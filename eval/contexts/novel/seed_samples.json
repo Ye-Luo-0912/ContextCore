@@ -1,0 +1,125 @@
+[
+  {
+    "id": "novel-sample-001",
+    "query": "续写：林风在苍穹大陆拍卖行争夺九转金丹药引龙魂草的场景。",
+    "mode": "NovelMode",
+    "mustHit": ["novel:world-cangqiong", "novel:character-linfeng", "memory:novel-current-plot"],
+    "mustNotHit": ["memory:novel-plot-old-draft", "memory:novel-plot-noise-keyword"],
+    "expectedScopes": ["plot", "world-setting"],
+    "expectedEntities": ["林风", "苍穹大陆", "龙魂草"],
+    "expectedConstraints": ["禁止吃书设定"],
+    "expectedUncertainties": [],
+    "goldenNotes": "应该召回世界设定、主角人设卡以及当前最新剧情线，同时排除已经废弃的冲突大纲和干扰废案。"
+  },
+  {
+    "id": "novel-sample-002",
+    "query": "大纲草稿中关于九转金丹的获取时间有什么废弃说明？",
+    "mode": "NovelMode",
+    "mustHit": ["memory:novel-plot-old-draft"],
+    "mustNotHit": ["memory:novel-plot-noise-keyword"],
+    "expectedScopes": ["plot"],
+    "expectedEntities": ["九转金丹"],
+    "expectedConstraints": [],
+    "expectedUncertainties": [],
+    "goldenNotes": "目标明确查询已废弃的大纲，验证是否能够召回特定的废弃设计以供作者审计。"
+  },
+  {
+    "id": "novel-sample-003",
+    "query": "黑角域拍卖行对于苍穹大陆争夺龙魂草和九转金丹有什么废弃构思？",
+    "mode": "NovelMode",
+    "mustHit": ["memory:novel-plot-old-draft", "memory:novel-current-plot"],
+    "mustNotHit": ["memory:novel-plot-noise-keyword"],
+    "expectedScopes": ["plot"],
+    "expectedEntities": [],
+    "expectedConstraints": [],
+    "expectedUncertainties": [],
+    "goldenNotes": "测试高关键词负样本拦截能力。novel:plot-noise-keyword 包含高频词但被标记为废弃，应被过滤。"
+  },
+  {
+    "id": "novel-sample-004",
+    "query": "林风目前的具体修炼境界和斗气属性是什么？",
+    "mode": "NovelMode",
+    "mustHit": ["memory:novel-conflict-v2"],
+    "mustNotHit": ["memory:novel-conflict-v1"],
+    "expectedScopes": ["character-detail"],
+    "expectedEntities": ["大斗师九星", "混元斗气"],
+    "expectedConstraints": [],
+    "expectedUncertainties": ["SupersededSelectedItem"],
+    "goldenNotes": "测试替代关系与冲突测试。旧人设雷属性斗气已被废弃，应当只召回混元斗气，且应产生冲突不确定性警告。"
+  },
+  {
+    "id": "novel-sample-005",
+    "query": "林风身边那个隐藏古族身份的配角是谁？她现在的境界是什么？",
+    "mode": "NovelMode",
+    "mustHit": ["memory:novel-extra-active-1"],
+    "mustNotHit": ["memory:novel-plot-old-draft"],
+    "expectedScopes": ["character"],
+    "expectedEntities": ["萧薰儿", "斗灵"],
+    "expectedConstraints": [],
+    "expectedUncertainties": [],
+    "goldenNotes": "普通活跃配角人设卡查询，成功召回萧薰儿。"
+  },
+  {
+    "id": "novel-sample-006",
+    "query": "黑角域是什么地方？有什么特点？",
+    "mode": "NovelMode",
+    "mustHit": ["memory:novel-extra-active-2"],
+    "mustNotHit": ["memory:novel-plot-old-draft"],
+    "expectedScopes": ["location"],
+    "expectedEntities": ["黑角域"],
+    "expectedConstraints": [],
+    "expectedUncertainties": [],
+    "goldenNotes": "活跃新地点设定查询，成功召回黑角域。"
+  },
+  {
+    "id": "novel-sample-007",
+    "query": "压力测试：低Token小说打包限制",
+    "mode": "NovelMode",
+    "mustHit": ["novel:character-linfeng"],
+    "mustNotHit": ["memory:novel-budget-stress"],
+    "expectedScopes": [],
+    "expectedEntities": [],
+    "expectedConstraints": ["禁止吃书设定"],
+    "expectedUncertainties": [],
+    "metadata": {
+      "tokenBudget": "150"
+    },
+    "goldenNotes": "极限预算测试，在150字节内超长背景压力备忘被自动舍弃，保留硬约束和主角主要设定。"
+  },
+  {
+    "id": "novel-sample-008",
+    "query": "主角林风目前最常用的本命武器是什么剑？是玄铁重剑还是裂天巨剑？",
+    "mode": "NovelMode",
+    "mustHit": ["memory:novel-weapon-v2"],
+    "mustNotHit": ["memory:novel-weapon-v1"],
+    "expectedScopes": ["character-detail"],
+    "expectedEntities": ["裂天巨剑"],
+    "expectedConstraints": [],
+    "expectedUncertainties": ["SupersededSelectedItem"],
+    "goldenNotes": "测试主角本命武器设定变更冲突。旧设定玄铁重剑已被废弃，新设定为裂天巨剑，应产生替代不确定性提示。"
+  },
+  {
+    "id": "novel-sample-009",
+    "query": "显式审计：查看大纲中关于已经被删减或废弃的反派‘噬魂殿’的旧草稿设定？",
+    "mode": "NovelMode",
+    "mustHit": ["memory:novel-plot-deprecated-villain"],
+    "mustNotHit": ["memory:novel-weapon-v2"],
+    "expectedScopes": ["plot"],
+    "expectedEntities": ["噬魂殿"],
+    "expectedConstraints": [],
+    "expectedUncertainties": [],
+    "goldenNotes": "显式审计场景。当作者明确询问废弃的反派设定时，应召回该已被舍弃的反派设定。"
+  },
+  {
+    "id": "novel-sample-010",
+    "query": "续写新场景中对主角林风的家族背景有什么核心的要求吗？",
+    "mode": "NovelMode",
+    "mustHit": ["novel:character-linfeng", "memory:novel-family-background"],
+    "mustNotHit": ["memory:novel-plot-deprecated-villain"],
+    "expectedScopes": ["character"],
+    "expectedEntities": [],
+    "expectedConstraints": ["禁止吃书设定"],
+    "expectedUncertainties": [],
+    "goldenNotes": "普通高匹配召回，避开已被废弃的反派设定干扰。"
+  }
+]

@@ -1,0 +1,50 @@
+[
+  {
+    "id": "chat-20260529-001",
+    "query": "继续刚才关于长期偏好的设置，输出和提示都要保持中文。",
+    "mode": "ChatMode",
+    "mustHit": ["pref:zh-output", "memory:long-term-user-preference"],
+    "mustNotHit": ["noise:one-off-greeting"],
+    "expectedScopes": ["workspace", "session"],
+    "expectedEntities": ["用户偏好", "中文输出"],
+    "expectedConstraints": ["输出、日志、注释和提示信息保持中文"],
+    "expectedUncertainties": [],
+    "goldenNotes": "应召回长期中文偏好，不应把普通寒暄作为关键记忆。",
+    "metadata": {
+      "category": "chat",
+      "source": "seed-20260529"
+    }
+  },
+  {
+    "id": "chat-20260529-002",
+    "query": "我刚刚说的临时吐槽不要记到长期里，只保留当前要做的事。",
+    "mode": "ChatMode",
+    "mustHit": ["task:current-user-request"],
+    "mustNotHit": ["emotion:temporary-complaint", "memory:stable-emotion"],
+    "expectedScopes": ["session", "task"],
+    "expectedEntities": ["当前任务"],
+    "expectedConstraints": ["临时情绪不应提升"],
+    "expectedUncertainties": [],
+    "goldenNotes": "应识别临时情绪不可提升，只保留当前任务上下文。",
+    "metadata": {
+      "category": "chat",
+      "source": "seed-20260529"
+    }
+  },
+  {
+    "id": "chat-20260529-003",
+    "query": "总结一下这轮对话里真正需要下次继续用的结论。",
+    "mode": "ChatMode",
+    "mustHit": ["memory:session-conclusion", "candidate:promotion-working"],
+    "mustNotHit": ["noise:repeated-explanation"],
+    "expectedScopes": ["session"],
+    "expectedEntities": ["阶段性结论"],
+    "expectedConstraints": ["重复解释、重复澄清、重复说明本身不应被提升为长期偏好或稳定事实；只有用户明确确认其为长期规则时才可提升。"],
+    "expectedUncertainties": ["长期有效性需要复核"],
+    "goldenNotes": "应抽取阶段性结论，并把长期有效性标记为需复核。",
+    "metadata": {
+      "category": "chat",
+      "source": "seed-20260529"
+    }
+  }
+]

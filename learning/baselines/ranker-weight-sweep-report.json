@@ -1,0 +1,1152 @@
+﻿{
+  "generatedAt": "2026-06-06T09:57:47.8750253+00:00",
+  "inputPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\learning\\features\\ranking-pairs.jsonl",
+  "pairCount": 253,
+  "ready": true,
+  "status": "Ready",
+  "notReadyReasons": [],
+  "split": {
+    "strategy": "DeterministicGroupHash80_20",
+    "groupKey": "EvalSampleId",
+    "trainGroupCount": 81,
+    "testGroupCount": 32,
+    "trainExampleCount": 190,
+    "testExampleCount": 63
+  },
+  "baselineWeights": {
+    "lifecyclePenaltyWeight": 4,
+    "recencyWeight": 0,
+    "currentVersionBoost": 0,
+    "activeStatusBoost": 0,
+    "noiseKeywordPenalty": 0,
+    "relationEvidenceBoost": 0,
+    "stablePreferenceBoost": 0
+  },
+  "baseline": {
+    "baselineName": "SimpleFeatureWeightedBaseline",
+    "pairwiseAccuracy": 0.9047619047619048,
+    "auc": 0.9047619047619048,
+    "winRateOverRule": 0,
+    "falsePositiveRate": 0.09523809523809523,
+    "falseNegativeRate": 0.09523809523809523,
+    "topFailureExamples": [
+      {
+        "evalSampleId": "novel-sample-008",
+        "mode": "NovelMode",
+        "intent": "NovelGeneration",
+        "positiveCandidateId": "memory:novel-weapon-v2",
+        "negativeCandidateId": "memory:novel-weapon-v1",
+        "positiveScore": 94.29999795,
+        "negativeScore": 105.24999555,
+        "reason": "negative candidate outranked positive candidate"
+      },
+      {
+        "evalSampleId": "novel-sample-008",
+        "mode": "NovelMode",
+        "intent": "NovelGeneration",
+        "positiveCandidateId": "memory:novel-weapon-v2",
+        "negativeCandidateId": "memory:novel-weapon-v1",
+        "positiveScore": 94.29999648,
+        "negativeScore": 105.24999238,
+        "reason": "negative candidate outranked positive candidate"
+      },
+      {
+        "evalSampleId": "chat-sample-002",
+        "mode": "ChatMode",
+        "intent": "FuzzyQuestion",
+        "positiveCandidateId": "memory:chat-active-plan",
+        "negativeCandidateId": "memory:chat-noise-keyword-1",
+        "positiveScore": 48.65,
+        "negativeScore": 59.4,
+        "reason": "negative candidate outranked positive candidate"
+      },
+      {
+        "evalSampleId": "chat-sample-002",
+        "mode": "ChatMode",
+        "intent": "FuzzyQuestion",
+        "positiveCandidateId": "memory:chat-active-plan",
+        "negativeCandidateId": "memory:chat-noise-keyword-1",
+        "positiveScore": 48.65,
+        "negativeScore": 59.4,
+        "reason": "negative candidate outranked positive candidate"
+      },
+      {
+        "evalSampleId": "chat-sample-004",
+        "mode": "ChatMode",
+        "intent": "FuzzyQuestion",
+        "positiveCandidateId": "memory:chat-version-conflict-v2",
+        "negativeCandidateId": "memory:chat-version-conflict-v1",
+        "positiveScore": 45.45,
+        "negativeScore": 54.05,
+        "reason": "negative candidate outranked positive candidate"
+      },
+      {
+        "evalSampleId": "chat-sample-004",
+        "mode": "ChatMode",
+        "intent": "FuzzyQuestion",
+        "positiveCandidateId": "memory:chat-version-conflict-v2",
+        "negativeCandidateId": "memory:chat-version-conflict-v1",
+        "positiveScore": 45.45,
+        "negativeScore": 54.05,
+        "reason": "negative candidate outranked positive candidate"
+      }
+    ]
+  },
+  "bestResult": {
+    "configurationId": "activeStatusBoost=0",
+    "parameterName": "activeStatusBoost",
+    "parameterValue": 0,
+    "weights": {
+      "lifecyclePenaltyWeight": 4,
+      "recencyWeight": 0,
+      "currentVersionBoost": 0,
+      "activeStatusBoost": 0,
+      "noiseKeywordPenalty": 0,
+      "relationEvidenceBoost": 0,
+      "stablePreferenceBoost": 0
+    },
+    "pairwiseAccuracy": 0.9047619047619048,
+    "accuracyDelta": 0,
+    "auc": 0.9047619047619048,
+    "winRateOverBaseline": 0,
+    "falsePositiveRate": 0.09523809523809523,
+    "falseNegativeRate": 0.09523809523809523,
+    "failureClusters": [
+      {
+        "cluster": "DeprecatedNoise",
+        "count": 3,
+        "exampleIds": [
+          "chat-sample-002",
+          "chat-sample-004",
+          "novel-sample-008"
+        ]
+      }
+    ],
+    "topFixedExamples": [],
+    "topNewlyFailedExamples": [],
+    "recommendation": "Neutral"
+  },
+  "sweepResults": [
+    {
+      "configurationId": "activeStatusBoost=0",
+      "parameterName": "activeStatusBoost",
+      "parameterValue": 0,
+      "weights": {
+        "lifecyclePenaltyWeight": 4,
+        "recencyWeight": 0,
+        "currentVersionBoost": 0,
+        "activeStatusBoost": 0,
+        "noiseKeywordPenalty": 0,
+        "relationEvidenceBoost": 0,
+        "stablePreferenceBoost": 0
+      },
+      "pairwiseAccuracy": 0.9047619047619048,
+      "accuracyDelta": 0,
+      "auc": 0.9047619047619048,
+      "winRateOverBaseline": 0,
+      "falsePositiveRate": 0.09523809523809523,
+      "falseNegativeRate": 0.09523809523809523,
+      "failureClusters": [
+        {
+          "cluster": "DeprecatedNoise",
+          "count": 3,
+          "exampleIds": [
+            "chat-sample-002",
+            "chat-sample-004",
+            "novel-sample-008"
+          ]
+        }
+      ],
+      "topFixedExamples": [],
+      "topNewlyFailedExamples": [],
+      "recommendation": "Neutral"
+    },
+    {
+      "configurationId": "activeStatusBoost=1",
+      "parameterName": "activeStatusBoost",
+      "parameterValue": 1,
+      "weights": {
+        "lifecyclePenaltyWeight": 4,
+        "recencyWeight": 0,
+        "currentVersionBoost": 0,
+        "activeStatusBoost": 1,
+        "noiseKeywordPenalty": 0,
+        "relationEvidenceBoost": 0,
+        "stablePreferenceBoost": 0
+      },
+      "pairwiseAccuracy": 0.9047619047619048,
+      "accuracyDelta": 0,
+      "auc": 0.9047619047619048,
+      "winRateOverBaseline": 0,
+      "falsePositiveRate": 0.09523809523809523,
+      "falseNegativeRate": 0.09523809523809523,
+      "failureClusters": [
+        {
+          "cluster": "DeprecatedNoise",
+          "count": 3,
+          "exampleIds": [
+            "chat-sample-002",
+            "chat-sample-004",
+            "novel-sample-008"
+          ]
+        }
+      ],
+      "topFixedExamples": [],
+      "topNewlyFailedExamples": [],
+      "recommendation": "Neutral"
+    },
+    {
+      "configurationId": "activeStatusBoost=2",
+      "parameterName": "activeStatusBoost",
+      "parameterValue": 2,
+      "weights": {
+        "lifecyclePenaltyWeight": 4,
+        "recencyWeight": 0,
+        "currentVersionBoost": 0,
+        "activeStatusBoost": 2,
+        "noiseKeywordPenalty": 0,
+        "relationEvidenceBoost": 0,
+        "stablePreferenceBoost": 0
+      },
+      "pairwiseAccuracy": 0.9047619047619048,
+      "accuracyDelta": 0,
+      "auc": 0.9047619047619048,
+      "winRateOverBaseline": 0,
+      "falsePositiveRate": 0.09523809523809523,
+      "falseNegativeRate": 0.09523809523809523,
+      "failureClusters": [
+        {
+          "cluster": "DeprecatedNoise",
+          "count": 3,
+          "exampleIds": [
+            "chat-sample-002",
+            "chat-sample-004",
+            "novel-sample-008"
+          ]
+        }
+      ],
+      "topFixedExamples": [],
+      "topNewlyFailedExamples": [],
+      "recommendation": "Neutral"
+    },
+    {
+      "configurationId": "activeStatusBoost=3",
+      "parameterName": "activeStatusBoost",
+      "parameterValue": 3,
+      "weights": {
+        "lifecyclePenaltyWeight": 4,
+        "recencyWeight": 0,
+        "currentVersionBoost": 0,
+        "activeStatusBoost": 3,
+        "noiseKeywordPenalty": 0,
+        "relationEvidenceBoost": 0,
+        "stablePreferenceBoost": 0
+      },
+      "pairwiseAccuracy": 0.9047619047619048,
+      "accuracyDelta": 0,
+      "auc": 0.9047619047619048,
+      "winRateOverBaseline": 0,
+      "falsePositiveRate": 0.09523809523809523,
+      "falseNegativeRate": 0.09523809523809523,
+      "failureClusters": [
+        {
+          "cluster": "DeprecatedNoise",
+          "count": 3,
+          "exampleIds": [
+            "chat-sample-002",
+            "chat-sample-004",
+            "novel-sample-008"
+          ]
+        }
+      ],
+      "topFixedExamples": [],
+      "topNewlyFailedExamples": [],
+      "recommendation": "Neutral"
+    },
+    {
+      "configurationId": "currentVersionBoost=0",
+      "parameterName": "currentVersionBoost",
+      "parameterValue": 0,
+      "weights": {
+        "lifecyclePenaltyWeight": 4,
+        "recencyWeight": 0,
+        "currentVersionBoost": 0,
+        "activeStatusBoost": 0,
+        "noiseKeywordPenalty": 0,
+        "relationEvidenceBoost": 0,
+        "stablePreferenceBoost": 0
+      },
+      "pairwiseAccuracy": 0.9047619047619048,
+      "accuracyDelta": 0,
+      "auc": 0.9047619047619048,
+      "winRateOverBaseline": 0,
+      "falsePositiveRate": 0.09523809523809523,
+      "falseNegativeRate": 0.09523809523809523,
+      "failureClusters": [
+        {
+          "cluster": "DeprecatedNoise",
+          "count": 3,
+          "exampleIds": [
+            "chat-sample-002",
+            "chat-sample-004",
+            "novel-sample-008"
+          ]
+        }
+      ],
+      "topFixedExamples": [],
+      "topNewlyFailedExamples": [],
+      "recommendation": "Neutral"
+    },
+    {
+      "configurationId": "currentVersionBoost=1",
+      "parameterName": "currentVersionBoost",
+      "parameterValue": 1,
+      "weights": {
+        "lifecyclePenaltyWeight": 4,
+        "recencyWeight": 0,
+        "currentVersionBoost": 1,
+        "activeStatusBoost": 0,
+        "noiseKeywordPenalty": 0,
+        "relationEvidenceBoost": 0,
+        "stablePreferenceBoost": 0
+      },
+      "pairwiseAccuracy": 0.9047619047619048,
+      "accuracyDelta": 0,
+      "auc": 0.9047619047619048,
+      "winRateOverBaseline": 0,
+      "falsePositiveRate": 0.09523809523809523,
+      "falseNegativeRate": 0.09523809523809523,
+      "failureClusters": [
+        {
+          "cluster": "DeprecatedNoise",
+          "count": 3,
+          "exampleIds": [
+            "chat-sample-002",
+            "chat-sample-004",
+            "novel-sample-008"
+          ]
+        }
+      ],
+      "topFixedExamples": [],
+      "topNewlyFailedExamples": [],
+      "recommendation": "Neutral"
+    },
+    {
+      "configurationId": "currentVersionBoost=2",
+      "parameterName": "currentVersionBoost",
+      "parameterValue": 2,
+      "weights": {
+        "lifecyclePenaltyWeight": 4,
+        "recencyWeight": 0,
+        "currentVersionBoost": 2,
+        "activeStatusBoost": 0,
+        "noiseKeywordPenalty": 0,
+        "relationEvidenceBoost": 0,
+        "stablePreferenceBoost": 0
+      },
+      "pairwiseAccuracy": 0.9047619047619048,
+      "accuracyDelta": 0,
+      "auc": 0.9047619047619048,
+      "winRateOverBaseline": 0,
+      "falsePositiveRate": 0.09523809523809523,
+      "falseNegativeRate": 0.09523809523809523,
+      "failureClusters": [
+        {
+          "cluster": "DeprecatedNoise",
+          "count": 3,
+          "exampleIds": [
+            "chat-sample-002",
+            "chat-sample-004",
+            "novel-sample-008"
+          ]
+        }
+      ],
+      "topFixedExamples": [],
+      "topNewlyFailedExamples": [],
+      "recommendation": "Neutral"
+    },
+    {
+      "configurationId": "currentVersionBoost=3",
+      "parameterName": "currentVersionBoost",
+      "parameterValue": 3,
+      "weights": {
+        "lifecyclePenaltyWeight": 4,
+        "recencyWeight": 0,
+        "currentVersionBoost": 3,
+        "activeStatusBoost": 0,
+        "noiseKeywordPenalty": 0,
+        "relationEvidenceBoost": 0,
+        "stablePreferenceBoost": 0
+      },
+      "pairwiseAccuracy": 0.9047619047619048,
+      "accuracyDelta": 0,
+      "auc": 0.9047619047619048,
+      "winRateOverBaseline": 0,
+      "falsePositiveRate": 0.09523809523809523,
+      "falseNegativeRate": 0.09523809523809523,
+      "failureClusters": [
+        {
+          "cluster": "DeprecatedNoise",
+          "count": 3,
+          "exampleIds": [
+            "chat-sample-002",
+            "chat-sample-004",
+            "novel-sample-008"
+          ]
+        }
+      ],
+      "topFixedExamples": [],
+      "topNewlyFailedExamples": [],
+      "recommendation": "Neutral"
+    },
+    {
+      "configurationId": "default",
+      "parameterName": "default",
+      "parameterValue": 0,
+      "weights": {
+        "lifecyclePenaltyWeight": 4,
+        "recencyWeight": 0,
+        "currentVersionBoost": 0,
+        "activeStatusBoost": 0,
+        "noiseKeywordPenalty": 0,
+        "relationEvidenceBoost": 0,
+        "stablePreferenceBoost": 0
+      },
+      "pairwiseAccuracy": 0.9047619047619048,
+      "accuracyDelta": 0,
+      "auc": 0.9047619047619048,
+      "winRateOverBaseline": 0,
+      "falsePositiveRate": 0.09523809523809523,
+      "falseNegativeRate": 0.09523809523809523,
+      "failureClusters": [
+        {
+          "cluster": "DeprecatedNoise",
+          "count": 3,
+          "exampleIds": [
+            "chat-sample-002",
+            "chat-sample-004",
+            "novel-sample-008"
+          ]
+        }
+      ],
+      "topFixedExamples": [],
+      "topNewlyFailedExamples": [],
+      "recommendation": "Neutral"
+    },
+    {
+      "configurationId": "lifecyclePenaltyWeight=0",
+      "parameterName": "lifecyclePenaltyWeight",
+      "parameterValue": 0,
+      "weights": {
+        "lifecyclePenaltyWeight": 0,
+        "recencyWeight": 0,
+        "currentVersionBoost": 0,
+        "activeStatusBoost": 0,
+        "noiseKeywordPenalty": 0,
+        "relationEvidenceBoost": 0,
+        "stablePreferenceBoost": 0
+      },
+      "pairwiseAccuracy": 0.9047619047619048,
+      "accuracyDelta": 0,
+      "auc": 0.9047619047619048,
+      "winRateOverBaseline": 0,
+      "falsePositiveRate": 0.09523809523809523,
+      "falseNegativeRate": 0.09523809523809523,
+      "failureClusters": [
+        {
+          "cluster": "DeprecatedNoise",
+          "count": 3,
+          "exampleIds": [
+            "chat-sample-002",
+            "chat-sample-004",
+            "novel-sample-008"
+          ]
+        }
+      ],
+      "topFixedExamples": [],
+      "topNewlyFailedExamples": [],
+      "recommendation": "Neutral"
+    },
+    {
+      "configurationId": "lifecyclePenaltyWeight=2",
+      "parameterName": "lifecyclePenaltyWeight",
+      "parameterValue": 2,
+      "weights": {
+        "lifecyclePenaltyWeight": 2,
+        "recencyWeight": 0,
+        "currentVersionBoost": 0,
+        "activeStatusBoost": 0,
+        "noiseKeywordPenalty": 0,
+        "relationEvidenceBoost": 0,
+        "stablePreferenceBoost": 0
+      },
+      "pairwiseAccuracy": 0.9047619047619048,
+      "accuracyDelta": 0,
+      "auc": 0.9047619047619048,
+      "winRateOverBaseline": 0,
+      "falsePositiveRate": 0.09523809523809523,
+      "falseNegativeRate": 0.09523809523809523,
+      "failureClusters": [
+        {
+          "cluster": "DeprecatedNoise",
+          "count": 3,
+          "exampleIds": [
+            "chat-sample-002",
+            "chat-sample-004",
+            "novel-sample-008"
+          ]
+        }
+      ],
+      "topFixedExamples": [],
+      "topNewlyFailedExamples": [],
+      "recommendation": "Neutral"
+    },
+    {
+      "configurationId": "lifecyclePenaltyWeight=4",
+      "parameterName": "lifecyclePenaltyWeight",
+      "parameterValue": 4,
+      "weights": {
+        "lifecyclePenaltyWeight": 4,
+        "recencyWeight": 0,
+        "currentVersionBoost": 0,
+        "activeStatusBoost": 0,
+        "noiseKeywordPenalty": 0,
+        "relationEvidenceBoost": 0,
+        "stablePreferenceBoost": 0
+      },
+      "pairwiseAccuracy": 0.9047619047619048,
+      "accuracyDelta": 0,
+      "auc": 0.9047619047619048,
+      "winRateOverBaseline": 0,
+      "falsePositiveRate": 0.09523809523809523,
+      "falseNegativeRate": 0.09523809523809523,
+      "failureClusters": [
+        {
+          "cluster": "DeprecatedNoise",
+          "count": 3,
+          "exampleIds": [
+            "chat-sample-002",
+            "chat-sample-004",
+            "novel-sample-008"
+          ]
+        }
+      ],
+      "topFixedExamples": [],
+      "topNewlyFailedExamples": [],
+      "recommendation": "Neutral"
+    },
+    {
+      "configurationId": "lifecyclePenaltyWeight=6",
+      "parameterName": "lifecyclePenaltyWeight",
+      "parameterValue": 6,
+      "weights": {
+        "lifecyclePenaltyWeight": 6,
+        "recencyWeight": 0,
+        "currentVersionBoost": 0,
+        "activeStatusBoost": 0,
+        "noiseKeywordPenalty": 0,
+        "relationEvidenceBoost": 0,
+        "stablePreferenceBoost": 0
+      },
+      "pairwiseAccuracy": 0.9047619047619048,
+      "accuracyDelta": 0,
+      "auc": 0.9047619047619048,
+      "winRateOverBaseline": 0,
+      "falsePositiveRate": 0.09523809523809523,
+      "falseNegativeRate": 0.09523809523809523,
+      "failureClusters": [
+        {
+          "cluster": "DeprecatedNoise",
+          "count": 3,
+          "exampleIds": [
+            "chat-sample-002",
+            "chat-sample-004",
+            "novel-sample-008"
+          ]
+        }
+      ],
+      "topFixedExamples": [],
+      "topNewlyFailedExamples": [],
+      "recommendation": "Neutral"
+    },
+    {
+      "configurationId": "lifecyclePenaltyWeight=8",
+      "parameterName": "lifecyclePenaltyWeight",
+      "parameterValue": 8,
+      "weights": {
+        "lifecyclePenaltyWeight": 8,
+        "recencyWeight": 0,
+        "currentVersionBoost": 0,
+        "activeStatusBoost": 0,
+        "noiseKeywordPenalty": 0,
+        "relationEvidenceBoost": 0,
+        "stablePreferenceBoost": 0
+      },
+      "pairwiseAccuracy": 0.9047619047619048,
+      "accuracyDelta": 0,
+      "auc": 0.9047619047619048,
+      "winRateOverBaseline": 0,
+      "falsePositiveRate": 0.09523809523809523,
+      "falseNegativeRate": 0.09523809523809523,
+      "failureClusters": [
+        {
+          "cluster": "DeprecatedNoise",
+          "count": 3,
+          "exampleIds": [
+            "chat-sample-002",
+            "chat-sample-004",
+            "novel-sample-008"
+          ]
+        }
+      ],
+      "topFixedExamples": [],
+      "topNewlyFailedExamples": [],
+      "recommendation": "Neutral"
+    },
+    {
+      "configurationId": "noiseKeywordPenalty=0",
+      "parameterName": "noiseKeywordPenalty",
+      "parameterValue": 0,
+      "weights": {
+        "lifecyclePenaltyWeight": 4,
+        "recencyWeight": 0,
+        "currentVersionBoost": 0,
+        "activeStatusBoost": 0,
+        "noiseKeywordPenalty": 0,
+        "relationEvidenceBoost": 0,
+        "stablePreferenceBoost": 0
+      },
+      "pairwiseAccuracy": 0.9047619047619048,
+      "accuracyDelta": 0,
+      "auc": 0.9047619047619048,
+      "winRateOverBaseline": 0,
+      "falsePositiveRate": 0.09523809523809523,
+      "falseNegativeRate": 0.09523809523809523,
+      "failureClusters": [
+        {
+          "cluster": "DeprecatedNoise",
+          "count": 3,
+          "exampleIds": [
+            "chat-sample-002",
+            "chat-sample-004",
+            "novel-sample-008"
+          ]
+        }
+      ],
+      "topFixedExamples": [],
+      "topNewlyFailedExamples": [],
+      "recommendation": "Neutral"
+    },
+    {
+      "configurationId": "noiseKeywordPenalty=2",
+      "parameterName": "noiseKeywordPenalty",
+      "parameterValue": 2,
+      "weights": {
+        "lifecyclePenaltyWeight": 4,
+        "recencyWeight": 0,
+        "currentVersionBoost": 0,
+        "activeStatusBoost": 0,
+        "noiseKeywordPenalty": 2,
+        "relationEvidenceBoost": 0,
+        "stablePreferenceBoost": 0
+      },
+      "pairwiseAccuracy": 0.9047619047619048,
+      "accuracyDelta": 0,
+      "auc": 0.9047619047619048,
+      "winRateOverBaseline": 0,
+      "falsePositiveRate": 0.09523809523809523,
+      "falseNegativeRate": 0.09523809523809523,
+      "failureClusters": [
+        {
+          "cluster": "DeprecatedNoise",
+          "count": 3,
+          "exampleIds": [
+            "chat-sample-002",
+            "chat-sample-004",
+            "novel-sample-008"
+          ]
+        }
+      ],
+      "topFixedExamples": [],
+      "topNewlyFailedExamples": [],
+      "recommendation": "Neutral"
+    },
+    {
+      "configurationId": "noiseKeywordPenalty=4",
+      "parameterName": "noiseKeywordPenalty",
+      "parameterValue": 4,
+      "weights": {
+        "lifecyclePenaltyWeight": 4,
+        "recencyWeight": 0,
+        "currentVersionBoost": 0,
+        "activeStatusBoost": 0,
+        "noiseKeywordPenalty": 4,
+        "relationEvidenceBoost": 0,
+        "stablePreferenceBoost": 0
+      },
+      "pairwiseAccuracy": 0.9047619047619048,
+      "accuracyDelta": 0,
+      "auc": 0.9047619047619048,
+      "winRateOverBaseline": 0,
+      "falsePositiveRate": 0.09523809523809523,
+      "falseNegativeRate": 0.09523809523809523,
+      "failureClusters": [
+        {
+          "cluster": "DeprecatedNoise",
+          "count": 3,
+          "exampleIds": [
+            "chat-sample-002",
+            "chat-sample-004",
+            "novel-sample-008"
+          ]
+        }
+      ],
+      "topFixedExamples": [],
+      "topNewlyFailedExamples": [],
+      "recommendation": "Neutral"
+    },
+    {
+      "configurationId": "noiseKeywordPenalty=6",
+      "parameterName": "noiseKeywordPenalty",
+      "parameterValue": 6,
+      "weights": {
+        "lifecyclePenaltyWeight": 4,
+        "recencyWeight": 0,
+        "currentVersionBoost": 0,
+        "activeStatusBoost": 0,
+        "noiseKeywordPenalty": 6,
+        "relationEvidenceBoost": 0,
+        "stablePreferenceBoost": 0
+      },
+      "pairwiseAccuracy": 0.9047619047619048,
+      "accuracyDelta": 0,
+      "auc": 0.9047619047619048,
+      "winRateOverBaseline": 0,
+      "falsePositiveRate": 0.09523809523809523,
+      "falseNegativeRate": 0.09523809523809523,
+      "failureClusters": [
+        {
+          "cluster": "DeprecatedNoise",
+          "count": 3,
+          "exampleIds": [
+            "chat-sample-002",
+            "chat-sample-004",
+            "novel-sample-008"
+          ]
+        }
+      ],
+      "topFixedExamples": [],
+      "topNewlyFailedExamples": [],
+      "recommendation": "Neutral"
+    },
+    {
+      "configurationId": "recencyWeight=0",
+      "parameterName": "recencyWeight",
+      "parameterValue": 0,
+      "weights": {
+        "lifecyclePenaltyWeight": 4,
+        "recencyWeight": 0,
+        "currentVersionBoost": 0,
+        "activeStatusBoost": 0,
+        "noiseKeywordPenalty": 0,
+        "relationEvidenceBoost": 0,
+        "stablePreferenceBoost": 0
+      },
+      "pairwiseAccuracy": 0.9047619047619048,
+      "accuracyDelta": 0,
+      "auc": 0.9047619047619048,
+      "winRateOverBaseline": 0,
+      "falsePositiveRate": 0.09523809523809523,
+      "falseNegativeRate": 0.09523809523809523,
+      "failureClusters": [
+        {
+          "cluster": "DeprecatedNoise",
+          "count": 3,
+          "exampleIds": [
+            "chat-sample-002",
+            "chat-sample-004",
+            "novel-sample-008"
+          ]
+        }
+      ],
+      "topFixedExamples": [],
+      "topNewlyFailedExamples": [],
+      "recommendation": "Neutral"
+    },
+    {
+      "configurationId": "recencyWeight=0.5",
+      "parameterName": "recencyWeight",
+      "parameterValue": 0.5,
+      "weights": {
+        "lifecyclePenaltyWeight": 4,
+        "recencyWeight": 0.5,
+        "currentVersionBoost": 0,
+        "activeStatusBoost": 0,
+        "noiseKeywordPenalty": 0,
+        "relationEvidenceBoost": 0,
+        "stablePreferenceBoost": 0
+      },
+      "pairwiseAccuracy": 0.9047619047619048,
+      "accuracyDelta": 0,
+      "auc": 0.9047619047619048,
+      "winRateOverBaseline": 0,
+      "falsePositiveRate": 0.09523809523809523,
+      "falseNegativeRate": 0.09523809523809523,
+      "failureClusters": [
+        {
+          "cluster": "DeprecatedNoise",
+          "count": 3,
+          "exampleIds": [
+            "chat-sample-002",
+            "chat-sample-004",
+            "novel-sample-008"
+          ]
+        }
+      ],
+      "topFixedExamples": [],
+      "topNewlyFailedExamples": [],
+      "recommendation": "Neutral"
+    },
+    {
+      "configurationId": "recencyWeight=1",
+      "parameterName": "recencyWeight",
+      "parameterValue": 1,
+      "weights": {
+        "lifecyclePenaltyWeight": 4,
+        "recencyWeight": 1,
+        "currentVersionBoost": 0,
+        "activeStatusBoost": 0,
+        "noiseKeywordPenalty": 0,
+        "relationEvidenceBoost": 0,
+        "stablePreferenceBoost": 0
+      },
+      "pairwiseAccuracy": 0.9047619047619048,
+      "accuracyDelta": 0,
+      "auc": 0.9047619047619048,
+      "winRateOverBaseline": 0,
+      "falsePositiveRate": 0.09523809523809523,
+      "falseNegativeRate": 0.09523809523809523,
+      "failureClusters": [
+        {
+          "cluster": "DeprecatedNoise",
+          "count": 3,
+          "exampleIds": [
+            "chat-sample-002",
+            "chat-sample-004",
+            "novel-sample-008"
+          ]
+        }
+      ],
+      "topFixedExamples": [],
+      "topNewlyFailedExamples": [],
+      "recommendation": "Neutral"
+    },
+    {
+      "configurationId": "recencyWeight=2",
+      "parameterName": "recencyWeight",
+      "parameterValue": 2,
+      "weights": {
+        "lifecyclePenaltyWeight": 4,
+        "recencyWeight": 2,
+        "currentVersionBoost": 0,
+        "activeStatusBoost": 0,
+        "noiseKeywordPenalty": 0,
+        "relationEvidenceBoost": 0,
+        "stablePreferenceBoost": 0
+      },
+      "pairwiseAccuracy": 0.9047619047619048,
+      "accuracyDelta": 0,
+      "auc": 0.9047619047619048,
+      "winRateOverBaseline": 0,
+      "falsePositiveRate": 0.09523809523809523,
+      "falseNegativeRate": 0.09523809523809523,
+      "failureClusters": [
+        {
+          "cluster": "DeprecatedNoise",
+          "count": 3,
+          "exampleIds": [
+            "chat-sample-002",
+            "chat-sample-004",
+            "novel-sample-008"
+          ]
+        }
+      ],
+      "topFixedExamples": [],
+      "topNewlyFailedExamples": [],
+      "recommendation": "Neutral"
+    },
+    {
+      "configurationId": "relationEvidenceBoost=0",
+      "parameterName": "relationEvidenceBoost",
+      "parameterValue": 0,
+      "weights": {
+        "lifecyclePenaltyWeight": 4,
+        "recencyWeight": 0,
+        "currentVersionBoost": 0,
+        "activeStatusBoost": 0,
+        "noiseKeywordPenalty": 0,
+        "relationEvidenceBoost": 0,
+        "stablePreferenceBoost": 0
+      },
+      "pairwiseAccuracy": 0.9047619047619048,
+      "accuracyDelta": 0,
+      "auc": 0.9047619047619048,
+      "winRateOverBaseline": 0,
+      "falsePositiveRate": 0.09523809523809523,
+      "falseNegativeRate": 0.09523809523809523,
+      "failureClusters": [
+        {
+          "cluster": "DeprecatedNoise",
+          "count": 3,
+          "exampleIds": [
+            "chat-sample-002",
+            "chat-sample-004",
+            "novel-sample-008"
+          ]
+        }
+      ],
+      "topFixedExamples": [],
+      "topNewlyFailedExamples": [],
+      "recommendation": "Neutral"
+    },
+    {
+      "configurationId": "relationEvidenceBoost=1",
+      "parameterName": "relationEvidenceBoost",
+      "parameterValue": 1,
+      "weights": {
+        "lifecyclePenaltyWeight": 4,
+        "recencyWeight": 0,
+        "currentVersionBoost": 0,
+        "activeStatusBoost": 0,
+        "noiseKeywordPenalty": 0,
+        "relationEvidenceBoost": 1,
+        "stablePreferenceBoost": 0
+      },
+      "pairwiseAccuracy": 0.9047619047619048,
+      "accuracyDelta": 0,
+      "auc": 0.9047619047619048,
+      "winRateOverBaseline": 0,
+      "falsePositiveRate": 0.09523809523809523,
+      "falseNegativeRate": 0.09523809523809523,
+      "failureClusters": [
+        {
+          "cluster": "DeprecatedNoise",
+          "count": 3,
+          "exampleIds": [
+            "chat-sample-002",
+            "chat-sample-004",
+            "novel-sample-008"
+          ]
+        }
+      ],
+      "topFixedExamples": [],
+      "topNewlyFailedExamples": [],
+      "recommendation": "Neutral"
+    },
+    {
+      "configurationId": "relationEvidenceBoost=2",
+      "parameterName": "relationEvidenceBoost",
+      "parameterValue": 2,
+      "weights": {
+        "lifecyclePenaltyWeight": 4,
+        "recencyWeight": 0,
+        "currentVersionBoost": 0,
+        "activeStatusBoost": 0,
+        "noiseKeywordPenalty": 0,
+        "relationEvidenceBoost": 2,
+        "stablePreferenceBoost": 0
+      },
+      "pairwiseAccuracy": 0.9047619047619048,
+      "accuracyDelta": 0,
+      "auc": 0.9047619047619048,
+      "winRateOverBaseline": 0,
+      "falsePositiveRate": 0.09523809523809523,
+      "falseNegativeRate": 0.09523809523809523,
+      "failureClusters": [
+        {
+          "cluster": "DeprecatedNoise",
+          "count": 3,
+          "exampleIds": [
+            "chat-sample-002",
+            "chat-sample-004",
+            "novel-sample-008"
+          ]
+        }
+      ],
+      "topFixedExamples": [],
+      "topNewlyFailedExamples": [],
+      "recommendation": "Neutral"
+    },
+    {
+      "configurationId": "relationEvidenceBoost=3",
+      "parameterName": "relationEvidenceBoost",
+      "parameterValue": 3,
+      "weights": {
+        "lifecyclePenaltyWeight": 4,
+        "recencyWeight": 0,
+        "currentVersionBoost": 0,
+        "activeStatusBoost": 0,
+        "noiseKeywordPenalty": 0,
+        "relationEvidenceBoost": 3,
+        "stablePreferenceBoost": 0
+      },
+      "pairwiseAccuracy": 0.9047619047619048,
+      "accuracyDelta": 0,
+      "auc": 0.9047619047619048,
+      "winRateOverBaseline": 0,
+      "falsePositiveRate": 0.09523809523809523,
+      "falseNegativeRate": 0.09523809523809523,
+      "failureClusters": [
+        {
+          "cluster": "DeprecatedNoise",
+          "count": 3,
+          "exampleIds": [
+            "chat-sample-002",
+            "chat-sample-004",
+            "novel-sample-008"
+          ]
+        }
+      ],
+      "topFixedExamples": [],
+      "topNewlyFailedExamples": [],
+      "recommendation": "Neutral"
+    },
+    {
+      "configurationId": "stablePreferenceBoost=0",
+      "parameterName": "stablePreferenceBoost",
+      "parameterValue": 0,
+      "weights": {
+        "lifecyclePenaltyWeight": 4,
+        "recencyWeight": 0,
+        "currentVersionBoost": 0,
+        "activeStatusBoost": 0,
+        "noiseKeywordPenalty": 0,
+        "relationEvidenceBoost": 0,
+        "stablePreferenceBoost": 0
+      },
+      "pairwiseAccuracy": 0.9047619047619048,
+      "accuracyDelta": 0,
+      "auc": 0.9047619047619048,
+      "winRateOverBaseline": 0,
+      "falsePositiveRate": 0.09523809523809523,
+      "falseNegativeRate": 0.09523809523809523,
+      "failureClusters": [
+        {
+          "cluster": "DeprecatedNoise",
+          "count": 3,
+          "exampleIds": [
+            "chat-sample-002",
+            "chat-sample-004",
+            "novel-sample-008"
+          ]
+        }
+      ],
+      "topFixedExamples": [],
+      "topNewlyFailedExamples": [],
+      "recommendation": "Neutral"
+    },
+    {
+      "configurationId": "stablePreferenceBoost=1",
+      "parameterName": "stablePreferenceBoost",
+      "parameterValue": 1,
+      "weights": {
+        "lifecyclePenaltyWeight": 4,
+        "recencyWeight": 0,
+        "currentVersionBoost": 0,
+        "activeStatusBoost": 0,
+        "noiseKeywordPenalty": 0,
+        "relationEvidenceBoost": 0,
+        "stablePreferenceBoost": 1
+      },
+      "pairwiseAccuracy": 0.9047619047619048,
+      "accuracyDelta": 0,
+      "auc": 0.9047619047619048,
+      "winRateOverBaseline": 0,
+      "falsePositiveRate": 0.09523809523809523,
+      "falseNegativeRate": 0.09523809523809523,
+      "failureClusters": [
+        {
+          "cluster": "DeprecatedNoise",
+          "count": 3,
+          "exampleIds": [
+            "chat-sample-002",
+            "chat-sample-004",
+            "novel-sample-008"
+          ]
+        }
+      ],
+      "topFixedExamples": [],
+      "topNewlyFailedExamples": [],
+      "recommendation": "Neutral"
+    },
+    {
+      "configurationId": "stablePreferenceBoost=2",
+      "parameterName": "stablePreferenceBoost",
+      "parameterValue": 2,
+      "weights": {
+        "lifecyclePenaltyWeight": 4,
+        "recencyWeight": 0,
+        "currentVersionBoost": 0,
+        "activeStatusBoost": 0,
+        "noiseKeywordPenalty": 0,
+        "relationEvidenceBoost": 0,
+        "stablePreferenceBoost": 2
+      },
+      "pairwiseAccuracy": 0.9047619047619048,
+      "accuracyDelta": 0,
+      "auc": 0.9047619047619048,
+      "winRateOverBaseline": 0,
+      "falsePositiveRate": 0.09523809523809523,
+      "falseNegativeRate": 0.09523809523809523,
+      "failureClusters": [
+        {
+          "cluster": "DeprecatedNoise",
+          "count": 3,
+          "exampleIds": [
+            "chat-sample-002",
+            "chat-sample-004",
+            "novel-sample-008"
+          ]
+        }
+      ],
+      "topFixedExamples": [],
+      "topNewlyFailedExamples": [],
+      "recommendation": "Neutral"
+    },
+    {
+      "configurationId": "stablePreferenceBoost=3",
+      "parameterName": "stablePreferenceBoost",
+      "parameterValue": 3,
+      "weights": {
+        "lifecyclePenaltyWeight": 4,
+        "recencyWeight": 0,
+        "currentVersionBoost": 0,
+        "activeStatusBoost": 0,
+        "noiseKeywordPenalty": 0,
+        "relationEvidenceBoost": 0,
+        "stablePreferenceBoost": 3
+      },
+      "pairwiseAccuracy": 0.9047619047619048,
+      "accuracyDelta": 0,
+      "auc": 0.9047619047619048,
+      "winRateOverBaseline": 0,
+      "falsePositiveRate": 0.09523809523809523,
+      "falseNegativeRate": 0.09523809523809523,
+      "failureClusters": [
+        {
+          "cluster": "DeprecatedNoise",
+          "count": 3,
+          "exampleIds": [
+            "chat-sample-002",
+            "chat-sample-004",
+            "novel-sample-008"
+          ]
+        }
+      ],
+      "topFixedExamples": [],
+      "topNewlyFailedExamples": [],
+      "recommendation": "Neutral"
+    }
+  ],
+  "policyVersion": "learning-offline-baseline/v1"
+}

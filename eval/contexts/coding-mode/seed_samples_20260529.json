@@ -1,0 +1,50 @@
+[
+  {
+    "id": "coding-20260529-001",
+    "query": "继续实现 A3 的评测样本读取器，并保证测试能覆盖 schema。",
+    "mode": "CodingMode",
+    "mustHit": ["todo:A3", "schema:context-eval-sample"],
+    "mustNotHit": ["task:old-P0-service-foundation"],
+    "expectedScopes": ["collection", "task"],
+    "expectedEntities": ["A3", "评测样本读取器", "schema"],
+    "expectedConstraints": ["代码注释和输出保持中文"],
+    "expectedUncertainties": ["当前样本数量是否达标"],
+    "goldenNotes": "应召回 A3 当前任务和样本 schema，不应回到旧 P0 任务。",
+    "metadata": {
+      "category": "coding-mode",
+      "source": "seed-20260529"
+    }
+  },
+  {
+    "id": "coding-20260529-002",
+    "query": "修复刚才测试失败的断言，不要改业务逻辑。",
+    "mode": "CodingMode",
+    "mustHit": ["test:last-failure", "assertion:expected-output"],
+    "mustNotHit": ["refactor:unrelated-business-logic"],
+    "expectedScopes": ["task", "test"],
+    "expectedEntities": ["测试失败", "断言", "业务逻辑"],
+    "expectedConstraints": ["只修复相关断言，不做无关重构"],
+    "expectedUncertainties": ["失败是否由输出文案变更导致"],
+    "goldenNotes": "应聚焦失败测试与断言，不应扩大到无关业务逻辑改动。",
+    "metadata": {
+      "category": "coding-mode",
+      "source": "seed-20260529"
+    }
+  },
+  {
+    "id": "coding-20260529-003",
+    "query": "生成最终报告前先跑 build、test 和密钥扫描。",
+    "mode": "CodingMode",
+    "mustHit": ["verification:build", "verification:test", "verification:secret-scan"],
+    "mustNotHit": ["secret:plain-api-key"],
+    "expectedScopes": ["workspace"],
+    "expectedEntities": ["构建", "测试", "密钥扫描"],
+    "expectedConstraints": ["不得写入明文 API Key"],
+    "expectedUncertainties": ["当前环境是否允许执行命令"],
+    "goldenNotes": "应在报告前执行或记录无法执行 build/test/secret scan。",
+    "metadata": {
+      "category": "coding-mode",
+      "source": "seed-20260529"
+    }
+  }
+]

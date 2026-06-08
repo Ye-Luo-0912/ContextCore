@@ -1,0 +1,17 @@
+﻿{
+  "ModelName": "bge-small-zh-v1.5",
+  "MeasuredAt": "2026-05-27T15:48:27.3076632+00:00",
+  "ModelLoadMs": 237,
+  "WorkingSetBeforeMb": 28,
+  "WorkingSetAfterLoadMb": 84,
+  "WorkingSetAfterPerfMb": 199,
+  "SingleDocEmbedAvgMs": 29,
+  "SingleQueryEmbedAvgMs": 24.7,
+  "Batch16AvgMs": 431.3333333333333,
+  "Batch32AvgMs": 894.6666666666666,
+  "Batch16ThroughputTextsPerSec": 37.09428129829985,
+  "Batch32ThroughputTextsPerSec": 35.767511177347245,
+  "QueryInstructionEnabled": true,
+  "MaxSequenceLength": 256,
+  "MaxBatchSize": 8
+}

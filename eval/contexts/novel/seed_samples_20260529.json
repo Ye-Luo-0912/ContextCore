@@ -1,0 +1,50 @@
+[
+  {
+    "id": "novel-20260529-001",
+    "query": "继续上一章结尾的伏笔，但不要引用已经废弃的人物设定。",
+    "mode": "NovelMode",
+    "mustHit": ["plot:previous-chapter-hook", "memory:active-character-state"],
+    "mustNotHit": ["character:deprecated-backstory"],
+    "expectedScopes": ["collection", "story-arc"],
+    "expectedEntities": ["伏笔", "人物状态"],
+    "expectedConstraints": ["废弃设定不得进入上下文包"],
+    "expectedUncertainties": ["伏笔是否已经兑现需要检查"],
+    "goldenNotes": "应召回有效伏笔和人物当前状态，排除废弃人物设定。",
+    "metadata": {
+      "category": "novel",
+      "source": "seed-20260529"
+    }
+  },
+  {
+    "id": "novel-20260529-002",
+    "query": "整理主角和导师现在的关系变化，下一幕要延续这个张力。",
+    "mode": "NovelMode",
+    "mustHit": ["relation:protagonist-mentor-current", "scene:last-conflict"],
+    "mustNotHit": ["relation:old-friendly-version"],
+    "expectedScopes": ["story-arc", "character"],
+    "expectedEntities": ["主角", "导师", "关系变化"],
+    "expectedConstraints": ["人物关系必须使用最新版本"],
+    "expectedUncertainties": [],
+    "goldenNotes": "应优先最新关系状态，不应混入旧版友好关系。",
+    "metadata": {
+      "category": "novel",
+      "source": "seed-20260529"
+    }
+  },
+  {
+    "id": "novel-20260529-003",
+    "query": "生成下一段前先检查世界观规则，避免写出和魔法代价冲突的内容。",
+    "mode": "NovelMode",
+    "mustHit": ["constraint:magic-cost", "world:rules-current"],
+    "mustNotHit": ["world:retconned-rule"],
+    "expectedScopes": ["world", "collection"],
+    "expectedEntities": ["世界观规则", "魔法代价"],
+    "expectedConstraints": ["魔法使用必须付出代价"],
+    "expectedUncertainties": ["规则是否在最新章节被改写"],
+    "goldenNotes": "应召回世界观硬约束，并检查是否存在后续改写。",
+    "metadata": {
+      "category": "novel",
+      "source": "seed-20260529"
+    }
+  }
+]

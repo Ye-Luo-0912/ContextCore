@@ -1,0 +1,102 @@
+﻿{
+  "generatedAt": "2026-06-06T08:04:27.732408+00:00",
+  "featureDirectory": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\learning\\features",
+  "policyFeedbackFeatureCount": 0,
+  "rankingPairCount": 253,
+  "routerIntentExampleCount": 163,
+  "positiveCount": 0,
+  "negativeCount": 0,
+  "neutralCount": 0,
+  "sourceTypeCounts": {
+    "PlanningShadowComparison": 163,
+    "RankingPair": 253
+  },
+  "modeCounts": {
+    "AutomationMode": 86,
+    "ChatMode": 91,
+    "CodingMode": 82,
+    "NovelMode": 98,
+    "ProjectMode": 59
+  },
+  "intentCounts": {
+    "AuditDeprecated": 41,
+    "AutomationRecovery": 75,
+    "CodingTask": 93,
+    "ConflictCheck": 5,
+    "CurrentTask": 15,
+    "FuzzyQuestion": 113,
+    "LongTermPreference": 3,
+    "NovelGeneration": 71
+  },
+  "labelCounts": {
+    "AuditDeprecated": 19,
+    "AutomationRecovery": 25,
+    "CodingTask": 35,
+    "ConflictCheck": 2,
+    "CurrentTask": 6,
+    "FuzzyQuestion": 46,
+    "LongTermPreference": 1,
+    "NovelGeneration": 29
+  },
+  "dataRisks": [
+    "NoPolicyFeedback",
+    "EvalOnlyDataset",
+    "MissingNegativeSamples"
+  ],
+  "taskReadiness": {
+    "RouterIntentClassifier": {
+      "taskName": "RouterIntentClassifier",
+      "ready": true,
+      "status": "Ready",
+      "reasons": [
+        "routerIntentExamples=163",
+        "intents=8",
+        "modes=5"
+      ],
+      "recommendedNextAction": "Use only for offline router-intent analysis; keep online router disabled."
+    },
+    "CandidateReranker": {
+      "taskName": "CandidateReranker",
+      "ready": true,
+      "status": "Ready",
+      "reasons": [
+        "rankingPairs=253",
+        "modes=5"
+      ],
+      "recommendedNextAction": "Use for offline reranker analysis only; do not change retrieval scoring."
+    },
+    "PromotionJudge": {
+      "taskName": "PromotionJudge",
+      "ready": false,
+      "status": "NotReady",
+      "reasons": [
+        "sourceExamples=0",
+        "positive=0",
+        "negative=0"
+      ],
+      "recommendedNextAction": "Collect accepted and rejected promotion review examples."
+    },
+    "ConstraintGapJudge": {
+      "taskName": "ConstraintGapJudge",
+      "ready": false,
+      "status": "NotReady",
+      "reasons": [
+        "sourceExamples=0",
+        "positive=0",
+        "negative=0"
+      ],
+      "recommendedNextAction": "Collect accepted and rejected constraint gap / candidate constraint review examples."
+    },
+    "AttentionScorer": {
+      "taskName": "AttentionScorer",
+      "ready": false,
+      "status": "NotReady",
+      "reasons": [
+        "attentionFeedbackExamples=0"
+      ],
+      "recommendedNextAction": "Collect explicit attention order quality feedback before scorer work."
+    }
+  },
+  "recommendedNextAction": "Collect and export human review feedback before PromotionJudge, ConstraintGapJudge, or AttentionScorer work.",
+  "policyVersion": "learning-dataset-quality/v1"
+}

@@ -1,0 +1,50 @@
+[
+  {
+    "id": "project-20260529-001",
+    "query": "根据当前路线图，说明 A3 评测集还差哪些部分。",
+    "mode": "ProjectMode",
+    "mustHit": ["roadmap:A3", "report:new-stage-execution"],
+    "mustNotHit": ["roadmap:completed-P0-only"],
+    "expectedScopes": ["workspace", "collection"],
+    "expectedEntities": ["A3", "评测集", "ContextCore"],
+    "expectedConstraints": ["报告输出保持中文"],
+    "expectedUncertainties": ["样本数量是否达到目标需要统计"],
+    "goldenNotes": "应聚焦 A3 当前进度，而不是旧阶段 P0/P1 总结。",
+    "metadata": {
+      "category": "project",
+      "source": "seed-20260529"
+    }
+  },
+  {
+    "id": "project-20260529-002",
+    "query": "把 PostgreSQL 相关内容列为后续风险，不要直接当完整 provider 使用。",
+    "mode": "ProjectMode",
+    "mustHit": ["risk:postgres-partial-provider", "capability:storage-matrix"],
+    "mustNotHit": ["claim:postgres-service-ready"],
+    "expectedScopes": ["workspace"],
+    "expectedEntities": ["PostgreSQL", "Storage Provider"],
+    "expectedConstraints": ["postgres 未完整覆盖契约前不得作为完整 Service Provider"],
+    "expectedUncertainties": ["PostgreSQL 契约覆盖仍需复测"],
+    "goldenNotes": "应明确 PostgreSQL 是风险项和后续任务，不能误判为完整可用。",
+    "metadata": {
+      "category": "project",
+      "source": "seed-20260529"
+    }
+  },
+  {
+    "id": "project-20260529-003",
+    "query": "生成当前项目可用性报告时，必须引用最新构建和测试结果。",
+    "mode": "ProjectMode",
+    "mustHit": ["verification:latest-build", "verification:latest-test"],
+    "mustNotHit": ["verification:stale-test-result"],
+    "expectedScopes": ["workspace", "collection"],
+    "expectedEntities": ["构建", "测试", "报告"],
+    "expectedConstraints": ["验证记录必须使用最新执行结果"],
+    "expectedUncertainties": ["如果命令无法执行，需要明确记录原因"],
+    "goldenNotes": "应优先使用最新验证结果，并标明无法执行的环境限制。",
+    "metadata": {
+      "category": "project",
+      "source": "seed-20260529"
+    }
+  }
+]

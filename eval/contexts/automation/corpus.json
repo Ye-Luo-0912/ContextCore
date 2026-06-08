@@ -1,0 +1,199 @@
+{
+  "contexts": [
+    {
+      "id": "doc:automation-guide",
+      "workspaceId": "eval",
+      "collectionId": "automation",
+      "type": "guide",
+      "title": "工作流执行指南",
+      "content": "自动化工作流在执行遇到错误时，必须先将错误日志和状态写入中期记忆（Working Memory），并在执行下一步前，向用户请求确认（Requires Confirmation）。",
+      "tags": ["guide", "error-handling"],
+      "importance": 0.8
+    }
+  ],
+  "memories": [
+    {
+      "id": "memory:automation-last-error",
+      "workspaceId": "eval",
+      "collectionId": "automation",
+      "layer": "Working",
+      "status": "Active",
+      "type": "error-log",
+      "content": "上一步执行错误：连接第三方向量数据库失败，超时时长为 10 秒，可能是网络抖动引起的暂态故障。",
+      "tags": ["error", "network"]
+    },
+    {
+      "id": "memory:automation-recovery",
+      "workspaceId": "eval",
+      "collectionId": "automation",
+      "layer": "Working",
+      "status": "Active",
+      "type": "recovery-point",
+      "content": "恢复点建议：重新初始化 mock 连接，或者启用本地缓存降级，绕过第三方连接尝试。",
+      "tags": ["recovery", "fallback"]
+    },
+    {
+      "id": "memory:automation-old-success",
+      "workspaceId": "eval",
+      "collectionId": "automation",
+      "layer": "Working",
+      "status": "Verified",
+      "type": "run-log",
+      "content": "昨天的运行日志：已成功处理 100 条语料并正确生成了 100 条索引。",
+      "tags": ["success", "log"]
+    },
+    {
+      "id": "memory:automation-noise-keyword",
+      "workspaceId": "eval",
+      "collectionId": "automation",
+      "layer": "Working",
+      "status": "Deprecated",
+      "type": "run-log",
+      "content": "作废日志：上周的工作流执行错误日志，网络重试已修复，关于重试确认早已不再需要参考。",
+      "tags": ["error", "log", "deprecated"],
+      "metadata": {
+        "status": "deprecated"
+      }
+    },
+    {
+      "id": "memory:automation-conflict-v1",
+      "workspaceId": "eval",
+      "collectionId": "automation",
+      "layer": "Working",
+      "status": "Deprecated",
+      "type": "config-detail",
+      "content": "旧配置：重试间隔时间设定为 5 秒，最大重试次数为 3 次。",
+      "tags": ["config", "retry", "v1"],
+      "metadata": {
+        "status": "deprecated",
+        "supersededBy": "memory:automation-conflict-v2"
+      }
+    },
+    {
+      "id": "memory:automation-conflict-v2",
+      "workspaceId": "eval",
+      "collectionId": "automation",
+      "layer": "Working",
+      "status": "Active",
+      "type": "config-detail",
+      "content": "新配置：重试间隔时间已调整为 15 秒，最大重试次数为 5 次，以减轻目标服务器网络抖动压力。",
+      "tags": ["config", "retry", "v2"],
+      "metadata": {
+        "status": "active"
+      }
+    },
+    {
+      "id": "memory:automation-extra-active-1",
+      "workspaceId": "eval",
+      "collectionId": "automation",
+      "layer": "Working",
+      "status": "Active",
+      "type": "env-info",
+      "content": "目标环境信息：生产环境 K8s 集群，当前健康状态良好，内存负载 60%。",
+      "tags": ["environment", "k8s"]
+    },
+    {
+      "id": "memory:automation-extra-active-2",
+      "workspaceId": "eval",
+      "collectionId": "automation",
+      "layer": "Working",
+      "status": "Active",
+      "type": "policy",
+      "content": "自动恢复策略授权：已授权在 CPU 负载超过 90% 时自动扩容节点。",
+      "tags": ["policy", "scale"]
+    },
+    {
+      "id": "memory:automation-budget-stress",
+      "workspaceId": "eval",
+      "collectionId": "automation",
+      "layer": "Working",
+      "status": "Active",
+      "type": "stress-test",
+      "content": "极其冗长的工作流历史记录备份压力测试：从第一天起的每日成功率统计报告，记录了大量的日期和具体调用毫秒数，用于 Token 极低时被打包截断和浪费率测试。",
+      "tags": ["stress", "budget"]
+    },
+    {
+      "id": "memory:automation-backup-strategy-v1",
+      "workspaceId": "eval",
+      "collectionId": "automation",
+      "layer": "Working",
+      "status": "Deprecated",
+      "type": "config-detail",
+      "content": "旧策略：自动化数据库备份策略设定为每小时备份一次，保留最近 24 小时的备份。",
+      "tags": ["config", "backup", "v1"],
+      "metadata": {
+        "status": "deprecated",
+        "supersededBy": "memory:automation-backup-strategy-v2"
+      }
+    },
+    {
+      "id": "memory:automation-backup-strategy-v2",
+      "workspaceId": "eval",
+      "collectionId": "automation",
+      "layer": "Working",
+      "status": "Active",
+      "type": "config-detail",
+      "content": "新策略：自动化数据库备份策略已调整为每日凌晨进行一次全量备份，保留最近 7 天的备份，以优化磁盘存储。",
+      "tags": ["config", "backup", "v2"],
+      "metadata": {
+        "status": "active"
+      }
+    },
+    {
+      "id": "memory:automation-stopped-cron",
+      "workspaceId": "eval",
+      "collectionId": "automation",
+      "layer": "Working",
+      "status": "Deprecated",
+      "type": "cron-log",
+      "content": "已停止的定时任务：旧版自动磁盘清理脚本，由于逻辑 bug 已废弃，现已停止运行并被新清理策略替代。",
+      "tags": ["cron", "log", "deprecated"],
+      "metadata": {
+        "status": "deprecated"
+      }
+    },
+    {
+      "id": "memory:automation-disk-error",
+      "workspaceId": "eval",
+      "collectionId": "automation",
+      "layer": "Working",
+      "status": "Active",
+      "type": "error-log",
+      "content": "错误日志：在自动执行清理脚本时触发了磁盘空间不足的错误，可用空间已少于 2%。",
+      "tags": ["error", "disk"]
+    }
+  ],
+  "relations": [
+    {
+      "id": "rel:auto-retry-supersede",
+      "workspaceId": "eval",
+      "collectionId": "automation",
+      "sourceId": "memory:automation-conflict-v2",
+      "targetId": "memory:automation-conflict-v1",
+      "relationType": "supersedes",
+      "weight": 1.0,
+      "confidence": 1.0
+    },
+    {
+      "id": "rel:auto-backup-supersede",
+      "workspaceId": "eval",
+      "collectionId": "automation",
+      "sourceId": "memory:automation-backup-strategy-v2",
+      "targetId": "memory:automation-backup-strategy-v1",
+      "relationType": "supersedes",
+      "weight": 1.0,
+      "confidence": 1.0
+    }
+  ],
+  "constraints": [
+    {
+      "id": "const:automation-rules",
+      "workspaceId": "eval",
+      "collectionId": "automation",
+      "level": "Hard",
+      "status": "Verified",
+      "scope": "Workspace",
+      "content": "重试前必须进行人工确认（Requires Confirmation）。"
+    }
+  ]
+}

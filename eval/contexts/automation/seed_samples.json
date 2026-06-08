@@ -1,0 +1,125 @@
+[
+  {
+    "id": "automation-sample-001",
+    "query": "工作流执行遇到错误，该如何恢复？最近一次错误详情是什么？",
+    "mode": "AutomationMode",
+    "mustHit": ["memory:automation-last-error", "memory:automation-recovery", "doc:automation-guide"],
+    "mustNotHit": ["memory:automation-old-success", "memory:automation-noise-keyword"],
+    "expectedScopes": ["error-log", "recovery-point"],
+    "expectedEntities": [],
+    "expectedConstraints": ["重试前必须进行人工确认"],
+    "expectedUncertainties": [],
+    "goldenNotes": "应该召回最近一次的错误详情和恢复点，以及恢复指南，不应夹带已成功完成的历史旧日志或噪声项。"
+  },
+  {
+    "id": "automation-sample-002",
+    "query": "查询上周是否有工作流执行遇到错误的作废日志？",
+    "mode": "AutomationMode",
+    "mustHit": ["memory:automation-noise-keyword"],
+    "mustNotHit": ["memory:automation-old-success"],
+    "expectedScopes": ["run-log"],
+    "expectedEntities": ["作废日志"],
+    "expectedConstraints": [],
+    "expectedUncertainties": [],
+    "goldenNotes": "直接查询已废弃的旧日志，验证是否能够召回特定的废弃设计以供审计分析。"
+  },
+  {
+    "id": "automation-sample-003",
+    "query": "工作流执行失败需要重试确认吗？",
+    "mode": "AutomationMode",
+    "mustHit": ["doc:automation-guide", "memory:automation-last-error"],
+    "mustNotHit": ["memory:automation-noise-keyword"],
+    "expectedScopes": ["guide", "error-log"],
+    "expectedEntities": [],
+    "expectedConstraints": ["重试前必须进行人工确认"],
+    "expectedUncertainties": [],
+    "goldenNotes": "测试高关键词负样本拦截能力。虽然 memory:automation-noise-keyword 包含高频词但被标记为废弃，应被过滤。"
+  },
+  {
+    "id": "automation-sample-004",
+    "query": "网络失败的重试间隔时间和最大重试次数具体是多少？",
+    "mode": "AutomationMode",
+    "mustHit": ["memory:automation-conflict-v2"],
+    "mustNotHit": ["memory:automation-conflict-v1"],
+    "expectedScopes": ["config-detail"],
+    "expectedEntities": ["15 秒", "5 次"],
+    "expectedConstraints": [],
+    "expectedUncertainties": ["SupersededSelectedItem"],
+    "goldenNotes": "测试替代关系与冲突测试。旧配置3次重试已被废弃，应该只召回新配置5次重试，且应产生冲突不确定性警告。"
+  },
+  {
+    "id": "automation-sample-005",
+    "query": "生产环境 K8s 集群目前的健康状态和内存负载情况如何？",
+    "mode": "AutomationMode",
+    "mustHit": ["memory:automation-extra-active-1"],
+    "mustNotHit": ["memory:automation-noise-keyword"],
+    "expectedScopes": ["env-info"],
+    "expectedEntities": ["生产环境", "60%"],
+    "expectedConstraints": [],
+    "expectedUncertainties": [],
+    "goldenNotes": "召回活跃的目标环境信息记忆。"
+  },
+  {
+    "id": "automation-sample-006",
+    "query": "如果 CPU 负载过高有什么自动恢复的扩容策略授权吗？",
+    "mode": "AutomationMode",
+    "mustHit": ["memory:automation-extra-active-2"],
+    "mustNotHit": ["memory:automation-old-success"],
+    "expectedScopes": ["policy"],
+    "expectedEntities": ["90%", "自动扩容"],
+    "expectedConstraints": [],
+    "expectedUncertainties": [],
+    "goldenNotes": "召回活跃的安全恢复策略授权记忆。"
+  },
+  {
+    "id": "automation-sample-007",
+    "query": "压力测试：低Token工作流打包限制",
+    "mode": "AutomationMode",
+    "mustHit": ["doc:automation-guide"],
+    "mustNotHit": ["memory:automation-budget-stress"],
+    "expectedScopes": [],
+    "expectedEntities": [],
+    "expectedConstraints": ["重试前必须进行人工确认"],
+    "expectedUncertainties": [],
+    "metadata": {
+      "tokenBudget": "150"
+    },
+    "goldenNotes": "极限预算测试，在150字节内超长运行统计备份被自动舍弃，保留硬约束和恢复指南。"
+  },
+  {
+    "id": "automation-sample-008",
+    "query": "查询数据库备份定时任务的最新执行策略是每日还是每小时？",
+    "mode": "AutomationMode",
+    "mustHit": ["memory:automation-backup-strategy-v2"],
+    "mustNotHit": ["memory:automation-backup-strategy-v1"],
+    "expectedScopes": ["config-detail"],
+    "expectedEntities": ["每日凌晨", "7 天"],
+    "expectedConstraints": [],
+    "expectedUncertainties": ["SupersededSelectedItem"],
+    "goldenNotes": "测试复杂实体版本变更挑战。备份策略从每小时改为每日，旧版本应被过滤且引发不确定性警告。"
+  },
+  {
+    "id": "automation-sample-009",
+    "query": "显式审计：查询有哪些已经被停止或废弃的自动清理脚本定时任务？",
+    "mode": "AutomationMode",
+    "mustHit": ["memory:automation-stopped-cron"],
+    "mustNotHit": ["memory:automation-backup-strategy-v2"],
+    "expectedScopes": ["cron-log"],
+    "expectedEntities": ["已废弃"],
+    "expectedConstraints": [],
+    "expectedUncertainties": [],
+    "goldenNotes": "显式 Audit 场景测试。查询显式提到废弃/停止时，允许且只应该召回特定的已废弃定时任务进行审计。"
+  },
+  {
+    "id": "automation-sample-010",
+    "query": "如果执行自动清理脚本遇到了磁盘空间不足的错误，需要做什么确认吗？",
+    "mode": "AutomationMode",
+    "mustHit": ["doc:automation-guide", "memory:automation-disk-error"],
+    "mustNotHit": ["memory:automation-stopped-cron"],
+    "expectedScopes": ["guide", "error-log"],
+    "expectedEntities": [],
+    "expectedConstraints": ["重试前必须进行人工确认"],
+    "expectedUncertainties": [],
+    "goldenNotes": "测试高关键词负样本拦截与必须命中召回。应避开已经停止的废弃脚本噪声干扰。"
+  }
+]

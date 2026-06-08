@@ -1,0 +1,147 @@
+[
+  {
+    "id": "compression-sample-001",
+    "category": "project_report",
+    "title": "ContextCore 基础设施化阶段审计与性能优化报告",
+    "inputs": [
+      {
+        "id": "report-item-1",
+        "title": "ContextCore 性能审计结论",
+        "type": "report",
+        "content": "在对 ContextCore 独立内存与文件系统存储后端的并发压力审计中，发现 FileSystem 向量检索的性能瓶颈。在 JSONL 文件线性反序列化模式下，1k 条记录的 p50 查询延迟为 133ms，当记录规模达到 5k 条时，JSONL 大小增长至 23.7MB，p50 查询延迟呈线性恶化达到 393ms。这表明，当向量索引数据规模超过 2000 条时，必须强制迁移至 PostgreSQL + pgvector (支持 HNSW 索引) 存储方案，方可保证查询在 O(log N) 延迟内完成。此外，单机轻量级部署及开发调试场景下，FileSystem 依然是零配置的最佳默认推荐后端。",
+        "importance": 0.9,
+        "tags": ["performance", "filesystem", "postgres", "vector"],
+        "version": 1
+      },
+      {
+        "id": "report-item-2",
+        "title": "系统可用性与监控设计",
+        "type": "design",
+        "content": "为保证生产环境下 ContextCore 的可运维性，新增就绪性健康检查探针 `/api/health/ready`（K8s readinessProbe 专用），支持对存储层读写、网关活跃状态以及向量模型进行 3s 超时深度探伤。同时，通过 System.Diagnostics.Metrics 统一埋点了 API Latency、Package Build Latency、Retrieval Latency 以及 LLM 压缩成本统计，支持零开销地向 OpenTelemetry / Prometheus 导出性能指标，并在 ControlRoom 中集成 Metrics 本地内存滑动窗口查询，提供离线性能状态大盘。",
+        "importance": 0.85,
+        "tags": ["health", "monitoring", "metrics", "observability"],
+        "version": 1
+      }
+    ],
+    "goldenSummary": "# ContextCore 性能审计与监控设计摘要\n\n## 1. 存储与检索性能瓶颈\n- **性能现状**：FileSystem 存储后端采用 JSONL 线性反序列化反查，1k 条数据 p50 延迟为 133ms，5k 条数据（23.7MB）p50 延迟恶化至 393ms。\n- **优化决策**：对于超过 2000 条向量条目的生产场景，必须迁移至 **PostgreSQL + pgvector (HNSW 索引)**；小于 2000 条的轻量单机部署依然推荐使用 FileSystem。\n\n## 2. 系统就绪与监控闭环\n- **就绪探针**：新增 `/api/health/ready` 深度就绪探针，支持 3s 超时对存储、网关与模型的健康检测。\n- **性能埋点**：通过原生 `System.Diagnostics.Metrics` 埋点 API 延迟、包构建延迟、语义检索延迟及 LLM 压缩成本，支持 OpenTelemetry 监控和 ControlRoom 内存大盘离线大盘反查。",
+    "goldenTags": ["performance", "storage-optimization", "postgres-migration", "health-check", "metrics"],
+    "goldenIndexHints": ["performance-audit", "pgvector-threshold", "health-probe", "metrics-observability"],
+    "goldenNotes": "本样本重点测试长报告的多主题提炼能力。摘要必须精确反映 2000 条向量的 pgvector 迁移阈值，以及 /api/health/ready 探针与 Metrics 观测指标。"
+  },
+  {
+    "id": "compression-sample-002",
+    "category": "long_chat",
+    "title": "AI编码助手与开发者的深度设计讨论会话",
+    "inputs": [
+      {
+        "id": "chat-item-1",
+        "title": "会话片段-核心语言与架构原则",
+        "type": "chat",
+        "content": "开发者：我们要开发的是 ContextCore 核心系统，这是一个通用的上下文管理基础设施。我们已经敲定了基于 C# / .NET 10 开发，前端控制台是 ControlRoom。对于上层集成，我们要提供通用的 Client SDK，不需要为特定应用做硬编码绑定。另外，短期对话记忆是不默认持久化和向量化的，只有触发 Promotion 规则的黄金结论才会提升到中期和长期记忆中，这样能极大防止数据库污染。这个原则不能变。",
+        "importance": 0.8,
+        "tags": ["chat", "architecture", "promotion"],
+        "version": 2
+      },
+      {
+        "id": "chat-item-2",
+        "title": "会话片段-交付目标与数据库倾向",
+        "type": "chat",
+        "content": "AI助手：明白，短期内容默认不持久化是防止存储杂音的优秀设计。关于存储，由于是第一阶段的 Alpha 固化，我们是否先以 FileSystem 作为生产推荐，Postgres 标记为 Experimental 实验性？\n开发者：是的，单机或 IDE 插件环境默认都是 FileSystem。Postgres 全量生产化放在稍后的 B1 阶段。还有，我们必须在 **6月30日** 交付第一版 Alpha。在 6月30日 之前要完成 50 条真实 query 的评测全绿。",
+        "importance": 0.75,
+        "tags": ["chat", "database", "deadline"],
+        "version": 2
+      }
+    ],
+    "goldenSummary": "# ContextCore 设计讨论摘要（会话归档）\n\n## 1. 核心技术栈与架构设计\n- **开发语言**：基于 **C# / .NET 10** 进行通用上下文管理基础设施开发，配备 ControlRoom 控制台与 Client SDK。\n- **记忆固化机制**：短期会话默认**不持久化、不向量化**；只有触发晋升（Promotion）规则的黄金结论才会提升至中期/长期记忆，防止存储污染。\n\n## 2. 存储路由与交付时间线\n- **存储默认**：第一阶段 Alpha 版本默认推荐使用 **FileSystem** 后端，PostgreSQL 暂列为 Experimental 实验特性。\n- **交付时间**：必须在 **6月30日** 前交付 Alpha 首个稳定版，且需通过 50 条中文真实评测全绿。",
+    "goldenTags": ["chat-summary", "architecture-decision", "memory-promotion", "filesystem-first", "june-30-deadline"],
+    "goldenIndexHints": ["csharp-net10", "promotion-rule", "filesystem-default", "june-30-delivery"],
+    "goldenNotes": "本样本测试在杂乱的多轮会话中提取关键架构共识与强约束（如 6月30日 交付期、短期内容不持久化决策、C# .NET 10 技术栈）的能力。"
+  },
+  {
+    "id": "compression-sample-003",
+    "category": "novel_setting",
+    "title": "《星渊回响》科幻小说世界观与核心能量源设定",
+    "inputs": [
+      {
+        "id": "novel-item-1",
+        "title": "星渊地理与虚空晶体",
+        "type": "setting",
+        "content": "‘星渊’是位于银河系边缘的巨大时空裂缝，其核心区域悬浮着名为‘虚空晶体’的暗能量聚合体。虚空晶体是人类帝国目前最核心的动力能源，能够驱动跨星系的星门跃迁。然而，晶体极其不稳定，任何能量提取脉冲的输出峰值如果超过 **12,000 脉冲单位**（Pulse Units），就会导致晶体谐振失控，引发时空崩塌。提取站的核心原则是‘单芯脉冲限制在 12,000 以下，超过则强制阻断’。",
+        "importance": 0.95,
+        "tags": ["world-setting", "energy-source", "hard-constraint"],
+        "version": 1
+      },
+      {
+        "id": "novel-item-2",
+        "title": "虚空侵蚀副作用",
+        "type": "setting",
+        "content": "长期接触虚空晶体辐射的提取工人，会面临名为‘虚空侵蚀’的生理与精神双重衰退。侵蚀会导致人的记忆出现断层、视觉呈现出紫色的极光幻觉，并在末期产生自我意识的解体，表现为‘融于虚空’的强烈精神倾向。帝国的劳工法规定，每名开采工人的单次连续换班时长不得超过 **72 小时**，换班后必须强制在净化舱接受至少 24 小时的离子去辐射洗涤。",
+        "importance": 0.85,
+        "tags": ["lore", "health-hazard", "soft-constraint"],
+        "version": 1
+      }
+    ],
+    "goldenSummary": "# 《星渊回响》：虚空晶体与开采限制设定\n\n## 1. 核心能量源：虚空晶体\n- **背景设定**：悬浮于银河边缘时空裂缝‘星渊’中的暗能量晶体，用以驱动帝国星门跃迁，但极不稳定。\n- **硬性约束限制**：单芯能量提取脉冲峰值**绝对禁止超过 12,000 脉冲单位**，否则谐振失控会导致时空崩塌；越限时系统强制阻断。\n\n## 2. 开采副作用与劳工保障\n- **虚空侵蚀危害**：晶体辐射会导致人记忆断层、视觉紫色极光幻觉、末期自我意识解体。\n- **开采安全规范**：单次连续换班时长**不得超过 72 小时**，下班后必须在净化舱进行 24 小时离子去辐射洗涤。",
+    "goldenTags": ["novel-lore", "energy-setting", "pulse-constraint", "void-erosion", "mining-safety"],
+    "goldenIndexHints": ["void-crystal", "12000-pulse-limit", "void-erosion-syndrome", "72-hour-shift"],
+    "goldenNotes": "本样本测试科幻设定小说的元素提炼和数字强约束提取。12,000脉冲极限和72小时最长轮班是不可丢弃的核心设定元素。"
+  },
+  {
+    "id": "compression-sample-004",
+    "category": "automation_log",
+    "title": "多步骤数据同步与清理作业执行日志",
+    "inputs": [
+      {
+        "id": "log-item-1",
+        "title": "作业初期执行日志",
+        "type": "log",
+        "content": "[2026-05-29 10:00:01] [INFO] Job-100234 Starter. WorkspaceId: ws-prod-backup.\n[2026-05-29 10:00:03] [INFO] Step 1: Pre-check database file system integrity... Succeeded. Found 0 corrupted blocks.\n[2026-05-29 10:00:15] [INFO] Step 2: Download raw delta package from bucket 'context-core-synced'... Completed. File size: 145.2 MB.\n[2026-05-29 10:00:20] [WARN] Step 3: Transforming payload entities. Encountered 42 records with invalid datetime values (epoch 0). Auto-fallback to local machine date applied.",
+        "importance": 0.8,
+        "tags": ["log", "backup", "step-1-3"],
+        "version": 1
+      },
+      {
+        "id": "log-item-2",
+        "title": "作业中后期执行日志",
+        "type": "log",
+        "content": "[2026-05-29 10:00:30] [ERROR] Step 4: Loading delta to local DB failed. Reason: Npgsql.PostgresException: Connection timeout.\n[2026-05-29 10:01:00] [INFO] Step 4: Retrying loading... (Attempt 1/3) failed.\n[2026-05-29 10:01:30] [INFO] Step 4: Retrying loading... (Attempt 2/3) succeeded. Inserted 14,200 entities.\n[2026-05-29 10:02:00] [INFO] Step 5: Clean up temporary zip and temp cache files... Done. Job Succeeded in 119 seconds.",
+        "importance": 0.85,
+        "tags": ["log", "backup", "step-4-5"],
+        "version": 1
+      }
+    ],
+    "goldenSummary": "# 数据同步与清理作业 (Job-100234) 运行报告\n\n## 1. 基础作业信息\n- **作业ID**：Job-100234\n- **工作区**：`ws-prod-backup`\n- **耗时情况**：在 119 秒内执行完毕，最终状态为 **Succeeded (成功)**。\n\n## 2. 详细执行流程与异常记录\n- **步骤 1 & 2**：前置数据库完整性校验无坏块，从 'context-core-synced' 下载 145.2 MB 增量包成功。\n- **步骤 3 (Warn)**：转换数据时发现 42 条包含无效时间戳 (epoch 0) 的记录，已自动修正为本机当前时间。\n- **步骤 4 (Error & Retry)**：写入本地数据库时因 PostgreSQL 连接超时首次失败；经过 **第 2 次重试** (Attempt 2/3) 成功恢复，写入 14,200 条实体。\n- **步骤 5**：清理临时压缩包与缓存成功，完成收尾。",
+    "goldenTags": ["execution-log", "backup-job", "timeout-retry", "timestamp-correction", "job-recovery"],
+    "goldenIndexHints": ["database-integrity", "datetime-fallback", "postgres-timeout-retry", "clean-up-temp"],
+    "goldenNotes": "自动化运维日志提炼。要求准确抽取出中间步骤发生的异常事件（42条时间戳错误、数据库超时重试2次成功、写入14,200条数据）以利于故障复盘。"
+  },
+  {
+    "id": "compression-sample-005",
+    "category": "design_document",
+    "title": "多层级工作记忆固化与晋升机制设计决策 (ADR-004)",
+    "inputs": [
+      {
+        "id": "adr-item-1",
+        "title": "ADR-004 背景与晋升规则",
+        "type": "design-adr",
+        "content": "在 ADR-004 中， we 明确了工作记忆 (Working Memory) 向上固化至长期记忆 (Stable Memory) 的自动化和审核生命周期。所有 LLM 生成的决策或关系首选进入 `candidate` (候选项) 状态，而非直接修改长期库。当某个候选项在后续交互中被反复提及，且置信度 (Confidence) 评分自动增长超过 **0.85** 时，或者上层控制台显式按下 `accept` 时，该记录在 IPromotionService 驱动下自动提升到 `stable` 层。低于 0.85 且未活跃的候选项将处于 `needs_review` 状态供人工排查。",
+        "importance": 0.9,
+        "tags": ["adr", "memory-promotion", "review-flow"],
+        "version": 3
+      },
+      {
+        "id": "adr-item-2",
+        "title": "ADR-004 记忆衰退与时效性",
+        "type": "design-adr",
+        "content": "为保证长期稳定记忆的纯净性，引入记忆衰退度规则。最近 7 天内被成功引用或活跃更新的 Memory 条目将获得额外 +2.0 的 `RecencyScore` 活跃加分；更新时间距今超过 30 天的条目，该活跃加分衰减至 +1.0。若条目的元数据被后续生成的 `supersededBy` 所指向，或状态直接标记为 `deprecated`，则对该条目施加 -12.0 的强排除惩罚，强制使其跌出 Top-3 选中位置，避免对当前最新的开发上下文造成致命的噪音干扰。",
+        "importance": 0.8,
+        "tags": ["adr", "decay-policy", "superseded-filter"],
+        "version": 3
+      }
+    ],
+    "goldenSummary": "# ADR-004：工作记忆晋升与衰退机制设计决策\n\n## 1. 记忆晋升与审核生命周期\n- **候选项暂存**：新决策默认进入 `candidate` 状态，不直接写入长期库。\n- **自动提升阈值**：交互中被反复提及且置信度 **> 0.85** 的候选项将自动提至 `stable` 长期层；其余留存 `needs_review` 供人工审核。\n- **手动晋升**：支持上层控制室直接调用 `accept` 手动晋升。\n\n## 2. 记忆时效性与衰退过滤\n- **活跃奖励**：≤ 7 天活跃条目提供 **+2.0 RecencyScore**；> 30 天条目活跃分衰退至 +1.0。\n- **过期排除**：被 `supersededBy` 指向或标记为 `deprecated` 的条目被施加 **-12.0 强排除惩罚**，使其快速跌出 Top-3 选中位置，避免噪声干扰。",
+    "goldenTags": ["adr-004", "memory-promotion", "confidence-threshold", "recency-decay", "deprecated-penalty"],
+    "goldenIndexHints": ["candidate-to-stable", "0.85-confidence-gate", "recency-score-bonus", "deprecated-exclusion-penalty"],
+    "goldenNotes": "设计决策文档提炼。必须精准捕获 0.85 置信度晋升门槛、+2.0 与 +1.0 时效加分规则、以及过期项的 -12.0 排除惩罚规则。"
+  }
+]

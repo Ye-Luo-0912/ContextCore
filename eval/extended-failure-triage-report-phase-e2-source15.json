@@ -1,0 +1,2023 @@
+﻿{
+  "OperationId": "09adb81ff70c47a3a8958901d5cc268a",
+  "GeneratedAt": "2026-06-04T17:25:03.341476+00:00",
+  "TotalSamples": 113,
+  "FailedSamples": 15,
+  "CategoryCounts": {
+    "BudgetDroppedImportantItem": 5,
+    "ConstraintMiss": 5,
+    "EntityMiss": 4,
+    "MissingMustHit": 3,
+    "MissingUncertainty": 9,
+    "MustHitSelectedButTooLow": 5,
+    "TooManyLowValueSelected": 5
+  },
+  "ModeCounts": {
+    "AutomationMode": 5,
+    "ChatMode": 4,
+    "CodingMode": 2,
+    "NovelMode": 4
+  },
+  "FixPlan": [
+    {
+      "SampleId": "chat-sample-003",
+      "FailureType": "BudgetDroppedImportantItem",
+      "SuspectedRootCause": "Must-hit evidence is selected but ranked below the top-10 package quality gate.",
+      "FixType": "section priority",
+      "ExpectedRegressionTest": "Extended sample chat-sample-003 should keep must-hit/important evidence under budget pressure."
+    },
+    {
+      "SampleId": "chat-sample-004",
+      "FailureType": "BudgetDroppedImportantItem",
+      "SuspectedRootCause": "Must-hit evidence is selected but ranked below the top-10 package quality gate.",
+      "FixType": "section priority",
+      "ExpectedRegressionTest": "Extended sample chat-sample-004 should keep must-hit/important evidence under budget pressure."
+    },
+    {
+      "SampleId": "chat-sample-005",
+      "FailureType": "MissingMustHit",
+      "SuspectedRootCause": "Important must-hit evidence was dropped or diluted under package budget pressure.",
+      "FixType": "budget diagnostics",
+      "ExpectedRegressionTest": "Extended sample chat-sample-005 should keep must-hit/important evidence under budget pressure."
+    },
+    {
+      "SampleId": "chat-20260529-003",
+      "FailureType": "ConstraintMiss",
+      "SuspectedRootCause": "Expected constraint text is not represented in constraints/package sections.",
+      "FixType": "uncertainty mapping",
+      "ExpectedRegressionTest": "Extended sample chat-20260529-003 should satisfy expected uncertainty aliases."
+    },
+    {
+      "SampleId": "novel-20260529-001",
+      "FailureType": "MissingMustHit",
+      "SuspectedRootCause": "Expected constraint text is not represented in constraints/package sections.",
+      "FixType": "uncertainty mapping",
+      "ExpectedRegressionTest": "Extended sample novel-20260529-001 should satisfy expected uncertainty aliases."
+    },
+    {
+      "SampleId": "novel-20260529-009",
+      "FailureType": "ConstraintMiss",
+      "SuspectedRootCause": "Expected constraint text is not represented in constraints/package sections.",
+      "FixType": "uncertainty mapping",
+      "ExpectedRegressionTest": "Extended sample novel-20260529-009 should satisfy expected uncertainty aliases."
+    },
+    {
+      "SampleId": "novel-20260529-013",
+      "FailureType": "EntityMiss",
+      "SuspectedRootCause": "Expected entity is not represented in the selected package text.",
+      "FixType": "section priority",
+      "ExpectedRegressionTest": "Extended sample novel-20260529-013 should preserve expected entity text in package output."
+    },
+    {
+      "SampleId": "novel-20260529-017",
+      "FailureType": "ConstraintMiss",
+      "SuspectedRootCause": "Expected constraint text is not represented in constraints/package sections.",
+      "FixType": "section priority",
+      "ExpectedRegressionTest": "Extended sample novel-20260529-017 should preserve expected constraint text in package output."
+    },
+    {
+      "SampleId": "automation-sample-001",
+      "FailureType": "MissingMustHit",
+      "SuspectedRootCause": "Must-hit evidence is selected but ranked below the top-10 package quality gate.",
+      "FixType": "section priority",
+      "ExpectedRegressionTest": "Extended sample automation-sample-001 should rank selected must-hit evidence inside top 10."
+    },
+    {
+      "SampleId": "automation-20260529-003",
+      "FailureType": "MissingUncertainty",
+      "SuspectedRootCause": "Expected uncertainty is not mapped from uncertainty, diagnostic, evidence, historical, excluded, or risk surfaces.",
+      "FixType": "uncertainty mapping",
+      "ExpectedRegressionTest": "Extended sample automation-20260529-003 should satisfy expected uncertainty aliases."
+    },
+    {
+      "SampleId": "automation-20260529-004",
+      "FailureType": "MissingUncertainty",
+      "SuspectedRootCause": "Expected uncertainty is not mapped from uncertainty, diagnostic, evidence, historical, excluded, or risk surfaces.",
+      "FixType": "uncertainty mapping",
+      "ExpectedRegressionTest": "Extended sample automation-20260529-004 should satisfy expected uncertainty aliases."
+    },
+    {
+      "SampleId": "automation-20260529-008",
+      "FailureType": "EntityMiss",
+      "SuspectedRootCause": "Expected entity is not represented in the selected package text.",
+      "FixType": "uncertainty mapping",
+      "ExpectedRegressionTest": "Extended sample automation-20260529-008 should satisfy expected uncertainty aliases."
+    },
+    {
+      "SampleId": "automation-20260529-010",
+      "FailureType": "EntityMiss",
+      "SuspectedRootCause": "Expected entity is not represented in the selected package text.",
+      "FixType": "uncertainty mapping",
+      "ExpectedRegressionTest": "Extended sample automation-20260529-010 should satisfy expected uncertainty aliases."
+    },
+    {
+      "SampleId": "coding-20260529-002",
+      "FailureType": "ConstraintMiss",
+      "SuspectedRootCause": "Expected constraint text is not represented in constraints/package sections.",
+      "FixType": "uncertainty mapping",
+      "ExpectedRegressionTest": "Extended sample coding-20260529-002 should satisfy expected uncertainty aliases."
+    },
+    {
+      "SampleId": "coding-20260529-010",
+      "FailureType": "EntityMiss",
+      "SuspectedRootCause": "Expected entity is not represented in the selected package text.",
+      "FixType": "uncertainty mapping",
+      "ExpectedRegressionTest": "Extended sample coding-20260529-010 should satisfy expected uncertainty aliases."
+    }
+  ],
+  "Samples": [
+    {
+      "SampleId": "chat-sample-003",
+      "Mode": "ChatMode",
+      "FailedReason": "Recall@10=50%",
+      "FailureCategories": [
+        "BudgetDroppedImportantItem",
+        "MustHitSelectedButTooLow",
+        "TooManyLowValueSelected"
+      ],
+      "SelectedCount": 26,
+      "TokenBudget": 4000,
+      "BudgetPressure": true,
+      "BudgetPressureBreakdown": {
+        "MandatoryTokens": 9,
+        "ConstraintsTokens": 42,
+        "WorkingTokens": 504,
+        "StableTokens": 291,
+        "EvidenceTokens": 0,
+        "DiagnosticsTokens": 480,
+        "HistoricalTokens": 0,
+        "DroppedMustHitTokens": 0,
+        "DroppedLowPriorityTokens": 105
+      },
+      "MustHitStatuses": [
+        {
+          "ItemId": "memory:chat-active-plan",
+          "Selected": true,
+          "Dropped": false,
+          "SelectedRank": 5,
+          "DroppedReason": "",
+          "EstimatedTokens": 36
+        },
+        {
+          "ItemId": "stable:preference-language",
+          "Selected": true,
+          "Dropped": false,
+          "SelectedRank": 17,
+          "DroppedReason": "",
+          "EstimatedTokens": 30
+        }
+      ],
+      "ConstraintStatus": {
+        "Satisfied": true,
+        "Expected": [],
+        "Missing": []
+      },
+      "EntityStatus": {
+        "Satisfied": true,
+        "Expected": [],
+        "Missing": []
+      },
+      "UncertaintyStatus": {
+        "Satisfied": true,
+        "Expected": [],
+        "Missing": []
+      },
+      "UncertaintyFailureTypes": [],
+      "TopDroppedImportantItems": [
+        {
+          "ItemId": "policy:no-promote-temporary-emotion",
+          "Kind": "stable_memory",
+          "Type": "promotion-policy",
+          "SectionName": "",
+          "Reason": "token budget exhausted",
+          "Score": 21.2,
+          "EstimatedTokens": 35,
+          "Rank": 0,
+          "IsMustHit": false,
+          "IsMustNotHit": false,
+          "SourceRefs": [
+            "policy:no-promote-temporary-emotion"
+          ]
+        },
+        {
+          "ItemId": "policy:no-promote-joke",
+          "Kind": "stable_memory",
+          "Type": "promotion-policy",
+          "SectionName": "",
+          "Reason": "token budget exhausted",
+          "Score": 20.4,
+          "EstimatedTokens": 35,
+          "Rank": 0,
+          "IsMustHit": false,
+          "IsMustNotHit": false,
+          "SourceRefs": [
+            "policy:no-promote-joke"
+          ]
+        },
+        {
+          "ItemId": "policy:no-promote-oneoff",
+          "Kind": "stable_memory",
+          "Type": "promotion-policy",
+          "SectionName": "",
+          "Reason": "token budget exhausted",
+          "Score": 20.4,
+          "EstimatedTokens": 35,
+          "Rank": 0,
+          "IsMustHit": false,
+          "IsMustNotHit": false,
+          "SourceRefs": [
+            "policy:no-promote-oneoff"
+          ]
+        },
+        {
+          "ItemId": "memory:chat-noise-keyword-1",
+          "Kind": "historical_context",
+          "Type": "preference",
+          "SectionName": "",
+          "Reason": "deprecated memory is excluded in non-audit mode",
+          "Score": 71.10000000000001,
+          "EstimatedTokens": 42,
+          "Rank": 0,
+          "IsMustHit": false,
+          "IsMustNotHit": true,
+          "SourceRefs": [
+            "memory:chat-noise-keyword-1"
+          ]
+        },
+        {
+          "ItemId": "memory:chat-deprecated-draft",
+          "Kind": "historical_context",
+          "Type": "draft",
+          "SectionName": "",
+          "Reason": "deprecated memory is excluded in non-audit mode",
+          "Score": 49.23248275830014,
+          "EstimatedTokens": 36,
+          "Rank": 0,
+          "IsMustHit": false,
+          "IsMustNotHit": false,
+          "SourceRefs": [
+            "memory:chat-deprecated-draft"
+          ]
+        },
+        {
+          "ItemId": "memory:chat-drink-preference-v1",
+          "Kind": "historical_context",
+          "Type": "preference",
+          "SectionName": "",
+          "Reason": "deprecated memory is excluded in non-audit mode",
+          "Score": 47.35,
+          "EstimatedTokens": 26,
+          "Rank": 0,
+          "IsMustHit": false,
+          "IsMustNotHit": false,
+          "SourceRefs": [
+            "memory:chat-drink-preference-v1"
+          ]
+        },
+        {
+          "ItemId": "memory:chat-old-topic",
+          "Kind": "historical_context",
+          "Type": "plan",
+          "SectionName": "",
+          "Reason": "deprecated memory is excluded in non-audit mode",
+          "Score": 47.35,
+          "EstimatedTokens": 30,
+          "Rank": 0,
+          "IsMustHit": false,
+          "IsMustNotHit": false,
+          "SourceRefs": [
+            "memory:chat-old-topic"
+          ]
+        },
+        {
+          "ItemId": "memory:chat-version-conflict-v1",
+          "Kind": "historical_context",
+          "Type": "user-location",
+          "SectionName": "",
+          "Reason": "deprecated memory is excluded in non-audit mode",
+          "Score": 39,
+          "EstimatedTokens": 25,
+          "Rank": 0,
+          "IsMustHit": false,
+          "IsMustNotHit": false,
+          "SourceRefs": [
+            "memory:chat-version-conflict-v1"
+          ]
+        }
+      ],
+      "SuspectedRootCause": "Must-hit evidence is selected but ranked below the top-10 package quality gate.",
+      "SuggestedFixType": "section priority"
+    },
+    {
+      "SampleId": "chat-sample-004",
+      "Mode": "ChatMode",
+      "FailedReason": "Recall@10=0%",
+      "FailureCategories": [
+        "BudgetDroppedImportantItem",
+        "MustHitSelectedButTooLow",
+        "TooManyLowValueSelected"
+      ],
+      "SelectedCount": 27,
+      "TokenBudget": 4000,
+      "BudgetPressure": true,
+      "BudgetPressureBreakdown": {
+        "MandatoryTokens": 9,
+        "ConstraintsTokens": 42,
+        "WorkingTokens": 497,
+        "StableTokens": 326,
+        "EvidenceTokens": 0,
+        "DiagnosticsTokens": 480,
+        "HistoricalTokens": 0,
+        "DroppedMustHitTokens": 0,
+        "DroppedLowPriorityTokens": 101
+      },
+      "MustHitStatuses": [
+        {
+          "ItemId": "memory:chat-version-conflict-v2",
+          "Selected": true,
+          "Dropped": false,
+          "SelectedRank": 16,
+          "DroppedReason": "",
+          "EstimatedTokens": 25
+        }
+      ],
+      "ConstraintStatus": {
+        "Satisfied": true,
+        "Expected": [],
+        "Missing": []
+      },
+      "EntityStatus": {
+        "Satisfied": true,
+        "Expected": [
+          "\u4E0A\u6D77\u6D66\u4E1C\u65B0\u533A"
+        ],
+        "Missing": []
+      },
+      "UncertaintyStatus": {
+        "Satisfied": true,
+        "Expected": [
+          "SupersededSelectedItem"
+        ],
+        "Missing": []
+      },
+      "UncertaintyFailureTypes": [],
+      "TopDroppedImportantItems": [
+        {
+          "ItemId": "rule:naming-confirmed",
+          "Kind": "stable_memory",
+          "Type": "confirmed-rule",
+          "SectionName": "",
+          "Reason": "token budget exhausted",
+          "Score": 20.8,
+          "EstimatedTokens": 31,
+          "Rank": 0,
+          "IsMustHit": false,
+          "IsMustNotHit": false,
+          "SourceRefs": [
+            "rule:naming-confirmed"
+          ]
+        },
+        {
+          "ItemId": "policy:no-promote-joke",
+          "Kind": "stable_memory",
+          "Type": "promotion-policy",
+          "SectionName": "",
+          "Reason": "token budget exhausted",
+          "Score": 20.4,
+          "EstimatedTokens": 35,
+          "Rank": 0,
+          "IsMustHit": false,
+          "IsMustNotHit": false,
+          "SourceRefs": [
+            "policy:no-promote-joke"
+          ]
+        },
+        {
+          "ItemId": "policy:no-promote-oneoff",
+          "Kind": "stable_memory",
+          "Type": "promotion-policy",
+          "SectionName": "",
+          "Reason": "token budget exhausted",
+          "Score": 20.4,
+          "EstimatedTokens": 35,
+          "Rank": 0,
+          "IsMustHit": false,
+          "IsMustNotHit": false,
+          "SourceRefs": [
+            "policy:no-promote-oneoff"
+          ]
+        },
+        {
+          "ItemId": "memory:chat-version-conflict-v1",
+          "Kind": "historical_context",
+          "Type": "user-location",
+          "SectionName": "",
+          "Reason": "deprecated memory is excluded in non-audit mode",
+          "Score": 58.05,
+          "EstimatedTokens": 25,
+          "Rank": 0,
+          "IsMustHit": false,
+          "IsMustNotHit": true,
+          "SourceRefs": [
+            "memory:chat-version-conflict-v1"
+          ]
+        },
+        {
+          "ItemId": "memory:chat-deprecated-draft",
+          "Kind": "historical_context",
+          "Type": "draft",
+          "SectionName": "",
+          "Reason": "deprecated memory is excluded in non-audit mode",
+          "Score": 49.2324823046494,
+          "EstimatedTokens": 36,
+          "Rank": 0,
+          "IsMustHit": false,
+          "IsMustNotHit": false,
+          "SourceRefs": [
+            "memory:chat-deprecated-draft"
+          ]
+        },
+        {
+          "ItemId": "memory:chat-drink-preference-v1",
+          "Kind": "historical_context",
+          "Type": "preference",
+          "SectionName": "",
+          "Reason": "deprecated memory is excluded in non-audit mode",
+          "Score": 47.35,
+          "EstimatedTokens": 26,
+          "Rank": 0,
+          "IsMustHit": false,
+          "IsMustNotHit": false,
+          "SourceRefs": [
+            "memory:chat-drink-preference-v1"
+          ]
+        },
+        {
+          "ItemId": "memory:chat-noise-keyword-1",
+          "Kind": "historical_context",
+          "Type": "preference",
+          "SectionName": "",
+          "Reason": "deprecated memory is excluded in non-audit mode",
+          "Score": 39,
+          "EstimatedTokens": 42,
+          "Rank": 0,
+          "IsMustHit": false,
+          "IsMustNotHit": false,
+          "SourceRefs": [
+            "memory:chat-noise-keyword-1"
+          ]
+        },
+        {
+          "ItemId": "memory:chat-old-topic",
+          "Kind": "historical_context",
+          "Type": "plan",
+          "SectionName": "",
+          "Reason": "deprecated memory is excluded in non-audit mode",
+          "Score": 39,
+          "EstimatedTokens": 30,
+          "Rank": 0,
+          "IsMustHit": false,
+          "IsMustNotHit": false,
+          "SourceRefs": [
+            "memory:chat-old-topic"
+          ]
+        }
+      ],
+      "SuspectedRootCause": "Must-hit evidence is selected but ranked below the top-10 package quality gate.",
+      "SuggestedFixType": "section priority"
+    },
+    {
+      "SampleId": "chat-sample-005",
+      "Mode": "ChatMode",
+      "FailedReason": "Recall@10=0%",
+      "FailureCategories": [
+        "MissingMustHit",
+        "BudgetDroppedImportantItem"
+      ],
+      "SelectedCount": 3,
+      "TokenBudget": 100,
+      "BudgetPressure": true,
+      "BudgetPressureBreakdown": {
+        "MandatoryTokens": 9,
+        "ConstraintsTokens": 9,
+        "WorkingTokens": 30,
+        "StableTokens": 35,
+        "EvidenceTokens": 0,
+        "DiagnosticsTokens": 12,
+        "HistoricalTokens": 0,
+        "DroppedMustHitTokens": 36,
+        "DroppedLowPriorityTokens": 553
+      },
+      "MustHitStatuses": [
+        {
+          "ItemId": "memory:chat-active-plan",
+          "Selected": false,
+          "Dropped": true,
+          "SelectedRank": 0,
+          "DroppedReason": "token budget exhausted",
+          "EstimatedTokens": 36
+        }
+      ],
+      "ConstraintStatus": {
+        "Satisfied": true,
+        "Expected": [
+          "\u8F93\u51FA\u5FC5\u987B\u4F7F\u7528\u4E2D\u6587"
+        ],
+        "Missing": []
+      },
+      "EntityStatus": {
+        "Satisfied": true,
+        "Expected": [],
+        "Missing": []
+      },
+      "UncertaintyStatus": {
+        "Satisfied": true,
+        "Expected": [],
+        "Missing": []
+      },
+      "UncertaintyFailureTypes": [],
+      "TopDroppedImportantItems": [
+        {
+          "ItemId": "memory:chat-active-plan",
+          "Kind": "working_memory",
+          "Type": "plan",
+          "SectionName": "",
+          "Reason": "token budget exhausted",
+          "Score": 18.66,
+          "EstimatedTokens": 36,
+          "Rank": 0,
+          "IsMustHit": true,
+          "IsMustNotHit": false,
+          "SourceRefs": [
+            "memory:chat-active-plan"
+          ]
+        },
+        {
+          "ItemId": "pref:answer-conclusion-first",
+          "Kind": "stable_memory",
+          "Type": "preference",
+          "SectionName": "",
+          "Reason": "token budget exhausted",
+          "Score": 27.2,
+          "EstimatedTokens": 36,
+          "Rank": 0,
+          "IsMustHit": false,
+          "IsMustNotHit": false,
+          "SourceRefs": [
+            "pref:answer-conclusion-first"
+          ]
+        },
+        {
+          "ItemId": "constraint:no-secret-commit",
+          "Kind": "stable_memory",
+          "Type": "security-constraint",
+          "SectionName": "",
+          "Reason": "token budget exhausted",
+          "Score": 21.6,
+          "EstimatedTokens": 33,
+          "Rank": 0,
+          "IsMustHit": false,
+          "IsMustNotHit": false,
+          "SourceRefs": [
+            "constraint:no-secret-commit"
+          ]
+        },
+        {
+          "ItemId": "policy:no-promote-temporary-emotion",
+          "Kind": "stable_memory",
+          "Type": "promotion-policy",
+          "SectionName": "",
+          "Reason": "token budget exhausted",
+          "Score": 21.2,
+          "EstimatedTokens": 35,
+          "Rank": 0,
+          "IsMustHit": false,
+          "IsMustNotHit": false,
+          "SourceRefs": [
+            "policy:no-promote-temporary-emotion"
+          ]
+        },
+        {
+          "ItemId": "pref:actionable-concise",
+          "Kind": "stable_memory",
+          "Type": "preference",
+          "SectionName": "",
+          "Reason": "token budget exhausted",
+          "Score": 21.2,
+          "EstimatedTokens": 32,
+          "Rank": 0,
+          "IsMustHit": false,
+          "IsMustNotHit": false,
+          "SourceRefs": [
+            "pref:actionable-concise"
+          ]
+        },
+        {
+          "ItemId": "pref:admit-uncertainty",
+          "Kind": "stable_memory",
+          "Type": "preference",
+          "SectionName": "",
+          "Reason": "token budget exhausted",
+          "Score": 21.2,
+          "EstimatedTokens": 33,
+          "Rank": 0,
+          "IsMustHit": false,
+          "IsMustNotHit": false,
+          "SourceRefs": [
+            "pref:admit-uncertainty"
+          ]
+        },
+        {
+          "ItemId": "pattern:repeated-user-preference",
+          "Kind": "stable_memory",
+          "Type": "preference-pattern",
+          "SectionName": "",
+          "Reason": "token budget exhausted",
+          "Score": 20.8,
+          "EstimatedTokens": 44,
+          "Rank": 0,
+          "IsMustHit": false,
+          "IsMustNotHit": false,
+          "SourceRefs": [
+            "pattern:repeated-user-preference"
+          ]
+        },
+        {
+          "ItemId": "rule:naming-confirmed",
+          "Kind": "stable_memory",
+          "Type": "confirmed-rule",
+          "SectionName": "",
+          "Reason": "token budget exhausted",
+          "Score": 20.8,
+          "EstimatedTokens": 31,
+          "Rank": 0,
+          "IsMustHit": false,
+          "IsMustNotHit": false,
+          "SourceRefs": [
+            "rule:naming-confirmed"
+          ]
+        }
+      ],
+      "SuspectedRootCause": "Important must-hit evidence was dropped or diluted under package budget pressure.",
+      "SuggestedFixType": "budget diagnostics"
+    },
+    {
+      "SampleId": "chat-20260529-003",
+      "Mode": "ChatMode",
+      "FailedReason": "constraint missing; uncertainty missing",
+      "FailureCategories": [
+        "ConstraintMiss",
+        "MissingUncertainty",
+        "BudgetDroppedImportantItem"
+      ],
+      "SelectedCount": 24,
+      "TokenBudget": 4000,
+      "BudgetPressure": true,
+      "BudgetPressureBreakdown": {
+        "MandatoryTokens": 9,
+        "ConstraintsTokens": 42,
+        "WorkingTokens": 463,
+        "StableTokens": 330,
+        "EvidenceTokens": 0,
+        "DiagnosticsTokens": 480,
+        "HistoricalTokens": 0,
+        "DroppedMustHitTokens": 0,
+        "DroppedLowPriorityTokens": 97
+      },
+      "MustHitStatuses": [
+        {
+          "ItemId": "memory:session-conclusion",
+          "Selected": true,
+          "Dropped": false,
+          "SelectedRank": 6,
+          "DroppedReason": "",
+          "EstimatedTokens": 32
+        },
+        {
+          "ItemId": "candidate:promotion-working",
+          "Selected": true,
+          "Dropped": false,
+          "SelectedRank": 9,
+          "DroppedReason": "",
+          "EstimatedTokens": 35
+        }
+      ],
+      "ConstraintStatus": {
+        "Satisfied": false,
+        "Expected": [
+          "\u91CD\u590D\u89E3\u91CA\u4E0D\u5E94\u63D0\u5347"
+        ],
+        "Missing": [
+          "\u91CD\u590D\u89E3\u91CA\u4E0D\u5E94\u63D0\u5347"
+        ]
+      },
+      "EntityStatus": {
+        "Satisfied": true,
+        "Expected": [
+          "\u9636\u6BB5\u6027\u7ED3\u8BBA"
+        ],
+        "Missing": []
+      },
+      "UncertaintyStatus": {
+        "Satisfied": false,
+        "Expected": [
+          "\u957F\u671F\u6709\u6548\u6027\u9700\u8981\u590D\u6838"
+        ],
+        "Missing": [
+          "\u957F\u671F\u6709\u6548\u6027\u9700\u8981\u590D\u6838"
+        ]
+      },
+      "UncertaintyFailureTypes": [],
+      "TopDroppedImportantItems": [
+        {
+          "ItemId": "pref:interaction-style",
+          "Kind": "stable_memory",
+          "Type": "preference",
+          "SectionName": "",
+          "Reason": "token budget exhausted",
+          "Score": 20.8,
+          "EstimatedTokens": 31,
+          "Rank": 0,
+          "IsMustHit": false,
+          "IsMustNotHit": false,
+          "SourceRefs": [
+            "pref:interaction-style"
+          ]
+        },
+        {
+          "ItemId": "rule:naming-confirmed",
+          "Kind": "stable_memory",
+          "Type": "confirmed-rule",
+          "SectionName": "",
+          "Reason": "token budget exhausted",
+          "Score": 20.8,
+          "EstimatedTokens": 31,
+          "Rank": 0,
+          "IsMustHit": false,
+          "IsMustNotHit": false,
+          "SourceRefs": [
+            "rule:naming-confirmed"
+          ]
+        },
+        {
+          "ItemId": "policy:no-promote-joke",
+          "Kind": "stable_memory",
+          "Type": "promotion-policy",
+          "SectionName": "",
+          "Reason": "token budget exhausted",
+          "Score": 20.4,
+          "EstimatedTokens": 35,
+          "Rank": 0,
+          "IsMustHit": false,
+          "IsMustNotHit": false,
+          "SourceRefs": [
+            "policy:no-promote-joke"
+          ]
+        },
+        {
+          "ItemId": "memory:chat-deprecated-draft",
+          "Kind": "historical_context",
+          "Type": "draft",
+          "SectionName": "",
+          "Reason": "deprecated memory is excluded in non-audit mode",
+          "Score": 49.7524791197082,
+          "EstimatedTokens": 36,
+          "Rank": 0,
+          "IsMustHit": false,
+          "IsMustNotHit": false,
+          "SourceRefs": [
+            "memory:chat-deprecated-draft"
+          ]
+        },
+        {
+          "ItemId": "memory:chat-drink-preference-v1",
+          "Kind": "historical_context",
+          "Type": "preference",
+          "SectionName": "",
+          "Reason": "deprecated memory is excluded in non-audit mode",
+          "Score": 39,
+          "EstimatedTokens": 26,
+          "Rank": 0,
+          "IsMustHit": false,
+          "IsMustNotHit": false,
+          "SourceRefs": [
+            "memory:chat-drink-preference-v1"
+          ]
+        },
+        {
+          "ItemId": "memory:chat-noise-keyword-1",
+          "Kind": "historical_context",
+          "Type": "preference",
+          "SectionName": "",
+          "Reason": "deprecated memory is excluded in non-audit mode",
+          "Score": 39,
+          "EstimatedTokens": 42,
+          "Rank": 0,
+          "IsMustHit": false,
+          "IsMustNotHit": false,
+          "SourceRefs": [
+            "memory:chat-noise-keyword-1"
+          ]
+        },
+        {
+          "ItemId": "memory:chat-old-topic",
+          "Kind": "historical_context",
+          "Type": "plan",
+          "SectionName": "",
+          "Reason": "deprecated memory is excluded in non-audit mode",
+          "Score": 39,
+          "EstimatedTokens": 30,
+          "Rank": 0,
+          "IsMustHit": false,
+          "IsMustNotHit": false,
+          "SourceRefs": [
+            "memory:chat-old-topic"
+          ]
+        },
+        {
+          "ItemId": "memory:chat-version-conflict-v1",
+          "Kind": "historical_context",
+          "Type": "user-location",
+          "SectionName": "",
+          "Reason": "deprecated memory is excluded in non-audit mode",
+          "Score": 39,
+          "EstimatedTokens": 25,
+          "Rank": 0,
+          "IsMustHit": false,
+          "IsMustNotHit": false,
+          "SourceRefs": [
+            "memory:chat-version-conflict-v1"
+          ]
+        }
+      ],
+      "SuspectedRootCause": "Expected constraint text is not represented in constraints/package sections.",
+      "SuggestedFixType": "uncertainty mapping"
+    },
+    {
+      "SampleId": "novel-20260529-001",
+      "Mode": "NovelMode",
+      "FailedReason": "Recall@10=50%; constraint missing; uncertainty missing",
+      "FailureCategories": [
+        "MissingMustHit",
+        "ConstraintMiss",
+        "MissingUncertainty"
+      ],
+      "SelectedCount": 12,
+      "TokenBudget": 4000,
+      "BudgetPressure": false,
+      "BudgetPressureBreakdown": {
+        "MandatoryTokens": 26,
+        "ConstraintsTokens": 26,
+        "WorkingTokens": 133,
+        "StableTokens": 104,
+        "EvidenceTokens": 0,
+        "DiagnosticsTokens": 0,
+        "HistoricalTokens": 124,
+        "DroppedMustHitTokens": 0,
+        "DroppedLowPriorityTokens": 0
+      },
+      "MustHitStatuses": [
+        {
+          "ItemId": "plot:previous-chapter-hook",
+          "Selected": true,
+          "Dropped": false,
+          "SelectedRank": 2,
+          "DroppedReason": "",
+          "EstimatedTokens": 34
+        },
+        {
+          "ItemId": "memory:active-character-state",
+          "Selected": false,
+          "Dropped": false,
+          "SelectedRank": 0,
+          "DroppedReason": "",
+          "EstimatedTokens": 0
+        }
+      ],
+      "ConstraintStatus": {
+        "Satisfied": false,
+        "Expected": [
+          "\u5E9F\u5F03\u8BBE\u5B9A\u4E0D\u5F97\u8FDB\u5165\u4E0A\u4E0B\u6587\u5305"
+        ],
+        "Missing": [
+          "\u5E9F\u5F03\u8BBE\u5B9A\u4E0D\u5F97\u8FDB\u5165\u4E0A\u4E0B\u6587\u5305"
+        ]
+      },
+      "EntityStatus": {
+        "Satisfied": true,
+        "Expected": [
+          "\u4F0F\u7B14",
+          "\u4EBA\u7269\u72B6\u6001"
+        ],
+        "Missing": []
+      },
+      "UncertaintyStatus": {
+        "Satisfied": false,
+        "Expected": [
+          "\u4F0F\u7B14\u662F\u5426\u5DF2\u7ECF\u5151\u73B0\u9700\u8981\u68C0\u67E5"
+        ],
+        "Missing": [
+          "\u4F0F\u7B14\u662F\u5426\u5DF2\u7ECF\u5151\u73B0\u9700\u8981\u68C0\u67E5"
+        ]
+      },
+      "UncertaintyFailureTypes": [],
+      "TopDroppedImportantItems": [],
+      "SuspectedRootCause": "Expected constraint text is not represented in constraints/package sections.",
+      "SuggestedFixType": "uncertainty mapping"
+    },
+    {
+      "SampleId": "novel-20260529-009",
+      "Mode": "NovelMode",
+      "FailedReason": "constraint missing; uncertainty missing",
+      "FailureCategories": [
+        "ConstraintMiss",
+        "MissingUncertainty",
+        "BudgetDroppedImportantItem"
+      ],
+      "SelectedCount": 17,
+      "TokenBudget": 4000,
+      "BudgetPressure": true,
+      "BudgetPressureBreakdown": {
+        "MandatoryTokens": 26,
+        "ConstraintsTokens": 26,
+        "WorkingTokens": 476,
+        "StableTokens": 32,
+        "EvidenceTokens": 0,
+        "DiagnosticsTokens": 461,
+        "HistoricalTokens": 0,
+        "DroppedMustHitTokens": 0,
+        "DroppedLowPriorityTokens": 24
+      },
+      "MustHitStatuses": [
+        {
+          "ItemId": "foreshadow:bell-sound",
+          "Selected": true,
+          "Dropped": false,
+          "SelectedRank": 2,
+          "DroppedReason": "",
+          "EstimatedTokens": 30
+        }
+      ],
+      "ConstraintStatus": {
+        "Satisfied": false,
+        "Expected": [
+          "\u4F0F\u7B14\u5151\u73B0"
+        ],
+        "Missing": [
+          "\u4F0F\u7B14\u5151\u73B0"
+        ]
+      },
+      "EntityStatus": {
+        "Satisfied": true,
+        "Expected": [
+          "\u949F\u58F0\u4F0F\u7B14"
+        ],
+        "Missing": []
+      },
+      "UncertaintyStatus": {
+        "Satisfied": false,
+        "Expected": [
+          "\u5151\u73B0\u65B9\u5F0F\u53EF\u591A\u9009"
+        ],
+        "Missing": [
+          "\u5151\u73B0\u65B9\u5F0F\u53EF\u591A\u9009"
+        ]
+      },
+      "UncertaintyFailureTypes": [],
+      "TopDroppedImportantItems": [
+        {
+          "ItemId": "ending:current-plan",
+          "Kind": "working_memory",
+          "Type": "ending-plan",
+          "SectionName": "",
+          "Reason": "token budget exhausted",
+          "Score": 18.72,
+          "EstimatedTokens": 24,
+          "Rank": 0,
+          "IsMustHit": false,
+          "IsMustNotHit": false,
+          "SourceRefs": [
+            "ending:current-plan"
+          ]
+        },
+        {
+          "ItemId": "memory:novel-conflict-v1",
+          "Kind": "historical_context",
+          "Type": "character-detail",
+          "SectionName": "",
+          "Reason": "deprecated memory is excluded in non-audit mode",
+          "Score": 39,
+          "EstimatedTokens": 32,
+          "Rank": 0,
+          "IsMustHit": false,
+          "IsMustNotHit": false,
+          "SourceRefs": [
+            "memory:novel-conflict-v1"
+          ]
+        },
+        {
+          "ItemId": "memory:novel-plot-deprecated-villain",
+          "Kind": "historical_context",
+          "Type": "plot",
+          "SectionName": "",
+          "Reason": "deprecated memory is excluded in non-audit mode",
+          "Score": 39,
+          "EstimatedTokens": 59,
+          "Rank": 0,
+          "IsMustHit": false,
+          "IsMustNotHit": false,
+          "SourceRefs": [
+            "memory:novel-plot-deprecated-villain"
+          ]
+        },
+        {
+          "ItemId": "memory:novel-plot-old-draft",
+          "Kind": "historical_context",
+          "Type": "plot",
+          "SectionName": "",
+          "Reason": "deprecated memory is excluded in non-audit mode",
+          "Score": 39,
+          "EstimatedTokens": 62,
+          "Rank": 0,
+          "IsMustHit": false,
+          "IsMustNotHit": false,
+          "SourceRefs": [
+            "memory:novel-plot-old-draft"
+          ]
+        },
+        {
+          "ItemId": "memory:novel-weapon-v1",
+          "Kind": "historical_context",
+          "Type": "character-detail",
+          "SectionName": "",
+          "Reason": "deprecated memory is excluded in non-audit mode",
+          "Score": 39,
+          "EstimatedTokens": 30,
+          "Rank": 0,
+          "IsMustHit": false,
+          "IsMustNotHit": false,
+          "SourceRefs": [
+            "memory:novel-weapon-v1"
+          ]
+        }
+      ],
+      "SuspectedRootCause": "Expected constraint text is not represented in constraints/package sections.",
+      "SuggestedFixType": "uncertainty mapping"
+    },
+    {
+      "SampleId": "novel-20260529-013",
+      "Mode": "NovelMode",
+      "FailedReason": "entity missing",
+      "FailureCategories": [
+        "EntityMiss"
+      ],
+      "SelectedCount": 9,
+      "TokenBudget": 4000,
+      "BudgetPressure": false,
+      "BudgetPressureBreakdown": {
+        "MandatoryTokens": 26,
+        "ConstraintsTokens": 26,
+        "WorkingTokens": 73,
+        "StableTokens": 68,
+        "EvidenceTokens": 0,
+        "DiagnosticsTokens": 0,
+        "HistoricalTokens": 124,
+        "DroppedMustHitTokens": 0,
+        "DroppedLowPriorityTokens": 0
+      },
+      "MustHitStatuses": [
+        {
+          "ItemId": "item:sword-broken",
+          "Selected": true,
+          "Dropped": false,
+          "SelectedRank": 2,
+          "DroppedReason": "",
+          "EstimatedTokens": 29
+        }
+      ],
+      "ConstraintStatus": {
+        "Satisfied": true,
+        "Expected": [
+          "\u7269\u54C1\u72B6\u6001\u8FDE\u7EED"
+        ],
+        "Missing": []
+      },
+      "EntityStatus": {
+        "Satisfied": false,
+        "Expected": [
+          "\u4E3B\u89D2",
+          "\u65AD\u5251"
+        ],
+        "Missing": [
+          "\u4E3B\u89D2",
+          "\u65AD\u5251"
+        ]
+      },
+      "UncertaintyStatus": {
+        "Satisfied": true,
+        "Expected": [],
+        "Missing": []
+      },
+      "UncertaintyFailureTypes": [],
+      "TopDroppedImportantItems": [],
+      "SuspectedRootCause": "Expected entity is not represented in the selected package text.",
+      "SuggestedFixType": "section priority"
+    },
+    {
+      "SampleId": "novel-20260529-017",
+      "Mode": "NovelMode",
+      "FailedReason": "constraint missing",
+      "FailureCategories": [
+        "ConstraintMiss"
+      ],
+      "SelectedCount": 13,
+      "TokenBudget": 4000,
+      "BudgetPressure": false,
+      "BudgetPressureBreakdown": {
+        "MandatoryTokens": 26,
+        "ConstraintsTokens": 26,
+        "WorkingTokens": 132,
+        "StableTokens": 104,
+        "EvidenceTokens": 0,
+        "DiagnosticsTokens": 0,
+        "HistoricalTokens": 124,
+        "DroppedMustHitTokens": 0,
+        "DroppedLowPriorityTokens": 0
+      },
+      "MustHitStatuses": [
+        {
+          "ItemId": "ending:current-plan",
+          "Selected": true,
+          "Dropped": false,
+          "SelectedRank": 3,
+          "DroppedReason": "",
+          "EstimatedTokens": 24
+        }
+      ],
+      "ConstraintStatus": {
+        "Satisfied": false,
+        "Expected": [
+          "\u5E9F\u5F03\u7ED3\u5C40\u4E0D\u5F97\u53EC\u56DE"
+        ],
+        "Missing": [
+          "\u5E9F\u5F03\u7ED3\u5C40\u4E0D\u5F97\u53EC\u56DE"
+        ]
+      },
+      "EntityStatus": {
+        "Satisfied": true,
+        "Expected": [
+          "\u65E7\u7248\u7ED3\u5C40",
+          "\u4E3B\u89D2"
+        ],
+        "Missing": []
+      },
+      "UncertaintyStatus": {
+        "Satisfied": true,
+        "Expected": [],
+        "Missing": []
+      },
+      "UncertaintyFailureTypes": [],
+      "TopDroppedImportantItems": [],
+      "SuspectedRootCause": "Expected constraint text is not represented in constraints/package sections.",
+      "SuggestedFixType": "section priority"
+    },
+    {
+      "SampleId": "automation-sample-001",
+      "Mode": "AutomationMode",
+      "FailedReason": "Recall@10=33%",
+      "FailureCategories": [
+        "MissingMustHit",
+        "MustHitSelectedButTooLow",
+        "TooManyLowValueSelected"
+      ],
+      "SelectedCount": 20,
+      "TokenBudget": 4000,
+      "BudgetPressure": false,
+      "BudgetPressureBreakdown": {
+        "MandatoryTokens": 19,
+        "ConstraintsTokens": 19,
+        "WorkingTokens": 586,
+        "StableTokens": 30,
+        "EvidenceTokens": 0,
+        "DiagnosticsTokens": 277,
+        "HistoricalTokens": 0,
+        "DroppedMustHitTokens": 0,
+        "DroppedLowPriorityTokens": 0
+      },
+      "MustHitStatuses": [
+        {
+          "ItemId": "memory:automation-last-error",
+          "Selected": true,
+          "Dropped": false,
+          "SelectedRank": 12,
+          "DroppedReason": "",
+          "EstimatedTokens": 44
+        },
+        {
+          "ItemId": "memory:automation-recovery",
+          "Selected": false,
+          "Dropped": false,
+          "SelectedRank": 0,
+          "DroppedReason": "",
+          "EstimatedTokens": 0
+        },
+        {
+          "ItemId": "doc:automation-guide",
+          "Selected": true,
+          "Dropped": false,
+          "SelectedRank": 2,
+          "DroppedReason": "",
+          "EstimatedTokens": 63
+        }
+      ],
+      "ConstraintStatus": {
+        "Satisfied": true,
+        "Expected": [
+          "\u91CD\u8BD5\u524D\u5FC5\u987B\u8FDB\u884C\u4EBA\u5DE5\u786E\u8BA4"
+        ],
+        "Missing": []
+      },
+      "EntityStatus": {
+        "Satisfied": true,
+        "Expected": [],
+        "Missing": []
+      },
+      "UncertaintyStatus": {
+        "Satisfied": true,
+        "Expected": [],
+        "Missing": []
+      },
+      "UncertaintyFailureTypes": [],
+      "TopDroppedImportantItems": [
+        {
+          "ItemId": "memory:automation-backup-strategy-v1",
+          "Kind": "historical_context",
+          "Type": "config-detail",
+          "SectionName": "",
+          "Reason": "deprecated memory is excluded in non-audit mode",
+          "Score": 68.79999960324427,
+          "EstimatedTokens": 36,
+          "Rank": 0,
+          "IsMustHit": false,
+          "IsMustNotHit": false,
+          "SourceRefs": [
+            "memory:automation-backup-strategy-v1"
+          ]
+        },
+        {
+          "ItemId": "memory:automation-stopped-cron",
+          "Kind": "historical_context",
+          "Type": "cron-log",
+          "SectionName": "",
+          "Reason": "deprecated memory is excluded in non-audit mode",
+          "Score": 53.09999960324427,
+          "EstimatedTokens": 45,
+          "Rank": 0,
+          "IsMustHit": false,
+          "IsMustNotHit": false,
+          "SourceRefs": [
+            "memory:automation-stopped-cron"
+          ]
+        },
+        {
+          "ItemId": "memory:automation-conflict-v1",
+          "Kind": "historical_context",
+          "Type": "config-detail",
+          "SectionName": "",
+          "Reason": "deprecated memory is excluded in non-audit mode",
+          "Score": 39,
+          "EstimatedTokens": 26,
+          "Rank": 0,
+          "IsMustHit": false,
+          "IsMustNotHit": false,
+          "SourceRefs": [
+            "memory:automation-conflict-v1"
+          ]
+        }
+      ],
+      "SuspectedRootCause": "Must-hit evidence is selected but ranked below the top-10 package quality gate.",
+      "SuggestedFixType": "section priority"
+    },
+    {
+      "SampleId": "automation-20260529-003",
+      "Mode": "AutomationMode",
+      "FailedReason": "Recall@10=50%; uncertainty missing",
+      "FailureCategories": [
+        "MissingUncertainty",
+        "MustHitSelectedButTooLow",
+        "TooManyLowValueSelected"
+      ],
+      "SelectedCount": 20,
+      "TokenBudget": 4000,
+      "BudgetPressure": false,
+      "BudgetPressureBreakdown": {
+        "MandatoryTokens": 19,
+        "ConstraintsTokens": 19,
+        "WorkingTokens": 600,
+        "StableTokens": 30,
+        "EvidenceTokens": 0,
+        "DiagnosticsTokens": 277,
+        "HistoricalTokens": 0,
+        "DroppedMustHitTokens": 0,
+        "DroppedLowPriorityTokens": 0
+      },
+      "MustHitStatuses": [
+        {
+          "ItemId": "worker:stats-latest",
+          "Selected": true,
+          "Dropped": false,
+          "SelectedRank": 2,
+          "DroppedReason": "",
+          "EstimatedTokens": 30
+        },
+        {
+          "ItemId": "event:recent-failures",
+          "Selected": true,
+          "Dropped": false,
+          "SelectedRank": 12,
+          "DroppedReason": "",
+          "EstimatedTokens": 30
+        }
+      ],
+      "ConstraintStatus": {
+        "Satisfied": true,
+        "Expected": [
+          "\u8FD0\u884C\u72B6\u6001\u5FC5\u987B\u57FA\u4E8E\u6700\u8FD1\u7EDF\u8BA1"
+        ],
+        "Missing": []
+      },
+      "EntityStatus": {
+        "Satisfied": true,
+        "Expected": [
+          "Worker",
+          "\u5931\u8D25\u8D8B\u52BF"
+        ],
+        "Missing": []
+      },
+      "UncertaintyStatus": {
+        "Satisfied": false,
+        "Expected": [
+          "\u6837\u672C\u7A97\u53E3\u662F\u5426\u8DB3\u591F\u5927"
+        ],
+        "Missing": [
+          "\u6837\u672C\u7A97\u53E3\u662F\u5426\u8DB3\u591F\u5927"
+        ]
+      },
+      "UncertaintyFailureTypes": [],
+      "TopDroppedImportantItems": [
+        {
+          "ItemId": "memory:automation-backup-strategy-v1",
+          "Kind": "historical_context",
+          "Type": "config-detail",
+          "SectionName": "",
+          "Reason": "deprecated memory is excluded in non-audit mode",
+          "Score": 60.4924939761855,
+          "EstimatedTokens": 36,
+          "Rank": 0,
+          "IsMustHit": false,
+          "IsMustNotHit": false,
+          "SourceRefs": [
+            "memory:automation-backup-strategy-v1"
+          ]
+        },
+        {
+          "ItemId": "memory:automation-stopped-cron",
+          "Kind": "historical_context",
+          "Type": "cron-log",
+          "SectionName": "",
+          "Reason": "deprecated memory is excluded in non-audit mode",
+          "Score": 58.9924939761855,
+          "EstimatedTokens": 45,
+          "Rank": 0,
+          "IsMustHit": false,
+          "IsMustNotHit": false,
+          "SourceRefs": [
+            "memory:automation-stopped-cron"
+          ]
+        },
+        {
+          "ItemId": "memory:automation-conflict-v1",
+          "Kind": "historical_context",
+          "Type": "config-detail",
+          "SectionName": "",
+          "Reason": "deprecated memory is excluded in non-audit mode",
+          "Score": 39,
+          "EstimatedTokens": 26,
+          "Rank": 0,
+          "IsMustHit": false,
+          "IsMustNotHit": false,
+          "SourceRefs": [
+            "memory:automation-conflict-v1"
+          ]
+        }
+      ],
+      "SuspectedRootCause": "Expected uncertainty is not mapped from uncertainty, diagnostic, evidence, historical, excluded, or risk surfaces.",
+      "SuggestedFixType": "uncertainty mapping"
+    },
+    {
+      "SampleId": "automation-20260529-004",
+      "Mode": "AutomationMode",
+      "FailedReason": "Recall@10=50%; uncertainty missing",
+      "FailureCategories": [
+        "MissingUncertainty",
+        "MustHitSelectedButTooLow",
+        "TooManyLowValueSelected"
+      ],
+      "SelectedCount": 20,
+      "TokenBudget": 4000,
+      "BudgetPressure": false,
+      "BudgetPressureBreakdown": {
+        "MandatoryTokens": 19,
+        "ConstraintsTokens": 19,
+        "WorkingTokens": 592,
+        "StableTokens": 30,
+        "EvidenceTokens": 0,
+        "DiagnosticsTokens": 277,
+        "HistoricalTokens": 0,
+        "DroppedMustHitTokens": 0,
+        "DroppedLowPriorityTokens": 0
+      },
+      "MustHitStatuses": [
+        {
+          "ItemId": "run:latest-recovery-point",
+          "Selected": true,
+          "Dropped": false,
+          "SelectedRank": 2,
+          "DroppedReason": "",
+          "EstimatedTokens": 39
+        },
+        {
+          "ItemId": "step:last-succeeded",
+          "Selected": true,
+          "Dropped": false,
+          "SelectedRank": 18,
+          "DroppedReason": "",
+          "EstimatedTokens": 28
+        }
+      ],
+      "ConstraintStatus": {
+        "Satisfied": true,
+        "Expected": [
+          "\u5DF2\u6210\u529F\u6B65\u9AA4\u4E0D\u5F97\u91CD\u590D\u6267\u884C"
+        ],
+        "Missing": []
+      },
+      "EntityStatus": {
+        "Satisfied": true,
+        "Expected": [
+          "\u6062\u590D\u70B9",
+          "\u6210\u529F\u6B65\u9AA4",
+          "\u81EA\u52A8\u5316\u6D41\u7A0B"
+        ],
+        "Missing": []
+      },
+      "UncertaintyStatus": {
+        "Satisfied": false,
+        "Expected": [
+          "\u6062\u590D\u70B9\u4E4B\u540E\u7684\u5916\u90E8\u72B6\u6001\u662F\u5426\u53D8\u5316"
+        ],
+        "Missing": [
+          "\u6062\u590D\u70B9\u4E4B\u540E\u7684\u5916\u90E8\u72B6\u6001\u662F\u5426\u53D8\u5316"
+        ]
+      },
+      "UncertaintyFailureTypes": [],
+      "TopDroppedImportantItems": [
+        {
+          "ItemId": "memory:automation-backup-strategy-v1",
+          "Kind": "historical_context",
+          "Type": "config-detail",
+          "SectionName": "",
+          "Reason": "deprecated memory is excluded in non-audit mode",
+          "Score": 67.07749352860088,
+          "EstimatedTokens": 36,
+          "Rank": 0,
+          "IsMustHit": false,
+          "IsMustNotHit": false,
+          "SourceRefs": [
+            "memory:automation-backup-strategy-v1"
+          ]
+        },
+        {
+          "ItemId": "memory:automation-stopped-cron",
+          "Kind": "historical_context",
+          "Type": "cron-log",
+          "SectionName": "",
+          "Reason": "deprecated memory is excluded in non-audit mode",
+          "Score": 51.37749352860089,
+          "EstimatedTokens": 45,
+          "Rank": 0,
+          "IsMustHit": false,
+          "IsMustNotHit": false,
+          "SourceRefs": [
+            "memory:automation-stopped-cron"
+          ]
+        },
+        {
+          "ItemId": "memory:automation-conflict-v1",
+          "Kind": "historical_context",
+          "Type": "config-detail",
+          "SectionName": "",
+          "Reason": "deprecated memory is excluded in non-audit mode",
+          "Score": 39,
+          "EstimatedTokens": 26,
+          "Rank": 0,
+          "IsMustHit": false,
+          "IsMustNotHit": false,
+          "SourceRefs": [
+            "memory:automation-conflict-v1"
+          ]
+        }
+      ],
+      "SuspectedRootCause": "Expected uncertainty is not mapped from uncertainty, diagnostic, evidence, historical, excluded, or risk surfaces.",
+      "SuggestedFixType": "uncertainty mapping"
+    },
+    {
+      "SampleId": "automation-20260529-008",
+      "Mode": "AutomationMode",
+      "FailedReason": "entity missing; uncertainty missing",
+      "FailureCategories": [
+        "EntityMiss",
+        "MissingUncertainty"
+      ],
+      "SelectedCount": 19,
+      "TokenBudget": 4000,
+      "BudgetPressure": false,
+      "BudgetPressureBreakdown": {
+        "MandatoryTokens": 19,
+        "ConstraintsTokens": 19,
+        "WorkingTokens": 592,
+        "StableTokens": 30,
+        "EvidenceTokens": 0,
+        "DiagnosticsTokens": 277,
+        "HistoricalTokens": 0,
+        "DroppedMustHitTokens": 0,
+        "DroppedLowPriorityTokens": 0
+      },
+      "MustHitStatuses": [
+        {
+          "ItemId": "job:max-retry-exceeded",
+          "Selected": true,
+          "Dropped": false,
+          "SelectedRank": 2,
+          "DroppedReason": "",
+          "EstimatedTokens": 37
+        },
+        {
+          "ItemId": "queue:dead-letter",
+          "Selected": true,
+          "Dropped": false,
+          "SelectedRank": 5,
+          "DroppedReason": "",
+          "EstimatedTokens": 37
+        }
+      ],
+      "ConstraintStatus": {
+        "Satisfied": true,
+        "Expected": [
+          "\u8D85\u8FC7\u6700\u5927\u91CD\u8BD5\u6B21\u6570\u540E\u4E0D\u5F97\u65E0\u9650\u91CD\u8BD5"
+        ],
+        "Missing": []
+      },
+      "EntityStatus": {
+        "Satisfied": false,
+        "Expected": [
+          "\u6B7B\u4FE1\u961F\u5217",
+          "\u91CD\u8BD5\u6B21\u6570",
+          "\u5904\u7406\u4EBA"
+        ],
+        "Missing": [
+          "\u6B7B\u4FE1\u961F\u5217",
+          "\u91CD\u8BD5\u6B21\u6570",
+          "\u5904\u7406\u4EBA"
+        ]
+      },
+      "UncertaintyStatus": {
+        "Satisfied": false,
+        "Expected": [
+          "\u8D1F\u8D23\u4EBA\u662F\u5426\u5DF2\u914D\u7F6E"
+        ],
+        "Missing": [
+          "\u8D1F\u8D23\u4EBA\u662F\u5426\u5DF2\u914D\u7F6E"
+        ]
+      },
+      "UncertaintyFailureTypes": [],
+      "TopDroppedImportantItems": [
+        {
+          "ItemId": "memory:automation-stopped-cron",
+          "Kind": "historical_context",
+          "Type": "cron-log",
+          "SectionName": "",
+          "Reason": "deprecated memory is excluded in non-audit mode",
+          "Score": 45.85,
+          "EstimatedTokens": 45,
+          "Rank": 0,
+          "IsMustHit": false,
+          "IsMustNotHit": false,
+          "SourceRefs": [
+            "memory:automation-stopped-cron"
+          ]
+        },
+        {
+          "ItemId": "memory:automation-backup-strategy-v1",
+          "Kind": "historical_context",
+          "Type": "config-detail",
+          "SectionName": "",
+          "Reason": "deprecated memory is excluded in non-audit mode",
+          "Score": 39,
+          "EstimatedTokens": 36,
+          "Rank": 0,
+          "IsMustHit": false,
+          "IsMustNotHit": false,
+          "SourceRefs": [
+            "memory:automation-backup-strategy-v1"
+          ]
+        },
+        {
+          "ItemId": "memory:automation-conflict-v1",
+          "Kind": "historical_context",
+          "Type": "config-detail",
+          "SectionName": "",
+          "Reason": "deprecated memory is excluded in non-audit mode",
+          "Score": 39,
+          "EstimatedTokens": 26,
+          "Rank": 0,
+          "IsMustHit": false,
+          "IsMustNotHit": false,
+          "SourceRefs": [
+            "memory:automation-conflict-v1"
+          ]
+        }
+      ],
+      "SuspectedRootCause": "Expected entity is not represented in the selected package text.",
+      "SuggestedFixType": "uncertainty mapping"
+    },
+    {
+      "SampleId": "automation-20260529-010",
+      "Mode": "AutomationMode",
+      "FailedReason": "entity missing; uncertainty missing",
+      "FailureCategories": [
+        "EntityMiss",
+        "MissingUncertainty"
+      ],
+      "SelectedCount": 20,
+      "TokenBudget": 4000,
+      "BudgetPressure": false,
+      "BudgetPressureBreakdown": {
+        "MandatoryTokens": 19,
+        "ConstraintsTokens": 19,
+        "WorkingTokens": 596,
+        "StableTokens": 30,
+        "EvidenceTokens": 0,
+        "DiagnosticsTokens": 277,
+        "HistoricalTokens": 0,
+        "DroppedMustHitTokens": 0,
+        "DroppedLowPriorityTokens": 0
+      },
+      "MustHitStatuses": [
+        {
+          "ItemId": "run:current-failed-steps",
+          "Selected": true,
+          "Dropped": false,
+          "SelectedRank": 3,
+          "DroppedReason": "",
+          "EstimatedTokens": 37
+        },
+        {
+          "ItemId": "report:actionable-fix",
+          "Selected": true,
+          "Dropped": false,
+          "SelectedRank": 2,
+          "DroppedReason": "",
+          "EstimatedTokens": 40
+        }
+      ],
+      "ConstraintStatus": {
+        "Satisfied": true,
+        "Expected": [
+          "\u62A5\u544A\u5E94\u805A\u7126\u672C\u6B21\u8FD0\u884C\u5E76\u7ED9\u51FA\u53EF\u6267\u884C\u52A8\u4F5C"
+        ],
+        "Missing": []
+      },
+      "EntityStatus": {
+        "Satisfied": false,
+        "Expected": [
+          "\u5931\u8D25\u6B65\u9AA4",
+          "\u4FEE\u590D\u5EFA\u8BAE",
+          "\u81EA\u52A8\u5316\u62A5\u544A"
+        ],
+        "Missing": [
+          "\u5931\u8D25\u6B65\u9AA4",
+          "\u4FEE\u590D\u5EFA\u8BAE",
+          "\u81EA\u52A8\u5316\u62A5\u544A"
+        ]
+      },
+      "UncertaintyStatus": {
+        "Satisfied": false,
+        "Expected": [
+          "\u5931\u8D25\u662F\u5426\u53EF\u81EA\u52A8\u4FEE\u590D"
+        ],
+        "Missing": [
+          "\u5931\u8D25\u662F\u5426\u53EF\u81EA\u52A8\u4FEE\u590D"
+        ]
+      },
+      "UncertaintyFailureTypes": [],
+      "TopDroppedImportantItems": [
+        {
+          "ItemId": "memory:automation-backup-strategy-v1",
+          "Kind": "historical_context",
+          "Type": "config-detail",
+          "SectionName": "",
+          "Reason": "deprecated memory is excluded in non-audit mode",
+          "Score": 61.727491434846996,
+          "EstimatedTokens": 36,
+          "Rank": 0,
+          "IsMustHit": false,
+          "IsMustNotHit": false,
+          "SourceRefs": [
+            "memory:automation-backup-strategy-v1"
+          ]
+        },
+        {
+          "ItemId": "memory:automation-stopped-cron",
+          "Kind": "historical_context",
+          "Type": "cron-log",
+          "SectionName": "",
+          "Reason": "deprecated memory is excluded in non-audit mode",
+          "Score": 60.227491434846996,
+          "EstimatedTokens": 45,
+          "Rank": 0,
+          "IsMustHit": false,
+          "IsMustNotHit": false,
+          "SourceRefs": [
+            "memory:automation-stopped-cron"
+          ]
+        },
+        {
+          "ItemId": "memory:automation-conflict-v1",
+          "Kind": "historical_context",
+          "Type": "config-detail",
+          "SectionName": "",
+          "Reason": "deprecated memory is excluded in non-audit mode",
+          "Score": 39,
+          "EstimatedTokens": 26,
+          "Rank": 0,
+          "IsMustHit": false,
+          "IsMustNotHit": false,
+          "SourceRefs": [
+            "memory:automation-conflict-v1"
+          ]
+        }
+      ],
+      "SuspectedRootCause": "Expected entity is not represented in the selected package text.",
+      "SuggestedFixType": "uncertainty mapping"
+    },
+    {
+      "SampleId": "coding-20260529-002",
+      "Mode": "CodingMode",
+      "FailedReason": "constraint missing; uncertainty missing",
+      "FailureCategories": [
+        "ConstraintMiss",
+        "MissingUncertainty"
+      ],
+      "SelectedCount": 23,
+      "TokenBudget": 4000,
+      "BudgetPressure": false,
+      "BudgetPressureBreakdown": {
+        "MandatoryTokens": 22,
+        "ConstraintsTokens": 22,
+        "WorkingTokens": 603,
+        "StableTokens": 136,
+        "EvidenceTokens": 0,
+        "DiagnosticsTokens": 265,
+        "HistoricalTokens": 0,
+        "DroppedMustHitTokens": 0,
+        "DroppedLowPriorityTokens": 0
+      },
+      "MustHitStatuses": [
+        {
+          "ItemId": "test:last-failure",
+          "Selected": true,
+          "Dropped": false,
+          "SelectedRank": 2,
+          "DroppedReason": "",
+          "EstimatedTokens": 31
+        },
+        {
+          "ItemId": "assertion:expected-output",
+          "Selected": true,
+          "Dropped": false,
+          "SelectedRank": 6,
+          "DroppedReason": "",
+          "EstimatedTokens": 29
+        }
+      ],
+      "ConstraintStatus": {
+        "Satisfied": false,
+        "Expected": [
+          "\u53EA\u4FEE\u590D\u76F8\u5173\u65AD\u8A00\uFF0C\u4E0D\u505A\u65E0\u5173\u91CD\u6784"
+        ],
+        "Missing": [
+          "\u53EA\u4FEE\u590D\u76F8\u5173\u65AD\u8A00\uFF0C\u4E0D\u505A\u65E0\u5173\u91CD\u6784"
+        ]
+      },
+      "EntityStatus": {
+        "Satisfied": true,
+        "Expected": [
+          "\u6D4B\u8BD5\u5931\u8D25",
+          "\u65AD\u8A00",
+          "\u4E1A\u52A1\u903B\u8F91"
+        ],
+        "Missing": []
+      },
+      "UncertaintyStatus": {
+        "Satisfied": false,
+        "Expected": [
+          "\u5931\u8D25\u662F\u5426\u7531\u8F93\u51FA\u6587\u6848\u53D8\u66F4\u5BFC\u81F4"
+        ],
+        "Missing": [
+          "\u5931\u8D25\u662F\u5426\u7531\u8F93\u51FA\u6587\u6848\u53D8\u66F4\u5BFC\u81F4"
+        ]
+      },
+      "UncertaintyFailureTypes": [],
+      "TopDroppedImportantItems": [
+        {
+          "ItemId": "memory:coding-conflict-v1",
+          "Kind": "historical_context",
+          "Type": "signature",
+          "SectionName": "",
+          "Reason": "deprecated memory is excluded in non-audit mode",
+          "Score": 51.24749555882061,
+          "EstimatedTokens": 32,
+          "Rank": 0,
+          "IsMustHit": false,
+          "IsMustNotHit": false,
+          "SourceRefs": [
+            "memory:coding-conflict-v1"
+          ]
+        },
+        {
+          "ItemId": "memory:coding-deprecated-logger",
+          "Kind": "historical_context",
+          "Type": "documentation",
+          "SectionName": "",
+          "Reason": "deprecated memory is excluded in non-audit mode",
+          "Score": 39,
+          "EstimatedTokens": 50,
+          "Rank": 0,
+          "IsMustHit": false,
+          "IsMustNotHit": false,
+          "SourceRefs": [
+            "memory:coding-deprecated-logger"
+          ]
+        },
+        {
+          "ItemId": "memory:coding-timeout-v1",
+          "Kind": "historical_context",
+          "Type": "signature",
+          "SectionName": "",
+          "Reason": "deprecated memory is excluded in non-audit mode",
+          "Score": 39,
+          "EstimatedTokens": 36,
+          "Rank": 0,
+          "IsMustHit": false,
+          "IsMustNotHit": false,
+          "SourceRefs": [
+            "memory:coding-timeout-v1"
+          ]
+        }
+      ],
+      "SuspectedRootCause": "Expected constraint text is not represented in constraints/package sections.",
+      "SuggestedFixType": "uncertainty mapping"
+    },
+    {
+      "SampleId": "coding-20260529-010",
+      "Mode": "CodingMode",
+      "FailedReason": "entity missing; uncertainty missing",
+      "FailureCategories": [
+        "EntityMiss",
+        "MissingUncertainty"
+      ],
+      "SelectedCount": 22,
+      "TokenBudget": 4000,
+      "BudgetPressure": false,
+      "BudgetPressureBreakdown": {
+        "MandatoryTokens": 22,
+        "ConstraintsTokens": 22,
+        "WorkingTokens": 603,
+        "StableTokens": 103,
+        "EvidenceTokens": 0,
+        "DiagnosticsTokens": 265,
+        "HistoricalTokens": 0,
+        "DroppedMustHitTokens": 0,
+        "DroppedLowPriorityTokens": 0
+      },
+      "MustHitStatuses": [
+        {
+          "ItemId": "verification:build",
+          "Selected": true,
+          "Dropped": false,
+          "SelectedRank": 4,
+          "DroppedReason": "",
+          "EstimatedTokens": 33
+        },
+        {
+          "ItemId": "verification:test",
+          "Selected": true,
+          "Dropped": false,
+          "SelectedRank": 3,
+          "DroppedReason": "",
+          "EstimatedTokens": 34
+        },
+        {
+          "ItemId": "verification:secret-scan",
+          "Selected": true,
+          "Dropped": false,
+          "SelectedRank": 5,
+          "DroppedReason": "",
+          "EstimatedTokens": 23
+        }
+      ],
+      "ConstraintStatus": {
+        "Satisfied": true,
+        "Expected": [
+          "\u6700\u7EC8\u62A5\u544A\u5FC5\u987B\u533A\u5206\u5DF2\u9A8C\u8BC1\u548C\u672A\u9A8C\u8BC1\u5185\u5BB9"
+        ],
+        "Missing": []
+      },
+      "EntityStatus": {
+        "Satisfied": false,
+        "Expected": [
+          "\u6784\u5EFA",
+          "\u6D4B\u8BD5",
+          "\u5BC6\u94A5\u626B\u63CF",
+          "\u6700\u7EC8\u7ED3\u8BBA"
+        ],
+        "Missing": [
+          "\u6784\u5EFA",
+          "\u6D4B\u8BD5",
+          "\u5BC6\u94A5\u626B\u63CF",
+          "\u6700\u7EC8\u7ED3\u8BBA"
+        ]
+      },
+      "UncertaintyStatus": {
+        "Satisfied": false,
+        "Expected": [
+          "\u547D\u4EE4\u662F\u5426\u53D7\u5F53\u524D\u73AF\u5883\u6743\u9650\u9650\u5236"
+        ],
+        "Missing": [
+          "\u547D\u4EE4\u662F\u5426\u53D7\u5F53\u524D\u73AF\u5883\u6743\u9650\u9650\u5236"
+        ]
+      },
+      "UncertaintyFailureTypes": [],
+      "TopDroppedImportantItems": [
+        {
+          "ItemId": "memory:coding-conflict-v1",
+          "Kind": "historical_context",
+          "Type": "signature",
+          "SectionName": "",
+          "Reason": "deprecated memory is excluded in non-audit mode",
+          "Score": 50.7274913954725,
+          "EstimatedTokens": 32,
+          "Rank": 0,
+          "IsMustHit": false,
+          "IsMustNotHit": false,
+          "SourceRefs": [
+            "memory:coding-conflict-v1"
+          ]
+        },
+        {
+          "ItemId": "memory:coding-deprecated-logger",
+          "Kind": "historical_context",
+          "Type": "documentation",
+          "SectionName": "",
+          "Reason": "deprecated memory is excluded in non-audit mode",
+          "Score": 39,
+          "EstimatedTokens": 50,
+          "Rank": 0,
+          "IsMustHit": false,
+          "IsMustNotHit": false,
+          "SourceRefs": [
+            "memory:coding-deprecated-logger"
+          ]
+        },
+        {
+          "ItemId": "memory:coding-timeout-v1",
+          "Kind": "historical_context",
+          "Type": "signature",
+          "SectionName": "",
+          "Reason": "deprecated memory is excluded in non-audit mode",
+          "Score": 39,
+          "EstimatedTokens": 36,
+          "Rank": 0,
+          "IsMustHit": false,
+          "IsMustNotHit": false,
+          "SourceRefs": [
+            "memory:coding-timeout-v1"
+          ]
+        }
+      ],
+      "SuspectedRootCause": "Expected entity is not represented in the selected package text.",
+      "SuggestedFixType": "uncertainty mapping"
+    }
+  ]
+}

@@ -1,0 +1,369 @@
+﻿{
+  "generatedAt": "2026-06-06T09:57:47.7695566+00:00",
+  "inputPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\learning\\features\\ranking-pairs.jsonl",
+  "pairCount": 253,
+  "ready": true,
+  "status": "Ready",
+  "notReadyReasons": [],
+  "split": {
+    "strategy": "DeterministicGroupHash80_20",
+    "groupKey": "EvalSampleId",
+    "trainGroupCount": 81,
+    "testGroupCount": 32,
+    "trainExampleCount": 190,
+    "testExampleCount": 63
+  },
+  "baseline": {
+    "baselineName": "SimpleFeatureWeightedBaseline",
+    "pairwiseAccuracy": 0.9047619047619048,
+    "auc": 0.9047619047619048,
+    "winRateOverRule": 0,
+    "falsePositiveRate": 0.09523809523809523,
+    "falseNegativeRate": 0.09523809523809523,
+    "topFailureExamples": [
+      {
+        "evalSampleId": "novel-sample-008",
+        "mode": "NovelMode",
+        "intent": "NovelGeneration",
+        "positiveCandidateId": "memory:novel-weapon-v2",
+        "negativeCandidateId": "memory:novel-weapon-v1",
+        "positiveScore": 94.29999795,
+        "negativeScore": 105.24999555,
+        "reason": "negative candidate outranked positive candidate"
+      },
+      {
+        "evalSampleId": "novel-sample-008",
+        "mode": "NovelMode",
+        "intent": "NovelGeneration",
+        "positiveCandidateId": "memory:novel-weapon-v2",
+        "negativeCandidateId": "memory:novel-weapon-v1",
+        "positiveScore": 94.29999648,
+        "negativeScore": 105.24999238,
+        "reason": "negative candidate outranked positive candidate"
+      },
+      {
+        "evalSampleId": "chat-sample-002",
+        "mode": "ChatMode",
+        "intent": "FuzzyQuestion",
+        "positiveCandidateId": "memory:chat-active-plan",
+        "negativeCandidateId": "memory:chat-noise-keyword-1",
+        "positiveScore": 48.65,
+        "negativeScore": 59.4,
+        "reason": "negative candidate outranked positive candidate"
+      },
+      {
+        "evalSampleId": "chat-sample-002",
+        "mode": "ChatMode",
+        "intent": "FuzzyQuestion",
+        "positiveCandidateId": "memory:chat-active-plan",
+        "negativeCandidateId": "memory:chat-noise-keyword-1",
+        "positiveScore": 48.65,
+        "negativeScore": 59.4,
+        "reason": "negative candidate outranked positive candidate"
+      },
+      {
+        "evalSampleId": "chat-sample-004",
+        "mode": "ChatMode",
+        "intent": "FuzzyQuestion",
+        "positiveCandidateId": "memory:chat-version-conflict-v2",
+        "negativeCandidateId": "memory:chat-version-conflict-v1",
+        "positiveScore": 45.45,
+        "negativeScore": 54.05,
+        "reason": "negative candidate outranked positive candidate"
+      },
+      {
+        "evalSampleId": "chat-sample-004",
+        "mode": "ChatMode",
+        "intent": "FuzzyQuestion",
+        "positiveCandidateId": "memory:chat-version-conflict-v2",
+        "negativeCandidateId": "memory:chat-version-conflict-v1",
+        "positiveScore": 45.45,
+        "negativeScore": 54.05,
+        "reason": "negative candidate outranked positive candidate"
+      }
+    ]
+  },
+  "ablations": [
+    {
+      "featureName": "lifecycle",
+      "disabledFeature": "lifecycle",
+      "pairwiseAccuracy": 0.9047619047619048,
+      "accuracyDelta": 0,
+      "auc": 0.9047619047619048,
+      "falsePositiveRate": 0.09523809523809523,
+      "falseNegativeRate": 0.09523809523809523,
+      "failureClusters": [
+        {
+          "cluster": "DeprecatedNoise",
+          "count": 3,
+          "exampleIds": [
+            "chat-sample-002",
+            "chat-sample-004",
+            "novel-sample-008"
+          ]
+        }
+      ],
+      "topFixedExamples": [],
+      "topNewlyFailedExamples": []
+    },
+    {
+      "featureName": "recency",
+      "disabledFeature": "recency",
+      "pairwiseAccuracy": 0.9047619047619048,
+      "accuracyDelta": 0,
+      "auc": 0.9047619047619048,
+      "falsePositiveRate": 0.09523809523809523,
+      "falseNegativeRate": 0.09523809523809523,
+      "failureClusters": [
+        {
+          "cluster": "DeprecatedNoise",
+          "count": 3,
+          "exampleIds": [
+            "chat-sample-002",
+            "chat-sample-004",
+            "novel-sample-008"
+          ]
+        }
+      ],
+      "topFixedExamples": [],
+      "topNewlyFailedExamples": []
+    },
+    {
+      "featureName": "channel source",
+      "disabledFeature": "channel source",
+      "pairwiseAccuracy": 0.9047619047619048,
+      "accuracyDelta": 0,
+      "auc": 0.9047619047619048,
+      "falsePositiveRate": 0.09523809523809523,
+      "falseNegativeRate": 0.09523809523809523,
+      "failureClusters": [
+        {
+          "cluster": "DeprecatedNoise",
+          "count": 3,
+          "exampleIds": [
+            "chat-sample-002",
+            "chat-sample-004",
+            "novel-sample-008"
+          ]
+        }
+      ],
+      "topFixedExamples": [],
+      "topNewlyFailedExamples": []
+    },
+    {
+      "featureName": "relation path",
+      "disabledFeature": "relation path",
+      "pairwiseAccuracy": 0.9047619047619048,
+      "accuracyDelta": 0,
+      "auc": 0.9047619047619048,
+      "falsePositiveRate": 0.09523809523809523,
+      "falseNegativeRate": 0.09523809523809523,
+      "failureClusters": [
+        {
+          "cluster": "DeprecatedNoise",
+          "count": 3,
+          "exampleIds": [
+            "chat-sample-002",
+            "chat-sample-004",
+            "novel-sample-008"
+          ]
+        }
+      ],
+      "topFixedExamples": [],
+      "topNewlyFailedExamples": []
+    },
+    {
+      "featureName": "short-term match",
+      "disabledFeature": "short-term match",
+      "pairwiseAccuracy": 0.9047619047619048,
+      "accuracyDelta": 0,
+      "auc": 0.9047619047619048,
+      "falsePositiveRate": 0.09523809523809523,
+      "falseNegativeRate": 0.09523809523809523,
+      "failureClusters": [
+        {
+          "cluster": "DeprecatedNoise",
+          "count": 3,
+          "exampleIds": [
+            "chat-sample-002",
+            "chat-sample-004",
+            "novel-sample-008"
+          ]
+        }
+      ],
+      "topFixedExamples": [],
+      "topNewlyFailedExamples": []
+    },
+    {
+      "featureName": "stable match",
+      "disabledFeature": "stable match",
+      "pairwiseAccuracy": 0.9047619047619048,
+      "accuracyDelta": 0,
+      "auc": 0.9047619047619048,
+      "falsePositiveRate": 0.09523809523809523,
+      "falseNegativeRate": 0.09523809523809523,
+      "failureClusters": [
+        {
+          "cluster": "DeprecatedNoise",
+          "count": 3,
+          "exampleIds": [
+            "chat-sample-002",
+            "chat-sample-004",
+            "novel-sample-008"
+          ]
+        }
+      ],
+      "topFixedExamples": [],
+      "topNewlyFailedExamples": []
+    },
+    {
+      "featureName": "constraint match",
+      "disabledFeature": "constraint match",
+      "pairwiseAccuracy": 0.9047619047619048,
+      "accuracyDelta": 0,
+      "auc": 0.9047619047619048,
+      "falsePositiveRate": 0.09523809523809523,
+      "falseNegativeRate": 0.09523809523809523,
+      "failureClusters": [
+        {
+          "cluster": "DeprecatedNoise",
+          "count": 3,
+          "exampleIds": [
+            "chat-sample-002",
+            "chat-sample-004",
+            "novel-sample-008"
+          ]
+        }
+      ],
+      "topFixedExamples": [],
+      "topNewlyFailedExamples": []
+    },
+    {
+      "featureName": "keyword match",
+      "disabledFeature": "keyword match",
+      "pairwiseAccuracy": 1,
+      "accuracyDelta": 0.09523809523809523,
+      "auc": 1,
+      "falsePositiveRate": 0,
+      "falseNegativeRate": 0,
+      "failureClusters": [],
+      "topFixedExamples": [
+        {
+          "evalSampleId": "novel-sample-008",
+          "mode": "NovelMode",
+          "intent": "NovelGeneration",
+          "positiveCandidateId": "memory:novel-weapon-v2",
+          "negativeCandidateId": "memory:novel-weapon-v1",
+          "baselinePositiveScore": 94.29999648,
+          "baselineNegativeScore": 105.24999238,
+          "candidatePositiveScore": 53.64999824,
+          "candidateNegativeScore": 50.62499619,
+          "failureCluster": "DeprecatedNoise",
+          "reason": "baseline failed; candidate fixed"
+        },
+        {
+          "evalSampleId": "chat-sample-002",
+          "mode": "ChatMode",
+          "intent": "FuzzyQuestion",
+          "positiveCandidateId": "memory:chat-active-plan",
+          "negativeCandidateId": "memory:chat-noise-keyword-1",
+          "baselinePositiveScore": 48.65,
+          "baselineNegativeScore": 59.4,
+          "candidatePositiveScore": 30.825,
+          "candidateNegativeScore": 27.7,
+          "failureCluster": "DeprecatedNoise",
+          "reason": "baseline failed; candidate fixed"
+        },
+        {
+          "evalSampleId": "chat-sample-004",
+          "mode": "ChatMode",
+          "intent": "FuzzyQuestion",
+          "positiveCandidateId": "memory:chat-version-conflict-v2",
+          "negativeCandidateId": "memory:chat-version-conflict-v1",
+          "baselinePositiveScore": 45.45,
+          "baselineNegativeScore": 54.05,
+          "candidatePositiveScore": 29.225,
+          "candidateNegativeScore": 25.025,
+          "failureCluster": "DeprecatedNoise",
+          "reason": "baseline failed; candidate fixed"
+        }
+      ],
+      "topNewlyFailedExamples": []
+    },
+    {
+      "featureName": "semantic anchor match",
+      "disabledFeature": "semantic anchor match",
+      "pairwiseAccuracy": 1,
+      "accuracyDelta": 0.09523809523809523,
+      "auc": 1,
+      "falsePositiveRate": 0,
+      "falseNegativeRate": 0,
+      "failureClusters": [],
+      "topFixedExamples": [
+        {
+          "evalSampleId": "novel-sample-008",
+          "mode": "NovelMode",
+          "intent": "NovelGeneration",
+          "positiveCandidateId": "memory:novel-weapon-v2",
+          "negativeCandidateId": "memory:novel-weapon-v1",
+          "baselinePositiveScore": 94.29999648,
+          "baselineNegativeScore": 105.24999238,
+          "candidatePositiveScore": 53.64999824,
+          "candidateNegativeScore": 50.62499619,
+          "failureCluster": "DeprecatedNoise",
+          "reason": "baseline failed; candidate fixed"
+        },
+        {
+          "evalSampleId": "chat-sample-002",
+          "mode": "ChatMode",
+          "intent": "FuzzyQuestion",
+          "positiveCandidateId": "memory:chat-active-plan",
+          "negativeCandidateId": "memory:chat-noise-keyword-1",
+          "baselinePositiveScore": 48.65,
+          "baselineNegativeScore": 59.4,
+          "candidatePositiveScore": 30.825,
+          "candidateNegativeScore": 27.7,
+          "failureCluster": "DeprecatedNoise",
+          "reason": "baseline failed; candidate fixed"
+        },
+        {
+          "evalSampleId": "chat-sample-004",
+          "mode": "ChatMode",
+          "intent": "FuzzyQuestion",
+          "positiveCandidateId": "memory:chat-version-conflict-v2",
+          "negativeCandidateId": "memory:chat-version-conflict-v1",
+          "baselinePositiveScore": 45.45,
+          "baselineNegativeScore": 54.05,
+          "candidatePositiveScore": 29.225,
+          "candidateNegativeScore": 25.025,
+          "failureCluster": "DeprecatedNoise",
+          "reason": "baseline failed; candidate fixed"
+        }
+      ],
+      "topNewlyFailedExamples": []
+    },
+    {
+      "featureName": "importance",
+      "disabledFeature": "importance",
+      "pairwiseAccuracy": 0.9047619047619048,
+      "accuracyDelta": 0,
+      "auc": 0.9047619047619048,
+      "falsePositiveRate": 0.09523809523809523,
+      "falseNegativeRate": 0.09523809523809523,
+      "failureClusters": [
+        {
+          "cluster": "DeprecatedNoise",
+          "count": 3,
+          "exampleIds": [
+            "chat-sample-002",
+            "chat-sample-004",
+            "novel-sample-008"
+          ]
+        }
+      ],
+      "topFixedExamples": [],
+      "topNewlyFailedExamples": []
+    }
+  ],
+  "policyVersion": "learning-offline-baseline/v1"
+}

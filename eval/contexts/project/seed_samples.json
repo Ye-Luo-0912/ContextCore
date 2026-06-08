@@ -1,0 +1,125 @@
+[
+  {
+    "id": "project-sample-001",
+    "query": "如何在本地运行 ContextCore 并配置持久化后端？",
+    "mode": "ProjectMode",
+    "mustHit": ["doc:local-alpha-runbook"],
+    "mustNotHit": ["doc:legacy-project-info", "doc:project-noise-keyword"],
+    "expectedScopes": ["runbook"],
+    "expectedEntities": ["FileSystem"],
+    "expectedConstraints": ["禁止把明文 API Key 写入项目仓库"],
+    "expectedUncertainties": [],
+    "goldenNotes": "应该召回本地运行手册，并且包含禁止明文密钥入库的安全约束，过滤掉已废弃的 RAGv1 遗留系统说明及 PostgreSQL 作废方案。"
+  },
+  {
+    "id": "project-sample-002",
+    "query": "PostgreSQL 存储当前可以作为生产后端使用吗？",
+    "mode": "ProjectMode",
+    "mustHit": ["doc:postgres-not-ready"],
+    "mustNotHit": ["doc:legacy-project-info", "doc:project-noise-keyword"],
+    "expectedScopes": ["postgres"],
+    "expectedEntities": ["PostgreSQL"],
+    "expectedConstraints": [],
+    "expectedUncertainties": [],
+    "goldenNotes": "应该检索到 PostgreSQL 的非就绪和实验性状态声明，避免误导用户将其用作生产环境。"
+  },
+  {
+    "id": "project-sample-003",
+    "query": "本地运行 PostgreSQL 数据库有什么最新推荐和持久化方案吗？",
+    "mode": "ProjectMode",
+    "mustHit": ["doc:local-alpha-runbook", "doc:postgres-not-ready"],
+    "mustNotHit": ["doc:project-noise-keyword"],
+    "expectedScopes": ["runbook", "postgres"],
+    "expectedEntities": [],
+    "expectedConstraints": [],
+    "expectedUncertainties": [],
+    "goldenNotes": "测试高关键词负样本拦截能力。虽然 doc:project-noise-keyword 包含本地运行和 PostgreSQL 等高频词，但已被废弃不应召回。"
+  },
+  {
+    "id": "project-sample-004",
+    "query": "请问现在的项目经理是谁？联系电话是多少？",
+    "mode": "ProjectMode",
+    "mustHit": ["memory:project-conflict-v2"],
+    "mustNotHit": ["memory:project-conflict-v1"],
+    "expectedScopes": ["pm-contact"],
+    "expectedEntities": ["李四"],
+    "expectedConstraints": [],
+    "expectedUncertainties": ["SupersededSelectedItem"],
+    "goldenNotes": "测试替代关系与冲突测试。旧的项目经理张三的信息应被排除，保留李四，并产生替代关系警告。"
+  },
+  {
+    "id": "project-sample-005",
+    "query": "当前的开发重点和项目阶段 milestone 是什么？",
+    "mode": "ProjectMode",
+    "mustHit": ["memory:project-current-step", "memory:project-extra-active-1"],
+    "mustNotHit": ["doc:project-noise-keyword"],
+    "expectedScopes": ["task", "milestone"],
+    "expectedEntities": ["边界固化"],
+    "expectedConstraints": [],
+    "expectedUncertainties": [],
+    "goldenNotes": "召回活跃的项目重点记忆，避免旧废弃项干扰。"
+  },
+  {
+    "id": "project-sample-006",
+    "query": "系统 API 调用有什么安全或审计方面的中转约束吗？",
+    "mode": "ProjectMode",
+    "mustHit": ["memory:project-extra-active-2"],
+    "mustNotHit": ["doc:legacy-project-info"],
+    "expectedScopes": ["constraint"],
+    "expectedEntities": ["ModelGateway"],
+    "expectedConstraints": [],
+    "expectedUncertainties": [],
+    "goldenNotes": "正确召回 ModelGateway 核心架构中转约束。"
+  },
+  {
+    "id": "project-sample-007",
+    "query": "压力测试：低Token项目打包限制",
+    "mode": "ProjectMode",
+    "mustHit": ["memory:project-current-step"],
+    "mustNotHit": ["memory:project-budget-stress"],
+    "expectedScopes": [],
+    "expectedEntities": [],
+    "expectedConstraints": ["禁止把明文 API Key 写入项目仓库"],
+    "expectedUncertainties": [],
+    "metadata": {
+      "tokenBudget": "150"
+    },
+    "goldenNotes": "极限预算测试，当预算只有150字节时，超长压力测试备份被舍弃，只包含硬约束和核心里程碑。"
+  },
+  {
+    "id": "project-sample-008",
+    "query": "项目中生产数据库的最大连接池设定是多少？是 20 还是 100？",
+    "mode": "ProjectMode",
+    "mustHit": ["memory:project-pool-v2"],
+    "mustNotHit": ["memory:project-pool-v1"],
+    "expectedScopes": ["postgres"],
+    "expectedEntities": ["100"],
+    "expectedConstraints": [],
+    "expectedUncertainties": ["SupersededSelectedItem"],
+    "goldenNotes": "测试复杂项目设定变更冲突。旧的连接池20设定已废弃，现在使用100以支持高并发，应产生替代不确定性提示。"
+  },
+  {
+    "id": "project-sample-009",
+    "query": "显式审计：查看大纲中关于已经被放弃的基于 Ocelot 的旧网关设计草案？",
+    "mode": "ProjectMode",
+    "mustHit": ["memory:project-deprecated-gateway"],
+    "mustNotHit": ["memory:project-pool-v2"],
+    "expectedScopes": ["runbook"],
+    "expectedEntities": ["Ocelot"],
+    "expectedConstraints": [],
+    "expectedUncertainties": [],
+    "goldenNotes": "显式审计场景。当作者明确询问已被放弃的旧网关草案时，应召回该已被舍弃的设计文档。"
+  },
+  {
+    "id": "project-sample-010",
+    "query": "本地运行 ContextCore 服务时对于运行环境有什么具体的系统组件要求吗？",
+    "mode": "ProjectMode",
+    "mustHit": ["doc:local-alpha-runbook", "memory:project-required-env"],
+    "mustNotHit": ["doc:project-deprecated-gateway"],
+    "expectedScopes": ["runbook"],
+    "expectedEntities": [],
+    "expectedConstraints": ["禁止把明文 API Key 写入项目仓库"],
+    "expectedUncertainties": [],
+    "goldenNotes": "普通高匹配召回，避开已被废弃的旧网关设定干扰。"
+  }
+]

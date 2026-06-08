@@ -1,0 +1,17 @@
+bin/
+obj/
+TestResults/
+*.user
+*.suo
+*.DotSettings.user
+.vs/
+.idea/
+.claude/
+context-core-data/
+context-core-relation-smoke/
+.appdata/
+.dotnet_home/
+.localappdata/
+.msbuild/
+.nuget/
+.userprofile/

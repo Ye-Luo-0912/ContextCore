@@ -1,0 +1,216 @@
+{
+  "contexts": [],
+  "memories": [
+    {
+      "id": "todo:A3",
+      "workspaceId": "eval",
+      "collectionId": "coding",
+      "layer": "Working",
+      "status": "Active",
+      "type": "todo",
+      "content": "A3 当前任务：实现评测样本读取器并保证测试覆盖 schema，当前样本数量是否达标需要确认。",
+      "tags": ["todo", "a3"],
+      "importance": 0.9
+    },
+    {
+      "id": "schema:context-eval-sample",
+      "workspaceId": "eval",
+      "collectionId": "coding",
+      "layer": "Working",
+      "status": "Active",
+      "type": "schema",
+      "content": "Context Eval Sample schema 描述 query、mode、mustHit、mustNotHit、expectedConstraints、expectedEntities 和 goldenNotes。",
+      "tags": ["schema", "eval"],
+      "importance": 0.85
+    },
+    {
+      "id": "test:last-failure",
+      "workspaceId": "eval",
+      "collectionId": "coding",
+      "layer": "Working",
+      "status": "Active",
+      "type": "test-failure",
+      "content": "最近测试失败来自断言不匹配，应该只修复相关断言，不改业务逻辑。",
+      "tags": ["test", "failure"],
+      "importance": 0.9
+    },
+    {
+      "id": "assertion:expected-output",
+      "workspaceId": "eval",
+      "collectionId": "coding",
+      "layer": "Working",
+      "status": "Active",
+      "type": "assertion",
+      "content": "断言期望输出发生变化，失败是否由输出文案变更导致需要确认。",
+      "tags": ["assertion", "test"],
+      "importance": 0.85
+    },
+    {
+      "id": "verification:build",
+      "workspaceId": "eval",
+      "collectionId": "coding",
+      "layer": "Working",
+      "status": "Active",
+      "type": "verification",
+      "content": "最终报告前需要运行构建验证，记录 build 结果并区分已验证和未验证内容。",
+      "tags": ["verification", "build"],
+      "importance": 0.9
+    },
+    {
+      "id": "verification:test",
+      "workspaceId": "eval",
+      "collectionId": "coding",
+      "layer": "Working",
+      "status": "Active",
+      "type": "verification",
+      "content": "最终报告前需要运行测试验证，记录 test 结果，命令可能受当前环境权限限制。",
+      "tags": ["verification", "test"],
+      "importance": 0.9
+    },
+    {
+      "id": "verification:secret-scan",
+      "workspaceId": "eval",
+      "collectionId": "coding",
+      "layer": "Working",
+      "status": "Active",
+      "type": "verification",
+      "content": "最终报告前需要运行密钥扫描，不得写入明文 API Key。",
+      "tags": ["verification", "secret"],
+      "importance": 0.95
+    },
+    {
+      "id": "build:last-error-file",
+      "workspaceId": "eval",
+      "collectionId": "coding",
+      "layer": "Working",
+      "status": "Active",
+      "type": "build-error",
+      "content": "最近构建失败应先定位报错文件，只修改与构建失败直接相关的代码。",
+      "tags": ["build", "error"],
+      "importance": 0.9
+    },
+    {
+      "id": "task:fix-build-failure",
+      "workspaceId": "eval",
+      "collectionId": "coding",
+      "layer": "Working",
+      "status": "Active",
+      "type": "task",
+      "content": "当前任务是修复构建失败，不顺手重构其他模块，失败是否由上一次改动引入需要确认。",
+      "tags": ["task", "build"],
+      "importance": 0.9
+    },
+    {
+      "id": "api:public-contract",
+      "workspaceId": "eval",
+      "collectionId": "coding",
+      "layer": "Working",
+      "status": "Active",
+      "type": "api-contract",
+      "content": "新增接口前必须确认现有公共 API 契约，公共接口变更必须检查兼容性。",
+      "tags": ["api", "contract"],
+      "importance": 0.9
+    },
+    {
+      "id": "compatibility:backward-check",
+      "workspaceId": "eval",
+      "collectionId": "coding",
+      "layer": "Working",
+      "status": "Active",
+      "type": "compatibility",
+      "content": "兼容性检查：确认是否有外部调用方依赖旧契约，避免未评审的破坏性变更。",
+      "tags": ["compatibility", "api"],
+      "importance": 0.9
+    },
+    {
+      "id": "comment:core-logic-chinese",
+      "workspaceId": "eval",
+      "collectionId": "coding",
+      "layer": "Stable",
+      "status": "Stable",
+      "type": "comment-rule",
+      "content": "新加核心逻辑需要补中文注释，注释应解释非显而易见的设计或边界。",
+      "tags": ["comment", "chinese"],
+      "importance": 0.85
+    },
+    {
+      "id": "comment:avoid-noise",
+      "workspaceId": "eval",
+      "collectionId": "coding",
+      "layer": "Stable",
+      "status": "Stable",
+      "type": "comment-rule",
+      "content": "避免噪音注释：不要给显而易见的赋值写废话注释。",
+      "tags": ["comment", "noise"],
+      "importance": 0.85
+    },
+    {
+      "id": "performance:avoid-repeated-io",
+      "workspaceId": "eval",
+      "collectionId": "coding",
+      "layer": "Stable",
+      "status": "Stable",
+      "type": "performance-rule",
+      "content": "性能路径需要优先避免重复 IO，性能关键路径避免不必要的磁盘读写。",
+      "tags": ["performance", "io"],
+      "importance": 0.9
+    },
+    {
+      "id": "performance:avoid-full-deserialize",
+      "workspaceId": "eval",
+      "collectionId": "coding",
+      "layer": "Stable",
+      "status": "Stable",
+      "type": "performance-rule",
+      "content": "性能路径避免全量反序列化，当前数据规模和缓存策略需要明确。",
+      "tags": ["performance", "deserialize"],
+      "importance": 0.9
+    },
+    {
+      "id": "test:risk-focused",
+      "workspaceId": "eval",
+      "collectionId": "coding",
+      "layer": "Stable",
+      "status": "Stable",
+      "type": "test-rule",
+      "content": "测试应覆盖这次变更的风险点，围绕行为风险而不是数字覆盖率。",
+      "tags": ["test", "risk"],
+      "importance": 0.9
+    },
+    {
+      "id": "test:avoid-brittle-snapshot",
+      "workspaceId": "eval",
+      "collectionId": "coding",
+      "layer": "Stable",
+      "status": "Stable",
+      "type": "test-rule",
+      "content": "不要为了覆盖率写脆弱快照测试，避免覆盖率噪音。",
+      "tags": ["test", "snapshot"],
+      "importance": 0.85
+    },
+    {
+      "id": "security:private-config-dir",
+      "workspaceId": "eval",
+      "collectionId": "coding",
+      "layer": "Stable",
+      "status": "Stable",
+      "type": "security-rule",
+      "content": "涉及密钥配置时只读取用户私有配置目录，运行时从私有配置读取。",
+      "tags": ["security", "config"],
+      "importance": 0.95
+    },
+    {
+      "id": "security:no-secret-in-repo",
+      "workspaceId": "eval",
+      "collectionId": "coding",
+      "layer": "Stable",
+      "status": "Stable",
+      "type": "security-rule",
+      "content": "密钥不得写入仓库，不能提交 API Key 到项目文件。",
+      "tags": ["security", "secret"],
+      "importance": 0.95
+    }
+  ],
+  "relations": [],
+  "constraints": []
+}

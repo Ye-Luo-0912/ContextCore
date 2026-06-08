@@ -1,0 +1,114 @@
+[
+  {
+    "id": "automation-20260529-004",
+    "query": "自动化流程中断后，从最近的恢复点继续，不要重新执行已经成功的步骤。",
+    "mode": "AutomationMode",
+    "mustHit": ["run:latest-recovery-point", "step:last-succeeded"],
+    "mustNotHit": ["step:rerun-completed"],
+    "expectedScopes": ["run", "task"],
+    "expectedEntities": ["恢复点", "成功步骤", "自动化流程"],
+    "expectedConstraints": ["已成功步骤不得重复执行"],
+    "expectedUncertainties": ["恢复点之后的外部状态是否变化"],
+    "goldenNotes": "应命中最近恢复点和最后成功步骤，并排除重复执行已完成步骤。",
+    "metadata": {
+      "category": "automation",
+      "source": "seed-20260529-batch2"
+    }
+  },
+  {
+    "id": "automation-20260529-005",
+    "query": "这个任务需要人工确认后才能继续执行删除操作。",
+    "mode": "AutomationMode",
+    "mustHit": ["confirmation:required-before-delete", "safety:destructive-operation"],
+    "mustNotHit": ["action:auto-delete-without-confirmation"],
+    "expectedScopes": ["task", "safety"],
+    "expectedEntities": ["人工确认", "删除操作"],
+    "expectedConstraints": ["破坏性操作必须等待确认"],
+    "expectedUncertainties": ["用户是否已明确确认"],
+    "goldenNotes": "应把删除操作标记为需要人工确认，不应自动继续执行。",
+    "metadata": {
+      "category": "automation",
+      "source": "seed-20260529-batch2"
+    }
+  },
+  {
+    "id": "automation-20260529-006",
+    "query": "上一次工具调用超时了，请基于错误日志判断是否重试。",
+    "mode": "AutomationMode",
+    "mustHit": ["tool:last-timeout", "log:last-error"],
+    "mustNotHit": ["tool:old-success"],
+    "expectedScopes": ["run", "tool"],
+    "expectedEntities": ["工具调用", "超时", "错误日志"],
+    "expectedConstraints": ["重试必须基于最近错误原因"],
+    "expectedUncertainties": ["超时是否由外部服务波动导致"],
+    "goldenNotes": "应召回最近工具超时和错误日志，避免使用旧成功状态覆盖当前失败。",
+    "metadata": {
+      "category": "automation",
+      "source": "seed-20260529-batch2"
+    }
+  },
+  {
+    "id": "automation-20260529-007",
+    "query": "检查并发 worker 是否重复消费了同一个任务。",
+    "mode": "AutomationMode",
+    "mustHit": ["worker:concurrency", "job:dedupe-token"],
+    "mustNotHit": ["job:single-worker-only"],
+    "expectedScopes": ["queue", "runtime"],
+    "expectedEntities": ["并发 worker", "重复消费", "任务"],
+    "expectedConstraints": ["并发出队必须保证同一任务只被一个 worker 消费"],
+    "expectedUncertainties": ["是否存在跨实例竞争"],
+    "goldenNotes": "应聚焦并发消费与去重线索，不应假设只有单 worker。",
+    "metadata": {
+      "category": "automation",
+      "source": "seed-20260529-batch2"
+    }
+  },
+  {
+    "id": "automation-20260529-008",
+    "query": "任务失败三次后进入死信队列，并说明下一步需要谁处理。",
+    "mode": "AutomationMode",
+    "mustHit": ["job:max-retry-exceeded", "queue:dead-letter"],
+    "mustNotHit": ["job:retry-indefinitely"],
+    "expectedScopes": ["queue", "task"],
+    "expectedEntities": ["死信队列", "重试次数", "处理人"],
+    "expectedConstraints": ["超过最大重试次数后不得无限重试"],
+    "expectedUncertainties": ["负责人是否已配置"],
+    "goldenNotes": "应识别最大重试次数和死信队列状态，并输出后续处理归属。",
+    "metadata": {
+      "category": "automation",
+      "source": "seed-20260529-batch2"
+    }
+  },
+  {
+    "id": "automation-20260529-009",
+    "query": "恢复执行前先确认当前环境和上次执行环境是否一致。",
+    "mode": "AutomationMode",
+    "mustHit": ["run:environment-snapshot", "run:resume-precheck"],
+    "mustNotHit": ["run:skip-environment-check"],
+    "expectedScopes": ["run", "environment"],
+    "expectedEntities": ["执行环境", "恢复前检查"],
+    "expectedConstraints": ["恢复执行前必须校验环境一致性"],
+    "expectedUncertainties": ["依赖版本或路径是否发生变化"],
+    "goldenNotes": "应召回环境快照和恢复前检查，不应跳过环境一致性校验。",
+    "metadata": {
+      "category": "automation",
+      "source": "seed-20260529-batch2"
+    }
+  },
+  {
+    "id": "automation-20260529-010",
+    "query": "自动化报告只输出本次运行的失败步骤和可执行修复建议。",
+    "mode": "AutomationMode",
+    "mustHit": ["run:current-failed-steps", "report:actionable-fix"],
+    "mustNotHit": ["report:historical-noise"],
+    "expectedScopes": ["run", "report"],
+    "expectedEntities": ["失败步骤", "修复建议", "自动化报告"],
+    "expectedConstraints": ["报告应聚焦本次运行并给出可执行动作"],
+    "expectedUncertainties": ["失败是否可自动修复"],
+    "goldenNotes": "应过滤历史噪音，输出本次失败步骤与可执行修复建议。",
+    "metadata": {
+      "category": "automation",
+      "source": "seed-20260529-batch2"
+    }
+  }
+]

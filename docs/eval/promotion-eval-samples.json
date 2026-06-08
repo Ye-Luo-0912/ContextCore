@@ -1,0 +1,90 @@
+[
+  {
+    "id": "working-architecture-001",
+    "description": "新的架构原则应进入中期记忆",
+    "content": "新的架构原则：ContextCore 的文件访问保持读写分离，命令层只做参数解析。",
+    "expectedDecision": "PromoteToWorkingMemory",
+    "expectedTargetLayer": "Working",
+    "tags": ["promotion", "working", "architecture"]
+  },
+  {
+    "id": "working-conclusion-001",
+    "description": "阶段性结论应进入中期记忆",
+    "content": "阶段性结论：A2 先使用轻量规则评估器，不在热路径调用 LLM。",
+    "expectedDecision": "PromoteToWorkingMemory",
+    "expectedTargetLayer": "Working",
+    "tags": ["promotion", "working", "conclusion"]
+  },
+  {
+    "id": "working-task-001",
+    "description": "任务状态变化应进入中期记忆",
+    "content": "任务状态变化：Promotion Review 命令已完成，下一步进入 Eval。",
+    "expectedDecision": "PromoteToWorkingMemory",
+    "expectedTargetLayer": "Working",
+    "tags": ["promotion", "working", "task"]
+  },
+  {
+    "id": "stable-preference-001",
+    "description": "用户长期偏好应进入长期记忆",
+    "content": "用户明确长期偏好：输出、日志、注释和提示信息保持中文。",
+    "expectedDecision": "PromoteToStableMemory",
+    "expectedTargetLayer": "Stable",
+    "tags": ["promotion", "stable", "preference"]
+  },
+  {
+    "id": "stable-constraint-001",
+    "description": "长期稳定约束应进入长期记忆",
+    "content": "长期稳定约束：不得把明文 API Key 写入项目文件。",
+    "expectedDecision": "PromoteToStableMemory",
+    "expectedTargetLayer": "Stable",
+    "tags": ["promotion", "stable", "constraint"]
+  },
+  {
+    "id": "stable-cross-scene-001",
+    "description": "跨场景通用规则应进入长期记忆",
+    "content": "跨场景通用规则：涉及密钥的配置放在用户目录私有配置。",
+    "expectedDecision": "PromoteToStableMemory",
+    "expectedTargetLayer": "Stable",
+    "tags": ["promotion", "stable", "rule"]
+  },
+  {
+    "id": "no-greeting-001",
+    "description": "普通寒暄不应提升",
+    "content": "你好，谢谢，辛苦了。",
+    "expectedDecision": "DoNotPromote",
+    "expectedTargetLayer": null,
+    "tags": ["promotion", "no-promote", "greeting"]
+  },
+  {
+    "id": "no-temporary-emotion-001",
+    "description": "临时情绪不应提升",
+    "content": "临时情绪：今天有点烦，这条不需要后续。",
+    "expectedDecision": "DoNotPromote",
+    "expectedTargetLayer": null,
+    "tags": ["promotion", "no-promote", "emotion"]
+  },
+  {
+    "id": "no-duplicate-001",
+    "description": "重复解释不应提升",
+    "content": "重复解释：前面说过的内容再解释一遍。",
+    "expectedDecision": "DoNotPromote",
+    "expectedTargetLayer": null,
+    "tags": ["promotion", "no-promote", "duplicate"]
+  },
+  {
+    "id": "no-oneoff-001",
+    "description": "明显一次性上下文不应提升",
+    "content": "一次性日志片段，仅这次排查使用。",
+    "expectedDecision": "DoNotPromote",
+    "expectedTargetLayer": null,
+    "tags": ["promotion", "no-promote", "oneoff"]
+  },
+  {
+    "id": "review-unclear-001",
+    "description": "规则信号不足时应进入 needs_review",
+    "content": "这段内容可能有点价值，但没有明确后续使用方式。",
+    "expectedDecision": "NeedsReview",
+    "expectedTargetLayer": null,
+    "tags": ["promotion", "needs-review"]
+  }
+]

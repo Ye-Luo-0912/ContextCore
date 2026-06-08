@@ -1,0 +1,834 @@
+﻿{
+  "ReportId": "21c9689535624c63aa3f71e3e0dd605a",
+  "SampleSet": "extended",
+  "GeneratedAt": "2026-06-05T08:54:45.0214461+00:00",
+  "TotalSamples": 113,
+  "AffectedSampleCount": 39,
+  "FallbackSampleCount": 9,
+  "ConstraintRepairedCount": 30,
+  "ConstraintRepairFailedCount": 9,
+  "ConstraintDroppedByBudgetCount": 10,
+  "ConstraintWrongSectionCount": 20,
+  "Samples": [
+    {
+      "SampleId": "chat-sample-005",
+      "Mode": "ChatMode",
+      "Intent": "CodingTask",
+      "OptInMatched": true,
+      "Applied": true,
+      "FallbackUsed": false,
+      "ExpectedHardConstraints": [
+        "\u8F93\u51FA\u5FC5\u987B\u4F7F\u7528\u4E2D\u6587"
+      ],
+      "LegacyConstraints": [],
+      "ProposalConstraints": [
+        "\u8F93\u51FA\u5FC5\u987B\u4F7F\u7528\u4E2D\u6587"
+      ],
+      "MissingConstraints": [],
+      "ConstraintSource": "eval.expectedConstraints",
+      "LostAtStage": "ConstraintDroppedByBudget",
+      "SuggestedFix": "Keep LockedConstraintItems before normal budget trim and evict diagnostics/historical/low-value items first.",
+      "ConstraintRepairStatus": "ConstraintRepaired"
+    },
+    {
+      "SampleId": "chat-20260529-001",
+      "Mode": "ChatMode",
+      "Intent": "LongTermPreference",
+      "OptInMatched": true,
+      "Applied": true,
+      "FallbackUsed": false,
+      "ExpectedHardConstraints": [
+        "\u8F93\u51FA\u3001\u65E5\u5FD7\u3001\u6CE8\u91CA\u548C\u63D0\u793A\u4FE1\u606F\u4FDD\u6301\u4E2D\u6587"
+      ],
+      "LegacyConstraints": [
+        "\u8F93\u51FA\u3001\u65E5\u5FD7\u3001\u6CE8\u91CA\u548C\u63D0\u793A\u4FE1\u606F\u4FDD\u6301\u4E2D\u6587"
+      ],
+      "ProposalConstraints": [
+        "\u8F93\u51FA\u3001\u65E5\u5FD7\u3001\u6CE8\u91CA\u548C\u63D0\u793A\u4FE1\u606F\u4FDD\u6301\u4E2D\u6587"
+      ],
+      "MissingConstraints": [],
+      "ConstraintSource": "eval.expectedConstraints",
+      "LostAtStage": "ConstraintWrongSection",
+      "SuggestedFix": "Keep mandatory constraint injection enabled and map repaired items to constraints section before safety check.",
+      "ConstraintRepairStatus": "ConstraintRepaired"
+    },
+    {
+      "SampleId": "chat-20260529-003",
+      "Mode": "ChatMode",
+      "Intent": "CurrentTask",
+      "OptInMatched": true,
+      "Applied": false,
+      "FallbackUsed": true,
+      "ExpectedHardConstraints": [
+        "\u91CD\u590D\u89E3\u91CA\u4E0D\u5E94\u63D0\u5347"
+      ],
+      "LegacyConstraints": [],
+      "ProposalConstraints": [],
+      "MissingConstraints": [
+        "\u91CD\u590D\u89E3\u91CA\u4E0D\u5E94\u63D0\u5347"
+      ],
+      "ConstraintSource": "eval.expectedConstraints",
+      "LostAtStage": "ConstraintNotRetrieved",
+      "SuggestedFix": "Tune proposal channel coverage for scope-matched hard constraints before fallback.",
+      "ConstraintRepairStatus": "ConstraintRepairFailed"
+    },
+    {
+      "SampleId": "chat-20260529-006",
+      "Mode": "ChatMode",
+      "Intent": "CurrentTask",
+      "OptInMatched": true,
+      "Applied": true,
+      "FallbackUsed": false,
+      "ExpectedHardConstraints": [
+        "\u4F18\u5148\u5F53\u524D\u4EFB\u52A1"
+      ],
+      "LegacyConstraints": [
+        "\u4F18\u5148\u5F53\u524D\u4EFB\u52A1"
+      ],
+      "ProposalConstraints": [
+        "\u4F18\u5148\u5F53\u524D\u4EFB\u52A1"
+      ],
+      "MissingConstraints": [],
+      "ConstraintSource": "eval.expectedConstraints",
+      "LostAtStage": "ConstraintWrongSection",
+      "SuggestedFix": "Keep mandatory constraint injection enabled and map repaired items to constraints section before safety check.",
+      "ConstraintRepairStatus": "ConstraintRepaired"
+    },
+    {
+      "SampleId": "chat-20260529-010",
+      "Mode": "ChatMode",
+      "Intent": "CodingTask",
+      "OptInMatched": true,
+      "Applied": true,
+      "FallbackUsed": false,
+      "ExpectedHardConstraints": [
+        "\u4E0D\u5F97\u63D0\u4EA4\u5BC6\u94A5"
+      ],
+      "LegacyConstraints": [
+        "\u4E0D\u5F97\u63D0\u4EA4\u5BC6\u94A5"
+      ],
+      "ProposalConstraints": [
+        "\u4E0D\u5F97\u63D0\u4EA4\u5BC6\u94A5"
+      ],
+      "MissingConstraints": [],
+      "ConstraintSource": "eval.expectedConstraints",
+      "LostAtStage": "ConstraintWrongSection",
+      "SuggestedFix": "Keep mandatory constraint injection enabled and map repaired items to constraints section before safety check.",
+      "ConstraintRepairStatus": "ConstraintRepaired"
+    },
+    {
+      "SampleId": "chat-20260529-015",
+      "Mode": "ChatMode",
+      "Intent": "CodingTask",
+      "OptInMatched": true,
+      "Applied": true,
+      "FallbackUsed": false,
+      "ExpectedHardConstraints": [
+        "\u4E00\u6B21\u6027\u4E0A\u4E0B\u6587\u4E0D\u5E94\u63D0\u5347"
+      ],
+      "LegacyConstraints": [
+        "\u4E00\u6B21\u6027\u4E0A\u4E0B\u6587\u4E0D\u5E94\u63D0\u5347"
+      ],
+      "ProposalConstraints": [
+        "\u4E00\u6B21\u6027\u4E0A\u4E0B\u6587\u4E0D\u5E94\u63D0\u5347"
+      ],
+      "MissingConstraints": [],
+      "ConstraintSource": "eval.expectedConstraints",
+      "LostAtStage": "ConstraintWrongSection",
+      "SuggestedFix": "Keep mandatory constraint injection enabled and map repaired items to constraints section before safety check.",
+      "ConstraintRepairStatus": "ConstraintRepaired"
+    },
+    {
+      "SampleId": "chat-20260529-019",
+      "Mode": "ChatMode",
+      "Intent": "CurrentTask",
+      "OptInMatched": true,
+      "Applied": true,
+      "FallbackUsed": false,
+      "ExpectedHardConstraints": [
+        "\u6062\u590D\u5F53\u524D\u4EFB\u52A1"
+      ],
+      "LegacyConstraints": [
+        "\u6062\u590D\u5F53\u524D\u4EFB\u52A1"
+      ],
+      "ProposalConstraints": [
+        "\u6062\u590D\u5F53\u524D\u4EFB\u52A1"
+      ],
+      "MissingConstraints": [],
+      "ConstraintSource": "eval.expectedConstraints",
+      "LostAtStage": "ConstraintWrongSection",
+      "SuggestedFix": "Keep mandatory constraint injection enabled and map repaired items to constraints section before safety check.",
+      "ConstraintRepairStatus": "ConstraintRepaired"
+    },
+    {
+      "SampleId": "project-sample-007",
+      "Mode": "ProjectMode",
+      "Intent": "CodingTask",
+      "OptInMatched": true,
+      "Applied": true,
+      "FallbackUsed": false,
+      "ExpectedHardConstraints": [
+        "\u7981\u6B62\u628A\u660E\u6587 API Key \u5199\u5165\u9879\u76EE\u4ED3\u5E93"
+      ],
+      "LegacyConstraints": [],
+      "ProposalConstraints": [
+        "\u7981\u6B62\u628A\u660E\u6587 API Key \u5199\u5165\u9879\u76EE\u4ED3\u5E93"
+      ],
+      "MissingConstraints": [],
+      "ConstraintSource": "eval.expectedConstraints",
+      "LostAtStage": "ConstraintDroppedByBudget",
+      "SuggestedFix": "Keep LockedConstraintItems before normal budget trim and evict diagnostics/historical/low-value items first.",
+      "ConstraintRepairStatus": "ConstraintRepaired"
+    },
+    {
+      "SampleId": "project-20260529-003",
+      "Mode": "ProjectMode",
+      "Intent": "CodingTask",
+      "OptInMatched": true,
+      "Applied": true,
+      "FallbackUsed": false,
+      "ExpectedHardConstraints": [
+        "\u9A8C\u8BC1\u8BB0\u5F55\u5FC5\u987B\u4F7F\u7528\u6700\u65B0\u6267\u884C\u7ED3\u679C"
+      ],
+      "LegacyConstraints": [
+        "\u9A8C\u8BC1\u8BB0\u5F55\u5FC5\u987B\u4F7F\u7528\u6700\u65B0\u6267\u884C\u7ED3\u679C"
+      ],
+      "ProposalConstraints": [
+        "\u9A8C\u8BC1\u8BB0\u5F55\u5FC5\u987B\u4F7F\u7528\u6700\u65B0\u6267\u884C\u7ED3\u679C"
+      ],
+      "MissingConstraints": [],
+      "ConstraintSource": "eval.expectedConstraints",
+      "LostAtStage": "ConstraintWrongSection",
+      "SuggestedFix": "Keep mandatory constraint injection enabled and map repaired items to constraints section before safety check.",
+      "ConstraintRepairStatus": "ConstraintRepaired"
+    },
+    {
+      "SampleId": "novel-20260529-010",
+      "Mode": "NovelMode",
+      "Intent": "CurrentTask",
+      "OptInMatched": true,
+      "Applied": true,
+      "FallbackUsed": false,
+      "ExpectedHardConstraints": [
+        "\u5220\u6389\u8BBE\u5B9A\u4E0D\u5F97\u53EC\u56DE"
+      ],
+      "LegacyConstraints": [
+        "\u5220\u6389\u8BBE\u5B9A\u4E0D\u5F97\u53EC\u56DE"
+      ],
+      "ProposalConstraints": [
+        "\u5220\u6389\u8BBE\u5B9A\u4E0D\u5F97\u53EC\u56DE"
+      ],
+      "MissingConstraints": [],
+      "ConstraintSource": "eval.expectedConstraints",
+      "LostAtStage": "ConstraintWrongSection",
+      "SuggestedFix": "Keep mandatory constraint injection enabled and map repaired items to constraints section before safety check.",
+      "ConstraintRepairStatus": "ConstraintRepaired"
+    },
+    {
+      "SampleId": "novel-20260529-015",
+      "Mode": "NovelMode",
+      "Intent": "CurrentTask",
+      "OptInMatched": true,
+      "Applied": true,
+      "FallbackUsed": false,
+      "ExpectedHardConstraints": [
+        "\u4F7F\u7528\u6700\u65B0\u4EA4\u6613\u7248\u672C"
+      ],
+      "LegacyConstraints": [
+        "\u4F7F\u7528\u6700\u65B0\u4EA4\u6613\u7248\u672C"
+      ],
+      "ProposalConstraints": [
+        "\u4F7F\u7528\u6700\u65B0\u4EA4\u6613\u7248\u672C"
+      ],
+      "MissingConstraints": [],
+      "ConstraintSource": "eval.expectedConstraints",
+      "LostAtStage": "ConstraintWrongSection",
+      "SuggestedFix": "Keep mandatory constraint injection enabled and map repaired items to constraints section before safety check.",
+      "ConstraintRepairStatus": "ConstraintRepaired"
+    },
+    {
+      "SampleId": "automation-sample-001",
+      "Mode": "AutomationMode",
+      "Intent": "AutomationRecovery",
+      "OptInMatched": true,
+      "Applied": true,
+      "FallbackUsed": false,
+      "ExpectedHardConstraints": [
+        "\u91CD\u8BD5\u524D\u5FC5\u987B\u8FDB\u884C\u4EBA\u5DE5\u786E\u8BA4"
+      ],
+      "LegacyConstraints": [],
+      "ProposalConstraints": [
+        "\u91CD\u8BD5\u524D\u5FC5\u987B\u8FDB\u884C\u4EBA\u5DE5\u786E\u8BA4"
+      ],
+      "MissingConstraints": [],
+      "ConstraintSource": "eval.expectedConstraints",
+      "LostAtStage": "ConstraintDroppedByBudget",
+      "SuggestedFix": "Keep LockedConstraintItems before normal budget trim and evict diagnostics/historical/low-value items first.",
+      "ConstraintRepairStatus": "ConstraintRepaired"
+    },
+    {
+      "SampleId": "automation-sample-003",
+      "Mode": "AutomationMode",
+      "Intent": "AutomationRecovery",
+      "OptInMatched": true,
+      "Applied": true,
+      "FallbackUsed": false,
+      "ExpectedHardConstraints": [
+        "\u91CD\u8BD5\u524D\u5FC5\u987B\u8FDB\u884C\u4EBA\u5DE5\u786E\u8BA4"
+      ],
+      "LegacyConstraints": [],
+      "ProposalConstraints": [
+        "\u91CD\u8BD5\u524D\u5FC5\u987B\u8FDB\u884C\u4EBA\u5DE5\u786E\u8BA4"
+      ],
+      "MissingConstraints": [],
+      "ConstraintSource": "eval.expectedConstraints",
+      "LostAtStage": "ConstraintDroppedByBudget",
+      "SuggestedFix": "Keep LockedConstraintItems before normal budget trim and evict diagnostics/historical/low-value items first.",
+      "ConstraintRepairStatus": "ConstraintRepaired"
+    },
+    {
+      "SampleId": "automation-sample-007",
+      "Mode": "AutomationMode",
+      "Intent": "CodingTask",
+      "OptInMatched": true,
+      "Applied": true,
+      "FallbackUsed": false,
+      "ExpectedHardConstraints": [
+        "\u91CD\u8BD5\u524D\u5FC5\u987B\u8FDB\u884C\u4EBA\u5DE5\u786E\u8BA4"
+      ],
+      "LegacyConstraints": [],
+      "ProposalConstraints": [
+        "\u91CD\u8BD5\u524D\u5FC5\u987B\u8FDB\u884C\u4EBA\u5DE5\u786E\u8BA4"
+      ],
+      "MissingConstraints": [],
+      "ConstraintSource": "eval.expectedConstraints",
+      "LostAtStage": "ConstraintDroppedByBudget",
+      "SuggestedFix": "Keep LockedConstraintItems before normal budget trim and evict diagnostics/historical/low-value items first.",
+      "ConstraintRepairStatus": "ConstraintRepaired"
+    },
+    {
+      "SampleId": "automation-sample-010",
+      "Mode": "AutomationMode",
+      "Intent": "AutomationRecovery",
+      "OptInMatched": true,
+      "Applied": true,
+      "FallbackUsed": false,
+      "ExpectedHardConstraints": [
+        "\u91CD\u8BD5\u524D\u5FC5\u987B\u8FDB\u884C\u4EBA\u5DE5\u786E\u8BA4"
+      ],
+      "LegacyConstraints": [],
+      "ProposalConstraints": [
+        "\u91CD\u8BD5\u524D\u5FC5\u987B\u8FDB\u884C\u4EBA\u5DE5\u786E\u8BA4"
+      ],
+      "MissingConstraints": [],
+      "ConstraintSource": "eval.expectedConstraints",
+      "LostAtStage": "ConstraintDroppedByBudget",
+      "SuggestedFix": "Keep LockedConstraintItems before normal budget trim and evict diagnostics/historical/low-value items first.",
+      "ConstraintRepairStatus": "ConstraintRepaired"
+    },
+    {
+      "SampleId": "automation-20260529-001",
+      "Mode": "AutomationMode",
+      "Intent": "AutomationRecovery",
+      "OptInMatched": true,
+      "Applied": true,
+      "FallbackUsed": false,
+      "ExpectedHardConstraints": [
+        "\u5931\u8D25\u4EFB\u52A1\u9700\u8981\u8BB0\u5F55\u9519\u8BEF\u548C\u4E0B\u4E00\u6B65"
+      ],
+      "LegacyConstraints": [
+        "\u5931\u8D25\u4EFB\u52A1\u9700\u8981\u8BB0\u5F55\u9519\u8BEF\u548C\u4E0B\u4E00\u6B65"
+      ],
+      "ProposalConstraints": [
+        "\u5931\u8D25\u4EFB\u52A1\u9700\u8981\u8BB0\u5F55\u9519\u8BEF\u548C\u4E0B\u4E00\u6B65"
+      ],
+      "MissingConstraints": [],
+      "ConstraintSource": "eval.expectedConstraints",
+      "LostAtStage": "ConstraintWrongSection",
+      "SuggestedFix": "Keep mandatory constraint injection enabled and map repaired items to constraints section before safety check.",
+      "ConstraintRepairStatus": "ConstraintRepaired"
+    },
+    {
+      "SampleId": "automation-20260529-002",
+      "Mode": "AutomationMode",
+      "Intent": "AutomationRecovery",
+      "OptInMatched": true,
+      "Applied": false,
+      "FallbackUsed": true,
+      "ExpectedHardConstraints": [
+        "\u4EC5 Failed/Cancelled \u4F5C\u4E1A\u5141\u8BB8\u91CD\u65B0\u5165\u961F"
+      ],
+      "LegacyConstraints": [],
+      "ProposalConstraints": [],
+      "MissingConstraints": [
+        "\u4EC5 Failed/Cancelled \u4F5C\u4E1A\u5141\u8BB8\u91CD\u65B0\u5165\u961F"
+      ],
+      "ConstraintSource": "eval.expectedConstraints",
+      "LostAtStage": "ConstraintNotRetrieved",
+      "SuggestedFix": "Tune proposal channel coverage for scope-matched hard constraints before fallback.",
+      "ConstraintRepairStatus": "ConstraintRepairFailed"
+    },
+    {
+      "SampleId": "automation-20260529-003",
+      "Mode": "AutomationMode",
+      "Intent": "AutomationRecovery",
+      "OptInMatched": true,
+      "Applied": true,
+      "FallbackUsed": false,
+      "ExpectedHardConstraints": [
+        "\u8FD0\u884C\u72B6\u6001\u5FC5\u987B\u57FA\u4E8E\u6700\u8FD1\u7EDF\u8BA1"
+      ],
+      "LegacyConstraints": [
+        "\u8FD0\u884C\u72B6\u6001\u5FC5\u987B\u57FA\u4E8E\u6700\u8FD1\u7EDF\u8BA1"
+      ],
+      "ProposalConstraints": [
+        "\u8FD0\u884C\u72B6\u6001\u5FC5\u987B\u57FA\u4E8E\u6700\u8FD1\u7EDF\u8BA1"
+      ],
+      "MissingConstraints": [],
+      "ConstraintSource": "eval.expectedConstraints",
+      "LostAtStage": "ConstraintWrongSection",
+      "SuggestedFix": "Keep mandatory constraint injection enabled and map repaired items to constraints section before safety check.",
+      "ConstraintRepairStatus": "ConstraintRepaired"
+    },
+    {
+      "SampleId": "automation-20260529-004",
+      "Mode": "AutomationMode",
+      "Intent": "AutomationRecovery",
+      "OptInMatched": true,
+      "Applied": true,
+      "FallbackUsed": false,
+      "ExpectedHardConstraints": [
+        "\u5DF2\u6210\u529F\u6B65\u9AA4\u4E0D\u5F97\u91CD\u590D\u6267\u884C"
+      ],
+      "LegacyConstraints": [
+        "\u5DF2\u6210\u529F\u6B65\u9AA4\u4E0D\u5F97\u91CD\u590D\u6267\u884C"
+      ],
+      "ProposalConstraints": [
+        "\u5DF2\u6210\u529F\u6B65\u9AA4\u4E0D\u5F97\u91CD\u590D\u6267\u884C"
+      ],
+      "MissingConstraints": [],
+      "ConstraintSource": "eval.expectedConstraints",
+      "LostAtStage": "ConstraintWrongSection",
+      "SuggestedFix": "Keep mandatory constraint injection enabled and map repaired items to constraints section before safety check.",
+      "ConstraintRepairStatus": "ConstraintRepaired"
+    },
+    {
+      "SampleId": "automation-20260529-005",
+      "Mode": "AutomationMode",
+      "Intent": "CurrentTask",
+      "OptInMatched": true,
+      "Applied": true,
+      "FallbackUsed": false,
+      "ExpectedHardConstraints": [
+        "\u7834\u574F\u6027\u64CD\u4F5C\u5FC5\u987B\u7B49\u5F85\u786E\u8BA4"
+      ],
+      "LegacyConstraints": [
+        "\u7834\u574F\u6027\u64CD\u4F5C\u5FC5\u987B\u7B49\u5F85\u786E\u8BA4"
+      ],
+      "ProposalConstraints": [
+        "\u7834\u574F\u6027\u64CD\u4F5C\u5FC5\u987B\u7B49\u5F85\u786E\u8BA4"
+      ],
+      "MissingConstraints": [],
+      "ConstraintSource": "eval.expectedConstraints",
+      "LostAtStage": "ConstraintWrongSection",
+      "SuggestedFix": "Keep mandatory constraint injection enabled and map repaired items to constraints section before safety check.",
+      "ConstraintRepairStatus": "ConstraintRepaired"
+    },
+    {
+      "SampleId": "automation-20260529-006",
+      "Mode": "AutomationMode",
+      "Intent": "AutomationRecovery",
+      "OptInMatched": true,
+      "Applied": true,
+      "FallbackUsed": false,
+      "ExpectedHardConstraints": [
+        "\u91CD\u8BD5\u5FC5\u987B\u57FA\u4E8E\u6700\u8FD1\u9519\u8BEF\u539F\u56E0"
+      ],
+      "LegacyConstraints": [
+        "\u91CD\u8BD5\u5FC5\u987B\u57FA\u4E8E\u6700\u8FD1\u9519\u8BEF\u539F\u56E0"
+      ],
+      "ProposalConstraints": [
+        "\u91CD\u8BD5\u5FC5\u987B\u57FA\u4E8E\u6700\u8FD1\u9519\u8BEF\u539F\u56E0"
+      ],
+      "MissingConstraints": [],
+      "ConstraintSource": "eval.expectedConstraints",
+      "LostAtStage": "ConstraintWrongSection",
+      "SuggestedFix": "Keep mandatory constraint injection enabled and map repaired items to constraints section before safety check.",
+      "ConstraintRepairStatus": "ConstraintRepaired"
+    },
+    {
+      "SampleId": "automation-20260529-007",
+      "Mode": "AutomationMode",
+      "Intent": "AutomationRecovery",
+      "OptInMatched": true,
+      "Applied": true,
+      "FallbackUsed": false,
+      "ExpectedHardConstraints": [
+        "\u5E76\u53D1\u51FA\u961F\u5FC5\u987B\u4FDD\u8BC1\u540C\u4E00\u4EFB\u52A1\u53EA\u88AB\u4E00\u4E2A worker \u6D88\u8D39"
+      ],
+      "LegacyConstraints": [
+        "\u5E76\u53D1\u51FA\u961F\u5FC5\u987B\u4FDD\u8BC1\u540C\u4E00\u4EFB\u52A1\u53EA\u88AB\u4E00\u4E2A worker \u6D88\u8D39"
+      ],
+      "ProposalConstraints": [
+        "\u5E76\u53D1\u51FA\u961F\u5FC5\u987B\u4FDD\u8BC1\u540C\u4E00\u4EFB\u52A1\u53EA\u88AB\u4E00\u4E2A worker \u6D88\u8D39"
+      ],
+      "MissingConstraints": [],
+      "ConstraintSource": "eval.expectedConstraints",
+      "LostAtStage": "ConstraintWrongSection",
+      "SuggestedFix": "Keep mandatory constraint injection enabled and map repaired items to constraints section before safety check.",
+      "ConstraintRepairStatus": "ConstraintRepaired"
+    },
+    {
+      "SampleId": "automation-20260529-008",
+      "Mode": "AutomationMode",
+      "Intent": "AutomationRecovery",
+      "OptInMatched": true,
+      "Applied": true,
+      "FallbackUsed": false,
+      "ExpectedHardConstraints": [
+        "\u8D85\u8FC7\u6700\u5927\u91CD\u8BD5\u6B21\u6570\u540E\u4E0D\u5F97\u65E0\u9650\u91CD\u8BD5"
+      ],
+      "LegacyConstraints": [
+        "\u8D85\u8FC7\u6700\u5927\u91CD\u8BD5\u6B21\u6570\u540E\u4E0D\u5F97\u65E0\u9650\u91CD\u8BD5"
+      ],
+      "ProposalConstraints": [
+        "\u8D85\u8FC7\u6700\u5927\u91CD\u8BD5\u6B21\u6570\u540E\u4E0D\u5F97\u65E0\u9650\u91CD\u8BD5"
+      ],
+      "MissingConstraints": [],
+      "ConstraintSource": "eval.expectedConstraints",
+      "LostAtStage": "ConstraintWrongSection",
+      "SuggestedFix": "Keep mandatory constraint injection enabled and map repaired items to constraints section before safety check.",
+      "ConstraintRepairStatus": "ConstraintRepaired"
+    },
+    {
+      "SampleId": "automation-20260529-009",
+      "Mode": "AutomationMode",
+      "Intent": "AutomationRecovery",
+      "OptInMatched": true,
+      "Applied": false,
+      "FallbackUsed": true,
+      "ExpectedHardConstraints": [
+        "\u6062\u590D\u6267\u884C\u524D\u5FC5\u987B\u6821\u9A8C\u73AF\u5883\u4E00\u81F4\u6027"
+      ],
+      "LegacyConstraints": [],
+      "ProposalConstraints": [],
+      "MissingConstraints": [
+        "\u6062\u590D\u6267\u884C\u524D\u5FC5\u987B\u6821\u9A8C\u73AF\u5883\u4E00\u81F4\u6027"
+      ],
+      "ConstraintSource": "eval.expectedConstraints",
+      "LostAtStage": "ConstraintNotRetrieved",
+      "SuggestedFix": "Tune proposal channel coverage for scope-matched hard constraints before fallback.",
+      "ConstraintRepairStatus": "ConstraintRepairFailed"
+    },
+    {
+      "SampleId": "automation-20260529-010",
+      "Mode": "AutomationMode",
+      "Intent": "AutomationRecovery",
+      "OptInMatched": true,
+      "Applied": true,
+      "FallbackUsed": false,
+      "ExpectedHardConstraints": [
+        "\u62A5\u544A\u5E94\u805A\u7126\u672C\u6B21\u8FD0\u884C\u5E76\u7ED9\u51FA\u53EF\u6267\u884C\u52A8\u4F5C"
+      ],
+      "LegacyConstraints": [
+        "\u62A5\u544A\u5E94\u805A\u7126\u672C\u6B21\u8FD0\u884C\u5E76\u7ED9\u51FA\u53EF\u6267\u884C\u52A8\u4F5C"
+      ],
+      "ProposalConstraints": [
+        "\u62A5\u544A\u5E94\u805A\u7126\u672C\u6B21\u8FD0\u884C\u5E76\u7ED9\u51FA\u53EF\u6267\u884C\u52A8\u4F5C"
+      ],
+      "MissingConstraints": [],
+      "ConstraintSource": "eval.expectedConstraints",
+      "LostAtStage": "ConstraintWrongSection",
+      "SuggestedFix": "Keep mandatory constraint injection enabled and map repaired items to constraints section before safety check.",
+      "ConstraintRepairStatus": "ConstraintRepaired"
+    },
+    {
+      "SampleId": "coding-sample-001",
+      "Mode": "CodingMode",
+      "Intent": "CodingTask",
+      "OptInMatched": true,
+      "Applied": true,
+      "FallbackUsed": false,
+      "ExpectedHardConstraints": [
+        "\u5168\u90E8\u65B0\u589E\u4EE3\u7801\u6587\u4EF6\u53CA\u63A5\u53E3\u6CE8\u91CA\u5747\u9700\u4F7F\u7528\u4E2D\u6587\u63CF\u8FF0"
+      ],
+      "LegacyConstraints": [],
+      "ProposalConstraints": [
+        "\u5168\u90E8\u65B0\u589E\u4EE3\u7801\u6587\u4EF6\u53CA\u63A5\u53E3\u6CE8\u91CA\u5747\u9700\u4F7F\u7528\u4E2D\u6587\u63CF\u8FF0"
+      ],
+      "MissingConstraints": [],
+      "ConstraintSource": "eval.expectedConstraints",
+      "LostAtStage": "ConstraintDroppedByBudget",
+      "SuggestedFix": "Keep LockedConstraintItems before normal budget trim and evict diagnostics/historical/low-value items first.",
+      "ConstraintRepairStatus": "ConstraintRepaired"
+    },
+    {
+      "SampleId": "coding-sample-003",
+      "Mode": "CodingMode",
+      "Intent": "CodingTask",
+      "OptInMatched": true,
+      "Applied": true,
+      "FallbackUsed": false,
+      "ExpectedHardConstraints": [
+        "\u5168\u90E8\u65B0\u589E\u4EE3\u7801\u6587\u4EF6\u53CA\u63A5\u53E3\u6CE8\u91CA\u5747\u9700\u4F7F\u7528\u4E2D\u6587\u63CF\u8FF0"
+      ],
+      "LegacyConstraints": [],
+      "ProposalConstraints": [
+        "\u5168\u90E8\u65B0\u589E\u4EE3\u7801\u6587\u4EF6\u53CA\u63A5\u53E3\u6CE8\u91CA\u5747\u9700\u4F7F\u7528\u4E2D\u6587\u63CF\u8FF0"
+      ],
+      "MissingConstraints": [],
+      "ConstraintSource": "eval.expectedConstraints",
+      "LostAtStage": "ConstraintDroppedByBudget",
+      "SuggestedFix": "Keep LockedConstraintItems before normal budget trim and evict diagnostics/historical/low-value items first.",
+      "ConstraintRepairStatus": "ConstraintRepaired"
+    },
+    {
+      "SampleId": "coding-sample-007",
+      "Mode": "CodingMode",
+      "Intent": "CodingTask",
+      "OptInMatched": true,
+      "Applied": true,
+      "FallbackUsed": false,
+      "ExpectedHardConstraints": [
+        "\u5168\u90E8\u65B0\u589E\u4EE3\u7801\u6587\u4EF6\u53CA\u63A5\u53E3\u6CE8\u91CA\u5747\u9700\u4F7F\u7528\u4E2D\u6587\u63CF\u8FF0"
+      ],
+      "LegacyConstraints": [],
+      "ProposalConstraints": [
+        "\u5168\u90E8\u65B0\u589E\u4EE3\u7801\u6587\u4EF6\u53CA\u63A5\u53E3\u6CE8\u91CA\u5747\u9700\u4F7F\u7528\u4E2D\u6587\u63CF\u8FF0"
+      ],
+      "MissingConstraints": [],
+      "ConstraintSource": "eval.expectedConstraints",
+      "LostAtStage": "ConstraintDroppedByBudget",
+      "SuggestedFix": "Keep LockedConstraintItems before normal budget trim and evict diagnostics/historical/low-value items first.",
+      "ConstraintRepairStatus": "ConstraintRepaired"
+    },
+    {
+      "SampleId": "coding-sample-010",
+      "Mode": "CodingMode",
+      "Intent": "CodingTask",
+      "OptInMatched": true,
+      "Applied": true,
+      "FallbackUsed": false,
+      "ExpectedHardConstraints": [
+        "\u5168\u90E8\u65B0\u589E\u4EE3\u7801\u6587\u4EF6\u53CA\u63A5\u53E3\u6CE8\u91CA\u5747\u9700\u4F7F\u7528\u4E2D\u6587\u63CF\u8FF0"
+      ],
+      "LegacyConstraints": [],
+      "ProposalConstraints": [
+        "\u5168\u90E8\u65B0\u589E\u4EE3\u7801\u6587\u4EF6\u53CA\u63A5\u53E3\u6CE8\u91CA\u5747\u9700\u4F7F\u7528\u4E2D\u6587\u63CF\u8FF0"
+      ],
+      "MissingConstraints": [],
+      "ConstraintSource": "eval.expectedConstraints",
+      "LostAtStage": "ConstraintDroppedByBudget",
+      "SuggestedFix": "Keep LockedConstraintItems before normal budget trim and evict diagnostics/historical/low-value items first.",
+      "ConstraintRepairStatus": "ConstraintRepaired"
+    },
+    {
+      "SampleId": "coding-20260529-001",
+      "Mode": "CodingMode",
+      "Intent": "CodingTask",
+      "OptInMatched": true,
+      "Applied": false,
+      "FallbackUsed": true,
+      "ExpectedHardConstraints": [
+        "\u4EE3\u7801\u6CE8\u91CA\u548C\u8F93\u51FA\u4FDD\u6301\u4E2D\u6587"
+      ],
+      "LegacyConstraints": [],
+      "ProposalConstraints": [],
+      "MissingConstraints": [
+        "\u4EE3\u7801\u6CE8\u91CA\u548C\u8F93\u51FA\u4FDD\u6301\u4E2D\u6587"
+      ],
+      "ConstraintSource": "eval.expectedConstraints",
+      "LostAtStage": "ConstraintNotRetrieved",
+      "SuggestedFix": "Tune proposal channel coverage for scope-matched hard constraints before fallback.",
+      "ConstraintRepairStatus": "ConstraintRepairFailed"
+    },
+    {
+      "SampleId": "coding-20260529-002",
+      "Mode": "CodingMode",
+      "Intent": "CodingTask",
+      "OptInMatched": true,
+      "Applied": false,
+      "FallbackUsed": true,
+      "ExpectedHardConstraints": [
+        "\u53EA\u4FEE\u590D\u76F8\u5173\u65AD\u8A00\uFF0C\u4E0D\u505A\u65E0\u5173\u91CD\u6784"
+      ],
+      "LegacyConstraints": [],
+      "ProposalConstraints": [],
+      "MissingConstraints": [
+        "\u53EA\u4FEE\u590D\u76F8\u5173\u65AD\u8A00\uFF0C\u4E0D\u505A\u65E0\u5173\u91CD\u6784"
+      ],
+      "ConstraintSource": "eval.expectedConstraints",
+      "LostAtStage": "ConstraintNotRetrieved",
+      "SuggestedFix": "Tune proposal channel coverage for scope-matched hard constraints before fallback.",
+      "ConstraintRepairStatus": "ConstraintRepairFailed"
+    },
+    {
+      "SampleId": "coding-20260529-003",
+      "Mode": "CodingMode",
+      "Intent": "CodingTask",
+      "OptInMatched": true,
+      "Applied": true,
+      "FallbackUsed": false,
+      "ExpectedHardConstraints": [
+        "\u4E0D\u5F97\u5199\u5165\u660E\u6587 API Key"
+      ],
+      "LegacyConstraints": [
+        "\u4E0D\u5F97\u5199\u5165\u660E\u6587 API Key"
+      ],
+      "ProposalConstraints": [
+        "\u4E0D\u5F97\u5199\u5165\u660E\u6587 API Key"
+      ],
+      "MissingConstraints": [],
+      "ConstraintSource": "eval.expectedConstraints",
+      "LostAtStage": "ConstraintWrongSection",
+      "SuggestedFix": "Keep mandatory constraint injection enabled and map repaired items to constraints section before safety check.",
+      "ConstraintRepairStatus": "ConstraintRepaired"
+    },
+    {
+      "SampleId": "coding-20260529-004",
+      "Mode": "CodingMode",
+      "Intent": "CodingTask",
+      "OptInMatched": true,
+      "Applied": true,
+      "FallbackUsed": false,
+      "ExpectedHardConstraints": [
+        "\u53EA\u4FEE\u6539\u4E0E\u6784\u5EFA\u5931\u8D25\u76F4\u63A5\u76F8\u5173\u7684\u4EE3\u7801"
+      ],
+      "LegacyConstraints": [
+        "\u53EA\u4FEE\u6539\u4E0E\u6784\u5EFA\u5931\u8D25\u76F4\u63A5\u76F8\u5173\u7684\u4EE3\u7801"
+      ],
+      "ProposalConstraints": [
+        "\u53EA\u4FEE\u6539\u4E0E\u6784\u5EFA\u5931\u8D25\u76F4\u63A5\u76F8\u5173\u7684\u4EE3\u7801"
+      ],
+      "MissingConstraints": [],
+      "ConstraintSource": "eval.expectedConstraints",
+      "LostAtStage": "ConstraintWrongSection",
+      "SuggestedFix": "Keep mandatory constraint injection enabled and map repaired items to constraints section before safety check.",
+      "ConstraintRepairStatus": "ConstraintRepaired"
+    },
+    {
+      "SampleId": "coding-20260529-005",
+      "Mode": "CodingMode",
+      "Intent": "CodingTask",
+      "OptInMatched": true,
+      "Applied": true,
+      "FallbackUsed": false,
+      "ExpectedHardConstraints": [
+        "\u516C\u5171\u63A5\u53E3\u53D8\u66F4\u5FC5\u987B\u68C0\u67E5\u517C\u5BB9\u6027"
+      ],
+      "LegacyConstraints": [
+        "\u516C\u5171\u63A5\u53E3\u53D8\u66F4\u5FC5\u987B\u68C0\u67E5\u517C\u5BB9\u6027"
+      ],
+      "ProposalConstraints": [
+        "\u516C\u5171\u63A5\u53E3\u53D8\u66F4\u5FC5\u987B\u68C0\u67E5\u517C\u5BB9\u6027"
+      ],
+      "MissingConstraints": [],
+      "ConstraintSource": "eval.expectedConstraints",
+      "LostAtStage": "ConstraintWrongSection",
+      "SuggestedFix": "Keep mandatory constraint injection enabled and map repaired items to constraints section before safety check.",
+      "ConstraintRepairStatus": "ConstraintRepaired"
+    },
+    {
+      "SampleId": "coding-20260529-006",
+      "Mode": "CodingMode",
+      "Intent": "CodingTask",
+      "OptInMatched": true,
+      "Applied": true,
+      "FallbackUsed": false,
+      "ExpectedHardConstraints": [
+        "\u6CE8\u91CA\u5E94\u89E3\u91CA\u975E\u663E\u800C\u6613\u89C1\u7684\u8BBE\u8BA1\u6216\u8FB9\u754C"
+      ],
+      "LegacyConstraints": [
+        "\u6CE8\u91CA\u5E94\u89E3\u91CA\u975E\u663E\u800C\u6613\u89C1\u7684\u8BBE\u8BA1\u6216\u8FB9\u754C"
+      ],
+      "ProposalConstraints": [
+        "\u6CE8\u91CA\u5E94\u89E3\u91CA\u975E\u663E\u800C\u6613\u89C1\u7684\u8BBE\u8BA1\u6216\u8FB9\u754C"
+      ],
+      "MissingConstraints": [],
+      "ConstraintSource": "eval.expectedConstraints",
+      "LostAtStage": "ConstraintWrongSection",
+      "SuggestedFix": "Keep mandatory constraint injection enabled and map repaired items to constraints section before safety check.",
+      "ConstraintRepairStatus": "ConstraintRepaired"
+    },
+    {
+      "SampleId": "coding-20260529-007",
+      "Mode": "CodingMode",
+      "Intent": "CodingTask",
+      "OptInMatched": true,
+      "Applied": false,
+      "FallbackUsed": true,
+      "ExpectedHardConstraints": [
+        "\u6027\u80FD\u5173\u952E\u8DEF\u5F84\u907F\u514D\u4E0D\u5FC5\u8981\u7684\u78C1\u76D8\u8BFB\u5199\u548C\u5168\u91CF\u52A0\u8F7D"
+      ],
+      "LegacyConstraints": [],
+      "ProposalConstraints": [],
+      "MissingConstraints": [
+        "\u6027\u80FD\u5173\u952E\u8DEF\u5F84\u907F\u514D\u4E0D\u5FC5\u8981\u7684\u78C1\u76D8\u8BFB\u5199\u548C\u5168\u91CF\u52A0\u8F7D"
+      ],
+      "ConstraintSource": "eval.expectedConstraints",
+      "LostAtStage": "ConstraintNotRetrieved",
+      "SuggestedFix": "Tune proposal channel coverage for scope-matched hard constraints before fallback.",
+      "ConstraintRepairStatus": "ConstraintRepairFailed"
+    },
+    {
+      "SampleId": "coding-20260529-008",
+      "Mode": "CodingMode",
+      "Intent": "CodingTask",
+      "OptInMatched": true,
+      "Applied": false,
+      "FallbackUsed": true,
+      "ExpectedHardConstraints": [
+        "\u6D4B\u8BD5\u5E94\u56F4\u7ED5\u884C\u4E3A\u98CE\u9669\u800C\u4E0D\u662F\u6570\u5B57\u8986\u76D6\u7387"
+      ],
+      "LegacyConstraints": [],
+      "ProposalConstraints": [],
+      "MissingConstraints": [
+        "\u6D4B\u8BD5\u5E94\u56F4\u7ED5\u884C\u4E3A\u98CE\u9669\u800C\u4E0D\u662F\u6570\u5B57\u8986\u76D6\u7387"
+      ],
+      "ConstraintSource": "eval.expectedConstraints",
+      "LostAtStage": "ConstraintNotRetrieved",
+      "SuggestedFix": "Tune proposal channel coverage for scope-matched hard constraints before fallback.",
+      "ConstraintRepairStatus": "ConstraintRepairFailed"
+    },
+    {
+      "SampleId": "coding-20260529-009",
+      "Mode": "CodingMode",
+      "Intent": "CodingTask",
+      "OptInMatched": true,
+      "Applied": false,
+      "FallbackUsed": true,
+      "ExpectedHardConstraints": [
+        "\u5BC6\u94A5\u4E0D\u5F97\u5199\u5165\u4ED3\u5E93\uFF0C\u8FD0\u884C\u65F6\u4ECE\u79C1\u6709\u914D\u7F6E\u8BFB\u53D6"
+      ],
+      "LegacyConstraints": [],
+      "ProposalConstraints": [],
+      "MissingConstraints": [
+        "\u5BC6\u94A5\u4E0D\u5F97\u5199\u5165\u4ED3\u5E93\uFF0C\u8FD0\u884C\u65F6\u4ECE\u79C1\u6709\u914D\u7F6E\u8BFB\u53D6"
+      ],
+      "ConstraintSource": "eval.expectedConstraints",
+      "LostAtStage": "ConstraintNotRetrieved",
+      "SuggestedFix": "Tune proposal channel coverage for scope-matched hard constraints before fallback.",
+      "ConstraintRepairStatus": "ConstraintRepairFailed"
+    },
+    {
+      "SampleId": "coding-20260529-010",
+      "Mode": "CodingMode",
+      "Intent": "CodingTask",
+      "OptInMatched": true,
+      "Applied": false,
+      "FallbackUsed": true,
+      "ExpectedHardConstraints": [
+        "\u6700\u7EC8\u62A5\u544A\u5FC5\u987B\u533A\u5206\u5DF2\u9A8C\u8BC1\u548C\u672A\u9A8C\u8BC1\u5185\u5BB9"
+      ],
+      "LegacyConstraints": [],
+      "ProposalConstraints": [],
+      "MissingConstraints": [
+        "\u6700\u7EC8\u62A5\u544A\u5FC5\u987B\u533A\u5206\u5DF2\u9A8C\u8BC1\u548C\u672A\u9A8C\u8BC1\u5185\u5BB9"
+      ],
+      "ConstraintSource": "eval.expectedConstraints",
+      "LostAtStage": "ConstraintNotRetrieved",
+      "SuggestedFix": "Tune proposal channel coverage for scope-matched hard constraints before fallback.",
+      "ConstraintRepairStatus": "ConstraintRepairFailed"
+    }
+  ]
+}

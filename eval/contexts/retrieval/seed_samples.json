@@ -1,0 +1,482 @@
+[
+  {
+    "id": "S01-vector-concurrent-write",
+    "query": "多节点并发写入导致状态冲突时如何保证最终一致",
+    "mode": "ProjectMode",
+    "mustHit": ["ret:dist-consistency"],
+    "mustNotHit": ["ret:keyword-noise"],
+    "expectedScopes": [],
+    "expectedEntities": [],
+    "expectedConstraints": [],
+    "expectedUncertainties": [],
+    "goldenNotes": "【向量语义】Query 不含 CRDT/向量时钟/分布式等关键词，仅通过语义相似度命中 ret:dist-consistency",
+    "metadata": {
+      "retrievalDimension": "vector",
+      "testFocus": "semantic-only recall"
+    }
+  },
+  {
+    "id": "S02-vector-audit-trail",
+    "query": "系统有没有记录每次操作的执行者身份和时间戳",
+    "mode": "ProjectMode",
+    "mustHit": ["ret:audit-trail"],
+    "mustNotHit": ["ret:keyword-noise"],
+    "expectedScopes": [],
+    "expectedEntities": [],
+    "expectedConstraints": [],
+    "expectedUncertainties": [],
+    "goldenNotes": "【向量语义】Query 不含审计/轨迹/UUID 等专业术语，通过语义（记录操作者和时间 ≈ 审计轨迹）命中 ret:audit-trail",
+    "metadata": {
+      "retrievalDimension": "vector",
+      "testFocus": "semantic-only recall"
+    }
+  },
+  {
+    "id": "S03-vector-active-task",
+    "query": "当前正在推进哪个关于召回质量改进的工作项",
+    "mode": "ProjectMode",
+    "mustHit": ["memory:active-retrieval-task"],
+    "mustNotHit": ["ret:keyword-noise"],
+    "expectedScopes": [],
+    "expectedEntities": [],
+    "expectedConstraints": [],
+    "expectedUncertainties": [],
+    "goldenNotes": "【向量语义】Query 不含 A5/§7.1/五个维度 等具体术语，通过语义（召回质量工作项 ≈ 检索评测集建立任务）命中 memory:active-retrieval-task",
+    "metadata": {
+      "retrievalDimension": "vector",
+      "testFocus": "semantic-only recall"
+    }
+  },
+  {
+    "id": "S04-vector-hybrid-weights",
+    "query": "多路检索信号合并时各路的权重如何分配才能提升排名效果",
+    "mode": "ProjectMode",
+    "mustHit": ["memory:arch-hybrid-decision"],
+    "mustNotHit": ["ret:keyword-noise", "memory:deprecated-embed-cfg"],
+    "expectedScopes": [],
+    "expectedEntities": [],
+    "expectedConstraints": [],
+    "expectedUncertainties": [],
+    "goldenNotes": "【向量语义】Query 不含 BM25/MRR/ADR-011 等术语，通过语义（多路融合权重 ≈ 混合检索向量+BM25融合）命中 memory:arch-hybrid-decision",
+    "metadata": {
+      "retrievalDimension": "vector",
+      "testFocus": "semantic-only recall"
+    }
+  },
+  {
+    "id": "S05-keyword-pg-fulltext",
+    "query": "PostgreSQL GIN 索引 pg_trgm zhparser 中文全文检索配置",
+    "mode": "ProjectMode",
+    "mustHit": ["ret:pg-full-text"],
+    "mustNotHit": ["ret:deprecated-es", "ret:keyword-noise"],
+    "expectedScopes": [],
+    "expectedEntities": [],
+    "expectedConstraints": [],
+    "expectedUncertainties": [],
+    "goldenNotes": "【关键词精确】PostgreSQL + GIN + pg_trgm + zhparser 均为 ret:pg-full-text 的精确关键词",
+    "metadata": {
+      "retrievalDimension": "keyword",
+      "testFocus": "exact term match"
+    }
+  },
+  {
+    "id": "S06-keyword-hnsw-benchmark",
+    "query": "HNSW M=16 ef=128 在 50k 向量规模下 Recall@10 和 P99 延迟实测数据",
+    "mode": "ProjectMode",
+    "mustHit": ["ret:hnsw-benchmark"],
+    "mustNotHit": ["ret:keyword-noise"],
+    "expectedScopes": [],
+    "expectedEntities": [],
+    "expectedConstraints": [],
+    "expectedUncertainties": [],
+    "goldenNotes": "【关键词精确】HNSW/M=16/ef=128/Recall@10/P99 均为 ret:hnsw-benchmark 的精确关键词和参数值",
+    "metadata": {
+      "retrievalDimension": "keyword",
+      "testFocus": "exact term match with numbers"
+    }
+  },
+  {
+    "id": "S07-keyword-bge-config",
+    "query": "bge-small-zh-v1.5 MaxSequenceLength QueryInstruction 当前激活的 embedding 配置",
+    "mode": "ProjectMode",
+    "mustHit": ["memory:current-embed-cfg"],
+    "mustNotHit": ["memory:deprecated-embed-cfg"],
+    "expectedScopes": [],
+    "expectedEntities": [],
+    "expectedConstraints": [],
+    "expectedUncertainties": [],
+    "goldenNotes": "【关键词精确】bge-small-zh-v1.5/MaxSequenceLength/QueryInstruction 均精确出现在 memory:current-embed-cfg 中；all-MiniLM 旧配置不应被召回",
+    "metadata": {
+      "retrievalDimension": "keyword",
+      "testFocus": "exact model name and config fields"
+    }
+  },
+  {
+    "id": "S08-keyword-hybrid-mrr",
+    "query": "BM25 与向量语义相似度线性融合 MRR 对比评测结果",
+    "mode": "ProjectMode",
+    "mustHit": ["memory:arch-hybrid-decision"],
+    "mustNotHit": ["ret:keyword-noise"],
+    "expectedScopes": [],
+    "expectedEntities": [],
+    "expectedConstraints": [],
+    "expectedUncertainties": [],
+    "goldenNotes": "【关键词精确】BM25/MRR/线性融合 均精确出现在 memory:arch-hybrid-decision 中",
+    "metadata": {
+      "retrievalDimension": "keyword",
+      "testFocus": "exact term match"
+    }
+  },
+  {
+    "id": "S09-deprecated-es-filter",
+    "query": "全文检索引擎技术选型和推荐方案",
+    "mode": "ProjectMode",
+    "mustHit": ["memory:arch-hybrid-decision"],
+    "mustNotHit": ["ret:deprecated-es"],
+    "expectedScopes": [],
+    "expectedEntities": [],
+    "expectedConstraints": [],
+    "expectedUncertainties": [],
+    "goldenNotes": "【废弃过滤】Elasticsearch 旧方案含大量'全文检索'关键词匹配，必须被过滤排除；当前混合检索决策应被召回",
+    "metadata": {
+      "retrievalDimension": "deprecated-filter",
+      "testFocus": "deprecated item suppression"
+    }
+  },
+  {
+    "id": "S10-deprecated-embed-cfg-filter",
+    "query": "目前在用的 embedding 模型名称版本和参数配置",
+    "mode": "ProjectMode",
+    "mustHit": ["memory:current-embed-cfg"],
+    "mustNotHit": ["memory:deprecated-embed-cfg"],
+    "expectedScopes": [],
+    "expectedEntities": [],
+    "expectedConstraints": [],
+    "expectedUncertainties": [],
+    "goldenNotes": "【废弃过滤】旧版 all-MiniLM-L6-v2 配置已废弃，即使关键词重叠也不应被召回；当前 bge 配置应排在前列",
+    "metadata": {
+      "retrievalDimension": "deprecated-filter",
+      "testFocus": "deprecated config suppression"
+    }
+  },
+  {
+    "id": "S11-deprecated-cache-filter",
+    "query": "内存缓存加载策略和条目淘汰机制设计",
+    "mode": "ProjectMode",
+    "mustHit": [],
+    "mustNotHit": ["ret:deprecated-cache"],
+    "expectedScopes": [],
+    "expectedEntities": [],
+    "expectedConstraints": [],
+    "expectedUncertainties": [],
+    "goldenNotes": "【废弃过滤】ret:deprecated-cache 含完整关键词匹配（内存缓存/加载/淘汰），但状态为 deprecated，不应进入召回结果",
+    "metadata": {
+      "retrievalDimension": "deprecated-filter",
+      "testFocus": "deprecated item suppression"
+    }
+  },
+  {
+    "id": "S12-noise-keyword-filter",
+    "query": "向量检索系统的整体架构设计原则",
+    "mode": "ProjectMode",
+    "mustHit": [],
+    "mustNotHit": ["ret:keyword-noise"],
+    "expectedScopes": [],
+    "expectedEntities": [],
+    "expectedConstraints": [],
+    "expectedUncertainties": [],
+    "goldenNotes": "【噪音过滤】ret:keyword-noise 含极高密度关键词（向量/检索/架构均出现），但内容无价值，importance=0.01，不应进入结果",
+    "metadata": {
+      "retrievalDimension": "deprecated-filter",
+      "testFocus": "keyword-noise suppression"
+    }
+  },
+  {
+    "id": "S13-relation-hnsw-prereq",
+    "query": "HNSW 索引基准测试及其执行前置条件检查",
+    "mode": "ProjectMode",
+    "mustHit": ["ret:hnsw-benchmark", "memory:prereq-tokenizer"],
+    "mustNotHit": ["ret:keyword-noise"],
+    "expectedScopes": [],
+    "expectedEntities": [],
+    "expectedConstraints": [],
+    "expectedUncertainties": [],
+    "goldenNotes": "【关系扩展】ret:hnsw-benchmark 通过直接检索命中；memory:prereq-tokenizer（词表 SHA256 校验）仅通过 depends_on 关系可达，内容语义与 HNSW 基准无直接关联",
+    "metadata": {
+      "retrievalDimension": "relation-expansion",
+      "testFocus": "depends_on relation traversal"
+    }
+  },
+  {
+    "id": "S14-relation-task-sideeffect",
+    "query": "A5 §7.1 检索评测集建立任务的当前进展",
+    "mode": "ProjectMode",
+    "mustHit": ["memory:active-retrieval-task", "memory:side-effect-cache-clear"],
+    "mustNotHit": ["ret:keyword-noise"],
+    "expectedScopes": [],
+    "expectedEntities": [],
+    "expectedConstraints": [],
+    "expectedUncertainties": [],
+    "goldenNotes": "【关系扩展】memory:active-retrieval-task 直接检索命中；memory:side-effect-cache-clear（索引重建缓存清理）仅通过 related_to 关系可达",
+    "metadata": {
+      "retrievalDimension": "relation-expansion",
+      "testFocus": "related_to relation traversal"
+    }
+  },
+  {
+    "id": "S15-relation-pipeline-cfg",
+    "query": "文本向量化的完整处理流程",
+    "mode": "ProjectMode",
+    "mustHit": ["ret:embedding-pipeline", "memory:current-embed-cfg"],
+    "mustNotHit": ["ret:keyword-noise", "memory:deprecated-embed-cfg"],
+    "expectedScopes": [],
+    "expectedEntities": [],
+    "expectedConstraints": [],
+    "expectedUncertainties": [],
+    "goldenNotes": "【关系扩展+混合】ret:embedding-pipeline 直接命中；memory:current-embed-cfg 既可通过关键词（bge/QueryInstruction）直接命中，也可通过 related_to 关系从 embedding-pipeline 到达",
+    "metadata": {
+      "retrievalDimension": "relation-expansion",
+      "testFocus": "related_to relation with dual recall path"
+    }
+  },
+  {
+    "id": "S16-relation-supersedes",
+    "query": "混合检索架构决策及其替代的旧技术路线",
+    "mode": "ProjectMode",
+    "mustHit": ["memory:arch-hybrid-decision"],
+    "mustNotHit": ["ret:deprecated-es"],
+    "expectedScopes": [],
+    "expectedEntities": [],
+    "expectedConstraints": [],
+    "expectedUncertainties": [],
+    "goldenNotes": "【关系扩展+废弃过滤】memory:arch-hybrid-decision 直接命中；通过 replaces 关系可达 ret:deprecated-es，但该项状态为 deprecated，不应出现在结果中",
+    "metadata": {
+      "retrievalDimension": "relation-expansion",
+      "testFocus": "replaces relation with deprecated target suppression"
+    }
+  },
+  {
+    "id": "S17-cross-layer-naming",
+    "query": "代码注释和变量命名应该遵循什么语言规范",
+    "mode": "ProjectMode",
+    "mustHit": ["stable:lang-convention"],
+    "mustNotHit": ["ret:keyword-noise"],
+    "expectedScopes": [],
+    "expectedEntities": [],
+    "expectedConstraints": [],
+    "expectedUncertainties": [],
+    "goldenNotes": "【跨层召回 Stable】stable:lang-convention 来自 Stable 层，测试系统能否跨层召回稳定层约定",
+    "metadata": {
+      "retrievalDimension": "cross-layer",
+      "testFocus": "stable layer recall"
+    }
+  },
+  {
+    "id": "S18-cross-layer-tech-constraint",
+    "query": "生产环境中禁止引入哪些运行时或框架依赖",
+    "mode": "ProjectMode",
+    "mustHit": ["stable:tech-stack"],
+    "mustNotHit": ["ret:keyword-noise"],
+    "expectedScopes": [],
+    "expectedEntities": [],
+    "expectedConstraints": [],
+    "expectedUncertainties": [],
+    "goldenNotes": "【跨层召回 Stable】stable:tech-stack 来自 Stable 层（禁止 Python 运行时），测试系统能否从 Working 查询中找到 Stable 约束",
+    "metadata": {
+      "retrievalDimension": "cross-layer",
+      "testFocus": "stable layer constraint recall"
+    }
+  },
+  {
+    "id": "S19-cross-layer-mixed",
+    "query": "当前技术选型约束与最新的检索架构决策",
+    "mode": "ProjectMode",
+    "mustHit": ["stable:tech-stack", "memory:arch-hybrid-decision"],
+    "mustNotHit": ["ret:keyword-noise", "memory:deprecated-embed-cfg"],
+    "expectedScopes": [],
+    "expectedEntities": [],
+    "expectedConstraints": [],
+    "expectedUncertainties": [],
+    "goldenNotes": "【跨层混合】需同时召回 Stable 层（技术约束）和 Working 层（架构决策），验证两层均可在同一请求中被检索",
+    "metadata": {
+      "retrievalDimension": "cross-layer",
+      "testFocus": "stable + working mixed layer recall"
+    }
+  },
+  {
+    "id": "S20-cross-layer-task-convention",
+    "query": "当前正在进行的工作项与代码风格长期约定",
+    "mode": "ProjectMode",
+    "mustHit": ["memory:active-retrieval-task", "stable:lang-convention"],
+    "mustNotHit": ["ret:keyword-noise"],
+    "expectedScopes": [],
+    "expectedEntities": [],
+    "expectedConstraints": [],
+    "expectedUncertainties": [],
+    "goldenNotes": "【跨层混合】Working 活跃任务 + Stable 语言规范两层召回，验证分层记忆的联合检索能力",
+    "metadata": {
+      "retrievalDimension": "cross-layer",
+      "testFocus": "working active + stable convention mixed recall"
+    }
+  },
+  {
+    "id": "S21-vector-cicd-pipeline",
+    "query": "代码合并到主分支后自动执行构建和测试覆盖率检查的工作流",
+    "mode": "ProjectMode",
+    "mustHit": ["ret:ci-pipeline"],
+    "mustNotHit": ["ret:keyword-noise"],
+    "expectedScopes": [],
+    "expectedEntities": [],
+    "expectedConstraints": [],
+    "expectedUncertainties": [],
+    "goldenNotes": "【向量语义】Query 不含 GitHub Actions/dotnet/Deploy 等专业词，通过语义（代码合并→自动构建测试→覆盖率 ≈ CI/CD pipeline）命中 ret:ci-pipeline",
+    "metadata": {
+      "retrievalDimension": "vector",
+      "testFocus": "CI/CD semantic recall"
+    }
+  },
+  {
+    "id": "S22-keyword-api-pagination",
+    "query": "cursor 游标 next_cursor keyset 分页 has_more 翻页接口设计规范",
+    "mode": "ProjectMode",
+    "mustHit": ["ret:api-pagination"],
+    "mustNotHit": ["ret:keyword-noise"],
+    "expectedScopes": [],
+    "expectedEntities": [],
+    "expectedConstraints": [],
+    "expectedUncertainties": [],
+    "goldenNotes": "【关键词精确】cursor/next_cursor/keyset/has_more 均精确出现在 ret:api-pagination 中",
+    "metadata": {
+      "retrievalDimension": "keyword",
+      "testFocus": "API pagination exact term match"
+    }
+  },
+  {
+    "id": "S23-rejected-graph-db-filter",
+    "query": "图数据库 Neo4j 存储关系数据的技术方案可行性",
+    "mode": "ProjectMode",
+    "mustHit": [],
+    "mustNotHit": ["memory:rejected-graph-db"],
+    "expectedScopes": [],
+    "expectedEntities": [],
+    "expectedConstraints": [],
+    "expectedUncertainties": [],
+    "goldenNotes": "【Rejected 过滤】memory:rejected-graph-db 含精确关键词（Neo4j/图数据库/关系存储），但状态为 Rejected，不应进入召回结果",
+    "metadata": {
+      "retrievalDimension": "deprecated-filter",
+      "testFocus": "rejected item suppression"
+    }
+  },
+  {
+    "id": "S24-vector-log-retention",
+    "query": "系统日志按级别分层存储并定期归档到冷存储的策略",
+    "mode": "ProjectMode",
+    "mustHit": ["ret:log-retention"],
+    "mustNotHit": ["ret:keyword-noise"],
+    "expectedScopes": [],
+    "expectedEntities": [],
+    "expectedConstraints": [],
+    "expectedUncertainties": [],
+    "goldenNotes": "【向量语义】Query 不含 debug/info/warn/error/180天 等具体参数，通过语义（日志分级归档冷存储 ≈ 日志保留策略）命中 ret:log-retention",
+    "metadata": {
+      "retrievalDimension": "vector",
+      "testFocus": "log retention semantic recall"
+    }
+  },
+  {
+    "id": "S25-relation-arch-to-ci",
+    "query": "ADR-011 混合检索策略的完整论证记录和评测数据对比",
+    "mode": "ProjectMode",
+    "mustHit": ["memory:arch-hybrid-decision", "ret:ci-pipeline"],
+    "mustNotHit": ["ret:keyword-noise"],
+    "expectedScopes": [],
+    "expectedEntities": [],
+    "expectedConstraints": [],
+    "expectedUncertainties": [],
+    "goldenNotes": "【关系扩展-memory种子】memory:arch-hybrid-decision 直接命中（ADR-011/混合检索/BM25）；ret:ci-pipeline 仅通过 rel:arch-ci 从 arch-hybrid-decision 到达，内容与查询无语义关联",
+    "metadata": {
+      "retrievalDimension": "relation-expansion",
+      "testFocus": "memory-item as relation expansion seed (memory→context)"
+    }
+  },
+  {
+    "id": "S26-relation-sprint-to-storage",
+    "query": "2026-05 月度冲刺计划截止节点和全部工作项清单",
+    "mode": "ProjectMode",
+    "mustHit": ["memory:sprint-3-goal", "ret:storage-health-check"],
+    "mustNotHit": ["ret:keyword-noise"],
+    "expectedScopes": [],
+    "expectedEntities": [],
+    "expectedConstraints": [],
+    "expectedUncertainties": [],
+    "goldenNotes": "【关系扩展-memory种子】memory:sprint-3-goal 直接命中（2026-05/冲刺/截止/工作项）；ret:storage-health-check 仅通过 rel:sprint-storage-check 从 sprint-3-goal 到达，健康检查内容与冲刺计划查询无关联",
+    "metadata": {
+      "retrievalDimension": "relation-expansion",
+      "testFocus": "memory-item as relation expansion seed (memory→context)"
+    }
+  },
+  {
+    "id": "S27-relation-sprint-to-task",
+    "query": "2026-05 月度冲刺各工作项截止时间节点安排",
+    "mode": "ProjectMode",
+    "mustHit": ["memory:sprint-3-goal", "memory:active-retrieval-task"],
+    "mustNotHit": ["ret:keyword-noise"],
+    "expectedScopes": [],
+    "expectedEntities": [],
+    "expectedConstraints": [],
+    "expectedUncertainties": [],
+    "goldenNotes": "【关系扩展-memory种子】memory:sprint-3-goal 直接命中；memory:active-retrieval-task（A5 §7.1 评测任务）仅通过 rel:sprint-retrieval-task 可达，内容不含「冲刺」「截止」「2026-05」等词",
+    "metadata": {
+      "retrievalDimension": "relation-expansion",
+      "testFocus": "memory-to-memory relation via memory seed"
+    }
+  },
+  {
+    "id": "S28-keyword-storage-health",
+    "query": "probe 探针 Degraded Down 六种存储健康检查延迟",
+    "mode": "ProjectMode",
+    "mustHit": ["ret:storage-health-check"],
+    "mustNotHit": ["ret:keyword-noise"],
+    "expectedScopes": [],
+    "expectedEntities": [],
+    "expectedConstraints": [],
+    "expectedUncertainties": [],
+    "goldenNotes": "【关键词精确】probe/Degraded/Down/六种存储 均精确出现在 ret:storage-health-check 中",
+    "metadata": {
+      "retrievalDimension": "keyword",
+      "testFocus": "storage health check exact term match"
+    }
+  },
+  {
+    "id": "S29-rejected-graph-db-positive",
+    "query": "上下文关系存储的最终架构选型结论",
+    "mode": "ProjectMode",
+    "mustHit": [],
+    "mustNotHit": ["memory:rejected-graph-db"],
+    "expectedScopes": [],
+    "expectedEntities": [],
+    "expectedConstraints": [],
+    "expectedUncertainties": [],
+    "goldenNotes": "【Rejected 过滤】memory:rejected-graph-db 内容与「关系存储架构选型」高度相关，但状态为 Rejected，不应出现在召回结果中",
+    "metadata": {
+      "retrievalDimension": "deprecated-filter",
+      "testFocus": "rejected item suppression - architecture decision"
+    }
+  },
+  {
+    "id": "S30-cross-layer-sprint-techstack",
+    "query": "当前月度冲刺任务目标与不可变的技术栈依赖约束",
+    "mode": "ProjectMode",
+    "mustHit": ["memory:sprint-3-goal", "stable:tech-stack"],
+    "mustNotHit": ["ret:keyword-noise"],
+    "expectedScopes": [],
+    "expectedEntities": [],
+    "expectedConstraints": [],
+    "expectedUncertainties": [],
+    "goldenNotes": "【跨层混合】Working 冲刺目标（memory:sprint-3-goal）+ Stable 技术约束（stable:tech-stack），验证跨层联合召回",
+    "metadata": {
+      "retrievalDimension": "cross-layer",
+      "testFocus": "working sprint + stable tech-stack mixed recall"
+    }
+  }
+]

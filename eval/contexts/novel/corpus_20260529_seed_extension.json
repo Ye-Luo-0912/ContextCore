@@ -1,0 +1,260 @@
+{
+  "contexts": [],
+  "memories": [
+    {
+      "id": "plot:previous-chapter-hook",
+      "workspaceId": "eval",
+      "collectionId": "novel",
+      "layer": "Working",
+      "status": "Active",
+      "type": "plot-hook",
+      "content": "上一章伏笔：钟声和密信仍未完全兑现，续写时需要检查伏笔是否已经兑现。",
+      "tags": ["plot", "hook"],
+      "importance": 0.85
+    },
+    {
+      "id": "memory:active-character-state",
+      "workspaceId": "eval",
+      "collectionId": "novel",
+      "layer": "Working",
+      "status": "Active",
+      "type": "character-state",
+      "content": "人物状态：主角受伤状态仍在，女主对家族保持怀疑，人物状态必须连续。",
+      "tags": ["character", "state"],
+      "importance": 0.9
+    },
+    {
+      "id": "relation:protagonist-mentor-current",
+      "workspaceId": "eval",
+      "collectionId": "novel",
+      "layer": "Working",
+      "status": "Active",
+      "type": "relationship",
+      "content": "主角和导师当前关系：上次争吵后仍有疏离感，人物关系必须使用最新版本。",
+      "tags": ["relationship", "mentor"],
+      "importance": 0.9
+    },
+    {
+      "id": "scene:last-conflict",
+      "workspaceId": "eval",
+      "collectionId": "novel",
+      "layer": "Working",
+      "status": "Active",
+      "type": "scene",
+      "content": "最近冲突场景：主角与导师争吵，导致二人关系变化，下一场对话要保留疏离感。",
+      "tags": ["scene", "conflict"],
+      "importance": 0.85
+    },
+    {
+      "id": "constraint:magic-cost",
+      "workspaceId": "eval",
+      "collectionId": "novel",
+      "layer": "Stable",
+      "status": "Stable",
+      "type": "world-rule",
+      "content": "世界观硬约束：魔法使用必须付出代价，战斗场景里必须体现魔法代价。",
+      "tags": ["world", "constraint", "magic"],
+      "importance": 0.95
+    },
+    {
+      "id": "world:rules-current",
+      "workspaceId": "eval",
+      "collectionId": "novel",
+      "layer": "Stable",
+      "status": "Stable",
+      "type": "world-rule",
+      "content": "当前世界观规则：魔法代价、城市封锁、王室血脉规则均以最新已公布版本为准。",
+      "tags": ["world", "rules"],
+      "importance": 0.9
+    },
+    {
+      "id": "state:protagonist-injured",
+      "workspaceId": "eval",
+      "collectionId": "novel",
+      "layer": "Working",
+      "status": "Active",
+      "type": "character-state",
+      "content": "主角受伤状态仍然存在，下一章要延续受伤后的行动限制，人物状态连续。",
+      "tags": ["character", "injury"],
+      "importance": 0.95
+    },
+    {
+      "id": "motive:villain-true",
+      "workspaceId": "eval",
+      "collectionId": "novel",
+      "layer": "Working",
+      "status": "Active",
+      "type": "motive",
+      "content": "反派真实动机已经揭示：他为了复活家族血脉而夺取王室秘钥。约束：已揭示真相优先。",
+      "tags": ["villain", "motive"],
+      "importance": 0.9
+    },
+    {
+      "id": "relation:post-argument-distance",
+      "workspaceId": "eval",
+      "collectionId": "novel",
+      "layer": "Working",
+      "status": "Active",
+      "type": "relationship",
+      "content": "二人上次争吵后出现疏离感，对话场景必须保留这种关系状态。",
+      "tags": ["relationship", "argument"],
+      "importance": 0.9
+    },
+    {
+      "id": "world:city-lockdown-active",
+      "workspaceId": "eval",
+      "collectionId": "novel",
+      "layer": "Working",
+      "status": "Active",
+      "type": "world-state",
+      "content": "城市封锁仍未解除，续写时要保持封锁状态未解除。",
+      "tags": ["world", "city-lockdown"],
+      "importance": 0.9
+    },
+    {
+      "id": "knowledge:mentor-letter-exists",
+      "workspaceId": "eval",
+      "collectionId": "novel",
+      "layer": "Working",
+      "status": "Active",
+      "type": "character-knowledge",
+      "content": "导师当前只知道密信存在，不知道密信内容。约束：角色知识边界。",
+      "tags": ["mentor", "letter"],
+      "importance": 0.9
+    },
+    {
+      "id": "foreshadow:bell-sound",
+      "workspaceId": "eval",
+      "collectionId": "novel",
+      "layer": "Working",
+      "status": "Active",
+      "type": "foreshadow",
+      "content": "钟声伏笔需要在本章兑现，兑现方式可多选，但必须召回指定伏笔。",
+      "tags": ["foreshadow", "bell"],
+      "importance": 0.9
+    },
+    {
+      "id": "subplot:active-trade-route",
+      "workspaceId": "eval",
+      "collectionId": "novel",
+      "layer": "Working",
+      "status": "Active",
+      "type": "subplot",
+      "content": "当前支线是活跃商路支线，不使用已经删掉的商队设定。约束：删掉设定不得召回。",
+      "tags": ["subplot", "trade-route"],
+      "importance": 0.85
+    },
+    {
+      "id": "state:heroine-distrust-family",
+      "workspaceId": "eval",
+      "collectionId": "novel",
+      "layer": "Working",
+      "status": "Active",
+      "type": "character-state",
+      "content": "女主现在对家族保持怀疑，不能写成完全信任。约束：心理状态连续。",
+      "tags": ["heroine", "family"],
+      "importance": 0.9
+    },
+    {
+      "id": "item:sword-broken",
+      "workspaceId": "eval",
+      "collectionId": "novel",
+      "layer": "Working",
+      "status": "Active",
+      "type": "item-state",
+      "content": "主角的剑已经断了，不能再用旧武器描写。约束：物品状态连续。",
+      "tags": ["item", "sword"],
+      "importance": 0.9
+    },
+    {
+      "id": "plot:mainline-current",
+      "workspaceId": "eval",
+      "collectionId": "novel",
+      "layer": "Working",
+      "status": "Active",
+      "type": "plot-scope",
+      "content": "当前只需要主线信息，不要带入番外设定。约束：排除番外设定。",
+      "tags": ["plot", "mainline"],
+      "importance": 0.85
+    },
+    {
+      "id": "arc:imperial-city",
+      "workspaceId": "eval",
+      "collectionId": "novel",
+      "layer": "Working",
+      "status": "Active",
+      "type": "story-arc",
+      "content": "皇城线仍在推进，皇帝和祭司的交易条件是这一线的核心关系。",
+      "tags": ["arc", "imperial-city"],
+      "importance": 0.9
+    },
+    {
+      "id": "deal:emperor-priest",
+      "workspaceId": "eval",
+      "collectionId": "novel",
+      "layer": "Working",
+      "status": "Active",
+      "type": "deal",
+      "content": "皇帝和祭司的最新交易条件：祭司提供禁术线索，皇帝承诺开放王室档案。约束：使用最新交易版本。",
+      "tags": ["deal", "emperor", "priest"],
+      "importance": 0.9
+    },
+    {
+      "id": "style:dream-ambiguity",
+      "workspaceId": "eval",
+      "collectionId": "novel",
+      "layer": "Working",
+      "status": "Active",
+      "type": "style",
+      "content": "梦境段落要保留真假难辨的不确定性，不得把梦境内容当成事实。梦境真实性未确认。",
+      "tags": ["dream", "style"],
+      "importance": 0.85
+    },
+    {
+      "id": "ending:current-plan",
+      "workspaceId": "eval",
+      "collectionId": "novel",
+      "layer": "Working",
+      "status": "Active",
+      "type": "ending-plan",
+      "content": "当前结局计划没有主角死亡设定，旧版结局不得召回。",
+      "tags": ["ending", "current"],
+      "importance": 0.85
+    },
+    {
+      "id": "location:party-outside-city",
+      "workspaceId": "eval",
+      "collectionId": "novel",
+      "layer": "Working",
+      "status": "Active",
+      "type": "location",
+      "content": "队伍中阿澜和卫青还留在城外，角色位置必须使用最新信息，部分角色位置可能待确认。",
+      "tags": ["location", "party"],
+      "importance": 0.85
+    },
+    {
+      "id": "belief:protagonist-doubts-prophecy",
+      "workspaceId": "eval",
+      "collectionId": "novel",
+      "layer": "Working",
+      "status": "Active",
+      "type": "belief",
+      "content": "主角不再相信预言，信念变化需要连续呈现。",
+      "tags": ["belief", "prophecy"],
+      "importance": 0.85
+    },
+    {
+      "id": "rule:royal-bloodline",
+      "workspaceId": "eval",
+      "collectionId": "novel",
+      "layer": "Stable",
+      "status": "Stable",
+      "type": "world-rule",
+      "content": "已公布的王室血脉规则不得违反；检查新段落时需要判断新设定是否覆盖旧规则。",
+      "tags": ["world", "royal-bloodline"],
+      "importance": 0.9
+    }
+  ],
+  "relations": [],
+  "constraints": []
+}

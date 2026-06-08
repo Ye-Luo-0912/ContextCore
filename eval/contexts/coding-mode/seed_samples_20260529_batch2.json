@@ -1,0 +1,114 @@
+[
+  {
+    "id": "coding-20260529-004",
+    "query": "继续修复构建失败，先定位报错文件，不要顺手重构其他模块。",
+    "mode": "CodingMode",
+    "mustHit": ["build:last-error-file", "task:fix-build-failure"],
+    "mustNotHit": ["refactor:unrelated-module"],
+    "expectedScopes": ["workspace", "task"],
+    "expectedEntities": ["构建失败", "报错文件", "其他模块"],
+    "expectedConstraints": ["只修改与构建失败直接相关的代码"],
+    "expectedUncertainties": ["失败是否由上一次改动引入"],
+    "goldenNotes": "应召回最近构建失败和报错文件，避免扩大重构范围。",
+    "metadata": {
+      "category": "coding-mode",
+      "source": "seed-20260529-batch2"
+    }
+  },
+  {
+    "id": "coding-20260529-005",
+    "query": "新增接口前先确认现有公共 API 是否会破坏兼容性。",
+    "mode": "CodingMode",
+    "mustHit": ["api:public-contract", "compatibility:backward-check"],
+    "mustNotHit": ["api:breaking-change-unreviewed"],
+    "expectedScopes": ["workspace", "api"],
+    "expectedEntities": ["公共 API", "兼容性", "新增接口"],
+    "expectedConstraints": ["公共接口变更必须检查兼容性"],
+    "expectedUncertainties": ["是否有外部调用方依赖旧契约"],
+    "goldenNotes": "应召回公共契约和兼容性检查要求，不应默认允许破坏性变更。",
+    "metadata": {
+      "category": "coding-mode",
+      "source": "seed-20260529-batch2"
+    }
+  },
+  {
+    "id": "coding-20260529-006",
+    "query": "给新加的核心逻辑补中文注释，但不要给显而易见的赋值写废话注释。",
+    "mode": "CodingMode",
+    "mustHit": ["comment:core-logic-chinese", "comment:avoid-noise"],
+    "mustNotHit": ["comment:obvious-assignment"],
+    "expectedScopes": ["workspace", "code"],
+    "expectedEntities": ["中文注释", "核心逻辑", "赋值"],
+    "expectedConstraints": ["注释应解释非显而易见的设计或边界"],
+    "expectedUncertainties": ["哪些代码块需要补充解释"],
+    "goldenNotes": "应召回中文注释偏好和避免噪音注释的约束。",
+    "metadata": {
+      "category": "coding-mode",
+      "source": "seed-20260529-batch2"
+    }
+  },
+  {
+    "id": "coding-20260529-007",
+    "query": "这次变更涉及性能路径，请优先避免重复 IO 和全量反序列化。",
+    "mode": "CodingMode",
+    "mustHit": ["performance:avoid-repeated-io", "performance:avoid-full-deserialize"],
+    "mustNotHit": ["implementation:naive-scan-every-request"],
+    "expectedScopes": ["workspace", "performance"],
+    "expectedEntities": ["性能路径", "重复 IO", "全量反序列化"],
+    "expectedConstraints": ["性能关键路径避免不必要的磁盘读写和全量加载"],
+    "expectedUncertainties": ["当前数据规模和缓存策略是否明确"],
+    "goldenNotes": "应召回性能约束，并在代码方案中避免明显低效实现。",
+    "metadata": {
+      "category": "coding-mode",
+      "source": "seed-20260529-batch2"
+    }
+  },
+  {
+    "id": "coding-20260529-008",
+    "query": "测试只覆盖这次变更的风险点，不要为了覆盖率写脆弱快照。",
+    "mode": "CodingMode",
+    "mustHit": ["test:risk-focused", "test:avoid-brittle-snapshot"],
+    "mustNotHit": ["test:coverage-only-noise"],
+    "expectedScopes": ["workspace", "test"],
+    "expectedEntities": ["测试风险点", "覆盖率", "快照测试"],
+    "expectedConstraints": ["测试应围绕行为风险而不是数字覆盖率"],
+    "expectedUncertainties": ["哪些行为是本次改动的主要风险"],
+    "goldenNotes": "应召回风险驱动测试原则，避免无意义快照。",
+    "metadata": {
+      "category": "coding-mode",
+      "source": "seed-20260529-batch2"
+    }
+  },
+  {
+    "id": "coding-20260529-009",
+    "query": "涉及密钥配置时只读取用户私有配置目录，不要写入仓库文件。",
+    "mode": "CodingMode",
+    "mustHit": ["security:private-config-dir", "security:no-secret-in-repo"],
+    "mustNotHit": ["secret:commit-api-key"],
+    "expectedScopes": ["workspace", "security"],
+    "expectedEntities": ["密钥配置", "用户私有配置目录", "仓库文件"],
+    "expectedConstraints": ["密钥不得写入仓库，运行时从私有配置读取"],
+    "expectedUncertainties": ["本机私有配置是否存在"],
+    "goldenNotes": "应召回密钥处理边界，避免在项目文件中落明文密钥。",
+    "metadata": {
+      "category": "coding-mode",
+      "source": "seed-20260529-batch2"
+    }
+  },
+  {
+    "id": "coding-20260529-010",
+    "query": "输出最终结论前，请记录构建、测试和密钥扫描结果。",
+    "mode": "CodingMode",
+    "mustHit": ["verification:build", "verification:test", "verification:secret-scan"],
+    "mustNotHit": ["report:unverified-claim"],
+    "expectedScopes": ["workspace", "verification"],
+    "expectedEntities": ["构建", "测试", "密钥扫描", "最终结论"],
+    "expectedConstraints": ["最终报告必须区分已验证和未验证内容"],
+    "expectedUncertainties": ["命令是否受当前环境权限限制"],
+    "goldenNotes": "应召回验证链路并将结果写入报告，不应输出未验证结论。",
+    "metadata": {
+      "category": "coding-mode",
+      "source": "seed-20260529-batch2"
+    }
+  }
+]

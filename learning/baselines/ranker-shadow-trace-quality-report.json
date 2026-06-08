@@ -1,0 +1,23 @@
+﻿{
+  "OperationId": "ranker-shadow-trace-quality-b1d8d967cae24a7d9bfdcc9c15eaf7d5",
+  "GeneratedAt": "2026-06-07T12:27:26.4949717+00:00",
+  "WorkspaceId": "default",
+  "CollectionId": "test",
+  "TraceCount": 0,
+  "CandidateScoreCount": 0,
+  "DeprecatedDemotionCount": 0,
+  "HistoricalDemotionCount": 0,
+  "VersionConflictFixCount": 0,
+  "CurrentVersionPromotionCount": 0,
+  "MustHitDemotedCount": 0,
+  "MustNotHitPromotedCount": 0,
+  "LifecycleViolationCount": 0,
+  "AverageScoreDelta": 0,
+  "MaxPositiveDelta": 0,
+  "MaxNegativeDelta": 0,
+  "ModeBreakdown": {},
+  "IntentBreakdown": {},
+  "RiskSamples": [],
+  "RecommendedNextStep": "NeedsMoreRealTraces",
+  "PolicyVersion": "ranker-shadow-trace-quality/v1"
+}

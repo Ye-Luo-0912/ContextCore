@@ -1,0 +1,212 @@
+{
+  "contexts": [
+    {
+      "id": "novel:world-cangqiong",
+      "workspaceId": "eval",
+      "collectionId": "novel",
+      "type": "world-setting",
+      "title": "苍穹大陆设定",
+      "content": "世界观：苍穹大陆是一个以炼丹和斗气为主的玄幻世界。修炼境界分为：斗者、斗师、大斗师、斗灵、斗王、斗皇、斗宗、斗尊、斗圣、斗帝。炼药师极其高贵，能炼制各种神丹妙药。",
+      "tags": ["world", "setting"],
+      "importance": 0.8
+    },
+    {
+      "id": "novel:character-linfeng",
+      "workspaceId": "eval",
+      "collectionId": "novel",
+      "type": "character",
+      "title": "林风人设卡",
+      "content": "主角林风：性格冷静坚毅，资质极差但身负九天龙魂。目前实力境界为大斗师，拥有一尊太古神炉，能熔炼天地万物，最擅长炼制九转金丹。",
+      "tags": ["character", "protagonist", "novel", "小说"],
+      "importance": 0.9
+    }
+  ],
+  "memories": [
+    {
+      "id": "memory:novel-current-plot",
+      "workspaceId": "eval",
+      "collectionId": "novel",
+      "layer": "Working",
+      "status": "Active",
+      "type": "plot",
+      "content": "当前剧情线：林风已来到黑角域拍卖行，准备参与争夺九转金丹的药引——龙魂草。",
+      "tags": ["plot", "active"]
+    },
+    {
+      "id": "memory:novel-conflict-v1",
+      "workspaceId": "eval",
+      "collectionId": "novel",
+      "layer": "Working",
+      "status": "Deprecated",
+      "type": "character-detail",
+      "content": "旧版设定：林风目前的大斗师境界是五星大斗师，修炼的是雷属性斗气。",
+      "tags": ["character", "v1"],
+      "metadata": {
+        "status": "deprecated",
+        "supersededBy": "memory:novel-conflict-v2"
+      }
+    },
+    {
+      "id": "memory:novel-conflict-v2",
+      "workspaceId": "eval",
+      "collectionId": "novel",
+      "layer": "Working",
+      "status": "Active",
+      "type": "character-detail",
+      "content": "新版设定：林风目前是大斗师九星，拥有太古神炉，修炼的是无属性混元斗气。",
+      "tags": ["character", "v2"],
+      "metadata": {
+        "status": "active"
+      }
+    },
+    {
+      "id": "memory:novel-extra-active-1",
+      "workspaceId": "eval",
+      "collectionId": "novel",
+      "layer": "Working",
+      "status": "Active",
+      "type": "character",
+      "content": "新增配角：萧薰儿，林风的青梅竹马，隐藏身份为古族千金，目前实力斗灵。",
+      "tags": ["character", "ally"]
+    },
+    {
+      "id": "memory:novel-extra-active-2",
+      "workspaceId": "eval",
+      "collectionId": "novel",
+      "layer": "Working",
+      "status": "Active",
+      "type": "location",
+      "content": "新地点：黑角域，苍穹大陆最混乱的地方，各大势力犬牙交错，危机四伏。",
+      "tags": ["location", "setting"]
+    },
+    {
+      "id": "memory:novel-budget-stress",
+      "workspaceId": "eval",
+      "collectionId": "novel",
+      "layer": "Working",
+      "status": "Active",
+      "type": "stress-test",
+      "content": "极长背景备忘压力测试：苍穹大陆的炼药师公会分为数个分会，每个分会都在不同的帝国，每个会长脾气各异。这段极其冗长的历史记录将在 Token 限制极低时被完美地修剪舍弃。",
+      "tags": ["stress", "budget"]
+    },
+    {
+      "id": "memory:novel-weapon-v1",
+      "workspaceId": "eval",
+      "collectionId": "novel",
+      "layer": "Working",
+      "status": "Deprecated",
+      "type": "character-detail",
+      "content": "旧设定：主角林风的本命武器是玄铁重剑，重达八百斤，呈漆黑色。",
+      "tags": ["character", "weapon", "v1"],
+      "metadata": {
+        "status": "deprecated",
+        "supersededBy": "memory:novel-weapon-v2"
+      }
+    },
+    {
+      "id": "memory:novel-weapon-v2",
+      "workspaceId": "eval",
+      "collectionId": "novel",
+      "layer": "Working",
+      "status": "Active",
+      "type": "character-detail",
+      "content": "新设定：林风的本命武器已调整为裂天巨剑，剑身呈暗红色，能完美导引混元斗气并爆发神炉火焰。",
+      "tags": ["character", "weapon", "v2"],
+      "metadata": {
+        "status": "active"
+      }
+    },
+    {
+      "id": "memory:novel-family-background",
+      "workspaceId": "eval",
+      "collectionId": "novel",
+      "layer": "Working",
+      "status": "Active",
+      "type": "character",
+      "content": "家族背景：林风所在的林家，乃是苍穹大陆古老萧族的一个分支，血脉早已稀薄，目前定居于乌坦城。",
+      "tags": ["character", "family"]
+    },
+    {
+      "id": "memory:novel-plot-deprecated-villain",
+      "workspaceId": "eval",
+      "collectionId": "novel",
+      "layer": "Working",
+      "status": "Deprecated",
+      "type": "plot",
+      "content": "已删减大纲：原计划在黑角域出现的神秘反派组织‘噬魂殿’，因影响主线推进速度已被全盘舍弃，所有噬魂殿的勾结段落全部删减。",
+      "tags": ["plot", "villain", "deprecated"],
+      "metadata": {
+        "status": "deprecated"
+      }
+    },
+    {
+      "id": "memory:novel-plot-old-draft",
+      "workspaceId": "eval",
+      "collectionId": "novel",
+      "layer": "Working",
+      "status": "Deprecated",
+      "type": "plot",
+      "content": "废弃大纲：林风在斗者时期就得到了九转金丹并直接成神。该情节与后面剧情冲突，已被彻底废弃，九转金丹的获取时间推迟到大斗师以后。",
+      "tags": ["plot", "deprecated"],
+      "metadata": {
+        "status": "deprecated"
+      }
+    },
+    {
+      "id": "memory:novel-plot-noise-keyword",
+      "workspaceId": "eval",
+      "collectionId": "novel",
+      "layer": "Working",
+      "status": "Deprecated",
+      "type": "plot",
+      "content": "作废废案：林风在苍穹大陆获得九转金丹后，击败了黑角域拍卖行的所有人直接获得龙魂草，此构思彻底废弃，绝不使用。",
+      "tags": ["plot", "deprecated"],
+      "metadata": {
+        "status": "deprecated"
+      }
+    }
+  ],
+  "relations": [
+    {
+      "id": "rel:novel-conflict",
+      "workspaceId": "eval",
+      "collectionId": "novel",
+      "sourceId": "memory:novel-current-plot",
+      "targetId": "memory:novel-plot-old-draft",
+      "relationType": "conflicts_with",
+      "weight": 1.0,
+      "confidence": 1.0
+    },
+    {
+      "id": "rel:novel-concept-supersede",
+      "workspaceId": "eval",
+      "collectionId": "novel",
+      "sourceId": "memory:novel-conflict-v2",
+      "targetId": "memory:novel-conflict-v1",
+      "relationType": "supersedes",
+      "weight": 1.0,
+      "confidence": 1.0
+    },
+    {
+      "id": "rel:novel-weapon-supersede",
+      "workspaceId": "eval",
+      "collectionId": "novel",
+      "sourceId": "memory:novel-weapon-v2",
+      "targetId": "memory:novel-weapon-v1",
+      "relationType": "supersedes",
+      "weight": 1.0,
+      "confidence": 1.0
+    }
+  ],
+  "constraints": [
+    {
+      "id": "const:novel-rules",
+      "workspaceId": "eval",
+      "collectionId": "novel",
+      "level": "Hard",
+      "status": "Verified",
+      "scope": "Workspace",
+      "content": "禁止吃书设定，人物实力必须严格遵守苍穹大陆境界划分。"
+    }
+  ]
+}

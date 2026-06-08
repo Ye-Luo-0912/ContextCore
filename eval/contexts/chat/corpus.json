@@ -1,0 +1,214 @@
+{
+  "contexts": [
+    {
+      "id": "ctx:chat-system-intro",
+      "workspaceId": "eval",
+      "collectionId": "chat",
+      "type": "system-intro",
+      "title": "聊天对话系统简介",
+      "content": "本系统为聊天场景提供上下文状态存储，主要关注用户偏好和最近对话主题。",
+      "tags": ["system"],
+      "importance": 0.5
+    }
+  ],
+  "memories": [
+    {
+      "id": "stable:preference-language",
+      "workspaceId": "eval",
+      "collectionId": "chat",
+      "layer": "Stable",
+      "status": "Stable",
+      "type": "preference",
+      "content": "用户偏好：输出、日志、注释和提示信息保持中文，避免英文输出。",
+      "tags": ["preference", "language"]
+    },
+    {
+      "id": "memory:chat-active-plan",
+      "workspaceId": "eval",
+      "collectionId": "chat",
+      "layer": "Working",
+      "status": "Active",
+      "type": "plan",
+      "content": "当前正在推进的计划是：完成上下文评测框架（A3 阶段）的设计与种子数据填充。",
+      "tags": ["plan", "active"],
+      "importance": 0.8
+    },
+    {
+      "id": "memory:chat-old-topic",
+      "workspaceId": "eval",
+      "collectionId": "chat",
+      "layer": "Working",
+      "status": "Deprecated",
+      "type": "plan",
+      "content": "之前的废弃计划是：使用纯 Python 实现评测，已被 C# 内置方案替代。",
+      "tags": ["plan", "old"],
+      "metadata": {
+        "status": "deprecated",
+        "supersededBy": "memory:chat-active-plan"
+      }
+    },
+    {
+      "id": "memory:chat-noise-keyword-1",
+      "workspaceId": "eval",
+      "collectionId": "chat",
+      "layer": "Working",
+      "status": "Deprecated",
+      "type": "preference",
+      "content": "废弃偏好：此项虽然含有开发任务、语言偏好和推进计划，但实际上早已作废，不允许被召回。",
+      "tags": ["preference", "plan", "deprecated"],
+      "metadata": {
+        "status": "deprecated"
+      }
+    },
+    {
+      "id": "memory:chat-version-conflict-v1",
+      "workspaceId": "eval",
+      "collectionId": "chat",
+      "layer": "Working",
+      "status": "Deprecated",
+      "type": "user-location",
+      "content": "旧版用户定位：用户目前位于北京海淀区，正在出差中。",
+      "tags": ["location", "version1"],
+      "metadata": {
+        "status": "deprecated",
+        "supersededBy": "memory:chat-version-conflict-v2"
+      }
+    },
+    {
+      "id": "memory:chat-version-conflict-v2",
+      "workspaceId": "eval",
+      "collectionId": "chat",
+      "layer": "Working",
+      "status": "Active",
+      "type": "user-location",
+      "content": "新版用户定位：用户目前已返回上海浦东新区总部办公。",
+      "tags": ["location", "version2"],
+      "metadata": {
+        "status": "active"
+      }
+    },
+    {
+      "id": "memory:chat-extra-active-1",
+      "workspaceId": "eval",
+      "collectionId": "chat",
+      "layer": "Working",
+      "status": "Active",
+      "type": "preference",
+      "content": "用户偏好界面：用户更倾向于使用深色黑暗模式主题（Dark Mode），保护视力。",
+      "tags": ["preference", "theme"]
+    },
+    {
+      "id": "memory:chat-extra-active-2",
+      "workspaceId": "eval",
+      "collectionId": "chat",
+      "layer": "Working",
+      "status": "Active",
+      "type": "preference",
+      "content": "用户开发语言偏好：用户在核心服务开发中偏好使用 C# 作为主要语言。",
+      "tags": ["preference", "language", "csharp"]
+    },
+    {
+      "id": "memory:chat-budget-stress",
+      "workspaceId": "eval",
+      "collectionId": "chat",
+      "layer": "Working",
+      "status": "Active",
+      "type": "stress-test",
+      "content": "压力测试项：上下文系统必须有极强的剪裁能力。这是一段很长的文本，用于测试打包算法在极低Token预算下能否正确舍弃并计算浪费率。为了占满空间，这里加入更多的无用字符以确保触发截断。",
+      "tags": ["stress", "budget"]
+    },
+    {
+      "id": "memory:chat-drink-preference-v1",
+      "workspaceId": "eval",
+      "collectionId": "chat",
+      "layer": "Working",
+      "status": "Deprecated",
+      "type": "preference",
+      "content": "旧的饮食偏好：用户喜欢喝加冰的冰美式咖啡，每天一杯。",
+      "tags": ["preference", "drink", "v1"],
+      "metadata": {
+        "status": "deprecated",
+        "supersededBy": "memory:chat-drink-preference-v2"
+      }
+    },
+    {
+      "id": "memory:chat-drink-preference-v2",
+      "workspaceId": "eval",
+      "collectionId": "chat",
+      "layer": "Working",
+      "status": "Active",
+      "type": "preference",
+      "content": "新的饮食偏好：由于胃部不适，用户现在更偏好喝热拿铁，减少刺激。",
+      "tags": ["preference", "drink", "v2"],
+      "metadata": {
+        "status": "active"
+      }
+    },
+    {
+      "id": "memory:chat-deprecated-draft",
+      "workspaceId": "eval",
+      "collectionId": "chat",
+      "layer": "Working",
+      "status": "Deprecated",
+      "type": "draft",
+      "content": "已作废方案：之前讨论的使用 MongoDB 存储记忆的方案，因为性能问题已被全盘否决。",
+      "tags": ["draft", "deprecated"],
+      "metadata": {
+        "status": "deprecated"
+      }
+    },
+    {
+      "id": "memory:chat-delivery-date",
+      "workspaceId": "eval",
+      "collectionId": "chat",
+      "layer": "Working",
+      "status": "Active",
+      "type": "plan",
+      "content": "交付节点：核心上下文评测框架计划在 6月30日 前完成全量上线和验收。",
+      "tags": ["plan", "date"]
+    }
+  ],
+  "relations": [
+    {
+      "id": "rel:chat-supersede",
+      "workspaceId": "eval",
+      "collectionId": "chat",
+      "sourceId": "memory:chat-active-plan",
+      "targetId": "memory:chat-old-topic",
+      "relationType": "supersedes",
+      "weight": 1.0,
+      "confidence": 1.0
+    },
+    {
+      "id": "rel:chat-location-supersede",
+      "workspaceId": "eval",
+      "collectionId": "chat",
+      "sourceId": "memory:chat-version-conflict-v2",
+      "targetId": "memory:chat-version-conflict-v1",
+      "relationType": "supersedes",
+      "weight": 1.0,
+      "confidence": 1.0
+    },
+    {
+      "id": "rel:chat-drink-supersede",
+      "workspaceId": "eval",
+      "collectionId": "chat",
+      "sourceId": "memory:chat-drink-preference-v2",
+      "targetId": "memory:chat-drink-preference-v1",
+      "relationType": "supersedes",
+      "weight": 1.0,
+      "confidence": 1.0
+    }
+  ],
+  "constraints": [
+    {
+      "id": "const:chat-output-lang",
+      "workspaceId": "eval",
+      "collectionId": "chat",
+      "level": "Hard",
+      "status": "Verified",
+      "scope": "Workspace",
+      "content": "输出必须使用中文。"
+    }
+  ]
+}

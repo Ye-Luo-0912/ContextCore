@@ -1,0 +1,200 @@
+{
+  "contexts": [
+    {
+      "id": "doc:local-alpha-runbook",
+      "workspaceId": "eval",
+      "collectionId": "project",
+      "type": "documentation",
+      "title": "ContextCore 本地运行手册",
+      "content": "本地运行手册（local-alpha-runbook）：当前推荐运行模式为 ContextCore.Service + FileSystem Storage。FileSystem 存储为当前唯一推荐持久化后端，数据目录位于 context-core-data 目录中。API 密钥配置需放置在用户目录的私有配置文件中。",
+      "tags": ["runbook", "filesystem"],
+      "importance": 0.9
+    },
+    {
+      "id": "doc:postgres-not-ready",
+      "workspaceId": "eval",
+      "collectionId": "project",
+      "type": "documentation",
+      "title": "PostgreSQL Provider 状态说明",
+      "content": "PostgreSQL 存储当前为 Experimental/Partial 状态，未覆盖完整 service 契约，不允许作为完整 Service 生产后端。除非配置 AllowExperimentalPostgres=true，否则启动时将 fail-fast 报错退出。",
+      "tags": ["postgres", "experimental"],
+      "importance": 0.8
+    },
+    {
+      "id": "doc:legacy-project-info",
+      "workspaceId": "eval",
+      "collectionId": "project",
+      "type": "documentation",
+      "title": "遗留系统 RAGv1 说明",
+      "content": "RAGv1 是已被彻底淘汰的上下文管理模块，完全基于 Python 实现，数据库采用 SQLite。该系统已经彻底不再使用，其代码已归档。",
+      "tags": ["legacy", "ragv1"],
+      "importance": 0.2
+    },
+    {
+      "id": "doc:project-noise-keyword",
+      "workspaceId": "eval",
+      "collectionId": "project",
+      "type": "documentation",
+      "title": "作废的 PostgreSQL 本地运行与持久化方案",
+      "content": "作废设计：使用 PostgreSQL 实现的本地运行的 RAG 缓存机制和持久化存储，目前已被遗弃不再使用。",
+      "tags": ["postgres", "legacy", "deprecated"],
+      "importance": 0.1,
+      "metadata": {
+        "status": "deprecated"
+      }
+    }
+  ],
+  "memories": [
+    {
+      "id": "memory:project-current-step",
+      "workspaceId": "eval",
+      "collectionId": "project",
+      "layer": "Working",
+      "status": "Active",
+      "type": "task",
+      "content": "当前项目阶段重点应从继续堆功能转向边界固化、真实样本验收和最小生产闭环。",
+      "tags": ["task", "milestone"],
+      "importance": 0.8
+    },
+    {
+      "id": "memory:project-conflict-v1",
+      "workspaceId": "eval",
+      "collectionId": "project",
+      "layer": "Working",
+      "status": "Deprecated",
+      "type": "pm-contact",
+      "content": "项目团队联系人v1：项目经理为张三，联系电话 13800000000。",
+      "tags": ["pm", "contact", "v1"],
+      "metadata": {
+        "status": "deprecated",
+        "supersededBy": "memory:project-conflict-v2"
+      }
+    },
+    {
+      "id": "memory:project-conflict-v2",
+      "workspaceId": "eval",
+      "collectionId": "project",
+      "layer": "Working",
+      "status": "Active",
+      "type": "pm-contact",
+      "content": "项目团队联系人v2：项目经理已变更为李四，联系电话 13911111111。",
+      "tags": ["pm", "contact", "v2"],
+      "metadata": {
+        "status": "active"
+      }
+    },
+    {
+      "id": "memory:project-extra-active-1",
+      "workspaceId": "eval",
+      "collectionId": "project",
+      "layer": "Working",
+      "status": "Active",
+      "type": "milestone",
+      "content": "项目进度里程碑：边界固化已完成 80%，待真实中文 eval 样本上线验收。",
+      "tags": ["milestone", "progress"]
+    },
+    {
+      "id": "memory:project-extra-active-2",
+      "workspaceId": "eval",
+      "collectionId": "project",
+      "layer": "Working",
+      "status": "Active",
+      "type": "constraint",
+      "content": "系统架构约束：所有的 API 调用都需要经过 ModelGateway 进行中转和审计。",
+      "tags": ["architecture", "constraint"]
+    },
+    {
+      "id": "memory:project-budget-stress",
+      "workspaceId": "eval",
+      "collectionId": "project",
+      "layer": "Working",
+      "status": "Active",
+      "type": "stress-test",
+      "content": "这是一段为了做极限预算测试而加入的超长文本项目备份，它详细阐述了上个季度的核心周报内容，占用了大量的空间，目的是要在100-200字节预算时被完美地修剪舍弃。",
+      "tags": ["stress", "budget"]
+    },
+    {
+      "id": "memory:project-pool-v1",
+      "workspaceId": "eval",
+      "collectionId": "project",
+      "layer": "Working",
+      "status": "Deprecated",
+      "type": "postgres-config",
+      "content": "旧设定：生产数据库 PostgreSQL 最大连接池大小设为 20，在高负载时经常引发连接被占满的问题。",
+      "tags": ["postgres", "pool", "v1"],
+      "metadata": {
+        "status": "deprecated",
+        "supersededBy": "memory:project-pool-v2"
+      }
+    },
+    {
+      "id": "memory:project-pool-v2",
+      "workspaceId": "eval",
+      "collectionId": "project",
+      "layer": "Working",
+      "status": "Active",
+      "type": "postgres-config",
+      "content": "新设定：生产数据库 PostgreSQL 最大连接池大小已调整为 100，并开启了连接空闲自动回收机制。",
+      "tags": ["postgres", "pool", "v2"],
+      "metadata": {
+        "status": "active"
+      }
+    },
+    {
+      "id": "memory:project-required-env",
+      "workspaceId": "eval",
+      "collectionId": "project",
+      "layer": "Working",
+      "status": "Active",
+      "type": "runbook",
+      "content": "运行环境要求：本地开发调试需要安装 .NET 10.0 SDK 和最新版 Visual Studio 或 VS Code 扩展。",
+      "tags": ["environment", "sdk"]
+    },
+    {
+      "id": "memory:project-deprecated-gateway",
+      "workspaceId": "eval",
+      "collectionId": "project",
+      "layer": "Working",
+      "status": "Deprecated",
+      "type": "runbook",
+      "content": "已舍弃的设计：原计划使用的基于 Ocelot 的微服务 API 网关方案，由于性能开销 and 维护复杂度过高已被全盘舍弃，现统一改用 ModelGateway 直连。",
+      "tags": ["gateway", "ocelot", "deprecated"],
+      "metadata": {
+        "status": "deprecated"
+      }
+    }
+  ],
+  "relations": [
+    {
+      "id": "rel:project-conflict-supersede",
+      "workspaceId": "eval",
+      "collectionId": "project",
+      "sourceId": "memory:project-conflict-v2",
+      "targetId": "memory:project-conflict-v1",
+      "relationType": "supersedes",
+      "weight": 1.0,
+      "confidence": 1.0
+    },
+    {
+      "id": "rel:project-pool-supersede",
+      "workspaceId": "eval",
+      "collectionId": "project",
+      "sourceId": "memory:project-pool-v2",
+      "targetId": "memory:project-pool-v1",
+      "relationType": "supersedes",
+      "weight": 1.0,
+      "confidence": 1.0
+    }
+  ],
+  "constraints": [
+    {
+      "id": "const:project-security",
+      "workspaceId": "eval",
+      "collectionId": "project",
+      "level": "Hard",
+      "status": "Verified",
+      "scope": "Workspace",
+      "content": "禁止把明文 API Key 写入项目仓库。"
+    }
+  ]
+}

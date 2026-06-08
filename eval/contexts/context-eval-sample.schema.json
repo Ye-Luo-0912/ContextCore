@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contextcore.local/schemas/context-eval-sample.schema.json",
+  "title": "ContextCore Context Eval Sample",
+  "type": "object",
+  "required": [
+    "query",
+    "mode",
+    "mustHit",
+    "mustNotHit",
+    "expectedScopes",
+    "expectedEntities",
+    "expectedConstraints",
+    "expectedUncertainties",
+    "goldenNotes"
+  ],
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "query": {
+      "type": "string",
+      "minLength": 1
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["ChatMode", "NovelMode", "AutomationMode", "CodingMode", "ProjectMode"]
+    },
+    "mustHit": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "mustNotHit": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "expectedScopes": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "expectedEntities": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "expectedConstraints": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "expectedUncertainties": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "goldenNotes": {
+      "type": "string"
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,50 @@
+[
+  {
+    "id": "automation-20260529-001",
+    "query": "继续上次失败的自动化任务，先说明阻塞点和下一步修复动作。",
+    "mode": "AutomationMode",
+    "mustHit": ["job:last-failed", "run:blocker-current"],
+    "mustNotHit": ["job:old-succeeded-run"],
+    "expectedScopes": ["task", "run"],
+    "expectedEntities": ["自动化任务", "阻塞点", "修复动作"],
+    "expectedConstraints": ["失败任务需要记录错误和下一步"],
+    "expectedUncertainties": ["外部依赖是否恢复"],
+    "goldenNotes": "应聚焦最近失败和阻塞原因，不应使用旧成功记录覆盖当前状态。",
+    "metadata": {
+      "category": "automation",
+      "source": "seed-20260529"
+    }
+  },
+  {
+    "id": "automation-20260529-002",
+    "query": "检查队列里是否还有需要重新入队的失败任务。",
+    "mode": "AutomationMode",
+    "mustHit": ["queue:dead-letter", "job:failed-requeue-candidate"],
+    "mustNotHit": ["job:running", "job:succeeded"],
+    "expectedScopes": ["workspace", "queue"],
+    "expectedEntities": ["死信队列", "重新入队"],
+    "expectedConstraints": ["仅 Failed/Cancelled 作业允许重新入队"],
+    "expectedUncertainties": ["失败原因是否已修复"],
+    "goldenNotes": "应只返回可重新入队候选，不应把 running/succeeded 作业当成候选。",
+    "metadata": {
+      "category": "automation",
+      "source": "seed-20260529"
+    }
+  },
+  {
+    "id": "automation-20260529-003",
+    "query": "汇总最近 worker 运行状态，指出是否有持续失败趋势。",
+    "mode": "AutomationMode",
+    "mustHit": ["worker:stats-latest", "event:recent-failures"],
+    "mustNotHit": ["worker:stale-stats"],
+    "expectedScopes": ["workspace", "runtime"],
+    "expectedEntities": ["Worker", "失败趋势"],
+    "expectedConstraints": ["运行状态必须基于最近统计"],
+    "expectedUncertainties": ["样本窗口是否足够大"],
+    "goldenNotes": "应基于最近 worker stats 和 event log 判断趋势。",
+    "metadata": {
+      "category": "automation",
+      "source": "seed-20260529"
+    }
+  }
+]

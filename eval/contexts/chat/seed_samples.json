@@ -1,0 +1,125 @@
+[
+  {
+    "id": "chat-sample-001",
+    "query": "你还记得我偏好用什么语言输出吗？",
+    "mode": "ChatMode",
+    "mustHit": ["stable:preference-language"],
+    "mustNotHit": ["memory:chat-old-topic", "memory:chat-noise-keyword-1"],
+    "expectedScopes": ["preference"],
+    "expectedEntities": [],
+    "expectedConstraints": ["输出必须使用中文"],
+    "expectedUncertainties": [],
+    "goldenNotes": "应该召回关于语言偏好的长期记忆，并且不应夹带废弃的中期计划或负向噪声项。"
+  },
+  {
+    "id": "chat-sample-002",
+    "query": "现在的开发任务或者计划是什么？",
+    "mode": "ChatMode",
+    "mustHit": ["memory:chat-active-plan"],
+    "mustNotHit": ["memory:chat-old-topic", "memory:chat-noise-keyword-1"],
+    "expectedScopes": ["plan"],
+    "expectedEntities": ["上下文评测框架"],
+    "expectedConstraints": [],
+    "expectedUncertainties": ["SupersededSelectedItem"],
+    "goldenNotes": "应该召回当前活跃的开发计划，且不应误召回已被替代的废弃计划。若包含废弃计划，应标识其被替代的状态。"
+  },
+  {
+    "id": "chat-sample-003",
+    "query": "开发计划与语言偏好有什么相关内容？",
+    "mode": "ChatMode",
+    "mustHit": ["memory:chat-active-plan", "stable:preference-language"],
+    "mustNotHit": ["memory:chat-noise-keyword-1"],
+    "expectedScopes": ["plan", "preference"],
+    "expectedEntities": [],
+    "expectedConstraints": [],
+    "expectedUncertainties": [],
+    "goldenNotes": "测试高关键词负样本拦截能力。废弃偏好项含有特征词但不应被选中。"
+  },
+  {
+    "id": "chat-sample-004",
+    "query": "用户当前是在北京出差还是在别的地方？",
+    "mode": "ChatMode",
+    "mustHit": ["memory:chat-version-conflict-v2"],
+    "mustNotHit": ["memory:chat-version-conflict-v1"],
+    "expectedScopes": ["location"],
+    "expectedEntities": ["上海浦东新区"],
+    "expectedConstraints": [],
+    "expectedUncertainties": ["SupersededSelectedItem"],
+    "goldenNotes": "多版本冲突与替代关系测试。旧版本定位已废弃，应该只选择新版本定位，且应产生冲突/替代不确定性提示。"
+  },
+  {
+    "id": "chat-sample-005",
+    "query": "压力测试：超低Token预算打包",
+    "mode": "ChatMode",
+    "mustHit": ["memory:chat-active-plan"],
+    "mustNotHit": ["memory:chat-budget-stress"],
+    "expectedScopes": [],
+    "expectedEntities": [],
+    "expectedConstraints": ["输出必须使用中文"],
+    "expectedUncertainties": [],
+    "metadata": {
+      "tokenBudget": "100"
+    },
+    "goldenNotes": "极低Token预算下的压力测试，导致由于预算限制，只保留高优先级的硬约束和活跃计划，大文本压力项被截断排除。"
+  },
+  {
+    "id": "chat-sample-006",
+    "query": "用户喜欢的界面显示主题是什么？",
+    "mode": "ChatMode",
+    "mustHit": ["memory:chat-extra-active-1"],
+    "mustNotHit": ["memory:chat-old-topic"],
+    "expectedScopes": ["preference"],
+    "expectedEntities": ["深色黑暗模式主题"],
+    "expectedConstraints": [],
+    "expectedUncertainties": [],
+    "goldenNotes": "普通活跃属性查询，成功召回黑暗模式主题偏好。"
+  },
+  {
+    "id": "chat-sample-007",
+    "query": "我们在核心开发中倾向于用什么语言？",
+    "mode": "ChatMode",
+    "mustHit": ["memory:chat-extra-active-2"],
+    "mustNotHit": ["memory:chat-noise-keyword-1"],
+    "expectedScopes": ["preference"],
+    "expectedEntities": ["C#"],
+    "expectedConstraints": [],
+    "expectedUncertainties": [],
+    "goldenNotes": "测试召回开发语言偏好的活跃记忆，并且不召回包含类似词汇但作废的干扰项。"
+  },
+  {
+    "id": "chat-sample-008",
+    "query": "用户更喜欢喝冰美式还是热拿铁？",
+    "mode": "ChatMode",
+    "mustHit": ["memory:chat-drink-preference-v2"],
+    "mustNotHit": ["memory:chat-drink-preference-v1"],
+    "expectedScopes": ["preference"],
+    "expectedEntities": ["热拿铁"],
+    "expectedConstraints": [],
+    "expectedUncertainties": ["SupersededSelectedItem"],
+    "goldenNotes": "测试界面偏好或饮食喜好冲突版本。美式咖啡已废弃，现在偏好热拿铁，应产生替代不确定性提示。"
+  },
+  {
+    "id": "chat-sample-009",
+    "query": "显式审计：看看我们之前讨论过但已经否决或作废的方案草稿有哪些？",
+    "mode": "ChatMode",
+    "mustHit": ["memory:chat-deprecated-draft"],
+    "mustNotHit": ["memory:chat-drink-preference-v2"],
+    "expectedScopes": ["draft"],
+    "expectedEntities": ["全盘否决"],
+    "expectedConstraints": [],
+    "expectedUncertainties": [],
+    "goldenNotes": "显式审计场景。当用户说‘否决或作废’时，应该专门召回已被否决的旧草稿。"
+  },
+  {
+    "id": "chat-sample-010",
+    "query": "核心开发计划中有规定我们的具体交付日期吗？",
+    "mode": "ChatMode",
+    "mustHit": ["memory:chat-active-plan", "memory:chat-delivery-date"],
+    "mustNotHit": ["memory:chat-deprecated-draft"],
+    "expectedScopes": ["plan"],
+    "expectedEntities": ["6月30日"],
+    "expectedConstraints": [],
+    "expectedUncertainties": [],
+    "goldenNotes": "普通高匹配召回，避开作废的设计草稿干扰。"
+  }
+]

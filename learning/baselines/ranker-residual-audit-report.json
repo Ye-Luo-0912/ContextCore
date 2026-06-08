@@ -1,0 +1,270 @@
+﻿{
+  "generatedAt": "2026-06-06T09:57:47.8888767+00:00",
+  "inputPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\learning\\features\\ranking-pairs.jsonl",
+  "pairCount": 253,
+  "ready": true,
+  "status": "Ready",
+  "notReadyReasons": [],
+  "split": {
+    "strategy": "DeterministicGroupHash80_20",
+    "groupKey": "EvalSampleId",
+    "trainGroupCount": 81,
+    "testGroupCount": 32,
+    "trainExampleCount": 190,
+    "testExampleCount": 63
+  },
+  "baseline": {
+    "baselineName": "SimpleFeatureWeightedBaseline",
+    "pairwiseAccuracy": 0.9047619047619048,
+    "auc": 0.9047619047619048,
+    "winRateOverRule": 0,
+    "falsePositiveRate": 0.09523809523809523,
+    "falseNegativeRate": 0.09523809523809523,
+    "topFailureExamples": [
+      {
+        "evalSampleId": "novel-sample-008",
+        "mode": "NovelMode",
+        "intent": "NovelGeneration",
+        "positiveCandidateId": "memory:novel-weapon-v2",
+        "negativeCandidateId": "memory:novel-weapon-v1",
+        "positiveScore": 94.29999795,
+        "negativeScore": 105.24999555,
+        "reason": "negative candidate outranked positive candidate"
+      },
+      {
+        "evalSampleId": "novel-sample-008",
+        "mode": "NovelMode",
+        "intent": "NovelGeneration",
+        "positiveCandidateId": "memory:novel-weapon-v2",
+        "negativeCandidateId": "memory:novel-weapon-v1",
+        "positiveScore": 94.29999648,
+        "negativeScore": 105.24999238,
+        "reason": "negative candidate outranked positive candidate"
+      },
+      {
+        "evalSampleId": "chat-sample-002",
+        "mode": "ChatMode",
+        "intent": "FuzzyQuestion",
+        "positiveCandidateId": "memory:chat-active-plan",
+        "negativeCandidateId": "memory:chat-noise-keyword-1",
+        "positiveScore": 48.65,
+        "negativeScore": 59.4,
+        "reason": "negative candidate outranked positive candidate"
+      },
+      {
+        "evalSampleId": "chat-sample-002",
+        "mode": "ChatMode",
+        "intent": "FuzzyQuestion",
+        "positiveCandidateId": "memory:chat-active-plan",
+        "negativeCandidateId": "memory:chat-noise-keyword-1",
+        "positiveScore": 48.65,
+        "negativeScore": 59.4,
+        "reason": "negative candidate outranked positive candidate"
+      },
+      {
+        "evalSampleId": "chat-sample-004",
+        "mode": "ChatMode",
+        "intent": "FuzzyQuestion",
+        "positiveCandidateId": "memory:chat-version-conflict-v2",
+        "negativeCandidateId": "memory:chat-version-conflict-v1",
+        "positiveScore": 45.45,
+        "negativeScore": 54.05,
+        "reason": "negative candidate outranked positive candidate"
+      },
+      {
+        "evalSampleId": "chat-sample-004",
+        "mode": "ChatMode",
+        "intent": "FuzzyQuestion",
+        "positiveCandidateId": "memory:chat-version-conflict-v2",
+        "negativeCandidateId": "memory:chat-version-conflict-v1",
+        "positiveScore": 45.45,
+        "negativeScore": 54.05,
+        "reason": "negative candidate outranked positive candidate"
+      }
+    ]
+  },
+  "failures": [
+    {
+      "evalSampleId": "novel-sample-008",
+      "mode": "NovelMode",
+      "intent": "NovelGeneration",
+      "positiveCandidateId": "memory:novel-weapon-v2",
+      "negativeCandidateId": "memory:novel-weapon-v1",
+      "positiveScore": 94.29999648,
+      "negativeScore": 105.24999238,
+      "margin": -10.94999589999999,
+      "positiveKeywordMatchScore": 41.14999824,
+      "negativeKeywordMatchScore": 54.62499619,
+      "positiveSemanticAnchorMatchScore": 41.14999824,
+      "negativeSemanticAnchorMatchScore": 54.62499619,
+      "positiveSelected": true,
+      "negativeSelected": false,
+      "positiveRank": 2,
+      "negativeRank": 0,
+      "positiveKind": "working_memory",
+      "negativeKind": "historical_context",
+      "positiveSection": "working_memory",
+      "negativeSection": "",
+      "failureCluster": "DeprecatedNoise",
+      "probableCause": "Deprecated negative has comparable or stronger keyword/semantic match than the active positive."
+    },
+    {
+      "evalSampleId": "chat-sample-002",
+      "mode": "ChatMode",
+      "intent": "FuzzyQuestion",
+      "positiveCandidateId": "memory:chat-active-plan",
+      "negativeCandidateId": "memory:chat-noise-keyword-1",
+      "positiveScore": 48.65,
+      "negativeScore": 59.4,
+      "margin": -10.75,
+      "positiveKeywordMatchScore": 18.325,
+      "negativeKeywordMatchScore": 31.7,
+      "positiveSemanticAnchorMatchScore": 18.325,
+      "negativeSemanticAnchorMatchScore": 31.7,
+      "positiveSelected": true,
+      "negativeSelected": false,
+      "positiveRank": 2,
+      "negativeRank": 0,
+      "positiveKind": "working_memory",
+      "negativeKind": "historical_context",
+      "positiveSection": "working_memory",
+      "negativeSection": "",
+      "failureCluster": "DeprecatedNoise",
+      "probableCause": "Deprecated negative has comparable or stronger keyword/semantic match than the active positive."
+    },
+    {
+      "evalSampleId": "chat-sample-004",
+      "mode": "ChatMode",
+      "intent": "FuzzyQuestion",
+      "positiveCandidateId": "memory:chat-version-conflict-v2",
+      "negativeCandidateId": "memory:chat-version-conflict-v1",
+      "positiveScore": 45.45,
+      "negativeScore": 54.05,
+      "margin": -8.599999999999994,
+      "positiveKeywordMatchScore": 16.725,
+      "negativeKeywordMatchScore": 29.025,
+      "positiveSemanticAnchorMatchScore": 16.725,
+      "negativeSemanticAnchorMatchScore": 29.025,
+      "positiveSelected": true,
+      "negativeSelected": false,
+      "positiveRank": 2,
+      "negativeRank": 0,
+      "positiveKind": "working_memory",
+      "negativeKind": "historical_context",
+      "positiveSection": "working_memory",
+      "negativeSection": "",
+      "failureCluster": "DeprecatedNoise",
+      "probableCause": "Deprecated negative has comparable or stronger keyword/semantic match than the active positive."
+    }
+  ],
+  "failureClusters": [
+    {
+      "cluster": "DeprecatedNoise",
+      "count": 3,
+      "averageMargin": -10.099998633333328,
+      "exampleIds": [
+        "chat-sample-002",
+        "chat-sample-004",
+        "novel-sample-008"
+      ],
+      "probableCause": "Deprecated or historical negatives retain high lexical/semantic similarity."
+    }
+  ],
+  "featureConflicts": [
+    {
+      "featureName": "KeywordMatch",
+      "failureCount": 3,
+      "averagePositiveValue": 25.399999413333337,
+      "averageNegativeValue": 38.44999873,
+      "averageDelta": -13.04999931666666,
+      "interpretation": "Keyword feature favors the negative candidate when average delta is below zero."
+    },
+    {
+      "featureName": "SemanticAnchorMatch",
+      "failureCount": 3,
+      "averagePositiveValue": 25.399999413333337,
+      "averageNegativeValue": 38.44999873,
+      "averageDelta": -13.04999931666666,
+      "interpretation": "Semantic anchor feature overmatches the negative candidate when average delta is below zero."
+    },
+    {
+      "featureName": "Rank",
+      "failureCount": 3,
+      "averagePositiveValue": 2,
+      "averageNegativeValue": 0,
+      "averageDelta": 2,
+      "interpretation": "Lower rank is better; positive rank should be lower than negative rank when both are selected."
+    },
+    {
+      "featureName": "Selection",
+      "failureCount": 3,
+      "averagePositiveValue": 1,
+      "averageNegativeValue": 0,
+      "averageDelta": 1,
+      "interpretation": "Selected-state conflict indicates historical or deprecated negatives were selected offline."
+    }
+  ],
+  "hardNegativeRecommendations": [
+    {
+      "recommendationType": "DeprecatedSameKeyword",
+      "cluster": "DeprecatedNoise",
+      "count": 3,
+      "reason": "Deprecated negatives share query keywords with current positives.",
+      "suggestedAction": "Generate pairs where deprecated/historical items share the same keyword surface as active positives.",
+      "exampleIds": [
+        "chat-sample-002",
+        "chat-sample-004",
+        "novel-sample-008"
+      ]
+    },
+    {
+      "recommendationType": "VersionConflict",
+      "cluster": "DeprecatedNoise",
+      "count": 3,
+      "reason": "Residual failures include older version candidates outranking active versions.",
+      "suggestedAction": "Add hard negatives that pair v1/old/deprecated items against v2/latest/current positives.",
+      "exampleIds": [
+        "chat-sample-002",
+        "chat-sample-004",
+        "novel-sample-008"
+      ]
+    },
+    {
+      "recommendationType": "HistoricalSelectedNoise",
+      "cluster": "DeprecatedNoise",
+      "count": 3,
+      "reason": "Historical candidates can still be attractive when selected/rank features are strong.",
+      "suggestedAction": "Add selected historical/deprecated negatives with explicit lifecycle markers to teach demotion offline.",
+      "exampleIds": [
+        "chat-sample-002",
+        "chat-sample-004",
+        "novel-sample-008"
+      ]
+    },
+    {
+      "recommendationType": "WeakLifecycleMarker",
+      "cluster": "DeprecatedNoise",
+      "count": 3,
+      "reason": "Lifecycle markers are not strong enough in eval-only ranking pairs.",
+      "suggestedAction": "Add negatives with weak or missing deprecated markers and require positive active/current evidence.",
+      "exampleIds": [
+        "chat-sample-002",
+        "chat-sample-004",
+        "novel-sample-008"
+      ]
+    },
+    {
+      "recommendationType": "SemanticAnchorOvermatch",
+      "cluster": "DeprecatedNoise",
+      "count": 3,
+      "reason": "Semantic anchor surface can overmatch deprecated negatives.",
+      "suggestedAction": "Add semantically similar deprecated negatives that differ only by lifecycle/version state.",
+      "exampleIds": [
+        "chat-sample-002",
+        "chat-sample-004",
+        "novel-sample-008"
+      ]
+    }
+  ],
+  "policyVersion": "learning-offline-baseline/v1"
+}

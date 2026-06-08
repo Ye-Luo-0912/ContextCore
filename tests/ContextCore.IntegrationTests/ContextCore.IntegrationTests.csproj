@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <NuGetAudit>false</NuGetAudit>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.10.0-preview-24080-01" />
+    <PackageReference Include="MSTest.TestAdapter" Version="3.1.1" />
+    <PackageReference Include="MSTest.TestFramework" Version="3.1.1" />
+    <PackageReference Include="Testcontainers.PostgreSql" Version="4.12.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Microsoft.VisualStudio.TestTools.UnitTesting" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\ContextCore.Abstractions\ContextCore.Abstractions.csproj" />
+    <ProjectReference Include="..\..\src\ContextCore.ControlRoom\ContextCore.ControlRoom.csproj" />
+    <ProjectReference Include="..\..\src\ContextCore.Core\ContextCore.Core.csproj" />
+    <ProjectReference Include="..\..\src\ContextCore.Embedding\ContextCore.Embedding.csproj" />
+    <ProjectReference Include="..\..\src\ContextCore.ModelGateway\ContextCore.ModelGateway.csproj" />
+    <ProjectReference Include="..\..\src\ContextCore.Storage.FileSystem\ContextCore.Storage.FileSystem.csproj" />
+    <ProjectReference Include="..\..\src\ContextCore.Storage.InMemory\ContextCore.Storage.InMemory.csproj" />
+    <ProjectReference Include="..\..\src\ContextCore.Storage.Postgres\ContextCore.Storage.Postgres.csproj" />
+  </ItemGroup>
+
+</Project>

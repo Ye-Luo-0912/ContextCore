@@ -1,0 +1,214 @@
+﻿{
+  "ReportId": "d160432129a34375a6291c91b0423f0b",
+  "SampleSet": "a3",
+  "GeneratedAt": "2026-06-05T08:54:29.2547069+00:00",
+  "TotalSamples": 50,
+  "AffectedSampleCount": 10,
+  "FallbackSampleCount": 0,
+  "ConstraintRepairedCount": 10,
+  "ConstraintRepairFailedCount": 0,
+  "ConstraintDroppedByBudgetCount": 10,
+  "ConstraintWrongSectionCount": 0,
+  "Samples": [
+    {
+      "SampleId": "chat-sample-005",
+      "Mode": "ChatMode",
+      "Intent": "CodingTask",
+      "OptInMatched": true,
+      "Applied": true,
+      "FallbackUsed": false,
+      "ExpectedHardConstraints": [
+        "\u8F93\u51FA\u5FC5\u987B\u4F7F\u7528\u4E2D\u6587"
+      ],
+      "LegacyConstraints": [],
+      "ProposalConstraints": [
+        "\u8F93\u51FA\u5FC5\u987B\u4F7F\u7528\u4E2D\u6587"
+      ],
+      "MissingConstraints": [],
+      "ConstraintSource": "eval.expectedConstraints",
+      "LostAtStage": "ConstraintDroppedByBudget",
+      "SuggestedFix": "Keep LockedConstraintItems before normal budget trim and evict diagnostics/historical/low-value items first.",
+      "ConstraintRepairStatus": "ConstraintRepaired"
+    },
+    {
+      "SampleId": "project-sample-007",
+      "Mode": "ProjectMode",
+      "Intent": "CodingTask",
+      "OptInMatched": true,
+      "Applied": true,
+      "FallbackUsed": false,
+      "ExpectedHardConstraints": [
+        "\u7981\u6B62\u628A\u660E\u6587 API Key \u5199\u5165\u9879\u76EE\u4ED3\u5E93"
+      ],
+      "LegacyConstraints": [],
+      "ProposalConstraints": [
+        "\u7981\u6B62\u628A\u660E\u6587 API Key \u5199\u5165\u9879\u76EE\u4ED3\u5E93"
+      ],
+      "MissingConstraints": [],
+      "ConstraintSource": "eval.expectedConstraints",
+      "LostAtStage": "ConstraintDroppedByBudget",
+      "SuggestedFix": "Keep LockedConstraintItems before normal budget trim and evict diagnostics/historical/low-value items first.",
+      "ConstraintRepairStatus": "ConstraintRepaired"
+    },
+    {
+      "SampleId": "automation-sample-001",
+      "Mode": "AutomationMode",
+      "Intent": "AutomationRecovery",
+      "OptInMatched": true,
+      "Applied": true,
+      "FallbackUsed": false,
+      "ExpectedHardConstraints": [
+        "\u91CD\u8BD5\u524D\u5FC5\u987B\u8FDB\u884C\u4EBA\u5DE5\u786E\u8BA4"
+      ],
+      "LegacyConstraints": [],
+      "ProposalConstraints": [
+        "\u91CD\u8BD5\u524D\u5FC5\u987B\u8FDB\u884C\u4EBA\u5DE5\u786E\u8BA4"
+      ],
+      "MissingConstraints": [],
+      "ConstraintSource": "eval.expectedConstraints",
+      "LostAtStage": "ConstraintDroppedByBudget",
+      "SuggestedFix": "Keep LockedConstraintItems before normal budget trim and evict diagnostics/historical/low-value items first.",
+      "ConstraintRepairStatus": "ConstraintRepaired"
+    },
+    {
+      "SampleId": "automation-sample-003",
+      "Mode": "AutomationMode",
+      "Intent": "AutomationRecovery",
+      "OptInMatched": true,
+      "Applied": true,
+      "FallbackUsed": false,
+      "ExpectedHardConstraints": [
+        "\u91CD\u8BD5\u524D\u5FC5\u987B\u8FDB\u884C\u4EBA\u5DE5\u786E\u8BA4"
+      ],
+      "LegacyConstraints": [],
+      "ProposalConstraints": [
+        "\u91CD\u8BD5\u524D\u5FC5\u987B\u8FDB\u884C\u4EBA\u5DE5\u786E\u8BA4"
+      ],
+      "MissingConstraints": [],
+      "ConstraintSource": "eval.expectedConstraints",
+      "LostAtStage": "ConstraintDroppedByBudget",
+      "SuggestedFix": "Keep LockedConstraintItems before normal budget trim and evict diagnostics/historical/low-value items first.",
+      "ConstraintRepairStatus": "ConstraintRepaired"
+    },
+    {
+      "SampleId": "automation-sample-007",
+      "Mode": "AutomationMode",
+      "Intent": "CodingTask",
+      "OptInMatched": true,
+      "Applied": true,
+      "FallbackUsed": false,
+      "ExpectedHardConstraints": [
+        "\u91CD\u8BD5\u524D\u5FC5\u987B\u8FDB\u884C\u4EBA\u5DE5\u786E\u8BA4"
+      ],
+      "LegacyConstraints": [],
+      "ProposalConstraints": [
+        "\u91CD\u8BD5\u524D\u5FC5\u987B\u8FDB\u884C\u4EBA\u5DE5\u786E\u8BA4"
+      ],
+      "MissingConstraints": [],
+      "ConstraintSource": "eval.expectedConstraints",
+      "LostAtStage": "ConstraintDroppedByBudget",
+      "SuggestedFix": "Keep LockedConstraintItems before normal budget trim and evict diagnostics/historical/low-value items first.",
+      "ConstraintRepairStatus": "ConstraintRepaired"
+    },
+    {
+      "SampleId": "automation-sample-010",
+      "Mode": "AutomationMode",
+      "Intent": "AutomationRecovery",
+      "OptInMatched": true,
+      "Applied": true,
+      "FallbackUsed": false,
+      "ExpectedHardConstraints": [
+        "\u91CD\u8BD5\u524D\u5FC5\u987B\u8FDB\u884C\u4EBA\u5DE5\u786E\u8BA4"
+      ],
+      "LegacyConstraints": [],
+      "ProposalConstraints": [
+        "\u91CD\u8BD5\u524D\u5FC5\u987B\u8FDB\u884C\u4EBA\u5DE5\u786E\u8BA4"
+      ],
+      "MissingConstraints": [],
+      "ConstraintSource": "eval.expectedConstraints",
+      "LostAtStage": "ConstraintDroppedByBudget",
+      "SuggestedFix": "Keep LockedConstraintItems before normal budget trim and evict diagnostics/historical/low-value items first.",
+      "ConstraintRepairStatus": "ConstraintRepaired"
+    },
+    {
+      "SampleId": "coding-sample-001",
+      "Mode": "CodingMode",
+      "Intent": "CodingTask",
+      "OptInMatched": true,
+      "Applied": true,
+      "FallbackUsed": false,
+      "ExpectedHardConstraints": [
+        "\u5168\u90E8\u65B0\u589E\u4EE3\u7801\u6587\u4EF6\u53CA\u63A5\u53E3\u6CE8\u91CA\u5747\u9700\u4F7F\u7528\u4E2D\u6587\u63CF\u8FF0"
+      ],
+      "LegacyConstraints": [],
+      "ProposalConstraints": [
+        "\u5168\u90E8\u65B0\u589E\u4EE3\u7801\u6587\u4EF6\u53CA\u63A5\u53E3\u6CE8\u91CA\u5747\u9700\u4F7F\u7528\u4E2D\u6587\u63CF\u8FF0"
+      ],
+      "MissingConstraints": [],
+      "ConstraintSource": "eval.expectedConstraints",
+      "LostAtStage": "ConstraintDroppedByBudget",
+      "SuggestedFix": "Keep LockedConstraintItems before normal budget trim and evict diagnostics/historical/low-value items first.",
+      "ConstraintRepairStatus": "ConstraintRepaired"
+    },
+    {
+      "SampleId": "coding-sample-003",
+      "Mode": "CodingMode",
+      "Intent": "CodingTask",
+      "OptInMatched": true,
+      "Applied": true,
+      "FallbackUsed": false,
+      "ExpectedHardConstraints": [
+        "\u5168\u90E8\u65B0\u589E\u4EE3\u7801\u6587\u4EF6\u53CA\u63A5\u53E3\u6CE8\u91CA\u5747\u9700\u4F7F\u7528\u4E2D\u6587\u63CF\u8FF0"
+      ],
+      "LegacyConstraints": [],
+      "ProposalConstraints": [
+        "\u5168\u90E8\u65B0\u589E\u4EE3\u7801\u6587\u4EF6\u53CA\u63A5\u53E3\u6CE8\u91CA\u5747\u9700\u4F7F\u7528\u4E2D\u6587\u63CF\u8FF0"
+      ],
+      "MissingConstraints": [],
+      "ConstraintSource": "eval.expectedConstraints",
+      "LostAtStage": "ConstraintDroppedByBudget",
+      "SuggestedFix": "Keep LockedConstraintItems before normal budget trim and evict diagnostics/historical/low-value items first.",
+      "ConstraintRepairStatus": "ConstraintRepaired"
+    },
+    {
+      "SampleId": "coding-sample-007",
+      "Mode": "CodingMode",
+      "Intent": "CodingTask",
+      "OptInMatched": true,
+      "Applied": true,
+      "FallbackUsed": false,
+      "ExpectedHardConstraints": [
+        "\u5168\u90E8\u65B0\u589E\u4EE3\u7801\u6587\u4EF6\u53CA\u63A5\u53E3\u6CE8\u91CA\u5747\u9700\u4F7F\u7528\u4E2D\u6587\u63CF\u8FF0"
+      ],
+      "LegacyConstraints": [],
+      "ProposalConstraints": [
+        "\u5168\u90E8\u65B0\u589E\u4EE3\u7801\u6587\u4EF6\u53CA\u63A5\u53E3\u6CE8\u91CA\u5747\u9700\u4F7F\u7528\u4E2D\u6587\u63CF\u8FF0"
+      ],
+      "MissingConstraints": [],
+      "ConstraintSource": "eval.expectedConstraints",
+      "LostAtStage": "ConstraintDroppedByBudget",
+      "SuggestedFix": "Keep LockedConstraintItems before normal budget trim and evict diagnostics/historical/low-value items first.",
+      "ConstraintRepairStatus": "ConstraintRepaired"
+    },
+    {
+      "SampleId": "coding-sample-010",
+      "Mode": "CodingMode",
+      "Intent": "CodingTask",
+      "OptInMatched": true,
+      "Applied": true,
+      "FallbackUsed": false,
+      "ExpectedHardConstraints": [
+        "\u5168\u90E8\u65B0\u589E\u4EE3\u7801\u6587\u4EF6\u53CA\u63A5\u53E3\u6CE8\u91CA\u5747\u9700\u4F7F\u7528\u4E2D\u6587\u63CF\u8FF0"
+      ],
+      "LegacyConstraints": [],
+      "ProposalConstraints": [
+        "\u5168\u90E8\u65B0\u589E\u4EE3\u7801\u6587\u4EF6\u53CA\u63A5\u53E3\u6CE8\u91CA\u5747\u9700\u4F7F\u7528\u4E2D\u6587\u63CF\u8FF0"
+      ],
+      "MissingConstraints": [],
+      "ConstraintSource": "eval.expectedConstraints",
+      "LostAtStage": "ConstraintDroppedByBudget",
+      "SuggestedFix": "Keep LockedConstraintItems before normal budget trim and evict diagnostics/historical/low-value items first.",
+      "ConstraintRepairStatus": "ConstraintRepaired"
+    }
+  ]
+}

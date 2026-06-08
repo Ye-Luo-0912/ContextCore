@@ -1,0 +1,10 @@
+﻿{
+  "ReportId": "1b49b45f6ded465095e8ee73693c95c6",
+  "SampleSet": "a3",
+  "GeneratedAt": "2026-06-05T06:56:55.7642832+00:00",
+  "TotalSamples": 50,
+  "DegradedSampleCount": 0,
+  "MustHitLostCount": 0,
+  "SuspectedLossReasonCounts": {},
+  "Samples": []
+}

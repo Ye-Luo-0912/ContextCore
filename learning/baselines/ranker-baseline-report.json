@@ -1,0 +1,200 @@
+﻿{
+  "generatedAt": "2026-06-06T08:50:48.6922836+00:00",
+  "inputPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\learning\\features\\ranking-pairs.jsonl",
+  "pairCount": 253,
+  "ready": true,
+  "status": "Ready",
+  "notReadyReasons": [],
+  "split": {
+    "strategy": "DeterministicGroupHash80_20",
+    "groupKey": "EvalSampleId",
+    "trainGroupCount": 81,
+    "testGroupCount": 32,
+    "trainExampleCount": 190,
+    "testExampleCount": 63
+  },
+  "baselines": [
+    {
+      "baselineName": "RuleScoreBaseline",
+      "pairwiseAccuracy": 0.8412698412698413,
+      "auc": 0.8412698412698413,
+      "winRateOverRule": 0,
+      "falsePositiveRate": 0.15873015873015872,
+      "falseNegativeRate": 0.15873015873015872,
+      "topFailureExamples": [
+        {
+          "evalSampleId": "novel-sample-008",
+          "mode": "NovelMode",
+          "intent": "NovelGeneration",
+          "positiveCandidateId": "memory:novel-weapon-v2",
+          "negativeCandidateId": "memory:novel-weapon-v1",
+          "positiveScore": 88.29999795,
+          "negativeScore": 109.24999555,
+          "reason": "negative candidate outranked positive candidate"
+        },
+        {
+          "evalSampleId": "novel-sample-008",
+          "mode": "NovelMode",
+          "intent": "NovelGeneration",
+          "positiveCandidateId": "memory:novel-weapon-v2",
+          "negativeCandidateId": "memory:novel-weapon-v1",
+          "positiveScore": 88.29999648,
+          "negativeScore": 109.24999238,
+          "reason": "negative candidate outranked positive candidate"
+        },
+        {
+          "evalSampleId": "chat-sample-002",
+          "mode": "ChatMode",
+          "intent": "FuzzyQuestion",
+          "positiveCandidateId": "memory:chat-active-plan",
+          "negativeCandidateId": "memory:chat-noise-keyword-1",
+          "positiveScore": 42.65,
+          "negativeScore": 63.4,
+          "reason": "negative candidate outranked positive candidate"
+        },
+        {
+          "evalSampleId": "chat-sample-002",
+          "mode": "ChatMode",
+          "intent": "FuzzyQuestion",
+          "positiveCandidateId": "memory:chat-active-plan",
+          "negativeCandidateId": "memory:chat-noise-keyword-1",
+          "positiveScore": 42.65,
+          "negativeScore": 63.4,
+          "reason": "negative candidate outranked positive candidate"
+        },
+        {
+          "evalSampleId": "chat-sample-004",
+          "mode": "ChatMode",
+          "intent": "FuzzyQuestion",
+          "positiveCandidateId": "memory:chat-version-conflict-v2",
+          "negativeCandidateId": "memory:chat-version-conflict-v1",
+          "positiveScore": 39.45,
+          "negativeScore": 58.05,
+          "reason": "negative candidate outranked positive candidate"
+        },
+        {
+          "evalSampleId": "chat-sample-004",
+          "mode": "ChatMode",
+          "intent": "FuzzyQuestion",
+          "positiveCandidateId": "memory:chat-version-conflict-v2",
+          "negativeCandidateId": "memory:chat-version-conflict-v1",
+          "positiveScore": 39.45,
+          "negativeScore": 58.05,
+          "reason": "negative candidate outranked positive candidate"
+        },
+        {
+          "evalSampleId": "chat-sample-002",
+          "mode": "ChatMode",
+          "intent": "FuzzyQuestion",
+          "positiveCandidateId": "memory:chat-active-plan",
+          "negativeCandidateId": "memory:chat-old-topic",
+          "positiveScore": 42.65,
+          "negativeScore": 47.35,
+          "reason": "negative candidate outranked positive candidate"
+        },
+        {
+          "evalSampleId": "chat-sample-002",
+          "mode": "ChatMode",
+          "intent": "FuzzyQuestion",
+          "positiveCandidateId": "memory:chat-active-plan",
+          "negativeCandidateId": "memory:chat-old-topic",
+          "positiveScore": 42.65,
+          "negativeScore": 47.35,
+          "reason": "negative candidate outranked positive candidate"
+        },
+        {
+          "evalSampleId": "project-sample-008",
+          "mode": "ProjectMode",
+          "intent": "FuzzyQuestion",
+          "positiveCandidateId": "memory:project-pool-v2",
+          "negativeCandidateId": "memory:project-pool-v1",
+          "positiveScore": 99.77499691,
+          "negativeScore": 100.16249777,
+          "reason": "negative candidate outranked positive candidate"
+        },
+        {
+          "evalSampleId": "project-sample-008",
+          "mode": "ProjectMode",
+          "intent": "FuzzyQuestion",
+          "positiveCandidateId": "memory:project-pool-v2",
+          "negativeCandidateId": "memory:project-pool-v1",
+          "positiveScore": 99.77499808,
+          "negativeScore": 100.16249861,
+          "reason": "negative candidate outranked positive candidate"
+        }
+      ]
+    },
+    {
+      "baselineName": "SimpleFeatureWeightedBaseline",
+      "pairwiseAccuracy": 0.9047619047619048,
+      "auc": 0.9047619047619048,
+      "winRateOverRule": 0.06349206349206349,
+      "falsePositiveRate": 0.09523809523809523,
+      "falseNegativeRate": 0.09523809523809523,
+      "topFailureExamples": [
+        {
+          "evalSampleId": "novel-sample-008",
+          "mode": "NovelMode",
+          "intent": "NovelGeneration",
+          "positiveCandidateId": "memory:novel-weapon-v2",
+          "negativeCandidateId": "memory:novel-weapon-v1",
+          "positiveScore": 94.29999795,
+          "negativeScore": 105.24999555,
+          "reason": "negative candidate outranked positive candidate"
+        },
+        {
+          "evalSampleId": "novel-sample-008",
+          "mode": "NovelMode",
+          "intent": "NovelGeneration",
+          "positiveCandidateId": "memory:novel-weapon-v2",
+          "negativeCandidateId": "memory:novel-weapon-v1",
+          "positiveScore": 94.29999648,
+          "negativeScore": 105.24999238,
+          "reason": "negative candidate outranked positive candidate"
+        },
+        {
+          "evalSampleId": "chat-sample-002",
+          "mode": "ChatMode",
+          "intent": "FuzzyQuestion",
+          "positiveCandidateId": "memory:chat-active-plan",
+          "negativeCandidateId": "memory:chat-noise-keyword-1",
+          "positiveScore": 48.65,
+          "negativeScore": 59.4,
+          "reason": "negative candidate outranked positive candidate"
+        },
+        {
+          "evalSampleId": "chat-sample-002",
+          "mode": "ChatMode",
+          "intent": "FuzzyQuestion",
+          "positiveCandidateId": "memory:chat-active-plan",
+          "negativeCandidateId": "memory:chat-noise-keyword-1",
+          "positiveScore": 48.65,
+          "negativeScore": 59.4,
+          "reason": "negative candidate outranked positive candidate"
+        },
+        {
+          "evalSampleId": "chat-sample-004",
+          "mode": "ChatMode",
+          "intent": "FuzzyQuestion",
+          "positiveCandidateId": "memory:chat-version-conflict-v2",
+          "negativeCandidateId": "memory:chat-version-conflict-v1",
+          "positiveScore": 45.45,
+          "negativeScore": 54.05,
+          "reason": "negative candidate outranked positive candidate"
+        },
+        {
+          "evalSampleId": "chat-sample-004",
+          "mode": "ChatMode",
+          "intent": "FuzzyQuestion",
+          "positiveCandidateId": "memory:chat-version-conflict-v2",
+          "negativeCandidateId": "memory:chat-version-conflict-v1",
+          "positiveScore": 45.45,
+          "negativeScore": 54.05,
+          "reason": "negative candidate outranked positive candidate"
+        }
+      ]
+    }
+  ],
+  "bestBaseline": "SimpleFeatureWeightedBaseline",
+  "policyVersion": "learning-offline-baseline/v1"
+}

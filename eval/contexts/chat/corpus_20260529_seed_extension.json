@@ -1,0 +1,278 @@
+{
+  "contexts": [],
+  "memories": [
+    {
+      "id": "pref:answer-conclusion-first",
+      "workspaceId": "eval",
+      "collectionId": "chat",
+      "layer": "Stable",
+      "status": "Stable",
+      "type": "preference",
+      "content": "回答风格偏好：以后回答问题时先给结论，再给必要步骤。约束：先结论后步骤。",
+      "tags": ["preference", "answer-style"],
+      "importance": 0.9
+    },
+    {
+      "id": "policy:no-promote-temporary-emotion",
+      "workspaceId": "eval",
+      "collectionId": "chat",
+      "layer": "Stable",
+      "status": "Stable",
+      "type": "promotion-policy",
+      "content": "Promotion 规则：随口抱怨、临时情绪不应提升为记忆。约束：临时情绪不应提升。",
+      "tags": ["promotion", "emotion"],
+      "importance": 0.9
+    },
+    {
+      "id": "task:current-active",
+      "workspaceId": "eval",
+      "collectionId": "chat",
+      "layer": "Working",
+      "status": "Active",
+      "type": "task-state",
+      "content": "当前待办：继续刚才的活跃任务，不要从旧话题重新开始。约束：优先当前任务。",
+      "tags": ["task", "active"],
+      "importance": 0.9
+    },
+    {
+      "id": "pattern:repeated-user-preference",
+      "workspaceId": "eval",
+      "collectionId": "chat",
+      "layer": "Stable",
+      "status": "Stable",
+      "type": "preference-pattern",
+      "content": "稳定模式：用户重复说过三次的偏好可以作为长期稳定偏好处理。约束：多次重复稳定模式可提升。",
+      "tags": ["preference", "pattern"],
+      "importance": 0.85
+    },
+    {
+      "id": "uncertainty:pending-confirmation",
+      "workspaceId": "eval",
+      "collectionId": "chat",
+      "layer": "Working",
+      "status": "Active",
+      "type": "uncertainty",
+      "content": "本轮讨论仍有待确认信息，需要用户确认；不确定内容必须标记，不能当作事实。",
+      "tags": ["uncertainty", "confirmation"],
+      "importance": 0.85
+    },
+    {
+      "id": "policy:no-promote-joke",
+      "workspaceId": "eval",
+      "collectionId": "chat",
+      "layer": "Stable",
+      "status": "Stable",
+      "type": "promotion-policy",
+      "content": "Promotion 规则：明显玩笑不应当成项目规则。约束：明显一次性上下文不应提升。",
+      "tags": ["promotion", "joke"],
+      "importance": 0.8
+    },
+    {
+      "id": "constraint:no-secret-commit",
+      "workspaceId": "eval",
+      "collectionId": "chat",
+      "layer": "Stable",
+      "status": "Stable",
+      "type": "security-constraint",
+      "content": "安全偏好：涉及配置和密钥时提醒不要提交到仓库。约束：不得提交密钥。",
+      "tags": ["security", "secret"],
+      "importance": 0.95
+    },
+    {
+      "id": "scope:current-session",
+      "workspaceId": "eval",
+      "collectionId": "chat",
+      "layer": "Working",
+      "status": "Active",
+      "type": "scope",
+      "content": "作用域：用户当前问的是今天这次会话，不是上周实验。约束：优先当前时间范围。",
+      "tags": ["scope", "session"],
+      "importance": 0.85
+    },
+    {
+      "id": "rule:naming-confirmed",
+      "workspaceId": "eval",
+      "collectionId": "chat",
+      "layer": "Stable",
+      "status": "Stable",
+      "type": "confirmed-rule",
+      "content": "命名规则已经确认，后续都按这个规则执行。约束：已确认规则优先。",
+      "tags": ["rule", "naming"],
+      "importance": 0.85
+    },
+    {
+      "id": "revision:latest-expression",
+      "workspaceId": "eval",
+      "collectionId": "chat",
+      "layer": "Working",
+      "status": "Active",
+      "type": "revision",
+      "content": "表达修正：用户刚才改口，应以后面那版表达为准。约束：后续覆盖前文。",
+      "tags": ["revision"],
+      "importance": 0.85
+    },
+    {
+      "id": "pref:interaction-style",
+      "workspaceId": "eval",
+      "collectionId": "chat",
+      "layer": "Stable",
+      "status": "Stable",
+      "type": "preference",
+      "content": "交互方式长期偏好：整理用户长期喜欢的交互方式，长期偏好可提升。",
+      "tags": ["preference", "interaction"],
+      "importance": 0.85
+    },
+    {
+      "id": "policy:no-promote-oneoff",
+      "workspaceId": "eval",
+      "collectionId": "chat",
+      "layer": "Stable",
+      "status": "Stable",
+      "type": "promotion-policy",
+      "content": "Promotion 规则：一次性测试文本不应下次再引用。约束：一次性上下文不应提升。",
+      "tags": ["promotion", "oneoff"],
+      "importance": 0.8
+    },
+    {
+      "id": "pref:actionable-concise",
+      "workspaceId": "eval",
+      "collectionId": "chat",
+      "layer": "Stable",
+      "status": "Stable",
+      "type": "preference",
+      "content": "沟通偏好：用户更关心可执行结果，不需要太长铺垫。约束：减少铺垫。",
+      "tags": ["preference", "concise"],
+      "importance": 0.9
+    },
+    {
+      "id": "pref:admit-uncertainty",
+      "workspaceId": "eval",
+      "collectionId": "chat",
+      "layer": "Stable",
+      "status": "Stable",
+      "type": "preference",
+      "content": "沟通偏好：如果没有把握，就明确告诉用户不确定。约束：不确定时说明。",
+      "tags": ["preference", "uncertainty"],
+      "importance": 0.9
+    },
+    {
+      "id": "source:reference-only",
+      "workspaceId": "eval",
+      "collectionId": "chat",
+      "layer": "Working",
+      "status": "Active",
+      "type": "source-scope",
+      "content": "参考链接只是参考，不代表接受其方案。约束：参考来源不等于决策，是否采纳方案待确认。",
+      "tags": ["source", "decision"],
+      "importance": 0.85
+    },
+    {
+      "id": "task:resume-context",
+      "workspaceId": "eval",
+      "collectionId": "chat",
+      "layer": "Working",
+      "status": "Active",
+      "type": "resume",
+      "content": "任务上下文需要下次继续时先恢复当前任务。约束：恢复当前任务。",
+      "tags": ["task", "resume"],
+      "importance": 0.9
+    },
+    {
+      "id": "scope:project-only",
+      "workspaceId": "eval",
+      "collectionId": "chat",
+      "layer": "Working",
+      "status": "Active",
+      "type": "scope",
+      "content": "项目结论只适用于当前项目，不应当成所有项目规则。约束：限定作用域。",
+      "tags": ["scope", "project"],
+      "importance": 0.85
+    },
+    {
+      "id": "pref:zh-output",
+      "workspaceId": "eval",
+      "collectionId": "chat",
+      "layer": "Stable",
+      "status": "Stable",
+      "type": "preference",
+      "content": "用户偏好：输出、日志、注释和提示信息都保持中文。",
+      "tags": ["preference", "language"],
+      "importance": 0.95
+    },
+    {
+      "id": "memory:long-term-user-preference",
+      "workspaceId": "eval",
+      "collectionId": "chat",
+      "layer": "Stable",
+      "status": "Stable",
+      "type": "preference",
+      "content": "长期用户偏好：回答直接、清晰、重视工程质量和可执行结果。",
+      "tags": ["preference"],
+      "importance": 0.85
+    },
+    {
+      "id": "task:current-user-request",
+      "workspaceId": "eval",
+      "collectionId": "chat",
+      "layer": "Working",
+      "status": "Active",
+      "type": "task-state",
+      "content": "当前用户请求：继续执行下一步任务，并保持文档报告简洁。",
+      "tags": ["task", "current"],
+      "importance": 0.85
+    },
+    {
+      "id": "candidate:promotion-working",
+      "workspaceId": "eval",
+      "collectionId": "chat",
+      "layer": "Working",
+      "status": "Active",
+      "type": "promotion-candidate",
+      "content": "短期内容中满足条件的阶段性结论可作为 promotion candidate 进入工作记忆候选队列。",
+      "tags": ["promotion", "candidate"],
+      "importance": 0.8
+    },
+    {
+      "id": "memory:session-conclusion",
+      "workspaceId": "eval",
+      "collectionId": "chat",
+      "layer": "Working",
+      "status": "Active",
+      "type": "conclusion",
+      "content": "会话结论：A3 评测样本数量已补齐，下一步是让扩展样本进入真实评测。",
+      "tags": ["conclusion", "a3"],
+      "importance": 0.85
+    }
+  ],
+  "relations": [],
+  "constraints": [],
+  "activatedConstraintGaps": [
+    {
+      "gapId": "constraint-gap-chat-20260529-003-no-promote-repetition",
+      "workspaceId": "eval",
+      "collectionId": "chat",
+      "sessionId": "session-chat-20260529",
+      "source": "eval-constraint-gap-fixture",
+      "sourceSampleId": "chat-20260529-003",
+      "sourceOperationId": "phase-p15-constraint-activation-closure",
+      "expectedConstraintText": "重复解释、重复澄清、重复说明本身不应被提升为长期偏好或稳定事实；只有用户明确确认其为长期规则时才可提升。",
+      "matchedConstraintIds": [],
+      "suggestedConstraintTitle": "重复说明不得自动提升",
+      "suggestedConstraintScope": "Collection",
+      "suggestedConstraintType": "Hard",
+      "severity": "High",
+      "reason": "Extended eval sample chat-20260529-003 requires an explicit hard constraint for promotion review closure.",
+      "evidenceRefs": [
+        "eval:chat-20260529-003",
+        "eval:extended-failure-triage-report:chat-20260529-003",
+        "phase:p15"
+      ],
+      "status": "Pending",
+      "metadata": {
+        "createdFrom": "eval_constraint_gap_fixture",
+        "fixturePhase": "P15",
+        "expectedConstraintText": "重复解释、重复澄清、重复说明本身不应被提升为长期偏好或稳定事实；只有用户明确确认其为长期规则时才可提升。"
+      }
+    }
+  ]
+}

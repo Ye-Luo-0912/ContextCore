@@ -1,0 +1,179 @@
+﻿{
+  "generatedAt": "2026-06-06T08:50:48.6555991+00:00",
+  "inputPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\learning\\features\\router-intent-examples.jsonl",
+  "sampleCount": 163,
+  "ready": true,
+  "status": "Ready",
+  "notReadyReasons": [],
+  "split": {
+    "strategy": "DeterministicGroupHash80_20",
+    "groupKey": "SourceId or metadata sampleId",
+    "trainGroupCount": 81,
+    "testGroupCount": 32,
+    "trainExampleCount": 117,
+    "testExampleCount": 46
+  },
+  "baselines": [
+    {
+      "baselineName": "MajorityClassBaseline",
+      "accuracy": 0.34782608695652173,
+      "macroF1": 0.08602150537634408,
+      "perIntentPrecision": {
+        "AuditDeprecated": 0,
+        "AutomationRecovery": 0,
+        "CodingTask": 0,
+        "CurrentTask": 0,
+        "FuzzyQuestion": 0.34782608695652173,
+        "NovelGeneration": 0
+      },
+      "perIntentRecall": {
+        "AuditDeprecated": 0,
+        "AutomationRecovery": 0,
+        "CodingTask": 0,
+        "CurrentTask": 0,
+        "FuzzyQuestion": 1,
+        "NovelGeneration": 0
+      },
+      "confusionMatrix": {
+        "AuditDeprecated": {
+          "AuditDeprecated": 0,
+          "AutomationRecovery": 0,
+          "CodingTask": 0,
+          "CurrentTask": 0,
+          "FuzzyQuestion": 8,
+          "NovelGeneration": 0
+        },
+        "AutomationRecovery": {
+          "AuditDeprecated": 0,
+          "AutomationRecovery": 0,
+          "CodingTask": 0,
+          "CurrentTask": 0,
+          "FuzzyQuestion": 8,
+          "NovelGeneration": 0
+        },
+        "CodingTask": {
+          "AuditDeprecated": 0,
+          "AutomationRecovery": 0,
+          "CodingTask": 0,
+          "CurrentTask": 0,
+          "FuzzyQuestion": 7,
+          "NovelGeneration": 0
+        },
+        "CurrentTask": {
+          "AuditDeprecated": 0,
+          "AutomationRecovery": 0,
+          "CodingTask": 0,
+          "CurrentTask": 0,
+          "FuzzyQuestion": 1,
+          "NovelGeneration": 0
+        },
+        "FuzzyQuestion": {
+          "AuditDeprecated": 0,
+          "AutomationRecovery": 0,
+          "CodingTask": 0,
+          "CurrentTask": 0,
+          "FuzzyQuestion": 16,
+          "NovelGeneration": 0
+        },
+        "NovelGeneration": {
+          "AuditDeprecated": 0,
+          "AutomationRecovery": 0,
+          "CodingTask": 0,
+          "CurrentTask": 0,
+          "FuzzyQuestion": 6,
+          "NovelGeneration": 0
+        }
+      }
+    },
+    {
+      "baselineName": "RuleBasedBaseline",
+      "accuracy": 0.5652173913043478,
+      "macroF1": 0.5088316028165653,
+      "perIntentPrecision": {
+        "AuditDeprecated": 1,
+        "AutomationRecovery": 0.8,
+        "CodingTask": 1,
+        "ConflictCheck": 0,
+        "CurrentTask": 0,
+        "FuzzyQuestion": 1,
+        "NovelGeneration": 0.75
+      },
+      "perIntentRecall": {
+        "AuditDeprecated": 0.5,
+        "AutomationRecovery": 1,
+        "CodingTask": 0.7142857142857143,
+        "ConflictCheck": 0,
+        "CurrentTask": 0,
+        "FuzzyQuestion": 0.1875,
+        "NovelGeneration": 1
+      },
+      "confusionMatrix": {
+        "AuditDeprecated": {
+          "AuditDeprecated": 4,
+          "AutomationRecovery": 2,
+          "CodingTask": 0,
+          "ConflictCheck": 0,
+          "CurrentTask": 0,
+          "FuzzyQuestion": 0,
+          "NovelGeneration": 2
+        },
+        "AutomationRecovery": {
+          "AuditDeprecated": 0,
+          "AutomationRecovery": 8,
+          "CodingTask": 0,
+          "ConflictCheck": 0,
+          "CurrentTask": 0,
+          "FuzzyQuestion": 0,
+          "NovelGeneration": 0
+        },
+        "CodingTask": {
+          "AuditDeprecated": 0,
+          "AutomationRecovery": 0,
+          "CodingTask": 5,
+          "ConflictCheck": 2,
+          "CurrentTask": 0,
+          "FuzzyQuestion": 0,
+          "NovelGeneration": 0
+        },
+        "ConflictCheck": {
+          "AuditDeprecated": 0,
+          "AutomationRecovery": 0,
+          "CodingTask": 0,
+          "ConflictCheck": 0,
+          "CurrentTask": 0,
+          "FuzzyQuestion": 0,
+          "NovelGeneration": 0
+        },
+        "CurrentTask": {
+          "AuditDeprecated": 0,
+          "AutomationRecovery": 0,
+          "CodingTask": 0,
+          "ConflictCheck": 1,
+          "CurrentTask": 0,
+          "FuzzyQuestion": 0,
+          "NovelGeneration": 0
+        },
+        "FuzzyQuestion": {
+          "AuditDeprecated": 0,
+          "AutomationRecovery": 0,
+          "CodingTask": 0,
+          "ConflictCheck": 13,
+          "CurrentTask": 0,
+          "FuzzyQuestion": 3,
+          "NovelGeneration": 0
+        },
+        "NovelGeneration": {
+          "AuditDeprecated": 0,
+          "AutomationRecovery": 0,
+          "CodingTask": 0,
+          "ConflictCheck": 0,
+          "CurrentTask": 0,
+          "FuzzyQuestion": 0,
+          "NovelGeneration": 6
+        }
+      }
+    }
+  ],
+  "bestBaseline": "RuleBasedBaseline",
+  "policyVersion": "learning-offline-baseline/v1"
+}

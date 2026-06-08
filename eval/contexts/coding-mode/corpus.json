@@ -1,0 +1,189 @@
+{
+  "contexts": [
+    {
+      "id": "doc:ipromotioncandidatestore",
+      "workspaceId": "eval",
+      "collectionId": "coding",
+      "type": "interface",
+      "title": "IPromotionCandidateStore 接口定义",
+      "content": "IPromotionCandidateStore 包含四个核心方法：SavePromotionCandidateAsync, GetPromotionCandidateAsync, QueryPromotionCandidatesAsync, 和 UpdatePromotionCandidateStatusAsync。实现该接口时需配套单元测试，验证各状态切换正常。",
+      "tags": ["interface", "promotion"],
+      "importance": 0.9
+    },
+    {
+      "id": "doc:legacy-code-structure",
+      "workspaceId": "eval",
+      "collectionId": "coding",
+      "type": "documentation",
+      "title": "遗留 Python 数据库代码",
+      "content": "在 RAGv1 中，数据存储使用 `sqlite3` 实现，该 Python 脚本的路径为 `legacy/db.py`，现已完全弃用，其逻辑不应对目前的 C# 开发产生任何参考价值。",
+      "tags": ["legacy", "python"],
+      "importance": 0.1
+    },
+    {
+      "id": "doc:coding-noise-keyword",
+      "workspaceId": "eval",
+      "collectionId": "coding",
+      "type": "documentation",
+      "title": "作废的 IPromotionCandidateStore 早期设计草案",
+      "content": "作废设计：已废弃的 IPromotionCandidateStore 早期接口设计草稿，包含对于 Python RAG 代码持久化的某些过时讨论，已被彻底舍弃不用。",
+      "tags": ["interface", "legacy", "deprecated"],
+      "importance": 0.3,
+      "metadata": {
+        "status": "deprecated"
+      }
+    }
+  ],
+  "memories": [
+    {
+      "id": "memory:coding-next-todo",
+      "workspaceId": "eval",
+      "collectionId": "coding",
+      "layer": "Working",
+      "status": "Active",
+      "type": "todo",
+      "content": "下一步 TODO：实现 IPromotionCandidateStore，并且实现基于 FileSystem/JSONL 的数据存储持久化，且包含测试覆盖。",
+      "tags": ["todo", "active"]
+    },
+    {
+      "id": "memory:coding-conflict-v1",
+      "workspaceId": "eval",
+      "collectionId": "coding",
+      "layer": "Working",
+      "status": "Deprecated",
+      "type": "signature",
+      "content": "旧版本设计：IPromotionCandidateStore 接口返回类型为 Task<bool>，无详细错误载荷。",
+      "tags": ["interface", "signature", "v1"],
+      "metadata": {
+        "status": "deprecated",
+        "supersededBy": "memory:coding-conflict-v2"
+      }
+    },
+    {
+      "id": "memory:coding-conflict-v2",
+      "workspaceId": "eval",
+      "collectionId": "coding",
+      "layer": "Working",
+      "status": "Active",
+      "type": "signature",
+      "content": "新版本设计：IPromotionCandidateStore 接口返回类型已重构为 Task<PromotionResult>，以支持丰富的错误消息传递。",
+      "tags": ["interface", "signature", "v2"],
+      "metadata": {
+        "status": "active"
+      }
+    },
+    {
+      "id": "memory:coding-extra-active-1",
+      "workspaceId": "eval",
+      "collectionId": "coding",
+      "layer": "Working",
+      "status": "Active",
+      "type": "testing-rule",
+      "content": "项目测试要求：所有的测试必须支持并发运行，且不应使用全局共享状态以防相互干扰。",
+      "tags": ["testing", "rule"]
+    },
+    {
+      "id": "memory:coding-extra-active-2",
+      "workspaceId": "eval",
+      "collectionId": "coding",
+      "layer": "Working",
+      "status": "Active",
+      "type": "linting-rule",
+      "content": "代码审查规范：所有的公共类和公共方法均需编写符合 XML 规范的文档注释，提高代码可读性。",
+      "tags": ["linting", "rule"]
+    },
+    {
+      "id": "memory:coding-budget-stress",
+      "workspaceId": "eval",
+      "collectionId": "coding",
+      "layer": "Working",
+      "status": "Active",
+      "type": "stress-test",
+      "content": "非常冗长而且繁琐的代码提交历史记录和修改日志归档：包含大量的代码行数变更统计、作者名字、提交时间、合并分支日志，用于 Token 极低时被打包截断和浪费率测试。",
+      "tags": ["stress", "budget"]
+    },
+    {
+      "id": "memory:coding-timeout-v1",
+      "workspaceId": "eval",
+      "collectionId": "coding",
+      "layer": "Working",
+      "status": "Deprecated",
+      "type": "signature",
+      "content": "旧配置：数据库连接重试超时时间硬编码为 10 秒，容易在高并发下触发超时报警。",
+      "tags": ["config", "timeout", "v1"],
+      "metadata": {
+        "status": "deprecated",
+        "supersededBy": "memory:coding-timeout-v2"
+      }
+    },
+    {
+      "id": "memory:coding-timeout-v2",
+      "workspaceId": "eval",
+      "collectionId": "coding",
+      "layer": "Working",
+      "status": "Active",
+      "type": "signature",
+      "content": "新配置：重构后的数据库连接超时参数已提升至 30 秒，并加入了抖动避让重试退避算法。",
+      "tags": ["config", "timeout", "v2"],
+      "metadata": {
+        "status": "active"
+      }
+    },
+    {
+      "id": "memory:coding-test-naming",
+      "workspaceId": "eval",
+      "collectionId": "coding",
+      "layer": "Working",
+      "status": "Active",
+      "type": "testing-rule",
+      "content": "测试命名规范：配套单元测试文件必须命名为 [TargetClass]Tests.cs，并存放在 tests 对应目录下。",
+      "tags": ["testing", "rule"]
+    },
+    {
+      "id": "memory:coding-deprecated-logger",
+      "workspaceId": "eval",
+      "collectionId": "coding",
+      "layer": "Working",
+      "status": "Deprecated",
+      "type": "documentation",
+      "content": "已舍弃的设计：旧的 Log4Net 日志打印适配器类，因为无法与目前微服务架构链路追踪对齐，已被全盘舍弃不再使用。",
+      "tags": ["logging", "legacy", "deprecated"],
+      "metadata": {
+        "status": "deprecated"
+      }
+    }
+  ],
+  "relations": [
+    {
+      "id": "rel:coding-sig-supersede",
+      "workspaceId": "eval",
+      "collectionId": "coding",
+      "sourceId": "memory:coding-conflict-v2",
+      "targetId": "memory:coding-conflict-v1",
+      "relationType": "supersedes",
+      "weight": 1.0,
+      "confidence": 1.0
+    },
+    {
+      "id": "rel:coding-timeout-supersede",
+      "workspaceId": "eval",
+      "collectionId": "coding",
+      "sourceId": "memory:coding-timeout-v2",
+      "targetId": "memory:coding-timeout-v1",
+      "relationType": "supersedes",
+      "weight": 1.0,
+      "confidence": 1.0
+    }
+  ],
+  "constraints": [
+    {
+      "id": "const:coding-conventions",
+      "workspaceId": "eval",
+      "collectionId": "coding",
+      "level": "Hard",
+      "status": "Verified",
+      "scope": "Workspace",
+      "content": "全部新增代码文件及接口注释均需使用中文描述。"
+    }
+  ]
+}

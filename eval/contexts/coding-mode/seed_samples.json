@@ -1,0 +1,125 @@
+[
+  {
+    "id": "coding-sample-001",
+    "query": "帮我实现 IPromotionCandidateStore 接口，并编写配套的单元测试。",
+    "mode": "CodingMode",
+    "mustHit": ["doc:ipromotioncandidatestore", "memory:coding-next-todo"],
+    "mustNotHit": ["doc:legacy-code-structure", "doc:coding-noise-keyword"],
+    "expectedScopes": ["interface", "todo"],
+    "expectedEntities": ["IPromotionCandidateStore"],
+    "expectedConstraints": ["全部新增代码文件及接口注释均需使用中文描述"],
+    "expectedUncertainties": [],
+    "goldenNotes": "应该召回接口定义以及待做TODO，同时带入中文代码描述的约束，并过滤掉 Python 遗留数据库文档和废弃草案。"
+  },
+  {
+    "id": "coding-sample-002",
+    "query": "如何查看已废弃的 IPromotionCandidateStore 早期接口设计草稿？",
+    "mode": "CodingMode",
+    "mustHit": ["doc:coding-noise-keyword"],
+    "mustNotHit": ["doc:legacy-code-structure"],
+    "expectedScopes": ["documentation"],
+    "expectedEntities": ["IPromotionCandidateStore"],
+    "expectedConstraints": [],
+    "expectedUncertainties": [],
+    "goldenNotes": "直接查询已废弃的早期接口设计草案，验证是否能够召回特定的废弃设计以供审计分析。"
+  },
+  {
+    "id": "coding-sample-003",
+    "query": "实现接口 IPromotionCandidateStore 配套的单元测试有什么规范和要求？",
+    "mode": "CodingMode",
+    "mustHit": ["doc:ipromotioncandidatestore", "memory:coding-next-todo"],
+    "mustNotHit": ["doc:coding-noise-keyword"],
+    "expectedScopes": ["interface", "todo"],
+    "expectedEntities": [],
+    "expectedConstraints": ["全部新增代码文件及接口注释均需使用中文描述"],
+    "expectedUncertainties": [],
+    "goldenNotes": "测试高关键词负样本拦截能力。虽然 doc:coding-noise-keyword 包含高频词但被标记为废弃，应被过滤。"
+  },
+  {
+    "id": "coding-sample-004",
+    "query": "IPromotionCandidateStore 接口的方法返回类型是什么？是 bool 还是别的？",
+    "mode": "CodingMode",
+    "mustHit": ["memory:coding-conflict-v2"],
+    "mustNotHit": ["memory:coding-conflict-v1"],
+    "expectedScopes": ["signature"],
+    "expectedEntities": ["PromotionResult"],
+    "expectedConstraints": [],
+    "expectedUncertainties": ["SupersededSelectedItem"],
+    "goldenNotes": "测试替代关系与冲突测试。旧接口设计 Task<bool> 已被废弃，应该只召回新设计 Task<PromotionResult>，且应产生冲突不确定性警告。"
+  },
+  {
+    "id": "coding-sample-005",
+    "query": "项目中的测试运行有什么并发或状态共享方面的具体规范和要求？",
+    "mode": "CodingMode",
+    "mustHit": ["memory:coding-extra-active-1"],
+    "mustNotHit": ["doc:legacy-code-structure"],
+    "expectedScopes": ["testing-rule"],
+    "expectedEntities": ["并发运行", "全局共享状态"],
+    "expectedConstraints": [],
+    "expectedUncertainties": [],
+    "goldenNotes": "召回活跃的项目测试并发规范记忆。"
+  },
+  {
+    "id": "coding-sample-006",
+    "query": "项目对于公共类和方法的 XML 文档注释有什么具体的代码审查规范？",
+    "mode": "CodingMode",
+    "mustHit": ["memory:coding-extra-active-2"],
+    "mustNotHit": ["doc:legacy-code-structure"],
+    "expectedScopes": ["linting-rule"],
+    "expectedEntities": ["XML 规范", "文档注释"],
+    "expectedConstraints": [],
+    "expectedUncertainties": [],
+    "goldenNotes": "召回活跃的代码审查注释规范记忆。"
+  },
+  {
+    "id": "coding-sample-007",
+    "query": "压力测试：低Token代码打包限制",
+    "mode": "CodingMode",
+    "mustHit": ["doc:ipromotioncandidatestore"],
+    "mustNotHit": ["memory:coding-budget-stress"],
+    "expectedScopes": [],
+    "expectedEntities": [],
+    "expectedConstraints": ["全部新增代码文件及接口注释均需使用中文描述"],
+    "expectedUncertainties": [],
+    "metadata": {
+      "tokenBudget": "150"
+    },
+    "goldenNotes": "极限预算测试，在150字节内超长历史变更日志被自动舍弃，保留硬约束和核心接口定义。"
+  },
+  {
+    "id": "coding-sample-008",
+    "query": "项目中数据库连接的超时参数设定是多少秒？是 10 秒还是 30 秒？",
+    "mode": "CodingMode",
+    "mustHit": ["memory:coding-timeout-v2"],
+    "mustNotHit": ["memory:coding-timeout-v1"],
+    "expectedScopes": ["signature"],
+    "expectedEntities": ["30 秒"],
+    "expectedConstraints": [],
+    "expectedUncertainties": ["SupersededSelectedItem"],
+    "goldenNotes": "测试接口数据库重试超时时间变更。10秒重试已废弃，现在使用30秒以支持重构后的高并发，应产生替代不确定性提示。"
+  },
+  {
+    "id": "coding-sample-009",
+    "query": "显式审计：查看有哪些已经被舍弃、作废或不再使用的老旧日志打印适配器方案？",
+    "mode": "CodingMode",
+    "mustHit": ["memory:coding-deprecated-logger"],
+    "mustNotHit": ["memory:coding-timeout-v2"],
+    "expectedScopes": ["documentation"],
+    "expectedEntities": ["已舍弃"],
+    "expectedConstraints": [],
+    "expectedUncertainties": [],
+    "goldenNotes": "显式审计场景。当用户明确问起旧的、废弃的日志适配器时，应召回特定的废案以供审计。"
+  },
+  {
+    "id": "coding-sample-010",
+    "query": "我们目前为接口编写配套单元测试有什么命名和存放的规范要求吗？",
+    "mode": "CodingMode",
+    "mustHit": ["memory:coding-next-todo", "memory:coding-test-naming"],
+    "mustNotHit": ["doc:coding-deprecated-logger"],
+    "expectedScopes": ["todo", "testing-rule"],
+    "expectedEntities": [],
+    "expectedConstraints": ["全部新增代码文件及接口注释均需使用中文描述"],
+    "expectedUncertainties": [],
+    "goldenNotes": "普通高匹配召回，避开作废的旧日志适配器文档干扰。"
+  }
+]

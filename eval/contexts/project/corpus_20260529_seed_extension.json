@@ -1,0 +1,73 @@
+{
+  "contexts": [],
+  "memories": [
+    {
+      "id": "roadmap:A3",
+      "workspaceId": "eval",
+      "collectionId": "project",
+      "layer": "Working",
+      "status": "Active",
+      "type": "roadmap",
+      "content": "A3 真实中文上下文评测集：当前需要统计样本数量、补齐评测集并让报告输出保持中文。实体：A3、评测集、ContextCore。",
+      "tags": ["roadmap", "a3"],
+      "importance": 0.9
+    },
+    {
+      "id": "report:new-stage-execution",
+      "workspaceId": "eval",
+      "collectionId": "project",
+      "layer": "Working",
+      "status": "Active",
+      "type": "report",
+      "content": "新阶段执行报告记录 A3 当前进度、样本数量和验证结果。约束：报告输出保持中文；样本数量是否达到目标需要统计。",
+      "tags": ["report", "a3"],
+      "importance": 0.9
+    },
+    {
+      "id": "risk:postgres-partial-provider",
+      "workspaceId": "eval",
+      "collectionId": "project",
+      "layer": "Working",
+      "status": "Active",
+      "type": "risk",
+      "content": "PostgreSQL 当前仍是后续风险项，未完整覆盖契约前不得作为完整 Service Provider。PostgreSQL 契约覆盖仍需复测。",
+      "tags": ["postgres", "risk"],
+      "importance": 0.95
+    },
+    {
+      "id": "capability:storage-matrix",
+      "workspaceId": "eval",
+      "collectionId": "project",
+      "layer": "Working",
+      "status": "Active",
+      "type": "capability-matrix",
+      "content": "Storage Provider 能力矩阵用于区分 FileSystem、InMemory、PostgreSQL 的完整度，防止将 partial provider 误认为 service-ready。",
+      "tags": ["storage", "provider"],
+      "importance": 0.9
+    },
+    {
+      "id": "verification:latest-build",
+      "workspaceId": "eval",
+      "collectionId": "project",
+      "layer": "Working",
+      "status": "Active",
+      "type": "verification",
+      "content": "最新构建验证记录：生成项目报告前必须引用最新 dotnet build 执行结果。验证记录必须使用最新执行结果。",
+      "tags": ["verification", "build"],
+      "importance": 0.9
+    },
+    {
+      "id": "verification:latest-test",
+      "workspaceId": "eval",
+      "collectionId": "project",
+      "layer": "Working",
+      "status": "Active",
+      "type": "verification",
+      "content": "最新测试验证记录：生成项目报告前必须引用最新 dotnet test 执行结果；如果命令无法执行，需要明确记录原因。",
+      "tags": ["verification", "test"],
+      "importance": 0.9
+    }
+  ],
+  "relations": [],
+  "constraints": []
+}
