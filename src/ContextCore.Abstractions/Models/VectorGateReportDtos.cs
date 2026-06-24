@@ -2175,6 +2175,104 @@ public sealed class ScopedRuntimePreviewActivationPreparationReport
 }
 
 
+/// <summary>V7.8 activation dry-run 推荐。</summary>
+public static class ScopedRuntimePreviewActivationDryRunRecommendations
+{
+    public const string ReadyForScopedRuntimePreviewActivationWindow = nameof(ReadyForScopedRuntimePreviewActivationWindow);
+    public const string BlockedByMissingPreparation = nameof(BlockedByMissingPreparation);
+    public const string BlockedByContractParseFailure = nameof(BlockedByContractParseFailure);
+    public const string BlockedByScopeRoutingFailure = nameof(BlockedByScopeRoutingFailure);
+    public const string BlockedByKillSwitchFailure = nameof(BlockedByKillSwitchFailure);
+    public const string BlockedByRollbackCheckpointFailure = nameof(BlockedByRollbackCheckpointFailure);
+    public const string BlockedByTraceSinkFailure = nameof(BlockedByTraceSinkFailure);
+    public const string BlockedByConfigPatchWritten = nameof(BlockedByConfigPatchWritten);
+    public const string BlockedByRuntimeActivationDetected = nameof(BlockedByRuntimeActivationDetected);
+    public const string BlockedBySafetyBoundaryViolation = nameof(BlockedBySafetyBoundaryViolation);
+    public const string KeepPreviewOnly = nameof(KeepPreviewOnly);
+}
+
+
+/// <summary>V7.8 activation dry-run 单轮结果。</summary>
+public sealed class ScopedRuntimePreviewActivationDryRunResult
+{
+    public int RunIndex { get; init; }
+    public string Scope { get; init; } = "";
+    public bool ContractParseable { get; init; }
+    public bool ScopeHit { get; init; }
+    public bool IsNoOp { get; init; }
+    public bool KillSwitchTripped { get; init; }
+    public bool RollbackAvailable { get; init; }
+    public bool TraceSinkWritable { get; init; }
+    public bool ConfigPatchPreviewOnly { get; init; }
+    public bool RuntimeActivationRemainsFalse { get; init; }
+    public int WouldApplyAdd { get; init; }
+    public int WouldApplyRemove { get; init; }
+    public int ActualAppliedAdd { get; init; }
+    public int ActualAppliedRemove { get; init; }
+    public int ErrorCount { get; init; }
+    public string Detail { get; init; } = "";
+}
+
+
+/// <summary>V7.8 activation dry-run 选项。</summary>
+public sealed class ScopedRuntimePreviewActivationDryRunOptions
+{
+    public bool Enabled { get; init; } = true;
+    public int DryRunCount { get; init; } = 5;
+    public bool ExplicitlyProvided { get; init; }
+    public string ApprovedBy { get; init; } = "ReleaseManager";
+    public IReadOnlyList<string> ApprovedScopes { get; init; } = ["demo-workspace/demo-collection"];
+    public IReadOnlyList<string> NonApprovedScopes { get; init; } = ["rogue-workspace/rogue-collection", "unauthorized/scope"];
+}
+
+
+/// <summary>V7.8 scoped runtime preview activation dry-run 报告。
+/// No-op harness：验证 activation contract 而不启用 runtime activation。
+/// ConfigPatchWritten=false, RuntimeActivation=false。</summary>
+public sealed class ScopedRuntimePreviewActivationDryRunReport
+{
+    public string OperationId { get; init; } = "";
+    public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
+    public bool DryRunPassed { get; init; }
+    public bool GatePassed { get; init; }
+    public string Recommendation { get; init; }
+        = ScopedRuntimePreviewActivationDryRunRecommendations.KeepPreviewOnly;
+    public string NextAllowedPhase { get; init; } = "KeepPreviewOnly";
+
+    public bool ContractParseable { get; init; }
+    public int TotalRuns { get; init; }
+    public int PassedRuns { get; init; }
+    public int ApprovedScopeHits { get; init; }
+    public int NonApprovedScopeNoOps { get; init; }
+    public int KillSwitchNoOpCount { get; init; }
+    public int AppliedAddTotal { get; init; }
+    public int AppliedRemoveTotal { get; init; }
+    public bool AppliedDeltaZero { get; init; }
+    public bool ConfigPatchWritten { get; init; }
+    public bool RuntimeActivation { get; init; }
+
+    public bool PreparationPassed { get; init; }
+    public bool AuthorizationPassed { get; init; }
+    public bool P15GatePassed { get; init; }
+    public bool RuntimeChangeGatePassed { get; init; }
+
+    public bool FormalRetrievalAllowed { get; init; }
+    public bool RuntimeSwitchAllowed { get; init; }
+    public bool FormalPackageWritten { get; init; }
+    public bool PackingPolicyChanged { get; init; }
+    public bool PackageOutputChanged { get; init; }
+    public bool VectorStoreBindingChanged { get; init; }
+    public bool GlobalDefaultOn { get; init; }
+    public bool NoRuntimeMutationInvariant { get; init; }
+
+    public IReadOnlyList<ScopedRuntimePreviewActivationDryRunResult> Runs { get; init; } = Array.Empty<ScopedRuntimePreviewActivationDryRunResult>();
+    public IReadOnlyList<string> AllowedActions { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> ForbiddenActions { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> BlockedReasons { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> Diagnostics { get; init; } = Array.Empty<string>();
+}
+
+
 /// <summary>架构清理计划报告。</summary>
 public sealed class ArchitectureCleanupPlanReport
 {

@@ -2892,6 +2892,7 @@ public sealed class ControlRoomService
             ScopedRuntimePreviewAuthorizationReport = TryLoadScopedRuntimePreviewAuthorizationSummary()?.Report,
             ScopedRuntimePreviewAuthorizationHardeningReport = TryLoadScopedRuntimePreviewAuthorizationHardeningSummary()?.Report,
             ScopedRuntimePreviewActivationPreparationReport = TryLoadScopedRuntimePreviewActivationPreparationSummary()?.Report,
+            ScopedRuntimePreviewActivationDryRunReport = TryLoadScopedRuntimePreviewActivationDryRunSummary()?.Report,
             Limit = limit,
             Offset = offset
         };
@@ -7493,6 +7494,9 @@ public sealed class ControlRoomService
     private static (ScopedRuntimePreviewActivationPreparationReport Report, string SourcePath)? TryLoadScopedRuntimePreviewActivationPreparationSummary()
         => TryLoadFromDescriptor<ScopedRuntimePreviewActivationPreparationReport>(ReportSummaryRegistry.V7ScopedRuntimePreviewActivationPreparation);
 
+    private static (ScopedRuntimePreviewActivationDryRunReport Report, string SourcePath)? TryLoadScopedRuntimePreviewActivationDryRunSummary()
+        => TryLoadFromDescriptor<ScopedRuntimePreviewActivationDryRunReport>(ReportSummaryRegistry.V7ScopedRuntimePreviewActivationDryRun);
+
     private static string VectorReportPath(string phase, string fileName)
     {
         return Path.Combine("vector", phase, fileName);
@@ -10426,6 +10430,8 @@ public sealed class ServiceLearningFeaturesSnapshot
     public ScopedRuntimePreviewAuthorizationHardeningReport? ScopedRuntimePreviewAuthorizationHardeningReport { get; init; }
 
     public ScopedRuntimePreviewActivationPreparationReport? ScopedRuntimePreviewActivationPreparationReport { get; init; }
+
+    public ScopedRuntimePreviewActivationDryRunReport? ScopedRuntimePreviewActivationDryRunReport { get; init; }
 
     public FoundationServiceStatusResponse? FoundationServiceStatus { get; init; }
 

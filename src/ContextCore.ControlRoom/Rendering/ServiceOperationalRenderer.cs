@@ -3839,6 +3839,33 @@ public static class ServiceOperationalRenderer
                 builder.AppendLine($"- blocked            : {string.Join(", ", v7Prep.BlockedReasons)}");
         }
 
+        builder.AppendLine();
+        builder.AppendLine("V7.8 Scoped Runtime Preview Activation Dry-run");
+        var v7Dry = snapshot.ScopedRuntimePreviewActivationDryRunReport;
+        if (v7Dry is null)
+        {
+            builder.AppendLine("- status : not generated");
+            builder.AppendLine("- path   : vector/v7/activation-dry-run.json");
+            builder.AppendLine("- action : run eval scoped-runtime-preview-activation-dry-run");
+        }
+        else
+        {
+            builder.AppendLine($"- dry-run passed     : {v7Dry.DryRunPassed}");
+            builder.AppendLine($"- gate passed        : {v7Dry.GatePassed}");
+            builder.AppendLine($"- recommendation     : {v7Dry.Recommendation}");
+            builder.AppendLine($"- next phase         : {v7Dry.NextAllowedPhase}");
+            builder.AppendLine($"- contract parseable : {v7Dry.ContractParseable}");
+            builder.AppendLine($"- runs               : {v7Dry.TotalRuns} total, {v7Dry.PassedRuns} passed");
+            builder.AppendLine($"- approved hits      : {v7Dry.ApprovedScopeHits}");
+            builder.AppendLine($"- non-approved noOps : {v7Dry.NonApprovedScopeNoOps}");
+            builder.AppendLine($"- appliedDeltaZero   : {v7Dry.AppliedDeltaZero}");
+            builder.AppendLine($"- configPatchWritten : {v7Dry.ConfigPatchWritten}");
+            builder.AppendLine($"- runtimeActivation  : {v7Dry.RuntimeActivation}");
+            builder.AppendLine($"- invariants         : formalRetrieval={v7Dry.FormalRetrievalAllowed} runtimeSwitch={v7Dry.RuntimeSwitchAllowed} formalPkg={v7Dry.FormalPackageWritten} noRuntimeMutation={v7Dry.NoRuntimeMutationInvariant}");
+            if (v7Dry.BlockedReasons.Count > 0)
+                builder.AppendLine($"- blocked            : {string.Join(", ", v7Dry.BlockedReasons)}");
+        }
+
         return builder.ToString();
     }
 

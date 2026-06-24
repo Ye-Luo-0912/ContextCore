@@ -229,6 +229,17 @@ public static class ReportSummaryRegistry
         EvalPlanCommand = "eval scoped-runtime-preview-activation-preparation",
     };
 
+    public static readonly ControlRoomReportDescriptor V7ScopedRuntimePreviewActivationDryRun = new()
+    {
+        ReportId = "ScopedRuntimePreviewActivationDryRun",
+        DisplayTitle = "V7.8 Scoped Runtime Preview Activation Dry-run Summary",
+        PrimaryPath = "vector/v7/activation-dry-run.json",
+        GatePath = "vector/v7/activation-dry-run-gate.json",
+        PhaseGroup = "V7",
+        EvalGateCommand = "eval scoped-runtime-preview-activation-dry-run-gate",
+        EvalPlanCommand = "eval scoped-runtime-preview-activation-dry-run",
+    };
+
     // =========================================================================
     // V5 descriptors
     // =========================================================================
@@ -493,6 +504,7 @@ public static class ReportSummaryRegistry
         V7ScopedRuntimePreviewAuthorization,
         V7ScopedRuntimePreviewAuthorizationHardening,
         V7ScopedRuntimePreviewActivationPreparation,
+        V7ScopedRuntimePreviewActivationDryRun,
     };
 
     public static IReadOnlyList<ControlRoomReportDescriptor> V5Descriptors { get; } = new[]
