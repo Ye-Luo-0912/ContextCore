@@ -3866,6 +3866,37 @@ public static class ServiceOperationalRenderer
                 builder.AppendLine($"- blocked            : {string.Join(", ", v7Dry.BlockedReasons)}");
         }
 
+        builder.AppendLine();
+        builder.AppendLine("V7.9 Scoped Runtime Preview Activation Window Preflight");
+        var v7WinPreflight = snapshot.ScopedRuntimePreviewActivationWindowPreflightReport;
+        if (v7WinPreflight is null)
+        {
+            builder.AppendLine("- status : not generated");
+            builder.AppendLine("- path   : vector/v7/activation-window-preflight.json");
+            builder.AppendLine("- action : run eval scoped-runtime-preview-activation-window-preflight");
+        }
+        else
+        {
+            builder.AppendLine($"- preflight passed   : {v7WinPreflight.PreflightPassed}");
+            builder.AppendLine($"- gate passed        : {v7WinPreflight.GatePassed}");
+            builder.AppendLine($"- recommendation     : {v7WinPreflight.Recommendation}");
+            builder.AppendLine($"- next phase         : {v7WinPreflight.NextAllowedPhase}");
+            builder.AppendLine($"- scopes unchanged   : {v7WinPreflight.ScopesUnchanged}");
+            builder.AppendLine($"- authorization valid: {v7WinPreflight.AuthorizationValid}");
+            builder.AppendLine($"- window duration    : {v7WinPreflight.WindowDurationMinutes}/{v7WinPreflight.MaxWindowDurationMinutes}min withinLimit={v7WinPreflight.WindowDurationWithinLimit}");
+            builder.AppendLine($"- request cap        : {v7WinPreflight.MaxRequestsPerWindow} defined={v7WinPreflight.RequestCapDefined}");
+            builder.AppendLine($"- kill switch probe  : verified={v7WinPreflight.KillSwitchNoOpVerified} count={v7WinPreflight.KillSwitchNoOpCount}");
+            builder.AppendLine($"- rollback checkpoint: {v7WinPreflight.RollbackCheckpointAvailable}");
+            builder.AppendLine($"- trace sink writable: {v7WinPreflight.TraceSinkWritable}");
+            builder.AppendLine($"- configPatch preview: {v7WinPreflight.ConfigPatchPreviewOnly}");
+            builder.AppendLine($"- stop conditions    : {v7WinPreflight.StopConditionsCount} sufficient={v7WinPreflight.StopConditionsSufficient}");
+            builder.AppendLine($"- configPatchWritten : {v7WinPreflight.ConfigPatchWritten}");
+            builder.AppendLine($"- runtimeActivation  : {v7WinPreflight.RuntimeActivation}");
+            builder.AppendLine($"- invariants         : formalRetrieval={v7WinPreflight.FormalRetrievalAllowed} runtimeSwitch={v7WinPreflight.RuntimeSwitchAllowed} formalPkg={v7WinPreflight.FormalPackageWritten} noRuntimeMutation={v7WinPreflight.NoRuntimeMutationInvariant}");
+            if (v7WinPreflight.BlockedReasons.Count > 0)
+                builder.AppendLine($"- blocked            : {string.Join(", ", v7WinPreflight.BlockedReasons)}");
+        }
+
         return builder.ToString();
     }
 

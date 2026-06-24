@@ -797,4 +797,85 @@ public static partial class EvalCommand
             $"appliedDeltaZero={report.AppliedDeltaZero}; configWritten={report.ConfigPatchWritten}; runtimeActivationRemainsFalse={!report.RuntimeActivation}; " +
             $"blocked={report.BlockedReasons.Count}");
     }
+
+    private static async Task ExecuteScopedRuntimePreviewActivationWindowPreflightAsync(
+        IReadOnlyList<string> args,
+        string subcommand,
+        CancellationToken ct)
+    {
+        var output = Path.GetFullPath(Path.Combine("vector", "v7"));
+        Directory.CreateDirectory(output);
+
+        var prepPath = Path.Combine("vector", "v7", "activation-preparation.json");
+        var prepGateFallback = Path.Combine("vector", "v7", "activation-preparation-gate.json");
+        var preparation = await ReadJsonFileAsync<ScopedRuntimePreviewActivationPreparationReport>(prepPath, ct)
+            .ConfigureAwait(false)
+            ?? await ReadJsonFileAsync<ScopedRuntimePreviewActivationPreparationReport>(prepGateFallback, ct)
+                .ConfigureAwait(false);
+
+        var dryRunPath = Path.Combine("vector", "v7", "activation-dry-run.json");
+        var dryRunGateFallback = Path.Combine("vector", "v7", "activation-dry-run-gate.json");
+        var dryRun = await ReadJsonFileAsync<ScopedRuntimePreviewActivationDryRunReport>(dryRunPath, ct)
+            .ConfigureAwait(false)
+            ?? await ReadJsonFileAsync<ScopedRuntimePreviewActivationDryRunReport>(dryRunGateFallback, ct)
+                .ConfigureAwait(false);
+
+        var authPath = Path.Combine("vector", "v7", "authorization.json");
+        var authGateFallback = Path.Combine("vector", "v7", "authorization-gate.json");
+        var authorization = await ReadJsonFileAsync<ScopedRuntimePreviewAuthorizationReport>(authPath, ct)
+            .ConfigureAwait(false)
+            ?? await ReadJsonFileAsync<ScopedRuntimePreviewAuthorizationReport>(authGateFallback, ct)
+                .ConfigureAwait(false);
+
+        var freezePath = Path.Combine("vector", "v7", "observation-freeze.json");
+        var freezeGateFallback = Path.Combine("vector", "v7", "observation-freeze-gate.json");
+        var v7Freeze = await ReadJsonFileAsync<ControlledAppliedMergeRuntimePreviewObservationFreezeReport>(freezePath, ct)
+            .ConfigureAwait(false)
+            ?? await ReadJsonFileAsync<ControlledAppliedMergeRuntimePreviewObservationFreezeReport>(freezeGateFallback, ct)
+                .ConfigureAwait(false);
+
+        var runtimeChangeGatePath = Path.Combine("learning", "readiness", "learning-runtime-change-readiness-gate.json");
+        var runtimeChangeGate = await ReadJsonFileAsync<LearningRuntimeChangeReadinessGateReport>(runtimeChangeGatePath, ct)
+            .ConfigureAwait(false);
+        var runtimeChangeGatePassed = runtimeChangeGate is not null && runtimeChangeGate.Passed;
+
+        var p15ReportPath = Path.Combine("eval", "eval-report-p15-a3.json");
+        var p15Report = await ReadJsonFileAsync<JsonDocument>(p15ReportPath, ct).ConfigureAwait(false);
+        var p15GatePassed = false;
+        if (p15Report is not null && p15Report.RootElement.TryGetProperty("PassRate", out var passRateEl))
+        {
+            p15GatePassed = passRateEl.GetDouble() >= 1.0;
+        }
+
+        var options = new ScopedRuntimePreviewActivationWindowPreflightOptions
+        {
+            Enabled = !CommandHelpers.HasFlag(args, "--disabled"),
+            ExplicitlyProvided = CommandHelpers.HasFlag(args, "--approved-by"),
+            ApprovedBy = CommandHelpers.GetOption(args, "--approved-by") ?? "ReleaseManager",
+            MaxWindowDurationMinutes = CommandHelpers.GetIntOption(args, "--max-window-minutes", 30),
+            MaxRequestsPerWindow = CommandHelpers.GetIntOption(args, "--max-requests", 100),
+        };
+
+        var runner = new ScopedRuntimePreviewActivationWindowPreflightRunner();
+        var isGate = string.Equals(subcommand, "scoped-runtime-preview-activation-window-preflight-gate", StringComparison.OrdinalIgnoreCase);
+        var report = isGate
+            ? runner.RunGate(preparation, dryRun, authorization, v7Freeze, runtimeChangeGatePassed, p15GatePassed, options)
+            : runner.RunPreflight(preparation, dryRun, authorization, v7Freeze, runtimeChangeGatePassed, p15GatePassed, options);
+
+        var fn = isGate ? "activation-window-preflight-gate" : "activation-window-preflight";
+        var jp = Path.Combine(output, $"{fn}.json");
+        var mp = Path.Combine(output, $"{fn}.md");
+        await WriteJsonSafeAsync(report, jp, ct).ConfigureAwait(false);
+        await WriteTextAsync(
+            ScopedRuntimePreviewActivationWindowPreflightRunner.BuildMarkdown(
+                isGate ? "Scoped Runtime Preview Activation Window Preflight Gate" : "Scoped Runtime Preview Activation Window Preflight",
+                report),
+            mp, ct).ConfigureAwait(false);
+
+        Console.WriteLine($"[Eval] Scoped runtime preview activation window preflight written: {jp}");
+        Console.WriteLine($"[Eval] preflightPassed={report.PreflightPassed}; gatePassed={report.GatePassed}; recommendation={report.Recommendation}; " +
+            $"nextPhase={report.NextAllowedPhase}; scopesUnchanged={report.ScopesUnchanged}; windowDurationOk={report.WindowDurationWithinLimit}; " +
+            $"killSwitchVerified={report.KillSwitchNoOpVerified}; configPatchWritten={report.ConfigPatchWritten}; " +
+            $"runtimeActivation={report.RuntimeActivation}; blocked={report.BlockedReasons.Count}");
+    }
 }

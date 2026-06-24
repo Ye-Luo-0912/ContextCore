@@ -2273,6 +2273,92 @@ public sealed class ScopedRuntimePreviewActivationDryRunReport
 }
 
 
+/// <summary>V7.9 activation window preflight 推荐。</summary>
+public static class ScopedRuntimePreviewActivationWindowPreflightRecommendations
+{
+    public const string ReadyForScopedRuntimePreviewActivationWindow = nameof(ReadyForScopedRuntimePreviewActivationWindow);
+    public const string BlockedByMissingPreparation = nameof(BlockedByMissingPreparation);
+    public const string BlockedByMissingDryRun = nameof(BlockedByMissingDryRun);
+    public const string BlockedByScopeMismatch = nameof(BlockedByScopeMismatch);
+    public const string BlockedByWindowDurationExceeded = nameof(BlockedByWindowDurationExceeded);
+    public const string BlockedByRequestCapMissing = nameof(BlockedByRequestCapMissing);
+    public const string BlockedByKillSwitchNotVerified = nameof(BlockedByKillSwitchNotVerified);
+    public const string BlockedByRollbackCheckpointUnavailable = nameof(BlockedByRollbackCheckpointUnavailable);
+    public const string BlockedByTraceSinkUnavailable = nameof(BlockedByTraceSinkUnavailable);
+    public const string BlockedByConfigPatchNotPreviewOnly = nameof(BlockedByConfigPatchNotPreviewOnly);
+    public const string BlockedByStopConditionsMissing = nameof(BlockedByStopConditionsMissing);
+    public const string BlockedByAuthorizationExpired = nameof(BlockedByAuthorizationExpired);
+    public const string BlockedBySafetyBoundaryViolation = nameof(BlockedBySafetyBoundaryViolation);
+    public const string KeepPreviewOnly = nameof(KeepPreviewOnly);
+}
+
+
+/// <summary>V7.9 preflight 选项。</summary>
+public sealed class ScopedRuntimePreviewActivationWindowPreflightOptions
+{
+    public bool Enabled { get; init; } = true;
+    public bool ExplicitlyProvided { get; init; }
+    public string ApprovedBy { get; init; } = "ReleaseManager";
+    public int MaxWindowDurationMinutes { get; init; } = 30;
+    public int MaxRequestsPerWindow { get; init; } = 100;
+    public int MinStopConditions { get; init; } = 5;
+}
+
+
+/// <summary>V7.9 scoped runtime preview activation window preflight 报告。
+/// 为 activation window 做启动前预检，验证所有条件就绪。
+/// ConfigPatchWritten=false, RuntimeActivation=false。</summary>
+public sealed class ScopedRuntimePreviewActivationWindowPreflightReport
+{
+    public string OperationId { get; init; } = "";
+    public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
+    public bool PreflightPassed { get; init; }
+    public bool GatePassed { get; init; }
+    public string Recommendation { get; init; }
+        = ScopedRuntimePreviewActivationWindowPreflightRecommendations.KeepPreviewOnly;
+    public string NextAllowedPhase { get; init; } = "KeepPreviewOnly";
+
+    public bool PreparationPassed { get; init; }
+    public bool DryRunPassed { get; init; }
+    public bool AuthorizationPassed { get; init; }
+    public bool AuthorizationValid { get; init; }
+    public bool P15GatePassed { get; init; }
+    public bool RuntimeChangeGatePassed { get; init; }
+
+    public bool ScopesUnchanged { get; init; }
+    public int WindowDurationMinutes { get; init; }
+    public int MaxWindowDurationMinutes { get; init; }
+    public bool WindowDurationWithinLimit { get; init; }
+    public int MaxRequestsPerWindow { get; init; }
+    public bool RequestCapDefined { get; init; }
+
+    public bool KillSwitchNoOpVerified { get; init; }
+    public int KillSwitchNoOpCount { get; init; }
+    public bool RollbackCheckpointAvailable { get; init; }
+    public bool TraceSinkWritable { get; init; }
+    public bool ConfigPatchPreviewOnly { get; init; }
+    public bool ConfigPatchWritten { get; init; }
+    public int StopConditionsCount { get; init; }
+    public bool StopConditionsSufficient { get; init; }
+
+    public bool FormalRetrievalAllowed { get; init; }
+    public bool RuntimeSwitchAllowed { get; init; }
+    public bool FormalPackageWritten { get; init; }
+    public bool RuntimeActivation { get; init; }
+    public bool WriteConfigPatch { get; init; }
+    public bool PackingPolicyChanged { get; init; }
+    public bool PackageOutputChanged { get; init; }
+    public bool VectorStoreBindingChanged { get; init; }
+    public bool GlobalDefaultOn { get; init; }
+    public bool NoRuntimeMutationInvariant { get; init; }
+
+    public IReadOnlyList<string> AllowedActions { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> ForbiddenActions { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> BlockedReasons { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> Diagnostics { get; init; } = Array.Empty<string>();
+}
+
+
 /// <summary>架构清理计划报告。</summary>
 public sealed class ArchitectureCleanupPlanReport
 {
