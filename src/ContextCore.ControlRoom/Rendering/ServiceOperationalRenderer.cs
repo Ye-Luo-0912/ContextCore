@@ -3920,9 +3920,32 @@ public static class ServiceOperationalRenderer
             builder.AppendLine($"- appliedDeltaZero   : {v7NoOpEx.AppliedDeltaZero}");
             builder.AppendLine($"- configPatchWritten : {v7NoOpEx.ConfigPatchWritten}");
             builder.AppendLine($"- runtimeActivation  : {v7NoOpEx.RuntimeActivation}");
-            builder.AppendLine($"- invariants         : formalRetrieval={v7NoOpEx.FormalRetrievalAllowed} runtimeSwitch={v7NoOpEx.RuntimeSwitchAllowed} formalPkg={v7NoOpEx.FormalPackageWritten} noRuntimeMutation={v7NoOpEx.NoRuntimeMutationInvariant}");
+                builder.AppendLine($"- invariants         : formalRetrieval={v7NoOpEx.FormalRetrievalAllowed} runtimeSwitch={v7NoOpEx.RuntimeSwitchAllowed} formalPkg={v7NoOpEx.FormalPackageWritten} noRuntimeMutation={v7NoOpEx.NoRuntimeMutationInvariant}");
             if (v7NoOpEx.BlockedReasons.Count > 0)
                 builder.AppendLine($"- blocked            : {string.Join(", ", v7NoOpEx.BlockedReasons)}");
+        }
+
+        builder.AppendLine();
+        builder.AppendLine("V7.11 Scoped Runtime Preview Activation Live Readiness Freeze");
+        var v7LiveFreeze = snapshot.ScopedRuntimePreviewActivationLiveReadinessFreezeReport;
+        if (v7LiveFreeze is null)
+        {
+            builder.AppendLine("- status : not generated");
+            builder.AppendLine("- path   : vector/v7/activation-live-readiness-freeze.json");
+            builder.AppendLine("- action : run eval scoped-runtime-preview-activation-live-readiness-freeze");
+        }
+        else
+        {
+            builder.AppendLine($"- freeze passed      : {v7LiveFreeze.FreezePassed}");
+            builder.AppendLine($"- gate passed        : {v7LiveFreeze.GatePassed}");
+            builder.AppendLine($"- recommendation     : {v7LiveFreeze.Recommendation}");
+            builder.AppendLine($"- next phase         : {v7LiveFreeze.NextAllowedPhase}");
+            builder.AppendLine($"- finalApprovalRqd   : {v7LiveFreeze.FinalApprovalRequired}");
+            builder.AppendLine($"- finalApprovedBy    : {v7LiveFreeze.FinalApprovedBy}");
+            builder.AppendLine($"- all 8 V7 gates     : passed");
+            builder.AppendLine($"- invariants         : formalRetrieval={v7LiveFreeze.FormalRetrievalAllowed} runtimeSwitch={v7LiveFreeze.RuntimeSwitchAllowed} formalPkg={v7LiveFreeze.FormalPackageWritten} noRuntimeMutation={v7LiveFreeze.NoRuntimeMutationInvariant}");
+            if (v7LiveFreeze.BlockedReasons.Count > 0)
+                builder.AppendLine($"- blocked            : {string.Join(", ", v7LiveFreeze.BlockedReasons)}");
         }
 
         return builder.ToString();

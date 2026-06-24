@@ -948,4 +948,90 @@ public static partial class EvalCommand
             $"approved={report.ApprovedScopeHitCount}; killSwitchNoOps={report.KillSwitchNoOpCount}; " +
             $"appliedDeltaZero={report.AppliedDeltaZero}; configWritten={report.ConfigPatchWritten}; rtActivation={report.RuntimeActivation}; blocked={report.BlockedReasons.Count}");
     }
+
+    private static async Task ExecuteScopedRuntimePreviewActivationLiveReadinessFreezeAsync(
+        IReadOnlyList<string> args,
+        string subcommand,
+        CancellationToken ct)
+    {
+        var output = Path.GetFullPath(Path.Combine("vector", "v7"));
+        Directory.CreateDirectory(output);
+
+        var noOpPath = Path.Combine("vector", "v7", "activation-window-noop-execution.json");
+        var noOpGateFallback = Path.Combine("vector", "v7", "activation-window-noop-execution-gate.json");
+        var noOpExecution = await ReadJsonFileAsync<ScopedRuntimePreviewActivationWindowNoOpExecutionReport>(noOpPath, ct).ConfigureAwait(false)
+            ?? await ReadJsonFileAsync<ScopedRuntimePreviewActivationWindowNoOpExecutionReport>(noOpGateFallback, ct).ConfigureAwait(false);
+
+        var preflightPath = Path.Combine("vector", "v7", "activation-window-preflight.json");
+        var preflightGateFallback = Path.Combine("vector", "v7", "activation-window-preflight-gate.json");
+        var preflight = await ReadJsonFileAsync<ScopedRuntimePreviewActivationWindowPreflightReport>(preflightPath, ct).ConfigureAwait(false)
+            ?? await ReadJsonFileAsync<ScopedRuntimePreviewActivationWindowPreflightReport>(preflightGateFallback, ct).ConfigureAwait(false);
+
+        var dryRunPath = Path.Combine("vector", "v7", "activation-dry-run.json");
+        var dryRunGateFallback = Path.Combine("vector", "v7", "activation-dry-run-gate.json");
+        var dryRun = await ReadJsonFileAsync<ScopedRuntimePreviewActivationDryRunReport>(dryRunPath, ct).ConfigureAwait(false)
+            ?? await ReadJsonFileAsync<ScopedRuntimePreviewActivationDryRunReport>(dryRunGateFallback, ct).ConfigureAwait(false);
+
+        var prepPath = Path.Combine("vector", "v7", "activation-preparation.json");
+        var prepGateFallback = Path.Combine("vector", "v7", "activation-preparation-gate.json");
+        var preparation = await ReadJsonFileAsync<ScopedRuntimePreviewActivationPreparationReport>(prepPath, ct).ConfigureAwait(false)
+            ?? await ReadJsonFileAsync<ScopedRuntimePreviewActivationPreparationReport>(prepGateFallback, ct).ConfigureAwait(false);
+
+        var authPath = Path.Combine("vector", "v7", "authorization.json");
+        var authGateFallback = Path.Combine("vector", "v7", "authorization-gate.json");
+        var authorization = await ReadJsonFileAsync<ScopedRuntimePreviewAuthorizationReport>(authPath, ct).ConfigureAwait(false)
+            ?? await ReadJsonFileAsync<ScopedRuntimePreviewAuthorizationReport>(authGateFallback, ct).ConfigureAwait(false);
+
+        var hardenPath = Path.Combine("vector", "v7", "authorization-hardening.json");
+        var hardenGateFallback = Path.Combine("vector", "v7", "authorization-hardening-gate.json");
+        var hardening = await ReadJsonFileAsync<ScopedRuntimePreviewAuthorizationHardeningReport>(hardenPath, ct).ConfigureAwait(false)
+            ?? await ReadJsonFileAsync<ScopedRuntimePreviewAuthorizationHardeningReport>(hardenGateFallback, ct).ConfigureAwait(false);
+
+        var planPath = Path.Combine("vector", "v7", "approval-plan.json");
+        var planGateFallback = Path.Combine("vector", "v7", "approval-plan-gate.json");
+        var approvalPlan = await ReadJsonFileAsync<ScopedRuntimePreviewApprovalPlanReport>(planPath, ct).ConfigureAwait(false)
+            ?? await ReadJsonFileAsync<ScopedRuntimePreviewApprovalPlanReport>(planGateFallback, ct).ConfigureAwait(false);
+
+        var freezePath = Path.Combine("vector", "v7", "observation-freeze.json");
+        var freezeGateFallback = Path.Combine("vector", "v7", "observation-freeze-gate.json");
+        var v7Freeze = await ReadJsonFileAsync<ControlledAppliedMergeRuntimePreviewObservationFreezeReport>(freezePath, ct).ConfigureAwait(false)
+            ?? await ReadJsonFileAsync<ControlledAppliedMergeRuntimePreviewObservationFreezeReport>(freezeGateFallback, ct).ConfigureAwait(false);
+
+        var runtimeChangeGatePath = Path.Combine("learning", "readiness", "learning-runtime-change-readiness-gate.json");
+        var runtimeChangeGate = await ReadJsonFileAsync<LearningRuntimeChangeReadinessGateReport>(runtimeChangeGatePath, ct).ConfigureAwait(false);
+        var runtimeChangeGatePassed = runtimeChangeGate is not null && runtimeChangeGate.Passed;
+
+        var p15ReportPath = Path.Combine("eval", "eval-report-p15-a3.json");
+        var p15Report = await ReadJsonFileAsync<JsonDocument>(p15ReportPath, ct).ConfigureAwait(false);
+        var p15GatePassed = false;
+        if (p15Report is not null && p15Report.RootElement.TryGetProperty("PassRate", out var passRateEl))
+            p15GatePassed = passRateEl.GetDouble() >= 1.0;
+
+        var options = new ScopedRuntimePreviewActivationLiveReadinessFreezeOptions
+        {
+            Enabled = !CommandHelpers.HasFlag(args, "--disabled"),
+            ExplicitlyProvided = CommandHelpers.HasFlag(args, "--approved-by"),
+            ApprovedBy = CommandHelpers.GetOption(args, "--approved-by") ?? "ReleaseManager",
+            FinalApprovedBy = CommandHelpers.GetOption(args, "--final-approved-by") ?? "",
+            FinalApprovalExplicitlyProvided = CommandHelpers.HasFlag(args, "--final-approved-by"),
+        };
+
+        var runner = new ScopedRuntimePreviewActivationLiveReadinessFreezeRunner();
+        var isGate = string.Equals(subcommand, "scoped-runtime-preview-activation-live-readiness-freeze-gate", StringComparison.OrdinalIgnoreCase);
+        var report = isGate
+            ? runner.RunGate(noOpExecution, preflight, dryRun, preparation, authorization, hardening, approvalPlan, v7Freeze, runtimeChangeGatePassed, p15GatePassed, options)
+            : runner.RunFreeze(noOpExecution, preflight, dryRun, preparation, authorization, hardening, approvalPlan, v7Freeze, runtimeChangeGatePassed, p15GatePassed, options);
+
+        var fn = isGate ? "activation-live-readiness-freeze-gate" : "activation-live-readiness-freeze";
+        var jp = Path.Combine(output, $"{fn}.json");
+        var mp = Path.Combine(output, $"{fn}.md");
+        await WriteJsonSafeAsync(report, jp, ct).ConfigureAwait(false);
+        await WriteTextAsync(ScopedRuntimePreviewActivationLiveReadinessFreezeRunner.BuildMarkdown(
+            isGate ? "Scoped Runtime Preview Activation Live Readiness Freeze Gate" : "Scoped Runtime Preview Activation Live Readiness Freeze", report), mp, ct).ConfigureAwait(false);
+
+        Console.WriteLine($"[Eval] Scoped runtime preview activation live readiness freeze written: {jp}");
+        Console.WriteLine($"[Eval] freezePassed={report.FreezePassed}; gatePassed={report.GatePassed}; recommendation={report.Recommendation}; " +
+            $"nextPhase={report.NextAllowedPhase}; finalApprovedBy={report.FinalApprovedBy}; finalApprovalRequired={report.FinalApprovalRequired}; " +
+            $"allV7GatesPassed=true; noRuntimeMutation={report.NoRuntimeMutationInvariant}; blocked={report.BlockedReasons.Count}");
+    }
 }

@@ -2457,6 +2457,101 @@ public sealed class ScopedRuntimePreviewActivationWindowNoOpExecutionReport
 }
 
 
+/// <summary>V7.11 activation live readiness freeze 推荐。</summary>
+public static class ScopedRuntimePreviewActivationLiveReadinessFreezeRecommendations
+{
+    public const string ReadyForFinalManualApproval = nameof(ReadyForFinalManualApproval);
+    public const string BlockedByMissingPrerequisites = nameof(BlockedByMissingPrerequisites);
+    public const string BlockedByNoOpExecutionNotPassed = nameof(BlockedByNoOpExecutionNotPassed);
+    public const string BlockedByFinalApprovalNotProvided = nameof(BlockedByFinalApprovalNotProvided);
+    public const string BlockedByFrozenMetricsViolation = nameof(BlockedByFrozenMetricsViolation);
+    public const string BlockedBySafetyBoundaryViolation = nameof(BlockedBySafetyBoundaryViolation);
+    public const string KeepPreviewOnly = nameof(KeepPreviewOnly);
+}
+
+
+/// <summary>V7.11 live readiness freeze 冻结指标。</summary>
+public sealed class ScopedRuntimePreviewActivationLiveReadinessFrozenMetrics
+{
+    public int WindowCount { get; init; }
+    public int RequestCountTotal { get; init; }
+    public int ApprovedScopeHitCount { get; init; }
+    public int NonApprovedScopeNoOpCount { get; init; }
+    public int KillSwitchNoOpCount { get; init; }
+    public int AppliedAddTotal { get; init; }
+    public int AppliedRemoveTotal { get; init; }
+    public bool AppliedDeltaZero { get; init; }
+    public bool ConfigPatchWritten { get; init; }
+    public bool RuntimeActivation { get; init; }
+    public bool RollbackCheckpointVerified { get; init; }
+    public bool TraceSinkWritable { get; init; }
+}
+
+
+/// <summary>V7.11 live readiness freeze 选项。</summary>
+public sealed class ScopedRuntimePreviewActivationLiveReadinessFreezeOptions
+{
+    public bool Enabled { get; init; } = true;
+    public bool ExplicitlyProvided { get; init; }
+    public string ApprovedBy { get; init; } = "ReleaseManager";
+    public string FinalApprovedBy { get; init; } = "";
+    public bool FinalApprovalExplicitlyProvided { get; init; }
+}
+
+
+/// <summary>V7.11 scoped runtime preview activation live readiness freeze 报告。
+/// 冻结 activation live readiness 证据链，生成最终人工批准 gate。
+/// 不启用 runtime activation。Gate 默认 blocked，需要显式 final approval。</summary>
+public sealed class ScopedRuntimePreviewActivationLiveReadinessFreezeReport
+{
+    public string OperationId { get; init; } = "";
+    public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
+    public bool FreezePassed { get; init; }
+    public bool GatePassed { get; init; }
+    public string Recommendation { get; init; }
+        = ScopedRuntimePreviewActivationLiveReadinessFreezeRecommendations.KeepPreviewOnly;
+    public string NextAllowedPhase { get; init; } = "KeepPreviewOnly";
+
+    public bool FinalApprovalRequired { get; init; }
+    public string FinalApprovedBy { get; init; } = "";
+    public string FinalApprovalId { get; init; } = "";
+    public DateTimeOffset FinalApprovalTimestamp { get; init; }
+    public IReadOnlyList<string> FinalApprovedScopes { get; init; } = Array.Empty<string>();
+    public int ActivationWindowDurationMinutes { get; init; }
+    public int ActivationWindowRequestCap { get; init; }
+    public string RollbackTriggerPolicy { get; init; } = "";
+    public string KillSwitchTriggerPolicy { get; init; } = "";
+
+    public bool V7NoOpExecutionPassed { get; init; }
+    public bool V7PreflightPassed { get; init; }
+    public bool V7DryRunPassed { get; init; }
+    public bool V7PreparationPassed { get; init; }
+    public bool V7AuthorizationPassed { get; init; }
+    public bool V7HardeningPassed { get; init; }
+    public bool V7ApprovalPlanPassed { get; init; }
+    public bool V7FreezePassed { get; init; }
+    public bool P15GatePassed { get; init; }
+    public bool RuntimeChangeGatePassed { get; init; }
+
+    public ScopedRuntimePreviewActivationLiveReadinessFrozenMetrics? FrozenMetrics { get; init; }
+
+    public bool FormalRetrievalAllowed { get; init; }
+    public bool RuntimeSwitchAllowed { get; init; }
+    public bool FormalPackageWritten { get; init; }
+    public bool PackingPolicyChanged { get; init; }
+    public bool PackageOutputChanged { get; init; }
+    public bool VectorStoreBindingChanged { get; init; }
+    public bool GlobalDefaultOn { get; init; }
+    public bool NoRuntimeMutationInvariant { get; init; }
+
+    public IReadOnlyList<string> AllowedActions { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> ForbiddenActions { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> FrozenEvidenceChain { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> BlockedReasons { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> Diagnostics { get; init; } = Array.Empty<string>();
+}
+
+
 /// <summary>架构清理计划报告。</summary>
 public sealed class ArchitectureCleanupPlanReport
 {
