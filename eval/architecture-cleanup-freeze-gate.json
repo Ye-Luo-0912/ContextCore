@@ -1,0 +1,25 @@
+﻿{
+  "OperationId": "arch-cleanup-freeze-gate-01b481484c15472da3d674a4b51a6fc3",
+  "CreatedAt": "2026-06-24T13:04:52.4232501+00:00",
+  "GatePassed": true,
+  "Recommendation": "ArchitectureCleanupFreezeGatePassed",
+  "FreezeReportPresent": true,
+  "FreezePassed": true,
+  "AllSubReportsAvailable": true,
+  "AllGateRulesCompliant": true,
+  "BlockedReasons": [],
+  "Diagnostics": [
+    "FreezeReportPresent: True",
+    "FreezePassed: True",
+    "AllSubReportsAvailable: True",
+    "AllGateRulesCompliant: True",
+    "PlanPassed: True",
+    "DtoSplitGenerated: True",
+    "HygienePassed: True",
+    "P15Hardened: True",
+    "FormalRetrievalNotEnabled: true",
+    "NoRuntimeSwitch: true",
+    "NoFormalPackageWrite: true",
+    "NoMutation: true"
+  ]
+}

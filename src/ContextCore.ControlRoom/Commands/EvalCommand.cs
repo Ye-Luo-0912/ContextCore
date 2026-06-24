@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
@@ -266,6 +266,16 @@ public static partial class EvalCommand
             !string.Equals(subcommand, "vector-mainline-shadow-adapter-package-comparison-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "architecture-cleanup-plan", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "architecture-cleanup-readiness-gate", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "architecture-cleanup-freeze", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "architecture-cleanup-freeze-gate", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "controlled-applied-merge-runtime-preview-plan", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "controlled-applied-merge-runtime-preview-plan-gate", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "controlled-applied-merge-runtime-preview-dry-run", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "controlled-applied-merge-runtime-preview-dry-run-gate", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "controlled-applied-merge-runtime-preview-activation-preflight", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "controlled-applied-merge-runtime-preview-activation-preflight-gate", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "controlled-applied-merge-runtime-preview-observation-window", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "controlled-applied-merge-runtime-preview-observation-window-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "dto-split-plan", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "dto-split-readiness-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "vector-retrieval-eval-protocol-audit", StringComparison.OrdinalIgnoreCase) &&
@@ -466,6 +476,16 @@ public static partial class EvalCommand
             Console.WriteLine("  eval vector-mainline-shadow-adapter-package-comparison-gate");
             Console.WriteLine("  eval architecture-cleanup-plan");
             Console.WriteLine("  eval architecture-cleanup-readiness-gate");
+            Console.WriteLine("  eval architecture-cleanup-freeze");
+            Console.WriteLine("  eval architecture-cleanup-freeze-gate");
+            Console.WriteLine("  eval controlled-applied-merge-runtime-preview-plan [--max-requests <n>] [--max-duration-minutes <n>]");
+            Console.WriteLine("  eval controlled-applied-merge-runtime-preview-plan-gate [--max-requests <n>] [--max-duration-minutes <n>]");
+            Console.WriteLine("  eval controlled-applied-merge-runtime-preview-dry-run [--observation-runs <n>] [--max-token-delta-total <n>]");
+            Console.WriteLine("  eval controlled-applied-merge-runtime-preview-dry-run-gate [--observation-runs <n>] [--max-token-delta-total <n>]");
+            Console.WriteLine("  eval controlled-applied-merge-runtime-preview-activation-preflight");
+            Console.WriteLine("  eval controlled-applied-merge-runtime-preview-activation-preflight-gate");
+            Console.WriteLine("  eval controlled-applied-merge-runtime-preview-observation-window [--observation-runs <n>] [--max-requests <n>] [--max-duration-minutes <n>]");
+            Console.WriteLine("  eval controlled-applied-merge-runtime-preview-observation-window-gate [--observation-runs <n>] [--max-requests <n>] [--max-duration-minutes <n>]");
             Console.WriteLine("  eval dto-split-plan");
             Console.WriteLine("  eval dto-split-readiness-gate");
             Console.WriteLine("  eval vector-retrieval-eval-protocol-audit");
@@ -1604,6 +1624,46 @@ public static partial class EvalCommand
         if (string.Equals(subcommand, "architecture-cleanup-readiness-gate", StringComparison.OrdinalIgnoreCase))
         {
             await ExecuteArchitectureCleanupReadinessGateAsync(cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        if (string.Equals(subcommand, "architecture-cleanup-freeze", StringComparison.OrdinalIgnoreCase))
+        {
+            await ExecuteArchitectureCleanupFreezeAsync(cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        if (string.Equals(subcommand, "architecture-cleanup-freeze-gate", StringComparison.OrdinalIgnoreCase))
+        {
+            await ExecuteArchitectureCleanupFreezeGateAsync(cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        if (string.Equals(subcommand, "controlled-applied-merge-runtime-preview-plan", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(subcommand, "controlled-applied-merge-runtime-preview-plan-gate", StringComparison.OrdinalIgnoreCase))
+        {
+            await ExecuteControlledAppliedMergeRuntimePreviewPlanAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        if (string.Equals(subcommand, "controlled-applied-merge-runtime-preview-dry-run", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(subcommand, "controlled-applied-merge-runtime-preview-dry-run-gate", StringComparison.OrdinalIgnoreCase))
+        {
+            await ExecuteControlledAppliedMergeRuntimePreviewDryRunAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        if (string.Equals(subcommand, "controlled-applied-merge-runtime-preview-activation-preflight", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(subcommand, "controlled-applied-merge-runtime-preview-activation-preflight-gate", StringComparison.OrdinalIgnoreCase))
+        {
+            await ExecuteControlledAppliedMergeRuntimePreviewActivationPreflightAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        if (string.Equals(subcommand, "controlled-applied-merge-runtime-preview-observation-window", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(subcommand, "controlled-applied-merge-runtime-preview-observation-window-gate", StringComparison.OrdinalIgnoreCase))
+        {
+            await ExecuteControlledAppliedMergeRuntimePreviewObservationWindowAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
             return;
         }
 
@@ -15858,5 +15918,39 @@ public static partial class EvalCommand
         sb.AppendLine();
         sb.AppendLine($"**AuditReport:** `{report.AuditReportPath}`");
         return sb.ToString();
+    }
+
+    private static async Task ExecuteArchitectureCleanupFreezeAsync(CancellationToken ct)
+    {
+        var output = Path.GetFullPath(Path.Combine("eval"));
+        Directory.CreateDirectory(output);
+        var runner = new ArchitectureCleanupFreezeRunner();
+        var report = runner.BuildFreeze(Directory.GetCurrentDirectory());
+        var jp = Path.Combine(output, "architecture-cleanup-freeze.json");
+        var mp = Path.Combine(output, "architecture-cleanup-freeze.md");
+        await WriteJsonSafeAsync(report, jp, ct).ConfigureAwait(false);
+        await WriteTextAsync(ArchitectureCleanupFreezeRunner.BuildMarkdown("Architecture Cleanup Freeze", report), mp, ct).ConfigureAwait(false);
+        Console.WriteLine($"[Eval] Architecture cleanup freeze written: {jp}");
+
+        var docsDir = Path.GetFullPath("docs");
+        Directory.CreateDirectory(docsDir);
+        var docsMp = Path.Combine(docsDir, "ContextCore_Architecture_Cleanup_Freeze.md");
+        await WriteTextAsync(ArchitectureCleanupFreezeRunner.BuildMarkdown("ContextCore Architecture Cleanup Freeze", report), docsMp, ct).ConfigureAwait(false);
+        Console.WriteLine($"[Eval] Architecture cleanup freeze docs written: {docsMp}");
+    }
+
+    private static async Task ExecuteArchitectureCleanupFreezeGateAsync(CancellationToken ct)
+    {
+        var output = Path.GetFullPath(Path.Combine("eval"));
+        Directory.CreateDirectory(output);
+        var freezePath = Path.Combine(output, "architecture-cleanup-freeze.json");
+        var freezeReport = await ReadJsonFileAsync<ArchitectureCleanupFreezeReport>(freezePath, ct).ConfigureAwait(false);
+        var gateRunner = new ArchitectureCleanupFreezeGateRunner();
+        var report = gateRunner.BuildGateReport(freezeReport);
+        var jp = Path.Combine(output, "architecture-cleanup-freeze-gate.json");
+        var mp = Path.Combine(output, "architecture-cleanup-freeze-gate.md");
+        await WriteJsonSafeAsync(report, jp, ct).ConfigureAwait(false);
+        await WriteTextAsync(ArchitectureCleanupFreezeGateRunner.BuildMarkdown("Architecture Cleanup Freeze Gate", report), mp, ct).ConfigureAwait(false);
+        Console.WriteLine($"[Eval] Architecture cleanup freeze gate written: {jp}");
     }
 }

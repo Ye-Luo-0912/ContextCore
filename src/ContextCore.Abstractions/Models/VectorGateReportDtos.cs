@@ -1080,6 +1080,449 @@ public sealed class ControlledAppliedMergePreviewFreezeReport
 }
 
 
+/// <summary>V7.0 controlled applied merge runtime preview plan 推荐。</summary>
+public static class ControlledAppliedMergeRuntimePreviewPlanRecommendations
+{
+    public const string ReadyForRuntimePreviewActivation = nameof(ReadyForRuntimePreviewActivation);
+    public const string BlockedByV6FreezeNotPassed = nameof(BlockedByV6FreezeNotPassed);
+    public const string BlockedByOPTFreezeNotPassed = nameof(BlockedByOPTFreezeNotPassed);
+    public const string BlockedByRuntimeChangeGateNotPassed = nameof(BlockedByRuntimeChangeGateNotPassed);
+    public const string BlockedByP15NotPassed = nameof(BlockedByP15NotPassed);
+    public const string BlockedByMissingKillSwitch = nameof(BlockedByMissingKillSwitch);
+    public const string BlockedByMissingRollbackPlan = nameof(BlockedByMissingRollbackPlan);
+    public const string BlockedByMissingObservationPlan = nameof(BlockedByMissingObservationPlan);
+    public const string BlockedByMissingStopConditions = nameof(BlockedByMissingStopConditions);
+    public const string BlockedByMissingAllowlistedScope = nameof(BlockedByMissingAllowlistedScope);
+    public const string BlockedByRuntimeSwitchAttempt = nameof(BlockedByRuntimeSwitchAttempt);
+    public const string KeepPreviewOnly = nameof(KeepPreviewOnly);
+}
+
+
+/// <summary>V7.0 controlled applied merge runtime preview plan 模式。</summary>
+public static class ControlledAppliedMergeRuntimePreviewPlanModes
+{
+    public const string PlanOnly = nameof(PlanOnly);
+}
+
+
+/// <summary>V7.0 controlled applied merge runtime preview plan 选项。</summary>
+public sealed class ControlledAppliedMergeRuntimePreviewPlanOptions
+{
+    public bool Enabled { get; init; } = true;
+    public string Mode { get; init; } = ControlledAppliedMergeRuntimePreviewPlanModes.PlanOnly;
+    public string ConfigSwitch { get; init; } = "ControlledAppliedMergeRuntimePreview:Enabled";
+    public string ApprovalMode { get; init; } = "ControlledAppliedMergePreview";
+    public string TracePath { get; init; } = "vector/v7/runtime-preview-trace.jsonl";
+    public int MaxRequestCount { get; init; } = 100;
+    public int MaxDurationMinutes { get; init; } = 30;
+    public IReadOnlyList<string> WorkspaceAllowlist { get; init; } = ["demo-workspace"];
+    public IReadOnlyList<string> CollectionAllowlist { get; init; } = ["demo-collection"];
+    public bool RequireKillSwitch { get; init; } = true;
+    public bool RequireRollbackPlan { get; init; } = true;
+    public bool RequireObservationPlan { get; init; } = true;
+    public bool RequireStopConditions { get; init; } = true;
+}
+
+
+/// <summary>V7.0 controlled applied merge runtime preview plan 报告；只产出 plan，不实现 runtime preview。</summary>
+public sealed class ControlledAppliedMergeRuntimePreviewPlanReport
+{
+    public string OperationId { get; init; } = "";
+    public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
+    public bool PlanPassed { get; init; }
+    public string Recommendation { get; init; }
+        = ControlledAppliedMergeRuntimePreviewPlanRecommendations.KeepPreviewOnly;
+    public string Mode { get; init; } = ControlledAppliedMergeRuntimePreviewPlanModes.PlanOnly;
+    public string NextAllowedPhase { get; init; } = "ControlledAppliedMergeRuntimePreviewActivationContract";
+
+    public bool V6FreezePassed { get; init; }
+    public bool OPTFreezePassed { get; init; }
+    public bool RuntimeChangeGatePassed { get; init; }
+    public bool P15GatePassed { get; init; }
+
+    public IReadOnlyList<string> AllowlistedScopes { get; init; } = Array.Empty<string>();
+    public string ConfigSwitch { get; init; } = "";
+    public string ApprovalMode { get; init; } = "";
+    public string KillSwitchPlan { get; init; } = "";
+    public string RollbackPlan { get; init; } = "";
+    public string TracePath { get; init; } = "";
+    public IReadOnlyList<string> ObservationMetrics { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> StopConditions { get; init; } = Array.Empty<string>();
+    public int MaxRequestCount { get; init; }
+    public int MaxDurationMinutes { get; init; }
+
+    public bool FormalRetrievalAllowed { get; init; }
+    public bool RuntimeSwitchAllowed { get; init; }
+    public bool FormalPackageWritten { get; init; }
+    public bool PackingPolicyChanged { get; init; }
+    public bool PackageOutputChanged { get; init; }
+    public bool RuntimeMutated { get; init; }
+    public bool VectorStoreBindingChanged { get; init; }
+    public bool GlobalDefaultOn { get; init; }
+
+    public IReadOnlyList<string> AllowedActions { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> ForbiddenActions { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> BlockedReasons { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> Diagnostics { get; init; } = Array.Empty<string>();
+}
+
+
+/// <summary>V7.1 controlled applied merge runtime preview dry-run 推荐。</summary>
+public static class ControlledAppliedMergeRuntimePreviewDryRunRecommendations
+{
+    public const string ReadyForRuntimePreviewGate = nameof(ReadyForRuntimePreviewGate);
+    public const string BlockedByPlanNotPassed = nameof(BlockedByPlanNotPassed);
+    public const string BlockedByV6FreezeNotPassed = nameof(BlockedByV6FreezeNotPassed);
+    public const string BlockedByMissingProposal = nameof(BlockedByMissingProposal);
+    public const string BlockedByScopeLeak = nameof(BlockedByScopeLeak);
+    public const string BlockedByRisk = nameof(BlockedByRisk);
+    public const string BlockedByOutputMutation = nameof(BlockedByOutputMutation);
+    public const string BlockedByConstraintViolation = nameof(BlockedByConstraintViolation);
+    public const string KeepDryRunOnly = nameof(KeepDryRunOnly);
+}
+
+
+/// <summary>V7.1 controlled applied merge runtime preview dry-run 选项。</summary>
+public sealed class ControlledAppliedMergeRuntimePreviewDryRunOptions
+{
+    public bool Enabled { get; init; } = true;
+    public int ObservationRuns { get; init; } = 3;
+    public int MinObservationRuns { get; init; } = 1;
+    public int MaxAddPerSample { get; init; } = 3;
+    public int MaxRemovePerSample { get; init; } = 3;
+    public int MaxTokenDeltaPerSample { get; init; } = 200;
+    public int MaxTokenDeltaTotal { get; init; } = 4000;
+    public int EstimatedTokensPerItem { get; init; } = 50;
+    public double WouldApplyRatio { get; init; } = 0.5;
+    public IReadOnlyList<string> WorkspaceAllowlist { get; init; } = ["demo-workspace"];
+    public IReadOnlyList<string> CollectionAllowlist { get; init; } = ["demo-collection"];
+}
+
+
+/// <summary>V7.1 controlled applied merge runtime preview dry-run harness 报告。
+/// 只计算 preview result，只写 trace/report，不改变 formal selected set，
+/// 不写 formal package，不改变 package output，不改变 PackingPolicy。</summary>
+public sealed class ControlledAppliedMergeRuntimePreviewDryRunReport
+{
+    public string OperationId { get; init; } = "";
+    public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
+    public bool DryRunPassed { get; init; }
+    public bool GatePassed { get; init; }
+    public string Recommendation { get; init; }
+        = ControlledAppliedMergeRuntimePreviewDryRunRecommendations.KeepDryRunOnly;
+    public string NextAllowedPhase { get; init; } = "KeepDryRunOnly";
+
+    public bool PlanPassed { get; init; }
+    public bool V6FreezePassed { get; init; }
+    public string PlanSourcePath { get; init; } = "";
+    public string ProposalSourcePath { get; init; } = "";
+
+    public IReadOnlyList<string> AllowlistedScopes { get; init; } = Array.Empty<string>();
+    public string TracePath { get; init; } = "";
+
+    public int ObservationRuns { get; init; }
+    public int RequestCount { get; init; }
+    public int WouldApplyAddCount { get; init; }
+    public int WouldApplyRemoveCount { get; init; }
+    public int AppliedAddCount { get; init; }
+    public int AppliedRemoveCount { get; init; }
+    public int BaselinePackageCount { get; init; }
+    public int PreviewPackageCount { get; init; }
+    public int TotalTokenDelta { get; init; }
+    public int MaxTokenDeltaPerSample { get; init; }
+
+    public int ScopeLeakCount { get; init; }
+    public int ErrorCount { get; init; }
+    public double LatencyP50Ms { get; init; }
+    public double LatencyP95Ms { get; init; }
+
+    public bool RollbackVerified { get; init; }
+    public bool KillSwitchTested { get; init; }
+    public bool StopConditionsChecked { get; init; }
+    public bool TraceWritten { get; init; }
+
+    public int RiskAfterPolicy { get; init; }
+    public int MustNotHitRiskAfterPolicy { get; init; }
+    public int LifecycleRiskAfterPolicy { get; init; }
+    public int FormalOutputChanged { get; init; }
+
+    public bool FormalSelectedSetChanged { get; init; }
+    public bool FormalPackageWritten { get; init; }
+    public bool PackageOutputChanged { get; init; }
+    public bool PackingPolicyChanged { get; init; }
+    public bool RuntimeMutated { get; init; }
+    public bool VectorStoreBindingChanged { get; init; }
+    public bool FormalRetrievalAllowed { get; init; }
+    public bool RuntimeSwitchAllowed { get; init; }
+    public bool GlobalDefaultOn { get; init; }
+    public bool NoRuntimeMutationInvariant { get; init; }
+
+    public IReadOnlyList<string> ObservationMetrics { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> StopConditions { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> AllowedActions { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> ForbiddenActions { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> BlockedReasons { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> Diagnostics { get; init; } = Array.Empty<string>();
+}
+
+
+/// <summary>V7.2 controlled applied merge runtime preview activation preflight 推荐。</summary>
+public static class ControlledAppliedMergeRuntimePreviewActivationPreflightRecommendations
+{
+    public const string ReadyForRuntimePreviewActivation = nameof(ReadyForRuntimePreviewActivation);
+    public const string BlockedByPlanNotPassed = nameof(BlockedByPlanNotPassed);
+    public const string BlockedByDryRunNotPassed = nameof(BlockedByDryRunNotPassed);
+    public const string BlockedByV6FreezeNotPassed = nameof(BlockedByV6FreezeNotPassed);
+    public const string BlockedByMissingKillSwitch = nameof(BlockedByMissingKillSwitch);
+    public const string BlockedByMissingRollbackPlan = nameof(BlockedByMissingRollbackPlan);
+    public const string BlockedByMissingTraceSink = nameof(BlockedByMissingTraceSink);
+    public const string BlockedByMissingAllowlistedScope = nameof(BlockedByMissingAllowlistedScope);
+    public const string BlockedByScopeLeak = nameof(BlockedByScopeLeak);
+    public const string BlockedByRuntimeMutation = nameof(BlockedByRuntimeMutation);
+    public const string BlockedByFormalOutputMutation = nameof(BlockedByFormalOutputMutation);
+    public const string KeepPreviewOnly = nameof(KeepPreviewOnly);
+}
+
+
+/// <summary>V7.2 activation preflight 模式。</summary>
+public static class ControlledAppliedMergeRuntimePreviewActivationPreflightModes
+{
+    public const string PreflightOnly = nameof(PreflightOnly);
+}
+
+
+/// <summary>V7.2 activation preflight 选项。</summary>
+public sealed class ControlledAppliedMergeRuntimePreviewActivationPreflightOptions
+{
+    public bool Enabled { get; init; } = true;
+    public string Mode { get; init; } = ControlledAppliedMergeRuntimePreviewActivationPreflightModes.PreflightOnly;
+    public bool RequireKillSwitch { get; init; } = true;
+    public bool RequireRollbackPlan { get; init; } = true;
+    public bool RequireTraceSink { get; init; } = true;
+    public bool TraceSinkAvailable { get; init; } = true;
+    public bool RequireRuntimeChangeGate { get; init; } = true;
+    public bool RequireP15Gate { get; init; } = true;
+    public IReadOnlyList<string> WorkspaceAllowlist { get; init; } = ["demo-workspace"];
+    public IReadOnlyList<string> CollectionAllowlist { get; init; } = ["demo-collection"];
+}
+
+
+/// <summary>V7.2 scoped runtime preview activation prelight 报告。
+/// 安装/验证 runtime preview 入口，但仍保持 preview-only、scope-only、no formal output mutation。</summary>
+public sealed class ControlledAppliedMergeRuntimePreviewActivationPreflightReport
+{
+    public string OperationId { get; init; } = "";
+    public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
+    public bool PreflightPassed { get; init; }
+    public bool GatePassed { get; init; }
+    public string Recommendation { get; init; }
+        = ControlledAppliedMergeRuntimePreviewActivationPreflightRecommendations.KeepPreviewOnly;
+    public string Mode { get; init; } = ControlledAppliedMergeRuntimePreviewActivationPreflightModes.PreflightOnly;
+    public string NextAllowedPhase { get; init; } = "KeepPreviewOnly";
+
+    public bool PlanPassed { get; init; }
+    public bool DryRunPassed { get; init; }
+    public bool V6FreezePassed { get; init; }
+    public bool RuntimeChangeGatePassed { get; init; }
+    public bool P15GatePassed { get; init; }
+
+    public IReadOnlyList<string> AllowlistedScopes { get; init; } = Array.Empty<string>();
+    public string ConfigSwitch { get; init; } = "";
+    public string TracePath { get; init; } = "";
+
+    public bool KillSwitchAvailable { get; init; }
+    public bool RollbackPlanAvailable { get; init; }
+    public bool TraceSinkAvailable { get; init; }
+    public bool ConfigPatchPreviewed { get; init; }
+    public bool ConfigPatchWritten { get; init; }
+    public bool ScopeValidationPassed { get; init; }
+    public int ScopeLeakCount { get; init; }
+    public bool NonAllowlistedScopeChecked { get; init; }
+
+    public bool FormalSelectedSetChanged { get; init; }
+    public bool FormalPackageWritten { get; init; }
+    public bool PackageOutputChanged { get; init; }
+    public bool PackingPolicyChanged { get; init; }
+    public bool RuntimeMutated { get; init; }
+    public bool VectorStoreBindingChanged { get; init; }
+    public bool FormalRetrievalAllowed { get; init; }
+    public bool RuntimeSwitchAllowed { get; init; }
+    public bool GlobalDefaultOn { get; init; }
+    public bool NoRuntimeMutationInvariant { get; init; }
+
+    public int WouldApplyAddCount { get; init; }
+    public int WouldApplyRemoveCount { get; init; }
+    public int TotalTokenDelta { get; init; }
+    public int RiskAfterPolicy { get; init; }
+
+    public IReadOnlyList<string> AllowedActions { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> ForbiddenActions { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> BlockedReasons { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> Diagnostics { get; init; } = Array.Empty<string>();
+}
+
+
+/// <summary>V7.3 controlled applied merge runtime preview observation window 推荐。</summary>
+public static class ControlledAppliedMergeRuntimePreviewObservationWindowRecommendations
+{
+    public const string ReadyForRuntimePreviewObservationFreeze = nameof(ReadyForRuntimePreviewObservationFreeze);
+    public const string BlockedByPreflightNotPassed = nameof(BlockedByPreflightNotPassed);
+    public const string BlockedByDryRunNotPassed = nameof(BlockedByDryRunNotPassed);
+    public const string BlockedByConstraintViolation = nameof(BlockedByConstraintViolation);
+    public const string BlockedByInstability = nameof(BlockedByInstability);
+    public const string BlockedByRisk = nameof(BlockedByRisk);
+    public const string BlockedByRuntimeInvariant = nameof(BlockedByRuntimeInvariant);
+    public const string BlockedByRollbackOrKillSwitch = nameof(BlockedByRollbackOrKillSwitch);
+    public const string BlockedByScopeLeak = nameof(BlockedByScopeLeak);
+    public const string KeepPreviewOnly = nameof(KeepPreviewOnly);
+}
+
+
+/// <summary>V7.3 observation window 选项。</summary>
+public sealed class ControlledAppliedMergeRuntimePreviewObservationWindowOptions
+{
+    public bool Enabled { get; init; } = true;
+    public int ObservationRunCount { get; init; } = 5;
+    public int MinObservationRunCount { get; init; } = 3;
+    public int MaxRequestCount { get; init; } = 100;
+    public int MaxDurationMinutes { get; init; } = 30;
+    public int MaxErrorCount { get; init; } = 0;
+    public int MaxTokenDeltaTotal { get; init; } = 4000;
+    public int MaxTokenDeltaPerSample { get; init; } = 200;
+    public int EstimatedTokensPerItem { get; init; } = 50;
+    public double WouldApplyRatio { get; init; } = 0.5;
+    public int SimulatedDurationMinutes { get; init; } = 5;
+    public int SimulatedErrorCount { get; init; } = 0;
+    public IReadOnlyList<string> WorkspaceAllowlist { get; init; } = ["demo-workspace"];
+    public IReadOnlyList<string> CollectionAllowlist { get; init; } = ["demo-collection"];
+}
+
+
+/// <summary>V7.3 observation window 单轮结果。</summary>
+public sealed class ControlledAppliedMergeRuntimePreviewObservationRunResult
+{
+    public int RunIndex { get; init; }
+    public bool DryRunPassed { get; init; }
+    public string StableSignature { get; init; } = string.Empty;
+    public int RequestCount { get; init; }
+    public int WouldApplyAddCount { get; init; }
+    public int WouldApplyRemoveCount { get; init; }
+    public int AppliedAddCount { get; init; }
+    public int AppliedRemoveCount { get; init; }
+    public int TotalTokenDelta { get; init; }
+    public int MaxTokenDeltaPerSample { get; init; }
+    public int BaselinePackageCount { get; init; }
+    public int PreviewPackageCount { get; init; }
+    public int ScopeLeakCount { get; init; }
+    public int ErrorCount { get; init; }
+    public double LatencyP50Ms { get; init; }
+    public double LatencyP95Ms { get; init; }
+    public int RiskAfterPolicy { get; init; }
+    public int MustNotHitRiskAfterPolicy { get; init; }
+    public int LifecycleRiskAfterPolicy { get; init; }
+    public int FormalOutputChanged { get; init; }
+    public bool FormalSelectedSetChanged { get; init; }
+    public bool FormalPackageWritten { get; init; }
+    public bool PackageOutputChanged { get; init; }
+    public bool PackingPolicyChanged { get; init; }
+    public bool RuntimeMutated { get; init; }
+    public bool VectorStoreBindingChanged { get; init; }
+    public bool RollbackVerified { get; init; }
+    public bool KillSwitchTested { get; init; }
+    public bool StopConditionsChecked { get; init; }
+    public bool TraceWritten { get; init; }
+    public bool FormalRetrievalAllowed { get; init; }
+    public bool RuntimeSwitchAllowed { get; init; }
+    public bool GlobalDefaultOn { get; init; }
+}
+
+
+/// <summary>V7.3 scoped runtime preview observation window 报告。
+/// 可以跑 observation window，但仍是 scoped、preview-only、allowlisted only、discard result、trace/report only、no formal output mutation。</summary>
+public sealed class ControlledAppliedMergeRuntimePreviewObservationWindowReport
+{
+    public string OperationId { get; init; } = "";
+    public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
+    public bool ObservationPassed { get; init; }
+    public bool GatePassed { get; init; }
+    public string Recommendation { get; init; }
+        = ControlledAppliedMergeRuntimePreviewObservationWindowRecommendations.KeepPreviewOnly;
+    public string NextAllowedPhase { get; init; } = "KeepPreviewOnly";
+
+    public bool PreflightPassed { get; init; }
+    public bool DryRunPassed { get; init; }
+    public bool V6FreezePassed { get; init; }
+    public bool RuntimeChangeGatePassed { get; init; }
+    public bool P15GatePassed { get; init; }
+
+    public IReadOnlyList<string> AllowlistedScopes { get; init; } = Array.Empty<string>();
+    public string TracePath { get; init; } = "";
+
+    public int ObservationRunCount { get; init; }
+    public int MinObservationRunCount { get; init; }
+    public int FailedRunCount { get; init; }
+    public int RequestCountTotal { get; init; }
+    public int MaxRequestCount { get; init; }
+    public int DurationMinutes { get; init; }
+    public int MaxDurationMinutes { get; init; }
+    public int ErrorCount { get; init; }
+    public int MaxErrorCount { get; init; }
+    public bool RequestDurationErrorWindowEnforced { get; init; }
+    public bool ObservationWindowLimitEnforced { get; init; }
+
+    public int DistinctStableSignatureCount { get; init; }
+    public bool DeterministicDryRunStable { get; init; }
+    public bool PreviewAddRemoveStable { get; init; }
+    public int WouldApplyAddCountMin { get; init; }
+    public int WouldApplyAddCountMax { get; init; }
+    public int WouldApplyAddCountTotal { get; init; }
+    public int WouldApplyRemoveCountMin { get; init; }
+    public int WouldApplyRemoveCountMax { get; init; }
+    public int WouldApplyRemoveCountTotal { get; init; }
+
+    public int AppliedAddCountMax { get; init; }
+    public int AppliedRemoveCountMax { get; init; }
+    public bool AppliedDeltaZero { get; init; }
+
+    public int TotalTokenDeltaMax { get; init; }
+    public int MaxTokenDeltaPerSampleMax { get; init; }
+    public bool TokenDeltaWithinBudget { get; init; }
+
+    public int ScopeLeakCountTotal { get; init; }
+    public int ErrorCountTotal { get; init; }
+    public double LatencyP50MsAvg { get; init; }
+    public double LatencyP95MsMax { get; init; }
+
+    public int RiskAfterPolicyMax { get; init; }
+    public int MustNotHitRiskAfterPolicyMax { get; init; }
+    public int LifecycleRiskAfterPolicyMax { get; init; }
+    public int FormalOutputChangedMax { get; init; }
+
+    public bool RollbackVerified { get; init; }
+    public bool KillSwitchTested { get; init; }
+    public bool StopConditionsChecked { get; init; }
+    public bool TraceWritten { get; init; }
+    public bool ResultDiscarded { get; init; }
+
+    public bool FormalSelectedSetChanged { get; init; }
+    public bool FormalPackageWritten { get; init; }
+    public bool PackageOutputChanged { get; init; }
+    public bool PackingPolicyChanged { get; init; }
+    public bool RuntimeMutated { get; init; }
+    public bool VectorStoreBindingChanged { get; init; }
+    public bool FormalRetrievalAllowed { get; init; }
+    public bool RuntimeSwitchAllowed { get; init; }
+    public bool GlobalDefaultOn { get; init; }
+    public bool NoRuntimeMutationInvariant { get; init; }
+
+    public IReadOnlyList<ControlledAppliedMergeRuntimePreviewObservationRunResult> Runs { get; init; } = Array.Empty<ControlledAppliedMergeRuntimePreviewObservationRunResult>();
+    public IReadOnlyList<string> AllowedActions { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> ForbiddenActions { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> BlockedReasons { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> Diagnostics { get; init; } = Array.Empty<string>();
+}
+
+
 /// <summary>架构清理计划报告。</summary>
 public sealed class ArchitectureCleanupPlanReport
 {
@@ -1098,6 +1541,73 @@ public sealed class ArchitectureCleanupPlanReport
         = Array.Empty<ArchitectureCleanupItem>();
     public IReadOnlyList<string> Diagnostics { get; init; } = Array.Empty<string>();
     public IReadOnlyList<string> BlockedReasons { get; init; } = Array.Empty<string>();
+}
+
+
+/// <summary>架构清理已完成项。</summary>
+public sealed class ArchitectureCleanupCompletedItem
+{
+    public string Category { get; init; } = "";
+    public string Result { get; init; } = "";
+    public IReadOnlyList<string> Artifacts { get; init; } = Array.Empty<string>();
+}
+
+
+/// <summary>架构清理冻结报告；汇总 OPT-001~OPT-006 结果并冻结 ArchitectureCleanup=Frozen。</summary>
+public sealed class ArchitectureCleanupFreezeReport
+{
+    public string OperationId { get; init; } = "";
+    public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
+    public bool FreezePassed { get; init; }
+    public string Recommendation { get; init; } = ArchitectureCleanupFreezeRecommendations.BlockedByMissingReports;
+    public string ArchitectureCleanup { get; init; } = "Frozen";
+    public string NextAllowedPhase { get; init; } = "None (ArchitectureCleanup frozen)";
+    public IReadOnlyList<ArchitectureCleanupCompletedItem> CompletedItems { get; init; } = Array.Empty<ArchitectureCleanupCompletedItem>();
+    public IReadOnlyList<string> RemainingDebt { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> DeferredCleanupItems { get; init; } = Array.Empty<string>();
+    public int TotalDtoCount { get; init; }
+    public int CoreRuntimeDtoCount { get; init; }
+    public int TotalRunnerCount { get; init; }
+    public int RuntimeRunnerCount { get; init; }
+    public int EvalRunnerCount { get; init; }
+    public int GateRunnerCount { get; init; }
+    public int DatasetRunnerCount { get; init; }
+    public int LegacyRunnerCount { get; init; }
+    public int EvalCommandMainLines { get; init; }
+    public int EvalCommandFamilyTotalLines { get; init; }
+    public int ControlRoomServiceLines { get; init; }
+    public int RendererLines { get; init; }
+    public int ControlRoomRegistryDescriptorCount { get; init; }
+    public bool ArchitectureCleanupPlanPassed { get; init; }
+    public bool DtoSplitPlanGenerated { get; init; }
+    public bool PathHygieneGatePassed { get; init; }
+    public bool P15BuildLockHardened { get; init; }
+    public bool ControlRoomRegistryConsolidated { get; init; }
+    public bool EvalCommandSplit { get; init; }
+    public bool VectorRunnerDirectoryIsolated { get; init; }
+    public bool FormalRetrievalNotEnabled { get; init; }
+    public bool NoRuntimeSwitch { get; init; }
+    public bool NoFormalPackageWrite { get; init; }
+    public bool NoPackagePackingPolicyVectorBindingMutation { get; init; }
+    public IReadOnlyList<string> BlockedReasons { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> Warnings { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> Diagnostics { get; init; } = Array.Empty<string>();
+}
+
+
+/// <summary>架构清理冻结 gate 报告；验证 freeze 报告的 completeness 和 compliance。</summary>
+public sealed class ArchitectureCleanupFreezeGateReport
+{
+    public string OperationId { get; init; } = "";
+    public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
+    public bool GatePassed { get; init; }
+    public string Recommendation { get; init; } = "";
+    public bool FreezeReportPresent { get; init; }
+    public bool FreezePassed { get; init; }
+    public bool AllSubReportsAvailable { get; init; }
+    public bool AllGateRulesCompliant { get; init; }
+    public IReadOnlyList<string> BlockedReasons { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> Diagnostics { get; init; } = Array.Empty<string>();
 }
 
 

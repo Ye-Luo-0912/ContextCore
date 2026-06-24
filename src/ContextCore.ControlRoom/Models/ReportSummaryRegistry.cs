@@ -116,6 +116,54 @@ public static class ReportSummaryRegistry
     };
 
     // =========================================================================
+    // V7 descriptors
+    // =========================================================================
+
+    public static readonly ControlRoomReportDescriptor V7ControlledAppliedMergeRuntimePreviewPlan = new()
+    {
+        ReportId = "ControlledAppliedMergeRuntimePreviewPlan",
+        DisplayTitle = "V7.0 Controlled Applied Merge Runtime Preview Plan Summary",
+        PrimaryPath = "vector/v7/runtime-preview-plan.json",
+        GatePath = "vector/v7/runtime-preview-plan-gate.json",
+        PhaseGroup = "V7",
+        EvalGateCommand = "eval controlled-applied-merge-runtime-preview-plan-gate",
+        EvalPlanCommand = "eval controlled-applied-merge-runtime-preview-plan",
+    };
+
+    public static readonly ControlRoomReportDescriptor V7ControlledAppliedMergeRuntimePreviewDryRun = new()
+    {
+        ReportId = "ControlledAppliedMergeRuntimePreviewDryRun",
+        DisplayTitle = "V7.1 Controlled Applied Merge Runtime Preview Dry-run Summary",
+        PrimaryPath = "vector/v7/runtime-preview-dry-run.json",
+        GatePath = "vector/v7/runtime-preview-dry-run-gate.json",
+        PhaseGroup = "V7",
+        EvalGateCommand = "eval controlled-applied-merge-runtime-preview-dry-run-gate",
+        EvalPlanCommand = "eval controlled-applied-merge-runtime-preview-dry-run",
+    };
+
+    public static readonly ControlRoomReportDescriptor V7ControlledAppliedMergeRuntimePreviewActivationPreflight = new()
+    {
+        ReportId = "ControlledAppliedMergeRuntimePreviewActivationPreflight",
+        DisplayTitle = "V7.2 Controlled Applied Merge Runtime Preview Activation Preflight Summary",
+        PrimaryPath = "vector/v7/activation-preflight.json",
+        GatePath = "vector/v7/activation-preflight-gate.json",
+        PhaseGroup = "V7",
+        EvalGateCommand = "eval controlled-applied-merge-runtime-preview-activation-preflight-gate",
+        EvalPlanCommand = "eval controlled-applied-merge-runtime-preview-activation-preflight",
+    };
+
+    public static readonly ControlRoomReportDescriptor V7ControlledAppliedMergeRuntimePreviewObservationWindow = new()
+    {
+        ReportId = "ControlledAppliedMergeRuntimePreviewObservationWindow",
+        DisplayTitle = "V7.3 Controlled Applied Merge Runtime Preview Observation Window Summary",
+        PrimaryPath = "vector/v7/observation-window.json",
+        GatePath = "vector/v7/observation-window-gate.json",
+        PhaseGroup = "V7",
+        EvalGateCommand = "eval controlled-applied-merge-runtime-preview-observation-window-gate",
+        EvalPlanCommand = "eval controlled-applied-merge-runtime-preview-observation-window",
+    };
+
+    // =========================================================================
     // V5 descriptors
     // =========================================================================
 
@@ -329,6 +377,25 @@ public static class ReportSummaryRegistry
         EvalGateCommand = "eval dto-split-plan",
     };
 
+    public static readonly ControlRoomReportDescriptor OPTArchitectureCleanupFreeze = new()
+    {
+        ReportId = "ArchitectureCleanupFreeze",
+        DisplayTitle = "OPT Architecture Cleanup Freeze",
+        PrimaryPath = "eval/architecture-cleanup-freeze.json",
+        GatePath = "eval/architecture-cleanup-freeze-gate.json",
+        PhaseGroup = "OPT",
+        EvalGateCommand = "eval architecture-cleanup-freeze",
+    };
+
+    public static readonly ControlRoomReportDescriptor OPTArchitectureCleanupFreezeGate = new()
+    {
+        ReportId = "ArchitectureCleanupFreezeGate",
+        DisplayTitle = "OPT Architecture Cleanup Freeze Gate",
+        PrimaryPath = "eval/architecture-cleanup-freeze-gate.json",
+        PhaseGroup = "OPT",
+        EvalGateCommand = "eval architecture-cleanup-freeze-gate",
+    };
+
     // =========================================================================
     // Grouped accessors
     // =========================================================================
@@ -346,6 +413,14 @@ public static class ReportSummaryRegistry
         V6ControlledAppliedMergeProposal,
         V6ControlledAppliedMergePreviewFreeze,
         V6ControlledAppliedMergeScopedPreview,
+    };
+
+    public static IReadOnlyList<ControlRoomReportDescriptor> V7Descriptors { get; } = new[]
+    {
+        V7ControlledAppliedMergeRuntimePreviewPlan,
+        V7ControlledAppliedMergeRuntimePreviewDryRun,
+        V7ControlledAppliedMergeRuntimePreviewActivationPreflight,
+        V7ControlledAppliedMergeRuntimePreviewObservationWindow,
     };
 
     public static IReadOnlyList<ControlRoomReportDescriptor> V5Descriptors { get; } = new[]
@@ -375,5 +450,7 @@ public static class ReportSummaryRegistry
     {
         OPTArchitectureCleanupPlan,
         OPTDtoSplitPlan,
+        OPTArchitectureCleanupFreeze,
+        OPTArchitectureCleanupFreezeGate,
     };
 }

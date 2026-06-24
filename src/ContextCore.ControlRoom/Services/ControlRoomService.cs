@@ -2880,6 +2880,12 @@ public sealed class ControlRoomService
                 .ConfigureAwait(false),
             ServiceFoundationFreezeReport = await ReadServiceFoundationFreezeReportAsync(cancellationToken)
                 .ConfigureAwait(false),
+            ArchitectureCleanupFreezeReport = TryLoadArchitectureCleanupFreezeSummary()?.Report,
+            ArchitectureCleanupFreezeGateReport = TryLoadArchitectureCleanupFreezeGateSummary()?.Report,
+            ControlledAppliedMergeRuntimePreviewPlanReport = TryLoadControlledAppliedMergeRuntimePreviewPlanSummary()?.Report,
+            ControlledAppliedMergeRuntimePreviewDryRunReport = TryLoadControlledAppliedMergeRuntimePreviewDryRunSummary()?.Report,
+            ControlledAppliedMergeRuntimePreviewActivationPreflightReport = TryLoadControlledAppliedMergeRuntimePreviewActivationPreflightSummary()?.Report,
+            ControlledAppliedMergeRuntimePreviewObservationWindowReport = TryLoadControlledAppliedMergeRuntimePreviewObservationWindowSummary()?.Report,
             Limit = limit,
             Offset = offset
         };
@@ -7441,6 +7447,28 @@ public sealed class ControlRoomService
             VectorReportPath("v5", "formal-retrieval-integration-freeze.json"));
     }
 
+    // OPT loaders
+
+    private static (ArchitectureCleanupFreezeReport Report, string SourcePath)? TryLoadArchitectureCleanupFreezeSummary()
+        => TryLoadFromDescriptor<ArchitectureCleanupFreezeReport>(ReportSummaryRegistry.OPTArchitectureCleanupFreeze);
+
+    private static (ArchitectureCleanupFreezeGateReport Report, string SourcePath)? TryLoadArchitectureCleanupFreezeGateSummary()
+        => TryLoadFromDescriptor<ArchitectureCleanupFreezeGateReport>(ReportSummaryRegistry.OPTArchitectureCleanupFreezeGate);
+
+    // V7 loaders
+
+    private static (ControlledAppliedMergeRuntimePreviewPlanReport Report, string SourcePath)? TryLoadControlledAppliedMergeRuntimePreviewPlanSummary()
+        => TryLoadFromDescriptor<ControlledAppliedMergeRuntimePreviewPlanReport>(ReportSummaryRegistry.V7ControlledAppliedMergeRuntimePreviewPlan);
+
+    private static (ControlledAppliedMergeRuntimePreviewDryRunReport Report, string SourcePath)? TryLoadControlledAppliedMergeRuntimePreviewDryRunSummary()
+        => TryLoadFromDescriptor<ControlledAppliedMergeRuntimePreviewDryRunReport>(ReportSummaryRegistry.V7ControlledAppliedMergeRuntimePreviewDryRun);
+
+    private static (ControlledAppliedMergeRuntimePreviewActivationPreflightReport Report, string SourcePath)? TryLoadControlledAppliedMergeRuntimePreviewActivationPreflightSummary()
+        => TryLoadFromDescriptor<ControlledAppliedMergeRuntimePreviewActivationPreflightReport>(ReportSummaryRegistry.V7ControlledAppliedMergeRuntimePreviewActivationPreflight);
+
+    private static (ControlledAppliedMergeRuntimePreviewObservationWindowReport Report, string SourcePath)? TryLoadControlledAppliedMergeRuntimePreviewObservationWindowSummary()
+        => TryLoadFromDescriptor<ControlledAppliedMergeRuntimePreviewObservationWindowReport>(ReportSummaryRegistry.V7ControlledAppliedMergeRuntimePreviewObservationWindow);
+
     private static string VectorReportPath(string phase, string fileName)
     {
         return Path.Combine("vector", phase, fileName);
@@ -10350,6 +10378,18 @@ public sealed class ServiceLearningFeaturesSnapshot
     public LearningRuntimeChangeReadinessGateReport? LearningRuntimeChangeReadinessGateReport { get; init; }
 
     public ContextCoreFoundationFreezeReport? FoundationFreezeReport { get; init; }
+
+    public ArchitectureCleanupFreezeReport? ArchitectureCleanupFreezeReport { get; init; }
+
+    public ArchitectureCleanupFreezeGateReport? ArchitectureCleanupFreezeGateReport { get; init; }
+
+    public ControlledAppliedMergeRuntimePreviewPlanReport? ControlledAppliedMergeRuntimePreviewPlanReport { get; init; }
+
+    public ControlledAppliedMergeRuntimePreviewDryRunReport? ControlledAppliedMergeRuntimePreviewDryRunReport { get; init; }
+
+    public ControlledAppliedMergeRuntimePreviewActivationPreflightReport? ControlledAppliedMergeRuntimePreviewActivationPreflightReport { get; init; }
+
+    public ControlledAppliedMergeRuntimePreviewObservationWindowReport? ControlledAppliedMergeRuntimePreviewObservationWindowReport { get; init; }
 
     public FoundationServiceStatusResponse? FoundationServiceStatus { get; init; }
 

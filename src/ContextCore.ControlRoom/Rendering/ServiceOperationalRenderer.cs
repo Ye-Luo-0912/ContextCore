@@ -3524,6 +3524,153 @@ public static class ServiceOperationalRenderer
             }
         }
 
+        builder.AppendLine();
+        builder.AppendLine("Architecture Cleanup Freeze");
+        var architectureFreeze = snapshot.ArchitectureCleanupFreezeReport;
+        if (architectureFreeze is null)
+        {
+            builder.AppendLine("- status : not generated");
+            builder.AppendLine("- path   : eval/architecture-cleanup-freeze.json");
+            builder.AppendLine("- action : run eval architecture-cleanup-freeze");
+        }
+        else
+        {
+            builder.AppendLine($"- freeze passed      : {architectureFreeze.FreezePassed}");
+            builder.AppendLine($"- recommendation     : {architectureFreeze.Recommendation}");
+            builder.AppendLine($"- cleanup status     : {architectureFreeze.ArchitectureCleanup}");
+            builder.AppendLine($"- next phase         : {architectureFreeze.NextAllowedPhase}");
+            builder.AppendLine($"- runtime runners    : {architectureFreeze.RuntimeRunnerCount}");
+            builder.AppendLine($"- eval runners       : {architectureFreeze.EvalRunnerCount}");
+            builder.AppendLine($"- total DTO types    : {architectureFreeze.TotalDtoCount} (runtime: {architectureFreeze.CoreRuntimeDtoCount})");
+            builder.AppendLine($"- EvalCommand lines  : {architectureFreeze.EvalCommandMainLines} (family: {architectureFreeze.EvalCommandFamilyTotalLines})");
+            builder.AppendLine($"- plan passed        : {architectureFreeze.ArchitectureCleanupPlanPassed}");
+            builder.AppendLine($"- DTO split          : {architectureFreeze.DtoSplitPlanGenerated}");
+            builder.AppendLine($"- path hygiene       : {architectureFreeze.PathHygieneGatePassed}");
+            builder.AppendLine($"- P15 hardened       : {architectureFreeze.P15BuildLockHardened}");
+            builder.AppendLine($"- registry           : {architectureFreeze.ControlRoomRegistryConsolidated} ({architectureFreeze.ControlRoomRegistryDescriptorCount} descriptors)");
+            builder.AppendLine($"- gate compliant     : {architectureFreeze.FormalRetrievalNotEnabled} / {architectureFreeze.NoRuntimeSwitch} / {architectureFreeze.NoFormalPackageWrite} / {architectureFreeze.NoPackagePackingPolicyVectorBindingMutation}");
+            if (architectureFreeze.BlockedReasons.Count > 0)
+                builder.AppendLine($"- blocked            : {string.Join(", ", architectureFreeze.BlockedReasons)}");
+            if (architectureFreeze.Warnings.Count > 0)
+                builder.AppendLine($"- warnings           : {string.Join(", ", architectureFreeze.Warnings)}");
+        }
+
+        builder.AppendLine();
+        builder.AppendLine("V7.0 Controlled Applied Merge Runtime Preview Plan");
+        var v7Plan = snapshot.ControlledAppliedMergeRuntimePreviewPlanReport;
+        if (v7Plan is null)
+        {
+            builder.AppendLine("- status : not generated");
+            builder.AppendLine("- path   : vector/v7/runtime-preview-plan.json");
+            builder.AppendLine("- action : run eval controlled-applied-merge-runtime-preview-plan");
+        }
+        else
+        {
+            builder.AppendLine($"- plan passed        : {v7Plan.PlanPassed}");
+            builder.AppendLine($"- recommendation     : {v7Plan.Recommendation}");
+            builder.AppendLine($"- mode               : {v7Plan.Mode}");
+            builder.AppendLine($"- next phase         : {v7Plan.NextAllowedPhase}");
+            builder.AppendLine($"- V6 freeze          : {v7Plan.V6FreezePassed}");
+            builder.AppendLine($"- OPT freeze         : {v7Plan.OPTFreezePassed}");
+            builder.AppendLine($"- runtime change     : {v7Plan.RuntimeChangeGatePassed}");
+            builder.AppendLine($"- P15                : {v7Plan.P15GatePassed}");
+            builder.AppendLine($"- allowlisted scopes : {v7Plan.AllowlistedScopes.Count}");
+            builder.AppendLine($"- config switch      : {v7Plan.ConfigSwitch}");
+            builder.AppendLine($"- trace path         : {v7Plan.TracePath}");
+            builder.AppendLine($"- max requests       : {v7Plan.MaxRequestCount}");
+            builder.AppendLine($"- max duration (min) : {v7Plan.MaxDurationMinutes}");
+            builder.AppendLine($"- kill switch present: {!string.IsNullOrWhiteSpace(v7Plan.KillSwitchPlan)}");
+            builder.AppendLine($"- rollback present   : {!string.IsNullOrWhiteSpace(v7Plan.RollbackPlan)}");
+            builder.AppendLine($"- observation metrics: {v7Plan.ObservationMetrics.Count}");
+            builder.AppendLine($"- stop conditions    : {v7Plan.StopConditions.Count}");
+            builder.AppendLine($"- runtime invariants : formalRetrieval={v7Plan.FormalRetrievalAllowed} runtimeSwitch={v7Plan.RuntimeSwitchAllowed} formalPackage={v7Plan.FormalPackageWritten} packingPolicy={v7Plan.PackingPolicyChanged} packageOutput={v7Plan.PackageOutputChanged} runtimeMutated={v7Plan.RuntimeMutated} vectorStoreBinding={v7Plan.VectorStoreBindingChanged} globalDefaultOn={v7Plan.GlobalDefaultOn}");
+            if (v7Plan.BlockedReasons.Count > 0)
+                builder.AppendLine($"- blocked            : {string.Join(", ", v7Plan.BlockedReasons)}");
+        }
+
+        builder.AppendLine();
+        builder.AppendLine("V7.1 Controlled Applied Merge Runtime Preview Dry-run");
+        var v7DryRun = snapshot.ControlledAppliedMergeRuntimePreviewDryRunReport;
+        if (v7DryRun is null)
+        {
+            builder.AppendLine("- status : not generated");
+            builder.AppendLine("- path   : vector/v7/runtime-preview-dry-run.json");
+            builder.AppendLine("- action : run eval controlled-applied-merge-runtime-preview-dry-run");
+        }
+        else
+        {
+            builder.AppendLine($"- dry-run passed     : {v7DryRun.DryRunPassed}");
+            builder.AppendLine($"- gate passed        : {v7DryRun.GatePassed}");
+            builder.AppendLine($"- recommendation     : {v7DryRun.Recommendation}");
+            builder.AppendLine($"- next phase         : {v7DryRun.NextAllowedPhase}");
+            builder.AppendLine($"- plan passed        : {v7DryRun.PlanPassed}");
+            builder.AppendLine($"- V6 freeze          : {v7DryRun.V6FreezePassed}");
+            builder.AppendLine($"- observation runs   : {v7DryRun.ObservationRuns}");
+            builder.AppendLine($"- would-apply add/rm : {v7DryRun.WouldApplyAddCount}/{v7DryRun.WouldApplyRemoveCount}");
+            builder.AppendLine($"- token delta        : {v7DryRun.TotalTokenDelta}");
+            builder.AppendLine($"- scope leak         : {v7DryRun.ScopeLeakCount}");
+            builder.AppendLine($"- rollback verified  : {v7DryRun.RollbackVerified}");
+            builder.AppendLine($"- kill switch tested : {v7DryRun.KillSwitchTested}");
+            builder.AppendLine($"- trace written      : {v7DryRun.TraceWritten}");
+            builder.AppendLine($"- invariants         : formalSelSet={v7DryRun.FormalSelectedSetChanged} formalPkg={v7DryRun.FormalPackageWritten} pkgOutput={v7DryRun.PackageOutputChanged} packingPolicy={v7DryRun.PackingPolicyChanged} runtimeMutated={v7DryRun.RuntimeMutated} vectorStoreBinding={v7DryRun.VectorStoreBindingChanged} formalRetrieval={v7DryRun.FormalRetrievalAllowed} runtimeSwitch={v7DryRun.RuntimeSwitchAllowed} globalDefaultOn={v7DryRun.GlobalDefaultOn}");
+            if (v7DryRun.BlockedReasons.Count > 0)
+                builder.AppendLine($"- blocked            : {string.Join(", ", v7DryRun.BlockedReasons)}");
+        }
+
+        builder.AppendLine();
+        builder.AppendLine("V7.2 Controlled Applied Merge Runtime Preview Activation Preflight");
+        var v7Preflight = snapshot.ControlledAppliedMergeRuntimePreviewActivationPreflightReport;
+        if (v7Preflight is null)
+        {
+            builder.AppendLine("- status : not generated");
+            builder.AppendLine("- path   : vector/v7/activation-preflight.json");
+            builder.AppendLine("- action : run eval controlled-applied-merge-runtime-preview-activation-preflight");
+        }
+        else
+        {
+            builder.AppendLine($"- preflight passed   : {v7Preflight.PreflightPassed}");
+            builder.AppendLine($"- gate passed        : {v7Preflight.GatePassed}");
+            builder.AppendLine($"- recommendation     : {v7Preflight.Recommendation}");
+            builder.AppendLine($"- next phase         : {v7Preflight.NextAllowedPhase}");
+            builder.AppendLine($"- plan / dryRun      : {v7Preflight.PlanPassed} / {v7Preflight.DryRunPassed}");
+            builder.AppendLine($"- V6 freeze          : {v7Preflight.V6FreezePassed}");
+            builder.AppendLine($"- kill switch        : {v7Preflight.KillSwitchAvailable}");
+            builder.AppendLine($"- rollback           : {v7Preflight.RollbackPlanAvailable}");
+            builder.AppendLine($"- trace sink         : {v7Preflight.TraceSinkAvailable}");
+            builder.AppendLine($"- config patch       : previewed={v7Preflight.ConfigPatchPreviewed} written={v7Preflight.ConfigPatchWritten}");
+            builder.AppendLine($"- scope validation   : {v7Preflight.ScopeValidationPassed} (leak={v7Preflight.ScopeLeakCount})");
+            builder.AppendLine($"- invariants         : formalSelSet={v7Preflight.FormalSelectedSetChanged} formalPkg={v7Preflight.FormalPackageWritten} pkgOutput={v7Preflight.PackageOutputChanged} packingPolicy={v7Preflight.PackingPolicyChanged} runtimeMutated={v7Preflight.RuntimeMutated} vectorStoreBinding={v7Preflight.VectorStoreBindingChanged} formalRetrieval={v7Preflight.FormalRetrievalAllowed} runtimeSwitch={v7Preflight.RuntimeSwitchAllowed} globalDefaultOn={v7Preflight.GlobalDefaultOn}");
+            if (v7Preflight.BlockedReasons.Count > 0)
+                builder.AppendLine($"- blocked            : {string.Join(", ", v7Preflight.BlockedReasons)}");
+        }
+
+        builder.AppendLine();
+        builder.AppendLine("V7.3 Controlled Applied Merge Runtime Preview Observation Window");
+        var v7Obs = snapshot.ControlledAppliedMergeRuntimePreviewObservationWindowReport;
+        if (v7Obs is null)
+        {
+            builder.AppendLine("- status : not generated");
+            builder.AppendLine("- path   : vector/v7/observation-window.json");
+            builder.AppendLine("- action : run eval controlled-applied-merge-runtime-preview-observation-window");
+        }
+        else
+        {
+            builder.AppendLine($"- observation passed : {v7Obs.ObservationPassed}");
+            builder.AppendLine($"- gate passed        : {v7Obs.GatePassed}");
+            builder.AppendLine($"- recommendation     : {v7Obs.Recommendation}");
+            builder.AppendLine($"- next phase         : {v7Obs.NextAllowedPhase}");
+            builder.AppendLine($"- preflight / dryRun : {v7Obs.PreflightPassed} / {v7Obs.DryRunPassed}");
+            builder.AppendLine($"- runs / failed      : {v7Obs.ObservationRunCount} / {v7Obs.FailedRunCount}");
+            builder.AppendLine($"- stable signatures  : {v7Obs.DistinctStableSignatureCount} (deterministic={v7Obs.DeterministicDryRunStable})");
+            builder.AppendLine($"- would-apply add/rm : {v7Obs.WouldApplyAddCountMin}-{v7Obs.WouldApplyAddCountMax} / {v7Obs.WouldApplyRemoveCountMin}-{v7Obs.WouldApplyRemoveCountMax}");
+            builder.AppendLine($"- appliedDeltaZero   : {v7Obs.AppliedDeltaZero}");
+            builder.AppendLine($"- resultDiscarded    : {v7Obs.ResultDiscarded}");
+            builder.AppendLine($"- traceWritten       : {v7Obs.TraceWritten}");
+            builder.AppendLine($"- invariants         : formalSelSet={v7Obs.FormalSelectedSetChanged} formalPkg={v7Obs.FormalPackageWritten} pkgOutput={v7Obs.PackageOutputChanged} packingPolicy={v7Obs.PackingPolicyChanged} runtimeMutated={v7Obs.RuntimeMutated} vectorStoreBinding={v7Obs.VectorStoreBindingChanged} formalRetrieval={v7Obs.FormalRetrievalAllowed} runtimeSwitch={v7Obs.RuntimeSwitchAllowed} globalDefaultOn={v7Obs.GlobalDefaultOn}");
+            if (v7Obs.BlockedReasons.Count > 0)
+                builder.AppendLine($"- blocked            : {string.Join(", ", v7Obs.BlockedReasons)}");
+        }
+
         return builder.ToString();
     }
 

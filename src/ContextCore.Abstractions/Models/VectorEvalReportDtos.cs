@@ -4825,6 +4825,18 @@ public static class ArchitectureCleanupPlanRecommendations
 }
 
 
+/// <summary>架构清理冻结推荐。</summary>
+public static class ArchitectureCleanupFreezeRecommendations
+{
+    public const string CleanupFrozen = nameof(CleanupFrozen);
+    public const string BlockedByMissingReports = nameof(BlockedByMissingReports);
+    public const string BlockedByPlanNotPassed = nameof(BlockedByPlanNotPassed);
+    public const string BlockedByDtoSplitFailed = nameof(BlockedByDtoSplitFailed);
+    public const string BlockedByHygieneGateFailed = nameof(BlockedByHygieneGateFailed);
+    public const string DeferredCleanupNotCompleted = nameof(DeferredCleanupNotCompleted);
+}
+
+
 /// <summary>Scoped runtime experiment no-op harness mode。</summary>
 public static class ScopedRuntimeExperimentNoOpHarnessModes
 {

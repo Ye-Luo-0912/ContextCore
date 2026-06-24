@@ -1,0 +1,128 @@
+﻿{
+  "OperationId": "arch-cleanup-freeze-766e3393631b4ac89f0bfbd983480290",
+  "CreatedAt": "2026-06-24T12:22:18.7683441+00:00",
+  "FreezePassed": true,
+  "Recommendation": "CleanupFrozen",
+  "ArchitectureCleanup": "Frozen",
+  "NextAllowedPhase": "None (ArchitectureCleanup frozen)",
+  "CompletedItems": [
+    {
+      "Category": "EvalCommand \u62C6\u5206 (OPT-001)",
+      "Result": "EvalCommand.cs: 15912 lines; partial \u6587\u4EF6: EvalCommand.VectorV6.cs, EvalCommand.VectorV5.cs, EvalCommand.Learning.cs, EvalCommand.DtoSplit.cs; total family: 24005 lines; subcommand refs: 763",
+      "Artifacts": [
+        "src/ContextCore.ControlRoom/Commands/EvalCommand.cs",
+        "src/ContextCore.ControlRoom/Commands/EvalCommand.VectorV6.cs",
+        "src/ContextCore.ControlRoom/Commands/EvalCommand.VectorV5.cs",
+        "src/ContextCore.ControlRoom/Commands/EvalCommand.Learning.cs",
+        "src/ContextCore.ControlRoom/Commands/EvalCommand.DtoSplit.cs"
+      ]
+    },
+    {
+      "Category": "Abstractions DTO \u62C6\u5206 (OPT-003)",
+      "Result": "VectorIndexDtos (75 runtime) \u62C6\u5206\u4E3A 5 \u6587\u4EF6; EvalReportDtos: 154, GateReportDtos: 36, SummaryDtos: 5, LegacyDtos: 45; \u603B\u8BA1 315 \u7C7B\u578B",
+      "Artifacts": [
+        "src/ContextCore.Abstractions/Models/VectorIndexDtos.cs",
+        "src/ContextCore.Abstractions/Models/VectorEvalReportDtos.cs",
+        "src/ContextCore.Abstractions/Models/VectorGateReportDtos.cs",
+        "src/ContextCore.Abstractions/Models/VectorControlRoomSummaryDtos.cs",
+        "src/ContextCore.Abstractions/Models/VectorLegacyDtos.cs"
+      ]
+    },
+    {
+      "Category": "Vector eval-only runner \u76EE\u5F55\u9694\u79BB (OPT-004)",
+      "Result": "Runtime: 18, Eval: 55 (V5: 37, V6: 18), Gates: 12, Dataset: 8, Legacy: 11; \u603B\u8BA1 104 runners",
+      "Artifacts": [
+        "src/ContextCore.Core/Services/Vector/Evaluation/V5/",
+        "src/ContextCore.Core/Services/Vector/Evaluation/V6/",
+        "src/ContextCore.Core/Services/Vector/Evaluation/Gates/",
+        "src/ContextCore.Core/Services/Vector/Evaluation/Dataset/",
+        "src/ContextCore.Core/Services/Vector/Legacy/"
+      ]
+    },
+    {
+      "Category": "P15 build/test \u6587\u4EF6\u9501\u52A0\u56FA (OPT-005)",
+      "Result": "Build retry \u002B test retry \u002B stale cleanup; P15 pass verified by diagnostics: True",
+      "Artifacts": [
+        "scripts/eval-gate-p15.ps1",
+        "eval/p15-build-lock-diagnostics.json",
+        "eval/p15-build-lock-diagnostics.md"
+      ]
+    },
+    {
+      "Category": "Path hygiene \u9759\u6001\u002B\u52A8\u6001\u6267\u6CD5 (OPT-002)",
+      "Result": "Hygiene gate: Passed",
+      "Artifacts": [
+        "src/ContextCore.Abstractions/PathHygiene.cs",
+        "eval/generated-artifact-path-hygiene-gate.json",
+        "eval/generated-artifact-path-hygiene-audit.json"
+      ]
+    },
+    {
+      "Category": "ControlRoom summary registry \u5408\u5E76 (OPT-006)",
+      "Result": "Registry descriptors: 37 (V6: 11, V5: 19, OPT: 2); TryLoadFromDescriptor \u002B TryBeginReportSection consolidations",
+      "Artifacts": [
+        "src/ContextCore.ControlRoom/Models/ControlRoomReportDescriptor.cs",
+        "src/ContextCore.ControlRoom/Models/ReportSummaryRegistry.cs"
+      ]
+    }
+  ],
+  "RemainingDebt": [
+    "Future ContextCore.Evaluation project split \u2014 eval DTOs \u002B runners \u8FC1\u79FB\u5230\u72EC\u7ACB\u9879\u76EE",
+    "Deeper ControlRoom cleanup \u2014 loader \u53CC\u8C03\u7528\u70B9\u5408\u5E76\u4E3A\u5355\u6B21\u6C42\u503C \u002B \u5171\u4EAB",
+    "Performance profiling \u2014 \u5927\u65B9\u6CD5 profiling \u002B \u70ED\u70B9\u4F18\u5316",
+    "Phase index cleanup \u2014 \u7EDF\u4E00\u5230 docs/ContextCore_Phase_Index.md (\u5F53\u524D V5.1\u2013V5.10, V6.10\u2013V6.16 \u7F16\u53F7\u5DF2\u81A8\u80C0)",
+    "V5 deprecated runner \u5F52\u6863 \u2014 \u5DF2\u51BB\u7ED3\u7684 V5 runner \u6807\u8BB0\u4E3A deprecated \u6216\u8FC1\u79FB\u5230 Legacy",
+    "Gate runner pipeline \u7EDF\u4E00 \u2014 Evaluation/Gates \u4E2D\u7684 gate runner \u5408\u5E76\u4E3A\u7EDF\u4E00 gate pipeline"
+  ],
+  "DeferredCleanupItems": [
+    "ContextCore.Evaluation \u72EC\u7ACB\u9879\u76EE \u2014 \u7B49\u5F85 Evaluation report/gate DTO \u002B runner \u91CF\u8DB3\u591F\u5927\u540E\u518D\u62C6\u5206",
+    "ControlRoom phase loader \u91CD\u6784 \u2014 \u7B49\u5F85\u66F4\u591A phase \u7A33\u5B9A\u540E\u518D\u5408\u5E76\u53CC\u8C03\u7528\u70B9",
+    "Renderer block \u62BD\u8C61 \u2014 \u7B49\u5F85 V5/V6 \u6E32\u67D3\u533A\u5757\u66F4\u591A\u7A33\u5B9A\u540E\u518D\u62BD\u8C61 RenderBlock \u516C\u7528\u65B9\u6CD5"
+  ],
+  "TotalDtoCount": 315,
+  "CoreRuntimeDtoCount": 75,
+  "TotalRunnerCount": 104,
+  "RuntimeRunnerCount": 18,
+  "EvalRunnerCount": 55,
+  "GateRunnerCount": 12,
+  "DatasetRunnerCount": 8,
+  "LegacyRunnerCount": 11,
+  "EvalCommandMainLines": 15912,
+  "EvalCommandFamilyTotalLines": 24005,
+  "ControlRoomServiceLines": 12235,
+  "RendererLines": 5806,
+  "ControlRoomRegistryDescriptorCount": 37,
+  "ArchitectureCleanupPlanPassed": true,
+  "DtoSplitPlanGenerated": true,
+  "PathHygieneGatePassed": true,
+  "P15BuildLockHardened": true,
+  "ControlRoomRegistryConsolidated": true,
+  "EvalCommandSplit": true,
+  "VectorRunnerDirectoryIsolated": true,
+  "FormalRetrievalNotEnabled": true,
+  "NoRuntimeSwitch": true,
+  "NoFormalPackageWrite": true,
+  "NoPackagePackingPolicyVectorBindingMutation": true,
+  "BlockedReasons": [],
+  "Warnings": [],
+  "Diagnostics": [
+    "Repository root: .",
+    "FreezePassed: True",
+    "PlanPassed: True",
+    "DtoSplitPlanGenerated: True",
+    "PathHygieneGatePassed: True",
+    "P15BuildLockHardened: True",
+    "ArchitectureCleanupPlan: present",
+    "DtoSplitPlan: present",
+    "HygieneGate: present",
+    "P15Diagnostics: present",
+    "Runners \u2014 Total: 104, Runtime: 18, Eval: 55 (V5:37\u002BV6:18), Gates: 12, Dataset: 8, Legacy: 11",
+    "DTOs \u2014 Total: 315, Runtime: 75, Eval: 154, Gate: 36, Summary: 5, Legacy: 45",
+    "EvalCommand.cs lines: 15912, Family total: 24005",
+    "ControlRoomService.cs lines: 12235",
+    "ServiceOperationalRenderer.cs lines: 5806",
+    "Eval subcommand refs: 763",
+    "ControlRoom registry descriptors: 37",
+    "Gate rules: FormalRetrievalNotEnabled=true, NoRuntimeSwitch=true, NoFormalPackageWrite=true, NoMutation=true"
+  ]
+}

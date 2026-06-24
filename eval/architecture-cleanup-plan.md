@@ -1,14 +1,14 @@
 ﻿# Architecture Cleanup Plan
 
-生成: `2026-06-24T10:08:23.8534045+00:00`
+生成: `2026-06-24T12:20:53.2154690+00:00`
 
 ## 核心指标
-- Core runner files: `105`
-- DTO classes: `311`
-- EvalCommand lines: `15862`
-- ControlRoomService lines: `12256`
-- Renderer lines: `5804`
-- Eval subcommand refs: `759`
+- Core runner files: `104`
+- DTO classes: `315`
+- EvalCommand lines: `15912`
+- ControlRoomService lines: `12235`
+- Renderer lines: `5806`
+- Eval subcommand refs: `763`
 
 ## 建议迁移项
 ### [HIGH] EvalCommand 拆分
@@ -17,12 +17,12 @@
 - 风险: low — 只移动代码，不改行为
 
 ### [MEDIUM] Core 中 eval-only runner 分离 (OPT-004 已部分完成)
-- 当前: eval-only runner 已按分类拆分到 Evaluation/V5 (37 files), Evaluation/V6 (17), Evaluation/Gates (11), Evaluation/Dataset (8), Legacy (11)；runtime 21 个文件保留在 Services/Vector/ 根目录
+- 当前: eval-only runner 已按分类拆分到 Evaluation/V5 (37 files), Evaluation/V6 (18), Evaluation/Gates (12), Evaluation/Dataset (8), Legacy (11)；runtime 18 个文件保留在 Services/Vector/ 根目录
 - 建议: 继续将 Evaluation/Gates 中的 gate runner 合并为统一 gate pipeline；将 V5 中已冻结的 runner 标记为 deprecated 或迁移到 Legacy
 - 风险: low — 已有目录结构，后续只做少量文件再分配
 
 ### [MEDIUM] Abstractions DTO 拆分 (OPT-003 已完成)
-- 当前: VectorIndexDtos 已拆分为 5 个文件: VectorIndexDtos (75), EvalReportDtos (153), GateReportDtos (33), SummaryDtos (5), LegacyDtos (45)；总计 311 类型
+- 当前: VectorIndexDtos 已拆分为 5 个文件: VectorIndexDtos (75), EvalReportDtos (154), GateReportDtos (36), SummaryDtos (5), LegacyDtos (45)；总计 315 类型
 - 建议: 后续按 OPT-005 将 report/gate DTO 迁移到独立 ContextCore.Eval.Models 项目
 - 风险: low — 已拆分，namespaces 和序列化行为未变
 
@@ -47,22 +47,22 @@
 - 风险: low — 已知工作区可用
 
 - Repository root: .
-- Core/Vector files (total): 105
--   Runtime: 21
+- Core/Vector files (total): 104
+-   Runtime: 18
 -   Legacy: 11
--   Evaluation/Gates: 11
+-   Evaluation/Gates: 12
 -   Evaluation/Dataset: 8
 -   Evaluation/V5: 37
--   Evaluation/V6: 17
-- DTO types (total): 311
+-   Evaluation/V6: 18
+- DTO types (total): 315
 -   VectorIndexDtos: 75
--   EvalReportDtos: 153
--   GateReportDtos: 33
+-   EvalReportDtos: 154
+-   GateReportDtos: 36
 -   SummaryDtos: 5
 -   LegacyDtos: 45
-- EvalCommand.cs lines: 15862
-- ControlRoomService.cs lines: 12256
-- ServiceOperationalRenderer.cs lines: 5804
-- Eval subcommand refs: 759
+- EvalCommand.cs lines: 15912
+- ControlRoomService.cs lines: 12235
+- ServiceOperationalRenderer.cs lines: 5806
+- Eval subcommand refs: 763
 
 OPT0 architecture cleanup plan. No runtime behavior change, no formal retrieval enable, no package/package policy/runtime/vector binding mutation.
