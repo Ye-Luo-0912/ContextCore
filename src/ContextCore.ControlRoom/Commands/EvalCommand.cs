@@ -292,6 +292,8 @@ public static partial class EvalCommand
             !string.Equals(subcommand, "scoped-runtime-preview-activation-dry-run-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "scoped-runtime-preview-activation-window-preflight", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "scoped-runtime-preview-activation-window-preflight-gate", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "scoped-runtime-preview-activation-window-noop-execution", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "scoped-runtime-preview-activation-window-noop-execution-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "dto-split-plan", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "dto-split-readiness-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "vector-retrieval-eval-protocol-audit", StringComparison.OrdinalIgnoreCase) &&
@@ -518,6 +520,8 @@ public static partial class EvalCommand
             Console.WriteLine("  eval scoped-runtime-preview-activation-dry-run-gate [--approved-by <name>] [--dry-runs <n>]");
             Console.WriteLine("  eval scoped-runtime-preview-activation-window-preflight [--approved-by <name>] [--max-window-minutes <n>] [--max-requests <n>]");
             Console.WriteLine("  eval scoped-runtime-preview-activation-window-preflight-gate [--approved-by <name>] [--max-window-minutes <n>] [--max-requests <n>]");
+            Console.WriteLine("  eval scoped-runtime-preview-activation-window-noop-execution [--approved-by <name>] [--min-windows <n>] [--requests-per-window <n>] [--min-requests <n>]");
+            Console.WriteLine("  eval scoped-runtime-preview-activation-window-noop-execution-gate [--approved-by <name>] [--min-windows <n>] [--requests-per-window <n>] [--min-requests <n>]");
             Console.WriteLine("  eval dto-split-plan");
             Console.WriteLine("  eval dto-split-readiness-gate");
             Console.WriteLine("  eval vector-retrieval-eval-protocol-audit");
@@ -1752,6 +1756,13 @@ public static partial class EvalCommand
             || string.Equals(subcommand, "scoped-runtime-preview-activation-window-preflight-gate", StringComparison.OrdinalIgnoreCase))
         {
             await ExecuteScopedRuntimePreviewActivationWindowPreflightAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        if (string.Equals(subcommand, "scoped-runtime-preview-activation-window-noop-execution", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(subcommand, "scoped-runtime-preview-activation-window-noop-execution-gate", StringComparison.OrdinalIgnoreCase))
+        {
+            await ExecuteScopedRuntimePreviewActivationWindowNoOpExecutionAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
             return;
         }
 

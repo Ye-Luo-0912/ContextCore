@@ -251,6 +251,17 @@ public static class ReportSummaryRegistry
         EvalPlanCommand = "eval scoped-runtime-preview-activation-window-preflight",
     };
 
+    public static readonly ControlRoomReportDescriptor V7ScopedRuntimePreviewActivationWindowNoOpExecution = new()
+    {
+        ReportId = "ScopedRuntimePreviewActivationWindowNoOpExecution",
+        DisplayTitle = "V7.10 Scoped Runtime Preview Activation Window No-op Execution Summary",
+        PrimaryPath = "vector/v7/activation-window-noop-execution.json",
+        GatePath = "vector/v7/activation-window-noop-execution-gate.json",
+        PhaseGroup = "V7",
+        EvalGateCommand = "eval scoped-runtime-preview-activation-window-noop-execution-gate",
+        EvalPlanCommand = "eval scoped-runtime-preview-activation-window-noop-execution",
+    };
+
     // =========================================================================
     // V5 descriptors
     // =========================================================================
@@ -517,6 +528,7 @@ public static class ReportSummaryRegistry
         V7ScopedRuntimePreviewActivationPreparation,
         V7ScopedRuntimePreviewActivationDryRun,
         V7ScopedRuntimePreviewActivationWindowPreflight,
+        V7ScopedRuntimePreviewActivationWindowNoOpExecution,
     };
 
     public static IReadOnlyList<ControlRoomReportDescriptor> V5Descriptors { get; } = new[]

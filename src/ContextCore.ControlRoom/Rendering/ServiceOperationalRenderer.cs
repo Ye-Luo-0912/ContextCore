@@ -3897,6 +3897,34 @@ public static class ServiceOperationalRenderer
                 builder.AppendLine($"- blocked            : {string.Join(", ", v7WinPreflight.BlockedReasons)}");
         }
 
+        builder.AppendLine();
+        builder.AppendLine("V7.10 Scoped Runtime Preview Activation Window No-op Execution");
+        var v7NoOpEx = snapshot.ScopedRuntimePreviewActivationWindowNoOpExecutionReport;
+        if (v7NoOpEx is null)
+        {
+            builder.AppendLine("- status : not generated");
+            builder.AppendLine("- path   : vector/v7/activation-window-noop-execution.json");
+            builder.AppendLine("- action : run eval scoped-runtime-preview-activation-window-noop-execution");
+        }
+        else
+        {
+            builder.AppendLine($"- no-op passed       : {v7NoOpEx.NoOpExecutionPassed}");
+            builder.AppendLine($"- gate passed        : {v7NoOpEx.GatePassed}");
+            builder.AppendLine($"- recommendation     : {v7NoOpEx.Recommendation}");
+            builder.AppendLine($"- next phase         : {v7NoOpEx.NextAllowedPhase}");
+            builder.AppendLine($"- windows            : {v7NoOpEx.WindowCount}/{v7NoOpEx.MinWindowCount}");
+            builder.AppendLine($"- requests           : {v7NoOpEx.RequestCountTotal}/{v7NoOpEx.MinRequestCountTotal}");
+            builder.AppendLine($"- approved hits      : {v7NoOpEx.ApprovedScopeHitCount}");
+            builder.AppendLine($"- non-approved noOps : {v7NoOpEx.NonApprovedScopeNoOpCount}");
+            builder.AppendLine($"- killSwitch noOps   : {v7NoOpEx.KillSwitchNoOpCount}");
+            builder.AppendLine($"- appliedDeltaZero   : {v7NoOpEx.AppliedDeltaZero}");
+            builder.AppendLine($"- configPatchWritten : {v7NoOpEx.ConfigPatchWritten}");
+            builder.AppendLine($"- runtimeActivation  : {v7NoOpEx.RuntimeActivation}");
+            builder.AppendLine($"- invariants         : formalRetrieval={v7NoOpEx.FormalRetrievalAllowed} runtimeSwitch={v7NoOpEx.RuntimeSwitchAllowed} formalPkg={v7NoOpEx.FormalPackageWritten} noRuntimeMutation={v7NoOpEx.NoRuntimeMutationInvariant}");
+            if (v7NoOpEx.BlockedReasons.Count > 0)
+                builder.AppendLine($"- blocked            : {string.Join(", ", v7NoOpEx.BlockedReasons)}");
+        }
+
         return builder.ToString();
     }
 

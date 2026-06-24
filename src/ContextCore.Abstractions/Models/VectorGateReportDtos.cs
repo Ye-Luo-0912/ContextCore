@@ -2359,6 +2359,104 @@ public sealed class ScopedRuntimePreviewActivationWindowPreflightReport
 }
 
 
+/// <summary>V7.10 activation window no-op execution 推荐。</summary>
+public static class ScopedRuntimePreviewActivationWindowNoOpExecutionRecommendations
+{
+    public const string ReadyForScopedRuntimePreviewActivationLive = nameof(ReadyForScopedRuntimePreviewActivationLive);
+    public const string BlockedByInsufficientRuns = nameof(BlockedByInsufficientRuns);
+    public const string BlockedByInsufficientRequests = nameof(BlockedByInsufficientRequests);
+    public const string BlockedByNoApprovedScopeHits = nameof(BlockedByNoApprovedScopeHits);
+    public const string BlockedByNoKillSwitchNoOp = nameof(BlockedByNoKillSwitchNoOp);
+    public const string BlockedByAppliedDeltaDetected = nameof(BlockedByAppliedDeltaDetected);
+    public const string BlockedByConfigPatchWritten = nameof(BlockedByConfigPatchWritten);
+    public const string BlockedByRuntimeActivationDetected = nameof(BlockedByRuntimeActivationDetected);
+    public const string BlockedBySafetyBoundaryViolation = nameof(BlockedBySafetyBoundaryViolation);
+    public const string KeepPreviewOnly = nameof(KeepPreviewOnly);
+}
+
+
+/// <summary>V7.10 no-op execution 单窗结果。</summary>
+public sealed class ScopedRuntimePreviewActivationWindowNoOpRunResult
+{
+    public int WindowIndex { get; init; }
+    public int RequestCount { get; init; }
+    public int ApprovedScopeHits { get; init; }
+    public int NonApprovedScopeNoOps { get; init; }
+    public int KillSwitchNoOps { get; init; }
+    public int WouldApplyAdd { get; init; }
+    public int WouldApplyRemove { get; init; }
+    public int AppliedAdd { get; init; }
+    public int AppliedRemove { get; init; }
+    public bool RollbackCheckpointVerified { get; init; }
+    public bool TraceSinkWritable { get; init; }
+    public bool ConfigPatchWritten { get; init; }
+    public bool RuntimeActivation { get; init; }
+    public int ErrorCount { get; init; }
+}
+
+
+/// <summary>V7.10 no-op execution 选项。</summary>
+public sealed class ScopedRuntimePreviewActivationWindowNoOpExecutionOptions
+{
+    public bool Enabled { get; init; } = true;
+    public bool ExplicitlyProvided { get; init; }
+    public string ApprovedBy { get; init; } = "ReleaseManager";
+    public int MinWindowCount { get; init; } = 3;
+    public int MinRequestCountTotal { get; init; } = 30;
+    public int RequestsPerWindow { get; init; } = 10;
+}
+
+
+/// <summary>V7.10 scoped runtime preview activation window no-op execution 报告。
+/// 模拟 activation window 执行节奏，保持 no-op。
+/// ConfigPatchWritten=false, RuntimeActivation=false, AppliedAdd/Remove=0/0。</summary>
+public sealed class ScopedRuntimePreviewActivationWindowNoOpExecutionReport
+{
+    public string OperationId { get; init; } = "";
+    public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
+    public bool NoOpExecutionPassed { get; init; }
+    public bool GatePassed { get; init; }
+    public string Recommendation { get; init; }
+        = ScopedRuntimePreviewActivationWindowNoOpExecutionRecommendations.KeepPreviewOnly;
+    public string NextAllowedPhase { get; init; } = "KeepPreviewOnly";
+
+    public int WindowCount { get; init; }
+    public int MinWindowCount { get; init; }
+    public int RequestCountTotal { get; init; }
+    public int MinRequestCountTotal { get; init; }
+    public int ApprovedScopeHitCount { get; init; }
+    public int NonApprovedScopeNoOpCount { get; init; }
+    public int KillSwitchNoOpCount { get; init; }
+    public int AppliedAddTotal { get; init; }
+    public int AppliedRemoveTotal { get; init; }
+    public bool AppliedDeltaZero { get; init; }
+    public bool RollbackCheckpointVerified { get; init; }
+    public bool TraceSinkWritable { get; init; }
+    public bool ConfigPatchWritten { get; init; }
+    public bool RuntimeActivation { get; init; }
+
+    public bool PreflightPassed { get; init; }
+    public bool DryRunPassed { get; init; }
+    public bool P15GatePassed { get; init; }
+    public bool RuntimeChangeGatePassed { get; init; }
+
+    public bool FormalRetrievalAllowed { get; init; }
+    public bool RuntimeSwitchAllowed { get; init; }
+    public bool FormalPackageWritten { get; init; }
+    public bool PackingPolicyChanged { get; init; }
+    public bool PackageOutputChanged { get; init; }
+    public bool VectorStoreBindingChanged { get; init; }
+    public bool GlobalDefaultOn { get; init; }
+    public bool NoRuntimeMutationInvariant { get; init; }
+
+    public IReadOnlyList<ScopedRuntimePreviewActivationWindowNoOpRunResult> Windows { get; init; } = Array.Empty<ScopedRuntimePreviewActivationWindowNoOpRunResult>();
+    public IReadOnlyList<string> AllowedActions { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> ForbiddenActions { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> BlockedReasons { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> Diagnostics { get; init; } = Array.Empty<string>();
+}
+
+
 /// <summary>架构清理计划报告。</summary>
 public sealed class ArchitectureCleanupPlanReport
 {
