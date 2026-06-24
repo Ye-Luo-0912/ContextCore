@@ -3755,6 +3755,36 @@ public static class ServiceOperationalRenderer
                 builder.AppendLine($"- blocked            : {string.Join(", ", v7Approval.BlockedReasons)}");
         }
 
+        builder.AppendLine();
+        builder.AppendLine("V7.6 Scoped Runtime Preview Authorization");
+        var v7Auth = snapshot.ScopedRuntimePreviewAuthorizationReport;
+        if (v7Auth is null)
+        {
+            builder.AppendLine("- status : not generated");
+            builder.AppendLine("- path   : vector/v7/authorization.json");
+            builder.AppendLine("- action : run eval scoped-runtime-preview-authorization");
+        }
+        else
+        {
+            builder.AppendLine($"- authorized         : {v7Auth.Authorized}");
+            builder.AppendLine($"- gate passed        : {v7Auth.GatePassed}");
+            builder.AppendLine($"- recommendation     : {v7Auth.Recommendation}");
+            builder.AppendLine($"- next phase         : {v7Auth.NextAllowedPhase}");
+            builder.AppendLine($"- approval id        : {v7Auth.ApprovalId[..12]}...");
+            builder.AppendLine($"- approved by        : {v7Auth.ApprovedBy}");
+            builder.AppendLine($"- authority          : {v7Auth.ApprovalAuthority}");
+            builder.AppendLine($"- scopes             : {string.Join(", ", v7Auth.ApprovedScopes)}");
+            builder.AppendLine($"- validity           : valid={v7Auth.ValidityValid} remainingDays={v7Auth.RemainingValidityDays} (not after {v7Auth.ValidityNotAfter:yyyy-MM-dd})");
+            builder.AppendLine($"- killSwitch ack     : {v7Auth.KillSwitchAcknowledged}");
+            builder.AppendLine($"- rollback ack       : {v7Auth.RollbackAcknowledged}");
+            builder.AppendLine($"- traceRetention ack : {v7Auth.TraceRetentionAcknowledged}");
+            builder.AppendLine($"- forbidden ack      : all={v7Auth.AllForbiddenActionsAcknowledged} acknowledged={v7Auth.AcknowledgedForbiddenActions.Count} unacknowledged={v7Auth.UnacknowledgedForbiddenActions.Count}");
+            builder.AppendLine($"- prerequisites      : approvalPlan={v7Auth.V7ApprovalPlanPassed} freeze={v7Auth.V7FreezePassed} rtChange={v7Auth.RuntimeChangeGatePassed} p15={v7Auth.P15GatePassed}");
+            builder.AppendLine($"- invariants         : formalRetrieval={v7Auth.FormalRetrievalAllowed} runtimeSwitch={v7Auth.RuntimeSwitchAllowed} formalPkg={v7Auth.FormalPackageWritten} noRuntimeMutation={v7Auth.NoRuntimeMutationInvariant}");
+            if (v7Auth.BlockedReasons.Count > 0)
+                builder.AppendLine($"- blocked            : {string.Join(", ", v7Auth.BlockedReasons)}");
+        }
+
         return builder.ToString();
     }
 

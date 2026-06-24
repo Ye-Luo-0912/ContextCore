@@ -1880,6 +1880,95 @@ public sealed class ScopedRuntimePreviewApprovalPlanReport
 }
 
 
+/// <summary>V7.6 scoped runtime preview authorization 推荐。</summary>
+public static class ScopedRuntimePreviewAuthorizationRecommendations
+{
+    public const string ReadyForScopedRuntimePreviewActivationPreparation = nameof(ReadyForScopedRuntimePreviewActivationPreparation);
+    public const string BlockedByMissingAuthorizationRecord = nameof(BlockedByMissingAuthorizationRecord);
+    public const string BlockedByExpiredAuthorization = nameof(BlockedByExpiredAuthorization);
+    public const string BlockedByWrongScope = nameof(BlockedByWrongScope);
+    public const string BlockedByMissingForbiddenActionAcknowledgement = nameof(BlockedByMissingForbiddenActionAcknowledgement);
+    public const string BlockedByKillSwitchNotAcknowledged = nameof(BlockedByKillSwitchNotAcknowledged);
+    public const string BlockedByRollbackNotAcknowledged = nameof(BlockedByRollbackNotAcknowledged);
+    public const string BlockedByTraceRetentionNotAcknowledged = nameof(BlockedByTraceRetentionNotAcknowledged);
+    public const string BlockedByApprovalPlanNotPassed = nameof(BlockedByApprovalPlanNotPassed);
+    public const string BlockedByFreezeNotPassed = nameof(BlockedByFreezeNotPassed);
+    public const string KeepPreviewOnly = nameof(KeepPreviewOnly);
+}
+
+
+/// <summary>V7.6 scoped runtime preview authorization 选项。</summary>
+public sealed class ScopedRuntimePreviewAuthorizationOptions
+{
+    public bool Enabled { get; init; } = true;
+    public string ApprovedBy { get; init; } = "ReleaseManager";
+    public string ApprovalAuthority { get; init; } = "ArchitectureReviewBoard";
+    public IReadOnlyList<string> ForbiddenActionsToAcknowledge { get; init; } =
+    [
+        "GlobalDefaultOn",
+        "FormalRetrievalEnable",
+        "FormalPackageWrite",
+        "PackingPolicyMutation",
+        "PackageOutputMutation",
+        "VectorStoreBindingMutation",
+        "RuntimeSwitch",
+        "RuntimeActivation",
+        "WriteConfigPatch",
+    ];
+}
+
+
+/// <summary>V7.6 scoped runtime preview authorization 报告。
+/// 生成并验证 Scoped Runtime Preview Authorization Record。
+/// 不启用 runtime activation，不写 config patch，不切 runtime switch，不写 formal package。</summary>
+public sealed class ScopedRuntimePreviewAuthorizationReport
+{
+    public string OperationId { get; init; } = "";
+    public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
+    public bool Authorized { get; init; }
+    public bool GatePassed { get; init; }
+    public string Recommendation { get; init; }
+        = ScopedRuntimePreviewAuthorizationRecommendations.KeepPreviewOnly;
+    public string NextAllowedPhase { get; init; } = "KeepPreviewOnly";
+
+    public string ApprovalId { get; init; } = "";
+    public string ApprovalPlanId { get; init; } = "";
+    public string ApprovedBy { get; init; } = "";
+    public string ApprovalAuthority { get; init; } = "";
+    public IReadOnlyList<string> ApprovedScopes { get; init; } = Array.Empty<string>();
+    public DateTimeOffset ValidityNotBefore { get; init; }
+    public DateTimeOffset ValidityNotAfter { get; init; }
+    public int RemainingValidityDays { get; init; }
+    public bool ValidityValid { get; init; }
+
+    public IReadOnlyList<string> AcknowledgedForbiddenActions { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> UnacknowledgedForbiddenActions { get; init; } = Array.Empty<string>();
+    public bool KillSwitchAcknowledged { get; init; }
+    public bool RollbackAcknowledged { get; init; }
+    public bool TraceRetentionAcknowledged { get; init; }
+    public bool AllForbiddenActionsAcknowledged { get; init; }
+
+    public bool V7ApprovalPlanPassed { get; init; }
+    public bool V7FreezePassed { get; init; }
+    public bool RuntimeChangeGatePassed { get; init; }
+    public bool P15GatePassed { get; init; }
+
+    public bool FormalRetrievalAllowed { get; init; }
+    public bool RuntimeSwitchAllowed { get; init; }
+    public bool FormalPackageWritten { get; init; }
+    public bool PackingPolicyChanged { get; init; }
+    public bool PackageOutputChanged { get; init; }
+    public bool VectorStoreBindingChanged { get; init; }
+    public bool GlobalDefaultOn { get; init; }
+    public bool NoRuntimeMutationInvariant { get; init; }
+
+    public IReadOnlyList<string> AllowedActions { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> ForbiddenActions { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> BlockedReasons { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> Diagnostics { get; init; } = Array.Empty<string>();
+}
+
+
 /// <summary>架构清理计划报告。</summary>
 public sealed class ArchitectureCleanupPlanReport
 {
