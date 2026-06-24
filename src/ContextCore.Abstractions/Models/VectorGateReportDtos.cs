@@ -1914,6 +1914,12 @@ public sealed class ScopedRuntimePreviewAuthorizationOptions
         "RuntimeSwitch",
         "RuntimeActivation",
         "WriteConfigPatch",
+        "ApplyPreviewResult",
+        "ChangeFormalSelectedSet",
+        "MutateApprovalPlanAfterAuthorization",
+        "ChangeApprovedScopesAfterAuthorization",
+        "OverrideValidityWindow",
+        "SkipForbiddenActionAcknowledgement",
     ];
 }
 
@@ -1952,6 +1958,111 @@ public sealed class ScopedRuntimePreviewAuthorizationReport
     public bool V7FreezePassed { get; init; }
     public bool RuntimeChangeGatePassed { get; init; }
     public bool P15GatePassed { get; init; }
+
+    public bool FormalRetrievalAllowed { get; init; }
+    public bool RuntimeSwitchAllowed { get; init; }
+    public bool FormalPackageWritten { get; init; }
+    public bool PackingPolicyChanged { get; init; }
+    public bool PackageOutputChanged { get; init; }
+    public bool VectorStoreBindingChanged { get; init; }
+    public bool GlobalDefaultOn { get; init; }
+    public bool NoRuntimeMutationInvariant { get; init; }
+
+    public IReadOnlyList<string> AllowedActions { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> ForbiddenActions { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> BlockedReasons { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> Diagnostics { get; init; } = Array.Empty<string>();
+}
+
+
+/// <summary>V7.6R authorization hardening 推荐。</summary>
+public static class ScopedRuntimePreviewAuthorizationHardeningRecommendations
+{
+    public const string ReadyForActivationPreparation = nameof(ReadyForActivationPreparation);
+    public const string BlockedByMissingApprovedBy = nameof(BlockedByMissingApprovedBy);
+    public const string BlockedByUnacknowledgedForbiddenActions = nameof(BlockedByUnacknowledgedForbiddenActions);
+    public const string BlockedByPartialForbiddenAcknowledgement = nameof(BlockedByPartialForbiddenAcknowledgement);
+    public const string BlockedByExpiredAuthorization = nameof(BlockedByExpiredAuthorization);
+    public const string BlockedByWrongScope = nameof(BlockedByWrongScope);
+    public const string BlockedByAuthorizationNotPassed = nameof(BlockedByAuthorizationNotPassed);
+    public const string BlockedBySafetyBoundaryViolation = nameof(BlockedBySafetyBoundaryViolation);
+    public const string KeepPreviewOnly = nameof(KeepPreviewOnly);
+}
+
+
+/// <summary>V7.6R authorization hardening 选项。</summary>
+public sealed class ScopedRuntimePreviewAuthorizationHardeningOptions
+{
+    public bool Enabled { get; init; } = true;
+    public string ApprovedBy { get; init; } = "ReleaseManager";
+    public bool RequireExplicitApprovedBy { get; init; } = true;
+    public IReadOnlyList<string> RequiredForbiddenActions { get; init; } =
+    [
+        "GlobalDefaultOn",
+        "FormalRetrievalEnable",
+        "FormalPackageWrite",
+        "PackingPolicyMutation",
+        "PackageOutputMutation",
+        "VectorStoreBindingMutation",
+        "RuntimeSwitch",
+        "RuntimeActivation",
+        "WriteConfigPatch",
+        "ApplyPreviewResult",
+        "ChangeFormalSelectedSet",
+        "MutateApprovalPlanAfterAuthorization",
+        "ChangeApprovedScopesAfterAuthorization",
+        "OverrideValidityWindow",
+        "SkipForbiddenActionAcknowledgement",
+    ];
+}
+
+
+/// <summary>V7.6R authorization hardening negative test 结果。</summary>
+public sealed class ScopedRuntimePreviewAuthorizationHardeningNegativeTest
+{
+    public string TestName { get; init; } = "";
+    public string Scenario { get; init; } = "";
+    public bool ExpectedBlocked { get; init; }
+    public bool ActuallyBlocked { get; init; }
+    public bool Passed { get; init; }
+    public string BlockedReason { get; init; } = "";
+    public string Detail { get; init; } = "";
+}
+
+
+/// <summary>V7.6R scoped runtime preview authorization hardening 报告。
+/// 硬化 authorization gate：显式 --approved-by、全量 forbidden 确认、negative tests。
+/// 不启用 runtime activation。</summary>
+public sealed class ScopedRuntimePreviewAuthorizationHardeningReport
+{
+    public string OperationId { get; init; } = "";
+    public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
+    public bool HardeningPassed { get; init; }
+    public bool GatePassed { get; init; }
+    public string Recommendation { get; init; }
+        = ScopedRuntimePreviewAuthorizationHardeningRecommendations.KeepPreviewOnly;
+    public string NextAllowedPhase { get; init; } = "KeepPreviewOnly";
+
+    public bool AuthorizationPassed { get; init; }
+    public bool ApprovalPlanPassed { get; init; }
+    public bool V7FreezePassed { get; init; }
+    public bool RuntimeChangeGatePassed { get; init; }
+    public bool P15GatePassed { get; init; }
+
+    public string ApprovedBy { get; init; } = "";
+    public bool ExplicitApprovedByProvided { get; init; }
+
+    public IReadOnlyList<string> AcknowledgedForbiddenActions { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> UnacknowledgedForbiddenActions { get; init; } = Array.Empty<string>();
+    public int RequiredForbiddenActionCount { get; init; }
+    public int AcknowledgedCount { get; init; }
+    public int UnacknowledgedCount { get; init; }
+    public bool AllForbiddenAcknowledged { get; init; }
+
+    public int NegativeTestTotal { get; init; }
+    public int NegativeTestPassed { get; init; }
+    public int NegativeTestFailed { get; init; }
+    public IReadOnlyList<ScopedRuntimePreviewAuthorizationHardeningNegativeTest> NegativeTests { get; init; } = Array.Empty<ScopedRuntimePreviewAuthorizationHardeningNegativeTest>();
 
     public bool FormalRetrievalAllowed { get; init; }
     public bool RuntimeSwitchAllowed { get; init; }

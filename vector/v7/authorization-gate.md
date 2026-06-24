@@ -1,7 +1,7 @@
 ﻿# Scoped Runtime Preview Authorization Gate
 
-生成: `2026-06-24T16:20:11.9844283+00:00`
-操作: `scoped-runtime-preview-authorization-gate-99fc112f696e4d41b77582a5fce6e443`
+生成: `2026-06-24T16:40:19.0809920+00:00`
+操作: `scoped-runtime-preview-authorization-gate-4396f1435240422fbb9797b45ee0b616`
 
 ## Decision
 - Authorized: `True`
@@ -10,7 +10,7 @@
 - NextAllowedPhase: `ScopedRuntimePreviewActivationPreparation`
 
 ## Authorization Record
-- ApprovalId: `arsp-auth-arsp-ap-20260624-3e6776f681304dc694b143b0e28e3323-20260624-03bb905be343493cb8d3aec81b67d004`
+- ApprovalId: `arsp-auth-arsp-ap-20260624-3e6776f681304dc694b143b0e28e3323-20260624-e50190d001f549dca4dfc52d4290dced`
 - ApprovalPlanId: `arsp-ap-20260624-3e6776f681304dc694b143b0e28e3323`
 - ApprovedBy: `ReleaseManager`
 - ApprovalAuthority: `ArchitectureReviewBoard`
@@ -36,6 +36,12 @@
 - `RuntimeSwitch`
 - `RuntimeActivation`
 - `WriteConfigPatch`
+- `ApplyPreviewResult`
+- `ChangeFormalSelectedSet`
+- `MutateApprovalPlanAfterAuthorization`
+- `ChangeApprovedScopesAfterAuthorization`
+- `OverrideValidityWindow`
+- `SkipForbiddenActionAcknowledgement`
 
 ## Unacknowledged Forbidden Actions
 - (empty)
@@ -104,7 +110,7 @@
 - `validityNotAfter=2026-07-24T16:06:35.4264351+00:00`
 - `remainingValidityDays=29`
 - `validityValid=True`
-- `acknowledgedForbiddenCount=9`
+- `acknowledgedForbiddenCount=15`
 - `unacknowledgedForbiddenCount=0`
 - `killSwitchAcknowledged=True`
 - `rollbackAcknowledged=True`

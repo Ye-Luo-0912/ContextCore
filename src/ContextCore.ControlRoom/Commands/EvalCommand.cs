@@ -284,6 +284,8 @@ public static partial class EvalCommand
             !string.Equals(subcommand, "scoped-runtime-preview-approval-plan-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "scoped-runtime-preview-authorization", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "scoped-runtime-preview-authorization-gate", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "scoped-runtime-preview-authorization-hardening", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "scoped-runtime-preview-authorization-hardening-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "dto-split-plan", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "dto-split-readiness-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "vector-retrieval-eval-protocol-audit", StringComparison.OrdinalIgnoreCase) &&
@@ -502,6 +504,8 @@ public static partial class EvalCommand
             Console.WriteLine("  eval scoped-runtime-preview-approval-plan-gate [--validity-days <n>] [--kill-switch-seconds <n>] [--rollback-minutes <n>] [--trace-retention-days <n>]");
             Console.WriteLine("  eval scoped-runtime-preview-authorization [--approved-by <name>]");
             Console.WriteLine("  eval scoped-runtime-preview-authorization-gate [--approved-by <name>]");
+            Console.WriteLine("  eval scoped-runtime-preview-authorization-hardening [--approved-by <name>]");
+            Console.WriteLine("  eval scoped-runtime-preview-authorization-hardening-gate [--approved-by <name>]");
             Console.WriteLine("  eval dto-split-plan");
             Console.WriteLine("  eval dto-split-readiness-gate");
             Console.WriteLine("  eval vector-retrieval-eval-protocol-audit");
@@ -1708,6 +1712,13 @@ public static partial class EvalCommand
             || string.Equals(subcommand, "scoped-runtime-preview-authorization-gate", StringComparison.OrdinalIgnoreCase))
         {
             await ExecuteScopedRuntimePreviewAuthorizationAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        if (string.Equals(subcommand, "scoped-runtime-preview-authorization-hardening", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(subcommand, "scoped-runtime-preview-authorization-hardening-gate", StringComparison.OrdinalIgnoreCase))
+        {
+            await ExecuteScopedRuntimePreviewAuthorizationHardeningAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
             return;
         }
 

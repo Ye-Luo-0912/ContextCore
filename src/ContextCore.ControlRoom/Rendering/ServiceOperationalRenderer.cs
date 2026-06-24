@@ -3785,6 +3785,30 @@ public static class ServiceOperationalRenderer
                 builder.AppendLine($"- blocked            : {string.Join(", ", v7Auth.BlockedReasons)}");
         }
 
+        builder.AppendLine();
+        builder.AppendLine("V7.6R Scoped Runtime Preview Authorization Hardening");
+        var v7AuthHarden = snapshot.ScopedRuntimePreviewAuthorizationHardeningReport;
+        if (v7AuthHarden is null)
+        {
+            builder.AppendLine("- status : not generated");
+            builder.AppendLine("- path   : vector/v7/authorization-hardening.json");
+            builder.AppendLine("- action : run eval scoped-runtime-preview-authorization-hardening");
+        }
+        else
+        {
+            builder.AppendLine($"- hardening passed   : {v7AuthHarden.HardeningPassed}");
+            builder.AppendLine($"- gate passed        : {v7AuthHarden.GatePassed}");
+            builder.AppendLine($"- recommendation     : {v7AuthHarden.Recommendation}");
+            builder.AppendLine($"- next phase         : {v7AuthHarden.NextAllowedPhase}");
+            builder.AppendLine($"- approved by        : {v7AuthHarden.ApprovedBy} (explicit: {v7AuthHarden.ExplicitApprovedByProvided})");
+            builder.AppendLine($"- forbidden ack      : {v7AuthHarden.AcknowledgedCount}/{v7AuthHarden.RequiredForbiddenActionCount} acknowledged, {v7AuthHarden.UnacknowledgedCount} unacknowledged, all={v7AuthHarden.AllForbiddenAcknowledged}");
+            builder.AppendLine($"- negative tests     : {v7AuthHarden.NegativeTestPassed}/{v7AuthHarden.NegativeTestTotal} passed");
+            builder.AppendLine($"- prerequisites      : authorization={v7AuthHarden.AuthorizationPassed} approvalPlan={v7AuthHarden.ApprovalPlanPassed} freeze={v7AuthHarden.V7FreezePassed} rtChange={v7AuthHarden.RuntimeChangeGatePassed} p15={v7AuthHarden.P15GatePassed}");
+            builder.AppendLine($"- invariants         : formalRetrieval={v7AuthHarden.FormalRetrievalAllowed} runtimeSwitch={v7AuthHarden.RuntimeSwitchAllowed} formalPkg={v7AuthHarden.FormalPackageWritten} noRuntimeMutation={v7AuthHarden.NoRuntimeMutationInvariant}");
+            if (v7AuthHarden.BlockedReasons.Count > 0)
+                builder.AppendLine($"- blocked            : {string.Join(", ", v7AuthHarden.BlockedReasons)}");
+        }
+
         return builder.ToString();
     }
 
