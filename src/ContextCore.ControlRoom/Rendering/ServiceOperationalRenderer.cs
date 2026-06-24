@@ -3809,6 +3809,36 @@ public static class ServiceOperationalRenderer
                 builder.AppendLine($"- blocked            : {string.Join(", ", v7AuthHarden.BlockedReasons)}");
         }
 
+        builder.AppendLine();
+        builder.AppendLine("V7.7 Scoped Runtime Preview Activation Preparation");
+        var v7Prep = snapshot.ScopedRuntimePreviewActivationPreparationReport;
+        if (v7Prep is null)
+        {
+            builder.AppendLine("- status : not generated");
+            builder.AppendLine("- path   : vector/v7/activation-preparation.json");
+            builder.AppendLine("- action : run eval scoped-runtime-preview-activation-preparation");
+        }
+        else
+        {
+            builder.AppendLine($"- preparation passed : {v7Prep.PreparationPassed}");
+            builder.AppendLine($"- gate passed        : {v7Prep.GatePassed}");
+            builder.AppendLine($"- recommendation     : {v7Prep.Recommendation}");
+            builder.AppendLine($"- next phase         : {v7Prep.NextAllowedPhase}");
+            builder.AppendLine($"- scopes unchanged   : {v7Prep.ApprovedScopesUnchanged}");
+            builder.AppendLine($"- authorization valid: {v7Prep.AuthorizationValid}");
+            builder.AppendLine($"- configPatchWritten : {v7Prep.ConfigPatchWritten}");
+            builder.AppendLine($"- runtimeActivation  : {v7Prep.RuntimeActivation}");
+            builder.AppendLine($"- killSwitch config  : {v7Prep.KillSwitchConfigured}");
+            builder.AppendLine($"- rollback config    : {v7Prep.RollbackConfigured}");
+            builder.AppendLine($"- traceRetention cfg : {v7Prep.TraceRetentionConfigured}");
+            builder.AppendLine($"- stopConditions     : {v7Prep.StopConditions.Count}");
+            builder.AppendLine($"- prerequisites      : auth={v7Prep.AuthorizationPassed} harden={v7Prep.AuthorizationHardeningPassed} plan={v7Prep.ApprovalPlanPassed} freeze={v7Prep.ObservationFreezePassed} rtChange={v7Prep.RuntimeChangeGatePassed} p15={v7Prep.P15GatePassed}");
+            builder.AppendLine($"- preflight checks   : explicitApprovedBy={v7Prep.ExplicitApprovedByPresent} allForbiddenAck={v7Prep.AllForbiddenActionsAcknowledged}");
+            builder.AppendLine($"- invariants         : formalRetrieval={v7Prep.FormalRetrievalAllowed} runtimeSwitch={v7Prep.RuntimeSwitchAllowed} formalPkg={v7Prep.FormalPackageWritten} noRuntimeMutation={v7Prep.NoRuntimeMutationInvariant}");
+            if (v7Prep.BlockedReasons.Count > 0)
+                builder.AppendLine($"- blocked            : {string.Join(", ", v7Prep.BlockedReasons)}");
+        }
+
         return builder.ToString();
     }
 

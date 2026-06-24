@@ -2081,6 +2081,100 @@ public sealed class ScopedRuntimePreviewAuthorizationHardeningReport
 }
 
 
+/// <summary>V7.7 scoped runtime preview activation preparation 推荐。</summary>
+public static class ScopedRuntimePreviewActivationPreparationRecommendations
+{
+    public const string ReadyForScopedRuntimePreviewActivation = nameof(ReadyForScopedRuntimePreviewActivation);
+    public const string BlockedByMissingAuthorization = nameof(BlockedByMissingAuthorization);
+    public const string BlockedByMissingHardening = nameof(BlockedByMissingHardening);
+    public const string BlockedByMissingApprovalPlan = nameof(BlockedByMissingApprovalPlan);
+    public const string BlockedByMissingFreeze = nameof(BlockedByMissingFreeze);
+    public const string BlockedByExpiredAuthorization = nameof(BlockedByExpiredAuthorization);
+    public const string BlockedByScopeMismatch = nameof(BlockedByScopeMismatch);
+    public const string BlockedByKillSwitchUnavailable = nameof(BlockedByKillSwitchUnavailable);
+    public const string BlockedByRollbackUnavailable = nameof(BlockedByRollbackUnavailable);
+    public const string BlockedByTraceRetentionUnconfigured = nameof(BlockedByTraceRetentionUnconfigured);
+    public const string BlockedByForbiddenActionNotAcknowledged = nameof(BlockedByForbiddenActionNotAcknowledged);
+    public const string BlockedByApprovedByMissing = nameof(BlockedByApprovedByMissing);
+    public const string BlockedBySafetyBoundaryViolation = nameof(BlockedBySafetyBoundaryViolation);
+    public const string KeepPreviewOnly = nameof(KeepPreviewOnly);
+}
+
+
+/// <summary>V7.7 activation preparation 选项。</summary>
+public sealed class ScopedRuntimePreviewActivationPreparationOptions
+{
+    public bool Enabled { get; init; } = true;
+    public string ApprovedBy { get; init; } = "ReleaseManager";
+    public bool ExplicitlyProvided { get; init; }
+    public int MaxObservationsBeforeActivation { get; init; } = 3;
+    public int ObservationIntervalSeconds { get; init; } = 30;
+    public int MaxObservationDurationMinutes { get; init; } = 5;
+}
+
+
+/// <summary>V7.7 scoped runtime preview activation preparation 报告。
+/// 准备 activation contract 和 pre-activation artifacts。
+/// 不启用 runtime activation。ConfigPatchWritten=false。</summary>
+public sealed class ScopedRuntimePreviewActivationPreparationReport
+{
+    public string OperationId { get; init; } = "";
+    public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
+    public bool PreparationPassed { get; init; }
+    public bool GatePassed { get; init; }
+    public string Recommendation { get; init; }
+        = ScopedRuntimePreviewActivationPreparationRecommendations.KeepPreviewOnly;
+    public string NextAllowedPhase { get; init; } = "KeepPreviewOnly";
+
+    public string ActivationPreparationId { get; init; } = "";
+    public string AuthorizationId { get; init; } = "";
+    public string ApprovalPlanId { get; init; } = "";
+    public IReadOnlyList<string> ApprovedScopes { get; init; } = Array.Empty<string>();
+    public DateTimeOffset ValidityNotBefore { get; init; }
+    public DateTimeOffset ValidityNotAfter { get; init; }
+    public bool AuthorizationValid { get; init; }
+
+    public string KillSwitchProbePlan { get; init; } = "";
+    public bool KillSwitchConfigured { get; init; }
+    public string RollbackCheckpointPlan { get; init; } = "";
+    public bool RollbackConfigured { get; init; }
+    public string TraceSinkPlan { get; init; } = "";
+    public bool TraceRetentionConfigured { get; init; }
+    public string ConfigPatchPreview { get; init; } = "";
+    public bool ConfigPatchWritten { get; init; }
+    public string ObservationStartPlan { get; init; } = "";
+    public int MaxObservationsBeforeActivation { get; init; }
+    public IReadOnlyList<string> StopConditions { get; init; } = Array.Empty<string>();
+
+    public bool AuthorizationPassed { get; init; }
+    public bool AuthorizationHardeningPassed { get; init; }
+    public bool ApprovalPlanPassed { get; init; }
+    public bool ObservationFreezePassed { get; init; }
+    public bool RuntimeChangeGatePassed { get; init; }
+    public bool P15GatePassed { get; init; }
+
+    public bool ExplicitApprovedByPresent { get; init; }
+    public bool AllForbiddenActionsAcknowledged { get; init; }
+    public bool ApprovedScopesUnchanged { get; init; }
+
+    public bool FormalRetrievalAllowed { get; init; }
+    public bool RuntimeSwitchAllowed { get; init; }
+    public bool FormalPackageWritten { get; init; }
+    public bool RuntimeActivation { get; init; }
+    public bool WriteConfigPatch { get; init; }
+    public bool PackingPolicyChanged { get; init; }
+    public bool PackageOutputChanged { get; init; }
+    public bool VectorStoreBindingChanged { get; init; }
+    public bool GlobalDefaultOn { get; init; }
+    public bool NoRuntimeMutationInvariant { get; init; }
+
+    public IReadOnlyList<string> AllowedActions { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> ForbiddenActions { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> BlockedReasons { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> Diagnostics { get; init; } = Array.Empty<string>();
+}
+
+
 /// <summary>架构清理计划报告。</summary>
 public sealed class ArchitectureCleanupPlanReport
 {
