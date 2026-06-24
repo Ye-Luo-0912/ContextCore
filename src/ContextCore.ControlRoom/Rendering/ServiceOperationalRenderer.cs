@@ -3671,6 +3671,37 @@ public static class ServiceOperationalRenderer
                 builder.AppendLine($"- blocked            : {string.Join(", ", v7Obs.BlockedReasons)}");
         }
 
+        builder.AppendLine();
+        builder.AppendLine("V7.3R Controlled Applied Merge Runtime Preview Observation Hardening");
+        var v7Harden = snapshot.ControlledAppliedMergeRuntimePreviewObservationHardeningReport;
+        if (v7Harden is null)
+        {
+            builder.AppendLine("- status : not generated");
+            builder.AppendLine("- path   : vector/v7/observation-hardening.json");
+            builder.AppendLine("- action : run eval controlled-applied-merge-runtime-preview-observation-hardening");
+        }
+        else
+        {
+            builder.AppendLine($"- hardening passed   : {v7Harden.HardeningPassed}");
+            builder.AppendLine($"- gate passed        : {v7Harden.GatePassed}");
+            builder.AppendLine($"- recommendation     : {v7Harden.Recommendation}");
+            builder.AppendLine($"- next phase         : {v7Harden.NextAllowedPhase}");
+            builder.AppendLine($"- runs / failed      : {v7Harden.ObservationRunCount} / {v7Harden.FailedRunCount}");
+            builder.AppendLine($"- requests total     : {v7Harden.RequestCountTotal} (min {v7Harden.MinRequestCountTotal})");
+            builder.AppendLine($"- duration / max     : {v7Harden.DurationMinutes} / {v7Harden.MaxDurationMinutes} min");
+            builder.AppendLine($"- errors / max       : {v7Harden.ErrorCountTotal} / {v7Harden.MaxErrorCount}");
+            builder.AppendLine($"- route hits         : allowlisted={v7Harden.AllowlistedPreviewRouteHitCountTotal} nonAllowlisted={v7Harden.NonAllowlistedPreviewRouteHitCountTotal} killSwitch={v7Harden.KillSwitchPreviewRouteHitCountTotal}");
+            builder.AppendLine($"- no-op counts       : nonAllowlisted={v7Harden.NonAllowlistedNoOpCountTotal} killSwitch={v7Harden.KillSwitchNoOpCountTotal}");
+            builder.AppendLine($"- trace completeness : {v7Harden.TraceCompletenessPercent:F1}%");
+            builder.AppendLine($"- trace stable       : payload={v7Harden.TracePayloadStable} replayable={v7Harden.TraceReplayable}");
+            builder.AppendLine($"- stability          : deterministic={v7Harden.DeterministicStable} candidateIds={v7Harden.SelectedCandidateIdsStable} payloadHash={v7Harden.TracePayloadHashStable}");
+            builder.AppendLine($"- appliedDeltaZero   : {v7Harden.AppliedDeltaZero}");
+            builder.AppendLine($"- resultDiscarded    : {v7Harden.ResultDiscarded}");
+            builder.AppendLine($"- invariants         : formalSelSet={v7Harden.FormalSelectedSetChanged} formalPkg={v7Harden.FormalPackageWritten} pkgOutput={v7Harden.PackageOutputChanged} packingPolicy={v7Harden.PackingPolicyChanged} runtimeMutated={v7Harden.RuntimeMutated} vectorStoreBinding={v7Harden.VectorStoreBindingChanged} formalRetrieval={v7Harden.FormalRetrievalAllowed} runtimeSwitch={v7Harden.RuntimeSwitchAllowed} globalDefaultOn={v7Harden.GlobalDefaultOn}");
+            if (v7Harden.BlockedReasons.Count > 0)
+                builder.AppendLine($"- blocked            : {string.Join(", ", v7Harden.BlockedReasons)}");
+        }
+
         return builder.ToString();
     }
 

@@ -1523,6 +1523,153 @@ public sealed class ControlledAppliedMergeRuntimePreviewObservationWindowReport
 }
 
 
+/// <summary>V7.3R observation hardening 推荐。</summary>
+public static class ControlledAppliedMergeRuntimePreviewObservationHardeningRecommendations
+{
+    public const string ReadyForRuntimePreviewObservationFreeze = nameof(ReadyForRuntimePreviewObservationFreeze);
+    public const string BlockedByObservationWindowNotPassed = nameof(BlockedByObservationWindowNotPassed);
+    public const string BlockedByInsufficientRuns = nameof(BlockedByInsufficientRuns);
+    public const string BlockedByInsufficientRequests = nameof(BlockedByInsufficientRequests);
+    public const string BlockedByDurationExceeded = nameof(BlockedByDurationExceeded);
+    public const string BlockedByErrorCount = nameof(BlockedByErrorCount);
+    public const string BlockedByRouteHitViolation = nameof(BlockedByRouteHitViolation);
+    public const string BlockedByTraceIntegrity = nameof(BlockedByTraceIntegrity);
+    public const string BlockedByStabilitySignature = nameof(BlockedByStabilitySignature);
+    public const string BlockedByRuntimeInvariant = nameof(BlockedByRuntimeInvariant);
+    public const string KeepPreviewOnly = nameof(KeepPreviewOnly);
+}
+
+
+/// <summary>V7.3R observation hardening 选项。</summary>
+public sealed class ControlledAppliedMergeRuntimePreviewObservationHardeningOptions
+{
+    public bool Enabled { get; init; } = true;
+    public int MinObservationRunCount { get; init; } = 10;
+    public int MinRequestCountTotal { get; init; } = 120;
+    public int MaxDurationMinutes { get; init; } = 30;
+    public int MaxErrorCount { get; init; } = 0;
+    public int RequestsPerRun { get; init; } = 12;
+    public int EstimatedTokensPerItem { get; init; } = 50;
+    public IReadOnlyList<string> WorkspaceAllowlist { get; init; } = ["demo-workspace"];
+    public IReadOnlyList<string> CollectionAllowlist { get; init; } = ["demo-collection"];
+    public IReadOnlyList<string> RequestKinds { get; init; } = ["chat", "project", "coding", "novel", "automation"];
+}
+
+
+/// <summary>V7.3R observation hardening 单轮结果。</summary>
+public sealed class ControlledAppliedMergeRuntimePreviewObservationHardeningRunResult
+{
+    public int RunIndex { get; init; }
+    public bool DryRunPassed { get; init; }
+    public string StableSignature { get; init; } = string.Empty;
+    public string Scope { get; init; } = "";
+    public string RequestKind { get; init; } = "";
+    public int RequestCount { get; init; }
+    public int WouldApplyAddCount { get; init; }
+    public int WouldApplyRemoveCount { get; init; }
+    public int TotalTokenDelta { get; init; }
+    public string SelectedCandidateIdsHash { get; init; } = "";
+    public string TracePayloadHash { get; init; } = "";
+    public int AllowlistedPreviewRouteHitCount { get; init; }
+    public int NonAllowlistedPreviewRouteHitCount { get; init; }
+    public int KillSwitchPreviewRouteHitCount { get; init; }
+    public int NonAllowlistedNoOpCount { get; init; }
+    public int KillSwitchNoOpCount { get; init; }
+    public double TraceCompletenessPercent { get; init; }
+    public bool TracePayloadStable { get; init; }
+    public bool TraceReplayable { get; init; }
+    public int AppliedAddCount { get; init; }
+    public int AppliedRemoveCount { get; init; }
+    public int ErrorCount { get; init; }
+    public int RiskAfterPolicy { get; init; }
+    public bool FormalSelectedSetChanged { get; init; }
+    public bool FormalPackageWritten { get; init; }
+    public bool PackageOutputChanged { get; init; }
+    public bool PackingPolicyChanged { get; init; }
+    public bool RuntimeMutated { get; init; }
+    public bool VectorStoreBindingChanged { get; init; }
+    public bool RollbackVerified { get; init; }
+    public bool KillSwitchTested { get; init; }
+}
+
+
+/// <summary>V7.3R runtime preview observation hardening 报告。
+/// 补强 V7.3 observation 使其达到 freeze-ready 证据强度。
+/// 不改变 formal output，不启用 runtime switch。</summary>
+public sealed class ControlledAppliedMergeRuntimePreviewObservationHardeningReport
+{
+    public string OperationId { get; init; } = "";
+    public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
+    public bool HardeningPassed { get; init; }
+    public bool GatePassed { get; init; }
+    public string Recommendation { get; init; }
+        = ControlledAppliedMergeRuntimePreviewObservationHardeningRecommendations.KeepPreviewOnly;
+    public string NextAllowedPhase { get; init; } = "KeepPreviewOnly";
+
+    public bool ObservationWindowPassed { get; init; }
+    public bool PreflightPassed { get; init; }
+    public bool DryRunPassed { get; init; }
+    public bool V6FreezePassed { get; init; }
+    public bool RuntimeChangeGatePassed { get; init; }
+    public bool P15GatePassed { get; init; }
+
+    public IReadOnlyList<string> AllowlistedScopes { get; init; } = Array.Empty<string>();
+    public string TracePath { get; init; } = "";
+
+    public int ObservationRunCount { get; init; }
+    public int MinObservationRunCount { get; init; }
+    public int FailedRunCount { get; init; }
+    public int RequestCountTotal { get; init; }
+    public int MinRequestCountTotal { get; init; }
+    public int DurationMinutes { get; init; }
+    public int MaxDurationMinutes { get; init; }
+    public int ErrorCountTotal { get; init; }
+    public int MaxErrorCount { get; init; }
+
+    public int AllowlistedPreviewRouteHitCountTotal { get; init; }
+    public int NonAllowlistedPreviewRouteHitCountTotal { get; init; }
+    public int KillSwitchPreviewRouteHitCountTotal { get; init; }
+    public int NonAllowlistedNoOpCountTotal { get; init; }
+    public int KillSwitchNoOpCountTotal { get; init; }
+
+    public double TraceCompletenessPercent { get; init; }
+    public bool TracePayloadStable { get; init; }
+    public bool TraceReplayable { get; init; }
+
+    public int DistinctStableSignatureCount { get; init; }
+    public bool DeterministicStable { get; init; }
+    public bool SelectedCandidateIdsStable { get; init; }
+    public bool TracePayloadHashStable { get; init; }
+
+    public int WouldApplyAddCountMin { get; init; }
+    public int WouldApplyAddCountMax { get; init; }
+    public int WouldApplyRemoveCountMin { get; init; }
+    public int WouldApplyRemoveCountMax { get; init; }
+    public int AppliedAddCountMax { get; init; }
+    public int AppliedRemoveCountMax { get; init; }
+    public bool AppliedDeltaZero { get; init; }
+
+    public bool ResultDiscarded { get; init; }
+
+    public bool FormalSelectedSetChanged { get; init; }
+    public bool FormalPackageWritten { get; init; }
+    public bool PackageOutputChanged { get; init; }
+    public bool PackingPolicyChanged { get; init; }
+    public bool RuntimeMutated { get; init; }
+    public bool VectorStoreBindingChanged { get; init; }
+    public bool FormalRetrievalAllowed { get; init; }
+    public bool RuntimeSwitchAllowed { get; init; }
+    public bool GlobalDefaultOn { get; init; }
+    public bool NoRuntimeMutationInvariant { get; init; }
+
+    public IReadOnlyList<ControlledAppliedMergeRuntimePreviewObservationHardeningRunResult> Runs { get; init; } = Array.Empty<ControlledAppliedMergeRuntimePreviewObservationHardeningRunResult>();
+    public IReadOnlyList<string> AllowedActions { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> ForbiddenActions { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> BlockedReasons { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> Diagnostics { get; init; } = Array.Empty<string>();
+}
+
+
 /// <summary>架构清理计划报告。</summary>
 public sealed class ArchitectureCleanupPlanReport
 {

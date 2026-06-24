@@ -163,6 +163,17 @@ public static class ReportSummaryRegistry
         EvalPlanCommand = "eval controlled-applied-merge-runtime-preview-observation-window",
     };
 
+    public static readonly ControlRoomReportDescriptor V7ControlledAppliedMergeRuntimePreviewObservationHardening = new()
+    {
+        ReportId = "ControlledAppliedMergeRuntimePreviewObservationHardening",
+        DisplayTitle = "V7.3R Controlled Applied Merge Runtime Preview Observation Hardening Summary",
+        PrimaryPath = "vector/v7/observation-hardening.json",
+        GatePath = "vector/v7/observation-hardening-gate.json",
+        PhaseGroup = "V7",
+        EvalGateCommand = "eval controlled-applied-merge-runtime-preview-observation-hardening-gate",
+        EvalPlanCommand = "eval controlled-applied-merge-runtime-preview-observation-hardening",
+    };
+
     // =========================================================================
     // V5 descriptors
     // =========================================================================
@@ -421,6 +432,7 @@ public static class ReportSummaryRegistry
         V7ControlledAppliedMergeRuntimePreviewDryRun,
         V7ControlledAppliedMergeRuntimePreviewActivationPreflight,
         V7ControlledAppliedMergeRuntimePreviewObservationWindow,
+        V7ControlledAppliedMergeRuntimePreviewObservationHardening,
     };
 
     public static IReadOnlyList<ControlRoomReportDescriptor> V5Descriptors { get; } = new[]

@@ -2886,6 +2886,7 @@ public sealed class ControlRoomService
             ControlledAppliedMergeRuntimePreviewDryRunReport = TryLoadControlledAppliedMergeRuntimePreviewDryRunSummary()?.Report,
             ControlledAppliedMergeRuntimePreviewActivationPreflightReport = TryLoadControlledAppliedMergeRuntimePreviewActivationPreflightSummary()?.Report,
             ControlledAppliedMergeRuntimePreviewObservationWindowReport = TryLoadControlledAppliedMergeRuntimePreviewObservationWindowSummary()?.Report,
+            ControlledAppliedMergeRuntimePreviewObservationHardeningReport = TryLoadControlledAppliedMergeRuntimePreviewObservationHardeningSummary()?.Report,
             Limit = limit,
             Offset = offset
         };
@@ -7469,6 +7470,9 @@ public sealed class ControlRoomService
     private static (ControlledAppliedMergeRuntimePreviewObservationWindowReport Report, string SourcePath)? TryLoadControlledAppliedMergeRuntimePreviewObservationWindowSummary()
         => TryLoadFromDescriptor<ControlledAppliedMergeRuntimePreviewObservationWindowReport>(ReportSummaryRegistry.V7ControlledAppliedMergeRuntimePreviewObservationWindow);
 
+    private static (ControlledAppliedMergeRuntimePreviewObservationHardeningReport Report, string SourcePath)? TryLoadControlledAppliedMergeRuntimePreviewObservationHardeningSummary()
+        => TryLoadFromDescriptor<ControlledAppliedMergeRuntimePreviewObservationHardeningReport>(ReportSummaryRegistry.V7ControlledAppliedMergeRuntimePreviewObservationHardening);
+
     private static string VectorReportPath(string phase, string fileName)
     {
         return Path.Combine("vector", phase, fileName);
@@ -10390,6 +10394,8 @@ public sealed class ServiceLearningFeaturesSnapshot
     public ControlledAppliedMergeRuntimePreviewActivationPreflightReport? ControlledAppliedMergeRuntimePreviewActivationPreflightReport { get; init; }
 
     public ControlledAppliedMergeRuntimePreviewObservationWindowReport? ControlledAppliedMergeRuntimePreviewObservationWindowReport { get; init; }
+
+    public ControlledAppliedMergeRuntimePreviewObservationHardeningReport? ControlledAppliedMergeRuntimePreviewObservationHardeningReport { get; init; }
 
     public FoundationServiceStatusResponse? FoundationServiceStatus { get; init; }
 
