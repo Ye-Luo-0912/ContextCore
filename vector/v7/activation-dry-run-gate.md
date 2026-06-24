@@ -1,7 +1,7 @@
 ﻿# Scoped Runtime Preview Activation Dry-run Gate
 
-生成: `2026-06-24T17:41:29.6413131+00:00`
-操作: `scoped-runtime-preview-activation-dryrun-gate-c83a78de008b4a4f809bf6b5a3d3b109`
+生成: `2026-06-24T17:51:27.5780341+00:00`
+操作: `scoped-runtime-preview-activation-dryrun-gate-018779925401499483d202ac8000bc36`
 
 ## Decision
 - DryRunPassed: `True`
@@ -12,9 +12,9 @@
 ## Dry-run Summary
 - ContractParseable: `True`
 - TotalRuns: `5`  PassedRuns: `5`
-- ApprovedScopeHits: `3`
-- NonApprovedScopeNoOps: `2`
-- KillSwitchNoOpCount: `0`
+- ApprovedScopeHits: `2`
+- NonApprovedScopeNoOps: `3`
+- KillSwitchNoOpCount: `1`
 - AppliedAddTotal: `0`  AppliedRemoveTotal: `0`
 - AppliedDeltaZero: `True`
 - ConfigPatchWritten: `False`
@@ -23,7 +23,7 @@
 ## Runs
 - Run 1: scope=`demo-workspace/demo-collection` hit=True noOp=False killSwitch=False rollback=True traceSink=True configPatchPreview=True rtActive=True applied +0/-0
 - Run 2: scope=`unauthorized/scope` hit=False noOp=True killSwitch=False rollback=True traceSink=True configPatchPreview=True rtActive=True applied +0/-0
-- Run 3: scope=`demo-workspace/demo-collection` hit=True noOp=False killSwitch=False rollback=True traceSink=True configPatchPreview=True rtActive=True applied +0/-0
+- Run 3: scope=`demo-workspace/demo-collection` hit=False noOp=True killSwitch=True rollback=True traceSink=True configPatchPreview=True rtActive=True applied +0/-0
 - Run 4: scope=`unauthorized/scope` hit=False noOp=True killSwitch=False rollback=True traceSink=True configPatchPreview=True rtActive=True applied +0/-0
 - Run 5: scope=`demo-workspace/demo-collection` hit=True noOp=False killSwitch=False rollback=True traceSink=True configPatchPreview=True rtActive=True applied +0/-0
 
@@ -89,9 +89,9 @@
 - `p15GatePassed=True`
 - `contractParseable=True`
 - `runCount=5 passedRuns=5`
-- `approvedScopeHits=3`
-- `nonApprovedScopeNoOps=2`
-- `killSwitchNoOpCount=0`
+- `approvedScopeHits=2`
+- `nonApprovedScopeNoOps=3`
+- `killSwitchNoOpCount=1`
 - `appliedAddTotal=0 appliedRemoveTotal=0`
 - `appliedDeltaZero=True`
 - `configPatchWritten=false`

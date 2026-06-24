@@ -794,7 +794,7 @@ public static partial class EvalCommand
         Console.WriteLine($"[Eval] dryRunPassed={report.DryRunPassed}; gatePassed={report.GatePassed}; recommendation={report.Recommendation}; " +
             $"nextPhase={report.NextAllowedPhase}; contractParseable={report.ContractParseable}; totalRuns={report.TotalRuns}; " +
             $"approvedScopeHits={report.ApprovedScopeHits}; nonApprovedNoOps={report.NonApprovedScopeNoOps}; " +
-            $"appliedDeltaZero={report.AppliedDeltaZero}; configWritten={report.ConfigPatchWritten}; rtActivation={report.RuntimeActivation}; " +
+            $"appliedDeltaZero={report.AppliedDeltaZero}; configWritten={report.ConfigPatchWritten}; runtimeActivationRemainsFalse={!report.RuntimeActivation}; " +
             $"blocked={report.BlockedReasons.Count}");
     }
 }

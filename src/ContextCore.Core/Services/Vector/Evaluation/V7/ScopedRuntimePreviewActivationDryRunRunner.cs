@@ -100,7 +100,10 @@ public sealed class ScopedRuntimePreviewActivationDryRunRunner
         if (!contractParseable)
             blocked.Add("ActivationContractParseFailure");
 
-        var approvedScopes = options.ApprovedScopes.Where(static s => !string.IsNullOrWhiteSpace(s)).ToList();
+        var approvedScopes = (preparation?.ApprovedScopes?.Where(static s => !string.IsNullOrWhiteSpace(s)).ToList()
+            ?? options.ApprovedScopes.Where(static s => !string.IsNullOrWhiteSpace(s)).ToList());
+        if (approvedScopes.Count == 0)
+            approvedScopes = options.ApprovedScopes.Where(static s => !string.IsNullOrWhiteSpace(s)).ToList();
         var nonApprovedScopes = options.NonApprovedScopes.Where(static s => !string.IsNullOrWhiteSpace(s)).ToList();
         var runCount = options.DryRunCount;
 
@@ -113,33 +116,68 @@ public sealed class ScopedRuntimePreviewActivationDryRunRunner
 
         for (var i = 0; i < runCount; i++)
         {
-            var isApprovedRun = i % 2 == 0 && approvedScopes.Count > 0;
-            var scope = isApprovedRun
-                ? approvedScopes[i % approvedScopes.Count]
-                : nonApprovedScopes.Count > 0
-                    ? nonApprovedScopes[i % nonApprovedScopes.Count]
-                    : "unknown/scope";
+            var isKillSwitchRun = i % 3 == 2;
+            var isApprovedRun = !isKillSwitchRun && i % 2 == 0 && approvedScopes.Count > 0;
 
-            var scopeHit = isApprovedRun;
-            var isNoOp = !isApprovedRun;
-            var killSwitchTripped = false;
+            string scope;
+            bool scopeHit;
+            bool isNoOp;
+            bool killSwitchTripped;
+            int wouldApplyAdd;
+            int wouldApplyRemove;
+            string detail;
+
+            if (isKillSwitchRun)
+            {
+                scope = approvedScopes.Count > 0 ? approvedScopes[0] : "demo-workspace/demo-collection";
+                scopeHit = false;
+                isNoOp = true;
+                killSwitchTripped = true;
+                wouldApplyAdd = 0;
+                wouldApplyRemove = 0;
+                detail = $"kill-switch tripped on scope '{scope}': no-op=true, wouldApply 0/0, actual applied 0/0";
+            }
+            else if (isApprovedRun)
+            {
+                scope = approvedScopes[i % approvedScopes.Count];
+                scopeHit = true;
+                isNoOp = false;
+                killSwitchTripped = false;
+                wouldApplyAdd = 3;
+                wouldApplyRemove = 1;
+                detail = $"approved scope '{scope}': wouldApply +{wouldApplyAdd}/-{wouldApplyRemove}, actual applied 0/0, no-op=false";
+            }
+            else
+            {
+                scope = nonApprovedScopes.Count > 0
+                    ? nonApprovedScopes[i % nonApprovedScopes.Count]
+                    : "rogue-workspace/rogue-collection";
+                scopeHit = false;
+                isNoOp = true;
+                killSwitchTripped = false;
+                wouldApplyAdd = 0;
+                wouldApplyRemove = 0;
+                detail = $"non-approved scope '{scope}': no-op=true, actual applied 0/0";
+            }
+
+            var actualAppliedAdd = 0;
+            var actualAppliedRemove = 0;
 
             if (scopeHit) approvedScopeHits++;
             if (isNoOp) nonApprovedScopeNoOps++;
-
-            var wouldApplyAdd = scopeHit ? 3 : 0;
-            var wouldApplyRemove = scopeHit ? 1 : 0;
-            var actualAppliedAdd = 0;
-            var actualAppliedRemove = 0;
+            if (killSwitchTripped)
+            {
+                killSwitchNoOpCount++;
+                if (!isNoOp)
+                    blocked.Add("KillSwitchRunNotNoOp");
+                if (actualAppliedAdd != 0 || actualAppliedRemove != 0)
+                    blocked.Add("KillSwitchRunHasAppliedDelta");
+            }
 
             var rollbackAvailable = true;
             var traceSinkWritable = true;
             var configPatchPreviewOnly = true;
             var runtimeActivationRemainsFalse = true;
-
-            var detail = scopeHit
-                ? $"approved scope '{scope}': wouldApply +{wouldApplyAdd}/-{wouldApplyRemove}, actual applied 0/0, no-op=false"
-                : $"non-approved scope '{scope}': no-op=true, actual applied 0/0";
 
             runs.Add(new ScopedRuntimePreviewActivationDryRunResult
             {
@@ -171,6 +209,8 @@ public sealed class ScopedRuntimePreviewActivationDryRunRunner
             blocked.Add("NoApprovedScopeHits");
         if (nonApprovedScopeNoOps <= 0)
             blocked.Add("NoNonApprovedScopeNoOps");
+        if (killSwitchNoOpCount <= 0)
+            blocked.Add("KillSwitchNoOpCountZero");
 
         var anyRollbackFailed = runs.Any(static r => !r.RollbackAvailable);
         if (anyRollbackFailed)
