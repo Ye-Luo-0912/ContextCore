@@ -1,4 +1,4 @@
-﻿# Vector Runtime-observable Retrieval Feature Contract Gate
+# Vector Runtime-observable Retrieval Feature Contract Gate
 
 Generated: `2026-06-18T00:23:23.8014156+00:00`
 OperationId: `runtime-observable-feature-contract-gate-b1d7b7f23e494c47a01abf65d2f8fe83`
@@ -249,13 +249,13 @@ OperationId: `runtime-observable-feature-contract-gate-b1d7b7f23e494c47a01abf65d
 - scannedFileCount: `7`
 - fixtureTokenHitCount: `0`
 - scannedFiles:
-  - `D:\Users\Ye_Luo\AppData\Local\Context\src\ContextCore.Core\Services\Vector\ShadowFormalRetrievalAdapterPlanRunner.cs`
-  - `D:\Users\Ye_Luo\AppData\Local\Context\src\ContextCore.Core\Services\Vector\ShadowFormalRetrievalAdapter.cs`
-  - `D:\Users\Ye_Luo\AppData\Local\Context\src\ContextCore.Core\Services\Vector\FormalAdapterPackageShadowComparisonRunner.cs`
-  - `D:\Users\Ye_Luo\AppData\Local\Context\src\ContextCore.Core\Services\Vector\GraphVectorRetrievalQualityAuditRunner.cs`
-  - `D:\Users\Ye_Luo\AppData\Local\Context\src\ContextCore.Core\Services\Vector\RetrievalQualityRepairPreviewRunner.cs`
-  - `D:\Users\Ye_Luo\AppData\Local\Context\src\ContextCore.Core\Services\Vector\RuntimeObservableRetrievalFeatureContractRunner.cs`
-  - `D:\Users\Ye_Luo\AppData\Local\Context\src\ContextCore.Core\Services\Vector\RuntimeRetrievalFeatureDerivationPreviewRunner.cs`
+  - `$(repo-root)\src\ContextCore.Core\Services\Vector\ShadowFormalRetrievalAdapterPlanRunner.cs`
+  - `$(repo-root)\src\ContextCore.Core\Services\Vector\ShadowFormalRetrievalAdapter.cs`
+  - `$(repo-root)\src\ContextCore.Core\Services\Vector\FormalAdapterPackageShadowComparisonRunner.cs`
+  - `$(repo-root)\src\ContextCore.Core\Services\Vector\GraphVectorRetrievalQualityAuditRunner.cs`
+  - `$(repo-root)\src\ContextCore.Core\Services\Vector\RetrievalQualityRepairPreviewRunner.cs`
+  - `$(repo-root)\src\ContextCore.Core\Services\Vector\RuntimeObservableRetrievalFeatureContractRunner.cs`
+  - `$(repo-root)\src\ContextCore.Core\Services\Vector\RuntimeRetrievalFeatureDerivationPreviewRunner.cs`
 
 ## Blocked Reasons
 - (empty)

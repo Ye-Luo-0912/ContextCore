@@ -5,6 +5,7 @@ using ContextCore.Abstractions.Models;
 using ContextCore.Client;
 using ContextCore.Core.Services;
 using ContextCore.ControlRoom.Services;
+using ContextCore.ControlRoom.Models;
 
 namespace ContextCore.ControlRoom.Rendering;
 
@@ -2192,6 +2193,30 @@ public static class ServiceOperationalRenderer
     {
         AppendStatusLine(builder, status);
         AppendMetricLine(builder, "action", action);
+    }
+
+    private static bool TryBeginReportSection(StringBuilder builder, ControlRoomReportDescriptor descriptor, string? sourcePath)
+    {
+        builder.AppendLine();
+        builder.AppendLine(descriptor.DisplayTitle);
+        if (string.IsNullOrWhiteSpace(sourcePath))
+        {
+            AppendMissingSummaryState(builder, descriptor.DefaultMissingStatus(), descriptor.DefaultEvalCommand());
+            return false;
+        }
+        return true;
+    }
+
+    private static bool TryBeginReportSection(StringBuilder builder, ControlRoomReportDescriptor descriptor, string? sourcePath1, string? sourcePath2)
+    {
+        builder.AppendLine();
+        builder.AppendLine(descriptor.DisplayTitle);
+        if (string.IsNullOrWhiteSpace(sourcePath1) && string.IsNullOrWhiteSpace(sourcePath2))
+        {
+            AppendMissingSummaryState(builder, descriptor.DefaultMissingStatus(), descriptor.DefaultEvalCommand());
+            return false;
+        }
+        return true;
     }
 
     private static void AppendLabeledLine(StringBuilder builder, string label, string value)
@@ -5023,13 +5048,7 @@ public static class ServiceOperationalRenderer
             AppendBlockedLine(builder, snapshot.ShadowQuality.FormalAdapterInputContractBlockedReasons);
         }
 
-        builder.AppendLine();
-        builder.AppendLine("V6.6 Source-diverse Shadow Adapter Validation Summary");
-        if (string.IsNullOrWhiteSpace(snapshot.ShadowQuality.SourceDiverseShadowAdapterValidationSourcePath))
-        {
-            AppendMissingSummaryState(builder, "NoSourceDiverseShadowAdapterValidationReport", "run eval vector-source-diverse-shadow-adapter-validation-gate");
-        }
-        else
+        if (TryBeginReportSection(builder, ReportSummaryRegistry.V6SourceDiverseShadowAdapter, snapshot.ShadowQuality.SourceDiverseShadowAdapterValidationSourcePath))
         {
             AppendMetricLine(builder, "source", BlankDash(snapshot.ShadowQuality.SourceDiverseShadowAdapterValidationSourcePath));
             AppendMetricLine(builder, "validation/gate", $"{snapshot.ShadowQuality.SourceDiverseShadowAdapterValidationPassed} / {snapshot.ShadowQuality.SourceDiverseShadowAdapterValidationGatePassed}");
@@ -5041,13 +5060,8 @@ public static class ServiceOperationalRenderer
             AppendRecommendationLine(builder, snapshot.ShadowQuality.SourceDiverseShadowAdapterValidationRecommendation);
             AppendBlockedLine(builder, snapshot.ShadowQuality.SourceDiverseShadowAdapterValidationBlockedReasons);
         }
-        builder.AppendLine();
-        builder.AppendLine("V6.7 Shadow Candidate Merge Preview Summary");
-        if (string.IsNullOrWhiteSpace(snapshot.ShadowQuality.ShadowCandidateMergePreviewSourcePath))
-        {
-            AppendMissingSummaryState(builder, "NoShadowCandidateMergePreviewReport", "run eval vector-shadow-candidate-merge-preview-gate");
-        }
-        else
+        if (TryBeginReportSection(builder, ReportSummaryRegistry.V6ShadowCandidateMergePreview, snapshot.ShadowQuality.ShadowCandidateMergePreviewSourcePath))
+        if (TryBeginReportSection(builder, ReportSummaryRegistry.V6ShadowCandidateMergePreview, snapshot.ShadowQuality.ShadowCandidateMergePreviewSourcePath))
         {
             AppendMetricLine(builder, "source", BlankDash(snapshot.ShadowQuality.ShadowCandidateMergePreviewSourcePath));
             AppendMetricLine(builder, "preview/gate", $"{snapshot.ShadowQuality.ShadowCandidateMergePreviewPassed} / {snapshot.ShadowQuality.ShadowCandidateMergePreviewGatePassed}");
@@ -5059,13 +5073,7 @@ public static class ServiceOperationalRenderer
             AppendRecommendationLine(builder, snapshot.ShadowQuality.ShadowCandidateMergePreviewRecommendation);
             AppendBlockedLine(builder, snapshot.ShadowQuality.ShadowCandidateMergePreviewBlockedReasons);
         }
-        builder.AppendLine();
-        builder.AppendLine("V6.7 Shadow Candidate Merge Observation Summary");
-        if (string.IsNullOrWhiteSpace(snapshot.ShadowQuality.ShadowCandidateMergePreviewObservationSourcePath))
-        {
-            AppendMissingSummaryState(builder, "NoShadowCandidateMergePreviewObservationReport", "run eval vector-shadow-candidate-merge-preview-observation-gate");
-        }
-        else
+        if (TryBeginReportSection(builder, ReportSummaryRegistry.V6ShadowCandidateMergeObservation, snapshot.ShadowQuality.ShadowCandidateMergePreviewObservationSourcePath))
         {
             AppendMetricLine(builder, "source", BlankDash(snapshot.ShadowQuality.ShadowCandidateMergePreviewObservationSourcePath));
             AppendMetricLine(builder, "observation/gate", $"{snapshot.ShadowQuality.ShadowCandidateMergePreviewObservationPassed} / {snapshot.ShadowQuality.ShadowCandidateMergePreviewObservationGatePassed}");
@@ -5077,14 +5085,7 @@ public static class ServiceOperationalRenderer
             AppendRecommendationLine(builder, snapshot.ShadowQuality.ShadowCandidateMergePreviewObservationRecommendation);
             AppendBlockedLine(builder, snapshot.ShadowQuality.ShadowCandidateMergePreviewObservationBlockedReasons);
         }
-        builder.AppendLine();
-        builder.AppendLine("V6.7 Shadow Merge Stability Freeze / Promotion Decision");
-        if (string.IsNullOrWhiteSpace(snapshot.ShadowQuality.ShadowMergeStabilityFreezeSourcePath) &&
-            string.IsNullOrWhiteSpace(snapshot.ShadowQuality.ShadowMergePromotionDecisionSourcePath))
-        {
-            AppendMissingSummaryState(builder, "NoShadowMergeStabilityFreezeReport", "run eval vector-shadow-merge-stability-freeze and eval vector-shadow-merge-promotion-decision");
-        }
-        else
+        if (TryBeginReportSection(builder, ReportSummaryRegistry.V6ShadowMergeStabilityFreeze, snapshot.ShadowQuality.ShadowMergeStabilityFreezeSourcePath, snapshot.ShadowQuality.ShadowMergePromotionDecisionSourcePath))
         {
             AppendMetricLine(builder, "freezeSource", BlankDash(snapshot.ShadowQuality.ShadowMergeStabilityFreezeSourcePath));
             AppendMetricLine(builder, "decisionSource", BlankDash(snapshot.ShadowQuality.ShadowMergePromotionDecisionSourcePath));
@@ -5098,13 +5099,7 @@ public static class ServiceOperationalRenderer
             AppendRecommendationLine(builder, snapshot.ShadowQuality.ShadowMergeStabilityFreezeRecommendation);
             AppendBlockedLine(builder, snapshot.ShadowQuality.ShadowMergeBlockedReasons);
         }
-        builder.AppendLine();
-        builder.AppendLine("V6.8 Controlled Shadow Merge Proposal");
-        if (string.IsNullOrWhiteSpace(snapshot.ShadowQuality.ControlledShadowMergeProposalSourcePath))
-        {
-            AppendMissingSummaryState(builder, "NoControlledShadowMergeProposalReport", "run eval vector-controlled-shadow-merge-proposal and eval vector-controlled-shadow-merge-proposal-gate");
-        }
-        else
+        if (TryBeginReportSection(builder, ReportSummaryRegistry.V6ControlledShadowMergeProposal, snapshot.ShadowQuality.ControlledShadowMergeProposalSourcePath))
         {
             AppendMetricLine(builder, "source", BlankDash(snapshot.ShadowQuality.ControlledShadowMergeProposalSourcePath));
             AppendMetricLine(builder, "proposal/gate", $"{snapshot.ShadowQuality.ControlledShadowMergeProposalPassed} / {snapshot.ShadowQuality.ControlledShadowMergeProposalGatePassed}");
@@ -5117,13 +5112,7 @@ public static class ServiceOperationalRenderer
             AppendBlockedLine(builder, snapshot.ShadowQuality.ControlledShadowMergeProposalBlockedReasons);
         }
 
-        builder.AppendLine();
-        builder.AppendLine("V6.10 Controlled Shadow Merge Dry-run Gate");
-        if (string.IsNullOrWhiteSpace(snapshot.ShadowQuality.ControlledShadowMergeDryRunSourcePath))
-        {
-            AppendMissingSummaryState(builder, "NoControlledShadowMergeDryRunReport", "run eval vector-controlled-shadow-merge-dry-run and eval vector-controlled-shadow-merge-dry-run-gate");
-        }
-        else
+        if (TryBeginReportSection(builder, ReportSummaryRegistry.V6ControlledShadowMergeDryRun, snapshot.ShadowQuality.ControlledShadowMergeDryRunSourcePath))
         {
             AppendMetricLine(builder, "source", BlankDash(snapshot.ShadowQuality.ControlledShadowMergeDryRunSourcePath));
             AppendMetricLine(builder, "dryRun/gate", $"{snapshot.ShadowQuality.ControlledShadowMergeDryRunPassed} / {snapshot.ShadowQuality.ControlledShadowMergeDryRunGatePassed}");
@@ -5137,13 +5126,7 @@ public static class ServiceOperationalRenderer
             AppendBlockedLine(builder, snapshot.ShadowQuality.ControlledShadowMergeDryRunBlockedReasons);
         }
 
-        builder.AppendLine();
-        builder.AppendLine("V6.11 Controlled Shadow Merge Observation Window");
-        if (string.IsNullOrWhiteSpace(snapshot.ShadowQuality.ControlledShadowMergeObservationWindowSourcePath))
-        {
-            AppendMissingSummaryState(builder, "NoControlledShadowMergeObservationWindowReport", "run eval vector-controlled-shadow-merge-observation-window and eval vector-controlled-shadow-merge-observation-window-gate");
-        }
-        else
+        if (TryBeginReportSection(builder, ReportSummaryRegistry.V6ControlledShadowMergeObservationWindow, snapshot.ShadowQuality.ControlledShadowMergeObservationWindowSourcePath))
         {
             AppendMetricLine(builder, "source", BlankDash(snapshot.ShadowQuality.ControlledShadowMergeObservationWindowSourcePath));
             AppendMetricLine(builder, "observation/gate", $"{snapshot.ShadowQuality.ControlledShadowMergeObservationWindowPassed} / {snapshot.ShadowQuality.ControlledShadowMergeObservationWindowGatePassed}");
@@ -5155,13 +5138,7 @@ public static class ServiceOperationalRenderer
             AppendRecommendationLine(builder, snapshot.ShadowQuality.ControlledShadowMergeObservationWindowRecommendation);
             AppendBlockedLine(builder, snapshot.ShadowQuality.ControlledShadowMergeObservationWindowBlockedReasons);
         }
-        builder.AppendLine();
-        builder.AppendLine("V6.13 Controlled Shadow Merge Freeze / Promotion Decision");
-        if (string.IsNullOrWhiteSpace(snapshot.ShadowQuality.ControlledShadowMergeFreezeSourcePath))
-        {
-            AppendMissingSummaryState(builder, "NoControlledShadowMergeFreezeReport", "run eval vector-controlled-shadow-merge-freeze and eval vector-controlled-shadow-merge-promotion-decision");
-        }
-        else
+        if (TryBeginReportSection(builder, ReportSummaryRegistry.V6ControlledShadowMergeFreeze, snapshot.ShadowQuality.ControlledShadowMergeFreezeSourcePath))
         {
             AppendMetricLine(builder, "source", BlankDash(snapshot.ShadowQuality.ControlledShadowMergeFreezeSourcePath));
             AppendMetricLine(builder, "freeze/promo", $"{snapshot.ShadowQuality.ControlledShadowMergeFreezePassed} / {snapshot.ShadowQuality.ControlledShadowMergePromotionDecisionPassed}");
@@ -5174,13 +5151,7 @@ public static class ServiceOperationalRenderer
             AppendRecommendationLine(builder, snapshot.ShadowQuality.ControlledShadowMergeFreezeRecommendation);
             AppendBlockedLine(builder, snapshot.ShadowQuality.ControlledShadowMergeFreezeBlockedReasons);
         }
-        builder.AppendLine();
-        builder.AppendLine("V6.14 Controlled Applied Merge Proposal");
-        if (string.IsNullOrWhiteSpace(snapshot.ShadowQuality.ControlledAppliedMergeProposalSourcePath))
-        {
-            AppendMissingSummaryState(builder, "NoControlledAppliedMergeProposalReport", "run eval vector-controlled-applied-merge-proposal and eval vector-controlled-applied-merge-proposal-gate");
-        }
-        else
+        if (TryBeginReportSection(builder, ReportSummaryRegistry.V6ControlledAppliedMergeProposal, snapshot.ShadowQuality.ControlledAppliedMergeProposalSourcePath))
         {
             AppendMetricLine(builder, "source", BlankDash(snapshot.ShadowQuality.ControlledAppliedMergeProposalSourcePath));
             AppendMetricLine(builder, "proposal/gate", $"{snapshot.ShadowQuality.ControlledAppliedMergeProposalPassed} / {snapshot.ShadowQuality.ControlledAppliedMergeProposalGatePassed}");

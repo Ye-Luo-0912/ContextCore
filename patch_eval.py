@@ -1,5 +1,5 @@
 import sys
-path = 'd:/Users/Ye_Luo/AppData/Local/Context/src/ContextCore.ControlRoom/Commands/EvalCommand.cs'
+path = 'src/ContextCore.ControlRoom/Commands/EvalCommand.cs'
 with open(path, 'r', encoding='utf-8') as f:
     lines = f.readlines()
 

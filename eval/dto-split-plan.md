@@ -1,15 +1,15 @@
 ﻿# DTO Split Plan
 
 PlanGenerated: `True`
-Source: `D:\Users\Ye_Luo\AppData\Local\Context\src\ContextCore.Abstractions\Models\VectorIndexDtos.cs`
-TotalClasses: `311`
+Source: `src/ContextCore.Abstractions/Models/VectorIndexDtos.cs`
+TotalClasses: `75`
 
 ## 分类统计
 - RuntimeContract: `73` — runtime adapter request/result/contract/envelope
-- EvalReport: `155` — phase eval report DTO（不含 gate）
-- GateReport: `33` — gate/freeze/decision/plan report DTO
-- ControlRoomSummary: `5` — ControlRoom summary/snapshot 用 DTO
-- Legacy: `45` — 已废弃或无法明确分类的 DTO
+- EvalReport: `2` — phase eval report DTO（不含 gate）
+- GateReport: `0` — gate/freeze/decision/plan report DTO
+- ControlRoomSummary: `0` — ControlRoom summary/snapshot 用 DTO
+- Legacy: `0` — 已废弃或无法明确分类的 DTO
 
 ## 目标拆分文件
 - `VectorRuntimeDtos.cs — runtime adapter request/result/contract/envelope/options`

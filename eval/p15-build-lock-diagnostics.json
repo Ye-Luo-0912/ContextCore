@@ -1,0 +1,36 @@
+{
+  "OperationId": "p15-build-lock-diagnostics-20260624-191912",
+  "GeneratedAt": "2026-06-24T19:19:12.9203304+08:00",
+  "Summary": {
+    "BuildPassed": true,
+    "BuildAttempts": 0,
+    "TestPassed": true,
+    "TestAttempts": 0,
+    "Msb3026Hits": 0,
+    "Msb3027Hits": 0,
+    "BuildLockIssueCount": 0,
+    "TestLockIssueCount": 0,
+    "TesthostResidueCount": 0,
+    "BinObjLockedAny": false
+  },
+  "BuildFlags": "-m:1 -p:UseSharedCompilation=false -p:BuildInParallel=false",
+  "BuildLockIssues": [],
+  "TestLockIssues": [],
+  "TesthostResidue": [],
+  "BinObjLockCheck": {
+    "AnyLocked": false,
+    "LockedFiles": [],
+    "CheckedDirs": [
+      "src\\ContextCore.AppHost\\bin",
+      "src\\ContextCore.Core\\bin",
+      "src\\ContextCore.Core\\obj",
+      "tests\\ContextCore.Tests\\bin",
+      "tests\\ContextCore.IntegrationTests\\bin",
+      "tests\\ContextCore.Service.Tests\\bin"
+    ]
+  },
+  "SuggestedCleanup": null,
+  "Notes": [
+    "Build/test skipped via SkipBuildTest"
+  ]
+}

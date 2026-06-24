@@ -558,7 +558,7 @@ public sealed class SourceDiverseShadowAdapterValidationRunner
 
     private static string? ResolveSourceFilePath()
     {
-        var relative = Path.Combine("src", "ContextCore.Core", "Services", "Vector", "SourceDiverseShadowAdapterValidationRunner.cs");
+        var relative = Path.Combine("src", "ContextCore.Core", "Services", "Vector", "Evaluation", "V6", "SourceDiverseShadowAdapterValidationRunner.cs");
         foreach (var root in EnumerateProbeRoots())
         {
             var candidate = Path.GetFullPath(Path.Combine(root, relative));

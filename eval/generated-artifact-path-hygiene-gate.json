@@ -1,0 +1,10 @@
+﻿{
+  "OperationId": "path-hygiene-gate-20260624-100827",
+  "GeneratedAt": "2026-06-24T10:08:27.3245567+00:00",
+  "Passed": true,
+  "InfectedFiles": 0,
+  "TotalFiles": 815,
+  "FailedConditions": [],
+  "Recommendation": "ReadyForNextPhase",
+  "AuditReportPath": "eval/generated-artifact-path-hygiene-audit.json"
+}

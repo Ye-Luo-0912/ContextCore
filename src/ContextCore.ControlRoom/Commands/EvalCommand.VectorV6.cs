@@ -39,7 +39,7 @@ public static partial class EvalCommand
         var jsonPath = Path.Combine(outputDirectory, "architecture-cleanup-plan.json");
         var markdownPath = Path.Combine(outputDirectory, "architecture-cleanup-plan.md");
 
-        await WriteTextAsync(JsonSerializer.Serialize(report, JsonOptions), jsonPath, ct).ConfigureAwait(false);
+        await WriteJsonSafeAsync(report, jsonPath, ct).ConfigureAwait(false);
         await WriteTextAsync(
                 ArchitectureCleanupPlanRunner.BuildMarkdown("Architecture Cleanup Plan", report),
                 markdownPath,

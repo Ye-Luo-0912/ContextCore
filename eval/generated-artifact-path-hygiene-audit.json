@@ -1,0 +1,10 @@
+﻿{
+  "ScanRoot": ".",
+  "GeneratedAt": "2026-06-24T08:40:24.6064977+00:00",
+  "TotalFiles": 815,
+  "InfectedFiles": 0,
+  "Entries": [],
+  "Passed": true,
+  "Recommendation": "ReadyForNextPhase",
+  "RemediationHints": []
+}

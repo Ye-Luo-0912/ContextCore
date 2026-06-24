@@ -17,6 +17,8 @@ public sealed class DtoSplitPlanRunner
         if (!File.Exists(srcPath))
             return new DtoSplitPlanReport { PlanGenerated = false, ErrorDescription = $"File not found: {srcPath}" };
 
+        var relativePath = ContextCore.Abstractions.PathHygiene.ToRepoRelativePath(srcPath);
+
         var text = File.ReadAllText(srcPath);
         var lines = File.ReadAllLines(srcPath);
 
@@ -99,7 +101,7 @@ public sealed class DtoSplitPlanRunner
         return new DtoSplitPlanReport
         {
             PlanGenerated = true,
-            SourceFile = srcPath,
+            SourceFile = relativePath,
             TotalClasses = classes.Count,
             RuntimeContractCount = runtime.Count,
             EvalReportCount = evalReport.Count,

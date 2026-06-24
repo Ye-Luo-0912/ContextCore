@@ -1,4 +1,4 @@
-using ContextCore.Abstractions.Models;
+﻿using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services;
 
 namespace ContextCore.Tests;
@@ -84,7 +84,7 @@ public class ContextCoreSourceDiverseShadowAdapterValidationTests
     [TestMethod]
     public void SourceDiverseShadowAdapterValidation_SourceDoesNotSpecialCaseSamplesOrItems()
     {
-        var source = File.ReadAllText(ResolveRepoFile("src", "ContextCore.Core", "Services", "Vector", "SourceDiverseShadowAdapterValidationRunner.cs"));
+        var source = File.ReadAllText(ResolveRepoFile("src", "ContextCore.Core", "Services", "Vector", "Evaluation", "V6", "SourceDiverseShadowAdapterValidationRunner.cs"));
         Assert.IsFalse(source.Contains("sample.SampleId ==", StringComparison.Ordinal));
         Assert.IsFalse(source.Contains("item.ItemId ==", StringComparison.Ordinal));
         Assert.IsFalse(source.Contains("mustHitItemId ==", StringComparison.Ordinal));
@@ -156,15 +156,5 @@ public class ContextCoreSourceDiverseShadowAdapterValidationTests
 
     private static string ResolveRepoFile(params string[] parts)
     {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            var candidate = Path.Combine(new[] { directory.FullName }.Concat(parts).ToArray());
-            if (File.Exists(candidate))
-                return candidate;
-            directory = directory.Parent;
-        }
-
-        throw new FileNotFoundException("Repository file not found", Path.Combine(parts));
-    }
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);return TestRepoFileResolver.Resolve(parts);}
 }

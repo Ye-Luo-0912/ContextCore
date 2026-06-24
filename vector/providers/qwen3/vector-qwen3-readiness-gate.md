@@ -1,4 +1,4 @@
-﻿# Vector Qwen3 Readiness Gate
+# Vector Qwen3 Readiness Gate
 
 Generated: 2026-06-14T18:12:16.8906366+00:00
 
@@ -6,8 +6,8 @@ Generated: 2026-06-14T18:12:16.8906366+00:00
 - ProviderId: `qwen3-embedding-0.6b-onnx`
 - ProviderType: `OnnxLocal`
 - ModelId: `qwen3-embedding-0.6b`
-- ModelPath: `D:\Users\Ye_Luo\AppData\Local\Context\src\ContextCore.Embedding\Models\qwen3-embedding-0.6b-onnx\model_int8.onnx`
-- TokenizerPath: `D:\Users\Ye_Luo\AppData\Local\Context\src\ContextCore.Embedding\Models\qwen3-embedding-0.6b-onnx\tokenizer.json`
+- ModelPath: `$(repo-root)\src\ContextCore.Embedding\Models\qwen3-embedding-0.6b-onnx\model_int8.onnx`
+- TokenizerPath: `$(repo-root)\src\ContextCore.Embedding\Models\qwen3-embedding-0.6b-onnx\tokenizer.json`
 - Dimension: `1024`
 - UseForRuntime: `False`
 - ProviderCompatibilityPassed: `True`

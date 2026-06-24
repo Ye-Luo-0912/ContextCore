@@ -1,7 +1,7 @@
-﻿# Ranker Offline Baseline Report
+# Ranker Offline Baseline Report
 
 Generated: 2026-06-06 08:50:48 +00:00
-Input: `D:\Users\Ye_Luo\AppData\Local\Context\learning\features\ranking-pairs.jsonl`
+Input: `$(repo-root)\learning\features\ranking-pairs.jsonl`
 Policy: `learning-offline-baseline/v1`
 Status: `Ready`
 Pairs: `253`

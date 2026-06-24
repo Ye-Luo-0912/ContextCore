@@ -1,4 +1,5 @@
-using System.Text;
+﻿using System.Text;
+using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 
 namespace ContextCore.Core.Services;
@@ -27,8 +28,20 @@ public sealed class ArchitectureCleanupPlanRunner
         var rendererPath = Path.Combine(resolvedRepositoryRoot, "src", "ContextCore.ControlRoom", "Rendering", "ServiceOperationalRenderer.cs");
         var dtoPath = Path.Combine(resolvedRepositoryRoot, "src", "ContextCore.Abstractions", "Models", "VectorIndexDtos.cs");
 
-        var runnerCount = CountFiles(vectorDir, "*.cs");
-        var dtoClassCount = CountDtoTypes(dtoPath);
+        var runtimeCount = CountFiles(Path.Combine(vectorDir), "*.cs", SearchOption.TopDirectoryOnly);
+        var legacyCount   = CountFiles(Path.Combine(vectorDir, "Legacy"), "*.cs");
+        var gatesCount    = CountFiles(Path.Combine(vectorDir, "Evaluation", "Gates"), "*.cs");
+        var datasetCount  = CountFiles(Path.Combine(vectorDir, "Evaluation", "Dataset"), "*.cs");
+        var v5evalCount   = CountFiles(Path.Combine(vectorDir, "Evaluation", "V5"), "*.cs");
+        var v6evalCount   = CountFiles(Path.Combine(vectorDir, "Evaluation", "V6"), "*.cs");
+        var totalRunnerCount = runtimeCount + legacyCount + gatesCount + datasetCount + v5evalCount + v6evalCount;
+
+        var dtoRuntimeCount = CountDtoTypes(Path.Combine(resolvedRepositoryRoot, "src", "ContextCore.Abstractions", "Models", "VectorIndexDtos.cs"));
+        var dtoEvalCount    = CountDtoTypes(Path.Combine(resolvedRepositoryRoot, "src", "ContextCore.Abstractions", "Models", "VectorEvalReportDtos.cs"));
+        var dtoGateCount    = CountDtoTypes(Path.Combine(resolvedRepositoryRoot, "src", "ContextCore.Abstractions", "Models", "VectorGateReportDtos.cs"));
+        var dtoSummaryCount = CountDtoTypes(Path.Combine(resolvedRepositoryRoot, "src", "ContextCore.Abstractions", "Models", "VectorControlRoomSummaryDtos.cs"));
+        var dtoLegacyCount  = CountDtoTypes(Path.Combine(resolvedRepositoryRoot, "src", "ContextCore.Abstractions", "Models", "VectorLegacyDtos.cs"));
+        var totalDtoCount = dtoRuntimeCount + dtoEvalCount + dtoGateCount + dtoSummaryCount + dtoLegacyCount;
         var evalCommandLines = CountLines(evalCommandPath);
         var controlRoomServiceLines = CountLines(controlRoomServicePath);
         var rendererLines = CountLines(rendererPath);
@@ -36,9 +49,20 @@ public sealed class ArchitectureCleanupPlanRunner
 
         var diag = new List<string>
         {
-            $"Repository root: {resolvedRepositoryRoot}",
-            $"Core/Vector runner files: {runnerCount}",
-            $"VectorIndexDtos types: {dtoClassCount}",
+            $"Repository root: {PathHygiene.ToRepoRelativePath(resolvedRepositoryRoot)}",
+            $"Core/Vector files (total): {totalRunnerCount}",
+            $"  Runtime: {runtimeCount}",
+            $"  Legacy: {legacyCount}",
+            $"  Evaluation/Gates: {gatesCount}",
+            $"  Evaluation/Dataset: {datasetCount}",
+            $"  Evaluation/V5: {v5evalCount}",
+            $"  Evaluation/V6: {v6evalCount}",
+            $"DTO types (total): {totalDtoCount}",
+            $"  VectorIndexDtos: {dtoRuntimeCount}",
+            $"  EvalReportDtos: {dtoEvalCount}",
+            $"  GateReportDtos: {dtoGateCount}",
+            $"  SummaryDtos: {dtoSummaryCount}",
+            $"  LegacyDtos: {dtoLegacyCount}",
             $"EvalCommand.cs lines: {evalCommandLines}",
             $"ControlRoomService.cs lines: {controlRoomServiceLines}",
             $"ServiceOperationalRenderer.cs lines: {rendererLines}",
@@ -56,17 +80,17 @@ public sealed class ArchitectureCleanupPlanRunner
             },
             new()
             {
-                Priority = "high", Category = "Core 中 eval-only runner 分离",
-                CurrentState = $"~100 个 runner 文件混在 ContextCore.Core/Services/Vector/，其中约 60% 是 eval-only shadow/preview/audit runner",
-                Recommendation = "将 eval-only runner 移到 ContextCore.Eval or ContextCore.Core/EvalRunners/ 子命名空间；留下 runtime 可用的 runner 在原位置",
-                Risk = "medium — 需检查每个 runner 的引用链，确保 DI 注册不受影响"
+                Priority = "medium", Category = "Core 中 eval-only runner 分离 (OPT-004 已部分完成)",
+                CurrentState = $"eval-only runner 已按分类拆分到 Evaluation/V5 ({v5evalCount} files), Evaluation/V6 ({v6evalCount}), Evaluation/Gates ({gatesCount}), Evaluation/Dataset ({datasetCount}), Legacy ({legacyCount})；runtime {runtimeCount} 个文件保留在 Services/Vector/ 根目录",
+                Recommendation = "继续将 Evaluation/Gates 中的 gate runner 合并为统一 gate pipeline；将 V5 中已冻结的 runner 标记为 deprecated 或迁移到 Legacy",
+                Risk = "low — 已有目录结构，后续只做少量文件再分配"
             },
             new()
             {
-                Priority = "high", Category = "Abstractions DTO 拆分",
-                CurrentState = "VectorIndexDtos.cs 包含 ~212 个类，从 V5.0 到 V6.F 所有 report/decision/proposal 混在一起",
-                Recommendation = "按 V5/VMeta/V6/EvalProtocol/Arch 拆分到独立文件；runner 只需要 using 对应命名空间",
-                Risk = "low — 只移动 DTO 定义，不改序列化行为"
+                Priority = "medium", Category = "Abstractions DTO 拆分 (OPT-003 已完成)",
+                CurrentState = $"VectorIndexDtos 已拆分为 5 个文件: VectorIndexDtos ({dtoRuntimeCount}), EvalReportDtos ({dtoEvalCount}), GateReportDtos ({dtoGateCount}), SummaryDtos ({dtoSummaryCount}), LegacyDtos ({dtoLegacyCount})；总计 {totalDtoCount} 类型",
+                Recommendation = "后续按 OPT-005 将 report/gate DTO 迁移到独立 ContextCore.Eval.Models 项目",
+                Risk = "low — 已拆分，namespaces 和序列化行为未变"
             },
             new()
             {
@@ -106,8 +130,8 @@ public sealed class ArchitectureCleanupPlanRunner
             Recommendation = blocked.Count == 0
                 ? ArchitectureCleanupPlanRecommendations.ReadyForCleanupPlan
                 : ArchitectureCleanupPlanRecommendations.BlockedByMissingV6FFreeze,
-            CoreRunnerCount = runnerCount,
-            DtoClassCount = dtoClassCount,
+            CoreRunnerCount = totalRunnerCount,
+            DtoClassCount = totalDtoCount,
             EvalCommandLines = evalCommandLines,
             ControlRoomServiceLines = controlRoomServiceLines,
             RendererLines = rendererLines,
@@ -166,10 +190,10 @@ public sealed class ArchitectureCleanupPlanRunner
         return Path.GetFullPath(repositoryRoot);
     }
 
-    private static int CountFiles(string directory, string searchPattern)
+    private static int CountFiles(string directory, string searchPattern, SearchOption searchOption = SearchOption.TopDirectoryOnly)
     {
         return Directory.Exists(directory)
-            ? Directory.EnumerateFiles(directory, searchPattern, SearchOption.TopDirectoryOnly).Count()
+            ? Directory.EnumerateFiles(directory, searchPattern, searchOption).Count()
             : 0;
     }
 

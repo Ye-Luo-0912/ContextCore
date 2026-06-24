@@ -1,9 +1,9 @@
 ﻿{
-  "OperationId": "dto-split-plan-a90be45cc37f4a669fa9391ef29dceaa",
-  "CreatedAt": "2026-06-24T03:26:13.5744258+00:00",
+  "OperationId": "dto-split-plan-cacfba201bb642eb8db9f0db32596c88",
+  "CreatedAt": "2026-06-24T08:31:42.1333817+00:00",
   "PlanGenerated": true,
   "ErrorDescription": "",
-  "SourceFile": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\src\\ContextCore.Abstractions\\Models\\VectorIndexDtos.cs",
+  "SourceFile": "src/ContextCore.Abstractions/Models/VectorIndexDtos.cs",
   "TotalClasses": 311,
   "RuntimeContractCount": 73,
   "EvalReportCount": 155,

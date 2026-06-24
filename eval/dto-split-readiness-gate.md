@@ -1,7 +1,7 @@
 ﻿# DTO Split Readiness Gate
 
 PlanGenerated: `True`
-Source: `D:\Users\Ye_Luo\AppData\Local\Context\src\ContextCore.Abstractions\Models\VectorIndexDtos.cs`
+Source: `src/ContextCore.Abstractions/Models/VectorIndexDtos.cs`
 TotalClasses: `311`
 
 ## 分类统计

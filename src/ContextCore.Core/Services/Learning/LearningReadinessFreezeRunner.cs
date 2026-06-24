@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using ContextCore.Abstractions;
@@ -607,7 +607,7 @@ public sealed class LearningReadinessFreezeRunner
             OperationId = $"learning-runtime-change-gate-{Guid.NewGuid():N}",
             GeneratedAt = DateTimeOffset.UtcNow,
             Passed = failed.Length == 0,
-            RegistryReportPath = registryReportPath,
+            RegistryReportPath = PathHygiene.ToRepoRelativePath(registryReportPath),
             Checks = checks,
             FailedConditions = failed,
             Recommendation = failed.Length == 0 ? "RuntimeChangeRulesSatisfied" : "KeepRuntimeDefaults",
@@ -727,7 +727,7 @@ public sealed class LearningReadinessFreezeRunner
                 "GuardedPostgresPrimary:ComparisonTraceDisabled",
                 "HistoricalMigrationAsSwitchPrerequisite"
             ],
-            LastEvalReportPath = path,
+            LastEvalReportPath = PathHygiene.ToRepoRelativePath(path),
             LastUpdatedAt = DateTimeOffset.UtcNow
         };
     }
@@ -828,7 +828,7 @@ public sealed class LearningReadinessFreezeRunner
                 "GuardedPostgresPrimary:MissingLeaseQualityGate",
                 "GuardedPostgresPrimary:MissingRetryDeadLetterQualityGate"
             ],
-            LastEvalReportPath = path,
+            LastEvalReportPath = PathHygiene.ToRepoRelativePath(path),
             LastUpdatedAt = report.GeneratedAt
         };
     }
@@ -929,7 +929,7 @@ public sealed class LearningReadinessFreezeRunner
                 "MissingShadowEvalGate",
                 "MissingRecallRiskGate"
             ],
-            LastEvalReportPath = path,
+            LastEvalReportPath = PathHygiene.ToRepoRelativePath(path),
             LastUpdatedAt = report.GeneratedAt
         };
     }
@@ -1021,7 +1021,7 @@ public sealed class LearningReadinessFreezeRunner
                 ? [ShadowRuntimeModes.Off, ShadowRuntimeModes.PreviewOnly, ShadowRuntimeModes.Shadow, "PreviewShadowEvalOnly"]
                 : [ShadowRuntimeModes.Off, ShadowRuntimeModes.PreviewOnly, ShadowRuntimeModes.Shadow],
             ForbiddenRuntimeModes = forbidden,
-            LastEvalReportPath = path,
+            LastEvalReportPath = PathHygiene.ToRepoRelativePath(path),
             LastUpdatedAt = report.GeneratedAt
         };
     }
@@ -1058,7 +1058,7 @@ public sealed class LearningReadinessFreezeRunner
                 "PackingPolicyIntegration",
                 "PackageOutputIntegration"
             ],
-            LastEvalReportPath = path,
+            LastEvalReportPath = PathHygiene.ToRepoRelativePath(path),
             LastUpdatedAt = DateTimeOffset.UtcNow
         };
     }
@@ -1138,7 +1138,7 @@ public sealed class LearningReadinessFreezeRunner
                 "ApplyGuarded:current-task-v1",
                 "NormalContextInjection"
             ],
-            LastEvalReportPath = path,
+            LastEvalReportPath = PathHygiene.ToRepoRelativePath(path),
             LastUpdatedAt = report.CreatedAt
         };
     }
@@ -1176,7 +1176,7 @@ public sealed class LearningReadinessFreezeRunner
             ForbiddenRuntimeModes = report.Passed
                 ? [ShadowRuntimeModes.DefaultOn, ShadowRuntimeModes.ApplyGuarded]
                 : [ShadowRuntimeModes.RuntimeShadow, ShadowRuntimeModes.ApplyGuarded, ShadowRuntimeModes.DefaultOn],
-            LastEvalReportPath = path,
+            LastEvalReportPath = PathHygiene.ToRepoRelativePath(path),
             LastUpdatedAt = report.CreatedAt
         };
     }
@@ -1241,7 +1241,7 @@ public sealed class LearningReadinessFreezeRunner
             BlockedReasons = blocked.Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
             AllowedRuntimeModes = [ShadowRuntimeModes.Off, ShadowRuntimeModes.PreviewOnly, ShadowRuntimeModes.Shadow, "PreviewShadowEvalOnly"],
             ForbiddenRuntimeModes = forbidden,
-            LastEvalReportPath = path,
+            LastEvalReportPath = PathHygiene.ToRepoRelativePath(path),
             LastUpdatedAt = report.GeneratedAt
         };
     }
@@ -1338,7 +1338,7 @@ public sealed class LearningReadinessFreezeRunner
                 ? [ShadowRuntimeModes.Off, ShadowRuntimeModes.PreviewOnly, ShadowRuntimeModes.Shadow, "V4RecheckInputOnly"]
                 : [ShadowRuntimeModes.Off, ShadowRuntimeModes.PreviewOnly],
             ForbiddenRuntimeModes = forbidden,
-            LastEvalReportPath = path,
+            LastEvalReportPath = PathHygiene.ToRepoRelativePath(path),
             LastUpdatedAt = report.CreatedAt
         };
     }
@@ -1421,7 +1421,7 @@ public sealed class LearningReadinessFreezeRunner
                 ? [ShadowRuntimeModes.Off, ShadowRuntimeModes.PreviewOnly, ShadowRuntimeModes.Shadow, "GuardedFormalPreviewOnly"]
                 : [ShadowRuntimeModes.Off, ShadowRuntimeModes.PreviewOnly],
             ForbiddenRuntimeModes = forbidden,
-            LastEvalReportPath = path,
+            LastEvalReportPath = PathHygiene.ToRepoRelativePath(path),
             LastUpdatedAt = report.CreatedAt
         };
     }
@@ -1516,7 +1516,7 @@ public sealed class LearningReadinessFreezeRunner
                 ? [ShadowRuntimeModes.Off, ShadowRuntimeModes.PreviewOnly, ShadowRuntimeModes.Shadow, "GuardedFormalPreviewOnly", "ShadowPackageComparisonOnly"]
                 : [ShadowRuntimeModes.Off, ShadowRuntimeModes.PreviewOnly],
             ForbiddenRuntimeModes = forbidden,
-            LastEvalReportPath = path,
+            LastEvalReportPath = PathHygiene.ToRepoRelativePath(path),
             LastUpdatedAt = report.CreatedAt
         };
     }
@@ -1621,7 +1621,7 @@ public sealed class LearningReadinessFreezeRunner
                 ? [ShadowRuntimeModes.Off, ShadowRuntimeModes.PreviewOnly, ShadowRuntimeModes.Shadow, "GuardedFormalPreviewOnly", "ShadowPackageComparisonOnly", "ScopedFormalPreviewOptInOnly"]
                 : [ShadowRuntimeModes.Off, ShadowRuntimeModes.PreviewOnly],
             ForbiddenRuntimeModes = forbidden,
-            LastEvalReportPath = path,
+            LastEvalReportPath = PathHygiene.ToRepoRelativePath(path),
             LastUpdatedAt = report.CreatedAt
         };
     }
@@ -1731,7 +1731,7 @@ public sealed class LearningReadinessFreezeRunner
                 ? [ShadowRuntimeModes.Off, ShadowRuntimeModes.PreviewOnly, ShadowRuntimeModes.Shadow, "GuardedFormalPreviewOnly", "ShadowPackageComparisonOnly", "ScopedFormalPreviewOptInOnly", "LimitedFormalPreviewObservationOnly"]
                 : [ShadowRuntimeModes.Off, ShadowRuntimeModes.PreviewOnly],
             ForbiddenRuntimeModes = forbidden,
-            LastEvalReportPath = path,
+            LastEvalReportPath = PathHygiene.ToRepoRelativePath(path),
             LastUpdatedAt = report.CreatedAt
         };
     }
@@ -1841,7 +1841,7 @@ public sealed class LearningReadinessFreezeRunner
                 ? [ShadowRuntimeModes.Off, ShadowRuntimeModes.PreviewOnly, ShadowRuntimeModes.Shadow, "FormalPreviewFreezeOnly"]
                 : [ShadowRuntimeModes.Off, ShadowRuntimeModes.PreviewOnly],
             ForbiddenRuntimeModes = forbidden,
-            LastEvalReportPath = path,
+            LastEvalReportPath = PathHygiene.ToRepoRelativePath(path),
             LastUpdatedAt = report.CreatedAt
         };
     }
@@ -1955,7 +1955,7 @@ public sealed class LearningReadinessFreezeRunner
                 ? [ShadowRuntimeModes.Off, ShadowRuntimeModes.PreviewOnly, ShadowRuntimeModes.Shadow, "ScopedPreviewOnly", "FormalPreviewFreezeOnly"]
                 : [ShadowRuntimeModes.Off, ShadowRuntimeModes.PreviewOnly],
             ForbiddenRuntimeModes = forbidden,
-            LastEvalReportPath = path,
+            LastEvalReportPath = PathHygiene.ToRepoRelativePath(path),
             LastUpdatedAt = report.CreatedAt
         };
     }
@@ -2060,7 +2060,7 @@ public sealed class LearningReadinessFreezeRunner
                 ? [ShadowRuntimeModes.Off, ShadowRuntimeModes.PreviewOnly, ShadowRuntimeModes.Shadow, "NoOpHarnessOnly", "ExplicitScopedExperimentPlanningOnly"]
                 : [ShadowRuntimeModes.Off, ShadowRuntimeModes.PreviewOnly],
             ForbiddenRuntimeModes = forbidden,
-            LastEvalReportPath = path,
+            LastEvalReportPath = PathHygiene.ToRepoRelativePath(path),
             LastUpdatedAt = report.CreatedAt
         };
     }
@@ -2098,7 +2098,7 @@ public sealed class LearningReadinessFreezeRunner
             ForbiddenRuntimeModes = report.Passed
                 ? [ShadowRuntimeModes.DefaultOn]
                 : [ShadowRuntimeModes.RuntimeShadow, ShadowRuntimeModes.ApplyGuarded, ShadowRuntimeModes.DefaultOn],
-            LastEvalReportPath = path,
+            LastEvalReportPath = PathHygiene.ToRepoRelativePath(path),
             LastUpdatedAt = report.GeneratedAt
         };
     }
@@ -2162,7 +2162,7 @@ public sealed class LearningReadinessFreezeRunner
             ForbiddenRuntimeModes = passed
                 ? [ShadowRuntimeModes.DefaultOn, ShadowRuntimeModes.ApplyGuarded]
                 : [ShadowRuntimeModes.RuntimeShadow, ShadowRuntimeModes.ApplyGuarded, ShadowRuntimeModes.DefaultOn],
-            LastEvalReportPath = $"{a3Path};{extendedPath}",
+            LastEvalReportPath = $"{PathHygiene.ToRepoRelativePath(a3Path)};{PathHygiene.ToRepoRelativePath(extendedPath)}",
             LastUpdatedAt = a3.GeneratedAt > extended.GeneratedAt ? a3.GeneratedAt : extended.GeneratedAt
         };
     }
@@ -2178,7 +2178,7 @@ public sealed class LearningReadinessFreezeRunner
             BlockedReasons = [],
             AllowedRuntimeModes = [ShadowRuntimeModes.Off, ShadowRuntimeModes.Shadow, ShadowRuntimeModes.ApplyGuarded],
             ForbiddenRuntimeModes = [ShadowRuntimeModes.DefaultOn, "SelectedSetChanging"],
-            LastEvalReportPath = Path.Combine(current, "docs", "attention-profile-selection-report.md"),
+            LastEvalReportPath = PathHygiene.ToRepoRelativePath(Path.Combine(current, "docs", "attention-profile-selection-report.md")),
             LastUpdatedAt = DateTimeOffset.UtcNow
         };
 
@@ -2193,7 +2193,7 @@ public sealed class LearningReadinessFreezeRunner
             BlockedReasons = [],
             AllowedRuntimeModes = [ShadowRuntimeModes.Off, ShadowRuntimeModes.Shadow, "ApplyGuarded:IntentScoped"],
             ForbiddenRuntimeModes = [ShadowRuntimeModes.DefaultOn, "GlobalApply", "VectorEnabled"],
-            LastEvalReportPath = Path.Combine(current, "eval", "planning-optin-comparison-a3.json"),
+            LastEvalReportPath = PathHygiene.ToRepoRelativePath(Path.Combine(current, "eval", "planning-optin-comparison-a3.json")),
             LastUpdatedAt = DateTimeOffset.UtcNow
         };
 
@@ -2213,7 +2213,7 @@ public sealed class LearningReadinessFreezeRunner
             BlockedReasons = blocked,
             AllowedRuntimeModes = [ShadowRuntimeModes.Off],
             ForbiddenRuntimeModes = forbidden,
-            LastEvalReportPath = path,
+            LastEvalReportPath = PathHygiene.ToRepoRelativePath(path),
             LastUpdatedAt = DateTimeOffset.UtcNow
         };
 

@@ -1,7 +1,7 @@
 # ContextCore 项目当前可用性审计报告
 
 生成时间：2026-05-25 17:43:40 +08:00  
-审计对象：`D:\Users\Ye_Luo\AppData\Local\Context`  
+审计对象：`ContextCore` 代码仓库
 报告依据：`ContextCore_TODO_Roadmap.md`、当前解决方案项目、服务配置、存储注册、测试项目和本次构建/测试结果。
 
 ## 1. 当前总体结论

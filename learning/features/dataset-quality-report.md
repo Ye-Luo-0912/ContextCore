@@ -1,7 +1,7 @@
-﻿# Learning Dataset Quality Report
+# Learning Dataset Quality Report
 
 Generated: 2026-06-06 08:04:27 +00:00
-Feature directory: `D:\Users\Ye_Luo\AppData\Local\Context\learning\features`
+Feature directory: `$(repo-root)\learning\features`
 Policy version: `learning-dataset-quality/v1`
 
 ## Summary

@@ -1,14 +1,14 @@
 ﻿# Architecture Cleanup Readiness Gate
 
-生成: `2026-06-24T03:26:11.6746382+00:00`
+生成: `2026-06-24T08:31:32.4236448+00:00`
 
 ## 核心指标
 - Core runner files: `105`
 - DTO classes: `311`
-- EvalCommand lines: `15692`
+- EvalCommand lines: `15862`
 - ControlRoomService lines: `12256`
 - Renderer lines: `5804`
-- Eval subcommand refs: `755`
+- Eval subcommand refs: `759`
 
 ## 建议迁移项
 ### [HIGH] EvalCommand 拆分
@@ -46,12 +46,12 @@
 - 建议: 检查并行项目引用图，确保无循环引用导致锁冲突；长期将集成测试移到独立项目
 - 风险: low — 已知工作区可用
 
-- Repository root: D:\Users\Ye_Luo\AppData\Local\Context
+- Repository root: .
 - Core/Vector runner files: 105
 - VectorIndexDtos types: 311
-- EvalCommand.cs lines: 15692
+- EvalCommand.cs lines: 15862
 - ControlRoomService.cs lines: 12256
 - ServiceOperationalRenderer.cs lines: 5804
-- Eval subcommand refs: 755
+- Eval subcommand refs: 759
 
 OPT0 architecture cleanup plan. No runtime behavior change, no formal retrieval enable, no package/package policy/runtime/vector binding mutation.

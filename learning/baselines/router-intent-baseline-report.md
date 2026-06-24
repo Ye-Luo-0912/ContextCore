@@ -1,7 +1,7 @@
-﻿# Router Intent Offline Baseline Report
+# Router Intent Offline Baseline Report
 
 Generated: 2026-06-06 08:50:48 +00:00
-Input: `D:\Users\Ye_Luo\AppData\Local\Context\learning\features\router-intent-examples.jsonl`
+Input: `$(repo-root)\learning\features\router-intent-examples.jsonl`
 Policy: `learning-offline-baseline/v1`
 Status: `Ready`
 Samples: `163`

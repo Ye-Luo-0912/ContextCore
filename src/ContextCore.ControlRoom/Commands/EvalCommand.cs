@@ -285,6 +285,8 @@ public static partial class EvalCommand
             !string.Equals(subcommand, "vector-formal-retrieval-integration-decision-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "project-state-audit", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "mainline-gap-map", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "generated-artifact-path-hygiene-audit", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "generated-artifact-path-hygiene-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "foundation-freeze-report", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "foundation-release-candidate-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "foundation-reproducibility-check", StringComparison.OrdinalIgnoreCase) &&
@@ -386,6 +388,8 @@ public static partial class EvalCommand
             Console.WriteLine("  eval router-guarded-optin-readiness-gate [--out-dir <dir>] [--agreement-threshold <0..1>] [--low-confidence-max <n>]");
             Console.WriteLine("  eval learning-readiness-freeze-report [--out-dir <dir>]");
             Console.WriteLine("  eval learning-runtime-change-readiness-gate [--out-dir <dir>]");
+            Console.WriteLine("  eval generated-artifact-path-hygiene-audit [--scan-dir <dir>]");
+            Console.WriteLine("  eval generated-artifact-path-hygiene-gate [--scan-dir <dir>]");
             Console.WriteLine("  eval foundation-freeze-report");
             Console.WriteLine("  eval foundation-release-candidate-gate");
             Console.WriteLine("  eval foundation-reproducibility-check");
@@ -1892,6 +1896,18 @@ public static partial class EvalCommand
         if (string.Equals(subcommand, "learning-runtime-change-readiness-gate", StringComparison.OrdinalIgnoreCase))
         {
             await ExecuteLearningRuntimeChangeReadinessGateAsync(args, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        if (string.Equals(subcommand, "generated-artifact-path-hygiene-audit", StringComparison.OrdinalIgnoreCase))
+        {
+            await ExecuteGeneratedArtifactPathHygieneAuditAsync(args, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        if (string.Equals(subcommand, "generated-artifact-path-hygiene-gate", StringComparison.OrdinalIgnoreCase))
+        {
+            await ExecuteGeneratedArtifactPathHygieneGateAsync(args, cancellationToken).ConfigureAwait(false);
             return;
         }
 
@@ -15661,10 +15677,11 @@ public static partial class EvalCommand
         Directory.CreateDirectory(output);
         var planPath = Path.Combine(output, "architecture-cleanup-plan.json");
         var plan = await ReadJsonFileAsync<ArchitectureCleanupPlanReport>(planPath, ct).ConfigureAwait(false);
+        var report = plan ?? new ArchitectureCleanupPlanReport();
         var jp = Path.Combine(output, "architecture-cleanup-readiness-gate.json");
         var mp = Path.Combine(output, "architecture-cleanup-readiness-gate.md");
-        await WriteTextAsync(JsonSerializer.Serialize(plan ?? new ArchitectureCleanupPlanReport(), JsonOptions), jp, ct).ConfigureAwait(false);
-        await WriteTextAsync(ArchitectureCleanupPlanRunner.BuildMarkdown("Architecture Cleanup Readiness Gate", plan ?? new()), mp, ct).ConfigureAwait(false);
+        await WriteJsonSafeAsync(report, jp, ct).ConfigureAwait(false);
+        await WriteTextAsync(ArchitectureCleanupPlanRunner.BuildMarkdown("Architecture Cleanup Readiness Gate", report), mp, ct).ConfigureAwait(false);
         Console.WriteLine($"[Eval] Architecture cleanup readiness gate written: {jp}");
     }
 
@@ -15688,5 +15705,158 @@ public static partial class EvalCommand
         await WriteTextAsync(DtoSplitPlanRunner.BuildMarkdown(isGate ? "DTO Split Readiness Gate" : "DTO Split Plan", report), mp, ct).ConfigureAwait(false);
         Console.WriteLine($"[Eval] DTO split plan written: {jp}");
         Console.WriteLine($"[Eval] total={report.TotalClasses}; runtime={report.RuntimeContractCount}; eval={report.EvalReportCount}; gate={report.GateReportCount}; summary={report.ControlRoomSummaryCount}; legacy={report.LegacyCount}; blocked={report.BlockedReasons.Count}");
+    }
+
+    /// <summary>序列化报告前自动应用路径规范化，确保无本地绝对路径泄漏。</summary>
+    private static async Task WriteJsonSafeAsync<T>(
+        T report,
+        string path,
+        CancellationToken cancellationToken) where T : class
+    {
+        PathHygiene.NormalizeReportPaths(report);
+        var fullPath = Path.GetFullPath(path);
+        var dir = Path.GetDirectoryName(fullPath);
+        if (!string.IsNullOrWhiteSpace(dir))
+        {
+            Directory.CreateDirectory(dir);
+        }
+
+        var json = JsonSerializer.Serialize(report, JsonOptions);
+        await File.WriteAllTextAsync(fullPath, json, Encoding.UTF8, cancellationToken).ConfigureAwait(false);
+        await MirrorReportArtifactAsync(path, json, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static async Task ExecuteGeneratedArtifactPathHygieneAuditAsync(
+        IReadOnlyList<string> args,
+        CancellationToken cancellationToken)
+    {
+        var current = Directory.GetCurrentDirectory();
+        PathHygiene.RepoRoot = current;
+        var scanDir = CommandHelpers.GetOption(args, "--scan-dir") ?? current;
+        var outputPath = Path.Combine(current, "eval", "generated-artifact-path-hygiene-audit.json");
+        var markdownPath = Path.Combine(current, "eval", "generated-artifact-path-hygiene-audit.md");
+
+        var report = PathHygiene.ScanGeneratedReports(scanDir);
+
+        var md = BuildPathHygieneAuditMarkdown(report);
+        await WriteJsonSafeAsync(report, outputPath, cancellationToken).ConfigureAwait(false);
+        await WriteTextAsync(md, markdownPath, cancellationToken).ConfigureAwait(false);
+
+        Console.WriteLine($"[Eval] Path hygiene audit: total={report.TotalFiles}; infected={report.InfectedFiles}; passed={report.Passed}");
+        if (report.InfectedFiles > 0)
+        {
+            Console.WriteLine($"[Eval] Found {report.InfectedFiles} files with absolute path leaks. See {outputPath} for details.");
+        }
+    }
+
+    private static async Task ExecuteGeneratedArtifactPathHygieneGateAsync(
+        IReadOnlyList<string> args,
+        CancellationToken cancellationToken)
+    {
+        var current = Directory.GetCurrentDirectory();
+        PathHygiene.RepoRoot = current;
+        var scanDir = CommandHelpers.GetOption(args, "--scan-dir") ?? current;
+        var auditPath = Path.Combine(current, "eval", "generated-artifact-path-hygiene-audit.json");
+        var outputPath = Path.Combine(current, "eval", "generated-artifact-path-hygiene-gate.json");
+        var markdownPath = Path.Combine(current, "eval", "generated-artifact-path-hygiene-gate.md");
+
+        PathHygieneScanReport audit;
+        if (File.Exists(auditPath))
+        {
+            var json = await File.ReadAllTextAsync(auditPath, Encoding.UTF8, cancellationToken).ConfigureAwait(false);
+            audit = JsonSerializer.Deserialize<PathHygieneScanReport>(json, JsonOptions) ?? PathHygiene.ScanGeneratedReports(scanDir);
+        }
+        else
+        {
+            audit = PathHygiene.ScanGeneratedReports(scanDir);
+        }
+
+        var failed = new List<string>();
+        if (audit.InfectedFiles > 0)
+        {
+            failed.Add($"Found {audit.InfectedFiles} files with absolute path leaks");
+            foreach (var entry in audit.Entries)
+            {
+                failed.Add($"  {entry.FilePath}: {string.Join(", ", entry.LeakedPaths)}");
+            }
+        }
+
+        var gate = new PathHygieneGateReport
+        {
+            OperationId = $"path-hygiene-gate-{DateTimeOffset.UtcNow:yyyyMMdd-HHmmss}",
+            GeneratedAt = DateTimeOffset.UtcNow,
+            Passed = audit.Passed,
+            InfectedFiles = audit.InfectedFiles,
+            TotalFiles = audit.TotalFiles,
+            FailedConditions = failed,
+            Recommendation = audit.Passed ? "ReadyForNextPhase" : "BlockedByPathLeaks",
+            AuditReportPath = "eval/generated-artifact-path-hygiene-audit.json"
+        };
+
+        var md = BuildPathHygieneGateMarkdown(gate);
+        await WriteJsonSafeAsync(gate, outputPath, cancellationToken).ConfigureAwait(false);
+        await WriteTextAsync(md, markdownPath, cancellationToken).ConfigureAwait(false);
+
+        Console.WriteLine($"[Eval] Path hygiene gate: passed={gate.Passed}; infected={gate.InfectedFiles}; total={gate.TotalFiles}");
+        if (!gate.Passed)
+        {
+            throw new InvalidOperationException(
+                $"Path hygiene gate failed: {gate.InfectedFiles} files contain absolute path leaks. Run 'eval generated-artifact-path-hygiene-audit' for details.");
+        }
+    }
+
+    private static string BuildPathHygieneAuditMarkdown(PathHygieneScanReport report)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("# Generated Artifact Path Hygiene Audit");
+        sb.AppendLine();
+        sb.AppendLine($"**ScanRoot:** `{report.ScanRoot}`");
+        sb.AppendLine($"**GeneratedAt:** {report.GeneratedAt:O}");
+        sb.AppendLine($"**TotalFiles:** {report.TotalFiles}");
+        sb.AppendLine($"**InfectedFiles:** {report.InfectedFiles}");
+        sb.AppendLine($"**Passed:** {report.Passed}");
+        sb.AppendLine();
+        if (report.Entries.Count > 0)
+        {
+            sb.AppendLine("## Leaked Absolute Paths");
+            sb.AppendLine();
+            sb.AppendLine("| File | Leak Count |");
+            sb.AppendLine("|------|-----------|");
+            foreach (var entry in report.Entries)
+            {
+                sb.AppendLine($"| `{entry.FilePath}` | {entry.LeakedPaths.Count} |");
+            }
+        }
+
+        sb.AppendLine();
+        sb.AppendLine($"**Recommendation:** {report.Recommendation}");
+        return sb.ToString();
+    }
+
+    private static string BuildPathHygieneGateMarkdown(PathHygieneGateReport report)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("# Generated Artifact Path Hygiene Gate");
+        sb.AppendLine();
+        sb.AppendLine($"**OperationId:** `{report.OperationId}`");
+        sb.AppendLine($"**GeneratedAt:** {report.GeneratedAt:O}");
+        sb.AppendLine($"**Passed:** {report.Passed}");
+        sb.AppendLine($"**InfectedFiles:** {report.InfectedFiles}");
+        sb.AppendLine($"**TotalFiles:** {report.TotalFiles}");
+        sb.AppendLine($"**Recommendation:** {report.Recommendation}");
+        sb.AppendLine();
+        if (report.FailedConditions.Count > 0)
+        {
+            sb.AppendLine("## Failed Conditions");
+            sb.AppendLine();
+            foreach (var condition in report.FailedConditions)
+            {
+                sb.AppendLine($"- {condition}");
+            }
+        }
+
+        sb.AppendLine();
+        sb.AppendLine($"**AuditReport:** `{report.AuditReportPath}`");
+        return sb.ToString();
     }
 }

@@ -1,8 +1,8 @@
-﻿# Ranker Hard Negative Dataset Report
+# Ranker Hard Negative Dataset Report
 
 Generated: 2026-06-06 09:57:47 +00:00
-Source audit: `D:\Users\Ye_Luo\AppData\Local\Context\learning\baselines\ranker-residual-audit-report.json`
-Output: `D:\Users\Ye_Luo\AppData\Local\Context\learning\features\hard-negatives.jsonl`
+Source audit: `$(repo-root)\learning\baselines\ranker-residual-audit-report.json`
+Output: `$(repo-root)\learning\features\hard-negatives.jsonl`
 Policy: `learning-offline-baseline/v1`
 Status: `Ready`
 Source failures: `3`

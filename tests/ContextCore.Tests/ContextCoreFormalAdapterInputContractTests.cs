@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services;
 
@@ -238,24 +238,5 @@ public class ContextCoreFormalAdapterInputContractTests
 
     private static string ResolveRepoFile(params string[] segments)
     {
-        var current = Directory.GetCurrentDirectory();
-        for (var i = 0; i < 8; i++)
-        {
-            var candidate = Path.Combine(new[] { current }.Concat(segments).ToArray());
-            if (File.Exists(candidate))
-            {
-                return candidate;
-            }
-
-            var parent = Directory.GetParent(current);
-            if (parent is null)
-            {
-                break;
-            }
-
-            current = parent.FullName;
-        }
-
-        return Path.Combine(new[] { Directory.GetCurrentDirectory() }.Concat(segments).ToArray());
-    }
+        var current = Directory.GetCurrentDirectory();return TestRepoFileResolver.Resolve(segments);}
 }

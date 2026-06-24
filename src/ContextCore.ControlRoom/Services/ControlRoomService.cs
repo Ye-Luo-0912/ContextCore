@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
+using ContextCore.ControlRoom.Models;
 using ContextCore.Client;
 using ContextCore.Core;
 using ContextCore.Core.Services;
@@ -7393,87 +7394,46 @@ public sealed class ControlRoomService
     }
 
     private static (SourceDiverseShadowAdapterValidationReport Report, string SourcePath)? TryLoadSourceDiverseShadowAdapterValidationSummary()
-    {
-        return TryLoadSummaryReport<SourceDiverseShadowAdapterValidationReport>(
-            VectorReportPath("v6", "source-diverse-shadow-adapter-validation-gate.json"),
-            VectorReportPath("v6", "source-diverse-shadow-adapter-validation.json"));
-    }
+        => TryLoadFromDescriptor<SourceDiverseShadowAdapterValidationReport>(ReportSummaryRegistry.V6SourceDiverseShadowAdapter);
+
     private static (ShadowCandidateMergePreviewReport Report, string SourcePath)? TryLoadShadowCandidateMergePreviewSummary()
-    {
-        return TryLoadSummaryReport<ShadowCandidateMergePreviewReport>(
-            VectorReportPath("v6", "shadow-candidate-merge-preview-gate.json"),
-            VectorReportPath("v6", "shadow-candidate-merge-preview.json"));
-    }
+        => TryLoadFromDescriptor<ShadowCandidateMergePreviewReport>(ReportSummaryRegistry.V6ShadowCandidateMergePreview);
 
     private static (ShadowCandidateMergePreviewObservationReport Report, string SourcePath)? TryLoadShadowCandidateMergePreviewObservationSummary()
-    {
-        return TryLoadSummaryReport<ShadowCandidateMergePreviewObservationReport>(
-            VectorReportPath("v6", "shadow-candidate-merge-preview-observation-gate.json"),
-            VectorReportPath("v6", "shadow-candidate-merge-preview-observation.json"));
-    }
+        => TryLoadFromDescriptor<ShadowCandidateMergePreviewObservationReport>(ReportSummaryRegistry.V6ShadowCandidateMergeObservation);
 
     private static (ShadowMergeStabilityFreezeReport Report, string SourcePath)? TryLoadShadowMergeStabilityFreezeSummary()
-    {
-        return TryLoadSummaryReport<ShadowMergeStabilityFreezeReport>(
-            VectorReportPath("v6", "shadow-merge-stability-freeze.json"));
-    }
+        => TryLoadFromDescriptor<ShadowMergeStabilityFreezeReport>(ReportSummaryRegistry.V6ShadowMergeStabilityFreeze);
 
     private static (ShadowMergeStabilityFreezeReport Report, string SourcePath)? TryLoadShadowMergePromotionDecisionSummary()
-    {
-        return TryLoadSummaryReport<ShadowMergeStabilityFreezeReport>(
+        => TryLoadSummaryReport<ShadowMergeStabilityFreezeReport>(
             VectorReportPath("v6", "shadow-merge-promotion-decision.json"));
-    }
+
     private static (ControlledShadowMergeProposalReport Report, string SourcePath)? TryLoadControlledShadowMergeProposalSummary()
-    {
-        return TryLoadSummaryReport<ControlledShadowMergeProposalReport>(
-            VectorReportPath("v6", "controlled-shadow-merge-proposal-gate.json"),
-            VectorReportPath("v6", "controlled-shadow-merge-proposal.json"));
-    }
+        => TryLoadFromDescriptor<ControlledShadowMergeProposalReport>(ReportSummaryRegistry.V6ControlledShadowMergeProposal);
+
     private static (ControlledShadowMergeDryRunGateReport Report, string SourcePath)? TryLoadControlledShadowMergeDryRunSummary()
-    {
-        return TryLoadSummaryReport<ControlledShadowMergeDryRunGateReport>(
-            VectorReportPath("v6", "controlled-shadow-merge-dry-run-gate.json"),
-            VectorReportPath("v6", "controlled-shadow-merge-dry-run.json"));
-    }
+        => TryLoadFromDescriptor<ControlledShadowMergeDryRunGateReport>(ReportSummaryRegistry.V6ControlledShadowMergeDryRun);
 
     private static (ControlledShadowMergeObservationWindowReport Report, string SourcePath)? TryLoadControlledShadowMergeObservationWindowSummary()
-    {
-        return TryLoadSummaryReport<ControlledShadowMergeObservationWindowReport>(
-            VectorReportPath("v6", "controlled-shadow-merge-observation-window-gate.json"),
-            VectorReportPath("v6", "controlled-shadow-merge-observation-window.json"));
-    }
+        => TryLoadFromDescriptor<ControlledShadowMergeObservationWindowReport>(ReportSummaryRegistry.V6ControlledShadowMergeObservationWindow);
+
     private static (ControlledShadowMergeFreezeReport Report, string SourcePath)? TryLoadControlledShadowMergeFreezeSummary()
-    {
-        return TryLoadSummaryReport<ControlledShadowMergeFreezeReport>(
-            VectorReportPath("v6", "controlled-shadow-merge-promotion-decision.json"),
-            VectorReportPath("v6", "controlled-shadow-merge-freeze.json"));
-    }
+        => TryLoadFromDescriptor<ControlledShadowMergeFreezeReport>(ReportSummaryRegistry.V6ControlledShadowMergeFreeze);
+
     private static (ControlledAppliedMergeDryRunObservationReport Report, string SourcePath)? TryLoadControlledAppliedMergeDryRunSummary()
-    {
-        return TryLoadSummaryReport<ControlledAppliedMergeDryRunObservationReport>(
+        => TryLoadSummaryReport<ControlledAppliedMergeDryRunObservationReport>(
             VectorReportPath("v6", "controlled-applied-merge-dry-run-decision.json"),
             VectorReportPath("v6", "controlled-applied-merge-dry-run-observation.json"));
-    }
 
     private static (ControlledAppliedMergePreviewFreezeReport Report, string SourcePath)? TryLoadControlledAppliedMergePreviewFreezeSummary()
-    {
-        return TryLoadSummaryReport<ControlledAppliedMergePreviewFreezeReport>(
-            VectorReportPath("v6", "controlled-applied-merge-preview-freeze.json"));
-    }
+        => TryLoadFromDescriptor<ControlledAppliedMergePreviewFreezeReport>(ReportSummaryRegistry.V6ControlledAppliedMergePreviewFreeze);
 
     private static (ControlledAppliedMergeScopedPreviewReport Report, string SourcePath)? TryLoadControlledAppliedMergeScopedPreviewSummary()
-    {
-        return TryLoadSummaryReport<ControlledAppliedMergeScopedPreviewReport>(
-            VectorReportPath("v6", "controlled-applied-merge-scoped-preview-gate.json"),
-            VectorReportPath("v6", "controlled-applied-merge-scoped-preview.json"));
-    }
+        => TryLoadFromDescriptor<ControlledAppliedMergeScopedPreviewReport>(ReportSummaryRegistry.V6ControlledAppliedMergeScopedPreview);
 
     private static (ControlledAppliedMergeProposalReport Report, string SourcePath)? TryLoadControlledAppliedMergeProposalSummary()
-    {
-        return TryLoadSummaryReport<ControlledAppliedMergeProposalReport>(
-            VectorReportPath("v6", "controlled-applied-merge-proposal-gate.json"),
-            VectorReportPath("v6", "controlled-applied-merge-proposal.json"));
-    }
+        => TryLoadFromDescriptor<ControlledAppliedMergeProposalReport>(ReportSummaryRegistry.V6ControlledAppliedMergeProposal);
     private static (FormalRetrievalIntegrationFreezeReport Report, string SourcePath)? TryLoadFormalRetrievalIntegrationFreezeSummary()
     {
         return TryLoadSummaryReport<FormalRetrievalIntegrationFreezeReport>(
@@ -7498,6 +7458,11 @@ public sealed class ControlRoomService
         }
 
         return null;
+    }
+
+    private static (T Report, string SourcePath)? TryLoadFromDescriptor<T>(ControlRoomReportDescriptor descriptor) where T : class
+    {
+        return TryLoadSummaryReport<T>(descriptor.AllPaths());
     }
 
     private static (TPrimary? Primary, TSecondary? Secondary, string PrimarySourcePath, string SecondarySourcePath)? TryLoadSummaryPair<TPrimary, TSecondary>(

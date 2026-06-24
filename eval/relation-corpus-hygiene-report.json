@@ -1,6 +1,6 @@
 ﻿{
   "CreatedAt": "2026-06-08T12:40:58.5843032+00:00",
-  "ContextsRootPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\eval\\contexts",
+  "ContextsRootPath": "eval/contexts",
   "CorpusFileCount": 11,
   "RelationCount": 21,
   "UnknownRelationTypes": {},

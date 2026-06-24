@@ -1,7 +1,7 @@
 ﻿{
   "GeneratedAt": "2026-06-03T14:45:45.4110938+00:00",
-  "BaselineReportPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\eval\\eval-report-attention-phase3-baseline.json",
-  "ExtendedReportPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\eval\\eval-report-attention-phase3-extended.json",
+  "BaselineReportPath": "eval/eval-report-attention-phase3-baseline.json",
+  "ExtendedReportPath": "eval/eval-report-attention-phase3-extended.json",
   "RecommendedProfile": "old-score-anchored-v1",
   "RecommendedMode": "guarded-rerank-candidate",
   "RiskLevel": "low",

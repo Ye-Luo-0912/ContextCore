@@ -4,7 +4,7 @@ Generated: 2026-06-11 06:08:59 +00:00
 
 ## Summary
 
-- Input: `D:\Users\Ye_Luo\AppData\Local\Context\learning\features\router-intent-examples.jsonl`
+- Input: `$(repo-root)\learning\features\router-intent-examples.jsonl`
 - Samples: `163`
 - Status: `Ready`
 - Best baseline: `TokenCentroidRouterBaseline`

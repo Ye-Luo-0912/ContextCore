@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services;
 
@@ -140,13 +140,5 @@ public class ContextCoreProjectStateAuditTests
 
     private static string ResolveRepoFile(params string[] segments)
     {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "ContextCore.sln")))
-        {
-            directory = directory.Parent;
-        }
-
-        Assert.IsNotNull(directory);
-        return Path.Combine(new[] { directory!.FullName }.Concat(segments).ToArray());
-    }
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);return TestRepoFileResolver.Resolve(segments);}
 }

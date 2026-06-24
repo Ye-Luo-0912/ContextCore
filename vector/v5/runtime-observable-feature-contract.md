@@ -1,4 +1,4 @@
-﻿# Vector Runtime-observable Retrieval Feature Contract
+# Vector Runtime-observable Retrieval Feature Contract
 
 Generated: `2026-06-17T17:55:07.7979759+00:00`
 OperationId: `runtime-observable-feature-contract-6af07401177047258aa049db19c77435`
@@ -249,11 +249,11 @@ OperationId: `runtime-observable-feature-contract-6af07401177047258aa049db19c774
 - scannedFileCount: `5`
 - fixtureTokenHitCount: `0`
 - scannedFiles:
-  - `D:\Users\Ye_Luo\AppData\Local\Context\src\ContextCore.Core\Services\Vector\ShadowFormalRetrievalAdapterPlanRunner.cs`
-  - `D:\Users\Ye_Luo\AppData\Local\Context\src\ContextCore.Core\Services\Vector\ShadowFormalRetrievalAdapter.cs`
-  - `D:\Users\Ye_Luo\AppData\Local\Context\src\ContextCore.Core\Services\Vector\FormalAdapterPackageShadowComparisonRunner.cs`
-  - `D:\Users\Ye_Luo\AppData\Local\Context\src\ContextCore.Core\Services\Vector\GraphVectorRetrievalQualityAuditRunner.cs`
-  - `D:\Users\Ye_Luo\AppData\Local\Context\src\ContextCore.Core\Services\Vector\RetrievalQualityRepairPreviewRunner.cs`
+  - `$(repo-root)\src\ContextCore.Core\Services\Vector\ShadowFormalRetrievalAdapterPlanRunner.cs`
+  - `$(repo-root)\src\ContextCore.Core\Services\Vector\ShadowFormalRetrievalAdapter.cs`
+  - `$(repo-root)\src\ContextCore.Core\Services\Vector\FormalAdapterPackageShadowComparisonRunner.cs`
+  - `$(repo-root)\src\ContextCore.Core\Services\Vector\GraphVectorRetrievalQualityAuditRunner.cs`
+  - `$(repo-root)\src\ContextCore.Core\Services\Vector\RetrievalQualityRepairPreviewRunner.cs`
 
 ## Blocked Reasons
 - (empty)

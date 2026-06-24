@@ -91,7 +91,7 @@
 - 返回 `400 BadRequest`
 - 错误体使用统一 `ContextCoreErrorResponse` 契约
 - `duplicate` 不属于错误，不会返回该契约
-- 详细字段定义见 [error-contract.md](D:/Users/Ye_Luo/AppData/Local/Context/docs/api/error-contract.md)
+- 详细字段定义见 [error-contract.md](error-contract.md)
 
 ```json
 {

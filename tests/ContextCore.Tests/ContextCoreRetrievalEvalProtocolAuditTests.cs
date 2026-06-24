@@ -1,4 +1,4 @@
-using ContextCore.Abstractions.Models;
+﻿using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services;
 
 namespace ContextCore.Tests;
@@ -71,7 +71,7 @@ public class ContextCoreRetrievalEvalProtocolAuditTests
     [TestMethod]
     public void RetrievalEvalProtocolAudit_HasNoKnownFixtureTerms()
     {
-        var source = File.ReadAllText(ResolveRepoFile("src", "ContextCore.Core", "Services", "Vector", "RetrievalEvalProtocolAuditRunner.cs"));
+        var source = File.ReadAllText(ResolveRepoFile("src", "ContextCore.Core", "Services", "Vector", "Evaluation", "V5", "RetrievalEvalProtocolAuditRunner.cs"));
         foreach (var forbidden in new[] { "林风", "苍穹大陆", "九转金丹", "龙魂草", "拍卖行" })
         {
             Assert.IsFalse(source.Contains(forbidden, StringComparison.Ordinal), $"runner must not contain fixed eval content: {forbidden}");
@@ -205,13 +205,5 @@ public class ContextCoreRetrievalEvalProtocolAuditTests
 
     private static string ResolveRepoFile(params string[] segments)
     {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "ContextCore.sln")))
-        {
-            directory = directory.Parent;
-        }
-
-        Assert.IsNotNull(directory);
-        return Path.Combine(new[] { directory!.FullName }.Concat(segments).ToArray());
-    }
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);return TestRepoFileResolver.Resolve(segments);}
 }

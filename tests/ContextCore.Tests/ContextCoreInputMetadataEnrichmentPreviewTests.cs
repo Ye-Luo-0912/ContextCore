@@ -1,4 +1,4 @@
-using ContextCore.Abstractions.Models;
+﻿using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services;
 
 namespace ContextCore.Tests;
@@ -65,7 +65,7 @@ public class ContextCoreInputMetadataEnrichmentPreviewTests
     [TestMethod]
     public void InputMetadataEnrichmentPreview_SourceDoesNotReadEvalLabelsOrSpecialCaseIds()
     {
-        var source = File.ReadAllText(ResolveRepoFile("src", "ContextCore.Core", "Services", "Vector", "InputMetadataEnrichmentPreviewRunner.cs"));
+        var source = File.ReadAllText(ResolveRepoFile("src", "ContextCore.Core", "Services", "Vector", "Evaluation", "V5", "InputMetadataEnrichmentPreviewRunner.cs"));
         Assert.IsFalse(source.Contains(".MustHitItemIds", StringComparison.Ordinal));
         Assert.IsFalse(source.Contains(".MustNotHitItemIds", StringComparison.Ordinal));
         Assert.IsFalse(source.Contains(".ExpectedTargetSection", StringComparison.Ordinal));
@@ -213,13 +213,5 @@ public class ContextCoreInputMetadataEnrichmentPreviewTests
 
     private static string ResolveRepoFile(params string[] segments)
     {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "ContextCore.sln")))
-        {
-            directory = directory.Parent;
-        }
-
-        Assert.IsNotNull(directory);
-        return Path.Combine(new[] { directory!.FullName }.Concat(segments).ToArray());
-    }
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);return TestRepoFileResolver.Resolve(segments);}
 }

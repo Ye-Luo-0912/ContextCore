@@ -554,3 +554,39 @@ Expected status:
 - `RollbackVerified=true`
 
 V4.14 remains shadow/observation only. It permits later scoped observation work but still does not authorize runtime switch, formal retrieval, formal package write, global vector binding changes, `PackingPolicy` integration, or package output mutation.
+
+## PATH-HYGIENE 路径输出规则 (OPT-001)
+
+所有 report / response / log / artifact 中禁止输出本地绝对路径。以下为强制规则：
+
+### 禁止的路径模式
+
+- Windows 绝对路径：`C:\...`、`D:\...`
+- Unix 绝对路径：`/home/...`、`/Users/...`
+- 其他绝对路径前缀：`\\` (UNC)
+
+### 允许的路径模式
+
+- **repo-relative path**：以 repo root 为基的 `src/`、`eval/`、`docs/`、`tests/`、`vector/` 等
+- **环境变量占位符**：`%USERPROFILE%\.contextcore\...`（无法使用 repo-relative 的外部资源，如模型文件）
+- **网络地址**：`Host=localhost` 等（数据库连接等，非本地 filesystem path）
+
+### sample 配置规范
+
+- Sample config（`*.sample.json`）只使用环境变量占位符或空字符串，不暴露任何真实路径
+- 模型路径使用 `%USERPROFILE%\.contextcore\models\...` 作为示例占位符
+
+### 代码约定
+
+- 报告生成代码中使用 `repo-relative` 路径写入 `SourceFile` / `ModelPath` / `ContextsRootPath` / `BaselineReportPath` 等字段
+- Console.WriteLine 输出路径用 repo-relative 替代 `Path.GetFullPath()`
+- 测试 mock 数据不硬编码绝对路径
+
+### OPT-001 已完成清理
+
+- `appsettings.VectorEmbedding.sample.json`：`D:\Models\...` → `%USERPROFILE%\.contextcore\models\...`
+- `patch_eval.py`：绝对路径 → `src/ContextCore.ControlRoom/Commands/EvalCommand.cs`
+- `tests/ContextCore.Tests/ContextCoreClientTests.cs`：3 处绝对路径 → repo-relative
+- `eval/` 报告 7 份：`SourceFile` / `ModelPath` / `ContextsRootPath` / `BaselineReportPath` / `Repository root` → repo-relative
+- `docs/` 文档 4 份：内部链接 → 相对路径；审计对象 → 通用标识
+- `docs/vector-embedding-provider-local-runbook.md`：示例模型路径 → `%USERPROFILE%` 模式

@@ -1,6 +1,6 @@
 {
-  "operationId": "learning-readiness-freeze-c1da3bccc83c43ccb4a3ee0d674c04bf",
-  "generatedAt": "2026-06-17T07:01:08.1956223+00:00",
+  "operationId": "learning-readiness-freeze-1f3247c15f614e78a6267aaada5d354a",
+  "generatedAt": "2026-06-24T08:37:09.2854538+00:00",
   "policyVersion": "learning-readiness-freeze-s0/v1",
   "capabilities": [
     {
@@ -23,8 +23,8 @@
         "GuardedPostgresPrimary:ComparisonTraceDisabled",
         "HistoricalMigrationAsSwitchPrerequisite"
       ],
-      "lastEvalReportPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\storage\\postgres\\postgres-relation-multi-normal-scope-quality-report.json",
-      "lastUpdatedAt": "2026-06-17T07:01:07.8504667+00:00"
+      "lastEvalReportPath": "storage/postgres/postgres-relation-multi-normal-scope-quality-report.json",
+      "lastUpdatedAt": "2026-06-24T08:37:08.9830189+00:00"
     },
     {
       "capabilityId": "JobQueuePostgres",
@@ -47,7 +47,7 @@
         "GuardedPostgresPrimary:MissingLeaseQualityGate",
         "GuardedPostgresPrimary:MissingRetryDeadLetterQualityGate"
       ],
-      "lastEvalReportPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\storage\\postgres\\postgres-job-queue-freeze-gate.json",
+      "lastEvalReportPath": "storage/postgres/postgres-job-queue-freeze-gate.json",
       "lastUpdatedAt": "2026-06-14T12:06:51.2640104+00:00"
     },
     {
@@ -77,7 +77,7 @@
         "MissingShadowEvalGate",
         "MissingRecallRiskGate"
       ],
-      "lastEvalReportPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\storage\\postgres\\postgres-vector-freeze-gate.json",
+      "lastEvalReportPath": "storage/postgres/postgres-vector-freeze-gate.json",
       "lastUpdatedAt": "2026-06-14T15:58:20.3375403+00:00"
     },
     {
@@ -110,7 +110,7 @@
         "PackingPolicyIntegration",
         "PackageOutputIntegration"
       ],
-      "lastEvalReportPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\vector\\providers\\qwen3\\vector-provider-comparison-freeze.json",
+      "lastEvalReportPath": "vector/providers/qwen3/vector-provider-comparison-freeze.json",
       "lastUpdatedAt": "2026-06-15T07:00:41.6357367+00:00"
     },
     {
@@ -135,8 +135,8 @@
         "PackingPolicyIntegration",
         "PackageOutputIntegration"
       ],
-      "lastEvalReportPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\vector\\providers\\qwen3\\vector-provider-comparison.json",
-      "lastUpdatedAt": "2026-06-17T07:01:07.8873746+00:00"
+      "lastEvalReportPath": "vector/providers/qwen3/vector-provider-comparison.json",
+      "lastUpdatedAt": "2026-06-24T08:37:09.0173201+00:00"
     },
     {
       "capabilityId": "GraphExpansion",
@@ -157,7 +157,7 @@
         "ApplyGuarded:current-task-v1",
         "NormalContextInjection"
       ],
-      "lastEvalReportPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\eval\\graph-expansion-guarded-optin-gate.json",
+      "lastEvalReportPath": "eval/graph-expansion-guarded-optin-gate.json",
       "lastUpdatedAt": "2026-06-09T00:30:57.637648+00:00"
     },
     {
@@ -180,7 +180,7 @@
         "ApplyGuarded",
         "DefaultOn"
       ],
-      "lastEvalReportPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\eval\\vector-retrieval-shadow-readiness-gate.json",
+      "lastEvalReportPath": "eval/vector-retrieval-shadow-readiness-gate.json",
       "lastUpdatedAt": "2026-06-10T15:07:23.5389595+00:00"
     },
     {
@@ -211,7 +211,7 @@
         "PackingPolicyIntegration",
         "PackageOutputIntegration"
       ],
-      "lastEvalReportPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\vector\\hybrid\\vector-hybrid-freeze-gate.json",
+      "lastEvalReportPath": "vector/hybrid/vector-hybrid-freeze-gate.json",
       "lastUpdatedAt": "2026-06-15T07:35:11.6938068+00:00"
     },
     {
@@ -239,7 +239,7 @@
         "PackingPolicyIntegration",
         "PackageOutputIntegration"
       ],
-      "lastEvalReportPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\vector\\dataset-v2\\stress\\stress-freeze-gate.json",
+      "lastEvalReportPath": "vector/dataset-v2/stress/stress-freeze-gate.json",
       "lastUpdatedAt": "2026-06-15T18:15:42.0816463+00:00"
     },
     {
@@ -269,7 +269,7 @@
         "PackingPolicyIntegration",
         "PackageOutputIntegration"
       ],
-      "lastEvalReportPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\vector\\v4\\vector-v4-readiness-recheck.json",
+      "lastEvalReportPath": "vector/v4/vector-v4-readiness-recheck.json",
       "lastUpdatedAt": "2026-06-16T01:56:45.2276027+00:00"
     },
     {
@@ -302,7 +302,7 @@
         "PackageOutputIntegration",
         "FormalPackageWrite"
       ],
-      "lastEvalReportPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\vector\\v4\\vector-guarded-formal-retrieval-preview-gate.json",
+      "lastEvalReportPath": "vector/v4/vector-guarded-formal-retrieval-preview-gate.json",
       "lastUpdatedAt": "2026-06-16T01:56:58.5850133+00:00"
     },
     {
@@ -336,7 +336,7 @@
         "PackageOutputIntegration",
         "FormalPackageWrite"
       ],
-      "lastEvalReportPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\vector\\v4\\vector-shadow-package-comparison-gate.json",
+      "lastEvalReportPath": "vector/v4/vector-shadow-package-comparison-gate.json",
       "lastUpdatedAt": "2026-06-16T01:57:12.0485849+00:00"
     },
     {
@@ -371,7 +371,7 @@
         "PackingPolicyIntegration",
         "PackageOutputIntegration"
       ],
-      "lastEvalReportPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\vector\\v4\\vector-scoped-formal-preview-optin-gate.json",
+      "lastEvalReportPath": "vector/v4/vector-scoped-formal-preview-optin-gate.json",
       "lastUpdatedAt": "2026-06-16T01:57:23.1619007+00:00"
     },
     {
@@ -403,7 +403,7 @@
         "PackingPolicyIntegration",
         "PackageOutputIntegration"
       ],
-      "lastEvalReportPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\vector\\v4\\vector-limited-formal-preview-observation-gate.json",
+      "lastEvalReportPath": "vector/v4/vector-limited-formal-preview-observation-gate.json",
       "lastUpdatedAt": "2026-06-16T01:57:33.2142307+00:00"
     },
     {
@@ -437,7 +437,7 @@
         "PackageOutputIntegration",
         "NonAllowlistedScopeUse"
       ],
-      "lastEvalReportPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\vector\\v4\\vector-formal-preview-freeze-gate.json",
+      "lastEvalReportPath": "vector/v4/vector-formal-preview-freeze-gate.json",
       "lastUpdatedAt": "2026-06-17T06:25:15.3305238+00:00"
     },
     {
@@ -473,7 +473,7 @@
         "NoOpHarnessOnly:RuntimeApproval",
         "NoOpHarnessOnlyAsRuntimeApproval"
       ],
-      "lastEvalReportPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\vector\\v4\\runtime-experiment\\harness-freeze-gate.json",
+      "lastEvalReportPath": "vector/v4/runtime-experiment/harness-freeze-gate.json",
       "lastUpdatedAt": "2026-06-17T04:25:54.763089+00:00"
     },
     {
@@ -496,7 +496,7 @@
         "ApplyGuarded",
         "DefaultOn"
       ],
-      "lastEvalReportPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\learning\\router\\router-guarded-optin-readiness-gate.json",
+      "lastEvalReportPath": "learning/router/router-guarded-optin-readiness-gate.json",
       "lastUpdatedAt": "2026-06-11T09:18:00.4971204+00:00"
     },
     {
@@ -519,7 +519,7 @@
         "ApplyGuarded",
         "DefaultOn"
       ],
-      "lastEvalReportPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\learning\\ranker\\candidate-reranker-shadow-eval-a3.json;D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\learning\\ranker\\candidate-reranker-shadow-eval-extended.json",
+      "lastEvalReportPath": "learning/ranker/candidate-reranker-shadow-eval-a3.json;learning/ranker/candidate-reranker-shadow-eval-extended.json",
       "lastUpdatedAt": "2026-06-12T06:57:34.4555695+00:00"
     },
     {
@@ -538,8 +538,8 @@
         "DefaultOn",
         "SelectedSetChanging"
       ],
-      "lastEvalReportPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\docs\\attention-profile-selection-report.md",
-      "lastUpdatedAt": "2026-06-17T07:01:08.1937416+00:00"
+      "lastEvalReportPath": "docs/attention-profile-selection-report.md",
+      "lastUpdatedAt": "2026-06-24T08:37:09.2830383+00:00"
     },
     {
       "capabilityId": "PlanningProposal",
@@ -558,8 +558,8 @@
         "GlobalApply",
         "VectorEnabled"
       ],
-      "lastEvalReportPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\eval\\planning-optin-comparison-a3.json",
-      "lastUpdatedAt": "2026-06-17T07:01:08.1938922+00:00"
+      "lastEvalReportPath": "eval/planning-optin-comparison-a3.json",
+      "lastUpdatedAt": "2026-06-24T08:37:09.2832587+00:00"
     }
   ],
   "readyCount": 15,

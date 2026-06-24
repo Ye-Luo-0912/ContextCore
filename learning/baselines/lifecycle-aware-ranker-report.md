@@ -1,7 +1,7 @@
-﻿# Lifecycle-aware Ranker Offline Report
+# Lifecycle-aware Ranker Offline Report
 
 Generated: 2026-06-06 09:57:47 +00:00
-Input: `D:\Users\Ye_Luo\AppData\Local\Context\learning\features\ranking-pairs.jsonl`
+Input: `$(repo-root)\learning\features\ranking-pairs.jsonl`
 Policy: `learning-offline-baseline/v1`
 Status: `Ready`
 Pairs: `253`

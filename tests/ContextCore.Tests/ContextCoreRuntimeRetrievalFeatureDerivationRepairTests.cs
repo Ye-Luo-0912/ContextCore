@@ -1,4 +1,4 @@
-using ContextCore.Abstractions.Models;
+﻿using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services;
 
 namespace ContextCore.Tests;
@@ -134,7 +134,7 @@ public class ContextCoreRuntimeRetrievalFeatureDerivationRepairTests
     {
         var paths = new[]
         {
-            ResolveRepoFile("src", "ContextCore.Core", "Services", "Vector", "RuntimeRetrievalFeatureDerivationRepairRunner.cs"),
+            ResolveRepoFile("src", "ContextCore.Core", "Services", "Vector", "Evaluation", "V5", "RuntimeRetrievalFeatureDerivationRepairRunner.cs"),
             ResolveRepoFile("src", "ContextCore.Core", "Services", "Vector", "CanonicalRuntimeAnchorResolver.cs"),
             ResolveRepoFile("src", "ContextCore.Core", "Services", "Vector", "RuntimeRelationIntentDeriver.cs")
         };
@@ -355,13 +355,5 @@ public class ContextCoreRuntimeRetrievalFeatureDerivationRepairTests
 
     private static string ResolveRepoFile(params string[] segments)
     {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "ContextCore.sln")))
-        {
-            directory = directory.Parent;
-        }
-
-        Assert.IsNotNull(directory);
-        return Path.Combine(new[] { directory!.FullName }.Concat(segments).ToArray());
-    }
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);return TestRepoFileResolver.Resolve(segments);}
 }

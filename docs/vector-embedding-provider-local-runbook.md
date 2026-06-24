@@ -8,7 +8,7 @@
 - 不提交 tokenizer / vocab 文件。
 - `OnnxLocal` 默认关闭。
 - `ModelPath` / `TokenizerPath` 必须通过本地私有配置或 CLI 参数显式传入。
-- 建议将模型放到仓库外的本地目录，例如 `D:\Models\ContextCore\embedding\`。
+- 建议将模型放到仓库外的本地目录，例如 `%USERPROFILE%\.contextcore\models\embedding\`。
 
 可参考仓库根目录的 `appsettings.VectorEmbedding.sample.json`。该文件只提供字段示例，不代表真实模型路径。
 
@@ -19,8 +19,8 @@
 ```powershell
 dotnet run --project src\ContextCore.ControlRoom -- eval embedding-provider-smoke `
   --provider onnx-local `
-  --model-path D:\Models\ContextCore\embedding\model.onnx `
-  --tokenizer-path D:\Models\ContextCore\embedding\vocab.txt `
+  --model-path %USERPROFILE%\.contextcore\models\embedding\model.onnx `
+  --tokenizer-path %USERPROFILE%\.contextcore\models\embedding\vocab.txt `
   --embedding-model local-onnx-embedding `
   --dimension 512
 ```
@@ -39,8 +39,8 @@ smoke test 通过后，才能执行 provider-scoped reindex：
 ```powershell
 dotnet run --project src\ContextCore.ControlRoom -- eval vector-reindex-apply --confirm `
   --provider onnx-local `
-  --model-path D:\Models\ContextCore\embedding\model.onnx `
-  --tokenizer-path D:\Models\ContextCore\embedding\vocab.txt `
+  --model-path %USERPROFILE%\.contextcore\models\embedding\model.onnx `
+  --tokenizer-path %USERPROFILE%\.contextcore\models\embedding\vocab.txt `
   --embedding-model local-onnx-embedding `
   --dimension 512
 ```
@@ -54,15 +54,15 @@ reindex 完成后运行 profile sweep 和 shadow eval：
 ```powershell
 dotnet run --project src\ContextCore.ControlRoom -- eval vector-query-profile-sweep `
   --provider onnx-local `
-  --model-path D:\Models\ContextCore\embedding\model.onnx `
-  --tokenizer-path D:\Models\ContextCore\embedding\vocab.txt `
+  --model-path %USERPROFILE%\.contextcore\models\embedding\model.onnx `
+  --tokenizer-path %USERPROFILE%\.contextcore\models\embedding\vocab.txt `
   --embedding-model local-onnx-embedding `
   --dimension 512
 
 dotnet run --project src\ContextCore.ControlRoom -- eval vector-query-shadow-eval `
   --provider onnx-local `
-  --model-path D:\Models\ContextCore\embedding\model.onnx `
-  --tokenizer-path D:\Models\ContextCore\embedding\vocab.txt `
+  --model-path %USERPROFILE%\.contextcore\models\embedding\model.onnx `
+  --tokenizer-path %USERPROFILE%\.contextcore\models\embedding\vocab.txt `
   --embedding-model local-onnx-embedding `
   --dimension 512
 ```

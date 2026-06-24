@@ -1,4 +1,4 @@
-using ContextCore.Abstractions.Models;
+﻿using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services;
 using ContextCore.Storage.FileSystem;
 using ContextCore.Storage.FileSystem.Stores;
@@ -166,9 +166,9 @@ public class ContextCoreVectorLifecycleMetadataReviewCandidateTests
             ResolveRepoFile("src", "ContextCore.Core", "Services", "Vector", "VectorLifecycleMetadataReviewCandidateService.cs"),
             ResolveRepoFile("src", "ContextCore.Core", "Services", "Vector", "VectorLifecycleMetadataReviewService.cs"),
             ResolveRepoFile("src", "ContextCore.Core", "Services", "Vector", "VectorLifecycleSidecarResolver.cs"),
-            ResolveRepoFile("src", "ContextCore.Core", "Services", "Vector", "VectorSidecarEligibilityPreviewRunner.cs"),
+            ResolveRepoFile("src", "ContextCore.Core", "Services", "Vector", "Evaluation", "V5", "VectorSidecarEligibilityPreviewRunner.cs"),
             ResolveRepoFile("src", "ContextCore.Core", "Services", "Vector", "VectorLifecycleMetadataReviewBatchService.cs"),
-            ResolveRepoFile("src", "ContextCore.Core", "Services", "Vector", "VectorLifecycleMetadataEvidenceBackfillRunner.cs"),
+            ResolveRepoFile("src", "ContextCore.Core", "Services", "Vector", "Evaluation", "V5", "VectorLifecycleMetadataEvidenceBackfillRunner.cs"),
             ResolveRepoFile("src", "ContextCore.Storage.FileSystem", "Stores", "FileVectorLifecycleMetadataReviewCandidateStore.cs"),
             ResolveRepoFile("src", "ContextCore.Storage.FileSystem", "Stores", "FileVectorLifecycleMetadataReviewStore.cs"),
             ResolveRepoFile("src", "ContextCore.Storage.FileSystem", "Stores", "FileVectorLifecycleSidecarMetadataStore.cs"),
@@ -1029,19 +1029,5 @@ public class ContextCoreVectorLifecycleMetadataReviewCandidateTests
 
     private static string ResolveRepoFile(params string[] parts)
     {
-        var directory = new DirectoryInfo(Directory.GetCurrentDirectory());
-        while (directory is not null)
-        {
-            var candidate = Path.Combine(new[] { directory.FullName }.Concat(parts).ToArray());
-            if (File.Exists(candidate))
-            {
-                return candidate;
-            }
-
-            directory = directory.Parent;
-        }
-
-        Assert.Fail("Could not resolve repository file: " + Path.Combine(parts));
-        return string.Empty;
-    }
+        var directory = new DirectoryInfo(Directory.GetCurrentDirectory());return TestRepoFileResolver.Resolve(parts);}
 }

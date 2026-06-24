@@ -1,4 +1,4 @@
-using ContextCore.Abstractions.Models;
+﻿using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services;
 
 namespace ContextCore.Tests;
@@ -108,7 +108,7 @@ public class ContextCoreOutputTokenPriorityShadowGateTests
     [TestMethod]
     public void OutputTokenPriorityShadow_SourceDoesNotSpecialCaseSamplesOrItems()
     {
-        var source = File.ReadAllText(ResolveRepoFile("src", "ContextCore.Core", "Services", "Vector", "OutputTokenPriorityShadowGateRunner.cs"));
+        var source = File.ReadAllText(ResolveRepoFile("src", "ContextCore.Core", "Services", "Vector", "Evaluation", "Gates", "OutputTokenPriorityShadowGateRunner.cs"));
         Assert.IsFalse(source.Contains("sample.SampleId ==", StringComparison.Ordinal));
         Assert.IsFalse(source.Contains("item.ItemId ==", StringComparison.Ordinal));
         Assert.IsFalse(source.Contains("sample-pkg", StringComparison.Ordinal));
@@ -281,13 +281,5 @@ public class ContextCoreOutputTokenPriorityShadowGateTests
 
     private static string ResolveRepoFile(params string[] segments)
     {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "ContextCore.sln")))
-        {
-            directory = directory.Parent;
-        }
-
-        Assert.IsNotNull(directory);
-        return Path.Combine(new[] { directory!.FullName }.Concat(segments).ToArray());
-    }
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);return TestRepoFileResolver.Resolve(segments);}
 }

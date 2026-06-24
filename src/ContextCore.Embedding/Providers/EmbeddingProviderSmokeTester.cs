@@ -1,4 +1,5 @@
 using System.Text;
+using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 
 namespace ContextCore.Embedding.Providers;
@@ -222,8 +223,8 @@ public sealed class EmbeddingProviderSmokeTester
             ProviderId = string.IsNullOrWhiteSpace(options.ProviderId) ? ResolveDefaultProviderId(options) : options.ProviderId,
             ProviderType = string.IsNullOrWhiteSpace(options.ProviderType) ? EmbeddingProviderTypes.DeterministicHash : options.ProviderType,
             EmbeddingModel = string.IsNullOrWhiteSpace(options.EmbeddingModel) ? ResolveDefaultModel(options) : options.EmbeddingModel,
-            ModelPath = modelPath,
-            TokenizerPath = tokenizerPath,
+            ModelPath = PathHygiene.NormalizeReportPath(modelPath),
+            TokenizerPath = PathHygiene.NormalizeReportPath(tokenizerPath),
             ExpectedDimension = options.Dimension,
             ActualDimension = actualDimension,
             UseForRuntime = false,

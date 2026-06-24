@@ -1,14 +1,14 @@
 ﻿{
-  "OperationId": "arch-cleanup-plan-78d9cb78e4d04673ba20df0070357fc2",
-  "CreatedAt": "2026-06-24T03:26:11.6746382+00:00",
+  "OperationId": "arch-cleanup-plan-8ef77b1cf08c464e829fda235841d7ba",
+  "CreatedAt": "2026-06-24T10:08:23.8534045+00:00",
   "PlanPassed": true,
   "Recommendation": "ReadyForCleanupPlan",
   "CoreRunnerCount": 105,
   "DtoClassCount": 311,
-  "EvalCommandLines": 15692,
+  "EvalCommandLines": 15862,
   "ControlRoomServiceLines": 12256,
   "RendererLines": 5804,
-  "SubcommandCount": 755,
+  "SubcommandCount": 759,
   "RecommendedMigrations": [
     {
       "Priority": "high",
@@ -19,20 +19,20 @@
       "Risk": "low \u2014 \u53EA\u79FB\u52A8\u4EE3\u7801\uFF0C\u4E0D\u6539\u884C\u4E3A"
     },
     {
-      "Priority": "high",
-      "Category": "Core \u4E2D eval-only runner \u5206\u79BB",
+      "Priority": "medium",
+      "Category": "Core \u4E2D eval-only runner \u5206\u79BB (OPT-004 \u5DF2\u90E8\u5206\u5B8C\u6210)",
       "Description": "",
-      "CurrentState": "~100 \u4E2A runner \u6587\u4EF6\u6DF7\u5728 ContextCore.Core/Services/Vector/\uFF0C\u5176\u4E2D\u7EA6 60% \u662F eval-only shadow/preview/audit runner",
-      "Recommendation": "\u5C06 eval-only runner \u79FB\u5230 ContextCore.Eval or ContextCore.Core/EvalRunners/ \u5B50\u547D\u540D\u7A7A\u95F4\uFF1B\u7559\u4E0B runtime \u53EF\u7528\u7684 runner \u5728\u539F\u4F4D\u7F6E",
-      "Risk": "medium \u2014 \u9700\u68C0\u67E5\u6BCF\u4E2A runner \u7684\u5F15\u7528\u94FE\uFF0C\u786E\u4FDD DI \u6CE8\u518C\u4E0D\u53D7\u5F71\u54CD"
+      "CurrentState": "eval-only runner \u5DF2\u6309\u5206\u7C7B\u62C6\u5206\u5230 Evaluation (2), Evaluation/V5 (37), Evaluation/V6 (18), Evaluation/Gates (11), Evaluation/Dataset (8), Legacy (11)\uFF1Bruntime 18 \u4E2A\u6587\u4EF6\u4FDD\u7559\u5728 Services/Vector/ \u6839\u76EE\u5F55",
+      "Recommendation": "\u7EE7\u7EED\u5C06 Evaluation/Gates \u4E2D\u7684 gate runner \u5408\u5E76\u4E3A\u7EDF\u4E00 gate pipeline\uFF1B\u5C06 V5 \u4E2D\u5DF2\u51BB\u7ED3\u7684 runner \u6807\u8BB0\u4E3A deprecated \u6216\u8FC1\u79FB\u5230 Legacy",
+      "Risk": "low \u2014 \u5DF2\u6709\u76EE\u5F55\u7ED3\u6784\uFF0C\u540E\u7EED\u53EA\u505A\u5C11\u91CF\u6587\u4EF6\u518D\u5206\u914D"
     },
     {
-      "Priority": "high",
-      "Category": "Abstractions DTO \u62C6\u5206",
+      "Priority": "medium",
+      "Category": "Abstractions DTO \u62C6\u5206 (OPT-003 \u5DF2\u5B8C\u6210)",
       "Description": "",
-      "CurrentState": "VectorIndexDtos.cs \u5305\u542B ~212 \u4E2A\u7C7B\uFF0C\u4ECE V5.0 \u5230 V6.F \u6240\u6709 report/decision/proposal \u6DF7\u5728\u4E00\u8D77",
-      "Recommendation": "\u6309 V5/VMeta/V6/EvalProtocol/Arch \u62C6\u5206\u5230\u72EC\u7ACB\u6587\u4EF6\uFF1Brunner \u53EA\u9700\u8981 using \u5BF9\u5E94\u547D\u540D\u7A7A\u95F4",
-      "Risk": "low \u2014 \u53EA\u79FB\u52A8 DTO \u5B9A\u4E49\uFF0C\u4E0D\u6539\u5E8F\u5217\u5316\u884C\u4E3A"
+      "CurrentState": "VectorIndexDtos \u5DF2\u62C6\u5206\u4E3A 5 \u4E2A\u6587\u4EF6: VectorIndexDtos (75), EvalReportDtos (153), GateReportDtos (33), SummaryDtos (5), LegacyDtos (45)\uFF1B\u603B\u8BA1 311 \u7C7B\u578B",
+      "Recommendation": "\u540E\u7EED\u6309 OPT-005 \u5C06 report/gate DTO \u8FC1\u79FB\u5230\u72EC\u7ACB ContextCore.Eval.Models \u9879\u76EE",
+      "Risk": "low \u2014 \u5DF2\u62C6\u5206\uFF0Cnamespaces \u548C\u5E8F\u5217\u5316\u884C\u4E3A\u672A\u53D8"
     },
     {
       "Priority": "medium",
@@ -68,13 +68,25 @@
     }
   ],
   "Diagnostics": [
-    "Repository root: D:\\Users\\Ye_Luo\\AppData\\Local\\Context",
-    "Core/Vector runner files: 105",
-    "VectorIndexDtos types: 311",
-    "EvalCommand.cs lines: 15692",
+    "Repository root: .",
+    "Core/Vector files (total): 105",
+    "  Runtime: 18",
+    "  Evaluation: 2",
+    "  Legacy: 11",
+    "  Evaluation/Gates: 11",
+    "  Evaluation/Dataset: 8",
+    "  Evaluation/V5: 37",
+    "  Evaluation/V6: 18",
+    "DTO types (total): 311",
+    "  VectorIndexDtos: 75",
+    "  EvalReportDtos: 153",
+    "  GateReportDtos: 33",
+    "  SummaryDtos: 5",
+    "  LegacyDtos: 45",
+    "EvalCommand.cs lines: 15862",
     "ControlRoomService.cs lines: 12256",
     "ServiceOperationalRenderer.cs lines: 5804",
-    "Eval subcommand refs: 755"
+    "Eval subcommand refs: 759"
   ],
   "BlockedReasons": []
 }

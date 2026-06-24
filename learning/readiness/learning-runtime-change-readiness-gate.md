@@ -1,8 +1,8 @@
 # Learning Runtime Change Readiness Gate
 
-Generated: 2026-06-24T03:26:14.5493932+00:00
+Generated: 2026-06-24T09:10:29.6582410+00:00
 PolicyVersion: `learning-readiness-freeze-s0/v1`
-Registry: `D:\Users\Ye_Luo\AppData\Local\Context\learning\readiness\learning-readiness-freeze-report.json`
+Registry: `learning/readiness/learning-readiness-freeze-report.json`
 
 - Passed: `True`
 - Recommendation: `RuntimeChangeRulesSatisfied`

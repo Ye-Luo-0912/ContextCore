@@ -1,8 +1,8 @@
 {
-  "operationId": "learning-runtime-change-gate-1f10ecbbc05d43058f6d062cc59fb9f1",
-  "generatedAt": "2026-06-24T03:26:14.5493932+00:00",
+  "operationId": "learning-runtime-change-gate-dbbd3877de09420c8dc7b029144231e6",
+  "generatedAt": "2026-06-24T09:10:29.658241+00:00",
   "passed": true,
-  "registryReportPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\learning\\readiness\\learning-readiness-freeze-report.json",
+  "registryReportPath": "learning/readiness/learning-readiness-freeze-report.json",
   "checks": [
     {
       "capabilityId": "Qwen3EmbeddingProvider",
