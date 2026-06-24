@@ -3726,6 +3726,35 @@ public static class ServiceOperationalRenderer
                 builder.AppendLine($"- blocked            : {string.Join(", ", v7Freeze.BlockedReasons)}");
         }
 
+        builder.AppendLine();
+        builder.AppendLine("V7.5 Scoped Runtime Preview Approval Plan");
+        var v7Approval = snapshot.ScopedRuntimePreviewApprovalPlanReport;
+        if (v7Approval is null)
+        {
+            builder.AppendLine("- status : not generated");
+            builder.AppendLine("- path   : vector/v7/approval-plan.json");
+            builder.AppendLine("- action : run eval scoped-runtime-preview-approval-plan");
+        }
+        else
+        {
+            builder.AppendLine($"- plan passed        : {v7Approval.PlanPassed}");
+            builder.AppendLine($"- gate passed        : {v7Approval.GatePassed}");
+            builder.AppendLine($"- recommendation     : {v7Approval.Recommendation}");
+            builder.AppendLine($"- next phase         : {v7Approval.NextAllowedPhase}");
+            builder.AppendLine($"- approval plan id   : {v7Approval.ApprovalPlanId}");
+            builder.AppendLine($"- authority          : {v7Approval.ApprovalAuthority} (approvers: {v7Approval.AuthorizedApprovers.Count})");
+            builder.AppendLine($"- scopes             : {string.Join(", ", v7Approval.ApprovedScopes)}");
+            builder.AppendLine($"- validity           : {v7Approval.ValidityDurationDays}d (not before {v7Approval.ValidityNotBefore:yyyy-MM-dd}, not after {v7Approval.ValidityNotAfter:yyyy-MM-dd}) withinBounds={v7Approval.ValidityWithinBounds}");
+            builder.AppendLine($"- revocation         : {v7Approval.RevocationMechanism} (majority={v7Approval.RevocationRequiresMajority}, triggers={v7Approval.RevocationTriggers.Count})");
+            builder.AppendLine($"- kill switch        : configured={v7Approval.KillSwitchConfigured} tested={v7Approval.KillSwitchTested} responseTime={v7Approval.KillSwitchResponseTimeSeconds}s");
+            builder.AppendLine($"- rollback           : configured={v7Approval.RollbackConfigured} verified={v7Approval.RollbackVerified} maxMin={v7Approval.RollbackMaxDurationMinutes}");
+            builder.AppendLine($"- trace retention    : configured={v7Approval.TraceRetentionConfigured} {v7Approval.TraceRetentionDays}d");
+            builder.AppendLine($"- prerequisites      : v7Freeze={v7Approval.V7FreezePassed} v7Harden={v7Approval.V7HardeningPassed} v6Freeze={v7Approval.V6FreezePassed} optFreeze={v7Approval.OptFreezePassed} rtChange={v7Approval.RuntimeChangeGatePassed} p15={v7Approval.P15GatePassed}");
+            builder.AppendLine($"- invariants         : formalRetrieval={v7Approval.FormalRetrievalAllowed} runtimeSwitch={v7Approval.RuntimeSwitchAllowed} formalPkg={v7Approval.FormalPackageWritten} noRuntimeMutation={v7Approval.NoRuntimeMutationInvariant}");
+            if (v7Approval.BlockedReasons.Count > 0)
+                builder.AppendLine($"- blocked            : {string.Join(", ", v7Approval.BlockedReasons)}");
+        }
+
         return builder.ToString();
     }
 

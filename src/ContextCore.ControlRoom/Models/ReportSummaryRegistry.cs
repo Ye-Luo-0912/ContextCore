@@ -185,6 +185,17 @@ public static class ReportSummaryRegistry
         EvalPlanCommand = "eval controlled-applied-merge-runtime-preview-observation-freeze",
     };
 
+    public static readonly ControlRoomReportDescriptor V7ScopedRuntimePreviewApprovalPlan = new()
+    {
+        ReportId = "ScopedRuntimePreviewApprovalPlan",
+        DisplayTitle = "V7.5 Scoped Runtime Preview Approval Plan Summary",
+        PrimaryPath = "vector/v7/approval-plan.json",
+        GatePath = "vector/v7/approval-plan-gate.json",
+        PhaseGroup = "V7",
+        EvalGateCommand = "eval scoped-runtime-preview-approval-plan-gate",
+        EvalPlanCommand = "eval scoped-runtime-preview-approval-plan",
+    };
+
     // =========================================================================
     // V5 descriptors
     // =========================================================================
@@ -445,6 +456,7 @@ public static class ReportSummaryRegistry
         V7ControlledAppliedMergeRuntimePreviewObservationWindow,
         V7ControlledAppliedMergeRuntimePreviewObservationHardening,
         V7ControlledAppliedMergeRuntimePreviewObservationFreeze,
+        V7ScopedRuntimePreviewApprovalPlan,
     };
 
     public static IReadOnlyList<ControlRoomReportDescriptor> V5Descriptors { get; } = new[]

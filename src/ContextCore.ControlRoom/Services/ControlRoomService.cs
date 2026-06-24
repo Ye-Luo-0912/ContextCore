@@ -2888,6 +2888,7 @@ public sealed class ControlRoomService
             ControlledAppliedMergeRuntimePreviewObservationWindowReport = TryLoadControlledAppliedMergeRuntimePreviewObservationWindowSummary()?.Report,
             ControlledAppliedMergeRuntimePreviewObservationHardeningReport = TryLoadControlledAppliedMergeRuntimePreviewObservationHardeningSummary()?.Report,
             ControlledAppliedMergeRuntimePreviewObservationFreezeReport = TryLoadControlledAppliedMergeRuntimePreviewObservationFreezeSummary()?.Report,
+            ScopedRuntimePreviewApprovalPlanReport = TryLoadScopedRuntimePreviewApprovalPlanSummary()?.Report,
             Limit = limit,
             Offset = offset
         };
@@ -7477,6 +7478,9 @@ public sealed class ControlRoomService
     private static (ControlledAppliedMergeRuntimePreviewObservationFreezeReport Report, string SourcePath)? TryLoadControlledAppliedMergeRuntimePreviewObservationFreezeSummary()
         => TryLoadFromDescriptor<ControlledAppliedMergeRuntimePreviewObservationFreezeReport>(ReportSummaryRegistry.V7ControlledAppliedMergeRuntimePreviewObservationFreeze);
 
+    private static (ScopedRuntimePreviewApprovalPlanReport Report, string SourcePath)? TryLoadScopedRuntimePreviewApprovalPlanSummary()
+        => TryLoadFromDescriptor<ScopedRuntimePreviewApprovalPlanReport>(ReportSummaryRegistry.V7ScopedRuntimePreviewApprovalPlan);
+
     private static string VectorReportPath(string phase, string fileName)
     {
         return Path.Combine("vector", phase, fileName);
@@ -10402,6 +10406,8 @@ public sealed class ServiceLearningFeaturesSnapshot
     public ControlledAppliedMergeRuntimePreviewObservationHardeningReport? ControlledAppliedMergeRuntimePreviewObservationHardeningReport { get; init; }
 
     public ControlledAppliedMergeRuntimePreviewObservationFreezeReport? ControlledAppliedMergeRuntimePreviewObservationFreezeReport { get; init; }
+
+    public ScopedRuntimePreviewApprovalPlanReport? ScopedRuntimePreviewApprovalPlanReport { get; init; }
 
     public FoundationServiceStatusResponse? FoundationServiceStatus { get; init; }
 

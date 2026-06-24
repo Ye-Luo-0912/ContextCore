@@ -1784,6 +1784,102 @@ public sealed class ControlledAppliedMergeRuntimePreviewObservationFreezeReport
 }
 
 
+/// <summary>V7.5 scoped runtime preview approval plan 推荐。</summary>
+public static class ScopedRuntimePreviewApprovalPlanRecommendations
+{
+    public const string ReadyForScopedRuntimePreviewAuthorization = nameof(ReadyForScopedRuntimePreviewAuthorization);
+    public const string BlockedByMissingFreeze = nameof(BlockedByMissingFreeze);
+    public const string BlockedByApprovalPlanIncomplete = nameof(BlockedByApprovalPlanIncomplete);
+    public const string BlockedByKillSwitchUnavailable = nameof(BlockedByKillSwitchUnavailable);
+    public const string BlockedByRollbackUnavailable = nameof(BlockedByRollbackUnavailable);
+    public const string BlockedByRevocationUndefined = nameof(BlockedByRevocationUndefined);
+    public const string BlockedByTraceRetentionUnconfigured = nameof(BlockedByTraceRetentionUnconfigured);
+    public const string BlockedBySafetyBoundaryViolation = nameof(BlockedBySafetyBoundaryViolation);
+    public const string KeepPreviewOnly = nameof(KeepPreviewOnly);
+}
+
+
+/// <summary>V7.5 scoped runtime preview approval plan 选项。</summary>
+public sealed class ScopedRuntimePreviewApprovalPlanOptions
+{
+    public bool Enabled { get; init; } = true;
+    public string ApprovalAuthority { get; init; } = "ArchitectureReviewBoard";
+    public int ValidityDurationDays { get; init; } = 30;
+    public int KillSwitchResponseTimeSeconds { get; init; } = 60;
+    public int RollbackMaxDurationMinutes { get; init; } = 15;
+    public int TraceRetentionDays { get; init; } = 90;
+    public IReadOnlyList<string> ApprovedScopes { get; init; } = ["demo-workspace/demo-collection"];
+    public IReadOnlyList<string> AuthorizedApprovers { get; init; } = ["ReleaseManager", "ArchitectureLead"];
+}
+
+
+/// <summary>V7.5 scoped runtime preview approval plan 报告。
+/// 生成 approval plan / approval gate，明确审批主体、scope、有效期、撤销机制、kill switch、rollback、trace retention。
+/// 不启用 runtime activation。不切 runtime switch。不写 formal package。</summary>
+public sealed class ScopedRuntimePreviewApprovalPlanReport
+{
+    public string OperationId { get; init; } = "";
+    public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
+    public bool PlanPassed { get; init; }
+    public bool GatePassed { get; init; }
+    public string Recommendation { get; init; }
+        = ScopedRuntimePreviewApprovalPlanRecommendations.KeepPreviewOnly;
+    public string NextAllowedPhase { get; init; } = "KeepPreviewOnly";
+
+    public string ApprovalPlanId { get; init; } = "";
+    public string ApprovalAuthority { get; init; } = "";
+    public IReadOnlyList<string> AuthorizedApprovers { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> ApprovedScopes { get; init; } = Array.Empty<string>();
+    public DateTimeOffset ValidityNotBefore { get; init; }
+    public DateTimeOffset ValidityNotAfter { get; init; }
+    public int ValidityDurationDays { get; init; }
+    public bool ValidityWithinBounds { get; init; }
+
+    public string RevocationMechanism { get; init; } = "";
+    public bool RevocationRequiresMajority { get; init; }
+    public IReadOnlyList<string> RevocationTriggers { get; init; } = Array.Empty<string>();
+    public string EmergencyRevocationContact { get; init; } = "";
+
+    public string KillSwitchPlan { get; init; } = "";
+    public string KillSwitchAction { get; init; } = "";
+    public int KillSwitchResponseTimeSeconds { get; init; }
+    public bool KillSwitchTested { get; init; }
+    public bool KillSwitchConfigured { get; init; }
+
+    public string RollbackPlan { get; init; } = "";
+    public int RollbackMaxDurationMinutes { get; init; }
+    public bool RollbackVerified { get; init; }
+    public string RollbackCheckpointStrategy { get; init; } = "";
+    public bool RollbackConfigured { get; init; }
+
+    public string TraceRetentionPolicy { get; init; } = "";
+    public int TraceRetentionDays { get; init; }
+    public string TraceStoragePath { get; init; } = "";
+    public bool TraceRetentionConfigured { get; init; }
+
+    public bool V7FreezePassed { get; init; }
+    public bool V7HardeningPassed { get; init; }
+    public bool V6FreezePassed { get; init; }
+    public bool OptFreezePassed { get; init; }
+    public bool RuntimeChangeGatePassed { get; init; }
+    public bool P15GatePassed { get; init; }
+
+    public bool FormalRetrievalAllowed { get; init; }
+    public bool RuntimeSwitchAllowed { get; init; }
+    public bool FormalPackageWritten { get; init; }
+    public bool PackingPolicyChanged { get; init; }
+    public bool PackageOutputChanged { get; init; }
+    public bool VectorStoreBindingChanged { get; init; }
+    public bool GlobalDefaultOn { get; init; }
+    public bool NoRuntimeMutationInvariant { get; init; }
+
+    public IReadOnlyList<string> AllowedActions { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> ForbiddenActions { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> BlockedReasons { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> Diagnostics { get; init; } = Array.Empty<string>();
+}
+
+
 /// <summary>架构清理计划报告。</summary>
 public sealed class ArchitectureCleanupPlanReport
 {

@@ -438,4 +438,72 @@ public static partial class EvalCommand
             $"promotionDecision={report.PromotionDecision}; testBaselineFrozen={report.TestBaselineFrozen}; " +
             $"noRuntimeMutation={report.NoRuntimeMutationInvariant}; blocked={report.BlockedReasons.Count}");
     }
+
+    private static async Task ExecuteScopedRuntimePreviewApprovalPlanAsync(
+        IReadOnlyList<string> args,
+        string subcommand,
+        CancellationToken ct)
+    {
+        var output = Path.GetFullPath(Path.Combine("vector", "v7"));
+        Directory.CreateDirectory(output);
+
+        var freezePath = Path.Combine("vector", "v7", "observation-freeze.json");
+        var freezeGateFallback = Path.Combine("vector", "v7", "observation-freeze-gate.json");
+        var v7Freeze = await ReadJsonFileAsync<ControlledAppliedMergeRuntimePreviewObservationFreezeReport>(freezePath, ct)
+            .ConfigureAwait(false)
+            ?? await ReadJsonFileAsync<ControlledAppliedMergeRuntimePreviewObservationFreezeReport>(freezeGateFallback, ct)
+                .ConfigureAwait(false);
+
+        var hardenPath = Path.Combine("vector", "v7", "observation-hardening.json");
+        var hardenGateFallback = Path.Combine("vector", "v7", "observation-hardening-gate.json");
+        var v7Hardening = await ReadJsonFileAsync<ControlledAppliedMergeRuntimePreviewObservationHardeningReport>(hardenPath, ct)
+            .ConfigureAwait(false)
+            ?? await ReadJsonFileAsync<ControlledAppliedMergeRuntimePreviewObservationHardeningReport>(hardenGateFallback, ct)
+                .ConfigureAwait(false);
+
+        var runtimeChangeGatePath = Path.Combine("learning", "readiness", "learning-runtime-change-readiness-gate.json");
+        var runtimeChangeGate = await ReadJsonFileAsync<LearningRuntimeChangeReadinessGateReport>(runtimeChangeGatePath, ct)
+            .ConfigureAwait(false);
+        var runtimeChangeGatePassed = runtimeChangeGate is not null && runtimeChangeGate.Passed;
+
+        var p15ReportPath = Path.Combine("eval", "eval-report-p15-a3.json");
+        var p15Report = await ReadJsonFileAsync<JsonDocument>(p15ReportPath, ct).ConfigureAwait(false);
+        var p15GatePassed = false;
+        if (p15Report is not null && p15Report.RootElement.TryGetProperty("PassRate", out var passRateEl))
+        {
+            p15GatePassed = passRateEl.GetDouble() >= 1.0;
+        }
+
+        var options = new ScopedRuntimePreviewApprovalPlanOptions
+        {
+            Enabled = !CommandHelpers.HasFlag(args, "--disabled"),
+            ValidityDurationDays = CommandHelpers.GetIntOption(args, "--validity-days", 30),
+            KillSwitchResponseTimeSeconds = CommandHelpers.GetIntOption(args, "--kill-switch-seconds", 60),
+            RollbackMaxDurationMinutes = CommandHelpers.GetIntOption(args, "--rollback-minutes", 15),
+            TraceRetentionDays = CommandHelpers.GetIntOption(args, "--trace-retention-days", 90),
+        };
+
+        var runner = new ScopedRuntimePreviewApprovalPlanRunner();
+        var isGate = string.Equals(subcommand, "scoped-runtime-preview-approval-plan-gate", StringComparison.OrdinalIgnoreCase);
+        var report = isGate
+            ? runner.RunGate(v7Freeze, v7Hardening, runtimeChangeGatePassed, p15GatePassed, options)
+            : runner.RunPlan(v7Freeze, v7Hardening, runtimeChangeGatePassed, p15GatePassed, options);
+
+        var fn = isGate ? "approval-plan-gate" : "approval-plan";
+        var jp = Path.Combine(output, $"{fn}.json");
+        var mp = Path.Combine(output, $"{fn}.md");
+        await WriteJsonSafeAsync(report, jp, ct).ConfigureAwait(false);
+        await WriteTextAsync(
+            ScopedRuntimePreviewApprovalPlanRunner.BuildMarkdown(
+                isGate ? "Scoped Runtime Preview Approval Plan Gate" : "Scoped Runtime Preview Approval Plan",
+                report),
+            mp, ct).ConfigureAwait(false);
+
+        Console.WriteLine($"[Eval] Scoped runtime preview approval plan written: {jp}");
+        Console.WriteLine($"[Eval] planPassed={report.PlanPassed}; gatePassed={report.GatePassed}; recommendation={report.Recommendation}; " +
+            $"nextPhase={report.NextAllowedPhase}; validityDays={report.ValidityDurationDays}; " +
+            $"killSwitchConfigured={report.KillSwitchConfigured}; rollbackConfigured={report.RollbackConfigured}; " +
+            $"traceRetentionConfigured={report.TraceRetentionConfigured}; noRuntimeMutation={report.NoRuntimeMutationInvariant}; " +
+            $"blocked={report.BlockedReasons.Count}");
+    }
 }
