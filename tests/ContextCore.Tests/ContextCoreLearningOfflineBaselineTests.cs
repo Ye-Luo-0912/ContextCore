@@ -2,6 +2,8 @@ using System.Text.Json;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services;
+using ContextCore.Core.Services.Planning;
+using ContextCore.Storage.InMemory;
 
 namespace ContextCore.Tests;
 
@@ -50,6 +52,353 @@ public sealed class ContextCoreLearningOfflineBaselineTests
         Assert.IsTrue(rule.PerIntentPrecision.ContainsKey(PlanningIntentDetector.AutomationRecovery));
         Assert.IsTrue(rule.PerIntentRecall.ContainsKey(PlanningIntentDetector.CodingTask));
         Assert.IsTrue(rule.ConfusionMatrix.ContainsKey(PlanningIntentDetector.NovelGeneration));
+    }
+
+    [TestMethod]
+    public async Task RouterIntentClassifierR1_ShouldGenerateReports()
+    {
+        var tempRoot = Path.Combine(Path.GetTempPath(), $"contextcore-router-r1-{Guid.NewGuid():N}");
+        try
+        {
+            var inputPath = Path.Combine(tempRoot, "features", LearningDatasetQualityReportBuilder.RouterIntentExamplesFileName);
+            var outputDir = Path.Combine(tempRoot, "router");
+            Directory.CreateDirectory(Path.GetDirectoryName(inputPath)!);
+            await WriteJsonLinesAsync(inputPath, CreateRouterTrainingExamples().ToArray());
+
+            var report = await new RouterIntentEvaluationRunner().RunAsync(inputPath, outputDir);
+
+            Assert.IsTrue(report.Ready);
+            Assert.AreEqual(32, report.SampleCount);
+            Assert.IsTrue(File.Exists(Path.Combine(outputDir, RouterIntentEvaluationRunner.ReportFileName)));
+            Assert.IsTrue(File.Exists(Path.Combine(outputDir, RouterIntentEvaluationRunner.MarkdownReportFileName)));
+            Assert.IsTrue(File.Exists(Path.Combine(outputDir, RouterIntentEvaluationRunner.ConfusionMatrixFileName)));
+            Assert.AreEqual(2, report.Baselines.Count);
+            Assert.IsTrue(report.Baselines.Any(item => item.BaselineName == RouterIntentClassifierBaselineNames.ExistingRuleBasedRouterBaseline));
+            Assert.IsTrue(report.Baselines.Any(item => item.BaselineName == RouterIntentClassifierBaselineNames.TokenCentroidRouterBaseline));
+            Assert.IsFalse(string.IsNullOrWhiteSpace(report.Recommendation));
+        }
+        finally
+        {
+            if (Directory.Exists(tempRoot))
+            {
+                Directory.Delete(tempRoot, recursive: true);
+            }
+        }
+    }
+
+    [TestMethod]
+    public void TokenCentroidRouterBaseline_ShouldNotUseIdsForPrediction()
+    {
+        var training = CreateRouterTrainingExamples().ToArray();
+        var classifier = new TokenCentroidRouterBaseline();
+        classifier.Fit(training);
+        var first = CreateRouterExample(
+            "router-id-a",
+            "CodingMode",
+            PlanningIntentDetector.CodingTask,
+            inputSummary: "compile module verification build");
+        var second = CreateRouterExample(
+            "router-id-b",
+            "ChatMode",
+            PlanningIntentDetector.FuzzyQuestion,
+            inputSummary: "compile module verification build");
+
+        var firstPrediction = classifier.Predict(first);
+        var secondPrediction = classifier.Predict(second);
+
+        Assert.AreEqual(firstPrediction.Intent, secondPrediction.Intent);
+    }
+
+    [TestMethod]
+    public async Task RouterShadow_ShouldBeDisabledByDefault()
+    {
+        var store = new InMemoryRouterIntentShadowTraceStore();
+        var service = new RouterIntentShadowService(
+            new RouterShadowOptions(),
+            store,
+            new PlanningIntentDetector());
+
+        var trace = await service.RecordAsync(new RouterIntentShadowRecordRequest
+        {
+            RequestId = "router-shadow-disabled",
+            WorkspaceId = "workspace-1",
+            CollectionId = "collection-1",
+            EntryPoint = "planning",
+            QueryText = "build verification task",
+            RuntimeIntent = PlanningIntentDetector.CodingTask
+        });
+        var records = await store.QueryAsync(new RouterIntentShadowTraceQuery
+        {
+            WorkspaceId = "workspace-1",
+            CollectionId = "collection-1"
+        });
+
+        Assert.IsNull(trace);
+        Assert.AreEqual(0, records.Count);
+    }
+
+    [TestMethod]
+    public async Task RouterShadow_ShouldRecordDisagreementWithoutChangingRuntimeIntent()
+    {
+        var store = new InMemoryRouterIntentShadowTraceStore();
+        var service = new RouterIntentShadowService(
+            new RouterShadowOptions
+            {
+                Enabled = true,
+                TraceCollectionEnabled = true
+            },
+            store,
+            new PlanningIntentDetector());
+        const string runtimeIntent = PlanningIntentDetector.CodingTask;
+
+        var trace = await service.RecordAsync(new RouterIntentShadowRecordRequest
+        {
+            RequestId = "router-shadow-disagreement",
+            WorkspaceId = "workspace-1",
+            CollectionId = "collection-1",
+            EntryPoint = "planning",
+            QueryText = "plain runtime query",
+            RuntimeIntent = runtimeIntent
+        });
+
+        Assert.IsNotNull(trace);
+        Assert.AreEqual(runtimeIntent, trace.RuntimeIntent);
+        Assert.IsFalse(trace.FormalOutputChanged);
+        Assert.IsFalse(trace.Agreement);
+        Assert.AreEqual(PlanningIntentDetector.FuzzyQuestion, trace.ShadowIntent);
+        var records = await store.QueryAsync(new RouterIntentShadowTraceQuery
+        {
+            WorkspaceId = "workspace-1",
+            CollectionId = "collection-1"
+        });
+        Assert.AreEqual(1, records.Count);
+    }
+
+    [TestMethod]
+    public void RouterShadowTraceQuality_ShouldCountLowConfidenceAndConfusion()
+    {
+        var report = new RouterIntentShadowReportBuilder().BuildTraceQualityReport(
+        [
+            new RouterIntentShadowTrace
+            {
+                RequestId = "trace-1",
+                WorkspaceId = "workspace-1",
+                CollectionId = "collection-1",
+                RuntimeIntent = PlanningIntentDetector.CodingTask,
+                ShadowIntent = PlanningIntentDetector.FuzzyQuestion,
+                Agreement = false,
+                LowConfidence = true,
+                CreatedAt = DateTimeOffset.UtcNow
+            },
+            new RouterIntentShadowTrace
+            {
+                RequestId = "trace-2",
+                WorkspaceId = "workspace-1",
+                CollectionId = "collection-1",
+                RuntimeIntent = PlanningIntentDetector.CurrentTask,
+                ShadowIntent = PlanningIntentDetector.CurrentTask,
+                Agreement = true,
+                CreatedAt = DateTimeOffset.UtcNow
+            }
+        ], "workspace-1", "collection-1");
+
+        Assert.AreEqual(2, report.TraceCount);
+        Assert.AreEqual(1, report.LowConfidenceCount);
+        Assert.IsTrue(report.TopConfusionPairs.ContainsKey($"{PlanningIntentDetector.CodingTask}->{PlanningIntentDetector.FuzzyQuestion}"));
+    }
+
+    [TestMethod]
+    public async Task RouterShadowEval_ShouldGenerateReports()
+    {
+        var tempRoot = Path.Combine(Path.GetTempPath(), $"contextcore-router-r2-{Guid.NewGuid():N}");
+        try
+        {
+            var inputPath = Path.Combine(tempRoot, "features", LearningDatasetQualityReportBuilder.RouterIntentExamplesFileName);
+            var outputDir = Path.Combine(tempRoot, "router");
+            Directory.CreateDirectory(Path.GetDirectoryName(inputPath)!);
+            await WriteJsonLinesAsync(inputPath, CreateRouterTrainingExamples().ToArray());
+
+            var (a3, extended) = await new RouterIntentShadowReportBuilder()
+                .RunShadowEvalAsync(inputPath, outputDir);
+
+            Assert.IsTrue(File.Exists(Path.Combine(outputDir, RouterIntentShadowReportBuilder.ShadowEvalA3FileName)));
+            Assert.IsTrue(File.Exists(Path.Combine(outputDir, RouterIntentShadowReportBuilder.ShadowEvalExtendedFileName)));
+            Assert.IsTrue(File.Exists(Path.Combine(outputDir, RouterIntentShadowReportBuilder.ShadowEvalMarkdownFileName)));
+            Assert.IsTrue(a3.SampleCount > 0);
+            Assert.AreEqual(a3.SampleCount, extended.SampleCount);
+            Assert.IsFalse(string.IsNullOrWhiteSpace(a3.Recommendation));
+        }
+        finally
+        {
+            if (Directory.Exists(tempRoot))
+            {
+                Directory.Delete(tempRoot, recursive: true);
+            }
+        }
+    }
+
+    [TestMethod]
+    public void RouterDisagreementTriage_ShouldClassifyShadowFixesAndBreaks()
+    {
+        var examples = CreateRouterTriageExamples().ToArray();
+
+        var report = new RouterDisagreementTriageRunner().BuildReport(examples, "A3", "router-intent-examples.jsonl");
+
+        Assert.IsTrue(report.DisagreementCount >= 2);
+        Assert.IsTrue(report.Disagreements.Any(item => item.TriageCategory == RouterDisagreementTriageCategories.ShadowFixesRuntime));
+        Assert.IsTrue(report.Disagreements.Any(item => item.TriageCategory == RouterDisagreementTriageCategories.ShadowBreaksRuntime));
+        Assert.IsTrue(report.ShadowFixesRuntime > 0);
+        Assert.IsTrue(report.ShadowBreaksRuntime > 0);
+    }
+
+    [TestMethod]
+    public async Task RouterDisagreementTriage_ShouldGenerateStableHardNegativeJsonl()
+    {
+        var tempRoot = Path.Combine(Path.GetTempPath(), $"contextcore-router-triage-{Guid.NewGuid():N}");
+        try
+        {
+            var inputPath = Path.Combine(tempRoot, "features", LearningDatasetQualityReportBuilder.RouterIntentExamplesFileName);
+            var outputDir = Path.Combine(tempRoot, "router");
+            Directory.CreateDirectory(Path.GetDirectoryName(inputPath)!);
+            await WriteJsonLinesAsync(inputPath, CreateRouterTriageExamples().ToArray());
+
+            var (a3, extended) = await new RouterDisagreementTriageRunner().RunAsync(inputPath, outputDir);
+            var hardNegativePath = Path.Combine(outputDir, RouterDisagreementTriageRunner.HardNegativesFileName);
+            var hardNegativeLines = await File.ReadAllLinesAsync(hardNegativePath);
+
+            Assert.IsTrue(File.Exists(Path.Combine(outputDir, RouterDisagreementTriageRunner.A3ReportFileName)));
+            Assert.IsTrue(File.Exists(Path.Combine(outputDir, RouterDisagreementTriageRunner.ExtendedReportFileName)));
+            Assert.IsTrue(File.Exists(Path.Combine(outputDir, RouterDisagreementTriageRunner.MarkdownReportFileName)));
+            Assert.IsTrue(hardNegativeLines.Length > 0);
+            Assert.AreEqual(hardNegativeLines.Distinct(StringComparer.OrdinalIgnoreCase).Count(), hardNegativeLines.Length);
+            Assert.IsTrue(a3.HardNegativeCount > 0);
+            Assert.AreEqual(a3.DisagreementCount, extended.DisagreementCount);
+        }
+        finally
+        {
+            if (Directory.Exists(tempRoot))
+            {
+                Directory.Delete(tempRoot, recursive: true);
+            }
+        }
+    }
+
+    [TestMethod]
+    public void RouterIntentBoundaryMarkdown_ShouldContainDefinitions()
+    {
+        var path = FindRepoFile("docs", "router-intent-boundaries.md");
+
+        Assert.IsTrue(File.Exists(path));
+        var markdown = File.ReadAllText(path);
+        StringAssert.Contains(markdown, "Intent 定义");
+        StringAssert.Contains(markdown, "常见混淆");
+        StringAssert.Contains(markdown, "Hard Negative 使用规则");
+    }
+
+    [TestMethod]
+    public void RouterDisagreementTriage_ShouldNotUseSampleIdForPrediction()
+    {
+        var training = CreateRouterTrainingExamples().ToArray();
+        var classifier = new TokenCentroidRouterBaseline();
+        classifier.Fit(training);
+        var first = CreateRouterExample(
+            "router-triage-id-a",
+            "ChatMode",
+            PlanningIntentDetector.CurrentTask,
+            inputSummary: "active focus next step");
+        var second = CreateRouterExample(
+            "router-triage-id-b",
+            "AutomationMode",
+            PlanningIntentDetector.AutomationRecovery,
+            inputSummary: "active focus next step");
+
+        var firstPrediction = classifier.Predict(first);
+        var secondPrediction = classifier.Predict(second);
+
+        Assert.AreEqual(firstPrediction.Intent, secondPrediction.Intent);
+    }
+
+    [TestMethod]
+    public void RouterGuardedOptInGate_ShouldFailWhenBreaksExceedFixes()
+    {
+        var report = new RouterGuardedOptInReadinessGateRunner().BuildReport(
+            [
+                CreateRouterShadowEvalReport(
+                    sampleCount: 10,
+                    agreementRate: 0.9,
+                    fixes: 1,
+                    breaks: 3,
+                    regressionCount: 3)
+            ],
+            [
+                CreateRouterTriageReport(fixes: 1, breaks: 3)
+            ],
+            p15GatePassed: true);
+
+        Assert.IsFalse(report.Passed);
+        CollectionAssert.Contains(
+            report.FailureReasons.ToArray(),
+            RouterGuardedOptInGateFailureReasons.ShadowBreaksRuntimeGreaterThanFixes);
+        Assert.AreEqual(RouterGuardedOptInGateRecommendations.KeepRuleBased, report.Recommendation);
+    }
+
+    [TestMethod]
+    public void RouterGuardedOptInGate_ShouldPassWhenFixesPositiveAndNoRegression()
+    {
+        var report = new RouterGuardedOptInReadinessGateRunner().BuildReport(
+            [
+                CreateRouterShadowEvalReport(
+                    sampleCount: 10,
+                    agreementRate: 0.95,
+                    fixes: 2,
+                    breaks: 0,
+                    regressionCount: 0)
+            ],
+            [
+                CreateRouterTriageReport(fixes: 2, breaks: 0)
+            ],
+            p15GatePassed: true);
+
+        Assert.IsTrue(report.Passed);
+        Assert.AreEqual(2, report.ShadowFixesRuntime);
+        Assert.AreEqual(0, report.ShadowBreaksRuntime);
+        Assert.AreEqual(RouterGuardedOptInGateRecommendations.ReadyForGuardedOptIn, report.Recommendation);
+    }
+
+    [TestMethod]
+    public void RouterGuardedOptInGate_ShouldNotUseSampleIdForDecision()
+    {
+        var first = new RouterGuardedOptInReadinessGateRunner().BuildReport(
+            [
+                CreateRouterShadowEvalReport(
+                    sampleCount: 12,
+                    agreementRate: 0.92,
+                    fixes: 1,
+                    breaks: 0,
+                    regressionCount: 0,
+                    operationId: "gate-report-a")
+            ],
+            [
+                CreateRouterTriageReport(fixes: 1, breaks: 0, operationId: "triage-report-a")
+            ],
+            p15GatePassed: true);
+        var second = new RouterGuardedOptInReadinessGateRunner().BuildReport(
+            [
+                CreateRouterShadowEvalReport(
+                    sampleCount: 12,
+                    agreementRate: 0.92,
+                    fixes: 1,
+                    breaks: 0,
+                    regressionCount: 0,
+                    operationId: "gate-report-b")
+            ],
+            [
+                CreateRouterTriageReport(fixes: 1, breaks: 0, operationId: "triage-report-b")
+            ],
+            p15GatePassed: true);
+
+        Assert.AreEqual(first.Passed, second.Passed);
+        CollectionAssert.AreEqual(first.FailureReasons.ToArray(), second.FailureReasons.ToArray());
     }
 
     [TestMethod]
@@ -540,10 +889,200 @@ public sealed class ContextCoreLearningOfflineBaselineTests
         CollectionAssert.AreEqual(originalIds, examples.Select(item => item.ExampleId).ToArray());
     }
 
+    [TestMethod]
+    public async Task LearningReadinessRegistry_ShouldFreezeCurrentShadowCapabilities()
+    {
+        var tempRoot = Path.Combine(Path.GetTempPath(), $"contextcore-learning-readiness-{Guid.NewGuid():N}");
+        var previous = Directory.GetCurrentDirectory();
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(tempRoot, "eval"));
+            Directory.CreateDirectory(Path.Combine(tempRoot, "learning", "router"));
+            Directory.CreateDirectory(Path.Combine(tempRoot, "learning", "ranker"));
+            await WriteJsonAsync(
+                Path.Combine(tempRoot, "eval", "graph-expansion-guarded-optin-gate.json"),
+                new GraphExpansionGuardedOptInGateReport
+                {
+                    CreatedAt = DateTimeOffset.Parse("2026-06-12T00:00:00Z"),
+                    Passed = true
+                });
+            await WriteJsonAsync(
+                Path.Combine(tempRoot, "eval", "vector-retrieval-shadow-readiness-gate.json"),
+                new VectorRetrievalShadowReadinessGateReport
+                {
+                    CreatedAt = DateTimeOffset.Parse("2026-06-12T00:00:00Z"),
+                    Passed = false,
+                    FailReasons = ["A3RecallAtLeast80Percent"]
+                });
+            await WriteJsonAsync(
+                Path.Combine(tempRoot, "learning", "router", "router-guarded-optin-readiness-gate.json"),
+                new RouterGuardedOptInReadinessGateReport
+                {
+                    GeneratedAt = DateTimeOffset.Parse("2026-06-12T00:00:00Z"),
+                    Passed = false,
+                    ShadowFixesRuntime = 1,
+                    ShadowBreaksRuntime = 3,
+                    NetGain = -2,
+                    FailureReasons =
+                    [
+                        RouterGuardedOptInGateFailureReasons.ShadowBreaksRuntimeGreaterThanFixes
+                    ],
+                    Recommendation = RouterGuardedOptInGateRecommendations.KeepRuleBased
+                });
+            await WriteJsonAsync(
+                Path.Combine(tempRoot, "learning", "ranker", "candidate-reranker-shadow-eval-a3.json"),
+                new CandidateRerankerShadowEvalReport
+                {
+                    GeneratedAt = DateTimeOffset.Parse("2026-06-12T00:00:00Z"),
+                    NetGain = -17,
+                    Recommendation = CandidateRerankerShadowRecommendations.KeepFormalRanking
+                });
+            await WriteJsonAsync(
+                Path.Combine(tempRoot, "learning", "ranker", "candidate-reranker-shadow-eval-extended.json"),
+                new CandidateRerankerShadowEvalReport
+                {
+                    GeneratedAt = DateTimeOffset.Parse("2026-06-12T00:00:00Z"),
+                    NetGain = -3,
+                    Recommendation = CandidateRerankerShadowRecommendations.KeepFormalRanking
+                });
+
+            Directory.SetCurrentDirectory(tempRoot);
+            var registry = await new LearningReadinessFreezeRunner().BuildRegistryFromCurrentFilesAsync();
+
+            var graph = registry.Capabilities.Single(item => item.CapabilityId == ShadowCapabilityIds.GraphExpansion);
+            var vector = registry.Capabilities.Single(item => item.CapabilityId == ShadowCapabilityIds.VectorRetrieval);
+            var router = registry.Capabilities.Single(item => item.CapabilityId == ShadowCapabilityIds.RouterIntentClassifier);
+            var ranker = registry.Capabilities.Single(item => item.CapabilityId == ShadowCapabilityIds.CandidateReranker);
+
+            Assert.IsTrue(graph.GatePassed);
+            CollectionAssert.Contains(graph.AllowedRuntimeModes.ToArray(), "ApplyGuarded:audit-v1");
+            CollectionAssert.Contains(graph.AllowedRuntimeModes.ToArray(), "ApplyGuarded:conflict-v1");
+            CollectionAssert.Contains(graph.ForbiddenRuntimeModes.ToArray(), "ApplyGuarded:normal-v1");
+            CollectionAssert.Contains(graph.ForbiddenRuntimeModes.ToArray(), "ApplyGuarded:current-task-v1");
+            Assert.IsFalse(vector.GatePassed);
+            Assert.AreEqual("BlockedByRecall", vector.Recommendation);
+            CollectionAssert.Contains(vector.BlockedReasons.ToArray(), "A3RecallAtLeast80Percent");
+            CollectionAssert.Contains(vector.ForbiddenRuntimeModes.ToArray(), ShadowRuntimeModes.RuntimeShadow);
+            Assert.IsFalse(router.GatePassed);
+            Assert.AreEqual(RouterGuardedOptInGateRecommendations.KeepRuleBased, router.Recommendation);
+            CollectionAssert.Contains(router.ForbiddenRuntimeModes.ToArray(), ShadowRuntimeModes.ApplyGuarded);
+            Assert.IsFalse(ranker.GatePassed);
+            Assert.AreEqual(ShadowCapabilityReadinessStatuses.KeepFormalRanking, ranker.Status);
+            CollectionAssert.Contains(ranker.BlockedReasons.ToArray(), "NetGainNotPositive");
+        }
+        finally
+        {
+            Directory.SetCurrentDirectory(previous);
+            if (Directory.Exists(tempRoot))
+            {
+                Directory.Delete(tempRoot, recursive: true);
+            }
+        }
+    }
+
+    [TestMethod]
+    public void LearningRuntimeChangeGate_ShouldFailWhenBlockedCapabilityAllowsRuntimeShadow()
+    {
+        var registry = new LearningReadinessRegistry
+        {
+            Capabilities =
+            [
+                new ShadowCapabilityReadiness
+                {
+                    CapabilityId = ShadowCapabilityIds.VectorRetrieval,
+                    GatePassed = false,
+                    BlockedReasons = ["A3RecallAtLeast80Percent"],
+                    AllowedRuntimeModes = [ShadowRuntimeModes.RuntimeShadow],
+                    ForbiddenRuntimeModes = [ShadowRuntimeModes.DefaultOn]
+                }
+            ]
+        };
+
+        var report = new LearningReadinessFreezeRunner().BuildRuntimeChangeGate(registry);
+
+        Assert.IsFalse(report.Passed);
+        Assert.IsTrue(report.FailedConditions.Any(item =>
+            item.Contains("NotReadyDoesNotAllowRuntimeModes", StringComparison.OrdinalIgnoreCase)));
+    }
+
+    [TestMethod]
+    public void LearningRuntimeChangeGate_ShouldPassWhenRegistryBlocksUnsafeModes()
+    {
+        var registry = new LearningReadinessRegistry
+        {
+            Capabilities =
+            [
+                new ShadowCapabilityReadiness
+                {
+                    CapabilityId = ShadowCapabilityIds.VectorRetrieval,
+                    GatePassed = false,
+                    BlockedReasons = ["A3RecallAtLeast80Percent"],
+                    AllowedRuntimeModes = [ShadowRuntimeModes.Off, ShadowRuntimeModes.PreviewOnly],
+                    ForbiddenRuntimeModes =
+                    [
+                        ShadowRuntimeModes.RuntimeShadow,
+                        ShadowRuntimeModes.ApplyGuarded,
+                        ShadowRuntimeModes.DefaultOn
+                    ]
+                },
+                new ShadowCapabilityReadiness
+                {
+                    CapabilityId = ShadowCapabilityIds.RouterIntentClassifier,
+                    GatePassed = false,
+                    BlockedReasons =
+                    [
+                        RouterGuardedOptInGateFailureReasons.ShadowBreaksRuntimeGreaterThanFixes
+                    ],
+                    AllowedRuntimeModes = [ShadowRuntimeModes.ExistingRuntime],
+                    ForbiddenRuntimeModes =
+                    [
+                        ShadowRuntimeModes.RuntimeShadow,
+                        ShadowRuntimeModes.ApplyGuarded,
+                        ShadowRuntimeModes.DefaultOn
+                    ]
+                },
+                new ShadowCapabilityReadiness
+                {
+                    CapabilityId = ShadowCapabilityIds.CandidateReranker,
+                    GatePassed = false,
+                    BlockedReasons = ["NetGainNotPositive"],
+                    AllowedRuntimeModes = [ShadowRuntimeModes.Off],
+                    ForbiddenRuntimeModes =
+                    [
+                        ShadowRuntimeModes.RuntimeShadow,
+                        ShadowRuntimeModes.ApplyGuarded,
+                        ShadowRuntimeModes.DefaultOn
+                    ]
+                },
+                new ShadowCapabilityReadiness
+                {
+                    CapabilityId = ShadowCapabilityIds.GraphExpansion,
+                    GatePassed = true,
+                    AllowedRuntimeModes =
+                    [
+                        "ApplyGuarded:audit-v1",
+                        "ApplyGuarded:conflict-v1"
+                    ],
+                    ForbiddenRuntimeModes =
+                    [
+                        "ApplyGuarded:normal-v1",
+                        "ApplyGuarded:current-task-v1",
+                        ShadowRuntimeModes.DefaultOn
+                    ]
+                }
+            ]
+        };
+
+        var report = new LearningReadinessFreezeRunner().BuildRuntimeChangeGate(registry);
+
+        Assert.IsTrue(report.Passed);
+    }
+
     private static ContextPolicyFeatureExample CreateRouterExample(
         string id,
         string mode,
-        string intent)
+        string intent,
+        string? inputSummary = null)
         => new()
         {
             ExampleId = id,
@@ -553,7 +1092,7 @@ public sealed class ContextCoreLearningOfflineBaselineTests
             Mode = mode,
             Intent = intent,
             Label = intent,
-            InputSummary = $"{intent}/{mode}",
+            InputSummary = inputSummary ?? $"{intent}/{mode}",
             CandidateKind = "RetrievalPlanProposal",
             CandidateLayer = "Planning",
             CandidateStatus = "NativeValid",
@@ -565,6 +1104,125 @@ public sealed class ContextCoreLearningOfflineBaselineTests
             PolicyVersion = LearningFeatureDatasetService.PolicyVersion,
             CreatedAt = DateTimeOffset.UtcNow
         };
+
+    private static IEnumerable<ContextPolicyFeatureExample> CreateRouterTrainingExamples()
+    {
+        for (var index = 0; index < 8; index++)
+        {
+            yield return CreateRouterExample(
+                $"router-current-{index}",
+                "ChatMode",
+                PlanningIntentDetector.CurrentTask,
+                inputSummary: $"active focus next step task {index}");
+            yield return CreateRouterExample(
+                $"router-coding-{index}",
+                "CodingMode",
+                PlanningIntentDetector.CodingTask,
+                inputSummary: $"compile module verification build {index}");
+            yield return CreateRouterExample(
+                $"router-novel-{index}",
+                "NovelMode",
+                PlanningIntentDetector.NovelGeneration,
+                inputSummary: $"chapter scene character arc {index}");
+            yield return CreateRouterExample(
+                $"router-automation-{index}",
+                "AutomationMode",
+                PlanningIntentDetector.AutomationRecovery,
+                inputSummary: $"retry recovery failure checkpoint {index}");
+        }
+    }
+
+    private static IEnumerable<ContextPolicyFeatureExample> CreateRouterTriageExamples()
+    {
+        for (var index = 0; index < 18; index++)
+        {
+            yield return CreateRouterExample(
+                $"triage-train-current-{index}",
+                "ChatMode",
+                PlanningIntentDetector.CurrentTask,
+                inputSummary: $"focus marker active task route {index}");
+            yield return CreateRouterExample(
+                $"triage-train-fuzzy-{index}",
+                "ChatMode",
+                PlanningIntentDetector.FuzzyQuestion,
+                inputSummary: $"plain marker general question route {index}");
+            yield return CreateRouterExample(
+                $"triage-train-coding-{index}",
+                "CodingMode",
+                PlanningIntentDetector.CodingTask,
+                inputSummary: $"compile module verification route {index}");
+        }
+
+        yield return CreateRouterExample(
+            "triage-fix-0",
+            "ChatMode",
+            PlanningIntentDetector.CurrentTask,
+            inputSummary: "focus marker active route");
+        yield return CreateRouterExample(
+            "triage-break-1",
+            "CodingMode",
+            PlanningIntentDetector.CodingTask,
+            inputSummary: "plain marker general route");
+    }
+
+    private static RouterIntentShadowEvalReport CreateRouterShadowEvalReport(
+        int sampleCount,
+        double agreementRate,
+        int fixes,
+        int breaks,
+        int regressionCount,
+        string operationId = "router-shadow-eval-test")
+        => new()
+        {
+            OperationId = operationId,
+            DatasetName = "test",
+            SampleCount = sampleCount,
+            AgreementRate = agreementRate,
+            LowConfidenceCount = 0,
+            ShadowFixesRuntime = fixes,
+            ShadowBreaksRuntime = breaks,
+            NetGain = fixes - breaks,
+            PerIntentRegression = regressionCount == 0
+                ? new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+                : new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+                {
+                    [PlanningIntentDetector.CodingTask] = regressionCount
+                }
+        };
+
+    private static RouterDisagreementTriageReport CreateRouterTriageReport(
+        int fixes,
+        int breaks,
+        string operationId = "router-triage-test")
+        => new()
+        {
+            OperationId = operationId,
+            DatasetName = "test",
+            SampleCount = fixes + breaks,
+            DisagreementCount = fixes + breaks,
+            ShadowFixesRuntime = fixes,
+            ShadowBreaksRuntime = breaks,
+            Recommendation = fixes > breaks
+                ? RouterDisagreementTriageRecommendations.NeedsHardNegativeDataset
+                : RouterDisagreementTriageRecommendations.KeepRuleBased
+        };
+
+    private static string FindRepoFile(params string[] segments)
+    {
+        var directory = new DirectoryInfo(Directory.GetCurrentDirectory());
+        while (directory is not null)
+        {
+            var path = Path.Combine([directory.FullName, .. segments]);
+            if (File.Exists(path))
+            {
+                return path;
+            }
+
+            directory = directory.Parent;
+        }
+
+        return Path.Combine(segments);
+    }
 
     private static RankingPairExample CreateRankingPair(
         string sampleId,
@@ -607,4 +1265,7 @@ public sealed class ContextCoreLearningOfflineBaselineTests
         var lines = records.Select(record => JsonSerializer.Serialize(record, JsonOptions));
         await File.WriteAllTextAsync(path, string.Join(Environment.NewLine, lines));
     }
+
+    private static Task WriteJsonAsync<T>(string path, T value)
+        => File.WriteAllTextAsync(path, JsonSerializer.Serialize(value, JsonOptions));
 }

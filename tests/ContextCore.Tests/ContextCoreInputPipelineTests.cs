@@ -1,13 +1,98 @@
 using ContextCore.Abstractions;
+using ContextCore.Abstractions.Models;
 using ContextCore.Core;
 using ContextCore.Core.Services;
 using ContextCore.Storage.InMemory;
+using ContextCore.Storage.InMemory.Stores;
 
 namespace ContextCore.Tests;
 
 [TestClass]
 public sealed class ContextCoreInputPipelineTests
 {
+    [TestMethod]
+    public void ProductionSource_ShouldNotContainFixtureDomainKeywords()
+    {
+        var sourceRoot = FindRepositoryRoot().FullName;
+        var forbiddenTerms = new[]
+        {
+            "林风",
+            "苍穹大陆",
+            "九转金丹",
+            "龙魂草",
+            "拍卖行"
+        };
+
+        var violations = Directory
+            .EnumerateFiles(Path.Combine(sourceRoot, "src"), "*.cs", SearchOption.AllDirectories)
+            .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase)
+                && !path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
+            .SelectMany(path =>
+            {
+                var text = File.ReadAllText(path);
+                return forbiddenTerms
+                    .Where(term => text.Contains(term, StringComparison.Ordinal))
+                    .Select(term => $"{Path.GetRelativePath(sourceRoot, path)}::{term}");
+            })
+            .ToArray();
+
+        CollectionAssert.AreEqual(Array.Empty<string>(), violations);
+    }
+
+    [TestMethod]
+    public async Task InMemoryContextStore_Query_ShouldUseGenericFieldMatching()
+    {
+        var store = new InMemoryContextStore();
+        await store.SaveAsync(new ContextItem
+        {
+            Id = "context-item-42",
+            WorkspaceId = "workspace-test",
+            CollectionId = "collection-test",
+            Type = "runbook",
+            Title = "服务恢复手册",
+            Content = "恢复流程需要记录失败步骤，并保留 source reference。",
+            Tags = ["recovery", "ops"],
+            Refs = ["ref:restore"],
+            SourceRefs = ["source:incident-42"],
+            UpdatedAt = DateTimeOffset.UtcNow
+        });
+
+        Assert.AreEqual("context-item-42", (await QueryOneAsync(store, "服务恢复")).Id);
+        Assert.AreEqual("context-item-42", (await QueryOneAsync(store, "runbook")).Id);
+        Assert.AreEqual("context-item-42", (await QueryOneAsync(store, "source reference")).Id);
+        Assert.AreEqual("context-item-42", (await QueryOneAsync(store, "ops")).Id);
+        Assert.AreEqual("context-item-42", (await QueryOneAsync(store, "ref:restore")).Id);
+        Assert.AreEqual("context-item-42", (await QueryOneAsync(store, "source:incident-42")).Id);
+        Assert.AreEqual("context-item-42", (await QueryOneAsync(store, "context-item-42")).Id);
+    }
+
+    [TestMethod]
+    public async Task InMemoryContextStore_Query_ShouldMatchGenericChineseBigramsWithoutFixtureKeywordList()
+    {
+        var store = new InMemoryContextStore();
+        await store.SaveAsync(new ContextItem
+        {
+            Id = "generic-cjk",
+            WorkspaceId = "workspace-test",
+            CollectionId = "collection-test",
+            Type = "note",
+            Title = "故障处理记录",
+            Content = "恢复流程需要记录失败步骤。",
+            UpdatedAt = DateTimeOffset.UtcNow
+        });
+
+        var results = await store.QueryAsync(new ContextQuery
+        {
+            WorkspaceId = "workspace-test",
+            CollectionId = "collection-test",
+            QueryText = "请检查失败步骤",
+            Take = 10
+        });
+
+        Assert.AreEqual(1, results.Count);
+        Assert.AreEqual("generic-cjk", results[0].Id);
+    }
+
     [TestMethod]
     public void ContextInputValidator_ShouldFail_WhenContentIsEmpty()
     {
@@ -24,6 +109,38 @@ public sealed class ContextCoreInputPipelineTests
 
         Assert.IsFalse(result.Succeeded);
         CollectionAssert.Contains(result.Issues.Select(issue => issue.Code).ToArray(), "ContentRequired");
+    }
+
+    private static async Task<ContextItem> QueryOneAsync(InMemoryContextStore store, string queryText)
+    {
+        var results = await store.QueryAsync(new ContextQuery
+        {
+            WorkspaceId = "workspace-test",
+            CollectionId = "collection-test",
+            QueryText = queryText,
+            Take = 10,
+            IncludeContent = true
+        });
+
+        Assert.AreEqual(1, results.Count, $"Query should match exactly one item: {queryText}");
+        return results[0];
+    }
+
+    private static DirectoryInfo FindRepositoryRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "ContextCore.sln")))
+            {
+                return directory;
+            }
+
+            directory = directory.Parent;
+        }
+
+        Assert.Fail("Cannot locate ContextCore.sln from test output directory.");
+        throw new InvalidOperationException("Cannot locate repository root.");
     }
 
     [TestMethod]

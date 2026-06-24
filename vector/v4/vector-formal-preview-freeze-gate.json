@@ -1,0 +1,43 @@
+﻿{
+  "OperationId": "vector-formal-preview-freeze-d62be74640b5434c83c55058bef146cb",
+  "CreatedAt": "2026-06-17T06:25:15.3305238+00:00",
+  "FreezePassed": true,
+  "VectorFormalPreview": "ReadyForScopedOptInPreview",
+  "AllowedMode": "ScopedPreviewOnly",
+  "FormalRetrievalAllowed": false,
+  "ReadyForRuntimeSwitch": false,
+  "UseForRuntime": false,
+  "RuntimeSwitchAllowed": false,
+  "V4ReadinessRecheckPassed": true,
+  "GuardedFormalPreviewGatePassed": true,
+  "ShadowPackageComparisonGatePassed": true,
+  "ScopedFormalPreviewOptInGatePassed": true,
+  "LimitedFormalPreviewObservationGatePassed": true,
+  "RuntimeChangeReadinessGatePassed": true,
+  "RiskAfterPolicy": 0,
+  "MustNotHitRiskAfterPolicy": 0,
+  "LifecycleRiskAfterPolicy": 0,
+  "FormalOutputChanged": 0,
+  "PackageOutputChanged": false,
+  "PackingPolicyChanged": false,
+  "FormalPackageWritten": false,
+  "RuntimeMutated": false,
+  "NonAllowlistedScopeLeakCount": 0,
+  "ForbiddenChanges": [
+    "RuntimeSwitch",
+    "FormalPackageWrite",
+    "PackingPolicyIntegration",
+    "PackageOutputMutation",
+    "NonAllowlistedScopeUse"
+  ],
+  "Recommendation": "ReadyForScopedOptInPreview",
+  "BlockedReasons": [],
+  "SourceReports": {
+    "vectorV4ReadinessRecheck": "vector\\v4\\vector-v4-readiness-recheck.json",
+    "guardedFormalRetrievalPreviewGate": "vector\\v4\\vector-guarded-formal-retrieval-preview-gate.json",
+    "vectorShadowPackageComparisonGate": "vector\\v4\\vector-shadow-package-comparison-gate.json",
+    "scopedFormalPreviewOptInGate": "vector\\v4\\vector-scoped-formal-preview-optin-gate.json",
+    "limitedFormalPreviewObservationGate": "vector\\v4\\vector-limited-formal-preview-observation-gate.json",
+    "learningRuntimeChangeReadinessGate": "learning\\readiness\\learning-runtime-change-readiness-gate.json"
+  }
+}

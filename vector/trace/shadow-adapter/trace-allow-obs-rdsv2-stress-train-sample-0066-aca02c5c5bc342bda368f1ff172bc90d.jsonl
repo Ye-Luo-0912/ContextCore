@@ -1,0 +1,1 @@
+{"OperationId":"allow-obs-rdsv2-stress-train-sample-0066-aca02c5c5bc342bda368f1ff172bc90d","WorkspaceId":"","CollectionId":"","QueryText":"Retrieve scope guidance for preserve isolation, but do not return items governed by archive.","BaselineCount":5,"AddedCandidateIds":[],"RemovedCandidateIds":[],"Applied":false,"Allowlisted":true,"Timestamp":"2026-06-22T00:49:10.6676471+00:00"}

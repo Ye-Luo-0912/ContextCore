@@ -1051,6 +1051,11 @@ public sealed class ContextCoreControlRoomServiceModeTests
         });
         handlers.Enqueue(request =>
         {
+            Assert.AreEqual("/api/learning/graph-expansion-shadow/traces", request.RequestUri?.AbsolutePath);
+            return Json<IReadOnlyList<GraphExpansionShadowTraceRecord>>([]);
+        });
+        handlers.Enqueue(request =>
+        {
             Assert.AreEqual("/api/relations/rel-1/explain", request.RequestUri?.AbsolutePath);
             return Json(new RelationExplainResponse
             {
@@ -1127,6 +1132,72 @@ public sealed class ContextCoreControlRoomServiceModeTests
             var rendered = ServiceOperationalRenderer.RenderError(exception);
             StringAssert.Contains(rendered, "relations.get.by-id");
         }
+    }
+
+    [TestMethod]
+    public async Task ServiceRelationsScreen_ShouldRequireConfirmationBeforeReject()
+    {
+        var rejectCalls = 0;
+        using var http = CreateHttpClient(request =>
+        {
+            if (request.Method == HttpMethod.Post
+                && string.Equals(request.RequestUri?.AbsolutePath, "/api/relations/rel-1/reject", StringComparison.OrdinalIgnoreCase))
+            {
+                rejectCalls++;
+                return new HttpResponseMessage(HttpStatusCode.InternalServerError);
+            }
+
+            Assert.AreEqual(HttpMethod.Get, request.Method);
+            Assert.AreEqual("/api/relations/rel-1/explain", request.RequestUri?.AbsolutePath);
+            return Json(new RelationExplainResponse
+            {
+                RelationId = "rel-1",
+                Relation = new ContextRelation
+                {
+                    Id = "rel-1",
+                    WorkspaceId = "workspace-test",
+                    CollectionId = "collection-test",
+                    SourceId = "stable-a",
+                    TargetId = "stable-b",
+                    RelationType = "contains",
+                    Confidence = 0.8
+                },
+                Confidence = 0.8,
+                Lifecycle = StableMemoryLifecycle.Active,
+                ReviewStatus = string.Empty
+            });
+        });
+        var state = ControlRoomService.CreateState(
+            "filesystem",
+            FileStorageOptions.DefaultRootPath,
+            "workspace-test",
+            "collection-test",
+            ControlRoomMode.Service,
+            "http://localhost:5079/",
+            http);
+        var service = new ControlRoomService(state);
+        var originalIn = Console.In;
+        var originalOut = Console.Out;
+        using var input = new StringReader("R rel-1\nNO\nB\n");
+        using var output = new StringWriter();
+
+        try
+        {
+            Console.SetIn(input);
+            Console.SetOut(output);
+            var action = await ServiceRelationsScreen.ShowAsync(service);
+
+            Assert.AreEqual(ControlRoomActionKind.Back, action);
+        }
+        finally
+        {
+            Console.SetIn(originalIn);
+            Console.SetOut(originalOut);
+        }
+
+        Assert.AreEqual(0, rejectCalls);
+        StringAssert.Contains(output.ToString(), "Type YES");
+        StringAssert.Contains(output.ToString(), "Relation review action canceled.");
     }
 
     [TestMethod]

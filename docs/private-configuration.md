@@ -25,12 +25,22 @@ Recommended `secrets.json` example:
   "PrivateApiKeys": {
     "DEEPSEEK_API_KEY": "replace-with-your-local-key",
     "PINAI_OPENAI_API_KEY": "replace-with-your-local-key"
+  },
+  "PostgresStore": {
+    "Enabled": true,
+    "ConnectionString": "Host=localhost;Port=55432;Database=contextcore;Username=contextcore;Password=replace-with-your-local-password",
+    "SchemaName": "contextcore_smoke",
+    "AutoMigrate": false,
+    "CommandTimeoutSeconds": 30,
+    "ProviderId": "postgres-local-smoke"
   }
 }
 ```
 
 Command-line arguments still take precedence over user-private configuration.
 If both `.json` and `.env` exist, the JSON values win.
+
+Sensitive data should use this user-private file instead of repository `appsettings*.json`. Repository config should keep only safe defaults, placeholders, provider names, and non-secret policy values.
 
 Model routing is configured in three layers:
 

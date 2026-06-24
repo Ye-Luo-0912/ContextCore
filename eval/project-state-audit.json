@@ -1,0 +1,263 @@
+﻿{
+  "OperationId": "project-state-audit-5f455fcbb3a0478a9bc2fc3f5db1e95b",
+  "CreatedAt": "2026-06-17T13:38:18.2874767+00:00",
+  "CurrentOverallStatus": "FoundationFrozen_FormalRetrievalPlanOnly",
+  "Recommendation": "ReadyForMainlineGapRepairPlanning",
+  "ReadyCapabilities": [
+    "Foundation",
+    "ServiceFoundation",
+    "StorageFoundation",
+    "RelationGovernancePostgres",
+    "LearningFeedbackPostgres",
+    "JobQueuePostgres",
+    "RuntimeChangeGate",
+    "InputDatasetV2"
+  ],
+  "PreviewOnlyCapabilities": [
+    "VectorPostgresProvider",
+    "VectorFormalPreview",
+    "ScopedRuntimeExperiment",
+    "FormalRetrievalIntegrationPlan",
+    "RouterGuardedOptIn",
+    "CandidateReranker",
+    "OutputPackageAssembly"
+  ],
+  "BlockedCapabilities": [
+    "FormalRetrievalRuntimeSwitch",
+    "FormalVectorStoreBinding",
+    "FormalPackageWrite"
+  ],
+  "CapabilityReadinessMatrix": [
+    {
+      "CapabilityId": "Foundation",
+      "Area": "Foundation",
+      "Status": "Frozen",
+      "Recommendation": "ReadyForReleaseCandidate",
+      "SourceReportPath": "foundation/foundation-release-candidate-gate.json",
+      "SourceReportExists": true,
+      "ReadyForRuntime": false,
+      "FormalRetrievalAllowed": false,
+      "RuntimeSwitchAllowed": false,
+      "BlockedReasons": []
+    },
+    {
+      "CapabilityId": "ServiceFoundation",
+      "Area": "Service",
+      "Status": "Frozen",
+      "Recommendation": "ReadyForV45ExplicitScopedRuntimeExperimentPlanning",
+      "SourceReportPath": "service/service-foundation-freeze-gate.json",
+      "SourceReportExists": true,
+      "ReadyForRuntime": false,
+      "FormalRetrievalAllowed": false,
+      "RuntimeSwitchAllowed": false,
+      "BlockedReasons": []
+    },
+    {
+      "CapabilityId": "StorageFoundation",
+      "Area": "Storage",
+      "Status": "Frozen",
+      "Recommendation": "ReadyForReleaseCandidate",
+      "SourceReportPath": "foundation/foundation-freeze-report.json",
+      "SourceReportExists": true,
+      "ReadyForRuntime": false,
+      "FormalRetrievalAllowed": false,
+      "RuntimeSwitchAllowed": false,
+      "BlockedReasons": []
+    },
+    {
+      "CapabilityId": "RelationGovernancePostgres",
+      "Area": "Graph",
+      "Status": "Ready",
+      "Recommendation": "ReadyForDualWrite",
+      "SourceReportPath": "storage/postgres/postgres-relation-governance-readiness-gate.json",
+      "SourceReportExists": true,
+      "ReadyForRuntime": false,
+      "FormalRetrievalAllowed": false,
+      "RuntimeSwitchAllowed": false,
+      "BlockedReasons": []
+    },
+    {
+      "CapabilityId": "LearningFeedbackPostgres",
+      "Area": "Learning",
+      "Status": "Ready",
+      "Recommendation": "ReadyForScopedServiceMode",
+      "SourceReportPath": "storage/postgres/postgres-learning-feedback-freeze-gate.json",
+      "SourceReportExists": true,
+      "ReadyForRuntime": false,
+      "FormalRetrievalAllowed": false,
+      "RuntimeSwitchAllowed": false,
+      "BlockedReasons": []
+    },
+    {
+      "CapabilityId": "JobQueuePostgres",
+      "Area": "Storage",
+      "Status": "Ready",
+      "Recommendation": "ReadyForScopedWorkerMode",
+      "SourceReportPath": "storage/postgres/postgres-job-queue-freeze-gate.json",
+      "SourceReportExists": true,
+      "ReadyForRuntime": false,
+      "FormalRetrievalAllowed": false,
+      "RuntimeSwitchAllowed": false,
+      "BlockedReasons": []
+    },
+    {
+      "CapabilityId": "VectorPostgresProvider",
+      "Area": "Vector",
+      "Status": "PreviewOnly",
+      "Recommendation": "ReadyForPreviewShadowStorage",
+      "SourceReportPath": "storage/postgres/postgres-vector-freeze-gate.json",
+      "SourceReportExists": true,
+      "ReadyForRuntime": false,
+      "FormalRetrievalAllowed": false,
+      "RuntimeSwitchAllowed": false,
+      "BlockedReasons": []
+    },
+    {
+      "CapabilityId": "VectorFormalPreview",
+      "Area": "Vector",
+      "Status": "PreviewOnly",
+      "Recommendation": "ReadyForScopedOptInPreview",
+      "SourceReportPath": "vector/v4/vector-formal-preview-freeze-gate.json",
+      "SourceReportExists": true,
+      "ReadyForRuntime": false,
+      "FormalRetrievalAllowed": false,
+      "RuntimeSwitchAllowed": false,
+      "BlockedReasons": []
+    },
+    {
+      "CapabilityId": "ScopedRuntimeExperiment",
+      "Area": "Runtime Experiment",
+      "Status": "PreviewOnly",
+      "Recommendation": "ReadyForFormalRetrievalIntegrationPlan",
+      "SourceReportPath": "vector/v4/runtime-experiment/promotion-decision.json",
+      "SourceReportExists": true,
+      "ReadyForRuntime": false,
+      "FormalRetrievalAllowed": false,
+      "RuntimeSwitchAllowed": false,
+      "BlockedReasons": []
+    },
+    {
+      "CapabilityId": "FormalRetrievalIntegrationPlan",
+      "Area": "Vector",
+      "Status": "PlanOnly",
+      "Recommendation": "ReadyForShadowFormalRetrievalAdapter",
+      "SourceReportPath": "vector/v5/formal-retrieval-integration-plan-gate.json",
+      "SourceReportExists": true,
+      "ReadyForRuntime": false,
+      "FormalRetrievalAllowed": false,
+      "RuntimeSwitchAllowed": false,
+      "BlockedReasons": []
+    },
+    {
+      "CapabilityId": "RouterGuardedOptIn",
+      "Area": "Router",
+      "Status": "PreviewOnly",
+      "Recommendation": "KeepRuleBased",
+      "SourceReportPath": "learning/router/router-guarded-optin-readiness-gate.json",
+      "SourceReportExists": true,
+      "ReadyForRuntime": false,
+      "FormalRetrievalAllowed": false,
+      "RuntimeSwitchAllowed": false,
+      "BlockedReasons": []
+    },
+    {
+      "CapabilityId": "CandidateReranker",
+      "Area": "Reranker",
+      "Status": "PreviewOnly",
+      "Recommendation": "PreviewOnly",
+      "SourceReportPath": "eval/vector-retrieval-shadow-readiness-gate.json",
+      "SourceReportExists": true,
+      "ReadyForRuntime": false,
+      "FormalRetrievalAllowed": false,
+      "RuntimeSwitchAllowed": false,
+      "BlockedReasons": []
+    },
+    {
+      "CapabilityId": "RuntimeChangeGate",
+      "Area": "Learning",
+      "Status": "Ready",
+      "Recommendation": "RuntimeChangeRulesSatisfied",
+      "SourceReportPath": "learning/readiness/learning-runtime-change-readiness-gate.json",
+      "SourceReportExists": true,
+      "ReadyForRuntime": false,
+      "FormalRetrievalAllowed": false,
+      "RuntimeSwitchAllowed": false,
+      "BlockedReasons": []
+    },
+    {
+      "CapabilityId": "InputDatasetV2",
+      "Area": "Input",
+      "Status": "Ready",
+      "Recommendation": "ReadyForDatasetV2ShadowEval",
+      "SourceReportPath": "vector/dataset-v2/generated/materialization-gate.json",
+      "SourceReportExists": true,
+      "ReadyForRuntime": false,
+      "FormalRetrievalAllowed": false,
+      "RuntimeSwitchAllowed": false,
+      "BlockedReasons": []
+    },
+    {
+      "CapabilityId": "OutputPackageAssembly",
+      "Area": "Output",
+      "Status": "PreviewOnly",
+      "Recommendation": "ReadyForScopedFormalPreviewOptIn",
+      "SourceReportPath": "vector/v4/vector-shadow-package-comparison-gate.json",
+      "SourceReportExists": true,
+      "ReadyForRuntime": false,
+      "FormalRetrievalAllowed": false,
+      "RuntimeSwitchAllowed": false,
+      "BlockedReasons": []
+    }
+  ],
+  "MainlineRisks": [
+    "Formal retrieval must not be enabled from preview or experiment freeze reports alone.",
+    "Graph relation quality can add noise if relation evidence is not audited at formal-candidate time.",
+    "Vector ranking improvements can regress precision unless post-scoring risk gates remain final.",
+    "Input lifecycle metadata gaps can block or misroute otherwise relevant candidates.",
+    "Package assembly must preserve token budget, priority, and formal output invariants.",
+    "Learning feedback is not yet a runtime training signal."
+  ],
+  "QualityGaps": [
+    "Graph: Graph recall, noise, and relation quality still need a mainline formal-candidate audit.",
+    "Vector: Vector recall and ranking are validated through preview/shadow gates but remain outside formal retrieval.",
+    "Input: Input ingestion evidence, provenance, and lifecycle metadata remain the strongest formal-readiness dependency.",
+    "Output: Output package assembly, token budget, and priority policy have not accepted formal vector changes.",
+    "Learning: Learning feedback has approved-data surfaces but no runtime training or negative-sample promotion path.",
+    "Foundation: Phase report runners and artifact readers are duplicated across many gates."
+  ],
+  "PerformanceGaps": [
+    "Shadow adapter candidate generation needs a bounded latency and allocation baseline.",
+    "Repeated report-runner JSON readers and markdown builders increase maintenance cost.",
+    "ControlRoom status aggregation can share a single capability artifact reader."
+  ],
+  "RecommendedNextPhases": [
+    "V5.1 ShadowFormalRetrievalAdapter Plan",
+    "V5.2 Formal Adapter Shadow Package Comparison",
+    "Graph Relation Quality and Noise Audit",
+    "Input Evidence/Provenance Contract Enforcement",
+    "Output Token Budget and Priority Policy Shadow Gate"
+  ],
+  "SourceReports": {
+    "Foundation": "foundation/foundation-release-candidate-gate.json",
+    "ServiceFoundation": "service/service-foundation-freeze-gate.json",
+    "StorageFoundation": "foundation/foundation-freeze-report.json",
+    "RelationGovernancePostgres": "storage/postgres/postgres-relation-governance-readiness-gate.json",
+    "LearningFeedbackPostgres": "storage/postgres/postgres-learning-feedback-freeze-gate.json",
+    "JobQueuePostgres": "storage/postgres/postgres-job-queue-freeze-gate.json",
+    "VectorPostgresProvider": "storage/postgres/postgres-vector-freeze-gate.json",
+    "VectorFormalPreview": "vector/v4/vector-formal-preview-freeze-gate.json",
+    "ScopedRuntimeExperiment": "vector/v4/runtime-experiment/promotion-decision.json",
+    "FormalRetrievalIntegrationPlan": "vector/v5/formal-retrieval-integration-plan-gate.json",
+    "RouterGuardedOptIn": "learning/router/router-guarded-optin-readiness-gate.json",
+    "CandidateReranker": "eval/vector-retrieval-shadow-readiness-gate.json",
+    "RuntimeChangeGate": "learning/readiness/learning-runtime-change-readiness-gate.json",
+    "InputDatasetV2": "vector/dataset-v2/generated/materialization-gate.json",
+    "OutputPackageAssembly": "vector/v4/vector-shadow-package-comparison-gate.json"
+  },
+  "FormalRetrievalAllowed": false,
+  "RuntimeSwitchAllowed": false,
+  "ReadyForRuntimeSwitch": false,
+  "PackingPolicyChanged": false,
+  "PackageOutputChanged": false,
+  "BlockedReasons": []
+}

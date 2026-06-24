@@ -40,6 +40,64 @@ public sealed class FileRelationStore : IRelationStore
         }
     }
 
+    /// <summary>按关系 ID 读取单条边；供 provider parity/diagnostics 使用。</summary>
+    public async Task<ContextRelation?> GetAsync(
+        string workspaceId,
+        string collectionId,
+        string relationId,
+        CancellationToken cancellationToken = default)
+    {
+        var path = _paths.GetRelationsJsonlPath(workspaceId, collectionId);
+
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var relations = await _jsonLines.ReadAsync<ContextRelation>(path, cancellationToken)
+                .ConfigureAwait(false);
+            return relations.FirstOrDefault(relation =>
+                string.Equals(relation.Id, relationId, StringComparison.OrdinalIgnoreCase));
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <summary>删除单条边；供 provider parity/cleanup 使用，不参与默认业务流程。</summary>
+    public async Task<bool> DeleteAsync(
+        string workspaceId,
+        string collectionId,
+        string relationId,
+        CancellationToken cancellationToken = default)
+    {
+        var path = _paths.GetRelationsJsonlPath(workspaceId, collectionId);
+
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var relations = await _jsonLines.ReadAsync<ContextRelation>(path, cancellationToken)
+                .ConfigureAwait(false);
+            var retained = relations
+                .Where(relation => !string.Equals(relation.Id, relationId, StringComparison.OrdinalIgnoreCase))
+                .ToArray();
+            if (retained.Length == relations.Count)
+            {
+                return false;
+            }
+
+            Directory.CreateDirectory(Path.GetDirectoryName(path) ?? ".");
+            await File.WriteAllLinesAsync(
+                path,
+                retained.Select(item => System.Text.Json.JsonSerializer.Serialize(item)),
+                cancellationToken).ConfigureAwait(false);
+            return true;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
     public async Task SaveManyAsync(
         IEnumerable<ContextRelation> relations,
         CancellationToken cancellationToken = default)
@@ -212,13 +270,8 @@ public sealed class FileRelationStore : IRelationStore
             return false;
         }
 
-        if (!string.IsNullOrWhiteSpace(query.RelationType)
-            && !string.Equals(relation.RelationType, query.RelationType, StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
-        return true;
+        return string.IsNullOrWhiteSpace(query.RelationType)
+               || string.Equals(relation.RelationType, query.RelationType, StringComparison.OrdinalIgnoreCase);
     }
 
     private static ContextRelation Normalize(ContextRelation relation)

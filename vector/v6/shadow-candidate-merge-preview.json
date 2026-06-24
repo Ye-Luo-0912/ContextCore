@@ -1,0 +1,525 @@
+﻿{
+  "OperationId": "shadow-candidate-merge-preview-b8901f380e8e4d289fda3ac6578384e3",
+  "CreatedAt": "2026-06-22T09:22:34.7835753+00:00",
+  "PreviewPassed": true,
+  "GatePassed": false,
+  "Recommendation": "ReadyForShadowMergeObservation",
+  "V66GatePassed": true,
+  "PreviewMergedSetGenerated": true,
+  "SampleCount": 12,
+  "BaselineCandidateCount": 60,
+  "ShadowAdapterCandidateCount": 120,
+  "MergedPreviewCandidateCount": 60,
+  "PreviewAddCount": 7,
+  "PreviewRemoveCount": 7,
+  "AppliedAddCount": 0,
+  "AppliedRemoveCount": 0,
+  "FormalSelectedSetChanged": false,
+  "FormalOutputChanged": 0,
+  "FormalPackageWritten": false,
+  "PackageOutputChanged": false,
+  "PackingPolicyChanged": false,
+  "RuntimeMutated": false,
+  "VectorStoreBindingChanged": false,
+  "RiskAfterPolicy": 0,
+  "MustNotHitRiskAfterPolicy": 0,
+  "LifecycleRiskAfterPolicy": 0,
+  "TokenDeltaTotal": 0,
+  "TokenDeltaMax": 0,
+  "TokenDeltaWithinBudget": true,
+  "PriorityOrderDeltaCount": 7,
+  "PriorityInversionCount": 0,
+  "DroppedRequiredCandidateCount": 0,
+  "SectionMismatchCount": 0,
+  "UseForRuntime": false,
+  "FormalRetrievalAllowed": false,
+  "RuntimeSwitchAllowed": false,
+  "ReadyForRuntimeSwitch": false,
+  "SampleResults": [
+    {
+      "SampleId": "v66-source-diverse-sample-01",
+      "Split": "train",
+      "Difficulty": "source-evidence",
+      "BaselineCandidates": [
+        "v66-source-diverse-primary-01",
+        "v66-source-diverse-primary-02",
+        "v66-source-diverse-primary-03",
+        "v66-source-diverse-primary-04",
+        "v66-source-diverse-primary-05"
+      ],
+      "ShadowAdapterCandidates": [
+        "v66-source-diverse-primary-01",
+        "v66-source-diverse-primary-02",
+        "v66-source-diverse-primary-03",
+        "v66-source-diverse-primary-04",
+        "v66-source-diverse-primary-05",
+        "v66-source-diverse-primary-06",
+        "v66-source-diverse-primary-07",
+        "v66-source-diverse-primary-08",
+        "v66-source-diverse-primary-09",
+        "v66-source-diverse-primary-10"
+      ],
+      "MergedPreviewCandidates": [
+        "v66-source-diverse-primary-01",
+        "v66-source-diverse-primary-02",
+        "v66-source-diverse-primary-03",
+        "v66-source-diverse-primary-04",
+        "v66-source-diverse-primary-05"
+      ],
+      "PreviewAddCandidateIds": [],
+      "PreviewRemoveCandidateIds": [],
+      "TokenDelta": 0,
+      "SectionMismatch": false,
+      "PriorityOrderChanged": false,
+      "PriorityInversionCount": 0,
+      "DroppedRequiredCandidateCount": 0
+    },
+    {
+      "SampleId": "v66-source-diverse-sample-02",
+      "Split": "dev",
+      "Difficulty": "source-evidence",
+      "BaselineCandidates": [
+        "v66-source-diverse-primary-01",
+        "v66-source-diverse-primary-02",
+        "v66-source-diverse-primary-03",
+        "v66-source-diverse-primary-04",
+        "v66-source-diverse-primary-05"
+      ],
+      "ShadowAdapterCandidates": [
+        "v66-source-diverse-primary-02",
+        "v66-source-diverse-primary-01",
+        "v66-source-diverse-primary-03",
+        "v66-source-diverse-primary-04",
+        "v66-source-diverse-primary-05",
+        "v66-source-diverse-primary-06",
+        "v66-source-diverse-primary-07",
+        "v66-source-diverse-primary-08",
+        "v66-source-diverse-primary-09",
+        "v66-source-diverse-primary-10"
+      ],
+      "MergedPreviewCandidates": [
+        "v66-source-diverse-primary-01",
+        "v66-source-diverse-primary-02",
+        "v66-source-diverse-primary-03",
+        "v66-source-diverse-primary-04",
+        "v66-source-diverse-primary-05"
+      ],
+      "PreviewAddCandidateIds": [],
+      "PreviewRemoveCandidateIds": [],
+      "TokenDelta": 0,
+      "SectionMismatch": false,
+      "PriorityOrderChanged": false,
+      "PriorityInversionCount": 0,
+      "DroppedRequiredCandidateCount": 0
+    },
+    {
+      "SampleId": "v66-source-diverse-sample-03",
+      "Split": "test",
+      "Difficulty": "source-evidence",
+      "BaselineCandidates": [
+        "v66-source-diverse-primary-01",
+        "v66-source-diverse-primary-02",
+        "v66-source-diverse-primary-03",
+        "v66-source-diverse-primary-04",
+        "v66-source-diverse-primary-05"
+      ],
+      "ShadowAdapterCandidates": [
+        "v66-source-diverse-primary-03",
+        "v66-source-diverse-primary-01",
+        "v66-source-diverse-primary-02",
+        "v66-source-diverse-primary-04",
+        "v66-source-diverse-primary-05",
+        "v66-source-diverse-primary-06",
+        "v66-source-diverse-primary-07",
+        "v66-source-diverse-primary-08",
+        "v66-source-diverse-primary-09",
+        "v66-source-diverse-primary-10"
+      ],
+      "MergedPreviewCandidates": [
+        "v66-source-diverse-primary-01",
+        "v66-source-diverse-primary-02",
+        "v66-source-diverse-primary-03",
+        "v66-source-diverse-primary-04",
+        "v66-source-diverse-primary-05"
+      ],
+      "PreviewAddCandidateIds": [],
+      "PreviewRemoveCandidateIds": [],
+      "TokenDelta": 0,
+      "SectionMismatch": false,
+      "PriorityOrderChanged": false,
+      "PriorityInversionCount": 0,
+      "DroppedRequiredCandidateCount": 0
+    },
+    {
+      "SampleId": "v66-source-diverse-sample-04",
+      "Split": "dev",
+      "Difficulty": "relation-anchor",
+      "BaselineCandidates": [
+        "v66-source-diverse-primary-01",
+        "v66-source-diverse-primary-02",
+        "v66-source-diverse-primary-03",
+        "v66-source-diverse-primary-04",
+        "v66-source-diverse-primary-05"
+      ],
+      "ShadowAdapterCandidates": [
+        "v66-source-diverse-primary-04",
+        "v66-source-diverse-primary-01",
+        "v66-source-diverse-primary-02",
+        "v66-source-diverse-primary-03",
+        "v66-source-diverse-primary-05",
+        "v66-source-diverse-primary-06",
+        "v66-source-diverse-primary-07",
+        "v66-source-diverse-primary-08",
+        "v66-source-diverse-primary-09",
+        "v66-source-diverse-primary-10"
+      ],
+      "MergedPreviewCandidates": [
+        "v66-source-diverse-primary-01",
+        "v66-source-diverse-primary-02",
+        "v66-source-diverse-primary-03",
+        "v66-source-diverse-primary-04",
+        "v66-source-diverse-primary-05"
+      ],
+      "PreviewAddCandidateIds": [],
+      "PreviewRemoveCandidateIds": [],
+      "TokenDelta": 0,
+      "SectionMismatch": false,
+      "PriorityOrderChanged": false,
+      "PriorityInversionCount": 0,
+      "DroppedRequiredCandidateCount": 0
+    },
+    {
+      "SampleId": "v66-source-diverse-sample-05",
+      "Split": "holdout",
+      "Difficulty": "source-evidence",
+      "BaselineCandidates": [
+        "v66-source-diverse-primary-01",
+        "v66-source-diverse-primary-02",
+        "v66-source-diverse-primary-03",
+        "v66-source-diverse-primary-04",
+        "v66-source-diverse-primary-05"
+      ],
+      "ShadowAdapterCandidates": [
+        "v66-source-diverse-primary-05",
+        "v66-source-diverse-primary-01",
+        "v66-source-diverse-primary-02",
+        "v66-source-diverse-primary-03",
+        "v66-source-diverse-primary-04",
+        "v66-source-diverse-primary-06",
+        "v66-source-diverse-primary-07",
+        "v66-source-diverse-primary-08",
+        "v66-source-diverse-primary-09",
+        "v66-source-diverse-primary-10"
+      ],
+      "MergedPreviewCandidates": [
+        "v66-source-diverse-primary-01",
+        "v66-source-diverse-primary-02",
+        "v66-source-diverse-primary-03",
+        "v66-source-diverse-primary-04",
+        "v66-source-diverse-primary-05"
+      ],
+      "PreviewAddCandidateIds": [],
+      "PreviewRemoveCandidateIds": [],
+      "TokenDelta": 0,
+      "SectionMismatch": false,
+      "PriorityOrderChanged": false,
+      "PriorityInversionCount": 0,
+      "DroppedRequiredCandidateCount": 0
+    },
+    {
+      "SampleId": "v66-source-diverse-sample-06",
+      "Split": "test",
+      "Difficulty": "source-evidence",
+      "BaselineCandidates": [
+        "v66-source-diverse-primary-01",
+        "v66-source-diverse-primary-02",
+        "v66-source-diverse-primary-03",
+        "v66-source-diverse-primary-04",
+        "v66-source-diverse-primary-05"
+      ],
+      "ShadowAdapterCandidates": [
+        "v66-source-diverse-primary-06",
+        "v66-source-diverse-primary-01",
+        "v66-source-diverse-primary-02",
+        "v66-source-diverse-primary-03",
+        "v66-source-diverse-primary-04",
+        "v66-source-diverse-primary-05",
+        "v66-source-diverse-primary-07",
+        "v66-source-diverse-primary-08",
+        "v66-source-diverse-primary-09",
+        "v66-source-diverse-primary-10"
+      ],
+      "MergedPreviewCandidates": [
+        "v66-source-diverse-primary-01",
+        "v66-source-diverse-primary-02",
+        "v66-source-diverse-primary-03",
+        "v66-source-diverse-primary-04",
+        "v66-source-diverse-primary-06"
+      ],
+      "PreviewAddCandidateIds": [
+        "v66-source-diverse-primary-06"
+      ],
+      "PreviewRemoveCandidateIds": [
+        "v66-source-diverse-primary-05"
+      ],
+      "TokenDelta": 0,
+      "SectionMismatch": false,
+      "PriorityOrderChanged": true,
+      "PriorityInversionCount": 0,
+      "DroppedRequiredCandidateCount": 0
+    },
+    {
+      "SampleId": "v66-source-diverse-sample-07",
+      "Split": "train",
+      "Difficulty": "source-evidence",
+      "BaselineCandidates": [
+        "v66-source-diverse-primary-01",
+        "v66-source-diverse-primary-02",
+        "v66-source-diverse-primary-03",
+        "v66-source-diverse-primary-04",
+        "v66-source-diverse-primary-05"
+      ],
+      "ShadowAdapterCandidates": [
+        "v66-source-diverse-primary-07",
+        "v66-source-diverse-primary-01",
+        "v66-source-diverse-primary-02",
+        "v66-source-diverse-primary-03",
+        "v66-source-diverse-primary-04",
+        "v66-source-diverse-primary-05",
+        "v66-source-diverse-primary-06",
+        "v66-source-diverse-primary-08",
+        "v66-source-diverse-primary-09",
+        "v66-source-diverse-primary-10"
+      ],
+      "MergedPreviewCandidates": [
+        "v66-source-diverse-primary-01",
+        "v66-source-diverse-primary-02",
+        "v66-source-diverse-primary-03",
+        "v66-source-diverse-primary-04",
+        "v66-source-diverse-primary-07"
+      ],
+      "PreviewAddCandidateIds": [
+        "v66-source-diverse-primary-07"
+      ],
+      "PreviewRemoveCandidateIds": [
+        "v66-source-diverse-primary-05"
+      ],
+      "TokenDelta": 0,
+      "SectionMismatch": false,
+      "PriorityOrderChanged": true,
+      "PriorityInversionCount": 0,
+      "DroppedRequiredCandidateCount": 0
+    },
+    {
+      "SampleId": "v66-source-diverse-sample-08",
+      "Split": "dev",
+      "Difficulty": "relation-anchor",
+      "BaselineCandidates": [
+        "v66-source-diverse-primary-01",
+        "v66-source-diverse-primary-02",
+        "v66-source-diverse-primary-03",
+        "v66-source-diverse-primary-04",
+        "v66-source-diverse-primary-05"
+      ],
+      "ShadowAdapterCandidates": [
+        "v66-source-diverse-primary-08",
+        "v66-source-diverse-primary-01",
+        "v66-source-diverse-primary-02",
+        "v66-source-diverse-primary-03",
+        "v66-source-diverse-primary-04",
+        "v66-source-diverse-primary-05",
+        "v66-source-diverse-primary-06",
+        "v66-source-diverse-primary-07",
+        "v66-source-diverse-primary-09",
+        "v66-source-diverse-primary-10"
+      ],
+      "MergedPreviewCandidates": [
+        "v66-source-diverse-primary-01",
+        "v66-source-diverse-primary-02",
+        "v66-source-diverse-primary-03",
+        "v66-source-diverse-primary-04",
+        "v66-source-diverse-primary-08"
+      ],
+      "PreviewAddCandidateIds": [
+        "v66-source-diverse-primary-08"
+      ],
+      "PreviewRemoveCandidateIds": [
+        "v66-source-diverse-primary-05"
+      ],
+      "TokenDelta": 0,
+      "SectionMismatch": false,
+      "PriorityOrderChanged": true,
+      "PriorityInversionCount": 0,
+      "DroppedRequiredCandidateCount": 0
+    },
+    {
+      "SampleId": "v66-source-diverse-sample-09",
+      "Split": "test",
+      "Difficulty": "source-evidence",
+      "BaselineCandidates": [
+        "v66-source-diverse-primary-01",
+        "v66-source-diverse-primary-02",
+        "v66-source-diverse-primary-03",
+        "v66-source-diverse-primary-04",
+        "v66-source-diverse-primary-05"
+      ],
+      "ShadowAdapterCandidates": [
+        "v66-source-diverse-primary-09",
+        "v66-source-diverse-primary-01",
+        "v66-source-diverse-primary-02",
+        "v66-source-diverse-primary-03",
+        "v66-source-diverse-primary-04",
+        "v66-source-diverse-primary-05",
+        "v66-source-diverse-primary-06",
+        "v66-source-diverse-primary-07",
+        "v66-source-diverse-primary-08",
+        "v66-source-diverse-primary-10"
+      ],
+      "MergedPreviewCandidates": [
+        "v66-source-diverse-primary-01",
+        "v66-source-diverse-primary-02",
+        "v66-source-diverse-primary-03",
+        "v66-source-diverse-primary-04",
+        "v66-source-diverse-primary-09"
+      ],
+      "PreviewAddCandidateIds": [
+        "v66-source-diverse-primary-09"
+      ],
+      "PreviewRemoveCandidateIds": [
+        "v66-source-diverse-primary-05"
+      ],
+      "TokenDelta": 0,
+      "SectionMismatch": false,
+      "PriorityOrderChanged": true,
+      "PriorityInversionCount": 0,
+      "DroppedRequiredCandidateCount": 0
+    },
+    {
+      "SampleId": "v66-source-diverse-sample-10",
+      "Split": "holdout",
+      "Difficulty": "source-evidence",
+      "BaselineCandidates": [
+        "v66-source-diverse-primary-01",
+        "v66-source-diverse-primary-02",
+        "v66-source-diverse-primary-03",
+        "v66-source-diverse-primary-04",
+        "v66-source-diverse-primary-05"
+      ],
+      "ShadowAdapterCandidates": [
+        "v66-source-diverse-primary-10",
+        "v66-source-diverse-primary-01",
+        "v66-source-diverse-primary-02",
+        "v66-source-diverse-primary-03",
+        "v66-source-diverse-primary-04",
+        "v66-source-diverse-primary-05",
+        "v66-source-diverse-primary-06",
+        "v66-source-diverse-primary-07",
+        "v66-source-diverse-primary-08",
+        "v66-source-diverse-primary-09"
+      ],
+      "MergedPreviewCandidates": [
+        "v66-source-diverse-primary-01",
+        "v66-source-diverse-primary-02",
+        "v66-source-diverse-primary-03",
+        "v66-source-diverse-primary-04",
+        "v66-source-diverse-primary-10"
+      ],
+      "PreviewAddCandidateIds": [
+        "v66-source-diverse-primary-10"
+      ],
+      "PreviewRemoveCandidateIds": [
+        "v66-source-diverse-primary-05"
+      ],
+      "TokenDelta": 0,
+      "SectionMismatch": false,
+      "PriorityOrderChanged": true,
+      "PriorityInversionCount": 0,
+      "DroppedRequiredCandidateCount": 0
+    },
+    {
+      "SampleId": "v66-source-diverse-sample-11",
+      "Split": "train",
+      "Difficulty": "source-evidence",
+      "BaselineCandidates": [
+        "v66-source-diverse-primary-01",
+        "v66-source-diverse-primary-02",
+        "v66-source-diverse-primary-03",
+        "v66-source-diverse-primary-04",
+        "v66-source-diverse-primary-05"
+      ],
+      "ShadowAdapterCandidates": [
+        "v66-source-diverse-primary-11",
+        "v66-source-diverse-primary-01",
+        "v66-source-diverse-primary-02",
+        "v66-source-diverse-primary-03",
+        "v66-source-diverse-primary-04",
+        "v66-source-diverse-primary-05",
+        "v66-source-diverse-primary-06",
+        "v66-source-diverse-primary-07",
+        "v66-source-diverse-primary-08",
+        "v66-source-diverse-primary-09"
+      ],
+      "MergedPreviewCandidates": [
+        "v66-source-diverse-primary-01",
+        "v66-source-diverse-primary-02",
+        "v66-source-diverse-primary-03",
+        "v66-source-diverse-primary-04",
+        "v66-source-diverse-primary-11"
+      ],
+      "PreviewAddCandidateIds": [
+        "v66-source-diverse-primary-11"
+      ],
+      "PreviewRemoveCandidateIds": [
+        "v66-source-diverse-primary-05"
+      ],
+      "TokenDelta": 0,
+      "SectionMismatch": false,
+      "PriorityOrderChanged": true,
+      "PriorityInversionCount": 0,
+      "DroppedRequiredCandidateCount": 0
+    },
+    {
+      "SampleId": "v66-source-diverse-sample-12",
+      "Split": "test",
+      "Difficulty": "relation-anchor",
+      "BaselineCandidates": [
+        "v66-source-diverse-primary-01",
+        "v66-source-diverse-primary-02",
+        "v66-source-diverse-primary-03",
+        "v66-source-diverse-primary-04",
+        "v66-source-diverse-primary-05"
+      ],
+      "ShadowAdapterCandidates": [
+        "v66-source-diverse-primary-12",
+        "v66-source-diverse-primary-01",
+        "v66-source-diverse-primary-02",
+        "v66-source-diverse-primary-03",
+        "v66-source-diverse-primary-04",
+        "v66-source-diverse-primary-05",
+        "v66-source-diverse-primary-06",
+        "v66-source-diverse-primary-07",
+        "v66-source-diverse-primary-08",
+        "v66-source-diverse-primary-09"
+      ],
+      "MergedPreviewCandidates": [
+        "v66-source-diverse-primary-01",
+        "v66-source-diverse-primary-02",
+        "v66-source-diverse-primary-03",
+        "v66-source-diverse-primary-04",
+        "v66-source-diverse-primary-12"
+      ],
+      "PreviewAddCandidateIds": [
+        "v66-source-diverse-primary-12"
+      ],
+      "PreviewRemoveCandidateIds": [
+        "v66-source-diverse-primary-05"
+      ],
+      "TokenDelta": 0,
+      "SectionMismatch": false,
+      "PriorityOrderChanged": true,
+      "PriorityInversionCount": 0,
+      "DroppedRequiredCandidateCount": 0
+    }
+  ],
+  "BlockedReasons": []
+}

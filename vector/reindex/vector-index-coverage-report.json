@@ -1,0 +1,775 @@
+﻿{
+  "WorkspaceId": "eval-vector",
+  "CollectionId": "corpus",
+  "TotalSourceItems": 158,
+  "IndexedItems": 158,
+  "CoverageRate": 1,
+  "CoverageByLayer": {
+    "context": {
+      "Key": "context",
+      "TotalSourceItems": 11,
+      "IndexedItems": 11,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "Stable": {
+      "Key": "Stable",
+      "TotalSourceItems": 25,
+      "IndexedItems": 25,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "Working": {
+      "Key": "Working",
+      "TotalSourceItems": 122,
+      "IndexedItems": 122,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    }
+  },
+  "CoverageByItemKind": {
+    "api-contract": {
+      "Key": "api-contract",
+      "TotalSourceItems": 1,
+      "IndexedItems": 1,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "assertion": {
+      "Key": "assertion",
+      "TotalSourceItems": 1,
+      "IndexedItems": 1,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "belief": {
+      "Key": "belief",
+      "TotalSourceItems": 1,
+      "IndexedItems": 1,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "blocker": {
+      "Key": "blocker",
+      "TotalSourceItems": 1,
+      "IndexedItems": 1,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "build-error": {
+      "Key": "build-error",
+      "TotalSourceItems": 1,
+      "IndexedItems": 1,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "capability-matrix": {
+      "Key": "capability-matrix",
+      "TotalSourceItems": 1,
+      "IndexedItems": 1,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "character": {
+      "Key": "character",
+      "TotalSourceItems": 3,
+      "IndexedItems": 3,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "character-detail": {
+      "Key": "character-detail",
+      "TotalSourceItems": 4,
+      "IndexedItems": 4,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "character-knowledge": {
+      "Key": "character-knowledge",
+      "TotalSourceItems": 1,
+      "IndexedItems": 1,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "character-state": {
+      "Key": "character-state",
+      "TotalSourceItems": 3,
+      "IndexedItems": 3,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "comment-rule": {
+      "Key": "comment-rule",
+      "TotalSourceItems": 2,
+      "IndexedItems": 2,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "compatibility": {
+      "Key": "compatibility",
+      "TotalSourceItems": 1,
+      "IndexedItems": 1,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "conclusion": {
+      "Key": "conclusion",
+      "TotalSourceItems": 1,
+      "IndexedItems": 1,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "config-detail": {
+      "Key": "config-detail",
+      "TotalSourceItems": 4,
+      "IndexedItems": 4,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "confirmation": {
+      "Key": "confirmation",
+      "TotalSourceItems": 1,
+      "IndexedItems": 1,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "confirmed-rule": {
+      "Key": "confirmed-rule",
+      "TotalSourceItems": 1,
+      "IndexedItems": 1,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "constraint": {
+      "Key": "constraint",
+      "TotalSourceItems": 1,
+      "IndexedItems": 1,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "cron-log": {
+      "Key": "cron-log",
+      "TotalSourceItems": 1,
+      "IndexedItems": 1,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "deal": {
+      "Key": "deal",
+      "TotalSourceItems": 1,
+      "IndexedItems": 1,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "dedupe": {
+      "Key": "dedupe",
+      "TotalSourceItems": 1,
+      "IndexedItems": 1,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "documentation": {
+      "Key": "documentation",
+      "TotalSourceItems": 7,
+      "IndexedItems": 7,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "draft": {
+      "Key": "draft",
+      "TotalSourceItems": 1,
+      "IndexedItems": 1,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "ending-plan": {
+      "Key": "ending-plan",
+      "TotalSourceItems": 1,
+      "IndexedItems": 1,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "env-info": {
+      "Key": "env-info",
+      "TotalSourceItems": 1,
+      "IndexedItems": 1,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "environment": {
+      "Key": "environment",
+      "TotalSourceItems": 1,
+      "IndexedItems": 1,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "error-log": {
+      "Key": "error-log",
+      "TotalSourceItems": 3,
+      "IndexedItems": 3,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "event-log": {
+      "Key": "event-log",
+      "TotalSourceItems": 1,
+      "IndexedItems": 1,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "fix-report": {
+      "Key": "fix-report",
+      "TotalSourceItems": 1,
+      "IndexedItems": 1,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "foreshadow": {
+      "Key": "foreshadow",
+      "TotalSourceItems": 1,
+      "IndexedItems": 1,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "guide": {
+      "Key": "guide",
+      "TotalSourceItems": 1,
+      "IndexedItems": 1,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "interface": {
+      "Key": "interface",
+      "TotalSourceItems": 1,
+      "IndexedItems": 1,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "item-state": {
+      "Key": "item-state",
+      "TotalSourceItems": 1,
+      "IndexedItems": 1,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "job-state": {
+      "Key": "job-state",
+      "TotalSourceItems": 2,
+      "IndexedItems": 2,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "linting-rule": {
+      "Key": "linting-rule",
+      "TotalSourceItems": 1,
+      "IndexedItems": 1,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "location": {
+      "Key": "location",
+      "TotalSourceItems": 2,
+      "IndexedItems": 2,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "milestone": {
+      "Key": "milestone",
+      "TotalSourceItems": 1,
+      "IndexedItems": 1,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "motive": {
+      "Key": "motive",
+      "TotalSourceItems": 1,
+      "IndexedItems": 1,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "performance-rule": {
+      "Key": "performance-rule",
+      "TotalSourceItems": 2,
+      "IndexedItems": 2,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "plan": {
+      "Key": "plan",
+      "TotalSourceItems": 3,
+      "IndexedItems": 3,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "plot": {
+      "Key": "plot",
+      "TotalSourceItems": 4,
+      "IndexedItems": 4,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "plot-hook": {
+      "Key": "plot-hook",
+      "TotalSourceItems": 1,
+      "IndexedItems": 1,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "plot-scope": {
+      "Key": "plot-scope",
+      "TotalSourceItems": 1,
+      "IndexedItems": 1,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "pm-contact": {
+      "Key": "pm-contact",
+      "TotalSourceItems": 2,
+      "IndexedItems": 2,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "policy": {
+      "Key": "policy",
+      "TotalSourceItems": 1,
+      "IndexedItems": 1,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "postgres-config": {
+      "Key": "postgres-config",
+      "TotalSourceItems": 2,
+      "IndexedItems": 2,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "precheck": {
+      "Key": "precheck",
+      "TotalSourceItems": 1,
+      "IndexedItems": 1,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "preference": {
+      "Key": "preference",
+      "TotalSourceItems": 12,
+      "IndexedItems": 12,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "preference-pattern": {
+      "Key": "preference-pattern",
+      "TotalSourceItems": 1,
+      "IndexedItems": 1,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "promotion-candidate": {
+      "Key": "promotion-candidate",
+      "TotalSourceItems": 1,
+      "IndexedItems": 1,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "promotion-policy": {
+      "Key": "promotion-policy",
+      "TotalSourceItems": 3,
+      "IndexedItems": 3,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "queue-state": {
+      "Key": "queue-state",
+      "TotalSourceItems": 1,
+      "IndexedItems": 1,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "recovery-point": {
+      "Key": "recovery-point",
+      "TotalSourceItems": 2,
+      "IndexedItems": 2,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "relationship": {
+      "Key": "relationship",
+      "TotalSourceItems": 2,
+      "IndexedItems": 2,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "report": {
+      "Key": "report",
+      "TotalSourceItems": 1,
+      "IndexedItems": 1,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "resume": {
+      "Key": "resume",
+      "TotalSourceItems": 1,
+      "IndexedItems": 1,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "retry-state": {
+      "Key": "retry-state",
+      "TotalSourceItems": 1,
+      "IndexedItems": 1,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "revision": {
+      "Key": "revision",
+      "TotalSourceItems": 1,
+      "IndexedItems": 1,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "risk": {
+      "Key": "risk",
+      "TotalSourceItems": 1,
+      "IndexedItems": 1,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "roadmap": {
+      "Key": "roadmap",
+      "TotalSourceItems": 1,
+      "IndexedItems": 1,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "run-log": {
+      "Key": "run-log",
+      "TotalSourceItems": 2,
+      "IndexedItems": 2,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "run-report": {
+      "Key": "run-report",
+      "TotalSourceItems": 1,
+      "IndexedItems": 1,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "runbook": {
+      "Key": "runbook",
+      "TotalSourceItems": 2,
+      "IndexedItems": 2,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "safety": {
+      "Key": "safety",
+      "TotalSourceItems": 1,
+      "IndexedItems": 1,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "scene": {
+      "Key": "scene",
+      "TotalSourceItems": 1,
+      "IndexedItems": 1,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "schema": {
+      "Key": "schema",
+      "TotalSourceItems": 1,
+      "IndexedItems": 1,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "scope": {
+      "Key": "scope",
+      "TotalSourceItems": 2,
+      "IndexedItems": 2,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "security-constraint": {
+      "Key": "security-constraint",
+      "TotalSourceItems": 1,
+      "IndexedItems": 1,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "security-rule": {
+      "Key": "security-rule",
+      "TotalSourceItems": 2,
+      "IndexedItems": 2,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "signature": {
+      "Key": "signature",
+      "TotalSourceItems": 4,
+      "IndexedItems": 4,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "source-scope": {
+      "Key": "source-scope",
+      "TotalSourceItems": 1,
+      "IndexedItems": 1,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "step-state": {
+      "Key": "step-state",
+      "TotalSourceItems": 1,
+      "IndexedItems": 1,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "story-arc": {
+      "Key": "story-arc",
+      "TotalSourceItems": 1,
+      "IndexedItems": 1,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "stress-test": {
+      "Key": "stress-test",
+      "TotalSourceItems": 5,
+      "IndexedItems": 5,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "style": {
+      "Key": "style",
+      "TotalSourceItems": 1,
+      "IndexedItems": 1,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "subplot": {
+      "Key": "subplot",
+      "TotalSourceItems": 1,
+      "IndexedItems": 1,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "system-intro": {
+      "Key": "system-intro",
+      "TotalSourceItems": 1,
+      "IndexedItems": 1,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "task": {
+      "Key": "task",
+      "TotalSourceItems": 2,
+      "IndexedItems": 2,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "task-state": {
+      "Key": "task-state",
+      "TotalSourceItems": 2,
+      "IndexedItems": 2,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "test-failure": {
+      "Key": "test-failure",
+      "TotalSourceItems": 1,
+      "IndexedItems": 1,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "test-rule": {
+      "Key": "test-rule",
+      "TotalSourceItems": 2,
+      "IndexedItems": 2,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "testing-rule": {
+      "Key": "testing-rule",
+      "TotalSourceItems": 2,
+      "IndexedItems": 2,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "todo": {
+      "Key": "todo",
+      "TotalSourceItems": 2,
+      "IndexedItems": 2,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "tool-error": {
+      "Key": "tool-error",
+      "TotalSourceItems": 1,
+      "IndexedItems": 1,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "uncertainty": {
+      "Key": "uncertainty",
+      "TotalSourceItems": 1,
+      "IndexedItems": 1,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "user-location": {
+      "Key": "user-location",
+      "TotalSourceItems": 2,
+      "IndexedItems": 2,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "verification": {
+      "Key": "verification",
+      "TotalSourceItems": 5,
+      "IndexedItems": 5,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "worker": {
+      "Key": "worker",
+      "TotalSourceItems": 1,
+      "IndexedItems": 1,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "worker-stats": {
+      "Key": "worker-stats",
+      "TotalSourceItems": 1,
+      "IndexedItems": 1,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "world-rule": {
+      "Key": "world-rule",
+      "TotalSourceItems": 3,
+      "IndexedItems": 3,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "world-setting": {
+      "Key": "world-setting",
+      "TotalSourceItems": 1,
+      "IndexedItems": 1,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    },
+    "world-state": {
+      "Key": "world-state",
+      "TotalSourceItems": 1,
+      "IndexedItems": 1,
+      "MissingItems": 0,
+      "StaleItems": 0,
+      "CoverageRate": 1
+    }
+  },
+  "MissingByLayer": {},
+  "StaleByLayer": {},
+  "DuplicateCount": 0,
+  "OrphanCount": 0,
+  "DimensionMismatchCount": 0,
+  "ProviderUnavailableCount": 0,
+  "EmbeddingModel": "bge-small-zh-v1.5",
+  "EmbeddingProvider": "onnx-local",
+  "Dimension": 512,
+  "Recommendation": "ReadyForVectorShadowEval",
+  "Warnings": [],
+  "CreatedAt": "2026-06-10T05:16:12.0789424+00:00"
+}

@@ -1,0 +1,80 @@
+﻿{
+  "OperationId": "arch-cleanup-plan-78d9cb78e4d04673ba20df0070357fc2",
+  "CreatedAt": "2026-06-24T03:26:11.6746382+00:00",
+  "PlanPassed": true,
+  "Recommendation": "ReadyForCleanupPlan",
+  "CoreRunnerCount": 105,
+  "DtoClassCount": 311,
+  "EvalCommandLines": 15692,
+  "ControlRoomServiceLines": 12256,
+  "RendererLines": 5804,
+  "SubcommandCount": 755,
+  "RecommendedMigrations": [
+    {
+      "Priority": "high",
+      "Category": "EvalCommand \u62C6\u5206",
+      "Description": "",
+      "CurrentState": "EvalCommand.cs: ~24k \u884C\uFF0C\u540C\u4E00\u6587\u4EF6\u5305\u542B\u5168\u90E8 ~50\u002B eval \u5B50\u547D\u4EE4 dispatch \u002B executor",
+      "Recommendation": "\u6309 V5/V6/\u67B6\u6784\u62C6\u5206\u5230 EvalCommand.V5.cs / EvalCommand.V6.cs / EvalCommand.Arch.cs\uFF0C\u6BCF\u4E2A\u5B50\u547D\u4EE4\u4FDD\u7559 dispatch \u4E00\u884C\uFF0Cexecutor \u79FB\u52A8\u5230\u5BF9\u5E94 phase \u6A21\u5757",
+      "Risk": "low \u2014 \u53EA\u79FB\u52A8\u4EE3\u7801\uFF0C\u4E0D\u6539\u884C\u4E3A"
+    },
+    {
+      "Priority": "high",
+      "Category": "Core \u4E2D eval-only runner \u5206\u79BB",
+      "Description": "",
+      "CurrentState": "~100 \u4E2A runner \u6587\u4EF6\u6DF7\u5728 ContextCore.Core/Services/Vector/\uFF0C\u5176\u4E2D\u7EA6 60% \u662F eval-only shadow/preview/audit runner",
+      "Recommendation": "\u5C06 eval-only runner \u79FB\u5230 ContextCore.Eval or ContextCore.Core/EvalRunners/ \u5B50\u547D\u540D\u7A7A\u95F4\uFF1B\u7559\u4E0B runtime \u53EF\u7528\u7684 runner \u5728\u539F\u4F4D\u7F6E",
+      "Risk": "medium \u2014 \u9700\u68C0\u67E5\u6BCF\u4E2A runner \u7684\u5F15\u7528\u94FE\uFF0C\u786E\u4FDD DI \u6CE8\u518C\u4E0D\u53D7\u5F71\u54CD"
+    },
+    {
+      "Priority": "high",
+      "Category": "Abstractions DTO \u62C6\u5206",
+      "Description": "",
+      "CurrentState": "VectorIndexDtos.cs \u5305\u542B ~212 \u4E2A\u7C7B\uFF0C\u4ECE V5.0 \u5230 V6.F \u6240\u6709 report/decision/proposal \u6DF7\u5728\u4E00\u8D77",
+      "Recommendation": "\u6309 V5/VMeta/V6/EvalProtocol/Arch \u62C6\u5206\u5230\u72EC\u7ACB\u6587\u4EF6\uFF1Brunner \u53EA\u9700\u8981 using \u5BF9\u5E94\u547D\u540D\u7A7A\u95F4",
+      "Risk": "low \u2014 \u53EA\u79FB\u52A8 DTO \u5B9A\u4E49\uFF0C\u4E0D\u6539\u5E8F\u5217\u5316\u884C\u4E3A"
+    },
+    {
+      "Priority": "medium",
+      "Category": "ControlRoom loader/\u5B57\u6BB5\u5197\u4F59",
+      "Description": "",
+      "CurrentState": "ControlRoomService.cs: ~12k \u884C\uFF0C\u6BCF\u4E2A phase \u7684 loader \u548C snapshot \u5B57\u6BB5\u91CD\u590D 2 \u6B21\uFF08\u9996\u5C4F \u002B \u5237\u65B0\uFF09",
+      "Recommendation": "\u5C06\u91CD\u590D\u7684\u53CC\u8C03\u7528\u70B9\u5408\u5E76\u4E3A\u5355\u6B21\u6C42\u503C \u002B \u5171\u4EAB\uFF1Bloader \u6309 phase \u6587\u4EF6\u5939\u72EC\u7ACB",
+      "Risk": "low \u2014 \u7EAF\u91CD\u6784"
+    },
+    {
+      "Priority": "medium",
+      "Category": "Renderer \u533A\u5757\u91CD\u590D",
+      "Description": "",
+      "CurrentState": "ServiceOperationalRenderer.cs: ~5.8k \u884C\uFF0C\u6BCF\u4E2A V5/V6 phase \u7684\u6E32\u67D3\u5757\u6A21\u5F0F\u51E0\u4E4E\u4E00\u81F4",
+      "Recommendation": "\u62BD\u8C61 RenderBlock(phase, snapshot, condition) \u8F85\u52A9\u65B9\u6CD5\uFF0C\u51CF\u5C11\u91CD\u590D",
+      "Risk": "low \u2014 \u8F93\u51FA\u683C\u5F0F\u4E0D\u53D8"
+    },
+    {
+      "Priority": "medium",
+      "Category": "\u9636\u6BB5\u7F16\u53F7/\u6587\u6863\u7D22\u5F15",
+      "Description": "",
+      "CurrentState": "V5.1\u2013V5.10\u3001V5.F\u3001V6.10\u2013V6.16\u3001V6.F\u3001OPT0 \u2014 \u9636\u6BB5\u7F16\u53F7\u5DF2\u81A8\u80C0\u5230 2 \u4F4D\u6570",
+      "Recommendation": "\u51BB\u7ED3 V5/V6 \u9636\u6BB5\u7F16\u53F7\uFF1BOPT \u9636\u6BB5\u4F7F\u7528\u4E09\u4F4D\u6570\u5B57\uFF08\u5982 OPT-001\uFF09\uFF1B\u7D22\u5F15\u6587\u6863\u7EDF\u4E00\u5230 docs/ContextCore_Phase_Index.md",
+      "Risk": "low \u2014 \u4E0D\u5F71\u54CD\u8FD0\u884C\u65F6"
+    },
+    {
+      "Priority": "low",
+      "Category": "P15 \u6784\u5EFA\u6587\u4EF6\u9501",
+      "Description": "",
+      "CurrentState": "dotnet build -m:1 -p:UseSharedCompilation=false -p:BuildInParallel=false \u662F\u7ED5\u5F00\u6587\u4EF6\u9501\u7684\u5DF2\u77E5\u5DE5\u4F5C\u533A",
+      "Recommendation": "\u68C0\u67E5\u5E76\u884C\u9879\u76EE\u5F15\u7528\u56FE\uFF0C\u786E\u4FDD\u65E0\u5FAA\u73AF\u5F15\u7528\u5BFC\u81F4\u9501\u51B2\u7A81\uFF1B\u957F\u671F\u5C06\u96C6\u6210\u6D4B\u8BD5\u79FB\u5230\u72EC\u7ACB\u9879\u76EE",
+      "Risk": "low \u2014 \u5DF2\u77E5\u5DE5\u4F5C\u533A\u53EF\u7528"
+    }
+  ],
+  "Diagnostics": [
+    "Repository root: D:\\Users\\Ye_Luo\\AppData\\Local\\Context",
+    "Core/Vector runner files: 105",
+    "VectorIndexDtos types: 311",
+    "EvalCommand.cs lines: 15692",
+    "ControlRoomService.cs lines: 12256",
+    "ServiceOperationalRenderer.cs lines: 5804",
+    "Eval subcommand refs: 755"
+  ],
+  "BlockedReasons": []
+}

@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace ContextCore.Storage.Postgres;
+namespace ContextCore.Storage.Postgres.Infrastructure;
 
 /// <summary>PostgreSQL jsonb 存储使用的统一 JSON 序列化器。</summary>
 public sealed class PostgresJsonSerializer

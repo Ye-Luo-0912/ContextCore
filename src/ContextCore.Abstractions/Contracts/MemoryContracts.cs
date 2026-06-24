@@ -47,6 +47,18 @@ public interface IRelationStore
         CancellationToken cancellationToken = default);
 }
 
+/// <summary>存储 Relation review / lifecycle 人工操作审核历史。</summary>
+public interface IRelationReviewStore
+{
+    Task AppendReviewAsync(
+        RelationReviewRecord record,
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<RelationReviewRecord>> QueryReviewsAsync(
+        string relationId,
+        CancellationToken cancellationToken = default);
+}
+
 /// <summary>存储和查询上下文约束规则。</summary>
 public interface IConstraintStore
 {

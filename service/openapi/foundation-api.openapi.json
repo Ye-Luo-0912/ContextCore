@@ -1,0 +1,638 @@
+﻿{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "ContextCore Foundation Read-only API",
+    "version": "foundation-api-contract-v1"
+  },
+  "paths": {
+    "/api/admin/foundation/status": {
+      "get": {
+        "operationId": "get-foundation-status",
+        "summary": "GET /api/admin/foundation/status",
+        "x-capabilityId": "foundation.readonly.status",
+        "x-readOnly": true,
+        "x-runtimeMutationAllowed": false,
+        "x-formalRetrievalAllowed": false,
+        "x-formalPackageWriteAllowed": false,
+        "x-packingPolicyMutationAllowed": false,
+        "x-packageOutputMutationAllowed": false,
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Read-only foundation status response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FoundationStatusEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized API key."
+          },
+          "503": {
+            "description": "Degraded report coverage response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DegradedFoundationEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/foundation/release-candidate": {
+      "get": {
+        "operationId": "get-foundation-release-candidate",
+        "summary": "GET /api/admin/foundation/release-candidate",
+        "x-capabilityId": "foundation.readonly.status",
+        "x-readOnly": true,
+        "x-runtimeMutationAllowed": false,
+        "x-formalRetrievalAllowed": false,
+        "x-formalPackageWriteAllowed": false,
+        "x-packingPolicyMutationAllowed": false,
+        "x-packageOutputMutationAllowed": false,
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Read-only foundation status response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FoundationStatusEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized API key."
+          },
+          "503": {
+            "description": "Degraded report coverage response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DegradedFoundationEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/foundation/reproducibility": {
+      "get": {
+        "operationId": "get-foundation-reproducibility",
+        "summary": "GET /api/admin/foundation/reproducibility",
+        "x-capabilityId": "foundation.readonly.status",
+        "x-readOnly": true,
+        "x-runtimeMutationAllowed": false,
+        "x-formalRetrievalAllowed": false,
+        "x-formalPackageWriteAllowed": false,
+        "x-packingPolicyMutationAllowed": false,
+        "x-packageOutputMutationAllowed": false,
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Read-only foundation status response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FoundationStatusEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized API key."
+          },
+          "503": {
+            "description": "Degraded report coverage response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DegradedFoundationEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/foundation/runtime-change-gate": {
+      "get": {
+        "operationId": "get-foundation-runtime-change-gate",
+        "summary": "GET /api/admin/foundation/runtime-change-gate",
+        "x-capabilityId": "foundation.readonly.status",
+        "x-readOnly": true,
+        "x-runtimeMutationAllowed": false,
+        "x-formalRetrievalAllowed": false,
+        "x-formalPackageWriteAllowed": false,
+        "x-packingPolicyMutationAllowed": false,
+        "x-packageOutputMutationAllowed": false,
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Read-only foundation status response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FoundationStatusEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized API key."
+          },
+          "503": {
+            "description": "Degraded report coverage response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DegradedFoundationEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/foundation/vector-formal-preview": {
+      "get": {
+        "operationId": "get-foundation-vector-formal-preview",
+        "summary": "GET /api/admin/foundation/vector-formal-preview",
+        "x-capabilityId": "foundation.readonly.status",
+        "x-readOnly": true,
+        "x-runtimeMutationAllowed": false,
+        "x-formalRetrievalAllowed": false,
+        "x-formalPackageWriteAllowed": false,
+        "x-packingPolicyMutationAllowed": false,
+        "x-packageOutputMutationAllowed": false,
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Read-only foundation status response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FoundationStatusEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized API key."
+          },
+          "503": {
+            "description": "Degraded report coverage response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DegradedFoundationEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/foundation/postgres-freeze-status": {
+      "get": {
+        "operationId": "get-foundation-postgres-freeze-status",
+        "summary": "GET /api/admin/foundation/postgres-freeze-status",
+        "x-capabilityId": "foundation.readonly.status",
+        "x-readOnly": true,
+        "x-runtimeMutationAllowed": false,
+        "x-formalRetrievalAllowed": false,
+        "x-formalPackageWriteAllowed": false,
+        "x-packingPolicyMutationAllowed": false,
+        "x-packageOutputMutationAllowed": false,
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Read-only foundation status response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FoundationStatusEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized API key."
+          },
+          "503": {
+            "description": "Degraded report coverage response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DegradedFoundationEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/foundation/reports": {
+      "get": {
+        "operationId": "get-foundation-reports",
+        "summary": "GET /api/admin/foundation/reports",
+        "x-capabilityId": "foundation.report.navigation",
+        "x-readOnly": true,
+        "x-runtimeMutationAllowed": false,
+        "x-formalRetrievalAllowed": false,
+        "x-formalPackageWriteAllowed": false,
+        "x-packingPolicyMutationAllowed": false,
+        "x-packageOutputMutationAllowed": false,
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Read-only foundation status response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FoundationReportNavigationEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized API key."
+          },
+          "503": {
+            "description": "Degraded report coverage response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DegradedFoundationEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/foundation/reports/{reportId}": {
+      "get": {
+        "operationId": "get-foundation-reports-by-id",
+        "summary": "GET /api/admin/foundation/reports/{reportId}",
+        "x-capabilityId": "foundation.report.navigation",
+        "x-readOnly": true,
+        "x-runtimeMutationAllowed": false,
+        "x-formalRetrievalAllowed": false,
+        "x-formalPackageWriteAllowed": false,
+        "x-packingPolicyMutationAllowed": false,
+        "x-packageOutputMutationAllowed": false,
+        "parameters": [
+          {
+            "name": "reportId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Read-only foundation status response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FoundationReportEntryEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized API key."
+          },
+          "503": {
+            "description": "Degraded report coverage response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DegradedFoundationEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "ApiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-ContextCore-Key",
+        "description": "Header name only; secret values are never serialized."
+      }
+    },
+    "schemas": {
+      "FoundationApiResponseEnvelope": {
+        "type": "object",
+        "required": [
+          "Success",
+          "CapabilityId",
+          "Status",
+          "Recommendation",
+          "Data",
+          "Diagnostics",
+          "GeneratedAt",
+          "SchemaVersion"
+        ],
+        "properties": {
+          "Success": {
+            "type": "boolean"
+          },
+          "CapabilityId": {
+            "type": "string"
+          },
+          "Status": {
+            "type": "string"
+          },
+          "Recommendation": {
+            "type": "string"
+          },
+          "Data": {},
+          "Diagnostics": {
+            "type": "object"
+          },
+          "GeneratedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "SchemaVersion": {
+            "type": "string",
+            "const": "foundation-api-envelope-v1"
+          }
+        }
+      },
+      "DegradedFoundationEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/FoundationApiResponseEnvelope"
+          }
+        ],
+        "properties": {
+          "Status": {
+            "const": "Degraded"
+          },
+          "Recommendation": {
+            "const": "RegenerateReport"
+          },
+          "Diagnostics": {
+            "type": "object",
+            "properties": {
+              "MissingReportIds": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "FoundationStatusEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/FoundationApiResponseEnvelope"
+          }
+        ],
+        "properties": {
+          "Data": {
+            "$ref": "#/components/schemas/FoundationServiceStatusResponse"
+          }
+        }
+      },
+      "FoundationReportNavigationEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/FoundationApiResponseEnvelope"
+          }
+        ],
+        "properties": {
+          "Data": {
+            "$ref": "#/components/schemas/FoundationReportNavigationResponse"
+          }
+        }
+      },
+      "FoundationReportEntryEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/FoundationApiResponseEnvelope"
+          }
+        ],
+        "properties": {
+          "Data": {
+            "$ref": "#/components/schemas/FoundationReportNavigationEntry"
+          }
+        }
+      },
+      "FoundationServiceStatusResponse": {
+        "type": "object",
+        "properties": {
+          "Capabilities": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CapabilityStatus"
+            }
+          },
+          "FormalRetrievalAllowed": {
+            "type": "boolean",
+            "const": false
+          },
+          "RuntimeSwitchAllowed": {
+            "type": "boolean",
+            "const": false
+          },
+          "ReadyForRuntimeSwitch": {
+            "type": "boolean",
+            "const": false
+          }
+        }
+      },
+      "CapabilityStatus": {
+        "type": "object",
+        "required": [
+          "CapabilityId",
+          "DisplayName",
+          "Category",
+          "State",
+          "Recommendation",
+          "GatePassed",
+          "UseForRuntime",
+          "FormalRetrievalAllowed",
+          "RuntimeSwitchAllowed",
+          "ReadyForRuntimeSwitch",
+          "PackingPolicyChanged",
+          "PackageOutputChanged",
+          "SourceReportPath",
+          "AllowedModes",
+          "ForbiddenModes",
+          "BlockedReasons"
+        ],
+        "properties": {
+          "CapabilityId": {
+            "type": "string"
+          },
+          "DisplayName": {
+            "type": "string"
+          },
+          "Category": {
+            "type": "string"
+          },
+          "State": {
+            "type": "string"
+          },
+          "Recommendation": {
+            "type": "string"
+          },
+          "GatePassed": {
+            "type": "string"
+          },
+          "UseForRuntime": {
+            "type": "string"
+          },
+          "FormalRetrievalAllowed": {
+            "type": "string"
+          },
+          "RuntimeSwitchAllowed": {
+            "type": "string"
+          },
+          "ReadyForRuntimeSwitch": {
+            "type": "string"
+          },
+          "PackingPolicyChanged": {
+            "type": "string"
+          },
+          "PackageOutputChanged": {
+            "type": "string"
+          },
+          "SourceReportPath": {
+            "type": "string"
+          },
+          "AllowedModes": {
+            "type": "string"
+          },
+          "ForbiddenModes": {
+            "type": "string"
+          },
+          "BlockedReasons": {
+            "type": "string"
+          }
+        }
+      },
+      "FoundationReportNavigationResponse": {
+        "type": "object",
+        "properties": {
+          "Reports": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FoundationReportNavigationEntry"
+            }
+          },
+          "MissingReportIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "FoundationReportNavigationEntry": {
+        "type": "object",
+        "required": [
+          "ReportId",
+          "CapabilityId",
+          "RelativePath",
+          "Exists",
+          "GeneratedAt",
+          "ContentType",
+          "Summary",
+          "SafeToExpose"
+        ],
+        "properties": {
+          "ReportId": {
+            "type": "string"
+          },
+          "CapabilityId": {
+            "type": "string"
+          },
+          "RelativePath": {
+            "type": "string"
+          },
+          "Exists": {
+            "type": "string"
+          },
+          "GeneratedAt": {
+            "type": "string"
+          },
+          "ContentType": {
+            "type": "string"
+          },
+          "Summary": {
+            "type": "string"
+          },
+          "SafeToExpose": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "x-envelopeSchemaVersion": "foundation-api-envelope-v1",
+  "x-forbiddenRuntimeActions": [
+    "RuntimeSwitch",
+    "FormalRetrieval",
+    "FormalPackageWrite",
+    "PackingPolicyMutation",
+    "PackageOutputMutation",
+    "NonAllowlistedScopeUse"
+  ],
+  "x-useForRuntime": false,
+  "x-formalRetrievalAllowed": false,
+  "x-readyForRuntimeSwitch": false
+}

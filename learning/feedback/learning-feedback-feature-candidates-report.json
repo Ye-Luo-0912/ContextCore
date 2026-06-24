@@ -1,0 +1,14 @@
+﻿{
+  "GeneratedAt": "2026-06-12T10:51:41.6293727+00:00",
+  "FeedbackScanned": 1,
+  "ReviewScanned": 0,
+  "GeneratedCandidateCount": 0,
+  "PendingReviewCount": 1,
+  "NeedsMoreEvidenceCount": 0,
+  "NeedsRedactionCount": 0,
+  "RejectedCount": 0,
+  "CandidatesByCapability": {},
+  "Candidates": [],
+  "JsonlPath": "learning/feedback/learning-feedback-feature-candidates.jsonl",
+  "Warnings": []
+}

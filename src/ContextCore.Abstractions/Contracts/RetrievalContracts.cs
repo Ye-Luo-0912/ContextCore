@@ -1,3 +1,5 @@
+using ContextCore.Abstractions.Models;
+
 namespace ContextCore.Abstractions;
 
 /// <summary>执行混合上下文检索，组合规则召回、关系扩展和向量召回。</summary>

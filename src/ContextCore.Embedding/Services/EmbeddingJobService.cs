@@ -1,4 +1,6 @@
 using ContextCore.Abstractions;
+using ContextCore.Abstractions.Models;
+using ContextCore.Embedding.Utilities;
 
 namespace ContextCore.Embedding;
 
@@ -7,8 +9,8 @@ public sealed class EmbeddingJobService : IEmbeddingJobService
 {
     private readonly IEmbeddingProvider _provider;
     private readonly IVectorStore _vectorStore;
-    private readonly List<EmbeddingJob> _jobs = new();
-    private readonly object _gate = new();
+    private readonly List<EmbeddingJob> _jobs = [];
+    private readonly Lock _gate = new();
 
     public EmbeddingJobService(
         IEmbeddingProvider provider,

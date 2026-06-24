@@ -1,3 +1,5 @@
+using ContextCore.Abstractions.Models;
+
 namespace ContextCore.Abstractions;
 
 /// <summary>Attention shadow scorer 使用的结构化候选特征。</summary>

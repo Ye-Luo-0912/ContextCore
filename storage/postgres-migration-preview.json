@@ -1,0 +1,58 @@
+﻿{
+  "DryRun": true,
+  "ProviderEnabled": true,
+  "ProviderId": "postgres-local-smoke",
+  "CurrentSchemaVersion": null,
+  "PendingMigrations": [
+    "0001_operational_store_baseline"
+  ],
+  "RequiredTables": [
+    "contextcore_smoke.cc_workspaces",
+    "contextcore_smoke.cc_collections",
+    "contextcore_smoke.cc_context_items",
+    "contextcore_smoke.cc_memory_short_term_items",
+    "contextcore_smoke.cc_memory_candidate_items",
+    "contextcore_smoke.cc_memory_stable_items",
+    "contextcore_smoke.cc_memory_temporal_items",
+    "contextcore_smoke.cc_memory_reviews",
+    "contextcore_smoke.cc_relations",
+    "contextcore_smoke.cc_relation_reviews",
+    "contextcore_smoke.cc_constraints_active",
+    "contextcore_smoke.cc_constraints_candidate",
+    "contextcore_smoke.cc_constraint_gaps",
+    "contextcore_smoke.cc_learning_feedback_events",
+    "contextcore_smoke.cc_learning_feedback_reviews",
+    "contextcore_smoke.cc_learning_feature_candidates",
+    "contextcore_smoke.cc_context_jobs",
+    "contextcore_smoke.cc_context_job_events",
+    "contextcore_smoke.cc_vector_index_entries",
+    "contextcore_smoke.cc_vector_index_manifests",
+    "contextcore_smoke.cc_context_schema_migrations"
+  ],
+  "MissingRequiredTables": [
+    "contextcore_smoke.cc_workspaces",
+    "contextcore_smoke.cc_collections",
+    "contextcore_smoke.cc_context_items",
+    "contextcore_smoke.cc_memory_short_term_items",
+    "contextcore_smoke.cc_memory_candidate_items",
+    "contextcore_smoke.cc_memory_stable_items",
+    "contextcore_smoke.cc_memory_temporal_items",
+    "contextcore_smoke.cc_memory_reviews",
+    "contextcore_smoke.cc_relations",
+    "contextcore_smoke.cc_relation_reviews",
+    "contextcore_smoke.cc_constraints_active",
+    "contextcore_smoke.cc_constraints_candidate",
+    "contextcore_smoke.cc_constraint_gaps",
+    "contextcore_smoke.cc_learning_feedback_events",
+    "contextcore_smoke.cc_learning_feedback_reviews",
+    "contextcore_smoke.cc_learning_feature_candidates",
+    "contextcore_smoke.cc_context_jobs",
+    "contextcore_smoke.cc_context_job_events",
+    "contextcore_smoke.cc_vector_index_entries",
+    "contextcore_smoke.cc_vector_index_manifests",
+    "contextcore_smoke.cc_context_schema_migrations"
+  ],
+  "Diagnostics": [
+    "PendingMigrationsDetected"
+  ]
+}

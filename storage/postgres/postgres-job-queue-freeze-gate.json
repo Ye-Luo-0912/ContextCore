@@ -1,0 +1,39 @@
+﻿{
+  "generatedAt": "2026-06-14T12:06:51.2640104+00:00",
+  "passed": true,
+  "jobQueuePostgres": "ReadyForScopedWorkerMode",
+  "defaultProvider": "ExistingProvider",
+  "allowedMode": "GuardedPostgresPrimary only for explicit allowlisted worker scopes",
+  "required": [
+    "lease quality gate",
+    "heartbeat quality gate",
+    "retry quality gate",
+    "dead-letter quality gate"
+  ],
+  "forbidden": [
+    "GlobalWorkerProviderSwitch",
+    "ProductionWorkerLoopSwitchWithoutGate"
+  ],
+  "diagnosticsReady": true,
+  "providerQualityReady": true,
+  "scopedWorkerCanaryPassed": true,
+  "limitedWorkerScopeQualityPassed": true,
+  "duplicateExecutionCount": 0,
+  "leaseViolationCount": 0,
+  "retryViolationCount": 0,
+  "deadLetterViolationCount": 0,
+  "postgresFailureCount": 0,
+  "scopeLeakCount": 0,
+  "nonSelectedScopeRemainsFileSystem": true,
+  "runtimeWorkerGlobalProviderUnchanged": true,
+  "globalSwitchAllowed": false,
+  "scopedWorkerCanaryAllowed": true,
+  "p15GatePassed": true,
+  "blockedReasons": [],
+  "diagnostics": [
+    "DefaultProviderExistingProvider",
+    "AllowlistedGuardedPostgresPrimaryOnly",
+    "RuntimeWorkerGlobalProviderUnchanged"
+  ],
+  "recommendation": "ReadyForScopedWorkerMode"
+}

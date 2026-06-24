@@ -1,0 +1,32 @@
+﻿{
+  "OperationId": "dto-split-plan-54ddfcac95644cc7856a231e0310077a",
+  "CreatedAt": "2026-06-24T03:23:52.6405504+00:00",
+  "PlanGenerated": true,
+  "ErrorDescription": "",
+  "SourceFile": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\src\\ContextCore.Abstractions\\Models\\VectorIndexDtos.cs",
+  "TotalClasses": 311,
+  "RuntimeContractCount": 73,
+  "EvalReportCount": 155,
+  "GateReportCount": 33,
+  "ControlRoomSummaryCount": 5,
+  "LegacyCount": 45,
+  "TargetFiles": [
+    "VectorRuntimeDtos.cs \u2014 runtime adapter request/result/contract/envelope/options",
+    "VectorEvalReportDtos.cs \u2014 phase eval report DTO\uFF08\u4E0D\u542B gate\uFF09",
+    "VectorGateReportDtos.cs \u2014 gate/freeze/decision/plan report DTO",
+    "VectorControlRoomSummaryDtos.cs \u2014 ControlRoom summary/snapshot \u7528 DTO",
+    "VectorLegacyDtos.cs \u2014 \u5DF2\u5E9F\u5F03\u6216\u65E0\u6CD5\u660E\u786E\u5206\u7C7B\u7684 DTO\uFF08\u9010\u6B65\u6DD8\u6C70\uFF09"
+  ],
+  "NotMovable": [
+    "IContextRetrievalAdapter / IShadowRetrievalAdapter / NoOpContextRetrievalAdapter\uFF08runtime adapter contract\uFF09",
+    "RetrievalAdapterRequest / RetrievalAdapterResult\uFF08runtime adapter request/result DTO\uFF09",
+    "FormalAdapterInputContract\uFF08formal adapter input contract\uFF09",
+    "public API client DTO\uFF08ContextCoreClient DTO\uFF09"
+  ],
+  "Deferred": [
+    "V5.1 ~ V5.3 phase reports\uFF08\u65E7\u9636\u6BB5\u62A5\u544A\u2014\u2014\u51BB\u7ED3\u540E\u53EF\u5F52\u6863\uFF09",
+    "V4 runtime experiment reports\uFF08V4 \u5B9E\u9A8C\u62A5\u544A\u2014\u2014\u53EA\u8BFB\uFF09",
+    "Superseded eval policy/recommendation DTO\uFF08\u5DF2\u88AB\u540E\u7EED\u9636\u6BB5\u66FF\u4EE3\uFF09"
+  ],
+  "BlockedReasons": []
+}

@@ -1,0 +1,210 @@
+﻿{
+  "operationId": "d0b1fc5d55134a45b3bbbfbacf3040bd",
+  "workspaceId": "postgres-job-queue-dual-write-smoke",
+  "collectionId": "jobs",
+  "operationKind": "enqueue",
+  "targetId": "db4-1-dual-enqueue",
+  "fileSystemWriteSucceeded": true,
+  "postgresWriteSucceeded": true,
+  "mismatchDetected": false,
+  "mismatchReason": "",
+  "postgresError": "",
+  "fallbackUsed": false,
+  "durationMs": 103.9418,
+  "createdAt": "2026-06-14T11:03:41.9150817+00:00"
+}
+{
+  "operationId": "ff98d615c42e48309c46bb73e128e535",
+  "workspaceId": "postgres-job-queue-dual-write-smoke",
+  "collectionId": "jobs",
+  "operationKind": "enqueue",
+  "targetId": "db4-1-dual-enqueue",
+  "fileSystemWriteSucceeded": true,
+  "postgresWriteSucceeded": true,
+  "mismatchDetected": false,
+  "mismatchReason": "",
+  "postgresError": "",
+  "fallbackUsed": false,
+  "durationMs": 16.622,
+  "createdAt": "2026-06-14T11:03:42.0192431+00:00"
+}
+{
+  "operationId": "7158322f3a8b463e9919e7944940bb9b",
+  "workspaceId": "postgres-job-queue-dual-write-smoke",
+  "collectionId": "jobs",
+  "operationKind": "enqueue",
+  "targetId": "db4-1-dual-lease",
+  "fileSystemWriteSucceeded": true,
+  "postgresWriteSucceeded": true,
+  "mismatchDetected": false,
+  "mismatchReason": "",
+  "postgresError": "",
+  "fallbackUsed": false,
+  "durationMs": 18.7582,
+  "createdAt": "2026-06-14T11:03:42.0358851+00:00"
+}
+{
+  "operationId": "a93069eb018942388c5539ac0a2751e5",
+  "workspaceId": "postgres-job-queue-dual-write-smoke",
+  "collectionId": "jobs",
+  "operationKind": "acquire-lease",
+  "targetId": "db4-1-dual-lease",
+  "fileSystemWriteSucceeded": true,
+  "postgresWriteSucceeded": true,
+  "mismatchDetected": false,
+  "mismatchReason": "",
+  "postgresError": "",
+  "fallbackUsed": false,
+  "durationMs": 28.4201,
+  "createdAt": "2026-06-14T11:03:42.0558514+00:00"
+}
+{
+  "operationId": "d23151e767a6464e9a970cee512ce137",
+  "workspaceId": "postgres-job-queue-dual-write-smoke",
+  "collectionId": "jobs",
+  "operationKind": "acquire-lease",
+  "targetId": "",
+  "fileSystemWriteSucceeded": true,
+  "postgresWriteSucceeded": true,
+  "mismatchDetected": false,
+  "mismatchReason": "LeaseConflictExpected",
+  "postgresError": "",
+  "fallbackUsed": false,
+  "durationMs": 3.4861,
+  "createdAt": "2026-06-14T11:03:42.0842926+00:00"
+}
+{
+  "operationId": "1baf9919c0844083b32790097f0bcd95",
+  "workspaceId": "",
+  "collectionId": "",
+  "operationKind": "renew-heartbeat",
+  "targetId": "db4-1-dual-lease",
+  "fileSystemWriteSucceeded": true,
+  "postgresWriteSucceeded": true,
+  "mismatchDetected": false,
+  "mismatchReason": "",
+  "postgresError": "",
+  "fallbackUsed": false,
+  "durationMs": 4.3504,
+  "createdAt": "2026-06-14T11:03:42.0881085+00:00"
+}
+{
+  "operationId": "505c9511834546f29fc40f40974078d2",
+  "workspaceId": "",
+  "collectionId": "",
+  "operationKind": "complete",
+  "targetId": "db4-1-dual-lease",
+  "fileSystemWriteSucceeded": true,
+  "postgresWriteSucceeded": true,
+  "mismatchDetected": false,
+  "mismatchReason": "",
+  "postgresError": "",
+  "fallbackUsed": false,
+  "durationMs": 21.9306,
+  "createdAt": "2026-06-14T11:03:42.0926881+00:00"
+}
+{
+  "operationId": "0472ae7961b343bbb10aa00c14dfaaaf",
+  "workspaceId": "postgres-job-queue-dual-write-smoke",
+  "collectionId": "jobs",
+  "operationKind": "enqueue",
+  "targetId": "db4-1-dual-retry",
+  "fileSystemWriteSucceeded": true,
+  "postgresWriteSucceeded": true,
+  "mismatchDetected": false,
+  "mismatchReason": "",
+  "postgresError": "",
+  "fallbackUsed": false,
+  "durationMs": 17.385,
+  "createdAt": "2026-06-14T11:03:42.1146364+00:00"
+}
+{
+  "operationId": "8c28d99ee26d4cfbb81bd0ace44858ab",
+  "workspaceId": "",
+  "collectionId": "",
+  "operationKind": "fail",
+  "targetId": "db4-1-dual-retry",
+  "fileSystemWriteSucceeded": true,
+  "postgresWriteSucceeded": true,
+  "mismatchDetected": false,
+  "mismatchReason": "",
+  "postgresError": "",
+  "fallbackUsed": false,
+  "durationMs": 20.0666,
+  "createdAt": "2026-06-14T11:03:42.1322861+00:00"
+}
+{
+  "operationId": "fa4d0d5d4e4c40a1b9218768c4fa2a2d",
+  "workspaceId": "",
+  "collectionId": "",
+  "operationKind": "retry",
+  "targetId": "db4-1-dual-retry",
+  "fileSystemWriteSucceeded": true,
+  "postgresWriteSucceeded": true,
+  "mismatchDetected": false,
+  "mismatchReason": "",
+  "postgresError": "",
+  "fallbackUsed": false,
+  "durationMs": 20.3008,
+  "createdAt": "2026-06-14T11:03:42.152609+00:00"
+}
+{
+  "operationId": "850a77ffbf2d4b908512c04212d54413",
+  "workspaceId": "postgres-job-queue-dual-write-smoke",
+  "collectionId": "jobs",
+  "operationKind": "enqueue",
+  "targetId": "db4-1-dual-cancel",
+  "fileSystemWriteSucceeded": true,
+  "postgresWriteSucceeded": true,
+  "mismatchDetected": false,
+  "mismatchReason": "",
+  "postgresError": "",
+  "fallbackUsed": false,
+  "durationMs": 17.2229,
+  "createdAt": "2026-06-14T11:03:42.1729171+00:00"
+}
+{
+  "operationId": "78df260fa8e5487e91469eecbd88b60f",
+  "workspaceId": "",
+  "collectionId": "",
+  "operationKind": "cancel",
+  "targetId": "db4-1-dual-cancel",
+  "fileSystemWriteSucceeded": true,
+  "postgresWriteSucceeded": true,
+  "mismatchDetected": false,
+  "mismatchReason": "",
+  "postgresError": "",
+  "fallbackUsed": false,
+  "durationMs": 18.6096,
+  "createdAt": "2026-06-14T11:03:42.1904518+00:00"
+}
+{
+  "operationId": "308bf776385444e484397115a079beb6",
+  "workspaceId": "postgres-job-queue-dual-write-smoke",
+  "collectionId": "jobs",
+  "operationKind": "enqueue",
+  "targetId": "db4-1-dual-dead",
+  "fileSystemWriteSucceeded": true,
+  "postgresWriteSucceeded": true,
+  "mismatchDetected": false,
+  "mismatchReason": "",
+  "postgresError": "",
+  "fallbackUsed": false,
+  "durationMs": 17.818,
+  "createdAt": "2026-06-14T11:03:42.2090761+00:00"
+}
+{
+  "operationId": "b9fcc5a718a6455e8bfe8bf61ab1255a",
+  "workspaceId": "",
+  "collectionId": "",
+  "operationKind": "dead-letter",
+  "targetId": "db4-1-dual-dead",
+  "fileSystemWriteSucceeded": true,
+  "postgresWriteSucceeded": true,
+  "mismatchDetected": false,
+  "mismatchReason": "",
+  "postgresError": "",
+  "fallbackUsed": false,
+  "durationMs": 17.4729,
+  "createdAt": "2026-06-14T11:03:42.2272039+00:00"
+}

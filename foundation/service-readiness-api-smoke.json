@@ -1,0 +1,20 @@
+﻿{
+  "OperationId": "service-foundation-status-smoke-fcc540c86566432789bb81ac4da7937d",
+  "GeneratedAt": "2026-06-16T16:38:48.9668768+00:00",
+  "SmokePassed": true,
+  "Recommendation": "ReadyForReadOnlyServiceStatus",
+  "EndpointCount": 6,
+  "CapabilityCount": 8,
+  "FoundationStatusPassed": true,
+  "ReleaseCandidatePassed": true,
+  "ReproducibilityPassed": true,
+  "RuntimeChangeGatePassed": true,
+  "VectorFormalPreviewPassed": true,
+  "PostgresFreezePassed": true,
+  "RuntimeMutated": false,
+  "FormalRetrievalAllowed": false,
+  "RuntimeSwitchAllowed": false,
+  "PackingPolicyChanged": false,
+  "PackageOutputChanged": false,
+  "BlockedReasons": []
+}

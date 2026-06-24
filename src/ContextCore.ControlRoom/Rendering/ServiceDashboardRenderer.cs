@@ -1,5 +1,6 @@
 using System.Text;
 using ContextCore.Abstractions;
+using ContextCore.Abstractions.Models;
 using ContextCore.Client;
 using ContextCore.ControlRoom.Services;
 
@@ -62,7 +63,7 @@ public static class ServiceDashboardRenderer
         builder.AppendLine();
         builder.AppendLine("命令");
         builder.AppendLine("----");
-        builder.AppendLine("[R] 刷新状态  [D] 深度刷新  [I] Ingest  [G] Query  [V] Package  [J] Jobs  [M] Model  [U] Admin  [Y] Memory  [K] Constraints  [C] ConstraintGaps  [E] CandidateConstraints  [L] Relations  [O] Policy  [T] ShortTerm  [N] Promotion  [H] Learning  [32] PolicyFeedback  [33] LearningFeatures  [X] Planning  [F] Proposal  [34] RankerDebug  [35] CandidateMemory  [36] StableMemory  [B/0] 返回  [Q] 退出");
+        builder.AppendLine("[R] 刷新状态  [D] 深度刷新  [I] Ingest  [G] Query  [V] Package  [J] Jobs  [M] Model  [U] Admin  [Y] Memory  [K] Constraints  [C] ConstraintGaps  [E] CandidateConstraints  [L] Relations  [O] Policy  [T] ShortTerm  [N] Promotion  [H] Learning  [32] PolicyFeedback  [33] LearningFeatures  [X] Planning  [F] Proposal  [34] RankerDebug  [35] CandidateMemory  [36] StableMemory  [37] VectorIndex  [B/0] 返回  [Q] 退出");
 
         return builder.ToString();
     }

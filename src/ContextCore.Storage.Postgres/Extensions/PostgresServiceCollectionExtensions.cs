@@ -1,4 +1,5 @@
 using ContextCore.Abstractions;
+using ContextCore.Storage.Postgres.Infrastructure;
 using ContextCore.Storage.Postgres.Stores;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -21,7 +22,9 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton(options);
         services.AddSingleton<PostgresJsonSerializer>();
         services.AddSingleton<PostgresConnectionFactory>();
+        services.AddSingleton<IPostgresConnectionFactory>(sp => sp.GetRequiredService<PostgresConnectionFactory>());
         services.AddSingleton<PostgresMigrationRunner>();
+        services.AddSingleton<IStoreMigrationRunner>(sp => sp.GetRequiredService<PostgresMigrationRunner>());
 
         // ContextStore + CollectionStore
         services.AddSingleton<PostgresContextStore>();
@@ -45,6 +48,14 @@ public static class PostgresServiceCollectionExtensions
         // RelationStore
         services.AddSingleton<PostgresRelationStore>();
         services.AddSingleton<IRelationStore>(sp => sp.GetRequiredService<PostgresRelationStore>());
+        services.AddSingleton<PostgresRelationReviewStore>();
+        services.AddSingleton<IRelationReviewStore>(sp => sp.GetRequiredService<PostgresRelationReviewStore>());
+        services.AddSingleton<PostgresRelationDiagnosticsStore>();
+
+        // Learning feedback provider 仅注册 concrete 类型；默认运行时仍由 FileSystem provider 作为 source of truth。
+        services.AddSingleton<PostgresLearningFeedbackStore>();
+        services.AddSingleton<PostgresLearningFeedbackReviewStore>();
+        services.AddSingleton<PostgresLearningFeatureCandidateStore>();
 
         // ConstraintStore
         services.AddSingleton<PostgresConstraintStore>();
@@ -57,6 +68,7 @@ public static class PostgresServiceCollectionExtensions
         // VectorStore
         services.AddSingleton<PostgresVectorStore>();
         services.AddSingleton<IVectorStore>(sp => sp.GetRequiredService<PostgresVectorStore>());
+        services.AddSingleton<PostgresVectorIndexStore>();
 
         // RetrievalTraceStore
         services.AddSingleton<PostgresRetrievalTraceStore>();

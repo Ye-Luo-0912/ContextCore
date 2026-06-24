@@ -1,4 +1,5 @@
 using ContextCore.Abstractions;
+using ContextCore.Storage.Postgres.Infrastructure;
 using Npgsql;
 
 namespace ContextCore.Storage.Postgres.Stores;
@@ -75,10 +76,7 @@ public sealed class PostgresContextEventSink : PostgresStoreBase, IContextEventS
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
             var item = Serializer.Deserialize<ContextOperationEvent>(reader.GetString(0));
-            if (item is not null)
-            {
-                results.Add(item);
-            }
+            results.Add(item);
         }
 
         return results;

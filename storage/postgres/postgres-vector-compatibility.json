@@ -1,0 +1,21 @@
+﻿{
+  "generatedAt": "2026-06-14T15:57:17.9039287+00:00",
+  "requestedProviderId": "deterministic-hash",
+  "modelId": "deterministic-hash-v1",
+  "dimension": 16,
+  "normalized": true,
+  "providerEnabled": true,
+  "connectionAvailable": true,
+  "pgVectorAvailable": true,
+  "tableExists": true,
+  "tableDimensionCompatible": true,
+  "existingIndexCompatible": true,
+  "existingCompatibleEntryCount": 158,
+  "staleProviderModelEntriesCount": 0,
+  "useForRuntime": false,
+  "diagnostics": [
+    "UseForRuntime=false",
+    "RetrievalProviderUnchanged"
+  ],
+  "recommendation": "ReadyForVectorParityEval"
+}

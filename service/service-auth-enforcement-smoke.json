@@ -1,0 +1,16 @@
+﻿{
+  "OperationId": "service-auth-enforcement-smoke-7f013de2f3b445ad806a2a98ba5311f7",
+  "GeneratedAt": "2026-06-16T08:12:06.3346201+00:00",
+  "SmokePassed": true,
+  "DevelopmentNoAuthAllowed": true,
+  "ServiceMissingApiKeyBlocked": true,
+  "ServiceConfiguredApiKeyPassed": true,
+  "ProductionMissingAuthBlocked": true,
+  "WrongApiKeyUnauthorized": true,
+  "CorrectApiKeyAvailable": true,
+  "RuntimeMutated": false,
+  "SecretLeakDetected": false,
+  "AbsolutePathLeakDetected": false,
+  "Recommendation": "ReadyForDeploymentProfileGate",
+  "BlockedReasons": []
+}

@@ -1,0 +1,15 @@
+﻿{
+  "Passed": true,
+  "GovernanceReadinessGatePassed": true,
+  "ProviderSwitchGatePassed": true,
+  "RuntimeCanaryPassed": true,
+  "ScopedAllowlistConfigured": true,
+  "NonAllowlistedScopeRemainsFileSystem": true,
+  "MismatchCount": 0,
+  "PostgresFailureCount": 0,
+  "FallbackTested": true,
+  "P15GatePassed": true,
+  "BlockedReasons": [],
+  "Diagnostics": [],
+  "Recommendation": "ReadyForScopedServiceMode"
+}

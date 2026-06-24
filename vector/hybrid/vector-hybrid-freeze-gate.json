@@ -1,0 +1,34 @@
+﻿{
+  "GeneratedAt": "2026-06-15T07:35:11.6938068+00:00",
+  "FreezePassed": true,
+  "HybridRetrievalStatus": "KeepPreviewOnly",
+  "Recommendation": "BlockedByA3Recall",
+  "LegacyDenseRecallA3": 0.045454545454545456,
+  "HybridDenseOnlyRecallA3": 0.045454545454545456,
+  "HybridBestRecallA3": 0.045454545454545456,
+  "LegacyDenseRecallExtended": 0.03125,
+  "HybridDenseOnlyRecallExtended": 0.03125,
+  "HybridBestRecallExtended": 0.03125,
+  "DenseCandidateDroppedCount": 0,
+  "EligibilityMismatchCount": 0,
+  "DedupOverwriteCount": 0,
+  "RiskAfterPolicy": 0,
+  "FormalOutputChanged": 0,
+  "FormalRetrievalAllowed": false,
+  "UseForRuntime": false,
+  "V4RecheckAllowed": false,
+  "RequiredBeforeV4": [
+    "RecallImprovementSourceRequired",
+    "A3AndExtendedRecallAtLeast80Percent"
+  ],
+  "Notes": [
+    "Current hybrid framework valid but ineffective for recall.",
+    "Dense-only recall aligns with legacy dense baseline.",
+    "Lexical / anchor union did not improve recall.",
+    "Formal retrieval remains disabled."
+  ],
+  "BlockedReasons": [
+    "A3RecallBelow80Percent",
+    "ExtendedRecallBelow80Percent"
+  ]
+}

@@ -8,6 +8,7 @@
     <ProjectReference Include="..\ContextCore.ModelGateway\ContextCore.ModelGateway.csproj" />
     <ProjectReference Include="..\ContextCore.Storage.FileSystem\ContextCore.Storage.FileSystem.csproj" />
     <ProjectReference Include="..\ContextCore.Storage.InMemory\ContextCore.Storage.InMemory.csproj" />
+    <ProjectReference Include="..\ContextCore.Storage.Postgres\ContextCore.Storage.Postgres.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

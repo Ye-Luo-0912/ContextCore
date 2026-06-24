@@ -1,4 +1,4 @@
-namespace ContextCore.Abstractions;
+namespace ContextCore.Abstractions.Models;
 
 /// <summary>预定义的上下文关系类型常量，用于统一标识条目间关系的语义。</summary>
 public static class ContextRelationTypes
@@ -11,6 +11,9 @@ public static class ContextRelationTypes
 
     /// <summary>由模型或自动流程生成。</summary>
     public const string GeneratedBy = "generated_by";
+
+    /// <summary>引用另一条目。</summary>
+    public const string References = "references";
 
     /// <summary>被包含在某个上下文包中。</summary>
     public const string IncludedInPackage = "included_in_package";
@@ -32,6 +35,9 @@ public static class ContextRelationTypes
 
     /// <summary>被另一条目替代。</summary>
     public const string SupersededBy = "superseded_by";
+
+    /// <summary>指向替代当前条目的新条目。</summary>
+    public const string ReplacedBy = "replaced_by";
 
     /// <summary>适用于另一条目。</summary>
     public const string AppliesTo = "applies_to";

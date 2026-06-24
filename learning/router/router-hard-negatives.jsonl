@@ -1,0 +1,3 @@
+{"queryText":"CodingTask/ChatMode","positiveIntent":"CodingTask","negativeIntent":"FuzzyQuestion","mode":"ChatMode","reason":"AddHardNegative","sourceSampleId":"chat-sample-005","confidence":0.6043608170087005}
+{"queryText":"CurrentTask/ChatMode","positiveIntent":"CurrentTask","negativeIntent":"FuzzyQuestion","mode":"ChatMode","reason":"ReviewRuntimeBoundary","sourceSampleId":"chat-20260529-019","confidence":0.566782499590778}
+{"queryText":"AuditDeprecated/CodingMode","positiveIntent":"AuditDeprecated","negativeIntent":"CodingTask","mode":"CodingMode","reason":"AddHardNegative","sourceSampleId":"coding-sample-002","confidence":0.5468677243167364}

@@ -1,0 +1,3186 @@
+﻿{
+  "OperationId": "vector-ranker-fusion-shadow-8d69b7186eba421e81d53c55d83f48ef",
+  "CreatedAt": "2026-06-10T13:57:04.9512266+00:00",
+  "Samples": 113,
+  "ProviderId": "onnx-local",
+  "EmbeddingModel": "bge-small-zh-v1.5",
+  "ProfileId": "normal-v1",
+  "TopK": 10,
+  "MinSimilarity": null,
+  "Results": [
+    {
+      "Strategy": "VectorOnly",
+      "ProfileId": "normal-v1",
+      "TopK": 10,
+      "MinSimilarity": null,
+      "Samples": 113,
+      "VectorCandidateCount": 915,
+      "FusionCandidateCount": 915,
+      "MustHitRecallVectorOnly": 0.84375,
+      "MustHitRecallFusion": 0.84375,
+      "MustHitMrrVectorOnly": 0.8229351032448379,
+      "MustHitMrrFusion": 0.8229351032448379,
+      "MustNotHitRiskVectorOnly": 0,
+      "MustNotHitRiskFusion": 0,
+      "LifecycleRiskFusion": 0,
+      "RecallGain": 0,
+      "RiskDelta": 0,
+      "TopFixedSamples": [],
+      "NewlyRiskySamples": [],
+      "Recommendation": "ReadyForRetrievalShadow"
+    },
+    {
+      "Strategy": "RankerFilteredVector",
+      "ProfileId": "normal-v1",
+      "TopK": 10,
+      "MinSimilarity": null,
+      "Samples": 113,
+      "VectorCandidateCount": 915,
+      "FusionCandidateCount": 1130,
+      "MustHitRecallVectorOnly": 0.84375,
+      "MustHitRecallFusion": 0.85,
+      "MustHitMrrVectorOnly": 0.8229351032448379,
+      "MustHitMrrFusion": 0.8229351032448379,
+      "MustNotHitRiskVectorOnly": 0,
+      "MustNotHitRiskFusion": 0.017699115044247787,
+      "LifecycleRiskFusion": 0,
+      "RecallGain": 0.00625,
+      "RiskDelta": 0.017699115044247787,
+      "TopFixedSamples": [
+        {
+          "SampleId": "chat-sample-010",
+          "Mode": "ChatMode",
+          "Intent": "Unknown",
+          "QueryText": "\u6838\u5FC3\u5F00\u53D1\u8BA1\u5212\u4E2D\u6709\u89C4\u5B9A\u6211\u4EEC\u7684\u5177\u4F53\u4EA4\u4ED8\u65E5\u671F\u5417\uFF1F",
+          "Strategy": "RankerFilteredVector",
+          "ProfileId": "normal-v1",
+          "TopK": 10,
+          "MinSimilarity": null,
+          "VectorCandidateCount": 6,
+          "FusionCandidateCount": 10,
+          "MustHitCount": 2,
+          "MustHitVectorOnlyHitCount": 1,
+          "MustHitFusionHitCount": 2,
+          "MustHitMrrVectorOnly": 1,
+          "MustHitMrrFusion": 1,
+          "MustNotHitVectorOnlyCount": 0,
+          "MustNotHitFusionCount": 0,
+          "LifecycleRiskFusionCount": 0,
+          "RecallGain": 0.5,
+          "RiskDelta": 0,
+          "IsFixed": true,
+          "IsNewlyRisky": false,
+          "MustHitGained": [
+            "memory:chat-active-plan"
+          ],
+          "MustHitLost": [],
+          "NewlyRiskyItems": [],
+          "TopCandidates": [
+            {
+              "ItemId": "memory:chat-delivery-date",
+              "VectorRank": 1,
+              "FusionRank": 1,
+              "Similarity": 0.6258221840363299,
+              "RankerScore": 1.825822,
+              "FusionScore": 2.451644,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "plan",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:chat-extra-active-2",
+              "VectorRank": 4,
+              "FusionRank": 2,
+              "Similarity": 0.534768310132537,
+              "RankerScore": 1.734768,
+              "FusionScore": 2.269537,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "preference",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:coding-extra-active-1",
+              "VectorRank": 5,
+              "FusionRank": 3,
+              "Similarity": 0.5226051222293324,
+              "RankerScore": 1.722605,
+              "FusionScore": 2.24521,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "testing-rule",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "pref:admit-uncertainty",
+              "VectorRank": 6,
+              "FusionRank": 4,
+              "Similarity": 0.519390669528881,
+              "RankerScore": 1.719391,
+              "FusionScore": 2.238781,
+              "Lifecycle": "Stable",
+              "Layer": "Stable",
+              "ItemKind": "preference",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "doc:automation-guide",
+              "VectorRank": 7,
+              "FusionRank": 5,
+              "Similarity": 0.5159051725485745,
+              "RankerScore": 0.715905,
+              "FusionScore": 1.23181,
+              "Lifecycle": "",
+              "Layer": "context",
+              "ItemKind": "guide",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "pref:actionable-concise",
+              "VectorRank": 8,
+              "FusionRank": 6,
+              "Similarity": 0.49295903747264225,
+              "RankerScore": 1.692959,
+              "FusionScore": 2.185918,
+              "Lifecycle": "Stable",
+              "Layer": "Stable",
+              "ItemKind": "preference",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "doc:ipromotioncandidatestore",
+              "VectorRank": 13,
+              "FusionRank": 7,
+              "Similarity": 0.4806056702198862,
+              "RankerScore": 0.680606,
+              "FusionScore": 1.161211,
+              "Lifecycle": "",
+              "Layer": "context",
+              "ItemKind": "interface",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:project-extra-active-2",
+              "VectorRank": 14,
+              "FusionRank": 8,
+              "Similarity": 0.4785118286044909,
+              "RankerScore": 1.678512,
+              "FusionScore": 2.157024,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "constraint",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:chat-active-plan",
+              "VectorRank": 15,
+              "FusionRank": 9,
+              "Similarity": 0.47729909547758514,
+              "RankerScore": 1.677299,
+              "FusionScore": 2.154598,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "plan",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "report:new-stage-execution",
+              "VectorRank": 16,
+              "FusionRank": 10,
+              "Similarity": 0.47711015732030015,
+              "RankerScore": 1.67711,
+              "FusionScore": 2.15422,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "report",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            }
+          ]
+        }
+      ],
+      "NewlyRiskySamples": [
+        {
+          "SampleId": "automation-sample-009",
+          "Mode": "AutomationMode",
+          "Intent": "Unknown",
+          "QueryText": "\u663E\u5F0F\u5BA1\u8BA1\uFF1A\u67E5\u8BE2\u6709\u54EA\u4E9B\u5DF2\u7ECF\u88AB\u505C\u6B62\u6216\u5E9F\u5F03\u7684\u81EA\u52A8\u6E05\u7406\u811A\u672C\u5B9A\u65F6\u4EFB\u52A1\uFF1F",
+          "Strategy": "RankerFilteredVector",
+          "ProfileId": "normal-v1",
+          "TopK": 10,
+          "MinSimilarity": null,
+          "VectorCandidateCount": 1,
+          "FusionCandidateCount": 10,
+          "MustHitCount": 1,
+          "MustHitVectorOnlyHitCount": 0,
+          "MustHitFusionHitCount": 0,
+          "MustHitMrrVectorOnly": 0,
+          "MustHitMrrFusion": 0,
+          "MustNotHitVectorOnlyCount": 0,
+          "MustNotHitFusionCount": 1,
+          "LifecycleRiskFusionCount": 0,
+          "RecallGain": 0,
+          "RiskDelta": 1,
+          "IsFixed": false,
+          "IsNewlyRisky": true,
+          "MustHitGained": [],
+          "MustHitLost": [],
+          "NewlyRiskyItems": [
+            "memory:automation-backup-strategy-v2"
+          ],
+          "TopCandidates": [
+            {
+              "ItemId": "memory:automation-disk-error",
+              "VectorRank": 7,
+              "FusionRank": 1,
+              "Similarity": 0.5883866660054198,
+              "RankerScore": 1.788387,
+              "FusionScore": 2.376773,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "error-log",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "doc:automation-guide",
+              "VectorRank": 12,
+              "FusionRank": 2,
+              "Similarity": 0.5561048730360474,
+              "RankerScore": 0.756105,
+              "FusionScore": 1.31221,
+              "Lifecycle": "",
+              "Layer": "context",
+              "ItemKind": "guide",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "safety:destructive-operation",
+              "VectorRank": 14,
+              "FusionRank": 3,
+              "Similarity": 0.5393262752487622,
+              "RankerScore": 1.739326,
+              "FusionScore": 2.278653,
+              "Lifecycle": "Stable",
+              "Layer": "Stable",
+              "ItemKind": "safety",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "report:actionable-fix",
+              "VectorRank": 16,
+              "FusionRank": 4,
+              "Similarity": 0.5334407036952209,
+              "RankerScore": 1.733441,
+              "FusionScore": 2.266881,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "fix-report",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "confirmation:required-before-delete",
+              "VectorRank": 17,
+              "FusionRank": 5,
+              "Similarity": 0.5329586245292064,
+              "RankerScore": 1.732959,
+              "FusionScore": 2.265917,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "confirmation",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:automation-last-error",
+              "VectorRank": 19,
+              "FusionRank": 6,
+              "Similarity": 0.530740025810869,
+              "RankerScore": 1.73074,
+              "FusionScore": 2.26148,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "error-log",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "todo:A3",
+              "VectorRank": 20,
+              "FusionRank": 7,
+              "Similarity": 0.5298861907345053,
+              "RankerScore": 1.729886,
+              "FusionScore": 2.259772,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "todo",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "job:dedupe-token",
+              "VectorRank": 21,
+              "FusionRank": 8,
+              "Similarity": 0.5255901177531689,
+              "RankerScore": 1.72559,
+              "FusionScore": 2.25118,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "dedupe",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:project-current-step",
+              "VectorRank": 24,
+              "FusionRank": 9,
+              "Similarity": 0.5232551275008762,
+              "RankerScore": 1.723255,
+              "FusionScore": 2.24651,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "task",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:automation-backup-strategy-v2",
+              "VectorRank": 25,
+              "FusionRank": 10,
+              "Similarity": 0.5219666746866398,
+              "RankerScore": 1.721967,
+              "FusionScore": 2.243933,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "config-detail",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            }
+          ]
+        },
+        {
+          "SampleId": "project-sample-009",
+          "Mode": "ProjectMode",
+          "Intent": "Unknown",
+          "QueryText": "\u663E\u5F0F\u5BA1\u8BA1\uFF1A\u67E5\u770B\u5927\u7EB2\u4E2D\u5173\u4E8E\u5DF2\u7ECF\u88AB\u653E\u5F03\u7684\u57FA\u4E8E Ocelot \u7684\u65E7\u7F51\u5173\u8BBE\u8BA1\u8349\u6848\uFF1F",
+          "Strategy": "RankerFilteredVector",
+          "ProfileId": "normal-v1",
+          "TopK": 10,
+          "MinSimilarity": null,
+          "VectorCandidateCount": 1,
+          "FusionCandidateCount": 10,
+          "MustHitCount": 1,
+          "MustHitVectorOnlyHitCount": 0,
+          "MustHitFusionHitCount": 0,
+          "MustHitMrrVectorOnly": 0,
+          "MustHitMrrFusion": 0,
+          "MustNotHitVectorOnlyCount": 0,
+          "MustNotHitFusionCount": 1,
+          "LifecycleRiskFusionCount": 0,
+          "RecallGain": 0,
+          "RiskDelta": 1,
+          "IsFixed": false,
+          "IsNewlyRisky": true,
+          "MustHitGained": [],
+          "MustHitLost": [],
+          "NewlyRiskyItems": [
+            "memory:project-pool-v2"
+          ],
+          "TopCandidates": [
+            {
+              "ItemId": "memory:project-extra-active-2",
+              "VectorRank": 7,
+              "FusionRank": 1,
+              "Similarity": 0.5844530486030521,
+              "RankerScore": 1.784453,
+              "FusionScore": 2.368906,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "constraint",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:project-pool-v2",
+              "VectorRank": 14,
+              "FusionRank": 2,
+              "Similarity": 0.5652459630628093,
+              "RankerScore": 1.765246,
+              "FusionScore": 2.330492,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "postgres-config",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:coding-conflict-v2",
+              "VectorRank": 15,
+              "FusionRank": 3,
+              "Similarity": 0.5644293628558184,
+              "RankerScore": 1.764429,
+              "FusionScore": 2.328859,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "signature",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:coding-extra-active-2",
+              "VectorRank": 19,
+              "FusionRank": 4,
+              "Similarity": 0.5385855741869889,
+              "RankerScore": 1.738586,
+              "FusionScore": 2.277171,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "linting-rule",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:project-extra-active-1",
+              "VectorRank": 20,
+              "FusionRank": 5,
+              "Similarity": 0.5349234405298472,
+              "RankerScore": 1.734923,
+              "FusionScore": 2.269847,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "milestone",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "ending:current-plan",
+              "VectorRank": 21,
+              "FusionRank": 6,
+              "Similarity": 0.5331239630004209,
+              "RankerScore": 1.733124,
+              "FusionScore": 2.266248,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "ending-plan",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "todo:A3",
+              "VectorRank": 22,
+              "FusionRank": 7,
+              "Similarity": 0.5303516409957522,
+              "RankerScore": 1.730352,
+              "FusionScore": 2.260703,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "todo",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "event:recent-failures",
+              "VectorRank": 24,
+              "FusionRank": 8,
+              "Similarity": 0.5290336601280293,
+              "RankerScore": 1.729034,
+              "FusionScore": 2.258067,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "event-log",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "compatibility:backward-check",
+              "VectorRank": 25,
+              "FusionRank": 9,
+              "Similarity": 0.5246079816863839,
+              "RankerScore": 1.724608,
+              "FusionScore": 2.249216,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "compatibility",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:project-current-step",
+              "VectorRank": 26,
+              "FusionRank": 10,
+              "Similarity": 0.5244391969071925,
+              "RankerScore": 1.724439,
+              "FusionScore": 2.248878,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "task",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            }
+          ]
+        }
+      ],
+      "Recommendation": "BlockedByRisk"
+    },
+    {
+      "Strategy": "RankerOnly",
+      "ProfileId": "normal-v1",
+      "TopK": 10,
+      "MinSimilarity": null,
+      "Samples": 113,
+      "VectorCandidateCount": 915,
+      "FusionCandidateCount": 1130,
+      "MustHitRecallVectorOnly": 0.84375,
+      "MustHitRecallFusion": 0.7625,
+      "MustHitMrrVectorOnly": 0.8229351032448379,
+      "MustHitMrrFusion": 0.7742098609355247,
+      "MustNotHitRiskVectorOnly": 0,
+      "MustNotHitRiskFusion": 0.017699115044247787,
+      "LifecycleRiskFusion": 0,
+      "RecallGain": -0.08125,
+      "RiskDelta": 0.017699115044247787,
+      "TopFixedSamples": [
+        {
+          "SampleId": "chat-sample-010",
+          "Mode": "ChatMode",
+          "Intent": "Unknown",
+          "QueryText": "\u6838\u5FC3\u5F00\u53D1\u8BA1\u5212\u4E2D\u6709\u89C4\u5B9A\u6211\u4EEC\u7684\u5177\u4F53\u4EA4\u4ED8\u65E5\u671F\u5417\uFF1F",
+          "Strategy": "RankerOnly",
+          "ProfileId": "normal-v1",
+          "TopK": 10,
+          "MinSimilarity": null,
+          "VectorCandidateCount": 6,
+          "FusionCandidateCount": 10,
+          "MustHitCount": 2,
+          "MustHitVectorOnlyHitCount": 1,
+          "MustHitFusionHitCount": 2,
+          "MustHitMrrVectorOnly": 1,
+          "MustHitMrrFusion": 1,
+          "MustNotHitVectorOnlyCount": 0,
+          "MustNotHitFusionCount": 0,
+          "LifecycleRiskFusionCount": 0,
+          "RecallGain": 0.5,
+          "RiskDelta": 0,
+          "IsFixed": true,
+          "IsNewlyRisky": false,
+          "MustHitGained": [
+            "memory:chat-active-plan"
+          ],
+          "MustHitLost": [],
+          "NewlyRiskyItems": [],
+          "TopCandidates": [
+            {
+              "ItemId": "memory:chat-delivery-date",
+              "VectorRank": 1,
+              "FusionRank": 1,
+              "Similarity": 0.6258221840363299,
+              "RankerScore": 1.825822,
+              "FusionScore": 2.451644,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "plan",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:chat-extra-active-2",
+              "VectorRank": 4,
+              "FusionRank": 2,
+              "Similarity": 0.534768310132537,
+              "RankerScore": 1.734768,
+              "FusionScore": 2.269537,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "preference",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:coding-extra-active-1",
+              "VectorRank": 5,
+              "FusionRank": 3,
+              "Similarity": 0.5226051222293324,
+              "RankerScore": 1.722605,
+              "FusionScore": 2.24521,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "testing-rule",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "pref:admit-uncertainty",
+              "VectorRank": 6,
+              "FusionRank": 4,
+              "Similarity": 0.519390669528881,
+              "RankerScore": 1.719391,
+              "FusionScore": 2.238781,
+              "Lifecycle": "Stable",
+              "Layer": "Stable",
+              "ItemKind": "preference",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "pref:actionable-concise",
+              "VectorRank": 8,
+              "FusionRank": 5,
+              "Similarity": 0.49295903747264225,
+              "RankerScore": 1.692959,
+              "FusionScore": 2.185918,
+              "Lifecycle": "Stable",
+              "Layer": "Stable",
+              "ItemKind": "preference",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:project-extra-active-2",
+              "VectorRank": 14,
+              "FusionRank": 6,
+              "Similarity": 0.4785118286044909,
+              "RankerScore": 1.678512,
+              "FusionScore": 2.157024,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "constraint",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:chat-active-plan",
+              "VectorRank": 15,
+              "FusionRank": 7,
+              "Similarity": 0.47729909547758514,
+              "RankerScore": 1.677299,
+              "FusionScore": 2.154598,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "plan",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "report:new-stage-execution",
+              "VectorRank": 16,
+              "FusionRank": 8,
+              "Similarity": 0.47711015732030015,
+              "RankerScore": 1.67711,
+              "FusionScore": 2.15422,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "report",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:long-term-user-preference",
+              "VectorRank": 17,
+              "FusionRank": 9,
+              "Similarity": 0.4767592421235065,
+              "RankerScore": 1.676759,
+              "FusionScore": 2.153518,
+              "Lifecycle": "Stable",
+              "Layer": "Stable",
+              "ItemKind": "preference",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "scope:project-only",
+              "VectorRank": 18,
+              "FusionRank": 10,
+              "Similarity": 0.4743314517289727,
+              "RankerScore": 1.674331,
+              "FusionScore": 2.148663,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "scope",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            }
+          ]
+        }
+      ],
+      "NewlyRiskySamples": [
+        {
+          "SampleId": "automation-sample-009",
+          "Mode": "AutomationMode",
+          "Intent": "Unknown",
+          "QueryText": "\u663E\u5F0F\u5BA1\u8BA1\uFF1A\u67E5\u8BE2\u6709\u54EA\u4E9B\u5DF2\u7ECF\u88AB\u505C\u6B62\u6216\u5E9F\u5F03\u7684\u81EA\u52A8\u6E05\u7406\u811A\u672C\u5B9A\u65F6\u4EFB\u52A1\uFF1F",
+          "Strategy": "RankerOnly",
+          "ProfileId": "normal-v1",
+          "TopK": 10,
+          "MinSimilarity": null,
+          "VectorCandidateCount": 1,
+          "FusionCandidateCount": 10,
+          "MustHitCount": 1,
+          "MustHitVectorOnlyHitCount": 0,
+          "MustHitFusionHitCount": 0,
+          "MustHitMrrVectorOnly": 0,
+          "MustHitMrrFusion": 0,
+          "MustNotHitVectorOnlyCount": 0,
+          "MustNotHitFusionCount": 1,
+          "LifecycleRiskFusionCount": 0,
+          "RecallGain": 0,
+          "RiskDelta": 1,
+          "IsFixed": false,
+          "IsNewlyRisky": true,
+          "MustHitGained": [],
+          "MustHitLost": [],
+          "NewlyRiskyItems": [
+            "memory:automation-backup-strategy-v2"
+          ],
+          "TopCandidates": [
+            {
+              "ItemId": "memory:automation-disk-error",
+              "VectorRank": 7,
+              "FusionRank": 1,
+              "Similarity": 0.5883866660054198,
+              "RankerScore": 1.788387,
+              "FusionScore": 2.376773,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "error-log",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "safety:destructive-operation",
+              "VectorRank": 14,
+              "FusionRank": 2,
+              "Similarity": 0.5393262752487622,
+              "RankerScore": 1.739326,
+              "FusionScore": 2.278653,
+              "Lifecycle": "Stable",
+              "Layer": "Stable",
+              "ItemKind": "safety",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "report:actionable-fix",
+              "VectorRank": 16,
+              "FusionRank": 3,
+              "Similarity": 0.5334407036952209,
+              "RankerScore": 1.733441,
+              "FusionScore": 2.266881,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "fix-report",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "confirmation:required-before-delete",
+              "VectorRank": 17,
+              "FusionRank": 4,
+              "Similarity": 0.5329586245292064,
+              "RankerScore": 1.732959,
+              "FusionScore": 2.265917,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "confirmation",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:automation-last-error",
+              "VectorRank": 19,
+              "FusionRank": 5,
+              "Similarity": 0.530740025810869,
+              "RankerScore": 1.73074,
+              "FusionScore": 2.26148,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "error-log",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "todo:A3",
+              "VectorRank": 20,
+              "FusionRank": 6,
+              "Similarity": 0.5298861907345053,
+              "RankerScore": 1.729886,
+              "FusionScore": 2.259772,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "todo",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "job:dedupe-token",
+              "VectorRank": 21,
+              "FusionRank": 7,
+              "Similarity": 0.5255901177531689,
+              "RankerScore": 1.72559,
+              "FusionScore": 2.25118,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "dedupe",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:project-current-step",
+              "VectorRank": 24,
+              "FusionRank": 8,
+              "Similarity": 0.5232551275008762,
+              "RankerScore": 1.723255,
+              "FusionScore": 2.24651,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "task",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:automation-backup-strategy-v2",
+              "VectorRank": 25,
+              "FusionRank": 9,
+              "Similarity": 0.5219666746866398,
+              "RankerScore": 1.721967,
+              "FusionScore": 2.243933,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "config-detail",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:coding-timeout-v2",
+              "VectorRank": 26,
+              "FusionRank": 10,
+              "Similarity": 0.5212167690318287,
+              "RankerScore": 1.721217,
+              "FusionScore": 2.242434,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "signature",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            }
+          ]
+        },
+        {
+          "SampleId": "project-sample-009",
+          "Mode": "ProjectMode",
+          "Intent": "Unknown",
+          "QueryText": "\u663E\u5F0F\u5BA1\u8BA1\uFF1A\u67E5\u770B\u5927\u7EB2\u4E2D\u5173\u4E8E\u5DF2\u7ECF\u88AB\u653E\u5F03\u7684\u57FA\u4E8E Ocelot \u7684\u65E7\u7F51\u5173\u8BBE\u8BA1\u8349\u6848\uFF1F",
+          "Strategy": "RankerOnly",
+          "ProfileId": "normal-v1",
+          "TopK": 10,
+          "MinSimilarity": null,
+          "VectorCandidateCount": 1,
+          "FusionCandidateCount": 10,
+          "MustHitCount": 1,
+          "MustHitVectorOnlyHitCount": 0,
+          "MustHitFusionHitCount": 0,
+          "MustHitMrrVectorOnly": 0,
+          "MustHitMrrFusion": 0,
+          "MustNotHitVectorOnlyCount": 0,
+          "MustNotHitFusionCount": 1,
+          "LifecycleRiskFusionCount": 0,
+          "RecallGain": 0,
+          "RiskDelta": 1,
+          "IsFixed": false,
+          "IsNewlyRisky": true,
+          "MustHitGained": [],
+          "MustHitLost": [],
+          "NewlyRiskyItems": [
+            "memory:project-pool-v2"
+          ],
+          "TopCandidates": [
+            {
+              "ItemId": "memory:project-extra-active-2",
+              "VectorRank": 7,
+              "FusionRank": 1,
+              "Similarity": 0.5844530486030521,
+              "RankerScore": 1.784453,
+              "FusionScore": 2.368906,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "constraint",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:project-pool-v2",
+              "VectorRank": 14,
+              "FusionRank": 2,
+              "Similarity": 0.5652459630628093,
+              "RankerScore": 1.765246,
+              "FusionScore": 2.330492,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "postgres-config",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:coding-conflict-v2",
+              "VectorRank": 15,
+              "FusionRank": 3,
+              "Similarity": 0.5644293628558184,
+              "RankerScore": 1.764429,
+              "FusionScore": 2.328859,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "signature",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:coding-extra-active-2",
+              "VectorRank": 19,
+              "FusionRank": 4,
+              "Similarity": 0.5385855741869889,
+              "RankerScore": 1.738586,
+              "FusionScore": 2.277171,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "linting-rule",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:project-extra-active-1",
+              "VectorRank": 20,
+              "FusionRank": 5,
+              "Similarity": 0.5349234405298472,
+              "RankerScore": 1.734923,
+              "FusionScore": 2.269847,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "milestone",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "ending:current-plan",
+              "VectorRank": 21,
+              "FusionRank": 6,
+              "Similarity": 0.5331239630004209,
+              "RankerScore": 1.733124,
+              "FusionScore": 2.266248,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "ending-plan",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "todo:A3",
+              "VectorRank": 22,
+              "FusionRank": 7,
+              "Similarity": 0.5303516409957522,
+              "RankerScore": 1.730352,
+              "FusionScore": 2.260703,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "todo",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "event:recent-failures",
+              "VectorRank": 24,
+              "FusionRank": 8,
+              "Similarity": 0.5290336601280293,
+              "RankerScore": 1.729034,
+              "FusionScore": 2.258067,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "event-log",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "compatibility:backward-check",
+              "VectorRank": 25,
+              "FusionRank": 9,
+              "Similarity": 0.5246079816863839,
+              "RankerScore": 1.724608,
+              "FusionScore": 2.249216,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "compatibility",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:project-current-step",
+              "VectorRank": 26,
+              "FusionRank": 10,
+              "Similarity": 0.5244391969071925,
+              "RankerScore": 1.724439,
+              "FusionScore": 2.248878,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "task",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            }
+          ]
+        }
+      ],
+      "Recommendation": "BlockedByRisk"
+    },
+    {
+      "Strategy": "UnionThenRank",
+      "ProfileId": "normal-v1",
+      "TopK": 10,
+      "MinSimilarity": null,
+      "Samples": 113,
+      "VectorCandidateCount": 915,
+      "FusionCandidateCount": 1130,
+      "MustHitRecallVectorOnly": 0.84375,
+      "MustHitRecallFusion": 0.7625,
+      "MustHitMrrVectorOnly": 0.8229351032448379,
+      "MustHitMrrFusion": 0.7742098609355247,
+      "MustNotHitRiskVectorOnly": 0,
+      "MustNotHitRiskFusion": 0.017699115044247787,
+      "LifecycleRiskFusion": 0,
+      "RecallGain": -0.08125,
+      "RiskDelta": 0.017699115044247787,
+      "TopFixedSamples": [
+        {
+          "SampleId": "chat-sample-010",
+          "Mode": "ChatMode",
+          "Intent": "Unknown",
+          "QueryText": "\u6838\u5FC3\u5F00\u53D1\u8BA1\u5212\u4E2D\u6709\u89C4\u5B9A\u6211\u4EEC\u7684\u5177\u4F53\u4EA4\u4ED8\u65E5\u671F\u5417\uFF1F",
+          "Strategy": "UnionThenRank",
+          "ProfileId": "normal-v1",
+          "TopK": 10,
+          "MinSimilarity": null,
+          "VectorCandidateCount": 6,
+          "FusionCandidateCount": 10,
+          "MustHitCount": 2,
+          "MustHitVectorOnlyHitCount": 1,
+          "MustHitFusionHitCount": 2,
+          "MustHitMrrVectorOnly": 1,
+          "MustHitMrrFusion": 1,
+          "MustNotHitVectorOnlyCount": 0,
+          "MustNotHitFusionCount": 0,
+          "LifecycleRiskFusionCount": 0,
+          "RecallGain": 0.5,
+          "RiskDelta": 0,
+          "IsFixed": true,
+          "IsNewlyRisky": false,
+          "MustHitGained": [
+            "memory:chat-active-plan"
+          ],
+          "MustHitLost": [],
+          "NewlyRiskyItems": [],
+          "TopCandidates": [
+            {
+              "ItemId": "memory:chat-delivery-date",
+              "VectorRank": 1,
+              "FusionRank": 1,
+              "Similarity": 0.6258221840363299,
+              "RankerScore": 1.825822,
+              "FusionScore": 2.451644,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "plan",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:chat-extra-active-2",
+              "VectorRank": 4,
+              "FusionRank": 2,
+              "Similarity": 0.534768310132537,
+              "RankerScore": 1.734768,
+              "FusionScore": 2.269537,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "preference",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:coding-extra-active-1",
+              "VectorRank": 5,
+              "FusionRank": 3,
+              "Similarity": 0.5226051222293324,
+              "RankerScore": 1.722605,
+              "FusionScore": 2.24521,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "testing-rule",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "pref:admit-uncertainty",
+              "VectorRank": 6,
+              "FusionRank": 4,
+              "Similarity": 0.519390669528881,
+              "RankerScore": 1.719391,
+              "FusionScore": 2.238781,
+              "Lifecycle": "Stable",
+              "Layer": "Stable",
+              "ItemKind": "preference",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "pref:actionable-concise",
+              "VectorRank": 8,
+              "FusionRank": 5,
+              "Similarity": 0.49295903747264225,
+              "RankerScore": 1.692959,
+              "FusionScore": 2.185918,
+              "Lifecycle": "Stable",
+              "Layer": "Stable",
+              "ItemKind": "preference",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:project-extra-active-2",
+              "VectorRank": 14,
+              "FusionRank": 6,
+              "Similarity": 0.4785118286044909,
+              "RankerScore": 1.678512,
+              "FusionScore": 2.157024,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "constraint",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:chat-active-plan",
+              "VectorRank": 15,
+              "FusionRank": 7,
+              "Similarity": 0.47729909547758514,
+              "RankerScore": 1.677299,
+              "FusionScore": 2.154598,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "plan",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "report:new-stage-execution",
+              "VectorRank": 16,
+              "FusionRank": 8,
+              "Similarity": 0.47711015732030015,
+              "RankerScore": 1.67711,
+              "FusionScore": 2.15422,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "report",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:long-term-user-preference",
+              "VectorRank": 17,
+              "FusionRank": 9,
+              "Similarity": 0.4767592421235065,
+              "RankerScore": 1.676759,
+              "FusionScore": 2.153518,
+              "Lifecycle": "Stable",
+              "Layer": "Stable",
+              "ItemKind": "preference",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "scope:project-only",
+              "VectorRank": 18,
+              "FusionRank": 10,
+              "Similarity": 0.4743314517289727,
+              "RankerScore": 1.674331,
+              "FusionScore": 2.148663,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "scope",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            }
+          ]
+        }
+      ],
+      "NewlyRiskySamples": [
+        {
+          "SampleId": "automation-sample-009",
+          "Mode": "AutomationMode",
+          "Intent": "Unknown",
+          "QueryText": "\u663E\u5F0F\u5BA1\u8BA1\uFF1A\u67E5\u8BE2\u6709\u54EA\u4E9B\u5DF2\u7ECF\u88AB\u505C\u6B62\u6216\u5E9F\u5F03\u7684\u81EA\u52A8\u6E05\u7406\u811A\u672C\u5B9A\u65F6\u4EFB\u52A1\uFF1F",
+          "Strategy": "UnionThenRank",
+          "ProfileId": "normal-v1",
+          "TopK": 10,
+          "MinSimilarity": null,
+          "VectorCandidateCount": 1,
+          "FusionCandidateCount": 10,
+          "MustHitCount": 1,
+          "MustHitVectorOnlyHitCount": 0,
+          "MustHitFusionHitCount": 0,
+          "MustHitMrrVectorOnly": 0,
+          "MustHitMrrFusion": 0,
+          "MustNotHitVectorOnlyCount": 0,
+          "MustNotHitFusionCount": 1,
+          "LifecycleRiskFusionCount": 0,
+          "RecallGain": 0,
+          "RiskDelta": 1,
+          "IsFixed": false,
+          "IsNewlyRisky": true,
+          "MustHitGained": [],
+          "MustHitLost": [],
+          "NewlyRiskyItems": [
+            "memory:automation-backup-strategy-v2"
+          ],
+          "TopCandidates": [
+            {
+              "ItemId": "memory:automation-disk-error",
+              "VectorRank": 7,
+              "FusionRank": 1,
+              "Similarity": 0.5883866660054198,
+              "RankerScore": 1.788387,
+              "FusionScore": 2.376773,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "error-log",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "safety:destructive-operation",
+              "VectorRank": 14,
+              "FusionRank": 2,
+              "Similarity": 0.5393262752487622,
+              "RankerScore": 1.739326,
+              "FusionScore": 2.278653,
+              "Lifecycle": "Stable",
+              "Layer": "Stable",
+              "ItemKind": "safety",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "report:actionable-fix",
+              "VectorRank": 16,
+              "FusionRank": 3,
+              "Similarity": 0.5334407036952209,
+              "RankerScore": 1.733441,
+              "FusionScore": 2.266881,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "fix-report",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "confirmation:required-before-delete",
+              "VectorRank": 17,
+              "FusionRank": 4,
+              "Similarity": 0.5329586245292064,
+              "RankerScore": 1.732959,
+              "FusionScore": 2.265917,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "confirmation",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:automation-last-error",
+              "VectorRank": 19,
+              "FusionRank": 5,
+              "Similarity": 0.530740025810869,
+              "RankerScore": 1.73074,
+              "FusionScore": 2.26148,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "error-log",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "todo:A3",
+              "VectorRank": 20,
+              "FusionRank": 6,
+              "Similarity": 0.5298861907345053,
+              "RankerScore": 1.729886,
+              "FusionScore": 2.259772,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "todo",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "job:dedupe-token",
+              "VectorRank": 21,
+              "FusionRank": 7,
+              "Similarity": 0.5255901177531689,
+              "RankerScore": 1.72559,
+              "FusionScore": 2.25118,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "dedupe",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:project-current-step",
+              "VectorRank": 24,
+              "FusionRank": 8,
+              "Similarity": 0.5232551275008762,
+              "RankerScore": 1.723255,
+              "FusionScore": 2.24651,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "task",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:automation-backup-strategy-v2",
+              "VectorRank": 25,
+              "FusionRank": 9,
+              "Similarity": 0.5219666746866398,
+              "RankerScore": 1.721967,
+              "FusionScore": 2.243933,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "config-detail",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:coding-timeout-v2",
+              "VectorRank": 26,
+              "FusionRank": 10,
+              "Similarity": 0.5212167690318287,
+              "RankerScore": 1.721217,
+              "FusionScore": 2.242434,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "signature",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            }
+          ]
+        },
+        {
+          "SampleId": "project-sample-009",
+          "Mode": "ProjectMode",
+          "Intent": "Unknown",
+          "QueryText": "\u663E\u5F0F\u5BA1\u8BA1\uFF1A\u67E5\u770B\u5927\u7EB2\u4E2D\u5173\u4E8E\u5DF2\u7ECF\u88AB\u653E\u5F03\u7684\u57FA\u4E8E Ocelot \u7684\u65E7\u7F51\u5173\u8BBE\u8BA1\u8349\u6848\uFF1F",
+          "Strategy": "UnionThenRank",
+          "ProfileId": "normal-v1",
+          "TopK": 10,
+          "MinSimilarity": null,
+          "VectorCandidateCount": 1,
+          "FusionCandidateCount": 10,
+          "MustHitCount": 1,
+          "MustHitVectorOnlyHitCount": 0,
+          "MustHitFusionHitCount": 0,
+          "MustHitMrrVectorOnly": 0,
+          "MustHitMrrFusion": 0,
+          "MustNotHitVectorOnlyCount": 0,
+          "MustNotHitFusionCount": 1,
+          "LifecycleRiskFusionCount": 0,
+          "RecallGain": 0,
+          "RiskDelta": 1,
+          "IsFixed": false,
+          "IsNewlyRisky": true,
+          "MustHitGained": [],
+          "MustHitLost": [],
+          "NewlyRiskyItems": [
+            "memory:project-pool-v2"
+          ],
+          "TopCandidates": [
+            {
+              "ItemId": "memory:project-extra-active-2",
+              "VectorRank": 7,
+              "FusionRank": 1,
+              "Similarity": 0.5844530486030521,
+              "RankerScore": 1.784453,
+              "FusionScore": 2.368906,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "constraint",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:project-pool-v2",
+              "VectorRank": 14,
+              "FusionRank": 2,
+              "Similarity": 0.5652459630628093,
+              "RankerScore": 1.765246,
+              "FusionScore": 2.330492,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "postgres-config",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:coding-conflict-v2",
+              "VectorRank": 15,
+              "FusionRank": 3,
+              "Similarity": 0.5644293628558184,
+              "RankerScore": 1.764429,
+              "FusionScore": 2.328859,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "signature",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:coding-extra-active-2",
+              "VectorRank": 19,
+              "FusionRank": 4,
+              "Similarity": 0.5385855741869889,
+              "RankerScore": 1.738586,
+              "FusionScore": 2.277171,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "linting-rule",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:project-extra-active-1",
+              "VectorRank": 20,
+              "FusionRank": 5,
+              "Similarity": 0.5349234405298472,
+              "RankerScore": 1.734923,
+              "FusionScore": 2.269847,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "milestone",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "ending:current-plan",
+              "VectorRank": 21,
+              "FusionRank": 6,
+              "Similarity": 0.5331239630004209,
+              "RankerScore": 1.733124,
+              "FusionScore": 2.266248,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "ending-plan",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "todo:A3",
+              "VectorRank": 22,
+              "FusionRank": 7,
+              "Similarity": 0.5303516409957522,
+              "RankerScore": 1.730352,
+              "FusionScore": 2.260703,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "todo",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "event:recent-failures",
+              "VectorRank": 24,
+              "FusionRank": 8,
+              "Similarity": 0.5290336601280293,
+              "RankerScore": 1.729034,
+              "FusionScore": 2.258067,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "event-log",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "compatibility:backward-check",
+              "VectorRank": 25,
+              "FusionRank": 9,
+              "Similarity": 0.5246079816863839,
+              "RankerScore": 1.724608,
+              "FusionScore": 2.249216,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "compatibility",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:project-current-step",
+              "VectorRank": 26,
+              "FusionRank": 10,
+              "Similarity": 0.5244391969071925,
+              "RankerScore": 1.724439,
+              "FusionScore": 2.248878,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "task",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            }
+          ]
+        }
+      ],
+      "Recommendation": "BlockedByRisk"
+    },
+    {
+      "Strategy": "VectorBoostedRanker",
+      "ProfileId": "normal-v1",
+      "TopK": 10,
+      "MinSimilarity": null,
+      "Samples": 113,
+      "VectorCandidateCount": 915,
+      "FusionCandidateCount": 1130,
+      "MustHitRecallVectorOnly": 0.84375,
+      "MustHitRecallFusion": 0.7625,
+      "MustHitMrrVectorOnly": 0.8229351032448379,
+      "MustHitMrrFusion": 0.7742098609355247,
+      "MustNotHitRiskVectorOnly": 0,
+      "MustNotHitRiskFusion": 0.017699115044247787,
+      "LifecycleRiskFusion": 0,
+      "RecallGain": -0.08125,
+      "RiskDelta": 0.017699115044247787,
+      "TopFixedSamples": [
+        {
+          "SampleId": "chat-sample-010",
+          "Mode": "ChatMode",
+          "Intent": "Unknown",
+          "QueryText": "\u6838\u5FC3\u5F00\u53D1\u8BA1\u5212\u4E2D\u6709\u89C4\u5B9A\u6211\u4EEC\u7684\u5177\u4F53\u4EA4\u4ED8\u65E5\u671F\u5417\uFF1F",
+          "Strategy": "VectorBoostedRanker",
+          "ProfileId": "normal-v1",
+          "TopK": 10,
+          "MinSimilarity": null,
+          "VectorCandidateCount": 6,
+          "FusionCandidateCount": 10,
+          "MustHitCount": 2,
+          "MustHitVectorOnlyHitCount": 1,
+          "MustHitFusionHitCount": 2,
+          "MustHitMrrVectorOnly": 1,
+          "MustHitMrrFusion": 1,
+          "MustNotHitVectorOnlyCount": 0,
+          "MustNotHitFusionCount": 0,
+          "LifecycleRiskFusionCount": 0,
+          "RecallGain": 0.5,
+          "RiskDelta": 0,
+          "IsFixed": true,
+          "IsNewlyRisky": false,
+          "MustHitGained": [
+            "memory:chat-active-plan"
+          ],
+          "MustHitLost": [],
+          "NewlyRiskyItems": [],
+          "TopCandidates": [
+            {
+              "ItemId": "memory:chat-delivery-date",
+              "VectorRank": 1,
+              "FusionRank": 1,
+              "Similarity": 0.6258221840363299,
+              "RankerScore": 1.825822,
+              "FusionScore": 2.451644,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "plan",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:chat-extra-active-2",
+              "VectorRank": 4,
+              "FusionRank": 2,
+              "Similarity": 0.534768310132537,
+              "RankerScore": 1.734768,
+              "FusionScore": 2.269537,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "preference",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:coding-extra-active-1",
+              "VectorRank": 5,
+              "FusionRank": 3,
+              "Similarity": 0.5226051222293324,
+              "RankerScore": 1.722605,
+              "FusionScore": 2.24521,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "testing-rule",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "pref:admit-uncertainty",
+              "VectorRank": 6,
+              "FusionRank": 4,
+              "Similarity": 0.519390669528881,
+              "RankerScore": 1.719391,
+              "FusionScore": 2.238781,
+              "Lifecycle": "Stable",
+              "Layer": "Stable",
+              "ItemKind": "preference",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "pref:actionable-concise",
+              "VectorRank": 8,
+              "FusionRank": 5,
+              "Similarity": 0.49295903747264225,
+              "RankerScore": 1.692959,
+              "FusionScore": 2.185918,
+              "Lifecycle": "Stable",
+              "Layer": "Stable",
+              "ItemKind": "preference",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:project-extra-active-2",
+              "VectorRank": 14,
+              "FusionRank": 6,
+              "Similarity": 0.4785118286044909,
+              "RankerScore": 1.678512,
+              "FusionScore": 2.157024,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "constraint",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:chat-active-plan",
+              "VectorRank": 15,
+              "FusionRank": 7,
+              "Similarity": 0.47729909547758514,
+              "RankerScore": 1.677299,
+              "FusionScore": 2.154598,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "plan",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "report:new-stage-execution",
+              "VectorRank": 16,
+              "FusionRank": 8,
+              "Similarity": 0.47711015732030015,
+              "RankerScore": 1.67711,
+              "FusionScore": 2.15422,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "report",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:long-term-user-preference",
+              "VectorRank": 17,
+              "FusionRank": 9,
+              "Similarity": 0.4767592421235065,
+              "RankerScore": 1.676759,
+              "FusionScore": 2.153518,
+              "Lifecycle": "Stable",
+              "Layer": "Stable",
+              "ItemKind": "preference",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "scope:project-only",
+              "VectorRank": 18,
+              "FusionRank": 10,
+              "Similarity": 0.4743314517289727,
+              "RankerScore": 1.674331,
+              "FusionScore": 2.148663,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "scope",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            }
+          ]
+        }
+      ],
+      "NewlyRiskySamples": [
+        {
+          "SampleId": "automation-sample-009",
+          "Mode": "AutomationMode",
+          "Intent": "Unknown",
+          "QueryText": "\u663E\u5F0F\u5BA1\u8BA1\uFF1A\u67E5\u8BE2\u6709\u54EA\u4E9B\u5DF2\u7ECF\u88AB\u505C\u6B62\u6216\u5E9F\u5F03\u7684\u81EA\u52A8\u6E05\u7406\u811A\u672C\u5B9A\u65F6\u4EFB\u52A1\uFF1F",
+          "Strategy": "VectorBoostedRanker",
+          "ProfileId": "normal-v1",
+          "TopK": 10,
+          "MinSimilarity": null,
+          "VectorCandidateCount": 1,
+          "FusionCandidateCount": 10,
+          "MustHitCount": 1,
+          "MustHitVectorOnlyHitCount": 0,
+          "MustHitFusionHitCount": 0,
+          "MustHitMrrVectorOnly": 0,
+          "MustHitMrrFusion": 0,
+          "MustNotHitVectorOnlyCount": 0,
+          "MustNotHitFusionCount": 1,
+          "LifecycleRiskFusionCount": 0,
+          "RecallGain": 0,
+          "RiskDelta": 1,
+          "IsFixed": false,
+          "IsNewlyRisky": true,
+          "MustHitGained": [],
+          "MustHitLost": [],
+          "NewlyRiskyItems": [
+            "memory:automation-backup-strategy-v2"
+          ],
+          "TopCandidates": [
+            {
+              "ItemId": "memory:automation-disk-error",
+              "VectorRank": 7,
+              "FusionRank": 1,
+              "Similarity": 0.5883866660054198,
+              "RankerScore": 1.788387,
+              "FusionScore": 2.376773,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "error-log",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "safety:destructive-operation",
+              "VectorRank": 14,
+              "FusionRank": 2,
+              "Similarity": 0.5393262752487622,
+              "RankerScore": 1.739326,
+              "FusionScore": 2.278653,
+              "Lifecycle": "Stable",
+              "Layer": "Stable",
+              "ItemKind": "safety",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "report:actionable-fix",
+              "VectorRank": 16,
+              "FusionRank": 3,
+              "Similarity": 0.5334407036952209,
+              "RankerScore": 1.733441,
+              "FusionScore": 2.266881,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "fix-report",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "confirmation:required-before-delete",
+              "VectorRank": 17,
+              "FusionRank": 4,
+              "Similarity": 0.5329586245292064,
+              "RankerScore": 1.732959,
+              "FusionScore": 2.265917,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "confirmation",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:automation-last-error",
+              "VectorRank": 19,
+              "FusionRank": 5,
+              "Similarity": 0.530740025810869,
+              "RankerScore": 1.73074,
+              "FusionScore": 2.26148,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "error-log",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "todo:A3",
+              "VectorRank": 20,
+              "FusionRank": 6,
+              "Similarity": 0.5298861907345053,
+              "RankerScore": 1.729886,
+              "FusionScore": 2.259772,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "todo",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "job:dedupe-token",
+              "VectorRank": 21,
+              "FusionRank": 7,
+              "Similarity": 0.5255901177531689,
+              "RankerScore": 1.72559,
+              "FusionScore": 2.25118,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "dedupe",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:project-current-step",
+              "VectorRank": 24,
+              "FusionRank": 8,
+              "Similarity": 0.5232551275008762,
+              "RankerScore": 1.723255,
+              "FusionScore": 2.24651,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "task",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:automation-backup-strategy-v2",
+              "VectorRank": 25,
+              "FusionRank": 9,
+              "Similarity": 0.5219666746866398,
+              "RankerScore": 1.721967,
+              "FusionScore": 2.243933,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "config-detail",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:coding-timeout-v2",
+              "VectorRank": 26,
+              "FusionRank": 10,
+              "Similarity": 0.5212167690318287,
+              "RankerScore": 1.721217,
+              "FusionScore": 2.242434,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "signature",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            }
+          ]
+        },
+        {
+          "SampleId": "project-sample-009",
+          "Mode": "ProjectMode",
+          "Intent": "Unknown",
+          "QueryText": "\u663E\u5F0F\u5BA1\u8BA1\uFF1A\u67E5\u770B\u5927\u7EB2\u4E2D\u5173\u4E8E\u5DF2\u7ECF\u88AB\u653E\u5F03\u7684\u57FA\u4E8E Ocelot \u7684\u65E7\u7F51\u5173\u8BBE\u8BA1\u8349\u6848\uFF1F",
+          "Strategy": "VectorBoostedRanker",
+          "ProfileId": "normal-v1",
+          "TopK": 10,
+          "MinSimilarity": null,
+          "VectorCandidateCount": 1,
+          "FusionCandidateCount": 10,
+          "MustHitCount": 1,
+          "MustHitVectorOnlyHitCount": 0,
+          "MustHitFusionHitCount": 0,
+          "MustHitMrrVectorOnly": 0,
+          "MustHitMrrFusion": 0,
+          "MustNotHitVectorOnlyCount": 0,
+          "MustNotHitFusionCount": 1,
+          "LifecycleRiskFusionCount": 0,
+          "RecallGain": 0,
+          "RiskDelta": 1,
+          "IsFixed": false,
+          "IsNewlyRisky": true,
+          "MustHitGained": [],
+          "MustHitLost": [],
+          "NewlyRiskyItems": [
+            "memory:project-pool-v2"
+          ],
+          "TopCandidates": [
+            {
+              "ItemId": "memory:project-extra-active-2",
+              "VectorRank": 7,
+              "FusionRank": 1,
+              "Similarity": 0.5844530486030521,
+              "RankerScore": 1.784453,
+              "FusionScore": 2.368906,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "constraint",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:project-pool-v2",
+              "VectorRank": 14,
+              "FusionRank": 2,
+              "Similarity": 0.5652459630628093,
+              "RankerScore": 1.765246,
+              "FusionScore": 2.330492,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "postgres-config",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:coding-conflict-v2",
+              "VectorRank": 15,
+              "FusionRank": 3,
+              "Similarity": 0.5644293628558184,
+              "RankerScore": 1.764429,
+              "FusionScore": 2.328859,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "signature",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:coding-extra-active-2",
+              "VectorRank": 19,
+              "FusionRank": 4,
+              "Similarity": 0.5385855741869889,
+              "RankerScore": 1.738586,
+              "FusionScore": 2.277171,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "linting-rule",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:project-extra-active-1",
+              "VectorRank": 20,
+              "FusionRank": 5,
+              "Similarity": 0.5349234405298472,
+              "RankerScore": 1.734923,
+              "FusionScore": 2.269847,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "milestone",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "ending:current-plan",
+              "VectorRank": 21,
+              "FusionRank": 6,
+              "Similarity": 0.5331239630004209,
+              "RankerScore": 1.733124,
+              "FusionScore": 2.266248,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "ending-plan",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "todo:A3",
+              "VectorRank": 22,
+              "FusionRank": 7,
+              "Similarity": 0.5303516409957522,
+              "RankerScore": 1.730352,
+              "FusionScore": 2.260703,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "todo",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "event:recent-failures",
+              "VectorRank": 24,
+              "FusionRank": 8,
+              "Similarity": 0.5290336601280293,
+              "RankerScore": 1.729034,
+              "FusionScore": 2.258067,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "event-log",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "compatibility:backward-check",
+              "VectorRank": 25,
+              "FusionRank": 9,
+              "Similarity": 0.5246079816863839,
+              "RankerScore": 1.724608,
+              "FusionScore": 2.249216,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "compatibility",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:project-current-step",
+              "VectorRank": 26,
+              "FusionRank": 10,
+              "Similarity": 0.5244391969071925,
+              "RankerScore": 1.724439,
+              "FusionScore": 2.248878,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "task",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            }
+          ]
+        }
+      ],
+      "Recommendation": "BlockedByRisk"
+    },
+    {
+      "Strategy": "LifecycleAwareFusion",
+      "ProfileId": "normal-v1",
+      "TopK": 10,
+      "MinSimilarity": null,
+      "Samples": 113,
+      "VectorCandidateCount": 915,
+      "FusionCandidateCount": 1130,
+      "MustHitRecallVectorOnly": 0.84375,
+      "MustHitRecallFusion": 0.7625,
+      "MustHitMrrVectorOnly": 0.8229351032448379,
+      "MustHitMrrFusion": 0.7742098609355247,
+      "MustNotHitRiskVectorOnly": 0,
+      "MustNotHitRiskFusion": 0.017699115044247787,
+      "LifecycleRiskFusion": 0,
+      "RecallGain": -0.08125,
+      "RiskDelta": 0.017699115044247787,
+      "TopFixedSamples": [
+        {
+          "SampleId": "chat-sample-010",
+          "Mode": "ChatMode",
+          "Intent": "Unknown",
+          "QueryText": "\u6838\u5FC3\u5F00\u53D1\u8BA1\u5212\u4E2D\u6709\u89C4\u5B9A\u6211\u4EEC\u7684\u5177\u4F53\u4EA4\u4ED8\u65E5\u671F\u5417\uFF1F",
+          "Strategy": "LifecycleAwareFusion",
+          "ProfileId": "normal-v1",
+          "TopK": 10,
+          "MinSimilarity": null,
+          "VectorCandidateCount": 6,
+          "FusionCandidateCount": 10,
+          "MustHitCount": 2,
+          "MustHitVectorOnlyHitCount": 1,
+          "MustHitFusionHitCount": 2,
+          "MustHitMrrVectorOnly": 1,
+          "MustHitMrrFusion": 1,
+          "MustNotHitVectorOnlyCount": 0,
+          "MustNotHitFusionCount": 0,
+          "LifecycleRiskFusionCount": 0,
+          "RecallGain": 0.5,
+          "RiskDelta": 0,
+          "IsFixed": true,
+          "IsNewlyRisky": false,
+          "MustHitGained": [
+            "memory:chat-active-plan"
+          ],
+          "MustHitLost": [],
+          "NewlyRiskyItems": [],
+          "TopCandidates": [
+            {
+              "ItemId": "memory:chat-delivery-date",
+              "VectorRank": 1,
+              "FusionRank": 1,
+              "Similarity": 0.6258221840363299,
+              "RankerScore": 1.825822,
+              "FusionScore": 2.451644,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "plan",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:chat-extra-active-2",
+              "VectorRank": 4,
+              "FusionRank": 2,
+              "Similarity": 0.534768310132537,
+              "RankerScore": 1.734768,
+              "FusionScore": 2.269537,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "preference",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:coding-extra-active-1",
+              "VectorRank": 5,
+              "FusionRank": 3,
+              "Similarity": 0.5226051222293324,
+              "RankerScore": 1.722605,
+              "FusionScore": 2.24521,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "testing-rule",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "pref:admit-uncertainty",
+              "VectorRank": 6,
+              "FusionRank": 4,
+              "Similarity": 0.519390669528881,
+              "RankerScore": 1.719391,
+              "FusionScore": 2.238781,
+              "Lifecycle": "Stable",
+              "Layer": "Stable",
+              "ItemKind": "preference",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "pref:actionable-concise",
+              "VectorRank": 8,
+              "FusionRank": 5,
+              "Similarity": 0.49295903747264225,
+              "RankerScore": 1.692959,
+              "FusionScore": 2.185918,
+              "Lifecycle": "Stable",
+              "Layer": "Stable",
+              "ItemKind": "preference",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:project-extra-active-2",
+              "VectorRank": 14,
+              "FusionRank": 6,
+              "Similarity": 0.4785118286044909,
+              "RankerScore": 1.678512,
+              "FusionScore": 2.157024,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "constraint",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:chat-active-plan",
+              "VectorRank": 15,
+              "FusionRank": 7,
+              "Similarity": 0.47729909547758514,
+              "RankerScore": 1.677299,
+              "FusionScore": 2.154598,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "plan",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "report:new-stage-execution",
+              "VectorRank": 16,
+              "FusionRank": 8,
+              "Similarity": 0.47711015732030015,
+              "RankerScore": 1.67711,
+              "FusionScore": 2.15422,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "report",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:long-term-user-preference",
+              "VectorRank": 17,
+              "FusionRank": 9,
+              "Similarity": 0.4767592421235065,
+              "RankerScore": 1.676759,
+              "FusionScore": 2.153518,
+              "Lifecycle": "Stable",
+              "Layer": "Stable",
+              "ItemKind": "preference",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "scope:project-only",
+              "VectorRank": 18,
+              "FusionRank": 10,
+              "Similarity": 0.4743314517289727,
+              "RankerScore": 1.674331,
+              "FusionScore": 2.148663,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "scope",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            }
+          ]
+        }
+      ],
+      "NewlyRiskySamples": [
+        {
+          "SampleId": "automation-sample-009",
+          "Mode": "AutomationMode",
+          "Intent": "Unknown",
+          "QueryText": "\u663E\u5F0F\u5BA1\u8BA1\uFF1A\u67E5\u8BE2\u6709\u54EA\u4E9B\u5DF2\u7ECF\u88AB\u505C\u6B62\u6216\u5E9F\u5F03\u7684\u81EA\u52A8\u6E05\u7406\u811A\u672C\u5B9A\u65F6\u4EFB\u52A1\uFF1F",
+          "Strategy": "LifecycleAwareFusion",
+          "ProfileId": "normal-v1",
+          "TopK": 10,
+          "MinSimilarity": null,
+          "VectorCandidateCount": 1,
+          "FusionCandidateCount": 10,
+          "MustHitCount": 1,
+          "MustHitVectorOnlyHitCount": 0,
+          "MustHitFusionHitCount": 0,
+          "MustHitMrrVectorOnly": 0,
+          "MustHitMrrFusion": 0,
+          "MustNotHitVectorOnlyCount": 0,
+          "MustNotHitFusionCount": 1,
+          "LifecycleRiskFusionCount": 0,
+          "RecallGain": 0,
+          "RiskDelta": 1,
+          "IsFixed": false,
+          "IsNewlyRisky": true,
+          "MustHitGained": [],
+          "MustHitLost": [],
+          "NewlyRiskyItems": [
+            "memory:automation-backup-strategy-v2"
+          ],
+          "TopCandidates": [
+            {
+              "ItemId": "memory:automation-disk-error",
+              "VectorRank": 7,
+              "FusionRank": 1,
+              "Similarity": 0.5883866660054198,
+              "RankerScore": 1.788387,
+              "FusionScore": 2.376773,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "error-log",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "safety:destructive-operation",
+              "VectorRank": 14,
+              "FusionRank": 2,
+              "Similarity": 0.5393262752487622,
+              "RankerScore": 1.739326,
+              "FusionScore": 2.278653,
+              "Lifecycle": "Stable",
+              "Layer": "Stable",
+              "ItemKind": "safety",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "report:actionable-fix",
+              "VectorRank": 16,
+              "FusionRank": 3,
+              "Similarity": 0.5334407036952209,
+              "RankerScore": 1.733441,
+              "FusionScore": 2.266881,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "fix-report",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "confirmation:required-before-delete",
+              "VectorRank": 17,
+              "FusionRank": 4,
+              "Similarity": 0.5329586245292064,
+              "RankerScore": 1.732959,
+              "FusionScore": 2.265917,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "confirmation",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:automation-last-error",
+              "VectorRank": 19,
+              "FusionRank": 5,
+              "Similarity": 0.530740025810869,
+              "RankerScore": 1.73074,
+              "FusionScore": 2.26148,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "error-log",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "todo:A3",
+              "VectorRank": 20,
+              "FusionRank": 6,
+              "Similarity": 0.5298861907345053,
+              "RankerScore": 1.729886,
+              "FusionScore": 2.259772,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "todo",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "job:dedupe-token",
+              "VectorRank": 21,
+              "FusionRank": 7,
+              "Similarity": 0.5255901177531689,
+              "RankerScore": 1.72559,
+              "FusionScore": 2.25118,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "dedupe",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:project-current-step",
+              "VectorRank": 24,
+              "FusionRank": 8,
+              "Similarity": 0.5232551275008762,
+              "RankerScore": 1.723255,
+              "FusionScore": 2.24651,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "task",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:automation-backup-strategy-v2",
+              "VectorRank": 25,
+              "FusionRank": 9,
+              "Similarity": 0.5219666746866398,
+              "RankerScore": 1.721967,
+              "FusionScore": 2.243933,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "config-detail",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:coding-timeout-v2",
+              "VectorRank": 26,
+              "FusionRank": 10,
+              "Similarity": 0.5212167690318287,
+              "RankerScore": 1.721217,
+              "FusionScore": 2.242434,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "signature",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            }
+          ]
+        },
+        {
+          "SampleId": "project-sample-009",
+          "Mode": "ProjectMode",
+          "Intent": "Unknown",
+          "QueryText": "\u663E\u5F0F\u5BA1\u8BA1\uFF1A\u67E5\u770B\u5927\u7EB2\u4E2D\u5173\u4E8E\u5DF2\u7ECF\u88AB\u653E\u5F03\u7684\u57FA\u4E8E Ocelot \u7684\u65E7\u7F51\u5173\u8BBE\u8BA1\u8349\u6848\uFF1F",
+          "Strategy": "LifecycleAwareFusion",
+          "ProfileId": "normal-v1",
+          "TopK": 10,
+          "MinSimilarity": null,
+          "VectorCandidateCount": 1,
+          "FusionCandidateCount": 10,
+          "MustHitCount": 1,
+          "MustHitVectorOnlyHitCount": 0,
+          "MustHitFusionHitCount": 0,
+          "MustHitMrrVectorOnly": 0,
+          "MustHitMrrFusion": 0,
+          "MustNotHitVectorOnlyCount": 0,
+          "MustNotHitFusionCount": 1,
+          "LifecycleRiskFusionCount": 0,
+          "RecallGain": 0,
+          "RiskDelta": 1,
+          "IsFixed": false,
+          "IsNewlyRisky": true,
+          "MustHitGained": [],
+          "MustHitLost": [],
+          "NewlyRiskyItems": [
+            "memory:project-pool-v2"
+          ],
+          "TopCandidates": [
+            {
+              "ItemId": "memory:project-extra-active-2",
+              "VectorRank": 7,
+              "FusionRank": 1,
+              "Similarity": 0.5844530486030521,
+              "RankerScore": 1.784453,
+              "FusionScore": 2.368906,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "constraint",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:project-pool-v2",
+              "VectorRank": 14,
+              "FusionRank": 2,
+              "Similarity": 0.5652459630628093,
+              "RankerScore": 1.765246,
+              "FusionScore": 2.330492,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "postgres-config",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:coding-conflict-v2",
+              "VectorRank": 15,
+              "FusionRank": 3,
+              "Similarity": 0.5644293628558184,
+              "RankerScore": 1.764429,
+              "FusionScore": 2.328859,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "signature",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:coding-extra-active-2",
+              "VectorRank": 19,
+              "FusionRank": 4,
+              "Similarity": 0.5385855741869889,
+              "RankerScore": 1.738586,
+              "FusionScore": 2.277171,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "linting-rule",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:project-extra-active-1",
+              "VectorRank": 20,
+              "FusionRank": 5,
+              "Similarity": 0.5349234405298472,
+              "RankerScore": 1.734923,
+              "FusionScore": 2.269847,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "milestone",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "ending:current-plan",
+              "VectorRank": 21,
+              "FusionRank": 6,
+              "Similarity": 0.5331239630004209,
+              "RankerScore": 1.733124,
+              "FusionScore": 2.266248,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "ending-plan",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "todo:A3",
+              "VectorRank": 22,
+              "FusionRank": 7,
+              "Similarity": 0.5303516409957522,
+              "RankerScore": 1.730352,
+              "FusionScore": 2.260703,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "todo",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "event:recent-failures",
+              "VectorRank": 24,
+              "FusionRank": 8,
+              "Similarity": 0.5290336601280293,
+              "RankerScore": 1.729034,
+              "FusionScore": 2.258067,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "event-log",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "compatibility:backward-check",
+              "VectorRank": 25,
+              "FusionRank": 9,
+              "Similarity": 0.5246079816863839,
+              "RankerScore": 1.724608,
+              "FusionScore": 2.249216,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "compatibility",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            },
+            {
+              "ItemId": "memory:project-current-step",
+              "VectorRank": 26,
+              "FusionRank": 10,
+              "Similarity": 0.5244391969071925,
+              "RankerScore": 1.724439,
+              "FusionScore": 2.248878,
+              "Lifecycle": "Active",
+              "Layer": "Working",
+              "ItemKind": "task",
+              "TargetSection": "normal_context",
+              "RiskAfterPolicy": false,
+              "ScoreReasons": [
+                "activeLifecycle",
+                "normalTarget"
+              ]
+            }
+          ]
+        }
+      ],
+      "Recommendation": "BlockedByRisk"
+    }
+  ],
+  "BestResult": {
+    "Strategy": "VectorOnly",
+    "ProfileId": "normal-v1",
+    "TopK": 10,
+    "MinSimilarity": null,
+    "Samples": 113,
+    "VectorCandidateCount": 915,
+    "FusionCandidateCount": 915,
+    "MustHitRecallVectorOnly": 0.84375,
+    "MustHitRecallFusion": 0.84375,
+    "MustHitMrrVectorOnly": 0.8229351032448379,
+    "MustHitMrrFusion": 0.8229351032448379,
+    "MustNotHitRiskVectorOnly": 0,
+    "MustNotHitRiskFusion": 0,
+    "LifecycleRiskFusion": 0,
+    "RecallGain": 0,
+    "RiskDelta": 0,
+    "TopFixedSamples": [],
+    "NewlyRiskySamples": [],
+    "Recommendation": "ReadyForRetrievalShadow"
+  },
+  "Recommendation": "ReadyForRetrievalShadow",
+  "FormalOutputChanged": 0,
+  "Warnings": [
+    "fusion shadow \u4F7F\u7528\u5019\u9009\u6C60 topK=50\uFF0C\u6700\u7EC8\u8BC4\u4F30 topK=10\uFF1B\u62A5\u544A\u4E0D\u6539\u53D8\u6B63\u5F0F retrieval/package \u8F93\u51FA\u3002"
+  ]
+}

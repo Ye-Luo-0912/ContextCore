@@ -1,0 +1,43 @@
+﻿{
+  "generatedAt": "2026-06-14T15:58:20.3375403+00:00",
+  "passed": true,
+  "vectorPostgresProvider": "ReadyForPreviewShadowStorage",
+  "defaultVectorStore": "unchanged",
+  "useForRuntime": false,
+  "formalRetrievalAllowed": false,
+  "allowed": [
+    "preview",
+    "shadow",
+    "eval"
+  ],
+  "required": [
+    "V4 readiness gate before formal retrieval"
+  ],
+  "forbidden": [
+    "FormalRetrievalSwitchWithoutV4Gate",
+    "PackingPolicyIntegrationWithoutV4Gate",
+    "PackageOutputIntegrationWithoutV4Gate"
+  ],
+  "diagnosticsReady": true,
+  "compatibilityReady": true,
+  "parityPassed": true,
+  "reindexQualityPassed": true,
+  "queryPreviewPassed": true,
+  "shadowEvalPassed": true,
+  "a3RecallDelta": 0,
+  "extendedRecallDelta": 0,
+  "riskAfterPolicy": 0,
+  "mustNotHitRiskAfterPolicy": 0,
+  "lifecycleRiskAfterPolicy": 0,
+  "formalOutputChanged": 0,
+  "projectionMismatchCount": 0,
+  "p15GatePassed": true,
+  "blockedReasons": [],
+  "diagnostics": [
+    "UseForRuntime=false",
+    "FormalRetrievalAllowed=false",
+    "PreviewShadowEvalOnly",
+    "VectorRetrievalStillBlockedByA3Recall"
+  ],
+  "recommendation": "ReadyForPreviewShadowStorage"
+}

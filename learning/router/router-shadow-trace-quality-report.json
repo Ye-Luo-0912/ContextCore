@@ -1,0 +1,21 @@
+{
+  "operationId": "router-shadow-trace-quality-a9c8bd8f260247b1a54716f49d8e4121",
+  "generatedAt": "2026-06-11T06:50:01.3728924+00:00",
+  "workspaceId": "default",
+  "collectionId": "test",
+  "traceCount": 0,
+  "agreementRate": 0,
+  "disagreementRate": 0,
+  "lowConfidenceCount": 0,
+  "abstainCount": 0,
+  "disagreementByIntent": {},
+  "lowConfidenceByIntent": {},
+  "topConfusionPairs": {},
+  "shadowFixesRuntime": 0,
+  "shadowBreaksRuntime": 0,
+  "netGain": 0,
+  "perIntentGain": {},
+  "perIntentRegression": {},
+  "recommendation": "NeedsMoreRealTraces",
+  "policyVersion": "router-intent-shadow-r2/v1"
+}

@@ -1,0 +1,88 @@
+﻿{
+  "SnapshotId": "foundation-client-contract-snapshot-5b2d18a89cd74f6db50ec4690fb30180",
+  "GeneratedAt": "2026-06-16T16:36:15.974835+00:00",
+  "SchemaVersion": "foundation-api-envelope-v1",
+  "Methods": [
+    {
+      "MethodName": "GetFoundationStatusAsync",
+      "Route": "/api/admin/foundation/status",
+      "ResponseType": "FoundationServiceStatusResponse",
+      "DeserializesEnvelope": true
+    },
+    {
+      "MethodName": "GetFoundationReleaseCandidateAsync",
+      "Route": "/api/admin/foundation/release-candidate",
+      "ResponseType": "FoundationServiceStatusResponse",
+      "DeserializesEnvelope": true
+    },
+    {
+      "MethodName": "GetFoundationReproducibilityAsync",
+      "Route": "/api/admin/foundation/reproducibility",
+      "ResponseType": "FoundationServiceStatusResponse",
+      "DeserializesEnvelope": true
+    },
+    {
+      "MethodName": "GetRuntimeChangeGateAsync",
+      "Route": "/api/admin/foundation/runtime-change-gate",
+      "ResponseType": "FoundationServiceStatusResponse",
+      "DeserializesEnvelope": true
+    },
+    {
+      "MethodName": "GetVectorFormalPreviewStatusAsync",
+      "Route": "/api/admin/foundation/vector-formal-preview",
+      "ResponseType": "FoundationServiceStatusResponse",
+      "DeserializesEnvelope": true
+    },
+    {
+      "MethodName": "GetPostgresFreezeStatusAsync",
+      "Route": "/api/admin/foundation/postgres-freeze-status",
+      "ResponseType": "FoundationServiceStatusResponse",
+      "DeserializesEnvelope": true
+    },
+    {
+      "MethodName": "GetFoundationReportsAsync",
+      "Route": "/api/admin/foundation/reports",
+      "ResponseType": "FoundationReportNavigationResponse",
+      "DeserializesEnvelope": true
+    },
+    {
+      "MethodName": "GetFoundationReportAsync",
+      "Route": "/api/admin/foundation/reports/{reportId}",
+      "ResponseType": "FoundationReportNavigationEntry",
+      "DeserializesEnvelope": true
+    }
+  ],
+  "AliasMethods": [
+    {
+      "MethodName": "GetFoundationReleaseCandidateStatusAsync",
+      "Route": "/api/admin/foundation/release-candidate",
+      "ResponseType": "FoundationServiceStatusResponse",
+      "DeserializesEnvelope": true
+    },
+    {
+      "MethodName": "GetFoundationReproducibilityStatusAsync",
+      "Route": "/api/admin/foundation/reproducibility",
+      "ResponseType": "FoundationServiceStatusResponse",
+      "DeserializesEnvelope": true
+    },
+    {
+      "MethodName": "GetFoundationRuntimeChangeGateStatusAsync",
+      "Route": "/api/admin/foundation/runtime-change-gate",
+      "ResponseType": "FoundationServiceStatusResponse",
+      "DeserializesEnvelope": true
+    },
+    {
+      "MethodName": "GetFoundationVectorFormalPreviewStatusAsync",
+      "Route": "/api/admin/foundation/vector-formal-preview",
+      "ResponseType": "FoundationServiceStatusResponse",
+      "DeserializesEnvelope": true
+    },
+    {
+      "MethodName": "GetFoundationPostgresFreezeStatusAsync",
+      "Route": "/api/admin/foundation/postgres-freeze-status",
+      "ResponseType": "FoundationServiceStatusResponse",
+      "DeserializesEnvelope": true
+    }
+  ],
+  "ReadOnly": true
+}

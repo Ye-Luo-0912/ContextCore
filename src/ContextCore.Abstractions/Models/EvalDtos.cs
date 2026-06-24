@@ -1,5 +1,3 @@
-using ContextCore.Abstractions;
-
 namespace ContextCore.Abstractions.Models;
 
 /// <summary>上下文评测样本，描述一次 query 的期望命中、排除、实体、约束和不确定性。</summary>
@@ -131,6 +129,10 @@ public sealed class ContextEvalResult
     public int TokenBudget { get; init; }
     public IReadOnlyList<string> SelectedIds { get; init; } = Array.Empty<string>();
     public IReadOnlyList<string> ExcludedIds { get; init; } = Array.Empty<string>();
+    public Dictionary<string, string> PackageMetadata { get; init; } = new(StringComparer.OrdinalIgnoreCase);
+    public IReadOnlyList<string> PackageSectionNames { get; init; } = Array.Empty<string>();
+    public Dictionary<string, IReadOnlyList<string>> PackageSectionItemRefs { get; init; } =
+        new(StringComparer.OrdinalIgnoreCase);
     public string PackageBuildTrace { get; init; } = string.Empty;
     
     public IReadOnlyList<string> MustHit { get; init; } = Array.Empty<string>();

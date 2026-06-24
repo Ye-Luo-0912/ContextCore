@@ -1,0 +1,22 @@
+﻿{
+  "generatedAt": "2026-06-14T11:03:20.0120143+00:00",
+  "workspaceId": "postgres-job-queue-parity",
+  "collectionId": "jobs",
+  "jobCount": 0,
+  "operationCount": 17,
+  "mismatchCount": 0,
+  "postgresFailureCount": 0,
+  "enqueueListParityPassed": true,
+  "duplicateUpsertParityPassed": true,
+  "statusTransitionParityPassed": true,
+  "retryCountParityPassed": true,
+  "cancelParityPassed": true,
+  "deadLetterParityPassed": true,
+  "cleanupPerformed": true,
+  "mismatches": [],
+  "diagnostics": [
+    "UseForRuntime=false",
+    "RuntimeWorkerUnchanged"
+  ],
+  "recommendation": "ReadyForDualWriteShadowRead"
+}

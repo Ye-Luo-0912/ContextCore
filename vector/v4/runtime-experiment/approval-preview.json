@@ -1,0 +1,47 @@
+﻿{
+  "OperationId": "vector-scoped-runtime-experiment-approval-4a5a1a7045e94b6baf53f7f9b6c08805",
+  "CreatedAt": "2026-06-17T03:36:35.6635275+00:00",
+  "ProposalId": "vsrep-bb5402e39c0f1333",
+  "ApprovalId": "vsrea-31e143c986997d36",
+  "ApprovalPassed": false,
+  "PreviewOnly": true,
+  "RecordWritten": false,
+  "Confirmed": false,
+  "ApprovalMode": "NoOpHarnessOnly",
+  "ApprovedBy": "",
+  "RollbackPlanAvailable": true,
+  "KillSwitchPlanAvailable": true,
+  "RuntimeSwitchAllowed": false,
+  "FormalRetrievalAllowed": false,
+  "ReadyForRuntimeSwitch": false,
+  "UseForRuntime": false,
+  "FormalPackageWriteAllowed": false,
+  "PackingPolicyChangeAllowed": false,
+  "Recommendation": "NeedsManualApproval",
+  "ApprovalRecord": {
+    "ApprovalId": "vsrea-31e143c986997d36",
+    "ProposalId": "vsrep-bb5402e39c0f1333",
+    "ApprovedBy": "",
+    "ApprovedAt": "2026-06-17T03:36:35.6621746+00:00",
+    "ApprovalScope": "contextcore_eval/dataset-v2-stress/dataset-v2-stress",
+    "ApprovalMode": "NoOpHarnessOnly",
+    "Reason": "V4.9 no-op harness approval for scoped runtime experiment proposal.",
+    "RiskAcknowledgement": "No runtime switch, no formal retrieval, no formal package write, no PackingPolicy mutation.",
+    "RollbackAcknowledgement": "Remove the selected scope from the proposal allowlist, keep UseForRuntime=false, discard shadow artifacts, rerun V4.7 and runtime-change gates.",
+    "ExpiresAt": "2026-06-24T03:36:35.6623779+00:00",
+    "Revoked": false,
+    "Metadata": {
+      "generatedBy": "scoped-runtime-experiment-approval-service/v1",
+      "proposalRecommendation": "ReadyForManualExperimentApproval",
+      "approvalMode": "NoOpHarnessOnly",
+      "useForRuntime": "false",
+      "formalRetrievalAllowed": "false",
+      "runtimeSwitchAllowed": "false",
+      "formalPackageWriteAllowed": "false"
+    }
+  },
+  "BlockedReasons": [
+    "ApprovedByMissing",
+    "ExplicitConfirmMissing"
+  ]
+}

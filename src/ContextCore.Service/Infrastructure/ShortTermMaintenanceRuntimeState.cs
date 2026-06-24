@@ -1,4 +1,5 @@
 using ContextCore.Abstractions;
+using ContextCore.Abstractions.Models;
 
 namespace ContextCore.Service.Infrastructure;
 

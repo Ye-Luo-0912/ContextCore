@@ -1,0 +1,32 @@
+﻿{
+  "OperationId": "vector-scoped-runtime-experiment-dry-run-route-a78c42b0cdf640e8ad67e2385d311c1e",
+  "CreatedAt": "2026-06-17T06:26:18.1201089+00:00",
+  "PreflightPassed": true,
+  "Recommendation": "ReadyForGuardedScopedRuntimeExperiment",
+  "ProposalId": "vsrep-bb5402e39c0f1333",
+  "ApprovalId": "vsrea-49cee0621cf6bc41",
+  "Mode": "PreflightAndDryRunRoute",
+  "SelectedScopes": [
+    "contextcore_eval/dataset-v2-stress/dataset-v2-stress"
+  ],
+  "KillSwitchAvailable": true,
+  "RollbackPlanAvailable": true,
+  "TraceSinkAvailable": true,
+  "ConfigPatchPreviewed": true,
+  "ConfigPatchWritten": false,
+  "RuntimeRouteDryRunExecuted": true,
+  "DryRunRouteHitCount": 1,
+  "NonAllowlistedScopeChecked": true,
+  "NonAllowlistedScopeLeakCount": 0,
+  "RuntimeMutated": false,
+  "VectorStoreBindingChanged": false,
+  "FormalPackageWritten": false,
+  "PackingPolicyChanged": false,
+  "PackageOutputChanged": false,
+  "FormalRetrievalAllowed": false,
+  "RuntimeSwitchAllowed": false,
+  "ReadyForRuntimeSwitch": false,
+  "RiskAfterPolicy": 0,
+  "FormalOutputChanged": 0,
+  "BlockedReasons": []
+}

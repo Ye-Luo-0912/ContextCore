@@ -1,6 +1,4 @@
-using ContextCore.Abstractions.Models;
-
-namespace ContextCore.Abstractions;
+namespace ContextCore.Abstractions.Models;
 
 /// <summary>中期候选记忆的一等治理视图，不参与正式检索排序或打包决策。</summary>
 public sealed class CandidateMemoryItem

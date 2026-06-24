@@ -1,0 +1,1144 @@
+﻿{
+  "CreatedAt": "2026-06-08T12:40:58.5843032+00:00",
+  "ContextsRootPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\eval\\contexts",
+  "CorpusFileCount": 11,
+  "RelationCount": 21,
+  "UnknownRelationTypes": {},
+  "LegacyRelationTypes": {
+    "supersedes": {
+      "LegacyType": "supersedes",
+      "NormalizedType": "replaces",
+      "Count": 11
+    }
+  },
+  "MissingEvidenceRelations": [
+    {
+      "Category": "automation",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:auto-backup-supersede",
+      "SourceId": "memory:automation-backup-strategy-v2",
+      "TargetId": "memory:automation-backup-strategy-v1",
+      "RelationType": "supersedes",
+      "NormalizedType": "replaces",
+      "Reason": "missing evidence metadata",
+      "Suggestion": "backfill fixture evidence when deterministic; otherwise mark NeedsEvidence/Candidate"
+    },
+    {
+      "Category": "automation",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:auto-retry-supersede",
+      "SourceId": "memory:automation-conflict-v2",
+      "TargetId": "memory:automation-conflict-v1",
+      "RelationType": "supersedes",
+      "NormalizedType": "replaces",
+      "Reason": "missing evidence metadata",
+      "Suggestion": "backfill fixture evidence when deterministic; otherwise mark NeedsEvidence/Candidate"
+    },
+    {
+      "Category": "chat",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:chat-drink-supersede",
+      "SourceId": "memory:chat-drink-preference-v2",
+      "TargetId": "memory:chat-drink-preference-v1",
+      "RelationType": "supersedes",
+      "NormalizedType": "replaces",
+      "Reason": "missing evidence metadata",
+      "Suggestion": "backfill fixture evidence when deterministic; otherwise mark NeedsEvidence/Candidate"
+    },
+    {
+      "Category": "chat",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:chat-location-supersede",
+      "SourceId": "memory:chat-version-conflict-v2",
+      "TargetId": "memory:chat-version-conflict-v1",
+      "RelationType": "supersedes",
+      "NormalizedType": "replaces",
+      "Reason": "missing evidence metadata",
+      "Suggestion": "backfill fixture evidence when deterministic; otherwise mark NeedsEvidence/Candidate"
+    },
+    {
+      "Category": "chat",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:chat-supersede",
+      "SourceId": "memory:chat-active-plan",
+      "TargetId": "memory:chat-old-topic",
+      "RelationType": "supersedes",
+      "NormalizedType": "replaces",
+      "Reason": "missing evidence metadata",
+      "Suggestion": "backfill fixture evidence when deterministic; otherwise mark NeedsEvidence/Candidate"
+    },
+    {
+      "Category": "coding-mode",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:coding-sig-supersede",
+      "SourceId": "memory:coding-conflict-v2",
+      "TargetId": "memory:coding-conflict-v1",
+      "RelationType": "supersedes",
+      "NormalizedType": "replaces",
+      "Reason": "missing evidence metadata",
+      "Suggestion": "backfill fixture evidence when deterministic; otherwise mark NeedsEvidence/Candidate"
+    },
+    {
+      "Category": "coding-mode",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:coding-timeout-supersede",
+      "SourceId": "memory:coding-timeout-v2",
+      "TargetId": "memory:coding-timeout-v1",
+      "RelationType": "supersedes",
+      "NormalizedType": "replaces",
+      "Reason": "missing evidence metadata",
+      "Suggestion": "backfill fixture evidence when deterministic; otherwise mark NeedsEvidence/Candidate"
+    },
+    {
+      "Category": "novel",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:novel-concept-supersede",
+      "SourceId": "memory:novel-conflict-v2",
+      "TargetId": "memory:novel-conflict-v1",
+      "RelationType": "supersedes",
+      "NormalizedType": "replaces",
+      "Reason": "missing evidence metadata",
+      "Suggestion": "backfill fixture evidence when deterministic; otherwise mark NeedsEvidence/Candidate"
+    },
+    {
+      "Category": "novel",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:novel-conflict",
+      "SourceId": "memory:novel-current-plot",
+      "TargetId": "memory:novel-plot-old-draft",
+      "RelationType": "conflicts_with",
+      "NormalizedType": "conflicts_with",
+      "Reason": "missing evidence metadata",
+      "Suggestion": "backfill fixture evidence when deterministic; otherwise mark NeedsEvidence/Candidate"
+    },
+    {
+      "Category": "novel",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:novel-weapon-supersede",
+      "SourceId": "memory:novel-weapon-v2",
+      "TargetId": "memory:novel-weapon-v1",
+      "RelationType": "supersedes",
+      "NormalizedType": "replaces",
+      "Reason": "missing evidence metadata",
+      "Suggestion": "backfill fixture evidence when deterministic; otherwise mark NeedsEvidence/Candidate"
+    },
+    {
+      "Category": "project",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:project-conflict-supersede",
+      "SourceId": "memory:project-conflict-v2",
+      "TargetId": "memory:project-conflict-v1",
+      "RelationType": "supersedes",
+      "NormalizedType": "replaces",
+      "Reason": "missing evidence metadata",
+      "Suggestion": "backfill fixture evidence when deterministic; otherwise mark NeedsEvidence/Candidate"
+    },
+    {
+      "Category": "project",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:project-pool-supersede",
+      "SourceId": "memory:project-pool-v2",
+      "TargetId": "memory:project-pool-v1",
+      "RelationType": "supersedes",
+      "NormalizedType": "replaces",
+      "Reason": "missing evidence metadata",
+      "Suggestion": "backfill fixture evidence when deterministic; otherwise mark NeedsEvidence/Candidate"
+    },
+    {
+      "Category": "retrieval",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:arch-ci",
+      "SourceId": "memory:arch-hybrid-decision",
+      "TargetId": "ret:ci-pipeline",
+      "RelationType": "related_to",
+      "NormalizedType": "related_to",
+      "Reason": "missing evidence metadata",
+      "Suggestion": "backfill fixture evidence when deterministic; otherwise mark NeedsEvidence/Candidate"
+    },
+    {
+      "Category": "retrieval",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:audit-log-retention",
+      "SourceId": "ret:audit-trail",
+      "TargetId": "ret:log-retention",
+      "RelationType": "related_to",
+      "NormalizedType": "related_to",
+      "Reason": "missing evidence metadata",
+      "Suggestion": "backfill fixture evidence when deterministic; otherwise mark NeedsEvidence/Candidate"
+    },
+    {
+      "Category": "retrieval",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:embed-cfg-supersedes",
+      "SourceId": "memory:current-embed-cfg",
+      "TargetId": "memory:deprecated-embed-cfg",
+      "RelationType": "replaces",
+      "NormalizedType": "replaces",
+      "Reason": "missing evidence metadata",
+      "Suggestion": "backfill fixture evidence when deterministic; otherwise mark NeedsEvidence/Candidate"
+    },
+    {
+      "Category": "retrieval",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:hnsw-prereq",
+      "SourceId": "ret:hnsw-benchmark",
+      "TargetId": "memory:prereq-tokenizer",
+      "RelationType": "depends_on",
+      "NormalizedType": "depends_on",
+      "Reason": "missing evidence metadata",
+      "Suggestion": "backfill fixture evidence when deterministic; otherwise mark NeedsEvidence/Candidate"
+    },
+    {
+      "Category": "retrieval",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:hybrid-supersedes",
+      "SourceId": "memory:arch-hybrid-decision",
+      "TargetId": "ret:deprecated-es",
+      "RelationType": "replaces",
+      "NormalizedType": "replaces",
+      "Reason": "missing evidence metadata",
+      "Suggestion": "backfill fixture evidence when deterministic; otherwise mark NeedsEvidence/Candidate"
+    },
+    {
+      "Category": "retrieval",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:pipeline-cfg",
+      "SourceId": "ret:embedding-pipeline",
+      "TargetId": "memory:current-embed-cfg",
+      "RelationType": "related_to",
+      "NormalizedType": "related_to",
+      "Reason": "missing evidence metadata",
+      "Suggestion": "backfill fixture evidence when deterministic; otherwise mark NeedsEvidence/Candidate"
+    },
+    {
+      "Category": "retrieval",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:sprint-retrieval-task",
+      "SourceId": "memory:sprint-3-goal",
+      "TargetId": "memory:active-retrieval-task",
+      "RelationType": "related_to",
+      "NormalizedType": "related_to",
+      "Reason": "missing evidence metadata",
+      "Suggestion": "backfill fixture evidence when deterministic; otherwise mark NeedsEvidence/Candidate"
+    },
+    {
+      "Category": "retrieval",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:sprint-storage-check",
+      "SourceId": "memory:sprint-3-goal",
+      "TargetId": "ret:storage-health-check",
+      "RelationType": "related_to",
+      "NormalizedType": "related_to",
+      "Reason": "missing evidence metadata",
+      "Suggestion": "backfill fixture evidence when deterministic; otherwise mark NeedsEvidence/Candidate"
+    },
+    {
+      "Category": "retrieval",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:task-sideeffect",
+      "SourceId": "memory:active-retrieval-task",
+      "TargetId": "memory:side-effect-cache-clear",
+      "RelationType": "related_to",
+      "NormalizedType": "related_to",
+      "Reason": "missing evidence metadata",
+      "Suggestion": "backfill fixture evidence when deterministic; otherwise mark NeedsEvidence/Candidate"
+    }
+  ],
+  "MissingConfidenceRelations": [],
+  "MissingLifecycleRelations": [
+    {
+      "Category": "automation",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:auto-retry-supersede",
+      "SourceId": "memory:automation-conflict-v2",
+      "TargetId": "memory:automation-conflict-v1",
+      "RelationType": "supersedes",
+      "NormalizedType": "replaces",
+      "Reason": "missing lifecycle",
+      "Suggestion": "set lifecycle=Active for deterministic fixtures"
+    },
+    {
+      "Category": "automation",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:auto-backup-supersede",
+      "SourceId": "memory:automation-backup-strategy-v2",
+      "TargetId": "memory:automation-backup-strategy-v1",
+      "RelationType": "supersedes",
+      "NormalizedType": "replaces",
+      "Reason": "missing lifecycle",
+      "Suggestion": "set lifecycle=Active for deterministic fixtures"
+    },
+    {
+      "Category": "chat",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:chat-supersede",
+      "SourceId": "memory:chat-active-plan",
+      "TargetId": "memory:chat-old-topic",
+      "RelationType": "supersedes",
+      "NormalizedType": "replaces",
+      "Reason": "missing lifecycle",
+      "Suggestion": "set lifecycle=Active for deterministic fixtures"
+    },
+    {
+      "Category": "chat",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:chat-location-supersede",
+      "SourceId": "memory:chat-version-conflict-v2",
+      "TargetId": "memory:chat-version-conflict-v1",
+      "RelationType": "supersedes",
+      "NormalizedType": "replaces",
+      "Reason": "missing lifecycle",
+      "Suggestion": "set lifecycle=Active for deterministic fixtures"
+    },
+    {
+      "Category": "chat",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:chat-drink-supersede",
+      "SourceId": "memory:chat-drink-preference-v2",
+      "TargetId": "memory:chat-drink-preference-v1",
+      "RelationType": "supersedes",
+      "NormalizedType": "replaces",
+      "Reason": "missing lifecycle",
+      "Suggestion": "set lifecycle=Active for deterministic fixtures"
+    },
+    {
+      "Category": "coding-mode",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:coding-sig-supersede",
+      "SourceId": "memory:coding-conflict-v2",
+      "TargetId": "memory:coding-conflict-v1",
+      "RelationType": "supersedes",
+      "NormalizedType": "replaces",
+      "Reason": "missing lifecycle",
+      "Suggestion": "set lifecycle=Active for deterministic fixtures"
+    },
+    {
+      "Category": "coding-mode",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:coding-timeout-supersede",
+      "SourceId": "memory:coding-timeout-v2",
+      "TargetId": "memory:coding-timeout-v1",
+      "RelationType": "supersedes",
+      "NormalizedType": "replaces",
+      "Reason": "missing lifecycle",
+      "Suggestion": "set lifecycle=Active for deterministic fixtures"
+    },
+    {
+      "Category": "novel",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:novel-conflict",
+      "SourceId": "memory:novel-current-plot",
+      "TargetId": "memory:novel-plot-old-draft",
+      "RelationType": "conflicts_with",
+      "NormalizedType": "conflicts_with",
+      "Reason": "missing lifecycle",
+      "Suggestion": "set lifecycle=Active for deterministic fixtures"
+    },
+    {
+      "Category": "novel",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:novel-concept-supersede",
+      "SourceId": "memory:novel-conflict-v2",
+      "TargetId": "memory:novel-conflict-v1",
+      "RelationType": "supersedes",
+      "NormalizedType": "replaces",
+      "Reason": "missing lifecycle",
+      "Suggestion": "set lifecycle=Active for deterministic fixtures"
+    },
+    {
+      "Category": "novel",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:novel-weapon-supersede",
+      "SourceId": "memory:novel-weapon-v2",
+      "TargetId": "memory:novel-weapon-v1",
+      "RelationType": "supersedes",
+      "NormalizedType": "replaces",
+      "Reason": "missing lifecycle",
+      "Suggestion": "set lifecycle=Active for deterministic fixtures"
+    },
+    {
+      "Category": "project",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:project-conflict-supersede",
+      "SourceId": "memory:project-conflict-v2",
+      "TargetId": "memory:project-conflict-v1",
+      "RelationType": "supersedes",
+      "NormalizedType": "replaces",
+      "Reason": "missing lifecycle",
+      "Suggestion": "set lifecycle=Active for deterministic fixtures"
+    },
+    {
+      "Category": "project",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:project-pool-supersede",
+      "SourceId": "memory:project-pool-v2",
+      "TargetId": "memory:project-pool-v1",
+      "RelationType": "supersedes",
+      "NormalizedType": "replaces",
+      "Reason": "missing lifecycle",
+      "Suggestion": "set lifecycle=Active for deterministic fixtures"
+    },
+    {
+      "Category": "retrieval",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:hnsw-prereq",
+      "SourceId": "ret:hnsw-benchmark",
+      "TargetId": "memory:prereq-tokenizer",
+      "RelationType": "depends_on",
+      "NormalizedType": "depends_on",
+      "Reason": "missing lifecycle",
+      "Suggestion": "set lifecycle=Active for deterministic fixtures"
+    },
+    {
+      "Category": "retrieval",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:task-sideeffect",
+      "SourceId": "memory:active-retrieval-task",
+      "TargetId": "memory:side-effect-cache-clear",
+      "RelationType": "related_to",
+      "NormalizedType": "related_to",
+      "Reason": "missing lifecycle",
+      "Suggestion": "set lifecycle=Active for deterministic fixtures"
+    },
+    {
+      "Category": "retrieval",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:pipeline-cfg",
+      "SourceId": "ret:embedding-pipeline",
+      "TargetId": "memory:current-embed-cfg",
+      "RelationType": "related_to",
+      "NormalizedType": "related_to",
+      "Reason": "missing lifecycle",
+      "Suggestion": "set lifecycle=Active for deterministic fixtures"
+    },
+    {
+      "Category": "retrieval",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:hybrid-supersedes",
+      "SourceId": "memory:arch-hybrid-decision",
+      "TargetId": "ret:deprecated-es",
+      "RelationType": "replaces",
+      "NormalizedType": "replaces",
+      "Reason": "missing lifecycle",
+      "Suggestion": "set lifecycle=Active for deterministic fixtures"
+    },
+    {
+      "Category": "retrieval",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:embed-cfg-supersedes",
+      "SourceId": "memory:current-embed-cfg",
+      "TargetId": "memory:deprecated-embed-cfg",
+      "RelationType": "replaces",
+      "NormalizedType": "replaces",
+      "Reason": "missing lifecycle",
+      "Suggestion": "set lifecycle=Active for deterministic fixtures"
+    },
+    {
+      "Category": "retrieval",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:audit-log-retention",
+      "SourceId": "ret:audit-trail",
+      "TargetId": "ret:log-retention",
+      "RelationType": "related_to",
+      "NormalizedType": "related_to",
+      "Reason": "missing lifecycle",
+      "Suggestion": "set lifecycle=Active for deterministic fixtures"
+    },
+    {
+      "Category": "retrieval",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:sprint-storage-check",
+      "SourceId": "memory:sprint-3-goal",
+      "TargetId": "ret:storage-health-check",
+      "RelationType": "related_to",
+      "NormalizedType": "related_to",
+      "Reason": "missing lifecycle",
+      "Suggestion": "set lifecycle=Active for deterministic fixtures"
+    },
+    {
+      "Category": "retrieval",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:sprint-retrieval-task",
+      "SourceId": "memory:sprint-3-goal",
+      "TargetId": "memory:active-retrieval-task",
+      "RelationType": "related_to",
+      "NormalizedType": "related_to",
+      "Reason": "missing lifecycle",
+      "Suggestion": "set lifecycle=Active for deterministic fixtures"
+    },
+    {
+      "Category": "retrieval",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:arch-ci",
+      "SourceId": "memory:arch-hybrid-decision",
+      "TargetId": "ret:ci-pipeline",
+      "RelationType": "related_to",
+      "NormalizedType": "related_to",
+      "Reason": "missing lifecycle",
+      "Suggestion": "set lifecycle=Active for deterministic fixtures"
+    }
+  ],
+  "MissingReviewStatusRelations": [
+    {
+      "Category": "automation",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:auto-retry-supersede",
+      "SourceId": "memory:automation-conflict-v2",
+      "TargetId": "memory:automation-conflict-v1",
+      "RelationType": "supersedes",
+      "NormalizedType": "replaces",
+      "Reason": "missing reviewStatus",
+      "Suggestion": "set reviewStatus=Reviewed for deterministic fixtures or NeedsEvidence for incomplete relations"
+    },
+    {
+      "Category": "automation",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:auto-backup-supersede",
+      "SourceId": "memory:automation-backup-strategy-v2",
+      "TargetId": "memory:automation-backup-strategy-v1",
+      "RelationType": "supersedes",
+      "NormalizedType": "replaces",
+      "Reason": "missing reviewStatus",
+      "Suggestion": "set reviewStatus=Reviewed for deterministic fixtures or NeedsEvidence for incomplete relations"
+    },
+    {
+      "Category": "chat",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:chat-supersede",
+      "SourceId": "memory:chat-active-plan",
+      "TargetId": "memory:chat-old-topic",
+      "RelationType": "supersedes",
+      "NormalizedType": "replaces",
+      "Reason": "missing reviewStatus",
+      "Suggestion": "set reviewStatus=Reviewed for deterministic fixtures or NeedsEvidence for incomplete relations"
+    },
+    {
+      "Category": "chat",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:chat-location-supersede",
+      "SourceId": "memory:chat-version-conflict-v2",
+      "TargetId": "memory:chat-version-conflict-v1",
+      "RelationType": "supersedes",
+      "NormalizedType": "replaces",
+      "Reason": "missing reviewStatus",
+      "Suggestion": "set reviewStatus=Reviewed for deterministic fixtures or NeedsEvidence for incomplete relations"
+    },
+    {
+      "Category": "chat",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:chat-drink-supersede",
+      "SourceId": "memory:chat-drink-preference-v2",
+      "TargetId": "memory:chat-drink-preference-v1",
+      "RelationType": "supersedes",
+      "NormalizedType": "replaces",
+      "Reason": "missing reviewStatus",
+      "Suggestion": "set reviewStatus=Reviewed for deterministic fixtures or NeedsEvidence for incomplete relations"
+    },
+    {
+      "Category": "coding-mode",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:coding-sig-supersede",
+      "SourceId": "memory:coding-conflict-v2",
+      "TargetId": "memory:coding-conflict-v1",
+      "RelationType": "supersedes",
+      "NormalizedType": "replaces",
+      "Reason": "missing reviewStatus",
+      "Suggestion": "set reviewStatus=Reviewed for deterministic fixtures or NeedsEvidence for incomplete relations"
+    },
+    {
+      "Category": "coding-mode",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:coding-timeout-supersede",
+      "SourceId": "memory:coding-timeout-v2",
+      "TargetId": "memory:coding-timeout-v1",
+      "RelationType": "supersedes",
+      "NormalizedType": "replaces",
+      "Reason": "missing reviewStatus",
+      "Suggestion": "set reviewStatus=Reviewed for deterministic fixtures or NeedsEvidence for incomplete relations"
+    },
+    {
+      "Category": "novel",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:novel-conflict",
+      "SourceId": "memory:novel-current-plot",
+      "TargetId": "memory:novel-plot-old-draft",
+      "RelationType": "conflicts_with",
+      "NormalizedType": "conflicts_with",
+      "Reason": "missing reviewStatus",
+      "Suggestion": "set reviewStatus=Reviewed for deterministic fixtures or NeedsEvidence for incomplete relations"
+    },
+    {
+      "Category": "novel",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:novel-concept-supersede",
+      "SourceId": "memory:novel-conflict-v2",
+      "TargetId": "memory:novel-conflict-v1",
+      "RelationType": "supersedes",
+      "NormalizedType": "replaces",
+      "Reason": "missing reviewStatus",
+      "Suggestion": "set reviewStatus=Reviewed for deterministic fixtures or NeedsEvidence for incomplete relations"
+    },
+    {
+      "Category": "novel",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:novel-weapon-supersede",
+      "SourceId": "memory:novel-weapon-v2",
+      "TargetId": "memory:novel-weapon-v1",
+      "RelationType": "supersedes",
+      "NormalizedType": "replaces",
+      "Reason": "missing reviewStatus",
+      "Suggestion": "set reviewStatus=Reviewed for deterministic fixtures or NeedsEvidence for incomplete relations"
+    },
+    {
+      "Category": "project",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:project-conflict-supersede",
+      "SourceId": "memory:project-conflict-v2",
+      "TargetId": "memory:project-conflict-v1",
+      "RelationType": "supersedes",
+      "NormalizedType": "replaces",
+      "Reason": "missing reviewStatus",
+      "Suggestion": "set reviewStatus=Reviewed for deterministic fixtures or NeedsEvidence for incomplete relations"
+    },
+    {
+      "Category": "project",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:project-pool-supersede",
+      "SourceId": "memory:project-pool-v2",
+      "TargetId": "memory:project-pool-v1",
+      "RelationType": "supersedes",
+      "NormalizedType": "replaces",
+      "Reason": "missing reviewStatus",
+      "Suggestion": "set reviewStatus=Reviewed for deterministic fixtures or NeedsEvidence for incomplete relations"
+    },
+    {
+      "Category": "retrieval",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:hnsw-prereq",
+      "SourceId": "ret:hnsw-benchmark",
+      "TargetId": "memory:prereq-tokenizer",
+      "RelationType": "depends_on",
+      "NormalizedType": "depends_on",
+      "Reason": "missing reviewStatus",
+      "Suggestion": "set reviewStatus=Reviewed for deterministic fixtures or NeedsEvidence for incomplete relations"
+    },
+    {
+      "Category": "retrieval",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:task-sideeffect",
+      "SourceId": "memory:active-retrieval-task",
+      "TargetId": "memory:side-effect-cache-clear",
+      "RelationType": "related_to",
+      "NormalizedType": "related_to",
+      "Reason": "missing reviewStatus",
+      "Suggestion": "set reviewStatus=Reviewed for deterministic fixtures or NeedsEvidence for incomplete relations"
+    },
+    {
+      "Category": "retrieval",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:pipeline-cfg",
+      "SourceId": "ret:embedding-pipeline",
+      "TargetId": "memory:current-embed-cfg",
+      "RelationType": "related_to",
+      "NormalizedType": "related_to",
+      "Reason": "missing reviewStatus",
+      "Suggestion": "set reviewStatus=Reviewed for deterministic fixtures or NeedsEvidence for incomplete relations"
+    },
+    {
+      "Category": "retrieval",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:hybrid-supersedes",
+      "SourceId": "memory:arch-hybrid-decision",
+      "TargetId": "ret:deprecated-es",
+      "RelationType": "replaces",
+      "NormalizedType": "replaces",
+      "Reason": "missing reviewStatus",
+      "Suggestion": "set reviewStatus=Reviewed for deterministic fixtures or NeedsEvidence for incomplete relations"
+    },
+    {
+      "Category": "retrieval",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:embed-cfg-supersedes",
+      "SourceId": "memory:current-embed-cfg",
+      "TargetId": "memory:deprecated-embed-cfg",
+      "RelationType": "replaces",
+      "NormalizedType": "replaces",
+      "Reason": "missing reviewStatus",
+      "Suggestion": "set reviewStatus=Reviewed for deterministic fixtures or NeedsEvidence for incomplete relations"
+    },
+    {
+      "Category": "retrieval",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:audit-log-retention",
+      "SourceId": "ret:audit-trail",
+      "TargetId": "ret:log-retention",
+      "RelationType": "related_to",
+      "NormalizedType": "related_to",
+      "Reason": "missing reviewStatus",
+      "Suggestion": "set reviewStatus=Reviewed for deterministic fixtures or NeedsEvidence for incomplete relations"
+    },
+    {
+      "Category": "retrieval",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:sprint-storage-check",
+      "SourceId": "memory:sprint-3-goal",
+      "TargetId": "ret:storage-health-check",
+      "RelationType": "related_to",
+      "NormalizedType": "related_to",
+      "Reason": "missing reviewStatus",
+      "Suggestion": "set reviewStatus=Reviewed for deterministic fixtures or NeedsEvidence for incomplete relations"
+    },
+    {
+      "Category": "retrieval",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:sprint-retrieval-task",
+      "SourceId": "memory:sprint-3-goal",
+      "TargetId": "memory:active-retrieval-task",
+      "RelationType": "related_to",
+      "NormalizedType": "related_to",
+      "Reason": "missing reviewStatus",
+      "Suggestion": "set reviewStatus=Reviewed for deterministic fixtures or NeedsEvidence for incomplete relations"
+    },
+    {
+      "Category": "retrieval",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:arch-ci",
+      "SourceId": "memory:arch-hybrid-decision",
+      "TargetId": "ret:ci-pipeline",
+      "RelationType": "related_to",
+      "NormalizedType": "related_to",
+      "Reason": "missing reviewStatus",
+      "Suggestion": "set reviewStatus=Reviewed for deterministic fixtures or NeedsEvidence for incomplete relations"
+    }
+  ],
+  "MigrationCandidates": [
+    {
+      "Category": "automation",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:auto-retry-supersede",
+      "LegacyType": "supersedes",
+      "NormalizedType": "replaces",
+      "SourceId": "memory:automation-conflict-v2",
+      "TargetId": "memory:automation-conflict-v1",
+      "Suggestion": "replace relationType \u0027supersedes\u0027 with \u0027replaces\u0027"
+    },
+    {
+      "Category": "automation",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:auto-backup-supersede",
+      "LegacyType": "supersedes",
+      "NormalizedType": "replaces",
+      "SourceId": "memory:automation-backup-strategy-v2",
+      "TargetId": "memory:automation-backup-strategy-v1",
+      "Suggestion": "replace relationType \u0027supersedes\u0027 with \u0027replaces\u0027"
+    },
+    {
+      "Category": "chat",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:chat-supersede",
+      "LegacyType": "supersedes",
+      "NormalizedType": "replaces",
+      "SourceId": "memory:chat-active-plan",
+      "TargetId": "memory:chat-old-topic",
+      "Suggestion": "replace relationType \u0027supersedes\u0027 with \u0027replaces\u0027"
+    },
+    {
+      "Category": "chat",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:chat-location-supersede",
+      "LegacyType": "supersedes",
+      "NormalizedType": "replaces",
+      "SourceId": "memory:chat-version-conflict-v2",
+      "TargetId": "memory:chat-version-conflict-v1",
+      "Suggestion": "replace relationType \u0027supersedes\u0027 with \u0027replaces\u0027"
+    },
+    {
+      "Category": "chat",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:chat-drink-supersede",
+      "LegacyType": "supersedes",
+      "NormalizedType": "replaces",
+      "SourceId": "memory:chat-drink-preference-v2",
+      "TargetId": "memory:chat-drink-preference-v1",
+      "Suggestion": "replace relationType \u0027supersedes\u0027 with \u0027replaces\u0027"
+    },
+    {
+      "Category": "coding-mode",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:coding-sig-supersede",
+      "LegacyType": "supersedes",
+      "NormalizedType": "replaces",
+      "SourceId": "memory:coding-conflict-v2",
+      "TargetId": "memory:coding-conflict-v1",
+      "Suggestion": "replace relationType \u0027supersedes\u0027 with \u0027replaces\u0027"
+    },
+    {
+      "Category": "coding-mode",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:coding-timeout-supersede",
+      "LegacyType": "supersedes",
+      "NormalizedType": "replaces",
+      "SourceId": "memory:coding-timeout-v2",
+      "TargetId": "memory:coding-timeout-v1",
+      "Suggestion": "replace relationType \u0027supersedes\u0027 with \u0027replaces\u0027"
+    },
+    {
+      "Category": "novel",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:novel-concept-supersede",
+      "LegacyType": "supersedes",
+      "NormalizedType": "replaces",
+      "SourceId": "memory:novel-conflict-v2",
+      "TargetId": "memory:novel-conflict-v1",
+      "Suggestion": "replace relationType \u0027supersedes\u0027 with \u0027replaces\u0027"
+    },
+    {
+      "Category": "novel",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:novel-weapon-supersede",
+      "LegacyType": "supersedes",
+      "NormalizedType": "replaces",
+      "SourceId": "memory:novel-weapon-v2",
+      "TargetId": "memory:novel-weapon-v1",
+      "Suggestion": "replace relationType \u0027supersedes\u0027 with \u0027replaces\u0027"
+    },
+    {
+      "Category": "project",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:project-conflict-supersede",
+      "LegacyType": "supersedes",
+      "NormalizedType": "replaces",
+      "SourceId": "memory:project-conflict-v2",
+      "TargetId": "memory:project-conflict-v1",
+      "Suggestion": "replace relationType \u0027supersedes\u0027 with \u0027replaces\u0027"
+    },
+    {
+      "Category": "project",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:project-pool-supersede",
+      "LegacyType": "supersedes",
+      "NormalizedType": "replaces",
+      "SourceId": "memory:project-pool-v2",
+      "TargetId": "memory:project-pool-v1",
+      "Suggestion": "replace relationType \u0027supersedes\u0027 with \u0027replaces\u0027"
+    }
+  ],
+  "BackfillCandidates": [
+    {
+      "Category": "automation",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:auto-retry-supersede",
+      "RelationType": "supersedes",
+      "NormalizedType": "replaces",
+      "MissingFields": [
+        "evidenceRefs/sourceRefs",
+        "lifecycle",
+        "reviewStatus"
+      ],
+      "CanBackfillEvidence": true,
+      "BackfillPolicy": "relation_corpus_fixture_backfill",
+      "Suggestion": "shadow backfill evidenceRefs/sourceRefs/sourceOperationId/confidence/lifecycle/reviewStatus"
+    },
+    {
+      "Category": "automation",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:auto-backup-supersede",
+      "RelationType": "supersedes",
+      "NormalizedType": "replaces",
+      "MissingFields": [
+        "evidenceRefs/sourceRefs",
+        "lifecycle",
+        "reviewStatus"
+      ],
+      "CanBackfillEvidence": true,
+      "BackfillPolicy": "relation_corpus_fixture_backfill",
+      "Suggestion": "shadow backfill evidenceRefs/sourceRefs/sourceOperationId/confidence/lifecycle/reviewStatus"
+    },
+    {
+      "Category": "chat",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:chat-supersede",
+      "RelationType": "supersedes",
+      "NormalizedType": "replaces",
+      "MissingFields": [
+        "evidenceRefs/sourceRefs",
+        "lifecycle",
+        "reviewStatus"
+      ],
+      "CanBackfillEvidence": true,
+      "BackfillPolicy": "relation_corpus_fixture_backfill",
+      "Suggestion": "shadow backfill evidenceRefs/sourceRefs/sourceOperationId/confidence/lifecycle/reviewStatus"
+    },
+    {
+      "Category": "chat",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:chat-location-supersede",
+      "RelationType": "supersedes",
+      "NormalizedType": "replaces",
+      "MissingFields": [
+        "evidenceRefs/sourceRefs",
+        "lifecycle",
+        "reviewStatus"
+      ],
+      "CanBackfillEvidence": true,
+      "BackfillPolicy": "relation_corpus_fixture_backfill",
+      "Suggestion": "shadow backfill evidenceRefs/sourceRefs/sourceOperationId/confidence/lifecycle/reviewStatus"
+    },
+    {
+      "Category": "chat",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:chat-drink-supersede",
+      "RelationType": "supersedes",
+      "NormalizedType": "replaces",
+      "MissingFields": [
+        "evidenceRefs/sourceRefs",
+        "lifecycle",
+        "reviewStatus"
+      ],
+      "CanBackfillEvidence": true,
+      "BackfillPolicy": "relation_corpus_fixture_backfill",
+      "Suggestion": "shadow backfill evidenceRefs/sourceRefs/sourceOperationId/confidence/lifecycle/reviewStatus"
+    },
+    {
+      "Category": "coding-mode",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:coding-sig-supersede",
+      "RelationType": "supersedes",
+      "NormalizedType": "replaces",
+      "MissingFields": [
+        "evidenceRefs/sourceRefs",
+        "lifecycle",
+        "reviewStatus"
+      ],
+      "CanBackfillEvidence": true,
+      "BackfillPolicy": "relation_corpus_fixture_backfill",
+      "Suggestion": "shadow backfill evidenceRefs/sourceRefs/sourceOperationId/confidence/lifecycle/reviewStatus"
+    },
+    {
+      "Category": "coding-mode",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:coding-timeout-supersede",
+      "RelationType": "supersedes",
+      "NormalizedType": "replaces",
+      "MissingFields": [
+        "evidenceRefs/sourceRefs",
+        "lifecycle",
+        "reviewStatus"
+      ],
+      "CanBackfillEvidence": true,
+      "BackfillPolicy": "relation_corpus_fixture_backfill",
+      "Suggestion": "shadow backfill evidenceRefs/sourceRefs/sourceOperationId/confidence/lifecycle/reviewStatus"
+    },
+    {
+      "Category": "novel",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:novel-conflict",
+      "RelationType": "conflicts_with",
+      "NormalizedType": "conflicts_with",
+      "MissingFields": [
+        "evidenceRefs/sourceRefs",
+        "lifecycle",
+        "reviewStatus"
+      ],
+      "CanBackfillEvidence": true,
+      "BackfillPolicy": "relation_corpus_fixture_backfill",
+      "Suggestion": "shadow backfill evidenceRefs/sourceRefs/sourceOperationId/confidence/lifecycle/reviewStatus"
+    },
+    {
+      "Category": "novel",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:novel-concept-supersede",
+      "RelationType": "supersedes",
+      "NormalizedType": "replaces",
+      "MissingFields": [
+        "evidenceRefs/sourceRefs",
+        "lifecycle",
+        "reviewStatus"
+      ],
+      "CanBackfillEvidence": true,
+      "BackfillPolicy": "relation_corpus_fixture_backfill",
+      "Suggestion": "shadow backfill evidenceRefs/sourceRefs/sourceOperationId/confidence/lifecycle/reviewStatus"
+    },
+    {
+      "Category": "novel",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:novel-weapon-supersede",
+      "RelationType": "supersedes",
+      "NormalizedType": "replaces",
+      "MissingFields": [
+        "evidenceRefs/sourceRefs",
+        "lifecycle",
+        "reviewStatus"
+      ],
+      "CanBackfillEvidence": true,
+      "BackfillPolicy": "relation_corpus_fixture_backfill",
+      "Suggestion": "shadow backfill evidenceRefs/sourceRefs/sourceOperationId/confidence/lifecycle/reviewStatus"
+    },
+    {
+      "Category": "project",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:project-conflict-supersede",
+      "RelationType": "supersedes",
+      "NormalizedType": "replaces",
+      "MissingFields": [
+        "evidenceRefs/sourceRefs",
+        "lifecycle",
+        "reviewStatus"
+      ],
+      "CanBackfillEvidence": true,
+      "BackfillPolicy": "relation_corpus_fixture_backfill",
+      "Suggestion": "shadow backfill evidenceRefs/sourceRefs/sourceOperationId/confidence/lifecycle/reviewStatus"
+    },
+    {
+      "Category": "project",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:project-pool-supersede",
+      "RelationType": "supersedes",
+      "NormalizedType": "replaces",
+      "MissingFields": [
+        "evidenceRefs/sourceRefs",
+        "lifecycle",
+        "reviewStatus"
+      ],
+      "CanBackfillEvidence": true,
+      "BackfillPolicy": "relation_corpus_fixture_backfill",
+      "Suggestion": "shadow backfill evidenceRefs/sourceRefs/sourceOperationId/confidence/lifecycle/reviewStatus"
+    },
+    {
+      "Category": "retrieval",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:hnsw-prereq",
+      "RelationType": "depends_on",
+      "NormalizedType": "depends_on",
+      "MissingFields": [
+        "evidenceRefs/sourceRefs",
+        "lifecycle",
+        "reviewStatus"
+      ],
+      "CanBackfillEvidence": true,
+      "BackfillPolicy": "relation_corpus_fixture_backfill",
+      "Suggestion": "shadow backfill evidenceRefs/sourceRefs/sourceOperationId/confidence/lifecycle/reviewStatus"
+    },
+    {
+      "Category": "retrieval",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:task-sideeffect",
+      "RelationType": "related_to",
+      "NormalizedType": "related_to",
+      "MissingFields": [
+        "evidenceRefs/sourceRefs",
+        "lifecycle",
+        "reviewStatus"
+      ],
+      "CanBackfillEvidence": true,
+      "BackfillPolicy": "relation_corpus_fixture_backfill",
+      "Suggestion": "shadow backfill evidenceRefs/sourceRefs/sourceOperationId/confidence/lifecycle/reviewStatus"
+    },
+    {
+      "Category": "retrieval",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:pipeline-cfg",
+      "RelationType": "related_to",
+      "NormalizedType": "related_to",
+      "MissingFields": [
+        "evidenceRefs/sourceRefs",
+        "lifecycle",
+        "reviewStatus"
+      ],
+      "CanBackfillEvidence": true,
+      "BackfillPolicy": "relation_corpus_fixture_backfill",
+      "Suggestion": "shadow backfill evidenceRefs/sourceRefs/sourceOperationId/confidence/lifecycle/reviewStatus"
+    },
+    {
+      "Category": "retrieval",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:hybrid-supersedes",
+      "RelationType": "replaces",
+      "NormalizedType": "replaces",
+      "MissingFields": [
+        "evidenceRefs/sourceRefs",
+        "lifecycle",
+        "reviewStatus"
+      ],
+      "CanBackfillEvidence": true,
+      "BackfillPolicy": "relation_corpus_fixture_backfill",
+      "Suggestion": "shadow backfill evidenceRefs/sourceRefs/sourceOperationId/confidence/lifecycle/reviewStatus"
+    },
+    {
+      "Category": "retrieval",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:embed-cfg-supersedes",
+      "RelationType": "replaces",
+      "NormalizedType": "replaces",
+      "MissingFields": [
+        "evidenceRefs/sourceRefs",
+        "lifecycle",
+        "reviewStatus"
+      ],
+      "CanBackfillEvidence": true,
+      "BackfillPolicy": "relation_corpus_fixture_backfill",
+      "Suggestion": "shadow backfill evidenceRefs/sourceRefs/sourceOperationId/confidence/lifecycle/reviewStatus"
+    },
+    {
+      "Category": "retrieval",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:audit-log-retention",
+      "RelationType": "related_to",
+      "NormalizedType": "related_to",
+      "MissingFields": [
+        "evidenceRefs/sourceRefs",
+        "lifecycle",
+        "reviewStatus"
+      ],
+      "CanBackfillEvidence": true,
+      "BackfillPolicy": "relation_corpus_fixture_backfill",
+      "Suggestion": "shadow backfill evidenceRefs/sourceRefs/sourceOperationId/confidence/lifecycle/reviewStatus"
+    },
+    {
+      "Category": "retrieval",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:sprint-storage-check",
+      "RelationType": "related_to",
+      "NormalizedType": "related_to",
+      "MissingFields": [
+        "evidenceRefs/sourceRefs",
+        "lifecycle",
+        "reviewStatus"
+      ],
+      "CanBackfillEvidence": true,
+      "BackfillPolicy": "relation_corpus_fixture_backfill",
+      "Suggestion": "shadow backfill evidenceRefs/sourceRefs/sourceOperationId/confidence/lifecycle/reviewStatus"
+    },
+    {
+      "Category": "retrieval",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:sprint-retrieval-task",
+      "RelationType": "related_to",
+      "NormalizedType": "related_to",
+      "MissingFields": [
+        "evidenceRefs/sourceRefs",
+        "lifecycle",
+        "reviewStatus"
+      ],
+      "CanBackfillEvidence": true,
+      "BackfillPolicy": "relation_corpus_fixture_backfill",
+      "Suggestion": "shadow backfill evidenceRefs/sourceRefs/sourceOperationId/confidence/lifecycle/reviewStatus"
+    },
+    {
+      "Category": "retrieval",
+      "CorpusFile": "corpus.json",
+      "RelationId": "rel:arch-ci",
+      "RelationType": "related_to",
+      "NormalizedType": "related_to",
+      "MissingFields": [
+        "evidenceRefs/sourceRefs",
+        "lifecycle",
+        "reviewStatus"
+      ],
+      "CanBackfillEvidence": true,
+      "BackfillPolicy": "relation_corpus_fixture_backfill",
+      "Suggestion": "shadow backfill evidenceRefs/sourceRefs/sourceOperationId/confidence/lifecycle/reviewStatus"
+    }
+  ],
+  "Warnings": []
+}

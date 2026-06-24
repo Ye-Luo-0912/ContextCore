@@ -1,0 +1,22 @@
+﻿{
+  "ProviderEnabled": true,
+  "WorkspaceId": "postgres-relation-review-parity",
+  "CollectionId": "relation-review",
+  "FixtureReviewCount": 2,
+  "FixtureDiagnosticsCount": 2,
+  "ReviewListPassed": true,
+  "LatestReviewPassed": true,
+  "ReviewStatusFilterPassed": true,
+  "ReviewerFilterPassed": true,
+  "OperationIdFilterPassed": true,
+  "DiagnosticsByRelationPassed": true,
+  "DiagnosticsByItemPassed": true,
+  "DiagnosticsKindFilterPassed": true,
+  "DiagnosticsSeverityFilterPassed": true,
+  "CleanupPerformed": true,
+  "Mismatches": [],
+  "Diagnostics": [
+    "CleanupPerformed"
+  ],
+  "Recommendation": "ParityPassed"
+}

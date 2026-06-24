@@ -1,0 +1,22 @@
+﻿{
+  "generatedAt": "2026-06-14T17:17:46.2208057+00:00",
+  "requestedProviderId": "qwen3-embedding-0.6b-onnx",
+  "modelId": "qwen3-embedding-0.6b",
+  "dimension": 1024,
+  "normalized": true,
+  "providerEnabled": true,
+  "connectionAvailable": true,
+  "pgVectorAvailable": true,
+  "tableExists": true,
+  "tableDimensionCompatible": true,
+  "existingIndexCompatible": true,
+  "existingCompatibleEntryCount": 158,
+  "staleProviderModelEntriesCount": 158,
+  "useForRuntime": false,
+  "diagnostics": [
+    "UseForRuntime=false",
+    "RetrievalProviderUnchanged",
+    "OtherProviderModelEntriesPresent"
+  ],
+  "recommendation": "ReadyForVectorParityEval"
+}

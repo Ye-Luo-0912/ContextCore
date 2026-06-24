@@ -1,10 +1,12 @@
 using System.IO.Compression;
 using System.Text.Json;
 using ContextCore.Abstractions;
+using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services;
 using ContextCore.Service.Infrastructure;
 using ContextCore.Storage.FileSystem;
 using ContextCore.Storage.Postgres;
+using ContextCore.Storage.Postgres.Infrastructure;
 
 namespace ContextCore.Service.Endpoints;
 
@@ -287,6 +289,211 @@ internal static class AdminEndpoints
         .WithName("AdminSchemaVersion")
         .WithSummary("返回 Postgres schema 版本：代码版本 vs 数据库已应用版本");
 
+        group.MapGet("/storage/postgres/status", async (
+            StorageOptions storage,
+            IServiceProvider sp,
+            CancellationToken ct) =>
+        {
+            var diagnostics = await BuildPostgresDiagnosticsAsync(storage, sp, ct).ConfigureAwait(false);
+            return Results.Ok(new PostgresStorageStatusResponse
+            {
+                Enabled = diagnostics.ProviderEnabled,
+                ProviderId = diagnostics.ProviderId,
+                ConnectionAvailable = diagnostics.ConnectionAvailable,
+                CurrentSchemaVersion = diagnostics.CurrentSchemaVersion,
+                PendingMigrations = diagnostics.PendingMigrations,
+                RequiredTableMissingCount = diagnostics.RequiredTableMissingCount,
+                CapabilityStatus = diagnostics.ProviderCapabilityStatus,
+                Diagnostics = diagnostics.Diagnostics
+            });
+        })
+        .WithName("AdminPostgresStorageStatus")
+        .WithSummary("返回 PostgreSQL operational store 状态摘要，不包含明文连接串");
+
+        group.MapGet("/storage/postgres/diagnostics", async (
+            StorageOptions storage,
+            IServiceProvider sp,
+            CancellationToken ct) =>
+        {
+            var diagnostics = await BuildPostgresDiagnosticsAsync(storage, sp, ct).ConfigureAwait(false);
+            return Results.Ok(diagnostics);
+        })
+        .WithName("AdminPostgresStorageDiagnostics")
+        .WithSummary("返回 PostgreSQL operational store 诊断，不自动迁移");
+
+        group.MapPost("/storage/postgres/migrations/dry-run", async (
+            StorageOptions storage,
+            IServiceProvider sp,
+            CancellationToken ct) =>
+        {
+            var runner = sp.GetService<IStoreMigrationRunner>();
+            if (!storage.IsPostgres || runner is null)
+            {
+                var options = BuildEndpointPostgresOptions(storage, enabled: false);
+                var disabled = PostgresOperationalStoreDiagnosticsBuilder.BuildNotConfigured(options);
+                return Results.Ok(new PostgresMigrationPlanResponse
+                {
+                    DryRun = true,
+                    ProviderEnabled = false,
+                    ProviderId = disabled.ProviderId,
+                    CurrentSchemaVersion = null,
+                    PendingMigrations = [PostgresMigrationRunner.BaselineMigrationId],
+                    RequiredTables = disabled.RequiredTables,
+                    MissingRequiredTables = disabled.MissingRequiredTables,
+                    Diagnostics = disabled.Diagnostics
+                });
+            }
+
+            var plan = await runner.PreviewMigrationsAsync(ct).ConfigureAwait(false);
+            return Results.Ok(ToPlanResponse(plan));
+        })
+        .WithName("AdminPostgresMigrationDryRun")
+        .WithSummary("预览 PostgreSQL baseline migrations，不写数据库");
+
+        group.MapPost("/storage/postgres/migrations/apply", async (
+            PostgresMigrationRequest request,
+            StorageOptions storage,
+            IServiceProvider sp,
+            CancellationToken ct) =>
+        {
+            var runner = sp.GetService<IStoreMigrationRunner>();
+            if (!storage.IsPostgres || runner is null)
+            {
+                return Results.Ok(new PostgresMigrationApplyResponse
+                {
+                    Applied = false,
+                    ConfirmRequired = false,
+                    Diagnostics = ["NotConfigured"]
+                });
+            }
+
+            var result = await runner.ApplyMigrationsAsync(request.Confirm, ct).ConfigureAwait(false);
+            return Results.Ok(new PostgresMigrationApplyResponse
+            {
+                Applied = result.Applied,
+                ConfirmRequired = result.ConfirmRequired,
+                SchemaVersion = result.SchemaVersion,
+                AppliedMigrations = result.AppliedMigrations,
+                Diagnostics = result.Diagnostics
+            });
+        })
+        .WithName("AdminPostgresMigrationApply")
+        .WithSummary("显式确认后应用 PostgreSQL baseline migrations");
+
+        group.MapGet("/storage/relation-provider/status", (
+            IServiceProvider sp) =>
+        {
+            var status = sp.GetService<RelationGovernanceScopedServiceModeStatusService>()?.GetStatus()
+                ?? new PostgresRelationScopedServiceModeStatusResponse
+                {
+                    CurrentMode = RelationGovernanceProviderMode.FileSystemPrimary.ToString(),
+                    ActiveRuntimeProvider = "FileSystemRelationStore",
+                    Diagnostics = ["ScopedServiceModeNotConfigured"],
+                    Recommendation = "FileSystemPrimary"
+                };
+            return Results.Ok(status);
+        })
+        .WithName("AdminRelationProviderStatus")
+        .WithSummary("返回 RelationStore scoped service mode 状态，不包含明文连接串");
+
+        group.MapGet("/storage/relation-provider/scoped-diagnostics", (
+            IServiceProvider sp) =>
+        {
+            var status = sp.GetService<RelationGovernanceScopedServiceModeStatusService>()?.GetStatus()
+                ?? new PostgresRelationScopedServiceModeStatusResponse
+                {
+                    CurrentMode = RelationGovernanceProviderMode.FileSystemPrimary.ToString(),
+                    ActiveRuntimeProvider = "FileSystemRelationStore",
+                    Diagnostics = ["ScopedServiceModeNotConfigured"],
+                    Recommendation = "FileSystemPrimary"
+                };
+            return Results.Ok(status);
+        })
+        .WithName("AdminRelationProviderScopedDiagnostics")
+        .WithSummary("返回 Relation governance scoped service mode 诊断");
+
+        group.MapGet("/foundation/status", async (
+            FoundationStatusService foundationStatus,
+            CancellationToken ct) =>
+        {
+            return Results.Ok(await foundationStatus.GetStatusEnvelopeAsync("foundation/status", ct)
+                .ConfigureAwait(false));
+        })
+        .WithName("AdminFoundationStatus")
+        .WithSummary("返回 frozen foundation 只读状态汇总");
+
+        group.MapGet("/foundation/release-candidate", async (
+            FoundationStatusService foundationStatus,
+            CancellationToken ct) =>
+        {
+            return Results.Ok(await foundationStatus.GetStatusEnvelopeAsync("foundation/release-candidate", ct)
+                .ConfigureAwait(false));
+        })
+        .WithName("AdminFoundationReleaseCandidateStatus")
+        .WithSummary("返回 release candidate gate 只读状态");
+
+        group.MapGet("/foundation/reproducibility", async (
+            FoundationStatusService foundationStatus,
+            CancellationToken ct) =>
+        {
+            return Results.Ok(await foundationStatus.GetStatusEnvelopeAsync("foundation/reproducibility", ct)
+                .ConfigureAwait(false));
+        })
+        .WithName("AdminFoundationReproducibilityStatus")
+        .WithSummary("返回 RC0 reproducibility check 只读状态");
+
+        group.MapGet("/foundation/runtime-change-gate", async (
+            FoundationStatusService foundationStatus,
+            CancellationToken ct) =>
+        {
+            return Results.Ok(await foundationStatus.GetStatusEnvelopeAsync("foundation/runtime-change-gate", ct)
+                .ConfigureAwait(false));
+        })
+        .WithName("AdminFoundationRuntimeChangeGateStatus")
+        .WithSummary("返回 runtime-change gate 只读状态");
+
+        group.MapGet("/foundation/vector-formal-preview", async (
+            FoundationStatusService foundationStatus,
+            CancellationToken ct) =>
+        {
+            return Results.Ok(await foundationStatus.GetStatusEnvelopeAsync("foundation/vector-formal-preview", ct)
+                .ConfigureAwait(false));
+        })
+        .WithName("AdminFoundationVectorFormalPreviewStatus")
+        .WithSummary("返回 vector formal preview freeze 只读状态");
+
+        group.MapGet("/foundation/postgres-freeze-status", async (
+            FoundationStatusService foundationStatus,
+            CancellationToken ct) =>
+        {
+            return Results.Ok(await foundationStatus.GetStatusEnvelopeAsync("foundation/postgres-freeze-status", ct)
+                .ConfigureAwait(false));
+        })
+        .WithName("AdminFoundationPostgresFreezeStatus")
+        .WithSummary("返回 Postgres frozen providers 只读状态");
+
+        group.MapGet("/foundation/reports", async (
+            FoundationStatusService foundationStatus,
+            CancellationToken ct) =>
+        {
+            return Results.Ok(await foundationStatus.GetReportNavigationEnvelopeAsync(ct)
+                .ConfigureAwait(false));
+        })
+        .WithName("AdminFoundationReports")
+        .WithSummary("返回 frozen foundation 报告导航，只暴露安全相对路径");
+
+        group.MapGet("/foundation/reports/{reportId}", async (
+            string reportId,
+            FoundationStatusService foundationStatus,
+            CancellationToken ct) =>
+        {
+            var envelope = await foundationStatus.GetReportNavigationEntryEnvelopeAsync(reportId, ct)
+                .ConfigureAwait(false);
+            return envelope.Success ? Results.Ok(envelope) : Results.NotFound(envelope);
+        })
+        .WithName("AdminFoundationReportDetail")
+        .WithSummary("返回单个 frozen foundation 报告导航详情，只暴露安全相对路径");
+
         // ── In-process metrics ─────────────────────────────────────────
         group.MapGet("/metrics", (Infrastructure.ContextCoreMetrics metrics) =>
             Results.Ok(metrics.GetSnapshot()))
@@ -294,5 +501,50 @@ internal static class AdminEndpoints
             .WithSummary("API 级别延迟统计（P50/P95/P99）+ 错误率，基于内存滚动窗口（最近 2000 次请求）");
 
         return app;
+    }
+
+    private static async Task<PostgresOperationalStoreDiagnostics> BuildPostgresDiagnosticsAsync(
+        StorageOptions storage,
+        IServiceProvider sp,
+        CancellationToken cancellationToken)
+    {
+        if (!storage.IsPostgres)
+        {
+            return PostgresOperationalStoreDiagnosticsBuilder.BuildNotConfigured(
+                BuildEndpointPostgresOptions(storage, enabled: false));
+        }
+
+        var options = sp.GetService<PostgresOptions>() ?? BuildEndpointPostgresOptions(storage, enabled: true);
+        return await PostgresOperationalStoreDiagnosticsBuilder.BuildAsync(
+            options,
+            sp.GetService<IPostgresConnectionFactory>(),
+            sp.GetService<IStoreMigrationRunner>(),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private static PostgresOptions BuildEndpointPostgresOptions(StorageOptions storage, bool enabled)
+    {
+        return new PostgresOptions
+        {
+            Enabled = enabled,
+            ConnectionString = storage.ResolvedPostgresConnectionString,
+            AutoMigrate = false,
+            EnablePgVectorExtension = true
+        };
+    }
+
+    private static PostgresMigrationPlanResponse ToPlanResponse(PostgresMigrationPlan plan)
+    {
+        return new PostgresMigrationPlanResponse
+        {
+            DryRun = true,
+            ProviderEnabled = plan.ProviderEnabled,
+            ProviderId = plan.ProviderId,
+            CurrentSchemaVersion = plan.CurrentSchemaVersion,
+            PendingMigrations = plan.PendingMigrations,
+            RequiredTables = plan.RequiredTables,
+            MissingRequiredTables = plan.MissingRequiredTables,
+            Diagnostics = plan.Diagnostics
+        };
     }
 }

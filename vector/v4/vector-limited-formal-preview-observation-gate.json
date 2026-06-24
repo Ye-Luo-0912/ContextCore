@@ -1,0 +1,48 @@
+﻿{
+  "OperationId": "vector-limited-formal-preview-observation-gate-787aee0591d3449b8c7e380798933e47",
+  "CreatedAt": "2026-06-16T01:57:33.2142307+00:00",
+  "ObservationPassed": false,
+  "GatePassed": true,
+  "Mode": "PreviewOnly",
+  "ProfileName": "post-scoring-risk-gated-v1",
+  "MinimumObservationRunCount": 3,
+  "ObservationRunCount": 3,
+  "WorkspaceAllowlist": [
+    "contextcore_eval"
+  ],
+  "CollectionAllowlist": [
+    "dataset-v2-stress"
+  ],
+  "EvalScopeAllowlist": [
+    "dataset-v2-stress"
+  ],
+  "PreviewPackageCount": 360,
+  "BaselinePackageCount": 360,
+  "CandidateAddCount": 171,
+  "CandidateRemoveCount": 171,
+  "CandidateUnchangedCount": 1629,
+  "SectionChangedCount": 0,
+  "TokenDeltaTotal": 165,
+  "TokenDeltaMax": 10,
+  "TokenDeltaP95": 10,
+  "ConstraintCoverageDelta": 0.016666666666666666,
+  "RelationCoverageDelta": 0.05694444444444445,
+  "RiskAfterPolicy": 0,
+  "MustNotHitRiskAfterPolicy": 0,
+  "LifecycleRiskAfterPolicy": 0,
+  "FormalOutputChanged": 0,
+  "PackageOutputChanged": false,
+  "PackingPolicyChanged": false,
+  "FormalPackageWritten": false,
+  "RuntimeMutated": false,
+  "NonAllowlistedScopeLeakCount": 0,
+  "UseForRuntime": false,
+  "FormalRetrievalAllowed": false,
+  "ReadyForRuntimeSwitch": false,
+  "Recommendation": "ReadyForFormalPreviewFreeze",
+  "BlockedReasons": [],
+  "SourceReports": {
+    "scopedFormalPreviewOptInGate": "vector\\v4\\vector-scoped-formal-preview-optin-gate.json",
+    "shadowPackageComparisonGate": "vector\\v4\\vector-shadow-package-comparison-gate.json"
+  }
+}

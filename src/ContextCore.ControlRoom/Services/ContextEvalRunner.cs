@@ -4,7 +4,9 @@ using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Core;
 using ContextCore.Core.Services;
+using ContextCore.Core.Services.Graph;
 using ContextCore.Storage.InMemory;
+using ContextCore.Storage.InMemory.Stores;
 
 namespace ContextCore.ControlRoom.Services;
 
@@ -21,10 +23,14 @@ public sealed class ContextEvalRunner
     };
 
     private readonly RetrievalAttentionRerankOptions? _attentionRerankOptions;
+    private readonly GraphExpansionApplyOptions? _graphExpansionApplyOptions;
 
-    public ContextEvalRunner(RetrievalAttentionRerankOptions? attentionRerankOptions = null)
+    public ContextEvalRunner(
+        RetrievalAttentionRerankOptions? attentionRerankOptions = null,
+        GraphExpansionApplyOptions? graphExpansionApplyOptions = null)
     {
         _attentionRerankOptions = attentionRerankOptions;
+        _graphExpansionApplyOptions = graphExpansionApplyOptions;
     }
 
     /// <summary>
@@ -70,7 +76,8 @@ public sealed class ContextEvalRunner
                 "eval",
                 workspaceId,
                 collectionId,
-                attentionRerankOptions: _attentionRerankOptions);
+                attentionRerankOptions: _attentionRerankOptions,
+                graphExpansionApplyOptions: _graphExpansionApplyOptions);
 
             // 3. 灌入语料数据
             if (corpus is not null)
@@ -122,6 +129,7 @@ public sealed class ContextEvalRunner
                     await state.MemoryStore.SaveAsync(normalizedMem);
                 }
 
+                var relationTypeNormalizer = new RelationTypeNormalizer();
                 foreach (var rel in corpus.Relations)
                 {
                     var normalizedRel = new ContextRelation
@@ -134,9 +142,15 @@ public sealed class ContextEvalRunner
                         RelationType = rel.RelationType,
                         Weight = rel.Weight,
                         Confidence = rel.Confidence,
+                        SourceRefs = rel.SourceRefs,
+                        Metadata = new Dictionary<string, string>(rel.Metadata, StringComparer.OrdinalIgnoreCase),
                         CreatedAt = DateTimeOffset.UtcNow
                     };
-                    await state.RelationStore.SaveAsync(normalizedRel);
+                    await state.RelationStore
+                        .SaveAsync(relationTypeNormalizer.NormalizeAndBackfillFixtureRelation(
+                            normalizedRel,
+                            "context-eval-runner"))
+                        .ConfigureAwait(false);
                 }
 
                 foreach (var cst in corpus.Constraints)
@@ -949,6 +963,17 @@ public sealed class ContextEvalRunner
             TokenBudget = packageResult.Budget.TokenBudget,
             SelectedIds = selectedIds,
             ExcludedIds = packageResult.DroppedItems.Select(item => item.ItemId).ToArray(),
+            PackageMetadata = new Dictionary<string, string>(packageResult.Package.Metadata, StringComparer.OrdinalIgnoreCase),
+            PackageSectionNames = packageResult.Package.Sections.Select(section => section.Name).ToArray(),
+            PackageSectionItemRefs = packageResult.Package.Sections
+                .GroupBy(section => section.Name, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(
+                    group => group.Key,
+                    group => (IReadOnlyList<string>)group
+                        .SelectMany(section => section.ItemRefs)
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .ToArray(),
+                    StringComparer.OrdinalIgnoreCase),
             PackageBuildTrace = trace,
             MustHit = sample.MustHit,
             MustNotHit = sample.MustNotHit,

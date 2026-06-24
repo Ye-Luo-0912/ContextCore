@@ -1,0 +1,72 @@
+﻿{
+  "OperationId": "vector-guarded-scoped-runtime-experiment-plan-b31750c590ce458697b1b58e8c832f72",
+  "CreatedAt": "2026-06-17T04:26:12.9243113+00:00",
+  "PlanPassed": true,
+  "Recommendation": "ReadyForScopedRuntimeExperimentActivationContract",
+  "ProposalId": "vsrep-bb5402e39c0f1333",
+  "RequiredApprovalMode": "ScopedRuntimeExperiment",
+  "SelectedScopes": [
+    "contextcore_eval/dataset-v2-stress/dataset-v2-stress"
+  ],
+  "MaxRequestCount": 120,
+  "MaxDurationMinutes": 30,
+  "KillSwitchPlan": "Set proposal mode to ProposalOnly, clear workspace/collection/eval scope allowlists, and rerun runtime-change gate before any new proposal.",
+  "RollbackPlan": "Remove the selected scope from the proposal allowlist, keep UseForRuntime=false, discard shadow artifacts, rerun V4.7 and runtime-change gates.",
+  "ObservationPlan": [
+    "RequestCount",
+    "BaselinePackageCount",
+    "ExperimentPackageCount",
+    "CandidateAddCount",
+    "CandidateRemoveCount",
+    "TokenDeltaTotal",
+    "TokenDeltaMax",
+    "RiskAfterPolicy",
+    "MustNotHitRiskAfterPolicy",
+    "LifecycleRiskAfterPolicy",
+    "FormalOutputChanged",
+    "PackageOutputChanged",
+    "PackingPolicyChanged",
+    "ScopeLeakCount",
+    "ErrorCount",
+    "LatencyP50",
+    "LatencyP95",
+    "KillSwitchTriggered",
+    "RollbackVerified"
+  ],
+  "StopConditions": [
+    "RiskAfterPolicy \u003E 0",
+    "MustNotHitRiskAfterPolicy \u003E 0",
+    "LifecycleRiskAfterPolicy \u003E 0",
+    "FormalOutputChanged \u003E 0",
+    "PackageOutputChanged=true",
+    "PackingPolicyChanged=true",
+    "RuntimeMutated unexpected",
+    "NonAllowlistedScopeLeakCount \u003E 0",
+    "ErrorCount \u003E threshold",
+    "LatencyP95 \u003E threshold",
+    "MissingTraceCount \u003E 0"
+  ],
+  "AllowedActions": [
+    "PrepareScopedRuntimeExperimentApproval",
+    "ValidateSelectedScopeActivationContract",
+    "CollectExperimentMetricsPlan",
+    "ValidateRollbackPlan",
+    "ValidateKillSwitchPlan"
+  ],
+  "ForbiddenActions": [
+    "GlobalRuntimeSwitch",
+    "NonAllowlistedScopeUse",
+    "FormalPackageWrite",
+    "PackingPolicyMutation",
+    "PackageOutputMutationOutsideExperimentArtifact",
+    "DIBindingMutation",
+    "IVectorIndexStoreGlobalBindingMutation",
+    "DisablingRuntimeChangeGate",
+    "TreatingNoOpHarnessOnlyApprovalAsRuntimeApproval"
+  ],
+  "RuntimeSwitchAllowed": false,
+  "FormalRetrievalAllowed": false,
+  "ReadyForRuntimeSwitch": false,
+  "UseForRuntime": false,
+  "BlockedReasons": []
+}

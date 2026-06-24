@@ -1,0 +1,86 @@
+﻿{
+  "OperationId": "vector-scoped-runtime-experiment-plan-7c593d89f3ca48e880ce0efe319d3ad3",
+  "CreatedAt": "2026-06-16T17:32:50.3587637+00:00",
+  "PlanPassed": true,
+  "Recommendation": "ReadyForExplicitScopedRuntimeExperimentDryRun",
+  "Mode": "PlanOnly",
+  "ProfileName": "post-scoring-risk-gated-v1",
+  "WorkspaceAllowlist": [
+    "contextcore_eval"
+  ],
+  "CollectionAllowlist": [
+    "dataset-v2-stress"
+  ],
+  "EvalScopeAllowlist": [
+    "dataset-v2-stress"
+  ],
+  "ScopeCount": 2,
+  "AllowlistedScopeCount": 1,
+  "NonAllowlistedScopeChecked": true,
+  "RequiredGateSummary": {
+    "foundation-release-candidate-gate": "True:ReadyForReleaseCandidate",
+    "foundation-reproducibility-check": "True:ReadyForReleaseCandidateReproduction",
+    "service-foundation-freeze-gate": "True:ReadyForV45ExplicitScopedRuntimeExperimentPlanning",
+    "vector-formal-preview-freeze-gate": "True:ReadyForScopedOptInPreview",
+    "learning-runtime-change-readiness-gate": "True:RuntimeChangeRulesSatisfied",
+    "vector-guarded-formal-retrieval-preview-gate": "True:ReadyForShadowPackageComparison",
+    "vector-shadow-package-comparison-gate": "True:ReadyForScopedFormalPreviewOptIn",
+    "vector-scoped-formal-preview-optin-gate": "True:ReadyForLimitedFormalPreviewObservation",
+    "vector-limited-formal-preview-observation-gate": "True:ReadyForFormalPreviewFreeze"
+  },
+  "AllowedActions": [
+    "ScopeAllowlistPlanning",
+    "PreviewProfileSelection",
+    "RollbackPlanDefinition",
+    "ObservationMetricsDefinition",
+    "DryRunPackageComparisonPlanning",
+    "ShadowArtifactOnlyDryRun"
+  ],
+  "ForbiddenActions": [
+    "RuntimeSwitch",
+    "FormalIVectorIndexStoreBinding",
+    "FormalPackageWrite",
+    "PackingPolicyIntegration",
+    "PackageOutputMutation",
+    "GlobalDefaultOn",
+    "NonAllowlistedScopeUse"
+  ],
+  "RollbackPlan": "Remove scopes from allowlists, keep UseForRuntime=false, discard shadow artifacts, rerun V4.F and runtime-change gate.",
+  "ObservationMetrics": {
+    "RiskAfterPolicy": "0",
+    "MustNotHitRiskAfterPolicy": "0",
+    "LifecycleRiskAfterPolicy": "0",
+    "FormalOutputChanged": "0",
+    "PackageOutputChanged": "False",
+    "PackingPolicyChanged": "False",
+    "FormalPackageWritten": "False",
+    "RuntimeMutated": "False",
+    "NonAllowlistedScopeLeakCount": "0"
+  },
+  "DryRunSupported": false,
+  "RuntimeSwitchAllowed": false,
+  "FormalRetrievalAllowed": false,
+  "ReadyForRuntimeSwitch": false,
+  "UseForRuntime": false,
+  "FormalPackageWritten": false,
+  "PackingPolicyChanged": false,
+  "PackageOutputChanged": false,
+  "RuntimeMutated": false,
+  "NonAllowlistedScopeLeakCount": 0,
+  "RiskAfterPolicy": 0,
+  "MustNotHitRiskAfterPolicy": 0,
+  "LifecycleRiskAfterPolicy": 0,
+  "FormalOutputChanged": 0,
+  "BlockedReasons": [],
+  "SourceReports": {
+    "foundationReleaseCandidateGate": "foundation\\foundation-release-candidate-gate.json",
+    "foundationReproducibilityCheck": "foundation\\foundation-reproducibility-check.json",
+    "serviceFoundationFreezeGate": "service\\service-foundation-freeze-gate.json",
+    "vectorFormalPreviewFreezeGate": "vector\\v4\\vector-formal-preview-freeze-gate.json",
+    "learningRuntimeChangeReadinessGate": "learning\\readiness\\learning-runtime-change-readiness-gate.json",
+    "guardedFormalRetrievalPreviewGate": "vector\\v4\\vector-guarded-formal-retrieval-preview-gate.json",
+    "shadowPackageComparisonGate": "vector\\v4\\vector-shadow-package-comparison-gate.json",
+    "scopedFormalPreviewOptInGate": "vector\\v4\\vector-scoped-formal-preview-optin-gate.json",
+    "limitedFormalPreviewObservationGate": "vector\\v4\\vector-limited-formal-preview-observation-gate.json"
+  }
+}

@@ -1,4 +1,4 @@
-namespace ContextCore.Abstractions;
+namespace ContextCore.Abstractions.Models;
 
 /// <summary>
 /// 输入层摄取结果，供 admin ingest path 返回详细的幂等、顺序和持久化信息。

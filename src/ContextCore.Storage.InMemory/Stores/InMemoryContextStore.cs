@@ -1,7 +1,8 @@
 using System.Collections.Concurrent;
 using ContextCore.Abstractions;
+using ContextCore.Abstractions.Models;
 
-namespace ContextCore.Storage.InMemory;
+namespace ContextCore.Storage.InMemory.Stores;
 
 /// <summary>
 /// 基于内存的 <see cref="IContextStore"/> 与 <see cref="IContextCollectionStore"/> 实现，
@@ -122,9 +123,7 @@ public sealed class InMemoryContextStore : IContextStore, IContextCollectionStor
             return true;
         }
 
-        var itemTags = item.Tags.ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-        return queryTags.All(itemTags.Contains);
+        return queryTags.All(queryTag => item.Tags.Any(tag => string.Equals(tag, queryTag, StringComparison.OrdinalIgnoreCase)));
     }
 
     private static bool MatchesTypes(ContextItem item, IReadOnlyList<string> queryTypes)
@@ -135,116 +134,14 @@ public sealed class InMemoryContextStore : IContextStore, IContextCollectionStor
 
     private static bool MatchesRefs(ContextItem item, IReadOnlyList<string> queryRefs)
     {
-        if (queryRefs.Count == 0)
-        {
-            return true;
-        }
-
-        var refs = item.Refs
-            .Concat(item.SourceRefs)
-            .Append(item.Id)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-        return queryRefs.Any(refs.Contains);
+        return queryRefs.Count == 0 || queryRefs.Any(queryRef => ContainsRef(item, queryRef));
     }
 
-    private static readonly string[] ChineseKeywords =
-    [
-        "语言偏好", "语言", "偏好", "输出", "中文", "英文", "开发", "任务", "计划",
-        "运行", "配置", "持久化", "后端", "存储", "生产", "生产后端", "林风", "苍穹",
-        "大陆", "苍穹大陆", "拍卖行", "九转金丹", "金丹", "药引", "龙魂草", "人设", "剧情",
-        "大纲", "工作流", "错误", "恢复", "接口", "单元测试", "测试", "设定", "密钥", "仓库",
-        "明文", "安全", "本地"
-    ];
-
-    private static readonly HashSet<string> StopWords = new(StringComparer.OrdinalIgnoreCase)
+    private static bool ContainsRef(ContextItem item, string queryRef)
     {
-        "的", "了", "在", "是", "我", "你", "他", "她", "它", "们", "这", "那", "都", "和", "与", "或", "而", "何", "如",
-        "如何", "什么", "怎么", "哪个", "哪里", "为什么", "谁", "几", "多少", "是吗", "以", "去", "来", "个", "只", "条",
-        "吗", "吧", "呢", "呀", "这", "那", "的", "地", "得"
-    };
-
-    private static bool ContainsChinese(string text)
-    {
-        foreach (var c in text)
-        {
-            if (c >= 0x4E00 && c <= 0x9FFF)
-            {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static IEnumerable<string> SegmentChinese(string text)
-    {
-        foreach (var kw in ChineseKeywords)
-        {
-            if (text.Contains(kw, StringComparison.OrdinalIgnoreCase))
-            {
-                yield return kw;
-            }
-        }
-
-        var sb = new System.Text.StringBuilder();
-        var chSegments = new List<string>();
-        foreach (var c in text)
-        {
-            if (c >= 0x4E00 && c <= 0x9FFF)
-            {
-                sb.Append(c);
-            }
-            else
-            {
-                if (sb.Length > 0)
-                {
-                    chSegments.Add(sb.ToString());
-                    sb.Clear();
-                }
-            }
-        }
-        if (sb.Length > 0)
-        {
-            chSegments.Add(sb.ToString());
-        }
-
-        foreach (var seg in chSegments)
-        {
-            if (seg.Length < 2)
-            {
-                continue;
-            }
-
-            if (seg.Length <= 4)
-            {
-                if (!StopWords.Contains(seg))
-                {
-                    yield return seg;
-                }
-            }
-
-            for (int i = 0; i < seg.Length - 1; i++)
-            {
-                var bigram = seg.Substring(i, 2);
-                if (StopWords.Contains(bigram))
-                {
-                    continue;
-                }
-                var containsStopChar = false;
-                foreach (var c in bigram)
-                {
-                    if (StopWords.Contains(c.ToString()))
-                    {
-                        containsStopChar = true;
-                        break;
-                    }
-                }
-                if (!containsStopChar)
-                {
-                    yield return bigram;
-                }
-            }
-        }
+        return string.Equals(item.Id, queryRef, StringComparison.OrdinalIgnoreCase)
+            || item.Refs.Any(itemRef => string.Equals(itemRef, queryRef, StringComparison.OrdinalIgnoreCase))
+            || item.SourceRefs.Any(sourceRef => string.Equals(sourceRef, queryRef, StringComparison.OrdinalIgnoreCase));
     }
 
     private static bool MatchesQueryText(ContextItem item, string? queryText)
@@ -254,20 +151,19 @@ public sealed class InMemoryContextStore : IContextStore, IContextCollectionStor
             return true;
         }
 
-        var words = ExtractQueryTerms(queryText).ToArray();
-        if (words.Length > 0)
-        {
-            return words.Any(word =>
-                Contains(item.Title, word)
-                || Contains(item.Type, word)
-                || Contains(item.Content, word)
-                || item.Tags.Any(tag => Contains(tag, word)));
-        }
+        var normalizedQuery = queryText.Trim();
+        return MatchesQueryTerm(item, normalizedQuery) || ExtractQueryTerms(normalizedQuery).Any(term => MatchesQueryTerm(item, term));
+    }
 
-        return Contains(item.Title, queryText)
+    private static bool MatchesQueryTerm(ContextItem item, string queryText)
+    {
+        return Contains(item.Id, queryText)
+            || Contains(item.Title, queryText)
             || Contains(item.Type, queryText)
             || Contains(item.Content, queryText)
-            || item.Tags.Any(tag => Contains(tag, queryText));
+            || item.Tags.Any(tag => Contains(tag, queryText))
+            || item.Refs.Any(itemRef => Contains(itemRef, queryText))
+            || item.SourceRefs.Any(sourceRef => Contains(sourceRef, queryText));
     }
 
     private static IEnumerable<string> ExtractQueryTerms(string? queryText)
@@ -280,20 +176,20 @@ public sealed class InMemoryContextStore : IContextStore, IContextCollectionStor
         var count = 0;
         foreach (var term in SplitTerms(queryText))
         {
-            if (ContainsChinese(term))
+            yield return term;
+            if (++count >= 12)
             {
-                foreach (var chTerm in SegmentChinese(term))
-                {
-                    yield return chTerm;
-                    if (++count >= 12)
-                    {
-                        yield break;
-                    }
-                }
+                yield break;
             }
-            else
+
+            if (!ContainsCjk(term))
             {
-                yield return term;
+                continue;
+            }
+
+            foreach (var bigram in EnumerateCjkBigrams(term))
+            {
+                yield return bigram;
                 if (++count >= 12)
                 {
                     yield break;
@@ -345,6 +241,22 @@ public sealed class InMemoryContextStore : IContextStore, IContextCollectionStor
         return ch is >= '\u4e00' and <= '\u9fff';
     }
 
+    private static bool ContainsCjk(string text)
+    {
+        return text.Any(IsCjk);
+    }
+
+    private static IEnumerable<string> EnumerateCjkBigrams(string text)
+    {
+        for (var index = 0; index < text.Length - 1; index++)
+        {
+            if (IsCjk(text[index]) && IsCjk(text[index + 1]))
+            {
+                yield return text.Substring(index, 2);
+            }
+        }
+    }
+
     private static bool Contains(string? value, string queryText)
     {
         return value?.Contains(queryText, StringComparison.OrdinalIgnoreCase) == true;
@@ -362,9 +274,9 @@ public sealed class InMemoryContextStore : IContextStore, IContextCollectionStor
             Title = item.Title,
             Content = content ?? item.Content,
             ContentFormat = item.ContentFormat,
-            Tags = item.Tags.ToArray(),
-            Refs = item.Refs.ToArray(),
-            SourceRefs = item.SourceRefs.ToArray(),
+            Tags = [.. item.Tags],
+            Refs = [.. item.Refs],
+            SourceRefs = [.. item.SourceRefs],
             Metadata = new Dictionary<string, string>(item.Metadata),
             Importance = item.Importance,
             Version = item.Version,

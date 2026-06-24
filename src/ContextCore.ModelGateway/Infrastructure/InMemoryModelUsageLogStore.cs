@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using ContextCore.Abstractions;
+using ContextCore.Abstractions.Models;
 
 namespace ContextCore.ModelGateway.Infrastructure;
 

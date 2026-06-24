@@ -1,4 +1,4 @@
-namespace ContextCore.Abstractions;
+namespace ContextCore.Abstractions.Models;
 
 /// <summary>Embedding 输入的来源类型。</summary>
 public enum EmbeddingInputKind

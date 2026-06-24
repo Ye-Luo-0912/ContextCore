@@ -1,7 +1,8 @@
 using System.Collections.Concurrent;
 using ContextCore.Abstractions;
+using ContextCore.Abstractions.Models;
 
-namespace ContextCore.Storage.InMemory;
+namespace ContextCore.Storage.InMemory.Stores;
 
 /// <summary>基于内存的 CandidateMemory review / cleanup 审核历史存储。</summary>
 public sealed class InMemoryCandidateMemoryReviewStore : ICandidateMemoryReviewStore

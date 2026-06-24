@@ -1,9 +1,15 @@
 using ContextCore.Abstractions;
+using ContextCore.Abstractions.Models;
+using ContextCore.Core.Services;
+using ContextCore.Service.Infrastructure;
 using ContextCore.Storage.FileSystem;
 using ContextCore.Storage.FileSystem.Stores;
 using ContextCore.Storage.InMemory;
+using ContextCore.Storage.InMemory.Stores;
 using ContextCore.Storage.Postgres;
 using ContextCore.Storage.Postgres.Extensions;
+using ContextCore.Storage.Postgres.Infrastructure;
+using ContextCore.Storage.Postgres.Stores;
 
 namespace ContextCore.Service.Extensions;
 
@@ -54,12 +60,15 @@ internal static class StorageExtensions
 
 		var pgOptions = new PostgresOptions
 		{
+			Enabled = true,
 			ConnectionString = options.ResolvedPostgresConnectionString,
-			AutoMigrate = true,
+			AutoMigrate = false,
 			EnablePgVectorExtension = true,
 		};
 
 		services.AddContextCorePostgresStorage(pgOptions);
+		services.AddSingleton<ILearningFeedbackStore>(_ => new UnsupportedLearningFeedbackStore("postgres"));
+		services.AddSingleton<ILearningFeedbackReviewStore>(_ => new UnsupportedLearningFeedbackReviewStore("postgres"));
 	}
 
 	private static void RegisterFileSystem(IServiceCollection services, StorageOptions options)
@@ -71,8 +80,13 @@ internal static class StorageExtensions
 		services.AddSingleton(fsOptions);
 		// FilePathResolver / FileFormatSerializer 各只有一个构造函数，DI 可直接解析
 		services.AddSingleton<FilePathResolver>();
+		services.AddSingleton<ContextCoreDataLayout>();
+		services.AddSingleton<IContextPathResolver>(sp => sp.GetRequiredService<ContextCoreDataLayout>());
+		services.AddSingleton<FileArtifactStore>();
+		services.AddSingleton<IArtifactStore>(sp => sp.GetRequiredService<FileArtifactStore>());
 		services.AddSingleton<FileFormatSerializer>();
 		services.AddSingleton<FileJsonLineStore>();
+		RegisterScopedRelationGovernancePostgresSupport(services, options);
 
 		// 各 File*Store 存在两个构造函数（DI 注入版 + 直接 new 版），需通过工厂 lambda
 		// 显式指定使用 (FilePathResolver, FileFormatSerializer) 版本，避免 DI 容器歧义
@@ -94,6 +108,35 @@ internal static class StorageExtensions
 				sp.GetRequiredService<FilePathResolver>(),
 				sp.GetRequiredService<FileFormatSerializer>()));
 		services.AddSingleton<IVectorStore>(sp => sp.GetRequiredService<FileVectorStore>());
+
+		services.AddSingleton<FileVectorIndexStore>(sp =>
+			new FileVectorIndexStore(
+				sp.GetRequiredService<FilePathResolver>(),
+				sp.GetRequiredService<FileFormatSerializer>()));
+		services.AddSingleton<IVectorIndexStore>(sp => sp.GetRequiredService<FileVectorIndexStore>());
+		services.AddSingleton<FileVectorReindexReportStore>(sp =>
+			new FileVectorReindexReportStore(
+				sp.GetRequiredService<FilePathResolver>(),
+				sp.GetRequiredService<FileFormatSerializer>()));
+		services.AddSingleton<IVectorReindexReportStore>(sp => sp.GetRequiredService<FileVectorReindexReportStore>());
+		services.AddSingleton<FileVectorLifecycleMetadataReviewCandidateStore>(sp =>
+			new FileVectorLifecycleMetadataReviewCandidateStore(
+				sp.GetRequiredService<FilePathResolver>(),
+				sp.GetRequiredService<FileFormatSerializer>()));
+		services.AddSingleton<IVectorLifecycleMetadataReviewCandidateStore>(sp =>
+			sp.GetRequiredService<FileVectorLifecycleMetadataReviewCandidateStore>());
+		services.AddSingleton<FileVectorLifecycleMetadataReviewStore>(sp =>
+			new FileVectorLifecycleMetadataReviewStore(
+				sp.GetRequiredService<FilePathResolver>(),
+				sp.GetRequiredService<FileFormatSerializer>()));
+		services.AddSingleton<IVectorLifecycleMetadataReviewStore>(sp =>
+			sp.GetRequiredService<FileVectorLifecycleMetadataReviewStore>());
+		services.AddSingleton<FileVectorLifecycleSidecarMetadataStore>(sp =>
+			new FileVectorLifecycleSidecarMetadataStore(
+				sp.GetRequiredService<FilePathResolver>(),
+				sp.GetRequiredService<FileFormatSerializer>()));
+		services.AddSingleton<IVectorLifecycleSidecarMetadataStore>(sp =>
+			sp.GetRequiredService<FileVectorLifecycleSidecarMetadataStore>());
 
 		services.AddSingleton<FileContextPackageBuildTraceStore>(sp =>
 			new FileContextPackageBuildTraceStore(
@@ -126,11 +169,26 @@ internal static class StorageExtensions
                 sp.GetRequiredService<FilePathResolver>(),
                 sp.GetRequiredService<FileFormatSerializer>()));
         services.AddSingleton<IShortTermPromotionCandidateStore>(sp => sp.GetRequiredService<FileShortTermPromotionCandidateStore>());
-        services.AddSingleton<FileContextLearningStore>(sp =>
-            new FileContextLearningStore(
-                sp.GetRequiredService<FilePathResolver>(),
-                sp.GetRequiredService<FileFormatSerializer>()));
-        services.AddSingleton<IContextLearningStore>(sp => sp.GetRequiredService<FileContextLearningStore>());
+		services.AddSingleton<FileContextLearningStore>(sp =>
+			new FileContextLearningStore(
+				sp.GetRequiredService<FilePathResolver>(),
+				sp.GetRequiredService<FileFormatSerializer>()));
+		services.AddSingleton<IContextLearningStore>(sp => sp.GetRequiredService<FileContextLearningStore>());
+		services.AddSingleton<FileLearningFeedbackStore>(sp =>
+			new FileLearningFeedbackStore(
+				sp.GetRequiredService<FilePathResolver>(),
+				sp.GetRequiredService<FileFormatSerializer>()));
+		services.AddSingleton<ILearningFeedbackStore>(sp => sp.GetRequiredService<FileLearningFeedbackStore>());
+		services.AddSingleton<FileLearningFeedbackReviewStore>(sp =>
+			new FileLearningFeedbackReviewStore(
+				sp.GetRequiredService<FilePathResolver>(),
+				sp.GetRequiredService<FileFormatSerializer>()));
+		services.AddSingleton<ILearningFeedbackReviewStore>(sp => sp.GetRequiredService<FileLearningFeedbackReviewStore>());
+		services.AddSingleton<FileRouterIntentShadowTraceStore>(sp =>
+			new FileRouterIntentShadowTraceStore(
+				sp.GetRequiredService<FilePathResolver>(),
+				sp.GetRequiredService<FileFormatSerializer>()));
+		services.AddSingleton<IRouterIntentShadowTraceStore>(sp => sp.GetRequiredService<FileRouterIntentShadowTraceStore>());
         services.AddSingleton<FileStableReviewCandidateStore>(sp =>
             new FileStableReviewCandidateStore(
                 sp.GetRequiredService<FilePathResolver>(),
@@ -156,6 +214,28 @@ internal static class StorageExtensions
                 sp.GetRequiredService<FilePathResolver>(),
                 sp.GetRequiredService<FileFormatSerializer>()));
         services.AddSingleton<IStableLifecycleReviewStore>(sp => sp.GetRequiredService<FileStableLifecycleReviewStore>());
+        services.AddSingleton<FileRelationReviewStore>(sp =>
+            new FileRelationReviewStore(
+                sp.GetRequiredService<FilePathResolver>(),
+                sp.GetRequiredService<FileFormatSerializer>()));
+        services.AddSingleton<FileRelationDiagnosticsStore>(sp =>
+            new FileRelationDiagnosticsStore(
+                sp.GetRequiredService<FilePathResolver>(),
+                sp.GetRequiredService<FileFormatSerializer>()));
+        services.AddSingleton<IRelationReviewStore>(sp =>
+        {
+            var switchOptions = sp.GetService<RelationGovernanceProviderSwitchOptions>() ?? new RelationGovernanceProviderSwitchOptions();
+            if (!switchOptions.Enabled)
+            {
+                return sp.GetRequiredService<FileRelationReviewStore>();
+            }
+
+            return new ScopedRelationGovernanceReviewStore(
+                sp.GetRequiredService<FileRelationReviewStore>(),
+                sp.GetRequiredService<PostgresRelationReviewStore>(),
+                switchOptions,
+                sp.GetRequiredService<RelationGovernanceScopedServiceModeStatusService>());
+        });
 
 		services.AddSingleton<FileMemoryStore>(sp =>
 			new FileMemoryStore(
@@ -176,7 +256,20 @@ internal static class StorageExtensions
 			new FileRelationStore(
 				sp.GetRequiredService<FilePathResolver>(),
 				sp.GetRequiredService<FileFormatSerializer>()));
-		services.AddSingleton<IRelationStore>(sp => sp.GetRequiredService<FileRelationStore>());
+		services.AddSingleton<IRelationStore>(sp =>
+		{
+			var switchOptions = sp.GetService<RelationGovernanceProviderSwitchOptions>() ?? new RelationGovernanceProviderSwitchOptions();
+			if (!switchOptions.Enabled)
+			{
+				return sp.GetRequiredService<FileRelationStore>();
+			}
+
+			return new ScopedRelationGovernanceStore(
+				sp.GetRequiredService<FileRelationStore>(),
+				sp.GetRequiredService<PostgresRelationStore>(),
+				switchOptions,
+				sp.GetRequiredService<RelationGovernanceScopedServiceModeStatusService>());
+		});
 
 		services.AddSingleton<FileGlobalContextStore>(sp =>
 			new FileGlobalContextStore(
@@ -199,6 +292,27 @@ internal static class StorageExtensions
 		});
 	}
 
+	private static void RegisterScopedRelationGovernancePostgresSupport(IServiceCollection services, StorageOptions options)
+	{
+		services.AddSingleton(sp => new PostgresOptions
+		{
+			Enabled = !string.IsNullOrWhiteSpace(options.ResolvedPostgresConnectionString),
+			ConnectionString = options.ResolvedPostgresConnectionString,
+			AutoMigrate = false,
+			EnablePgVectorExtension = true
+		});
+		services.AddSingleton<PostgresJsonSerializer>();
+		services.AddSingleton<PostgresConnectionFactory>();
+		services.AddSingleton<IPostgresConnectionFactory>(sp => sp.GetRequiredService<PostgresConnectionFactory>());
+		services.AddSingleton<PostgresMigrationRunner>();
+		services.AddSingleton<IStoreMigrationRunner>(sp => sp.GetRequiredService<PostgresMigrationRunner>());
+		services.AddSingleton<PostgresRelationStore>();
+		services.AddSingleton<PostgresRelationReviewStore>();
+		services.AddSingleton<PostgresRelationDiagnosticsStore>();
+		services.AddSingleton(sp => new RelationGovernanceScopedServiceModeStatusService(
+			sp.GetService<RelationGovernanceProviderSwitchOptions>() ?? new RelationGovernanceProviderSwitchOptions()));
+	}
+
 	/// <summary>
 	/// 注册内存存储服务到依赖注入容器中。
 	/// 此方法主要用于测试环境，通过添加一系列基于内存的实现来模拟存储服务。
@@ -218,6 +332,12 @@ internal static class StorageExtensions
         services.AddSingleton<IShortTermPromotionCandidateStore>(sp => sp.GetRequiredService<InMemoryShortTermPromotionCandidateStore>());
         services.AddSingleton<InMemoryContextLearningStore>();
         services.AddSingleton<IContextLearningStore>(sp => sp.GetRequiredService<InMemoryContextLearningStore>());
+        services.AddSingleton<InMemoryLearningFeedbackStore>();
+        services.AddSingleton<ILearningFeedbackStore>(sp => sp.GetRequiredService<InMemoryLearningFeedbackStore>());
+        services.AddSingleton<InMemoryLearningFeedbackReviewStore>();
+        services.AddSingleton<ILearningFeedbackReviewStore>(sp => sp.GetRequiredService<InMemoryLearningFeedbackReviewStore>());
+        services.AddSingleton<InMemoryRouterIntentShadowTraceStore>();
+        services.AddSingleton<IRouterIntentShadowTraceStore>(sp => sp.GetRequiredService<InMemoryRouterIntentShadowTraceStore>());
         services.AddSingleton<InMemoryStableReviewCandidateStore>();
         services.AddSingleton<IStableReviewCandidateStore>(sp => sp.GetRequiredService<InMemoryStableReviewCandidateStore>());
         services.AddSingleton<InMemoryConstraintGapCandidateStore>();
@@ -228,9 +348,24 @@ internal static class StorageExtensions
         services.AddSingleton<ICandidateMemoryReviewStore>(sp => sp.GetRequiredService<InMemoryCandidateMemoryReviewStore>());
         services.AddSingleton<InMemoryStableLifecycleReviewStore>();
         services.AddSingleton<IStableLifecycleReviewStore>(sp => sp.GetRequiredService<InMemoryStableLifecycleReviewStore>());
+        services.AddSingleton<InMemoryRelationReviewStore>();
+        services.AddSingleton<IRelationReviewStore>(sp => sp.GetRequiredService<InMemoryRelationReviewStore>());
 
 		services.AddSingleton<InMemoryVectorStore>();
 		services.AddSingleton<IVectorStore>(sp => sp.GetRequiredService<InMemoryVectorStore>());
+		services.AddSingleton<InMemoryVectorIndexStore>();
+		services.AddSingleton<IVectorIndexStore>(sp => sp.GetRequiredService<InMemoryVectorIndexStore>());
+		services.AddSingleton<InMemoryVectorReindexReportStore>();
+		services.AddSingleton<IVectorReindexReportStore>(sp => sp.GetRequiredService<InMemoryVectorReindexReportStore>());
+		services.AddSingleton<InMemoryVectorLifecycleMetadataReviewCandidateStore>();
+		services.AddSingleton<IVectorLifecycleMetadataReviewCandidateStore>(sp =>
+			sp.GetRequiredService<InMemoryVectorLifecycleMetadataReviewCandidateStore>());
+		services.AddSingleton<InMemoryVectorLifecycleMetadataReviewStore>();
+		services.AddSingleton<IVectorLifecycleMetadataReviewStore>(sp =>
+			sp.GetRequiredService<InMemoryVectorLifecycleMetadataReviewStore>());
+		services.AddSingleton<InMemoryVectorLifecycleSidecarMetadataStore>();
+		services.AddSingleton<IVectorLifecycleSidecarMetadataStore>(sp =>
+			sp.GetRequiredService<InMemoryVectorLifecycleSidecarMetadataStore>());
 
 		services.AddSingleton<InMemoryRetrievalTraceStore>();
 		services.AddSingleton<IRetrievalTraceStore>(sp => sp.GetRequiredService<InMemoryRetrievalTraceStore>());

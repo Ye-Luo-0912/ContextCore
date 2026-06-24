@@ -1,0 +1,12 @@
+﻿{
+  "DatasetId": "rdsv2-blind-holdout-v514-08e782c1071b9eeb",
+  "CorpusItemCount": 24,
+  "SampleCount": 24,
+  "Split": "blind-holdout",
+  "QueryLeakageCount": 0,
+  "ItemLeakageCount": 0,
+  "TemplateLeakageCount": 0,
+  "ContractIssueCount": 0,
+  "GeneratedBy": "source-aware-ranking-repair/blind-holdout/v1",
+  "UseForRuntime": false
+}

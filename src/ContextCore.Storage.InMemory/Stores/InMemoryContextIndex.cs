@@ -1,7 +1,8 @@
 using System.Collections.Concurrent;
 using ContextCore.Abstractions;
+using ContextCore.Abstractions.Models;
 
-namespace ContextCore.Storage.InMemory;
+namespace ContextCore.Storage.InMemory.Stores;
 
 /// <summary>基于内存的 <see cref="IContextIndex"/> 实现，适用于测试和短生命周期场景。</summary>
 public sealed class InMemoryContextIndex : IContextIndex

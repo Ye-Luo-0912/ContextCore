@@ -1,0 +1,19 @@
+﻿{
+  "WorkspaceId": "contextcore_scoped_service",
+  "CollectionId": "relation-governance-scoped-service",
+  "ProviderMode": "GuardedPostgresPrimary",
+  "GatePassed": true,
+  "AllowlistedScopeUsedPostgresPrimary": true,
+  "NonAllowlistedScopeUsedFileSystem": true,
+  "FallbackTested": true,
+  "ComparisonTraceRecorded": true,
+  "MismatchCount": 0,
+  "PostgresFailureCount": 0,
+  "CleanupPerformed": true,
+  "Diagnostics": [
+    "GlobalDefaultStillOff",
+    "RuntimeProviderScopedOnly"
+  ],
+  "BlockedReasons": [],
+  "Recommendation": "ReadyForScopedServiceMode"
+}

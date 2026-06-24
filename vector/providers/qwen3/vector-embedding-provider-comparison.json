@@ -1,0 +1,74 @@
+﻿{
+  "OperationId": "vector-embedding-provider-comparison-66f68ecb4a7c4400970813d6bd0c6a9d",
+  "CreatedAt": "2026-06-14T18:12:03.236747+00:00",
+  "ProviderId": "qwen3-embedding-0.6b-onnx",
+  "ProviderType": "OnnxLocal",
+  "EmbeddingModel": "qwen3-embedding-0.6b",
+  "Dimension": 1024,
+  "IndexedItems": 158,
+  "QueryCount": 113,
+  "AverageTopSimilarity": 0.8521344597214245,
+  "PositiveAverageSimilarity": 0.8321240260049775,
+  "NegativeAverageSimilarity": 0.7800565002075618,
+  "SimilaritySeparation": 0.05206752579741569,
+  "MustHitRecallAtK": 0.76875,
+  "MustHitMrrAfterPolicy": 0.8058364938895912,
+  "MustNotHitRiskAfterPolicy": 0.00819672131147541,
+  "LifecycleRiskAfterPolicy": 0,
+  "EligibleCandidateCount": 880,
+  "NoCandidateCount": 0,
+  "Recommendation": "BlockedByRisk",
+  "ProviderResults": [
+    {
+      "ProviderId": "deterministic-hash",
+      "ProviderType": "DeterministicHash",
+      "EmbeddingModel": "deterministic-hash-v1",
+      "Dimension": 16,
+      "IndexedItems": 158,
+      "QueryCount": 113,
+      "AverageTopSimilarity": 0.6091406646920795,
+      "PositiveAverageSimilarity": 0.36608849804443,
+      "NegativeAverageSimilarity": 0.35945928899578894,
+      "SimilaritySeparation": 0.00662920904864106,
+      "MustHitRecallAfterPolicy": 0.03125,
+      "MustHitMrrAfterPolicy": 0.010703750526759375,
+      "MustNotHitRiskAfterPolicy": 0,
+      "LifecycleRiskAfterPolicy": 0,
+      "EligibleCandidateCount": 863,
+      "NoCandidateCount": 0,
+      "Recommendation": "NeedsRealEmbeddingProvider",
+      "Diagnostics": [],
+      "Warnings": [
+        "\u5F53\u524D embedding \u8BED\u4E49\u533A\u5206\u80FD\u529B\u4E0D\u8DB3\uFF0C\u9700\u8981\u771F\u5B9E provider \u6216\u66F4\u9AD8\u8D28\u91CF\u6A21\u578B\u3002"
+      ]
+    },
+    {
+      "ProviderId": "qwen3-embedding-0.6b-onnx",
+      "ProviderType": "OnnxLocal",
+      "EmbeddingModel": "qwen3-embedding-0.6b",
+      "Dimension": 1024,
+      "IndexedItems": 158,
+      "QueryCount": 113,
+      "AverageTopSimilarity": 0.8521344597214245,
+      "PositiveAverageSimilarity": 0.8321240260049775,
+      "NegativeAverageSimilarity": 0.7800565002075618,
+      "SimilaritySeparation": 0.05206752579741569,
+      "MustHitRecallAfterPolicy": 0.76875,
+      "MustHitMrrAfterPolicy": 0.8058364938895912,
+      "MustNotHitRiskAfterPolicy": 0.00819672131147541,
+      "LifecycleRiskAfterPolicy": 0,
+      "EligibleCandidateCount": 880,
+      "NoCandidateCount": 0,
+      "Recommendation": "BlockedByRisk",
+      "Diagnostics": [],
+      "Warnings": [
+        "vector candidate policy \u540E\u4ECD\u5B58\u5728\u98CE\u9669\uFF0C\u5FC5\u987B\u4FDD\u6301 preview-only\u3002"
+      ]
+    }
+  ],
+  "Diagnostics": [],
+  "Warnings": [
+    "\u5F53\u524D embedding \u8BED\u4E49\u533A\u5206\u80FD\u529B\u4E0D\u8DB3\uFF0C\u9700\u8981\u771F\u5B9E provider \u6216\u66F4\u9AD8\u8D28\u91CF\u6A21\u578B\u3002",
+    "vector candidate policy \u540E\u4ECD\u5B58\u5728\u98CE\u9669\uFF0C\u5FC5\u987B\u4FDD\u6301 preview-only\u3002"
+  ]
+}

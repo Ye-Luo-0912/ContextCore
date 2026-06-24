@@ -1,4 +1,4 @@
-namespace ContextCore.Abstractions;
+namespace ContextCore.Abstractions.Models;
 
 /// <summary>
 /// 输入层统一命令，作为 Service Alpha 之前的标准化入口。

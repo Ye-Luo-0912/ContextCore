@@ -1,6 +1,4 @@
-using ContextCore.Abstractions.Models;
-
-namespace ContextCore.Abstractions;
+namespace ContextCore.Abstractions.Models;
 
 /// <summary>稳定对象来源链查询响应。</summary>
 public sealed class ContextProvenanceResponse

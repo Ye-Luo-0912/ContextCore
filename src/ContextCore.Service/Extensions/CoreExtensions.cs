@@ -3,6 +3,11 @@ using ContextCore.Abstractions.Models;
 using ContextCore.Core;
 using ContextCore.Core.Jobs;
 using ContextCore.Core.Services;
+using ContextCore.Core.Services.Attention;
+using ContextCore.Core.Services.Graph;
+using ContextCore.Core.Services.Planning;
+using ContextCore.Core.Services.Promotion;
+using ContextCore.Core.Services.Retrieval;
 using ContextCore.ModelGateway;
 using ContextCore.ModelGateway.Infrastructure;
 using ContextCore.Service.Infrastructure;
@@ -82,6 +87,11 @@ internal static class CoreExtensions
 			sp.GetService<IStableLifecycleReviewStore>(),
 			sp.GetService<IRelationStore>(),
 			sp.GetRequiredService<StableMemoryGovernanceService>()));
+		services.AddSingleton(sp => new RelationReviewService(
+			sp.GetService<IRelationStore>(),
+			sp.GetService<IRelationReviewStore>(),
+			sp.GetRequiredService<RelationTypeRegistry>(),
+			sp.GetRequiredService<RelationGraphValidationService>()));
 		services.AddSingleton(sp => new PolicyFeedbackDatasetService(
 			sp.GetService<IShortTermPromotionCandidateStore>(),
 			sp.GetService<IStableReviewCandidateStore>(),
@@ -91,12 +101,55 @@ internal static class CoreExtensions
 		services.AddSingleton(sp => new LearningFeatureDatasetService(
 			sp.GetRequiredService<PolicyFeedbackDatasetService>(),
 			sp.GetRequiredService<PlanningIntentDetector>()));
+		services.AddSingleton<LearningFeedbackService>();
+		services.AddSingleton<LearningFeedbackReviewService>();
+		services.AddSingleton<LearningFeedbackFeatureCandidateBuilder>();
 		services.AddSingleton<LearningDatasetQualityReportBuilder>();
+		services.AddSingleton<RouterIntentShadowReportBuilder>();
+		services.AddSingleton(sp => new RouterIntentShadowService(
+			sp.GetRequiredService<RouterShadowOptions>(),
+			sp.GetService<IRouterIntentShadowTraceStore>(),
+			sp.GetRequiredService<PlanningIntentDetector>()));
 		services.AddSingleton<LifecycleAwareRankerShadowScorer>();
 		services.AddSingleton<LifecycleAwareRankerTraceBuilder>();
 		services.AddSingleton<LifecycleAwareRankerDebugService>();
 		services.AddSingleton(sp => new RankerShadowTraceExportService(
 			sp.GetService<IRetrievalTraceStore>()));
+		services.AddSingleton<GraphExpansionShadowTraceBuilder>();
+		services.AddSingleton(sp => new GraphExpansionShadowTraceExportService(
+			sp.GetService<IRetrievalTraceStore>()));
+		services.AddSingleton<GraphExpansionShadowTraceQualityReportBuilder>();
+		services.AddSingleton<IEmbeddingGenerator, DeterministicHashEmbeddingGenerator>();
+		services.AddSingleton(sp => new VectorReindexPlanner(
+			sp.GetService<IContextStore>(),
+			sp.GetService<IMemoryStore>(),
+			sp.GetService<IVectorIndexStore>(),
+			sp.GetService<IEmbeddingGenerator>()));
+		services.AddSingleton(sp => new VectorReindexExecutor(
+			sp.GetRequiredService<VectorReindexPlanner>(),
+			sp.GetService<IEmbeddingGenerator>(),
+			sp.GetService<IVectorIndexStore>(),
+			sp.GetService<IVectorReindexReportStore>()));
+		services.AddSingleton(sp => new VectorIndexService(
+			sp.GetService<IVectorIndexStore>(),
+			sp.GetService<IEmbeddingGenerator>(),
+			sp.GetService<IContextStore>(),
+			sp.GetService<IMemoryStore>()));
+		services.AddSingleton<VectorQueryProfileRegistry>();
+		services.AddSingleton<VectorSourceLifecycleMetadataResolver>();
+		services.AddSingleton<VectorCandidateEligibilityPolicy>();
+		services.AddSingleton(sp => new VectorQueryPreviewService(
+			sp.GetService<IVectorIndexStore>(),
+			sp.GetService<IEmbeddingGenerator>(),
+			sp.GetRequiredService<VectorIndexService>(),
+			sp.GetRequiredService<VectorQueryProfileRegistry>(),
+			sp.GetRequiredService<VectorCandidateEligibilityPolicy>()));
+		services.AddSingleton(sp => new VectorLifecycleMetadataReviewCandidateService(
+			sp.GetRequiredService<IVectorLifecycleMetadataReviewCandidateStore>()));
+		services.AddSingleton(sp => new VectorLifecycleMetadataReviewService(
+			sp.GetRequiredService<IVectorLifecycleMetadataReviewCandidateStore>(),
+			sp.GetRequiredService<IVectorLifecycleMetadataReviewStore>(),
+			sp.GetRequiredService<IVectorLifecycleSidecarMetadataStore>()));
 		services.AddSingleton<PlanningSnapshotService>();
 		services.AddSingleton<PlanningIntentDetector>();
 		services.AddSingleton(RetrievalPlanSafetyProfile.CreateDefault());
@@ -112,6 +165,18 @@ internal static class CoreExtensions
 		services.AddSingleton<CollectionValidationService>();
 		services.AddSingleton<RelationBuilder>();
 		services.AddSingleton<RelationTypeRegistry>();
+		services.AddSingleton<RelationExpansionProfileRegistry>();
+		services.AddSingleton<RelationExpansionPolicyValidator>();
+		services.AddSingleton(sp => new RelationExpansionPreviewService(
+			sp.GetService<IRelationStore>(),
+			sp.GetRequiredService<RelationExpansionProfileRegistry>(),
+			sp.GetRequiredService<RelationExpansionPolicyValidator>()));
+		services.AddSingleton(sp => new GraphExpansionApplyPolicy(
+			sp.GetRequiredService<RelationExpansionPreviewService>(),
+			sp.GetRequiredService<IContextStore>(),
+			sp.GetService<IMemoryStore>(),
+			sp.GetService<IConstraintStore>()));
+		services.AddSingleton<RelationExpansionProfileShadowReportBuilder>();
 		services.AddSingleton(sp => new RelationGraphValidationService(
 			sp.GetService<IRelationStore>(),
 			sp.GetService<IContextStore>(),
@@ -148,7 +213,9 @@ internal static class CoreExtensions
 			sp.GetRequiredService<IRelationStore>(),
 			sp.GetService<IContextPackageBuildTraceStore>(),
 			sp.GetRequiredService<IContextTokenizerResolver>(),
-			sp.GetService<IWorkingMemoryService>()));
+			sp.GetService<IWorkingMemoryService>(),
+			sp.GetRequiredService<GraphExpansionApplyOptions>(),
+			sp.GetRequiredService<GraphExpansionApplyPolicy>()));
 		services.AddSingleton<IContextPackageBuilder>(sp =>
 			sp.GetRequiredService<BasicContextPackageBuilder>());
 
@@ -167,7 +234,9 @@ internal static class CoreExtensions
 			sp.GetRequiredService<RetrievalPlanProposalService>(),
 			sp.GetRequiredService<ShadowRetrievalPlanExecutor>(),
 			sp.GetRequiredService<LifecycleAwareRankerShadowOptions>(),
-			sp.GetRequiredService<LifecycleAwareRankerTraceBuilder>()));
+			sp.GetRequiredService<LifecycleAwareRankerTraceBuilder>(),
+			sp.GetRequiredService<GraphExpansionShadowOptions>(),
+			sp.GetRequiredService<GraphExpansionShadowTraceBuilder>()));
 		services.AddSingleton<IContextRetriever>(sp => sp.GetRequiredService<HybridContextRetriever>());
 
 		services.AddSingleton<LoggingContextEventSink>();
@@ -207,6 +276,7 @@ internal static class CoreExtensions
 		services.AddSingleton<ServiceAlphaRuntimeInspector>();
 
 		services.AddSingleton<IContextJobProcessor, CompressionJobProcessor>();
+		services.AddSingleton<IContextJobProcessor, VectorIndexingJobProcessor>();
 		services.AddSingleton<IContextJobProcessor>(_ => new UnsupportedJobProcessor(ContextJobKind.IndexBuild));
 		services.AddSingleton<IContextJobProcessor>(_ => new UnsupportedJobProcessor(ContextJobKind.PackageRefresh));
 		services.AddSingleton<ContextJobDispatcher>();

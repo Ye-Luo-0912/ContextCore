@@ -1,0 +1,49 @@
+﻿{
+  "OperationId": "vector-scoped-runtime-experiment-dry-run-observation-observation-84bf394bd53d43c18e236c1dda2d1eaf",
+  "CreatedAt": "2026-06-16T18:08:12.2504684+00:00",
+  "ObservationPassed": true,
+  "GatePassed": false,
+  "Mode": "DryRun",
+  "ProfileName": "post-scoring-risk-gated-v1",
+  "ObservationRunCount": 3,
+  "MinimumObservationRunCount": 3,
+  "WorkspaceAllowlist": [
+    "contextcore_eval"
+  ],
+  "CollectionAllowlist": [
+    "dataset-v2-stress"
+  ],
+  "EvalScopeAllowlist": [
+    "dataset-v2-stress"
+  ],
+  "AllowlistedScopeCount": 1,
+  "NonAllowlistedScopeChecked": true,
+  "DryRunPackageCount": 360,
+  "BaselinePackageCount": 360,
+  "CandidateAddCount": 171,
+  "CandidateRemoveCount": 171,
+  "TokenDeltaTotal": 165,
+  "TokenDeltaMax": 10,
+  "RiskAfterPolicy": 0,
+  "MustNotHitRiskAfterPolicy": 0,
+  "LifecycleRiskAfterPolicy": 0,
+  "FormalOutputChanged": 0,
+  "FormalPackageWritten": false,
+  "RuntimeMutated": false,
+  "VectorStoreBindingChanged": false,
+  "PackingPolicyChanged": false,
+  "PackageOutputChanged": false,
+  "NonAllowlistedScopeLeakCount": 0,
+  "RollbackPlanAvailable": true,
+  "RuntimeChangeGateConsistent": true,
+  "UseForRuntime": false,
+  "FormalRetrievalAllowed": false,
+  "ReadyForRuntimeSwitch": false,
+  "Recommendation": "ReadyForScopedRuntimeExperimentDesignFreeze",
+  "BlockedReasons": [],
+  "SourceReports": {
+    "v45ScopedRuntimeExperimentGate": "vector\\v4\\vector-scoped-runtime-experiment-gate.json",
+    "shadowPackageComparisonGate": "vector\\v4\\vector-shadow-package-comparison-gate.json",
+    "learningRuntimeChangeReadinessGate": "learning\\readiness\\learning-runtime-change-readiness-gate.json"
+  }
+}

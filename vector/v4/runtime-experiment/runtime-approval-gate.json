@@ -1,0 +1,21 @@
+﻿{
+  "OperationId": "vector-scoped-runtime-experiment-runtime-approval-gate-af2ee67e7066429f852e8155b3bbff8d",
+  "CreatedAt": "2026-06-17T07:01:12.2720789+00:00",
+  "GatePassed": true,
+  "Recommendation": "ReadyForActivationPreflight",
+  "ProposalId": "vsrep-bb5402e39c0f1333",
+  "ApprovalId": "vsrea-49cee0621cf6bc41",
+  "ApprovalMode": "ScopedRuntimeExperiment",
+  "ApprovedBy": "codex",
+  "ApprovalExists": true,
+  "ApprovalExpired": false,
+  "ApprovalRevoked": false,
+  "RequiredAcknowledgementsPresent": true,
+  "RuntimeSwitchAllowed": false,
+  "FormalRetrievalAllowed": false,
+  "ReadyForRuntimeSwitch": false,
+  "UseForRuntime": false,
+  "FormalPackageWriteAllowed": false,
+  "PackingPolicyIntegrationAllowed": false,
+  "BlockedReasons": []
+}

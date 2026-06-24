@@ -1,0 +1,13 @@
+﻿{
+  "OperationId": "service-api-security-diagnostics-04c0609f2681484bb62c7282250612e6",
+  "GeneratedAt": "2026-06-16T16:38:49.9238227+00:00",
+  "AuthConfigured": false,
+  "ApiKeyConfigured": false,
+  "DevelopmentMode": false,
+  "SecretLeakDetected": false,
+  "AbsolutePathLeakDetected": false,
+  "Recommendation": "NotConfigured",
+  "Diagnostics": [
+    "ApiKeyRequiredButMissing"
+  ]
+}

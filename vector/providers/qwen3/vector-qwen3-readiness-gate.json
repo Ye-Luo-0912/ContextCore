@@ -1,0 +1,33 @@
+﻿{
+  "OperationId": "vector-qwen3-readiness-gate-9cd849b8b31b47838503f571cbfce4fc",
+  "CreatedAt": "2026-06-14T18:12:16.8906366+00:00",
+  "Passed": false,
+  "ProviderId": "qwen3-embedding-0.6b-onnx",
+  "ProviderType": "OnnxLocal",
+  "ModelId": "qwen3-embedding-0.6b",
+  "ModelPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\src\\ContextCore.Embedding\\Models\\qwen3-embedding-0.6b-onnx\\model_int8.onnx",
+  "TokenizerPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\src\\ContextCore.Embedding\\Models\\qwen3-embedding-0.6b-onnx\\tokenizer.json",
+  "Dimension": 1024,
+  "UseForRuntime": false,
+  "ProviderCompatibilityPassed": true,
+  "A3RecallAfterPolicy": 0.5454545454545454,
+  "ExtendedRecallAfterPolicy": 0.76875,
+  "RiskAfterPolicy": 2,
+  "MustNotHitRiskAfterPolicy": 0.017543859649122806,
+  "LifecycleRiskAfterPolicy": 0,
+  "FormalOutputChanged": 0,
+  "ProjectionMismatchCount": 999,
+  "PgVectorFileSystemParityPassed": false,
+  "P15GatePassed": true,
+  "FormalRetrievalAllowed": false,
+  "BlockedReasons": [
+    "A3RecallBelow80Percent",
+    "ExtendedRecallBelow80Percent",
+    "RiskAfterPolicyNonZero",
+    "MustNotHitRiskAfterPolicyNonZero",
+    "ProjectionMismatchNonZero",
+    "PgVectorFileSystemParityNotPassed"
+  ],
+  "Diagnostics": [],
+  "Recommendation": "BlockedByRisk"
+}

@@ -1,0 +1,24 @@
+﻿{
+  "OperationId": "retrieval-dataset-legacy-limitation-4adfaad622a3466cb0f4309c44d1b285",
+  "CreatedAt": "2026-06-15T13:24:17.6454321+00:00",
+  "BatchId": "vlmrb-47f13317240164d7",
+  "ReviewCandidateCount": 32,
+  "MissingEvidenceSourceProvenanceCandidateCount": 32,
+  "EvidenceBackfillRecommendation": "NeedsIngestionMetadataBackfill",
+  "LegacyDatasetSuitableForPrimaryRecallRepair": false,
+  "Limitations": [
+    "32 lifecycle metadata review candidates lack evidence/source/provenance required by Dataset V2.",
+    "Legacy eval corpus can explain recall loss but cannot safely justify lifecycle repair decisions.",
+    "Recall repair should move to Dataset V2 ingestion metadata rather than manual repair of legacy labels."
+  ],
+  "RequiredNextDataWork": [
+    "Backfill sourceRefs/evidenceRefs/provenance at ingestion time.",
+    "Add lifecycle/reviewStatus/replacementState metadata to corpus items.",
+    "Attach relation evidence for deprecation and replacement state.",
+    "Validate split isolation and query label hygiene before using a dataset for recall repair."
+  ],
+  "GeneratesFormalDataset": false,
+  "FormalRetrievalAllowed": false,
+  "UseForRuntime": false,
+  "Recommendation": "NeedsIngestionMetadataBackfill"
+}

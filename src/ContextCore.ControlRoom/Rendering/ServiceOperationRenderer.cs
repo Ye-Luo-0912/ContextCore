@@ -1,5 +1,6 @@
 using System.Text;
 using ContextCore.Abstractions;
+using ContextCore.Abstractions.Models;
 using ContextCore.Client;
 
 namespace ContextCore.ControlRoom.Rendering;
@@ -58,6 +59,7 @@ public static class ServiceOperationRenderer
         builder.AppendLine($"DroppedItems   : {result.DroppedItems.Count}");
         builder.AppendLine($"Warnings       : {result.Uncertainties.Count}");
         builder.AppendLine($"TraceSummary   : selected={result.SelectedItems.Count}, dropped={result.DroppedItems.Count}, uncertainties={result.Uncertainties.Count}");
+        AppendGraphExpansionStatus(builder, result);
         builder.AppendLine();
         builder.AppendLine("Sections");
         builder.AppendLine("--------");
@@ -78,6 +80,28 @@ public static class ServiceOperationRenderer
         }
 
         return builder.ToString();
+    }
+
+    private static void AppendGraphExpansionStatus(StringBuilder builder, ContextPackageBuildResult result)
+    {
+        if (!result.Package.Metadata.TryGetValue("graphExpansionMode", out var mode)
+            && !result.Metadata.TryGetValue("graphExpansionMode", out mode))
+        {
+            return;
+        }
+
+        var metadata = result.Package.Metadata.Count > 0 ? result.Package.Metadata : result.Metadata;
+        builder.AppendLine("GraphExpansion :");
+        builder.AppendLine($"  Mode          : {mode}");
+        builder.AppendLine($"  Applied       : {metadata.GetValueOrDefault("graphExpansionApplied", "false")}");
+        builder.AppendLine($"  Profiles      : {metadata.GetValueOrDefault("graphExpansionProfiles", "-")}");
+        builder.AppendLine($"  AddedItems    : {metadata.GetValueOrDefault("graphExpansionAddedItems", "-")}");
+        builder.AppendLine($"  TargetSections: {metadata.GetValueOrDefault("graphExpansionTargetSections", "-")}");
+        builder.AppendLine($"  ExpectedDelta : {metadata.GetValueOrDefault("graphExpansionExpectedGraphSectionDelta", "0")}");
+        builder.AppendLine($"  UnexpectedWarn: {metadata.GetValueOrDefault("graphExpansionUnexpectedWarningDelta", "0")}");
+        builder.AppendLine($"  FallbackUsed  : {metadata.GetValueOrDefault("graphExpansionFallbackUsed", "false")}");
+        builder.AppendLine($"  FallbackReason: {metadata.GetValueOrDefault("graphExpansionFallbackReason", "-")}");
+        builder.AppendLine($"  RiskChecks    : {metadata.GetValueOrDefault("graphExpansionRiskChecks", "-")}");
     }
 
     public static string RenderError(ContextCoreApiException exception)

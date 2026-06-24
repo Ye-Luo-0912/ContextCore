@@ -1,0 +1,346 @@
+﻿{
+  "OperationId": "shadow-formal-retrieval-adapter-gate-d68559c2b52b447faa112f74a2a1b8d0",
+  "CreatedAt": "2026-06-17T16:18:04.7452773+00:00",
+  "AdapterPassed": true,
+  "GatePassed": true,
+  "Recommendation": "ReadyForShadowAdapterFreeze",
+  "AllowedMode": "ShadowOnly",
+  "RequiredNextPhase": "ShadowFormalRetrievalAdapterFreeze",
+  "VectorProviderSource": "post-scoring-risk-gated-v1",
+  "GraphCandidateSource": "read-only relation evidence / expansion preview",
+  "AdapterInputs": [
+    "query",
+    "workspaceId",
+    "collectionId",
+    "package context",
+    "baseline candidates"
+  ],
+  "AdapterOutputs": [
+    "shadow vector candidates",
+    "shadow graph candidates",
+    "merged shadow candidates",
+    "filtered candidates",
+    "trace/explain"
+  ],
+  "GateOrder": [
+    "provider scope isolation",
+    "candidate eligibility",
+    "lifecycle projection",
+    "risk projection",
+    "must-not risk gate",
+    "post-scoring risk gate",
+    "formal output/package invariant gate"
+  ],
+  "SampleCount": 120,
+  "TotalBaselineCandidateCount": 600,
+  "TotalShadowVectorCandidateCount": 600,
+  "TotalShadowGraphCandidateCount": 235,
+  "TotalMergedShadowCandidateCount": 751,
+  "TotalFilteredCandidateCount": 751,
+  "RiskAfterPolicy": 0,
+  "MustNotHitRiskAfterPolicy": 0,
+  "LifecycleRiskAfterPolicy": 0,
+  "TargetSectionViolationCount": 0,
+  "FormalOutputChanged": 0,
+  "FormalSelectedSetChanged": false,
+  "PackageOutputChanged": false,
+  "PackingPolicyChanged": false,
+  "RuntimeMutated": false,
+  "VectorStoreBindingChanged": false,
+  "FormalPackageWritten": false,
+  "FormalRetrievalAllowed": false,
+  "RuntimeSwitchAllowed": false,
+  "ReadyForRuntimeSwitch": false,
+  "UseForRuntime": false,
+  "NoRuntimeMutationInvariant": true,
+  "Samples": [
+    {
+      "SampleId": "rdsv2-stress-train-sample-0001",
+      "QueryText": "Find checkpoint guidance for restore safely with rollback signal handling while excluding normal-context constraint.",
+      "WorkspaceId": "",
+      "CollectionId": "",
+      "ExpectedTargetSection": "normal_context",
+      "BaselineCandidateCount": 5,
+      "ShadowVectorCandidateCount": 5,
+      "ShadowGraphCandidateCount": 5,
+      "MergedShadowCandidateCount": 8,
+      "FilteredCandidateCount": 8,
+      "RiskAfterPolicy": 0,
+      "MustNotHitRiskAfterPolicy": 0,
+      "LifecycleRiskAfterPolicy": 0,
+      "TargetSectionViolationCount": 0,
+      "BaselineCandidateIds": [
+        "rdsv2-stress-holdout-item-0101",
+        "rdsv2-stress-holdout-item-0111",
+        "rdsv2-stress-train-item-0001",
+        "rdsv2-stress-train-item-0011",
+        "rdsv2-stress-train-item-0021"
+      ],
+      "ShadowVectorCandidateIds": [
+        "rdsv2-stress-holdout-item-0101",
+        "rdsv2-stress-holdout-item-0111",
+        "rdsv2-stress-train-item-0001",
+        "rdsv2-stress-train-item-0011",
+        "rdsv2-stress-train-item-0021"
+      ],
+      "ShadowGraphCandidateIds": [
+        "rdsv2-stress-train-item-0001",
+        "rdsv2-stress-train-item-0002",
+        "rdsv2-stress-train-item-0003",
+        "rdsv2-stress-train-item-0004",
+        "rdsv2-stress-train-item-0006"
+      ],
+      "MergedShadowCandidateIds": [
+        "rdsv2-stress-holdout-item-0101",
+        "rdsv2-stress-holdout-item-0111",
+        "rdsv2-stress-train-item-0001",
+        "rdsv2-stress-train-item-0011",
+        "rdsv2-stress-train-item-0021"
+      ],
+      "FilteredCandidateIds": [
+        "rdsv2-stress-holdout-item-0101",
+        "rdsv2-stress-holdout-item-0111",
+        "rdsv2-stress-train-item-0001",
+        "rdsv2-stress-train-item-0011",
+        "rdsv2-stress-train-item-0021"
+      ],
+      "DropReasons": [],
+      "ExplainNotes": [
+        "vector top-k via post-scoring-risk-gated-v1",
+        "graph candidates via read-only relation evidence",
+        "merge preserves vector-first stable order",
+        "filter chain: eligibility -\u003E lifecycle -\u003E must-not -\u003E risk",
+        "fallback to baseline package path on adapter failure"
+      ]
+    },
+    {
+      "SampleId": "rdsv2-stress-train-sample-0002",
+      "QueryText": "Which approved note explains reliable handling for plan migration when version signal is the main concern?",
+      "WorkspaceId": "",
+      "CollectionId": "",
+      "ExpectedTargetSection": "normal_context",
+      "BaselineCandidateCount": 5,
+      "ShadowVectorCandidateCount": 5,
+      "ShadowGraphCandidateCount": 2,
+      "MergedShadowCandidateCount": 6,
+      "FilteredCandidateCount": 6,
+      "RiskAfterPolicy": 0,
+      "MustNotHitRiskAfterPolicy": 0,
+      "LifecycleRiskAfterPolicy": 0,
+      "TargetSectionViolationCount": 0,
+      "BaselineCandidateIds": [
+        "rdsv2-stress-holdout-item-0102",
+        "rdsv2-stress-holdout-item-0112",
+        "rdsv2-stress-train-item-0002",
+        "rdsv2-stress-train-item-0012",
+        "rdsv2-stress-train-item-0022"
+      ],
+      "ShadowVectorCandidateIds": [
+        "rdsv2-stress-holdout-item-0102",
+        "rdsv2-stress-holdout-item-0112",
+        "rdsv2-stress-train-item-0002",
+        "rdsv2-stress-train-item-0012",
+        "rdsv2-stress-train-item-0022"
+      ],
+      "ShadowGraphCandidateIds": [
+        "rdsv2-stress-train-item-0002",
+        "rdsv2-stress-train-item-0001"
+      ],
+      "MergedShadowCandidateIds": [
+        "rdsv2-stress-holdout-item-0102",
+        "rdsv2-stress-holdout-item-0112",
+        "rdsv2-stress-train-item-0002",
+        "rdsv2-stress-train-item-0012",
+        "rdsv2-stress-train-item-0022"
+      ],
+      "FilteredCandidateIds": [
+        "rdsv2-stress-holdout-item-0102",
+        "rdsv2-stress-holdout-item-0112",
+        "rdsv2-stress-train-item-0002",
+        "rdsv2-stress-train-item-0012",
+        "rdsv2-stress-train-item-0022"
+      ],
+      "DropReasons": [],
+      "ExplainNotes": [
+        "vector top-k via post-scoring-risk-gated-v1",
+        "graph candidates via read-only relation evidence",
+        "merge preserves vector-first stable order",
+        "filter chain: eligibility -\u003E lifecycle -\u003E must-not -\u003E risk",
+        "fallback to baseline package path on adapter failure"
+      ]
+    },
+    {
+      "SampleId": "rdsv2-stress-train-sample-0003",
+      "QueryText": "Use shared metadata about lease to locate the right renew heartbeat guidance without relying on a unique source tag.",
+      "WorkspaceId": "",
+      "CollectionId": "",
+      "ExpectedTargetSection": "normal_context",
+      "BaselineCandidateCount": 5,
+      "ShadowVectorCandidateCount": 5,
+      "ShadowGraphCandidateCount": 2,
+      "MergedShadowCandidateCount": 6,
+      "FilteredCandidateCount": 6,
+      "RiskAfterPolicy": 0,
+      "MustNotHitRiskAfterPolicy": 0,
+      "LifecycleRiskAfterPolicy": 0,
+      "TargetSectionViolationCount": 0,
+      "BaselineCandidateIds": [
+        "rdsv2-stress-holdout-item-0103",
+        "rdsv2-stress-holdout-item-0113",
+        "rdsv2-stress-train-item-0003",
+        "rdsv2-stress-train-item-0013",
+        "rdsv2-stress-train-item-0023"
+      ],
+      "ShadowVectorCandidateIds": [
+        "rdsv2-stress-holdout-item-0103",
+        "rdsv2-stress-holdout-item-0113",
+        "rdsv2-stress-train-item-0003",
+        "rdsv2-stress-train-item-0013",
+        "rdsv2-stress-train-item-0023"
+      ],
+      "ShadowGraphCandidateIds": [
+        "rdsv2-stress-train-item-0003",
+        "rdsv2-stress-train-item-0001"
+      ],
+      "MergedShadowCandidateIds": [
+        "rdsv2-stress-holdout-item-0103",
+        "rdsv2-stress-holdout-item-0113",
+        "rdsv2-stress-train-item-0003",
+        "rdsv2-stress-train-item-0013",
+        "rdsv2-stress-train-item-0023"
+      ],
+      "FilteredCandidateIds": [
+        "rdsv2-stress-holdout-item-0103",
+        "rdsv2-stress-holdout-item-0113",
+        "rdsv2-stress-train-item-0003",
+        "rdsv2-stress-train-item-0013",
+        "rdsv2-stress-train-item-0023"
+      ],
+      "DropReasons": [],
+      "ExplainNotes": [
+        "vector top-k via post-scoring-risk-gated-v1",
+        "graph candidates via read-only relation evidence",
+        "merge preserves vector-first stable order",
+        "filter chain: eligibility -\u003E lifecycle -\u003E must-not -\u003E risk",
+        "fallback to baseline package path on adapter failure"
+      ]
+    },
+    {
+      "SampleId": "rdsv2-stress-train-sample-0004",
+      "QueryText": "Follow replacement evidence for review and identify the context that still supports verify evidence.",
+      "WorkspaceId": "",
+      "CollectionId": "",
+      "ExpectedTargetSection": "normal_context",
+      "BaselineCandidateCount": 5,
+      "ShadowVectorCandidateCount": 5,
+      "ShadowGraphCandidateCount": 2,
+      "MergedShadowCandidateCount": 6,
+      "FilteredCandidateCount": 6,
+      "RiskAfterPolicy": 0,
+      "MustNotHitRiskAfterPolicy": 0,
+      "LifecycleRiskAfterPolicy": 0,
+      "TargetSectionViolationCount": 0,
+      "BaselineCandidateIds": [
+        "rdsv2-stress-holdout-item-0104",
+        "rdsv2-stress-holdout-item-0114",
+        "rdsv2-stress-train-item-0004",
+        "rdsv2-stress-train-item-0014",
+        "rdsv2-stress-train-item-0024"
+      ],
+      "ShadowVectorCandidateIds": [
+        "rdsv2-stress-holdout-item-0104",
+        "rdsv2-stress-holdout-item-0114",
+        "rdsv2-stress-train-item-0004",
+        "rdsv2-stress-train-item-0014",
+        "rdsv2-stress-train-item-0024"
+      ],
+      "ShadowGraphCandidateIds": [
+        "rdsv2-stress-train-item-0004",
+        "rdsv2-stress-train-item-0001"
+      ],
+      "MergedShadowCandidateIds": [
+        "rdsv2-stress-holdout-item-0104",
+        "rdsv2-stress-holdout-item-0114",
+        "rdsv2-stress-train-item-0004",
+        "rdsv2-stress-train-item-0014",
+        "rdsv2-stress-train-item-0024"
+      ],
+      "FilteredCandidateIds": [
+        "rdsv2-stress-holdout-item-0104",
+        "rdsv2-stress-holdout-item-0114",
+        "rdsv2-stress-train-item-0004",
+        "rdsv2-stress-train-item-0014",
+        "rdsv2-stress-train-item-0024"
+      ],
+      "DropReasons": [],
+      "ExplainNotes": [
+        "vector top-k via post-scoring-risk-gated-v1",
+        "graph candidates via read-only relation evidence",
+        "merge preserves vector-first stable order",
+        "filter chain: eligibility -\u003E lifecycle -\u003E must-not -\u003E risk",
+        "fallback to baseline package path on adapter failure"
+      ]
+    },
+    {
+      "SampleId": "rdsv2-stress-train-sample-0005",
+      "QueryText": "Return only historical or audit context for archive when deprecated lifecycle evidence is present.",
+      "WorkspaceId": "",
+      "CollectionId": "",
+      "ExpectedTargetSection": "historical_context",
+      "BaselineCandidateCount": 5,
+      "ShadowVectorCandidateCount": 5,
+      "ShadowGraphCandidateCount": 1,
+      "MergedShadowCandidateCount": 5,
+      "FilteredCandidateCount": 5,
+      "RiskAfterPolicy": 0,
+      "MustNotHitRiskAfterPolicy": 0,
+      "LifecycleRiskAfterPolicy": 0,
+      "TargetSectionViolationCount": 0,
+      "BaselineCandidateIds": [
+        "rdsv2-stress-holdout-item-0105",
+        "rdsv2-stress-holdout-item-0115",
+        "rdsv2-stress-train-item-0005",
+        "rdsv2-stress-train-item-0015",
+        "rdsv2-stress-train-item-0025"
+      ],
+      "ShadowVectorCandidateIds": [
+        "rdsv2-stress-holdout-item-0105",
+        "rdsv2-stress-holdout-item-0115",
+        "rdsv2-stress-train-item-0005",
+        "rdsv2-stress-train-item-0015",
+        "rdsv2-stress-train-item-0025"
+      ],
+      "ShadowGraphCandidateIds": [
+        "rdsv2-stress-train-item-0005"
+      ],
+      "MergedShadowCandidateIds": [
+        "rdsv2-stress-holdout-item-0105",
+        "rdsv2-stress-holdout-item-0115",
+        "rdsv2-stress-train-item-0005",
+        "rdsv2-stress-train-item-0015",
+        "rdsv2-stress-train-item-0025"
+      ],
+      "FilteredCandidateIds": [
+        "rdsv2-stress-holdout-item-0105",
+        "rdsv2-stress-holdout-item-0115",
+        "rdsv2-stress-train-item-0005",
+        "rdsv2-stress-train-item-0015",
+        "rdsv2-stress-train-item-0025"
+      ],
+      "DropReasons": [],
+      "ExplainNotes": [
+        "vector top-k via post-scoring-risk-gated-v1",
+        "graph candidates via read-only relation evidence",
+        "merge preserves vector-first stable order",
+        "filter chain: eligibility -\u003E lifecycle -\u003E must-not -\u003E risk",
+        "fallback to baseline package path on adapter failure"
+      ]
+    }
+  ],
+  "SourceReports": {
+    "v51PlanGate": "vector\\v5\\shadow-formal-retrieval-adapter-plan-gate.json",
+    "stressCorpus": "vector\\dataset-v2\\stress\\corpus.jsonl",
+    "stressSamples": "vector\\dataset-v2\\stress\\samples.jsonl"
+  },
+  "BlockedReasons": []
+}

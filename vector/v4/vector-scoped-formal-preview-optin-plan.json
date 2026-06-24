@@ -1,0 +1,58 @@
+﻿{
+  "OperationId": "vector-scoped-formal-preview-optin-plan-430bf91e741446389dd319b28578fa20",
+  "CreatedAt": "2026-06-16T00:54:24.9782841+00:00",
+  "PlanPassed": true,
+  "SmokePassed": false,
+  "GatePassed": false,
+  "Mode": "PreviewOnly",
+  "ProfileName": "post-scoring-risk-gated-v1",
+  "WorkspaceAllowlist": [
+    "contextcore_eval"
+  ],
+  "CollectionAllowlist": [
+    "dataset-v2-stress"
+  ],
+  "EvalScopeAllowlist": [
+    "dataset-v2-stress"
+  ],
+  "SelectedWorkspaceId": "contextcore_eval",
+  "SelectedCollectionId": "dataset-v2-stress",
+  "SelectedEvalScope": "dataset-v2-stress",
+  "NonAllowlistedWorkspaceId": "contextcore_eval-outside",
+  "NonAllowlistedCollectionId": "dataset-v2-stress-outside",
+  "NonAllowlistedEvalScope": "dataset-v2-stress-outside",
+  "ScopeCount": 2,
+  "AllowlistedScopeCount": 1,
+  "NonAllowlistedScopeChecked": true,
+  "PreviewPackageCount": 120,
+  "BaselinePackageCount": 120,
+  "CandidateAddCount": 57,
+  "CandidateRemoveCount": 57,
+  "TokenDeltaTotal": 55,
+  "TokenDeltaMax": 10,
+  "RiskAfterPolicy": 0,
+  "MustNotHitRiskAfterPolicy": 0,
+  "LifecycleRiskAfterPolicy": 0,
+  "FormalOutputChanged": 0,
+  "PackageOutputChanged": false,
+  "PackingPolicyChanged": false,
+  "FormalPackageWritten": false,
+  "RuntimeMutated": false,
+  "NonAllowlistedScopeLeakCount": 0,
+  "UseForRuntime": false,
+  "FormalRetrievalAllowed": false,
+  "ReadyForRuntimeSwitch": false,
+  "RollbackInstruction": "Remove the selected workspace, collection, and eval scope from allowlists; keep Mode=Off.",
+  "Recommendation": "ReadyForLimitedFormalPreviewObservation",
+  "BlockedReasons": [],
+  "GateDependencySummary": {
+    "V4ReadinessRecheck": "True:ReadyForGuardedFormalPreview",
+    "GuardedFormalRetrievalPreview": "True:ReadyForShadowPackageComparison",
+    "ShadowPackageComparison": "True:ReadyForScopedFormalPreviewOptIn"
+  },
+  "SourceReports": {
+    "v4ReadinessRecheck": "vector\\v4\\vector-v4-readiness-recheck.json",
+    "guardedFormalRetrievalPreviewGate": "vector\\v4\\vector-guarded-formal-retrieval-preview-gate.json",
+    "shadowPackageComparisonGate": "vector\\v4\\vector-shadow-package-comparison-gate.json"
+  }
+}

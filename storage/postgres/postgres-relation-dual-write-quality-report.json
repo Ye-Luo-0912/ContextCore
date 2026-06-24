@@ -1,0 +1,11 @@
+﻿{
+  "TraceCount": 3,
+  "FileSystemWriteSuccessCount": 3,
+  "PostgresWriteSuccessCount": 3,
+  "PostgresWriteFailureCount": 0,
+  "MismatchCount": 0,
+  "FallbackCount": 0,
+  "AverageDurationMs": 24.05633333333333,
+  "Diagnostics": [],
+  "Recommendation": "ReadyForShadowRead"
+}

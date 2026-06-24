@@ -1,0 +1,18 @@
+﻿{
+  "providerEnabled": true,
+  "feedbackParityPassed": true,
+  "reviewParityPassed": true,
+  "featureCandidateParityPassed": true,
+  "metadataRoundtripPassed": true,
+  "duplicateFeedbackUpsertPassed": true,
+  "cleanupPerformed": true,
+  "feedbackCount": 2,
+  "reviewCount": 3,
+  "featureCandidateCount": 1,
+  "mismatches": [],
+  "diagnostics": [
+    "CleanupPerformed",
+    "UseForRuntime=false"
+  ],
+  "recommendation": "ReadyForParityEval"
+}

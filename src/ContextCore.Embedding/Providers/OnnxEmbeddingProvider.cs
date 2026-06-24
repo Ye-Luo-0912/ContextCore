@@ -1,4 +1,7 @@
 using ContextCore.Abstractions;
+using ContextCore.Abstractions.Models;
+using ContextCore.Embedding.Services;
+using ContextCore.Embedding.Utilities;
 
 namespace ContextCore.Embedding;
 
@@ -46,101 +49,130 @@ public sealed class OnnxEmbeddingProvider : IEmbeddingProvider
         var sw = System.Diagnostics.Stopwatch.StartNew();
         try
         {
-        foreach (var input in request.Inputs)
-        {
-            var effectiveText = hasInstruction ? instruction + input.Text : input.Text;
-            // contentHash 包含 effectiveText（含 instruction），确保缓存与实际 embedding 一致
-            var hashText = hasInstruction ? effectiveText : input.Text;
-            var contentHash = EmbeddingContentHasher.HashText(hashText, request.InputKind, modelName);
-            if (_options.EnableContentHashCache
-                && _cache.TryGet(modelName, contentHash, out var cached))
+            foreach (var input in request.Inputs)
             {
-                cacheHits++;
-                vectors.Add(WithInputIdentity(cached, input, contentHash, cacheHit: true));
-                continue;
-            }
-
-            misses.Add((input, effectiveText));
-            missHashes[input.Id] = contentHash;
-        }
-
-        if (misses.Count > 0)
-        {
-            var session = await _sessionManager.GetSessionAsync(cancellationToken).ConfigureAwait(false);
-            foreach (var batch in misses.Chunk(Math.Max(1, _options.MaxBatchSize)))
-            {
-                var batchVectors = await session.EmbedBatchAsync(
-                    batch.Select(item => item.EffectiveText).ToArray(),
-                    cancellationToken).ConfigureAwait(false);
-
-                if (batchVectors.Count != batch.Length)
+                var effectiveText = hasInstruction ? instruction + input.Text : input.Text;
+                // contentHash 包含 effectiveText（含 instruction），确保缓存与实际 embedding 一致
+                var hashText = hasInstruction ? effectiveText : input.Text;
+                var contentHash = EmbeddingContentHasher.HashText(hashText, request.InputKind, modelName);
+                if (_options.EnableContentHashCache
+                    && _cache.TryGet(modelName, contentHash, out var cached))
                 {
-                    return Failure(
-                        request,
-                        modelName,
-                        $"ONNX embedding 会话返回数量不匹配：输入 {batch.Length} 条，输出 {batchVectors.Count} 条。");
+                    cacheHits++;
+                    vectors.Add(WithInputIdentity(cached, input, contentHash, cacheHit: true));
+                    continue;
                 }
 
-                for (var i = 0; i < batch.Length; i++)
+                misses.Add((input, effectiveText));
+                missHashes[input.Id] = contentHash;
+            }
+
+            if (misses.Count <= 0)
+                return new EmbeddingResult
                 {
-                    var (input, _) = batch[i];
-                    var values = batchVectors[i];
-                    if (request.Normalize && _options.Normalize)
+                    OperationId = string.IsNullOrWhiteSpace(request.OperationId)
+                        ? Guid.NewGuid().ToString("N")
+                        : request.OperationId,
+                    ModelName = modelName,
+                    Dimensions = vectors.FirstOrDefault()?.Values.Count
+                                 ?? (_options.Dimensions > 0 ? _options.Dimensions : 0),
+                    Succeeded = true,
+                    Vectors =
+                    [
+                        .. vectors
+                            .OrderBy(vector => request.Inputs.Select((input, index) => new { input.Id, Index = index })
+                                .First(item => item.Id == vector.InputId).Index)
+                    ],
+                    Usage = new ContextOperationUsage
                     {
-                        values = EmbeddingNormalization.Normalize(values);
+                        InputTokens = request.Inputs.Sum(input => EstimateTokens(input.Text)),
+                        OutputTokens = 0,
+                        ModelCalls = misses.Count
+                    },
+                    Metadata = new Dictionary<string, string>
+                    {
+                        ["provider"] = "onnx",
+                        ["cacheHits"] = cacheHits.ToString(),
+                        ["batchSize"] = Math.Max(1, _options.MaxBatchSize).ToString()
+                    },
+                    CreatedAt = DateTimeOffset.UtcNow
+                };
+            {
+                var session = await _sessionManager.GetSessionAsync(cancellationToken).ConfigureAwait(false);
+                foreach (var batch in misses.Chunk(Math.Max(1, _options.MaxBatchSize)))
+                {
+                    var batchVectors = await session.EmbedBatchAsync(
+                        batch.Select(item => item.EffectiveText).ToArray(),
+                        cancellationToken).ConfigureAwait(false);
+
+                    if (batchVectors.Count != batch.Length)
+                    {
+                        return Failure(
+                            request,
+                            modelName,
+                            $"ONNX embedding 会话返回数量不匹配：输入 {batch.Length} 条，输出 {batchVectors.Count} 条。");
                     }
 
-                    var contentHash = missHashes[input.Id];
-                    var vector = new EmbeddingVector
+                    for (var i = 0; i < batch.Length; i++)
                     {
-                        InputId = input.Id,
-                        SourceRef = string.IsNullOrWhiteSpace(input.SourceRef) ? input.Id : input.SourceRef,
-                        Values = values.ToArray(),
-                        Norm = EmbeddingNormalization.CalculateNorm(values),
-                        Metadata = new Dictionary<string, string>
+                        var (input, _) = batch[i];
+                        var values = batchVectors[i];
+                        if (request.Normalize && _options.Normalize)
                         {
-                            ["contentHash"] = contentHash,
-                            ["cacheHit"] = "false"
+                            values = EmbeddingNormalization.Normalize(values);
                         }
-                    };
 
-                    if (_options.EnableContentHashCache)
-                    {
-                        _cache.Store(modelName, contentHash, vector);
+                        var contentHash = missHashes[input.Id];
+                        var vector = new EmbeddingVector
+                        {
+                            InputId = input.Id,
+                            SourceRef = string.IsNullOrWhiteSpace(input.SourceRef) ? input.Id : input.SourceRef,
+                            Values = values.ToArray(),
+                            Norm = EmbeddingNormalization.CalculateNorm(values),
+                            Metadata = new Dictionary<string, string>
+                            {
+                                ["contentHash"] = contentHash,
+                                ["cacheHit"] = "false"
+                            }
+                        };
+
+                        if (_options.EnableContentHashCache)
+                        {
+                            _cache.Store(modelName, contentHash, vector);
+                        }
+
+                        vectors.Add(vector);
                     }
-
-                    vectors.Add(vector);
                 }
             }
-        }
 
-        return new EmbeddingResult
-        {
-            OperationId = string.IsNullOrWhiteSpace(request.OperationId)
-                ? Guid.NewGuid().ToString("N")
-                : request.OperationId,
-            ModelName = modelName,
-            Dimensions = vectors.FirstOrDefault()?.Values.Count
-                ?? (_options.Dimensions > 0 ? _options.Dimensions : 0),
-            Succeeded = true,
-            Vectors = vectors
-                .OrderBy(vector => request.Inputs.Select((input, index) => new { input.Id, Index = index })
-                    .First(item => item.Id == vector.InputId).Index)
-                .ToArray(),
-            Usage = new ContextOperationUsage
+            return new EmbeddingResult
             {
-                InputTokens = request.Inputs.Sum(input => EstimateTokens(input.Text)),
-                OutputTokens = 0,
-                ModelCalls = misses.Count
-            },
-            Metadata = new Dictionary<string, string>
-            {
-                ["provider"] = "onnx",
-                ["cacheHits"] = cacheHits.ToString(),
-                ["batchSize"] = Math.Max(1, _options.MaxBatchSize).ToString()
-            },
-            CreatedAt = DateTimeOffset.UtcNow
-        };
+                OperationId = string.IsNullOrWhiteSpace(request.OperationId)
+                    ? Guid.NewGuid().ToString("N")
+                    : request.OperationId,
+                ModelName = modelName,
+                Dimensions = vectors.FirstOrDefault()?.Values.Count
+                             ?? (_options.Dimensions > 0 ? _options.Dimensions : 0),
+                Succeeded = true,
+                Vectors = vectors
+                    .OrderBy(vector => request.Inputs.Select((input, index) => new { input.Id, Index = index })
+                        .First(item => item.Id == vector.InputId).Index)
+                    .ToArray(),
+                Usage = new ContextOperationUsage
+                {
+                    InputTokens = request.Inputs.Sum(input => EstimateTokens(input.Text)),
+                    OutputTokens = 0,
+                    ModelCalls = misses.Count
+                },
+                Metadata = new Dictionary<string, string>
+                {
+                    ["provider"] = "onnx",
+                    ["cacheHits"] = cacheHits.ToString(),
+                    ["batchSize"] = Math.Max(1, _options.MaxBatchSize).ToString()
+                },
+                CreatedAt = DateTimeOffset.UtcNow
+            };
         }
         finally
         {

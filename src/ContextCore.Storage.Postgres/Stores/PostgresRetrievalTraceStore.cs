@@ -1,5 +1,6 @@
-using ContextCore.Storage.Postgres;
 using ContextCore.Abstractions;
+using ContextCore.Abstractions.Models;
+using ContextCore.Storage.Postgres.Infrastructure;
 
 namespace ContextCore.Storage.Postgres.Stores;
 
@@ -72,15 +73,16 @@ LIMIT @take;
             CollectionId = trace.CollectionId,
             QueryText = trace.QueryText,
             RewrittenQueryText = trace.RewrittenQueryText,
-            Stages = trace.Stages.ToArray(),
-            Candidates = trace.Candidates.ToArray(),
-            SelectedItems = trace.SelectedItems.ToArray(),
-            DroppedItems = trace.DroppedItems.ToArray(),
-            AttentionScores = trace.AttentionScores.ToArray(),
+            Stages = [.. trace.Stages],
+            Candidates = [.. trace.Candidates],
+            SelectedItems = [.. trace.SelectedItems],
+            DroppedItems = [.. trace.DroppedItems],
+            AttentionScores = [.. trace.AttentionScores],
             AttentionShadowReport = trace.AttentionShadowReport,
             AttentionProfileComparison = trace.AttentionProfileComparison,
             AttentionRerankComparison = trace.AttentionRerankComparison,
             RankerShadowTrace = trace.RankerShadowTrace,
+            GraphExpansionShadowTrace = trace.GraphExpansionShadowTrace,
             Metadata = new Dictionary<string, string>(trace.Metadata),
             CreatedAt = trace.CreatedAt == default ? DateTimeOffset.UtcNow : trace.CreatedAt
         };

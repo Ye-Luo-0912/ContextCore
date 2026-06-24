@@ -1,0 +1,29 @@
+﻿{
+  "generatedAt": "2026-06-14T14:40:55.3850204+00:00",
+  "workspaceId": "postgres-vector-smoke",
+  "collectionId": "vector-index-store",
+  "providerId": "deterministic-hash",
+  "modelId": "deterministic-hash-v1",
+  "dimension": 16,
+  "providerEnabled": true,
+  "connectionAvailable": true,
+  "pgVectorAvailable": true,
+  "schemaVersion": "cc-schema-v6",
+  "tableExists": true,
+  "missingIndexCount": 0,
+  "supportedDimensionCount": 1,
+  "insertedCount": 3,
+  "upsertedCount": 1,
+  "queryCount": 2,
+  "mismatchCount": 0,
+  "dimensionMismatchBlocked": true,
+  "providerModelMismatchBlocked": true,
+  "cleanupPerformed": true,
+  "useForRuntime": false,
+  "diagnostics": [
+    "UseForRuntime=false",
+    "RetrievalProviderUnchanged"
+  ],
+  "mismatches": [],
+  "recommendation": "ReadyForVectorParityEval"
+}

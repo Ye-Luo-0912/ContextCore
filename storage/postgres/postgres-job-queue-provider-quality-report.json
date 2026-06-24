@@ -1,0 +1,20 @@
+﻿{
+  "generatedAt": "2026-06-14T12:02:36.9337944+00:00",
+  "traceCount": 22,
+  "fileSystemWriteSuccessCount": 14,
+  "postgresWriteSuccessCount": 14,
+  "fileSystemReadSuccessCount": 8,
+  "postgresReadSuccessCount": 8,
+  "mismatchCount": 0,
+  "postgresFailureCount": 0,
+  "fallbackCount": 0,
+  "leaseParityPassed": true,
+  "retryParityPassed": true,
+  "deadLetterParityPassed": true,
+  "countParityPassed": true,
+  "diagnostics": [
+    "UseForRuntime=false",
+    "RuntimeWorkerUnchanged"
+  ],
+  "recommendation": "ReadyForScopedWorkerCanary"
+}

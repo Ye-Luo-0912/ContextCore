@@ -1,5 +1,6 @@
-using ContextCore.Storage.Postgres;
 using ContextCore.Abstractions;
+using ContextCore.Abstractions.Models;
+using ContextCore.Storage.Postgres.Infrastructure;
 
 namespace ContextCore.Storage.Postgres.Stores;
 
@@ -156,9 +157,9 @@ LIMIT @take;
             SourceKind = record.SourceKind,
             ModelName = record.ModelName,
             Dimensions = record.Dimensions > 0 ? record.Dimensions : record.Vector.Count,
-            Vector = record.Vector.ToArray(),
+            Vector = [.. record.Vector],
             ContentHash = record.ContentHash,
-            Tags = record.Tags.ToArray(),
+            Tags = [.. record.Tags],
             Metadata = new Dictionary<string, string>(record.Metadata),
             CreatedAt = record.CreatedAt == default ? now : record.CreatedAt,
             UpdatedAt = record.UpdatedAt == default ? now : record.UpdatedAt

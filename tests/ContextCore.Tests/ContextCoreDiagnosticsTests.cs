@@ -7,6 +7,7 @@ using ContextCore.Core.Services;
 using ContextCore.ModelGateway;
 using ContextCore.Service.Infrastructure;
 using ContextCore.Storage.InMemory;
+using ContextCore.Storage.InMemory.Stores;
 using Microsoft.Extensions.Logging;
 
 namespace ContextCore.Tests;

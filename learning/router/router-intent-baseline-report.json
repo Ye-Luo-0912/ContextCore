@@ -1,0 +1,251 @@
+{
+  "generatedAt": "2026-06-11T06:08:59.8186965+00:00",
+  "inputPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\learning\\features\\router-intent-examples.jsonl",
+  "sampleCount": 163,
+  "ready": true,
+  "status": "Ready",
+  "notReadyReasons": [],
+  "split": {
+    "strategy": "DeterministicGroupHash80_20",
+    "groupKey": "SourceType\u002BSourceId",
+    "trainGroupCount": 89,
+    "testGroupCount": 24,
+    "trainExampleCount": 128,
+    "testExampleCount": 35
+  },
+  "baselines": [
+    {
+      "baselineName": "ExistingRuleBasedRouterBaseline",
+      "accuracy": 0.9714285714285714,
+      "macroF1": 0.6176470588235294,
+      "perIntentPrecision": {
+        "AuditDeprecated": 1,
+        "AutomationRecovery": 1,
+        "CodingTask": 1,
+        "ConflictCheck": 0,
+        "CurrentTask": 0,
+        "FuzzyQuestion": 0.8888888888888888,
+        "LongTermPreference": 0,
+        "NovelGeneration": 1
+      },
+      "perIntentRecall": {
+        "AuditDeprecated": 1,
+        "AutomationRecovery": 1,
+        "CodingTask": 1,
+        "ConflictCheck": 0,
+        "CurrentTask": 0,
+        "FuzzyQuestion": 1,
+        "LongTermPreference": 0,
+        "NovelGeneration": 1
+      },
+      "confusionMatrix": {
+        "AuditDeprecated": {
+          "AuditDeprecated": 6,
+          "AutomationRecovery": 0,
+          "CodingTask": 0,
+          "ConflictCheck": 0,
+          "CurrentTask": 0,
+          "FuzzyQuestion": 0,
+          "LongTermPreference": 0,
+          "NovelGeneration": 0
+        },
+        "AutomationRecovery": {
+          "AuditDeprecated": 0,
+          "AutomationRecovery": 3,
+          "CodingTask": 0,
+          "ConflictCheck": 0,
+          "CurrentTask": 0,
+          "FuzzyQuestion": 0,
+          "LongTermPreference": 0,
+          "NovelGeneration": 0
+        },
+        "CodingTask": {
+          "AuditDeprecated": 0,
+          "AutomationRecovery": 0,
+          "CodingTask": 9,
+          "ConflictCheck": 0,
+          "CurrentTask": 0,
+          "FuzzyQuestion": 0,
+          "LongTermPreference": 0,
+          "NovelGeneration": 0
+        },
+        "ConflictCheck": {
+          "AuditDeprecated": 0,
+          "AutomationRecovery": 0,
+          "CodingTask": 0,
+          "ConflictCheck": 0,
+          "CurrentTask": 0,
+          "FuzzyQuestion": 0,
+          "LongTermPreference": 0,
+          "NovelGeneration": 0
+        },
+        "CurrentTask": {
+          "AuditDeprecated": 0,
+          "AutomationRecovery": 0,
+          "CodingTask": 0,
+          "ConflictCheck": 0,
+          "CurrentTask": 0,
+          "FuzzyQuestion": 1,
+          "LongTermPreference": 0,
+          "NovelGeneration": 0
+        },
+        "FuzzyQuestion": {
+          "AuditDeprecated": 0,
+          "AutomationRecovery": 0,
+          "CodingTask": 0,
+          "ConflictCheck": 0,
+          "CurrentTask": 0,
+          "FuzzyQuestion": 8,
+          "LongTermPreference": 0,
+          "NovelGeneration": 0
+        },
+        "LongTermPreference": {
+          "AuditDeprecated": 0,
+          "AutomationRecovery": 0,
+          "CodingTask": 0,
+          "ConflictCheck": 0,
+          "CurrentTask": 0,
+          "FuzzyQuestion": 0,
+          "LongTermPreference": 0,
+          "NovelGeneration": 0
+        },
+        "NovelGeneration": {
+          "AuditDeprecated": 0,
+          "AutomationRecovery": 0,
+          "CodingTask": 0,
+          "ConflictCheck": 0,
+          "CurrentTask": 0,
+          "FuzzyQuestion": 0,
+          "LongTermPreference": 0,
+          "NovelGeneration": 8
+        }
+      },
+      "lowConfidenceCount": 0,
+      "abstainCount": 0,
+      "currentTaskRecall": 0,
+      "fuzzyQuestionRecall": 1,
+      "codingTaskRecall": 1,
+      "novelGenerationRecall": 1,
+      "automationRecoveryRecall": 1,
+      "recommendation": "KeepRuleBased"
+    },
+    {
+      "baselineName": "TokenCentroidRouterBaseline",
+      "accuracy": 0.9142857142857143,
+      "macroF1": 0.702688651218063,
+      "perIntentPrecision": {
+        "AuditDeprecated": 1,
+        "AutomationRecovery": 1,
+        "CodingTask": 0.875,
+        "ConflictCheck": 0,
+        "CurrentTask": 1,
+        "FuzzyQuestion": 0.8,
+        "LongTermPreference": 0,
+        "NovelGeneration": 1
+      },
+      "perIntentRecall": {
+        "AuditDeprecated": 0.8333333333333334,
+        "AutomationRecovery": 1,
+        "CodingTask": 0.7777777777777778,
+        "ConflictCheck": 0,
+        "CurrentTask": 1,
+        "FuzzyQuestion": 1,
+        "LongTermPreference": 0,
+        "NovelGeneration": 1
+      },
+      "confusionMatrix": {
+        "AuditDeprecated": {
+          "AuditDeprecated": 5,
+          "AutomationRecovery": 0,
+          "CodingTask": 1,
+          "ConflictCheck": 0,
+          "CurrentTask": 0,
+          "FuzzyQuestion": 0,
+          "LongTermPreference": 0,
+          "NovelGeneration": 0
+        },
+        "AutomationRecovery": {
+          "AuditDeprecated": 0,
+          "AutomationRecovery": 3,
+          "CodingTask": 0,
+          "ConflictCheck": 0,
+          "CurrentTask": 0,
+          "FuzzyQuestion": 0,
+          "LongTermPreference": 0,
+          "NovelGeneration": 0
+        },
+        "CodingTask": {
+          "AuditDeprecated": 0,
+          "AutomationRecovery": 0,
+          "CodingTask": 7,
+          "ConflictCheck": 0,
+          "CurrentTask": 0,
+          "FuzzyQuestion": 2,
+          "LongTermPreference": 0,
+          "NovelGeneration": 0
+        },
+        "ConflictCheck": {
+          "AuditDeprecated": 0,
+          "AutomationRecovery": 0,
+          "CodingTask": 0,
+          "ConflictCheck": 0,
+          "CurrentTask": 0,
+          "FuzzyQuestion": 0,
+          "LongTermPreference": 0,
+          "NovelGeneration": 0
+        },
+        "CurrentTask": {
+          "AuditDeprecated": 0,
+          "AutomationRecovery": 0,
+          "CodingTask": 0,
+          "ConflictCheck": 0,
+          "CurrentTask": 1,
+          "FuzzyQuestion": 0,
+          "LongTermPreference": 0,
+          "NovelGeneration": 0
+        },
+        "FuzzyQuestion": {
+          "AuditDeprecated": 0,
+          "AutomationRecovery": 0,
+          "CodingTask": 0,
+          "ConflictCheck": 0,
+          "CurrentTask": 0,
+          "FuzzyQuestion": 8,
+          "LongTermPreference": 0,
+          "NovelGeneration": 0
+        },
+        "LongTermPreference": {
+          "AuditDeprecated": 0,
+          "AutomationRecovery": 0,
+          "CodingTask": 0,
+          "ConflictCheck": 0,
+          "CurrentTask": 0,
+          "FuzzyQuestion": 0,
+          "LongTermPreference": 0,
+          "NovelGeneration": 0
+        },
+        "NovelGeneration": {
+          "AuditDeprecated": 0,
+          "AutomationRecovery": 0,
+          "CodingTask": 0,
+          "ConflictCheck": 0,
+          "CurrentTask": 0,
+          "FuzzyQuestion": 0,
+          "LongTermPreference": 0,
+          "NovelGeneration": 8
+        }
+      },
+      "lowConfidenceCount": 0,
+      "abstainCount": 0,
+      "currentTaskRecall": 1,
+      "fuzzyQuestionRecall": 1,
+      "codingTaskRecall": 0.7777777777777778,
+      "novelGenerationRecall": 1,
+      "automationRecoveryRecall": 1,
+      "recommendation": "ReadyForRouterShadow"
+    }
+  ],
+  "bestBaseline": "TokenCentroidRouterBaseline",
+  "recommendation": "ReadyForRouterShadow",
+  "policyVersion": "router-intent-classifier-r1/v1"
+}

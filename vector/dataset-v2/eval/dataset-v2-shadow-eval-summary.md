@@ -1,0 +1,21 @@
+﻿# Retrieval Dataset V2 Shadow Eval Summary
+
+- DatasetId: `rdsv2-9d8678d981f1aac1`
+- CorpusHash: `7d1cdb5b9377aedaea2abba4334ae8c7bf9b2622b776582ccf79cc8c4c205bb7`
+- SamplesHash: `e26560cd752377e075d4eb5c4df138770feb0d102317b60b0512a734f45ffcf0`
+- CorpusItemCount: `28`
+- SampleCount: `21`
+- BestProfileName: `hybrid-dense-plus-anchor`
+- BestRecallAfterPolicy: `100.00%`
+- BestMrrAfterPolicy: `1.0000`
+- BestRiskAfterPolicy: `0`
+- PgVectorParityPassed: `True`
+- PgVectorTopKOverlapRate: `100.00%`
+- PgVectorOrderingMismatchCount: `0`
+- PgVectorScoreDeltaMax: `0.000000`
+- PgVectorMetadataMismatchCount: `0`
+- PgVectorEligibilityMetadataMismatchCount: `0`
+- PgVectorRiskProjectionMismatchCount: `0`
+- UseForRuntime: `False`
+- FormalRetrievalAllowed: `False`
+- Recommendation: `ReadyForDatasetV2RetrievalCandidate`

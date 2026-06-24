@@ -21,6 +21,14 @@ internal static class CommandHelpers
         return int.TryParse(GetOption(args, name), out var value) ? value : defaultValue;
     }
 
+    public static double GetDoubleOption(IReadOnlyList<string> args, string name, double defaultValue)
+    {
+        var raw = GetOption(args, name);
+        return double.TryParse(raw, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var value)
+            ? value
+            : defaultValue;
+    }
+
     public static bool HasFlag(IReadOnlyList<string> args, string name)
     {
         return args.Any(arg => string.Equals(arg, name, StringComparison.OrdinalIgnoreCase));

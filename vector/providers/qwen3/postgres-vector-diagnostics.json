@@ -1,0 +1,37 @@
+﻿{
+  "generatedAt": "2026-06-14T17:16:39.0084608+00:00",
+  "providerEnabled": true,
+  "connectionAvailable": true,
+  "pgVectorAvailable": true,
+  "schemaVersion": "cc-schema-v6",
+  "tableExists": true,
+  "requiredIndexesExist": true,
+  "missingIndexCount": 0,
+  "missingIndexes": [],
+  "supportedDimensionCount": 2,
+  "supportedDimensions": [
+    16,
+    1024
+  ],
+  "indexedEntryCount": 316,
+  "providerModelDistribution": [
+    {
+      "providerId": "deterministic-hash",
+      "modelId": "deterministic-hash-v1",
+      "dimension": 16,
+      "count": 158
+    },
+    {
+      "providerId": "qwen3-embedding-0.6b-onnx",
+      "modelId": "qwen3-embedding-0.6b",
+      "dimension": 1024,
+      "count": 158
+    }
+  ],
+  "useForRuntime": false,
+  "diagnostics": [
+    "UseForRuntime=false",
+    "RetrievalProviderUnchanged"
+  ],
+  "recommendation": "ReadyForVectorParityEval"
+}

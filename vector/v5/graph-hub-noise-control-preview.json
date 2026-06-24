@@ -1,0 +1,39 @@
+﻿{
+  "OperationId": "graph-hub-noise-control-preview-3e5099e0b6b740a8ad22f14db6217f1e",
+  "CreatedAt": "2026-06-18T16:28:03.2513544+00:00",
+  "PreviewPassed": false,
+  "GatePassed": false,
+  "Recommendation": "KeepBaselineOnly",
+  "AllowedMode": "PreviewOnly",
+  "TopK": 5,
+  "SampleCount": 120,
+  "HubItemCount": 3,
+  "AvgEnvelopeWidthRatio": 1.3472023809523808,
+  "AvgHubDominanceRatio": 0.05833333333333336,
+  "Baseline": {
+    "ProfileId": "baseline",
+    "ProfileLabel": "Baseline",
+    "Recall": 0.5083333333333333,
+    "Precision": 0,
+    "MeanReciprocalRank": 0.22750000000000004,
+    "MustHitBelowTopKCount": 0
+  },
+  "PreviousDerived": {
+    "ProfileId": "previous-derived",
+    "ProfileLabel": "Previous derived",
+    "Recall": 0.4791666666666667,
+    "Precision": 0,
+    "MeanReciprocalRank": 0.1998263888888889,
+    "MustHitBelowTopKCount": 0
+  },
+  "HubControlled": {
+    "ProfileId": "hub-controlled",
+    "ProfileLabel": "Hub-controlled",
+    "Recall": 0.375,
+    "Precision": 0,
+    "MeanReciprocalRank": 0.1670833333333333,
+    "MustHitBelowTopKCount": 0
+  },
+  "HubControlledRecallDelta": -0.1333333333333333,
+  "HubControlledMrrDelta": -0.06041666666666673
+}

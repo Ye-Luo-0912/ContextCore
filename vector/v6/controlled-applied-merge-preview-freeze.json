@@ -1,0 +1,29 @@
+﻿{
+  "OperationId": "controlled-merge-preview-freeze-6587549f246440da8dfbfa9afb5e8069",
+  "CreatedAt": "2026-06-23T02:07:04.8782778+00:00",
+  "FreezePassed": true,
+  "Recommendation": "ReadyForV6MainlineFreeze",
+  "ScopedPreviewSourcePath": "",
+  "ProposalAddCount": 7,
+  "ProposalRemoveCount": 7,
+  "DryRunWouldApplyAdd": 4,
+  "DryRunWouldApplyRemove": 4,
+  "PreviewAddCount": 4,
+  "PreviewRemoveCount": 4,
+  "ApprovalPresent": true,
+  "ApprovedBy": "codex",
+  "V6PhaseCount": 7,
+  "FrozenArtifacts": [
+    "vector/v6/controlled-shadow-merge-proposal.json/.md",
+    "vector/v6/controlled-shadow-merge-proposal-gate.json/.md",
+    "vector/v6/controlled-applied-merge-proposal.json/.md",
+    "vector/v6/controlled-applied-merge-proposal-gate.json/.md",
+    "vector/v6/controlled-applied-merge-dry-run-observation.json/.md",
+    "vector/v6/controlled-applied-merge-dry-run-decision.json/.md",
+    "vector/v6/controlled-applied-merge-approval-gate.json/.md",
+    "vector/v6/controlled-applied-merge-scoped-preview.json/.md",
+    "vector/v6/controlled-applied-merge-scoped-preview-gate.json/.md",
+    "vector/v6/controlled-applied-merge-preview-freeze.json/.md"
+  ],
+  "BlockedReasons": []
+}

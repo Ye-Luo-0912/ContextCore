@@ -1,10 +1,12 @@
 using System.Globalization;
 using System.Text;
+using ContextCore.Abstractions;
+using ContextCore.Abstractions.Models;
 
 namespace ContextCore.Embedding;
 
 /// <summary>轻量 BERT WordPiece tokenizer，用于本地 ONNX embedding 推理。</summary>
-public sealed class BertWordPieceTokenizer
+public sealed class BertWordPieceTokenizer : IEmbeddingTokenizer
 {
     private const int MaxInputCharsPerWord = 100;
     private readonly Dictionary<string, int> _vocabulary;
@@ -57,9 +59,22 @@ public sealed class BertWordPieceTokenizer
         IReadOnlyList<string> texts,
         int maxSequenceLength)
     {
+        var tokenized = Tokenize(texts, maxSequenceLength);
+        return new TokenizedTextBatch(
+            tokenized.BatchSize,
+            tokenized.SequenceLength,
+            tokenized.InputIds,
+            tokenized.AttentionMask,
+            tokenized.TokenTypeIds);
+    }
+
+    public EmbeddingTokenizationResult Tokenize(
+        IReadOnlyList<string> texts,
+        int maxTokens)
+    {
         ArgumentNullException.ThrowIfNull(texts);
 
-        var sequenceLength = Math.Clamp(maxSequenceLength, 2, 512);
+        var sequenceLength = Math.Clamp(maxTokens, 2, 512);
         var inputIds = new long[texts.Count * sequenceLength];
         var attentionMask = new long[texts.Count * sequenceLength];
         var tokenTypeIds = new long[texts.Count * sequenceLength];
@@ -81,12 +96,18 @@ public sealed class BertWordPieceTokenizer
             }
         }
 
-        return new TokenizedTextBatch(
-            texts.Count,
-            sequenceLength,
-            inputIds,
-            attentionMask,
-            tokenTypeIds);
+        return new EmbeddingTokenizationResult
+        {
+            BatchSize = texts.Count,
+            SequenceLength = sequenceLength,
+            InputIds = inputIds,
+            AttentionMask = attentionMask,
+            TokenTypeIds = tokenTypeIds,
+            Metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["tokenizer"] = "bert-wordpiece"
+            }
+        };
     }
 
     private IReadOnlyList<int> EncodeSingle(string? text, int maxSequenceLength)
@@ -163,15 +184,13 @@ public sealed class BertWordPieceTokenizer
 
     private IEnumerable<int> WordPieceTokenize(string token)
     {
-        if (token.Length == 0)
+        switch (token.Length)
         {
-            yield break;
-        }
-
-        if (token.Length > MaxInputCharsPerWord)
-        {
-            yield return _unkTokenId;
-            yield break;
+            case 0:
+                yield break;
+            case > MaxInputCharsPerWord:
+                yield return _unkTokenId;
+                yield break;
         }
 
         var subTokens = new List<int>();
@@ -230,12 +249,9 @@ public sealed class BertWordPieceTokenizer
         var lowered = token.ToLowerInvariant();
         var normalized = lowered.Normalize(NormalizationForm.FormD);
         var builder = new StringBuilder(normalized.Length);
-        foreach (var ch in normalized)
+        foreach (var ch in normalized.Where(ch => CharUnicodeInfo.GetUnicodeCategory(ch) != UnicodeCategory.NonSpacingMark))
         {
-            if (CharUnicodeInfo.GetUnicodeCategory(ch) != UnicodeCategory.NonSpacingMark)
-            {
-                builder.Append(ch);
-            }
+            builder.Append(ch);
         }
 
         return builder.ToString().Normalize(NormalizationForm.FormC);
@@ -244,10 +260,7 @@ public sealed class BertWordPieceTokenizer
     private static bool IsPunctuation(char ch)
     {
         var code = (int)ch;
-        if ((code >= 33 && code <= 47)
-            || (code >= 58 && code <= 64)
-            || (code >= 91 && code <= 96)
-            || (code >= 123 && code <= 126))
+        if (code is >= 33 and <= 47 or >= 58 and <= 64 or >= 91 and <= 96 or >= 123 and <= 126)
         {
             return true;
         }
@@ -265,9 +278,7 @@ public sealed class BertWordPieceTokenizer
     private static bool IsChineseChar(char ch)
     {
         var code = (int)ch;
-        return (code >= 0x4E00 && code <= 0x9FFF)
-            || (code >= 0x3400 && code <= 0x4DBF)
-            || (code >= 0xF900 && code <= 0xFAFF);
+        return code is >= 0x4E00 and <= 0x9FFF or >= 0x3400 and <= 0x4DBF or >= 0xF900 and <= 0xFAFF;
     }
 }
 

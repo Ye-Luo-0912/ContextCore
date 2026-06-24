@@ -1,0 +1,122 @@
+﻿{
+  "GeneratedAt": "2026-06-12T12:30:27.5099962+00:00",
+  "FeedbackCount": 1,
+  "PendingReviewCount": 1,
+  "ApprovedCount": 0,
+  "RejectedCount": 0,
+  "NeedsRedactionCount": 0,
+  "NeedsEvidenceCount": 0,
+  "MetadataOnlyCount": 1,
+  "TrainingDisabledCount": 1,
+  "FeatureCandidateCount": 0,
+  "CandidateCountByCapability": {},
+  "CandidateCountByLabelKind": {},
+  "RedactionCoverageRate": 0,
+  "ReviewCoverageRate": 0,
+  "ApprovedDatasetReadiness": [
+    {
+      "CapabilityId": "RouterIntentClassifier",
+      "ApprovedCandidateCount": 0,
+      "PositiveLabelCount": 0,
+      "NegativeLabelCount": 0,
+      "MetadataOnlyCount": 0,
+      "NeedsMoreEvidenceCount": 0,
+      "Ready": false,
+      "Status": "NotReady",
+      "BlockedReasons": [
+        "NoFeedback",
+        "NoApprovedFeedback",
+        "MissingPositiveSamples",
+        "MissingNegativeSamples"
+      ]
+    },
+    {
+      "CapabilityId": "CandidateReranker",
+      "ApprovedCandidateCount": 0,
+      "PositiveLabelCount": 0,
+      "NegativeLabelCount": 0,
+      "MetadataOnlyCount": 0,
+      "NeedsMoreEvidenceCount": 0,
+      "Ready": false,
+      "Status": "NotReady",
+      "BlockedReasons": [
+        "NoFeedback",
+        "NoApprovedFeedback",
+        "MissingPositiveSamples",
+        "MissingNegativeSamples"
+      ]
+    },
+    {
+      "CapabilityId": "VectorRetrieval",
+      "ApprovedCandidateCount": 0,
+      "PositiveLabelCount": 0,
+      "NegativeLabelCount": 0,
+      "MetadataOnlyCount": 0,
+      "NeedsMoreEvidenceCount": 0,
+      "Ready": false,
+      "Status": "NotReady",
+      "BlockedReasons": [
+        "NoApprovedFeedback",
+        "NeedsReview",
+        "MissingPositiveSamples",
+        "MissingNegativeSamples"
+      ]
+    },
+    {
+      "CapabilityId": "GraphExpansion",
+      "ApprovedCandidateCount": 0,
+      "PositiveLabelCount": 0,
+      "NegativeLabelCount": 0,
+      "MetadataOnlyCount": 0,
+      "NeedsMoreEvidenceCount": 0,
+      "Ready": false,
+      "Status": "NotReady",
+      "BlockedReasons": [
+        "NoFeedback",
+        "NoApprovedFeedback",
+        "MissingPositiveSamples",
+        "MissingNegativeSamples"
+      ]
+    },
+    {
+      "CapabilityId": "PromotionJudge",
+      "ApprovedCandidateCount": 0,
+      "PositiveLabelCount": 0,
+      "NegativeLabelCount": 0,
+      "MetadataOnlyCount": 0,
+      "NeedsMoreEvidenceCount": 0,
+      "Ready": false,
+      "Status": "NotReady",
+      "BlockedReasons": [
+        "NoFeedback",
+        "NoApprovedFeedback",
+        "MissingPositiveSamples",
+        "MissingNegativeSamples"
+      ]
+    },
+    {
+      "CapabilityId": "ConstraintGapJudge",
+      "ApprovedCandidateCount": 0,
+      "PositiveLabelCount": 0,
+      "NegativeLabelCount": 0,
+      "MetadataOnlyCount": 0,
+      "NeedsMoreEvidenceCount": 0,
+      "Ready": false,
+      "Status": "NotReady",
+      "BlockedReasons": [
+        "NoFeedback",
+        "NoApprovedFeedback",
+        "MissingPositiveSamples",
+        "MissingNegativeSamples"
+      ]
+    }
+  ],
+  "ExistingPolicyFeatureCount": 0,
+  "ExistingRankingPairCount": 253,
+  "ExistingRouterIntentExampleCount": 163,
+  "Recommendation": "NeedsReviewedFeedback",
+  "Warnings": [
+    "\u5DF2\u6709 runtime feedback\uFF0C\u4F46\u5F53\u524D\u6CA1\u6709\u53EF\u5BFC\u51FA\u7684 feature candidate\u3002",
+    "\u6240\u6709 capability \u5F53\u524D\u90FD\u672A\u8FBE\u5230\u79BB\u7EBF\u6570\u636E\u96C6 readiness\u3002"
+  ]
+}

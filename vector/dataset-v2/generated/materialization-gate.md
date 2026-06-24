@@ -1,0 +1,28 @@
+﻿# Retrieval Dataset V2 Materialization Gate
+
+- DatasetId: `rdsv2-9d8678d981f1aac1`
+- CorpusPath: `vector/dataset-v2/generated/corpus.jsonl`
+- SamplesPath: `vector/dataset-v2/generated/samples.jsonl`
+- CorpusItemCount: `28`
+- SampleCount: `21`
+- CorpusHash: `7d1cdb5b9377aedaea2abba4334ae8c7bf9b2622b776582ccf79cc8c4c205bb7`
+- SamplesHash: `e26560cd752377e075d4eb5c4df138770feb0d102317b60b0512a734f45ffcf0`
+- GeneratorVersion: `retrieval-dataset-v2-generator/v1`
+- ContractVersion: `retrieval-dataset-v2`
+- CorpusExists: `True`
+- SamplesExists: `True`
+- ManifestExists: `True`
+- ValidatePassed: `True`
+- QualityRecommendation: `ReadyForDatasetV2ShadowEval`
+- CorpusHashStable: `True`
+- SamplesHashStable: `True`
+- ValidationIssueCount: `0`
+- MissingEvidenceCount: `0`
+- MissingProvenanceCount: `0`
+- ItemIdLeakageCount: `0`
+- RelationInconsistencyCount: `0`
+- UseForRuntime: `False`
+- FormalRetrievalAllowed: `False`
+- GatePassed: `True`
+- Recommendation: `ReadyForDatasetV2ShadowEval`
+- BlockedReasons: ``

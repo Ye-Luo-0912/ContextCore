@@ -1,0 +1,266 @@
+﻿# Vector Runtime-observable Retrieval Feature Contract Gate
+
+Generated: `2026-06-18T00:23:23.8014156+00:00`
+OperationId: `runtime-observable-feature-contract-gate-b1d7b7f23e494c47a01abf65d2f8fe83`
+
+## Summary
+
+- ContractPassed: `True`
+- GatePassed: `True`
+- Recommendation: `ReadyForRuntimeObservableFeatureFreeze`
+- AllowedMode: `AuditOnly`
+- RequiredNextPhase: `RuntimeObservableFeatureFreeze`
+- VectorProviderSource: `post-scoring-risk-gated-v1`
+- GraphCandidateSource: `read-only relation evidence / expansion preview`
+- BestProfileId: `combined-repair`
+- BestProfileContractStatus: `RequiresRuntimeDerivation`
+- ScoringFeatureCount: `12`
+- FilteringFeatureCount: `5`
+- CandidateExpansionFeatureCount: `4`
+- RuntimeObservableCount: `14`
+- DerivedAtRuntimeCount: `8`
+- EvalOnlyCount: `0`
+- ForbiddenForScoringCount: `2`
+- FormalOutputChanged: `0`
+- FormalSelectedSetChanged: `False`
+- FormalPackageWritten: `False`
+- PackageOutputChanged: `False`
+- PackingPolicyChanged: `False`
+- RuntimeMutated: `False`
+- VectorStoreBindingChanged: `False`
+- FormalRetrievalAllowed: `False`
+- RuntimeSwitchAllowed: `False`
+- ReadyForRuntimeSwitch: `False`
+- UseForRuntime: `False`
+- NoRuntimeMutationInvariant: `True`
+
+## Best Profile Contract
+- profileId: `combined-repair` (Combined repair)
+- status: `RequiresRuntimeDerivation`
+- usesForbiddenForScoring: `False`
+- usesEvalOnlyForScoring: `False`
+- requiresRuntimeDerivation: `True`
+- derivation paths: `router.targetSection or packageContext.targetSection; query.evidenceAnchors; query.sourceAnchors; planner.requiredRelations or relationStore lookup`
+
+## Profile Contracts
+- profileId: `baseline` (Baseline) status=`RuntimeSafe`
+  - scoring features: query.tokens [RuntimeObservable], item.Content [RuntimeObservable], item.Tags [RuntimeObservable], item.Anchors [RuntimeObservable], item.TargetSection [RuntimeObservable], item.ItemKind [RuntimeObservable], item.SourceKind [RuntimeObservable]
+  - notes:
+    - Filtering uses item.TargetSection × sample.ExpectedTargetSection (filter) (currently from RetrievalDatasetV2CorpusItem.TargetSection × RetrievalDatasetV2Sample.ExpectedTargetSection); runtime must supply router.targetSection or packageContext.targetSection
+    - Filtering uses sample.MustNotHitItemIds (filter) (currently from RetrievalDatasetV2Sample.MustNotHitItemIds (eval ground truth)); runtime must supply query.mustNotItemIds from policy (runtime equivalent only)
+    - CandidateExpansion uses item.Relations × sample.RequiredRelations (graph collection) (currently from RetrievalDatasetV2CorpusItem.Relations × RetrievalDatasetV2Sample.RequiredRelations); runtime must supply planner.requiredRelations or relationStore lookup
+    - CandidateExpansion uses item.EvidenceRefs × sample.EvidenceRefs (graph collection) (currently from RetrievalDatasetV2CorpusItem.EvidenceRefs × RetrievalDatasetV2Sample.EvidenceRefs); runtime must supply query.evidenceAnchors
+    - CandidateExpansion uses item.SourceRefs × sample.SourceRefs (graph collection) (currently from RetrievalDatasetV2CorpusItem.SourceRefs × RetrievalDatasetV2Sample.SourceRefs); runtime must supply query.sourceAnchors
+- profileId: `candidate-pool-expansion` (Candidate pool expansion) status=`RuntimeSafe`
+  - scoring features: query.tokens [RuntimeObservable], item.Content [RuntimeObservable], item.Tags [RuntimeObservable], item.Anchors [RuntimeObservable], item.TargetSection [RuntimeObservable], item.ItemKind [RuntimeObservable], item.SourceKind [RuntimeObservable]
+  - notes:
+    - Filtering uses item.TargetSection × sample.ExpectedTargetSection (filter) (currently from RetrievalDatasetV2CorpusItem.TargetSection × RetrievalDatasetV2Sample.ExpectedTargetSection); runtime must supply router.targetSection or packageContext.targetSection
+    - Filtering uses sample.MustNotHitItemIds (filter) (currently from RetrievalDatasetV2Sample.MustNotHitItemIds (eval ground truth)); runtime must supply query.mustNotItemIds from policy (runtime equivalent only)
+    - CandidateExpansion uses item.Relations × sample.RequiredRelations (graph collection) (currently from RetrievalDatasetV2CorpusItem.Relations × RetrievalDatasetV2Sample.RequiredRelations); runtime must supply planner.requiredRelations or relationStore lookup
+    - CandidateExpansion uses item.EvidenceRefs × sample.EvidenceRefs (graph collection) (currently from RetrievalDatasetV2CorpusItem.EvidenceRefs × RetrievalDatasetV2Sample.EvidenceRefs); runtime must supply query.evidenceAnchors
+    - CandidateExpansion uses item.SourceRefs × sample.SourceRefs (graph collection) (currently from RetrievalDatasetV2CorpusItem.SourceRefs × RetrievalDatasetV2Sample.SourceRefs); runtime must supply query.sourceAnchors
+- profileId: `topk-adjustment` (TopK adjustment) status=`RuntimeSafe`
+  - scoring features: query.tokens [RuntimeObservable], item.Content [RuntimeObservable], item.Tags [RuntimeObservable], item.Anchors [RuntimeObservable], item.TargetSection [RuntimeObservable], item.ItemKind [RuntimeObservable], item.SourceKind [RuntimeObservable]
+  - notes:
+    - Filtering uses item.TargetSection × sample.ExpectedTargetSection (filter) (currently from RetrievalDatasetV2CorpusItem.TargetSection × RetrievalDatasetV2Sample.ExpectedTargetSection); runtime must supply router.targetSection or packageContext.targetSection
+    - Filtering uses sample.MustNotHitItemIds (filter) (currently from RetrievalDatasetV2Sample.MustNotHitItemIds (eval ground truth)); runtime must supply query.mustNotItemIds from policy (runtime equivalent only)
+    - CandidateExpansion uses item.Relations × sample.RequiredRelations (graph collection) (currently from RetrievalDatasetV2CorpusItem.Relations × RetrievalDatasetV2Sample.RequiredRelations); runtime must supply planner.requiredRelations or relationStore lookup
+    - CandidateExpansion uses item.EvidenceRefs × sample.EvidenceRefs (graph collection) (currently from RetrievalDatasetV2CorpusItem.EvidenceRefs × RetrievalDatasetV2Sample.EvidenceRefs); runtime must supply query.evidenceAnchors
+    - CandidateExpansion uses item.SourceRefs × sample.SourceRefs (graph collection) (currently from RetrievalDatasetV2CorpusItem.SourceRefs × RetrievalDatasetV2Sample.SourceRefs); runtime must supply query.sourceAnchors
+- profileId: `section-aware-boost` (Section-aware boost) status=`RequiresRuntimeDerivation`
+  - scoring features: query.tokens [RuntimeObservable], item.Content [RuntimeObservable], item.Tags [RuntimeObservable], item.Anchors [RuntimeObservable], item.TargetSection [RuntimeObservable], item.ItemKind [RuntimeObservable], item.SourceKind [RuntimeObservable], item.TargetSection × sample.ExpectedTargetSection [DerivedAtRuntime]
+  - derivation paths: router.targetSection or packageContext.targetSection
+  - notes:
+    - Filtering uses item.TargetSection × sample.ExpectedTargetSection (filter) (currently from RetrievalDatasetV2CorpusItem.TargetSection × RetrievalDatasetV2Sample.ExpectedTargetSection); runtime must supply router.targetSection or packageContext.targetSection
+    - Filtering uses sample.MustNotHitItemIds (filter) (currently from RetrievalDatasetV2Sample.MustNotHitItemIds (eval ground truth)); runtime must supply query.mustNotItemIds from policy (runtime equivalent only)
+    - CandidateExpansion uses item.Relations × sample.RequiredRelations (graph collection) (currently from RetrievalDatasetV2CorpusItem.Relations × RetrievalDatasetV2Sample.RequiredRelations); runtime must supply planner.requiredRelations or relationStore lookup
+    - CandidateExpansion uses item.EvidenceRefs × sample.EvidenceRefs (graph collection) (currently from RetrievalDatasetV2CorpusItem.EvidenceRefs × RetrievalDatasetV2Sample.EvidenceRefs); runtime must supply query.evidenceAnchors
+    - CandidateExpansion uses item.SourceRefs × sample.SourceRefs (graph collection) (currently from RetrievalDatasetV2CorpusItem.SourceRefs × RetrievalDatasetV2Sample.SourceRefs); runtime must supply query.sourceAnchors
+- profileId: `must-hit-evidence-boost` (Must-hit evidence boost) status=`RequiresRuntimeDerivation`
+  - scoring features: query.tokens [RuntimeObservable], item.Content [RuntimeObservable], item.Tags [RuntimeObservable], item.Anchors [RuntimeObservable], item.TargetSection [RuntimeObservable], item.ItemKind [RuntimeObservable], item.SourceKind [RuntimeObservable], item.EvidenceRefs × sample.EvidenceRefs [DerivedAtRuntime], item.SourceRefs × sample.SourceRefs [DerivedAtRuntime]
+  - derivation paths: query.evidenceAnchors; query.sourceAnchors
+  - notes:
+    - Filtering uses item.TargetSection × sample.ExpectedTargetSection (filter) (currently from RetrievalDatasetV2CorpusItem.TargetSection × RetrievalDatasetV2Sample.ExpectedTargetSection); runtime must supply router.targetSection or packageContext.targetSection
+    - Filtering uses sample.MustNotHitItemIds (filter) (currently from RetrievalDatasetV2Sample.MustNotHitItemIds (eval ground truth)); runtime must supply query.mustNotItemIds from policy (runtime equivalent only)
+    - CandidateExpansion uses item.Relations × sample.RequiredRelations (graph collection) (currently from RetrievalDatasetV2CorpusItem.Relations × RetrievalDatasetV2Sample.RequiredRelations); runtime must supply planner.requiredRelations or relationStore lookup
+    - CandidateExpansion uses item.EvidenceRefs × sample.EvidenceRefs (graph collection) (currently from RetrievalDatasetV2CorpusItem.EvidenceRefs × RetrievalDatasetV2Sample.EvidenceRefs); runtime must supply query.evidenceAnchors
+    - CandidateExpansion uses item.SourceRefs × sample.SourceRefs (graph collection) (currently from RetrievalDatasetV2CorpusItem.SourceRefs × RetrievalDatasetV2Sample.SourceRefs); runtime must supply query.sourceAnchors
+- profileId: `graph-relation-anchor-boost` (Graph relation anchor boost) status=`RequiresRuntimeDerivation`
+  - scoring features: query.tokens [RuntimeObservable], item.Content [RuntimeObservable], item.Tags [RuntimeObservable], item.Anchors [RuntimeObservable], item.TargetSection [RuntimeObservable], item.ItemKind [RuntimeObservable], item.SourceKind [RuntimeObservable], item.Relations × sample.RequiredRelations [DerivedAtRuntime]
+  - derivation paths: planner.requiredRelations or relationStore lookup
+  - notes:
+    - Filtering uses item.TargetSection × sample.ExpectedTargetSection (filter) (currently from RetrievalDatasetV2CorpusItem.TargetSection × RetrievalDatasetV2Sample.ExpectedTargetSection); runtime must supply router.targetSection or packageContext.targetSection
+    - Filtering uses sample.MustNotHitItemIds (filter) (currently from RetrievalDatasetV2Sample.MustNotHitItemIds (eval ground truth)); runtime must supply query.mustNotItemIds from policy (runtime equivalent only)
+    - CandidateExpansion uses item.Relations × sample.RequiredRelations (graph collection) (currently from RetrievalDatasetV2CorpusItem.Relations × RetrievalDatasetV2Sample.RequiredRelations); runtime must supply planner.requiredRelations or relationStore lookup
+    - CandidateExpansion uses item.EvidenceRefs × sample.EvidenceRefs (graph collection) (currently from RetrievalDatasetV2CorpusItem.EvidenceRefs × RetrievalDatasetV2Sample.EvidenceRefs); runtime must supply query.evidenceAnchors
+    - CandidateExpansion uses item.SourceRefs × sample.SourceRefs (graph collection) (currently from RetrievalDatasetV2CorpusItem.SourceRefs × RetrievalDatasetV2Sample.SourceRefs); runtime must supply query.sourceAnchors
+- profileId: `lexical-fallback-boost` (Lexical fallback boost) status=`RuntimeSafe`
+  - scoring features: query.tokens [RuntimeObservable], item.Content [RuntimeObservable], item.Tags [RuntimeObservable], item.Anchors [RuntimeObservable], item.TargetSection [RuntimeObservable], item.ItemKind [RuntimeObservable], item.SourceKind [RuntimeObservable], lexical/dense ratio [RuntimeObservable]
+  - notes:
+    - Filtering uses item.TargetSection × sample.ExpectedTargetSection (filter) (currently from RetrievalDatasetV2CorpusItem.TargetSection × RetrievalDatasetV2Sample.ExpectedTargetSection); runtime must supply router.targetSection or packageContext.targetSection
+    - Filtering uses sample.MustNotHitItemIds (filter) (currently from RetrievalDatasetV2Sample.MustNotHitItemIds (eval ground truth)); runtime must supply query.mustNotItemIds from policy (runtime equivalent only)
+    - CandidateExpansion uses item.Relations × sample.RequiredRelations (graph collection) (currently from RetrievalDatasetV2CorpusItem.Relations × RetrievalDatasetV2Sample.RequiredRelations); runtime must supply planner.requiredRelations or relationStore lookup
+    - CandidateExpansion uses item.EvidenceRefs × sample.EvidenceRefs (graph collection) (currently from RetrievalDatasetV2CorpusItem.EvidenceRefs × RetrievalDatasetV2Sample.EvidenceRefs); runtime must supply query.evidenceAnchors
+    - CandidateExpansion uses item.SourceRefs × sample.SourceRefs (graph collection) (currently from RetrievalDatasetV2CorpusItem.SourceRefs × RetrievalDatasetV2Sample.SourceRefs); runtime must supply query.sourceAnchors
+- profileId: `combined-repair` (Combined repair) status=`RequiresRuntimeDerivation`
+  - scoring features: query.tokens [RuntimeObservable], item.Content [RuntimeObservable], item.Tags [RuntimeObservable], item.Anchors [RuntimeObservable], item.TargetSection [RuntimeObservable], item.ItemKind [RuntimeObservable], item.SourceKind [RuntimeObservable], item.TargetSection × sample.ExpectedTargetSection [DerivedAtRuntime], item.EvidenceRefs × sample.EvidenceRefs [DerivedAtRuntime], item.SourceRefs × sample.SourceRefs [DerivedAtRuntime], item.Relations × sample.RequiredRelations [DerivedAtRuntime], lexical/dense ratio [RuntimeObservable]
+  - derivation paths: router.targetSection or packageContext.targetSection; query.evidenceAnchors; query.sourceAnchors; planner.requiredRelations or relationStore lookup
+  - notes:
+    - Filtering uses item.TargetSection × sample.ExpectedTargetSection (filter) (currently from RetrievalDatasetV2CorpusItem.TargetSection × RetrievalDatasetV2Sample.ExpectedTargetSection); runtime must supply router.targetSection or packageContext.targetSection
+    - Filtering uses sample.MustNotHitItemIds (filter) (currently from RetrievalDatasetV2Sample.MustNotHitItemIds (eval ground truth)); runtime must supply query.mustNotItemIds from policy (runtime equivalent only)
+    - CandidateExpansion uses item.Relations × sample.RequiredRelations (graph collection) (currently from RetrievalDatasetV2CorpusItem.Relations × RetrievalDatasetV2Sample.RequiredRelations); runtime must supply planner.requiredRelations or relationStore lookup
+    - CandidateExpansion uses item.EvidenceRefs × sample.EvidenceRefs (graph collection) (currently from RetrievalDatasetV2CorpusItem.EvidenceRefs × RetrievalDatasetV2Sample.EvidenceRefs); runtime must supply query.evidenceAnchors
+    - CandidateExpansion uses item.SourceRefs × sample.SourceRefs (graph collection) (currently from RetrievalDatasetV2CorpusItem.SourceRefs × RetrievalDatasetV2Sample.SourceRefs); runtime must supply query.sourceAnchors
+
+## Feature Catalog
+- featureId: `query.tokens`
+  - classification: `RuntimeObservable` usageKind: `Scoring`
+  - currentSource: `tokenized RetrievalDatasetV2Sample.QueryText (== runtime query text)`
+  - profiles: `baseline, candidate-pool-expansion, topk-adjustment, section-aware-boost, must-hit-evidence-boost, graph-relation-anchor-boost, lexical-fallback-boost, combined-repair`
+  - description: Query token set fed into dense / lexical / anchor / negative-cue scoring.
+- featureId: `item.Content`
+  - classification: `RuntimeObservable` usageKind: `Scoring`
+  - currentSource: `RetrievalDatasetV2CorpusItem.Content (== ContextItem.Content at runtime)`
+  - profiles: `baseline, candidate-pool-expansion, topk-adjustment, section-aware-boost, must-hit-evidence-boost, graph-relation-anchor-boost, lexical-fallback-boost, combined-repair`
+  - description: Item body tokens for dense and lexical scoring.
+- featureId: `item.Tags`
+  - classification: `RuntimeObservable` usageKind: `Scoring`
+  - currentSource: `RetrievalDatasetV2CorpusItem.Tags (== ContextItem.Tags)`
+  - profiles: `baseline, candidate-pool-expansion, topk-adjustment, section-aware-boost, must-hit-evidence-boost, graph-relation-anchor-boost, lexical-fallback-boost, combined-repair`
+  - description: Tag tokens contributing to dense and anchor scoring.
+- featureId: `item.Anchors`
+  - classification: `RuntimeObservable` usageKind: `Scoring`
+  - currentSource: `RetrievalDatasetV2CorpusItem.Anchors (== item anchor metadata)`
+  - profiles: `baseline, candidate-pool-expansion, topk-adjustment, section-aware-boost, must-hit-evidence-boost, graph-relation-anchor-boost, lexical-fallback-boost, combined-repair`
+  - description: Anchor tokens contributing to anchor and negative-cue scoring.
+- featureId: `item.TargetSection`
+  - classification: `RuntimeObservable` usageKind: `Scoring`
+  - currentSource: `RetrievalDatasetV2CorpusItem.TargetSection (== item target section)`
+  - profiles: `baseline, candidate-pool-expansion, topk-adjustment, section-aware-boost, must-hit-evidence-boost, graph-relation-anchor-boost, lexical-fallback-boost, combined-repair`
+  - description: Target section token contributing to dense scoring.
+- featureId: `item.ItemKind`
+  - classification: `RuntimeObservable` usageKind: `Scoring`
+  - currentSource: `RetrievalDatasetV2CorpusItem.ItemKind`
+  - profiles: `baseline, candidate-pool-expansion, topk-adjustment, section-aware-boost, must-hit-evidence-boost, graph-relation-anchor-boost, lexical-fallback-boost, combined-repair`
+  - description: Item kind contributing to dense scoring.
+- featureId: `item.SourceKind`
+  - classification: `RuntimeObservable` usageKind: `Scoring`
+  - currentSource: `RetrievalDatasetV2CorpusItem.SourceKind`
+  - profiles: `baseline, candidate-pool-expansion, topk-adjustment, section-aware-boost, must-hit-evidence-boost, graph-relation-anchor-boost, lexical-fallback-boost, combined-repair`
+  - description: Source kind contributing to dense scoring.
+- featureId: `item.TargetSection × sample.ExpectedTargetSection`
+  - classification: `DerivedAtRuntime` usageKind: `Scoring`
+  - currentSource: `RetrievalDatasetV2CorpusItem.TargetSection × RetrievalDatasetV2Sample.ExpectedTargetSection`
+  - derivationPath: `router.targetSection or packageContext.targetSection`
+  - profiles: `section-aware-boost, combined-repair`
+  - description: Section-aware boost activates when item.TargetSection equals sample.ExpectedTargetSection.
+- featureId: `item.EvidenceRefs × sample.EvidenceRefs`
+  - classification: `DerivedAtRuntime` usageKind: `Scoring`
+  - currentSource: `RetrievalDatasetV2CorpusItem.EvidenceRefs × RetrievalDatasetV2Sample.EvidenceRefs`
+  - derivationPath: `query.evidenceAnchors`
+  - profiles: `must-hit-evidence-boost, combined-repair`
+  - description: Evidence boost activates when item.EvidenceRefs intersects sample.EvidenceRefs.
+- featureId: `item.SourceRefs × sample.SourceRefs`
+  - classification: `DerivedAtRuntime` usageKind: `Scoring`
+  - currentSource: `RetrievalDatasetV2CorpusItem.SourceRefs × RetrievalDatasetV2Sample.SourceRefs`
+  - derivationPath: `query.sourceAnchors`
+  - profiles: `must-hit-evidence-boost, combined-repair`
+  - description: Evidence boost activates when item.SourceRefs intersects sample.SourceRefs.
+- featureId: `item.Relations × sample.RequiredRelations`
+  - classification: `DerivedAtRuntime` usageKind: `Scoring`
+  - currentSource: `RetrievalDatasetV2CorpusItem.Relations × RetrievalDatasetV2Sample.RequiredRelations`
+  - derivationPath: `planner.requiredRelations or relationStore lookup`
+  - profiles: `graph-relation-anchor-boost, combined-repair`
+  - description: Relation boost activates when item.Relations intersects sample.RequiredRelations.
+- featureId: `lexical/dense ratio`
+  - classification: `RuntimeObservable` usageKind: `Scoring`
+  - currentSource: `Computed from query.tokens × item.Content`
+  - profiles: `lexical-fallback-boost, combined-repair`
+  - description: Boost when lexical/dense > 0.6, recovering low-overlap items.
+- featureId: `item.Lifecycle`
+  - classification: `RuntimeObservable` usageKind: `Filtering`
+  - currentSource: `RetrievalDatasetV2CorpusItem.Lifecycle (== item lifecycle metadata)`
+  - profiles: `baseline, candidate-pool-expansion, topk-adjustment, section-aware-boost, must-hit-evidence-boost, graph-relation-anchor-boost, lexical-fallback-boost, combined-repair`
+  - description: Used by IsLifecycleRisk and IsBlockedByEligibility.
+- featureId: `item.ReplacementState`
+  - classification: `RuntimeObservable` usageKind: `Filtering`
+  - currentSource: `RetrievalDatasetV2CorpusItem.ReplacementState`
+  - profiles: `baseline, candidate-pool-expansion, topk-adjustment, section-aware-boost, must-hit-evidence-boost, graph-relation-anchor-boost, lexical-fallback-boost, combined-repair`
+  - description: Used by IsLifecycleRisk and IsBlockedByEligibility.
+- featureId: `item.ReviewStatus`
+  - classification: `RuntimeObservable` usageKind: `Filtering`
+  - currentSource: `RetrievalDatasetV2CorpusItem.ReviewStatus`
+  - profiles: `baseline, candidate-pool-expansion, topk-adjustment, section-aware-boost, must-hit-evidence-boost, graph-relation-anchor-boost, lexical-fallback-boost, combined-repair`
+  - description: Available for eligibility filters; not actively branched in V5.5 runner.
+- featureId: `item.TargetSection × sample.ExpectedTargetSection (filter)`
+  - classification: `DerivedAtRuntime` usageKind: `Filtering`
+  - currentSource: `RetrievalDatasetV2CorpusItem.TargetSection × RetrievalDatasetV2Sample.ExpectedTargetSection`
+  - derivationPath: `router.targetSection or packageContext.targetSection`
+  - profiles: `baseline, candidate-pool-expansion, topk-adjustment, section-aware-boost, must-hit-evidence-boost, graph-relation-anchor-boost, lexical-fallback-boost, combined-repair`
+  - description: Eligibility filter requires sample target section equality at runtime.
+- featureId: `sample.MustNotHitItemIds (filter)`
+  - classification: `ForbiddenForScoring` usageKind: `Filtering`
+  - currentSource: `RetrievalDatasetV2Sample.MustNotHitItemIds (eval ground truth)`
+  - derivationPath: `query.mustNotItemIds from policy (runtime equivalent only)`
+  - profiles: `baseline, candidate-pool-expansion, topk-adjustment, section-aware-boost, must-hit-evidence-boost, graph-relation-anchor-boost, lexical-fallback-boost, combined-repair`
+  - description: post-scoring risk gate references mustNot list; current runner reads eval-side label, runtime needs query.mustNotItemIds policy.
+- featureId: `item.Relations × sample.RequiredRelations (graph collection)`
+  - classification: `DerivedAtRuntime` usageKind: `CandidateExpansion`
+  - currentSource: `RetrievalDatasetV2CorpusItem.Relations × RetrievalDatasetV2Sample.RequiredRelations`
+  - derivationPath: `planner.requiredRelations or relationStore lookup`
+  - profiles: `baseline, candidate-pool-expansion, topk-adjustment, section-aware-boost, must-hit-evidence-boost, graph-relation-anchor-boost, lexical-fallback-boost, combined-repair`
+  - description: Graph candidate overlap += 2 when item.Relations intersects sample.RequiredRelations.
+- featureId: `item.EvidenceRefs × sample.EvidenceRefs (graph collection)`
+  - classification: `DerivedAtRuntime` usageKind: `CandidateExpansion`
+  - currentSource: `RetrievalDatasetV2CorpusItem.EvidenceRefs × RetrievalDatasetV2Sample.EvidenceRefs`
+  - derivationPath: `query.evidenceAnchors`
+  - profiles: `baseline, candidate-pool-expansion, topk-adjustment, section-aware-boost, must-hit-evidence-boost, graph-relation-anchor-boost, lexical-fallback-boost, combined-repair`
+  - description: Graph candidate overlap += 1 on evidence overlap.
+- featureId: `item.SourceRefs × sample.SourceRefs (graph collection)`
+  - classification: `DerivedAtRuntime` usageKind: `CandidateExpansion`
+  - currentSource: `RetrievalDatasetV2CorpusItem.SourceRefs × RetrievalDatasetV2Sample.SourceRefs`
+  - derivationPath: `query.sourceAnchors`
+  - profiles: `baseline, candidate-pool-expansion, topk-adjustment, section-aware-boost, must-hit-evidence-boost, graph-relation-anchor-boost, lexical-fallback-boost, combined-repair`
+  - description: Graph candidate overlap += 1 on source overlap.
+- featureId: `sample.MustHitItemIds (graph collection)`
+  - classification: `ForbiddenForScoring` usageKind: `CandidateExpansion`
+  - currentSource: `RetrievalDatasetV2Sample.MustHitItemIds (eval ground truth)`
+  - derivationPath: `(none — runtime must avoid leaking labels into candidate ranking)`
+  - profiles: `baseline, candidate-pool-expansion, topk-adjustment, section-aware-boost, must-hit-evidence-boost, graph-relation-anchor-boost, lexical-fallback-boost, combined-repair`
+  - description: Graph candidate overlap += 3 when item is in MustHitItemIds; this is eval-only and must be removed before runtime promotion.
+- featureId: `options.VectorTopK`
+  - classification: `RuntimeObservable` usageKind: `Knob`
+  - currentSource: `RetrievalQualityRepairPreviewOptions.{Baseline,Expansion}VectorTopK`
+  - profiles: `baseline, candidate-pool-expansion, topk-adjustment, section-aware-boost, must-hit-evidence-boost, graph-relation-anchor-boost, lexical-fallback-boost, combined-repair`
+  - description: Number of vector candidates retained.
+- featureId: `options.GraphTopK`
+  - classification: `RuntimeObservable` usageKind: `Knob`
+  - currentSource: `RetrievalQualityRepairPreviewOptions.{Baseline,Expansion}GraphTopK`
+  - profiles: `baseline, candidate-pool-expansion, topk-adjustment, section-aware-boost, must-hit-evidence-boost, graph-relation-anchor-boost, lexical-fallback-boost, combined-repair`
+  - description: Number of graph candidates retained.
+- featureId: `options.MergedTopK`
+  - classification: `RuntimeObservable` usageKind: `Knob`
+  - currentSource: `RetrievalQualityRepairPreviewOptions.{Baseline,Expansion,Adjusted}MergedTopK`
+  - profiles: `baseline, candidate-pool-expansion, topk-adjustment, section-aware-boost, must-hit-evidence-boost, graph-relation-anchor-boost, lexical-fallback-boost, combined-repair`
+  - description: Size of merged candidate window before TopK eval slice.
+
+## Source Scan
+- scanPerformed: `True`
+- scannedFileCount: `7`
+- fixtureTokenHitCount: `0`
+- scannedFiles:
+  - `D:\Users\Ye_Luo\AppData\Local\Context\src\ContextCore.Core\Services\Vector\ShadowFormalRetrievalAdapterPlanRunner.cs`
+  - `D:\Users\Ye_Luo\AppData\Local\Context\src\ContextCore.Core\Services\Vector\ShadowFormalRetrievalAdapter.cs`
+  - `D:\Users\Ye_Luo\AppData\Local\Context\src\ContextCore.Core\Services\Vector\FormalAdapterPackageShadowComparisonRunner.cs`
+  - `D:\Users\Ye_Luo\AppData\Local\Context\src\ContextCore.Core\Services\Vector\GraphVectorRetrievalQualityAuditRunner.cs`
+  - `D:\Users\Ye_Luo\AppData\Local\Context\src\ContextCore.Core\Services\Vector\RetrievalQualityRepairPreviewRunner.cs`
+  - `D:\Users\Ye_Luo\AppData\Local\Context\src\ContextCore.Core\Services\Vector\RuntimeObservableRetrievalFeatureContractRunner.cs`
+  - `D:\Users\Ye_Luo\AppData\Local\Context\src\ContextCore.Core\Services\Vector\RuntimeRetrievalFeatureDerivationPreviewRunner.cs`
+
+## Blocked Reasons
+- (empty)
+
+## Source Reports
+- v55RepairGate: `vector\v5\retrieval-quality-repair-gate.json`
+
+V5.6 audit only. No formal retrieval, formal package write, formal selected set change, package output mutation, packing policy mutation, runtime switch, or vector store binding change.

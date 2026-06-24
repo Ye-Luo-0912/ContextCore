@@ -1,4 +1,5 @@
 using ContextCore.Abstractions;
+using ContextCore.Abstractions.Models;
 
 namespace ContextCore.Storage.FileSystem.Stores;
 
@@ -339,20 +340,22 @@ public sealed class FileContextStore : IContextStore, IContextCollectionStore
     {
         if (!string.IsNullOrWhiteSpace(collectionId))
         {
-            return new[] { collectionId };
+            return [collectionId];
         }
 
         var collectionsDirectory = _paths.GetCollectionsDirectory(workspaceId);
         if (!Directory.Exists(collectionsDirectory))
         {
-            return Array.Empty<string>();
+            return [];
         }
 
-        return Directory.EnumerateDirectories(collectionsDirectory)
-            .Select(Path.GetFileName)
-            .Where(id => !string.IsNullOrWhiteSpace(id))
-            .Cast<string>()
-            .ToArray();
+        return
+        [
+            .. Directory.EnumerateDirectories(collectionsDirectory)
+                .Select(Path.GetFileName)
+                .Where(id => !string.IsNullOrWhiteSpace(id))
+                .Cast<string>()
+        ];
     }
 
     private static bool MatchesMetadata(ContextItemMetadata metadata, ContextQuery query)
@@ -410,7 +413,7 @@ public sealed class FileContextStore : IContextStore, IContextCollectionStore
             .Append(metadata.Id)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        return queryRefs.Any(refId => refs.Contains(refId));
+        return queryRefs.Any(refs.Contains);
     }
 
     private static bool MatchesQueryText(ContextItem item, string? queryText)

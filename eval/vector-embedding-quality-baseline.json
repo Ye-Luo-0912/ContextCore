@@ -1,0 +1,17 @@
+﻿{
+  "OperationId": "vector-embedding-quality-baseline-39a32c105e784e47b01c00df99c43600",
+  "CreatedAt": "2026-06-14T17:36:29.8323673+00:00",
+  "Samples": 113,
+  "PairCount": 1,
+  "PositiveHitCount": 20,
+  "NegativeHitCount": 5,
+  "PositiveAverageSimilarity": 0.36608849804443,
+  "NegativeAverageSimilarity": 0.35945928899578894,
+  "SimilaritySeparation": 0.00662920904864106,
+  "MustHitRecallAt20": 0.125,
+  "MustNotHitRiskAt20": 0.040983606557377046,
+  "EmbeddingProvider": "deterministic-hash",
+  "EmbeddingModel": "deterministic-hash-v1",
+  "Recommendation": "NeedsRealEmbeddingProvider",
+  "Warnings": []
+}

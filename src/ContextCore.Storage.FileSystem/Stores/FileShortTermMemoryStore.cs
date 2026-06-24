@@ -30,7 +30,11 @@ public sealed class FileShortTermMemoryStore : IShortTermMemoryStore
         try
         {
             var path = _paths.GetShortTermRawEventsJsonlPath(normalized.WorkspaceId, normalized.CollectionId);
-            var items = await _jsonLines.ReadAsync<ShortTermRawEvent>(path, cancellationToken).ConfigureAwait(false);
+            var items = await ReadJsonLinesWithLegacyAsync<ShortTermRawEvent>(
+                path,
+                _paths.GetLegacyShortTermRawEventsJsonlPath(normalized.WorkspaceId, normalized.CollectionId),
+                static item => item.EventId,
+                cancellationToken).ConfigureAwait(false);
             await _jsonLines.WriteAsync(path, items.Append(normalized), cancellationToken).ConfigureAwait(false);
         }
         finally
@@ -48,7 +52,11 @@ public sealed class FileShortTermMemoryStore : IShortTermMemoryStore
         try
         {
             var path = _paths.GetShortTermWorkingItemsJsonlPath(normalized.WorkspaceId, normalized.CollectionId);
-            var items = await _jsonLines.ReadAsync<ShortTermWorkingItem>(path, cancellationToken).ConfigureAwait(false);
+            var items = await ReadJsonLinesWithLegacyAsync<ShortTermWorkingItem>(
+                path,
+                _paths.GetLegacyShortTermWorkingItemsJsonlPath(normalized.WorkspaceId, normalized.CollectionId),
+                static item => item.ItemId,
+                cancellationToken).ConfigureAwait(false);
             var updated = items
                 .Where(existing => !string.Equals(existing.ItemId, normalized.ItemId, StringComparison.OrdinalIgnoreCase))
                 .Append(normalized)
@@ -120,7 +128,11 @@ public sealed class FileShortTermMemoryStore : IShortTermMemoryStore
         try
         {
             var path = _paths.GetShortTermArchivedRawEventsJsonlPath(workspaceId, collectionId);
-            var existing = await _jsonLines.ReadAsync<ShortTermRawEvent>(path, cancellationToken).ConfigureAwait(false);
+            var existing = await ReadJsonLinesWithLegacyAsync<ShortTermRawEvent>(
+                path,
+                _paths.GetLegacyShortTermArchivedRawEventsJsonlPath(workspaceId, collectionId),
+                static item => item.EventId,
+                cancellationToken).ConfigureAwait(false);
             await _jsonLines.WriteAsync(path, existing.Concat(items.Select(Normalize)), cancellationToken).ConfigureAwait(false);
         }
         finally
@@ -143,7 +155,11 @@ public sealed class FileShortTermMemoryStore : IShortTermMemoryStore
         try
         {
             var path = _paths.GetShortTermArchivedWorkingItemsJsonlPath(workspaceId, collectionId);
-            var existing = await _jsonLines.ReadAsync<ShortTermWorkingItem>(path, cancellationToken).ConfigureAwait(false);
+            var existing = await ReadJsonLinesWithLegacyAsync<ShortTermWorkingItem>(
+                path,
+                _paths.GetLegacyShortTermArchivedWorkingItemsJsonlPath(workspaceId, collectionId),
+                static item => item.ItemId,
+                cancellationToken).ConfigureAwait(false);
             await _jsonLines.WriteAsync(path, existing.Concat(items.Select(Normalize)), cancellationToken).ConfigureAwait(false);
         }
         finally
@@ -303,7 +319,11 @@ public sealed class FileShortTermMemoryStore : IShortTermMemoryStore
         try
         {
             var path = _paths.GetShortTermCompactionRunsJsonlPath(run.WorkspaceId, run.CollectionId);
-            var existing = await _jsonLines.ReadAsync<ShortTermCompactionRun>(path, cancellationToken).ConfigureAwait(false);
+            var existing = await ReadJsonLinesWithLegacyAsync<ShortTermCompactionRun>(
+                path,
+                _paths.GetLegacyShortTermCompactionRunsJsonlPath(run.WorkspaceId, run.CollectionId),
+                static item => item.RunId,
+                cancellationToken).ConfigureAwait(false);
             await _jsonLines.WriteAsync(path, existing.Append(Normalize(run)), cancellationToken).ConfigureAwait(false);
         }
         finally
@@ -326,7 +346,11 @@ public sealed class FileShortTermMemoryStore : IShortTermMemoryStore
             foreach (var scope in scopes)
             {
                 var path = _paths.GetShortTermCompactionRunsJsonlPath(scope.WorkspaceId, scope.CollectionId);
-                var items = await _jsonLines.ReadAsync<ShortTermCompactionRun>(path, cancellationToken).ConfigureAwait(false);
+                var items = await ReadJsonLinesWithLegacyAsync<ShortTermCompactionRun>(
+                    path,
+                    _paths.GetLegacyShortTermCompactionRunsJsonlPath(scope.WorkspaceId, scope.CollectionId),
+                    static item => item.RunId,
+                    cancellationToken).ConfigureAwait(false);
                 results.AddRange(items.Where(item => Matches(item, query)));
             }
 
@@ -351,7 +375,11 @@ public sealed class FileShortTermMemoryStore : IShortTermMemoryStore
             foreach (var scope in EnumerateScopes())
             {
                 var path = _paths.GetShortTermCompactionRunsJsonlPath(scope.WorkspaceId, scope.CollectionId);
-                var items = await _jsonLines.ReadAsync<ShortTermCompactionRun>(path, cancellationToken).ConfigureAwait(false);
+                var items = await ReadJsonLinesWithLegacyAsync<ShortTermCompactionRun>(
+                    path,
+                    _paths.GetLegacyShortTermCompactionRunsJsonlPath(scope.WorkspaceId, scope.CollectionId),
+                    static item => item.RunId,
+                    cancellationToken).ConfigureAwait(false);
                 var run = items.FirstOrDefault(item => string.Equals(item.RunId, runId, StringComparison.OrdinalIgnoreCase));
                 if (run is not null)
                 {
@@ -379,7 +407,14 @@ public sealed class FileShortTermMemoryStore : IShortTermMemoryStore
             var path = archived
                 ? _paths.GetShortTermArchivedRawEventsJsonlPath(scope.WorkspaceId, scope.CollectionId)
                 : _paths.GetShortTermRawEventsJsonlPath(scope.WorkspaceId, scope.CollectionId);
-            var items = await _jsonLines.ReadAsync<ShortTermRawEvent>(path, cancellationToken).ConfigureAwait(false);
+            var legacyPath = archived
+                ? _paths.GetLegacyShortTermArchivedRawEventsJsonlPath(scope.WorkspaceId, scope.CollectionId)
+                : _paths.GetLegacyShortTermRawEventsJsonlPath(scope.WorkspaceId, scope.CollectionId);
+            var items = await ReadJsonLinesWithLegacyAsync<ShortTermRawEvent>(
+                path,
+                legacyPath,
+                static item => item.EventId,
+                cancellationToken).ConfigureAwait(false);
             results.AddRange(items.Where(item => Matches(item, query)));
         }
 
@@ -401,7 +436,14 @@ public sealed class FileShortTermMemoryStore : IShortTermMemoryStore
             var path = archived
                 ? _paths.GetShortTermArchivedWorkingItemsJsonlPath(scope.WorkspaceId, scope.CollectionId)
                 : _paths.GetShortTermWorkingItemsJsonlPath(scope.WorkspaceId, scope.CollectionId);
-            var items = await _jsonLines.ReadAsync<ShortTermWorkingItem>(path, cancellationToken).ConfigureAwait(false);
+            var legacyPath = archived
+                ? _paths.GetLegacyShortTermArchivedWorkingItemsJsonlPath(scope.WorkspaceId, scope.CollectionId)
+                : _paths.GetLegacyShortTermWorkingItemsJsonlPath(scope.WorkspaceId, scope.CollectionId);
+            var items = await ReadJsonLinesWithLegacyAsync<ShortTermWorkingItem>(
+                path,
+                legacyPath,
+                static item => item.ItemId,
+                cancellationToken).ConfigureAwait(false);
             results.AddRange(items.Where(item => Matches(item, query)));
         }
 
@@ -502,15 +544,15 @@ public sealed class FileShortTermMemoryStore : IShortTermMemoryStore
                 return Directory.EnumerateDirectories(collectionsRoot)
                     .Select(collectionDirectory => new
                     {
-                        WorkspaceId = workspaceId!,
+                        WorkspaceId = workspaceId,
                         CollectionId = Path.GetFileName(collectionDirectory)
                     })
                     .Where(item => !string.IsNullOrWhiteSpace(item.CollectionId))
-                    .Where(item => HasShortTermData(item.WorkspaceId, item.CollectionId!))
+                    .Where(item => HasShortTermData(item.WorkspaceId, item.CollectionId))
                     .Select(item => new ShortTermMemoryScope
                     {
                         WorkspaceId = item.WorkspaceId,
-                        CollectionId = item.CollectionId!
+                        CollectionId = item.CollectionId
                     })
                     .ToArray();
             })
@@ -531,16 +573,63 @@ public sealed class FileShortTermMemoryStore : IShortTermMemoryStore
             return scopes;
         }
 
-        return scopes
-            .Where(item => string.Equals(item.WorkspaceId, workspaceId, StringComparison.OrdinalIgnoreCase))
-            .Where(item => string.IsNullOrWhiteSpace(collectionId) || string.Equals(item.CollectionId, collectionId, StringComparison.OrdinalIgnoreCase))
-            .ToArray();
+        return
+        [
+            .. scopes
+                .Where(item => string.Equals(item.WorkspaceId, workspaceId, StringComparison.OrdinalIgnoreCase))
+                .Where(item => string.IsNullOrWhiteSpace(collectionId) || string.Equals(item.CollectionId, collectionId,
+                    StringComparison.OrdinalIgnoreCase))
+        ];
     }
 
     private bool HasShortTermData(string workspaceId, string collectionId)
     {
         return Directory.Exists(_paths.GetShortTermDirectory(workspaceId, collectionId))
-            || File.Exists(_paths.GetShortTermCompactionRunsJsonlPath(workspaceId, collectionId));
+            || Directory.Exists(_paths.GetLegacyShortTermDirectory(workspaceId, collectionId))
+            || File.Exists(_paths.GetShortTermCompactionRunsJsonlPath(workspaceId, collectionId))
+            || File.Exists(_paths.GetLegacyShortTermCompactionRunsJsonlPath(workspaceId, collectionId));
+    }
+
+    private async Task<IReadOnlyList<T>> ReadJsonLinesWithLegacyAsync<T>(
+        string primaryPath,
+        string legacyPath,
+        Func<T, string?> keySelector,
+        CancellationToken cancellationToken)
+    {
+        var primary = await _jsonLines.ReadAsync<T>(primaryPath, cancellationToken).ConfigureAwait(false);
+        if (string.Equals(primaryPath, legacyPath, StringComparison.OrdinalIgnoreCase) || !File.Exists(legacyPath))
+        {
+            return primary;
+        }
+
+        var legacy = await _jsonLines.ReadAsync<T>(legacyPath, cancellationToken).ConfigureAwait(false);
+        if (legacy.Count == 0)
+        {
+            return primary;
+        }
+
+        var keys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var merged = new List<T>(primary.Count + legacy.Count);
+        foreach (var item in primary)
+        {
+            merged.Add(item);
+            var key = keySelector(item);
+            if (!string.IsNullOrWhiteSpace(key))
+            {
+                keys.Add(key);
+            }
+        }
+
+        foreach (var item in legacy)
+        {
+            var key = keySelector(item);
+            if (string.IsNullOrWhiteSpace(key) || keys.Add(key))
+            {
+                merged.Add(item);
+            }
+        }
+
+        return merged;
     }
 
     private static bool Matches(ShortTermRawEvent item, ShortTermRawEventQuery query)
@@ -631,8 +720,8 @@ public sealed class FileShortTermMemoryStore : IShortTermMemoryStore
             ArchivedRawEvents = item.ArchivedRawEvents,
             ArchivedWorkingItems = item.ArchivedWorkingItems,
             RemovedDuplicates = item.RemovedDuplicates,
-            Warnings = item.Warnings.ToArray(),
-            Errors = item.Errors.ToArray()
+            Warnings = [.. item.Warnings],
+            Errors = [.. item.Errors]
         };
     }
 

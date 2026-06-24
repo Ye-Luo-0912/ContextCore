@@ -1,0 +1,64 @@
+﻿{
+  "GatePassed": true,
+  "ScopeCount": 2,
+  "EnabledScopeCount": 2,
+  "OperationCount": 210,
+  "OperationCountByScope": {
+    "multi-normal-alpha": 105,
+    "multi-normal-beta": 105
+  },
+  "PostgresPrimaryReadCount": 102,
+  "PostgresPrimaryWriteCount": 90,
+  "FileSystemFallbackCount": 0,
+  "ComparisonTraceCount": 210,
+  "MismatchCount": 0,
+  "PostgresFailureCount": 0,
+  "ScopeLeakCount": 0,
+  "NonAllowlistedScopeChecked": true,
+  "AveragePostgresReadMs": 2.273557843137255,
+  "P95PostgresReadMs": 3.3983,
+  "AveragePostgresWriteMs": 16.332621111111116,
+  "P95PostgresWriteMs": 22.4876,
+  "PerScopeStatus": [
+    {
+      "ScopeName": "multi-normal-alpha",
+      "WorkspaceId": "contextcore_multi_normal_alpha",
+      "CollectionId": "relation-governance-multi-normal-alpha-19ec0598ef3",
+      "RolloutStage": "db2.14-multi-normal",
+      "OperationCount": 105,
+      "PostgresPrimaryReadCount": 51,
+      "PostgresPrimaryWriteCount": 45,
+      "FileSystemFallbackCount": 0,
+      "MismatchCount": 0,
+      "PostgresFailureCount": 0,
+      "ScopeLeakCount": 0,
+      "Recommendation": "ReadyForMultiNormalScopeCanary"
+    },
+    {
+      "ScopeName": "multi-normal-beta",
+      "WorkspaceId": "contextcore_multi_normal_beta",
+      "CollectionId": "relation-governance-multi-normal-beta-19ec0598ef3",
+      "RolloutStage": "db2.14-multi-normal",
+      "OperationCount": 105,
+      "PostgresPrimaryReadCount": 51,
+      "PostgresPrimaryWriteCount": 45,
+      "FileSystemFallbackCount": 0,
+      "MismatchCount": 0,
+      "PostgresFailureCount": 0,
+      "ScopeLeakCount": 0,
+      "Recommendation": "ReadyForMultiNormalScopeCanary"
+    }
+  ],
+  "GraphExpansionPreviewParityPassed": true,
+  "ReviewLifecycleParityPassed": true,
+  "DiagnosticsParityPassed": true,
+  "ReplacementChainParityPassed": true,
+  "CleanupPerformed": false,
+  "RollbackInstruction": "Disable affected normal scope rule or set RelationGovernanceProviderSwitchOptions.Enabled=false.",
+  "Diagnostics": [
+    "multi-normal-alpha:ExtendedCanaryScopedOnly",
+    "multi-normal-beta:ExtendedCanaryScopedOnly"
+  ],
+  "BlockedReasons": [],
+  "Recommendation": "ReadyForLimitedScopeExpansion"
+}

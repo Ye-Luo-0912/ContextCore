@@ -1,0 +1,28 @@
+﻿{
+  "OperationId": "service-openapi-contract-876e8b8fd94a451c9c57ba589975de94",
+  "GeneratedAt": "2026-06-16T16:36:15.9888773+00:00",
+  "EndpointCount": 8,
+  "EndpointIds": [
+    "GET /api/admin/foundation/postgres-freeze-status",
+    "GET /api/admin/foundation/release-candidate",
+    "GET /api/admin/foundation/reports",
+    "GET /api/admin/foundation/reports/{reportId}",
+    "GET /api/admin/foundation/reproducibility",
+    "GET /api/admin/foundation/runtime-change-gate",
+    "GET /api/admin/foundation/status",
+    "GET /api/admin/foundation/vector-formal-preview"
+  ],
+  "EnvelopeSchemaVersion": "foundation-api-envelope-v1",
+  "AuthScheme": "ApiKeyAuth",
+  "ApiKeyHeaderName": "X-ContextCore-Key",
+  "ClientMethodCount": 13,
+  "RequestSchemaCount": 0,
+  "ResponseSchemaCount": 9,
+  "ForbiddenActionCount": 6,
+  "BreakingChangeDetected": false,
+  "SecretLeakDetected": false,
+  "AbsolutePathLeakDetected": false,
+  "ReadOnly": true,
+  "Recommendation": "ReadyForOpenApiContractFreeze",
+  "BlockedReasons": []
+}

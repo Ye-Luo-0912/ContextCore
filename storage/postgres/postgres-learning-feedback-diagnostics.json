@@ -1,0 +1,15 @@
+﻿{
+  "providerEnabled": true,
+  "connectionAvailable": true,
+  "schemaVersion": "cc-schema-v4",
+  "feedbackTableExists": true,
+  "reviewTableExists": true,
+  "featureCandidateTableExists": true,
+  "requiredIndexesExist": true,
+  "feedbackCount": 0,
+  "reviewCount": 0,
+  "featureCandidateCount": 0,
+  "useForRuntime": false,
+  "status": "ReadyForParityEval",
+  "diagnostics": []
+}

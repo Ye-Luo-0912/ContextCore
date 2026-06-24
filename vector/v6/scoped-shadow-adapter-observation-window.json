@@ -1,0 +1,25 @@
+﻿{
+  "OperationId": "scoped-shadow-observation-3aaa2ed046ab460791be98722c9e8bb5",
+  "CreatedAt": "2026-06-22T01:50:57.3202169+00:00",
+  "ObservationPassed": true,
+  "Recommendation": "ReadyForShadowObservationFreeze",
+  "EvalOnlySyntheticScope": true,
+  "ResolvedScopeKey": "eval-only:synthetic-alternating",
+  "SampleCount": 120,
+  "MainlineInvocationCount": 120,
+  "AllowlistedInvocationCount": 60,
+  "NonAllowlistedInvocationCount": 60,
+  "HypotheticalAddCount": 0,
+  "HypotheticalRemoveCount": 0,
+  "AppliedAddCount": 0,
+  "AppliedRemoveCount": 0,
+  "TraceCompleteness": 1,
+  "P50LatencyMs": 0,
+  "P95LatencyMs": 0,
+  "Diagnostics": [
+    "scopeResolved=eval-only:synthetic-alternating hasRealScope=False",
+    "total: 120 allowlisted: 60 nonAllowlisted: 60",
+    "hypoAdd=0 hypoRemove=0 appliedAdd=0 appliedRemove=0"
+  ],
+  "BlockedReasons": []
+}

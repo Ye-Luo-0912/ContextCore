@@ -1,3 +1,4 @@
+using ContextCore.Storage.Postgres.Infrastructure;
 using Npgsql;
 using NpgsqlTypes;
 
@@ -50,7 +51,7 @@ public abstract class PostgresStoreBase
         }
     }
 
-    protected string Table(string suffix) => PostgresNames.Table(Options, suffix);
+    protected string Table(string suffix) => Infrastructure.PostgresNames.Table(Options, suffix);
 
     protected static string CollectionKey(string? collectionId) => string.IsNullOrWhiteSpace(collectionId) ? string.Empty : collectionId;
 

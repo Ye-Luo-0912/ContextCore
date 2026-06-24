@@ -1,4 +1,5 @@
 using ContextCore.Abstractions;
+using ContextCore.Abstractions.Models;
 
 namespace ContextCore.Storage.FileSystem.Stores;
 
@@ -160,38 +161,45 @@ public sealed class FileShortTermPromotionCandidateStore : IShortTermPromotionCa
             return Array.Empty<ShortTermMemoryScope>();
         }
 
-        return Directory.EnumerateDirectories(workspacesRoot)
-            .SelectMany(workspaceDirectory =>
-            {
-                var workspaceId = Path.GetFileName(workspaceDirectory);
-                if (string.IsNullOrWhiteSpace(workspaceId))
+        return
+        [
+            .. Directory.EnumerateDirectories(workspacesRoot)
+                .SelectMany(workspaceDirectory =>
                 {
-                    return Array.Empty<ShortTermMemoryScope>();
-                }
-
-                var collectionsRoot = Path.Combine(workspaceDirectory, "collections");
-                if (!Directory.Exists(collectionsRoot))
-                {
-                    return Array.Empty<ShortTermMemoryScope>();
-                }
-
-                return Directory.EnumerateDirectories(collectionsRoot)
-                    .Select(collectionDirectory => new
+                    var workspaceId = Path.GetFileName(workspaceDirectory);
+                    if (string.IsNullOrWhiteSpace(workspaceId))
                     {
-                        WorkspaceId = workspaceId!,
-                        CollectionId = Path.GetFileName(collectionDirectory)
-                    })
-                    .Where(item => !string.IsNullOrWhiteSpace(item.CollectionId))
-                    .Where(item => File.Exists(_paths.GetShortTermPromotionCandidatesJsonlPath(item.WorkspaceId, item.CollectionId!)))
-                    .Select(item => new ShortTermMemoryScope
+                        return Array.Empty<ShortTermMemoryScope>();
+                    }
+
+                    var collectionsRoot = Path.Combine(workspaceDirectory, "collections");
+                    if (!Directory.Exists(collectionsRoot))
                     {
-                        WorkspaceId = item.WorkspaceId,
-                        CollectionId = item.CollectionId!
-                    })
-                    .ToArray();
-            })
-            .DistinctBy(item => $"{item.WorkspaceId}\u001f{item.CollectionId}", StringComparer.OrdinalIgnoreCase)
-            .ToArray();
+                        return Array.Empty<ShortTermMemoryScope>();
+                    }
+
+                    return
+                    [
+                        .. Directory.EnumerateDirectories(collectionsRoot)
+                            .Select(collectionDirectory => new
+                            {
+                                WorkspaceId = workspaceId,
+                                CollectionId = Path.GetFileName(collectionDirectory)
+                            })
+                            .Where(item => !string.IsNullOrWhiteSpace(item.CollectionId))
+                            .Where(item =>
+                                File.Exists(
+                                    _paths.GetShortTermPromotionCandidatesJsonlPath(item.WorkspaceId,
+                                        item.CollectionId!)))
+                            .Select(item => new ShortTermMemoryScope
+                            {
+                                WorkspaceId = item.WorkspaceId,
+                                CollectionId = item.CollectionId
+                            })
+                    ];
+                })
+                .DistinctBy(item => $"{item.WorkspaceId}\u001f{item.CollectionId}", StringComparer.OrdinalIgnoreCase)
+        ];
     }
 
     private IReadOnlyList<ShortTermMemoryScope> ResolveScopes(string workspaceId, string? collectionId)
@@ -201,9 +209,11 @@ public sealed class FileShortTermPromotionCandidateStore : IShortTermPromotionCa
             return [new ShortTermMemoryScope { WorkspaceId = workspaceId, CollectionId = collectionId }];
         }
 
-        return EnumerateScopes()
-            .Where(item => string.Equals(item.WorkspaceId, workspaceId, StringComparison.OrdinalIgnoreCase))
-            .ToArray();
+        return
+        [
+            .. EnumerateScopes()
+                .Where(item => string.Equals(item.WorkspaceId, workspaceId, StringComparison.OrdinalIgnoreCase))
+        ];
     }
 
     private static bool Matches(ShortTermPromotionCandidate item, ShortTermPromotionCandidateQuery query)
@@ -267,12 +277,12 @@ public sealed class FileShortTermPromotionCandidateStore : IShortTermPromotionCa
             TargetItemId = item.TargetItemId,
             TargetItemKind = item.TargetItemKind,
             TargetLayer = item.TargetLayer,
-            EvidenceRefs = item.EvidenceRefs.ToArray(),
+            EvidenceRefs = [.. item.EvidenceRefs],
             CreatedAt = createdAt,
             ReviewedAt = item.ReviewedAt == default ? createdAt : item.ReviewedAt,
             Metadata = new Dictionary<string, string>(item.Metadata, StringComparer.OrdinalIgnoreCase),
-            Warnings = item.Warnings.ToArray(),
-            Errors = item.Errors.ToArray()
+            Warnings = [.. item.Warnings],
+            Errors = [.. item.Errors]
         };
     }
 

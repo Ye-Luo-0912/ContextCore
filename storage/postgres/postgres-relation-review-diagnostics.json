@@ -1,0 +1,23 @@
+﻿{
+  "ProviderEnabled": true,
+  "ProviderId": "postgres-local-smoke",
+  "UseForRuntime": false,
+  "ActiveRuntimeProvider": "FileSystemRelationStore",
+  "ConnectionAvailable": true,
+  "SchemaVersion": "cc-schema-v4",
+  "RelationReviewsTableExists": true,
+  "RelationDiagnosticsTableExists": true,
+  "RequiredIndexes": [
+    "ix_cc_relation_reviews_relation",
+    "ix_cc_relation_diagnostics_relation",
+    "ix_cc_relation_diagnostics_item",
+    "ix_cc_relation_diagnostics_kind",
+    "ix_cc_relation_diagnostics_severity"
+  ],
+  "MissingRequiredIndexes": [],
+  "ReviewCount": 0,
+  "DiagnosticsCount": 0,
+  "RedactedConnectionString": "Host=localhost;Port=55432;Database=contextcore;Username=***;Password=***",
+  "Diagnostics": [],
+  "Recommendation": "ReadyForParityEval"
+}

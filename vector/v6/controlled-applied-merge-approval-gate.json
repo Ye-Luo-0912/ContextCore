@@ -1,0 +1,19 @@
+﻿{
+  "OperationId": "controlled-merge-approval-cdfe8de9024045e9a319e37210b4b0da",
+  "CreatedAt": "2026-06-22T17:39:45.0891759+00:00",
+  "ApprovalPassed": true,
+  "Recommendation": "ReadyForScopedPreview",
+  "ProposalId": "controlled-merge-dryrun-70dfb2e3e39c4ca39406a4a7a1a3cca8",
+  "ApprovedBy": "codex",
+  "Reason": "Controlled applied merge scoped preview",
+  "ExpiresAt": "2026-06-29T17:39:45.0893+00:00",
+  "ApprovalMode": "ControlledAppliedMergePreviewOnly",
+  "DryRunDecisionSourcePath": "",
+  "WouldApplyAddCount": 4,
+  "WouldApplyRemoveCount": 4,
+  "RiskAfterPolicy": 0,
+  "RollbackPresent": true,
+  "KillSwitchPresent": true,
+  "IsRevoked": false,
+  "BlockedReasons": []
+}

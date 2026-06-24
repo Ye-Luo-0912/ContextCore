@@ -1,0 +1,1440 @@
+﻿{
+  "ItemId": "rdsv2-blind-holdout-item-0001-2b86d543",
+  "ItemKind": "policy",
+  "SourceKind": "governance-note",
+  "Layer": "context",
+  "Lifecycle": "Stable",
+  "ReviewStatus": "Approved",
+  "ReplacementState": "current",
+  "TargetSection": "normal_context",
+  "SourceRefs": [
+    "blind-src-0001-94868a74"
+  ],
+  "EvidenceRefs": [
+    "blind-ev-0001-9eeccfd0"
+  ],
+  "Provenance": {
+    "RecordId": "blind-prov-3bd74fab4f4e7dbd",
+    "SourceFingerprint": "6d14873d2a87ea862438cc4e0a1e5f2a1305604a0588e539aba06ab9939fde91",
+    "IngestionBatchId": "rdsv2-blind-holdout-v514",
+    "CreatedAt": "2026-06-19T00:00:00+00:00"
+  },
+  "SourceFingerprint": "49c299963a37192151e2bc1699759dcdc53ceed2af487175f2b398963429a864",
+  "CreatedAt": "2026-06-19T00:00:00+00:00",
+  "Relations": [
+    {
+      "RelationId": "rdsv2-blind-holdout-rel-0001",
+      "SourceItemId": "rdsv2-blind-holdout-item-0001-2b86d543",
+      "TargetItemId": "rdsv2-blind-holdout-item-0002-1073aa14",
+      "RelationType": "supports",
+      "SourceRefs": [
+        "blind-src-0001-94868a74",
+        "blind-src-0002-f0ab0c2f"
+      ],
+      "EvidenceRefs": [
+        "blind-ev-0001-9eeccfd0",
+        "blind-ev-0002-0c3686da"
+      ]
+    }
+  ],
+  "Tags": [
+    "blind-section-normal-context",
+    "blind-tag-policy",
+    "governance-note",
+    "kind-policy"
+  ],
+  "Anchors": [
+    "blind-lifecycle-stable",
+    "blind-source-governance-note",
+    "kind-policy",
+    "lifecycle-stable"
+  ],
+  "Content": "Blind holdout policy from governance-note uses Stable review status for normal_context. Evidence blind-ev-0001-9eeccfd0 and source blind-src-0001-94868a74 describe recoverable context without reused query wording.",
+  "Split": "blind-holdout",
+  "Metadata": {
+    "generatedBy": "source-aware-ranking-repair/blind-holdout/v1",
+    "useForRuntime": "false",
+    "sourceItemFingerprint": "77435786efc0f9456ad5c9fdeffa8d1a4ff306caf226f42fe0d69884df50079b",
+    "templateSignature": "blind-v514-0"
+  }
+}
+{
+  "ItemId": "rdsv2-blind-holdout-item-0002-1073aa14",
+  "ItemKind": "policy",
+  "SourceKind": "engineering-note",
+  "Layer": "context",
+  "Lifecycle": "Stable",
+  "ReviewStatus": "Approved",
+  "ReplacementState": "current",
+  "TargetSection": "normal_context",
+  "SourceRefs": [
+    "blind-src-0002-f0ab0c2f"
+  ],
+  "EvidenceRefs": [
+    "blind-ev-0002-0c3686da"
+  ],
+  "Provenance": {
+    "RecordId": "blind-prov-d8df1c29b2d1ed5c",
+    "SourceFingerprint": "d929171381e8e0e0d705a320a44818bd42d2bd94ac2d8cd99753af99537f5747",
+    "IngestionBatchId": "rdsv2-blind-holdout-v514",
+    "CreatedAt": "2026-06-19T00:00:00+00:00"
+  },
+  "SourceFingerprint": "98f22a015213e3637172c5ae936c93d25745b60329b325ea844010d4f697aeb9",
+  "CreatedAt": "2026-06-19T00:01:00+00:00",
+  "Relations": [
+    {
+      "RelationId": "rdsv2-blind-holdout-rel-0002",
+      "SourceItemId": "rdsv2-blind-holdout-item-0002-1073aa14",
+      "TargetItemId": "rdsv2-blind-holdout-item-0003-47c52c12",
+      "RelationType": "contrasts",
+      "SourceRefs": [
+        "blind-src-0002-f0ab0c2f",
+        "blind-src-0003-19d5db27"
+      ],
+      "EvidenceRefs": [
+        "blind-ev-0002-0c3686da",
+        "blind-ev-0003-b7675305"
+      ]
+    }
+  ],
+  "Tags": [
+    "blind-section-normal-context",
+    "blind-tag-policy",
+    "engineering-note",
+    "kind-policy"
+  ],
+  "Anchors": [
+    "blind-lifecycle-stable",
+    "blind-source-engineering-note",
+    "kind-policy",
+    "lifecycle-stable"
+  ],
+  "Content": "Blind holdout policy from engineering-note uses Stable review status for normal_context. Evidence blind-ev-0002-0c3686da and source blind-src-0002-f0ab0c2f describe recoverable context without reused query wording.",
+  "Split": "blind-holdout",
+  "Metadata": {
+    "generatedBy": "source-aware-ranking-repair/blind-holdout/v1",
+    "useForRuntime": "false",
+    "sourceItemFingerprint": "f1e7c31e029684fe503ecfeda39a812ae8c6590cffc5e372f9a8ff70c5468b33",
+    "templateSignature": "blind-v514-1"
+  }
+}
+{
+  "ItemId": "rdsv2-blind-holdout-item-0003-47c52c12",
+  "ItemKind": "policy",
+  "SourceKind": "governance-note",
+  "Layer": "context",
+  "Lifecycle": "Stable",
+  "ReviewStatus": "Approved",
+  "ReplacementState": "current",
+  "TargetSection": "normal_context",
+  "SourceRefs": [
+    "blind-src-0003-19d5db27"
+  ],
+  "EvidenceRefs": [
+    "blind-ev-0003-b7675305"
+  ],
+  "Provenance": {
+    "RecordId": "blind-prov-12dc91e25f853862",
+    "SourceFingerprint": "673ad2cc4522ab166c4436ae5c54988e714459e93e7622e5a20fa1960673ff7f",
+    "IngestionBatchId": "rdsv2-blind-holdout-v514",
+    "CreatedAt": "2026-06-19T00:00:00+00:00"
+  },
+  "SourceFingerprint": "510876198afcfa9d120d55c7254def92fe21a9226872b58abcb2659ba067de3f",
+  "CreatedAt": "2026-06-19T00:02:00+00:00",
+  "Relations": [
+    {
+      "RelationId": "rdsv2-blind-holdout-rel-0003",
+      "SourceItemId": "rdsv2-blind-holdout-item-0003-47c52c12",
+      "TargetItemId": "rdsv2-blind-holdout-item-0004-fbf1cf2c",
+      "RelationType": "supports",
+      "SourceRefs": [
+        "blind-src-0003-19d5db27",
+        "blind-src-0004-abae2aca"
+      ],
+      "EvidenceRefs": [
+        "blind-ev-0003-b7675305",
+        "blind-ev-0004-b2b33056"
+      ]
+    }
+  ],
+  "Tags": [
+    "blind-section-normal-context",
+    "blind-tag-policy",
+    "governance-note",
+    "kind-policy"
+  ],
+  "Anchors": [
+    "blind-lifecycle-stable",
+    "blind-source-governance-note",
+    "kind-policy",
+    "lifecycle-stable"
+  ],
+  "Content": "Blind holdout policy from governance-note uses Stable review status for normal_context. Evidence blind-ev-0003-b7675305 and source blind-src-0003-19d5db27 describe recoverable context without reused query wording.",
+  "Split": "blind-holdout",
+  "Metadata": {
+    "generatedBy": "source-aware-ranking-repair/blind-holdout/v1",
+    "useForRuntime": "false",
+    "sourceItemFingerprint": "6daf83171452bad9dc9216fbef9556ff3d13a0b2cc2c3587d7d554df1a70fffd",
+    "templateSignature": "blind-v514-2"
+  }
+}
+{
+  "ItemId": "rdsv2-blind-holdout-item-0004-fbf1cf2c",
+  "ItemKind": "policy",
+  "SourceKind": "governance-note",
+  "Layer": "context",
+  "Lifecycle": "Stable",
+  "ReviewStatus": "Approved",
+  "ReplacementState": "current",
+  "TargetSection": "normal_context",
+  "SourceRefs": [
+    "blind-src-0004-abae2aca"
+  ],
+  "EvidenceRefs": [
+    "blind-ev-0004-b2b33056"
+  ],
+  "Provenance": {
+    "RecordId": "blind-prov-3b70cdb01e8937b0",
+    "SourceFingerprint": "4d76a5ee802c32cdd833d3eabeff43d61375d2b1fea772f6c8a0507da38419af",
+    "IngestionBatchId": "rdsv2-blind-holdout-v514",
+    "CreatedAt": "2026-06-19T00:00:00+00:00"
+  },
+  "SourceFingerprint": "99df6d609f3d8b78af00cac01f5d04c04029a623f4eb323ede50238f69ae40da",
+  "CreatedAt": "2026-06-19T00:03:00+00:00",
+  "Relations": [
+    {
+      "RelationId": "rdsv2-blind-holdout-rel-0004",
+      "SourceItemId": "rdsv2-blind-holdout-item-0004-fbf1cf2c",
+      "TargetItemId": "rdsv2-blind-holdout-item-0005-7467d5b7",
+      "RelationType": "contrasts",
+      "SourceRefs": [
+        "blind-src-0004-abae2aca",
+        "blind-src-0005-0a58b806"
+      ],
+      "EvidenceRefs": [
+        "blind-ev-0004-b2b33056",
+        "blind-ev-0005-aec31d09"
+      ]
+    }
+  ],
+  "Tags": [
+    "blind-section-normal-context",
+    "blind-tag-policy",
+    "governance-note",
+    "kind-policy"
+  ],
+  "Anchors": [
+    "blind-lifecycle-stable",
+    "blind-source-governance-note",
+    "kind-policy",
+    "lifecycle-stable"
+  ],
+  "Content": "Blind holdout policy from governance-note uses Stable review status for normal_context. Evidence blind-ev-0004-b2b33056 and source blind-src-0004-abae2aca describe recoverable context without reused query wording.",
+  "Split": "blind-holdout",
+  "Metadata": {
+    "generatedBy": "source-aware-ranking-repair/blind-holdout/v1",
+    "useForRuntime": "false",
+    "sourceItemFingerprint": "56e0772360b8ab7f5b659f2d8e7cdcb55b6fb6dfcd887b513735e4be4268a760",
+    "templateSignature": "blind-v514-3"
+  }
+}
+{
+  "ItemId": "rdsv2-blind-holdout-item-0005-7467d5b7",
+  "ItemKind": "runbook",
+  "SourceKind": "operational-note",
+  "Layer": "context",
+  "Lifecycle": "Stable",
+  "ReviewStatus": "Approved",
+  "ReplacementState": "current",
+  "TargetSection": "normal_context",
+  "SourceRefs": [
+    "blind-src-0005-0a58b806"
+  ],
+  "EvidenceRefs": [
+    "blind-ev-0005-aec31d09"
+  ],
+  "Provenance": {
+    "RecordId": "blind-prov-3698a9fe6fd676df",
+    "SourceFingerprint": "31007ec819696a22024870d26f456558dfca8318731019830ff06602cec29411",
+    "IngestionBatchId": "rdsv2-blind-holdout-v514",
+    "CreatedAt": "2026-06-19T00:00:00+00:00"
+  },
+  "SourceFingerprint": "4ded516490680cf576eae446a63934c5221910085ae938b51e6115be8ce78920",
+  "CreatedAt": "2026-06-19T00:04:00+00:00",
+  "Relations": [
+    {
+      "RelationId": "rdsv2-blind-holdout-rel-0005",
+      "SourceItemId": "rdsv2-blind-holdout-item-0005-7467d5b7",
+      "TargetItemId": "rdsv2-blind-holdout-item-0006-4866ab1e",
+      "RelationType": "supports",
+      "SourceRefs": [
+        "blind-src-0005-0a58b806",
+        "blind-src-0006-bc434dd2"
+      ],
+      "EvidenceRefs": [
+        "blind-ev-0005-aec31d09",
+        "blind-ev-0006-f2d31bfa"
+      ]
+    }
+  ],
+  "Tags": [
+    "blind-section-normal-context",
+    "blind-tag-runbook",
+    "kind-runbook",
+    "lifecycle-stable"
+  ],
+  "Anchors": [
+    "blind-lifecycle-stable",
+    "blind-source-operational-note",
+    "kind-runbook",
+    "lifecycle-stable"
+  ],
+  "Content": "Blind holdout runbook from operational-note uses Stable review status for normal_context. Evidence blind-ev-0005-aec31d09 and source blind-src-0005-0a58b806 describe recoverable context without reused query wording.",
+  "Split": "blind-holdout",
+  "Metadata": {
+    "generatedBy": "source-aware-ranking-repair/blind-holdout/v1",
+    "useForRuntime": "false",
+    "sourceItemFingerprint": "d07ed91fc71ce31cd67a4f173ca1c246c8f4a4e0f34abfcbfd048fffee94fbf2",
+    "templateSignature": "blind-v514-0"
+  }
+}
+{
+  "ItemId": "rdsv2-blind-holdout-item-0006-4866ab1e",
+  "ItemKind": "policy",
+  "SourceKind": "engineering-note",
+  "Layer": "context",
+  "Lifecycle": "Stable",
+  "ReviewStatus": "Approved",
+  "ReplacementState": "current",
+  "TargetSection": "normal_context",
+  "SourceRefs": [
+    "blind-src-0006-bc434dd2"
+  ],
+  "EvidenceRefs": [
+    "blind-ev-0006-f2d31bfa"
+  ],
+  "Provenance": {
+    "RecordId": "blind-prov-6aaa5f85f6f61e73",
+    "SourceFingerprint": "edb921a1ce3882e257ff6d38c464072014891607cb5017476dd93dbfddd051de",
+    "IngestionBatchId": "rdsv2-blind-holdout-v514",
+    "CreatedAt": "2026-06-19T00:00:00+00:00"
+  },
+  "SourceFingerprint": "1bebd26ea3adf973fd8f8da86258c4120f289e4305a40d5326ceff1a2ebb908a",
+  "CreatedAt": "2026-06-19T00:05:00+00:00",
+  "Relations": [
+    {
+      "RelationId": "rdsv2-blind-holdout-rel-0006",
+      "SourceItemId": "rdsv2-blind-holdout-item-0006-4866ab1e",
+      "TargetItemId": "rdsv2-blind-holdout-item-0007-127c4e3c",
+      "RelationType": "contrasts",
+      "SourceRefs": [
+        "blind-src-0006-bc434dd2",
+        "blind-src-0007-48c3e513"
+      ],
+      "EvidenceRefs": [
+        "blind-ev-0006-f2d31bfa",
+        "blind-ev-0007-b7511e5f"
+      ]
+    }
+  ],
+  "Tags": [
+    "blind-section-normal-context",
+    "blind-tag-policy",
+    "engineering-note",
+    "kind-policy"
+  ],
+  "Anchors": [
+    "blind-lifecycle-stable",
+    "blind-source-engineering-note",
+    "kind-policy",
+    "lifecycle-stable"
+  ],
+  "Content": "Blind holdout policy from engineering-note uses Stable review status for normal_context. Evidence blind-ev-0006-f2d31bfa and source blind-src-0006-bc434dd2 describe recoverable context without reused query wording.",
+  "Split": "blind-holdout",
+  "Metadata": {
+    "generatedBy": "source-aware-ranking-repair/blind-holdout/v1",
+    "useForRuntime": "false",
+    "sourceItemFingerprint": "577da817e2f8b414b5e7c2bba10de9cb5a62f72a5685c276330d28e57e1816da",
+    "templateSignature": "blind-v514-1"
+  }
+}
+{
+  "ItemId": "rdsv2-blind-holdout-item-0007-127c4e3c",
+  "ItemKind": "historical-note",
+  "SourceKind": "archive-note",
+  "Layer": "context",
+  "Lifecycle": "Deprecated",
+  "ReviewStatus": "DeprecatedReviewed",
+  "ReplacementState": "superseded",
+  "TargetSection": "historical_context",
+  "SourceRefs": [
+    "blind-src-0007-48c3e513"
+  ],
+  "EvidenceRefs": [
+    "blind-ev-0007-b7511e5f"
+  ],
+  "Provenance": {
+    "RecordId": "blind-prov-1f6686563837861c",
+    "SourceFingerprint": "4a36f543e02103b92c79c896cb24e0ed1f4b8bdb58ff6edd6757804a04b80757",
+    "IngestionBatchId": "rdsv2-blind-holdout-v514",
+    "CreatedAt": "2026-06-19T00:00:00+00:00"
+  },
+  "SourceFingerprint": "4da8c85376aa3aba5d586864fa0eb9efb62212668846d0fbd6a25118d014e13c",
+  "CreatedAt": "2026-06-19T00:06:00+00:00",
+  "Relations": [
+    {
+      "RelationId": "rdsv2-blind-holdout-rel-0007",
+      "SourceItemId": "rdsv2-blind-holdout-item-0007-127c4e3c",
+      "TargetItemId": "rdsv2-blind-holdout-item-0008-ae47e62a",
+      "RelationType": "supports",
+      "SourceRefs": [
+        "blind-src-0007-48c3e513",
+        "blind-src-0008-42ad6b25"
+      ],
+      "EvidenceRefs": [
+        "blind-ev-0007-b7511e5f",
+        "blind-ev-0008-68b6d6e4"
+      ]
+    }
+  ],
+  "Tags": [
+    "archive",
+    "archive-note",
+    "blind-section-historical-context",
+    "blind-tag-historical-note"
+  ],
+  "Anchors": [
+    "blind-lifecycle-deprecated",
+    "blind-source-archive-note",
+    "kind-historical-note",
+    "lifecycle-deprecated"
+  ],
+  "Content": "Blind holdout historical-note from archive-note uses Deprecated review status for historical_context. Evidence blind-ev-0007-b7511e5f and source blind-src-0007-48c3e513 describe recoverable context without reused query wording.",
+  "Split": "blind-holdout",
+  "Metadata": {
+    "generatedBy": "source-aware-ranking-repair/blind-holdout/v1",
+    "useForRuntime": "false",
+    "sourceItemFingerprint": "2b112330ea0cf3832f2ab198c7c10dbe6f10b1e15c1601b5d23cdbd3cf84e2ee",
+    "templateSignature": "blind-v514-2"
+  }
+}
+{
+  "ItemId": "rdsv2-blind-holdout-item-0008-ae47e62a",
+  "ItemKind": "runbook",
+  "SourceKind": "operational-note",
+  "Layer": "context",
+  "Lifecycle": "Stable",
+  "ReviewStatus": "Approved",
+  "ReplacementState": "current",
+  "TargetSection": "normal_context",
+  "SourceRefs": [
+    "blind-src-0008-42ad6b25"
+  ],
+  "EvidenceRefs": [
+    "blind-ev-0008-68b6d6e4"
+  ],
+  "Provenance": {
+    "RecordId": "blind-prov-6eb2315875a661e4",
+    "SourceFingerprint": "73ea458eceb024ce7b246876c25169004e834df31515f8c52c4e647f577e60f2",
+    "IngestionBatchId": "rdsv2-blind-holdout-v514",
+    "CreatedAt": "2026-06-19T00:00:00+00:00"
+  },
+  "SourceFingerprint": "32c394c2d1cbbc8d52f1a8d98b853d8cc6eb37348533f6bee152256578dc43fe",
+  "CreatedAt": "2026-06-19T00:07:00+00:00",
+  "Relations": [
+    {
+      "RelationId": "rdsv2-blind-holdout-rel-0008",
+      "SourceItemId": "rdsv2-blind-holdout-item-0008-ae47e62a",
+      "TargetItemId": "rdsv2-blind-holdout-item-0009-85245bb8",
+      "RelationType": "contrasts",
+      "SourceRefs": [
+        "blind-src-0008-42ad6b25",
+        "blind-src-0009-3f799d2e"
+      ],
+      "EvidenceRefs": [
+        "blind-ev-0008-68b6d6e4",
+        "blind-ev-0009-97a47fb2"
+      ]
+    }
+  ],
+  "Tags": [
+    "blind-section-normal-context",
+    "blind-tag-runbook",
+    "holdout",
+    "kind-runbook"
+  ],
+  "Anchors": [
+    "blind-lifecycle-stable",
+    "blind-source-operational-note",
+    "kind-runbook",
+    "lifecycle-stable"
+  ],
+  "Content": "Blind holdout runbook from operational-note uses Stable review status for normal_context. Evidence blind-ev-0008-68b6d6e4 and source blind-src-0008-42ad6b25 describe recoverable context without reused query wording.",
+  "Split": "blind-holdout",
+  "Metadata": {
+    "generatedBy": "source-aware-ranking-repair/blind-holdout/v1",
+    "useForRuntime": "false",
+    "sourceItemFingerprint": "8efa708e4dd9b3dc6304d586fe320c23229d42f6e899bb9b9497935833c71a4e",
+    "templateSignature": "blind-v514-3"
+  }
+}
+{
+  "ItemId": "rdsv2-blind-holdout-item-0009-85245bb8",
+  "ItemKind": "runbook",
+  "SourceKind": "operational-note",
+  "Layer": "context",
+  "Lifecycle": "Stable",
+  "ReviewStatus": "Approved",
+  "ReplacementState": "current",
+  "TargetSection": "normal_context",
+  "SourceRefs": [
+    "blind-src-0009-3f799d2e"
+  ],
+  "EvidenceRefs": [
+    "blind-ev-0009-97a47fb2"
+  ],
+  "Provenance": {
+    "RecordId": "blind-prov-7d85f3124fb1edc0",
+    "SourceFingerprint": "706f1fac2731c27b28cf78e711cc75349a2af6aefa1840fc773cd910bcedd457",
+    "IngestionBatchId": "rdsv2-blind-holdout-v514",
+    "CreatedAt": "2026-06-19T00:00:00+00:00"
+  },
+  "SourceFingerprint": "03ad9860b18e4048079a7de87290a9ddc83c2c8bcb8effc8ca8aa603d1b2a5af",
+  "CreatedAt": "2026-06-19T00:08:00+00:00",
+  "Relations": [
+    {
+      "RelationId": "rdsv2-blind-holdout-rel-0009",
+      "SourceItemId": "rdsv2-blind-holdout-item-0009-85245bb8",
+      "TargetItemId": "rdsv2-blind-holdout-item-0010-cb773e12",
+      "RelationType": "supports",
+      "SourceRefs": [
+        "blind-src-0009-3f799d2e",
+        "blind-src-0010-d460cfe3"
+      ],
+      "EvidenceRefs": [
+        "blind-ev-0009-97a47fb2",
+        "blind-ev-0010-1ba212a3"
+      ]
+    }
+  ],
+  "Tags": [
+    "blind-section-normal-context",
+    "blind-tag-runbook",
+    "holdout",
+    "kind-runbook"
+  ],
+  "Anchors": [
+    "blind-lifecycle-stable",
+    "blind-source-operational-note",
+    "kind-runbook",
+    "lifecycle-stable"
+  ],
+  "Content": "Blind holdout runbook from operational-note uses Stable review status for normal_context. Evidence blind-ev-0009-97a47fb2 and source blind-src-0009-3f799d2e describe recoverable context without reused query wording.",
+  "Split": "blind-holdout",
+  "Metadata": {
+    "generatedBy": "source-aware-ranking-repair/blind-holdout/v1",
+    "useForRuntime": "false",
+    "sourceItemFingerprint": "e6dcd15bcc4124387476191b0ca752053be0a873747c96a0f3e746646fbe3bcd",
+    "templateSignature": "blind-v514-0"
+  }
+}
+{
+  "ItemId": "rdsv2-blind-holdout-item-0010-cb773e12",
+  "ItemKind": "policy",
+  "SourceKind": "governance-note",
+  "Layer": "context",
+  "Lifecycle": "Stable",
+  "ReviewStatus": "Approved",
+  "ReplacementState": "current",
+  "TargetSection": "normal_context",
+  "SourceRefs": [
+    "blind-src-0010-d460cfe3"
+  ],
+  "EvidenceRefs": [
+    "blind-ev-0010-1ba212a3"
+  ],
+  "Provenance": {
+    "RecordId": "blind-prov-9ffdddf925a23000",
+    "SourceFingerprint": "70b8aa02d29d9cc27b072384f17753410ac4422a426b9cc0f385a16ca74d36b4",
+    "IngestionBatchId": "rdsv2-blind-holdout-v514",
+    "CreatedAt": "2026-06-19T00:00:00+00:00"
+  },
+  "SourceFingerprint": "113af3eab818923e6b4ee2084c7a9e4e148175fbbdbe8cc588072ac09aa2a875",
+  "CreatedAt": "2026-06-19T00:09:00+00:00",
+  "Relations": [
+    {
+      "RelationId": "rdsv2-blind-holdout-rel-0010",
+      "SourceItemId": "rdsv2-blind-holdout-item-0010-cb773e12",
+      "TargetItemId": "rdsv2-blind-holdout-item-0011-03c11d9b",
+      "RelationType": "contrasts",
+      "SourceRefs": [
+        "blind-src-0010-d460cfe3",
+        "blind-src-0011-6ee7c070"
+      ],
+      "EvidenceRefs": [
+        "blind-ev-0010-1ba212a3",
+        "blind-ev-0011-b5f24294"
+      ]
+    }
+  ],
+  "Tags": [
+    "blind-section-normal-context",
+    "blind-tag-policy",
+    "evidence",
+    "governance-note"
+  ],
+  "Anchors": [
+    "blind-lifecycle-stable",
+    "blind-source-governance-note",
+    "kind-policy",
+    "lifecycle-stable"
+  ],
+  "Content": "Blind holdout policy from governance-note uses Stable review status for normal_context. Evidence blind-ev-0010-1ba212a3 and source blind-src-0010-d460cfe3 describe recoverable context without reused query wording.",
+  "Split": "blind-holdout",
+  "Metadata": {
+    "generatedBy": "source-aware-ranking-repair/blind-holdout/v1",
+    "useForRuntime": "false",
+    "sourceItemFingerprint": "b5ae56e8ae40dd36252ced403b4291d39be15cf7c705ac96cba5354cb6d239b3",
+    "templateSignature": "blind-v514-1"
+  }
+}
+{
+  "ItemId": "rdsv2-blind-holdout-item-0011-03c11d9b",
+  "ItemKind": "diagnostic",
+  "SourceKind": "operational-note",
+  "Layer": "context",
+  "Lifecycle": "Stable",
+  "ReviewStatus": "Approved",
+  "ReplacementState": "current",
+  "TargetSection": "normal_context",
+  "SourceRefs": [
+    "blind-src-0011-6ee7c070"
+  ],
+  "EvidenceRefs": [
+    "blind-ev-0011-b5f24294"
+  ],
+  "Provenance": {
+    "RecordId": "blind-prov-cb3505a2f629d3ac",
+    "SourceFingerprint": "142c821ce1b70a4a9599b4ae77d671cad1098ce64c6aeba82e156f93469a6738",
+    "IngestionBatchId": "rdsv2-blind-holdout-v514",
+    "CreatedAt": "2026-06-19T00:00:00+00:00"
+  },
+  "SourceFingerprint": "95d9ea48e1fe10af3b18a73c9539ddb409b75d5f9e76e00459ab683a43a86491",
+  "CreatedAt": "2026-06-19T00:10:00+00:00",
+  "Relations": [
+    {
+      "RelationId": "rdsv2-blind-holdout-rel-0011",
+      "SourceItemId": "rdsv2-blind-holdout-item-0011-03c11d9b",
+      "TargetItemId": "rdsv2-blind-holdout-item-0012-97c52ae0",
+      "RelationType": "supports",
+      "SourceRefs": [
+        "blind-src-0011-6ee7c070",
+        "blind-src-0012-4b950ff8"
+      ],
+      "EvidenceRefs": [
+        "blind-ev-0011-b5f24294",
+        "blind-ev-0012-5821a1d0"
+      ]
+    }
+  ],
+  "Tags": [
+    "blind-section-normal-context",
+    "blind-tag-diagnostic",
+    "kind-diagnostic",
+    "lease"
+  ],
+  "Anchors": [
+    "blind-lifecycle-stable",
+    "blind-source-operational-note",
+    "kind-diagnostic",
+    "lifecycle-stable"
+  ],
+  "Content": "Blind holdout diagnostic from operational-note uses Stable review status for normal_context. Evidence blind-ev-0011-b5f24294 and source blind-src-0011-6ee7c070 describe recoverable context without reused query wording.",
+  "Split": "blind-holdout",
+  "Metadata": {
+    "generatedBy": "source-aware-ranking-repair/blind-holdout/v1",
+    "useForRuntime": "false",
+    "sourceItemFingerprint": "e49cef56d1beb57cc7245403d2871778d7f20c441ff3871cf060823e4c8b5e23",
+    "templateSignature": "blind-v514-2"
+  }
+}
+{
+  "ItemId": "rdsv2-blind-holdout-item-0012-97c52ae0",
+  "ItemKind": "test-note",
+  "SourceKind": "evaluation-note",
+  "Layer": "context",
+  "Lifecycle": "Stable",
+  "ReviewStatus": "Approved",
+  "ReplacementState": "current",
+  "TargetSection": "normal_context",
+  "SourceRefs": [
+    "blind-src-0012-4b950ff8"
+  ],
+  "EvidenceRefs": [
+    "blind-ev-0012-5821a1d0"
+  ],
+  "Provenance": {
+    "RecordId": "blind-prov-a55ad76b914c4149",
+    "SourceFingerprint": "31b412029a545239819a3fffc92659953cbde6f60c5531fd7fc9ac70a5a9299d",
+    "IngestionBatchId": "rdsv2-blind-holdout-v514",
+    "CreatedAt": "2026-06-19T00:00:00+00:00"
+  },
+  "SourceFingerprint": "904763dbd2d8ece02e306e2b63183ae3aa01f6f49565d4766bd78f45cdfddd13",
+  "CreatedAt": "2026-06-19T00:11:00+00:00",
+  "Relations": [
+    {
+      "RelationId": "rdsv2-blind-holdout-rel-0012",
+      "SourceItemId": "rdsv2-blind-holdout-item-0012-97c52ae0",
+      "TargetItemId": "rdsv2-blind-holdout-item-0013-33b131f0",
+      "RelationType": "contrasts",
+      "SourceRefs": [
+        "blind-src-0012-4b950ff8",
+        "blind-src-0013-0c302b6e"
+      ],
+      "EvidenceRefs": [
+        "blind-ev-0012-5821a1d0",
+        "blind-ev-0013-8b9d74d8"
+      ]
+    }
+  ],
+  "Tags": [
+    "blind-section-normal-context",
+    "blind-tag-test-note",
+    "dev",
+    "evaluation-note"
+  ],
+  "Anchors": [
+    "blind-lifecycle-stable",
+    "blind-source-evaluation-note",
+    "kind-test-note",
+    "lifecycle-stable"
+  ],
+  "Content": "Blind holdout test-note from evaluation-note uses Stable review status for normal_context. Evidence blind-ev-0012-5821a1d0 and source blind-src-0012-4b950ff8 describe recoverable context without reused query wording.",
+  "Split": "blind-holdout",
+  "Metadata": {
+    "generatedBy": "source-aware-ranking-repair/blind-holdout/v1",
+    "useForRuntime": "false",
+    "sourceItemFingerprint": "e9c46865aec5fd350b07165744a930a80a7bf2a082da44ffdef950cb4e9af409",
+    "templateSignature": "blind-v514-3"
+  }
+}
+{
+  "ItemId": "rdsv2-blind-holdout-item-0013-33b131f0",
+  "ItemKind": "diagnostic",
+  "SourceKind": "operational-note",
+  "Layer": "context",
+  "Lifecycle": "Current",
+  "ReviewStatus": "Approved",
+  "ReplacementState": "current",
+  "TargetSection": "normal_context",
+  "SourceRefs": [
+    "blind-src-0013-0c302b6e"
+  ],
+  "EvidenceRefs": [
+    "blind-ev-0013-8b9d74d8"
+  ],
+  "Provenance": {
+    "RecordId": "blind-prov-57689118500e1644",
+    "SourceFingerprint": "c1cc624c29431d5b241fcdf762231a10297d011751655fb6d1dbddb594ab9b18",
+    "IngestionBatchId": "rdsv2-blind-holdout-v514",
+    "CreatedAt": "2026-06-19T00:00:00+00:00"
+  },
+  "SourceFingerprint": "f8d7deeba2a9b3efb255e09af235851aaac5d9460d5bb534ded9e6b35e550c94",
+  "CreatedAt": "2026-06-19T00:12:00+00:00",
+  "Relations": [
+    {
+      "RelationId": "rdsv2-blind-holdout-rel-0013",
+      "SourceItemId": "rdsv2-blind-holdout-item-0013-33b131f0",
+      "TargetItemId": "rdsv2-blind-holdout-item-0014-44a253a2",
+      "RelationType": "supports",
+      "SourceRefs": [
+        "blind-src-0013-0c302b6e",
+        "blind-src-0014-8dc3603d"
+      ],
+      "EvidenceRefs": [
+        "blind-ev-0013-8b9d74d8",
+        "blind-ev-0014-c61f174e"
+      ]
+    }
+  ],
+  "Tags": [
+    "blind-section-normal-context",
+    "blind-tag-diagnostic",
+    "holdout",
+    "kind-diagnostic"
+  ],
+  "Anchors": [
+    "blind-lifecycle-current",
+    "blind-source-operational-note",
+    "kind-diagnostic",
+    "lifecycle-current"
+  ],
+  "Content": "Blind holdout diagnostic from operational-note uses Current review status for normal_context. Evidence blind-ev-0013-8b9d74d8 and source blind-src-0013-0c302b6e describe recoverable context without reused query wording.",
+  "Split": "blind-holdout",
+  "Metadata": {
+    "generatedBy": "source-aware-ranking-repair/blind-holdout/v1",
+    "useForRuntime": "false",
+    "sourceItemFingerprint": "ff1f52eeaa7ff045f2119e3bd38ae98e652972f27582c636bf530f146e1098c0",
+    "templateSignature": "blind-v514-0"
+  }
+}
+{
+  "ItemId": "rdsv2-blind-holdout-item-0014-44a253a2",
+  "ItemKind": "diagnostic",
+  "SourceKind": "operational-note",
+  "Layer": "context",
+  "Lifecycle": "Stable",
+  "ReviewStatus": "Approved",
+  "ReplacementState": "current",
+  "TargetSection": "normal_context",
+  "SourceRefs": [
+    "blind-src-0014-8dc3603d"
+  ],
+  "EvidenceRefs": [
+    "blind-ev-0014-c61f174e"
+  ],
+  "Provenance": {
+    "RecordId": "blind-prov-3e2ea9ede526f322",
+    "SourceFingerprint": "927bd185edb98da9117e61e4118d6df37fb6fbc37440e489f8517de1a99e89a7",
+    "IngestionBatchId": "rdsv2-blind-holdout-v514",
+    "CreatedAt": "2026-06-19T00:00:00+00:00"
+  },
+  "SourceFingerprint": "f34913c87daf3e0b3263e1c9e8c6a385f2f493a25b6ae447924e11ff815af3c0",
+  "CreatedAt": "2026-06-19T00:13:00+00:00",
+  "Relations": [
+    {
+      "RelationId": "rdsv2-blind-holdout-rel-0014",
+      "SourceItemId": "rdsv2-blind-holdout-item-0014-44a253a2",
+      "TargetItemId": "rdsv2-blind-holdout-item-0015-4205d164",
+      "RelationType": "contrasts",
+      "SourceRefs": [
+        "blind-src-0014-8dc3603d",
+        "blind-src-0015-c0a534d6"
+      ],
+      "EvidenceRefs": [
+        "blind-ev-0014-c61f174e",
+        "blind-ev-0015-cf9442e1"
+      ]
+    }
+  ],
+  "Tags": [
+    "blind-section-normal-context",
+    "blind-tag-diagnostic",
+    "kind-diagnostic",
+    "lease"
+  ],
+  "Anchors": [
+    "blind-lifecycle-stable",
+    "blind-source-operational-note",
+    "kind-diagnostic",
+    "lifecycle-stable"
+  ],
+  "Content": "Blind holdout diagnostic from operational-note uses Stable review status for normal_context. Evidence blind-ev-0014-c61f174e and source blind-src-0014-8dc3603d describe recoverable context without reused query wording.",
+  "Split": "blind-holdout",
+  "Metadata": {
+    "generatedBy": "source-aware-ranking-repair/blind-holdout/v1",
+    "useForRuntime": "false",
+    "sourceItemFingerprint": "82dd189927e80cbcf8072101f8741ea9f4ad8a42672ed0e69df8773f7c83ccd8",
+    "templateSignature": "blind-v514-1"
+  }
+}
+{
+  "ItemId": "rdsv2-blind-holdout-item-0015-4205d164",
+  "ItemKind": "test-note",
+  "SourceKind": "evaluation-note",
+  "Layer": "context",
+  "Lifecycle": "Current",
+  "ReviewStatus": "Approved",
+  "ReplacementState": "current",
+  "TargetSection": "normal_context",
+  "SourceRefs": [
+    "blind-src-0015-c0a534d6"
+  ],
+  "EvidenceRefs": [
+    "blind-ev-0015-cf9442e1"
+  ],
+  "Provenance": {
+    "RecordId": "blind-prov-6690ada233408e9a",
+    "SourceFingerprint": "3b9065c0abedae5f091b92938d893409266b328b227819fca9cef6b1d1224047",
+    "IngestionBatchId": "rdsv2-blind-holdout-v514",
+    "CreatedAt": "2026-06-19T00:00:00+00:00"
+  },
+  "SourceFingerprint": "a8d9a2a393d108ff54e9fd124742be206caca65b525e44338707a1bff122d2b8",
+  "CreatedAt": "2026-06-19T00:14:00+00:00",
+  "Relations": [
+    {
+      "RelationId": "rdsv2-blind-holdout-rel-0015",
+      "SourceItemId": "rdsv2-blind-holdout-item-0015-4205d164",
+      "TargetItemId": "rdsv2-blind-holdout-item-0016-321d9711",
+      "RelationType": "supports",
+      "SourceRefs": [
+        "blind-src-0015-c0a534d6",
+        "blind-src-0016-2eb125ff"
+      ],
+      "EvidenceRefs": [
+        "blind-ev-0015-cf9442e1",
+        "blind-ev-0016-718ec5ae"
+      ]
+    }
+  ],
+  "Tags": [
+    "blind-section-normal-context",
+    "blind-tag-test-note",
+    "dev",
+    "evaluation-note"
+  ],
+  "Anchors": [
+    "blind-lifecycle-current",
+    "blind-source-evaluation-note",
+    "kind-test-note",
+    "lifecycle-current"
+  ],
+  "Content": "Blind holdout test-note from evaluation-note uses Current review status for normal_context. Evidence blind-ev-0015-cf9442e1 and source blind-src-0015-c0a534d6 describe recoverable context without reused query wording.",
+  "Split": "blind-holdout",
+  "Metadata": {
+    "generatedBy": "source-aware-ranking-repair/blind-holdout/v1",
+    "useForRuntime": "false",
+    "sourceItemFingerprint": "802969a39684515598beafa6e5c25f6c0b0d1d75bca885ba92ed4d2dc981e643",
+    "templateSignature": "blind-v514-2"
+  }
+}
+{
+  "ItemId": "rdsv2-blind-holdout-item-0016-321d9711",
+  "ItemKind": "policy",
+  "SourceKind": "governance-note",
+  "Layer": "context",
+  "Lifecycle": "Stable",
+  "ReviewStatus": "Approved",
+  "ReplacementState": "current",
+  "TargetSection": "normal_context",
+  "SourceRefs": [
+    "blind-src-0016-2eb125ff"
+  ],
+  "EvidenceRefs": [
+    "blind-ev-0016-718ec5ae"
+  ],
+  "Provenance": {
+    "RecordId": "blind-prov-39b8fc155aaf7c7f",
+    "SourceFingerprint": "0d79f5d4ad64ed90aa3ac36da7cf1b2fd569f6282db8f4acad8a0cfe84cb1d97",
+    "IngestionBatchId": "rdsv2-blind-holdout-v514",
+    "CreatedAt": "2026-06-19T00:00:00+00:00"
+  },
+  "SourceFingerprint": "3c47553befe904b8f3c8336a9d0f4e17d153f5d4f9bc1a52b510ddd2c546256b",
+  "CreatedAt": "2026-06-19T00:15:00+00:00",
+  "Relations": [
+    {
+      "RelationId": "rdsv2-blind-holdout-rel-0016",
+      "SourceItemId": "rdsv2-blind-holdout-item-0016-321d9711",
+      "TargetItemId": "rdsv2-blind-holdout-item-0017-e4e2e38e",
+      "RelationType": "contrasts",
+      "SourceRefs": [
+        "blind-src-0016-2eb125ff",
+        "blind-src-0017-ca7b14fe"
+      ],
+      "EvidenceRefs": [
+        "blind-ev-0016-718ec5ae",
+        "blind-ev-0017-32b75ccd"
+      ]
+    }
+  ],
+  "Tags": [
+    "blind-section-normal-context",
+    "blind-tag-policy",
+    "evidence",
+    "governance-note"
+  ],
+  "Anchors": [
+    "blind-lifecycle-stable",
+    "blind-source-governance-note",
+    "kind-policy",
+    "lifecycle-stable"
+  ],
+  "Content": "Blind holdout policy from governance-note uses Stable review status for normal_context. Evidence blind-ev-0016-718ec5ae and source blind-src-0016-2eb125ff describe recoverable context without reused query wording.",
+  "Split": "blind-holdout",
+  "Metadata": {
+    "generatedBy": "source-aware-ranking-repair/blind-holdout/v1",
+    "useForRuntime": "false",
+    "sourceItemFingerprint": "76038fa3dfb7be3f669548dd0b95ee35452558e57803e8ce2dc6ca9bf59c0d7c",
+    "templateSignature": "blind-v514-3"
+  }
+}
+{
+  "ItemId": "rdsv2-blind-holdout-item-0017-e4e2e38e",
+  "ItemKind": "diagnostic",
+  "SourceKind": "operational-note",
+  "Layer": "context",
+  "Lifecycle": "Stable",
+  "ReviewStatus": "Approved",
+  "ReplacementState": "current",
+  "TargetSection": "normal_context",
+  "SourceRefs": [
+    "blind-src-0017-ca7b14fe"
+  ],
+  "EvidenceRefs": [
+    "blind-ev-0017-32b75ccd"
+  ],
+  "Provenance": {
+    "RecordId": "blind-prov-dfd550ce08d3d321",
+    "SourceFingerprint": "5ba15afec3ff610ce16d742f2c2f304bffd431bc9aa0556b0f175cfed0d4f2b9",
+    "IngestionBatchId": "rdsv2-blind-holdout-v514",
+    "CreatedAt": "2026-06-19T00:00:00+00:00"
+  },
+  "SourceFingerprint": "8d2b1f79bea79634666d2793ff7f80a91010b5890932ea9977198a058b4e3f1e",
+  "CreatedAt": "2026-06-19T00:16:00+00:00",
+  "Relations": [
+    {
+      "RelationId": "rdsv2-blind-holdout-rel-0017",
+      "SourceItemId": "rdsv2-blind-holdout-item-0017-e4e2e38e",
+      "TargetItemId": "rdsv2-blind-holdout-item-0018-973aad61",
+      "RelationType": "supports",
+      "SourceRefs": [
+        "blind-src-0017-ca7b14fe",
+        "blind-src-0018-aed3943c"
+      ],
+      "EvidenceRefs": [
+        "blind-ev-0017-32b75ccd",
+        "blind-ev-0018-88bd117d"
+      ]
+    }
+  ],
+  "Tags": [
+    "blind-section-normal-context",
+    "blind-tag-diagnostic",
+    "kind-diagnostic",
+    "lease"
+  ],
+  "Anchors": [
+    "blind-lifecycle-stable",
+    "blind-source-operational-note",
+    "kind-diagnostic",
+    "lifecycle-stable"
+  ],
+  "Content": "Blind holdout diagnostic from operational-note uses Stable review status for normal_context. Evidence blind-ev-0017-32b75ccd and source blind-src-0017-ca7b14fe describe recoverable context without reused query wording.",
+  "Split": "blind-holdout",
+  "Metadata": {
+    "generatedBy": "source-aware-ranking-repair/blind-holdout/v1",
+    "useForRuntime": "false",
+    "sourceItemFingerprint": "2535d4683dcd908889f484eae46e8b2bc4ebd5f3e86e2ac330a2a76bdb31b687",
+    "templateSignature": "blind-v514-0"
+  }
+}
+{
+  "ItemId": "rdsv2-blind-holdout-item-0018-973aad61",
+  "ItemKind": "diagnostic",
+  "SourceKind": "operational-note",
+  "Layer": "context",
+  "Lifecycle": "Stable",
+  "ReviewStatus": "Approved",
+  "ReplacementState": "current",
+  "TargetSection": "normal_context",
+  "SourceRefs": [
+    "blind-src-0018-aed3943c"
+  ],
+  "EvidenceRefs": [
+    "blind-ev-0018-88bd117d"
+  ],
+  "Provenance": {
+    "RecordId": "blind-prov-8f2d6e55b07a29ac",
+    "SourceFingerprint": "d9627885b6b3370031f172bd943683f3f2d62f1dd5524b511bea122f0ba1c49f",
+    "IngestionBatchId": "rdsv2-blind-holdout-v514",
+    "CreatedAt": "2026-06-19T00:00:00+00:00"
+  },
+  "SourceFingerprint": "9a73ef5ffb4ec500a57da46d4b79fcf34019ffc7a41645331a11eebea23e2147",
+  "CreatedAt": "2026-06-19T00:17:00+00:00",
+  "Relations": [
+    {
+      "RelationId": "rdsv2-blind-holdout-rel-0018",
+      "SourceItemId": "rdsv2-blind-holdout-item-0018-973aad61",
+      "TargetItemId": "rdsv2-blind-holdout-item-0019-091e458d",
+      "RelationType": "contrasts",
+      "SourceRefs": [
+        "blind-src-0018-aed3943c",
+        "blind-src-0019-737a673e"
+      ],
+      "EvidenceRefs": [
+        "blind-ev-0018-88bd117d",
+        "blind-ev-0019-df4bdfef"
+      ]
+    }
+  ],
+  "Tags": [
+    "blind-section-normal-context",
+    "blind-tag-diagnostic",
+    "kind-diagnostic",
+    "lease"
+  ],
+  "Anchors": [
+    "blind-lifecycle-stable",
+    "blind-source-operational-note",
+    "kind-diagnostic",
+    "lifecycle-stable"
+  ],
+  "Content": "Blind holdout diagnostic from operational-note uses Stable review status for normal_context. Evidence blind-ev-0018-88bd117d and source blind-src-0018-aed3943c describe recoverable context without reused query wording.",
+  "Split": "blind-holdout",
+  "Metadata": {
+    "generatedBy": "source-aware-ranking-repair/blind-holdout/v1",
+    "useForRuntime": "false",
+    "sourceItemFingerprint": "f49694f0ce7d2e4613baa821c0f54a14cb8ede2a989ecb2a63a1b6b26af3d407",
+    "templateSignature": "blind-v514-1"
+  }
+}
+{
+  "ItemId": "rdsv2-blind-holdout-item-0019-091e458d",
+  "ItemKind": "diagnostic",
+  "SourceKind": "operational-note",
+  "Layer": "context",
+  "Lifecycle": "Current",
+  "ReviewStatus": "Approved",
+  "ReplacementState": "current",
+  "TargetSection": "normal_context",
+  "SourceRefs": [
+    "blind-src-0019-737a673e"
+  ],
+  "EvidenceRefs": [
+    "blind-ev-0019-df4bdfef"
+  ],
+  "Provenance": {
+    "RecordId": "blind-prov-2ca30e6fe5194e1a",
+    "SourceFingerprint": "af0bd3ea8fa83ce5bee767b97f14a426b761987502d41f43310fac27e2dce0c4",
+    "IngestionBatchId": "rdsv2-blind-holdout-v514",
+    "CreatedAt": "2026-06-19T00:00:00+00:00"
+  },
+  "SourceFingerprint": "8933042fb278ed854d102cbad19719810b07ace4a12c5e524f1d7e16dd6b233b",
+  "CreatedAt": "2026-06-19T00:18:00+00:00",
+  "Relations": [
+    {
+      "RelationId": "rdsv2-blind-holdout-rel-0019",
+      "SourceItemId": "rdsv2-blind-holdout-item-0019-091e458d",
+      "TargetItemId": "rdsv2-blind-holdout-item-0020-82957ede",
+      "RelationType": "supports",
+      "SourceRefs": [
+        "blind-src-0019-737a673e",
+        "blind-src-0020-750e3095"
+      ],
+      "EvidenceRefs": [
+        "blind-ev-0019-df4bdfef",
+        "blind-ev-0020-75f96096"
+      ]
+    }
+  ],
+  "Tags": [
+    "blind-section-normal-context",
+    "blind-tag-diagnostic",
+    "kind-diagnostic",
+    "lease"
+  ],
+  "Anchors": [
+    "blind-lifecycle-current",
+    "blind-source-operational-note",
+    "kind-diagnostic",
+    "lifecycle-current"
+  ],
+  "Content": "Blind holdout diagnostic from operational-note uses Current review status for normal_context. Evidence blind-ev-0019-df4bdfef and source blind-src-0019-737a673e describe recoverable context without reused query wording.",
+  "Split": "blind-holdout",
+  "Metadata": {
+    "generatedBy": "source-aware-ranking-repair/blind-holdout/v1",
+    "useForRuntime": "false",
+    "sourceItemFingerprint": "8daa75346ed659bc5b5daa74b3c5928ada76062dd1a4e209e6541521312c704b",
+    "templateSignature": "blind-v514-2"
+  }
+}
+{
+  "ItemId": "rdsv2-blind-holdout-item-0020-82957ede",
+  "ItemKind": "test-note",
+  "SourceKind": "evaluation-note",
+  "Layer": "context",
+  "Lifecycle": "Stable",
+  "ReviewStatus": "Approved",
+  "ReplacementState": "current",
+  "TargetSection": "normal_context",
+  "SourceRefs": [
+    "blind-src-0020-750e3095"
+  ],
+  "EvidenceRefs": [
+    "blind-ev-0020-75f96096"
+  ],
+  "Provenance": {
+    "RecordId": "blind-prov-e82ab2a3bc49456b",
+    "SourceFingerprint": "19c1ae940584fda5936286872ddab6bb4843c29507496c6aedec3dd9623f24f1",
+    "IngestionBatchId": "rdsv2-blind-holdout-v514",
+    "CreatedAt": "2026-06-19T00:00:00+00:00"
+  },
+  "SourceFingerprint": "c9dac392623fd78cbf398384a6b8efb1db82e3d9e366693605d2056c72ba5bb9",
+  "CreatedAt": "2026-06-19T00:19:00+00:00",
+  "Relations": [
+    {
+      "RelationId": "rdsv2-blind-holdout-rel-0020",
+      "SourceItemId": "rdsv2-blind-holdout-item-0020-82957ede",
+      "TargetItemId": "rdsv2-blind-holdout-item-0021-5fa1a1b1",
+      "RelationType": "contrasts",
+      "SourceRefs": [
+        "blind-src-0020-750e3095",
+        "blind-src-0021-239912e3"
+      ],
+      "EvidenceRefs": [
+        "blind-ev-0020-75f96096",
+        "blind-ev-0021-a3c7bc01"
+      ]
+    }
+  ],
+  "Tags": [
+    "blind-section-normal-context",
+    "blind-tag-test-note",
+    "dev",
+    "evaluation-note"
+  ],
+  "Anchors": [
+    "blind-lifecycle-stable",
+    "blind-source-evaluation-note",
+    "kind-test-note",
+    "lifecycle-stable"
+  ],
+  "Content": "Blind holdout test-note from evaluation-note uses Stable review status for normal_context. Evidence blind-ev-0020-75f96096 and source blind-src-0020-750e3095 describe recoverable context without reused query wording.",
+  "Split": "blind-holdout",
+  "Metadata": {
+    "generatedBy": "source-aware-ranking-repair/blind-holdout/v1",
+    "useForRuntime": "false",
+    "sourceItemFingerprint": "0cf154ed0db68dde1b869420895b5d652f835edb51cc7a6085f13dea6628d409",
+    "templateSignature": "blind-v514-3"
+  }
+}
+{
+  "ItemId": "rdsv2-blind-holdout-item-0021-5fa1a1b1",
+  "ItemKind": "routing-note",
+  "SourceKind": "governance-note",
+  "Layer": "context",
+  "Lifecycle": "Stable",
+  "ReviewStatus": "Approved",
+  "ReplacementState": "current",
+  "TargetSection": "normal_context",
+  "SourceRefs": [
+    "blind-src-0021-239912e3"
+  ],
+  "EvidenceRefs": [
+    "blind-ev-0021-a3c7bc01"
+  ],
+  "Provenance": {
+    "RecordId": "blind-prov-b517ed4a0d6a80f7",
+    "SourceFingerprint": "8e887d7e59803e02476751c4011ea0d9eae186c3252b8d99fdf75c08a80a5716",
+    "IngestionBatchId": "rdsv2-blind-holdout-v514",
+    "CreatedAt": "2026-06-19T00:00:00+00:00"
+  },
+  "SourceFingerprint": "7d7a6aea6cf079898735d3916883eeaaf97b867f5f6400b29e7f9c890ce8c351",
+  "CreatedAt": "2026-06-19T00:20:00+00:00",
+  "Relations": [
+    {
+      "RelationId": "rdsv2-blind-holdout-rel-0021",
+      "SourceItemId": "rdsv2-blind-holdout-item-0021-5fa1a1b1",
+      "TargetItemId": "rdsv2-blind-holdout-item-0022-a4820849",
+      "RelationType": "supports",
+      "SourceRefs": [
+        "blind-src-0021-239912e3",
+        "blind-src-0022-cbed3389"
+      ],
+      "EvidenceRefs": [
+        "blind-ev-0021-a3c7bc01",
+        "blind-ev-0022-6b17e73c"
+      ]
+    }
+  ],
+  "Tags": [
+    "blind-section-normal-context",
+    "blind-tag-routing-note",
+    "dev",
+    "governance-note"
+  ],
+  "Anchors": [
+    "blind-lifecycle-stable",
+    "blind-source-governance-note",
+    "kind-routing-note",
+    "lifecycle-stable"
+  ],
+  "Content": "Blind holdout routing-note from governance-note uses Stable review status for normal_context. Evidence blind-ev-0021-a3c7bc01 and source blind-src-0021-239912e3 describe recoverable context without reused query wording.",
+  "Split": "blind-holdout",
+  "Metadata": {
+    "generatedBy": "source-aware-ranking-repair/blind-holdout/v1",
+    "useForRuntime": "false",
+    "sourceItemFingerprint": "45c3579c819b714a350fd7578bb4fbe098a8aee75f1e0ac6443ab3ee6b6ee109",
+    "templateSignature": "blind-v514-0"
+  }
+}
+{
+  "ItemId": "rdsv2-blind-holdout-item-0022-a4820849",
+  "ItemKind": "diagnostic",
+  "SourceKind": "evaluation-note",
+  "Layer": "context",
+  "Lifecycle": "Stable",
+  "ReviewStatus": "Approved",
+  "ReplacementState": "current",
+  "TargetSection": "normal_context",
+  "SourceRefs": [
+    "blind-src-0022-cbed3389"
+  ],
+  "EvidenceRefs": [
+    "blind-ev-0022-6b17e73c"
+  ],
+  "Provenance": {
+    "RecordId": "blind-prov-853de73426f52039",
+    "SourceFingerprint": "574a8fb69c7e3ec0f5061315ca49917d19228ecbde2c6397cc8c989af714e567",
+    "IngestionBatchId": "rdsv2-blind-holdout-v514",
+    "CreatedAt": "2026-06-19T00:00:00+00:00"
+  },
+  "SourceFingerprint": "39d0efbff2dbed4dec50a69de4d8137436c16dc5fe22cc0857e63d07abe7937a",
+  "CreatedAt": "2026-06-19T00:21:00+00:00",
+  "Relations": [
+    {
+      "RelationId": "rdsv2-blind-holdout-rel-0022",
+      "SourceItemId": "rdsv2-blind-holdout-item-0022-a4820849",
+      "TargetItemId": "rdsv2-blind-holdout-item-0023-a247624f",
+      "RelationType": "contrasts",
+      "SourceRefs": [
+        "blind-src-0022-cbed3389",
+        "blind-src-0023-8599f0e2"
+      ],
+      "EvidenceRefs": [
+        "blind-ev-0022-6b17e73c",
+        "blind-ev-0023-d3a472ff"
+      ]
+    }
+  ],
+  "Tags": [
+    "blind-section-normal-context",
+    "blind-tag-diagnostic",
+    "duplicate",
+    "evaluation-note"
+  ],
+  "Anchors": [
+    "blind-lifecycle-stable",
+    "blind-source-evaluation-note",
+    "kind-diagnostic",
+    "lifecycle-stable"
+  ],
+  "Content": "Blind holdout diagnostic from evaluation-note uses Stable review status for normal_context. Evidence blind-ev-0022-6b17e73c and source blind-src-0022-cbed3389 describe recoverable context without reused query wording.",
+  "Split": "blind-holdout",
+  "Metadata": {
+    "generatedBy": "source-aware-ranking-repair/blind-holdout/v1",
+    "useForRuntime": "false",
+    "sourceItemFingerprint": "0426ce8475d67001ea8dbbaf0984cc11a0f7fc472fff778f0d06232523bce1ae",
+    "templateSignature": "blind-v514-1"
+  }
+}
+{
+  "ItemId": "rdsv2-blind-holdout-item-0023-a247624f",
+  "ItemKind": "policy",
+  "SourceKind": "engineering-note",
+  "Layer": "context",
+  "Lifecycle": "Stable",
+  "ReviewStatus": "Approved",
+  "ReplacementState": "current",
+  "TargetSection": "normal_context",
+  "SourceRefs": [
+    "blind-src-0023-8599f0e2"
+  ],
+  "EvidenceRefs": [
+    "blind-ev-0023-d3a472ff"
+  ],
+  "Provenance": {
+    "RecordId": "blind-prov-ef90fc52020f4aab",
+    "SourceFingerprint": "021c91f6566d3175bc3a21db31f835b42004e287bff362978f06e1e9a4cc7c86",
+    "IngestionBatchId": "rdsv2-blind-holdout-v514",
+    "CreatedAt": "2026-06-19T00:00:00+00:00"
+  },
+  "SourceFingerprint": "da8f4b125baa0c640fdd19eb3fda64388c9a38ca3dfd0f568d5362af42bf6275",
+  "CreatedAt": "2026-06-19T00:22:00+00:00",
+  "Relations": [
+    {
+      "RelationId": "rdsv2-blind-holdout-rel-0023",
+      "SourceItemId": "rdsv2-blind-holdout-item-0023-a247624f",
+      "TargetItemId": "rdsv2-blind-holdout-item-0024-ccf1a517",
+      "RelationType": "supports",
+      "SourceRefs": [
+        "blind-src-0023-8599f0e2",
+        "blind-src-0024-616dec09"
+      ],
+      "EvidenceRefs": [
+        "blind-ev-0023-d3a472ff",
+        "blind-ev-0024-cb013e23"
+      ]
+    }
+  ],
+  "Tags": [
+    "blind-section-normal-context",
+    "blind-tag-policy",
+    "engineering-note",
+    "kind-policy"
+  ],
+  "Anchors": [
+    "blind-lifecycle-stable",
+    "blind-source-engineering-note",
+    "kind-policy",
+    "lifecycle-stable"
+  ],
+  "Content": "Blind holdout policy from engineering-note uses Stable review status for normal_context. Evidence blind-ev-0023-d3a472ff and source blind-src-0023-8599f0e2 describe recoverable context without reused query wording.",
+  "Split": "blind-holdout",
+  "Metadata": {
+    "generatedBy": "source-aware-ranking-repair/blind-holdout/v1",
+    "useForRuntime": "false",
+    "sourceItemFingerprint": "5904f401fa6dc200ec604117ed46ca823e3b277b74609c8571e82b54425fbd94",
+    "templateSignature": "blind-v514-2"
+  }
+}
+{
+  "ItemId": "rdsv2-blind-holdout-item-0024-ccf1a517",
+  "ItemKind": "historical-note",
+  "SourceKind": "archive-note",
+  "Layer": "context",
+  "Lifecycle": "Deprecated",
+  "ReviewStatus": "DeprecatedReviewed",
+  "ReplacementState": "superseded",
+  "TargetSection": "historical_context",
+  "SourceRefs": [
+    "blind-src-0024-616dec09"
+  ],
+  "EvidenceRefs": [
+    "blind-ev-0024-cb013e23"
+  ],
+  "Provenance": {
+    "RecordId": "blind-prov-ba44ac5d3120e4b0",
+    "SourceFingerprint": "9d540dbcde71ff7dd41202722f95db046740e68341e2e567928637d0638a2904",
+    "IngestionBatchId": "rdsv2-blind-holdout-v514",
+    "CreatedAt": "2026-06-19T00:00:00+00:00"
+  },
+  "SourceFingerprint": "91919ca99d576e2ba20dc882bac7aa8764c687bf62638b05f1cc3d6024aff994",
+  "CreatedAt": "2026-06-19T00:23:00+00:00",
+  "Relations": [
+    {
+      "RelationId": "rdsv2-blind-holdout-rel-0024",
+      "SourceItemId": "rdsv2-blind-holdout-item-0024-ccf1a517",
+      "TargetItemId": "rdsv2-blind-holdout-item-0001-2b86d543",
+      "RelationType": "contrasts",
+      "SourceRefs": [
+        "blind-src-0024-616dec09",
+        "blind-src-0001-94868a74"
+      ],
+      "EvidenceRefs": [
+        "blind-ev-0024-cb013e23",
+        "blind-ev-0001-9eeccfd0"
+      ]
+    }
+  ],
+  "Tags": [
+    "archive",
+    "archive-note",
+    "blind-section-historical-context",
+    "blind-tag-historical-note"
+  ],
+  "Anchors": [
+    "blind-lifecycle-deprecated",
+    "blind-source-archive-note",
+    "kind-historical-note",
+    "lifecycle-deprecated"
+  ],
+  "Content": "Blind holdout historical-note from archive-note uses Deprecated review status for historical_context. Evidence blind-ev-0024-cb013e23 and source blind-src-0024-616dec09 describe recoverable context without reused query wording.",
+  "Split": "blind-holdout",
+  "Metadata": {
+    "generatedBy": "source-aware-ranking-repair/blind-holdout/v1",
+    "useForRuntime": "false",
+    "sourceItemFingerprint": "1f8c0aa9e5d373b457b58e4b1c21c00431410b2764216c882abd92690d84408c",
+    "templateSignature": "blind-v514-3"
+  }
+}

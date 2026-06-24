@@ -1,12 +1,13 @@
 using ContextCore.Abstractions;
+using ContextCore.Abstractions.Models;
 
-namespace ContextCore.Embedding;
+namespace ContextCore.Embedding.Services;
 
 /// <summary>基于 contentHash 的内存 embedding 缓存。</summary>
 public sealed class EmbeddingCacheService
 {
     private readonly Dictionary<string, EmbeddingVector> _vectors = new(StringComparer.OrdinalIgnoreCase);
-    private readonly object _gate = new();
+    private readonly Lock _gate = new();
 
     public int Count
     {

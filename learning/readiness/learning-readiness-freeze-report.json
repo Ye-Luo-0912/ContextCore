@@ -1,0 +1,572 @@
+{
+  "operationId": "learning-readiness-freeze-c1da3bccc83c43ccb4a3ee0d674c04bf",
+  "generatedAt": "2026-06-17T07:01:08.1956223+00:00",
+  "policyVersion": "learning-readiness-freeze-s0/v1",
+  "capabilities": [
+    {
+      "capabilityId": "RelationGovernance",
+      "currentPhase": "DB2.F",
+      "status": "ReadyForLimitedScopeExpansion",
+      "recommendation": "ReadyForLimitedScopeExpansion",
+      "gatePassed": true,
+      "blockedReasons": [],
+      "allowedRuntimeModes": [
+        "Off",
+        "FileSystemPrimary",
+        "GuardedPostgresPrimary:AllowlistedScopes:FallbackToFileSystem:ComparisonTrace"
+      ],
+      "forbiddenRuntimeModes": [
+        "DefaultOn",
+        "GlobalDefaultOn",
+        "GuardedPostgresPrimary:Global",
+        "GuardedPostgresPrimary:FallbackDisabled",
+        "GuardedPostgresPrimary:ComparisonTraceDisabled",
+        "HistoricalMigrationAsSwitchPrerequisite"
+      ],
+      "lastEvalReportPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\storage\\postgres\\postgres-relation-multi-normal-scope-quality-report.json",
+      "lastUpdatedAt": "2026-06-17T07:01:07.8504667+00:00"
+    },
+    {
+      "capabilityId": "JobQueuePostgres",
+      "currentPhase": "DB4.F",
+      "status": "ReadyForScopedWorkerMode",
+      "recommendation": "ReadyForScopedWorkerMode",
+      "gatePassed": true,
+      "blockedReasons": [],
+      "allowedRuntimeModes": [
+        "Off",
+        "ExistingProvider",
+        "GuardedPostgresPrimary:ExplicitAllowlistedWorkerScopes:LeaseHeartbeatQualityGate:RetryDeadLetterQualityGate"
+      ],
+      "forbiddenRuntimeModes": [
+        "DefaultOn",
+        "GlobalWorkerProviderSwitch",
+        "ProductionWorkerLoopSwitchWithoutGate",
+        "GuardedPostgresPrimary:Global",
+        "GuardedPostgresPrimary:MissingScopedAllowlist",
+        "GuardedPostgresPrimary:MissingLeaseQualityGate",
+        "GuardedPostgresPrimary:MissingRetryDeadLetterQualityGate"
+      ],
+      "lastEvalReportPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\storage\\postgres\\postgres-job-queue-freeze-gate.json",
+      "lastUpdatedAt": "2026-06-14T12:06:51.2640104+00:00"
+    },
+    {
+      "capabilityId": "VectorPostgresProvider",
+      "currentPhase": "DB5.F",
+      "status": "ReadyForPreviewShadowStorage",
+      "recommendation": "ReadyForPreviewShadowStorage",
+      "gatePassed": true,
+      "blockedReasons": [],
+      "allowedRuntimeModes": [
+        "Off",
+        "PreviewOnly",
+        "Shadow",
+        "PreviewShadowEvalOnly"
+      ],
+      "forbiddenRuntimeModes": [
+        "DefaultOn",
+        "ApplyGuarded",
+        "RuntimeShadow",
+        "FormalRetrievalSwitch",
+        "PgVectorFormalRetrievalSwitch",
+        "PostgresVectorIndexStoreFormalBinding",
+        "FormalIVectorIndexStoreBindingWithoutV4Gate",
+        "PackingPolicyIntegration",
+        "PackageOutputIntegration",
+        "FormalVectorRetrieval",
+        "MissingShadowEvalGate",
+        "MissingRecallRiskGate"
+      ],
+      "lastEvalReportPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\storage\\postgres\\postgres-vector-freeze-gate.json",
+      "lastUpdatedAt": "2026-06-14T15:58:20.3375403+00:00"
+    },
+    {
+      "capabilityId": "Qwen3EmbeddingProvider",
+      "currentPhase": "V3.10.F",
+      "status": "PreviewOnly",
+      "recommendation": "BlockedByRisk",
+      "gatePassed": false,
+      "blockedReasons": [
+        "ReadinessGateNotPassed",
+        "RiskAfterPolicyNonZero",
+        "A3RecallBelow80Percent",
+        "ExtendedRecallBelow80Percent",
+        "EmbeddingProviderComparisonFreezeNotPassed",
+        "Qwen3ReadinessGateNotPassed",
+        "RiskAfterPolicyNonZero"
+      ],
+      "allowedRuntimeModes": [
+        "Off",
+        "PreviewOnly",
+        "Shadow"
+      ],
+      "forbiddenRuntimeModes": [
+        "DefaultOn",
+        "ApplyGuarded",
+        "RuntimeShadow",
+        "FormalRetrievalSwitch",
+        "PgVectorFormalRetrievalSwitch",
+        "FormalIVectorIndexStoreBinding",
+        "PackingPolicyIntegration",
+        "PackageOutputIntegration"
+      ],
+      "lastEvalReportPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\vector\\providers\\qwen3\\vector-provider-comparison-freeze.json",
+      "lastUpdatedAt": "2026-06-15T07:00:41.6357367+00:00"
+    },
+    {
+      "capabilityId": "CurrentEmbeddingProvider",
+      "currentPhase": "V3.10.F",
+      "status": "KeepCurrentPreviewProvider",
+      "recommendation": "KeepCurrentPreviewProvider",
+      "gatePassed": true,
+      "blockedReasons": [],
+      "allowedRuntimeModes": [
+        "Off",
+        "PreviewOnly",
+        "ExistingRuntime"
+      ],
+      "forbiddenRuntimeModes": [
+        "DefaultOn",
+        "ApplyGuarded",
+        "RuntimeShadow",
+        "FormalRetrievalSwitch",
+        "PgVectorFormalRetrievalSwitch",
+        "FormalIVectorIndexStoreBinding",
+        "PackingPolicyIntegration",
+        "PackageOutputIntegration"
+      ],
+      "lastEvalReportPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\vector\\providers\\qwen3\\vector-provider-comparison.json",
+      "lastUpdatedAt": "2026-06-17T07:01:07.8873746+00:00"
+    },
+    {
+      "capabilityId": "GraphExpansion",
+      "currentPhase": "G7.1",
+      "status": "ReadyForGuardedOptIn",
+      "recommendation": "ReadyForGuardedOptIn:audit-v1,conflict-v1",
+      "gatePassed": true,
+      "blockedReasons": [],
+      "allowedRuntimeModes": [
+        "Off",
+        "Shadow",
+        "ApplyGuarded:audit-v1",
+        "ApplyGuarded:conflict-v1"
+      ],
+      "forbiddenRuntimeModes": [
+        "DefaultOn",
+        "ApplyGuarded:normal-v1",
+        "ApplyGuarded:current-task-v1",
+        "NormalContextInjection"
+      ],
+      "lastEvalReportPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\eval\\graph-expansion-guarded-optin-gate.json",
+      "lastUpdatedAt": "2026-06-09T00:30:57.637648+00:00"
+    },
+    {
+      "capabilityId": "VectorRetrieval",
+      "currentPhase": "V3.F",
+      "status": "PreviewOnly",
+      "recommendation": "BlockedByRecall",
+      "gatePassed": false,
+      "blockedReasons": [
+        "A3RecallAtLeast80Percent",
+        "A3FusionRecallAtLeast80Percent",
+        "A3ExpandedRecallAtLeast80Percent"
+      ],
+      "allowedRuntimeModes": [
+        "Off",
+        "PreviewOnly"
+      ],
+      "forbiddenRuntimeModes": [
+        "RuntimeShadow",
+        "ApplyGuarded",
+        "DefaultOn"
+      ],
+      "lastEvalReportPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\eval\\vector-retrieval-shadow-readiness-gate.json",
+      "lastUpdatedAt": "2026-06-10T15:07:23.5389595+00:00"
+    },
+    {
+      "capabilityId": "HybridRetrievalPreview",
+      "currentPhase": "V3.11.F",
+      "status": "PreviewOnly",
+      "recommendation": "BlockedByA3Recall",
+      "gatePassed": false,
+      "blockedReasons": [
+        "A3RecallBelow80Percent",
+        "ExtendedRecallBelow80Percent",
+        "HybridV4RecheckNotAllowed"
+      ],
+      "allowedRuntimeModes": [
+        "Off",
+        "PreviewOnly",
+        "Shadow",
+        "PreviewShadowEvalOnly"
+      ],
+      "forbiddenRuntimeModes": [
+        "DefaultOn",
+        "ApplyGuarded",
+        "RuntimeShadow",
+        "FormalRetrievalSwitch",
+        "FormalHybridRetrievalSwitch",
+        "FormalRetrievalSourceReplacement",
+        "FormalIVectorIndexStoreBinding",
+        "PackingPolicyIntegration",
+        "PackageOutputIntegration"
+      ],
+      "lastEvalReportPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\vector\\hybrid\\vector-hybrid-freeze-gate.json",
+      "lastUpdatedAt": "2026-06-15T07:35:11.6938068+00:00"
+    },
+    {
+      "capabilityId": "DatasetV2Stress",
+      "currentPhase": "V3.24",
+      "status": "ReadyForV4RecheckInput",
+      "recommendation": "ReadyForV4RecheckInput",
+      "gatePassed": true,
+      "blockedReasons": [],
+      "allowedRuntimeModes": [
+        "Off",
+        "PreviewOnly",
+        "Shadow",
+        "V4RecheckInputOnly"
+      ],
+      "forbiddenRuntimeModes": [
+        "DefaultOn",
+        "ApplyGuarded",
+        "RuntimeShadow",
+        "FormalRetrievalSwitch",
+        "ReadyForFormalRetrieval",
+        "FormalIVectorIndexStoreBinding",
+        "PostScoringRiskGatedV1:Runtime",
+        "post-scoring-risk-gated-v1:Runtime",
+        "PackingPolicyIntegration",
+        "PackageOutputIntegration"
+      ],
+      "lastEvalReportPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\vector\\dataset-v2\\stress\\stress-freeze-gate.json",
+      "lastUpdatedAt": "2026-06-15T18:15:42.0816463+00:00"
+    },
+    {
+      "capabilityId": "VectorV4ReadinessRecheck",
+      "currentPhase": "V4.R",
+      "status": "ReadyForGuardedFormalPreview",
+      "recommendation": "ReadyForGuardedFormalPreview",
+      "gatePassed": true,
+      "blockedReasons": [],
+      "allowedRuntimeModes": [
+        "Off",
+        "PreviewOnly",
+        "Shadow",
+        "GuardedFormalPreviewOnly"
+      ],
+      "forbiddenRuntimeModes": [
+        "DefaultOn",
+        "ApplyGuarded",
+        "RuntimeShadow",
+        "ReadyForRuntimeSwitch",
+        "RuntimeSwitch",
+        "FormalRetrievalSwitch",
+        "FormalRetrievalAllowed",
+        "FormalIVectorIndexStoreBinding",
+        "PostgresVectorIndexStoreFormalBinding",
+        "post-scoring-risk-gated-v1:Runtime",
+        "PackingPolicyIntegration",
+        "PackageOutputIntegration"
+      ],
+      "lastEvalReportPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\vector\\v4\\vector-v4-readiness-recheck.json",
+      "lastUpdatedAt": "2026-06-16T01:56:45.2276027+00:00"
+    },
+    {
+      "capabilityId": "GuardedFormalRetrievalPreview",
+      "currentPhase": "V4.1",
+      "status": "ReadyForShadowPackageComparison",
+      "recommendation": "ReadyForShadowPackageComparison",
+      "gatePassed": true,
+      "blockedReasons": [],
+      "allowedRuntimeModes": [
+        "Off",
+        "PreviewOnly",
+        "Shadow",
+        "GuardedFormalPreviewOnly",
+        "ShadowPackageComparisonOnly"
+      ],
+      "forbiddenRuntimeModes": [
+        "DefaultOn",
+        "ApplyGuarded",
+        "RuntimeShadow",
+        "ReadyForRuntimeSwitch",
+        "RuntimeSwitch",
+        "FormalRetrievalSwitch",
+        "FormalRetrievalAllowed",
+        "FormalIVectorIndexStoreBinding",
+        "PostgresVectorIndexStoreFormalBinding",
+        "GuardedFormalPreview:Runtime",
+        "post-scoring-risk-gated-v1:Runtime",
+        "PackingPolicyIntegration",
+        "PackageOutputIntegration",
+        "FormalPackageWrite"
+      ],
+      "lastEvalReportPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\vector\\v4\\vector-guarded-formal-retrieval-preview-gate.json",
+      "lastUpdatedAt": "2026-06-16T01:56:58.5850133+00:00"
+    },
+    {
+      "capabilityId": "VectorShadowPackageComparison",
+      "currentPhase": "V4.2",
+      "status": "ReadyForScopedFormalPreviewOptIn",
+      "recommendation": "ReadyForScopedFormalPreviewOptIn",
+      "gatePassed": true,
+      "blockedReasons": [],
+      "allowedRuntimeModes": [
+        "Off",
+        "PreviewOnly",
+        "Shadow",
+        "GuardedFormalPreviewOnly",
+        "ShadowPackageComparisonOnly",
+        "ScopedFormalPreviewOptInOnly"
+      ],
+      "forbiddenRuntimeModes": [
+        "DefaultOn",
+        "ApplyGuarded",
+        "RuntimeShadow",
+        "ReadyForRuntimeSwitch",
+        "RuntimeSwitch",
+        "FormalRetrievalSwitch",
+        "FormalRetrievalAllowed",
+        "FormalIVectorIndexStoreBinding",
+        "PostgresVectorIndexStoreFormalBinding",
+        "ShadowPackageComparison:Runtime",
+        "post-scoring-risk-gated-v1:Runtime",
+        "PackingPolicyIntegration",
+        "PackageOutputIntegration",
+        "FormalPackageWrite"
+      ],
+      "lastEvalReportPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\vector\\v4\\vector-shadow-package-comparison-gate.json",
+      "lastUpdatedAt": "2026-06-16T01:57:12.0485849+00:00"
+    },
+    {
+      "capabilityId": "ScopedFormalPreviewOptIn",
+      "currentPhase": "V4.3",
+      "status": "ReadyForLimitedFormalPreviewObservation",
+      "recommendation": "ReadyForLimitedFormalPreviewObservation",
+      "gatePassed": true,
+      "blockedReasons": [],
+      "allowedRuntimeModes": [
+        "Off",
+        "PreviewOnly",
+        "Shadow",
+        "GuardedFormalPreviewOnly",
+        "ShadowPackageComparisonOnly",
+        "ScopedFormalPreviewOptInOnly",
+        "LimitedFormalPreviewObservationOnly"
+      ],
+      "forbiddenRuntimeModes": [
+        "DefaultOn",
+        "ApplyGuarded",
+        "RuntimeShadow",
+        "ReadyForRuntimeSwitch",
+        "RuntimeSwitch",
+        "FormalRetrievalSwitch",
+        "FormalRetrievalAllowed",
+        "FormalIVectorIndexStoreBinding",
+        "PostgresVectorIndexStoreFormalBinding",
+        "ScopedFormalPreviewOptIn:Runtime",
+        "PreviewOnly:Runtime",
+        "FormalPackageWrite",
+        "PackingPolicyIntegration",
+        "PackageOutputIntegration"
+      ],
+      "lastEvalReportPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\vector\\v4\\vector-scoped-formal-preview-optin-gate.json",
+      "lastUpdatedAt": "2026-06-16T01:57:23.1619007+00:00"
+    },
+    {
+      "capabilityId": "LimitedFormalPreviewObservation",
+      "currentPhase": "V4.4",
+      "status": "ReadyForFormalPreviewFreeze",
+      "recommendation": "ReadyForFormalPreviewFreeze",
+      "gatePassed": true,
+      "blockedReasons": [],
+      "allowedRuntimeModes": [
+        "Off",
+        "PreviewOnly",
+        "Shadow",
+        "FormalPreviewFreezeOnly"
+      ],
+      "forbiddenRuntimeModes": [
+        "DefaultOn",
+        "ApplyGuarded",
+        "RuntimeShadow",
+        "ReadyForRuntimeSwitch",
+        "RuntimeSwitch",
+        "FormalRetrievalSwitch",
+        "FormalRetrievalAllowed",
+        "FormalIVectorIndexStoreBinding",
+        "PostgresVectorIndexStoreFormalBinding",
+        "LimitedFormalPreviewObservation:Runtime",
+        "PreviewOnly:Runtime",
+        "FormalPackageWrite",
+        "PackingPolicyIntegration",
+        "PackageOutputIntegration"
+      ],
+      "lastEvalReportPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\vector\\v4\\vector-limited-formal-preview-observation-gate.json",
+      "lastUpdatedAt": "2026-06-16T01:57:33.2142307+00:00"
+    },
+    {
+      "capabilityId": "VectorFormalPreviewFreeze",
+      "currentPhase": "V4.F",
+      "status": "ReadyForScopedOptInPreview",
+      "recommendation": "ReadyForScopedOptInPreview",
+      "gatePassed": true,
+      "blockedReasons": [],
+      "allowedRuntimeModes": [
+        "Off",
+        "PreviewOnly",
+        "Shadow",
+        "ScopedPreviewOnly",
+        "FormalPreviewFreezeOnly"
+      ],
+      "forbiddenRuntimeModes": [
+        "DefaultOn",
+        "ApplyGuarded",
+        "RuntimeShadow",
+        "ReadyForRuntimeSwitch",
+        "RuntimeSwitch",
+        "FormalRetrievalSwitch",
+        "FormalRetrievalAllowed",
+        "FormalIVectorIndexStoreBinding",
+        "PostgresVectorIndexStoreFormalBinding",
+        "VectorFormalPreview:Runtime",
+        "ScopedPreviewOnly:Runtime",
+        "FormalPackageWrite",
+        "PackingPolicyIntegration",
+        "PackageOutputIntegration",
+        "NonAllowlistedScopeUse"
+      ],
+      "lastEvalReportPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\vector\\v4\\vector-formal-preview-freeze-gate.json",
+      "lastUpdatedAt": "2026-06-17T06:25:15.3305238+00:00"
+    },
+    {
+      "capabilityId": "ScopedRuntimeExperimentHarnessFreeze",
+      "currentPhase": "V4.10",
+      "status": "ReadyForGuardedRuntimeExperimentPlanning",
+      "recommendation": "ReadyForGuardedRuntimeExperimentPlanning",
+      "gatePassed": true,
+      "blockedReasons": [],
+      "allowedRuntimeModes": [
+        "Off",
+        "PreviewOnly",
+        "Shadow",
+        "NoOpHarnessOnly",
+        "ExplicitScopedExperimentPlanningOnly"
+      ],
+      "forbiddenRuntimeModes": [
+        "DefaultOn",
+        "ApplyGuarded",
+        "RuntimeShadow",
+        "ReadyForRuntimeSwitch",
+        "RuntimeSwitch",
+        "FormalRetrievalSwitch",
+        "FormalRetrievalAllowed",
+        "FormalIVectorIndexStoreBinding",
+        "PostgresVectorIndexStoreFormalBinding",
+        "FormalPackageWrite",
+        "DIBindingMutation",
+        "VectorStoreBindingMutation",
+        "PackingPolicyIntegration",
+        "PackageOutputIntegration",
+        "GlobalDefaultOn",
+        "NoOpHarnessOnly:RuntimeApproval",
+        "NoOpHarnessOnlyAsRuntimeApproval"
+      ],
+      "lastEvalReportPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\vector\\v4\\runtime-experiment\\harness-freeze-gate.json",
+      "lastUpdatedAt": "2026-06-17T04:25:54.763089+00:00"
+    },
+    {
+      "capabilityId": "RouterIntentClassifier",
+      "currentPhase": "R2.F",
+      "status": "KeepRuleBased",
+      "recommendation": "KeepRuleBased",
+      "gatePassed": false,
+      "blockedReasons": [
+        "ShadowBreaksRuntimeGreaterThanFixes",
+        "ShadowBreaksRuntimeNonZero",
+        "NetGainNotPositive",
+        "PerIntentRegressionNonZero"
+      ],
+      "allowedRuntimeModes": [
+        "ExistingRuntime"
+      ],
+      "forbiddenRuntimeModes": [
+        "RuntimeShadow",
+        "ApplyGuarded",
+        "DefaultOn"
+      ],
+      "lastEvalReportPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\learning\\router\\router-guarded-optin-readiness-gate.json",
+      "lastUpdatedAt": "2026-06-11T09:18:00.4971204+00:00"
+    },
+    {
+      "capabilityId": "CandidateReranker",
+      "currentPhase": "CR1.4",
+      "status": "KeepFormalRanking",
+      "recommendation": "KeepFormalRanking",
+      "gatePassed": false,
+      "blockedReasons": [
+        "A3NetGainNotPositive",
+        "ExtendedNetGainNotPositive",
+        "NetGainNotPositive"
+      ],
+      "allowedRuntimeModes": [
+        "Off",
+        "KeepFormalRanking"
+      ],
+      "forbiddenRuntimeModes": [
+        "RuntimeShadow",
+        "ApplyGuarded",
+        "DefaultOn"
+      ],
+      "lastEvalReportPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\learning\\ranker\\candidate-reranker-shadow-eval-a3.json;D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\learning\\ranker\\candidate-reranker-shadow-eval-extended.json",
+      "lastUpdatedAt": "2026-06-12T06:57:34.4555695+00:00"
+    },
+    {
+      "capabilityId": "AttentionRerank",
+      "currentPhase": "AttentionPhase4",
+      "status": "ApplyGuardedOptInOnly",
+      "recommendation": "ApplyGuarded opt-in only; default off",
+      "gatePassed": true,
+      "blockedReasons": [],
+      "allowedRuntimeModes": [
+        "Off",
+        "Shadow",
+        "ApplyGuarded"
+      ],
+      "forbiddenRuntimeModes": [
+        "DefaultOn",
+        "SelectedSetChanging"
+      ],
+      "lastEvalReportPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\docs\\attention-profile-selection-report.md",
+      "lastUpdatedAt": "2026-06-17T07:01:08.1937416+00:00"
+    },
+    {
+      "capabilityId": "PlanningProposal",
+      "currentPhase": "P9/P10",
+      "status": "IntentScopedOptInOnly",
+      "recommendation": "intent-scoped opt-in only; default off",
+      "gatePassed": true,
+      "blockedReasons": [],
+      "allowedRuntimeModes": [
+        "Off",
+        "Shadow",
+        "ApplyGuarded:IntentScoped"
+      ],
+      "forbiddenRuntimeModes": [
+        "DefaultOn",
+        "GlobalApply",
+        "VectorEnabled"
+      ],
+      "lastEvalReportPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\eval\\planning-optin-comparison-a3.json",
+      "lastUpdatedAt": "2026-06-17T07:01:08.1938922+00:00"
+    }
+  ],
+  "readyCount": 15,
+  "blockedCount": 5,
+  "overallRecommendation": "KeepRuntimeDefaults",
+  "warnings": [
+    "Registry \u53EA\u8BB0\u5F55 readiness\uFF0C\u4E0D\u542F\u7528\u4EFB\u4F55\u6B63\u5F0F runtime \u80FD\u529B\u3002",
+    "Vector\u3001router\u3001candidate reranker \u5728 gate \u672A\u901A\u8FC7\u524D\u4E0D\u5F97\u8FDB\u5165 runtime shadow \u6216 opt-in\u3002"
+  ]
+}

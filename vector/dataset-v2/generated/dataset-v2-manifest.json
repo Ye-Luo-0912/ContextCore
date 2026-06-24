@@ -1,0 +1,14 @@
+﻿{
+  "DatasetId": "rdsv2-9d8678d981f1aac1",
+  "CorpusPath": "vector/dataset-v2/generated/corpus.jsonl",
+  "SamplesPath": "vector/dataset-v2/generated/samples.jsonl",
+  "CorpusItemCount": 28,
+  "SampleCount": 21,
+  "CorpusHash": "7d1cdb5b9377aedaea2abba4334ae8c7bf9b2622b776582ccf79cc8c4c205bb7",
+  "SamplesHash": "e26560cd752377e075d4eb5c4df138770feb0d102317b60b0512a734f45ffcf0",
+  "GeneratorVersion": "retrieval-dataset-v2-generator/v1",
+  "ContractVersion": "retrieval-dataset-v2",
+  "CreatedAt": "2026-06-15T14:50:24.5141528+00:00",
+  "UseForRuntime": false,
+  "FormalRetrievalAllowed": false
+}

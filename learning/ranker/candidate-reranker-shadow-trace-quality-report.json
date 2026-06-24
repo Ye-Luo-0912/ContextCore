@@ -1,0 +1,17 @@
+﻿{
+  "OperationId": "candidate-reranker-shadow-trace-quality-f5c06f853ab34fc8acd1c6ffe297d834",
+  "GeneratedAt": "2026-06-11T09:46:58.0037093+00:00",
+  "WorkspaceId": "default",
+  "CollectionId": "test",
+  "TraceCount": 0,
+  "CandidateCount": 0,
+  "WouldChangeTop1Count": 0,
+  "WouldChangeTopKCount": 0,
+  "LifecycleRiskCount": 0,
+  "DeprecatedRiskCount": 0,
+  "MustNotRiskCount": 0,
+  "NetGain": 0,
+  "Recommendation": "NeedsMoreRealTraces",
+  "Traces": [],
+  "PolicyVersion": "candidate-reranker-shadow-trace-quality-cr1/v1"
+}

@@ -1,0 +1,14 @@
+﻿{
+  "WorkspaceId": "eval-vector",
+  "CollectionId": "corpus",
+  "IndexedCount": 316,
+  "MissingCount": 0,
+  "StaleCount": 0,
+  "DuplicateCount": 0,
+  "OrphanCount": 0,
+  "DimensionMismatchCount": 0,
+  "UnsupportedModelCount": 0,
+  "ProviderUnavailableCount": 0,
+  "CountsByType": {},
+  "Diagnostics": []
+}

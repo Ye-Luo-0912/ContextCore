@@ -1,9 +1,13 @@
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services;
+using ContextCore.Core.Services.Attention;
+using ContextCore.Core.Services.Graph;
+using ContextCore.Core.Services.Retrieval;
 using ContextCore.Storage.FileSystem;
 using ContextCore.Storage.FileSystem.Stores;
 using ContextCore.Storage.InMemory;
+using ContextCore.Storage.InMemory.Stores;
 
 namespace ContextCore.Tests;
 
@@ -279,6 +283,185 @@ public sealed class ContextCoreHybridRetrievalTests
         Assert.AreEqual("false", shadowResult.Trace.Metadata["rankerShadowSelectedSetChanged"]);
         Assert.AreEqual("false", shadowResult.Trace.Metadata["rankerShadowPackageSectionsChanged"]);
         Assert.IsTrue(traces[0].RankerShadowTrace.CandidateShadowScores.Count > 0);
+    }
+
+    [TestMethod]
+    public async Task HybridContextRetriever_GraphExpansionShadowTraceCollection_ShouldStayDisabledByDefault()
+    {
+        var contextStore = new InMemoryContextStore();
+        var relationStore = new InMemoryRelationStore();
+        var traceStore = new InMemoryRetrievalTraceStore();
+        var retriever = new HybridContextRetriever(
+            contextStore,
+            relationStore: relationStore,
+            traceStore: traceStore);
+        var now = DateTimeOffset.UtcNow;
+        await contextStore.SaveAsync(Item("graph-shadow-default", "graph shadow 默认关闭测试。", ["graph"], now));
+        await relationStore.SaveAsync(GraphRelation(
+            "rel-default-audit",
+            "graph-shadow-default",
+            "graph-shadow-old",
+            ContextRelationTypes.Replaces,
+            GraphExpansionTargetSection.AuditContext,
+            StableMemoryLifecycle.Deprecated,
+            now));
+
+        var result = await retriever.RetrieveAsync(new ContextRetrievalRequest
+        {
+            WorkspaceId = "workspace-test",
+            CollectionId = "collection-test",
+            QueryText = "graph shadow 默认关闭",
+            IncludeKeywordRecall = true,
+            IncludeVectorRecall = false,
+            IncludeRelationExpansion = false,
+            CandidateTake = 10,
+            TopK = 5,
+            TokenBudget = 1000
+        });
+        var traces = await traceStore.QueryRecentAsync("workspace-test", "collection-test", 10);
+
+        Assert.IsFalse(result.Trace.GraphExpansionShadowTrace.GraphExpansionShadowEnabled);
+        Assert.AreEqual(0, result.Trace.GraphExpansionShadowTrace.AcceptedRelations.Count);
+        Assert.AreEqual("false", result.Trace.Metadata["graphExpansionShadowTraceCollectionEnabled"]);
+        Assert.IsFalse(traces[0].GraphExpansionShadowTrace.GraphExpansionShadowEnabled);
+    }
+
+    [TestMethod]
+    public async Task HybridContextRetriever_GraphExpansionShadowTraceCollection_ShouldRecordWithoutChangingOutput()
+    {
+        var baselineContextStore = new InMemoryContextStore();
+        var shadowContextStore = new InMemoryContextStore();
+        var relationStore = new InMemoryRelationStore();
+        var traceStore = new InMemoryRetrievalTraceStore();
+        var now = DateTimeOffset.UtcNow;
+        var seed = Item("graph-shadow-current", "graph shadow current seed for audit conflict.", ["graph"], now);
+        await baselineContextStore.SaveAsync(seed);
+        await shadowContextStore.SaveAsync(seed);
+        await relationStore.SaveAsync(GraphRelation(
+            "rel-graph-shadow-old",
+            "graph-shadow-current",
+            "graph-shadow-old",
+            ContextRelationTypes.Replaces,
+            GraphExpansionTargetSection.AuditContext,
+            StableMemoryLifecycle.Deprecated,
+            now));
+
+        var baseline = new HybridContextRetriever(
+            baselineContextStore,
+            traceStore: null);
+        var shadow = new HybridContextRetriever(
+            shadowContextStore,
+            relationStore: relationStore,
+            traceStore: traceStore,
+            graphExpansionShadowOptions: new GraphExpansionShadowOptions
+            {
+                Enabled = true,
+                TraceCollectionEnabled = true,
+                Profiles = ["audit-v1", "conflict-v1"],
+                MaxRelationsPerTrace = 50
+            },
+            graphExpansionShadowTraceBuilder: CreateGraphExpansionShadowTraceBuilder(relationStore));
+        var request = new ContextRetrievalRequest
+        {
+            WorkspaceId = "workspace-test",
+            CollectionId = "collection-test",
+            QueryText = "graph shadow current seed",
+            IncludeKeywordRecall = true,
+            IncludeVectorRecall = false,
+            IncludeRelationExpansion = false,
+            CandidateTake = 10,
+            TopK = 5,
+            TokenBudget = 1000
+        };
+
+        var baselineResult = await baseline.RetrieveAsync(request);
+        var shadowResult = await shadow.RetrieveAsync(request);
+        var traces = await traceStore.QueryRecentAsync("workspace-test", "collection-test", 10);
+
+        CollectionAssert.AreEqual(
+            baselineResult.SelectedItems.Select(static item => item.CandidateId).ToArray(),
+            shadowResult.SelectedItems.Select(static item => item.CandidateId).ToArray());
+        Assert.IsTrue(shadowResult.Trace.GraphExpansionShadowTrace.GraphExpansionShadowEnabled);
+        Assert.IsTrue(shadowResult.Trace.GraphExpansionShadowTrace.AcceptedRelations.Count >= 2);
+        Assert.IsTrue(shadowResult.Trace.GraphExpansionShadowTrace.TargetSections.ContainsKey(GraphExpansionTargetSection.AuditContext));
+        Assert.IsTrue(shadowResult.Trace.GraphExpansionShadowTrace.TargetSections.ContainsKey(GraphExpansionTargetSection.ConflictEvidence));
+        Assert.AreEqual(0, shadowResult.Trace.GraphExpansionShadowTrace.RiskAfterRouting);
+        Assert.AreEqual("false", shadowResult.Trace.Metadata["graphExpansionFormalOutputChanged"]);
+        Assert.AreEqual("false", shadowResult.Trace.Metadata["graphExpansionSelectedSetChanged"]);
+        Assert.AreEqual("false", shadowResult.Trace.Metadata["graphExpansionPackageSectionsChanged"]);
+        Assert.IsTrue(traces[0].GraphExpansionShadowTrace.AcceptedRelations.Count >= 2);
+    }
+
+    [TestMethod]
+    public async Task HybridContextRetriever_GraphExpansionShadowTraceCollection_ShouldSuppressDuplicatePayload()
+    {
+        var contextStore = new InMemoryContextStore();
+        var relationStore = new InMemoryRelationStore();
+        var traceStore = new InMemoryRetrievalTraceStore();
+        var now = DateTimeOffset.UtcNow;
+        var seed = Item("graph-shadow-dedupe-current", "graph shadow dedupe current seed.", ["graph", "dedupe"], now);
+        await contextStore.SaveAsync(seed);
+        await relationStore.SaveAsync(GraphRelation(
+            "rel-graph-shadow-dedupe-old",
+            "graph-shadow-dedupe-current",
+            "graph-shadow-dedupe-old",
+            ContextRelationTypes.Replaces,
+            GraphExpansionTargetSection.AuditContext,
+            StableMemoryLifecycle.Deprecated,
+            now));
+
+        var retriever = new HybridContextRetriever(
+            contextStore,
+            relationStore: relationStore,
+            traceStore: traceStore,
+            graphExpansionShadowOptions: new GraphExpansionShadowOptions
+            {
+                Enabled = true,
+                TraceCollectionEnabled = true,
+                Profiles = ["audit-v1", "conflict-v1"],
+                MaxRelationsPerTrace = 50
+            },
+            graphExpansionShadowTraceBuilder: CreateGraphExpansionShadowTraceBuilder(relationStore));
+        var firstRequest = new ContextRetrievalRequest
+        {
+            OperationId = "graph-shadow-dedupe-first",
+            WorkspaceId = "workspace-test",
+            CollectionId = "collection-test",
+            QueryText = "graph shadow dedupe current seed",
+            IncludeKeywordRecall = true,
+            IncludeVectorRecall = false,
+            IncludeRelationExpansion = false,
+            CandidateTake = 10,
+            TopK = 5,
+            TokenBudget = 1000
+        };
+        var secondRequest = new ContextRetrievalRequest
+        {
+            OperationId = "graph-shadow-dedupe-second",
+            WorkspaceId = "workspace-test",
+            CollectionId = "collection-test",
+            QueryText = firstRequest.QueryText,
+            IncludeKeywordRecall = true,
+            IncludeVectorRecall = false,
+            IncludeRelationExpansion = false,
+            CandidateTake = 10,
+            TopK = 5,
+            TokenBudget = 1000
+        };
+
+        var first = await retriever.RetrieveAsync(firstRequest);
+        var second = await retriever.RetrieveAsync(secondRequest);
+        var traces = await traceStore.QueryRecentAsync("workspace-test", "collection-test", 10);
+
+        CollectionAssert.AreEqual(
+            first.SelectedItems.Select(static item => item.CandidateId).ToArray(),
+            second.SelectedItems.Select(static item => item.CandidateId).ToArray());
+        Assert.IsTrue(first.Trace.GraphExpansionShadowTrace.AcceptedRelations.Count > 0);
+        Assert.AreEqual(0, second.Trace.GraphExpansionShadowTrace.AcceptedRelations.Count);
+        Assert.AreEqual("true", second.Trace.Metadata["graphExpansionDuplicateSuppressed"]);
+        Assert.AreEqual("graph-shadow-dedupe-first", second.Trace.Metadata["graphExpansionDuplicateOfRetrievalId"]);
+        Assert.AreEqual("true", second.Trace.GraphExpansionShadowTrace.Metadata["duplicateSuppressed"]);
+        Assert.AreEqual(2, traces.Count);
     }
 
     [TestMethod]
@@ -1358,6 +1541,46 @@ public sealed class ContextCoreHybridRetrievalTests
             Confidence = 0.9,
             CreatedAt = now
         };
+    }
+
+    private static ContextRelation GraphRelation(
+        string id,
+        string sourceId,
+        string targetId,
+        string relationType,
+        string targetSection,
+        string targetLifecycle,
+        DateTimeOffset now)
+    {
+        return new ContextRelation
+        {
+            Id = id,
+            WorkspaceId = "workspace-test",
+            CollectionId = "collection-test",
+            SourceId = sourceId,
+            TargetId = targetId,
+            RelationType = relationType,
+            Weight = 1.0,
+            Confidence = 1.0,
+            SourceRefs = [$"review:{id}"],
+            Metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["targetLifecycle"] = targetLifecycle,
+                ["targetSection"] = targetSection,
+                ["lifecycle"] = StableMemoryLifecycle.Active,
+                ["reviewStatus"] = RelationReviewStatuses.Reviewed,
+                ["evidenceRefs"] = $"review:{id}"
+            },
+            CreatedAt = now
+        };
+    }
+
+    private static GraphExpansionShadowTraceBuilder CreateGraphExpansionShadowTraceBuilder(IRelationStore relationStore)
+    {
+        var profileRegistry = new RelationExpansionProfileRegistry();
+        var validator = new RelationExpansionPolicyValidator(new RelationTypeRegistry());
+        var previewService = new RelationExpansionPreviewService(relationStore, profileRegistry, validator);
+        return new GraphExpansionShadowTraceBuilder(previewService);
     }
 
     private static ContextMemoryItem Memory(

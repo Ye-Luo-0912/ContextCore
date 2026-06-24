@@ -5,7 +5,9 @@ using ContextCore.Service.Endpoints;
 using ContextCore.Service.Extensions;
 using ContextCore.Service.Hosting;
 using ContextCore.Service.Infrastructure;
+using ContextCore.Core.Services;
 using ContextCore.Storage.FileSystem;
+using ContextCore.Storage.Postgres.Infrastructure;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Http.Timeouts;
@@ -41,6 +43,19 @@ var retrievalPlanningOptions = builder.Configuration
 var learningRankerShadowOptions = builder.Configuration
 	.GetSection("Learning:RankerShadow")
 	.Get<LearningRankerShadowOptions>() ?? new LearningRankerShadowOptions();
+var learningRouterShadowOptions = builder.Configuration
+	.GetSection("Learning:RouterShadow")
+	.Get<LearningRouterShadowOptions>() ?? new LearningRouterShadowOptions();
+var graphExpansionShadowSection = builder.Configuration.GetSection("Graph:ExpansionShadow");
+var learningGraphExpansionShadowOptions = graphExpansionShadowSection.Exists()
+	? graphExpansionShadowSection.Get<LearningGraphExpansionShadowOptions>() ?? new LearningGraphExpansionShadowOptions()
+	: builder.Configuration.GetSection("Learning:GraphExpansionShadow").Get<LearningGraphExpansionShadowOptions>()
+		?? new LearningGraphExpansionShadowOptions();
+var graphExpansionApplySection = builder.Configuration.GetSection("Graph:ExpansionApply");
+var graphExpansionApplyServiceOptions = graphExpansionApplySection.Exists()
+	? graphExpansionApplySection.Get<GraphExpansionApplyServiceOptions>() ?? new GraphExpansionApplyServiceOptions()
+	: builder.Configuration.GetSection("Learning:GraphExpansionApply").Get<GraphExpansionApplyServiceOptions>()
+		?? new GraphExpansionApplyServiceOptions();
 var lifecycleAwareRankerShadowOptions = new LifecycleAwareRankerShadowOptions
 {
 	Enabled = learningRankerShadowOptions.Enabled,
@@ -51,18 +66,89 @@ var lifecycleAwareRankerShadowOptions = new LifecycleAwareRankerShadowOptions
 		? "lifecycle-aware-v1"
 		: learningRankerShadowOptions.Profile
 };
+var graphExpansionShadowOptions = new GraphExpansionShadowOptions
+{
+	Enabled = learningGraphExpansionShadowOptions.Enabled,
+	TraceCollectionEnabled = learningGraphExpansionShadowOptions.TraceCollectionEnabled,
+	Profiles = learningGraphExpansionShadowOptions.Profiles.Count == 0
+		? ["audit-v1", "conflict-v1"]
+		: learningGraphExpansionShadowOptions.Profiles
+			.Where(static item => !string.IsNullOrWhiteSpace(item))
+			.Select(static item => item.Trim())
+			.Distinct(StringComparer.OrdinalIgnoreCase)
+			.ToArray(),
+	MaxRelationsPerTrace = learningGraphExpansionShadowOptions.MaxRelationsPerTrace > 0
+		? learningGraphExpansionShadowOptions.MaxRelationsPerTrace
+		: 50
+};
+var graphExpansionApplyOptions = new GraphExpansionApplyOptions
+{
+	Mode = string.IsNullOrWhiteSpace(graphExpansionApplyServiceOptions.Mode)
+		? GraphExpansionApplyOptions.OffMode
+		: graphExpansionApplyServiceOptions.Mode,
+	ApplyMode = string.IsNullOrWhiteSpace(graphExpansionApplyServiceOptions.ApplyMode)
+		? GraphExpansionApplyOptions.ProfileScopedApplyMode
+		: graphExpansionApplyServiceOptions.ApplyMode,
+	OptInProfiles = graphExpansionApplyServiceOptions.OptInProfiles
+		.Where(static item => !string.IsNullOrWhiteSpace(item))
+		.Select(static item => item.Trim())
+		.Distinct(StringComparer.OrdinalIgnoreCase)
+		.ToArray(),
+	AllowedTargetSections = graphExpansionApplyServiceOptions.AllowedTargetSections.Count == 0
+		?
+		[
+			GraphExpansionTargetSection.AuditContext,
+			GraphExpansionTargetSection.ConflictEvidence,
+			GraphExpansionTargetSection.HistoricalContext,
+			GraphExpansionTargetSection.DiagnosticsOnly
+		]
+		: graphExpansionApplyServiceOptions.AllowedTargetSections
+			.Where(static item => !string.IsNullOrWhiteSpace(item))
+			.Select(static item => item.Trim())
+			.Distinct(StringComparer.OrdinalIgnoreCase)
+			.ToArray(),
+	DisallowNormalContextInjection = graphExpansionApplyServiceOptions.DisallowNormalContextInjection,
+	FallbackOnRisk = graphExpansionApplyServiceOptions.FallbackOnRisk,
+	MaxAddedItemsPerPackage = graphExpansionApplyServiceOptions.MaxAddedItemsPerPackage > 0
+		? graphExpansionApplyServiceOptions.MaxAddedItemsPerPackage
+		: 20,
+	EmitComparisonTrace = graphExpansionApplyServiceOptions.EmitComparisonTrace
+};
+var relationGovernanceProviderSwitchSection = builder.Configuration.GetSection("Storage:RelationGovernanceProviderSwitch");
+var relationGovernanceProviderSwitchOptions = relationGovernanceProviderSwitchSection.Exists()
+	? relationGovernanceProviderSwitchSection.Get<RelationGovernanceProviderSwitchOptions>() ?? new RelationGovernanceProviderSwitchOptions()
+	: builder.Configuration.GetSection("RelationGovernance:ProviderSwitch").Get<RelationGovernanceProviderSwitchOptions>()
+		?? new RelationGovernanceProviderSwitchOptions();
+var routerShadowOptions = new RouterShadowOptions
+{
+	Enabled = learningRouterShadowOptions.Enabled,
+	TraceCollectionEnabled = learningRouterShadowOptions.TraceCollectionEnabled,
+	ShadowClassifier = string.IsNullOrWhiteSpace(learningRouterShadowOptions.ShadowClassifier)
+		? RouterIntentClassifierBaselineNames.TokenCentroidRouterBaseline
+		: learningRouterShadowOptions.ShadowClassifier,
+	RecordAgreements = learningRouterShadowOptions.RecordAgreements,
+	RecordDisagreements = learningRouterShadowOptions.RecordDisagreements
+};
 builder.Services.AddSingleton(storageOptions);
 builder.Services.AddSingleton(compressionOptions);
 builder.Services.AddSingleton(securityOptions);
 builder.Services.AddSingleton(retrievalAttentionRerankOptions);
 builder.Services.AddSingleton(retrievalPlanningOptions);
 builder.Services.AddSingleton(learningRankerShadowOptions);
+builder.Services.AddSingleton(learningRouterShadowOptions);
+builder.Services.AddSingleton(routerShadowOptions);
 builder.Services.AddSingleton(lifecycleAwareRankerShadowOptions);
+builder.Services.AddSingleton(learningGraphExpansionShadowOptions);
+builder.Services.AddSingleton(graphExpansionShadowOptions);
+builder.Services.AddSingleton(graphExpansionApplyServiceOptions);
+builder.Services.AddSingleton(graphExpansionApplyOptions);
+builder.Services.AddSingleton(relationGovernanceProviderSwitchOptions);
 builder.Services.Configure<JobWorkerOptions>(builder.Configuration.GetSection("JobWorker"));
 builder.Services.Configure<ShortTermMaintenanceOptions>(builder.Configuration.GetSection("ShortTermMaintenance"));
 builder.Services.AddHostedService<ContextJobWorker>();
 builder.Services.AddHostedService<ShortTermMemoryMaintenanceWorker>();
 builder.Services.AddSingleton<ContextCoreMetrics>();
+builder.Services.AddSingleton(new FoundationStatusService(Directory.GetCurrentDirectory()));
 builder.Services.AddRequestTimeouts(options =>
 {
 	options.DefaultPolicy = new RequestTimeoutPolicy
@@ -172,6 +258,7 @@ app
 	.MapConstraintEndpoints()
 	.MapLearningEndpoints()
 	.MapProvenanceEndpoints()
+	.MapVectorEndpoints()
 	.MapModelEndpoints();
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok", utc = DateTimeOffset.UtcNow }))
@@ -276,7 +363,7 @@ if (storageOptions.IsPostgres)
 	try
 	{
 		using var startupCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-		var pgFactory = app.Services.GetRequiredService<ContextCore.Storage.Postgres.PostgresConnectionFactory>();
+		var pgFactory = app.Services.GetRequiredService<PostgresConnectionFactory>();
 		var (pgOk, pgError) = await pgFactory.PingAsync(startupCts.Token);
 		if (!pgOk)
 		{

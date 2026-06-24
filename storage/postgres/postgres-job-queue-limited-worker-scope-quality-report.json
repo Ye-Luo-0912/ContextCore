@@ -1,0 +1,27 @@
+﻿{
+  "generatedAt": "2026-06-14T12:02:55.6948389+00:00",
+  "passed": true,
+  "observationWindowSeconds": 120,
+  "jobCount": 11,
+  "completedCount": 8,
+  "retriedCount": 4,
+  "deadLetterCount": 2,
+  "cancelledCount": 1,
+  "leaseAcquireCount": 15,
+  "leaseConflictCount": 1,
+  "leaseExpiredReacquireCount": 1,
+  "heartbeatCount": 2,
+  "duplicateExecutionCount": 0,
+  "leaseViolationCount": 0,
+  "retryViolationCount": 0,
+  "deadLetterViolationCount": 0,
+  "postgresFailureCount": 0,
+  "scopeLeakCount": 0,
+  "nonSelectedScopeRemainsFileSystem": true,
+  "runtimeWorkerGlobalProviderUnchanged": true,
+  "blockedReasons": [],
+  "diagnostics": [
+    "RuntimeWorkerGlobalProviderUnchanged"
+  ],
+  "recommendation": "ReadyForJobQueueFreezeGate"
+}

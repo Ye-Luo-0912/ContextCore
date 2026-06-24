@@ -1,0 +1,1 @@
+{"OperationId":"allow-obs-rdsv2-stress-holdout-sample-0110-1ddb84683c2844438e1acb0db4b4846f","WorkspaceId":"","CollectionId":"","QueryText":"minimal-token signal recover context coverage constraint","BaselineCount":5,"AddedCandidateIds":[],"RemovedCandidateIds":[],"Applied":false,"Allowlisted":true,"Timestamp":"2026-06-22T00:49:50.6363484+00:00"}

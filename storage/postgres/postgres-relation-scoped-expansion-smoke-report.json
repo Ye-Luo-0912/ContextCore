@@ -1,0 +1,90 @@
+﻿{
+  "GatePassed": true,
+  "ScopeCount": 2,
+  "AllowlistedScopeCount": 2,
+  "NonAllowlistedScopeChecked": true,
+  "OperationCount": 59,
+  "PostgresPrimaryReadCount": 28,
+  "PostgresPrimaryWriteCount": 26,
+  "FileSystemScopeReadCount": 1,
+  "FallbackCount": 0,
+  "ComparisonTraceCount": 58,
+  "MismatchCount": 0,
+  "PostgresFailureCount": 0,
+  "AveragePostgresReadMs": 4.285896428571429,
+  "AveragePostgresWriteMs": 14.75868148148148,
+  "Plans": [
+    {
+      "ScopeName": "selected-canary-alpha",
+      "WorkspaceId": "contextcore_scoped_expansion_alpha",
+      "CollectionId": "relation-governance-scoped-expansion-alpha",
+      "Mode": "GuardedPostgresPrimary",
+      "GateStatus": "Passed",
+      "LastCanaryStatus": "ReadyForScopedServiceModeExpansion",
+      "AllowedOperations": [
+        "relation-edge-read-write",
+        "relation-review-read-write",
+        "diagnostics-read-write",
+        "replacement-chain-lookup",
+        "graph-expansion-preview"
+      ],
+      "FallbackEnabled": true,
+      "ComparisonTraceEnabled": true,
+      "RollbackInstruction": "Disable scope \u0060selected-canary-alpha\u0060 or set RelationGovernanceProviderSwitchOptions.Enabled=false."
+    },
+    {
+      "ScopeName": "selected-canary-beta",
+      "WorkspaceId": "contextcore_scoped_expansion_beta",
+      "CollectionId": "relation-governance-scoped-expansion-beta",
+      "Mode": "GuardedPostgresPrimary",
+      "GateStatus": "Passed",
+      "LastCanaryStatus": "ReadyForScopedServiceModeExpansion",
+      "AllowedOperations": [
+        "relation-edge-read-write",
+        "relation-review-read-write",
+        "diagnostics-read-write",
+        "replacement-chain-lookup",
+        "graph-expansion-preview"
+      ],
+      "FallbackEnabled": true,
+      "ComparisonTraceEnabled": true,
+      "RollbackInstruction": "Disable scope \u0060selected-canary-beta\u0060 or set RelationGovernanceProviderSwitchOptions.Enabled=false."
+    }
+  ],
+  "PerScopeStatus": [
+    {
+      "ScopeName": "selected-canary-alpha",
+      "WorkspaceId": "contextcore_scoped_expansion_alpha",
+      "CollectionId": "relation-governance-scoped-expansion-alpha",
+      "Mode": "GuardedPostgresPrimary",
+      "RolloutStage": "db2.10-expansion",
+      "OperationCount": 29,
+      "PostgresPrimaryReadCount": 14,
+      "PostgresPrimaryWriteCount": 13,
+      "FallbackCount": 0,
+      "MismatchCount": 0,
+      "PostgresFailureCount": 0,
+      "Recommendation": "ReadyForSelectedWorkspaceCanary"
+    },
+    {
+      "ScopeName": "selected-canary-beta",
+      "WorkspaceId": "contextcore_scoped_expansion_beta",
+      "CollectionId": "relation-governance-scoped-expansion-beta",
+      "Mode": "GuardedPostgresPrimary",
+      "RolloutStage": "db2.10-expansion",
+      "OperationCount": 29,
+      "PostgresPrimaryReadCount": 14,
+      "PostgresPrimaryWriteCount": 13,
+      "FallbackCount": 0,
+      "MismatchCount": 0,
+      "PostgresFailureCount": 0,
+      "Recommendation": "ReadyForSelectedWorkspaceCanary"
+    }
+  ],
+  "Diagnostics": [
+    "selected-canary-alpha:ExtendedCanaryScopedOnly",
+    "selected-canary-beta:ExtendedCanaryScopedOnly"
+  ],
+  "BlockedReasons": [],
+  "Recommendation": "ReadyForScopedExpansion"
+}

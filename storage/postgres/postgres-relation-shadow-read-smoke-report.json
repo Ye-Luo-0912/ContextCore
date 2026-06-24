@@ -1,0 +1,13 @@
+﻿{
+  "ProviderEnabled": true,
+  "WorkspaceId": "postgres-relation-shadow-read-smoke",
+  "CollectionId": "relation-shadow-read",
+  "TraceCount": 15,
+  "CleanupPerformed": true,
+  "Mismatches": [],
+  "Diagnostics": [
+    "CleanupPerformed",
+    "RuntimeProviderStillFileSystem"
+  ],
+  "Recommendation": "ReadyForGuardedProviderSwitch"
+}

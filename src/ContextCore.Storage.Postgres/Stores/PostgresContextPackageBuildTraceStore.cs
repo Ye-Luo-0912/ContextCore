@@ -1,5 +1,7 @@
 using ContextCore.Abstractions;
+using ContextCore.Abstractions.Models;
 using ContextCore.Storage.Postgres;
+using ContextCore.Storage.Postgres.Infrastructure;
 using Npgsql;
 
 namespace ContextCore.Storage.Postgres.Stores;
@@ -65,7 +67,7 @@ LIMIT {(take > 0 ? take : 20)};
         {
             var json = reader.GetString(0);
             var item = Serializer.Deserialize<ContextPackageBuildResult>(json);
-            if (item is not null) results.Add(item);
+            results.Add(item);
         }
 
         return results;

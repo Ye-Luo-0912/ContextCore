@@ -1,0 +1,15 @@
+﻿{
+  "Passed": true,
+  "GovernanceReadinessGatePassed": true,
+  "DualWriteQualityReady": true,
+  "ShadowReadQualityReady": true,
+  "MismatchCount": 0,
+  "PostgresReadFailureCount": 0,
+  "PostgresWriteFailureCount": 0,
+  "FallbackPathTested": true,
+  "AllowlistScopeConfigured": true,
+  "P15GatePassed": true,
+  "BlockedReasons": [],
+  "Diagnostics": [],
+  "Recommendation": "ReadyForGuardedProviderSwitch"
+}

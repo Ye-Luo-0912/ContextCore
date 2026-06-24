@@ -1,0 +1,1 @@
+{"OperationId":"mline-rdsv2-stress-holdout-sample-0106-d9e198fef57645f4a476c76f995435e3","WorkspaceId":"","CollectionId":"","QueryText":"Retrieve scope guidance for preserve isolation, but do not return items governed by review.","BaselineCount":5,"AddedCandidateIds":[],"RemovedCandidateIds":[],"Applied":false,"Allowlisted":false,"Timestamp":"2026-06-20T07:43:44.3773053+00:00"}

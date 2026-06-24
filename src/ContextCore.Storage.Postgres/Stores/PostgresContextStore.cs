@@ -1,6 +1,6 @@
-using ContextCore.Storage.Postgres;
 using ContextCore.Abstractions;
-using Npgsql;
+using ContextCore.Abstractions.Models;
+using ContextCore.Storage.Postgres.Infrastructure;
 
 namespace ContextCore.Storage.Postgres.Stores;
 
@@ -219,9 +219,9 @@ ON CONFLICT (workspace_id, id) DO UPDATE SET
             Title = item.Title,
             Content = item.Content,
             ContentFormat = item.ContentFormat,
-            Tags = item.Tags.ToArray(),
-            Refs = item.Refs.ToArray(),
-            SourceRefs = item.SourceRefs.ToArray(),
+            Tags = [.. item.Tags],
+            Refs = [.. item.Refs],
+            SourceRefs = [.. item.SourceRefs],
             Metadata = new Dictionary<string, string>(item.Metadata),
             Importance = item.Importance,
             Version = item.Version <= 0 ? 1 : item.Version,

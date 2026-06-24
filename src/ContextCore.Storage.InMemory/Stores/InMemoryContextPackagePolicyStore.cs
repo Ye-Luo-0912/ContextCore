@@ -2,7 +2,7 @@ using System.Collections.Concurrent;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 
-namespace ContextCore.Storage.InMemory;
+namespace ContextCore.Storage.InMemory.Stores;
 
 /// <summary>基于内存的上下文包策略存储，主要用于测试和临时运行。</summary>
 public sealed class InMemoryContextPackagePolicyStore : IContextPackagePolicyStore

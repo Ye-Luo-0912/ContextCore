@@ -1,0 +1,15 @@
+﻿{
+  "generatedAt": "2026-06-14T00:43:48.645214+00:00",
+  "traceCount": 17,
+  "fileSystemWriteSuccessCount": 10,
+  "postgresWriteSuccessCount": 10,
+  "fileSystemReadSuccessCount": 7,
+  "postgresReadSuccessCount": 7,
+  "mismatchCount": 0,
+  "postgresFailureCount": 0,
+  "fallbackCount": 0,
+  "exportProjectionParityPassed": true,
+  "summaryParityPassed": true,
+  "recommendation": "ReadyForScopedServiceMode",
+  "diagnostics": []
+}

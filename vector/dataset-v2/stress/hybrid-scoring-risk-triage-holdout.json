@@ -1,0 +1,23 @@
+﻿{
+  "OperationId": "retrieval-dataset-v2-hybrid-scoring-risk-triage-09e0fd3ee326455d8381b080ddc83b85",
+  "CreatedAt": "2026-06-15T17:16:35.1380788+00:00",
+  "DatasetId": "rdsv2-stress-a9f2c86e8d1df488",
+  "ProfileName": "post-scoring-risk-gated-v1",
+  "SampleCount": 24,
+  "RiskCandidateCount": 0,
+  "RiskByType": {},
+  "RiskByDifficulty": {},
+  "RiskBySplit": {},
+  "BlockedCandidateReintroducedCount": 0,
+  "MustNotCandidatePromotedCount": 0,
+  "LifecycleRiskPromotedCount": 0,
+  "RiskProjectionMismatchCount": 0,
+  "EligibilityBypassCount": 0,
+  "RepairableByPostScoringRiskGateCount": 0,
+  "RepairableByScoreCapCount": 0,
+  "UnsafeProfileCount": 0,
+  "UseForRuntime": false,
+  "FormalRetrievalAllowed": false,
+  "Recommendation": "ReadyForSafeScoringRepair",
+  "Details": []
+}

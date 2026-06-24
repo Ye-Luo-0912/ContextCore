@@ -133,6 +133,242 @@ public sealed class ContextCoreClient
             cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task<VectorIndexStatusResponse> GetVectorStatusAsync(
+        string workspaceId,
+        string collectionId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(collectionId);
+
+        var path = $"api/vector/status?workspaceId={Escape(workspaceId)}&collectionId={Escape(collectionId)}";
+        return await GetRequiredAsync<VectorIndexStatusResponse>(path, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<VectorIndexDiagnosticsReport> GetVectorDiagnosticsAsync(
+        string workspaceId,
+        string collectionId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(collectionId);
+
+        var path = $"api/vector/diagnostics?workspaceId={Escape(workspaceId)}&collectionId={Escape(collectionId)}";
+        return await GetRequiredAsync<VectorIndexDiagnosticsReport>(path, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<VectorReindexPreviewResponse> PreviewVectorReindexAsync(
+        VectorReindexPreviewRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.WorkspaceId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.CollectionId);
+
+        return await PostRequiredAsync<VectorReindexPreviewRequest, VectorReindexPreviewResponse>(
+            "api/vector/reindex-preview",
+            request,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<VectorQueryPreviewResult> PreviewVectorQueryAsync(
+        VectorQueryPreviewRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.WorkspaceId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.CollectionId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.QueryText);
+
+        return await PostRequiredAsync<VectorQueryPreviewRequest, VectorQueryPreviewResult>(
+            "api/vector/query-preview",
+            request,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<VectorReindexPlan> CreateVectorReindexPlanAsync(
+        VectorReindexRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.WorkspaceId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.CollectionId);
+
+        return await PostRequiredAsync<VectorReindexRequest, VectorReindexPlan>(
+            "api/vector/reindex-plan",
+            request,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<VectorReindexSubmitResponse> SubmitVectorReindexAsync(
+        VectorReindexRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.WorkspaceId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.CollectionId);
+
+        return await PostRequiredAsync<VectorReindexRequest, VectorReindexSubmitResponse>(
+            "api/vector/reindex-submit",
+            request,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<VectorReindexReportQueryResponse> GetVectorReindexReportsAsync(
+        string workspaceId,
+        string collectionId,
+        int take = 20,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(collectionId);
+
+        var path = $"api/vector/reindex-reports?workspaceId={Escape(workspaceId)}&collectionId={Escape(collectionId)}&take={take}";
+        return await GetRequiredAsync<VectorReindexReportQueryResponse>(path, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<VectorReindexResult> GetVectorReindexReportAsync(
+        string reportId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(reportId);
+
+        return await GetRequiredAsync<VectorReindexResult>(
+            $"api/vector/reindex-reports/{Escape(reportId)}",
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<VectorLifecycleMetadataReviewCandidateGenerationResult> GenerateVectorLifecycleMetadataReviewCandidatesAsync(
+        VectorLifecycleMetadataReviewCandidateGenerationRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.WorkspaceId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.CollectionId);
+
+        return await PostRequiredAsync<VectorLifecycleMetadataReviewCandidateGenerationRequest, VectorLifecycleMetadataReviewCandidateGenerationResult>(
+            "api/vector/lifecycle-metadata/review-candidates/generate",
+            request,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<IReadOnlyList<VectorLifecycleMetadataReviewCandidate>> GetVectorLifecycleMetadataReviewCandidatesAsync(
+        string workspaceId,
+        string? collectionId = null,
+        string? status = null,
+        string? layer = null,
+        string? itemKind = null,
+        string? mustHitItemId = null,
+        string? sourceEvalSet = null,
+        int limit = 50,
+        int offset = 0,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
+
+        var parts = new List<string>
+        {
+            $"workspaceId={Escape(workspaceId)}",
+            $"limit={limit}",
+            $"offset={offset}"
+        };
+        if (!string.IsNullOrWhiteSpace(collectionId)) parts.Add($"collectionId={Escape(collectionId)}");
+        if (!string.IsNullOrWhiteSpace(status)) parts.Add($"status={Escape(status)}");
+        if (!string.IsNullOrWhiteSpace(layer)) parts.Add($"layer={Escape(layer)}");
+        if (!string.IsNullOrWhiteSpace(itemKind)) parts.Add($"itemKind={Escape(itemKind)}");
+        if (!string.IsNullOrWhiteSpace(mustHitItemId)) parts.Add($"mustHitItemId={Escape(mustHitItemId)}");
+        if (!string.IsNullOrWhiteSpace(sourceEvalSet)) parts.Add($"sourceEvalSet={Escape(sourceEvalSet)}");
+
+        return await GetRequiredAsync<IReadOnlyList<VectorLifecycleMetadataReviewCandidate>>(
+            $"api/vector/lifecycle-metadata/review-candidates?{string.Join('&', parts)}",
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<VectorLifecycleMetadataReviewCandidate> GetVectorLifecycleMetadataReviewCandidateAsync(
+        string candidateId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(candidateId);
+
+        return await GetRequiredAsync<VectorLifecycleMetadataReviewCandidate>(
+            $"api/vector/lifecycle-metadata/review-candidates/{Escape(candidateId)}",
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<VectorLifecycleMetadataReviewCandidateExplanation> ExplainVectorLifecycleMetadataReviewCandidateAsync(
+        string candidateId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(candidateId);
+
+        return await GetRequiredAsync<VectorLifecycleMetadataReviewCandidateExplanation>(
+            $"api/vector/lifecycle-metadata/review-candidates/{Escape(candidateId)}/explain",
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public Task<VectorLifecycleMetadataReviewResult> ApproveVectorLifecycleMetadataReviewCandidateAsync(
+        string candidateId,
+        VectorLifecycleMetadataReviewRequest request,
+        CancellationToken cancellationToken = default)
+        => ReviewVectorLifecycleMetadataReviewCandidateAsync(candidateId, "approve", request, cancellationToken);
+
+    public Task<VectorLifecycleMetadataReviewResult> RejectVectorLifecycleMetadataReviewCandidateAsync(
+        string candidateId,
+        VectorLifecycleMetadataReviewRequest request,
+        CancellationToken cancellationToken = default)
+        => ReviewVectorLifecycleMetadataReviewCandidateAsync(candidateId, "reject", request, cancellationToken);
+
+    public Task<VectorLifecycleMetadataReviewResult> NeedsEvidenceVectorLifecycleMetadataReviewCandidateAsync(
+        string candidateId,
+        VectorLifecycleMetadataReviewRequest request,
+        CancellationToken cancellationToken = default)
+        => ReviewVectorLifecycleMetadataReviewCandidateAsync(candidateId, "needs-evidence", request, cancellationToken);
+
+    public Task<VectorLifecycleMetadataReviewResult> SupersedeVectorLifecycleMetadataReviewCandidateAsync(
+        string candidateId,
+        VectorLifecycleMetadataReviewRequest request,
+        CancellationToken cancellationToken = default)
+        => ReviewVectorLifecycleMetadataReviewCandidateAsync(candidateId, "supersede", request, cancellationToken);
+
+    public async Task<IReadOnlyList<VectorLifecycleMetadataReviewRecord>> GetVectorLifecycleMetadataReviewHistoryAsync(
+        string candidateId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(candidateId);
+
+        return await GetRequiredAsync<IReadOnlyList<VectorLifecycleMetadataReviewRecord>>(
+            $"api/vector/lifecycle-metadata/review-candidates/{Escape(candidateId)}/reviews",
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<IReadOnlyList<VectorLifecycleSidecarMetadataEntry>> GetVectorLifecycleMetadataSidecarAsync(
+        string workspaceId,
+        string? collectionId = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
+        var path = $"api/vector/lifecycle-metadata/sidecar?workspaceId={Escape(workspaceId)}"
+            + (string.IsNullOrWhiteSpace(collectionId) ? string.Empty : $"&collectionId={Escape(collectionId)}");
+        return await GetRequiredAsync<IReadOnlyList<VectorLifecycleSidecarMetadataEntry>>(path, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    private async Task<VectorLifecycleMetadataReviewResult> ReviewVectorLifecycleMetadataReviewCandidateAsync(
+        string candidateId,
+        string route,
+        VectorLifecycleMetadataReviewRequest request,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(candidateId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(route);
+        ArgumentNullException.ThrowIfNull(request);
+
+        return await PostRequiredAsync<VectorLifecycleMetadataReviewRequest, VectorLifecycleMetadataReviewResult>(
+            $"api/vector/lifecycle-metadata/review-candidates/{Escape(candidateId)}/{route}",
+            request,
+            cancellationToken).ConfigureAwait(false);
+    }
+
     public async Task<RetrievalPlanProposal> ProposeRetrievalPlanAsync(
         ContextPlanningProposalRequest request,
         CancellationToken cancellationToken = default)
@@ -227,6 +463,60 @@ public sealed class ContextCoreClient
         ArgumentException.ThrowIfNullOrWhiteSpace(collectionId);
 
         var path = $"api/learning/ranker-shadow/traces?workspaceId={Escape(workspaceId)}&collectionId={Escape(collectionId)}&take={take}&format=jsonl";
+        return await GetRequiredStringAsync(path, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<IReadOnlyList<GraphExpansionShadowTraceRecord>> GetGraphExpansionShadowTracesAsync(
+        string workspaceId,
+        string collectionId,
+        int take = 10,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(collectionId);
+
+        var path = $"api/learning/graph-expansion-shadow/traces?workspaceId={Escape(workspaceId)}&collectionId={Escape(collectionId)}&take={take}";
+        return await GetRequiredAsync<IReadOnlyList<GraphExpansionShadowTraceRecord>>(path, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    public async Task<string> ExportGraphExpansionShadowTracesAsync(
+        string workspaceId,
+        string collectionId,
+        int take = 100,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(collectionId);
+
+        var path = $"api/learning/graph-expansion-shadow/traces?workspaceId={Escape(workspaceId)}&collectionId={Escape(collectionId)}&take={take}&format=jsonl";
+        return await GetRequiredStringAsync(path, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<IReadOnlyList<RouterIntentShadowTrace>> GetRouterShadowTracesAsync(
+        string workspaceId,
+        string collectionId,
+        int take = 10,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(collectionId);
+
+        var path = $"api/learning/router-shadow/traces?workspaceId={Escape(workspaceId)}&collectionId={Escape(collectionId)}&take={take}";
+        return await GetRequiredAsync<IReadOnlyList<RouterIntentShadowTrace>>(path, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    public async Task<string> ExportRouterShadowTracesAsync(
+        string workspaceId,
+        string collectionId,
+        int take = 100,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(collectionId);
+
+        var path = $"api/learning/router-shadow/traces?workspaceId={Escape(workspaceId)}&collectionId={Escape(collectionId)}&take={take}&format=jsonl";
         return await GetRequiredStringAsync(path, cancellationToken).ConfigureAwait(false);
     }
 
@@ -1053,6 +1343,108 @@ public sealed class ContextCoreClient
             cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task<LearningFeedbackSubmitResult> SubmitLearningFeedbackAsync(
+        LearningFeedbackEvent feedbackEvent,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(feedbackEvent);
+        return await SubmitLearningFeedbackAsync(ToLearningFeedbackSubmitRequest(feedbackEvent), cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    public async Task<LearningFeedbackSubmitResult> SubmitLearningFeedbackAsync(
+        LearningFeedbackSubmitRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        return await PostRequiredAsync<LearningFeedbackSubmitRequest, LearningFeedbackSubmitResult>(
+            "api/learning/feedback",
+            request,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<IReadOnlyList<LearningFeedbackEvent>> GetLearningFeedbackAsync(
+        LearningFeedbackEventQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        return await GetRequiredAsync<IReadOnlyList<LearningFeedbackEvent>>(
+            $"api/learning/feedback?{BuildRuntimeLearningFeedbackQueryString(query)}",
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<LearningFeedbackSummaryReport> GetLearningFeedbackSummaryAsync(
+        LearningFeedbackEventQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        return await GetRequiredAsync<LearningFeedbackSummaryReport>(
+            $"api/learning/feedback/summary?{BuildRuntimeLearningFeedbackQueryString(query, includeRuntimeFlag: false)}",
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<string> ExportLearningFeedbackAsync(
+        LearningFeedbackEventQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        return await GetRequiredStringAsync(
+            $"api/learning/feedback/export?{BuildRuntimeLearningFeedbackQueryString(query, includeRuntimeFlag: false)}",
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public Task<LearningFeedbackReviewResult> ApproveLearningFeedbackAsync(
+        string feedbackId,
+        LearningFeedbackReviewRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        return ReviewLearningFeedbackAsync(feedbackId, "approve", request, cancellationToken);
+    }
+
+    public Task<LearningFeedbackReviewResult> RejectLearningFeedbackAsync(
+        string feedbackId,
+        LearningFeedbackReviewRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        return ReviewLearningFeedbackAsync(feedbackId, "reject", request, cancellationToken);
+    }
+
+    public Task<LearningFeedbackReviewResult> MarkLearningFeedbackNeedsRedactionAsync(
+        string feedbackId,
+        LearningFeedbackReviewRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        return ReviewLearningFeedbackAsync(feedbackId, "needs-redaction", request, cancellationToken);
+    }
+
+    public Task<LearningFeedbackReviewResult> MarkLearningFeedbackNeedsEvidenceAsync(
+        string feedbackId,
+        LearningFeedbackReviewRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        return ReviewLearningFeedbackAsync(feedbackId, "needs-evidence", request, cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<LearningFeedbackReviewRecord>> GetLearningFeedbackReviewsAsync(
+        LearningFeedbackReviewQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        return await GetRequiredAsync<IReadOnlyList<LearningFeedbackReviewRecord>>(
+            $"api/learning/feedback/reviews?{BuildLearningFeedbackReviewQueryString(query)}",
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<LearningFeedbackReviewSummaryReport> GetLearningFeedbackReviewSummaryAsync(
+        LearningFeedbackReviewQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        return await GetRequiredAsync<LearningFeedbackReviewSummaryReport>(
+            $"api/learning/feedback/reviews/summary?{BuildLearningFeedbackReviewQueryString(query)}",
+            cancellationToken).ConfigureAwait(false);
+    }
+
     public async Task<PolicyFeedbackDataset> GetPolicyFeedbackAsync(
         string workspaceId,
         string? collectionId = null,
@@ -1064,6 +1456,20 @@ public sealed class ContextCoreClient
         ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
         var path = $"api/learning/policy-feedback?{BuildPolicyFeedbackQueryString(workspaceId, collectionId, sessionId, limit, offset)}";
         return await GetRequiredAsync<PolicyFeedbackDataset>(path, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<LearningFeedbackReviewResult> ReviewLearningFeedbackAsync(
+        string feedbackId,
+        string action,
+        LearningFeedbackReviewRequest request,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(feedbackId);
+        ArgumentNullException.ThrowIfNull(request);
+        return await PostRequiredAsync<LearningFeedbackReviewRequest, LearningFeedbackReviewResult>(
+            $"api/learning/feedback/{Escape(feedbackId)}/review/{action}",
+            request,
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<string> ExportPolicyFeedbackAsync(
@@ -1357,6 +1763,25 @@ public sealed class ContextCoreClient
             cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task<IReadOnlyList<RelationExpansionProfile>> GetRelationExpansionProfilesAsync(
+        CancellationToken cancellationToken = default)
+    {
+        return await GetRequiredAsync<IReadOnlyList<RelationExpansionProfile>>(
+            "api/relations/expansion/profiles",
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<RelationExpansionPreviewResponse> PreviewRelationExpansionAsync(
+        RelationExpansionPreviewRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        return await PostRequiredAsync<RelationExpansionPreviewRequest, RelationExpansionPreviewResponse>(
+            "api/relations/expansion/preview",
+            request,
+            cancellationToken).ConfigureAwait(false);
+    }
+
     public async Task<RelationGraphDiagnosticsReport> GetRelationDiagnosticsAsync(
         string workspaceId,
         string? collectionId = null,
@@ -1412,6 +1837,64 @@ public sealed class ContextCoreClient
 
         return await GetRequiredAsync<RelationExplainResponse>(
             $"api/relations/{Escape(relationId)}/explain?{string.Join('&', parts)}",
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<RelationReviewResult> ReviewRelationAsync(
+        string relationId,
+        RelationReviewRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(relationId);
+        return await PostRequiredAsync<RelationReviewRequest, RelationReviewResult>(
+            $"api/relations/{Escape(relationId)}/review",
+            request,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<RelationReviewResult> RejectRelationAsync(
+        string relationId,
+        RelationReviewRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(relationId);
+        return await PostRequiredAsync<RelationReviewRequest, RelationReviewResult>(
+            $"api/relations/{Escape(relationId)}/reject",
+            request,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<RelationReviewResult> DeprecateRelationAsync(
+        string relationId,
+        RelationReviewRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(relationId);
+        return await PostRequiredAsync<RelationReviewRequest, RelationReviewResult>(
+            $"api/relations/{Escape(relationId)}/deprecate",
+            request,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<RelationReviewResult> MarkRelationNeedsEvidenceAsync(
+        string relationId,
+        RelationReviewRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(relationId);
+        return await PostRequiredAsync<RelationReviewRequest, RelationReviewResult>(
+            $"api/relations/{Escape(relationId)}/needs-evidence",
+            request,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<IReadOnlyList<RelationReviewRecord>> GetRelationReviewsAsync(
+        string relationId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(relationId);
+        return await GetRequiredAsync<IReadOnlyList<RelationReviewRecord>>(
+            $"api/relations/{Escape(relationId)}/reviews",
             cancellationToken).ConfigureAwait(false);
     }
 
@@ -1690,9 +2173,151 @@ public sealed class ContextCoreClient
         return await GetRequiredAsync<ContextCoreBackupValidateResponse>("api/admin/backup/validate", cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task<PostgresStorageStatusResponse> GetPostgresStorageStatusAsync(CancellationToken cancellationToken = default)
+    {
+        return await GetRequiredAsync<PostgresStorageStatusResponse>(
+            "api/admin/storage/postgres/status",
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<PostgresOperationalStoreDiagnostics> GetPostgresStorageDiagnosticsAsync(CancellationToken cancellationToken = default)
+    {
+        return await GetRequiredAsync<PostgresOperationalStoreDiagnostics>(
+            "api/admin/storage/postgres/diagnostics",
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<PostgresMigrationPlanResponse> PreviewPostgresMigrationsAsync(CancellationToken cancellationToken = default)
+    {
+        return await PostRequiredAsync<object, PostgresMigrationPlanResponse>(
+            "api/admin/storage/postgres/migrations/dry-run",
+            new { },
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<PostgresMigrationApplyResponse> ApplyPostgresMigrationsAsync(
+        bool confirm,
+        CancellationToken cancellationToken = default)
+    {
+        return await PostRequiredAsync<PostgresMigrationRequest, PostgresMigrationApplyResponse>(
+            "api/admin/storage/postgres/migrations/apply",
+            new PostgresMigrationRequest { Confirm = confirm },
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<PostgresRelationScopedServiceModeStatusResponse> GetRelationProviderStatusAsync(CancellationToken cancellationToken = default)
+    {
+        return await GetRequiredAsync<PostgresRelationScopedServiceModeStatusResponse>(
+            "api/admin/storage/relation-provider/status",
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<PostgresRelationScopedServiceModeStatusResponse> GetRelationProviderScopedDiagnosticsAsync(CancellationToken cancellationToken = default)
+    {
+        return await GetRequiredAsync<PostgresRelationScopedServiceModeStatusResponse>(
+            "api/admin/storage/relation-provider/scoped-diagnostics",
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<FoundationServiceStatusResponse> GetFoundationStatusAsync(CancellationToken cancellationToken = default)
+    {
+        return await GetFoundationEnvelopeDataAsync<FoundationServiceStatusResponse>(
+            "api/admin/foundation/status",
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<FoundationServiceStatusResponse> GetFoundationReleaseCandidateStatusAsync(CancellationToken cancellationToken = default)
+    {
+        return await GetFoundationEnvelopeDataAsync<FoundationServiceStatusResponse>(
+            "api/admin/foundation/release-candidate",
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<FoundationServiceStatusResponse> GetFoundationReleaseCandidateAsync(CancellationToken cancellationToken = default)
+        => await GetFoundationReleaseCandidateStatusAsync(cancellationToken).ConfigureAwait(false);
+
+    public async Task<FoundationServiceStatusResponse> GetFoundationReproducibilityStatusAsync(CancellationToken cancellationToken = default)
+    {
+        return await GetFoundationEnvelopeDataAsync<FoundationServiceStatusResponse>(
+            "api/admin/foundation/reproducibility",
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<FoundationServiceStatusResponse> GetFoundationReproducibilityAsync(CancellationToken cancellationToken = default)
+        => await GetFoundationReproducibilityStatusAsync(cancellationToken).ConfigureAwait(false);
+
+    public async Task<FoundationServiceStatusResponse> GetFoundationRuntimeChangeGateStatusAsync(CancellationToken cancellationToken = default)
+    {
+        return await GetFoundationEnvelopeDataAsync<FoundationServiceStatusResponse>(
+            "api/admin/foundation/runtime-change-gate",
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<FoundationServiceStatusResponse> GetRuntimeChangeGateAsync(CancellationToken cancellationToken = default)
+        => await GetFoundationRuntimeChangeGateStatusAsync(cancellationToken).ConfigureAwait(false);
+
+    public async Task<FoundationServiceStatusResponse> GetFoundationVectorFormalPreviewStatusAsync(CancellationToken cancellationToken = default)
+    {
+        return await GetFoundationEnvelopeDataAsync<FoundationServiceStatusResponse>(
+            "api/admin/foundation/vector-formal-preview",
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<FoundationServiceStatusResponse> GetVectorFormalPreviewStatusAsync(CancellationToken cancellationToken = default)
+        => await GetFoundationVectorFormalPreviewStatusAsync(cancellationToken).ConfigureAwait(false);
+
+    public async Task<FoundationServiceStatusResponse> GetFoundationPostgresFreezeStatusAsync(CancellationToken cancellationToken = default)
+    {
+        return await GetFoundationEnvelopeDataAsync<FoundationServiceStatusResponse>(
+            "api/admin/foundation/postgres-freeze-status",
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<FoundationServiceStatusResponse> GetPostgresFreezeStatusAsync(CancellationToken cancellationToken = default)
+        => await GetFoundationPostgresFreezeStatusAsync(cancellationToken).ConfigureAwait(false);
+
+    public async Task<FoundationReportNavigationResponse> GetFoundationReportsAsync(CancellationToken cancellationToken = default)
+    {
+        return await GetFoundationEnvelopeDataAsync<FoundationReportNavigationResponse>(
+            "api/admin/foundation/reports",
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<FoundationReportNavigationEntry> GetFoundationReportAsync(
+        string reportId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(reportId);
+
+        return await GetFoundationEnvelopeDataAsync<FoundationReportNavigationEntry>(
+            $"api/admin/foundation/reports/{Escape(reportId)}",
+            cancellationToken).ConfigureAwait(false);
+    }
+
     private static string Escape(string value)
     {
         return Uri.EscapeDataString(value);
+    }
+
+    private async Task<TResponse> GetFoundationEnvelopeDataAsync<TResponse>(
+        string path,
+        CancellationToken cancellationToken)
+    {
+        var envelope = await GetRequiredAsync<FoundationApiResponseEnvelope<TResponse>>(path, cancellationToken)
+            .ConfigureAwait(false);
+        if (envelope.Data is null)
+        {
+            throw new ContextCoreApiException(
+                new ContextCoreErrorResponse
+                {
+                    ErrorCode = ContextCoreErrorCodes.StorageUnavailable,
+                    Message = $"Foundation API returned no data for {path} (status={envelope.Status}, recommendation={envelope.Recommendation}).",
+                    Target = path
+                },
+                HttpStatusCode.ServiceUnavailable);
+        }
+
+        return envelope.Data;
     }
 
     private static string BuildLearningRecordQueryString(ContextLearningRecordQuery query)
@@ -1725,6 +2350,77 @@ public sealed class ContextCoreClient
         if (!string.IsNullOrWhiteSpace(query.CandidateId)) parts.Add($"candidateId={Escape(query.CandidateId)}");
         if (!string.IsNullOrWhiteSpace(query.Action)) parts.Add($"action={Escape(query.Action)}");
         return string.Join('&', parts);
+    }
+
+    private static string BuildRuntimeLearningFeedbackQueryString(
+        LearningFeedbackEventQuery query,
+        bool includeRuntimeFlag = true)
+    {
+        var parts = new List<string>
+        {
+            $"limit={query.Limit}",
+            $"offset={query.Offset}"
+        };
+        if (includeRuntimeFlag)
+        {
+            parts.Add("runtimeFeedback=true");
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.WorkspaceId)) parts.Add($"workspaceId={Escape(query.WorkspaceId)}");
+        if (!string.IsNullOrWhiteSpace(query.CollectionId)) parts.Add($"collectionId={Escape(query.CollectionId)}");
+        if (!string.IsNullOrWhiteSpace(query.Source)) parts.Add($"source={Escape(query.Source)}");
+        if (!string.IsNullOrWhiteSpace(query.SourceOperationId)) parts.Add($"sourceOperationId={Escape(query.SourceOperationId)}");
+        if (!string.IsNullOrWhiteSpace(query.CapabilityId)) parts.Add($"capabilityId={Escape(query.CapabilityId)}");
+        if (!string.IsNullOrWhiteSpace(query.TargetId)) parts.Add($"targetId={Escape(query.TargetId)}");
+        if (!string.IsNullOrWhiteSpace(query.TargetType)) parts.Add($"targetType={Escape(query.TargetType)}");
+        if (!string.IsNullOrWhiteSpace(query.FeedbackKind)) parts.Add($"feedbackKind={Escape(query.FeedbackKind)}");
+        return string.Join('&', parts);
+    }
+
+    private static string BuildLearningFeedbackReviewQueryString(LearningFeedbackReviewQuery query)
+    {
+        var parts = new List<string>
+        {
+            $"limit={query.Limit}",
+            $"offset={query.Offset}"
+        };
+        if (!string.IsNullOrWhiteSpace(query.FeedbackId)) parts.Add($"feedbackId={Escape(query.FeedbackId)}");
+        if (query.ReviewStatus is not null) parts.Add($"reviewStatus={query.ReviewStatus.Value}");
+        if (!string.IsNullOrWhiteSpace(query.Reviewer)) parts.Add($"reviewer={Escape(query.Reviewer)}");
+        return string.Join('&', parts);
+    }
+
+    private static LearningFeedbackSubmitRequest ToLearningFeedbackSubmitRequest(LearningFeedbackEvent feedbackEvent)
+    {
+        if (!Enum.TryParse<LearningFeedbackTargetType>(
+            feedbackEvent.TargetType,
+            ignoreCase: true,
+            out var parsedTargetType))
+        {
+            throw new ArgumentException($"Invalid targetType '{feedbackEvent.TargetType}'.", nameof(feedbackEvent));
+        }
+
+        return new LearningFeedbackSubmitRequest
+        {
+            FeedbackId = feedbackEvent.FeedbackId,
+            WorkspaceId = feedbackEvent.WorkspaceId,
+            CollectionId = feedbackEvent.CollectionId,
+            Source = feedbackEvent.Source,
+            SourceOperationId = feedbackEvent.SourceOperationId,
+            CapabilityId = feedbackEvent.CapabilityId,
+            TargetId = feedbackEvent.TargetId,
+            TargetType = parsedTargetType,
+            FeedbackKind = feedbackEvent.FeedbackKind,
+            FeedbackValue = feedbackEvent.FeedbackValue,
+            Reason = feedbackEvent.Reason,
+            UserCorrection = feedbackEvent.UserCorrection,
+            RedactionMode = feedbackEvent.RedactionMode,
+            MetadataOnly = feedbackEvent.MetadataOnly,
+            TrainingUse = feedbackEvent.TrainingUse,
+            Confidence = feedbackEvent.Confidence,
+            CreatedAt = feedbackEvent.CreatedAt,
+            Metadata = feedbackEvent.Metadata
+        };
     }
 
     private static string BuildPolicyFeedbackQueryString(

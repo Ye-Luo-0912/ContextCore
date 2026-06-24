@@ -1,0 +1,58 @@
+﻿{
+  "OperationId": "vector-formal-retrieval-integration-gate-1fe6be1b61f84072871b628d32114144",
+  "CreatedAt": "2026-06-17T08:54:09.6377095+00:00",
+  "PlanPassed": true,
+  "Recommendation": "ReadyForShadowFormalRetrievalAdapter",
+  "AllowedMode": "PlanOnly",
+  "RequiredNextPhase": "ShadowFormalRetrievalAdapter",
+  "V416PromotionDecisionPassed": true,
+  "RuntimeChangeGatePassed": true,
+  "P15GatePassed": true,
+  "PromotionDecision": "ReadyForFormalRetrievalIntegrationPlan",
+  "FormalRetrievalAllowed": false,
+  "RuntimeSwitchAllowed": false,
+  "ReadyForRuntimeSwitch": false,
+  "UseForRuntime": false,
+  "FormalOutputChanged": 0,
+  "PackageOutputChanged": false,
+  "PackingPolicyChanged": false,
+  "VectorStoreBindingChanged": false,
+  "FormalPackageWritten": false,
+  "IntegrationPoints": [
+    "vector retrieval provider",
+    "IVectorIndexStore binding",
+    "package builder / context package assembly",
+    "fallback path",
+    "config switch",
+    "trace / comparison output",
+    "rollback / kill switch"
+  ],
+  "AllowedActions": [
+    "Plan formal retrieval integration points",
+    "Define ShadowFormalRetrievalAdapter requirements",
+    "Define fallback and rollback plan",
+    "Define trace and comparison output",
+    "Define config switch without enabling runtime"
+  ],
+  "ForbiddenActions": [
+    "Runtime switch",
+    "Formal retrieval enablement",
+    "Formal IVectorIndexStore binding",
+    "Formal package write",
+    "PackingPolicy mutation",
+    "Package output mutation",
+    "Global default-on"
+  ],
+  "FallbackPathPlan": "Keep current formal retrieval/package assembly as baseline; shadow adapter must fail closed to baseline.",
+  "ConfigSwitchPlan": "Define an explicit scoped config switch for the next ShadowFormalRetrievalAdapter phase; default remains off.",
+  "TraceComparisonOutputPlan": "Emit shadow comparison artifacts for baseline versus vector candidates without changing package output.",
+  "RollbackPlan": "Disable scoped shadow adapter config and continue baseline path; historical traces are retained.",
+  "KillSwitchPlan": "A config-level kill switch must return all scoped requests to baseline before any adapter activation.",
+  "SourceReports": {
+    "v416PromotionDecision": "vector\\v4\\runtime-experiment\\promotion-decision.json",
+    "learningRuntimeChangeReadinessGate": "learning\\readiness\\learning-runtime-change-readiness-gate.json",
+    "p15A3": "eval\\eval-report-p15-a3.json",
+    "p15Extended": "eval\\eval-report-p15-extended.json"
+  },
+  "BlockedReasons": []
+}

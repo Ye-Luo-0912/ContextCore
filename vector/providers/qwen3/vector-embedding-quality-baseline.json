@@ -1,0 +1,17 @@
+﻿{
+  "OperationId": "vector-embedding-quality-baseline-8459abd016aa4e73982edb48538fa111",
+  "CreatedAt": "2026-06-14T18:10:21.5491352+00:00",
+  "Samples": 113,
+  "PairCount": 47,
+  "PositiveHitCount": 149,
+  "NegativeHitCount": 38,
+  "PositiveAverageSimilarity": 0.8321240260049775,
+  "NegativeAverageSimilarity": 0.7800565002075618,
+  "SimilaritySeparation": 0.05206752579741569,
+  "MustHitRecallAt20": 0.93125,
+  "MustNotHitRiskAt20": 0.3114754098360656,
+  "EmbeddingProvider": "qwen3-embedding-0.6b-onnx",
+  "EmbeddingModel": "qwen3-embedding-0.6b",
+  "Recommendation": "KeepPreviewOnly",
+  "Warnings": []
+}

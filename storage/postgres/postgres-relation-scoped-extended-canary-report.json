@@ -1,0 +1,22 @@
+﻿{
+  "GatePassed": true,
+  "ProviderMode": "GuardedPostgresPrimary",
+  "CanaryScope": "contextcore_canary/relation-governance-extended-canary",
+  "OperationCount": 29,
+  "PostgresPrimaryReadCount": 14,
+  "PostgresPrimaryWriteCount": 13,
+  "FileSystemFallbackCount": 0,
+  "ComparisonTraceCount": 29,
+  "MismatchCount": 0,
+  "PostgresFailureCount": 0,
+  "GraphExpansionPreviewParityPassed": true,
+  "ReviewLifecycleParityPassed": true,
+  "DiagnosticsParityPassed": true,
+  "ReplacementChainParityPassed": true,
+  "CleanupPerformed": true,
+  "Diagnostics": [
+    "ExtendedCanaryScopedOnly"
+  ],
+  "BlockedReasons": [],
+  "Recommendation": "ReadyForSelectedWorkspaceCanary"
+}

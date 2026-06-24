@@ -1,0 +1,22 @@
+﻿{
+  "OperationId": "embedding-provider-smoke-8d095537b66f448bb3f66e38f259a743",
+  "CreatedAt": "2026-06-10T05:13:55.5130372+00:00",
+  "ProviderId": "onnx-local",
+  "ProviderType": "OnnxLocal",
+  "EmbeddingModel": "bge-small-zh-v1.5",
+  "ModelPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\src\\ContextCore.Embedding\\Models\\bge-small-zh-v1.5\\onnx\\model_quantized.onnx",
+  "TokenizerPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\src\\ContextCore.Embedding\\Models\\bge-small-zh-v1.5\\vocab.txt",
+  "ExpectedDimension": 512,
+  "ActualDimension": 512,
+  "ProviderEnabled": true,
+  "ModelPathExists": true,
+  "TokenizerPathExists": true,
+  "TokenizationWorks": true,
+  "OnnxInferenceWorks": true,
+  "DimensionMatchesConfig": true,
+  "NormalizationWorks": true,
+  "BatchEmbeddingWorks": true,
+  "Succeeded": true,
+  "Diagnostics": [],
+  "Warnings": []
+}

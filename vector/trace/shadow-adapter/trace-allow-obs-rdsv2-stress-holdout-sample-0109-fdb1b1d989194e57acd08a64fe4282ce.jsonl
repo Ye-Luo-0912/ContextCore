@@ -1,0 +1,1 @@
+{"OperationId":"allow-obs-rdsv2-stress-holdout-sample-0109-fdb1b1d989194e57acd08a64fe4282ce","WorkspaceId":"","CollectionId":"","QueryText":"Choose the context for duplicate instead of unrelated negative evidence.","BaselineCount":5,"AddedCandidateIds":[],"RemovedCandidateIds":[],"Applied":false,"Allowlisted":true,"Timestamp":"2026-06-22T00:22:08.1095744+00:00"}

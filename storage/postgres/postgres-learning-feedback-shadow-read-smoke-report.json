@@ -1,0 +1,16 @@
+﻿{
+  "generatedAt": "2026-06-13T10:31:28.5615529+00:00",
+  "workspaceId": "postgres-learning-feedback-shadow-read-smoke",
+  "collectionId": "learning-feedback",
+  "operationCount": 7,
+  "fileSystemReadSuccessCount": 7,
+  "postgresReadSuccessCount": 7,
+  "mismatchCount": 0,
+  "postgresFailureCount": 0,
+  "fallbackCount": 0,
+  "exportProjectionParityPassed": true,
+  "summaryParityPassed": true,
+  "cleanupPerformed": true,
+  "mismatches": [],
+  "recommendation": "ReadyForProviderQuality"
+}

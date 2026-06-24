@@ -1,0 +1,50 @@
+﻿{
+  "OperationId": "runtime-feature-derivation-failure-freeze-1d6ebbebc3d24509a28a082b0c961061",
+  "CreatedAt": "2026-06-23T08:01:47.9927467+00:00",
+  "FreezePassed": true,
+  "Recommendation": "ReadyForGraphHubNoiseControlPreview",
+  "FrozenStatus": "BlockedByHubRelationNoise",
+  "RepairGateSourcePath": "vector\\v5\\runtime-feature-derivation-repair-gate.json",
+  "DerivationGateSourcePath": "vector\\v5\\runtime-feature-derivation-gate.json",
+  "CanonicalAnchorResolverReusable": true,
+  "RuntimeRelationIntentDeriverReady": false,
+  "CombinedRepairEvalUpperBoundOnly": true,
+  "FormalRetrievalAllowed": false,
+  "RuntimeSwitchAllowed": false,
+  "V57DerivedRecall": 0.5083333333333333,
+  "V57DerivedMrr": 0.22750000000000004,
+  "V58TrainBaselineRecall": 0.5104166666666666,
+  "V58TrainDerivedRecall": 0.4791666666666667,
+  "V58TrainBaselineMrr": 0.22986111111111115,
+  "V58TrainDerivedMrr": 0.1998263888888889,
+  "V58HoldoutBaselineRecall": 0.5,
+  "V58HoldoutDerivedRecall": 0.4583333333333333,
+  "V58HoldoutBaselineMrr": 0.21805555555555556,
+  "V58HoldoutDerivedMrr": 0.2076388888888889,
+  "CanonicalRelationCoverageRate": 0.13333333333333333,
+  "CanonicalEvidenceCoverageRate": 0.475,
+  "CanonicalSourceCoverageRate": 0.475,
+  "FailureReasons": [
+    "DerivedMrrNotImproved",
+    "DerivedRecallNotImproved",
+    "HoldoutMrrRegression",
+    "HoldoutRecallRegression",
+    "LowRelationCoverage"
+  ],
+  "DisabledCapabilities": [
+    "relation boost promotion: hub-expanded relation envelope causes uniform multiplier across all candidates",
+    "combined-repair formal scoring: relation boost degrades recall on hub-and-spoke relation graphs",
+    "hub-expanded relation envelope scoring: hub items flood envelope with non-discriminative relations"
+  ],
+  "RecommendedNextPhases": [
+    "RuntimeRetrievalFeatureDerivationFreeze: graph hub / relation noise control preview",
+    "RuntimeRetrievalFeatureDerivationFreeze: input evidence / provenance contract enforcement"
+  ],
+  "FrozenArtifactPaths": [
+    "vector/v5/runtime-feature-derivation-preview.json/.md",
+    "vector/v5/runtime-feature-derivation-gate.json/.md",
+    "vector/v5/runtime-feature-derivation-repair.json/.md",
+    "vector/v5/runtime-feature-derivation-repair-gate.json/.md",
+    "vector/v5/runtime-feature-derivation-failure-freeze.json/.md"
+  ]
+}

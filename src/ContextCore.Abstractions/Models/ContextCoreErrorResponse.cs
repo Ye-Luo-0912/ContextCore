@@ -1,4 +1,4 @@
-namespace ContextCore.Abstractions;
+namespace ContextCore.Abstractions.Models;
 
 /// <summary>Service 对外错误响应的统一契约。</summary>
 public sealed class ContextCoreErrorResponse

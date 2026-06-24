@@ -1,0 +1,122 @@
+﻿{
+  "SnapshotId": "foundation-api-contract-snapshot-f43f88dacf584363b1b0c37bec955342",
+  "GeneratedAt": "2026-06-16T16:36:15.9740571+00:00",
+  "SchemaVersion": "foundation-api-envelope-v1",
+  "EnvelopeSchemaFields": [
+    "Success",
+    "CapabilityId",
+    "Status",
+    "Recommendation",
+    "Data",
+    "Diagnostics",
+    "GeneratedAt",
+    "SchemaVersion"
+  ],
+  "Endpoints": [
+    {
+      "Method": "GET",
+      "Route": "/api/admin/foundation/status",
+      "CapabilityId": "foundation.readonly.status",
+      "ResponseType": "FoundationServiceStatusResponse",
+      "UsesEnvelope": true,
+      "ReadOnly": true
+    },
+    {
+      "Method": "GET",
+      "Route": "/api/admin/foundation/release-candidate",
+      "CapabilityId": "foundation.readonly.status",
+      "ResponseType": "FoundationServiceStatusResponse",
+      "UsesEnvelope": true,
+      "ReadOnly": true
+    },
+    {
+      "Method": "GET",
+      "Route": "/api/admin/foundation/reproducibility",
+      "CapabilityId": "foundation.readonly.status",
+      "ResponseType": "FoundationServiceStatusResponse",
+      "UsesEnvelope": true,
+      "ReadOnly": true
+    },
+    {
+      "Method": "GET",
+      "Route": "/api/admin/foundation/runtime-change-gate",
+      "CapabilityId": "foundation.readonly.status",
+      "ResponseType": "FoundationServiceStatusResponse",
+      "UsesEnvelope": true,
+      "ReadOnly": true
+    },
+    {
+      "Method": "GET",
+      "Route": "/api/admin/foundation/vector-formal-preview",
+      "CapabilityId": "foundation.readonly.status",
+      "ResponseType": "FoundationServiceStatusResponse",
+      "UsesEnvelope": true,
+      "ReadOnly": true
+    },
+    {
+      "Method": "GET",
+      "Route": "/api/admin/foundation/postgres-freeze-status",
+      "CapabilityId": "foundation.readonly.status",
+      "ResponseType": "FoundationServiceStatusResponse",
+      "UsesEnvelope": true,
+      "ReadOnly": true
+    },
+    {
+      "Method": "GET",
+      "Route": "/api/admin/foundation/reports",
+      "CapabilityId": "foundation.report.navigation",
+      "ResponseType": "FoundationReportNavigationResponse",
+      "UsesEnvelope": true,
+      "ReadOnly": true
+    },
+    {
+      "Method": "GET",
+      "Route": "/api/admin/foundation/reports/{reportId}",
+      "CapabilityId": "foundation.report.navigation",
+      "ResponseType": "FoundationReportNavigationEntry",
+      "UsesEnvelope": true,
+      "ReadOnly": true
+    }
+  ],
+  "CapabilityStatusSchemaFields": [
+    "CapabilityId",
+    "DisplayName",
+    "Category",
+    "State",
+    "Recommendation",
+    "GatePassed",
+    "UseForRuntime",
+    "FormalRetrievalAllowed",
+    "RuntimeSwitchAllowed",
+    "ReadyForRuntimeSwitch",
+    "PackingPolicyChanged",
+    "PackageOutputChanged",
+    "SourceReportPath",
+    "AllowedModes",
+    "ForbiddenModes",
+    "BlockedReasons"
+  ],
+  "ReportNavigationSchemaFields": [
+    "ReportId",
+    "CapabilityId",
+    "RelativePath",
+    "Exists",
+    "GeneratedAt",
+    "ContentType",
+    "Summary",
+    "SafeToExpose"
+  ],
+  "ForbiddenActions": [
+    "RuntimeSwitch",
+    "FormalRetrieval",
+    "FormalPackageWrite",
+    "PackingPolicyMutation",
+    "PackageOutputMutation",
+    "NonAllowlistedScopeUse"
+  ],
+  "AuthScheme": "ApiKeyAuth",
+  "ApiKeyHeaderName": "X-ContextCore-Key",
+  "ReadOnly": true,
+  "FormalRetrievalAllowed": false,
+  "RuntimeSwitchAllowed": false
+}

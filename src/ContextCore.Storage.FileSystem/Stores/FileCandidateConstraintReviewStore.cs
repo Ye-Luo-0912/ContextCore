@@ -1,4 +1,5 @@
 using ContextCore.Abstractions;
+using ContextCore.Abstractions.Models;
 
 namespace ContextCore.Storage.FileSystem.Stores;
 
@@ -80,38 +81,44 @@ public sealed class FileCandidateConstraintReviewStore : ICandidateConstraintRev
             return Array.Empty<ShortTermMemoryScope>();
         }
 
-        return Directory.EnumerateDirectories(workspacesRoot)
-            .SelectMany(workspaceDirectory =>
-            {
-                var workspaceId = Path.GetFileName(workspaceDirectory);
-                if (string.IsNullOrWhiteSpace(workspaceId))
+        return
+        [
+            .. Directory.EnumerateDirectories(workspacesRoot)
+                .SelectMany(workspaceDirectory =>
                 {
-                    return Array.Empty<ShortTermMemoryScope>();
-                }
-
-                var collectionsRoot = Path.Combine(workspaceDirectory, "collections");
-                if (!Directory.Exists(collectionsRoot))
-                {
-                    return Array.Empty<ShortTermMemoryScope>();
-                }
-
-                return Directory.EnumerateDirectories(collectionsRoot)
-                    .Select(collectionDirectory => new
+                    var workspaceId = Path.GetFileName(workspaceDirectory);
+                    if (string.IsNullOrWhiteSpace(workspaceId))
                     {
-                        WorkspaceId = workspaceId!,
-                        CollectionId = Path.GetFileName(collectionDirectory)
-                    })
-                    .Where(item => !string.IsNullOrWhiteSpace(item.CollectionId))
-                    .Where(item => File.Exists(_paths.GetCandidateConstraintReviewsJsonlPath(item.WorkspaceId, item.CollectionId!)))
-                    .Select(item => new ShortTermMemoryScope
+                        return Array.Empty<ShortTermMemoryScope>();
+                    }
+
+                    var collectionsRoot = Path.Combine(workspaceDirectory, "collections");
+                    if (!Directory.Exists(collectionsRoot))
                     {
-                        WorkspaceId = item.WorkspaceId,
-                        CollectionId = item.CollectionId!
-                    })
-                    .ToArray();
-            })
-            .DistinctBy(scope => $"{scope.WorkspaceId}\u001f{scope.CollectionId}", StringComparer.OrdinalIgnoreCase)
-            .ToArray();
+                        return [];
+                    }
+
+                    return
+                    [
+                        .. Directory.EnumerateDirectories(collectionsRoot)
+                            .Select(collectionDirectory => new
+                            {
+                                WorkspaceId = workspaceId,
+                                CollectionId = Path.GetFileName(collectionDirectory)
+                            })
+                            .Where(item => !string.IsNullOrWhiteSpace(item.CollectionId))
+                            .Where(item =>
+                                File.Exists(
+                                    _paths.GetCandidateConstraintReviewsJsonlPath(item.WorkspaceId, item.CollectionId)))
+                            .Select(item => new ShortTermMemoryScope
+                            {
+                                WorkspaceId = item.WorkspaceId,
+                                CollectionId = item.CollectionId
+                            })
+                    ];
+                })
+                .DistinctBy(scope => $"{scope.WorkspaceId}\u001f{scope.CollectionId}", StringComparer.OrdinalIgnoreCase)
+        ];
     }
 
     private static CandidateConstraintReviewRecord Normalize(CandidateConstraintReviewRecord record)

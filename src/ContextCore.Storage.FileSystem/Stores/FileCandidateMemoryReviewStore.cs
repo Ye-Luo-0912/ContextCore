@@ -1,4 +1,5 @@
 using ContextCore.Abstractions;
+using ContextCore.Abstractions.Models;
 
 namespace ContextCore.Storage.FileSystem.Stores;
 
@@ -30,7 +31,8 @@ public sealed class FileCandidateMemoryReviewStore : ICandidateMemoryReviewStore
         try
         {
             var path = _paths.GetCandidateMemoryReviewsJsonlPath(normalized.WorkspaceId, normalized.CollectionId);
-            var existing = await _jsonLines.ReadAsync<CandidateMemoryReviewRecord>(path, cancellationToken).ConfigureAwait(false);
+            var existing = await ReadReviewsWithLegacyAsync(normalized.WorkspaceId, normalized.CollectionId, cancellationToken)
+                .ConfigureAwait(false);
             var updated = existing
                 .Where(item => !string.Equals(item.ReviewId, normalized.ReviewId, StringComparison.OrdinalIgnoreCase))
                 .Append(normalized)
@@ -56,8 +58,8 @@ public sealed class FileCandidateMemoryReviewStore : ICandidateMemoryReviewStore
             var results = new List<CandidateMemoryReviewRecord>();
             foreach (var scope in EnumerateScopes())
             {
-                var path = _paths.GetCandidateMemoryReviewsJsonlPath(scope.WorkspaceId, scope.CollectionId);
-                var items = await _jsonLines.ReadAsync<CandidateMemoryReviewRecord>(path, cancellationToken).ConfigureAwait(false);
+                var items = await ReadReviewsWithLegacyAsync(scope.WorkspaceId, scope.CollectionId, cancellationToken)
+                    .ConfigureAwait(false);
                 results.AddRange(items.Where(item => string.Equals(item.CandidateId, candidateId, StringComparison.OrdinalIgnoreCase)));
             }
 
@@ -98,20 +100,53 @@ public sealed class FileCandidateMemoryReviewStore : ICandidateMemoryReviewStore
                 return Directory.EnumerateDirectories(collectionsRoot)
                     .Select(collectionDirectory => new
                     {
-                        WorkspaceId = workspaceId!,
+                        WorkspaceId = workspaceId,
                         CollectionId = Path.GetFileName(collectionDirectory)
                     })
                     .Where(item => !string.IsNullOrWhiteSpace(item.CollectionId))
-                    .Where(item => File.Exists(_paths.GetCandidateMemoryReviewsJsonlPath(item.WorkspaceId, item.CollectionId!)))
+                    .Where(item => File.Exists(_paths.GetCandidateMemoryReviewsJsonlPath(item.WorkspaceId, item.CollectionId))
+                        || File.Exists(_paths.GetLegacyCandidateMemoryReviewsJsonlPath(item.WorkspaceId, item.CollectionId)))
                     .Select(item => new ShortTermMemoryScope
                     {
                         WorkspaceId = item.WorkspaceId,
-                        CollectionId = item.CollectionId!
+                        CollectionId = item.CollectionId
                     })
                     .ToArray();
             })
             .DistinctBy(scope => $"{scope.WorkspaceId}\u001f{scope.CollectionId}", StringComparer.OrdinalIgnoreCase)
             .ToArray();
+    }
+
+    private async Task<IReadOnlyList<CandidateMemoryReviewRecord>> ReadReviewsWithLegacyAsync(
+        string workspaceId,
+        string collectionId,
+        CancellationToken cancellationToken)
+    {
+        var primaryPath = _paths.GetCandidateMemoryReviewsJsonlPath(workspaceId, collectionId);
+        var primary = await _jsonLines.ReadAsync<CandidateMemoryReviewRecord>(primaryPath, cancellationToken)
+            .ConfigureAwait(false);
+        var legacyPath = _paths.GetLegacyCandidateMemoryReviewsJsonlPath(workspaceId, collectionId);
+        if (string.Equals(primaryPath, legacyPath, StringComparison.OrdinalIgnoreCase) || !File.Exists(legacyPath))
+        {
+            return primary;
+        }
+
+        var legacy = await _jsonLines.ReadAsync<CandidateMemoryReviewRecord>(legacyPath, cancellationToken)
+            .ConfigureAwait(false);
+        if (legacy.Count == 0)
+        {
+            return primary;
+        }
+
+        var keys = primary
+            .Where(item => !string.IsNullOrWhiteSpace(item.ReviewId))
+            .Select(item => item.ReviewId)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return
+        [
+            .. primary,
+            .. legacy.Where(item => string.IsNullOrWhiteSpace(item.ReviewId) || keys.Add(item.ReviewId))
+        ];
     }
 
     private static CandidateMemoryReviewRecord Normalize(CandidateMemoryReviewRecord record)

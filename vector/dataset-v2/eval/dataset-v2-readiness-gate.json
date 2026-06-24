@@ -1,0 +1,22 @@
+﻿{
+  "OperationId": "retrieval-dataset-v2-readiness-gate-184c5f61967d45a79a22a6a5cffa6f40",
+  "CreatedAt": "2026-06-15T15:41:01.1451411+00:00",
+  "DatasetId": "rdsv2-9d8678d981f1aac1",
+  "GatePassed": true,
+  "RecallThreshold": 0.8,
+  "BestRecallAfterPolicy": 1,
+  "BestMrrAfterPolicy": 1,
+  "RiskAfterPolicy": 0,
+  "MustNotHitRiskAfterPolicy": 0,
+  "LifecycleRiskAfterPolicy": 0,
+  "FormalOutputChanged": 0,
+  "PgVectorParityPassed": true,
+  "MaterializationGatePassed": true,
+  "ValidationIssueCount": 0,
+  "MissingEvidenceCount": 0,
+  "MissingProvenanceCount": 0,
+  "UseForRuntime": false,
+  "FormalRetrievalAllowed": false,
+  "Recommendation": "ReadyForDatasetV2RetrievalCandidate",
+  "BlockedReasons": []
+}

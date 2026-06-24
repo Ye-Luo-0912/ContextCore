@@ -1,4 +1,4 @@
-namespace ContextCore.Abstractions;
+namespace ContextCore.Abstractions.Models;
 
 /// <summary>检索锚点在短期锚定召回计划中扮演的角色。</summary>
 public enum RetrievalAnchorRole

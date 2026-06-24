@@ -1,5 +1,6 @@
 using System.Text.Json;
 using ContextCore.Abstractions;
+using ContextCore.Abstractions.Models;
 
 namespace ContextCore.Core;
 

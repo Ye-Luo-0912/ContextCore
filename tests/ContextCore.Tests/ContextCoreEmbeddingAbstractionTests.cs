@@ -1,6 +1,9 @@
 using System.Text.Json;
 using ContextCore.Abstractions;
+using ContextCore.Abstractions.Models;
 using ContextCore.Embedding;
+using ContextCore.Embedding.Providers;
+using ContextCore.Embedding.Services;
 
 namespace ContextCore.Tests;
 

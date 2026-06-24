@@ -1,0 +1,23 @@
+﻿{
+  "generatedAt": "2026-06-14T11:03:20.5937505+00:00",
+  "workspaceId": "postgres-job-queue-lease-smoke",
+  "collectionId": "jobs",
+  "jobCount": 0,
+  "operationCount": 13,
+  "mismatchCount": 0,
+  "postgresFailureCount": 0,
+  "leaseAcquireCount": 1,
+  "leaseConflictCount": 1,
+  "leaseExpiredReacquireCount": 1,
+  "heartbeatRenewalPassed": true,
+  "completeTransitionPassed": true,
+  "retryTransitionPassed": true,
+  "deadLetterTransitionPassed": true,
+  "cleanupPerformed": true,
+  "mismatches": [],
+  "diagnostics": [
+    "UseForRuntime=false",
+    "RuntimeWorkerUnchanged"
+  ],
+  "recommendation": "ReadyForDualWriteShadowRead"
+}

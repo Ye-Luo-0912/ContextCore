@@ -8,7 +8,7 @@ namespace ContextCore.Storage.InMemory;
 /// </summary>
 public sealed class InMemoryJobQueue : IContextJobQueue, IContextJobQueryStore
 {
-    private readonly object _gate = new();
+    private readonly Lock _gate = new();
     private readonly Dictionary<string, ContextJob> _jobs = new(StringComparer.OrdinalIgnoreCase);
 
     public Task EnqueueAsync(ContextJob job, CancellationToken cancellationToken = default)
@@ -86,21 +86,19 @@ public sealed class InMemoryJobQueue : IContextJobQueue, IContextJobQueryStore
 
         lock (_gate)
         {
-            if (_jobs.TryGetValue(jobId, out var job))
-            {
-                var retryCount = job.RetryCount + 1;
-                // Nack 后仍在重试预算内则进入 WaitingRetry，便于控制室观察失败重试状态。
-                var state = retryCount <= job.MaxRetryCount
-                    ? ContextJobState.WaitingRetry
-                    : ContextJobState.Failed;
+            if (!_jobs.TryGetValue(jobId, out var job)) return Task.CompletedTask;
+            var retryCount = job.RetryCount + 1;
+            // Nack 后仍在重试预算内则进入 WaitingRetry，便于控制室观察失败重试状态。
+            var state = retryCount <= job.MaxRetryCount
+                ? ContextJobState.WaitingRetry
+                : ContextJobState.Failed;
 
-                _jobs[jobId] = Copy(
-                    job,
-                    state: state,
-                    retryCount: retryCount,
-                    completedAt: state == ContextJobState.Failed ? DateTimeOffset.UtcNow : null,
-                    errorMessage: reason);
-            }
+            _jobs[jobId] = Copy(
+                job,
+                state: state,
+                retryCount: retryCount,
+                completedAt: state == ContextJobState.Failed ? DateTimeOffset.UtcNow : null,
+                errorMessage: reason);
         }
 
         return Task.CompletedTask;
@@ -122,6 +120,7 @@ public sealed class InMemoryJobQueue : IContextJobQueue, IContextJobQueryStore
                 .Where(job => string.IsNullOrWhiteSpace(query.CollectionId)
                     || string.Equals(job.CollectionId, query.CollectionId, StringComparison.OrdinalIgnoreCase))
                 .Where(job => query.State is null || job.State == query.State)
+                .Where(job => query.Kind is null || job.Kind == query.Kind)
                 .OrderByDescending(job => job.Priority)
                 .ThenByDescending(job => job.CreatedAt)
                 .Take(take)

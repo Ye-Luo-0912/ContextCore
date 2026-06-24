@@ -1,6 +1,4 @@
-using ContextCore.Abstractions.Models;
-
-namespace ContextCore.Abstractions;
+namespace ContextCore.Abstractions.Models;
 
 /// <summary>
 /// Specifies the format of the content stored in a context item.

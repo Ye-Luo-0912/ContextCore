@@ -1,0 +1,1 @@
+{"OperationId":"allow-obs-rdsv2-stress-train-sample-0046-bd34946055074ea59abcce3000018b76","WorkspaceId":"","CollectionId":"","QueryText":"Retrieve review guidance for verify evidence, but do not return items governed by schema.","BaselineCount":5,"AddedCandidateIds":[],"RemovedCandidateIds":[],"Applied":false,"Allowlisted":true,"Timestamp":"2026-06-22T00:22:09.1545526+00:00"}

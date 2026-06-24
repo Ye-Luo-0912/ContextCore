@@ -40,7 +40,7 @@ public sealed class FileMemoryStore : IMemoryStore, IWorkingMemoryService, IProm
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            foreach (var path in GetMemoryPaths(normalized.WorkspaceId, normalized.CollectionId))
+            foreach (var path in GetWritableMemoryPaths(normalized.WorkspaceId, normalized.CollectionId))
             {
                 var existing = await _jsonLines.ReadAsync<ContextMemoryItem>(path, cancellationToken)
                     .ConfigureAwait(false);
@@ -134,17 +134,19 @@ public sealed class FileMemoryStore : IMemoryStore, IWorkingMemoryService, IProm
             var skip = Math.Max(0, query.Skip);
             var take = query.Take > 0 ? query.Take : 50;
 
-            return results
-                .GroupBy(item => item.Id, StringComparer.OrdinalIgnoreCase)
-                .Select(group => group
-                    .OrderByDescending(item => item.UpdatedAt)
-                    .First())
-                .OrderByDescending(item => item.Importance)
-                .ThenByDescending(item => item.UpdatedAt)
-                .Skip(skip)
-                .Take(take)
-                .Select(item => Clone(item))
-                .ToArray();
+            return
+            [
+                .. results
+                    .GroupBy(item => item.Id, StringComparer.OrdinalIgnoreCase)
+                    .Select(group => group
+                        .OrderByDescending(item => item.UpdatedAt)
+                        .First())
+                    .OrderByDescending(item => item.Importance)
+                    .ThenByDescending(item => item.UpdatedAt)
+                    .Skip(skip)
+                    .Take(take)
+                    .Select(Clone)
+            ];
         }
         finally
         {
@@ -177,9 +179,9 @@ public sealed class FileMemoryStore : IMemoryStore, IWorkingMemoryService, IProm
             Type = item.Type,
             Content = item.Content,
             ContentFormat = item.ContentFormat,
-            Tags = item.Tags.ToArray(),
-            SourceRefs = item.SourceRefs.ToArray(),
-            RelationRefs = item.RelationRefs.ToArray(),
+            Tags = [.. item.Tags],
+            SourceRefs = [.. item.SourceRefs],
+            RelationRefs = [.. item.RelationRefs],
             Importance = item.Importance,
             Confidence = item.Confidence,
             Version = item.Version + 1,
@@ -205,9 +207,9 @@ public sealed class FileMemoryStore : IMemoryStore, IWorkingMemoryService, IProm
             Type = item.Type,
             Content = item.Content,
             ContentFormat = item.ContentFormat,
-            Tags = item.Tags.ToArray(),
-            SourceRefs = item.SourceRefs.ToArray(),
-            RelationRefs = item.RelationRefs.ToArray(),
+            Tags = [.. item.Tags],
+            SourceRefs = [.. item.SourceRefs],
+            RelationRefs = [.. item.RelationRefs],
             Importance = item.Importance,
             Confidence = item.Confidence,
             Version = item.Version,
@@ -605,29 +607,44 @@ public sealed class FileMemoryStore : IMemoryStore, IWorkingMemoryService, IProm
                     _paths.GetRecentMemoryJsonlPath(workspaceId, collectionId),
                     _paths.GetLegacyRecentMemoryJsonlPath(workspaceId, collectionId)
                 }
-                : new[] { GetMemoryPath(workspaceId, collectionId, layer.Value) };
+                : layer.Value == ContextMemoryLayer.Stable
+                    ? new[]
+                    {
+                        _paths.GetStableMemoryJsonlPath(workspaceId, collectionId),
+                        _paths.GetLegacyStableMemoryJsonlPath(workspaceId, collectionId)
+                    }
+                    : new[] { GetMemoryPath(workspaceId, collectionId, layer.Value) };
         }
 
-        return new[]
-        {
+        return
+        [
             _paths.GetRecentMemoryJsonlPath(workspaceId, collectionId),
             _paths.GetLegacyRecentMemoryJsonlPath(workspaceId, collectionId),
             _paths.GetMemoryCandidatesJsonlPath(workspaceId, collectionId),
-            _paths.GetStableMemoryJsonlPath(workspaceId, collectionId)
-        };
+            _paths.GetStableMemoryJsonlPath(workspaceId, collectionId),
+            _paths.GetLegacyStableMemoryJsonlPath(workspaceId, collectionId)
+        ];
     }
+
+    private IReadOnlyList<string> GetWritableMemoryPaths(string workspaceId, string collectionId)
+        =>
+        [
+            _paths.GetRecentMemoryJsonlPath(workspaceId, collectionId),
+            _paths.GetMemoryCandidatesJsonlPath(workspaceId, collectionId),
+            _paths.GetStableMemoryJsonlPath(workspaceId, collectionId)
+        ];
 
     private IReadOnlyList<string> ResolveCollectionIds(string workspaceId, string? collectionId)
     {
         if (!string.IsNullOrWhiteSpace(collectionId))
         {
-            return new[] { collectionId };
+            return [collectionId];
         }
 
         var collectionsDirectory = _paths.GetCollectionsDirectory(workspaceId);
         if (!Directory.Exists(collectionsDirectory))
         {
-            return Array.Empty<string>();
+            return [];
         }
 
         return Directory.EnumerateDirectories(collectionsDirectory)
@@ -989,4 +1006,3 @@ public sealed class FileMemoryStore : IMemoryStore, IWorkingMemoryService, IProm
             && item.UpdatedAt == default;
     }
 }
-

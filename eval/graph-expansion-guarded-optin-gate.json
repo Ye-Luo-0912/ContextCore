@@ -1,0 +1,36 @@
+﻿{
+  "OperationId": "graph-expansion-guarded-optin-gate-c1ea88923a084613bf65e2969728ef39",
+  "CreatedAt": "2026-06-09T00:30:57.637648+00:00",
+  "Passed": true,
+  "Scopes": [
+    {
+      "Scope": "A3",
+      "Passed": true,
+      "GuardStatus": "Passed",
+      "NormalSelectedSetChanged": 0,
+      "RiskAfterRoutingCount": 0,
+      "WrongSectionRiskCount": 0,
+      "MustNotHitRiskCount": 0,
+      "LifecycleRiskCount": 0,
+      "MissingEvidenceCount": 0,
+      "UnexpectedWarningDelta": 0,
+      "DisallowedNormalContextInjection": 0,
+      "FailedConditions": []
+    },
+    {
+      "Scope": "Extended",
+      "Passed": true,
+      "GuardStatus": "Passed",
+      "NormalSelectedSetChanged": 0,
+      "RiskAfterRoutingCount": 0,
+      "WrongSectionRiskCount": 0,
+      "MustNotHitRiskCount": 0,
+      "LifecycleRiskCount": 0,
+      "MissingEvidenceCount": 0,
+      "UnexpectedWarningDelta": 0,
+      "DisallowedNormalContextInjection": 0,
+      "FailedConditions": []
+    }
+  ],
+  "FailedConditions": []
+}

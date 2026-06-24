@@ -1,0 +1,26 @@
+﻿{
+  "generatedAt": "2026-06-14T17:02:10.1445579+00:00",
+  "workspaceId": "eval-vector",
+  "collectionId": "corpus",
+  "providerId": "qwen3-embedding-0.6b-onnx",
+  "modelId": "qwen3-embedding-0.6b",
+  "dimension": 1024,
+  "normalized": true,
+  "confirmed": true,
+  "candidateCount": 158,
+  "plannedInsertCount": 158,
+  "plannedUpdateCount": 0,
+  "plannedSkipCount": 0,
+  "appliedInsertCount": 158,
+  "appliedUpdateCount": 0,
+  "metadataRoundtripMismatchCount": 0,
+  "indexedEntryCountAfterApply": 158,
+  "useForRuntime": false,
+  "diagnostics": [
+    "UseForRuntime=false",
+    "RetrievalProviderUnchanged",
+    "FileSystemVectorStoreUnchanged"
+  ],
+  "mismatches": [],
+  "recommendation": "ReadyForPgVectorQueryPreview"
+}

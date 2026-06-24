@@ -15,3 +15,35 @@ context-core-relation-smoke/
 .msbuild/
 .nuget/
 .userprofile/
+
+# Local secrets / environment overrides
+**/secrets.json
+**/*.secrets.json
+.env
+.env.*
+!.env.sample
+!*.sample.env
+appsettings.Local*.json
+appsettings.*.local.json
+appsettings.Development.local.json
+appsettings.Postgres.local.json
+connectionstrings.local.json
+
+# Local database files and transient traces
+*.db
+*.sqlite
+*.sqlite3
+*.tmp
+*.temp
+**/tmp/
+**/temp/
+**/*trace*.tmp
+**/*trace*.temp
+
+# Large local model binaries. Use Git LFS explicitly before tracking these.
+*.safetensors
+*.gguf
+*.bin
+*.pt
+*.pth
+*.onnx

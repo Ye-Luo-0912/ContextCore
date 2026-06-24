@@ -120,6 +120,7 @@ public sealed class FileContextJobQueue : IContextJobQueue, IContextJobQueryStor
                 .Where(job => string.IsNullOrWhiteSpace(query.CollectionId)
                     || string.Equals(job.CollectionId, query.CollectionId, StringComparison.OrdinalIgnoreCase))
                 .Where(job => query.State is null || job.State == query.State)
+                .Where(job => query.Kind is null || job.Kind == query.Kind)
                 .OrderByDescending(job => job.Priority)
                 .ThenByDescending(job => job.CreatedAt)
                 .Take(take)];

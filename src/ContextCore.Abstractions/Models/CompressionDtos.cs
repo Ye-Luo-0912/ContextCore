@@ -1,4 +1,4 @@
-namespace ContextCore.Abstractions;
+namespace ContextCore.Abstractions.Models;
 
 /// <summary>压缩任务的操作类型。</summary>
 public enum CompressionTaskKind

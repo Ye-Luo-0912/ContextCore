@@ -1,7 +1,9 @@
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Core;
+using ContextCore.Core.Services;
 using ContextCore.Storage.InMemory;
+using ContextCore.Storage.InMemory.Stores;
 
 namespace ContextCore.Tests;
 
@@ -80,6 +82,37 @@ public sealed class ContextCorePackageBuilderA1Tests
         Assert.IsTrue(anchors.Any(anchor => anchor.Type == AnchorType.Project && anchor.Name == "ContextCore"));
         Assert.IsTrue(anchors.Any(anchor => anchor.Type == AnchorType.Task && anchor.Name == "PackageBuilder"));
         Assert.IsTrue(anchors.Any(anchor => anchor.Type == AnchorType.Constraint && anchor.Name.Contains("约束")));
+    }
+
+    [TestMethod]
+    public void ContextAnchorExtractor_ShouldNotContainFixtureKeywordOrStopWordTables()
+    {
+        var anchoringPath = Path.Combine(FindRepositoryRoot(), "src", "ContextCore.Core", "Services", "Anchoring");
+        var sourceText = string.Join(
+            Environment.NewLine,
+            Directory.EnumerateFiles(anchoringPath, "*.cs", SearchOption.AllDirectories)
+                .Select(File.ReadAllText));
+
+        var forbiddenTerms = new[]
+        {
+            "林风",
+            "苍穹大陆",
+            "拍卖行",
+            "九转金丹",
+            "龙魂草",
+            "王室血脉",
+            "\"如何\"",
+            "\"什么\"",
+            "\"怎么\"",
+            "\"为什么\""
+        };
+
+        foreach (var term in forbiddenTerms)
+        {
+            Assert.IsFalse(
+                sourceText.Contains(term, StringComparison.OrdinalIgnoreCase),
+                $"锚点提取逻辑不应包含硬编码夹具词或停用词：{term}");
+        }
     }
 
     [TestMethod]
@@ -1485,5 +1518,21 @@ public sealed class ContextCorePackageBuilderA1Tests
             Assert.IsTrue(index > previousIndex, $"片段顺序不正确：{fragment}");
             previousIndex = index;
         }
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        var current = new DirectoryInfo(AppContext.BaseDirectory);
+        while (current is not null)
+        {
+            if (File.Exists(Path.Combine(current.FullName, "ContextCore.sln")))
+            {
+                return current.FullName;
+            }
+
+            current = current.Parent;
+        }
+
+        throw new DirectoryNotFoundException("未找到 ContextCore.sln，无法定位仓库根目录。");
     }
 }

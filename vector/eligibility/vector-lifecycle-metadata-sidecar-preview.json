@@ -1,0 +1,13 @@
+﻿{
+  "OperationId": "vector-lifecycle-metadata-sidecar-preview-96c0cea684544bb18127bb311d18fe45",
+  "CreatedAt": "2026-06-15T10:11:02.1789005+00:00",
+  "SidecarEntryCount": 0,
+  "NormalContextEntryCount": 0,
+  "AuditContextEntryCount": 0,
+  "HistoricalContextEntryCount": 0,
+  "DiagnosticsOnlyEntryCount": 0,
+  "SourceItemUnchanged": true,
+  "FormalRetrievalAllowed": false,
+  "UseForRuntime": false,
+  "Entries": []
+}

@@ -1,0 +1,1595 @@
+﻿{
+  "OperationId": "formal-adapter-input-contract-a79bdf066d7a4937a9d8743d496dbae1",
+  "CreatedAt": "2026-06-19T17:05:48.2033258+00:00",
+  "ContractPassed": true,
+  "GatePassed": false,
+  "Recommendation": "ReadyForFormalAdapterInputContractFreeze",
+  "ContractVersion": "formal-adapter-input-contract-v1",
+  "AllowedMode": "ContractOnly",
+  "RequiredNextPhase": "FormalAdapterImplementationPreflight",
+  "RuntimeInputTypes": [
+    "FormalAdapterRuntimeInputEnvelope",
+    "FormalAdapterRuntimePackageContext",
+    "FormalAdapterRuntimeCandidateInput",
+    "FormalAdapterRuntimeProvenanceInput",
+    "FormalAdapterRuntimeRelationEvidenceInput"
+  ],
+  "RuntimeInputTypeCount": 5,
+  "RuntimeInputFieldCount": 34,
+  "DeniedFieldCount": 25,
+  "AllowedRuntimeInputs": [
+    {
+      "FieldId": "request.requestId",
+      "Category": "Request",
+      "RuntimeSource": "formal request envelope",
+      "AllowedUsage": "trace correlation only",
+      "Required": true
+    },
+    {
+      "FieldId": "request.workspaceId",
+      "Category": "Scope",
+      "RuntimeSource": "runtime request scope",
+      "AllowedUsage": "allowlist and provider scope isolation",
+      "Required": true
+    },
+    {
+      "FieldId": "request.collectionId",
+      "Category": "Scope",
+      "RuntimeSource": "runtime request scope",
+      "AllowedUsage": "allowlist and provider scope isolation",
+      "Required": true
+    },
+    {
+      "FieldId": "request.queryText",
+      "Category": "Query",
+      "RuntimeSource": "runtime user query",
+      "AllowedUsage": "query tokenization and candidate scoring",
+      "Required": true
+    },
+    {
+      "FieldId": "request.queryAnchors",
+      "Category": "Query",
+      "RuntimeSource": "runtime-derived anchors",
+      "AllowedUsage": "optional source-aware scoring signals",
+      "Required": false
+    },
+    {
+      "FieldId": "package.baselinePackageId",
+      "Category": "PackageContext",
+      "RuntimeSource": "current package snapshot",
+      "AllowedUsage": "shadow comparison identity only",
+      "Required": false
+    },
+    {
+      "FieldId": "package.baselineCandidateIds",
+      "Category": "PackageContext",
+      "RuntimeSource": "current formal selected set snapshot",
+      "AllowedUsage": "selected-set preserving comparison",
+      "Required": false
+    },
+    {
+      "FieldId": "package.sectionTokenBudgets",
+      "Category": "PackageContext",
+      "RuntimeSource": "runtime package constraints",
+      "AllowedUsage": "token budget shadow validation",
+      "Required": true
+    },
+    {
+      "FieldId": "package.sectionOccupancy",
+      "Category": "PackageContext",
+      "RuntimeSource": "runtime package snapshot",
+      "AllowedUsage": "section occupancy comparison",
+      "Required": false
+    },
+    {
+      "FieldId": "package.totalTokenBudget",
+      "Category": "PackageContext",
+      "RuntimeSource": "runtime package constraints",
+      "AllowedUsage": "budget guard",
+      "Required": true
+    },
+    {
+      "FieldId": "candidate.candidateId",
+      "Category": "Candidate",
+      "RuntimeSource": "candidate provider output",
+      "AllowedUsage": "identity and stable tie-break",
+      "Required": true
+    },
+    {
+      "FieldId": "candidate.itemId",
+      "Category": "Candidate",
+      "RuntimeSource": "candidate provider output",
+      "AllowedUsage": "identity and stable tie-break only; no business special case",
+      "Required": true
+    },
+    {
+      "FieldId": "candidate.sourceId",
+      "Category": "Candidate",
+      "RuntimeSource": "source metadata",
+      "AllowedUsage": "source trace and dedupe",
+      "Required": false
+    },
+    {
+      "FieldId": "candidate.content",
+      "Category": "Candidate",
+      "RuntimeSource": "runtime item content",
+      "AllowedUsage": "dense/lexical scoring",
+      "Required": true
+    },
+    {
+      "FieldId": "candidate.itemKind",
+      "Category": "CandidateMetadata",
+      "RuntimeSource": "runtime item metadata",
+      "AllowedUsage": "generic source-aware scoring and filtering",
+      "Required": true
+    },
+    {
+      "FieldId": "candidate.sourceKind",
+      "Category": "CandidateMetadata",
+      "RuntimeSource": "runtime source metadata",
+      "AllowedUsage": "generic source-aware scoring and filtering",
+      "Required": true
+    },
+    {
+      "FieldId": "candidate.layer",
+      "Category": "CandidateMetadata",
+      "RuntimeSource": "runtime item metadata",
+      "AllowedUsage": "eligibility and routing gate",
+      "Required": false
+    },
+    {
+      "FieldId": "candidate.lifecycle",
+      "Category": "Eligibility",
+      "RuntimeSource": "runtime lifecycle metadata",
+      "AllowedUsage": "lifecycle gate",
+      "Required": true
+    },
+    {
+      "FieldId": "candidate.reviewStatus",
+      "Category": "Eligibility",
+      "RuntimeSource": "runtime review metadata",
+      "AllowedUsage": "eligibility gate",
+      "Required": true
+    },
+    {
+      "FieldId": "candidate.replacementState",
+      "Category": "Eligibility",
+      "RuntimeSource": "runtime replacement metadata",
+      "AllowedUsage": "superseded guard",
+      "Required": true
+    },
+    {
+      "FieldId": "candidate.targetSection",
+      "Category": "Routing",
+      "RuntimeSource": "runtime item metadata",
+      "AllowedUsage": "section routing and risk gate",
+      "Required": true
+    },
+    {
+      "FieldId": "candidate.tags",
+      "Category": "CandidateMetadata",
+      "RuntimeSource": "runtime item metadata",
+      "AllowedUsage": "generic anchor/source scoring",
+      "Required": false
+    },
+    {
+      "FieldId": "candidate.anchors",
+      "Category": "CandidateMetadata",
+      "RuntimeSource": "runtime item metadata",
+      "AllowedUsage": "generic anchor/source scoring",
+      "Required": false
+    },
+    {
+      "FieldId": "candidate.sourceRefs",
+      "Category": "Evidence",
+      "RuntimeSource": "runtime item metadata",
+      "AllowedUsage": "source evidence projection",
+      "Required": false
+    },
+    {
+      "FieldId": "candidate.evidenceRefs",
+      "Category": "Evidence",
+      "RuntimeSource": "runtime item metadata",
+      "AllowedUsage": "evidence projection",
+      "Required": false
+    },
+    {
+      "FieldId": "candidate.provenance.recordId",
+      "Category": "Provenance",
+      "RuntimeSource": "runtime provenance metadata",
+      "AllowedUsage": "trace and audit",
+      "Required": false
+    },
+    {
+      "FieldId": "candidate.provenance.sourceFingerprint",
+      "Category": "Provenance",
+      "RuntimeSource": "runtime provenance metadata",
+      "AllowedUsage": "source identity and trace",
+      "Required": false
+    },
+    {
+      "FieldId": "candidate.provenance.ingestionBatchId",
+      "Category": "Provenance",
+      "RuntimeSource": "runtime provenance metadata",
+      "AllowedUsage": "trace and audit",
+      "Required": false
+    },
+    {
+      "FieldId": "candidate.relations",
+      "Category": "RelationEvidence",
+      "RuntimeSource": "read-only relation evidence",
+      "AllowedUsage": "graph expansion and confidence gate",
+      "Required": false
+    },
+    {
+      "FieldId": "candidate.estimatedTokens",
+      "Category": "PackageContext",
+      "RuntimeSource": "runtime package estimator",
+      "AllowedUsage": "shadow token budget validation",
+      "Required": false
+    },
+    {
+      "FieldId": "candidate.score",
+      "Category": "Candidate",
+      "RuntimeSource": "candidate provider output",
+      "AllowedUsage": "pre-fusion score only",
+      "Required": false
+    },
+    {
+      "FieldId": "candidate.denseRank",
+      "Category": "Candidate",
+      "RuntimeSource": "candidate provider output",
+      "AllowedUsage": "dense winner preservation",
+      "Required": false
+    },
+    {
+      "FieldId": "candidate.lexicalRank",
+      "Category": "Candidate",
+      "RuntimeSource": "candidate provider output",
+      "AllowedUsage": "source contribution diagnostics",
+      "Required": false
+    },
+    {
+      "FieldId": "candidate.anchorRank",
+      "Category": "Candidate",
+      "RuntimeSource": "candidate provider output",
+      "AllowedUsage": "source contribution diagnostics",
+      "Required": false
+    }
+  ],
+  "DeniedInputs": [
+    {
+      "FieldId": "RetrievalDatasetV2Sample",
+      "Category": "DatasetEvalField",
+      "Reason": "formal adapter must not accept eval sample DTOs"
+    },
+    {
+      "FieldId": "RetrievalDatasetV2GeneratedDataset",
+      "Category": "DatasetEvalField",
+      "Reason": "formal adapter must not accept generated dataset containers"
+    },
+    {
+      "FieldId": "SampleId",
+      "Category": "SampleMetadata",
+      "Reason": "sample identity is an eval artifact, not runtime input"
+    },
+    {
+      "FieldId": "SourceEvalSet",
+      "Category": "SampleMetadata",
+      "Reason": "eval set identity must not affect runtime retrieval"
+    },
+    {
+      "FieldId": "Split",
+      "Category": "SampleMetadata",
+      "Reason": "train/dev/test/holdout split is eval-only"
+    },
+    {
+      "FieldId": "Difficulty",
+      "Category": "SampleMetadata",
+      "Reason": "difficulty labels are eval-only"
+    },
+    {
+      "FieldId": "TaskKind",
+      "Category": "SampleMetadata",
+      "Reason": "task kind labels from generated samples are eval-only"
+    },
+    {
+      "FieldId": "Intent",
+      "Category": "SampleMetadata",
+      "Reason": "sample intent labels are eval-only unless produced by runtime router contract"
+    },
+    {
+      "FieldId": "Rationale",
+      "Category": "SampleMetadata",
+      "Reason": "rationale must not enter indexed/runtime scoring text"
+    },
+    {
+      "FieldId": "MustHitItemIds",
+      "Category": "GoldLabel",
+      "Reason": "must-hit labels are gold labels"
+    },
+    {
+      "FieldId": "MustNotHitItemIds",
+      "Category": "GoldLabel",
+      "Reason": "must-not labels are gold labels"
+    },
+    {
+      "FieldId": "NegativeDistractorIds",
+      "Category": "GoldLabel",
+      "Reason": "negative distractor labels are gold labels"
+    },
+    {
+      "FieldId": "ExpectedTargetSection",
+      "Category": "GoldLabel",
+      "Reason": "expected section is an eval label"
+    },
+    {
+      "FieldId": "RequiredRelations",
+      "Category": "EvalAnnotation",
+      "Reason": "required relations from sample labels are eval-only"
+    },
+    {
+      "FieldId": "sample.SourceRefs",
+      "Category": "EvalAnnotation",
+      "Reason": "source refs from samples are eval annotations; use item/source metadata"
+    },
+    {
+      "FieldId": "sample.EvidenceRefs",
+      "Category": "EvalAnnotation",
+      "Reason": "evidence refs from samples are eval annotations; use item/source metadata"
+    },
+    {
+      "FieldId": "sample.Metadata",
+      "Category": "SampleMetadata",
+      "Reason": "free-form sample metadata must not be runtime adapter input"
+    },
+    {
+      "FieldId": "ShadowFormalRetrievalAdapterReport",
+      "Category": "ShadowArtifact",
+      "Reason": "shadow reports are eval artifacts"
+    },
+    {
+      "FieldId": "FormalAdapterPackageShadowComparisonReport",
+      "Category": "ShadowArtifact",
+      "Reason": "package shadow reports are eval artifacts"
+    },
+    {
+      "FieldId": "OutputTokenPriorityShadowGateReport",
+      "Category": "ShadowArtifact",
+      "Reason": "output-token shadow reports are eval artifacts"
+    },
+    {
+      "FieldId": "SourceAwareRankingRepairReport",
+      "Category": "ShadowArtifact",
+      "Reason": "source-aware repair reports are eval artifacts"
+    },
+    {
+      "FieldId": "RetrievalEvalProtocolGateReport",
+      "Category": "ShadowArtifact",
+      "Reason": "eval protocol reports are not runtime input"
+    },
+    {
+      "FieldId": "BlindHoldout",
+      "Category": "ShadowArtifact",
+      "Reason": "blind holdout artifacts are eval-only"
+    },
+    {
+      "FieldId": "GatePassed",
+      "Category": "ShadowArtifact",
+      "Reason": "gate result fields must not drive runtime scoring"
+    },
+    {
+      "FieldId": "Recommendation",
+      "Category": "ShadowArtifact",
+      "Reason": "recommendation fields must not drive runtime scoring"
+    }
+  ],
+  "ContractForbiddenPropertyCount": 0,
+  "ContractForbiddenProperties": [],
+  "FormalSourceForbiddenReadCount": 0,
+  "EvalOnlyForbiddenReadCount": 194,
+  "DatasetEvalFieldsBlocked": true,
+  "GoldLabelsBlocked": true,
+  "SampleMetadataBlocked": true,
+  "ShadowArtifactFieldsBlocked": true,
+  "CurrentShadowAdapterEvalOnly": true,
+  "V51PlanGatePassed": true,
+  "V515OutputPolicyGatePassed": true,
+  "RuntimeChangeGatePassed": true,
+  "SourceScan": {
+    "ScanPerformed": true,
+    "FormalSourceFileCount": 0,
+    "EvalOnlySourceFileCount": 3,
+    "FormalSourceForbiddenReadCount": 0,
+    "EvalOnlyForbiddenReadCount": 194,
+    "FormalSourceFiles": [],
+    "EvalOnlySourceFiles": [
+      "src/ContextCore.Core/Services/Vector/ShadowFormalRetrievalAdapter.cs",
+      "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+      "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs"
+    ],
+    "Hits": [
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+        "Token": "FormalAdapterPackageShadowComparisonReport",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+        "Token": "FormalAdapterPackageShadowComparisonReport",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+        "Token": "FormalAdapterPackageShadowComparisonReport",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+        "Token": "FormalAdapterPackageShadowComparisonReport",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+        "Token": "FormalAdapterPackageShadowComparisonReport",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+        "Token": "GatePassed",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+        "Token": "GatePassed",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+        "Token": "GatePassed",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+        "Token": "GatePassed",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+        "Token": "GatePassed",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+        "Token": "GatePassed",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+        "Token": "Recommendation",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+        "Token": "Recommendation",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+        "Token": "Recommendation",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+        "Token": "Recommendation",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+        "Token": "Recommendation",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+        "Token": "Recommendation",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+        "Token": "Recommendation",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+        "Token": "Recommendation",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+        "Token": "Recommendation",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+        "Token": "Recommendation",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+        "Token": "Recommendation",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+        "Token": "Recommendation",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+        "Token": "Recommendation",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+        "Token": "Recommendation",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+        "Token": "Recommendation",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+        "Token": "Recommendation",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+        "Token": "Recommendation",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+        "Token": "Recommendation",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+        "Token": "Recommendation",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+        "Token": "Recommendation",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+        "Token": "RetrievalDatasetV2GeneratedDataset",
+        "Category": "DatasetEvalField",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+        "Token": "RetrievalDatasetV2GeneratedDataset",
+        "Category": "DatasetEvalField",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+        "Token": "RetrievalDatasetV2GeneratedDataset",
+        "Category": "DatasetEvalField",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+        "Token": "RetrievalDatasetV2Sample",
+        "Category": "DatasetEvalField",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+        "Token": "RetrievalDatasetV2Sample",
+        "Category": "DatasetEvalField",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+        "Token": "RetrievalDatasetV2Sample",
+        "Category": "DatasetEvalField",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+        "Token": "RetrievalDatasetV2Sample",
+        "Category": "DatasetEvalField",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+        "Token": "RetrievalDatasetV2Sample",
+        "Category": "DatasetEvalField",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+        "Token": "RetrievalDatasetV2Sample",
+        "Category": "DatasetEvalField",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+        "Token": "sample.EvidenceRefs",
+        "Category": "EvalAnnotation",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+        "Token": "sample.EvidenceRefs",
+        "Category": "EvalAnnotation",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+        "Token": "sample.ExpectedTargetSection",
+        "Category": "GoldLabel",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+        "Token": "sample.ExpectedTargetSection",
+        "Category": "GoldLabel",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+        "Token": "sample.ExpectedTargetSection",
+        "Category": "GoldLabel",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+        "Token": "sample.ExpectedTargetSection",
+        "Category": "GoldLabel",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+        "Token": "sample.ExpectedTargetSection",
+        "Category": "GoldLabel",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+        "Token": "sample.Metadata",
+        "Category": "SampleMetadata",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+        "Token": "sample.Metadata",
+        "Category": "SampleMetadata",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+        "Token": "sample.MustHitItemIds",
+        "Category": "GoldLabel",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+        "Token": "sample.MustHitItemIds",
+        "Category": "GoldLabel",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+        "Token": "sample.MustNotHitItemIds",
+        "Category": "GoldLabel",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+        "Token": "sample.MustNotHitItemIds",
+        "Category": "GoldLabel",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+        "Token": "sample.RequiredRelations",
+        "Category": "EvalAnnotation",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+        "Token": "sample.RequiredRelations",
+        "Category": "EvalAnnotation",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+        "Token": "sample.SampleId",
+        "Category": "SampleMetadata",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+        "Token": "sample.SampleId",
+        "Category": "SampleMetadata",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+        "Token": "sample.SourceRefs",
+        "Category": "EvalAnnotation",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+        "Token": "sample.SourceRefs",
+        "Category": "EvalAnnotation",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+        "Token": "ShadowFormalRetrievalAdapterReport",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+        "Token": "ShadowFormalRetrievalAdapterReport",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/FormalAdapterPackageShadowComparisonRunner.cs",
+        "Token": "ShadowFormalRetrievalAdapterReport",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "BlindHoldout",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "BlindHoldout",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "BlindHoldout",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "BlindHoldout",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "GatePassed",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "GatePassed",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "GatePassed",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "GatePassed",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "GatePassed",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "GatePassed",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "GatePassed",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "GatePassed",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "GatePassed",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "GatePassed",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "GatePassed",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "GatePassed",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "GatePassed",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "GatePassed",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "GatePassed",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "GatePassed",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "GatePassed",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "GatePassed",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "OutputTokenPriorityShadowGateReport",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "OutputTokenPriorityShadowGateReport",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "OutputTokenPriorityShadowGateReport",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "OutputTokenPriorityShadowGateReport",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "OutputTokenPriorityShadowGateReport",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "OutputTokenPriorityShadowGateReport",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "Recommendation",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "Recommendation",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "Recommendation",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "Recommendation",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "Recommendation",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "Recommendation",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "Recommendation",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "Recommendation",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "Recommendation",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "Recommendation",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "Recommendation",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "Recommendation",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "Recommendation",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "Recommendation",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "Recommendation",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "Recommendation",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "Recommendation",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "Recommendation",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "RetrievalDatasetV2GeneratedDataset",
+        "Category": "DatasetEvalField",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "RetrievalDatasetV2GeneratedDataset",
+        "Category": "DatasetEvalField",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "RetrievalDatasetV2GeneratedDataset",
+        "Category": "DatasetEvalField",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "RetrievalDatasetV2GeneratedDataset",
+        "Category": "DatasetEvalField",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "RetrievalDatasetV2Sample",
+        "Category": "DatasetEvalField",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "RetrievalDatasetV2Sample",
+        "Category": "DatasetEvalField",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "RetrievalDatasetV2Sample",
+        "Category": "DatasetEvalField",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "RetrievalDatasetV2Sample",
+        "Category": "DatasetEvalField",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "RetrievalEvalProtocolGateReport",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "RetrievalEvalProtocolGateReport",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "RetrievalEvalProtocolGateReport",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "sample.EvidenceRefs",
+        "Category": "EvalAnnotation",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "sample.EvidenceRefs",
+        "Category": "EvalAnnotation",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "sample.EvidenceRefs",
+        "Category": "EvalAnnotation",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "sample.Metadata",
+        "Category": "SampleMetadata",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "sample.Metadata",
+        "Category": "SampleMetadata",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "sample.MustHitItemIds",
+        "Category": "GoldLabel",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "sample.MustNotHitItemIds",
+        "Category": "GoldLabel",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "sample.MustNotHitItemIds",
+        "Category": "GoldLabel",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "sample.RequiredRelations",
+        "Category": "EvalAnnotation",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "sample.RequiredRelations",
+        "Category": "EvalAnnotation",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "sample.RequiredRelations",
+        "Category": "EvalAnnotation",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "sample.SourceRefs",
+        "Category": "EvalAnnotation",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "sample.SourceRefs",
+        "Category": "EvalAnnotation",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "sample.SourceRefs",
+        "Category": "EvalAnnotation",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "sample.Split",
+        "Category": "SampleMetadata",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "SourceAwareRankingRepairReport",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "SourceAwareRankingRepairReport",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/OutputTokenPriorityShadowGateRunner.cs",
+        "Token": "SourceAwareRankingRepairReport",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/ShadowFormalRetrievalAdapter.cs",
+        "Token": "GatePassed",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/ShadowFormalRetrievalAdapter.cs",
+        "Token": "GatePassed",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/ShadowFormalRetrievalAdapter.cs",
+        "Token": "GatePassed",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/ShadowFormalRetrievalAdapter.cs",
+        "Token": "GatePassed",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/ShadowFormalRetrievalAdapter.cs",
+        "Token": "GatePassed",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/ShadowFormalRetrievalAdapter.cs",
+        "Token": "Recommendation",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/ShadowFormalRetrievalAdapter.cs",
+        "Token": "Recommendation",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/ShadowFormalRetrievalAdapter.cs",
+        "Token": "Recommendation",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/ShadowFormalRetrievalAdapter.cs",
+        "Token": "Recommendation",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/ShadowFormalRetrievalAdapter.cs",
+        "Token": "Recommendation",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/ShadowFormalRetrievalAdapter.cs",
+        "Token": "Recommendation",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/ShadowFormalRetrievalAdapter.cs",
+        "Token": "Recommendation",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/ShadowFormalRetrievalAdapter.cs",
+        "Token": "Recommendation",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/ShadowFormalRetrievalAdapter.cs",
+        "Token": "Recommendation",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/ShadowFormalRetrievalAdapter.cs",
+        "Token": "Recommendation",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/ShadowFormalRetrievalAdapter.cs",
+        "Token": "Recommendation",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/ShadowFormalRetrievalAdapter.cs",
+        "Token": "Recommendation",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/ShadowFormalRetrievalAdapter.cs",
+        "Token": "Recommendation",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/ShadowFormalRetrievalAdapter.cs",
+        "Token": "Recommendation",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/ShadowFormalRetrievalAdapter.cs",
+        "Token": "Recommendation",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/ShadowFormalRetrievalAdapter.cs",
+        "Token": "Recommendation",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/ShadowFormalRetrievalAdapter.cs",
+        "Token": "Recommendation",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/ShadowFormalRetrievalAdapter.cs",
+        "Token": "Recommendation",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/ShadowFormalRetrievalAdapter.cs",
+        "Token": "Recommendation",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/ShadowFormalRetrievalAdapter.cs",
+        "Token": "RetrievalDatasetV2GeneratedDataset",
+        "Category": "DatasetEvalField",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/ShadowFormalRetrievalAdapter.cs",
+        "Token": "RetrievalDatasetV2GeneratedDataset",
+        "Category": "DatasetEvalField",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/ShadowFormalRetrievalAdapter.cs",
+        "Token": "RetrievalDatasetV2GeneratedDataset",
+        "Category": "DatasetEvalField",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/ShadowFormalRetrievalAdapter.cs",
+        "Token": "RetrievalDatasetV2Sample",
+        "Category": "DatasetEvalField",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/ShadowFormalRetrievalAdapter.cs",
+        "Token": "RetrievalDatasetV2Sample",
+        "Category": "DatasetEvalField",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/ShadowFormalRetrievalAdapter.cs",
+        "Token": "RetrievalDatasetV2Sample",
+        "Category": "DatasetEvalField",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/ShadowFormalRetrievalAdapter.cs",
+        "Token": "RetrievalDatasetV2Sample",
+        "Category": "DatasetEvalField",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/ShadowFormalRetrievalAdapter.cs",
+        "Token": "RetrievalDatasetV2Sample",
+        "Category": "DatasetEvalField",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/ShadowFormalRetrievalAdapter.cs",
+        "Token": "RetrievalDatasetV2Sample",
+        "Category": "DatasetEvalField",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/ShadowFormalRetrievalAdapter.cs",
+        "Token": "sample.EvidenceRefs",
+        "Category": "EvalAnnotation",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/ShadowFormalRetrievalAdapter.cs",
+        "Token": "sample.EvidenceRefs",
+        "Category": "EvalAnnotation",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/ShadowFormalRetrievalAdapter.cs",
+        "Token": "sample.ExpectedTargetSection",
+        "Category": "GoldLabel",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/ShadowFormalRetrievalAdapter.cs",
+        "Token": "sample.ExpectedTargetSection",
+        "Category": "GoldLabel",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/ShadowFormalRetrievalAdapter.cs",
+        "Token": "sample.ExpectedTargetSection",
+        "Category": "GoldLabel",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/ShadowFormalRetrievalAdapter.cs",
+        "Token": "sample.ExpectedTargetSection",
+        "Category": "GoldLabel",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/ShadowFormalRetrievalAdapter.cs",
+        "Token": "sample.ExpectedTargetSection",
+        "Category": "GoldLabel",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/ShadowFormalRetrievalAdapter.cs",
+        "Token": "sample.Metadata",
+        "Category": "SampleMetadata",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/ShadowFormalRetrievalAdapter.cs",
+        "Token": "sample.Metadata",
+        "Category": "SampleMetadata",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/ShadowFormalRetrievalAdapter.cs",
+        "Token": "sample.MustHitItemIds",
+        "Category": "GoldLabel",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/ShadowFormalRetrievalAdapter.cs",
+        "Token": "sample.MustHitItemIds",
+        "Category": "GoldLabel",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/ShadowFormalRetrievalAdapter.cs",
+        "Token": "sample.MustNotHitItemIds",
+        "Category": "GoldLabel",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/ShadowFormalRetrievalAdapter.cs",
+        "Token": "sample.MustNotHitItemIds",
+        "Category": "GoldLabel",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/ShadowFormalRetrievalAdapter.cs",
+        "Token": "sample.RequiredRelations",
+        "Category": "EvalAnnotation",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/ShadowFormalRetrievalAdapter.cs",
+        "Token": "sample.RequiredRelations",
+        "Category": "EvalAnnotation",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/ShadowFormalRetrievalAdapter.cs",
+        "Token": "sample.SampleId",
+        "Category": "SampleMetadata",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/ShadowFormalRetrievalAdapter.cs",
+        "Token": "sample.SampleId",
+        "Category": "SampleMetadata",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/ShadowFormalRetrievalAdapter.cs",
+        "Token": "sample.SourceRefs",
+        "Category": "EvalAnnotation",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/ShadowFormalRetrievalAdapter.cs",
+        "Token": "sample.SourceRefs",
+        "Category": "EvalAnnotation",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/ShadowFormalRetrievalAdapter.cs",
+        "Token": "ShadowFormalRetrievalAdapterReport",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/ShadowFormalRetrievalAdapter.cs",
+        "Token": "ShadowFormalRetrievalAdapterReport",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/ShadowFormalRetrievalAdapter.cs",
+        "Token": "ShadowFormalRetrievalAdapterReport",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/ShadowFormalRetrievalAdapter.cs",
+        "Token": "ShadowFormalRetrievalAdapterReport",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      },
+      {
+        "FilePath": "src/ContextCore.Core/Services/Vector/ShadowFormalRetrievalAdapter.cs",
+        "Token": "ShadowFormalRetrievalAdapterReport",
+        "Category": "ShadowArtifact",
+        "IsFormalSource": false
+      }
+    ]
+  },
+  "FormalOutputChanged": 0,
+  "FormalSelectedSetChanged": false,
+  "FormalPackageWritten": false,
+  "PackageOutputChanged": false,
+  "PackingPolicyChanged": false,
+  "RuntimeMutated": false,
+  "VectorStoreBindingChanged": false,
+  "FormalRetrievalAllowed": false,
+  "RuntimeSwitchAllowed": false,
+  "ReadyForRuntimeSwitch": false,
+  "UseForRuntime": false,
+  "SourceReports": {
+    "v51ShadowFormalRetrievalAdapterPlanGate": "vector\\v5\\shadow-formal-retrieval-adapter-plan-gate.json",
+    "v515OutputTokenPriorityShadowGate": "vector\\v5\\output-token-priority-shadow-gate.json",
+    "runtimeChangeGate": "learning\\readiness\\learning-runtime-change-readiness-gate.json"
+  },
+  "BlockedReasons": []
+}

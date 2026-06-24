@@ -1,6 +1,9 @@
 using ContextCore.Abstractions;
 using ContextCore.Core.Services;
+using ContextCore.Core.Services.Graph;
 using ContextCore.Service.Infrastructure;
+using System.Text.Json;
+using ContextCore.Abstractions.Models;
 
 namespace ContextCore.Service.Endpoints;
 
@@ -12,18 +15,54 @@ internal static class LearningEndpoints
         var group = app.MapGroup("/api/learning")
             .WithTags("Learning");
 
+        group.MapPost("/feedback", SubmitRuntimeLearningFeedbackAsync)
+            .WithName("SubmitRuntimeLearningFeedback")
+            .WithSummary("提交运行时学习反馈事件；仅采集，不改变正式策略");
+
         group.MapGet("/feedback", async Task<IResult> (
             string? workspaceId,
             string? collectionId,
             string? sessionId,
             string? candidateId,
             string? action,
+            bool? runtimeFeedback,
+            string? source,
+            string? sourceOperationId,
+            string? capabilityId,
+            string? targetId,
+            string? targetType,
+            string? feedbackKind,
             int? limit,
             int? offset,
             IServiceProvider services,
             HttpContext httpContext,
             CancellationToken ct) =>
         {
+            if (runtimeFeedback.GetValueOrDefault()
+                || !string.IsNullOrWhiteSpace(source)
+                || !string.IsNullOrWhiteSpace(sourceOperationId)
+                || !string.IsNullOrWhiteSpace(capabilityId)
+                || !string.IsNullOrWhiteSpace(targetId)
+                || !string.IsNullOrWhiteSpace(targetType)
+                || !string.IsNullOrWhiteSpace(feedbackKind))
+            {
+                return await QueryRuntimeLearningFeedbackAsync(
+                        workspaceId,
+                        collectionId,
+                        source,
+                        sourceOperationId,
+                        capabilityId,
+                        targetId,
+                        targetType,
+                        feedbackKind,
+                        limit,
+                        offset,
+                        services,
+                        httpContext,
+                        ct)
+                    .ConfigureAwait(false);
+            }
+
             var store = services.GetService<IContextLearningStore>();
             if (store is null)
             {
@@ -56,6 +95,86 @@ internal static class LearningEndpoints
         .WithName("QueryLearningFeedback")
         .WithSummary("查询晋升反馈信号");
 
+        group.MapGet("/feedback/summary", GetRuntimeLearningFeedbackSummaryAsync)
+            .WithName("GetRuntimeLearningFeedbackSummary")
+            .WithSummary("查询运行时学习反馈汇总；不改变正式策略");
+
+        group.MapGet("/feedback/export", ExportRuntimeLearningFeedbackAsync)
+            .WithName("ExportRuntimeLearningFeedback")
+            .WithSummary("导出运行时学习反馈 JSONL；不改变正式策略");
+
+        group.MapPost("/feedback/{feedbackId}/review/approve", (
+            string feedbackId,
+            LearningFeedbackReviewRequest request,
+            IServiceProvider services,
+            HttpContext httpContext,
+            CancellationToken ct) =>
+            ReviewRuntimeLearningFeedbackAsync(
+                feedbackId,
+                FeedbackReviewStatus.ApprovedForDataset,
+                request,
+                services,
+                httpContext,
+                ct))
+            .WithName("ApproveRuntimeLearningFeedback")
+            .WithSummary("批准运行时反馈进入离线数据集候选；不改变正式策略");
+
+        group.MapPost("/feedback/{feedbackId}/review/reject", (
+            string feedbackId,
+            LearningFeedbackReviewRequest request,
+            IServiceProvider services,
+            HttpContext httpContext,
+            CancellationToken ct) =>
+            ReviewRuntimeLearningFeedbackAsync(
+                feedbackId,
+                FeedbackReviewStatus.Rejected,
+                request,
+                services,
+                httpContext,
+                ct))
+            .WithName("RejectRuntimeLearningFeedback")
+            .WithSummary("拒绝运行时反馈进入离线数据集候选；不改变正式策略");
+
+        group.MapPost("/feedback/{feedbackId}/review/needs-redaction", (
+            string feedbackId,
+            LearningFeedbackReviewRequest request,
+            IServiceProvider services,
+            HttpContext httpContext,
+            CancellationToken ct) =>
+            ReviewRuntimeLearningFeedbackAsync(
+                feedbackId,
+                FeedbackReviewStatus.NeedsRedaction,
+                request,
+                services,
+                httpContext,
+                ct))
+            .WithName("MarkRuntimeLearningFeedbackNeedsRedaction")
+            .WithSummary("标记运行时反馈需要脱敏后再进入离线数据集候选");
+
+        group.MapPost("/feedback/{feedbackId}/review/needs-evidence", (
+            string feedbackId,
+            LearningFeedbackReviewRequest request,
+            IServiceProvider services,
+            HttpContext httpContext,
+            CancellationToken ct) =>
+            ReviewRuntimeLearningFeedbackAsync(
+                feedbackId,
+                FeedbackReviewStatus.NeedsMoreEvidence,
+                request,
+                services,
+                httpContext,
+                ct))
+            .WithName("MarkRuntimeLearningFeedbackNeedsEvidence")
+            .WithSummary("标记运行时反馈需要更多证据后再进入离线数据集候选");
+
+        group.MapGet("/feedback/reviews", GetRuntimeLearningFeedbackReviewsAsync)
+            .WithName("GetRuntimeLearningFeedbackReviews")
+            .WithSummary("查询运行时反馈审核记录；不改变正式策略");
+
+        group.MapGet("/feedback/reviews/summary", GetRuntimeLearningFeedbackReviewSummaryAsync)
+            .WithName("GetRuntimeLearningFeedbackReviewSummary")
+            .WithSummary("查询运行时反馈审核摘要；不改变正式策略");
+
         group.MapGet("/policy-feedback", GetPolicyFeedbackAsync)
             .WithName("GetPolicyFeedback")
             .WithSummary("查询策略反馈数据集");
@@ -79,6 +198,14 @@ internal static class LearningEndpoints
         group.MapGet("/ranker-shadow/traces", GetRankerShadowTracesAsync)
             .WithName("GetRankerShadowTraces")
             .WithSummary("导出 lifecycle-aware ranker shadow traces，不影响 retrieval output");
+
+        group.MapGet("/graph-expansion-shadow/traces", GetGraphExpansionShadowTracesAsync)
+            .WithName("GetGraphExpansionShadowTraces")
+            .WithSummary("导出 graph expansion shadow traces，不影响 retrieval/package output");
+
+        group.MapGet("/router-shadow/traces", GetRouterShadowTracesAsync)
+            .WithName("GetRouterShadowTraces")
+            .WithSummary("导出 router intent shadow traces，不影响 runtime router/planning/retrieval/package output");
 
         group.MapGet("/records", async Task<IResult> (
             string? workspaceId,
@@ -380,6 +507,315 @@ internal static class LearningEndpoints
         return app;
     }
 
+    private static async Task<IResult> SubmitRuntimeLearningFeedbackAsync(
+        LearningFeedbackSubmitRequest request,
+        IServiceProvider services,
+        HttpContext httpContext,
+        CancellationToken ct)
+    {
+        var service = services.GetService<LearningFeedbackService>();
+        if (service is null)
+        {
+            return ContextCoreHttpResultMapper.Misconfigured(
+                httpContext,
+                string.Empty,
+                "learning.feedback.runtime.submit",
+                "当前 provider 未注册运行时学习反馈服务。");
+        }
+
+        try
+        {
+            var result = await service.SubmitAsync(request, ct)
+                .ConfigureAwait(false);
+            return Results.Ok(result);
+        }
+        catch (ArgumentException ex)
+        {
+            return ContextCoreHttpResultMapper.InvalidRequest(
+                httpContext,
+                string.Empty,
+                "learning.feedback.runtime.submit",
+                ex.Message);
+        }
+        catch (Exception ex)
+        {
+            return ContextCoreHttpResultMapper.Error(httpContext, ex, string.Empty, "learning.feedback.runtime.submit");
+        }
+    }
+
+    private static async Task<IResult> QueryRuntimeLearningFeedbackAsync(
+        string? workspaceId,
+        string? collectionId,
+        string? source,
+        string? sourceOperationId,
+        string? capabilityId,
+        string? targetId,
+        string? targetType,
+        string? feedbackKind,
+        int? limit,
+        int? offset,
+        IServiceProvider services,
+        HttpContext httpContext,
+        CancellationToken ct)
+    {
+        var service = services.GetService<LearningFeedbackService>();
+        if (service is null)
+        {
+            return ContextCoreHttpResultMapper.Misconfigured(
+                httpContext,
+                string.Empty,
+                "learning.feedback.runtime",
+                "当前 provider 未注册运行时学习反馈服务。");
+        }
+
+        try
+        {
+            var rows = await service.ListAsync(new LearningFeedbackEventQuery
+            {
+                WorkspaceId = workspaceId,
+                CollectionId = collectionId,
+                Source = source,
+                SourceOperationId = sourceOperationId,
+                CapabilityId = capabilityId,
+                TargetId = targetId,
+                TargetType = targetType,
+                FeedbackKind = feedbackKind,
+                Limit = limit.GetValueOrDefault(100),
+                Offset = offset.GetValueOrDefault(0)
+            }, ct).ConfigureAwait(false);
+            return Results.Ok(rows);
+        }
+        catch (Exception ex)
+        {
+            return ContextCoreHttpResultMapper.Error(httpContext, ex, string.Empty, "learning.feedback.runtime");
+        }
+    }
+
+    private static async Task<IResult> GetRuntimeLearningFeedbackSummaryAsync(
+        string? workspaceId,
+        string? collectionId,
+        string? source,
+        string? sourceOperationId,
+        string? capabilityId,
+        string? targetId,
+        string? targetType,
+        string? feedbackKind,
+        int? limit,
+        int? offset,
+        IServiceProvider services,
+        HttpContext httpContext,
+        CancellationToken ct)
+    {
+        var service = services.GetService<LearningFeedbackService>();
+        if (service is null)
+        {
+            return ContextCoreHttpResultMapper.Misconfigured(
+                httpContext,
+                string.Empty,
+                "learning.feedback.runtime.summary",
+                "当前 provider 未注册运行时学习反馈服务。");
+        }
+
+        try
+        {
+            var report = await service.BuildSummaryAsync(new LearningFeedbackEventQuery
+            {
+                WorkspaceId = workspaceId,
+                CollectionId = collectionId,
+                Source = source,
+                SourceOperationId = sourceOperationId,
+                CapabilityId = capabilityId,
+                TargetId = targetId,
+                TargetType = targetType,
+                FeedbackKind = feedbackKind,
+                Limit = limit.GetValueOrDefault(20),
+                Offset = offset.GetValueOrDefault(0)
+            }, ct).ConfigureAwait(false);
+            return Results.Ok(report);
+        }
+        catch (Exception ex)
+        {
+            return ContextCoreHttpResultMapper.Error(httpContext, ex, string.Empty, "learning.feedback.runtime.summary");
+        }
+    }
+
+    private static async Task<IResult> ExportRuntimeLearningFeedbackAsync(
+        string? workspaceId,
+        string? collectionId,
+        string? source,
+        string? sourceOperationId,
+        string? capabilityId,
+        string? targetId,
+        string? targetType,
+        string? feedbackKind,
+        int? limit,
+        int? offset,
+        IServiceProvider services,
+        HttpContext httpContext,
+        CancellationToken ct)
+    {
+        var service = services.GetService<LearningFeedbackService>();
+        if (service is null)
+        {
+            return ContextCoreHttpResultMapper.Misconfigured(
+                httpContext,
+                string.Empty,
+                "learning.feedback.runtime.export",
+                "当前 provider 未注册运行时学习反馈服务。");
+        }
+
+        try
+        {
+            var jsonl = await service.ExportJsonLinesAsync(new LearningFeedbackEventQuery
+            {
+                WorkspaceId = workspaceId,
+                CollectionId = collectionId,
+                Source = source,
+                SourceOperationId = sourceOperationId,
+                CapabilityId = capabilityId,
+                TargetId = targetId,
+                TargetType = targetType,
+                FeedbackKind = feedbackKind,
+                Limit = limit.GetValueOrDefault(1000),
+                Offset = offset.GetValueOrDefault(0)
+            }, ct).ConfigureAwait(false);
+            return Results.Text(jsonl, "application/x-ndjson");
+        }
+        catch (Exception ex)
+        {
+            return ContextCoreHttpResultMapper.Error(httpContext, ex, string.Empty, "learning.feedback.runtime.export");
+        }
+    }
+
+    private static async Task<IResult> ReviewRuntimeLearningFeedbackAsync(
+        string feedbackId,
+        FeedbackReviewStatus status,
+        LearningFeedbackReviewRequest request,
+        IServiceProvider services,
+        HttpContext httpContext,
+        CancellationToken ct)
+    {
+        var service = services.GetService<LearningFeedbackReviewService>();
+        if (service is null)
+        {
+            return ContextCoreHttpResultMapper.Misconfigured(
+                httpContext,
+                string.Empty,
+                "learning.feedback.review",
+                "当前 provider 未注册运行时学习反馈审核服务。");
+        }
+
+        try
+        {
+            var result = status switch
+            {
+                FeedbackReviewStatus.ApprovedForDataset => await service.ApproveAsync(feedbackId, request, ct)
+                    .ConfigureAwait(false),
+                FeedbackReviewStatus.Rejected => await service.RejectAsync(feedbackId, request, ct)
+                    .ConfigureAwait(false),
+                FeedbackReviewStatus.NeedsRedaction => await service.NeedsRedactionAsync(feedbackId, request, ct)
+                    .ConfigureAwait(false),
+                FeedbackReviewStatus.NeedsMoreEvidence => await service.NeedsMoreEvidenceAsync(feedbackId, request, ct)
+                    .ConfigureAwait(false),
+                _ => throw new ArgumentException($"Unsupported feedback review status: {status}")
+            };
+            return Results.Ok(result);
+        }
+        catch (ArgumentException ex)
+        {
+            return ContextCoreHttpResultMapper.InvalidRequest(
+                httpContext,
+                string.Empty,
+                "learning.feedback.review",
+                ex.Message);
+        }
+        catch (Exception ex)
+        {
+            return ContextCoreHttpResultMapper.Error(httpContext, ex, string.Empty, "learning.feedback.review");
+        }
+    }
+
+    private static async Task<IResult> GetRuntimeLearningFeedbackReviewsAsync(
+        string? feedbackId,
+        FeedbackReviewStatus? reviewStatus,
+        string? reviewer,
+        int? limit,
+        int? offset,
+        IServiceProvider services,
+        HttpContext httpContext,
+        CancellationToken ct)
+    {
+        var service = services.GetService<LearningFeedbackReviewService>();
+        if (service is null)
+        {
+            return ContextCoreHttpResultMapper.Misconfigured(
+                httpContext,
+                string.Empty,
+                "learning.feedback.reviews",
+                "当前 provider 未注册运行时学习反馈审核服务。");
+        }
+
+        try
+        {
+            var rows = await service.ListAsync(new LearningFeedbackReviewQuery
+                {
+                    FeedbackId = feedbackId,
+                    ReviewStatus = reviewStatus,
+                    Reviewer = reviewer,
+                    Limit = limit.GetValueOrDefault(100),
+                    Offset = offset.GetValueOrDefault(0)
+                }, ct)
+                .ConfigureAwait(false);
+            return Results.Ok(rows);
+        }
+        catch (Exception ex)
+        {
+            return ContextCoreHttpResultMapper.Error(httpContext, ex, string.Empty, "learning.feedback.reviews");
+        }
+    }
+
+    private static async Task<IResult> GetRuntimeLearningFeedbackReviewSummaryAsync(
+        string? feedbackId,
+        FeedbackReviewStatus? reviewStatus,
+        string? reviewer,
+        int? limit,
+        int? offset,
+        IServiceProvider services,
+        HttpContext httpContext,
+        CancellationToken ct)
+    {
+        var service = services.GetService<LearningFeedbackReviewService>();
+        if (service is null)
+        {
+            return ContextCoreHttpResultMapper.Misconfigured(
+                httpContext,
+                string.Empty,
+                "learning.feedback.reviews.summary",
+                "当前 provider 未注册运行时学习反馈审核服务。");
+        }
+
+        try
+        {
+            var report = await service.BuildSummaryAsync(
+                    new LearningFeedbackEventQuery { Limit = int.MaxValue },
+                    new LearningFeedbackReviewQuery
+                    {
+                        FeedbackId = feedbackId,
+                        ReviewStatus = reviewStatus,
+                        Reviewer = reviewer,
+                        Limit = limit.GetValueOrDefault(100),
+                        Offset = offset.GetValueOrDefault(0)
+                    },
+                    ct)
+                .ConfigureAwait(false);
+            return Results.Ok(report);
+        }
+        catch (Exception ex)
+        {
+            return ContextCoreHttpResultMapper.Error(httpContext, ex, string.Empty, "learning.feedback.reviews.summary");
+        }
+    }
+
     private static async Task<IResult> GetPolicyFeedbackAsync(
         string? workspaceId,
         string? collectionId,
@@ -669,6 +1105,145 @@ internal static class LearningEndpoints
         catch (Exception ex)
         {
             return ContextCoreHttpResultMapper.Error(httpContext, ex, string.Empty, "learning.ranker-shadow.traces");
+        }
+    }
+
+    private static async Task<IResult> GetGraphExpansionShadowTracesAsync(
+        string? workspaceId,
+        string? collectionId,
+        int? take,
+        string? format,
+        IServiceProvider services,
+        HttpContext httpContext,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(workspaceId))
+        {
+            return ContextCoreHttpResultMapper.InvalidRequest(
+                httpContext,
+                string.Empty,
+                "learning.graph-expansion-shadow.traces",
+                "查询 graph expansion shadow traces 需要 workspaceId。",
+                field: "workspaceId");
+        }
+
+        if (string.IsNullOrWhiteSpace(collectionId))
+        {
+            return ContextCoreHttpResultMapper.InvalidRequest(
+                httpContext,
+                string.Empty,
+                "learning.graph-expansion-shadow.traces",
+                "查询 graph expansion shadow traces 需要 collectionId。",
+                field: "collectionId");
+        }
+
+        var service = services.GetService<GraphExpansionShadowTraceExportService>();
+        if (service is null)
+        {
+            return ContextCoreHttpResultMapper.Misconfigured(
+                httpContext,
+                string.Empty,
+                "learning.graph-expansion-shadow.traces",
+                "当前 provider 未注册 graph expansion shadow trace export 服务。");
+        }
+
+        try
+        {
+            if (string.Equals(format, "jsonl", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(format, "ndjson", StringComparison.OrdinalIgnoreCase))
+            {
+                var jsonl = await service
+                    .ExportJsonLinesAsync(
+                        workspaceId,
+                        collectionId,
+                        take.GetValueOrDefault(50),
+                        ct)
+                    .ConfigureAwait(false);
+                return Results.Text(jsonl, "application/x-ndjson");
+            }
+
+            var records = await service
+                .QueryAsync(
+                    workspaceId,
+                    collectionId,
+                    take.GetValueOrDefault(50),
+                    ct)
+                .ConfigureAwait(false);
+            return Results.Ok(records);
+        }
+        catch (ArgumentException ex)
+        {
+            return ContextCoreHttpResultMapper.InvalidRequest(
+                httpContext,
+                string.Empty,
+                "learning.graph-expansion-shadow.traces",
+                ex.Message);
+        }
+        catch (Exception ex)
+        {
+            return ContextCoreHttpResultMapper.Error(httpContext, ex, string.Empty, "learning.graph-expansion-shadow.traces");
+        }
+    }
+
+    private static async Task<IResult> GetRouterShadowTracesAsync(
+        string? workspaceId,
+        string? collectionId,
+        int? take,
+        string? format,
+        IServiceProvider services,
+        HttpContext httpContext,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(workspaceId))
+        {
+            return ContextCoreHttpResultMapper.InvalidRequest(
+                httpContext,
+                string.Empty,
+                "learning.router-shadow.traces",
+                "查询 router shadow traces 需要 workspaceId。",
+                field: "workspaceId");
+        }
+
+        if (string.IsNullOrWhiteSpace(collectionId))
+        {
+            return ContextCoreHttpResultMapper.InvalidRequest(
+                httpContext,
+                string.Empty,
+                "learning.router-shadow.traces",
+                "查询 router shadow traces 需要 collectionId。",
+                field: "collectionId");
+        }
+
+        var store = services.GetService<IRouterIntentShadowTraceStore>();
+        if (store is null)
+        {
+            return ContextCoreHttpResultMapper.Misconfigured(
+                httpContext,
+                string.Empty,
+                "learning.router-shadow.traces",
+                "当前 provider 未注册 router shadow trace 存储。");
+        }
+
+        try
+        {
+            var records = await store.QueryAsync(new RouterIntentShadowTraceQuery
+            {
+                WorkspaceId = workspaceId,
+                CollectionId = collectionId,
+                Take = take.GetValueOrDefault(50)
+            }, ct).ConfigureAwait(false);
+            if (string.Equals(format, "jsonl", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(format, "ndjson", StringComparison.OrdinalIgnoreCase))
+            {
+                var lines = records.Select(record => JsonSerializer.Serialize(record, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+                return Results.Text(string.Join(Environment.NewLine, lines), "application/x-ndjson");
+            }
+
+            return Results.Ok(records);
+        }
+        catch (Exception ex)
+        {
+            return ContextCoreHttpResultMapper.Error(httpContext, ex, string.Empty, "learning.router-shadow.traces");
         }
     }
 

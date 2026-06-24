@@ -1,0 +1,8 @@
+﻿{
+  "BatchId": "import-smoke",
+  "ImportedAt": "2026-06-15T11:22:58.5561416+00:00",
+  "RowCount": 11,
+  "DecisionCount": 11,
+  "Imported": true,
+  "Diagnostics": []
+}

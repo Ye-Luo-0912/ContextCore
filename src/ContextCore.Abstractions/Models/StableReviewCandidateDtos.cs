@@ -1,6 +1,4 @@
-using ContextCore.Abstractions.Models;
-
-namespace ContextCore.Abstractions;
+namespace ContextCore.Abstractions.Models;
 
 /// <summary>从已接受短期晋升候选项派生的 Stable review 候选项。</summary>
 public sealed class StableReviewCandidate

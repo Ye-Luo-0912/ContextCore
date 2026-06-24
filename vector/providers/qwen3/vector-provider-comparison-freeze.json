@@ -1,0 +1,41 @@
+﻿{
+  "GeneratedAt": "2026-06-15T07:00:41.6357367+00:00",
+  "Passed": false,
+  "ProviderId": "qwen3-embedding-0.6b-onnx",
+  "ModelId": "qwen3-embedding-0.6b",
+  "ProviderComparison": "Conclusive",
+  "ProviderConfigurationSanityPassed": true,
+  "ProviderConfigurationSanityAuditPath": "vector\\providers\\qwen3\\vector-provider-configuration-sanity-audit.json",
+  "ReadinessGatePassed": false,
+  "A3RecallAfterPolicy": 0.5454545454545454,
+  "ExtendedRecallAfterPolicy": 0.76875,
+  "RiskAfterPolicy": 2,
+  "FormalOutputChanged": 0,
+  "PromotionStatus": "DoNotPromote",
+  "VectorV4RecheckAllowed": false,
+  "FormalRetrievalAllowed": false,
+  "VectorRetrievalStatus": "PreviewOnly",
+  "P15GatePassed": true,
+  "Allowed": [
+    "preview",
+    "shadow",
+    "eval"
+  ],
+  "Forbidden": [
+    "FormalRetrievalSwitch",
+    "PgVectorFormalRetrievalSwitch",
+    "FormalIVectorIndexStoreBinding",
+    "PackingPolicyIntegration",
+    "PackageOutputIntegration"
+  ],
+  "BlockedReasons": [
+    "ReadinessGateNotPassed",
+    "RiskAfterPolicyNonZero",
+    "A3RecallBelow80Percent",
+    "ExtendedRecallBelow80Percent"
+  ],
+  "Diagnostics": [
+    "EmbeddingProviderComparisonFreezeBlocked"
+  ],
+  "Recommendation": "BlockedByRisk"
+}

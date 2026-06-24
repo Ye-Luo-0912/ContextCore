@@ -1,4 +1,5 @@
 using ContextCore.Abstractions;
+using ContextCore.Abstractions.Models;
 
 namespace ContextCore.Storage.FileSystem.Stores;
 
@@ -48,13 +49,10 @@ public sealed class FileRetrievalTraceStore : IRetrievalTraceStore
         int take,
         CancellationToken cancellationToken = default)
     {
-        var path = _paths.GetRetrievalTraceJsonlPath(workspaceId, collectionId);
-
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var traces = await _jsonLines.ReadAsync<ContextRetrievalTrace>(path, cancellationToken)
-                .ConfigureAwait(false);
+            var traces = await ReadTraceFilesAsync(workspaceId, collectionId, cancellationToken).ConfigureAwait(false);
             var count = take > 0 ? take : 50;
 
             return [.. traces
@@ -65,5 +63,49 @@ public sealed class FileRetrievalTraceStore : IRetrievalTraceStore
         {
             _gate.Release();
         }
+    }
+
+    private async Task<IReadOnlyList<ContextRetrievalTrace>> ReadTraceFilesAsync(
+        string workspaceId,
+        string collectionId,
+        CancellationToken cancellationToken)
+    {
+        var paths = EnumerateTraceFiles(workspaceId, collectionId);
+        var results = new List<ContextRetrievalTrace>();
+        var keys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var path in paths)
+        {
+            var traces = await _jsonLines.ReadAsync<ContextRetrievalTrace>(path, cancellationToken)
+                .ConfigureAwait(false);
+            foreach (var trace in traces)
+            {
+                var key = trace.RetrievalId;
+                if (string.IsNullOrWhiteSpace(key) || keys.Add(key))
+                {
+                    results.Add(trace);
+                }
+            }
+        }
+
+        return results;
+    }
+
+    private IReadOnlyList<string> EnumerateTraceFiles(string workspaceId, string collectionId)
+    {
+        var files = new List<string>();
+        var directory = _paths.GetRetrievalTraceDirectory(workspaceId, collectionId);
+        if (Directory.Exists(directory))
+        {
+            files.AddRange(Directory.EnumerateFiles(directory, "*.jsonl", SearchOption.AllDirectories)
+                .OrderByDescending(File.GetLastWriteTimeUtc));
+        }
+
+        var legacyPath = _paths.GetLegacyRetrievalTraceJsonlPath(workspaceId, collectionId);
+        if (File.Exists(legacyPath))
+        {
+            files.Add(legacyPath);
+        }
+
+        return files;
     }
 }

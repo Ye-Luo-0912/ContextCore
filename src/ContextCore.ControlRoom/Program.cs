@@ -511,6 +511,17 @@ static async Task RunInteractiveAsync(
                     return;
                 }
                 break;
+            case ControlRoomActionKind.OpenServiceVectorIndex:
+                if (!service.State.IsServiceMode)
+                {
+                    ShowServiceModeUnsupported("Service Vector Index 仅在 Service 模式可用");
+                    break;
+                }
+                if (await ServiceVectorIndexScreen.ShowAsync(service, cancellationToken).ConfigureAwait(false) == ControlRoomActionKind.Quit)
+                {
+                    return;
+                }
+                break;
             case ControlRoomActionKind.OpenServicePolicies:
                 if (!service.State.IsServiceMode)
                 {

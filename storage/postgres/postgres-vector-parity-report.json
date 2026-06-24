@@ -1,0 +1,31 @@
+﻿{
+  "generatedAt": "2026-06-14T14:40:55.5703882+00:00",
+  "workspaceId": "postgres-vector-parity",
+  "collectionId": "vector-index-store",
+  "providerId": "deterministic-hash",
+  "modelId": "deterministic-hash-v1",
+  "dimension": 16,
+  "operationCount": 14,
+  "fileSystemEntryCount": 3,
+  "postgresEntryCount": 3,
+  "insertedCount": 4,
+  "upsertedCount": 1,
+  "deletedCount": 1,
+  "queryCount": 3,
+  "mismatchCount": 0,
+  "orderingMismatchCount": 0,
+  "scoreDeltaMax": 2.3841857155204593E-08,
+  "metadataMismatchCount": 0,
+  "dimensionMismatchBlocked": true,
+  "providerModelMismatchBlocked": true,
+  "normalizedMismatchWarned": true,
+  "cleanupPerformed": true,
+  "useForRuntime": false,
+  "mismatches": [],
+  "diagnostics": [
+    "UseForRuntime=false",
+    "RetrievalProviderUnchanged",
+    "NormalizedFlagNotPartOfIVectorIndexStoreContract"
+  ],
+  "recommendation": "ReadyForProviderScopedReindex"
+}

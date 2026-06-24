@@ -1,4 +1,4 @@
-namespace ContextCore.Abstractions;
+namespace ContextCore.Abstractions.Models;
 
 /// <summary>短期原始事件，记录进入输入层后的短期上下文痕迹。</summary>
 public sealed class ShortTermRawEvent

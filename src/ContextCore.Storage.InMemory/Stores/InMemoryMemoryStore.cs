@@ -19,7 +19,7 @@ public sealed class InMemoryMemoryStore : IMemoryStore, IWorkingMemoryService, I
     private readonly ConcurrentDictionary<string, WorkingMemoryActiveContext> _activeContexts = new();
     private readonly ConcurrentDictionary<string, WorkingMemoryCurrentTask> _currentTasks = new();
     private readonly List<ContextPromotionRecord> _promotionRecords = new();
-    private readonly object _promotionGate = new();
+    private readonly Lock _promotionGate = new();
 
     public Task SaveAsync(ContextMemoryItem item, CancellationToken cancellationToken = default)
     {
@@ -226,16 +226,24 @@ public sealed class InMemoryMemoryStore : IMemoryStore, IWorkingMemoryService, I
         lock (_promotionGate)
         {
             var count = take > 0 ? take : 50;
-            return Task.FromResult<IReadOnlyList<ContextPromotionRecord>>(_promotionRecords
-                .Where(item => string.Equals(item.WorkspaceId, workspaceId, StringComparison.OrdinalIgnoreCase))
-                .Where(item => string.Equals(item.CollectionId, collectionId, StringComparison.OrdinalIgnoreCase))
-                .OrderByDescending(item => item.CreatedAt)
-                .Take(count)
-                .Select(item => Clone(item))
-                .ToArray());
+            return Task.FromResult<IReadOnlyList<ContextPromotionRecord>>([
+                .. _promotionRecords
+                    .Where(item => string.Equals(item.WorkspaceId, workspaceId, StringComparison.OrdinalIgnoreCase))
+                    .Where(item => string.Equals(item.CollectionId, collectionId, StringComparison.OrdinalIgnoreCase))
+                    .OrderByDescending(item => item.CreatedAt)
+                    .Take(count)
+                    .Select(item => Clone(item))
+            ]);
         }
     }
 
+    /// <summary>
+    /// 保存一个促销候选项。当候选项的状态或其他属性发生变化时，应调用此方法进行更新。
+    /// </summary>
+    /// <param name="candidate"></param>
+    /// <param name="cancellationToken"></param>
+    /// <returns></returns>
+    /// <exception cref="ArgumentNullException"></exception>
     public Task SavePromotionCandidateAsync(
         PromotionCandidate candidate,
         CancellationToken cancellationToken = default)
@@ -249,6 +257,14 @@ public sealed class InMemoryMemoryStore : IMemoryStore, IWorkingMemoryService, I
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// 获取指定促销候选项的详细信息，包括当前状态、审核记录等。当候选项不存在时返回 null。
+    /// </summary>
+    /// <param name="workspaceId"></param>
+    /// <param name="collectionId"></param>
+    /// <param name="id"></param>
+    /// <param name="cancellationToken"></param>
+    /// <returns></returns>
     public Task<PromotionCandidate?> GetPromotionCandidateAsync(
         string workspaceId,
         string collectionId,

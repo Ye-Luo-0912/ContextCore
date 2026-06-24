@@ -1,0 +1,16 @@
+﻿{
+  "generatedAt": "2026-06-13T10:31:22.2819247+00:00",
+  "workspaceId": "postgres-learning-feedback-dual-write-smoke",
+  "collectionId": "learning-feedback",
+  "operationCount": 10,
+  "fileSystemWriteSuccessCount": 10,
+  "postgresWriteSuccessCount": 10,
+  "mismatchCount": 0,
+  "postgresFailureCount": 0,
+  "fallbackCount": 0,
+  "duplicateFeedbackUpsertPassed": true,
+  "metadataRoundtripPassed": true,
+  "cleanupPerformed": true,
+  "mismatches": [],
+  "recommendation": "ReadyForShadowReadSmoke"
+}

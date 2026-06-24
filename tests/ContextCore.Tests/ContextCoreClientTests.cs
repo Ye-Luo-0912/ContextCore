@@ -4,6 +4,7 @@ using System.Text.Json;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Client;
+using ContextCore.Core.Services.Planning;
 
 namespace ContextCore.Tests;
 
@@ -392,6 +393,343 @@ public sealed class ContextCoreClientTests
         Assert.AreEqual("CurrentTask", proposal.Intent);
         Assert.IsFalse(proposal.UseVector);
         Assert.AreEqual(20, proposal.FinalTopK);
+    }
+
+    [TestMethod]
+    public async Task VectorReindexMethods_ShouldCallExpectedRoutes()
+    {
+        var handlers = new Queue<Func<HttpRequestMessage, HttpResponseMessage>>();
+        handlers.Enqueue(request =>
+        {
+            Assert.AreEqual(HttpMethod.Post, request.Method);
+            Assert.AreEqual("/api/vector/reindex-plan", request.RequestUri?.AbsolutePath);
+            var payload = JsonSerializer.Deserialize<VectorReindexRequest>(
+                request.Content!.ReadAsStringAsync().GetAwaiter().GetResult(),
+                JsonOptions);
+            Assert.IsNotNull(payload);
+            Assert.AreEqual("workspace-1", payload!.WorkspaceId);
+            Assert.AreEqual("collection-1", payload.CollectionId);
+            Assert.IsTrue(payload.DryRun);
+
+            return Json(new VectorReindexPlan
+            {
+                PlanId = "plan-1",
+                WorkspaceId = "workspace-1",
+                CollectionId = "collection-1",
+                TotalCandidates = 2,
+                ToCreate = 1,
+                ToSkip = 1,
+                DryRun = true
+            });
+        });
+        handlers.Enqueue(request =>
+        {
+            Assert.AreEqual(HttpMethod.Post, request.Method);
+            Assert.AreEqual("/api/vector/reindex-submit", request.RequestUri?.AbsolutePath);
+            var payload = JsonSerializer.Deserialize<VectorReindexRequest>(
+                request.Content!.ReadAsStringAsync().GetAwaiter().GetResult(),
+                JsonOptions);
+            Assert.IsNotNull(payload);
+            Assert.IsTrue(payload!.Apply);
+            Assert.IsTrue(payload.ConfirmApply);
+
+            return Json(new VectorReindexSubmitResponse
+            {
+                Job = new ContextJob
+                {
+                    JobId = "vector-job-1",
+                    WorkspaceId = "workspace-1",
+                    CollectionId = "collection-1",
+                    Kind = ContextJobKind.VectorReindex,
+                    State = ContextJobState.Queued
+                },
+                Plan = new VectorReindexPlan
+                {
+                    PlanId = "plan-apply-1",
+                    WorkspaceId = "workspace-1",
+                    CollectionId = "collection-1",
+                    ToCreate = 1
+                }
+            }, HttpStatusCode.Accepted);
+        });
+        handlers.Enqueue(request =>
+        {
+            Assert.AreEqual(HttpMethod.Get, request.Method);
+            Assert.AreEqual("/api/vector/reindex-reports", request.RequestUri?.AbsolutePath);
+            Assert.AreEqual("?workspaceId=workspace-1&collectionId=collection-1&take=5", request.RequestUri?.Query);
+            return Json(new VectorReindexReportQueryResponse
+            {
+                Count = 1,
+                Reports =
+                [
+                    new VectorReindexResult
+                    {
+                        ReportId = "report-1",
+                        WorkspaceId = "workspace-1",
+                        CollectionId = "collection-1",
+                        Summary = new VectorReindexSummary { Created = 1, Applied = true }
+                    }
+                ]
+            });
+        });
+        handlers.Enqueue(request =>
+        {
+            Assert.AreEqual(HttpMethod.Get, request.Method);
+            Assert.AreEqual("/api/vector/reindex-reports/report-1", request.RequestUri?.AbsolutePath);
+            return Json(new VectorReindexResult
+            {
+                ReportId = "report-1",
+                WorkspaceId = "workspace-1",
+                CollectionId = "collection-1",
+                Summary = new VectorReindexSummary { Created = 1, Applied = true }
+            });
+        });
+
+        using var http = CreateHttpClient(request => handlers.Dequeue().Invoke(request));
+        var client = new ContextCoreClient(http);
+
+        var plan = await client.CreateVectorReindexPlanAsync(new VectorReindexRequest
+        {
+            WorkspaceId = "workspace-1",
+            CollectionId = "collection-1",
+            DryRun = true
+        });
+        var submit = await client.SubmitVectorReindexAsync(new VectorReindexRequest
+        {
+            WorkspaceId = "workspace-1",
+            CollectionId = "collection-1",
+            Apply = true,
+            ConfirmApply = true
+        });
+        var reports = await client.GetVectorReindexReportsAsync("workspace-1", "collection-1", take: 5);
+        var detail = await client.GetVectorReindexReportAsync("report-1");
+
+        Assert.AreEqual("plan-1", plan.PlanId);
+        Assert.AreEqual("vector-job-1", submit.Job.JobId);
+        Assert.AreEqual(1, reports.Count);
+        Assert.AreEqual("report-1", detail.ReportId);
+        Assert.AreEqual(0, handlers.Count);
+    }
+
+    [TestMethod]
+    public async Task PreviewVectorQueryAsync_ShouldCallExpectedRoute()
+    {
+        using var http = CreateHttpClient(request =>
+        {
+            Assert.AreEqual(HttpMethod.Post, request.Method);
+            Assert.AreEqual("/api/vector/query-preview", request.RequestUri?.AbsolutePath);
+            var payload = JsonSerializer.Deserialize<VectorQueryPreviewRequest>(
+                request.Content!.ReadAsStringAsync().GetAwaiter().GetResult(),
+                JsonOptions);
+            Assert.IsNotNull(payload);
+            Assert.AreEqual("workspace-1", payload!.WorkspaceId);
+            Assert.AreEqual("collection-1", payload.CollectionId);
+            Assert.AreEqual("alpha query", payload.QueryText);
+            Assert.AreEqual(5, payload.TopK);
+
+            return Json(new VectorQueryPreviewResult
+            {
+                OperationId = "vector-query-op-1",
+                WorkspaceId = "workspace-1",
+                CollectionId = "collection-1",
+                QueryText = "alpha query",
+                Candidates =
+                [
+                    new VectorQueryPreviewCandidate
+                    {
+                        ItemId = "item-alpha",
+                        EntryId = "entry-alpha",
+                        Similarity = 0.98,
+                        Rank = 1
+                    }
+                ]
+            });
+        });
+        var client = new ContextCoreClient(http);
+
+        var result = await client.PreviewVectorQueryAsync(new VectorQueryPreviewRequest
+        {
+            WorkspaceId = "workspace-1",
+            CollectionId = "collection-1",
+            QueryText = "alpha query",
+            TopK = 5
+        });
+
+        Assert.AreEqual("vector-query-op-1", result.OperationId);
+        Assert.AreEqual("item-alpha", result.Candidates[0].ItemId);
+    }
+
+    [TestMethod]
+    public async Task VectorLifecycleMetadataReviewCandidateMethods_ShouldCallExpectedRoutes()
+    {
+        var handlers = new Queue<Func<HttpRequestMessage, HttpResponseMessage>>();
+        handlers.Enqueue(request =>
+        {
+            Assert.AreEqual(HttpMethod.Post, request.Method);
+            Assert.AreEqual("/api/vector/lifecycle-metadata/review-candidates/generate", request.RequestUri?.AbsolutePath);
+            return Json(new VectorLifecycleMetadataReviewCandidateGenerationResult
+            {
+                OperationId = "generate-1",
+                CandidateCount = 1,
+                Candidates = [CreateVectorLifecycleMetadataReviewCandidate("candidate-1")]
+            });
+        });
+        handlers.Enqueue(request =>
+        {
+            Assert.AreEqual(HttpMethod.Get, request.Method);
+            Assert.AreEqual("/api/vector/lifecycle-metadata/review-candidates", request.RequestUri?.AbsolutePath);
+            Assert.AreEqual("?workspaceId=workspace-1&limit=5&offset=1&collectionId=collection-1&status=PendingReview&layer=context&itemKind=note&mustHitItemId=item-1&sourceEvalSet=A3", request.RequestUri?.Query);
+            return Json(new[] { CreateVectorLifecycleMetadataReviewCandidate("candidate-1") });
+        });
+        handlers.Enqueue(request =>
+        {
+            Assert.AreEqual(HttpMethod.Get, request.Method);
+            Assert.AreEqual("/api/vector/lifecycle-metadata/review-candidates/candidate-1", request.RequestUri?.AbsolutePath);
+            return Json(CreateVectorLifecycleMetadataReviewCandidate("candidate-1"));
+        });
+        handlers.Enqueue(request =>
+        {
+            Assert.AreEqual(HttpMethod.Get, request.Method);
+            Assert.AreEqual("/api/vector/lifecycle-metadata/review-candidates/candidate-1/explain", request.RequestUri?.AbsolutePath);
+            return Json(new VectorLifecycleMetadataReviewCandidateExplanation
+            {
+                CandidateId = "candidate-1",
+                Candidate = CreateVectorLifecycleMetadataReviewCandidate("candidate-1"),
+                EvidenceRefs = ["evidence-1"],
+                SourceRefs = ["source-1"],
+                RiskIfApproved = ["SidecarWriteWouldChangeEligibilityOnlyAfterFutureApproval"],
+                RiskIfRejected = ["RecallRemainsBlockedByLifecycleMetadata"]
+            });
+        });
+        handlers.Enqueue(request =>
+        {
+            Assert.AreEqual(HttpMethod.Post, request.Method);
+            Assert.AreEqual("/api/vector/lifecycle-metadata/review-candidates/candidate-1/approve", request.RequestUri?.AbsolutePath);
+            return Json(new VectorLifecycleMetadataReviewResult
+            {
+                Succeeded = true,
+                CandidateId = "candidate-1",
+                Decision = VectorLifecycleMetadataReviewDecisions.ApproveForSidecar,
+                CandidateStatus = VectorLifecycleMetadataReviewCandidateStatuses.ApprovedForSidecar,
+                SidecarWritten = true
+            });
+        });
+        handlers.Enqueue(request =>
+        {
+            Assert.AreEqual(HttpMethod.Post, request.Method);
+            Assert.AreEqual("/api/vector/lifecycle-metadata/review-candidates/candidate-1/reject", request.RequestUri?.AbsolutePath);
+            return Json(new VectorLifecycleMetadataReviewResult
+            {
+                Succeeded = true,
+                CandidateId = "candidate-1",
+                Decision = VectorLifecycleMetadataReviewDecisions.Reject,
+                CandidateStatus = VectorLifecycleMetadataReviewCandidateStatuses.Rejected
+            });
+        });
+        handlers.Enqueue(request =>
+        {
+            Assert.AreEqual(HttpMethod.Post, request.Method);
+            Assert.AreEqual("/api/vector/lifecycle-metadata/review-candidates/candidate-1/needs-evidence", request.RequestUri?.AbsolutePath);
+            return Json(new VectorLifecycleMetadataReviewResult
+            {
+                Succeeded = true,
+                CandidateId = "candidate-1",
+                Decision = VectorLifecycleMetadataReviewDecisions.NeedsEvidence,
+                CandidateStatus = VectorLifecycleMetadataReviewCandidateStatuses.NeedsEvidence
+            });
+        });
+        handlers.Enqueue(request =>
+        {
+            Assert.AreEqual(HttpMethod.Post, request.Method);
+            Assert.AreEqual("/api/vector/lifecycle-metadata/review-candidates/candidate-1/supersede", request.RequestUri?.AbsolutePath);
+            return Json(new VectorLifecycleMetadataReviewResult
+            {
+                Succeeded = true,
+                CandidateId = "candidate-1",
+                Decision = VectorLifecycleMetadataReviewDecisions.Supersede,
+                CandidateStatus = VectorLifecycleMetadataReviewCandidateStatuses.Superseded
+            });
+        });
+        handlers.Enqueue(request =>
+        {
+            Assert.AreEqual(HttpMethod.Get, request.Method);
+            Assert.AreEqual("/api/vector/lifecycle-metadata/review-candidates/candidate-1/reviews", request.RequestUri?.AbsolutePath);
+            return Json(new[]
+            {
+                new VectorLifecycleMetadataReviewRecord
+                {
+                    ReviewId = "review-1",
+                    CandidateId = "candidate-1",
+                    Decision = VectorLifecycleMetadataReviewDecisions.ApproveForSidecar
+                }
+            });
+        });
+        handlers.Enqueue(request =>
+        {
+            Assert.AreEqual(HttpMethod.Get, request.Method);
+            Assert.AreEqual("/api/vector/lifecycle-metadata/sidecar", request.RequestUri?.AbsolutePath);
+            Assert.AreEqual("?workspaceId=workspace-1&collectionId=collection-1", request.RequestUri?.Query);
+            return Json(new[]
+            {
+                new VectorLifecycleSidecarMetadataEntry
+                {
+                    ItemId = "item-1",
+                    WorkspaceId = "workspace-1",
+                    CollectionId = "collection-1",
+                    SourceReviewId = "review-1"
+                }
+            });
+        });
+
+        using var http = CreateHttpClient(request => handlers.Dequeue().Invoke(request));
+        var client = new ContextCoreClient(http);
+
+        var generated = await client.GenerateVectorLifecycleMetadataReviewCandidatesAsync(new VectorLifecycleMetadataReviewCandidateGenerationRequest
+        {
+            WorkspaceId = "workspace-1",
+            CollectionId = "collection-1"
+        });
+        var queried = await client.GetVectorLifecycleMetadataReviewCandidatesAsync(
+            "workspace-1",
+            "collection-1",
+            VectorLifecycleMetadataReviewCandidateStatuses.PendingReview,
+            "context",
+            "note",
+            "item-1",
+            "A3",
+            5,
+            1);
+        var detail = await client.GetVectorLifecycleMetadataReviewCandidateAsync("candidate-1");
+        var explanation = await client.ExplainVectorLifecycleMetadataReviewCandidateAsync("candidate-1");
+        var reviewRequest = new VectorLifecycleMetadataReviewRequest
+        {
+            CandidateId = "candidate-1",
+            Reviewer = "reviewer",
+            Reason = "reason",
+            ProposedLifecycle = "Active",
+            ProposedReviewStatus = "Stable",
+            ProposedTargetSection = VectorQueryTargetSections.AuditContext,
+            EvidenceRefs = ["evidence-1"],
+            Confirmed = true
+        };
+        var approved = await client.ApproveVectorLifecycleMetadataReviewCandidateAsync("candidate-1", reviewRequest);
+        var rejected = await client.RejectVectorLifecycleMetadataReviewCandidateAsync("candidate-1", reviewRequest);
+        var needsEvidence = await client.NeedsEvidenceVectorLifecycleMetadataReviewCandidateAsync("candidate-1", reviewRequest);
+        var superseded = await client.SupersedeVectorLifecycleMetadataReviewCandidateAsync("candidate-1", reviewRequest);
+        var history = await client.GetVectorLifecycleMetadataReviewHistoryAsync("candidate-1");
+        var sidecar = await client.GetVectorLifecycleMetadataSidecarAsync("workspace-1", "collection-1");
+
+        Assert.AreEqual(1, generated.CandidateCount);
+        Assert.AreEqual(1, queried.Count);
+        Assert.AreEqual("candidate-1", detail.CandidateId);
+        CollectionAssert.Contains(explanation.RiskIfRejected.ToArray(), "RecallRemainsBlockedByLifecycleMetadata");
+        Assert.IsTrue(approved.SidecarWritten);
+        Assert.AreEqual(VectorLifecycleMetadataReviewCandidateStatuses.Rejected, rejected.CandidateStatus);
+        Assert.AreEqual(VectorLifecycleMetadataReviewCandidateStatuses.NeedsEvidence, needsEvidence.CandidateStatus);
+        Assert.AreEqual(VectorLifecycleMetadataReviewCandidateStatuses.Superseded, superseded.CandidateStatus);
+        Assert.AreEqual(1, history.Count);
+        Assert.AreEqual(1, sidecar.Count);
+        Assert.AreEqual(0, handlers.Count);
     }
 
     [TestMethod]
@@ -1682,6 +2020,46 @@ public sealed class ContextCoreClientTests
         handlers.Enqueue(request =>
         {
             Assert.AreEqual(HttpMethod.Get, request.Method);
+            Assert.AreEqual("/api/relations/expansion/profiles", request.RequestUri?.AbsolutePath);
+            return Json<IReadOnlyList<RelationExpansionProfile>>(
+            [
+                new RelationExpansionProfile
+                {
+                    ProfileId = "normal-v1",
+                    Mode = "Normal",
+                    Intent = "Default",
+                    MaxDepth = 1,
+                    MaxFanout = 8
+                }
+            ]);
+        });
+        handlers.Enqueue(request =>
+        {
+            Assert.AreEqual(HttpMethod.Post, request.Method);
+            Assert.AreEqual("/api/relations/expansion/preview", request.RequestUri?.AbsolutePath);
+            return Json(new RelationExpansionPreviewResponse
+            {
+                OperationId = "op-preview",
+                WorkspaceId = "workspace-1",
+                CollectionId = "collection-1",
+                ItemId = "item-1",
+                Profile = new RelationExpansionProfile { ProfileId = "normal-v1" },
+                AcceptedCount = 1,
+                AcceptedRelations =
+                [
+                    new RelationExpansionPreviewRelation
+                    {
+                        RelationId = "rel-1",
+                        SourceId = "item-1",
+                        TargetId = "item-2",
+                        RelationType = "references"
+                    }
+                ]
+            });
+        });
+        handlers.Enqueue(request =>
+        {
+            Assert.AreEqual(HttpMethod.Get, request.Method);
             Assert.AreEqual("/api/relations/diagnostics", request.RequestUri?.AbsolutePath);
             Assert.AreEqual("?workspaceId=workspace-1&collectionId=collection-1", request.RequestUri?.Query);
             return Json(new RelationGraphDiagnosticsReport
@@ -1733,6 +2111,14 @@ public sealed class ContextCoreClientTests
 
         var response = await client.QueryRelationsAsync("item-1", "workspace-1", "collection-1");
         var types = await client.GetRelationTypesAsync();
+        var profiles = await client.GetRelationExpansionProfilesAsync();
+        var preview = await client.PreviewRelationExpansionAsync(new RelationExpansionPreviewRequest
+        {
+            WorkspaceId = "workspace-1",
+            CollectionId = "collection-1",
+            ItemId = "item-1",
+            ProfileId = "normal-v1"
+        });
         var diagnostics = await client.GetRelationDiagnosticsAsync("workspace-1", "collection-1");
         var itemDiagnostics = await client.GetItemRelationDiagnosticsAsync("item-1", "workspace-1", "collection-1");
         var explain = await client.ExplainRelationAsync("rel-1", "workspace-1", "collection-1");
@@ -1742,6 +2128,8 @@ public sealed class ContextCoreClientTests
         Assert.AreEqual("references", response.Outgoing[0].RelationType);
         Assert.AreEqual(0, response.Incoming.Count);
         Assert.AreEqual("references", types[0].Type);
+        Assert.AreEqual("normal-v1", profiles[0].ProfileId);
+        Assert.AreEqual(1, preview.AcceptedCount);
         Assert.AreEqual(1, diagnostics.RelationCount);
         Assert.AreEqual(1, itemDiagnostics.DiagnosticCount);
         Assert.AreEqual("rel-1", explain.RelationId);
@@ -2355,6 +2743,83 @@ public sealed class ContextCoreClientTests
     }
 
     [TestMethod]
+    public async Task RuntimeLearningFeedbackClientMethods_ShouldCallRuntimeFeedbackRoutes()
+    {
+        var handlers = new Queue<Func<HttpRequestMessage, HttpResponseMessage>>();
+        handlers.Enqueue(request =>
+        {
+            Assert.AreEqual(HttpMethod.Post, request.Method);
+            Assert.AreEqual("/api/learning/feedback", request.RequestUri?.AbsolutePath);
+            var body = request.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
+            StringAssert.Contains(body, "VectorRetrieval");
+            return Json(new LearningFeedbackSubmitResult
+            {
+                FeedbackId = "feedback-runtime-1",
+                Created = true,
+                Event = CreateRuntimeLearningFeedback()
+            });
+        });
+        handlers.Enqueue(request =>
+        {
+            Assert.AreEqual(HttpMethod.Get, request.Method);
+            Assert.AreEqual("/api/learning/feedback", request.RequestUri?.AbsolutePath);
+            StringAssert.Contains(request.RequestUri?.Query ?? string.Empty, "runtimeFeedback=true");
+            StringAssert.Contains(request.RequestUri?.Query ?? string.Empty, "capabilityId=VectorRetrieval");
+            return Json(new[] { CreateRuntimeLearningFeedback() });
+        });
+        handlers.Enqueue(request =>
+        {
+            Assert.AreEqual(HttpMethod.Get, request.Method);
+            Assert.AreEqual("/api/learning/feedback/summary", request.RequestUri?.AbsolutePath);
+            return Json(new LearningFeedbackSummaryReport
+            {
+                WorkspaceId = "workspace-1",
+                CollectionId = "collection-1",
+                FeedbackCount = 1,
+                FeedbackByCapability = new Dictionary<string, int>
+                {
+                    [ShadowCapabilityIds.VectorRetrieval] = 1
+                },
+                FeedbackByKind = new Dictionary<string, int>
+                {
+                    [LearningFeedbackKinds.MissingContext] = 1
+                }
+            });
+        });
+        handlers.Enqueue(request =>
+        {
+            Assert.AreEqual(HttpMethod.Get, request.Method);
+            Assert.AreEqual("/api/learning/feedback/export", request.RequestUri?.AbsolutePath);
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("{\"feedbackId\":\"feedback-runtime-1\"}\n", Encoding.UTF8, "application/x-ndjson")
+            };
+        });
+
+        using var http = CreateHttpClient(request => handlers.Dequeue().Invoke(request));
+        var client = new ContextCoreClient(http);
+        var query = new LearningFeedbackEventQuery
+        {
+            WorkspaceId = "workspace-1",
+            CollectionId = "collection-1",
+            CapabilityId = ShadowCapabilityIds.VectorRetrieval,
+            FeedbackKind = LearningFeedbackKinds.MissingContext,
+            Limit = 10
+        };
+
+        var submitted = await client.SubmitLearningFeedbackAsync(CreateRuntimeLearningFeedback());
+        var rows = await client.GetLearningFeedbackAsync(query);
+        var summary = await client.GetLearningFeedbackSummaryAsync(query);
+        var jsonl = await client.ExportLearningFeedbackAsync(query);
+
+        Assert.AreEqual("feedback-runtime-1", submitted.FeedbackId);
+        Assert.AreEqual(1, rows.Count);
+        Assert.AreEqual(1, summary.FeedbackCount);
+        StringAssert.Contains(jsonl, "feedback-runtime-1");
+        Assert.AreEqual(0, handlers.Count);
+    }
+
+    [TestMethod]
     public async Task PolicyFeedbackClientMethods_ShouldCallExpectedRoutes()
     {
         var handlers = new Queue<Func<HttpRequestMessage, HttpResponseMessage>>();
@@ -2668,6 +3133,300 @@ public sealed class ContextCoreClientTests
         Assert.AreEqual(0, handlers.Count);
     }
 
+    [TestMethod]
+    public async Task GraphExpansionShadowTraceClientMethods_ShouldCallExpectedRoutes()
+    {
+        var handlers = new Queue<Func<HttpRequestMessage, HttpResponseMessage>>();
+        handlers.Enqueue(request =>
+        {
+            Assert.AreEqual(HttpMethod.Get, request.Method);
+            Assert.AreEqual("/api/learning/graph-expansion-shadow/traces", request.RequestUri?.AbsolutePath);
+            StringAssert.Contains(request.RequestUri?.Query ?? string.Empty, "workspaceId=workspace-1");
+            StringAssert.Contains(request.RequestUri?.Query ?? string.Empty, "collectionId=collection-1");
+            StringAssert.Contains(request.RequestUri?.Query ?? string.Empty, "take=5");
+            return Json(new[]
+            {
+                new GraphExpansionShadowTraceRecord
+                {
+                    RetrievalId = "retrieval-graph-shadow-1",
+                    WorkspaceId = "workspace-1",
+                    CollectionId = "collection-1",
+                    Query = "audit conflict",
+                    Profiles = ["audit-v1"],
+                    AcceptedRelations =
+                    [
+                        new RelationExpansionPreviewRelation
+                        {
+                            RelationId = "rel-client-audit",
+                            RelationType = ContextRelationTypes.Replaces,
+                            TargetSection = GraphExpansionTargetSection.AuditContext
+                        }
+                    ]
+                }
+            });
+        });
+        handlers.Enqueue(request =>
+        {
+            Assert.AreEqual(HttpMethod.Get, request.Method);
+            Assert.AreEqual("/api/learning/graph-expansion-shadow/traces", request.RequestUri?.AbsolutePath);
+            StringAssert.Contains(request.RequestUri?.Query ?? string.Empty, "format=jsonl");
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    "{\"retrievalId\":\"retrieval-graph-shadow-1\",\"acceptedRelations\":[]}",
+                    Encoding.UTF8,
+                    "application/x-ndjson")
+            };
+        });
+
+        using var http = CreateHttpClient(request => handlers.Dequeue().Invoke(request));
+        var client = new ContextCoreClient(http);
+
+        var records = await client.GetGraphExpansionShadowTracesAsync("workspace-1", "collection-1", take: 5);
+        var jsonl = await client.ExportGraphExpansionShadowTracesAsync("workspace-1", "collection-1", take: 5);
+
+        Assert.AreEqual("retrieval-graph-shadow-1", records[0].RetrievalId);
+        StringAssert.Contains(jsonl, "retrieval-graph-shadow-1");
+        Assert.AreEqual(0, handlers.Count);
+    }
+
+    [TestMethod]
+    public async Task RouterShadowTraceClientMethods_ShouldCallExpectedRoutes()
+    {
+        var handlers = new Queue<Func<HttpRequestMessage, HttpResponseMessage>>();
+        handlers.Enqueue(request =>
+        {
+            Assert.AreEqual(HttpMethod.Get, request.Method);
+            Assert.AreEqual("/api/learning/router-shadow/traces", request.RequestUri?.AbsolutePath);
+            StringAssert.Contains(request.RequestUri?.Query ?? string.Empty, "workspaceId=workspace-1");
+            StringAssert.Contains(request.RequestUri?.Query ?? string.Empty, "collectionId=collection-1");
+            StringAssert.Contains(request.RequestUri?.Query ?? string.Empty, "take=5");
+            return Json(new[]
+            {
+                new RouterIntentShadowTrace
+                {
+                    RequestId = "router-shadow-1",
+                    WorkspaceId = "workspace-1",
+                    CollectionId = "collection-1",
+                    RuntimeIntent = PlanningIntentDetector.CodingTask,
+                    ShadowIntent = PlanningIntentDetector.FuzzyQuestion,
+                    Agreement = false,
+                    FormalOutputChanged = false
+                }
+            });
+        });
+        handlers.Enqueue(request =>
+        {
+            Assert.AreEqual(HttpMethod.Get, request.Method);
+            Assert.AreEqual("/api/learning/router-shadow/traces", request.RequestUri?.AbsolutePath);
+            StringAssert.Contains(request.RequestUri?.Query ?? string.Empty, "format=jsonl");
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    "{\"requestId\":\"router-shadow-1\",\"formalOutputChanged\":false}",
+                    Encoding.UTF8,
+                    "application/x-ndjson")
+            };
+        });
+
+        using var http = CreateHttpClient(request => handlers.Dequeue().Invoke(request));
+        var client = new ContextCoreClient(http);
+
+        var records = await client.GetRouterShadowTracesAsync("workspace-1", "collection-1", take: 5);
+        var jsonl = await client.ExportRouterShadowTracesAsync("workspace-1", "collection-1", take: 5);
+
+        Assert.AreEqual("router-shadow-1", records[0].RequestId);
+        Assert.IsFalse(records[0].FormalOutputChanged);
+        StringAssert.Contains(jsonl, "router-shadow-1");
+        Assert.AreEqual(0, handlers.Count);
+    }
+
+    [TestMethod]
+    public async Task ClientMethods_ShouldCallFoundationReadOnlyStatusRoutes()
+    {
+        var handlers = new Queue<Func<HttpRequestMessage, HttpResponseMessage>>();
+        var paths = new[]
+        {
+            "/api/admin/foundation/status",
+            "/api/admin/foundation/release-candidate",
+            "/api/admin/foundation/reproducibility",
+            "/api/admin/foundation/runtime-change-gate",
+            "/api/admin/foundation/vector-formal-preview",
+            "/api/admin/foundation/postgres-freeze-status",
+            "/api/admin/foundation/reports",
+            "/api/admin/foundation/reports/foundation-release-candidate-gate"
+        };
+        foreach (var path in paths)
+        {
+            handlers.Enqueue(request =>
+            {
+                Assert.AreEqual(HttpMethod.Get, request.Method);
+                Assert.AreEqual(path, request.RequestUri?.AbsolutePath);
+
+                if (path.Equals("/api/admin/foundation/reports", StringComparison.Ordinal))
+                {
+                    return Json(new FoundationApiResponseEnvelope<FoundationReportNavigationResponse>
+                    {
+                        CapabilityId = "foundation.report.navigation",
+                        Status = "Ready",
+                        Recommendation = "ReadyForReadOnlyReportNavigation",
+                        Data = new FoundationReportNavigationResponse
+                        {
+                            ReportCount = 1,
+                            ExistingReportCount = 1,
+                            Reports =
+                            [
+                                new FoundationReportNavigationEntry
+                                {
+                                    ReportId = "foundation-release-candidate-gate",
+                                    CapabilityId = "ContextCoreFoundation",
+                                    RelativePath = "foundation/foundation-release-candidate-gate.json",
+                                    Exists = true,
+                                    SafeToExpose = true
+                                }
+                            ]
+                        }
+                    });
+                }
+
+                if (path.Equals("/api/admin/foundation/reports/foundation-release-candidate-gate", StringComparison.Ordinal))
+                {
+                    return Json(new FoundationApiResponseEnvelope<FoundationReportNavigationEntry>
+                    {
+                        CapabilityId = "ContextCoreFoundation",
+                        Status = "Ready",
+                        Recommendation = "ReadyForReadOnlyReportNavigation",
+                        Data = new FoundationReportNavigationEntry
+                        {
+                            ReportId = "foundation-release-candidate-gate",
+                            CapabilityId = "ContextCoreFoundation",
+                            RelativePath = "foundation/foundation-release-candidate-gate.json",
+                            Exists = true,
+                            SafeToExpose = true
+                        }
+                    });
+                }
+
+                return Json(new FoundationApiResponseEnvelope<FoundationServiceStatusResponse>
+                {
+                    CapabilityId = "foundation.readonly.status",
+                    Status = "Ready",
+                    Recommendation = "ReadOnlyStatusAvailable",
+                    Data = new FoundationServiceStatusResponse
+                    {
+                        StatusKind = path.Replace("/api/admin/", string.Empty, StringComparison.Ordinal),
+                        FoundationGateStatus = "Passed",
+                        RuntimeChangeGateStatus = "Passed",
+                        ReproducibilityStatus = "Passed",
+                        VectorFormalPreviewStatus = "Passed",
+                        PostgresFreezeStatus = "Passed",
+                        Capabilities =
+                        [
+                            new CapabilityStatus
+                            {
+                                CapabilityId = "ContextCoreFoundation",
+                                Category = "foundation",
+                                State = "Frozen",
+                                GatePassed = true
+                            }
+                        ]
+                    }
+                });
+            });
+        }
+
+        using var http = CreateHttpClient(request => handlers.Dequeue().Invoke(request));
+        var client = new ContextCoreClient(http);
+
+        var status = await client.GetFoundationStatusAsync();
+        var release = await client.GetFoundationReleaseCandidateStatusAsync();
+        var reproducibility = await client.GetFoundationReproducibilityStatusAsync();
+        var runtime = await client.GetFoundationRuntimeChangeGateStatusAsync();
+        var vector = await client.GetFoundationVectorFormalPreviewStatusAsync();
+        var postgres = await client.GetFoundationPostgresFreezeStatusAsync();
+        var reports = await client.GetFoundationReportsAsync();
+        var report = await client.GetFoundationReportAsync("foundation-release-candidate-gate");
+
+        Assert.AreEqual("Passed", status.FoundationGateStatus);
+        Assert.AreEqual("Passed", release.FoundationGateStatus);
+        Assert.AreEqual("Passed", reproducibility.ReproducibilityStatus);
+        Assert.AreEqual("Passed", runtime.RuntimeChangeGateStatus);
+        Assert.AreEqual("Passed", vector.VectorFormalPreviewStatus);
+        Assert.AreEqual("Passed", postgres.PostgresFreezeStatus);
+        Assert.AreEqual(1, reports.ReportCount);
+        Assert.AreEqual("foundation-release-candidate-gate", report.ReportId);
+        Assert.AreEqual(0, handlers.Count);
+    }
+
+    [TestMethod]
+    public async Task ClientMethods_ShouldFailWhenFoundationEnvelopeHasNoData()
+    {
+        using var http = CreateHttpClient(request =>
+        {
+            Assert.AreEqual("/api/admin/foundation/status", request.RequestUri?.AbsolutePath);
+            return Json(new FoundationApiResponseEnvelope<FoundationServiceStatusResponse>
+            {
+                Success = true,
+                Status = "Degraded",
+                Recommendation = "RegenerateReport",
+                Data = null
+            });
+        });
+        var client = new ContextCoreClient(http);
+
+        var ex = await Assert.ThrowsExceptionAsync<ContextCoreApiException>(
+            () => client.GetFoundationStatusAsync());
+
+        Assert.AreEqual(HttpStatusCode.ServiceUnavailable, ex.StatusCode);
+        Assert.AreEqual(ContextCoreErrorCodes.StorageUnavailable, ex.ErrorResponse.ErrorCode);
+    }
+
+    [TestMethod]
+    public async Task ClientAliasMethods_ShouldCallFrozenFoundationReadOnlyRoutes()
+    {
+        var handlers = new Queue<Func<HttpRequestMessage, HttpResponseMessage>>();
+        var paths = new[]
+        {
+            "/api/admin/foundation/release-candidate",
+            "/api/admin/foundation/reproducibility",
+            "/api/admin/foundation/runtime-change-gate",
+            "/api/admin/foundation/vector-formal-preview",
+            "/api/admin/foundation/postgres-freeze-status"
+        };
+        foreach (var path in paths)
+        {
+            handlers.Enqueue(request =>
+            {
+                Assert.AreEqual(HttpMethod.Get, request.Method);
+                Assert.AreEqual(path, request.RequestUri?.AbsolutePath);
+                return Json(new FoundationApiResponseEnvelope<FoundationServiceStatusResponse>
+                {
+                    CapabilityId = "foundation.readonly.status",
+                    Status = "Ready",
+                    Recommendation = "ReadOnlyStatusAvailable",
+                    Data = new FoundationServiceStatusResponse
+                    {
+                        FoundationGateStatus = "Passed",
+                        RuntimeChangeGateStatus = "Passed",
+                        ReproducibilityStatus = "Passed",
+                        VectorFormalPreviewStatus = "Passed",
+                        PostgresFreezeStatus = "Passed"
+                    }
+                });
+            });
+        }
+
+        using var http = CreateHttpClient(request => handlers.Dequeue().Invoke(request));
+        var client = new ContextCoreClient(http);
+
+        Assert.AreEqual("Passed", (await client.GetFoundationReleaseCandidateAsync()).FoundationGateStatus);
+        Assert.AreEqual("Passed", (await client.GetFoundationReproducibilityAsync()).ReproducibilityStatus);
+        Assert.AreEqual("Passed", (await client.GetRuntimeChangeGateAsync()).RuntimeChangeGateStatus);
+        Assert.AreEqual("Passed", (await client.GetVectorFormalPreviewStatusAsync()).VectorFormalPreviewStatus);
+        Assert.AreEqual("Passed", (await client.GetPostgresFreezeStatusAsync()).PostgresFreezeStatus);
+        Assert.AreEqual(0, handlers.Count);
+    }
+
     private static HttpClient CreateHttpClient(Func<HttpRequestMessage, HttpResponseMessage> handler)
     {
         return new HttpClient(new StubHttpMessageHandler(handler))
@@ -2738,6 +3497,52 @@ public sealed class ContextCoreClientTests
             CreatedAt = DateTimeOffset.UtcNow
         };
     }
+
+    private static LearningFeedbackEvent CreateRuntimeLearningFeedback()
+        => new()
+        {
+            FeedbackId = "feedback-runtime-1",
+            WorkspaceId = "workspace-1",
+            CollectionId = "collection-1",
+            Source = "retrieval-debug",
+            SourceOperationId = "operation-runtime-1",
+            CapabilityId = ShadowCapabilityIds.VectorRetrieval,
+            TargetId = "candidate-runtime-1",
+            TargetType = LearningFeedbackTargetType.VectorCandidate.ToString(),
+            FeedbackKind = LearningFeedbackKinds.MissingContext,
+            FeedbackValue = -1,
+            Reason = "runtime feedback reason",
+            RedactionMode = "metadata-only",
+            MetadataOnly = true,
+            TrainingUse = "disabled_until_review",
+            Confidence = 0.7,
+            CreatedAt = DateTimeOffset.Parse("2026-06-12T00:00:00+00:00")
+        };
+
+    private static VectorLifecycleMetadataReviewCandidate CreateVectorLifecycleMetadataReviewCandidate(string candidateId)
+        => new()
+        {
+            CandidateId = candidateId,
+            WorkspaceId = "workspace-1",
+            CollectionId = "collection-1",
+            SourceSampleId = "sample-1",
+            SourceEvalSet = "A3",
+            MustHitItemId = "item-1",
+            ItemKind = "note",
+            Layer = "context",
+            CurrentLifecycle = "Unknown",
+            ProposedLifecycle = "Active",
+            CurrentTargetSection = VectorQueryTargetSections.Excluded,
+            ProposedTargetSection = VectorQueryTargetSections.NormalContext,
+            RepairReason = "review required",
+            EvidenceRefs = ["evidence-1"],
+            SourceRefs = ["source-1"],
+            RiskIfApproved = ["SidecarWriteWouldChangeEligibilityOnlyAfterFutureApproval"],
+            RiskIfRejected = ["RecallRemainsBlockedByLifecycleMetadata"],
+            RequiresHumanReview = true,
+            Status = VectorLifecycleMetadataReviewCandidateStatuses.PendingReview,
+            CreatedAt = DateTimeOffset.UtcNow
+        };
 
     private static StableReviewCandidate CreateStableReviewCandidate(string stableReviewCandidateId)
     {

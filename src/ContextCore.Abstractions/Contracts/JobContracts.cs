@@ -9,6 +9,8 @@ public enum ContextJobKind
     IndexBuild,
     /// <summary>Embedding 生成作业。</summary>
     Embedding,
+    /// <summary>Vector index 重建作业。</summary>
+    VectorReindex,
     /// <summary>包刷新作业。</summary>
     PackageRefresh,
     /// <summary>自定义作业。</summary>
@@ -88,6 +90,9 @@ public sealed class ContextJobQuery
 
     /// <summary>筛选指定状态的作业。</summary>
     public ContextJobState? State { get; init; }
+
+    /// <summary>筛选指定类型的作业。</summary>
+    public ContextJobKind? Kind { get; init; }
 
     /// <summary>最多返回的记录数，默认 100。</summary>
     public int Take { get; init; } = 100;

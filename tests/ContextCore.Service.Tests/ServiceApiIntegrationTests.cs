@@ -3,6 +3,7 @@ using System.Text.Json;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services;
+using ContextCore.Core.Services.Planning;
 using ContextCore.Service;
 using ContextCore.Storage.FileSystem;
 using ContextCore.Storage.InMemory;
@@ -68,6 +69,52 @@ public sealed class ServiceApiIntegrationTests
             // /health 不需要 Key
             var healthResponse = await clientNoKey.GetAsync("/health");
             healthResponse.EnsureSuccessStatusCode();
+        }
+        finally
+        {
+            DeleteTestRoot(rootPath);
+        }
+    }
+
+    [TestMethod]
+    public async Task FoundationReadOnlyApis_ShouldEnforceApiKeyWithoutLeakingSecret()
+    {
+        var rootPath = CreateTestRootPath();
+        const string testKey = "foundation-secret-key";
+
+        try
+        {
+            using var factory = CreateFactory(
+                rootPath,
+                jobWorkerEnabled: false,
+                pollIntervalMs: 100,
+                requireApiKey: true,
+                apiKey: testKey);
+
+            using var noKeyClient = factory.CreateClient();
+            var noKey = await noKeyClient.GetAsync("/api/admin/foundation/status");
+            Assert.AreEqual(System.Net.HttpStatusCode.Unauthorized, noKey.StatusCode);
+
+            using var wrongKeyClient = factory.CreateClient();
+            wrongKeyClient.DefaultRequestHeaders.TryAddWithoutValidation("X-ContextCore-Key", "wrong-key");
+            var wrongKey = await wrongKeyClient.GetAsync("/api/admin/foundation/status");
+            Assert.AreEqual(System.Net.HttpStatusCode.Unauthorized, wrongKey.StatusCode);
+
+            using var correctKeyClient = factory.CreateClient();
+            correctKeyClient.DefaultRequestHeaders.TryAddWithoutValidation("X-ContextCore-Key", testKey);
+            var ok = await correctKeyClient.GetStringAsync("/api/admin/foundation/status");
+            Assert.IsFalse(ok.Contains(testKey, StringComparison.Ordinal), "response must not expose API key value");
+            AssertNoLocalPathLeak(ok, "foundation status with auth");
+            var envelope = JsonSerializer.Deserialize<FoundationApiResponseEnvelope<FoundationServiceStatusResponse>>(
+                ok,
+                new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+            Assert.IsNotNull(envelope);
+            Assert.IsTrue(envelope!.Success);
+            Assert.IsNotNull(envelope.Data);
+            Assert.IsFalse(envelope.Data!.RuntimeMutated);
+            Assert.IsFalse(envelope.Data.RuntimeSwitchAllowed);
+            Assert.IsFalse(envelope.Data.FormalRetrievalAllowed);
         }
         finally
         {
@@ -266,6 +313,119 @@ public sealed class ServiceApiIntegrationTests
 
             StringAssert.Contains(jsonl, "\"retrievalId\":\"retrieval-shadow-api-1\"");
             StringAssert.Contains(jsonl, "\"candidateId\":\"memory:deprecated-rule-v1\"");
+            Assert.AreEqual("application/x-ndjson", response.Content.Headers.ContentType?.MediaType);
+        }
+        finally
+        {
+            DeleteTestRoot(rootPath);
+        }
+    }
+
+    [TestMethod]
+    public async Task GraphExpansionShadowTraceEndpoint_ShouldExportJsonLinesCompatibleTraces()
+    {
+        var rootPath = CreateTestRootPath();
+        var traceStore = new InMemoryRetrievalTraceStore();
+        await traceStore.SaveAsync(new ContextRetrievalTrace
+        {
+            RetrievalId = "retrieval-graph-shadow-api-1",
+            WorkspaceId = "workspace-1",
+            CollectionId = "collection-1",
+            QueryText = "audit conflict",
+            CreatedAt = DateTimeOffset.UtcNow,
+            GraphExpansionShadowTrace = new GraphExpansionShadowTrace
+            {
+                GraphExpansionShadowEnabled = true,
+                GraphExpansionProfiles = ["audit-v1", "conflict-v1"],
+                AcceptedRelations =
+                [
+                    new RelationExpansionPreviewRelation
+                    {
+                        RelationId = "rel-api-audit",
+                        SourceId = "item-current",
+                        TargetId = "item-old",
+                        RelationType = ContextRelationTypes.Replaces,
+                        TargetSection = GraphExpansionTargetSection.AuditContext,
+                        RiskIfNormalSelected = true,
+                        RiskAfterSectionRouting = false
+                    }
+                ],
+                TargetSections = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+                {
+                    [GraphExpansionTargetSection.AuditContext] = 1
+                }
+            }
+        });
+
+        try
+        {
+            using var factory = CreateFactory(
+                rootPath,
+                jobWorkerEnabled: false,
+                pollIntervalMs: 100,
+                configureServices: services =>
+                {
+                    services.RemoveAll<IRetrievalTraceStore>();
+                    services.AddSingleton<IRetrievalTraceStore>(traceStore);
+                });
+            using var client = factory.CreateClient();
+
+            var response = await client.GetAsync(
+                "/api/learning/graph-expansion-shadow/traces?workspaceId=workspace-1&collectionId=collection-1&take=10&format=jsonl");
+            response.EnsureSuccessStatusCode();
+            var jsonl = await response.Content.ReadAsStringAsync();
+
+            StringAssert.Contains(jsonl, "\"retrievalId\":\"retrieval-graph-shadow-api-1\"");
+            StringAssert.Contains(jsonl, "\"relationId\":\"rel-api-audit\"");
+            Assert.AreEqual("application/x-ndjson", response.Content.Headers.ContentType?.MediaType);
+        }
+        finally
+        {
+            DeleteTestRoot(rootPath);
+        }
+    }
+
+    [TestMethod]
+    public async Task RouterShadowTraceEndpoint_ShouldExportJsonLinesCompatibleTraces()
+    {
+        var rootPath = CreateTestRootPath();
+        var traceStore = new InMemoryRouterIntentShadowTraceStore();
+        await traceStore.SaveAsync(new RouterIntentShadowTrace
+        {
+            RequestId = "router-shadow-api-1",
+            WorkspaceId = "workspace-1",
+            CollectionId = "collection-1",
+            EntryPoint = "planning",
+            QueryText = "build verification",
+            RuntimeIntent = PlanningIntentDetector.CodingTask,
+            ShadowIntent = PlanningIntentDetector.FuzzyQuestion,
+            ShadowConfidence = 0.12,
+            Agreement = false,
+            LowConfidence = true,
+            FormalOutputChanged = false,
+            CreatedAt = DateTimeOffset.UtcNow
+        });
+
+        try
+        {
+            using var factory = CreateFactory(
+                rootPath,
+                jobWorkerEnabled: false,
+                pollIntervalMs: 100,
+                configureServices: services =>
+                {
+                    services.RemoveAll<IRouterIntentShadowTraceStore>();
+                    services.AddSingleton<IRouterIntentShadowTraceStore>(traceStore);
+                });
+            using var client = factory.CreateClient();
+
+            var response = await client.GetAsync(
+                "/api/learning/router-shadow/traces?workspaceId=workspace-1&collectionId=collection-1&take=10&format=jsonl");
+            response.EnsureSuccessStatusCode();
+            var jsonl = await response.Content.ReadAsStringAsync();
+
+            StringAssert.Contains(jsonl, "\"requestId\":\"router-shadow-api-1\"");
+            StringAssert.Contains(jsonl, "\"formalOutputChanged\":false");
             Assert.AreEqual("application/x-ndjson", response.Content.Headers.ContentType?.MediaType);
         }
         finally
@@ -573,6 +733,14 @@ public sealed class ServiceApiIntegrationTests
                 SourceId = "item-a",
                 TargetId = "item-b",
                 RelationType = "references",
+                Confidence = 0.9,
+                SourceRefs = ["event-1"],
+                Metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["evidenceRefs"] = "event-1",
+                    ["lifecycle"] = StableMemoryLifecycle.Active,
+                    ["reviewStatus"] = RelationReviewStatuses.Reviewed
+                },
                 CreatedAt = DateTimeOffset.UtcNow
             });
 
@@ -582,12 +750,27 @@ public sealed class ServiceApiIntegrationTests
                 "/api/relations/item-a?workspaceId=workspace-test&collectionId=collection-test");
             var relationExplain = await client.GetFromJsonAsync<RelationExplainResponse>(
                 "/api/relations/relation-1/explain?workspaceId=workspace-test&collectionId=collection-test");
+            var expansionProfiles = await client.GetFromJsonAsync<IReadOnlyList<RelationExpansionProfile>>(
+                "/api/relations/expansion/profiles");
+            var expansionPreviewResponse = await client.PostAsJsonAsync(
+                "/api/relations/expansion/preview",
+                new RelationExpansionPreviewRequest
+                {
+                    WorkspaceId = "workspace-test",
+                    CollectionId = "collection-test",
+                    ItemId = "item-a",
+                    ProfileId = "normal-v1"
+                });
+            var expansionPreview = await expansionPreviewResponse.Content
+                .ReadFromJsonAsync<RelationExpansionPreviewResponse>();
             var modelStatus = await client.GetFromJsonAsync<ContextCoreModelStatusResponse>("/api/model/status");
 
             Assert.IsNotNull(status);
             Assert.IsNotNull(deepStatus);
             Assert.IsNotNull(relations);
             Assert.IsNotNull(relationExplain);
+            Assert.IsNotNull(expansionProfiles);
+            Assert.IsNotNull(expansionPreview);
             Assert.IsNotNull(modelStatus);
 
             Assert.AreEqual("filesystem", status!.Storage.Provider);
@@ -599,9 +782,123 @@ public sealed class ServiceApiIntegrationTests
             Assert.AreEqual("references", relations.Outgoing[0].RelationType);
             Assert.AreEqual("relation-1", relationExplain!.RelationId);
             Assert.AreEqual("references", relationExplain.Relation!.RelationType);
+            Assert.IsTrue(expansionProfiles!.Any(profile => profile.ProfileId == "normal-v1"));
+            Assert.IsTrue(expansionPreviewResponse.IsSuccessStatusCode);
+            Assert.AreEqual(1, expansionPreview!.AcceptedCount);
             Assert.IsTrue(modelStatus!.ApiProviders.Count > 0);
             Assert.IsTrue(modelStatus.Models.Count > 0);
             Assert.IsTrue(modelStatus.Routes.Count > 0);
+        }
+        finally
+        {
+            DeleteTestRoot(rootPath);
+        }
+    }
+
+    [TestMethod]
+    public async Task FoundationReadOnlyStatusApis_ShouldReturnFrozenStatusWithoutRuntimeMutation()
+    {
+        var rootPath = CreateTestRootPath();
+        Assert.IsFalse(Directory.Exists(rootPath), "Read-only API smoke 需要从干净的 filesystem root 开始。");
+
+        try
+        {
+            using var factory = CreateFactory(rootPath, jobWorkerEnabled: false, pollIntervalMs: 100);
+            using var client = factory.CreateClient();
+
+            var endpoints = new[]
+            {
+                "/api/admin/foundation/status",
+                "/api/admin/foundation/release-candidate",
+                "/api/admin/foundation/reproducibility",
+                "/api/admin/foundation/runtime-change-gate",
+                "/api/admin/foundation/vector-formal-preview",
+                "/api/admin/foundation/postgres-freeze-status"
+            };
+
+            foreach (var endpoint in endpoints)
+            {
+                var raw = await client.GetStringAsync(endpoint);
+                AssertNoLocalPathLeak(raw, endpoint);
+                Assert.IsFalse(raw.Contains("test-api-key-secure", StringComparison.Ordinal), endpoint);
+                var envelope = JsonSerializer.Deserialize<FoundationApiResponseEnvelope<FoundationServiceStatusResponse>>(
+                    raw,
+                    new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+                Assert.IsNotNull(envelope, endpoint);
+                Assert.IsTrue(envelope!.Success, endpoint);
+                Assert.AreEqual("foundation-api-envelope-v1", envelope.SchemaVersion, endpoint);
+                Assert.IsTrue(envelope.Status is "Ready" or "Degraded", endpoint);
+                Assert.IsNotNull(envelope.Data, endpoint);
+                var response = envelope.Data!;
+                Assert.IsTrue(response!.ReadOnly, endpoint);
+                Assert.IsFalse(response.RuntimeMutated, endpoint);
+                Assert.IsFalse(response.FormalRetrievalAllowed, endpoint);
+                Assert.IsFalse(response.RuntimeSwitchAllowed, endpoint);
+                Assert.IsFalse(response.ReadyForRuntimeSwitch, endpoint);
+                Assert.IsFalse(response.PackingPolicyChanged, endpoint);
+                Assert.IsFalse(response.PackageOutputChanged, endpoint);
+                Assert.IsFalse(response.FormalPackageWritten, endpoint);
+                Assert.IsTrue(response.Capabilities.Count >= 6, endpoint);
+                Assert.IsTrue(response.Capabilities.All(static item => !item.RuntimeSwitchAllowed), endpoint);
+            }
+
+            var reportsRaw = await client.GetStringAsync("/api/admin/foundation/reports");
+            AssertNoLocalPathLeak(reportsRaw, "reports");
+            var reportsEnvelope = JsonSerializer.Deserialize<FoundationApiResponseEnvelope<FoundationReportNavigationResponse>>(
+                reportsRaw,
+                new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            Assert.IsNotNull(reportsEnvelope);
+            Assert.IsNotNull(reportsEnvelope!.Data);
+            Assert.AreEqual("foundation-api-envelope-v1", reportsEnvelope.SchemaVersion);
+            Assert.IsTrue(reportsEnvelope.Data!.Reports.Count > 0);
+            Assert.IsTrue(reportsEnvelope.Data.Reports.All(static report => report.SafeToExpose));
+            Assert.IsTrue(reportsEnvelope.Data.Reports.All(static report => !Path.IsPathRooted(report.RelativePath)));
+
+            var firstReportId = reportsEnvelope.Data.Reports[0].ReportId;
+            var detailRaw = await client.GetStringAsync($"/api/admin/foundation/reports/{firstReportId}");
+            AssertNoLocalPathLeak(detailRaw, "report detail");
+            var detailEnvelope = JsonSerializer.Deserialize<FoundationApiResponseEnvelope<FoundationReportNavigationEntry>>(
+                detailRaw,
+                new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            Assert.IsNotNull(detailEnvelope);
+            Assert.IsNotNull(detailEnvelope!.Data);
+            Assert.AreEqual(firstReportId, detailEnvelope.Data!.ReportId);
+        }
+        finally
+        {
+            DeleteTestRoot(rootPath);
+        }
+    }
+
+    [TestMethod]
+    public async Task FoundationReadOnlyStatusApis_MissingReportsShouldReturnDegradedEnvelope()
+    {
+        var rootPath = CreateTestRootPath();
+        Directory.CreateDirectory(rootPath);
+
+        try
+        {
+            using var factory = CreateFactory(
+                rootPath,
+                jobWorkerEnabled: false,
+                pollIntervalMs: 100,
+                configureServices: services =>
+                {
+                    services.RemoveAll<FoundationStatusService>();
+                    services.AddSingleton(new FoundationStatusService(rootPath));
+                });
+            using var client = factory.CreateClient();
+
+            var envelope = await client.GetFromJsonAsync<FoundationApiResponseEnvelope<FoundationServiceStatusResponse>>(
+                "/api/admin/foundation/status");
+
+            Assert.IsNotNull(envelope);
+            Assert.IsTrue(envelope!.Success);
+            Assert.AreEqual("Degraded", envelope.Status);
+            Assert.AreEqual("RegenerateReport", envelope.Recommendation);
+            Assert.IsTrue(envelope.Diagnostics.TryGetValue("MissingReportIds", out var missing));
+            Assert.IsTrue(missing!.Count > 0);
         }
         finally
         {
@@ -2254,6 +2551,90 @@ public sealed class ServiceApiIntegrationTests
     }
 
     [TestMethod]
+    public async Task VectorLifecycleMetadataReviewCandidateEndpoints_ShouldGenerateExplain_AndReturnStructuredNotFound()
+    {
+        var rootPath = CreateTestRootPath();
+        var repairPlanPath = Path.Combine(
+            "vector",
+            "eligibility",
+            $"vector-lifecycle-metadata-review-candidate-api-test-{Guid.NewGuid():N}.json");
+
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(repairPlanPath)!);
+            await File.WriteAllTextAsync(repairPlanPath, JsonSerializer.Serialize(CreateVectorLifecycleRepairPlanSummary(), new JsonSerializerOptions { WriteIndented = true }));
+
+            using var factory = CreateFactory(rootPath, jobWorkerEnabled: false, pollIntervalMs: 100);
+            using var client = factory.CreateClient();
+
+            var generateResponse = await client.PostAsJsonAsync("/api/vector/lifecycle-metadata/review-candidates/generate", new VectorLifecycleMetadataReviewCandidateGenerationRequest
+            {
+                WorkspaceId = "workspace-vector-review",
+                CollectionId = "collection-vector-review",
+                RepairPlanReportPath = repairPlanPath
+            });
+            generateResponse.EnsureSuccessStatusCode();
+            var generated = await generateResponse.Content.ReadFromJsonAsync<VectorLifecycleMetadataReviewCandidateGenerationResult>();
+            Assert.IsNotNull(generated);
+            Assert.AreEqual(1, generated!.CandidateCount);
+            var candidateId = generated.Candidates.Single().CandidateId;
+
+            var listed = await client.GetFromJsonAsync<VectorLifecycleMetadataReviewCandidate[]>("/api/vector/lifecycle-metadata/review-candidates?workspaceId=workspace-vector-review&collectionId=collection-vector-review&status=PendingReview&limit=10&offset=0");
+            Assert.IsNotNull(listed);
+            Assert.AreEqual(1, listed!.Length);
+
+            var detail = await client.GetFromJsonAsync<VectorLifecycleMetadataReviewCandidate>($"/api/vector/lifecycle-metadata/review-candidates/{candidateId}");
+            var explanation = await client.GetFromJsonAsync<VectorLifecycleMetadataReviewCandidateExplanation>($"/api/vector/lifecycle-metadata/review-candidates/{candidateId}/explain");
+            Assert.IsNotNull(detail);
+            Assert.IsNotNull(explanation);
+            Assert.AreEqual(candidateId, detail!.CandidateId);
+            CollectionAssert.Contains(explanation!.EvidenceRefs.ToArray(), "evidence-api");
+            CollectionAssert.Contains(explanation.RiskIfRejected.ToArray(), "RecallRemainsBlockedByLifecycleMetadata");
+
+            var approveResponse = await client.PostAsJsonAsync($"/api/vector/lifecycle-metadata/review-candidates/{candidateId}/approve", new VectorLifecycleMetadataReviewRequest
+            {
+                Reviewer = "api-reviewer",
+                Reason = "api approval",
+                ProposedLifecycle = detail.ProposedLifecycle,
+                ProposedReviewStatus = detail.ProposedReviewStatus,
+                ProposedTargetSection = detail.ProposedTargetSection,
+                EvidenceRefs = detail.EvidenceRefs,
+                SourceRefs = detail.SourceRefs,
+                Confirmed = true
+            });
+            approveResponse.EnsureSuccessStatusCode();
+            var approveResult = await approveResponse.Content.ReadFromJsonAsync<VectorLifecycleMetadataReviewResult>();
+            Assert.IsNotNull(approveResult);
+            Assert.IsTrue(approveResult!.Succeeded);
+            Assert.IsTrue(approveResult.SidecarWritten);
+
+            var reviews = await client.GetFromJsonAsync<VectorLifecycleMetadataReviewRecord[]>($"/api/vector/lifecycle-metadata/review-candidates/{candidateId}/reviews");
+            Assert.IsNotNull(reviews);
+            Assert.AreEqual(1, reviews!.Length);
+
+            var sidecars = await client.GetFromJsonAsync<VectorLifecycleSidecarMetadataEntry[]>("/api/vector/lifecycle-metadata/sidecar?workspaceId=workspace-vector-review&collectionId=collection-vector-review");
+            Assert.IsNotNull(sidecars);
+            Assert.AreEqual(1, sidecars!.Length);
+            Assert.AreEqual("item-api", sidecars[0].ItemId);
+
+            var missingResponse = await client.GetAsync("/api/vector/lifecycle-metadata/review-candidates/missing-candidate");
+            Assert.AreEqual(System.Net.HttpStatusCode.NotFound, missingResponse.StatusCode);
+            var error = await missingResponse.Content.ReadFromJsonAsync<ContextCoreErrorResponse>();
+            Assert.IsNotNull(error);
+            Assert.AreEqual(ContextCoreErrorCodes.NotFound, error!.ErrorCode);
+        }
+        finally
+        {
+            if (File.Exists(repairPlanPath))
+            {
+                File.Delete(repairPlanPath);
+            }
+
+            DeleteTestRoot(rootPath);
+        }
+    }
+
+    [TestMethod]
     public async Task ShortTermPromotionCandidateReview_NotFound_ShouldReturnStructuredError()
     {
         var rootPath = CreateTestRootPath();
@@ -2607,6 +2988,53 @@ public sealed class ServiceApiIntegrationTests
         };
     }
 
+    private static VectorLifecycleMetadataRepairPlanSummaryReport CreateVectorLifecycleRepairPlanSummary()
+        => new()
+        {
+            OperationId = "repair-summary-api",
+            CandidateCount = 1,
+            HumanReviewRequiredCount = 1,
+            CorrectlyBlockedSkippedCount = 18,
+            FormalRetrievalAllowed = false,
+            UseForRuntime = false,
+            Reports =
+            [
+                new VectorLifecycleMetadataRepairPlanReport
+                {
+                    OperationId = "repair-a3-api",
+                    DatasetName = "A3",
+                    CandidateCount = 1,
+                    HumanReviewRequiredCount = 1,
+                    CorrectlyBlockedSkippedCount = 18,
+                    FormalRetrievalAllowed = false,
+                    UseForRuntime = false,
+                    Candidates =
+                    [
+                        new VectorLifecycleMetadataRepairCandidate
+                        {
+                            DatasetName = "A3",
+                            SampleId = "sample-api",
+                            MustHitItemId = "item-api",
+                            ItemKind = "note",
+                            Layer = "context",
+                            CurrentLifecycle = "Unknown",
+                            ProposedLifecycle = "Active",
+                            ProposedReviewStatus = "Current",
+                            CurrentTargetSection = VectorQueryTargetSections.Excluded,
+                            ProposedTargetSection = VectorQueryTargetSections.NormalContext,
+                            EvidenceRefs = ["evidence-api"],
+                            SourceRefs = ["source-api"],
+                            RelationEvidenceAvailable = true,
+                            RepairReason = "review required",
+                            RequiresHumanReview = true,
+                            CanAutoRepair = false,
+                            ForbiddenReason = "MissingProvenance"
+                        }
+                    ]
+                }
+            ]
+        };
+
     private static WebApplicationFactory<Program> CreateFactory(
         string rootPath,
         bool jobWorkerEnabled,
@@ -2633,6 +3061,16 @@ public sealed class ServiceApiIntegrationTests
         {
             Directory.Delete(rootPath, recursive: true);
         }
+    }
+
+    private static void AssertNoLocalPathLeak(string payload, string context)
+    {
+        Assert.IsFalse(payload.Contains(@":\", StringComparison.Ordinal), context);
+        Assert.IsFalse(payload.Contains(":/", StringComparison.Ordinal), context);
+        Assert.IsFalse(payload.Contains("/home/", StringComparison.OrdinalIgnoreCase), context);
+        Assert.IsFalse(payload.Contains(".contextcore", StringComparison.OrdinalIgnoreCase), context);
+        Assert.IsFalse(payload.Contains("secrets.json", StringComparison.OrdinalIgnoreCase), context);
+        Assert.IsFalse(payload.Contains(".onnx", StringComparison.OrdinalIgnoreCase), context);
     }
 
     private static string GetSystemHealthCollectionPath(string rootPath)
@@ -2777,4 +3215,3 @@ public sealed class ServiceApiIntegrationTests
     }
 
 }
-

@@ -1,6 +1,6 @@
-using ContextCore.Storage.Postgres;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
+using ContextCore.Storage.Postgres.Infrastructure;
 
 namespace ContextCore.Storage.Postgres.Stores;
 

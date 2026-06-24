@@ -1,8 +1,11 @@
 using System.Security.Cryptography;
 using System.Text;
 using ContextCore.Abstractions;
+using ContextCore.Abstractions.Models;
+using ContextCore.Embedding.Services;
+using ContextCore.Embedding.Utilities;
 
-namespace ContextCore.Embedding;
+namespace ContextCore.Embedding.Providers;
 
 /// <summary>确定性的本地 embedding provider，用于开发、测试和无模型环境。</summary>
 public sealed class MockEmbeddingProvider : IEmbeddingProvider
@@ -120,11 +123,8 @@ public sealed class MockEmbeddingProvider : IEmbeddingProvider
         var values = new float[dimensions];
         var normalizedText = string.IsNullOrWhiteSpace(text) ? " " : text;
 
-        for (var i = 0; i < normalizedText.Length; i++)
+        foreach (var index in from t in normalizedText select t.ToString().ToLowerInvariant() into token select SHA256.HashData(Encoding.UTF8.GetBytes(token)) into hash select BitConverter.ToUInt32(hash, 0) % dimensions)
         {
-            var token = normalizedText[i].ToString().ToLowerInvariant();
-            var hash = SHA256.HashData(Encoding.UTF8.GetBytes(token));
-            var index = BitConverter.ToUInt32(hash, 0) % dimensions;
             values[index] += 1f;
         }
 

@@ -1,4 +1,4 @@
-namespace ContextCore.Abstractions;
+namespace ContextCore.Abstractions.Models;
 
 /// <summary>约束语料缺口候选项，用于人工复核缺失的 hard constraint，不直接写入 ConstraintStore。</summary>
 public sealed class ConstraintGapCandidate

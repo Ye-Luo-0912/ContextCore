@@ -1,0 +1,1 @@
+{"OperationId":"mline-rdsv2-stress-train-sample-0036-60dc075985d94f8fac4917af46144cfd","WorkspaceId":"","CollectionId":"","QueryText":"Retrieve scope guidance for preserve isolation, but do not return items governed by review.","BaselineCount":5,"AddedCandidateIds":[],"RemovedCandidateIds":[],"Applied":false,"Allowlisted":false,"Timestamp":"2026-06-20T07:45:11.629413+00:00"}

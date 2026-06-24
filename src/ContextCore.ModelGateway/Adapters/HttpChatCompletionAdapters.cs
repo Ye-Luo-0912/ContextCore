@@ -4,6 +4,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using ContextCore.Abstractions;
+using ContextCore.Abstractions.Models;
 using ContextCore.ModelGateway.Infrastructure;
 
 namespace ContextCore.ModelGateway.Adapters;

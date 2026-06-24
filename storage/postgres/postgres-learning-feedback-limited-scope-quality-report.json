@@ -1,0 +1,21 @@
+﻿{
+  "generatedAt": "2026-06-14T00:44:14.6665843+00:00",
+  "passed": true,
+  "operationCount": 18,
+  "mismatchCount": 0,
+  "postgresFailureCount": 0,
+  "scopeLeakCount": 0,
+  "errorRate": 0,
+  "fallbackRate": 0,
+  "exportProjectionParityPassed": true,
+  "summaryParityPassed": true,
+  "reviewSummaryParityPassed": true,
+  "featureCandidateParityPassed": true,
+  "trainableCandidateLeakCount": 0,
+  "smokeCandidateExcludedCount": 1,
+  "blockedReasons": [],
+  "diagnostics": [
+    "LimitedScopeObservationQualityPassed"
+  ],
+  "recommendation": "ReadyForFreezeGate"
+}

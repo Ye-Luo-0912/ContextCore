@@ -1,0 +1,22 @@
+﻿{
+  "OperationId": "vector-residual-risk-audit-808df242aed5477daf9b52e873bed580",
+  "CreatedAt": "2026-06-10T07:14:05.2208108+00:00",
+  "Samples": 50,
+  "ProviderId": "onnx-local",
+  "EmbeddingModel": "bge-small-zh-v1.5",
+  "ProfileId": "normal-v1",
+  "ResidualRiskCount": 0,
+  "BeforeRepairRiskCount": 174,
+  "AfterRepairRiskCount": 0,
+  "BlockedByLifecycleMetadataGate": 145,
+  "RemainingRiskTypes": {},
+  "Risks": [],
+  "RiskAfterPolicyByType": {},
+  "RecallLossAfterRepair": 0.13636363636363635,
+  "MustHitRecallAfterPolicy": 0.7121212121212122,
+  "MustHitMrrAfterPolicy": 0.6765000000000001,
+  "NoCandidateCount": 0,
+  "SimilarityMarginForRiskCandidates": 0,
+  "Recommendation": "KeepPreviewOnly",
+  "Warnings": []
+}

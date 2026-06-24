@@ -1,0 +1,20 @@
+﻿{
+  "ProviderEnabled": true,
+  "WorkspaceId": "postgres-relation-governance-parity",
+  "CollectionId": "relation-governance",
+  "RelationParityPassed": true,
+  "ReviewParityPassed": true,
+  "DiagnosticsParityPassed": true,
+  "GovernanceParityPassed": true,
+  "CleanupPerformed": true,
+  "CanDualWrite": true,
+  "CanShadowRead": false,
+  "CanRuntimeSwitch": false,
+  "Mismatches": [],
+  "BlockedReasons": [],
+  "Diagnostics": [
+    "CleanupPerformed",
+    "RuntimeProviderStillFileSystem"
+  ],
+  "Recommendation": "ReadyForDualWrite"
+}

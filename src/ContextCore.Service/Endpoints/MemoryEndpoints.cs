@@ -1,6 +1,7 @@
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services;
+using ContextCore.Core.Services.Promotion;
 using ContextCore.Service.Infrastructure;
 
 namespace ContextCore.Service.Endpoints;

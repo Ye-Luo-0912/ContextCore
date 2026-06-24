@@ -1,0 +1,32 @@
+﻿{
+  "GatePassed": true,
+  "WorkspaceId": "contextcore_selected_normal",
+  "CollectionId": "relation-governance-selected-normal",
+  "ProviderMode": "GuardedPostgresPrimary",
+  "OperationCount": 35,
+  "PostgresPrimaryReadCount": 17,
+  "PostgresPrimaryWriteCount": 15,
+  "FileSystemFallbackCount": 0,
+  "ComparisonTraceCount": 35,
+  "MismatchCount": 0,
+  "PostgresFailureCount": 0,
+  "ScopeLeakCount": 0,
+  "AveragePostgresReadMs": 6.077364705882353,
+  "P95PostgresReadMs": 46.2503,
+  "AveragePostgresWriteMs": 22.405213333333336,
+  "P95PostgresWriteMs": 109.2951,
+  "GraphExpansionPreviewParityPassed": true,
+  "ReviewLifecycleParityPassed": true,
+  "DiagnosticsParityPassed": true,
+  "ReplacementChainParityPassed": true,
+  "ControlRoomReadPathPassed": true,
+  "ClientApiRoundtripPathPassed": true,
+  "NonSelectedNormalScopeRemainsFileSystem": true,
+  "CleanupPerformed": false,
+  "RollbackInstruction": "Remove the selected normal workspace/collection from allowlist or set RelationGovernanceProviderSwitchOptions.Enabled=false.",
+  "Diagnostics": [
+    "ExtendedCanaryScopedOnly"
+  ],
+  "BlockedReasons": [],
+  "Recommendation": "ReadyForLimitedNormalScope"
+}

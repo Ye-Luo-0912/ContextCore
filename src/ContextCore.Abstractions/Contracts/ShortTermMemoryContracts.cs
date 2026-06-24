@@ -1,3 +1,5 @@
+using ContextCore.Abstractions.Models;
+
 namespace ContextCore.Abstractions;
 
 /// <summary>短期记忆存储接口，负责保存短期原始事件、工作项并提供只读摘要。</summary>

@@ -1,0 +1,22 @@
+﻿{
+  "ApprovalId": "vsrea-1f12d0a4760014e4",
+  "ProposalId": "vsrep-bb5402e39c0f1333",
+  "ApprovedBy": "codex",
+  "ApprovedAt": "2026-06-17T03:36:35.8663186+00:00",
+  "ApprovalScope": "contextcore_eval/dataset-v2-stress/dataset-v2-stress",
+  "ApprovalMode": "NoOpHarnessOnly",
+  "Reason": "V4.9 no-op harness approval for scoped runtime experiment proposal.",
+  "RiskAcknowledgement": "No runtime switch, no formal retrieval, no formal package write, no PackingPolicy mutation.",
+  "RollbackAcknowledgement": "Remove the selected scope from the proposal allowlist, keep UseForRuntime=false, discard shadow artifacts, rerun V4.7 and runtime-change gates.",
+  "ExpiresAt": "2026-06-24T03:36:35.8665233+00:00",
+  "Revoked": false,
+  "Metadata": {
+    "generatedBy": "scoped-runtime-experiment-approval-service/v1",
+    "proposalRecommendation": "ReadyForManualExperimentApproval",
+    "approvalMode": "NoOpHarnessOnly",
+    "useForRuntime": "false",
+    "formalRetrievalAllowed": "false",
+    "runtimeSwitchAllowed": "false",
+    "formalPackageWriteAllowed": "false"
+  }
+}

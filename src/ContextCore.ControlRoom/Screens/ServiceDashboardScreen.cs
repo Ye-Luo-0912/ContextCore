@@ -319,6 +319,18 @@ public static class ServiceDashboardScreen
 
                 continue;
             }
+
+            if (action.Kind == ControlRoomActionKind.Value
+                && string.Equals(action.Value?.Trim(), "37", StringComparison.OrdinalIgnoreCase))
+            {
+                var result = await ServiceVectorIndexScreen.ShowAsync(service, cancellationToken).ConfigureAwait(false);
+                if (result == ControlRoomActionKind.Quit)
+                {
+                    return result;
+                }
+
+                continue;
+            }
         }
     }
 }

@@ -1,0 +1,21 @@
+﻿{
+  "ProviderEnabled": true,
+  "WorkspaceId": "postgres-relation-parity",
+  "CollectionId": "relation-store",
+  "FixtureRelationCount": 4,
+  "GetPassed": true,
+  "ListPassed": true,
+  "SourceQueryPassed": true,
+  "TargetQueryPassed": true,
+  "TypeQueryPassed": true,
+  "LifecycleQueryPassed": true,
+  "ReviewStatusQueryPassed": true,
+  "ReplacementChainQueryPassed": true,
+  "DeletePassed": true,
+  "CleanupPerformed": true,
+  "Mismatches": [],
+  "Diagnostics": [
+    "CleanupPerformed"
+  ],
+  "Recommendation": "ParityPassed"
+}

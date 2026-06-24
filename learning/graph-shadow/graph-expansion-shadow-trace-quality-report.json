@@ -1,0 +1,27 @@
+﻿{
+  "OperationId": "graph-shadow-trace-quality-3c966c3801ff46ceb8bd19d7140ae02e",
+  "GeneratedAt": "2026-06-08T16:37:24.5073963+00:00",
+  "WorkspaceId": "graph-shadow-samples",
+  "CollectionId": "test",
+  "TraceCount": 30,
+  "AcceptedRelationCount": 150,
+  "BlockedRelationCount": 30,
+  "AuditContextCount": 120,
+  "ConflictEvidenceCount": 30,
+  "RiskAfterRoutingCount": 0,
+  "WrongSectionRiskCount": 0,
+  "MustNotHitRiskCount": 0,
+  "LifecycleRiskCount": 0,
+  "MissingEvidenceCount": 0,
+  "TopRelationTypes": {
+    "conflicts_with": 60,
+    "references": 60,
+    "same_as": 60
+  },
+  "TopBlockedReasons": {
+    "ConfidenceTooLow": 30,
+    "RelationTypeNotAllowed": 30
+  },
+  "Recommendation": "ReadyForGuardedOptIn",
+  "PolicyVersion": "graph-expansion-shadow-trace-quality/v1"
+}

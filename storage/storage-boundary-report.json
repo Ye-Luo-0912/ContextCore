@@ -1,0 +1,1662 @@
+﻿{
+  "GeneratedAt": "2026-06-12T13:14:27.9114373+00:00",
+  "TotalArtifactKinds": 40,
+  "ArtifactOnlyCount": 8,
+  "OperationalStateCount": 21,
+  "IndexStateCount": 2,
+  "DatabaseRecommendedCount": 23,
+  "FileSystemPreferredCount": 30,
+  "MigrationCandidates": [
+    {
+      "SubjectId": "Constraint",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 20,
+      "StoreKind": null,
+      "Responsibility": 1,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "High",
+      "MigrationRisk": "High",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "constraint lifecycle state"
+    },
+    {
+      "SubjectId": "ConstraintState",
+      "SubjectType": "StoreKind",
+      "ArtifactKind": null,
+      "StoreKind": "ConstraintState",
+      "Responsibility": 1,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "High",
+      "MigrationRisk": "High",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "constraint lifecycle state should move to database"
+    },
+    {
+      "SubjectId": "ContextItem",
+      "SubjectType": "StoreKind",
+      "ArtifactKind": null,
+      "StoreKind": "ContextItem",
+      "Responsibility": 1,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "High",
+      "MigrationRisk": "High",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "context item state should move to operational store"
+    },
+    {
+      "SubjectId": "Job",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 38,
+      "StoreKind": null,
+      "Responsibility": 1,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "High",
+      "MigrationRisk": "Medium",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "job record operational state"
+    },
+    {
+      "SubjectId": "JobRecord",
+      "SubjectType": "StoreKind",
+      "ArtifactKind": null,
+      "StoreKind": "JobRecord",
+      "Responsibility": 1,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "High",
+      "MigrationRisk": "Medium",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "job queue state should move to operational store"
+    },
+    {
+      "SubjectId": "MemoryCandidate",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 1,
+      "StoreKind": null,
+      "Responsibility": 1,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "High",
+      "MigrationRisk": "Medium",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "candidate memory reviewable operational state"
+    },
+    {
+      "SubjectId": "MemoryCandidateItem",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 10,
+      "StoreKind": null,
+      "Responsibility": 1,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "High",
+      "MigrationRisk": "Medium",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "candidate memory item state"
+    },
+    {
+      "SubjectId": "MemoryCandidateReview",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 11,
+      "StoreKind": null,
+      "Responsibility": 1,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "High",
+      "MigrationRisk": "Medium",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "candidate memory review history"
+    },
+    {
+      "SubjectId": "MemoryItem",
+      "SubjectType": "StoreKind",
+      "ArtifactKind": null,
+      "StoreKind": "MemoryItem",
+      "Responsibility": 1,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "High",
+      "MigrationRisk": "High",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "memory item state should move to operational store"
+    },
+    {
+      "SubjectId": "MemoryStable",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 2,
+      "StoreKind": null,
+      "Responsibility": 1,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "High",
+      "MigrationRisk": "High",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "stable memory lifecycle state"
+    },
+    {
+      "SubjectId": "MemoryStableItem",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 14,
+      "StoreKind": null,
+      "Responsibility": 1,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "High",
+      "MigrationRisk": "High",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "stable memory item state"
+    },
+    {
+      "SubjectId": "MemoryStableLifecycleReview",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 15,
+      "StoreKind": null,
+      "Responsibility": 1,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "High",
+      "MigrationRisk": "Medium",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "stable lifecycle review history"
+    },
+    {
+      "SubjectId": "MemoryStableProvenance",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 17,
+      "StoreKind": null,
+      "Responsibility": 1,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "High",
+      "MigrationRisk": "Medium",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "stable provenance chain"
+    },
+    {
+      "SubjectId": "MemoryStableReplacementChain",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 16,
+      "StoreKind": null,
+      "Responsibility": 1,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "High",
+      "MigrationRisk": "High",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "stable replacement chain state"
+    },
+    {
+      "SubjectId": "Relation",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 19,
+      "StoreKind": null,
+      "Responsibility": 1,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "High",
+      "MigrationRisk": "High",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "relation graph operational state"
+    },
+    {
+      "SubjectId": "RelationItem",
+      "SubjectType": "StoreKind",
+      "ArtifactKind": null,
+      "StoreKind": "RelationItem",
+      "Responsibility": 1,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "High",
+      "MigrationRisk": "High",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "relation graph should move to database-backed operational store"
+    },
+    {
+      "SubjectId": "Vector",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 21,
+      "StoreKind": null,
+      "Responsibility": 2,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "High",
+      "MigrationRisk": "Medium",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "vector index state, pgvector candidate"
+    },
+    {
+      "SubjectId": "VectorIndexEntry",
+      "SubjectType": "StoreKind",
+      "ArtifactKind": null,
+      "StoreKind": "VectorIndexEntry",
+      "Responsibility": 2,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "High",
+      "MigrationRisk": "Medium",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "pgvector candidate; filesystem remains preview/export only"
+    },
+    {
+      "SubjectId": "MemoryCandidateEvidence",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 13,
+      "StoreKind": null,
+      "Responsibility": 1,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "Medium",
+      "MigrationRisk": "Medium",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "candidate evidence provenance"
+    },
+    {
+      "SubjectId": "MemoryShort",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 0,
+      "StoreKind": null,
+      "Responsibility": 1,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "Medium",
+      "MigrationRisk": "Medium",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "short-term memory operational state"
+    },
+    {
+      "SubjectId": "MemoryShortTermRawEvent",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 3,
+      "StoreKind": null,
+      "Responsibility": 1,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "Medium",
+      "MigrationRisk": "Medium",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "raw memory event stream"
+    },
+    {
+      "SubjectId": "MemoryShortTermWorkingItem",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 4,
+      "StoreKind": null,
+      "Responsibility": 1,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "Medium",
+      "MigrationRisk": "Medium",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "working memory state"
+    },
+    {
+      "SubjectId": "MemoryTemporalItem",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 7,
+      "StoreKind": null,
+      "Responsibility": 1,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "Medium",
+      "MigrationRisk": "Medium",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "temporal memory placeholder state"
+    }
+  ],
+  "HighPriorityMigrationCandidates": [
+    {
+      "SubjectId": "Constraint",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 20,
+      "StoreKind": null,
+      "Responsibility": 1,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "High",
+      "MigrationRisk": "High",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "constraint lifecycle state"
+    },
+    {
+      "SubjectId": "ConstraintState",
+      "SubjectType": "StoreKind",
+      "ArtifactKind": null,
+      "StoreKind": "ConstraintState",
+      "Responsibility": 1,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "High",
+      "MigrationRisk": "High",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "constraint lifecycle state should move to database"
+    },
+    {
+      "SubjectId": "ContextItem",
+      "SubjectType": "StoreKind",
+      "ArtifactKind": null,
+      "StoreKind": "ContextItem",
+      "Responsibility": 1,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "High",
+      "MigrationRisk": "High",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "context item state should move to operational store"
+    },
+    {
+      "SubjectId": "Job",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 38,
+      "StoreKind": null,
+      "Responsibility": 1,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "High",
+      "MigrationRisk": "Medium",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "job record operational state"
+    },
+    {
+      "SubjectId": "JobRecord",
+      "SubjectType": "StoreKind",
+      "ArtifactKind": null,
+      "StoreKind": "JobRecord",
+      "Responsibility": 1,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "High",
+      "MigrationRisk": "Medium",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "job queue state should move to operational store"
+    },
+    {
+      "SubjectId": "MemoryCandidate",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 1,
+      "StoreKind": null,
+      "Responsibility": 1,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "High",
+      "MigrationRisk": "Medium",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "candidate memory reviewable operational state"
+    },
+    {
+      "SubjectId": "MemoryCandidateItem",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 10,
+      "StoreKind": null,
+      "Responsibility": 1,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "High",
+      "MigrationRisk": "Medium",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "candidate memory item state"
+    },
+    {
+      "SubjectId": "MemoryCandidateReview",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 11,
+      "StoreKind": null,
+      "Responsibility": 1,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "High",
+      "MigrationRisk": "Medium",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "candidate memory review history"
+    },
+    {
+      "SubjectId": "MemoryItem",
+      "SubjectType": "StoreKind",
+      "ArtifactKind": null,
+      "StoreKind": "MemoryItem",
+      "Responsibility": 1,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "High",
+      "MigrationRisk": "High",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "memory item state should move to operational store"
+    },
+    {
+      "SubjectId": "MemoryStable",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 2,
+      "StoreKind": null,
+      "Responsibility": 1,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "High",
+      "MigrationRisk": "High",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "stable memory lifecycle state"
+    },
+    {
+      "SubjectId": "MemoryStableItem",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 14,
+      "StoreKind": null,
+      "Responsibility": 1,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "High",
+      "MigrationRisk": "High",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "stable memory item state"
+    },
+    {
+      "SubjectId": "MemoryStableLifecycleReview",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 15,
+      "StoreKind": null,
+      "Responsibility": 1,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "High",
+      "MigrationRisk": "Medium",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "stable lifecycle review history"
+    },
+    {
+      "SubjectId": "MemoryStableProvenance",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 17,
+      "StoreKind": null,
+      "Responsibility": 1,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "High",
+      "MigrationRisk": "Medium",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "stable provenance chain"
+    },
+    {
+      "SubjectId": "MemoryStableReplacementChain",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 16,
+      "StoreKind": null,
+      "Responsibility": 1,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "High",
+      "MigrationRisk": "High",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "stable replacement chain state"
+    },
+    {
+      "SubjectId": "Relation",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 19,
+      "StoreKind": null,
+      "Responsibility": 1,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "High",
+      "MigrationRisk": "High",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "relation graph operational state"
+    },
+    {
+      "SubjectId": "RelationItem",
+      "SubjectType": "StoreKind",
+      "ArtifactKind": null,
+      "StoreKind": "RelationItem",
+      "Responsibility": 1,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "High",
+      "MigrationRisk": "High",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "relation graph should move to database-backed operational store"
+    },
+    {
+      "SubjectId": "Vector",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 21,
+      "StoreKind": null,
+      "Responsibility": 2,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "High",
+      "MigrationRisk": "Medium",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "vector index state, pgvector candidate"
+    },
+    {
+      "SubjectId": "VectorIndexEntry",
+      "SubjectType": "StoreKind",
+      "ArtifactKind": null,
+      "StoreKind": "VectorIndexEntry",
+      "Responsibility": 2,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "High",
+      "MigrationRisk": "Medium",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "pgvector candidate; filesystem remains preview/export only"
+    }
+  ],
+  "BlockedReasons": [
+    "RequiresNonDestructiveMigrationPlan",
+    "RequiresProviderDesign"
+  ],
+  "RecommendedNextPhases": [
+    "DB1: operational state provider abstraction audit",
+    "DB2: relation/constraint database store design",
+    "DB3: pgvector-backed vector index store design",
+    "DB4: job/feedback operational store migration plan"
+  ],
+  "Diagnostics": [],
+  "Entries": [
+    {
+      "SubjectId": "Constraint",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 20,
+      "StoreKind": null,
+      "Responsibility": 1,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "High",
+      "MigrationRisk": "High",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "constraint lifecycle state"
+    },
+    {
+      "SubjectId": "Eval",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 26,
+      "StoreKind": null,
+      "Responsibility": 0,
+      "PreferredProvider": 8,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "Low",
+      "MigrationRisk": "Low",
+      "Tags": [],
+      "BlockedReasons": [],
+      "Notes": "eval report artifact"
+    },
+    {
+      "SubjectId": "Graph",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 25,
+      "StoreKind": null,
+      "Responsibility": 0,
+      "PreferredProvider": 8,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "Low",
+      "MigrationRisk": "Low",
+      "Tags": [],
+      "BlockedReasons": [],
+      "Notes": "graph eval/report artifact"
+    },
+    {
+      "SubjectId": "Job",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 38,
+      "StoreKind": null,
+      "Responsibility": 1,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "High",
+      "MigrationRisk": "Medium",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "job record operational state"
+    },
+    {
+      "SubjectId": "LearningFeedback",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 22,
+      "StoreKind": null,
+      "Responsibility": 4,
+      "PreferredProvider": 8,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "Low",
+      "MigrationRisk": "Low",
+      "Tags": [],
+      "BlockedReasons": [],
+      "Notes": "reviewed feedback export artifact"
+    },
+    {
+      "SubjectId": "MemoryCandidate",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 1,
+      "StoreKind": null,
+      "Responsibility": 1,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "High",
+      "MigrationRisk": "Medium",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "candidate memory reviewable operational state"
+    },
+    {
+      "SubjectId": "MemoryCandidateDiagnostics",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 12,
+      "StoreKind": null,
+      "Responsibility": 5,
+      "PreferredProvider": 8,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "Low",
+      "MigrationRisk": "Low",
+      "Tags": [],
+      "BlockedReasons": [],
+      "Notes": "candidate diagnostics artifact"
+    },
+    {
+      "SubjectId": "MemoryCandidateEvidence",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 13,
+      "StoreKind": null,
+      "Responsibility": 1,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "Medium",
+      "MigrationRisk": "Medium",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "candidate evidence provenance"
+    },
+    {
+      "SubjectId": "MemoryCandidateItem",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 10,
+      "StoreKind": null,
+      "Responsibility": 1,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "High",
+      "MigrationRisk": "Medium",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "candidate memory item state"
+    },
+    {
+      "SubjectId": "MemoryCandidateReview",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 11,
+      "StoreKind": null,
+      "Responsibility": 1,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "High",
+      "MigrationRisk": "Medium",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "candidate memory review history"
+    },
+    {
+      "SubjectId": "MemoryShort",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 0,
+      "StoreKind": null,
+      "Responsibility": 1,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "Medium",
+      "MigrationRisk": "Medium",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "short-term memory operational state"
+    },
+    {
+      "SubjectId": "MemoryShortTermArchive",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 5,
+      "StoreKind": null,
+      "Responsibility": 5,
+      "PreferredProvider": 8,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "Low",
+      "MigrationRisk": "Low",
+      "Tags": [],
+      "BlockedReasons": [],
+      "Notes": "archive snapshot artifact"
+    },
+    {
+      "SubjectId": "MemoryShortTermCompactionRun",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 6,
+      "StoreKind": null,
+      "Responsibility": 3,
+      "PreferredProvider": 8,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "Low",
+      "MigrationRisk": "Low",
+      "Tags": [],
+      "BlockedReasons": [],
+      "Notes": "compaction run artifact"
+    },
+    {
+      "SubjectId": "MemoryShortTermRawEvent",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 3,
+      "StoreKind": null,
+      "Responsibility": 1,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "Medium",
+      "MigrationRisk": "Medium",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "raw memory event stream"
+    },
+    {
+      "SubjectId": "MemoryShortTermWorkingItem",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 4,
+      "StoreKind": null,
+      "Responsibility": 1,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "Medium",
+      "MigrationRisk": "Medium",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "working memory state"
+    },
+    {
+      "SubjectId": "MemoryStable",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 2,
+      "StoreKind": null,
+      "Responsibility": 1,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "High",
+      "MigrationRisk": "High",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "stable memory lifecycle state"
+    },
+    {
+      "SubjectId": "MemoryStableDiagnostics",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 18,
+      "StoreKind": null,
+      "Responsibility": 5,
+      "PreferredProvider": 8,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "Low",
+      "MigrationRisk": "Low",
+      "Tags": [],
+      "BlockedReasons": [],
+      "Notes": "stable diagnostics artifact"
+    },
+    {
+      "SubjectId": "MemoryStableItem",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 14,
+      "StoreKind": null,
+      "Responsibility": 1,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "High",
+      "MigrationRisk": "High",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "stable memory item state"
+    },
+    {
+      "SubjectId": "MemoryStableLifecycleReview",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 15,
+      "StoreKind": null,
+      "Responsibility": 1,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "High",
+      "MigrationRisk": "Medium",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "stable lifecycle review history"
+    },
+    {
+      "SubjectId": "MemoryStableProvenance",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 17,
+      "StoreKind": null,
+      "Responsibility": 1,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "High",
+      "MigrationRisk": "Medium",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "stable provenance chain"
+    },
+    {
+      "SubjectId": "MemoryStableReplacementChain",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 16,
+      "StoreKind": null,
+      "Responsibility": 1,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "High",
+      "MigrationRisk": "High",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "stable replacement chain state"
+    },
+    {
+      "SubjectId": "MemoryTemporalArchive",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 8,
+      "StoreKind": null,
+      "Responsibility": 5,
+      "PreferredProvider": 8,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "Low",
+      "MigrationRisk": "Low",
+      "Tags": [],
+      "BlockedReasons": [],
+      "Notes": "temporal archive artifact"
+    },
+    {
+      "SubjectId": "MemoryTemporalDiagnostics",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 9,
+      "StoreKind": null,
+      "Responsibility": 5,
+      "PreferredProvider": 8,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "Low",
+      "MigrationRisk": "Low",
+      "Tags": [],
+      "BlockedReasons": [],
+      "Notes": "temporal diagnostics artifact"
+    },
+    {
+      "SubjectId": "MemoryTemporalItem",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 7,
+      "StoreKind": null,
+      "Responsibility": 1,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "Medium",
+      "MigrationRisk": "Medium",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "temporal memory placeholder state"
+    },
+    {
+      "SubjectId": "Ranker",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 24,
+      "StoreKind": null,
+      "Responsibility": 0,
+      "PreferredProvider": 8,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "Low",
+      "MigrationRisk": "Low",
+      "Tags": [],
+      "BlockedReasons": [],
+      "Notes": "ranker eval/report artifact"
+    },
+    {
+      "SubjectId": "Relation",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 19,
+      "StoreKind": null,
+      "Responsibility": 1,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "High",
+      "MigrationRisk": "High",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "relation graph operational state"
+    },
+    {
+      "SubjectId": "Report",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 39,
+      "StoreKind": null,
+      "Responsibility": 0,
+      "PreferredProvider": 8,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "Low",
+      "MigrationRisk": "Low",
+      "Tags": [],
+      "BlockedReasons": [],
+      "Notes": "report artifact"
+    },
+    {
+      "SubjectId": "Router",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 23,
+      "StoreKind": null,
+      "Responsibility": 0,
+      "PreferredProvider": 8,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "Low",
+      "MigrationRisk": "Low",
+      "Tags": [],
+      "BlockedReasons": [],
+      "Notes": "router eval/report artifact"
+    },
+    {
+      "SubjectId": "Trace",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 27,
+      "StoreKind": null,
+      "Responsibility": 3,
+      "PreferredProvider": 8,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "Low",
+      "MigrationRisk": "Low",
+      "Tags": [],
+      "BlockedReasons": [],
+      "Notes": "generic trace artifact"
+    },
+    {
+      "SubjectId": "TraceError",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 37,
+      "StoreKind": null,
+      "Responsibility": 3,
+      "PreferredProvider": 8,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "Low",
+      "MigrationRisk": "Low",
+      "Tags": [],
+      "BlockedReasons": [],
+      "Notes": "error trace artifact"
+    },
+    {
+      "SubjectId": "TraceGraphShadow",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 34,
+      "StoreKind": null,
+      "Responsibility": 3,
+      "PreferredProvider": 8,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "Low",
+      "MigrationRisk": "Low",
+      "Tags": [],
+      "BlockedReasons": [],
+      "Notes": "graph shadow trace artifact"
+    },
+    {
+      "SubjectId": "TraceModelCall",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 36,
+      "StoreKind": null,
+      "Responsibility": 3,
+      "PreferredProvider": 8,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "Low",
+      "MigrationRisk": "Low",
+      "Tags": [],
+      "BlockedReasons": [],
+      "Notes": "model-call trace artifact"
+    },
+    {
+      "SubjectId": "TracePackageBuild",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 35,
+      "StoreKind": null,
+      "Responsibility": 3,
+      "PreferredProvider": 8,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "Low",
+      "MigrationRisk": "Low",
+      "Tags": [],
+      "BlockedReasons": [],
+      "Notes": "package build trace artifact"
+    },
+    {
+      "SubjectId": "TracePlanning",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 29,
+      "StoreKind": null,
+      "Responsibility": 3,
+      "PreferredProvider": 8,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "Low",
+      "MigrationRisk": "Low",
+      "Tags": [],
+      "BlockedReasons": [],
+      "Notes": "planning trace artifact"
+    },
+    {
+      "SubjectId": "TraceRankerShadow",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 32,
+      "StoreKind": null,
+      "Responsibility": 3,
+      "PreferredProvider": 8,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "Low",
+      "MigrationRisk": "Low",
+      "Tags": [],
+      "BlockedReasons": [],
+      "Notes": "ranker shadow trace artifact"
+    },
+    {
+      "SubjectId": "TraceRetrieval",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 28,
+      "StoreKind": null,
+      "Responsibility": 3,
+      "PreferredProvider": 8,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "Low",
+      "MigrationRisk": "Low",
+      "Tags": [],
+      "BlockedReasons": [],
+      "Notes": "retrieval trace artifact"
+    },
+    {
+      "SubjectId": "TraceRouterShadow",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 31,
+      "StoreKind": null,
+      "Responsibility": 3,
+      "PreferredProvider": 8,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "Low",
+      "MigrationRisk": "Low",
+      "Tags": [],
+      "BlockedReasons": [],
+      "Notes": "router shadow trace artifact"
+    },
+    {
+      "SubjectId": "TraceToolCall",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 30,
+      "StoreKind": null,
+      "Responsibility": 3,
+      "PreferredProvider": 8,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "Low",
+      "MigrationRisk": "Low",
+      "Tags": [],
+      "BlockedReasons": [],
+      "Notes": "tool-call trace artifact"
+    },
+    {
+      "SubjectId": "TraceVectorShadow",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 33,
+      "StoreKind": null,
+      "Responsibility": 3,
+      "PreferredProvider": 8,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "Low",
+      "MigrationRisk": "Low",
+      "Tags": [],
+      "BlockedReasons": [],
+      "Notes": "vector shadow trace artifact"
+    },
+    {
+      "SubjectId": "Vector",
+      "SubjectType": "ArtifactKind",
+      "ArtifactKind": 21,
+      "StoreKind": null,
+      "Responsibility": 2,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "High",
+      "MigrationRisk": "Medium",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "vector index state, pgvector candidate"
+    },
+    {
+      "SubjectId": "ConstraintState",
+      "SubjectType": "StoreKind",
+      "ArtifactKind": null,
+      "StoreKind": "ConstraintState",
+      "Responsibility": 1,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "High",
+      "MigrationRisk": "High",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "constraint lifecycle state should move to database"
+    },
+    {
+      "SubjectId": "ContextItem",
+      "SubjectType": "StoreKind",
+      "ArtifactKind": null,
+      "StoreKind": "ContextItem",
+      "Responsibility": 1,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "High",
+      "MigrationRisk": "High",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "context item state should move to operational store"
+    },
+    {
+      "SubjectId": "EvalReport",
+      "SubjectType": "StoreKind",
+      "ArtifactKind": null,
+      "StoreKind": "EvalReport",
+      "Responsibility": 0,
+      "PreferredProvider": 8,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "Low",
+      "MigrationRisk": "Low",
+      "Tags": [],
+      "BlockedReasons": [],
+      "Notes": "eval reports remain artifact plane"
+    },
+    {
+      "SubjectId": "FeedbackExport",
+      "SubjectType": "StoreKind",
+      "ArtifactKind": null,
+      "StoreKind": "FeedbackExport",
+      "Responsibility": 4,
+      "PreferredProvider": 8,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "Low",
+      "MigrationRisk": "Low",
+      "Tags": [],
+      "BlockedReasons": [],
+      "Notes": "feedback jsonl export remains artifact plane"
+    },
+    {
+      "SubjectId": "JobRecord",
+      "SubjectType": "StoreKind",
+      "ArtifactKind": null,
+      "StoreKind": "JobRecord",
+      "Responsibility": 1,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "High",
+      "MigrationRisk": "Medium",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "job queue state should move to operational store"
+    },
+    {
+      "SubjectId": "LearningReport",
+      "SubjectType": "StoreKind",
+      "ArtifactKind": null,
+      "StoreKind": "LearningReport",
+      "Responsibility": 0,
+      "PreferredProvider": 8,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "Low",
+      "MigrationRisk": "Low",
+      "Tags": [],
+      "BlockedReasons": [],
+      "Notes": "learning reports remain artifact plane"
+    },
+    {
+      "SubjectId": "MemoryItem",
+      "SubjectType": "StoreKind",
+      "ArtifactKind": null,
+      "StoreKind": "MemoryItem",
+      "Responsibility": 1,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "High",
+      "MigrationRisk": "High",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "memory item state should move to operational store"
+    },
+    {
+      "SubjectId": "ReadinessGate",
+      "SubjectType": "StoreKind",
+      "ArtifactKind": null,
+      "StoreKind": "ReadinessGate",
+      "Responsibility": 0,
+      "PreferredProvider": 8,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "Low",
+      "MigrationRisk": "Low",
+      "Tags": [],
+      "BlockedReasons": [],
+      "Notes": "gate snapshots remain artifact plane"
+    },
+    {
+      "SubjectId": "RelationItem",
+      "SubjectType": "StoreKind",
+      "ArtifactKind": null,
+      "StoreKind": "RelationItem",
+      "Responsibility": 1,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "High",
+      "MigrationRisk": "High",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "relation graph should move to database-backed operational store"
+    },
+    {
+      "SubjectId": "ShadowTrace",
+      "SubjectType": "StoreKind",
+      "ArtifactKind": null,
+      "StoreKind": "ShadowTrace",
+      "Responsibility": 3,
+      "PreferredProvider": 8,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "Low",
+      "MigrationRisk": "Low",
+      "Tags": [],
+      "BlockedReasons": [],
+      "Notes": "shadow traces remain trace plane"
+    },
+    {
+      "SubjectId": "ToolCallTrace",
+      "SubjectType": "StoreKind",
+      "ArtifactKind": null,
+      "StoreKind": "ToolCallTrace",
+      "Responsibility": 3,
+      "PreferredProvider": 8,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "Low",
+      "MigrationRisk": "Low",
+      "Tags": [],
+      "BlockedReasons": [],
+      "Notes": "tool call traces remain trace plane"
+    },
+    {
+      "SubjectId": "TraceRetrieval",
+      "SubjectType": "StoreKind",
+      "ArtifactKind": null,
+      "StoreKind": "TraceRetrieval",
+      "Responsibility": 3,
+      "PreferredProvider": 8,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "Low",
+      "MigrationRisk": "Low",
+      "Tags": [],
+      "BlockedReasons": [],
+      "Notes": "retrieval traces remain trace plane"
+    },
+    {
+      "SubjectId": "VectorIndexEntry",
+      "SubjectType": "StoreKind",
+      "ArtifactKind": null,
+      "StoreKind": "VectorIndexEntry",
+      "Responsibility": 2,
+      "PreferredProvider": 7,
+      "CurrentProvider": "FileSystem/InMemory",
+      "MigrationPriority": "High",
+      "MigrationRisk": "Medium",
+      "Tags": [
+        6
+      ],
+      "BlockedReasons": [
+        "RequiresProviderDesign",
+        "RequiresNonDestructiveMigrationPlan"
+      ],
+      "Notes": "pgvector candidate; filesystem remains preview/export only"
+    }
+  ]
+}

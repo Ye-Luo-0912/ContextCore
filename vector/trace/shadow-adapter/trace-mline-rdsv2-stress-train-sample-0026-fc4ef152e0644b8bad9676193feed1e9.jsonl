@@ -1,0 +1,1 @@
+{"OperationId":"mline-rdsv2-stress-train-sample-0026-fc4ef152e0644b8bad9676193feed1e9","WorkspaceId":"","CollectionId":"","QueryText":"Retrieve schema guidance for plan migration, but do not return items governed by scope.","BaselineCount":5,"AddedCandidateIds":[],"RemovedCandidateIds":[],"Applied":false,"Allowlisted":false,"Timestamp":"2026-06-20T07:45:11.6076859+00:00"}

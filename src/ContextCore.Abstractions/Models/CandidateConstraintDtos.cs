@@ -1,6 +1,4 @@
-using ContextCore.Abstractions.Models;
-
-namespace ContextCore.Abstractions;
+namespace ContextCore.Abstractions.Models;
 
 /// <summary>CandidateConstraint 查询条件。</summary>
 public sealed class CandidateConstraintQuery

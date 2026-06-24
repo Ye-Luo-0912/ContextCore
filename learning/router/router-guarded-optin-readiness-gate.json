@@ -1,0 +1,24 @@
+{
+  "operationId": "router-guarded-optin-gate-c66e4107bebb4f68bf8b626914c1706c",
+  "generatedAt": "2026-06-11T09:18:00.4971204+00:00",
+  "passed": false,
+  "shadowFixesRuntime": 1,
+  "shadowBreaksRuntime": 3,
+  "netGain": -2,
+  "perIntentRegressionCount": 3,
+  "agreementRate": 0.8857142857142857,
+  "agreementRateThreshold": 0.85,
+  "lowConfidenceCount": 0,
+  "lowConfidenceMaxCount": 0,
+  "p15GatePassed": true,
+  "failureReasons": [
+    "ShadowBreaksRuntimeGreaterThanFixes",
+    "ShadowBreaksRuntimeNonZero",
+    "NetGainNotPositive",
+    "PerIntentRegressionNonZero"
+  ],
+  "recommendation": "KeepRuleBased",
+  "shadowEvalReportPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\learning\\router\\router-intent-shadow-eval-a3.json;D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\learning\\router\\router-intent-shadow-eval-extended.json",
+  "triageReportPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\learning\\router\\router-disagreement-triage-a3.json;D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\learning\\router\\router-disagreement-triage-extended.json",
+  "policyVersion": "router-guarded-optin-gate-r2.f/v1"
+}

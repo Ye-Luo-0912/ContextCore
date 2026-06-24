@@ -1,0 +1,30 @@
+﻿{
+  "GatePassed": true,
+  "WorkspaceId": "contextcore_selected_canary",
+  "CollectionId": "relation-governance-selected-canary",
+  "ProviderMode": "GuardedPostgresPrimary",
+  "OperationCount": 35,
+  "PostgresPrimaryReadCount": 17,
+  "PostgresPrimaryWriteCount": 15,
+  "FileSystemFallbackCount": 0,
+  "ComparisonTraceCount": 35,
+  "MismatchCount": 0,
+  "PostgresFailureCount": 0,
+  "AveragePostgresReadMs": 6.1628823529411765,
+  "AveragePostgresWriteMs": 21.843486666666664,
+  "AverageFileSystemFallbackMs": 0,
+  "GraphExpansionPreviewParityPassed": true,
+  "ReviewLifecycleParityPassed": true,
+  "DiagnosticsParityPassed": true,
+  "ReplacementChainParityPassed": true,
+  "ControlRoomReadPathPassed": true,
+  "ClientApiRoundtripPathPassed": true,
+  "NonSelectedScopeRemainsFileSystem": true,
+  "CleanupPerformed": true,
+  "RollbackInstruction": "Set RelationGovernanceProviderSwitchOptions.Enabled=false or remove the selected workspace/collection from allowlist.",
+  "Diagnostics": [
+    "ExtendedCanaryScopedOnly"
+  ],
+  "BlockedReasons": [],
+  "Recommendation": "ReadyForScopedServiceModeExpansion"
+}

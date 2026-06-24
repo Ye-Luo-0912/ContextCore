@@ -1,0 +1,17 @@
+﻿{
+  "CanaryScope": "contextcore_canary/relation-governance-canary",
+  "ProviderMode": "GuardedPostgresPrimary",
+  "GatePassed": true,
+  "PostgresPrimaryReadCount": 12,
+  "PostgresPrimaryWriteCount": 4,
+  "FallbackCount": 0,
+  "MismatchCount": 0,
+  "PostgresFailureCount": 0,
+  "ComparisonTraceCount": 17,
+  "CleanupPerformed": true,
+  "Diagnostics": [
+    "RuntimeProviderStillScopedCanaryOnly"
+  ],
+  "BlockedReasons": [],
+  "Recommendation": "ReadyForScopedServiceMode"
+}

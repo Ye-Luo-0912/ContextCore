@@ -1,0 +1,20 @@
+﻿{
+  "generatedAt": "2026-06-14T00:43:54.7622374+00:00",
+  "passed": true,
+  "readinessGatePassed": true,
+  "dualWriteSmokePassed": true,
+  "shadowReadSmokePassed": true,
+  "providerQualityReady": true,
+  "scopedAllowlistConfigured": true,
+  "nonAllowlistedScopeRemainsFileSystem": true,
+  "exportProjectionParityPassed": true,
+  "summaryParityPassed": true,
+  "fallbackTested": true,
+  "mismatchCount": 0,
+  "postgresFailureCount": 0,
+  "fallbackCount": 0,
+  "p15GatePassed": true,
+  "blockedReasons": [],
+  "diagnostics": [],
+  "recommendation": "ReadyForSelectedFeedbackScope"
+}

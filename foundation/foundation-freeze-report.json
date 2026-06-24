@@ -1,0 +1,72 @@
+﻿{
+  "OperationId": "contextcore-foundation-freeze-74ffc107520c442b95aa6594cf45234f",
+  "GeneratedAt": "2026-06-16T02:31:30.8416434+00:00",
+  "FreezePassed": true,
+  "Recommendation": "ReadyForReleaseCandidate",
+  "ContextCoreFoundation": "Frozen",
+  "StorageFoundation": "Frozen",
+  "VectorFoundation": "ReadyForScopedFormalPreview",
+  "NextAllowedPhase": "ScopedRuntimeExperimentPlanning or NextSubsystemDevelopment",
+  "RelationGovernanceStatus": "ReadyForLimitedScopeExpansion",
+  "LearningFeedbackStatus": "ReadyForScopedServiceMode",
+  "JobQueueStatus": "ReadyForScopedWorkerMode",
+  "VectorPostgresProviderStatus": "ReadyForPreviewShadowStorage",
+  "VectorFormalPreviewStatus": "ReadyForScopedOptInPreview",
+  "RuntimeChangeGateStatus": "Passed",
+  "P15GateStatus": "Passed",
+  "FormalRetrievalAllowed": false,
+  "ReadyForRuntimeSwitch": false,
+  "RuntimeSwitchAllowed": false,
+  "PackingPolicyChanged": false,
+  "PackageOutputChanged": false,
+  "MissingReportCount": 0,
+  "MissingDocCount": 0,
+  "StorageProviderReadiness": {
+    "RelationGovernance": "ReadyForLimitedScopeExpansion",
+    "LearningFeedbackPostgres": "ReadyForScopedServiceMode",
+    "JobQueuePostgres": "ReadyForScopedWorkerMode",
+    "VectorPostgresProvider": "ReadyForPreviewShadowStorage"
+  },
+  "VectorProviderReadiness": {
+    "VectorPostgresProvider": "ReadyForPreviewShadowStorage",
+    "Qwen3EmbeddingProvider": "DoNotPromoteOrPreviewOnly",
+    "HybridRetrievalPreview": "KeepPreviewOnly",
+    "DatasetV2Stress": "ReadyForV4RecheckInput"
+  },
+  "VectorFormalPreviewReadiness": {
+    "VectorV4ReadinessRecheck": "Passed",
+    "GuardedFormalRetrievalPreview": "Passed",
+    "VectorShadowPackageComparison": "Passed",
+    "ScopedFormalPreviewOptIn": "Passed",
+    "LimitedFormalPreviewObservation": "Passed",
+    "VectorFormalPreviewFreeze": "ReadyForScopedOptInPreview"
+  },
+  "ControlRoomCoverage": {
+    "Foundation Freeze Summary renderer": true,
+    "Foundation freeze report loader": true,
+    "Vector formal preview freeze status": true
+  },
+  "DocsCoverage": {
+    "docs\\relation-governance-postgres-freeze.md": true,
+    "docs\\postgres-operational-store.md": true,
+    "docs\\job-queue-postgres-freeze.md": true,
+    "docs\\vector-postgres-provider-freeze.md": true,
+    "docs\\vector-embedding-provider-comparison-freeze.md": true,
+    "docs\\vector-hybrid-retrieval-freeze.md": true,
+    "docs\\vector-preview-shadow-freeze.md": true,
+    "docs\\learning-loop-foundation.md": true,
+    "docs\\ContextCore_Foundation_Freeze_Report.md": true,
+    "docs\\controlroom-service-mode.md": true
+  },
+  "GeneratedReportCoverage": {
+    "storage\\postgres\\postgres-relation-multi-normal-scope-quality-report.json": true,
+    "storage\\postgres\\postgres-learning-feedback-freeze-gate.json": true,
+    "storage\\postgres\\postgres-job-queue-freeze-gate.json": true,
+    "storage\\postgres\\postgres-vector-freeze-gate.json": true,
+    "vector\\v4\\vector-formal-preview-freeze-gate.json": true,
+    "learning\\readiness\\learning-runtime-change-readiness-gate.json": true,
+    "eval\\eval-report-p15-a3.json": true,
+    "eval\\eval-report-p15-extended.json": true
+  },
+  "BlockedReasons": []
+}

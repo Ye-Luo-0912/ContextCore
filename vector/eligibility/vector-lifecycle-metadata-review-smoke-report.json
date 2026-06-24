@@ -1,0 +1,16 @@
+﻿{
+  "OperationId": "vector-lifecycle-metadata-review-smoke-5a931f2942af47d4946e1635bcf6af6a",
+  "CreatedAt": "2026-06-15T09:44:12.7140596+00:00",
+  "ApprovedSidecarWritten": true,
+  "RejectSkippedSidecar": true,
+  "NeedsEvidenceSkippedSidecar": true,
+  "SupersedeSkippedSidecar": true,
+  "SourceItemUnchanged": true,
+  "UnsafeNormalContextApprovalBlocked": true,
+  "CleanupPerformed": true,
+  "SidecarEntryCount": 1,
+  "Recommendation": "ReviewSmokePassed",
+  "Diagnostics": [
+    "DeprecatedHistoricalOrSupersededCannotApproveToNormalContext"
+  ]
+}

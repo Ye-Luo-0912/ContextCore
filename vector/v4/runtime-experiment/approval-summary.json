@@ -1,0 +1,17 @@
+﻿{
+  "OperationId": "vector-scoped-runtime-experiment-approval-summary-5eb62ddc78fa4e2088b591d62763309d",
+  "CreatedAt": "2026-06-17T05:16:06.3187449+00:00",
+  "ProposalId": "vsrep-bb5402e39c0f1333",
+  "ApprovalCount": 1,
+  "ApprovalRecordExists": true,
+  "LatestApprovalId": "vsrea-1f12d0a4760014e4",
+  "ApprovalMode": "NoOpHarnessOnly",
+  "Expired": false,
+  "Revoked": false,
+  "RuntimeSwitchAllowed": false,
+  "FormalRetrievalAllowed": false,
+  "ReadyForRuntimeSwitch": false,
+  "UseForRuntime": false,
+  "Recommendation": "ReadyForScopedRuntimeExperimentDryRunHarnessFreeze",
+  "BlockedReasons": []
+}

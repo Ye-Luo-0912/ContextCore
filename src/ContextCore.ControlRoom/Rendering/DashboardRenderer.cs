@@ -223,11 +223,11 @@ public static class DashboardRenderer
             return compact
                 ? 
                 [
-                    "[R] 刷新  [A] 自动  [S] 服务  [I] Ingest  [G] Query  [V] Package  [J] Jobs  [M] Model  [U] Admin  [Y] Memory  [K] Constraints  [C] Gaps  [E] Candidates  [L] Relations  [O] Policy  [T] ShortTerm  [N] Promotion  [Z] StableReview  [H] Learning  [32] PolicyFeedback  [33] LearningFeatures  [X] Planning  [F] Proposal  [34] RankerDebug  [35] CandidateMemory  [36] StableMemory  [Q] 退出"
+                    "[R] 刷新  [A] 自动  [S] 服务  [I] Ingest  [G] Query  [V] Package  [J] Jobs  [M] Model  [U] Admin  [Y] Memory  [K] Constraints  [C] Gaps  [E] Candidates  [L] Relations  [O] Policy  [T] ShortTerm  [N] Promotion  [Z] StableReview  [H] Learning  [32] PolicyFeedback  [33] LearningFeatures  [X] Planning  [F] Proposal  [34] RankerDebug  [35] CandidateMemory  [36] StableMemory  [37] VectorIndex  [Q] 退出"
                 ]
                 :
                 [
-                    "[R] 刷新  [A] 自动  [S] 服务  [I] Ingest  [G] Query  [V] Package  [J] Jobs  [M] Model  [U] Admin  [Y] Memory  [K] Constraints  [C] Gaps  [E] Candidates  [L] Relations  [O] Policy  [T] ShortTerm  [N] Promotion  [Z] StableReview  [H] Learning  [32] PolicyFeedback  [33] LearningFeatures  [X] Planning  [F] Proposal  [34] RankerDebug  [35] CandidateMemory  [36] StableMemory  [Q] 退出",
+                    "[R] 刷新  [A] 自动  [S] 服务  [I] Ingest  [G] Query  [V] Package  [J] Jobs  [M] Model  [U] Admin  [Y] Memory  [K] Constraints  [C] Gaps  [E] Candidates  [L] Relations  [O] Policy  [T] ShortTerm  [N] Promotion  [Z] StableReview  [H] Learning  [32] PolicyFeedback  [33] LearningFeatures  [X] Planning  [F] Proposal  [34] RankerDebug  [35] CandidateMemory  [36] StableMemory  [37] VectorIndex  [Q] 退出",
                     "Service 模式为最小观测模式；本地文件浏览、记忆层、包预览等 direct-only 功能已禁用"
                 ];
         }

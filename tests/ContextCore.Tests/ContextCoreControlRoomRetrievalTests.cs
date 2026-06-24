@@ -5,10 +5,14 @@ using ContextCore.ControlRoom.Rendering;
 using ContextCore.ControlRoom.Services;
 using ContextCore.Core;
 using ContextCore.Core.Services;
+using ContextCore.Core.Services.Attention;
+using ContextCore.Core.Services.Retrieval;
 using ContextCore.Embedding;
+using ContextCore.Embedding.Providers;
 using ContextCore.ModelGateway;
 using ContextCore.ModelGateway.Infrastructure;
 using ContextCore.Storage.InMemory;
+using ContextCore.Storage.InMemory.Stores;
 
 namespace ContextCore.Tests;
 

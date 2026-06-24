@@ -157,6 +157,10 @@ Diagnostics are advisory only. They never trigger cleanup or state transitions.
 
 FileSystem and InMemory providers support review history and replacement relations. Postgres still does not register the StableLifecycle review write path in S3; the API returns a structured misconfigured response for that provider before any metadata-only stable lifecycle write can occur.
 
+Graph Foundation G5.1 adds `RelationTypeNormalizer` for eval corpus hygiene and shadow-only analysis. Stable lifecycle review continues to write canonical `superseded_by` / `replaces` relations directly with reviewed evidence metadata. G5.1 does not rewrite stable review relations or alter retrieval/package behavior.
+
+Graph Foundation G5.2 adds replacement-direction traversal policy for preview / shadow relation expansion. Normal and current-task profiles follow replacement chains only toward latest active items and block `replaces` traversal from a replacement back to a deprecated / historical item. Audit and conflict profiles may inspect historical replacement targets in their own shadow sections. This governance does not change stable lifecycle records, formal retrieval, package output, or replacement-chain storage.
+
 ## Service API
 
 Read-only endpoints:

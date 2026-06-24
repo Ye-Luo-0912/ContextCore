@@ -1,0 +1,198 @@
+{
+  "operationId": "router-disagreement-triage-fe9886dbd65248a5a946dbeb0436f513",
+  "generatedAt": "2026-06-11T07:28:42.5019299+00:00",
+  "datasetName": "Extended",
+  "inputPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\learning\\features\\router-intent-examples.jsonl",
+  "sampleCount": 35,
+  "disagreementCount": 4,
+  "shadowFixesRuntime": 1,
+  "shadowBreaksRuntime": 3,
+  "bothWrongCount": 0,
+  "lowConfidenceCount": 0,
+  "hardNegativeCount": 3,
+  "topConfusionPairs": {
+    "CodingTask-\u003EFuzzyQuestion": 2,
+    "AuditDeprecated-\u003ECodingTask": 1,
+    "FuzzyQuestion-\u003ECurrentTask": 1
+  },
+  "triageCategoryCounts": {
+    "ShadowBreaksRuntime": 3,
+    "ShadowFixesRuntime": 1
+  },
+  "disagreements": [
+    {
+      "sampleId": "chat-sample-005",
+      "queryText": "CodingTask/ChatMode",
+      "mode": "ChatMode",
+      "expectedIntent": "CodingTask",
+      "runtimeIntent": "CodingTask",
+      "shadowIntent": "FuzzyQuestion",
+      "runtimeCorrect": true,
+      "shadowCorrect": false,
+      "shadowFixesRuntime": false,
+      "shadowBreaksRuntime": true,
+      "confidence": 0.6043608170087005,
+      "topPredictions": [
+        {
+          "intent": "FuzzyQuestion",
+          "confidence": 0.7799923745495567,
+          "reason": "centroidScore=0.78"
+        },
+        {
+          "intent": "CodingTask",
+          "confidence": 0.7025262301634247,
+          "reason": "centroidScore=0.7025"
+        },
+        {
+          "intent": "AuditDeprecated",
+          "confidence": 0.6769504935356214,
+          "reason": "centroidScore=0.677"
+        },
+        {
+          "intent": "AutomationRecovery",
+          "confidence": 0.5158554747781723,
+          "reason": "centroidScore=0.5159"
+        },
+        {
+          "intent": "NovelGeneration",
+          "confidence": 0.4410488286393709,
+          "reason": "centroidScore=0.441"
+        }
+      ],
+      "disagreementType": "IntentMismatch",
+      "triageCategory": "ShadowBreaksRuntime",
+      "recommendedAction": "AddHardNegative"
+    },
+    {
+      "sampleId": "chat-sample-005",
+      "queryText": "CodingTask/ChatMode",
+      "mode": "ChatMode",
+      "expectedIntent": "CodingTask",
+      "runtimeIntent": "CodingTask",
+      "shadowIntent": "FuzzyQuestion",
+      "runtimeCorrect": true,
+      "shadowCorrect": false,
+      "shadowFixesRuntime": false,
+      "shadowBreaksRuntime": true,
+      "confidence": 0.48601676439932484,
+      "topPredictions": [
+        {
+          "intent": "FuzzyQuestion",
+          "confidence": 0.6175616187072749,
+          "reason": "centroidScore=0.6176"
+        },
+        {
+          "intent": "LongTermPreference",
+          "confidence": 0.5261794172318,
+          "reason": "centroidScore=0.5262"
+        },
+        {
+          "intent": "CodingTask",
+          "confidence": 0.5188751035591576,
+          "reason": "centroidScore=0.5189"
+        },
+        {
+          "intent": "CurrentTask",
+          "confidence": 0.4247232809743862,
+          "reason": "centroidScore=0.4247"
+        },
+        {
+          "intent": "AuditDeprecated",
+          "confidence": 0.3912129743636496,
+          "reason": "centroidScore=0.3912"
+        }
+      ],
+      "disagreementType": "IntentMismatch",
+      "triageCategory": "ShadowBreaksRuntime",
+      "recommendedAction": "AddHardNegative"
+    },
+    {
+      "sampleId": "chat-20260529-019",
+      "queryText": "CurrentTask/ChatMode",
+      "mode": "ChatMode",
+      "expectedIntent": "CurrentTask",
+      "runtimeIntent": "FuzzyQuestion",
+      "shadowIntent": "CurrentTask",
+      "runtimeCorrect": false,
+      "shadowCorrect": true,
+      "shadowFixesRuntime": true,
+      "shadowBreaksRuntime": false,
+      "confidence": 0.566782499590778,
+      "topPredictions": [
+        {
+          "intent": "CurrentTask",
+          "confidence": 0.7229037144347592,
+          "reason": "centroidScore=0.7229"
+        },
+        {
+          "intent": "FuzzyQuestion",
+          "confidence": 0.6244848593759252,
+          "reason": "centroidScore=0.6245"
+        },
+        {
+          "intent": "LongTermPreference",
+          "confidence": 0.550911641555246,
+          "reason": "centroidScore=0.5509"
+        },
+        {
+          "intent": "AuditDeprecated",
+          "confidence": 0.3908196734969595,
+          "reason": "centroidScore=0.3908"
+        },
+        {
+          "intent": "CodingTask",
+          "confidence": 0.3807559531621493,
+          "reason": "centroidScore=0.3808"
+        }
+      ],
+      "disagreementType": "IntentMismatch",
+      "triageCategory": "ShadowFixesRuntime",
+      "recommendedAction": "ReviewRuntimeBoundary"
+    },
+    {
+      "sampleId": "coding-sample-002",
+      "queryText": "AuditDeprecated/CodingMode",
+      "mode": "CodingMode",
+      "expectedIntent": "AuditDeprecated",
+      "runtimeIntent": "AuditDeprecated",
+      "shadowIntent": "CodingTask",
+      "runtimeCorrect": true,
+      "shadowCorrect": false,
+      "shadowFixesRuntime": false,
+      "shadowBreaksRuntime": true,
+      "confidence": 0.5468677243167364,
+      "topPredictions": [
+        {
+          "intent": "CodingTask",
+          "confidence": 0.711456535359962,
+          "reason": "centroidScore=0.7115"
+        },
+        {
+          "intent": "AuditDeprecated",
+          "confidence": 0.6583552441729027,
+          "reason": "centroidScore=0.6584"
+        },
+        {
+          "intent": "FuzzyQuestion",
+          "confidence": 0.470557404768929,
+          "reason": "centroidScore=0.4706"
+        },
+        {
+          "intent": "AutomationRecovery",
+          "confidence": 0.4119591893468774,
+          "reason": "centroidScore=0.412"
+        },
+        {
+          "intent": "NovelGeneration",
+          "confidence": 0.33336829859686756,
+          "reason": "centroidScore=0.3334"
+        }
+      ],
+      "disagreementType": "IntentMismatch",
+      "triageCategory": "ShadowBreaksRuntime",
+      "recommendedAction": "AddHardNegative"
+    }
+  ],
+  "recommendation": "KeepRuleBased",
+  "policyVersion": "router-disagreement-triage-r2.1/v1"
+}

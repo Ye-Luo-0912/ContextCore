@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using ContextCore.Abstractions;
+using ContextCore.Abstractions.Models;
 
 namespace ContextCore.Core;
 

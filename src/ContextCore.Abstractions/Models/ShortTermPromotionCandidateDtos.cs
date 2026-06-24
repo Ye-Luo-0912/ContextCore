@@ -1,6 +1,4 @@
-using ContextCore.Abstractions.Models;
-
-namespace ContextCore.Abstractions;
+namespace ContextCore.Abstractions.Models;
 
 /// <summary>短期记忆生成的只读晋升候选项。</summary>
 public sealed class ShortTermPromotionCandidate

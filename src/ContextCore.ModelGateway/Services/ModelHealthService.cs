@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using ContextCore.Abstractions;
+using ContextCore.Abstractions.Models;
 using ContextCore.ModelGateway.Infrastructure;
 
 namespace ContextCore.ModelGateway;

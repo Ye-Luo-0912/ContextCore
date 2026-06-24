@@ -1,0 +1,153 @@
+﻿{
+  "OperationId": "formal-retrieval-integration-decision-gate-03831b59347f4e7b87096066b6832536",
+  "CreatedAt": "2026-06-19T17:58:33.9056822+00:00",
+  "DecisionPassed": true,
+  "GatePassed": true,
+  "Recommendation": "ReadyForFormalRetrievalIntegrationFreezeAndAdapterNoOpBindingPlan",
+  "IntegrationDecision": "ReadyForFormalRetrievalIntegrationFreezeAndAdapterNoOpBindingPlan",
+  "CurrentOverallStatus": "FoundationFrozen_FormalRetrievalPlanOnly",
+  "AllowedMode": "DecisionOnly",
+  "NextAllowedPhase": "FormalRetrievalIntegrationFreeze / AdapterNoOpBindingPlan",
+  "ReadyForFormalRetrievalIntegrationFreeze": true,
+  "ReadyForAdapterNoOpBindingPlan": true,
+  "AdapterNoOpBindingPlanAllowed": true,
+  "FormalRetrievalIntegrationFreezeAllowed": true,
+  "FormalRetrievalAllowed": false,
+  "RuntimeSwitchAllowed": false,
+  "ReadyForRuntimeSwitch": false,
+  "UseForRuntime": false,
+  "FormalVectorStoreBindingAllowed": false,
+  "FormalPackageWriteAllowed": false,
+  "PackingPolicyIntegrationAllowed": false,
+  "PackageOutputMutationAllowed": false,
+  "RiskAfterPolicy": 0,
+  "MustNotHitRiskAfterPolicy": 0,
+  "LifecycleRiskAfterPolicy": 0,
+  "FormalOutputChanged": 0,
+  "FormalSelectedSetChanged": false,
+  "FormalPackageWritten": false,
+  "PackageOutputChanged": false,
+  "PackingPolicyChanged": false,
+  "RuntimeMutated": false,
+  "VectorStoreBindingChanged": false,
+  "RuntimeChangeGatePassed": true,
+  "P15GatePassed": true,
+  "V50ProjectStateAuditPassed": true,
+  "V50FormalIntegrationPlanGatePassed": true,
+  "V51ShadowAdapterPlanGatePassed": true,
+  "V511RetrievalEvalProtocolGatePassed": true,
+  "V512InputMetadataEnrichmentGatePassed": true,
+  "V513EnrichedSourceRepairGatePassed": true,
+  "V514SourceAwareRankingGatePassed": true,
+  "V515OutputTokenPriorityGatePassed": true,
+  "V516AdapterInputContractGatePassed": true,
+  "Gates": [
+    {
+      "GateId": "V50ProjectStateAudit",
+      "Passed": true,
+      "Recommendation": "ReadyForMainlineGapRepairPlanning",
+      "SourcePath": "eval\\project-state-audit.json",
+      "SupersededBy": ""
+    },
+    {
+      "GateId": "V50FormalRetrievalIntegrationPlan",
+      "Passed": true,
+      "Recommendation": "ReadyForShadowFormalRetrievalAdapter",
+      "SourcePath": "vector\\v5\\formal-retrieval-integration-plan-gate.json",
+      "SupersededBy": ""
+    },
+    {
+      "GateId": "V51ShadowFormalRetrievalAdapterPlan",
+      "Passed": true,
+      "Recommendation": "ReadyForShadowAdapterDesignFreeze",
+      "SourcePath": "vector\\v5\\shadow-formal-retrieval-adapter-plan-gate.json",
+      "SupersededBy": ""
+    },
+    {
+      "GateId": "V511RetrievalEvalProtocol",
+      "Passed": true,
+      "Recommendation": "NeedsInputMetadataEnrichment",
+      "SourcePath": "vector\\v5\\retrieval-eval-protocol-gate.json",
+      "SupersededBy": ""
+    },
+    {
+      "GateId": "V512InputMetadataEnrichment",
+      "Passed": true,
+      "Recommendation": "ReadyForSourceRepairRecheck",
+      "SourcePath": "vector\\v5\\input-metadata-enrichment-gate.json",
+      "SupersededBy": ""
+    },
+    {
+      "GateId": "V513EnrichedCandidateSourceRepair",
+      "Passed": true,
+      "Recommendation": "SupersededByV514SourceAwareRankingRepair",
+      "SourcePath": "vector\\v5\\enriched-candidate-source-repair-recheck-gate.json",
+      "SupersededBy": "V514SourceAwareRankingRepair"
+    },
+    {
+      "GateId": "V514SourceAwareRankingRepair",
+      "Passed": true,
+      "Recommendation": "ReadyForSourceAwareRankingFreeze",
+      "SourcePath": "vector\\v5\\source-aware-ranking-repair-gate.json",
+      "SupersededBy": ""
+    },
+    {
+      "GateId": "V515OutputTokenPriorityShadow",
+      "Passed": true,
+      "Recommendation": "ReadyForOutputPolicyShadowFreeze",
+      "SourcePath": "vector\\v5\\output-token-priority-shadow-gate.json",
+      "SupersededBy": ""
+    },
+    {
+      "GateId": "V516FormalAdapterInputContract",
+      "Passed": true,
+      "Recommendation": "ReadyForFormalAdapterInputContractFreeze",
+      "SourcePath": "vector\\v5\\formal-adapter-input-contract-gate.json",
+      "SupersededBy": ""
+    },
+    {
+      "GateId": "RuntimeChangeGate",
+      "Passed": true,
+      "Recommendation": "RuntimeChangeRulesSatisfied",
+      "SourcePath": "learning\\readiness\\learning-runtime-change-readiness-gate.json",
+      "SupersededBy": ""
+    },
+    {
+      "GateId": "P15Gate",
+      "Passed": true,
+      "Recommendation": "Passed",
+      "SourcePath": "eval\\eval-report-p15-a3.json;eval\\eval-report-p15-extended.json",
+      "SupersededBy": ""
+    }
+  ],
+  "AllowedActions": [
+    "Plan formal retrieval integration freeze",
+    "Plan adapter no-op binding only",
+    "Define DI registration shape without enabling runtime",
+    "Define trace and rollback checks for no-op adapter path"
+  ],
+  "ForbiddenActions": [
+    "Enable formal retrieval",
+    "Switch runtime retrieval provider",
+    "Bind IVectorIndexStore as formal runtime store",
+    "Write formal package",
+    "Mutate PackingPolicy",
+    "Mutate package output",
+    "Use Dataset/Eval/gold/shadow fields as runtime adapter input",
+    "Global default-on"
+  ],
+  "SourceReports": {
+    "V50ProjectStateAudit": "eval\\project-state-audit.json",
+    "V50FormalRetrievalIntegrationPlan": "vector\\v5\\formal-retrieval-integration-plan-gate.json",
+    "V51ShadowFormalRetrievalAdapterPlan": "vector\\v5\\shadow-formal-retrieval-adapter-plan-gate.json",
+    "V511RetrievalEvalProtocol": "vector\\v5\\retrieval-eval-protocol-gate.json",
+    "V512InputMetadataEnrichment": "vector\\v5\\input-metadata-enrichment-gate.json",
+    "V513EnrichedCandidateSourceRepair": "vector\\v5\\enriched-candidate-source-repair-recheck-gate.json",
+    "V514SourceAwareRankingRepair": "vector\\v5\\source-aware-ranking-repair-gate.json",
+    "V515OutputTokenPriorityShadow": "vector\\v5\\output-token-priority-shadow-gate.json",
+    "V516FormalAdapterInputContract": "vector\\v5\\formal-adapter-input-contract-gate.json",
+    "RuntimeChangeGate": "learning\\readiness\\learning-runtime-change-readiness-gate.json",
+    "P15Gate": "eval\\eval-report-p15-a3.json;eval\\eval-report-p15-extended.json"
+  },
+  "BlockedReasons": []
+}

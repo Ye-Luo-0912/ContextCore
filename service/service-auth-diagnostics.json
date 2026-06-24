@@ -1,0 +1,22 @@
+﻿{
+  "OperationId": "service-auth-diagnostics-e6c6d4a943b549ba9f8042019e506fa3",
+  "GeneratedAt": "2026-06-16T08:12:06.8460027+00:00",
+  "DeploymentProfile": 0,
+  "AuthConfigured": false,
+  "ApiKeyConfigured": false,
+  "RequireApiKey": false,
+  "ApiKeyHeaderName": "X-ContextCore-Key",
+  "DevelopmentNoAuthAllowed": true,
+  "SecretLeakDetected": false,
+  "AbsolutePathLeakDetected": false,
+  "RuntimeMutated": false,
+  "FormalRetrievalAllowed": false,
+  "RuntimeSwitchAllowed": false,
+  "PackingPolicyChanged": false,
+  "PackageOutputChanged": false,
+  "Recommendation": "DevelopmentOnly",
+  "Diagnostics": [
+    "DevelopmentOnlyAuthDisabled"
+  ],
+  "BlockedReasons": []
+}

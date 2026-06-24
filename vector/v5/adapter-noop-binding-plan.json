@@ -1,0 +1,24 @@
+﻿{
+  "OperationId": "adapter-no-op-binding-plan-de05f233cd6143dcad1b93be5b3fee79",
+  "CreatedAt": "2026-06-20T00:37:01.5667657+00:00",
+  "PlanPassed": true,
+  "Recommendation": "ReadyForAdapterNoOpBindingPlanFreeze",
+  "FormalRetrievalAllowed": false,
+  "RuntimeSwitchAllowed": false,
+  "PlanVersion": "1.0",
+  "DiEntryPoints": [
+    "IContextRetrievalAdapter (scoped DI registration via ServiceCollectionExtensions)"
+  ],
+  "NoOpAdapterInterface": "IShadowRetrievalAdapter { Task\u003CShadowAdapterResult\u003E ExecuteAsync(QueryContext, CancellationToken) }",
+  "ShadowTracePath": "vector/trace/shadow-adapter-trace-{query}.jsonl",
+  "RollbackPlan": "Disable IShadowRetrievalAdapter DI registration; restore original IContextPackageBuilder path.",
+  "KillSwitchPlan": "Remove adapter DI binding; re-run integration-freeze-gate before re-enabling.",
+  "ImplementationPhases": [
+    "Phase 1: Define IShadowRetrievalAdapter interface \u002B no-op implementation",
+    "Phase 2: Wire DI registration behind feature flag (default off)",
+    "Phase 3: Integrate shadow trace writer with existing package assembly pipeline",
+    "Phase 4: Controlled canary rollout with observation window",
+    "Phase 5: Full formal retrieval binding (separate approval gate required)"
+  ],
+  "BlockedReasons": []
+}

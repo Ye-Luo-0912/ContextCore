@@ -1,5 +1,6 @@
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
+using ContextCore.Core.Services;
 using ContextCore.Service.Infrastructure;
 
 namespace ContextCore.Service.Endpoints;
@@ -17,12 +18,18 @@ internal static class PackageEndpoints
 		group.MapPost("/build", async Task<IResult> (
 			ContextPackageRequest request,
 			IContextRuntimeService runtime,
+			IServiceProvider services,
 			HttpContext httpContext,
 			CancellationToken ct) =>
 		{
 			try
 			{
 				var package = await runtime.BuildPackageAsync(request, ct);
+				await RecordRouterShadowAsync(
+						services,
+						BuildRouterShadowRequest(request, "package.build", package.PackageId),
+						ct)
+					.ConfigureAwait(false);
 				return Results.Ok(package);
 			}
 			catch (ArgumentException ex)
@@ -43,12 +50,18 @@ internal static class PackageEndpoints
 		group.MapPost("/build-detailed", async Task<IResult> (
 			ContextPackageRequest request,
 			IContextRuntimeService runtime,
+			IServiceProvider services,
 			HttpContext httpContext,
 			CancellationToken ct) =>
 		{
 			try
 			{
 				var result = await runtime.BuildPackageDetailedAsync(request, ct);
+				await RecordRouterShadowAsync(
+						services,
+						BuildRouterShadowRequest(request, "package.build-detailed", result.BuildId),
+						ct)
+					.ConfigureAwait(false);
 				return Results.Ok(result);
 			}
 			catch (ArgumentException ex)
@@ -67,12 +80,18 @@ internal static class PackageEndpoints
 		group.MapPost("/preview", async Task<IResult> (
 			ContextPackageRequest request,
 			IContextRuntimeService runtime,
+			IServiceProvider services,
 			HttpContext httpContext,
 			CancellationToken ct) =>
 		{
 			try
 			{
 				var package = await runtime.BuildPackageAsync(request, ct);
+				await RecordRouterShadowAsync(
+						services,
+						BuildRouterShadowRequest(request, "package.preview", package.PackageId),
+						ct)
+					.ConfigureAwait(false);
 				return Results.Ok(package);
 			}
 			catch (ArgumentException ex)
@@ -150,6 +169,52 @@ internal static class PackageEndpoints
 		.WithSummary("获取指定上下文包策略");
 
 		return app;
+	}
+
+	private static RouterIntentShadowRecordRequest BuildRouterShadowRequest(
+		ContextPackageRequest request,
+		string entryPoint,
+		string requestId)
+	{
+		var metadata = new Dictionary<string, string>(request.Metadata, StringComparer.OrdinalIgnoreCase)
+		{
+			["packageEntryPoint"] = entryPoint
+		};
+		return new RouterIntentShadowRecordRequest
+		{
+			RequestId = string.IsNullOrWhiteSpace(requestId) ? $"{entryPoint}-{Guid.NewGuid():N}" : requestId,
+			WorkspaceId = request.WorkspaceId,
+			CollectionId = request.CollectionId,
+			SessionId = request.Metadata.GetValueOrDefault("sessionId"),
+			EntryPoint = entryPoint,
+			Mode = ResolveMode(request),
+			QueryText = request.QueryText ?? string.Empty,
+			Metadata = metadata
+		};
+	}
+
+	private static async Task RecordRouterShadowAsync(
+		IServiceProvider services,
+		RouterIntentShadowRecordRequest request,
+		CancellationToken cancellationToken)
+	{
+		var shadow = services.GetService<RouterIntentShadowService>();
+		if (shadow is null)
+		{
+			return;
+		}
+
+		await shadow.RecordAsync(request, cancellationToken).ConfigureAwait(false);
+	}
+
+	private static string ResolveMode(ContextPackageRequest request)
+	{
+		if (request.Mode != ContextPackageMode.None)
+		{
+			return request.Mode.ToString();
+		}
+
+		return request.Metadata.GetValueOrDefault("mode") ?? string.Empty;
 	}
 }
 

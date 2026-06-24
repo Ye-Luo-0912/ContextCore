@@ -1,4 +1,5 @@
 using ContextCore.Abstractions;
+using ContextCore.Abstractions.Models;
 
 namespace ContextCore.Storage.FileSystem.Stores;
 
@@ -255,38 +256,42 @@ public sealed class FileContextLearningStore : IContextLearningStore
             return Array.Empty<ShortTermMemoryScope>();
         }
 
-        return Directory.EnumerateDirectories(workspacesRoot)
-            .SelectMany(workspaceDirectory =>
-            {
-                var workspaceId = Path.GetFileName(workspaceDirectory);
-                if (string.IsNullOrWhiteSpace(workspaceId))
+        return
+        [
+            .. Directory.EnumerateDirectories(workspacesRoot)
+                .SelectMany(workspaceDirectory =>
                 {
-                    return Array.Empty<ShortTermMemoryScope>();
-                }
-
-                var collectionsRoot = Path.Combine(workspaceDirectory, "collections");
-                if (!Directory.Exists(collectionsRoot))
-                {
-                    return Array.Empty<ShortTermMemoryScope>();
-                }
-
-                return Directory.EnumerateDirectories(collectionsRoot)
-                    .Select(collectionDirectory => new
+                    var workspaceId = Path.GetFileName(workspaceDirectory);
+                    if (string.IsNullOrWhiteSpace(workspaceId))
                     {
-                        WorkspaceId = workspaceId!,
-                        CollectionId = Path.GetFileName(collectionDirectory)
-                    })
-                    .Where(item => !string.IsNullOrWhiteSpace(item.CollectionId))
-                    .Where(item => File.Exists(ResolvePath(item.WorkspaceId, item.CollectionId!, scopeKind)))
-                    .Select(item => new ShortTermMemoryScope
+                        return Array.Empty<ShortTermMemoryScope>();
+                    }
+
+                    var collectionsRoot = Path.Combine(workspaceDirectory, "collections");
+                    if (!Directory.Exists(collectionsRoot))
                     {
-                        WorkspaceId = item.WorkspaceId,
-                        CollectionId = item.CollectionId!
-                    })
-                    .ToArray();
-            })
-            .DistinctBy(scope => $"{scope.WorkspaceId}\u001f{scope.CollectionId}", StringComparer.OrdinalIgnoreCase)
-            .ToArray();
+                        return Array.Empty<ShortTermMemoryScope>();
+                    }
+
+                    return
+                    [
+                        .. Directory.EnumerateDirectories(collectionsRoot)
+                            .Select(collectionDirectory => new
+                            {
+                                WorkspaceId = workspaceId,
+                                CollectionId = Path.GetFileName(collectionDirectory)
+                            })
+                            .Where(item => !string.IsNullOrWhiteSpace(item.CollectionId))
+                            .Where(item => File.Exists(ResolvePath(item.WorkspaceId, item.CollectionId, scopeKind)))
+                            .Select(item => new ShortTermMemoryScope
+                            {
+                                WorkspaceId = item.WorkspaceId,
+                                CollectionId = item.CollectionId
+                            })
+                    ];
+                })
+                .DistinctBy(scope => $"{scope.WorkspaceId}\u001f{scope.CollectionId}", StringComparer.OrdinalIgnoreCase)
+        ];
     }
 
     private string ResolvePath(string workspaceId, string collectionId, LearningScopeKind scopeKind)

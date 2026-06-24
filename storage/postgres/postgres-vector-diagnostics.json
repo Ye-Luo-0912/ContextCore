@@ -1,0 +1,30 @@
+﻿{
+  "generatedAt": "2026-06-14T15:57:08.7680397+00:00",
+  "providerEnabled": true,
+  "connectionAvailable": true,
+  "pgVectorAvailable": true,
+  "schemaVersion": "cc-schema-v6",
+  "tableExists": true,
+  "requiredIndexesExist": true,
+  "missingIndexCount": 0,
+  "missingIndexes": [],
+  "supportedDimensionCount": 1,
+  "supportedDimensions": [
+    16
+  ],
+  "indexedEntryCount": 158,
+  "providerModelDistribution": [
+    {
+      "providerId": "deterministic-hash",
+      "modelId": "deterministic-hash-v1",
+      "dimension": 16,
+      "count": 158
+    }
+  ],
+  "useForRuntime": false,
+  "diagnostics": [
+    "UseForRuntime=false",
+    "RetrievalProviderUnchanged"
+  ],
+  "recommendation": "ReadyForVectorParityEval"
+}

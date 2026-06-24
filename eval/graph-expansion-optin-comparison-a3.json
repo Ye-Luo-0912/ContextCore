@@ -1,0 +1,2700 @@
+﻿{
+  "OperationId": "graph-expansion-optin-920864ab13934084a677997145101d9a",
+  "CreatedAt": "2026-06-09T00:30:55.2838369+00:00",
+  "Scope": "A3",
+  "TotalSamples": 50,
+  "NormalSelectedSetChanged": 0,
+  "AuxiliaryGraphSectionChanged": 39,
+  "GraphExpansionAppliedCount": 39,
+  "AddedAuditContextItems": 60,
+  "AddedConflictEvidenceItems": 60,
+  "RiskAfterRoutingCount": 0,
+  "WrongSectionRiskCount": 0,
+  "MustNotHitRiskCount": 0,
+  "LifecycleRiskCount": 0,
+  "MissingEvidenceCount": 0,
+  "FallbackCount": 0,
+  "PassRateDelta": 0,
+  "WarningDelta": 7,
+  "ExpectedWarningDelta": 7,
+  "UnexpectedWarningDelta": 0,
+  "WarningDeltaByKind": {
+    "AuxiliaryGraphSectionAdded": 39,
+    "ExpectedAuditContextAdded": 39,
+    "ExpectedConflictEvidenceAdded": 39
+  },
+  "DisallowedNormalContextInjection": 0,
+  "GuardStatus": "Passed",
+  "Samples": [
+    {
+      "SampleId": "chat-sample-001",
+      "Mode": "ChatMode",
+      "NormalSelectedSetChanged": false,
+      "AuxiliaryGraphSectionChanged": true,
+      "GraphExpansionApplied": true,
+      "GraphExpansionMode": "ApplyGuarded",
+      "GraphExpansionFallbackUsed": false,
+      "GraphExpansionFallbackReason": "",
+      "GraphExpansionWarnings": "",
+      "BaselineSelected": [
+        "const:chat-output-lang",
+        "stable:preference-language",
+        "memory:chat-extra-active-2",
+        "memory:chat-drink-preference-v2",
+        "memory:chat-extra-active-1",
+        "memory:chat-active-plan",
+        "ctx:chat-system-intro",
+        "memory:chat-budget-stress"
+      ],
+      "ApplySelected": [
+        "const:chat-output-lang",
+        "stable:preference-language",
+        "memory:chat-extra-active-2",
+        "memory:chat-drink-preference-v2",
+        "memory:chat-extra-active-1",
+        "memory:chat-active-plan",
+        "ctx:chat-system-intro",
+        "memory:chat-budget-stress"
+      ],
+      "AddedGraphItems": [
+        "memory:chat-drink-preference-v1",
+        "memory:chat-old-topic"
+      ],
+      "TargetSections": [
+        "audit_context",
+        "conflict_evidence"
+      ],
+      "AddedAuditContextItems": 2,
+      "AddedConflictEvidenceItems": 2,
+      "RiskChecks": {
+        "RiskAfterRoutingCount": 0,
+        "WrongSectionRiskCount": 0,
+        "MustNotHitRiskCount": 0,
+        "LifecycleRiskCount": 0,
+        "MissingEvidenceCount": 0,
+        "HasRisk": false
+      },
+      "WarningDelta": 1,
+      "ExpectedWarningDelta": 1,
+      "UnexpectedWarningDelta": 0,
+      "WarningKinds": [
+        "AuxiliaryGraphSectionAdded",
+        "ExpectedAuditContextAdded",
+        "ExpectedConflictEvidenceAdded"
+      ],
+      "DisallowedNormalContextInjection": false,
+      "GuardStatus": "Passed"
+    },
+    {
+      "SampleId": "chat-sample-002",
+      "Mode": "ChatMode",
+      "NormalSelectedSetChanged": false,
+      "AuxiliaryGraphSectionChanged": true,
+      "GraphExpansionApplied": true,
+      "GraphExpansionMode": "ApplyGuarded",
+      "GraphExpansionFallbackUsed": false,
+      "GraphExpansionFallbackReason": "",
+      "GraphExpansionWarnings": "",
+      "BaselineSelected": [
+        "const:chat-output-lang",
+        "memory:chat-active-plan",
+        "memory:chat-delivery-date",
+        "memory:chat-extra-active-2",
+        "stable:preference-language"
+      ],
+      "ApplySelected": [
+        "const:chat-output-lang",
+        "memory:chat-active-plan",
+        "memory:chat-delivery-date",
+        "memory:chat-extra-active-2",
+        "stable:preference-language"
+      ],
+      "AddedGraphItems": [
+        "memory:chat-old-topic"
+      ],
+      "TargetSections": [
+        "audit_context",
+        "conflict_evidence"
+      ],
+      "AddedAuditContextItems": 1,
+      "AddedConflictEvidenceItems": 1,
+      "RiskChecks": {
+        "RiskAfterRoutingCount": 0,
+        "WrongSectionRiskCount": 0,
+        "MustNotHitRiskCount": 0,
+        "LifecycleRiskCount": 0,
+        "MissingEvidenceCount": 0,
+        "HasRisk": false
+      },
+      "WarningDelta": 0,
+      "ExpectedWarningDelta": 0,
+      "UnexpectedWarningDelta": 0,
+      "WarningKinds": [
+        "AuxiliaryGraphSectionAdded",
+        "ExpectedAuditContextAdded",
+        "ExpectedConflictEvidenceAdded"
+      ],
+      "DisallowedNormalContextInjection": false,
+      "GuardStatus": "Passed"
+    },
+    {
+      "SampleId": "chat-sample-003",
+      "Mode": "ChatMode",
+      "NormalSelectedSetChanged": false,
+      "AuxiliaryGraphSectionChanged": true,
+      "GraphExpansionApplied": true,
+      "GraphExpansionMode": "ApplyGuarded",
+      "GraphExpansionFallbackUsed": false,
+      "GraphExpansionFallbackReason": "",
+      "GraphExpansionWarnings": "",
+      "BaselineSelected": [
+        "const:chat-output-lang",
+        "memory:chat-active-plan",
+        "stable:preference-language",
+        "memory:chat-extra-active-2",
+        "memory:chat-delivery-date",
+        "memory:chat-drink-preference-v2",
+        "memory:chat-extra-active-1",
+        "ctx:chat-system-intro",
+        "memory:chat-budget-stress"
+      ],
+      "ApplySelected": [
+        "const:chat-output-lang",
+        "memory:chat-active-plan",
+        "stable:preference-language",
+        "memory:chat-extra-active-2",
+        "memory:chat-delivery-date",
+        "memory:chat-drink-preference-v2",
+        "memory:chat-extra-active-1",
+        "ctx:chat-system-intro",
+        "memory:chat-budget-stress"
+      ],
+      "AddedGraphItems": [
+        "memory:chat-drink-preference-v1",
+        "memory:chat-old-topic"
+      ],
+      "TargetSections": [
+        "audit_context",
+        "conflict_evidence"
+      ],
+      "AddedAuditContextItems": 2,
+      "AddedConflictEvidenceItems": 2,
+      "RiskChecks": {
+        "RiskAfterRoutingCount": 0,
+        "WrongSectionRiskCount": 0,
+        "MustNotHitRiskCount": 0,
+        "LifecycleRiskCount": 0,
+        "MissingEvidenceCount": 0,
+        "HasRisk": false
+      },
+      "WarningDelta": 0,
+      "ExpectedWarningDelta": 0,
+      "UnexpectedWarningDelta": 0,
+      "WarningKinds": [
+        "AuxiliaryGraphSectionAdded",
+        "ExpectedAuditContextAdded",
+        "ExpectedConflictEvidenceAdded"
+      ],
+      "DisallowedNormalContextInjection": false,
+      "GuardStatus": "Passed"
+    },
+    {
+      "SampleId": "chat-sample-004",
+      "Mode": "ChatMode",
+      "NormalSelectedSetChanged": false,
+      "AuxiliaryGraphSectionChanged": true,
+      "GraphExpansionApplied": true,
+      "GraphExpansionMode": "ApplyGuarded",
+      "GraphExpansionFallbackUsed": false,
+      "GraphExpansionFallbackReason": "",
+      "GraphExpansionWarnings": "",
+      "BaselineSelected": [
+        "const:chat-output-lang",
+        "memory:chat-version-conflict-v2",
+        "memory:chat-active-plan",
+        "memory:chat-drink-preference-v2",
+        "memory:chat-extra-active-1",
+        "memory:chat-extra-active-2",
+        "stable:preference-language",
+        "ctx:chat-system-intro",
+        "memory:chat-budget-stress"
+      ],
+      "ApplySelected": [
+        "const:chat-output-lang",
+        "memory:chat-version-conflict-v2",
+        "memory:chat-active-plan",
+        "memory:chat-drink-preference-v2",
+        "memory:chat-extra-active-1",
+        "memory:chat-extra-active-2",
+        "stable:preference-language",
+        "ctx:chat-system-intro",
+        "memory:chat-budget-stress"
+      ],
+      "AddedGraphItems": [
+        "memory:chat-drink-preference-v1",
+        "memory:chat-old-topic",
+        "memory:chat-version-conflict-v1"
+      ],
+      "TargetSections": [
+        "audit_context",
+        "conflict_evidence"
+      ],
+      "AddedAuditContextItems": 3,
+      "AddedConflictEvidenceItems": 3,
+      "RiskChecks": {
+        "RiskAfterRoutingCount": 0,
+        "WrongSectionRiskCount": 0,
+        "MustNotHitRiskCount": 0,
+        "LifecycleRiskCount": 0,
+        "MissingEvidenceCount": 0,
+        "HasRisk": false
+      },
+      "WarningDelta": 1,
+      "ExpectedWarningDelta": 1,
+      "UnexpectedWarningDelta": 0,
+      "WarningKinds": [
+        "AuxiliaryGraphSectionAdded",
+        "ExpectedAuditContextAdded",
+        "ExpectedConflictEvidenceAdded"
+      ],
+      "DisallowedNormalContextInjection": false,
+      "GuardStatus": "Passed"
+    },
+    {
+      "SampleId": "chat-sample-005",
+      "Mode": "ChatMode",
+      "NormalSelectedSetChanged": false,
+      "AuxiliaryGraphSectionChanged": true,
+      "GraphExpansionApplied": true,
+      "GraphExpansionMode": "ApplyGuarded",
+      "GraphExpansionFallbackUsed": false,
+      "GraphExpansionFallbackReason": "",
+      "GraphExpansionWarnings": "",
+      "BaselineSelected": [
+        "const:chat-output-lang",
+        "memory:chat-active-plan",
+        "stable:preference-language"
+      ],
+      "ApplySelected": [
+        "const:chat-output-lang",
+        "memory:chat-active-plan",
+        "stable:preference-language"
+      ],
+      "AddedGraphItems": [
+        "memory:chat-old-topic"
+      ],
+      "TargetSections": [
+        "audit_context",
+        "conflict_evidence"
+      ],
+      "AddedAuditContextItems": 1,
+      "AddedConflictEvidenceItems": 1,
+      "RiskChecks": {
+        "RiskAfterRoutingCount": 0,
+        "WrongSectionRiskCount": 0,
+        "MustNotHitRiskCount": 0,
+        "LifecycleRiskCount": 0,
+        "MissingEvidenceCount": 0,
+        "HasRisk": false
+      },
+      "WarningDelta": 0,
+      "ExpectedWarningDelta": 0,
+      "UnexpectedWarningDelta": 0,
+      "WarningKinds": [
+        "AuxiliaryGraphSectionAdded",
+        "ExpectedAuditContextAdded",
+        "ExpectedConflictEvidenceAdded"
+      ],
+      "DisallowedNormalContextInjection": false,
+      "GuardStatus": "Passed"
+    },
+    {
+      "SampleId": "chat-sample-006",
+      "Mode": "ChatMode",
+      "NormalSelectedSetChanged": false,
+      "AuxiliaryGraphSectionChanged": true,
+      "GraphExpansionApplied": true,
+      "GraphExpansionMode": "ApplyGuarded",
+      "GraphExpansionFallbackUsed": false,
+      "GraphExpansionFallbackReason": "",
+      "GraphExpansionWarnings": "",
+      "BaselineSelected": [
+        "const:chat-output-lang",
+        "memory:chat-extra-active-1",
+        "memory:chat-drink-preference-v2",
+        "memory:chat-extra-active-2",
+        "stable:preference-language",
+        "memory:chat-active-plan",
+        "ctx:chat-system-intro",
+        "memory:chat-version-conflict-v2",
+        "memory:chat-budget-stress"
+      ],
+      "ApplySelected": [
+        "const:chat-output-lang",
+        "memory:chat-extra-active-1",
+        "memory:chat-drink-preference-v2",
+        "memory:chat-extra-active-2",
+        "stable:preference-language",
+        "memory:chat-active-plan",
+        "ctx:chat-system-intro",
+        "memory:chat-version-conflict-v2",
+        "memory:chat-budget-stress"
+      ],
+      "AddedGraphItems": [
+        "memory:chat-drink-preference-v1",
+        "memory:chat-old-topic",
+        "memory:chat-version-conflict-v1"
+      ],
+      "TargetSections": [
+        "audit_context",
+        "conflict_evidence"
+      ],
+      "AddedAuditContextItems": 3,
+      "AddedConflictEvidenceItems": 3,
+      "RiskChecks": {
+        "RiskAfterRoutingCount": 0,
+        "WrongSectionRiskCount": 0,
+        "MustNotHitRiskCount": 0,
+        "LifecycleRiskCount": 0,
+        "MissingEvidenceCount": 0,
+        "HasRisk": false
+      },
+      "WarningDelta": 1,
+      "ExpectedWarningDelta": 1,
+      "UnexpectedWarningDelta": 0,
+      "WarningKinds": [
+        "AuxiliaryGraphSectionAdded",
+        "ExpectedAuditContextAdded",
+        "ExpectedConflictEvidenceAdded"
+      ],
+      "DisallowedNormalContextInjection": false,
+      "GuardStatus": "Passed"
+    },
+    {
+      "SampleId": "chat-sample-007",
+      "Mode": "ChatMode",
+      "NormalSelectedSetChanged": false,
+      "AuxiliaryGraphSectionChanged": true,
+      "GraphExpansionApplied": true,
+      "GraphExpansionMode": "ApplyGuarded",
+      "GraphExpansionFallbackUsed": false,
+      "GraphExpansionFallbackReason": "",
+      "GraphExpansionWarnings": "",
+      "BaselineSelected": [
+        "const:chat-output-lang",
+        "memory:chat-extra-active-2",
+        "memory:chat-extra-active-1",
+        "memory:chat-delivery-date",
+        "stable:preference-language",
+        "memory:chat-active-plan"
+      ],
+      "ApplySelected": [
+        "const:chat-output-lang",
+        "memory:chat-extra-active-2",
+        "memory:chat-extra-active-1",
+        "memory:chat-delivery-date",
+        "stable:preference-language",
+        "memory:chat-active-plan"
+      ],
+      "AddedGraphItems": [
+        "memory:chat-old-topic"
+      ],
+      "TargetSections": [
+        "audit_context",
+        "conflict_evidence"
+      ],
+      "AddedAuditContextItems": 1,
+      "AddedConflictEvidenceItems": 1,
+      "RiskChecks": {
+        "RiskAfterRoutingCount": 0,
+        "WrongSectionRiskCount": 0,
+        "MustNotHitRiskCount": 0,
+        "LifecycleRiskCount": 0,
+        "MissingEvidenceCount": 0,
+        "HasRisk": false
+      },
+      "WarningDelta": 0,
+      "ExpectedWarningDelta": 0,
+      "UnexpectedWarningDelta": 0,
+      "WarningKinds": [
+        "AuxiliaryGraphSectionAdded",
+        "ExpectedAuditContextAdded",
+        "ExpectedConflictEvidenceAdded"
+      ],
+      "DisallowedNormalContextInjection": false,
+      "GuardStatus": "Passed"
+    },
+    {
+      "SampleId": "chat-sample-008",
+      "Mode": "ChatMode",
+      "NormalSelectedSetChanged": false,
+      "AuxiliaryGraphSectionChanged": true,
+      "GraphExpansionApplied": true,
+      "GraphExpansionMode": "ApplyGuarded",
+      "GraphExpansionFallbackUsed": false,
+      "GraphExpansionFallbackReason": "",
+      "GraphExpansionWarnings": "",
+      "BaselineSelected": [
+        "const:chat-output-lang",
+        "memory:chat-drink-preference-v2",
+        "memory:chat-extra-active-1",
+        "memory:chat-extra-active-2",
+        "stable:preference-language",
+        "memory:chat-active-plan",
+        "memory:chat-version-conflict-v2",
+        "ctx:chat-system-intro",
+        "memory:chat-budget-stress"
+      ],
+      "ApplySelected": [
+        "const:chat-output-lang",
+        "memory:chat-drink-preference-v2",
+        "memory:chat-extra-active-1",
+        "memory:chat-extra-active-2",
+        "stable:preference-language",
+        "memory:chat-active-plan",
+        "memory:chat-version-conflict-v2",
+        "ctx:chat-system-intro",
+        "memory:chat-budget-stress"
+      ],
+      "AddedGraphItems": [
+        "memory:chat-drink-preference-v1",
+        "memory:chat-old-topic",
+        "memory:chat-version-conflict-v1"
+      ],
+      "TargetSections": [
+        "audit_context",
+        "conflict_evidence"
+      ],
+      "AddedAuditContextItems": 3,
+      "AddedConflictEvidenceItems": 3,
+      "RiskChecks": {
+        "RiskAfterRoutingCount": 0,
+        "WrongSectionRiskCount": 0,
+        "MustNotHitRiskCount": 0,
+        "LifecycleRiskCount": 0,
+        "MissingEvidenceCount": 0,
+        "HasRisk": false
+      },
+      "WarningDelta": 1,
+      "ExpectedWarningDelta": 1,
+      "UnexpectedWarningDelta": 0,
+      "WarningKinds": [
+        "AuxiliaryGraphSectionAdded",
+        "ExpectedAuditContextAdded",
+        "ExpectedConflictEvidenceAdded"
+      ],
+      "DisallowedNormalContextInjection": false,
+      "GuardStatus": "Passed"
+    },
+    {
+      "SampleId": "chat-sample-009",
+      "Mode": "ChatMode",
+      "NormalSelectedSetChanged": false,
+      "AuxiliaryGraphSectionChanged": false,
+      "GraphExpansionApplied": false,
+      "GraphExpansionMode": "ApplyGuarded",
+      "GraphExpansionFallbackUsed": false,
+      "GraphExpansionFallbackReason": "",
+      "GraphExpansionWarnings": "",
+      "BaselineSelected": [
+        "const:chat-output-lang",
+        "memory:chat-deprecated-draft",
+        "memory:chat-old-topic",
+        "memory:chat-noise-keyword-1",
+        "stable:preference-language"
+      ],
+      "ApplySelected": [
+        "const:chat-output-lang",
+        "memory:chat-deprecated-draft",
+        "memory:chat-old-topic",
+        "memory:chat-noise-keyword-1",
+        "stable:preference-language"
+      ],
+      "AddedGraphItems": [],
+      "TargetSections": [],
+      "AddedAuditContextItems": 0,
+      "AddedConflictEvidenceItems": 0,
+      "RiskChecks": {
+        "RiskAfterRoutingCount": 0,
+        "WrongSectionRiskCount": 0,
+        "MustNotHitRiskCount": 0,
+        "LifecycleRiskCount": 0,
+        "MissingEvidenceCount": 0,
+        "HasRisk": false
+      },
+      "WarningDelta": 0,
+      "ExpectedWarningDelta": 0,
+      "UnexpectedWarningDelta": 0,
+      "WarningKinds": [],
+      "DisallowedNormalContextInjection": false,
+      "GuardStatus": "Passed"
+    },
+    {
+      "SampleId": "chat-sample-010",
+      "Mode": "ChatMode",
+      "NormalSelectedSetChanged": false,
+      "AuxiliaryGraphSectionChanged": true,
+      "GraphExpansionApplied": true,
+      "GraphExpansionMode": "ApplyGuarded",
+      "GraphExpansionFallbackUsed": false,
+      "GraphExpansionFallbackReason": "",
+      "GraphExpansionWarnings": "",
+      "BaselineSelected": [
+        "const:chat-output-lang",
+        "memory:chat-delivery-date",
+        "memory:chat-active-plan",
+        "memory:chat-extra-active-2",
+        "stable:preference-language"
+      ],
+      "ApplySelected": [
+        "const:chat-output-lang",
+        "memory:chat-delivery-date",
+        "memory:chat-active-plan",
+        "memory:chat-extra-active-2",
+        "stable:preference-language"
+      ],
+      "AddedGraphItems": [
+        "memory:chat-old-topic"
+      ],
+      "TargetSections": [
+        "audit_context",
+        "conflict_evidence"
+      ],
+      "AddedAuditContextItems": 1,
+      "AddedConflictEvidenceItems": 1,
+      "RiskChecks": {
+        "RiskAfterRoutingCount": 0,
+        "WrongSectionRiskCount": 0,
+        "MustNotHitRiskCount": 0,
+        "LifecycleRiskCount": 0,
+        "MissingEvidenceCount": 0,
+        "HasRisk": false
+      },
+      "WarningDelta": 0,
+      "ExpectedWarningDelta": 0,
+      "UnexpectedWarningDelta": 0,
+      "WarningKinds": [
+        "AuxiliaryGraphSectionAdded",
+        "ExpectedAuditContextAdded",
+        "ExpectedConflictEvidenceAdded"
+      ],
+      "DisallowedNormalContextInjection": false,
+      "GuardStatus": "Passed"
+    },
+    {
+      "SampleId": "project-sample-001",
+      "Mode": "ProjectMode",
+      "NormalSelectedSetChanged": false,
+      "AuxiliaryGraphSectionChanged": true,
+      "GraphExpansionApplied": true,
+      "GraphExpansionMode": "ApplyGuarded",
+      "GraphExpansionFallbackUsed": false,
+      "GraphExpansionFallbackReason": "",
+      "GraphExpansionWarnings": "",
+      "BaselineSelected": [
+        "const:project-security",
+        "doc:local-alpha-runbook",
+        "doc:postgres-not-ready",
+        "memory:project-required-env",
+        "memory:project-pool-v2",
+        "memory:project-current-step"
+      ],
+      "ApplySelected": [
+        "const:project-security",
+        "doc:local-alpha-runbook",
+        "doc:postgres-not-ready",
+        "memory:project-required-env",
+        "memory:project-pool-v2",
+        "memory:project-current-step"
+      ],
+      "AddedGraphItems": [
+        "memory:project-pool-v1"
+      ],
+      "TargetSections": [
+        "audit_context",
+        "conflict_evidence"
+      ],
+      "AddedAuditContextItems": 1,
+      "AddedConflictEvidenceItems": 1,
+      "RiskChecks": {
+        "RiskAfterRoutingCount": 0,
+        "WrongSectionRiskCount": 0,
+        "MustNotHitRiskCount": 0,
+        "LifecycleRiskCount": 0,
+        "MissingEvidenceCount": 0,
+        "HasRisk": false
+      },
+      "WarningDelta": 0,
+      "ExpectedWarningDelta": 0,
+      "UnexpectedWarningDelta": 0,
+      "WarningKinds": [
+        "AuxiliaryGraphSectionAdded",
+        "ExpectedAuditContextAdded",
+        "ExpectedConflictEvidenceAdded"
+      ],
+      "DisallowedNormalContextInjection": false,
+      "GuardStatus": "Passed"
+    },
+    {
+      "SampleId": "project-sample-002",
+      "Mode": "ProjectMode",
+      "NormalSelectedSetChanged": false,
+      "AuxiliaryGraphSectionChanged": true,
+      "GraphExpansionApplied": true,
+      "GraphExpansionMode": "ApplyGuarded",
+      "GraphExpansionFallbackUsed": false,
+      "GraphExpansionFallbackReason": "",
+      "GraphExpansionWarnings": "",
+      "BaselineSelected": [
+        "const:project-security",
+        "doc:postgres-not-ready",
+        "doc:local-alpha-runbook",
+        "memory:project-pool-v2",
+        "memory:project-required-env",
+        "memory:project-current-step"
+      ],
+      "ApplySelected": [
+        "const:project-security",
+        "doc:postgres-not-ready",
+        "doc:local-alpha-runbook",
+        "memory:project-pool-v2",
+        "memory:project-required-env",
+        "memory:project-current-step"
+      ],
+      "AddedGraphItems": [
+        "memory:project-pool-v1"
+      ],
+      "TargetSections": [
+        "audit_context",
+        "conflict_evidence"
+      ],
+      "AddedAuditContextItems": 1,
+      "AddedConflictEvidenceItems": 1,
+      "RiskChecks": {
+        "RiskAfterRoutingCount": 0,
+        "WrongSectionRiskCount": 0,
+        "MustNotHitRiskCount": 0,
+        "LifecycleRiskCount": 0,
+        "MissingEvidenceCount": 0,
+        "HasRisk": false
+      },
+      "WarningDelta": 0,
+      "ExpectedWarningDelta": 0,
+      "UnexpectedWarningDelta": 0,
+      "WarningKinds": [
+        "AuxiliaryGraphSectionAdded",
+        "ExpectedAuditContextAdded",
+        "ExpectedConflictEvidenceAdded"
+      ],
+      "DisallowedNormalContextInjection": false,
+      "GuardStatus": "Passed"
+    },
+    {
+      "SampleId": "project-sample-003",
+      "Mode": "ProjectMode",
+      "NormalSelectedSetChanged": false,
+      "AuxiliaryGraphSectionChanged": true,
+      "GraphExpansionApplied": true,
+      "GraphExpansionMode": "ApplyGuarded",
+      "GraphExpansionFallbackUsed": false,
+      "GraphExpansionFallbackReason": "",
+      "GraphExpansionWarnings": "",
+      "BaselineSelected": [
+        "const:project-security",
+        "doc:local-alpha-runbook",
+        "doc:postgres-not-ready",
+        "memory:project-required-env",
+        "memory:project-pool-v2",
+        "memory:project-current-step"
+      ],
+      "ApplySelected": [
+        "const:project-security",
+        "doc:local-alpha-runbook",
+        "doc:postgres-not-ready",
+        "memory:project-required-env",
+        "memory:project-pool-v2",
+        "memory:project-current-step"
+      ],
+      "AddedGraphItems": [
+        "memory:project-pool-v1"
+      ],
+      "TargetSections": [
+        "audit_context",
+        "conflict_evidence"
+      ],
+      "AddedAuditContextItems": 1,
+      "AddedConflictEvidenceItems": 1,
+      "RiskChecks": {
+        "RiskAfterRoutingCount": 0,
+        "WrongSectionRiskCount": 0,
+        "MustNotHitRiskCount": 0,
+        "LifecycleRiskCount": 0,
+        "MissingEvidenceCount": 0,
+        "HasRisk": false
+      },
+      "WarningDelta": 0,
+      "ExpectedWarningDelta": 0,
+      "UnexpectedWarningDelta": 0,
+      "WarningKinds": [
+        "AuxiliaryGraphSectionAdded",
+        "ExpectedAuditContextAdded",
+        "ExpectedConflictEvidenceAdded"
+      ],
+      "DisallowedNormalContextInjection": false,
+      "GuardStatus": "Passed"
+    },
+    {
+      "SampleId": "project-sample-004",
+      "Mode": "ProjectMode",
+      "NormalSelectedSetChanged": false,
+      "AuxiliaryGraphSectionChanged": true,
+      "GraphExpansionApplied": true,
+      "GraphExpansionMode": "ApplyGuarded",
+      "GraphExpansionFallbackUsed": false,
+      "GraphExpansionFallbackReason": "",
+      "GraphExpansionWarnings": "",
+      "BaselineSelected": [
+        "const:project-security",
+        "memory:project-conflict-v2",
+        "memory:project-current-step",
+        "memory:project-extra-active-1",
+        "memory:project-budget-stress"
+      ],
+      "ApplySelected": [
+        "const:project-security",
+        "memory:project-conflict-v2",
+        "memory:project-current-step",
+        "memory:project-extra-active-1",
+        "memory:project-budget-stress"
+      ],
+      "AddedGraphItems": [
+        "memory:project-conflict-v1"
+      ],
+      "TargetSections": [
+        "audit_context",
+        "conflict_evidence"
+      ],
+      "AddedAuditContextItems": 1,
+      "AddedConflictEvidenceItems": 1,
+      "RiskChecks": {
+        "RiskAfterRoutingCount": 0,
+        "WrongSectionRiskCount": 0,
+        "MustNotHitRiskCount": 0,
+        "LifecycleRiskCount": 0,
+        "MissingEvidenceCount": 0,
+        "HasRisk": false
+      },
+      "WarningDelta": 0,
+      "ExpectedWarningDelta": 0,
+      "UnexpectedWarningDelta": 0,
+      "WarningKinds": [
+        "AuxiliaryGraphSectionAdded",
+        "ExpectedAuditContextAdded",
+        "ExpectedConflictEvidenceAdded"
+      ],
+      "DisallowedNormalContextInjection": false,
+      "GuardStatus": "Passed"
+    },
+    {
+      "SampleId": "project-sample-005",
+      "Mode": "ProjectMode",
+      "NormalSelectedSetChanged": false,
+      "AuxiliaryGraphSectionChanged": true,
+      "GraphExpansionApplied": true,
+      "GraphExpansionMode": "ApplyGuarded",
+      "GraphExpansionFallbackUsed": false,
+      "GraphExpansionFallbackReason": "",
+      "GraphExpansionWarnings": "",
+      "BaselineSelected": [
+        "const:project-security",
+        "memory:project-current-step",
+        "memory:project-extra-active-1",
+        "memory:project-required-env",
+        "doc:local-alpha-runbook",
+        "doc:postgres-not-ready",
+        "memory:project-pool-v2",
+        "memory:project-conflict-v2",
+        "memory:project-budget-stress"
+      ],
+      "ApplySelected": [
+        "const:project-security",
+        "memory:project-current-step",
+        "memory:project-extra-active-1",
+        "memory:project-required-env",
+        "doc:local-alpha-runbook",
+        "doc:postgres-not-ready",
+        "memory:project-pool-v2",
+        "memory:project-conflict-v2",
+        "memory:project-budget-stress"
+      ],
+      "AddedGraphItems": [
+        "memory:project-conflict-v1",
+        "memory:project-pool-v1"
+      ],
+      "TargetSections": [
+        "audit_context",
+        "conflict_evidence"
+      ],
+      "AddedAuditContextItems": 2,
+      "AddedConflictEvidenceItems": 2,
+      "RiskChecks": {
+        "RiskAfterRoutingCount": 0,
+        "WrongSectionRiskCount": 0,
+        "MustNotHitRiskCount": 0,
+        "LifecycleRiskCount": 0,
+        "MissingEvidenceCount": 0,
+        "HasRisk": false
+      },
+      "WarningDelta": 0,
+      "ExpectedWarningDelta": 0,
+      "UnexpectedWarningDelta": 0,
+      "WarningKinds": [
+        "AuxiliaryGraphSectionAdded",
+        "ExpectedAuditContextAdded",
+        "ExpectedConflictEvidenceAdded"
+      ],
+      "DisallowedNormalContextInjection": false,
+      "GuardStatus": "Passed"
+    },
+    {
+      "SampleId": "project-sample-006",
+      "Mode": "ProjectMode",
+      "NormalSelectedSetChanged": false,
+      "AuxiliaryGraphSectionChanged": false,
+      "GraphExpansionApplied": false,
+      "GraphExpansionMode": "ApplyGuarded",
+      "GraphExpansionFallbackUsed": false,
+      "GraphExpansionFallbackReason": "",
+      "GraphExpansionWarnings": "",
+      "BaselineSelected": [
+        "const:project-security",
+        "memory:project-extra-active-2",
+        "memory:project-deprecated-gateway",
+        "doc:local-alpha-runbook",
+        "memory:project-required-env"
+      ],
+      "ApplySelected": [
+        "const:project-security",
+        "memory:project-extra-active-2",
+        "memory:project-deprecated-gateway",
+        "doc:local-alpha-runbook",
+        "memory:project-required-env"
+      ],
+      "AddedGraphItems": [],
+      "TargetSections": [],
+      "AddedAuditContextItems": 0,
+      "AddedConflictEvidenceItems": 0,
+      "RiskChecks": {
+        "RiskAfterRoutingCount": 0,
+        "WrongSectionRiskCount": 0,
+        "MustNotHitRiskCount": 0,
+        "LifecycleRiskCount": 0,
+        "MissingEvidenceCount": 0,
+        "HasRisk": false
+      },
+      "WarningDelta": 0,
+      "ExpectedWarningDelta": 0,
+      "UnexpectedWarningDelta": 0,
+      "WarningKinds": [],
+      "DisallowedNormalContextInjection": false,
+      "GuardStatus": "Passed"
+    },
+    {
+      "SampleId": "project-sample-007",
+      "Mode": "ProjectMode",
+      "NormalSelectedSetChanged": false,
+      "AuxiliaryGraphSectionChanged": true,
+      "GraphExpansionApplied": true,
+      "GraphExpansionMode": "ApplyGuarded",
+      "GraphExpansionFallbackUsed": false,
+      "GraphExpansionFallbackReason": "",
+      "GraphExpansionWarnings": "",
+      "BaselineSelected": [
+        "const:project-security",
+        "memory:project-current-step",
+        "memory:project-conflict-v2",
+        "memory:project-extra-active-1"
+      ],
+      "ApplySelected": [
+        "const:project-security",
+        "memory:project-current-step",
+        "memory:project-conflict-v2",
+        "memory:project-extra-active-1"
+      ],
+      "AddedGraphItems": [
+        "memory:project-conflict-v1"
+      ],
+      "TargetSections": [
+        "audit_context",
+        "conflict_evidence"
+      ],
+      "AddedAuditContextItems": 1,
+      "AddedConflictEvidenceItems": 1,
+      "RiskChecks": {
+        "RiskAfterRoutingCount": 0,
+        "WrongSectionRiskCount": 0,
+        "MustNotHitRiskCount": 0,
+        "LifecycleRiskCount": 0,
+        "MissingEvidenceCount": 0,
+        "HasRisk": false
+      },
+      "WarningDelta": 0,
+      "ExpectedWarningDelta": 0,
+      "UnexpectedWarningDelta": 0,
+      "WarningKinds": [
+        "AuxiliaryGraphSectionAdded",
+        "ExpectedAuditContextAdded",
+        "ExpectedConflictEvidenceAdded"
+      ],
+      "DisallowedNormalContextInjection": false,
+      "GuardStatus": "Passed"
+    },
+    {
+      "SampleId": "project-sample-008",
+      "Mode": "ProjectMode",
+      "NormalSelectedSetChanged": false,
+      "AuxiliaryGraphSectionChanged": true,
+      "GraphExpansionApplied": true,
+      "GraphExpansionMode": "ApplyGuarded",
+      "GraphExpansionFallbackUsed": false,
+      "GraphExpansionFallbackReason": "",
+      "GraphExpansionWarnings": "",
+      "BaselineSelected": [
+        "const:project-security",
+        "memory:project-pool-v2",
+        "doc:postgres-not-ready",
+        "memory:project-required-env",
+        "doc:local-alpha-runbook",
+        "memory:project-current-step",
+        "memory:project-conflict-v2",
+        "memory:project-extra-active-1",
+        "memory:project-budget-stress"
+      ],
+      "ApplySelected": [
+        "const:project-security",
+        "memory:project-pool-v2",
+        "doc:postgres-not-ready",
+        "memory:project-required-env",
+        "doc:local-alpha-runbook",
+        "memory:project-current-step",
+        "memory:project-conflict-v2",
+        "memory:project-extra-active-1",
+        "memory:project-budget-stress"
+      ],
+      "AddedGraphItems": [
+        "memory:project-conflict-v1",
+        "memory:project-pool-v1"
+      ],
+      "TargetSections": [
+        "audit_context",
+        "conflict_evidence"
+      ],
+      "AddedAuditContextItems": 2,
+      "AddedConflictEvidenceItems": 2,
+      "RiskChecks": {
+        "RiskAfterRoutingCount": 0,
+        "WrongSectionRiskCount": 0,
+        "MustNotHitRiskCount": 0,
+        "LifecycleRiskCount": 0,
+        "MissingEvidenceCount": 0,
+        "HasRisk": false
+      },
+      "WarningDelta": 0,
+      "ExpectedWarningDelta": 0,
+      "UnexpectedWarningDelta": 0,
+      "WarningKinds": [
+        "AuxiliaryGraphSectionAdded",
+        "ExpectedAuditContextAdded",
+        "ExpectedConflictEvidenceAdded"
+      ],
+      "DisallowedNormalContextInjection": false,
+      "GuardStatus": "Passed"
+    },
+    {
+      "SampleId": "project-sample-009",
+      "Mode": "ProjectMode",
+      "NormalSelectedSetChanged": false,
+      "AuxiliaryGraphSectionChanged": false,
+      "GraphExpansionApplied": false,
+      "GraphExpansionMode": "ApplyGuarded",
+      "GraphExpansionFallbackUsed": false,
+      "GraphExpansionFallbackReason": "",
+      "GraphExpansionWarnings": "",
+      "BaselineSelected": [
+        "const:project-security",
+        "memory:project-deprecated-gateway"
+      ],
+      "ApplySelected": [
+        "const:project-security",
+        "memory:project-deprecated-gateway"
+      ],
+      "AddedGraphItems": [],
+      "TargetSections": [],
+      "AddedAuditContextItems": 0,
+      "AddedConflictEvidenceItems": 0,
+      "RiskChecks": {
+        "RiskAfterRoutingCount": 0,
+        "WrongSectionRiskCount": 0,
+        "MustNotHitRiskCount": 0,
+        "LifecycleRiskCount": 0,
+        "MissingEvidenceCount": 0,
+        "HasRisk": false
+      },
+      "WarningDelta": 0,
+      "ExpectedWarningDelta": 0,
+      "UnexpectedWarningDelta": 0,
+      "WarningKinds": [],
+      "DisallowedNormalContextInjection": false,
+      "GuardStatus": "Passed"
+    },
+    {
+      "SampleId": "project-sample-010",
+      "Mode": "ProjectMode",
+      "NormalSelectedSetChanged": false,
+      "AuxiliaryGraphSectionChanged": false,
+      "GraphExpansionApplied": false,
+      "GraphExpansionMode": "ApplyGuarded",
+      "GraphExpansionFallbackUsed": false,
+      "GraphExpansionFallbackReason": "",
+      "GraphExpansionWarnings": "",
+      "BaselineSelected": [
+        "const:project-security",
+        "doc:local-alpha-runbook",
+        "memory:project-required-env",
+        "memory:project-extra-active-2",
+        "memory:project-current-step"
+      ],
+      "ApplySelected": [
+        "const:project-security",
+        "doc:local-alpha-runbook",
+        "memory:project-required-env",
+        "memory:project-extra-active-2",
+        "memory:project-current-step"
+      ],
+      "AddedGraphItems": [],
+      "TargetSections": [],
+      "AddedAuditContextItems": 0,
+      "AddedConflictEvidenceItems": 0,
+      "RiskChecks": {
+        "RiskAfterRoutingCount": 0,
+        "WrongSectionRiskCount": 0,
+        "MustNotHitRiskCount": 0,
+        "LifecycleRiskCount": 0,
+        "MissingEvidenceCount": 0,
+        "HasRisk": false
+      },
+      "WarningDelta": 0,
+      "ExpectedWarningDelta": 0,
+      "UnexpectedWarningDelta": 0,
+      "WarningKinds": [],
+      "DisallowedNormalContextInjection": false,
+      "GuardStatus": "Passed"
+    },
+    {
+      "SampleId": "novel-sample-001",
+      "Mode": "NovelMode",
+      "NormalSelectedSetChanged": false,
+      "AuxiliaryGraphSectionChanged": true,
+      "GraphExpansionApplied": true,
+      "GraphExpansionMode": "ApplyGuarded",
+      "GraphExpansionFallbackUsed": false,
+      "GraphExpansionFallbackReason": "",
+      "GraphExpansionWarnings": "",
+      "BaselineSelected": [
+        "const:novel-rules",
+        "memory:novel-current-plot",
+        "novel:character-linfeng",
+        "novel:world-cangqiong",
+        "memory:novel-family-background",
+        "memory:novel-extra-active-2",
+        "memory:novel-conflict-v2",
+        "memory:novel-extra-active-1",
+        "memory:novel-weapon-v2",
+        "memory:novel-budget-stress"
+      ],
+      "ApplySelected": [
+        "const:novel-rules",
+        "memory:novel-current-plot",
+        "novel:character-linfeng",
+        "novel:world-cangqiong",
+        "memory:novel-family-background",
+        "memory:novel-extra-active-2",
+        "memory:novel-conflict-v2",
+        "memory:novel-extra-active-1",
+        "memory:novel-weapon-v2",
+        "memory:novel-budget-stress"
+      ],
+      "AddedGraphItems": [
+        "memory:novel-conflict-v1",
+        "memory:novel-plot-old-draft",
+        "memory:novel-weapon-v1"
+      ],
+      "TargetSections": [
+        "audit_context",
+        "conflict_evidence"
+      ],
+      "AddedAuditContextItems": 3,
+      "AddedConflictEvidenceItems": 3,
+      "RiskChecks": {
+        "RiskAfterRoutingCount": 0,
+        "WrongSectionRiskCount": 0,
+        "MustNotHitRiskCount": 0,
+        "LifecycleRiskCount": 0,
+        "MissingEvidenceCount": 0,
+        "HasRisk": false
+      },
+      "WarningDelta": 0,
+      "ExpectedWarningDelta": 0,
+      "UnexpectedWarningDelta": 0,
+      "WarningKinds": [
+        "AuxiliaryGraphSectionAdded",
+        "ExpectedAuditContextAdded",
+        "ExpectedConflictEvidenceAdded"
+      ],
+      "DisallowedNormalContextInjection": false,
+      "GuardStatus": "Passed"
+    },
+    {
+      "SampleId": "novel-sample-002",
+      "Mode": "NovelMode",
+      "NormalSelectedSetChanged": false,
+      "AuxiliaryGraphSectionChanged": true,
+      "GraphExpansionApplied": true,
+      "GraphExpansionMode": "ApplyGuarded",
+      "GraphExpansionFallbackUsed": false,
+      "GraphExpansionFallbackReason": "",
+      "GraphExpansionWarnings": "",
+      "BaselineSelected": [
+        "const:novel-rules",
+        "memory:novel-plot-old-draft",
+        "novel:character-linfeng",
+        "memory:novel-weapon-v1",
+        "memory:novel-current-plot",
+        "memory:novel-conflict-v1",
+        "memory:novel-plot-deprecated-villain"
+      ],
+      "ApplySelected": [
+        "const:novel-rules",
+        "memory:novel-plot-old-draft",
+        "novel:character-linfeng",
+        "memory:novel-weapon-v1",
+        "memory:novel-current-plot",
+        "memory:novel-conflict-v1",
+        "memory:novel-plot-deprecated-villain"
+      ],
+      "AddedGraphItems": [
+        "memory:novel-plot-old-draft"
+      ],
+      "TargetSections": [
+        "audit_context",
+        "conflict_evidence"
+      ],
+      "AddedAuditContextItems": 1,
+      "AddedConflictEvidenceItems": 1,
+      "RiskChecks": {
+        "RiskAfterRoutingCount": 0,
+        "WrongSectionRiskCount": 0,
+        "MustNotHitRiskCount": 0,
+        "LifecycleRiskCount": 0,
+        "MissingEvidenceCount": 0,
+        "HasRisk": false
+      },
+      "WarningDelta": 0,
+      "ExpectedWarningDelta": 0,
+      "UnexpectedWarningDelta": 0,
+      "WarningKinds": [
+        "AuxiliaryGraphSectionAdded",
+        "ExpectedAuditContextAdded",
+        "ExpectedConflictEvidenceAdded"
+      ],
+      "DisallowedNormalContextInjection": false,
+      "GuardStatus": "Passed"
+    },
+    {
+      "SampleId": "novel-sample-003",
+      "Mode": "NovelMode",
+      "NormalSelectedSetChanged": false,
+      "AuxiliaryGraphSectionChanged": true,
+      "GraphExpansionApplied": true,
+      "GraphExpansionMode": "ApplyGuarded",
+      "GraphExpansionFallbackUsed": false,
+      "GraphExpansionFallbackReason": "",
+      "GraphExpansionWarnings": "",
+      "BaselineSelected": [
+        "const:novel-rules",
+        "memory:novel-current-plot",
+        "memory:novel-plot-old-draft",
+        "novel:world-cangqiong",
+        "memory:novel-weapon-v1",
+        "memory:novel-family-background",
+        "memory:novel-extra-active-2",
+        "novel:character-linfeng",
+        "memory:novel-conflict-v1",
+        "memory:novel-plot-deprecated-villain",
+        "memory:novel-budget-stress"
+      ],
+      "ApplySelected": [
+        "const:novel-rules",
+        "memory:novel-current-plot",
+        "memory:novel-plot-old-draft",
+        "novel:world-cangqiong",
+        "memory:novel-weapon-v1",
+        "memory:novel-family-background",
+        "memory:novel-extra-active-2",
+        "novel:character-linfeng",
+        "memory:novel-conflict-v1",
+        "memory:novel-plot-deprecated-villain",
+        "memory:novel-budget-stress"
+      ],
+      "AddedGraphItems": [
+        "memory:novel-plot-old-draft"
+      ],
+      "TargetSections": [
+        "audit_context",
+        "conflict_evidence"
+      ],
+      "AddedAuditContextItems": 1,
+      "AddedConflictEvidenceItems": 1,
+      "RiskChecks": {
+        "RiskAfterRoutingCount": 0,
+        "WrongSectionRiskCount": 0,
+        "MustNotHitRiskCount": 0,
+        "LifecycleRiskCount": 0,
+        "MissingEvidenceCount": 0,
+        "HasRisk": false
+      },
+      "WarningDelta": 0,
+      "ExpectedWarningDelta": 0,
+      "UnexpectedWarningDelta": 0,
+      "WarningKinds": [
+        "AuxiliaryGraphSectionAdded",
+        "ExpectedAuditContextAdded",
+        "ExpectedConflictEvidenceAdded"
+      ],
+      "DisallowedNormalContextInjection": false,
+      "GuardStatus": "Passed"
+    },
+    {
+      "SampleId": "novel-sample-004",
+      "Mode": "NovelMode",
+      "NormalSelectedSetChanged": false,
+      "AuxiliaryGraphSectionChanged": true,
+      "GraphExpansionApplied": true,
+      "GraphExpansionMode": "ApplyGuarded",
+      "GraphExpansionFallbackUsed": false,
+      "GraphExpansionFallbackReason": "",
+      "GraphExpansionWarnings": "",
+      "BaselineSelected": [
+        "const:novel-rules",
+        "memory:novel-conflict-v2",
+        "novel:world-cangqiong",
+        "novel:character-linfeng",
+        "memory:novel-extra-active-1",
+        "memory:novel-family-background",
+        "memory:novel-weapon-v2",
+        "memory:novel-current-plot"
+      ],
+      "ApplySelected": [
+        "const:novel-rules",
+        "memory:novel-conflict-v2",
+        "novel:world-cangqiong",
+        "novel:character-linfeng",
+        "memory:novel-extra-active-1",
+        "memory:novel-family-background",
+        "memory:novel-weapon-v2",
+        "memory:novel-current-plot"
+      ],
+      "AddedGraphItems": [
+        "memory:novel-conflict-v1",
+        "memory:novel-plot-old-draft",
+        "memory:novel-weapon-v1"
+      ],
+      "TargetSections": [
+        "audit_context",
+        "conflict_evidence"
+      ],
+      "AddedAuditContextItems": 3,
+      "AddedConflictEvidenceItems": 3,
+      "RiskChecks": {
+        "RiskAfterRoutingCount": 0,
+        "WrongSectionRiskCount": 0,
+        "MustNotHitRiskCount": 0,
+        "LifecycleRiskCount": 0,
+        "MissingEvidenceCount": 0,
+        "HasRisk": false
+      },
+      "WarningDelta": 1,
+      "ExpectedWarningDelta": 1,
+      "UnexpectedWarningDelta": 0,
+      "WarningKinds": [
+        "AuxiliaryGraphSectionAdded",
+        "ExpectedAuditContextAdded",
+        "ExpectedConflictEvidenceAdded"
+      ],
+      "DisallowedNormalContextInjection": false,
+      "GuardStatus": "Passed"
+    },
+    {
+      "SampleId": "novel-sample-005",
+      "Mode": "NovelMode",
+      "NormalSelectedSetChanged": false,
+      "AuxiliaryGraphSectionChanged": true,
+      "GraphExpansionApplied": true,
+      "GraphExpansionMode": "ApplyGuarded",
+      "GraphExpansionFallbackUsed": false,
+      "GraphExpansionFallbackReason": "",
+      "GraphExpansionWarnings": "",
+      "BaselineSelected": [
+        "const:novel-rules",
+        "memory:novel-extra-active-1",
+        "novel:character-linfeng",
+        "novel:world-cangqiong",
+        "memory:novel-conflict-v2",
+        "memory:novel-current-plot",
+        "memory:novel-family-background",
+        "memory:novel-weapon-v2"
+      ],
+      "ApplySelected": [
+        "const:novel-rules",
+        "memory:novel-extra-active-1",
+        "novel:character-linfeng",
+        "novel:world-cangqiong",
+        "memory:novel-conflict-v2",
+        "memory:novel-current-plot",
+        "memory:novel-family-background",
+        "memory:novel-weapon-v2"
+      ],
+      "AddedGraphItems": [
+        "memory:novel-conflict-v1",
+        "memory:novel-plot-old-draft",
+        "memory:novel-weapon-v1"
+      ],
+      "TargetSections": [
+        "audit_context",
+        "conflict_evidence"
+      ],
+      "AddedAuditContextItems": 3,
+      "AddedConflictEvidenceItems": 3,
+      "RiskChecks": {
+        "RiskAfterRoutingCount": 0,
+        "WrongSectionRiskCount": 0,
+        "MustNotHitRiskCount": 0,
+        "LifecycleRiskCount": 0,
+        "MissingEvidenceCount": 0,
+        "HasRisk": false
+      },
+      "WarningDelta": 1,
+      "ExpectedWarningDelta": 1,
+      "UnexpectedWarningDelta": 0,
+      "WarningKinds": [
+        "AuxiliaryGraphSectionAdded",
+        "ExpectedAuditContextAdded",
+        "ExpectedConflictEvidenceAdded"
+      ],
+      "DisallowedNormalContextInjection": false,
+      "GuardStatus": "Passed"
+    },
+    {
+      "SampleId": "novel-sample-006",
+      "Mode": "NovelMode",
+      "NormalSelectedSetChanged": false,
+      "AuxiliaryGraphSectionChanged": true,
+      "GraphExpansionApplied": true,
+      "GraphExpansionMode": "ApplyGuarded",
+      "GraphExpansionFallbackUsed": false,
+      "GraphExpansionFallbackReason": "",
+      "GraphExpansionWarnings": "",
+      "BaselineSelected": [
+        "const:novel-rules",
+        "memory:novel-extra-active-2",
+        "memory:novel-current-plot"
+      ],
+      "ApplySelected": [
+        "const:novel-rules",
+        "memory:novel-extra-active-2",
+        "memory:novel-current-plot"
+      ],
+      "AddedGraphItems": [
+        "memory:novel-plot-old-draft"
+      ],
+      "TargetSections": [
+        "audit_context",
+        "conflict_evidence"
+      ],
+      "AddedAuditContextItems": 1,
+      "AddedConflictEvidenceItems": 1,
+      "RiskChecks": {
+        "RiskAfterRoutingCount": 0,
+        "WrongSectionRiskCount": 0,
+        "MustNotHitRiskCount": 0,
+        "LifecycleRiskCount": 0,
+        "MissingEvidenceCount": 0,
+        "HasRisk": false
+      },
+      "WarningDelta": 0,
+      "ExpectedWarningDelta": 0,
+      "UnexpectedWarningDelta": 0,
+      "WarningKinds": [
+        "AuxiliaryGraphSectionAdded",
+        "ExpectedAuditContextAdded",
+        "ExpectedConflictEvidenceAdded"
+      ],
+      "DisallowedNormalContextInjection": false,
+      "GuardStatus": "Passed"
+    },
+    {
+      "SampleId": "novel-sample-007",
+      "Mode": "NovelMode",
+      "NormalSelectedSetChanged": false,
+      "AuxiliaryGraphSectionChanged": false,
+      "GraphExpansionApplied": false,
+      "GraphExpansionMode": "ApplyGuarded",
+      "GraphExpansionFallbackUsed": false,
+      "GraphExpansionFallbackReason": "",
+      "GraphExpansionWarnings": "",
+      "BaselineSelected": [
+        "const:novel-rules",
+        "novel:character-linfeng",
+        "memory:novel-family-background"
+      ],
+      "ApplySelected": [
+        "const:novel-rules",
+        "novel:character-linfeng",
+        "memory:novel-family-background"
+      ],
+      "AddedGraphItems": [],
+      "TargetSections": [],
+      "AddedAuditContextItems": 0,
+      "AddedConflictEvidenceItems": 0,
+      "RiskChecks": {
+        "RiskAfterRoutingCount": 0,
+        "WrongSectionRiskCount": 0,
+        "MustNotHitRiskCount": 0,
+        "LifecycleRiskCount": 0,
+        "MissingEvidenceCount": 0,
+        "HasRisk": false
+      },
+      "WarningDelta": 0,
+      "ExpectedWarningDelta": 0,
+      "UnexpectedWarningDelta": 0,
+      "WarningKinds": [],
+      "DisallowedNormalContextInjection": false,
+      "GuardStatus": "Passed"
+    },
+    {
+      "SampleId": "novel-sample-008",
+      "Mode": "NovelMode",
+      "NormalSelectedSetChanged": false,
+      "AuxiliaryGraphSectionChanged": true,
+      "GraphExpansionApplied": true,
+      "GraphExpansionMode": "ApplyGuarded",
+      "GraphExpansionFallbackUsed": false,
+      "GraphExpansionFallbackReason": "",
+      "GraphExpansionWarnings": "",
+      "BaselineSelected": [
+        "const:novel-rules",
+        "memory:novel-weapon-v2",
+        "novel:character-linfeng",
+        "memory:novel-conflict-v2",
+        "memory:novel-extra-active-1",
+        "memory:novel-family-background",
+        "memory:novel-current-plot"
+      ],
+      "ApplySelected": [
+        "const:novel-rules",
+        "memory:novel-weapon-v2",
+        "novel:character-linfeng",
+        "memory:novel-conflict-v2",
+        "memory:novel-extra-active-1",
+        "memory:novel-family-background",
+        "memory:novel-current-plot"
+      ],
+      "AddedGraphItems": [
+        "memory:novel-conflict-v1",
+        "memory:novel-plot-old-draft",
+        "memory:novel-weapon-v1"
+      ],
+      "TargetSections": [
+        "audit_context",
+        "conflict_evidence"
+      ],
+      "AddedAuditContextItems": 3,
+      "AddedConflictEvidenceItems": 3,
+      "RiskChecks": {
+        "RiskAfterRoutingCount": 0,
+        "WrongSectionRiskCount": 0,
+        "MustNotHitRiskCount": 0,
+        "LifecycleRiskCount": 0,
+        "MissingEvidenceCount": 0,
+        "HasRisk": false
+      },
+      "WarningDelta": 0,
+      "ExpectedWarningDelta": 0,
+      "UnexpectedWarningDelta": 0,
+      "WarningKinds": [
+        "AuxiliaryGraphSectionAdded",
+        "ExpectedAuditContextAdded",
+        "ExpectedConflictEvidenceAdded"
+      ],
+      "DisallowedNormalContextInjection": false,
+      "GuardStatus": "Passed"
+    },
+    {
+      "SampleId": "novel-sample-009",
+      "Mode": "NovelMode",
+      "NormalSelectedSetChanged": false,
+      "AuxiliaryGraphSectionChanged": false,
+      "GraphExpansionApplied": false,
+      "GraphExpansionMode": "ApplyGuarded",
+      "GraphExpansionFallbackUsed": false,
+      "GraphExpansionFallbackReason": "",
+      "GraphExpansionWarnings": "",
+      "BaselineSelected": [
+        "const:novel-rules",
+        "memory:novel-plot-deprecated-villain",
+        "memory:novel-plot-old-draft",
+        "memory:novel-conflict-v1",
+        "memory:novel-weapon-v1"
+      ],
+      "ApplySelected": [
+        "const:novel-rules",
+        "memory:novel-plot-deprecated-villain",
+        "memory:novel-plot-old-draft",
+        "memory:novel-conflict-v1",
+        "memory:novel-weapon-v1"
+      ],
+      "AddedGraphItems": [],
+      "TargetSections": [],
+      "AddedAuditContextItems": 0,
+      "AddedConflictEvidenceItems": 0,
+      "RiskChecks": {
+        "RiskAfterRoutingCount": 0,
+        "WrongSectionRiskCount": 0,
+        "MustNotHitRiskCount": 0,
+        "LifecycleRiskCount": 0,
+        "MissingEvidenceCount": 0,
+        "HasRisk": false
+      },
+      "WarningDelta": 0,
+      "ExpectedWarningDelta": 0,
+      "UnexpectedWarningDelta": 0,
+      "WarningKinds": [],
+      "DisallowedNormalContextInjection": false,
+      "GuardStatus": "Passed"
+    },
+    {
+      "SampleId": "novel-sample-010",
+      "Mode": "NovelMode",
+      "NormalSelectedSetChanged": false,
+      "AuxiliaryGraphSectionChanged": true,
+      "GraphExpansionApplied": true,
+      "GraphExpansionMode": "ApplyGuarded",
+      "GraphExpansionFallbackUsed": false,
+      "GraphExpansionFallbackReason": "",
+      "GraphExpansionWarnings": "",
+      "BaselineSelected": [
+        "const:novel-rules",
+        "novel:character-linfeng",
+        "memory:novel-family-background",
+        "memory:novel-conflict-v2",
+        "memory:novel-current-plot",
+        "memory:novel-extra-active-1",
+        "memory:novel-weapon-v2",
+        "memory:novel-budget-stress"
+      ],
+      "ApplySelected": [
+        "const:novel-rules",
+        "novel:character-linfeng",
+        "memory:novel-family-background",
+        "memory:novel-conflict-v2",
+        "memory:novel-current-plot",
+        "memory:novel-extra-active-1",
+        "memory:novel-weapon-v2",
+        "memory:novel-budget-stress"
+      ],
+      "AddedGraphItems": [
+        "memory:novel-conflict-v1",
+        "memory:novel-plot-old-draft",
+        "memory:novel-weapon-v1"
+      ],
+      "TargetSections": [
+        "audit_context",
+        "conflict_evidence"
+      ],
+      "AddedAuditContextItems": 3,
+      "AddedConflictEvidenceItems": 3,
+      "RiskChecks": {
+        "RiskAfterRoutingCount": 0,
+        "WrongSectionRiskCount": 0,
+        "MustNotHitRiskCount": 0,
+        "LifecycleRiskCount": 0,
+        "MissingEvidenceCount": 0,
+        "HasRisk": false
+      },
+      "WarningDelta": 0,
+      "ExpectedWarningDelta": 0,
+      "UnexpectedWarningDelta": 0,
+      "WarningKinds": [
+        "AuxiliaryGraphSectionAdded",
+        "ExpectedAuditContextAdded",
+        "ExpectedConflictEvidenceAdded"
+      ],
+      "DisallowedNormalContextInjection": false,
+      "GuardStatus": "Passed"
+    },
+    {
+      "SampleId": "automation-sample-001",
+      "Mode": "AutomationMode",
+      "NormalSelectedSetChanged": false,
+      "AuxiliaryGraphSectionChanged": true,
+      "GraphExpansionApplied": true,
+      "GraphExpansionMode": "ApplyGuarded",
+      "GraphExpansionFallbackUsed": false,
+      "GraphExpansionFallbackReason": "",
+      "GraphExpansionWarnings": "",
+      "BaselineSelected": [
+        "const:automation-rules",
+        "memory:automation-last-error",
+        "memory:automation-recovery",
+        "doc:automation-guide",
+        "memory:automation-disk-error",
+        "memory:automation-backup-strategy-v2",
+        "memory:automation-extra-active-2",
+        "memory:automation-budget-stress"
+      ],
+      "ApplySelected": [
+        "const:automation-rules",
+        "memory:automation-last-error",
+        "memory:automation-recovery",
+        "doc:automation-guide",
+        "memory:automation-disk-error",
+        "memory:automation-backup-strategy-v2",
+        "memory:automation-extra-active-2",
+        "memory:automation-budget-stress"
+      ],
+      "AddedGraphItems": [
+        "memory:automation-backup-strategy-v1"
+      ],
+      "TargetSections": [
+        "audit_context",
+        "conflict_evidence"
+      ],
+      "AddedAuditContextItems": 1,
+      "AddedConflictEvidenceItems": 1,
+      "RiskChecks": {
+        "RiskAfterRoutingCount": 0,
+        "WrongSectionRiskCount": 0,
+        "MustNotHitRiskCount": 0,
+        "LifecycleRiskCount": 0,
+        "MissingEvidenceCount": 0,
+        "HasRisk": false
+      },
+      "WarningDelta": 0,
+      "ExpectedWarningDelta": 0,
+      "UnexpectedWarningDelta": 0,
+      "WarningKinds": [
+        "AuxiliaryGraphSectionAdded",
+        "ExpectedAuditContextAdded",
+        "ExpectedConflictEvidenceAdded"
+      ],
+      "DisallowedNormalContextInjection": false,
+      "GuardStatus": "Passed"
+    },
+    {
+      "SampleId": "automation-sample-002",
+      "Mode": "AutomationMode",
+      "NormalSelectedSetChanged": false,
+      "AuxiliaryGraphSectionChanged": false,
+      "GraphExpansionApplied": false,
+      "GraphExpansionMode": "ApplyGuarded",
+      "GraphExpansionFallbackUsed": false,
+      "GraphExpansionFallbackReason": "",
+      "GraphExpansionWarnings": "",
+      "BaselineSelected": [
+        "const:automation-rules",
+        "memory:automation-noise-keyword",
+        "memory:automation-disk-error",
+        "memory:automation-last-error",
+        "doc:automation-guide",
+        "memory:automation-backup-strategy-v1",
+        "memory:automation-stopped-cron",
+        "memory:automation-budget-stress"
+      ],
+      "ApplySelected": [
+        "const:automation-rules",
+        "memory:automation-noise-keyword",
+        "memory:automation-disk-error",
+        "memory:automation-last-error",
+        "doc:automation-guide",
+        "memory:automation-backup-strategy-v1",
+        "memory:automation-stopped-cron",
+        "memory:automation-budget-stress"
+      ],
+      "AddedGraphItems": [],
+      "TargetSections": [],
+      "AddedAuditContextItems": 0,
+      "AddedConflictEvidenceItems": 0,
+      "RiskChecks": {
+        "RiskAfterRoutingCount": 0,
+        "WrongSectionRiskCount": 0,
+        "MustNotHitRiskCount": 0,
+        "LifecycleRiskCount": 0,
+        "MissingEvidenceCount": 0,
+        "HasRisk": false
+      },
+      "WarningDelta": 0,
+      "ExpectedWarningDelta": 0,
+      "UnexpectedWarningDelta": 0,
+      "WarningKinds": [],
+      "DisallowedNormalContextInjection": false,
+      "GuardStatus": "Passed"
+    },
+    {
+      "SampleId": "automation-sample-003",
+      "Mode": "AutomationMode",
+      "NormalSelectedSetChanged": false,
+      "AuxiliaryGraphSectionChanged": true,
+      "GraphExpansionApplied": true,
+      "GraphExpansionMode": "ApplyGuarded",
+      "GraphExpansionFallbackUsed": false,
+      "GraphExpansionFallbackReason": "",
+      "GraphExpansionWarnings": "",
+      "BaselineSelected": [
+        "const:automation-rules",
+        "memory:automation-last-error",
+        "doc:automation-guide",
+        "memory:automation-disk-error",
+        "memory:automation-backup-strategy-v2",
+        "memory:automation-extra-active-2",
+        "memory:automation-conflict-v2",
+        "memory:automation-budget-stress"
+      ],
+      "ApplySelected": [
+        "const:automation-rules",
+        "memory:automation-last-error",
+        "doc:automation-guide",
+        "memory:automation-disk-error",
+        "memory:automation-backup-strategy-v2",
+        "memory:automation-extra-active-2",
+        "memory:automation-conflict-v2",
+        "memory:automation-budget-stress"
+      ],
+      "AddedGraphItems": [
+        "memory:automation-backup-strategy-v1",
+        "memory:automation-conflict-v1"
+      ],
+      "TargetSections": [
+        "audit_context",
+        "conflict_evidence"
+      ],
+      "AddedAuditContextItems": 2,
+      "AddedConflictEvidenceItems": 2,
+      "RiskChecks": {
+        "RiskAfterRoutingCount": 0,
+        "WrongSectionRiskCount": 0,
+        "MustNotHitRiskCount": 0,
+        "LifecycleRiskCount": 0,
+        "MissingEvidenceCount": 0,
+        "HasRisk": false
+      },
+      "WarningDelta": 0,
+      "ExpectedWarningDelta": 0,
+      "UnexpectedWarningDelta": 0,
+      "WarningKinds": [
+        "AuxiliaryGraphSectionAdded",
+        "ExpectedAuditContextAdded",
+        "ExpectedConflictEvidenceAdded"
+      ],
+      "DisallowedNormalContextInjection": false,
+      "GuardStatus": "Passed"
+    },
+    {
+      "SampleId": "automation-sample-004",
+      "Mode": "AutomationMode",
+      "NormalSelectedSetChanged": false,
+      "AuxiliaryGraphSectionChanged": true,
+      "GraphExpansionApplied": true,
+      "GraphExpansionMode": "ApplyGuarded",
+      "GraphExpansionFallbackUsed": false,
+      "GraphExpansionFallbackReason": "",
+      "GraphExpansionWarnings": "",
+      "BaselineSelected": [
+        "const:automation-rules",
+        "memory:automation-conflict-v2",
+        "memory:automation-last-error",
+        "memory:automation-budget-stress"
+      ],
+      "ApplySelected": [
+        "const:automation-rules",
+        "memory:automation-conflict-v2",
+        "memory:automation-last-error",
+        "memory:automation-budget-stress"
+      ],
+      "AddedGraphItems": [
+        "memory:automation-conflict-v1"
+      ],
+      "TargetSections": [
+        "audit_context",
+        "conflict_evidence"
+      ],
+      "AddedAuditContextItems": 1,
+      "AddedConflictEvidenceItems": 1,
+      "RiskChecks": {
+        "RiskAfterRoutingCount": 0,
+        "WrongSectionRiskCount": 0,
+        "MustNotHitRiskCount": 0,
+        "LifecycleRiskCount": 0,
+        "MissingEvidenceCount": 0,
+        "HasRisk": false
+      },
+      "WarningDelta": 0,
+      "ExpectedWarningDelta": 0,
+      "UnexpectedWarningDelta": 0,
+      "WarningKinds": [
+        "AuxiliaryGraphSectionAdded",
+        "ExpectedAuditContextAdded",
+        "ExpectedConflictEvidenceAdded"
+      ],
+      "DisallowedNormalContextInjection": false,
+      "GuardStatus": "Passed"
+    },
+    {
+      "SampleId": "automation-sample-005",
+      "Mode": "AutomationMode",
+      "NormalSelectedSetChanged": false,
+      "AuxiliaryGraphSectionChanged": true,
+      "GraphExpansionApplied": true,
+      "GraphExpansionMode": "ApplyGuarded",
+      "GraphExpansionFallbackUsed": false,
+      "GraphExpansionFallbackReason": "",
+      "GraphExpansionWarnings": "",
+      "BaselineSelected": [
+        "const:automation-rules",
+        "memory:automation-extra-active-1",
+        "memory:automation-disk-error",
+        "memory:automation-last-error",
+        "memory:automation-extra-active-2",
+        "doc:automation-guide",
+        "memory:automation-backup-strategy-v2",
+        "memory:automation-budget-stress"
+      ],
+      "ApplySelected": [
+        "const:automation-rules",
+        "memory:automation-extra-active-1",
+        "memory:automation-disk-error",
+        "memory:automation-last-error",
+        "memory:automation-extra-active-2",
+        "doc:automation-guide",
+        "memory:automation-backup-strategy-v2",
+        "memory:automation-budget-stress"
+      ],
+      "AddedGraphItems": [
+        "memory:automation-backup-strategy-v1"
+      ],
+      "TargetSections": [
+        "audit_context",
+        "conflict_evidence"
+      ],
+      "AddedAuditContextItems": 1,
+      "AddedConflictEvidenceItems": 1,
+      "RiskChecks": {
+        "RiskAfterRoutingCount": 0,
+        "WrongSectionRiskCount": 0,
+        "MustNotHitRiskCount": 0,
+        "LifecycleRiskCount": 0,
+        "MissingEvidenceCount": 0,
+        "HasRisk": false
+      },
+      "WarningDelta": 0,
+      "ExpectedWarningDelta": 0,
+      "UnexpectedWarningDelta": 0,
+      "WarningKinds": [
+        "AuxiliaryGraphSectionAdded",
+        "ExpectedAuditContextAdded",
+        "ExpectedConflictEvidenceAdded"
+      ],
+      "DisallowedNormalContextInjection": false,
+      "GuardStatus": "Passed"
+    },
+    {
+      "SampleId": "automation-sample-006",
+      "Mode": "AutomationMode",
+      "NormalSelectedSetChanged": false,
+      "AuxiliaryGraphSectionChanged": true,
+      "GraphExpansionApplied": true,
+      "GraphExpansionMode": "ApplyGuarded",
+      "GraphExpansionFallbackUsed": false,
+      "GraphExpansionFallbackReason": "",
+      "GraphExpansionWarnings": "",
+      "BaselineSelected": [
+        "const:automation-rules",
+        "memory:automation-extra-active-2",
+        "memory:automation-disk-error",
+        "memory:automation-last-error",
+        "memory:automation-recovery",
+        "doc:automation-guide",
+        "memory:automation-backup-strategy-v2",
+        "memory:automation-extra-active-1",
+        "memory:automation-budget-stress"
+      ],
+      "ApplySelected": [
+        "const:automation-rules",
+        "memory:automation-extra-active-2",
+        "memory:automation-disk-error",
+        "memory:automation-last-error",
+        "memory:automation-recovery",
+        "doc:automation-guide",
+        "memory:automation-backup-strategy-v2",
+        "memory:automation-extra-active-1",
+        "memory:automation-budget-stress"
+      ],
+      "AddedGraphItems": [
+        "memory:automation-backup-strategy-v1"
+      ],
+      "TargetSections": [
+        "audit_context",
+        "conflict_evidence"
+      ],
+      "AddedAuditContextItems": 1,
+      "AddedConflictEvidenceItems": 1,
+      "RiskChecks": {
+        "RiskAfterRoutingCount": 0,
+        "WrongSectionRiskCount": 0,
+        "MustNotHitRiskCount": 0,
+        "LifecycleRiskCount": 0,
+        "MissingEvidenceCount": 0,
+        "HasRisk": false
+      },
+      "WarningDelta": 1,
+      "ExpectedWarningDelta": 1,
+      "UnexpectedWarningDelta": 0,
+      "WarningKinds": [
+        "AuxiliaryGraphSectionAdded",
+        "ExpectedAuditContextAdded",
+        "ExpectedConflictEvidenceAdded"
+      ],
+      "DisallowedNormalContextInjection": false,
+      "GuardStatus": "Passed"
+    },
+    {
+      "SampleId": "automation-sample-007",
+      "Mode": "AutomationMode",
+      "NormalSelectedSetChanged": false,
+      "AuxiliaryGraphSectionChanged": false,
+      "GraphExpansionApplied": false,
+      "GraphExpansionMode": "ApplyGuarded",
+      "GraphExpansionFallbackUsed": false,
+      "GraphExpansionFallbackReason": "",
+      "GraphExpansionWarnings": "",
+      "BaselineSelected": [
+        "const:automation-rules",
+        "doc:automation-guide",
+        "memory:automation-disk-error"
+      ],
+      "ApplySelected": [
+        "const:automation-rules",
+        "doc:automation-guide",
+        "memory:automation-disk-error"
+      ],
+      "AddedGraphItems": [],
+      "TargetSections": [],
+      "AddedAuditContextItems": 0,
+      "AddedConflictEvidenceItems": 0,
+      "RiskChecks": {
+        "RiskAfterRoutingCount": 0,
+        "WrongSectionRiskCount": 0,
+        "MustNotHitRiskCount": 0,
+        "LifecycleRiskCount": 0,
+        "MissingEvidenceCount": 0,
+        "HasRisk": false
+      },
+      "WarningDelta": 0,
+      "ExpectedWarningDelta": 0,
+      "UnexpectedWarningDelta": 0,
+      "WarningKinds": [],
+      "DisallowedNormalContextInjection": false,
+      "GuardStatus": "Passed"
+    },
+    {
+      "SampleId": "automation-sample-008",
+      "Mode": "AutomationMode",
+      "NormalSelectedSetChanged": false,
+      "AuxiliaryGraphSectionChanged": true,
+      "GraphExpansionApplied": true,
+      "GraphExpansionMode": "ApplyGuarded",
+      "GraphExpansionFallbackUsed": false,
+      "GraphExpansionFallbackReason": "",
+      "GraphExpansionWarnings": "",
+      "BaselineSelected": [
+        "const:automation-rules",
+        "memory:automation-backup-strategy-v2",
+        "memory:automation-last-error",
+        "memory:automation-disk-error",
+        "memory:automation-extra-active-2",
+        "memory:automation-budget-stress"
+      ],
+      "ApplySelected": [
+        "const:automation-rules",
+        "memory:automation-backup-strategy-v2",
+        "memory:automation-last-error",
+        "memory:automation-disk-error",
+        "memory:automation-extra-active-2",
+        "memory:automation-budget-stress"
+      ],
+      "AddedGraphItems": [
+        "memory:automation-backup-strategy-v1"
+      ],
+      "TargetSections": [
+        "audit_context",
+        "conflict_evidence"
+      ],
+      "AddedAuditContextItems": 1,
+      "AddedConflictEvidenceItems": 1,
+      "RiskChecks": {
+        "RiskAfterRoutingCount": 0,
+        "WrongSectionRiskCount": 0,
+        "MustNotHitRiskCount": 0,
+        "LifecycleRiskCount": 0,
+        "MissingEvidenceCount": 0,
+        "HasRisk": false
+      },
+      "WarningDelta": 0,
+      "ExpectedWarningDelta": 0,
+      "UnexpectedWarningDelta": 0,
+      "WarningKinds": [
+        "AuxiliaryGraphSectionAdded",
+        "ExpectedAuditContextAdded",
+        "ExpectedConflictEvidenceAdded"
+      ],
+      "DisallowedNormalContextInjection": false,
+      "GuardStatus": "Passed"
+    },
+    {
+      "SampleId": "automation-sample-009",
+      "Mode": "AutomationMode",
+      "NormalSelectedSetChanged": false,
+      "AuxiliaryGraphSectionChanged": false,
+      "GraphExpansionApplied": false,
+      "GraphExpansionMode": "ApplyGuarded",
+      "GraphExpansionFallbackUsed": false,
+      "GraphExpansionFallbackReason": "",
+      "GraphExpansionWarnings": "",
+      "BaselineSelected": [
+        "const:automation-rules",
+        "memory:automation-stopped-cron",
+        "memory:automation-disk-error",
+        "memory:automation-backup-strategy-v1"
+      ],
+      "ApplySelected": [
+        "const:automation-rules",
+        "memory:automation-stopped-cron",
+        "memory:automation-disk-error",
+        "memory:automation-backup-strategy-v1"
+      ],
+      "AddedGraphItems": [],
+      "TargetSections": [],
+      "AddedAuditContextItems": 0,
+      "AddedConflictEvidenceItems": 0,
+      "RiskChecks": {
+        "RiskAfterRoutingCount": 0,
+        "WrongSectionRiskCount": 0,
+        "MustNotHitRiskCount": 0,
+        "LifecycleRiskCount": 0,
+        "MissingEvidenceCount": 0,
+        "HasRisk": false
+      },
+      "WarningDelta": 0,
+      "ExpectedWarningDelta": 0,
+      "UnexpectedWarningDelta": 0,
+      "WarningKinds": [],
+      "DisallowedNormalContextInjection": false,
+      "GuardStatus": "Passed"
+    },
+    {
+      "SampleId": "automation-sample-010",
+      "Mode": "AutomationMode",
+      "NormalSelectedSetChanged": false,
+      "AuxiliaryGraphSectionChanged": true,
+      "GraphExpansionApplied": true,
+      "GraphExpansionMode": "ApplyGuarded",
+      "GraphExpansionFallbackUsed": false,
+      "GraphExpansionFallbackReason": "",
+      "GraphExpansionWarnings": "",
+      "BaselineSelected": [
+        "const:automation-rules",
+        "memory:automation-disk-error",
+        "doc:automation-guide",
+        "memory:automation-last-error",
+        "memory:automation-backup-strategy-v2",
+        "memory:automation-extra-active-2",
+        "memory:automation-budget-stress"
+      ],
+      "ApplySelected": [
+        "const:automation-rules",
+        "memory:automation-disk-error",
+        "doc:automation-guide",
+        "memory:automation-last-error",
+        "memory:automation-backup-strategy-v2",
+        "memory:automation-extra-active-2",
+        "memory:automation-budget-stress"
+      ],
+      "AddedGraphItems": [
+        "memory:automation-backup-strategy-v1"
+      ],
+      "TargetSections": [
+        "audit_context",
+        "conflict_evidence"
+      ],
+      "AddedAuditContextItems": 1,
+      "AddedConflictEvidenceItems": 1,
+      "RiskChecks": {
+        "RiskAfterRoutingCount": 0,
+        "WrongSectionRiskCount": 0,
+        "MustNotHitRiskCount": 0,
+        "LifecycleRiskCount": 0,
+        "MissingEvidenceCount": 0,
+        "HasRisk": false
+      },
+      "WarningDelta": 0,
+      "ExpectedWarningDelta": 0,
+      "UnexpectedWarningDelta": 0,
+      "WarningKinds": [
+        "AuxiliaryGraphSectionAdded",
+        "ExpectedAuditContextAdded",
+        "ExpectedConflictEvidenceAdded"
+      ],
+      "DisallowedNormalContextInjection": false,
+      "GuardStatus": "Passed"
+    },
+    {
+      "SampleId": "coding-sample-001",
+      "Mode": "CodingMode",
+      "NormalSelectedSetChanged": false,
+      "AuxiliaryGraphSectionChanged": true,
+      "GraphExpansionApplied": true,
+      "GraphExpansionMode": "ApplyGuarded",
+      "GraphExpansionFallbackUsed": false,
+      "GraphExpansionFallbackReason": "",
+      "GraphExpansionWarnings": "",
+      "BaselineSelected": [
+        "const:coding-conventions",
+        "doc:ipromotioncandidatestore",
+        "memory:coding-next-todo",
+        "memory:coding-test-naming",
+        "memory:coding-conflict-v2",
+        "memory:coding-extra-active-1",
+        "memory:coding-extra-active-2",
+        "memory:coding-budget-stress"
+      ],
+      "ApplySelected": [
+        "const:coding-conventions",
+        "doc:ipromotioncandidatestore",
+        "memory:coding-next-todo",
+        "memory:coding-test-naming",
+        "memory:coding-conflict-v2",
+        "memory:coding-extra-active-1",
+        "memory:coding-extra-active-2",
+        "memory:coding-budget-stress"
+      ],
+      "AddedGraphItems": [
+        "memory:coding-conflict-v1"
+      ],
+      "TargetSections": [
+        "audit_context",
+        "conflict_evidence"
+      ],
+      "AddedAuditContextItems": 1,
+      "AddedConflictEvidenceItems": 1,
+      "RiskChecks": {
+        "RiskAfterRoutingCount": 0,
+        "WrongSectionRiskCount": 0,
+        "MustNotHitRiskCount": 0,
+        "LifecycleRiskCount": 0,
+        "MissingEvidenceCount": 0,
+        "HasRisk": false
+      },
+      "WarningDelta": 0,
+      "ExpectedWarningDelta": 0,
+      "UnexpectedWarningDelta": 0,
+      "WarningKinds": [
+        "AuxiliaryGraphSectionAdded",
+        "ExpectedAuditContextAdded",
+        "ExpectedConflictEvidenceAdded"
+      ],
+      "DisallowedNormalContextInjection": false,
+      "GuardStatus": "Passed"
+    },
+    {
+      "SampleId": "coding-sample-002",
+      "Mode": "CodingMode",
+      "NormalSelectedSetChanged": false,
+      "AuxiliaryGraphSectionChanged": true,
+      "GraphExpansionApplied": true,
+      "GraphExpansionMode": "ApplyGuarded",
+      "GraphExpansionFallbackUsed": false,
+      "GraphExpansionFallbackReason": "",
+      "GraphExpansionWarnings": "",
+      "BaselineSelected": [
+        "const:coding-conventions",
+        "doc:coding-noise-keyword",
+        "doc:ipromotioncandidatestore",
+        "memory:coding-conflict-v1",
+        "memory:coding-conflict-v2",
+        "memory:coding-deprecated-logger",
+        "memory:coding-next-todo",
+        "memory:coding-budget-stress"
+      ],
+      "ApplySelected": [
+        "const:coding-conventions",
+        "doc:coding-noise-keyword",
+        "doc:ipromotioncandidatestore",
+        "memory:coding-conflict-v1",
+        "memory:coding-conflict-v2",
+        "memory:coding-deprecated-logger",
+        "memory:coding-next-todo",
+        "memory:coding-budget-stress"
+      ],
+      "AddedGraphItems": [
+        "memory:coding-conflict-v1"
+      ],
+      "TargetSections": [
+        "audit_context",
+        "conflict_evidence"
+      ],
+      "AddedAuditContextItems": 1,
+      "AddedConflictEvidenceItems": 1,
+      "RiskChecks": {
+        "RiskAfterRoutingCount": 0,
+        "WrongSectionRiskCount": 0,
+        "MustNotHitRiskCount": 0,
+        "LifecycleRiskCount": 0,
+        "MissingEvidenceCount": 0,
+        "HasRisk": false
+      },
+      "WarningDelta": 0,
+      "ExpectedWarningDelta": 0,
+      "UnexpectedWarningDelta": 0,
+      "WarningKinds": [
+        "AuxiliaryGraphSectionAdded",
+        "ExpectedAuditContextAdded",
+        "ExpectedConflictEvidenceAdded"
+      ],
+      "DisallowedNormalContextInjection": false,
+      "GuardStatus": "Passed"
+    },
+    {
+      "SampleId": "coding-sample-003",
+      "Mode": "CodingMode",
+      "NormalSelectedSetChanged": false,
+      "AuxiliaryGraphSectionChanged": true,
+      "GraphExpansionApplied": true,
+      "GraphExpansionMode": "ApplyGuarded",
+      "GraphExpansionFallbackUsed": false,
+      "GraphExpansionFallbackReason": "",
+      "GraphExpansionWarnings": "",
+      "BaselineSelected": [
+        "const:coding-conventions",
+        "doc:ipromotioncandidatestore",
+        "memory:coding-next-todo",
+        "memory:coding-test-naming",
+        "memory:coding-conflict-v2",
+        "memory:coding-extra-active-1",
+        "memory:coding-extra-active-2",
+        "memory:coding-budget-stress"
+      ],
+      "ApplySelected": [
+        "const:coding-conventions",
+        "doc:ipromotioncandidatestore",
+        "memory:coding-next-todo",
+        "memory:coding-test-naming",
+        "memory:coding-conflict-v2",
+        "memory:coding-extra-active-1",
+        "memory:coding-extra-active-2",
+        "memory:coding-budget-stress"
+      ],
+      "AddedGraphItems": [
+        "memory:coding-conflict-v1"
+      ],
+      "TargetSections": [
+        "audit_context",
+        "conflict_evidence"
+      ],
+      "AddedAuditContextItems": 1,
+      "AddedConflictEvidenceItems": 1,
+      "RiskChecks": {
+        "RiskAfterRoutingCount": 0,
+        "WrongSectionRiskCount": 0,
+        "MustNotHitRiskCount": 0,
+        "LifecycleRiskCount": 0,
+        "MissingEvidenceCount": 0,
+        "HasRisk": false
+      },
+      "WarningDelta": 0,
+      "ExpectedWarningDelta": 0,
+      "UnexpectedWarningDelta": 0,
+      "WarningKinds": [
+        "AuxiliaryGraphSectionAdded",
+        "ExpectedAuditContextAdded",
+        "ExpectedConflictEvidenceAdded"
+      ],
+      "DisallowedNormalContextInjection": false,
+      "GuardStatus": "Passed"
+    },
+    {
+      "SampleId": "coding-sample-004",
+      "Mode": "CodingMode",
+      "NormalSelectedSetChanged": false,
+      "AuxiliaryGraphSectionChanged": true,
+      "GraphExpansionApplied": true,
+      "GraphExpansionMode": "ApplyGuarded",
+      "GraphExpansionFallbackUsed": false,
+      "GraphExpansionFallbackReason": "",
+      "GraphExpansionWarnings": "",
+      "BaselineSelected": [
+        "const:coding-conventions",
+        "memory:coding-conflict-v2",
+        "doc:ipromotioncandidatestore",
+        "memory:coding-next-todo",
+        "memory:coding-extra-active-2",
+        "memory:coding-budget-stress"
+      ],
+      "ApplySelected": [
+        "const:coding-conventions",
+        "memory:coding-conflict-v2",
+        "doc:ipromotioncandidatestore",
+        "memory:coding-next-todo",
+        "memory:coding-extra-active-2",
+        "memory:coding-budget-stress"
+      ],
+      "AddedGraphItems": [
+        "memory:coding-conflict-v1"
+      ],
+      "TargetSections": [
+        "audit_context",
+        "conflict_evidence"
+      ],
+      "AddedAuditContextItems": 1,
+      "AddedConflictEvidenceItems": 1,
+      "RiskChecks": {
+        "RiskAfterRoutingCount": 0,
+        "WrongSectionRiskCount": 0,
+        "MustNotHitRiskCount": 0,
+        "LifecycleRiskCount": 0,
+        "MissingEvidenceCount": 0,
+        "HasRisk": false
+      },
+      "WarningDelta": 0,
+      "ExpectedWarningDelta": 0,
+      "UnexpectedWarningDelta": 0,
+      "WarningKinds": [
+        "AuxiliaryGraphSectionAdded",
+        "ExpectedAuditContextAdded",
+        "ExpectedConflictEvidenceAdded"
+      ],
+      "DisallowedNormalContextInjection": false,
+      "GuardStatus": "Passed"
+    },
+    {
+      "SampleId": "coding-sample-005",
+      "Mode": "CodingMode",
+      "NormalSelectedSetChanged": false,
+      "AuxiliaryGraphSectionChanged": true,
+      "GraphExpansionApplied": true,
+      "GraphExpansionMode": "ApplyGuarded",
+      "GraphExpansionFallbackUsed": false,
+      "GraphExpansionFallbackReason": "",
+      "GraphExpansionWarnings": "",
+      "BaselineSelected": [
+        "const:coding-conventions",
+        "memory:coding-extra-active-1",
+        "doc:ipromotioncandidatestore",
+        "memory:coding-next-todo",
+        "memory:coding-conflict-v2",
+        "memory:coding-test-naming",
+        "memory:coding-extra-active-2",
+        "memory:coding-budget-stress"
+      ],
+      "ApplySelected": [
+        "const:coding-conventions",
+        "memory:coding-extra-active-1",
+        "doc:ipromotioncandidatestore",
+        "memory:coding-next-todo",
+        "memory:coding-conflict-v2",
+        "memory:coding-test-naming",
+        "memory:coding-extra-active-2",
+        "memory:coding-budget-stress"
+      ],
+      "AddedGraphItems": [
+        "memory:coding-conflict-v1"
+      ],
+      "TargetSections": [
+        "audit_context",
+        "conflict_evidence"
+      ],
+      "AddedAuditContextItems": 1,
+      "AddedConflictEvidenceItems": 1,
+      "RiskChecks": {
+        "RiskAfterRoutingCount": 0,
+        "WrongSectionRiskCount": 0,
+        "MustNotHitRiskCount": 0,
+        "LifecycleRiskCount": 0,
+        "MissingEvidenceCount": 0,
+        "HasRisk": false
+      },
+      "WarningDelta": 0,
+      "ExpectedWarningDelta": 0,
+      "UnexpectedWarningDelta": 0,
+      "WarningKinds": [
+        "AuxiliaryGraphSectionAdded",
+        "ExpectedAuditContextAdded",
+        "ExpectedConflictEvidenceAdded"
+      ],
+      "DisallowedNormalContextInjection": false,
+      "GuardStatus": "Passed"
+    },
+    {
+      "SampleId": "coding-sample-006",
+      "Mode": "CodingMode",
+      "NormalSelectedSetChanged": false,
+      "AuxiliaryGraphSectionChanged": true,
+      "GraphExpansionApplied": true,
+      "GraphExpansionMode": "ApplyGuarded",
+      "GraphExpansionFallbackUsed": false,
+      "GraphExpansionFallbackReason": "",
+      "GraphExpansionWarnings": "",
+      "BaselineSelected": [
+        "const:coding-conventions",
+        "memory:coding-extra-active-2",
+        "doc:ipromotioncandidatestore",
+        "memory:coding-next-todo",
+        "memory:coding-conflict-v2",
+        "memory:coding-extra-active-1",
+        "memory:coding-test-naming",
+        "memory:coding-budget-stress"
+      ],
+      "ApplySelected": [
+        "const:coding-conventions",
+        "memory:coding-extra-active-2",
+        "doc:ipromotioncandidatestore",
+        "memory:coding-next-todo",
+        "memory:coding-conflict-v2",
+        "memory:coding-extra-active-1",
+        "memory:coding-test-naming",
+        "memory:coding-budget-stress"
+      ],
+      "AddedGraphItems": [
+        "memory:coding-conflict-v1"
+      ],
+      "TargetSections": [
+        "audit_context",
+        "conflict_evidence"
+      ],
+      "AddedAuditContextItems": 1,
+      "AddedConflictEvidenceItems": 1,
+      "RiskChecks": {
+        "RiskAfterRoutingCount": 0,
+        "WrongSectionRiskCount": 0,
+        "MustNotHitRiskCount": 0,
+        "LifecycleRiskCount": 0,
+        "MissingEvidenceCount": 0,
+        "HasRisk": false
+      },
+      "WarningDelta": 0,
+      "ExpectedWarningDelta": 0,
+      "UnexpectedWarningDelta": 0,
+      "WarningKinds": [
+        "AuxiliaryGraphSectionAdded",
+        "ExpectedAuditContextAdded",
+        "ExpectedConflictEvidenceAdded"
+      ],
+      "DisallowedNormalContextInjection": false,
+      "GuardStatus": "Passed"
+    },
+    {
+      "SampleId": "coding-sample-007",
+      "Mode": "CodingMode",
+      "NormalSelectedSetChanged": false,
+      "AuxiliaryGraphSectionChanged": false,
+      "GraphExpansionApplied": false,
+      "GraphExpansionMode": "ApplyGuarded",
+      "GraphExpansionFallbackUsed": false,
+      "GraphExpansionFallbackReason": "",
+      "GraphExpansionWarnings": "",
+      "BaselineSelected": [
+        "const:coding-conventions",
+        "doc:ipromotioncandidatestore",
+        "memory:coding-next-todo"
+      ],
+      "ApplySelected": [
+        "const:coding-conventions",
+        "doc:ipromotioncandidatestore",
+        "memory:coding-next-todo"
+      ],
+      "AddedGraphItems": [],
+      "TargetSections": [],
+      "AddedAuditContextItems": 0,
+      "AddedConflictEvidenceItems": 0,
+      "RiskChecks": {
+        "RiskAfterRoutingCount": 0,
+        "WrongSectionRiskCount": 0,
+        "MustNotHitRiskCount": 0,
+        "LifecycleRiskCount": 0,
+        "MissingEvidenceCount": 0,
+        "HasRisk": false
+      },
+      "WarningDelta": 0,
+      "ExpectedWarningDelta": 0,
+      "UnexpectedWarningDelta": 0,
+      "WarningKinds": [],
+      "DisallowedNormalContextInjection": false,
+      "GuardStatus": "Passed"
+    },
+    {
+      "SampleId": "coding-sample-008",
+      "Mode": "CodingMode",
+      "NormalSelectedSetChanged": false,
+      "AuxiliaryGraphSectionChanged": true,
+      "GraphExpansionApplied": true,
+      "GraphExpansionMode": "ApplyGuarded",
+      "GraphExpansionFallbackUsed": false,
+      "GraphExpansionFallbackReason": "",
+      "GraphExpansionWarnings": "",
+      "BaselineSelected": [
+        "const:coding-conventions",
+        "memory:coding-timeout-v2",
+        "memory:coding-next-todo",
+        "memory:coding-extra-active-1"
+      ],
+      "ApplySelected": [
+        "const:coding-conventions",
+        "memory:coding-timeout-v2",
+        "memory:coding-next-todo",
+        "memory:coding-extra-active-1"
+      ],
+      "AddedGraphItems": [
+        "memory:coding-timeout-v1"
+      ],
+      "TargetSections": [
+        "audit_context",
+        "conflict_evidence"
+      ],
+      "AddedAuditContextItems": 1,
+      "AddedConflictEvidenceItems": 1,
+      "RiskChecks": {
+        "RiskAfterRoutingCount": 0,
+        "WrongSectionRiskCount": 0,
+        "MustNotHitRiskCount": 0,
+        "LifecycleRiskCount": 0,
+        "MissingEvidenceCount": 0,
+        "HasRisk": false
+      },
+      "WarningDelta": 0,
+      "ExpectedWarningDelta": 0,
+      "UnexpectedWarningDelta": 0,
+      "WarningKinds": [
+        "AuxiliaryGraphSectionAdded",
+        "ExpectedAuditContextAdded",
+        "ExpectedConflictEvidenceAdded"
+      ],
+      "DisallowedNormalContextInjection": false,
+      "GuardStatus": "Passed"
+    },
+    {
+      "SampleId": "coding-sample-009",
+      "Mode": "CodingMode",
+      "NormalSelectedSetChanged": false,
+      "AuxiliaryGraphSectionChanged": false,
+      "GraphExpansionApplied": false,
+      "GraphExpansionMode": "ApplyGuarded",
+      "GraphExpansionFallbackUsed": false,
+      "GraphExpansionFallbackReason": "",
+      "GraphExpansionWarnings": "",
+      "BaselineSelected": [
+        "const:coding-conventions",
+        "memory:coding-deprecated-logger",
+        "memory:coding-budget-stress"
+      ],
+      "ApplySelected": [
+        "const:coding-conventions",
+        "memory:coding-deprecated-logger",
+        "memory:coding-budget-stress"
+      ],
+      "AddedGraphItems": [],
+      "TargetSections": [],
+      "AddedAuditContextItems": 0,
+      "AddedConflictEvidenceItems": 0,
+      "RiskChecks": {
+        "RiskAfterRoutingCount": 0,
+        "WrongSectionRiskCount": 0,
+        "MustNotHitRiskCount": 0,
+        "LifecycleRiskCount": 0,
+        "MissingEvidenceCount": 0,
+        "HasRisk": false
+      },
+      "WarningDelta": 0,
+      "ExpectedWarningDelta": 0,
+      "UnexpectedWarningDelta": 0,
+      "WarningKinds": [],
+      "DisallowedNormalContextInjection": false,
+      "GuardStatus": "Passed"
+    },
+    {
+      "SampleId": "coding-sample-010",
+      "Mode": "CodingMode",
+      "NormalSelectedSetChanged": false,
+      "AuxiliaryGraphSectionChanged": true,
+      "GraphExpansionApplied": true,
+      "GraphExpansionMode": "ApplyGuarded",
+      "GraphExpansionFallbackUsed": false,
+      "GraphExpansionFallbackReason": "",
+      "GraphExpansionWarnings": "",
+      "BaselineSelected": [
+        "const:coding-conventions",
+        "memory:coding-test-naming",
+        "memory:coding-next-todo",
+        "doc:ipromotioncandidatestore",
+        "memory:coding-conflict-v2",
+        "memory:coding-extra-active-1",
+        "memory:coding-extra-active-2",
+        "memory:coding-budget-stress"
+      ],
+      "ApplySelected": [
+        "const:coding-conventions",
+        "memory:coding-test-naming",
+        "memory:coding-next-todo",
+        "doc:ipromotioncandidatestore",
+        "memory:coding-conflict-v2",
+        "memory:coding-extra-active-1",
+        "memory:coding-extra-active-2",
+        "memory:coding-budget-stress"
+      ],
+      "AddedGraphItems": [
+        "memory:coding-conflict-v1"
+      ],
+      "TargetSections": [
+        "audit_context",
+        "conflict_evidence"
+      ],
+      "AddedAuditContextItems": 1,
+      "AddedConflictEvidenceItems": 1,
+      "RiskChecks": {
+        "RiskAfterRoutingCount": 0,
+        "WrongSectionRiskCount": 0,
+        "MustNotHitRiskCount": 0,
+        "LifecycleRiskCount": 0,
+        "MissingEvidenceCount": 0,
+        "HasRisk": false
+      },
+      "WarningDelta": 0,
+      "ExpectedWarningDelta": 0,
+      "UnexpectedWarningDelta": 0,
+      "WarningKinds": [
+        "AuxiliaryGraphSectionAdded",
+        "ExpectedAuditContextAdded",
+        "ExpectedConflictEvidenceAdded"
+      ],
+      "DisallowedNormalContextInjection": false,
+      "GuardStatus": "Passed"
+    }
+  ]
+}

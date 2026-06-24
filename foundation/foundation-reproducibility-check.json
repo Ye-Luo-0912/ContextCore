@@ -1,0 +1,83 @@
+﻿{
+  "OperationId": "foundation-reproducibility-7658913645fe4dbfa85adb18017d4d09",
+  "GeneratedAt": "2026-06-17T03:12:03.4834086+00:00",
+  "ReproducibilityPassed": true,
+  "Recommendation": "ReadyForReleaseCandidateReproduction",
+  "BuildCommand": "dotnet build",
+  "TestCommand": "dotnet test",
+  "P15Command": "scripts/eval-gate-p15.ps1",
+  "RuntimeChangeGateCommand": "dotnet run --project src/ContextCore.ControlRoom -- eval learning-runtime-change-readiness-gate",
+  "FoundationGateCommand": "dotnet run --project src/ContextCore.ControlRoom -- eval foundation-release-candidate-gate",
+  "ReproducibilityCheckCommand": "dotnet run --project src/ContextCore.ControlRoom -- eval foundation-reproducibility-check",
+  "ExpectedOutputSummary": "Build/test/P15/runtime-change/foundation gates pass; runtime switch and formal retrieval remain disabled; no critical report or secret leakage.",
+  "GitStatusCategories": {
+    "source code": [
+      "src/ContextCore.Abstractions/Models/VectorIndexDtos.cs",
+      "src/ContextCore.ControlRoom/Commands/EvalCommand.cs",
+      "src/ContextCore.ControlRoom/Rendering/ServiceOperationalRenderer.cs",
+      "src/ContextCore.ControlRoom/Services/ControlRoomService.cs",
+      "src/ContextCore.Core/Services/Vector/ExplicitScopedRuntimeExperimentProposalRunner.cs"
+    ],
+    "tests": [
+      "tests/ContextCore.Tests/ContextCoreRetrievalDatasetV2MetadataContractTests.cs"
+    ],
+    "docs": [
+      "docs/ContextCore_Foundation_Freeze_Report.md",
+      "docs/ContextCore_\\346\\226\\260\\351\\230\\266\\346\\256\\265\\346\\211\\247\\350\\241\\214\\346\\212\\245\\345\\221\\212.md",
+      "docs/controlroom-service-mode.md",
+      "docs/vector-index-foundation.md",
+      "docs/vector-preview-shadow-freeze.md"
+    ],
+    "generated reports": [
+      "eval/eval-report-latest.json",
+      "eval/eval-report-p15-a3.json",
+      "eval/eval-report-p15-extended.json",
+      "eval/extended-failure-triage-report.json",
+      "eval/extended-failure-triage-report.md",
+      "foundation/foundation-release-candidate-gate.json",
+      "foundation/foundation-release-candidate-gate.md",
+      "learning/readiness/learning-readiness-freeze-report.json",
+      "learning/readiness/learning-readiness-freeze-report.md",
+      "learning/readiness/learning-runtime-change-readiness-gate.json",
+      "learning/readiness/learning-runtime-change-readiness-gate.md",
+      "vector/v4/vector-scoped-runtime-experiment-config-preview.json",
+      "vector/v4/vector-scoped-runtime-experiment-config-preview.md",
+      "vector/v4/vector-scoped-runtime-experiment-proposal-gate.json",
+      "vector/v4/vector-scoped-runtime-experiment-proposal-gate.md",
+      "vector/v4/vector-scoped-runtime-experiment-proposal.json",
+      "vector/v4/vector-scoped-runtime-experiment-proposal.md"
+    ],
+    "local config / secrets": [],
+    "model files": [],
+    "temporary files": [],
+    "other": []
+  },
+  "CriticalReportCoverage": {
+    "foundation\\foundation-release-candidate-gate.md": true,
+    "foundation\\foundation-release-candidate-gate.json": true,
+    "learning\\readiness\\learning-runtime-change-readiness-gate.md": true,
+    "learning\\readiness\\learning-runtime-change-readiness-gate.json": true,
+    "vector\\v4\\vector-formal-preview-freeze-gate.md": true,
+    "docs\\ContextCore_Foundation_Freeze_Report.md": true,
+    "eval\\eval-report-p15-a3.json": true,
+    "eval\\eval-report-p15-extended.json": true
+  },
+  "BoundaryChecks": {
+    "FoundationReleaseCandidateGatePassed": true,
+    "RuntimeChangeGatePassed": true,
+    "P15GatePassed": true,
+    "FormalRetrievalAllowedFalse": true,
+    "RuntimeSwitchAllowedFalse": true,
+    "ReadyForRuntimeSwitchFalse": true,
+    "PackingPolicyChangedFalse": true,
+    "PackageOutputChangedFalse": true,
+    "UseForRuntimeFalseWhereApplicable": true
+  },
+  "FoundationGateStatus": "Passed",
+  "RuntimeChangeGateStatus": "Passed",
+  "P15GateStatus": "Passed",
+  "LocalSecretsDetected": false,
+  "LocalSecretPathCount": 0,
+  "LocalSecretPaths": [],
+  "BlockedReasons": []
+}

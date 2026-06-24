@@ -1,0 +1,18 @@
+﻿{
+  "ProviderEnabled": true,
+  "WorkspaceId": "postgres-relation-provider-switch-smoke",
+  "CollectionId": "relation-provider-switch",
+  "Mode": "GuardedPostgresPrimary",
+  "WritePassed": true,
+  "PostgresPrimaryReadPassed": true,
+  "FileSystemFallbackPassed": true,
+  "ComparisonTraceRecorded": true,
+  "CleanupPerformed": true,
+  "TraceCount": 6,
+  "Mismatches": [],
+  "Diagnostics": [
+    "RuntimeProviderStillFileSystem",
+    "CleanupPerformed"
+  ],
+  "Recommendation": "ReadyForGuardedProviderSwitch"
+}

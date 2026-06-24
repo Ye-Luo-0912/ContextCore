@@ -1,0 +1,24 @@
+﻿{
+  "OperationId": "scoped-shadow-adapter-invocation-4e3cf1d22eab4a7e857aabbd969c25b5",
+  "CreatedAt": "2026-06-20T06:50:12.385028+00:00",
+  "InvocationPassed": true,
+  "AllowlistedInvocationCount": 1,
+  "NonAllowlistedInvocationCount": 1,
+  "AdapterType": "ScopedShadow",
+  "AllowlistedResult": "False/0/0",
+  "NonAllowlistedResult": "False/0/0",
+  "FormalSelectedSetChanged": false,
+  "FormalOutputChanged": 0,
+  "FormalPackageWritten": false,
+  "PackageOutputChanged": false,
+  "PackingPolicyChanged": false,
+  "RuntimeMutated": false,
+  "VectorStoreBindingChanged": false,
+  "FormalRetrievalAllowed": false,
+  "RuntimeSwitchAllowed": false,
+  "Diagnostics": [
+    "allowlisted: adapter=ScopedShadow applied=False added=0 removed=0 trace=vector/trace\\shadow-adapter\\trace-v61-allowlisted-5a6871d930214277bb56433c756ed299.jsonl",
+    "non-allowlisted: applied=False added=0 removed=0"
+  ],
+  "BlockedReasons": []
+}

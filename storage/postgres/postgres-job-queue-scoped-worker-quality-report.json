@@ -1,0 +1,22 @@
+﻿{
+  "generatedAt": "2026-06-14T12:02:46.6050421+00:00",
+  "passed": true,
+  "jobCount": 6,
+  "completedCount": 4,
+  "retriedCount": 2,
+  "deadLetterCount": 1,
+  "leaseAcquireCount": 8,
+  "leaseConflictCount": 1,
+  "leaseExpiredReacquireCount": 1,
+  "heartbeatCount": 1,
+  "mismatchCount": 0,
+  "postgresFailureCount": 0,
+  "scopeLeakCount": 0,
+  "nonSelectedScopeRemainsFileSystem": true,
+  "runtimeWorkerGlobalProviderUnchanged": true,
+  "blockedReasons": [],
+  "diagnostics": [
+    "RuntimeWorkerGlobalProviderUnchanged"
+  ],
+  "recommendation": "ReadyForLimitedWorkerScope"
+}

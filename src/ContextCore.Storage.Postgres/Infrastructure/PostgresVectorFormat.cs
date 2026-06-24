@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Text;
 
-namespace ContextCore.Storage.Postgres;
+namespace ContextCore.Storage.Postgres.Infrastructure;
 
 /// <summary>pgvector 文本格式工具。</summary>
 public static class PostgresVectorFormat

@@ -1,6 +1,4 @@
-using ContextCore.Abstractions.Models;
-
-namespace ContextCore.Abstractions;
+namespace ContextCore.Abstractions.Models;
 
 /// <summary>Stable memory governance 的统一只读记录。</summary>
 public sealed class StableMemoryRecord

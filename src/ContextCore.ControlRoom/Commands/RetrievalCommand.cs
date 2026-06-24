@@ -134,6 +134,27 @@ public static class RetrievalCommand
                 ]
             ]);
 
+        var graphMetadata = details.Package.Metadata.Count > 0
+            ? details.Package.Metadata
+            : result.Trace.Metadata;
+        TableRenderer.Render(
+            "Graph Expansion Status",
+            ["Mode", "Applied", "FallbackUsed", "FallbackReason", "Profiles", "AddedItems", "TargetSections", "ExpectedDelta", "UnexpectedWarn", "RiskChecks"],
+            [
+                [
+                    graphMetadata.GetValueOrDefault("graphExpansionMode", result.Trace.Metadata.GetValueOrDefault("graphExpansionMode", "Off")),
+                    graphMetadata.GetValueOrDefault("graphExpansionApplied", result.Trace.Metadata.GetValueOrDefault("graphExpansionApplied", "false")),
+                    graphMetadata.GetValueOrDefault("graphExpansionFallbackUsed", result.Trace.Metadata.GetValueOrDefault("graphExpansionFallbackUsed", "false")),
+                    graphMetadata.GetValueOrDefault("graphExpansionFallbackReason", result.Trace.Metadata.GetValueOrDefault("graphExpansionFallbackReason", "")),
+                    graphMetadata.GetValueOrDefault("graphExpansionProfiles", result.Trace.Metadata.GetValueOrDefault("graphExpansionProfiles", "")),
+                    graphMetadata.GetValueOrDefault("graphExpansionAddedItems", result.Trace.Metadata.GetValueOrDefault("graphExpansionAddedItems", "")),
+                    graphMetadata.GetValueOrDefault("graphExpansionTargetSections", result.Trace.Metadata.GetValueOrDefault("graphExpansionTargetSections", "")),
+                    graphMetadata.GetValueOrDefault("graphExpansionExpectedGraphSectionDelta", result.Trace.Metadata.GetValueOrDefault("graphExpansionExpectedGraphSectionDelta", "0")),
+                    graphMetadata.GetValueOrDefault("graphExpansionUnexpectedWarningDelta", result.Trace.Metadata.GetValueOrDefault("graphExpansionUnexpectedWarningDelta", "0")),
+                    graphMetadata.GetValueOrDefault("graphExpansionRiskChecks", result.Trace.Metadata.GetValueOrDefault("graphExpansionRiskChecks", ""))
+                ]
+            ]);
+
         TableRenderer.Render(
             "Attention Shadow Diff",
             ["Id", "当前", "Attention", "Delta", "选中", "Would", "原分", "Attn分", "标签", "原因"],

@@ -1,0 +1,21 @@
+﻿{
+  "generatedAt": "2026-06-14T12:02:27.9216643+00:00",
+  "providerEnabled": true,
+  "connectionAvailable": true,
+  "schemaVersion": "cc-schema-v5",
+  "jobTableExists": true,
+  "requiredIndexesExist": true,
+  "pendingCount": 0,
+  "runningCount": 0,
+  "failedCount": 0,
+  "deadLetterCount": 0,
+  "staleLeaseCount": 0,
+  "useForRuntime": false,
+  "jobCount": 0,
+  "missingIndexes": [],
+  "diagnostics": [
+    "UseForRuntime=false",
+    "RuntimeWorkerUnchanged"
+  ],
+  "recommendation": "ReadyForParityEval"
+}

@@ -1,4 +1,5 @@
 using ContextCore.Abstractions;
+using ContextCore.Abstractions.Models;
 
 namespace ContextCore.Storage.FileSystem.Stores;
 
@@ -88,12 +89,14 @@ public sealed class FileStableReviewCandidateStore : IStableReviewCandidateStore
                 results.AddRange(candidates.Where(candidate => Matches(candidate, query)));
             }
 
-            return results
-                .OrderByDescending(static item => item.CreatedAt)
-                .Skip(Math.Max(0, query.Offset))
-                .Take(query.Limit > 0 ? query.Limit : 20)
-                .Select(Clone)
-                .ToArray();
+            return
+            [
+                .. results
+                    .OrderByDescending(static item => item.CreatedAt)
+                    .Skip(Math.Max(0, query.Offset))
+                    .Take(query.Limit > 0 ? query.Limit : 20)
+                    .Select(Clone)
+            ];
         }
         finally
         {
@@ -143,10 +146,12 @@ public sealed class FileStableReviewCandidateStore : IStableReviewCandidateStore
                 results.AddRange(items.Where(item => string.Equals(item.StableReviewCandidateId, stableReviewCandidateId, StringComparison.OrdinalIgnoreCase)));
             }
 
-            return results
-                .OrderByDescending(static item => item.CreatedAt)
-                .Select(Clone)
-                .ToArray();
+            return
+            [
+                .. results
+                    .OrderByDescending(static item => item.CreatedAt)
+                    .Select(Clone)
+            ];
         }
         finally
         {
@@ -161,9 +166,11 @@ public sealed class FileStableReviewCandidateStore : IStableReviewCandidateStore
             return [new ShortTermMemoryScope { WorkspaceId = workspaceId, CollectionId = collectionId }];
         }
 
-        return EnumerateScopes()
-            .Where(scope => string.Equals(scope.WorkspaceId, workspaceId, StringComparison.OrdinalIgnoreCase))
-            .ToArray();
+        return
+        [
+            .. EnumerateScopes()
+                .Where(scope => string.Equals(scope.WorkspaceId, workspaceId, StringComparison.OrdinalIgnoreCase))
+        ];
     }
 
     private IReadOnlyList<ShortTermMemoryScope> EnumerateScopes()
@@ -184,38 +191,42 @@ public sealed class FileStableReviewCandidateStore : IStableReviewCandidateStore
             return Array.Empty<ShortTermMemoryScope>();
         }
 
-        return Directory.EnumerateDirectories(workspacesRoot)
-            .SelectMany(workspaceDirectory =>
-            {
-                var workspaceId = Path.GetFileName(workspaceDirectory);
-                if (string.IsNullOrWhiteSpace(workspaceId))
+        return
+        [
+            .. Directory.EnumerateDirectories(workspacesRoot)
+                .SelectMany(workspaceDirectory =>
                 {
-                    return Array.Empty<ShortTermMemoryScope>();
-                }
-
-                var collectionsRoot = Path.Combine(workspaceDirectory, "collections");
-                if (!Directory.Exists(collectionsRoot))
-                {
-                    return Array.Empty<ShortTermMemoryScope>();
-                }
-
-                return Directory.EnumerateDirectories(collectionsRoot)
-                    .Select(collectionDirectory => new
+                    var workspaceId = Path.GetFileName(workspaceDirectory);
+                    if (string.IsNullOrWhiteSpace(workspaceId))
                     {
-                        WorkspaceId = workspaceId!,
-                        CollectionId = Path.GetFileName(collectionDirectory)
-                    })
-                    .Where(item => !string.IsNullOrWhiteSpace(item.CollectionId))
-                    .Where(item => File.Exists(pathSelector(item.WorkspaceId, item.CollectionId!)))
-                    .Select(item => new ShortTermMemoryScope
+                        return Array.Empty<ShortTermMemoryScope>();
+                    }
+
+                    var collectionsRoot = Path.Combine(workspaceDirectory, "collections");
+                    if (!Directory.Exists(collectionsRoot))
                     {
-                        WorkspaceId = item.WorkspaceId,
-                        CollectionId = item.CollectionId!
-                    })
-                    .ToArray();
-            })
-            .DistinctBy(scope => $"{scope.WorkspaceId}\u001f{scope.CollectionId}", StringComparer.OrdinalIgnoreCase)
-            .ToArray();
+                        return Array.Empty<ShortTermMemoryScope>();
+                    }
+
+                    return
+                    [
+                        .. Directory.EnumerateDirectories(collectionsRoot)
+                            .Select(collectionDirectory => new
+                            {
+                                WorkspaceId = workspaceId,
+                                CollectionId = Path.GetFileName(collectionDirectory)
+                            })
+                            .Where(item => !string.IsNullOrWhiteSpace(item.CollectionId))
+                            .Where(item => File.Exists(pathSelector(item.WorkspaceId, item.CollectionId!)))
+                            .Select(item => new ShortTermMemoryScope
+                            {
+                                WorkspaceId = item.WorkspaceId,
+                                CollectionId = item.CollectionId
+                            })
+                    ];
+                })
+                .DistinctBy(scope => $"{scope.WorkspaceId}\u001f{scope.CollectionId}", StringComparer.OrdinalIgnoreCase)
+        ];
     }
 
     private static bool Matches(StableReviewCandidate candidate, StableReviewCandidateQuery query)
@@ -285,16 +296,16 @@ public sealed class FileStableReviewCandidateStore : IStableReviewCandidateStore
             SourcePromotionCandidateId = item.SourcePromotionCandidateId,
             SourceTargetItemId = item.SourceTargetItemId,
             SourceLearningCaseId = item.SourceLearningCaseId,
-            EvidenceRefs = item.EvidenceRefs.ToArray(),
+            EvidenceRefs = [.. item.EvidenceRefs],
             ValidationStatus = string.IsNullOrWhiteSpace(item.ValidationStatus)
                 ? StableReviewValidationStatuses.ReadyForReview
                 : item.ValidationStatus,
-            RiskFlags = item.RiskFlags.ToArray(),
+            RiskFlags = [.. item.RiskFlags],
             CreatedAt = createdAt,
             ReviewedAt = item.ReviewedAt == default ? createdAt : item.ReviewedAt,
             Metadata = new Dictionary<string, string>(item.Metadata, StringComparer.OrdinalIgnoreCase),
-            Warnings = item.Warnings.ToArray(),
-            Errors = item.Errors.ToArray()
+            Warnings = [.. item.Warnings],
+            Errors = [.. item.Errors]
         };
     }
 

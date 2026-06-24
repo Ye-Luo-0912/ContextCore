@@ -2,8 +2,9 @@ using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
 using ContextCore.Abstractions;
+using ContextCore.Abstractions.Models;
 
-namespace ContextCore.Storage.InMemory;
+namespace ContextCore.Storage.InMemory.Stores;
 
 /// <summary>基于内存的约束缺口候选项存储。</summary>
 public sealed class InMemoryConstraintGapCandidateStore : IConstraintGapCandidateStore

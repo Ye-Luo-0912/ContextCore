@@ -1,0 +1,12 @@
+﻿{
+  "TraceCount": 15,
+  "FileSystemReadSuccessCount": 15,
+  "PostgresReadSuccessCount": 15,
+  "PostgresReadFailureCount": 0,
+  "MismatchCount": 0,
+  "FallbackCount": 0,
+  "AverageFileSystemReadMs": 1.6583400000000001,
+  "AveragePostgresReadMs": 6.0385133333333325,
+  "Diagnostics": [],
+  "Recommendation": "ReadyForGuardedProviderSwitch"
+}

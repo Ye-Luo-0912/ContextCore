@@ -1,6 +1,7 @@
-using ContextCore.Storage.Postgres;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
+using ContextCore.Storage.Postgres.Infrastructure;
+using Npgsql;
 
 namespace ContextCore.Storage.Postgres.Stores;
 
@@ -33,6 +34,7 @@ ON CONFLICT (workspace_id, collection_id, id) DO UPDATE SET
     relation_type = EXCLUDED.relation_type,
     weight = EXCLUDED.weight,
     confidence = EXCLUDED.confidence,
+    created_at = EXCLUDED.created_at,
     data = EXCLUDED.data;
 """;
         command.Parameters.AddWithValue("workspace_id", normalized.WorkspaceId);
@@ -46,6 +48,77 @@ ON CONFLICT (workspace_id, collection_id, id) DO UPDATE SET
         command.Parameters.AddWithValue("created_at", normalized.CreatedAt);
         AddJson(command, "data", normalized);
         await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>按关系 ID 读取单条边；供 Postgres provider diagnostics/parity 使用，不改变 IRelationStore 契约。</summary>
+    public async Task<ContextRelation?> GetAsync(
+        string workspaceId,
+        string collectionId,
+        string relationId,
+        CancellationToken cancellationToken = default)
+    {
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+        command.CommandText = $"""
+SELECT data
+FROM {Table("relations")}
+WHERE workspace_id = @workspace_id
+  AND collection_id = @collection_id
+  AND id = @id
+LIMIT 1;
+""";
+        command.Parameters.AddWithValue("workspace_id", workspaceId);
+        command.Parameters.AddWithValue("collection_id", collectionId);
+        command.Parameters.AddWithValue("id", relationId);
+
+        var result = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        return result is string json ? Serializer.Deserialize<ContextRelation>(json) : null;
+    }
+
+    /// <summary>删除单条边；仅用于显式 provider parity/cleanup，不参与默认运行时。</summary>
+    public async Task<bool> DeleteAsync(
+        string workspaceId,
+        string collectionId,
+        string relationId,
+        CancellationToken cancellationToken = default)
+    {
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+        command.CommandText = $"""
+DELETE FROM {Table("relations")}
+WHERE workspace_id = @workspace_id
+  AND collection_id = @collection_id
+  AND id = @id;
+""";
+        command.Parameters.AddWithValue("workspace_id", workspaceId);
+        command.Parameters.AddWithValue("collection_id", collectionId);
+        command.Parameters.AddWithValue("id", relationId);
+
+        return await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) > 0;
+    }
+
+    /// <summary>清理显式 smoke/canary scope；只供受控验证流程调用。</summary>
+    public async Task<int> DeleteByScopeAsync(
+        string workspaceId,
+        string collectionId,
+        CancellationToken cancellationToken = default)
+    {
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+        command.CommandText = $"""
+DELETE FROM {Table("relations")}
+WHERE workspace_id = @workspace_id
+  AND collection_id = @collection_id;
+""";
+        command.Parameters.AddWithValue("workspace_id", workspaceId);
+        command.Parameters.AddWithValue("collection_id", collectionId);
+        return await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task SaveManyAsync(IEnumerable<ContextRelation> relations, CancellationToken cancellationToken = default)
@@ -134,6 +207,118 @@ LIMIT @take;
     public Task<IReadOnlyList<ContextRelation>> QueryByTypeAsync(string workspaceId, string collectionId, string relationType, CancellationToken cancellationToken = default)
     {
         return QueryAsync(new ContextRelationQuery { WorkspaceId = workspaceId, CollectionId = collectionId, RelationType = relationType, Take = int.MaxValue }, cancellationToken);
+    }
+
+    /// <summary>按 lifecycle 元数据查询；兼容 PascalCase/camelCase 两种 JSON 键名。</summary>
+    public Task<IReadOnlyList<ContextRelation>> QueryByLifecycleAsync(
+        string workspaceId,
+        string collectionId,
+        string lifecycle,
+        CancellationToken cancellationToken = default)
+    {
+        return QueryByMetadataAsync(workspaceId, collectionId, ["lifecycle", "Lifecycle"], lifecycle, cancellationToken);
+    }
+
+    /// <summary>按 reviewStatus 元数据查询；兼容 PascalCase/camelCase 两种 JSON 键名。</summary>
+    public Task<IReadOnlyList<ContextRelation>> QueryByReviewStatusAsync(
+        string workspaceId,
+        string collectionId,
+        string reviewStatus,
+        CancellationToken cancellationToken = default)
+    {
+        return QueryByMetadataAsync(workspaceId, collectionId, ["reviewStatus", "ReviewStatus"], reviewStatus, cancellationToken);
+    }
+
+    /// <summary>查询 replacement chain 相关边，不执行图扩展或运行时排序。</summary>
+    public async Task<IReadOnlyList<ContextRelation>> QueryReplacementChainRelationsAsync(
+        string workspaceId,
+        string collectionId,
+        string itemId,
+        CancellationToken cancellationToken = default)
+    {
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+        command.CommandText = $"""
+SELECT data
+FROM {Table("relations")}
+WHERE workspace_id = @workspace_id
+  AND collection_id = @collection_id
+  AND (source_id = @item_id OR target_id = @item_id)
+  AND relation_type = ANY(@relation_types)
+ORDER BY weight DESC, confidence DESC, created_at DESC;
+""";
+        command.Parameters.AddWithValue("workspace_id", workspaceId);
+        command.Parameters.AddWithValue("collection_id", collectionId);
+        command.Parameters.AddWithValue("item_id", itemId);
+        command.Parameters.AddWithValue("relation_types", new[]
+        {
+            ContextRelationTypes.SupersededBy,
+            ContextRelationTypes.Replaces,
+            ContextRelationTypes.ReplacedBy
+        });
+
+        return await ReadRelationsAsync(command, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>统计当前 schema 中的 relation 数量。</summary>
+    public async Task<int> CountAsync(CancellationToken cancellationToken = default)
+    {
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+        command.CommandText = $"SELECT count(*) FROM {Table("relations")};";
+        var value = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        return Convert.ToInt32(value, System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    private async Task<IReadOnlyList<ContextRelation>> QueryByMetadataAsync(
+        string workspaceId,
+        string collectionId,
+        IReadOnlyList<string> metadataKeys,
+        string expectedValue,
+        CancellationToken cancellationToken)
+    {
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+        command.CommandText = $"""
+SELECT data
+FROM {Table("relations")}
+WHERE workspace_id = @workspace_id
+  AND collection_id = @collection_id
+  AND (
+      data -> 'Metadata' ->> @metadata_key_0 = @expected_value
+      OR data -> 'Metadata' ->> @metadata_key_1 = @expected_value
+      OR data -> 'metadata' ->> @metadata_key_0 = @expected_value
+      OR data -> 'metadata' ->> @metadata_key_1 = @expected_value
+  )
+ORDER BY weight DESC, confidence DESC, created_at DESC;
+""";
+        command.Parameters.AddWithValue("workspace_id", workspaceId);
+        command.Parameters.AddWithValue("collection_id", collectionId);
+        command.Parameters.AddWithValue("metadata_key_0", metadataKeys[0]);
+        command.Parameters.AddWithValue("metadata_key_1", metadataKeys.Count > 1 ? metadataKeys[1] : metadataKeys[0]);
+        command.Parameters.AddWithValue("expected_value", expectedValue);
+
+        return await ReadRelationsAsync(command, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<IReadOnlyList<ContextRelation>> ReadRelationsAsync(
+        NpgsqlCommand command,
+        CancellationToken cancellationToken)
+    {
+        var results = new List<ContextRelation>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            results.Add(Serializer.Deserialize<ContextRelation>(reader.GetString(0)));
+        }
+
+        return results;
     }
 
     private static ContextRelation Normalize(ContextRelation relation)

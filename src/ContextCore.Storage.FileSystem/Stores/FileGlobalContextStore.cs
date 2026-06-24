@@ -55,12 +55,14 @@ public sealed class FileGlobalContextStore : IGlobalContextStore
 
             var take = query.Take > 0 ? query.Take : 50;
 
-            return items
-                .Where(item => Matches(item, query))
-                .OrderByDescending(item => item.Importance)
-                .ThenByDescending(item => item.UpdatedAt)
-                .Take(take)
-                .ToArray();
+            return
+            [
+                .. items
+                    .Where(item => Matches(item, query))
+                    .OrderByDescending(item => item.Importance)
+                    .ThenByDescending(item => item.UpdatedAt)
+                    .Take(take)
+            ];
         }
         finally
         {

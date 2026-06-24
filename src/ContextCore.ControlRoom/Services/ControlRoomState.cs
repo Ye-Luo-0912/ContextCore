@@ -1,4 +1,5 @@
 using ContextCore.Abstractions;
+using ContextCore.Abstractions.Models;
 using ContextCore.Client;
 using ContextCore.Core;
 using ContextCore.Storage.FileSystem;
@@ -54,6 +55,12 @@ public sealed class ControlRoomState
     public IContextPackageBuilder PackageBuilder { get; init; } = default!;
 
     public IContextPackagePolicyStore PackagePolicyStore { get; init; } = default!;
+
+    public ILearningFeedbackStore LearningFeedbackStore { get; init; } = default!;
+
+    public ILearningFeedbackReviewStore LearningFeedbackReviewStore { get; init; } = default!;
+
+    public IArtifactStore ArtifactStore { get; init; } = default!;
 
     public IContextTokenizerResolver TokenizerResolver { get; init; } = new DefaultContextTokenizerResolver();
 

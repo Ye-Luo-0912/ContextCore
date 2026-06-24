@@ -1,0 +1,40 @@
+﻿{
+  "generatedAt": "2026-06-14T00:45:57.7192889+00:00",
+  "passed": true,
+  "learningFeedbackPostgres": "ReadyForScopedServiceMode",
+  "defaultProvider": "FileSystem",
+  "allowedMode": "GuardedPostgresPrimary only for allowlisted scopes",
+  "required": [
+    "fallback",
+    "comparison trace"
+  ],
+  "forbidden": [
+    "global default-on",
+    "auto-training",
+    "auto-readiness-change"
+  ],
+  "readinessGatePassed": true,
+  "providerQualityReady": true,
+  "scopedServiceModeGatePassed": true,
+  "selectedNormalScopeCanaryPassed": true,
+  "limitedObservationQualityPassed": true,
+  "mismatchCount": 0,
+  "postgresFailureCount": 0,
+  "scopeLeakCount": 0,
+  "trainableCandidateLeakCount": 0,
+  "exportProjectionParityPassed": true,
+  "summaryParityPassed": true,
+  "reviewSummaryParityPassed": true,
+  "featureCandidateParityPassed": true,
+  "fallbackRequired": true,
+  "comparisonTraceRequired": true,
+  "globalDefaultOnForbidden": true,
+  "p15GatePassed": true,
+  "blockedReasons": [],
+  "diagnostics": [
+    "DefaultProviderFileSystem",
+    "AllowlistedGuardedPostgresPrimaryOnly",
+    "NoTrainingNoRuntimePolicyChange"
+  ],
+  "recommendation": "ReadyForScopedServiceMode"
+}

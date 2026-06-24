@@ -1,4 +1,4 @@
-namespace ContextCore.Abstractions;
+namespace ContextCore.Abstractions.Models;
 
 /// <summary>RetrievalPlan proposal 的 shadow 执行结果；不代表正式 retrieval 输出。</summary>
 public sealed class ShadowRetrievalResult

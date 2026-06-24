@@ -1,4 +1,4 @@
-namespace ContextCore.Abstractions;
+namespace ContextCore.Abstractions.Models;
 
 /// <summary>模型在网关中承担的业务角色。</summary>
 public enum ModelRole

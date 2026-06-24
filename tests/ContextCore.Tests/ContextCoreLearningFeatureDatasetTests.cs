@@ -4,6 +4,10 @@ using ContextCore.Abstractions.Models;
 using ContextCore.ControlRoom.Rendering;
 using ContextCore.ControlRoom.Services;
 using ContextCore.Core.Services;
+using ContextCore.Storage.FileSystem;
+using ContextCore.Storage.FileSystem.Stores;
+using ContextCore.Storage.InMemory;
+using ContextCore.Storage.InMemory.Stores;
 
 namespace ContextCore.Tests;
 
@@ -79,6 +83,471 @@ public sealed class ContextCoreLearningFeatureDatasetTests
         Assert.IsFalse(example.Accepted);
         Assert.IsTrue(example.Rejected);
         Assert.AreEqual(1, example.LifecycleRisk);
+    }
+
+    [TestMethod]
+    public async Task RuntimeLearningFeedbackService_ShouldSubmitFilterExportSummarizeAndDeduplicate()
+    {
+        var store = new InMemoryLearningFeedbackStore();
+        var service = new LearningFeedbackService(store);
+        var feedback = CreateRuntimeFeedback(metadataOnly: true);
+
+        var created = await service.SubmitAsync(feedback);
+        var replaced = await service.SubmitAsync(feedback);
+        var rows = await service.ListAsync(new LearningFeedbackEventQuery
+        {
+            WorkspaceId = WorkspaceId,
+            CollectionId = CollectionId,
+            CapabilityId = ShadowCapabilityIds.VectorRetrieval,
+            FeedbackKind = LearningFeedbackKinds.MissingContext,
+            Limit = 20
+        });
+        var summary = await service.BuildSummaryAsync(new LearningFeedbackEventQuery
+        {
+            WorkspaceId = WorkspaceId,
+            CollectionId = CollectionId
+        });
+        var jsonl = await service.ExportJsonLinesAsync(new LearningFeedbackEventQuery
+        {
+            WorkspaceId = WorkspaceId,
+            CollectionId = CollectionId
+        });
+
+        Assert.IsTrue(created.Created);
+        Assert.IsTrue(replaced.DuplicateReplaced);
+        Assert.AreEqual(1, rows.Count);
+        Assert.AreEqual(string.Empty, rows[0].Reason);
+        Assert.AreEqual(string.Empty, rows[0].UserCorrection);
+        Assert.AreEqual("metadata-only", rows[0].Metadata["redactionMode"]);
+        Assert.AreEqual(1, summary.FeedbackCount);
+        Assert.AreEqual(1, summary.FeedbackByCapability[ShadowCapabilityIds.VectorRetrieval]);
+        Assert.AreEqual(1, summary.FeedbackByTargetType[LearningFeedbackTargetType.VectorCandidate.ToString()]);
+        Assert.AreEqual(1, summary.MetadataOnlyCount);
+        Assert.AreEqual(1, summary.TrainingUseDisabledCount);
+        StringAssert.Contains(jsonl, rows[0].FeedbackId);
+    }
+
+    [TestMethod]
+    public async Task RuntimeLearningFeedbackService_ShouldRejectInvalidCapability()
+    {
+        var service = new LearningFeedbackService(new InMemoryLearningFeedbackStore());
+        var feedback = new LearningFeedbackEvent
+        {
+            WorkspaceId = WorkspaceId,
+            CollectionId = CollectionId,
+            CapabilityId = "UnsupportedCapability",
+            FeedbackKind = LearningFeedbackKinds.Useful
+        };
+
+        await Assert.ThrowsExceptionAsync<ArgumentException>(() => service.SubmitAsync(feedback));
+    }
+
+    [TestMethod]
+    public async Task RuntimeLearningFeedbackService_ShouldRejectInvalidTargetType()
+    {
+        var service = new LearningFeedbackService(new InMemoryLearningFeedbackStore());
+        var feedback = new LearningFeedbackEvent
+        {
+            WorkspaceId = WorkspaceId,
+            CollectionId = CollectionId,
+            CapabilityId = ShadowCapabilityIds.VectorRetrieval,
+            TargetId = "candidate-1",
+            TargetType = "UnsupportedTarget",
+            FeedbackKind = LearningFeedbackKinds.Useful
+        };
+
+        await Assert.ThrowsExceptionAsync<ArgumentException>(() => service.SubmitAsync(feedback));
+    }
+
+    [TestMethod]
+    public async Task FileLearningFeedbackStore_ShouldPersistAndQuery()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "contextcore-feedback-test-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var store = new FileLearningFeedbackStore(new FileStorageOptions { RootPath = root });
+            var service = new LearningFeedbackService(store);
+            var feedback = CreateRuntimeFeedback(metadataOnly: false);
+
+            var result = await service.SubmitAsync(feedback);
+            var found = await store.GetAsync(result.FeedbackId);
+            var rows = await store.QueryAsync(new LearningFeedbackEventQuery
+            {
+                WorkspaceId = WorkspaceId,
+                CollectionId = CollectionId,
+                TargetId = "candidate-1",
+                Limit = 10
+            });
+
+            Assert.IsNotNull(found);
+            Assert.AreEqual(result.FeedbackId, found.FeedbackId);
+            Assert.AreEqual(1, rows.Count);
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    [TestMethod]
+    public async Task FeedbackReviewSummary_ShouldTreatNewFeedbackAsPendingReview()
+    {
+        var feedbackStore = new InMemoryLearningFeedbackStore();
+        var reviewStore = new InMemoryLearningFeedbackReviewStore();
+        var feedbackService = new LearningFeedbackService(feedbackStore);
+        await feedbackService.SubmitAsync(CreateRuntimeFeedback(metadataOnly: true));
+
+        var summary = await new LearningFeedbackReviewService(feedbackStore, reviewStore)
+            .BuildSummaryAsync(DefaultFeedbackQuery(), new LearningFeedbackReviewQuery());
+
+        Assert.AreEqual(1, summary.FeedbackCount);
+        Assert.AreEqual(1, summary.PendingReviewCount);
+        Assert.AreEqual(0, summary.ApprovedCount);
+        Assert.AreEqual("disabled_until_review", (await feedbackStore.QueryAsync(DefaultFeedbackQuery()))[0].TrainingUse);
+    }
+
+    [TestMethod]
+    public async Task FeedbackFeatureCandidateBuilder_ShouldSkipUnreviewedFeedback()
+    {
+        var feedbackStore = new InMemoryLearningFeedbackStore();
+        var reviewStore = new InMemoryLearningFeedbackReviewStore();
+        await new LearningFeedbackService(feedbackStore)
+            .SubmitAsync(CreateRuntimeFeedback(metadataOnly: false, feedbackId: "feedback-unreviewed"));
+
+        var report = await new LearningFeedbackFeatureCandidateBuilder(feedbackStore, reviewStore)
+            .BuildAsync(DefaultFeedbackQuery());
+
+        Assert.AreEqual(0, report.GeneratedCandidateCount);
+        Assert.AreEqual(1, report.PendingReviewCount);
+    }
+
+    [TestMethod]
+    public async Task ApprovedFeedback_ShouldGenerateFeatureCandidate()
+    {
+        var (feedbackStore, reviewStore, feedback) = await CreateReviewedFeedbackAsync(
+            "feedback-approved",
+            metadataOnly: false,
+            FeedbackReviewStatus.ApprovedForDataset);
+
+        var report = await new LearningFeedbackFeatureCandidateBuilder(feedbackStore, reviewStore)
+            .BuildAsync(DefaultFeedbackQuery());
+
+        Assert.AreEqual(1, report.GeneratedCandidateCount);
+        Assert.AreEqual(feedback.FeedbackId, report.Candidates[0].SourceFeedbackId);
+        Assert.AreEqual(ShadowCapabilityIds.VectorRetrieval, report.Candidates[0].CapabilityId);
+        Assert.IsTrue(report.Candidates[0].PositiveLabel);
+        Assert.AreEqual("approved_for_dataset", report.Candidates[0].TrainingUse);
+    }
+
+    [TestMethod]
+    public async Task RejectedFeedback_ShouldNotGenerateFeatureCandidate()
+    {
+        var (feedbackStore, reviewStore, _) = await CreateReviewedFeedbackAsync(
+            "feedback-rejected",
+            metadataOnly: false,
+            FeedbackReviewStatus.Rejected);
+
+        var report = await new LearningFeedbackFeatureCandidateBuilder(feedbackStore, reviewStore)
+            .BuildAsync(DefaultFeedbackQuery());
+
+        Assert.AreEqual(0, report.GeneratedCandidateCount);
+        Assert.AreEqual(1, report.RejectedCount);
+    }
+
+    [TestMethod]
+    public async Task NeedsRedactionFeedback_ShouldNotGenerateFeatureCandidate()
+    {
+        var (feedbackStore, reviewStore, _) = await CreateReviewedFeedbackAsync(
+            "feedback-needs-redaction",
+            metadataOnly: false,
+            FeedbackReviewStatus.NeedsRedaction);
+
+        var report = await new LearningFeedbackFeatureCandidateBuilder(feedbackStore, reviewStore)
+            .BuildAsync(DefaultFeedbackQuery());
+
+        Assert.AreEqual(0, report.GeneratedCandidateCount);
+        Assert.AreEqual(1, report.NeedsRedactionCount);
+    }
+
+    [TestMethod]
+    public async Task MetadataOnlyFeedback_ShouldNotLeakRawTextIntoFeatureCandidate()
+    {
+        var (feedbackStore, reviewStore, _) = await CreateReviewedFeedbackAsync(
+            "feedback-metadata-only",
+            metadataOnly: true,
+            FeedbackReviewStatus.ApprovedForDataset);
+
+        var report = await new LearningFeedbackFeatureCandidateBuilder(feedbackStore, reviewStore)
+            .BuildAsync(DefaultFeedbackQuery());
+        var candidate = report.Candidates.Single();
+
+        Assert.AreEqual(string.Empty, candidate.QueryText);
+        Assert.AreEqual(string.Empty, candidate.Reason);
+        Assert.AreEqual("metadata-only", candidate.RedactionStatus);
+        Assert.AreEqual("true", candidate.Metadata["metadataSafe"]);
+    }
+
+    [TestMethod]
+    public async Task MissingFeedbackBinding_ShouldMarkNeedsMoreEvidenceWhenRequested()
+    {
+        var feedbackStore = new InMemoryLearningFeedbackStore();
+        var reviewStore = new InMemoryLearningFeedbackReviewStore();
+        var feedback = await new LearningFeedbackService(feedbackStore)
+            .SubmitAsync(CreateRuntimeFeedback(
+                metadataOnly: false,
+                feedbackId: "feedback-missing-binding",
+                sourceOperationId: string.Empty));
+        await new LearningFeedbackReviewService(feedbackStore, reviewStore)
+            .ApproveAsync(feedback.FeedbackId, ApprovedReviewRequest());
+
+        var report = await new LearningFeedbackFeatureCandidateBuilder(feedbackStore, reviewStore)
+            .BuildAsync(DefaultFeedbackQuery(), updateNeedsMoreEvidence: true);
+        var review = (await reviewStore.QueryAsync(new LearningFeedbackReviewQuery
+        {
+            FeedbackId = feedback.FeedbackId,
+            Limit = 10
+        })).Single();
+
+        Assert.AreEqual(0, report.GeneratedCandidateCount);
+        Assert.AreEqual(1, report.NeedsMoreEvidenceCount);
+        Assert.AreEqual(FeedbackReviewStatus.NeedsMoreEvidence, review.ReviewStatus);
+    }
+
+    [TestMethod]
+    public async Task DuplicateFeedbackFeatureCandidate_ShouldHaveStableCandidateId()
+    {
+        var (feedbackStore, reviewStore, _) = await CreateReviewedFeedbackAsync(
+            "feedback-stable-candidate",
+            metadataOnly: false,
+            FeedbackReviewStatus.ApprovedForDataset);
+        var builder = new LearningFeedbackFeatureCandidateBuilder(feedbackStore, reviewStore);
+
+        var first = await builder.BuildAsync(DefaultFeedbackQuery());
+        var second = await builder.BuildAsync(DefaultFeedbackQuery());
+
+        Assert.AreEqual(1, first.GeneratedCandidateCount);
+        Assert.AreEqual(1, second.GeneratedCandidateCount);
+        Assert.AreEqual(first.Candidates[0].CandidateId, second.Candidates[0].CandidateId);
+    }
+
+    [TestMethod]
+    public async Task LearningFeedbackQuality_ShouldRecommendReviewForPendingOnlyFeedback()
+    {
+        var feedbackStore = new InMemoryLearningFeedbackStore();
+        var reviewStore = new InMemoryLearningFeedbackReviewStore();
+        await new LearningFeedbackService(feedbackStore)
+            .SubmitAsync(CreateRuntimeFeedback(metadataOnly: true, feedbackId: "feedback-quality-pending"));
+
+        var report = await BuildFeedbackQualityReportAsync(feedbackStore, reviewStore);
+
+        Assert.AreEqual(1, report.FeedbackCount);
+        Assert.AreEqual(1, report.PendingReviewCount);
+        Assert.AreEqual(LearningFeedbackQualityRecommendations.NeedsReviewedFeedback, report.Recommendation);
+    }
+
+    [TestMethod]
+    public async Task LearningFeedbackQuality_ShouldRequireRedactionReviewForUncheckedApprovedFeedback()
+    {
+        var feedbackStore = new InMemoryLearningFeedbackStore();
+        var reviewStore = new InMemoryLearningFeedbackReviewStore();
+        var feedback = await new LearningFeedbackService(feedbackStore)
+            .SubmitAsync(CreateRuntimeFeedback(metadataOnly: false, feedbackId: "feedback-quality-redaction"));
+        await new LearningFeedbackReviewService(feedbackStore, reviewStore)
+            .ApproveAsync(feedback.FeedbackId, new LearningFeedbackReviewRequest
+            {
+                Reviewer = "reviewer-test",
+                ReviewReason = "approved but redaction was not checked",
+                RedactionChecked = false,
+                TrainingUse = "approved_for_dataset"
+            });
+
+        var report = await BuildFeedbackQualityReportAsync(feedbackStore, reviewStore);
+
+        Assert.AreEqual(1, report.ApprovedCount);
+        Assert.AreEqual(1, report.NeedsRedactionCount);
+        Assert.AreEqual(LearningFeedbackQualityRecommendations.NeedsRedactionReview, report.Recommendation);
+    }
+
+    [TestMethod]
+    public async Task LearningFeedbackQuality_ShouldMarkCapabilityReadyWhenApprovedLabelsAreCovered()
+    {
+        var feedbackStore = new InMemoryLearningFeedbackStore();
+        var reviewStore = new InMemoryLearningFeedbackReviewStore();
+        await SubmitApprovedFeedbackAsync(feedbackStore, reviewStore, "feedback-quality-positive", LearningFeedbackKinds.MissingContext, metadataOnly: false);
+        await SubmitApprovedFeedbackAsync(feedbackStore, reviewStore, "feedback-quality-negative", LearningFeedbackKinds.DeprecatedContext, metadataOnly: false);
+
+        var report = await BuildFeedbackQualityReportAsync(feedbackStore, reviewStore);
+        var readiness = report.ApprovedDatasetReadiness.Single(item => item.CapabilityId == ShadowCapabilityIds.VectorRetrieval);
+
+        Assert.AreEqual(2, report.FeatureCandidateCount);
+        Assert.IsTrue(readiness.Ready);
+        Assert.AreEqual(1, readiness.PositiveLabelCount);
+        Assert.AreEqual(1, readiness.NegativeLabelCount);
+        Assert.AreEqual(LearningFeedbackQualityRecommendations.ReadyForOfflineBaseline, report.Recommendation);
+    }
+
+    [TestMethod]
+    public async Task LearningFeedbackQuality_ShouldBlockMetadataOnlyInsufficientCapability()
+    {
+        var feedbackStore = new InMemoryLearningFeedbackStore();
+        var reviewStore = new InMemoryLearningFeedbackReviewStore();
+        await SubmitApprovedFeedbackAsync(feedbackStore, reviewStore, "feedback-quality-meta-positive", LearningFeedbackKinds.MissingContext, metadataOnly: true);
+        await SubmitApprovedFeedbackAsync(feedbackStore, reviewStore, "feedback-quality-meta-negative", LearningFeedbackKinds.DeprecatedContext, metadataOnly: true);
+
+        var report = await BuildFeedbackQualityReportAsync(feedbackStore, reviewStore);
+        var readiness = report.ApprovedDatasetReadiness.Single(item => item.CapabilityId == ShadowCapabilityIds.VectorRetrieval);
+
+        Assert.IsFalse(readiness.Ready);
+        CollectionAssert.Contains(readiness.BlockedReasons.ToArray(), LearningFeedbackQualityBlockedReasons.MetadataOnlyInsufficient);
+        Assert.AreEqual(2, readiness.MetadataOnlyCount);
+    }
+
+    [TestMethod]
+    public async Task LearningFeedbackQuality_ShouldBlockMissingPositiveOrNegativeLabels()
+    {
+        var feedbackStore = new InMemoryLearningFeedbackStore();
+        var reviewStore = new InMemoryLearningFeedbackReviewStore();
+        await SubmitApprovedFeedbackAsync(feedbackStore, reviewStore, "feedback-quality-positive-only", LearningFeedbackKinds.MissingContext, metadataOnly: false);
+
+        var report = await BuildFeedbackQualityReportAsync(feedbackStore, reviewStore);
+        var readiness = report.ApprovedDatasetReadiness.Single(item => item.CapabilityId == ShadowCapabilityIds.VectorRetrieval);
+
+        Assert.IsFalse(readiness.Ready);
+        CollectionAssert.Contains(readiness.BlockedReasons.ToArray(), LearningFeedbackQualityBlockedReasons.MissingNegativeSamples);
+        Assert.AreEqual(LearningFeedbackQualityRecommendations.NeedsLabelCoverage, report.Recommendation);
+    }
+
+    [TestMethod]
+    public async Task LearningFeedbackQuality_ShouldIgnoreReviewsOutsideQueriedFeedbackSet()
+    {
+        var feedbackStore = new InMemoryLearningFeedbackStore();
+        var reviewStore = new InMemoryLearningFeedbackReviewStore();
+        await new LearningFeedbackService(feedbackStore)
+            .SubmitAsync(CreateRuntimeFeedback(metadataOnly: true, feedbackId: "feedback-quality-pending-isolated"));
+        await reviewStore.UpsertAsync(new LearningFeedbackReviewRecord
+        {
+            FeedbackId = "feedback-other-workspace-approved",
+            Reviewer = "reviewer-test",
+            ReviewStatus = FeedbackReviewStatus.ApprovedForDataset,
+            ReviewReason = "unrelated approved review",
+            RedactionChecked = true,
+            TrainingUse = "approved_for_dataset",
+            ReviewedAt = DateTimeOffset.UtcNow,
+            Metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["workspaceId"] = "other-workspace",
+                ["collectionId"] = "other-collection"
+            }
+        });
+
+        var report = await BuildFeedbackQualityReportAsync(feedbackStore, reviewStore);
+
+        Assert.AreEqual(0, report.ApprovedCount);
+        Assert.AreEqual(1, report.PendingReviewCount);
+        Assert.AreEqual(LearningFeedbackQualityRecommendations.NeedsReviewedFeedback, report.Recommendation);
+    }
+
+    [TestMethod]
+    public async Task FeedbackReviewOperations_ShouldRecordApproveRejectRedactionAndEvidence()
+    {
+        var feedbackStore = new InMemoryLearningFeedbackStore();
+        var reviewStore = new InMemoryLearningFeedbackReviewStore();
+        var feedbackService = new LearningFeedbackService(feedbackStore);
+        var reviewService = new LearningFeedbackReviewService(feedbackStore, reviewStore);
+        var approved = await feedbackService.SubmitAsync(CreateRuntimeFeedback(metadataOnly: true, feedbackId: "feedback-review-approved"));
+        var rejected = await feedbackService.SubmitAsync(CreateRuntimeFeedback(metadataOnly: true, feedbackId: "feedback-review-rejected"));
+        var redaction = await feedbackService.SubmitAsync(CreateRuntimeFeedback(metadataOnly: false, feedbackId: "feedback-review-redaction"));
+        var evidence = await feedbackService.SubmitAsync(CreateRuntimeFeedback(metadataOnly: true, feedbackId: "feedback-review-evidence"));
+
+        await reviewService.ApproveAsync(approved.FeedbackId, ApprovedReviewRequest());
+        await reviewService.RejectAsync(rejected.FeedbackId, ApprovedReviewRequest());
+        await reviewService.NeedsRedactionAsync(redaction.FeedbackId, ApprovedReviewRequest());
+        await reviewService.NeedsMoreEvidenceAsync(evidence.FeedbackId, ApprovedReviewRequest());
+        var summary = await reviewService.BuildSummaryAsync(DefaultFeedbackQuery(), new LearningFeedbackReviewQuery());
+
+        Assert.AreEqual(4, summary.FeedbackCount);
+        Assert.AreEqual(1, summary.ApprovedCount);
+        Assert.AreEqual(1, summary.RejectedCount);
+        Assert.AreEqual(1, summary.NeedsRedactionCount);
+        Assert.AreEqual(1, summary.NeedsMoreEvidenceCount);
+    }
+
+    [TestMethod]
+    public async Task SmokeFeedback_ShouldGenerateCandidateButRemainExcludedFromTrainableDataset()
+    {
+        var feedbackStore = new InMemoryLearningFeedbackStore();
+        var reviewStore = new InMemoryLearningFeedbackReviewStore();
+        var feedback = await new LearningFeedbackService(feedbackStore)
+            .SubmitAsync(CreateRuntimeFeedback(
+                metadataOnly: true,
+                feedbackId: "feedback-smoke-excluded"));
+        await new LearningFeedbackReviewService(feedbackStore, reviewStore)
+            .ApproveAsync(feedback.FeedbackId, new LearningFeedbackReviewRequest
+            {
+                Reviewer = "reviewer-test",
+                ReviewReason = "smoke review",
+                RedactionChecked = true,
+                TrainingUse = "smoke_test_only",
+                Metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["excludedFromTraining"] = "true"
+                }
+            });
+
+        var candidates = await new LearningFeedbackFeatureCandidateBuilder(feedbackStore, reviewStore)
+            .BuildAsync(DefaultFeedbackQuery());
+        var quality = await BuildFeedbackQualityReportAsync(feedbackStore, reviewStore);
+        var gate = new LearningApprovedFeedbackDatasetGateBuilder()
+            .Build(quality, candidates);
+
+        Assert.AreEqual(1, candidates.GeneratedCandidateCount);
+        Assert.AreEqual("true", candidates.Candidates[0].Metadata["excludedFromTraining"]);
+        Assert.AreEqual(0, gate.TrainableCandidateCount);
+        Assert.AreEqual(1, gate.SmokeExcludedCount);
+        CollectionAssert.Contains(gate.FailureReasons.ToArray(), LearningApprovedFeedbackDatasetGateFailureReasons.NoTrainableCandidates);
+    }
+
+    [TestMethod]
+    public async Task ApprovedFeedbackDatasetGate_ShouldFailWhenNoApprovedFeedbackExists()
+    {
+        var feedbackStore = new InMemoryLearningFeedbackStore();
+        var reviewStore = new InMemoryLearningFeedbackReviewStore();
+        await new LearningFeedbackService(feedbackStore)
+            .SubmitAsync(CreateRuntimeFeedback(metadataOnly: true, feedbackId: "feedback-gate-pending"));
+
+        var candidates = await new LearningFeedbackFeatureCandidateBuilder(feedbackStore, reviewStore)
+            .BuildAsync(DefaultFeedbackQuery());
+        var quality = await BuildFeedbackQualityReportAsync(feedbackStore, reviewStore);
+        var gate = new LearningApprovedFeedbackDatasetGateBuilder()
+            .Build(quality, candidates);
+
+        Assert.IsFalse(gate.Passed);
+        CollectionAssert.Contains(gate.FailureReasons.ToArray(), LearningApprovedFeedbackDatasetGateFailureReasons.NoApprovedFeedback);
+        CollectionAssert.Contains(gate.FailureReasons.ToArray(), LearningApprovedFeedbackDatasetGateFailureReasons.NeedsReviewedFeedback);
+    }
+
+    [TestMethod]
+    public async Task ApprovedFeedbackDatasetGate_ShouldPassWhenCapabilityHasTrainablePositiveAndNegativeLabels()
+    {
+        var feedbackStore = new InMemoryLearningFeedbackStore();
+        var reviewStore = new InMemoryLearningFeedbackReviewStore();
+        await SubmitApprovedFeedbackAsync(feedbackStore, reviewStore, "feedback-gate-positive", LearningFeedbackKinds.MissingContext, metadataOnly: false);
+        await SubmitApprovedFeedbackAsync(feedbackStore, reviewStore, "feedback-gate-negative", LearningFeedbackKinds.DeprecatedContext, metadataOnly: false);
+
+        var candidates = await new LearningFeedbackFeatureCandidateBuilder(feedbackStore, reviewStore)
+            .BuildAsync(DefaultFeedbackQuery());
+        var quality = await BuildFeedbackQualityReportAsync(feedbackStore, reviewStore);
+        var gate = new LearningApprovedFeedbackDatasetGateBuilder()
+            .Build(quality, candidates);
+
+        Assert.IsTrue(gate.Passed);
+        Assert.AreEqual(2, gate.TrainableCandidateCount);
+        Assert.AreEqual(0, gate.SmokeExcludedCount);
+        Assert.AreEqual(1, gate.PositiveLabelCountByCapability[ShadowCapabilityIds.VectorRetrieval]);
+        Assert.AreEqual(1, gate.NegativeLabelCountByCapability[ShadowCapabilityIds.VectorRetrieval]);
     }
 
     [TestMethod]
@@ -393,6 +862,256 @@ public sealed class ContextCoreLearningFeatureDatasetTests
                     }
                 },
                 RecommendedNextAction = "Add rejected examples."
+            },
+            RouterIntentBaselineReport = new RouterIntentClassifierBaselineReport
+            {
+                SampleCount = 12,
+                Ready = true,
+                Status = LearningDatasetReadinessStatus.Ready,
+                BestBaseline = RouterIntentClassifierBaselineNames.TokenCentroidRouterBaseline,
+                Recommendation = RouterIntentClassifierRecommendations.ReadyForRouterShadow,
+                Baselines =
+                [
+                    new RouterIntentClassifierBaselineResult
+                    {
+                        BaselineName = RouterIntentClassifierBaselineNames.TokenCentroidRouterBaseline,
+                        Accuracy = 0.75,
+                        MacroF1 = 0.7,
+                        CurrentTaskRecall = 0.8,
+                        FuzzyQuestionRecall = 0.6,
+                        CodingTaskRecall = 0.9,
+                        NovelGenerationRecall = 0.7,
+                        AutomationRecoveryRecall = 0.75
+                    }
+                ],
+                PolicyVersion = RouterIntentEvaluationRunner.PolicyVersion
+            },
+            RouterDisagreementTriageA3Report = new RouterDisagreementTriageReport
+            {
+                DatasetName = "A3",
+                SampleCount = 10,
+                DisagreementCount = 2,
+                ShadowFixesRuntime = 1,
+                ShadowBreaksRuntime = 1,
+                HardNegativeCount = 2,
+                Recommendation = RouterDisagreementTriageRecommendations.KeepRuleBased,
+                TopConfusionPairs = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["CodingTask->FuzzyQuestion"] = 1
+                }
+            },
+            RouterDisagreementTriageExtendedReport = new RouterDisagreementTriageReport
+            {
+                DatasetName = "Extended",
+                SampleCount = 10,
+                DisagreementCount = 2,
+                ShadowFixesRuntime = 1,
+                ShadowBreaksRuntime = 1,
+                HardNegativeCount = 2,
+                Recommendation = RouterDisagreementTriageRecommendations.KeepRuleBased,
+                TopConfusionPairs = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["CodingTask->FuzzyQuestion"] = 1
+                }
+            },
+            RouterHardNegativeCount = 2,
+            RouterGuardedOptInReadinessGateReport = new RouterGuardedOptInReadinessGateReport
+            {
+                Passed = false,
+                ShadowFixesRuntime = 1,
+                ShadowBreaksRuntime = 3,
+                NetGain = -2,
+                AgreementRate = 0.8857,
+                Recommendation = RouterGuardedOptInGateRecommendations.KeepRuleBased,
+                FailureReasons =
+                [
+                    RouterGuardedOptInGateFailureReasons.ShadowBreaksRuntimeGreaterThanFixes
+                ]
+            },
+            CandidateRerankerFeatureCompletenessA3Report = new CandidateRerankerFeatureCompletenessReport
+            {
+                DatasetName = "A3",
+                FeatureCompletenessRate = 0.91,
+                MissingFeatureMetadataCount = 2,
+                RiskCandidateBlockedBeforeRerank = 5,
+                EligibilityGuardStatus = CandidateRerankerEligibilityGuardStatuses.Guarded,
+                Recommendation = "ReadyForGuardedShadowEval"
+            },
+            CandidateRerankerFeatureCompletenessExtendedReport = new CandidateRerankerFeatureCompletenessReport
+            {
+                DatasetName = "Extended",
+                FeatureCompletenessRate = 0.94,
+                MissingFeatureMetadataCount = 3,
+                RiskCandidateBlockedBeforeRerank = 8,
+                EligibilityGuardStatus = CandidateRerankerEligibilityGuardStatuses.Guarded,
+                Recommendation = "ReadyForGuardedShadowEval"
+            },
+            CandidateRerankerShadowEvalA3Report = new CandidateRerankerShadowEvalReport
+            {
+                DatasetName = "A3",
+                Samples = 10,
+                CandidateCount = 50,
+                WouldImproveCount = 2,
+                WouldRegressCount = 1,
+                NetGain = 1,
+                Recommendation = CandidateRerankerShadowRecommendations.NeedsFeatureTuning
+            },
+            CandidateRerankerShadowEvalExtendedReport = new CandidateRerankerShadowEvalReport
+            {
+                DatasetName = "Extended",
+                Samples = 20,
+                CandidateCount = 100,
+                WouldImproveCount = 3,
+                WouldRegressCount = 0,
+                NetGain = 3,
+                Recommendation = CandidateRerankerShadowRecommendations.ReadyForRankerShadow
+            },
+            CandidateRerankerShadowTraceQualityReport = new CandidateRerankerShadowTraceQualityReport
+            {
+                TraceCount = 30,
+                CandidateCount = 120,
+                Recommendation = CandidateRerankerShadowRecommendations.ReadyForRankerShadow
+            },
+            CandidateRerankerShadowFailureAuditA3Report = new CandidateRerankerShadowFailureAuditReport
+            {
+                DatasetName = "A3",
+                RegressionCount = 2,
+                ScoreContractStatus = CandidateRerankerScoreContractStatuses.NeedsAudit,
+                RiskCandidateInShadowTopK = 3,
+                RecommendedNextAction = "Keep formal ranking.",
+                RegressionReasonSummary = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+                {
+                    [CandidateRerankerRegressionReasons.RiskCandidateAllowed] = 2
+                }
+            },
+            CandidateRerankerShadowFailureAuditExtendedReport = new CandidateRerankerShadowFailureAuditReport
+            {
+                DatasetName = "Extended",
+                RegressionCount = 1,
+                ScoreContractStatus = CandidateRerankerScoreContractStatuses.NeedsAudit,
+                RiskCandidateInShadowTopK = 1,
+                RecommendedNextAction = "Keep formal ranking.",
+                RegressionReasonSummary = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+                {
+                    [CandidateRerankerRegressionReasons.RankerFeatureTooWeak] = 1
+                }
+            },
+            CandidateRerankerScoreDistributionA3Report = new CandidateRerankerScoreDistributionReport
+            {
+                DatasetName = "A3",
+                ScoreMean = 12,
+                ScoreStdDev = 2,
+                LowMarginDecisionCount = 1,
+                Recommendation = CandidateRerankerShadowRecommendations.NeedsFeatureTuning
+            },
+            CandidateRerankerScoreDistributionExtendedReport = new CandidateRerankerScoreDistributionReport
+            {
+                DatasetName = "Extended",
+                ScoreMean = 14,
+                ScoreStdDev = 3,
+                LowMarginDecisionCount = 0,
+                Recommendation = CandidateRerankerShadowRecommendations.KeepFormalRanking
+            },
+            CandidateRerankerListwiseCalibrationA3Report = new CandidateRerankerListwiseCalibrationReport
+            {
+                DatasetName = "A3",
+                RegressionCount = 2,
+                LowMarginDecisionCount = 1,
+                FormalPriorityMismatchCount = 1,
+                Recommendation = CandidateRerankerShadowRecommendations.NeedsFeatureTuning,
+                CalibrationIssueCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+                {
+                    [CandidateRerankerCalibrationIssues.LowMarginAmbiguity] = 1
+                }
+            },
+            CandidateRerankerListwiseCalibrationExtendedReport = new CandidateRerankerListwiseCalibrationReport
+            {
+                DatasetName = "Extended",
+                RegressionCount = 1,
+                LowMarginDecisionCount = 0,
+                FormalPriorityMismatchCount = 1,
+                Recommendation = CandidateRerankerShadowRecommendations.NeedsFeatureTuning,
+                CalibrationIssueCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+                {
+                    [CandidateRerankerCalibrationIssues.FormalRankingHasImplicitPriority] = 1
+                }
+            },
+            CandidateRerankerFormalPriorityAlignmentA3Report = new CandidateRerankerFormalPriorityAlignmentReport
+            {
+                DatasetName = "A3",
+                RegressionCount = 2,
+                RecoveredCount = 1,
+                UnexplainedMismatchCount = 1,
+                AbstainCount = 1,
+                NetGainAfterAbstain = 0,
+                RecoveredByLayerPriority = 1,
+                RecoveredBySourcePriority = 1,
+                RecoveredByCurrentTaskBoost = 1,
+                RecoveredByConstraintRelevance = 1,
+                RecoveredByStableMemoryBias = 0,
+                Recommendation = CandidateRerankerShadowRecommendations.NeedsFeatureTuning
+            },
+            CandidateRerankerFormalPriorityAlignmentExtendedReport = new CandidateRerankerFormalPriorityAlignmentReport
+            {
+                DatasetName = "Extended",
+                RegressionCount = 1,
+                RecoveredCount = 1,
+                UnexplainedMismatchCount = 0,
+                AbstainCount = 0,
+                NetGainAfterAbstain = 1,
+                RecoveredByLayerPriority = 1,
+                RecoveredBySourcePriority = 1,
+                RecoveredByCurrentTaskBoost = 0,
+                RecoveredByConstraintRelevance = 0,
+                RecoveredByStableMemoryBias = 1,
+                Recommendation = CandidateRerankerShadowRecommendations.NeedsFeatureTuning
+            },
+            LearningReadinessRegistry = new LearningReadinessRegistry
+            {
+                ReadyCount = 3,
+                BlockedCount = 3,
+                OverallRecommendation = "KeepRuntimeDefaults",
+                Capabilities =
+                [
+                    new ShadowCapabilityReadiness
+                    {
+                        CapabilityId = ShadowCapabilityIds.GraphExpansion,
+                        CurrentPhase = "G7.1",
+                        Status = ShadowCapabilityReadinessStatuses.ReadyForGuardedOptIn,
+                        GatePassed = true,
+                        Recommendation = "ReadyForGuardedOptIn:audit-v1,conflict-v1",
+                        AllowedRuntimeModes = ["ApplyGuarded:audit-v1", "ApplyGuarded:conflict-v1"],
+                        ForbiddenRuntimeModes = ["ApplyGuarded:normal-v1", "ApplyGuarded:current-task-v1"],
+                        LastEvalReportPath = "eval/graph-expansion-guarded-optin-gate.json"
+                    },
+                    new ShadowCapabilityReadiness
+                    {
+                        CapabilityId = ShadowCapabilityIds.VectorRetrieval,
+                        CurrentPhase = "V3.F",
+                        Status = ShadowCapabilityReadinessStatuses.PreviewOnly,
+                        GatePassed = false,
+                        Recommendation = "BlockedByRecall",
+                        BlockedReasons = ["A3RecallAtLeast80Percent"],
+                        AllowedRuntimeModes = [ShadowRuntimeModes.PreviewOnly],
+                        ForbiddenRuntimeModes = [ShadowRuntimeModes.RuntimeShadow, ShadowRuntimeModes.ApplyGuarded],
+                        LastEvalReportPath = "eval/vector-retrieval-shadow-readiness-gate.json"
+                    }
+                ]
+            },
+            LearningRuntimeChangeReadinessGateReport = new LearningRuntimeChangeReadinessGateReport
+            {
+                Passed = true,
+                Recommendation = "RuntimeChangeRulesSatisfied",
+                Checks =
+                [
+                    new LearningRuntimeChangeReadinessGateCheck
+                    {
+                        CapabilityId = ShadowCapabilityIds.VectorRetrieval,
+                        Condition = "VectorV4GateBlocksRuntimeShadow",
+                        Passed = true,
+                        Reason = "Vector V4 gate 未通过时必须禁止 RuntimeShadow / ApplyGuarded。"
+                    }
+                ]
             }
         };
 
@@ -404,6 +1123,33 @@ public sealed class ContextCoreLearningFeatureDatasetTests
         StringAssert.Contains(output, "policy=1 rankingPairs=2 routerIntent=3");
         StringAssert.Contains(output, "MissingNegativeSamples");
         StringAssert.Contains(output, "RouterIntentClassifier: Ready");
+        StringAssert.Contains(output, "Learning Readiness Dashboard");
+        StringAssert.Contains(output, ShadowCapabilityIds.GraphExpansion);
+        StringAssert.Contains(output, "ApplyGuarded:audit-v1");
+        StringAssert.Contains(output, "BlockedByRecall");
+        StringAssert.Contains(output, "Learning Runtime Change Gate");
+        StringAssert.Contains(output, "RuntimeChangeRulesSatisfied");
+        StringAssert.Contains(output, "Router Intent Baseline");
+        StringAssert.Contains(output, RouterIntentClassifierRecommendations.ReadyForRouterShadow);
+        StringAssert.Contains(output, RouterIntentClassifierBaselineNames.TokenCentroidRouterBaseline);
+        StringAssert.Contains(output, "Router Disagreement Triage Summary");
+        StringAssert.Contains(output, "hard negatives: 2");
+        StringAssert.Contains(output, "CodingTask->FuzzyQuestion");
+        StringAssert.Contains(output, "Router Opt-in Readiness Summary");
+        StringAssert.Contains(output, RouterGuardedOptInGateFailureReasons.ShadowBreaksRuntimeGreaterThanFixes);
+        StringAssert.Contains(output, "Candidate Feature Completeness / Eligibility Guard Summary");
+        StringAssert.Contains(output, CandidateRerankerEligibilityGuardStatuses.Guarded);
+        StringAssert.Contains(output, "Candidate Reranker Shadow Summary");
+        StringAssert.Contains(output, CandidateRerankerShadowRecommendations.ReadyForRankerShadow);
+        StringAssert.Contains(output, "Candidate Reranker Failure Audit Summary");
+        StringAssert.Contains(output, CandidateRerankerRegressionReasons.RiskCandidateAllowed);
+        StringAssert.Contains(output, CandidateRerankerScoreContractStatuses.NeedsAudit);
+        StringAssert.Contains(output, "Ranker Calibration Summary");
+        StringAssert.Contains(output, CandidateRerankerCalibrationIssues.LowMarginAmbiguity);
+        StringAssert.Contains(output, CandidateRerankerCalibrationIssues.FormalRankingHasImplicitPriority);
+        StringAssert.Contains(output, "Formal Priority Alignment Summary");
+        StringAssert.Contains(output, "recovered=1");
+        StringAssert.Contains(output, "netAfterAbstain=1");
         StringAssert.Contains(output, "Add rejected examples.");
         StringAssert.Contains(output, "Positive: 1");
         StringAssert.Contains(output, "PromotionCandidateReviewRecord: 1");
@@ -692,6 +1438,106 @@ public sealed class ContextCoreLearningFeatureDatasetTests
             PolicyVersion = LearningFeatureDatasetService.PolicyVersion,
             CreatedAt = DateTimeOffset.UtcNow
         };
+
+    private static LearningFeedbackEvent CreateRuntimeFeedback(
+        bool metadataOnly,
+        string? feedbackId = null,
+        string? capabilityId = null,
+        string? feedbackKind = null,
+        string? targetId = null,
+        string? sourceOperationId = null)
+        => new()
+        {
+            FeedbackId = feedbackId ?? string.Empty,
+            WorkspaceId = WorkspaceId,
+            CollectionId = CollectionId,
+            Source = "package-preview",
+            SourceOperationId = sourceOperationId ?? "operation-feedback-1",
+            CapabilityId = capabilityId ?? ShadowCapabilityIds.VectorRetrieval,
+            TargetId = targetId ?? "candidate-1",
+            TargetType = LearningFeedbackTargetType.VectorCandidate.ToString(),
+            FeedbackKind = feedbackKind ?? LearningFeedbackKinds.MissingContext,
+            FeedbackValue = -1,
+            Reason = "missing context reason that should not become training data directly",
+            UserCorrection = "corrected context detail",
+            RedactionMode = metadataOnly ? "metadata-only" : string.Empty,
+            MetadataOnly = metadataOnly,
+            TrainingUse = "disabled_until_review",
+            Confidence = 0.8,
+            Metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["metadataOnly"] = metadataOnly ? "true" : "false"
+            }
+        };
+
+    private static LearningFeedbackEventQuery DefaultFeedbackQuery()
+        => new()
+        {
+            WorkspaceId = WorkspaceId,
+            CollectionId = CollectionId,
+            Limit = int.MaxValue
+        };
+
+    private static LearningFeedbackReviewRequest ApprovedReviewRequest()
+        => new()
+        {
+            Reviewer = "reviewer-test",
+            ReviewReason = "reviewed for offline dataset candidate",
+            RedactionChecked = true,
+            TrainingUse = "approved_for_dataset"
+        };
+
+    private static async Task<(InMemoryLearningFeedbackStore FeedbackStore, InMemoryLearningFeedbackReviewStore ReviewStore, LearningFeedbackEvent Feedback)> CreateReviewedFeedbackAsync(
+        string feedbackId,
+        bool metadataOnly,
+        FeedbackReviewStatus status)
+    {
+        var feedbackStore = new InMemoryLearningFeedbackStore();
+        var reviewStore = new InMemoryLearningFeedbackReviewStore();
+        var feedback = await new LearningFeedbackService(feedbackStore)
+            .SubmitAsync(CreateRuntimeFeedback(metadataOnly, feedbackId));
+        var reviewService = new LearningFeedbackReviewService(feedbackStore, reviewStore);
+        var request = ApprovedReviewRequest();
+        _ = status switch
+        {
+            FeedbackReviewStatus.ApprovedForDataset => await reviewService.ApproveAsync(feedback.FeedbackId, request),
+            FeedbackReviewStatus.Rejected => await reviewService.RejectAsync(feedback.FeedbackId, request),
+            FeedbackReviewStatus.NeedsRedaction => await reviewService.NeedsRedactionAsync(feedback.FeedbackId, request),
+            FeedbackReviewStatus.NeedsMoreEvidence => await reviewService.NeedsMoreEvidenceAsync(feedback.FeedbackId, request),
+            _ => throw new ArgumentOutOfRangeException(nameof(status), status, "Unsupported review status for test setup.")
+        };
+
+        return (feedbackStore, reviewStore, feedback.Event);
+    }
+
+    private static async Task SubmitApprovedFeedbackAsync(
+        InMemoryLearningFeedbackStore feedbackStore,
+        InMemoryLearningFeedbackReviewStore reviewStore,
+        string feedbackId,
+        string feedbackKind,
+        bool metadataOnly)
+    {
+        var feedback = await new LearningFeedbackService(feedbackStore)
+            .SubmitAsync(CreateRuntimeFeedback(
+                metadataOnly,
+                feedbackId,
+                feedbackKind: feedbackKind));
+        await new LearningFeedbackReviewService(feedbackStore, reviewStore)
+            .ApproveAsync(feedback.FeedbackId, ApprovedReviewRequest());
+    }
+
+    private static async Task<LearningFeedbackQualityReport> BuildFeedbackQualityReportAsync(
+        InMemoryLearningFeedbackStore feedbackStore,
+        InMemoryLearningFeedbackReviewStore reviewStore)
+    {
+        var query = DefaultFeedbackQuery();
+        var feedback = await feedbackStore.QueryAsync(query);
+        var reviews = await reviewStore.QueryAsync(new LearningFeedbackReviewQuery { Limit = int.MaxValue });
+        var featureCandidates = await new LearningFeedbackFeatureCandidateBuilder(feedbackStore, reviewStore)
+            .BuildAsync(query);
+        return new LearningFeedbackQualityReportBuilder()
+            .Build(feedback, reviews, featureCandidates);
+    }
 
     private static RankingPairExample CreateRankingPair(
         string sampleId,

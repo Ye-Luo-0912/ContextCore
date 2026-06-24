@@ -1,0 +1,31 @@
+﻿{
+  "OperationId": "retrieval-dataset-v2-quality-689ab6aa18a64f3c8b9d369204e25d8d",
+  "CreatedAt": "2026-06-15T14:50:28.5146915+00:00",
+  "CorpusItemCount": 28,
+  "SampleCount": 21,
+  "DifficultyBreakdown": {
+    "direct_lexical": 3,
+    "paraphrase_semantic": 3,
+    "metadata_anchor": 3,
+    "relation_multi_hop": 3,
+    "lifecycle_deprecated_trap": 3,
+    "must_not_negative_constraint": 3,
+    "ambiguous_query_requiring_target_section": 3
+  },
+  "SplitBreakdown": {
+    "train": 13,
+    "dev": 4,
+    "test": 4
+  },
+  "ValidationIssueCount": 0,
+  "MissingEvidenceCount": 0,
+  "MissingProvenanceCount": 0,
+  "MustHitMissingCount": 0,
+  "MustNotOverlapCount": 0,
+  "ItemIdLeakageCount": 0,
+  "RelationInconsistencyCount": 0,
+  "JudgeWarningCount": 0,
+  "FormalRetrievalAllowed": false,
+  "UseForRuntime": false,
+  "Recommendation": "ReadyForDatasetV2ShadowEval"
+}

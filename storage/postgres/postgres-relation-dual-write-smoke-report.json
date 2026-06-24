@@ -1,0 +1,16 @@
+﻿{
+  "ProviderEnabled": true,
+  "WorkspaceId": "postgres-relation-dual-write-smoke",
+  "CollectionId": "relation-dual-write",
+  "RelationDualWritePassed": true,
+  "ReviewDualWritePassed": true,
+  "DiagnosticsDualWritePassed": true,
+  "CleanupPerformed": true,
+  "TraceCount": 3,
+  "Mismatches": [],
+  "Diagnostics": [
+    "CleanupPerformed",
+    "RuntimeProviderStillFileSystem"
+  ],
+  "Recommendation": "ReadyForShadowRead"
+}

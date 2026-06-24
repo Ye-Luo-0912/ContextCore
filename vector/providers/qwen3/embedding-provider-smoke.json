@@ -1,0 +1,23 @@
+﻿{
+  "OperationId": "embedding-provider-smoke-7495e95949704c9293c4dc3132489293",
+  "CreatedAt": "2026-06-14T18:07:17.5895975+00:00",
+  "ProviderId": "qwen3-embedding-0.6b-onnx",
+  "ProviderType": "OnnxLocal",
+  "EmbeddingModel": "qwen3-embedding-0.6b",
+  "ModelPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\src\\ContextCore.Embedding\\Models\\qwen3-embedding-0.6b-onnx\\model_int8.onnx",
+  "TokenizerPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\src\\ContextCore.Embedding\\Models\\qwen3-embedding-0.6b-onnx\\tokenizer.json",
+  "ExpectedDimension": 1024,
+  "ActualDimension": 1024,
+  "UseForRuntime": false,
+  "ProviderEnabled": true,
+  "ModelPathExists": true,
+  "TokenizerPathExists": true,
+  "TokenizationWorks": true,
+  "OnnxInferenceWorks": true,
+  "DimensionMatchesConfig": true,
+  "NormalizationWorks": true,
+  "BatchEmbeddingWorks": true,
+  "Succeeded": true,
+  "Diagnostics": [],
+  "Warnings": []
+}

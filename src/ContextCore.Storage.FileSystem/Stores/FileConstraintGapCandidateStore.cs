@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using ContextCore.Abstractions;
+using ContextCore.Abstractions.Models;
 
 namespace ContextCore.Storage.FileSystem.Stores;
 
@@ -267,13 +268,13 @@ public sealed class FileConstraintGapCandidateStore : IConstraintGapCandidateSto
                 var workspaceId = Path.GetFileName(workspaceDirectory);
                 if (string.IsNullOrWhiteSpace(workspaceId))
                 {
-                    return Array.Empty<ShortTermMemoryScope>();
+                    return [];
                 }
 
                 var collectionsRoot = Path.Combine(workspaceDirectory, "collections");
                 if (!Directory.Exists(collectionsRoot))
                 {
-                    return Array.Empty<ShortTermMemoryScope>();
+                    return [];
                 }
 
                 return Directory.EnumerateDirectories(collectionsRoot)

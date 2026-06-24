@@ -1,0 +1,3478 @@
+﻿{
+  "OperationId": "runtime-observable-feature-contract-gate-b1d7b7f23e494c47a01abf65d2f8fe83",
+  "CreatedAt": "2026-06-18T00:23:23.8014156+00:00",
+  "ContractPassed": true,
+  "GatePassed": true,
+  "Recommendation": "ReadyForRuntimeObservableFeatureFreeze",
+  "AllowedMode": "AuditOnly",
+  "RequiredNextPhase": "RuntimeObservableFeatureFreeze",
+  "VectorProviderSource": "post-scoring-risk-gated-v1",
+  "GraphCandidateSource": "read-only relation evidence / expansion preview",
+  "BestProfileId": "combined-repair",
+  "BestProfileContractStatus": "RequiresRuntimeDerivation",
+  "Profiles": [
+    {
+      "ProfileId": "baseline",
+      "ProfileLabel": "Baseline",
+      "ContractStatus": "RuntimeSafe",
+      "Features": [
+        {
+          "FeatureId": "query.tokens",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Scoring",
+          "DerivationPath": "",
+          "CurrentSource": "tokenized RetrievalDatasetV2Sample.QueryText (== runtime query text)",
+          "Description": "Query token set fed into dense / lexical / anchor / negative-cue scoring.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.Content",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Scoring",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.Content (== ContextItem.Content at runtime)",
+          "Description": "Item body tokens for dense and lexical scoring.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.Tags",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Scoring",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.Tags (== ContextItem.Tags)",
+          "Description": "Tag tokens contributing to dense and anchor scoring.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.Anchors",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Scoring",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.Anchors (== item anchor metadata)",
+          "Description": "Anchor tokens contributing to anchor and negative-cue scoring.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.TargetSection",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Scoring",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.TargetSection (== item target section)",
+          "Description": "Target section token contributing to dense scoring.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.ItemKind",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Scoring",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.ItemKind",
+          "Description": "Item kind contributing to dense scoring.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.SourceKind",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Scoring",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.SourceKind",
+          "Description": "Source kind contributing to dense scoring.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.Lifecycle",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Filtering",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.Lifecycle (== item lifecycle metadata)",
+          "Description": "Used by IsLifecycleRisk and IsBlockedByEligibility.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.ReplacementState",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Filtering",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.ReplacementState",
+          "Description": "Used by IsLifecycleRisk and IsBlockedByEligibility.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.ReviewStatus",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Filtering",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.ReviewStatus",
+          "Description": "Available for eligibility filters; not actively branched in V5.5 runner.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.TargetSection \u00D7 sample.ExpectedTargetSection (filter)",
+          "Classification": "DerivedAtRuntime",
+          "UsageKind": "Filtering",
+          "DerivationPath": "router.targetSection or packageContext.targetSection",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.TargetSection \u00D7 RetrievalDatasetV2Sample.ExpectedTargetSection",
+          "Description": "Eligibility filter requires sample target section equality at runtime.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "sample.MustNotHitItemIds (filter)",
+          "Classification": "ForbiddenForScoring",
+          "UsageKind": "Filtering",
+          "DerivationPath": "query.mustNotItemIds from policy (runtime equivalent only)",
+          "CurrentSource": "RetrievalDatasetV2Sample.MustNotHitItemIds (eval ground truth)",
+          "Description": "post-scoring risk gate references mustNot list; current runner reads eval-side label, runtime needs query.mustNotItemIds policy.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.Relations \u00D7 sample.RequiredRelations (graph collection)",
+          "Classification": "DerivedAtRuntime",
+          "UsageKind": "CandidateExpansion",
+          "DerivationPath": "planner.requiredRelations or relationStore lookup",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.Relations \u00D7 RetrievalDatasetV2Sample.RequiredRelations",
+          "Description": "Graph candidate overlap \u002B= 2 when item.Relations intersects sample.RequiredRelations.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.EvidenceRefs \u00D7 sample.EvidenceRefs (graph collection)",
+          "Classification": "DerivedAtRuntime",
+          "UsageKind": "CandidateExpansion",
+          "DerivationPath": "query.evidenceAnchors",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.EvidenceRefs \u00D7 RetrievalDatasetV2Sample.EvidenceRefs",
+          "Description": "Graph candidate overlap \u002B= 1 on evidence overlap.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.SourceRefs \u00D7 sample.SourceRefs (graph collection)",
+          "Classification": "DerivedAtRuntime",
+          "UsageKind": "CandidateExpansion",
+          "DerivationPath": "query.sourceAnchors",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.SourceRefs \u00D7 RetrievalDatasetV2Sample.SourceRefs",
+          "Description": "Graph candidate overlap \u002B= 1 on source overlap.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "sample.MustHitItemIds (graph collection)",
+          "Classification": "ForbiddenForScoring",
+          "UsageKind": "CandidateExpansion",
+          "DerivationPath": "(none \u2014 runtime must avoid leaking labels into candidate ranking)",
+          "CurrentSource": "RetrievalDatasetV2Sample.MustHitItemIds (eval ground truth)",
+          "Description": "Graph candidate overlap \u002B= 3 when item is in MustHitItemIds; this is eval-only and must be removed before runtime promotion.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "options.VectorTopK",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Knob",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalQualityRepairPreviewOptions.{Baseline,Expansion}VectorTopK",
+          "Description": "Number of vector candidates retained.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "options.GraphTopK",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Knob",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalQualityRepairPreviewOptions.{Baseline,Expansion}GraphTopK",
+          "Description": "Number of graph candidates retained.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "options.MergedTopK",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Knob",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalQualityRepairPreviewOptions.{Baseline,Expansion,Adjusted}MergedTopK",
+          "Description": "Size of merged candidate window before TopK eval slice.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        }
+      ],
+      "UsesForbiddenForScoring": false,
+      "UsesEvalOnlyForScoring": false,
+      "RequiresRuntimeDerivation": false,
+      "RequiredRuntimeDerivationPaths": [],
+      "Notes": [
+        "Filtering uses item.TargetSection \u00D7 sample.ExpectedTargetSection (filter) (currently from RetrievalDatasetV2CorpusItem.TargetSection \u00D7 RetrievalDatasetV2Sample.ExpectedTargetSection); runtime must supply router.targetSection or packageContext.targetSection",
+        "Filtering uses sample.MustNotHitItemIds (filter) (currently from RetrievalDatasetV2Sample.MustNotHitItemIds (eval ground truth)); runtime must supply query.mustNotItemIds from policy (runtime equivalent only)",
+        "CandidateExpansion uses item.Relations \u00D7 sample.RequiredRelations (graph collection) (currently from RetrievalDatasetV2CorpusItem.Relations \u00D7 RetrievalDatasetV2Sample.RequiredRelations); runtime must supply planner.requiredRelations or relationStore lookup",
+        "CandidateExpansion uses item.EvidenceRefs \u00D7 sample.EvidenceRefs (graph collection) (currently from RetrievalDatasetV2CorpusItem.EvidenceRefs \u00D7 RetrievalDatasetV2Sample.EvidenceRefs); runtime must supply query.evidenceAnchors",
+        "CandidateExpansion uses item.SourceRefs \u00D7 sample.SourceRefs (graph collection) (currently from RetrievalDatasetV2CorpusItem.SourceRefs \u00D7 RetrievalDatasetV2Sample.SourceRefs); runtime must supply query.sourceAnchors",
+        "CandidateExpansion uses sample.MustHitItemIds (graph collection) (currently from RetrievalDatasetV2Sample.MustHitItemIds (eval ground truth)); runtime must supply (none \u2014 runtime must avoid leaking labels into candidate ranking)"
+      ]
+    },
+    {
+      "ProfileId": "candidate-pool-expansion",
+      "ProfileLabel": "Candidate pool expansion",
+      "ContractStatus": "RuntimeSafe",
+      "Features": [
+        {
+          "FeatureId": "query.tokens",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Scoring",
+          "DerivationPath": "",
+          "CurrentSource": "tokenized RetrievalDatasetV2Sample.QueryText (== runtime query text)",
+          "Description": "Query token set fed into dense / lexical / anchor / negative-cue scoring.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.Content",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Scoring",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.Content (== ContextItem.Content at runtime)",
+          "Description": "Item body tokens for dense and lexical scoring.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.Tags",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Scoring",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.Tags (== ContextItem.Tags)",
+          "Description": "Tag tokens contributing to dense and anchor scoring.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.Anchors",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Scoring",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.Anchors (== item anchor metadata)",
+          "Description": "Anchor tokens contributing to anchor and negative-cue scoring.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.TargetSection",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Scoring",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.TargetSection (== item target section)",
+          "Description": "Target section token contributing to dense scoring.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.ItemKind",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Scoring",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.ItemKind",
+          "Description": "Item kind contributing to dense scoring.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.SourceKind",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Scoring",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.SourceKind",
+          "Description": "Source kind contributing to dense scoring.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.Lifecycle",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Filtering",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.Lifecycle (== item lifecycle metadata)",
+          "Description": "Used by IsLifecycleRisk and IsBlockedByEligibility.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.ReplacementState",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Filtering",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.ReplacementState",
+          "Description": "Used by IsLifecycleRisk and IsBlockedByEligibility.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.ReviewStatus",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Filtering",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.ReviewStatus",
+          "Description": "Available for eligibility filters; not actively branched in V5.5 runner.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.TargetSection \u00D7 sample.ExpectedTargetSection (filter)",
+          "Classification": "DerivedAtRuntime",
+          "UsageKind": "Filtering",
+          "DerivationPath": "router.targetSection or packageContext.targetSection",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.TargetSection \u00D7 RetrievalDatasetV2Sample.ExpectedTargetSection",
+          "Description": "Eligibility filter requires sample target section equality at runtime.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "sample.MustNotHitItemIds (filter)",
+          "Classification": "ForbiddenForScoring",
+          "UsageKind": "Filtering",
+          "DerivationPath": "query.mustNotItemIds from policy (runtime equivalent only)",
+          "CurrentSource": "RetrievalDatasetV2Sample.MustNotHitItemIds (eval ground truth)",
+          "Description": "post-scoring risk gate references mustNot list; current runner reads eval-side label, runtime needs query.mustNotItemIds policy.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.Relations \u00D7 sample.RequiredRelations (graph collection)",
+          "Classification": "DerivedAtRuntime",
+          "UsageKind": "CandidateExpansion",
+          "DerivationPath": "planner.requiredRelations or relationStore lookup",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.Relations \u00D7 RetrievalDatasetV2Sample.RequiredRelations",
+          "Description": "Graph candidate overlap \u002B= 2 when item.Relations intersects sample.RequiredRelations.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.EvidenceRefs \u00D7 sample.EvidenceRefs (graph collection)",
+          "Classification": "DerivedAtRuntime",
+          "UsageKind": "CandidateExpansion",
+          "DerivationPath": "query.evidenceAnchors",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.EvidenceRefs \u00D7 RetrievalDatasetV2Sample.EvidenceRefs",
+          "Description": "Graph candidate overlap \u002B= 1 on evidence overlap.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.SourceRefs \u00D7 sample.SourceRefs (graph collection)",
+          "Classification": "DerivedAtRuntime",
+          "UsageKind": "CandidateExpansion",
+          "DerivationPath": "query.sourceAnchors",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.SourceRefs \u00D7 RetrievalDatasetV2Sample.SourceRefs",
+          "Description": "Graph candidate overlap \u002B= 1 on source overlap.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "sample.MustHitItemIds (graph collection)",
+          "Classification": "ForbiddenForScoring",
+          "UsageKind": "CandidateExpansion",
+          "DerivationPath": "(none \u2014 runtime must avoid leaking labels into candidate ranking)",
+          "CurrentSource": "RetrievalDatasetV2Sample.MustHitItemIds (eval ground truth)",
+          "Description": "Graph candidate overlap \u002B= 3 when item is in MustHitItemIds; this is eval-only and must be removed before runtime promotion.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "options.VectorTopK",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Knob",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalQualityRepairPreviewOptions.{Baseline,Expansion}VectorTopK",
+          "Description": "Number of vector candidates retained.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "options.GraphTopK",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Knob",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalQualityRepairPreviewOptions.{Baseline,Expansion}GraphTopK",
+          "Description": "Number of graph candidates retained.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "options.MergedTopK",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Knob",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalQualityRepairPreviewOptions.{Baseline,Expansion,Adjusted}MergedTopK",
+          "Description": "Size of merged candidate window before TopK eval slice.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        }
+      ],
+      "UsesForbiddenForScoring": false,
+      "UsesEvalOnlyForScoring": false,
+      "RequiresRuntimeDerivation": false,
+      "RequiredRuntimeDerivationPaths": [],
+      "Notes": [
+        "Filtering uses item.TargetSection \u00D7 sample.ExpectedTargetSection (filter) (currently from RetrievalDatasetV2CorpusItem.TargetSection \u00D7 RetrievalDatasetV2Sample.ExpectedTargetSection); runtime must supply router.targetSection or packageContext.targetSection",
+        "Filtering uses sample.MustNotHitItemIds (filter) (currently from RetrievalDatasetV2Sample.MustNotHitItemIds (eval ground truth)); runtime must supply query.mustNotItemIds from policy (runtime equivalent only)",
+        "CandidateExpansion uses item.Relations \u00D7 sample.RequiredRelations (graph collection) (currently from RetrievalDatasetV2CorpusItem.Relations \u00D7 RetrievalDatasetV2Sample.RequiredRelations); runtime must supply planner.requiredRelations or relationStore lookup",
+        "CandidateExpansion uses item.EvidenceRefs \u00D7 sample.EvidenceRefs (graph collection) (currently from RetrievalDatasetV2CorpusItem.EvidenceRefs \u00D7 RetrievalDatasetV2Sample.EvidenceRefs); runtime must supply query.evidenceAnchors",
+        "CandidateExpansion uses item.SourceRefs \u00D7 sample.SourceRefs (graph collection) (currently from RetrievalDatasetV2CorpusItem.SourceRefs \u00D7 RetrievalDatasetV2Sample.SourceRefs); runtime must supply query.sourceAnchors",
+        "CandidateExpansion uses sample.MustHitItemIds (graph collection) (currently from RetrievalDatasetV2Sample.MustHitItemIds (eval ground truth)); runtime must supply (none \u2014 runtime must avoid leaking labels into candidate ranking)"
+      ]
+    },
+    {
+      "ProfileId": "topk-adjustment",
+      "ProfileLabel": "TopK adjustment",
+      "ContractStatus": "RuntimeSafe",
+      "Features": [
+        {
+          "FeatureId": "query.tokens",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Scoring",
+          "DerivationPath": "",
+          "CurrentSource": "tokenized RetrievalDatasetV2Sample.QueryText (== runtime query text)",
+          "Description": "Query token set fed into dense / lexical / anchor / negative-cue scoring.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.Content",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Scoring",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.Content (== ContextItem.Content at runtime)",
+          "Description": "Item body tokens for dense and lexical scoring.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.Tags",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Scoring",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.Tags (== ContextItem.Tags)",
+          "Description": "Tag tokens contributing to dense and anchor scoring.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.Anchors",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Scoring",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.Anchors (== item anchor metadata)",
+          "Description": "Anchor tokens contributing to anchor and negative-cue scoring.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.TargetSection",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Scoring",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.TargetSection (== item target section)",
+          "Description": "Target section token contributing to dense scoring.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.ItemKind",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Scoring",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.ItemKind",
+          "Description": "Item kind contributing to dense scoring.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.SourceKind",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Scoring",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.SourceKind",
+          "Description": "Source kind contributing to dense scoring.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.Lifecycle",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Filtering",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.Lifecycle (== item lifecycle metadata)",
+          "Description": "Used by IsLifecycleRisk and IsBlockedByEligibility.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.ReplacementState",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Filtering",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.ReplacementState",
+          "Description": "Used by IsLifecycleRisk and IsBlockedByEligibility.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.ReviewStatus",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Filtering",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.ReviewStatus",
+          "Description": "Available for eligibility filters; not actively branched in V5.5 runner.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.TargetSection \u00D7 sample.ExpectedTargetSection (filter)",
+          "Classification": "DerivedAtRuntime",
+          "UsageKind": "Filtering",
+          "DerivationPath": "router.targetSection or packageContext.targetSection",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.TargetSection \u00D7 RetrievalDatasetV2Sample.ExpectedTargetSection",
+          "Description": "Eligibility filter requires sample target section equality at runtime.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "sample.MustNotHitItemIds (filter)",
+          "Classification": "ForbiddenForScoring",
+          "UsageKind": "Filtering",
+          "DerivationPath": "query.mustNotItemIds from policy (runtime equivalent only)",
+          "CurrentSource": "RetrievalDatasetV2Sample.MustNotHitItemIds (eval ground truth)",
+          "Description": "post-scoring risk gate references mustNot list; current runner reads eval-side label, runtime needs query.mustNotItemIds policy.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.Relations \u00D7 sample.RequiredRelations (graph collection)",
+          "Classification": "DerivedAtRuntime",
+          "UsageKind": "CandidateExpansion",
+          "DerivationPath": "planner.requiredRelations or relationStore lookup",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.Relations \u00D7 RetrievalDatasetV2Sample.RequiredRelations",
+          "Description": "Graph candidate overlap \u002B= 2 when item.Relations intersects sample.RequiredRelations.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.EvidenceRefs \u00D7 sample.EvidenceRefs (graph collection)",
+          "Classification": "DerivedAtRuntime",
+          "UsageKind": "CandidateExpansion",
+          "DerivationPath": "query.evidenceAnchors",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.EvidenceRefs \u00D7 RetrievalDatasetV2Sample.EvidenceRefs",
+          "Description": "Graph candidate overlap \u002B= 1 on evidence overlap.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.SourceRefs \u00D7 sample.SourceRefs (graph collection)",
+          "Classification": "DerivedAtRuntime",
+          "UsageKind": "CandidateExpansion",
+          "DerivationPath": "query.sourceAnchors",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.SourceRefs \u00D7 RetrievalDatasetV2Sample.SourceRefs",
+          "Description": "Graph candidate overlap \u002B= 1 on source overlap.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "sample.MustHitItemIds (graph collection)",
+          "Classification": "ForbiddenForScoring",
+          "UsageKind": "CandidateExpansion",
+          "DerivationPath": "(none \u2014 runtime must avoid leaking labels into candidate ranking)",
+          "CurrentSource": "RetrievalDatasetV2Sample.MustHitItemIds (eval ground truth)",
+          "Description": "Graph candidate overlap \u002B= 3 when item is in MustHitItemIds; this is eval-only and must be removed before runtime promotion.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "options.VectorTopK",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Knob",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalQualityRepairPreviewOptions.{Baseline,Expansion}VectorTopK",
+          "Description": "Number of vector candidates retained.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "options.GraphTopK",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Knob",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalQualityRepairPreviewOptions.{Baseline,Expansion}GraphTopK",
+          "Description": "Number of graph candidates retained.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "options.MergedTopK",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Knob",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalQualityRepairPreviewOptions.{Baseline,Expansion,Adjusted}MergedTopK",
+          "Description": "Size of merged candidate window before TopK eval slice.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        }
+      ],
+      "UsesForbiddenForScoring": false,
+      "UsesEvalOnlyForScoring": false,
+      "RequiresRuntimeDerivation": false,
+      "RequiredRuntimeDerivationPaths": [],
+      "Notes": [
+        "Filtering uses item.TargetSection \u00D7 sample.ExpectedTargetSection (filter) (currently from RetrievalDatasetV2CorpusItem.TargetSection \u00D7 RetrievalDatasetV2Sample.ExpectedTargetSection); runtime must supply router.targetSection or packageContext.targetSection",
+        "Filtering uses sample.MustNotHitItemIds (filter) (currently from RetrievalDatasetV2Sample.MustNotHitItemIds (eval ground truth)); runtime must supply query.mustNotItemIds from policy (runtime equivalent only)",
+        "CandidateExpansion uses item.Relations \u00D7 sample.RequiredRelations (graph collection) (currently from RetrievalDatasetV2CorpusItem.Relations \u00D7 RetrievalDatasetV2Sample.RequiredRelations); runtime must supply planner.requiredRelations or relationStore lookup",
+        "CandidateExpansion uses item.EvidenceRefs \u00D7 sample.EvidenceRefs (graph collection) (currently from RetrievalDatasetV2CorpusItem.EvidenceRefs \u00D7 RetrievalDatasetV2Sample.EvidenceRefs); runtime must supply query.evidenceAnchors",
+        "CandidateExpansion uses item.SourceRefs \u00D7 sample.SourceRefs (graph collection) (currently from RetrievalDatasetV2CorpusItem.SourceRefs \u00D7 RetrievalDatasetV2Sample.SourceRefs); runtime must supply query.sourceAnchors",
+        "CandidateExpansion uses sample.MustHitItemIds (graph collection) (currently from RetrievalDatasetV2Sample.MustHitItemIds (eval ground truth)); runtime must supply (none \u2014 runtime must avoid leaking labels into candidate ranking)"
+      ]
+    },
+    {
+      "ProfileId": "section-aware-boost",
+      "ProfileLabel": "Section-aware boost",
+      "ContractStatus": "RequiresRuntimeDerivation",
+      "Features": [
+        {
+          "FeatureId": "query.tokens",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Scoring",
+          "DerivationPath": "",
+          "CurrentSource": "tokenized RetrievalDatasetV2Sample.QueryText (== runtime query text)",
+          "Description": "Query token set fed into dense / lexical / anchor / negative-cue scoring.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.Content",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Scoring",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.Content (== ContextItem.Content at runtime)",
+          "Description": "Item body tokens for dense and lexical scoring.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.Tags",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Scoring",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.Tags (== ContextItem.Tags)",
+          "Description": "Tag tokens contributing to dense and anchor scoring.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.Anchors",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Scoring",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.Anchors (== item anchor metadata)",
+          "Description": "Anchor tokens contributing to anchor and negative-cue scoring.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.TargetSection",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Scoring",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.TargetSection (== item target section)",
+          "Description": "Target section token contributing to dense scoring.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.ItemKind",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Scoring",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.ItemKind",
+          "Description": "Item kind contributing to dense scoring.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.SourceKind",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Scoring",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.SourceKind",
+          "Description": "Source kind contributing to dense scoring.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.TargetSection \u00D7 sample.ExpectedTargetSection",
+          "Classification": "DerivedAtRuntime",
+          "UsageKind": "Scoring",
+          "DerivationPath": "router.targetSection or packageContext.targetSection",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.TargetSection \u00D7 RetrievalDatasetV2Sample.ExpectedTargetSection",
+          "Description": "Section-aware boost activates when item.TargetSection equals sample.ExpectedTargetSection.",
+          "ProfileIds": [
+            "section-aware-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.Lifecycle",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Filtering",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.Lifecycle (== item lifecycle metadata)",
+          "Description": "Used by IsLifecycleRisk and IsBlockedByEligibility.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.ReplacementState",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Filtering",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.ReplacementState",
+          "Description": "Used by IsLifecycleRisk and IsBlockedByEligibility.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.ReviewStatus",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Filtering",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.ReviewStatus",
+          "Description": "Available for eligibility filters; not actively branched in V5.5 runner.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.TargetSection \u00D7 sample.ExpectedTargetSection (filter)",
+          "Classification": "DerivedAtRuntime",
+          "UsageKind": "Filtering",
+          "DerivationPath": "router.targetSection or packageContext.targetSection",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.TargetSection \u00D7 RetrievalDatasetV2Sample.ExpectedTargetSection",
+          "Description": "Eligibility filter requires sample target section equality at runtime.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "sample.MustNotHitItemIds (filter)",
+          "Classification": "ForbiddenForScoring",
+          "UsageKind": "Filtering",
+          "DerivationPath": "query.mustNotItemIds from policy (runtime equivalent only)",
+          "CurrentSource": "RetrievalDatasetV2Sample.MustNotHitItemIds (eval ground truth)",
+          "Description": "post-scoring risk gate references mustNot list; current runner reads eval-side label, runtime needs query.mustNotItemIds policy.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.Relations \u00D7 sample.RequiredRelations (graph collection)",
+          "Classification": "DerivedAtRuntime",
+          "UsageKind": "CandidateExpansion",
+          "DerivationPath": "planner.requiredRelations or relationStore lookup",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.Relations \u00D7 RetrievalDatasetV2Sample.RequiredRelations",
+          "Description": "Graph candidate overlap \u002B= 2 when item.Relations intersects sample.RequiredRelations.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.EvidenceRefs \u00D7 sample.EvidenceRefs (graph collection)",
+          "Classification": "DerivedAtRuntime",
+          "UsageKind": "CandidateExpansion",
+          "DerivationPath": "query.evidenceAnchors",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.EvidenceRefs \u00D7 RetrievalDatasetV2Sample.EvidenceRefs",
+          "Description": "Graph candidate overlap \u002B= 1 on evidence overlap.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.SourceRefs \u00D7 sample.SourceRefs (graph collection)",
+          "Classification": "DerivedAtRuntime",
+          "UsageKind": "CandidateExpansion",
+          "DerivationPath": "query.sourceAnchors",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.SourceRefs \u00D7 RetrievalDatasetV2Sample.SourceRefs",
+          "Description": "Graph candidate overlap \u002B= 1 on source overlap.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "sample.MustHitItemIds (graph collection)",
+          "Classification": "ForbiddenForScoring",
+          "UsageKind": "CandidateExpansion",
+          "DerivationPath": "(none \u2014 runtime must avoid leaking labels into candidate ranking)",
+          "CurrentSource": "RetrievalDatasetV2Sample.MustHitItemIds (eval ground truth)",
+          "Description": "Graph candidate overlap \u002B= 3 when item is in MustHitItemIds; this is eval-only and must be removed before runtime promotion.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "options.VectorTopK",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Knob",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalQualityRepairPreviewOptions.{Baseline,Expansion}VectorTopK",
+          "Description": "Number of vector candidates retained.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "options.GraphTopK",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Knob",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalQualityRepairPreviewOptions.{Baseline,Expansion}GraphTopK",
+          "Description": "Number of graph candidates retained.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "options.MergedTopK",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Knob",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalQualityRepairPreviewOptions.{Baseline,Expansion,Adjusted}MergedTopK",
+          "Description": "Size of merged candidate window before TopK eval slice.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        }
+      ],
+      "UsesForbiddenForScoring": false,
+      "UsesEvalOnlyForScoring": false,
+      "RequiresRuntimeDerivation": true,
+      "RequiredRuntimeDerivationPaths": [
+        "router.targetSection or packageContext.targetSection"
+      ],
+      "Notes": [
+        "Filtering uses item.TargetSection \u00D7 sample.ExpectedTargetSection (filter) (currently from RetrievalDatasetV2CorpusItem.TargetSection \u00D7 RetrievalDatasetV2Sample.ExpectedTargetSection); runtime must supply router.targetSection or packageContext.targetSection",
+        "Filtering uses sample.MustNotHitItemIds (filter) (currently from RetrievalDatasetV2Sample.MustNotHitItemIds (eval ground truth)); runtime must supply query.mustNotItemIds from policy (runtime equivalent only)",
+        "CandidateExpansion uses item.Relations \u00D7 sample.RequiredRelations (graph collection) (currently from RetrievalDatasetV2CorpusItem.Relations \u00D7 RetrievalDatasetV2Sample.RequiredRelations); runtime must supply planner.requiredRelations or relationStore lookup",
+        "CandidateExpansion uses item.EvidenceRefs \u00D7 sample.EvidenceRefs (graph collection) (currently from RetrievalDatasetV2CorpusItem.EvidenceRefs \u00D7 RetrievalDatasetV2Sample.EvidenceRefs); runtime must supply query.evidenceAnchors",
+        "CandidateExpansion uses item.SourceRefs \u00D7 sample.SourceRefs (graph collection) (currently from RetrievalDatasetV2CorpusItem.SourceRefs \u00D7 RetrievalDatasetV2Sample.SourceRefs); runtime must supply query.sourceAnchors",
+        "CandidateExpansion uses sample.MustHitItemIds (graph collection) (currently from RetrievalDatasetV2Sample.MustHitItemIds (eval ground truth)); runtime must supply (none \u2014 runtime must avoid leaking labels into candidate ranking)"
+      ]
+    },
+    {
+      "ProfileId": "must-hit-evidence-boost",
+      "ProfileLabel": "Must-hit evidence boost",
+      "ContractStatus": "RequiresRuntimeDerivation",
+      "Features": [
+        {
+          "FeatureId": "query.tokens",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Scoring",
+          "DerivationPath": "",
+          "CurrentSource": "tokenized RetrievalDatasetV2Sample.QueryText (== runtime query text)",
+          "Description": "Query token set fed into dense / lexical / anchor / negative-cue scoring.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.Content",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Scoring",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.Content (== ContextItem.Content at runtime)",
+          "Description": "Item body tokens for dense and lexical scoring.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.Tags",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Scoring",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.Tags (== ContextItem.Tags)",
+          "Description": "Tag tokens contributing to dense and anchor scoring.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.Anchors",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Scoring",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.Anchors (== item anchor metadata)",
+          "Description": "Anchor tokens contributing to anchor and negative-cue scoring.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.TargetSection",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Scoring",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.TargetSection (== item target section)",
+          "Description": "Target section token contributing to dense scoring.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.ItemKind",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Scoring",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.ItemKind",
+          "Description": "Item kind contributing to dense scoring.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.SourceKind",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Scoring",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.SourceKind",
+          "Description": "Source kind contributing to dense scoring.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.EvidenceRefs \u00D7 sample.EvidenceRefs",
+          "Classification": "DerivedAtRuntime",
+          "UsageKind": "Scoring",
+          "DerivationPath": "query.evidenceAnchors",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.EvidenceRefs \u00D7 RetrievalDatasetV2Sample.EvidenceRefs",
+          "Description": "Evidence boost activates when item.EvidenceRefs intersects sample.EvidenceRefs.",
+          "ProfileIds": [
+            "must-hit-evidence-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.SourceRefs \u00D7 sample.SourceRefs",
+          "Classification": "DerivedAtRuntime",
+          "UsageKind": "Scoring",
+          "DerivationPath": "query.sourceAnchors",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.SourceRefs \u00D7 RetrievalDatasetV2Sample.SourceRefs",
+          "Description": "Evidence boost activates when item.SourceRefs intersects sample.SourceRefs.",
+          "ProfileIds": [
+            "must-hit-evidence-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.Lifecycle",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Filtering",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.Lifecycle (== item lifecycle metadata)",
+          "Description": "Used by IsLifecycleRisk and IsBlockedByEligibility.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.ReplacementState",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Filtering",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.ReplacementState",
+          "Description": "Used by IsLifecycleRisk and IsBlockedByEligibility.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.ReviewStatus",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Filtering",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.ReviewStatus",
+          "Description": "Available for eligibility filters; not actively branched in V5.5 runner.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.TargetSection \u00D7 sample.ExpectedTargetSection (filter)",
+          "Classification": "DerivedAtRuntime",
+          "UsageKind": "Filtering",
+          "DerivationPath": "router.targetSection or packageContext.targetSection",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.TargetSection \u00D7 RetrievalDatasetV2Sample.ExpectedTargetSection",
+          "Description": "Eligibility filter requires sample target section equality at runtime.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "sample.MustNotHitItemIds (filter)",
+          "Classification": "ForbiddenForScoring",
+          "UsageKind": "Filtering",
+          "DerivationPath": "query.mustNotItemIds from policy (runtime equivalent only)",
+          "CurrentSource": "RetrievalDatasetV2Sample.MustNotHitItemIds (eval ground truth)",
+          "Description": "post-scoring risk gate references mustNot list; current runner reads eval-side label, runtime needs query.mustNotItemIds policy.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.Relations \u00D7 sample.RequiredRelations (graph collection)",
+          "Classification": "DerivedAtRuntime",
+          "UsageKind": "CandidateExpansion",
+          "DerivationPath": "planner.requiredRelations or relationStore lookup",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.Relations \u00D7 RetrievalDatasetV2Sample.RequiredRelations",
+          "Description": "Graph candidate overlap \u002B= 2 when item.Relations intersects sample.RequiredRelations.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.EvidenceRefs \u00D7 sample.EvidenceRefs (graph collection)",
+          "Classification": "DerivedAtRuntime",
+          "UsageKind": "CandidateExpansion",
+          "DerivationPath": "query.evidenceAnchors",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.EvidenceRefs \u00D7 RetrievalDatasetV2Sample.EvidenceRefs",
+          "Description": "Graph candidate overlap \u002B= 1 on evidence overlap.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.SourceRefs \u00D7 sample.SourceRefs (graph collection)",
+          "Classification": "DerivedAtRuntime",
+          "UsageKind": "CandidateExpansion",
+          "DerivationPath": "query.sourceAnchors",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.SourceRefs \u00D7 RetrievalDatasetV2Sample.SourceRefs",
+          "Description": "Graph candidate overlap \u002B= 1 on source overlap.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "sample.MustHitItemIds (graph collection)",
+          "Classification": "ForbiddenForScoring",
+          "UsageKind": "CandidateExpansion",
+          "DerivationPath": "(none \u2014 runtime must avoid leaking labels into candidate ranking)",
+          "CurrentSource": "RetrievalDatasetV2Sample.MustHitItemIds (eval ground truth)",
+          "Description": "Graph candidate overlap \u002B= 3 when item is in MustHitItemIds; this is eval-only and must be removed before runtime promotion.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "options.VectorTopK",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Knob",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalQualityRepairPreviewOptions.{Baseline,Expansion}VectorTopK",
+          "Description": "Number of vector candidates retained.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "options.GraphTopK",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Knob",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalQualityRepairPreviewOptions.{Baseline,Expansion}GraphTopK",
+          "Description": "Number of graph candidates retained.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "options.MergedTopK",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Knob",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalQualityRepairPreviewOptions.{Baseline,Expansion,Adjusted}MergedTopK",
+          "Description": "Size of merged candidate window before TopK eval slice.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        }
+      ],
+      "UsesForbiddenForScoring": false,
+      "UsesEvalOnlyForScoring": false,
+      "RequiresRuntimeDerivation": true,
+      "RequiredRuntimeDerivationPaths": [
+        "query.evidenceAnchors",
+        "query.sourceAnchors"
+      ],
+      "Notes": [
+        "Filtering uses item.TargetSection \u00D7 sample.ExpectedTargetSection (filter) (currently from RetrievalDatasetV2CorpusItem.TargetSection \u00D7 RetrievalDatasetV2Sample.ExpectedTargetSection); runtime must supply router.targetSection or packageContext.targetSection",
+        "Filtering uses sample.MustNotHitItemIds (filter) (currently from RetrievalDatasetV2Sample.MustNotHitItemIds (eval ground truth)); runtime must supply query.mustNotItemIds from policy (runtime equivalent only)",
+        "CandidateExpansion uses item.Relations \u00D7 sample.RequiredRelations (graph collection) (currently from RetrievalDatasetV2CorpusItem.Relations \u00D7 RetrievalDatasetV2Sample.RequiredRelations); runtime must supply planner.requiredRelations or relationStore lookup",
+        "CandidateExpansion uses item.EvidenceRefs \u00D7 sample.EvidenceRefs (graph collection) (currently from RetrievalDatasetV2CorpusItem.EvidenceRefs \u00D7 RetrievalDatasetV2Sample.EvidenceRefs); runtime must supply query.evidenceAnchors",
+        "CandidateExpansion uses item.SourceRefs \u00D7 sample.SourceRefs (graph collection) (currently from RetrievalDatasetV2CorpusItem.SourceRefs \u00D7 RetrievalDatasetV2Sample.SourceRefs); runtime must supply query.sourceAnchors",
+        "CandidateExpansion uses sample.MustHitItemIds (graph collection) (currently from RetrievalDatasetV2Sample.MustHitItemIds (eval ground truth)); runtime must supply (none \u2014 runtime must avoid leaking labels into candidate ranking)"
+      ]
+    },
+    {
+      "ProfileId": "graph-relation-anchor-boost",
+      "ProfileLabel": "Graph relation anchor boost",
+      "ContractStatus": "RequiresRuntimeDerivation",
+      "Features": [
+        {
+          "FeatureId": "query.tokens",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Scoring",
+          "DerivationPath": "",
+          "CurrentSource": "tokenized RetrievalDatasetV2Sample.QueryText (== runtime query text)",
+          "Description": "Query token set fed into dense / lexical / anchor / negative-cue scoring.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.Content",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Scoring",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.Content (== ContextItem.Content at runtime)",
+          "Description": "Item body tokens for dense and lexical scoring.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.Tags",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Scoring",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.Tags (== ContextItem.Tags)",
+          "Description": "Tag tokens contributing to dense and anchor scoring.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.Anchors",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Scoring",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.Anchors (== item anchor metadata)",
+          "Description": "Anchor tokens contributing to anchor and negative-cue scoring.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.TargetSection",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Scoring",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.TargetSection (== item target section)",
+          "Description": "Target section token contributing to dense scoring.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.ItemKind",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Scoring",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.ItemKind",
+          "Description": "Item kind contributing to dense scoring.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.SourceKind",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Scoring",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.SourceKind",
+          "Description": "Source kind contributing to dense scoring.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.Relations \u00D7 sample.RequiredRelations",
+          "Classification": "DerivedAtRuntime",
+          "UsageKind": "Scoring",
+          "DerivationPath": "planner.requiredRelations or relationStore lookup",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.Relations \u00D7 RetrievalDatasetV2Sample.RequiredRelations",
+          "Description": "Relation boost activates when item.Relations intersects sample.RequiredRelations.",
+          "ProfileIds": [
+            "graph-relation-anchor-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.Lifecycle",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Filtering",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.Lifecycle (== item lifecycle metadata)",
+          "Description": "Used by IsLifecycleRisk and IsBlockedByEligibility.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.ReplacementState",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Filtering",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.ReplacementState",
+          "Description": "Used by IsLifecycleRisk and IsBlockedByEligibility.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.ReviewStatus",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Filtering",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.ReviewStatus",
+          "Description": "Available for eligibility filters; not actively branched in V5.5 runner.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.TargetSection \u00D7 sample.ExpectedTargetSection (filter)",
+          "Classification": "DerivedAtRuntime",
+          "UsageKind": "Filtering",
+          "DerivationPath": "router.targetSection or packageContext.targetSection",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.TargetSection \u00D7 RetrievalDatasetV2Sample.ExpectedTargetSection",
+          "Description": "Eligibility filter requires sample target section equality at runtime.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "sample.MustNotHitItemIds (filter)",
+          "Classification": "ForbiddenForScoring",
+          "UsageKind": "Filtering",
+          "DerivationPath": "query.mustNotItemIds from policy (runtime equivalent only)",
+          "CurrentSource": "RetrievalDatasetV2Sample.MustNotHitItemIds (eval ground truth)",
+          "Description": "post-scoring risk gate references mustNot list; current runner reads eval-side label, runtime needs query.mustNotItemIds policy.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.Relations \u00D7 sample.RequiredRelations (graph collection)",
+          "Classification": "DerivedAtRuntime",
+          "UsageKind": "CandidateExpansion",
+          "DerivationPath": "planner.requiredRelations or relationStore lookup",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.Relations \u00D7 RetrievalDatasetV2Sample.RequiredRelations",
+          "Description": "Graph candidate overlap \u002B= 2 when item.Relations intersects sample.RequiredRelations.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.EvidenceRefs \u00D7 sample.EvidenceRefs (graph collection)",
+          "Classification": "DerivedAtRuntime",
+          "UsageKind": "CandidateExpansion",
+          "DerivationPath": "query.evidenceAnchors",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.EvidenceRefs \u00D7 RetrievalDatasetV2Sample.EvidenceRefs",
+          "Description": "Graph candidate overlap \u002B= 1 on evidence overlap.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.SourceRefs \u00D7 sample.SourceRefs (graph collection)",
+          "Classification": "DerivedAtRuntime",
+          "UsageKind": "CandidateExpansion",
+          "DerivationPath": "query.sourceAnchors",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.SourceRefs \u00D7 RetrievalDatasetV2Sample.SourceRefs",
+          "Description": "Graph candidate overlap \u002B= 1 on source overlap.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "sample.MustHitItemIds (graph collection)",
+          "Classification": "ForbiddenForScoring",
+          "UsageKind": "CandidateExpansion",
+          "DerivationPath": "(none \u2014 runtime must avoid leaking labels into candidate ranking)",
+          "CurrentSource": "RetrievalDatasetV2Sample.MustHitItemIds (eval ground truth)",
+          "Description": "Graph candidate overlap \u002B= 3 when item is in MustHitItemIds; this is eval-only and must be removed before runtime promotion.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "options.VectorTopK",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Knob",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalQualityRepairPreviewOptions.{Baseline,Expansion}VectorTopK",
+          "Description": "Number of vector candidates retained.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "options.GraphTopK",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Knob",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalQualityRepairPreviewOptions.{Baseline,Expansion}GraphTopK",
+          "Description": "Number of graph candidates retained.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "options.MergedTopK",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Knob",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalQualityRepairPreviewOptions.{Baseline,Expansion,Adjusted}MergedTopK",
+          "Description": "Size of merged candidate window before TopK eval slice.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        }
+      ],
+      "UsesForbiddenForScoring": false,
+      "UsesEvalOnlyForScoring": false,
+      "RequiresRuntimeDerivation": true,
+      "RequiredRuntimeDerivationPaths": [
+        "planner.requiredRelations or relationStore lookup"
+      ],
+      "Notes": [
+        "Filtering uses item.TargetSection \u00D7 sample.ExpectedTargetSection (filter) (currently from RetrievalDatasetV2CorpusItem.TargetSection \u00D7 RetrievalDatasetV2Sample.ExpectedTargetSection); runtime must supply router.targetSection or packageContext.targetSection",
+        "Filtering uses sample.MustNotHitItemIds (filter) (currently from RetrievalDatasetV2Sample.MustNotHitItemIds (eval ground truth)); runtime must supply query.mustNotItemIds from policy (runtime equivalent only)",
+        "CandidateExpansion uses item.Relations \u00D7 sample.RequiredRelations (graph collection) (currently from RetrievalDatasetV2CorpusItem.Relations \u00D7 RetrievalDatasetV2Sample.RequiredRelations); runtime must supply planner.requiredRelations or relationStore lookup",
+        "CandidateExpansion uses item.EvidenceRefs \u00D7 sample.EvidenceRefs (graph collection) (currently from RetrievalDatasetV2CorpusItem.EvidenceRefs \u00D7 RetrievalDatasetV2Sample.EvidenceRefs); runtime must supply query.evidenceAnchors",
+        "CandidateExpansion uses item.SourceRefs \u00D7 sample.SourceRefs (graph collection) (currently from RetrievalDatasetV2CorpusItem.SourceRefs \u00D7 RetrievalDatasetV2Sample.SourceRefs); runtime must supply query.sourceAnchors",
+        "CandidateExpansion uses sample.MustHitItemIds (graph collection) (currently from RetrievalDatasetV2Sample.MustHitItemIds (eval ground truth)); runtime must supply (none \u2014 runtime must avoid leaking labels into candidate ranking)"
+      ]
+    },
+    {
+      "ProfileId": "lexical-fallback-boost",
+      "ProfileLabel": "Lexical fallback boost",
+      "ContractStatus": "RuntimeSafe",
+      "Features": [
+        {
+          "FeatureId": "query.tokens",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Scoring",
+          "DerivationPath": "",
+          "CurrentSource": "tokenized RetrievalDatasetV2Sample.QueryText (== runtime query text)",
+          "Description": "Query token set fed into dense / lexical / anchor / negative-cue scoring.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.Content",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Scoring",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.Content (== ContextItem.Content at runtime)",
+          "Description": "Item body tokens for dense and lexical scoring.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.Tags",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Scoring",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.Tags (== ContextItem.Tags)",
+          "Description": "Tag tokens contributing to dense and anchor scoring.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.Anchors",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Scoring",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.Anchors (== item anchor metadata)",
+          "Description": "Anchor tokens contributing to anchor and negative-cue scoring.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.TargetSection",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Scoring",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.TargetSection (== item target section)",
+          "Description": "Target section token contributing to dense scoring.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.ItemKind",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Scoring",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.ItemKind",
+          "Description": "Item kind contributing to dense scoring.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.SourceKind",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Scoring",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.SourceKind",
+          "Description": "Source kind contributing to dense scoring.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "lexical/dense ratio",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Scoring",
+          "DerivationPath": "",
+          "CurrentSource": "Computed from query.tokens \u00D7 item.Content",
+          "Description": "Boost when lexical/dense \u003E 0.6, recovering low-overlap items.",
+          "ProfileIds": [
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.Lifecycle",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Filtering",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.Lifecycle (== item lifecycle metadata)",
+          "Description": "Used by IsLifecycleRisk and IsBlockedByEligibility.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.ReplacementState",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Filtering",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.ReplacementState",
+          "Description": "Used by IsLifecycleRisk and IsBlockedByEligibility.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.ReviewStatus",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Filtering",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.ReviewStatus",
+          "Description": "Available for eligibility filters; not actively branched in V5.5 runner.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.TargetSection \u00D7 sample.ExpectedTargetSection (filter)",
+          "Classification": "DerivedAtRuntime",
+          "UsageKind": "Filtering",
+          "DerivationPath": "router.targetSection or packageContext.targetSection",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.TargetSection \u00D7 RetrievalDatasetV2Sample.ExpectedTargetSection",
+          "Description": "Eligibility filter requires sample target section equality at runtime.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "sample.MustNotHitItemIds (filter)",
+          "Classification": "ForbiddenForScoring",
+          "UsageKind": "Filtering",
+          "DerivationPath": "query.mustNotItemIds from policy (runtime equivalent only)",
+          "CurrentSource": "RetrievalDatasetV2Sample.MustNotHitItemIds (eval ground truth)",
+          "Description": "post-scoring risk gate references mustNot list; current runner reads eval-side label, runtime needs query.mustNotItemIds policy.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.Relations \u00D7 sample.RequiredRelations (graph collection)",
+          "Classification": "DerivedAtRuntime",
+          "UsageKind": "CandidateExpansion",
+          "DerivationPath": "planner.requiredRelations or relationStore lookup",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.Relations \u00D7 RetrievalDatasetV2Sample.RequiredRelations",
+          "Description": "Graph candidate overlap \u002B= 2 when item.Relations intersects sample.RequiredRelations.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.EvidenceRefs \u00D7 sample.EvidenceRefs (graph collection)",
+          "Classification": "DerivedAtRuntime",
+          "UsageKind": "CandidateExpansion",
+          "DerivationPath": "query.evidenceAnchors",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.EvidenceRefs \u00D7 RetrievalDatasetV2Sample.EvidenceRefs",
+          "Description": "Graph candidate overlap \u002B= 1 on evidence overlap.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.SourceRefs \u00D7 sample.SourceRefs (graph collection)",
+          "Classification": "DerivedAtRuntime",
+          "UsageKind": "CandidateExpansion",
+          "DerivationPath": "query.sourceAnchors",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.SourceRefs \u00D7 RetrievalDatasetV2Sample.SourceRefs",
+          "Description": "Graph candidate overlap \u002B= 1 on source overlap.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "sample.MustHitItemIds (graph collection)",
+          "Classification": "ForbiddenForScoring",
+          "UsageKind": "CandidateExpansion",
+          "DerivationPath": "(none \u2014 runtime must avoid leaking labels into candidate ranking)",
+          "CurrentSource": "RetrievalDatasetV2Sample.MustHitItemIds (eval ground truth)",
+          "Description": "Graph candidate overlap \u002B= 3 when item is in MustHitItemIds; this is eval-only and must be removed before runtime promotion.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "options.VectorTopK",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Knob",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalQualityRepairPreviewOptions.{Baseline,Expansion}VectorTopK",
+          "Description": "Number of vector candidates retained.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "options.GraphTopK",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Knob",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalQualityRepairPreviewOptions.{Baseline,Expansion}GraphTopK",
+          "Description": "Number of graph candidates retained.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "options.MergedTopK",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Knob",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalQualityRepairPreviewOptions.{Baseline,Expansion,Adjusted}MergedTopK",
+          "Description": "Size of merged candidate window before TopK eval slice.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        }
+      ],
+      "UsesForbiddenForScoring": false,
+      "UsesEvalOnlyForScoring": false,
+      "RequiresRuntimeDerivation": false,
+      "RequiredRuntimeDerivationPaths": [],
+      "Notes": [
+        "Filtering uses item.TargetSection \u00D7 sample.ExpectedTargetSection (filter) (currently from RetrievalDatasetV2CorpusItem.TargetSection \u00D7 RetrievalDatasetV2Sample.ExpectedTargetSection); runtime must supply router.targetSection or packageContext.targetSection",
+        "Filtering uses sample.MustNotHitItemIds (filter) (currently from RetrievalDatasetV2Sample.MustNotHitItemIds (eval ground truth)); runtime must supply query.mustNotItemIds from policy (runtime equivalent only)",
+        "CandidateExpansion uses item.Relations \u00D7 sample.RequiredRelations (graph collection) (currently from RetrievalDatasetV2CorpusItem.Relations \u00D7 RetrievalDatasetV2Sample.RequiredRelations); runtime must supply planner.requiredRelations or relationStore lookup",
+        "CandidateExpansion uses item.EvidenceRefs \u00D7 sample.EvidenceRefs (graph collection) (currently from RetrievalDatasetV2CorpusItem.EvidenceRefs \u00D7 RetrievalDatasetV2Sample.EvidenceRefs); runtime must supply query.evidenceAnchors",
+        "CandidateExpansion uses item.SourceRefs \u00D7 sample.SourceRefs (graph collection) (currently from RetrievalDatasetV2CorpusItem.SourceRefs \u00D7 RetrievalDatasetV2Sample.SourceRefs); runtime must supply query.sourceAnchors",
+        "CandidateExpansion uses sample.MustHitItemIds (graph collection) (currently from RetrievalDatasetV2Sample.MustHitItemIds (eval ground truth)); runtime must supply (none \u2014 runtime must avoid leaking labels into candidate ranking)"
+      ]
+    },
+    {
+      "ProfileId": "combined-repair",
+      "ProfileLabel": "Combined repair",
+      "ContractStatus": "RequiresRuntimeDerivation",
+      "Features": [
+        {
+          "FeatureId": "query.tokens",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Scoring",
+          "DerivationPath": "",
+          "CurrentSource": "tokenized RetrievalDatasetV2Sample.QueryText (== runtime query text)",
+          "Description": "Query token set fed into dense / lexical / anchor / negative-cue scoring.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.Content",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Scoring",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.Content (== ContextItem.Content at runtime)",
+          "Description": "Item body tokens for dense and lexical scoring.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.Tags",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Scoring",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.Tags (== ContextItem.Tags)",
+          "Description": "Tag tokens contributing to dense and anchor scoring.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.Anchors",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Scoring",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.Anchors (== item anchor metadata)",
+          "Description": "Anchor tokens contributing to anchor and negative-cue scoring.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.TargetSection",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Scoring",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.TargetSection (== item target section)",
+          "Description": "Target section token contributing to dense scoring.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.ItemKind",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Scoring",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.ItemKind",
+          "Description": "Item kind contributing to dense scoring.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.SourceKind",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Scoring",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.SourceKind",
+          "Description": "Source kind contributing to dense scoring.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.TargetSection \u00D7 sample.ExpectedTargetSection",
+          "Classification": "DerivedAtRuntime",
+          "UsageKind": "Scoring",
+          "DerivationPath": "router.targetSection or packageContext.targetSection",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.TargetSection \u00D7 RetrievalDatasetV2Sample.ExpectedTargetSection",
+          "Description": "Section-aware boost activates when item.TargetSection equals sample.ExpectedTargetSection.",
+          "ProfileIds": [
+            "section-aware-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.EvidenceRefs \u00D7 sample.EvidenceRefs",
+          "Classification": "DerivedAtRuntime",
+          "UsageKind": "Scoring",
+          "DerivationPath": "query.evidenceAnchors",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.EvidenceRefs \u00D7 RetrievalDatasetV2Sample.EvidenceRefs",
+          "Description": "Evidence boost activates when item.EvidenceRefs intersects sample.EvidenceRefs.",
+          "ProfileIds": [
+            "must-hit-evidence-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.SourceRefs \u00D7 sample.SourceRefs",
+          "Classification": "DerivedAtRuntime",
+          "UsageKind": "Scoring",
+          "DerivationPath": "query.sourceAnchors",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.SourceRefs \u00D7 RetrievalDatasetV2Sample.SourceRefs",
+          "Description": "Evidence boost activates when item.SourceRefs intersects sample.SourceRefs.",
+          "ProfileIds": [
+            "must-hit-evidence-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.Relations \u00D7 sample.RequiredRelations",
+          "Classification": "DerivedAtRuntime",
+          "UsageKind": "Scoring",
+          "DerivationPath": "planner.requiredRelations or relationStore lookup",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.Relations \u00D7 RetrievalDatasetV2Sample.RequiredRelations",
+          "Description": "Relation boost activates when item.Relations intersects sample.RequiredRelations.",
+          "ProfileIds": [
+            "graph-relation-anchor-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "lexical/dense ratio",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Scoring",
+          "DerivationPath": "",
+          "CurrentSource": "Computed from query.tokens \u00D7 item.Content",
+          "Description": "Boost when lexical/dense \u003E 0.6, recovering low-overlap items.",
+          "ProfileIds": [
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.Lifecycle",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Filtering",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.Lifecycle (== item lifecycle metadata)",
+          "Description": "Used by IsLifecycleRisk and IsBlockedByEligibility.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.ReplacementState",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Filtering",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.ReplacementState",
+          "Description": "Used by IsLifecycleRisk and IsBlockedByEligibility.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.ReviewStatus",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Filtering",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.ReviewStatus",
+          "Description": "Available for eligibility filters; not actively branched in V5.5 runner.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.TargetSection \u00D7 sample.ExpectedTargetSection (filter)",
+          "Classification": "DerivedAtRuntime",
+          "UsageKind": "Filtering",
+          "DerivationPath": "router.targetSection or packageContext.targetSection",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.TargetSection \u00D7 RetrievalDatasetV2Sample.ExpectedTargetSection",
+          "Description": "Eligibility filter requires sample target section equality at runtime.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "sample.MustNotHitItemIds (filter)",
+          "Classification": "ForbiddenForScoring",
+          "UsageKind": "Filtering",
+          "DerivationPath": "query.mustNotItemIds from policy (runtime equivalent only)",
+          "CurrentSource": "RetrievalDatasetV2Sample.MustNotHitItemIds (eval ground truth)",
+          "Description": "post-scoring risk gate references mustNot list; current runner reads eval-side label, runtime needs query.mustNotItemIds policy.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.Relations \u00D7 sample.RequiredRelations (graph collection)",
+          "Classification": "DerivedAtRuntime",
+          "UsageKind": "CandidateExpansion",
+          "DerivationPath": "planner.requiredRelations or relationStore lookup",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.Relations \u00D7 RetrievalDatasetV2Sample.RequiredRelations",
+          "Description": "Graph candidate overlap \u002B= 2 when item.Relations intersects sample.RequiredRelations.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.EvidenceRefs \u00D7 sample.EvidenceRefs (graph collection)",
+          "Classification": "DerivedAtRuntime",
+          "UsageKind": "CandidateExpansion",
+          "DerivationPath": "query.evidenceAnchors",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.EvidenceRefs \u00D7 RetrievalDatasetV2Sample.EvidenceRefs",
+          "Description": "Graph candidate overlap \u002B= 1 on evidence overlap.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "item.SourceRefs \u00D7 sample.SourceRefs (graph collection)",
+          "Classification": "DerivedAtRuntime",
+          "UsageKind": "CandidateExpansion",
+          "DerivationPath": "query.sourceAnchors",
+          "CurrentSource": "RetrievalDatasetV2CorpusItem.SourceRefs \u00D7 RetrievalDatasetV2Sample.SourceRefs",
+          "Description": "Graph candidate overlap \u002B= 1 on source overlap.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "sample.MustHitItemIds (graph collection)",
+          "Classification": "ForbiddenForScoring",
+          "UsageKind": "CandidateExpansion",
+          "DerivationPath": "(none \u2014 runtime must avoid leaking labels into candidate ranking)",
+          "CurrentSource": "RetrievalDatasetV2Sample.MustHitItemIds (eval ground truth)",
+          "Description": "Graph candidate overlap \u002B= 3 when item is in MustHitItemIds; this is eval-only and must be removed before runtime promotion.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "options.VectorTopK",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Knob",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalQualityRepairPreviewOptions.{Baseline,Expansion}VectorTopK",
+          "Description": "Number of vector candidates retained.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "options.GraphTopK",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Knob",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalQualityRepairPreviewOptions.{Baseline,Expansion}GraphTopK",
+          "Description": "Number of graph candidates retained.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        },
+        {
+          "FeatureId": "options.MergedTopK",
+          "Classification": "RuntimeObservable",
+          "UsageKind": "Knob",
+          "DerivationPath": "",
+          "CurrentSource": "RetrievalQualityRepairPreviewOptions.{Baseline,Expansion,Adjusted}MergedTopK",
+          "Description": "Size of merged candidate window before TopK eval slice.",
+          "ProfileIds": [
+            "baseline",
+            "candidate-pool-expansion",
+            "topk-adjustment",
+            "section-aware-boost",
+            "must-hit-evidence-boost",
+            "graph-relation-anchor-boost",
+            "lexical-fallback-boost",
+            "combined-repair"
+          ]
+        }
+      ],
+      "UsesForbiddenForScoring": false,
+      "UsesEvalOnlyForScoring": false,
+      "RequiresRuntimeDerivation": true,
+      "RequiredRuntimeDerivationPaths": [
+        "router.targetSection or packageContext.targetSection",
+        "query.evidenceAnchors",
+        "query.sourceAnchors",
+        "planner.requiredRelations or relationStore lookup"
+      ],
+      "Notes": [
+        "Filtering uses item.TargetSection \u00D7 sample.ExpectedTargetSection (filter) (currently from RetrievalDatasetV2CorpusItem.TargetSection \u00D7 RetrievalDatasetV2Sample.ExpectedTargetSection); runtime must supply router.targetSection or packageContext.targetSection",
+        "Filtering uses sample.MustNotHitItemIds (filter) (currently from RetrievalDatasetV2Sample.MustNotHitItemIds (eval ground truth)); runtime must supply query.mustNotItemIds from policy (runtime equivalent only)",
+        "CandidateExpansion uses item.Relations \u00D7 sample.RequiredRelations (graph collection) (currently from RetrievalDatasetV2CorpusItem.Relations \u00D7 RetrievalDatasetV2Sample.RequiredRelations); runtime must supply planner.requiredRelations or relationStore lookup",
+        "CandidateExpansion uses item.EvidenceRefs \u00D7 sample.EvidenceRefs (graph collection) (currently from RetrievalDatasetV2CorpusItem.EvidenceRefs \u00D7 RetrievalDatasetV2Sample.EvidenceRefs); runtime must supply query.evidenceAnchors",
+        "CandidateExpansion uses item.SourceRefs \u00D7 sample.SourceRefs (graph collection) (currently from RetrievalDatasetV2CorpusItem.SourceRefs \u00D7 RetrievalDatasetV2Sample.SourceRefs); runtime must supply query.sourceAnchors",
+        "CandidateExpansion uses sample.MustHitItemIds (graph collection) (currently from RetrievalDatasetV2Sample.MustHitItemIds (eval ground truth)); runtime must supply (none \u2014 runtime must avoid leaking labels into candidate ranking)"
+      ]
+    }
+  ],
+  "Catalog": [
+    {
+      "FeatureId": "query.tokens",
+      "Classification": "RuntimeObservable",
+      "UsageKind": "Scoring",
+      "DerivationPath": "",
+      "CurrentSource": "tokenized RetrievalDatasetV2Sample.QueryText (== runtime query text)",
+      "Description": "Query token set fed into dense / lexical / anchor / negative-cue scoring.",
+      "ProfileIds": [
+        "baseline",
+        "candidate-pool-expansion",
+        "topk-adjustment",
+        "section-aware-boost",
+        "must-hit-evidence-boost",
+        "graph-relation-anchor-boost",
+        "lexical-fallback-boost",
+        "combined-repair"
+      ]
+    },
+    {
+      "FeatureId": "item.Content",
+      "Classification": "RuntimeObservable",
+      "UsageKind": "Scoring",
+      "DerivationPath": "",
+      "CurrentSource": "RetrievalDatasetV2CorpusItem.Content (== ContextItem.Content at runtime)",
+      "Description": "Item body tokens for dense and lexical scoring.",
+      "ProfileIds": [
+        "baseline",
+        "candidate-pool-expansion",
+        "topk-adjustment",
+        "section-aware-boost",
+        "must-hit-evidence-boost",
+        "graph-relation-anchor-boost",
+        "lexical-fallback-boost",
+        "combined-repair"
+      ]
+    },
+    {
+      "FeatureId": "item.Tags",
+      "Classification": "RuntimeObservable",
+      "UsageKind": "Scoring",
+      "DerivationPath": "",
+      "CurrentSource": "RetrievalDatasetV2CorpusItem.Tags (== ContextItem.Tags)",
+      "Description": "Tag tokens contributing to dense and anchor scoring.",
+      "ProfileIds": [
+        "baseline",
+        "candidate-pool-expansion",
+        "topk-adjustment",
+        "section-aware-boost",
+        "must-hit-evidence-boost",
+        "graph-relation-anchor-boost",
+        "lexical-fallback-boost",
+        "combined-repair"
+      ]
+    },
+    {
+      "FeatureId": "item.Anchors",
+      "Classification": "RuntimeObservable",
+      "UsageKind": "Scoring",
+      "DerivationPath": "",
+      "CurrentSource": "RetrievalDatasetV2CorpusItem.Anchors (== item anchor metadata)",
+      "Description": "Anchor tokens contributing to anchor and negative-cue scoring.",
+      "ProfileIds": [
+        "baseline",
+        "candidate-pool-expansion",
+        "topk-adjustment",
+        "section-aware-boost",
+        "must-hit-evidence-boost",
+        "graph-relation-anchor-boost",
+        "lexical-fallback-boost",
+        "combined-repair"
+      ]
+    },
+    {
+      "FeatureId": "item.TargetSection",
+      "Classification": "RuntimeObservable",
+      "UsageKind": "Scoring",
+      "DerivationPath": "",
+      "CurrentSource": "RetrievalDatasetV2CorpusItem.TargetSection (== item target section)",
+      "Description": "Target section token contributing to dense scoring.",
+      "ProfileIds": [
+        "baseline",
+        "candidate-pool-expansion",
+        "topk-adjustment",
+        "section-aware-boost",
+        "must-hit-evidence-boost",
+        "graph-relation-anchor-boost",
+        "lexical-fallback-boost",
+        "combined-repair"
+      ]
+    },
+    {
+      "FeatureId": "item.ItemKind",
+      "Classification": "RuntimeObservable",
+      "UsageKind": "Scoring",
+      "DerivationPath": "",
+      "CurrentSource": "RetrievalDatasetV2CorpusItem.ItemKind",
+      "Description": "Item kind contributing to dense scoring.",
+      "ProfileIds": [
+        "baseline",
+        "candidate-pool-expansion",
+        "topk-adjustment",
+        "section-aware-boost",
+        "must-hit-evidence-boost",
+        "graph-relation-anchor-boost",
+        "lexical-fallback-boost",
+        "combined-repair"
+      ]
+    },
+    {
+      "FeatureId": "item.SourceKind",
+      "Classification": "RuntimeObservable",
+      "UsageKind": "Scoring",
+      "DerivationPath": "",
+      "CurrentSource": "RetrievalDatasetV2CorpusItem.SourceKind",
+      "Description": "Source kind contributing to dense scoring.",
+      "ProfileIds": [
+        "baseline",
+        "candidate-pool-expansion",
+        "topk-adjustment",
+        "section-aware-boost",
+        "must-hit-evidence-boost",
+        "graph-relation-anchor-boost",
+        "lexical-fallback-boost",
+        "combined-repair"
+      ]
+    },
+    {
+      "FeatureId": "item.TargetSection \u00D7 sample.ExpectedTargetSection",
+      "Classification": "DerivedAtRuntime",
+      "UsageKind": "Scoring",
+      "DerivationPath": "router.targetSection or packageContext.targetSection",
+      "CurrentSource": "RetrievalDatasetV2CorpusItem.TargetSection \u00D7 RetrievalDatasetV2Sample.ExpectedTargetSection",
+      "Description": "Section-aware boost activates when item.TargetSection equals sample.ExpectedTargetSection.",
+      "ProfileIds": [
+        "section-aware-boost",
+        "combined-repair"
+      ]
+    },
+    {
+      "FeatureId": "item.EvidenceRefs \u00D7 sample.EvidenceRefs",
+      "Classification": "DerivedAtRuntime",
+      "UsageKind": "Scoring",
+      "DerivationPath": "query.evidenceAnchors",
+      "CurrentSource": "RetrievalDatasetV2CorpusItem.EvidenceRefs \u00D7 RetrievalDatasetV2Sample.EvidenceRefs",
+      "Description": "Evidence boost activates when item.EvidenceRefs intersects sample.EvidenceRefs.",
+      "ProfileIds": [
+        "must-hit-evidence-boost",
+        "combined-repair"
+      ]
+    },
+    {
+      "FeatureId": "item.SourceRefs \u00D7 sample.SourceRefs",
+      "Classification": "DerivedAtRuntime",
+      "UsageKind": "Scoring",
+      "DerivationPath": "query.sourceAnchors",
+      "CurrentSource": "RetrievalDatasetV2CorpusItem.SourceRefs \u00D7 RetrievalDatasetV2Sample.SourceRefs",
+      "Description": "Evidence boost activates when item.SourceRefs intersects sample.SourceRefs.",
+      "ProfileIds": [
+        "must-hit-evidence-boost",
+        "combined-repair"
+      ]
+    },
+    {
+      "FeatureId": "item.Relations \u00D7 sample.RequiredRelations",
+      "Classification": "DerivedAtRuntime",
+      "UsageKind": "Scoring",
+      "DerivationPath": "planner.requiredRelations or relationStore lookup",
+      "CurrentSource": "RetrievalDatasetV2CorpusItem.Relations \u00D7 RetrievalDatasetV2Sample.RequiredRelations",
+      "Description": "Relation boost activates when item.Relations intersects sample.RequiredRelations.",
+      "ProfileIds": [
+        "graph-relation-anchor-boost",
+        "combined-repair"
+      ]
+    },
+    {
+      "FeatureId": "lexical/dense ratio",
+      "Classification": "RuntimeObservable",
+      "UsageKind": "Scoring",
+      "DerivationPath": "",
+      "CurrentSource": "Computed from query.tokens \u00D7 item.Content",
+      "Description": "Boost when lexical/dense \u003E 0.6, recovering low-overlap items.",
+      "ProfileIds": [
+        "lexical-fallback-boost",
+        "combined-repair"
+      ]
+    },
+    {
+      "FeatureId": "item.Lifecycle",
+      "Classification": "RuntimeObservable",
+      "UsageKind": "Filtering",
+      "DerivationPath": "",
+      "CurrentSource": "RetrievalDatasetV2CorpusItem.Lifecycle (== item lifecycle metadata)",
+      "Description": "Used by IsLifecycleRisk and IsBlockedByEligibility.",
+      "ProfileIds": [
+        "baseline",
+        "candidate-pool-expansion",
+        "topk-adjustment",
+        "section-aware-boost",
+        "must-hit-evidence-boost",
+        "graph-relation-anchor-boost",
+        "lexical-fallback-boost",
+        "combined-repair"
+      ]
+    },
+    {
+      "FeatureId": "item.ReplacementState",
+      "Classification": "RuntimeObservable",
+      "UsageKind": "Filtering",
+      "DerivationPath": "",
+      "CurrentSource": "RetrievalDatasetV2CorpusItem.ReplacementState",
+      "Description": "Used by IsLifecycleRisk and IsBlockedByEligibility.",
+      "ProfileIds": [
+        "baseline",
+        "candidate-pool-expansion",
+        "topk-adjustment",
+        "section-aware-boost",
+        "must-hit-evidence-boost",
+        "graph-relation-anchor-boost",
+        "lexical-fallback-boost",
+        "combined-repair"
+      ]
+    },
+    {
+      "FeatureId": "item.ReviewStatus",
+      "Classification": "RuntimeObservable",
+      "UsageKind": "Filtering",
+      "DerivationPath": "",
+      "CurrentSource": "RetrievalDatasetV2CorpusItem.ReviewStatus",
+      "Description": "Available for eligibility filters; not actively branched in V5.5 runner.",
+      "ProfileIds": [
+        "baseline",
+        "candidate-pool-expansion",
+        "topk-adjustment",
+        "section-aware-boost",
+        "must-hit-evidence-boost",
+        "graph-relation-anchor-boost",
+        "lexical-fallback-boost",
+        "combined-repair"
+      ]
+    },
+    {
+      "FeatureId": "item.TargetSection \u00D7 sample.ExpectedTargetSection (filter)",
+      "Classification": "DerivedAtRuntime",
+      "UsageKind": "Filtering",
+      "DerivationPath": "router.targetSection or packageContext.targetSection",
+      "CurrentSource": "RetrievalDatasetV2CorpusItem.TargetSection \u00D7 RetrievalDatasetV2Sample.ExpectedTargetSection",
+      "Description": "Eligibility filter requires sample target section equality at runtime.",
+      "ProfileIds": [
+        "baseline",
+        "candidate-pool-expansion",
+        "topk-adjustment",
+        "section-aware-boost",
+        "must-hit-evidence-boost",
+        "graph-relation-anchor-boost",
+        "lexical-fallback-boost",
+        "combined-repair"
+      ]
+    },
+    {
+      "FeatureId": "sample.MustNotHitItemIds (filter)",
+      "Classification": "ForbiddenForScoring",
+      "UsageKind": "Filtering",
+      "DerivationPath": "query.mustNotItemIds from policy (runtime equivalent only)",
+      "CurrentSource": "RetrievalDatasetV2Sample.MustNotHitItemIds (eval ground truth)",
+      "Description": "post-scoring risk gate references mustNot list; current runner reads eval-side label, runtime needs query.mustNotItemIds policy.",
+      "ProfileIds": [
+        "baseline",
+        "candidate-pool-expansion",
+        "topk-adjustment",
+        "section-aware-boost",
+        "must-hit-evidence-boost",
+        "graph-relation-anchor-boost",
+        "lexical-fallback-boost",
+        "combined-repair"
+      ]
+    },
+    {
+      "FeatureId": "item.Relations \u00D7 sample.RequiredRelations (graph collection)",
+      "Classification": "DerivedAtRuntime",
+      "UsageKind": "CandidateExpansion",
+      "DerivationPath": "planner.requiredRelations or relationStore lookup",
+      "CurrentSource": "RetrievalDatasetV2CorpusItem.Relations \u00D7 RetrievalDatasetV2Sample.RequiredRelations",
+      "Description": "Graph candidate overlap \u002B= 2 when item.Relations intersects sample.RequiredRelations.",
+      "ProfileIds": [
+        "baseline",
+        "candidate-pool-expansion",
+        "topk-adjustment",
+        "section-aware-boost",
+        "must-hit-evidence-boost",
+        "graph-relation-anchor-boost",
+        "lexical-fallback-boost",
+        "combined-repair"
+      ]
+    },
+    {
+      "FeatureId": "item.EvidenceRefs \u00D7 sample.EvidenceRefs (graph collection)",
+      "Classification": "DerivedAtRuntime",
+      "UsageKind": "CandidateExpansion",
+      "DerivationPath": "query.evidenceAnchors",
+      "CurrentSource": "RetrievalDatasetV2CorpusItem.EvidenceRefs \u00D7 RetrievalDatasetV2Sample.EvidenceRefs",
+      "Description": "Graph candidate overlap \u002B= 1 on evidence overlap.",
+      "ProfileIds": [
+        "baseline",
+        "candidate-pool-expansion",
+        "topk-adjustment",
+        "section-aware-boost",
+        "must-hit-evidence-boost",
+        "graph-relation-anchor-boost",
+        "lexical-fallback-boost",
+        "combined-repair"
+      ]
+    },
+    {
+      "FeatureId": "item.SourceRefs \u00D7 sample.SourceRefs (graph collection)",
+      "Classification": "DerivedAtRuntime",
+      "UsageKind": "CandidateExpansion",
+      "DerivationPath": "query.sourceAnchors",
+      "CurrentSource": "RetrievalDatasetV2CorpusItem.SourceRefs \u00D7 RetrievalDatasetV2Sample.SourceRefs",
+      "Description": "Graph candidate overlap \u002B= 1 on source overlap.",
+      "ProfileIds": [
+        "baseline",
+        "candidate-pool-expansion",
+        "topk-adjustment",
+        "section-aware-boost",
+        "must-hit-evidence-boost",
+        "graph-relation-anchor-boost",
+        "lexical-fallback-boost",
+        "combined-repair"
+      ]
+    },
+    {
+      "FeatureId": "sample.MustHitItemIds (graph collection)",
+      "Classification": "ForbiddenForScoring",
+      "UsageKind": "CandidateExpansion",
+      "DerivationPath": "(none \u2014 runtime must avoid leaking labels into candidate ranking)",
+      "CurrentSource": "RetrievalDatasetV2Sample.MustHitItemIds (eval ground truth)",
+      "Description": "Graph candidate overlap \u002B= 3 when item is in MustHitItemIds; this is eval-only and must be removed before runtime promotion.",
+      "ProfileIds": [
+        "baseline",
+        "candidate-pool-expansion",
+        "topk-adjustment",
+        "section-aware-boost",
+        "must-hit-evidence-boost",
+        "graph-relation-anchor-boost",
+        "lexical-fallback-boost",
+        "combined-repair"
+      ]
+    },
+    {
+      "FeatureId": "options.VectorTopK",
+      "Classification": "RuntimeObservable",
+      "UsageKind": "Knob",
+      "DerivationPath": "",
+      "CurrentSource": "RetrievalQualityRepairPreviewOptions.{Baseline,Expansion}VectorTopK",
+      "Description": "Number of vector candidates retained.",
+      "ProfileIds": [
+        "baseline",
+        "candidate-pool-expansion",
+        "topk-adjustment",
+        "section-aware-boost",
+        "must-hit-evidence-boost",
+        "graph-relation-anchor-boost",
+        "lexical-fallback-boost",
+        "combined-repair"
+      ]
+    },
+    {
+      "FeatureId": "options.GraphTopK",
+      "Classification": "RuntimeObservable",
+      "UsageKind": "Knob",
+      "DerivationPath": "",
+      "CurrentSource": "RetrievalQualityRepairPreviewOptions.{Baseline,Expansion}GraphTopK",
+      "Description": "Number of graph candidates retained.",
+      "ProfileIds": [
+        "baseline",
+        "candidate-pool-expansion",
+        "topk-adjustment",
+        "section-aware-boost",
+        "must-hit-evidence-boost",
+        "graph-relation-anchor-boost",
+        "lexical-fallback-boost",
+        "combined-repair"
+      ]
+    },
+    {
+      "FeatureId": "options.MergedTopK",
+      "Classification": "RuntimeObservable",
+      "UsageKind": "Knob",
+      "DerivationPath": "",
+      "CurrentSource": "RetrievalQualityRepairPreviewOptions.{Baseline,Expansion,Adjusted}MergedTopK",
+      "Description": "Size of merged candidate window before TopK eval slice.",
+      "ProfileIds": [
+        "baseline",
+        "candidate-pool-expansion",
+        "topk-adjustment",
+        "section-aware-boost",
+        "must-hit-evidence-boost",
+        "graph-relation-anchor-boost",
+        "lexical-fallback-boost",
+        "combined-repair"
+      ]
+    }
+  ],
+  "ScoringFeatureCount": 12,
+  "FilteringFeatureCount": 5,
+  "CandidateExpansionFeatureCount": 4,
+  "RuntimeObservableCount": 14,
+  "DerivedAtRuntimeCount": 8,
+  "EvalOnlyCount": 0,
+  "ForbiddenForScoringCount": 2,
+  "SourceScan": {
+    "ScanPerformed": true,
+    "ScannedFileCount": 7,
+    "FixtureTokenHitCount": 0,
+    "ScannedFiles": [
+      "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\src\\ContextCore.Core\\Services\\Vector\\ShadowFormalRetrievalAdapterPlanRunner.cs",
+      "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\src\\ContextCore.Core\\Services\\Vector\\ShadowFormalRetrievalAdapter.cs",
+      "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\src\\ContextCore.Core\\Services\\Vector\\FormalAdapterPackageShadowComparisonRunner.cs",
+      "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\src\\ContextCore.Core\\Services\\Vector\\GraphVectorRetrievalQualityAuditRunner.cs",
+      "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\src\\ContextCore.Core\\Services\\Vector\\RetrievalQualityRepairPreviewRunner.cs",
+      "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\src\\ContextCore.Core\\Services\\Vector\\RuntimeObservableRetrievalFeatureContractRunner.cs",
+      "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\src\\ContextCore.Core\\Services\\Vector\\RuntimeRetrievalFeatureDerivationPreviewRunner.cs"
+    ],
+    "FlaggedFiles": [],
+    "FlaggedTokens": []
+  },
+  "FormalOutputChanged": 0,
+  "FormalSelectedSetChanged": false,
+  "FormalPackageWritten": false,
+  "PackageOutputChanged": false,
+  "PackingPolicyChanged": false,
+  "RuntimeMutated": false,
+  "VectorStoreBindingChanged": false,
+  "FormalRetrievalAllowed": false,
+  "RuntimeSwitchAllowed": false,
+  "ReadyForRuntimeSwitch": false,
+  "UseForRuntime": false,
+  "NoRuntimeMutationInvariant": true,
+  "SourceReports": {
+    "v55RepairGate": "vector\\v5\\retrieval-quality-repair-gate.json"
+  },
+  "BlockedReasons": []
+}

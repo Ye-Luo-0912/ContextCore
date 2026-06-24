@@ -1,0 +1,31 @@
+﻿{
+  "OperationId": "shadow-adapter-delta-diag-29efdd7aaa194b13bc5d93cdf645f856",
+  "CreatedAt": "2026-06-22T08:54:04.6827206+00:00",
+  "DiagnosticsPassed": true,
+  "Recommendations": "ReadyForShadowAdapterDeltaTriage",
+  "SampleCount": 120,
+  "BaselinePoolSize": 600,
+  "ShadowPoolSize": 1200,
+  "OverlapCount": 600,
+  "OverlapRate": 1,
+  "BaselineOnlyCount": 0,
+  "ShadowOnlyCount": 600,
+  "FilteredByEligibilityCount": 0,
+  "FilteredByLifecycleCount": 90,
+  "FilteredByBelowTopKCount": 600,
+  "FilteredByDuplicateCount": 0,
+  "DeltaZeroCauses": [
+    "CandidateSourceNoUniqueContribution",
+    "ShadowCandidateBelowTopK",
+    "ShadowCandidateFiltered",
+    "ScopeSyntheticDatasetLimitation"
+  ],
+  "Diagnostics": [
+    "samples=120 baselinePool=600 shadowPool=1200",
+    "overlap=600/600 (100.00%)",
+    "baselineOnly=0 shadowOnly=600",
+    "filters: eligibility=0 lifecycle=90 belowTopK=600 duplicate=0",
+    "deltaZeroCauses: CandidateSourceNoUniqueContribution, ShadowCandidateBelowTopK, ShadowCandidateFiltered, ScopeSyntheticDatasetLimitation"
+  ],
+  "BlockedReasons": []
+}

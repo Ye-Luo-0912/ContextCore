@@ -1,0 +1,33 @@
+﻿{
+  "generatedAt": "2026-06-14T00:44:08.6904787+00:00",
+  "gatePassed": true,
+  "workspaceId": "contextcore_selected_normal",
+  "collectionId": "learning-feedback-selected-normal",
+  "observationWindowMinutes": 10,
+  "providerMode": "GuardedPostgresPrimary",
+  "operationCount": 18,
+  "postgresPrimaryReadCount": 7,
+  "postgresPrimaryWriteCount": 10,
+  "fileSystemFallbackCount": 0,
+  "comparisonTraceCount": 18,
+  "mismatchCount": 0,
+  "postgresFailureCount": 0,
+  "scopeLeakCount": 0,
+  "errorRate": 0,
+  "fallbackRate": 0,
+  "exportProjectionParityPassed": true,
+  "summaryParityPassed": true,
+  "reviewSummaryParityPassed": true,
+  "featureCandidateParityPassed": true,
+  "trainableCandidateLeakCount": 0,
+  "smokeCandidateExcludedCount": 1,
+  "cleanupPerformed": false,
+  "mismatches": [],
+  "blockedReasons": [],
+  "diagnostics": [
+    "SelectedNormalScopeCanary",
+    "NoTrainingNoRuntimeBehaviorChange"
+  ],
+  "rollbackInstruction": "remove limited learning feedback scope allowlist or set LearningFeedbackProviderSwitchOptions.Enabled=false",
+  "recommendation": "ReadyForFreezeGate"
+}

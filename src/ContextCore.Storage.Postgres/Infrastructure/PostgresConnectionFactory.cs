@@ -1,9 +1,9 @@
 using Npgsql;
 
-namespace ContextCore.Storage.Postgres;
+namespace ContextCore.Storage.Postgres.Infrastructure;
 
 /// <summary>集中管理 PostgreSQL 连接池。</summary>
-public sealed class PostgresConnectionFactory : IAsyncDisposable
+public sealed class PostgresConnectionFactory : IPostgresConnectionFactory
 {
     private readonly NpgsqlDataSource _dataSource;
 

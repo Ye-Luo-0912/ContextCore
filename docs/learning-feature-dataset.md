@@ -446,3 +446,121 @@ Service Mode 新增 Learning Features 只读页面：
 Ranker Shadow Debug 页面新增 Recent Shadow Traces 只读区块，展示 recent retrieval id、profile、candidate score count、deprecated demotion count 与 query。该区块只读取 trace store，不触发新的 retrieval，不改变正式输出。
 
 Phase 6G 进一步在 Ranker Shadow Debug 页面增加 Trace Quality Summary，只读展示 trace count、candidate score count、demotion / promotion 统计、risk count 和 recommended next step。该 summary 仍只读取 recent traces，不训练模型、不应用权重、不改变 runtime retrieval 或 package。
+
+## Runtime Feedback Source
+
+F1 新增 `LearningFeedbackEvent` 作为运行时反馈采集源。它与 `PolicyFeedbackDataset`、feature export 保持解耦：反馈事件不会自动生成训练样本，不会自动进入 reranker/router/attention 数据集，也不会自动改变任何 policy。
+
+采集接口：
+
+- `POST /api/learning/feedback`
+- `GET /api/learning/feedback?runtimeFeedback=true`
+- `GET /api/learning/feedback/summary`
+- `GET /api/learning/feedback/export`
+
+导出文件：
+
+- `learning/feedback/learning-feedback-summary.json`
+- `learning/feedback/learning-feedback-summary.md`
+- `learning/feedback/learning-feedback-events.jsonl`
+
+数据治理要求：
+
+- 反馈事件按稳定 `FeedbackId` upsert，避免重复数据污染。
+- 默认 metadata 写入 `trainingUse=disabled_until_review`。
+- 支持 metadata-only / redaction 模式，避免用户原始敏感内容直接成为训练样本。
+- 后续如果要转为 feature dataset，必须新增显式评审或脱敏步骤。
+
+F1.1 补充反馈提交入口与 smoke flow：
+
+- `LearningFeedbackTargetType` 限定目标绑定类型。
+- `LearningFeedbackSubmitRequest` 作为显式提交请求。
+- `eval submit-learning-feedback` 可提交单条 smoke / manual feedback，必须显式传入 capability、target type、target id 和 feedback kind。
+- `eval learning-feedback-smoke` 验证 submit、duplicate upsert、metadata-only redaction、summary 和 export。
+- smoke 仍只写 `learning/feedback` 与 runtime feedback store，不进入 feature export，不改变任何 runtime policy。
+
+## Feedback Review Feature Candidates
+
+F2 新增 runtime feedback 到离线 dataset candidate 的审核闸门：
+
+- `LearningFeedbackReviewRecord` 记录 reviewer、review status、approved capability、approved label kind、redaction checked 与 training use。
+- `LearningFeedbackReviewService` 负责 approve / reject / needs-redaction / needs-evidence，不修改任何 runtime policy。
+- `LearningFeedbackFeatureCandidateBuilder` 只读取已审核 feedback，生成 `FeedbackFeatureCandidate` JSONL。
+
+候选生成规则：
+
+- 只处理 `ApprovedForDataset`。
+- `TrainingUse` 必须不是 `disabled_until_review`。
+- `RedactionChecked` 必须为 true。
+- `metadataOnly=true` 时不导出原始 query / reason / correction，只保留 metadata-safe refs。
+- 缺少 `SourceOperationId`、`TargetId` 或 `CapabilityId` 时标记为 evidence 不足，不生成候选。
+- candidate id 稳定生成，重复运行不会制造重复样本噪声。
+
+CLI：
+
+- `eval learning-feedback-review-summary`
+- `eval learning-feedback-feature-candidates`
+
+输出：
+
+- `learning/feedback/learning-feedback-review-summary.json`
+- `learning/feedback/learning-feedback-review-summary.md`
+- `learning/feedback/learning-feedback-feature-candidates.jsonl`
+- `learning/feedback/learning-feedback-feature-candidates.md`
+- `learning/feedback/learning-feedback-feature-candidates-report.json`
+
+该阶段仍不训练模型、不调权、不改变 retrieval / planning / scoring / `PackingPolicy` / package output。
+
+## Feedback Quality Readiness
+
+F3 新增 `eval learning-feedback-quality`，用于评估 runtime feedback 是否已经足够进入后续离线 dataset export / offline baseline。
+
+输入：
+
+- runtime feedback events
+- feedback review records
+- feature candidates
+- existing learning feature dataset summary
+
+输出：
+
+- `learning/feedback/learning-feedback-quality-report.json`
+- `learning/feedback/learning-feedback-quality-report.md`
+
+报告会按 capability 输出 readiness：
+
+- approved candidate count
+- positive / negative label count
+- metadata-only count
+- needs more evidence count
+- ready / not ready
+- blocked reasons
+
+`metadataOnly=true` 的候选可以保留为 metadata-safe candidate，但如果某个 capability 只有 metadata-only 候选，会被标记为 `MetadataOnlyInsufficient`。缺正样本或负样本分别标记 `MissingPositiveSamples` / `MissingNegativeSamples`。未 review 的 feedback 只计入 `PendingReviewCount`，不会生成候选。
+
+## Feedback Review Operations & Approved Dataset Gate
+
+F3.1 增加 review 操作 smoke 和 approved dataset gate，用于把“操作链路可用”和“真实训练候选可用”分开评估。该阶段仍不训练、不调权、不改变 retrieval / planning / scoring / `PackingPolicy` / package output。
+
+新增 CLI：
+
+- `eval learning-feedback-review-smoke`
+- `eval learning-approved-feedback-dataset-gate`
+
+`learning-feedback-review-smoke` 验证 submit、duplicate upsert、needs-redaction、reject、approve metadata-safe feedback、feature candidate export 和 quality report refresh。Smoke feedback 必须写入 `TrainingUse=smoke_test_only` 与 `excludedFromTraining=true`，因此可用于验证链路，但不会进入真实 trainable dataset。
+
+`learning-approved-feedback-dataset-gate` 输出：
+
+- `learning/feedback/learning-approved-feedback-dataset-gate.json`
+- `learning/feedback/learning-approved-feedback-dataset-gate.md`
+
+Gate 条件：
+
+- approved feedback 数量大于 0
+- redaction coverage 为 100%
+- feature candidate 数量大于 0
+- trainable candidate 不得使用 `disabled_until_review`
+- trainable dataset 中不得包含 `smoke_test_only`
+- capability label coverage 必须具备正负样本
+
+当前本地真实数据没有 approved feedback，gate 应保持失败，原因是 `NoApprovedFeedback` 或 `NeedsReviewedFeedback`。

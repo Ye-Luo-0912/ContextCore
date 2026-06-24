@@ -1,6 +1,4 @@
-using ContextCore.Abstractions.Models;
-
-namespace ContextCore.Abstractions;
+namespace ContextCore.Abstractions.Models;
 
 /// <summary>供规划层读取的只读上下文快照，不参与 retrieval 或 package 选择。</summary>
 public sealed class ContextPlanningSnapshot

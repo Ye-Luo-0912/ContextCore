@@ -1,0 +1,58 @@
+﻿{
+  "GatePassed": true,
+  "ScopeCount": 2,
+  "ObservationWindowMinutes": 30,
+  "OperationIntervalSeconds": 1,
+  "MaxOperations": 100,
+  "OperationCount": 59,
+  "PostgresPrimaryReadCount": 28,
+  "PostgresPrimaryWriteCount": 26,
+  "FileSystemFallbackCount": 0,
+  "ComparisonTraceCount": 58,
+  "MismatchCount": 0,
+  "PostgresFailureCount": 0,
+  "NonAllowlistedScopeLeakCount": 0,
+  "AveragePostgresReadMs": 4.547424999999999,
+  "P95PostgresReadMs": 17.0488,
+  "AveragePostgresWriteMs": 17.5838,
+  "P95PostgresWriteMs": 24.1569,
+  "FallbackPathTested": true,
+  "CleanupPerformed": false,
+  "PerScopeStatus": [
+    {
+      "ScopeName": "selected-canary-alpha",
+      "WorkspaceId": "contextcore_scoped_expansion_alpha",
+      "CollectionId": "relation-governance-scoped-expansion-alpha",
+      "Mode": "GuardedPostgresPrimary",
+      "RolloutStage": "db2.10-expansion",
+      "OperationCount": 29,
+      "PostgresPrimaryReadCount": 14,
+      "PostgresPrimaryWriteCount": 13,
+      "FallbackCount": 0,
+      "MismatchCount": 0,
+      "PostgresFailureCount": 0,
+      "Recommendation": "NeedsMoreCanaryRuns"
+    },
+    {
+      "ScopeName": "selected-canary-beta",
+      "WorkspaceId": "contextcore_scoped_expansion_beta",
+      "CollectionId": "relation-governance-scoped-expansion-beta",
+      "Mode": "GuardedPostgresPrimary",
+      "RolloutStage": "db2.10-expansion",
+      "OperationCount": 29,
+      "PostgresPrimaryReadCount": 14,
+      "PostgresPrimaryWriteCount": 13,
+      "FallbackCount": 0,
+      "MismatchCount": 0,
+      "PostgresFailureCount": 0,
+      "Recommendation": "NeedsMoreCanaryRuns"
+    }
+  ],
+  "Diagnostics": [
+    "selected-canary-alpha:ExtendedCanaryScopedOnly",
+    "selected-canary-beta:ExtendedCanaryScopedOnly"
+  ],
+  "BlockedReasons": [],
+  "RollbackInstruction": "Disable affected scoped rule or set RelationGovernanceProviderSwitchOptions.Enabled=false.",
+  "Recommendation": "ReadyForSelectedNormalWorkspace"
+}

@@ -1,7 +1,8 @@
 using System.Collections.Concurrent;
 using ContextCore.Abstractions;
+using ContextCore.Abstractions.Models;
 
-namespace ContextCore.Storage.InMemory;
+namespace ContextCore.Storage.InMemory.Stores;
 
 /// <summary>基于内存的学习记录存储，适用于测试和短生命周期运行。</summary>
 public sealed class InMemoryContextLearningStore : IContextLearningStore

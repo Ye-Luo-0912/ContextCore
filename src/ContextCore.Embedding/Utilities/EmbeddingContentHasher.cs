@@ -1,8 +1,9 @@
 using System.Security.Cryptography;
 using System.Text;
 using ContextCore.Abstractions;
+using ContextCore.Abstractions.Models;
 
-namespace ContextCore.Embedding;
+namespace ContextCore.Embedding.Utilities;
 
 /// <summary>生成 embedding 输入的稳定内容哈希。</summary>
 public static class EmbeddingContentHasher

@@ -1,0 +1,1 @@
+{"OperationId":"mline-rdsv2-stress-train-sample-0016-4a769243d66f4644b751ba578d904655","WorkspaceId":"","CollectionId":"","QueryText":"Retrieve review guidance for verify evidence, but do not return items governed by schema.","BaselineCount":5,"AddedCandidateIds":[],"RemovedCandidateIds":[],"Applied":false,"Allowlisted":false,"Timestamp":"2026-06-20T07:43:44.1760288+00:00"}

@@ -1,12 +1,21 @@
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
 using System.Text.Json;
+using ContextCore.Abstractions;
+using ContextCore.Abstractions.Models;
 
 namespace ContextCore.Embedding;
 
 /// <summary>基于 Microsoft.ML.OnnxRuntime 创建本地 embedding 会话。</summary>
 public sealed class OnnxRuntimeEmbeddingSessionFactory : IOnnxEmbeddingSessionFactory
 {
+    private readonly IEmbeddingTokenizer? _tokenizer;
+
+    public OnnxRuntimeEmbeddingSessionFactory(IEmbeddingTokenizer? tokenizer = null)
+    {
+        _tokenizer = tokenizer;
+    }
+
     public Task<IOnnxEmbeddingSession> CreateAsync(
         EmbeddingOptions options,
         CancellationToken cancellationToken = default)
@@ -34,9 +43,11 @@ public sealed class OnnxRuntimeEmbeddingSessionFactory : IOnnxEmbeddingSessionFa
         var dimensions = ResolveDimensions(options, modelRoot);
         var lowercase = ResolveTokenizerLowercase(options, modelRoot);
         var poolingStrategy = ResolvePoolingStrategy(options, modelPath);
-        var tokenizer = BertWordPieceTokenizer.FromVocabularyFile(
-            vocabularyPath,
-            lowercase);
+        var tokenizer = _tokenizer
+            ?? EmbeddingTokenizerFactory.Create(
+                vocabularyPath,
+                modelPath,
+                lowercase);
         var sessionOptions = CreateSessionOptions(options);
         var session = new InferenceSession(modelPath, sessionOptions);
 
@@ -124,6 +135,12 @@ public sealed class OnnxRuntimeEmbeddingSessionFactory : IOnnxEmbeddingSessionFa
     {
         var modelDirectory = Path.GetDirectoryName(Path.GetFullPath(modelPath))
             ?? throw new InvalidOperationException($"无法解析 ONNX 模型目录：{modelPath}");
+        if (File.Exists(Path.Combine(modelDirectory, "config.json"))
+            || File.Exists(Path.Combine(modelDirectory, "tokenizer_config.json")))
+        {
+            return modelDirectory;
+        }
+
         return Directory.GetParent(modelDirectory)?.FullName ?? modelDirectory;
     }
 
@@ -168,16 +185,47 @@ public sealed class OnnxRuntimeEmbeddingSessionFactory : IOnnxEmbeddingSessionFa
     }
 }
 
+internal sealed class OnnxPastKeyValueInput
+{
+    private readonly int[] _dimensions;
+
+    public OnnxPastKeyValueInput(string name, int[] dimensions)
+    {
+        Name = name;
+        _dimensions = dimensions;
+    }
+
+    public string Name { get; }
+
+    public int[] ToInitialCacheDimensions(int batchSize)
+    {
+        if (_dimensions.Length != 4)
+        {
+            return [batchSize, 1, 0, 1];
+        }
+
+        return
+        [
+            _dimensions[0] > 0 ? _dimensions[0] : batchSize,
+            _dimensions[1] > 0 ? _dimensions[1] : 1,
+            0,
+            _dimensions[3] > 0 ? _dimensions[3] : 1
+        ];
+    }
+}
+
 /// <summary>封装 ONNX Runtime 推理、mean pooling 与向量输出。</summary>
 public sealed class OnnxRuntimeEmbeddingSession : IOnnxEmbeddingSession
 {
     private readonly InferenceSession _session;
-    private readonly BertWordPieceTokenizer _tokenizer;
+    private readonly IEmbeddingTokenizer _tokenizer;
     private readonly int _maxSequenceLength;
     private readonly bool _useTokenTypeIds;
     private readonly string _inputIdsName;
     private readonly string? _attentionMaskName;
     private readonly string? _tokenTypeIdsName;
+    private readonly string? _positionIdsName;
+    private readonly IReadOnlyList<OnnxPastKeyValueInput> _pastKeyValueInputs;
     private readonly string _outputName;
 
     public OnnxRuntimeEmbeddingSession(
@@ -186,7 +234,7 @@ public sealed class OnnxRuntimeEmbeddingSession : IOnnxEmbeddingSession
         int maxSequenceLength,
         EmbeddingPoolingStrategy poolingStrategy,
         bool useTokenTypeIds,
-        BertWordPieceTokenizer tokenizer,
+        IEmbeddingTokenizer tokenizer,
         InferenceSession session)
     {
         ArgumentNullException.ThrowIfNull(tokenizer);
@@ -204,6 +252,8 @@ public sealed class OnnxRuntimeEmbeddingSession : IOnnxEmbeddingSession
         _inputIdsName = ResolveRequiredInputName(session, "input_ids");
         _attentionMaskName = ResolveOptionalInputName(session, "attention_mask");
         _tokenTypeIdsName = ResolveOptionalInputName(session, "token_type_ids");
+        _positionIdsName = ResolveOptionalInputName(session, "position_ids");
+        _pastKeyValueInputs = ResolvePastKeyValueInputs(session);
         _outputName = ResolveOutputName(session);
     }
 
@@ -225,7 +275,7 @@ public sealed class OnnxRuntimeEmbeddingSession : IOnnxEmbeddingSession
             return Task.FromResult<IReadOnlyList<IReadOnlyList<float>>>(Array.Empty<IReadOnlyList<float>>());
         }
 
-        var encoded = _tokenizer.EncodeBatch(texts, _maxSequenceLength);
+        var encoded = _tokenizer.Tokenize(texts, _maxSequenceLength);
         var inputs = CreateInputs(encoded);
         using var results = _session.Run(inputs);
         var output = results.FirstOrDefault(result => string.Equals(result.Name, _outputName, StringComparison.Ordinal))
@@ -242,7 +292,7 @@ public sealed class OnnxRuntimeEmbeddingSession : IOnnxEmbeddingSession
         return ValueTask.CompletedTask;
     }
 
-    private IReadOnlyList<NamedOnnxValue> CreateInputs(TokenizedTextBatch encoded)
+    private IReadOnlyList<NamedOnnxValue> CreateInputs(EmbeddingTokenizationResult encoded)
     {
         var dimensions = new[] { encoded.BatchSize, encoded.SequenceLength };
         var inputs = new List<NamedOnnxValue>
@@ -266,12 +316,56 @@ public sealed class OnnxRuntimeEmbeddingSession : IOnnxEmbeddingSession
                 new DenseTensor<long>(encoded.TokenTypeIds, dimensions)));
         }
 
+        if (_positionIdsName is not null)
+        {
+            inputs.Add(NamedOnnxValue.CreateFromTensor(
+                _positionIdsName,
+                new DenseTensor<long>(CreatePositionIds(encoded), dimensions)));
+        }
+
+        foreach (var pastInput in _pastKeyValueInputs)
+        {
+            inputs.Add(NamedOnnxValue.CreateFromTensor(
+                pastInput.Name,
+                new DenseTensor<float>(Array.Empty<float>(), pastInput.ToInitialCacheDimensions(encoded.BatchSize))));
+        }
+
         return inputs;
+    }
+
+    private static long[] CreatePositionIds(EmbeddingTokenizationResult encoded)
+    {
+        var values = new long[encoded.BatchSize * encoded.SequenceLength];
+        for (var batchIndex = 0; batchIndex < encoded.BatchSize; batchIndex++)
+        {
+            var offset = batchIndex * encoded.SequenceLength;
+            var position = 0L;
+            for (var tokenIndex = 0; tokenIndex < encoded.SequenceLength; tokenIndex++)
+            {
+                if (encoded.AttentionMask[offset + tokenIndex] == 0)
+                {
+                    continue;
+                }
+
+                values[offset + tokenIndex] = position++;
+            }
+        }
+
+        return values;
+    }
+
+    private static IReadOnlyList<OnnxPastKeyValueInput> ResolvePastKeyValueInputs(InferenceSession session)
+    {
+        return session.InputMetadata
+            .Where(static item => item.Key.StartsWith("past_key_values.", StringComparison.Ordinal))
+            .Select(static item => new OnnxPastKeyValueInput(item.Key, item.Value.Dimensions.ToArray()))
+            .OrderBy(static item => item.Name, StringComparer.Ordinal)
+            .ToArray();
     }
 
     private IReadOnlyList<IReadOnlyList<float>> PoolVectors(
         Tensor<float> tensor,
-        TokenizedTextBatch encoded)
+        EmbeddingTokenizationResult encoded)
     {
         var outputDimensions = tensor.Dimensions.ToArray();
         return outputDimensions.Length switch
@@ -325,7 +419,7 @@ public sealed class OnnxRuntimeEmbeddingSession : IOnnxEmbeddingSession
     private IReadOnlyList<IReadOnlyList<float>> MeanPoolSequenceOutput(
         float[] values,
         IReadOnlyList<int> outputDimensions,
-        TokenizedTextBatch encoded)
+        EmbeddingTokenizationResult encoded)
     {
         var batchSize = outputDimensions[0];
         var outputSequenceLength = outputDimensions[1];

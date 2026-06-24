@@ -1,0 +1,3470 @@
+﻿{
+  "OperationId": "retrieval-dataset-v2-stress-failure-triage-9a1b996d7bc6447295fb46f8bebddc67",
+  "CreatedAt": "2026-06-15T17:18:29.7162912+00:00",
+  "DatasetId": "rdsv2-stress-a9f2c86e8d1df488",
+  "SampleCount": 120,
+  "FailureCount": 68,
+  "FailureCountBySplit": {
+    "dev": 13,
+    "test": 16,
+    "train": 30,
+    "holdout": 9
+  },
+  "FailureCountByDifficulty": {
+    "near_duplicate_distractor": 12,
+    "cross_domain_distractor": 12,
+    "query_with_sparse_tokens": 7,
+    "ambiguous_target_section": 7,
+    "direct_lexical": 6,
+    "paraphrase_semantic": 6,
+    "metadata_anchor": 6,
+    "relation_multi_hop": 6,
+    "must_not_negative_constraint": 6
+  },
+  "FailureCountByReason": {
+    "HybridUnionRankingRegression": 5,
+    "MustHitBelowTopK": 59,
+    "NegativeDistractorOutranksMustHit": 3,
+    "AnchorRankingRegression": 1
+  },
+  "HoldoutFailureCount": 9,
+  "DenseOnlyWinCount": 5,
+  "HybridWinCount": 0,
+  "AnchorRegressionCount": 1,
+  "MustHitBelowTopKCount": 59,
+  "MustHitMissingFromCandidateSetCount": 0,
+  "EligibilityBlockedCount": 0,
+  "UseForRuntime": false,
+  "FormalRetrievalAllowed": false,
+  "Recommendation": "NeedsHybridUnionScoringRepair",
+  "ProfileComparisons": [
+    {
+      "ComparisonName": "dense-only-vs-hybrid-full",
+      "LeftProfileName": "dense-only",
+      "RightProfileName": "hybrid-full",
+      "SampleCount": 120,
+      "LeftHitCount": 57,
+      "RightHitCount": 52,
+      "LeftOnlyWinCount": 5,
+      "RightOnlyWinCount": 0,
+      "BothHitCount": 52,
+      "BothMissCount": 63,
+      "LeftRecall": 0.475,
+      "RightRecall": 0.43333333333333335
+    },
+    {
+      "ComparisonName": "dense-only-vs-hybrid-with-anchor-shuffle",
+      "LeftProfileName": "dense-only",
+      "RightProfileName": "hybrid-with-anchor-shuffle",
+      "SampleCount": 120,
+      "LeftHitCount": 57,
+      "RightHitCount": 57,
+      "LeftOnlyWinCount": 0,
+      "RightOnlyWinCount": 0,
+      "BothHitCount": 57,
+      "BothMissCount": 63,
+      "LeftRecall": 0.475,
+      "RightRecall": 0.475
+    },
+    {
+      "ComparisonName": "dense-only-vs-hybrid-with-metadata-anchor-removed",
+      "LeftProfileName": "dense-only",
+      "RightProfileName": "hybrid-with-metadata-anchor-removed",
+      "SampleCount": 120,
+      "LeftHitCount": 57,
+      "RightHitCount": 57,
+      "LeftOnlyWinCount": 0,
+      "RightOnlyWinCount": 0,
+      "BothHitCount": 57,
+      "BothMissCount": 63,
+      "LeftRecall": 0.475,
+      "RightRecall": 0.475
+    },
+    {
+      "ComparisonName": "anchor-only-vs-hybrid-full",
+      "LeftProfileName": "anchor-only",
+      "RightProfileName": "hybrid-full",
+      "SampleCount": 120,
+      "LeftHitCount": 33,
+      "RightHitCount": 52,
+      "LeftOnlyWinCount": 1,
+      "RightOnlyWinCount": 20,
+      "BothHitCount": 32,
+      "BothMissCount": 67,
+      "LeftRecall": 0.275,
+      "RightRecall": 0.43333333333333335
+    }
+  ],
+  "Failures": [
+    {
+      "SampleId": "rdsv2-stress-dev-sample-0017",
+      "Split": "dev",
+      "Difficulty": "ambiguous_target_section",
+      "QueryText": "Resolve the target section for must-not signal and return the context with compatible lifecycle metadata.",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-dev-item-0087"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-dev-item-0017"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-dev-item-0007",
+        "rdsv2-stress-dev-item-0017",
+        "rdsv2-stress-dev-item-0027",
+        "rdsv2-stress-dev-item-0037",
+        "rdsv2-stress-dev-item-0047"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-dev-item-0007",
+        "rdsv2-stress-dev-item-0017",
+        "rdsv2-stress-dev-item-0027",
+        "rdsv2-stress-dev-item-0037",
+        "rdsv2-stress-dev-item-0047"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-dev-item-0007",
+        "rdsv2-stress-dev-item-0008",
+        "rdsv2-stress-dev-item-0017",
+        "rdsv2-stress-dev-item-0018",
+        "rdsv2-stress-dev-item-0027"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-dev-item-0007",
+        "rdsv2-stress-dev-item-0017",
+        "rdsv2-stress-dev-item-0027",
+        "rdsv2-stress-dev-item-0037",
+        "rdsv2-stress-dev-item-0047"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 9,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-dev-item-0007",
+      "NearestWrongCandidateKind": "test-note",
+      "FailureReason": "NegativeDistractorOutranksMustHit",
+      "RecommendedRepair": "Strengthen must-not negative policy in preview scoring."
+    },
+    {
+      "SampleId": "rdsv2-stress-dev-sample-0047",
+      "Split": "dev",
+      "Difficulty": "ambiguous_target_section",
+      "QueryText": "Resolve the target section for must-not signal and return the context with compatible lifecycle metadata.",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-dev-item-0057"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-dev-item-0087"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-dev-item-0007",
+        "rdsv2-stress-dev-item-0017",
+        "rdsv2-stress-dev-item-0027",
+        "rdsv2-stress-dev-item-0037",
+        "rdsv2-stress-dev-item-0047"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-dev-item-0007",
+        "rdsv2-stress-dev-item-0017",
+        "rdsv2-stress-dev-item-0027",
+        "rdsv2-stress-dev-item-0037",
+        "rdsv2-stress-dev-item-0047"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-dev-item-0007",
+        "rdsv2-stress-dev-item-0008",
+        "rdsv2-stress-dev-item-0017",
+        "rdsv2-stress-dev-item-0018",
+        "rdsv2-stress-dev-item-0027"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-dev-item-0007",
+        "rdsv2-stress-dev-item-0017",
+        "rdsv2-stress-dev-item-0027",
+        "rdsv2-stress-dev-item-0037",
+        "rdsv2-stress-dev-item-0047"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 6,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-dev-item-0007",
+      "NearestWrongCandidateKind": "test-note",
+      "FailureReason": "MustHitBelowTopK",
+      "RecommendedRepair": "Tune ranking so present mustHit candidates are promoted into topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-dev-sample-0067",
+      "Split": "dev",
+      "Difficulty": "ambiguous_target_section",
+      "QueryText": "Resolve the target section for must-not signal and return the context with compatible lifecycle metadata.",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-dev-item-0067"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-dev-item-0008"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-dev-item-0007",
+        "rdsv2-stress-dev-item-0017",
+        "rdsv2-stress-dev-item-0027",
+        "rdsv2-stress-dev-item-0037",
+        "rdsv2-stress-dev-item-0047"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-dev-item-0007",
+        "rdsv2-stress-dev-item-0017",
+        "rdsv2-stress-dev-item-0027",
+        "rdsv2-stress-dev-item-0037",
+        "rdsv2-stress-dev-item-0047"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-dev-item-0007",
+        "rdsv2-stress-dev-item-0008",
+        "rdsv2-stress-dev-item-0017",
+        "rdsv2-stress-dev-item-0018",
+        "rdsv2-stress-dev-item-0027"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-dev-item-0007",
+        "rdsv2-stress-dev-item-0017",
+        "rdsv2-stress-dev-item-0027",
+        "rdsv2-stress-dev-item-0037",
+        "rdsv2-stress-dev-item-0047"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 7,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-dev-item-0007",
+      "NearestWrongCandidateKind": "test-note",
+      "FailureReason": "MustHitBelowTopK",
+      "RecommendedRepair": "Tune ranking so present mustHit candidates are promoted into topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-dev-sample-0087",
+      "Split": "dev",
+      "Difficulty": "ambiguous_target_section",
+      "QueryText": "Resolve the target section for must-not signal and return the context with compatible lifecycle metadata.",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-dev-item-0077"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-dev-item-0027"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-dev-item-0007",
+        "rdsv2-stress-dev-item-0017",
+        "rdsv2-stress-dev-item-0027",
+        "rdsv2-stress-dev-item-0037",
+        "rdsv2-stress-dev-item-0047"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-dev-item-0007",
+        "rdsv2-stress-dev-item-0017",
+        "rdsv2-stress-dev-item-0027",
+        "rdsv2-stress-dev-item-0037",
+        "rdsv2-stress-dev-item-0047"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-dev-item-0007",
+        "rdsv2-stress-dev-item-0008",
+        "rdsv2-stress-dev-item-0017",
+        "rdsv2-stress-dev-item-0018",
+        "rdsv2-stress-dev-item-0027"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-dev-item-0007",
+        "rdsv2-stress-dev-item-0017",
+        "rdsv2-stress-dev-item-0027",
+        "rdsv2-stress-dev-item-0037",
+        "rdsv2-stress-dev-item-0047"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 8,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-dev-item-0007",
+      "NearestWrongCandidateKind": "test-note",
+      "FailureReason": "NegativeDistractorOutranksMustHit",
+      "RecommendedRepair": "Strengthen must-not negative policy in preview scoring."
+    },
+    {
+      "SampleId": "rdsv2-stress-dev-sample-0008",
+      "Split": "dev",
+      "Difficulty": "near_duplicate_distractor",
+      "QueryText": "Find the item about select section and ambiguity constraint; avoid the near duplicate with incompatible lifecycle.",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-dev-item-0038"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-dev-item-0058"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-dev-item-0008",
+        "rdsv2-stress-dev-item-0018",
+        "rdsv2-stress-dev-item-0028",
+        "rdsv2-stress-dev-item-0038",
+        "rdsv2-stress-dev-item-0048"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-dev-item-0008",
+        "rdsv2-stress-dev-item-0018",
+        "rdsv2-stress-dev-item-0028",
+        "rdsv2-stress-dev-item-0038",
+        "rdsv2-stress-dev-item-0048"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-holdout-item-0099",
+        "rdsv2-stress-holdout-item-0109",
+        "rdsv2-stress-holdout-item-0119",
+        "rdsv2-stress-test-item-0009",
+        "rdsv2-stress-test-item-0019"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-holdout-item-0099",
+        "rdsv2-stress-holdout-item-0109",
+        "rdsv2-stress-holdout-item-0119",
+        "rdsv2-stress-test-item-0009",
+        "rdsv2-stress-test-item-0019"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 16,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-holdout-item-0099",
+      "NearestWrongCandidateKind": "diagnostic",
+      "FailureReason": "HybridUnionRankingRegression",
+      "RecommendedRepair": "Preview hybrid union scoring repair so dense wins are preserved in topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-dev-sample-0018",
+      "Split": "dev",
+      "Difficulty": "near_duplicate_distractor",
+      "QueryText": "Find the item about select section and ambiguity constraint; avoid the near duplicate with incompatible lifecycle.",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-dev-item-0088"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-dev-item-0018"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-dev-item-0008",
+        "rdsv2-stress-dev-item-0028",
+        "rdsv2-stress-dev-item-0038",
+        "rdsv2-stress-dev-item-0048",
+        "rdsv2-stress-dev-item-0058"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-dev-item-0008",
+        "rdsv2-stress-dev-item-0028",
+        "rdsv2-stress-dev-item-0038",
+        "rdsv2-stress-dev-item-0048",
+        "rdsv2-stress-dev-item-0058"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-holdout-item-0099",
+        "rdsv2-stress-holdout-item-0109",
+        "rdsv2-stress-holdout-item-0119",
+        "rdsv2-stress-test-item-0009",
+        "rdsv2-stress-test-item-0019"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-holdout-item-0099",
+        "rdsv2-stress-holdout-item-0109",
+        "rdsv2-stress-holdout-item-0119",
+        "rdsv2-stress-test-item-0009",
+        "rdsv2-stress-test-item-0019"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 20,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-holdout-item-0099",
+      "NearestWrongCandidateKind": "diagnostic",
+      "FailureReason": "MustHitBelowTopK",
+      "RecommendedRepair": "Tune ranking so present mustHit candidates are promoted into topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-dev-sample-0028",
+      "Split": "dev",
+      "Difficulty": "near_duplicate_distractor",
+      "QueryText": "Find the item about select section and ambiguity constraint; avoid the near duplicate with incompatible lifecycle.",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-dev-item-0048"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-dev-item-0077"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-dev-item-0008",
+        "rdsv2-stress-dev-item-0018",
+        "rdsv2-stress-dev-item-0028",
+        "rdsv2-stress-dev-item-0038",
+        "rdsv2-stress-dev-item-0048"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-dev-item-0008",
+        "rdsv2-stress-dev-item-0018",
+        "rdsv2-stress-dev-item-0028",
+        "rdsv2-stress-dev-item-0038",
+        "rdsv2-stress-dev-item-0048"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-holdout-item-0099",
+        "rdsv2-stress-holdout-item-0109",
+        "rdsv2-stress-holdout-item-0119",
+        "rdsv2-stress-test-item-0009",
+        "rdsv2-stress-test-item-0019"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-holdout-item-0099",
+        "rdsv2-stress-holdout-item-0109",
+        "rdsv2-stress-holdout-item-0119",
+        "rdsv2-stress-test-item-0009",
+        "rdsv2-stress-test-item-0019"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 17,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-holdout-item-0099",
+      "NearestWrongCandidateKind": "diagnostic",
+      "FailureReason": "HybridUnionRankingRegression",
+      "RecommendedRepair": "Preview hybrid union scoring repair so dense wins are preserved in topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-dev-sample-0038",
+      "Split": "dev",
+      "Difficulty": "near_duplicate_distractor",
+      "QueryText": "Find the item about select section and ambiguity constraint; avoid the near duplicate with incompatible lifecycle.",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-dev-item-0008"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-dev-item-0038"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-dev-item-0008",
+        "rdsv2-stress-dev-item-0018",
+        "rdsv2-stress-dev-item-0028",
+        "rdsv2-stress-dev-item-0048",
+        "rdsv2-stress-dev-item-0058"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-dev-item-0008",
+        "rdsv2-stress-dev-item-0018",
+        "rdsv2-stress-dev-item-0028",
+        "rdsv2-stress-dev-item-0048",
+        "rdsv2-stress-dev-item-0058"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-holdout-item-0099",
+        "rdsv2-stress-holdout-item-0109",
+        "rdsv2-stress-holdout-item-0119",
+        "rdsv2-stress-test-item-0009",
+        "rdsv2-stress-test-item-0019"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-holdout-item-0099",
+        "rdsv2-stress-holdout-item-0109",
+        "rdsv2-stress-holdout-item-0119",
+        "rdsv2-stress-test-item-0009",
+        "rdsv2-stress-test-item-0019"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 13,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-holdout-item-0099",
+      "NearestWrongCandidateKind": "diagnostic",
+      "FailureReason": "HybridUnionRankingRegression",
+      "RecommendedRepair": "Preview hybrid union scoring repair so dense wins are preserved in topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-dev-sample-0048",
+      "Split": "dev",
+      "Difficulty": "near_duplicate_distractor",
+      "QueryText": "Find the item about select section and ambiguity constraint; avoid the near duplicate with incompatible lifecycle.",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-dev-item-0058"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-dev-item-0088"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-dev-item-0008",
+        "rdsv2-stress-dev-item-0018",
+        "rdsv2-stress-dev-item-0028",
+        "rdsv2-stress-dev-item-0038",
+        "rdsv2-stress-dev-item-0048"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-dev-item-0008",
+        "rdsv2-stress-dev-item-0018",
+        "rdsv2-stress-dev-item-0028",
+        "rdsv2-stress-dev-item-0038",
+        "rdsv2-stress-dev-item-0048"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-holdout-item-0099",
+        "rdsv2-stress-holdout-item-0109",
+        "rdsv2-stress-holdout-item-0119",
+        "rdsv2-stress-test-item-0009",
+        "rdsv2-stress-test-item-0019"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-holdout-item-0099",
+        "rdsv2-stress-holdout-item-0109",
+        "rdsv2-stress-holdout-item-0119",
+        "rdsv2-stress-test-item-0009",
+        "rdsv2-stress-test-item-0019"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 18,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-holdout-item-0099",
+      "NearestWrongCandidateKind": "diagnostic",
+      "FailureReason": "MustHitBelowTopK",
+      "RecommendedRepair": "Tune ranking so present mustHit candidates are promoted into topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-dev-sample-0058",
+      "Split": "dev",
+      "Difficulty": "near_duplicate_distractor",
+      "QueryText": "Find the item about select section and ambiguity constraint; avoid the near duplicate with incompatible lifecycle.",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-dev-item-0018"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-dev-item-0057"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-dev-item-0008",
+        "rdsv2-stress-dev-item-0018",
+        "rdsv2-stress-dev-item-0028",
+        "rdsv2-stress-dev-item-0038",
+        "rdsv2-stress-dev-item-0048"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-dev-item-0008",
+        "rdsv2-stress-dev-item-0018",
+        "rdsv2-stress-dev-item-0028",
+        "rdsv2-stress-dev-item-0038",
+        "rdsv2-stress-dev-item-0048"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-holdout-item-0099",
+        "rdsv2-stress-holdout-item-0109",
+        "rdsv2-stress-holdout-item-0119",
+        "rdsv2-stress-test-item-0009",
+        "rdsv2-stress-test-item-0019"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-holdout-item-0099",
+        "rdsv2-stress-holdout-item-0109",
+        "rdsv2-stress-holdout-item-0119",
+        "rdsv2-stress-test-item-0009",
+        "rdsv2-stress-test-item-0019"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 14,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-holdout-item-0099",
+      "NearestWrongCandidateKind": "diagnostic",
+      "FailureReason": "HybridUnionRankingRegression",
+      "RecommendedRepair": "Preview hybrid union scoring repair so dense wins are preserved in topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-dev-sample-0068",
+      "Split": "dev",
+      "Difficulty": "near_duplicate_distractor",
+      "QueryText": "Find the item about select section and ambiguity constraint; avoid the near duplicate with incompatible lifecycle.",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-dev-item-0068"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-dev-item-0017"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-dev-item-0008",
+        "rdsv2-stress-dev-item-0018",
+        "rdsv2-stress-dev-item-0028",
+        "rdsv2-stress-dev-item-0038",
+        "rdsv2-stress-dev-item-0048"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-dev-item-0008",
+        "rdsv2-stress-dev-item-0018",
+        "rdsv2-stress-dev-item-0028",
+        "rdsv2-stress-dev-item-0038",
+        "rdsv2-stress-dev-item-0048"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-holdout-item-0099",
+        "rdsv2-stress-holdout-item-0109",
+        "rdsv2-stress-holdout-item-0119",
+        "rdsv2-stress-test-item-0009",
+        "rdsv2-stress-test-item-0019"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-holdout-item-0099",
+        "rdsv2-stress-holdout-item-0109",
+        "rdsv2-stress-holdout-item-0119",
+        "rdsv2-stress-test-item-0009",
+        "rdsv2-stress-test-item-0019"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 19,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-holdout-item-0099",
+      "NearestWrongCandidateKind": "diagnostic",
+      "FailureReason": "MustHitBelowTopK",
+      "RecommendedRepair": "Tune ranking so present mustHit candidates are promoted into topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-dev-sample-0078",
+      "Split": "dev",
+      "Difficulty": "near_duplicate_distractor",
+      "QueryText": "Find the item about select section and ambiguity constraint; avoid the near duplicate with incompatible lifecycle.",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-dev-item-0028"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-dev-item-0068"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-dev-item-0008",
+        "rdsv2-stress-dev-item-0018",
+        "rdsv2-stress-dev-item-0028",
+        "rdsv2-stress-dev-item-0038",
+        "rdsv2-stress-dev-item-0048"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-dev-item-0008",
+        "rdsv2-stress-dev-item-0018",
+        "rdsv2-stress-dev-item-0028",
+        "rdsv2-stress-dev-item-0038",
+        "rdsv2-stress-dev-item-0048"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-holdout-item-0099",
+        "rdsv2-stress-holdout-item-0109",
+        "rdsv2-stress-holdout-item-0119",
+        "rdsv2-stress-test-item-0009",
+        "rdsv2-stress-test-item-0019"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-holdout-item-0099",
+        "rdsv2-stress-holdout-item-0109",
+        "rdsv2-stress-holdout-item-0119",
+        "rdsv2-stress-test-item-0009",
+        "rdsv2-stress-test-item-0019"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 15,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-holdout-item-0099",
+      "NearestWrongCandidateKind": "diagnostic",
+      "FailureReason": "HybridUnionRankingRegression",
+      "RecommendedRepair": "Preview hybrid union scoring repair so dense wins are preserved in topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-dev-sample-0088",
+      "Split": "dev",
+      "Difficulty": "near_duplicate_distractor",
+      "QueryText": "Find the item about select section and ambiguity constraint; avoid the near duplicate with incompatible lifecycle.",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-dev-item-0078"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-dev-item-0028"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-dev-item-0008",
+        "rdsv2-stress-dev-item-0018",
+        "rdsv2-stress-dev-item-0038",
+        "rdsv2-stress-dev-item-0048",
+        "rdsv2-stress-dev-item-0058"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-dev-item-0008",
+        "rdsv2-stress-dev-item-0018",
+        "rdsv2-stress-dev-item-0038",
+        "rdsv2-stress-dev-item-0048",
+        "rdsv2-stress-dev-item-0058"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-holdout-item-0099",
+        "rdsv2-stress-holdout-item-0109",
+        "rdsv2-stress-holdout-item-0119",
+        "rdsv2-stress-test-item-0009",
+        "rdsv2-stress-test-item-0019"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-holdout-item-0099",
+        "rdsv2-stress-holdout-item-0109",
+        "rdsv2-stress-holdout-item-0119",
+        "rdsv2-stress-test-item-0009",
+        "rdsv2-stress-test-item-0019"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 19,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-holdout-item-0099",
+      "NearestWrongCandidateKind": "diagnostic",
+      "FailureReason": "MustHitBelowTopK",
+      "RecommendedRepair": "Tune ranking so present mustHit candidates are promoted into topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-holdout-sample-0097",
+      "Split": "holdout",
+      "Difficulty": "ambiguous_target_section",
+      "QueryText": "Resolve the target section for must-not signal and return the context with compatible lifecycle metadata.",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-holdout-item-0097"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-holdout-item-0105"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-dev-item-0007",
+        "rdsv2-stress-dev-item-0017",
+        "rdsv2-stress-dev-item-0027",
+        "rdsv2-stress-dev-item-0037",
+        "rdsv2-stress-dev-item-0047"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-dev-item-0007",
+        "rdsv2-stress-dev-item-0017",
+        "rdsv2-stress-dev-item-0027",
+        "rdsv2-stress-dev-item-0037",
+        "rdsv2-stress-dev-item-0047"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-dev-item-0007",
+        "rdsv2-stress-dev-item-0008",
+        "rdsv2-stress-dev-item-0017",
+        "rdsv2-stress-dev-item-0018",
+        "rdsv2-stress-dev-item-0027"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-dev-item-0007",
+        "rdsv2-stress-dev-item-0017",
+        "rdsv2-stress-dev-item-0027",
+        "rdsv2-stress-dev-item-0037",
+        "rdsv2-stress-dev-item-0047"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 10,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-dev-item-0007",
+      "NearestWrongCandidateKind": "test-note",
+      "FailureReason": "MustHitBelowTopK",
+      "RecommendedRepair": "Tune ranking so present mustHit candidates are promoted into topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-holdout-sample-0107",
+      "Split": "holdout",
+      "Difficulty": "ambiguous_target_section",
+      "QueryText": "Resolve the target section for must-not signal and return the context with compatible lifecycle metadata.",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-holdout-item-0107"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-holdout-item-0115"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-dev-item-0007",
+        "rdsv2-stress-dev-item-0017",
+        "rdsv2-stress-dev-item-0027",
+        "rdsv2-stress-dev-item-0037",
+        "rdsv2-stress-dev-item-0047"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-dev-item-0007",
+        "rdsv2-stress-dev-item-0017",
+        "rdsv2-stress-dev-item-0027",
+        "rdsv2-stress-dev-item-0037",
+        "rdsv2-stress-dev-item-0047"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-dev-item-0007",
+        "rdsv2-stress-dev-item-0008",
+        "rdsv2-stress-dev-item-0017",
+        "rdsv2-stress-dev-item-0018",
+        "rdsv2-stress-dev-item-0027"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-dev-item-0007",
+        "rdsv2-stress-dev-item-0017",
+        "rdsv2-stress-dev-item-0027",
+        "rdsv2-stress-dev-item-0037",
+        "rdsv2-stress-dev-item-0047"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 11,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-dev-item-0007",
+      "NearestWrongCandidateKind": "test-note",
+      "FailureReason": "MustHitBelowTopK",
+      "RecommendedRepair": "Tune ranking so present mustHit candidates are promoted into topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-holdout-sample-0117",
+      "Split": "holdout",
+      "Difficulty": "ambiguous_target_section",
+      "QueryText": "Resolve the target section for must-not signal and return the context with compatible lifecycle metadata.",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-holdout-item-0117"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-holdout-item-0101"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-dev-item-0007",
+        "rdsv2-stress-dev-item-0017",
+        "rdsv2-stress-dev-item-0027",
+        "rdsv2-stress-dev-item-0037",
+        "rdsv2-stress-dev-item-0047"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-dev-item-0007",
+        "rdsv2-stress-dev-item-0017",
+        "rdsv2-stress-dev-item-0027",
+        "rdsv2-stress-dev-item-0037",
+        "rdsv2-stress-dev-item-0047"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-dev-item-0007",
+        "rdsv2-stress-dev-item-0008",
+        "rdsv2-stress-dev-item-0017",
+        "rdsv2-stress-dev-item-0018",
+        "rdsv2-stress-dev-item-0027"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-dev-item-0007",
+        "rdsv2-stress-dev-item-0017",
+        "rdsv2-stress-dev-item-0027",
+        "rdsv2-stress-dev-item-0037",
+        "rdsv2-stress-dev-item-0047"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 12,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-dev-item-0007",
+      "NearestWrongCandidateKind": "test-note",
+      "FailureReason": "MustHitBelowTopK",
+      "RecommendedRepair": "Tune ranking so present mustHit candidates are promoted into topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-holdout-sample-0099",
+      "Split": "holdout",
+      "Difficulty": "cross_domain_distractor",
+      "QueryText": "Choose the context for duplicate instead of unrelated negative evidence.",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-holdout-item-0099"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-holdout-item-0107"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-dev-item-0007",
+        "rdsv2-stress-dev-item-0017",
+        "rdsv2-stress-dev-item-0027",
+        "rdsv2-stress-dev-item-0037",
+        "rdsv2-stress-dev-item-0047"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-dev-item-0007",
+        "rdsv2-stress-dev-item-0017",
+        "rdsv2-stress-dev-item-0027",
+        "rdsv2-stress-dev-item-0037",
+        "rdsv2-stress-dev-item-0047"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-dev-item-0007",
+        "rdsv2-stress-dev-item-0017",
+        "rdsv2-stress-dev-item-0027",
+        "rdsv2-stress-dev-item-0037",
+        "rdsv2-stress-dev-item-0047"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-dev-item-0007",
+        "rdsv2-stress-dev-item-0017",
+        "rdsv2-stress-dev-item-0027",
+        "rdsv2-stress-dev-item-0037",
+        "rdsv2-stress-dev-item-0047"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 24,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-dev-item-0007",
+      "NearestWrongCandidateKind": "test-note",
+      "FailureReason": "MustHitBelowTopK",
+      "RecommendedRepair": "Tune ranking so present mustHit candidates are promoted into topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-holdout-sample-0109",
+      "Split": "holdout",
+      "Difficulty": "cross_domain_distractor",
+      "QueryText": "Choose the context for duplicate instead of unrelated negative evidence.",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-holdout-item-0109"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-holdout-item-0117"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-dev-item-0007",
+        "rdsv2-stress-dev-item-0017",
+        "rdsv2-stress-dev-item-0027",
+        "rdsv2-stress-dev-item-0037",
+        "rdsv2-stress-dev-item-0047"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-dev-item-0007",
+        "rdsv2-stress-dev-item-0017",
+        "rdsv2-stress-dev-item-0027",
+        "rdsv2-stress-dev-item-0037",
+        "rdsv2-stress-dev-item-0047"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-dev-item-0007",
+        "rdsv2-stress-dev-item-0017",
+        "rdsv2-stress-dev-item-0027",
+        "rdsv2-stress-dev-item-0037",
+        "rdsv2-stress-dev-item-0047"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-dev-item-0007",
+        "rdsv2-stress-dev-item-0017",
+        "rdsv2-stress-dev-item-0027",
+        "rdsv2-stress-dev-item-0037",
+        "rdsv2-stress-dev-item-0047"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 25,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-dev-item-0007",
+      "NearestWrongCandidateKind": "test-note",
+      "FailureReason": "MustHitBelowTopK",
+      "RecommendedRepair": "Tune ranking so present mustHit candidates are promoted into topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-holdout-sample-0119",
+      "Split": "holdout",
+      "Difficulty": "cross_domain_distractor",
+      "QueryText": "Choose the context for duplicate instead of unrelated timeout evidence.",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-holdout-item-0119"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-holdout-item-0103"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-holdout-item-0113",
+        "rdsv2-stress-train-item-0003",
+        "rdsv2-stress-train-item-0013",
+        "rdsv2-stress-train-item-0023",
+        "rdsv2-stress-train-item-0033"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-holdout-item-0113",
+        "rdsv2-stress-train-item-0003",
+        "rdsv2-stress-train-item-0013",
+        "rdsv2-stress-train-item-0023",
+        "rdsv2-stress-train-item-0033"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-holdout-item-0099",
+        "rdsv2-stress-holdout-item-0104",
+        "rdsv2-stress-holdout-item-0109",
+        "rdsv2-stress-holdout-item-0114",
+        "rdsv2-stress-holdout-item-0119"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-holdout-item-0113",
+        "rdsv2-stress-train-item-0003",
+        "rdsv2-stress-train-item-0013",
+        "rdsv2-stress-train-item-0023",
+        "rdsv2-stress-train-item-0033"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 26,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-holdout-item-0113",
+      "NearestWrongCandidateKind": "diagnostic",
+      "FailureReason": "AnchorRankingRegression",
+      "RecommendedRepair": "Inspect hybrid anchor weighting and avoid anchor score suppressing dense winners."
+    },
+    {
+      "SampleId": "rdsv2-stress-holdout-sample-0098",
+      "Split": "holdout",
+      "Difficulty": "near_duplicate_distractor",
+      "QueryText": "Find the item about select section and ambiguity constraint; avoid the near duplicate with incompatible lifecycle.",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-holdout-item-0098"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-holdout-item-0106"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-dev-item-0008",
+        "rdsv2-stress-dev-item-0018",
+        "rdsv2-stress-dev-item-0028",
+        "rdsv2-stress-dev-item-0038",
+        "rdsv2-stress-dev-item-0048"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-dev-item-0008",
+        "rdsv2-stress-dev-item-0018",
+        "rdsv2-stress-dev-item-0028",
+        "rdsv2-stress-dev-item-0038",
+        "rdsv2-stress-dev-item-0048"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-holdout-item-0099",
+        "rdsv2-stress-holdout-item-0109",
+        "rdsv2-stress-holdout-item-0119",
+        "rdsv2-stress-test-item-0009",
+        "rdsv2-stress-test-item-0019"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-holdout-item-0099",
+        "rdsv2-stress-holdout-item-0109",
+        "rdsv2-stress-holdout-item-0119",
+        "rdsv2-stress-test-item-0009",
+        "rdsv2-stress-test-item-0019"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 22,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-holdout-item-0099",
+      "NearestWrongCandidateKind": "diagnostic",
+      "FailureReason": "MustHitBelowTopK",
+      "RecommendedRepair": "Tune ranking so present mustHit candidates are promoted into topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-holdout-sample-0108",
+      "Split": "holdout",
+      "Difficulty": "near_duplicate_distractor",
+      "QueryText": "Find the item about select section and ambiguity constraint; avoid the near duplicate with incompatible lifecycle.",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-holdout-item-0108"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-holdout-item-0116"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-dev-item-0008",
+        "rdsv2-stress-dev-item-0018",
+        "rdsv2-stress-dev-item-0028",
+        "rdsv2-stress-dev-item-0038",
+        "rdsv2-stress-dev-item-0048"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-dev-item-0008",
+        "rdsv2-stress-dev-item-0018",
+        "rdsv2-stress-dev-item-0028",
+        "rdsv2-stress-dev-item-0038",
+        "rdsv2-stress-dev-item-0048"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-holdout-item-0099",
+        "rdsv2-stress-holdout-item-0109",
+        "rdsv2-stress-holdout-item-0119",
+        "rdsv2-stress-test-item-0009",
+        "rdsv2-stress-test-item-0019"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-holdout-item-0099",
+        "rdsv2-stress-holdout-item-0109",
+        "rdsv2-stress-holdout-item-0119",
+        "rdsv2-stress-test-item-0009",
+        "rdsv2-stress-test-item-0019"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 23,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-holdout-item-0099",
+      "NearestWrongCandidateKind": "diagnostic",
+      "FailureReason": "MustHitBelowTopK",
+      "RecommendedRepair": "Tune ranking so present mustHit candidates are promoted into topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-holdout-sample-0118",
+      "Split": "holdout",
+      "Difficulty": "near_duplicate_distractor",
+      "QueryText": "Find the item about select section and ambiguity constraint; avoid the near duplicate with incompatible lifecycle.",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-holdout-item-0118"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-holdout-item-0102"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-dev-item-0008",
+        "rdsv2-stress-dev-item-0018",
+        "rdsv2-stress-dev-item-0028",
+        "rdsv2-stress-dev-item-0038",
+        "rdsv2-stress-dev-item-0048"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-dev-item-0008",
+        "rdsv2-stress-dev-item-0018",
+        "rdsv2-stress-dev-item-0028",
+        "rdsv2-stress-dev-item-0038",
+        "rdsv2-stress-dev-item-0048"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-holdout-item-0099",
+        "rdsv2-stress-holdout-item-0109",
+        "rdsv2-stress-holdout-item-0119",
+        "rdsv2-stress-test-item-0009",
+        "rdsv2-stress-test-item-0019"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-holdout-item-0099",
+        "rdsv2-stress-holdout-item-0109",
+        "rdsv2-stress-holdout-item-0119",
+        "rdsv2-stress-test-item-0009",
+        "rdsv2-stress-test-item-0019"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 24,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-holdout-item-0099",
+      "NearestWrongCandidateKind": "diagnostic",
+      "FailureReason": "MustHitBelowTopK",
+      "RecommendedRepair": "Tune ranking so present mustHit candidates are promoted into topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-test-sample-0009",
+      "Split": "test",
+      "Difficulty": "cross_domain_distractor",
+      "QueryText": "Choose the context for duplicate instead of unrelated duplicate evidence.",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-test-item-0049"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-test-item-0069"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-holdout-item-0103",
+        "rdsv2-stress-holdout-item-0104",
+        "rdsv2-stress-holdout-item-0113",
+        "rdsv2-stress-holdout-item-0114",
+        "rdsv2-stress-train-item-0003"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-holdout-item-0103",
+        "rdsv2-stress-holdout-item-0104",
+        "rdsv2-stress-holdout-item-0113",
+        "rdsv2-stress-holdout-item-0114",
+        "rdsv2-stress-train-item-0003"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-holdout-item-0099",
+        "rdsv2-stress-holdout-item-0104",
+        "rdsv2-stress-holdout-item-0109",
+        "rdsv2-stress-holdout-item-0114",
+        "rdsv2-stress-holdout-item-0119"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-holdout-item-0104",
+        "rdsv2-stress-holdout-item-0114",
+        "rdsv2-stress-train-item-0004",
+        "rdsv2-stress-train-item-0014",
+        "rdsv2-stress-train-item-0024"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 20,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-holdout-item-0104",
+      "NearestWrongCandidateKind": "policy",
+      "FailureReason": "MustHitBelowTopK",
+      "RecommendedRepair": "Tune ranking so present mustHit candidates are promoted into topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-test-sample-0019",
+      "Split": "test",
+      "Difficulty": "cross_domain_distractor",
+      "QueryText": "Choose the context for duplicate instead of unrelated sparse evidence.",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-test-item-0009"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-test-item-0030"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-holdout-item-0100",
+        "rdsv2-stress-holdout-item-0110",
+        "rdsv2-stress-holdout-item-0120",
+        "rdsv2-stress-test-item-0010",
+        "rdsv2-stress-test-item-0020"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-holdout-item-0100",
+        "rdsv2-stress-holdout-item-0110",
+        "rdsv2-stress-holdout-item-0120",
+        "rdsv2-stress-test-item-0010",
+        "rdsv2-stress-test-item-0020"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-holdout-item-0099",
+        "rdsv2-stress-holdout-item-0100",
+        "rdsv2-stress-holdout-item-0104",
+        "rdsv2-stress-holdout-item-0109",
+        "rdsv2-stress-holdout-item-0110"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-holdout-item-0100",
+        "rdsv2-stress-holdout-item-0110",
+        "rdsv2-stress-holdout-item-0120",
+        "rdsv2-stress-test-item-0010",
+        "rdsv2-stress-test-item-0020"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 27,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-holdout-item-0100",
+      "NearestWrongCandidateKind": "runbook",
+      "FailureReason": "MustHitBelowTopK",
+      "RecommendedRepair": "Tune ranking so present mustHit candidates are promoted into topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-test-sample-0029",
+      "Split": "test",
+      "Difficulty": "cross_domain_distractor",
+      "QueryText": "Choose the context for duplicate instead of unrelated sparse evidence.",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-test-item-0059"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-test-item-0080"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-holdout-item-0100",
+        "rdsv2-stress-holdout-item-0110",
+        "rdsv2-stress-holdout-item-0120",
+        "rdsv2-stress-test-item-0010",
+        "rdsv2-stress-test-item-0020"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-holdout-item-0100",
+        "rdsv2-stress-holdout-item-0110",
+        "rdsv2-stress-holdout-item-0120",
+        "rdsv2-stress-test-item-0010",
+        "rdsv2-stress-test-item-0020"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-holdout-item-0099",
+        "rdsv2-stress-holdout-item-0100",
+        "rdsv2-stress-holdout-item-0104",
+        "rdsv2-stress-holdout-item-0109",
+        "rdsv2-stress-holdout-item-0110"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-holdout-item-0100",
+        "rdsv2-stress-holdout-item-0110",
+        "rdsv2-stress-holdout-item-0120",
+        "rdsv2-stress-test-item-0010",
+        "rdsv2-stress-test-item-0020"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 32,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-holdout-item-0100",
+      "NearestWrongCandidateKind": "runbook",
+      "FailureReason": "MustHitBelowTopK",
+      "RecommendedRepair": "Tune ranking so present mustHit candidates are promoted into topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-test-sample-0039",
+      "Split": "test",
+      "Difficulty": "cross_domain_distractor",
+      "QueryText": "Choose the context for duplicate instead of unrelated duplicate evidence.",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-test-item-0019"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-test-item-0049"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-holdout-item-0103",
+        "rdsv2-stress-holdout-item-0104",
+        "rdsv2-stress-holdout-item-0113",
+        "rdsv2-stress-holdout-item-0114",
+        "rdsv2-stress-train-item-0003"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-holdout-item-0103",
+        "rdsv2-stress-holdout-item-0104",
+        "rdsv2-stress-holdout-item-0113",
+        "rdsv2-stress-holdout-item-0114",
+        "rdsv2-stress-train-item-0003"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-holdout-item-0099",
+        "rdsv2-stress-holdout-item-0104",
+        "rdsv2-stress-holdout-item-0109",
+        "rdsv2-stress-holdout-item-0114",
+        "rdsv2-stress-holdout-item-0119"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-holdout-item-0104",
+        "rdsv2-stress-holdout-item-0114",
+        "rdsv2-stress-train-item-0004",
+        "rdsv2-stress-train-item-0014",
+        "rdsv2-stress-train-item-0024"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 17,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-holdout-item-0104",
+      "NearestWrongCandidateKind": "policy",
+      "FailureReason": "MustHitBelowTopK",
+      "RecommendedRepair": "Tune ranking so present mustHit candidates are promoted into topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-test-sample-0049",
+      "Split": "test",
+      "Difficulty": "cross_domain_distractor",
+      "QueryText": "Choose the context for duplicate instead of unrelated duplicate evidence.",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-test-item-0069"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-test-item-0009"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-holdout-item-0103",
+        "rdsv2-stress-holdout-item-0104",
+        "rdsv2-stress-holdout-item-0113",
+        "rdsv2-stress-holdout-item-0114",
+        "rdsv2-stress-train-item-0003"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-holdout-item-0103",
+        "rdsv2-stress-holdout-item-0104",
+        "rdsv2-stress-holdout-item-0113",
+        "rdsv2-stress-holdout-item-0114",
+        "rdsv2-stress-train-item-0003"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-holdout-item-0099",
+        "rdsv2-stress-holdout-item-0104",
+        "rdsv2-stress-holdout-item-0109",
+        "rdsv2-stress-holdout-item-0114",
+        "rdsv2-stress-holdout-item-0119"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-holdout-item-0104",
+        "rdsv2-stress-holdout-item-0114",
+        "rdsv2-stress-train-item-0004",
+        "rdsv2-stress-train-item-0014",
+        "rdsv2-stress-train-item-0024"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 21,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-holdout-item-0104",
+      "NearestWrongCandidateKind": "policy",
+      "FailureReason": "MustHitBelowTopK",
+      "RecommendedRepair": "Tune ranking so present mustHit candidates are promoted into topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-test-sample-0059",
+      "Split": "test",
+      "Difficulty": "cross_domain_distractor",
+      "QueryText": "Choose the context for duplicate instead of unrelated sparse evidence.",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-test-item-0029"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-test-item-0060"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-holdout-item-0100",
+        "rdsv2-stress-holdout-item-0110",
+        "rdsv2-stress-holdout-item-0120",
+        "rdsv2-stress-test-item-0010",
+        "rdsv2-stress-test-item-0020"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-holdout-item-0100",
+        "rdsv2-stress-holdout-item-0110",
+        "rdsv2-stress-holdout-item-0120",
+        "rdsv2-stress-test-item-0010",
+        "rdsv2-stress-test-item-0020"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-holdout-item-0099",
+        "rdsv2-stress-holdout-item-0100",
+        "rdsv2-stress-holdout-item-0104",
+        "rdsv2-stress-holdout-item-0109",
+        "rdsv2-stress-holdout-item-0110"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-holdout-item-0100",
+        "rdsv2-stress-holdout-item-0110",
+        "rdsv2-stress-holdout-item-0120",
+        "rdsv2-stress-test-item-0010",
+        "rdsv2-stress-test-item-0020"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 29,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-holdout-item-0100",
+      "NearestWrongCandidateKind": "runbook",
+      "FailureReason": "MustHitBelowTopK",
+      "RecommendedRepair": "Tune ranking so present mustHit candidates are promoted into topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-test-sample-0069",
+      "Split": "test",
+      "Difficulty": "cross_domain_distractor",
+      "QueryText": "Choose the context for duplicate instead of unrelated sparse evidence.",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-test-item-0079"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-test-item-0020"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-holdout-item-0100",
+        "rdsv2-stress-holdout-item-0110",
+        "rdsv2-stress-holdout-item-0120",
+        "rdsv2-stress-test-item-0010",
+        "rdsv2-stress-test-item-0030"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-holdout-item-0100",
+        "rdsv2-stress-holdout-item-0110",
+        "rdsv2-stress-holdout-item-0120",
+        "rdsv2-stress-test-item-0010",
+        "rdsv2-stress-test-item-0030"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-holdout-item-0099",
+        "rdsv2-stress-holdout-item-0100",
+        "rdsv2-stress-holdout-item-0104",
+        "rdsv2-stress-holdout-item-0109",
+        "rdsv2-stress-holdout-item-0110"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-holdout-item-0100",
+        "rdsv2-stress-holdout-item-0110",
+        "rdsv2-stress-holdout-item-0120",
+        "rdsv2-stress-test-item-0010",
+        "rdsv2-stress-test-item-0030"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 34,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-holdout-item-0100",
+      "NearestWrongCandidateKind": "runbook",
+      "FailureReason": "MustHitBelowTopK",
+      "RecommendedRepair": "Tune ranking so present mustHit candidates are promoted into topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-test-sample-0079",
+      "Split": "test",
+      "Difficulty": "cross_domain_distractor",
+      "QueryText": "Choose the context for duplicate instead of unrelated duplicate evidence.",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-test-item-0039"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-test-item-0079"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-holdout-item-0103",
+        "rdsv2-stress-holdout-item-0104",
+        "rdsv2-stress-holdout-item-0113",
+        "rdsv2-stress-holdout-item-0114",
+        "rdsv2-stress-train-item-0003"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-holdout-item-0103",
+        "rdsv2-stress-holdout-item-0104",
+        "rdsv2-stress-holdout-item-0113",
+        "rdsv2-stress-holdout-item-0114",
+        "rdsv2-stress-train-item-0003"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-holdout-item-0099",
+        "rdsv2-stress-holdout-item-0104",
+        "rdsv2-stress-holdout-item-0109",
+        "rdsv2-stress-holdout-item-0114",
+        "rdsv2-stress-holdout-item-0119"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-holdout-item-0104",
+        "rdsv2-stress-holdout-item-0114",
+        "rdsv2-stress-train-item-0004",
+        "rdsv2-stress-train-item-0014",
+        "rdsv2-stress-train-item-0024"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 19,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-holdout-item-0104",
+      "NearestWrongCandidateKind": "policy",
+      "FailureReason": "MustHitBelowTopK",
+      "RecommendedRepair": "Tune ranking so present mustHit candidates are promoted into topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-test-sample-0089",
+      "Split": "test",
+      "Difficulty": "cross_domain_distractor",
+      "QueryText": "Choose the context for duplicate instead of unrelated duplicate evidence.",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-test-item-0089"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-test-item-0039"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-holdout-item-0103",
+        "rdsv2-stress-holdout-item-0104",
+        "rdsv2-stress-holdout-item-0113",
+        "rdsv2-stress-holdout-item-0114",
+        "rdsv2-stress-train-item-0003"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-holdout-item-0103",
+        "rdsv2-stress-holdout-item-0104",
+        "rdsv2-stress-holdout-item-0113",
+        "rdsv2-stress-holdout-item-0114",
+        "rdsv2-stress-train-item-0003"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-holdout-item-0099",
+        "rdsv2-stress-holdout-item-0104",
+        "rdsv2-stress-holdout-item-0109",
+        "rdsv2-stress-holdout-item-0114",
+        "rdsv2-stress-holdout-item-0119"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-holdout-item-0104",
+        "rdsv2-stress-holdout-item-0114",
+        "rdsv2-stress-train-item-0004",
+        "rdsv2-stress-train-item-0014",
+        "rdsv2-stress-train-item-0024"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 23,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-holdout-item-0104",
+      "NearestWrongCandidateKind": "policy",
+      "FailureReason": "MustHitBelowTopK",
+      "RecommendedRepair": "Tune ranking so present mustHit candidates are promoted into topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-test-sample-0010",
+      "Split": "test",
+      "Difficulty": "query_with_sparse_tokens",
+      "QueryText": "minimal-token signal recover context coverage constraint",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-test-item-0050"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-test-item-0070"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-holdout-item-0100",
+        "rdsv2-stress-holdout-item-0110",
+        "rdsv2-stress-holdout-item-0120",
+        "rdsv2-stress-test-item-0010",
+        "rdsv2-stress-test-item-0020"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-holdout-item-0100",
+        "rdsv2-stress-holdout-item-0110",
+        "rdsv2-stress-holdout-item-0120",
+        "rdsv2-stress-test-item-0010",
+        "rdsv2-stress-test-item-0020"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-dev-item-0007",
+        "rdsv2-stress-dev-item-0008",
+        "rdsv2-stress-dev-item-0017",
+        "rdsv2-stress-dev-item-0018",
+        "rdsv2-stress-dev-item-0027"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-holdout-item-0100",
+        "rdsv2-stress-holdout-item-0110",
+        "rdsv2-stress-holdout-item-0120",
+        "rdsv2-stress-test-item-0010",
+        "rdsv2-stress-test-item-0020"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 8,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-holdout-item-0100",
+      "NearestWrongCandidateKind": "runbook",
+      "FailureReason": "MustHitBelowTopK",
+      "RecommendedRepair": "Tune ranking so present mustHit candidates are promoted into topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-test-sample-0030",
+      "Split": "test",
+      "Difficulty": "query_with_sparse_tokens",
+      "QueryText": "minimal-token signal recover context coverage constraint",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-test-item-0060"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-test-item-0089"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-holdout-item-0100",
+        "rdsv2-stress-holdout-item-0110",
+        "rdsv2-stress-holdout-item-0120",
+        "rdsv2-stress-test-item-0010",
+        "rdsv2-stress-test-item-0020"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-holdout-item-0100",
+        "rdsv2-stress-holdout-item-0110",
+        "rdsv2-stress-holdout-item-0120",
+        "rdsv2-stress-test-item-0010",
+        "rdsv2-stress-test-item-0020"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-dev-item-0007",
+        "rdsv2-stress-dev-item-0008",
+        "rdsv2-stress-dev-item-0017",
+        "rdsv2-stress-dev-item-0018",
+        "rdsv2-stress-dev-item-0027"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-holdout-item-0100",
+        "rdsv2-stress-holdout-item-0110",
+        "rdsv2-stress-holdout-item-0120",
+        "rdsv2-stress-test-item-0010",
+        "rdsv2-stress-test-item-0020"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 9,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-holdout-item-0100",
+      "NearestWrongCandidateKind": "runbook",
+      "FailureReason": "MustHitBelowTopK",
+      "RecommendedRepair": "Tune ranking so present mustHit candidates are promoted into topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-test-sample-0050",
+      "Split": "test",
+      "Difficulty": "query_with_sparse_tokens",
+      "QueryText": "minimal-token signal recover context coverage constraint",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-test-item-0070"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-test-item-0010"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-holdout-item-0100",
+        "rdsv2-stress-holdout-item-0110",
+        "rdsv2-stress-holdout-item-0120",
+        "rdsv2-stress-test-item-0010",
+        "rdsv2-stress-test-item-0020"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-holdout-item-0100",
+        "rdsv2-stress-holdout-item-0110",
+        "rdsv2-stress-holdout-item-0120",
+        "rdsv2-stress-test-item-0010",
+        "rdsv2-stress-test-item-0020"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-dev-item-0007",
+        "rdsv2-stress-dev-item-0008",
+        "rdsv2-stress-dev-item-0017",
+        "rdsv2-stress-dev-item-0018",
+        "rdsv2-stress-dev-item-0027"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-holdout-item-0100",
+        "rdsv2-stress-holdout-item-0110",
+        "rdsv2-stress-holdout-item-0120",
+        "rdsv2-stress-test-item-0010",
+        "rdsv2-stress-test-item-0020"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 10,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-holdout-item-0100",
+      "NearestWrongCandidateKind": "runbook",
+      "FailureReason": "NegativeDistractorOutranksMustHit",
+      "RecommendedRepair": "Strengthen must-not negative policy in preview scoring."
+    },
+    {
+      "SampleId": "rdsv2-stress-test-sample-0060",
+      "Split": "test",
+      "Difficulty": "query_with_sparse_tokens",
+      "QueryText": "minimal-token signal recover context coverage constraint",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-test-item-0030"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-test-item-0069"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-holdout-item-0100",
+        "rdsv2-stress-holdout-item-0110",
+        "rdsv2-stress-holdout-item-0120",
+        "rdsv2-stress-test-item-0010",
+        "rdsv2-stress-test-item-0020"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-holdout-item-0100",
+        "rdsv2-stress-holdout-item-0110",
+        "rdsv2-stress-holdout-item-0120",
+        "rdsv2-stress-test-item-0010",
+        "rdsv2-stress-test-item-0020"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-dev-item-0007",
+        "rdsv2-stress-dev-item-0008",
+        "rdsv2-stress-dev-item-0017",
+        "rdsv2-stress-dev-item-0018",
+        "rdsv2-stress-dev-item-0027"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-holdout-item-0100",
+        "rdsv2-stress-holdout-item-0110",
+        "rdsv2-stress-holdout-item-0120",
+        "rdsv2-stress-test-item-0010",
+        "rdsv2-stress-test-item-0020"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 6,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-holdout-item-0100",
+      "NearestWrongCandidateKind": "runbook",
+      "FailureReason": "MustHitBelowTopK",
+      "RecommendedRepair": "Tune ranking so present mustHit candidates are promoted into topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-test-sample-0070",
+      "Split": "test",
+      "Difficulty": "query_with_sparse_tokens",
+      "QueryText": "minimal-token signal recover context coverage constraint",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-test-item-0080"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-test-item-0029"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-holdout-item-0100",
+        "rdsv2-stress-holdout-item-0110",
+        "rdsv2-stress-holdout-item-0120",
+        "rdsv2-stress-test-item-0010",
+        "rdsv2-stress-test-item-0020"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-holdout-item-0100",
+        "rdsv2-stress-holdout-item-0110",
+        "rdsv2-stress-holdout-item-0120",
+        "rdsv2-stress-test-item-0010",
+        "rdsv2-stress-test-item-0020"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-dev-item-0007",
+        "rdsv2-stress-dev-item-0008",
+        "rdsv2-stress-dev-item-0017",
+        "rdsv2-stress-dev-item-0018",
+        "rdsv2-stress-dev-item-0027"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-holdout-item-0100",
+        "rdsv2-stress-holdout-item-0110",
+        "rdsv2-stress-holdout-item-0120",
+        "rdsv2-stress-test-item-0010",
+        "rdsv2-stress-test-item-0020"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 11,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-holdout-item-0100",
+      "NearestWrongCandidateKind": "runbook",
+      "FailureReason": "MustHitBelowTopK",
+      "RecommendedRepair": "Tune ranking so present mustHit candidates are promoted into topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-test-sample-0080",
+      "Split": "test",
+      "Difficulty": "query_with_sparse_tokens",
+      "QueryText": "minimal-token signal recover context coverage constraint",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-test-item-0040"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-test-item-0080"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-holdout-item-0100",
+        "rdsv2-stress-holdout-item-0110",
+        "rdsv2-stress-holdout-item-0120",
+        "rdsv2-stress-test-item-0010",
+        "rdsv2-stress-test-item-0020"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-holdout-item-0100",
+        "rdsv2-stress-holdout-item-0110",
+        "rdsv2-stress-holdout-item-0120",
+        "rdsv2-stress-test-item-0010",
+        "rdsv2-stress-test-item-0020"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-dev-item-0007",
+        "rdsv2-stress-dev-item-0008",
+        "rdsv2-stress-dev-item-0017",
+        "rdsv2-stress-dev-item-0018",
+        "rdsv2-stress-dev-item-0027"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-holdout-item-0100",
+        "rdsv2-stress-holdout-item-0110",
+        "rdsv2-stress-holdout-item-0120",
+        "rdsv2-stress-test-item-0010",
+        "rdsv2-stress-test-item-0020"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 7,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-holdout-item-0100",
+      "NearestWrongCandidateKind": "runbook",
+      "FailureReason": "MustHitBelowTopK",
+      "RecommendedRepair": "Tune ranking so present mustHit candidates are promoted into topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-test-sample-0090",
+      "Split": "test",
+      "Difficulty": "query_with_sparse_tokens",
+      "QueryText": "minimal-token signal recover context coverage constraint",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-test-item-0090"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-test-item-0040"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-holdout-item-0100",
+        "rdsv2-stress-holdout-item-0110",
+        "rdsv2-stress-holdout-item-0120",
+        "rdsv2-stress-test-item-0010",
+        "rdsv2-stress-test-item-0020"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-holdout-item-0100",
+        "rdsv2-stress-holdout-item-0110",
+        "rdsv2-stress-holdout-item-0120",
+        "rdsv2-stress-test-item-0010",
+        "rdsv2-stress-test-item-0020"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-dev-item-0007",
+        "rdsv2-stress-dev-item-0008",
+        "rdsv2-stress-dev-item-0017",
+        "rdsv2-stress-dev-item-0018",
+        "rdsv2-stress-dev-item-0027"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-holdout-item-0100",
+        "rdsv2-stress-holdout-item-0110",
+        "rdsv2-stress-holdout-item-0120",
+        "rdsv2-stress-test-item-0010",
+        "rdsv2-stress-test-item-0020"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 12,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-holdout-item-0100",
+      "NearestWrongCandidateKind": "runbook",
+      "FailureReason": "MustHitBelowTopK",
+      "RecommendedRepair": "Tune ranking so present mustHit candidates are promoted into topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-train-sample-0021",
+      "Split": "train",
+      "Difficulty": "direct_lexical",
+      "QueryText": "Find timeout guidance for renew heartbeat with lease signal handling while excluding staleness constraint.",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-train-item-0033"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-train-item-0041"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-holdout-item-0103",
+        "rdsv2-stress-holdout-item-0113",
+        "rdsv2-stress-train-item-0003",
+        "rdsv2-stress-train-item-0013",
+        "rdsv2-stress-train-item-0023"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-holdout-item-0103",
+        "rdsv2-stress-holdout-item-0113",
+        "rdsv2-stress-train-item-0003",
+        "rdsv2-stress-train-item-0013",
+        "rdsv2-stress-train-item-0023"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-holdout-item-0103",
+        "rdsv2-stress-holdout-item-0113",
+        "rdsv2-stress-train-item-0003",
+        "rdsv2-stress-train-item-0013",
+        "rdsv2-stress-train-item-0023"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-holdout-item-0103",
+        "rdsv2-stress-holdout-item-0113",
+        "rdsv2-stress-train-item-0003",
+        "rdsv2-stress-train-item-0013",
+        "rdsv2-stress-train-item-0023"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 6,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-holdout-item-0103",
+      "NearestWrongCandidateKind": "diagnostic",
+      "FailureReason": "MustHitBelowTopK",
+      "RecommendedRepair": "Tune ranking so present mustHit candidates are promoted into topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-train-sample-0031",
+      "Split": "train",
+      "Difficulty": "direct_lexical",
+      "QueryText": "Find checkpoint guidance for restore safely with rollback signal handling while excluding normal-context constraint.",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-train-item-0051"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-train-item-0055"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-holdout-item-0101",
+        "rdsv2-stress-holdout-item-0111",
+        "rdsv2-stress-train-item-0001",
+        "rdsv2-stress-train-item-0011",
+        "rdsv2-stress-train-item-0021"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-holdout-item-0101",
+        "rdsv2-stress-holdout-item-0111",
+        "rdsv2-stress-train-item-0001",
+        "rdsv2-stress-train-item-0011",
+        "rdsv2-stress-train-item-0021"
+      ],
+      "AnchorTopK": [],
+      "HybridTopK": [
+        "rdsv2-stress-holdout-item-0101",
+        "rdsv2-stress-holdout-item-0111",
+        "rdsv2-stress-train-item-0001",
+        "rdsv2-stress-train-item-0011",
+        "rdsv2-stress-train-item-0021"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 8,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-holdout-item-0101",
+      "NearestWrongCandidateKind": "runbook",
+      "FailureReason": "MustHitBelowTopK",
+      "RecommendedRepair": "Tune ranking so present mustHit candidates are promoted into topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-train-sample-0041",
+      "Split": "train",
+      "Difficulty": "direct_lexical",
+      "QueryText": "Find archive guidance for route historically with deprecated signal handling while excluding duplicate constraint.",
+      "ExpectedTargetSection": "historical_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-train-item-0065"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-train-item-0073"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-holdout-item-0105",
+        "rdsv2-stress-holdout-item-0115",
+        "rdsv2-stress-train-item-0005",
+        "rdsv2-stress-train-item-0015",
+        "rdsv2-stress-train-item-0025"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-holdout-item-0105",
+        "rdsv2-stress-holdout-item-0115",
+        "rdsv2-stress-train-item-0005",
+        "rdsv2-stress-train-item-0015",
+        "rdsv2-stress-train-item-0025"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-holdout-item-0105",
+        "rdsv2-stress-holdout-item-0115",
+        "rdsv2-stress-train-item-0005",
+        "rdsv2-stress-train-item-0015",
+        "rdsv2-stress-train-item-0025"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-holdout-item-0105",
+        "rdsv2-stress-holdout-item-0115",
+        "rdsv2-stress-train-item-0005",
+        "rdsv2-stress-train-item-0015",
+        "rdsv2-stress-train-item-0025"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 9,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-holdout-item-0105",
+      "NearestWrongCandidateKind": "historical-note",
+      "FailureReason": "MustHitBelowTopK",
+      "RecommendedRepair": "Tune ranking so present mustHit candidates are promoted into topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-train-sample-0051",
+      "Split": "train",
+      "Difficulty": "direct_lexical",
+      "QueryText": "Find timeout guidance for renew heartbeat with lease signal handling while excluding staleness constraint.",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-train-item-0083"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-train-item-0091"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-holdout-item-0103",
+        "rdsv2-stress-holdout-item-0113",
+        "rdsv2-stress-train-item-0003",
+        "rdsv2-stress-train-item-0013",
+        "rdsv2-stress-train-item-0023"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-holdout-item-0103",
+        "rdsv2-stress-holdout-item-0113",
+        "rdsv2-stress-train-item-0003",
+        "rdsv2-stress-train-item-0013",
+        "rdsv2-stress-train-item-0023"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-holdout-item-0103",
+        "rdsv2-stress-holdout-item-0113",
+        "rdsv2-stress-train-item-0003",
+        "rdsv2-stress-train-item-0013",
+        "rdsv2-stress-train-item-0023"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-holdout-item-0103",
+        "rdsv2-stress-holdout-item-0113",
+        "rdsv2-stress-train-item-0003",
+        "rdsv2-stress-train-item-0013",
+        "rdsv2-stress-train-item-0023"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 11,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-holdout-item-0103",
+      "NearestWrongCandidateKind": "diagnostic",
+      "FailureReason": "MustHitBelowTopK",
+      "RecommendedRepair": "Tune ranking so present mustHit candidates are promoted into topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-train-sample-0081",
+      "Split": "train",
+      "Difficulty": "direct_lexical",
+      "QueryText": "Find timeout guidance for renew heartbeat with lease signal handling while excluding rollback constraint.",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-train-item-0033"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-train-item-0042"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-holdout-item-0103",
+        "rdsv2-stress-holdout-item-0113",
+        "rdsv2-stress-train-item-0003",
+        "rdsv2-stress-train-item-0013",
+        "rdsv2-stress-train-item-0023"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-holdout-item-0103",
+        "rdsv2-stress-holdout-item-0113",
+        "rdsv2-stress-train-item-0003",
+        "rdsv2-stress-train-item-0013",
+        "rdsv2-stress-train-item-0023"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-holdout-item-0103",
+        "rdsv2-stress-holdout-item-0113",
+        "rdsv2-stress-train-item-0003",
+        "rdsv2-stress-train-item-0013",
+        "rdsv2-stress-train-item-0023"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-holdout-item-0103",
+        "rdsv2-stress-holdout-item-0113",
+        "rdsv2-stress-train-item-0003",
+        "rdsv2-stress-train-item-0013",
+        "rdsv2-stress-train-item-0023"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 6,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-holdout-item-0103",
+      "NearestWrongCandidateKind": "diagnostic",
+      "FailureReason": "MustHitBelowTopK",
+      "RecommendedRepair": "Tune ranking so present mustHit candidates are promoted into topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-train-sample-0091",
+      "Split": "train",
+      "Difficulty": "direct_lexical",
+      "QueryText": "Find checkpoint guidance for restore safely with rollback signal handling while excluding cross-scope constraint.",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-train-item-0051"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-train-item-0056"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-holdout-item-0101",
+        "rdsv2-stress-holdout-item-0111",
+        "rdsv2-stress-train-item-0001",
+        "rdsv2-stress-train-item-0011",
+        "rdsv2-stress-train-item-0021"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-holdout-item-0101",
+        "rdsv2-stress-holdout-item-0111",
+        "rdsv2-stress-train-item-0001",
+        "rdsv2-stress-train-item-0011",
+        "rdsv2-stress-train-item-0021"
+      ],
+      "AnchorTopK": [],
+      "HybridTopK": [
+        "rdsv2-stress-holdout-item-0101",
+        "rdsv2-stress-holdout-item-0111",
+        "rdsv2-stress-train-item-0001",
+        "rdsv2-stress-train-item-0011",
+        "rdsv2-stress-train-item-0021"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 8,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-holdout-item-0101",
+      "NearestWrongCandidateKind": "runbook",
+      "FailureReason": "MustHitBelowTopK",
+      "RecommendedRepair": "Tune ranking so present mustHit candidates are promoted into topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-train-sample-0023",
+      "Split": "train",
+      "Difficulty": "metadata_anchor",
+      "QueryText": "Use shared metadata about archive to locate the right route historically guidance without relying on a unique source tag.",
+      "ExpectedTargetSection": "historical_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-train-item-0035"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-train-item-0043"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-holdout-item-0105",
+        "rdsv2-stress-holdout-item-0115",
+        "rdsv2-stress-train-item-0005",
+        "rdsv2-stress-train-item-0015",
+        "rdsv2-stress-train-item-0025"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-holdout-item-0105",
+        "rdsv2-stress-holdout-item-0115",
+        "rdsv2-stress-train-item-0005",
+        "rdsv2-stress-train-item-0015",
+        "rdsv2-stress-train-item-0025"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-holdout-item-0105",
+        "rdsv2-stress-holdout-item-0115",
+        "rdsv2-stress-train-item-0005",
+        "rdsv2-stress-train-item-0015",
+        "rdsv2-stress-train-item-0025"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-holdout-item-0105",
+        "rdsv2-stress-holdout-item-0115",
+        "rdsv2-stress-train-item-0005",
+        "rdsv2-stress-train-item-0015",
+        "rdsv2-stress-train-item-0025"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 6,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-holdout-item-0105",
+      "NearestWrongCandidateKind": "historical-note",
+      "FailureReason": "MustHitBelowTopK",
+      "RecommendedRepair": "Tune ranking so present mustHit candidates are promoted into topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-train-sample-0033",
+      "Split": "train",
+      "Difficulty": "metadata_anchor",
+      "QueryText": "Use shared metadata about lease to locate the right renew heartbeat guidance without relying on a unique source tag.",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-train-item-0053"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-train-item-0061"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-holdout-item-0103",
+        "rdsv2-stress-holdout-item-0113",
+        "rdsv2-stress-train-item-0003",
+        "rdsv2-stress-train-item-0013",
+        "rdsv2-stress-train-item-0023"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-holdout-item-0103",
+        "rdsv2-stress-holdout-item-0113",
+        "rdsv2-stress-train-item-0003",
+        "rdsv2-stress-train-item-0013",
+        "rdsv2-stress-train-item-0023"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-holdout-item-0103",
+        "rdsv2-stress-holdout-item-0113",
+        "rdsv2-stress-train-item-0003",
+        "rdsv2-stress-train-item-0013",
+        "rdsv2-stress-train-item-0023"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-holdout-item-0103",
+        "rdsv2-stress-holdout-item-0113",
+        "rdsv2-stress-train-item-0003",
+        "rdsv2-stress-train-item-0013",
+        "rdsv2-stress-train-item-0023"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 8,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-holdout-item-0103",
+      "NearestWrongCandidateKind": "diagnostic",
+      "FailureReason": "MustHitBelowTopK",
+      "RecommendedRepair": "Tune ranking so present mustHit candidates are promoted into topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-train-sample-0043",
+      "Split": "train",
+      "Difficulty": "metadata_anchor",
+      "QueryText": "Use shared metadata about recovery to locate the right restore safely guidance without relying on a unique source tag.",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-train-item-0071"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-train-item-0075"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-holdout-item-0101",
+        "rdsv2-stress-holdout-item-0111",
+        "rdsv2-stress-train-item-0001",
+        "rdsv2-stress-train-item-0011",
+        "rdsv2-stress-train-item-0021"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-holdout-item-0101",
+        "rdsv2-stress-holdout-item-0111",
+        "rdsv2-stress-train-item-0001",
+        "rdsv2-stress-train-item-0011",
+        "rdsv2-stress-train-item-0021"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-holdout-item-0101",
+        "rdsv2-stress-holdout-item-0111",
+        "rdsv2-stress-train-item-0001",
+        "rdsv2-stress-train-item-0011",
+        "rdsv2-stress-train-item-0021"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-holdout-item-0101",
+        "rdsv2-stress-holdout-item-0111",
+        "rdsv2-stress-train-item-0001",
+        "rdsv2-stress-train-item-0011",
+        "rdsv2-stress-train-item-0021"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 10,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-holdout-item-0101",
+      "NearestWrongCandidateKind": "runbook",
+      "FailureReason": "MustHitBelowTopK",
+      "RecommendedRepair": "Tune ranking so present mustHit candidates are promoted into topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-train-sample-0053",
+      "Split": "train",
+      "Difficulty": "metadata_anchor",
+      "QueryText": "Use shared metadata about archive to locate the right route historically guidance without relying on a unique source tag.",
+      "ExpectedTargetSection": "historical_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-train-item-0085"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-train-item-0093"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-holdout-item-0105",
+        "rdsv2-stress-holdout-item-0115",
+        "rdsv2-stress-train-item-0005",
+        "rdsv2-stress-train-item-0015",
+        "rdsv2-stress-train-item-0025"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-holdout-item-0105",
+        "rdsv2-stress-holdout-item-0115",
+        "rdsv2-stress-train-item-0005",
+        "rdsv2-stress-train-item-0015",
+        "rdsv2-stress-train-item-0025"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-holdout-item-0105",
+        "rdsv2-stress-holdout-item-0115",
+        "rdsv2-stress-train-item-0005",
+        "rdsv2-stress-train-item-0015",
+        "rdsv2-stress-train-item-0025"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-holdout-item-0105",
+        "rdsv2-stress-holdout-item-0115",
+        "rdsv2-stress-train-item-0005",
+        "rdsv2-stress-train-item-0015",
+        "rdsv2-stress-train-item-0025"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 11,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-holdout-item-0105",
+      "NearestWrongCandidateKind": "historical-note",
+      "FailureReason": "MustHitBelowTopK",
+      "RecommendedRepair": "Tune ranking so present mustHit candidates are promoted into topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-train-sample-0083",
+      "Split": "train",
+      "Difficulty": "metadata_anchor",
+      "QueryText": "Use shared metadata about archive to locate the right route historically guidance without relying on a unique source tag.",
+      "ExpectedTargetSection": "historical_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-train-item-0035"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-train-item-0044"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-holdout-item-0105",
+        "rdsv2-stress-holdout-item-0115",
+        "rdsv2-stress-train-item-0005",
+        "rdsv2-stress-train-item-0015",
+        "rdsv2-stress-train-item-0025"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-holdout-item-0105",
+        "rdsv2-stress-holdout-item-0115",
+        "rdsv2-stress-train-item-0005",
+        "rdsv2-stress-train-item-0015",
+        "rdsv2-stress-train-item-0025"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-holdout-item-0105",
+        "rdsv2-stress-holdout-item-0115",
+        "rdsv2-stress-train-item-0005",
+        "rdsv2-stress-train-item-0015",
+        "rdsv2-stress-train-item-0025"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-holdout-item-0105",
+        "rdsv2-stress-holdout-item-0115",
+        "rdsv2-stress-train-item-0005",
+        "rdsv2-stress-train-item-0015",
+        "rdsv2-stress-train-item-0025"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 6,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-holdout-item-0105",
+      "NearestWrongCandidateKind": "historical-note",
+      "FailureReason": "MustHitBelowTopK",
+      "RecommendedRepair": "Tune ranking so present mustHit candidates are promoted into topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-train-sample-0093",
+      "Split": "train",
+      "Difficulty": "metadata_anchor",
+      "QueryText": "Use shared metadata about lease to locate the right renew heartbeat guidance without relying on a unique source tag.",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-train-item-0053"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-train-item-0062"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-holdout-item-0103",
+        "rdsv2-stress-holdout-item-0113",
+        "rdsv2-stress-train-item-0003",
+        "rdsv2-stress-train-item-0013",
+        "rdsv2-stress-train-item-0023"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-holdout-item-0103",
+        "rdsv2-stress-holdout-item-0113",
+        "rdsv2-stress-train-item-0003",
+        "rdsv2-stress-train-item-0013",
+        "rdsv2-stress-train-item-0023"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-holdout-item-0103",
+        "rdsv2-stress-holdout-item-0113",
+        "rdsv2-stress-train-item-0003",
+        "rdsv2-stress-train-item-0013",
+        "rdsv2-stress-train-item-0023"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-holdout-item-0103",
+        "rdsv2-stress-holdout-item-0113",
+        "rdsv2-stress-train-item-0003",
+        "rdsv2-stress-train-item-0013",
+        "rdsv2-stress-train-item-0023"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 8,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-holdout-item-0103",
+      "NearestWrongCandidateKind": "diagnostic",
+      "FailureReason": "MustHitBelowTopK",
+      "RecommendedRepair": "Tune ranking so present mustHit candidates are promoted into topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-train-sample-0026",
+      "Split": "train",
+      "Difficulty": "must_not_negative_constraint",
+      "QueryText": "Retrieve schema guidance for plan migration, but do not return items governed by scope.",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-train-item-0042"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-train-item-0046"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-holdout-item-0102",
+        "rdsv2-stress-holdout-item-0112",
+        "rdsv2-stress-train-item-0002",
+        "rdsv2-stress-train-item-0012",
+        "rdsv2-stress-train-item-0022"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-holdout-item-0102",
+        "rdsv2-stress-holdout-item-0112",
+        "rdsv2-stress-train-item-0002",
+        "rdsv2-stress-train-item-0012",
+        "rdsv2-stress-train-item-0022"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-holdout-item-0102",
+        "rdsv2-stress-holdout-item-0106",
+        "rdsv2-stress-holdout-item-0112",
+        "rdsv2-stress-holdout-item-0116",
+        "rdsv2-stress-train-item-0002"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-holdout-item-0102",
+        "rdsv2-stress-holdout-item-0112",
+        "rdsv2-stress-train-item-0002",
+        "rdsv2-stress-train-item-0012",
+        "rdsv2-stress-train-item-0022"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 7,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-holdout-item-0102",
+      "NearestWrongCandidateKind": "policy",
+      "FailureReason": "MustHitBelowTopK",
+      "RecommendedRepair": "Tune ranking so present mustHit candidates are promoted into topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-train-sample-0036",
+      "Split": "train",
+      "Difficulty": "must_not_negative_constraint",
+      "QueryText": "Retrieve scope guidance for preserve isolation, but do not return items governed by review.",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-train-item-0056"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-train-item-0064"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-holdout-item-0106",
+        "rdsv2-stress-holdout-item-0116",
+        "rdsv2-stress-train-item-0006",
+        "rdsv2-stress-train-item-0016",
+        "rdsv2-stress-train-item-0026"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-holdout-item-0106",
+        "rdsv2-stress-holdout-item-0116",
+        "rdsv2-stress-train-item-0006",
+        "rdsv2-stress-train-item-0016",
+        "rdsv2-stress-train-item-0026"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-holdout-item-0106",
+        "rdsv2-stress-holdout-item-0116",
+        "rdsv2-stress-train-item-0006",
+        "rdsv2-stress-train-item-0016",
+        "rdsv2-stress-train-item-0026"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-holdout-item-0106",
+        "rdsv2-stress-holdout-item-0116",
+        "rdsv2-stress-train-item-0006",
+        "rdsv2-stress-train-item-0016",
+        "rdsv2-stress-train-item-0026"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 8,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-holdout-item-0106",
+      "NearestWrongCandidateKind": "policy",
+      "FailureReason": "MustHitBelowTopK",
+      "RecommendedRepair": "Tune ranking so present mustHit candidates are promoted into topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-train-sample-0046",
+      "Split": "train",
+      "Difficulty": "must_not_negative_constraint",
+      "QueryText": "Retrieve review guidance for verify evidence, but do not return items governed by schema.",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-train-item-0074"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-train-item-0082"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-holdout-item-0104",
+        "rdsv2-stress-holdout-item-0114",
+        "rdsv2-stress-train-item-0004",
+        "rdsv2-stress-train-item-0014",
+        "rdsv2-stress-train-item-0024"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-holdout-item-0104",
+        "rdsv2-stress-holdout-item-0114",
+        "rdsv2-stress-train-item-0004",
+        "rdsv2-stress-train-item-0014",
+        "rdsv2-stress-train-item-0024"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-holdout-item-0102",
+        "rdsv2-stress-holdout-item-0104",
+        "rdsv2-stress-holdout-item-0112",
+        "rdsv2-stress-holdout-item-0114",
+        "rdsv2-stress-train-item-0002"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-holdout-item-0104",
+        "rdsv2-stress-holdout-item-0114",
+        "rdsv2-stress-train-item-0004",
+        "rdsv2-stress-train-item-0014",
+        "rdsv2-stress-train-item-0024"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 10,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-holdout-item-0104",
+      "NearestWrongCandidateKind": "policy",
+      "FailureReason": "MustHitBelowTopK",
+      "RecommendedRepair": "Tune ranking so present mustHit candidates are promoted into topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-train-sample-0056",
+      "Split": "train",
+      "Difficulty": "must_not_negative_constraint",
+      "QueryText": "Retrieve schema guidance for plan migration, but do not return items governed by scope.",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-train-item-0092"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-train-item-0096"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-holdout-item-0102",
+        "rdsv2-stress-holdout-item-0112",
+        "rdsv2-stress-train-item-0002",
+        "rdsv2-stress-train-item-0012",
+        "rdsv2-stress-train-item-0022"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-holdout-item-0102",
+        "rdsv2-stress-holdout-item-0112",
+        "rdsv2-stress-train-item-0002",
+        "rdsv2-stress-train-item-0012",
+        "rdsv2-stress-train-item-0022"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-holdout-item-0102",
+        "rdsv2-stress-holdout-item-0106",
+        "rdsv2-stress-holdout-item-0112",
+        "rdsv2-stress-holdout-item-0116",
+        "rdsv2-stress-train-item-0002"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-holdout-item-0102",
+        "rdsv2-stress-holdout-item-0112",
+        "rdsv2-stress-train-item-0002",
+        "rdsv2-stress-train-item-0012",
+        "rdsv2-stress-train-item-0022"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 12,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-holdout-item-0102",
+      "NearestWrongCandidateKind": "policy",
+      "FailureReason": "MustHitBelowTopK",
+      "RecommendedRepair": "Tune ranking so present mustHit candidates are promoted into topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-train-sample-0086",
+      "Split": "train",
+      "Difficulty": "must_not_negative_constraint",
+      "QueryText": "Retrieve schema guidance for plan migration, but do not return items governed by checkpoint.",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-train-item-0042"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-train-item-0051"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-holdout-item-0102",
+        "rdsv2-stress-holdout-item-0112",
+        "rdsv2-stress-train-item-0002",
+        "rdsv2-stress-train-item-0012",
+        "rdsv2-stress-train-item-0022"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-holdout-item-0102",
+        "rdsv2-stress-holdout-item-0112",
+        "rdsv2-stress-train-item-0002",
+        "rdsv2-stress-train-item-0012",
+        "rdsv2-stress-train-item-0022"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-holdout-item-0102",
+        "rdsv2-stress-holdout-item-0112",
+        "rdsv2-stress-train-item-0002",
+        "rdsv2-stress-train-item-0012",
+        "rdsv2-stress-train-item-0022"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-holdout-item-0102",
+        "rdsv2-stress-holdout-item-0112",
+        "rdsv2-stress-train-item-0002",
+        "rdsv2-stress-train-item-0012",
+        "rdsv2-stress-train-item-0022"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 7,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-holdout-item-0102",
+      "NearestWrongCandidateKind": "policy",
+      "FailureReason": "MustHitBelowTopK",
+      "RecommendedRepair": "Tune ranking so present mustHit candidates are promoted into topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-train-sample-0096",
+      "Split": "train",
+      "Difficulty": "must_not_negative_constraint",
+      "QueryText": "Retrieve scope guidance for preserve isolation, but do not return items governed by archive.",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-train-item-0056"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-train-item-0065"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-holdout-item-0106",
+        "rdsv2-stress-holdout-item-0116",
+        "rdsv2-stress-train-item-0006",
+        "rdsv2-stress-train-item-0016",
+        "rdsv2-stress-train-item-0026"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-holdout-item-0106",
+        "rdsv2-stress-holdout-item-0116",
+        "rdsv2-stress-train-item-0006",
+        "rdsv2-stress-train-item-0016",
+        "rdsv2-stress-train-item-0026"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-holdout-item-0106",
+        "rdsv2-stress-holdout-item-0116",
+        "rdsv2-stress-train-item-0006",
+        "rdsv2-stress-train-item-0016",
+        "rdsv2-stress-train-item-0026"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-holdout-item-0106",
+        "rdsv2-stress-holdout-item-0116",
+        "rdsv2-stress-train-item-0006",
+        "rdsv2-stress-train-item-0016",
+        "rdsv2-stress-train-item-0026"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 8,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-holdout-item-0106",
+      "NearestWrongCandidateKind": "policy",
+      "FailureReason": "MustHitBelowTopK",
+      "RecommendedRepair": "Tune ranking so present mustHit candidates are promoted into topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-train-sample-0022",
+      "Split": "train",
+      "Difficulty": "paraphrase_semantic",
+      "QueryText": "Which approved note explains reliable handling for verify evidence when provenance signal is the main concern?",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-train-item-0034"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-train-item-0042"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-holdout-item-0104",
+        "rdsv2-stress-holdout-item-0114",
+        "rdsv2-stress-train-item-0004",
+        "rdsv2-stress-train-item-0014",
+        "rdsv2-stress-train-item-0024"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-holdout-item-0104",
+        "rdsv2-stress-holdout-item-0114",
+        "rdsv2-stress-train-item-0004",
+        "rdsv2-stress-train-item-0014",
+        "rdsv2-stress-train-item-0024"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-holdout-item-0104",
+        "rdsv2-stress-holdout-item-0114",
+        "rdsv2-stress-train-item-0004",
+        "rdsv2-stress-train-item-0014",
+        "rdsv2-stress-train-item-0024"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-holdout-item-0104",
+        "rdsv2-stress-holdout-item-0114",
+        "rdsv2-stress-train-item-0004",
+        "rdsv2-stress-train-item-0014",
+        "rdsv2-stress-train-item-0024"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 6,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-holdout-item-0104",
+      "NearestWrongCandidateKind": "policy",
+      "FailureReason": "MustHitBelowTopK",
+      "RecommendedRepair": "Tune ranking so present mustHit candidates are promoted into topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-train-sample-0032",
+      "Split": "train",
+      "Difficulty": "paraphrase_semantic",
+      "QueryText": "Which approved note explains reliable handling for plan migration when version signal is the main concern?",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-train-item-0052"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-train-item-0056"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-holdout-item-0102",
+        "rdsv2-stress-holdout-item-0112",
+        "rdsv2-stress-train-item-0002",
+        "rdsv2-stress-train-item-0012",
+        "rdsv2-stress-train-item-0022"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-holdout-item-0102",
+        "rdsv2-stress-holdout-item-0112",
+        "rdsv2-stress-train-item-0002",
+        "rdsv2-stress-train-item-0012",
+        "rdsv2-stress-train-item-0022"
+      ],
+      "AnchorTopK": [],
+      "HybridTopK": [
+        "rdsv2-stress-holdout-item-0102",
+        "rdsv2-stress-holdout-item-0112",
+        "rdsv2-stress-train-item-0002",
+        "rdsv2-stress-train-item-0012",
+        "rdsv2-stress-train-item-0022"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 8,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-holdout-item-0102",
+      "NearestWrongCandidateKind": "policy",
+      "FailureReason": "MustHitBelowTopK",
+      "RecommendedRepair": "Tune ranking so present mustHit candidates are promoted into topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-train-sample-0042",
+      "Split": "train",
+      "Difficulty": "paraphrase_semantic",
+      "QueryText": "Which approved note explains reliable handling for preserve isolation when collection signal is the main concern?",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-train-item-0066"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-train-item-0074"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-holdout-item-0106",
+        "rdsv2-stress-holdout-item-0116",
+        "rdsv2-stress-train-item-0006",
+        "rdsv2-stress-train-item-0016",
+        "rdsv2-stress-train-item-0026"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-holdout-item-0106",
+        "rdsv2-stress-holdout-item-0116",
+        "rdsv2-stress-train-item-0006",
+        "rdsv2-stress-train-item-0016",
+        "rdsv2-stress-train-item-0026"
+      ],
+      "AnchorTopK": [],
+      "HybridTopK": [
+        "rdsv2-stress-holdout-item-0106",
+        "rdsv2-stress-holdout-item-0116",
+        "rdsv2-stress-train-item-0006",
+        "rdsv2-stress-train-item-0016",
+        "rdsv2-stress-train-item-0026"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 9,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-holdout-item-0106",
+      "NearestWrongCandidateKind": "policy",
+      "FailureReason": "MustHitBelowTopK",
+      "RecommendedRepair": "Tune ranking so present mustHit candidates are promoted into topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-train-sample-0052",
+      "Split": "train",
+      "Difficulty": "paraphrase_semantic",
+      "QueryText": "Which approved note explains reliable handling for verify evidence when provenance signal is the main concern?",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-train-item-0084"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-train-item-0092"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-holdout-item-0104",
+        "rdsv2-stress-holdout-item-0114",
+        "rdsv2-stress-train-item-0004",
+        "rdsv2-stress-train-item-0014",
+        "rdsv2-stress-train-item-0024"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-holdout-item-0104",
+        "rdsv2-stress-holdout-item-0114",
+        "rdsv2-stress-train-item-0004",
+        "rdsv2-stress-train-item-0014",
+        "rdsv2-stress-train-item-0024"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-holdout-item-0104",
+        "rdsv2-stress-holdout-item-0114",
+        "rdsv2-stress-train-item-0004",
+        "rdsv2-stress-train-item-0014",
+        "rdsv2-stress-train-item-0024"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-holdout-item-0104",
+        "rdsv2-stress-holdout-item-0114",
+        "rdsv2-stress-train-item-0004",
+        "rdsv2-stress-train-item-0014",
+        "rdsv2-stress-train-item-0024"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 11,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-holdout-item-0104",
+      "NearestWrongCandidateKind": "policy",
+      "FailureReason": "MustHitBelowTopK",
+      "RecommendedRepair": "Tune ranking so present mustHit candidates are promoted into topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-train-sample-0082",
+      "Split": "train",
+      "Difficulty": "paraphrase_semantic",
+      "QueryText": "Which approved note explains reliable handling for verify evidence when provenance signal is the main concern?",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-train-item-0034"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-train-item-0043"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-holdout-item-0104",
+        "rdsv2-stress-holdout-item-0114",
+        "rdsv2-stress-train-item-0004",
+        "rdsv2-stress-train-item-0014",
+        "rdsv2-stress-train-item-0024"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-holdout-item-0104",
+        "rdsv2-stress-holdout-item-0114",
+        "rdsv2-stress-train-item-0004",
+        "rdsv2-stress-train-item-0014",
+        "rdsv2-stress-train-item-0024"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-holdout-item-0104",
+        "rdsv2-stress-holdout-item-0114",
+        "rdsv2-stress-train-item-0004",
+        "rdsv2-stress-train-item-0014",
+        "rdsv2-stress-train-item-0024"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-holdout-item-0104",
+        "rdsv2-stress-holdout-item-0114",
+        "rdsv2-stress-train-item-0004",
+        "rdsv2-stress-train-item-0014",
+        "rdsv2-stress-train-item-0024"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 6,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-holdout-item-0104",
+      "NearestWrongCandidateKind": "policy",
+      "FailureReason": "MustHitBelowTopK",
+      "RecommendedRepair": "Tune ranking so present mustHit candidates are promoted into topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-train-sample-0092",
+      "Split": "train",
+      "Difficulty": "paraphrase_semantic",
+      "QueryText": "Which approved note explains reliable handling for plan migration when version signal is the main concern?",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-train-item-0052"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-train-item-0061"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-holdout-item-0102",
+        "rdsv2-stress-holdout-item-0112",
+        "rdsv2-stress-train-item-0002",
+        "rdsv2-stress-train-item-0012",
+        "rdsv2-stress-train-item-0022"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-holdout-item-0102",
+        "rdsv2-stress-holdout-item-0112",
+        "rdsv2-stress-train-item-0002",
+        "rdsv2-stress-train-item-0012",
+        "rdsv2-stress-train-item-0022"
+      ],
+      "AnchorTopK": [],
+      "HybridTopK": [
+        "rdsv2-stress-holdout-item-0102",
+        "rdsv2-stress-holdout-item-0112",
+        "rdsv2-stress-train-item-0002",
+        "rdsv2-stress-train-item-0012",
+        "rdsv2-stress-train-item-0022"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 8,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-holdout-item-0102",
+      "NearestWrongCandidateKind": "policy",
+      "FailureReason": "MustHitBelowTopK",
+      "RecommendedRepair": "Tune ranking so present mustHit candidates are promoted into topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-train-sample-0024",
+      "Split": "train",
+      "Difficulty": "relation_multi_hop",
+      "QueryText": "Follow replacement evidence for scope and identify the context that still supports preserve isolation.",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-train-item-0036"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-train-item-0044"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-holdout-item-0106",
+        "rdsv2-stress-holdout-item-0116",
+        "rdsv2-stress-train-item-0006",
+        "rdsv2-stress-train-item-0016",
+        "rdsv2-stress-train-item-0026"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-holdout-item-0106",
+        "rdsv2-stress-holdout-item-0116",
+        "rdsv2-stress-train-item-0006",
+        "rdsv2-stress-train-item-0016",
+        "rdsv2-stress-train-item-0026"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-holdout-item-0104",
+        "rdsv2-stress-holdout-item-0106",
+        "rdsv2-stress-holdout-item-0114",
+        "rdsv2-stress-holdout-item-0116",
+        "rdsv2-stress-train-item-0004"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-holdout-item-0106",
+        "rdsv2-stress-holdout-item-0116",
+        "rdsv2-stress-train-item-0006",
+        "rdsv2-stress-train-item-0016",
+        "rdsv2-stress-train-item-0026"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 6,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-holdout-item-0106",
+      "NearestWrongCandidateKind": "policy",
+      "FailureReason": "MustHitBelowTopK",
+      "RecommendedRepair": "Tune ranking so present mustHit candidates are promoted into topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-train-sample-0034",
+      "Split": "train",
+      "Difficulty": "relation_multi_hop",
+      "QueryText": "Follow replacement evidence for review and identify the context that still supports verify evidence.",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-train-item-0054"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-train-item-0062"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-holdout-item-0104",
+        "rdsv2-stress-holdout-item-0114",
+        "rdsv2-stress-train-item-0004",
+        "rdsv2-stress-train-item-0014",
+        "rdsv2-stress-train-item-0024"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-holdout-item-0104",
+        "rdsv2-stress-holdout-item-0114",
+        "rdsv2-stress-train-item-0004",
+        "rdsv2-stress-train-item-0014",
+        "rdsv2-stress-train-item-0024"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-holdout-item-0104",
+        "rdsv2-stress-holdout-item-0114",
+        "rdsv2-stress-train-item-0004",
+        "rdsv2-stress-train-item-0014",
+        "rdsv2-stress-train-item-0024"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-holdout-item-0104",
+        "rdsv2-stress-holdout-item-0114",
+        "rdsv2-stress-train-item-0004",
+        "rdsv2-stress-train-item-0014",
+        "rdsv2-stress-train-item-0024"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 8,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-holdout-item-0104",
+      "NearestWrongCandidateKind": "policy",
+      "FailureReason": "MustHitBelowTopK",
+      "RecommendedRepair": "Tune ranking so present mustHit candidates are promoted into topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-train-sample-0044",
+      "Split": "train",
+      "Difficulty": "relation_multi_hop",
+      "QueryText": "Follow replacement evidence for schema and identify the context that still supports plan migration.",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-train-item-0072"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-train-item-0076"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-holdout-item-0102",
+        "rdsv2-stress-holdout-item-0112",
+        "rdsv2-stress-train-item-0002",
+        "rdsv2-stress-train-item-0012",
+        "rdsv2-stress-train-item-0022"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-holdout-item-0102",
+        "rdsv2-stress-holdout-item-0112",
+        "rdsv2-stress-train-item-0002",
+        "rdsv2-stress-train-item-0012",
+        "rdsv2-stress-train-item-0022"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-holdout-item-0102",
+        "rdsv2-stress-holdout-item-0104",
+        "rdsv2-stress-holdout-item-0112",
+        "rdsv2-stress-holdout-item-0114",
+        "rdsv2-stress-train-item-0002"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-holdout-item-0102",
+        "rdsv2-stress-holdout-item-0112",
+        "rdsv2-stress-train-item-0002",
+        "rdsv2-stress-train-item-0012",
+        "rdsv2-stress-train-item-0022"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 10,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-holdout-item-0102",
+      "NearestWrongCandidateKind": "policy",
+      "FailureReason": "MustHitBelowTopK",
+      "RecommendedRepair": "Tune ranking so present mustHit candidates are promoted into topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-train-sample-0054",
+      "Split": "train",
+      "Difficulty": "relation_multi_hop",
+      "QueryText": "Follow replacement evidence for scope and identify the context that still supports preserve isolation.",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-train-item-0086"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-train-item-0094"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-holdout-item-0106",
+        "rdsv2-stress-holdout-item-0116",
+        "rdsv2-stress-train-item-0006",
+        "rdsv2-stress-train-item-0016",
+        "rdsv2-stress-train-item-0026"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-holdout-item-0106",
+        "rdsv2-stress-holdout-item-0116",
+        "rdsv2-stress-train-item-0006",
+        "rdsv2-stress-train-item-0016",
+        "rdsv2-stress-train-item-0026"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-holdout-item-0104",
+        "rdsv2-stress-holdout-item-0106",
+        "rdsv2-stress-holdout-item-0114",
+        "rdsv2-stress-holdout-item-0116",
+        "rdsv2-stress-train-item-0004"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-holdout-item-0106",
+        "rdsv2-stress-holdout-item-0116",
+        "rdsv2-stress-train-item-0006",
+        "rdsv2-stress-train-item-0016",
+        "rdsv2-stress-train-item-0026"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 11,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-holdout-item-0106",
+      "NearestWrongCandidateKind": "policy",
+      "FailureReason": "MustHitBelowTopK",
+      "RecommendedRepair": "Tune ranking so present mustHit candidates are promoted into topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-train-sample-0084",
+      "Split": "train",
+      "Difficulty": "relation_multi_hop",
+      "QueryText": "Follow replacement evidence for scope and identify the context that still supports preserve isolation.",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-train-item-0036"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-train-item-0045"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-holdout-item-0106",
+        "rdsv2-stress-holdout-item-0116",
+        "rdsv2-stress-train-item-0006",
+        "rdsv2-stress-train-item-0016",
+        "rdsv2-stress-train-item-0026"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-holdout-item-0106",
+        "rdsv2-stress-holdout-item-0116",
+        "rdsv2-stress-train-item-0006",
+        "rdsv2-stress-train-item-0016",
+        "rdsv2-stress-train-item-0026"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-holdout-item-0104",
+        "rdsv2-stress-holdout-item-0106",
+        "rdsv2-stress-holdout-item-0114",
+        "rdsv2-stress-holdout-item-0116",
+        "rdsv2-stress-train-item-0004"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-holdout-item-0106",
+        "rdsv2-stress-holdout-item-0116",
+        "rdsv2-stress-train-item-0006",
+        "rdsv2-stress-train-item-0016",
+        "rdsv2-stress-train-item-0026"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 6,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-holdout-item-0106",
+      "NearestWrongCandidateKind": "policy",
+      "FailureReason": "MustHitBelowTopK",
+      "RecommendedRepair": "Tune ranking so present mustHit candidates are promoted into topK."
+    },
+    {
+      "SampleId": "rdsv2-stress-train-sample-0094",
+      "Split": "train",
+      "Difficulty": "relation_multi_hop",
+      "QueryText": "Follow replacement evidence for review and identify the context that still supports verify evidence.",
+      "ExpectedTargetSection": "normal_context",
+      "MustHitItemIds": [
+        "rdsv2-stress-train-item-0054"
+      ],
+      "MustNotHitItemIds": [
+        "rdsv2-stress-train-item-0063"
+      ],
+      "DenseTopK": [
+        "rdsv2-stress-holdout-item-0104",
+        "rdsv2-stress-holdout-item-0114",
+        "rdsv2-stress-train-item-0004",
+        "rdsv2-stress-train-item-0014",
+        "rdsv2-stress-train-item-0024"
+      ],
+      "LexicalTopK": [
+        "rdsv2-stress-holdout-item-0104",
+        "rdsv2-stress-holdout-item-0114",
+        "rdsv2-stress-train-item-0004",
+        "rdsv2-stress-train-item-0014",
+        "rdsv2-stress-train-item-0024"
+      ],
+      "AnchorTopK": [
+        "rdsv2-stress-holdout-item-0104",
+        "rdsv2-stress-holdout-item-0114",
+        "rdsv2-stress-train-item-0004",
+        "rdsv2-stress-train-item-0014",
+        "rdsv2-stress-train-item-0024"
+      ],
+      "HybridTopK": [
+        "rdsv2-stress-holdout-item-0104",
+        "rdsv2-stress-holdout-item-0114",
+        "rdsv2-stress-train-item-0004",
+        "rdsv2-stress-train-item-0014",
+        "rdsv2-stress-train-item-0024"
+      ],
+      "MustHitPresentInCorpus": true,
+      "MustHitPresentInCandidateSet": true,
+      "MustHitRank": 8,
+      "MustHitBlockedByEligibility": false,
+      "MustHitTargetSectionMismatch": false,
+      "NearestWrongCandidateId": "rdsv2-stress-holdout-item-0104",
+      "NearestWrongCandidateKind": "policy",
+      "FailureReason": "MustHitBelowTopK",
+      "RecommendedRepair": "Tune ranking so present mustHit candidates are promoted into topK."
+    }
+  ]
+}

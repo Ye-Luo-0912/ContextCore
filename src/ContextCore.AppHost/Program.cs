@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using ContextCore.Abstractions;
+using ContextCore.Abstractions.Models;
 using ContextCore.Core;
 using ContextCore.Core.Services;
 using ContextCore.Storage.FileSystem;
@@ -170,6 +171,7 @@ if (appOptions.PrintPackage)
 Console.WriteLine("ContextCore AppHost completed.");
 
 // TODO-DEMO：此函数注入 3 条硬编码演示数据，不代表真实业务场景。
+
 static async Task SeedDemoItemsAsync(
     IContextRuntimeService runtime,
     string workspaceId,
