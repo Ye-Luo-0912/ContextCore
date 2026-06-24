@@ -346,4 +346,96 @@ public static partial class EvalCommand
             $"traceCompleteness={report.TraceCompletenessPercent:F0}%; stable={report.DeterministicStable}; " +
             $"appliedDeltaZero={report.AppliedDeltaZero}; resultDiscarded={report.ResultDiscarded}; blocked={report.BlockedReasons.Count}");
     }
+
+    private static async Task ExecuteControlledAppliedMergeRuntimePreviewObservationFreezeAsync(
+        IReadOnlyList<string> args,
+        string subcommand,
+        CancellationToken ct)
+    {
+        var output = Path.GetFullPath(Path.Combine("vector", "v7"));
+        Directory.CreateDirectory(output);
+
+        var planPath = Path.Combine("vector", "v7", "runtime-preview-plan.json");
+        var planGateFallback = Path.Combine("vector", "v7", "runtime-preview-plan-gate.json");
+        var v7Plan = await ReadJsonFileAsync<ControlledAppliedMergeRuntimePreviewPlanReport>(planPath, ct)
+            .ConfigureAwait(false)
+            ?? await ReadJsonFileAsync<ControlledAppliedMergeRuntimePreviewPlanReport>(planGateFallback, ct)
+                .ConfigureAwait(false);
+
+        var dryRunPath = Path.Combine("vector", "v7", "runtime-preview-dry-run.json");
+        var dryRunGateFallback = Path.Combine("vector", "v7", "runtime-preview-dry-run-gate.json");
+        var v7DryRun = await ReadJsonFileAsync<ControlledAppliedMergeRuntimePreviewDryRunReport>(dryRunPath, ct)
+            .ConfigureAwait(false)
+            ?? await ReadJsonFileAsync<ControlledAppliedMergeRuntimePreviewDryRunReport>(dryRunGateFallback, ct)
+                .ConfigureAwait(false);
+
+        var preflightPath = Path.Combine("vector", "v7", "activation-preflight.json");
+        var preflightGateFallback = Path.Combine("vector", "v7", "activation-preflight-gate.json");
+        var v7Preflight = await ReadJsonFileAsync<ControlledAppliedMergeRuntimePreviewActivationPreflightReport>(preflightPath, ct)
+            .ConfigureAwait(false)
+            ?? await ReadJsonFileAsync<ControlledAppliedMergeRuntimePreviewActivationPreflightReport>(preflightGateFallback, ct)
+                .ConfigureAwait(false);
+
+        var obsWindowPath = Path.Combine("vector", "v7", "observation-window.json");
+        var obsWindowGateFallback = Path.Combine("vector", "v7", "observation-window-gate.json");
+        var v7Observation = await ReadJsonFileAsync<ControlledAppliedMergeRuntimePreviewObservationWindowReport>(obsWindowPath, ct)
+            .ConfigureAwait(false)
+            ?? await ReadJsonFileAsync<ControlledAppliedMergeRuntimePreviewObservationWindowReport>(obsWindowGateFallback, ct)
+                .ConfigureAwait(false);
+
+        var hardenPath = Path.Combine("vector", "v7", "observation-hardening.json");
+        var hardenGateFallback = Path.Combine("vector", "v7", "observation-hardening-gate.json");
+        var v7Hardening = await ReadJsonFileAsync<ControlledAppliedMergeRuntimePreviewObservationHardeningReport>(hardenPath, ct)
+            .ConfigureAwait(false)
+            ?? await ReadJsonFileAsync<ControlledAppliedMergeRuntimePreviewObservationHardeningReport>(hardenGateFallback, ct)
+                .ConfigureAwait(false);
+
+        var v6FreezePath = Path.Combine("vector", "v6", "controlled-applied-merge-preview-freeze.json");
+        var v6Freeze = await ReadJsonFileAsync<ControlledAppliedMergePreviewFreezeReport>(v6FreezePath, ct)
+            .ConfigureAwait(false);
+
+        var optFreezePath = Path.Combine("eval", "architecture-cleanup-freeze.json");
+        var optFreeze = await ReadJsonFileAsync<ArchitectureCleanupFreezeReport>(optFreezePath, ct)
+            .ConfigureAwait(false);
+
+        var runtimeChangeGatePath = Path.Combine("learning", "readiness", "learning-runtime-change-readiness-gate.json");
+        var runtimeChangeGate = await ReadJsonFileAsync<LearningRuntimeChangeReadinessGateReport>(runtimeChangeGatePath, ct)
+            .ConfigureAwait(false);
+        var runtimeChangeGatePassed = runtimeChangeGate is not null && runtimeChangeGate.Passed;
+
+        var p15ReportPath = Path.Combine("eval", "eval-report-p15-a3.json");
+        var p15Report = await ReadJsonFileAsync<JsonDocument>(p15ReportPath, ct).ConfigureAwait(false);
+        var p15GatePassed = false;
+        if (p15Report is not null && p15Report.RootElement.TryGetProperty("PassRate", out var passRateEl))
+        {
+            p15GatePassed = passRateEl.GetDouble() >= 1.0;
+        }
+
+        var options = new ControlledAppliedMergeRuntimePreviewObservationFreezeOptions
+        {
+            Enabled = !CommandHelpers.HasFlag(args, "--disabled"),
+            TestCountBaseline = CommandHelpers.GetIntOption(args, "--test-baseline", 1452),
+        };
+
+        var runner = new ControlledAppliedMergeRuntimePreviewObservationFreezeRunner();
+        var isGate = string.Equals(subcommand, "controlled-applied-merge-runtime-preview-observation-freeze-gate", StringComparison.OrdinalIgnoreCase);
+        var report = isGate
+            ? runner.RunGate(v7Plan, v7DryRun, v7Preflight, v7Observation, v7Hardening, v6Freeze, optFreeze, runtimeChangeGatePassed, p15GatePassed, options)
+            : runner.RunFreeze(v7Plan, v7DryRun, v7Preflight, v7Observation, v7Hardening, v6Freeze, optFreeze, runtimeChangeGatePassed, p15GatePassed, options);
+
+        var fn = isGate ? "observation-freeze-gate" : "observation-freeze";
+        var jp = Path.Combine(output, $"{fn}.json");
+        var mp = Path.Combine(output, $"{fn}.md");
+        await WriteJsonSafeAsync(report, jp, ct).ConfigureAwait(false);
+        await WriteTextAsync(
+            ControlledAppliedMergeRuntimePreviewObservationFreezeRunner.BuildMarkdown(
+                isGate ? "Controlled Applied Merge Runtime Preview Observation Freeze Gate" : "Controlled Applied Merge Runtime Preview Observation Freeze",
+                report),
+            mp, ct).ConfigureAwait(false);
+
+        Console.WriteLine($"[Eval] Controlled applied merge runtime preview observation freeze written: {jp}");
+        Console.WriteLine($"[Eval] freezePassed={report.FreezePassed}; gatePassed={report.GatePassed}; recommendation={report.Recommendation}; " +
+            $"promotionDecision={report.PromotionDecision}; testBaselineFrozen={report.TestBaselineFrozen}; " +
+            $"noRuntimeMutation={report.NoRuntimeMutationInvariant}; blocked={report.BlockedReasons.Count}");
+    }
 }

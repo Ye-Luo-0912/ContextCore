@@ -3702,6 +3702,30 @@ public static class ServiceOperationalRenderer
                 builder.AppendLine($"- blocked            : {string.Join(", ", v7Harden.BlockedReasons)}");
         }
 
+        builder.AppendLine();
+        builder.AppendLine("V7.4 Controlled Applied Merge Runtime Preview Observation Freeze / Promotion Decision");
+        var v7Freeze = snapshot.ControlledAppliedMergeRuntimePreviewObservationFreezeReport;
+        if (v7Freeze is null)
+        {
+            builder.AppendLine("- status : not generated");
+            builder.AppendLine("- path   : vector/v7/observation-freeze.json");
+            builder.AppendLine("- action : run eval controlled-applied-merge-runtime-preview-observation-freeze");
+        }
+        else
+        {
+            builder.AppendLine($"- freeze passed      : {v7Freeze.FreezePassed}");
+            builder.AppendLine($"- gate passed        : {v7Freeze.GatePassed}");
+            builder.AppendLine($"- recommendation     : {v7Freeze.Recommendation}");
+            builder.AppendLine($"- promotion decision : {v7Freeze.PromotionDecision}");
+            builder.AppendLine($"- next phase         : {v7Freeze.NextAllowedPhase}");
+            builder.AppendLine($"- test baseline      : baseline={v7Freeze.TestCountBaseline} current={v7Freeze.CurrentTestCount} delta={v7Freeze.TestCountDelta} frozen={v7Freeze.TestBaselineFrozen}");
+            builder.AppendLine($"- prerequisites      : plan={v7Freeze.V7PlanPassed} dryRun={v7Freeze.V7DryRunPassed} preflight={v7Freeze.V7PreflightPassed} observation={v7Freeze.V7ObservationPassed} hardening={v7Freeze.V7HardeningPassed} v6Freeze={v7Freeze.V6FreezePassed} optFreeze={v7Freeze.OptFreezePassed} rtChange={v7Freeze.RuntimeChangeGatePassed} p15={v7Freeze.P15GatePassed}");
+            builder.AppendLine($"- invariants         : formalSelSet={v7Freeze.FormalSelectedSetChanged} formalPkg={v7Freeze.FormalPackageWritten} pkgOutput={v7Freeze.PackageOutputChanged} packingPolicy={v7Freeze.PackingPolicyChanged} runtimeMutated={v7Freeze.RuntimeMutated} vectorStoreBinding={v7Freeze.VectorStoreBindingChanged} formalRetrieval={v7Freeze.FormalRetrievalAllowed} runtimeSwitch={v7Freeze.RuntimeSwitchAllowed} globalDefaultOn={v7Freeze.GlobalDefaultOn}");
+            builder.AppendLine($"- noMutationInvariant: {v7Freeze.NoRuntimeMutationInvariant}");
+            if (v7Freeze.BlockedReasons.Count > 0)
+                builder.AppendLine($"- blocked            : {string.Join(", ", v7Freeze.BlockedReasons)}");
+        }
+
         return builder.ToString();
     }
 

@@ -278,6 +278,8 @@ public static partial class EvalCommand
             !string.Equals(subcommand, "controlled-applied-merge-runtime-preview-observation-window-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "controlled-applied-merge-runtime-preview-observation-hardening", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "controlled-applied-merge-runtime-preview-observation-hardening-gate", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "controlled-applied-merge-runtime-preview-observation-freeze", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "controlled-applied-merge-runtime-preview-observation-freeze-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "dto-split-plan", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "dto-split-readiness-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "vector-retrieval-eval-protocol-audit", StringComparison.OrdinalIgnoreCase) &&
@@ -490,6 +492,8 @@ public static partial class EvalCommand
             Console.WriteLine("  eval controlled-applied-merge-runtime-preview-observation-window-gate [--observation-runs <n>] [--max-requests <n>] [--max-duration-minutes <n>]");
             Console.WriteLine("  eval controlled-applied-merge-runtime-preview-observation-hardening [--min-runs <n>] [--min-requests <n>] [--max-duration-minutes <n>] [--requests-per-run <n>]");
             Console.WriteLine("  eval controlled-applied-merge-runtime-preview-observation-hardening-gate [--min-runs <n>] [--min-requests <n>] [--max-duration-minutes <n>] [--requests-per-run <n>]");
+            Console.WriteLine("  eval controlled-applied-merge-runtime-preview-observation-freeze [--test-baseline <n>]");
+            Console.WriteLine("  eval controlled-applied-merge-runtime-preview-observation-freeze-gate [--test-baseline <n>]");
             Console.WriteLine("  eval dto-split-plan");
             Console.WriteLine("  eval dto-split-readiness-gate");
             Console.WriteLine("  eval vector-retrieval-eval-protocol-audit");
@@ -1675,6 +1679,13 @@ public static partial class EvalCommand
             || string.Equals(subcommand, "controlled-applied-merge-runtime-preview-observation-hardening-gate", StringComparison.OrdinalIgnoreCase))
         {
             await ExecuteControlledAppliedMergeRuntimePreviewObservationHardeningAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        if (string.Equals(subcommand, "controlled-applied-merge-runtime-preview-observation-freeze", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(subcommand, "controlled-applied-merge-runtime-preview-observation-freeze-gate", StringComparison.OrdinalIgnoreCase))
+        {
+            await ExecuteControlledAppliedMergeRuntimePreviewObservationFreezeAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
             return;
         }
 

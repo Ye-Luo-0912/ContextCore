@@ -1670,6 +1670,120 @@ public sealed class ControlledAppliedMergeRuntimePreviewObservationHardeningRepo
 }
 
 
+/// <summary>V7.4 runtime preview observation freeze 推荐。</summary>
+public static class ControlledAppliedMergeRuntimePreviewObservationFreezeRecommendations
+{
+    public const string ReadyForScopedRuntimePreviewApprovalPlan = nameof(ReadyForScopedRuntimePreviewApprovalPlan);
+    public const string BlockedByMissingPrerequisites = nameof(BlockedByMissingPrerequisites);
+    public const string BlockedByObservationHardeningNotPassed = nameof(BlockedByObservationHardeningNotPassed);
+    public const string BlockedByObservationWindowNotPassed = nameof(BlockedByObservationWindowNotPassed);
+    public const string BlockedByPreflightNotPassed = nameof(BlockedByPreflightNotPassed);
+    public const string BlockedByDryRunNotPassed = nameof(BlockedByDryRunNotPassed);
+    public const string BlockedByFreezeMetricsViolation = nameof(BlockedByFreezeMetricsViolation);
+    public const string BlockedBySafetyBoundaryViolation = nameof(BlockedBySafetyBoundaryViolation);
+    public const string BlockedByTestBaselineMismatch = nameof(BlockedByTestBaselineMismatch);
+    public const string BlockedByGateFailure = nameof(BlockedByGateFailure);
+    public const string KeepPreviewOnly = nameof(KeepPreviewOnly);
+}
+
+
+/// <summary>V7.4 observation freeze 选项。</summary>
+public sealed class ControlledAppliedMergeRuntimePreviewObservationFreezeOptions
+{
+    public bool Enabled { get; init; } = true;
+    public int TestCountBaseline { get; init; } = 1452;
+    public int MinObservationRunCount { get; init; } = 10;
+    public int MinRequestCountTotal { get; init; } = 120;
+    public int MaxErrorCount { get; init; } = 0;
+    public double MinTraceCompletenessPercent { get; init; } = 100.0;
+}
+
+
+/// <summary>V7.4 observation freeze 汇总指标。</summary>
+public sealed class ControlledAppliedMergeRuntimePreviewObservationFreezeMetrics
+{
+    public int ObservationRunCount { get; init; }
+    public int RequestCountTotal { get; init; }
+    public int ErrorCountTotal { get; init; }
+    public int AllowlistedPreviewRouteHitCount { get; init; }
+    public int NonAllowlistedPreviewRouteHitCount { get; init; }
+    public int KillSwitchPreviewRouteHitCount { get; init; }
+    public int NonAllowlistedNoOpCount { get; init; }
+    public int KillSwitchNoOpCount { get; init; }
+    public double TraceCompletenessPercent { get; init; }
+    public bool TracePayloadStable { get; init; }
+    public bool TraceReplayable { get; init; }
+    public bool DeterministicStable { get; init; }
+    public int WouldApplyAddCount { get; init; }
+    public int WouldApplyRemoveCount { get; init; }
+    public int AppliedAddCount { get; init; }
+    public int AppliedRemoveCount { get; init; }
+    public bool AppliedDeltaZero { get; init; }
+    public bool ResultDiscarded { get; init; }
+}
+
+
+/// <summary>V7.4 runtime preview observation freeze 报告。
+/// 冻结 V7 runtime preview observation 结果并做 promotion decision。
+/// 不启用 formal retrieval，不切 runtime，不写正式 package。</summary>
+public sealed class ControlledAppliedMergeRuntimePreviewObservationFreezeReport
+{
+    public string OperationId { get; init; } = "";
+    public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
+    public bool FreezePassed { get; init; }
+    public bool GatePassed { get; init; }
+    public string Recommendation { get; init; }
+        = ControlledAppliedMergeRuntimePreviewObservationFreezeRecommendations.KeepPreviewOnly;
+    public string PromotionDecision { get; init; }
+        = ControlledAppliedMergeRuntimePreviewObservationFreezeRecommendations.KeepPreviewOnly;
+    public string NextAllowedPhase { get; init; } = "KeepPreviewOnly";
+
+    public bool V7PlanPresent { get; init; }
+    public bool V7DryRunPresent { get; init; }
+    public bool V7PreflightPresent { get; init; }
+    public bool V7ObservationPresent { get; init; }
+    public bool V7HardeningPresent { get; init; }
+    public bool V6FreezePresent { get; init; }
+    public bool OptFreezePresent { get; init; }
+    public bool RuntimeChangeGatePresent { get; init; }
+    public bool P15GatePassed { get; init; }
+
+    public bool V7PlanPassed { get; init; }
+    public bool V7DryRunPassed { get; init; }
+    public bool V7PreflightPassed { get; init; }
+    public bool V7ObservationPassed { get; init; }
+    public bool V7HardeningPassed { get; init; }
+    public bool V6FreezePassed { get; init; }
+    public bool OptFreezePassed { get; init; }
+    public bool RuntimeChangeGatePassed { get; init; }
+
+    public ControlledAppliedMergeRuntimePreviewObservationFreezeMetrics? HardeningMetrics { get; init; }
+
+    public int TestCountBaseline { get; init; }
+    public int CurrentTestCount { get; init; }
+    public int TestCountDelta { get; init; }
+    public bool TestBaselineFrozen { get; init; }
+
+    public bool FormalSelectedSetChanged { get; init; }
+    public bool FormalPackageWritten { get; init; }
+    public bool PackageOutputChanged { get; init; }
+    public bool PackingPolicyChanged { get; init; }
+    public bool RuntimeMutated { get; init; }
+    public bool VectorStoreBindingChanged { get; init; }
+    public bool FormalRetrievalAllowed { get; init; }
+    public bool RuntimeSwitchAllowed { get; init; }
+    public bool GlobalDefaultOn { get; init; }
+    public bool NoRuntimeMutationInvariant { get; init; }
+
+    public IReadOnlyList<string> FrozenMetrics { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> SafetyBoundaries { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> AllowedActions { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> ForbiddenActions { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> BlockedReasons { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> Diagnostics { get; init; } = Array.Empty<string>();
+}
+
+
 /// <summary>架构清理计划报告。</summary>
 public sealed class ArchitectureCleanupPlanReport
 {
