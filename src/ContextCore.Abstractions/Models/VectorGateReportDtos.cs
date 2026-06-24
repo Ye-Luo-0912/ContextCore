@@ -1996,6 +1996,7 @@ public sealed class ScopedRuntimePreviewAuthorizationHardeningOptions
     public bool Enabled { get; init; } = true;
     public string ApprovedBy { get; init; } = "ReleaseManager";
     public bool RequireExplicitApprovedBy { get; init; } = true;
+    public bool ExplicitlyProvided { get; init; }
     public IReadOnlyList<string> RequiredForbiddenActions { get; init; } =
     [
         "GlobalDefaultOn",

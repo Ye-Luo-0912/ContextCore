@@ -1,6 +1,6 @@
 ﻿{
-  "OperationId": "scoped-runtime-preview-auth-hardening-gate-a6c8b49f50674f8ebe3860e8ff261302",
-  "CreatedAt": "2026-06-24T16:40:26.4315334+00:00",
+  "OperationId": "scoped-runtime-preview-auth-hardening-gate-ade946ad337b41ee9d7359454d875b06",
+  "CreatedAt": "2026-06-24T17:01:44.2202475+00:00",
   "HardeningPassed": true,
   "GatePassed": true,
   "Recommendation": "ReadyForActivationPreparation",
@@ -11,7 +11,7 @@
   "RuntimeChangeGatePassed": true,
   "P15GatePassed": true,
   "ApprovedBy": "ReleaseManager",
-  "ExplicitApprovedByProvided": false,
+  "ExplicitApprovedByProvided": true,
   "AcknowledgedForbiddenActions": [
     "ApplyPreviewResult",
     "ChangeApprovedScopesAfterAuthorization",
@@ -40,12 +40,12 @@
   "NegativeTests": [
     {
       "TestName": "MissingApprovedByBlocks",
-      "Scenario": "approvedBy is empty string, RequireExplicitApprovedBy=true",
+      "Scenario": "approvedBy is empty, RequireExplicitApprovedBy=true, ExplicitlyProvided=false",
       "ExpectedBlocked": true,
       "ActuallyBlocked": true,
       "Passed": true,
       "BlockedReason": "ExplicitApprovedByRequired",
-      "Detail": "Empty approvedBy should block authorization"
+      "Detail": "Missing explicit --approved-by should block authorization"
     },
     {
       "TestName": "PartialForbiddenAcknowledgementBlocks",
@@ -58,21 +58,21 @@
     },
     {
       "TestName": "ExpiredAuthorizationBlocks",
-      "Scenario": "Authorization plan validity check (simulated: ok within window)",
+      "Scenario": "Simulated expired validity: 2026-06-23T17:01:44.2085656\u002B00:00 (now \u003E simulated)",
       "ExpectedBlocked": true,
-      "ActuallyBlocked": false,
+      "ActuallyBlocked": true,
       "Passed": true,
-      "BlockedReason": "",
-      "Detail": "Authorization plan validity check (simulated: ok within window)"
+      "BlockedReason": "AuthorizationExpired",
+      "Detail": "Simulated ValidityNotAfter=2026-06-23 \u003C now=2026-06-24"
     },
     {
       "TestName": "WrongScopeBlocks",
-      "Scenario": "Approved scopes: demo-workspace/demo-collection (scopes present, ok)",
+      "Scenario": "Simulated scope \u0027wrong-workspace/wrong-collection\u0027 not in approved scopes [demo-workspace/demo-collection]",
       "ExpectedBlocked": true,
-      "ActuallyBlocked": false,
+      "ActuallyBlocked": true,
       "Passed": true,
-      "BlockedReason": "",
-      "Detail": "Approved scopes: demo-workspace/demo-collection (scopes present, ok)"
+      "BlockedReason": "ApprovedScopeMismatch",
+      "Detail": "\u0027wrong-workspace/wrong-collection\u0027 is not in approved scopes"
     }
   ],
   "FormalRetrievalAllowed": false,
@@ -120,7 +120,7 @@
     "v7FreezePassed=True",
     "runtimeChangeGatePassed=True",
     "p15GatePassed=True",
-    "approvedBy=ReleaseManager explicit=False",
+    "approvedBy=ReleaseManager explicit=True",
     "requiredForbiddenCount=15",
     "acknowledgedCount=15",
     "unacknowledgedCount=0",

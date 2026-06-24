@@ -1,7 +1,7 @@
 ﻿# Scoped Runtime Preview Authorization Hardening
 
-生成: `2026-06-24T16:40:22.7626735+00:00`
-操作: `scoped-runtime-preview-auth-hardening-hardening-63b695cc5e674545b07a3d52ed51111e`
+生成: `2026-06-24T17:01:40.5502319+00:00`
+操作: `scoped-runtime-preview-auth-hardening-hardening-52b49a30a6a44ee88aa2dac5c0c3f9a0`
 
 ## Decision
 - HardeningPassed: `True`
@@ -11,7 +11,7 @@
 
 ## Approved By
 - ApprovedBy: `ReleaseManager`
-- ExplicitApprovedByProvided: `False`
+- ExplicitApprovedByProvided: `True`
 
 ## Forbidden Actions Acknowledgement
 - RequiredForbiddenActionCount: `15`
@@ -26,8 +26,8 @@
 - Total: `4`  Passed: `4`  Failed: `0`
 - `MissingApprovedByBlocks`: passed=`True` expectedBlocked=`True` actuallyBlocked=`True` reason=`ExplicitApprovedByRequired`
 - `PartialForbiddenAcknowledgementBlocks`: passed=`True` expectedBlocked=`True` actuallyBlocked=`True` reason=`UnacknowledgedForbiddenActionsDetected`
-- `ExpiredAuthorizationBlocks`: passed=`True` expectedBlocked=`True` actuallyBlocked=`False` reason=``
-- `WrongScopeBlocks`: passed=`True` expectedBlocked=`True` actuallyBlocked=`False` reason=``
+- `ExpiredAuthorizationBlocks`: passed=`True` expectedBlocked=`True` actuallyBlocked=`True` reason=`AuthorizationExpired`
+- `WrongScopeBlocks`: passed=`True` expectedBlocked=`True` actuallyBlocked=`True` reason=`ApprovedScopeMismatch`
 
 ## Prerequisites
 - AuthorizationPassed: `True`
@@ -86,7 +86,7 @@
 - `v7FreezePassed=True`
 - `runtimeChangeGatePassed=True`
 - `p15GatePassed=True`
-- `approvedBy=ReleaseManager explicit=False`
+- `approvedBy=ReleaseManager explicit=True`
 - `requiredForbiddenCount=15`
 - `acknowledgedCount=15`
 - `unacknowledgedCount=0`

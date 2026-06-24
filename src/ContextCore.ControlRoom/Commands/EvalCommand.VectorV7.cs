@@ -617,6 +617,7 @@ public static partial class EvalCommand
         {
             Enabled = !CommandHelpers.HasFlag(args, "--disabled"),
             ApprovedBy = CommandHelpers.GetOption(args, "--approved-by") ?? "ReleaseManager",
+            ExplicitlyProvided = CommandHelpers.HasFlag(args, "--approved-by"),
         };
 
         var runner = new ScopedRuntimePreviewAuthorizationHardeningRunner();

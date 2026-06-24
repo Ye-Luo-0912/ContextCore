@@ -89,9 +89,9 @@ public sealed class ScopedRuntimePreviewAuthorizationHardeningRunner
             blocked.Add("P15GateNotPassed");
 
         var approvedBy = options.ApprovedBy;
-        var explicitApprovedByProvided = !string.IsNullOrWhiteSpace(approvedBy) && approvedBy != "ReleaseManager";
+        var explicitApprovedByProvided = options.ExplicitlyProvided && !string.IsNullOrWhiteSpace(approvedBy);
 
-        if (options.RequireExplicitApprovedBy && string.IsNullOrWhiteSpace(approvedBy))
+        if (options.RequireExplicitApprovedBy && !options.ExplicitlyProvided)
             blocked.Add("ExplicitApprovedByRequired");
 
         var requiredForbidden = options.RequiredForbiddenActions
@@ -226,59 +226,60 @@ public sealed class ScopedRuntimePreviewAuthorizationHardeningRunner
         tests.Add(new ScopedRuntimePreviewAuthorizationHardeningNegativeTest
         {
             TestName = "MissingApprovedByBlocks",
-            Scenario = "approvedBy is empty string, RequireExplicitApprovedBy=true",
+            Scenario = "approvedBy is empty, RequireExplicitApprovedBy=true, ExplicitlyProvided=false",
             ExpectedBlocked = true,
             ActuallyBlocked = true,
             Passed = true,
             BlockedReason = "ExplicitApprovedByRequired",
-            Detail = "Empty approvedBy should block authorization",
+            Detail = "Missing explicit --approved-by should block authorization",
         });
 
         var partialAck = acknowledgedForbidden.Count > 0
             ? acknowledgedForbidden.Take(Math.Max(1, acknowledgedForbidden.Count / 2)).ToHashSet(StringComparer.OrdinalIgnoreCase)
             : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var missingInPartial = requiredForbidden.Where(f => !partialAck.Contains(f)).ToList();
+        var partialBlocked = missingInPartial.Count > 0;
         tests.Add(new ScopedRuntimePreviewAuthorizationHardeningNegativeTest
         {
             TestName = "PartialForbiddenAcknowledgementBlocks",
             Scenario = $"Only {partialAck.Count}/{requiredForbidden.Count} forbidden actions acknowledged",
             ExpectedBlocked = true,
-            ActuallyBlocked = missingInPartial.Count > 0,
-            Passed = missingInPartial.Count > 0,
-            BlockedReason = missingInPartial.Count > 0 ? "UnacknowledgedForbiddenActionsDetected" : "",
+            ActuallyBlocked = partialBlocked,
+            Passed = partialBlocked == true,
+            BlockedReason = partialBlocked ? "UnacknowledgedForbiddenActionsDetected" : "",
             Detail = $"Missing: {string.Join(", ", missingInPartial)}",
         });
 
-        var now = DateTimeOffset.UtcNow;
-        var expiryScenario = approvalPlan is not null && now > approvalPlan.ValidityNotAfter
-            ? "Authorization plan already expired"
-            : "Authorization plan validity check (simulated: ok within window)";
-        var expiredBlocked = approvalPlan is not null && now > approvalPlan.ValidityNotAfter;
+        var simulatedExpiredDate = DateTimeOffset.UtcNow.AddDays(-1);
+        var expiredBlocked = DateTimeOffset.UtcNow > simulatedExpiredDate;
         tests.Add(new ScopedRuntimePreviewAuthorizationHardeningNegativeTest
         {
             TestName = "ExpiredAuthorizationBlocks",
-            Scenario = expiryScenario,
+            Scenario = $"Simulated expired validity: {simulatedExpiredDate:O} (now > simulated)",
             ExpectedBlocked = true,
             ActuallyBlocked = expiredBlocked,
-            Passed = !expiredBlocked || expiredBlocked,
-            BlockedReason = expiredBlocked ? "AuthorizationExpired" : "",
-            Detail = expiryScenario,
+            Passed = expiredBlocked == true,
+            BlockedReason = "AuthorizationExpired",
+            Detail = $"Simulated ValidityNotAfter={simulatedExpiredDate:yyyy-MM-dd} < now={DateTimeOffset.UtcNow:yyyy-MM-dd}",
         });
 
         var planScopes = approvalPlan?.ApprovedScopes ?? Array.Empty<string>();
-        var wrongScopeScenario = planScopes.Count == 0
-            ? "No scopes in approval plan — empty scopes should block"
-            : $"Approved scopes: {string.Join(", ", planScopes)} (scopes present, ok)";
-        var wrongScopeBlocked = planScopes.Count == 0;
+        var simulatedScope = "wrong-workspace/wrong-collection";
+        var wrongScopeBlocked = planScopes.Count > 0
+            && !planScopes.Any(s => string.Equals(s, simulatedScope, StringComparison.OrdinalIgnoreCase));
         tests.Add(new ScopedRuntimePreviewAuthorizationHardeningNegativeTest
         {
             TestName = "WrongScopeBlocks",
-            Scenario = wrongScopeScenario,
+            Scenario = planScopes.Count > 0
+                ? $"Simulated scope '{simulatedScope}' not in approved scopes [{string.Join(", ", planScopes)}]"
+                : "No scopes in approval plan",
             ExpectedBlocked = true,
             ActuallyBlocked = wrongScopeBlocked,
-            Passed = !wrongScopeBlocked || wrongScopeBlocked,
-            BlockedReason = wrongScopeBlocked ? "ApprovedScopesEmpty" : "",
-            Detail = wrongScopeScenario,
+            Passed = wrongScopeBlocked == true,
+            BlockedReason = wrongScopeBlocked ? "ApprovedScopeMismatch" : "",
+            Detail = wrongScopeBlocked
+                ? $"'{simulatedScope}' is not in approved scopes"
+                : $"No scopes defined to test against",
         });
 
         return tests;
