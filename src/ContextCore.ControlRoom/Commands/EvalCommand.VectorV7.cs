@@ -1034,4 +1034,71 @@ public static partial class EvalCommand
             $"nextPhase={report.NextAllowedPhase}; finalApprovedBy={report.FinalApprovedBy}; finalApprovalRequired={report.FinalApprovalRequired}; " +
             $"allV7GatesPassed=true; noRuntimeMutation={report.NoRuntimeMutationInvariant}; blocked={report.BlockedReasons.Count}");
     }
+
+    private static async Task ExecuteScopedRuntimePreviewLiveActivationExecutionPlanAsync(
+        IReadOnlyList<string> args,
+        string subcommand,
+        CancellationToken ct)
+    {
+        var output = Path.GetFullPath(Path.Combine("vector", "v7"));
+        Directory.CreateDirectory(output);
+
+        var freezePath = Path.Combine("vector", "v7", "activation-live-readiness-freeze.json");
+        var freezeFallback = Path.Combine("vector", "v7", "activation-live-readiness-freeze-gate.json");
+        var freeze = await ReadJsonFileAsync<ScopedRuntimePreviewActivationLiveReadinessFreezeReport>(freezePath, ct).ConfigureAwait(false)
+            ?? await ReadJsonFileAsync<ScopedRuntimePreviewActivationLiveReadinessFreezeReport>(freezeFallback, ct).ConfigureAwait(false);
+
+        var noOpPath = Path.Combine("vector", "v7", "activation-window-noop-execution.json");
+        var noOpFallback = Path.Combine("vector", "v7", "activation-window-noop-execution-gate.json");
+        var noOpExec = await ReadJsonFileAsync<ScopedRuntimePreviewActivationWindowNoOpExecutionReport>(noOpPath, ct).ConfigureAwait(false)
+            ?? await ReadJsonFileAsync<ScopedRuntimePreviewActivationWindowNoOpExecutionReport>(noOpFallback, ct).ConfigureAwait(false);
+
+        var preflightPath = Path.Combine("vector", "v7", "activation-window-preflight.json");
+        var preflightFallback = Path.Combine("vector", "v7", "activation-window-preflight-gate.json");
+        var preflight = await ReadJsonFileAsync<ScopedRuntimePreviewActivationWindowPreflightReport>(preflightPath, ct).ConfigureAwait(false)
+            ?? await ReadJsonFileAsync<ScopedRuntimePreviewActivationWindowPreflightReport>(preflightFallback, ct).ConfigureAwait(false);
+
+        var dryRunPath = Path.Combine("vector", "v7", "activation-dry-run.json");
+        var dryRunFallback = Path.Combine("vector", "v7", "activation-dry-run-gate.json");
+        var dryRun = await ReadJsonFileAsync<ScopedRuntimePreviewActivationDryRunReport>(dryRunPath, ct).ConfigureAwait(false)
+            ?? await ReadJsonFileAsync<ScopedRuntimePreviewActivationDryRunReport>(dryRunFallback, ct).ConfigureAwait(false);
+
+        var runtimeChangeGatePath = Path.Combine("learning", "readiness", "learning-runtime-change-readiness-gate.json");
+        var runtimeChangeGate = await ReadJsonFileAsync<LearningRuntimeChangeReadinessGateReport>(runtimeChangeGatePath, ct).ConfigureAwait(false);
+        var runtimeChangeGatePassed = runtimeChangeGate is not null && runtimeChangeGate.Passed;
+
+        var p15ReportPath = Path.Combine("eval", "eval-report-p15-a3.json");
+        var p15Report = await ReadJsonFileAsync<JsonDocument>(p15ReportPath, ct).ConfigureAwait(false);
+        var p15GatePassed = false;
+        if (p15Report is not null && p15Report.RootElement.TryGetProperty("PassRate", out var passRateEl))
+            p15GatePassed = passRateEl.GetDouble() >= 1.0;
+
+        var options = new ScopedRuntimePreviewLiveActivationExecutionPlanOptions
+        {
+            Enabled = !CommandHelpers.HasFlag(args, "--disabled"),
+            ExplicitlyProvided = CommandHelpers.HasFlag(args, "--approved-by"),
+            ApprovedBy = CommandHelpers.GetOption(args, "--approved-by") ?? "ReleaseManager",
+            FinalApprovedBy = CommandHelpers.GetOption(args, "--final-approved-by") ?? "",
+            FinalApprovalExplicitlyProvided = CommandHelpers.HasFlag(args, "--final-approved-by"),
+        };
+
+        var runner = new ScopedRuntimePreviewLiveActivationExecutionPlanRunner();
+        var isGate = string.Equals(subcommand, "scoped-runtime-preview-live-activation-execution-plan-gate", StringComparison.OrdinalIgnoreCase);
+        var report = isGate
+            ? runner.RunGate(freeze, noOpExec, preflight, dryRun, runtimeChangeGatePassed, p15GatePassed, options)
+            : runner.RunPlan(freeze, noOpExec, preflight, dryRun, runtimeChangeGatePassed, p15GatePassed, options);
+
+        var fn = isGate ? "live-activation-execution-plan-gate" : "live-activation-execution-plan";
+        var jp = Path.Combine(output, $"{fn}.json");
+        var mp = Path.Combine(output, $"{fn}.md");
+        await WriteJsonSafeAsync(report, jp, ct).ConfigureAwait(false);
+        await WriteTextAsync(ScopedRuntimePreviewLiveActivationExecutionPlanRunner.BuildMarkdown(
+            isGate ? "Scoped Runtime Preview Live Activation Execution Plan Gate" : "Scoped Runtime Preview Live Activation Execution Plan", report), mp, ct).ConfigureAwait(false);
+
+        Console.WriteLine($"[Eval] Scoped runtime preview live activation execution plan written: {jp}");
+        Console.WriteLine($"[Eval] planPassed={report.PlanPassed}; gatePassed={report.GatePassed}; recommendation={report.Recommendation}; " +
+            $"nextPhase={report.NextAllowedPhase}; configPatchPreviewLocked={report.ConfigPatchPreviewLocked}; " +
+            $"configPatchWritten={report.ConfigPatchWritten}; runtimeActivation={report.RuntimeActivation}; " +
+            $"abortConditions={report.AbortConditions.Count}; blocked={report.BlockedReasons.Count}");
+    }
 }

@@ -3948,6 +3948,30 @@ public static class ServiceOperationalRenderer
                 builder.AppendLine($"- blocked            : {string.Join(", ", v7LiveFreeze.BlockedReasons)}");
         }
 
+        builder.AppendLine();
+        builder.AppendLine("V7.12 Scoped Runtime Preview Live Activation Execution Plan");
+        var v7ExecPlan = snapshot.ScopedRuntimePreviewLiveActivationExecutionPlanReport;
+        if (v7ExecPlan is null)
+        {
+            builder.AppendLine("- status : not generated");
+            builder.AppendLine("- path   : vector/v7/live-activation-execution-plan.json");
+            builder.AppendLine("- action : run eval scoped-runtime-preview-live-activation-execution-plan");
+        }
+        else
+        {
+            builder.AppendLine($"- plan passed        : {v7ExecPlan.PlanPassed}");
+            builder.AppendLine($"- gate passed        : {v7ExecPlan.GatePassed}");
+            builder.AppendLine($"- recommendation     : {v7ExecPlan.Recommendation}");
+            builder.AppendLine($"- next phase         : {v7ExecPlan.NextAllowedPhase}");
+            builder.AppendLine($"- configPatchLocked  : {v7ExecPlan.ConfigPatchPreviewLocked}");
+            builder.AppendLine($"- configPatchWritten : {v7ExecPlan.ConfigPatchWritten}");
+            builder.AppendLine($"- runtimeActivation  : {v7ExecPlan.RuntimeActivation}");
+            builder.AppendLine($"- abortConditions    : {v7ExecPlan.AbortConditions.Count}");
+            builder.AppendLine($"- invariants         : formalRetrieval={v7ExecPlan.FormalRetrievalAllowed} runtimeSwitch={v7ExecPlan.RuntimeSwitchAllowed} formalPkg={v7ExecPlan.FormalPackageWritten} noRuntimeMutation={v7ExecPlan.NoRuntimeMutationInvariant}");
+            if (v7ExecPlan.BlockedReasons.Count > 0)
+                builder.AppendLine($"- blocked            : {string.Join(", ", v7ExecPlan.BlockedReasons)}");
+        }
+
         return builder.ToString();
     }
 

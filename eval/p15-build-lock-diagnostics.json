@@ -1,6 +1,6 @@
 {
-  "OperationId": "p15-build-lock-diagnostics-20260625-024648",
-  "GeneratedAt": "2026-06-25T02:46:48.9021267+08:00",
+  "OperationId": "p15-build-lock-diagnostics-20260625-144657",
+  "GeneratedAt": "2026-06-25T14:46:57.5078678+08:00",
   "Summary": {
     "BuildPassed": true,
     "BuildAttempts": 0,
@@ -18,7 +18,7 @@
   "TestLockIssues": [],
   "TesthostResidue": [],
   "BinObjLockCheck": {
-    "AnyLocked": false,
+    "LockedFiles": [],
     "CheckedDirs": [
       "src\\ContextCore.AppHost\\bin",
       "src\\ContextCore.Core\\bin",
@@ -27,7 +27,7 @@
       "tests\\ContextCore.IntegrationTests\\bin",
       "tests\\ContextCore.Service.Tests\\bin"
     ],
-    "LockedFiles": []
+    "AnyLocked": false
   },
   "SuggestedCleanup": null,
   "Notes": [

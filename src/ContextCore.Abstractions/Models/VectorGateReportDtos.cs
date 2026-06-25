@@ -2552,6 +2552,84 @@ public sealed class ScopedRuntimePreviewActivationLiveReadinessFreezeReport
 }
 
 
+/// <summary>V7.12 live activation execution plan 推荐。</summary>
+public static class ScopedRuntimePreviewLiveActivationExecutionPlanRecommendations
+{
+    public const string ReadyForScopedRuntimePreviewLiveActivation = nameof(ReadyForScopedRuntimePreviewLiveActivation);
+    public const string BlockedByMissingFreeze = nameof(BlockedByMissingFreeze);
+    public const string BlockedByMissingNoOpExecution = nameof(BlockedByMissingNoOpExecution);
+    public const string BlockedByFinalApprovalNotPresent = nameof(BlockedByFinalApprovalNotPresent);
+    public const string BlockedByConfigPatchPreviewNotLocked = nameof(BlockedByConfigPatchPreviewNotLocked);
+    public const string BlockedByMonitoringPlanMissing = nameof(BlockedByMonitoringPlanMissing);
+    public const string BlockedBySafetyBoundaryViolation = nameof(BlockedBySafetyBoundaryViolation);
+    public const string KeepPreviewOnly = nameof(KeepPreviewOnly);
+}
+
+
+/// <summary>V7.12 execution plan 选项。</summary>
+public sealed class ScopedRuntimePreviewLiveActivationExecutionPlanOptions
+{
+    public bool Enabled { get; init; } = true;
+    public bool ExplicitlyProvided { get; init; }
+    public string ApprovedBy { get; init; } = "ReleaseManager";
+    public string FinalApprovedBy { get; init; } = "";
+    public bool FinalApprovalExplicitlyProvided { get; init; }
+}
+
+
+/// <summary>V7.12 scoped runtime preview live activation execution plan 报告。
+/// 生成最终执行计划并冻结 config patch preview。
+/// ConfigPatchWritten=false, RuntimeActivation=false。</summary>
+public sealed class ScopedRuntimePreviewLiveActivationExecutionPlanReport
+{
+    public string OperationId { get; init; } = "";
+    public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
+    public bool PlanPassed { get; init; }
+    public bool GatePassed { get; init; }
+    public string Recommendation { get; init; }
+        = ScopedRuntimePreviewLiveActivationExecutionPlanRecommendations.KeepPreviewOnly;
+    public string NextAllowedPhase { get; init; } = "KeepPreviewOnly";
+
+    public string ExecutionPlanId { get; init; } = "";
+    public string FinalApprovalId { get; init; } = "";
+    public IReadOnlyList<string> ApprovedScopes { get; init; } = Array.Empty<string>();
+    public int ActivationWindowDurationMinutes { get; init; }
+    public int ActivationWindowRequestCap { get; init; }
+    public string RollbackTriggerPolicy { get; init; } = "";
+    public string KillSwitchTriggerPolicy { get; init; } = "";
+    public string ConfigPatchPreview { get; init; } = "";
+    public string RuntimeSwitchPreview { get; init; } = "";
+    public string MonitoringPlan { get; init; } = "";
+    public IReadOnlyList<string> AbortConditions { get; init; } = Array.Empty<string>();
+
+    public bool ConfigPatchWritten { get; init; }
+    public bool RuntimeActivation { get; init; }
+    public bool ConfigPatchPreviewLocked { get; init; }
+
+    public bool V7FreezePassed { get; init; }
+    public bool V7NoOpExecutionPassed { get; init; }
+    public bool V7PreflightPassed { get; init; }
+    public bool V7DryRunPassed { get; init; }
+    public bool P15GatePassed { get; init; }
+    public bool RuntimeChangeGatePassed { get; init; }
+    public bool FinalApprovalPresent { get; init; }
+
+    public bool FormalRetrievalAllowed { get; init; }
+    public bool RuntimeSwitchAllowed { get; init; }
+    public bool FormalPackageWritten { get; init; }
+    public bool PackingPolicyChanged { get; init; }
+    public bool PackageOutputChanged { get; init; }
+    public bool VectorStoreBindingChanged { get; init; }
+    public bool GlobalDefaultOn { get; init; }
+    public bool NoRuntimeMutationInvariant { get; init; }
+
+    public IReadOnlyList<string> AllowedActions { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> ForbiddenActions { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> BlockedReasons { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> Diagnostics { get; init; } = Array.Empty<string>();
+}
+
+
 /// <summary>架构清理计划报告。</summary>
 public sealed class ArchitectureCleanupPlanReport
 {

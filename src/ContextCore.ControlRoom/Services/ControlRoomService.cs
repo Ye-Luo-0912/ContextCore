@@ -2896,6 +2896,7 @@ public sealed class ControlRoomService
             ScopedRuntimePreviewActivationWindowPreflightReport = TryLoadScopedRuntimePreviewActivationWindowPreflightSummary()?.Report,
             ScopedRuntimePreviewActivationWindowNoOpExecutionReport = TryLoadScopedRuntimePreviewActivationWindowNoOpExecutionSummary()?.Report,
             ScopedRuntimePreviewActivationLiveReadinessFreezeReport = TryLoadScopedRuntimePreviewActivationLiveReadinessFreezeSummary()?.Report,
+            ScopedRuntimePreviewLiveActivationExecutionPlanReport = TryLoadScopedRuntimePreviewLiveActivationExecutionPlanSummary()?.Report,
             Limit = limit,
             Offset = offset
         };
@@ -7509,6 +7510,9 @@ public sealed class ControlRoomService
     private static (ScopedRuntimePreviewActivationLiveReadinessFreezeReport Report, string SourcePath)? TryLoadScopedRuntimePreviewActivationLiveReadinessFreezeSummary()
         => TryLoadFromDescriptor<ScopedRuntimePreviewActivationLiveReadinessFreezeReport>(ReportSummaryRegistry.V7ScopedRuntimePreviewActivationLiveReadinessFreeze);
 
+    private static (ScopedRuntimePreviewLiveActivationExecutionPlanReport Report, string SourcePath)? TryLoadScopedRuntimePreviewLiveActivationExecutionPlanSummary()
+        => TryLoadFromDescriptor<ScopedRuntimePreviewLiveActivationExecutionPlanReport>(ReportSummaryRegistry.V7ScopedRuntimePreviewLiveActivationExecutionPlan);
+
     private static string VectorReportPath(string phase, string fileName)
     {
         return Path.Combine("vector", phase, fileName);
@@ -10450,6 +10454,8 @@ public sealed class ServiceLearningFeaturesSnapshot
     public ScopedRuntimePreviewActivationWindowNoOpExecutionReport? ScopedRuntimePreviewActivationWindowNoOpExecutionReport { get; init; }
 
     public ScopedRuntimePreviewActivationLiveReadinessFreezeReport? ScopedRuntimePreviewActivationLiveReadinessFreezeReport { get; init; }
+
+    public ScopedRuntimePreviewLiveActivationExecutionPlanReport? ScopedRuntimePreviewLiveActivationExecutionPlanReport { get; init; }
 
     public FoundationServiceStatusResponse? FoundationServiceStatus { get; init; }
 
