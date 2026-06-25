@@ -4068,6 +4068,26 @@ public static class ServiceOperationalRenderer
             builder.AppendLine($"- invariants         : noRuntimeMutation={v7Close.NoRuntimeMutationInvariant}");
         }
 
+        builder.AppendLine();
+        builder.AppendLine("V8.0 Formal Retrieval Promotion Readiness Audit");
+        var v8Audit = snapshot.FormalRetrievalPromotionReadinessAuditReport;
+        if (v8Audit is null)
+        {
+            builder.AppendLine("- status : not generated");
+            builder.AppendLine("- path   : vector/v8/formal-retrieval-promotion-readiness-audit.json");
+            builder.AppendLine("- action : run eval formal-retrieval-promotion-readiness-audit");
+        }
+        else
+        {
+            builder.AppendLine($"- audit passed       : {v8Audit.AuditPassed}");
+            builder.AppendLine($"- gate passed        : {v8Audit.GatePassed}");
+            builder.AppendLine($"- recommendation     : {v8Audit.Recommendation}");
+            builder.AppendLine($"- next phase         : {v8Audit.NextAllowedPhase}");
+            builder.AppendLine($"- retrieval blocked  : {v8Audit.FormalRetrievalStillBlocked}");
+            builder.AppendLine($"- runtime mutation   : {v8Audit.NoFormalRuntimeMutation}");
+            builder.AppendLine($"- invariants         : formalRetrieval={v8Audit.FormalRetrievalAllowed} noRuntimeMutation={v8Audit.NoRuntimeMutationInvariant}");
+        }
+
         return builder.ToString();
     }
 

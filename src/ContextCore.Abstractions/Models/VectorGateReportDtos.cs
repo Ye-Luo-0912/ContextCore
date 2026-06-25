@@ -2947,6 +2947,65 @@ public sealed class ScopedRuntimePreviewLiveActivationCloseoutReport
 }
 
 
+/// <summary>V8.0 formal retrieval promotion readiness audit 推荐。</summary>
+public static class FormalRetrievalPromotionReadinessRecommendations
+{
+    public const string ReadyForFormalRetrievalPromotionPlan = nameof(ReadyForFormalRetrievalPromotionPlan);
+    public const string BlockedByMissingCloseout = nameof(BlockedByMissingCloseout);
+    public const string BlockedByV7CloseoutNotCompleted = nameof(BlockedByV7CloseoutNotCompleted);
+    public const string BlockedByFormalRetrievalStillBlocked = nameof(BlockedByFormalRetrievalStillBlocked);
+    public const string BlockedBySafetyBoundaryViolation = nameof(BlockedBySafetyBoundaryViolation);
+    public const string KeepPreviewOnly = nameof(KeepPreviewOnly);
+}
+
+
+/// <summary>V8.0 audit 选项。</summary>
+public sealed class FormalRetrievalPromotionReadinessAuditOptions
+{
+    public bool Enabled { get; init; } = true;
+}
+
+
+/// <summary>V8.0 scoped runtime preview formal retrieval promotion readiness audit 报告。
+/// 不启用 formal retrieval。FormalRetrievalAllowed=false。</summary>
+public sealed class FormalRetrievalPromotionReadinessAuditReport
+{
+    public string OperationId { get; init; } = "";
+    public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
+    public bool AuditPassed { get; init; }
+    public bool GatePassed { get; init; }
+    public string Recommendation { get; init; }
+        = FormalRetrievalPromotionReadinessRecommendations.KeepPreviewOnly;
+    public string NextAllowedPhase { get; init; } = "KeepPreviewOnly";
+
+    public bool V7CloseoutCompleted { get; init; }
+    public bool FormalRetrievalStillBlocked { get; init; }
+    public bool RequiresSeparateFormalRetrievalPromotionGate { get; init; }
+    public string ObservationSource { get; init; } = "";
+    public bool NoFormalRuntimeMutation { get; init; }
+    public bool NoPackageOutputMutation { get; init; }
+    public bool NoPackingPolicyMutation { get; init; }
+    public bool NoVectorStoreBindingMutation { get; init; }
+    public bool P15GatePassed { get; init; }
+    public bool RuntimeChangeGatePassed { get; init; }
+
+    public bool FormalRetrievalAllowed { get; init; }
+    public bool RuntimeSwitchAllowed { get; init; }
+    public bool FormalPackageWritten { get; init; }
+    public bool PackageOutputChanged { get; init; }
+    public bool PackingPolicyChanged { get; init; }
+    public bool VectorStoreBindingChanged { get; init; }
+    public bool GlobalDefaultOn { get; init; }
+    public bool NoRuntimeMutationInvariant { get; init; }
+
+    public IReadOnlyList<string> AuditItems { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> AllowedActions { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> ForbiddenActions { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> BlockedReasons { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> Diagnostics { get; init; } = Array.Empty<string>();
+}
+
+
 /// <summary>架构清理计划报告。</summary>
 public sealed class ArchitectureCleanupPlanReport
 {
