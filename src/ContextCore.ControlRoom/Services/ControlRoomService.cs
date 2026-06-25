@@ -2898,6 +2898,7 @@ public sealed class ControlRoomService
             ScopedRuntimePreviewActivationLiveReadinessFreezeReport = TryLoadScopedRuntimePreviewActivationLiveReadinessFreezeSummary()?.Report,
             ScopedRuntimePreviewLiveActivationExecutionPlanReport = TryLoadScopedRuntimePreviewLiveActivationExecutionPlanSummary()?.Report,
             ScopedRuntimePreviewLiveActivationExecutionReport = TryLoadScopedRuntimePreviewLiveActivationExecutionSummary()?.Report,
+            ScopedRuntimePreviewLiveActivationObservationReport = TryLoadScopedRuntimePreviewLiveActivationObservationSummary()?.Report,
             Limit = limit,
             Offset = offset
         };
@@ -7517,6 +7518,9 @@ public sealed class ControlRoomService
     private static (ScopedRuntimePreviewLiveActivationExecutionReport Report, string SourcePath)? TryLoadScopedRuntimePreviewLiveActivationExecutionSummary()
         => TryLoadFromDescriptor<ScopedRuntimePreviewLiveActivationExecutionReport>(ReportSummaryRegistry.V7ScopedRuntimePreviewLiveActivationExecution);
 
+    private static (ScopedRuntimePreviewLiveActivationObservationReport Report, string SourcePath)? TryLoadScopedRuntimePreviewLiveActivationObservationSummary()
+        => TryLoadFromDescriptor<ScopedRuntimePreviewLiveActivationObservationReport>(ReportSummaryRegistry.V7ScopedRuntimePreviewLiveActivationObservation);
+
     private static string VectorReportPath(string phase, string fileName)
     {
         return Path.Combine("vector", phase, fileName);
@@ -10462,6 +10466,8 @@ public sealed class ServiceLearningFeaturesSnapshot
     public ScopedRuntimePreviewLiveActivationExecutionPlanReport? ScopedRuntimePreviewLiveActivationExecutionPlanReport { get; init; }
 
     public ScopedRuntimePreviewLiveActivationExecutionReport? ScopedRuntimePreviewLiveActivationExecutionReport { get; init; }
+
+    public ScopedRuntimePreviewLiveActivationObservationReport? ScopedRuntimePreviewLiveActivationObservationReport { get; init; }
 
     public FoundationServiceStatusResponse? FoundationServiceStatus { get; init; }
 

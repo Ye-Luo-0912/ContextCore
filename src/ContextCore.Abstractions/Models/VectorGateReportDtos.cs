@@ -2715,6 +2715,90 @@ public sealed class ScopedRuntimePreviewLiveActivationExecutionReport
 }
 
 
+/// <summary>V7.14 live activation observation 推荐。</summary>
+public static class ScopedRuntimePreviewLiveActivationObservationRecommendations
+{
+    public const string ReadyForLiveActivationSummaryFreeze = nameof(ReadyForLiveActivationSummaryFreeze);
+    public const string BlockedByMissingExecution = nameof(BlockedByMissingExecution);
+    public const string BlockedByMissingPlan = nameof(BlockedByMissingPlan);
+    public const string BlockedByScopeMismatch = nameof(BlockedByScopeMismatch);
+    public const string BlockedByRequestCapExceeded = nameof(BlockedByRequestCapExceeded);
+    public const string BlockedByNonApprovedRouteNotNoOp = nameof(BlockedByNonApprovedRouteNotNoOp);
+    public const string BlockedByKillSwitchNotArmed = nameof(BlockedByKillSwitchNotArmed);
+    public const string BlockedByAppliedDeltaDetected = nameof(BlockedByAppliedDeltaDetected);
+    public const string BlockedByConfigPatchWritten = nameof(BlockedByConfigPatchWritten);
+    public const string BlockedByRuntimeActivationDetected = nameof(BlockedByRuntimeActivationDetected);
+    public const string BlockedBySafetyBoundaryViolation = nameof(BlockedBySafetyBoundaryViolation);
+    public const string KeepPreviewOnly = nameof(KeepPreviewOnly);
+}
+
+
+/// <summary>V7.14 observation 选项。</summary>
+public sealed class ScopedRuntimePreviewLiveActivationObservationOptions
+{
+    public bool Enabled { get; init; } = true;
+    public int ObservationRuns { get; init; } = 5;
+    public int MaxRequestCap { get; init; } = 100;
+    public int RequestsPerRun { get; init; } = 8;
+}
+
+
+/// <summary>V7.14 scoped runtime preview live activation observation 报告。
+/// 对 live activation window 做观测与安全审计。
+/// 不启用 runtime activation。ConfigPatchWritten=false。</summary>
+public sealed class ScopedRuntimePreviewLiveActivationObservationReport
+{
+    public string OperationId { get; init; } = "";
+    public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
+    public bool ObservationPassed { get; init; }
+    public bool GatePassed { get; init; }
+    public string Recommendation { get; init; }
+        = ScopedRuntimePreviewLiveActivationObservationRecommendations.KeepPreviewOnly;
+    public string NextAllowedPhase { get; init; } = "KeepPreviewOnly";
+
+    public string ActivationExecutionId { get; init; } = "";
+    public string ExecutionPlanId { get; init; } = "";
+    public IReadOnlyList<string> ApprovedScopes { get; init; } = Array.Empty<string>();
+    public int ObservedRequestCount { get; init; }
+    public int MaxRequestCap { get; init; }
+    public int ApprovedScopeRequestCount { get; init; }
+    public int NonApprovedScopeRequestCount { get; init; }
+    public int NonApprovedScopeNoOpCount { get; init; }
+    public bool KillSwitchArmed { get; init; }
+    public int KillSwitchTripCount { get; init; }
+    public bool RollbackCheckpointAvailable { get; init; }
+    public bool TraceSinkWritable { get; init; }
+    public int TraceRecordCount { get; init; }
+    public int AppliedDeltaCount { get; init; }
+    public bool AppliedDeltaZero { get; init; }
+    public bool ConfigPatchWritten { get; init; }
+    public bool RuntimeActivation { get; init; }
+    public bool RuntimeSwitchChanged { get; init; }
+
+    public bool ExecutionGatePassed { get; init; }
+    public bool ExecutionPlanPassed { get; init; }
+    public bool FreezePassed { get; init; }
+    public bool NoOpExecutionPassed { get; init; }
+    public bool P15GatePassed { get; init; }
+    public bool RuntimeChangeGatePassed { get; init; }
+    public bool PlanIdUnchanged { get; init; }
+    public bool FinalApprovalIdentityUnchanged { get; init; }
+
+    public bool FormalRetrievalAllowed { get; init; }
+    public bool FormalPackageWritten { get; init; }
+    public bool PackingPolicyChanged { get; init; }
+    public bool PackageOutputChanged { get; init; }
+    public bool VectorStoreBindingChanged { get; init; }
+    public bool GlobalDefaultOn { get; init; }
+    public bool NoRuntimeMutationInvariant { get; init; }
+
+    public IReadOnlyList<string> AllowedActions { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> ForbiddenActions { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> BlockedReasons { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> Diagnostics { get; init; } = Array.Empty<string>();
+}
+
+
 /// <summary>架构清理计划报告。</summary>
 public sealed class ArchitectureCleanupPlanReport
 {
