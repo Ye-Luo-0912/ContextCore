@@ -298,6 +298,8 @@ public static partial class EvalCommand
             !string.Equals(subcommand, "scoped-runtime-preview-activation-live-readiness-freeze-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "scoped-runtime-preview-live-activation-execution-plan", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "scoped-runtime-preview-live-activation-execution-plan-gate", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "scoped-runtime-preview-live-activation-execution", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "scoped-runtime-preview-live-activation-execution-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "dto-split-plan", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "dto-split-readiness-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "vector-retrieval-eval-protocol-audit", StringComparison.OrdinalIgnoreCase) &&
@@ -530,6 +532,8 @@ public static partial class EvalCommand
             Console.WriteLine("  eval scoped-runtime-preview-activation-live-readiness-freeze-gate [--approved-by <name>] [--final-approved-by <name>]");
             Console.WriteLine("  eval scoped-runtime-preview-live-activation-execution-plan [--approved-by <name>] [--final-approved-by <name>]");
             Console.WriteLine("  eval scoped-runtime-preview-live-activation-execution-plan-gate [--approved-by <name>] [--final-approved-by <name>]");
+            Console.WriteLine("  eval scoped-runtime-preview-live-activation-execution [--final-approved-by <name>] [--execution-plan-id <id>] [--execute-live-activation]");
+            Console.WriteLine("  eval scoped-runtime-preview-live-activation-execution-gate [--final-approved-by <name>] [--execution-plan-id <id>] [--execute-live-activation]");
             Console.WriteLine("  eval dto-split-plan");
             Console.WriteLine("  eval dto-split-readiness-gate");
             Console.WriteLine("  eval vector-retrieval-eval-protocol-audit");
@@ -1785,6 +1789,13 @@ public static partial class EvalCommand
             || string.Equals(subcommand, "scoped-runtime-preview-live-activation-execution-plan-gate", StringComparison.OrdinalIgnoreCase))
         {
             await ExecuteScopedRuntimePreviewLiveActivationExecutionPlanAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        if (string.Equals(subcommand, "scoped-runtime-preview-live-activation-execution", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(subcommand, "scoped-runtime-preview-live-activation-execution-gate", StringComparison.OrdinalIgnoreCase))
+        {
+            await ExecuteScopedRuntimePreviewLiveActivationExecutionAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
             return;
         }
 

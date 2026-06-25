@@ -2630,6 +2630,91 @@ public sealed class ScopedRuntimePreviewLiveActivationExecutionPlanReport
 }
 
 
+/// <summary>V7.13 live activation execution 推荐。</summary>
+public static class ScopedRuntimePreviewLiveActivationExecutionRecommendations
+{
+    public const string ReadyForExplicitLiveActivationCommand = nameof(ReadyForExplicitLiveActivationCommand);
+    public const string BlockedByMissingPlan = nameof(BlockedByMissingPlan);
+    public const string BlockedByMissingFreeze = nameof(BlockedByMissingFreeze);
+    public const string BlockedByPlanIdMismatch = nameof(BlockedByPlanIdMismatch);
+    public const string BlockedByConfigPatchNotLocked = nameof(BlockedByConfigPatchNotLocked);
+    public const string BlockedByKillSwitchNotArmed = nameof(BlockedByKillSwitchNotArmed);
+    public const string BlockedByRollbackCheckpointMissing = nameof(BlockedByRollbackCheckpointMissing);
+    public const string BlockedByTraceSinkMissing = nameof(BlockedByTraceSinkMissing);
+    public const string BlockedByScopeMismatch = nameof(BlockedByScopeMismatch);
+    public const string BlockedBySafetyBoundaryViolation = nameof(BlockedBySafetyBoundaryViolation);
+    public const string ExecuteLiveActivationNotRequested = nameof(ExecuteLiveActivationNotRequested);
+    public const string KeepPreviewOnly = nameof(KeepPreviewOnly);
+}
+
+
+/// <summary>V7.13 execution 选项。</summary>
+public sealed class ScopedRuntimePreviewLiveActivationExecutionOptions
+{
+    public bool Enabled { get; init; } = true;
+    public bool ExecuteLiveActivation { get; init; }
+    public string FinalApprovedBy { get; init; } = "";
+    public bool FinalApprovalExplicitlyProvided { get; init; }
+    public string ExecutionPlanId { get; init; } = "";
+}
+
+
+/// <summary>V7.13 guarded scoped runtime preview live activation execution 报告。
+/// 默认只生成执行记录，不执行 live activation。
+/// 需要显式 --execute-live-activation + --execution-plan-id 匹配。</summary>
+public sealed class ScopedRuntimePreviewLiveActivationExecutionReport
+{
+    public string OperationId { get; init; } = "";
+    public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
+    public bool ExecutionGatePassed { get; init; }
+    public bool GatePassed { get; init; }
+    public string Recommendation { get; init; }
+        = ScopedRuntimePreviewLiveActivationExecutionRecommendations.KeepPreviewOnly;
+    public string NextAllowedPhase { get; init; } = "KeepPreviewOnly";
+
+    public bool ExecuteLiveActivation { get; init; }
+    public string ActivationExecutionId { get; init; } = "";
+    public string ExecutionPlanId { get; init; } = "";
+    public string AppliedConfigPatchId { get; init; } = "";
+    public IReadOnlyList<string> ApprovedScopes { get; init; } = Array.Empty<string>();
+    public DateTimeOffset ActivationWindowStart { get; init; }
+    public DateTimeOffset ActivationWindowEnd { get; init; }
+    public int RequestCap { get; init; }
+    public bool KillSwitchArmed { get; init; }
+    public string RollbackCheckpointId { get; init; } = "";
+    public string TraceSinkPath { get; init; } = "";
+    public IReadOnlyList<string> StopConditions { get; init; } = Array.Empty<string>();
+
+    public bool ConfigPatchWritten { get; init; }
+    public bool RuntimeActivation { get; init; }
+    public bool RuntimeSwitchChanged { get; init; }
+    public bool PlanIdMatches { get; init; }
+    public bool ConfigPatchPreviewLocked { get; init; }
+
+    public bool V7PlanPassed { get; init; }
+    public bool V7FreezePassed { get; init; }
+    public bool V7NoOpPassed { get; init; }
+    public bool V7PreflightPassed { get; init; }
+    public bool V7DryRunPassed { get; init; }
+    public bool P15GatePassed { get; init; }
+    public bool RuntimeChangeGatePassed { get; init; }
+    public bool FinalApprovalPresent { get; init; }
+
+    public bool FormalRetrievalAllowed { get; init; }
+    public bool FormalPackageWritten { get; init; }
+    public bool PackingPolicyChanged { get; init; }
+    public bool PackageOutputChanged { get; init; }
+    public bool VectorStoreBindingChanged { get; init; }
+    public bool GlobalDefaultOn { get; init; }
+    public bool NoRuntimeMutationInvariant { get; init; }
+
+    public IReadOnlyList<string> AllowedActions { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> ForbiddenActions { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> BlockedReasons { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> Diagnostics { get; init; } = Array.Empty<string>();
+}
+
+
 /// <summary>架构清理计划报告。</summary>
 public sealed class ArchitectureCleanupPlanReport
 {
