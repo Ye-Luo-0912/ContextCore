@@ -1,7 +1,7 @@
 ﻿# Scoped Runtime Preview Activation Live Readiness Freeze
 
-生成: `2026-06-24T18:46:20.1987407+00:00`
-操作: `arsp-live-readiness-freeze-freeze-a526164613dd405eb0a2d86a8512c7c5`
+生成: `2026-06-25T08:11:53.2531680+00:00`
+操作: `arsp-live-readiness-freeze-freeze-2bc839823c7440c3b2b46cfc3bcbbac0`
 
 ## Decision
 - FreezePassed: `True`
@@ -11,9 +11,9 @@
 
 ## Final Manual Approval
 - FinalApprovalRequired: `True`
-- FinalApprovedBy: ``
-- FinalApprovalId: `...`
-- FinalApprovalTimestamp: `0001-01-01T00:00:00.0000000+00:00`
+- FinalApprovedBy: `ReleaseManager`
+- FinalApprovalId: `arsp-final-a...`
+- FinalApprovalTimestamp: `2026-06-25T08:11:53.2531680+00:00`
 - FinalApprovedScopes: `demo-workspace/demo-collection`
 - ActivationWindowDurationMinutes: `30`
 - ActivationWindowRequestCap: `100`
@@ -85,8 +85,8 @@
 - `noOpExecutionPassed=True`
 - `runtimeChangeGatePassed=True`
 - `p15GatePassed=True`
-- `finalApprovalExplicitlyProvided=False`
-- `finalApprovedBy=`
+- `finalApprovalExplicitlyProvided=True`
+- `finalApprovedBy=ReleaseManager`
 - `noRuntimeMutationInvariant=True`
 - `configPatchWritten=false runtimeActivation=false`
 - `freezePassed=True gatePassed=False`

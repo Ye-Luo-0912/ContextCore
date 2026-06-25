@@ -147,6 +147,18 @@ public sealed class ScopedRuntimePreviewLiveActivationExecutionRunner
 
         if (isGate && !options.FinalApprovalExplicitlyProvided)
             blocked.Add("FinalApprovalMissing");
+        else if (isGate && string.IsNullOrWhiteSpace(options.FinalApprovedBy))
+            blocked.Add("FinalApprovalEmpty");
+        else if (isGate && options.FinalApprovalExplicitlyProvided)
+        {
+            var freezeApprovedBy = freeze?.FinalApprovedBy ?? "";
+            if (!string.IsNullOrWhiteSpace(freezeApprovedBy)
+                && !string.Equals(freezeApprovedBy, options.FinalApprovedBy, StringComparison.OrdinalIgnoreCase))
+            {
+                blocked.Add("FinalApprovalMismatch");
+                diag.Add($"freezeFinalApprovedBy={freezeApprovedBy} provided={options.FinalApprovedBy}");
+            }
+        }
 
         var dryRunPresent = dryRun is not null;
         var formalRetrievalAllowed = dryRunPresent && dryRun!.FormalRetrievalAllowed;

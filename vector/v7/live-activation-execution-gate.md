@@ -1,7 +1,7 @@
 ﻿# Scoped Runtime Preview Live Activation Execution Gate
 
-生成: `2026-06-25T07:53:41.3666650+00:00`
-操作: `arsp-live-exec-gate-400a07d23e8c4b2c9a625efdf77e2b67`
+生成: `2026-06-25T08:14:42.6369095+00:00`
+操作: `arsp-live-exec-gate-846964ad5a394ce2a74e4f33afd6a548`
 
 ## Decision
 - ExecutionGatePassed: `True`
@@ -11,16 +11,16 @@
 - ExecuteLiveActivation: `True`
 
 ## Execution Record
-- ActivationExecutionId: `arsp-live-exec-20260625-ac26897467224220af6653ecbeed6978`
+- ActivationExecutionId: `arsp-live-exec-20260625-0858241fdabd4b64befa24ca6e141fab`
 - ExecutionPlanId: `arsp-exec-pl...`
 - AppliedConfigPatchId: `arsp-config-...`
 - ApprovedScopes: `demo-workspace/demo-collection`
-- ActivationWindowStart: `2026-06-25T07:53:41.3666650+00:00`
-- ActivationWindowEnd: `2026-06-25T08:23:41.3666650+00:00`
+- ActivationWindowStart: `2026-06-25T08:14:42.6369095+00:00`
+- ActivationWindowEnd: `2026-06-25T08:44:42.6369095+00:00`
 - RequestCap: `100`
 - KillSwitchArmed: `True`
 - RollbackCheckpointId: `arsp-rollbac...`
-- TraceSinkPath: `vector/v7/live-activation-trace-20260625-075341.jsonl`
+- TraceSinkPath: `vector/v7/live-activation-trace-20260625-081442.jsonl`
 
 ## Stop Conditions
 - `AnySafetyBoundaryViolation`
