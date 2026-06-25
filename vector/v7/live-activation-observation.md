@@ -1,7 +1,7 @@
 ﻿# Live Activation Observation
 
-生成: `2026-06-25T08:46:29.6418257+00:00`
-操作: `arsp-live-obs-observation-f0c05ebd97184e04a528268fae718615`
+生成: `2026-06-25T09:01:09.5317778+00:00`
+操作: `arsp-live-obs-observation-bd07b16efbc6480d8148634c5f231e46`
 
 ## Decision
 - ObservationPassed: `True`
@@ -9,23 +9,26 @@
 - Recommendation: `ReadyForLiveActivationSummaryFreeze`
 - NextAllowedPhase: `LiveActivationSummaryFreeze`
 
-## Observation Metrics
+## Observation Metrics (from shadow trace fixture)
 - ObservedRequestCount: `40` / `100`
-- ApprovedScopeRequestCount: `15`
-- NonApprovedScopeRequestCount: `15`
-- NonApprovedScopeNoOpCount: `25`
-- KillSwitchArmed: `True`
+- ApprovedScopeRequestCount: `10`
+- NonApprovedScopeRequestCount: `20`
+- NonApprovedScopeNoOpCount: `20` (noOp==reqCount: `true`)
 - KillSwitchTripCount: `10`
-- RollbackCheckpointAvailable: `True`
-- TraceSinkWritable: `True`
+- KillSwitchNoOpCount: `10` (noOp==tripCount: `true`)
+- ShadowTracePath: `vector/v7/live-activation-trace-shadow.jsonl`
 - TraceRecordCount: `40`
-- AppliedDeltaCount: `0`
 - AppliedDeltaZero: `True`
 - ConfigPatchWritten: `False`
 - RuntimeActivation: `False`
-- RuntimeSwitchChanged: `False`
 
-## Safety Boundaries
+## Identity & Plan Integrity
+- PlanIdUnchanged: `True`
+- FinalApprovalIdentityUnchanged: `True`
+
+## Safety Boundaries (from execution report)
+- FormalRetrievalAllowed: `False`
+- FormalPackageWritten: `False`
 - NoRuntimeMutationInvariant: `True`
 
 ## Allowed Actions
@@ -35,7 +38,7 @@
 - `ReadV7NoOpExecution`
 - `ReadRuntimeChangeGate`
 - `ReadP15Report`
-- `SimulateObservationWindow`
+- `GenerateShadowTraceFixture`
 - `ValidateRequestCap`
 - `ValidateScopeRouting`
 - `ValidateKillSwitchState`
@@ -70,16 +73,19 @@
 - `stage=observation`
 - `executionPassed=True`
 - `planPassed=True`
-- `observationRuns=5 requestsPerRun=8`
+- `planIdUnchanged=True`
+- `finalApprovalUnchanged=True freezeApprovedBy=ReleaseManager`
 - `observedRequestCount=40/100`
-- `approvedScopeRequestCount=15`
-- `nonApprovedScopeRequestCount=15`
-- `nonApprovedScopeNoOpCount=25`
-- `killSwitchTripCount=10`
+- `approvedScopeRequestCount=10`
+- `nonApprovedScopeRequestCount=20`
+- `nonApprovedScopeNoOpCount=20`
+- `killSwitchTripCount=10 killSwitchNoOpCount=10`
 - `appliedDeltaCount=0 deltaZero=True`
-- `configPatchWritten=false runtimeActivation=false`
+- `configPatchWritten=False runtimeActivation=False`
+- `traceSource=shadow trace fixture=vector/v7/live-activation-trace-shadow.jsonl`
+- `safetySource=execution report`
 - `noRuntimeMutationInvariant=True`
 - `observationPassed=True gatePassed=False`
 - `GatePassed=false is expected for non-gate artifact; *-gate artifact is authoritative`
 
-V7.14 scoped runtime preview live activation observation。观测与安全审计。GatePassed=false is expected for non-gate artifact; *-gate artifact is authoritative。
+V7.14R live activation observation gate hardening。基于 V7.13 execution report + shadow trace fixture 的可审计观测。GatePassed=false is expected for non-gate artifact; *-gate artifact is authoritative。

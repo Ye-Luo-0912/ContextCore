@@ -2766,8 +2766,11 @@ public sealed class ScopedRuntimePreviewLiveActivationObservationReport
     public int NonApprovedScopeNoOpCount { get; init; }
     public bool KillSwitchArmed { get; init; }
     public int KillSwitchTripCount { get; init; }
+    public int KillSwitchNoOpCount { get; init; }
     public bool RollbackCheckpointAvailable { get; init; }
     public bool TraceSinkWritable { get; init; }
+    public string TraceSinkPath { get; init; } = "";
+    public string ShadowTracePath { get; init; } = "";
     public int TraceRecordCount { get; init; }
     public int AppliedDeltaCount { get; init; }
     public bool AppliedDeltaZero { get; init; }

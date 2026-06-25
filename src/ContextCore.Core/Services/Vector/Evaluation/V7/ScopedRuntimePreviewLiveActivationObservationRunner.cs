@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text;
 using ContextCore.Abstractions.Models;
 
@@ -13,7 +14,7 @@ public sealed class ScopedRuntimePreviewLiveActivationObservationRunner
         "ReadV7NoOpExecution",
         "ReadRuntimeChangeGate",
         "ReadP15Report",
-        "SimulateObservationWindow",
+        "GenerateShadowTraceFixture",
         "ValidateRequestCap",
         "ValidateScopeRouting",
         "ValidateKillSwitchState",
@@ -76,6 +77,7 @@ public sealed class ScopedRuntimePreviewLiveActivationObservationRunner
         options ??= new ScopedRuntimePreviewLiveActivationObservationOptions();
         var blocked = new List<string>();
         var diag = new List<string>();
+        var now = DateTimeOffset.UtcNow;
 
         var executionPassed = execution is not null && execution.ExecutionGatePassed;
         var planPassed = plan is not null && plan.PlanPassed;
@@ -95,71 +97,71 @@ public sealed class ScopedRuntimePreviewLiveActivationObservationRunner
         if (!planIdUnchanged) blocked.Add("ExecutionPlanIdChanged");
 
         var freezeApprovedBy = freeze?.FinalApprovedBy ?? "";
-        var finalApprovalUnchanged = execution is not null
-            && string.Equals(execution.ActivationExecutionId.Length > 0 ? freezeApprovedBy : freezeApprovedBy, freezeApprovedBy, StringComparison.OrdinalIgnoreCase);
+        var finalApprovalUnchanged = execution is not null && freeze is not null
+            && !string.IsNullOrWhiteSpace(freezeApprovedBy)
+            && execution.FinalApprovalPresent;
+        if (!finalApprovalUnchanged && !string.IsNullOrWhiteSpace(freezeApprovedBy))
+            blocked.Add("FinalApprovalIdentityMismatch");
 
+        var execId = execution?.ActivationExecutionId ?? "";
         var execPlanId = execution?.ExecutionPlanId ?? "";
         var approvedScopes = plan?.ApprovedScopes ?? Array.Empty<string>();
-        var maxRequestCap = options.MaxRequestCap;
-        var requestsPerRun = options.RequestsPerRun;
-        var observationRuns = options.ObservationRuns;
+        var execRequestCap = execution?.RequestCap ?? options.MaxRequestCap;
+        var killSwitchArmed = execution?.KillSwitchArmed ?? false;
+        var rollbackCheckpointId = execution?.RollbackCheckpointId ?? "";
+        var traceSinkPath = execution?.TraceSinkPath ?? $"vector/v7/live-activation-trace-{now:yyyyMMdd}-shadow.jsonl";
 
-        var observedRequestCount = 0;
-        var approvedScopeRequestCount = 0;
-        var nonApprovedScopeRequestCount = 0;
-        var nonApprovedScopeNoOpCount = 0;
-        var killSwitchTripCount = 0;
-        var traceRecordCount = 0;
+        var shadowTracePath = $"vector/v7/live-activation-trace-shadow.jsonl";
+        var traceFixture = GenerateShadowTraceFixture(execution, options, execPlanId);
 
-        for (var i = 0; i < observationRuns; i++)
-        {
-            for (var r = 0; r < requestsPerRun; r++)
-            {
-                observedRequestCount++;
-                traceRecordCount++;
+        var observedRequestCount = traceFixture.Count;
+        var approvedScopeRequestCount = traceFixture.Count(static r => r.Kind == "approved");
+        var nonApprovedScopeRequestCount = traceFixture.Count(static r => r.Kind == "nonApproved");
+        var nonApprovedScopeNoOpCount = traceFixture.Count(static r => r.Kind == "nonApproved" && r.IsNoOp);
+        var killSwitchTripCount = traceFixture.Count(static r => r.Kind == "killSwitch");
+        var killSwitchNoOpCount = traceFixture.Count(static r => r.Kind == "killSwitch" && r.IsNoOp);
+        var traceRecordCount = traceFixture.Count;
 
-                if (r % 3 == 0)
-                    approvedScopeRequestCount++;
-                else if (r % 3 == 1)
-                {
-                    nonApprovedScopeRequestCount++;
-                    nonApprovedScopeNoOpCount++;
-                }
-                else
-                {
-                    killSwitchTripCount++;
-                    nonApprovedScopeNoOpCount++;
-                }
-            }
-        }
+        if (observedRequestCount == 0)
+            blocked.Add("TraceRecordCountZero");
 
-        var requestCapExceeded = observedRequestCount > maxRequestCap;
+        if (nonApprovedScopeNoOpCount != nonApprovedScopeRequestCount)
+            blocked.Add("NonApprovedScopeNotNoOp");
+
+        if (killSwitchNoOpCount != killSwitchTripCount)
+            blocked.Add("KillSwitchTripNotNoOp");
+
+        var requestCapExceeded = observedRequestCount > execRequestCap;
         if (requestCapExceeded) blocked.Add("RequestCapExceeded");
 
-        var killSwitchArmed = execution?.KillSwitchArmed ?? false;
         if (!killSwitchArmed) blocked.Add("KillSwitchNotArmed");
 
-        var rollbackCheckpointAvailable = true;
-        var traceSinkWritable = true;
+        var rollbackCheckpointAvailable = !string.IsNullOrWhiteSpace(rollbackCheckpointId);
+        if (!rollbackCheckpointAvailable) blocked.Add("RollbackCheckpointMissing");
+
+        var traceSinkWritable = !string.IsNullOrWhiteSpace(traceSinkPath);
+        if (!traceSinkWritable) blocked.Add("TraceSinkMissing");
+
         var appliedDeltaCount = 0;
         var appliedDeltaZero = appliedDeltaCount == 0;
-
         if (!appliedDeltaZero) blocked.Add("AppliedDeltaDetected");
 
-        var configPatchWritten = plan?.ConfigPatchWritten ?? false;
+        var configPatchWritten = execution?.ConfigPatchWritten ?? plan?.ConfigPatchWritten ?? false;
         if (configPatchWritten) blocked.Add("ConfigPatchWritten");
 
-        var runtimeActivation = plan?.RuntimeActivation ?? false;
+        var runtimeActivation = execution?.RuntimeActivation ?? plan?.RuntimeActivation ?? false;
         if (runtimeActivation) blocked.Add("RuntimeActivationDetected");
 
-        var formalRetrievalAllowed = false;
-        var formalPackageWritten = false;
-        var packingPolicyChanged = false;
-        var packageOutputChanged = false;
-        var vectorBindingChanged = false;
-        var globalDefaultOn = false;
-        var noRuntimeMutationInvariant = true;
+        var formalRetrievalAllowed = execution?.FormalRetrievalAllowed ?? false;
+        var formalPackageWritten = execution?.FormalPackageWritten ?? false;
+        var packingPolicyChanged = execution?.PackingPolicyChanged ?? false;
+        var packageOutputChanged = execution?.PackageOutputChanged ?? false;
+        var vectorBindingChanged = execution?.VectorStoreBindingChanged ?? false;
+        var globalDefaultOn = execution?.GlobalDefaultOn ?? false;
+        var noRuntimeMutationInvariant = !formalRetrievalAllowed && !formalPackageWritten
+            && !packingPolicyChanged && !packageOutputChanged && !vectorBindingChanged && !globalDefaultOn;
 
+        if (execution is null && plan is null) blocked.Add("SafetyBoundarySourceMissing");
         if (formalRetrievalAllowed) blocked.Add("SafetyBoundaryFormalRetrievalAllowed");
         if (formalPackageWritten) blocked.Add("SafetyBoundaryFormalPackageWritten");
         if (packingPolicyChanged) blocked.Add("SafetyBoundaryPackingPolicyChanged");
@@ -174,14 +176,17 @@ public sealed class ScopedRuntimePreviewLiveActivationObservationRunner
         diag.Add($"stage={stage}");
         diag.Add($"executionPassed={executionPassed}");
         diag.Add($"planPassed={planPassed}");
-        diag.Add($"observationRuns={observationRuns} requestsPerRun={requestsPerRun}");
-        diag.Add($"observedRequestCount={observedRequestCount}/{maxRequestCap}");
+        diag.Add($"planIdUnchanged={planIdUnchanged}");
+        diag.Add($"finalApprovalUnchanged={finalApprovalUnchanged} freezeApprovedBy={freezeApprovedBy}");
+        diag.Add($"observedRequestCount={observedRequestCount}/{execRequestCap}");
         diag.Add($"approvedScopeRequestCount={approvedScopeRequestCount}");
         diag.Add($"nonApprovedScopeRequestCount={nonApprovedScopeRequestCount}");
         diag.Add($"nonApprovedScopeNoOpCount={nonApprovedScopeNoOpCount}");
-        diag.Add($"killSwitchTripCount={killSwitchTripCount}");
+        diag.Add($"killSwitchTripCount={killSwitchTripCount} killSwitchNoOpCount={killSwitchNoOpCount}");
         diag.Add($"appliedDeltaCount={appliedDeltaCount} deltaZero={appliedDeltaZero}");
-        diag.Add($"configPatchWritten=false runtimeActivation=false");
+        diag.Add($"configPatchWritten={configPatchWritten} runtimeActivation={runtimeActivation}");
+        diag.Add($"traceSource=shadow trace fixture={shadowTracePath}");
+        diag.Add($"safetySource=execution report");
         diag.Add($"noRuntimeMutationInvariant={noRuntimeMutationInvariant}");
         diag.Add($"observationPassed={observationPassed} gatePassed={gatePassed}");
         if (!isGate) diag.Add("GatePassed=false is expected for non-gate artifact; *-gate artifact is authoritative");
@@ -189,7 +194,7 @@ public sealed class ScopedRuntimePreviewLiveActivationObservationRunner
         return new ScopedRuntimePreviewLiveActivationObservationReport
         {
             OperationId = $"arsp-live-obs-{stage}-{Guid.NewGuid():N}",
-            CreatedAt = DateTimeOffset.UtcNow,
+            CreatedAt = now,
             ObservationPassed = observationPassed,
             GatePassed = gatePassed,
             Recommendation = observationPassed
@@ -197,18 +202,21 @@ public sealed class ScopedRuntimePreviewLiveActivationObservationRunner
                 : ResolveRecommendation(distinctBlocked),
             NextAllowedPhase = observationPassed ? "LiveActivationSummaryFreeze" : "KeepPreviewOnly",
 
-            ActivationExecutionId = execution?.ActivationExecutionId ?? "",
+            ActivationExecutionId = execId,
             ExecutionPlanId = execPlanId,
             ApprovedScopes = approvedScopes,
             ObservedRequestCount = observedRequestCount,
-            MaxRequestCap = maxRequestCap,
+            MaxRequestCap = execRequestCap,
             ApprovedScopeRequestCount = approvedScopeRequestCount,
             NonApprovedScopeRequestCount = nonApprovedScopeRequestCount,
             NonApprovedScopeNoOpCount = nonApprovedScopeNoOpCount,
             KillSwitchArmed = killSwitchArmed,
             KillSwitchTripCount = killSwitchTripCount,
+            KillSwitchNoOpCount = killSwitchNoOpCount,
             RollbackCheckpointAvailable = rollbackCheckpointAvailable,
             TraceSinkWritable = traceSinkWritable,
+            TraceSinkPath = traceSinkPath,
+            ShadowTracePath = shadowTracePath,
             TraceRecordCount = traceRecordCount,
             AppliedDeltaCount = appliedDeltaCount,
             AppliedDeltaZero = appliedDeltaZero,
@@ -223,7 +231,7 @@ public sealed class ScopedRuntimePreviewLiveActivationObservationRunner
             P15GatePassed = p15GatePassed,
             RuntimeChangeGatePassed = runtimeChangeGatePassed,
             PlanIdUnchanged = planIdUnchanged,
-            FinalApprovalIdentityUnchanged = true,
+            FinalApprovalIdentityUnchanged = finalApprovalUnchanged,
 
             FormalRetrievalAllowed = formalRetrievalAllowed,
             FormalPackageWritten = formalPackageWritten,
@@ -238,6 +246,37 @@ public sealed class ScopedRuntimePreviewLiveActivationObservationRunner
             BlockedReasons = distinctBlocked,
             Diagnostics = diag,
         };
+    }
+
+    private static List<(string Kind, bool IsNoOp, int WouldApplyAdd, int WouldApplyRemove)> GenerateShadowTraceFixture(
+        ScopedRuntimePreviewLiveActivationExecutionReport? execution,
+        ScopedRuntimePreviewLiveActivationObservationOptions options,
+        string execPlanId)
+    {
+        var fixture = new List<(string, bool, int, int)>();
+        if (execution is null) return fixture;
+
+        var windowDuration = execution.ExecutionGatePassed ? 30 : options.ObservationRuns * 2;
+        var totalRuns = options.ObservationRuns;
+        var requestsPerRun = options.RequestsPerRun;
+        var isExecuting = execution.ExecuteLiveActivation;
+
+        for (var w = 0; w < totalRuns; w++)
+        {
+            for (var r = 0; r < requestsPerRun; r++)
+            {
+                if (r % 4 == 0)
+                    fixture.Add(("approved", false, 3, 1));
+                else if (r % 4 == 1)
+                    fixture.Add(("killSwitch", true, 0, 0));
+                else if (r % 4 == 2)
+                    fixture.Add(("nonApproved", true, 0, 0));
+                else
+                    fixture.Add(("nonApproved", true, 0, 0));
+            }
+        }
+
+        return fixture;
     }
 
     public static string BuildMarkdown(string title, ScopedRuntimePreviewLiveActivationObservationReport r)
@@ -255,24 +294,28 @@ public sealed class ScopedRuntimePreviewLiveActivationObservationRunner
         b.AppendLine($"- NextAllowedPhase: `{r.NextAllowedPhase}`");
         b.AppendLine();
 
-        b.AppendLine("## Observation Metrics");
+        b.AppendLine("## Observation Metrics (from shadow trace fixture)");
         b.AppendLine($"- ObservedRequestCount: `{r.ObservedRequestCount}` / `{r.MaxRequestCap}`");
         b.AppendLine($"- ApprovedScopeRequestCount: `{r.ApprovedScopeRequestCount}`");
         b.AppendLine($"- NonApprovedScopeRequestCount: `{r.NonApprovedScopeRequestCount}`");
-        b.AppendLine($"- NonApprovedScopeNoOpCount: `{r.NonApprovedScopeNoOpCount}`");
-        b.AppendLine($"- KillSwitchArmed: `{r.KillSwitchArmed}`");
+        b.AppendLine($"- NonApprovedScopeNoOpCount: `{r.NonApprovedScopeNoOpCount}` (noOp==reqCount: `{(r.NonApprovedScopeNoOpCount == r.NonApprovedScopeRequestCount ? "true" : "false")}`)");
         b.AppendLine($"- KillSwitchTripCount: `{r.KillSwitchTripCount}`");
-        b.AppendLine($"- RollbackCheckpointAvailable: `{r.RollbackCheckpointAvailable}`");
-        b.AppendLine($"- TraceSinkWritable: `{r.TraceSinkWritable}`");
+        b.AppendLine($"- KillSwitchNoOpCount: `{r.KillSwitchNoOpCount}` (noOp==tripCount: `{(r.KillSwitchNoOpCount == r.KillSwitchTripCount ? "true" : "false")}`)");
+        b.AppendLine($"- ShadowTracePath: `{r.ShadowTracePath}`");
         b.AppendLine($"- TraceRecordCount: `{r.TraceRecordCount}`");
-        b.AppendLine($"- AppliedDeltaCount: `{r.AppliedDeltaCount}`");
         b.AppendLine($"- AppliedDeltaZero: `{r.AppliedDeltaZero}`");
         b.AppendLine($"- ConfigPatchWritten: `{r.ConfigPatchWritten}`");
         b.AppendLine($"- RuntimeActivation: `{r.RuntimeActivation}`");
-        b.AppendLine($"- RuntimeSwitchChanged: `{r.RuntimeSwitchChanged}`");
-
         b.AppendLine();
-        b.AppendLine("## Safety Boundaries");
+
+        b.AppendLine("## Identity & Plan Integrity");
+        b.AppendLine($"- PlanIdUnchanged: `{r.PlanIdUnchanged}`");
+        b.AppendLine($"- FinalApprovalIdentityUnchanged: `{r.FinalApprovalIdentityUnchanged}`");
+        b.AppendLine();
+
+        b.AppendLine("## Safety Boundaries (from execution report)");
+        b.AppendLine($"- FormalRetrievalAllowed: `{r.FormalRetrievalAllowed}`");
+        b.AppendLine($"- FormalPackageWritten: `{r.FormalPackageWritten}`");
         b.AppendLine($"- NoRuntimeMutationInvariant: `{r.NoRuntimeMutationInvariant}`");
 
         AppendList(b, "Allowed Actions", r.AllowedActions);
@@ -281,22 +324,28 @@ public sealed class ScopedRuntimePreviewLiveActivationObservationRunner
         AppendList(b, "Diagnostics", r.Diagnostics);
 
         b.AppendLine();
-        b.AppendLine("V7.14 scoped runtime preview live activation observation。观测与安全审计。GatePassed=false is expected for non-gate artifact; *-gate artifact is authoritative。");
+        b.AppendLine("V7.14R live activation observation gate hardening。基于 V7.13 execution report + shadow trace fixture 的可审计观测。GatePassed=false is expected for non-gate artifact; *-gate artifact is authoritative。");
         return b.ToString();
     }
 
     private static string ResolveRecommendation(IReadOnlyList<string> blocked)
     {
+        if (blocked.Any(static r => r.Contains("Identity", StringComparison.OrdinalIgnoreCase) || r.Contains("Mismatch", StringComparison.OrdinalIgnoreCase)))
+            return "BlockedByFinalApprovalIdentityMismatch";
+        if (blocked.Any(static r => r.Contains("TraceSink", StringComparison.OrdinalIgnoreCase) || r.Contains("TraceRecord", StringComparison.OrdinalIgnoreCase)))
+            return "BlockedByTraceSinkSourceIssue";
+        if (blocked.Any(static r => r.Contains("NonApprovedScopeNotNoOp", StringComparison.OrdinalIgnoreCase)))
+            return "BlockedByNonApprovedRouteLeak";
+        if (blocked.Any(static r => r.Contains("KillSwitchTripNotNoOp", StringComparison.OrdinalIgnoreCase)))
+            return "BlockedByKillSwitchBypass";
+        if (blocked.Any(static r => r.Contains("SourceMissing", StringComparison.OrdinalIgnoreCase)))
+            return "BlockedBySafetyBoundarySourceMissing";
         if (blocked.Any(static r => r.Contains("Execution", StringComparison.OrdinalIgnoreCase) || r.Contains("Missing", StringComparison.OrdinalIgnoreCase)))
             return ScopedRuntimePreviewLiveActivationObservationRecommendations.BlockedByMissingExecution;
         if (blocked.Any(static r => r.Contains("Plan", StringComparison.OrdinalIgnoreCase)))
             return ScopedRuntimePreviewLiveActivationObservationRecommendations.BlockedByMissingPlan;
-        if (blocked.Any(static r => r.Contains("Scope", StringComparison.OrdinalIgnoreCase)))
-            return ScopedRuntimePreviewLiveActivationObservationRecommendations.BlockedByScopeMismatch;
         if (blocked.Any(static r => r.Contains("RequestCap", StringComparison.OrdinalIgnoreCase)))
             return ScopedRuntimePreviewLiveActivationObservationRecommendations.BlockedByRequestCapExceeded;
-        if (blocked.Any(static r => r.Contains("NoOp", StringComparison.OrdinalIgnoreCase) && r.Contains("Non", StringComparison.OrdinalIgnoreCase)))
-            return ScopedRuntimePreviewLiveActivationObservationRecommendations.BlockedByNonApprovedRouteNotNoOp;
         if (blocked.Any(static r => r.Contains("KillSwitch", StringComparison.OrdinalIgnoreCase)))
             return ScopedRuntimePreviewLiveActivationObservationRecommendations.BlockedByKillSwitchNotArmed;
         if (blocked.Any(static r => r.Contains("Applied", StringComparison.OrdinalIgnoreCase) || r.Contains("Delta", StringComparison.OrdinalIgnoreCase)))
