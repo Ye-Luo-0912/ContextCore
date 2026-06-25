@@ -4024,6 +4024,29 @@ public static class ServiceOperationalRenderer
                 builder.AppendLine($"- blocked            : {string.Join(", ", v7LiveObs.BlockedReasons)}");
         }
 
+        builder.AppendLine();
+        builder.AppendLine("V7.15 Scoped Runtime Preview Live Activation Summary Freeze");
+        var v7SumFreeze = snapshot.ScopedRuntimePreviewLiveActivationSummaryFreezeReport;
+        if (v7SumFreeze is null)
+        {
+            builder.AppendLine("- status : not generated");
+            builder.AppendLine("- path   : vector/v7/live-activation-summary-freeze.json");
+            builder.AppendLine("- action : run eval scoped-runtime-preview-live-activation-summary-freeze");
+        }
+        else
+        {
+            builder.AppendLine($"- freeze passed      : {v7SumFreeze.FreezePassed}");
+            builder.AppendLine($"- gate passed        : {v7SumFreeze.GatePassed}");
+            builder.AppendLine($"- recommendation     : {v7SumFreeze.Recommendation}");
+            builder.AppendLine($"- next phase         : {v7SumFreeze.NextAllowedPhase}");
+            builder.AppendLine($"- observation source : {v7SumFreeze.ObservationSource}");
+            builder.AppendLine($"- identity unchanged : {v7SumFreeze.FinalApprovalIdentityUnchanged}");
+            builder.AppendLine($"- evidence chain     : {v7SumFreeze.FrozenEvidenceChain.Count} items");
+            builder.AppendLine($"- invariants         : noRuntimeMutation={v7SumFreeze.NoRuntimeMutationInvariant}");
+            if (v7SumFreeze.BlockedReasons.Count > 0)
+                builder.AppendLine($"- blocked            : {string.Join(", ", v7SumFreeze.BlockedReasons)}");
+        }
+
         return builder.ToString();
     }
 

@@ -2802,6 +2802,92 @@ public sealed class ScopedRuntimePreviewLiveActivationObservationReport
 }
 
 
+/// <summary>V7.15 live activation summary freeze 推荐。</summary>
+public static class ScopedRuntimePreviewLiveActivationSummaryFreezeRecommendations
+{
+    public const string ReadyForLiveActivationCloseout = nameof(ReadyForLiveActivationCloseout);
+    public const string BlockedByMissingObservation = nameof(BlockedByMissingObservation);
+    public const string BlockedByMissingExecution = nameof(BlockedByMissingExecution);
+    public const string BlockedByIdentityMismatch = nameof(BlockedByIdentityMismatch);
+    public const string BlockedByFrozenMetricsViolation = nameof(BlockedByFrozenMetricsViolation);
+    public const string BlockedBySafetyBoundaryViolation = nameof(BlockedBySafetyBoundaryViolation);
+    public const string KeepPreviewOnly = nameof(KeepPreviewOnly);
+}
+
+
+/// <summary>V7.15 summary freeze 冻结指标。</summary>
+public sealed class ScopedRuntimePreviewLiveActivationSummaryFrozenMetrics
+{
+    public int ObservedRequestCount { get; init; }
+    public int MaxRequestCap { get; init; }
+    public int ApprovedScopeRequestCount { get; init; }
+    public int NonApprovedScopeRequestCount { get; init; }
+    public int NonApprovedScopeNoOpCount { get; init; }
+    public int KillSwitchTripCount { get; init; }
+    public int KillSwitchNoOpCount { get; init; }
+    public int AppliedDeltaCount { get; init; }
+    public bool ConfigPatchWritten { get; init; }
+    public bool RuntimeActivation { get; init; }
+    public bool RuntimeSwitchChanged { get; init; }
+}
+
+
+/// <summary>V7.15 summary freeze 选项。</summary>
+public sealed class ScopedRuntimePreviewLiveActivationSummaryFreezeOptions
+{
+    public bool Enabled { get; init; } = true;
+}
+
+
+/// <summary>V7.15 live activation summary freeze 报告。
+/// 冻结 scoped runtime preview live activation 执行记录与 shadow observation 证据链。
+/// ConfigPatchWritten=false, RuntimeActivation=false。</summary>
+public sealed class ScopedRuntimePreviewLiveActivationSummaryFreezeReport
+{
+    public string OperationId { get; init; } = "";
+    public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
+    public bool FreezePassed { get; init; }
+    public bool GatePassed { get; init; }
+    public string Recommendation { get; init; }
+        = ScopedRuntimePreviewLiveActivationSummaryFreezeRecommendations.KeepPreviewOnly;
+    public string NextAllowedPhase { get; init; } = "KeepPreviewOnly";
+
+    public string ActivationExecutionId { get; init; } = "";
+    public string ExecutionPlanId { get; init; } = "";
+    public string FinalApprovedBy { get; init; } = "";
+    public string FinalApprovalId { get; init; } = "";
+    public IReadOnlyList<string> ApprovedScopes { get; init; } = Array.Empty<string>();
+    public string ObservationSource { get; init; } = "";
+    public string ShadowTracePath { get; init; } = "";
+    public IReadOnlyList<string> FrozenEvidenceChain { get; init; } = Array.Empty<string>();
+
+    public bool V7ObservationPassed { get; init; }
+    public bool V7ExecutionGatePassed { get; init; }
+    public bool V7PlanPassed { get; init; }
+    public bool V7FreezePassed { get; init; }
+    public bool V7NoOpPassed { get; init; }
+    public bool P15GatePassed { get; init; }
+    public bool RuntimeChangeGatePassed { get; init; }
+    public bool FinalApprovalIdentityUnchanged { get; init; }
+    public bool ExecutionPlanIdUnchanged { get; init; }
+
+    public ScopedRuntimePreviewLiveActivationSummaryFrozenMetrics? FrozenMetrics { get; init; }
+
+    public bool FormalRetrievalAllowed { get; init; }
+    public bool FormalPackageWritten { get; init; }
+    public bool PackingPolicyChanged { get; init; }
+    public bool PackageOutputChanged { get; init; }
+    public bool VectorStoreBindingChanged { get; init; }
+    public bool GlobalDefaultOn { get; init; }
+    public bool NoRuntimeMutationInvariant { get; init; }
+
+    public IReadOnlyList<string> AllowedActions { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> ForbiddenActions { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> BlockedReasons { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> Diagnostics { get; init; } = Array.Empty<string>();
+}
+
+
 /// <summary>架构清理计划报告。</summary>
 public sealed class ArchitectureCleanupPlanReport
 {

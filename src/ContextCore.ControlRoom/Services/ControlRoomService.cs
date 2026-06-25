@@ -2899,6 +2899,7 @@ public sealed class ControlRoomService
             ScopedRuntimePreviewLiveActivationExecutionPlanReport = TryLoadScopedRuntimePreviewLiveActivationExecutionPlanSummary()?.Report,
             ScopedRuntimePreviewLiveActivationExecutionReport = TryLoadScopedRuntimePreviewLiveActivationExecutionSummary()?.Report,
             ScopedRuntimePreviewLiveActivationObservationReport = TryLoadScopedRuntimePreviewLiveActivationObservationSummary()?.Report,
+            ScopedRuntimePreviewLiveActivationSummaryFreezeReport = TryLoadScopedRuntimePreviewLiveActivationSummaryFreezeSummary()?.Report,
             Limit = limit,
             Offset = offset
         };
@@ -7521,6 +7522,9 @@ public sealed class ControlRoomService
     private static (ScopedRuntimePreviewLiveActivationObservationReport Report, string SourcePath)? TryLoadScopedRuntimePreviewLiveActivationObservationSummary()
         => TryLoadFromDescriptor<ScopedRuntimePreviewLiveActivationObservationReport>(ReportSummaryRegistry.V7ScopedRuntimePreviewLiveActivationObservation);
 
+    private static (ScopedRuntimePreviewLiveActivationSummaryFreezeReport Report, string SourcePath)? TryLoadScopedRuntimePreviewLiveActivationSummaryFreezeSummary()
+        => TryLoadFromDescriptor<ScopedRuntimePreviewLiveActivationSummaryFreezeReport>(ReportSummaryRegistry.V7ScopedRuntimePreviewLiveActivationSummaryFreeze);
+
     private static string VectorReportPath(string phase, string fileName)
     {
         return Path.Combine("vector", phase, fileName);
@@ -10468,6 +10472,8 @@ public sealed class ServiceLearningFeaturesSnapshot
     public ScopedRuntimePreviewLiveActivationExecutionReport? ScopedRuntimePreviewLiveActivationExecutionReport { get; init; }
 
     public ScopedRuntimePreviewLiveActivationObservationReport? ScopedRuntimePreviewLiveActivationObservationReport { get; init; }
+
+    public ScopedRuntimePreviewLiveActivationSummaryFreezeReport? ScopedRuntimePreviewLiveActivationSummaryFreezeReport { get; init; }
 
     public FoundationServiceStatusResponse? FoundationServiceStatus { get; init; }
 
