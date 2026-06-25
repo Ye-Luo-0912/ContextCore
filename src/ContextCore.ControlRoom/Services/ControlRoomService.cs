@@ -2900,6 +2900,7 @@ public sealed class ControlRoomService
             ScopedRuntimePreviewLiveActivationExecutionReport = TryLoadScopedRuntimePreviewLiveActivationExecutionSummary()?.Report,
             ScopedRuntimePreviewLiveActivationObservationReport = TryLoadScopedRuntimePreviewLiveActivationObservationSummary()?.Report,
             ScopedRuntimePreviewLiveActivationSummaryFreezeReport = TryLoadScopedRuntimePreviewLiveActivationSummaryFreezeSummary()?.Report,
+            ScopedRuntimePreviewLiveActivationCloseoutReport = TryLoadScopedRuntimePreviewLiveActivationCloseoutSummary()?.Report,
             Limit = limit,
             Offset = offset
         };
@@ -7525,6 +7526,9 @@ public sealed class ControlRoomService
     private static (ScopedRuntimePreviewLiveActivationSummaryFreezeReport Report, string SourcePath)? TryLoadScopedRuntimePreviewLiveActivationSummaryFreezeSummary()
         => TryLoadFromDescriptor<ScopedRuntimePreviewLiveActivationSummaryFreezeReport>(ReportSummaryRegistry.V7ScopedRuntimePreviewLiveActivationSummaryFreeze);
 
+    private static (ScopedRuntimePreviewLiveActivationCloseoutReport Report, string SourcePath)? TryLoadScopedRuntimePreviewLiveActivationCloseoutSummary()
+        => TryLoadFromDescriptor<ScopedRuntimePreviewLiveActivationCloseoutReport>(ReportSummaryRegistry.V7ScopedRuntimePreviewLiveActivationCloseout);
+
     private static string VectorReportPath(string phase, string fileName)
     {
         return Path.Combine("vector", phase, fileName);
@@ -10474,6 +10478,8 @@ public sealed class ServiceLearningFeaturesSnapshot
     public ScopedRuntimePreviewLiveActivationObservationReport? ScopedRuntimePreviewLiveActivationObservationReport { get; init; }
 
     public ScopedRuntimePreviewLiveActivationSummaryFreezeReport? ScopedRuntimePreviewLiveActivationSummaryFreezeReport { get; init; }
+
+    public ScopedRuntimePreviewLiveActivationCloseoutReport? ScopedRuntimePreviewLiveActivationCloseoutReport { get; init; }
 
     public FoundationServiceStatusResponse? FoundationServiceStatus { get; init; }
 

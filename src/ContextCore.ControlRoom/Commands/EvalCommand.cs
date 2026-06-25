@@ -304,6 +304,8 @@ public static partial class EvalCommand
             !string.Equals(subcommand, "scoped-runtime-preview-live-activation-observation-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "scoped-runtime-preview-live-activation-summary-freeze", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "scoped-runtime-preview-live-activation-summary-freeze-gate", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "scoped-runtime-preview-live-activation-closeout", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "scoped-runtime-preview-live-activation-closeout-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "dto-split-plan", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "dto-split-readiness-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "vector-retrieval-eval-protocol-audit", StringComparison.OrdinalIgnoreCase) &&
@@ -542,6 +544,8 @@ public static partial class EvalCommand
             Console.WriteLine("  eval scoped-runtime-preview-live-activation-observation-gate [--observation-runs <n>] [--requests-per-run <n>]");
             Console.WriteLine("  eval scoped-runtime-preview-live-activation-summary-freeze");
             Console.WriteLine("  eval scoped-runtime-preview-live-activation-summary-freeze-gate");
+            Console.WriteLine("  eval scoped-runtime-preview-live-activation-closeout");
+            Console.WriteLine("  eval scoped-runtime-preview-live-activation-closeout-gate");
             Console.WriteLine("  eval dto-split-plan");
             Console.WriteLine("  eval dto-split-readiness-gate");
             Console.WriteLine("  eval vector-retrieval-eval-protocol-audit");
@@ -1818,6 +1822,13 @@ public static partial class EvalCommand
             || string.Equals(subcommand, "scoped-runtime-preview-live-activation-summary-freeze-gate", StringComparison.OrdinalIgnoreCase))
         {
             await ExecuteScopedRuntimePreviewLiveActivationSummaryFreezeAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        if (string.Equals(subcommand, "scoped-runtime-preview-live-activation-closeout", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(subcommand, "scoped-runtime-preview-live-activation-closeout-gate", StringComparison.OrdinalIgnoreCase))
+        {
+            await ExecuteScopedRuntimePreviewLiveActivationCloseoutAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
             return;
         }
 

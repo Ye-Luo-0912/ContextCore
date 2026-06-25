@@ -2888,6 +2888,65 @@ public sealed class ScopedRuntimePreviewLiveActivationSummaryFreezeReport
 }
 
 
+/// <summary>V7.16 live activation closeout 推荐。</summary>
+public static class ScopedRuntimePreviewLiveActivationCloseoutRecommendations
+{
+    public const string ScopedRuntimePreviewCompleted = nameof(ScopedRuntimePreviewCompleted);
+    public const string BlockedByMissingSummaryFreeze = nameof(BlockedByMissingSummaryFreeze);
+    public const string BlockedByMissingObservation = nameof(BlockedByMissingObservation);
+    public const string BlockedBySafetyBoundaryViolation = nameof(BlockedBySafetyBoundaryViolation);
+    public const string KeepPreviewOnly = nameof(KeepPreviewOnly);
+}
+
+
+/// <summary>V7.16 closeout 选项。</summary>
+public sealed class ScopedRuntimePreviewLiveActivationCloseoutOptions
+{
+    public bool Enabled { get; init; } = true;
+}
+
+
+/// <summary>V7.16 scoped runtime preview live activation closeout 报告。
+/// 最终收尾报告与证据链封存。FormalRetrievalStillBlocked, GlobalDefaultOnStillBlocked。</summary>
+public sealed class ScopedRuntimePreviewLiveActivationCloseoutReport
+{
+    public string OperationId { get; init; } = "";
+    public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
+    public bool CloseoutPassed { get; init; }
+    public bool GatePassed { get; init; }
+    public string Recommendation { get; init; }
+        = ScopedRuntimePreviewLiveActivationCloseoutRecommendations.KeepPreviewOnly;
+    public string NextAllowedPhase { get; init; } = "KeepPreviewOnly";
+
+    public string ActivationExecutionId { get; init; } = "";
+    public string ExecutionPlanId { get; init; } = "";
+    public string FinalApprovedBy { get; init; } = "";
+    public string FinalApprovalId { get; init; } = "";
+    public IReadOnlyList<string> ApprovedScopes { get; init; } = Array.Empty<string>();
+    public string ObservationSource { get; init; } = "";
+    public IReadOnlyList<string> FrozenEvidenceChain { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> FinalDisposition { get; init; } = Array.Empty<string>();
+
+    public bool SummaryFreezePassed { get; init; }
+    public bool ObservationPassed { get; init; }
+    public bool ExecutionPassed { get; init; }
+    public bool P15GatePassed { get; init; }
+    public bool RuntimeChangeGatePassed { get; init; }
+
+    public bool ConfigPatchWritten { get; init; }
+    public bool RuntimeActivation { get; init; }
+    public bool FormalRetrievalAllowed { get; init; }
+    public bool FormalPackageWritten { get; init; }
+    public bool GlobalDefaultOn { get; init; }
+    public bool NoRuntimeMutationInvariant { get; init; }
+
+    public IReadOnlyList<string> AllowedActions { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> ForbiddenActions { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> BlockedReasons { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> Diagnostics { get; init; } = Array.Empty<string>();
+}
+
+
 /// <summary>架构清理计划报告。</summary>
 public sealed class ArchitectureCleanupPlanReport
 {

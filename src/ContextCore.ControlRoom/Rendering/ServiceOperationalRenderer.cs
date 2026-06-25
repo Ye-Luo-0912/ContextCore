@@ -4047,6 +4047,27 @@ public static class ServiceOperationalRenderer
                 builder.AppendLine($"- blocked            : {string.Join(", ", v7SumFreeze.BlockedReasons)}");
         }
 
+        builder.AppendLine();
+        builder.AppendLine("V7.16 Scoped Runtime Preview Live Activation Closeout");
+        var v7Close = snapshot.ScopedRuntimePreviewLiveActivationCloseoutReport;
+        if (v7Close is null)
+        {
+            builder.AppendLine("- status : not generated");
+            builder.AppendLine("- path   : vector/v7/live-activation-closeout.json");
+            builder.AppendLine("- action : run eval scoped-runtime-preview-live-activation-closeout");
+        }
+        else
+        {
+            builder.AppendLine($"- closeout passed    : {v7Close.CloseoutPassed}");
+            builder.AppendLine($"- gate passed        : {v7Close.GatePassed}");
+            builder.AppendLine($"- recommendation     : {v7Close.Recommendation}");
+            builder.AppendLine($"- next phase         : {v7Close.NextAllowedPhase}");
+            builder.AppendLine($"- formalRetrieval    : {v7Close.FormalRetrievalAllowed}");
+            builder.AppendLine($"- globalDefaultOn    : {v7Close.GlobalDefaultOn}");
+            builder.AppendLine($"- evidence sealed    : {v7Close.FrozenEvidenceChain.Count} items");
+            builder.AppendLine($"- invariants         : noRuntimeMutation={v7Close.NoRuntimeMutationInvariant}");
+        }
+
         return builder.ToString();
     }
 

@@ -1317,4 +1317,54 @@ public static partial class EvalCommand
             $"identityUnchanged={report2.FinalApprovalIdentityUnchanged}; noRuntimeMutation={report2.NoRuntimeMutationInvariant}; " +
             $"evidenceChain={report2.FrozenEvidenceChain.Count}; blocked={report2.BlockedReasons.Count}");
     }
+
+    private static async Task ExecuteScopedRuntimePreviewLiveActivationCloseoutAsync(
+        IReadOnlyList<string> args, string subcommand, CancellationToken ct)
+    {
+        var output = Path.GetFullPath(Path.Combine("vector", "v7"));
+        Directory.CreateDirectory(output);
+
+        var sumPath = Path.Combine("vector", "v7", "live-activation-summary-freeze-gate.json");
+        var summaryFreeze = await ReadJsonFileAsync<ScopedRuntimePreviewLiveActivationSummaryFreezeReport>(sumPath, ct).ConfigureAwait(false);
+
+        var obsPath = Path.Combine("vector", "v7", "live-activation-observation-gate.json");
+        var obs = await ReadJsonFileAsync<ScopedRuntimePreviewLiveActivationObservationReport>(obsPath, ct).ConfigureAwait(false);
+
+        var execPath = Path.Combine("vector", "v7", "live-activation-execution-gate.json");
+        var exec = await ReadJsonFileAsync<ScopedRuntimePreviewLiveActivationExecutionReport>(execPath, ct).ConfigureAwait(false);
+
+        var planPath = Path.Combine("vector", "v7", "live-activation-execution-plan-gate.json");
+        var plan = await ReadJsonFileAsync<ScopedRuntimePreviewLiveActivationExecutionPlanReport>(planPath, ct).ConfigureAwait(false);
+
+        var freezePath = Path.Combine("vector", "v7", "activation-live-readiness-freeze-gate.json");
+        var freeze = await ReadJsonFileAsync<ScopedRuntimePreviewActivationLiveReadinessFreezeReport>(freezePath, ct).ConfigureAwait(false);
+
+        var rtPath = Path.Combine("learning", "readiness", "learning-runtime-change-readiness-gate.json");
+        var rtGate = await ReadJsonFileAsync<LearningRuntimeChangeReadinessGateReport>(rtPath, ct).ConfigureAwait(false);
+        var rtPassed = rtGate is not null && rtGate.Passed;
+
+        var p15Path = Path.Combine("eval", "eval-report-p15-a3.json");
+        var p15 = await ReadJsonFileAsync<JsonDocument>(p15Path, ct).ConfigureAwait(false);
+        var p15Passed = false;
+        if (p15 is not null && p15.RootElement.TryGetProperty("PassRate", out var pr)) p15Passed = pr.GetDouble() >= 1.0;
+
+        var options = new ScopedRuntimePreviewLiveActivationCloseoutOptions { Enabled = !CommandHelpers.HasFlag(args, "--disabled") };
+        var runner = new ScopedRuntimePreviewLiveActivationCloseoutRunner();
+        var isGate = string.Equals(subcommand, "scoped-runtime-preview-live-activation-closeout-gate", StringComparison.OrdinalIgnoreCase);
+        var report = isGate
+            ? runner.RunGate(summaryFreeze, obs, exec, plan, freeze, rtPassed, p15Passed, options)
+            : runner.RunCloseout(summaryFreeze, obs, exec, plan, freeze, rtPassed, p15Passed, options);
+
+        var fn = isGate ? "live-activation-closeout-gate" : "live-activation-closeout";
+        var jp = Path.Combine(output, $"{fn}.json");
+        var mp = Path.Combine(output, $"{fn}.md");
+        await WriteJsonSafeAsync(report, jp, ct).ConfigureAwait(false);
+        await WriteTextAsync(ScopedRuntimePreviewLiveActivationCloseoutRunner.BuildMarkdown(
+            isGate ? "Live Activation Closeout Gate" : "Live Activation Closeout", report), mp, ct).ConfigureAwait(false);
+
+        Console.WriteLine($"[Eval] Live activation closeout written: {jp}");
+        Console.WriteLine($"[Eval] closeoutPassed={report.CloseoutPassed}; gatePassed={report.GatePassed}; " +
+            $"recommendation={report.Recommendation}; noRuntimeMutation={report.NoRuntimeMutationInvariant}; " +
+            $"evidenceChain={report.FrozenEvidenceChain.Count} items; blocked={report.BlockedReasons.Count}");
+    }
 }
