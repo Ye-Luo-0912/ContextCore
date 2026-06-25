@@ -1,7 +1,7 @@
 ﻿# Live Activation Summary Freeze
 
-生成: `2026-06-25T09:19:53.0575244+00:00`
-操作: `arsp-summary-freeze-freeze-65fe139c8cf54de49ee12916bab026ca`
+生成: `2026-06-25T16:43:15.6288634+00:00`
+操作: `arsp-summary-freeze-freeze-30e4805d34ae4012b5fe09ad88785768`
 
 ## Decision
 - FreezePassed: `True`
@@ -16,19 +16,19 @@
 - ObservationSource: `DeterministicShadowTraceFixture`
 
 ## Frozen Evidence Chain
-- `V7.4  observation-freeze.json              — FreezePassed`
-- `V7.5  approval-plan.json                   — PlanPassed`
-- `V7.6  authorization.json                   — Authorized`
-- `V7.6R2 authorization-hardening.json         — HardeningPassed`
-- `V7.7  activation-preparation.json           — PreparationPassed`
-- `V7.8R activation-dry-run.json               — DryRunPassed`
-- `V7.9  activation-window-preflight.json      — PreflightPassed`
-- `V7.10 activation-window-noop-execution.json  — NoOpExecutionPassed`
-- `V7.11 activation-live-readiness-freeze.json — FreezePassed`
-- `V7.12 live-activation-execution-plan.json   — PlanPassed`
-- `V7.13R2 live-activation-execution.json       — ExecutionGatePassed`
-- `V7.14R live-activation-observation.json      — ObservationPassed`
-- `V7.15  live-activation-summary-freeze.json   — FreezePassed (this artifact, 2026-06-25)`
+- `V7.4  observation-freeze.json                       — FreezePassed`
+- `V7.5  approval-plan.json                            — PlanPassed`
+- `V7.6  authorization.json                            — Authorized`
+- `V7.6R2 authorization-hardening.json                  — HardeningPassed`
+- `V7.7  activation-preparation.json                    — PreparationPassed`
+- `V7.8R activation-dry-run.json                        — DryRunPassed`
+- `V7.9  activation-window-preflight.json               — PreflightPassed`
+- `V7.10 activation-window-noop-execution.json           — NoOpExecutionPassed`
+- `V7.11 activation-live-readiness-freeze-gate.json     — GatePassed`
+- `V7.12 live-activation-execution-plan-gate.json       — GatePassed`
+- `V7.13R2 live-activation-execution-gate.json           — GatePassed`
+- `V7.14R live-activation-observation-gate.json          — GatePassed`
+- `V7.15  live-activation-summary-freeze-gate.json      — GatePassed (this artifact, 2026-06-25)`
 
 ## Safety Boundaries
 - NoRuntimeMutationInvariant: `True`

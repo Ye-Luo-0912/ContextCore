@@ -21,6 +21,7 @@ public sealed class ScopedRuntimePreviewLiveActivationSummaryFreezeRunner
     ];
 
     public ScopedRuntimePreviewLiveActivationSummaryFreezeReport RunFreeze(
+        bool isAuthoritative,
         ScopedRuntimePreviewLiveActivationObservationReport? observation,
         ScopedRuntimePreviewLiveActivationExecutionReport? execution,
         ScopedRuntimePreviewLiveActivationExecutionPlanReport? plan,
@@ -28,9 +29,10 @@ public sealed class ScopedRuntimePreviewLiveActivationSummaryFreezeRunner
         ScopedRuntimePreviewActivationWindowNoOpExecutionReport? noOpExecution,
         bool rtGatePassed, bool p15Passed,
         ScopedRuntimePreviewLiveActivationSummaryFreezeOptions? options = null)
-        => BuildReport("freeze", false, observation, execution, plan, freeze, noOpExecution, rtGatePassed, p15Passed, options);
+        => BuildReport("freeze", false, isAuthoritative, observation, execution, plan, freeze, noOpExecution, rtGatePassed, p15Passed, options);
 
     public ScopedRuntimePreviewLiveActivationSummaryFreezeReport RunGate(
+        bool isAuthoritative,
         ScopedRuntimePreviewLiveActivationObservationReport? observation,
         ScopedRuntimePreviewLiveActivationExecutionReport? execution,
         ScopedRuntimePreviewLiveActivationExecutionPlanReport? plan,
@@ -38,10 +40,10 @@ public sealed class ScopedRuntimePreviewLiveActivationSummaryFreezeRunner
         ScopedRuntimePreviewActivationWindowNoOpExecutionReport? noOpExecution,
         bool rtGatePassed, bool p15Passed,
         ScopedRuntimePreviewLiveActivationSummaryFreezeOptions? options = null)
-        => BuildReport("gate", true, observation, execution, plan, freeze, noOpExecution, rtGatePassed, p15Passed, options);
+        => BuildReport("gate", true, isAuthoritative, observation, execution, plan, freeze, noOpExecution, rtGatePassed, p15Passed, options);
 
     private static ScopedRuntimePreviewLiveActivationSummaryFreezeReport BuildReport(
-        string stage, bool isGate,
+        string stage, bool isGate, bool isAuthoritative,
         ScopedRuntimePreviewLiveActivationObservationReport? observation,
         ScopedRuntimePreviewLiveActivationExecutionReport? execution,
         ScopedRuntimePreviewLiveActivationExecutionPlanReport? plan,
@@ -55,18 +57,32 @@ public sealed class ScopedRuntimePreviewLiveActivationSummaryFreezeRunner
         var diag = new List<string>();
         var now = DateTimeOffset.UtcNow;
 
+        if (isGate && !isAuthoritative)
+            blocked.Add("NonAuthoritativeArtifactUsed");
+
         var obsPassed = observation is not null && observation.ObservationPassed;
         var execPassed = execution is not null && execution.ExecutionGatePassed;
         var planPassed = plan is not null && plan.PlanPassed;
         var v7FreezePassed = freeze is not null && freeze.FreezePassed;
         var noOpPassed = noOpExecution is not null && noOpExecution.NoOpExecutionPassed;
 
+        var obsGatePassed = observation is not null && observation.GatePassed;
+        var execGatePassed = execution is not null && execution.GatePassed;
+        var planGatePassed = plan is not null && plan.GatePassed;
+        var freezeGatePassed = freeze is not null && freeze.GatePassed;
+        var noOpGatePassed = noOpExecution is not null && noOpExecution.GatePassed;
+
         if (!options.Enabled) blocked.Add("FreezeDisabled");
         if (!obsPassed) blocked.Add("ObservationMissingOrNotPassed");
+        if (isGate && !obsGatePassed) blocked.Add("ObservationGateNotPassed");
         if (!execPassed) blocked.Add("ExecutionMissingOrNotPassed");
+        if (isGate && !execGatePassed) blocked.Add("ExecutionGateNotPassed");
         if (!planPassed) blocked.Add("PlanMissingOrNotPassed");
+        if (isGate && !planGatePassed) blocked.Add("PlanGateNotPassed");
         if (!v7FreezePassed) blocked.Add("FreezeMissingOrNotPassed");
+        if (isGate && !freezeGatePassed) blocked.Add("FreezeGateNotPassed");
         if (!noOpPassed) blocked.Add("NoOpExecutionMissingOrNotPassed");
+        if (isGate && !noOpGatePassed) blocked.Add("NoOpGateNotPassed");
         if (!rtGatePassed) blocked.Add("RuntimeChangeGateNotPassed");
         if (!p15Passed) blocked.Add("P15GateNotPassed");
 
@@ -127,19 +143,19 @@ public sealed class ScopedRuntimePreviewLiveActivationSummaryFreezeRunner
 
         var frozenEvidenceChain = new List<string>
         {
-            "V7.4  observation-freeze.json              — FreezePassed",
-            "V7.5  approval-plan.json                   — PlanPassed",
-            "V7.6  authorization.json                   — Authorized",
-            "V7.6R2 authorization-hardening.json         — HardeningPassed",
-            "V7.7  activation-preparation.json           — PreparationPassed",
-            "V7.8R activation-dry-run.json               — DryRunPassed",
-            "V7.9  activation-window-preflight.json      — PreflightPassed",
-            "V7.10 activation-window-noop-execution.json  — NoOpExecutionPassed",
-            "V7.11 activation-live-readiness-freeze.json — FreezePassed",
-            "V7.12 live-activation-execution-plan.json   — PlanPassed",
-            "V7.13R2 live-activation-execution.json       — ExecutionGatePassed",
-            "V7.14R live-activation-observation.json      — ObservationPassed",
-            $"V7.15  live-activation-summary-freeze.json   — FreezePassed (this artifact, {now:yyyy-MM-dd})",
+            "V7.4  observation-freeze.json                       — FreezePassed",
+            "V7.5  approval-plan.json                            — PlanPassed",
+            "V7.6  authorization.json                            — Authorized",
+            "V7.6R2 authorization-hardening.json                  — HardeningPassed",
+            "V7.7  activation-preparation.json                    — PreparationPassed",
+            "V7.8R activation-dry-run.json                        — DryRunPassed",
+            "V7.9  activation-window-preflight.json               — PreflightPassed",
+            "V7.10 activation-window-noop-execution.json           — NoOpExecutionPassed",
+            "V7.11 activation-live-readiness-freeze-gate.json     — GatePassed",
+            "V7.12 live-activation-execution-plan-gate.json       — GatePassed",
+            "V7.13R2 live-activation-execution-gate.json           — GatePassed",
+            "V7.14R live-activation-observation-gate.json          — GatePassed",
+            $"V7.15  live-activation-summary-freeze-gate.json      — GatePassed (this artifact, {now:yyyy-MM-dd})",
         };
 
         var distinctBlocked = blocked.Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(static x => x, StringComparer.OrdinalIgnoreCase).ToArray();

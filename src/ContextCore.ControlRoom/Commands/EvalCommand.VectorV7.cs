@@ -1280,20 +1280,41 @@ public static partial class EvalCommand
         var options = new ScopedRuntimePreviewLiveActivationSummaryFreezeOptions { Enabled = !CommandHelpers.HasFlag(args, "--disabled") };
         var runner = new ScopedRuntimePreviewLiveActivationSummaryFreezeRunner();
         var isGate = string.Equals(subcommand, "scoped-runtime-preview-live-activation-summary-freeze-gate", StringComparison.OrdinalIgnoreCase);
-        var report = isGate
-            ? runner.RunGate(obs, exec, plan, freeze, noOp, rtPassed, p15Passed, options)
-            : runner.RunFreeze(obs, exec, plan, freeze, noOp, rtPassed, p15Passed, options);
 
-        var fn = isGate ? "live-activation-summary-freeze-gate" : "live-activation-summary-freeze";
-        var jp = Path.Combine(output, $"{fn}.json");
-        var mp = Path.Combine(output, $"{fn}.md");
-        await WriteJsonSafeAsync(report, jp, ct).ConfigureAwait(false);
-        await WriteTextAsync(ScopedRuntimePreviewLiveActivationSummaryFreezeRunner.BuildMarkdown(
-            isGate ? "Live Activation Summary Freeze Gate" : "Live Activation Summary Freeze", report), mp, ct).ConfigureAwait(false);
+        bool isAuthoritative;
+        if (isGate)
+        {
+            var obsGate = await ReadJsonFileAsync<ScopedRuntimePreviewLiveActivationObservationReport>(Path.Combine("vector", "v7", "live-activation-observation-gate.json"), ct).ConfigureAwait(false);
+            var execGate = await ReadJsonFileAsync<ScopedRuntimePreviewLiveActivationExecutionReport>(Path.Combine("vector", "v7", "live-activation-execution-gate.json"), ct).ConfigureAwait(false);
+            var planGate = await ReadJsonFileAsync<ScopedRuntimePreviewLiveActivationExecutionPlanReport>(Path.Combine("vector", "v7", "live-activation-execution-plan-gate.json"), ct).ConfigureAwait(false);
+            var freezeGate = await ReadJsonFileAsync<ScopedRuntimePreviewActivationLiveReadinessFreezeReport>(Path.Combine("vector", "v7", "activation-live-readiness-freeze-gate.json"), ct).ConfigureAwait(false);
+            var noOpGate = await ReadJsonFileAsync<ScopedRuntimePreviewActivationWindowNoOpExecutionReport>(Path.Combine("vector", "v7", "activation-window-noop-execution-gate.json"), ct).ConfigureAwait(false);
 
-        Console.WriteLine($"[Eval] Live activation summary freeze written: {jp}");
-        Console.WriteLine($"[Eval] freezePassed={report.FreezePassed}; gatePassed={report.GatePassed}; " +
-            $"identityUnchanged={report.FinalApprovalIdentityUnchanged}; noRuntimeMutation={report.NoRuntimeMutationInvariant}; " +
-            $"evidenceChain={report.FrozenEvidenceChain.Count}; blocked={report.BlockedReasons.Count}");
+            isAuthoritative = obsGate is not null && execGate is not null && planGate is not null && freezeGate is not null && noOpGate is not null;
+            var report = runner.RunGate(isAuthoritative, obsGate ?? obs, execGate ?? exec, planGate ?? plan, freezeGate ?? freeze, noOpGate ?? noOp, rtPassed, p15Passed, options);
+
+            var fn = "live-activation-summary-freeze-gate";
+            var jp = Path.Combine(output, $"{fn}.json");
+            var mp = Path.Combine(output, $"{fn}.md");
+            await WriteJsonSafeAsync(report, jp, ct).ConfigureAwait(false);
+            await WriteTextAsync(ScopedRuntimePreviewLiveActivationSummaryFreezeRunner.BuildMarkdown("Live Activation Summary Freeze Gate", report), mp, ct).ConfigureAwait(false);
+            Console.WriteLine($"[Eval] Live activation summary freeze gate written: {jp}");
+            Console.WriteLine($"[Eval] freezePassed={report.FreezePassed}; gatePassed={report.GatePassed}; authoritativeSource={isAuthoritative}; " +
+                $"evidenceChain={report.FrozenEvidenceChain.Count}; blocked={report.BlockedReasons.Count}");
+            return;
+        }
+
+        var report2 = runner.RunFreeze(false, obs, exec, plan, freeze, noOp, rtPassed, p15Passed, options);
+
+        var fn2 = "live-activation-summary-freeze";
+        var jp2 = Path.Combine(output, $"{fn2}.json");
+        var mp2 = Path.Combine(output, $"{fn2}.md");
+        await WriteJsonSafeAsync(report2, jp2, ct).ConfigureAwait(false);
+        await WriteTextAsync(ScopedRuntimePreviewLiveActivationSummaryFreezeRunner.BuildMarkdown("Live Activation Summary Freeze", report2), mp2, ct).ConfigureAwait(false);
+
+        Console.WriteLine($"[Eval] Live activation summary freeze written: {jp2}");
+        Console.WriteLine($"[Eval] freezePassed={report2.FreezePassed}; gatePassed={report2.GatePassed}; " +
+            $"identityUnchanged={report2.FinalApprovalIdentityUnchanged}; noRuntimeMutation={report2.NoRuntimeMutationInvariant}; " +
+            $"evidenceChain={report2.FrozenEvidenceChain.Count}; blocked={report2.BlockedReasons.Count}");
     }
 }
