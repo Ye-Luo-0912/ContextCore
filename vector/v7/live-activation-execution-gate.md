@@ -1,26 +1,26 @@
 ﻿# Scoped Runtime Preview Live Activation Execution Gate
 
-生成: `2026-06-25T07:31:47.3002054+00:00`
-操作: `arsp-live-exec-gate-c077c9e3c0414721996f37b57ad613b1`
+生成: `2026-06-25T07:53:41.3666650+00:00`
+操作: `arsp-live-exec-gate-400a07d23e8c4b2c9a625efdf77e2b67`
 
 ## Decision
 - ExecutionGatePassed: `True`
 - GatePassed: `True`
-- Recommendation: `ExecuteLiveActivationNotRequested`
-- NextAllowedPhase: `ScopedRuntimePreviewLiveActivationStandingBy`
-- ExecuteLiveActivation: `False`
+- Recommendation: `ReadyForExplicitLiveActivationCommand`
+- NextAllowedPhase: `ScopedRuntimePreviewLiveActivationRunning`
+- ExecuteLiveActivation: `True`
 
 ## Execution Record
-- ActivationExecutionId: `arsp-live-exec-20260625-b18b439880c04c259aa65168d89c985c`
+- ActivationExecutionId: `arsp-live-exec-20260625-ac26897467224220af6653ecbeed6978`
 - ExecutionPlanId: `arsp-exec-pl...`
 - AppliedConfigPatchId: `arsp-config-...`
 - ApprovedScopes: `demo-workspace/demo-collection`
-- ActivationWindowStart: `2026-06-25T07:31:47.3002054+00:00`
-- ActivationWindowEnd: `2026-06-25T08:01:47.3002054+00:00`
+- ActivationWindowStart: `2026-06-25T07:53:41.3666650+00:00`
+- ActivationWindowEnd: `2026-06-25T08:23:41.3666650+00:00`
 - RequestCap: `100`
 - KillSwitchArmed: `True`
 - RollbackCheckpointId: `arsp-rollbac...`
-- TraceSinkPath: `vector/v7/live-activation-trace-20260625-073147.jsonl`
+- TraceSinkPath: `vector/v7/live-activation-trace-20260625-075341.jsonl`
 
 ## Stop Conditions
 - `AnySafetyBoundaryViolation`
@@ -66,6 +66,8 @@
 - `PackageOutputMutation`
 - `VectorStoreBindingMutation`
 - `RuntimeSwitch`
+- `RuntimeActivation`
+- `RuntimeSwitchChanged`
 - `WriteConfigPatch`
 - `ChangeFormalSelectedSet`
 - `MutateApprovedScopes`
@@ -85,7 +87,7 @@
 - `noOpPassed=True`
 - `planIdMatches=True`
 - `configPatchPreviewLocked=True`
-- `executeLiveActivation=False`
+- `executeLiveActivation=True`
 - `killSwitchArmed=True`
 - `configPatchWritten=false runtimeActivation=false runtimeSwitchChanged=false`
 - `noRuntimeMutationInvariant=True`

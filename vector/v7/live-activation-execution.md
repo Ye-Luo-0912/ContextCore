@@ -1,7 +1,7 @@
 ﻿# Scoped Runtime Preview Live Activation Execution
 
-生成: `2026-06-25T07:31:44.6507629+00:00`
-操作: `arsp-live-exec-execution-57457b5eee974a208a5faa0fa2b135d3`
+生成: `2026-06-25T07:53:38.6268364+00:00`
+操作: `arsp-live-exec-execution-0734d1f5468f420a895e130e942af3f1`
 
 ## Decision
 - ExecutionGatePassed: `True`
@@ -11,16 +11,16 @@
 - ExecuteLiveActivation: `False`
 
 ## Execution Record
-- ActivationExecutionId: `arsp-live-exec-20260625-170e495b55b54eab81295501a87a27c8`
+- ActivationExecutionId: `arsp-live-exec-20260625-0e933b543b1d4e8485adff711f7c6c17`
 - ExecutionPlanId: `arsp-exec-pl...`
 - AppliedConfigPatchId: `arsp-config-...`
 - ApprovedScopes: `demo-workspace/demo-collection`
-- ActivationWindowStart: `2026-06-25T07:31:44.6507629+00:00`
-- ActivationWindowEnd: `2026-06-25T08:01:44.6507629+00:00`
+- ActivationWindowStart: `2026-06-25T07:53:38.6268364+00:00`
+- ActivationWindowEnd: `2026-06-25T08:23:38.6268364+00:00`
 - RequestCap: `100`
 - KillSwitchArmed: `True`
 - RollbackCheckpointId: `arsp-rollbac...`
-- TraceSinkPath: `vector/v7/live-activation-trace-20260625-073144.jsonl`
+- TraceSinkPath: `vector/v7/live-activation-trace-20260625-075338.jsonl`
 
 ## Stop Conditions
 - `AnySafetyBoundaryViolation`
@@ -38,7 +38,7 @@
 - ConfigPatchWritten: `False`
 - RuntimeActivation: `False`
 - RuntimeSwitchChanged: `False`
-- PlanIdMatches: `True`
+- PlanIdMatches: `False`
 - ConfigPatchPreviewLocked: `True`
 - NoRuntimeMutationInvariant: `True`
 
@@ -66,6 +66,8 @@
 - `PackageOutputMutation`
 - `VectorStoreBindingMutation`
 - `RuntimeSwitch`
+- `RuntimeActivation`
+- `RuntimeSwitchChanged`
 - `WriteConfigPatch`
 - `ChangeFormalSelectedSet`
 - `MutateApprovedScopes`
@@ -83,7 +85,7 @@
 - `planPassed=True`
 - `freezePassed=True`
 - `noOpPassed=True`
-- `planIdMatches=True`
+- `planIdMatches=False`
 - `configPatchPreviewLocked=True`
 - `executeLiveActivation=False`
 - `killSwitchArmed=True`

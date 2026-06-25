@@ -33,6 +33,8 @@ public sealed class ScopedRuntimePreviewLiveActivationExecutionRunner
         "PackageOutputMutation",
         "VectorStoreBindingMutation",
         "RuntimeSwitch",
+        "RuntimeActivation",
+        "RuntimeSwitchChanged",
         "WriteConfigPatch",
         "ChangeFormalSelectedSet",
         "MutateApprovedScopes",
@@ -100,9 +102,14 @@ public sealed class ScopedRuntimePreviewLiveActivationExecutionRunner
         var planExecutionPlanId = plan?.ExecutionPlanId ?? "";
         var requestedPlanId = options.ExecutionPlanId;
         var planIdMatches = !string.IsNullOrWhiteSpace(planExecutionPlanId)
-            && (!isGate || string.IsNullOrWhiteSpace(requestedPlanId) || string.Equals(planExecutionPlanId, requestedPlanId, StringComparison.OrdinalIgnoreCase));
-        if (!planIdMatches)
-            blocked.Add("ExecutionPlanIdMismatch");
+            && string.Equals(planExecutionPlanId, requestedPlanId, StringComparison.OrdinalIgnoreCase);
+
+        if (isGate && string.IsNullOrWhiteSpace(requestedPlanId))
+            blocked.Add("ExecutionPlanIdMissing");
+        else if (isGate && !planIdMatches)
+            blocked.Add("PlanIdMismatch");
+        else if (!isGate && string.IsNullOrWhiteSpace(planExecutionPlanId))
+            blocked.Add("ExecutionPlanIdMissingOnDisk");
 
         var configPatchPreviewLocked = plan?.ConfigPatchPreviewLocked ?? false;
         if (!configPatchPreviewLocked)
@@ -133,7 +140,13 @@ public sealed class ScopedRuntimePreviewLiveActivationExecutionRunner
             "OperatorAbort",
         };
 
-        var executeLiveActivation = isGate && options.ExecuteLiveActivation;
+        var executeLiveActivation = options.ExecuteLiveActivation;
+
+        if (isGate && !executeLiveActivation)
+            blocked.Add("ExecuteLiveActivationNotRequested");
+
+        if (isGate && !options.FinalApprovalExplicitlyProvided)
+            blocked.Add("FinalApprovalMissing");
 
         var dryRunPresent = dryRun is not null;
         var formalRetrievalAllowed = dryRunPresent && dryRun!.FormalRetrievalAllowed;
@@ -151,6 +164,9 @@ public sealed class ScopedRuntimePreviewLiveActivationExecutionRunner
         if (packageOutputChanged) blocked.Add("SafetyBoundaryPackageOutputChanged");
         if (vectorBindingChanged) blocked.Add("SafetyBoundaryVectorStoreBindingChanged");
         if (globalDefaultOn) blocked.Add("SafetyBoundaryGlobalDefaultOn");
+
+        var runtimeActivationDetected = plan?.RuntimeActivation ?? false;
+        if (runtimeActivationDetected) blocked.Add("SafetyBoundaryRuntimeActivation");
 
         if (!killSwitchArmed) blocked.Add("KillSwitchNotArmed");
         if (string.IsNullOrWhiteSpace(rollbackCheckpointId)) blocked.Add("RollbackCheckpointMissing");
