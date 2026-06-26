@@ -112,6 +112,19 @@ public sealed class FormalRetrievalPromotionApprovalEvidenceSealRunner
         var evidenceSourceKind = "";
         var evidenceProvidedBy = "";
 
+        var trustAnchorPresent = false;
+        var provenanceRecordMatched = false;
+        var sourceKindTrusted = false;
+        var providedByMatched = false;
+        var checksumMatched = false;
+        var requestIdMatched = false;
+        var boundGateIdMatched = false;
+        var trustRequestIdMatched = false;
+        var trustBoundGateMatched = false;
+        var trustRecordNotExpired = false;
+        var trustScopeMatched = false;
+        var evidenceProvenanceTrusted = false;
+
         if (evidencePresent && evidence is not null)
         {
             approvedBy = evidence.ApprovedBy;
@@ -148,16 +161,26 @@ public sealed class FormalRetrievalPromotionApprovalEvidenceSealRunner
 
             if (approvalArtifact is not null)
             {
+                var reqIdMatch = !string.IsNullOrWhiteSpace(evidence.SourceApprovalRequestId)
+                    && string.Equals(evidence.SourceApprovalRequestId, approvalArtifact.ApprovalRequestId, StringComparison.OrdinalIgnoreCase);
+                var boundGateMatch = !string.IsNullOrWhiteSpace(evidence.BoundPendingApprovalGateOperationId)
+                    && string.Equals(evidence.BoundPendingApprovalGateOperationId, approvalArtifact.OperationId, StringComparison.OrdinalIgnoreCase);
+
+                requestIdMatched = reqIdMatch;
+                boundGateIdMatched = boundGateMatch;
+
                 if (string.IsNullOrWhiteSpace(evidence.SourceApprovalRequestId))
                     blocked.Add("EvidenceSourceApprovalRequestIdMissing");
-                else if (!string.Equals(evidence.SourceApprovalRequestId, approvalArtifact.ApprovalRequestId, StringComparison.OrdinalIgnoreCase))
+                else if (!reqIdMatch)
                     blocked.Add("EvidenceSourceApprovalRequestIdMismatch");
 
                 if (string.IsNullOrWhiteSpace(evidence.BoundPendingApprovalGateOperationId))
                     blocked.Add("EvidenceBoundPendingGateIdMissing");
-                else if (!string.Equals(evidence.BoundPendingApprovalGateOperationId, approvalArtifact.OperationId, StringComparison.OrdinalIgnoreCase))
+                else if (!boundGateMatch)
                     blocked.Add("EvidenceBoundPendingGateIdMismatch");
             }
+
+            trustAnchorPresent = trustRegistry is not null;
 
             if (trustRegistry is null)
             {
@@ -172,34 +195,41 @@ public sealed class FormalRetrievalPromotionApprovalEvidenceSealRunner
                 var provenanceRecord = trustRegistry.TrustedProvenanceRecords
                     .FirstOrDefault(r => string.Equals(r.ApprovalEvidenceProvenanceId, evidence.ApprovalEvidenceProvenanceId, StringComparison.OrdinalIgnoreCase));
 
+                provenanceRecordMatched = provenanceRecord is not null;
+
                 if (provenanceRecord is null)
                 {
                     blocked.Add("ApprovalEvidenceProvenanceUntrusted");
                 }
                 else
                 {
-                    if (!trustRegistry.AllowedSourceKinds.Any(k => string.Equals(k, evidence.ApprovalEvidenceSourceKind, StringComparison.OrdinalIgnoreCase)))
-                        blocked.Add("ApprovalEvidenceSourceKindUntrusted");
+                    sourceKindTrusted = trustRegistry.AllowedSourceKinds
+                        .Any(k => string.Equals(k, evidence.ApprovalEvidenceSourceKind, StringComparison.OrdinalIgnoreCase));
+                    if (!sourceKindTrusted) blocked.Add("ApprovalEvidenceSourceKindUntrusted");
 
-                    if (!string.Equals(evidence.ApprovalEvidenceProvidedBy, provenanceRecord.ApprovalEvidenceProvidedBy, StringComparison.OrdinalIgnoreCase))
-                        blocked.Add("ApprovalEvidenceProvidedByMismatch");
+                    providedByMatched = string.Equals(evidence.ApprovalEvidenceProvidedBy, provenanceRecord.ApprovalEvidenceProvidedBy, StringComparison.OrdinalIgnoreCase);
+                    if (!providedByMatched) blocked.Add("ApprovalEvidenceProvidedByMismatch");
 
-                    if (!string.Equals(evidence.ApprovalEvidenceChecksum, provenanceRecord.ApprovalEvidenceChecksum, StringComparison.OrdinalIgnoreCase))
-                        blocked.Add("ApprovalEvidenceChecksumMismatch");
+                    checksumMatched = string.Equals(evidence.ApprovalEvidenceChecksum, provenanceRecord.ApprovalEvidenceChecksum, StringComparison.OrdinalIgnoreCase);
+                    if (!checksumMatched) blocked.Add("ApprovalEvidenceChecksumMismatch");
 
-                    if (!string.Equals(evidence.SourceApprovalRequestId, provenanceRecord.SourceApprovalRequestId, StringComparison.OrdinalIgnoreCase))
-                        blocked.Add("ApprovalEvidenceRequestIdMismatch");
+                    trustRequestIdMatched = string.Equals(evidence.SourceApprovalRequestId, provenanceRecord.SourceApprovalRequestId, StringComparison.OrdinalIgnoreCase);
+                    if (!trustRequestIdMatched) blocked.Add("ApprovalEvidenceRequestIdMismatch");
 
-                    if (!string.Equals(evidence.BoundPendingApprovalGateOperationId, provenanceRecord.BoundPendingApprovalGateOperationId, StringComparison.OrdinalIgnoreCase))
-                        blocked.Add("ApprovalEvidenceBoundGateIdMismatch");
+                    trustBoundGateMatched = string.Equals(evidence.BoundPendingApprovalGateOperationId, provenanceRecord.BoundPendingApprovalGateOperationId, StringComparison.OrdinalIgnoreCase);
+                    if (!trustBoundGateMatched) blocked.Add("ApprovalEvidenceBoundGateIdMismatch");
 
-                    if (provenanceRecord.ValidUntil != default && DateTimeOffset.UtcNow > provenanceRecord.ValidUntil)
-                        blocked.Add("ApprovalEvidenceTrustRecordExpired");
+                    trustRecordNotExpired = provenanceRecord.ValidUntil == default || DateTimeOffset.UtcNow <= provenanceRecord.ValidUntil;
+                    if (!trustRecordNotExpired) blocked.Add("ApprovalEvidenceTrustRecordExpired");
 
                     var trustScopes = provenanceRecord.AllowedScopes;
-                    var scopeSubsetOfTrust = approvalScopes.Length > 0 && trustScopes.Count > 0
+                    trustScopeMatched = approvalScopes.Length > 0 && trustScopes.Count > 0
                         && approvalScopes.All(s => trustScopes.Any(t => string.Equals(t, s, StringComparison.OrdinalIgnoreCase)));
-                    if (!scopeSubsetOfTrust) blocked.Add("ApprovalEvidenceScopeNotTrusted");
+                    if (!trustScopeMatched) blocked.Add("ApprovalEvidenceScopeNotTrusted");
+
+                    evidenceProvenanceTrusted = provenanceRecordMatched && sourceKindTrusted && providedByMatched
+                        && checksumMatched && trustRequestIdMatched && trustBoundGateMatched
+                        && trustScopeMatched && trustRecordNotExpired;
                 }
 
                 isExternal = true;
@@ -217,9 +247,20 @@ public sealed class FormalRetrievalPromotionApprovalEvidenceSealRunner
 
         diag.Add($"stage={stage}");
         diag.Add($"evidencePresent={evidencePresent}");
+        diag.Add($"trustAnchorPresent={trustAnchorPresent}");
+        diag.Add($"provenanceRecordMatched={provenanceRecordMatched}");
+        diag.Add($"sourceKindTrusted={sourceKindTrusted}");
+        diag.Add($"providedByMatched={providedByMatched}");
+        diag.Add($"checksumMatched={checksumMatched}");
+        diag.Add($"requestIdMatched={requestIdMatched}");
+        diag.Add($"boundGateIdMatched={boundGateIdMatched}");
+        diag.Add($"trustRequestIdMatched={trustRequestIdMatched}");
+        diag.Add($"trustBoundGateMatched={trustBoundGateMatched}");
+        diag.Add($"trustScopeMatched={trustScopeMatched}");
+        diag.Add($"trustRecordNotExpired={trustRecordNotExpired}");
+        diag.Add($"evidenceProvenanceTrusted={evidenceProvenanceTrusted}");
         diag.Add($"boundPendingGateVerified={boundPendingGateVerified}");
         diag.Add($"pendingReasonsManualOnly={pendingReasonsManualOnly}");
-        diag.Add($"isExternal={isExternal}");
         diag.Add($"scopeSubsetValidated={scopeSubsetValidated}");
         diag.Add($"sourceGateIdsMatch={sourceGateIdsMatch}");
         diag.Add($"sealPassed={sealPassed} gatePassed={gatePassed}");
@@ -251,11 +292,11 @@ public sealed class FormalRetrievalPromotionApprovalEvidenceSealRunner
             ApprovalEvidenceProvidedBy = evidenceProvidedBy,
             BoundPendingApprovalGateVerified = boundPendingGateVerified,
             PendingApprovalBlockedReasonsManualOnly = pendingReasonsManualOnly,
-            SourceApprovalRequestIdMatched = false,
-            BoundPendingApprovalGateIdMatched = false,
-            TrustAnchorPresent = trustRegistry is not null,
-            EvidenceProvenanceTrusted = !blocked.Contains("ApprovalEvidenceProvenanceUntrusted", StringComparer.OrdinalIgnoreCase),
-            EvidenceChecksumMatched = !blocked.Contains("ApprovalEvidenceChecksumMismatch", StringComparer.OrdinalIgnoreCase),
+            SourceApprovalRequestIdMatched = evidencePresent && requestIdMatched,
+            BoundPendingApprovalGateIdMatched = evidencePresent && boundGateIdMatched,
+            TrustAnchorPresent = trustAnchorPresent,
+            EvidenceProvenanceTrusted = evidencePresent && evidenceProvenanceTrusted,
+            EvidenceChecksumMatched = evidencePresent && trustAnchorPresent && checksumMatched,
 
             V8ApprovalPendingGatePresent = approvalArtifact is not null,
             V8PlanGatePassed = planGatePassed,
