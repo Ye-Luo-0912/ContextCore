@@ -294,14 +294,23 @@ public static partial class EvalCommand
             templatesContainPlaceholders = evidenceContent.Contains("{{PLACEHOLDER:", StringComparison.OrdinalIgnoreCase)
                 && trustContent.Contains("{{PLACEHOLDER:", StringComparison.OrdinalIgnoreCase);
 
-            var evidenceKeys = new[] { "ApprovalEvidenceId", "ApprovedBy", "ApprovalId", "ApprovalSource",
-                "ApprovalTimestamp", "SourcePromotionPlanGateOperationId", "SourceReadinessGateOperationId",
-                "SourceCloseoutGateOperationId", "OperatorStatement", "EvidenceCreatedAt",
-                "ApprovalEvidenceSourceKind", "ApprovalEvidenceProvenanceId", "ApprovalEvidenceProvidedBy",
-                "ApprovalEvidenceProvidedAt", "ApprovalEvidenceTrustMode", "ApprovalEvidenceChecksum",
-                "SourceApprovalRequestId", "BoundPendingApprovalGateOperationId" };
+            var evidenceKeys = new[] { "ApprovalEvidenceId", "ApprovedBy", "ApprovalId", "ApprovalScopes[0]",
+                "ApprovalSource", "ApprovalTimestamp", "SourcePromotionPlanGateOperationId",
+                "SourceReadinessGateOperationId", "SourceCloseoutGateOperationId", "OperatorStatement",
+                "EvidenceCreatedAt", "ApprovalEvidenceSourceKind", "ApprovalEvidenceProvenanceId",
+                "ApprovalEvidenceProvidedBy", "ApprovalEvidenceProvidedAt", "ApprovalEvidenceTrustMode",
+                "ApprovalEvidenceChecksum", "SourceApprovalRequestId", "BoundPendingApprovalGateOperationId" };
 
-            var trustKeys = new[] { "RegistryId", "RegistryCreatedAt" };
+            var trustKeys = new[] { "RegistryId", "RegistryCreatedAt", "AllowedSourceKinds[0]",
+                "TrustedProvenanceRecords[0].ApprovalEvidenceProvenanceId",
+                "TrustedProvenanceRecords[0].ApprovalEvidenceSourceKind",
+                "TrustedProvenanceRecords[0].ApprovalEvidenceProvidedBy",
+                "TrustedProvenanceRecords[0].ApprovalEvidenceChecksum",
+                "TrustedProvenanceRecords[0].SourceApprovalRequestId",
+                "TrustedProvenanceRecords[0].BoundPendingApprovalGateOperationId",
+                "TrustedProvenanceRecords[0].AllowedScopes[0]",
+                "TrustedProvenanceRecords[0].TrustMode",
+                "TrustedProvenanceRecords[0].ValidUntil" };
 
             evidenceFieldsValid = ValidateTemplateFields(evidenceContent, evidenceKeys, missingFields, nonPlaceholderFields);
             trustFieldsValid = ValidateTemplateFields(trustContent, trustKeys, missingFields, nonPlaceholderFields);
@@ -344,43 +353,63 @@ public static partial class EvalCommand
             $"mainlineBlocked={report.MainlineIntakeStillBlocked}; blocked={report.BlockedReasons.Count}");
     }
 
-    private static bool ValidateTemplateFields(string jsonContent, string[] fieldNames, List<string> missing, List<string> nonPlaceholder)
+    private static bool ValidateTemplateFields(string jsonContent, string[] fieldPaths, List<string> missing, List<string> nonPlaceholder)
     {
         var doc = System.Text.Json.JsonDocument.Parse(jsonContent);
-        var root = doc.RootElement;
         var allValid = true;
 
-        foreach (var field in fieldNames)
+        foreach (var path in fieldPaths)
         {
-            if (!root.TryGetProperty(field, out var prop))
+            var el = NavigateJsonPath(doc.RootElement, path);
+            if (el is null)
             {
-                missing.Add(field);
+                missing.Add(path);
                 allValid = false;
                 continue;
             }
 
-            var val = prop.ValueKind == System.Text.Json.JsonValueKind.String ? prop.GetString() ?? "" : prop.GetRawText();
+            var val = el.Value.ValueKind == System.Text.Json.JsonValueKind.String
+                ? el.Value.GetString() ?? ""
+                : el.Value.GetRawText();
+
             if (string.IsNullOrWhiteSpace(val) || !val.Contains("{{PLACEHOLDER:", StringComparison.OrdinalIgnoreCase))
             {
-                nonPlaceholder.Add(field);
+                nonPlaceholder.Add(path);
                 allValid = false;
             }
         }
 
-        var approvalScopes = root.TryGetProperty("ApprovalScopes", out var scopes) && scopes.ValueKind == System.Text.Json.JsonValueKind.Array;
-        if (approvalScopes && scopes.GetArrayLength() > 0)
-        {
-            var first = scopes[0].GetString() ?? "";
-            if (!first.Contains("{{PLACEHOLDER:", StringComparison.OrdinalIgnoreCase)) { nonPlaceholder.Add("ApprovalScopes[0]"); allValid = false; }
-        }
-
-        var allowedKinds = root.TryGetProperty("AllowedSourceKinds", out var kinds) && kinds.ValueKind == System.Text.Json.JsonValueKind.Array;
-        if (allowedKinds && kinds.GetArrayLength() > 0)
-        {
-            var first = kinds[0].GetString() ?? "";
-            if (!first.Contains("{{PLACEHOLDER:", StringComparison.OrdinalIgnoreCase)) { nonPlaceholder.Add("AllowedSourceKinds[0]"); allValid = false; }
-        }
-
         return allValid;
+    }
+
+    private static System.Text.Json.JsonElement? NavigateJsonPath(System.Text.Json.JsonElement root, string path)
+    {
+        var segments = path.Split('.');
+        System.Text.Json.JsonElement current = root;
+
+        foreach (var seg in segments)
+        {
+            var bracketIdx = seg.IndexOf('[');
+            if (bracketIdx > 0)
+            {
+                var propName = seg[..bracketIdx];
+                var closeIdx = seg.IndexOf(']', bracketIdx);
+                if (closeIdx < 0) return null;
+                var idxStr = seg[(bracketIdx + 1)..closeIdx];
+                if (!int.TryParse(idxStr, out var arrIdx)) return null;
+
+                if (!current.TryGetProperty(propName, out var arrEl) || arrEl.ValueKind != System.Text.Json.JsonValueKind.Array)
+                    return null;
+                if (arrIdx >= arrEl.GetArrayLength()) return null;
+                current = arrEl[arrIdx];
+            }
+            else
+            {
+                if (!current.TryGetProperty(seg, out var prop)) return null;
+                current = prop;
+            }
+        }
+
+        return current;
     }
 }
