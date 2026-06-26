@@ -3484,6 +3484,36 @@ public sealed class FormalRetrievalPromotionExternalApprovalDryRunReport
     public IReadOnlyList<string> Diagnostics { get; init; } = Array.Empty<string>();
 }
 
+
+/// <summary>V8.7 negative matrix 单案例。</summary>
+public sealed class FormalRetrievalPromotionExternalApprovalDryRunNegativeCase
+{
+    public string CaseName { get; init; } = "";
+    public string ExpectedBlockedReason { get; init; } = "";
+    public IReadOnlyList<string> ActualBlockedReasons { get; init; } = Array.Empty<string>();
+    public bool FailedAsExpected { get; init; }
+}
+
+
+/// <summary>V8.7 negative matrix 报告。</summary>
+public sealed class FormalRetrievalPromotionExternalApprovalDryRunNegativeMatrixReport
+{
+    public string OperationId { get; init; } = "";
+    public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
+    public bool MatrixPassed { get; init; }
+    public bool GatePassed { get; init; }
+    public string Recommendation { get; init; } = "";
+    public int TotalCases { get; init; }
+    public int PassedCases { get; init; }
+    public int FailedCases { get; init; }
+    public IReadOnlyList<FormalRetrievalPromotionExternalApprovalDryRunNegativeCase> Cases { get; init; } = Array.Empty<FormalRetrievalPromotionExternalApprovalDryRunNegativeCase>();
+    public bool FormalRetrievalAllowed { get; init; }
+    public bool NoRuntimeMutationInvariant { get; init; }
+    public IReadOnlyList<string> BlockedReasons { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> Diagnostics { get; init; } = Array.Empty<string>();
+}
+
+
 /// <summary>架构清理计划报告。</summary>
 public sealed class ArchitectureCleanupPlanReport
 {

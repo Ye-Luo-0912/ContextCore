@@ -1,0 +1,76 @@
+﻿{
+  "OperationId": "frp-neg-matrix-50737a11932242559649b982765357f5",
+  "CreatedAt": "2026-06-26T13:46:42.8675535+00:00",
+  "MatrixPassed": true,
+  "GatePassed": true,
+  "Recommendation": "NegativeMatrixPassed",
+  "TotalCases": 7,
+  "PassedCases": 7,
+  "FailedCases": 0,
+  "Cases": [
+    {
+      "CaseName": "SourceKindMismatch",
+      "ExpectedBlockedReason": "FixtureSourceKindMismatch",
+      "ActualBlockedReasons": [
+        "FixtureSourceKindMismatch"
+      ],
+      "FailedAsExpected": true
+    },
+    {
+      "CaseName": "ProvidedByMismatch",
+      "ExpectedBlockedReason": "FixtureProvidedByMismatch",
+      "ActualBlockedReasons": [
+        "FixtureProvidedByMismatch"
+      ],
+      "FailedAsExpected": true
+    },
+    {
+      "CaseName": "TrustRecordExpired",
+      "ExpectedBlockedReason": "FixtureTrustRecordExpired",
+      "ActualBlockedReasons": [
+        "FixtureTrustRecordExpired"
+      ],
+      "FailedAsExpected": true
+    },
+    {
+      "CaseName": "ChecksumMismatch",
+      "ExpectedBlockedReason": "FixtureChecksumMismatch",
+      "ActualBlockedReasons": [
+        "FixtureChecksumMismatch"
+      ],
+      "FailedAsExpected": true
+    },
+    {
+      "CaseName": "RecordApprovalRequestMismatch",
+      "ExpectedBlockedReason": "FixtureTrustRecordApprovalRequestMismatch",
+      "ActualBlockedReasons": [
+        "FixtureApprovalRequestBindingFailed",
+        "FixtureTrustRecordApprovalRequestMismatch"
+      ],
+      "FailedAsExpected": true
+    },
+    {
+      "CaseName": "RecordBoundGateMismatch",
+      "ExpectedBlockedReason": "FixtureTrustRecordBoundGateMismatch",
+      "ActualBlockedReasons": [
+        "FixtureApprovalRequestBindingFailed",
+        "FixtureTrustRecordBoundGateMismatch"
+      ],
+      "FailedAsExpected": true
+    },
+    {
+      "CaseName": "SourceGateIdsMismatch",
+      "ExpectedBlockedReason": "FixtureSourceGateIdsMismatch",
+      "ActualBlockedReasons": [
+        "FixtureSourceGateIdsMismatch"
+      ],
+      "FailedAsExpected": true
+    }
+  ],
+  "FormalRetrievalAllowed": false,
+  "NoRuntimeMutationInvariant": true,
+  "BlockedReasons": [],
+  "Diagnostics": [
+    "total=7 passed=7 failed=0"
+  ]
+}
