@@ -1,6 +1,6 @@
 ﻿{
-  "OperationId": "frp-quarantine-gate-1df2b5e163224a11b89888055492609b",
-  "CreatedAt": "2026-06-26T16:12:47.4988374+00:00",
+  "OperationId": "frp-quarantine-gate-d5acf792b651473ea80c4d9aa9043111",
+  "CreatedAt": "2026-06-26T16:23:49.7750955+00:00",
   "ScanPassed": true,
   "GatePassed": true,
   "Recommendation": "QuarantineScanComplete",

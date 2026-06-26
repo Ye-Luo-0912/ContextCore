@@ -573,14 +573,14 @@ public static partial class EvalCommand
                 {
                     var doc = System.Text.Json.JsonDocument.Parse(rawJson);
                     var records = doc.RootElement.GetProperty("TrustedProvenanceRecords");
-                    if (records.GetArrayLength() > 0)
+                    for (var i = 0; i < records.GetArrayLength(); i++)
                     {
-                        var rec0 = records[0];
+                        var rec = records[i];
                         foreach (var field in recRequiredFields)
                         {
-                            if (!rec0.TryGetProperty(field, out var prop))
+                            if (!rec.TryGetProperty(field, out var prop))
                             {
-                                missingFields.Add($"TrustedProvenanceRecords[0].{field}");
+                                missingFields.Add($"TrustedProvenanceRecords[{i}].{field}");
                                 regSchemaValid = false;
                                 continue;
                             }
@@ -592,14 +592,14 @@ public static partial class EvalCommand
                             };
                             if (isInvalid)
                             {
-                                invalidFields.Add($"TrustedProvenanceRecords[0].{field}");
+                                invalidFields.Add($"TrustedProvenanceRecords[{i}].{field}");
                                 regSchemaValid = false;
                             }
                             if (field == "ValidUntil" && prop.TryGetDateTimeOffset(out var dt))
                             {
                                 if (dt == default || dt.Year < 2000)
                                 {
-                                    invalidFields.Add($"TrustedProvenanceRecords[0].{field}");
+                                    invalidFields.Add($"TrustedProvenanceRecords[{i}].{field}");
                                     regSchemaValid = false;
                                 }
                             }
