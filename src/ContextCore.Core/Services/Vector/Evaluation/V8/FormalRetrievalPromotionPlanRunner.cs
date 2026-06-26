@@ -227,7 +227,7 @@ public sealed class FormalRetrievalPromotionPlanRunner
         b.AppendLine($"- FormalRetrievalAllowed: `{r.FormalRetrievalAllowed}`");
         b.AppendLine($"- NoRuntimeMutationInvariant: `{r.NoRuntimeMutationInvariant}`");
         b.AppendLine();
-        b.AppendLine("V8.1 formal retrieval promotion plan。不启用 formal retrieval。GatePassed=false is expected for non-gate artifact。");
+        b.AppendLine("V8.1 formal retrieval promotion plan。不启用 formal retrieval。");
         return b.ToString();
     }
 }

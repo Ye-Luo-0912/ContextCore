@@ -1,11 +1,11 @@
 ﻿{
-  "OperationId": "frp-plan-gate-436339d305c94de2a6f20817289d4226",
-  "CreatedAt": "2026-06-26T06:15:06.1075547+00:00",
+  "OperationId": "frp-plan-gate-39b807ebe543456c89166daebc7eb484",
+  "CreatedAt": "2026-06-26T06:51:47.5652615+00:00",
   "PlanPassed": true,
   "GatePassed": true,
   "Recommendation": "ReadyForFormalRetrievalPromotionApproval",
   "NextAllowedPhase": "FormalRetrievalPromotionApproval",
-  "PromotionPlanId": "frp-plan-20260626-8047e9c9c3cc4d829bfdb529179d3213",
+  "PromotionPlanId": "frp-plan-20260626-be702b9fface4f3fa1218c27e9f5ba8a",
   "SourceCloseoutId": "arsp-closeout-gate-3df0efdbc9a540f3b5cdd03a2bd1b43a",
   "ApprovedScopes": [
     "demo-workspace/demo-collection"

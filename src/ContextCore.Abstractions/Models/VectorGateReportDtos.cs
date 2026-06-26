@@ -3081,6 +3081,83 @@ public sealed class FormalRetrievalPromotionPlanReport
 }
 
 
+/// <summary>V8.2 formal retrieval promotion approval 推荐。</summary>
+public static class FormalRetrievalPromotionApprovalRecommendations
+{
+    public const string ManualApprovalGranted = nameof(ManualApprovalGranted);
+    public const string BlockedByMissingPlanGate = nameof(BlockedByMissingPlanGate);
+    public const string BlockedByManualApprovalMissing = nameof(BlockedByManualApprovalMissing);
+    public const string BlockedByApprovalIdentityMissing = nameof(BlockedByApprovalIdentityMissing);
+    public const string BlockedByApprovalIdMissing = nameof(BlockedByApprovalIdMissing);
+    public const string BlockedByUpstreamInvariantViolation = nameof(BlockedByUpstreamInvariantViolation);
+    public const string BlockedBySafetyBoundaryViolation = nameof(BlockedBySafetyBoundaryViolation);
+    public const string KeepPreviewOnly = nameof(KeepPreviewOnly);
+}
+
+
+/// <summary>V8.2 approval 选项。</summary>
+public sealed class FormalRetrievalPromotionApprovalOptions
+{
+    public bool Enabled { get; init; } = true;
+    public string ApprovedBy { get; init; } = "";
+    public bool ExplicitlyProvided { get; init; }
+    public string ApprovalId { get; init; } = "";
+    public bool ApprovalIdExplicitlyProvided { get; init; }
+}
+
+
+/// <summary>V8.2 formal retrieval promotion approval 报告。
+/// 人工批准契约。需要显式 --approved-by + --approval-id 才能通过 gate。
+/// FormalRetrievalAllowed=false。</summary>
+public sealed class FormalRetrievalPromotionApprovalReport
+{
+    public string OperationId { get; init; } = "";
+    public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
+    public bool ApprovalGatePassed { get; init; }
+    public bool GatePassed { get; init; }
+    public string Recommendation { get; init; }
+        = FormalRetrievalPromotionApprovalRecommendations.KeepPreviewOnly;
+    public string NextAllowedPhase { get; init; } = "KeepPreviewOnly";
+
+    public string ApprovalRequestId { get; init; } = "";
+    public string SourcePromotionPlanId { get; init; } = "";
+    public string SourcePromotionPlanGateOperationId { get; init; } = "";
+    public string SourceReadinessGateOperationId { get; init; } = "";
+    public string SourceCloseoutGateOperationId { get; init; } = "";
+    public IReadOnlyList<string> ApprovedScopes { get; init; } = Array.Empty<string>();
+    public bool RequiredManualApproval { get; init; }
+    public bool ApprovalGranted { get; init; }
+    public string ApprovedBy { get; init; } = "";
+    public string ApprovalId { get; init; } = "";
+    public DateTimeOffset ApprovalTimestamp { get; init; }
+    public bool ApprovalIdentityBound { get; init; }
+    public bool ApprovalScopeBound { get; init; }
+    public bool FormalRetrievalStillBlocked { get; init; }
+    public bool RuntimeSwitchStillBlocked { get; init; }
+    public bool ConfigPatchWritten { get; init; }
+
+    public bool V8PlanGatePassed { get; init; }
+    public bool V8ReadinessGatePassed { get; init; }
+    public bool V7CloseoutGatePassed { get; init; }
+    public bool P15GatePassed { get; init; }
+    public bool RuntimeChangeGatePassed { get; init; }
+
+    public bool FormalRetrievalAllowed { get; init; }
+    public bool RuntimeSwitchAllowed { get; init; }
+    public bool FormalPackageWritten { get; init; }
+    public bool PackageOutputChanged { get; init; }
+    public bool PackingPolicyChanged { get; init; }
+    public bool VectorStoreBindingChanged { get; init; }
+    public bool GlobalDefaultOn { get; init; }
+    public bool NoRuntimeMutationInvariant { get; init; }
+
+    public IReadOnlyList<string> AllowedActions { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> ForbiddenActions { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> BlockedReasons { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> Diagnostics { get; init; } = Array.Empty<string>();
+}
+
+
 /// <summary>架构清理计划报告。</summary>
 public sealed class ArchitectureCleanupPlanReport
 {

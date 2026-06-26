@@ -4109,6 +4109,28 @@ public static class ServiceOperationalRenderer
             builder.AppendLine($"- invariants         : formalRetrieval={v8Plan.FormalRetrievalAllowed} noRuntimeMutation={v8Plan.NoRuntimeMutationInvariant}");
         }
 
+        builder.AppendLine();
+        builder.AppendLine("V8.2 Formal Retrieval Promotion Approval");
+        var v8Approval = snapshot.FormalRetrievalPromotionApprovalReport;
+        if (v8Approval is null)
+        {
+            builder.AppendLine("- status : not generated");
+            builder.AppendLine("- path   : vector/v8/formal-retrieval-promotion-approval.json");
+            builder.AppendLine("- action : run eval formal-retrieval-promotion-approval");
+        }
+        else
+        {
+            builder.AppendLine($"- approval gate      : {v8Approval.ApprovalGatePassed}");
+            builder.AppendLine($"- gate passed        : {v8Approval.GatePassed}");
+            builder.AppendLine($"- recommendation     : {v8Approval.Recommendation}");
+            builder.AppendLine($"- next phase         : {v8Approval.NextAllowedPhase}");
+            builder.AppendLine($"- approval granted   : {v8Approval.ApprovalGranted}");
+            builder.AppendLine($"- approved by        : {v8Approval.ApprovedBy}");
+            builder.AppendLine($"- identity bound     : {v8Approval.ApprovalIdentityBound}");
+            builder.AppendLine($"- retrieval blocked  : {v8Approval.FormalRetrievalStillBlocked}");
+            builder.AppendLine($"- invariants         : formalRetrieval={v8Approval.FormalRetrievalAllowed} noRuntimeMutation={v8Approval.NoRuntimeMutationInvariant}");
+        }
+
         return builder.ToString();
     }
 

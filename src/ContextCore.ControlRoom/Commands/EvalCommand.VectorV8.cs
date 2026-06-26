@@ -110,4 +110,55 @@ public static partial class EvalCommand
             $"formalRetrievalStillBlocked={report.FormalRetrievalStillBlocked}; " +
             $"requiredManualApproval={report.RequiredManualApproval}; abortConditions={report.AbortConditions.Count}; blocked={report.BlockedReasons.Count}");
     }
+
+    private static async Task ExecuteFormalRetrievalPromotionApprovalAsync(
+        IReadOnlyList<string> args, string subcommand, CancellationToken ct)
+    {
+        var output = Path.GetFullPath(Path.Combine("vector", "v8"));
+        Directory.CreateDirectory(output);
+
+        var planGatePath = Path.Combine("vector", "v8", "formal-retrieval-promotion-plan-gate.json");
+        var planGate = await ReadJsonFileAsync<FormalRetrievalPromotionPlanReport>(planGatePath, ct).ConfigureAwait(false);
+
+        var readinessPath = Path.Combine("vector", "v8", "formal-retrieval-promotion-readiness-gate.json");
+        var readinessGate = await ReadJsonFileAsync<FormalRetrievalPromotionReadinessAuditReport>(readinessPath, ct).ConfigureAwait(false);
+
+        var closePath = Path.Combine("vector", "v7", "live-activation-closeout-gate.json");
+        var closeoutGate = await ReadJsonFileAsync<ScopedRuntimePreviewLiveActivationCloseoutReport>(closePath, ct).ConfigureAwait(false);
+
+        var rtPath = Path.Combine("learning", "readiness", "learning-runtime-change-readiness-gate.json");
+        var rtGate = await ReadJsonFileAsync<LearningRuntimeChangeReadinessGateReport>(rtPath, ct).ConfigureAwait(false);
+        var rtPassed = rtGate is not null && rtGate.Passed;
+
+        var p15Path = Path.Combine("eval", "eval-report-p15-a3.json");
+        var p15 = await ReadJsonFileAsync<JsonDocument>(p15Path, ct).ConfigureAwait(false);
+        var p15Passed = false;
+        if (p15 is not null && p15.RootElement.TryGetProperty("PassRate", out var pr)) p15Passed = pr.GetDouble() >= 1.0;
+
+        var options = new FormalRetrievalPromotionApprovalOptions
+        {
+            Enabled = !CommandHelpers.HasFlag(args, "--disabled"),
+            ApprovedBy = CommandHelpers.GetOption(args, "--approved-by") ?? "",
+            ExplicitlyProvided = CommandHelpers.HasFlag(args, "--approved-by"),
+            ApprovalId = CommandHelpers.GetOption(args, "--approval-id") ?? "",
+            ApprovalIdExplicitlyProvided = CommandHelpers.HasFlag(args, "--approval-id"),
+        };
+
+        var runner = new FormalRetrievalPromotionApprovalRunner();
+        var isGate = string.Equals(subcommand, "formal-retrieval-promotion-approval-gate", StringComparison.OrdinalIgnoreCase);
+        var report = isGate
+            ? runner.RunGate(planGate, readinessGate, closeoutGate, rtPassed, p15Passed, options)
+            : runner.RunApproval(planGate, readinessGate, closeoutGate, rtPassed, p15Passed, options);
+
+        var fn = isGate ? "formal-retrieval-promotion-approval-gate" : "formal-retrieval-promotion-approval";
+        var jp = Path.Combine(output, $"{fn}.json");
+        var mp = Path.Combine(output, $"{fn}.md");
+        await WriteJsonSafeAsync(report, jp, ct).ConfigureAwait(false);
+        await WriteTextAsync(FormalRetrievalPromotionApprovalRunner.BuildMarkdown(
+            isGate ? "Formal Retrieval Promotion Approval Gate" : "Formal Retrieval Promotion Approval", report), mp, ct).ConfigureAwait(false);
+
+        Console.WriteLine($"[Eval] Formal retrieval promotion approval written: {jp}");
+        Console.WriteLine($"[Eval] approvalGatePassed={report.ApprovalGatePassed}; gatePassed={report.GatePassed}; " +
+            $"approvalGranted={report.ApprovalGranted}; approvedBy={report.ApprovedBy}; blocked={report.BlockedReasons.Count}");
+    }
 }

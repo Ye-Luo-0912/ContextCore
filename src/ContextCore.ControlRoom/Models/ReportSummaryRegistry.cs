@@ -354,10 +354,22 @@ public static class ReportSummaryRegistry
         EvalPlanCommand = "eval formal-retrieval-promotion-plan",
     };
 
+    public static readonly ControlRoomReportDescriptor V8FormalRetrievalPromotionApproval = new()
+    {
+        ReportId = "FormalRetrievalPromotionApproval",
+        DisplayTitle = "V8.2 Formal Retrieval Promotion Approval Summary",
+        PrimaryPath = "vector/v8/formal-retrieval-promotion-approval.json",
+        GatePath = "vector/v8/formal-retrieval-promotion-approval-gate.json",
+        PhaseGroup = "V8",
+        EvalGateCommand = "eval formal-retrieval-promotion-approval-gate",
+        EvalPlanCommand = "eval formal-retrieval-promotion-approval",
+    };
+
     public static IReadOnlyList<ControlRoomReportDescriptor> V8Descriptors { get; } = new[]
     {
         V8FormalRetrievalPromotionReadinessAudit,
         V8FormalRetrievalPromotionPlan,
+        V8FormalRetrievalPromotionApproval,
     };
 
     // =========================================================================
