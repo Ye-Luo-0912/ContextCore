@@ -3266,6 +3266,32 @@ public sealed class FormalRetrievalPromotionApprovalEvidenceSealReport
 }
 
 
+/// <summary>V8.3R3 trust registry 可信证明记录。</summary>
+public sealed class FormalRetrievalPromotionApprovalTrustedProvenanceRecord
+{
+    public string ApprovalEvidenceProvenanceId { get; init; } = "";
+    public string ApprovalEvidenceSourceKind { get; init; } = "";
+    public string ApprovalEvidenceProvidedBy { get; init; } = "";
+    public string ApprovalEvidenceChecksum { get; init; } = "";
+    public string SourceApprovalRequestId { get; init; } = "";
+    public string BoundPendingApprovalGateOperationId { get; init; } = "";
+    public IReadOnlyList<string> AllowedScopes { get; init; } = Array.Empty<string>();
+    public string TrustMode { get; init; } = "";
+    public DateTimeOffset ValidUntil { get; init; }
+}
+
+
+/// <summary>V8.3R3 approval trust registry。</summary>
+public sealed class FormalRetrievalPromotionApprovalTrustRegistry
+{
+    public string RegistryId { get; init; } = "";
+    public DateTimeOffset RegistryCreatedAt { get; init; }
+    public IReadOnlyList<string> AllowedSourceKinds { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<FormalRetrievalPromotionApprovalTrustedProvenanceRecord> TrustedProvenanceRecords { get; init; }
+        = Array.Empty<FormalRetrievalPromotionApprovalTrustedProvenanceRecord>();
+}
+
+
 /// <summary>架构清理计划报告。</summary>
 public sealed class ArchitectureCleanupPlanReport
 {

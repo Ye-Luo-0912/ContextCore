@@ -24,27 +24,30 @@ public sealed class FormalRetrievalPromotionApprovalEvidenceSealRunner
 
     public FormalRetrievalPromotionApprovalEvidenceSealReport RunSeal(
         FormalRetrievalPromotionApprovalEvidence? evidence,
+        FormalRetrievalPromotionApprovalTrustRegistry? trustRegistry,
         FormalRetrievalPromotionApprovalReport? approvalArtifact,
         FormalRetrievalPromotionPlanReport? planGate,
         FormalRetrievalPromotionReadinessAuditReport? readinessGate,
         ScopedRuntimePreviewLiveActivationCloseoutReport? closeoutGate,
         bool rtPassed, bool p15Passed,
         FormalRetrievalPromotionApprovalEvidenceSealOptions? options = null)
-        => BuildReport("seal", false, evidence, approvalArtifact, planGate, readinessGate, closeoutGate, rtPassed, p15Passed, options);
+        => BuildReport("seal", false, evidence, trustRegistry, approvalArtifact, planGate, readinessGate, closeoutGate, rtPassed, p15Passed, options);
 
     public FormalRetrievalPromotionApprovalEvidenceSealReport RunGate(
         FormalRetrievalPromotionApprovalEvidence? evidence,
+        FormalRetrievalPromotionApprovalTrustRegistry? trustRegistry,
         FormalRetrievalPromotionApprovalReport? approvalArtifact,
         FormalRetrievalPromotionPlanReport? planGate,
         FormalRetrievalPromotionReadinessAuditReport? readinessGate,
         ScopedRuntimePreviewLiveActivationCloseoutReport? closeoutGate,
         bool rtPassed, bool p15Passed,
         FormalRetrievalPromotionApprovalEvidenceSealOptions? options = null)
-        => BuildReport("gate", true, evidence, approvalArtifact, planGate, readinessGate, closeoutGate, rtPassed, p15Passed, options);
+        => BuildReport("gate", true, evidence, trustRegistry, approvalArtifact, planGate, readinessGate, closeoutGate, rtPassed, p15Passed, options);
 
     private static FormalRetrievalPromotionApprovalEvidenceSealReport BuildReport(
         string stage, bool isGate,
         FormalRetrievalPromotionApprovalEvidence? evidence,
+        FormalRetrievalPromotionApprovalTrustRegistry? trustRegistry,
         FormalRetrievalPromotionApprovalReport? approvalArtifact,
         FormalRetrievalPromotionPlanReport? planGate,
         FormalRetrievalPromotionReadinessAuditReport? readinessGate,
@@ -155,6 +158,54 @@ public sealed class FormalRetrievalPromotionApprovalEvidenceSealRunner
                 else if (!string.Equals(evidence.BoundPendingApprovalGateOperationId, approvalArtifact.OperationId, StringComparison.OrdinalIgnoreCase))
                     blocked.Add("EvidenceBoundPendingGateIdMismatch");
             }
+
+            if (trustRegistry is null)
+            {
+                blocked.Add("ApprovalTrustRegistryMissing");
+            }
+            else if (trustRegistry.AllowedSourceKinds.Count == 0 || trustRegistry.TrustedProvenanceRecords.Count == 0)
+            {
+                blocked.Add("ApprovalTrustRegistryInvalid");
+            }
+            else
+            {
+                var provenanceRecord = trustRegistry.TrustedProvenanceRecords
+                    .FirstOrDefault(r => string.Equals(r.ApprovalEvidenceProvenanceId, evidence.ApprovalEvidenceProvenanceId, StringComparison.OrdinalIgnoreCase));
+
+                if (provenanceRecord is null)
+                {
+                    blocked.Add("ApprovalEvidenceProvenanceUntrusted");
+                }
+                else
+                {
+                    if (!trustRegistry.AllowedSourceKinds.Any(k => string.Equals(k, evidence.ApprovalEvidenceSourceKind, StringComparison.OrdinalIgnoreCase)))
+                        blocked.Add("ApprovalEvidenceSourceKindUntrusted");
+
+                    if (!string.Equals(evidence.ApprovalEvidenceProvidedBy, provenanceRecord.ApprovalEvidenceProvidedBy, StringComparison.OrdinalIgnoreCase))
+                        blocked.Add("ApprovalEvidenceProvidedByMismatch");
+
+                    if (!string.Equals(evidence.ApprovalEvidenceChecksum, provenanceRecord.ApprovalEvidenceChecksum, StringComparison.OrdinalIgnoreCase))
+                        blocked.Add("ApprovalEvidenceChecksumMismatch");
+
+                    if (!string.Equals(evidence.SourceApprovalRequestId, provenanceRecord.SourceApprovalRequestId, StringComparison.OrdinalIgnoreCase))
+                        blocked.Add("ApprovalEvidenceRequestIdMismatch");
+
+                    if (!string.Equals(evidence.BoundPendingApprovalGateOperationId, provenanceRecord.BoundPendingApprovalGateOperationId, StringComparison.OrdinalIgnoreCase))
+                        blocked.Add("ApprovalEvidenceBoundGateIdMismatch");
+
+                    if (provenanceRecord.ValidUntil != default && DateTimeOffset.UtcNow > provenanceRecord.ValidUntil)
+                        blocked.Add("ApprovalEvidenceTrustRecordExpired");
+
+                    var trustScopes = provenanceRecord.AllowedScopes;
+                    var scopeSubsetOfTrust = approvalScopes.Length > 0 && trustScopes.Count > 0
+                        && approvalScopes.All(s => trustScopes.Any(t => string.Equals(t, s, StringComparison.OrdinalIgnoreCase)));
+                    if (!scopeSubsetOfTrust) blocked.Add("ApprovalEvidenceScopeNotTrusted");
+                }
+
+                isExternal = true;
+                evidenceSourceKind = evidence.ApprovalEvidenceSourceKind;
+                evidenceProvidedBy = evidence.ApprovalEvidenceProvidedBy;
+            }
         }
 
         var configPatchWritten = evidencePresent && evidence?.ApprovalEvidenceChecksum?.Contains("cfg-patch") == true;
@@ -202,9 +253,9 @@ public sealed class FormalRetrievalPromotionApprovalEvidenceSealRunner
             PendingApprovalBlockedReasonsManualOnly = pendingReasonsManualOnly,
             SourceApprovalRequestIdMatched = false,
             BoundPendingApprovalGateIdMatched = false,
-            TrustAnchorPresent = false,
-            EvidenceProvenanceTrusted = false,
-            EvidenceChecksumMatched = false,
+            TrustAnchorPresent = trustRegistry is not null,
+            EvidenceProvenanceTrusted = !blocked.Contains("ApprovalEvidenceProvenanceUntrusted", StringComparer.OrdinalIgnoreCase),
+            EvidenceChecksumMatched = !blocked.Contains("ApprovalEvidenceChecksumMismatch", StringComparer.OrdinalIgnoreCase),
 
             V8ApprovalPendingGatePresent = approvalArtifact is not null,
             V8PlanGatePassed = planGatePassed,

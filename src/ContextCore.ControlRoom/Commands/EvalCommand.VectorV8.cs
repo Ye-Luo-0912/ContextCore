@@ -172,6 +172,9 @@ public static partial class EvalCommand
         var evidencePath = Path.Combine("vector", "v8", "formal-retrieval-promotion-approval-evidence.json");
         var evidence = await ReadJsonFileAsync<FormalRetrievalPromotionApprovalEvidence>(evidencePath, ct).ConfigureAwait(false);
 
+        var trustPath = Path.Combine("vector", "v8", "formal-retrieval-promotion-approval-trust-registry.json");
+        var trustRegistry = await ReadJsonFileAsync<FormalRetrievalPromotionApprovalTrustRegistry>(trustPath, ct).ConfigureAwait(false);
+
         var approvalPath = Path.Combine("vector", "v8", "formal-retrieval-promotion-approval-gate.json");
         var approval = await ReadJsonFileAsync<FormalRetrievalPromotionApprovalReport>(approvalPath, ct).ConfigureAwait(false);
 
@@ -197,8 +200,8 @@ public static partial class EvalCommand
         var runner = new FormalRetrievalPromotionApprovalEvidenceSealRunner();
         var isGate = string.Equals(subcommand, "formal-retrieval-promotion-approval-evidence-seal-gate", StringComparison.OrdinalIgnoreCase);
         var report = isGate
-            ? runner.RunGate(evidence, approval, planGate, readinessGate, closeoutGate, rtPassed, p15Passed, options)
-            : runner.RunSeal(evidence, approval, planGate, readinessGate, closeoutGate, rtPassed, p15Passed, options);
+            ? runner.RunGate(evidence, trustRegistry, approval, planGate, readinessGate, closeoutGate, rtPassed, p15Passed, options)
+            : runner.RunSeal(evidence, trustRegistry, approval, planGate, readinessGate, closeoutGate, rtPassed, p15Passed, options);
 
         var fn = isGate ? "formal-retrieval-promotion-approval-evidence-seal-gate" : "formal-retrieval-promotion-approval-evidence-seal";
         var jp = Path.Combine(output, $"{fn}.json");
