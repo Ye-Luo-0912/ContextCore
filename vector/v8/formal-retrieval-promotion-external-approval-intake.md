@@ -1,7 +1,7 @@
-﻿# External Approval Intake Gate
+﻿# External Approval Intake
 
-生成: `2026-06-26T08:51:02.7232848+00:00`
-操作: `frp-intake-gate-0b8106acd49d4924811fadaa2d31e7e0`
+生成: `2026-06-26T08:51:00.0571259+00:00`
+操作: `frp-intake-intake-824e5b94a69c43c6a2a9851ec9eb4b87`
 
 ## Decision
 - IntakePassed: `False`

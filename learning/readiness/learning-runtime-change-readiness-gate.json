@@ -1,0 +1,317 @@
+{
+  "operationId": "learning-runtime-change-gate-e1da7e6f80564a39bcc76d4b9466c7c3",
+  "generatedAt": "2026-06-26T08:50:57.1640132+00:00",
+  "passed": true,
+  "registryReportPath": "learning/readiness/learning-readiness-freeze-report.json",
+  "checks": [
+    {
+      "capabilityId": "Qwen3EmbeddingProvider",
+      "condition": "NotReadyDoesNotAllowRuntimeModes",
+      "passed": true,
+      "reason": "\u672A\u901A\u8FC7 readiness \u7684 capability \u4E0D\u5F97\u5141\u8BB8 ApplyGuarded / RuntimeShadow / DefaultOn\u3002"
+    },
+    {
+      "capabilityId": "VectorRetrieval",
+      "condition": "NotReadyDoesNotAllowRuntimeModes",
+      "passed": true,
+      "reason": "\u672A\u901A\u8FC7 readiness \u7684 capability \u4E0D\u5F97\u5141\u8BB8 ApplyGuarded / RuntimeShadow / DefaultOn\u3002"
+    },
+    {
+      "capabilityId": "HybridRetrievalPreview",
+      "condition": "NotReadyDoesNotAllowRuntimeModes",
+      "passed": true,
+      "reason": "\u672A\u901A\u8FC7 readiness \u7684 capability \u4E0D\u5F97\u5141\u8BB8 ApplyGuarded / RuntimeShadow / DefaultOn\u3002"
+    },
+    {
+      "capabilityId": "RouterIntentClassifier",
+      "condition": "NotReadyDoesNotAllowRuntimeModes",
+      "passed": true,
+      "reason": "\u672A\u901A\u8FC7 readiness \u7684 capability \u4E0D\u5F97\u5141\u8BB8 ApplyGuarded / RuntimeShadow / DefaultOn\u3002"
+    },
+    {
+      "capabilityId": "CandidateReranker",
+      "condition": "NotReadyDoesNotAllowRuntimeModes",
+      "passed": true,
+      "reason": "\u672A\u901A\u8FC7 readiness \u7684 capability \u4E0D\u5F97\u5141\u8BB8 ApplyGuarded / RuntimeShadow / DefaultOn\u3002"
+    },
+    {
+      "capabilityId": "VectorRetrieval",
+      "condition": "VectorV4GateBlocksRuntimeShadow",
+      "passed": true,
+      "reason": "Vector V4 gate \u672A\u901A\u8FC7\u65F6\u5FC5\u987B\u7981\u6B62 RuntimeShadow / ApplyGuarded\u3002"
+    },
+    {
+      "capabilityId": "HybridRetrievalPreview",
+      "condition": "HybridRetrievalFormalRetrievalSwitchForbiddenWithoutV4Gate",
+      "passed": true,
+      "reason": "HybridRetrieval \u672A\u8FC7 V4 gate \u65F6\u4E0D\u5F97\u63A5 formal retrieval\u3002"
+    },
+    {
+      "capabilityId": "HybridRetrievalPreview",
+      "condition": "HybridRetrievalPackingPolicyIntegrationForbidden",
+      "passed": true,
+      "reason": "HybridRetrieval preview \u4E0D\u5F97\u5F71\u54CD PackingPolicy / package output\u3002"
+    },
+    {
+      "capabilityId": "HybridRetrievalPreview",
+      "condition": "HybridRetrievalFormalSourceReplacementForbidden",
+      "passed": true,
+      "reason": "HybridRetrieval preview \u4E0D\u5F97\u66FF\u4EE3\u6B63\u5F0F retrieval source\u3002"
+    },
+    {
+      "capabilityId": "DatasetV2Stress",
+      "condition": "DatasetV2StressFreezeDoesNotAllowFormalRetrieval",
+      "passed": true,
+      "reason": "Dataset V2 stress freeze \u901A\u8FC7\u4E5F\u53EA\u5141\u8BB8\u4F5C\u4E3A V4 \u590D\u6838\u8F93\u5165\uFF0C\u4E0D\u5F97\u5F00\u542F formal retrieval\u3002"
+    },
+    {
+      "capabilityId": "DatasetV2Stress",
+      "condition": "PostScoringRiskGatedProfileRuntimeUseForbidden",
+      "passed": true,
+      "reason": "post-scoring-risk-gated-v1 \u4E0D\u5F97\u76F4\u63A5\u63A5\u5165 runtime\u3002"
+    },
+    {
+      "capabilityId": "DatasetV2Stress",
+      "condition": "DatasetV2StressPackingPolicyIntegrationForbiddenWithoutV4Gate",
+      "passed": true,
+      "reason": "\u672A\u901A\u8FC7 V4 formal readiness gate \u524D\u4E0D\u5F97\u6539\u53D8 PackingPolicy / package output\u3002"
+    },
+    {
+      "capabilityId": "VectorV4ReadinessRecheck",
+      "condition": "VectorV4RecheckDoesNotAllowRuntimeSwitch",
+      "passed": true,
+      "reason": "V4.R \u901A\u8FC7\u4E5F\u4E0D\u7B49\u4E8E runtime switch\u3002"
+    },
+    {
+      "capabilityId": "VectorV4ReadinessRecheck",
+      "condition": "VectorV4RecheckFormalRetrievalStillForbidden",
+      "passed": true,
+      "reason": "V4.R \u9636\u6BB5 formal retrieval \u4ECD\u4FDD\u6301\u7981\u7528\u3002"
+    },
+    {
+      "capabilityId": "VectorV4ReadinessRecheck",
+      "condition": "VectorV4RecheckPackingPolicyIntegrationForbidden",
+      "passed": true,
+      "reason": "V4.R \u4E0D\u5F97\u6539\u53D8 PackingPolicy / package output\u3002"
+    },
+    {
+      "capabilityId": "GuardedFormalRetrievalPreview",
+      "condition": "GuardedFormalPreviewDoesNotAllowRuntimeSwitch",
+      "passed": true,
+      "reason": "Guarded formal retrieval preview \u901A\u8FC7\u4E5F\u4E0D\u7B49\u4E8E runtime switch\u3002"
+    },
+    {
+      "capabilityId": "GuardedFormalRetrievalPreview",
+      "condition": "GuardedFormalPreviewFormalRetrievalStillForbidden",
+      "passed": true,
+      "reason": "V4.1 \u9636\u6BB5 formal retrieval \u4ECD\u4FDD\u6301\u7981\u7528\u3002"
+    },
+    {
+      "capabilityId": "GuardedFormalRetrievalPreview",
+      "condition": "GuardedFormalPreviewPackageMutationForbidden",
+      "passed": true,
+      "reason": "V4.1 preview \u4E0D\u5F97\u6539\u53D8 PackingPolicy \u6216\u5199\u6B63\u5F0F package\u3002"
+    },
+    {
+      "capabilityId": "VectorShadowPackageComparison",
+      "condition": "VectorShadowPackageComparisonDoesNotAllowRuntimeSwitch",
+      "passed": true,
+      "reason": "V4.2 shadow package comparison \u901A\u8FC7\u4E5F\u4E0D\u7B49\u4E8E runtime switch\u3002"
+    },
+    {
+      "capabilityId": "VectorShadowPackageComparison",
+      "condition": "VectorShadowPackageComparisonFormalRetrievalStillForbidden",
+      "passed": true,
+      "reason": "V4.2 \u9636\u6BB5 formal retrieval \u4ECD\u4FDD\u6301\u7981\u7528\u3002"
+    },
+    {
+      "capabilityId": "VectorShadowPackageComparison",
+      "condition": "VectorShadowPackageComparisonPackageMutationForbidden",
+      "passed": true,
+      "reason": "V4.2 shadow package comparison \u4E0D\u5F97\u6539\u53D8 PackingPolicy \u6216\u5199\u6B63\u5F0F package\u3002"
+    },
+    {
+      "capabilityId": "ScopedFormalPreviewOptIn",
+      "condition": "ScopedFormalPreviewOptInDoesNotAllowRuntimeSwitch",
+      "passed": true,
+      "reason": "V4.3 scoped formal preview opt-in \u901A\u8FC7\u4E5F\u4E0D\u7B49\u4E8E runtime switch\u3002"
+    },
+    {
+      "capabilityId": "ScopedFormalPreviewOptIn",
+      "condition": "ScopedFormalPreviewOptInFormalRetrievalStillForbidden",
+      "passed": true,
+      "reason": "V4.3 \u9636\u6BB5 formal retrieval \u4ECD\u4FDD\u6301\u7981\u7528\u3002"
+    },
+    {
+      "capabilityId": "ScopedFormalPreviewOptIn",
+      "condition": "ScopedFormalPreviewOptInPackageMutationForbidden",
+      "passed": true,
+      "reason": "V4.3 scoped preview \u4E0D\u5F97\u6539\u53D8 PackingPolicy \u6216\u5199\u6B63\u5F0F package\u3002"
+    },
+    {
+      "capabilityId": "LimitedFormalPreviewObservation",
+      "condition": "LimitedFormalPreviewObservationDoesNotAllowRuntimeSwitch",
+      "passed": true,
+      "reason": "V4.4 limited formal preview observation \u901A\u8FC7\u4E5F\u4E0D\u7B49\u4E8E runtime switch\u3002"
+    },
+    {
+      "capabilityId": "LimitedFormalPreviewObservation",
+      "condition": "LimitedFormalPreviewObservationFormalRetrievalStillForbidden",
+      "passed": true,
+      "reason": "V4.4 \u9636\u6BB5 formal retrieval \u4ECD\u4FDD\u6301\u7981\u7528\u3002"
+    },
+    {
+      "capabilityId": "LimitedFormalPreviewObservation",
+      "condition": "LimitedFormalPreviewObservationPackageMutationForbidden",
+      "passed": true,
+      "reason": "V4.4 observation \u4E0D\u5F97\u6539\u53D8 PackingPolicy \u6216\u5199\u6B63\u5F0F package\u3002"
+    },
+    {
+      "capabilityId": "VectorFormalPreviewFreeze",
+      "condition": "VectorFormalPreviewFreezeDoesNotAllowRuntimeSwitch",
+      "passed": true,
+      "reason": "V4.F formal preview freeze \u901A\u8FC7\u4E5F\u4E0D\u7B49\u4E8E runtime switch\u3002"
+    },
+    {
+      "capabilityId": "VectorFormalPreviewFreeze",
+      "condition": "VectorFormalPreviewFreezeFormalRetrievalStillForbidden",
+      "passed": true,
+      "reason": "V4.F \u9636\u6BB5 formal retrieval \u4ECD\u4FDD\u6301\u7981\u7528\u3002"
+    },
+    {
+      "capabilityId": "VectorFormalPreviewFreeze",
+      "condition": "VectorFormalPreviewFreezePackageMutationForbidden",
+      "passed": true,
+      "reason": "V4.F freeze \u4E0D\u5F97\u6539\u53D8 PackingPolicy\u3001\u5199\u6B63\u5F0F package \u6216\u6539\u53D8 package output\u3002"
+    },
+    {
+      "capabilityId": "ScopedRuntimeExperimentHarnessFreeze",
+      "condition": "ScopedRuntimeExperimentHarnessFreezeDoesNotAllowRuntimeSwitch",
+      "passed": true,
+      "reason": "V4.10 no-op harness freeze \u901A\u8FC7\u4E5F\u4E0D\u7B49\u4E8E runtime switch\u3002"
+    },
+    {
+      "capabilityId": "ScopedRuntimeExperimentHarnessFreeze",
+      "condition": "ScopedRuntimeExperimentHarnessFreezeFormalRetrievalStillForbidden",
+      "passed": true,
+      "reason": "V4.10 \u9636\u6BB5 formal retrieval \u4ECD\u4FDD\u6301\u7981\u7528\u3002"
+    },
+    {
+      "capabilityId": "ScopedRuntimeExperimentHarnessFreeze",
+      "condition": "ScopedRuntimeExperimentHarnessFreezePackageAndBindingMutationForbidden",
+      "passed": true,
+      "reason": "V4.10 freeze \u4E0D\u5F97\u5199\u6B63\u5F0F package\u3001\u6539\u53D8 DI/vector binding\u3001PackingPolicy \u6216 package output\u3002"
+    },
+    {
+      "capabilityId": "ScopedRuntimeExperimentHarnessFreeze",
+      "condition": "NoOpHarnessOnlyIsNotRuntimeApproval",
+      "passed": true,
+      "reason": "ApprovalMode=NoOpHarnessOnly \u4E0D\u80FD\u88AB\u89E3\u91CA\u4E3A runtime approval\u3002"
+    },
+    {
+      "capabilityId": "RouterIntentClassifier",
+      "condition": "RouterBreaksBlockGuardedOptIn",
+      "passed": true,
+      "reason": "Router breaks \u003E fixes \u65F6\u5FC5\u987B\u7981\u6B62 guarded opt-in\u3002"
+    },
+    {
+      "capabilityId": "CandidateReranker",
+      "condition": "CandidateRerankerNetGainBlocksRuntime",
+      "passed": true,
+      "reason": "Candidate reranker netGain \u003C= 0 \u65F6\u5FC5\u987B\u7981\u6B62 runtime shadow / opt-in\u3002"
+    },
+    {
+      "capabilityId": "GraphExpansion",
+      "condition": "GraphNormalCurrentTaskForbidden",
+      "passed": true,
+      "reason": "Graph normal-v1 / current-task-v1 \u4E0D\u5F97\u9ED8\u8BA4\u542F\u7528\u3002"
+    },
+    {
+      "capabilityId": "RelationGovernance",
+      "condition": "RelationGovernanceGlobalDefaultOnForbidden",
+      "passed": true,
+      "reason": "Relation governance Postgres provider \u4E0D\u5F97 global default-on\u3002"
+    },
+    {
+      "capabilityId": "RelationGovernance",
+      "condition": "RelationGovernanceRequiresFallback",
+      "passed": true,
+      "reason": "GuardedPostgresPrimary \u5FC5\u987B\u4FDD\u7559 FileSystem fallback\u3002"
+    },
+    {
+      "capabilityId": "RelationGovernance",
+      "condition": "RelationGovernanceRequiresComparisonTrace",
+      "passed": true,
+      "reason": "GuardedPostgresPrimary \u5FC5\u987B\u4FDD\u7559 comparison trace\u3002"
+    },
+    {
+      "capabilityId": "JobQueuePostgres",
+      "condition": "JobQueueGlobalWorkerProviderSwitchForbidden",
+      "passed": true,
+      "reason": "Job queue Postgres provider \u4E0D\u5F97 global worker provider switch\u3002"
+    },
+    {
+      "capabilityId": "JobQueuePostgres",
+      "condition": "JobQueueRequiresScopedAllowlist",
+      "passed": true,
+      "reason": "GuardedPostgresPrimary \u5FC5\u987B\u9650\u5B9A explicit allowlisted worker scopes\u3002"
+    },
+    {
+      "capabilityId": "JobQueuePostgres",
+      "condition": "JobQueueRequiresLeaseQualityGate",
+      "passed": true,
+      "reason": "Job queue scoped worker \u5FC5\u987B\u4FDD\u7559 lease / heartbeat quality gate\u3002"
+    },
+    {
+      "capabilityId": "JobQueuePostgres",
+      "condition": "JobQueueRequiresRetryDeadLetterQualityGate",
+      "passed": true,
+      "reason": "Job queue scoped worker \u5FC5\u987B\u4FDD\u7559 retry / dead-letter quality gate\u3002"
+    },
+    {
+      "capabilityId": "VectorPostgresProvider",
+      "condition": "VectorPostgresFormalRetrievalSwitchForbidden",
+      "passed": true,
+      "reason": "pgvector provider freeze \u540E\u4ECD\u4E0D\u5F97\u5207\u6362\u6B63\u5F0F vector retrieval\u3002"
+    },
+    {
+      "capabilityId": "VectorPostgresProvider",
+      "condition": "VectorPostgresFormalStoreBindingForbiddenWithoutV4Gate",
+      "passed": true,
+      "reason": "\u672A\u901A\u8FC7 V4 gate \u524D\u4E0D\u5F97\u628A PostgresVectorIndexStore \u7ED1\u5B9A\u4E3A\u6B63\u5F0F IVectorIndexStore\u3002"
+    },
+    {
+      "capabilityId": "VectorPostgresProvider",
+      "condition": "VectorPostgresPackingPolicyIntegrationForbiddenWithoutV4Gate",
+      "passed": true,
+      "reason": "\u672A\u901A\u8FC7 V4 gate \u524D\u4E0D\u5F97\u63A5\u5165 PackingPolicy \u6216 package output\u3002"
+    },
+    {
+      "capabilityId": "VectorPostgresProvider",
+      "condition": "VectorPostgresRequiresShadowEvalRecallRiskGate",
+      "passed": true,
+      "reason": "pgvector \u53EA\u53EF\u4F5C\u4E3A preview/shadow/eval storage\uFF0C\u5FC5\u987B\u6709 shadow eval / recall / risk gate\u3002"
+    },
+    {
+      "capabilityId": "Qwen3EmbeddingProvider",
+      "condition": "Qwen3ProviderFormalRetrievalSwitchForbidden",
+      "passed": true,
+      "reason": "\u672A\u901A\u8FC7 provider comparison freeze \u7684 provider \u4E0D\u5F97\u5207\u6362\u6B63\u5F0F vector retrieval\u3002"
+    },
+    {
+      "capabilityId": "Qwen3EmbeddingProvider",
+      "condition": "Qwen3ProviderFormalStoreBindingForbidden",
+      "passed": true,
+      "reason": "\u672A\u901A\u8FC7 provider comparison freeze \u7684 provider \u4E0D\u5F97\u7ED1\u5B9A\u4E3A\u6B63\u5F0F IVectorIndexStore\u3002"
+    },
+    {
+      "capabilityId": "Qwen3EmbeddingProvider",
+      "condition": "Qwen3ProviderPackingPolicyIntegrationForbidden",
+      "passed": true,
+      "reason": "\u672A\u901A\u8FC7 provider comparison freeze \u7684 provider \u4E0D\u5F97\u63A5\u5165 PackingPolicy \u6216 package output\u3002"
+    }
+  ],
+  "failedConditions": [],
+  "recommendation": "RuntimeChangeRulesSatisfied",
+  "policyVersion": "learning-readiness-freeze-s0/v1"
+}
