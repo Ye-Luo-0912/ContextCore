@@ -45,6 +45,8 @@ public sealed class FormalRetrievalPromotionExternalApprovalQuarantineScanRunner
         if (!opt.Enabled) blocked.Add("ScanDisabled");
         if (mainlineEvidencePresent) blocked.Add("MainlineEvidencePresent");
         if (mainlineRegistryPresent) blocked.Add("MainlineTrustRegistryPresent");
+        if (evCandidateExists && !evValid) blocked.Add("EvidenceCandidateInvalid");
+        if (regCandidateExists && !regValid) blocked.Add("TrustRegistryCandidateInvalid");
         if (!rtPassed) blocked.Add("RuntimeChangeGateNotPassed");
         if (!p15Passed) blocked.Add("P15GateNotPassed");
 
