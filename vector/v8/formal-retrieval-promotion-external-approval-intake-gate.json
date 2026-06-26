@@ -1,0 +1,44 @@
+﻿{
+  "OperationId": "frp-intake-gate-6e8b8f94d0c043999d96d96af5bfa921",
+  "CreatedAt": "2026-06-26T08:43:55.6024283+00:00",
+  "IntakePassed": false,
+  "GatePassed": false,
+  "Recommendation": "BlockedByExternalApprovalMissing",
+  "NextAllowedPhase": "KeepPreviewOnly",
+  "EvidencePresent": false,
+  "EvidencePath": "vector/v8/formal-retrieval-promotion-approval-evidence.json",
+  "TrustRegistryPresent": false,
+  "TrustRegistryPath": "vector/v8/formal-retrieval-promotion-approval-trust-registry.json",
+  "EvidenceStructureValid": false,
+  "RegistryStructureValid": false,
+  "UpstreamGateIdsMatch": false,
+  "ApprovalRequestIdBound": false,
+  "ProvenanceRecordMatched": false,
+  "EvidenceFields": [
+    "status=missing"
+  ],
+  "RegistryFields": [
+    "status=missing"
+  ],
+  "FormalRetrievalAllowed": false,
+  "RuntimeSwitchAllowed": false,
+  "FormalPackageWritten": false,
+  "GlobalDefaultOn": false,
+  "NoRuntimeMutationInvariant": true,
+  "BlockedReasons": [
+    "ExternalApprovalEvidenceMissing",
+    "RuntimeChangeGateNotPassed",
+    "TrustRegistryMissing"
+  ],
+  "Diagnostics": [
+    "stage=gate",
+    "evidencePresent=False",
+    "trustPresent=False",
+    "evidenceStructureValid=False",
+    "registryStructureValid=False",
+    "upstreamGateIdsMatch=False",
+    "approvalRequestIdBound=False",
+    "provenanceRecordMatched=False",
+    "intakePassed=False gatePassed=False"
+  ]
+}

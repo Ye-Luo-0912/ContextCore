@@ -3292,6 +3292,63 @@ public sealed class FormalRetrievalPromotionApprovalTrustRegistry
 }
 
 
+/// <summary>V8.4 external approval intake 推荐。</summary>
+public static class FormalRetrievalPromotionExternalApprovalIntakeRecommendations
+{
+    public const string ReadyForExternalApprovalProcessing = nameof(ReadyForExternalApprovalProcessing);
+    public const string BlockedByExternalApprovalMissing = nameof(BlockedByExternalApprovalMissing);
+    public const string BlockedByTrustRegistryMissing = nameof(BlockedByTrustRegistryMissing);
+    public const string BlockedByEvidenceStructureInvalid = nameof(BlockedByEvidenceStructureInvalid);
+    public const string BlockedByRegistryStructureInvalid = nameof(BlockedByRegistryStructureInvalid);
+    public const string BlockedByUpstreamGateMismatch = nameof(BlockedByUpstreamGateMismatch);
+    public const string KeepPreviewOnly = nameof(KeepPreviewOnly);
+}
+
+
+/// <summary>V8.4 external approval intake 选项。</summary>
+public sealed class FormalRetrievalPromotionExternalApprovalIntakeOptions
+{
+    public bool Enabled { get; init; } = true;
+}
+
+
+/// <summary>V8.4 formal retrieval promotion external approval intake 报告。
+/// 只验证 evidence / trust registry 结构和绑定，不生成假文件。
+/// FormalRetrievalAllowed=false。</summary>
+public sealed class FormalRetrievalPromotionExternalApprovalIntakeReport
+{
+    public string OperationId { get; init; } = "";
+    public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
+    public bool IntakePassed { get; init; }
+    public bool GatePassed { get; init; }
+    public string Recommendation { get; init; }
+        = FormalRetrievalPromotionExternalApprovalIntakeRecommendations.KeepPreviewOnly;
+    public string NextAllowedPhase { get; init; } = "KeepPreviewOnly";
+
+    public bool EvidencePresent { get; init; }
+    public string EvidencePath { get; init; } = "";
+    public bool TrustRegistryPresent { get; init; }
+    public string TrustRegistryPath { get; init; } = "";
+    public bool EvidenceStructureValid { get; init; }
+    public bool RegistryStructureValid { get; init; }
+    public bool UpstreamGateIdsMatch { get; init; }
+    public bool ApprovalRequestIdBound { get; init; }
+    public bool ProvenanceRecordMatched { get; init; }
+
+    public IReadOnlyList<string> EvidenceFields { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> RegistryFields { get; init; } = Array.Empty<string>();
+
+    public bool FormalRetrievalAllowed { get; init; }
+    public bool RuntimeSwitchAllowed { get; init; }
+    public bool FormalPackageWritten { get; init; }
+    public bool GlobalDefaultOn { get; init; }
+    public bool NoRuntimeMutationInvariant { get; init; }
+
+    public IReadOnlyList<string> BlockedReasons { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> Diagnostics { get; init; } = Array.Empty<string>();
+}
+
+
 /// <summary>架构清理计划报告。</summary>
 public sealed class ArchitectureCleanupPlanReport
 {

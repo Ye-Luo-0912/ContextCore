@@ -4152,6 +4152,27 @@ public static class ServiceOperationalRenderer
             builder.AppendLine($"- invariants         : formalRetrieval={v8Seal.FormalRetrievalAllowed} noRuntimeMutation={v8Seal.NoRuntimeMutationInvariant}");
         }
 
+        builder.AppendLine();
+        builder.AppendLine("V8.4 Formal Retrieval Promotion External Approval Intake");
+        var v8Intake = snapshot.FormalRetrievalPromotionExternalApprovalIntakeReport;
+        if (v8Intake is null)
+        {
+            builder.AppendLine("- status : not generated");
+            builder.AppendLine("- path   : vector/v8/formal-retrieval-promotion-external-approval-intake.json");
+            builder.AppendLine("- action : run eval formal-retrieval-promotion-external-approval-intake");
+        }
+        else
+        {
+            builder.AppendLine($"- intake passed      : {v8Intake.IntakePassed}");
+            builder.AppendLine($"- gate passed        : {v8Intake.GatePassed}");
+            builder.AppendLine($"- recommendation     : {v8Intake.Recommendation}");
+            builder.AppendLine($"- evidence present   : {v8Intake.EvidencePresent}");
+            builder.AppendLine($"- trust registry     : {v8Intake.TrustRegistryPresent}");
+            builder.AppendLine($"- structure valid    : evidence={v8Intake.EvidenceStructureValid} registry={v8Intake.RegistryStructureValid}");
+            builder.AppendLine($"- upstream match     : {v8Intake.UpstreamGateIdsMatch}");
+            builder.AppendLine($"- invariants         : formalRetrieval={v8Intake.FormalRetrievalAllowed} noRuntimeMutation={v8Intake.NoRuntimeMutationInvariant}");
+        }
+
         return builder.ToString();
     }
 
