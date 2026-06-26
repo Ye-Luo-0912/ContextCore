@@ -282,12 +282,29 @@ public static partial class EvalCommand
         var trustTemplateExists = File.Exists(trustTemplatePath);
 
         var templatesContainPlaceholders = false;
+        var evidenceFieldsValid = false;
+        var trustFieldsValid = false;
+        var missingFields = new List<string>();
+        var nonPlaceholderFields = new List<string>();
+
         if (evidenceTemplateExists && trustTemplateExists)
         {
             var evidenceContent = await File.ReadAllTextAsync(evidenceTemplatePath, ct).ConfigureAwait(false);
             var trustContent = await File.ReadAllTextAsync(trustTemplatePath, ct).ConfigureAwait(false);
             templatesContainPlaceholders = evidenceContent.Contains("{{PLACEHOLDER:", StringComparison.OrdinalIgnoreCase)
                 && trustContent.Contains("{{PLACEHOLDER:", StringComparison.OrdinalIgnoreCase);
+
+            var evidenceKeys = new[] { "ApprovalEvidenceId", "ApprovedBy", "ApprovalId", "ApprovalSource",
+                "ApprovalTimestamp", "SourcePromotionPlanGateOperationId", "SourceReadinessGateOperationId",
+                "SourceCloseoutGateOperationId", "OperatorStatement", "EvidenceCreatedAt",
+                "ApprovalEvidenceSourceKind", "ApprovalEvidenceProvenanceId", "ApprovalEvidenceProvidedBy",
+                "ApprovalEvidenceProvidedAt", "ApprovalEvidenceTrustMode", "ApprovalEvidenceChecksum",
+                "SourceApprovalRequestId", "BoundPendingApprovalGateOperationId" };
+
+            var trustKeys = new[] { "RegistryId", "RegistryCreatedAt" };
+
+            evidenceFieldsValid = ValidateTemplateFields(evidenceContent, evidenceKeys, missingFields, nonPlaceholderFields);
+            trustFieldsValid = ValidateTemplateFields(trustContent, trustKeys, missingFields, nonPlaceholderFields);
         }
 
         var noRealEvidence = !File.Exists(Path.Combine("vector", "v8", "formal-retrieval-promotion-approval-evidence.json"));
@@ -310,8 +327,8 @@ public static partial class EvalCommand
         var runner = new FormalRetrievalPromotionExternalApprovalSubmissionPackRunner();
         var isGate = string.Equals(subcommand, "formal-retrieval-promotion-external-approval-submission-pack-gate", StringComparison.OrdinalIgnoreCase);
         var report = isGate
-            ? runner.RunGate(evidenceSchemaExists, trustSchemaExists, evidenceTemplateExists, trustTemplateExists, mainlineIntakeBlocked, noRealEvidence, noRealRegistry, templatesContainPlaceholders, rtPassed, p15Passed, opt)
-            : runner.RunPack(evidenceSchemaExists, trustSchemaExists, evidenceTemplateExists, trustTemplateExists, mainlineIntakeBlocked, noRealEvidence, noRealRegistry, templatesContainPlaceholders, rtPassed, p15Passed, opt);
+            ? runner.RunGate(evidenceSchemaExists, trustSchemaExists, evidenceTemplateExists, trustTemplateExists, mainlineIntakeBlocked, noRealEvidence, noRealRegistry, templatesContainPlaceholders, evidenceFieldsValid, trustFieldsValid, missingFields, nonPlaceholderFields, rtPassed, p15Passed, opt)
+            : runner.RunPack(evidenceSchemaExists, trustSchemaExists, evidenceTemplateExists, trustTemplateExists, mainlineIntakeBlocked, noRealEvidence, noRealRegistry, templatesContainPlaceholders, evidenceFieldsValid, trustFieldsValid, missingFields, nonPlaceholderFields, rtPassed, p15Passed, opt);
 
         var fn = isGate ? "formal-retrieval-promotion-external-approval-submission-pack-gate" : "formal-retrieval-promotion-external-approval-submission-pack";
         var jp = Path.Combine(output, $"{fn}.json");
@@ -323,6 +340,47 @@ public static partial class EvalCommand
         Console.WriteLine($"[Eval] Submission pack written: {jp}");
         Console.WriteLine($"[Eval] packPassed={report.PackPassed}; gatePassed={report.GatePassed}; " +
             $"schemas={report.EvidenceSchemaPresent && report.TrustRegistrySchemaPresent}; " +
+            $"fieldsValid=evidence:{report.EvidenceTemplatePlaceholderFieldsValid} trust:{report.TrustRegistryTemplatePlaceholderFieldsValid}; " +
             $"mainlineBlocked={report.MainlineIntakeStillBlocked}; blocked={report.BlockedReasons.Count}");
+    }
+
+    private static bool ValidateTemplateFields(string jsonContent, string[] fieldNames, List<string> missing, List<string> nonPlaceholder)
+    {
+        var doc = System.Text.Json.JsonDocument.Parse(jsonContent);
+        var root = doc.RootElement;
+        var allValid = true;
+
+        foreach (var field in fieldNames)
+        {
+            if (!root.TryGetProperty(field, out var prop))
+            {
+                missing.Add(field);
+                allValid = false;
+                continue;
+            }
+
+            var val = prop.ValueKind == System.Text.Json.JsonValueKind.String ? prop.GetString() ?? "" : prop.GetRawText();
+            if (string.IsNullOrWhiteSpace(val) || !val.Contains("{{PLACEHOLDER:", StringComparison.OrdinalIgnoreCase))
+            {
+                nonPlaceholder.Add(field);
+                allValid = false;
+            }
+        }
+
+        var approvalScopes = root.TryGetProperty("ApprovalScopes", out var scopes) && scopes.ValueKind == System.Text.Json.JsonValueKind.Array;
+        if (approvalScopes && scopes.GetArrayLength() > 0)
+        {
+            var first = scopes[0].GetString() ?? "";
+            if (!first.Contains("{{PLACEHOLDER:", StringComparison.OrdinalIgnoreCase)) { nonPlaceholder.Add("ApprovalScopes[0]"); allValid = false; }
+        }
+
+        var allowedKinds = root.TryGetProperty("AllowedSourceKinds", out var kinds) && kinds.ValueKind == System.Text.Json.JsonValueKind.Array;
+        if (allowedKinds && kinds.GetArrayLength() > 0)
+        {
+            var first = kinds[0].GetString() ?? "";
+            if (!first.Contains("{{PLACEHOLDER:", StringComparison.OrdinalIgnoreCase)) { nonPlaceholder.Add("AllowedSourceKinds[0]"); allValid = false; }
+        }
+
+        return allValid;
     }
 }

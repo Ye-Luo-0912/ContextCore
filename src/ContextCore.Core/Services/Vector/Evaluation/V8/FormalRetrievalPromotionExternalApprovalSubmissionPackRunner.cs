@@ -10,20 +10,26 @@ public sealed class FormalRetrievalPromotionExternalApprovalSubmissionPackRunner
         bool evidenceTemplateExists, bool trustTemplateExists,
         bool mainlineIntakeBlocked, bool noRealEvidence, bool noRealRegistry,
         bool templatesContainPlaceholders,
+        bool evidenceFieldsValid, bool trustFieldsValid,
+        IReadOnlyList<string> missingFields, IReadOnlyList<string> nonPlaceholderFields,
         bool rtPassed, bool p15Passed,
         FormalRetrievalPromotionExternalApprovalSubmissionPackOptions? opt = null)
         => Build("pack", false, evidenceSchemaExists, trustSchemaExists, evidenceTemplateExists, trustTemplateExists,
-            mainlineIntakeBlocked, noRealEvidence, noRealRegistry, templatesContainPlaceholders, rtPassed, p15Passed, opt);
+            mainlineIntakeBlocked, noRealEvidence, noRealRegistry, templatesContainPlaceholders,
+            evidenceFieldsValid, trustFieldsValid, missingFields, nonPlaceholderFields, rtPassed, p15Passed, opt);
 
     public FormalRetrievalPromotionExternalApprovalSubmissionPackReport RunGate(
         bool evidenceSchemaExists, bool trustSchemaExists,
         bool evidenceTemplateExists, bool trustTemplateExists,
         bool mainlineIntakeBlocked, bool noRealEvidence, bool noRealRegistry,
         bool templatesContainPlaceholders,
+        bool evidenceFieldsValid, bool trustFieldsValid,
+        IReadOnlyList<string> missingFields, IReadOnlyList<string> nonPlaceholderFields,
         bool rtPassed, bool p15Passed,
         FormalRetrievalPromotionExternalApprovalSubmissionPackOptions? opt = null)
         => Build("gate", true, evidenceSchemaExists, trustSchemaExists, evidenceTemplateExists, trustTemplateExists,
-            mainlineIntakeBlocked, noRealEvidence, noRealRegistry, templatesContainPlaceholders, rtPassed, p15Passed, opt);
+            mainlineIntakeBlocked, noRealEvidence, noRealRegistry, templatesContainPlaceholders,
+            evidenceFieldsValid, trustFieldsValid, missingFields, nonPlaceholderFields, rtPassed, p15Passed, opt);
 
     private static FormalRetrievalPromotionExternalApprovalSubmissionPackReport Build(
         string stage, bool isGate,
@@ -31,6 +37,8 @@ public sealed class FormalRetrievalPromotionExternalApprovalSubmissionPackRunner
         bool evidenceTemplateExists, bool trustTemplateExists,
         bool mainlineIntakeBlocked, bool noRealEvidence, bool noRealRegistry,
         bool templatesContainPlaceholders,
+        bool evidenceFieldsValid, bool trustFieldsValid,
+        IReadOnlyList<string> missingFields, IReadOnlyList<string> nonPlaceholderFields,
         bool rtPassed, bool p15Passed,
         FormalRetrievalPromotionExternalApprovalSubmissionPackOptions? opt)
     {
@@ -46,6 +54,7 @@ public sealed class FormalRetrievalPromotionExternalApprovalSubmissionPackRunner
         if (!noRealEvidence) blocked.Add("RealApprovalEvidencePresent");
         if (!noRealRegistry) blocked.Add("RealTrustRegistryPresent");
         if (!templatesContainPlaceholders) blocked.Add("TemplatesMissingPlaceholders");
+        if (!evidenceFieldsValid || !trustFieldsValid) blocked.Add("TemplatePlaceholderFieldsInvalid");
         if (!rtPassed) blocked.Add("RuntimeChangeGateNotPassed");
         if (!p15Passed) blocked.Add("P15GateNotPassed");
 
@@ -78,6 +87,10 @@ public sealed class FormalRetrievalPromotionExternalApprovalSubmissionPackRunner
             EvidenceTemplatePresent = evidenceTemplateExists,
             TrustRegistryTemplatePresent = trustTemplateExists,
             TemplatesContainPlaceholders = templatesContainPlaceholders,
+            EvidenceTemplatePlaceholderFieldsValid = evidenceFieldsValid,
+            TrustRegistryTemplatePlaceholderFieldsValid = trustFieldsValid,
+            PlaceholderValidationMissingFields = missingFields,
+            PlaceholderValidationNonPlaceholderFields = nonPlaceholderFields,
             MainlineIntakeStillBlocked = mainlineIntakeBlocked,
             NoRealEvidencePresent = noRealEvidence,
             NoRealTrustRegistryPresent = noRealRegistry,

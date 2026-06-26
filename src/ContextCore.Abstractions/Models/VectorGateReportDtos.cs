@@ -3386,6 +3386,10 @@ public sealed class FormalRetrievalPromotionExternalApprovalSubmissionPackReport
     public bool EvidenceTemplatePresent { get; init; }
     public bool TrustRegistryTemplatePresent { get; init; }
     public bool TemplatesContainPlaceholders { get; init; }
+    public bool EvidenceTemplatePlaceholderFieldsValid { get; init; }
+    public bool TrustRegistryTemplatePlaceholderFieldsValid { get; init; }
+    public IReadOnlyList<string> PlaceholderValidationMissingFields { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> PlaceholderValidationNonPlaceholderFields { get; init; } = Array.Empty<string>();
     public bool MainlineIntakeStillBlocked { get; init; }
     public bool NoRealEvidencePresent { get; init; }
     public bool NoRealTrustRegistryPresent { get; init; }
