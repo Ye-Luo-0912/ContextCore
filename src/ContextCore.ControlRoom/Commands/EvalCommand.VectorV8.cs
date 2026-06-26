@@ -857,6 +857,53 @@ public static partial class EvalCommand
         Console.WriteLine($"[Eval] operatorSignOffMatrixPassed={report.OperatorSignOffMatrixPassed}; gatePassed={report.GatePassed}; total={report.TotalCases} notApplicable={report.NotApplicableCases} insufficient={report.InsufficientCases} recorded={report.RecordedCases} crossed={report.Crossed} applicationApplied={report.ApplicationApplied} rollbackActivated={report.RollbackActivated}");
     }
 
+    private static async Task ExecuteFormalRetrievalPromotionApprovalPreCrossingFinalGateAsync(
+        IReadOnlyList<string> args, string subcommand, CancellationToken ct)
+    {
+        var output = Path.GetFullPath(Path.Combine("vector", "v8"));
+        Directory.CreateDirectory(output);
+
+        var rtPath = Path.Combine("learning", "readiness", "learning-runtime-change-readiness-gate.json");
+        var rtGate = await ReadJsonFileAsync<LearningRuntimeChangeReadinessGateReport>(rtPath, ct).ConfigureAwait(false);
+        var rtPassed = rtGate is not null && rtGate.Passed;
+
+        var p15Path = Path.Combine("eval", "eval-report-p15-a3.json");
+        var p15 = await ReadJsonFileAsync<JsonDocument>(p15Path, ct).ConfigureAwait(false);
+        var p15Passed = false;
+        if (p15 is not null && p15.RootElement.TryGetProperty("PassRate", out var pr)) p15Passed = pr.GetDouble() >= 1.0;
+
+        var mainlineEvPath = Path.Combine("vector", "v8", "formal-retrieval-promotion-approval-evidence.json");
+        var mainlineRegPath = Path.Combine("vector", "v8", "formal-retrieval-promotion-approval-trust-registry.json");
+        var mainlineEvPresent = File.Exists(mainlineEvPath);
+        var mainlineRegPresent = File.Exists(mainlineRegPath);
+
+        // 真实从磁盘加载三个 V8.13/V8.14/V8.15 gate artifact（matrix 内部 scenarios 用合成数据，但 final-gate state 必须看真实文件）。
+        var grantGatePath = Path.Combine("vector", "v8", "formal-retrieval-promotion-approval-grant-application-matrix-gate.json");
+        var rollbackGatePath = Path.Combine("vector", "v8", "formal-retrieval-promotion-approval-rollback-readiness-matrix-gate.json");
+        var signOffGatePath = Path.Combine("vector", "v8", "formal-retrieval-promotion-approval-operator-sign-off-matrix-gate.json");
+
+        var grantGate = await ReadJsonFileAsync<FormalRetrievalPromotionApprovalGrantApplicationMatrixReport>(grantGatePath, ct).ConfigureAwait(false);
+        var rollbackGate = await ReadJsonFileAsync<FormalRetrievalPromotionApprovalRollbackReadinessMatrixReport>(rollbackGatePath, ct).ConfigureAwait(false);
+        var signOffGate = await ReadJsonFileAsync<FormalRetrievalPromotionApprovalOperatorSignOffMatrixReport>(signOffGatePath, ct).ConfigureAwait(false);
+
+        var isGate = string.Equals(subcommand, "formal-retrieval-promotion-approval-pre-crossing-final-gate-gate", StringComparison.OrdinalIgnoreCase);
+        var opt = new FormalRetrievalPromotionApprovalPreCrossingFinalGateOptions { IsGate = isGate, Enabled = !CommandHelpers.HasFlag(args, "--disabled") };
+        var runner = new FormalRetrievalPromotionApprovalPreCrossingFinalGateRunner();
+        var report = runner.Run(grantGate, rollbackGate, signOffGate, rtPassed, p15Passed, mainlineEvPresent, mainlineRegPresent, opt);
+
+        var fn = isGate
+            ? "formal-retrieval-promotion-approval-pre-crossing-final-gate-gate"
+            : "formal-retrieval-promotion-approval-pre-crossing-final-gate";
+        var jp = Path.Combine(output, $"{fn}.json");
+        var mp = Path.Combine(output, $"{fn}.md");
+        await WriteJsonSafeAsync(report, jp, ct).ConfigureAwait(false);
+        await WriteTextAsync(FormalRetrievalPromotionApprovalPreCrossingFinalGateRunner.BuildMarkdown(
+            isGate ? "Pre-Crossing Final Gate (Gate)" : "Pre-Crossing Final Gate", report), mp, ct).ConfigureAwait(false);
+
+        Console.WriteLine($"[Eval] Pre-crossing final gate written: {jp}");
+        Console.WriteLine($"[Eval] preCrossingFinalGatePassed={report.PreCrossingFinalGatePassed}; gatePassed={report.GatePassed}; total={report.TotalCases} ready={report.ReadyCases} blocked={report.BlockedCases} upstream(grant/rollback/signOff)={report.UpstreamGrantApplicationGatePassed}/{report.UpstreamRollbackReadinessGatePassed}/{report.UpstreamOperatorSignOffGatePassed} boundCapability={report.BoundCapability} crossed={report.Crossed}");
+    }
+
     private static bool ValidateTemplateFields(string jsonContent, string[] fieldPaths, List<string> missing, List<string> nonPlaceholder)
     {
         var doc = System.Text.Json.JsonDocument.Parse(jsonContent);

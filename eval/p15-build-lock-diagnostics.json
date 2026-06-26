@@ -1,46 +1,37 @@
-﻿{
-    "OperationId":  "p15-build-lock-diagnostics-20260627-010835",
-    "GeneratedAt":  "2026-06-27T01:08:35.1947390+08:00",
-    "Summary":  {
-                    "BuildPassed":  true,
-                    "BuildAttempts":  0,
-                    "TestPassed":  true,
-                    "TestAttempts":  0,
-                    "Msb3026Hits":  0,
-                    "Msb3027Hits":  0,
-                    "BuildLockIssueCount":  0,
-                    "TestLockIssueCount":  0,
-                    "TesthostResidueCount":  0,
-                    "BinObjLockedAny":  false
-                },
-    "BuildFlags":  "-m:1 -p:UseSharedCompilation=false -p:BuildInParallel=false",
-    "BuildLockIssues":  [
-
-                        ],
-    "TestLockIssues":  [
-
-                       ],
-    "TesthostResidue":  [
-
-                        ],
-    "BinObjLockCheck":  {
-                            "CheckedDirs":  [
-                                                "src\\ContextCore.AppHost\\bin",
-                                                "src\\ContextCore.Core\\bin",
-                                                "src\\ContextCore.Core\\obj",
-                                                "tests\\ContextCore.Tests\\bin",
-                                                "tests\\ContextCore.IntegrationTests\\bin",
-                                                "tests\\ContextCore.Service.Tests\\bin"
-                                            ],
-                            "LockedFiles":  [
-
-                                            ],
-                            "AnyLocked":  false
-                        },
-    "SuggestedCleanup":  {
-
-                         },
-    "Notes":  [
-                  "Build/test skipped via SkipBuildTest"
-              ]
+{
+  "OperationId": "p15-build-lock-diagnostics-20260627-032423",
+  "GeneratedAt": "2026-06-27T03:24:23.9096243+08:00",
+  "Summary": {
+    "BuildPassed": true,
+    "BuildAttempts": 1,
+    "TestPassed": true,
+    "TestAttempts": 1,
+    "Msb3026Hits": 0,
+    "Msb3027Hits": 0,
+    "BuildLockIssueCount": 0,
+    "TestLockIssueCount": 0,
+    "TesthostResidueCount": 0,
+    "BinObjLockedAny": false
+  },
+  "BuildFlags": "-m:1 -p:UseSharedCompilation=false -p:BuildInParallel=false",
+  "BuildLockIssues": [],
+  "TestLockIssues": [],
+  "TesthostResidue": [],
+  "BinObjLockCheck": {
+    "LockedFiles": [],
+    "AnyLocked": false,
+    "CheckedDirs": [
+      "src\\ContextCore.AppHost\\bin",
+      "src\\ContextCore.Core\\bin",
+      "src\\ContextCore.Core\\obj",
+      "tests\\ContextCore.Tests\\bin",
+      "tests\\ContextCore.IntegrationTests\\bin",
+      "tests\\ContextCore.Service.Tests\\bin"
+    ]
+  },
+  "SuggestedCleanup": null,
+  "Notes": [
+    "Build passed on attempt 1",
+    "Test passed on attempt 1"
+  ]
 }

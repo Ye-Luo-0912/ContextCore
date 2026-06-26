@@ -1,0 +1,195 @@
+﻿# Pre-Crossing Final Gate (Gate)
+
+生成: `2026-06-26T19:23:01.3059346+00:00`
+操作: `frp-pre-crossing-final-gate-fef54db4846b4910bffa33faad16c65b`
+
+## Decision
+- PreCrossingFinalGatePassed: `True` GatePassed: `True`
+- Total: `15` Passed: `15` Failed: `0`
+- Status — Ready: `1` Blocked: `14` NotApplicable: `0`
+
+## Upstream (Real Loaded Artifacts)
+- UpstreamGrantApplicationGatePassed: `True`
+- UpstreamRollbackReadinessGatePassed: `True`
+- UpstreamOperatorSignOffGatePassed: `True`
+- BoundCapability: `FormalRetrievalActivation`
+- BoundScope: `demo-workspace/demo-collection`
+- CapabilityScopeAligned: `True`
+
+## No-Crossing Contract
+- ManualReviewRequired: `False`
+- ApprovalSealed: `False`
+- CapabilityGrantWritten: `False`
+- GrantApplied: `False`
+- ApplicationApplied: `False`
+- RollbackActivated: `False`
+- Crossed: `False`  (PreCrossingReady != Crossed; matrix never produces a crossing event)
+- PromotionToMainlinePerformed: `False`
+- EvidenceCopiedToMainline: `False`
+- TrustRegistryCopiedToMainline: `False`
+- MainlineEvidencePresent: `False`
+- MainlineTrustRegistryPresent: `False`
+
+## Safety
+- FormalRetrievalAllowed: `False`
+- RuntimeSwitchAllowed: `False`
+- FormalPackageWritten: `False`
+- PackageOutputChanged: `False`
+- PackingPolicyChanged: `False`
+- VectorStoreBindingChanged: `False`
+- GlobalDefaultOn: `False`
+- ConfigPatchWritten: `False`
+- RuntimeActivation: `False`
+- NoRuntimeMutationInvariant: `True`
+
+## Pre-Crossing Cases
+- `AllAlignedReady`: passedAsExpected=`True`
+  - status expected=`PreCrossingReady` actual=`PreCrossingReady` matched=`True`
+  - bound: capability=`FormalRetrievalActivation` scope=`demo-workspace/demo-collection` aligned=`True`
+  - upstream present: grant=`True` rollback=`True` signOff=`True`
+  - upstream passed: grant=`True` rollback=`True` signOff=`True`
+  - readiness: grantReady=`True` rollbackReady=`True` signOffRecorded=`True`
+  - notCrossed=`True` applicationNotApplied=`True` rollbackNotActivated=`True`
+  - reasoning: all upstream gates present and passed; readiness cases bound to capability='FormalRetrievalActivation' scope='demo-workspace/demo-collection'; runtime/p15 OK; no mainline files. PreCrossingReady. Note: PreCrossingReady != Crossed; application boundary remains uncrossed.
+- `GrantApplicationGateMissing`: passedAsExpected=`True`
+  - status expected=`PreCrossingBlocked` actual=`PreCrossingBlocked` matched=`True`
+  - expectedReason=`GrantApplicationGateMissing` matched=`True`
+  - bound: capability=`` scope=`` aligned=`False`
+  - upstream present: grant=`False` rollback=`True` signOff=`True`
+  - upstream passed: grant=`False` rollback=`True` signOff=`True`
+  - readiness: grantReady=`False` rollbackReady=`True` signOffRecorded=`True`
+  - notCrossed=`True` applicationNotApplied=`True` rollbackNotActivated=`True`
+  - actualReasons=`GrantApplicationGateMissing`
+  - reasoning: 1 blocked reason(s); pre-crossing final gate did not pass.
+- `RollbackReadinessGateMissing`: passedAsExpected=`True`
+  - status expected=`PreCrossingBlocked` actual=`PreCrossingBlocked` matched=`True`
+  - expectedReason=`RollbackReadinessGateMissing` matched=`True`
+  - bound: capability=`FormalRetrievalActivation` scope=`demo-workspace/demo-collection` aligned=`False`
+  - upstream present: grant=`True` rollback=`False` signOff=`True`
+  - upstream passed: grant=`True` rollback=`False` signOff=`True`
+  - readiness: grantReady=`True` rollbackReady=`False` signOffRecorded=`True`
+  - notCrossed=`True` applicationNotApplied=`True` rollbackNotActivated=`True`
+  - actualReasons=`RollbackReadinessGateMissing`
+  - reasoning: 1 blocked reason(s); pre-crossing final gate did not pass.
+- `OperatorSignOffGateMissing`: passedAsExpected=`True`
+  - status expected=`PreCrossingBlocked` actual=`PreCrossingBlocked` matched=`True`
+  - expectedReason=`OperatorSignOffGateMissing` matched=`True`
+  - bound: capability=`FormalRetrievalActivation` scope=`demo-workspace/demo-collection` aligned=`False`
+  - upstream present: grant=`True` rollback=`True` signOff=`False`
+  - upstream passed: grant=`True` rollback=`True` signOff=`False`
+  - readiness: grantReady=`True` rollbackReady=`True` signOffRecorded=`False`
+  - notCrossed=`True` applicationNotApplied=`True` rollbackNotActivated=`True`
+  - actualReasons=`OperatorSignOffGateMissing`
+  - reasoning: 1 blocked reason(s); pre-crossing final gate did not pass.
+- `GrantApplicationGateNotPassed`: passedAsExpected=`True`
+  - status expected=`PreCrossingBlocked` actual=`PreCrossingBlocked` matched=`True`
+  - expectedReason=`GrantApplicationGateNotPassed` matched=`True`
+  - bound: capability=`FormalRetrievalActivation` scope=`demo-workspace/demo-collection` aligned=`True`
+  - upstream present: grant=`True` rollback=`True` signOff=`True`
+  - upstream passed: grant=`False` rollback=`True` signOff=`True`
+  - readiness: grantReady=`True` rollbackReady=`True` signOffRecorded=`True`
+  - notCrossed=`True` applicationNotApplied=`True` rollbackNotActivated=`True`
+  - actualReasons=`GrantApplicationGateNotPassed`
+  - reasoning: 1 blocked reason(s); pre-crossing final gate did not pass.
+- `RollbackReadinessGateNotPassed`: passedAsExpected=`True`
+  - status expected=`PreCrossingBlocked` actual=`PreCrossingBlocked` matched=`True`
+  - expectedReason=`RollbackReadinessGateNotPassed` matched=`True`
+  - bound: capability=`FormalRetrievalActivation` scope=`demo-workspace/demo-collection` aligned=`True`
+  - upstream present: grant=`True` rollback=`True` signOff=`True`
+  - upstream passed: grant=`True` rollback=`False` signOff=`True`
+  - readiness: grantReady=`True` rollbackReady=`True` signOffRecorded=`True`
+  - notCrossed=`True` applicationNotApplied=`True` rollbackNotActivated=`True`
+  - actualReasons=`RollbackReadinessGateNotPassed`
+  - reasoning: 1 blocked reason(s); pre-crossing final gate did not pass.
+- `OperatorSignOffGateNotPassed`: passedAsExpected=`True`
+  - status expected=`PreCrossingBlocked` actual=`PreCrossingBlocked` matched=`True`
+  - expectedReason=`OperatorSignOffGateNotPassed` matched=`True`
+  - bound: capability=`FormalRetrievalActivation` scope=`demo-workspace/demo-collection` aligned=`True`
+  - upstream present: grant=`True` rollback=`True` signOff=`True`
+  - upstream passed: grant=`True` rollback=`True` signOff=`False`
+  - readiness: grantReady=`True` rollbackReady=`True` signOffRecorded=`True`
+  - notCrossed=`True` applicationNotApplied=`True` rollbackNotActivated=`True`
+  - actualReasons=`OperatorSignOffGateNotPassed`
+  - reasoning: 1 blocked reason(s); pre-crossing final gate did not pass.
+- `GrantApplicationNoReadyCase`: passedAsExpected=`True`
+  - status expected=`PreCrossingBlocked` actual=`PreCrossingBlocked` matched=`True`
+  - expectedReason=`GrantApplicationNoReadyCase` matched=`True`
+  - bound: capability=`` scope=`` aligned=`False`
+  - upstream present: grant=`True` rollback=`True` signOff=`True`
+  - upstream passed: grant=`True` rollback=`True` signOff=`True`
+  - readiness: grantReady=`False` rollbackReady=`True` signOffRecorded=`True`
+  - notCrossed=`True` applicationNotApplied=`True` rollbackNotActivated=`True`
+  - actualReasons=`GrantApplicationNoReadyCase`
+  - reasoning: 1 blocked reason(s); pre-crossing final gate did not pass.
+- `RollbackReadinessNoReadyCase`: passedAsExpected=`True`
+  - status expected=`PreCrossingBlocked` actual=`PreCrossingBlocked` matched=`True`
+  - expectedReason=`RollbackReadinessNoReadyCase` matched=`True`
+  - bound: capability=`FormalRetrievalActivation` scope=`demo-workspace/demo-collection` aligned=`False`
+  - upstream present: grant=`True` rollback=`True` signOff=`True`
+  - upstream passed: grant=`True` rollback=`True` signOff=`True`
+  - readiness: grantReady=`True` rollbackReady=`False` signOffRecorded=`True`
+  - notCrossed=`True` applicationNotApplied=`True` rollbackNotActivated=`True`
+  - actualReasons=`RollbackReadinessNoReadyCase`
+  - reasoning: 1 blocked reason(s); pre-crossing final gate did not pass.
+- `OperatorSignOffNoRecordedCase`: passedAsExpected=`True`
+  - status expected=`PreCrossingBlocked` actual=`PreCrossingBlocked` matched=`True`
+  - expectedReason=`OperatorSignOffNoRecordedCase` matched=`True`
+  - bound: capability=`FormalRetrievalActivation` scope=`demo-workspace/demo-collection` aligned=`False`
+  - upstream present: grant=`True` rollback=`True` signOff=`True`
+  - upstream passed: grant=`True` rollback=`True` signOff=`True`
+  - readiness: grantReady=`True` rollbackReady=`True` signOffRecorded=`False`
+  - notCrossed=`True` applicationNotApplied=`True` rollbackNotActivated=`True`
+  - actualReasons=`OperatorSignOffNoRecordedCase`
+  - reasoning: 1 blocked reason(s); pre-crossing final gate did not pass.
+- `CapabilityMismatchAcrossGates`: passedAsExpected=`True`
+  - status expected=`PreCrossingBlocked` actual=`PreCrossingBlocked` matched=`True`
+  - expectedReason=`CapabilityMismatchAcrossUpstreamGates` matched=`True`
+  - bound: capability=`FormalRetrievalActivation` scope=`demo-workspace/demo-collection` aligned=`False`
+  - upstream present: grant=`True` rollback=`True` signOff=`True`
+  - upstream passed: grant=`True` rollback=`True` signOff=`True`
+  - readiness: grantReady=`True` rollbackReady=`True` signOffRecorded=`True`
+  - notCrossed=`True` applicationNotApplied=`True` rollbackNotActivated=`True`
+  - actualReasons=`CapabilityMismatchAcrossUpstreamGates`
+  - reasoning: 1 blocked reason(s); pre-crossing final gate did not pass.
+- `ScopeMismatchAcrossGates`: passedAsExpected=`True`
+  - status expected=`PreCrossingBlocked` actual=`PreCrossingBlocked` matched=`True`
+  - expectedReason=`ScopeMismatchAcrossUpstreamGates` matched=`True`
+  - bound: capability=`FormalRetrievalActivation` scope=`demo-workspace/demo-collection` aligned=`False`
+  - upstream present: grant=`True` rollback=`True` signOff=`True`
+  - upstream passed: grant=`True` rollback=`True` signOff=`True`
+  - readiness: grantReady=`True` rollbackReady=`True` signOffRecorded=`True`
+  - notCrossed=`True` applicationNotApplied=`True` rollbackNotActivated=`True`
+  - actualReasons=`ScopeMismatchAcrossUpstreamGates`
+  - reasoning: 1 blocked reason(s); pre-crossing final gate did not pass.
+- `RuntimeGateNotPassed`: passedAsExpected=`True`
+  - status expected=`PreCrossingBlocked` actual=`PreCrossingBlocked` matched=`True`
+  - expectedReason=`RuntimeChangeGateNotPassed` matched=`True`
+  - bound: capability=`FormalRetrievalActivation` scope=`demo-workspace/demo-collection` aligned=`True`
+  - upstream present: grant=`True` rollback=`True` signOff=`True`
+  - upstream passed: grant=`True` rollback=`True` signOff=`True`
+  - readiness: grantReady=`True` rollbackReady=`True` signOffRecorded=`True`
+  - notCrossed=`True` applicationNotApplied=`True` rollbackNotActivated=`True`
+  - actualReasons=`RuntimeChangeGateNotPassed`
+  - reasoning: 1 blocked reason(s); pre-crossing final gate did not pass.
+- `P15GateNotPassed`: passedAsExpected=`True`
+  - status expected=`PreCrossingBlocked` actual=`PreCrossingBlocked` matched=`True`
+  - expectedReason=`P15GateNotPassed` matched=`True`
+  - bound: capability=`FormalRetrievalActivation` scope=`demo-workspace/demo-collection` aligned=`True`
+  - upstream present: grant=`True` rollback=`True` signOff=`True`
+  - upstream passed: grant=`True` rollback=`True` signOff=`True`
+  - readiness: grantReady=`True` rollbackReady=`True` signOffRecorded=`True`
+  - notCrossed=`True` applicationNotApplied=`True` rollbackNotActivated=`True`
+  - actualReasons=`P15GateNotPassed`
+  - reasoning: 1 blocked reason(s); pre-crossing final gate did not pass.
+- `MainlineEvidencePresentBlocks`: passedAsExpected=`True`
+  - status expected=`PreCrossingBlocked` actual=`PreCrossingBlocked` matched=`True`
+  - expectedReason=`MainlineEvidencePresent` matched=`True`
+  - bound: capability=`FormalRetrievalActivation` scope=`demo-workspace/demo-collection` aligned=`True`
+  - upstream present: grant=`True` rollback=`True` signOff=`True`
+  - upstream passed: grant=`True` rollback=`True` signOff=`True`
+  - readiness: grantReady=`True` rollbackReady=`True` signOffRecorded=`True`
+  - notCrossed=`True` applicationNotApplied=`True` rollbackNotActivated=`True`
+  - actualReasons=`MainlineEvidencePresent`
+  - reasoning: 1 blocked reason(s); pre-crossing final gate did not pass.
+
+V8.16 pre-crossing final gate matrix。读取真实 V8.13/V8.14/V8.15 gate artifact + 15 个合成 scenarios 核对决策逻辑。PreCrossingReady ≠ Crossed — 这层 matrix 仅产出『可进入独立 crossing gate』的最终输入包；不跨过、不应用、不激活回滚、不启用 formal retrieval、不写 mainline。
