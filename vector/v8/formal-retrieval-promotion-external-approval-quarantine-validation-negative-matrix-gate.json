@@ -1,6 +1,6 @@
 ﻿{
-  "OperationId": "frp-q-neg-matrix-d301c67613b14e3e97ccf54b5865e071",
-  "CreatedAt": "2026-06-26T16:50:28.4793209+00:00",
+  "OperationId": "frp-q-neg-matrix-350a5fc6a72f400684ff9a7284d60cf7",
+  "CreatedAt": "2026-06-26T17:37:58.9094036+00:00",
   "MatrixPassed": true,
   "GatePassed": true,
   "TotalCases": 8,
@@ -13,6 +13,14 @@
       "ActualBlockedReasons": [
         "EvidenceCandidateSchemaInvalid"
       ],
+      "ExpectedMissingField": "ApprovalId",
+      "ExpectedInvalidField": "",
+      "ActualMissingFields": [
+        "ApprovalId"
+      ],
+      "ActualInvalidFields": [],
+      "MissingFieldMatched": true,
+      "InvalidFieldMatched": true,
       "FailedAsExpected": true
     },
     {
@@ -21,6 +29,14 @@
       "ActualBlockedReasons": [
         "EvidenceCandidateSchemaInvalid"
       ],
+      "ExpectedMissingField": "",
+      "ExpectedInvalidField": "ApprovalScopes",
+      "ActualMissingFields": [],
+      "ActualInvalidFields": [
+        "ApprovalScopes"
+      ],
+      "MissingFieldMatched": true,
+      "InvalidFieldMatched": true,
       "FailedAsExpected": true
     },
     {
@@ -29,14 +45,30 @@
       "ActualBlockedReasons": [
         "EvidenceCandidateSchemaInvalid"
       ],
+      "ExpectedMissingField": "",
+      "ExpectedInvalidField": "ApprovalTimestamp",
+      "ActualMissingFields": [],
+      "ActualInvalidFields": [
+        "ApprovalTimestamp"
+      ],
+      "MissingFieldMatched": true,
+      "InvalidFieldMatched": true,
       "FailedAsExpected": true
     },
     {
       "CaseName": "RegistryMissingRecords",
-      "ExpectedBlockedReason": "TrustRegistryCandidateSchemaInvalid",
+      "ExpectedBlockedReason": "TrustRegistryCandidateInvalid",
       "ActualBlockedReasons": [
-        "TrustRegistryCandidateSchemaInvalid"
+        "TrustRegistryCandidateInvalid"
       ],
+      "ExpectedMissingField": "TrustedProvenanceRecords",
+      "ExpectedInvalidField": "",
+      "ActualMissingFields": [
+        "TrustedProvenanceRecords"
+      ],
+      "ActualInvalidFields": [],
+      "MissingFieldMatched": true,
+      "InvalidFieldMatched": true,
       "FailedAsExpected": true
     },
     {
@@ -45,6 +77,14 @@
       "ActualBlockedReasons": [
         "TrustRegistryCandidateSchemaInvalid"
       ],
+      "ExpectedMissingField": "",
+      "ExpectedInvalidField": "AllowedSourceKinds",
+      "ActualMissingFields": [],
+      "ActualInvalidFields": [
+        "AllowedSourceKinds"
+      ],
+      "MissingFieldMatched": true,
+      "InvalidFieldMatched": true,
       "FailedAsExpected": true
     },
     {
@@ -53,6 +93,14 @@
       "ActualBlockedReasons": [
         "TrustRegistryCandidateSchemaInvalid"
       ],
+      "ExpectedMissingField": "TrustedProvenanceRecords[0].ApprovalEvidenceChecksum",
+      "ExpectedInvalidField": "",
+      "ActualMissingFields": [
+        "TrustedProvenanceRecords[0].ApprovalEvidenceChecksum"
+      ],
+      "ActualInvalidFields": [],
+      "MissingFieldMatched": true,
+      "InvalidFieldMatched": true,
       "FailedAsExpected": true
     },
     {
@@ -61,6 +109,14 @@
       "ActualBlockedReasons": [
         "TrustRegistryCandidateSchemaInvalid"
       ],
+      "ExpectedMissingField": "TrustedProvenanceRecords[1].ApprovalEvidenceProvidedBy",
+      "ExpectedInvalidField": "",
+      "ActualMissingFields": [
+        "TrustedProvenanceRecords[1].ApprovalEvidenceProvidedBy"
+      ],
+      "ActualInvalidFields": [],
+      "MissingFieldMatched": true,
+      "InvalidFieldMatched": true,
       "FailedAsExpected": true
     },
     {
@@ -69,10 +125,36 @@
       "ActualBlockedReasons": [
         "TrustRegistryCandidateSchemaInvalid"
       ],
+      "ExpectedMissingField": "",
+      "ExpectedInvalidField": "TrustedProvenanceRecords[1].ValidUntil",
+      "ActualMissingFields": [],
+      "ActualInvalidFields": [
+        "TrustedProvenanceRecords[1].ValidUntil"
+      ],
+      "MissingFieldMatched": true,
+      "InvalidFieldMatched": true,
       "FailedAsExpected": true
     }
   ],
+  "PromotionToMainlinePerformed": false,
+  "MainlineEvidencePresent": false,
+  "MainlineTrustRegistryPresent": false,
   "FormalRetrievalAllowed": false,
+  "RuntimeSwitchAllowed": false,
+  "FormalPackageWritten": false,
+  "PackageOutputChanged": false,
+  "PackingPolicyChanged": false,
+  "VectorStoreBindingChanged": false,
+  "GlobalDefaultOn": false,
+  "ConfigPatchWritten": false,
+  "RuntimeActivation": false,
   "NoRuntimeMutationInvariant": true,
-  "BlockedReasons": []
+  "BlockedReasons": [],
+  "Diagnostics": [
+    "total=8",
+    "passed=8",
+    "failed=0",
+    "runtimeGate=True",
+    "p15Gate=True"
+  ]
 }

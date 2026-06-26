@@ -533,28 +533,18 @@ public static partial class EvalCommand
         var missingFields = new List<string>();
         var invalidFields = new List<string>();
 
-        var evRequiredFields = new[] { "ApprovalEvidenceId", "ApprovedBy", "ApprovalId", "ApprovalScopes",
-            "ApprovalSource", "ApprovalTimestamp", "SourcePromotionPlanGateOperationId",
-            "SourceReadinessGateOperationId", "SourceCloseoutGateOperationId", "OperatorStatement",
-            "EvidenceCreatedAt", "ApprovalEvidenceSourceKind", "ApprovalEvidenceProvenanceId",
-            "ApprovalEvidenceProvidedBy", "ApprovalEvidenceProvidedAt", "ApprovalEvidenceTrustMode",
-            "ApprovalEvidenceIsExternal", "ApprovalEvidenceChecksum",
-            "SourceApprovalRequestId", "BoundPendingApprovalGateOperationId" };
-
-        var regRequiredFields = new[] { "RegistryId", "RegistryCreatedAt", "AllowedSourceKinds", "TrustedProvenanceRecords" };
-        var recRequiredFields = new[] { "ApprovalEvidenceProvenanceId", "ApprovalEvidenceSourceKind",
-            "ApprovalEvidenceProvidedBy", "ApprovalEvidenceChecksum", "SourceApprovalRequestId",
-            "BoundPendingApprovalGateOperationId", "AllowedScopes", "TrustMode", "ValidUntil" };
 
         if (evExists)
         {
             evidenceStatus = QuarantineScanStatuses.CandidateFound;
             try
             {
-                var ev = await ReadJsonFileAsync<FormalRetrievalPromotionApprovalEvidence>(qEvidencePath, ct).ConfigureAwait(false);
-                evValid = ev is not null && !string.IsNullOrWhiteSpace(ev.ApprovalEvidenceId) && !string.IsNullOrWhiteSpace(ev.ApprovedBy);
                 var rawJson = await File.ReadAllTextAsync(qEvidencePath, ct).ConfigureAwait(false);
-                evSchemaValid = ValidateCandidateFields(rawJson, evRequiredFields, missingFields, invalidFields);
+                var validation = FormalRetrievalPromotionExternalApprovalQuarantineCandidateValidation.ValidateEvidenceJson(rawJson);
+                evValid = validation.CandidateValid;
+                evSchemaValid = validation.SchemaValid;
+                missingFields.AddRange(validation.MissingFields);
+                invalidFields.AddRange(validation.InvalidFields);
                 evidenceStatus = evValid ? (evSchemaValid ? QuarantineScanStatuses.ReadyForManualReview : QuarantineScanStatuses.Invalid) : QuarantineScanStatuses.Invalid;
             }
             catch { evidenceStatus = QuarantineScanStatuses.Invalid; missingFields.Add("<evidence-parse-error>"); }
@@ -565,47 +555,12 @@ public static partial class EvalCommand
             registryStatus = QuarantineScanStatuses.CandidateFound;
             try
             {
-                var reg = await ReadJsonFileAsync<FormalRetrievalPromotionApprovalTrustRegistry>(qRegistryPath, ct).ConfigureAwait(false);
-                regValid = reg is not null && !string.IsNullOrWhiteSpace(reg.RegistryId) && reg.TrustedProvenanceRecords.Count > 0;
                 var rawJson = await File.ReadAllTextAsync(qRegistryPath, ct).ConfigureAwait(false);
-                regSchemaValid = ValidateCandidateFields(rawJson, regRequiredFields, missingFields, invalidFields);
-                if (regSchemaValid && regValid)
-                {
-                    var doc = System.Text.Json.JsonDocument.Parse(rawJson);
-                    var records = doc.RootElement.GetProperty("TrustedProvenanceRecords");
-                    for (var i = 0; i < records.GetArrayLength(); i++)
-                    {
-                        var rec = records[i];
-                        foreach (var field in recRequiredFields)
-                        {
-                            if (!rec.TryGetProperty(field, out var prop))
-                            {
-                                missingFields.Add($"TrustedProvenanceRecords[{i}].{field}");
-                                regSchemaValid = false;
-                                continue;
-                            }
-                            var isInvalid = prop.ValueKind switch
-                            {
-                                System.Text.Json.JsonValueKind.String => string.IsNullOrWhiteSpace(prop.GetString()),
-                                System.Text.Json.JsonValueKind.Array => prop.GetArrayLength() == 0,
-                                _ => false,
-                            };
-                            if (isInvalid)
-                            {
-                                invalidFields.Add($"TrustedProvenanceRecords[{i}].{field}");
-                                regSchemaValid = false;
-                            }
-                            if (field == "ValidUntil" && prop.TryGetDateTimeOffset(out var dt))
-                            {
-                                if (dt == default || dt.Year < 2000)
-                                {
-                                    invalidFields.Add($"TrustedProvenanceRecords[{i}].{field}");
-                                    regSchemaValid = false;
-                                }
-                            }
-                        }
-                    }
-                }
+                var validation = FormalRetrievalPromotionExternalApprovalQuarantineCandidateValidation.ValidateTrustRegistryJson(rawJson);
+                regValid = validation.CandidateValid;
+                regSchemaValid = validation.SchemaValid;
+                missingFields.AddRange(validation.MissingFields);
+                invalidFields.AddRange(validation.InvalidFields);
                 registryStatus = regValid ? (regSchemaValid ? QuarantineScanStatuses.ReadyForManualReview : QuarantineScanStatuses.Invalid) : QuarantineScanStatuses.Invalid;
             }
             catch { registryStatus = QuarantineScanStatuses.Invalid; missingFields.Add("<registry-parse-error>"); }
@@ -673,51 +628,6 @@ public static partial class EvalCommand
         Console.WriteLine($"[Eval] Quarantine negative matrix written: {jp}");
         Console.WriteLine($"[Eval] matrixPassed={report.MatrixPassed}; gatePassed={report.GatePassed}; total={report.TotalCases} passed={report.PassedCases} failed={report.FailedCases}");
     }
-
-    private static bool ValidateCandidateFields(string jsonContent, string[] fieldNames, List<string> missing, List<string> invalid)
-    {
-        if (string.IsNullOrWhiteSpace(jsonContent)) { missing.Add("<empty-json>"); return false; }
-        var allValid = true;
-        try
-        {
-            var doc = System.Text.Json.JsonDocument.Parse(jsonContent);
-            var root = doc.RootElement;
-            foreach (var field in fieldNames)
-            {
-                if (!root.TryGetProperty(field, out var prop))
-                {
-                    missing.Add(field);
-                    allValid = false;
-                    continue;
-                }
-                var invalidValue = prop.ValueKind switch
-                {
-                    System.Text.Json.JsonValueKind.String => string.IsNullOrWhiteSpace(prop.GetString()),
-                    System.Text.Json.JsonValueKind.Array => prop.GetArrayLength() == 0,
-                    System.Text.Json.JsonValueKind.Number => prop.GetDecimal() == 0 && prop.GetRawText() == "0",
-                    System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False => !prop.GetBoolean(),
-                    _ => false,
-                };
-                if (invalidValue)
-                {
-                    invalid.Add(field);
-                    allValid = false;
-                }
-                if (field is "ApprovalTimestamp" or "EvidenceCreatedAt" or "ApprovalEvidenceProvidedAt" or "RegistryCreatedAt"
-                    && prop.TryGetDateTimeOffset(out var dt))
-                {
-                    if (dt == default || dt.Year < 2000)
-                    {
-                        invalid.Add(field);
-                        allValid = false;
-                    }
-                }
-            }
-        }
-        catch { missing.Add("<parse-error>"); return false; }
-        return allValid;
-    }
-
     private static bool ValidateTemplateFields(string jsonContent, string[] fieldPaths, List<string> missing, List<string> nonPlaceholder)
     {
         var doc = System.Text.Json.JsonDocument.Parse(jsonContent);
@@ -778,3 +688,4 @@ public static partial class EvalCommand
         return current;
     }
 }
+

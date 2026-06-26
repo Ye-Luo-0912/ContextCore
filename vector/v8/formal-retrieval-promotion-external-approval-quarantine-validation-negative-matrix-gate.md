@@ -1,19 +1,75 @@
 ﻿# Quarantine Negative Matrix Gate
 
-生成: `2026-06-26T16:50:28.4793209+00:00`
+生成: `2026-06-26T17:37:58.9094036+00:00`
+操作: `frp-q-neg-matrix-350a5fc6a72f400684ff9a7284d60cf7`
 
 ## Decision
 - MatrixPassed: `True` GatePassed: `True`
 - Total: `8` Passed: `8` Failed: `0`
+- PromotionToMainlinePerformed: `False`
+- MainlineEvidencePresent: `False`
+- MainlineTrustRegistryPresent: `False`
+
+## Safety
+- FormalRetrievalAllowed: `False`
+- RuntimeSwitchAllowed: `False`
+- FormalPackageWritten: `False`
+- PackageOutputChanged: `False`
+- PackingPolicyChanged: `False`
+- VectorStoreBindingChanged: `False`
+- GlobalDefaultOn: `False`
+- ConfigPatchWritten: `False`
+- RuntimeActivation: `False`
+- NoRuntimeMutationInvariant: `True`
 
 ## Negative Cases
-- `EvidenceMissingField`: expected=`EvidenceCandidateSchemaInvalid` failedAsExpected=`True` actual=`EvidenceCandidateSchemaInvalid`
-- `EvidenceEmptyScopes`: expected=`EvidenceCandidateSchemaInvalid` failedAsExpected=`True` actual=`EvidenceCandidateSchemaInvalid`
-- `EvidenceDefaultTime`: expected=`EvidenceCandidateSchemaInvalid` failedAsExpected=`True` actual=`EvidenceCandidateSchemaInvalid`
-- `RegistryMissingRecords`: expected=`TrustRegistryCandidateSchemaInvalid` failedAsExpected=`True` actual=`TrustRegistryCandidateSchemaInvalid`
-- `RegistryEmptySourceKinds`: expected=`TrustRegistryCandidateSchemaInvalid` failedAsExpected=`True` actual=`TrustRegistryCandidateSchemaInvalid`
-- `RecordMissingChecksum`: expected=`TrustRegistryCandidateSchemaInvalid` failedAsExpected=`True` actual=`TrustRegistryCandidateSchemaInvalid`
-- `RecordMissingProvidedBy`: expected=`TrustRegistryCandidateSchemaInvalid` failedAsExpected=`True` actual=`TrustRegistryCandidateSchemaInvalid`
-- `RecordDefaultValidUntil`: expected=`TrustRegistryCandidateSchemaInvalid` failedAsExpected=`True` actual=`TrustRegistryCandidateSchemaInvalid`
+- `EvidenceMissingField`: expectedReason=`EvidenceCandidateSchemaInvalid` failedAsExpected=`True`
+  - expectedMissing=`ApprovalId` matched=`True`
+  - expectedInvalid=`` matched=`True`
+  - actualBlocked=`EvidenceCandidateSchemaInvalid`
+  - actualMissing=`ApprovalId`
+  - actualInvalid=``
+- `EvidenceEmptyScopes`: expectedReason=`EvidenceCandidateSchemaInvalid` failedAsExpected=`True`
+  - expectedMissing=`` matched=`True`
+  - expectedInvalid=`ApprovalScopes` matched=`True`
+  - actualBlocked=`EvidenceCandidateSchemaInvalid`
+  - actualMissing=``
+  - actualInvalid=`ApprovalScopes`
+- `EvidenceDefaultTime`: expectedReason=`EvidenceCandidateSchemaInvalid` failedAsExpected=`True`
+  - expectedMissing=`` matched=`True`
+  - expectedInvalid=`ApprovalTimestamp` matched=`True`
+  - actualBlocked=`EvidenceCandidateSchemaInvalid`
+  - actualMissing=``
+  - actualInvalid=`ApprovalTimestamp`
+- `RegistryMissingRecords`: expectedReason=`TrustRegistryCandidateInvalid` failedAsExpected=`True`
+  - expectedMissing=`TrustedProvenanceRecords` matched=`True`
+  - expectedInvalid=`` matched=`True`
+  - actualBlocked=`TrustRegistryCandidateInvalid`
+  - actualMissing=`TrustedProvenanceRecords`
+  - actualInvalid=``
+- `RegistryEmptySourceKinds`: expectedReason=`TrustRegistryCandidateSchemaInvalid` failedAsExpected=`True`
+  - expectedMissing=`` matched=`True`
+  - expectedInvalid=`AllowedSourceKinds` matched=`True`
+  - actualBlocked=`TrustRegistryCandidateSchemaInvalid`
+  - actualMissing=``
+  - actualInvalid=`AllowedSourceKinds`
+- `RecordMissingChecksum`: expectedReason=`TrustRegistryCandidateSchemaInvalid` failedAsExpected=`True`
+  - expectedMissing=`TrustedProvenanceRecords[0].ApprovalEvidenceChecksum` matched=`True`
+  - expectedInvalid=`` matched=`True`
+  - actualBlocked=`TrustRegistryCandidateSchemaInvalid`
+  - actualMissing=`TrustedProvenanceRecords[0].ApprovalEvidenceChecksum`
+  - actualInvalid=``
+- `RecordMissingProvidedBy`: expectedReason=`TrustRegistryCandidateSchemaInvalid` failedAsExpected=`True`
+  - expectedMissing=`TrustedProvenanceRecords[1].ApprovalEvidenceProvidedBy` matched=`True`
+  - expectedInvalid=`` matched=`True`
+  - actualBlocked=`TrustRegistryCandidateSchemaInvalid`
+  - actualMissing=`TrustedProvenanceRecords[1].ApprovalEvidenceProvidedBy`
+  - actualInvalid=``
+- `RecordDefaultValidUntil`: expectedReason=`TrustRegistryCandidateSchemaInvalid` failedAsExpected=`True`
+  - expectedMissing=`` matched=`True`
+  - expectedInvalid=`TrustedProvenanceRecords[1].ValidUntil` matched=`True`
+  - actualBlocked=`TrustRegistryCandidateSchemaInvalid`
+  - actualMissing=``
+  - actualInvalid=`TrustedProvenanceRecords[1].ValidUntil`
 
-V8.9 quarantine negative matrix。
+V8.9R quarantine negative matrix。真实 candidate JSON + 字段定位校验。

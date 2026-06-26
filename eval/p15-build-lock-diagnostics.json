@@ -1,36 +1,46 @@
-{
-  "OperationId": "p15-build-lock-diagnostics-20260626-180215",
-  "GeneratedAt": "2026-06-26T18:02:15.3761299+08:00",
-  "Summary": {
-    "BuildPassed": true,
-    "BuildAttempts": 0,
-    "TestPassed": true,
-    "TestAttempts": 0,
-    "Msb3026Hits": 0,
-    "Msb3027Hits": 0,
-    "BuildLockIssueCount": 0,
-    "TestLockIssueCount": 0,
-    "TesthostResidueCount": 0,
-    "BinObjLockedAny": false
-  },
-  "BuildFlags": "-m:1 -p:UseSharedCompilation=false -p:BuildInParallel=false",
-  "BuildLockIssues": [],
-  "TestLockIssues": [],
-  "TesthostResidue": [],
-  "BinObjLockCheck": {
-    "AnyLocked": false,
-    "LockedFiles": [],
-    "CheckedDirs": [
-      "src\\ContextCore.AppHost\\bin",
-      "src\\ContextCore.Core\\bin",
-      "src\\ContextCore.Core\\obj",
-      "tests\\ContextCore.Tests\\bin",
-      "tests\\ContextCore.IntegrationTests\\bin",
-      "tests\\ContextCore.Service.Tests\\bin"
-    ]
-  },
-  "SuggestedCleanup": null,
-  "Notes": [
-    "Build/test skipped via SkipBuildTest"
-  ]
+﻿{
+    "OperationId":  "p15-build-lock-diagnostics-20260627-010835",
+    "GeneratedAt":  "2026-06-27T01:08:35.1947390+08:00",
+    "Summary":  {
+                    "BuildPassed":  true,
+                    "BuildAttempts":  0,
+                    "TestPassed":  true,
+                    "TestAttempts":  0,
+                    "Msb3026Hits":  0,
+                    "Msb3027Hits":  0,
+                    "BuildLockIssueCount":  0,
+                    "TestLockIssueCount":  0,
+                    "TesthostResidueCount":  0,
+                    "BinObjLockedAny":  false
+                },
+    "BuildFlags":  "-m:1 -p:UseSharedCompilation=false -p:BuildInParallel=false",
+    "BuildLockIssues":  [
+
+                        ],
+    "TestLockIssues":  [
+
+                       ],
+    "TesthostResidue":  [
+
+                        ],
+    "BinObjLockCheck":  {
+                            "CheckedDirs":  [
+                                                "src\\ContextCore.AppHost\\bin",
+                                                "src\\ContextCore.Core\\bin",
+                                                "src\\ContextCore.Core\\obj",
+                                                "tests\\ContextCore.Tests\\bin",
+                                                "tests\\ContextCore.IntegrationTests\\bin",
+                                                "tests\\ContextCore.Service.Tests\\bin"
+                                            ],
+                            "LockedFiles":  [
+
+                                            ],
+                            "AnyLocked":  false
+                        },
+    "SuggestedCleanup":  {
+
+                         },
+    "Notes":  [
+                  "Build/test skipped via SkipBuildTest"
+              ]
 }
