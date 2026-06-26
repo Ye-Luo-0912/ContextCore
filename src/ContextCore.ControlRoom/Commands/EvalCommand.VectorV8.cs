@@ -569,6 +569,43 @@ public static partial class EvalCommand
                 regValid = reg is not null && !string.IsNullOrWhiteSpace(reg.RegistryId) && reg.TrustedProvenanceRecords.Count > 0;
                 var rawJson = await File.ReadAllTextAsync(qRegistryPath, ct).ConfigureAwait(false);
                 regSchemaValid = ValidateCandidateFields(rawJson, regRequiredFields, missingFields, invalidFields);
+                if (regSchemaValid && regValid)
+                {
+                    var doc = System.Text.Json.JsonDocument.Parse(rawJson);
+                    var records = doc.RootElement.GetProperty("TrustedProvenanceRecords");
+                    if (records.GetArrayLength() > 0)
+                    {
+                        var rec0 = records[0];
+                        foreach (var field in recRequiredFields)
+                        {
+                            if (!rec0.TryGetProperty(field, out var prop))
+                            {
+                                missingFields.Add($"TrustedProvenanceRecords[0].{field}");
+                                regSchemaValid = false;
+                                continue;
+                            }
+                            var isInvalid = prop.ValueKind switch
+                            {
+                                System.Text.Json.JsonValueKind.String => string.IsNullOrWhiteSpace(prop.GetString()),
+                                System.Text.Json.JsonValueKind.Array => prop.GetArrayLength() == 0,
+                                _ => false,
+                            };
+                            if (isInvalid)
+                            {
+                                invalidFields.Add($"TrustedProvenanceRecords[0].{field}");
+                                regSchemaValid = false;
+                            }
+                            if (field == "ValidUntil" && prop.TryGetDateTimeOffset(out var dt))
+                            {
+                                if (dt == default || dt.Year < 2000)
+                                {
+                                    invalidFields.Add($"TrustedProvenanceRecords[0].{field}");
+                                    regSchemaValid = false;
+                                }
+                            }
+                        }
+                    }
+                }
                 registryStatus = regValid ? (regSchemaValid ? QuarantineScanStatuses.ReadyForManualReview : QuarantineScanStatuses.Invalid) : QuarantineScanStatuses.Invalid;
             }
             catch { registryStatus = QuarantineScanStatuses.Invalid; missingFields.Add("<registry-parse-error>"); }
@@ -634,6 +671,15 @@ public static partial class EvalCommand
                 {
                     invalid.Add(field);
                     allValid = false;
+                }
+                if (field is "ApprovalTimestamp" or "EvidenceCreatedAt" or "ApprovalEvidenceProvidedAt" or "RegistryCreatedAt"
+                    && prop.TryGetDateTimeOffset(out var dt))
+                {
+                    if (dt == default || dt.Year < 2000)
+                    {
+                        invalid.Add(field);
+                        allValid = false;
+                    }
                 }
             }
         }
