@@ -1,0 +1,259 @@
+﻿{
+  "OperationId": "frp-rollback-readiness-matrix-860b95ac1e9b412fa3f52297ea5bd381",
+  "CreatedAt": "2026-06-26T18:50:22.6298732+00:00",
+  "RollbackReadinessMatrixPassed": true,
+  "GatePassed": false,
+  "TotalCases": 9,
+  "PassedCases": 9,
+  "FailedCases": 0,
+  "NotApplicableCases": 2,
+  "IncompleteCases": 6,
+  "ReadyCases": 1,
+  "Cases": [
+    {
+      "CaseName": "NotApplicableFromBlockedApplication",
+      "InputApplicationStatus": "GrantApplicationBlocked",
+      "RequestedCapability": "FormalRetrievalActivation",
+      "RequestedScope": "demo-workspace/demo-collection",
+      "ExpectedStatus": "RollbackReadinessNotApplicable",
+      "ActualStatus": "RollbackReadinessNotApplicable",
+      "ExpectedMissingElement": "",
+      "ActualRollbackElementsMet": [],
+      "ActualRollbackElementsMissing": [],
+      "Reasoning": "application status \u0027GrantApplicationBlocked\u0027 is not Ready; rollback readiness not evaluated.",
+      "StatusMatched": true,
+      "MissingElementMatched": true,
+      "CountShapeOk": true,
+      "RollbackNotActivated": true,
+      "ApplicationNotApplied": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "NotApplicableFromNotApplicableApplication",
+      "InputApplicationStatus": "GrantApplicationNotApplicable",
+      "RequestedCapability": "FormalRetrievalActivation",
+      "RequestedScope": "demo-workspace/demo-collection",
+      "ExpectedStatus": "RollbackReadinessNotApplicable",
+      "ActualStatus": "RollbackReadinessNotApplicable",
+      "ExpectedMissingElement": "",
+      "ActualRollbackElementsMet": [],
+      "ActualRollbackElementsMissing": [],
+      "Reasoning": "application status \u0027GrantApplicationNotApplicable\u0027 is not Ready; rollback readiness not evaluated.",
+      "StatusMatched": true,
+      "MissingElementMatched": true,
+      "CountShapeOk": true,
+      "RollbackNotActivated": true,
+      "ApplicationNotApplied": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "IncompleteMissingSnapshot",
+      "InputApplicationStatus": "GrantApplicationReady",
+      "RequestedCapability": "FormalRetrievalActivation",
+      "RequestedScope": "demo-workspace/demo-collection",
+      "ExpectedStatus": "RollbackReadinessIncomplete",
+      "ActualStatus": "RollbackReadinessIncomplete",
+      "ExpectedMissingElement": "PreApplicationSnapshotPresent",
+      "ActualRollbackElementsMet": [
+        "RollbackPlaybookPresent",
+        "RollbackDryRunPassed",
+        "StateRestorationProvenInTest",
+        "RollbackOperatorAccessPathPresent"
+      ],
+      "ActualRollbackElementsMissing": [
+        "PreApplicationSnapshotPresent"
+      ],
+      "Reasoning": "1 rollback element(s) missing; rollback readiness incomplete.",
+      "StatusMatched": true,
+      "MissingElementMatched": true,
+      "CountShapeOk": true,
+      "RollbackNotActivated": true,
+      "ApplicationNotApplied": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "IncompleteMissingPlaybook",
+      "InputApplicationStatus": "GrantApplicationReady",
+      "RequestedCapability": "FormalRetrievalActivation",
+      "RequestedScope": "demo-workspace/demo-collection",
+      "ExpectedStatus": "RollbackReadinessIncomplete",
+      "ActualStatus": "RollbackReadinessIncomplete",
+      "ExpectedMissingElement": "RollbackPlaybookPresent",
+      "ActualRollbackElementsMet": [
+        "PreApplicationSnapshotPresent",
+        "RollbackDryRunPassed",
+        "StateRestorationProvenInTest",
+        "RollbackOperatorAccessPathPresent"
+      ],
+      "ActualRollbackElementsMissing": [
+        "RollbackPlaybookPresent"
+      ],
+      "Reasoning": "1 rollback element(s) missing; rollback readiness incomplete.",
+      "StatusMatched": true,
+      "MissingElementMatched": true,
+      "CountShapeOk": true,
+      "RollbackNotActivated": true,
+      "ApplicationNotApplied": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "IncompleteMissingDryRun",
+      "InputApplicationStatus": "GrantApplicationReady",
+      "RequestedCapability": "FormalRetrievalActivation",
+      "RequestedScope": "demo-workspace/demo-collection",
+      "ExpectedStatus": "RollbackReadinessIncomplete",
+      "ActualStatus": "RollbackReadinessIncomplete",
+      "ExpectedMissingElement": "RollbackDryRunPassed",
+      "ActualRollbackElementsMet": [
+        "PreApplicationSnapshotPresent",
+        "RollbackPlaybookPresent",
+        "StateRestorationProvenInTest",
+        "RollbackOperatorAccessPathPresent"
+      ],
+      "ActualRollbackElementsMissing": [
+        "RollbackDryRunPassed"
+      ],
+      "Reasoning": "1 rollback element(s) missing; rollback readiness incomplete.",
+      "StatusMatched": true,
+      "MissingElementMatched": true,
+      "CountShapeOk": true,
+      "RollbackNotActivated": true,
+      "ApplicationNotApplied": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "IncompleteMissingRestorationProof",
+      "InputApplicationStatus": "GrantApplicationReady",
+      "RequestedCapability": "FormalRetrievalActivation",
+      "RequestedScope": "demo-workspace/demo-collection",
+      "ExpectedStatus": "RollbackReadinessIncomplete",
+      "ActualStatus": "RollbackReadinessIncomplete",
+      "ExpectedMissingElement": "StateRestorationProvenInTest",
+      "ActualRollbackElementsMet": [
+        "PreApplicationSnapshotPresent",
+        "RollbackPlaybookPresent",
+        "RollbackDryRunPassed",
+        "RollbackOperatorAccessPathPresent"
+      ],
+      "ActualRollbackElementsMissing": [
+        "StateRestorationProvenInTest"
+      ],
+      "Reasoning": "1 rollback element(s) missing; rollback readiness incomplete.",
+      "StatusMatched": true,
+      "MissingElementMatched": true,
+      "CountShapeOk": true,
+      "RollbackNotActivated": true,
+      "ApplicationNotApplied": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "IncompleteMissingOperatorAccess",
+      "InputApplicationStatus": "GrantApplicationReady",
+      "RequestedCapability": "FormalRetrievalActivation",
+      "RequestedScope": "demo-workspace/demo-collection",
+      "ExpectedStatus": "RollbackReadinessIncomplete",
+      "ActualStatus": "RollbackReadinessIncomplete",
+      "ExpectedMissingElement": "RollbackOperatorAccessPathPresent",
+      "ActualRollbackElementsMet": [
+        "PreApplicationSnapshotPresent",
+        "RollbackPlaybookPresent",
+        "RollbackDryRunPassed",
+        "StateRestorationProvenInTest"
+      ],
+      "ActualRollbackElementsMissing": [
+        "RollbackOperatorAccessPathPresent"
+      ],
+      "Reasoning": "1 rollback element(s) missing; rollback readiness incomplete.",
+      "StatusMatched": true,
+      "MissingElementMatched": true,
+      "CountShapeOk": true,
+      "RollbackNotActivated": true,
+      "ApplicationNotApplied": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "RollbackReadyButNothingActivated",
+      "InputApplicationStatus": "GrantApplicationReady",
+      "RequestedCapability": "FormalRetrievalActivation",
+      "RequestedScope": "demo-workspace/demo-collection",
+      "ExpectedStatus": "RollbackReady",
+      "ActualStatus": "RollbackReady",
+      "ExpectedMissingElement": "",
+      "ActualRollbackElementsMet": [
+        "PreApplicationSnapshotPresent",
+        "RollbackPlaybookPresent",
+        "RollbackDryRunPassed",
+        "StateRestorationProvenInTest",
+        "RollbackOperatorAccessPathPresent"
+      ],
+      "ActualRollbackElementsMissing": [],
+      "Reasoning": "all rollback elements present; if applied we can undo. Note: application still not executed, rollback path still not activated.",
+      "StatusMatched": true,
+      "MissingElementMatched": true,
+      "CountShapeOk": true,
+      "RollbackNotActivated": true,
+      "ApplicationNotApplied": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "IncompleteMultipleMissing",
+      "InputApplicationStatus": "GrantApplicationReady",
+      "RequestedCapability": "FormalRetrievalActivation",
+      "RequestedScope": "demo-workspace/demo-collection",
+      "ExpectedStatus": "RollbackReadinessIncomplete",
+      "ActualStatus": "RollbackReadinessIncomplete",
+      "ExpectedMissingElement": "PreApplicationSnapshotPresent",
+      "ActualRollbackElementsMet": [
+        "RollbackDryRunPassed",
+        "StateRestorationProvenInTest",
+        "RollbackOperatorAccessPathPresent"
+      ],
+      "ActualRollbackElementsMissing": [
+        "PreApplicationSnapshotPresent",
+        "RollbackPlaybookPresent"
+      ],
+      "Reasoning": "2 rollback element(s) missing; rollback readiness incomplete.",
+      "StatusMatched": true,
+      "MissingElementMatched": true,
+      "CountShapeOk": true,
+      "RollbackNotActivated": true,
+      "ApplicationNotApplied": true,
+      "PassedAsExpected": true
+    }
+  ],
+  "ManualReviewRequired": false,
+  "ApprovalSealed": false,
+  "CapabilityGrantWritten": false,
+  "GrantApplied": false,
+  "ApplicationApplied": false,
+  "RollbackActivated": false,
+  "PromotionToMainlinePerformed": false,
+  "EvidenceCopiedToMainline": false,
+  "TrustRegistryCopiedToMainline": false,
+  "MainlineEvidencePresent": false,
+  "MainlineTrustRegistryPresent": false,
+  "FormalRetrievalAllowed": false,
+  "RuntimeSwitchAllowed": false,
+  "FormalPackageWritten": false,
+  "PackageOutputChanged": false,
+  "PackingPolicyChanged": false,
+  "VectorStoreBindingChanged": false,
+  "GlobalDefaultOn": false,
+  "ConfigPatchWritten": false,
+  "RuntimeActivation": false,
+  "NoRuntimeMutationInvariant": true,
+  "BlockedReasons": [],
+  "Diagnostics": [
+    "total=9",
+    "passed=9",
+    "failed=0",
+    "notApplicable=2",
+    "incomplete=6",
+    "ready=1",
+    "runtimeGate=True",
+    "p15Gate=True",
+    "mainlineEvidence=False",
+    "mainlineRegistry=False",
+    "nextStage=ExplicitOperatorSignOff (RollbackReady \u002B ApplicationReady together still require operator sign-off; matrix never crosses)"
+  ]
+}
