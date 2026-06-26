@@ -4193,6 +4193,25 @@ public static class ServiceOperationalRenderer
             builder.AppendLine($"- no real registry   : {v8Pack.NoRealTrustRegistryPresent}");
         }
 
+        builder.AppendLine();
+        builder.AppendLine("V8.6 External Approval Dry-Run (Fixture-Isolated)");
+        var v8Dr = snapshot.FormalRetrievalPromotionExternalApprovalDryRunReport;
+        if (v8Dr is null)
+        {
+            builder.AppendLine("- status : not generated");
+            builder.AppendLine("- path   : vector/v8/formal-retrieval-promotion-external-approval-dry-run.json");
+            builder.AppendLine("- action : run eval formal-retrieval-promotion-external-approval-dry-run");
+        }
+        else
+        {
+            builder.AppendLine($"- dry-run passed     : {v8Dr.DryRunPassed}");
+            builder.AppendLine($"- gate passed        : {v8Dr.GatePassed}");
+            builder.AppendLine($"- fixture isolation  : {v8Dr.FixtureIsolationVerified}");
+            builder.AppendLine($"- source ids match   : {v8Dr.SourceGateIdsMatch}");
+            builder.AppendLine($"- provenance found   : {v8Dr.ProvenanceRecordFound}");
+            builder.AppendLine($"- checksum matched   : {v8Dr.ChecksumMatched}");
+        }
+
         return builder.ToString();
     }
 

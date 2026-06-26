@@ -318,6 +318,8 @@ public static partial class EvalCommand
             !string.Equals(subcommand, "formal-retrieval-promotion-external-approval-intake-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "formal-retrieval-promotion-external-approval-submission-pack", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "formal-retrieval-promotion-external-approval-submission-pack-gate", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "formal-retrieval-promotion-external-approval-dry-run", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "formal-retrieval-promotion-external-approval-dry-run-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "dto-split-plan", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "dto-split-readiness-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "vector-retrieval-eval-protocol-audit", StringComparison.OrdinalIgnoreCase) &&
@@ -570,6 +572,8 @@ public static partial class EvalCommand
             Console.WriteLine("  eval formal-retrieval-promotion-external-approval-intake-gate");
             Console.WriteLine("  eval formal-retrieval-promotion-external-approval-submission-pack");
             Console.WriteLine("  eval formal-retrieval-promotion-external-approval-submission-pack-gate");
+            Console.WriteLine("  eval formal-retrieval-promotion-external-approval-dry-run");
+            Console.WriteLine("  eval formal-retrieval-promotion-external-approval-dry-run-gate");
             Console.WriteLine("  eval dto-split-plan");
             Console.WriteLine("  eval dto-split-readiness-gate");
             Console.WriteLine("  eval vector-retrieval-eval-protocol-audit");
@@ -1895,6 +1899,13 @@ public static partial class EvalCommand
             || string.Equals(subcommand, "formal-retrieval-promotion-external-approval-submission-pack-gate", StringComparison.OrdinalIgnoreCase))
         {
             await ExecuteFormalRetrievalPromotionExternalApprovalSubmissionPackAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        if (string.Equals(subcommand, "formal-retrieval-promotion-external-approval-dry-run", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(subcommand, "formal-retrieval-promotion-external-approval-dry-run-gate", StringComparison.OrdinalIgnoreCase))
+        {
+            await ExecuteFormalRetrievalPromotionExternalApprovalDryRunAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
             return;
         }
 

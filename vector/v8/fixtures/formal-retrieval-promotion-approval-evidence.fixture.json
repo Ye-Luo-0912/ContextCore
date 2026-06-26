@@ -1,0 +1,22 @@
+{
+  "ApprovalEvidenceId": "fixture-evid-dryrun-001",
+  "ApprovedBy": "ReleaseManager",
+  "ApprovalId": "APPROVE-001",
+  "ApprovalScopes": ["demo-workspace/demo-collection"],
+  "ApprovalSource": "fixture-external-approval",
+  "ApprovalTimestamp": "2026-06-26T12:00:00Z",
+  "SourcePromotionPlanGateOperationId": "frp-plan-gate-39b807ebe543456c89166daebc7eb484",
+  "SourceReadinessGateOperationId": "frp-audit-gate-3ecc140a80b043249694e63dd8e461d8",
+  "SourceCloseoutGateOperationId": "arsp-closeout-gate-3df0efdbc9a540f3b5cdd03a2bd1b43a",
+  "OperatorStatement": "Fixture dry-run approval for validation purposes only. Not a real approval.",
+  "EvidenceCreatedAt": "2026-06-26T12:00:00Z",
+  "ApprovalEvidenceSourceKind": "fixture",
+  "ApprovalEvidenceProvenanceId": "fixture-provenance-001",
+  "ApprovalEvidenceProvidedBy": "FixtureDryRunOperator",
+  "ApprovalEvidenceProvidedAt": "2026-06-26T12:00:00Z",
+  "ApprovalEvidenceTrustMode": "fixture-dry-run",
+  "ApprovalEvidenceIsExternal": true,
+  "ApprovalEvidenceChecksum": "fixture-computed-checksum-abc123",
+  "SourceApprovalRequestId": "frp-approval-20260626-5597b86de70d4ecb9949c2b99b23fce3",
+  "BoundPendingApprovalGateOperationId": "frp-approval-gate-38556bf32c094044af1934f4ab59beaa"
+}

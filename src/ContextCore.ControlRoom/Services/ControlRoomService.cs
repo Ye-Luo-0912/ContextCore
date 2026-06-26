@@ -2907,6 +2907,7 @@ public sealed class ControlRoomService
             FormalRetrievalPromotionApprovalEvidenceSealReport = TryLoadFormalRetrievalPromotionApprovalEvidenceSealSummary()?.Report,
             FormalRetrievalPromotionExternalApprovalIntakeReport = TryLoadFormalRetrievalPromotionExternalApprovalIntakeSummary()?.Report,
             FormalRetrievalPromotionExternalApprovalSubmissionPackReport = TryLoadFormalRetrievalPromotionExternalApprovalSubmissionPackSummary()?.Report,
+            FormalRetrievalPromotionExternalApprovalDryRunReport = TryLoadFormalRetrievalPromotionExternalApprovalDryRunSummary()?.Report,
             Limit = limit,
             Offset = offset
         };
@@ -7553,6 +7554,9 @@ public sealed class ControlRoomService
     private static (FormalRetrievalPromotionExternalApprovalSubmissionPackReport Report, string SourcePath)? TryLoadFormalRetrievalPromotionExternalApprovalSubmissionPackSummary()
         => TryLoadFromDescriptor<FormalRetrievalPromotionExternalApprovalSubmissionPackReport>(ReportSummaryRegistry.V8FormalRetrievalPromotionExternalApprovalSubmissionPack);
 
+    private static (FormalRetrievalPromotionExternalApprovalDryRunReport Report, string SourcePath)? TryLoadFormalRetrievalPromotionExternalApprovalDryRunSummary()
+        => TryLoadFromDescriptor<FormalRetrievalPromotionExternalApprovalDryRunReport>(ReportSummaryRegistry.V8FormalRetrievalPromotionExternalApprovalDryRun);
+
     private static string VectorReportPath(string phase, string fileName)
     {
         return Path.Combine("vector", phase, fileName);
@@ -10516,6 +10520,8 @@ public sealed class ServiceLearningFeaturesSnapshot
     public FormalRetrievalPromotionExternalApprovalIntakeReport? FormalRetrievalPromotionExternalApprovalIntakeReport { get; init; }
 
     public FormalRetrievalPromotionExternalApprovalSubmissionPackReport? FormalRetrievalPromotionExternalApprovalSubmissionPackReport { get; init; }
+
+    public FormalRetrievalPromotionExternalApprovalDryRunReport? FormalRetrievalPromotionExternalApprovalDryRunReport { get; init; }
 
     public FoundationServiceStatusResponse? FoundationServiceStatus { get; init; }
 
