@@ -1,6 +1,6 @@
 # Learning Runtime Change Readiness Gate
 
-Generated: 2026-06-26T07:06:04.3338380+00:00
+Generated: 2026-06-26T07:18:57.7003209+00:00
 PolicyVersion: `learning-readiness-freeze-s0/v1`
 Registry: `learning/readiness/learning-readiness-freeze-report.json`
 

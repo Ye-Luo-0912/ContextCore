@@ -1,6 +1,6 @@
 {
-  "operationId": "learning-runtime-change-gate-f2e5469b5afa421593eb7d34a6ba383d",
-  "generatedAt": "2026-06-26T07:06:04.333838+00:00",
+  "operationId": "learning-runtime-change-gate-9a2edc143cc24d3baf354003eb14f773",
+  "generatedAt": "2026-06-26T07:18:57.7003209+00:00",
   "passed": true,
   "registryReportPath": "learning/readiness/learning-readiness-freeze-report.json",
   "checks": [

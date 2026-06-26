@@ -3161,6 +3161,85 @@ public sealed class FormalRetrievalPromotionApprovalReport
 }
 
 
+/// <summary>V8.3 approval evidence 输入模型。</summary>
+public sealed class FormalRetrievalPromotionApprovalEvidence
+{
+    public string ApprovalEvidenceId { get; init; } = "";
+    public string ApprovedBy { get; init; } = "";
+    public string ApprovalId { get; init; } = "";
+    public IReadOnlyList<string> ApprovalScopes { get; init; } = Array.Empty<string>();
+    public string ApprovalSource { get; init; } = "";
+    public DateTimeOffset ApprovalTimestamp { get; init; }
+    public string SourcePromotionPlanGateOperationId { get; init; } = "";
+    public string SourceReadinessGateOperationId { get; init; } = "";
+    public string SourceCloseoutGateOperationId { get; init; } = "";
+    public string OperatorStatement { get; init; } = "";
+    public DateTimeOffset EvidenceCreatedAt { get; init; }
+}
+
+
+/// <summary>V8.3 approval evidence seal 推荐。</summary>
+public static class FormalRetrievalPromotionApprovalEvidenceSealRecommendations
+{
+    public const string EvidenceSealedManualApprovalComplete = nameof(EvidenceSealedManualApprovalComplete);
+    public const string BlockedByEvidenceMissing = nameof(BlockedByEvidenceMissing);
+    public const string BlockedByEvidenceIncomplete = nameof(BlockedByEvidenceIncomplete);
+    public const string BlockedByUpstreamInvariantViolation = nameof(BlockedByUpstreamInvariantViolation);
+    public const string BlockedBySafetyBoundaryViolation = nameof(BlockedBySafetyBoundaryViolation);
+    public const string KeepPreviewOnly = nameof(KeepPreviewOnly);
+}
+
+
+/// <summary>V8.3 evidence seal 选项。</summary>
+public sealed class FormalRetrievalPromotionApprovalEvidenceSealOptions
+{
+    public bool Enabled { get; init; } = true;
+}
+
+
+/// <summary>V8.3 formal retrieval promotion approval evidence seal 报告。
+/// 读取并绑定真实 approval evidence，生成 seal artifact。
+/// FormalRetrievalAllowed=false。</summary>
+public sealed class FormalRetrievalPromotionApprovalEvidenceSealReport
+{
+    public string OperationId { get; init; } = "";
+    public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
+    public bool SealPassed { get; init; }
+    public bool GatePassed { get; init; }
+    public string Recommendation { get; init; }
+        = FormalRetrievalPromotionApprovalEvidenceSealRecommendations.KeepPreviewOnly;
+    public string NextAllowedPhase { get; init; } = "KeepPreviewOnly";
+
+    public bool EvidencePresent { get; init; }
+    public string EvidencePath { get; init; } = "";
+    public string ApprovalEvidenceId { get; init; } = "";
+    public string ApprovedBy { get; init; } = "";
+    public string ApprovalId { get; init; } = "";
+    public IReadOnlyList<string> ApprovalScopes { get; init; } = Array.Empty<string>();
+    public string ApprovalSource { get; init; } = "";
+    public bool ScopeSubsetValidated { get; init; }
+    public bool SourceGateIdsMatch { get; init; }
+
+    public bool V8ApprovalPendingGatePresent { get; init; }
+    public bool V8PlanGatePassed { get; init; }
+    public bool V8ReadinessGatePassed { get; init; }
+    public bool V7CloseoutGatePassed { get; init; }
+    public bool P15GatePassed { get; init; }
+    public bool RuntimeChangeGatePassed { get; init; }
+
+    public bool FormalRetrievalAllowed { get; init; }
+    public bool RuntimeSwitchAllowed { get; init; }
+    public bool FormalPackageWritten { get; init; }
+    public bool GlobalDefaultOn { get; init; }
+    public bool NoRuntimeMutationInvariant { get; init; }
+
+    public IReadOnlyList<string> AllowedActions { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> ForbiddenActions { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> BlockedReasons { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> Diagnostics { get; init; } = Array.Empty<string>();
+}
+
+
 /// <summary>架构清理计划报告。</summary>
 public sealed class ArchitectureCleanupPlanReport
 {

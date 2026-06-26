@@ -1,0 +1,15 @@
+{
+  "SourceCloseoutGateOperationId": "arsp-closeout-gate-3df0efdbc9a540f3b5cdd03a2bd1b43a",
+  "ApprovedBy": "ReleaseManager",
+  "SourceReadinessGateOperationId": "frp-audit-gate-3ecc140a80b043249694e63dd8e461d8",
+  "ApprovalId": "APPROVE-001",
+  "ApprovalScopes": [
+    "demo-workspace/demo-collection"
+  ],
+  "OperatorStatement": "Approved after V8.2R pending review and evidence verification",
+  "ApprovalEvidenceId": "evid-20260626-56e0a3a5-241a-4bba-9ddf-4f0b8c92bc46",
+  "ApprovalSource": "manual-external",
+  "SourcePromotionPlanGateOperationId": "frp-plan-gate-39b807ebe543456c89166daebc7eb484",
+  "EvidenceCreatedAt": "2026-06-26T07:17:49.6891801Z",
+  "ApprovalTimestamp": "2026-06-26T07:17:49.6813840Z"
+}

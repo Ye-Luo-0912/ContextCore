@@ -4131,6 +4131,27 @@ public static class ServiceOperationalRenderer
             builder.AppendLine($"- invariants         : formalRetrieval={v8Approval.FormalRetrievalAllowed} noRuntimeMutation={v8Approval.NoRuntimeMutationInvariant}");
         }
 
+        builder.AppendLine();
+        builder.AppendLine("V8.3 Formal Retrieval Promotion Approval Evidence Seal");
+        var v8Seal = snapshot.FormalRetrievalPromotionApprovalEvidenceSealReport;
+        if (v8Seal is null)
+        {
+            builder.AppendLine("- status : not generated");
+            builder.AppendLine("- path   : vector/v8/formal-retrieval-promotion-approval-evidence-seal.json");
+            builder.AppendLine("- action : run eval formal-retrieval-promotion-approval-evidence-seal");
+        }
+        else
+        {
+            builder.AppendLine($"- seal passed        : {v8Seal.SealPassed}");
+            builder.AppendLine($"- gate passed        : {v8Seal.GatePassed}");
+            builder.AppendLine($"- recommendation     : {v8Seal.Recommendation}");
+            builder.AppendLine($"- evidence present   : {v8Seal.EvidencePresent}");
+            builder.AppendLine($"- approved by        : {v8Seal.ApprovedBy}");
+            builder.AppendLine($"- scope validated    : {v8Seal.ScopeSubsetValidated}");
+            builder.AppendLine($"- source ids match   : {v8Seal.SourceGateIdsMatch}");
+            builder.AppendLine($"- invariants         : formalRetrieval={v8Seal.FormalRetrievalAllowed} noRuntimeMutation={v8Seal.NoRuntimeMutationInvariant}");
+        }
+
         return builder.ToString();
     }
 

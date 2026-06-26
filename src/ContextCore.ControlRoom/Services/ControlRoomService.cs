@@ -2904,6 +2904,7 @@ public sealed class ControlRoomService
             FormalRetrievalPromotionReadinessAuditReport = TryLoadFormalRetrievalPromotionReadinessAuditSummary()?.Report,
             FormalRetrievalPromotionPlanReport = TryLoadFormalRetrievalPromotionPlanSummary()?.Report,
             FormalRetrievalPromotionApprovalReport = TryLoadFormalRetrievalPromotionApprovalSummary()?.Report,
+            FormalRetrievalPromotionApprovalEvidenceSealReport = TryLoadFormalRetrievalPromotionApprovalEvidenceSealSummary()?.Report,
             Limit = limit,
             Offset = offset
         };
@@ -7541,6 +7542,9 @@ public sealed class ControlRoomService
     private static (FormalRetrievalPromotionApprovalReport Report, string SourcePath)? TryLoadFormalRetrievalPromotionApprovalSummary()
         => TryLoadFromDescriptor<FormalRetrievalPromotionApprovalReport>(ReportSummaryRegistry.V8FormalRetrievalPromotionApproval);
 
+    private static (FormalRetrievalPromotionApprovalEvidenceSealReport Report, string SourcePath)? TryLoadFormalRetrievalPromotionApprovalEvidenceSealSummary()
+        => TryLoadFromDescriptor<FormalRetrievalPromotionApprovalEvidenceSealReport>(ReportSummaryRegistry.V8FormalRetrievalPromotionApprovalEvidenceSeal);
+
     private static string VectorReportPath(string phase, string fileName)
     {
         return Path.Combine("vector", phase, fileName);
@@ -10498,6 +10502,8 @@ public sealed class ServiceLearningFeaturesSnapshot
     public FormalRetrievalPromotionPlanReport? FormalRetrievalPromotionPlanReport { get; init; }
 
     public FormalRetrievalPromotionApprovalReport? FormalRetrievalPromotionApprovalReport { get; init; }
+
+    public FormalRetrievalPromotionApprovalEvidenceSealReport? FormalRetrievalPromotionApprovalEvidenceSealReport { get; init; }
 
     public FoundationServiceStatusResponse? FoundationServiceStatus { get; init; }
 

@@ -365,11 +365,23 @@ public static class ReportSummaryRegistry
         EvalPlanCommand = "eval formal-retrieval-promotion-approval",
     };
 
+    public static readonly ControlRoomReportDescriptor V8FormalRetrievalPromotionApprovalEvidenceSeal = new()
+    {
+        ReportId = "FormalRetrievalPromotionApprovalEvidenceSeal",
+        DisplayTitle = "V8.3 Formal Retrieval Promotion Approval Evidence Seal Summary",
+        PrimaryPath = "vector/v8/formal-retrieval-promotion-approval-evidence-seal.json",
+        GatePath = "vector/v8/formal-retrieval-promotion-approval-evidence-seal-gate.json",
+        PhaseGroup = "V8",
+        EvalGateCommand = "eval formal-retrieval-promotion-approval-evidence-seal-gate",
+        EvalPlanCommand = "eval formal-retrieval-promotion-approval-evidence-seal",
+    };
+
     public static IReadOnlyList<ControlRoomReportDescriptor> V8Descriptors { get; } = new[]
     {
         V8FormalRetrievalPromotionReadinessAudit,
         V8FormalRetrievalPromotionPlan,
         V8FormalRetrievalPromotionApproval,
+        V8FormalRetrievalPromotionApprovalEvidenceSeal,
     };
 
     // =========================================================================
