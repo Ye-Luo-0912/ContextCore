@@ -1,7 +1,7 @@
 ﻿# External Approval Dry-Run Gate
 
-生成: `2026-06-26T11:12:12.3450043+00:00`
-操作: `frp-dryrun-gate-24d7952c60374aeb8f815e606a423b02`
+生成: `2026-06-26T11:29:17.5141021+00:00`
+操作: `frp-dryrun-gate-8fd49d4a303d4e48946891dac5994171`
 
 ## Decision
 - DryRunPassed: `True`  GatePassed: `True`

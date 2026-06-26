@@ -81,6 +81,11 @@ public sealed class FormalRetrievalPromotionExternalApprovalDryRunRunner
             && fixtureRegistry.AllowedSourceKinds.Count > 0
             && fixtureRegistry.TrustedProvenanceRecords.Count > 0;
 
+        var recordStructureValid = false;
+        var sourceKindTrusted = false;
+        var providedByVerified = false;
+        var trustRecordNotExpired = false;
+
         var sourceGateIdsMatch = false;
         var approvalRequestBinding = false;
         var provenanceFound = false;
@@ -119,11 +124,30 @@ public sealed class FormalRetrievalPromotionExternalApprovalDryRunRunner
             var record = fixtureRegistry.TrustedProvenanceRecords
                 .FirstOrDefault(r => string.Equals(r.ApprovalEvidenceProvenanceId, fixtureEvidence.ApprovalEvidenceProvenanceId, StringComparison.OrdinalIgnoreCase));
             provenanceFound = record is not null;
+
             if (provenanceFound && record is not null)
             {
+                recordStructureValid = !string.IsNullOrWhiteSpace(record.ApprovalEvidenceSourceKind)
+                    && !string.IsNullOrWhiteSpace(record.ApprovalEvidenceProvidedBy)
+                    && !string.IsNullOrWhiteSpace(record.ApprovalEvidenceChecksum)
+                    && !string.IsNullOrWhiteSpace(record.SourceApprovalRequestId)
+                    && !string.IsNullOrWhiteSpace(record.BoundPendingApprovalGateOperationId)
+                    && record.AllowedScopes.Count > 0
+                    && !string.IsNullOrWhiteSpace(record.TrustMode)
+                    && record.ValidUntil != default;
+                if (!recordStructureValid) blocked.Add("FixtureRecordStructureInvalid");
+
+                sourceKindTrusted = fixtureRegistry.AllowedSourceKinds.Any(k => string.Equals(k, fixtureEvidence.ApprovalEvidenceSourceKind, StringComparison.OrdinalIgnoreCase));
+                providedByVerified = string.Equals(fixtureEvidence.ApprovalEvidenceProvidedBy, record.ApprovalEvidenceProvidedBy, StringComparison.OrdinalIgnoreCase);
+                trustRecordNotExpired = record.ValidUntil == default || now <= record.ValidUntil;
+
                 checksumMatch = string.Equals(fixtureEvidence.ApprovalEvidenceChecksum, record.ApprovalEvidenceChecksum, StringComparison.OrdinalIgnoreCase);
                 scopeTrusted = fixtureEvidence.ApprovalScopes.Count > 0 && record.AllowedScopes.Count > 0
                     && fixtureEvidence.ApprovalScopes.All(s => record.AllowedScopes.Any(t => string.Equals(t, s, StringComparison.OrdinalIgnoreCase)));
+
+                if (!sourceKindTrusted) blocked.Add("FixtureSourceKindMismatch");
+                if (!providedByVerified) blocked.Add("FixtureProvidedByMismatch");
+                if (!trustRecordNotExpired) blocked.Add("FixtureTrustRecordExpired");
             }
 
             if (!provenanceFound) blocked.Add("FixtureProvenanceRecordNotFound");
@@ -173,6 +197,11 @@ public sealed class FormalRetrievalPromotionExternalApprovalDryRunRunner
             ScopeTrustedByRegistry = scopeTrusted,
             ScopeSubsetOfApprovedScopes = scopeApproved,
             ApprovalRequestBindingMatched = approvalRequestBinding,
+            SourceKindTrusted = sourceKindTrusted,
+            ProvidedByMatched = providedByVerified,
+            TrustRecordNotExpired = trustRecordNotExpired,
+            RecordStructureValid = recordStructureValid,
+            IntakeSafetyFieldsVerified = intakeHasRequiredReasons,
             P15GatePassed = p15Passed,
             RuntimeChangeGatePassed = rtPassed,
             FormalRetrievalAllowed = false, RuntimeSwitchAllowed = false, FormalPackageWritten = false,

@@ -3458,6 +3458,11 @@ public sealed class FormalRetrievalPromotionExternalApprovalDryRunReport
     public bool ScopeTrustedByRegistry { get; init; }
     public bool ScopeSubsetOfApprovedScopes { get; init; }
     public bool ApprovalRequestBindingMatched { get; init; }
+    public bool SourceKindTrusted { get; init; }
+    public bool ProvidedByMatched { get; init; }
+    public bool TrustRecordNotExpired { get; init; }
+    public bool RecordStructureValid { get; init; }
+    public bool IntakeSafetyFieldsVerified { get; init; }
 
     public bool P15GatePassed { get; init; }
     public bool RuntimeChangeGatePassed { get; init; }
