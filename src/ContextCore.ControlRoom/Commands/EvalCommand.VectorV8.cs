@@ -628,6 +628,44 @@ public static partial class EvalCommand
         Console.WriteLine($"[Eval] Quarantine negative matrix written: {jp}");
         Console.WriteLine($"[Eval] matrixPassed={report.MatrixPassed}; gatePassed={report.GatePassed}; total={report.TotalCases} passed={report.PassedCases} failed={report.FailedCases}");
     }
+
+    private static async Task ExecuteFormalRetrievalPromotionExternalApprovalQuarantinePositiveMatrixAsync(
+        IReadOnlyList<string> args, string subcommand, CancellationToken ct)
+    {
+        var output = Path.GetFullPath(Path.Combine("vector", "v8"));
+        Directory.CreateDirectory(output);
+
+        var rtPath = Path.Combine("learning", "readiness", "learning-runtime-change-readiness-gate.json");
+        var rtGate = await ReadJsonFileAsync<LearningRuntimeChangeReadinessGateReport>(rtPath, ct).ConfigureAwait(false);
+        var rtPassed = rtGate is not null && rtGate.Passed;
+
+        var p15Path = Path.Combine("eval", "eval-report-p15-a3.json");
+        var p15 = await ReadJsonFileAsync<JsonDocument>(p15Path, ct).ConfigureAwait(false);
+        var p15Passed = false;
+        if (p15 is not null && p15.RootElement.TryGetProperty("PassRate", out var pr)) p15Passed = pr.GetDouble() >= 1.0;
+
+        // mainline approval evidence / trust registry 文件不得出现。
+        var mainlineEvPath = Path.Combine("vector", "v8", "formal-retrieval-promotion-approval-evidence.json");
+        var mainlineRegPath = Path.Combine("vector", "v8", "formal-retrieval-promotion-approval-trust-registry.json");
+        var mainlineEvPresent = File.Exists(mainlineEvPath);
+        var mainlineRegPresent = File.Exists(mainlineRegPath);
+
+        var isGate = string.Equals(subcommand, "formal-retrieval-promotion-external-approval-quarantine-positive-matrix-gate", StringComparison.OrdinalIgnoreCase);
+        var opt = new FormalRetrievalPromotionExternalApprovalQuarantinePositiveMatrixOptions { IsGate = isGate, Enabled = !CommandHelpers.HasFlag(args, "--disabled") };
+        var runner = new FormalRetrievalPromotionExternalApprovalQuarantinePositiveMatrixRunner();
+        var report = runner.Run(rtPassed, p15Passed, mainlineEvPresent, mainlineRegPresent, opt);
+
+        var fn = isGate ? "formal-retrieval-promotion-external-approval-quarantine-positive-matrix-gate" : "formal-retrieval-promotion-external-approval-quarantine-positive-matrix";
+        var jp = Path.Combine(output, $"{fn}.json");
+        var mp = Path.Combine(output, $"{fn}.md");
+        await WriteJsonSafeAsync(report, jp, ct).ConfigureAwait(false);
+        await WriteTextAsync(FormalRetrievalPromotionExternalApprovalQuarantinePositiveMatrixRunner.BuildMarkdown(
+            isGate ? "Quarantine Positive Matrix Gate" : "Quarantine Positive Matrix", report), mp, ct).ConfigureAwait(false);
+
+        Console.WriteLine($"[Eval] Quarantine positive matrix written: {jp}");
+        Console.WriteLine($"[Eval] positiveMatrixPassed={report.PositiveMatrixPassed}; gatePassed={report.GatePassed}; total={report.TotalCases} passed={report.PassedCases} failed={report.FailedCases}; mainlineEv={report.MainlineEvidencePresent}; mainlineReg={report.MainlineTrustRegistryPresent}");
+    }
+
     private static bool ValidateTemplateFields(string jsonContent, string[] fieldPaths, List<string> missing, List<string> nonPlaceholder)
     {
         var doc = System.Text.Json.JsonDocument.Parse(jsonContent);
