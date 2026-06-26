@@ -1,11 +1,11 @@
 ﻿{
-  "OperationId": "frp-plan-plan-2ba9635f2a444b938412407df83fd175",
-  "CreatedAt": "2026-06-26T06:01:48.2535327+00:00",
+  "OperationId": "frp-plan-plan-cd494e9d533d48d0acf36b5f48596e58",
+  "CreatedAt": "2026-06-26T06:15:03.4171765+00:00",
   "PlanPassed": true,
   "GatePassed": false,
   "Recommendation": "ReadyForFormalRetrievalPromotionApproval",
   "NextAllowedPhase": "FormalRetrievalPromotionApproval",
-  "PromotionPlanId": "frp-plan-20260626-83395d3ad19b487d91f5928936d4ce82",
+  "PromotionPlanId": "frp-plan-20260626-1f912de357aa48d8a9ba05b51983ca2d",
   "SourceCloseoutId": "arsp-closeout-gate-3df0efdbc9a540f3b5cdd03a2bd1b43a",
   "ApprovedScopes": [
     "demo-workspace/demo-collection"
@@ -46,6 +46,10 @@
   "RequiresSeparateFormalRetrievalPromotionGate": true,
   "V8ReadinessGateOperationId": "frp-audit-gate-3ecc140a80b043249694e63dd8e461d8",
   "UpstreamReadinessArtifactPath": "vector/v8/formal-retrieval-promotion-readiness-gate.json",
+  "V8ReadinessFormalRetrievalStillBlocked": true,
+  "V8ReadinessObservationSource": "DeterministicShadowTraceFixture",
+  "V7CloseoutGatePassed": true,
+  "V7CloseoutGateOperationId": "arsp-closeout-gate-3df0efdbc9a540f3b5cdd03a2bd1b43a",
   "AllowedActions": [
     "ReadV8ReadinessGateArtifact",
     "ReadV7Closeout",
@@ -86,9 +90,16 @@
     "auditPassed=True",
     "readinessGatePassed=True",
     "requiresSeparateGate=True",
+    "readinessFormalRetrievalStillBlocked=True",
+    "readinessObservationSource=DeterministicShadowTraceFixture",
     "closeoutPassed=True",
+    "closeoutGatePassed=True",
     "upstreamReadinessArtifact=vector/v8/formal-retrieval-promotion-readiness-gate.json",
-    "formalRetrievalStillBlocked=True",
+    "v8ReadinessGatePassed=True",
+    "v8ReadinessFormalRetrievalStillBlocked=True",
+    "v8ReadinessObservationSource=DeterministicShadowTraceFixture",
+    "requiresSeparateFormalRetrievalPromotionGate=True",
+    "v7CloseoutGatePassed=True",
     "noRuntimeMutationInvariant=True",
     "planPassed=True gatePassed=False",
     "GatePassed=false is expected for non-gate artifact"

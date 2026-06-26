@@ -1,11 +1,11 @@
 ﻿{
-  "OperationId": "frp-plan-gate-ee7c02b96fa14c74b9ea0b163f2f5b6e",
-  "CreatedAt": "2026-06-26T06:01:51.5167801+00:00",
+  "OperationId": "frp-plan-gate-436339d305c94de2a6f20817289d4226",
+  "CreatedAt": "2026-06-26T06:15:06.1075547+00:00",
   "PlanPassed": true,
   "GatePassed": true,
   "Recommendation": "ReadyForFormalRetrievalPromotionApproval",
   "NextAllowedPhase": "FormalRetrievalPromotionApproval",
-  "PromotionPlanId": "frp-plan-20260626-d752810b52e24c39bf7b27c0fd1377ec",
+  "PromotionPlanId": "frp-plan-20260626-8047e9c9c3cc4d829bfdb529179d3213",
   "SourceCloseoutId": "arsp-closeout-gate-3df0efdbc9a540f3b5cdd03a2bd1b43a",
   "ApprovedScopes": [
     "demo-workspace/demo-collection"
@@ -46,6 +46,10 @@
   "RequiresSeparateFormalRetrievalPromotionGate": true,
   "V8ReadinessGateOperationId": "frp-audit-gate-3ecc140a80b043249694e63dd8e461d8",
   "UpstreamReadinessArtifactPath": "vector/v8/formal-retrieval-promotion-readiness-gate.json",
+  "V8ReadinessFormalRetrievalStillBlocked": true,
+  "V8ReadinessObservationSource": "DeterministicShadowTraceFixture",
+  "V7CloseoutGatePassed": true,
+  "V7CloseoutGateOperationId": "arsp-closeout-gate-3df0efdbc9a540f3b5cdd03a2bd1b43a",
   "AllowedActions": [
     "ReadV8ReadinessGateArtifact",
     "ReadV7Closeout",
@@ -86,9 +90,16 @@
     "auditPassed=True",
     "readinessGatePassed=True",
     "requiresSeparateGate=True",
+    "readinessFormalRetrievalStillBlocked=True",
+    "readinessObservationSource=DeterministicShadowTraceFixture",
     "closeoutPassed=True",
+    "closeoutGatePassed=True",
     "upstreamReadinessArtifact=vector/v8/formal-retrieval-promotion-readiness-gate.json",
-    "formalRetrievalStillBlocked=True",
+    "v8ReadinessGatePassed=True",
+    "v8ReadinessFormalRetrievalStillBlocked=True",
+    "v8ReadinessObservationSource=DeterministicShadowTraceFixture",
+    "requiresSeparateFormalRetrievalPromotionGate=True",
+    "v7CloseoutGatePassed=True",
     "noRuntimeMutationInvariant=True",
     "planPassed=True gatePassed=True"
   ]

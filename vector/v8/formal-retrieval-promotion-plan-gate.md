@@ -1,7 +1,7 @@
 ﻿# Formal Retrieval Promotion Plan Gate
 
-生成: `2026-06-26T06:01:51.5167801+00:00`
-操作: `frp-plan-gate-ee7c02b96fa14c74b9ea0b163f2f5b6e`
+生成: `2026-06-26T06:15:06.1075547+00:00`
+操作: `frp-plan-gate-436339d305c94de2a6f20817289d4226`
 
 ## Decision
 - PlanPassed: `True`
@@ -10,7 +10,7 @@
 - NextAllowedPhase: `FormalRetrievalPromotionApproval`
 
 ## Promotion Plan
-- PromotionPlanId: `frp-plan-20260626-d752810b52e24c39bf7b27c0fd1377ec`
+- PromotionPlanId: `frp-plan-20260626-8047e9c9c3cc4d829bfdb529179d3213`
 - UpstreamReadinessArtifact: `vector/v8/formal-retrieval-promotion-readiness-gate.json` (gate artifact, not non-gate audit)
 - V8ReadinessGatePassed: `True`
 - RequiresSeparatePromotionGate: `True`
