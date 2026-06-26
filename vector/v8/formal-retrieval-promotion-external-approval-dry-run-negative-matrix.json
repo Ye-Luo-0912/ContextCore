@@ -1,11 +1,11 @@
 ﻿{
-  "OperationId": "frp-neg-matrix-8dc68c18da8b4b2e83cffd9d668dbbf2",
-  "CreatedAt": "2026-06-26T13:46:13.3654058+00:00",
+  "OperationId": "frp-neg-matrix-db0113bac89842b0aeefa165f94a5c3e",
+  "CreatedAt": "2026-06-26T14:08:09.4611658+00:00",
   "MatrixPassed": true,
   "GatePassed": false,
   "Recommendation": "NegativeMatrixPassed",
-  "TotalCases": 7,
-  "PassedCases": 7,
+  "TotalCases": 9,
+  "PassedCases": 9,
   "FailedCases": 0,
   "Cases": [
     {
@@ -65,12 +65,40 @@
         "FixtureSourceGateIdsMismatch"
       ],
       "FailedAsExpected": true
+    },
+    {
+      "CaseName": "MainlineEvidencePresent",
+      "ExpectedBlockedReason": "MainlineEvidencePresent",
+      "ActualBlockedReasons": [
+        "MainlineEvidencePresent"
+      ],
+      "FailedAsExpected": true
+    },
+    {
+      "CaseName": "MainlineTrustRegistryPresent",
+      "ExpectedBlockedReason": "MainlineTrustRegistryPresent",
+      "ActualBlockedReasons": [
+        "MainlineTrustRegistryPresent"
+      ],
+      "FailedAsExpected": true
     }
   ],
+  "MainlineEvidencePresent": false,
+  "MainlineTrustRegistryPresent": false,
+  "MainlineIntakeStillBlocked": true,
+  "FixtureIsolationVerified": true,
   "FormalRetrievalAllowed": false,
+  "RuntimeSwitchAllowed": false,
+  "FormalPackageWritten": false,
+  "PackageOutputChanged": false,
+  "PackingPolicyChanged": false,
+  "VectorStoreBindingChanged": false,
+  "GlobalDefaultOn": false,
+  "ConfigPatchWritten": false,
+  "RuntimeActivation": false,
   "NoRuntimeMutationInvariant": true,
   "BlockedReasons": [],
   "Diagnostics": [
-    "total=7 passed=7 failed=0"
+    "total=9 passed=9 failed=0"
   ]
 }

@@ -14,7 +14,7 @@ public sealed class FormalRetrievalPromotionExternalApprovalDryRunNegativeMatrix
         FormalRetrievalPromotionPlanReport? planGate,
         FormalRetrievalPromotionReadinessAuditReport? readinessGate,
         ScopedRuntimePreviewLiveActivationCloseoutReport? closeoutGate,
-        bool intakeBlocked,
+        bool intakeBlocked, bool intakeBlockedClean,
         FormalRetrievalPromotionExternalApprovalDryRunMatrixOptions? opt = null)
     {
         opt ??= new FormalRetrievalPromotionExternalApprovalDryRunMatrixOptions();
@@ -28,12 +28,14 @@ public sealed class FormalRetrievalPromotionExternalApprovalDryRunNegativeMatrix
         foreach (var scenario in NegativeScenarios)
         {
             var (evidence, registry) = ModifyFixtures(baseEvidence, baseRegistry, scenario);
+            var mainlineEv = scenario.CaseName == "MainlineEvidencePresent" ? true : mainlineEvidencePresent;
+            var mainlineReg = scenario.CaseName == "MainlineTrustRegistryPresent" ? true : mainlineRegistryPresent;
             var report = dryRunner.RunGate(
-                mainlineEvidencePresent, mainlineRegistryPresent,
+                mainlineEv, mainlineReg,
                 evidence is not null, registry is not null,
                 evidence, registry,
                 pendingApproval, planGate, readinessGate, closeoutGate,
-                intakeBlocked, intakeBlocked,
+                intakeBlocked, intakeBlockedClean,
                 rtPassed, p15Passed);
 
             var failedAsExpected = !report.DryRunPassed && report.BlockedReasons.Any(r =>
@@ -66,7 +68,13 @@ public sealed class FormalRetrievalPromotionExternalApprovalDryRunNegativeMatrix
             PassedCases = passedCases,
             FailedCases = failedCases,
             Cases = cases,
-            FormalRetrievalAllowed = false,
+            MainlineEvidencePresent = mainlineEvidencePresent,
+            MainlineTrustRegistryPresent = mainlineRegistryPresent,
+            MainlineIntakeStillBlocked = intakeBlocked,
+            FixtureIsolationVerified = !mainlineEvidencePresent && !mainlineRegistryPresent,
+            FormalRetrievalAllowed = false, RuntimeSwitchAllowed = false, FormalPackageWritten = false,
+            PackageOutputChanged = false, PackingPolicyChanged = false, VectorStoreBindingChanged = false,
+            GlobalDefaultOn = false, ConfigPatchWritten = false, RuntimeActivation = false,
             NoRuntimeMutationInvariant = true,
             BlockedReasons = blocked,
             Diagnostics = new List<string> { $"total={cases.Count} passed={passedCases} failed={failedCases}" },
@@ -82,6 +90,8 @@ public sealed class FormalRetrievalPromotionExternalApprovalDryRunNegativeMatrix
         ("RecordApprovalRequestMismatch", "FixtureTrustRecordApprovalRequestMismatch"),
         ("RecordBoundGateMismatch", "FixtureTrustRecordBoundGateMismatch"),
         ("SourceGateIdsMismatch", "FixtureSourceGateIdsMismatch"),
+        ("MainlineEvidencePresent", "MainlineEvidencePresent"),
+        ("MainlineTrustRegistryPresent", "MainlineTrustRegistryPresent"),
     ];
 
     private static (FormalRetrievalPromotionApprovalEvidence?, FormalRetrievalPromotionApprovalTrustRegistry?) ModifyFixtures(

@@ -3507,7 +3507,19 @@ public sealed class FormalRetrievalPromotionExternalApprovalDryRunNegativeMatrix
     public int PassedCases { get; init; }
     public int FailedCases { get; init; }
     public IReadOnlyList<FormalRetrievalPromotionExternalApprovalDryRunNegativeCase> Cases { get; init; } = Array.Empty<FormalRetrievalPromotionExternalApprovalDryRunNegativeCase>();
+    public bool MainlineEvidencePresent { get; init; }
+    public bool MainlineTrustRegistryPresent { get; init; }
+    public bool MainlineIntakeStillBlocked { get; init; }
+    public bool FixtureIsolationVerified { get; init; }
     public bool FormalRetrievalAllowed { get; init; }
+    public bool RuntimeSwitchAllowed { get; init; }
+    public bool FormalPackageWritten { get; init; }
+    public bool PackageOutputChanged { get; init; }
+    public bool PackingPolicyChanged { get; init; }
+    public bool VectorStoreBindingChanged { get; init; }
+    public bool GlobalDefaultOn { get; init; }
+    public bool ConfigPatchWritten { get; init; }
+    public bool RuntimeActivation { get; init; }
     public bool NoRuntimeMutationInvariant { get; init; }
     public IReadOnlyList<string> BlockedReasons { get; init; } = Array.Empty<string>();
     public IReadOnlyList<string> Diagnostics { get; init; } = Array.Empty<string>();
