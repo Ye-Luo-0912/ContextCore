@@ -387,6 +387,17 @@ public static class ReportSummaryRegistry
         EvalPlanCommand = "eval formal-retrieval-promotion-external-approval-intake",
     };
 
+    public static readonly ControlRoomReportDescriptor V8FormalRetrievalPromotionExternalApprovalSubmissionPack = new()
+    {
+        ReportId = "FormalRetrievalPromotionExternalApprovalSubmissionPack",
+        DisplayTitle = "V8.5 Formal Retrieval Promotion External Approval Submission Pack Summary",
+        PrimaryPath = "vector/v8/formal-retrieval-promotion-external-approval-submission-pack.json",
+        GatePath = "vector/v8/formal-retrieval-promotion-external-approval-submission-pack-gate.json",
+        PhaseGroup = "V8",
+        EvalGateCommand = "eval formal-retrieval-promotion-external-approval-submission-pack-gate",
+        EvalPlanCommand = "eval formal-retrieval-promotion-external-approval-submission-pack",
+    };
+
     public static IReadOnlyList<ControlRoomReportDescriptor> V8Descriptors { get; } = new[]
     {
         V8FormalRetrievalPromotionReadinessAudit,
@@ -394,6 +405,7 @@ public static class ReportSummaryRegistry
         V8FormalRetrievalPromotionApproval,
         V8FormalRetrievalPromotionApprovalEvidenceSeal,
         V8FormalRetrievalPromotionExternalApprovalIntake,
+        V8FormalRetrievalPromotionExternalApprovalSubmissionPack,
     };
 
     // =========================================================================

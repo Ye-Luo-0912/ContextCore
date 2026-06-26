@@ -2906,6 +2906,7 @@ public sealed class ControlRoomService
             FormalRetrievalPromotionApprovalReport = TryLoadFormalRetrievalPromotionApprovalSummary()?.Report,
             FormalRetrievalPromotionApprovalEvidenceSealReport = TryLoadFormalRetrievalPromotionApprovalEvidenceSealSummary()?.Report,
             FormalRetrievalPromotionExternalApprovalIntakeReport = TryLoadFormalRetrievalPromotionExternalApprovalIntakeSummary()?.Report,
+            FormalRetrievalPromotionExternalApprovalSubmissionPackReport = TryLoadFormalRetrievalPromotionExternalApprovalSubmissionPackSummary()?.Report,
             Limit = limit,
             Offset = offset
         };
@@ -7549,6 +7550,9 @@ public sealed class ControlRoomService
     private static (FormalRetrievalPromotionExternalApprovalIntakeReport Report, string SourcePath)? TryLoadFormalRetrievalPromotionExternalApprovalIntakeSummary()
         => TryLoadFromDescriptor<FormalRetrievalPromotionExternalApprovalIntakeReport>(ReportSummaryRegistry.V8FormalRetrievalPromotionExternalApprovalIntake);
 
+    private static (FormalRetrievalPromotionExternalApprovalSubmissionPackReport Report, string SourcePath)? TryLoadFormalRetrievalPromotionExternalApprovalSubmissionPackSummary()
+        => TryLoadFromDescriptor<FormalRetrievalPromotionExternalApprovalSubmissionPackReport>(ReportSummaryRegistry.V8FormalRetrievalPromotionExternalApprovalSubmissionPack);
+
     private static string VectorReportPath(string phase, string fileName)
     {
         return Path.Combine("vector", phase, fileName);
@@ -10510,6 +10514,8 @@ public sealed class ServiceLearningFeaturesSnapshot
     public FormalRetrievalPromotionApprovalEvidenceSealReport? FormalRetrievalPromotionApprovalEvidenceSealReport { get; init; }
 
     public FormalRetrievalPromotionExternalApprovalIntakeReport? FormalRetrievalPromotionExternalApprovalIntakeReport { get; init; }
+
+    public FormalRetrievalPromotionExternalApprovalSubmissionPackReport? FormalRetrievalPromotionExternalApprovalSubmissionPackReport { get; init; }
 
     public FoundationServiceStatusResponse? FoundationServiceStatus { get; init; }
 

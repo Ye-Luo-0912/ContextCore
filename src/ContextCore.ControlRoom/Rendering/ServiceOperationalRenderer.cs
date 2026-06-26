@@ -4173,6 +4173,26 @@ public static class ServiceOperationalRenderer
             builder.AppendLine($"- invariants         : formalRetrieval={v8Intake.FormalRetrievalAllowed} noRuntimeMutation={v8Intake.NoRuntimeMutationInvariant}");
         }
 
+        builder.AppendLine();
+        builder.AppendLine("V8.5 External Approval Submission Pack");
+        var v8Pack = snapshot.FormalRetrievalPromotionExternalApprovalSubmissionPackReport;
+        if (v8Pack is null)
+        {
+            builder.AppendLine("- status : not generated");
+            builder.AppendLine("- path   : vector/v8/formal-retrieval-promotion-external-approval-submission-pack.json");
+            builder.AppendLine("- action : run eval formal-retrieval-promotion-external-approval-submission-pack");
+        }
+        else
+        {
+            builder.AppendLine($"- pack passed        : {v8Pack.PackPassed}");
+            builder.AppendLine($"- gate passed        : {v8Pack.GatePassed}");
+            builder.AppendLine($"- schemas present    : {v8Pack.EvidenceSchemaPresent && v8Pack.TrustRegistrySchemaPresent}");
+            builder.AppendLine($"- templates present  : {v8Pack.EvidenceTemplatePresent && v8Pack.TrustRegistryTemplatePresent}");
+            builder.AppendLine($"- mainline blocked   : {v8Pack.MainlineIntakeStillBlocked}");
+            builder.AppendLine($"- no real evidence   : {v8Pack.NoRealEvidencePresent}");
+            builder.AppendLine($"- no real registry   : {v8Pack.NoRealTrustRegistryPresent}");
+        }
+
         return builder.ToString();
     }
 

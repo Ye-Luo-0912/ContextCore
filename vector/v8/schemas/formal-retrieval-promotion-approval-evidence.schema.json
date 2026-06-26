@@ -1,0 +1,30 @@
+{
+  "title": "Formal Retrieval Promotion Approval Evidence Schema",
+  "version": "1.0",
+  "description": "Schema for external approval evidence submission. All fields required.",
+  "requiredFields": [
+    "ApprovalEvidenceId",
+    "ApprovedBy",
+    "ApprovalId",
+    "ApprovalScopes",
+    "ApprovalSource",
+    "ApprovalTimestamp",
+    "SourcePromotionPlanGateOperationId",
+    "SourceReadinessGateOperationId",
+    "SourceCloseoutGateOperationId",
+    "OperatorStatement",
+    "EvidenceCreatedAt",
+    "ApprovalEvidenceSourceKind",
+    "ApprovalEvidenceProvenanceId",
+    "ApprovalEvidenceProvidedBy",
+    "ApprovalEvidenceProvidedAt",
+    "ApprovalEvidenceTrustMode",
+    "ApprovalEvidenceIsExternal",
+    "ApprovalEvidenceChecksum",
+    "SourceApprovalRequestId",
+    "BoundPendingApprovalGateOperationId"
+  ],
+  "forbiddenValues": {
+    "ApprovalEvidenceIsExternal": "must be true for external evidence"
+  }
+}

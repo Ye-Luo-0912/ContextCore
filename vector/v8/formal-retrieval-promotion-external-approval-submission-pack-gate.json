@@ -1,0 +1,33 @@
+﻿{
+  "OperationId": "frp-pack-gate-6188ab7622ec4aefabb628e4ee83809f",
+  "CreatedAt": "2026-06-26T09:05:11.1707971+00:00",
+  "PackPassed": true,
+  "GatePassed": true,
+  "Recommendation": "SubmissionPackReady",
+  "NextAllowedPhase": "SubmissionPackReady",
+  "EvidenceSchemaPresent": true,
+  "TrustRegistrySchemaPresent": true,
+  "EvidenceTemplatePresent": true,
+  "TrustRegistryTemplatePresent": true,
+  "TemplatesContainPlaceholders": true,
+  "MainlineIntakeStillBlocked": true,
+  "NoRealEvidencePresent": true,
+  "NoRealTrustRegistryPresent": true,
+  "P15GatePassed": true,
+  "RuntimeChangeGatePassed": true,
+  "FormalRetrievalAllowed": false,
+  "RuntimeSwitchAllowed": false,
+  "FormalPackageWritten": false,
+  "GlobalDefaultOn": false,
+  "NoRuntimeMutationInvariant": true,
+  "BlockedReasons": [],
+  "Diagnostics": [
+    "stage=gate",
+    "schemasComplete=True",
+    "templatesComplete=True",
+    "mainlineIntakeBlocked=True",
+    "noRealEvidence=True",
+    "noRealRegistry=True",
+    "packPassed=True gatePassed=True"
+  ]
+}

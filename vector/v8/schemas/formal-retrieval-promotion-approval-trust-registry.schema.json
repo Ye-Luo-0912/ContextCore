@@ -1,0 +1,22 @@
+{
+  "title": "Formal Retrieval Promotion Approval Trust Registry Schema",
+  "version": "1.0",
+  "description": "Schema for approval trust registry. All fields required.",
+  "requiredFields": [
+    "RegistryId",
+    "RegistryCreatedAt",
+    "AllowedSourceKinds",
+    "TrustedProvenanceRecords"
+  ],
+  "recordRequiredFields": [
+    "ApprovalEvidenceProvenanceId",
+    "ApprovalEvidenceSourceKind",
+    "ApprovalEvidenceProvidedBy",
+    "ApprovalEvidenceChecksum",
+    "SourceApprovalRequestId",
+    "BoundPendingApprovalGateOperationId",
+    "AllowedScopes",
+    "TrustMode",
+    "ValidUntil"
+  ]
+}

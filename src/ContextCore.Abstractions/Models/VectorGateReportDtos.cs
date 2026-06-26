@@ -3354,6 +3354,56 @@ public sealed class FormalRetrievalPromotionExternalApprovalIntakeReport
 }
 
 
+/// <summary>V8.5 submission pack 推荐。</summary>
+public static class FormalRetrievalPromotionExternalApprovalSubmissionPackRecommendations
+{
+    public const string SubmissionPackReady = nameof(SubmissionPackReady);
+    public const string BlockedBySchemasMissing = nameof(BlockedBySchemasMissing);
+    public const string BlockedByTemplatesMissing = nameof(BlockedByTemplatesMissing);
+    public const string KeepPreviewOnly = nameof(KeepPreviewOnly);
+}
+
+
+/// <summary>V8.5 submission pack 选项。</summary>
+public sealed class FormalRetrievalPromotionExternalApprovalSubmissionPackOptions
+{
+    public bool Enabled { get; init; } = true;
+}
+
+
+/// <summary>V8.5 submission pack 报告。</summary>
+public sealed class FormalRetrievalPromotionExternalApprovalSubmissionPackReport
+{
+    public string OperationId { get; init; } = "";
+    public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
+    public bool PackPassed { get; init; }
+    public bool GatePassed { get; init; }
+    public string Recommendation { get; init; } = FormalRetrievalPromotionExternalApprovalSubmissionPackRecommendations.KeepPreviewOnly;
+    public string NextAllowedPhase { get; init; } = "KeepPreviewOnly";
+
+    public bool EvidenceSchemaPresent { get; init; }
+    public bool TrustRegistrySchemaPresent { get; init; }
+    public bool EvidenceTemplatePresent { get; init; }
+    public bool TrustRegistryTemplatePresent { get; init; }
+    public bool TemplatesContainPlaceholders { get; init; }
+    public bool MainlineIntakeStillBlocked { get; init; }
+    public bool NoRealEvidencePresent { get; init; }
+    public bool NoRealTrustRegistryPresent { get; init; }
+
+    public bool P15GatePassed { get; init; }
+    public bool RuntimeChangeGatePassed { get; init; }
+
+    public bool FormalRetrievalAllowed { get; init; }
+    public bool RuntimeSwitchAllowed { get; init; }
+    public bool FormalPackageWritten { get; init; }
+    public bool GlobalDefaultOn { get; init; }
+    public bool NoRuntimeMutationInvariant { get; init; }
+
+    public IReadOnlyList<string> BlockedReasons { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> Diagnostics { get; init; } = Array.Empty<string>();
+}
+
+
 /// <summary>架构清理计划报告。</summary>
 public sealed class ArchitectureCleanupPlanReport
 {

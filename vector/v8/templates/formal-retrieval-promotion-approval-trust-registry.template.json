@@ -1,0 +1,18 @@
+{
+  "RegistryId": "{{PLACEHOLDER: unique registry id}}",
+  "RegistryCreatedAt": "{{PLACEHOLDER: ISO 8601 timestamp}}",
+  "AllowedSourceKinds": ["{{PLACEHOLDER: external-source-kind}}"],
+  "TrustedProvenanceRecords": [
+    {
+      "ApprovalEvidenceProvenanceId": "{{PLACEHOLDER: provenance id matching evidence}}",
+      "ApprovalEvidenceSourceKind": "{{PLACEHOLDER: source kind}}",
+      "ApprovalEvidenceProvidedBy": "{{PLACEHOLDER: provider name}}",
+      "ApprovalEvidenceChecksum": "{{PLACEHOLDER: expected checksum}}",
+      "SourceApprovalRequestId": "{{PLACEHOLDER: matching V8.2R ApprovalRequestId}}",
+      "BoundPendingApprovalGateOperationId": "{{PLACEHOLDER: matching V8.2R OperationId}}",
+      "AllowedScopes": ["{{PLACEHOLDER: approved scope}}"],
+      "TrustMode": "{{PLACEHOLDER: trust mode}}",
+      "ValidUntil": "{{PLACEHOLDER: ISO 8601 timestamp}}"
+    }
+  ]
+}

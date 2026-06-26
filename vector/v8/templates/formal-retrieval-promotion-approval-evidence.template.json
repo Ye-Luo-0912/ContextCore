@@ -1,0 +1,22 @@
+{
+  "ApprovalEvidenceId": "{{PLACEHOLDER: unique evidence id}}",
+  "ApprovedBy": "{{PLACEHOLDER: approver name}}",
+  "ApprovalId": "{{PLACEHOLDER: approval identifier}}",
+  "ApprovalScopes": ["{{PLACEHOLDER: approved scope}}"],
+  "ApprovalSource": "{{PLACEHOLDER: manual-external or equivalent}}",
+  "ApprovalTimestamp": "{{PLACEHOLDER: ISO 8601 timestamp}}",
+  "SourcePromotionPlanGateOperationId": "{{PLACEHOLDER: from V8.1R2 plan gate OperationId}}",
+  "SourceReadinessGateOperationId": "{{PLACEHOLDER: from V8.0 readiness gate OperationId}}",
+  "SourceCloseoutGateOperationId": "{{PLACEHOLDER: from V7.16 closeout gate OperationId}}",
+  "OperatorStatement": "{{PLACEHOLDER: operator approval statement}}",
+  "EvidenceCreatedAt": "{{PLACEHOLDER: ISO 8601 timestamp}}",
+  "ApprovalEvidenceSourceKind": "{{PLACEHOLDER: external-source-kind}}",
+  "ApprovalEvidenceProvenanceId": "{{PLACEHOLDER: provenance record id}}",
+  "ApprovalEvidenceProvidedBy": "{{PLACEHOLDER: evidence provider}}",
+  "ApprovalEvidenceProvidedAt": "{{PLACEHOLDER: ISO 8601 timestamp}}",
+  "ApprovalEvidenceTrustMode": "{{PLACEHOLDER: trust mode}}",
+  "ApprovalEvidenceIsExternal": true,
+  "ApprovalEvidenceChecksum": "{{PLACEHOLDER: evidence checksum hash}}",
+  "SourceApprovalRequestId": "{{PLACEHOLDER: from V8.2R approval gate ApprovalRequestId}}",
+  "BoundPendingApprovalGateOperationId": "{{PLACEHOLDER: from V8.2R approval gate OperationId}}"
+}
