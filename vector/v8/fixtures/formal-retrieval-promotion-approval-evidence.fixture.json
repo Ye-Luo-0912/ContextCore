@@ -16,6 +16,7 @@
   "ApprovalEvidenceProvidedAt": "2026-06-26T12:00:00Z",
   "ApprovalEvidenceTrustMode": "fixture-dry-run",
   "ApprovalEvidenceIsExternal": true,
+  "IsFixture": true,
   "ApprovalEvidenceChecksum": "fixture-computed-checksum-abc123",
   "SourceApprovalRequestId": "frp-approval-20260626-5597b86de70d4ecb9949c2b99b23fce3",
   "BoundPendingApprovalGateOperationId": "frp-approval-gate-38556bf32c094044af1934f4ab59beaa"

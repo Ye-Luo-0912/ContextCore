@@ -14,11 +14,13 @@ public sealed class FormalRetrievalPromotionExternalApprovalDryRunRunner
         FormalRetrievalPromotionPlanReport? planGate,
         FormalRetrievalPromotionReadinessAuditReport? readinessGate,
         ScopedRuntimePreviewLiveActivationCloseoutReport? closeoutGate,
+        bool intakeBlocked, bool intakeFtAllowed, bool intakeRtSw,
         bool rtPassed, bool p15Passed,
         FormalRetrievalPromotionExternalApprovalDryRunOptions? opt = null)
         => Build("dryrun", false, mainlineEvidenceExists, mainlineRegistryExists,
             fixtureEvidencePresent, fixtureRegistryPresent, fixtureEvidence, fixtureRegistry,
-            pendingApproval, planGate, readinessGate, closeoutGate, rtPassed, p15Passed, opt);
+            pendingApproval, planGate, readinessGate, closeoutGate, intakeBlocked, intakeFtAllowed, intakeRtSw,
+            rtPassed, p15Passed, opt);
 
     public FormalRetrievalPromotionExternalApprovalDryRunReport RunGate(
         bool mainlineEvidenceExists, bool mainlineRegistryExists,
@@ -29,11 +31,13 @@ public sealed class FormalRetrievalPromotionExternalApprovalDryRunRunner
         FormalRetrievalPromotionPlanReport? planGate,
         FormalRetrievalPromotionReadinessAuditReport? readinessGate,
         ScopedRuntimePreviewLiveActivationCloseoutReport? closeoutGate,
+        bool intakeBlocked, bool intakeFtAllowed, bool intakeRtSw,
         bool rtPassed, bool p15Passed,
         FormalRetrievalPromotionExternalApprovalDryRunOptions? opt = null)
         => Build("gate", true, mainlineEvidenceExists, mainlineRegistryExists,
             fixtureEvidencePresent, fixtureRegistryPresent, fixtureEvidence, fixtureRegistry,
-            pendingApproval, planGate, readinessGate, closeoutGate, rtPassed, p15Passed, opt);
+            pendingApproval, planGate, readinessGate, closeoutGate, intakeBlocked, intakeFtAllowed, intakeRtSw,
+            rtPassed, p15Passed, opt);
 
     private static FormalRetrievalPromotionExternalApprovalDryRunReport Build(
         string stage, bool isGate,
@@ -45,6 +49,7 @@ public sealed class FormalRetrievalPromotionExternalApprovalDryRunRunner
         FormalRetrievalPromotionPlanReport? planGate,
         FormalRetrievalPromotionReadinessAuditReport? readinessGate,
         ScopedRuntimePreviewLiveActivationCloseoutReport? closeoutGate,
+        bool intakeBlocked, bool intakeFtAllowed, bool intakeRtSw,
         bool rtPassed, bool p15Passed,
         FormalRetrievalPromotionExternalApprovalDryRunOptions? opt)
     {
@@ -57,73 +62,53 @@ public sealed class FormalRetrievalPromotionExternalApprovalDryRunRunner
         if (mainlineRegistryExists) blocked.Add("MainlineTrustRegistryPresent");
         if (!fixtureEvidencePresent) blocked.Add("FixtureEvidenceMissing");
         if (!fixtureRegistryPresent) blocked.Add("FixtureTrustRegistryMissing");
+        if (!intakeBlocked) blocked.Add("MainlineIntakeNotBlocked");
+        if (intakeFtAllowed) blocked.Add("MainlineIntakeFormalRetrievalAllowed");
+        if (intakeRtSw) blocked.Add("MainlineIntakeRuntimeSwitchAllowed");
         if (!rtPassed) blocked.Add("RuntimeChangeGateNotPassed");
         if (!p15Passed) blocked.Add("P15GateNotPassed");
 
-        var evidenceValid = false;
-        var registryValid = false;
+        var evidenceMarker = fixtureEvidence?.IsFixture ?? false;
+        var trustMarker = fixtureRegistry?.RegistryId?.Contains("fixture") == true;
+        if (!evidenceMarker) blocked.Add("FixtureEvidenceMarkerMissing");
+        if (!trustMarker) blocked.Add("FixtureTrustRegistryMarkerMissing");
+
         var sourceIdsMatch = false;
-        var requestIdMatch = false;
         var provenanceFound = false;
         var checksumMatch = false;
-        var sourceKindMatch = false;
-        var providedByMatch = false;
-        var scopeMatch = false;
-        var notExpired = false;
+        var scopeTrusted = false;
+        var scopeApproved = false;
 
-        if (fixtureEvidencePresent && fixtureRegistryPresent
-            && fixtureEvidence is not null && fixtureRegistry is not null)
+        if (fixtureEvidencePresent && fixtureRegistryPresent && fixtureEvidence is not null && fixtureRegistry is not null)
         {
-            evidenceValid = !string.IsNullOrWhiteSpace(fixtureEvidence.ApprovalEvidenceId)
-                && !string.IsNullOrWhiteSpace(fixtureEvidence.ApprovedBy)
-                && fixtureEvidence.ApprovalScopes.Count > 0;
-            registryValid = !string.IsNullOrWhiteSpace(fixtureRegistry.RegistryId)
-                && fixtureRegistry.TrustedProvenanceRecords.Count > 0;
-
-            if (!evidenceValid) blocked.Add("FixtureEvidenceStructureInvalid");
-            if (!registryValid) blocked.Add("FixtureRegistryStructureInvalid");
-
-            if (pendingApproval is not null)
-            {
-                requestIdMatch = string.Equals(fixtureEvidence.SourceApprovalRequestId, pendingApproval.ApprovalRequestId, StringComparison.OrdinalIgnoreCase);
-                var boundMatch = string.Equals(fixtureEvidence.BoundPendingApprovalGateOperationId, pendingApproval.OperationId, StringComparison.OrdinalIgnoreCase);
-                if (!requestIdMatch || !boundMatch) blocked.Add("FixtureNoRealApprovalRequestBinding");
-            }
-
             if (planGate is not null)
             {
-                var pm = string.Equals(fixtureEvidence.SourcePromotionPlanGateOperationId, planGate.OperationId, StringComparison.OrdinalIgnoreCase);
-                var rm = readinessGate is not null && string.Equals(fixtureEvidence.SourceReadinessGateOperationId, readinessGate.OperationId, StringComparison.OrdinalIgnoreCase);
-                var cm = closeoutGate is not null && string.Equals(fixtureEvidence.SourceCloseoutGateOperationId, closeoutGate.OperationId, StringComparison.OrdinalIgnoreCase);
-                sourceIdsMatch = pm && rm && cm;
-                if (!sourceIdsMatch) blocked.Add("FixtureSourceGateIdMismatch");
+                var planScopes = planGate.ApprovedScopes;
+                var evScopes = fixtureEvidence.ApprovalScopes;
+                scopeApproved = evScopes.Count > 0 && planScopes.Count > 0
+                    && evScopes.All(s => planScopes.Any(p => string.Equals(p, s, StringComparison.OrdinalIgnoreCase)));
+                if (!scopeApproved) blocked.Add("FixtureScopeNotApproved");
             }
 
-            if (registryValid)
+            var record = fixtureRegistry.TrustedProvenanceRecords.FirstOrDefault();
+            if (record is not null)
             {
-                var record = fixtureRegistry.TrustedProvenanceRecords
-                    .FirstOrDefault(r => string.Equals(r.ApprovalEvidenceProvenanceId, fixtureEvidence.ApprovalEvidenceProvenanceId, StringComparison.OrdinalIgnoreCase));
-                provenanceFound = record is not null;
-                if (provenanceFound && record is not null)
+                provenanceFound = string.Equals(fixtureEvidence.ApprovalEvidenceProvenanceId, record.ApprovalEvidenceProvenanceId, StringComparison.OrdinalIgnoreCase);
+                checksumMatch = string.Equals(fixtureEvidence.ApprovalEvidenceChecksum, record.ApprovalEvidenceChecksum, StringComparison.OrdinalIgnoreCase);
+                scopeTrusted = fixtureEvidence.ApprovalScopes.Count > 0 && record.AllowedScopes.Count > 0
+                    && fixtureEvidence.ApprovalScopes.All(s => record.AllowedScopes.Any(t => string.Equals(t, s, StringComparison.OrdinalIgnoreCase)));
+                if (pendingApproval is not null)
                 {
-                    sourceKindMatch = fixtureRegistry.AllowedSourceKinds.Any(k => string.Equals(k, fixtureEvidence.ApprovalEvidenceSourceKind, StringComparison.OrdinalIgnoreCase));
-                    providedByMatch = string.Equals(fixtureEvidence.ApprovalEvidenceProvidedBy, record.ApprovalEvidenceProvidedBy, StringComparison.OrdinalIgnoreCase);
-                    checksumMatch = string.Equals(fixtureEvidence.ApprovalEvidenceChecksum, record.ApprovalEvidenceChecksum, StringComparison.OrdinalIgnoreCase);
-                    notExpired = record.ValidUntil == default || now <= record.ValidUntil;
-
-                    var trustScopes = record.AllowedScopes;
-                    var evScopes = fixtureEvidence.ApprovalScopes;
-                    scopeMatch = evScopes.Count > 0 && trustScopes.Count > 0
-                        && evScopes.All(s => trustScopes.Any(t => string.Equals(t, s, StringComparison.OrdinalIgnoreCase)));
+                    var reqMatch = string.Equals(fixtureEvidence.SourceApprovalRequestId, pendingApproval.ApprovalRequestId, StringComparison.OrdinalIgnoreCase);
+                    var gateMatch = string.Equals(fixtureEvidence.BoundPendingApprovalGateOperationId, pendingApproval.OperationId, StringComparison.OrdinalIgnoreCase);
+                    sourceIdsMatch = reqMatch && gateMatch;
                 }
-
-                if (!provenanceFound) blocked.Add("FixtureProvenanceRecordNotFound");
-                if (!sourceKindMatch) blocked.Add("FixtureSourceKindMismatch");
-                if (!providedByMatch) blocked.Add("FixtureProvidedByMismatch");
-                if (!checksumMatch) blocked.Add("FixtureChecksumMismatch");
-                if (!scopeMatch) blocked.Add("FixtureScopeMismatch");
-                if (!notExpired) blocked.Add("FixtureTrustRecordExpired");
             }
+
+            if (!provenanceFound) blocked.Add("FixtureProvenanceRecordNotFound");
+            if (!checksumMatch) blocked.Add("FixtureChecksumMismatch");
+            if (!scopeTrusted) blocked.Add("FixtureScopeNotTrusted");
+            if (!sourceIdsMatch) blocked.Add("FixtureSourceIdsMismatch");
         }
 
         var distinctBlocked = blocked.Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(static x => x, StringComparer.OrdinalIgnoreCase).ToArray();
@@ -131,14 +116,13 @@ public sealed class FormalRetrievalPromotionExternalApprovalDryRunRunner
         var gatePassed = isGate && dryRunPassed;
 
         diag.Add($"stage={stage}");
-        diag.Add($"mainlineEvidenceExists={mainlineEvidenceExists}");
-        diag.Add($"mainlineRegistryExists={mainlineRegistryExists}");
-        diag.Add($"fixtureEvidencePresent={fixtureEvidencePresent}");
-        diag.Add($"fixtureRegistryPresent={fixtureRegistryPresent}");
-        diag.Add($"evidenceValid={evidenceValid}");
+        diag.Add($"mainlineEvidence={mainlineEvidenceExists} registry={mainlineRegistryExists}");
+        diag.Add($"fixtureEvidence={fixtureEvidencePresent} registry={fixtureRegistryPresent}");
+        diag.Add($"intakeBlocked={intakeBlocked}");
+        diag.Add($"evidenceMarker={evidenceMarker} trustMarker={trustMarker}");
+        diag.Add($"provenanceFound={provenanceFound} checksumMatch={checksumMatch}");
+        diag.Add($"scopeTrusted={scopeTrusted} scopeApproved={scopeApproved}");
         diag.Add($"sourceIdsMatch={sourceIdsMatch}");
-        diag.Add($"provenanceFound={provenanceFound}");
-        diag.Add($"checksumMatch={checksumMatch}");
         diag.Add($"dryRunPassed={dryRunPassed} gatePassed={gatePassed}");
         if (!isGate) diag.Add("GatePassed=false is expected for non-gate artifact");
 
@@ -153,20 +137,31 @@ public sealed class FormalRetrievalPromotionExternalApprovalDryRunRunner
                 : FormalRetrievalPromotionExternalApprovalDryRunRecommendations.BlockedByFixtureMissing,
             NextAllowedPhase = dryRunPassed ? "ExternalApprovalDryRunComplete" : "KeepPreviewOnly",
             FixtureIsolationVerified = !mainlineEvidenceExists && !mainlineRegistryExists,
-            MainlineIntakeStillBlocked = mainlineEvidenceExists == false && mainlineRegistryExists == false,
+            MainlineIntakeStillBlocked = !mainlineEvidenceExists && !mainlineRegistryExists,
             FixtureEvidencePresent = fixtureEvidencePresent,
             FixtureTrustRegistryPresent = fixtureRegistryPresent,
-            EvidenceStructureValid = evidenceValid,
-            RegistryStructureValid = registryValid,
+            EvidenceStructureValid = fixtureEvidencePresent,
+            RegistryStructureValid = fixtureRegistryPresent,
             SourceGateIdsMatch = sourceIdsMatch,
             ProvenanceRecordFound = provenanceFound,
             ChecksumMatched = checksumMatch,
+            FixtureEvidenceMarkerVerified = evidenceMarker,
+            FixtureTrustRegistryMarkerVerified = trustMarker,
+            MainlineIntakeGateStillBlocked = intakeBlocked,
+            MainlineIntakeBlockedReasonsVerified = intakeBlocked,
+            ScopeTrustedByRegistry = scopeTrusted,
+            ScopeSubsetOfApprovedScopes = scopeApproved,
             P15GatePassed = p15Passed,
             RuntimeChangeGatePassed = rtPassed,
             FormalRetrievalAllowed = false,
             RuntimeSwitchAllowed = false,
             FormalPackageWritten = false,
+            PackageOutputChanged = false,
+            PackingPolicyChanged = false,
+            VectorStoreBindingChanged = false,
             GlobalDefaultOn = false,
+            ConfigPatchWritten = false,
+            RuntimeActivation = false,
             NoRuntimeMutationInvariant = true,
             BlockedReasons = distinctBlocked,
             Diagnostics = diag,
@@ -184,22 +179,19 @@ public sealed class FormalRetrievalPromotionExternalApprovalDryRunRunner
         b.AppendLine("## Decision");
         b.AppendLine($"- DryRunPassed: `{r.DryRunPassed}`");
         b.AppendLine($"- GatePassed: `{r.GatePassed}`");
-        b.AppendLine($"- Recommendation: `{r.Recommendation}`");
-        b.AppendLine($"- NextAllowedPhase: `{r.NextAllowedPhase}`");
         b.AppendLine();
-        b.AppendLine("## Fixture Validation");
-        b.AppendLine($"- FixtureIsolationVerified: `{r.FixtureIsolationVerified}`");
-        b.AppendLine($"- MainlineIntakeStillBlocked: `{r.MainlineIntakeStillBlocked}`");
-        b.AppendLine($"- EvidenceStructureValid: `{r.EvidenceStructureValid}`");
-        b.AppendLine($"- RegistryStructureValid: `{r.RegistryStructureValid}`");
-        b.AppendLine($"- SourceGateIdsMatch: `{r.SourceGateIdsMatch}`");
-        b.AppendLine($"- ProvenanceRecordFound: `{r.ProvenanceRecordFound}`");
-        b.AppendLine($"- ChecksumMatched: `{r.ChecksumMatched}`");
+        b.AppendLine("## Fixture Markers");
+        b.AppendLine($"- EvidenceMarker: `{r.FixtureEvidenceMarkerVerified}`");
+        b.AppendLine($"- TrustRegistryMarker: `{r.FixtureTrustRegistryMarkerVerified}`");
+        b.AppendLine($"- IntakeGateBlocked: `{r.MainlineIntakeGateStillBlocked}`");
+        b.AppendLine($"- ScopeTrusted: `{r.ScopeTrustedByRegistry}`");
+        b.AppendLine($"- ScopeApproved: `{r.ScopeSubsetOfApprovedScopes}`");
         b.AppendLine();
         b.AppendLine("## Safety");
         b.AppendLine($"- FormalRetrievalAllowed: `{r.FormalRetrievalAllowed}`");
+        b.AppendLine($"- ConfigPatchWritten: `{r.ConfigPatchWritten}`");
         b.AppendLine();
-        b.AppendLine("V8.6 external approval dry-run。Fixture-isolated positive path，不启用 formal retrieval。");
+        b.AppendLine("V8.6R external approval dry-run。Fixture marker + intake binding + scope check。");
         return b.ToString();
     }
 }

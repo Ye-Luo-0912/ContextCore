@@ -1,24 +1,21 @@
 ﻿# External Approval Dry-Run Gate
 
-生成: `2026-06-26T10:18:50.1868066+00:00`
-操作: `frp-dryrun-gate-88f73a9f915948cba009299d9bfb9f14`
+生成: `2026-06-26T10:35:36.6505209+00:00`
+操作: `frp-dryrun-gate-054297e56f7349c3bebf259d3cbbd278`
 
 ## Decision
 - DryRunPassed: `True`
 - GatePassed: `True`
-- Recommendation: `FixtureDryRunValidationPassed`
-- NextAllowedPhase: `ExternalApprovalDryRunComplete`
 
-## Fixture Validation
-- FixtureIsolationVerified: `True`
-- MainlineIntakeStillBlocked: `True`
-- EvidenceStructureValid: `True`
-- RegistryStructureValid: `True`
-- SourceGateIdsMatch: `True`
-- ProvenanceRecordFound: `True`
-- ChecksumMatched: `True`
+## Fixture Markers
+- EvidenceMarker: `True`
+- TrustRegistryMarker: `True`
+- IntakeGateBlocked: `True`
+- ScopeTrusted: `True`
+- ScopeApproved: `True`
 
 ## Safety
 - FormalRetrievalAllowed: `False`
+- ConfigPatchWritten: `False`
 
-V8.6 external approval dry-run。Fixture-isolated positive path，不启用 formal retrieval。
+V8.6R external approval dry-run。Fixture marker + intake binding + scope check。

@@ -3182,6 +3182,7 @@ public sealed class FormalRetrievalPromotionApprovalEvidence
     public DateTimeOffset ApprovalEvidenceProvidedAt { get; init; }
     public string ApprovalEvidenceTrustMode { get; init; } = "";
     public bool ApprovalEvidenceIsExternal { get; init; }
+    public bool IsFixture { get; init; }
     public string ApprovalEvidenceChecksum { get; init; } = "";
     public string SourceApprovalRequestId { get; init; } = "";
     public string BoundPendingApprovalGateOperationId { get; init; } = "";
@@ -3449,19 +3450,30 @@ public sealed class FormalRetrievalPromotionExternalApprovalDryRunReport
     public bool ProvenanceRecordFound { get; init; }
     public bool ChecksumMatched { get; init; }
 
+    public bool FixtureEvidenceMarkerVerified { get; init; }
+    public bool FixtureTrustRegistryMarkerVerified { get; init; }
+    public bool MainlineIntakeGateStillBlocked { get; init; }
+    public bool MainlineIntakeBlockedReasonsVerified { get; init; }
+    public bool ScopeTrustedByRegistry { get; init; }
+    public bool ScopeSubsetOfApprovedScopes { get; init; }
+
     public bool P15GatePassed { get; init; }
     public bool RuntimeChangeGatePassed { get; init; }
 
     public bool FormalRetrievalAllowed { get; init; }
     public bool RuntimeSwitchAllowed { get; init; }
     public bool FormalPackageWritten { get; init; }
+    public bool PackageOutputChanged { get; init; }
+    public bool PackingPolicyChanged { get; init; }
+    public bool VectorStoreBindingChanged { get; init; }
     public bool GlobalDefaultOn { get; init; }
+    public bool ConfigPatchWritten { get; init; }
+    public bool RuntimeActivation { get; init; }
     public bool NoRuntimeMutationInvariant { get; init; }
 
     public IReadOnlyList<string> BlockedReasons { get; init; } = Array.Empty<string>();
     public IReadOnlyList<string> Diagnostics { get; init; } = Array.Empty<string>();
 }
-
 
 /// <summary>架构清理计划报告。</summary>
 public sealed class ArchitectureCleanupPlanReport
