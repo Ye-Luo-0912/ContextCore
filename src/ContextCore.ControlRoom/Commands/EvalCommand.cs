@@ -336,6 +336,8 @@ public static partial class EvalCommand
             !string.Equals(subcommand, "formal-retrieval-promotion-approval-grant-application-matrix-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "formal-retrieval-promotion-approval-rollback-readiness-matrix", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "formal-retrieval-promotion-approval-rollback-readiness-matrix-gate", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "formal-retrieval-promotion-approval-operator-sign-off-matrix", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "formal-retrieval-promotion-approval-operator-sign-off-matrix-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "dto-split-plan", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "dto-split-readiness-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "vector-retrieval-eval-protocol-audit", StringComparison.OrdinalIgnoreCase) &&
@@ -606,6 +608,8 @@ public static partial class EvalCommand
             Console.WriteLine("  eval formal-retrieval-promotion-approval-grant-application-matrix-gate");
             Console.WriteLine("  eval formal-retrieval-promotion-approval-rollback-readiness-matrix");
             Console.WriteLine("  eval formal-retrieval-promotion-approval-rollback-readiness-matrix-gate");
+            Console.WriteLine("  eval formal-retrieval-promotion-approval-operator-sign-off-matrix");
+            Console.WriteLine("  eval formal-retrieval-promotion-approval-operator-sign-off-matrix-gate");
             Console.WriteLine("  eval dto-split-plan");
             Console.WriteLine("  eval dto-split-readiness-gate");
             Console.WriteLine("  eval vector-retrieval-eval-protocol-audit");
@@ -1994,6 +1998,13 @@ public static partial class EvalCommand
             || string.Equals(subcommand, "formal-retrieval-promotion-approval-rollback-readiness-matrix-gate", StringComparison.OrdinalIgnoreCase))
         {
             await ExecuteFormalRetrievalPromotionApprovalRollbackReadinessMatrixAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        if (string.Equals(subcommand, "formal-retrieval-promotion-approval-operator-sign-off-matrix", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(subcommand, "formal-retrieval-promotion-approval-operator-sign-off-matrix-gate", StringComparison.OrdinalIgnoreCase))
+        {
+            await ExecuteFormalRetrievalPromotionApprovalOperatorSignOffMatrixAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
             return;
         }
 
