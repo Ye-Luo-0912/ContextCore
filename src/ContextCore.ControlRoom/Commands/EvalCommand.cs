@@ -322,6 +322,8 @@ public static partial class EvalCommand
             !string.Equals(subcommand, "formal-retrieval-promotion-external-approval-dry-run-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "formal-retrieval-promotion-external-approval-dry-run-negative-matrix", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "formal-retrieval-promotion-external-approval-dry-run-negative-matrix-gate", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "formal-retrieval-promotion-external-approval-quarantine-scan", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "formal-retrieval-promotion-external-approval-quarantine-scan-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "dto-split-plan", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "dto-split-readiness-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "vector-retrieval-eval-protocol-audit", StringComparison.OrdinalIgnoreCase) &&
@@ -578,6 +580,8 @@ public static partial class EvalCommand
             Console.WriteLine("  eval formal-retrieval-promotion-external-approval-dry-run-gate");
             Console.WriteLine("  eval formal-retrieval-promotion-external-approval-dry-run-negative-matrix");
             Console.WriteLine("  eval formal-retrieval-promotion-external-approval-dry-run-negative-matrix-gate");
+            Console.WriteLine("  eval formal-retrieval-promotion-external-approval-quarantine-scan");
+            Console.WriteLine("  eval formal-retrieval-promotion-external-approval-quarantine-scan-gate");
             Console.WriteLine("  eval dto-split-plan");
             Console.WriteLine("  eval dto-split-readiness-gate");
             Console.WriteLine("  eval vector-retrieval-eval-protocol-audit");
@@ -1917,6 +1921,13 @@ public static partial class EvalCommand
             || string.Equals(subcommand, "formal-retrieval-promotion-external-approval-dry-run-negative-matrix-gate", StringComparison.OrdinalIgnoreCase))
         {
             await ExecuteFormalRetrievalPromotionExternalApprovalDryRunNegativeMatrixAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        if (string.Equals(subcommand, "formal-retrieval-promotion-external-approval-quarantine-scan", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(subcommand, "formal-retrieval-promotion-external-approval-quarantine-scan-gate", StringComparison.OrdinalIgnoreCase))
+        {
+            await ExecuteFormalRetrievalPromotionExternalApprovalQuarantineScanAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
             return;
         }
 

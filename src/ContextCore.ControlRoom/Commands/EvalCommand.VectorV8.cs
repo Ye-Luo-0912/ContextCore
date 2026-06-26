@@ -510,6 +510,55 @@ public static partial class EvalCommand
             $"total={report.TotalCases} passed={report.PassedCases} failed={report.FailedCases}; blocked={report.BlockedReasons.Count}");
     }
 
+    private static async Task ExecuteFormalRetrievalPromotionExternalApprovalQuarantineScanAsync(
+        IReadOnlyList<string> args, string subcommand, CancellationToken ct)
+    {
+        var output = Path.GetFullPath(Path.Combine("vector", "v8"));
+        Directory.CreateDirectory(Path.Combine("vector", "v8", "quarantine"));
+
+        var qEvidencePath = Path.Combine("vector", "v8", "quarantine", "formal-retrieval-promotion-approval-evidence.candidate.json");
+        var qRegistryPath = Path.Combine("vector", "v8", "quarantine", "formal-retrieval-promotion-approval-trust-registry.candidate.json");
+        var evExists = File.Exists(qEvidencePath);
+        var regExists = File.Exists(qRegistryPath);
+        var candidateFiles = new List<string>();
+        if (evExists) candidateFiles.Add(qEvidencePath);
+        if (regExists) candidateFiles.Add(qRegistryPath);
+
+        var evidenceStatus = evExists ? QuarantineScanStatuses.CandidateFound : QuarantineScanStatuses.Missing;
+        var registryStatus = regExists ? QuarantineScanStatuses.CandidateFound : QuarantineScanStatuses.Missing;
+
+        var mainlineEv = File.Exists(Path.Combine("vector", "v8", "formal-retrieval-promotion-approval-evidence.json"));
+        var mainlineReg = File.Exists(Path.Combine("vector", "v8", "formal-retrieval-promotion-approval-trust-registry.json"));
+
+        var rtPath = Path.Combine("learning", "readiness", "learning-runtime-change-readiness-gate.json");
+        var rtGate = await ReadJsonFileAsync<LearningRuntimeChangeReadinessGateReport>(rtPath, ct).ConfigureAwait(false);
+        var rtPassed = rtGate is not null && rtGate.Passed;
+
+        var p15Path = Path.Combine("eval", "eval-report-p15-a3.json");
+        var p15 = await ReadJsonFileAsync<JsonDocument>(p15Path, ct).ConfigureAwait(false);
+        var p15Passed = false;
+        if (p15 is not null && p15.RootElement.TryGetProperty("PassRate", out var pr)) p15Passed = pr.GetDouble() >= 1.0;
+
+        var opt = new FormalRetrievalPromotionExternalApprovalQuarantineScanOptions { Enabled = !CommandHelpers.HasFlag(args, "--disabled") };
+        var runner = new FormalRetrievalPromotionExternalApprovalQuarantineScanRunner();
+        var isGate = string.Equals(subcommand, "formal-retrieval-promotion-external-approval-quarantine-scan-gate", StringComparison.OrdinalIgnoreCase);
+        var report = isGate
+            ? runner.RunGate(evExists, regExists, evidenceStatus, registryStatus, mainlineEv, mainlineReg, candidateFiles, rtPassed, p15Passed, opt)
+            : runner.RunScan(evExists, regExists, evidenceStatus, registryStatus, mainlineEv, mainlineReg, candidateFiles, rtPassed, p15Passed, opt);
+
+        var fn = isGate ? "formal-retrieval-promotion-external-approval-quarantine-scan-gate" : "formal-retrieval-promotion-external-approval-quarantine-scan";
+        var jp = Path.Combine(output, $"{fn}.json");
+        var mp = Path.Combine(output, $"{fn}.md");
+        await WriteJsonSafeAsync(report, jp, ct).ConfigureAwait(false);
+        await WriteTextAsync(FormalRetrievalPromotionExternalApprovalQuarantineScanRunner.BuildMarkdown(
+            isGate ? "Quarantine Scan Gate" : "Quarantine Scan", report), mp, ct).ConfigureAwait(false);
+
+        Console.WriteLine($"[Eval] Quarantine scan written: {jp}");
+        Console.WriteLine($"[Eval] scanPassed={report.ScanPassed}; gatePassed={report.GatePassed}; " +
+            $"evidenceCandidate={report.EvidenceCandidatePresent}; registryCandidate={report.TrustRegistryCandidatePresent}; " +
+            $"promotionToMainline={report.PromotionToMainlinePerformed}; blocked={report.BlockedReasons.Count}");
+    }
+
     private static bool ValidateTemplateFields(string jsonContent, string[] fieldPaths, List<string> missing, List<string> nonPlaceholder)
     {
         var doc = System.Text.Json.JsonDocument.Parse(jsonContent);

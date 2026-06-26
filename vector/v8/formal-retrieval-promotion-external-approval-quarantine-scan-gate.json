@@ -1,0 +1,30 @@
+﻿{
+  "OperationId": "frp-quarantine-gate-1181dab5ff5042e2ae16387a3e8940d9",
+  "CreatedAt": "2026-06-26T14:15:40.9382903+00:00",
+  "ScanPassed": true,
+  "GatePassed": true,
+  "Recommendation": "QuarantineScanComplete",
+  "EvidenceCandidatePresent": false,
+  "TrustRegistryCandidatePresent": false,
+  "EvidenceStatus": "Missing",
+  "TrustRegistryStatus": "Missing",
+  "PromotionToMainlinePerformed": false,
+  "MainlineEvidencePresent": false,
+  "MainlineTrustRegistryPresent": false,
+  "FormalRetrievalAllowed": false,
+  "RuntimeSwitchAllowed": false,
+  "FormalPackageWritten": false,
+  "GlobalDefaultOn": false,
+  "NoRuntimeMutationInvariant": true,
+  "CandidateFiles": [],
+  "BlockedReasons": [],
+  "Diagnostics": [
+    "stage=gate",
+    "evidenceCandidate=False",
+    "registryCandidate=False",
+    "evidenceStatus=Missing",
+    "registryStatus=Missing",
+    "mainlineEvidence=False",
+    "mainlineRegistry=False"
+  ]
+}

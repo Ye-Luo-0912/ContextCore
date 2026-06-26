@@ -3526,6 +3526,45 @@ public sealed class FormalRetrievalPromotionExternalApprovalDryRunNegativeMatrix
 }
 
 
+/// <summary>V8.8 quarantine scan 状态。</summary>
+public static class QuarantineScanStatuses
+{
+    public const string Missing = nameof(Missing);
+    public const string CandidateFound = nameof(CandidateFound);
+    public const string Invalid = nameof(Invalid);
+    public const string ReadyForManualReview = nameof(ReadyForManualReview);
+}
+
+
+/// <summary>V8.8 quarantine scan 报告。</summary>
+public sealed class FormalRetrievalPromotionExternalApprovalQuarantineScanReport
+{
+    public string OperationId { get; init; } = "";
+    public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
+    public bool ScanPassed { get; init; }
+    public bool GatePassed { get; init; }
+    public string Recommendation { get; init; } = "";
+
+    public bool EvidenceCandidatePresent { get; init; }
+    public bool TrustRegistryCandidatePresent { get; init; }
+    public string EvidenceStatus { get; init; } = "";
+    public string TrustRegistryStatus { get; init; } = "";
+    public bool PromotionToMainlinePerformed { get; init; }
+    public bool MainlineEvidencePresent { get; init; }
+    public bool MainlineTrustRegistryPresent { get; init; }
+
+    public bool FormalRetrievalAllowed { get; init; }
+    public bool RuntimeSwitchAllowed { get; init; }
+    public bool FormalPackageWritten { get; init; }
+    public bool GlobalDefaultOn { get; init; }
+    public bool NoRuntimeMutationInvariant { get; init; }
+
+    public IReadOnlyList<string> CandidateFiles { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> BlockedReasons { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> Diagnostics { get; init; } = Array.Empty<string>();
+}
+
+
 /// <summary>架构清理计划报告。</summary>
 public sealed class ArchitectureCleanupPlanReport
 {
