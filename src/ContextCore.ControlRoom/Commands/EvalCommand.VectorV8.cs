@@ -743,6 +743,44 @@ public static partial class EvalCommand
         Console.WriteLine($"[Eval] policyAuthorityMatrixPassed={report.PolicyAuthorityMatrixPassed}; gatePassed={report.GatePassed}; total={report.TotalCases} grant={report.GrantCases} deny={report.DenyCases} indeterminate={report.IndeterminateCases} grantApplied={report.GrantApplied}");
     }
 
+    private static async Task ExecuteFormalRetrievalPromotionApprovalGrantApplicationMatrixAsync(
+        IReadOnlyList<string> args, string subcommand, CancellationToken ct)
+    {
+        var output = Path.GetFullPath(Path.Combine("vector", "v8"));
+        Directory.CreateDirectory(output);
+
+        var rtPath = Path.Combine("learning", "readiness", "learning-runtime-change-readiness-gate.json");
+        var rtGate = await ReadJsonFileAsync<LearningRuntimeChangeReadinessGateReport>(rtPath, ct).ConfigureAwait(false);
+        var rtPassed = rtGate is not null && rtGate.Passed;
+
+        var p15Path = Path.Combine("eval", "eval-report-p15-a3.json");
+        var p15 = await ReadJsonFileAsync<JsonDocument>(p15Path, ct).ConfigureAwait(false);
+        var p15Passed = false;
+        if (p15 is not null && p15.RootElement.TryGetProperty("PassRate", out var pr)) p15Passed = pr.GetDouble() >= 1.0;
+
+        var mainlineEvPath = Path.Combine("vector", "v8", "formal-retrieval-promotion-approval-evidence.json");
+        var mainlineRegPath = Path.Combine("vector", "v8", "formal-retrieval-promotion-approval-trust-registry.json");
+        var mainlineEvPresent = File.Exists(mainlineEvPath);
+        var mainlineRegPresent = File.Exists(mainlineRegPath);
+
+        var isGate = string.Equals(subcommand, "formal-retrieval-promotion-approval-grant-application-matrix-gate", StringComparison.OrdinalIgnoreCase);
+        var opt = new FormalRetrievalPromotionApprovalGrantApplicationMatrixOptions { IsGate = isGate, Enabled = !CommandHelpers.HasFlag(args, "--disabled") };
+        var runner = new FormalRetrievalPromotionApprovalGrantApplicationMatrixRunner();
+        var report = runner.Run(rtPassed, p15Passed, mainlineEvPresent, mainlineRegPresent, opt);
+
+        var fn = isGate
+            ? "formal-retrieval-promotion-approval-grant-application-matrix-gate"
+            : "formal-retrieval-promotion-approval-grant-application-matrix";
+        var jp = Path.Combine(output, $"{fn}.json");
+        var mp = Path.Combine(output, $"{fn}.md");
+        await WriteJsonSafeAsync(report, jp, ct).ConfigureAwait(false);
+        await WriteTextAsync(FormalRetrievalPromotionApprovalGrantApplicationMatrixRunner.BuildMarkdown(
+            isGate ? "Grant Application Matrix Gate" : "Grant Application Matrix", report), mp, ct).ConfigureAwait(false);
+
+        Console.WriteLine($"[Eval] Grant application matrix written: {jp}");
+        Console.WriteLine($"[Eval] grantApplicationMatrixPassed={report.GrantApplicationMatrixPassed}; gatePassed={report.GatePassed}; total={report.TotalCases} notApplicable={report.NotApplicableCases} blocked={report.BlockedCases} ready={report.ReadyCases} applicationApplied={report.ApplicationApplied}");
+    }
+
     private static bool ValidateTemplateFields(string jsonContent, string[] fieldPaths, List<string> missing, List<string> nonPlaceholder)
     {
         var doc = System.Text.Json.JsonDocument.Parse(jsonContent);

@@ -1,0 +1,258 @@
+﻿{
+  "OperationId": "frp-grant-application-matrix-0d6b3ab146cc48a39b55261618316670",
+  "CreatedAt": "2026-06-26T18:38:54.5114026+00:00",
+  "GrantApplicationMatrixPassed": true,
+  "GatePassed": true,
+  "TotalCases": 9,
+  "PassedCases": 9,
+  "FailedCases": 0,
+  "NotApplicableCases": 2,
+  "BlockedCases": 6,
+  "ReadyCases": 1,
+  "Cases": [
+    {
+      "CaseName": "DenyInputNotApplicable",
+      "RequestedCapability": "FormalRetrievalActivation",
+      "RequestedScope": "demo-workspace/demo-collection",
+      "InputPolicyEffect": "Deny",
+      "InputPolicyRule": "FixtureTrustModeCannotAuthorizeProduction",
+      "ExpectedStatus": "GrantApplicationNotApplicable",
+      "ActualStatus": "GrantApplicationNotApplicable",
+      "ExpectedMissingPrecondition": "",
+      "ActualPreconditionsMet": [],
+      "ActualPreconditionsMissing": [],
+      "Reasoning": "policy effect \u0027Deny\u0027 is not Grant; application path not entered.",
+      "StatusMatched": true,
+      "MissingPreconditionMatched": true,
+      "CountShapeOk": true,
+      "ApplicationNotApplied": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "IndeterminateInputNotApplicable",
+      "RequestedCapability": "FormalRetrievalActivation",
+      "RequestedScope": "demo-workspace/demo-collection",
+      "InputPolicyEffect": "Indeterminate",
+      "InputPolicyRule": "CapabilityNotInPolicyAuthority",
+      "ExpectedStatus": "GrantApplicationNotApplicable",
+      "ActualStatus": "GrantApplicationNotApplicable",
+      "ExpectedMissingPrecondition": "",
+      "ActualPreconditionsMet": [],
+      "ActualPreconditionsMissing": [],
+      "Reasoning": "policy effect \u0027Indeterminate\u0027 is not Grant; application path not entered.",
+      "StatusMatched": true,
+      "MissingPreconditionMatched": true,
+      "CountShapeOk": true,
+      "ApplicationNotApplied": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "GrantMissingApprovalSeal",
+      "RequestedCapability": "FormalRetrievalActivation",
+      "RequestedScope": "demo-workspace/demo-collection",
+      "InputPolicyEffect": "Grant",
+      "InputPolicyRule": "AuthorizedByPolicy",
+      "ExpectedStatus": "GrantApplicationBlocked",
+      "ActualStatus": "GrantApplicationBlocked",
+      "ExpectedMissingPrecondition": "ApprovalSealArtifactPresent",
+      "ActualPreconditionsMet": [
+        "DryRunCleanArtifactPresent",
+        "AuditLogArtifactPresent",
+        "RuntimeChangeReadinessGatePassed",
+        "TrustChainReverificationGatePassed"
+      ],
+      "ActualPreconditionsMissing": [
+        "ApprovalSealArtifactPresent"
+      ],
+      "Reasoning": "1 precondition(s) missing; application blocked.",
+      "StatusMatched": true,
+      "MissingPreconditionMatched": true,
+      "CountShapeOk": true,
+      "ApplicationNotApplied": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "GrantMissingDryRunArtifact",
+      "RequestedCapability": "FormalRetrievalActivation",
+      "RequestedScope": "demo-workspace/demo-collection",
+      "InputPolicyEffect": "Grant",
+      "InputPolicyRule": "AuthorizedByPolicy",
+      "ExpectedStatus": "GrantApplicationBlocked",
+      "ActualStatus": "GrantApplicationBlocked",
+      "ExpectedMissingPrecondition": "DryRunCleanArtifactPresent",
+      "ActualPreconditionsMet": [
+        "ApprovalSealArtifactPresent",
+        "AuditLogArtifactPresent",
+        "RuntimeChangeReadinessGatePassed",
+        "TrustChainReverificationGatePassed"
+      ],
+      "ActualPreconditionsMissing": [
+        "DryRunCleanArtifactPresent"
+      ],
+      "Reasoning": "1 precondition(s) missing; application blocked.",
+      "StatusMatched": true,
+      "MissingPreconditionMatched": true,
+      "CountShapeOk": true,
+      "ApplicationNotApplied": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "GrantMissingAuditLog",
+      "RequestedCapability": "FormalRetrievalActivation",
+      "RequestedScope": "demo-workspace/demo-collection",
+      "InputPolicyEffect": "Grant",
+      "InputPolicyRule": "AuthorizedByPolicy",
+      "ExpectedStatus": "GrantApplicationBlocked",
+      "ActualStatus": "GrantApplicationBlocked",
+      "ExpectedMissingPrecondition": "AuditLogArtifactPresent",
+      "ActualPreconditionsMet": [
+        "ApprovalSealArtifactPresent",
+        "DryRunCleanArtifactPresent",
+        "RuntimeChangeReadinessGatePassed",
+        "TrustChainReverificationGatePassed"
+      ],
+      "ActualPreconditionsMissing": [
+        "AuditLogArtifactPresent"
+      ],
+      "Reasoning": "1 precondition(s) missing; application blocked.",
+      "StatusMatched": true,
+      "MissingPreconditionMatched": true,
+      "CountShapeOk": true,
+      "ApplicationNotApplied": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "GrantMissingRuntimeGate",
+      "RequestedCapability": "FormalRetrievalActivation",
+      "RequestedScope": "demo-workspace/demo-collection",
+      "InputPolicyEffect": "Grant",
+      "InputPolicyRule": "AuthorizedByPolicy",
+      "ExpectedStatus": "GrantApplicationBlocked",
+      "ActualStatus": "GrantApplicationBlocked",
+      "ExpectedMissingPrecondition": "RuntimeChangeReadinessGatePassed",
+      "ActualPreconditionsMet": [
+        "ApprovalSealArtifactPresent",
+        "DryRunCleanArtifactPresent",
+        "AuditLogArtifactPresent",
+        "TrustChainReverificationGatePassed"
+      ],
+      "ActualPreconditionsMissing": [
+        "RuntimeChangeReadinessGatePassed"
+      ],
+      "Reasoning": "1 precondition(s) missing; application blocked.",
+      "StatusMatched": true,
+      "MissingPreconditionMatched": true,
+      "CountShapeOk": true,
+      "ApplicationNotApplied": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "GrantMissingTrustChainReverification",
+      "RequestedCapability": "FormalRetrievalActivation",
+      "RequestedScope": "demo-workspace/demo-collection",
+      "InputPolicyEffect": "Grant",
+      "InputPolicyRule": "AuthorizedByPolicy",
+      "ExpectedStatus": "GrantApplicationBlocked",
+      "ActualStatus": "GrantApplicationBlocked",
+      "ExpectedMissingPrecondition": "TrustChainReverificationGatePassed",
+      "ActualPreconditionsMet": [
+        "ApprovalSealArtifactPresent",
+        "DryRunCleanArtifactPresent",
+        "AuditLogArtifactPresent",
+        "RuntimeChangeReadinessGatePassed"
+      ],
+      "ActualPreconditionsMissing": [
+        "TrustChainReverificationGatePassed"
+      ],
+      "Reasoning": "1 precondition(s) missing; application blocked.",
+      "StatusMatched": true,
+      "MissingPreconditionMatched": true,
+      "CountShapeOk": true,
+      "ApplicationNotApplied": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "GrantAllPreconditionsMet_Ready_ButNotApplied",
+      "RequestedCapability": "FormalRetrievalActivation",
+      "RequestedScope": "demo-workspace/demo-collection",
+      "InputPolicyEffect": "Grant",
+      "InputPolicyRule": "AuthorizedByPolicy",
+      "ExpectedStatus": "GrantApplicationReady",
+      "ActualStatus": "GrantApplicationReady",
+      "ExpectedMissingPrecondition": "",
+      "ActualPreconditionsMet": [
+        "ApprovalSealArtifactPresent",
+        "DryRunCleanArtifactPresent",
+        "AuditLogArtifactPresent",
+        "RuntimeChangeReadinessGatePassed",
+        "TrustChainReverificationGatePassed"
+      ],
+      "ActualPreconditionsMissing": [],
+      "Reasoning": "all preconditions met; application Ready. Ready != Applied \u2014 application is a separate write-out path not executed here.",
+      "StatusMatched": true,
+      "MissingPreconditionMatched": true,
+      "CountShapeOk": true,
+      "ApplicationNotApplied": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "GrantMultiplePreconditionsMissing",
+      "RequestedCapability": "FormalRetrievalActivation",
+      "RequestedScope": "demo-workspace/demo-collection",
+      "InputPolicyEffect": "Grant",
+      "InputPolicyRule": "AuthorizedByPolicy",
+      "ExpectedStatus": "GrantApplicationBlocked",
+      "ActualStatus": "GrantApplicationBlocked",
+      "ExpectedMissingPrecondition": "ApprovalSealArtifactPresent",
+      "ActualPreconditionsMet": [
+        "AuditLogArtifactPresent",
+        "RuntimeChangeReadinessGatePassed",
+        "TrustChainReverificationGatePassed"
+      ],
+      "ActualPreconditionsMissing": [
+        "ApprovalSealArtifactPresent",
+        "DryRunCleanArtifactPresent"
+      ],
+      "Reasoning": "2 precondition(s) missing; application blocked.",
+      "StatusMatched": true,
+      "MissingPreconditionMatched": true,
+      "CountShapeOk": true,
+      "ApplicationNotApplied": true,
+      "PassedAsExpected": true
+    }
+  ],
+  "ManualReviewRequired": false,
+  "ApprovalSealed": false,
+  "CapabilityGrantWritten": false,
+  "GrantApplied": false,
+  "ApplicationApplied": false,
+  "PromotionToMainlinePerformed": false,
+  "EvidenceCopiedToMainline": false,
+  "TrustRegistryCopiedToMainline": false,
+  "MainlineEvidencePresent": false,
+  "MainlineTrustRegistryPresent": false,
+  "FormalRetrievalAllowed": false,
+  "RuntimeSwitchAllowed": false,
+  "FormalPackageWritten": false,
+  "PackageOutputChanged": false,
+  "PackingPolicyChanged": false,
+  "VectorStoreBindingChanged": false,
+  "GlobalDefaultOn": false,
+  "ConfigPatchWritten": false,
+  "RuntimeActivation": false,
+  "NoRuntimeMutationInvariant": true,
+  "BlockedReasons": [],
+  "Diagnostics": [
+    "total=9",
+    "passed=9",
+    "failed=0",
+    "notApplicable=2",
+    "blocked=6",
+    "ready=1",
+    "runtimeGate=True",
+    "p15Gate=True",
+    "mainlineEvidence=False",
+    "mainlineRegistry=False",
+    "nextStage=ExplicitApplicationWriteOut (Ready != Applied; application requires a dedicated write-out path with its own gate)"
+  ]
+}

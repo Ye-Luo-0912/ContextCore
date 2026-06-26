@@ -332,6 +332,8 @@ public static partial class EvalCommand
             !string.Equals(subcommand, "formal-retrieval-promotion-approval-trust-chain-validation-matrix-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "formal-retrieval-promotion-approval-policy-authority-matrix", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "formal-retrieval-promotion-approval-policy-authority-matrix-gate", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "formal-retrieval-promotion-approval-grant-application-matrix", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "formal-retrieval-promotion-approval-grant-application-matrix-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "dto-split-plan", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "dto-split-readiness-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "vector-retrieval-eval-protocol-audit", StringComparison.OrdinalIgnoreCase) &&
@@ -598,6 +600,8 @@ public static partial class EvalCommand
             Console.WriteLine("  eval formal-retrieval-promotion-approval-trust-chain-validation-matrix-gate");
             Console.WriteLine("  eval formal-retrieval-promotion-approval-policy-authority-matrix");
             Console.WriteLine("  eval formal-retrieval-promotion-approval-policy-authority-matrix-gate");
+            Console.WriteLine("  eval formal-retrieval-promotion-approval-grant-application-matrix");
+            Console.WriteLine("  eval formal-retrieval-promotion-approval-grant-application-matrix-gate");
             Console.WriteLine("  eval dto-split-plan");
             Console.WriteLine("  eval dto-split-readiness-gate");
             Console.WriteLine("  eval vector-retrieval-eval-protocol-audit");
@@ -1972,6 +1976,13 @@ public static partial class EvalCommand
             || string.Equals(subcommand, "formal-retrieval-promotion-approval-policy-authority-matrix-gate", StringComparison.OrdinalIgnoreCase))
         {
             await ExecuteFormalRetrievalPromotionApprovalPolicyAuthorityMatrixAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        if (string.Equals(subcommand, "formal-retrieval-promotion-approval-grant-application-matrix", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(subcommand, "formal-retrieval-promotion-approval-grant-application-matrix-gate", StringComparison.OrdinalIgnoreCase))
+        {
+            await ExecuteFormalRetrievalPromotionApprovalGrantApplicationMatrixAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
             return;
         }
 
