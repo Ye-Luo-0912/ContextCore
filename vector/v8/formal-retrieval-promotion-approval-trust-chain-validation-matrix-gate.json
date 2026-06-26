@@ -1,0 +1,282 @@
+﻿{
+  "OperationId": "frp-trust-chain-matrix-4e10c6ef00cf4a928031c10b272f8cc7",
+  "CreatedAt": "2026-06-26T18:23:54.8666207+00:00",
+  "ChainValidationPassed": true,
+  "GatePassed": true,
+  "TotalCases": 11,
+  "PassedCases": 11,
+  "FailedCases": 0,
+  "PositiveCases": 1,
+  "NegativeCases": 10,
+  "Cases": [
+    {
+      "CaseName": "ChainComplete",
+      "ExpectedStatus": "TrustChainValidated",
+      "ActualStatus": "TrustChainValidated",
+      "ExpectedChainComplete": true,
+      "ActualChainComplete": true,
+      "ExpectedMismatchReason": "",
+      "ExpectedMismatchField": "",
+      "ActualMismatchReasons": [],
+      "ActualMismatchFields": [],
+      "MatchedProvenanceId": "fixture-provenance-trustchain-001",
+      "MatchedRecordIndex": 0,
+      "StatusMatched": true,
+      "ChainCompleteMatched": true,
+      "MismatchReasonMatched": true,
+      "MismatchFieldMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "ProvenanceIdNotInRegistry",
+      "ExpectedStatus": "TrustChainBroken",
+      "ActualStatus": "TrustChainBroken",
+      "ExpectedChainComplete": false,
+      "ActualChainComplete": false,
+      "ExpectedMismatchReason": "EvidenceProvenanceNotFoundInRegistry",
+      "ExpectedMismatchField": "ApprovalEvidenceProvenanceId",
+      "ActualMismatchReasons": [
+        "EvidenceProvenanceNotFoundInRegistry"
+      ],
+      "ActualMismatchFields": [
+        "ApprovalEvidenceProvenanceId"
+      ],
+      "MatchedProvenanceId": "",
+      "MatchedRecordIndex": -1,
+      "StatusMatched": true,
+      "ChainCompleteMatched": true,
+      "MismatchReasonMatched": true,
+      "MismatchFieldMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "SourceKindMismatchWithRecord",
+      "ExpectedStatus": "TrustChainBroken",
+      "ActualStatus": "TrustChainBroken",
+      "ExpectedChainComplete": false,
+      "ActualChainComplete": false,
+      "ExpectedMismatchReason": "EvidenceSourceKindMismatch",
+      "ExpectedMismatchField": "ApprovalEvidenceSourceKind",
+      "ActualMismatchReasons": [
+        "EvidenceSourceKindMismatch"
+      ],
+      "ActualMismatchFields": [
+        "ApprovalEvidenceSourceKind"
+      ],
+      "MatchedProvenanceId": "fixture-provenance-trustchain-001",
+      "MatchedRecordIndex": 0,
+      "StatusMatched": true,
+      "ChainCompleteMatched": true,
+      "MismatchReasonMatched": true,
+      "MismatchFieldMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "SourceKindNotInAllowedKinds",
+      "ExpectedStatus": "TrustChainBroken",
+      "ActualStatus": "TrustChainBroken",
+      "ExpectedChainComplete": false,
+      "ActualChainComplete": false,
+      "ExpectedMismatchReason": "EvidenceSourceKindNotAllowed",
+      "ExpectedMismatchField": "ApprovalEvidenceSourceKind",
+      "ActualMismatchReasons": [
+        "EvidenceSourceKindNotAllowed"
+      ],
+      "ActualMismatchFields": [
+        "ApprovalEvidenceSourceKind"
+      ],
+      "MatchedProvenanceId": "fixture-provenance-trustchain-001",
+      "MatchedRecordIndex": 0,
+      "StatusMatched": true,
+      "ChainCompleteMatched": true,
+      "MismatchReasonMatched": true,
+      "MismatchFieldMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "ChecksumMismatch",
+      "ExpectedStatus": "TrustChainBroken",
+      "ActualStatus": "TrustChainBroken",
+      "ExpectedChainComplete": false,
+      "ActualChainComplete": false,
+      "ExpectedMismatchReason": "EvidenceChecksumMismatch",
+      "ExpectedMismatchField": "ApprovalEvidenceChecksum",
+      "ActualMismatchReasons": [
+        "EvidenceChecksumMismatch"
+      ],
+      "ActualMismatchFields": [
+        "ApprovalEvidenceChecksum"
+      ],
+      "MatchedProvenanceId": "fixture-provenance-trustchain-001",
+      "MatchedRecordIndex": 0,
+      "StatusMatched": true,
+      "ChainCompleteMatched": true,
+      "MismatchReasonMatched": true,
+      "MismatchFieldMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "ProvidedByMismatch",
+      "ExpectedStatus": "TrustChainBroken",
+      "ActualStatus": "TrustChainBroken",
+      "ExpectedChainComplete": false,
+      "ActualChainComplete": false,
+      "ExpectedMismatchReason": "EvidenceProvidedByMismatch",
+      "ExpectedMismatchField": "ApprovalEvidenceProvidedBy",
+      "ActualMismatchReasons": [
+        "EvidenceProvidedByMismatch"
+      ],
+      "ActualMismatchFields": [
+        "ApprovalEvidenceProvidedBy"
+      ],
+      "MatchedProvenanceId": "fixture-provenance-trustchain-001",
+      "MatchedRecordIndex": 0,
+      "StatusMatched": true,
+      "ChainCompleteMatched": true,
+      "MismatchReasonMatched": true,
+      "MismatchFieldMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "SourceApprovalRequestIdMismatch",
+      "ExpectedStatus": "TrustChainBroken",
+      "ActualStatus": "TrustChainBroken",
+      "ExpectedChainComplete": false,
+      "ActualChainComplete": false,
+      "ExpectedMismatchReason": "EvidenceSourceApprovalRequestIdMismatch",
+      "ExpectedMismatchField": "SourceApprovalRequestId",
+      "ActualMismatchReasons": [
+        "EvidenceSourceApprovalRequestIdMismatch"
+      ],
+      "ActualMismatchFields": [
+        "SourceApprovalRequestId"
+      ],
+      "MatchedProvenanceId": "fixture-provenance-trustchain-001",
+      "MatchedRecordIndex": 0,
+      "StatusMatched": true,
+      "ChainCompleteMatched": true,
+      "MismatchReasonMatched": true,
+      "MismatchFieldMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "BoundPendingApprovalGateOperationIdMismatch",
+      "ExpectedStatus": "TrustChainBroken",
+      "ActualStatus": "TrustChainBroken",
+      "ExpectedChainComplete": false,
+      "ActualChainComplete": false,
+      "ExpectedMismatchReason": "EvidenceBoundPendingApprovalGateOperationIdMismatch",
+      "ExpectedMismatchField": "BoundPendingApprovalGateOperationId",
+      "ActualMismatchReasons": [
+        "EvidenceBoundPendingApprovalGateOperationIdMismatch"
+      ],
+      "ActualMismatchFields": [
+        "BoundPendingApprovalGateOperationId"
+      ],
+      "MatchedProvenanceId": "fixture-provenance-trustchain-001",
+      "MatchedRecordIndex": 0,
+      "StatusMatched": true,
+      "ChainCompleteMatched": true,
+      "MismatchReasonMatched": true,
+      "MismatchFieldMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "TrustModeMismatch",
+      "ExpectedStatus": "TrustChainBroken",
+      "ActualStatus": "TrustChainBroken",
+      "ExpectedChainComplete": false,
+      "ActualChainComplete": false,
+      "ExpectedMismatchReason": "EvidenceTrustModeMismatch",
+      "ExpectedMismatchField": "ApprovalEvidenceTrustMode",
+      "ActualMismatchReasons": [
+        "EvidenceTrustModeMismatch"
+      ],
+      "ActualMismatchFields": [
+        "ApprovalEvidenceTrustMode"
+      ],
+      "MatchedProvenanceId": "fixture-provenance-trustchain-001",
+      "MatchedRecordIndex": 0,
+      "StatusMatched": true,
+      "ChainCompleteMatched": true,
+      "MismatchReasonMatched": true,
+      "MismatchFieldMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "ApprovalScopesNotSubsetOfRecord",
+      "ExpectedStatus": "TrustChainBroken",
+      "ActualStatus": "TrustChainBroken",
+      "ExpectedChainComplete": false,
+      "ActualChainComplete": false,
+      "ExpectedMismatchReason": "EvidenceApprovalScopesNotSubsetOfRecord",
+      "ExpectedMismatchField": "ApprovalScopes",
+      "ActualMismatchReasons": [
+        "EvidenceApprovalScopesNotSubsetOfRecord"
+      ],
+      "ActualMismatchFields": [
+        "ApprovalScopes"
+      ],
+      "MatchedProvenanceId": "fixture-provenance-trustchain-001",
+      "MatchedRecordIndex": 0,
+      "StatusMatched": true,
+      "ChainCompleteMatched": true,
+      "MismatchReasonMatched": true,
+      "MismatchFieldMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "ApprovalTimestampAfterValidUntil",
+      "ExpectedStatus": "TrustChainBroken",
+      "ActualStatus": "TrustChainBroken",
+      "ExpectedChainComplete": false,
+      "ActualChainComplete": false,
+      "ExpectedMismatchReason": "EvidenceApprovalTimestampAfterRecordValidUntil",
+      "ExpectedMismatchField": "ApprovalTimestamp",
+      "ActualMismatchReasons": [
+        "EvidenceApprovalTimestampAfterRecordValidUntil"
+      ],
+      "ActualMismatchFields": [
+        "ApprovalTimestamp"
+      ],
+      "MatchedProvenanceId": "fixture-provenance-trustchain-001",
+      "MatchedRecordIndex": 0,
+      "StatusMatched": true,
+      "ChainCompleteMatched": true,
+      "MismatchReasonMatched": true,
+      "MismatchFieldMatched": true,
+      "PassedAsExpected": true
+    }
+  ],
+  "ManualReviewRequired": false,
+  "ApprovalSealed": false,
+  "CapabilityGrantWritten": false,
+  "PromotionToMainlinePerformed": false,
+  "EvidenceCopiedToMainline": false,
+  "TrustRegistryCopiedToMainline": false,
+  "MainlineEvidencePresent": false,
+  "MainlineTrustRegistryPresent": false,
+  "FormalRetrievalAllowed": false,
+  "RuntimeSwitchAllowed": false,
+  "FormalPackageWritten": false,
+  "PackageOutputChanged": false,
+  "PackingPolicyChanged": false,
+  "VectorStoreBindingChanged": false,
+  "GlobalDefaultOn": false,
+  "ConfigPatchWritten": false,
+  "RuntimeActivation": false,
+  "NoRuntimeMutationInvariant": true,
+  "BlockedReasons": [],
+  "Diagnostics": [
+    "total=11",
+    "positive=1",
+    "negative=10",
+    "passed=11",
+    "failed=0",
+    "runtimeGate=True",
+    "p15Gate=True",
+    "mainlineEvidence=False",
+    "mainlineRegistry=False",
+    "nextStage=PolicyAuthorityModel (not manual review, not approval seal)"
+  ]
+}
