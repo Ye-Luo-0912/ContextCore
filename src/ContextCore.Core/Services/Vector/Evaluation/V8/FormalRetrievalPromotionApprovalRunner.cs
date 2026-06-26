@@ -8,9 +8,11 @@ public sealed class FormalRetrievalPromotionApprovalRunner
     private static readonly string[] FrozenAllowedActions =
     [
         "ReadV8PlanGate", "ReadV8ReadinessGate", "ReadV7CloseoutGate",
-        "ReadP15Report", "ReadRuntimeChangeGate", "ValidatePlanGatePassed",
-        "ValidateUpstreamInvariants", "RequireExplicitApprovalIdentity",
-        "RequireExplicitApprovalId", "BindApprovalRecord", "WriteApprovalArtifactsOnly"
+        "ReadP15Report", "ReadRuntimeChangeGate", "ValidateUpstreamInvariants",
+        "ValidatePlanRequiredManualApproval", "ValidatePlanFormalRetrievalStillBlocked",
+        "ValidateReadinessInvariants", "ValidateCloseoutInvariants",
+        "RequireExplicitApprovalIdentity", "RequireExplicitApprovalId",
+        "ValidateApprovalScopeSubset", "BindApprovalRecord", "WriteApprovalArtifactsOnly"
     ];
 
     private static readonly string[] FrozenForbiddenActions =
@@ -56,33 +58,76 @@ public sealed class FormalRetrievalPromotionApprovalRunner
         var closeoutGatePassed = closeoutGate is not null && closeoutGate.GatePassed;
 
         if (!options.Enabled) blocked.Add("ApprovalDisabled");
-        if (!planGatePassed) blocked.Add("PlanGateMissingOrNotPassed");
-        if (!readinessGatePassed) blocked.Add("ReadinessGateMissingOrNotPassed");
-        if (!closeoutGatePassed) blocked.Add("CloseoutGateMissingOrNotPassed");
+        if (!planGatePassed) blocked.Add("PlanGateNotPassed");
+        if (!readinessGatePassed) blocked.Add("ReadinessGateNotPassed");
+        if (!closeoutGatePassed) blocked.Add("CloseoutGateNotPassed");
         if (!rtGatePassed) blocked.Add("RuntimeChangeGateNotPassed");
         if (!p15Passed) blocked.Add("P15GateNotPassed");
 
+        var planRequiredManualApproval = planGate?.RequiredManualApproval ?? false;
+        if (!planRequiredManualApproval) blocked.Add("PlanRequiredManualApprovalMissing");
+
+        var planFormalRetrievalBlocked = planGate?.FormalRetrievalStillBlocked ?? false;
+        if (!planFormalRetrievalBlocked) blocked.Add("PlanFormalRetrievalNotBlocked");
+
+        var planRuntimeSwitchBlocked = planGate?.RuntimeSwitchStillBlocked ?? false;
+        if (!planRuntimeSwitchBlocked) blocked.Add("PlanRuntimeSwitchNotBlocked");
+
+        var planConfigWritten = planGate?.ConfigPatchWritten ?? false;
+        if (planConfigWritten) blocked.Add("PlanConfigPatchWritten");
+
+        var readinessFormalRetrievalBlocked = readinessGate?.FormalRetrievalStillBlocked ?? false;
+        if (!readinessFormalRetrievalBlocked) blocked.Add("ReadinessFormalRetrievalNotBlocked");
+
+        var readinessObservationSource = readinessGate?.ObservationSource ?? "";
+        if (!string.Equals(readinessObservationSource, "DeterministicShadowTraceFixture", StringComparison.OrdinalIgnoreCase))
+            blocked.Add("ReadinessObservationSourceMismatch");
+
+        var readinessSeparateGate = readinessGate?.RequiresSeparateFormalRetrievalPromotionGate ?? false;
+        if (!readinessSeparateGate) blocked.Add("ReadinessSeparatePromotionGateMissing");
+
+        var readinessFtAllowed = readinessGate?.FormalRetrievalAllowed ?? false;
+        if (readinessFtAllowed) blocked.Add("ReadinessSafetyBoundaryFormalRetrievalAllowed");
+
+        var closeoutConfigWritten = closeoutGate?.ConfigPatchWritten ?? false;
+        if (closeoutConfigWritten) blocked.Add("CloseoutConfigPatchWritten");
+
+        var closeoutRtAct = closeoutGate?.RuntimeActivation ?? false;
+        if (closeoutRtAct) blocked.Add("CloseoutRuntimeActivationDetected");
+
+        var closeoutFtAllowed = closeoutGate?.FormalRetrievalAllowed ?? false;
+        if (closeoutFtAllowed) blocked.Add("CloseoutFormalRetrievalAllowed");
+
         var approvedScopes = planGate?.ApprovedScopes ?? Array.Empty<string>();
 
-        if (isGate && !options.ExplicitlyProvided)
+        var hasApproval = options.ExplicitlyProvided && options.ApprovalIdExplicitlyProvided
+            && !string.IsNullOrWhiteSpace(options.ApprovedBy) && !string.IsNullOrWhiteSpace(options.ApprovalId);
+
+        if (!options.ExplicitlyProvided)
             blocked.Add("ManualApprovalMissing");
-        else if (isGate && options.ExplicitlyProvided && string.IsNullOrWhiteSpace(options.ApprovedBy))
+        else if (options.ExplicitlyProvided && string.IsNullOrWhiteSpace(options.ApprovedBy))
             blocked.Add("ApprovalIdentityMissing");
 
-        if (isGate && !options.ApprovalIdExplicitlyProvided)
+        if (!options.ApprovalIdExplicitlyProvided)
             blocked.Add("ApprovalIdMissing");
-        else if (isGate && options.ApprovalIdExplicitlyProvided && string.IsNullOrWhiteSpace(options.ApprovalId))
+        else if (string.IsNullOrWhiteSpace(options.ApprovalId))
             blocked.Add("ApprovalIdEmpty");
 
-        var approvalGranted = isGate && options.ExplicitlyProvided && options.ApprovalIdExplicitlyProvided
-            && !string.IsNullOrWhiteSpace(options.ApprovedBy) && !string.IsNullOrWhiteSpace(options.ApprovalId);
-        var approvalIdentityBound = !string.IsNullOrWhiteSpace(options.ApprovedBy);
-        var approvalScopeBound = approvedScopes.Count > 0;
+        var approvalScopes = options.ApprovalScopes
+            .Where(static s => !string.IsNullOrWhiteSpace(s))
+            .ToList();
+        var approvalScopeSubset = approvalScopes.Count == 0
+            || (approvedScopes.Count > 0 && approvalScopes.All(s => approvedScopes.Any(a => string.Equals(a, s, StringComparison.OrdinalIgnoreCase))));
+
+        if (approvalScopes.Count == 0)
+            blocked.Add("ApprovalScopeMissing");
+        else if (!approvalScopeSubset)
+            blocked.Add("ApprovalScopeNotSubset");
+
+        var approvalGranted = hasApproval;
+        var approvalIdentityBound = hasApproval;
 
         var approvalRequestId = $"frp-approval-{now:yyyyMMdd}-{Guid.NewGuid():N}";
-        var sourcePlanGateOpId = planGate?.OperationId ?? "";
-
-        var noRuntimeMutationInvariant = true;
 
         var distinctBlocked = blocked.Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(static x => x, StringComparer.OrdinalIgnoreCase).ToArray();
         var approvalGatePassed = distinctBlocked.Length == 0;
@@ -92,9 +137,14 @@ public sealed class FormalRetrievalPromotionApprovalRunner
         diag.Add($"planGatePassed={planGatePassed}");
         diag.Add($"readinessGatePassed={readinessGatePassed}");
         diag.Add($"closeoutGatePassed={closeoutGatePassed}");
-        diag.Add($"approvalGranted={approvalGranted}");
-        diag.Add($"approvedBy={options.ApprovedBy}");
-        diag.Add($"approvalIdProvided={options.ApprovalIdExplicitlyProvided}");
+        diag.Add($"planRequiredManualApproval={planRequiredManualApproval}");
+        diag.Add($"planFormalRetrievalBlocked={planFormalRetrievalBlocked}");
+        diag.Add($"readinessFormalRetrievalBlocked={readinessFormalRetrievalBlocked}");
+        diag.Add($"readinessObservationSource={readinessObservationSource}");
+        diag.Add($"readinessSeparateGate={readinessSeparateGate}");
+        diag.Add($"hasApproval={hasApproval}");
+        diag.Add($"approvalScopes={approvalScopes.Count}");
+        diag.Add($"approvalScopeSubset={approvalScopeSubset}");
         diag.Add($"approvalGatePassed={approvalGatePassed} gatePassed={gatePassed}");
         if (!isGate) diag.Add("GatePassed=false is expected for non-gate artifact");
 
@@ -104,24 +154,26 @@ public sealed class FormalRetrievalPromotionApprovalRunner
             CreatedAt = now,
             ApprovalGatePassed = approvalGatePassed,
             GatePassed = gatePassed,
-            Recommendation = approvalGatePassed
+            Recommendation = hasApproval && approvalGatePassed
                 ? FormalRetrievalPromotionApprovalRecommendations.ManualApprovalGranted
                 : FormalRetrievalPromotionApprovalRecommendations.BlockedByManualApprovalMissing,
-            NextAllowedPhase = approvalGatePassed ? "FormalRetrievalPromotionApproved" : "KeepPreviewOnly",
+            NextAllowedPhase = hasApproval && approvalGatePassed ? "FormalRetrievalPromotionApproved" : "KeepPreviewOnly",
 
             ApprovalRequestId = approvalRequestId,
             SourcePromotionPlanId = planGate?.PromotionPlanId ?? "",
-            SourcePromotionPlanGateOperationId = sourcePlanGateOpId,
+            SourcePromotionPlanGateOperationId = planGate?.OperationId ?? "",
             SourceReadinessGateOperationId = readinessGate?.OperationId ?? "",
             SourceCloseoutGateOperationId = closeoutGate?.OperationId ?? "",
             ApprovedScopes = approvedScopes,
+            ApprovalScopes = approvalScopes,
+            ApprovalScopeSubsetOfApprovedScopes = approvalScopeSubset,
             RequiredManualApproval = true,
             ApprovalGranted = approvalGranted,
             ApprovedBy = options.ApprovedBy,
             ApprovalId = options.ApprovalId,
             ApprovalTimestamp = approvalGranted ? now : DateTimeOffset.MinValue,
             ApprovalIdentityBound = approvalIdentityBound,
-            ApprovalScopeBound = approvalScopeBound,
+            ApprovalScopeBound = false,
             FormalRetrievalStillBlocked = true,
             RuntimeSwitchStillBlocked = true,
             ConfigPatchWritten = false,
@@ -165,17 +217,25 @@ public sealed class FormalRetrievalPromotionApprovalRunner
         b.AppendLine("## Approval Record");
         b.AppendLine($"- ApprovalGranted: `{r.ApprovalGranted}`");
         b.AppendLine($"- ApprovedBy: `{r.ApprovedBy}`");
-        b.AppendLine($"- ApprovalId: `{r.ApprovalId[..Math.Min(12, r.ApprovalId.Length)]}...`");
+        var aid = r.ApprovalId;
+        b.AppendLine($"- ApprovalId: `{(aid.Length > 12 ? aid[..12] : aid)}...`");
         b.AppendLine($"- ApprovalIdentityBound: `{r.ApprovalIdentityBound}`");
-        b.AppendLine($"- ApprovalScopeBound: `{r.ApprovalScopeBound}`");
-        b.AppendLine($"- RequiredManualApproval: `{r.RequiredManualApproval}`");
-        b.AppendLine($"- FormalRetrievalStillBlocked: `{r.FormalRetrievalStillBlocked}`");
+        AppendList(b, "Approval Scopes", r.ApprovalScopes);
+        b.AppendLine($"- ApprovalScopeSubsetOfApprovedScopes: `{r.ApprovalScopeSubsetOfApprovedScopes}`");
         b.AppendLine();
         b.AppendLine("## Safety Boundaries");
         b.AppendLine($"- FormalRetrievalAllowed: `{r.FormalRetrievalAllowed}`");
         b.AppendLine($"- NoRuntimeMutationInvariant: `{r.NoRuntimeMutationInvariant}`");
         b.AppendLine();
-        b.AppendLine("V8.2 formal retrieval promotion approval gate。Manual approval contract。FormalRetrievalAllowed=false。");
+        b.AppendLine("V8.2R formal retrieval promotion approval gate。Manual approval with scope validation。FormalRetrievalAllowed=false。");
         return b.ToString();
+    }
+
+    private static void AppendList(StringBuilder b, string title, IReadOnlyList<string> values)
+    {
+        b.AppendLine();
+        b.AppendLine($"## {title}");
+        if (values.Count == 0) { b.AppendLine("- (empty)"); return; }
+        foreach (var v in values) b.AppendLine($"- `{v}`");
     }
 }

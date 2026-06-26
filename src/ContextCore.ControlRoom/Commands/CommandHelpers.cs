@@ -33,4 +33,17 @@ internal static class CommandHelpers
     {
         return args.Any(arg => string.Equals(arg, name, StringComparison.OrdinalIgnoreCase));
     }
+
+    public static IReadOnlyList<string> GetMultiOption(IReadOnlyList<string> args, string name)
+    {
+        var results = new List<string>();
+        for (var i = 0; i < args.Count - 1; i++)
+        {
+            if (string.Equals(args[i], name, StringComparison.OrdinalIgnoreCase))
+            {
+                results.Add(args[i + 1]);
+            }
+        }
+        return results;
+    }
 }

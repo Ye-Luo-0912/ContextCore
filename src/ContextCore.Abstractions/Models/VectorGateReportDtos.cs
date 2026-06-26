@@ -3103,6 +3103,7 @@ public sealed class FormalRetrievalPromotionApprovalOptions
     public bool ExplicitlyProvided { get; init; }
     public string ApprovalId { get; init; } = "";
     public bool ApprovalIdExplicitlyProvided { get; init; }
+    public IReadOnlyList<string> ApprovalScopes { get; init; } = Array.Empty<string>();
 }
 
 
@@ -3132,6 +3133,8 @@ public sealed class FormalRetrievalPromotionApprovalReport
     public DateTimeOffset ApprovalTimestamp { get; init; }
     public bool ApprovalIdentityBound { get; init; }
     public bool ApprovalScopeBound { get; init; }
+    public IReadOnlyList<string> ApprovalScopes { get; init; } = Array.Empty<string>();
+    public bool ApprovalScopeSubsetOfApprovedScopes { get; init; }
     public bool FormalRetrievalStillBlocked { get; init; }
     public bool RuntimeSwitchStillBlocked { get; init; }
     public bool ConfigPatchWritten { get; init; }

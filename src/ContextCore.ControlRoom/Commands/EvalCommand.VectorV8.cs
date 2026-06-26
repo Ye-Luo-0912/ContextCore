@@ -142,6 +142,7 @@ public static partial class EvalCommand
             ExplicitlyProvided = CommandHelpers.HasFlag(args, "--approved-by"),
             ApprovalId = CommandHelpers.GetOption(args, "--approval-id") ?? "",
             ApprovalIdExplicitlyProvided = CommandHelpers.HasFlag(args, "--approval-id"),
+            ApprovalScopes = CommandHelpers.GetMultiOption(args, "--approval-scope"),
         };
 
         var runner = new FormalRetrievalPromotionApprovalRunner();

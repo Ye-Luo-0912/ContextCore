@@ -1,25 +1,26 @@
 ﻿# Formal Retrieval Promotion Approval Gate
 
-生成: `2026-06-26T06:50:28.0222490+00:00`
-操作: `frp-approval-gate-5e1c099735b241deb7606b3887d63fd3`
+生成: `2026-06-26T07:06:28.5608759+00:00`
+操作: `frp-approval-gate-38556bf32c094044af1934f4ab59beaa`
 
 ## Decision
-- ApprovalGatePassed: `True`
-- GatePassed: `True`
-- Recommendation: `ManualApprovalGranted`
-- NextAllowedPhase: `FormalRetrievalPromotionApproved`
+- ApprovalGatePassed: `False`
+- GatePassed: `False`
+- Recommendation: `BlockedByManualApprovalMissing`
+- NextAllowedPhase: `KeepPreviewOnly`
 
 ## Approval Record
-- ApprovalGranted: `True`
-- ApprovedBy: `ReleaseManager`
-- ApprovalId: `APPROVE-001...`
-- ApprovalIdentityBound: `True`
-- ApprovalScopeBound: `True`
-- RequiredManualApproval: `True`
-- FormalRetrievalStillBlocked: `True`
+- ApprovalGranted: `False`
+- ApprovedBy: ``
+- ApprovalId: `...`
+- ApprovalIdentityBound: `False`
+
+## Approval Scopes
+- (empty)
+- ApprovalScopeSubsetOfApprovedScopes: `True`
 
 ## Safety Boundaries
 - FormalRetrievalAllowed: `False`
 - NoRuntimeMutationInvariant: `True`
 
-V8.2 formal retrieval promotion approval gate。Manual approval contract。FormalRetrievalAllowed=false。
+V8.2R formal retrieval promotion approval gate。Manual approval with scope validation。FormalRetrievalAllowed=false。
