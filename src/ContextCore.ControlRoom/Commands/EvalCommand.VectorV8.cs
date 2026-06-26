@@ -643,6 +643,37 @@ public static partial class EvalCommand
             $"promotionToMainline={report.PromotionToMainlinePerformed}; blocked={report.BlockedReasons.Count}");
     }
 
+    private static async Task ExecuteFormalRetrievalPromotionExternalApprovalQuarantineNegativeMatrixAsync(
+        IReadOnlyList<string> args, string subcommand, CancellationToken ct)
+    {
+        var output = Path.GetFullPath(Path.Combine("vector", "v8"));
+        Directory.CreateDirectory(Path.Combine("vector", "v8", "quarantine"));
+
+        var rtPath = Path.Combine("learning", "readiness", "learning-runtime-change-readiness-gate.json");
+        var rtGate = await ReadJsonFileAsync<LearningRuntimeChangeReadinessGateReport>(rtPath, ct).ConfigureAwait(false);
+        var rtPassed = rtGate is not null && rtGate.Passed;
+
+        var p15Path = Path.Combine("eval", "eval-report-p15-a3.json");
+        var p15 = await ReadJsonFileAsync<JsonDocument>(p15Path, ct).ConfigureAwait(false);
+        var p15Passed = false;
+        if (p15 is not null && p15.RootElement.TryGetProperty("PassRate", out var pr)) p15Passed = pr.GetDouble() >= 1.0;
+
+        var isGate = string.Equals(subcommand, "formal-retrieval-promotion-external-approval-quarantine-negative-matrix-gate", StringComparison.OrdinalIgnoreCase);
+        var opt = new FormalRetrievalPromotionExternalApprovalQuarantineMatrixOptions { IsGate = isGate, Enabled = !CommandHelpers.HasFlag(args, "--disabled") };
+        var runner = new FormalRetrievalPromotionExternalApprovalQuarantineNegativeMatrixRunner();
+        var report = runner.Run(rtPassed, p15Passed, opt);
+
+        var fn = isGate ? "formal-retrieval-promotion-external-approval-quarantine-validation-negative-matrix-gate" : "formal-retrieval-promotion-external-approval-quarantine-validation-negative-matrix";
+        var jp = Path.Combine(output, $"{fn}.json");
+        var mp = Path.Combine(output, $"{fn}.md");
+        await WriteJsonSafeAsync(report, jp, ct).ConfigureAwait(false);
+        await WriteTextAsync(FormalRetrievalPromotionExternalApprovalQuarantineNegativeMatrixRunner.BuildMarkdown(
+            isGate ? "Quarantine Negative Matrix Gate" : "Quarantine Negative Matrix", report), mp, ct).ConfigureAwait(false);
+
+        Console.WriteLine($"[Eval] Quarantine negative matrix written: {jp}");
+        Console.WriteLine($"[Eval] matrixPassed={report.MatrixPassed}; gatePassed={report.GatePassed}; total={report.TotalCases} passed={report.PassedCases} failed={report.FailedCases}");
+    }
+
     private static bool ValidateCandidateFields(string jsonContent, string[] fieldNames, List<string> missing, List<string> invalid)
     {
         if (string.IsNullOrWhiteSpace(jsonContent)) { missing.Add("<empty-json>"); return false; }

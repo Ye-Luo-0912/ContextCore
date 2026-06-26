@@ -1,0 +1,78 @@
+﻿{
+  "OperationId": "frp-q-neg-matrix-d301c67613b14e3e97ccf54b5865e071",
+  "CreatedAt": "2026-06-26T16:50:28.4793209+00:00",
+  "MatrixPassed": true,
+  "GatePassed": true,
+  "TotalCases": 8,
+  "PassedCases": 8,
+  "FailedCases": 0,
+  "Cases": [
+    {
+      "CaseName": "EvidenceMissingField",
+      "ExpectedBlockedReason": "EvidenceCandidateSchemaInvalid",
+      "ActualBlockedReasons": [
+        "EvidenceCandidateSchemaInvalid"
+      ],
+      "FailedAsExpected": true
+    },
+    {
+      "CaseName": "EvidenceEmptyScopes",
+      "ExpectedBlockedReason": "EvidenceCandidateSchemaInvalid",
+      "ActualBlockedReasons": [
+        "EvidenceCandidateSchemaInvalid"
+      ],
+      "FailedAsExpected": true
+    },
+    {
+      "CaseName": "EvidenceDefaultTime",
+      "ExpectedBlockedReason": "EvidenceCandidateSchemaInvalid",
+      "ActualBlockedReasons": [
+        "EvidenceCandidateSchemaInvalid"
+      ],
+      "FailedAsExpected": true
+    },
+    {
+      "CaseName": "RegistryMissingRecords",
+      "ExpectedBlockedReason": "TrustRegistryCandidateSchemaInvalid",
+      "ActualBlockedReasons": [
+        "TrustRegistryCandidateSchemaInvalid"
+      ],
+      "FailedAsExpected": true
+    },
+    {
+      "CaseName": "RegistryEmptySourceKinds",
+      "ExpectedBlockedReason": "TrustRegistryCandidateSchemaInvalid",
+      "ActualBlockedReasons": [
+        "TrustRegistryCandidateSchemaInvalid"
+      ],
+      "FailedAsExpected": true
+    },
+    {
+      "CaseName": "RecordMissingChecksum",
+      "ExpectedBlockedReason": "TrustRegistryCandidateSchemaInvalid",
+      "ActualBlockedReasons": [
+        "TrustRegistryCandidateSchemaInvalid"
+      ],
+      "FailedAsExpected": true
+    },
+    {
+      "CaseName": "RecordMissingProvidedBy",
+      "ExpectedBlockedReason": "TrustRegistryCandidateSchemaInvalid",
+      "ActualBlockedReasons": [
+        "TrustRegistryCandidateSchemaInvalid"
+      ],
+      "FailedAsExpected": true
+    },
+    {
+      "CaseName": "RecordDefaultValidUntil",
+      "ExpectedBlockedReason": "TrustRegistryCandidateSchemaInvalid",
+      "ActualBlockedReasons": [
+        "TrustRegistryCandidateSchemaInvalid"
+      ],
+      "FailedAsExpected": true
+    }
+  ],
+  "FormalRetrievalAllowed": false,
+  "NoRuntimeMutationInvariant": true,
+  "BlockedReasons": []
+}
