@@ -3252,6 +3252,12 @@ public sealed class FormalRetrievalPromotionApprovalEvidenceSealReport
     public string ApprovalEvidenceSourceKind { get; init; } = "";
     public string ApprovalEvidenceProvidedBy { get; init; } = "";
     public bool BoundPendingApprovalGateVerified { get; init; }
+    public bool PendingApprovalBlockedReasonsManualOnly { get; init; }
+    public bool SourceApprovalRequestIdMatched { get; init; }
+    public bool BoundPendingApprovalGateIdMatched { get; init; }
+    public bool TrustAnchorPresent { get; init; }
+    public bool EvidenceProvenanceTrusted { get; init; }
+    public bool EvidenceChecksumMatched { get; init; }
 
     public IReadOnlyList<string> AllowedActions { get; init; } = Array.Empty<string>();
     public IReadOnlyList<string> ForbiddenActions { get; init; } = Array.Empty<string>();

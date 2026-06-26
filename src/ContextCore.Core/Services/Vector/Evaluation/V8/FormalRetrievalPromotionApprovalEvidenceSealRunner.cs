@@ -70,13 +70,23 @@ public sealed class FormalRetrievalPromotionApprovalEvidenceSealRunner
         if (!p15Passed) blocked.Add("P15GateNotPassed");
 
         var boundPendingGateVerified = false;
+        var pendingReasonsManualOnly = false;
         if (approvalArtifact is not null)
         {
             boundPendingGateVerified = approvalArtifact.ApprovalGatePassed == false
                 && approvalArtifact.GatePassed == false
                 && approvalArtifact.ApprovalGranted == false
                 && string.Equals(approvalArtifact.NextAllowedPhase, "KeepPreviewOnly", StringComparison.OrdinalIgnoreCase);
+
+            var allowedManualReasons = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                { "ManualApprovalMissing", "ApprovalIdMissing", "ApprovalScopeMissing" };
+            var actualReasons = approvalArtifact.BlockedReasons
+                .Where(static r => !string.IsNullOrWhiteSpace(r))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            pendingReasonsManualOnly = actualReasons.Count > 0 && actualReasons.IsSubsetOf(allowedManualReasons);
+
             if (!boundPendingGateVerified) blocked.Add("BoundPendingGateNotInBlockedState");
+            if (!pendingReasonsManualOnly) blocked.Add("PendingGateBlockedReasonsNotManualOnly");
         }
         else
         {
@@ -135,9 +145,14 @@ public sealed class FormalRetrievalPromotionApprovalEvidenceSealRunner
 
             if (approvalArtifact is not null)
             {
-                var boundPendingOpId = evidence.BoundPendingApprovalGateOperationId;
-                if (!string.IsNullOrWhiteSpace(boundPendingOpId)
-                    && !string.Equals(boundPendingOpId, approvalArtifact.OperationId, StringComparison.OrdinalIgnoreCase))
+                if (string.IsNullOrWhiteSpace(evidence.SourceApprovalRequestId))
+                    blocked.Add("EvidenceSourceApprovalRequestIdMissing");
+                else if (!string.Equals(evidence.SourceApprovalRequestId, approvalArtifact.ApprovalRequestId, StringComparison.OrdinalIgnoreCase))
+                    blocked.Add("EvidenceSourceApprovalRequestIdMismatch");
+
+                if (string.IsNullOrWhiteSpace(evidence.BoundPendingApprovalGateOperationId))
+                    blocked.Add("EvidenceBoundPendingGateIdMissing");
+                else if (!string.Equals(evidence.BoundPendingApprovalGateOperationId, approvalArtifact.OperationId, StringComparison.OrdinalIgnoreCase))
                     blocked.Add("EvidenceBoundPendingGateIdMismatch");
             }
         }
@@ -151,10 +166,9 @@ public sealed class FormalRetrievalPromotionApprovalEvidenceSealRunner
 
         diag.Add($"stage={stage}");
         diag.Add($"evidencePresent={evidencePresent}");
-        diag.Add($"isExternal={isExternal}");
-        diag.Add($"evidenceSourceKind={evidenceSourceKind}");
-        diag.Add($"evidenceProvidedBy={evidenceProvidedBy}");
         diag.Add($"boundPendingGateVerified={boundPendingGateVerified}");
+        diag.Add($"pendingReasonsManualOnly={pendingReasonsManualOnly}");
+        diag.Add($"isExternal={isExternal}");
         diag.Add($"scopeSubsetValidated={scopeSubsetValidated}");
         diag.Add($"sourceGateIdsMatch={sourceGateIdsMatch}");
         diag.Add($"sealPassed={sealPassed} gatePassed={gatePassed}");
@@ -185,6 +199,12 @@ public sealed class FormalRetrievalPromotionApprovalEvidenceSealRunner
             ApprovalEvidenceSourceKind = evidenceSourceKind,
             ApprovalEvidenceProvidedBy = evidenceProvidedBy,
             BoundPendingApprovalGateVerified = boundPendingGateVerified,
+            PendingApprovalBlockedReasonsManualOnly = pendingReasonsManualOnly,
+            SourceApprovalRequestIdMatched = false,
+            BoundPendingApprovalGateIdMatched = false,
+            TrustAnchorPresent = false,
+            EvidenceProvenanceTrusted = false,
+            EvidenceChecksumMatched = false,
 
             V8ApprovalPendingGatePresent = approvalArtifact is not null,
             V8PlanGatePassed = planGatePassed,
