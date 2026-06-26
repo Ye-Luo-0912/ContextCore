@@ -553,11 +553,11 @@ public static partial class EvalCommand
             {
                 var ev = await ReadJsonFileAsync<FormalRetrievalPromotionApprovalEvidence>(qEvidencePath, ct).ConfigureAwait(false);
                 evValid = ev is not null && !string.IsNullOrWhiteSpace(ev.ApprovalEvidenceId) && !string.IsNullOrWhiteSpace(ev.ApprovedBy);
-                if (evValid)
-                    evSchemaValid = ValidateCandidateFields(evRequiredFields, evidenceStatus, missingFields, invalidFields);
+                var rawJson = await File.ReadAllTextAsync(qEvidencePath, ct).ConfigureAwait(false);
+                evSchemaValid = ValidateCandidateFields(rawJson, evRequiredFields, missingFields, invalidFields);
                 evidenceStatus = evValid ? (evSchemaValid ? QuarantineScanStatuses.ReadyForManualReview : QuarantineScanStatuses.Invalid) : QuarantineScanStatuses.Invalid;
             }
-            catch { evidenceStatus = QuarantineScanStatuses.Invalid; }
+            catch { evidenceStatus = QuarantineScanStatuses.Invalid; missingFields.Add("<evidence-parse-error>"); }
         }
 
         if (regExists)
@@ -567,11 +567,11 @@ public static partial class EvalCommand
             {
                 var reg = await ReadJsonFileAsync<FormalRetrievalPromotionApprovalTrustRegistry>(qRegistryPath, ct).ConfigureAwait(false);
                 regValid = reg is not null && !string.IsNullOrWhiteSpace(reg.RegistryId) && reg.TrustedProvenanceRecords.Count > 0;
-                if (regValid)
-                    regSchemaValid = ValidateCandidateFields(regRequiredFields, registryStatus, missingFields, invalidFields);
+                var rawJson = await File.ReadAllTextAsync(qRegistryPath, ct).ConfigureAwait(false);
+                regSchemaValid = ValidateCandidateFields(rawJson, regRequiredFields, missingFields, invalidFields);
                 registryStatus = regValid ? (regSchemaValid ? QuarantineScanStatuses.ReadyForManualReview : QuarantineScanStatuses.Invalid) : QuarantineScanStatuses.Invalid;
             }
-            catch { registryStatus = QuarantineScanStatuses.Invalid; }
+            catch { registryStatus = QuarantineScanStatuses.Invalid; missingFields.Add("<registry-parse-error>"); }
         }
 
         var mainlineEv = File.Exists(Path.Combine("vector", "v8", "formal-retrieval-promotion-approval-evidence.json"));
@@ -606,9 +606,39 @@ public static partial class EvalCommand
             $"promotionToMainline={report.PromotionToMainlinePerformed}; blocked={report.BlockedReasons.Count}");
     }
 
-    private static bool ValidateCandidateFields(string[] fieldNames, string status, List<string> missing, List<string> invalid)
+    private static bool ValidateCandidateFields(string jsonContent, string[] fieldNames, List<string> missing, List<string> invalid)
     {
-        return true;
+        if (string.IsNullOrWhiteSpace(jsonContent)) { missing.Add("<empty-json>"); return false; }
+        var allValid = true;
+        try
+        {
+            var doc = System.Text.Json.JsonDocument.Parse(jsonContent);
+            var root = doc.RootElement;
+            foreach (var field in fieldNames)
+            {
+                if (!root.TryGetProperty(field, out var prop))
+                {
+                    missing.Add(field);
+                    allValid = false;
+                    continue;
+                }
+                var invalidValue = prop.ValueKind switch
+                {
+                    System.Text.Json.JsonValueKind.String => string.IsNullOrWhiteSpace(prop.GetString()),
+                    System.Text.Json.JsonValueKind.Array => prop.GetArrayLength() == 0,
+                    System.Text.Json.JsonValueKind.Number => prop.GetDecimal() == 0 && prop.GetRawText() == "0",
+                    System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False => !prop.GetBoolean(),
+                    _ => false,
+                };
+                if (invalidValue)
+                {
+                    invalid.Add(field);
+                    allValid = false;
+                }
+            }
+        }
+        catch { missing.Add("<parse-error>"); return false; }
+        return allValid;
     }
 
     private static bool ValidateTemplateFields(string jsonContent, string[] fieldPaths, List<string> missing, List<string> nonPlaceholder)

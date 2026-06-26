@@ -1,6 +1,6 @@
 ﻿# Quarantine Scan
 
-生成: `2026-06-26T15:18:02.2936854+00:00`
+生成: `2026-06-26T15:31:09.2147204+00:00`
 
 ## Decision
 - ScanPassed: `True` GatePassed: `False`
