@@ -1,21 +1,20 @@
 ﻿# External Approval Dry-Run
 
-生成: `2026-06-26T10:35:33.7104410+00:00`
-操作: `frp-dryrun-dryrun-aab59610fda44fd6a9baacea29199b2f`
+生成: `2026-06-26T11:12:09.7396082+00:00`
+操作: `frp-dryrun-dryrun-3e462dca923e429e870802271bf69dcb`
 
 ## Decision
-- DryRunPassed: `True`
-- GatePassed: `False`
+- DryRunPassed: `True`  GatePassed: `False`
 
-## Fixture Markers
-- EvidenceMarker: `True`
-- TrustRegistryMarker: `True`
-- IntakeGateBlocked: `True`
-- ScopeTrusted: `True`
-- ScopeApproved: `True`
+## Binding Verification
+- EvidenceMarker: `True`  TrustMarker: `True`
+- SourceGateIdsMatch: `True` (plan/readiness/closeout)
+- ApprovalRequestBinding: `True` (request/gate)
+- IntakeBlocked: `True`  ReasonsVerified: `True`
+- ScopeTrusted: `True`  ScopeApproved: `True`
 
 ## Safety
 - FormalRetrievalAllowed: `False`
 - ConfigPatchWritten: `False`
 
-V8.6R external approval dry-run。Fixture marker + intake binding + scope check。
+V8.6R2 dry-run binding semantics hardening。

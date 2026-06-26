@@ -1,6 +1,6 @@
 ﻿{
-  "OperationId": "frp-dryrun-dryrun-aab59610fda44fd6a9baacea29199b2f",
-  "CreatedAt": "2026-06-26T10:35:33.710441+00:00",
+  "OperationId": "frp-dryrun-dryrun-3e462dca923e429e870802271bf69dcb",
+  "CreatedAt": "2026-06-26T11:12:09.7396082+00:00",
   "DryRunPassed": true,
   "GatePassed": false,
   "Recommendation": "FixtureDryRunValidationPassed",
@@ -20,6 +20,7 @@
   "MainlineIntakeBlockedReasonsVerified": true,
   "ScopeTrustedByRegistry": true,
   "ScopeSubsetOfApprovedScopes": true,
+  "ApprovalRequestBindingMatched": true,
   "P15GatePassed": true,
   "RuntimeChangeGatePassed": true,
   "FormalRetrievalAllowed": false,
@@ -37,11 +38,12 @@
     "stage=dryrun",
     "mainlineEvidence=False registry=False",
     "fixtureEvidence=True registry=True",
-    "intakeBlocked=True",
+    "intakeBlocked=True reasonsVerified=True",
     "evidenceMarker=True trustMarker=True",
+    "evidenceValid=True registryValid=True",
+    "sourceGateIdsMatch=True approvalBinding=True",
     "provenanceFound=True checksumMatch=True",
     "scopeTrusted=True scopeApproved=True",
-    "sourceIdsMatch=True",
     "dryRunPassed=True gatePassed=False",
     "GatePassed=false is expected for non-gate artifact"
   ]

@@ -1,5 +1,6 @@
 {
   "RegistryId": "fixture-registry-dryrun-001",
+  "IsFixture": true,
   "RegistryCreatedAt": "2026-06-26T12:00:00Z",
   "AllowedSourceKinds": ["fixture"],
   "TrustedProvenanceRecords": [

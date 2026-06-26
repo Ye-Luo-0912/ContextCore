@@ -3286,6 +3286,7 @@ public sealed class FormalRetrievalPromotionApprovalTrustedProvenanceRecord
 public sealed class FormalRetrievalPromotionApprovalTrustRegistry
 {
     public string RegistryId { get; init; } = "";
+    public bool IsFixture { get; init; }
     public DateTimeOffset RegistryCreatedAt { get; init; }
     public IReadOnlyList<string> AllowedSourceKinds { get; init; } = Array.Empty<string>();
     public IReadOnlyList<FormalRetrievalPromotionApprovalTrustedProvenanceRecord> TrustedProvenanceRecords { get; init; }
@@ -3456,6 +3457,7 @@ public sealed class FormalRetrievalPromotionExternalApprovalDryRunReport
     public bool MainlineIntakeBlockedReasonsVerified { get; init; }
     public bool ScopeTrustedByRegistry { get; init; }
     public bool ScopeSubsetOfApprovedScopes { get; init; }
+    public bool ApprovalRequestBindingMatched { get; init; }
 
     public bool P15GatePassed { get; init; }
     public bool RuntimeChangeGatePassed { get; init; }
