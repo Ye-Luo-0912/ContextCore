@@ -3065,6 +3065,11 @@ public sealed class FormalRetrievalPromotionPlanReport
     public bool GlobalDefaultOn { get; init; }
     public bool NoRuntimeMutationInvariant { get; init; }
 
+    public bool V8ReadinessGatePassed { get; init; }
+    public bool RequiresSeparateFormalRetrievalPromotionGate { get; init; }
+    public string V8ReadinessGateOperationId { get; init; } = "";
+    public string UpstreamReadinessArtifactPath { get; init; } = "";
+
     public IReadOnlyList<string> AllowedActions { get; init; } = Array.Empty<string>();
     public IReadOnlyList<string> ForbiddenActions { get; init; } = Array.Empty<string>();
     public IReadOnlyList<string> BlockedReasons { get; init; } = Array.Empty<string>();

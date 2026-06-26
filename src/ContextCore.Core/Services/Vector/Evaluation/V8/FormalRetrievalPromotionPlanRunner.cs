@@ -7,7 +7,7 @@ public sealed class FormalRetrievalPromotionPlanRunner
 {
     private static readonly string[] FrozenAllowedActions =
     [
-        "ReadV8Audit", "ReadV7Closeout", "ReadV7Summary", "ReadV7Observation", "ReadV7Execution", "ReadV7Plan",
+        "ReadV8ReadinessGateArtifact", "ReadV7Closeout", "ReadV7Summary", "ReadV7Observation", "ReadV7Execution", "ReadV7Plan",
         "ReadP15Report", "ReadRuntimeChangeGate", "DefinePromotionPlan", "DefineRollbackPlan", "DefineKillSwitchPlan",
         "DefineShadowValidationPlan", "DefineFormalPackageSafetyPlan", "DefineAbortConditions", "WritePlanArtifactsOnly"
     ];
@@ -59,10 +59,14 @@ public sealed class FormalRetrievalPromotionPlanRunner
         var now = DateTimeOffset.UtcNow;
 
         var auditPassed = audit is not null && audit.AuditPassed;
+        var readinessGatePassed = audit is not null && audit.GatePassed;
+        var requiresSeparateGate = audit?.RequiresSeparateFormalRetrievalPromotionGate ?? false;
         var closeoutPassed = closeout is not null && closeout.CloseoutPassed;
 
         if (!options.Enabled) blocked.Add("PlanDisabled");
         if (!auditPassed) blocked.Add("ReadinessAuditMissingOrNotPassed");
+        if (isGate && !readinessGatePassed) blocked.Add("ReadinessGateNotPassed");
+        if (isGate && !requiresSeparateGate) blocked.Add("RequiresSeparatePromotionGateNotDeclared");
         if (!closeoutPassed) blocked.Add("CloseoutMissingOrNotPassed");
         if (!rtGatePassed) blocked.Add("RuntimeChangeGateNotPassed");
         if (!p15Passed) blocked.Add("P15GateNotPassed");
@@ -115,7 +119,10 @@ public sealed class FormalRetrievalPromotionPlanRunner
 
         diag.Add($"stage={stage}");
         diag.Add($"auditPassed={auditPassed}");
+        diag.Add($"readinessGatePassed={readinessGatePassed}");
+        diag.Add($"requiresSeparateGate={requiresSeparateGate}");
         diag.Add($"closeoutPassed={closeoutPassed}");
+        diag.Add($"upstreamReadinessArtifact=vector/v8/formal-retrieval-promotion-readiness-gate.json");
         diag.Add($"formalRetrievalStillBlocked={formalRetrievalStillBlocked}");
         diag.Add($"noRuntimeMutationInvariant={noRuntimeMutationInvariant}");
         diag.Add($"planPassed={planPassed} gatePassed={gatePassed}");
@@ -147,6 +154,10 @@ public sealed class FormalRetrievalPromotionPlanRunner
             AbortConditions = abortConditions,
 
             V8AuditPassed = auditPassed,
+            V8ReadinessGatePassed = readinessGatePassed,
+            RequiresSeparateFormalRetrievalPromotionGate = requiresSeparateGate,
+            V8ReadinessGateOperationId = audit?.OperationId ?? "",
+            UpstreamReadinessArtifactPath = "vector/v8/formal-retrieval-promotion-readiness-gate.json",
             V7CloseoutPassed = closeoutPassed,
             P15GatePassed = p15Passed,
             RuntimeChangeGatePassed = rtGatePassed,
@@ -183,6 +194,9 @@ public sealed class FormalRetrievalPromotionPlanRunner
         b.AppendLine();
         b.AppendLine("## Promotion Plan");
         b.AppendLine($"- PromotionPlanId: `{r.PromotionPlanId}`");
+        b.AppendLine($"- UpstreamReadinessArtifact: `{r.UpstreamReadinessArtifactPath}` (gate artifact, not non-gate audit)");
+        b.AppendLine($"- V8ReadinessGatePassed: `{r.V8ReadinessGatePassed}`");
+        b.AppendLine($"- RequiresSeparatePromotionGate: `{r.RequiresSeparateFormalRetrievalPromotionGate}`");
         b.AppendLine($"- FormalRetrievalStillBlocked: `{r.FormalRetrievalStillBlocked}`");
         b.AppendLine($"- RuntimeSwitchStillBlocked: `{r.RuntimeSwitchStillBlocked}`");
         b.AppendLine($"- RequiredManualApproval: `{r.RequiredManualApproval}`");

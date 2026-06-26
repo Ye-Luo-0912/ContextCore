@@ -63,8 +63,9 @@ public static partial class EvalCommand
         var output = Path.GetFullPath(Path.Combine("vector", "v8"));
         Directory.CreateDirectory(output);
 
-        var auditPath = Path.Combine("vector", "v8", "formal-retrieval-promotion-readiness-audit.json");
+        var auditPath = Path.Combine("vector", "v8", "formal-retrieval-promotion-readiness-gate.json");
         var audit = await ReadJsonFileAsync<FormalRetrievalPromotionReadinessAuditReport>(auditPath, ct).ConfigureAwait(false);
+        var upstreamReadinessArtifactPath = "vector/v8/formal-retrieval-promotion-readiness-gate.json";
 
         var closePath = Path.Combine("vector", "v7", "live-activation-closeout-gate.json");
         var closeout = await ReadJsonFileAsync<ScopedRuntimePreviewLiveActivationCloseoutReport>(closePath, ct).ConfigureAwait(false);

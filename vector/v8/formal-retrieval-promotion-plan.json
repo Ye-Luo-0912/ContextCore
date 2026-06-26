@@ -1,11 +1,11 @@
 ﻿{
-  "OperationId": "frp-plan-plan-191882bbe61d47d4a86c937856bd3d9d",
-  "CreatedAt": "2026-06-26T05:21:39.1204045+00:00",
+  "OperationId": "frp-plan-plan-2ba9635f2a444b938412407df83fd175",
+  "CreatedAt": "2026-06-26T06:01:48.2535327+00:00",
   "PlanPassed": true,
   "GatePassed": false,
   "Recommendation": "ReadyForFormalRetrievalPromotionApproval",
   "NextAllowedPhase": "FormalRetrievalPromotionApproval",
-  "PromotionPlanId": "frp-plan-20260626-03734b5a9f5a48d691b7f1a3d84741cd",
+  "PromotionPlanId": "frp-plan-20260626-83395d3ad19b487d91f5928936d4ce82",
   "SourceCloseoutId": "arsp-closeout-gate-3df0efdbc9a540f3b5cdd03a2bd1b43a",
   "ApprovedScopes": [
     "demo-workspace/demo-collection"
@@ -42,8 +42,12 @@
   "VectorStoreBindingChanged": false,
   "GlobalDefaultOn": false,
   "NoRuntimeMutationInvariant": true,
+  "V8ReadinessGatePassed": true,
+  "RequiresSeparateFormalRetrievalPromotionGate": true,
+  "V8ReadinessGateOperationId": "frp-audit-gate-3ecc140a80b043249694e63dd8e461d8",
+  "UpstreamReadinessArtifactPath": "vector/v8/formal-retrieval-promotion-readiness-gate.json",
   "AllowedActions": [
-    "ReadV8Audit",
+    "ReadV8ReadinessGateArtifact",
     "ReadV7Closeout",
     "ReadV7Summary",
     "ReadV7Observation",
@@ -80,7 +84,10 @@
   "Diagnostics": [
     "stage=plan",
     "auditPassed=True",
+    "readinessGatePassed=True",
+    "requiresSeparateGate=True",
     "closeoutPassed=True",
+    "upstreamReadinessArtifact=vector/v8/formal-retrieval-promotion-readiness-gate.json",
     "formalRetrievalStillBlocked=True",
     "noRuntimeMutationInvariant=True",
     "planPassed=True gatePassed=False",
