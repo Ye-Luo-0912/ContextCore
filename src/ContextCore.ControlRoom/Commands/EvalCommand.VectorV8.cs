@@ -405,9 +405,23 @@ public static partial class EvalCommand
             && intake.FormalRetrievalAllowed == false
             && intake.RuntimeSwitchAllowed == false
             && intake.FormalPackageWritten == false
+            && intake.PackageOutputChanged == false
+            && intake.PackingPolicyChanged == false
+            && intake.VectorStoreBindingChanged == false
+            && intake.GlobalDefaultOn == false
             && intake.ConfigPatchWritten == false
-            && intake.RuntimeActivation == false;
-        var intakeBlockedClean = intakeHasRequiredReasons && intakeSafetyOk;
+            && intake.RuntimeActivation == false
+            && intake.NoRuntimeMutationInvariant == true;
+        var intakeReasonsClean = intakeHasRequiredReasons
+            && !intake.BlockedReasons.Any(r => r.Contains("Runtime", StringComparison.OrdinalIgnoreCase)
+                || r.Contains("Package", StringComparison.OrdinalIgnoreCase)
+                || r.Contains("Packing", StringComparison.OrdinalIgnoreCase)
+                || r.Contains("Vector", StringComparison.OrdinalIgnoreCase)
+                || r.Contains("Config", StringComparison.OrdinalIgnoreCase)
+                || r.Contains("Safety", StringComparison.OrdinalIgnoreCase)
+                || r.Contains("Activation", StringComparison.OrdinalIgnoreCase)
+                || r.Contains("Mutation", StringComparison.OrdinalIgnoreCase));
+        var intakeBlockedClean = intakeHasRequiredReasons && intakeSafetyOk && intakeReasonsClean;
 
         var opt = new FormalRetrievalPromotionExternalApprovalDryRunOptions { Enabled = !CommandHelpers.HasFlag(args, "--disabled") };
         var runner = new FormalRetrievalPromotionExternalApprovalDryRunRunner();

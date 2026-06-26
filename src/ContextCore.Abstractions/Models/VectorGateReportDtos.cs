@@ -3463,6 +3463,8 @@ public sealed class FormalRetrievalPromotionExternalApprovalDryRunReport
     public bool TrustRecordNotExpired { get; init; }
     public bool RecordStructureValid { get; init; }
     public bool IntakeSafetyFieldsVerified { get; init; }
+    public bool TrustRecordApprovalRequestIdMatched { get; init; }
+    public bool TrustRecordBoundGateIdMatched { get; init; }
 
     public bool P15GatePassed { get; init; }
     public bool RuntimeChangeGatePassed { get; init; }

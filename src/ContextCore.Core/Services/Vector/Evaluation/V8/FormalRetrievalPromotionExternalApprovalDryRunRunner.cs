@@ -85,6 +85,8 @@ public sealed class FormalRetrievalPromotionExternalApprovalDryRunRunner
         var sourceKindTrusted = false;
         var providedByVerified = false;
         var trustRecordNotExpired = false;
+        var trustRecReqIdMatched = false;
+        var trustRecBoundGateMatched = false;
 
         var sourceGateIdsMatch = false;
         var approvalRequestBinding = false;
@@ -140,6 +142,8 @@ public sealed class FormalRetrievalPromotionExternalApprovalDryRunRunner
                 sourceKindTrusted = fixtureRegistry.AllowedSourceKinds.Any(k => string.Equals(k, fixtureEvidence.ApprovalEvidenceSourceKind, StringComparison.OrdinalIgnoreCase));
                 providedByVerified = string.Equals(fixtureEvidence.ApprovalEvidenceProvidedBy, record.ApprovalEvidenceProvidedBy, StringComparison.OrdinalIgnoreCase);
                 trustRecordNotExpired = record.ValidUntil == default || now <= record.ValidUntil;
+                trustRecReqIdMatched = string.Equals(fixtureEvidence.SourceApprovalRequestId, record.SourceApprovalRequestId, StringComparison.OrdinalIgnoreCase);
+                trustRecBoundGateMatched = string.Equals(fixtureEvidence.BoundPendingApprovalGateOperationId, record.BoundPendingApprovalGateOperationId, StringComparison.OrdinalIgnoreCase);
 
                 checksumMatch = string.Equals(fixtureEvidence.ApprovalEvidenceChecksum, record.ApprovalEvidenceChecksum, StringComparison.OrdinalIgnoreCase);
                 scopeTrusted = fixtureEvidence.ApprovalScopes.Count > 0 && record.AllowedScopes.Count > 0
@@ -148,6 +152,8 @@ public sealed class FormalRetrievalPromotionExternalApprovalDryRunRunner
                 if (!sourceKindTrusted) blocked.Add("FixtureSourceKindMismatch");
                 if (!providedByVerified) blocked.Add("FixtureProvidedByMismatch");
                 if (!trustRecordNotExpired) blocked.Add("FixtureTrustRecordExpired");
+                if (!trustRecReqIdMatched) blocked.Add("FixtureTrustRecordApprovalRequestMismatch");
+                if (!trustRecBoundGateMatched) blocked.Add("FixtureTrustRecordBoundGateMismatch");
             }
 
             if (!provenanceFound) blocked.Add("FixtureProvenanceRecordNotFound");
@@ -202,6 +208,8 @@ public sealed class FormalRetrievalPromotionExternalApprovalDryRunRunner
             TrustRecordNotExpired = trustRecordNotExpired,
             RecordStructureValid = recordStructureValid,
             IntakeSafetyFieldsVerified = intakeHasRequiredReasons,
+            TrustRecordApprovalRequestIdMatched = trustRecReqIdMatched,
+            TrustRecordBoundGateIdMatched = trustRecBoundGateMatched,
             P15GatePassed = p15Passed,
             RuntimeChangeGatePassed = rtPassed,
             FormalRetrievalAllowed = false, RuntimeSwitchAllowed = false, FormalPackageWritten = false,

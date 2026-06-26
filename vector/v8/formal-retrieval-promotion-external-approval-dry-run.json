@@ -1,6 +1,6 @@
 ﻿{
-  "OperationId": "frp-dryrun-dryrun-b5889442765b4da8a3be6e290cb7c8b5",
-  "CreatedAt": "2026-06-26T11:29:14.4058128+00:00",
+  "OperationId": "frp-dryrun-dryrun-ba183085c60f487f936cd143df5552f7",
+  "CreatedAt": "2026-06-26T12:26:07.9964563+00:00",
   "DryRunPassed": true,
   "GatePassed": false,
   "Recommendation": "FixtureDryRunValidationPassed",
@@ -26,6 +26,8 @@
   "TrustRecordNotExpired": true,
   "RecordStructureValid": true,
   "IntakeSafetyFieldsVerified": true,
+  "TrustRecordApprovalRequestIdMatched": true,
+  "TrustRecordBoundGateIdMatched": true,
   "P15GatePassed": true,
   "RuntimeChangeGatePassed": true,
   "FormalRetrievalAllowed": false,
