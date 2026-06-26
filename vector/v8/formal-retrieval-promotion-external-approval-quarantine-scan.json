@@ -1,12 +1,12 @@
 ﻿{
-  "OperationId": "frp-quarantine-scan-f66a3a1f94074eb3bf2e1b539ed9677b",
-  "CreatedAt": "2026-06-26T14:15:37.3759516+00:00",
+  "OperationId": "frp-quarantine-scan-80a97b8619124547b60b5194e3dcba37",
+  "CreatedAt": "2026-06-26T14:28:19.4991999+00:00",
   "ScanPassed": true,
   "GatePassed": false,
   "Recommendation": "QuarantineScanComplete",
-  "EvidenceCandidatePresent": false,
+  "EvidenceCandidatePresent": true,
   "TrustRegistryCandidatePresent": false,
-  "EvidenceStatus": "Missing",
+  "EvidenceStatus": "Invalid",
   "TrustRegistryStatus": "Missing",
   "PromotionToMainlinePerformed": false,
   "MainlineEvidencePresent": false,
@@ -14,17 +14,22 @@
   "FormalRetrievalAllowed": false,
   "RuntimeSwitchAllowed": false,
   "FormalPackageWritten": false,
+  "PackageOutputChanged": false,
+  "PackingPolicyChanged": false,
+  "VectorStoreBindingChanged": false,
   "GlobalDefaultOn": false,
+  "ConfigPatchWritten": false,
+  "RuntimeActivation": false,
   "NoRuntimeMutationInvariant": true,
-  "CandidateFiles": [],
+  "CandidateFiles": [
+    "vector\\v8\\quarantine\\formal-retrieval-promotion-approval-evidence.candidate.json"
+  ],
   "BlockedReasons": [],
   "Diagnostics": [
     "stage=scan",
-    "evidenceCandidate=False",
-    "registryCandidate=False",
-    "evidenceStatus=Missing",
-    "registryStatus=Missing",
-    "mainlineEvidence=False",
-    "mainlineRegistry=False"
+    "evCandidate=True status=Invalid valid=False",
+    "regCandidate=False status=Missing valid=False",
+    "mainlineEv=False mainlineReg=False",
+    "scanPassed=True gatePassed=False"
   ]
 }

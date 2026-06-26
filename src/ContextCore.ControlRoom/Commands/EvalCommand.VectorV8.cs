@@ -524,8 +524,34 @@ public static partial class EvalCommand
         if (evExists) candidateFiles.Add(qEvidencePath);
         if (regExists) candidateFiles.Add(qRegistryPath);
 
-        var evidenceStatus = evExists ? QuarantineScanStatuses.CandidateFound : QuarantineScanStatuses.Missing;
-        var registryStatus = regExists ? QuarantineScanStatuses.CandidateFound : QuarantineScanStatuses.Missing;
+        var evidenceStatus = QuarantineScanStatuses.Missing;
+        var registryStatus = QuarantineScanStatuses.Missing;
+        var evValid = false;
+        var regValid = false;
+
+        if (evExists)
+        {
+            evidenceStatus = QuarantineScanStatuses.CandidateFound;
+            try
+            {
+                var ev = await ReadJsonFileAsync<FormalRetrievalPromotionApprovalEvidence>(qEvidencePath, ct).ConfigureAwait(false);
+                evValid = ev is not null && !string.IsNullOrWhiteSpace(ev.ApprovalEvidenceId) && !string.IsNullOrWhiteSpace(ev.ApprovedBy);
+                evidenceStatus = evValid ? QuarantineScanStatuses.ReadyForManualReview : QuarantineScanStatuses.Invalid;
+            }
+            catch { evidenceStatus = QuarantineScanStatuses.Invalid; }
+        }
+
+        if (regExists)
+        {
+            registryStatus = QuarantineScanStatuses.CandidateFound;
+            try
+            {
+                var reg = await ReadJsonFileAsync<FormalRetrievalPromotionApprovalTrustRegistry>(qRegistryPath, ct).ConfigureAwait(false);
+                regValid = reg is not null && !string.IsNullOrWhiteSpace(reg.RegistryId) && reg.TrustedProvenanceRecords.Count > 0;
+                registryStatus = regValid ? QuarantineScanStatuses.ReadyForManualReview : QuarantineScanStatuses.Invalid;
+            }
+            catch { registryStatus = QuarantineScanStatuses.Invalid; }
+        }
 
         var mainlineEv = File.Exists(Path.Combine("vector", "v8", "formal-retrieval-promotion-approval-evidence.json"));
         var mainlineReg = File.Exists(Path.Combine("vector", "v8", "formal-retrieval-promotion-approval-trust-registry.json"));
@@ -543,8 +569,8 @@ public static partial class EvalCommand
         var runner = new FormalRetrievalPromotionExternalApprovalQuarantineScanRunner();
         var isGate = string.Equals(subcommand, "formal-retrieval-promotion-external-approval-quarantine-scan-gate", StringComparison.OrdinalIgnoreCase);
         var report = isGate
-            ? runner.RunGate(evExists, regExists, evidenceStatus, registryStatus, mainlineEv, mainlineReg, candidateFiles, rtPassed, p15Passed, opt)
-            : runner.RunScan(evExists, regExists, evidenceStatus, registryStatus, mainlineEv, mainlineReg, candidateFiles, rtPassed, p15Passed, opt);
+            ? runner.RunGate(evExists, regExists, evidenceStatus, registryStatus, evValid, regValid, mainlineEv, mainlineReg, candidateFiles, rtPassed, p15Passed, opt)
+            : runner.RunScan(evExists, regExists, evidenceStatus, registryStatus, evValid, regValid, mainlineEv, mainlineReg, candidateFiles, rtPassed, p15Passed, opt);
 
         var fn = isGate ? "formal-retrieval-promotion-external-approval-quarantine-scan-gate" : "formal-retrieval-promotion-external-approval-quarantine-scan";
         var jp = Path.Combine(output, $"{fn}.json");

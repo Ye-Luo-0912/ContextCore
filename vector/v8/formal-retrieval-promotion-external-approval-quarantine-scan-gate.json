@@ -1,6 +1,6 @@
 ﻿{
-  "OperationId": "frp-quarantine-gate-1181dab5ff5042e2ae16387a3e8940d9",
-  "CreatedAt": "2026-06-26T14:15:40.9382903+00:00",
+  "OperationId": "frp-quarantine-gate-cbd52459417542dcb4802ff0b569e583",
+  "CreatedAt": "2026-06-26T14:28:04.1476817+00:00",
   "ScanPassed": true,
   "GatePassed": true,
   "Recommendation": "QuarantineScanComplete",
@@ -14,17 +14,20 @@
   "FormalRetrievalAllowed": false,
   "RuntimeSwitchAllowed": false,
   "FormalPackageWritten": false,
+  "PackageOutputChanged": false,
+  "PackingPolicyChanged": false,
+  "VectorStoreBindingChanged": false,
   "GlobalDefaultOn": false,
+  "ConfigPatchWritten": false,
+  "RuntimeActivation": false,
   "NoRuntimeMutationInvariant": true,
   "CandidateFiles": [],
   "BlockedReasons": [],
   "Diagnostics": [
     "stage=gate",
-    "evidenceCandidate=False",
-    "registryCandidate=False",
-    "evidenceStatus=Missing",
-    "registryStatus=Missing",
-    "mainlineEvidence=False",
-    "mainlineRegistry=False"
+    "evCandidate=False status=Missing valid=False",
+    "regCandidate=False status=Missing valid=False",
+    "mainlineEv=False mainlineReg=False",
+    "scanPassed=True gatePassed=True"
   ]
 }

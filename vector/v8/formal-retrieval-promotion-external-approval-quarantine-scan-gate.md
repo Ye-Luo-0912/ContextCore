@@ -1,17 +1,15 @@
 ﻿# Quarantine Scan Gate
 
-生成: `2026-06-26T14:15:40.9382903+00:00` 操作: `frp-quarantine-gate-1181dab5ff5042e2ae16387a3e8940d9`
+生成: `2026-06-26T14:28:04.1476817+00:00`
 
 ## Decision
 - ScanPassed: `True` GatePassed: `True`
-
-## Quarantine Status
-- EvidenceCandidate: `False` status=`Missing`
-- TrustRegistryCandidate: `False` status=`Missing`
+- Evidence: present=`False` status=`Missing`
+- Registry: present=`False` status=`Missing`
 - PromotionToMainline: `False`
-- MainlineEvidence: `False` MainlineRegistry: `False`
 
 ## Safety
 - FormalRetrievalAllowed: `False`
+- ConfigPatchWritten: `False`
 
-V8.8 quarantine scan。不提升到主线，不启用 formal retrieval。
+V8.8R quarantine scan。Candidate validation + mainline blocking。
