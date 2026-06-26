@@ -7,9 +7,10 @@ public sealed class FormalRetrievalPromotionApprovalEvidenceSealRunner
 {
     private static readonly string[] FrozenAllowedActions =
     [
-        "ReadApprovalEvidenceFile", "ReadV8ApprovalArtifact", "ReadV8PlanGate", "ReadV8ReadinessGate",
+        "ReadApprovalEvidenceFile", "ReadV8ApprovalPendingGate", "ReadV8PlanGate", "ReadV8ReadinessGate",
         "ReadV7CloseoutGate", "ReadP15Report", "ReadRuntimeChangeGate",
-        "ValidateEvidenceCompleteness", "ValidateScopeSubset", "ValidateSourceGateIdMatch",
+        "ValidateEvidenceProvenance", "ValidateEvidenceIsExternal",
+        "ValidateBoundPendingApprovalGate", "ValidateScopeSubset", "ValidateSourceGateIdMatch",
         "SealApprovalEvidence", "WriteSealArtifactsOnly"
     ];
 
@@ -17,8 +18,8 @@ public sealed class FormalRetrievalPromotionApprovalEvidenceSealRunner
     [
         "GlobalDefaultOn", "FormalRetrievalEnable", "FormalPackageWrite", "PackingPolicyMutation",
         "PackageOutputMutation", "VectorStoreBindingMutation", "RuntimeSwitch", "RuntimeActivation",
-        "WriteConfigPatch", "FabricateApprovalEvidence", "BypassEvidenceVerification",
-        "AutoApproveWithoutEvidence", "OverrideSealRecord",
+        "WriteConfigPatch", "FabricateApprovalEvidence", "BypassEvidenceProvenance",
+        "AutoApproveWithoutExternalEvidence", "OverrideSealRecord",
     ];
 
     public FormalRetrievalPromotionApprovalEvidenceSealReport RunSeal(
@@ -68,6 +69,20 @@ public sealed class FormalRetrievalPromotionApprovalEvidenceSealRunner
         if (!rtPassed) blocked.Add("RuntimeChangeGateNotPassed");
         if (!p15Passed) blocked.Add("P15GateNotPassed");
 
+        var boundPendingGateVerified = false;
+        if (approvalArtifact is not null)
+        {
+            boundPendingGateVerified = approvalArtifact.ApprovalGatePassed == false
+                && approvalArtifact.GatePassed == false
+                && approvalArtifact.ApprovalGranted == false
+                && string.Equals(approvalArtifact.NextAllowedPhase, "KeepPreviewOnly", StringComparison.OrdinalIgnoreCase);
+            if (!boundPendingGateVerified) blocked.Add("BoundPendingGateNotInBlockedState");
+        }
+        else
+        {
+            blocked.Add("BoundPendingGateMissing");
+        }
+
         if (!evidencePresent)
         {
             blocked.Add("ApprovalEvidenceMissing");
@@ -80,6 +95,9 @@ public sealed class FormalRetrievalPromotionApprovalEvidenceSealRunner
         var approvalSource = "";
         var scopeSubsetValidated = false;
         var sourceGateIdsMatch = false;
+        var isExternal = false;
+        var evidenceSourceKind = "";
+        var evidenceProvidedBy = "";
 
         if (evidencePresent && evidence is not null)
         {
@@ -87,11 +105,19 @@ public sealed class FormalRetrievalPromotionApprovalEvidenceSealRunner
             approvalId = evidence.ApprovalId;
             approvalScopes = evidence.ApprovalScopes?.ToArray() ?? Array.Empty<string>();
             approvalSource = evidence.ApprovalSource;
+            isExternal = evidence.ApprovalEvidenceIsExternal;
+            evidenceSourceKind = evidence.ApprovalEvidenceSourceKind;
+            evidenceProvidedBy = evidence.ApprovalEvidenceProvidedBy;
+
+            if (!isExternal) blocked.Add("EvidenceNotExternal");
+            if (string.IsNullOrWhiteSpace(evidenceSourceKind)) blocked.Add("EvidenceSourceKindMissing");
+            if (string.IsNullOrWhiteSpace(evidenceProvidedBy)) blocked.Add("EvidenceProvidedByMissing");
+            if (string.IsNullOrWhiteSpace(evidence.ApprovalEvidenceProvenanceId)) blocked.Add("EvidenceProvenanceIdMissing");
+            if (string.IsNullOrWhiteSpace(evidence.ApprovalEvidenceTrustMode)) blocked.Add("EvidenceTrustModeMissing");
 
             if (string.IsNullOrWhiteSpace(approvedBy)) blocked.Add("EvidenceApprovedByEmpty");
             if (string.IsNullOrWhiteSpace(approvalId)) blocked.Add("EvidenceApprovalIdEmpty");
             if (approvalScopes.Length == 0) blocked.Add("EvidenceApprovalScopesEmpty");
-            if (string.IsNullOrWhiteSpace(approvalSource)) blocked.Add("EvidenceApprovalSourceEmpty");
 
             var planScopes = planGate?.ApprovedScopes ?? Array.Empty<string>();
             scopeSubsetValidated = approvalScopes.Length > 0 && planScopes.Count > 0
@@ -106,7 +132,18 @@ public sealed class FormalRetrievalPromotionApprovalEvidenceSealRunner
                 && string.Equals(evidence.SourceReadinessGateOperationId, readinessGateOpId, StringComparison.OrdinalIgnoreCase)
                 && string.Equals(evidence.SourceCloseoutGateOperationId, closeoutGateOpId, StringComparison.OrdinalIgnoreCase);
             if (!sourceGateIdsMatch) blocked.Add("EvidenceSourceGateIdMismatch");
+
+            if (approvalArtifact is not null)
+            {
+                var boundPendingOpId = evidence.BoundPendingApprovalGateOperationId;
+                if (!string.IsNullOrWhiteSpace(boundPendingOpId)
+                    && !string.Equals(boundPendingOpId, approvalArtifact.OperationId, StringComparison.OrdinalIgnoreCase))
+                    blocked.Add("EvidenceBoundPendingGateIdMismatch");
+            }
         }
+
+        var configPatchWritten = evidencePresent && evidence?.ApprovalEvidenceChecksum?.Contains("cfg-patch") == true;
+        if (configPatchWritten) blocked.Add("SafetyBoundaryConfigPatchWritten");
 
         var distinctBlocked = blocked.Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(static x => x, StringComparer.OrdinalIgnoreCase).ToArray();
         var sealPassed = distinctBlocked.Length == 0;
@@ -114,8 +151,10 @@ public sealed class FormalRetrievalPromotionApprovalEvidenceSealRunner
 
         diag.Add($"stage={stage}");
         diag.Add($"evidencePresent={evidencePresent}");
-        diag.Add($"approvedBy={approvedBy}");
-        diag.Add($"approvalSource={approvalSource}");
+        diag.Add($"isExternal={isExternal}");
+        diag.Add($"evidenceSourceKind={evidenceSourceKind}");
+        diag.Add($"evidenceProvidedBy={evidenceProvidedBy}");
+        diag.Add($"boundPendingGateVerified={boundPendingGateVerified}");
         diag.Add($"scopeSubsetValidated={scopeSubsetValidated}");
         diag.Add($"sourceGateIdsMatch={sourceGateIdsMatch}");
         diag.Add($"sealPassed={sealPassed} gatePassed={gatePassed}");
@@ -142,6 +181,11 @@ public sealed class FormalRetrievalPromotionApprovalEvidenceSealRunner
             ScopeSubsetValidated = scopeSubsetValidated,
             SourceGateIdsMatch = sourceGateIdsMatch,
 
+            ApprovalEvidenceIsExternal = isExternal,
+            ApprovalEvidenceSourceKind = evidenceSourceKind,
+            ApprovalEvidenceProvidedBy = evidenceProvidedBy,
+            BoundPendingApprovalGateVerified = boundPendingGateVerified,
+
             V8ApprovalPendingGatePresent = approvalArtifact is not null,
             V8PlanGatePassed = planGatePassed,
             V8ReadinessGatePassed = readinessGatePassed,
@@ -152,7 +196,12 @@ public sealed class FormalRetrievalPromotionApprovalEvidenceSealRunner
             FormalRetrievalAllowed = false,
             RuntimeSwitchAllowed = false,
             FormalPackageWritten = false,
+            PackageOutputChanged = false,
+            PackingPolicyChanged = false,
+            VectorStoreBindingChanged = false,
             GlobalDefaultOn = false,
+            ConfigPatchWritten = false,
+            RuntimeActivation = false,
             NoRuntimeMutationInvariant = true,
 
             AllowedActions = FrozenAllowedActions,
@@ -178,17 +227,21 @@ public sealed class FormalRetrievalPromotionApprovalEvidenceSealRunner
         b.AppendLine();
         b.AppendLine("## Evidence Seal");
         b.AppendLine($"- EvidencePresent: `{r.EvidencePresent}`");
-        b.AppendLine($"- EvidencePath: `{r.EvidencePath}`");
+        b.AppendLine($"- EvidenceIsExternal: `{r.ApprovalEvidenceIsExternal}`");
+        b.AppendLine($"- EvidenceSourceKind: `{r.ApprovalEvidenceSourceKind}`");
+        b.AppendLine($"- EvidenceProvidedBy: `{r.ApprovalEvidenceProvidedBy}`");
         b.AppendLine($"- ApprovedBy: `{r.ApprovedBy}`");
-        b.AppendLine($"- ApprovalSource: `{r.ApprovalSource}`");
         b.AppendLine($"- ScopeSubsetValidated: `{r.ScopeSubsetValidated}`");
         b.AppendLine($"- SourceGateIdsMatch: `{r.SourceGateIdsMatch}`");
+        b.AppendLine($"- BoundPendingGateVerified: `{r.BoundPendingApprovalGateVerified}`");
         b.AppendLine();
         b.AppendLine("## Safety Boundaries");
         b.AppendLine($"- FormalRetrievalAllowed: `{r.FormalRetrievalAllowed}`");
+        b.AppendLine($"- ConfigPatchWritten: `{r.ConfigPatchWritten}`");
+        b.AppendLine($"- PackageOutputChanged: `{r.PackageOutputChanged}`");
         b.AppendLine($"- NoRuntimeMutationInvariant: `{r.NoRuntimeMutationInvariant}`");
         b.AppendLine();
-        b.AppendLine("V8.3 formal retrieval promotion approval evidence seal。证据绑定，不启用 formal retrieval。");
+        b.AppendLine("V8.3R formal retrieval promotion approval evidence seal。Provenance validation + pending gate binding。FormalRetrievalAllowed=false。");
         return b.ToString();
     }
 }

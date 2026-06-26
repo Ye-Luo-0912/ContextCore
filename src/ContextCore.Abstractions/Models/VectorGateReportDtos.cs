@@ -3175,6 +3175,16 @@ public sealed class FormalRetrievalPromotionApprovalEvidence
     public string SourceCloseoutGateOperationId { get; init; } = "";
     public string OperatorStatement { get; init; } = "";
     public DateTimeOffset EvidenceCreatedAt { get; init; }
+
+    public string ApprovalEvidenceSourceKind { get; init; } = "";
+    public string ApprovalEvidenceProvenanceId { get; init; } = "";
+    public string ApprovalEvidenceProvidedBy { get; init; } = "";
+    public DateTimeOffset ApprovalEvidenceProvidedAt { get; init; }
+    public string ApprovalEvidenceTrustMode { get; init; } = "";
+    public bool ApprovalEvidenceIsExternal { get; init; }
+    public string ApprovalEvidenceChecksum { get; init; } = "";
+    public string SourceApprovalRequestId { get; init; } = "";
+    public string BoundPendingApprovalGateOperationId { get; init; } = "";
 }
 
 
@@ -3230,8 +3240,18 @@ public sealed class FormalRetrievalPromotionApprovalEvidenceSealReport
     public bool FormalRetrievalAllowed { get; init; }
     public bool RuntimeSwitchAllowed { get; init; }
     public bool FormalPackageWritten { get; init; }
+    public bool PackageOutputChanged { get; init; }
+    public bool PackingPolicyChanged { get; init; }
+    public bool VectorStoreBindingChanged { get; init; }
     public bool GlobalDefaultOn { get; init; }
+    public bool ConfigPatchWritten { get; init; }
+    public bool RuntimeActivation { get; init; }
     public bool NoRuntimeMutationInvariant { get; init; }
+
+    public bool ApprovalEvidenceIsExternal { get; init; }
+    public string ApprovalEvidenceSourceKind { get; init; } = "";
+    public string ApprovalEvidenceProvidedBy { get; init; } = "";
+    public bool BoundPendingApprovalGateVerified { get; init; }
 
     public IReadOnlyList<string> AllowedActions { get; init; } = Array.Empty<string>();
     public IReadOnlyList<string> ForbiddenActions { get; init; } = Array.Empty<string>();
