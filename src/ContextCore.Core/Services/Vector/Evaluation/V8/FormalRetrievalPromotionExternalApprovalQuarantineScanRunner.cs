@@ -9,22 +9,28 @@ public sealed class FormalRetrievalPromotionExternalApprovalQuarantineScanRunner
         bool evCandidateExists, bool regCandidateExists,
         string evStatus, string regStatus,
         bool evValid, bool regValid,
+        bool evSchemaValid, bool regSchemaValid,
+        IReadOnlyList<string> missingFields, IReadOnlyList<string> invalidFields,
         bool mainlineEvidencePresent, bool mainlineRegistryPresent,
         IReadOnlyList<string> candidateFiles,
         bool rtPassed, bool p15Passed,
         FormalRetrievalPromotionExternalApprovalQuarantineScanOptions? opt = null)
         => Build("scan", false, evCandidateExists, regCandidateExists, evStatus, regStatus, evValid, regValid,
+            evSchemaValid, regSchemaValid, missingFields, invalidFields,
             mainlineEvidencePresent, mainlineRegistryPresent, candidateFiles, rtPassed, p15Passed, opt);
 
     public FormalRetrievalPromotionExternalApprovalQuarantineScanReport RunGate(
         bool evCandidateExists, bool regCandidateExists,
         string evStatus, string regStatus,
         bool evValid, bool regValid,
+        bool evSchemaValid, bool regSchemaValid,
+        IReadOnlyList<string> missingFields, IReadOnlyList<string> invalidFields,
         bool mainlineEvidencePresent, bool mainlineRegistryPresent,
         IReadOnlyList<string> candidateFiles,
         bool rtPassed, bool p15Passed,
         FormalRetrievalPromotionExternalApprovalQuarantineScanOptions? opt = null)
         => Build("gate", true, evCandidateExists, regCandidateExists, evStatus, regStatus, evValid, regValid,
+            evSchemaValid, regSchemaValid, missingFields, invalidFields,
             mainlineEvidencePresent, mainlineRegistryPresent, candidateFiles, rtPassed, p15Passed, opt);
 
     private static FormalRetrievalPromotionExternalApprovalQuarantineScanReport Build(
@@ -32,6 +38,8 @@ public sealed class FormalRetrievalPromotionExternalApprovalQuarantineScanRunner
         bool evCandidateExists, bool regCandidateExists,
         string evStatus, string regStatus,
         bool evValid, bool regValid,
+        bool evSchemaValid, bool regSchemaValid,
+        IReadOnlyList<string> missingFields, IReadOnlyList<string> invalidFields,
         bool mainlineEvidencePresent, bool mainlineRegistryPresent,
         IReadOnlyList<string> candidateFiles,
         bool rtPassed, bool p15Passed,
@@ -47,6 +55,8 @@ public sealed class FormalRetrievalPromotionExternalApprovalQuarantineScanRunner
         if (mainlineRegistryPresent) blocked.Add("MainlineTrustRegistryPresent");
         if (evCandidateExists && !evValid) blocked.Add("EvidenceCandidateInvalid");
         if (regCandidateExists && !regValid) blocked.Add("TrustRegistryCandidateInvalid");
+        if (evCandidateExists && evValid && !evSchemaValid) blocked.Add("EvidenceCandidateSchemaInvalid");
+        if (regCandidateExists && regValid && !regSchemaValid) blocked.Add("TrustRegistryCandidateSchemaInvalid");
         if (!rtPassed) blocked.Add("RuntimeChangeGateNotPassed");
         if (!p15Passed) blocked.Add("P15GateNotPassed");
 
@@ -55,9 +65,8 @@ public sealed class FormalRetrievalPromotionExternalApprovalQuarantineScanRunner
         var gatePassed = isGate && scanPassed;
 
         diag.Add($"stage={stage}");
-        diag.Add($"evCandidate={evCandidateExists} status={evStatus} valid={evValid}");
-        diag.Add($"regCandidate={regCandidateExists} status={regStatus} valid={regValid}");
-        diag.Add($"mainlineEv={mainlineEvidencePresent} mainlineReg={mainlineRegistryPresent}");
+        diag.Add($"evCandidate={evCandidateExists} status={evStatus} valid={evValid} schemaValid={evSchemaValid}");
+        diag.Add($"regCandidate={regCandidateExists} status={regStatus} valid={regValid} schemaValid={regSchemaValid}");
         diag.Add($"scanPassed={scanPassed} gatePassed={gatePassed}");
 
         return new FormalRetrievalPromotionExternalApprovalQuarantineScanReport
@@ -69,6 +78,10 @@ public sealed class FormalRetrievalPromotionExternalApprovalQuarantineScanRunner
             EvidenceCandidatePresent = evCandidateExists,
             TrustRegistryCandidatePresent = regCandidateExists,
             EvidenceStatus = evStatus, TrustRegistryStatus = regStatus,
+            EvidenceCandidateSchemaValid = evSchemaValid,
+            TrustRegistryCandidateSchemaValid = regSchemaValid,
+            CandidateValidationMissingFields = missingFields,
+            CandidateValidationInvalidFields = invalidFields,
             PromotionToMainlinePerformed = false,
             MainlineEvidencePresent = mainlineEvidencePresent,
             MainlineTrustRegistryPresent = mainlineRegistryPresent,

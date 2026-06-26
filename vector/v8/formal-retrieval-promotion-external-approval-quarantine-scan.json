@@ -1,6 +1,6 @@
 ﻿{
-  "OperationId": "frp-quarantine-scan-f0c029da17a0430c9d0e807383cff230",
-  "CreatedAt": "2026-06-26T14:58:46.9412755+00:00",
+  "OperationId": "frp-quarantine-scan-e4e17fcaccc74e529408cda036a909f3",
+  "CreatedAt": "2026-06-26T15:18:02.2936854+00:00",
   "ScanPassed": true,
   "GatePassed": false,
   "Recommendation": "QuarantineScanComplete",
@@ -11,6 +11,10 @@
   "PromotionToMainlinePerformed": false,
   "MainlineEvidencePresent": false,
   "MainlineTrustRegistryPresent": false,
+  "EvidenceCandidateSchemaValid": false,
+  "TrustRegistryCandidateSchemaValid": false,
+  "CandidateValidationMissingFields": [],
+  "CandidateValidationInvalidFields": [],
   "FormalRetrievalAllowed": false,
   "RuntimeSwitchAllowed": false,
   "FormalPackageWritten": false,
@@ -25,9 +29,8 @@
   "BlockedReasons": [],
   "Diagnostics": [
     "stage=scan",
-    "evCandidate=False status=Missing valid=False",
-    "regCandidate=False status=Missing valid=False",
-    "mainlineEv=False mainlineReg=False",
+    "evCandidate=False status=Missing valid=False schemaValid=False",
+    "regCandidate=False status=Missing valid=False schemaValid=False",
     "scanPassed=True gatePassed=False"
   ]
 }

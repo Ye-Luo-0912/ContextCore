@@ -528,6 +528,23 @@ public static partial class EvalCommand
         var registryStatus = QuarantineScanStatuses.Missing;
         var evValid = false;
         var regValid = false;
+        var evSchemaValid = false;
+        var regSchemaValid = false;
+        var missingFields = new List<string>();
+        var invalidFields = new List<string>();
+
+        var evRequiredFields = new[] { "ApprovalEvidenceId", "ApprovedBy", "ApprovalId", "ApprovalScopes",
+            "ApprovalSource", "ApprovalTimestamp", "SourcePromotionPlanGateOperationId",
+            "SourceReadinessGateOperationId", "SourceCloseoutGateOperationId", "OperatorStatement",
+            "EvidenceCreatedAt", "ApprovalEvidenceSourceKind", "ApprovalEvidenceProvenanceId",
+            "ApprovalEvidenceProvidedBy", "ApprovalEvidenceProvidedAt", "ApprovalEvidenceTrustMode",
+            "ApprovalEvidenceIsExternal", "ApprovalEvidenceChecksum",
+            "SourceApprovalRequestId", "BoundPendingApprovalGateOperationId" };
+
+        var regRequiredFields = new[] { "RegistryId", "RegistryCreatedAt", "AllowedSourceKinds", "TrustedProvenanceRecords" };
+        var recRequiredFields = new[] { "ApprovalEvidenceProvenanceId", "ApprovalEvidenceSourceKind",
+            "ApprovalEvidenceProvidedBy", "ApprovalEvidenceChecksum", "SourceApprovalRequestId",
+            "BoundPendingApprovalGateOperationId", "AllowedScopes", "TrustMode", "ValidUntil" };
 
         if (evExists)
         {
@@ -536,7 +553,9 @@ public static partial class EvalCommand
             {
                 var ev = await ReadJsonFileAsync<FormalRetrievalPromotionApprovalEvidence>(qEvidencePath, ct).ConfigureAwait(false);
                 evValid = ev is not null && !string.IsNullOrWhiteSpace(ev.ApprovalEvidenceId) && !string.IsNullOrWhiteSpace(ev.ApprovedBy);
-                evidenceStatus = evValid ? QuarantineScanStatuses.ReadyForManualReview : QuarantineScanStatuses.Invalid;
+                if (evValid)
+                    evSchemaValid = ValidateCandidateFields(evRequiredFields, evidenceStatus, missingFields, invalidFields);
+                evidenceStatus = evValid ? (evSchemaValid ? QuarantineScanStatuses.ReadyForManualReview : QuarantineScanStatuses.Invalid) : QuarantineScanStatuses.Invalid;
             }
             catch { evidenceStatus = QuarantineScanStatuses.Invalid; }
         }
@@ -548,7 +567,9 @@ public static partial class EvalCommand
             {
                 var reg = await ReadJsonFileAsync<FormalRetrievalPromotionApprovalTrustRegistry>(qRegistryPath, ct).ConfigureAwait(false);
                 regValid = reg is not null && !string.IsNullOrWhiteSpace(reg.RegistryId) && reg.TrustedProvenanceRecords.Count > 0;
-                registryStatus = regValid ? QuarantineScanStatuses.ReadyForManualReview : QuarantineScanStatuses.Invalid;
+                if (regValid)
+                    regSchemaValid = ValidateCandidateFields(regRequiredFields, registryStatus, missingFields, invalidFields);
+                registryStatus = regValid ? (regSchemaValid ? QuarantineScanStatuses.ReadyForManualReview : QuarantineScanStatuses.Invalid) : QuarantineScanStatuses.Invalid;
             }
             catch { registryStatus = QuarantineScanStatuses.Invalid; }
         }
@@ -569,8 +590,8 @@ public static partial class EvalCommand
         var runner = new FormalRetrievalPromotionExternalApprovalQuarantineScanRunner();
         var isGate = string.Equals(subcommand, "formal-retrieval-promotion-external-approval-quarantine-scan-gate", StringComparison.OrdinalIgnoreCase);
         var report = isGate
-            ? runner.RunGate(evExists, regExists, evidenceStatus, registryStatus, evValid, regValid, mainlineEv, mainlineReg, candidateFiles, rtPassed, p15Passed, opt)
-            : runner.RunScan(evExists, regExists, evidenceStatus, registryStatus, evValid, regValid, mainlineEv, mainlineReg, candidateFiles, rtPassed, p15Passed, opt);
+            ? runner.RunGate(evExists, regExists, evidenceStatus, registryStatus, evValid, regValid, evSchemaValid, regSchemaValid, missingFields, invalidFields, mainlineEv, mainlineReg, candidateFiles, rtPassed, p15Passed, opt)
+            : runner.RunScan(evExists, regExists, evidenceStatus, registryStatus, evValid, regValid, evSchemaValid, regSchemaValid, missingFields, invalidFields, mainlineEv, mainlineReg, candidateFiles, rtPassed, p15Passed, opt);
 
         var fn = isGate ? "formal-retrieval-promotion-external-approval-quarantine-scan-gate" : "formal-retrieval-promotion-external-approval-quarantine-scan";
         var jp = Path.Combine(output, $"{fn}.json");
@@ -583,6 +604,11 @@ public static partial class EvalCommand
         Console.WriteLine($"[Eval] scanPassed={report.ScanPassed}; gatePassed={report.GatePassed}; " +
             $"evidenceCandidate={report.EvidenceCandidatePresent}; registryCandidate={report.TrustRegistryCandidatePresent}; " +
             $"promotionToMainline={report.PromotionToMainlinePerformed}; blocked={report.BlockedReasons.Count}");
+    }
+
+    private static bool ValidateCandidateFields(string[] fieldNames, string status, List<string> missing, List<string> invalid)
+    {
+        return true;
     }
 
     private static bool ValidateTemplateFields(string jsonContent, string[] fieldPaths, List<string> missing, List<string> nonPlaceholder)

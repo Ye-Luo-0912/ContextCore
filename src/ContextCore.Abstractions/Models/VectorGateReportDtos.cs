@@ -3552,6 +3552,10 @@ public sealed class FormalRetrievalPromotionExternalApprovalQuarantineScanReport
     public bool PromotionToMainlinePerformed { get; init; }
     public bool MainlineEvidencePresent { get; init; }
     public bool MainlineTrustRegistryPresent { get; init; }
+    public bool EvidenceCandidateSchemaValid { get; init; }
+    public bool TrustRegistryCandidateSchemaValid { get; init; }
+    public IReadOnlyList<string> CandidateValidationMissingFields { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> CandidateValidationInvalidFields { get; init; } = Array.Empty<string>();
 
     public bool FormalRetrievalAllowed { get; init; }
     public bool RuntimeSwitchAllowed { get; init; }
