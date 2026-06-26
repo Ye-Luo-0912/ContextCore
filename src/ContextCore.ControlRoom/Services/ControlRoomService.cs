@@ -2902,6 +2902,7 @@ public sealed class ControlRoomService
             ScopedRuntimePreviewLiveActivationSummaryFreezeReport = TryLoadScopedRuntimePreviewLiveActivationSummaryFreezeSummary()?.Report,
             ScopedRuntimePreviewLiveActivationCloseoutReport = TryLoadScopedRuntimePreviewLiveActivationCloseoutSummary()?.Report,
             FormalRetrievalPromotionReadinessAuditReport = TryLoadFormalRetrievalPromotionReadinessAuditSummary()?.Report,
+            FormalRetrievalPromotionPlanReport = TryLoadFormalRetrievalPromotionPlanSummary()?.Report,
             Limit = limit,
             Offset = offset
         };
@@ -7533,6 +7534,9 @@ public sealed class ControlRoomService
     private static (FormalRetrievalPromotionReadinessAuditReport Report, string SourcePath)? TryLoadFormalRetrievalPromotionReadinessAuditSummary()
         => TryLoadFromDescriptor<FormalRetrievalPromotionReadinessAuditReport>(ReportSummaryRegistry.V8FormalRetrievalPromotionReadinessAudit);
 
+    private static (FormalRetrievalPromotionPlanReport Report, string SourcePath)? TryLoadFormalRetrievalPromotionPlanSummary()
+        => TryLoadFromDescriptor<FormalRetrievalPromotionPlanReport>(ReportSummaryRegistry.V8FormalRetrievalPromotionPlan);
+
     private static string VectorReportPath(string phase, string fileName)
     {
         return Path.Combine("vector", phase, fileName);
@@ -10486,6 +10490,8 @@ public sealed class ServiceLearningFeaturesSnapshot
     public ScopedRuntimePreviewLiveActivationCloseoutReport? ScopedRuntimePreviewLiveActivationCloseoutReport { get; init; }
 
     public FormalRetrievalPromotionReadinessAuditReport? FormalRetrievalPromotionReadinessAuditReport { get; init; }
+
+    public FormalRetrievalPromotionPlanReport? FormalRetrievalPromotionPlanReport { get; init; }
 
     public FoundationServiceStatusResponse? FoundationServiceStatus { get; init; }
 

@@ -3006,6 +3006,72 @@ public sealed class FormalRetrievalPromotionReadinessAuditReport
 }
 
 
+/// <summary>V8.1 formal retrieval promotion plan 推荐。</summary>
+public static class FormalRetrievalPromotionPlanRecommendations
+{
+    public const string ReadyForFormalRetrievalPromotionApproval = nameof(ReadyForFormalRetrievalPromotionApproval);
+    public const string BlockedByMissingReadinessAudit = nameof(BlockedByMissingReadinessAudit);
+    public const string BlockedByMissingCloseout = nameof(BlockedByMissingCloseout);
+    public const string BlockedBySafetyPlanIncomplete = nameof(BlockedBySafetyPlanIncomplete);
+    public const string BlockedBySafetyBoundaryViolation = nameof(BlockedBySafetyBoundaryViolation);
+    public const string KeepPreviewOnly = nameof(KeepPreviewOnly);
+}
+
+
+/// <summary>V8.1 promotion plan 选项。</summary>
+public sealed class FormalRetrievalPromotionPlanOptions
+{
+    public bool Enabled { get; init; } = true;
+}
+
+
+/// <summary>V8.1 formal retrieval promotion plan 报告。
+/// 不启用 formal retrieval。FormalRetrievalAllowed=false。</summary>
+public sealed class FormalRetrievalPromotionPlanReport
+{
+    public string OperationId { get; init; } = "";
+    public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
+    public bool PlanPassed { get; init; }
+    public bool GatePassed { get; init; }
+    public string Recommendation { get; init; }
+        = FormalRetrievalPromotionPlanRecommendations.KeepPreviewOnly;
+    public string NextAllowedPhase { get; init; } = "KeepPreviewOnly";
+
+    public string PromotionPlanId { get; init; } = "";
+    public string SourceCloseoutId { get; init; } = "";
+    public IReadOnlyList<string> ApprovedScopes { get; init; } = Array.Empty<string>();
+    public string ObservationSource { get; init; } = "";
+    public bool FormalRetrievalStillBlocked { get; init; }
+    public bool RuntimeSwitchStillBlocked { get; init; }
+    public bool ConfigPatchWritten { get; init; }
+    public bool RequiredManualApproval { get; init; }
+    public string RollbackPlan { get; init; } = "";
+    public string KillSwitchPlan { get; init; } = "";
+    public string ShadowValidationPlan { get; init; } = "";
+    public string FormalPackageSafetyPlan { get; init; } = "";
+    public IReadOnlyList<string> AbortConditions { get; init; } = Array.Empty<string>();
+
+    public bool V8AuditPassed { get; init; }
+    public bool V7CloseoutPassed { get; init; }
+    public bool P15GatePassed { get; init; }
+    public bool RuntimeChangeGatePassed { get; init; }
+
+    public bool FormalRetrievalAllowed { get; init; }
+    public bool RuntimeSwitchAllowed { get; init; }
+    public bool FormalPackageWritten { get; init; }
+    public bool PackageOutputChanged { get; init; }
+    public bool PackingPolicyChanged { get; init; }
+    public bool VectorStoreBindingChanged { get; init; }
+    public bool GlobalDefaultOn { get; init; }
+    public bool NoRuntimeMutationInvariant { get; init; }
+
+    public IReadOnlyList<string> AllowedActions { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> ForbiddenActions { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> BlockedReasons { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> Diagnostics { get; init; } = Array.Empty<string>();
+}
+
+
 /// <summary>架构清理计划报告。</summary>
 public sealed class ArchitectureCleanupPlanReport
 {
