@@ -276,8 +276,20 @@ public static partial class EvalCommand
 
         var evidenceSchemaExists = File.Exists(Path.Combine("vector", "v8", "schemas", "formal-retrieval-promotion-approval-evidence.schema.json"));
         var trustSchemaExists = File.Exists(Path.Combine("vector", "v8", "schemas", "formal-retrieval-promotion-approval-trust-registry.schema.json"));
-        var evidenceTemplateExists = File.Exists(Path.Combine("vector", "v8", "templates", "formal-retrieval-promotion-approval-evidence.template.json"));
-        var trustTemplateExists = File.Exists(Path.Combine("vector", "v8", "templates", "formal-retrieval-promotion-approval-trust-registry.template.json"));
+        var evidenceTemplatePath = Path.Combine("vector", "v8", "templates", "formal-retrieval-promotion-approval-evidence.template.json");
+        var trustTemplatePath = Path.Combine("vector", "v8", "templates", "formal-retrieval-promotion-approval-trust-registry.template.json");
+        var evidenceTemplateExists = File.Exists(evidenceTemplatePath);
+        var trustTemplateExists = File.Exists(trustTemplatePath);
+
+        var templatesContainPlaceholders = false;
+        if (evidenceTemplateExists && trustTemplateExists)
+        {
+            var evidenceContent = await File.ReadAllTextAsync(evidenceTemplatePath, ct).ConfigureAwait(false);
+            var trustContent = await File.ReadAllTextAsync(trustTemplatePath, ct).ConfigureAwait(false);
+            templatesContainPlaceholders = evidenceContent.Contains("{{PLACEHOLDER:", StringComparison.OrdinalIgnoreCase)
+                && trustContent.Contains("{{PLACEHOLDER:", StringComparison.OrdinalIgnoreCase);
+        }
+
         var noRealEvidence = !File.Exists(Path.Combine("vector", "v8", "formal-retrieval-promotion-approval-evidence.json"));
         var noRealRegistry = !File.Exists(Path.Combine("vector", "v8", "formal-retrieval-promotion-approval-trust-registry.json"));
 
@@ -298,8 +310,8 @@ public static partial class EvalCommand
         var runner = new FormalRetrievalPromotionExternalApprovalSubmissionPackRunner();
         var isGate = string.Equals(subcommand, "formal-retrieval-promotion-external-approval-submission-pack-gate", StringComparison.OrdinalIgnoreCase);
         var report = isGate
-            ? runner.RunGate(evidenceSchemaExists, trustSchemaExists, evidenceTemplateExists, trustTemplateExists, mainlineIntakeBlocked, noRealEvidence, noRealRegistry, rtPassed, p15Passed, opt)
-            : runner.RunPack(evidenceSchemaExists, trustSchemaExists, evidenceTemplateExists, trustTemplateExists, mainlineIntakeBlocked, noRealEvidence, noRealRegistry, rtPassed, p15Passed, opt);
+            ? runner.RunGate(evidenceSchemaExists, trustSchemaExists, evidenceTemplateExists, trustTemplateExists, mainlineIntakeBlocked, noRealEvidence, noRealRegistry, templatesContainPlaceholders, rtPassed, p15Passed, opt)
+            : runner.RunPack(evidenceSchemaExists, trustSchemaExists, evidenceTemplateExists, trustTemplateExists, mainlineIntakeBlocked, noRealEvidence, noRealRegistry, templatesContainPlaceholders, rtPassed, p15Passed, opt);
 
         var fn = isGate ? "formal-retrieval-promotion-external-approval-submission-pack-gate" : "formal-retrieval-promotion-external-approval-submission-pack";
         var jp = Path.Combine(output, $"{fn}.json");

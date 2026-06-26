@@ -9,25 +9,28 @@ public sealed class FormalRetrievalPromotionExternalApprovalSubmissionPackRunner
         bool evidenceSchemaExists, bool trustSchemaExists,
         bool evidenceTemplateExists, bool trustTemplateExists,
         bool mainlineIntakeBlocked, bool noRealEvidence, bool noRealRegistry,
+        bool templatesContainPlaceholders,
         bool rtPassed, bool p15Passed,
         FormalRetrievalPromotionExternalApprovalSubmissionPackOptions? opt = null)
         => Build("pack", false, evidenceSchemaExists, trustSchemaExists, evidenceTemplateExists, trustTemplateExists,
-            mainlineIntakeBlocked, noRealEvidence, noRealRegistry, rtPassed, p15Passed, opt);
+            mainlineIntakeBlocked, noRealEvidence, noRealRegistry, templatesContainPlaceholders, rtPassed, p15Passed, opt);
 
     public FormalRetrievalPromotionExternalApprovalSubmissionPackReport RunGate(
         bool evidenceSchemaExists, bool trustSchemaExists,
         bool evidenceTemplateExists, bool trustTemplateExists,
         bool mainlineIntakeBlocked, bool noRealEvidence, bool noRealRegistry,
+        bool templatesContainPlaceholders,
         bool rtPassed, bool p15Passed,
         FormalRetrievalPromotionExternalApprovalSubmissionPackOptions? opt = null)
         => Build("gate", true, evidenceSchemaExists, trustSchemaExists, evidenceTemplateExists, trustTemplateExists,
-            mainlineIntakeBlocked, noRealEvidence, noRealRegistry, rtPassed, p15Passed, opt);
+            mainlineIntakeBlocked, noRealEvidence, noRealRegistry, templatesContainPlaceholders, rtPassed, p15Passed, opt);
 
     private static FormalRetrievalPromotionExternalApprovalSubmissionPackReport Build(
         string stage, bool isGate,
         bool evidenceSchemaExists, bool trustSchemaExists,
         bool evidenceTemplateExists, bool trustTemplateExists,
         bool mainlineIntakeBlocked, bool noRealEvidence, bool noRealRegistry,
+        bool templatesContainPlaceholders,
         bool rtPassed, bool p15Passed,
         FormalRetrievalPromotionExternalApprovalSubmissionPackOptions? opt)
     {
@@ -40,6 +43,9 @@ public sealed class FormalRetrievalPromotionExternalApprovalSubmissionPackRunner
         if (!evidenceSchemaExists || !trustSchemaExists) blocked.Add("SchemasMissing");
         if (!evidenceTemplateExists || !trustTemplateExists) blocked.Add("TemplatesMissing");
         if (!mainlineIntakeBlocked) blocked.Add("MainlineIntakeNotBlocked");
+        if (!noRealEvidence) blocked.Add("RealApprovalEvidencePresent");
+        if (!noRealRegistry) blocked.Add("RealTrustRegistryPresent");
+        if (!templatesContainPlaceholders) blocked.Add("TemplatesMissingPlaceholders");
         if (!rtPassed) blocked.Add("RuntimeChangeGateNotPassed");
         if (!p15Passed) blocked.Add("P15GateNotPassed");
 
@@ -50,6 +56,7 @@ public sealed class FormalRetrievalPromotionExternalApprovalSubmissionPackRunner
         diag.Add($"stage={stage}");
         diag.Add($"schemasComplete={evidenceSchemaExists && trustSchemaExists}");
         diag.Add($"templatesComplete={evidenceTemplateExists && trustTemplateExists}");
+        diag.Add($"templatesContainPlaceholders={templatesContainPlaceholders}");
         diag.Add($"mainlineIntakeBlocked={mainlineIntakeBlocked}");
         diag.Add($"noRealEvidence={noRealEvidence}");
         diag.Add($"noRealRegistry={noRealRegistry}");
@@ -70,7 +77,7 @@ public sealed class FormalRetrievalPromotionExternalApprovalSubmissionPackRunner
             TrustRegistrySchemaPresent = trustSchemaExists,
             EvidenceTemplatePresent = evidenceTemplateExists,
             TrustRegistryTemplatePresent = trustTemplateExists,
-            TemplatesContainPlaceholders = true,
+            TemplatesContainPlaceholders = templatesContainPlaceholders,
             MainlineIntakeStillBlocked = mainlineIntakeBlocked,
             NoRealEvidencePresent = noRealEvidence,
             NoRealTrustRegistryPresent = noRealRegistry,
@@ -79,7 +86,12 @@ public sealed class FormalRetrievalPromotionExternalApprovalSubmissionPackRunner
             FormalRetrievalAllowed = false,
             RuntimeSwitchAllowed = false,
             FormalPackageWritten = false,
+            PackageOutputChanged = false,
+            PackingPolicyChanged = false,
+            VectorStoreBindingChanged = false,
             GlobalDefaultOn = false,
+            ConfigPatchWritten = false,
+            RuntimeActivation = false,
             NoRuntimeMutationInvariant = true,
             BlockedReasons = distinctBlocked,
             Diagnostics = diag,
@@ -101,19 +113,17 @@ public sealed class FormalRetrievalPromotionExternalApprovalSubmissionPackRunner
         b.AppendLine($"- NextAllowedPhase: `{r.NextAllowedPhase}`");
         b.AppendLine();
         b.AppendLine("## Submission Pack");
-        b.AppendLine($"- EvidenceSchema: `{r.EvidenceSchemaPresent}`");
-        b.AppendLine($"- TrustRegistrySchema: `{r.TrustRegistrySchemaPresent}`");
-        b.AppendLine($"- EvidenceTemplate: `{r.EvidenceTemplatePresent}`");
-        b.AppendLine($"- TrustRegistryTemplate: `{r.TrustRegistryTemplatePresent}`");
-        b.AppendLine($"- TemplatesPlaceholders: `{r.TemplatesContainPlaceholders}`");
-        b.AppendLine($"- MainlineIntakeBlocked: `{r.MainlineIntakeStillBlocked}`");
+        b.AppendLine($"- Schemas present: `{r.EvidenceSchemaPresent && r.TrustRegistrySchemaPresent}`");
+        b.AppendLine($"- Templates present: `{r.EvidenceTemplatePresent && r.TrustRegistryTemplatePresent}`");
+        b.AppendLine($"- TemplatesContainPlaceholders: `{r.TemplatesContainPlaceholders}`");
+        b.AppendLine($"- Mainline blocked: `{r.MainlineIntakeStillBlocked}`");
         b.AppendLine($"- NoRealEvidence: `{r.NoRealEvidencePresent}`");
         b.AppendLine($"- NoRealRegistry: `{r.NoRealTrustRegistryPresent}`");
         b.AppendLine();
         b.AppendLine("## Safety");
         b.AppendLine($"- FormalRetrievalAllowed: `{r.FormalRetrievalAllowed}`");
         b.AppendLine();
-        b.AppendLine("V8.5 external approval submission pack。Schema/template/example contract，不生成正式 evidence/trust registry。");
+        b.AppendLine("V8.5R external approval submission pack。Real placeholder validation + no-real-input guard。");
         return b.ToString();
     }
 }

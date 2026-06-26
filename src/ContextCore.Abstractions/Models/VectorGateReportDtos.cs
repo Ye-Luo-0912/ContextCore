@@ -3396,13 +3396,17 @@ public sealed class FormalRetrievalPromotionExternalApprovalSubmissionPackReport
     public bool FormalRetrievalAllowed { get; init; }
     public bool RuntimeSwitchAllowed { get; init; }
     public bool FormalPackageWritten { get; init; }
+    public bool PackageOutputChanged { get; init; }
+    public bool PackingPolicyChanged { get; init; }
+    public bool VectorStoreBindingChanged { get; init; }
     public bool GlobalDefaultOn { get; init; }
+    public bool ConfigPatchWritten { get; init; }
+    public bool RuntimeActivation { get; init; }
     public bool NoRuntimeMutationInvariant { get; init; }
 
     public IReadOnlyList<string> BlockedReasons { get; init; } = Array.Empty<string>();
     public IReadOnlyList<string> Diagnostics { get; init; } = Array.Empty<string>();
 }
-
 
 /// <summary>架构清理计划报告。</summary>
 public sealed class ArchitectureCleanupPlanReport
