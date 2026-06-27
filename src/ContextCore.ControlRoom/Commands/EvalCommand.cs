@@ -350,6 +350,8 @@ public static partial class EvalCommand
             !string.Equals(subcommand, "formal-retrieval-promotion-approval-guarded-runtime-activation-gate-dry-run-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "formal-retrieval-promotion-approval-guarded-runtime-activation-artifact-write-out", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "formal-retrieval-promotion-approval-guarded-runtime-activation-artifact-write-out-gate", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "formal-retrieval-promotion-approval-runtime-activation-artifact-integrity", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "formal-retrieval-promotion-approval-runtime-activation-artifact-integrity-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "dto-split-plan", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "dto-split-readiness-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "vector-retrieval-eval-protocol-audit", StringComparison.OrdinalIgnoreCase) &&
@@ -634,6 +636,8 @@ public static partial class EvalCommand
             Console.WriteLine("  eval formal-retrieval-promotion-approval-guarded-runtime-activation-gate-dry-run-gate");
             Console.WriteLine("  eval formal-retrieval-promotion-approval-guarded-runtime-activation-artifact-write-out");
             Console.WriteLine("  eval formal-retrieval-promotion-approval-guarded-runtime-activation-artifact-write-out-gate");
+            Console.WriteLine("  eval formal-retrieval-promotion-approval-runtime-activation-artifact-integrity");
+            Console.WriteLine("  eval formal-retrieval-promotion-approval-runtime-activation-artifact-integrity-gate");
             Console.WriteLine("  eval dto-split-plan");
             Console.WriteLine("  eval dto-split-readiness-gate");
             Console.WriteLine("  eval vector-retrieval-eval-protocol-audit");
@@ -2075,6 +2079,12 @@ public static partial class EvalCommand
         }
 
 
+        if (string.Equals(subcommand, "formal-retrieval-promotion-approval-runtime-activation-artifact-integrity", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(subcommand, "formal-retrieval-promotion-approval-runtime-activation-artifact-integrity-gate", StringComparison.OrdinalIgnoreCase))
+        {
+            await ExecuteFormalRetrievalPromotionApprovalRuntimeActivationArtifactIntegrityAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
+            return;
+        }
         if (string.Equals(subcommand, "dto-split-plan", StringComparison.OrdinalIgnoreCase)
             || string.Equals(subcommand, "dto-split-readiness-gate", StringComparison.OrdinalIgnoreCase))
         {
@@ -16362,3 +16372,8 @@ public static partial class EvalCommand
         Console.WriteLine($"[Eval] Architecture cleanup freeze gate written: {jp}");
     }
 }
+
+
+
+
+
