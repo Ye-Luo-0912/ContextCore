@@ -1,0 +1,9 @@
+﻿{
+  "BoundGrantId": "frp-grant-9308474979b64f31b8fc7d260b19575f",
+  "Scope": "demo-workspace/demo-collection",
+  "KillSwitchRequired": true,
+  "ScopeGuardRequired": true,
+  "RollbackRequired": true,
+  "RuntimeActivationAllowed": false,
+  "CreatedAt": "2026-06-27T07:11:50.0866038\u002B00:00"
+}

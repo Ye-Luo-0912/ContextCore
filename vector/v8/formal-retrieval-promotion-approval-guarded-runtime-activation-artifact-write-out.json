@@ -1,0 +1,829 @@
+﻿{
+  "OperationId": "frp-guarded-runtime-activation-artifact-write-out-92abec4e03e14cf18bc926bf0129600c",
+  "CreatedAt": "2026-06-27T07:14:39.2381189+00:00",
+  "GuardedRuntimeActivationArtifactWriteOutPassed": true,
+  "GatePassed": false,
+  "TotalCases": 27,
+  "PassedCases": 27,
+  "FailedCases": 0,
+  "WrittenCases": 1,
+  "BlockedCases": 26,
+  "Cases": [
+    {
+      "CaseName": "AllUpstreamClean",
+      "ExpectedStatus": "GuardedRuntimeActivationArtifactsWritten",
+      "ActualStatus": "GuardedRuntimeActivationArtifactsWritten",
+      "ExpectedBlockedReason": "",
+      "ActualBlockedReasons": [],
+      "BoundGrantId": "frp-grant-fixture-001",
+      "BoundCapability": "FormalRetrievalActivation",
+      "BoundScope": "demo-workspace/demo-collection",
+      "PlannedArtifactPaths": [
+        "vector/v8/runtime-activation/runtime-switch-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/activation-audit-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl",
+        "vector/v8/runtime-activation/runtime-guard-manifest-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/scope-enforcement-manifest-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/activation-rollback-binding-FormalRetrievalActivation-demo-workspace-demo-collection.json"
+      ],
+      "RuntimeActivationArtifactsWritten": true,
+      "RuntimeActivation": false,
+      "FormalRetrievalAllowed": false,
+      "RuntimeSwitchAllowed": false,
+      "PackageOutputChanged": false,
+      "Reasoning": "all preconditions met; 5 runtime-activation artifacts can be written under vector/v8/runtime-activation/ while RuntimeActivation remains false.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "GuardedRuntimeActivationDryRunGateMissing",
+      "ExpectedStatus": "GuardedRuntimeActivationArtifactWriteOutBlocked",
+      "ActualStatus": "GuardedRuntimeActivationArtifactWriteOutBlocked",
+      "ExpectedBlockedReason": "GuardedRuntimeActivationDryRunGateMissing",
+      "ActualBlockedReasons": [
+        "GuardedRuntimeActivationDryRunGateMissing"
+      ],
+      "BoundGrantId": "",
+      "BoundCapability": "",
+      "BoundScope": "",
+      "PlannedArtifactPaths": [],
+      "RuntimeActivationArtifactsWritten": false,
+      "RuntimeActivation": false,
+      "FormalRetrievalAllowed": false,
+      "RuntimeSwitchAllowed": false,
+      "PackageOutputChanged": false,
+      "Reasoning": "V8.20 guarded runtime activation dry-run gate artifact missing.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "GuardedRuntimeActivationDryRunGateNotPassed",
+      "ExpectedStatus": "GuardedRuntimeActivationArtifactWriteOutBlocked",
+      "ActualStatus": "GuardedRuntimeActivationArtifactWriteOutBlocked",
+      "ExpectedBlockedReason": "GuardedRuntimeActivationDryRunGateNotPassed",
+      "ActualBlockedReasons": [
+        "GuardedRuntimeActivationDryRunGateNotPassed"
+      ],
+      "BoundGrantId": "frp-grant-fixture-001",
+      "BoundCapability": "FormalRetrievalActivation",
+      "BoundScope": "demo-workspace/demo-collection",
+      "PlannedArtifactPaths": [
+        "vector/v8/runtime-activation/runtime-switch-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/activation-audit-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl",
+        "vector/v8/runtime-activation/runtime-guard-manifest-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/scope-enforcement-manifest-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/activation-rollback-binding-FormalRetrievalActivation-demo-workspace-demo-collection.json"
+      ],
+      "RuntimeActivationArtifactsWritten": false,
+      "RuntimeActivation": false,
+      "FormalRetrievalAllowed": false,
+      "RuntimeSwitchAllowed": false,
+      "PackageOutputChanged": false,
+      "Reasoning": "1 blocked reason(s); guarded runtime activation artifact write-out blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "NoGuardedRuntimeActivationDryRunReadyCase",
+      "ExpectedStatus": "GuardedRuntimeActivationArtifactWriteOutBlocked",
+      "ActualStatus": "GuardedRuntimeActivationArtifactWriteOutBlocked",
+      "ExpectedBlockedReason": "NoGuardedRuntimeActivationDryRunReadyCase",
+      "ActualBlockedReasons": [
+        "NoGuardedRuntimeActivationDryRunReadyCase"
+      ],
+      "BoundGrantId": "frp-grant-fixture-001",
+      "BoundCapability": "FormalRetrievalActivation",
+      "BoundScope": "demo-workspace/demo-collection",
+      "PlannedArtifactPaths": [
+        "vector/v8/runtime-activation/runtime-switch-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/activation-audit-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl",
+        "vector/v8/runtime-activation/runtime-guard-manifest-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/scope-enforcement-manifest-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/activation-rollback-binding-FormalRetrievalActivation-demo-workspace-demo-collection.json"
+      ],
+      "RuntimeActivationArtifactsWritten": false,
+      "RuntimeActivation": false,
+      "FormalRetrievalAllowed": false,
+      "RuntimeSwitchAllowed": false,
+      "PackageOutputChanged": false,
+      "Reasoning": "1 blocked reason(s); guarded runtime activation artifact write-out blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "BoundGrantIdEmpty",
+      "ExpectedStatus": "GuardedRuntimeActivationArtifactWriteOutBlocked",
+      "ActualStatus": "GuardedRuntimeActivationArtifactWriteOutBlocked",
+      "ExpectedBlockedReason": "BoundGrantIdEmpty",
+      "ActualBlockedReasons": [
+        "BoundGrantIdEmpty"
+      ],
+      "BoundGrantId": "",
+      "BoundCapability": "FormalRetrievalActivation",
+      "BoundScope": "demo-workspace/demo-collection",
+      "PlannedArtifactPaths": [
+        "vector/v8/runtime-activation/runtime-switch-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/activation-audit-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl",
+        "vector/v8/runtime-activation/runtime-guard-manifest-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/scope-enforcement-manifest-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/activation-rollback-binding-FormalRetrievalActivation-demo-workspace-demo-collection.json"
+      ],
+      "RuntimeActivationArtifactsWritten": false,
+      "RuntimeActivation": false,
+      "FormalRetrievalAllowed": false,
+      "RuntimeSwitchAllowed": false,
+      "PackageOutputChanged": false,
+      "Reasoning": "1 blocked reason(s); guarded runtime activation artifact write-out blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "BoundCapabilityMismatch",
+      "ExpectedStatus": "GuardedRuntimeActivationArtifactWriteOutBlocked",
+      "ActualStatus": "GuardedRuntimeActivationArtifactWriteOutBlocked",
+      "ExpectedBlockedReason": "BoundCapabilityMismatch",
+      "ActualBlockedReasons": [
+        "BoundCapabilityMismatch"
+      ],
+      "BoundGrantId": "frp-grant-fixture-001",
+      "BoundCapability": "OtherCapability",
+      "BoundScope": "demo-workspace/demo-collection",
+      "PlannedArtifactPaths": [
+        "vector/v8/runtime-activation/runtime-switch-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/activation-audit-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl",
+        "vector/v8/runtime-activation/runtime-guard-manifest-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/scope-enforcement-manifest-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/activation-rollback-binding-FormalRetrievalActivation-demo-workspace-demo-collection.json"
+      ],
+      "RuntimeActivationArtifactsWritten": false,
+      "RuntimeActivation": false,
+      "FormalRetrievalAllowed": false,
+      "RuntimeSwitchAllowed": false,
+      "PackageOutputChanged": false,
+      "Reasoning": "1 blocked reason(s); guarded runtime activation artifact write-out blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "BoundScopeMismatch",
+      "ExpectedStatus": "GuardedRuntimeActivationArtifactWriteOutBlocked",
+      "ActualStatus": "GuardedRuntimeActivationArtifactWriteOutBlocked",
+      "ExpectedBlockedReason": "BoundScopeMismatch",
+      "ActualBlockedReasons": [
+        "BoundScopeMismatch"
+      ],
+      "BoundGrantId": "frp-grant-fixture-001",
+      "BoundCapability": "FormalRetrievalActivation",
+      "BoundScope": "other-workspace/other-collection",
+      "PlannedArtifactPaths": [
+        "vector/v8/runtime-activation/runtime-switch-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/activation-audit-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl",
+        "vector/v8/runtime-activation/runtime-guard-manifest-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/scope-enforcement-manifest-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/activation-rollback-binding-FormalRetrievalActivation-demo-workspace-demo-collection.json"
+      ],
+      "RuntimeActivationArtifactsWritten": false,
+      "RuntimeActivation": false,
+      "FormalRetrievalAllowed": false,
+      "RuntimeSwitchAllowed": false,
+      "PackageOutputChanged": false,
+      "Reasoning": "1 blocked reason(s); guarded runtime activation artifact write-out blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "PlannedArtifactCountNotFive",
+      "ExpectedStatus": "GuardedRuntimeActivationArtifactWriteOutBlocked",
+      "ActualStatus": "GuardedRuntimeActivationArtifactWriteOutBlocked",
+      "ExpectedBlockedReason": "PlannedArtifactCountNotFive",
+      "ActualBlockedReasons": [
+        "PlannedArtifactCountNotFive"
+      ],
+      "BoundGrantId": "frp-grant-fixture-001",
+      "BoundCapability": "FormalRetrievalActivation",
+      "BoundScope": "demo-workspace/demo-collection",
+      "PlannedArtifactPaths": [
+        "vector/v8/runtime-activation/runtime-switch-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/activation-audit-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl",
+        "vector/v8/runtime-activation/runtime-guard-manifest-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/scope-enforcement-manifest-FormalRetrievalActivation-demo-workspace-demo-collection.json"
+      ],
+      "RuntimeActivationArtifactsWritten": false,
+      "RuntimeActivation": false,
+      "FormalRetrievalAllowed": false,
+      "RuntimeSwitchAllowed": false,
+      "PackageOutputChanged": false,
+      "Reasoning": "1 blocked reason(s); guarded runtime activation artifact write-out blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "PlannedArtifactOutsideAllowedDirectory",
+      "ExpectedStatus": "GuardedRuntimeActivationArtifactWriteOutBlocked",
+      "ActualStatus": "GuardedRuntimeActivationArtifactWriteOutBlocked",
+      "ExpectedBlockedReason": "PlannedArtifactOutsideAllowedDirectory",
+      "ActualBlockedReasons": [
+        "PlannedArtifactOutsideAllowedDirectory"
+      ],
+      "BoundGrantId": "frp-grant-fixture-001",
+      "BoundCapability": "FormalRetrievalActivation",
+      "BoundScope": "demo-workspace/demo-collection",
+      "PlannedArtifactPaths": [
+        "vector/v8/elsewhere/runtime-switch-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/activation-audit-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl",
+        "vector/v8/runtime-activation/runtime-guard-manifest-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/scope-enforcement-manifest-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/activation-rollback-binding-FormalRetrievalActivation-demo-workspace-demo-collection.json"
+      ],
+      "RuntimeActivationArtifactsWritten": false,
+      "RuntimeActivation": false,
+      "FormalRetrievalAllowed": false,
+      "RuntimeSwitchAllowed": false,
+      "PackageOutputChanged": false,
+      "Reasoning": "1 blocked reason(s); guarded runtime activation artifact write-out blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "PlannedArtifactAlreadyExists",
+      "ExpectedStatus": "GuardedRuntimeActivationArtifactWriteOutBlocked",
+      "ActualStatus": "GuardedRuntimeActivationArtifactWriteOutBlocked",
+      "ExpectedBlockedReason": "PlannedArtifactAlreadyExists",
+      "ActualBlockedReasons": [
+        "PlannedArtifactAlreadyExists"
+      ],
+      "BoundGrantId": "frp-grant-fixture-001",
+      "BoundCapability": "FormalRetrievalActivation",
+      "BoundScope": "demo-workspace/demo-collection",
+      "PlannedArtifactPaths": [
+        "vector/v8/runtime-activation/runtime-switch-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/activation-audit-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl",
+        "vector/v8/runtime-activation/runtime-guard-manifest-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/scope-enforcement-manifest-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/activation-rollback-binding-FormalRetrievalActivation-demo-workspace-demo-collection.json"
+      ],
+      "RuntimeActivationArtifactsWritten": false,
+      "RuntimeActivation": false,
+      "FormalRetrievalAllowed": false,
+      "RuntimeSwitchAllowed": false,
+      "PackageOutputChanged": false,
+      "Reasoning": "1 blocked reason(s); guarded runtime activation artifact write-out blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "ReferencedRollbackSnapshotMissing",
+      "ExpectedStatus": "GuardedRuntimeActivationArtifactWriteOutBlocked",
+      "ActualStatus": "GuardedRuntimeActivationArtifactWriteOutBlocked",
+      "ExpectedBlockedReason": "ReferencedRollbackSnapshotMissing",
+      "ActualBlockedReasons": [
+        "ReferencedRollbackSnapshotMissing"
+      ],
+      "BoundGrantId": "frp-grant-fixture-001",
+      "BoundCapability": "FormalRetrievalActivation",
+      "BoundScope": "demo-workspace/demo-collection",
+      "PlannedArtifactPaths": [
+        "vector/v8/runtime-activation/runtime-switch-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/activation-audit-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl",
+        "vector/v8/runtime-activation/runtime-guard-manifest-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/scope-enforcement-manifest-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/activation-rollback-binding-FormalRetrievalActivation-demo-workspace-demo-collection.json"
+      ],
+      "RuntimeActivationArtifactsWritten": false,
+      "RuntimeActivation": false,
+      "FormalRetrievalAllowed": false,
+      "RuntimeSwitchAllowed": false,
+      "PackageOutputChanged": false,
+      "Reasoning": "1 blocked reason(s); guarded runtime activation artifact write-out blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "ReferencedRevocationRecordMissing",
+      "ExpectedStatus": "GuardedRuntimeActivationArtifactWriteOutBlocked",
+      "ActualStatus": "GuardedRuntimeActivationArtifactWriteOutBlocked",
+      "ExpectedBlockedReason": "ReferencedRevocationRecordMissing",
+      "ActualBlockedReasons": [
+        "ReferencedRevocationRecordMissing"
+      ],
+      "BoundGrantId": "frp-grant-fixture-001",
+      "BoundCapability": "FormalRetrievalActivation",
+      "BoundScope": "demo-workspace/demo-collection",
+      "PlannedArtifactPaths": [
+        "vector/v8/runtime-activation/runtime-switch-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/activation-audit-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl",
+        "vector/v8/runtime-activation/runtime-guard-manifest-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/scope-enforcement-manifest-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/activation-rollback-binding-FormalRetrievalActivation-demo-workspace-demo-collection.json"
+      ],
+      "RuntimeActivationArtifactsWritten": false,
+      "RuntimeActivation": false,
+      "FormalRetrievalAllowed": false,
+      "RuntimeSwitchAllowed": false,
+      "PackageOutputChanged": false,
+      "Reasoning": "1 blocked reason(s); guarded runtime activation artifact write-out blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "ReferencedConfigPatchMissing",
+      "ExpectedStatus": "GuardedRuntimeActivationArtifactWriteOutBlocked",
+      "ActualStatus": "GuardedRuntimeActivationArtifactWriteOutBlocked",
+      "ExpectedBlockedReason": "ReferencedConfigPatchMissing",
+      "ActualBlockedReasons": [
+        "ReferencedConfigPatchMissing"
+      ],
+      "BoundGrantId": "frp-grant-fixture-001",
+      "BoundCapability": "FormalRetrievalActivation",
+      "BoundScope": "demo-workspace/demo-collection",
+      "PlannedArtifactPaths": [
+        "vector/v8/runtime-activation/runtime-switch-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/activation-audit-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl",
+        "vector/v8/runtime-activation/runtime-guard-manifest-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/scope-enforcement-manifest-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/activation-rollback-binding-FormalRetrievalActivation-demo-workspace-demo-collection.json"
+      ],
+      "RuntimeActivationArtifactsWritten": false,
+      "RuntimeActivation": false,
+      "FormalRetrievalAllowed": false,
+      "RuntimeSwitchAllowed": false,
+      "PackageOutputChanged": false,
+      "Reasoning": "1 blocked reason(s); guarded runtime activation artifact write-out blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "RuntimeActivationWriteAllowedTrueInUpstream",
+      "ExpectedStatus": "GuardedRuntimeActivationArtifactWriteOutBlocked",
+      "ActualStatus": "GuardedRuntimeActivationArtifactWriteOutBlocked",
+      "ExpectedBlockedReason": "RuntimeActivationWriteAllowedTrueInUpstream",
+      "ActualBlockedReasons": [
+        "RuntimeActivationWriteAllowedTrueInUpstream"
+      ],
+      "BoundGrantId": "frp-grant-fixture-001",
+      "BoundCapability": "FormalRetrievalActivation",
+      "BoundScope": "demo-workspace/demo-collection",
+      "PlannedArtifactPaths": [
+        "vector/v8/runtime-activation/runtime-switch-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/activation-audit-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl",
+        "vector/v8/runtime-activation/runtime-guard-manifest-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/scope-enforcement-manifest-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/activation-rollback-binding-FormalRetrievalActivation-demo-workspace-demo-collection.json"
+      ],
+      "RuntimeActivationArtifactsWritten": false,
+      "RuntimeActivation": false,
+      "FormalRetrievalAllowed": false,
+      "RuntimeSwitchAllowed": false,
+      "PackageOutputChanged": false,
+      "Reasoning": "1 blocked reason(s); guarded runtime activation artifact write-out blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "RuntimeActivationTrueInUpstream",
+      "ExpectedStatus": "GuardedRuntimeActivationArtifactWriteOutBlocked",
+      "ActualStatus": "GuardedRuntimeActivationArtifactWriteOutBlocked",
+      "ExpectedBlockedReason": "RuntimeActivationTrueInUpstream",
+      "ActualBlockedReasons": [
+        "RuntimeActivationTrueInUpstream"
+      ],
+      "BoundGrantId": "frp-grant-fixture-001",
+      "BoundCapability": "FormalRetrievalActivation",
+      "BoundScope": "demo-workspace/demo-collection",
+      "PlannedArtifactPaths": [
+        "vector/v8/runtime-activation/runtime-switch-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/activation-audit-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl",
+        "vector/v8/runtime-activation/runtime-guard-manifest-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/scope-enforcement-manifest-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/activation-rollback-binding-FormalRetrievalActivation-demo-workspace-demo-collection.json"
+      ],
+      "RuntimeActivationArtifactsWritten": false,
+      "RuntimeActivation": false,
+      "FormalRetrievalAllowed": false,
+      "RuntimeSwitchAllowed": false,
+      "PackageOutputChanged": false,
+      "Reasoning": "1 blocked reason(s); guarded runtime activation artifact write-out blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "FormalRetrievalAllowedTrueInUpstream",
+      "ExpectedStatus": "GuardedRuntimeActivationArtifactWriteOutBlocked",
+      "ActualStatus": "GuardedRuntimeActivationArtifactWriteOutBlocked",
+      "ExpectedBlockedReason": "FormalRetrievalAllowedTrueInUpstream",
+      "ActualBlockedReasons": [
+        "FormalRetrievalAllowedTrueInUpstream"
+      ],
+      "BoundGrantId": "frp-grant-fixture-001",
+      "BoundCapability": "FormalRetrievalActivation",
+      "BoundScope": "demo-workspace/demo-collection",
+      "PlannedArtifactPaths": [
+        "vector/v8/runtime-activation/runtime-switch-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/activation-audit-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl",
+        "vector/v8/runtime-activation/runtime-guard-manifest-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/scope-enforcement-manifest-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/activation-rollback-binding-FormalRetrievalActivation-demo-workspace-demo-collection.json"
+      ],
+      "RuntimeActivationArtifactsWritten": false,
+      "RuntimeActivation": false,
+      "FormalRetrievalAllowed": false,
+      "RuntimeSwitchAllowed": false,
+      "PackageOutputChanged": false,
+      "Reasoning": "1 blocked reason(s); guarded runtime activation artifact write-out blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "RuntimeSwitchAllowedTrueInUpstream",
+      "ExpectedStatus": "GuardedRuntimeActivationArtifactWriteOutBlocked",
+      "ActualStatus": "GuardedRuntimeActivationArtifactWriteOutBlocked",
+      "ExpectedBlockedReason": "RuntimeSwitchAllowedTrueInUpstream",
+      "ActualBlockedReasons": [
+        "RuntimeSwitchAllowedTrueInUpstream"
+      ],
+      "BoundGrantId": "frp-grant-fixture-001",
+      "BoundCapability": "FormalRetrievalActivation",
+      "BoundScope": "demo-workspace/demo-collection",
+      "PlannedArtifactPaths": [
+        "vector/v8/runtime-activation/runtime-switch-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/activation-audit-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl",
+        "vector/v8/runtime-activation/runtime-guard-manifest-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/scope-enforcement-manifest-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/activation-rollback-binding-FormalRetrievalActivation-demo-workspace-demo-collection.json"
+      ],
+      "RuntimeActivationArtifactsWritten": false,
+      "RuntimeActivation": false,
+      "FormalRetrievalAllowed": false,
+      "RuntimeSwitchAllowed": false,
+      "PackageOutputChanged": false,
+      "Reasoning": "1 blocked reason(s); guarded runtime activation artifact write-out blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "PackageOutputChangedTrueInUpstream",
+      "ExpectedStatus": "GuardedRuntimeActivationArtifactWriteOutBlocked",
+      "ActualStatus": "GuardedRuntimeActivationArtifactWriteOutBlocked",
+      "ExpectedBlockedReason": "PackageOutputChangedTrueInUpstream",
+      "ActualBlockedReasons": [
+        "PackageOutputChangedTrueInUpstream"
+      ],
+      "BoundGrantId": "frp-grant-fixture-001",
+      "BoundCapability": "FormalRetrievalActivation",
+      "BoundScope": "demo-workspace/demo-collection",
+      "PlannedArtifactPaths": [
+        "vector/v8/runtime-activation/runtime-switch-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/activation-audit-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl",
+        "vector/v8/runtime-activation/runtime-guard-manifest-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/scope-enforcement-manifest-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/activation-rollback-binding-FormalRetrievalActivation-demo-workspace-demo-collection.json"
+      ],
+      "RuntimeActivationArtifactsWritten": false,
+      "RuntimeActivation": false,
+      "FormalRetrievalAllowed": false,
+      "RuntimeSwitchAllowed": false,
+      "PackageOutputChanged": false,
+      "Reasoning": "1 blocked reason(s); guarded runtime activation artifact write-out blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "FormalPackageWrittenTrueInUpstream",
+      "ExpectedStatus": "GuardedRuntimeActivationArtifactWriteOutBlocked",
+      "ActualStatus": "GuardedRuntimeActivationArtifactWriteOutBlocked",
+      "ExpectedBlockedReason": "FormalPackageWrittenTrueInUpstream",
+      "ActualBlockedReasons": [
+        "FormalPackageWrittenTrueInUpstream"
+      ],
+      "BoundGrantId": "frp-grant-fixture-001",
+      "BoundCapability": "FormalRetrievalActivation",
+      "BoundScope": "demo-workspace/demo-collection",
+      "PlannedArtifactPaths": [
+        "vector/v8/runtime-activation/runtime-switch-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/activation-audit-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl",
+        "vector/v8/runtime-activation/runtime-guard-manifest-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/scope-enforcement-manifest-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/activation-rollback-binding-FormalRetrievalActivation-demo-workspace-demo-collection.json"
+      ],
+      "RuntimeActivationArtifactsWritten": false,
+      "RuntimeActivation": false,
+      "FormalRetrievalAllowed": false,
+      "RuntimeSwitchAllowed": false,
+      "PackageOutputChanged": false,
+      "Reasoning": "1 blocked reason(s); guarded runtime activation artifact write-out blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "VectorStoreBindingChangedTrueInUpstream",
+      "ExpectedStatus": "GuardedRuntimeActivationArtifactWriteOutBlocked",
+      "ActualStatus": "GuardedRuntimeActivationArtifactWriteOutBlocked",
+      "ExpectedBlockedReason": "VectorStoreBindingChangedTrueInUpstream",
+      "ActualBlockedReasons": [
+        "VectorStoreBindingChangedTrueInUpstream"
+      ],
+      "BoundGrantId": "frp-grant-fixture-001",
+      "BoundCapability": "FormalRetrievalActivation",
+      "BoundScope": "demo-workspace/demo-collection",
+      "PlannedArtifactPaths": [
+        "vector/v8/runtime-activation/runtime-switch-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/activation-audit-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl",
+        "vector/v8/runtime-activation/runtime-guard-manifest-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/scope-enforcement-manifest-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/activation-rollback-binding-FormalRetrievalActivation-demo-workspace-demo-collection.json"
+      ],
+      "RuntimeActivationArtifactsWritten": false,
+      "RuntimeActivation": false,
+      "FormalRetrievalAllowed": false,
+      "RuntimeSwitchAllowed": false,
+      "PackageOutputChanged": false,
+      "Reasoning": "1 blocked reason(s); guarded runtime activation artifact write-out blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "GlobalDefaultOnTrueInUpstream",
+      "ExpectedStatus": "GuardedRuntimeActivationArtifactWriteOutBlocked",
+      "ActualStatus": "GuardedRuntimeActivationArtifactWriteOutBlocked",
+      "ExpectedBlockedReason": "GlobalDefaultOnTrueInUpstream",
+      "ActualBlockedReasons": [
+        "GlobalDefaultOnTrueInUpstream"
+      ],
+      "BoundGrantId": "frp-grant-fixture-001",
+      "BoundCapability": "FormalRetrievalActivation",
+      "BoundScope": "demo-workspace/demo-collection",
+      "PlannedArtifactPaths": [
+        "vector/v8/runtime-activation/runtime-switch-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/activation-audit-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl",
+        "vector/v8/runtime-activation/runtime-guard-manifest-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/scope-enforcement-manifest-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/activation-rollback-binding-FormalRetrievalActivation-demo-workspace-demo-collection.json"
+      ],
+      "RuntimeActivationArtifactsWritten": false,
+      "RuntimeActivation": false,
+      "FormalRetrievalAllowed": false,
+      "RuntimeSwitchAllowed": false,
+      "PackageOutputChanged": false,
+      "Reasoning": "1 blocked reason(s); guarded runtime activation artifact write-out blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "RuntimeGateNotPassed",
+      "ExpectedStatus": "GuardedRuntimeActivationArtifactWriteOutBlocked",
+      "ActualStatus": "GuardedRuntimeActivationArtifactWriteOutBlocked",
+      "ExpectedBlockedReason": "RuntimeChangeGateNotPassed",
+      "ActualBlockedReasons": [
+        "RuntimeChangeGateNotPassed"
+      ],
+      "BoundGrantId": "frp-grant-fixture-001",
+      "BoundCapability": "FormalRetrievalActivation",
+      "BoundScope": "demo-workspace/demo-collection",
+      "PlannedArtifactPaths": [
+        "vector/v8/runtime-activation/runtime-switch-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/activation-audit-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl",
+        "vector/v8/runtime-activation/runtime-guard-manifest-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/scope-enforcement-manifest-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/activation-rollback-binding-FormalRetrievalActivation-demo-workspace-demo-collection.json"
+      ],
+      "RuntimeActivationArtifactsWritten": false,
+      "RuntimeActivation": false,
+      "FormalRetrievalAllowed": false,
+      "RuntimeSwitchAllowed": false,
+      "PackageOutputChanged": false,
+      "Reasoning": "1 blocked reason(s); guarded runtime activation artifact write-out blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "P15GateNotPassed",
+      "ExpectedStatus": "GuardedRuntimeActivationArtifactWriteOutBlocked",
+      "ActualStatus": "GuardedRuntimeActivationArtifactWriteOutBlocked",
+      "ExpectedBlockedReason": "P15GateNotPassed",
+      "ActualBlockedReasons": [
+        "P15GateNotPassed"
+      ],
+      "BoundGrantId": "frp-grant-fixture-001",
+      "BoundCapability": "FormalRetrievalActivation",
+      "BoundScope": "demo-workspace/demo-collection",
+      "PlannedArtifactPaths": [
+        "vector/v8/runtime-activation/runtime-switch-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/activation-audit-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl",
+        "vector/v8/runtime-activation/runtime-guard-manifest-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/scope-enforcement-manifest-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/activation-rollback-binding-FormalRetrievalActivation-demo-workspace-demo-collection.json"
+      ],
+      "RuntimeActivationArtifactsWritten": false,
+      "RuntimeActivation": false,
+      "FormalRetrievalAllowed": false,
+      "RuntimeSwitchAllowed": false,
+      "PackageOutputChanged": false,
+      "Reasoning": "1 blocked reason(s); guarded runtime activation artifact write-out blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "MainlineEvidencePresent",
+      "ExpectedStatus": "GuardedRuntimeActivationArtifactWriteOutBlocked",
+      "ActualStatus": "GuardedRuntimeActivationArtifactWriteOutBlocked",
+      "ExpectedBlockedReason": "MainlineEvidencePresent",
+      "ActualBlockedReasons": [
+        "MainlineEvidencePresent"
+      ],
+      "BoundGrantId": "frp-grant-fixture-001",
+      "BoundCapability": "FormalRetrievalActivation",
+      "BoundScope": "demo-workspace/demo-collection",
+      "PlannedArtifactPaths": [
+        "vector/v8/runtime-activation/runtime-switch-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/activation-audit-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl",
+        "vector/v8/runtime-activation/runtime-guard-manifest-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/scope-enforcement-manifest-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/activation-rollback-binding-FormalRetrievalActivation-demo-workspace-demo-collection.json"
+      ],
+      "RuntimeActivationArtifactsWritten": false,
+      "RuntimeActivation": false,
+      "FormalRetrievalAllowed": false,
+      "RuntimeSwitchAllowed": false,
+      "PackageOutputChanged": false,
+      "Reasoning": "1 blocked reason(s); guarded runtime activation artifact write-out blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "MainlineTrustRegistryPresent",
+      "ExpectedStatus": "GuardedRuntimeActivationArtifactWriteOutBlocked",
+      "ActualStatus": "GuardedRuntimeActivationArtifactWriteOutBlocked",
+      "ExpectedBlockedReason": "MainlineTrustRegistryPresent",
+      "ActualBlockedReasons": [
+        "MainlineTrustRegistryPresent"
+      ],
+      "BoundGrantId": "frp-grant-fixture-001",
+      "BoundCapability": "FormalRetrievalActivation",
+      "BoundScope": "demo-workspace/demo-collection",
+      "PlannedArtifactPaths": [
+        "vector/v8/runtime-activation/runtime-switch-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/activation-audit-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl",
+        "vector/v8/runtime-activation/runtime-guard-manifest-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/scope-enforcement-manifest-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/activation-rollback-binding-FormalRetrievalActivation-demo-workspace-demo-collection.json"
+      ],
+      "RuntimeActivationArtifactsWritten": false,
+      "RuntimeActivation": false,
+      "FormalRetrievalAllowed": false,
+      "RuntimeSwitchAllowed": false,
+      "PackageOutputChanged": false,
+      "Reasoning": "1 blocked reason(s); guarded runtime activation artifact write-out blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "WriteFailureSimulated",
+      "ExpectedStatus": "GuardedRuntimeActivationArtifactWriteOutBlocked",
+      "ActualStatus": "GuardedRuntimeActivationArtifactWriteOutBlocked",
+      "ExpectedBlockedReason": "WriteFailureSimulated",
+      "ActualBlockedReasons": [
+        "WriteFailureSimulated"
+      ],
+      "BoundGrantId": "frp-grant-fixture-001",
+      "BoundCapability": "FormalRetrievalActivation",
+      "BoundScope": "demo-workspace/demo-collection",
+      "PlannedArtifactPaths": [
+        "vector/v8/runtime-activation/runtime-switch-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/activation-audit-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl",
+        "vector/v8/runtime-activation/runtime-guard-manifest-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/scope-enforcement-manifest-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/activation-rollback-binding-FormalRetrievalActivation-demo-workspace-demo-collection.json"
+      ],
+      "RuntimeActivationArtifactsWritten": false,
+      "RuntimeActivation": false,
+      "FormalRetrievalAllowed": false,
+      "RuntimeSwitchAllowed": false,
+      "PackageOutputChanged": false,
+      "Reasoning": "1 blocked reason(s); guarded runtime activation artifact write-out blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "NoRuntimeMutationInvariantFalseInUpstream",
+      "ExpectedStatus": "GuardedRuntimeActivationArtifactWriteOutBlocked",
+      "ActualStatus": "GuardedRuntimeActivationArtifactWriteOutBlocked",
+      "ExpectedBlockedReason": "NoRuntimeMutationInvariantFalseInUpstream",
+      "ActualBlockedReasons": [
+        "NoRuntimeMutationInvariantFalseInUpstream"
+      ],
+      "BoundGrantId": "frp-grant-fixture-001",
+      "BoundCapability": "FormalRetrievalActivation",
+      "BoundScope": "demo-workspace/demo-collection",
+      "PlannedArtifactPaths": [
+        "vector/v8/runtime-activation/runtime-switch-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/activation-audit-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl",
+        "vector/v8/runtime-activation/runtime-guard-manifest-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/scope-enforcement-manifest-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/runtime-activation/activation-rollback-binding-FormalRetrievalActivation-demo-workspace-demo-collection.json"
+      ],
+      "RuntimeActivationArtifactsWritten": false,
+      "RuntimeActivation": false,
+      "FormalRetrievalAllowed": false,
+      "RuntimeSwitchAllowed": false,
+      "PackageOutputChanged": false,
+      "Reasoning": "1 blocked reason(s); guarded runtime activation artifact write-out blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    }
+  ],
+  "BoundGrantId": "frp-grant-9308474979b64f31b8fc7d260b19575f",
+  "BoundCapability": "FormalRetrievalActivation",
+  "BoundScope": "demo-workspace/demo-collection",
+  "PlannedGuardedActivationContract": {
+    "PlannedRuntimeActivationMode": "GuardedScopeOnly",
+    "PlannedCapability": "FormalRetrievalActivation",
+    "PlannedScope": "demo-workspace/demo-collection",
+    "PlannedRuntimeSwitchArtifactPath": "vector/v8/runtime-activation/runtime-switch-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+    "PlannedActivationAuditArtifactPath": "vector/v8/runtime-activation/activation-audit-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl",
+    "PlannedRuntimeGuardManifestPath": "vector/v8/runtime-activation/runtime-guard-manifest-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+    "PlannedScopeEnforcementManifestPath": "vector/v8/runtime-activation/scope-enforcement-manifest-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+    "PlannedActivationRollbackBindingPath": "vector/v8/runtime-activation/activation-rollback-binding-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+    "ReferencedRollbackSnapshotPath": "vector\\v8\\dedicated-crossing\\rollback-snapshot-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+    "ReferencedRevocationRecordPath": "vector\\v8\\dedicated-crossing\\revocation-record-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+    "ReferencedConfigPatchSourcePath": "vector\\v8\\dedicated-crossing\\runtime-config-patch-FormalRetrievalActivation-demo-workspace-demo-collection.json"
+  },
+  "UpstreamGuardedRuntimeActivationDryRunGatePresent": true,
+  "UpstreamGuardedRuntimeActivationDryRunGatePassed": true,
+  "WrittenArtifactPaths": [
+    "vector/v8/runtime-activation/runtime-switch-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+    "vector/v8/runtime-activation/activation-audit-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl",
+    "vector/v8/runtime-activation/runtime-guard-manifest-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+    "vector/v8/runtime-activation/scope-enforcement-manifest-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+    "vector/v8/runtime-activation/activation-rollback-binding-FormalRetrievalActivation-demo-workspace-demo-collection.json"
+  ],
+  "RuntimeActivationArtifactsWritten": true,
+  "RuntimeActivation": false,
+  "FormalRetrievalAllowed": false,
+  "RuntimeSwitchAllowed": false,
+  "ConfigPatchAppliedToRuntime": false,
+  "FormalPackageWritten": false,
+  "PackageOutputChanged": false,
+  "PackingPolicyChanged": false,
+  "VectorStoreBindingChanged": false,
+  "GlobalDefaultOn": false,
+  "Crossed": true,
+  "ArtifactOnly": true,
+  "CapabilityGrantWritten": true,
+  "ConfigPatchWritten": true,
+  "RollbackSnapshotWritten": true,
+  "AuditLogWritten": true,
+  "RevocationRecordWritten": true,
+  "EvidenceCopiedToMainline": false,
+  "TrustRegistryCopiedToMainline": false,
+  "MainlineEvidencePresent": false,
+  "MainlineTrustRegistryPresent": false,
+  "ManualReviewRequired": false,
+  "ApprovalSealed": false,
+  "GrantApplied": false,
+  "ApplicationApplied": false,
+  "RollbackActivated": false,
+  "PromotionToMainlinePerformed": false,
+  "NoRuntimeMutationInvariant": true,
+  "BlockedReasons": [],
+  "Diagnostics": [
+    "total=27",
+    "passed=27",
+    "failed=0",
+    "written=1",
+    "blocked=26",
+    "realUpstreamPresent=True",
+    "realUpstreamPassed=True",
+    "runtimeActivationArtifactsWritten=True",
+    "runtimeGate=True",
+    "p15Gate=True",
+    "mainlineEvidence=False",
+    "mainlineRegistry=False",
+    "idempotentReRun=True"
+  ]
+}

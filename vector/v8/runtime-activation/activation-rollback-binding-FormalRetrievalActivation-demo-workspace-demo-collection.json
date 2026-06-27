@@ -1,0 +1,9 @@
+﻿{
+  "BoundGrantId": "frp-grant-9308474979b64f31b8fc7d260b19575f",
+  "RollbackSnapshotReference": "vector\\v8\\dedicated-crossing\\rollback-snapshot-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+  "RevocationRecordReference": "vector\\v8\\dedicated-crossing\\revocation-record-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+  "ConfigPatchSourceReference": "vector\\v8\\dedicated-crossing\\runtime-config-patch-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+  "RestoreTestRequired": true,
+  "RuntimeActivation": false,
+  "CreatedAt": "2026-06-27T07:11:50.0866038\u002B00:00"
+}

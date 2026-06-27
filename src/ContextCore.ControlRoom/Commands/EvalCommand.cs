@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
@@ -348,6 +348,8 @@ public static partial class EvalCommand
             !string.Equals(subcommand, "formal-retrieval-promotion-approval-runtime-activation-dry-run-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "formal-retrieval-promotion-approval-guarded-runtime-activation-gate-dry-run", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "formal-retrieval-promotion-approval-guarded-runtime-activation-gate-dry-run-gate", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "formal-retrieval-promotion-approval-guarded-runtime-activation-artifact-write-out", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "formal-retrieval-promotion-approval-guarded-runtime-activation-artifact-write-out-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "dto-split-plan", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "dto-split-readiness-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "vector-retrieval-eval-protocol-audit", StringComparison.OrdinalIgnoreCase) &&
@@ -630,6 +632,8 @@ public static partial class EvalCommand
             Console.WriteLine("  eval formal-retrieval-promotion-approval-runtime-activation-dry-run-gate");
             Console.WriteLine("  eval formal-retrieval-promotion-approval-guarded-runtime-activation-gate-dry-run");
             Console.WriteLine("  eval formal-retrieval-promotion-approval-guarded-runtime-activation-gate-dry-run-gate");
+            Console.WriteLine("  eval formal-retrieval-promotion-approval-guarded-runtime-activation-artifact-write-out");
+            Console.WriteLine("  eval formal-retrieval-promotion-approval-guarded-runtime-activation-artifact-write-out-gate");
             Console.WriteLine("  eval dto-split-plan");
             Console.WriteLine("  eval dto-split-readiness-gate");
             Console.WriteLine("  eval vector-retrieval-eval-protocol-audit");
@@ -2062,6 +2066,14 @@ public static partial class EvalCommand
             await ExecuteFormalRetrievalPromotionApprovalGuardedRuntimeActivationGateDryRunAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
             return;
         }
+
+        if (string.Equals(subcommand, "formal-retrieval-promotion-approval-guarded-runtime-activation-artifact-write-out", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(subcommand, "formal-retrieval-promotion-approval-guarded-runtime-activation-artifact-write-out-gate", StringComparison.OrdinalIgnoreCase))
+        {
+            await ExecuteFormalRetrievalPromotionApprovalGuardedRuntimeActivationArtifactWriteOutAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
 
         if (string.Equals(subcommand, "dto-split-plan", StringComparison.OrdinalIgnoreCase)
             || string.Equals(subcommand, "dto-split-readiness-gate", StringComparison.OrdinalIgnoreCase))

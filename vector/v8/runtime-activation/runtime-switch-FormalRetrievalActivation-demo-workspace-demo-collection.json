@@ -1,0 +1,13 @@
+﻿{
+  "SwitchId": "frp-runtime-switch-078684cb043b4d13ab58c9a4c4a0ef58",
+  "BoundGrantId": "frp-grant-9308474979b64f31b8fc7d260b19575f",
+  "Capability": "FormalRetrievalActivation",
+  "Scope": "demo-workspace/demo-collection",
+  "SwitchMode": "GuardedArtifactOnly",
+  "ApplyToRuntime": false,
+  "RuntimeActivation": false,
+  "FormalRetrievalAllowed": false,
+  "RuntimeSwitchAllowed": false,
+  "SourceGuardedRuntimeActivationDryRunOperationId": "frp-guarded-runtime-activation-dry-run-1c871dc94c2149849882f3aebbf1d5a9",
+  "CreatedAt": "2026-06-27T07:11:50.0866038\u002B00:00"
+}

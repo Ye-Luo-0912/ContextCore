@@ -1,0 +1,151 @@
+﻿# Guarded Runtime Activation Artifact Write-Out
+
+## Summary
+- GuardedRuntimeActivationArtifactWriteOutPassed: `True`
+- GatePassed: `False`
+- TotalCases: `27`
+- PassedCases: `27`
+- FailedCases: `0`
+- WrittenCases: `1`
+- BlockedCases: `26`
+- WrittenArtifactCount: `5`
+- RuntimeActivationArtifactsWritten: `True`
+
+## Binding
+- BoundGrantId: `frp-grant-9308474979b64f31b8fc7d260b19575f`
+- BoundCapability: `FormalRetrievalActivation`
+- BoundScope: `demo-workspace/demo-collection`
+- UpstreamGuardedRuntimeActivationDryRunGatePresent: `True`
+- UpstreamGuardedRuntimeActivationDryRunGatePassed: `True`
+
+## Safety
+- RuntimeActivation: `False`
+- FormalRetrievalAllowed: `False`
+- RuntimeSwitchAllowed: `False`
+- ConfigPatchAppliedToRuntime: `False`
+- FormalPackageWritten: `False`
+- PackageOutputChanged: `False`
+- PackingPolicyChanged: `False`
+- VectorStoreBindingChanged: `False`
+- GlobalDefaultOn: `False`
+- NoRuntimeMutationInvariant: `True`
+- PromotionToMainlinePerformed: `False`
+- MainlineEvidencePresent: `False`
+- MainlineTrustRegistryPresent: `False`
+
+## Written Artifacts
+- `vector/v8/runtime-activation/runtime-switch-FormalRetrievalActivation-demo-workspace-demo-collection.json`
+- `vector/v8/runtime-activation/activation-audit-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl`
+- `vector/v8/runtime-activation/runtime-guard-manifest-FormalRetrievalActivation-demo-workspace-demo-collection.json`
+- `vector/v8/runtime-activation/scope-enforcement-manifest-FormalRetrievalActivation-demo-workspace-demo-collection.json`
+- `vector/v8/runtime-activation/activation-rollback-binding-FormalRetrievalActivation-demo-workspace-demo-collection.json`
+
+## Cases
+- `AllUpstreamClean`: passedAsExpected=`True`
+  - status expected=`GuardedRuntimeActivationArtifactsWritten` actual=`GuardedRuntimeActivationArtifactsWritten` matched=`True`
+- `GuardedRuntimeActivationDryRunGateMissing`: passedAsExpected=`True`
+  - status expected=`GuardedRuntimeActivationArtifactWriteOutBlocked` actual=`GuardedRuntimeActivationArtifactWriteOutBlocked` matched=`True`
+  - expectedReason=`GuardedRuntimeActivationDryRunGateMissing` matched=`True`
+  - actualReasons=`GuardedRuntimeActivationDryRunGateMissing`
+- `GuardedRuntimeActivationDryRunGateNotPassed`: passedAsExpected=`True`
+  - status expected=`GuardedRuntimeActivationArtifactWriteOutBlocked` actual=`GuardedRuntimeActivationArtifactWriteOutBlocked` matched=`True`
+  - expectedReason=`GuardedRuntimeActivationDryRunGateNotPassed` matched=`True`
+  - actualReasons=`GuardedRuntimeActivationDryRunGateNotPassed`
+- `NoGuardedRuntimeActivationDryRunReadyCase`: passedAsExpected=`True`
+  - status expected=`GuardedRuntimeActivationArtifactWriteOutBlocked` actual=`GuardedRuntimeActivationArtifactWriteOutBlocked` matched=`True`
+  - expectedReason=`NoGuardedRuntimeActivationDryRunReadyCase` matched=`True`
+  - actualReasons=`NoGuardedRuntimeActivationDryRunReadyCase`
+- `BoundGrantIdEmpty`: passedAsExpected=`True`
+  - status expected=`GuardedRuntimeActivationArtifactWriteOutBlocked` actual=`GuardedRuntimeActivationArtifactWriteOutBlocked` matched=`True`
+  - expectedReason=`BoundGrantIdEmpty` matched=`True`
+  - actualReasons=`BoundGrantIdEmpty`
+- `BoundCapabilityMismatch`: passedAsExpected=`True`
+  - status expected=`GuardedRuntimeActivationArtifactWriteOutBlocked` actual=`GuardedRuntimeActivationArtifactWriteOutBlocked` matched=`True`
+  - expectedReason=`BoundCapabilityMismatch` matched=`True`
+  - actualReasons=`BoundCapabilityMismatch`
+- `BoundScopeMismatch`: passedAsExpected=`True`
+  - status expected=`GuardedRuntimeActivationArtifactWriteOutBlocked` actual=`GuardedRuntimeActivationArtifactWriteOutBlocked` matched=`True`
+  - expectedReason=`BoundScopeMismatch` matched=`True`
+  - actualReasons=`BoundScopeMismatch`
+- `PlannedArtifactCountNotFive`: passedAsExpected=`True`
+  - status expected=`GuardedRuntimeActivationArtifactWriteOutBlocked` actual=`GuardedRuntimeActivationArtifactWriteOutBlocked` matched=`True`
+  - expectedReason=`PlannedArtifactCountNotFive` matched=`True`
+  - actualReasons=`PlannedArtifactCountNotFive`
+- `PlannedArtifactOutsideAllowedDirectory`: passedAsExpected=`True`
+  - status expected=`GuardedRuntimeActivationArtifactWriteOutBlocked` actual=`GuardedRuntimeActivationArtifactWriteOutBlocked` matched=`True`
+  - expectedReason=`PlannedArtifactOutsideAllowedDirectory` matched=`True`
+  - actualReasons=`PlannedArtifactOutsideAllowedDirectory`
+- `PlannedArtifactAlreadyExists`: passedAsExpected=`True`
+  - status expected=`GuardedRuntimeActivationArtifactWriteOutBlocked` actual=`GuardedRuntimeActivationArtifactWriteOutBlocked` matched=`True`
+  - expectedReason=`PlannedArtifactAlreadyExists` matched=`True`
+  - actualReasons=`PlannedArtifactAlreadyExists`
+- `ReferencedRollbackSnapshotMissing`: passedAsExpected=`True`
+  - status expected=`GuardedRuntimeActivationArtifactWriteOutBlocked` actual=`GuardedRuntimeActivationArtifactWriteOutBlocked` matched=`True`
+  - expectedReason=`ReferencedRollbackSnapshotMissing` matched=`True`
+  - actualReasons=`ReferencedRollbackSnapshotMissing`
+- `ReferencedRevocationRecordMissing`: passedAsExpected=`True`
+  - status expected=`GuardedRuntimeActivationArtifactWriteOutBlocked` actual=`GuardedRuntimeActivationArtifactWriteOutBlocked` matched=`True`
+  - expectedReason=`ReferencedRevocationRecordMissing` matched=`True`
+  - actualReasons=`ReferencedRevocationRecordMissing`
+- `ReferencedConfigPatchMissing`: passedAsExpected=`True`
+  - status expected=`GuardedRuntimeActivationArtifactWriteOutBlocked` actual=`GuardedRuntimeActivationArtifactWriteOutBlocked` matched=`True`
+  - expectedReason=`ReferencedConfigPatchMissing` matched=`True`
+  - actualReasons=`ReferencedConfigPatchMissing`
+- `RuntimeActivationWriteAllowedTrueInUpstream`: passedAsExpected=`True`
+  - status expected=`GuardedRuntimeActivationArtifactWriteOutBlocked` actual=`GuardedRuntimeActivationArtifactWriteOutBlocked` matched=`True`
+  - expectedReason=`RuntimeActivationWriteAllowedTrueInUpstream` matched=`True`
+  - actualReasons=`RuntimeActivationWriteAllowedTrueInUpstream`
+- `RuntimeActivationTrueInUpstream`: passedAsExpected=`True`
+  - status expected=`GuardedRuntimeActivationArtifactWriteOutBlocked` actual=`GuardedRuntimeActivationArtifactWriteOutBlocked` matched=`True`
+  - expectedReason=`RuntimeActivationTrueInUpstream` matched=`True`
+  - actualReasons=`RuntimeActivationTrueInUpstream`
+- `FormalRetrievalAllowedTrueInUpstream`: passedAsExpected=`True`
+  - status expected=`GuardedRuntimeActivationArtifactWriteOutBlocked` actual=`GuardedRuntimeActivationArtifactWriteOutBlocked` matched=`True`
+  - expectedReason=`FormalRetrievalAllowedTrueInUpstream` matched=`True`
+  - actualReasons=`FormalRetrievalAllowedTrueInUpstream`
+- `RuntimeSwitchAllowedTrueInUpstream`: passedAsExpected=`True`
+  - status expected=`GuardedRuntimeActivationArtifactWriteOutBlocked` actual=`GuardedRuntimeActivationArtifactWriteOutBlocked` matched=`True`
+  - expectedReason=`RuntimeSwitchAllowedTrueInUpstream` matched=`True`
+  - actualReasons=`RuntimeSwitchAllowedTrueInUpstream`
+- `PackageOutputChangedTrueInUpstream`: passedAsExpected=`True`
+  - status expected=`GuardedRuntimeActivationArtifactWriteOutBlocked` actual=`GuardedRuntimeActivationArtifactWriteOutBlocked` matched=`True`
+  - expectedReason=`PackageOutputChangedTrueInUpstream` matched=`True`
+  - actualReasons=`PackageOutputChangedTrueInUpstream`
+- `FormalPackageWrittenTrueInUpstream`: passedAsExpected=`True`
+  - status expected=`GuardedRuntimeActivationArtifactWriteOutBlocked` actual=`GuardedRuntimeActivationArtifactWriteOutBlocked` matched=`True`
+  - expectedReason=`FormalPackageWrittenTrueInUpstream` matched=`True`
+  - actualReasons=`FormalPackageWrittenTrueInUpstream`
+- `VectorStoreBindingChangedTrueInUpstream`: passedAsExpected=`True`
+  - status expected=`GuardedRuntimeActivationArtifactWriteOutBlocked` actual=`GuardedRuntimeActivationArtifactWriteOutBlocked` matched=`True`
+  - expectedReason=`VectorStoreBindingChangedTrueInUpstream` matched=`True`
+  - actualReasons=`VectorStoreBindingChangedTrueInUpstream`
+- `GlobalDefaultOnTrueInUpstream`: passedAsExpected=`True`
+  - status expected=`GuardedRuntimeActivationArtifactWriteOutBlocked` actual=`GuardedRuntimeActivationArtifactWriteOutBlocked` matched=`True`
+  - expectedReason=`GlobalDefaultOnTrueInUpstream` matched=`True`
+  - actualReasons=`GlobalDefaultOnTrueInUpstream`
+- `RuntimeGateNotPassed`: passedAsExpected=`True`
+  - status expected=`GuardedRuntimeActivationArtifactWriteOutBlocked` actual=`GuardedRuntimeActivationArtifactWriteOutBlocked` matched=`True`
+  - expectedReason=`RuntimeChangeGateNotPassed` matched=`True`
+  - actualReasons=`RuntimeChangeGateNotPassed`
+- `P15GateNotPassed`: passedAsExpected=`True`
+  - status expected=`GuardedRuntimeActivationArtifactWriteOutBlocked` actual=`GuardedRuntimeActivationArtifactWriteOutBlocked` matched=`True`
+  - expectedReason=`P15GateNotPassed` matched=`True`
+  - actualReasons=`P15GateNotPassed`
+- `MainlineEvidencePresent`: passedAsExpected=`True`
+  - status expected=`GuardedRuntimeActivationArtifactWriteOutBlocked` actual=`GuardedRuntimeActivationArtifactWriteOutBlocked` matched=`True`
+  - expectedReason=`MainlineEvidencePresent` matched=`True`
+  - actualReasons=`MainlineEvidencePresent`
+- `MainlineTrustRegistryPresent`: passedAsExpected=`True`
+  - status expected=`GuardedRuntimeActivationArtifactWriteOutBlocked` actual=`GuardedRuntimeActivationArtifactWriteOutBlocked` matched=`True`
+  - expectedReason=`MainlineTrustRegistryPresent` matched=`True`
+  - actualReasons=`MainlineTrustRegistryPresent`
+- `WriteFailureSimulated`: passedAsExpected=`True`
+  - status expected=`GuardedRuntimeActivationArtifactWriteOutBlocked` actual=`GuardedRuntimeActivationArtifactWriteOutBlocked` matched=`True`
+  - expectedReason=`WriteFailureSimulated` matched=`True`
+  - actualReasons=`WriteFailureSimulated`
+- `NoRuntimeMutationInvariantFalseInUpstream`: passedAsExpected=`True`
+  - status expected=`GuardedRuntimeActivationArtifactWriteOutBlocked` actual=`GuardedRuntimeActivationArtifactWriteOutBlocked` matched=`True`
+  - expectedReason=`NoRuntimeMutationInvariantFalseInUpstream` matched=`True`
+  - actualReasons=`NoRuntimeMutationInvariantFalseInUpstream`
+
+V8.21 只写 runtime-activation evidence artifacts。runtime switch、formal retrieval、formal package、vector store binding、package output、PackingPolicy 都保持不变。
