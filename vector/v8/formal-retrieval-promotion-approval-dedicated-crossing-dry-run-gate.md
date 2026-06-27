@@ -1,0 +1,182 @@
+﻿# Dedicated Crossing Dry-Run (Gate)
+
+生成: `2026-06-27T02:04:24.1049219+00:00`
+操作: `frp-dedicated-crossing-dry-run-6431c7712f6840c09e5f2b30cbea1ee5`
+
+## Decision
+- CrossingDryRunMatrixPassed: `True` GatePassed: `True`
+- Total: `16` Passed: `16` Failed: `0`
+- Status — Ready: `1` Blocked: `15`
+
+## Crossing Execution Contract (Planned, Not Written)
+- DryRunOnly: `True`
+- CrossingExecutionAllowed: `False` (always false from this matrix)
+- PlannedCapability: `FormalRetrievalActivation`
+- PlannedScope: `demo-workspace/demo-collection`
+- PlannedCapabilityGrantPath: `vector/v8/dedicated-crossing/capability-grant-FormalRetrievalActivation-demo-workspace-demo-collection.json`
+- PlannedRuntimeConfigPatchPath: `vector/v8/dedicated-crossing/runtime-config-patch-FormalRetrievalActivation-demo-workspace-demo-collection.json`
+- PlannedRollbackSnapshotPath: `vector/v8/dedicated-crossing/rollback-snapshot-FormalRetrievalActivation-demo-workspace-demo-collection.json`
+- PlannedAuditLogPath: `vector/v8/dedicated-crossing/audit-log-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl`
+- PlannedRevocationRecordPath: `vector/v8/dedicated-crossing/revocation-record-FormalRetrievalActivation-demo-workspace-demo-collection.json`
+
+## Upstream (Real)
+- UpstreamPreCrossingGatePresent: `True`
+- UpstreamPreCrossingGatePassed: `True`
+- UpstreamPreCrossingFinalGatePassed: `True`
+- BoundCapability: `FormalRetrievalActivation`
+- BoundScope: `demo-workspace/demo-collection`
+
+## No-Crossing Contract
+- ManualReviewRequired: `False`
+- ApprovalSealed: `False`
+- CapabilityGrantWritten: `False`
+- GrantApplied: `False`
+- ApplicationApplied: `False`
+- RollbackActivated: `False`
+- Crossed: `False`
+- PromotionToMainlinePerformed: `False`
+- EvidenceCopiedToMainline: `False`
+- TrustRegistryCopiedToMainline: `False`
+- MainlineEvidencePresent: `False`
+- MainlineTrustRegistryPresent: `False`
+
+## Safety
+- FormalRetrievalAllowed: `False`
+- RuntimeSwitchAllowed: `False`
+- FormalPackageWritten: `False`
+- PackageOutputChanged: `False`
+- PackingPolicyChanged: `False`
+- VectorStoreBindingChanged: `False`
+- GlobalDefaultOn: `False`
+- ConfigPatchWritten: `False`
+- RuntimeActivation: `False`
+- NoRuntimeMutationInvariant: `True`
+
+## Crossing Dry-Run Cases
+- `AllAlignedReady`: passedAsExpected=`True`
+  - status expected=`CrossingDryRunReady` actual=`CrossingDryRunReady` matched=`True`
+  - bound: capability=`FormalRetrievalActivation` scope=`demo-workspace/demo-collection`
+  - dryRunOnly=`True` executionAllowed=`False` notCrossed=`True` applicationNotApplied=`True` rollbackNotActivated=`True`
+  - plannedArtifacts=`vector/v8/dedicated-crossing/capability-grant-FormalRetrievalActivation-demo-workspace-demo-collection.json, vector/v8/dedicated-crossing/runtime-config-patch-FormalRetrievalActivation-demo-workspace-demo-collection.json, vector/v8/dedicated-crossing/rollback-snapshot-FormalRetrievalActivation-demo-workspace-demo-collection.json, vector/v8/dedicated-crossing/audit-log-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl, vector/v8/dedicated-crossing/revocation-record-FormalRetrievalActivation-demo-workspace-demo-collection.json`
+  - reasoning: all crossing dry-run preconditions met; capability='FormalRetrievalActivation' scope='demo-workspace/demo-collection'; 5 planned artifact paths recorded. DryRunOnly=true; CrossingExecutionAllowed=false; nothing written, nothing crossed.
+- `PreCrossingGateMissing`: passedAsExpected=`True`
+  - status expected=`CrossingDryRunBlocked` actual=`CrossingDryRunBlocked` matched=`True`
+  - expectedReason=`PreCrossingGateMissing` matched=`True`
+  - bound: capability=`` scope=``
+  - dryRunOnly=`True` executionAllowed=`False` notCrossed=`True` applicationNotApplied=`True` rollbackNotActivated=`True`
+  - actualReasons=`PreCrossingGateMissing`
+  - reasoning: pre-crossing final gate report missing; crossing dry-run cannot proceed.
+- `PreCrossingGateNotPassed`: passedAsExpected=`True`
+  - status expected=`CrossingDryRunBlocked` actual=`CrossingDryRunBlocked` matched=`True`
+  - expectedReason=`PreCrossingGateNotPassed` matched=`True`
+  - bound: capability=`FormalRetrievalActivation` scope=`demo-workspace/demo-collection`
+  - dryRunOnly=`True` executionAllowed=`False` notCrossed=`True` applicationNotApplied=`True` rollbackNotActivated=`True`
+  - actualReasons=`PreCrossingGateNotPassed`
+  - plannedArtifacts=`vector/v8/dedicated-crossing/capability-grant-FormalRetrievalActivation-demo-workspace-demo-collection.json, vector/v8/dedicated-crossing/runtime-config-patch-FormalRetrievalActivation-demo-workspace-demo-collection.json, vector/v8/dedicated-crossing/rollback-snapshot-FormalRetrievalActivation-demo-workspace-demo-collection.json, vector/v8/dedicated-crossing/audit-log-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl, vector/v8/dedicated-crossing/revocation-record-FormalRetrievalActivation-demo-workspace-demo-collection.json`
+  - reasoning: 1 blocked reason(s); crossing dry-run blocked.
+- `NoPreCrossingReadyCase`: passedAsExpected=`True`
+  - status expected=`CrossingDryRunBlocked` actual=`CrossingDryRunBlocked` matched=`True`
+  - expectedReason=`NoPreCrossingReadyCase` matched=`True`
+  - bound: capability=`FormalRetrievalActivation` scope=`demo-workspace/demo-collection`
+  - dryRunOnly=`True` executionAllowed=`False` notCrossed=`True` applicationNotApplied=`True` rollbackNotActivated=`True`
+  - actualReasons=`NoPreCrossingReadyCase`
+  - plannedArtifacts=`vector/v8/dedicated-crossing/capability-grant-FormalRetrievalActivation-demo-workspace-demo-collection.json, vector/v8/dedicated-crossing/runtime-config-patch-FormalRetrievalActivation-demo-workspace-demo-collection.json, vector/v8/dedicated-crossing/rollback-snapshot-FormalRetrievalActivation-demo-workspace-demo-collection.json, vector/v8/dedicated-crossing/audit-log-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl, vector/v8/dedicated-crossing/revocation-record-FormalRetrievalActivation-demo-workspace-demo-collection.json`
+  - reasoning: 1 blocked reason(s); crossing dry-run blocked.
+- `CapabilityMismatch`: passedAsExpected=`True`
+  - status expected=`CrossingDryRunBlocked` actual=`CrossingDryRunBlocked` matched=`True`
+  - expectedReason=`CapabilityMismatch` matched=`True`
+  - bound: capability=`UnauthorizedCapability` scope=`demo-workspace/demo-collection`
+  - dryRunOnly=`True` executionAllowed=`False` notCrossed=`True` applicationNotApplied=`True` rollbackNotActivated=`True`
+  - actualReasons=`CapabilityMismatch`
+  - plannedArtifacts=`vector/v8/dedicated-crossing/capability-grant-UnauthorizedCapability-demo-workspace-demo-collection.json, vector/v8/dedicated-crossing/runtime-config-patch-UnauthorizedCapability-demo-workspace-demo-collection.json, vector/v8/dedicated-crossing/rollback-snapshot-UnauthorizedCapability-demo-workspace-demo-collection.json, vector/v8/dedicated-crossing/audit-log-UnauthorizedCapability-demo-workspace-demo-collection.jsonl, vector/v8/dedicated-crossing/revocation-record-UnauthorizedCapability-demo-workspace-demo-collection.json`
+  - reasoning: 1 blocked reason(s); crossing dry-run blocked.
+- `EmptyScope`: passedAsExpected=`True`
+  - status expected=`CrossingDryRunBlocked` actual=`CrossingDryRunBlocked` matched=`True`
+  - expectedReason=`EmptyScope` matched=`True`
+  - bound: capability=`FormalRetrievalActivation` scope=``
+  - dryRunOnly=`True` executionAllowed=`False` notCrossed=`True` applicationNotApplied=`True` rollbackNotActivated=`True`
+  - actualReasons=`EmptyScope`
+  - plannedArtifacts=`vector/v8/dedicated-crossing/capability-grant-FormalRetrievalActivation-missing.json, vector/v8/dedicated-crossing/runtime-config-patch-FormalRetrievalActivation-missing.json, vector/v8/dedicated-crossing/rollback-snapshot-FormalRetrievalActivation-missing.json, vector/v8/dedicated-crossing/audit-log-FormalRetrievalActivation-missing.jsonl, vector/v8/dedicated-crossing/revocation-record-FormalRetrievalActivation-missing.json`
+  - reasoning: 1 blocked reason(s); crossing dry-run blocked.
+- `GlobalScope`: passedAsExpected=`True`
+  - status expected=`CrossingDryRunBlocked` actual=`CrossingDryRunBlocked` matched=`True`
+  - expectedReason=`GlobalScopeForbidden` matched=`True`
+  - bound: capability=`FormalRetrievalActivation` scope=`*`
+  - dryRunOnly=`True` executionAllowed=`False` notCrossed=`True` applicationNotApplied=`True` rollbackNotActivated=`True`
+  - actualReasons=`GlobalScopeForbidden`
+  - plannedArtifacts=`vector/v8/dedicated-crossing/capability-grant-FormalRetrievalActivation--.json, vector/v8/dedicated-crossing/runtime-config-patch-FormalRetrievalActivation--.json, vector/v8/dedicated-crossing/rollback-snapshot-FormalRetrievalActivation--.json, vector/v8/dedicated-crossing/audit-log-FormalRetrievalActivation--.jsonl, vector/v8/dedicated-crossing/revocation-record-FormalRetrievalActivation--.json`
+  - reasoning: 1 blocked reason(s); crossing dry-run blocked.
+- `UpstreamCrossedTrue`: passedAsExpected=`True`
+  - status expected=`CrossingDryRunBlocked` actual=`CrossingDryRunBlocked` matched=`True`
+  - expectedReason=`UpstreamCrossedTrue` matched=`True`
+  - bound: capability=`FormalRetrievalActivation` scope=`demo-workspace/demo-collection`
+  - dryRunOnly=`True` executionAllowed=`False` notCrossed=`True` applicationNotApplied=`True` rollbackNotActivated=`True`
+  - actualReasons=`UpstreamCrossedTrue`
+  - plannedArtifacts=`vector/v8/dedicated-crossing/capability-grant-FormalRetrievalActivation-demo-workspace-demo-collection.json, vector/v8/dedicated-crossing/runtime-config-patch-FormalRetrievalActivation-demo-workspace-demo-collection.json, vector/v8/dedicated-crossing/rollback-snapshot-FormalRetrievalActivation-demo-workspace-demo-collection.json, vector/v8/dedicated-crossing/audit-log-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl, vector/v8/dedicated-crossing/revocation-record-FormalRetrievalActivation-demo-workspace-demo-collection.json`
+  - reasoning: 1 blocked reason(s); crossing dry-run blocked.
+- `UpstreamApplicationApplied`: passedAsExpected=`True`
+  - status expected=`CrossingDryRunBlocked` actual=`CrossingDryRunBlocked` matched=`True`
+  - expectedReason=`UpstreamApplicationApplied` matched=`True`
+  - bound: capability=`FormalRetrievalActivation` scope=`demo-workspace/demo-collection`
+  - dryRunOnly=`True` executionAllowed=`False` notCrossed=`True` applicationNotApplied=`True` rollbackNotActivated=`True`
+  - actualReasons=`UpstreamApplicationApplied`
+  - plannedArtifacts=`vector/v8/dedicated-crossing/capability-grant-FormalRetrievalActivation-demo-workspace-demo-collection.json, vector/v8/dedicated-crossing/runtime-config-patch-FormalRetrievalActivation-demo-workspace-demo-collection.json, vector/v8/dedicated-crossing/rollback-snapshot-FormalRetrievalActivation-demo-workspace-demo-collection.json, vector/v8/dedicated-crossing/audit-log-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl, vector/v8/dedicated-crossing/revocation-record-FormalRetrievalActivation-demo-workspace-demo-collection.json`
+  - reasoning: 1 blocked reason(s); crossing dry-run blocked.
+- `UpstreamRollbackActivated`: passedAsExpected=`True`
+  - status expected=`CrossingDryRunBlocked` actual=`CrossingDryRunBlocked` matched=`True`
+  - expectedReason=`UpstreamRollbackActivated` matched=`True`
+  - bound: capability=`FormalRetrievalActivation` scope=`demo-workspace/demo-collection`
+  - dryRunOnly=`True` executionAllowed=`False` notCrossed=`True` applicationNotApplied=`True` rollbackNotActivated=`True`
+  - actualReasons=`UpstreamRollbackActivated`
+  - plannedArtifacts=`vector/v8/dedicated-crossing/capability-grant-FormalRetrievalActivation-demo-workspace-demo-collection.json, vector/v8/dedicated-crossing/runtime-config-patch-FormalRetrievalActivation-demo-workspace-demo-collection.json, vector/v8/dedicated-crossing/rollback-snapshot-FormalRetrievalActivation-demo-workspace-demo-collection.json, vector/v8/dedicated-crossing/audit-log-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl, vector/v8/dedicated-crossing/revocation-record-FormalRetrievalActivation-demo-workspace-demo-collection.json`
+  - reasoning: 1 blocked reason(s); crossing dry-run blocked.
+- `RuntimeGateNotPassed`: passedAsExpected=`True`
+  - status expected=`CrossingDryRunBlocked` actual=`CrossingDryRunBlocked` matched=`True`
+  - expectedReason=`RuntimeChangeGateNotPassed` matched=`True`
+  - bound: capability=`FormalRetrievalActivation` scope=`demo-workspace/demo-collection`
+  - dryRunOnly=`True` executionAllowed=`False` notCrossed=`True` applicationNotApplied=`True` rollbackNotActivated=`True`
+  - actualReasons=`RuntimeChangeGateNotPassed`
+  - plannedArtifacts=`vector/v8/dedicated-crossing/capability-grant-FormalRetrievalActivation-demo-workspace-demo-collection.json, vector/v8/dedicated-crossing/runtime-config-patch-FormalRetrievalActivation-demo-workspace-demo-collection.json, vector/v8/dedicated-crossing/rollback-snapshot-FormalRetrievalActivation-demo-workspace-demo-collection.json, vector/v8/dedicated-crossing/audit-log-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl, vector/v8/dedicated-crossing/revocation-record-FormalRetrievalActivation-demo-workspace-demo-collection.json`
+  - reasoning: 1 blocked reason(s); crossing dry-run blocked.
+- `P15GateNotPassed`: passedAsExpected=`True`
+  - status expected=`CrossingDryRunBlocked` actual=`CrossingDryRunBlocked` matched=`True`
+  - expectedReason=`P15GateNotPassed` matched=`True`
+  - bound: capability=`FormalRetrievalActivation` scope=`demo-workspace/demo-collection`
+  - dryRunOnly=`True` executionAllowed=`False` notCrossed=`True` applicationNotApplied=`True` rollbackNotActivated=`True`
+  - actualReasons=`P15GateNotPassed`
+  - plannedArtifacts=`vector/v8/dedicated-crossing/capability-grant-FormalRetrievalActivation-demo-workspace-demo-collection.json, vector/v8/dedicated-crossing/runtime-config-patch-FormalRetrievalActivation-demo-workspace-demo-collection.json, vector/v8/dedicated-crossing/rollback-snapshot-FormalRetrievalActivation-demo-workspace-demo-collection.json, vector/v8/dedicated-crossing/audit-log-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl, vector/v8/dedicated-crossing/revocation-record-FormalRetrievalActivation-demo-workspace-demo-collection.json`
+  - reasoning: 1 blocked reason(s); crossing dry-run blocked.
+- `MainlineEvidencePresent`: passedAsExpected=`True`
+  - status expected=`CrossingDryRunBlocked` actual=`CrossingDryRunBlocked` matched=`True`
+  - expectedReason=`MainlineEvidencePresent` matched=`True`
+  - bound: capability=`FormalRetrievalActivation` scope=`demo-workspace/demo-collection`
+  - dryRunOnly=`True` executionAllowed=`False` notCrossed=`True` applicationNotApplied=`True` rollbackNotActivated=`True`
+  - actualReasons=`MainlineEvidencePresent`
+  - plannedArtifacts=`vector/v8/dedicated-crossing/capability-grant-FormalRetrievalActivation-demo-workspace-demo-collection.json, vector/v8/dedicated-crossing/runtime-config-patch-FormalRetrievalActivation-demo-workspace-demo-collection.json, vector/v8/dedicated-crossing/rollback-snapshot-FormalRetrievalActivation-demo-workspace-demo-collection.json, vector/v8/dedicated-crossing/audit-log-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl, vector/v8/dedicated-crossing/revocation-record-FormalRetrievalActivation-demo-workspace-demo-collection.json`
+  - reasoning: 1 blocked reason(s); crossing dry-run blocked.
+- `MainlineTrustRegistryPresent`: passedAsExpected=`True`
+  - status expected=`CrossingDryRunBlocked` actual=`CrossingDryRunBlocked` matched=`True`
+  - expectedReason=`MainlineTrustRegistryPresent` matched=`True`
+  - bound: capability=`FormalRetrievalActivation` scope=`demo-workspace/demo-collection`
+  - dryRunOnly=`True` executionAllowed=`False` notCrossed=`True` applicationNotApplied=`True` rollbackNotActivated=`True`
+  - actualReasons=`MainlineTrustRegistryPresent`
+  - plannedArtifacts=`vector/v8/dedicated-crossing/capability-grant-FormalRetrievalActivation-demo-workspace-demo-collection.json, vector/v8/dedicated-crossing/runtime-config-patch-FormalRetrievalActivation-demo-workspace-demo-collection.json, vector/v8/dedicated-crossing/rollback-snapshot-FormalRetrievalActivation-demo-workspace-demo-collection.json, vector/v8/dedicated-crossing/audit-log-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl, vector/v8/dedicated-crossing/revocation-record-FormalRetrievalActivation-demo-workspace-demo-collection.json`
+  - reasoning: 1 blocked reason(s); crossing dry-run blocked.
+- `ConfigPatchPathWouldOverwrite`: passedAsExpected=`True`
+  - status expected=`CrossingDryRunBlocked` actual=`CrossingDryRunBlocked` matched=`True`
+  - expectedReason=`PlannedConfigPatchPathWouldOverwrite` matched=`True`
+  - bound: capability=`FormalRetrievalActivation` scope=`demo-workspace/demo-collection`
+  - dryRunOnly=`True` executionAllowed=`False` notCrossed=`True` applicationNotApplied=`True` rollbackNotActivated=`True`
+  - actualReasons=`PlannedConfigPatchPathWouldOverwrite`
+  - plannedArtifacts=`vector/v8/dedicated-crossing/capability-grant-FormalRetrievalActivation-demo-workspace-demo-collection.json, vector/v8/dedicated-crossing/runtime-config-patch-FormalRetrievalActivation-demo-workspace-demo-collection.json, vector/v8/dedicated-crossing/rollback-snapshot-FormalRetrievalActivation-demo-workspace-demo-collection.json, vector/v8/dedicated-crossing/audit-log-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl, vector/v8/dedicated-crossing/revocation-record-FormalRetrievalActivation-demo-workspace-demo-collection.json`
+  - reasoning: 1 blocked reason(s); crossing dry-run blocked.
+- `RollbackSnapshotPathMissing`: passedAsExpected=`True`
+  - status expected=`CrossingDryRunBlocked` actual=`CrossingDryRunBlocked` matched=`True`
+  - expectedReason=`PlannedRollbackSnapshotPathMissing` matched=`True`
+  - bound: capability=`FormalRetrievalActivation` scope=`demo-workspace/demo-collection`
+  - dryRunOnly=`True` executionAllowed=`False` notCrossed=`True` applicationNotApplied=`True` rollbackNotActivated=`True`
+  - actualReasons=`PlannedRollbackSnapshotPathMissing`
+  - plannedArtifacts=`vector/v8/dedicated-crossing/capability-grant-FormalRetrievalActivation-demo-workspace-demo-collection.json, vector/v8/dedicated-crossing/runtime-config-patch-FormalRetrievalActivation-demo-workspace-demo-collection.json, vector/v8/dedicated-crossing/audit-log-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl, vector/v8/dedicated-crossing/revocation-record-FormalRetrievalActivation-demo-workspace-demo-collection.json`
+  - reasoning: 1 blocked reason(s); crossing dry-run blocked.
+
+V8.17 dedicated crossing gate dry-run matrix。读取 V8.16 PreCrossing artifact + 16 个 scenarios 验证决策逻辑 + 输出 crossing execution contract（5 个 planned artifact path）。CrossingDryRunReady ≠ Crossed — 这层 matrix 仅产出 dry-run plan；不写 planned artifact、不应用 grant、不修改 runtime config、不启用 formal retrieval。

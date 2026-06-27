@@ -1,0 +1,642 @@
+﻿{
+  "OperationId": "frp-dedicated-crossing-dry-run-6431c7712f6840c09e5f2b30cbea1ee5",
+  "CreatedAt": "2026-06-27T02:04:24.1049219+00:00",
+  "CrossingDryRunMatrixPassed": true,
+  "GatePassed": true,
+  "TotalCases": 16,
+  "PassedCases": 16,
+  "FailedCases": 0,
+  "ReadyCases": 1,
+  "BlockedCases": 15,
+  "Cases": [
+    {
+      "CaseName": "AllAlignedReady",
+      "ExpectedStatus": "CrossingDryRunReady",
+      "ActualStatus": "CrossingDryRunReady",
+      "ExpectedBlockedReason": "",
+      "ActualBlockedReasons": [],
+      "BoundCapability": "FormalRetrievalActivation",
+      "BoundScope": "demo-workspace/demo-collection",
+      "Contract": {
+        "PlannedCapability": "FormalRetrievalActivation",
+        "PlannedScope": "demo-workspace/demo-collection",
+        "PlannedCapabilityGrantPath": "vector/v8/dedicated-crossing/capability-grant-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "PlannedRuntimeConfigPatchPath": "vector/v8/dedicated-crossing/runtime-config-patch-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "PlannedRollbackSnapshotPath": "vector/v8/dedicated-crossing/rollback-snapshot-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "PlannedAuditLogPath": "vector/v8/dedicated-crossing/audit-log-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl",
+        "PlannedRevocationRecordPath": "vector/v8/dedicated-crossing/revocation-record-FormalRetrievalActivation-demo-workspace-demo-collection.json"
+      },
+      "PlannedArtifacts": [
+        "vector/v8/dedicated-crossing/capability-grant-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/dedicated-crossing/runtime-config-patch-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/dedicated-crossing/rollback-snapshot-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/dedicated-crossing/audit-log-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl",
+        "vector/v8/dedicated-crossing/revocation-record-FormalRetrievalActivation-demo-workspace-demo-collection.json"
+      ],
+      "Reasoning": "all crossing dry-run preconditions met; capability=\u0027FormalRetrievalActivation\u0027 scope=\u0027demo-workspace/demo-collection\u0027; 5 planned artifact paths recorded. DryRunOnly=true; CrossingExecutionAllowed=false; nothing written, nothing crossed.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "DryRunOnly": true,
+      "CrossingExecutionAllowed": false,
+      "NotCrossed": true,
+      "ApplicationNotApplied": true,
+      "RollbackNotActivated": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "PreCrossingGateMissing",
+      "ExpectedStatus": "CrossingDryRunBlocked",
+      "ActualStatus": "CrossingDryRunBlocked",
+      "ExpectedBlockedReason": "PreCrossingGateMissing",
+      "ActualBlockedReasons": [
+        "PreCrossingGateMissing"
+      ],
+      "BoundCapability": "",
+      "BoundScope": "",
+      "Contract": {
+        "PlannedCapability": "",
+        "PlannedScope": "",
+        "PlannedCapabilityGrantPath": "",
+        "PlannedRuntimeConfigPatchPath": "",
+        "PlannedRollbackSnapshotPath": "",
+        "PlannedAuditLogPath": "",
+        "PlannedRevocationRecordPath": ""
+      },
+      "PlannedArtifacts": [],
+      "Reasoning": "pre-crossing final gate report missing; crossing dry-run cannot proceed.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "DryRunOnly": true,
+      "CrossingExecutionAllowed": false,
+      "NotCrossed": true,
+      "ApplicationNotApplied": true,
+      "RollbackNotActivated": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "PreCrossingGateNotPassed",
+      "ExpectedStatus": "CrossingDryRunBlocked",
+      "ActualStatus": "CrossingDryRunBlocked",
+      "ExpectedBlockedReason": "PreCrossingGateNotPassed",
+      "ActualBlockedReasons": [
+        "PreCrossingGateNotPassed"
+      ],
+      "BoundCapability": "FormalRetrievalActivation",
+      "BoundScope": "demo-workspace/demo-collection",
+      "Contract": {
+        "PlannedCapability": "FormalRetrievalActivation",
+        "PlannedScope": "demo-workspace/demo-collection",
+        "PlannedCapabilityGrantPath": "vector/v8/dedicated-crossing/capability-grant-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "PlannedRuntimeConfigPatchPath": "vector/v8/dedicated-crossing/runtime-config-patch-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "PlannedRollbackSnapshotPath": "vector/v8/dedicated-crossing/rollback-snapshot-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "PlannedAuditLogPath": "vector/v8/dedicated-crossing/audit-log-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl",
+        "PlannedRevocationRecordPath": "vector/v8/dedicated-crossing/revocation-record-FormalRetrievalActivation-demo-workspace-demo-collection.json"
+      },
+      "PlannedArtifacts": [
+        "vector/v8/dedicated-crossing/capability-grant-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/dedicated-crossing/runtime-config-patch-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/dedicated-crossing/rollback-snapshot-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/dedicated-crossing/audit-log-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl",
+        "vector/v8/dedicated-crossing/revocation-record-FormalRetrievalActivation-demo-workspace-demo-collection.json"
+      ],
+      "Reasoning": "1 blocked reason(s); crossing dry-run blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "DryRunOnly": true,
+      "CrossingExecutionAllowed": false,
+      "NotCrossed": true,
+      "ApplicationNotApplied": true,
+      "RollbackNotActivated": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "NoPreCrossingReadyCase",
+      "ExpectedStatus": "CrossingDryRunBlocked",
+      "ActualStatus": "CrossingDryRunBlocked",
+      "ExpectedBlockedReason": "NoPreCrossingReadyCase",
+      "ActualBlockedReasons": [
+        "NoPreCrossingReadyCase"
+      ],
+      "BoundCapability": "FormalRetrievalActivation",
+      "BoundScope": "demo-workspace/demo-collection",
+      "Contract": {
+        "PlannedCapability": "FormalRetrievalActivation",
+        "PlannedScope": "demo-workspace/demo-collection",
+        "PlannedCapabilityGrantPath": "vector/v8/dedicated-crossing/capability-grant-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "PlannedRuntimeConfigPatchPath": "vector/v8/dedicated-crossing/runtime-config-patch-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "PlannedRollbackSnapshotPath": "vector/v8/dedicated-crossing/rollback-snapshot-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "PlannedAuditLogPath": "vector/v8/dedicated-crossing/audit-log-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl",
+        "PlannedRevocationRecordPath": "vector/v8/dedicated-crossing/revocation-record-FormalRetrievalActivation-demo-workspace-demo-collection.json"
+      },
+      "PlannedArtifacts": [
+        "vector/v8/dedicated-crossing/capability-grant-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/dedicated-crossing/runtime-config-patch-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/dedicated-crossing/rollback-snapshot-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/dedicated-crossing/audit-log-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl",
+        "vector/v8/dedicated-crossing/revocation-record-FormalRetrievalActivation-demo-workspace-demo-collection.json"
+      ],
+      "Reasoning": "1 blocked reason(s); crossing dry-run blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "DryRunOnly": true,
+      "CrossingExecutionAllowed": false,
+      "NotCrossed": true,
+      "ApplicationNotApplied": true,
+      "RollbackNotActivated": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "CapabilityMismatch",
+      "ExpectedStatus": "CrossingDryRunBlocked",
+      "ActualStatus": "CrossingDryRunBlocked",
+      "ExpectedBlockedReason": "CapabilityMismatch",
+      "ActualBlockedReasons": [
+        "CapabilityMismatch"
+      ],
+      "BoundCapability": "UnauthorizedCapability",
+      "BoundScope": "demo-workspace/demo-collection",
+      "Contract": {
+        "PlannedCapability": "UnauthorizedCapability",
+        "PlannedScope": "demo-workspace/demo-collection",
+        "PlannedCapabilityGrantPath": "vector/v8/dedicated-crossing/capability-grant-UnauthorizedCapability-demo-workspace-demo-collection.json",
+        "PlannedRuntimeConfigPatchPath": "vector/v8/dedicated-crossing/runtime-config-patch-UnauthorizedCapability-demo-workspace-demo-collection.json",
+        "PlannedRollbackSnapshotPath": "vector/v8/dedicated-crossing/rollback-snapshot-UnauthorizedCapability-demo-workspace-demo-collection.json",
+        "PlannedAuditLogPath": "vector/v8/dedicated-crossing/audit-log-UnauthorizedCapability-demo-workspace-demo-collection.jsonl",
+        "PlannedRevocationRecordPath": "vector/v8/dedicated-crossing/revocation-record-UnauthorizedCapability-demo-workspace-demo-collection.json"
+      },
+      "PlannedArtifacts": [
+        "vector/v8/dedicated-crossing/capability-grant-UnauthorizedCapability-demo-workspace-demo-collection.json",
+        "vector/v8/dedicated-crossing/runtime-config-patch-UnauthorizedCapability-demo-workspace-demo-collection.json",
+        "vector/v8/dedicated-crossing/rollback-snapshot-UnauthorizedCapability-demo-workspace-demo-collection.json",
+        "vector/v8/dedicated-crossing/audit-log-UnauthorizedCapability-demo-workspace-demo-collection.jsonl",
+        "vector/v8/dedicated-crossing/revocation-record-UnauthorizedCapability-demo-workspace-demo-collection.json"
+      ],
+      "Reasoning": "1 blocked reason(s); crossing dry-run blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "DryRunOnly": true,
+      "CrossingExecutionAllowed": false,
+      "NotCrossed": true,
+      "ApplicationNotApplied": true,
+      "RollbackNotActivated": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "EmptyScope",
+      "ExpectedStatus": "CrossingDryRunBlocked",
+      "ActualStatus": "CrossingDryRunBlocked",
+      "ExpectedBlockedReason": "EmptyScope",
+      "ActualBlockedReasons": [
+        "EmptyScope"
+      ],
+      "BoundCapability": "FormalRetrievalActivation",
+      "BoundScope": "",
+      "Contract": {
+        "PlannedCapability": "FormalRetrievalActivation",
+        "PlannedScope": "",
+        "PlannedCapabilityGrantPath": "vector/v8/dedicated-crossing/capability-grant-FormalRetrievalActivation-missing.json",
+        "PlannedRuntimeConfigPatchPath": "vector/v8/dedicated-crossing/runtime-config-patch-FormalRetrievalActivation-missing.json",
+        "PlannedRollbackSnapshotPath": "vector/v8/dedicated-crossing/rollback-snapshot-FormalRetrievalActivation-missing.json",
+        "PlannedAuditLogPath": "vector/v8/dedicated-crossing/audit-log-FormalRetrievalActivation-missing.jsonl",
+        "PlannedRevocationRecordPath": "vector/v8/dedicated-crossing/revocation-record-FormalRetrievalActivation-missing.json"
+      },
+      "PlannedArtifacts": [
+        "vector/v8/dedicated-crossing/capability-grant-FormalRetrievalActivation-missing.json",
+        "vector/v8/dedicated-crossing/runtime-config-patch-FormalRetrievalActivation-missing.json",
+        "vector/v8/dedicated-crossing/rollback-snapshot-FormalRetrievalActivation-missing.json",
+        "vector/v8/dedicated-crossing/audit-log-FormalRetrievalActivation-missing.jsonl",
+        "vector/v8/dedicated-crossing/revocation-record-FormalRetrievalActivation-missing.json"
+      ],
+      "Reasoning": "1 blocked reason(s); crossing dry-run blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "DryRunOnly": true,
+      "CrossingExecutionAllowed": false,
+      "NotCrossed": true,
+      "ApplicationNotApplied": true,
+      "RollbackNotActivated": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "GlobalScope",
+      "ExpectedStatus": "CrossingDryRunBlocked",
+      "ActualStatus": "CrossingDryRunBlocked",
+      "ExpectedBlockedReason": "GlobalScopeForbidden",
+      "ActualBlockedReasons": [
+        "GlobalScopeForbidden"
+      ],
+      "BoundCapability": "FormalRetrievalActivation",
+      "BoundScope": "*",
+      "Contract": {
+        "PlannedCapability": "FormalRetrievalActivation",
+        "PlannedScope": "*",
+        "PlannedCapabilityGrantPath": "vector/v8/dedicated-crossing/capability-grant-FormalRetrievalActivation--.json",
+        "PlannedRuntimeConfigPatchPath": "vector/v8/dedicated-crossing/runtime-config-patch-FormalRetrievalActivation--.json",
+        "PlannedRollbackSnapshotPath": "vector/v8/dedicated-crossing/rollback-snapshot-FormalRetrievalActivation--.json",
+        "PlannedAuditLogPath": "vector/v8/dedicated-crossing/audit-log-FormalRetrievalActivation--.jsonl",
+        "PlannedRevocationRecordPath": "vector/v8/dedicated-crossing/revocation-record-FormalRetrievalActivation--.json"
+      },
+      "PlannedArtifacts": [
+        "vector/v8/dedicated-crossing/capability-grant-FormalRetrievalActivation--.json",
+        "vector/v8/dedicated-crossing/runtime-config-patch-FormalRetrievalActivation--.json",
+        "vector/v8/dedicated-crossing/rollback-snapshot-FormalRetrievalActivation--.json",
+        "vector/v8/dedicated-crossing/audit-log-FormalRetrievalActivation--.jsonl",
+        "vector/v8/dedicated-crossing/revocation-record-FormalRetrievalActivation--.json"
+      ],
+      "Reasoning": "1 blocked reason(s); crossing dry-run blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "DryRunOnly": true,
+      "CrossingExecutionAllowed": false,
+      "NotCrossed": true,
+      "ApplicationNotApplied": true,
+      "RollbackNotActivated": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "UpstreamCrossedTrue",
+      "ExpectedStatus": "CrossingDryRunBlocked",
+      "ActualStatus": "CrossingDryRunBlocked",
+      "ExpectedBlockedReason": "UpstreamCrossedTrue",
+      "ActualBlockedReasons": [
+        "UpstreamCrossedTrue"
+      ],
+      "BoundCapability": "FormalRetrievalActivation",
+      "BoundScope": "demo-workspace/demo-collection",
+      "Contract": {
+        "PlannedCapability": "FormalRetrievalActivation",
+        "PlannedScope": "demo-workspace/demo-collection",
+        "PlannedCapabilityGrantPath": "vector/v8/dedicated-crossing/capability-grant-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "PlannedRuntimeConfigPatchPath": "vector/v8/dedicated-crossing/runtime-config-patch-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "PlannedRollbackSnapshotPath": "vector/v8/dedicated-crossing/rollback-snapshot-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "PlannedAuditLogPath": "vector/v8/dedicated-crossing/audit-log-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl",
+        "PlannedRevocationRecordPath": "vector/v8/dedicated-crossing/revocation-record-FormalRetrievalActivation-demo-workspace-demo-collection.json"
+      },
+      "PlannedArtifacts": [
+        "vector/v8/dedicated-crossing/capability-grant-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/dedicated-crossing/runtime-config-patch-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/dedicated-crossing/rollback-snapshot-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/dedicated-crossing/audit-log-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl",
+        "vector/v8/dedicated-crossing/revocation-record-FormalRetrievalActivation-demo-workspace-demo-collection.json"
+      ],
+      "Reasoning": "1 blocked reason(s); crossing dry-run blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "DryRunOnly": true,
+      "CrossingExecutionAllowed": false,
+      "NotCrossed": true,
+      "ApplicationNotApplied": true,
+      "RollbackNotActivated": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "UpstreamApplicationApplied",
+      "ExpectedStatus": "CrossingDryRunBlocked",
+      "ActualStatus": "CrossingDryRunBlocked",
+      "ExpectedBlockedReason": "UpstreamApplicationApplied",
+      "ActualBlockedReasons": [
+        "UpstreamApplicationApplied"
+      ],
+      "BoundCapability": "FormalRetrievalActivation",
+      "BoundScope": "demo-workspace/demo-collection",
+      "Contract": {
+        "PlannedCapability": "FormalRetrievalActivation",
+        "PlannedScope": "demo-workspace/demo-collection",
+        "PlannedCapabilityGrantPath": "vector/v8/dedicated-crossing/capability-grant-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "PlannedRuntimeConfigPatchPath": "vector/v8/dedicated-crossing/runtime-config-patch-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "PlannedRollbackSnapshotPath": "vector/v8/dedicated-crossing/rollback-snapshot-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "PlannedAuditLogPath": "vector/v8/dedicated-crossing/audit-log-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl",
+        "PlannedRevocationRecordPath": "vector/v8/dedicated-crossing/revocation-record-FormalRetrievalActivation-demo-workspace-demo-collection.json"
+      },
+      "PlannedArtifacts": [
+        "vector/v8/dedicated-crossing/capability-grant-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/dedicated-crossing/runtime-config-patch-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/dedicated-crossing/rollback-snapshot-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/dedicated-crossing/audit-log-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl",
+        "vector/v8/dedicated-crossing/revocation-record-FormalRetrievalActivation-demo-workspace-demo-collection.json"
+      ],
+      "Reasoning": "1 blocked reason(s); crossing dry-run blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "DryRunOnly": true,
+      "CrossingExecutionAllowed": false,
+      "NotCrossed": true,
+      "ApplicationNotApplied": true,
+      "RollbackNotActivated": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "UpstreamRollbackActivated",
+      "ExpectedStatus": "CrossingDryRunBlocked",
+      "ActualStatus": "CrossingDryRunBlocked",
+      "ExpectedBlockedReason": "UpstreamRollbackActivated",
+      "ActualBlockedReasons": [
+        "UpstreamRollbackActivated"
+      ],
+      "BoundCapability": "FormalRetrievalActivation",
+      "BoundScope": "demo-workspace/demo-collection",
+      "Contract": {
+        "PlannedCapability": "FormalRetrievalActivation",
+        "PlannedScope": "demo-workspace/demo-collection",
+        "PlannedCapabilityGrantPath": "vector/v8/dedicated-crossing/capability-grant-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "PlannedRuntimeConfigPatchPath": "vector/v8/dedicated-crossing/runtime-config-patch-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "PlannedRollbackSnapshotPath": "vector/v8/dedicated-crossing/rollback-snapshot-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "PlannedAuditLogPath": "vector/v8/dedicated-crossing/audit-log-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl",
+        "PlannedRevocationRecordPath": "vector/v8/dedicated-crossing/revocation-record-FormalRetrievalActivation-demo-workspace-demo-collection.json"
+      },
+      "PlannedArtifacts": [
+        "vector/v8/dedicated-crossing/capability-grant-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/dedicated-crossing/runtime-config-patch-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/dedicated-crossing/rollback-snapshot-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/dedicated-crossing/audit-log-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl",
+        "vector/v8/dedicated-crossing/revocation-record-FormalRetrievalActivation-demo-workspace-demo-collection.json"
+      ],
+      "Reasoning": "1 blocked reason(s); crossing dry-run blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "DryRunOnly": true,
+      "CrossingExecutionAllowed": false,
+      "NotCrossed": true,
+      "ApplicationNotApplied": true,
+      "RollbackNotActivated": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "RuntimeGateNotPassed",
+      "ExpectedStatus": "CrossingDryRunBlocked",
+      "ActualStatus": "CrossingDryRunBlocked",
+      "ExpectedBlockedReason": "RuntimeChangeGateNotPassed",
+      "ActualBlockedReasons": [
+        "RuntimeChangeGateNotPassed"
+      ],
+      "BoundCapability": "FormalRetrievalActivation",
+      "BoundScope": "demo-workspace/demo-collection",
+      "Contract": {
+        "PlannedCapability": "FormalRetrievalActivation",
+        "PlannedScope": "demo-workspace/demo-collection",
+        "PlannedCapabilityGrantPath": "vector/v8/dedicated-crossing/capability-grant-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "PlannedRuntimeConfigPatchPath": "vector/v8/dedicated-crossing/runtime-config-patch-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "PlannedRollbackSnapshotPath": "vector/v8/dedicated-crossing/rollback-snapshot-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "PlannedAuditLogPath": "vector/v8/dedicated-crossing/audit-log-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl",
+        "PlannedRevocationRecordPath": "vector/v8/dedicated-crossing/revocation-record-FormalRetrievalActivation-demo-workspace-demo-collection.json"
+      },
+      "PlannedArtifacts": [
+        "vector/v8/dedicated-crossing/capability-grant-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/dedicated-crossing/runtime-config-patch-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/dedicated-crossing/rollback-snapshot-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/dedicated-crossing/audit-log-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl",
+        "vector/v8/dedicated-crossing/revocation-record-FormalRetrievalActivation-demo-workspace-demo-collection.json"
+      ],
+      "Reasoning": "1 blocked reason(s); crossing dry-run blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "DryRunOnly": true,
+      "CrossingExecutionAllowed": false,
+      "NotCrossed": true,
+      "ApplicationNotApplied": true,
+      "RollbackNotActivated": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "P15GateNotPassed",
+      "ExpectedStatus": "CrossingDryRunBlocked",
+      "ActualStatus": "CrossingDryRunBlocked",
+      "ExpectedBlockedReason": "P15GateNotPassed",
+      "ActualBlockedReasons": [
+        "P15GateNotPassed"
+      ],
+      "BoundCapability": "FormalRetrievalActivation",
+      "BoundScope": "demo-workspace/demo-collection",
+      "Contract": {
+        "PlannedCapability": "FormalRetrievalActivation",
+        "PlannedScope": "demo-workspace/demo-collection",
+        "PlannedCapabilityGrantPath": "vector/v8/dedicated-crossing/capability-grant-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "PlannedRuntimeConfigPatchPath": "vector/v8/dedicated-crossing/runtime-config-patch-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "PlannedRollbackSnapshotPath": "vector/v8/dedicated-crossing/rollback-snapshot-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "PlannedAuditLogPath": "vector/v8/dedicated-crossing/audit-log-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl",
+        "PlannedRevocationRecordPath": "vector/v8/dedicated-crossing/revocation-record-FormalRetrievalActivation-demo-workspace-demo-collection.json"
+      },
+      "PlannedArtifacts": [
+        "vector/v8/dedicated-crossing/capability-grant-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/dedicated-crossing/runtime-config-patch-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/dedicated-crossing/rollback-snapshot-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/dedicated-crossing/audit-log-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl",
+        "vector/v8/dedicated-crossing/revocation-record-FormalRetrievalActivation-demo-workspace-demo-collection.json"
+      ],
+      "Reasoning": "1 blocked reason(s); crossing dry-run blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "DryRunOnly": true,
+      "CrossingExecutionAllowed": false,
+      "NotCrossed": true,
+      "ApplicationNotApplied": true,
+      "RollbackNotActivated": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "MainlineEvidencePresent",
+      "ExpectedStatus": "CrossingDryRunBlocked",
+      "ActualStatus": "CrossingDryRunBlocked",
+      "ExpectedBlockedReason": "MainlineEvidencePresent",
+      "ActualBlockedReasons": [
+        "MainlineEvidencePresent"
+      ],
+      "BoundCapability": "FormalRetrievalActivation",
+      "BoundScope": "demo-workspace/demo-collection",
+      "Contract": {
+        "PlannedCapability": "FormalRetrievalActivation",
+        "PlannedScope": "demo-workspace/demo-collection",
+        "PlannedCapabilityGrantPath": "vector/v8/dedicated-crossing/capability-grant-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "PlannedRuntimeConfigPatchPath": "vector/v8/dedicated-crossing/runtime-config-patch-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "PlannedRollbackSnapshotPath": "vector/v8/dedicated-crossing/rollback-snapshot-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "PlannedAuditLogPath": "vector/v8/dedicated-crossing/audit-log-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl",
+        "PlannedRevocationRecordPath": "vector/v8/dedicated-crossing/revocation-record-FormalRetrievalActivation-demo-workspace-demo-collection.json"
+      },
+      "PlannedArtifacts": [
+        "vector/v8/dedicated-crossing/capability-grant-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/dedicated-crossing/runtime-config-patch-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/dedicated-crossing/rollback-snapshot-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/dedicated-crossing/audit-log-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl",
+        "vector/v8/dedicated-crossing/revocation-record-FormalRetrievalActivation-demo-workspace-demo-collection.json"
+      ],
+      "Reasoning": "1 blocked reason(s); crossing dry-run blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "DryRunOnly": true,
+      "CrossingExecutionAllowed": false,
+      "NotCrossed": true,
+      "ApplicationNotApplied": true,
+      "RollbackNotActivated": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "MainlineTrustRegistryPresent",
+      "ExpectedStatus": "CrossingDryRunBlocked",
+      "ActualStatus": "CrossingDryRunBlocked",
+      "ExpectedBlockedReason": "MainlineTrustRegistryPresent",
+      "ActualBlockedReasons": [
+        "MainlineTrustRegistryPresent"
+      ],
+      "BoundCapability": "FormalRetrievalActivation",
+      "BoundScope": "demo-workspace/demo-collection",
+      "Contract": {
+        "PlannedCapability": "FormalRetrievalActivation",
+        "PlannedScope": "demo-workspace/demo-collection",
+        "PlannedCapabilityGrantPath": "vector/v8/dedicated-crossing/capability-grant-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "PlannedRuntimeConfigPatchPath": "vector/v8/dedicated-crossing/runtime-config-patch-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "PlannedRollbackSnapshotPath": "vector/v8/dedicated-crossing/rollback-snapshot-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "PlannedAuditLogPath": "vector/v8/dedicated-crossing/audit-log-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl",
+        "PlannedRevocationRecordPath": "vector/v8/dedicated-crossing/revocation-record-FormalRetrievalActivation-demo-workspace-demo-collection.json"
+      },
+      "PlannedArtifacts": [
+        "vector/v8/dedicated-crossing/capability-grant-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/dedicated-crossing/runtime-config-patch-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/dedicated-crossing/rollback-snapshot-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/dedicated-crossing/audit-log-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl",
+        "vector/v8/dedicated-crossing/revocation-record-FormalRetrievalActivation-demo-workspace-demo-collection.json"
+      ],
+      "Reasoning": "1 blocked reason(s); crossing dry-run blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "DryRunOnly": true,
+      "CrossingExecutionAllowed": false,
+      "NotCrossed": true,
+      "ApplicationNotApplied": true,
+      "RollbackNotActivated": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "ConfigPatchPathWouldOverwrite",
+      "ExpectedStatus": "CrossingDryRunBlocked",
+      "ActualStatus": "CrossingDryRunBlocked",
+      "ExpectedBlockedReason": "PlannedConfigPatchPathWouldOverwrite",
+      "ActualBlockedReasons": [
+        "PlannedConfigPatchPathWouldOverwrite"
+      ],
+      "BoundCapability": "FormalRetrievalActivation",
+      "BoundScope": "demo-workspace/demo-collection",
+      "Contract": {
+        "PlannedCapability": "FormalRetrievalActivation",
+        "PlannedScope": "demo-workspace/demo-collection",
+        "PlannedCapabilityGrantPath": "vector/v8/dedicated-crossing/capability-grant-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "PlannedRuntimeConfigPatchPath": "vector/v8/dedicated-crossing/runtime-config-patch-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "PlannedRollbackSnapshotPath": "vector/v8/dedicated-crossing/rollback-snapshot-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "PlannedAuditLogPath": "vector/v8/dedicated-crossing/audit-log-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl",
+        "PlannedRevocationRecordPath": "vector/v8/dedicated-crossing/revocation-record-FormalRetrievalActivation-demo-workspace-demo-collection.json"
+      },
+      "PlannedArtifacts": [
+        "vector/v8/dedicated-crossing/capability-grant-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/dedicated-crossing/runtime-config-patch-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/dedicated-crossing/rollback-snapshot-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/dedicated-crossing/audit-log-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl",
+        "vector/v8/dedicated-crossing/revocation-record-FormalRetrievalActivation-demo-workspace-demo-collection.json"
+      ],
+      "Reasoning": "1 blocked reason(s); crossing dry-run blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "DryRunOnly": true,
+      "CrossingExecutionAllowed": false,
+      "NotCrossed": true,
+      "ApplicationNotApplied": true,
+      "RollbackNotActivated": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "RollbackSnapshotPathMissing",
+      "ExpectedStatus": "CrossingDryRunBlocked",
+      "ActualStatus": "CrossingDryRunBlocked",
+      "ExpectedBlockedReason": "PlannedRollbackSnapshotPathMissing",
+      "ActualBlockedReasons": [
+        "PlannedRollbackSnapshotPathMissing"
+      ],
+      "BoundCapability": "FormalRetrievalActivation",
+      "BoundScope": "demo-workspace/demo-collection",
+      "Contract": {
+        "PlannedCapability": "FormalRetrievalActivation",
+        "PlannedScope": "demo-workspace/demo-collection",
+        "PlannedCapabilityGrantPath": "vector/v8/dedicated-crossing/capability-grant-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "PlannedRuntimeConfigPatchPath": "vector/v8/dedicated-crossing/runtime-config-patch-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "PlannedRollbackSnapshotPath": "",
+        "PlannedAuditLogPath": "vector/v8/dedicated-crossing/audit-log-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl",
+        "PlannedRevocationRecordPath": "vector/v8/dedicated-crossing/revocation-record-FormalRetrievalActivation-demo-workspace-demo-collection.json"
+      },
+      "PlannedArtifacts": [
+        "vector/v8/dedicated-crossing/capability-grant-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/dedicated-crossing/runtime-config-patch-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+        "vector/v8/dedicated-crossing/audit-log-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl",
+        "vector/v8/dedicated-crossing/revocation-record-FormalRetrievalActivation-demo-workspace-demo-collection.json"
+      ],
+      "Reasoning": "1 blocked reason(s); crossing dry-run blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "DryRunOnly": true,
+      "CrossingExecutionAllowed": false,
+      "NotCrossed": true,
+      "ApplicationNotApplied": true,
+      "RollbackNotActivated": true,
+      "PassedAsExpected": true
+    }
+  ],
+  "UpstreamPreCrossingGatePresent": true,
+  "UpstreamPreCrossingGatePassed": true,
+  "UpstreamPreCrossingFinalGatePassed": true,
+  "BoundCapability": "FormalRetrievalActivation",
+  "BoundScope": "demo-workspace/demo-collection",
+  "Contract": {
+    "PlannedCapability": "FormalRetrievalActivation",
+    "PlannedScope": "demo-workspace/demo-collection",
+    "PlannedCapabilityGrantPath": "vector/v8/dedicated-crossing/capability-grant-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+    "PlannedRuntimeConfigPatchPath": "vector/v8/dedicated-crossing/runtime-config-patch-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+    "PlannedRollbackSnapshotPath": "vector/v8/dedicated-crossing/rollback-snapshot-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+    "PlannedAuditLogPath": "vector/v8/dedicated-crossing/audit-log-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl",
+    "PlannedRevocationRecordPath": "vector/v8/dedicated-crossing/revocation-record-FormalRetrievalActivation-demo-workspace-demo-collection.json"
+  },
+  "PlannedArtifacts": [
+    "vector/v8/dedicated-crossing/capability-grant-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+    "vector/v8/dedicated-crossing/runtime-config-patch-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+    "vector/v8/dedicated-crossing/rollback-snapshot-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+    "vector/v8/dedicated-crossing/audit-log-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl",
+    "vector/v8/dedicated-crossing/revocation-record-FormalRetrievalActivation-demo-workspace-demo-collection.json"
+  ],
+  "DryRunOnly": true,
+  "CrossingExecutionAllowed": false,
+  "ManualReviewRequired": false,
+  "ApprovalSealed": false,
+  "CapabilityGrantWritten": false,
+  "GrantApplied": false,
+  "ApplicationApplied": false,
+  "RollbackActivated": false,
+  "Crossed": false,
+  "PromotionToMainlinePerformed": false,
+  "EvidenceCopiedToMainline": false,
+  "TrustRegistryCopiedToMainline": false,
+  "MainlineEvidencePresent": false,
+  "MainlineTrustRegistryPresent": false,
+  "FormalRetrievalAllowed": false,
+  "RuntimeSwitchAllowed": false,
+  "FormalPackageWritten": false,
+  "PackageOutputChanged": false,
+  "PackingPolicyChanged": false,
+  "VectorStoreBindingChanged": false,
+  "GlobalDefaultOn": false,
+  "ConfigPatchWritten": false,
+  "RuntimeActivation": false,
+  "NoRuntimeMutationInvariant": true,
+  "BlockedReasons": [],
+  "Diagnostics": [
+    "total=16",
+    "passed=16",
+    "failed=0",
+    "ready=1",
+    "blocked=15",
+    "realUpstreamPresent=True",
+    "realUpstreamPassed=True",
+    "realConfigPatchPathAlreadyExists=False",
+    "realExistingPlannedPaths=0",
+    "runtimeGate=True",
+    "p15Gate=True",
+    "mainlineEvidence=False",
+    "mainlineRegistry=False",
+    "nextStage=ExplicitCrossingExecutionGate (only that gate may produce Crossed=true; this matrix never does, never writes planned artifacts)"
+  ]
+}
