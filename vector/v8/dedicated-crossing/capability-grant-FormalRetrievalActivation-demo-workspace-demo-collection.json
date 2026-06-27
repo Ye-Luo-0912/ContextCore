@@ -1,0 +1,15 @@
+﻿{
+  "GrantId": "frp-grant-9308474979b64f31b8fc7d260b19575f",
+  "Capability": "FormalRetrievalActivation",
+  "Scope": "demo-workspace/demo-collection",
+  "SourcePreCrossingOperationId": "frp-pre-crossing-final-gate-349c7b9e96d947a386feeec9f6424aed",
+  "SourceDryRunOperationId": "frp-dedicated-crossing-dry-run-6431c7712f6840c09e5f2b30cbea1ee5",
+  "IssuedAt": "2026-06-27T02:37:41.4640934\u002B00:00",
+  "ValidUntil": "2027-06-27T02:37:41.4640934\u002B00:00",
+  "Revocable": true,
+  "RuntimeActivationAllowed": false,
+  "ArtifactOnly": true,
+  "Crossed": true,
+  "FormalRetrievalAllowed": false,
+  "RuntimeSwitchAllowed": false
+}

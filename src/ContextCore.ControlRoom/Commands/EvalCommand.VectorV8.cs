@@ -954,6 +954,53 @@ public static partial class EvalCommand
         Console.WriteLine($"[Eval] crossingDryRunMatrixPassed={report.CrossingDryRunMatrixPassed}; gatePassed={report.GatePassed}; total={report.TotalCases} ready={report.ReadyCases} blocked={report.BlockedCases} dryRunOnly={report.DryRunOnly} executionAllowed={report.CrossingExecutionAllowed} crossed={report.Crossed} boundCapability={report.BoundCapability} boundScope={report.BoundScope} plannedArtifacts={report.PlannedArtifacts.Count}");
     }
 
+    private static async Task ExecuteFormalRetrievalPromotionApprovalDedicatedCrossingExecutionGateAsync(
+        IReadOnlyList<string> args, string subcommand, CancellationToken ct)
+    {
+        var output = Path.GetFullPath(Path.Combine("vector", "v8"));
+        Directory.CreateDirectory(output);
+
+        var rtPath = Path.Combine("learning", "readiness", "learning-runtime-change-readiness-gate.json");
+        var rtGate = await ReadJsonFileAsync<LearningRuntimeChangeReadinessGateReport>(rtPath, ct).ConfigureAwait(false);
+        var rtPassed = rtGate is not null && rtGate.Passed;
+
+        var p15Path = Path.Combine("eval", "eval-report-p15-a3.json");
+        var p15 = await ReadJsonFileAsync<JsonDocument>(p15Path, ct).ConfigureAwait(false);
+        var p15Passed = false;
+        if (p15 is not null && p15.RootElement.TryGetProperty("PassRate", out var pr)) p15Passed = pr.GetDouble() >= 1.0;
+
+        var mainlineEvPath = Path.Combine("vector", "v8", "formal-retrieval-promotion-approval-evidence.json");
+        var mainlineRegPath = Path.Combine("vector", "v8", "formal-retrieval-promotion-approval-trust-registry.json");
+        var mainlineEvPresent = File.Exists(mainlineEvPath);
+        var mainlineRegPresent = File.Exists(mainlineRegPath);
+
+        // 真实从磁盘加载 V8.17 dry-run gate + V8.16 pre-crossing gate
+        var dryRunGatePath = Path.Combine("vector", "v8", "formal-retrieval-promotion-approval-dedicated-crossing-dry-run-gate.json");
+        var preCrossingGatePath = Path.Combine("vector", "v8", "formal-retrieval-promotion-approval-pre-crossing-final-gate-gate.json");
+        var dryRunGate = await ReadJsonFileAsync<FormalRetrievalPromotionApprovalDedicatedCrossingGateDryRunReport>(dryRunGatePath, ct).ConfigureAwait(false);
+        var preCrossingGate = await ReadJsonFileAsync<FormalRetrievalPromotionApprovalPreCrossingFinalGateReport>(preCrossingGatePath, ct).ConfigureAwait(false);
+
+        var isGate = string.Equals(subcommand, "formal-retrieval-promotion-approval-dedicated-crossing-execution-gate", StringComparison.OrdinalIgnoreCase);
+        var opt = new FormalRetrievalPromotionApprovalDedicatedCrossingExecutionGateOptions { IsGate = isGate, Enabled = !CommandHelpers.HasFlag(args, "--disabled") };
+        var runner = new FormalRetrievalPromotionApprovalDedicatedCrossingExecutionGateRunner();
+        var report = runner.Run(dryRunGate, preCrossingGate, rtPassed, p15Passed, mainlineEvPresent, mainlineRegPresent,
+            realPathExists: null,  // 默认 File.Exists
+            realWriter: null,      // 默认真实 writer
+            opt);
+
+        var fn = isGate
+            ? "formal-retrieval-promotion-approval-dedicated-crossing-execution-gate"
+            : "formal-retrieval-promotion-approval-dedicated-crossing-execution";
+        var jp = Path.Combine(output, $"{fn}.json");
+        var mp = Path.Combine(output, $"{fn}.md");
+        await WriteJsonSafeAsync(report, jp, ct).ConfigureAwait(false);
+        await WriteTextAsync(FormalRetrievalPromotionApprovalDedicatedCrossingExecutionGateRunner.BuildMarkdown(
+            isGate ? "Dedicated Crossing Execution (Gate)" : "Dedicated Crossing Execution", report), mp, ct).ConfigureAwait(false);
+
+        Console.WriteLine($"[Eval] Dedicated crossing execution written: {jp}");
+        Console.WriteLine($"[Eval] dedicatedCrossingExecutionGatePassed={report.DedicatedCrossingExecutionGatePassed}; gatePassed={report.GatePassed}; total={report.TotalCases} executed={report.ExecutedCases} blocked={report.BlockedCases} crossed={report.Crossed} artifactOnly={report.ArtifactOnly} runtimeActivation={report.RuntimeActivation} formalRetrievalAllowed={report.FormalRetrievalAllowed} writtenArtifacts={report.WrittenArtifactPaths.Count}");
+    }
+
     private static bool ValidateTemplateFields(string jsonContent, string[] fieldPaths, List<string> missing, List<string> nonPlaceholder)
     {
         var doc = System.Text.Json.JsonDocument.Parse(jsonContent);

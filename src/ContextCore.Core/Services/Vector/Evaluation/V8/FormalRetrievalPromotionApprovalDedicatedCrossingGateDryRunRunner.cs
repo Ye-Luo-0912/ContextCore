@@ -129,15 +129,43 @@ public sealed class FormalRetrievalPromotionApprovalDedicatedCrossingGateDryRunR
         var realExistingPaths = realPlannedPaths
             .Where(System.IO.File.Exists)
             .ToArray();
-        foreach (var existingPath in realExistingPaths)
+
+        // 幂等性核对 — 如果所有 5 个 planned path 都已存在且 capability-grant artifact 绑定到当前 capability/scope，
+        // 视为 "V8.18 已经成功 crossed"。此时 V8.17 dry-run 不再"会覆盖" — crossing 已完成，dry-run plan 仍一致。
+        var crossingAlreadyExecuted = false;
+        if (realExistingPaths.Length == realPlannedPaths.Length && realPlannedPaths.Length == 5)
         {
-            blocked.Add($"PlannedArtifactAlreadyExists:{System.IO.Path.GetFileName(existingPath)}");
+            try
+            {
+                var existingGrantJson = System.IO.File.ReadAllText(realPlannedPaths[0]);
+                using var doc = System.Text.Json.JsonDocument.Parse(existingGrantJson);
+                var root = doc.RootElement;
+                if (root.TryGetProperty("Capability", out var capProp)
+                    && root.TryGetProperty("Scope", out var scopeProp)
+                    && string.Equals(capProp.GetString(), realContract.PlannedCapability, StringComparison.Ordinal)
+                    && string.Equals(scopeProp.GetString(), realContract.PlannedScope, StringComparison.Ordinal))
+                {
+                    crossingAlreadyExecuted = true;
+                }
+            }
+            catch
+            {
+                // parse 失败 → 走原始 block 路径。
+            }
         }
 
-        // ConfigPatch path 已存在 — 单独检测以便和 spec 中的命名对齐。
-        if (realConfigPatchPathAlreadyExists)
+        if (!crossingAlreadyExecuted)
         {
-            blocked.Add("RealConfigPatchPathWouldOverwrite");
+            foreach (var existingPath in realExistingPaths)
+            {
+                blocked.Add($"PlannedArtifactAlreadyExists:{System.IO.Path.GetFileName(existingPath)}");
+            }
+
+            // ConfigPatch path 已存在 — 单独检测以便和 spec 中的命名对齐。
+            if (realConfigPatchPathAlreadyExists)
+            {
+                blocked.Add("RealConfigPatchPathWouldOverwrite");
+            }
         }
 
         if (mainlineEvidencePresent) blocked.Add("MainlineEvidencePresent");

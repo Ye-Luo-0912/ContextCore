@@ -342,6 +342,8 @@ public static partial class EvalCommand
             !string.Equals(subcommand, "formal-retrieval-promotion-approval-pre-crossing-final-gate-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "formal-retrieval-promotion-approval-dedicated-crossing-dry-run", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "formal-retrieval-promotion-approval-dedicated-crossing-dry-run-gate", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "formal-retrieval-promotion-approval-dedicated-crossing-execution", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "formal-retrieval-promotion-approval-dedicated-crossing-execution-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "dto-split-plan", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "dto-split-readiness-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "vector-retrieval-eval-protocol-audit", StringComparison.OrdinalIgnoreCase) &&
@@ -618,6 +620,8 @@ public static partial class EvalCommand
             Console.WriteLine("  eval formal-retrieval-promotion-approval-pre-crossing-final-gate-gate");
             Console.WriteLine("  eval formal-retrieval-promotion-approval-dedicated-crossing-dry-run");
             Console.WriteLine("  eval formal-retrieval-promotion-approval-dedicated-crossing-dry-run-gate");
+            Console.WriteLine("  eval formal-retrieval-promotion-approval-dedicated-crossing-execution");
+            Console.WriteLine("  eval formal-retrieval-promotion-approval-dedicated-crossing-execution-gate");
             Console.WriteLine("  eval dto-split-plan");
             Console.WriteLine("  eval dto-split-readiness-gate");
             Console.WriteLine("  eval vector-retrieval-eval-protocol-audit");
@@ -2027,6 +2031,13 @@ public static partial class EvalCommand
             || string.Equals(subcommand, "formal-retrieval-promotion-approval-dedicated-crossing-dry-run-gate", StringComparison.OrdinalIgnoreCase))
         {
             await ExecuteFormalRetrievalPromotionApprovalDedicatedCrossingGateDryRunAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        if (string.Equals(subcommand, "formal-retrieval-promotion-approval-dedicated-crossing-execution", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(subcommand, "formal-retrieval-promotion-approval-dedicated-crossing-execution-gate", StringComparison.OrdinalIgnoreCase))
+        {
+            await ExecuteFormalRetrievalPromotionApprovalDedicatedCrossingExecutionGateAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
             return;
         }
 

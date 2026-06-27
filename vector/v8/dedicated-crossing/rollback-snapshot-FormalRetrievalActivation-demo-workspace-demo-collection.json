@@ -1,0 +1,20 @@
+﻿{
+  "SnapshotId": "frp-rollback-snapshot-fe7598922eb1496d9e233874e1c5303a",
+  "BoundCapability": "FormalRetrievalActivation",
+  "BoundScope": "demo-workspace/demo-collection",
+  "SourceGrantId": "frp-grant-9308474979b64f31b8fc7d260b19575f",
+  "PreCrossingState": {
+    "FormalRetrievalAllowed": false,
+    "RuntimeActivation": false,
+    "CapabilityGrantPresent": false,
+    "RuntimeConfigPatchApplied": false
+  },
+  "PlannedRestoreActions": [
+    "delete capability grant artifact",
+    "delete runtime config patch artifact",
+    "append rollback event to audit log",
+    "mark revocation record as revoked"
+  ],
+  "RestoreTestRequired": true,
+  "IssuedAt": "2026-06-27T02:37:41.4640934\u002B00:00"
+}

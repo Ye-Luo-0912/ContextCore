@@ -1,0 +1,10 @@
+﻿{
+  "RevocationRecordId": "frp-revocation-record-89012f6f1abd434b9c4dffd374a4757c",
+  "GrantId": "frp-grant-9308474979b64f31b8fc7d260b19575f",
+  "BoundCapability": "FormalRetrievalActivation",
+  "BoundScope": "demo-workspace/demo-collection",
+  "Revocable": true,
+  "RevocationPathPresent": true,
+  "RevocationStatus": "RevocableNotYetRevoked",
+  "IssuedAt": "2026-06-27T02:37:41.4640934\u002B00:00"
+}
