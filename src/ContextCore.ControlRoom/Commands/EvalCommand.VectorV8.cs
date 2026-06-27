@@ -1001,6 +1001,82 @@ public static partial class EvalCommand
         Console.WriteLine($"[Eval] dedicatedCrossingExecutionGatePassed={report.DedicatedCrossingExecutionGatePassed}; gatePassed={report.GatePassed}; total={report.TotalCases} executed={report.ExecutedCases} blocked={report.BlockedCases} crossed={report.Crossed} artifactOnly={report.ArtifactOnly} runtimeActivation={report.RuntimeActivation} formalRetrievalAllowed={report.FormalRetrievalAllowed} writtenArtifacts={report.WrittenArtifactPaths.Count}");
     }
 
+    private static async Task ExecuteFormalRetrievalPromotionApprovalRuntimeActivationDryRunAsync(
+        IReadOnlyList<string> args, string subcommand, CancellationToken ct)
+    {
+        var output = Path.GetFullPath(Path.Combine("vector", "v8"));
+        Directory.CreateDirectory(output);
+
+        var rtPath = Path.Combine("learning", "readiness", "learning-runtime-change-readiness-gate.json");
+        var rtGate = await ReadJsonFileAsync<LearningRuntimeChangeReadinessGateReport>(rtPath, ct).ConfigureAwait(false);
+        var rtPassed = rtGate is not null && rtGate.Passed;
+
+        var p15Path = Path.Combine("eval", "eval-report-p15-a3.json");
+        var p15 = await ReadJsonFileAsync<JsonDocument>(p15Path, ct).ConfigureAwait(false);
+        var p15Passed = false;
+        if (p15 is not null && p15.RootElement.TryGetProperty("PassRate", out var pr)) p15Passed = pr.GetDouble() >= 1.0;
+
+        var mainlineEvPath = Path.Combine("vector", "v8", "formal-retrieval-promotion-approval-evidence.json");
+        var mainlineRegPath = Path.Combine("vector", "v8", "formal-retrieval-promotion-approval-trust-registry.json");
+        var mainlineEvPresent = File.Exists(mainlineEvPath);
+        var mainlineRegPresent = File.Exists(mainlineRegPath);
+
+        // 加载 V8.18 execution gate report
+        var executionGatePath = Path.Combine("vector", "v8", "formal-retrieval-promotion-approval-dedicated-crossing-execution-gate.json");
+        var executionGate = await ReadJsonFileAsync<FormalRetrievalPromotionApprovalDedicatedCrossingExecutionGateReport>(executionGatePath, ct).ConfigureAwait(false);
+
+        // 加载 V8.18 写出的 5 个 artifact
+        var crossingDir = Path.Combine("vector", "v8", "dedicated-crossing");
+        var grantPath = Path.Combine(crossingDir, "capability-grant-FormalRetrievalActivation-demo-workspace-demo-collection.json");
+        var configPatchPath = Path.Combine(crossingDir, "runtime-config-patch-FormalRetrievalActivation-demo-workspace-demo-collection.json");
+        var rollbackPath = Path.Combine(crossingDir, "rollback-snapshot-FormalRetrievalActivation-demo-workspace-demo-collection.json");
+        var auditLogPath = Path.Combine(crossingDir, "audit-log-FormalRetrievalActivation-demo-workspace-demo-collection.jsonl");
+        var revocationPath = Path.Combine(crossingDir, "revocation-record-FormalRetrievalActivation-demo-workspace-demo-collection.json");
+
+        var grant = await ReadJsonFileAsync<CrossingCapabilityGrantContent>(grantPath, ct).ConfigureAwait(false);
+        var configPatch = await ReadJsonFileAsync<CrossingRuntimeConfigPatchContent>(configPatchPath, ct).ConfigureAwait(false);
+        var rollback = await ReadJsonFileAsync<CrossingRollbackSnapshotContent>(rollbackPath, ct).ConfigureAwait(false);
+        var revocation = await ReadJsonFileAsync<CrossingRevocationRecordContent>(revocationPath, ct).ConfigureAwait(false);
+
+        // jsonl: 读第一行解析。
+        CrossingAuditLogEvent? auditEvent = null;
+        if (File.Exists(auditLogPath))
+        {
+            try
+            {
+                var firstLine = File.ReadAllLines(auditLogPath).FirstOrDefault(l => !string.IsNullOrWhiteSpace(l));
+                if (!string.IsNullOrWhiteSpace(firstLine))
+                {
+                    auditEvent = JsonSerializer.Deserialize<CrossingAuditLogEvent>(firstLine);
+                }
+            }
+            catch { /* parse failure → auditEvent stays null → policy reports ArtifactMissing */ }
+        }
+
+        var isGate = string.Equals(subcommand, "formal-retrieval-promotion-approval-runtime-activation-dry-run-gate", StringComparison.OrdinalIgnoreCase);
+        var opt = new FormalRetrievalPromotionApprovalRuntimeActivationDryRunOptions { IsGate = isGate, Enabled = !CommandHelpers.HasFlag(args, "--disabled") };
+        var runner = new FormalRetrievalPromotionApprovalRuntimeActivationDryRunRunner();
+        var report = runner.Run(
+            executionGate, grant, configPatch, rollback, auditEvent, revocation,
+            rtPassed, p15Passed, mainlineEvPresent, mainlineRegPresent,
+            configPatchSourcePath: configPatchPath,
+            rollbackSnapshotPath: rollbackPath,
+            revocationRecordPath: revocationPath,
+            opt);
+
+        var fn = isGate
+            ? "formal-retrieval-promotion-approval-runtime-activation-dry-run-gate"
+            : "formal-retrieval-promotion-approval-runtime-activation-dry-run";
+        var jp = Path.Combine(output, $"{fn}.json");
+        var mp = Path.Combine(output, $"{fn}.md");
+        await WriteJsonSafeAsync(report, jp, ct).ConfigureAwait(false);
+        await WriteTextAsync(FormalRetrievalPromotionApprovalRuntimeActivationDryRunRunner.BuildMarkdown(
+            isGate ? "Runtime Activation Dry-Run (Gate)" : "Runtime Activation Dry-Run", report), mp, ct).ConfigureAwait(false);
+
+        Console.WriteLine($"[Eval] Runtime activation dry-run written: {jp}");
+        Console.WriteLine($"[Eval] runtimeActivationDryRunPassed={report.RuntimeActivationDryRunPassed}; gatePassed={report.GatePassed}; total={report.TotalCases} ready={report.ReadyCases} blocked={report.BlockedCases} boundGrantId={report.BoundGrantId} runtimeActivation={report.RuntimeActivation} formalRetrievalAllowed={report.FormalRetrievalAllowed} configPatchApplied={report.ConfigPatchAppliedToRuntime}");
+    }
+
     private static bool ValidateTemplateFields(string jsonContent, string[] fieldPaths, List<string> missing, List<string> nonPlaceholder)
     {
         var doc = System.Text.Json.JsonDocument.Parse(jsonContent);
