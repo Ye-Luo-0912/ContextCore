@@ -15,7 +15,7 @@ public class ContextCoreFormalRetrievalPromotionApprovalRuntimeActivationDryRunT
         var report = RunClean();
         Assert.IsTrue(report.RuntimeActivationDryRunPassed, string.Join(",", report.BlockedReasons));
         Assert.IsTrue(report.GatePassed);
-        Assert.IsTrue(report.TotalCases >= 20, $"TotalCases={report.TotalCases}");
+        Assert.IsTrue(report.TotalCases >= 50, $"TotalCases={report.TotalCases} — V8.19R 要求 ≥50");
         Assert.AreEqual(report.TotalCases, report.PassedCases);
         Assert.AreEqual(0, report.FailedCases);
         Assert.AreEqual(TestGrantId, report.BoundGrantId);
@@ -162,6 +162,47 @@ public class ContextCoreFormalRetrievalPromotionApprovalRuntimeActivationDryRunT
 
         Assert.IsFalse(report.RuntimeActivationDryRunPassed);
         CollectionAssert.Contains(report.BlockedReasons.ToList(), "RealCrossingExecutionGateArtifactMissing");
+    }
+
+    [TestMethod]
+    public void RuntimeActivationDryRun_V819R_ArtifactContentNegatives_AllFire()
+    {
+        var report = RunClean();
+
+        // V8.19R 新增 28 个 artifact-content negative scenarios。
+        // grant
+        AssertBlocked(report, "GrantRevocableFalse", RuntimeActivationDryRunBlockedReasons.GrantRevocableFalse);
+        AssertBlocked(report, "GrantArtifactOnlyFalse", RuntimeActivationDryRunBlockedReasons.GrantArtifactOnlyFalse);
+        AssertBlocked(report, "GrantCrossedFalse", RuntimeActivationDryRunBlockedReasons.GrantCrossedFalse);
+        AssertBlocked(report, "GrantFormalRetrievalAllowedTrue", RuntimeActivationDryRunBlockedReasons.GrantFormalRetrievalAllowedTrue);
+        AssertBlocked(report, "GrantRuntimeSwitchAllowedTrue", RuntimeActivationDryRunBlockedReasons.GrantRuntimeSwitchAllowedTrue);
+        AssertBlocked(report, "GrantSourcePreCrossingMismatch", RuntimeActivationDryRunBlockedReasons.GrantSourcePreCrossingMismatch);
+        AssertBlocked(report, "GrantSourceDryRunMismatch", RuntimeActivationDryRunBlockedReasons.GrantSourceDryRunMismatch);
+        // config patch
+        AssertBlocked(report, "ConfigPatchTargetCapabilityMismatch", RuntimeActivationDryRunBlockedReasons.ConfigPatchTargetCapabilityMismatch);
+        AssertBlocked(report, "ConfigPatchTargetScopeMismatch", RuntimeActivationDryRunBlockedReasons.ConfigPatchTargetScopeMismatch);
+        AssertBlocked(report, "ConfigPatchPatchModeNotArtifactOnly", RuntimeActivationDryRunBlockedReasons.ConfigPatchPatchModeNotArtifactOnly);
+        AssertBlocked(report, "ConfigPatchApplyToRuntimeTrue", RuntimeActivationDryRunBlockedReasons.ConfigPatchApplyToRuntimeTrue);
+        AssertBlocked(report, "ConfigPatchFormalRetrievalAllowedTrue", RuntimeActivationDryRunBlockedReasons.ConfigPatchFormalRetrievalAllowedTrue);
+        AssertBlocked(report, "ConfigPatchSourcePreCrossingMismatch", RuntimeActivationDryRunBlockedReasons.ConfigPatchSourcePreCrossingMismatch);
+        AssertBlocked(report, "ConfigPatchSourceDryRunMismatch", RuntimeActivationDryRunBlockedReasons.ConfigPatchSourceDryRunMismatch);
+        // rollback
+        AssertBlocked(report, "RollbackCapabilityMismatch", RuntimeActivationDryRunBlockedReasons.RollbackCapabilityMismatch);
+        AssertBlocked(report, "RollbackScopeMismatch", RuntimeActivationDryRunBlockedReasons.RollbackScopeMismatch);
+        AssertBlocked(report, "RollbackRestoreTestRequiredFalse", RuntimeActivationDryRunBlockedReasons.RollbackRestoreTestRequiredFalse);
+        // audit
+        AssertBlocked(report, "AuditEventTypeMismatch", RuntimeActivationDryRunBlockedReasons.AuditEventTypeMismatch);
+        AssertBlocked(report, "AuditCapabilityMismatch", RuntimeActivationDryRunBlockedReasons.AuditCapabilityMismatch);
+        AssertBlocked(report, "AuditScopeMismatch", RuntimeActivationDryRunBlockedReasons.AuditScopeMismatch);
+        AssertBlocked(report, "AuditCrossedFalse", RuntimeActivationDryRunBlockedReasons.AuditCrossedFalse);
+        AssertBlocked(report, "AuditArtifactOnlyFalse", RuntimeActivationDryRunBlockedReasons.AuditArtifactOnlyFalse);
+        AssertBlocked(report, "AuditRuntimeActivationTrue", RuntimeActivationDryRunBlockedReasons.AuditRuntimeActivationTrue);
+        AssertBlocked(report, "AuditFormalRetrievalAllowedTrue", RuntimeActivationDryRunBlockedReasons.AuditFormalRetrievalAllowedTrue);
+        // revocation
+        AssertBlocked(report, "RevocationCapabilityMismatch", RuntimeActivationDryRunBlockedReasons.RevocationCapabilityMismatch);
+        AssertBlocked(report, "RevocationScopeMismatch", RuntimeActivationDryRunBlockedReasons.RevocationScopeMismatch);
+        AssertBlocked(report, "RevocationRevocableFalse", RuntimeActivationDryRunBlockedReasons.RevocationRevocableFalse);
+        AssertBlocked(report, "RevocationPathPresentFalse", RuntimeActivationDryRunBlockedReasons.RevocationPathPresentFalse);
     }
 
     private static FormalRetrievalPromotionApprovalRuntimeActivationDryRunReport RunClean()

@@ -43,6 +43,36 @@ public static class RuntimeActivationDryRunBlockedReasons
     public const string P15GateNotPassed = nameof(P15GateNotPassed);
     public const string MainlineEvidencePresent = nameof(MainlineEvidencePresent);
     public const string MainlineTrustRegistryPresent = nameof(MainlineTrustRegistryPresent);
+
+    // V8.19R — 28 个新增 artifact-content 内容校验维度。
+    public const string GrantRevocableFalse = nameof(GrantRevocableFalse);
+    public const string GrantArtifactOnlyFalse = nameof(GrantArtifactOnlyFalse);
+    public const string GrantCrossedFalse = nameof(GrantCrossedFalse);
+    public const string GrantFormalRetrievalAllowedTrue = nameof(GrantFormalRetrievalAllowedTrue);
+    public const string GrantRuntimeSwitchAllowedTrue = nameof(GrantRuntimeSwitchAllowedTrue);
+    public const string GrantSourcePreCrossingMismatch = nameof(GrantSourcePreCrossingMismatch);
+    public const string GrantSourceDryRunMismatch = nameof(GrantSourceDryRunMismatch);
+    public const string ConfigPatchTargetCapabilityMismatch = nameof(ConfigPatchTargetCapabilityMismatch);
+    public const string ConfigPatchTargetScopeMismatch = nameof(ConfigPatchTargetScopeMismatch);
+    public const string ConfigPatchPatchModeNotArtifactOnly = nameof(ConfigPatchPatchModeNotArtifactOnly);
+    public const string ConfigPatchApplyToRuntimeTrue = nameof(ConfigPatchApplyToRuntimeTrue);
+    public const string ConfigPatchFormalRetrievalAllowedTrue = nameof(ConfigPatchFormalRetrievalAllowedTrue);
+    public const string ConfigPatchSourcePreCrossingMismatch = nameof(ConfigPatchSourcePreCrossingMismatch);
+    public const string ConfigPatchSourceDryRunMismatch = nameof(ConfigPatchSourceDryRunMismatch);
+    public const string RollbackCapabilityMismatch = nameof(RollbackCapabilityMismatch);
+    public const string RollbackScopeMismatch = nameof(RollbackScopeMismatch);
+    public const string RollbackRestoreTestRequiredFalse = nameof(RollbackRestoreTestRequiredFalse);
+    public const string AuditEventTypeMismatch = nameof(AuditEventTypeMismatch);
+    public const string AuditCapabilityMismatch = nameof(AuditCapabilityMismatch);
+    public const string AuditScopeMismatch = nameof(AuditScopeMismatch);
+    public const string AuditCrossedFalse = nameof(AuditCrossedFalse);
+    public const string AuditArtifactOnlyFalse = nameof(AuditArtifactOnlyFalse);
+    public const string AuditRuntimeActivationTrue = nameof(AuditRuntimeActivationTrue);
+    public const string AuditFormalRetrievalAllowedTrue = nameof(AuditFormalRetrievalAllowedTrue);
+    public const string RevocationCapabilityMismatch = nameof(RevocationCapabilityMismatch);
+    public const string RevocationScopeMismatch = nameof(RevocationScopeMismatch);
+    public const string RevocationRevocableFalse = nameof(RevocationRevocableFalse);
+    public const string RevocationPathPresentFalse = nameof(RevocationPathPresentFalse);
 }
 
 /// <summary>V8.18 写出的 capability grant artifact 内容（解析后）。</summary>
@@ -236,6 +266,26 @@ public static class FormalRetrievalPromotionApprovalRuntimeActivationDryRunPolic
             {
                 blocked.Add(RuntimeActivationDryRunBlockedReasons.GrantRuntimeActivationAllowedTrue);
             }
+
+            // V8.19R — grant artifact 内容级守护。
+            if (!grant.Revocable) blocked.Add(RuntimeActivationDryRunBlockedReasons.GrantRevocableFalse);
+            if (!grant.ArtifactOnly) blocked.Add(RuntimeActivationDryRunBlockedReasons.GrantArtifactOnlyFalse);
+            if (!grant.Crossed) blocked.Add(RuntimeActivationDryRunBlockedReasons.GrantCrossedFalse);
+            if (grant.FormalRetrievalAllowed) blocked.Add(RuntimeActivationDryRunBlockedReasons.GrantFormalRetrievalAllowedTrue);
+            if (grant.RuntimeSwitchAllowed) blocked.Add(RuntimeActivationDryRunBlockedReasons.GrantRuntimeSwitchAllowedTrue);
+
+            if (executionReport is not null)
+            {
+                if (!string.Equals(grant.SourcePreCrossingOperationId, executionReport.SourcePreCrossingOperationId, StringComparison.Ordinal))
+                {
+                    blocked.Add(RuntimeActivationDryRunBlockedReasons.GrantSourcePreCrossingMismatch);
+                }
+
+                if (!string.Equals(grant.SourceDryRunOperationId, executionReport.SourceDryRunOperationId, StringComparison.Ordinal))
+                {
+                    blocked.Add(RuntimeActivationDryRunBlockedReasons.GrantSourceDryRunMismatch);
+                }
+            }
         }
 
         if (grant is not null && configPatch is not null
@@ -244,10 +294,77 @@ public static class FormalRetrievalPromotionApprovalRuntimeActivationDryRunPolic
             blocked.Add(RuntimeActivationDryRunBlockedReasons.ConfigPatchSourceGrantIdMismatch);
         }
 
+        // V8.19R — config patch artifact 内容级守护（独立于 SourceGrantId）。
+        if (configPatch is not null && grant is not null)
+        {
+            if (!string.Equals(configPatch.TargetCapability, grant.Capability, StringComparison.Ordinal))
+            {
+                blocked.Add(RuntimeActivationDryRunBlockedReasons.ConfigPatchTargetCapabilityMismatch);
+            }
+
+            if (!string.Equals(configPatch.TargetScope, grant.Scope, StringComparison.Ordinal))
+            {
+                blocked.Add(RuntimeActivationDryRunBlockedReasons.ConfigPatchTargetScopeMismatch);
+            }
+        }
+
+        if (configPatch is not null)
+        {
+            if (!string.Equals(configPatch.PatchMode, "ArtifactOnly", StringComparison.Ordinal))
+            {
+                blocked.Add(RuntimeActivationDryRunBlockedReasons.ConfigPatchPatchModeNotArtifactOnly);
+            }
+
+            if (configPatch.ApplyToRuntime)
+            {
+                blocked.Add(RuntimeActivationDryRunBlockedReasons.ConfigPatchApplyToRuntimeTrue);
+            }
+
+            if (configPatch.FormalRetrievalAllowed)
+            {
+                blocked.Add(RuntimeActivationDryRunBlockedReasons.ConfigPatchFormalRetrievalAllowedTrue);
+            }
+
+            if (executionReport is not null)
+            {
+                if (!string.Equals(configPatch.SourcePreCrossingOperationId, executionReport.SourcePreCrossingOperationId, StringComparison.Ordinal))
+                {
+                    blocked.Add(RuntimeActivationDryRunBlockedReasons.ConfigPatchSourcePreCrossingMismatch);
+                }
+
+                if (!string.Equals(configPatch.SourceDryRunOperationId, executionReport.SourceDryRunOperationId, StringComparison.Ordinal))
+                {
+                    blocked.Add(RuntimeActivationDryRunBlockedReasons.ConfigPatchSourceDryRunMismatch);
+                }
+            }
+        }
+
         if (grant is not null && rollbackSnapshot is not null
             && !string.Equals(rollbackSnapshot.SourceGrantId, grant.GrantId, StringComparison.Ordinal))
         {
             blocked.Add(RuntimeActivationDryRunBlockedReasons.RollbackSourceGrantIdMismatch);
+        }
+
+        // V8.19R — rollback snapshot 内容级守护。
+        if (rollbackSnapshot is not null)
+        {
+            if (grant is not null)
+            {
+                if (!string.Equals(rollbackSnapshot.BoundCapability, grant.Capability, StringComparison.Ordinal))
+                {
+                    blocked.Add(RuntimeActivationDryRunBlockedReasons.RollbackCapabilityMismatch);
+                }
+
+                if (!string.Equals(rollbackSnapshot.BoundScope, grant.Scope, StringComparison.Ordinal))
+                {
+                    blocked.Add(RuntimeActivationDryRunBlockedReasons.RollbackScopeMismatch);
+                }
+            }
+
+            if (!rollbackSnapshot.RestoreTestRequired)
+            {
+                blocked.Add(RuntimeActivationDryRunBlockedReasons.RollbackRestoreTestRequiredFalse);
+            }
         }
 
         if (grant is not null && auditEvent is not null
@@ -256,10 +373,64 @@ public static class FormalRetrievalPromotionApprovalRuntimeActivationDryRunPolic
             blocked.Add(RuntimeActivationDryRunBlockedReasons.AuditGrantIdMismatch);
         }
 
+        // V8.19R — audit log event 内容级守护。
+        if (auditEvent is not null)
+        {
+            if (!string.Equals(auditEvent.EventType, "DedicatedCrossingArtifactWriteOut", StringComparison.Ordinal))
+            {
+                blocked.Add(RuntimeActivationDryRunBlockedReasons.AuditEventTypeMismatch);
+            }
+
+            if (grant is not null)
+            {
+                if (!string.Equals(auditEvent.BoundCapability, grant.Capability, StringComparison.Ordinal))
+                {
+                    blocked.Add(RuntimeActivationDryRunBlockedReasons.AuditCapabilityMismatch);
+                }
+
+                if (!string.Equals(auditEvent.BoundScope, grant.Scope, StringComparison.Ordinal))
+                {
+                    blocked.Add(RuntimeActivationDryRunBlockedReasons.AuditScopeMismatch);
+                }
+            }
+
+            if (!auditEvent.Crossed) blocked.Add(RuntimeActivationDryRunBlockedReasons.AuditCrossedFalse);
+            if (!auditEvent.ArtifactOnly) blocked.Add(RuntimeActivationDryRunBlockedReasons.AuditArtifactOnlyFalse);
+            if (auditEvent.RuntimeActivation) blocked.Add(RuntimeActivationDryRunBlockedReasons.AuditRuntimeActivationTrue);
+            if (auditEvent.FormalRetrievalAllowed) blocked.Add(RuntimeActivationDryRunBlockedReasons.AuditFormalRetrievalAllowedTrue);
+        }
+
         if (grant is not null && revocation is not null
             && !string.Equals(revocation.GrantId, grant.GrantId, StringComparison.Ordinal))
         {
             blocked.Add(RuntimeActivationDryRunBlockedReasons.RevocationGrantIdMismatch);
+        }
+
+        // V8.19R — revocation record 内容级守护。
+        if (revocation is not null)
+        {
+            if (grant is not null)
+            {
+                if (!string.Equals(revocation.BoundCapability, grant.Capability, StringComparison.Ordinal))
+                {
+                    blocked.Add(RuntimeActivationDryRunBlockedReasons.RevocationCapabilityMismatch);
+                }
+
+                if (!string.Equals(revocation.BoundScope, grant.Scope, StringComparison.Ordinal))
+                {
+                    blocked.Add(RuntimeActivationDryRunBlockedReasons.RevocationScopeMismatch);
+                }
+            }
+
+            if (!revocation.Revocable)
+            {
+                blocked.Add(RuntimeActivationDryRunBlockedReasons.RevocationRevocableFalse);
+            }
+
+            if (!revocation.RevocationPathPresent)
+            {
+                blocked.Add(RuntimeActivationDryRunBlockedReasons.RevocationPathPresentFalse);
+            }
         }
 
         if (revocation is not null

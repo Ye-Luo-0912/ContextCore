@@ -130,7 +130,10 @@ public sealed class FormalRetrievalPromotionApprovalDedicatedCrossingExecutionGa
 
         // 幂等性核对 — 5 个 path 都已存在 + capability grant 中 Capability/Scope 与当前上游一致 → 视为"先前已 crossing"，
         // 不重新写、不动 gate state，但 Crossed/Written 仍标 true（事实如此）。
+        // 同时读取 existing artifact 的 source op IDs 作为 gate.json 的"冻结"上游引用，避免 V8.16/V8.17 重跑导致下游 V8.19R 校验断裂。
         bool idempotentReRun = false;
+        string? frozenSourcePreCrossingOperationId = null;
+        string? frozenSourceDryRunOperationId = null;
         if (realPathExistence.AnyExists
             && realPathExistence.CapabilityGrantPathExists
             && realPathExistence.RuntimeConfigPatchPathExists
@@ -149,6 +152,14 @@ public sealed class FormalRetrievalPromotionApprovalDedicatedCrossingExecutionGa
                     && string.Equals(scopeProp.GetString(), realScope, StringComparison.Ordinal))
                 {
                     idempotentReRun = true;
+                    if (root.TryGetProperty("SourcePreCrossingOperationId", out var preProp))
+                    {
+                        frozenSourcePreCrossingOperationId = preProp.GetString();
+                    }
+                    if (root.TryGetProperty("SourceDryRunOperationId", out var dryProp))
+                    {
+                        frozenSourceDryRunOperationId = dryProp.GetString();
+                    }
                 }
             }
             catch
@@ -226,8 +237,9 @@ public sealed class FormalRetrievalPromotionApprovalDedicatedCrossingExecutionGa
             UpstreamDryRunExecutionAllowed = realDryRunExecAllowed,
             BoundCapability = realDecision.BoundCapability,
             BoundScope = realDecision.BoundScope,
-            SourcePreCrossingOperationId = realDecision.SourcePreCrossingOperationId,
-            SourceDryRunOperationId = realDecision.SourceDryRunOperationId,
+            // 幂等再跑时用 frozen 上游 ID（来自已写出的 grant artifact），避免 V8.16/V8.17 重跑导致下游 V8.19R binding 校验断裂。
+            SourcePreCrossingOperationId = frozenSourcePreCrossingOperationId ?? realDecision.SourcePreCrossingOperationId,
+            SourceDryRunOperationId = frozenSourceDryRunOperationId ?? realDecision.SourceDryRunOperationId,
             PlannedArtifactPaths = realDecision.PlannedArtifactPaths,
             WrittenArtifactPaths = writeResult?.WrittenPaths ?? Array.Empty<string>(),
             // 关键不变量 — V8.18 的 Crossed=true 是 OK 的，但仅在 Executed 状态下。

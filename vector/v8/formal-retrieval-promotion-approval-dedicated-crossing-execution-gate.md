@@ -1,7 +1,7 @@
 ﻿# Dedicated Crossing Execution (Gate)
 
-生成: `2026-06-27T02:46:18.7391527+00:00`
-操作: `frp-dedicated-crossing-execution-e1fb9a1e18ad42708f3435e23500e409`
+生成: `2026-06-27T03:55:17.7221611+00:00`
+操作: `frp-dedicated-crossing-execution-8e510bcc53a24c7db8f6da987360fae3`
 
 ## Decision
 - DedicatedCrossingExecutionGatePassed: `True` GatePassed: `True`
@@ -36,7 +36,7 @@
 - BoundCapability: `FormalRetrievalActivation`
 - BoundScope: `demo-workspace/demo-collection`
 - SourcePreCrossingOperationId: `frp-pre-crossing-final-gate-349c7b9e96d947a386feeec9f6424aed`
-- SourceDryRunOperationId: `frp-dedicated-crossing-dry-run-9042a2d250554ffb95d33f450b88a637`
+- SourceDryRunOperationId: `frp-dedicated-crossing-dry-run-6431c7712f6840c09e5f2b30cbea1ee5`
 
 ## Mainline Files
 - EvidenceCopiedToMainline: `False`

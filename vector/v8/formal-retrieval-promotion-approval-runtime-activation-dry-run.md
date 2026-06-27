@@ -1,12 +1,12 @@
 ﻿# Runtime Activation Dry-Run
 
-生成: `2026-06-27T03:13:51.6832436+00:00`
-操作: `frp-runtime-activation-dry-run-53659d3340ed4eb7a2171a0373ad2bd4`
+生成: `2026-06-27T03:52:36.3340013+00:00`
+操作: `frp-runtime-activation-dry-run-73764ab8e94443778409c554132f43e6`
 
 ## Decision
 - RuntimeActivationDryRunPassed: `True` GatePassed: `False`
-- Total: `26` Passed: `26` Failed: `0`
-- Status — Ready: `1` Blocked: `25`
+- Total: `54` Passed: `54` Failed: `0`
+- Status — Ready: `1` Blocked: `53`
 
 ## Bound (Real)
 - BoundGrantId: `frp-grant-9308474979b64f31b8fc7d260b19575f`
@@ -142,13 +142,13 @@
   - expectedReason=`GrantCapabilityMismatch` matched=`True`
   - bound: grantId=`frp-grant-fixture-001` capability=`UnauthorizedCapability` scope=`demo-workspace/demo-collection`
   - activationDryRunOnly=`True` runtimeActivation=`False` formalRetrievalAllowed=`False` configPatchAppliedToRuntime=`False`
-  - actualReasons=`GrantCapabilityMismatch`
+  - actualReasons=`AuditCapabilityMismatch, ConfigPatchTargetCapabilityMismatch, GrantCapabilityMismatch, RevocationCapabilityMismatch, RollbackCapabilityMismatch`
 - `GrantScopeMismatch`: passedAsExpected=`True`
   - status expected=`RuntimeActivationDryRunBlocked` actual=`RuntimeActivationDryRunBlocked` matched=`True`
   - expectedReason=`GrantScopeMismatch` matched=`True`
   - bound: grantId=`frp-grant-fixture-001` capability=`FormalRetrievalActivation` scope=`other-workspace/other-collection`
   - activationDryRunOnly=`True` runtimeActivation=`False` formalRetrievalAllowed=`False` configPatchAppliedToRuntime=`False`
-  - actualReasons=`GrantScopeMismatch`
+  - actualReasons=`AuditScopeMismatch, ConfigPatchTargetScopeMismatch, GrantScopeMismatch, RevocationScopeMismatch, RollbackScopeMismatch`
 - `ConfigPatchSourceGrantIdMismatch`: passedAsExpected=`True`
   - status expected=`RuntimeActivationDryRunBlocked` actual=`RuntimeActivationDryRunBlocked` matched=`True`
   - expectedReason=`ConfigPatchSourceGrantIdMismatch` matched=`True`
@@ -203,5 +203,173 @@
   - bound: grantId=`frp-grant-fixture-001` capability=`FormalRetrievalActivation` scope=`demo-workspace/demo-collection`
   - activationDryRunOnly=`True` runtimeActivation=`False` formalRetrievalAllowed=`False` configPatchAppliedToRuntime=`False`
   - actualReasons=`MainlineTrustRegistryPresent`
+- `GrantRevocableFalse`: passedAsExpected=`True`
+  - status expected=`RuntimeActivationDryRunBlocked` actual=`RuntimeActivationDryRunBlocked` matched=`True`
+  - expectedReason=`GrantRevocableFalse` matched=`True`
+  - bound: grantId=`frp-grant-fixture-001` capability=`FormalRetrievalActivation` scope=`demo-workspace/demo-collection`
+  - activationDryRunOnly=`True` runtimeActivation=`False` formalRetrievalAllowed=`False` configPatchAppliedToRuntime=`False`
+  - actualReasons=`GrantRevocableFalse`
+- `GrantArtifactOnlyFalse`: passedAsExpected=`True`
+  - status expected=`RuntimeActivationDryRunBlocked` actual=`RuntimeActivationDryRunBlocked` matched=`True`
+  - expectedReason=`GrantArtifactOnlyFalse` matched=`True`
+  - bound: grantId=`frp-grant-fixture-001` capability=`FormalRetrievalActivation` scope=`demo-workspace/demo-collection`
+  - activationDryRunOnly=`True` runtimeActivation=`False` formalRetrievalAllowed=`False` configPatchAppliedToRuntime=`False`
+  - actualReasons=`GrantArtifactOnlyFalse`
+- `GrantCrossedFalse`: passedAsExpected=`True`
+  - status expected=`RuntimeActivationDryRunBlocked` actual=`RuntimeActivationDryRunBlocked` matched=`True`
+  - expectedReason=`GrantCrossedFalse` matched=`True`
+  - bound: grantId=`frp-grant-fixture-001` capability=`FormalRetrievalActivation` scope=`demo-workspace/demo-collection`
+  - activationDryRunOnly=`True` runtimeActivation=`False` formalRetrievalAllowed=`False` configPatchAppliedToRuntime=`False`
+  - actualReasons=`GrantCrossedFalse`
+- `GrantFormalRetrievalAllowedTrue`: passedAsExpected=`True`
+  - status expected=`RuntimeActivationDryRunBlocked` actual=`RuntimeActivationDryRunBlocked` matched=`True`
+  - expectedReason=`GrantFormalRetrievalAllowedTrue` matched=`True`
+  - bound: grantId=`frp-grant-fixture-001` capability=`FormalRetrievalActivation` scope=`demo-workspace/demo-collection`
+  - activationDryRunOnly=`True` runtimeActivation=`False` formalRetrievalAllowed=`False` configPatchAppliedToRuntime=`False`
+  - actualReasons=`GrantFormalRetrievalAllowedTrue`
+- `GrantRuntimeSwitchAllowedTrue`: passedAsExpected=`True`
+  - status expected=`RuntimeActivationDryRunBlocked` actual=`RuntimeActivationDryRunBlocked` matched=`True`
+  - expectedReason=`GrantRuntimeSwitchAllowedTrue` matched=`True`
+  - bound: grantId=`frp-grant-fixture-001` capability=`FormalRetrievalActivation` scope=`demo-workspace/demo-collection`
+  - activationDryRunOnly=`True` runtimeActivation=`False` formalRetrievalAllowed=`False` configPatchAppliedToRuntime=`False`
+  - actualReasons=`GrantRuntimeSwitchAllowedTrue`
+- `GrantSourcePreCrossingMismatch`: passedAsExpected=`True`
+  - status expected=`RuntimeActivationDryRunBlocked` actual=`RuntimeActivationDryRunBlocked` matched=`True`
+  - expectedReason=`GrantSourcePreCrossingMismatch` matched=`True`
+  - bound: grantId=`frp-grant-fixture-001` capability=`FormalRetrievalActivation` scope=`demo-workspace/demo-collection`
+  - activationDryRunOnly=`True` runtimeActivation=`False` formalRetrievalAllowed=`False` configPatchAppliedToRuntime=`False`
+  - actualReasons=`GrantSourcePreCrossingMismatch`
+- `GrantSourceDryRunMismatch`: passedAsExpected=`True`
+  - status expected=`RuntimeActivationDryRunBlocked` actual=`RuntimeActivationDryRunBlocked` matched=`True`
+  - expectedReason=`GrantSourceDryRunMismatch` matched=`True`
+  - bound: grantId=`frp-grant-fixture-001` capability=`FormalRetrievalActivation` scope=`demo-workspace/demo-collection`
+  - activationDryRunOnly=`True` runtimeActivation=`False` formalRetrievalAllowed=`False` configPatchAppliedToRuntime=`False`
+  - actualReasons=`GrantSourceDryRunMismatch`
+- `ConfigPatchTargetCapabilityMismatch`: passedAsExpected=`True`
+  - status expected=`RuntimeActivationDryRunBlocked` actual=`RuntimeActivationDryRunBlocked` matched=`True`
+  - expectedReason=`ConfigPatchTargetCapabilityMismatch` matched=`True`
+  - bound: grantId=`frp-grant-fixture-001` capability=`FormalRetrievalActivation` scope=`demo-workspace/demo-collection`
+  - activationDryRunOnly=`True` runtimeActivation=`False` formalRetrievalAllowed=`False` configPatchAppliedToRuntime=`False`
+  - actualReasons=`ConfigPatchTargetCapabilityMismatch`
+- `ConfigPatchTargetScopeMismatch`: passedAsExpected=`True`
+  - status expected=`RuntimeActivationDryRunBlocked` actual=`RuntimeActivationDryRunBlocked` matched=`True`
+  - expectedReason=`ConfigPatchTargetScopeMismatch` matched=`True`
+  - bound: grantId=`frp-grant-fixture-001` capability=`FormalRetrievalActivation` scope=`demo-workspace/demo-collection`
+  - activationDryRunOnly=`True` runtimeActivation=`False` formalRetrievalAllowed=`False` configPatchAppliedToRuntime=`False`
+  - actualReasons=`ConfigPatchTargetScopeMismatch`
+- `ConfigPatchPatchModeNotArtifactOnly`: passedAsExpected=`True`
+  - status expected=`RuntimeActivationDryRunBlocked` actual=`RuntimeActivationDryRunBlocked` matched=`True`
+  - expectedReason=`ConfigPatchPatchModeNotArtifactOnly` matched=`True`
+  - bound: grantId=`frp-grant-fixture-001` capability=`FormalRetrievalActivation` scope=`demo-workspace/demo-collection`
+  - activationDryRunOnly=`True` runtimeActivation=`False` formalRetrievalAllowed=`False` configPatchAppliedToRuntime=`False`
+  - actualReasons=`ConfigPatchPatchModeNotArtifactOnly`
+- `ConfigPatchApplyToRuntimeTrue`: passedAsExpected=`True`
+  - status expected=`RuntimeActivationDryRunBlocked` actual=`RuntimeActivationDryRunBlocked` matched=`True`
+  - expectedReason=`ConfigPatchApplyToRuntimeTrue` matched=`True`
+  - bound: grantId=`frp-grant-fixture-001` capability=`FormalRetrievalActivation` scope=`demo-workspace/demo-collection`
+  - activationDryRunOnly=`True` runtimeActivation=`False` formalRetrievalAllowed=`False` configPatchAppliedToRuntime=`False`
+  - actualReasons=`ConfigPatchApplyToRuntimeTrue`
+- `ConfigPatchFormalRetrievalAllowedTrue`: passedAsExpected=`True`
+  - status expected=`RuntimeActivationDryRunBlocked` actual=`RuntimeActivationDryRunBlocked` matched=`True`
+  - expectedReason=`ConfigPatchFormalRetrievalAllowedTrue` matched=`True`
+  - bound: grantId=`frp-grant-fixture-001` capability=`FormalRetrievalActivation` scope=`demo-workspace/demo-collection`
+  - activationDryRunOnly=`True` runtimeActivation=`False` formalRetrievalAllowed=`False` configPatchAppliedToRuntime=`False`
+  - actualReasons=`ConfigPatchFormalRetrievalAllowedTrue`
+- `ConfigPatchSourcePreCrossingMismatch`: passedAsExpected=`True`
+  - status expected=`RuntimeActivationDryRunBlocked` actual=`RuntimeActivationDryRunBlocked` matched=`True`
+  - expectedReason=`ConfigPatchSourcePreCrossingMismatch` matched=`True`
+  - bound: grantId=`frp-grant-fixture-001` capability=`FormalRetrievalActivation` scope=`demo-workspace/demo-collection`
+  - activationDryRunOnly=`True` runtimeActivation=`False` formalRetrievalAllowed=`False` configPatchAppliedToRuntime=`False`
+  - actualReasons=`ConfigPatchSourcePreCrossingMismatch`
+- `ConfigPatchSourceDryRunMismatch`: passedAsExpected=`True`
+  - status expected=`RuntimeActivationDryRunBlocked` actual=`RuntimeActivationDryRunBlocked` matched=`True`
+  - expectedReason=`ConfigPatchSourceDryRunMismatch` matched=`True`
+  - bound: grantId=`frp-grant-fixture-001` capability=`FormalRetrievalActivation` scope=`demo-workspace/demo-collection`
+  - activationDryRunOnly=`True` runtimeActivation=`False` formalRetrievalAllowed=`False` configPatchAppliedToRuntime=`False`
+  - actualReasons=`ConfigPatchSourceDryRunMismatch`
+- `RollbackCapabilityMismatch`: passedAsExpected=`True`
+  - status expected=`RuntimeActivationDryRunBlocked` actual=`RuntimeActivationDryRunBlocked` matched=`True`
+  - expectedReason=`RollbackCapabilityMismatch` matched=`True`
+  - bound: grantId=`frp-grant-fixture-001` capability=`FormalRetrievalActivation` scope=`demo-workspace/demo-collection`
+  - activationDryRunOnly=`True` runtimeActivation=`False` formalRetrievalAllowed=`False` configPatchAppliedToRuntime=`False`
+  - actualReasons=`RollbackCapabilityMismatch`
+- `RollbackScopeMismatch`: passedAsExpected=`True`
+  - status expected=`RuntimeActivationDryRunBlocked` actual=`RuntimeActivationDryRunBlocked` matched=`True`
+  - expectedReason=`RollbackScopeMismatch` matched=`True`
+  - bound: grantId=`frp-grant-fixture-001` capability=`FormalRetrievalActivation` scope=`demo-workspace/demo-collection`
+  - activationDryRunOnly=`True` runtimeActivation=`False` formalRetrievalAllowed=`False` configPatchAppliedToRuntime=`False`
+  - actualReasons=`RollbackScopeMismatch`
+- `RollbackRestoreTestRequiredFalse`: passedAsExpected=`True`
+  - status expected=`RuntimeActivationDryRunBlocked` actual=`RuntimeActivationDryRunBlocked` matched=`True`
+  - expectedReason=`RollbackRestoreTestRequiredFalse` matched=`True`
+  - bound: grantId=`frp-grant-fixture-001` capability=`FormalRetrievalActivation` scope=`demo-workspace/demo-collection`
+  - activationDryRunOnly=`True` runtimeActivation=`False` formalRetrievalAllowed=`False` configPatchAppliedToRuntime=`False`
+  - actualReasons=`RollbackRestoreTestRequiredFalse`
+- `AuditEventTypeMismatch`: passedAsExpected=`True`
+  - status expected=`RuntimeActivationDryRunBlocked` actual=`RuntimeActivationDryRunBlocked` matched=`True`
+  - expectedReason=`AuditEventTypeMismatch` matched=`True`
+  - bound: grantId=`frp-grant-fixture-001` capability=`FormalRetrievalActivation` scope=`demo-workspace/demo-collection`
+  - activationDryRunOnly=`True` runtimeActivation=`False` formalRetrievalAllowed=`False` configPatchAppliedToRuntime=`False`
+  - actualReasons=`AuditEventTypeMismatch`
+- `AuditCapabilityMismatch`: passedAsExpected=`True`
+  - status expected=`RuntimeActivationDryRunBlocked` actual=`RuntimeActivationDryRunBlocked` matched=`True`
+  - expectedReason=`AuditCapabilityMismatch` matched=`True`
+  - bound: grantId=`frp-grant-fixture-001` capability=`FormalRetrievalActivation` scope=`demo-workspace/demo-collection`
+  - activationDryRunOnly=`True` runtimeActivation=`False` formalRetrievalAllowed=`False` configPatchAppliedToRuntime=`False`
+  - actualReasons=`AuditCapabilityMismatch`
+- `AuditScopeMismatch`: passedAsExpected=`True`
+  - status expected=`RuntimeActivationDryRunBlocked` actual=`RuntimeActivationDryRunBlocked` matched=`True`
+  - expectedReason=`AuditScopeMismatch` matched=`True`
+  - bound: grantId=`frp-grant-fixture-001` capability=`FormalRetrievalActivation` scope=`demo-workspace/demo-collection`
+  - activationDryRunOnly=`True` runtimeActivation=`False` formalRetrievalAllowed=`False` configPatchAppliedToRuntime=`False`
+  - actualReasons=`AuditScopeMismatch`
+- `AuditCrossedFalse`: passedAsExpected=`True`
+  - status expected=`RuntimeActivationDryRunBlocked` actual=`RuntimeActivationDryRunBlocked` matched=`True`
+  - expectedReason=`AuditCrossedFalse` matched=`True`
+  - bound: grantId=`frp-grant-fixture-001` capability=`FormalRetrievalActivation` scope=`demo-workspace/demo-collection`
+  - activationDryRunOnly=`True` runtimeActivation=`False` formalRetrievalAllowed=`False` configPatchAppliedToRuntime=`False`
+  - actualReasons=`AuditCrossedFalse`
+- `AuditArtifactOnlyFalse`: passedAsExpected=`True`
+  - status expected=`RuntimeActivationDryRunBlocked` actual=`RuntimeActivationDryRunBlocked` matched=`True`
+  - expectedReason=`AuditArtifactOnlyFalse` matched=`True`
+  - bound: grantId=`frp-grant-fixture-001` capability=`FormalRetrievalActivation` scope=`demo-workspace/demo-collection`
+  - activationDryRunOnly=`True` runtimeActivation=`False` formalRetrievalAllowed=`False` configPatchAppliedToRuntime=`False`
+  - actualReasons=`AuditArtifactOnlyFalse`
+- `AuditRuntimeActivationTrue`: passedAsExpected=`True`
+  - status expected=`RuntimeActivationDryRunBlocked` actual=`RuntimeActivationDryRunBlocked` matched=`True`
+  - expectedReason=`AuditRuntimeActivationTrue` matched=`True`
+  - bound: grantId=`frp-grant-fixture-001` capability=`FormalRetrievalActivation` scope=`demo-workspace/demo-collection`
+  - activationDryRunOnly=`True` runtimeActivation=`False` formalRetrievalAllowed=`False` configPatchAppliedToRuntime=`False`
+  - actualReasons=`AuditRuntimeActivationTrue`
+- `AuditFormalRetrievalAllowedTrue`: passedAsExpected=`True`
+  - status expected=`RuntimeActivationDryRunBlocked` actual=`RuntimeActivationDryRunBlocked` matched=`True`
+  - expectedReason=`AuditFormalRetrievalAllowedTrue` matched=`True`
+  - bound: grantId=`frp-grant-fixture-001` capability=`FormalRetrievalActivation` scope=`demo-workspace/demo-collection`
+  - activationDryRunOnly=`True` runtimeActivation=`False` formalRetrievalAllowed=`False` configPatchAppliedToRuntime=`False`
+  - actualReasons=`AuditFormalRetrievalAllowedTrue`
+- `RevocationCapabilityMismatch`: passedAsExpected=`True`
+  - status expected=`RuntimeActivationDryRunBlocked` actual=`RuntimeActivationDryRunBlocked` matched=`True`
+  - expectedReason=`RevocationCapabilityMismatch` matched=`True`
+  - bound: grantId=`frp-grant-fixture-001` capability=`FormalRetrievalActivation` scope=`demo-workspace/demo-collection`
+  - activationDryRunOnly=`True` runtimeActivation=`False` formalRetrievalAllowed=`False` configPatchAppliedToRuntime=`False`
+  - actualReasons=`RevocationCapabilityMismatch`
+- `RevocationScopeMismatch`: passedAsExpected=`True`
+  - status expected=`RuntimeActivationDryRunBlocked` actual=`RuntimeActivationDryRunBlocked` matched=`True`
+  - expectedReason=`RevocationScopeMismatch` matched=`True`
+  - bound: grantId=`frp-grant-fixture-001` capability=`FormalRetrievalActivation` scope=`demo-workspace/demo-collection`
+  - activationDryRunOnly=`True` runtimeActivation=`False` formalRetrievalAllowed=`False` configPatchAppliedToRuntime=`False`
+  - actualReasons=`RevocationScopeMismatch`
+- `RevocationRevocableFalse`: passedAsExpected=`True`
+  - status expected=`RuntimeActivationDryRunBlocked` actual=`RuntimeActivationDryRunBlocked` matched=`True`
+  - expectedReason=`RevocationRevocableFalse` matched=`True`
+  - bound: grantId=`frp-grant-fixture-001` capability=`FormalRetrievalActivation` scope=`demo-workspace/demo-collection`
+  - activationDryRunOnly=`True` runtimeActivation=`False` formalRetrievalAllowed=`False` configPatchAppliedToRuntime=`False`
+  - actualReasons=`RevocationRevocableFalse`
+- `RevocationPathPresentFalse`: passedAsExpected=`True`
+  - status expected=`RuntimeActivationDryRunBlocked` actual=`RuntimeActivationDryRunBlocked` matched=`True`
+  - expectedReason=`RevocationPathPresentFalse` matched=`True`
+  - bound: grantId=`frp-grant-fixture-001` capability=`FormalRetrievalActivation` scope=`demo-workspace/demo-collection`
+  - activationDryRunOnly=`True` runtimeActivation=`False` formalRetrievalAllowed=`False` configPatchAppliedToRuntime=`False`
+  - actualReasons=`RevocationPathPresentFalse`
 
 V8.19 runtime activation dry-run matrix。读取 V8.18 5 个 artifact + 跨字段 GrantId/capability/scope 一致性核对 + 输出 planned runtime activation contract（仅 plan，不执行）。RuntimeActivationDryRunReady ≠ RuntimeActivated — runtime 仍未动。下一阶段 GuardedRuntimeActivationGate 才可能产生 RuntimeActivation=true。
