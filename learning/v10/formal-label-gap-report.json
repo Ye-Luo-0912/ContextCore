@@ -1,0 +1,19 @@
+﻿{
+  "ShadowLabelCount": 60,
+  "FormalizedCount": 0,
+  "PendingFormalizationCount": 60,
+  "RejectedCount": 0,
+  "InvalidBindingCount": 0,
+  "FormalizationCoverageRate": 0,
+  "Notes": [
+    "ShadowLabelCount=60 (from V10.10 evidence-bound-hard-negative-labels.jsonl)",
+    "FormalizedCount=0 (no formal labels exist on disk yet)",
+    "PendingFormalizationCount=60",
+    "RejectedCount=0",
+    "InvalidBindingCount=0",
+    "FormalizationCoverageRate=0.000",
+    "Formal training set is NOT modified by this report. Realization happens through V9.5 feedback ingestion only.",
+    "Status: ALL shadow labels are pending formalization. RuntimePilotExecutionReadyForSeparateGate=false until \u22651 formalized."
+  ],
+  "FormalTrainingSetChanged": false
+}

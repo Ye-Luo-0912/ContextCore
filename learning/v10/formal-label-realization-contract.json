@@ -1,0 +1,81 @@
+﻿{
+  "ContractVersion": "v10.13-formal-label-realization/v1",
+  "ContractMode": "SchemaOnlyNoDatasetWrite",
+  "Fields": [
+    {
+      "FieldName": "formalLabelId",
+      "Type": "string",
+      "Required": true,
+      "Description": "New stable id minted at formalization time; different from sourceShadowLabelId to track the realization step."
+    },
+    {
+      "FieldName": "sourceShadowLabelId",
+      "Type": "string",
+      "Required": true,
+      "Description": "References the V10.10 EvidenceBoundShadowLabel.LabelId; one-to-one."
+    },
+    {
+      "FieldName": "evidencePath",
+      "Type": "string",
+      "Required": true,
+      "Description": "Stable on-disk path to the underlying evidence row (ranking-pairs.jsonl#evalSampleId=...)."
+    },
+    {
+      "FieldName": "expectedPreference",
+      "Type": "string",
+      "Required": true,
+      "Description": "Canonical preference label, e.g. PositiveOverNegative."
+    },
+    {
+      "FieldName": "deterministicBindingHash",
+      "Type": "string",
+      "Required": true,
+      "Description": "SHA-256 of (sourceShadowLabelId \u002B evidencePath \u002B expectedPreference) \u2014 used to detect tampering between shadow and formal."
+    },
+    {
+      "FieldName": "promotionEligibility",
+      "Type": "string",
+      "Required": true,
+      "Description": "Eligible / Pending / Rejected / InvalidBinding."
+    },
+    {
+      "FieldName": "lifecycleState",
+      "Type": "string",
+      "Required": true,
+      "Description": "Proposed / UnderReview / Approved / Realized / Retracted."
+    },
+    {
+      "FieldName": "reviewSignals",
+      "Type": "string[]",
+      "Required": false,
+      "Description": "Human-feedback signals attached (per V10.3 HumanFeedbackSignalPolicy)."
+    },
+    {
+      "FieldName": "realizedAt",
+      "Type": "datetime",
+      "Required": false,
+      "Description": "Set only when lifecycleState=Realized."
+    }
+  ],
+  "PromotionEligibilityRules": [
+    "Eligible iff: sourceShadowLabelId resolves, evidencePath exists, expectedPreference matches V10.10 binding, deterministicBindingHash matches recomputed hash.",
+    "Realization MAY only proceed via V9.5 feedback ingestion pipeline; this contract NEVER writes the formal dataset itself.",
+    "Rejected labels MUST keep the source shadow label intact for re-binding under a future evidence cycle."
+  ],
+  "LifecycleStates": [
+    "Proposed",
+    "UnderReview",
+    "Approved",
+    "Realized",
+    "Retracted"
+  ],
+  "RejectedAuthorityClaims": [
+    "This contract CANNOT auto-promote shadow labels to formal labels.",
+    "This contract CANNOT modify learning/features/hard-negatives.jsonl.",
+    "This contract CANNOT bypass the V9.5 human feedback ingestion path.",
+    "This contract CANNOT grant ML / LLM / Runtime / Gate authority."
+  ],
+  "FormalTrainingSetChanged": false,
+  "AutoIngest": false,
+  "ShadowOnly": true
+}

@@ -1,0 +1,535 @@
+﻿{
+  "OperationId": "v10-learning-formal-evidence-boundary-pack-aa684eb0579545629b1a0ecf9c652b84",
+  "CreatedAt": "2026-06-28T16:23:08.7789929+00:00",
+  "FormalEvidenceBoundaryPackPassed": true,
+  "GatePassed": false,
+  "TotalCases": 26,
+  "PassedCases": 26,
+  "FailedCases": 0,
+  "ReadyCases": 1,
+  "BlockedCases": 25,
+  "Cases": [
+    {
+      "CaseName": "AllUpstreamClean",
+      "ExpectedStatus": "LearningFormalEvidenceBoundaryPackReady",
+      "ActualStatus": "LearningFormalEvidenceBoundaryPackReady",
+      "ExpectedBlockedReason": "",
+      "ActualBlockedReasons": [],
+      "Reasoning": "formal evidence boundary pack policy ready \u2014 upstream \u002B authority invariants satisfied; formal vs shadow boundary computed below.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "CounterexampleRepairPackMissing",
+      "ExpectedStatus": "LearningFormalEvidenceBoundaryPackBlocked",
+      "ActualStatus": "LearningFormalEvidenceBoundaryPackBlocked",
+      "ExpectedBlockedReason": "CounterexampleRepairPackMissing",
+      "ActualBlockedReasons": [
+        "CounterexampleRepairPackMissing"
+      ],
+      "Reasoning": "1 blocked reason(s); formal evidence boundary pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "CounterexampleRepairPackNotPassed",
+      "ExpectedStatus": "LearningFormalEvidenceBoundaryPackBlocked",
+      "ActualStatus": "LearningFormalEvidenceBoundaryPackBlocked",
+      "ExpectedBlockedReason": "CounterexampleRepairPackNotPassed",
+      "ActualBlockedReasons": [
+        "CounterexampleRepairPackNotPassed"
+      ],
+      "Reasoning": "1 blocked reason(s); formal evidence boundary pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "EvidenceBoundLabelsMissing",
+      "ExpectedStatus": "LearningFormalEvidenceBoundaryPackBlocked",
+      "ActualStatus": "LearningFormalEvidenceBoundaryPackBlocked",
+      "ExpectedBlockedReason": "EvidenceBoundLabelsMissing",
+      "ActualBlockedReasons": [
+        "EvidenceBoundLabelsMissing"
+      ],
+      "Reasoning": "1 blocked reason(s); formal evidence boundary pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "EvidenceSufficiencyV2Missing",
+      "ExpectedStatus": "LearningFormalEvidenceBoundaryPackBlocked",
+      "ActualStatus": "LearningFormalEvidenceBoundaryPackBlocked",
+      "ExpectedBlockedReason": "EvidenceSufficiencyV2Missing",
+      "ActualBlockedReasons": [
+        "EvidenceSufficiencyV2Missing"
+      ],
+      "Reasoning": "1 blocked reason(s); formal evidence boundary pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "ShadowLabelsTreatedAsFormal",
+      "ExpectedStatus": "LearningFormalEvidenceBoundaryPackBlocked",
+      "ActualStatus": "LearningFormalEvidenceBoundaryPackBlocked",
+      "ExpectedBlockedReason": "ShadowLabelsTreatedAsFormal",
+      "ActualBlockedReasons": [
+        "ShadowLabelsTreatedAsFormal"
+      ],
+      "Reasoning": "1 blocked reason(s); formal evidence boundary pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "FormalTrainingSetChangedTrue",
+      "ExpectedStatus": "LearningFormalEvidenceBoundaryPackBlocked",
+      "ActualStatus": "LearningFormalEvidenceBoundaryPackBlocked",
+      "ExpectedBlockedReason": "FormalTrainingSetChangedTrue",
+      "ActualBlockedReasons": [
+        "FormalTrainingSetChangedTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); formal evidence boundary pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "AutoIngestTrue",
+      "ExpectedStatus": "LearningFormalEvidenceBoundaryPackBlocked",
+      "ActualStatus": "LearningFormalEvidenceBoundaryPackBlocked",
+      "ExpectedBlockedReason": "AutoIngestTrue",
+      "ActualBlockedReasons": [
+        "AutoIngestTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); formal evidence boundary pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "RuntimePilotReadyWhileFormalEvidenceFalse",
+      "ExpectedStatus": "LearningFormalEvidenceBoundaryPackBlocked",
+      "ActualStatus": "LearningFormalEvidenceBoundaryPackBlocked",
+      "ExpectedBlockedReason": "RuntimePilotReadyWhileFormalEvidenceFalse",
+      "ActualBlockedReasons": [
+        "RuntimePilotReadyWhileFormalEvidenceFalse"
+      ],
+      "Reasoning": "1 blocked reason(s); formal evidence boundary pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "RuntimePilotExecutionAppliedTrue",
+      "ExpectedStatus": "LearningFormalEvidenceBoundaryPackBlocked",
+      "ActualStatus": "LearningFormalEvidenceBoundaryPackBlocked",
+      "ExpectedBlockedReason": "RuntimePilotExecutionAppliedTrue",
+      "ActualBlockedReasons": [
+        "RuntimePilotExecutionAppliedTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); formal evidence boundary pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "RuntimePromotionAppliedTrue",
+      "ExpectedStatus": "LearningFormalEvidenceBoundaryPackBlocked",
+      "ActualStatus": "LearningFormalEvidenceBoundaryPackBlocked",
+      "ExpectedBlockedReason": "RuntimePromotionAppliedTrue",
+      "ActualBlockedReasons": [
+        "RuntimePromotionAppliedTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); formal evidence boundary pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "RuntimeRerankerChangedTrue",
+      "ExpectedStatus": "LearningFormalEvidenceBoundaryPackBlocked",
+      "ActualStatus": "LearningFormalEvidenceBoundaryPackBlocked",
+      "ExpectedBlockedReason": "RuntimeRerankerChangedTrue",
+      "ActualBlockedReasons": [
+        "RuntimeRerankerChangedTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); formal evidence boundary pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "RuntimeRouterChangedTrue",
+      "ExpectedStatus": "LearningFormalEvidenceBoundaryPackBlocked",
+      "ActualStatus": "LearningFormalEvidenceBoundaryPackBlocked",
+      "ExpectedBlockedReason": "RuntimeRouterChangedTrue",
+      "ActualBlockedReasons": [
+        "RuntimeRouterChangedTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); formal evidence boundary pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "ProductionDecisionChangedTrue",
+      "ExpectedStatus": "LearningFormalEvidenceBoundaryPackBlocked",
+      "ActualStatus": "LearningFormalEvidenceBoundaryPackBlocked",
+      "ExpectedBlockedReason": "ProductionDecisionChangedTrue",
+      "ActualBlockedReasons": [
+        "ProductionDecisionChangedTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); formal evidence boundary pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "PackageOutputChangedTrue",
+      "ExpectedStatus": "LearningFormalEvidenceBoundaryPackBlocked",
+      "ActualStatus": "LearningFormalEvidenceBoundaryPackBlocked",
+      "ExpectedBlockedReason": "PackageOutputChangedTrue",
+      "ActualBlockedReasons": [
+        "PackageOutputChangedTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); formal evidence boundary pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "FormalPackageWrittenTrue",
+      "ExpectedStatus": "LearningFormalEvidenceBoundaryPackBlocked",
+      "ActualStatus": "LearningFormalEvidenceBoundaryPackBlocked",
+      "ExpectedBlockedReason": "FormalPackageWrittenTrue",
+      "ActualBlockedReasons": [
+        "FormalPackageWrittenTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); formal evidence boundary pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "GlobalDefaultOnTrue",
+      "ExpectedStatus": "LearningFormalEvidenceBoundaryPackBlocked",
+      "ActualStatus": "LearningFormalEvidenceBoundaryPackBlocked",
+      "ExpectedBlockedReason": "GlobalDefaultOnTrue",
+      "ActualBlockedReasons": [
+        "GlobalDefaultOnTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); formal evidence boundary pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "MLAuthorityTrue",
+      "ExpectedStatus": "LearningFormalEvidenceBoundaryPackBlocked",
+      "ActualStatus": "LearningFormalEvidenceBoundaryPackBlocked",
+      "ExpectedBlockedReason": "MLAuthorityTrue",
+      "ActualBlockedReasons": [
+        "MLAuthorityTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); formal evidence boundary pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "LLMAuthorityTrue",
+      "ExpectedStatus": "LearningFormalEvidenceBoundaryPackBlocked",
+      "ActualStatus": "LearningFormalEvidenceBoundaryPackBlocked",
+      "ExpectedBlockedReason": "LLMAuthorityTrue",
+      "ActualBlockedReasons": [
+        "LLMAuthorityTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); formal evidence boundary pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "RuntimeAuthorityTrue",
+      "ExpectedStatus": "LearningFormalEvidenceBoundaryPackBlocked",
+      "ActualStatus": "LearningFormalEvidenceBoundaryPackBlocked",
+      "ExpectedBlockedReason": "RuntimeAuthorityTrue",
+      "ActualBlockedReasons": [
+        "RuntimeAuthorityTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); formal evidence boundary pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "GateAuthorityTrue",
+      "ExpectedStatus": "LearningFormalEvidenceBoundaryPackBlocked",
+      "ActualStatus": "LearningFormalEvidenceBoundaryPackBlocked",
+      "ExpectedBlockedReason": "GateAuthorityTrue",
+      "ActualBlockedReasons": [
+        "GateAuthorityTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); formal evidence boundary pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "V8ScopedActivationLost",
+      "ExpectedStatus": "LearningFormalEvidenceBoundaryPackBlocked",
+      "ActualStatus": "LearningFormalEvidenceBoundaryPackBlocked",
+      "ExpectedBlockedReason": "V8ScopedActivationLost",
+      "ActualBlockedReasons": [
+        "V8ScopedActivationLost"
+      ],
+      "Reasoning": "1 blocked reason(s); formal evidence boundary pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "MainlineEvidencePresent",
+      "ExpectedStatus": "LearningFormalEvidenceBoundaryPackBlocked",
+      "ActualStatus": "LearningFormalEvidenceBoundaryPackBlocked",
+      "ExpectedBlockedReason": "MainlineEvidencePresent",
+      "ActualBlockedReasons": [
+        "MainlineEvidencePresent"
+      ],
+      "Reasoning": "1 blocked reason(s); formal evidence boundary pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "MainlineTrustRegistryPresent",
+      "ExpectedStatus": "LearningFormalEvidenceBoundaryPackBlocked",
+      "ActualStatus": "LearningFormalEvidenceBoundaryPackBlocked",
+      "ExpectedBlockedReason": "MainlineTrustRegistryPresent",
+      "ActualBlockedReasons": [
+        "MainlineTrustRegistryPresent"
+      ],
+      "Reasoning": "1 blocked reason(s); formal evidence boundary pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "RuntimeGateNotPassed",
+      "ExpectedStatus": "LearningFormalEvidenceBoundaryPackBlocked",
+      "ActualStatus": "LearningFormalEvidenceBoundaryPackBlocked",
+      "ExpectedBlockedReason": "RuntimeChangeGateNotPassed",
+      "ActualBlockedReasons": [
+        "RuntimeChangeGateNotPassed"
+      ],
+      "Reasoning": "1 blocked reason(s); formal evidence boundary pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "P15GateNotPassed",
+      "ExpectedStatus": "LearningFormalEvidenceBoundaryPackBlocked",
+      "ActualStatus": "LearningFormalEvidenceBoundaryPackBlocked",
+      "ExpectedBlockedReason": "P15GateNotPassed",
+      "ActualBlockedReasons": [
+        "P15GateNotPassed"
+      ],
+      "Reasoning": "1 blocked reason(s); formal evidence boundary pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    }
+  ],
+  "FormalLabelRealizationContract": {
+    "ContractVersion": "v10.13-formal-label-realization/v1",
+    "ContractMode": "SchemaOnlyNoDatasetWrite",
+    "Fields": [
+      {
+        "FieldName": "formalLabelId",
+        "Type": "string",
+        "Required": true,
+        "Description": "New stable id minted at formalization time; different from sourceShadowLabelId to track the realization step."
+      },
+      {
+        "FieldName": "sourceShadowLabelId",
+        "Type": "string",
+        "Required": true,
+        "Description": "References the V10.10 EvidenceBoundShadowLabel.LabelId; one-to-one."
+      },
+      {
+        "FieldName": "evidencePath",
+        "Type": "string",
+        "Required": true,
+        "Description": "Stable on-disk path to the underlying evidence row (ranking-pairs.jsonl#evalSampleId=...)."
+      },
+      {
+        "FieldName": "expectedPreference",
+        "Type": "string",
+        "Required": true,
+        "Description": "Canonical preference label, e.g. PositiveOverNegative."
+      },
+      {
+        "FieldName": "deterministicBindingHash",
+        "Type": "string",
+        "Required": true,
+        "Description": "SHA-256 of (sourceShadowLabelId \u002B evidencePath \u002B expectedPreference) \u2014 used to detect tampering between shadow and formal."
+      },
+      {
+        "FieldName": "promotionEligibility",
+        "Type": "string",
+        "Required": true,
+        "Description": "Eligible / Pending / Rejected / InvalidBinding."
+      },
+      {
+        "FieldName": "lifecycleState",
+        "Type": "string",
+        "Required": true,
+        "Description": "Proposed / UnderReview / Approved / Realized / Retracted."
+      },
+      {
+        "FieldName": "reviewSignals",
+        "Type": "string[]",
+        "Required": false,
+        "Description": "Human-feedback signals attached (per V10.3 HumanFeedbackSignalPolicy)."
+      },
+      {
+        "FieldName": "realizedAt",
+        "Type": "datetime",
+        "Required": false,
+        "Description": "Set only when lifecycleState=Realized."
+      }
+    ],
+    "PromotionEligibilityRules": [
+      "Eligible iff: sourceShadowLabelId resolves, evidencePath exists, expectedPreference matches V10.10 binding, deterministicBindingHash matches recomputed hash.",
+      "Realization MAY only proceed via V9.5 feedback ingestion pipeline; this contract NEVER writes the formal dataset itself.",
+      "Rejected labels MUST keep the source shadow label intact for re-binding under a future evidence cycle."
+    ],
+    "LifecycleStates": [
+      "Proposed",
+      "UnderReview",
+      "Approved",
+      "Realized",
+      "Retracted"
+    ],
+    "RejectedAuthorityClaims": [
+      "This contract CANNOT auto-promote shadow labels to formal labels.",
+      "This contract CANNOT modify learning/features/hard-negatives.jsonl.",
+      "This contract CANNOT bypass the V9.5 human feedback ingestion path.",
+      "This contract CANNOT grant ML / LLM / Runtime / Gate authority."
+    ],
+    "FormalTrainingSetChanged": false,
+    "AutoIngest": false,
+    "ShadowOnly": true
+  },
+  "FormalLabelGapReport": {
+    "ShadowLabelCount": 60,
+    "FormalizedCount": 0,
+    "PendingFormalizationCount": 60,
+    "RejectedCount": 0,
+    "InvalidBindingCount": 0,
+    "FormalizationCoverageRate": 0,
+    "Notes": [
+      "ShadowLabelCount=60 (from V10.10 evidence-bound-hard-negative-labels.jsonl)",
+      "FormalizedCount=0 (no formal labels exist on disk yet)",
+      "PendingFormalizationCount=60",
+      "RejectedCount=0",
+      "InvalidBindingCount=0",
+      "FormalizationCoverageRate=0.000",
+      "Formal training set is NOT modified by this report. Realization happens through V9.5 feedback ingestion only.",
+      "Status: ALL shadow labels are pending formalization. RuntimePilotExecutionReadyForSeparateGate=false until \u22651 formalized."
+    ],
+    "FormalTrainingSetChanged": false
+  },
+  "PrePilotReadinessDecision": {
+    "DecisionId": "v10-pre-pilot-readiness-decision-813d63fe8a114e9e9b604e2222521d16",
+    "CreatedAt": "2026-06-28T16:23:08.7789929\u002B00:00",
+    "ShadowEvidenceSufficient": true,
+    "FormalEvidenceSufficient": false,
+    "FormalLabelRealizationRequired": true,
+    "PrePilotGateReady": true,
+    "RuntimePilotExecutionReadyForSeparateGate": false,
+    "BlockedForRuntimePilotExecutionBy": [
+      "FormalEvidenceInsufficient",
+      "FormalLabelsPendingRealization:60"
+    ],
+    "EvidenceSourcesConsidered": [
+      "learning/v10/counterexample-repair-pack-gate.json",
+      "learning/v10/evidence-bound-hard-negative-labels.jsonl",
+      "learning/v10/evidence-sufficiency-recomputed-v2.json",
+      "learning/v10/repaired-shadow-scoring-proposal.json",
+      "learning/v10/counterexample-replay-after-repair.json"
+    ],
+    "DecisionNotes": [
+      "Shadow evidence is sufficient (V10.10 RepairedCandidateFailureRate=0 matches Reference).",
+      "Formal evidence is NOT sufficient: zero labels in the formal dataset have been realized from the 60 shadow-bound labels.",
+      "Pre-pilot gate is ready: realization contract published, gap report written, decision recorded.",
+      "RuntimePilotExecutionReadyForSeparateGate=false \u2014 this corrects the V10.10 semantic mistake where shadow-only sufficiency was conflated with pilot readiness.",
+      "Path forward: V9.5 feedback ingestion realizes \u22651 (preferably all 60) shadow labels to formal labels before any runtime pilot."
+    ],
+    "AIArbitration": false,
+    "RuntimePilotExecutionApplied": false,
+    "RuntimePromotionApplied": false,
+    "PackageOutputChanged": false,
+    "GlobalDefaultOn": false
+  },
+  "FormalLabelRealizationContractReady": true,
+  "FormalLabelGapReportReady": true,
+  "PrePilotReadinessDecisionReady": true,
+  "ShadowEvidenceSufficient": true,
+  "FormalEvidenceSufficient": false,
+  "FormalLabelRealizationRequired": true,
+  "PrePilotGateReady": true,
+  "RuntimePilotExecutionReadyForSeparateGate": false,
+  "FormalizedCount": 0,
+  "PendingFormalizationCount": 60,
+  "BlockedForRuntimePilotExecutionBy": [
+    "FormalEvidenceInsufficient",
+    "FormalLabelsPendingRealization:60"
+  ],
+  "ShadowOnly": true,
+  "EvidenceBoundShadowLabelsAreFormal": false,
+  "FormalTrainingSetChanged": false,
+  "AutoIngest": false,
+  "TrainingSetChanged": false,
+  "RuntimePromotionApplied": false,
+  "RuntimePilotExecutionApplied": false,
+  "RuntimeRerankerChanged": false,
+  "RuntimeRouterChanged": false,
+  "ProductionDecisionChanged": false,
+  "PackageOutputChanged": false,
+  "FormalPackageWritten": false,
+  "GlobalDefaultOn": false,
+  "MLAuthority": false,
+  "LLMAuthority": false,
+  "RuntimeAuthority": false,
+  "GateAuthority": false,
+  "V8ScopedActivationPreserved": true,
+  "UpstreamCounterexampleRepairPackGatePresent": true,
+  "UpstreamCounterexampleRepairPackGatePassed": true,
+  "MainlineEvidencePresent": false,
+  "MainlineTrustRegistryPresent": false,
+  "FormalLabelRealizationContractPath": "learning/v10/formal-label-realization-contract.json",
+  "FormalLabelGapReportPath": "learning/v10/formal-label-gap-report.json",
+  "PrePilotReadinessDecisionPath": "learning/v10/pre-pilot-readiness-decision.json",
+  "Recommendation": "ProceedToFormalLabelRealizationViaV9.5FeedbackIngestion",
+  "NextAllowedPhase": "FormalLabelRealization-pending-V9.5-human-feedback-ingestion",
+  "BlockedReasons": [],
+  "Diagnostics": [
+    "total=26",
+    "realStatus=LearningFormalEvidenceBoundaryPackReady",
+    "shadowEvidenceSufficient=True",
+    "formalEvidenceSufficient=False",
+    "formalizedCount=0",
+    "pendingFormalizationCount=60",
+    "prePilotGateReady=True",
+    "runtimePilotReady=False (must be false until formal evidence)",
+    "runtimeGate=True",
+    "p15Gate=True"
+  ]
+}

@@ -1922,6 +1922,59 @@ public static partial class EvalCommand
         Console.WriteLine($"[Eval] counterexampleRepairPackPassed={report.CounterexampleRepairPackPassed}; gatePassed={report.GatePassed}; total={report.TotalCases} ready={report.ReadyCases} blocked={report.BlockedCases} boundLabels={report.EvidenceBoundShadowLabelCount} unbound={report.UnboundCandidateSpecCount} bindingRate={report.BindingCoverageRate:F3} origFailRate={report.OriginalCandidateFailureRate:F3} repairedFailRate={report.RepairedCandidateFailureRate:F3} refFailRate={report.ReferenceFailureRate:F3} improvement={report.RepairImprovement:F3} evidenceSufficient={report.EvidenceSufficient} pilotReady={report.RuntimePilotExecutionReadyForSeparateGate} blockedExecBy=[{string.Join(',', report.BlockedForRuntimePilotExecutionBy)}] recommendation={report.Recommendation}");
     }
 
+    private static async Task ExecuteLearningFormalEvidenceBoundaryPackAsync(
+        IReadOnlyList<string> args, string subcommand, CancellationToken ct)
+    {
+        var output = Path.GetFullPath(Path.Combine("learning", "v10"));
+        Directory.CreateDirectory(output);
+        var rtPath = Path.Combine("learning", "readiness", "learning-runtime-change-readiness-gate.json");
+        var rtGate = await ReadJsonFileAsync<LearningRuntimeChangeReadinessGateReport>(rtPath, ct).ConfigureAwait(false);
+        var rtPassed = rtGate is not null && rtGate.Passed;
+        var p15Path = Path.Combine("eval", "eval-report-p15-a3.json");
+        var p15 = await ReadJsonFileAsync<JsonDocument>(p15Path, ct).ConfigureAwait(false);
+        var p15Passed = false;
+        if (p15 is not null && p15.RootElement.TryGetProperty("PassRate", out var pr)) p15Passed = pr.GetDouble() >= 1.0;
+        var mainlineEvPath = Path.Combine("vector", "v8", "formal-retrieval-promotion-approval-evidence.json");
+        var mainlineRegPath = Path.Combine("vector", "v8", "formal-retrieval-promotion-approval-trust-registry.json");
+        var mainlineEvPresent = File.Exists(mainlineEvPath);
+        var mainlineRegPresent = File.Exists(mainlineRegPath);
+
+        var repairPath = Path.Combine("learning", "v10", "counterexample-repair-pack-gate.json");
+        var repair = await ReadJsonFileAsync<LearningCounterexampleRepairPackReport>(repairPath, ct).ConfigureAwait(false);
+        var boundLabelsPath = Path.Combine("learning", "v10", "evidence-bound-hard-negative-labels.jsonl");
+        var realBoundLabels = LearningFormalEvidenceBoundaryPackRunner.LoadEvidenceBoundShadowLabels(boundLabelsPath);
+        var v2Path = Path.Combine("learning", "v10", "evidence-sufficiency-recomputed-v2.json");
+        var v2Present = File.Exists(v2Path);
+
+        var realContext = new LearningFormalEvidenceBoundaryPackContext
+        {
+            CounterexampleRepairPackPresent = repair is not null,
+            CounterexampleRepairPackPassed = repair?.GatePassed ?? false,
+            EvidenceBoundLabelsPresent = realBoundLabels.Count > 0,
+            EvidenceBoundShadowLabelCount = realBoundLabels.Count,
+            EvidenceSufficiencyV2Present = v2Present,
+            ShadowEvidenceSufficient = repair?.EvidenceSufficient ?? false,
+            V8ScopedActivationPreserved = repair?.V8ScopedActivationPreserved ?? false
+        };
+
+        var isGate = string.Equals(subcommand, "learning-formal-evidence-boundary-pack-gate", StringComparison.OrdinalIgnoreCase);
+        var opt = new LearningFormalEvidenceBoundaryPackOptions
+        {
+            IsGate = isGate,
+            Enabled = !CommandHelpers.HasFlag(args, "--disabled")
+        };
+        var runner = new LearningFormalEvidenceBoundaryPackRunner();
+        var report = runner.Run(realContext, output, realBoundLabels, rtPassed, p15Passed, mainlineEvPresent, mainlineRegPresent, opt);
+        var fn = isGate ? "formal-evidence-boundary-pack-gate" : "formal-evidence-boundary-pack";
+        var jp = Path.Combine(output, $"{fn}.json");
+        var mp = Path.Combine(output, $"{fn}.md");
+        await WriteJsonSafeAsync(report, jp, ct).ConfigureAwait(false);
+        await WriteTextAsync(LearningFormalEvidenceBoundaryPackRunner.BuildMarkdown(
+            isGate ? "Learning Formal Evidence Boundary Pack (Gate)" : "Learning Formal Evidence Boundary Pack", report), mp, ct).ConfigureAwait(false);
+        Console.WriteLine($"[Eval] Learning formal evidence boundary pack written: {jp}");
+        Console.WriteLine($"[Eval] formalEvidenceBoundaryPackPassed={report.FormalEvidenceBoundaryPackPassed}; gatePassed={report.GatePassed}; total={report.TotalCases} ready={report.ReadyCases} blocked={report.BlockedCases} shadowSufficient={report.ShadowEvidenceSufficient} formalSufficient={report.FormalEvidenceSufficient} prePilotReady={report.PrePilotGateReady} pilotReady={report.RuntimePilotExecutionReadyForSeparateGate} formalized={report.FormalizedCount} pending={report.PendingFormalizationCount} blockedExecBy=[{string.Join(',', report.BlockedForRuntimePilotExecutionBy)}] recommendation={report.Recommendation}");
+    }
+
     private static bool ValidateTemplateFields(string jsonContent, string[] fieldPaths, List<string> missing, List<string> nonPlaceholder)
     {
         var doc = System.Text.Json.JsonDocument.Parse(jsonContent);

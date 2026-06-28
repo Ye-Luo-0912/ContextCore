@@ -1,0 +1,32 @@
+﻿{
+  "DecisionId": "v10-pre-pilot-readiness-decision-4bc0ffcb5b954366a6863151444926a0",
+  "CreatedAt": "2026-06-28T16:23:12.6915834\u002B00:00",
+  "ShadowEvidenceSufficient": true,
+  "FormalEvidenceSufficient": false,
+  "FormalLabelRealizationRequired": true,
+  "PrePilotGateReady": true,
+  "RuntimePilotExecutionReadyForSeparateGate": false,
+  "BlockedForRuntimePilotExecutionBy": [
+    "FormalEvidenceInsufficient",
+    "FormalLabelsPendingRealization:60"
+  ],
+  "EvidenceSourcesConsidered": [
+    "learning/v10/counterexample-repair-pack-gate.json",
+    "learning/v10/evidence-bound-hard-negative-labels.jsonl",
+    "learning/v10/evidence-sufficiency-recomputed-v2.json",
+    "learning/v10/repaired-shadow-scoring-proposal.json",
+    "learning/v10/counterexample-replay-after-repair.json"
+  ],
+  "DecisionNotes": [
+    "Shadow evidence is sufficient (V10.10 RepairedCandidateFailureRate=0 matches Reference).",
+    "Formal evidence is NOT sufficient: zero labels in the formal dataset have been realized from the 60 shadow-bound labels.",
+    "Pre-pilot gate is ready: realization contract published, gap report written, decision recorded.",
+    "RuntimePilotExecutionReadyForSeparateGate=false \u2014 this corrects the V10.10 semantic mistake where shadow-only sufficiency was conflated with pilot readiness.",
+    "Path forward: V9.5 feedback ingestion realizes \u22651 (preferably all 60) shadow labels to formal labels before any runtime pilot."
+  ],
+  "AIArbitration": false,
+  "RuntimePilotExecutionApplied": false,
+  "RuntimePromotionApplied": false,
+  "PackageOutputChanged": false,
+  "GlobalDefaultOn": false
+}
