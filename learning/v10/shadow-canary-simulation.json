@@ -1,0 +1,23 @@
+﻿{
+  "CanaryMode": "ScopedShadowSimulation",
+  "Scope": "demo-workspace/demo-collection",
+  "Capability": "FormalRetrievalActivation",
+  "ShadowCanarySimulationExecuted": true,
+  "RuntimeRerankerChanged": false,
+  "RuntimeRouterChanged": false,
+  "ProductionDecisionChanged": false,
+  "PackageOutputChanged": false,
+  "KillSwitchArmed": true,
+  "RollbackReady": true,
+  "SimulatedQueryCount": 58,
+  "ShadowAgreementCount": 54,
+  "SimulatedShadowAgreementRate": 0.9310344827586207,
+  "SimulationStages": [
+    "Stage 0 \u2014 offline replay completed; held-out test set deterministic results recorded",
+    "Stage 1 \u2014 shadow inference simulation: candidate scores recorded alongside reference, never decides production",
+    "Stage 2 \u2014 simulated \u22641% canary: candidate vs reference disagreement counted, no traffic switched",
+    "Stage 3 \u2014 simulated demo-scope canary: aggregate metrics computed, abort conditions checked",
+    "Stage 4 \u2014 pending V10.3 pilot execution gate (requires human review completion)"
+  ],
+  "AbortConditionsObserved": []
+}

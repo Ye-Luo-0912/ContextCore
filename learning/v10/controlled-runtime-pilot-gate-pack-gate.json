@@ -1,0 +1,498 @@
+﻿{
+  "OperationId": "v10-learning-controlled-runtime-pilot-gate-pack-2fd175b4133a4673bb21012591c21a0d",
+  "CreatedAt": "2026-06-28T12:46:32.8510554+00:00",
+  "ControlledRuntimePilotGatePackPassed": true,
+  "GatePassed": true,
+  "TotalCases": 28,
+  "PassedCases": 28,
+  "FailedCases": 0,
+  "ReadyCases": 1,
+  "BlockedCases": 27,
+  "Cases": [
+    {
+      "CaseName": "AllUpstreamClean",
+      "ExpectedStatus": "LearningControlledRuntimePilotGatePackReady",
+      "ActualStatus": "LearningControlledRuntimePilotGatePackReady",
+      "ExpectedBlockedReason": "",
+      "ActualBlockedReasons": [],
+      "Reasoning": "controlled runtime pilot gate policy ready \u2014 V9 readiness validated, design \u002B queue \u002B replay \u002B canary simulation all pass; runtime execution awaits explicit human review completion.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "V9ReadinessGateMissing",
+      "ExpectedStatus": "LearningControlledRuntimePilotGatePackBlocked",
+      "ActualStatus": "LearningControlledRuntimePilotGatePackBlocked",
+      "ExpectedBlockedReason": "V9ReadinessGateMissing",
+      "ActualBlockedReasons": [
+        "V9ReadinessGateMissing"
+      ],
+      "Reasoning": "1 blocked reason(s); controlled runtime pilot gate blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "V9ReadinessGateNotPassed",
+      "ExpectedStatus": "LearningControlledRuntimePilotGatePackBlocked",
+      "ActualStatus": "LearningControlledRuntimePilotGatePackBlocked",
+      "ExpectedBlockedReason": "V9ReadinessGateNotPassed",
+      "ActualBlockedReasons": [
+        "V9ReadinessGateNotPassed"
+      ],
+      "Reasoning": "1 blocked reason(s); controlled runtime pilot gate blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "PromotionProposalMissing",
+      "ExpectedStatus": "LearningControlledRuntimePilotGatePackBlocked",
+      "ActualStatus": "LearningControlledRuntimePilotGatePackBlocked",
+      "ExpectedBlockedReason": "PromotionProposalMissing",
+      "ActualBlockedReasons": [
+        "PromotionProposalMissing"
+      ],
+      "Reasoning": "1 blocked reason(s); controlled runtime pilot gate blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "HumanReviewQueueMissing",
+      "ExpectedStatus": "LearningControlledRuntimePilotGatePackBlocked",
+      "ActualStatus": "LearningControlledRuntimePilotGatePackBlocked",
+      "ExpectedBlockedReason": "HumanReviewQueueMissing",
+      "ActualBlockedReasons": [
+        "HumanReviewQueueMissing"
+      ],
+      "Reasoning": "1 blocked reason(s); controlled runtime pilot gate blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "ControlledPilotDesignMissing",
+      "ExpectedStatus": "LearningControlledRuntimePilotGatePackBlocked",
+      "ActualStatus": "LearningControlledRuntimePilotGatePackBlocked",
+      "ExpectedBlockedReason": "ControlledPilotDesignMissing",
+      "ActualBlockedReasons": [
+        "ControlledPilotDesignMissing"
+      ],
+      "Reasoning": "1 blocked reason(s); controlled runtime pilot gate blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "HumanReviewRequiredFalse",
+      "ExpectedStatus": "LearningControlledRuntimePilotGatePackBlocked",
+      "ActualStatus": "LearningControlledRuntimePilotGatePackBlocked",
+      "ExpectedBlockedReason": "HumanReviewRequiredFalse",
+      "ActualBlockedReasons": [
+        "HumanReviewRequiredFalse"
+      ],
+      "Reasoning": "1 blocked reason(s); controlled runtime pilot gate blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "AutoIngestTrue",
+      "ExpectedStatus": "LearningControlledRuntimePilotGatePackBlocked",
+      "ActualStatus": "LearningControlledRuntimePilotGatePackBlocked",
+      "ExpectedBlockedReason": "AutoIngestTrue",
+      "ActualBlockedReasons": [
+        "AutoIngestTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); controlled runtime pilot gate blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "RuntimePromotionAllowedTrue",
+      "ExpectedStatus": "LearningControlledRuntimePilotGatePackBlocked",
+      "ActualStatus": "LearningControlledRuntimePilotGatePackBlocked",
+      "ExpectedBlockedReason": "RuntimePromotionAllowedTrue",
+      "ActualBlockedReasons": [
+        "RuntimePromotionAllowedTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); controlled runtime pilot gate blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "RequiresSeparatePromotionGateFalse",
+      "ExpectedStatus": "LearningControlledRuntimePilotGatePackBlocked",
+      "ActualStatus": "LearningControlledRuntimePilotGatePackBlocked",
+      "ExpectedBlockedReason": "RequiresSeparatePromotionGateFalse",
+      "ActualBlockedReasons": [
+        "RequiresSeparatePromotionGateFalse"
+      ],
+      "Reasoning": "1 blocked reason(s); controlled runtime pilot gate blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "RequiresHumanApprovalFalse",
+      "ExpectedStatus": "LearningControlledRuntimePilotGatePackBlocked",
+      "ActualStatus": "LearningControlledRuntimePilotGatePackBlocked",
+      "ExpectedBlockedReason": "RequiresHumanApprovalFalse",
+      "ActualBlockedReasons": [
+        "RequiresHumanApprovalFalse"
+      ],
+      "Reasoning": "1 blocked reason(s); controlled runtime pilot gate blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "HumanReviewCompletedFalselyAssumed",
+      "ExpectedStatus": "LearningControlledRuntimePilotGatePackBlocked",
+      "ActualStatus": "LearningControlledRuntimePilotGatePackBlocked",
+      "ExpectedBlockedReason": "HumanReviewCompletedFalselyAssumed",
+      "ActualBlockedReasons": [
+        "HumanReviewCompletedFalselyAssumed"
+      ],
+      "Reasoning": "1 blocked reason(s); controlled runtime pilot gate blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "RouterPromotionReadyTrue",
+      "ExpectedStatus": "LearningControlledRuntimePilotGatePackBlocked",
+      "ActualStatus": "LearningControlledRuntimePilotGatePackBlocked",
+      "ExpectedBlockedReason": "RouterPromotionReadyTrue",
+      "ActualBlockedReasons": [
+        "RouterPromotionReadyTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); controlled runtime pilot gate blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "RuntimeRerankerChangedTrue",
+      "ExpectedStatus": "LearningControlledRuntimePilotGatePackBlocked",
+      "ActualStatus": "LearningControlledRuntimePilotGatePackBlocked",
+      "ExpectedBlockedReason": "RuntimeRerankerChangedTrue",
+      "ActualBlockedReasons": [
+        "RuntimeRerankerChangedTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); controlled runtime pilot gate blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "RuntimeRouterChangedTrue",
+      "ExpectedStatus": "LearningControlledRuntimePilotGatePackBlocked",
+      "ActualStatus": "LearningControlledRuntimePilotGatePackBlocked",
+      "ExpectedBlockedReason": "RuntimeRouterChangedTrue",
+      "ActualBlockedReasons": [
+        "RuntimeRouterChangedTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); controlled runtime pilot gate blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "ProductionDecisionChangedTrue",
+      "ExpectedStatus": "LearningControlledRuntimePilotGatePackBlocked",
+      "ActualStatus": "LearningControlledRuntimePilotGatePackBlocked",
+      "ExpectedBlockedReason": "ProductionDecisionChangedTrue",
+      "ActualBlockedReasons": [
+        "ProductionDecisionChangedTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); controlled runtime pilot gate blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "PackageOutputChangedTrue",
+      "ExpectedStatus": "LearningControlledRuntimePilotGatePackBlocked",
+      "ActualStatus": "LearningControlledRuntimePilotGatePackBlocked",
+      "ExpectedBlockedReason": "PackageOutputChangedTrue",
+      "ActualBlockedReasons": [
+        "PackageOutputChangedTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); controlled runtime pilot gate blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "FormalPackageWrittenTrue",
+      "ExpectedStatus": "LearningControlledRuntimePilotGatePackBlocked",
+      "ActualStatus": "LearningControlledRuntimePilotGatePackBlocked",
+      "ExpectedBlockedReason": "FormalPackageWrittenTrue",
+      "ActualBlockedReasons": [
+        "FormalPackageWrittenTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); controlled runtime pilot gate blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "GlobalDefaultOnTrue",
+      "ExpectedStatus": "LearningControlledRuntimePilotGatePackBlocked",
+      "ActualStatus": "LearningControlledRuntimePilotGatePackBlocked",
+      "ExpectedBlockedReason": "GlobalDefaultOnTrue",
+      "ActualBlockedReasons": [
+        "GlobalDefaultOnTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); controlled runtime pilot gate blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "MLAuthorityTrue",
+      "ExpectedStatus": "LearningControlledRuntimePilotGatePackBlocked",
+      "ActualStatus": "LearningControlledRuntimePilotGatePackBlocked",
+      "ExpectedBlockedReason": "MLAuthorityTrue",
+      "ActualBlockedReasons": [
+        "MLAuthorityTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); controlled runtime pilot gate blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "LLMAuthorityTrue",
+      "ExpectedStatus": "LearningControlledRuntimePilotGatePackBlocked",
+      "ActualStatus": "LearningControlledRuntimePilotGatePackBlocked",
+      "ExpectedBlockedReason": "LLMAuthorityTrue",
+      "ActualBlockedReasons": [
+        "LLMAuthorityTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); controlled runtime pilot gate blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "RuntimeAuthorityTrue",
+      "ExpectedStatus": "LearningControlledRuntimePilotGatePackBlocked",
+      "ActualStatus": "LearningControlledRuntimePilotGatePackBlocked",
+      "ExpectedBlockedReason": "RuntimeAuthorityTrue",
+      "ActualBlockedReasons": [
+        "RuntimeAuthorityTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); controlled runtime pilot gate blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "GateAuthorityTrue",
+      "ExpectedStatus": "LearningControlledRuntimePilotGatePackBlocked",
+      "ActualStatus": "LearningControlledRuntimePilotGatePackBlocked",
+      "ExpectedBlockedReason": "GateAuthorityTrue",
+      "ActualBlockedReasons": [
+        "GateAuthorityTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); controlled runtime pilot gate blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "V8ScopedActivationLost",
+      "ExpectedStatus": "LearningControlledRuntimePilotGatePackBlocked",
+      "ActualStatus": "LearningControlledRuntimePilotGatePackBlocked",
+      "ExpectedBlockedReason": "V8ScopedActivationLost",
+      "ActualBlockedReasons": [
+        "V8ScopedActivationLost"
+      ],
+      "Reasoning": "1 blocked reason(s); controlled runtime pilot gate blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "RuntimeGateNotPassed",
+      "ExpectedStatus": "LearningControlledRuntimePilotGatePackBlocked",
+      "ActualStatus": "LearningControlledRuntimePilotGatePackBlocked",
+      "ExpectedBlockedReason": "RuntimeChangeGateNotPassed",
+      "ActualBlockedReasons": [
+        "RuntimeChangeGateNotPassed"
+      ],
+      "Reasoning": "1 blocked reason(s); controlled runtime pilot gate blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "P15GateNotPassed",
+      "ExpectedStatus": "LearningControlledRuntimePilotGatePackBlocked",
+      "ActualStatus": "LearningControlledRuntimePilotGatePackBlocked",
+      "ExpectedBlockedReason": "P15GateNotPassed",
+      "ActualBlockedReasons": [
+        "P15GateNotPassed"
+      ],
+      "Reasoning": "1 blocked reason(s); controlled runtime pilot gate blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "MainlineEvidencePresent",
+      "ExpectedStatus": "LearningControlledRuntimePilotGatePackBlocked",
+      "ActualStatus": "LearningControlledRuntimePilotGatePackBlocked",
+      "ExpectedBlockedReason": "MainlineEvidencePresent",
+      "ActualBlockedReasons": [
+        "MainlineEvidencePresent"
+      ],
+      "Reasoning": "1 blocked reason(s); controlled runtime pilot gate blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "MainlineTrustRegistryPresent",
+      "ExpectedStatus": "LearningControlledRuntimePilotGatePackBlocked",
+      "ActualStatus": "LearningControlledRuntimePilotGatePackBlocked",
+      "ExpectedBlockedReason": "MainlineTrustRegistryPresent",
+      "ActualBlockedReasons": [
+        "MainlineTrustRegistryPresent"
+      ],
+      "Reasoning": "1 blocked reason(s); controlled runtime pilot gate blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    }
+  ],
+  "OfflineReplaySummary": {
+    "Candidate": "LogisticBaseline",
+    "ReferenceBaseline": "WeightedBaseline",
+    "Scope": "demo-workspace/demo-collection",
+    "ReplayMode": "DeterministicOfflineReplay",
+    "ReplayExecuted": true,
+    "CandidatePairwiseAccuracy": 1,
+    "ReferencePairwiseAccuracy": 0.8620689655172413,
+    "AccuracyDelta": 0.13793103448275867,
+    "CandidateEvalCount": 58,
+    "ReferenceEvalCount": 58,
+    "RuntimeDecisionChanged": false,
+    "PackageOutputChanged": false,
+    "Notes": [
+      "Candidate \u0027LogisticBaseline\u0027 pairwiseAccuracy=1.000",
+      "Reference \u0027WeightedBaseline\u0027 pairwiseAccuracy=0.862",
+      "Delta=0.138 (positive = candidate stronger)",
+      "Replay is read-only: candidate and reference both score against held-out V9.1-V9.3 eval set; no runtime traffic touched.",
+      "RuntimeDecisionChanged=false / PackageOutputChanged=false \u2014 production decisions and packages unaffected.",
+      "Reminder: candidate\u0027s 100% accuracy is suspicious signal-leak risk; V9.7 risks flagged this. Pilot must verify on hard-negative-expanded eval set before runtime execution."
+    ]
+  },
+  "ShadowCanarySimulation": {
+    "CanaryMode": "ScopedShadowSimulation",
+    "Scope": "demo-workspace/demo-collection",
+    "Capability": "FormalRetrievalActivation",
+    "ShadowCanarySimulationExecuted": true,
+    "RuntimeRerankerChanged": false,
+    "RuntimeRouterChanged": false,
+    "ProductionDecisionChanged": false,
+    "PackageOutputChanged": false,
+    "KillSwitchArmed": true,
+    "RollbackReady": true,
+    "SimulatedQueryCount": 58,
+    "ShadowAgreementCount": 54,
+    "SimulatedShadowAgreementRate": 0.9310344827586207,
+    "SimulationStages": [
+      "Stage 0 \u2014 offline replay completed; held-out test set deterministic results recorded",
+      "Stage 1 \u2014 shadow inference simulation: candidate scores recorded alongside reference, never decides production",
+      "Stage 2 \u2014 simulated \u22641% canary: candidate vs reference disagreement counted, no traffic switched",
+      "Stage 3 \u2014 simulated demo-scope canary: aggregate metrics computed, abort conditions checked",
+      "Stage 4 \u2014 pending V10.3 pilot execution gate (requires human review completion)"
+    ],
+    "AbortConditionsObserved": []
+  },
+  "PilotAuditManifest": {
+    "ManifestId": "v10-pilot-audit-manifest-7f77939c577548cb881ca723246cee48",
+    "CreatedAt": "2026-06-28T12:46:32.8510554\u002B00:00",
+    "Capability": "FormalRetrievalActivation",
+    "Scope": "demo-workspace/demo-collection",
+    "V9PromotionReadinessValidated": true,
+    "ControlledPilotDesignValidated": true,
+    "HumanReviewQueueValidated": true,
+    "OfflineReplayReady": true,
+    "ShadowCanarySimulationReady": true,
+    "RuntimePilotExecutionReady": false,
+    "RuntimePromotionApplied": false,
+    "BlockedForRuntimePilotExecutionBy": "HumanReviewNotCompleted",
+    "V9ReadinessGatePath": "learning/v9/shadow-promotion-readiness-pack-gate.json",
+    "PromotionProposalPath": "learning/v9/shadow-promotion-candidate-proposal.json",
+    "HumanReviewQueuePath": "learning/v9/human-review-queue-plan.jsonl",
+    "ControlledPilotDesignPath": "learning/v9/controlled-pilot-design.json",
+    "OfflineReplaySummaryPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\learning\\v10\\offline-replay-summary.json",
+    "ShadowCanarySimulationPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\learning\\v10\\shadow-canary-simulation.json",
+    "MLAuthority": false,
+    "LLMAuthority": false,
+    "RuntimeAuthority": false,
+    "GateAuthority": false,
+    "NextAllowedPhase": "V10.3PilotExecutionGate-pending-human-review",
+    "AuditNotes": [
+      "V10 pack is read-only: no runtime mutation occurred during this evaluation.",
+      "Human review completion artifact present: False; runtime pilot execution BLOCKED pending review.",
+      "Router promotion remains blocked (RouterPromotionReady=false); router stays on rule-based runtime.",
+      "Mainline evidence / trust registry must remain absent until a separate V11\u002B phase explicitly approves them.",
+      "V8 scoped activation state untouched: state.State=Active inside demo-workspace/demo-collection only."
+    ]
+  },
+  "V9PromotionReadinessValidated": true,
+  "CandidatePromotionProposalValidated": true,
+  "HumanReviewQueueValidated": true,
+  "HumanReviewRequired": true,
+  "HumanReviewCompleted": false,
+  "ControlledPilotDesignValidated": true,
+  "OfflineReplayReady": true,
+  "ShadowCanarySimulationReady": true,
+  "RuntimePilotExecutionReady": false,
+  "BlockedForRuntimePilotExecutionBy": "HumanReviewNotCompleted",
+  "RuntimePromotionApplied": false,
+  "RuntimeRerankerChanged": false,
+  "RuntimeRouterChanged": false,
+  "ProductionDecisionChanged": false,
+  "PackageOutputChanged": false,
+  "FormalPackageWritten": false,
+  "GlobalDefaultOn": false,
+  "MLAuthority": false,
+  "LLMAuthority": false,
+  "RuntimeAuthority": false,
+  "GateAuthority": false,
+  "RequiresSeparatePromotionGate": true,
+  "RequiresHumanApproval": true,
+  "AutoIngest": false,
+  "V8ScopedActivationPreserved": true,
+  "UpstreamV9ReadinessGatePresent": true,
+  "UpstreamV9ReadinessGatePassed": true,
+  "MainlineEvidencePresent": false,
+  "MainlineTrustRegistryPresent": false,
+  "OfflineReplaySummaryPath": "learning/v10/offline-replay-summary.json",
+  "ShadowCanarySimulationPath": "learning/v10/shadow-canary-simulation.json",
+  "PilotAuditManifestPath": "learning/v10/pilot-audit-manifest.json",
+  "Recommendation": "ProceedToHumanReviewCompletionOrV10.3PilotExecutionGate",
+  "NextAllowedPhase": "V10.3PilotExecutionGate-pending-human-review",
+  "BlockedReasons": [],
+  "Diagnostics": [
+    "total=28",
+    "realStatus=LearningControlledRuntimePilotGatePackReady",
+    "humanReviewCompleted=False",
+    "blockedExecBy=HumanReviewNotCompleted",
+    "replayExecuted=True",
+    "canarySimExecuted=True",
+    "bestShadowCandidate=LogisticBaseline(1.000)",
+    "runtimeGate=True",
+    "p15Gate=True"
+  ]
+}

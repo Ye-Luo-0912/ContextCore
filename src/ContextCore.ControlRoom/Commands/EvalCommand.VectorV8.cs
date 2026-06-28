@@ -1631,6 +1631,96 @@ public static partial class EvalCommand
         Console.WriteLine($"[Eval] Learning shadow promotion readiness pack written: {jp}");
         Console.WriteLine($"[Eval] shadowPromotionReadinessPackPassed={report.ShadowPromotionReadinessPackPassed}; gatePassed={report.GatePassed}; total={report.TotalCases} ready={report.ReadyCases} blocked={report.BlockedCases} bestShadow={report.BestShadowCandidate}({report.BestShadowCandidatePairwiseAccuracy:F3}) routerPromotion={report.RouterPromotionReady} routerRepair={report.RouterRepairRequired} queue={report.HumanReviewQueue.Count} runtimePromotion={report.RuntimePromotionAllowed} recommendation={report.Recommendation} nextPhase={report.NextAllowedPhase}");
     }
+
+    private static async Task ExecuteLearningControlledRuntimePilotGatePackAsync(
+        IReadOnlyList<string> args, string subcommand, CancellationToken ct)
+    {
+        var output = Path.GetFullPath(Path.Combine("learning", "v10"));
+        Directory.CreateDirectory(output);
+        var rtPath = Path.Combine("learning", "readiness", "learning-runtime-change-readiness-gate.json");
+        var rtGate = await ReadJsonFileAsync<LearningRuntimeChangeReadinessGateReport>(rtPath, ct).ConfigureAwait(false);
+        var rtPassed = rtGate is not null && rtGate.Passed;
+        var p15Path = Path.Combine("eval", "eval-report-p15-a3.json");
+        var p15 = await ReadJsonFileAsync<JsonDocument>(p15Path, ct).ConfigureAwait(false);
+        var p15Passed = false;
+        if (p15 is not null && p15.RootElement.TryGetProperty("PassRate", out var pr)) p15Passed = pr.GetDouble() >= 1.0;
+        var mainlineEvPath = Path.Combine("vector", "v8", "formal-retrieval-promotion-approval-evidence.json");
+        var mainlineRegPath = Path.Combine("vector", "v8", "formal-retrieval-promotion-approval-trust-registry.json");
+        var mainlineEvPresent = File.Exists(mainlineEvPath);
+        var mainlineRegPresent = File.Exists(mainlineRegPath);
+
+        var v9ReadinessPath = Path.Combine("learning", "v9", "shadow-promotion-readiness-pack-gate.json");
+        var v9Readiness = await ReadJsonFileAsync<LearningShadowPromotionReadinessPackReport>(v9ReadinessPath, ct).ConfigureAwait(false);
+        var promotionProposalPath = Path.Combine("learning", "v9", "shadow-promotion-candidate-proposal.json");
+        var humanReviewQueuePath = Path.Combine("learning", "v9", "human-review-queue-plan.jsonl");
+        var pilotDesignPath = Path.Combine("learning", "v9", "controlled-pilot-design.json");
+        var shadowImplPath = Path.Combine("learning", "v9", "shadow-implementation-pack-gate.json");
+        var shadowImpl = await ReadJsonFileAsync<LearningShadowImplementationPackReport>(shadowImplPath, ct).ConfigureAwait(false);
+
+        // Validate human-review queue every entry: humanReviewRequired=true, autoIngest=false
+        var allRequireReview = true;
+        var anyAutoIngest = false;
+        var queueEntryCount = 0;
+        if (File.Exists(humanReviewQueuePath))
+        {
+            foreach (var line in File.ReadAllLines(humanReviewQueuePath))
+            {
+                if (string.IsNullOrWhiteSpace(line)) continue;
+                queueEntryCount++;
+                try
+                {
+                    using var doc = JsonDocument.Parse(line);
+                    if (doc.RootElement.TryGetProperty("humanReviewRequired", out var hr) && hr.ValueKind == JsonValueKind.False) allRequireReview = false;
+                    if (doc.RootElement.TryGetProperty("autoIngest", out var ai) && ai.ValueKind == JsonValueKind.True) anyAutoIngest = true;
+                }
+                catch { allRequireReview = false; }
+            }
+        }
+
+        // Look for a (currently nonexistent) human-review-completion artifact. V10 must never fake completion.
+        var humanReviewCompletionPath = Path.Combine("learning", "v10", "human-review-completion.json");
+        var humanReviewCompletionPresent = File.Exists(humanReviewCompletionPath);
+
+        var realContext = new LearningControlledRuntimePilotGatePackContext
+        {
+            V9ReadinessGatePresent = v9Readiness is not null,
+            V9ReadinessGatePassed = v9Readiness?.GatePassed ?? false,
+            PromotionProposalPresent = File.Exists(promotionProposalPath),
+            HumanReviewQueuePresent = File.Exists(humanReviewQueuePath) && queueEntryCount > 0,
+            HumanReviewQueueEntryCount = queueEntryCount,
+            HumanReviewQueueAllEntriesRequireReview = allRequireReview,
+            HumanReviewQueueAnyAutoIngest = anyAutoIngest,
+            ControlledPilotDesignPresent = File.Exists(pilotDesignPath),
+            V8ScopedActivationPreserved = v9Readiness?.V8ScopedActivationPreserved ?? false,
+            BestShadowCandidate = v9Readiness?.BestShadowCandidate ?? string.Empty,
+            BestShadowCandidatePairwiseAccuracy = v9Readiness?.BestShadowCandidatePairwiseAccuracy ?? 0,
+            ReferenceBaselineName = "WeightedBaseline",
+            ReferencePairwiseAccuracy = shadowImpl?.CandidateRerankerBaselines.FirstOrDefault(b => b.BaselineName == "WeightedBaseline")?.PairwiseAccuracy ?? 0,
+            CandidateEvalCount = shadowImpl?.CandidateRerankerBaselines.FirstOrDefault(b => b.BaselineName == "LogisticBaseline")?.EvalCount ?? 0,
+            RouterPromotionReady = v9Readiness?.RouterPromotionReady ?? false,
+            HumanReviewRequiredOverride = true,
+            RequiresSeparatePromotionGateOverride = true,
+            RequiresHumanApprovalOverride = true,
+            HumanReviewCompletionArtifactPresent = humanReviewCompletionPresent
+        };
+
+        var isGate = string.Equals(subcommand, "learning-controlled-runtime-pilot-gate-pack-gate", StringComparison.OrdinalIgnoreCase);
+        var opt = new LearningControlledRuntimePilotGatePackOptions
+        {
+            IsGate = isGate,
+            Enabled = !CommandHelpers.HasFlag(args, "--disabled")
+        };
+        var runner = new LearningControlledRuntimePilotGatePackRunner();
+        var report = runner.Run(realContext, output, rtPassed, p15Passed, mainlineEvPresent, mainlineRegPresent, opt);
+        var fn = isGate ? "controlled-runtime-pilot-gate-pack-gate" : "controlled-runtime-pilot-gate-pack";
+        var jp = Path.Combine(output, $"{fn}.json");
+        var mp = Path.Combine(output, $"{fn}.md");
+        await WriteJsonSafeAsync(report, jp, ct).ConfigureAwait(false);
+        await WriteTextAsync(LearningControlledRuntimePilotGatePackRunner.BuildMarkdown(
+            isGate ? "Learning Controlled Runtime Pilot Gate Pack (Gate)" : "Learning Controlled Runtime Pilot Gate Pack", report), mp, ct).ConfigureAwait(false);
+        Console.WriteLine($"[Eval] Learning controlled runtime pilot gate pack written: {jp}");
+        Console.WriteLine($"[Eval] controlledRuntimePilotGatePackPassed={report.ControlledRuntimePilotGatePackPassed}; gatePassed={report.GatePassed}; total={report.TotalCases} ready={report.ReadyCases} blocked={report.BlockedCases} replayReady={report.OfflineReplayReady} canaryReady={report.ShadowCanarySimulationReady} pilotExecReady={report.RuntimePilotExecutionReady} blockedExecBy={report.BlockedForRuntimePilotExecutionBy} recommendation={report.Recommendation} nextPhase={report.NextAllowedPhase}");
+    }
     private static bool ValidateTemplateFields(string jsonContent, string[] fieldPaths, List<string> missing, List<string> nonPlaceholder)
     {
         var doc = System.Text.Json.JsonDocument.Parse(jsonContent);

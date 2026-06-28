@@ -1,0 +1,22 @@
+﻿{
+  "Candidate": "LogisticBaseline",
+  "ReferenceBaseline": "WeightedBaseline",
+  "Scope": "demo-workspace/demo-collection",
+  "ReplayMode": "DeterministicOfflineReplay",
+  "ReplayExecuted": true,
+  "CandidatePairwiseAccuracy": 1,
+  "ReferencePairwiseAccuracy": 0.8620689655172413,
+  "AccuracyDelta": 0.13793103448275867,
+  "CandidateEvalCount": 58,
+  "ReferenceEvalCount": 58,
+  "RuntimeDecisionChanged": false,
+  "PackageOutputChanged": false,
+  "Notes": [
+    "Candidate \u0027LogisticBaseline\u0027 pairwiseAccuracy=1.000",
+    "Reference \u0027WeightedBaseline\u0027 pairwiseAccuracy=0.862",
+    "Delta=0.138 (positive = candidate stronger)",
+    "Replay is read-only: candidate and reference both score against held-out V9.1-V9.3 eval set; no runtime traffic touched.",
+    "RuntimeDecisionChanged=false / PackageOutputChanged=false \u2014 production decisions and packages unaffected.",
+    "Reminder: candidate\u0027s 100% accuracy is suspicious signal-leak risk; V9.7 risks flagged this. Pilot must verify on hard-negative-expanded eval set before runtime execution."
+  ]
+}

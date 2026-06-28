@@ -1,0 +1,32 @@
+﻿{
+  "ManifestId": "v10-pilot-audit-manifest-7f77939c577548cb881ca723246cee48",
+  "CreatedAt": "2026-06-28T12:46:32.8510554\u002B00:00",
+  "Capability": "FormalRetrievalActivation",
+  "Scope": "demo-workspace/demo-collection",
+  "V9PromotionReadinessValidated": true,
+  "ControlledPilotDesignValidated": true,
+  "HumanReviewQueueValidated": true,
+  "OfflineReplayReady": true,
+  "ShadowCanarySimulationReady": true,
+  "RuntimePilotExecutionReady": false,
+  "RuntimePromotionApplied": false,
+  "BlockedForRuntimePilotExecutionBy": "HumanReviewNotCompleted",
+  "V9ReadinessGatePath": "learning/v9/shadow-promotion-readiness-pack-gate.json",
+  "PromotionProposalPath": "learning/v9/shadow-promotion-candidate-proposal.json",
+  "HumanReviewQueuePath": "learning/v9/human-review-queue-plan.jsonl",
+  "ControlledPilotDesignPath": "learning/v9/controlled-pilot-design.json",
+  "OfflineReplaySummaryPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\learning\\v10\\offline-replay-summary.json",
+  "ShadowCanarySimulationPath": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\learning\\v10\\shadow-canary-simulation.json",
+  "MLAuthority": false,
+  "LLMAuthority": false,
+  "RuntimeAuthority": false,
+  "GateAuthority": false,
+  "NextAllowedPhase": "V10.3PilotExecutionGate-pending-human-review",
+  "AuditNotes": [
+    "V10 pack is read-only: no runtime mutation occurred during this evaluation.",
+    "Human review completion artifact present: False; runtime pilot execution BLOCKED pending review.",
+    "Router promotion remains blocked (RouterPromotionReady=false); router stays on rule-based runtime.",
+    "Mainline evidence / trust registry must remain absent until a separate V11\u002B phase explicitly approves them.",
+    "V8 scoped activation state untouched: state.State=Active inside demo-workspace/demo-collection only."
+  ]
+}
