@@ -3,7 +3,9 @@ using System.Text.Json;
 
 namespace ContextCore.Core.Services;
 
-/// <summary>V8.24 guarded live runtime activation evidence 写出器。仅在 scoped guarded mode 内写 applied/audit/state 3 个 artifact。</summary>
+/// <summary>V8.24 guarded live runtime activation evidence 写出器。仅在 scoped guarded mode 内写 applied/audit/state 3 个 artifact。
+/// V8.24R: idempotent — 如果磁盘上已存在 compatible applied artifact（同 grant/capability/scope/mode + safety flags 全部为 false），
+/// 复用其 ActivationId，避免 non-gate/gate 重复执行导致 evidence chain 断裂。</summary>
 public static class GuardedLiveRuntimeActivationWriter
 {
     private const string ActivationMode = "GuardedScopedRuntime";
@@ -16,8 +18,34 @@ public static class GuardedLiveRuntimeActivationWriter
         public string AppliedPath { get; init; } = string.Empty;
         public string AuditPath { get; init; } = string.Empty;
         public string StatePath { get; init; } = string.Empty;
+        public string ActivationId { get; init; } = string.Empty;
+        public bool ReusedExistingActivationId { get; init; }
         public IReadOnlyList<string> WrittenPaths { get; init; } = Array.Empty<string>();
         public IReadOnlyList<string> Errors { get; init; } = Array.Empty<string>();
+    }
+
+    /// <summary>V8.24R: returns existing compatible ActivationId on disk, or empty string if none / mismatched.</summary>
+    public static string TryReuseExistingActivationId(string root, string capability, string scope, string boundGrantId)
+    {
+        try
+        {
+            var scopeToken = scope.Replace('/', '-').Replace('\\', '-');
+            var appliedPath = Path.Combine(root, $"live-runtime-activation-applied-{capability}-{scopeToken}.json");
+            if (!File.Exists(appliedPath)) return string.Empty;
+            var existing = JsonSerializer.Deserialize<LiveRuntimeActivationAppliedArtifactContent>(File.ReadAllText(appliedPath), new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            if (existing is null) return string.Empty;
+            if (!string.Equals(existing.BoundGrantId, boundGrantId, StringComparison.Ordinal)) return string.Empty;
+            if (!string.Equals(existing.Capability, capability, StringComparison.Ordinal)) return string.Empty;
+            if (!string.Equals(existing.Scope, scope, StringComparison.Ordinal)) return string.Empty;
+            if (!string.Equals(existing.ActivationMode, ActivationMode, StringComparison.Ordinal)) return string.Empty;
+            // Reuse only if existing artifact is safe — never reuse a tampered ActivationId.
+            if (existing.GlobalDefaultOn || existing.PackageOutputChanged || existing.FormalPackageWritten || existing.VectorStoreBindingChanged) return string.Empty;
+            return existing.ActivationId;
+        }
+        catch
+        {
+            return string.Empty;
+        }
     }
 
     public static WriteResult WriteAll(
@@ -36,6 +64,10 @@ public static class GuardedLiveRuntimeActivationWriter
     {
         var written = new List<string>(3);
         var errors = new List<string>();
+        // V8.24R: idempotent — reuse existing compatible ActivationId before writing.
+        var reusedId = TryReuseExistingActivationId(root, capability, scope, boundGrantId);
+        var reused = !string.IsNullOrEmpty(reusedId);
+        var effectiveActivationId = reused ? reusedId : activationId;
         try
         {
             Directory.CreateDirectory(root);
@@ -46,7 +78,7 @@ public static class GuardedLiveRuntimeActivationWriter
 
             var applied = new LiveRuntimeActivationAppliedArtifactContent
             {
-                ActivationId = activationId,
+                ActivationId = effectiveActivationId,
                 BoundGrantId = boundGrantId,
                 Capability = capability,
                 Scope = scope,
@@ -74,7 +106,7 @@ public static class GuardedLiveRuntimeActivationWriter
             {
                 EventId = $"frp-live-runtime-activation-audit-{Guid.NewGuid():N}",
                 EventType = "GuardedLiveRuntimeActivationApplied",
-                ActivationId = activationId,
+                ActivationId = effectiveActivationId,
                 BoundGrantId = boundGrantId,
                 Capability = capability,
                 Scope = scope,
@@ -98,7 +130,7 @@ public static class GuardedLiveRuntimeActivationWriter
 
             var state = new LiveRuntimeActivationStateContent
             {
-                ActivationId = activationId,
+                ActivationId = effectiveActivationId,
                 BoundGrantId = boundGrantId,
                 Capability = capability,
                 Scope = scope,
@@ -127,6 +159,8 @@ public static class GuardedLiveRuntimeActivationWriter
                 AppliedPath = appliedPath,
                 AuditPath = auditPath,
                 StatePath = statePath,
+                ActivationId = effectiveActivationId,
+                ReusedExistingActivationId = reused,
                 WrittenPaths = written,
                 Errors = errors
             };
@@ -134,7 +168,7 @@ public static class GuardedLiveRuntimeActivationWriter
         catch (Exception ex)
         {
             errors.Add(ex.Message);
-            return new WriteResult { AllArtifactsWritten = false, WrittenPaths = written, Errors = errors };
+            return new WriteResult { AllArtifactsWritten = false, ActivationId = effectiveActivationId, ReusedExistingActivationId = reused, WrittenPaths = written, Errors = errors };
         }
     }
 

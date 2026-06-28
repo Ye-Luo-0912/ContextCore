@@ -1,5 +1,5 @@
 ﻿{
-  "ActivationId": "frp-guarded-live-runtime-activation-b3075c8a12834f57b84c378f5c8a99c3",
+  "ActivationId": "frp-guarded-live-runtime-activation-ffed69e2126743cdb7b3c7d5a6b4bc05",
   "BoundGrantId": "frp-grant-9308474979b64f31b8fc7d260b19575f",
   "Capability": "FormalRetrievalActivation",
   "Scope": "demo-workspace/demo-collection",
@@ -16,6 +16,6 @@
   "ScopeGuardActive": true,
   "RollbackBindingPresent": true,
   "ActivationSource": "V8.23LiveRuntimeActivationExecutionDryRun",
-  "LastTransitionAt": "2026-06-28T05:32:04.1012207\u002B00:00",
-  "CreatedAt": "2026-06-28T05:32:04.1012207\u002B00:00"
+  "LastTransitionAt": "2026-06-28T08:11:46.6519632\u002B00:00",
+  "CreatedAt": "2026-06-28T08:11:46.6519632\u002B00:00"
 }

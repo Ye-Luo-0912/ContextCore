@@ -56,6 +56,31 @@ public static class GuardedLiveRuntimeActivationExecutionBlockedReasons
     public const string AttemptedGlobalActivation = nameof(AttemptedGlobalActivation);
     public const string AttemptedPackageOutputChange = nameof(AttemptedPackageOutputChange);
     public const string AttemptedFormalPackageWrite = nameof(AttemptedFormalPackageWrite);
+    public const string AppliedEvidenceMissing = nameof(AppliedEvidenceMissing);
+    public const string AuditEvidenceMissing = nameof(AuditEvidenceMissing);
+    public const string StateEvidenceMissing = nameof(StateEvidenceMissing);
+    public const string AppliedEvidenceActivationIdMismatch = nameof(AppliedEvidenceActivationIdMismatch);
+    public const string AuditEvidenceActivationIdMismatch = nameof(AuditEvidenceActivationIdMismatch);
+    public const string StateEvidenceActivationIdMismatch = nameof(StateEvidenceActivationIdMismatch);
+    public const string AppliedEvidenceScopeMismatch = nameof(AppliedEvidenceScopeMismatch);
+    public const string AuditEvidenceScopeMismatch = nameof(AuditEvidenceScopeMismatch);
+    public const string StateEvidenceScopeMismatch = nameof(StateEvidenceScopeMismatch);
+    public const string EvidenceGlobalDefaultOnTrue = nameof(EvidenceGlobalDefaultOnTrue);
+    public const string EvidencePackageOutputChangedTrue = nameof(EvidencePackageOutputChangedTrue);
+    public const string EvidenceFormalPackageWrittenTrue = nameof(EvidenceFormalPackageWrittenTrue);
+    public const string EvidenceVectorStoreBindingChangedTrue = nameof(EvidenceVectorStoreBindingChangedTrue);
+}
+
+public sealed class EvidenceBindingSnapshot
+{
+    public string ExpectedActivationId { get; init; } = string.Empty;
+    public string AppliedPath { get; init; } = string.Empty;
+    public string AuditPath { get; init; } = string.Empty;
+    public string StatePath { get; init; } = string.Empty;
+    public LiveRuntimeActivationAppliedArtifactContent? Applied { get; init; }
+    public LiveRuntimeActivationAuditEvent? Audit { get; init; }
+    public LiveRuntimeActivationStateContent? State { get; init; }
+    public bool ExpectValidation { get; init; }
 }
 
 public sealed class GuardedLiveRuntimeActivationApplyPlan
@@ -113,6 +138,40 @@ public static class FormalRetrievalPromotionApprovalGuardedLiveRuntimeActivation
     private const string AllowedCapability = PolicyAuthorityKnownCapabilities.FormalRetrievalActivation;
     private const string AllowedScope = "demo-workspace/demo-collection";
 
+    public static IReadOnlyList<string> ValidateEvidenceBinding(EvidenceBindingSnapshot evidenceBinding)
+    {
+        var blocked = new List<string>();
+        if (evidenceBinding.Applied is null) blocked.Add(GuardedLiveRuntimeActivationExecutionBlockedReasons.AppliedEvidenceMissing);
+        else
+        {
+            if (!string.Equals(evidenceBinding.Applied.ActivationId, evidenceBinding.ExpectedActivationId, StringComparison.Ordinal))
+                blocked.Add(GuardedLiveRuntimeActivationExecutionBlockedReasons.AppliedEvidenceActivationIdMismatch);
+            if (!string.Equals(evidenceBinding.Applied.Scope, AllowedScope, StringComparison.Ordinal))
+                blocked.Add(GuardedLiveRuntimeActivationExecutionBlockedReasons.AppliedEvidenceScopeMismatch);
+            if (evidenceBinding.Applied.GlobalDefaultOn) blocked.Add(GuardedLiveRuntimeActivationExecutionBlockedReasons.EvidenceGlobalDefaultOnTrue);
+            if (evidenceBinding.Applied.PackageOutputChanged) blocked.Add(GuardedLiveRuntimeActivationExecutionBlockedReasons.EvidencePackageOutputChangedTrue);
+            if (evidenceBinding.Applied.FormalPackageWritten) blocked.Add(GuardedLiveRuntimeActivationExecutionBlockedReasons.EvidenceFormalPackageWrittenTrue);
+            if (evidenceBinding.Applied.VectorStoreBindingChanged) blocked.Add(GuardedLiveRuntimeActivationExecutionBlockedReasons.EvidenceVectorStoreBindingChangedTrue);
+        }
+        if (evidenceBinding.Audit is null) blocked.Add(GuardedLiveRuntimeActivationExecutionBlockedReasons.AuditEvidenceMissing);
+        else
+        {
+            if (!string.Equals(evidenceBinding.Audit.ActivationId, evidenceBinding.ExpectedActivationId, StringComparison.Ordinal))
+                blocked.Add(GuardedLiveRuntimeActivationExecutionBlockedReasons.AuditEvidenceActivationIdMismatch);
+            if (!string.Equals(evidenceBinding.Audit.Scope, AllowedScope, StringComparison.Ordinal))
+                blocked.Add(GuardedLiveRuntimeActivationExecutionBlockedReasons.AuditEvidenceScopeMismatch);
+        }
+        if (evidenceBinding.State is null) blocked.Add(GuardedLiveRuntimeActivationExecutionBlockedReasons.StateEvidenceMissing);
+        else
+        {
+            if (!string.Equals(evidenceBinding.State.ActivationId, evidenceBinding.ExpectedActivationId, StringComparison.Ordinal))
+                blocked.Add(GuardedLiveRuntimeActivationExecutionBlockedReasons.StateEvidenceActivationIdMismatch);
+            if (!string.Equals(evidenceBinding.State.Scope, AllowedScope, StringComparison.Ordinal))
+                blocked.Add(GuardedLiveRuntimeActivationExecutionBlockedReasons.StateEvidenceScopeMismatch);
+        }
+        return blocked;
+    }
+
     public static GuardedLiveRuntimeActivationApplyDecision Evaluate(
         FormalRetrievalPromotionApprovalLiveRuntimeActivationExecutionDryRunReport? dryRunReport,
         FormalRetrievalPromotionApprovalRuntimeActivationArtifactIntegrityReport? integrityReport,
@@ -122,7 +181,8 @@ public static class FormalRetrievalPromotionApprovalGuardedLiveRuntimeActivation
         bool rtPassed,
         bool p15Passed,
         bool mainlineEvidencePresent,
-        bool mainlineRegistryPresent)
+        bool mainlineRegistryPresent,
+        EvidenceBindingSnapshot? evidenceBinding = null)
     {
         var blocked = new List<string>();
         var grantId = dryRunReport?.BoundGrantId ?? integrityReport?.BoundGrantId ?? writeOutReport?.BoundGrantId ?? string.Empty;
@@ -209,6 +269,12 @@ public static class FormalRetrievalPromotionApprovalGuardedLiveRuntimeActivation
         if (mainlineEvidencePresent) blocked.Add(GuardedLiveRuntimeActivationExecutionBlockedReasons.MainlineEvidencePresent);
         if (mainlineRegistryPresent) blocked.Add(GuardedLiveRuntimeActivationExecutionBlockedReasons.MainlineTrustRegistryPresent);
 
+        // V8.24R: evidence-binding validation — checks that committed evidence artifacts match the gate report's ActivationId / scope / safety flags.
+        if (evidenceBinding is not null && evidenceBinding.ExpectValidation)
+        {
+            blocked.AddRange(ValidateEvidenceBinding(evidenceBinding));
+        }
+
         var finalBlocked = blocked.Distinct(StringComparer.Ordinal).OrderBy(static x => x, StringComparer.Ordinal).ToArray();
         var apply = finalBlocked.Length == 0;
         return new GuardedLiveRuntimeActivationApplyDecision
@@ -275,7 +341,8 @@ public sealed record FormalRetrievalPromotionApprovalGuardedLiveRuntimeActivatio
     bool MainlineEvidencePresent,
     bool MainlineRegistryPresent,
     string ExpectedStatus,
-    string? ExpectedBlockedReason);
+    string? ExpectedBlockedReason,
+    EvidenceBindingSnapshot? EvidenceBinding = null);
 
 public sealed class FormalRetrievalPromotionApprovalGuardedLiveRuntimeActivationExecutionRunner
 {
@@ -305,7 +372,8 @@ public sealed class FormalRetrievalPromotionApprovalGuardedLiveRuntimeActivation
                 scenario.RtPassed,
                 scenario.P15Passed,
                 scenario.MainlineEvidencePresent,
-                scenario.MainlineRegistryPresent);
+                scenario.MainlineRegistryPresent,
+                scenario.EvidenceBinding);
             var statusMatched = string.Equals(scenario.ExpectedStatus, decision.Status, StringComparison.Ordinal);
             var blockedReasonMatched = scenario.ExpectedBlockedReason is null || decision.BlockedReasons.Contains(scenario.ExpectedBlockedReason, StringComparer.Ordinal);
             var applied = string.Equals(decision.Status, GuardedLiveRuntimeActivationExecutionStatuses.GuardedLiveRuntimeActivationApplied, StringComparison.Ordinal);
@@ -348,7 +416,7 @@ public sealed class FormalRetrievalPromotionApprovalGuardedLiveRuntimeActivation
         }).ToArray();
 
         var blocked = new List<string>();
-        if (cases.Length < 30) blocked.Add("InsufficientGuardedLiveRuntimeActivationExecutionCases");
+        if (cases.Length < 40) blocked.Add("InsufficientGuardedLiveRuntimeActivationExecutionCases");
         if (cases.Any(static c => !c.PassedAsExpected)) blocked.Add("GuardedLiveRuntimeActivationExecutionMatrixFailed");
         foreach (var status in new[] { GuardedLiveRuntimeActivationExecutionStatuses.GuardedLiveRuntimeActivationApplied, GuardedLiveRuntimeActivationExecutionStatuses.GuardedLiveRuntimeActivationBlocked })
         {
@@ -387,6 +455,7 @@ public sealed class FormalRetrievalPromotionApprovalGuardedLiveRuntimeActivation
         var appliedArtifactPath = string.Empty;
         var auditArtifactPath = string.Empty;
         var stateArtifactPath = string.Empty;
+        var evidenceReusedExistingActivationId = false;
         if (blocked.Count == 0 && string.Equals(realDecision.Status, GuardedLiveRuntimeActivationExecutionStatuses.GuardedLiveRuntimeActivationApplied, StringComparison.Ordinal) && opt.WriteEvidence)
         {
             var root = outputRoot ?? Path.Combine("vector", "v8", "runtime-activation");
@@ -409,6 +478,12 @@ public sealed class FormalRetrievalPromotionApprovalGuardedLiveRuntimeActivation
                 appliedArtifactPath = writeResult.AppliedPath;
                 auditArtifactPath = writeResult.AuditPath;
                 stateArtifactPath = writeResult.StatePath;
+                activationId = writeResult.ActivationId;
+                evidenceReusedExistingActivationId = writeResult.ReusedExistingActivationId;
+
+                // V8.24R: read back the 3 just-written evidence artifacts and validate they all bind to the same ActivationId / scope / safety flags.
+                var bindingSnapshot = LoadEvidenceBindingSnapshot(appliedArtifactPath, auditArtifactPath, stateArtifactPath, activationId);
+                blocked.AddRange(FormalRetrievalPromotionApprovalGuardedLiveRuntimeActivationExecutionPolicy.ValidateEvidenceBinding(bindingSnapshot));
             }
         }
 
@@ -523,8 +598,109 @@ public sealed class FormalRetrievalPromotionApprovalGuardedLiveRuntimeActivation
             new("AttemptedScopeExpansionViaWildcard", cleanDryRun, cleanIntegrity, cleanWriteOut, CloneSnapshot(cleanSnapshot, scopeManifest:new GuardedRuntimeActivationScopeEnforcementManifestContent { BoundGrantId = cleanSnapshot.ScopeEnforcementManifest!.BoundGrantId, AllowedScope = cleanSnapshot.ScopeEnforcementManifest.AllowedScope, GlobalDefaultOn = false, WildcardScopeAllowed = true, CreatedAt = cleanSnapshot.ScopeEnforcementManifest.CreatedAt }), cleanRefs, true, true, false, false, GuardedLiveRuntimeActivationExecutionStatuses.GuardedLiveRuntimeActivationBlocked, GuardedLiveRuntimeActivationExecutionBlockedReasons.WildcardScopeAllowedTrue),
             new("AttemptedGlobalActivationViaDefaultOn", cleanDryRun, cleanIntegrity, cleanWriteOut, CloneSnapshot(cleanSnapshot, scopeManifest:new GuardedRuntimeActivationScopeEnforcementManifestContent { BoundGrantId = cleanSnapshot.ScopeEnforcementManifest!.BoundGrantId, AllowedScope = cleanSnapshot.ScopeEnforcementManifest.AllowedScope, GlobalDefaultOn = true, WildcardScopeAllowed = false, CreatedAt = cleanSnapshot.ScopeEnforcementManifest.CreatedAt }), cleanRefs, true, true, false, false, GuardedLiveRuntimeActivationExecutionStatuses.GuardedLiveRuntimeActivationBlocked, GuardedLiveRuntimeActivationExecutionBlockedReasons.GlobalDefaultOnTrue),
             new("AttemptedPackageOutputChange", CloneDryRun(cleanDryRun, packageOutputChanged:true), cleanIntegrity, cleanWriteOut, cleanSnapshot, cleanRefs, true, true, false, false, GuardedLiveRuntimeActivationExecutionStatuses.GuardedLiveRuntimeActivationBlocked, GuardedLiveRuntimeActivationExecutionBlockedReasons.PackageOutputChangedTrueInUpstream),
-            new("AttemptedFormalPackageWrite", CloneDryRun(cleanDryRun, formalPackageWritten:true), cleanIntegrity, cleanWriteOut, cleanSnapshot, cleanRefs, true, true, false, false, GuardedLiveRuntimeActivationExecutionStatuses.GuardedLiveRuntimeActivationBlocked, GuardedLiveRuntimeActivationExecutionBlockedReasons.FormalPackageWrittenTrueInUpstream)
+            new("AttemptedFormalPackageWrite", CloneDryRun(cleanDryRun, formalPackageWritten:true), cleanIntegrity, cleanWriteOut, cleanSnapshot, cleanRefs, true, true, false, false, GuardedLiveRuntimeActivationExecutionStatuses.GuardedLiveRuntimeActivationBlocked, GuardedLiveRuntimeActivationExecutionBlockedReasons.FormalPackageWrittenTrueInUpstream),
+
+            // V8.24R: evidence-binding negative cases — committed evidence must match gate report.
+            new("AppliedEvidenceMissing", cleanDryRun, cleanIntegrity, cleanWriteOut, cleanSnapshot, cleanRefs, true, true, false, false, GuardedLiveRuntimeActivationExecutionStatuses.GuardedLiveRuntimeActivationBlocked, GuardedLiveRuntimeActivationExecutionBlockedReasons.AppliedEvidenceMissing, BuildEvidenceBinding(skipApplied:true)),
+            new("AuditEvidenceMissing", cleanDryRun, cleanIntegrity, cleanWriteOut, cleanSnapshot, cleanRefs, true, true, false, false, GuardedLiveRuntimeActivationExecutionStatuses.GuardedLiveRuntimeActivationBlocked, GuardedLiveRuntimeActivationExecutionBlockedReasons.AuditEvidenceMissing, BuildEvidenceBinding(skipAudit:true)),
+            new("StateEvidenceMissing", cleanDryRun, cleanIntegrity, cleanWriteOut, cleanSnapshot, cleanRefs, true, true, false, false, GuardedLiveRuntimeActivationExecutionStatuses.GuardedLiveRuntimeActivationBlocked, GuardedLiveRuntimeActivationExecutionBlockedReasons.StateEvidenceMissing, BuildEvidenceBinding(skipState:true)),
+            new("AppliedActivationIdMismatch", cleanDryRun, cleanIntegrity, cleanWriteOut, cleanSnapshot, cleanRefs, true, true, false, false, GuardedLiveRuntimeActivationExecutionStatuses.GuardedLiveRuntimeActivationBlocked, GuardedLiveRuntimeActivationExecutionBlockedReasons.AppliedEvidenceActivationIdMismatch, BuildEvidenceBinding(appliedActivationId:"different-id-applied")),
+            new("AuditActivationIdMismatch", cleanDryRun, cleanIntegrity, cleanWriteOut, cleanSnapshot, cleanRefs, true, true, false, false, GuardedLiveRuntimeActivationExecutionStatuses.GuardedLiveRuntimeActivationBlocked, GuardedLiveRuntimeActivationExecutionBlockedReasons.AuditEvidenceActivationIdMismatch, BuildEvidenceBinding(auditActivationId:"different-id-audit")),
+            new("StateActivationIdMismatch", cleanDryRun, cleanIntegrity, cleanWriteOut, cleanSnapshot, cleanRefs, true, true, false, false, GuardedLiveRuntimeActivationExecutionStatuses.GuardedLiveRuntimeActivationBlocked, GuardedLiveRuntimeActivationExecutionBlockedReasons.StateEvidenceActivationIdMismatch, BuildEvidenceBinding(stateActivationId:"different-id-state")),
+            new("AppliedScopeMismatch", cleanDryRun, cleanIntegrity, cleanWriteOut, cleanSnapshot, cleanRefs, true, true, false, false, GuardedLiveRuntimeActivationExecutionStatuses.GuardedLiveRuntimeActivationBlocked, GuardedLiveRuntimeActivationExecutionBlockedReasons.AppliedEvidenceScopeMismatch, BuildEvidenceBinding(appliedScope:"other/scope")),
+            new("AuditScopeMismatch", cleanDryRun, cleanIntegrity, cleanWriteOut, cleanSnapshot, cleanRefs, true, true, false, false, GuardedLiveRuntimeActivationExecutionStatuses.GuardedLiveRuntimeActivationBlocked, GuardedLiveRuntimeActivationExecutionBlockedReasons.AuditEvidenceScopeMismatch, BuildEvidenceBinding(auditScope:"other/scope")),
+            new("StateScopeMismatch", cleanDryRun, cleanIntegrity, cleanWriteOut, cleanSnapshot, cleanRefs, true, true, false, false, GuardedLiveRuntimeActivationExecutionStatuses.GuardedLiveRuntimeActivationBlocked, GuardedLiveRuntimeActivationExecutionBlockedReasons.StateEvidenceScopeMismatch, BuildEvidenceBinding(stateScope:"other/scope")),
+            new("EvidenceGlobalDefaultOnTrue", cleanDryRun, cleanIntegrity, cleanWriteOut, cleanSnapshot, cleanRefs, true, true, false, false, GuardedLiveRuntimeActivationExecutionStatuses.GuardedLiveRuntimeActivationBlocked, GuardedLiveRuntimeActivationExecutionBlockedReasons.EvidenceGlobalDefaultOnTrue, BuildEvidenceBinding(globalDefaultOn:true)),
+            new("EvidencePackageOutputChangedTrue", cleanDryRun, cleanIntegrity, cleanWriteOut, cleanSnapshot, cleanRefs, true, true, false, false, GuardedLiveRuntimeActivationExecutionStatuses.GuardedLiveRuntimeActivationBlocked, GuardedLiveRuntimeActivationExecutionBlockedReasons.EvidencePackageOutputChangedTrue, BuildEvidenceBinding(packageOutputChanged:true)),
+            new("EvidenceFormalPackageWrittenTrue", cleanDryRun, cleanIntegrity, cleanWriteOut, cleanSnapshot, cleanRefs, true, true, false, false, GuardedLiveRuntimeActivationExecutionStatuses.GuardedLiveRuntimeActivationBlocked, GuardedLiveRuntimeActivationExecutionBlockedReasons.EvidenceFormalPackageWrittenTrue, BuildEvidenceBinding(formalPackageWritten:true)),
+            new("EvidenceVectorStoreBindingChangedTrue", cleanDryRun, cleanIntegrity, cleanWriteOut, cleanSnapshot, cleanRefs, true, true, false, false, GuardedLiveRuntimeActivationExecutionStatuses.GuardedLiveRuntimeActivationBlocked, GuardedLiveRuntimeActivationExecutionBlockedReasons.EvidenceVectorStoreBindingChangedTrue, BuildEvidenceBinding(vectorStoreBindingChanged:true)),
+            new("AllUpstreamCleanWithValidEvidenceBinding", cleanDryRun, cleanIntegrity, cleanWriteOut, cleanSnapshot, cleanRefs, true, true, false, false, GuardedLiveRuntimeActivationExecutionStatuses.GuardedLiveRuntimeActivationApplied, null, BuildEvidenceBinding())
         ];
+    }
+
+    /// <summary>V8.24R: build a synthetic EvidenceBindingSnapshot for matrix testing.
+    /// Defaults all 3 evidence to match a fixed ActivationId / capability / demo scope / safe flags.
+    /// Flags allow simulating each failure mode (missing piece, mismatched id/scope, safety leak).</summary>
+    private static EvidenceBindingSnapshot BuildEvidenceBinding(
+        bool skipApplied = false, bool skipAudit = false, bool skipState = false,
+        string? appliedActivationId = null, string? auditActivationId = null, string? stateActivationId = null,
+        string? appliedScope = null, string? auditScope = null, string? stateScope = null,
+        bool globalDefaultOn = false, bool packageOutputChanged = false, bool formalPackageWritten = false, bool vectorStoreBindingChanged = false)
+    {
+        const string expectedId = "frp-guarded-live-runtime-activation-fixture";
+        const string defaultScope = "demo-workspace/demo-collection";
+        const string defaultCapability = PolicyAuthorityKnownCapabilities.FormalRetrievalActivation;
+        var applied = skipApplied ? null : new LiveRuntimeActivationAppliedArtifactContent
+        {
+            ActivationId = appliedActivationId ?? expectedId,
+            BoundGrantId = "fixture-grant",
+            Capability = defaultCapability,
+            Scope = appliedScope ?? defaultScope,
+            ActivationMode = "GuardedScopedRuntime",
+            RuntimeActivation = true,
+            FormalRetrievalAllowed = true,
+            RuntimeSwitchAllowed = true,
+            GlobalDefaultOn = globalDefaultOn,
+            PackageOutputChanged = packageOutputChanged,
+            FormalPackageWritten = formalPackageWritten,
+            VectorStoreBindingChanged = vectorStoreBindingChanged,
+            KillSwitchArmed = true,
+            RollbackBindingPresent = true,
+            ScopeGuardActive = true,
+            ActivationSource = "V8.23LiveRuntimeActivationExecutionDryRun",
+            CreatedAt = "2026-06-28T12:00:00Z"
+        };
+        var audit = skipAudit ? null : new LiveRuntimeActivationAuditEvent
+        {
+            EventId = "fixture-event",
+            EventType = "GuardedLiveRuntimeActivationApplied",
+            ActivationId = auditActivationId ?? expectedId,
+            BoundGrantId = "fixture-grant",
+            Capability = defaultCapability,
+            Scope = auditScope ?? defaultScope,
+            ActivationMode = "GuardedScopedRuntime",
+            RuntimeActivation = true,
+            FormalRetrievalAllowed = true,
+            RuntimeSwitchAllowed = true,
+            GlobalDefaultOn = false,
+            PackageOutputChanged = false,
+            FormalPackageWritten = false,
+            VectorStoreBindingChanged = false,
+            KillSwitchArmed = true,
+            ScopeGuardActive = true,
+            RollbackBindingPresent = true,
+            ActivationSource = "V8.23LiveRuntimeActivationExecutionDryRun",
+            Timestamp = "2026-06-28T12:00:00Z"
+        };
+        var state = skipState ? null : new LiveRuntimeActivationStateContent
+        {
+            ActivationId = stateActivationId ?? expectedId,
+            BoundGrantId = "fixture-grant",
+            Capability = defaultCapability,
+            Scope = stateScope ?? defaultScope,
+            State = "Active",
+            ActivationMode = "GuardedScopedRuntime",
+            RuntimeActivation = true,
+            FormalRetrievalAllowed = true,
+            RuntimeSwitchAllowed = true,
+            GlobalDefaultOn = false,
+            PackageOutputChanged = false,
+            FormalPackageWritten = false,
+            VectorStoreBindingChanged = false,
+            KillSwitchArmed = true,
+            ScopeGuardActive = true,
+            RollbackBindingPresent = true,
+            ActivationSource = "V8.23LiveRuntimeActivationExecutionDryRun",
+            CreatedAt = "2026-06-28T12:00:00Z"
+        };
+        return new EvidenceBindingSnapshot
+        {
+            ExpectedActivationId = expectedId,
+            Applied = applied,
+            Audit = audit,
+            State = state,
+            ExpectValidation = true
+        };
     }
 
     private static FormalRetrievalPromotionApprovalRuntimeActivationArtifactIntegrityReport BuildCleanIntegrityFixture(
@@ -836,6 +1012,20 @@ public sealed class FormalRetrievalPromotionApprovalGuardedLiveRuntimeActivation
     private static string FirstNonEmpty(params string?[] values) => values.FirstOrDefault(static x => !string.IsNullOrWhiteSpace(x)) ?? string.Empty;
     private static T? ReadJsonFile<T>(string path) where T : class => string.IsNullOrWhiteSpace(path) || !File.Exists(path) ? null : JsonSerializer.Deserialize<T>(File.ReadAllText(path), JsonOptions);
     private static T? ReadJsonLine<T>(string path) where T : class => string.IsNullOrWhiteSpace(path) || !File.Exists(path) ? null : JsonSerializer.Deserialize<T>(File.ReadLines(path).FirstOrDefault() ?? string.Empty, JsonOptions);
+
+    /// <summary>V8.24R: build an EvidenceBindingSnapshot by reading the 3 just-written evidence files. Used to validate that the gate report's ActivationId matches what's on disk.</summary>
+    private static EvidenceBindingSnapshot LoadEvidenceBindingSnapshot(string appliedPath, string auditPath, string statePath, string expectedActivationId)
+        => new()
+        {
+            ExpectedActivationId = expectedActivationId,
+            AppliedPath = appliedPath,
+            AuditPath = auditPath,
+            StatePath = statePath,
+            Applied = ReadJsonFile<LiveRuntimeActivationAppliedArtifactContent>(appliedPath),
+            Audit = ReadJsonLine<LiveRuntimeActivationAuditEvent>(auditPath),
+            State = ReadJsonFile<LiveRuntimeActivationStateContent>(statePath),
+            ExpectValidation = true
+        };
 
     public static string BuildMarkdown(string title, FormalRetrievalPromotionApprovalGuardedLiveRuntimeActivationExecutionReport report)
     {

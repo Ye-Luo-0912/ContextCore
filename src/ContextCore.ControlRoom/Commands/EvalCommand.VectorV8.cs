@@ -1307,7 +1307,7 @@ public static partial class EvalCommand
             WriteEvidence = true
         };
         var runner = new FormalRetrievalPromotionApprovalGuardedLiveRuntimeActivationExecutionRunner();
-        var evidenceRoot = Path.GetFullPath(Path.Combine("vector", "v8", "runtime-activation"));
+        var evidenceRoot = Path.Combine("vector", "v8", "runtime-activation");
         var report = runner.Run(dryRunGate, integrityGate, artifactWriteOutGate, rtPassed, p15Passed, mainlineEvPresent, mainlineRegPresent, opt, evidenceRoot);
         var fn = isGate
             ? "formal-retrieval-promotion-approval-guarded-live-runtime-activation-execution-gate"
