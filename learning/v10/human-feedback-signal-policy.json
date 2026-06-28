@@ -1,0 +1,23 @@
+﻿{
+  "PolicyVersion": "v10.3-human-feedback-signal/v1",
+  "HumanReviewAsGateAuthority": false,
+  "HumanFeedbackAccepted": true,
+  "HumanFeedbackAutoIngest": false,
+  "HumanFeedbackRequiresEvidenceBinding": true,
+  "HumanFeedbackUsedAsTrainingSignalOnly": true,
+  "HumanReviewBacklogObserved": true,
+  "HumanReviewBacklogQueueEntryCount": 12,
+  "AcceptedSignalTypes": [
+    "labeled hard-negative confirmation (per V9.4 candidate spec)",
+    "router intent ground-truth annotation (per V9.4 repair plan)",
+    "failure cluster root-cause categorization (per V9.4 diagnosis pack)",
+    "package coverage / constraint gap labeling (per V9.5 feedback ingestion contract)"
+  ],
+  "RejectedAuthorityClaims": [
+    "human review CANNOT mark RuntimePilotExecutionReadyForSeparateGate=true on its own",
+    "human review CANNOT bypass signal-leakage suspicion / hard-negative evidence requirement",
+    "human review CANNOT auto-ingest feedback into training set without evidence-binding verification",
+    "human review CANNOT grant runtime / gate / ML / LLM authority"
+  ],
+  "Notes": "Human review is now a feedback SIGNAL feeding the dataset, not a GATE deciding readiness. Evidence calibration alone gates runtime pilot execution. Backlog observed only \u2014 not consumed here."
+}

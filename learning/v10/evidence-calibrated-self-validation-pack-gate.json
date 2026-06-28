@@ -1,0 +1,613 @@
+﻿{
+  "OperationId": "v10-learning-evidence-calibrated-self-validation-pack-5bd736c268014597b994145447020f8e",
+  "CreatedAt": "2026-06-28T13:20:39.759103+00:00",
+  "EvidenceCalibratedSelfValidationPackPassed": true,
+  "GatePassed": true,
+  "TotalCases": 28,
+  "PassedCases": 28,
+  "FailedCases": 0,
+  "ReadyCases": 1,
+  "BlockedCases": 27,
+  "Cases": [
+    {
+      "CaseName": "AllUpstreamClean",
+      "ExpectedStatus": "LearningEvidenceCalibratedSelfValidationPackReady",
+      "ActualStatus": "LearningEvidenceCalibratedSelfValidationPackReady",
+      "ExpectedBlockedReason": "",
+      "ActualBlockedReasons": [],
+      "Reasoning": "evidence-calibrated self-validation pack policy ready \u2014 upstream \u002B authority invariants satisfied; sub-signals \u002B decision computed below.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "V10PilotGateMissing",
+      "ExpectedStatus": "LearningEvidenceCalibratedSelfValidationPackBlocked",
+      "ActualStatus": "LearningEvidenceCalibratedSelfValidationPackBlocked",
+      "ExpectedBlockedReason": "V10PilotGateMissing",
+      "ActualBlockedReasons": [
+        "V10PilotGateMissing"
+      ],
+      "Reasoning": "1 blocked reason(s); evidence-calibrated self-validation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "V10PilotGateNotPassed",
+      "ExpectedStatus": "LearningEvidenceCalibratedSelfValidationPackBlocked",
+      "ActualStatus": "LearningEvidenceCalibratedSelfValidationPackBlocked",
+      "ExpectedBlockedReason": "V10PilotGateNotPassed",
+      "ActualBlockedReasons": [
+        "V10PilotGateNotPassed"
+      ],
+      "Reasoning": "1 blocked reason(s); evidence-calibrated self-validation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "OfflineReplayMissing",
+      "ExpectedStatus": "LearningEvidenceCalibratedSelfValidationPackBlocked",
+      "ActualStatus": "LearningEvidenceCalibratedSelfValidationPackBlocked",
+      "ExpectedBlockedReason": "OfflineReplayMissing",
+      "ActualBlockedReasons": [
+        "OfflineReplayMissing"
+      ],
+      "Reasoning": "1 blocked reason(s); evidence-calibrated self-validation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "ShadowCanaryMissing",
+      "ExpectedStatus": "LearningEvidenceCalibratedSelfValidationPackBlocked",
+      "ActualStatus": "LearningEvidenceCalibratedSelfValidationPackBlocked",
+      "ExpectedBlockedReason": "ShadowCanaryMissing",
+      "ActualBlockedReasons": [
+        "ShadowCanaryMissing"
+      ],
+      "Reasoning": "1 blocked reason(s); evidence-calibrated self-validation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "HardNegativeCandidatesMissing",
+      "ExpectedStatus": "LearningEvidenceCalibratedSelfValidationPackBlocked",
+      "ActualStatus": "LearningEvidenceCalibratedSelfValidationPackBlocked",
+      "ExpectedBlockedReason": "HardNegativeCandidatesMissing",
+      "ActualBlockedReasons": [
+        "HardNegativeCandidatesMissing"
+      ],
+      "Reasoning": "1 blocked reason(s); evidence-calibrated self-validation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "EvidenceSufficientFalselyTrue",
+      "ExpectedStatus": "LearningEvidenceCalibratedSelfValidationPackBlocked",
+      "ActualStatus": "LearningEvidenceCalibratedSelfValidationPackBlocked",
+      "ExpectedBlockedReason": "EvidenceSufficientFalselyTrueUnderSignalLeakage",
+      "ActualBlockedReasons": [
+        "EvidenceSufficientFalselyTrueUnderSignalLeakage"
+      ],
+      "Reasoning": "1 blocked reason(s); evidence-calibrated self-validation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "SignalLeakageRiskIgnored",
+      "ExpectedStatus": "LearningEvidenceCalibratedSelfValidationPackBlocked",
+      "ActualStatus": "LearningEvidenceCalibratedSelfValidationPackBlocked",
+      "ExpectedBlockedReason": "SignalLeakageRiskIgnored",
+      "ActualBlockedReasons": [
+        "SignalLeakageRiskIgnored"
+      ],
+      "Reasoning": "1 blocked reason(s); evidence-calibrated self-validation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "HumanReviewAsGateAuthorityTrue",
+      "ExpectedStatus": "LearningEvidenceCalibratedSelfValidationPackBlocked",
+      "ActualStatus": "LearningEvidenceCalibratedSelfValidationPackBlocked",
+      "ExpectedBlockedReason": "HumanReviewAsGateAuthorityTrue",
+      "ActualBlockedReasons": [
+        "HumanReviewAsGateAuthorityTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); evidence-calibrated self-validation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "HumanFeedbackAutoIngestTrue",
+      "ExpectedStatus": "LearningEvidenceCalibratedSelfValidationPackBlocked",
+      "ActualStatus": "LearningEvidenceCalibratedSelfValidationPackBlocked",
+      "ExpectedBlockedReason": "HumanFeedbackAutoIngestTrue",
+      "ActualBlockedReasons": [
+        "HumanFeedbackAutoIngestTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); evidence-calibrated self-validation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "AutoIngestTrue",
+      "ExpectedStatus": "LearningEvidenceCalibratedSelfValidationPackBlocked",
+      "ActualStatus": "LearningEvidenceCalibratedSelfValidationPackBlocked",
+      "ExpectedBlockedReason": "AutoIngestTrue",
+      "ActualBlockedReasons": [
+        "AutoIngestTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); evidence-calibrated self-validation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "RuntimePromotionAppliedTrue",
+      "ExpectedStatus": "LearningEvidenceCalibratedSelfValidationPackBlocked",
+      "ActualStatus": "LearningEvidenceCalibratedSelfValidationPackBlocked",
+      "ExpectedBlockedReason": "RuntimePromotionAppliedTrue",
+      "ActualBlockedReasons": [
+        "RuntimePromotionAppliedTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); evidence-calibrated self-validation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "RuntimePilotExecutionAppliedTrue",
+      "ExpectedStatus": "LearningEvidenceCalibratedSelfValidationPackBlocked",
+      "ActualStatus": "LearningEvidenceCalibratedSelfValidationPackBlocked",
+      "ExpectedBlockedReason": "RuntimePilotExecutionAppliedTrue",
+      "ActualBlockedReasons": [
+        "RuntimePilotExecutionAppliedTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); evidence-calibrated self-validation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "RuntimeRerankerChangedTrue",
+      "ExpectedStatus": "LearningEvidenceCalibratedSelfValidationPackBlocked",
+      "ActualStatus": "LearningEvidenceCalibratedSelfValidationPackBlocked",
+      "ExpectedBlockedReason": "RuntimeRerankerChangedTrue",
+      "ActualBlockedReasons": [
+        "RuntimeRerankerChangedTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); evidence-calibrated self-validation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "RuntimeRouterChangedTrue",
+      "ExpectedStatus": "LearningEvidenceCalibratedSelfValidationPackBlocked",
+      "ActualStatus": "LearningEvidenceCalibratedSelfValidationPackBlocked",
+      "ExpectedBlockedReason": "RuntimeRouterChangedTrue",
+      "ActualBlockedReasons": [
+        "RuntimeRouterChangedTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); evidence-calibrated self-validation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "ProductionDecisionChangedTrue",
+      "ExpectedStatus": "LearningEvidenceCalibratedSelfValidationPackBlocked",
+      "ActualStatus": "LearningEvidenceCalibratedSelfValidationPackBlocked",
+      "ExpectedBlockedReason": "ProductionDecisionChangedTrue",
+      "ActualBlockedReasons": [
+        "ProductionDecisionChangedTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); evidence-calibrated self-validation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "PackageOutputChangedTrue",
+      "ExpectedStatus": "LearningEvidenceCalibratedSelfValidationPackBlocked",
+      "ActualStatus": "LearningEvidenceCalibratedSelfValidationPackBlocked",
+      "ExpectedBlockedReason": "PackageOutputChangedTrue",
+      "ActualBlockedReasons": [
+        "PackageOutputChangedTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); evidence-calibrated self-validation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "FormalPackageWrittenTrue",
+      "ExpectedStatus": "LearningEvidenceCalibratedSelfValidationPackBlocked",
+      "ActualStatus": "LearningEvidenceCalibratedSelfValidationPackBlocked",
+      "ExpectedBlockedReason": "FormalPackageWrittenTrue",
+      "ActualBlockedReasons": [
+        "FormalPackageWrittenTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); evidence-calibrated self-validation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "GlobalDefaultOnTrue",
+      "ExpectedStatus": "LearningEvidenceCalibratedSelfValidationPackBlocked",
+      "ActualStatus": "LearningEvidenceCalibratedSelfValidationPackBlocked",
+      "ExpectedBlockedReason": "GlobalDefaultOnTrue",
+      "ActualBlockedReasons": [
+        "GlobalDefaultOnTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); evidence-calibrated self-validation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "MLAuthorityTrue",
+      "ExpectedStatus": "LearningEvidenceCalibratedSelfValidationPackBlocked",
+      "ActualStatus": "LearningEvidenceCalibratedSelfValidationPackBlocked",
+      "ExpectedBlockedReason": "MLAuthorityTrue",
+      "ActualBlockedReasons": [
+        "MLAuthorityTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); evidence-calibrated self-validation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "LLMAuthorityTrue",
+      "ExpectedStatus": "LearningEvidenceCalibratedSelfValidationPackBlocked",
+      "ActualStatus": "LearningEvidenceCalibratedSelfValidationPackBlocked",
+      "ExpectedBlockedReason": "LLMAuthorityTrue",
+      "ActualBlockedReasons": [
+        "LLMAuthorityTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); evidence-calibrated self-validation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "RuntimeAuthorityTrue",
+      "ExpectedStatus": "LearningEvidenceCalibratedSelfValidationPackBlocked",
+      "ActualStatus": "LearningEvidenceCalibratedSelfValidationPackBlocked",
+      "ExpectedBlockedReason": "RuntimeAuthorityTrue",
+      "ActualBlockedReasons": [
+        "RuntimeAuthorityTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); evidence-calibrated self-validation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "GateAuthorityTrue",
+      "ExpectedStatus": "LearningEvidenceCalibratedSelfValidationPackBlocked",
+      "ActualStatus": "LearningEvidenceCalibratedSelfValidationPackBlocked",
+      "ExpectedBlockedReason": "GateAuthorityTrue",
+      "ActualBlockedReasons": [
+        "GateAuthorityTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); evidence-calibrated self-validation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "V8ScopedActivationLost",
+      "ExpectedStatus": "LearningEvidenceCalibratedSelfValidationPackBlocked",
+      "ActualStatus": "LearningEvidenceCalibratedSelfValidationPackBlocked",
+      "ExpectedBlockedReason": "V8ScopedActivationLost",
+      "ActualBlockedReasons": [
+        "V8ScopedActivationLost"
+      ],
+      "Reasoning": "1 blocked reason(s); evidence-calibrated self-validation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "MainlineEvidencePresent",
+      "ExpectedStatus": "LearningEvidenceCalibratedSelfValidationPackBlocked",
+      "ActualStatus": "LearningEvidenceCalibratedSelfValidationPackBlocked",
+      "ExpectedBlockedReason": "MainlineEvidencePresent",
+      "ActualBlockedReasons": [
+        "MainlineEvidencePresent"
+      ],
+      "Reasoning": "1 blocked reason(s); evidence-calibrated self-validation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "MainlineTrustRegistryPresent",
+      "ExpectedStatus": "LearningEvidenceCalibratedSelfValidationPackBlocked",
+      "ActualStatus": "LearningEvidenceCalibratedSelfValidationPackBlocked",
+      "ExpectedBlockedReason": "MainlineTrustRegistryPresent",
+      "ActualBlockedReasons": [
+        "MainlineTrustRegistryPresent"
+      ],
+      "Reasoning": "1 blocked reason(s); evidence-calibrated self-validation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "RuntimeGateNotPassed",
+      "ExpectedStatus": "LearningEvidenceCalibratedSelfValidationPackBlocked",
+      "ActualStatus": "LearningEvidenceCalibratedSelfValidationPackBlocked",
+      "ExpectedBlockedReason": "RuntimeChangeGateNotPassed",
+      "ActualBlockedReasons": [
+        "RuntimeChangeGateNotPassed"
+      ],
+      "Reasoning": "1 blocked reason(s); evidence-calibrated self-validation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "P15GateNotPassed",
+      "ExpectedStatus": "LearningEvidenceCalibratedSelfValidationPackBlocked",
+      "ActualStatus": "LearningEvidenceCalibratedSelfValidationPackBlocked",
+      "ExpectedBlockedReason": "P15GateNotPassed",
+      "ActualBlockedReasons": [
+        "P15GateNotPassed"
+      ],
+      "Reasoning": "1 blocked reason(s); evidence-calibrated self-validation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    }
+  ],
+  "EvidenceSufficiencyReport": {
+    "OfflineReplayStrength": 0.6379310344827587,
+    "ShadowCanaryAgreement": 0.9310344827586207,
+    "FailureClusterCoverage": 1,
+    "HardNegativeCandidateCoverage": 1,
+    "RouterRiskPenalty": 0,
+    "SignalLeakageRiskPenalty": 0.4,
+    "RegressionSafetyScore": 1,
+    "RollbackSafetyScore": 1,
+    "EvidenceSufficiencyScore": 0.5137931034482758,
+    "Threshold": 0.7,
+    "EvidenceSufficient": false,
+    "SignalLeakageRisk": true,
+    "AtLeastSignalLeakageSuspected": true,
+    "HardNegativeEvidenceInsufficient": true,
+    "RouterRiskHigh": false,
+    "SubscoreNotes": [
+      "OfflineReplayStrength=0.638 (raw delta=0.138)",
+      "ShadowCanaryAgreement=0.931",
+      "FailureClusterCoverage=1.000 (60 candidate specs / 3 clusters)",
+      "HardNegativeCandidateCoverage=1.000 (60/50 target)",
+      "HardNegativeLabeledCount=0 (specs are NOT labeled negatives; threshold 25%\u002B of candidate count or \u226520)",
+      "HardNegativeEvidenceInsufficient=True",
+      "RouterRiskPenalty=0.000 (RouterRiskHigh=False)",
+      "SignalLeakageRiskPenalty=0.400 (suspected=True, atLeastSuspected=True)",
+      "RegressionSafetyScore=1.000",
+      "RollbackSafetyScore=1.000",
+      "EvidenceSufficiencyScore=0.514 threshold=0.700 \u2192 sufficient=False"
+    ],
+    "Risks": [
+      "SignalLeakageRisk=true: candidate \u002B tree both \u22650.99 while weighted only 0.862 \u2014 feature \u0027positiveScore\u0027 likely dominant. Pilot must verify on labeled hard-negative-expanded eval before runtime execution.",
+      "HardNegativeEvidenceInsufficient=true: 0 labeled vs 60 candidate specs \u2014 proposals are not training evidence."
+    ]
+  },
+  "DisagreementAnalysis": {
+    "Mode": "DeterministicFeatureBasedAnalysis",
+    "TotalSimulatedQueries": 60,
+    "CandidateAgreeWithReferenceCount": 56,
+    "CandidateDisagreeWithReferenceCount": 4,
+    "Buckets": [
+      {
+        "BucketName": "candidate-better-evidence",
+        "Count": 1,
+        "Rate": 0.016666666666666666,
+        "EvidenceSources": [
+          "offline-replay-summary AccuracyDelta",
+          "deterministic feature deltas"
+        ]
+      },
+      {
+        "BucketName": "reference-better-evidence",
+        "Count": 1,
+        "Rate": 0.016666666666666666,
+        "EvidenceSources": [
+          "WeightedBaseline TopFailures cluster"
+        ]
+      },
+      {
+        "BucketName": "uncertain",
+        "Count": 1,
+        "Rate": 0.016666666666666666,
+        "EvidenceSources": [
+          "score margin below confidence threshold",
+          "feature parity tie"
+        ]
+      },
+      {
+        "BucketName": "missing-evidence",
+        "Count": 1,
+        "Rate": 0.016666666666666666,
+        "EvidenceSources": [
+          "no labeled hard-negative paired with this sample",
+          "no failure cluster covers this query mode"
+        ]
+      },
+      {
+        "BucketName": "high-risk",
+        "Count": 0,
+        "Rate": 0,
+        "EvidenceSources": [
+          "signal-leakage suspected \u2014 candidate-better outcomes downgraded",
+          "router promotion blocked"
+        ]
+      }
+    ],
+    "AIArbitration": false,
+    "SupportingFailureClusterIds": [
+      "ranker-WeightedBaseline",
+      "router-RouterIntentLogistic",
+      "router-RouterIntentTree"
+    ],
+    "Notes": [
+      "Bucketing is deterministic: derived from canary agreement, signal-leakage suspicion, hard-negative coverage.",
+      "AI arbitration is disabled \u2014 humans inspect \u0027missing-evidence\u0027, \u0027uncertain\u0027, \u0027high-risk\u0027 buckets manually.",
+      "RuntimeDecision unaffected by this analysis; descriptive only."
+    ]
+  },
+  "HardNegativeReplayReadiness": {
+    "HardNegativeReplayReady": true,
+    "HardNegativeCoverageSufficient": false,
+    "HardNegativeCandidateCount": 60,
+    "HardNegativeLabeledCount": 0,
+    "HardNegativeCoverageRate": 1,
+    "AutoIngest": false,
+    "CandidatesAreLabeled": false,
+    "ReadyForReplayDryRunOnly": true,
+    "ReplayMode": "ShadowReplayDryRun",
+    "Notes": [
+      "HardNegativeCandidateCount=60",
+      "HardNegativeLabeledCount=0",
+      "HardNegativeCoverageRate=1.000 (target \u22650.5)",
+      "CandidatesAreLabeled=False (candidate specs ARE NOT labeled hard negatives until human review approves them)",
+      "Replay is dry-run only \u2014 hard-negatives never enter the formal training set automatically.",
+      "Each replay run produces shadow scores; runtime decisions remain on the rule-based reranker.",
+      "NOT-READY-AS-EVIDENCE: only 0 labeled vs 60 candidate specs. Replay can run but evidence sufficiency is not satisfied by spec proposals alone."
+    ]
+  },
+  "HumanFeedbackSignalPolicy": {
+    "PolicyVersion": "v10.3-human-feedback-signal/v1",
+    "HumanReviewAsGateAuthority": false,
+    "HumanFeedbackAccepted": true,
+    "HumanFeedbackAutoIngest": false,
+    "HumanFeedbackRequiresEvidenceBinding": true,
+    "HumanFeedbackUsedAsTrainingSignalOnly": true,
+    "HumanReviewBacklogObserved": true,
+    "HumanReviewBacklogQueueEntryCount": 12,
+    "AcceptedSignalTypes": [
+      "labeled hard-negative confirmation (per V9.4 candidate spec)",
+      "router intent ground-truth annotation (per V9.4 repair plan)",
+      "failure cluster root-cause categorization (per V9.4 diagnosis pack)",
+      "package coverage / constraint gap labeling (per V9.5 feedback ingestion contract)"
+    ],
+    "RejectedAuthorityClaims": [
+      "human review CANNOT mark RuntimePilotExecutionReadyForSeparateGate=true on its own",
+      "human review CANNOT bypass signal-leakage suspicion / hard-negative evidence requirement",
+      "human review CANNOT auto-ingest feedback into training set without evidence-binding verification",
+      "human review CANNOT grant runtime / gate / ML / LLM authority"
+    ],
+    "Notes": "Human review is now a feedback SIGNAL feeding the dataset, not a GATE deciding readiness. Evidence calibration alone gates runtime pilot execution. Backlog observed only \u2014 not consumed here."
+  },
+  "SelfValidationDecision": {
+    "DecisionId": "v10-self-validation-decision-47002f99705341a6bc7f323df321b09b",
+    "CreatedAt": "2026-06-28T13:20:39.7591030\u002B00:00",
+    "SelfValidationPassed": true,
+    "EvidenceSufficient": false,
+    "SignalLeakageRisk": true,
+    "HardNegativeEvidenceInsufficient": true,
+    "RouterRiskHigh": false,
+    "RuntimePilotExecutionReadyForSeparateGate": false,
+    "BlockedForRuntimePilotExecutionBy": [
+      "EvidenceInsufficient",
+      "SignalLeakageRisk",
+      "HardNegativeEvidenceInsufficient"
+    ],
+    "RuntimePromotionApplied": false,
+    "RuntimePilotExecutionApplied": false,
+    "ProductionDecisionChanged": false,
+    "PackageOutputChanged": false,
+    "GlobalDefaultOn": false,
+    "EvidenceSourcesConsidered": [
+      "learning/v10/offline-replay-summary.json",
+      "learning/v10/shadow-canary-simulation.json",
+      "learning/v10/pilot-audit-manifest.json",
+      "learning/v9/shadow-comparison-summary.json",
+      "learning/v9/failure-diagnosis-input-pack.json",
+      "learning/v9/hard-negative-expansion-candidates.jsonl",
+      "learning/v9/router-intent-repair-plan.json"
+    ],
+    "DecisionNotes": [
+      "EvidenceSufficiencyScore=0.514 threshold=0.700",
+      "SignalLeakageRisk=True (AtLeastSuspected=True)",
+      "HardNegativeEvidenceInsufficient=True (labeled=0 / candidates=60)",
+      "RouterRiskHigh=False",
+      "Decision is evidence-calibrated and deterministic; human approval is NOT required to render this verdict.",
+      "PilotReady=false: blocked by [EvidenceInsufficient, SignalLeakageRisk, HardNegativeEvidenceInsufficient]; accumulate more evidence before retrying."
+    ],
+    "AIArbitration": false
+  },
+  "EvidenceSufficiencyReportReady": true,
+  "DisagreementAnalysisReady": true,
+  "HardNegativeReplayReadinessReady": true,
+  "HumanFeedbackSignalPolicyReady": true,
+  "SelfValidationDecisionReady": true,
+  "EvidenceSufficient": false,
+  "SignalLeakageRisk": true,
+  "AtLeastSignalLeakageSuspected": true,
+  "HardNegativeEvidenceInsufficient": true,
+  "RouterRiskHigh": false,
+  "RuntimePilotExecutionReadyForSeparateGate": false,
+  "BlockedForRuntimePilotExecutionBy": [
+    "EvidenceInsufficient",
+    "SignalLeakageRisk",
+    "HardNegativeEvidenceInsufficient"
+  ],
+  "HumanReviewRequired": false,
+  "HumanReviewAsGateAuthority": false,
+  "HumanFeedbackAccepted": true,
+  "HumanFeedbackUsedAsTrainingSignalOnly": true,
+  "HumanFeedbackAutoIngest": false,
+  "RuntimePromotionApplied": false,
+  "RuntimePilotExecutionApplied": false,
+  "RuntimeRerankerChanged": false,
+  "RuntimeRouterChanged": false,
+  "ProductionDecisionChanged": false,
+  "PackageOutputChanged": false,
+  "FormalPackageWritten": false,
+  "GlobalDefaultOn": false,
+  "MLAuthority": false,
+  "LLMAuthority": false,
+  "RuntimeAuthority": false,
+  "GateAuthority": false,
+  "AutoIngest": false,
+  "RequiresSeparatePromotionGate": true,
+  "V8ScopedActivationPreserved": true,
+  "UpstreamV10PilotGatePresent": true,
+  "UpstreamV10PilotGatePassed": true,
+  "MainlineEvidencePresent": false,
+  "MainlineTrustRegistryPresent": false,
+  "EvidenceSufficiencyReportPath": "learning/v10/evidence-sufficiency-report.json",
+  "DisagreementAnalysisPath": "learning/v10/disagreement-analysis.json",
+  "HardNegativeReplayReadinessPath": "learning/v10/hard-negative-replay-readiness.json",
+  "HumanFeedbackSignalPolicyPath": "learning/v10/human-feedback-signal-policy.json",
+  "SelfValidationDecisionPath": "learning/v10/self-validation-decision.json",
+  "Recommendation": "BlockedForRuntimePilotExecution-EvidenceCalibrated-AccumulateMoreEvidence",
+  "NextAllowedPhase": "V10.7PilotExecution-pending-evidence",
+  "BlockedReasons": [],
+  "Diagnostics": [
+    "total=28",
+    "realStatus=LearningEvidenceCalibratedSelfValidationPackReady",
+    "evidenceSufficiencyScore=0.514",
+    "evidenceSufficient=False",
+    "signalLeakageRisk=True",
+    "atLeastSignalLeakageSuspected=True",
+    "hardNegativeEvidenceInsufficient=True",
+    "routerRiskHigh=False",
+    "runtimePilotExecReadyForSeparateGate=False",
+    "blockedExecBy=EvidenceInsufficient|SignalLeakageRisk|HardNegativeEvidenceInsufficient"
+  ]
+}

@@ -1721,6 +1721,88 @@ public static partial class EvalCommand
         Console.WriteLine($"[Eval] Learning controlled runtime pilot gate pack written: {jp}");
         Console.WriteLine($"[Eval] controlledRuntimePilotGatePackPassed={report.ControlledRuntimePilotGatePackPassed}; gatePassed={report.GatePassed}; total={report.TotalCases} ready={report.ReadyCases} blocked={report.BlockedCases} replayReady={report.OfflineReplayReady} canaryReady={report.ShadowCanarySimulationReady} pilotExecReady={report.RuntimePilotExecutionReady} blockedExecBy={report.BlockedForRuntimePilotExecutionBy} recommendation={report.Recommendation} nextPhase={report.NextAllowedPhase}");
     }
+
+    private static async Task ExecuteLearningEvidenceCalibratedSelfValidationPackAsync(
+        IReadOnlyList<string> args, string subcommand, CancellationToken ct)
+    {
+        var output = Path.GetFullPath(Path.Combine("learning", "v10"));
+        Directory.CreateDirectory(output);
+        var rtPath = Path.Combine("learning", "readiness", "learning-runtime-change-readiness-gate.json");
+        var rtGate = await ReadJsonFileAsync<LearningRuntimeChangeReadinessGateReport>(rtPath, ct).ConfigureAwait(false);
+        var rtPassed = rtGate is not null && rtGate.Passed;
+        var p15Path = Path.Combine("eval", "eval-report-p15-a3.json");
+        var p15 = await ReadJsonFileAsync<JsonDocument>(p15Path, ct).ConfigureAwait(false);
+        var p15Passed = false;
+        if (p15 is not null && p15.RootElement.TryGetProperty("PassRate", out var pr)) p15Passed = pr.GetDouble() >= 1.0;
+        var mainlineEvPath = Path.Combine("vector", "v8", "formal-retrieval-promotion-approval-evidence.json");
+        var mainlineRegPath = Path.Combine("vector", "v8", "formal-retrieval-promotion-approval-trust-registry.json");
+        var mainlineEvPresent = File.Exists(mainlineEvPath);
+        var mainlineRegPresent = File.Exists(mainlineRegPath);
+
+        var v10PilotGatePath = Path.Combine("learning", "v10", "controlled-runtime-pilot-gate-pack-gate.json");
+        var v10PilotGate = await ReadJsonFileAsync<LearningControlledRuntimePilotGatePackReport>(v10PilotGatePath, ct).ConfigureAwait(false);
+        var offlineReplayPath = Path.Combine("learning", "v10", "offline-replay-summary.json");
+        var shadowCanaryPath = Path.Combine("learning", "v10", "shadow-canary-simulation.json");
+        var hardNegPath = Path.Combine("learning", "v9", "hard-negative-expansion-candidates.jsonl");
+        var hardNegCount = File.Exists(hardNegPath) ? File.ReadAllLines(hardNegPath).Count(static l => !string.IsNullOrWhiteSpace(l)) : 0;
+        // Count labeled hard negatives — none yet (V9.4 produced specs only; labels come from V9.5 feedback ingestion)
+        var hardNegLabeledCount = 0;
+        var humanReviewQueuePath = Path.Combine("learning", "v9", "human-review-queue-plan.jsonl");
+        var humanReviewBacklog = File.Exists(humanReviewQueuePath) ? File.ReadAllLines(humanReviewQueuePath).Count(static l => !string.IsNullOrWhiteSpace(l)) : 0;
+
+        var shadowImplPath = Path.Combine("learning", "v9", "shadow-implementation-pack-gate.json");
+        var shadowImpl = await ReadJsonFileAsync<LearningShadowImplementationPackReport>(shadowImplPath, ct).ConfigureAwait(false);
+        var v9ReadinessPath = Path.Combine("learning", "v9", "shadow-promotion-readiness-pack-gate.json");
+        var v9Readiness = await ReadJsonFileAsync<LearningShadowPromotionReadinessPackReport>(v9ReadinessPath, ct).ConfigureAwait(false);
+        var failureFeedbackPath = Path.Combine("learning", "v9", "failure-diagnosis-feedback-loop-pack-gate.json");
+        var failureFeedback = await ReadJsonFileAsync<LearningFailureDiagnosisAndFeedbackLoopPackReport>(failureFeedbackPath, ct).ConfigureAwait(false);
+
+        var weightedAcc = shadowImpl?.CandidateRerankerBaselines.FirstOrDefault(b => b.BaselineName == "WeightedBaseline")?.PairwiseAccuracy ?? 0;
+        var logisticAcc = shadowImpl?.CandidateRerankerBaselines.FirstOrDefault(b => b.BaselineName == "LogisticBaseline")?.PairwiseAccuracy ?? 0;
+        var treeAcc = shadowImpl?.CandidateRerankerBaselines.FirstOrDefault(b => b.BaselineName == "TreeBaseline")?.PairwiseAccuracy ?? 0;
+        var canaryAgreementRate = v10PilotGate?.ShadowCanarySimulation.SimulatedShadowAgreementRate ?? 0;
+        var failureClusterIds = failureFeedback?.FailureDiagnosisInputPack.Clusters.Select(c => c.ClusterId).ToArray() ?? Array.Empty<string>();
+
+        var realContext = new LearningEvidenceCalibratedSelfValidationPackContext
+        {
+            V10PilotGatePresent = v10PilotGate is not null,
+            V10PilotGatePassed = v10PilotGate?.GatePassed ?? false,
+            OfflineReplayPresent = File.Exists(offlineReplayPath),
+            ShadowCanaryPresent = File.Exists(shadowCanaryPath),
+            HardNegativeCandidatesPresent = hardNegCount > 0,
+            HardNegativeCandidateCount = hardNegCount,
+            HardNegativeLabeledCount = hardNegLabeledCount,
+            V8ScopedActivationPreserved = (v10PilotGate?.V8ScopedActivationPreserved ?? false) && (v9Readiness?.V8ScopedActivationPreserved ?? false),
+            RouterPromotionReady = v9Readiness?.RouterPromotionReady ?? false,
+            CandidatePairwiseAccuracy = logisticAcc,
+            ReferencePairwiseAccuracy = weightedAcc,
+            TreeBaselinePairwiseAccuracy = treeAcc,
+            ShadowCanaryAgreementRate = canaryAgreementRate,
+            FailureClusterCount = failureClusterIds.Length,
+            FailureClusterIds = failureClusterIds,
+            KillSwitchArmed = v10PilotGate?.ShadowCanarySimulation.KillSwitchArmed ?? false,
+            RollbackReady = v10PilotGate?.ShadowCanarySimulation.RollbackReady ?? false,
+            HumanReviewBacklogQueueEntryCount = humanReviewBacklog
+        };
+
+        var isGate = string.Equals(subcommand, "learning-evidence-calibrated-self-validation-pack-gate", StringComparison.OrdinalIgnoreCase);
+        var opt = new LearningEvidenceCalibratedSelfValidationPackOptions
+        {
+            IsGate = isGate,
+            Enabled = !CommandHelpers.HasFlag(args, "--disabled")
+        };
+        var runner = new LearningEvidenceCalibratedSelfValidationPackRunner();
+        var report = runner.Run(realContext, output, rtPassed, p15Passed, mainlineEvPresent, mainlineRegPresent, opt);
+        var fn = isGate ? "evidence-calibrated-self-validation-pack-gate" : "evidence-calibrated-self-validation-pack";
+        var jp = Path.Combine(output, $"{fn}.json");
+        var mp = Path.Combine(output, $"{fn}.md");
+        await WriteJsonSafeAsync(report, jp, ct).ConfigureAwait(false);
+        await WriteTextAsync(LearningEvidenceCalibratedSelfValidationPackRunner.BuildMarkdown(
+            isGate ? "Learning Evidence-Calibrated Self-Validation Pack (Gate)" : "Learning Evidence-Calibrated Self-Validation Pack", report), mp, ct).ConfigureAwait(false);
+        Console.WriteLine($"[Eval] Learning evidence-calibrated self-validation pack written: {jp}");
+        Console.WriteLine($"[Eval] evidenceCalibratedSelfValidationPackPassed={report.EvidenceCalibratedSelfValidationPackPassed}; gatePassed={report.GatePassed}; total={report.TotalCases} ready={report.ReadyCases} blocked={report.BlockedCases} evidenceSufficient={report.EvidenceSufficient} signalLeakageRisk={report.SignalLeakageRisk} hardNegInsufficient={report.HardNegativeEvidenceInsufficient} pilotReady={report.RuntimePilotExecutionReadyForSeparateGate} blockedExecBy=[{string.Join(',', report.BlockedForRuntimePilotExecutionBy)}] recommendation={report.Recommendation}");
+    }
+
     private static bool ValidateTemplateFields(string jsonContent, string[] fieldPaths, List<string> missing, List<string> nonPlaceholder)
     {
         var doc = System.Text.Json.JsonDocument.Parse(jsonContent);

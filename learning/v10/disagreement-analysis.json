@@ -1,0 +1,63 @@
+﻿{
+  "Mode": "DeterministicFeatureBasedAnalysis",
+  "TotalSimulatedQueries": 60,
+  "CandidateAgreeWithReferenceCount": 56,
+  "CandidateDisagreeWithReferenceCount": 4,
+  "Buckets": [
+    {
+      "BucketName": "candidate-better-evidence",
+      "Count": 1,
+      "Rate": 0.016666666666666666,
+      "EvidenceSources": [
+        "offline-replay-summary AccuracyDelta",
+        "deterministic feature deltas"
+      ]
+    },
+    {
+      "BucketName": "reference-better-evidence",
+      "Count": 1,
+      "Rate": 0.016666666666666666,
+      "EvidenceSources": [
+        "WeightedBaseline TopFailures cluster"
+      ]
+    },
+    {
+      "BucketName": "uncertain",
+      "Count": 1,
+      "Rate": 0.016666666666666666,
+      "EvidenceSources": [
+        "score margin below confidence threshold",
+        "feature parity tie"
+      ]
+    },
+    {
+      "BucketName": "missing-evidence",
+      "Count": 1,
+      "Rate": 0.016666666666666666,
+      "EvidenceSources": [
+        "no labeled hard-negative paired with this sample",
+        "no failure cluster covers this query mode"
+      ]
+    },
+    {
+      "BucketName": "high-risk",
+      "Count": 0,
+      "Rate": 0,
+      "EvidenceSources": [
+        "signal-leakage suspected \u2014 candidate-better outcomes downgraded",
+        "router promotion blocked"
+      ]
+    }
+  ],
+  "AIArbitration": false,
+  "SupportingFailureClusterIds": [
+    "ranker-WeightedBaseline",
+    "router-RouterIntentLogistic",
+    "router-RouterIntentTree"
+  ],
+  "Notes": [
+    "Bucketing is deterministic: derived from canary agreement, signal-leakage suspicion, hard-negative coverage.",
+    "AI arbitration is disabled \u2014 humans inspect \u0027missing-evidence\u0027, \u0027uncertain\u0027, \u0027high-risk\u0027 buckets manually.",
+    "RuntimeDecision unaffected by this analysis; descriptive only."
+  ]
+}

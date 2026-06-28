@@ -370,6 +370,8 @@ public static partial class EvalCommand
             !string.Equals(subcommand, "learning-shadow-promotion-readiness-pack-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "learning-controlled-runtime-pilot-gate-pack", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "learning-controlled-runtime-pilot-gate-pack-gate", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "learning-evidence-calibrated-self-validation-pack", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "learning-evidence-calibrated-self-validation-pack-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "dto-split-plan", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "dto-split-readiness-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "vector-retrieval-eval-protocol-audit", StringComparison.OrdinalIgnoreCase) &&
@@ -674,6 +676,8 @@ public static partial class EvalCommand
             Console.WriteLine("  eval learning-shadow-promotion-readiness-pack-gate");
             Console.WriteLine("  eval learning-controlled-runtime-pilot-gate-pack");
             Console.WriteLine("  eval learning-controlled-runtime-pilot-gate-pack-gate");
+            Console.WriteLine("  eval learning-evidence-calibrated-self-validation-pack");
+            Console.WriteLine("  eval learning-evidence-calibrated-self-validation-pack-gate");
             Console.WriteLine("  eval dto-split-plan");
             Console.WriteLine("  eval dto-split-readiness-gate");
             Console.WriteLine("  eval vector-retrieval-eval-protocol-audit");
@@ -2173,6 +2177,12 @@ public static partial class EvalCommand
             || string.Equals(subcommand, "learning-controlled-runtime-pilot-gate-pack-gate", StringComparison.OrdinalIgnoreCase))
         {
             await ExecuteLearningControlledRuntimePilotGatePackAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+        if (string.Equals(subcommand, "learning-evidence-calibrated-self-validation-pack", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(subcommand, "learning-evidence-calibrated-self-validation-pack-gate", StringComparison.OrdinalIgnoreCase))
+        {
+            await ExecuteLearningEvidenceCalibratedSelfValidationPackAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
             return;
         }
 

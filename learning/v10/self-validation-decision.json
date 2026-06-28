@@ -1,0 +1,38 @@
+﻿{
+  "DecisionId": "v10-self-validation-decision-47002f99705341a6bc7f323df321b09b",
+  "CreatedAt": "2026-06-28T13:20:39.7591030\u002B00:00",
+  "SelfValidationPassed": true,
+  "EvidenceSufficient": false,
+  "SignalLeakageRisk": true,
+  "HardNegativeEvidenceInsufficient": true,
+  "RouterRiskHigh": false,
+  "RuntimePilotExecutionReadyForSeparateGate": false,
+  "BlockedForRuntimePilotExecutionBy": [
+    "EvidenceInsufficient",
+    "SignalLeakageRisk",
+    "HardNegativeEvidenceInsufficient"
+  ],
+  "RuntimePromotionApplied": false,
+  "RuntimePilotExecutionApplied": false,
+  "ProductionDecisionChanged": false,
+  "PackageOutputChanged": false,
+  "GlobalDefaultOn": false,
+  "EvidenceSourcesConsidered": [
+    "learning/v10/offline-replay-summary.json",
+    "learning/v10/shadow-canary-simulation.json",
+    "learning/v10/pilot-audit-manifest.json",
+    "learning/v9/shadow-comparison-summary.json",
+    "learning/v9/failure-diagnosis-input-pack.json",
+    "learning/v9/hard-negative-expansion-candidates.jsonl",
+    "learning/v9/router-intent-repair-plan.json"
+  ],
+  "DecisionNotes": [
+    "EvidenceSufficiencyScore=0.514 threshold=0.700",
+    "SignalLeakageRisk=True (AtLeastSuspected=True)",
+    "HardNegativeEvidenceInsufficient=True (labeled=0 / candidates=60)",
+    "RouterRiskHigh=False",
+    "Decision is evidence-calibrated and deterministic; human approval is NOT required to render this verdict.",
+    "PilotReady=false: blocked by [EvidenceInsufficient, SignalLeakageRisk, HardNegativeEvidenceInsufficient]; accumulate more evidence before retrying."
+  ],
+  "AIArbitration": false
+}

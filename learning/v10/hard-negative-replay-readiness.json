@@ -1,0 +1,20 @@
+﻿{
+  "HardNegativeReplayReady": true,
+  "HardNegativeCoverageSufficient": false,
+  "HardNegativeCandidateCount": 60,
+  "HardNegativeLabeledCount": 0,
+  "HardNegativeCoverageRate": 1,
+  "AutoIngest": false,
+  "CandidatesAreLabeled": false,
+  "ReadyForReplayDryRunOnly": true,
+  "ReplayMode": "ShadowReplayDryRun",
+  "Notes": [
+    "HardNegativeCandidateCount=60",
+    "HardNegativeLabeledCount=0",
+    "HardNegativeCoverageRate=1.000 (target \u22650.5)",
+    "CandidatesAreLabeled=False (candidate specs ARE NOT labeled hard negatives until human review approves them)",
+    "Replay is dry-run only \u2014 hard-negatives never enter the formal training set automatically.",
+    "Each replay run produces shadow scores; runtime decisions remain on the rule-based reranker.",
+    "NOT-READY-AS-EVIDENCE: only 0 labeled vs 60 candidate specs. Replay can run but evidence sufficiency is not satisfied by spec proposals alone."
+  ]
+}
