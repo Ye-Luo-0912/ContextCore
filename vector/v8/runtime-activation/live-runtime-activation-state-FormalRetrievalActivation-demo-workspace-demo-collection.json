@@ -1,0 +1,21 @@
+﻿{
+  "ActivationId": "frp-guarded-live-runtime-activation-b3075c8a12834f57b84c378f5c8a99c3",
+  "BoundGrantId": "frp-grant-9308474979b64f31b8fc7d260b19575f",
+  "Capability": "FormalRetrievalActivation",
+  "Scope": "demo-workspace/demo-collection",
+  "State": "Active",
+  "ActivationMode": "GuardedScopedRuntime",
+  "RuntimeActivation": true,
+  "FormalRetrievalAllowed": true,
+  "RuntimeSwitchAllowed": true,
+  "GlobalDefaultOn": false,
+  "PackageOutputChanged": false,
+  "FormalPackageWritten": false,
+  "VectorStoreBindingChanged": false,
+  "KillSwitchArmed": true,
+  "ScopeGuardActive": true,
+  "RollbackBindingPresent": true,
+  "ActivationSource": "V8.23LiveRuntimeActivationExecutionDryRun",
+  "LastTransitionAt": "2026-06-28T05:32:04.1012207\u002B00:00",
+  "CreatedAt": "2026-06-28T05:32:04.1012207\u002B00:00"
+}

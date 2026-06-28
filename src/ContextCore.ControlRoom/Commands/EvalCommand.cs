@@ -354,6 +354,8 @@ public static partial class EvalCommand
             !string.Equals(subcommand, "formal-retrieval-promotion-approval-runtime-activation-artifact-integrity-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "formal-retrieval-promotion-approval-live-runtime-activation-execution-dry-run", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "formal-retrieval-promotion-approval-live-runtime-activation-execution-dry-run-gate", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "formal-retrieval-promotion-approval-guarded-live-runtime-activation-execution", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "formal-retrieval-promotion-approval-guarded-live-runtime-activation-execution-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "dto-split-plan", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "dto-split-readiness-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "vector-retrieval-eval-protocol-audit", StringComparison.OrdinalIgnoreCase) &&
@@ -642,6 +644,8 @@ public static partial class EvalCommand
             Console.WriteLine("  eval formal-retrieval-promotion-approval-runtime-activation-artifact-integrity-gate");
             Console.WriteLine("  eval formal-retrieval-promotion-approval-live-runtime-activation-execution-dry-run");
             Console.WriteLine("  eval formal-retrieval-promotion-approval-live-runtime-activation-execution-dry-run-gate");
+            Console.WriteLine("  eval formal-retrieval-promotion-approval-guarded-live-runtime-activation-execution");
+            Console.WriteLine("  eval formal-retrieval-promotion-approval-guarded-live-runtime-activation-execution-gate");
             Console.WriteLine("  eval dto-split-plan");
             Console.WriteLine("  eval dto-split-readiness-gate");
             Console.WriteLine("  eval vector-retrieval-eval-protocol-audit");
@@ -2093,6 +2097,12 @@ public static partial class EvalCommand
             || string.Equals(subcommand, "formal-retrieval-promotion-approval-live-runtime-activation-execution-dry-run-gate", StringComparison.OrdinalIgnoreCase))
         {
             await ExecuteFormalRetrievalPromotionApprovalLiveRuntimeActivationExecutionDryRunAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+        if (string.Equals(subcommand, "formal-retrieval-promotion-approval-guarded-live-runtime-activation-execution", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(subcommand, "formal-retrieval-promotion-approval-guarded-live-runtime-activation-execution-gate", StringComparison.OrdinalIgnoreCase))
+        {
+            await ExecuteFormalRetrievalPromotionApprovalGuardedLiveRuntimeActivationExecutionAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
             return;
         }
 

@@ -1275,6 +1275,51 @@ public static partial class EvalCommand
         Console.WriteLine($"[Eval] Live runtime activation execution dry-run written: {jp}");
         Console.WriteLine($"[Eval] liveRuntimeActivationExecutionDryRunPassed={report.LiveRuntimeActivationExecutionDryRunPassed}; gatePassed={report.GatePassed}; total={report.TotalCases} ready={report.ReadyCases} blocked={report.BlockedCases} probeExecuted={report.ProbeExecuted} runtimeStateChanged={report.RuntimeStateChanged} runtimeActivation={report.RuntimeActivation}");
     }
+
+    private static async Task ExecuteFormalRetrievalPromotionApprovalGuardedLiveRuntimeActivationExecutionAsync(
+        IReadOnlyList<string> args, string subcommand, CancellationToken ct)
+    {
+        var output = Path.GetFullPath(Path.Combine("vector", "v8"));
+        Directory.CreateDirectory(output);
+        var rtPath = Path.Combine("learning", "readiness", "learning-runtime-change-readiness-gate.json");
+        var rtGate = await ReadJsonFileAsync<LearningRuntimeChangeReadinessGateReport>(rtPath, ct).ConfigureAwait(false);
+        var rtPassed = rtGate is not null && rtGate.Passed;
+        var p15Path = Path.Combine("eval", "eval-report-p15-a3.json");
+        var p15 = await ReadJsonFileAsync<JsonDocument>(p15Path, ct).ConfigureAwait(false);
+        var p15Passed = false;
+        if (p15 is not null && p15.RootElement.TryGetProperty("PassRate", out var pr)) p15Passed = pr.GetDouble() >= 1.0;
+        var mainlineEvPath = Path.Combine("vector", "v8", "formal-retrieval-promotion-approval-evidence.json");
+        var mainlineRegPath = Path.Combine("vector", "v8", "formal-retrieval-promotion-approval-trust-registry.json");
+        var mainlineEvPresent = File.Exists(mainlineEvPath);
+        var mainlineRegPresent = File.Exists(mainlineRegPath);
+        var dryRunGatePath = Path.Combine("vector", "v8", "formal-retrieval-promotion-approval-live-runtime-activation-execution-dry-run-gate.json");
+        var dryRunGate = await ReadJsonFileAsync<FormalRetrievalPromotionApprovalLiveRuntimeActivationExecutionDryRunReport>(dryRunGatePath, ct).ConfigureAwait(false);
+        var integrityGatePath = Path.Combine("vector", "v8", "formal-retrieval-promotion-approval-runtime-activation-artifact-integrity-gate.json");
+        var integrityGate = await ReadJsonFileAsync<FormalRetrievalPromotionApprovalRuntimeActivationArtifactIntegrityReport>(integrityGatePath, ct).ConfigureAwait(false);
+        var artifactWriteOutGatePath = Path.Combine("vector", "v8", "formal-retrieval-promotion-approval-guarded-runtime-activation-artifact-write-out-gate.json");
+        var artifactWriteOutGate = await ReadJsonFileAsync<FormalRetrievalPromotionApprovalGuardedRuntimeActivationArtifactWriteOutReport>(artifactWriteOutGatePath, ct).ConfigureAwait(false);
+
+        var isGate = string.Equals(subcommand, "formal-retrieval-promotion-approval-guarded-live-runtime-activation-execution-gate", StringComparison.OrdinalIgnoreCase);
+        var opt = new FormalRetrievalPromotionApprovalGuardedLiveRuntimeActivationExecutionOptions
+        {
+            IsGate = isGate,
+            Enabled = !CommandHelpers.HasFlag(args, "--disabled"),
+            WriteEvidence = true
+        };
+        var runner = new FormalRetrievalPromotionApprovalGuardedLiveRuntimeActivationExecutionRunner();
+        var evidenceRoot = Path.GetFullPath(Path.Combine("vector", "v8", "runtime-activation"));
+        var report = runner.Run(dryRunGate, integrityGate, artifactWriteOutGate, rtPassed, p15Passed, mainlineEvPresent, mainlineRegPresent, opt, evidenceRoot);
+        var fn = isGate
+            ? "formal-retrieval-promotion-approval-guarded-live-runtime-activation-execution-gate"
+            : "formal-retrieval-promotion-approval-guarded-live-runtime-activation-execution";
+        var jp = Path.Combine(output, $"{fn}.json");
+        var mp = Path.Combine(output, $"{fn}.md");
+        await WriteJsonSafeAsync(report, jp, ct).ConfigureAwait(false);
+        await WriteTextAsync(FormalRetrievalPromotionApprovalGuardedLiveRuntimeActivationExecutionRunner.BuildMarkdown(
+            isGate ? "Guarded Live Runtime Activation Execution (Gate)" : "Guarded Live Runtime Activation Execution", report), mp, ct).ConfigureAwait(false);
+        Console.WriteLine($"[Eval] Guarded live runtime activation execution written: {jp}");
+        Console.WriteLine($"[Eval] guardedLiveRuntimeActivationExecutionPassed={report.GuardedLiveRuntimeActivationExecutionPassed}; gatePassed={report.GatePassed}; total={report.TotalCases} applied={report.AppliedCases} blocked={report.BlockedCases} activationApplied={report.ActivationApplied} runtimeActivation={report.RuntimeActivation} globalDefaultOn={report.GlobalDefaultOn}");
+    }
     private static bool ValidateTemplateFields(string jsonContent, string[] fieldPaths, List<string> missing, List<string> nonPlaceholder)
     {
         var doc = System.Text.Json.JsonDocument.Parse(jsonContent);

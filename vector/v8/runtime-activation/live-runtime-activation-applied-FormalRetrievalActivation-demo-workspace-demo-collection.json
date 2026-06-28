@@ -1,0 +1,22 @@
+﻿{
+  "ActivationId": "frp-guarded-live-runtime-activation-b3075c8a12834f57b84c378f5c8a99c3",
+  "BoundGrantId": "frp-grant-9308474979b64f31b8fc7d260b19575f",
+  "Capability": "FormalRetrievalActivation",
+  "Scope": "demo-workspace/demo-collection",
+  "ActivationMode": "GuardedScopedRuntime",
+  "RuntimeActivation": true,
+  "FormalRetrievalAllowed": true,
+  "RuntimeSwitchAllowed": true,
+  "GlobalDefaultOn": false,
+  "PackageOutputChanged": false,
+  "FormalPackageWritten": false,
+  "VectorStoreBindingChanged": false,
+  "KillSwitchArmed": true,
+  "RollbackBindingPresent": true,
+  "ScopeGuardActive": true,
+  "ActivationSource": "V8.23LiveRuntimeActivationExecutionDryRun",
+  "SourceLiveRuntimeActivationExecutionDryRunOperationId": "frp-live-runtime-activation-execution-dry-run-faf057a012674ed3a33f809c77124db5",
+  "SourceRuntimeActivationArtifactIntegrityOperationId": "frp-runtime-activation-artifact-integrity-4a3b11e3840b47ae9c4c3a4580fa8a6a",
+  "SourceGuardedRuntimeActivationArtifactWriteOutOperationId": "frp-guarded-runtime-activation-artifact-write-out-c971462460c74498a827e11497412226",
+  "CreatedAt": "2026-06-28T05:32:04.1012207\u002B00:00"
+}
