@@ -1,0 +1,110 @@
+﻿{
+  "AblationMode": "DeterministicFeatureMaskedRetrain",
+  "Variants": [
+    {
+      "VariantName": "all-features",
+      "IncludedFeatures": [
+        "Recall3",
+        "Recall5",
+        "Recall10",
+        "MRR",
+        "PositiveRankInverseDelta",
+        "PositiveScoreMinusNegativeScore",
+        "PositiveSelectedMinusNegativeSelected",
+        "PackageHasAllConstraints"
+      ],
+      "ExcludedFeatures": [],
+      "TrainCount": 195,
+      "EvalCount": 58,
+      "PairwiseAccuracy": 1
+    },
+    {
+      "VariantName": "without-positiveScore",
+      "IncludedFeatures": [
+        "Recall3",
+        "Recall5",
+        "Recall10",
+        "MRR",
+        "PositiveRankInverseDelta",
+        "PositiveSelectedMinusNegativeSelected",
+        "PackageHasAllConstraints"
+      ],
+      "ExcludedFeatures": [
+        "PositiveScoreMinusNegativeScore"
+      ],
+      "TrainCount": 195,
+      "EvalCount": 58,
+      "PairwiseAccuracy": 1
+    },
+    {
+      "VariantName": "without-score-like",
+      "IncludedFeatures": [
+        "Recall3",
+        "Recall5",
+        "Recall10",
+        "MRR",
+        "PositiveRankInverseDelta",
+        "PackageHasAllConstraints"
+      ],
+      "ExcludedFeatures": [
+        "PositiveScoreMinusNegativeScore",
+        "PositiveSelectedMinusNegativeSelected"
+      ],
+      "TrainCount": 195,
+      "EvalCount": 58,
+      "PairwiseAccuracy": 1
+    },
+    {
+      "VariantName": "only-structural",
+      "IncludedFeatures": [
+        "PackageHasAllConstraints"
+      ],
+      "ExcludedFeatures": [
+        "Recall3",
+        "Recall5",
+        "Recall10",
+        "MRR",
+        "PositiveRankInverseDelta",
+        "PositiveScoreMinusNegativeScore",
+        "PositiveSelectedMinusNegativeSelected"
+      ],
+      "TrainCount": 195,
+      "EvalCount": 58,
+      "PairwiseAccuracy": 1
+    },
+    {
+      "VariantName": "only-recall-family",
+      "IncludedFeatures": [
+        "Recall3",
+        "Recall5",
+        "Recall10"
+      ],
+      "ExcludedFeatures": [
+        "MRR",
+        "PositiveRankInverseDelta",
+        "PositiveScoreMinusNegativeScore",
+        "PositiveSelectedMinusNegativeSelected",
+        "PackageHasAllConstraints"
+      ],
+      "TrainCount": 195,
+      "EvalCount": 58,
+      "PairwiseAccuracy": 1
+    }
+  ],
+  "BaselineAccuracy": 1,
+  "AccuracyWithoutPositiveScore": 1,
+  "AccuracyWithoutScoreLikeFeatures": 1,
+  "AccuracyDropFromPositiveScoreRemoval": 0,
+  "AccuracyDropFromAllScoreLikeRemoval": 0,
+  "PositiveScoreDominanceDetected": false,
+  "LeakageRiskReduced": true,
+  "Notes": [
+    "BaselineAccuracy=1.000",
+    "AccuracyWithoutPositiveScore=1.000 (drop=0.000)",
+    "AccuracyWithoutScoreLikeFeatures=1.000 (drop=0.000)",
+    "PositiveScoreDominanceDetected=False (threshold: drop \u22650.05)",
+    "LeakageRiskReduced=True (structural features alone score \u22650.85)",
+    "Ablation is REAL: each variant retrains Logistic regression on a feature subset using the same 80/20 split as V9.1-V9.3.",
+    "If dominance detected and leakage not reduced, the candidate\u0027s apparent strength is positively driven by a single dominant feature \u2014 pilot must address before promotion."
+  ]
+}

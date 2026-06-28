@@ -1,0 +1,20 @@
+﻿{
+  "SimulationId": "v10-hard-neg-label-sim-cd5c72ed88c54a178c54f8bedd8e2813",
+  "SimulationMode": "ShadowSyntheticLabelDryRun",
+  "CandidateSpecCount": 60,
+  "SimulatedLabeledHardNegativeCount": 60,
+  "SyntheticLabelConfidence": 0,
+  "HardNegativeEvidenceStillInsufficient": true,
+  "EvidenceImprovedIfLabelsWereReal": true,
+  "SyntheticLabelAuthority": false,
+  "RuntimeAuthority": false,
+  "AutoIngest": false,
+  "TrainingSetChanged": false,
+  "Notes": [
+    "Simulation only: this report describes the hypothetical state IF every candidate spec were approved by human reviewers.",
+    "Synthetic labels carry confidence=0.0 and DO NOT count as real training evidence.",
+    "HardNegativeEvidenceStillInsufficient=true because no real labels exist on disk yet.",
+    "AutoIngest=false / TrainingSetChanged=false \u2014 the formal training set is not modified by this simulation.",
+    "Path to resolution: V9.5 feedback ingestion contract collects labeled hard-negatives \u2192 unblocks V10.7 evidence sufficiency."
+  ]
+}

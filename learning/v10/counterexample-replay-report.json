@@ -1,0 +1,20 @@
+﻿{
+  "ReplayMode": "ShadowCounterexampleReplay",
+  "CounterexampleCount": 127,
+  "CounterexampleReplayReady": true,
+  "CandidateFailureRateOnCounterexamples": 0.2755905511811024,
+  "ReferenceFailureRateOnCounterexamples": 0,
+  "SourceFailureClusterIds": [
+    "ranker-WeightedBaseline",
+    "router-RouterIntentLogistic",
+    "router-RouterIntentTree"
+  ],
+  "Notes": [
+    "Counterexamples are pairs where (positiveScore - negativeScore) \u2264 median = 63.385.",
+    "These are the hard cases where positiveScore dominance fails to discriminate.",
+    "Candidate fails on 35/127 counterexamples; reference fails on 0/127.",
+    "Runtime decision unchanged. Package output unchanged. This is shadow replay only."
+  ],
+  "RuntimeDecisionChanged": false,
+  "PackageOutputChanged": false
+}

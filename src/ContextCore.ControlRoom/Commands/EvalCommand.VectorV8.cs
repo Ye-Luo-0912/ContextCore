@@ -1803,6 +1803,63 @@ public static partial class EvalCommand
         Console.WriteLine($"[Eval] evidenceCalibratedSelfValidationPackPassed={report.EvidenceCalibratedSelfValidationPackPassed}; gatePassed={report.GatePassed}; total={report.TotalCases} ready={report.ReadyCases} blocked={report.BlockedCases} evidenceSufficient={report.EvidenceSufficient} signalLeakageRisk={report.SignalLeakageRisk} hardNegInsufficient={report.HardNegativeEvidenceInsufficient} pilotReady={report.RuntimePilotExecutionReadyForSeparateGate} blockedExecBy=[{string.Join(',', report.BlockedForRuntimePilotExecutionBy)}] recommendation={report.Recommendation}");
     }
 
+    private static async Task ExecuteLearningEvidenceAccumulationPackAsync(
+        IReadOnlyList<string> args, string subcommand, CancellationToken ct)
+    {
+        var output = Path.GetFullPath(Path.Combine("learning", "v10"));
+        Directory.CreateDirectory(output);
+        var rtPath = Path.Combine("learning", "readiness", "learning-runtime-change-readiness-gate.json");
+        var rtGate = await ReadJsonFileAsync<LearningRuntimeChangeReadinessGateReport>(rtPath, ct).ConfigureAwait(false);
+        var rtPassed = rtGate is not null && rtGate.Passed;
+        var p15Path = Path.Combine("eval", "eval-report-p15-a3.json");
+        var p15 = await ReadJsonFileAsync<JsonDocument>(p15Path, ct).ConfigureAwait(false);
+        var p15Passed = false;
+        if (p15 is not null && p15.RootElement.TryGetProperty("PassRate", out var pr)) p15Passed = pr.GetDouble() >= 1.0;
+        var mainlineEvPath = Path.Combine("vector", "v8", "formal-retrieval-promotion-approval-evidence.json");
+        var mainlineRegPath = Path.Combine("vector", "v8", "formal-retrieval-promotion-approval-trust-registry.json");
+        var mainlineEvPresent = File.Exists(mainlineEvPath);
+        var mainlineRegPresent = File.Exists(mainlineRegPath);
+
+        var selfValidPath = Path.Combine("learning", "v10", "evidence-calibrated-self-validation-pack-gate.json");
+        var selfValid = await ReadJsonFileAsync<LearningEvidenceCalibratedSelfValidationPackReport>(selfValidPath, ct).ConfigureAwait(false);
+        var hardNegPath = Path.Combine("learning", "v9", "hard-negative-expansion-candidates.jsonl");
+        var hardNegCount = File.Exists(hardNegPath) ? File.ReadAllLines(hardNegPath).Count(static l => !string.IsNullOrWhiteSpace(l)) : 0;
+        var rankerPairsPath = Path.Combine("learning", "features", "ranking-pairs.jsonl");
+        var rankerPairs = LearningShadowImplementationPackRunner.LoadRankerPairs(rankerPairsPath);
+        var failureFeedbackPath = Path.Combine("learning", "v9", "failure-diagnosis-feedback-loop-pack-gate.json");
+        var failureFeedback = await ReadJsonFileAsync<LearningFailureDiagnosisAndFeedbackLoopPackReport>(failureFeedbackPath, ct).ConfigureAwait(false);
+        var failureClusterIds = failureFeedback?.FailureDiagnosisInputPack.Clusters.Select(c => c.ClusterId).ToArray() ?? Array.Empty<string>();
+
+        var realContext = new LearningEvidenceAccumulationPackContext
+        {
+            SelfValidationPackPresent = selfValid is not null,
+            SelfValidationPackPassed = selfValid?.GatePassed ?? false,
+            HardNegativeCandidatesPresent = hardNegCount > 0,
+            HardNegativeCandidateCount = hardNegCount,
+            V8ScopedActivationPreserved = selfValid?.V8ScopedActivationPreserved ?? false,
+            RankerPairs = rankerPairs,
+            FailureClusterIds = failureClusterIds,
+            PreviousEvidenceSufficiencyScore = selfValid?.EvidenceSufficiencyReport.EvidenceSufficiencyScore ?? 0
+        };
+
+        var isGate = string.Equals(subcommand, "learning-evidence-accumulation-pack-gate", StringComparison.OrdinalIgnoreCase);
+        var opt = new LearningEvidenceAccumulationPackOptions
+        {
+            IsGate = isGate,
+            Enabled = !CommandHelpers.HasFlag(args, "--disabled")
+        };
+        var runner = new LearningEvidenceAccumulationPackRunner();
+        var report = runner.Run(realContext, output, rtPassed, p15Passed, mainlineEvPresent, mainlineRegPresent, opt);
+        var fn = isGate ? "evidence-accumulation-pack-gate" : "evidence-accumulation-pack";
+        var jp = Path.Combine(output, $"{fn}.json");
+        var mp = Path.Combine(output, $"{fn}.md");
+        await WriteJsonSafeAsync(report, jp, ct).ConfigureAwait(false);
+        await WriteTextAsync(LearningEvidenceAccumulationPackRunner.BuildMarkdown(
+            isGate ? "Learning Evidence Accumulation Pack (Gate)" : "Learning Evidence Accumulation Pack", report), mp, ct).ConfigureAwait(false);
+        Console.WriteLine($"[Eval] Learning evidence accumulation pack written: {jp}");
+        Console.WriteLine($"[Eval] evidenceAccumulationPackPassed={report.EvidenceAccumulationPackPassed}; gatePassed={report.GatePassed}; total={report.TotalCases} ready={report.ReadyCases} blocked={report.BlockedCases} dominance={report.PositiveScoreDominanceDetected} leakageReduced={report.LeakageRiskReduced} accDropNoPositiveScore={report.SignalLeakageAblation.AccuracyDropFromPositiveScoreRemoval:F3} evidenceSufficient={report.EvidenceSufficient} pilotReady={report.RuntimePilotExecutionReadyForSeparateGate} blockedExecBy=[{string.Join(',', report.BlockedForRuntimePilotExecutionBy)}] recommendation={report.Recommendation}");
+    }
+
     private static bool ValidateTemplateFields(string jsonContent, string[] fieldPaths, List<string> missing, List<string> nonPlaceholder)
     {
         var doc = System.Text.Json.JsonDocument.Parse(jsonContent);

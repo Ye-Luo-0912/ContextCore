@@ -1,0 +1,613 @@
+﻿{
+  "OperationId": "v10-learning-evidence-accumulation-pack-4b7b74af8d7b43a79648d6373a96f7c1",
+  "CreatedAt": "2026-06-28T15:35:56.6083564+00:00",
+  "EvidenceAccumulationPackPassed": true,
+  "GatePassed": true,
+  "TotalCases": 27,
+  "PassedCases": 27,
+  "FailedCases": 0,
+  "ReadyCases": 1,
+  "BlockedCases": 26,
+  "Cases": [
+    {
+      "CaseName": "AllUpstreamClean",
+      "ExpectedStatus": "LearningEvidenceAccumulationPackReady",
+      "ActualStatus": "LearningEvidenceAccumulationPackReady",
+      "ExpectedBlockedReason": "",
+      "ActualBlockedReasons": [],
+      "Reasoning": "evidence accumulation pack policy ready \u2014 upstream \u002B authority invariants satisfied; ablation \u002B simulation \u002B replay \u002B recomputation computed below.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "SelfValidationPackMissing",
+      "ExpectedStatus": "LearningEvidenceAccumulationPackBlocked",
+      "ActualStatus": "LearningEvidenceAccumulationPackBlocked",
+      "ExpectedBlockedReason": "SelfValidationPackMissing",
+      "ActualBlockedReasons": [
+        "SelfValidationPackMissing"
+      ],
+      "Reasoning": "1 blocked reason(s); evidence accumulation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "SelfValidationPackNotPassed",
+      "ExpectedStatus": "LearningEvidenceAccumulationPackBlocked",
+      "ActualStatus": "LearningEvidenceAccumulationPackBlocked",
+      "ExpectedBlockedReason": "SelfValidationPackNotPassed",
+      "ActualBlockedReasons": [
+        "SelfValidationPackNotPassed"
+      ],
+      "Reasoning": "1 blocked reason(s); evidence accumulation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "HardNegativeCandidatesMissing",
+      "ExpectedStatus": "LearningEvidenceAccumulationPackBlocked",
+      "ActualStatus": "LearningEvidenceAccumulationPackBlocked",
+      "ExpectedBlockedReason": "HardNegativeCandidatesMissing",
+      "ActualBlockedReasons": [
+        "HardNegativeCandidatesMissing"
+      ],
+      "Reasoning": "1 blocked reason(s); evidence accumulation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "SignalLeakageAblationMissing",
+      "ExpectedStatus": "LearningEvidenceAccumulationPackBlocked",
+      "ActualStatus": "LearningEvidenceAccumulationPackBlocked",
+      "ExpectedBlockedReason": "SignalLeakageAblationMissing",
+      "ActualBlockedReasons": [
+        "SignalLeakageAblationMissing"
+      ],
+      "Reasoning": "1 blocked reason(s); evidence accumulation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "SyntheticLabelsTreatedAsAuthority",
+      "ExpectedStatus": "LearningEvidenceAccumulationPackBlocked",
+      "ActualStatus": "LearningEvidenceAccumulationPackBlocked",
+      "ExpectedBlockedReason": "SyntheticLabelsTreatedAsAuthority",
+      "ActualBlockedReasons": [
+        "SyntheticLabelsTreatedAsAuthority"
+      ],
+      "Reasoning": "1 blocked reason(s); evidence accumulation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "AutoIngestTrue",
+      "ExpectedStatus": "LearningEvidenceAccumulationPackBlocked",
+      "ActualStatus": "LearningEvidenceAccumulationPackBlocked",
+      "ExpectedBlockedReason": "AutoIngestTrue",
+      "ActualBlockedReasons": [
+        "AutoIngestTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); evidence accumulation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "TrainingSetChangedTrue",
+      "ExpectedStatus": "LearningEvidenceAccumulationPackBlocked",
+      "ActualStatus": "LearningEvidenceAccumulationPackBlocked",
+      "ExpectedBlockedReason": "TrainingSetChangedTrue",
+      "ActualBlockedReasons": [
+        "TrainingSetChangedTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); evidence accumulation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "PositiveScoreDominanceIgnored",
+      "ExpectedStatus": "LearningEvidenceAccumulationPackBlocked",
+      "ActualStatus": "LearningEvidenceAccumulationPackBlocked",
+      "ExpectedBlockedReason": "PositiveScoreDominanceIgnored",
+      "ActualBlockedReasons": [
+        "PositiveScoreDominanceIgnored"
+      ],
+      "Reasoning": "1 blocked reason(s); evidence accumulation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "EvidenceSufficientFalselyTrue",
+      "ExpectedStatus": "LearningEvidenceAccumulationPackBlocked",
+      "ActualStatus": "LearningEvidenceAccumulationPackBlocked",
+      "ExpectedBlockedReason": "EvidenceSufficientFalselyTrueUnderUnresolvedLeakage",
+      "ActualBlockedReasons": [
+        "EvidenceSufficientFalselyTrueUnderUnresolvedLeakage"
+      ],
+      "Reasoning": "1 blocked reason(s); evidence accumulation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "RuntimePilotExecutionAppliedTrue",
+      "ExpectedStatus": "LearningEvidenceAccumulationPackBlocked",
+      "ActualStatus": "LearningEvidenceAccumulationPackBlocked",
+      "ExpectedBlockedReason": "RuntimePilotExecutionAppliedTrue",
+      "ActualBlockedReasons": [
+        "RuntimePilotExecutionAppliedTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); evidence accumulation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "RuntimePromotionAppliedTrue",
+      "ExpectedStatus": "LearningEvidenceAccumulationPackBlocked",
+      "ActualStatus": "LearningEvidenceAccumulationPackBlocked",
+      "ExpectedBlockedReason": "RuntimePromotionAppliedTrue",
+      "ActualBlockedReasons": [
+        "RuntimePromotionAppliedTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); evidence accumulation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "RuntimeRerankerChangedTrue",
+      "ExpectedStatus": "LearningEvidenceAccumulationPackBlocked",
+      "ActualStatus": "LearningEvidenceAccumulationPackBlocked",
+      "ExpectedBlockedReason": "RuntimeRerankerChangedTrue",
+      "ActualBlockedReasons": [
+        "RuntimeRerankerChangedTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); evidence accumulation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "RuntimeRouterChangedTrue",
+      "ExpectedStatus": "LearningEvidenceAccumulationPackBlocked",
+      "ActualStatus": "LearningEvidenceAccumulationPackBlocked",
+      "ExpectedBlockedReason": "RuntimeRouterChangedTrue",
+      "ActualBlockedReasons": [
+        "RuntimeRouterChangedTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); evidence accumulation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "ProductionDecisionChangedTrue",
+      "ExpectedStatus": "LearningEvidenceAccumulationPackBlocked",
+      "ActualStatus": "LearningEvidenceAccumulationPackBlocked",
+      "ExpectedBlockedReason": "ProductionDecisionChangedTrue",
+      "ActualBlockedReasons": [
+        "ProductionDecisionChangedTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); evidence accumulation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "PackageOutputChangedTrue",
+      "ExpectedStatus": "LearningEvidenceAccumulationPackBlocked",
+      "ActualStatus": "LearningEvidenceAccumulationPackBlocked",
+      "ExpectedBlockedReason": "PackageOutputChangedTrue",
+      "ActualBlockedReasons": [
+        "PackageOutputChangedTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); evidence accumulation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "FormalPackageWrittenTrue",
+      "ExpectedStatus": "LearningEvidenceAccumulationPackBlocked",
+      "ActualStatus": "LearningEvidenceAccumulationPackBlocked",
+      "ExpectedBlockedReason": "FormalPackageWrittenTrue",
+      "ActualBlockedReasons": [
+        "FormalPackageWrittenTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); evidence accumulation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "GlobalDefaultOnTrue",
+      "ExpectedStatus": "LearningEvidenceAccumulationPackBlocked",
+      "ActualStatus": "LearningEvidenceAccumulationPackBlocked",
+      "ExpectedBlockedReason": "GlobalDefaultOnTrue",
+      "ActualBlockedReasons": [
+        "GlobalDefaultOnTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); evidence accumulation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "MLAuthorityTrue",
+      "ExpectedStatus": "LearningEvidenceAccumulationPackBlocked",
+      "ActualStatus": "LearningEvidenceAccumulationPackBlocked",
+      "ExpectedBlockedReason": "MLAuthorityTrue",
+      "ActualBlockedReasons": [
+        "MLAuthorityTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); evidence accumulation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "LLMAuthorityTrue",
+      "ExpectedStatus": "LearningEvidenceAccumulationPackBlocked",
+      "ActualStatus": "LearningEvidenceAccumulationPackBlocked",
+      "ExpectedBlockedReason": "LLMAuthorityTrue",
+      "ActualBlockedReasons": [
+        "LLMAuthorityTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); evidence accumulation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "RuntimeAuthorityTrue",
+      "ExpectedStatus": "LearningEvidenceAccumulationPackBlocked",
+      "ActualStatus": "LearningEvidenceAccumulationPackBlocked",
+      "ExpectedBlockedReason": "RuntimeAuthorityTrue",
+      "ActualBlockedReasons": [
+        "RuntimeAuthorityTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); evidence accumulation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "GateAuthorityTrue",
+      "ExpectedStatus": "LearningEvidenceAccumulationPackBlocked",
+      "ActualStatus": "LearningEvidenceAccumulationPackBlocked",
+      "ExpectedBlockedReason": "GateAuthorityTrue",
+      "ActualBlockedReasons": [
+        "GateAuthorityTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); evidence accumulation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "V8ScopedActivationLost",
+      "ExpectedStatus": "LearningEvidenceAccumulationPackBlocked",
+      "ActualStatus": "LearningEvidenceAccumulationPackBlocked",
+      "ExpectedBlockedReason": "V8ScopedActivationLost",
+      "ActualBlockedReasons": [
+        "V8ScopedActivationLost"
+      ],
+      "Reasoning": "1 blocked reason(s); evidence accumulation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "MainlineEvidencePresent",
+      "ExpectedStatus": "LearningEvidenceAccumulationPackBlocked",
+      "ActualStatus": "LearningEvidenceAccumulationPackBlocked",
+      "ExpectedBlockedReason": "MainlineEvidencePresent",
+      "ActualBlockedReasons": [
+        "MainlineEvidencePresent"
+      ],
+      "Reasoning": "1 blocked reason(s); evidence accumulation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "MainlineTrustRegistryPresent",
+      "ExpectedStatus": "LearningEvidenceAccumulationPackBlocked",
+      "ActualStatus": "LearningEvidenceAccumulationPackBlocked",
+      "ExpectedBlockedReason": "MainlineTrustRegistryPresent",
+      "ActualBlockedReasons": [
+        "MainlineTrustRegistryPresent"
+      ],
+      "Reasoning": "1 blocked reason(s); evidence accumulation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "RuntimeGateNotPassed",
+      "ExpectedStatus": "LearningEvidenceAccumulationPackBlocked",
+      "ActualStatus": "LearningEvidenceAccumulationPackBlocked",
+      "ExpectedBlockedReason": "RuntimeChangeGateNotPassed",
+      "ActualBlockedReasons": [
+        "RuntimeChangeGateNotPassed"
+      ],
+      "Reasoning": "1 blocked reason(s); evidence accumulation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "P15GateNotPassed",
+      "ExpectedStatus": "LearningEvidenceAccumulationPackBlocked",
+      "ActualStatus": "LearningEvidenceAccumulationPackBlocked",
+      "ExpectedBlockedReason": "P15GateNotPassed",
+      "ActualBlockedReasons": [
+        "P15GateNotPassed"
+      ],
+      "Reasoning": "1 blocked reason(s); evidence accumulation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    }
+  ],
+  "HardNegativeLabeledEvidenceSimulation": {
+    "SimulationId": "v10-hard-neg-label-sim-cd5c72ed88c54a178c54f8bedd8e2813",
+    "SimulationMode": "ShadowSyntheticLabelDryRun",
+    "CandidateSpecCount": 60,
+    "SimulatedLabeledHardNegativeCount": 60,
+    "SyntheticLabelConfidence": 0,
+    "HardNegativeEvidenceStillInsufficient": true,
+    "EvidenceImprovedIfLabelsWereReal": true,
+    "SyntheticLabelAuthority": false,
+    "RuntimeAuthority": false,
+    "AutoIngest": false,
+    "TrainingSetChanged": false,
+    "Notes": [
+      "Simulation only: this report describes the hypothetical state IF every candidate spec were approved by human reviewers.",
+      "Synthetic labels carry confidence=0.0 and DO NOT count as real training evidence.",
+      "HardNegativeEvidenceStillInsufficient=true because no real labels exist on disk yet.",
+      "AutoIngest=false / TrainingSetChanged=false \u2014 the formal training set is not modified by this simulation.",
+      "Path to resolution: V9.5 feedback ingestion contract collects labeled hard-negatives \u2192 unblocks V10.7 evidence sufficiency."
+    ]
+  },
+  "SignalLeakageAblation": {
+    "AblationMode": "DeterministicFeatureMaskedRetrain",
+    "Variants": [
+      {
+        "VariantName": "all-features",
+        "IncludedFeatures": [
+          "Recall3",
+          "Recall5",
+          "Recall10",
+          "MRR",
+          "PositiveRankInverseDelta",
+          "PositiveScoreMinusNegativeScore",
+          "PositiveSelectedMinusNegativeSelected",
+          "PackageHasAllConstraints"
+        ],
+        "ExcludedFeatures": [],
+        "TrainCount": 195,
+        "EvalCount": 58,
+        "PairwiseAccuracy": 1
+      },
+      {
+        "VariantName": "without-positiveScore",
+        "IncludedFeatures": [
+          "Recall3",
+          "Recall5",
+          "Recall10",
+          "MRR",
+          "PositiveRankInverseDelta",
+          "PositiveSelectedMinusNegativeSelected",
+          "PackageHasAllConstraints"
+        ],
+        "ExcludedFeatures": [
+          "PositiveScoreMinusNegativeScore"
+        ],
+        "TrainCount": 195,
+        "EvalCount": 58,
+        "PairwiseAccuracy": 1
+      },
+      {
+        "VariantName": "without-score-like",
+        "IncludedFeatures": [
+          "Recall3",
+          "Recall5",
+          "Recall10",
+          "MRR",
+          "PositiveRankInverseDelta",
+          "PackageHasAllConstraints"
+        ],
+        "ExcludedFeatures": [
+          "PositiveScoreMinusNegativeScore",
+          "PositiveSelectedMinusNegativeSelected"
+        ],
+        "TrainCount": 195,
+        "EvalCount": 58,
+        "PairwiseAccuracy": 1
+      },
+      {
+        "VariantName": "only-structural",
+        "IncludedFeatures": [
+          "PackageHasAllConstraints"
+        ],
+        "ExcludedFeatures": [
+          "Recall3",
+          "Recall5",
+          "Recall10",
+          "MRR",
+          "PositiveRankInverseDelta",
+          "PositiveScoreMinusNegativeScore",
+          "PositiveSelectedMinusNegativeSelected"
+        ],
+        "TrainCount": 195,
+        "EvalCount": 58,
+        "PairwiseAccuracy": 1
+      },
+      {
+        "VariantName": "only-recall-family",
+        "IncludedFeatures": [
+          "Recall3",
+          "Recall5",
+          "Recall10"
+        ],
+        "ExcludedFeatures": [
+          "MRR",
+          "PositiveRankInverseDelta",
+          "PositiveScoreMinusNegativeScore",
+          "PositiveSelectedMinusNegativeSelected",
+          "PackageHasAllConstraints"
+        ],
+        "TrainCount": 195,
+        "EvalCount": 58,
+        "PairwiseAccuracy": 1
+      }
+    ],
+    "BaselineAccuracy": 1,
+    "AccuracyWithoutPositiveScore": 1,
+    "AccuracyWithoutScoreLikeFeatures": 1,
+    "AccuracyDropFromPositiveScoreRemoval": 0,
+    "AccuracyDropFromAllScoreLikeRemoval": 0,
+    "PositiveScoreDominanceDetected": false,
+    "LeakageRiskReduced": true,
+    "Notes": [
+      "BaselineAccuracy=1.000",
+      "AccuracyWithoutPositiveScore=1.000 (drop=0.000)",
+      "AccuracyWithoutScoreLikeFeatures=1.000 (drop=0.000)",
+      "PositiveScoreDominanceDetected=False (threshold: drop \u22650.05)",
+      "LeakageRiskReduced=True (structural features alone score \u22650.85)",
+      "Ablation is REAL: each variant retrains Logistic regression on a feature subset using the same 80/20 split as V9.1-V9.3.",
+      "If dominance detected and leakage not reduced, the candidate\u0027s apparent strength is positively driven by a single dominant feature \u2014 pilot must address before promotion."
+    ]
+  },
+  "CounterexampleReplayReport": {
+    "ReplayMode": "ShadowCounterexampleReplay",
+    "CounterexampleCount": 127,
+    "CounterexampleReplayReady": true,
+    "CandidateFailureRateOnCounterexamples": 0.2755905511811024,
+    "ReferenceFailureRateOnCounterexamples": 0,
+    "SourceFailureClusterIds": [
+      "ranker-WeightedBaseline",
+      "router-RouterIntentLogistic",
+      "router-RouterIntentTree"
+    ],
+    "Notes": [
+      "Counterexamples are pairs where (positiveScore - negativeScore) \u2264 median = 63.385.",
+      "These are the hard cases where positiveScore dominance fails to discriminate.",
+      "Candidate fails on 35/127 counterexamples; reference fails on 0/127.",
+      "Runtime decision unchanged. Package output unchanged. This is shadow replay only."
+    ],
+    "RuntimeDecisionChanged": false,
+    "PackageOutputChanged": false
+  },
+  "EvidenceSufficiencyRecomputed": {
+    "PreviousEvidenceSufficiencyScore": 0.5137931034482758,
+    "NewEvidenceSufficiencyScore": 0.8137931034482758,
+    "Threshold": 0.7,
+    "EvidenceSufficientUnderRealLabels": false,
+    "EvidenceSufficientUnderSyntheticLabelsOnly": true,
+    "EvidenceSufficient": false,
+    "SignalLeakageStillSuspected": false,
+    "HardNegativeEvidenceStillInsufficient": true,
+    "SubscoreDeltas": [
+      "AblationContribution=\u002B0.200 (LeakageRiskReduced=True)",
+      "CounterexampleContribution=\u002B0.000 (candidateFailRate=0.276 vs reference=0.000)",
+      "HardNegativeContribution=\u002B0.000 (synthetic labels carry zero real evidence)",
+      "LeakageResolutionBonus=\u002B0.100 (only when leakage actually resolved)"
+    ],
+    "Notes": [
+      "Previous score=0.514 \u2192 new score=0.814 (threshold=0.700)",
+      "Evidence sufficiency requires BOTH leakage resolved AND real labels \u2014 neither can be substituted by synthetic data.",
+      "EvidenceSufficientUnderRealLabels=False",
+      "EvidenceSufficientUnderSyntheticLabelsOnly=True (what-if: real labels in place)",
+      "SyntheticLabelsTreatedAsAuthority is NOT permitted in this pack \u2014 see policy invariant."
+    ]
+  },
+  "SelfOptimizationPlanUpdate": {
+    "PlanVersion": "v10.7-self-optimization/v1",
+    "ResolvedItems": [
+      "Signal leakage risk reduced (structural features alone score \u22650.85)"
+    ],
+    "OpenItems": [
+      "Hard-negative real labels still missing (simulated=60, real=0)",
+      "EvidenceSufficiencyScore=0.814 below threshold 0.700"
+    ],
+    "RecommendedActions": [
+      "Drive 60 hard-negative candidate specs through V9.5 feedback ingestion: reviewers label \u226520 as confirmed negatives. After ingestion, re-run V10.7.",
+      "Augment hard-negative dataset with adversarial generation from failure clusters (within shadow scope only).",
+      "Do NOT promote LogisticBaseline to pilot execution. Repeat V10.3-V10.7 cycle after evidence accumulation."
+    ],
+    "RuntimeAuthority": false,
+    "GateAuthority": false,
+    "AutoIngest": false
+  },
+  "HardNegativeLabeledEvidenceSimulationReady": true,
+  "SignalLeakageAblationReady": true,
+  "CounterexampleReplayReady": true,
+  "EvidenceSufficiencyRecomputedReady": true,
+  "SelfOptimizationPlanUpdateReady": true,
+  "PositiveScoreDominanceDetected": false,
+  "LeakageRiskReduced": true,
+  "EvidenceSufficient": false,
+  "SignalLeakageStillSuspected": false,
+  "HardNegativeEvidenceStillInsufficient": true,
+  "RuntimePilotExecutionReadyForSeparateGate": false,
+  "BlockedForRuntimePilotExecutionBy": [
+    "EvidenceInsufficient",
+    "HardNegativeEvidenceStillInsufficient"
+  ],
+  "SyntheticLabelAuthority": false,
+  "HumanReviewAsGateAuthority": false,
+  "HumanFeedbackAutoIngest": false,
+  "AutoIngest": false,
+  "TrainingSetChanged": false,
+  "RuntimePromotionApplied": false,
+  "RuntimePilotExecutionApplied": false,
+  "RuntimeRerankerChanged": false,
+  "RuntimeRouterChanged": false,
+  "ProductionDecisionChanged": false,
+  "PackageOutputChanged": false,
+  "FormalPackageWritten": false,
+  "GlobalDefaultOn": false,
+  "MLAuthority": false,
+  "LLMAuthority": false,
+  "RuntimeAuthority": false,
+  "GateAuthority": false,
+  "V8ScopedActivationPreserved": true,
+  "UpstreamSelfValidationPackGatePresent": true,
+  "UpstreamSelfValidationPackGatePassed": true,
+  "MainlineEvidencePresent": false,
+  "MainlineTrustRegistryPresent": false,
+  "HardNegativeLabeledEvidenceSimulationPath": "learning/v10/hard-negative-labeled-evidence-simulation.json",
+  "SignalLeakageAblationPath": "learning/v10/signal-leakage-ablation.json",
+  "CounterexampleReplayReportPath": "learning/v10/counterexample-replay-report.json",
+  "EvidenceSufficiencyRecomputedPath": "learning/v10/evidence-sufficiency-recomputed.json",
+  "SelfOptimizationPlanUpdatedPath": "learning/v10/self-optimization-plan-updated.json",
+  "Recommendation": "BlockedForRuntimePilotExecution-EvidenceCalibrated-AccumulateMoreEvidence",
+  "NextAllowedPhase": "V10.10PilotExecution-pending-evidence",
+  "BlockedReasons": [],
+  "Diagnostics": [
+    "total=27",
+    "realStatus=LearningEvidenceAccumulationPackReady",
+    "ablationVariants=5",
+    "baselineAccuracy=1.000",
+    "accuracyWithoutPositiveScore=1.000",
+    "accuracyDrop=0.000",
+    "positiveScoreDominanceDetected=False",
+    "leakageRiskReduced=True",
+    "simulatedLabeledHardNegativeCount=60",
+    "counterexampleCount=127",
+    "recomputedEvidenceScore=0.814",
+    "evidenceSufficient=False",
+    "runtimePilotReady=False"
+  ]
+}

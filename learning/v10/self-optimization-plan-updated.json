@@ -1,0 +1,18 @@
+﻿{
+  "PlanVersion": "v10.7-self-optimization/v1",
+  "ResolvedItems": [
+    "Signal leakage risk reduced (structural features alone score \u22650.85)"
+  ],
+  "OpenItems": [
+    "Hard-negative real labels still missing (simulated=60, real=0)",
+    "EvidenceSufficiencyScore=0.814 below threshold 0.700"
+  ],
+  "RecommendedActions": [
+    "Drive 60 hard-negative candidate specs through V9.5 feedback ingestion: reviewers label \u226520 as confirmed negatives. After ingestion, re-run V10.7.",
+    "Augment hard-negative dataset with adversarial generation from failure clusters (within shadow scope only).",
+    "Do NOT promote LogisticBaseline to pilot execution. Repeat V10.3-V10.7 cycle after evidence accumulation."
+  ],
+  "RuntimeAuthority": false,
+  "GateAuthority": false,
+  "AutoIngest": false
+}

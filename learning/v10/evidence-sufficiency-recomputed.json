@@ -1,0 +1,23 @@
+﻿{
+  "PreviousEvidenceSufficiencyScore": 0.5137931034482758,
+  "NewEvidenceSufficiencyScore": 0.8137931034482758,
+  "Threshold": 0.7,
+  "EvidenceSufficientUnderRealLabels": false,
+  "EvidenceSufficientUnderSyntheticLabelsOnly": true,
+  "EvidenceSufficient": false,
+  "SignalLeakageStillSuspected": false,
+  "HardNegativeEvidenceStillInsufficient": true,
+  "SubscoreDeltas": [
+    "AblationContribution=\u002B0.200 (LeakageRiskReduced=True)",
+    "CounterexampleContribution=\u002B0.000 (candidateFailRate=0.276 vs reference=0.000)",
+    "HardNegativeContribution=\u002B0.000 (synthetic labels carry zero real evidence)",
+    "LeakageResolutionBonus=\u002B0.100 (only when leakage actually resolved)"
+  ],
+  "Notes": [
+    "Previous score=0.514 \u2192 new score=0.814 (threshold=0.700)",
+    "Evidence sufficiency requires BOTH leakage resolved AND real labels \u2014 neither can be substituted by synthetic data.",
+    "EvidenceSufficientUnderRealLabels=False",
+    "EvidenceSufficientUnderSyntheticLabelsOnly=True (what-if: real labels in place)",
+    "SyntheticLabelsTreatedAsAuthority is NOT permitted in this pack \u2014 see policy invariant."
+  ]
+}
