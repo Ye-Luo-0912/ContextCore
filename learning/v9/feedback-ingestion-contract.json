@@ -1,0 +1,65 @@
+﻿{
+  "SchemaVersion": "v9.5-feedback-ingestion/v1",
+  "Fields": [
+    {
+      "FieldName": "sampleId",
+      "Type": "string",
+      "Required": true,
+      "Description": "Eval sample / example id from V9.0 dataset inventory."
+    },
+    {
+      "FieldName": "taskFamily",
+      "Type": "string",
+      "Required": true,
+      "Description": "One of CandidateReranker / RouterIntentClassifier / PackageQuality / MemoryPromotion / ConstraintGap."
+    },
+    {
+      "FieldName": "failureType",
+      "Type": "string",
+      "Required": true,
+      "Description": "missed-positive / wrong-intent / over-ranked-negative / coverage-gap / etc."
+    },
+    {
+      "FieldName": "proposedLabel",
+      "Type": "string",
+      "Required": true,
+      "Description": "Human-proposed correct label for the sample."
+    },
+    {
+      "FieldName": "confidence",
+      "Type": "double",
+      "Required": true,
+      "Description": "Reviewer confidence 0..1 \u2014 feeds into V9.7 promotion readiness scoring."
+    },
+    {
+      "FieldName": "reviewStatus",
+      "Type": "string",
+      "Required": true,
+      "Description": "Pending / Approved / Rejected."
+    },
+    {
+      "FieldName": "approvedBy",
+      "Type": "string",
+      "Required": false,
+      "Description": "Reviewer id; required when reviewStatus=Approved."
+    },
+    {
+      "FieldName": "source",
+      "Type": "string",
+      "Required": true,
+      "Description": "Human / V9.4-LLM-diagnosis / V9.4-hard-negative-generation."
+    },
+    {
+      "FieldName": "submittedAt",
+      "Type": "datetime",
+      "Required": true,
+      "Description": "ISO-8601 submission timestamp."
+    }
+  ],
+  "HumanReviewRequired": true,
+  "AutoIngest": false,
+  "ShadowOnly": true,
+  "RuntimeAuthority": false,
+  "GateAuthority": false,
+  "Notes": "Approved feedback may only enter shadow training set after V9.7 promotion readiness gate passes. No runtime authority; no gate authority."
+}

@@ -1,0 +1,27 @@
+﻿{
+  "UnderrepresentedLabels": [
+    "ConflictCheck (count=2)",
+    "CurrentTask (count=6)",
+    "LongTermPreference (count=1)"
+  ],
+  "ConfusingLabelPairs": [
+    "CodingTask-\u003EAuditDeprecated (count=5)",
+    "CodingTask-\u003EFuzzyQuestion (count=5)",
+    "AuditDeprecated-\u003EFuzzyQuestion (count=2)",
+    "AutomationRecovery-\u003EAuditDeprecated (count=2)",
+    "AutomationRecovery-\u003EFuzzyQuestion (count=2)",
+    "NovelGeneration-\u003EFuzzyQuestion (count=2)",
+    "FuzzyQuestion-\u003EAuditDeprecated (count=1)",
+    "NovelGeneration-\u003EAuditDeprecated (count=1)"
+  ],
+  "FeaturesNeedingEnrichment": [
+    "queryTopicEmbedding (not present today)",
+    "intentLifecycleStage (not present today)",
+    "modeXIntentContextSimilarity (not present today)",
+    "policyFeedbackSignal (currently empty \u2014 see feedback ingestion contract)"
+  ],
+  "RequiredNewExampleCount": 163,
+  "ProposalMode": "ShadowProposalOnly",
+  "RuntimeRouterChanged": false,
+  "RouterLabelSchemaChanged": false
+}

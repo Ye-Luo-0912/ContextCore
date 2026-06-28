@@ -1,0 +1,72 @@
+﻿{
+  "TotalRawFailures": 28,
+  "CandidateRerankerFailureCount": 8,
+  "RouterIntentFailureCount": 20,
+  "CandidateRerankerDeduplicatedCount": 4,
+  "RouterIntentDeduplicatedCount": 20,
+  "Clusters": [
+    {
+      "ClusterId": "ranker-WeightedBaseline",
+      "Baseline": "WeightedBaseline",
+      "TaskFamily": "CandidateReranker",
+      "ExpectedLabel": "positive-wins",
+      "PredictedLabel": "negative-wins-or-tie",
+      "ScoreRange": "below-zero-or-tied",
+      "LikelyCause": "Hand-tuned weights miss feature interactions; consider feature engineering or move to logistic/tree.",
+      "FailureCount": 4,
+      "SampleIds": [
+        "automation-sample-010",
+        "chat-sample-003",
+        "novel-sample-008"
+      ]
+    },
+    {
+      "ClusterId": "router-RouterIntentLogistic",
+      "Baseline": "RouterIntentLogistic",
+      "TaskFamily": "RouterIntentClassifier",
+      "ExpectedLabel": "various",
+      "PredictedLabel": "CodingTask-\u003EFuzzyQuestion|AutomationRecovery-\u003EFuzzyQuestion|NovelGeneration-\u003EFuzzyQuestion|AuditDeprecated-\u003EFuzzyQuestion",
+      "ScoreRange": "low-confidence",
+      "LikelyCause": "Router dataset has poor intent discriminability; most examples are selected/accepted. Need negative \u002B diverse examples per intent.",
+      "FailureCount": 10,
+      "SampleIds": [
+        "router-1136de63f72ea37d",
+        "router-13c8bb5e7f886bb4",
+        "router-3337daf9ef84f6c5",
+        "router-3e5a19a04f4e785e",
+        "router-47ff8d690b44b56d",
+        "router-4bb15058e41039ad",
+        "router-4bdb424223357c4e",
+        "router-4f18f06d7df96d2b",
+        "router-4fd69c633db064da",
+        "router-505a074fca61bef8"
+      ]
+    },
+    {
+      "ClusterId": "router-RouterIntentTree",
+      "Baseline": "RouterIntentTree",
+      "TaskFamily": "RouterIntentClassifier",
+      "ExpectedLabel": "various",
+      "PredictedLabel": "CodingTask-\u003EAuditDeprecated|AutomationRecovery-\u003EAuditDeprecated|FuzzyQuestion-\u003EAuditDeprecated|NovelGeneration-\u003EAuditDeprecated|AuditDeprecated-\u003EFuzzyQuestion",
+      "ScoreRange": "low-confidence",
+      "LikelyCause": "Router dataset has poor intent discriminability; most examples are selected/accepted. Need negative \u002B diverse examples per intent.",
+      "FailureCount": 10,
+      "SampleIds": [
+        "router-1136de63f72ea37d",
+        "router-13c8bb5e7f886bb4",
+        "router-3337daf9ef84f6c5",
+        "router-3938b5bbf4c569eb",
+        "router-3e5a19a04f4e785e",
+        "router-47ff8d690b44b56d",
+        "router-4bb15058e41039ad",
+        "router-4bdb424223357c4e",
+        "router-4f18f06d7df96d2b",
+        "router-4fd69c633db064da"
+      ]
+    }
+  ],
+  "LLMAuthority": false,
+  "RuntimeAuthority": false,
+  "GateAuthority": false,
+  "DiagnosisMode": "StructuredInputPackForOfflineLLMReview"
+}

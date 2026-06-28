@@ -1,0 +1,1209 @@
+﻿{
+  "OperationId": "v9-learning-failure-diagnosis-feedback-loop-pack-db1670edb2ea42688835121a7a80d16f",
+  "CreatedAt": "2026-06-28T10:27:45.1531712+00:00",
+  "FailureDiagnosisFeedbackLoopPackPassed": true,
+  "GatePassed": true,
+  "TotalCases": 21,
+  "PassedCases": 21,
+  "FailedCases": 0,
+  "ReadyCases": 1,
+  "BlockedCases": 20,
+  "Cases": [
+    {
+      "CaseName": "AllUpstreamClean",
+      "ExpectedStatus": "LearningFailureDiagnosisAndFeedbackLoopPackReady",
+      "ActualStatus": "LearningFailureDiagnosisAndFeedbackLoopPackReady",
+      "ExpectedBlockedReason": "",
+      "ActualBlockedReasons": [],
+      "Reasoning": "failure diagnosis \u002B feedback loop pack policy ready \u2014 all upstream gates \u002B authority invariants satisfied; pack runs shadow-only.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "ShadowImplementationPackMissing",
+      "ExpectedStatus": "LearningFailureDiagnosisAndFeedbackLoopPackBlocked",
+      "ActualStatus": "LearningFailureDiagnosisAndFeedbackLoopPackBlocked",
+      "ExpectedBlockedReason": "ShadowImplementationPackMissing",
+      "ActualBlockedReasons": [
+        "ShadowImplementationPackMissing"
+      ],
+      "Reasoning": "1 blocked reason(s); failure diagnosis \u002B feedback loop pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "ShadowImplementationPackNotPassed",
+      "ExpectedStatus": "LearningFailureDiagnosisAndFeedbackLoopPackBlocked",
+      "ActualStatus": "LearningFailureDiagnosisAndFeedbackLoopPackBlocked",
+      "ExpectedBlockedReason": "ShadowImplementationPackNotPassed",
+      "ActualBlockedReasons": [
+        "ShadowImplementationPackNotPassed"
+      ],
+      "Reasoning": "1 blocked reason(s); failure diagnosis \u002B feedback loop pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "FailureSampleFilesMissing",
+      "ExpectedStatus": "LearningFailureDiagnosisAndFeedbackLoopPackBlocked",
+      "ActualStatus": "LearningFailureDiagnosisAndFeedbackLoopPackBlocked",
+      "ExpectedBlockedReason": "FailureSampleFilesMissing",
+      "ActualBlockedReasons": [
+        "FailureSampleFilesMissing"
+      ],
+      "Reasoning": "1 blocked reason(s); failure diagnosis \u002B feedback loop pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "ShadowComparisonSummaryMissing",
+      "ExpectedStatus": "LearningFailureDiagnosisAndFeedbackLoopPackBlocked",
+      "ActualStatus": "LearningFailureDiagnosisAndFeedbackLoopPackBlocked",
+      "ExpectedBlockedReason": "ShadowComparisonSummaryMissing",
+      "ActualBlockedReasons": [
+        "ShadowComparisonSummaryMissing"
+      ],
+      "Reasoning": "1 blocked reason(s); failure diagnosis \u002B feedback loop pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "LLMAuthorityTrue",
+      "ExpectedStatus": "LearningFailureDiagnosisAndFeedbackLoopPackBlocked",
+      "ActualStatus": "LearningFailureDiagnosisAndFeedbackLoopPackBlocked",
+      "ExpectedBlockedReason": "LLMAuthorityTrue",
+      "ActualBlockedReasons": [
+        "LLMAuthorityTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); failure diagnosis \u002B feedback loop pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "AutoIngestTrue",
+      "ExpectedStatus": "LearningFailureDiagnosisAndFeedbackLoopPackBlocked",
+      "ActualStatus": "LearningFailureDiagnosisAndFeedbackLoopPackBlocked",
+      "ExpectedBlockedReason": "AutoIngestTrue",
+      "ActualBlockedReasons": [
+        "AutoIngestTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); failure diagnosis \u002B feedback loop pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "HumanReviewRequiredFalse",
+      "ExpectedStatus": "LearningFailureDiagnosisAndFeedbackLoopPackBlocked",
+      "ActualStatus": "LearningFailureDiagnosisAndFeedbackLoopPackBlocked",
+      "ExpectedBlockedReason": "HumanReviewRequiredFalse",
+      "ActualBlockedReasons": [
+        "HumanReviewRequiredFalse"
+      ],
+      "Reasoning": "1 blocked reason(s); failure diagnosis \u002B feedback loop pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "RuntimeAuthorityTrue",
+      "ExpectedStatus": "LearningFailureDiagnosisAndFeedbackLoopPackBlocked",
+      "ActualStatus": "LearningFailureDiagnosisAndFeedbackLoopPackBlocked",
+      "ExpectedBlockedReason": "RuntimeAuthorityTrue",
+      "ActualBlockedReasons": [
+        "RuntimeAuthorityTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); failure diagnosis \u002B feedback loop pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "GateAuthorityTrue",
+      "ExpectedStatus": "LearningFailureDiagnosisAndFeedbackLoopPackBlocked",
+      "ActualStatus": "LearningFailureDiagnosisAndFeedbackLoopPackBlocked",
+      "ExpectedBlockedReason": "GateAuthorityTrue",
+      "ActualBlockedReasons": [
+        "GateAuthorityTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); failure diagnosis \u002B feedback loop pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "RuntimeRerankerChangedTrue",
+      "ExpectedStatus": "LearningFailureDiagnosisAndFeedbackLoopPackBlocked",
+      "ActualStatus": "LearningFailureDiagnosisAndFeedbackLoopPackBlocked",
+      "ExpectedBlockedReason": "RuntimeRerankerChangedTrue",
+      "ActualBlockedReasons": [
+        "RuntimeRerankerChangedTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); failure diagnosis \u002B feedback loop pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "RuntimeRouterChangedTrue",
+      "ExpectedStatus": "LearningFailureDiagnosisAndFeedbackLoopPackBlocked",
+      "ActualStatus": "LearningFailureDiagnosisAndFeedbackLoopPackBlocked",
+      "ExpectedBlockedReason": "RuntimeRouterChangedTrue",
+      "ActualBlockedReasons": [
+        "RuntimeRouterChangedTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); failure diagnosis \u002B feedback loop pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "PackageOutputChangedTrue",
+      "ExpectedStatus": "LearningFailureDiagnosisAndFeedbackLoopPackBlocked",
+      "ActualStatus": "LearningFailureDiagnosisAndFeedbackLoopPackBlocked",
+      "ExpectedBlockedReason": "PackageOutputChangedTrue",
+      "ActualBlockedReasons": [
+        "PackageOutputChangedTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); failure diagnosis \u002B feedback loop pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "FormalPackageWrittenTrue",
+      "ExpectedStatus": "LearningFailureDiagnosisAndFeedbackLoopPackBlocked",
+      "ActualStatus": "LearningFailureDiagnosisAndFeedbackLoopPackBlocked",
+      "ExpectedBlockedReason": "FormalPackageWrittenTrue",
+      "ActualBlockedReasons": [
+        "FormalPackageWrittenTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); failure diagnosis \u002B feedback loop pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "GlobalDefaultOnTrue",
+      "ExpectedStatus": "LearningFailureDiagnosisAndFeedbackLoopPackBlocked",
+      "ActualStatus": "LearningFailureDiagnosisAndFeedbackLoopPackBlocked",
+      "ExpectedBlockedReason": "GlobalDefaultOnTrue",
+      "ActualBlockedReasons": [
+        "GlobalDefaultOnTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); failure diagnosis \u002B feedback loop pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "V8ScopedActivationLost",
+      "ExpectedStatus": "LearningFailureDiagnosisAndFeedbackLoopPackBlocked",
+      "ActualStatus": "LearningFailureDiagnosisAndFeedbackLoopPackBlocked",
+      "ExpectedBlockedReason": "V8ScopedActivationLost",
+      "ActualBlockedReasons": [
+        "V8ScopedActivationLost"
+      ],
+      "Reasoning": "1 blocked reason(s); failure diagnosis \u002B feedback loop pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "RuntimeGateNotPassed",
+      "ExpectedStatus": "LearningFailureDiagnosisAndFeedbackLoopPackBlocked",
+      "ActualStatus": "LearningFailureDiagnosisAndFeedbackLoopPackBlocked",
+      "ExpectedBlockedReason": "RuntimeChangeGateNotPassed",
+      "ActualBlockedReasons": [
+        "RuntimeChangeGateNotPassed"
+      ],
+      "Reasoning": "1 blocked reason(s); failure diagnosis \u002B feedback loop pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "P15GateNotPassed",
+      "ExpectedStatus": "LearningFailureDiagnosisAndFeedbackLoopPackBlocked",
+      "ActualStatus": "LearningFailureDiagnosisAndFeedbackLoopPackBlocked",
+      "ExpectedBlockedReason": "P15GateNotPassed",
+      "ActualBlockedReasons": [
+        "P15GateNotPassed"
+      ],
+      "Reasoning": "1 blocked reason(s); failure diagnosis \u002B feedback loop pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "MainlineEvidencePresent",
+      "ExpectedStatus": "LearningFailureDiagnosisAndFeedbackLoopPackBlocked",
+      "ActualStatus": "LearningFailureDiagnosisAndFeedbackLoopPackBlocked",
+      "ExpectedBlockedReason": "MainlineEvidencePresent",
+      "ActualBlockedReasons": [
+        "MainlineEvidencePresent"
+      ],
+      "Reasoning": "1 blocked reason(s); failure diagnosis \u002B feedback loop pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "MainlineTrustRegistryPresent",
+      "ExpectedStatus": "LearningFailureDiagnosisAndFeedbackLoopPackBlocked",
+      "ActualStatus": "LearningFailureDiagnosisAndFeedbackLoopPackBlocked",
+      "ExpectedBlockedReason": "MainlineTrustRegistryPresent",
+      "ActualBlockedReasons": [
+        "MainlineTrustRegistryPresent"
+      ],
+      "Reasoning": "1 blocked reason(s); failure diagnosis \u002B feedback loop pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "AuthorityAndAutoIngestBoth",
+      "ExpectedStatus": "LearningFailureDiagnosisAndFeedbackLoopPackBlocked",
+      "ActualStatus": "LearningFailureDiagnosisAndFeedbackLoopPackBlocked",
+      "ExpectedBlockedReason": "LLMAuthorityTrue",
+      "ActualBlockedReasons": [
+        "AutoIngestTrue",
+        "LLMAuthorityTrue"
+      ],
+      "Reasoning": "2 blocked reason(s); failure diagnosis \u002B feedback loop pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    }
+  ],
+  "FailureDiagnosisInputPack": {
+    "TotalRawFailures": 28,
+    "CandidateRerankerFailureCount": 8,
+    "RouterIntentFailureCount": 20,
+    "CandidateRerankerDeduplicatedCount": 4,
+    "RouterIntentDeduplicatedCount": 20,
+    "Clusters": [
+      {
+        "ClusterId": "ranker-WeightedBaseline",
+        "Baseline": "WeightedBaseline",
+        "TaskFamily": "CandidateReranker",
+        "ExpectedLabel": "positive-wins",
+        "PredictedLabel": "negative-wins-or-tie",
+        "ScoreRange": "below-zero-or-tied",
+        "LikelyCause": "Hand-tuned weights miss feature interactions; consider feature engineering or move to logistic/tree.",
+        "FailureCount": 4,
+        "SampleIds": [
+          "automation-sample-010",
+          "chat-sample-003",
+          "novel-sample-008"
+        ]
+      },
+      {
+        "ClusterId": "router-RouterIntentLogistic",
+        "Baseline": "RouterIntentLogistic",
+        "TaskFamily": "RouterIntentClassifier",
+        "ExpectedLabel": "various",
+        "PredictedLabel": "CodingTask-\u003EFuzzyQuestion|AutomationRecovery-\u003EFuzzyQuestion|NovelGeneration-\u003EFuzzyQuestion|AuditDeprecated-\u003EFuzzyQuestion",
+        "ScoreRange": "low-confidence",
+        "LikelyCause": "Router dataset has poor intent discriminability; most examples are selected/accepted. Need negative \u002B diverse examples per intent.",
+        "FailureCount": 10,
+        "SampleIds": [
+          "router-1136de63f72ea37d",
+          "router-13c8bb5e7f886bb4",
+          "router-3337daf9ef84f6c5",
+          "router-3e5a19a04f4e785e",
+          "router-47ff8d690b44b56d",
+          "router-4bb15058e41039ad",
+          "router-4bdb424223357c4e",
+          "router-4f18f06d7df96d2b",
+          "router-4fd69c633db064da",
+          "router-505a074fca61bef8"
+        ]
+      },
+      {
+        "ClusterId": "router-RouterIntentTree",
+        "Baseline": "RouterIntentTree",
+        "TaskFamily": "RouterIntentClassifier",
+        "ExpectedLabel": "various",
+        "PredictedLabel": "CodingTask-\u003EAuditDeprecated|AutomationRecovery-\u003EAuditDeprecated|FuzzyQuestion-\u003EAuditDeprecated|NovelGeneration-\u003EAuditDeprecated|AuditDeprecated-\u003EFuzzyQuestion",
+        "ScoreRange": "low-confidence",
+        "LikelyCause": "Router dataset has poor intent discriminability; most examples are selected/accepted. Need negative \u002B diverse examples per intent.",
+        "FailureCount": 10,
+        "SampleIds": [
+          "router-1136de63f72ea37d",
+          "router-13c8bb5e7f886bb4",
+          "router-3337daf9ef84f6c5",
+          "router-3938b5bbf4c569eb",
+          "router-3e5a19a04f4e785e",
+          "router-47ff8d690b44b56d",
+          "router-4bb15058e41039ad",
+          "router-4bdb424223357c4e",
+          "router-4f18f06d7df96d2b",
+          "router-4fd69c633db064da"
+        ]
+      }
+    ],
+    "LLMAuthority": false,
+    "RuntimeAuthority": false,
+    "GateAuthority": false,
+    "DiagnosisMode": "StructuredInputPackForOfflineLLMReview"
+  },
+  "HardNegativeCandidates": [
+    {
+      "CandidateSpecId": "hnc-0000-automation-sample-010",
+      "SourceSampleId": "automation-sample-010",
+      "SourceBaseline": "WeightedBaseline",
+      "TargetCandidateKind": "near-miss-boundary-negative",
+      "Rationale": "Negative candidate near the positive\u0027s score boundary; sourced from failure clusters of WeightedBaseline",
+      "HumanReviewRequired": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v9.4-shadow",
+      "CreatedAt": "2026-06-28T10:27:45.1531712\u002B00:00"
+    },
+    {
+      "CandidateSpecId": "hnc-0001-chat-sample-003",
+      "SourceSampleId": "chat-sample-003",
+      "SourceBaseline": "WeightedBaseline",
+      "TargetCandidateKind": "near-miss-boundary-negative",
+      "Rationale": "Negative candidate near the positive\u0027s score boundary; sourced from failure clusters of WeightedBaseline",
+      "HumanReviewRequired": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v9.4-shadow",
+      "CreatedAt": "2026-06-28T10:27:45.1531712\u002B00:00"
+    },
+    {
+      "CandidateSpecId": "hnc-0002-novel-sample-008",
+      "SourceSampleId": "novel-sample-008",
+      "SourceBaseline": "WeightedBaseline",
+      "TargetCandidateKind": "near-miss-boundary-negative",
+      "Rationale": "Negative candidate near the positive\u0027s score boundary; sourced from failure clusters of WeightedBaseline",
+      "HumanReviewRequired": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v9.4-shadow",
+      "CreatedAt": "2026-06-28T10:27:45.1531712\u002B00:00"
+    },
+    {
+      "CandidateSpecId": "hnc-0003-automation-20260529-001",
+      "SourceSampleId": "automation-20260529-001",
+      "SourceBaseline": "matrix-enumeration",
+      "TargetCandidateKind": "deprecated-doc",
+      "Rationale": "Enumerated candidate of kind \u0027deprecated-doc\u0027 near sample automation-20260529-001; pending human review before ingestion.",
+      "HumanReviewRequired": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v9.4-shadow",
+      "CreatedAt": "2026-06-28T10:27:45.1531712\u002B00:00"
+    },
+    {
+      "CandidateSpecId": "hnc-0004-automation-20260529-002",
+      "SourceSampleId": "automation-20260529-002",
+      "SourceBaseline": "matrix-enumeration",
+      "TargetCandidateKind": "stale-memory",
+      "Rationale": "Enumerated candidate of kind \u0027stale-memory\u0027 near sample automation-20260529-002; pending human review before ingestion.",
+      "HumanReviewRequired": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v9.4-shadow",
+      "CreatedAt": "2026-06-28T10:27:45.1531712\u002B00:00"
+    },
+    {
+      "CandidateSpecId": "hnc-0005-automation-20260529-003",
+      "SourceSampleId": "automation-20260529-003",
+      "SourceBaseline": "matrix-enumeration",
+      "TargetCandidateKind": "off-topic-memory",
+      "Rationale": "Enumerated candidate of kind \u0027off-topic-memory\u0027 near sample automation-20260529-003; pending human review before ingestion.",
+      "HumanReviewRequired": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v9.4-shadow",
+      "CreatedAt": "2026-06-28T10:27:45.1531712\u002B00:00"
+    },
+    {
+      "CandidateSpecId": "hnc-0006-automation-20260529-004",
+      "SourceSampleId": "automation-20260529-004",
+      "SourceBaseline": "matrix-enumeration",
+      "TargetCandidateKind": "duplicate-context",
+      "Rationale": "Enumerated candidate of kind \u0027duplicate-context\u0027 near sample automation-20260529-004; pending human review before ingestion.",
+      "HumanReviewRequired": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v9.4-shadow",
+      "CreatedAt": "2026-06-28T10:27:45.1531712\u002B00:00"
+    },
+    {
+      "CandidateSpecId": "hnc-0007-automation-20260529-005",
+      "SourceSampleId": "automation-20260529-005",
+      "SourceBaseline": "matrix-enumeration",
+      "TargetCandidateKind": "out-of-scope-snippet",
+      "Rationale": "Enumerated candidate of kind \u0027out-of-scope-snippet\u0027 near sample automation-20260529-005; pending human review before ingestion.",
+      "HumanReviewRequired": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v9.4-shadow",
+      "CreatedAt": "2026-06-28T10:27:45.1531712\u002B00:00"
+    },
+    {
+      "CandidateSpecId": "hnc-0008-automation-20260529-006",
+      "SourceSampleId": "automation-20260529-006",
+      "SourceBaseline": "matrix-enumeration",
+      "TargetCandidateKind": "deprecated-doc",
+      "Rationale": "Enumerated candidate of kind \u0027deprecated-doc\u0027 near sample automation-20260529-006; pending human review before ingestion.",
+      "HumanReviewRequired": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v9.4-shadow",
+      "CreatedAt": "2026-06-28T10:27:45.1531712\u002B00:00"
+    },
+    {
+      "CandidateSpecId": "hnc-0009-automation-20260529-007",
+      "SourceSampleId": "automation-20260529-007",
+      "SourceBaseline": "matrix-enumeration",
+      "TargetCandidateKind": "stale-memory",
+      "Rationale": "Enumerated candidate of kind \u0027stale-memory\u0027 near sample automation-20260529-007; pending human review before ingestion.",
+      "HumanReviewRequired": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v9.4-shadow",
+      "CreatedAt": "2026-06-28T10:27:45.1531712\u002B00:00"
+    },
+    {
+      "CandidateSpecId": "hnc-0010-automation-20260529-008",
+      "SourceSampleId": "automation-20260529-008",
+      "SourceBaseline": "matrix-enumeration",
+      "TargetCandidateKind": "off-topic-memory",
+      "Rationale": "Enumerated candidate of kind \u0027off-topic-memory\u0027 near sample automation-20260529-008; pending human review before ingestion.",
+      "HumanReviewRequired": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v9.4-shadow",
+      "CreatedAt": "2026-06-28T10:27:45.1531712\u002B00:00"
+    },
+    {
+      "CandidateSpecId": "hnc-0011-automation-20260529-009",
+      "SourceSampleId": "automation-20260529-009",
+      "SourceBaseline": "matrix-enumeration",
+      "TargetCandidateKind": "duplicate-context",
+      "Rationale": "Enumerated candidate of kind \u0027duplicate-context\u0027 near sample automation-20260529-009; pending human review before ingestion.",
+      "HumanReviewRequired": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v9.4-shadow",
+      "CreatedAt": "2026-06-28T10:27:45.1531712\u002B00:00"
+    },
+    {
+      "CandidateSpecId": "hnc-0012-automation-20260529-010",
+      "SourceSampleId": "automation-20260529-010",
+      "SourceBaseline": "matrix-enumeration",
+      "TargetCandidateKind": "out-of-scope-snippet",
+      "Rationale": "Enumerated candidate of kind \u0027out-of-scope-snippet\u0027 near sample automation-20260529-010; pending human review before ingestion.",
+      "HumanReviewRequired": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v9.4-shadow",
+      "CreatedAt": "2026-06-28T10:27:45.1531712\u002B00:00"
+    },
+    {
+      "CandidateSpecId": "hnc-0013-automation-sample-001",
+      "SourceSampleId": "automation-sample-001",
+      "SourceBaseline": "matrix-enumeration",
+      "TargetCandidateKind": "deprecated-doc",
+      "Rationale": "Enumerated candidate of kind \u0027deprecated-doc\u0027 near sample automation-sample-001; pending human review before ingestion.",
+      "HumanReviewRequired": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v9.4-shadow",
+      "CreatedAt": "2026-06-28T10:27:45.1531712\u002B00:00"
+    },
+    {
+      "CandidateSpecId": "hnc-0014-automation-sample-002",
+      "SourceSampleId": "automation-sample-002",
+      "SourceBaseline": "matrix-enumeration",
+      "TargetCandidateKind": "stale-memory",
+      "Rationale": "Enumerated candidate of kind \u0027stale-memory\u0027 near sample automation-sample-002; pending human review before ingestion.",
+      "HumanReviewRequired": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v9.4-shadow",
+      "CreatedAt": "2026-06-28T10:27:45.1531712\u002B00:00"
+    },
+    {
+      "CandidateSpecId": "hnc-0015-automation-sample-003",
+      "SourceSampleId": "automation-sample-003",
+      "SourceBaseline": "matrix-enumeration",
+      "TargetCandidateKind": "off-topic-memory",
+      "Rationale": "Enumerated candidate of kind \u0027off-topic-memory\u0027 near sample automation-sample-003; pending human review before ingestion.",
+      "HumanReviewRequired": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v9.4-shadow",
+      "CreatedAt": "2026-06-28T10:27:45.1531712\u002B00:00"
+    },
+    {
+      "CandidateSpecId": "hnc-0016-automation-sample-004",
+      "SourceSampleId": "automation-sample-004",
+      "SourceBaseline": "matrix-enumeration",
+      "TargetCandidateKind": "duplicate-context",
+      "Rationale": "Enumerated candidate of kind \u0027duplicate-context\u0027 near sample automation-sample-004; pending human review before ingestion.",
+      "HumanReviewRequired": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v9.4-shadow",
+      "CreatedAt": "2026-06-28T10:27:45.1531712\u002B00:00"
+    },
+    {
+      "CandidateSpecId": "hnc-0017-automation-sample-005",
+      "SourceSampleId": "automation-sample-005",
+      "SourceBaseline": "matrix-enumeration",
+      "TargetCandidateKind": "out-of-scope-snippet",
+      "Rationale": "Enumerated candidate of kind \u0027out-of-scope-snippet\u0027 near sample automation-sample-005; pending human review before ingestion.",
+      "HumanReviewRequired": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v9.4-shadow",
+      "CreatedAt": "2026-06-28T10:27:45.1531712\u002B00:00"
+    },
+    {
+      "CandidateSpecId": "hnc-0018-automation-sample-006",
+      "SourceSampleId": "automation-sample-006",
+      "SourceBaseline": "matrix-enumeration",
+      "TargetCandidateKind": "deprecated-doc",
+      "Rationale": "Enumerated candidate of kind \u0027deprecated-doc\u0027 near sample automation-sample-006; pending human review before ingestion.",
+      "HumanReviewRequired": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v9.4-shadow",
+      "CreatedAt": "2026-06-28T10:27:45.1531712\u002B00:00"
+    },
+    {
+      "CandidateSpecId": "hnc-0019-automation-sample-007",
+      "SourceSampleId": "automation-sample-007",
+      "SourceBaseline": "matrix-enumeration",
+      "TargetCandidateKind": "stale-memory",
+      "Rationale": "Enumerated candidate of kind \u0027stale-memory\u0027 near sample automation-sample-007; pending human review before ingestion.",
+      "HumanReviewRequired": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v9.4-shadow",
+      "CreatedAt": "2026-06-28T10:27:45.1531712\u002B00:00"
+    },
+    {
+      "CandidateSpecId": "hnc-0020-automation-sample-008",
+      "SourceSampleId": "automation-sample-008",
+      "SourceBaseline": "matrix-enumeration",
+      "TargetCandidateKind": "off-topic-memory",
+      "Rationale": "Enumerated candidate of kind \u0027off-topic-memory\u0027 near sample automation-sample-008; pending human review before ingestion.",
+      "HumanReviewRequired": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v9.4-shadow",
+      "CreatedAt": "2026-06-28T10:27:45.1531712\u002B00:00"
+    },
+    {
+      "CandidateSpecId": "hnc-0021-automation-sample-009",
+      "SourceSampleId": "automation-sample-009",
+      "SourceBaseline": "matrix-enumeration",
+      "TargetCandidateKind": "duplicate-context",
+      "Rationale": "Enumerated candidate of kind \u0027duplicate-context\u0027 near sample automation-sample-009; pending human review before ingestion.",
+      "HumanReviewRequired": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v9.4-shadow",
+      "CreatedAt": "2026-06-28T10:27:45.1531712\u002B00:00"
+    },
+    {
+      "CandidateSpecId": "hnc-0022-automation-sample-010",
+      "SourceSampleId": "automation-sample-010",
+      "SourceBaseline": "matrix-enumeration",
+      "TargetCandidateKind": "out-of-scope-snippet",
+      "Rationale": "Enumerated candidate of kind \u0027out-of-scope-snippet\u0027 near sample automation-sample-010; pending human review before ingestion.",
+      "HumanReviewRequired": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v9.4-shadow",
+      "CreatedAt": "2026-06-28T10:27:45.1531712\u002B00:00"
+    },
+    {
+      "CandidateSpecId": "hnc-0023-chat-20260529-001",
+      "SourceSampleId": "chat-20260529-001",
+      "SourceBaseline": "matrix-enumeration",
+      "TargetCandidateKind": "deprecated-doc",
+      "Rationale": "Enumerated candidate of kind \u0027deprecated-doc\u0027 near sample chat-20260529-001; pending human review before ingestion.",
+      "HumanReviewRequired": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v9.4-shadow",
+      "CreatedAt": "2026-06-28T10:27:45.1531712\u002B00:00"
+    },
+    {
+      "CandidateSpecId": "hnc-0024-chat-20260529-002",
+      "SourceSampleId": "chat-20260529-002",
+      "SourceBaseline": "matrix-enumeration",
+      "TargetCandidateKind": "stale-memory",
+      "Rationale": "Enumerated candidate of kind \u0027stale-memory\u0027 near sample chat-20260529-002; pending human review before ingestion.",
+      "HumanReviewRequired": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v9.4-shadow",
+      "CreatedAt": "2026-06-28T10:27:45.1531712\u002B00:00"
+    },
+    {
+      "CandidateSpecId": "hnc-0025-chat-20260529-003",
+      "SourceSampleId": "chat-20260529-003",
+      "SourceBaseline": "matrix-enumeration",
+      "TargetCandidateKind": "off-topic-memory",
+      "Rationale": "Enumerated candidate of kind \u0027off-topic-memory\u0027 near sample chat-20260529-003; pending human review before ingestion.",
+      "HumanReviewRequired": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v9.4-shadow",
+      "CreatedAt": "2026-06-28T10:27:45.1531712\u002B00:00"
+    },
+    {
+      "CandidateSpecId": "hnc-0026-chat-20260529-004",
+      "SourceSampleId": "chat-20260529-004",
+      "SourceBaseline": "matrix-enumeration",
+      "TargetCandidateKind": "duplicate-context",
+      "Rationale": "Enumerated candidate of kind \u0027duplicate-context\u0027 near sample chat-20260529-004; pending human review before ingestion.",
+      "HumanReviewRequired": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v9.4-shadow",
+      "CreatedAt": "2026-06-28T10:27:45.1531712\u002B00:00"
+    },
+    {
+      "CandidateSpecId": "hnc-0027-chat-20260529-005",
+      "SourceSampleId": "chat-20260529-005",
+      "SourceBaseline": "matrix-enumeration",
+      "TargetCandidateKind": "out-of-scope-snippet",
+      "Rationale": "Enumerated candidate of kind \u0027out-of-scope-snippet\u0027 near sample chat-20260529-005; pending human review before ingestion.",
+      "HumanReviewRequired": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v9.4-shadow",
+      "CreatedAt": "2026-06-28T10:27:45.1531712\u002B00:00"
+    },
+    {
+      "CandidateSpecId": "hnc-0028-chat-20260529-006",
+      "SourceSampleId": "chat-20260529-006",
+      "SourceBaseline": "matrix-enumeration",
+      "TargetCandidateKind": "deprecated-doc",
+      "Rationale": "Enumerated candidate of kind \u0027deprecated-doc\u0027 near sample chat-20260529-006; pending human review before ingestion.",
+      "HumanReviewRequired": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v9.4-shadow",
+      "CreatedAt": "2026-06-28T10:27:45.1531712\u002B00:00"
+    },
+    {
+      "CandidateSpecId": "hnc-0029-chat-20260529-007",
+      "SourceSampleId": "chat-20260529-007",
+      "SourceBaseline": "matrix-enumeration",
+      "TargetCandidateKind": "stale-memory",
+      "Rationale": "Enumerated candidate of kind \u0027stale-memory\u0027 near sample chat-20260529-007; pending human review before ingestion.",
+      "HumanReviewRequired": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v9.4-shadow",
+      "CreatedAt": "2026-06-28T10:27:45.1531712\u002B00:00"
+    },
+    {
+      "CandidateSpecId": "hnc-0030-chat-20260529-008",
+      "SourceSampleId": "chat-20260529-008",
+      "SourceBaseline": "matrix-enumeration",
+      "TargetCandidateKind": "off-topic-memory",
+      "Rationale": "Enumerated candidate of kind \u0027off-topic-memory\u0027 near sample chat-20260529-008; pending human review before ingestion.",
+      "HumanReviewRequired": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v9.4-shadow",
+      "CreatedAt": "2026-06-28T10:27:45.1531712\u002B00:00"
+    },
+    {
+      "CandidateSpecId": "hnc-0031-chat-20260529-009",
+      "SourceSampleId": "chat-20260529-009",
+      "SourceBaseline": "matrix-enumeration",
+      "TargetCandidateKind": "duplicate-context",
+      "Rationale": "Enumerated candidate of kind \u0027duplicate-context\u0027 near sample chat-20260529-009; pending human review before ingestion.",
+      "HumanReviewRequired": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v9.4-shadow",
+      "CreatedAt": "2026-06-28T10:27:45.1531712\u002B00:00"
+    },
+    {
+      "CandidateSpecId": "hnc-0032-chat-20260529-010",
+      "SourceSampleId": "chat-20260529-010",
+      "SourceBaseline": "matrix-enumeration",
+      "TargetCandidateKind": "out-of-scope-snippet",
+      "Rationale": "Enumerated candidate of kind \u0027out-of-scope-snippet\u0027 near sample chat-20260529-010; pending human review before ingestion.",
+      "HumanReviewRequired": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v9.4-shadow",
+      "CreatedAt": "2026-06-28T10:27:45.1531712\u002B00:00"
+    },
+    {
+      "CandidateSpecId": "hnc-0033-chat-20260529-011",
+      "SourceSampleId": "chat-20260529-011",
+      "SourceBaseline": "matrix-enumeration",
+      "TargetCandidateKind": "deprecated-doc",
+      "Rationale": "Enumerated candidate of kind \u0027deprecated-doc\u0027 near sample chat-20260529-011; pending human review before ingestion.",
+      "HumanReviewRequired": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v9.4-shadow",
+      "CreatedAt": "2026-06-28T10:27:45.1531712\u002B00:00"
+    },
+    {
+      "CandidateSpecId": "hnc-0034-chat-20260529-012",
+      "SourceSampleId": "chat-20260529-012",
+      "SourceBaseline": "matrix-enumeration",
+      "TargetCandidateKind": "stale-memory",
+      "Rationale": "Enumerated candidate of kind \u0027stale-memory\u0027 near sample chat-20260529-012; pending human review before ingestion.",
+      "HumanReviewRequired": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v9.4-shadow",
+      "CreatedAt": "2026-06-28T10:27:45.1531712\u002B00:00"
+    },
+    {
+      "CandidateSpecId": "hnc-0035-chat-20260529-013",
+      "SourceSampleId": "chat-20260529-013",
+      "SourceBaseline": "matrix-enumeration",
+      "TargetCandidateKind": "off-topic-memory",
+      "Rationale": "Enumerated candidate of kind \u0027off-topic-memory\u0027 near sample chat-20260529-013; pending human review before ingestion.",
+      "HumanReviewRequired": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v9.4-shadow",
+      "CreatedAt": "2026-06-28T10:27:45.1531712\u002B00:00"
+    },
+    {
+      "CandidateSpecId": "hnc-0036-chat-20260529-014",
+      "SourceSampleId": "chat-20260529-014",
+      "SourceBaseline": "matrix-enumeration",
+      "TargetCandidateKind": "duplicate-context",
+      "Rationale": "Enumerated candidate of kind \u0027duplicate-context\u0027 near sample chat-20260529-014; pending human review before ingestion.",
+      "HumanReviewRequired": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v9.4-shadow",
+      "CreatedAt": "2026-06-28T10:27:45.1531712\u002B00:00"
+    },
+    {
+      "CandidateSpecId": "hnc-0037-chat-20260529-015",
+      "SourceSampleId": "chat-20260529-015",
+      "SourceBaseline": "matrix-enumeration",
+      "TargetCandidateKind": "out-of-scope-snippet",
+      "Rationale": "Enumerated candidate of kind \u0027out-of-scope-snippet\u0027 near sample chat-20260529-015; pending human review before ingestion.",
+      "HumanReviewRequired": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v9.4-shadow",
+      "CreatedAt": "2026-06-28T10:27:45.1531712\u002B00:00"
+    },
+    {
+      "CandidateSpecId": "hnc-0038-chat-20260529-016",
+      "SourceSampleId": "chat-20260529-016",
+      "SourceBaseline": "matrix-enumeration",
+      "TargetCandidateKind": "deprecated-doc",
+      "Rationale": "Enumerated candidate of kind \u0027deprecated-doc\u0027 near sample chat-20260529-016; pending human review before ingestion.",
+      "HumanReviewRequired": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v9.4-shadow",
+      "CreatedAt": "2026-06-28T10:27:45.1531712\u002B00:00"
+    },
+    {
+      "CandidateSpecId": "hnc-0039-chat-20260529-017",
+      "SourceSampleId": "chat-20260529-017",
+      "SourceBaseline": "matrix-enumeration",
+      "TargetCandidateKind": "stale-memory",
+      "Rationale": "Enumerated candidate of kind \u0027stale-memory\u0027 near sample chat-20260529-017; pending human review before ingestion.",
+      "HumanReviewRequired": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v9.4-shadow",
+      "CreatedAt": "2026-06-28T10:27:45.1531712\u002B00:00"
+    },
+    {
+      "CandidateSpecId": "hnc-0040-chat-20260529-018",
+      "SourceSampleId": "chat-20260529-018",
+      "SourceBaseline": "matrix-enumeration",
+      "TargetCandidateKind": "off-topic-memory",
+      "Rationale": "Enumerated candidate of kind \u0027off-topic-memory\u0027 near sample chat-20260529-018; pending human review before ingestion.",
+      "HumanReviewRequired": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v9.4-shadow",
+      "CreatedAt": "2026-06-28T10:27:45.1531712\u002B00:00"
+    },
+    {
+      "CandidateSpecId": "hnc-0041-chat-20260529-019",
+      "SourceSampleId": "chat-20260529-019",
+      "SourceBaseline": "matrix-enumeration",
+      "TargetCandidateKind": "duplicate-context",
+      "Rationale": "Enumerated candidate of kind \u0027duplicate-context\u0027 near sample chat-20260529-019; pending human review before ingestion.",
+      "HumanReviewRequired": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v9.4-shadow",
+      "CreatedAt": "2026-06-28T10:27:45.1531712\u002B00:00"
+    },
+    {
+      "CandidateSpecId": "hnc-0042-chat-20260529-020",
+      "SourceSampleId": "chat-20260529-020",
+      "SourceBaseline": "matrix-enumeration",
+      "TargetCandidateKind": "out-of-scope-snippet",
+      "Rationale": "Enumerated candidate of kind \u0027out-of-scope-snippet\u0027 near sample chat-20260529-020; pending human review before ingestion.",
+      "HumanReviewRequired": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v9.4-shadow",
+      "CreatedAt": "2026-06-28T10:27:45.1531712\u002B00:00"
+    },
+    {
+      "CandidateSpecId": "hnc-0043-chat-sample-001",
+      "SourceSampleId": "chat-sample-001",
+      "SourceBaseline": "matrix-enumeration",
+      "TargetCandidateKind": "deprecated-doc",
+      "Rationale": "Enumerated candidate of kind \u0027deprecated-doc\u0027 near sample chat-sample-001; pending human review before ingestion.",
+      "HumanReviewRequired": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v9.4-shadow",
+      "CreatedAt": "2026-06-28T10:27:45.1531712\u002B00:00"
+    },
+    {
+      "CandidateSpecId": "hnc-0044-chat-sample-002",
+      "SourceSampleId": "chat-sample-002",
+      "SourceBaseline": "matrix-enumeration",
+      "TargetCandidateKind": "stale-memory",
+      "Rationale": "Enumerated candidate of kind \u0027stale-memory\u0027 near sample chat-sample-002; pending human review before ingestion.",
+      "HumanReviewRequired": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v9.4-shadow",
+      "CreatedAt": "2026-06-28T10:27:45.1531712\u002B00:00"
+    },
+    {
+      "CandidateSpecId": "hnc-0045-chat-sample-003",
+      "SourceSampleId": "chat-sample-003",
+      "SourceBaseline": "matrix-enumeration",
+      "TargetCandidateKind": "off-topic-memory",
+      "Rationale": "Enumerated candidate of kind \u0027off-topic-memory\u0027 near sample chat-sample-003; pending human review before ingestion.",
+      "HumanReviewRequired": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v9.4-shadow",
+      "CreatedAt": "2026-06-28T10:27:45.1531712\u002B00:00"
+    },
+    {
+      "CandidateSpecId": "hnc-0046-chat-sample-004",
+      "SourceSampleId": "chat-sample-004",
+      "SourceBaseline": "matrix-enumeration",
+      "TargetCandidateKind": "duplicate-context",
+      "Rationale": "Enumerated candidate of kind \u0027duplicate-context\u0027 near sample chat-sample-004; pending human review before ingestion.",
+      "HumanReviewRequired": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v9.4-shadow",
+      "CreatedAt": "2026-06-28T10:27:45.1531712\u002B00:00"
+    },
+    {
+      "CandidateSpecId": "hnc-0047-chat-sample-005",
+      "SourceSampleId": "chat-sample-005",
+      "SourceBaseline": "matrix-enumeration",
+      "TargetCandidateKind": "out-of-scope-snippet",
+      "Rationale": "Enumerated candidate of kind \u0027out-of-scope-snippet\u0027 near sample chat-sample-005; pending human review before ingestion.",
+      "HumanReviewRequired": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v9.4-shadow",
+      "CreatedAt": "2026-06-28T10:27:45.1531712\u002B00:00"
+    },
+    {
+      "CandidateSpecId": "hnc-0048-chat-sample-006",
+      "SourceSampleId": "chat-sample-006",
+      "SourceBaseline": "matrix-enumeration",
+      "TargetCandidateKind": "deprecated-doc",
+      "Rationale": "Enumerated candidate of kind \u0027deprecated-doc\u0027 near sample chat-sample-006; pending human review before ingestion.",
+      "HumanReviewRequired": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v9.4-shadow",
+      "CreatedAt": "2026-06-28T10:27:45.1531712\u002B00:00"
+    },
+    {
+      "CandidateSpecId": "hnc-0049-chat-sample-007",
+      "SourceSampleId": "chat-sample-007",
+      "SourceBaseline": "matrix-enumeration",
+      "TargetCandidateKind": "stale-memory",
+      "Rationale": "Enumerated candidate of kind \u0027stale-memory\u0027 near sample chat-sample-007; pending human review before ingestion.",
+      "HumanReviewRequired": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v9.4-shadow",
+      "CreatedAt": "2026-06-28T10:27:45.1531712\u002B00:00"
+    },
+    {
+      "CandidateSpecId": "hnc-0050-chat-sample-008",
+      "SourceSampleId": "chat-sample-008",
+      "SourceBaseline": "matrix-enumeration",
+      "TargetCandidateKind": "off-topic-memory",
+      "Rationale": "Enumerated candidate of kind \u0027off-topic-memory\u0027 near sample chat-sample-008; pending human review before ingestion.",
+      "HumanReviewRequired": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v9.4-shadow",
+      "CreatedAt": "2026-06-28T10:27:45.1531712\u002B00:00"
+    },
+    {
+      "CandidateSpecId": "hnc-0051-chat-sample-009",
+      "SourceSampleId": "chat-sample-009",
+      "SourceBaseline": "matrix-enumeration",
+      "TargetCandidateKind": "duplicate-context",
+      "Rationale": "Enumerated candidate of kind \u0027duplicate-context\u0027 near sample chat-sample-009; pending human review before ingestion.",
+      "HumanReviewRequired": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v9.4-shadow",
+      "CreatedAt": "2026-06-28T10:27:45.1531712\u002B00:00"
+    },
+    {
+      "CandidateSpecId": "hnc-0052-chat-sample-010",
+      "SourceSampleId": "chat-sample-010",
+      "SourceBaseline": "matrix-enumeration",
+      "TargetCandidateKind": "out-of-scope-snippet",
+      "Rationale": "Enumerated candidate of kind \u0027out-of-scope-snippet\u0027 near sample chat-sample-010; pending human review before ingestion.",
+      "HumanReviewRequired": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v9.4-shadow",
+      "CreatedAt": "2026-06-28T10:27:45.1531712\u002B00:00"
+    },
+    {
+      "CandidateSpecId": "hnc-0053-coding-20260529-001",
+      "SourceSampleId": "coding-20260529-001",
+      "SourceBaseline": "matrix-enumeration",
+      "TargetCandidateKind": "deprecated-doc",
+      "Rationale": "Enumerated candidate of kind \u0027deprecated-doc\u0027 near sample coding-20260529-001; pending human review before ingestion.",
+      "HumanReviewRequired": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v9.4-shadow",
+      "CreatedAt": "2026-06-28T10:27:45.1531712\u002B00:00"
+    },
+    {
+      "CandidateSpecId": "hnc-0054-coding-20260529-002",
+      "SourceSampleId": "coding-20260529-002",
+      "SourceBaseline": "matrix-enumeration",
+      "TargetCandidateKind": "stale-memory",
+      "Rationale": "Enumerated candidate of kind \u0027stale-memory\u0027 near sample coding-20260529-002; pending human review before ingestion.",
+      "HumanReviewRequired": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v9.4-shadow",
+      "CreatedAt": "2026-06-28T10:27:45.1531712\u002B00:00"
+    },
+    {
+      "CandidateSpecId": "hnc-0055-coding-20260529-003",
+      "SourceSampleId": "coding-20260529-003",
+      "SourceBaseline": "matrix-enumeration",
+      "TargetCandidateKind": "off-topic-memory",
+      "Rationale": "Enumerated candidate of kind \u0027off-topic-memory\u0027 near sample coding-20260529-003; pending human review before ingestion.",
+      "HumanReviewRequired": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v9.4-shadow",
+      "CreatedAt": "2026-06-28T10:27:45.1531712\u002B00:00"
+    },
+    {
+      "CandidateSpecId": "hnc-0056-coding-20260529-004",
+      "SourceSampleId": "coding-20260529-004",
+      "SourceBaseline": "matrix-enumeration",
+      "TargetCandidateKind": "duplicate-context",
+      "Rationale": "Enumerated candidate of kind \u0027duplicate-context\u0027 near sample coding-20260529-004; pending human review before ingestion.",
+      "HumanReviewRequired": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v9.4-shadow",
+      "CreatedAt": "2026-06-28T10:27:45.1531712\u002B00:00"
+    },
+    {
+      "CandidateSpecId": "hnc-0057-coding-20260529-005",
+      "SourceSampleId": "coding-20260529-005",
+      "SourceBaseline": "matrix-enumeration",
+      "TargetCandidateKind": "out-of-scope-snippet",
+      "Rationale": "Enumerated candidate of kind \u0027out-of-scope-snippet\u0027 near sample coding-20260529-005; pending human review before ingestion.",
+      "HumanReviewRequired": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v9.4-shadow",
+      "CreatedAt": "2026-06-28T10:27:45.1531712\u002B00:00"
+    },
+    {
+      "CandidateSpecId": "hnc-0058-coding-20260529-006",
+      "SourceSampleId": "coding-20260529-006",
+      "SourceBaseline": "matrix-enumeration",
+      "TargetCandidateKind": "deprecated-doc",
+      "Rationale": "Enumerated candidate of kind \u0027deprecated-doc\u0027 near sample coding-20260529-006; pending human review before ingestion.",
+      "HumanReviewRequired": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v9.4-shadow",
+      "CreatedAt": "2026-06-28T10:27:45.1531712\u002B00:00"
+    },
+    {
+      "CandidateSpecId": "hnc-0059-coding-20260529-007",
+      "SourceSampleId": "coding-20260529-007",
+      "SourceBaseline": "matrix-enumeration",
+      "TargetCandidateKind": "stale-memory",
+      "Rationale": "Enumerated candidate of kind \u0027stale-memory\u0027 near sample coding-20260529-007; pending human review before ingestion.",
+      "HumanReviewRequired": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v9.4-shadow",
+      "CreatedAt": "2026-06-28T10:27:45.1531712\u002B00:00"
+    }
+  ],
+  "RouterIntentRepairPlan": {
+    "UnderrepresentedLabels": [
+      "ConflictCheck (count=2)",
+      "CurrentTask (count=6)",
+      "LongTermPreference (count=1)"
+    ],
+    "ConfusingLabelPairs": [
+      "CodingTask-\u003EAuditDeprecated (count=5)",
+      "CodingTask-\u003EFuzzyQuestion (count=5)",
+      "AuditDeprecated-\u003EFuzzyQuestion (count=2)",
+      "AutomationRecovery-\u003EAuditDeprecated (count=2)",
+      "AutomationRecovery-\u003EFuzzyQuestion (count=2)",
+      "NovelGeneration-\u003EFuzzyQuestion (count=2)",
+      "FuzzyQuestion-\u003EAuditDeprecated (count=1)",
+      "NovelGeneration-\u003EAuditDeprecated (count=1)"
+    ],
+    "FeaturesNeedingEnrichment": [
+      "queryTopicEmbedding (not present today)",
+      "intentLifecycleStage (not present today)",
+      "modeXIntentContextSimilarity (not present today)",
+      "policyFeedbackSignal (currently empty \u2014 see feedback ingestion contract)"
+    ],
+    "RequiredNewExampleCount": 163,
+    "ProposalMode": "ShadowProposalOnly",
+    "RuntimeRouterChanged": false,
+    "RouterLabelSchemaChanged": false
+  },
+  "FeedbackIngestionContract": {
+    "SchemaVersion": "v9.5-feedback-ingestion/v1",
+    "Fields": [
+      {
+        "FieldName": "sampleId",
+        "Type": "string",
+        "Required": true,
+        "Description": "Eval sample / example id from V9.0 dataset inventory."
+      },
+      {
+        "FieldName": "taskFamily",
+        "Type": "string",
+        "Required": true,
+        "Description": "One of CandidateReranker / RouterIntentClassifier / PackageQuality / MemoryPromotion / ConstraintGap."
+      },
+      {
+        "FieldName": "failureType",
+        "Type": "string",
+        "Required": true,
+        "Description": "missed-positive / wrong-intent / over-ranked-negative / coverage-gap / etc."
+      },
+      {
+        "FieldName": "proposedLabel",
+        "Type": "string",
+        "Required": true,
+        "Description": "Human-proposed correct label for the sample."
+      },
+      {
+        "FieldName": "confidence",
+        "Type": "double",
+        "Required": true,
+        "Description": "Reviewer confidence 0..1 \u2014 feeds into V9.7 promotion readiness scoring."
+      },
+      {
+        "FieldName": "reviewStatus",
+        "Type": "string",
+        "Required": true,
+        "Description": "Pending / Approved / Rejected."
+      },
+      {
+        "FieldName": "approvedBy",
+        "Type": "string",
+        "Required": false,
+        "Description": "Reviewer id; required when reviewStatus=Approved."
+      },
+      {
+        "FieldName": "source",
+        "Type": "string",
+        "Required": true,
+        "Description": "Human / V9.4-LLM-diagnosis / V9.4-hard-negative-generation."
+      },
+      {
+        "FieldName": "submittedAt",
+        "Type": "datetime",
+        "Required": true,
+        "Description": "ISO-8601 submission timestamp."
+      }
+    ],
+    "HumanReviewRequired": true,
+    "AutoIngest": false,
+    "ShadowOnly": true,
+    "RuntimeAuthority": false,
+    "GateAuthority": false,
+    "Notes": "Approved feedback may only enter shadow training set after V9.7 promotion readiness gate passes. No runtime authority; no gate authority."
+  },
+  "FutureTaskFamilyReadinessPlans": [
+    {
+      "TaskFamily": "PackageQuality",
+      "ReadinessStatus": "NotReadyWithPlan",
+      "NotReadyReason": "policy-feedback-features dataset is empty; no signal to train PackageQuality shadow scorer.",
+      "MissingRequirements": [
+        "Populate policy-feedback-features.jsonl with \u226550 human-reviewed feedback entries (via V9.5 feedback ingestion contract).",
+        "Define PackageQuality target labels (e.g. CoverageOK / ConstraintMissing / EntityMissing).",
+        "Add coverage/constraint/entity completeness features per package."
+      ],
+      "NextSteps": [
+        "After V9.7 promotion readiness, accumulate \u226550 approved feedback samples.",
+        "Train shadow PackageQualityScorer using exported feedback dataset.",
+        "Run shadow eval against ranking-pairs to validate scorer signal alignment."
+      ],
+      "ShadowOnly": true,
+      "RuntimeAuthority": false,
+      "GateAuthority": false
+    },
+    {
+      "TaskFamily": "MemoryPromotion",
+      "ReadinessStatus": "NotReadyWithPlan",
+      "NotReadyReason": "No dedicated memory-shadow lifecycle dataset yet; memory promotion features (recency, semantic anchor, lifecycle stage) need to be exported.",
+      "MissingRequirements": [
+        "Export memory-shadow lifecycle features per memory candidate (recency, anchor, lifecycle stage).",
+        "Define promotion targets (Promote / KeepStable / Demote / Archive).",
+        "Generate paired (memory-id, lifecycle-decision) examples from existing memory traffic."
+      ],
+      "NextSteps": [
+        "Add memory-shadow feature export pipeline.",
+        "Define labeling schema with human review.",
+        "Once \u2265100 labeled memory promotion examples exist, train shadow promoter."
+      ],
+      "ShadowOnly": true,
+      "RuntimeAuthority": false,
+      "GateAuthority": false
+    },
+    {
+      "TaskFamily": "ConstraintGap",
+      "ReadinessStatus": "NotReadyWithPlan",
+      "NotReadyReason": "policy-feedback-features dataset lacks structured missing-constraint / missing-entity / missing-uncertainty annotations.",
+      "MissingRequirements": [
+        "Add missingConstraintCount / missingEntityCount / missingUncertaintyCount fields to feedback schema.",
+        "Capture human reviewer\u0027s structured gap annotations.",
+        "Generate at least 50 gap-annotated samples per package failure mode."
+      ],
+      "NextSteps": [
+        "Extend V9.5 feedback ingestion contract with structured gap fields.",
+        "Train shadow gap detector once data threshold met.",
+        "Validate gap detector against V9.1-V9.3 failure clusters."
+      ],
+      "ShadowOnly": true,
+      "RuntimeAuthority": false,
+      "GateAuthority": false
+    }
+  ],
+  "FailureDiagnosisInputPackReady": true,
+  "FailureClustersGenerated": true,
+  "CandidateFailureDeduplicated": true,
+  "RouterFailureDeduplicated": true,
+  "HardNegativeExpansionReady": true,
+  "HardNegativeCandidateCount": 60,
+  "HumanReviewRequired": true,
+  "AutoIngest": false,
+  "RouterIntentRepairPlanReady": true,
+  "FeedbackIngestionContractReady": true,
+  "PackageQualityReadinessPlanReady": true,
+  "MemoryPromotionReadinessPlanReady": true,
+  "ConstraintGapReadinessPlanReady": true,
+  "LLMAuthority": false,
+  "RuntimeAuthority": false,
+  "GateAuthority": false,
+  "RuntimeRerankerChanged": false,
+  "RuntimeRouterChanged": false,
+  "PackageOutputChanged": false,
+  "FormalPackageWritten": false,
+  "GlobalDefaultOn": false,
+  "V8ScopedActivationPreserved": true,
+  "UpstreamShadowImplementationPackGatePresent": true,
+  "UpstreamShadowImplementationPackGatePassed": true,
+  "MainlineEvidencePresent": false,
+  "MainlineTrustRegistryPresent": false,
+  "FailureDiagnosisInputPackPath": "learning/v9/failure-diagnosis-input-pack.json",
+  "HardNegativeExpansionCandidatesPath": "learning/v9/hard-negative-expansion-candidates.jsonl",
+  "RouterIntentRepairPlanPath": "learning/v9/router-intent-repair-plan.json",
+  "FeedbackIngestionContractPath": "learning/v9/feedback-ingestion-contract.json",
+  "Recommendation": "ProceedToV9.7ShadowPromotionReadiness",
+  "NextAllowedPhase": "V9.7ShadowPromotionReadiness",
+  "BlockedReasons": [],
+  "Diagnostics": [
+    "total=21",
+    "realStatus=LearningFailureDiagnosisAndFeedbackLoopPackReady",
+    "failureClusterCount=3",
+    "hardNegativeCandidateCount=60",
+    "futureTaskFamilyPlanCount=3",
+    "runtimeGate=True",
+    "p15Gate=True"
+  ]
+}

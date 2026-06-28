@@ -1499,6 +1499,67 @@ public static partial class EvalCommand
         Console.WriteLine($"[Eval] Learning shadow implementation pack written: {jp}");
         Console.WriteLine($"[Eval] shadowImplementationPackPassed={report.ShadowImplementationPackPassed}; gatePassed={report.GatePassed}; total={report.TotalCases} ready={report.ReadyCases} blocked={report.BlockedCases} bestRanker={report.ShadowComparisonSummary.BestRankerCandidate}({report.ShadowComparisonSummary.BestRankerPairwiseAccuracy:F3}) bestRouter={report.ShadowComparisonSummary.BestRouterCandidate}({report.ShadowComparisonSummary.BestRouterAccuracy:F3}) shadowOnly={report.ShadowOnly} recommendation={report.Recommendation} nextPhase={report.NextAllowedPhase}");
     }
+
+    private static async Task ExecuteLearningFailureDiagnosisAndFeedbackLoopPackAsync(
+        IReadOnlyList<string> args, string subcommand, CancellationToken ct)
+    {
+        var output = Path.GetFullPath(Path.Combine("learning", "v9"));
+        Directory.CreateDirectory(output);
+        var rtPath = Path.Combine("learning", "readiness", "learning-runtime-change-readiness-gate.json");
+        var rtGate = await ReadJsonFileAsync<LearningRuntimeChangeReadinessGateReport>(rtPath, ct).ConfigureAwait(false);
+        var rtPassed = rtGate is not null && rtGate.Passed;
+        var p15Path = Path.Combine("eval", "eval-report-p15-a3.json");
+        var p15 = await ReadJsonFileAsync<JsonDocument>(p15Path, ct).ConfigureAwait(false);
+        var p15Passed = false;
+        if (p15 is not null && p15.RootElement.TryGetProperty("PassRate", out var pr)) p15Passed = pr.GetDouble() >= 1.0;
+        var mainlineEvPath = Path.Combine("vector", "v8", "formal-retrieval-promotion-approval-evidence.json");
+        var mainlineRegPath = Path.Combine("vector", "v8", "formal-retrieval-promotion-approval-trust-registry.json");
+        var mainlineEvPresent = File.Exists(mainlineEvPath);
+        var mainlineRegPresent = File.Exists(mainlineRegPath);
+
+        var shadowPackPath = Path.Combine("learning", "v9", "shadow-implementation-pack-gate.json");
+        var shadowPack = await ReadJsonFileAsync<LearningShadowImplementationPackReport>(shadowPackPath, ct).ConfigureAwait(false);
+        var summaryPath = Path.Combine("learning", "v9", "shadow-comparison-summary.json");
+        var summaryPresent = File.Exists(summaryPath);
+        var failureSamplesDir = Path.Combine("learning", "v9", "failure-samples");
+        var rankerFailuresPath = Path.Combine(failureSamplesDir, "candidate-reranker-failures.jsonl");
+        var routerFailuresPath = Path.Combine(failureSamplesDir, "router-intent-failures.jsonl");
+        var failureSampleFilesPresent = File.Exists(rankerFailuresPath) && File.Exists(routerFailuresPath);
+
+        var rankerPairs = LearningShadowImplementationPackRunner.LoadRankerPairs(Path.Combine("learning", "features", "ranking-pairs.jsonl"));
+        var routerExamples = LearningShadowImplementationPackRunner.LoadRouterExamples(Path.Combine("learning", "features", "router-intent-examples.jsonl"));
+        var hardNegativesPath = Path.Combine("learning", "features", "hard-negatives.jsonl");
+        var hardNegativeCount = File.Exists(hardNegativesPath) ? File.ReadAllLines(hardNegativesPath).Count(static l => !string.IsNullOrWhiteSpace(l)) : 0;
+        var policyFeedbackPath = Path.Combine("learning", "features", "policy-feedback-features.jsonl");
+        var policyFeedbackCount = File.Exists(policyFeedbackPath) ? File.ReadAllLines(policyFeedbackPath).Count(static l => !string.IsNullOrWhiteSpace(l)) : 0;
+
+        var realContext = new LearningFailureDiagnosisAndFeedbackLoopPackContext
+        {
+            ShadowPackPresent = shadowPack is not null,
+            ShadowPackPassed = shadowPack?.GatePassed ?? false,
+            ShadowComparisonSummaryPresent = summaryPresent,
+            FailureSampleFilesPresent = failureSampleFilesPresent,
+            V8ScopedActivationPreserved = shadowPack?.V8ScopedActivationPreserved ?? false,
+            HumanReviewRequiredOverride = true
+        };
+
+        var isGate = string.Equals(subcommand, "learning-failure-diagnosis-feedback-loop-pack-gate", StringComparison.OrdinalIgnoreCase);
+        var opt = new LearningFailureDiagnosisAndFeedbackLoopPackOptions
+        {
+            IsGate = isGate,
+            Enabled = !CommandHelpers.HasFlag(args, "--disabled")
+        };
+        var runner = new LearningFailureDiagnosisAndFeedbackLoopPackRunner();
+        var report = runner.Run(realContext, failureSamplesDir, output, rankerPairs, routerExamples, hardNegativeCount, policyFeedbackCount, rtPassed, p15Passed, mainlineEvPresent, mainlineRegPresent, opt);
+        var fn = isGate ? "failure-diagnosis-feedback-loop-pack-gate" : "failure-diagnosis-feedback-loop-pack";
+        var jp = Path.Combine(output, $"{fn}.json");
+        var mp = Path.Combine(output, $"{fn}.md");
+        await WriteJsonSafeAsync(report, jp, ct).ConfigureAwait(false);
+        await WriteTextAsync(LearningFailureDiagnosisAndFeedbackLoopPackRunner.BuildMarkdown(
+            isGate ? "Learning Failure Diagnosis + Feedback Loop Pack (Gate)" : "Learning Failure Diagnosis + Feedback Loop Pack", report), mp, ct).ConfigureAwait(false);
+        Console.WriteLine($"[Eval] Learning failure diagnosis + feedback loop pack written: {jp}");
+        Console.WriteLine($"[Eval] failureDiagnosisFeedbackLoopPackPassed={report.FailureDiagnosisFeedbackLoopPackPassed}; gatePassed={report.GatePassed}; total={report.TotalCases} ready={report.ReadyCases} blocked={report.BlockedCases} clusters={report.FailureDiagnosisInputPack.Clusters.Count} hardNegCount={report.HardNegativeCandidateCount} humanReview={report.HumanReviewRequired} autoIngest={report.AutoIngest} recommendation={report.Recommendation} nextPhase={report.NextAllowedPhase}");
+    }
     private static bool ValidateTemplateFields(string jsonContent, string[] fieldPaths, List<string> missing, List<string> nonPlaceholder)
     {
         var doc = System.Text.Json.JsonDocument.Parse(jsonContent);
