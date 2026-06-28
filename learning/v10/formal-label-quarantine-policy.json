@@ -1,0 +1,32 @@
+﻿{
+  "PolicyVersion": "v10.19-formal-label-quarantine/v1",
+  "QuarantineTriggers": [
+    "IntegrityManifest hash mismatch detected post-staging",
+    "Evidence path becomes invalid (source ranking pair removed/rewritten)",
+    "Downstream pilot detects regression vs reference under repaired scoring",
+    "Operator manual quarantine request",
+    "Counterexample replay shows \u003E5% additional failure rate vs reference"
+  ],
+  "QuarantineActions": [
+    "Move affected staged row to learning/v10/staged-formal-hard-negatives-quarantine/ with timestamped subdir.",
+    "Mark LifecycleState=Quarantined in the staging decision.",
+    "Notify operators via signal channel (not gate authority).",
+    "Refuse to include quarantined rows in any subsequent diff preview or ingestion attempt.",
+    "Refuse to silently delete; quarantined rows persist on disk until explicit operator review."
+  ],
+  "ReleaseConditions": [
+    "Hash recomputed and verified against original binding.",
+    "Evidence path verified to exist and still match expectedPreference.",
+    "Counterexample replay confirms candidate failure rate \u003C= reference failure rate.",
+    "Operator releases via V9.5 ingestion contract (not auto-released)."
+  ],
+  "RejectedAuthorityClaims": [
+    "Quarantine policy CANNOT auto-release rows without operator review.",
+    "Quarantine policy CANNOT silently delete quarantined rows.",
+    "Quarantine policy CANNOT modify learning/features/hard-negatives.jsonl.",
+    "Quarantine policy CANNOT grant ML/LLM/Runtime/Gate authority."
+  ],
+  "QuarantineLocation": "learning/v10/staged-formal-hard-negatives-quarantine/",
+  "FormalTrainingSetChanged": false,
+  "AutoIngest": false
+}

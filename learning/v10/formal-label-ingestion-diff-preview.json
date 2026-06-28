@@ -1,0 +1,25 @@
+﻿{
+  "DiffMode": "PreviewOnlyNoApply",
+  "FormalDatasetPath": "learning\\features\\hard-negatives.jsonl",
+  "FormalDatasetLineCountBefore": 18,
+  "StagedRowCount": 60,
+  "WouldAddCount": 60,
+  "WouldSkipDuplicateCount": 0,
+  "WouldRejectInvalidCount": 0,
+  "FormalDatasetLineCountAfterIfApplied": 78,
+  "FormalTrainingSetChanged": false,
+  "AutoIngest": false,
+  "SampleAddedRows": [
+    "sfh-0000-ebsl-0000-automation-sample-010 (hash=be4befd2631de048...)",
+    "sfh-0001-ebsl-0001-chat-sample-003 (hash=639f6d6dd0e7e0d2...)",
+    "sfh-0002-ebsl-0002-novel-sample-008 (hash=6ef7564adb477a5d...)"
+  ],
+  "Notes": [
+    "Formal dataset path: learning\\features\\hard-negatives.jsonl",
+    "Current formal dataset line count: 18",
+    "Staged rows: 60",
+    "If applied, formal dataset would grow to 78 lines.",
+    "This diff is read-only. FormalTrainingSetChanged=false. AutoIngest=false. No write performed.",
+    "Schema bridge between staged jsonl (v10.19 with hash) and formal hard-negatives.jsonl (legacy schema) requires V9.5 ingestion to translate fields."
+  ]
+}

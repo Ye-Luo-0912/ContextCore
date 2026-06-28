@@ -1,0 +1,27 @@
+﻿{
+  "PlanVersion": "v10.19-rollback-snapshot-plan/v1",
+  "PlanMode": "PlanOnlyNoSnapshotTaken",
+  "FormalDatasetPath": "learning\\features\\hard-negatives.jsonl",
+  "PlannedSnapshotPath": "learning/v10/staged-formal-hard-negatives-snapshots/hard-negatives-{timestamp}.snapshot.jsonl",
+  "PlannedSnapshotAlgorithm": "SHA-256",
+  "FormalDatasetCurrentHash": "51a3b89d5b72a7b2b63ab470d7b40f8679f5276a2f7f1d948d20d4fbdf4fed14",
+  "FormalDatasetCurrentLineCount": 18,
+  "SnapshotProcedure": [
+    "Step 1: Compute SHA-256 of current formal dataset; record hash \u002B line count.",
+    "Step 2: Copy current formal dataset to learning/v10/staged-formal-hard-negatives-snapshots/ with timestamped filename.",
+    "Step 3: Compute SHA-256 of copied snapshot; verify it matches Step 1.",
+    "Step 4: Record snapshot path \u002B hash in V8.18 rollback binding artifact.",
+    "Step 5: Emit V8.18-style audit event referencing snapshot path."
+  ],
+  "RestoreProcedure": [
+    "Step 1: Verify rollback request references a snapshot in the V8.18 rollback binding registry.",
+    "Step 2: Verify snapshot hash matches the recorded hash; refuse otherwise.",
+    "Step 3: Atomically replace formal dataset with snapshot content (rename \u2192 move pattern).",
+    "Step 4: Emit V8.18-style revocation record referencing all retracted labels.",
+    "Step 5: Notify operators (signal only, not authority)."
+  ],
+  "SnapshotTaken": false,
+  "FormalTrainingSetChanged": false,
+  "V818RollbackBindingReference": "vector/v8/runtime-activation/activation-rollback-binding-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+  "V818RevocationRecordReference": "vector/v8/dedicated-crossing/revocation-record-FormalRetrievalActivation-demo-workspace-demo-collection.json"
+}

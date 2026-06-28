@@ -1,0 +1,39 @@
+﻿{
+  "DecisionId": "v10-formal-label-ingestion-staging-decision-e74e17968ba841dcbe79094c7fa6f8e6",
+  "CreatedAt": "2026-06-28T17:06:31.2099819\u002B00:00",
+  "StagedFormalLabelCount": 60,
+  "InvalidCandidateCount": 0,
+  "HashMismatchCount": 0,
+  "StagingDatasetReady": true,
+  "DiffPreviewReady": true,
+  "RollbackSnapshotPlanReady": true,
+  "QuarantinePolicyReady": true,
+  "StagingOnly": true,
+  "StagedLabelsAreFormal": false,
+  "FormalTrainingSetChanged": false,
+  "AutoIngest": false,
+  "HumanFeedbackAsSignal": true,
+  "HumanReviewAsGateAuthority": false,
+  "FormalIngestionApplied": false,
+  "RuntimePilotExecutionReadyForSeparateGate": false,
+  "BlockedForFormalIngestionBy": [
+    "FormalIngestionNotApplied: staging is the buffer, V9.5 controlled ingestion is required to write to formal dataset.",
+    "RollbackSnapshotNotTaken: PlannedSnapshotPath is described but actual copy has not been executed."
+  ],
+  "AIArbitration": false,
+  "EvidenceSourcesConsidered": [
+    "learning/v10/formal-evidence-realization-pack-gate.json",
+    "learning/v10/formal-label-candidates.jsonl",
+    "learning/v10/formal-label-integrity-manifest.json",
+    "learning/v10/formal-label-realization-decision.json",
+    "learning/v10/formal-label-rollback-contract.json"
+  ],
+  "DecisionNotes": [
+    "Staged rows: 60 (all sourced from V10.16 eligible \u002B integrity-verified candidates).",
+    "Diff preview: would add 60 rows, skip 0 duplicates, reject 0 invalid.",
+    "Rollback snapshot plan published; SnapshotTaken=False.",
+    "Quarantine policy published; 5 triggers / 4 release conditions.",
+    "Staging is a BUFFER. Formal dataset (learning/features/hard-negatives.jsonl) was NOT modified.",
+    "FormalIngestionApplied=false; RuntimePilotExecutionReadyForSeparateGate=false until V9.5 actually writes the formal dataset under controlled human review."
+  ]
+}

@@ -2030,6 +2030,61 @@ public static partial class EvalCommand
         Console.WriteLine($"[Eval] formalEvidenceRealizationPackPassed={report.FormalEvidenceRealizationPackPassed}; gatePassed={report.GatePassed}; total={report.TotalCases} ready={report.ReadyCases} blocked={report.BlockedCases} candidates={report.FormalLabelCandidateCount} realizable={report.RealizableFormalLabelCount} invalid={report.InvalidBindingCount} verified={report.FormalLabelIntegrityManifest.VerifiedEntries} mismatched={report.FormalLabelIntegrityManifest.MismatchedEntries} formalRealized={report.FormalLabelsRealized} formalSufficient={report.FormalEvidenceSufficient} pilotReady={report.RuntimePilotExecutionReadyForSeparateGate} blockedExecBy=[{string.Join(',', report.BlockedForRuntimePilotExecutionBy)}] recommendation={report.Recommendation}");
     }
 
+    private static async Task ExecuteLearningControlledFormalLabelIngestionStagingPackAsync(
+        IReadOnlyList<string> args, string subcommand, CancellationToken ct)
+    {
+        var output = Path.GetFullPath(Path.Combine("learning", "v10"));
+        Directory.CreateDirectory(output);
+        var rtPath = Path.Combine("learning", "readiness", "learning-runtime-change-readiness-gate.json");
+        var rtGate = await ReadJsonFileAsync<LearningRuntimeChangeReadinessGateReport>(rtPath, ct).ConfigureAwait(false);
+        var rtPassed = rtGate is not null && rtGate.Passed;
+        var p15Path = Path.Combine("eval", "eval-report-p15-a3.json");
+        var p15 = await ReadJsonFileAsync<JsonDocument>(p15Path, ct).ConfigureAwait(false);
+        var p15Passed = false;
+        if (p15 is not null && p15.RootElement.TryGetProperty("PassRate", out var pr)) p15Passed = pr.GetDouble() >= 1.0;
+        var mainlineEvPath = Path.Combine("vector", "v8", "formal-retrieval-promotion-approval-evidence.json");
+        var mainlineRegPath = Path.Combine("vector", "v8", "formal-retrieval-promotion-approval-trust-registry.json");
+        var mainlineEvPresent = File.Exists(mainlineEvPath);
+        var mainlineRegPresent = File.Exists(mainlineRegPath);
+
+        var realizationPath = Path.Combine("learning", "v10", "formal-evidence-realization-pack-gate.json");
+        var realization = await ReadJsonFileAsync<LearningFormalEvidenceRealizationPackReport>(realizationPath, ct).ConfigureAwait(false);
+        var candidatesPath = Path.Combine("learning", "v10", "formal-label-candidates.jsonl");
+        var candidates = LearningControlledFormalLabelIngestionStagingPackRunner.LoadFormalLabelCandidates(candidatesPath);
+        var manifestPath = Path.Combine("learning", "v10", "formal-label-integrity-manifest.json");
+        var manifestPresent = File.Exists(manifestPath);
+        var formalDatasetPath = Path.Combine("learning", "features", "hard-negatives.jsonl");
+
+        var realContext = new LearningControlledFormalLabelIngestionStagingPackContext
+        {
+            FormalRealizationPackPresent = realization is not null,
+            FormalRealizationPackPassed = realization?.GatePassed ?? false,
+            CandidatesPresent = candidates.Count > 0,
+            CandidateCount = candidates.Count,
+            IntegrityManifestPresent = manifestPresent,
+            V8ScopedActivationPreserved = realization?.V8ScopedActivationPreserved ?? false,
+            Candidates = candidates,
+            FormalDatasetPath = formalDatasetPath
+        };
+
+        var isGate = string.Equals(subcommand, "learning-controlled-formal-label-ingestion-staging-gate", StringComparison.OrdinalIgnoreCase);
+        var opt = new LearningControlledFormalLabelIngestionStagingPackOptions
+        {
+            IsGate = isGate,
+            Enabled = !CommandHelpers.HasFlag(args, "--disabled")
+        };
+        var runner = new LearningControlledFormalLabelIngestionStagingPackRunner();
+        var report = runner.Run(realContext, output, rtPassed, p15Passed, mainlineEvPresent, mainlineRegPresent, opt);
+        var fn = isGate ? "controlled-formal-label-ingestion-staging-pack-gate" : "controlled-formal-label-ingestion-staging-pack";
+        var jp = Path.Combine(output, $"{fn}.json");
+        var mp = Path.Combine(output, $"{fn}.md");
+        await WriteJsonSafeAsync(report, jp, ct).ConfigureAwait(false);
+        await WriteTextAsync(LearningControlledFormalLabelIngestionStagingPackRunner.BuildMarkdown(
+            isGate ? "Learning Controlled Formal Label Ingestion Staging Pack (Gate)" : "Learning Controlled Formal Label Ingestion Staging Pack", report), mp, ct).ConfigureAwait(false);
+        Console.WriteLine($"[Eval] Learning controlled formal label ingestion staging pack written: {jp}");
+        Console.WriteLine($"[Eval] controlledFormalLabelIngestionStagingPackPassed={report.ControlledFormalLabelIngestionStagingPackPassed}; gatePassed={report.GatePassed}; total={report.TotalCases} ready={report.ReadyCases} blocked={report.BlockedCases} stagedCount={report.StagedFormalLabelCount} invalidCount={report.InvalidCandidateCount} hashMismatchCount={report.HashMismatchCount} wouldAdd={report.DiffPreview.WouldAddCount} datasetSizeBefore={report.FormalDatasetSizeBeforeBytes} datasetSizeAfter={report.FormalDatasetSizeAfterBytes} untouched={report.FormalDatasetSizeBeforeBytes == report.FormalDatasetSizeAfterBytes} recommendation={report.Recommendation}");
+    }
+
     private static bool ValidateTemplateFields(string jsonContent, string[] fieldPaths, List<string> missing, List<string> nonPlaceholder)
     {
         var doc = System.Text.Json.JsonDocument.Parse(jsonContent);
