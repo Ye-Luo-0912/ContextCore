@@ -1,0 +1,75 @@
+﻿{
+  "ContractVersion": "v10.16-formal-label-rollback/v1",
+  "ContractMode": "SchemaOnlyNoRollbackExecuted",
+  "Fields": [
+    {
+      "FieldName": "rollbackId",
+      "Type": "string",
+      "Required": true,
+      "Description": "Stable id for the rollback operation; immutable once issued."
+    },
+    {
+      "FieldName": "targetFormalLabelIds",
+      "Type": "string[]",
+      "Required": true,
+      "Description": "Formal label ids to retract (must reference labels that were actually realized into the formal training set)."
+    },
+    {
+      "FieldName": "rollbackReason",
+      "Type": "string",
+      "Required": true,
+      "Description": "Reason code: HashMismatch / EvidencePathInvalid / OperatorRequest / DownstreamFailure."
+    },
+    {
+      "FieldName": "rollbackTrigger",
+      "Type": "string",
+      "Required": true,
+      "Description": "What surfaced the need: Integrity / Operator / Downstream."
+    },
+    {
+      "FieldName": "rollbackSnapshotReference",
+      "Type": "string",
+      "Required": true,
+      "Description": "Path to the formal-training-set snapshot from before the rollback (V8-style restore reference)."
+    },
+    {
+      "FieldName": "revocationRecordReference",
+      "Type": "string",
+      "Required": true,
+      "Description": "Path to the revocation record produced by the rollback (V8.18 revocation contract)."
+    },
+    {
+      "FieldName": "lifecycleStateAfter",
+      "Type": "string",
+      "Required": true,
+      "Description": "Must be one of Retracted / Quarantined; never Realized."
+    },
+    {
+      "FieldName": "executedAt",
+      "Type": "datetime",
+      "Required": false,
+      "Description": "Set when the rollback was applied (this contract never sets it)."
+    }
+  ],
+  "RollbackTriggers": [
+    "IntegrityManifest hash mismatch on any realized label",
+    "Evidence path invalidated (source ranking pair removed or rewritten)",
+    "Downstream pilot detects regression vs reference",
+    "Operator-initiated rollback under V9.5 review"
+  ],
+  "RollbackPreconditions": [
+    "Rollback may only be issued AFTER labels are actually realized (FormalLabelsRealized=true).",
+    "Rollback MUST reference an existing formal-training-set snapshot (V8-style rollback binding required).",
+    "Rollback MUST emit a revocation record under the V8.18 schema.",
+    "Rollback MUST keep V8 scoped activation state intact (no cross-pollination with V8 evidence)."
+  ],
+  "RollbackActions": [
+    "Read snapshot, restore formal training set entries to pre-realization state.",
+    "Mark affected labels LifecycleState=Retracted in the integrity manifest.",
+    "Emit revocation record per V8.18 contract.",
+    "Notify human reviewers (signal, not authority)."
+  ],
+  "FormalTrainingSetChanged": false,
+  "AutoIngest": false,
+  "RuntimeRollbackApplied": false
+}

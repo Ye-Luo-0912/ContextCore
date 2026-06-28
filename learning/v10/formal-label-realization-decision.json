@@ -1,0 +1,37 @@
+﻿{
+  "DecisionId": "v10-formal-label-realization-decision-3305385da8e24537842140319f84bc28",
+  "CreatedAt": "2026-06-28T16:51:37.7839481\u002B00:00",
+  "FormalLabelCandidateCount": 60,
+  "RealizableFormalLabelCount": 60,
+  "InvalidBindingCount": 0,
+  "FormalLabelCandidatesReady": true,
+  "FormalLabelsRealized": false,
+  "FormalEvidenceSufficient": false,
+  "RuntimePilotExecutionReadyForSeparateGate": false,
+  "BlockedForRuntimePilotExecutionBy": [
+    "FormalLabelsNotRealizedInDataset",
+    "FormalEvidenceInsufficientV3"
+  ],
+  "HumanFeedbackAsSignal": true,
+  "HumanReviewAsGateAuthority": false,
+  "HumanFeedbackAutoIngest": false,
+  "FormalTrainingSetChanged": false,
+  "FormalLabelCandidatesAreFormal": false,
+  "AIArbitration": false,
+  "EvidenceSourcesConsidered": [
+    "learning/v10/formal-evidence-boundary-pack-gate.json",
+    "learning/v10/formal-label-realization-contract.json",
+    "learning/v10/formal-label-gap-report.json",
+    "learning/v10/evidence-bound-hard-negative-labels.jsonl",
+    "learning/v10/pre-pilot-readiness-decision.json"
+  ],
+  "DecisionNotes": [
+    "FormalLabelCandidateCount=60",
+    "RealizableFormalLabelCount=60 (passed integrity \u002B eligibility checks)",
+    "InvalidBindingCount=0",
+    "IntegrityManifest: verified=60, mismatched=0",
+    "Candidates are NOT formal labels: they are eligible-for-promotion descriptors. The formal dataset has not been changed.",
+    "FormalLabelsRealized stays false until controlled formal ingestion (V9.5 feedback pipeline) actually writes labels into the formal training set under human review.",
+    "RuntimePilotExecutionReadyForSeparateGate stays false until FormalEvidenceSufficient becomes true."
+  ]
+}

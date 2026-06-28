@@ -1,0 +1,2038 @@
+﻿{
+  "OperationId": "v10-learning-formal-evidence-realization-pack-e3d299d8b36648cca257712723e08827",
+  "CreatedAt": "2026-06-28T16:51:37.7839481+00:00",
+  "FormalEvidenceRealizationPackPassed": true,
+  "GatePassed": true,
+  "TotalCases": 31,
+  "PassedCases": 31,
+  "FailedCases": 0,
+  "ReadyCases": 1,
+  "BlockedCases": 30,
+  "Cases": [
+    {
+      "CaseName": "AllUpstreamClean",
+      "ExpectedStatus": "LearningFormalEvidenceRealizationPackReady",
+      "ActualStatus": "LearningFormalEvidenceRealizationPackReady",
+      "ExpectedBlockedReason": "",
+      "ActualBlockedReasons": [],
+      "Reasoning": "formal evidence realization pack policy ready \u2014 candidate computation \u002B integrity manifest \u002B rollback contract proceed; formal dataset stays untouched.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "FormalEvidenceBoundaryMissing",
+      "ExpectedStatus": "LearningFormalEvidenceRealizationPackBlocked",
+      "ActualStatus": "LearningFormalEvidenceRealizationPackBlocked",
+      "ExpectedBlockedReason": "FormalEvidenceBoundaryMissing",
+      "ActualBlockedReasons": [
+        "FormalEvidenceBoundaryMissing"
+      ],
+      "Reasoning": "1 blocked reason(s); formal evidence realization pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "FormalEvidenceBoundaryNotPassed",
+      "ExpectedStatus": "LearningFormalEvidenceRealizationPackBlocked",
+      "ActualStatus": "LearningFormalEvidenceRealizationPackBlocked",
+      "ExpectedBlockedReason": "FormalEvidenceBoundaryNotPassed",
+      "ActualBlockedReasons": [
+        "FormalEvidenceBoundaryNotPassed"
+      ],
+      "Reasoning": "1 blocked reason(s); formal evidence realization pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "RealizationContractMissing",
+      "ExpectedStatus": "LearningFormalEvidenceRealizationPackBlocked",
+      "ActualStatus": "LearningFormalEvidenceRealizationPackBlocked",
+      "ExpectedBlockedReason": "RealizationContractMissing",
+      "ActualBlockedReasons": [
+        "RealizationContractMissing"
+      ],
+      "Reasoning": "1 blocked reason(s); formal evidence realization pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "ShadowLabelsMissing",
+      "ExpectedStatus": "LearningFormalEvidenceRealizationPackBlocked",
+      "ActualStatus": "LearningFormalEvidenceRealizationPackBlocked",
+      "ExpectedBlockedReason": "ShadowLabelsMissing",
+      "ActualBlockedReasons": [
+        "ShadowLabelsMissing"
+      ],
+      "Reasoning": "1 blocked reason(s); formal evidence realization pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "HashMismatchDetected",
+      "ExpectedStatus": "LearningFormalEvidenceRealizationPackBlocked",
+      "ActualStatus": "LearningFormalEvidenceRealizationPackBlocked",
+      "ExpectedBlockedReason": "HashMismatchDetected",
+      "ActualBlockedReasons": [
+        "HashMismatchDetected"
+      ],
+      "Reasoning": "1 blocked reason(s); formal evidence realization pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "EvidencePathMissing",
+      "ExpectedStatus": "LearningFormalEvidenceRealizationPackBlocked",
+      "ActualStatus": "LearningFormalEvidenceRealizationPackBlocked",
+      "ExpectedBlockedReason": "EvidencePathMissing",
+      "ActualBlockedReasons": [
+        "EvidencePathMissing"
+      ],
+      "Reasoning": "1 blocked reason(s); formal evidence realization pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "ExpectedPreferenceMismatch",
+      "ExpectedStatus": "LearningFormalEvidenceRealizationPackBlocked",
+      "ActualStatus": "LearningFormalEvidenceRealizationPackBlocked",
+      "ExpectedBlockedReason": "ExpectedPreferenceMismatch",
+      "ActualBlockedReasons": [
+        "ExpectedPreferenceMismatch"
+      ],
+      "Reasoning": "1 blocked reason(s); formal evidence realization pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "FormalCandidatesTreatedAsFormalLabels",
+      "ExpectedStatus": "LearningFormalEvidenceRealizationPackBlocked",
+      "ActualStatus": "LearningFormalEvidenceRealizationPackBlocked",
+      "ExpectedBlockedReason": "FormalCandidatesTreatedAsFormalLabels",
+      "ActualBlockedReasons": [
+        "FormalCandidatesTreatedAsFormalLabels"
+      ],
+      "Reasoning": "1 blocked reason(s); formal evidence realization pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "AutoIngestTrue",
+      "ExpectedStatus": "LearningFormalEvidenceRealizationPackBlocked",
+      "ActualStatus": "LearningFormalEvidenceRealizationPackBlocked",
+      "ExpectedBlockedReason": "AutoIngestTrue",
+      "ActualBlockedReasons": [
+        "AutoIngestTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); formal evidence realization pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "FormalTrainingSetChangedUnexpectedly",
+      "ExpectedStatus": "LearningFormalEvidenceRealizationPackBlocked",
+      "ActualStatus": "LearningFormalEvidenceRealizationPackBlocked",
+      "ExpectedBlockedReason": "FormalTrainingSetChangedUnexpectedly",
+      "ActualBlockedReasons": [
+        "FormalTrainingSetChangedUnexpectedly"
+      ],
+      "Reasoning": "1 blocked reason(s); formal evidence realization pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "HumanReviewAsGateAuthorityTrue",
+      "ExpectedStatus": "LearningFormalEvidenceRealizationPackBlocked",
+      "ActualStatus": "LearningFormalEvidenceRealizationPackBlocked",
+      "ExpectedBlockedReason": "HumanReviewAsGateAuthorityTrue",
+      "ActualBlockedReasons": [
+        "HumanReviewAsGateAuthorityTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); formal evidence realization pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "HumanFeedbackAutoIngestTrue",
+      "ExpectedStatus": "LearningFormalEvidenceRealizationPackBlocked",
+      "ActualStatus": "LearningFormalEvidenceRealizationPackBlocked",
+      "ExpectedBlockedReason": "HumanFeedbackAutoIngestTrue",
+      "ActualBlockedReasons": [
+        "HumanFeedbackAutoIngestTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); formal evidence realization pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "RuntimePilotReadyWhileFormalLabelsUnrealized",
+      "ExpectedStatus": "LearningFormalEvidenceRealizationPackBlocked",
+      "ActualStatus": "LearningFormalEvidenceRealizationPackBlocked",
+      "ExpectedBlockedReason": "RuntimePilotReadyWhileFormalLabelsUnrealized",
+      "ActualBlockedReasons": [
+        "RuntimePilotReadyWhileFormalLabelsUnrealized"
+      ],
+      "Reasoning": "1 blocked reason(s); formal evidence realization pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "RuntimePilotExecutionAppliedTrue",
+      "ExpectedStatus": "LearningFormalEvidenceRealizationPackBlocked",
+      "ActualStatus": "LearningFormalEvidenceRealizationPackBlocked",
+      "ExpectedBlockedReason": "RuntimePilotExecutionAppliedTrue",
+      "ActualBlockedReasons": [
+        "RuntimePilotExecutionAppliedTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); formal evidence realization pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "RuntimePromotionAppliedTrue",
+      "ExpectedStatus": "LearningFormalEvidenceRealizationPackBlocked",
+      "ActualStatus": "LearningFormalEvidenceRealizationPackBlocked",
+      "ExpectedBlockedReason": "RuntimePromotionAppliedTrue",
+      "ActualBlockedReasons": [
+        "RuntimePromotionAppliedTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); formal evidence realization pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "RuntimeRerankerChangedTrue",
+      "ExpectedStatus": "LearningFormalEvidenceRealizationPackBlocked",
+      "ActualStatus": "LearningFormalEvidenceRealizationPackBlocked",
+      "ExpectedBlockedReason": "RuntimeRerankerChangedTrue",
+      "ActualBlockedReasons": [
+        "RuntimeRerankerChangedTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); formal evidence realization pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "RuntimeRouterChangedTrue",
+      "ExpectedStatus": "LearningFormalEvidenceRealizationPackBlocked",
+      "ActualStatus": "LearningFormalEvidenceRealizationPackBlocked",
+      "ExpectedBlockedReason": "RuntimeRouterChangedTrue",
+      "ActualBlockedReasons": [
+        "RuntimeRouterChangedTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); formal evidence realization pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "ProductionDecisionChangedTrue",
+      "ExpectedStatus": "LearningFormalEvidenceRealizationPackBlocked",
+      "ActualStatus": "LearningFormalEvidenceRealizationPackBlocked",
+      "ExpectedBlockedReason": "ProductionDecisionChangedTrue",
+      "ActualBlockedReasons": [
+        "ProductionDecisionChangedTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); formal evidence realization pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "PackageOutputChangedTrue",
+      "ExpectedStatus": "LearningFormalEvidenceRealizationPackBlocked",
+      "ActualStatus": "LearningFormalEvidenceRealizationPackBlocked",
+      "ExpectedBlockedReason": "PackageOutputChangedTrue",
+      "ActualBlockedReasons": [
+        "PackageOutputChangedTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); formal evidence realization pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "FormalPackageWrittenTrue",
+      "ExpectedStatus": "LearningFormalEvidenceRealizationPackBlocked",
+      "ActualStatus": "LearningFormalEvidenceRealizationPackBlocked",
+      "ExpectedBlockedReason": "FormalPackageWrittenTrue",
+      "ActualBlockedReasons": [
+        "FormalPackageWrittenTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); formal evidence realization pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "GlobalDefaultOnTrue",
+      "ExpectedStatus": "LearningFormalEvidenceRealizationPackBlocked",
+      "ActualStatus": "LearningFormalEvidenceRealizationPackBlocked",
+      "ExpectedBlockedReason": "GlobalDefaultOnTrue",
+      "ActualBlockedReasons": [
+        "GlobalDefaultOnTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); formal evidence realization pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "MLAuthorityTrue",
+      "ExpectedStatus": "LearningFormalEvidenceRealizationPackBlocked",
+      "ActualStatus": "LearningFormalEvidenceRealizationPackBlocked",
+      "ExpectedBlockedReason": "MLAuthorityTrue",
+      "ActualBlockedReasons": [
+        "MLAuthorityTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); formal evidence realization pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "LLMAuthorityTrue",
+      "ExpectedStatus": "LearningFormalEvidenceRealizationPackBlocked",
+      "ActualStatus": "LearningFormalEvidenceRealizationPackBlocked",
+      "ExpectedBlockedReason": "LLMAuthorityTrue",
+      "ActualBlockedReasons": [
+        "LLMAuthorityTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); formal evidence realization pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "RuntimeAuthorityTrue",
+      "ExpectedStatus": "LearningFormalEvidenceRealizationPackBlocked",
+      "ActualStatus": "LearningFormalEvidenceRealizationPackBlocked",
+      "ExpectedBlockedReason": "RuntimeAuthorityTrue",
+      "ActualBlockedReasons": [
+        "RuntimeAuthorityTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); formal evidence realization pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "GateAuthorityTrue",
+      "ExpectedStatus": "LearningFormalEvidenceRealizationPackBlocked",
+      "ActualStatus": "LearningFormalEvidenceRealizationPackBlocked",
+      "ExpectedBlockedReason": "GateAuthorityTrue",
+      "ActualBlockedReasons": [
+        "GateAuthorityTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); formal evidence realization pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "V8ScopedActivationLost",
+      "ExpectedStatus": "LearningFormalEvidenceRealizationPackBlocked",
+      "ActualStatus": "LearningFormalEvidenceRealizationPackBlocked",
+      "ExpectedBlockedReason": "V8ScopedActivationLost",
+      "ActualBlockedReasons": [
+        "V8ScopedActivationLost"
+      ],
+      "Reasoning": "1 blocked reason(s); formal evidence realization pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "MainlineEvidencePresent",
+      "ExpectedStatus": "LearningFormalEvidenceRealizationPackBlocked",
+      "ActualStatus": "LearningFormalEvidenceRealizationPackBlocked",
+      "ExpectedBlockedReason": "MainlineEvidencePresent",
+      "ActualBlockedReasons": [
+        "MainlineEvidencePresent"
+      ],
+      "Reasoning": "1 blocked reason(s); formal evidence realization pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "MainlineTrustRegistryPresent",
+      "ExpectedStatus": "LearningFormalEvidenceRealizationPackBlocked",
+      "ActualStatus": "LearningFormalEvidenceRealizationPackBlocked",
+      "ExpectedBlockedReason": "MainlineTrustRegistryPresent",
+      "ActualBlockedReasons": [
+        "MainlineTrustRegistryPresent"
+      ],
+      "Reasoning": "1 blocked reason(s); formal evidence realization pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "RuntimeGateNotPassed",
+      "ExpectedStatus": "LearningFormalEvidenceRealizationPackBlocked",
+      "ActualStatus": "LearningFormalEvidenceRealizationPackBlocked",
+      "ExpectedBlockedReason": "RuntimeChangeGateNotPassed",
+      "ActualBlockedReasons": [
+        "RuntimeChangeGateNotPassed"
+      ],
+      "Reasoning": "1 blocked reason(s); formal evidence realization pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "P15GateNotPassed",
+      "ExpectedStatus": "LearningFormalEvidenceRealizationPackBlocked",
+      "ActualStatus": "LearningFormalEvidenceRealizationPackBlocked",
+      "ExpectedBlockedReason": "P15GateNotPassed",
+      "ActualBlockedReasons": [
+        "P15GateNotPassed"
+      ],
+      "Reasoning": "1 blocked reason(s); formal evidence realization pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    }
+  ],
+  "FormalLabelCandidates": [
+    {
+      "CandidateLabelId": "flc-0000-automation-sample-010",
+      "SourceShadowLabelId": "ebsl-0000-automation-sample-010",
+      "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=automation-sample-010",
+      "ExpectedPreference": "PositiveOverNegative",
+      "DeterministicBindingHash": "be4befd2631de048784bda6a9fa2c1468ddc8ae6b3348d9eb581cb07354227de",
+      "PromotionEligibility": "Eligible",
+      "LifecycleState": "Proposed",
+      "IntegrityVerified": true,
+      "FormalLabelCandidateIsFormal": false,
+      "ShadowOnly": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v10.16-formal-label-candidate/v1"
+    },
+    {
+      "CandidateLabelId": "flc-0001-chat-sample-003",
+      "SourceShadowLabelId": "ebsl-0001-chat-sample-003",
+      "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-sample-003",
+      "ExpectedPreference": "PositiveOverNegative",
+      "DeterministicBindingHash": "639f6d6dd0e7e0d2db63e0ac229940fc5913c8e0d760e75694e99c30af450615",
+      "PromotionEligibility": "Eligible",
+      "LifecycleState": "Proposed",
+      "IntegrityVerified": true,
+      "FormalLabelCandidateIsFormal": false,
+      "ShadowOnly": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v10.16-formal-label-candidate/v1"
+    },
+    {
+      "CandidateLabelId": "flc-0002-novel-sample-008",
+      "SourceShadowLabelId": "ebsl-0002-novel-sample-008",
+      "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=novel-sample-008",
+      "ExpectedPreference": "PositiveOverNegative",
+      "DeterministicBindingHash": "6ef7564adb477a5dd74321123ac810f0cea1a5b013d7d812b9fafc4ffe0bde1e",
+      "PromotionEligibility": "Eligible",
+      "LifecycleState": "Proposed",
+      "IntegrityVerified": true,
+      "FormalLabelCandidateIsFormal": false,
+      "ShadowOnly": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v10.16-formal-label-candidate/v1"
+    },
+    {
+      "CandidateLabelId": "flc-0003-automation-20260529-001",
+      "SourceShadowLabelId": "ebsl-0003-automation-20260529-001",
+      "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=automation-20260529-001",
+      "ExpectedPreference": "PositiveOverNegative",
+      "DeterministicBindingHash": "85a09b68c20b535c39d990a70abe69f7a57647ad39bbe649c2b266a12e3dd5cd",
+      "PromotionEligibility": "Eligible",
+      "LifecycleState": "Proposed",
+      "IntegrityVerified": true,
+      "FormalLabelCandidateIsFormal": false,
+      "ShadowOnly": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v10.16-formal-label-candidate/v1"
+    },
+    {
+      "CandidateLabelId": "flc-0004-automation-20260529-002",
+      "SourceShadowLabelId": "ebsl-0004-automation-20260529-002",
+      "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=automation-20260529-002",
+      "ExpectedPreference": "PositiveOverNegative",
+      "DeterministicBindingHash": "2a232cbdd94a582a19feb1b55633f0e8530ccb397374052467795cf3f315a7eb",
+      "PromotionEligibility": "Eligible",
+      "LifecycleState": "Proposed",
+      "IntegrityVerified": true,
+      "FormalLabelCandidateIsFormal": false,
+      "ShadowOnly": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v10.16-formal-label-candidate/v1"
+    },
+    {
+      "CandidateLabelId": "flc-0005-automation-20260529-003",
+      "SourceShadowLabelId": "ebsl-0005-automation-20260529-003",
+      "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=automation-20260529-003",
+      "ExpectedPreference": "PositiveOverNegative",
+      "DeterministicBindingHash": "5bebe89d26782f30173176fbddbffb0eb1f20fe85d98b655de588d0ca3da7ce1",
+      "PromotionEligibility": "Eligible",
+      "LifecycleState": "Proposed",
+      "IntegrityVerified": true,
+      "FormalLabelCandidateIsFormal": false,
+      "ShadowOnly": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v10.16-formal-label-candidate/v1"
+    },
+    {
+      "CandidateLabelId": "flc-0006-automation-20260529-004",
+      "SourceShadowLabelId": "ebsl-0006-automation-20260529-004",
+      "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=automation-20260529-004",
+      "ExpectedPreference": "PositiveOverNegative",
+      "DeterministicBindingHash": "792e4b28fe98584df3bfccc96a4d36c0c547a69622fecfa0bc0125dc9dae4526",
+      "PromotionEligibility": "Eligible",
+      "LifecycleState": "Proposed",
+      "IntegrityVerified": true,
+      "FormalLabelCandidateIsFormal": false,
+      "ShadowOnly": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v10.16-formal-label-candidate/v1"
+    },
+    {
+      "CandidateLabelId": "flc-0007-automation-20260529-005",
+      "SourceShadowLabelId": "ebsl-0007-automation-20260529-005",
+      "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=automation-20260529-005",
+      "ExpectedPreference": "PositiveOverNegative",
+      "DeterministicBindingHash": "95a2a767bea8fb95ce1ae0516dfd436b2b6ad95384ba94fce748a77c42e6b4a5",
+      "PromotionEligibility": "Eligible",
+      "LifecycleState": "Proposed",
+      "IntegrityVerified": true,
+      "FormalLabelCandidateIsFormal": false,
+      "ShadowOnly": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v10.16-formal-label-candidate/v1"
+    },
+    {
+      "CandidateLabelId": "flc-0008-automation-20260529-006",
+      "SourceShadowLabelId": "ebsl-0008-automation-20260529-006",
+      "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=automation-20260529-006",
+      "ExpectedPreference": "PositiveOverNegative",
+      "DeterministicBindingHash": "fe99730191e27631fba686aee88a14731e0fb93e53918aaed926e22c2b98ca01",
+      "PromotionEligibility": "Eligible",
+      "LifecycleState": "Proposed",
+      "IntegrityVerified": true,
+      "FormalLabelCandidateIsFormal": false,
+      "ShadowOnly": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v10.16-formal-label-candidate/v1"
+    },
+    {
+      "CandidateLabelId": "flc-0009-automation-20260529-007",
+      "SourceShadowLabelId": "ebsl-0009-automation-20260529-007",
+      "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=automation-20260529-007",
+      "ExpectedPreference": "PositiveOverNegative",
+      "DeterministicBindingHash": "43d1a41c789b4fa581b5cef0ad237a46f8de4b81d75ef017822bab1b16396e81",
+      "PromotionEligibility": "Eligible",
+      "LifecycleState": "Proposed",
+      "IntegrityVerified": true,
+      "FormalLabelCandidateIsFormal": false,
+      "ShadowOnly": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v10.16-formal-label-candidate/v1"
+    },
+    {
+      "CandidateLabelId": "flc-0010-automation-20260529-008",
+      "SourceShadowLabelId": "ebsl-0010-automation-20260529-008",
+      "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=automation-20260529-008",
+      "ExpectedPreference": "PositiveOverNegative",
+      "DeterministicBindingHash": "a94aaa2549e27cfedc8cdd8005e4bb4cbf2a89d5eebfbde69468f7df6844324c",
+      "PromotionEligibility": "Eligible",
+      "LifecycleState": "Proposed",
+      "IntegrityVerified": true,
+      "FormalLabelCandidateIsFormal": false,
+      "ShadowOnly": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v10.16-formal-label-candidate/v1"
+    },
+    {
+      "CandidateLabelId": "flc-0011-automation-20260529-009",
+      "SourceShadowLabelId": "ebsl-0011-automation-20260529-009",
+      "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=automation-20260529-009",
+      "ExpectedPreference": "PositiveOverNegative",
+      "DeterministicBindingHash": "0f599299c58a8c994c05a73a683d262ddf687cba53f1d875c22413160eace210",
+      "PromotionEligibility": "Eligible",
+      "LifecycleState": "Proposed",
+      "IntegrityVerified": true,
+      "FormalLabelCandidateIsFormal": false,
+      "ShadowOnly": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v10.16-formal-label-candidate/v1"
+    },
+    {
+      "CandidateLabelId": "flc-0012-automation-20260529-010",
+      "SourceShadowLabelId": "ebsl-0012-automation-20260529-010",
+      "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=automation-20260529-010",
+      "ExpectedPreference": "PositiveOverNegative",
+      "DeterministicBindingHash": "26c4015ad3c8618c46cd27a1ea770d2b71b33897885d3a5ac58e6d36fdce513b",
+      "PromotionEligibility": "Eligible",
+      "LifecycleState": "Proposed",
+      "IntegrityVerified": true,
+      "FormalLabelCandidateIsFormal": false,
+      "ShadowOnly": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v10.16-formal-label-candidate/v1"
+    },
+    {
+      "CandidateLabelId": "flc-0013-automation-sample-001",
+      "SourceShadowLabelId": "ebsl-0013-automation-sample-001",
+      "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=automation-sample-001",
+      "ExpectedPreference": "PositiveOverNegative",
+      "DeterministicBindingHash": "fac8c2c57ed96dce11460752ffef8741abdf062056c32ad49c0a56cd53ecf59f",
+      "PromotionEligibility": "Eligible",
+      "LifecycleState": "Proposed",
+      "IntegrityVerified": true,
+      "FormalLabelCandidateIsFormal": false,
+      "ShadowOnly": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v10.16-formal-label-candidate/v1"
+    },
+    {
+      "CandidateLabelId": "flc-0014-automation-sample-002",
+      "SourceShadowLabelId": "ebsl-0014-automation-sample-002",
+      "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=automation-sample-002",
+      "ExpectedPreference": "PositiveOverNegative",
+      "DeterministicBindingHash": "bcfcfc4511c5fe1411c820c8243dcb5964494ae6871e31173d1ff931daf1f92d",
+      "PromotionEligibility": "Eligible",
+      "LifecycleState": "Proposed",
+      "IntegrityVerified": true,
+      "FormalLabelCandidateIsFormal": false,
+      "ShadowOnly": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v10.16-formal-label-candidate/v1"
+    },
+    {
+      "CandidateLabelId": "flc-0015-automation-sample-003",
+      "SourceShadowLabelId": "ebsl-0015-automation-sample-003",
+      "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=automation-sample-003",
+      "ExpectedPreference": "PositiveOverNegative",
+      "DeterministicBindingHash": "30c3784b46f571874ec1899c2e15f57b2781cb04651efdf7600669987dade7ce",
+      "PromotionEligibility": "Eligible",
+      "LifecycleState": "Proposed",
+      "IntegrityVerified": true,
+      "FormalLabelCandidateIsFormal": false,
+      "ShadowOnly": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v10.16-formal-label-candidate/v1"
+    },
+    {
+      "CandidateLabelId": "flc-0016-automation-sample-004",
+      "SourceShadowLabelId": "ebsl-0016-automation-sample-004",
+      "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=automation-sample-004",
+      "ExpectedPreference": "PositiveOverNegative",
+      "DeterministicBindingHash": "b64bdbf4ad670163ca8443ddbdfa71631fcb6b0d1df75517bb168538d6244129",
+      "PromotionEligibility": "Eligible",
+      "LifecycleState": "Proposed",
+      "IntegrityVerified": true,
+      "FormalLabelCandidateIsFormal": false,
+      "ShadowOnly": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v10.16-formal-label-candidate/v1"
+    },
+    {
+      "CandidateLabelId": "flc-0017-automation-sample-005",
+      "SourceShadowLabelId": "ebsl-0017-automation-sample-005",
+      "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=automation-sample-005",
+      "ExpectedPreference": "PositiveOverNegative",
+      "DeterministicBindingHash": "2e548b86a144900262af410cc2040603f23ca901fee570f8446220f68d7529ef",
+      "PromotionEligibility": "Eligible",
+      "LifecycleState": "Proposed",
+      "IntegrityVerified": true,
+      "FormalLabelCandidateIsFormal": false,
+      "ShadowOnly": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v10.16-formal-label-candidate/v1"
+    },
+    {
+      "CandidateLabelId": "flc-0018-automation-sample-006",
+      "SourceShadowLabelId": "ebsl-0018-automation-sample-006",
+      "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=automation-sample-006",
+      "ExpectedPreference": "PositiveOverNegative",
+      "DeterministicBindingHash": "335a53d2d6360c2eed87bf92a37a678f39e39789f73e2f499f82505b9cd0959d",
+      "PromotionEligibility": "Eligible",
+      "LifecycleState": "Proposed",
+      "IntegrityVerified": true,
+      "FormalLabelCandidateIsFormal": false,
+      "ShadowOnly": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v10.16-formal-label-candidate/v1"
+    },
+    {
+      "CandidateLabelId": "flc-0019-automation-sample-007",
+      "SourceShadowLabelId": "ebsl-0019-automation-sample-007",
+      "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=automation-sample-007",
+      "ExpectedPreference": "PositiveOverNegative",
+      "DeterministicBindingHash": "eea9f3623fd6a067d5bc1cff8b419010be56b29028876553ae6f1cb505d1eefb",
+      "PromotionEligibility": "Eligible",
+      "LifecycleState": "Proposed",
+      "IntegrityVerified": true,
+      "FormalLabelCandidateIsFormal": false,
+      "ShadowOnly": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v10.16-formal-label-candidate/v1"
+    },
+    {
+      "CandidateLabelId": "flc-0020-automation-sample-008",
+      "SourceShadowLabelId": "ebsl-0020-automation-sample-008",
+      "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=automation-sample-008",
+      "ExpectedPreference": "PositiveOverNegative",
+      "DeterministicBindingHash": "6137992cf8657fe41ef6bcecf6115c4a3d187ce63945e7a2e1c89f0abfa1f7a8",
+      "PromotionEligibility": "Eligible",
+      "LifecycleState": "Proposed",
+      "IntegrityVerified": true,
+      "FormalLabelCandidateIsFormal": false,
+      "ShadowOnly": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v10.16-formal-label-candidate/v1"
+    },
+    {
+      "CandidateLabelId": "flc-0021-automation-sample-009",
+      "SourceShadowLabelId": "ebsl-0021-automation-sample-009",
+      "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=automation-sample-009",
+      "ExpectedPreference": "PositiveOverNegative",
+      "DeterministicBindingHash": "2cbce8cf70307a401a3ee95cad2804d78d576461d43122009519988dc3f07fad",
+      "PromotionEligibility": "Eligible",
+      "LifecycleState": "Proposed",
+      "IntegrityVerified": true,
+      "FormalLabelCandidateIsFormal": false,
+      "ShadowOnly": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v10.16-formal-label-candidate/v1"
+    },
+    {
+      "CandidateLabelId": "flc-0022-automation-sample-010",
+      "SourceShadowLabelId": "ebsl-0022-automation-sample-010",
+      "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=automation-sample-010",
+      "ExpectedPreference": "PositiveOverNegative",
+      "DeterministicBindingHash": "e3c210e2f7f96f386dacfdb17c52c87ac9e780e1dd9e26138892ebff7d2839fc",
+      "PromotionEligibility": "Eligible",
+      "LifecycleState": "Proposed",
+      "IntegrityVerified": true,
+      "FormalLabelCandidateIsFormal": false,
+      "ShadowOnly": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v10.16-formal-label-candidate/v1"
+    },
+    {
+      "CandidateLabelId": "flc-0023-chat-20260529-001",
+      "SourceShadowLabelId": "ebsl-0023-chat-20260529-001",
+      "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-20260529-001",
+      "ExpectedPreference": "PositiveOverNegative",
+      "DeterministicBindingHash": "d5084e7ba6b0160ae30333a8397c8d295d563096ba24aae0ae10191cfa04238e",
+      "PromotionEligibility": "Eligible",
+      "LifecycleState": "Proposed",
+      "IntegrityVerified": true,
+      "FormalLabelCandidateIsFormal": false,
+      "ShadowOnly": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v10.16-formal-label-candidate/v1"
+    },
+    {
+      "CandidateLabelId": "flc-0024-chat-20260529-002",
+      "SourceShadowLabelId": "ebsl-0024-chat-20260529-002",
+      "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-20260529-002",
+      "ExpectedPreference": "PositiveOverNegative",
+      "DeterministicBindingHash": "8b25851b1c0c091f215d0153516ef092dde79a9adcd517678d531802cbff2bea",
+      "PromotionEligibility": "Eligible",
+      "LifecycleState": "Proposed",
+      "IntegrityVerified": true,
+      "FormalLabelCandidateIsFormal": false,
+      "ShadowOnly": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v10.16-formal-label-candidate/v1"
+    },
+    {
+      "CandidateLabelId": "flc-0025-chat-20260529-003",
+      "SourceShadowLabelId": "ebsl-0025-chat-20260529-003",
+      "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-20260529-003",
+      "ExpectedPreference": "PositiveOverNegative",
+      "DeterministicBindingHash": "36f201a12e233c4f1b10489d2e54dbc8ab241d28b46516cf832ef25c78f011d3",
+      "PromotionEligibility": "Eligible",
+      "LifecycleState": "Proposed",
+      "IntegrityVerified": true,
+      "FormalLabelCandidateIsFormal": false,
+      "ShadowOnly": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v10.16-formal-label-candidate/v1"
+    },
+    {
+      "CandidateLabelId": "flc-0026-chat-20260529-004",
+      "SourceShadowLabelId": "ebsl-0026-chat-20260529-004",
+      "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-20260529-004",
+      "ExpectedPreference": "PositiveOverNegative",
+      "DeterministicBindingHash": "e19eab2a79ab5a2b4d49e586989fb81e16a7bd52682b2339ea66defaa709fb67",
+      "PromotionEligibility": "Eligible",
+      "LifecycleState": "Proposed",
+      "IntegrityVerified": true,
+      "FormalLabelCandidateIsFormal": false,
+      "ShadowOnly": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v10.16-formal-label-candidate/v1"
+    },
+    {
+      "CandidateLabelId": "flc-0027-chat-20260529-005",
+      "SourceShadowLabelId": "ebsl-0027-chat-20260529-005",
+      "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-20260529-005",
+      "ExpectedPreference": "PositiveOverNegative",
+      "DeterministicBindingHash": "ed9312b6d90ab1baedf6a744139564440b1a1ddc41ded506057e10130da74808",
+      "PromotionEligibility": "Eligible",
+      "LifecycleState": "Proposed",
+      "IntegrityVerified": true,
+      "FormalLabelCandidateIsFormal": false,
+      "ShadowOnly": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v10.16-formal-label-candidate/v1"
+    },
+    {
+      "CandidateLabelId": "flc-0028-chat-20260529-006",
+      "SourceShadowLabelId": "ebsl-0028-chat-20260529-006",
+      "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-20260529-006",
+      "ExpectedPreference": "PositiveOverNegative",
+      "DeterministicBindingHash": "33813a872bee257ff9ae02759a3d664d517f87f3a09bd1ad7848b91ae494815c",
+      "PromotionEligibility": "Eligible",
+      "LifecycleState": "Proposed",
+      "IntegrityVerified": true,
+      "FormalLabelCandidateIsFormal": false,
+      "ShadowOnly": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v10.16-formal-label-candidate/v1"
+    },
+    {
+      "CandidateLabelId": "flc-0029-chat-20260529-007",
+      "SourceShadowLabelId": "ebsl-0029-chat-20260529-007",
+      "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-20260529-007",
+      "ExpectedPreference": "PositiveOverNegative",
+      "DeterministicBindingHash": "c1a794bd25f6a579a70a69cc9b51ed9bc0b2c943cca19a6b92ebb8c85891cdb6",
+      "PromotionEligibility": "Eligible",
+      "LifecycleState": "Proposed",
+      "IntegrityVerified": true,
+      "FormalLabelCandidateIsFormal": false,
+      "ShadowOnly": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v10.16-formal-label-candidate/v1"
+    },
+    {
+      "CandidateLabelId": "flc-0030-chat-20260529-008",
+      "SourceShadowLabelId": "ebsl-0030-chat-20260529-008",
+      "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-20260529-008",
+      "ExpectedPreference": "PositiveOverNegative",
+      "DeterministicBindingHash": "4975c3e0ae444652c5b15111c61d51445f57dead67f4d0907a12b843aec973a3",
+      "PromotionEligibility": "Eligible",
+      "LifecycleState": "Proposed",
+      "IntegrityVerified": true,
+      "FormalLabelCandidateIsFormal": false,
+      "ShadowOnly": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v10.16-formal-label-candidate/v1"
+    },
+    {
+      "CandidateLabelId": "flc-0031-chat-20260529-009",
+      "SourceShadowLabelId": "ebsl-0031-chat-20260529-009",
+      "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-20260529-009",
+      "ExpectedPreference": "PositiveOverNegative",
+      "DeterministicBindingHash": "8838f0699545a6ccf1ff30ba0cea61d7da22ace631f47dc79502a1764f8fb3f0",
+      "PromotionEligibility": "Eligible",
+      "LifecycleState": "Proposed",
+      "IntegrityVerified": true,
+      "FormalLabelCandidateIsFormal": false,
+      "ShadowOnly": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v10.16-formal-label-candidate/v1"
+    },
+    {
+      "CandidateLabelId": "flc-0032-chat-20260529-010",
+      "SourceShadowLabelId": "ebsl-0032-chat-20260529-010",
+      "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-20260529-010",
+      "ExpectedPreference": "PositiveOverNegative",
+      "DeterministicBindingHash": "6145381c68c8a04b1665edf35cb2d01025eb3242ba319e4bb6f15edaff84d95e",
+      "PromotionEligibility": "Eligible",
+      "LifecycleState": "Proposed",
+      "IntegrityVerified": true,
+      "FormalLabelCandidateIsFormal": false,
+      "ShadowOnly": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v10.16-formal-label-candidate/v1"
+    },
+    {
+      "CandidateLabelId": "flc-0033-chat-20260529-011",
+      "SourceShadowLabelId": "ebsl-0033-chat-20260529-011",
+      "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-20260529-011",
+      "ExpectedPreference": "PositiveOverNegative",
+      "DeterministicBindingHash": "8db8b1eb3eca8917d45562709d1e14ab046a5ce8f560a7f2239c0c413c154545",
+      "PromotionEligibility": "Eligible",
+      "LifecycleState": "Proposed",
+      "IntegrityVerified": true,
+      "FormalLabelCandidateIsFormal": false,
+      "ShadowOnly": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v10.16-formal-label-candidate/v1"
+    },
+    {
+      "CandidateLabelId": "flc-0034-chat-20260529-012",
+      "SourceShadowLabelId": "ebsl-0034-chat-20260529-012",
+      "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-20260529-012",
+      "ExpectedPreference": "PositiveOverNegative",
+      "DeterministicBindingHash": "9ab13047028089e039f00459fa66fb86fdb95d60f32382075109383f14336007",
+      "PromotionEligibility": "Eligible",
+      "LifecycleState": "Proposed",
+      "IntegrityVerified": true,
+      "FormalLabelCandidateIsFormal": false,
+      "ShadowOnly": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v10.16-formal-label-candidate/v1"
+    },
+    {
+      "CandidateLabelId": "flc-0035-chat-20260529-013",
+      "SourceShadowLabelId": "ebsl-0035-chat-20260529-013",
+      "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-20260529-013",
+      "ExpectedPreference": "PositiveOverNegative",
+      "DeterministicBindingHash": "2a56ec46cd8894716e8982fca2f6415d4ee20bad95157f329badb41eb40d0157",
+      "PromotionEligibility": "Eligible",
+      "LifecycleState": "Proposed",
+      "IntegrityVerified": true,
+      "FormalLabelCandidateIsFormal": false,
+      "ShadowOnly": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v10.16-formal-label-candidate/v1"
+    },
+    {
+      "CandidateLabelId": "flc-0036-chat-20260529-014",
+      "SourceShadowLabelId": "ebsl-0036-chat-20260529-014",
+      "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-20260529-014",
+      "ExpectedPreference": "PositiveOverNegative",
+      "DeterministicBindingHash": "c036e3f99eecfdfb27acfca36a5c04a007050307f2d723360ff91707533f7f33",
+      "PromotionEligibility": "Eligible",
+      "LifecycleState": "Proposed",
+      "IntegrityVerified": true,
+      "FormalLabelCandidateIsFormal": false,
+      "ShadowOnly": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v10.16-formal-label-candidate/v1"
+    },
+    {
+      "CandidateLabelId": "flc-0037-chat-20260529-015",
+      "SourceShadowLabelId": "ebsl-0037-chat-20260529-015",
+      "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-20260529-015",
+      "ExpectedPreference": "PositiveOverNegative",
+      "DeterministicBindingHash": "556cc911c9198b57a3346eff54fe6fc31168dec578043d8f6e0e40156068b00c",
+      "PromotionEligibility": "Eligible",
+      "LifecycleState": "Proposed",
+      "IntegrityVerified": true,
+      "FormalLabelCandidateIsFormal": false,
+      "ShadowOnly": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v10.16-formal-label-candidate/v1"
+    },
+    {
+      "CandidateLabelId": "flc-0038-chat-20260529-016",
+      "SourceShadowLabelId": "ebsl-0038-chat-20260529-016",
+      "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-20260529-016",
+      "ExpectedPreference": "PositiveOverNegative",
+      "DeterministicBindingHash": "18746701efeab4e2ec72032c5a68f8ecaf258ca155550cf22bbcd3769b10650a",
+      "PromotionEligibility": "Eligible",
+      "LifecycleState": "Proposed",
+      "IntegrityVerified": true,
+      "FormalLabelCandidateIsFormal": false,
+      "ShadowOnly": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v10.16-formal-label-candidate/v1"
+    },
+    {
+      "CandidateLabelId": "flc-0039-chat-20260529-017",
+      "SourceShadowLabelId": "ebsl-0039-chat-20260529-017",
+      "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-20260529-017",
+      "ExpectedPreference": "PositiveOverNegative",
+      "DeterministicBindingHash": "6ef44966be6c199dc9dc7c9f40a97007641b40539a31f5894ae15e7c42524a40",
+      "PromotionEligibility": "Eligible",
+      "LifecycleState": "Proposed",
+      "IntegrityVerified": true,
+      "FormalLabelCandidateIsFormal": false,
+      "ShadowOnly": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v10.16-formal-label-candidate/v1"
+    },
+    {
+      "CandidateLabelId": "flc-0040-chat-20260529-018",
+      "SourceShadowLabelId": "ebsl-0040-chat-20260529-018",
+      "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-20260529-018",
+      "ExpectedPreference": "PositiveOverNegative",
+      "DeterministicBindingHash": "27e8f4de2d434372398237bad93998662399a946e92fde23e3ef4ddb90a1cba2",
+      "PromotionEligibility": "Eligible",
+      "LifecycleState": "Proposed",
+      "IntegrityVerified": true,
+      "FormalLabelCandidateIsFormal": false,
+      "ShadowOnly": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v10.16-formal-label-candidate/v1"
+    },
+    {
+      "CandidateLabelId": "flc-0041-chat-20260529-019",
+      "SourceShadowLabelId": "ebsl-0041-chat-20260529-019",
+      "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-20260529-019",
+      "ExpectedPreference": "PositiveOverNegative",
+      "DeterministicBindingHash": "359d6ae790622583457c0bdda8f080717ad2f5835b5d518b5bab489df6091755",
+      "PromotionEligibility": "Eligible",
+      "LifecycleState": "Proposed",
+      "IntegrityVerified": true,
+      "FormalLabelCandidateIsFormal": false,
+      "ShadowOnly": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v10.16-formal-label-candidate/v1"
+    },
+    {
+      "CandidateLabelId": "flc-0042-chat-20260529-020",
+      "SourceShadowLabelId": "ebsl-0042-chat-20260529-020",
+      "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-20260529-020",
+      "ExpectedPreference": "PositiveOverNegative",
+      "DeterministicBindingHash": "66b495442e1258df9af142202b8d84d3143e909323c58e972f95401ffbc6cd6c",
+      "PromotionEligibility": "Eligible",
+      "LifecycleState": "Proposed",
+      "IntegrityVerified": true,
+      "FormalLabelCandidateIsFormal": false,
+      "ShadowOnly": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v10.16-formal-label-candidate/v1"
+    },
+    {
+      "CandidateLabelId": "flc-0043-chat-sample-001",
+      "SourceShadowLabelId": "ebsl-0043-chat-sample-001",
+      "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-sample-001",
+      "ExpectedPreference": "PositiveOverNegative",
+      "DeterministicBindingHash": "70672b81c1c13b3f4ff5d700257fc691979e4684d2357f82814ff4d05b93767a",
+      "PromotionEligibility": "Eligible",
+      "LifecycleState": "Proposed",
+      "IntegrityVerified": true,
+      "FormalLabelCandidateIsFormal": false,
+      "ShadowOnly": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v10.16-formal-label-candidate/v1"
+    },
+    {
+      "CandidateLabelId": "flc-0044-chat-sample-002",
+      "SourceShadowLabelId": "ebsl-0044-chat-sample-002",
+      "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-sample-002",
+      "ExpectedPreference": "PositiveOverNegative",
+      "DeterministicBindingHash": "a02e4f058d90518282c1e5bb082d55f52c60d58a2a924bcc39b83a25c9f89f61",
+      "PromotionEligibility": "Eligible",
+      "LifecycleState": "Proposed",
+      "IntegrityVerified": true,
+      "FormalLabelCandidateIsFormal": false,
+      "ShadowOnly": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v10.16-formal-label-candidate/v1"
+    },
+    {
+      "CandidateLabelId": "flc-0045-chat-sample-003",
+      "SourceShadowLabelId": "ebsl-0045-chat-sample-003",
+      "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-sample-003",
+      "ExpectedPreference": "PositiveOverNegative",
+      "DeterministicBindingHash": "32dea372610c2a210295875c74d6fc666d2c21533039fd4ff0b803508d97a452",
+      "PromotionEligibility": "Eligible",
+      "LifecycleState": "Proposed",
+      "IntegrityVerified": true,
+      "FormalLabelCandidateIsFormal": false,
+      "ShadowOnly": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v10.16-formal-label-candidate/v1"
+    },
+    {
+      "CandidateLabelId": "flc-0046-chat-sample-004",
+      "SourceShadowLabelId": "ebsl-0046-chat-sample-004",
+      "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-sample-004",
+      "ExpectedPreference": "PositiveOverNegative",
+      "DeterministicBindingHash": "76cc69b0e1b524559f2f8234ed498bcacf707233920050c74ab794d160f0c12e",
+      "PromotionEligibility": "Eligible",
+      "LifecycleState": "Proposed",
+      "IntegrityVerified": true,
+      "FormalLabelCandidateIsFormal": false,
+      "ShadowOnly": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v10.16-formal-label-candidate/v1"
+    },
+    {
+      "CandidateLabelId": "flc-0047-chat-sample-005",
+      "SourceShadowLabelId": "ebsl-0047-chat-sample-005",
+      "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-sample-005",
+      "ExpectedPreference": "PositiveOverNegative",
+      "DeterministicBindingHash": "26a59019fa6fcccd7dd6ca04bfb1da7b9944fe1031a18049580631e1fa4c33e1",
+      "PromotionEligibility": "Eligible",
+      "LifecycleState": "Proposed",
+      "IntegrityVerified": true,
+      "FormalLabelCandidateIsFormal": false,
+      "ShadowOnly": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v10.16-formal-label-candidate/v1"
+    },
+    {
+      "CandidateLabelId": "flc-0048-chat-sample-006",
+      "SourceShadowLabelId": "ebsl-0048-chat-sample-006",
+      "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-sample-006",
+      "ExpectedPreference": "PositiveOverNegative",
+      "DeterministicBindingHash": "4f18d7bed1c875d3d8921548c0c2d41bfeb9478c05d73428959df6915f7fe42d",
+      "PromotionEligibility": "Eligible",
+      "LifecycleState": "Proposed",
+      "IntegrityVerified": true,
+      "FormalLabelCandidateIsFormal": false,
+      "ShadowOnly": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v10.16-formal-label-candidate/v1"
+    },
+    {
+      "CandidateLabelId": "flc-0049-chat-sample-007",
+      "SourceShadowLabelId": "ebsl-0049-chat-sample-007",
+      "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-sample-007",
+      "ExpectedPreference": "PositiveOverNegative",
+      "DeterministicBindingHash": "74a57ba9c54d7ec21ab401a52682f6f9a99c047b84ccc0f995efa09855e04d05",
+      "PromotionEligibility": "Eligible",
+      "LifecycleState": "Proposed",
+      "IntegrityVerified": true,
+      "FormalLabelCandidateIsFormal": false,
+      "ShadowOnly": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v10.16-formal-label-candidate/v1"
+    },
+    {
+      "CandidateLabelId": "flc-0050-chat-sample-008",
+      "SourceShadowLabelId": "ebsl-0050-chat-sample-008",
+      "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-sample-008",
+      "ExpectedPreference": "PositiveOverNegative",
+      "DeterministicBindingHash": "5b592ca8aed1e51a8272226839bc34ffc463dd8e1e4f0f288e962b27fb6f6e3b",
+      "PromotionEligibility": "Eligible",
+      "LifecycleState": "Proposed",
+      "IntegrityVerified": true,
+      "FormalLabelCandidateIsFormal": false,
+      "ShadowOnly": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v10.16-formal-label-candidate/v1"
+    },
+    {
+      "CandidateLabelId": "flc-0051-chat-sample-009",
+      "SourceShadowLabelId": "ebsl-0051-chat-sample-009",
+      "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-sample-009",
+      "ExpectedPreference": "PositiveOverNegative",
+      "DeterministicBindingHash": "f5adfb2a3076a504a200a9a7555981e8143f2b5c83f46f59bf42ee0bd4c82d69",
+      "PromotionEligibility": "Eligible",
+      "LifecycleState": "Proposed",
+      "IntegrityVerified": true,
+      "FormalLabelCandidateIsFormal": false,
+      "ShadowOnly": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v10.16-formal-label-candidate/v1"
+    },
+    {
+      "CandidateLabelId": "flc-0052-chat-sample-010",
+      "SourceShadowLabelId": "ebsl-0052-chat-sample-010",
+      "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-sample-010",
+      "ExpectedPreference": "PositiveOverNegative",
+      "DeterministicBindingHash": "1cb420e02dcc9f37eba72ed7a547d54efcba8c486a306b41e38d31aaacb8d08b",
+      "PromotionEligibility": "Eligible",
+      "LifecycleState": "Proposed",
+      "IntegrityVerified": true,
+      "FormalLabelCandidateIsFormal": false,
+      "ShadowOnly": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v10.16-formal-label-candidate/v1"
+    },
+    {
+      "CandidateLabelId": "flc-0053-coding-20260529-001",
+      "SourceShadowLabelId": "ebsl-0053-coding-20260529-001",
+      "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=coding-20260529-001",
+      "ExpectedPreference": "PositiveOverNegative",
+      "DeterministicBindingHash": "dfd2ad3818bbdc5902bee36833f545273812a4a8075f9ab0f5b03965f2c83f05",
+      "PromotionEligibility": "Eligible",
+      "LifecycleState": "Proposed",
+      "IntegrityVerified": true,
+      "FormalLabelCandidateIsFormal": false,
+      "ShadowOnly": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v10.16-formal-label-candidate/v1"
+    },
+    {
+      "CandidateLabelId": "flc-0054-coding-20260529-002",
+      "SourceShadowLabelId": "ebsl-0054-coding-20260529-002",
+      "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=coding-20260529-002",
+      "ExpectedPreference": "PositiveOverNegative",
+      "DeterministicBindingHash": "1bc0bd463a2dab170cebf8fbf972bd8fff1ba3b004961629d1a9d1bd00bcfb99",
+      "PromotionEligibility": "Eligible",
+      "LifecycleState": "Proposed",
+      "IntegrityVerified": true,
+      "FormalLabelCandidateIsFormal": false,
+      "ShadowOnly": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v10.16-formal-label-candidate/v1"
+    },
+    {
+      "CandidateLabelId": "flc-0055-coding-20260529-003",
+      "SourceShadowLabelId": "ebsl-0055-coding-20260529-003",
+      "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=coding-20260529-003",
+      "ExpectedPreference": "PositiveOverNegative",
+      "DeterministicBindingHash": "0f9f1dc35d06cf89e20060b54f1f1ce55435ab374cbd2fc12978b24badfe6337",
+      "PromotionEligibility": "Eligible",
+      "LifecycleState": "Proposed",
+      "IntegrityVerified": true,
+      "FormalLabelCandidateIsFormal": false,
+      "ShadowOnly": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v10.16-formal-label-candidate/v1"
+    },
+    {
+      "CandidateLabelId": "flc-0056-coding-20260529-004",
+      "SourceShadowLabelId": "ebsl-0056-coding-20260529-004",
+      "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=coding-20260529-004",
+      "ExpectedPreference": "PositiveOverNegative",
+      "DeterministicBindingHash": "818623751064e3ba8918fd5eb33deef6aa7fd34ea43eaa83a189533146cdf543",
+      "PromotionEligibility": "Eligible",
+      "LifecycleState": "Proposed",
+      "IntegrityVerified": true,
+      "FormalLabelCandidateIsFormal": false,
+      "ShadowOnly": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v10.16-formal-label-candidate/v1"
+    },
+    {
+      "CandidateLabelId": "flc-0057-coding-20260529-005",
+      "SourceShadowLabelId": "ebsl-0057-coding-20260529-005",
+      "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=coding-20260529-005",
+      "ExpectedPreference": "PositiveOverNegative",
+      "DeterministicBindingHash": "d9288b369f0eb00b3ca12f5ec13700609618a924bd9f97df31854a25728d2c8e",
+      "PromotionEligibility": "Eligible",
+      "LifecycleState": "Proposed",
+      "IntegrityVerified": true,
+      "FormalLabelCandidateIsFormal": false,
+      "ShadowOnly": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v10.16-formal-label-candidate/v1"
+    },
+    {
+      "CandidateLabelId": "flc-0058-coding-20260529-006",
+      "SourceShadowLabelId": "ebsl-0058-coding-20260529-006",
+      "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=coding-20260529-006",
+      "ExpectedPreference": "PositiveOverNegative",
+      "DeterministicBindingHash": "b7b956caacd04d5254d235df71cebe39d671d47ab8299c7cb2eb99f723274c6b",
+      "PromotionEligibility": "Eligible",
+      "LifecycleState": "Proposed",
+      "IntegrityVerified": true,
+      "FormalLabelCandidateIsFormal": false,
+      "ShadowOnly": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v10.16-formal-label-candidate/v1"
+    },
+    {
+      "CandidateLabelId": "flc-0059-coding-20260529-007",
+      "SourceShadowLabelId": "ebsl-0059-coding-20260529-007",
+      "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=coding-20260529-007",
+      "ExpectedPreference": "PositiveOverNegative",
+      "DeterministicBindingHash": "b2df11c4d230e5d35c19a144c9f91b4c793fb1ae8927fc2a4bd3920aaead58c0",
+      "PromotionEligibility": "Eligible",
+      "LifecycleState": "Proposed",
+      "IntegrityVerified": true,
+      "FormalLabelCandidateIsFormal": false,
+      "ShadowOnly": true,
+      "AutoIngest": false,
+      "PolicyVersion": "v10.16-formal-label-candidate/v1"
+    }
+  ],
+  "FormalLabelIntegrityManifest": {
+    "ManifestId": "v10-formal-label-integrity-manifest-4d399ad5f88244599110266c2ec28d8e",
+    "ManifestVersion": "v10.16-formal-label-integrity/v1",
+    "HashAlgorithm": "SHA-256",
+    "TotalEntries": 60,
+    "VerifiedEntries": 60,
+    "MismatchedEntries": 0,
+    "Entries": [
+      {
+        "CandidateLabelId": "flc-0000-automation-sample-010",
+        "SourceShadowLabelId": "ebsl-0000-automation-sample-010",
+        "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=automation-sample-010",
+        "ExpectedPreference": "PositiveOverNegative",
+        "DeterministicBindingHash": "be4befd2631de048784bda6a9fa2c1468ddc8ae6b3348d9eb581cb07354227de",
+        "ExpectedHash": "be4befd2631de048784bda6a9fa2c1468ddc8ae6b3348d9eb581cb07354227de",
+        "HashMatches": true,
+        "IntegrityStatus": "Verified"
+      },
+      {
+        "CandidateLabelId": "flc-0001-chat-sample-003",
+        "SourceShadowLabelId": "ebsl-0001-chat-sample-003",
+        "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-sample-003",
+        "ExpectedPreference": "PositiveOverNegative",
+        "DeterministicBindingHash": "639f6d6dd0e7e0d2db63e0ac229940fc5913c8e0d760e75694e99c30af450615",
+        "ExpectedHash": "639f6d6dd0e7e0d2db63e0ac229940fc5913c8e0d760e75694e99c30af450615",
+        "HashMatches": true,
+        "IntegrityStatus": "Verified"
+      },
+      {
+        "CandidateLabelId": "flc-0002-novel-sample-008",
+        "SourceShadowLabelId": "ebsl-0002-novel-sample-008",
+        "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=novel-sample-008",
+        "ExpectedPreference": "PositiveOverNegative",
+        "DeterministicBindingHash": "6ef7564adb477a5dd74321123ac810f0cea1a5b013d7d812b9fafc4ffe0bde1e",
+        "ExpectedHash": "6ef7564adb477a5dd74321123ac810f0cea1a5b013d7d812b9fafc4ffe0bde1e",
+        "HashMatches": true,
+        "IntegrityStatus": "Verified"
+      },
+      {
+        "CandidateLabelId": "flc-0003-automation-20260529-001",
+        "SourceShadowLabelId": "ebsl-0003-automation-20260529-001",
+        "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=automation-20260529-001",
+        "ExpectedPreference": "PositiveOverNegative",
+        "DeterministicBindingHash": "85a09b68c20b535c39d990a70abe69f7a57647ad39bbe649c2b266a12e3dd5cd",
+        "ExpectedHash": "85a09b68c20b535c39d990a70abe69f7a57647ad39bbe649c2b266a12e3dd5cd",
+        "HashMatches": true,
+        "IntegrityStatus": "Verified"
+      },
+      {
+        "CandidateLabelId": "flc-0004-automation-20260529-002",
+        "SourceShadowLabelId": "ebsl-0004-automation-20260529-002",
+        "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=automation-20260529-002",
+        "ExpectedPreference": "PositiveOverNegative",
+        "DeterministicBindingHash": "2a232cbdd94a582a19feb1b55633f0e8530ccb397374052467795cf3f315a7eb",
+        "ExpectedHash": "2a232cbdd94a582a19feb1b55633f0e8530ccb397374052467795cf3f315a7eb",
+        "HashMatches": true,
+        "IntegrityStatus": "Verified"
+      },
+      {
+        "CandidateLabelId": "flc-0005-automation-20260529-003",
+        "SourceShadowLabelId": "ebsl-0005-automation-20260529-003",
+        "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=automation-20260529-003",
+        "ExpectedPreference": "PositiveOverNegative",
+        "DeterministicBindingHash": "5bebe89d26782f30173176fbddbffb0eb1f20fe85d98b655de588d0ca3da7ce1",
+        "ExpectedHash": "5bebe89d26782f30173176fbddbffb0eb1f20fe85d98b655de588d0ca3da7ce1",
+        "HashMatches": true,
+        "IntegrityStatus": "Verified"
+      },
+      {
+        "CandidateLabelId": "flc-0006-automation-20260529-004",
+        "SourceShadowLabelId": "ebsl-0006-automation-20260529-004",
+        "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=automation-20260529-004",
+        "ExpectedPreference": "PositiveOverNegative",
+        "DeterministicBindingHash": "792e4b28fe98584df3bfccc96a4d36c0c547a69622fecfa0bc0125dc9dae4526",
+        "ExpectedHash": "792e4b28fe98584df3bfccc96a4d36c0c547a69622fecfa0bc0125dc9dae4526",
+        "HashMatches": true,
+        "IntegrityStatus": "Verified"
+      },
+      {
+        "CandidateLabelId": "flc-0007-automation-20260529-005",
+        "SourceShadowLabelId": "ebsl-0007-automation-20260529-005",
+        "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=automation-20260529-005",
+        "ExpectedPreference": "PositiveOverNegative",
+        "DeterministicBindingHash": "95a2a767bea8fb95ce1ae0516dfd436b2b6ad95384ba94fce748a77c42e6b4a5",
+        "ExpectedHash": "95a2a767bea8fb95ce1ae0516dfd436b2b6ad95384ba94fce748a77c42e6b4a5",
+        "HashMatches": true,
+        "IntegrityStatus": "Verified"
+      },
+      {
+        "CandidateLabelId": "flc-0008-automation-20260529-006",
+        "SourceShadowLabelId": "ebsl-0008-automation-20260529-006",
+        "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=automation-20260529-006",
+        "ExpectedPreference": "PositiveOverNegative",
+        "DeterministicBindingHash": "fe99730191e27631fba686aee88a14731e0fb93e53918aaed926e22c2b98ca01",
+        "ExpectedHash": "fe99730191e27631fba686aee88a14731e0fb93e53918aaed926e22c2b98ca01",
+        "HashMatches": true,
+        "IntegrityStatus": "Verified"
+      },
+      {
+        "CandidateLabelId": "flc-0009-automation-20260529-007",
+        "SourceShadowLabelId": "ebsl-0009-automation-20260529-007",
+        "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=automation-20260529-007",
+        "ExpectedPreference": "PositiveOverNegative",
+        "DeterministicBindingHash": "43d1a41c789b4fa581b5cef0ad237a46f8de4b81d75ef017822bab1b16396e81",
+        "ExpectedHash": "43d1a41c789b4fa581b5cef0ad237a46f8de4b81d75ef017822bab1b16396e81",
+        "HashMatches": true,
+        "IntegrityStatus": "Verified"
+      },
+      {
+        "CandidateLabelId": "flc-0010-automation-20260529-008",
+        "SourceShadowLabelId": "ebsl-0010-automation-20260529-008",
+        "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=automation-20260529-008",
+        "ExpectedPreference": "PositiveOverNegative",
+        "DeterministicBindingHash": "a94aaa2549e27cfedc8cdd8005e4bb4cbf2a89d5eebfbde69468f7df6844324c",
+        "ExpectedHash": "a94aaa2549e27cfedc8cdd8005e4bb4cbf2a89d5eebfbde69468f7df6844324c",
+        "HashMatches": true,
+        "IntegrityStatus": "Verified"
+      },
+      {
+        "CandidateLabelId": "flc-0011-automation-20260529-009",
+        "SourceShadowLabelId": "ebsl-0011-automation-20260529-009",
+        "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=automation-20260529-009",
+        "ExpectedPreference": "PositiveOverNegative",
+        "DeterministicBindingHash": "0f599299c58a8c994c05a73a683d262ddf687cba53f1d875c22413160eace210",
+        "ExpectedHash": "0f599299c58a8c994c05a73a683d262ddf687cba53f1d875c22413160eace210",
+        "HashMatches": true,
+        "IntegrityStatus": "Verified"
+      },
+      {
+        "CandidateLabelId": "flc-0012-automation-20260529-010",
+        "SourceShadowLabelId": "ebsl-0012-automation-20260529-010",
+        "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=automation-20260529-010",
+        "ExpectedPreference": "PositiveOverNegative",
+        "DeterministicBindingHash": "26c4015ad3c8618c46cd27a1ea770d2b71b33897885d3a5ac58e6d36fdce513b",
+        "ExpectedHash": "26c4015ad3c8618c46cd27a1ea770d2b71b33897885d3a5ac58e6d36fdce513b",
+        "HashMatches": true,
+        "IntegrityStatus": "Verified"
+      },
+      {
+        "CandidateLabelId": "flc-0013-automation-sample-001",
+        "SourceShadowLabelId": "ebsl-0013-automation-sample-001",
+        "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=automation-sample-001",
+        "ExpectedPreference": "PositiveOverNegative",
+        "DeterministicBindingHash": "fac8c2c57ed96dce11460752ffef8741abdf062056c32ad49c0a56cd53ecf59f",
+        "ExpectedHash": "fac8c2c57ed96dce11460752ffef8741abdf062056c32ad49c0a56cd53ecf59f",
+        "HashMatches": true,
+        "IntegrityStatus": "Verified"
+      },
+      {
+        "CandidateLabelId": "flc-0014-automation-sample-002",
+        "SourceShadowLabelId": "ebsl-0014-automation-sample-002",
+        "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=automation-sample-002",
+        "ExpectedPreference": "PositiveOverNegative",
+        "DeterministicBindingHash": "bcfcfc4511c5fe1411c820c8243dcb5964494ae6871e31173d1ff931daf1f92d",
+        "ExpectedHash": "bcfcfc4511c5fe1411c820c8243dcb5964494ae6871e31173d1ff931daf1f92d",
+        "HashMatches": true,
+        "IntegrityStatus": "Verified"
+      },
+      {
+        "CandidateLabelId": "flc-0015-automation-sample-003",
+        "SourceShadowLabelId": "ebsl-0015-automation-sample-003",
+        "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=automation-sample-003",
+        "ExpectedPreference": "PositiveOverNegative",
+        "DeterministicBindingHash": "30c3784b46f571874ec1899c2e15f57b2781cb04651efdf7600669987dade7ce",
+        "ExpectedHash": "30c3784b46f571874ec1899c2e15f57b2781cb04651efdf7600669987dade7ce",
+        "HashMatches": true,
+        "IntegrityStatus": "Verified"
+      },
+      {
+        "CandidateLabelId": "flc-0016-automation-sample-004",
+        "SourceShadowLabelId": "ebsl-0016-automation-sample-004",
+        "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=automation-sample-004",
+        "ExpectedPreference": "PositiveOverNegative",
+        "DeterministicBindingHash": "b64bdbf4ad670163ca8443ddbdfa71631fcb6b0d1df75517bb168538d6244129",
+        "ExpectedHash": "b64bdbf4ad670163ca8443ddbdfa71631fcb6b0d1df75517bb168538d6244129",
+        "HashMatches": true,
+        "IntegrityStatus": "Verified"
+      },
+      {
+        "CandidateLabelId": "flc-0017-automation-sample-005",
+        "SourceShadowLabelId": "ebsl-0017-automation-sample-005",
+        "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=automation-sample-005",
+        "ExpectedPreference": "PositiveOverNegative",
+        "DeterministicBindingHash": "2e548b86a144900262af410cc2040603f23ca901fee570f8446220f68d7529ef",
+        "ExpectedHash": "2e548b86a144900262af410cc2040603f23ca901fee570f8446220f68d7529ef",
+        "HashMatches": true,
+        "IntegrityStatus": "Verified"
+      },
+      {
+        "CandidateLabelId": "flc-0018-automation-sample-006",
+        "SourceShadowLabelId": "ebsl-0018-automation-sample-006",
+        "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=automation-sample-006",
+        "ExpectedPreference": "PositiveOverNegative",
+        "DeterministicBindingHash": "335a53d2d6360c2eed87bf92a37a678f39e39789f73e2f499f82505b9cd0959d",
+        "ExpectedHash": "335a53d2d6360c2eed87bf92a37a678f39e39789f73e2f499f82505b9cd0959d",
+        "HashMatches": true,
+        "IntegrityStatus": "Verified"
+      },
+      {
+        "CandidateLabelId": "flc-0019-automation-sample-007",
+        "SourceShadowLabelId": "ebsl-0019-automation-sample-007",
+        "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=automation-sample-007",
+        "ExpectedPreference": "PositiveOverNegative",
+        "DeterministicBindingHash": "eea9f3623fd6a067d5bc1cff8b419010be56b29028876553ae6f1cb505d1eefb",
+        "ExpectedHash": "eea9f3623fd6a067d5bc1cff8b419010be56b29028876553ae6f1cb505d1eefb",
+        "HashMatches": true,
+        "IntegrityStatus": "Verified"
+      },
+      {
+        "CandidateLabelId": "flc-0020-automation-sample-008",
+        "SourceShadowLabelId": "ebsl-0020-automation-sample-008",
+        "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=automation-sample-008",
+        "ExpectedPreference": "PositiveOverNegative",
+        "DeterministicBindingHash": "6137992cf8657fe41ef6bcecf6115c4a3d187ce63945e7a2e1c89f0abfa1f7a8",
+        "ExpectedHash": "6137992cf8657fe41ef6bcecf6115c4a3d187ce63945e7a2e1c89f0abfa1f7a8",
+        "HashMatches": true,
+        "IntegrityStatus": "Verified"
+      },
+      {
+        "CandidateLabelId": "flc-0021-automation-sample-009",
+        "SourceShadowLabelId": "ebsl-0021-automation-sample-009",
+        "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=automation-sample-009",
+        "ExpectedPreference": "PositiveOverNegative",
+        "DeterministicBindingHash": "2cbce8cf70307a401a3ee95cad2804d78d576461d43122009519988dc3f07fad",
+        "ExpectedHash": "2cbce8cf70307a401a3ee95cad2804d78d576461d43122009519988dc3f07fad",
+        "HashMatches": true,
+        "IntegrityStatus": "Verified"
+      },
+      {
+        "CandidateLabelId": "flc-0022-automation-sample-010",
+        "SourceShadowLabelId": "ebsl-0022-automation-sample-010",
+        "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=automation-sample-010",
+        "ExpectedPreference": "PositiveOverNegative",
+        "DeterministicBindingHash": "e3c210e2f7f96f386dacfdb17c52c87ac9e780e1dd9e26138892ebff7d2839fc",
+        "ExpectedHash": "e3c210e2f7f96f386dacfdb17c52c87ac9e780e1dd9e26138892ebff7d2839fc",
+        "HashMatches": true,
+        "IntegrityStatus": "Verified"
+      },
+      {
+        "CandidateLabelId": "flc-0023-chat-20260529-001",
+        "SourceShadowLabelId": "ebsl-0023-chat-20260529-001",
+        "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-20260529-001",
+        "ExpectedPreference": "PositiveOverNegative",
+        "DeterministicBindingHash": "d5084e7ba6b0160ae30333a8397c8d295d563096ba24aae0ae10191cfa04238e",
+        "ExpectedHash": "d5084e7ba6b0160ae30333a8397c8d295d563096ba24aae0ae10191cfa04238e",
+        "HashMatches": true,
+        "IntegrityStatus": "Verified"
+      },
+      {
+        "CandidateLabelId": "flc-0024-chat-20260529-002",
+        "SourceShadowLabelId": "ebsl-0024-chat-20260529-002",
+        "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-20260529-002",
+        "ExpectedPreference": "PositiveOverNegative",
+        "DeterministicBindingHash": "8b25851b1c0c091f215d0153516ef092dde79a9adcd517678d531802cbff2bea",
+        "ExpectedHash": "8b25851b1c0c091f215d0153516ef092dde79a9adcd517678d531802cbff2bea",
+        "HashMatches": true,
+        "IntegrityStatus": "Verified"
+      },
+      {
+        "CandidateLabelId": "flc-0025-chat-20260529-003",
+        "SourceShadowLabelId": "ebsl-0025-chat-20260529-003",
+        "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-20260529-003",
+        "ExpectedPreference": "PositiveOverNegative",
+        "DeterministicBindingHash": "36f201a12e233c4f1b10489d2e54dbc8ab241d28b46516cf832ef25c78f011d3",
+        "ExpectedHash": "36f201a12e233c4f1b10489d2e54dbc8ab241d28b46516cf832ef25c78f011d3",
+        "HashMatches": true,
+        "IntegrityStatus": "Verified"
+      },
+      {
+        "CandidateLabelId": "flc-0026-chat-20260529-004",
+        "SourceShadowLabelId": "ebsl-0026-chat-20260529-004",
+        "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-20260529-004",
+        "ExpectedPreference": "PositiveOverNegative",
+        "DeterministicBindingHash": "e19eab2a79ab5a2b4d49e586989fb81e16a7bd52682b2339ea66defaa709fb67",
+        "ExpectedHash": "e19eab2a79ab5a2b4d49e586989fb81e16a7bd52682b2339ea66defaa709fb67",
+        "HashMatches": true,
+        "IntegrityStatus": "Verified"
+      },
+      {
+        "CandidateLabelId": "flc-0027-chat-20260529-005",
+        "SourceShadowLabelId": "ebsl-0027-chat-20260529-005",
+        "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-20260529-005",
+        "ExpectedPreference": "PositiveOverNegative",
+        "DeterministicBindingHash": "ed9312b6d90ab1baedf6a744139564440b1a1ddc41ded506057e10130da74808",
+        "ExpectedHash": "ed9312b6d90ab1baedf6a744139564440b1a1ddc41ded506057e10130da74808",
+        "HashMatches": true,
+        "IntegrityStatus": "Verified"
+      },
+      {
+        "CandidateLabelId": "flc-0028-chat-20260529-006",
+        "SourceShadowLabelId": "ebsl-0028-chat-20260529-006",
+        "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-20260529-006",
+        "ExpectedPreference": "PositiveOverNegative",
+        "DeterministicBindingHash": "33813a872bee257ff9ae02759a3d664d517f87f3a09bd1ad7848b91ae494815c",
+        "ExpectedHash": "33813a872bee257ff9ae02759a3d664d517f87f3a09bd1ad7848b91ae494815c",
+        "HashMatches": true,
+        "IntegrityStatus": "Verified"
+      },
+      {
+        "CandidateLabelId": "flc-0029-chat-20260529-007",
+        "SourceShadowLabelId": "ebsl-0029-chat-20260529-007",
+        "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-20260529-007",
+        "ExpectedPreference": "PositiveOverNegative",
+        "DeterministicBindingHash": "c1a794bd25f6a579a70a69cc9b51ed9bc0b2c943cca19a6b92ebb8c85891cdb6",
+        "ExpectedHash": "c1a794bd25f6a579a70a69cc9b51ed9bc0b2c943cca19a6b92ebb8c85891cdb6",
+        "HashMatches": true,
+        "IntegrityStatus": "Verified"
+      },
+      {
+        "CandidateLabelId": "flc-0030-chat-20260529-008",
+        "SourceShadowLabelId": "ebsl-0030-chat-20260529-008",
+        "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-20260529-008",
+        "ExpectedPreference": "PositiveOverNegative",
+        "DeterministicBindingHash": "4975c3e0ae444652c5b15111c61d51445f57dead67f4d0907a12b843aec973a3",
+        "ExpectedHash": "4975c3e0ae444652c5b15111c61d51445f57dead67f4d0907a12b843aec973a3",
+        "HashMatches": true,
+        "IntegrityStatus": "Verified"
+      },
+      {
+        "CandidateLabelId": "flc-0031-chat-20260529-009",
+        "SourceShadowLabelId": "ebsl-0031-chat-20260529-009",
+        "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-20260529-009",
+        "ExpectedPreference": "PositiveOverNegative",
+        "DeterministicBindingHash": "8838f0699545a6ccf1ff30ba0cea61d7da22ace631f47dc79502a1764f8fb3f0",
+        "ExpectedHash": "8838f0699545a6ccf1ff30ba0cea61d7da22ace631f47dc79502a1764f8fb3f0",
+        "HashMatches": true,
+        "IntegrityStatus": "Verified"
+      },
+      {
+        "CandidateLabelId": "flc-0032-chat-20260529-010",
+        "SourceShadowLabelId": "ebsl-0032-chat-20260529-010",
+        "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-20260529-010",
+        "ExpectedPreference": "PositiveOverNegative",
+        "DeterministicBindingHash": "6145381c68c8a04b1665edf35cb2d01025eb3242ba319e4bb6f15edaff84d95e",
+        "ExpectedHash": "6145381c68c8a04b1665edf35cb2d01025eb3242ba319e4bb6f15edaff84d95e",
+        "HashMatches": true,
+        "IntegrityStatus": "Verified"
+      },
+      {
+        "CandidateLabelId": "flc-0033-chat-20260529-011",
+        "SourceShadowLabelId": "ebsl-0033-chat-20260529-011",
+        "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-20260529-011",
+        "ExpectedPreference": "PositiveOverNegative",
+        "DeterministicBindingHash": "8db8b1eb3eca8917d45562709d1e14ab046a5ce8f560a7f2239c0c413c154545",
+        "ExpectedHash": "8db8b1eb3eca8917d45562709d1e14ab046a5ce8f560a7f2239c0c413c154545",
+        "HashMatches": true,
+        "IntegrityStatus": "Verified"
+      },
+      {
+        "CandidateLabelId": "flc-0034-chat-20260529-012",
+        "SourceShadowLabelId": "ebsl-0034-chat-20260529-012",
+        "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-20260529-012",
+        "ExpectedPreference": "PositiveOverNegative",
+        "DeterministicBindingHash": "9ab13047028089e039f00459fa66fb86fdb95d60f32382075109383f14336007",
+        "ExpectedHash": "9ab13047028089e039f00459fa66fb86fdb95d60f32382075109383f14336007",
+        "HashMatches": true,
+        "IntegrityStatus": "Verified"
+      },
+      {
+        "CandidateLabelId": "flc-0035-chat-20260529-013",
+        "SourceShadowLabelId": "ebsl-0035-chat-20260529-013",
+        "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-20260529-013",
+        "ExpectedPreference": "PositiveOverNegative",
+        "DeterministicBindingHash": "2a56ec46cd8894716e8982fca2f6415d4ee20bad95157f329badb41eb40d0157",
+        "ExpectedHash": "2a56ec46cd8894716e8982fca2f6415d4ee20bad95157f329badb41eb40d0157",
+        "HashMatches": true,
+        "IntegrityStatus": "Verified"
+      },
+      {
+        "CandidateLabelId": "flc-0036-chat-20260529-014",
+        "SourceShadowLabelId": "ebsl-0036-chat-20260529-014",
+        "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-20260529-014",
+        "ExpectedPreference": "PositiveOverNegative",
+        "DeterministicBindingHash": "c036e3f99eecfdfb27acfca36a5c04a007050307f2d723360ff91707533f7f33",
+        "ExpectedHash": "c036e3f99eecfdfb27acfca36a5c04a007050307f2d723360ff91707533f7f33",
+        "HashMatches": true,
+        "IntegrityStatus": "Verified"
+      },
+      {
+        "CandidateLabelId": "flc-0037-chat-20260529-015",
+        "SourceShadowLabelId": "ebsl-0037-chat-20260529-015",
+        "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-20260529-015",
+        "ExpectedPreference": "PositiveOverNegative",
+        "DeterministicBindingHash": "556cc911c9198b57a3346eff54fe6fc31168dec578043d8f6e0e40156068b00c",
+        "ExpectedHash": "556cc911c9198b57a3346eff54fe6fc31168dec578043d8f6e0e40156068b00c",
+        "HashMatches": true,
+        "IntegrityStatus": "Verified"
+      },
+      {
+        "CandidateLabelId": "flc-0038-chat-20260529-016",
+        "SourceShadowLabelId": "ebsl-0038-chat-20260529-016",
+        "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-20260529-016",
+        "ExpectedPreference": "PositiveOverNegative",
+        "DeterministicBindingHash": "18746701efeab4e2ec72032c5a68f8ecaf258ca155550cf22bbcd3769b10650a",
+        "ExpectedHash": "18746701efeab4e2ec72032c5a68f8ecaf258ca155550cf22bbcd3769b10650a",
+        "HashMatches": true,
+        "IntegrityStatus": "Verified"
+      },
+      {
+        "CandidateLabelId": "flc-0039-chat-20260529-017",
+        "SourceShadowLabelId": "ebsl-0039-chat-20260529-017",
+        "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-20260529-017",
+        "ExpectedPreference": "PositiveOverNegative",
+        "DeterministicBindingHash": "6ef44966be6c199dc9dc7c9f40a97007641b40539a31f5894ae15e7c42524a40",
+        "ExpectedHash": "6ef44966be6c199dc9dc7c9f40a97007641b40539a31f5894ae15e7c42524a40",
+        "HashMatches": true,
+        "IntegrityStatus": "Verified"
+      },
+      {
+        "CandidateLabelId": "flc-0040-chat-20260529-018",
+        "SourceShadowLabelId": "ebsl-0040-chat-20260529-018",
+        "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-20260529-018",
+        "ExpectedPreference": "PositiveOverNegative",
+        "DeterministicBindingHash": "27e8f4de2d434372398237bad93998662399a946e92fde23e3ef4ddb90a1cba2",
+        "ExpectedHash": "27e8f4de2d434372398237bad93998662399a946e92fde23e3ef4ddb90a1cba2",
+        "HashMatches": true,
+        "IntegrityStatus": "Verified"
+      },
+      {
+        "CandidateLabelId": "flc-0041-chat-20260529-019",
+        "SourceShadowLabelId": "ebsl-0041-chat-20260529-019",
+        "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-20260529-019",
+        "ExpectedPreference": "PositiveOverNegative",
+        "DeterministicBindingHash": "359d6ae790622583457c0bdda8f080717ad2f5835b5d518b5bab489df6091755",
+        "ExpectedHash": "359d6ae790622583457c0bdda8f080717ad2f5835b5d518b5bab489df6091755",
+        "HashMatches": true,
+        "IntegrityStatus": "Verified"
+      },
+      {
+        "CandidateLabelId": "flc-0042-chat-20260529-020",
+        "SourceShadowLabelId": "ebsl-0042-chat-20260529-020",
+        "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-20260529-020",
+        "ExpectedPreference": "PositiveOverNegative",
+        "DeterministicBindingHash": "66b495442e1258df9af142202b8d84d3143e909323c58e972f95401ffbc6cd6c",
+        "ExpectedHash": "66b495442e1258df9af142202b8d84d3143e909323c58e972f95401ffbc6cd6c",
+        "HashMatches": true,
+        "IntegrityStatus": "Verified"
+      },
+      {
+        "CandidateLabelId": "flc-0043-chat-sample-001",
+        "SourceShadowLabelId": "ebsl-0043-chat-sample-001",
+        "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-sample-001",
+        "ExpectedPreference": "PositiveOverNegative",
+        "DeterministicBindingHash": "70672b81c1c13b3f4ff5d700257fc691979e4684d2357f82814ff4d05b93767a",
+        "ExpectedHash": "70672b81c1c13b3f4ff5d700257fc691979e4684d2357f82814ff4d05b93767a",
+        "HashMatches": true,
+        "IntegrityStatus": "Verified"
+      },
+      {
+        "CandidateLabelId": "flc-0044-chat-sample-002",
+        "SourceShadowLabelId": "ebsl-0044-chat-sample-002",
+        "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-sample-002",
+        "ExpectedPreference": "PositiveOverNegative",
+        "DeterministicBindingHash": "a02e4f058d90518282c1e5bb082d55f52c60d58a2a924bcc39b83a25c9f89f61",
+        "ExpectedHash": "a02e4f058d90518282c1e5bb082d55f52c60d58a2a924bcc39b83a25c9f89f61",
+        "HashMatches": true,
+        "IntegrityStatus": "Verified"
+      },
+      {
+        "CandidateLabelId": "flc-0045-chat-sample-003",
+        "SourceShadowLabelId": "ebsl-0045-chat-sample-003",
+        "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-sample-003",
+        "ExpectedPreference": "PositiveOverNegative",
+        "DeterministicBindingHash": "32dea372610c2a210295875c74d6fc666d2c21533039fd4ff0b803508d97a452",
+        "ExpectedHash": "32dea372610c2a210295875c74d6fc666d2c21533039fd4ff0b803508d97a452",
+        "HashMatches": true,
+        "IntegrityStatus": "Verified"
+      },
+      {
+        "CandidateLabelId": "flc-0046-chat-sample-004",
+        "SourceShadowLabelId": "ebsl-0046-chat-sample-004",
+        "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-sample-004",
+        "ExpectedPreference": "PositiveOverNegative",
+        "DeterministicBindingHash": "76cc69b0e1b524559f2f8234ed498bcacf707233920050c74ab794d160f0c12e",
+        "ExpectedHash": "76cc69b0e1b524559f2f8234ed498bcacf707233920050c74ab794d160f0c12e",
+        "HashMatches": true,
+        "IntegrityStatus": "Verified"
+      },
+      {
+        "CandidateLabelId": "flc-0047-chat-sample-005",
+        "SourceShadowLabelId": "ebsl-0047-chat-sample-005",
+        "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-sample-005",
+        "ExpectedPreference": "PositiveOverNegative",
+        "DeterministicBindingHash": "26a59019fa6fcccd7dd6ca04bfb1da7b9944fe1031a18049580631e1fa4c33e1",
+        "ExpectedHash": "26a59019fa6fcccd7dd6ca04bfb1da7b9944fe1031a18049580631e1fa4c33e1",
+        "HashMatches": true,
+        "IntegrityStatus": "Verified"
+      },
+      {
+        "CandidateLabelId": "flc-0048-chat-sample-006",
+        "SourceShadowLabelId": "ebsl-0048-chat-sample-006",
+        "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-sample-006",
+        "ExpectedPreference": "PositiveOverNegative",
+        "DeterministicBindingHash": "4f18d7bed1c875d3d8921548c0c2d41bfeb9478c05d73428959df6915f7fe42d",
+        "ExpectedHash": "4f18d7bed1c875d3d8921548c0c2d41bfeb9478c05d73428959df6915f7fe42d",
+        "HashMatches": true,
+        "IntegrityStatus": "Verified"
+      },
+      {
+        "CandidateLabelId": "flc-0049-chat-sample-007",
+        "SourceShadowLabelId": "ebsl-0049-chat-sample-007",
+        "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-sample-007",
+        "ExpectedPreference": "PositiveOverNegative",
+        "DeterministicBindingHash": "74a57ba9c54d7ec21ab401a52682f6f9a99c047b84ccc0f995efa09855e04d05",
+        "ExpectedHash": "74a57ba9c54d7ec21ab401a52682f6f9a99c047b84ccc0f995efa09855e04d05",
+        "HashMatches": true,
+        "IntegrityStatus": "Verified"
+      },
+      {
+        "CandidateLabelId": "flc-0050-chat-sample-008",
+        "SourceShadowLabelId": "ebsl-0050-chat-sample-008",
+        "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-sample-008",
+        "ExpectedPreference": "PositiveOverNegative",
+        "DeterministicBindingHash": "5b592ca8aed1e51a8272226839bc34ffc463dd8e1e4f0f288e962b27fb6f6e3b",
+        "ExpectedHash": "5b592ca8aed1e51a8272226839bc34ffc463dd8e1e4f0f288e962b27fb6f6e3b",
+        "HashMatches": true,
+        "IntegrityStatus": "Verified"
+      },
+      {
+        "CandidateLabelId": "flc-0051-chat-sample-009",
+        "SourceShadowLabelId": "ebsl-0051-chat-sample-009",
+        "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-sample-009",
+        "ExpectedPreference": "PositiveOverNegative",
+        "DeterministicBindingHash": "f5adfb2a3076a504a200a9a7555981e8143f2b5c83f46f59bf42ee0bd4c82d69",
+        "ExpectedHash": "f5adfb2a3076a504a200a9a7555981e8143f2b5c83f46f59bf42ee0bd4c82d69",
+        "HashMatches": true,
+        "IntegrityStatus": "Verified"
+      },
+      {
+        "CandidateLabelId": "flc-0052-chat-sample-010",
+        "SourceShadowLabelId": "ebsl-0052-chat-sample-010",
+        "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-sample-010",
+        "ExpectedPreference": "PositiveOverNegative",
+        "DeterministicBindingHash": "1cb420e02dcc9f37eba72ed7a547d54efcba8c486a306b41e38d31aaacb8d08b",
+        "ExpectedHash": "1cb420e02dcc9f37eba72ed7a547d54efcba8c486a306b41e38d31aaacb8d08b",
+        "HashMatches": true,
+        "IntegrityStatus": "Verified"
+      },
+      {
+        "CandidateLabelId": "flc-0053-coding-20260529-001",
+        "SourceShadowLabelId": "ebsl-0053-coding-20260529-001",
+        "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=coding-20260529-001",
+        "ExpectedPreference": "PositiveOverNegative",
+        "DeterministicBindingHash": "dfd2ad3818bbdc5902bee36833f545273812a4a8075f9ab0f5b03965f2c83f05",
+        "ExpectedHash": "dfd2ad3818bbdc5902bee36833f545273812a4a8075f9ab0f5b03965f2c83f05",
+        "HashMatches": true,
+        "IntegrityStatus": "Verified"
+      },
+      {
+        "CandidateLabelId": "flc-0054-coding-20260529-002",
+        "SourceShadowLabelId": "ebsl-0054-coding-20260529-002",
+        "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=coding-20260529-002",
+        "ExpectedPreference": "PositiveOverNegative",
+        "DeterministicBindingHash": "1bc0bd463a2dab170cebf8fbf972bd8fff1ba3b004961629d1a9d1bd00bcfb99",
+        "ExpectedHash": "1bc0bd463a2dab170cebf8fbf972bd8fff1ba3b004961629d1a9d1bd00bcfb99",
+        "HashMatches": true,
+        "IntegrityStatus": "Verified"
+      },
+      {
+        "CandidateLabelId": "flc-0055-coding-20260529-003",
+        "SourceShadowLabelId": "ebsl-0055-coding-20260529-003",
+        "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=coding-20260529-003",
+        "ExpectedPreference": "PositiveOverNegative",
+        "DeterministicBindingHash": "0f9f1dc35d06cf89e20060b54f1f1ce55435ab374cbd2fc12978b24badfe6337",
+        "ExpectedHash": "0f9f1dc35d06cf89e20060b54f1f1ce55435ab374cbd2fc12978b24badfe6337",
+        "HashMatches": true,
+        "IntegrityStatus": "Verified"
+      },
+      {
+        "CandidateLabelId": "flc-0056-coding-20260529-004",
+        "SourceShadowLabelId": "ebsl-0056-coding-20260529-004",
+        "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=coding-20260529-004",
+        "ExpectedPreference": "PositiveOverNegative",
+        "DeterministicBindingHash": "818623751064e3ba8918fd5eb33deef6aa7fd34ea43eaa83a189533146cdf543",
+        "ExpectedHash": "818623751064e3ba8918fd5eb33deef6aa7fd34ea43eaa83a189533146cdf543",
+        "HashMatches": true,
+        "IntegrityStatus": "Verified"
+      },
+      {
+        "CandidateLabelId": "flc-0057-coding-20260529-005",
+        "SourceShadowLabelId": "ebsl-0057-coding-20260529-005",
+        "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=coding-20260529-005",
+        "ExpectedPreference": "PositiveOverNegative",
+        "DeterministicBindingHash": "d9288b369f0eb00b3ca12f5ec13700609618a924bd9f97df31854a25728d2c8e",
+        "ExpectedHash": "d9288b369f0eb00b3ca12f5ec13700609618a924bd9f97df31854a25728d2c8e",
+        "HashMatches": true,
+        "IntegrityStatus": "Verified"
+      },
+      {
+        "CandidateLabelId": "flc-0058-coding-20260529-006",
+        "SourceShadowLabelId": "ebsl-0058-coding-20260529-006",
+        "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=coding-20260529-006",
+        "ExpectedPreference": "PositiveOverNegative",
+        "DeterministicBindingHash": "b7b956caacd04d5254d235df71cebe39d671d47ab8299c7cb2eb99f723274c6b",
+        "ExpectedHash": "b7b956caacd04d5254d235df71cebe39d671d47ab8299c7cb2eb99f723274c6b",
+        "HashMatches": true,
+        "IntegrityStatus": "Verified"
+      },
+      {
+        "CandidateLabelId": "flc-0059-coding-20260529-007",
+        "SourceShadowLabelId": "ebsl-0059-coding-20260529-007",
+        "EvidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=coding-20260529-007",
+        "ExpectedPreference": "PositiveOverNegative",
+        "DeterministicBindingHash": "b2df11c4d230e5d35c19a144c9f91b4c793fb1ae8927fc2a4bd3920aaead58c0",
+        "ExpectedHash": "b2df11c4d230e5d35c19a144c9f91b4c793fb1ae8927fc2a4bd3920aaead58c0",
+        "HashMatches": true,
+        "IntegrityStatus": "Verified"
+      }
+    ],
+    "AnyHashMismatch": false,
+    "ShadowOnly": true
+  },
+  "FormalLabelRealizationDecision": {
+    "DecisionId": "v10-formal-label-realization-decision-3305385da8e24537842140319f84bc28",
+    "CreatedAt": "2026-06-28T16:51:37.7839481\u002B00:00",
+    "FormalLabelCandidateCount": 60,
+    "RealizableFormalLabelCount": 60,
+    "InvalidBindingCount": 0,
+    "FormalLabelCandidatesReady": true,
+    "FormalLabelsRealized": false,
+    "FormalEvidenceSufficient": false,
+    "RuntimePilotExecutionReadyForSeparateGate": false,
+    "BlockedForRuntimePilotExecutionBy": [
+      "FormalLabelsNotRealizedInDataset",
+      "FormalEvidenceInsufficientV3"
+    ],
+    "HumanFeedbackAsSignal": true,
+    "HumanReviewAsGateAuthority": false,
+    "HumanFeedbackAutoIngest": false,
+    "FormalTrainingSetChanged": false,
+    "FormalLabelCandidatesAreFormal": false,
+    "AIArbitration": false,
+    "EvidenceSourcesConsidered": [
+      "learning/v10/formal-evidence-boundary-pack-gate.json",
+      "learning/v10/formal-label-realization-contract.json",
+      "learning/v10/formal-label-gap-report.json",
+      "learning/v10/evidence-bound-hard-negative-labels.jsonl",
+      "learning/v10/pre-pilot-readiness-decision.json"
+    ],
+    "DecisionNotes": [
+      "FormalLabelCandidateCount=60",
+      "RealizableFormalLabelCount=60 (passed integrity \u002B eligibility checks)",
+      "InvalidBindingCount=0",
+      "IntegrityManifest: verified=60, mismatched=0",
+      "Candidates are NOT formal labels: they are eligible-for-promotion descriptors. The formal dataset has not been changed.",
+      "FormalLabelsRealized stays false until controlled formal ingestion (V9.5 feedback pipeline) actually writes labels into the formal training set under human review.",
+      "RuntimePilotExecutionReadyForSeparateGate stays false until FormalEvidenceSufficient becomes true."
+    ]
+  },
+  "FormalLabelRollbackContract": {
+    "ContractVersion": "v10.16-formal-label-rollback/v1",
+    "ContractMode": "SchemaOnlyNoRollbackExecuted",
+    "Fields": [
+      {
+        "FieldName": "rollbackId",
+        "Type": "string",
+        "Required": true,
+        "Description": "Stable id for the rollback operation; immutable once issued."
+      },
+      {
+        "FieldName": "targetFormalLabelIds",
+        "Type": "string[]",
+        "Required": true,
+        "Description": "Formal label ids to retract (must reference labels that were actually realized into the formal training set)."
+      },
+      {
+        "FieldName": "rollbackReason",
+        "Type": "string",
+        "Required": true,
+        "Description": "Reason code: HashMismatch / EvidencePathInvalid / OperatorRequest / DownstreamFailure."
+      },
+      {
+        "FieldName": "rollbackTrigger",
+        "Type": "string",
+        "Required": true,
+        "Description": "What surfaced the need: Integrity / Operator / Downstream."
+      },
+      {
+        "FieldName": "rollbackSnapshotReference",
+        "Type": "string",
+        "Required": true,
+        "Description": "Path to the formal-training-set snapshot from before the rollback (V8-style restore reference)."
+      },
+      {
+        "FieldName": "revocationRecordReference",
+        "Type": "string",
+        "Required": true,
+        "Description": "Path to the revocation record produced by the rollback (V8.18 revocation contract)."
+      },
+      {
+        "FieldName": "lifecycleStateAfter",
+        "Type": "string",
+        "Required": true,
+        "Description": "Must be one of Retracted / Quarantined; never Realized."
+      },
+      {
+        "FieldName": "executedAt",
+        "Type": "datetime",
+        "Required": false,
+        "Description": "Set when the rollback was applied (this contract never sets it)."
+      }
+    ],
+    "RollbackTriggers": [
+      "IntegrityManifest hash mismatch on any realized label",
+      "Evidence path invalidated (source ranking pair removed or rewritten)",
+      "Downstream pilot detects regression vs reference",
+      "Operator-initiated rollback under V9.5 review"
+    ],
+    "RollbackPreconditions": [
+      "Rollback may only be issued AFTER labels are actually realized (FormalLabelsRealized=true).",
+      "Rollback MUST reference an existing formal-training-set snapshot (V8-style rollback binding required).",
+      "Rollback MUST emit a revocation record under the V8.18 schema.",
+      "Rollback MUST keep V8 scoped activation state intact (no cross-pollination with V8 evidence)."
+    ],
+    "RollbackActions": [
+      "Read snapshot, restore formal training set entries to pre-realization state.",
+      "Mark affected labels LifecycleState=Retracted in the integrity manifest.",
+      "Emit revocation record per V8.18 contract.",
+      "Notify human reviewers (signal, not authority)."
+    ],
+    "FormalTrainingSetChanged": false,
+    "AutoIngest": false,
+    "RuntimeRollbackApplied": false
+  },
+  "FormalLabelCandidatesReady": true,
+  "FormalLabelIntegrityManifestReady": true,
+  "FormalLabelRealizationDecisionReady": true,
+  "FormalLabelRollbackContractReady": true,
+  "FormalLabelCandidateCount": 60,
+  "RealizableFormalLabelCount": 60,
+  "InvalidBindingCount": 0,
+  "FormalLabelsRealized": false,
+  "FormalEvidenceSufficient": false,
+  "RuntimePilotExecutionReadyForSeparateGate": false,
+  "BlockedForRuntimePilotExecutionBy": [
+    "FormalLabelsNotRealizedInDataset",
+    "FormalEvidenceInsufficientV3"
+  ],
+  "FormalLabelCandidatesAreFormal": false,
+  "ShadowOnly": true,
+  "FormalTrainingSetChanged": false,
+  "AutoIngest": false,
+  "TrainingSetChanged": false,
+  "HumanFeedbackAsSignal": true,
+  "HumanReviewAsGateAuthority": false,
+  "HumanFeedbackAutoIngest": false,
+  "RuntimePromotionApplied": false,
+  "RuntimePilotExecutionApplied": false,
+  "RuntimeRerankerChanged": false,
+  "RuntimeRouterChanged": false,
+  "ProductionDecisionChanged": false,
+  "PackageOutputChanged": false,
+  "FormalPackageWritten": false,
+  "GlobalDefaultOn": false,
+  "MLAuthority": false,
+  "LLMAuthority": false,
+  "RuntimeAuthority": false,
+  "GateAuthority": false,
+  "V8ScopedActivationPreserved": true,
+  "UpstreamFormalEvidenceBoundaryPackGatePresent": true,
+  "UpstreamFormalEvidenceBoundaryPackGatePassed": true,
+  "MainlineEvidencePresent": false,
+  "MainlineTrustRegistryPresent": false,
+  "FormalLabelCandidatesPath": "learning/v10/formal-label-candidates.jsonl",
+  "FormalLabelIntegrityManifestPath": "learning/v10/formal-label-integrity-manifest.json",
+  "FormalLabelRealizationDecisionPath": "learning/v10/formal-label-realization-decision.json",
+  "FormalLabelRollbackContractPath": "learning/v10/formal-label-rollback-contract.json",
+  "Recommendation": "ProceedToControlledFormalLabelIngestionViaV9.5",
+  "NextAllowedPhase": "ControlledFormalLabelIngestion-pending-V9.5-human-feedback",
+  "BlockedReasons": [],
+  "Diagnostics": [
+    "total=31",
+    "realStatus=LearningFormalEvidenceRealizationPackReady",
+    "formalLabelCandidateCount=60",
+    "realizableFormalLabelCount=60",
+    "invalidBindingCount=0",
+    "hashVerifiedEntries=60",
+    "hashMismatchedEntries=0",
+    "formalLabelsRealized=False",
+    "formalEvidenceSufficient=False",
+    "runtimePilotReady=False"
+  ]
+}
