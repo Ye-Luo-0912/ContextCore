@@ -1,0 +1,884 @@
+﻿{
+  "OperationId": "v9-learning-layer-bootstrap-57a0db6d4def40d983ea4745817ba990",
+  "CreatedAt": "2026-06-28T09:27:32.5933991+00:00",
+  "LearningLayerBootstrapPassed": true,
+  "GatePassed": false,
+  "TotalCases": 19,
+  "PassedCases": 19,
+  "FailedCases": 0,
+  "ReadyCases": 1,
+  "BlockedCases": 18,
+  "Cases": [
+    {
+      "CaseName": "AllUpstreamClean",
+      "ExpectedStatus": "LearningLayerBootstrapReady",
+      "ActualStatus": "LearningLayerBootstrapReady",
+      "ExpectedBlockedReason": "",
+      "ActualBlockedReasons": [],
+      "ShadowOnly": true,
+      "RuntimeAuthority": false,
+      "GateAuthority": false,
+      "PackageOutputChanged": false,
+      "FormalPackageWritten": false,
+      "GlobalDefaultOn": false,
+      "V8ScopedActivationPreserved": true,
+      "Reasoning": "learning layer bootstrap ready \u2014 dataset inventory, feature contract, and baseline plan in place; all entries shadow-only; V8 scoped activation preserved.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "DatasetQualityReportMissing",
+      "ExpectedStatus": "LearningLayerBootstrapBlocked",
+      "ActualStatus": "LearningLayerBootstrapBlocked",
+      "ExpectedBlockedReason": "DatasetQualityReportMissing",
+      "ActualBlockedReasons": [
+        "DatasetQualityReportMissing"
+      ],
+      "ShadowOnly": true,
+      "RuntimeAuthority": false,
+      "GateAuthority": false,
+      "PackageOutputChanged": false,
+      "FormalPackageWritten": false,
+      "GlobalDefaultOn": false,
+      "V8ScopedActivationPreserved": true,
+      "Reasoning": "1 blocked reason(s); learning layer bootstrap blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "RankingPairsMissing",
+      "ExpectedStatus": "LearningLayerBootstrapBlocked",
+      "ActualStatus": "LearningLayerBootstrapBlocked",
+      "ExpectedBlockedReason": "RankingPairsMissing",
+      "ActualBlockedReasons": [
+        "RankingPairsMissing"
+      ],
+      "ShadowOnly": true,
+      "RuntimeAuthority": false,
+      "GateAuthority": false,
+      "PackageOutputChanged": false,
+      "FormalPackageWritten": false,
+      "GlobalDefaultOn": false,
+      "V8ScopedActivationPreserved": true,
+      "Reasoning": "1 blocked reason(s); learning layer bootstrap blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "RouterIntentExamplesMissing",
+      "ExpectedStatus": "LearningLayerBootstrapBlocked",
+      "ActualStatus": "LearningLayerBootstrapBlocked",
+      "ExpectedBlockedReason": "RouterIntentExamplesMissing",
+      "ActualBlockedReasons": [
+        "RouterIntentExamplesMissing"
+      ],
+      "ShadowOnly": true,
+      "RuntimeAuthority": false,
+      "GateAuthority": false,
+      "PackageOutputChanged": false,
+      "FormalPackageWritten": false,
+      "GlobalDefaultOn": false,
+      "V8ScopedActivationPreserved": true,
+      "Reasoning": "1 blocked reason(s); learning layer bootstrap blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "AllFeaturesMissing",
+      "ExpectedStatus": "LearningLayerBootstrapBlocked",
+      "ActualStatus": "LearningLayerBootstrapBlocked",
+      "ExpectedBlockedReason": "AllFeaturesMissing",
+      "ActualBlockedReasons": [
+        "AllFeaturesMissing",
+        "RankingPairsMissing",
+        "RouterIntentExamplesMissing"
+      ],
+      "ShadowOnly": true,
+      "RuntimeAuthority": false,
+      "GateAuthority": false,
+      "PackageOutputChanged": false,
+      "FormalPackageWritten": false,
+      "GlobalDefaultOn": false,
+      "V8ScopedActivationPreserved": true,
+      "Reasoning": "3 blocked reason(s); learning layer bootstrap blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "RankerAblationReportMissing",
+      "ExpectedStatus": "LearningLayerBootstrapBlocked",
+      "ActualStatus": "LearningLayerBootstrapBlocked",
+      "ExpectedBlockedReason": "RankerAblationReportMissing",
+      "ActualBlockedReasons": [
+        "RankerAblationReportMissing"
+      ],
+      "ShadowOnly": true,
+      "RuntimeAuthority": false,
+      "GateAuthority": false,
+      "PackageOutputChanged": false,
+      "FormalPackageWritten": false,
+      "GlobalDefaultOn": false,
+      "V8ScopedActivationPreserved": true,
+      "Reasoning": "1 blocked reason(s); learning layer bootstrap blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "ShadowOnlyFalse",
+      "ExpectedStatus": "LearningLayerBootstrapBlocked",
+      "ActualStatus": "LearningLayerBootstrapBlocked",
+      "ExpectedBlockedReason": "ShadowOnlyFalse",
+      "ActualBlockedReasons": [
+        "ShadowOnlyFalse"
+      ],
+      "ShadowOnly": true,
+      "RuntimeAuthority": false,
+      "GateAuthority": false,
+      "PackageOutputChanged": false,
+      "FormalPackageWritten": false,
+      "GlobalDefaultOn": false,
+      "V8ScopedActivationPreserved": true,
+      "Reasoning": "1 blocked reason(s); learning layer bootstrap blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "RuntimeAuthorityTrue",
+      "ExpectedStatus": "LearningLayerBootstrapBlocked",
+      "ActualStatus": "LearningLayerBootstrapBlocked",
+      "ExpectedBlockedReason": "RuntimeAuthorityTrue",
+      "ActualBlockedReasons": [
+        "RuntimeAuthorityTrue"
+      ],
+      "ShadowOnly": true,
+      "RuntimeAuthority": false,
+      "GateAuthority": false,
+      "PackageOutputChanged": false,
+      "FormalPackageWritten": false,
+      "GlobalDefaultOn": false,
+      "V8ScopedActivationPreserved": true,
+      "Reasoning": "1 blocked reason(s); learning layer bootstrap blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "GateAuthorityTrue",
+      "ExpectedStatus": "LearningLayerBootstrapBlocked",
+      "ActualStatus": "LearningLayerBootstrapBlocked",
+      "ExpectedBlockedReason": "GateAuthorityTrue",
+      "ActualBlockedReasons": [
+        "GateAuthorityTrue"
+      ],
+      "ShadowOnly": true,
+      "RuntimeAuthority": false,
+      "GateAuthority": false,
+      "PackageOutputChanged": false,
+      "FormalPackageWritten": false,
+      "GlobalDefaultOn": false,
+      "V8ScopedActivationPreserved": true,
+      "Reasoning": "1 blocked reason(s); learning layer bootstrap blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "PackageOutputChangedTrue",
+      "ExpectedStatus": "LearningLayerBootstrapBlocked",
+      "ActualStatus": "LearningLayerBootstrapBlocked",
+      "ExpectedBlockedReason": "PackageOutputChangedTrue",
+      "ActualBlockedReasons": [
+        "PackageOutputChangedTrue"
+      ],
+      "ShadowOnly": true,
+      "RuntimeAuthority": false,
+      "GateAuthority": false,
+      "PackageOutputChanged": false,
+      "FormalPackageWritten": false,
+      "GlobalDefaultOn": false,
+      "V8ScopedActivationPreserved": true,
+      "Reasoning": "1 blocked reason(s); learning layer bootstrap blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "FormalPackageWrittenTrue",
+      "ExpectedStatus": "LearningLayerBootstrapBlocked",
+      "ActualStatus": "LearningLayerBootstrapBlocked",
+      "ExpectedBlockedReason": "FormalPackageWrittenTrue",
+      "ActualBlockedReasons": [
+        "FormalPackageWrittenTrue"
+      ],
+      "ShadowOnly": true,
+      "RuntimeAuthority": false,
+      "GateAuthority": false,
+      "PackageOutputChanged": false,
+      "FormalPackageWritten": false,
+      "GlobalDefaultOn": false,
+      "V8ScopedActivationPreserved": true,
+      "Reasoning": "1 blocked reason(s); learning layer bootstrap blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "GlobalDefaultOnTrue",
+      "ExpectedStatus": "LearningLayerBootstrapBlocked",
+      "ActualStatus": "LearningLayerBootstrapBlocked",
+      "ExpectedBlockedReason": "GlobalDefaultOnTrue",
+      "ActualBlockedReasons": [
+        "GlobalDefaultOnTrue"
+      ],
+      "ShadowOnly": true,
+      "RuntimeAuthority": false,
+      "GateAuthority": false,
+      "PackageOutputChanged": false,
+      "FormalPackageWritten": false,
+      "GlobalDefaultOn": false,
+      "V8ScopedActivationPreserved": true,
+      "Reasoning": "1 blocked reason(s); learning layer bootstrap blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "V8ScopedActivationCloseoutMissing",
+      "ExpectedStatus": "LearningLayerBootstrapBlocked",
+      "ActualStatus": "LearningLayerBootstrapBlocked",
+      "ExpectedBlockedReason": "V8ScopedActivationCloseoutMissing",
+      "ActualBlockedReasons": [
+        "V8ScopedActivationCloseoutMissing"
+      ],
+      "ShadowOnly": true,
+      "RuntimeAuthority": false,
+      "GateAuthority": false,
+      "PackageOutputChanged": false,
+      "FormalPackageWritten": false,
+      "GlobalDefaultOn": false,
+      "V8ScopedActivationPreserved": false,
+      "Reasoning": "1 blocked reason(s); learning layer bootstrap blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "V8ScopedActivationCloseoutNotPassed",
+      "ExpectedStatus": "LearningLayerBootstrapBlocked",
+      "ActualStatus": "LearningLayerBootstrapBlocked",
+      "ExpectedBlockedReason": "V8ScopedActivationCloseoutNotPassed",
+      "ActualBlockedReasons": [
+        "V8ScopedActivationCloseoutNotPassed"
+      ],
+      "ShadowOnly": true,
+      "RuntimeAuthority": false,
+      "GateAuthority": false,
+      "PackageOutputChanged": false,
+      "FormalPackageWritten": false,
+      "GlobalDefaultOn": false,
+      "V8ScopedActivationPreserved": false,
+      "Reasoning": "1 blocked reason(s); learning layer bootstrap blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "V8ScopedActivationLost",
+      "ExpectedStatus": "LearningLayerBootstrapBlocked",
+      "ActualStatus": "LearningLayerBootstrapBlocked",
+      "ExpectedBlockedReason": "V8ScopedActivationLost",
+      "ActualBlockedReasons": [
+        "V8ScopedActivationLost"
+      ],
+      "ShadowOnly": true,
+      "RuntimeAuthority": false,
+      "GateAuthority": false,
+      "PackageOutputChanged": false,
+      "FormalPackageWritten": false,
+      "GlobalDefaultOn": false,
+      "V8ScopedActivationPreserved": false,
+      "Reasoning": "1 blocked reason(s); learning layer bootstrap blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "RuntimeGateNotPassed",
+      "ExpectedStatus": "LearningLayerBootstrapBlocked",
+      "ActualStatus": "LearningLayerBootstrapBlocked",
+      "ExpectedBlockedReason": "RuntimeChangeGateNotPassed",
+      "ActualBlockedReasons": [
+        "RuntimeChangeGateNotPassed"
+      ],
+      "ShadowOnly": true,
+      "RuntimeAuthority": false,
+      "GateAuthority": false,
+      "PackageOutputChanged": false,
+      "FormalPackageWritten": false,
+      "GlobalDefaultOn": false,
+      "V8ScopedActivationPreserved": true,
+      "Reasoning": "1 blocked reason(s); learning layer bootstrap blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "P15GateNotPassed",
+      "ExpectedStatus": "LearningLayerBootstrapBlocked",
+      "ActualStatus": "LearningLayerBootstrapBlocked",
+      "ExpectedBlockedReason": "P15GateNotPassed",
+      "ActualBlockedReasons": [
+        "P15GateNotPassed"
+      ],
+      "ShadowOnly": true,
+      "RuntimeAuthority": false,
+      "GateAuthority": false,
+      "PackageOutputChanged": false,
+      "FormalPackageWritten": false,
+      "GlobalDefaultOn": false,
+      "V8ScopedActivationPreserved": true,
+      "Reasoning": "1 blocked reason(s); learning layer bootstrap blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "MainlineEvidencePresent",
+      "ExpectedStatus": "LearningLayerBootstrapBlocked",
+      "ActualStatus": "LearningLayerBootstrapBlocked",
+      "ExpectedBlockedReason": "MainlineEvidencePresent",
+      "ActualBlockedReasons": [
+        "MainlineEvidencePresent"
+      ],
+      "ShadowOnly": true,
+      "RuntimeAuthority": false,
+      "GateAuthority": false,
+      "PackageOutputChanged": false,
+      "FormalPackageWritten": false,
+      "GlobalDefaultOn": false,
+      "V8ScopedActivationPreserved": true,
+      "Reasoning": "1 blocked reason(s); learning layer bootstrap blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "MainlineTrustRegistryPresent",
+      "ExpectedStatus": "LearningLayerBootstrapBlocked",
+      "ActualStatus": "LearningLayerBootstrapBlocked",
+      "ExpectedBlockedReason": "MainlineTrustRegistryPresent",
+      "ActualBlockedReasons": [
+        "MainlineTrustRegistryPresent"
+      ],
+      "ShadowOnly": true,
+      "RuntimeAuthority": false,
+      "GateAuthority": false,
+      "PackageOutputChanged": false,
+      "FormalPackageWritten": false,
+      "GlobalDefaultOn": false,
+      "V8ScopedActivationPreserved": true,
+      "Reasoning": "1 blocked reason(s); learning layer bootstrap blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    }
+  ],
+  "DatasetInventory": {
+    "RankingPairCount": 253,
+    "RouterIntentExampleCount": 163,
+    "PolicyFeedbackFeatureCount": 0,
+    "HardNegativeCount": 18,
+    "RankingPairsFilePresent": true,
+    "RouterIntentExamplesFilePresent": true,
+    "PolicyFeedbackFeaturesFilePresent": true,
+    "HardNegativesFilePresent": true,
+    "DatasetQualityReportPresent": true,
+    "UsableTaskFamilies": [
+      "CandidateReranker",
+      "RouterIntentClassifier"
+    ],
+    "NotReadyTaskFamilies": [
+      "ConstraintGap",
+      "MemoryPromotion",
+      "PackageQuality"
+    ],
+    "KnownRisks": [
+      "EvalOnlyDataset",
+      "MissingNegativeSamples",
+      "NoPolicyFeedback"
+    ]
+  },
+  "FeatureContract": {
+    "Entries": [
+      {
+        "TaskFamily": "CandidateReranker",
+        "FeatureName": "Recall3",
+        "Source": "ranking-pairs.featureSnapshot.recall3",
+        "Type": "float",
+        "Nullable": false,
+        "ShadowOnly": true,
+        "RuntimeAuthority": false,
+        "GateAuthority": false
+      },
+      {
+        "TaskFamily": "CandidateReranker",
+        "FeatureName": "Recall5",
+        "Source": "ranking-pairs.featureSnapshot.recall5",
+        "Type": "float",
+        "Nullable": false,
+        "ShadowOnly": true,
+        "RuntimeAuthority": false,
+        "GateAuthority": false
+      },
+      {
+        "TaskFamily": "CandidateReranker",
+        "FeatureName": "Recall10",
+        "Source": "ranking-pairs.featureSnapshot.recall10",
+        "Type": "float",
+        "Nullable": false,
+        "ShadowOnly": true,
+        "RuntimeAuthority": false,
+        "GateAuthority": false
+      },
+      {
+        "TaskFamily": "CandidateReranker",
+        "FeatureName": "MRR",
+        "Source": "ranking-pairs.featureSnapshot.mrr",
+        "Type": "float",
+        "Nullable": false,
+        "ShadowOnly": true,
+        "RuntimeAuthority": false,
+        "GateAuthority": false
+      },
+      {
+        "TaskFamily": "CandidateReranker",
+        "FeatureName": "PositiveRank",
+        "Source": "ranking-pairs.featureSnapshot.positiveRank",
+        "Type": "int",
+        "Nullable": false,
+        "ShadowOnly": true,
+        "RuntimeAuthority": false,
+        "GateAuthority": false
+      },
+      {
+        "TaskFamily": "CandidateReranker",
+        "FeatureName": "NegativeRank",
+        "Source": "ranking-pairs.featureSnapshot.negativeRank",
+        "Type": "int",
+        "Nullable": false,
+        "ShadowOnly": true,
+        "RuntimeAuthority": false,
+        "GateAuthority": false
+      },
+      {
+        "TaskFamily": "CandidateReranker",
+        "FeatureName": "PositiveScore",
+        "Source": "ranking-pairs.featureSnapshot.positiveScore",
+        "Type": "int",
+        "Nullable": false,
+        "ShadowOnly": true,
+        "RuntimeAuthority": false,
+        "GateAuthority": false
+      },
+      {
+        "TaskFamily": "CandidateReranker",
+        "FeatureName": "NegativeScore",
+        "Source": "ranking-pairs.featureSnapshot.negativeScore",
+        "Type": "int",
+        "Nullable": false,
+        "ShadowOnly": true,
+        "RuntimeAuthority": false,
+        "GateAuthority": false
+      },
+      {
+        "TaskFamily": "CandidateReranker",
+        "FeatureName": "PositiveKind",
+        "Source": "ranking-pairs.featureSnapshot.positiveKind",
+        "Type": "string",
+        "Nullable": true,
+        "ShadowOnly": true,
+        "RuntimeAuthority": false,
+        "GateAuthority": false
+      },
+      {
+        "TaskFamily": "CandidateReranker",
+        "FeatureName": "PositiveSection",
+        "Source": "ranking-pairs.featureSnapshot.positiveSection",
+        "Type": "string",
+        "Nullable": true,
+        "ShadowOnly": true,
+        "RuntimeAuthority": false,
+        "GateAuthority": false
+      },
+      {
+        "TaskFamily": "CandidateReranker",
+        "FeatureName": "PackageHasAllConstraints",
+        "Source": "ranking-pairs.featureSnapshot.packageHasAllConstraints",
+        "Type": "bool",
+        "Nullable": false,
+        "ShadowOnly": true,
+        "RuntimeAuthority": false,
+        "GateAuthority": false
+      },
+      {
+        "TaskFamily": "CandidateReranker",
+        "FeatureName": "PackageHasAllEntities",
+        "Source": "ranking-pairs.featureSnapshot.packageHasAllEntities",
+        "Type": "bool",
+        "Nullable": false,
+        "ShadowOnly": true,
+        "RuntimeAuthority": false,
+        "GateAuthority": false
+      },
+      {
+        "TaskFamily": "RouterIntentClassifier",
+        "FeatureName": "Mode",
+        "Source": "router-intent-examples.mode",
+        "Type": "string",
+        "Nullable": false,
+        "ShadowOnly": true,
+        "RuntimeAuthority": false,
+        "GateAuthority": false
+      },
+      {
+        "TaskFamily": "RouterIntentClassifier",
+        "FeatureName": "Intent",
+        "Source": "router-intent-examples.intent",
+        "Type": "string",
+        "Nullable": false,
+        "ShadowOnly": true,
+        "RuntimeAuthority": false,
+        "GateAuthority": false
+      },
+      {
+        "TaskFamily": "RouterIntentClassifier",
+        "FeatureName": "CandidateImportance",
+        "Source": "router-intent-examples.candidateImportance",
+        "Type": "float",
+        "Nullable": false,
+        "ShadowOnly": true,
+        "RuntimeAuthority": false,
+        "GateAuthority": false
+      },
+      {
+        "TaskFamily": "RouterIntentClassifier",
+        "FeatureName": "CandidateRecency",
+        "Source": "router-intent-examples.candidateRecency",
+        "Type": "float",
+        "Nullable": false,
+        "ShadowOnly": true,
+        "RuntimeAuthority": false,
+        "GateAuthority": false
+      },
+      {
+        "TaskFamily": "RouterIntentClassifier",
+        "FeatureName": "KeywordMatchScore",
+        "Source": "router-intent-examples.keywordMatchScore",
+        "Type": "float",
+        "Nullable": false,
+        "ShadowOnly": true,
+        "RuntimeAuthority": false,
+        "GateAuthority": false
+      },
+      {
+        "TaskFamily": "RouterIntentClassifier",
+        "FeatureName": "SemanticAnchorMatchScore",
+        "Source": "router-intent-examples.semanticAnchorMatchScore",
+        "Type": "float",
+        "Nullable": false,
+        "ShadowOnly": true,
+        "RuntimeAuthority": false,
+        "GateAuthority": false
+      },
+      {
+        "TaskFamily": "RouterIntentClassifier",
+        "FeatureName": "ShortTermMatchScore",
+        "Source": "router-intent-examples.shortTermMatchScore",
+        "Type": "float",
+        "Nullable": false,
+        "ShadowOnly": true,
+        "RuntimeAuthority": false,
+        "GateAuthority": false
+      },
+      {
+        "TaskFamily": "RouterIntentClassifier",
+        "FeatureName": "ConstraintMatchScore",
+        "Source": "router-intent-examples.constraintMatchScore",
+        "Type": "float",
+        "Nullable": false,
+        "ShadowOnly": true,
+        "RuntimeAuthority": false,
+        "GateAuthority": false
+      },
+      {
+        "TaskFamily": "RouterIntentClassifier",
+        "FeatureName": "LifecycleRisk",
+        "Source": "router-intent-examples.lifecycleRisk",
+        "Type": "float",
+        "Nullable": false,
+        "ShadowOnly": true,
+        "RuntimeAuthority": false,
+        "GateAuthority": false
+      },
+      {
+        "TaskFamily": "RouterIntentClassifier",
+        "FeatureName": "RelationPathCount",
+        "Source": "router-intent-examples.relationPathCount",
+        "Type": "int",
+        "Nullable": false,
+        "ShadowOnly": true,
+        "RuntimeAuthority": false,
+        "GateAuthority": false
+      },
+      {
+        "TaskFamily": "PackageQuality",
+        "FeatureName": "PackageConstraintCoverage",
+        "Source": "policy-feedback-features.constraintCoverage",
+        "Type": "float",
+        "Nullable": true,
+        "ShadowOnly": true,
+        "RuntimeAuthority": false,
+        "GateAuthority": false
+      },
+      {
+        "TaskFamily": "PackageQuality",
+        "FeatureName": "PackageEntityCoverage",
+        "Source": "policy-feedback-features.entityCoverage",
+        "Type": "float",
+        "Nullable": true,
+        "ShadowOnly": true,
+        "RuntimeAuthority": false,
+        "GateAuthority": false
+      },
+      {
+        "TaskFamily": "PackageQuality",
+        "FeatureName": "PackageUncertaintyCoverage",
+        "Source": "policy-feedback-features.uncertaintyCoverage",
+        "Type": "float",
+        "Nullable": true,
+        "ShadowOnly": true,
+        "RuntimeAuthority": false,
+        "GateAuthority": false
+      },
+      {
+        "TaskFamily": "MemoryPromotion",
+        "FeatureName": "MemoryRecency",
+        "Source": "memory-shadow.recency",
+        "Type": "float",
+        "Nullable": true,
+        "ShadowOnly": true,
+        "RuntimeAuthority": false,
+        "GateAuthority": false
+      },
+      {
+        "TaskFamily": "MemoryPromotion",
+        "FeatureName": "MemorySemanticAnchor",
+        "Source": "memory-shadow.semanticAnchor",
+        "Type": "float",
+        "Nullable": true,
+        "ShadowOnly": true,
+        "RuntimeAuthority": false,
+        "GateAuthority": false
+      },
+      {
+        "TaskFamily": "MemoryPromotion",
+        "FeatureName": "MemoryLifecycleStage",
+        "Source": "memory-shadow.lifecycleStage",
+        "Type": "string",
+        "Nullable": true,
+        "ShadowOnly": true,
+        "RuntimeAuthority": false,
+        "GateAuthority": false
+      },
+      {
+        "TaskFamily": "ConstraintGap",
+        "FeatureName": "MissingConstraintCount",
+        "Source": "policy-feedback-features.missingConstraintCount",
+        "Type": "int",
+        "Nullable": true,
+        "ShadowOnly": true,
+        "RuntimeAuthority": false,
+        "GateAuthority": false
+      },
+      {
+        "TaskFamily": "ConstraintGap",
+        "FeatureName": "MissingEntityCount",
+        "Source": "policy-feedback-features.missingEntityCount",
+        "Type": "int",
+        "Nullable": true,
+        "ShadowOnly": true,
+        "RuntimeAuthority": false,
+        "GateAuthority": false
+      },
+      {
+        "TaskFamily": "ConstraintGap",
+        "FeatureName": "MissingUncertaintyCount",
+        "Source": "policy-feedback-features.missingUncertaintyCount",
+        "Type": "int",
+        "Nullable": true,
+        "ShadowOnly": true,
+        "RuntimeAuthority": false,
+        "GateAuthority": false
+      }
+    ],
+    "TaskFamilies": [
+      "CandidateReranker",
+      "ConstraintGap",
+      "MemoryPromotion",
+      "PackageQuality",
+      "RouterIntentClassifier"
+    ],
+    "AllEntriesShadowOnly": true,
+    "AnyEntryRuntimeAuthority": false,
+    "AnyEntryGateAuthority": false
+  },
+  "BaselinePlan": {
+    "Entries": [
+      {
+        "BaselineName": "WeightedBaseline",
+        "TaskFamily": "CandidateReranker",
+        "Stage": "V9.1",
+        "ShadowOnly": true,
+        "RuntimeAuthority": false,
+        "GateAuthority": false,
+        "Notes": "rule-driven weighted score with existing feature ablation; mirrors current rules."
+      },
+      {
+        "BaselineName": "LogisticBaseline",
+        "TaskFamily": "CandidateReranker",
+        "Stage": "V9.1",
+        "ShadowOnly": true,
+        "RuntimeAuthority": false,
+        "GateAuthority": false,
+        "Notes": "logistic regression over hand-crafted features; pairwise loss."
+      },
+      {
+        "BaselineName": "GBDTBaseline",
+        "TaskFamily": "CandidateReranker",
+        "Stage": "V9.2",
+        "ShadowOnly": true,
+        "RuntimeAuthority": false,
+        "GateAuthority": false,
+        "Notes": "gradient-boosted decision tree; learns interactions between features."
+      },
+      {
+        "BaselineName": "LightweightMLPShadowCandidate",
+        "TaskFamily": "CandidateReranker",
+        "Stage": "V9.3",
+        "ShadowOnly": true,
+        "RuntimeAuthority": false,
+        "GateAuthority": false,
+        "Notes": "small MLP, train-on-cpu; shadow-only inference."
+      },
+      {
+        "BaselineName": "RouterIntentLogistic",
+        "TaskFamily": "RouterIntentClassifier",
+        "Stage": "V9.1",
+        "ShadowOnly": true,
+        "RuntimeAuthority": false,
+        "GateAuthority": false,
+        "Notes": "logistic regression over router intent features."
+      },
+      {
+        "BaselineName": "RouterIntentGBDT",
+        "TaskFamily": "RouterIntentClassifier",
+        "Stage": "V9.2",
+        "ShadowOnly": true,
+        "RuntimeAuthority": false,
+        "GateAuthority": false,
+        "Notes": "gradient-boosted decision tree for intent classification."
+      },
+      {
+        "BaselineName": "LLMAssistedFailureDiagnosis",
+        "TaskFamily": "CandidateReranker",
+        "Stage": "V9.4",
+        "ShadowOnly": true,
+        "RuntimeAuthority": false,
+        "GateAuthority": false,
+        "Notes": "LLM analyzes top failure examples \u002B emits structured diagnoses (still shadow)."
+      },
+      {
+        "BaselineName": "HardNegativeGeneration",
+        "TaskFamily": "CandidateReranker",
+        "Stage": "V9.4",
+        "ShadowOnly": true,
+        "RuntimeAuthority": false,
+        "GateAuthority": false,
+        "Notes": "LLM proposes hard negatives; human-review gated before ingestion."
+      },
+      {
+        "BaselineName": "HumanReviewFeedbackIngestion",
+        "TaskFamily": "PackageQuality",
+        "Stage": "V9.5",
+        "ShadowOnly": true,
+        "RuntimeAuthority": false,
+        "GateAuthority": false,
+        "Notes": "ingest human-reviewed feedback to grow policy-feedback-features dataset."
+      },
+      {
+        "BaselineName": "PackageQualityShadowScorer",
+        "TaskFamily": "PackageQuality",
+        "Stage": "V9.5",
+        "ShadowOnly": true,
+        "RuntimeAuthority": false,
+        "GateAuthority": false,
+        "Notes": "shadow scorer for package coverage / constraint completeness."
+      },
+      {
+        "BaselineName": "MemoryPromotionShadowScorer",
+        "TaskFamily": "MemoryPromotion",
+        "Stage": "V9.6",
+        "ShadowOnly": true,
+        "RuntimeAuthority": false,
+        "GateAuthority": false,
+        "Notes": "shadow scorer for memory lifecycle promotion candidates."
+      },
+      {
+        "BaselineName": "ConstraintGapShadowDetector",
+        "TaskFamily": "ConstraintGap",
+        "Stage": "V9.6",
+        "ShadowOnly": true,
+        "RuntimeAuthority": false,
+        "GateAuthority": false,
+        "Notes": "shadow detector for missing constraints / entities / uncertainties."
+      }
+    ],
+    "AllEntriesShadowOnly": true,
+    "AnyEntryRuntimeAuthority": false,
+    "AnyEntryGateAuthority": false
+  },
+  "ShadowOnly": true,
+  "RuntimeAuthority": false,
+  "GateAuthority": false,
+  "PackageOutputChanged": false,
+  "FormalPackageWritten": false,
+  "GlobalDefaultOn": false,
+  "V8ScopedActivationPreserved": true,
+  "UpstreamV8ScopedActivationCloseoutGatePresent": true,
+  "UpstreamV8ScopedActivationCloseoutGatePassed": true,
+  "MainlineEvidencePresent": false,
+  "MainlineTrustRegistryPresent": false,
+  "Recommendation": "ProceedToV9BaselineImplementation",
+  "NextAllowedPhase": "V9.1BaselineImplementation",
+  "BlockedReasons": [],
+  "Diagnostics": [
+    "total=19",
+    "realStatus=LearningLayerBootstrapReady",
+    "rankingPairCount=253",
+    "routerIntentExampleCount=163",
+    "policyFeedbackFeatureCount=0",
+    "hardNegativeCount=18",
+    "featureContractEntryCount=31",
+    "baselinePlanEntryCount=12",
+    "runtimeGate=True",
+    "p15Gate=True",
+    "v8Preserved=True"
+  ]
+}

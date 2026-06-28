@@ -1404,6 +1404,45 @@ public static partial class EvalCommand
         Console.WriteLine($"[Eval] Scoped live activation safety closeout written: {jp}");
         Console.WriteLine($"[Eval] scopedLiveActivationSafetyCloseoutPassed={report.ScopedLiveActivationSafetyCloseoutPassed}; gatePassed={report.GatePassed}; total={report.TotalCases} ready={report.ReadyCases} blocked={report.BlockedCases} activationStillActive={report.ActivationStillActive} rollbackReady={report.RollbackDryRunReady} killSwitchReady={report.KillSwitchDryRunReady} revocationReady={report.RevocationDryRunReady} recommendation={report.Recommendation} nextPhase={report.NextAllowedPhase}");
     }
+
+    private static async Task ExecuteLearningLayerBootstrapAsync(
+        IReadOnlyList<string> args, string subcommand, CancellationToken ct)
+    {
+        var output = Path.GetFullPath(Path.Combine("learning", "v9"));
+        Directory.CreateDirectory(output);
+        var rtPath = Path.Combine("learning", "readiness", "learning-runtime-change-readiness-gate.json");
+        var rtGate = await ReadJsonFileAsync<LearningRuntimeChangeReadinessGateReport>(rtPath, ct).ConfigureAwait(false);
+        var rtPassed = rtGate is not null && rtGate.Passed;
+        var p15Path = Path.Combine("eval", "eval-report-p15-a3.json");
+        var p15 = await ReadJsonFileAsync<JsonDocument>(p15Path, ct).ConfigureAwait(false);
+        var p15Passed = false;
+        if (p15 is not null && p15.RootElement.TryGetProperty("PassRate", out var pr)) p15Passed = pr.GetDouble() >= 1.0;
+        var mainlineEvPath = Path.Combine("vector", "v8", "formal-retrieval-promotion-approval-evidence.json");
+        var mainlineRegPath = Path.Combine("vector", "v8", "formal-retrieval-promotion-approval-trust-registry.json");
+        var mainlineEvPresent = File.Exists(mainlineEvPath);
+        var mainlineRegPresent = File.Exists(mainlineRegPath);
+
+        var v8CloseoutPath = Path.Combine("vector", "v8", "formal-retrieval-promotion-approval-scoped-live-activation-safety-closeout-gate.json");
+        var v8Closeout = await ReadJsonFileAsync<FormalRetrievalPromotionApprovalScopedLiveActivationSafetyCloseoutReport>(v8CloseoutPath, ct).ConfigureAwait(false);
+        var realContext = LearningLayerBootstrapRunner.LoadRealContext(v8Closeout);
+
+        var isGate = string.Equals(subcommand, "learning-layer-bootstrap-gate", StringComparison.OrdinalIgnoreCase);
+        var opt = new LearningLayerBootstrapOptions
+        {
+            IsGate = isGate,
+            Enabled = !CommandHelpers.HasFlag(args, "--disabled")
+        };
+        var runner = new LearningLayerBootstrapRunner();
+        var report = runner.Run(realContext, rtPassed, p15Passed, mainlineEvPresent, mainlineRegPresent, opt);
+        var fn = isGate ? "learning-layer-bootstrap-gate" : "learning-layer-bootstrap";
+        var jp = Path.Combine(output, $"{fn}.json");
+        var mp = Path.Combine(output, $"{fn}.md");
+        await WriteJsonSafeAsync(report, jp, ct).ConfigureAwait(false);
+        await WriteTextAsync(LearningLayerBootstrapRunner.BuildMarkdown(
+            isGate ? "Learning Layer Bootstrap (Gate)" : "Learning Layer Bootstrap", report), mp, ct).ConfigureAwait(false);
+        Console.WriteLine($"[Eval] Learning layer bootstrap written: {jp}");
+        Console.WriteLine($"[Eval] learningLayerBootstrapPassed={report.LearningLayerBootstrapPassed}; gatePassed={report.GatePassed}; total={report.TotalCases} ready={report.ReadyCases} blocked={report.BlockedCases} shadowOnly={report.ShadowOnly} runtimeAuthority={report.RuntimeAuthority} v8Preserved={report.V8ScopedActivationPreserved} recommendation={report.Recommendation} nextPhase={report.NextAllowedPhase}");
+    }
     private static bool ValidateTemplateFields(string jsonContent, string[] fieldPaths, List<string> missing, List<string> nonPlaceholder)
     {
         var doc = System.Text.Json.JsonDocument.Parse(jsonContent);
