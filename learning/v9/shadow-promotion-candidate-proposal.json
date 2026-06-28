@@ -1,0 +1,25 @@
+﻿{
+  "BestShadowCandidate": "LogisticBaseline",
+  "BestShadowCandidatePairwiseAccuracy": 1,
+  "TaskFamily": "CandidateReranker",
+  "EligibilityReasons": [
+    "pairwiseAccuracy=1.000 \u2265 0.95 threshold",
+    "Failure clusters analyzed and documented in V9.4 failure-diagnosis-input-pack",
+    "Hard-negative expansion candidates available (60 specs)",
+    "Feedback ingestion contract published (V9.5 schema)"
+  ],
+  "Risks": [
+    "LogisticBaseline 100% accuracy likely driven by positiveScore feature dominance; promote only after V9.4 hard-negative expansion \u002B V10 canary observation",
+    "Test set is small (n=58); confidence intervals wide",
+    "No production traffic exposure yet \u2014 pilot must be scoped"
+  ],
+  "RuntimePromotionAllowed": false,
+  "RequiresSeparatePromotionGate": true,
+  "RequiresHumanApproval": true,
+  "PromotionMode": "ShadowOnlyProposalForOfflineHumanReview",
+  "ShadowOnly": true,
+  "MLAuthority": false,
+  "LLMAuthority": false,
+  "RuntimeAuthority": false,
+  "GateAuthority": false
+}

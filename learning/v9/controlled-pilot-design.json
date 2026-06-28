@@ -1,0 +1,48 @@
+﻿{
+  "PilotMode": "ShadowOnlyCanaryDesign",
+  "Scope": "demo-workspace/demo-collection",
+  "Capability": "FormalRetrievalActivation",
+  "RuntimeRerankerChanged": false,
+  "RuntimeRouterChanged": false,
+  "PackageOutputChanged": false,
+  "FormalPackageWritten": false,
+  "GlobalDefaultOn": false,
+  "KillSwitchRequired": true,
+  "RollbackRequired": true,
+  "ManualPromotionRequired": true,
+  "RequiresSeparatePromotionGate": true,
+  "CanaryStages": [
+    "Stage 0 \u2014 Offline replay on held-out test set (V9.1-V9.3 artefact); human reviewer sign-off",
+    "Stage 1 \u2014 Shadow inference alongside production reranker; emit shadow scores to audit log only",
+    "Stage 2 \u2014 Limited canary (\u22641% of demo-workspace/demo-collection queries); shadow scores compared, no decision change",
+    "Stage 3 \u2014 Full canary in demo-workspace/demo-collection scope only; production traffic unaffected outside scope",
+    "Stage 4 \u2014 Manual promotion gate (V10ControlledRuntimePilotGate); human reviewer \u002B V8-style guarded scoped activation"
+  ],
+  "EntryCriteria": [
+    "V9.7 readiness pack passed",
+    "Hard-negative expansion \u226550 \u002B \u226550% human-reviewed",
+    "Router repair plan executed for top 3 underrepresented labels",
+    "Failure clusters reviewed; root causes documented",
+    "V8 scoped activation still preserved (state=Active, no mainline leak)"
+  ],
+  "ExitCriteria": [
+    "Stage abort criteria triggered",
+    "Manual abort by human reviewer",
+    "Any safety invariant violated (RuntimeAuthority, PackageOutputChanged, GlobalDefaultOn)",
+    "V8 scoped activation degraded"
+  ],
+  "ObservabilityRequirements": [
+    "Per-query shadow score logged with reproducible request id",
+    "Per-stage error-rate / latency / coverage delta tracked",
+    "Failure cluster drift detector (compare with V9.4 baseline clusters)",
+    "Per-mode / per-intent accuracy heatmap"
+  ],
+  "AbortConditions": [
+    "pairwiseAccuracy drops below baseline rule reranker by \u003E2 absolute points on the demo scope",
+    "Router intent accuracy drops below 50% within scope",
+    "Any RuntimeAuthority / GateAuthority leak detected",
+    "Any PackageOutputChanged / FormalPackageWritten observed",
+    "Mainline evidence / trust registry written without separate approval"
+  ],
+  "ExpectedNextGate": "V10ControlledRuntimePilotGate"
+}
