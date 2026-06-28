@@ -1,0 +1,23 @@
+﻿{
+  "PreviousEvidenceSufficiencyScore": 0.8137931034482758,
+  "NewEvidenceSufficiencyScoreV2": 1,
+  "Threshold": 0.7,
+  "EvidenceBoundShadowLabelCount": 60,
+  "UnboundCandidateSpecCount": 0,
+  "BindingCoverageRate": 1,
+  "CounterexampleRepairImprovement": 0.2755905511811024,
+  "EvidenceSufficient": true,
+  "EvidenceSufficientForPilotCandidate": false,
+  "EvidenceBoundShadowLabelsAreFormal": false,
+  "SubscoreDeltas": [
+    "BoundShadowLabelContribution=\u002B0.100 (60/60 bound, rate=1.000)",
+    "CounterexampleRepairContribution=\u002B0.100 (improvement=0.276)"
+  ],
+  "Notes": [
+    "Previous score=0.814 \u2192 new score=1.000 (threshold=0.700)",
+    "Bound shadow labels carry partial evidence weight; they are NOT formal labels and never enter the formal training set.",
+    "BindingCoverageRate=1.000 \u2014 how many candidate specs successfully bound to ranking-pair / failure-cluster evidence.",
+    "RepairImprovement=0.276 \u2014 counterexample failure rate reduction from shadow scoring repair proposal.",
+    "EvidenceSufficient considers BOTH score threshold AND repair effectiveness; runtime pilot still requires formal labels."
+  ]
+}

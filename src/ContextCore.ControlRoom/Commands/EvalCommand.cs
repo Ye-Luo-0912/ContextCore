@@ -374,6 +374,8 @@ public static partial class EvalCommand
             !string.Equals(subcommand, "learning-evidence-calibrated-self-validation-pack-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "learning-evidence-accumulation-pack", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "learning-evidence-accumulation-pack-gate", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "learning-counterexample-repair-pack", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "learning-counterexample-repair-pack-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "dto-split-plan", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "dto-split-readiness-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "vector-retrieval-eval-protocol-audit", StringComparison.OrdinalIgnoreCase) &&
@@ -682,6 +684,8 @@ public static partial class EvalCommand
             Console.WriteLine("  eval learning-evidence-calibrated-self-validation-pack-gate");
             Console.WriteLine("  eval learning-evidence-accumulation-pack");
             Console.WriteLine("  eval learning-evidence-accumulation-pack-gate");
+            Console.WriteLine("  eval learning-counterexample-repair-pack");
+            Console.WriteLine("  eval learning-counterexample-repair-pack-gate");
             Console.WriteLine("  eval dto-split-plan");
             Console.WriteLine("  eval dto-split-readiness-gate");
             Console.WriteLine("  eval vector-retrieval-eval-protocol-audit");
@@ -2193,6 +2197,12 @@ public static partial class EvalCommand
             || string.Equals(subcommand, "learning-evidence-accumulation-pack-gate", StringComparison.OrdinalIgnoreCase))
         {
             await ExecuteLearningEvidenceAccumulationPackAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+        if (string.Equals(subcommand, "learning-counterexample-repair-pack", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(subcommand, "learning-counterexample-repair-pack-gate", StringComparison.OrdinalIgnoreCase))
+        {
+            await ExecuteLearningCounterexampleRepairPackAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
             return;
         }
 

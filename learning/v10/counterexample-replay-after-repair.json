@@ -1,0 +1,18 @@
+﻿{
+  "ReplayMode": "ShadowReplayAfterRepairProposal",
+  "CounterexampleCount": 127,
+  "OriginalCandidateFailureRate": 0.2755905511811024,
+  "RepairedCandidateFailureRate": 0,
+  "ReferenceFailureRate": 0,
+  "RepairImprovement": 0.2755905511811024,
+  "RepairedCandidateMatchesOrBeatsReference": true,
+  "RuntimeDecisionChanged": false,
+  "PackageOutputChanged": false,
+  "Notes": [
+    "Original candidate failure rate on counterexamples: 0.276",
+    "Repaired candidate failure rate on counterexamples: 0.000 (improvement=0.276)",
+    "Reference failure rate on counterexamples: 0.000",
+    "RepairedCandidateMatchesOrBeatsReference=True",
+    "Runtime decisions unchanged. Package output unchanged. Repaired scoring is a SHADOW proposal."
+  ]
+}

@@ -1,0 +1,116 @@
+﻿{
+  "TotalCounterexamples": 127,
+  "CandidateFailureCount": 35,
+  "ReferenceFailureCount": 0,
+  "TopCases": [
+    {
+      "CaseId": "crc-0000-automation-sample-004",
+      "EvalSampleId": "automation-sample-004",
+      "PositiveScoreMinusNegativeScore": -0.15000000000000568,
+      "Recall3": 1,
+      "FailureReason": "candidate uses positiveScore-only logic; positiveScore-negativeScore \u2264 0 \u2192 tie \u2192 predicted as negative wins",
+      "CandidateWeaknessFeature": "PositiveScoreMinusNegativeScore (feature index 5) \u2014 single-feature dependence",
+      "ReferenceStrengthFeature": "Recall3 (feature index 0) \u2014 auxiliary signal even when scores tie",
+      "ProposedRepairFeature": "Add Recall3 as tiebreaker when PositiveScoreMinusNegativeScore \u2264 0"
+    },
+    {
+      "CaseId": "crc-0001-automation-sample-004",
+      "EvalSampleId": "automation-sample-004",
+      "PositiveScoreMinusNegativeScore": -0.15000000000000568,
+      "Recall3": 1,
+      "FailureReason": "candidate uses positiveScore-only logic; positiveScore-negativeScore \u2264 0 \u2192 tie \u2192 predicted as negative wins",
+      "CandidateWeaknessFeature": "PositiveScoreMinusNegativeScore (feature index 5) \u2014 single-feature dependence",
+      "ReferenceStrengthFeature": "Recall3 (feature index 0) \u2014 auxiliary signal even when scores tie",
+      "ProposedRepairFeature": "Add Recall3 as tiebreaker when PositiveScoreMinusNegativeScore \u2264 0"
+    },
+    {
+      "CaseId": "crc-0002-automation-sample-008",
+      "EvalSampleId": "automation-sample-008",
+      "PositiveScoreMinusNegativeScore": -12.25,
+      "Recall3": 1,
+      "FailureReason": "candidate uses positiveScore-only logic; positiveScore-negativeScore \u2264 0 \u2192 tie \u2192 predicted as negative wins",
+      "CandidateWeaknessFeature": "PositiveScoreMinusNegativeScore (feature index 5) \u2014 single-feature dependence",
+      "ReferenceStrengthFeature": "Recall3 (feature index 0) \u2014 auxiliary signal even when scores tie",
+      "ProposedRepairFeature": "Add Recall3 as tiebreaker when PositiveScoreMinusNegativeScore \u2264 0"
+    },
+    {
+      "CaseId": "crc-0003-automation-sample-008",
+      "EvalSampleId": "automation-sample-008",
+      "PositiveScoreMinusNegativeScore": -12.25,
+      "Recall3": 1,
+      "FailureReason": "candidate uses positiveScore-only logic; positiveScore-negativeScore \u2264 0 \u2192 tie \u2192 predicted as negative wins",
+      "CandidateWeaknessFeature": "PositiveScoreMinusNegativeScore (feature index 5) \u2014 single-feature dependence",
+      "ReferenceStrengthFeature": "Recall3 (feature index 0) \u2014 auxiliary signal even when scores tie",
+      "ProposedRepairFeature": "Add Recall3 as tiebreaker when PositiveScoreMinusNegativeScore \u2264 0"
+    },
+    {
+      "CaseId": "crc-0004-automation-sample-010",
+      "EvalSampleId": "automation-sample-010",
+      "PositiveScoreMinusNegativeScore": -4.125006870000007,
+      "Recall3": 1,
+      "FailureReason": "candidate uses positiveScore-only logic; positiveScore-negativeScore \u2264 0 \u2192 tie \u2192 predicted as negative wins",
+      "CandidateWeaknessFeature": "PositiveScoreMinusNegativeScore (feature index 5) \u2014 single-feature dependence",
+      "ReferenceStrengthFeature": "Recall3 (feature index 0) \u2014 auxiliary signal even when scores tie",
+      "ProposedRepairFeature": "Add Recall3 as tiebreaker when PositiveScoreMinusNegativeScore \u2264 0"
+    },
+    {
+      "CaseId": "crc-0005-automation-sample-010",
+      "EvalSampleId": "automation-sample-010",
+      "PositiveScoreMinusNegativeScore": -4.125019159999994,
+      "Recall3": 1,
+      "FailureReason": "candidate uses positiveScore-only logic; positiveScore-negativeScore \u2264 0 \u2192 tie \u2192 predicted as negative wins",
+      "CandidateWeaknessFeature": "PositiveScoreMinusNegativeScore (feature index 5) \u2014 single-feature dependence",
+      "ReferenceStrengthFeature": "Recall3 (feature index 0) \u2014 auxiliary signal even when scores tie",
+      "ProposedRepairFeature": "Add Recall3 as tiebreaker when PositiveScoreMinusNegativeScore \u2264 0"
+    },
+    {
+      "CaseId": "crc-0006-chat-sample-001",
+      "EvalSampleId": "chat-sample-001",
+      "PositiveScoreMinusNegativeScore": -18.400000000000006,
+      "Recall3": 1,
+      "FailureReason": "candidate uses positiveScore-only logic; positiveScore-negativeScore \u2264 0 \u2192 tie \u2192 predicted as negative wins",
+      "CandidateWeaknessFeature": "PositiveScoreMinusNegativeScore (feature index 5) \u2014 single-feature dependence",
+      "ReferenceStrengthFeature": "Recall3 (feature index 0) \u2014 auxiliary signal even when scores tie",
+      "ProposedRepairFeature": "Add Recall3 as tiebreaker when PositiveScoreMinusNegativeScore \u2264 0"
+    },
+    {
+      "CaseId": "crc-0007-chat-sample-001",
+      "EvalSampleId": "chat-sample-001",
+      "PositiveScoreMinusNegativeScore": -4.700000000000003,
+      "Recall3": 1,
+      "FailureReason": "candidate uses positiveScore-only logic; positiveScore-negativeScore \u2264 0 \u2192 tie \u2192 predicted as negative wins",
+      "CandidateWeaknessFeature": "PositiveScoreMinusNegativeScore (feature index 5) \u2014 single-feature dependence",
+      "ReferenceStrengthFeature": "Recall3 (feature index 0) \u2014 auxiliary signal even when scores tie",
+      "ProposedRepairFeature": "Add Recall3 as tiebreaker when PositiveScoreMinusNegativeScore \u2264 0"
+    },
+    {
+      "CaseId": "crc-0008-chat-sample-001",
+      "EvalSampleId": "chat-sample-001",
+      "PositiveScoreMinusNegativeScore": -18.400000000000006,
+      "Recall3": 1,
+      "FailureReason": "candidate uses positiveScore-only logic; positiveScore-negativeScore \u2264 0 \u2192 tie \u2192 predicted as negative wins",
+      "CandidateWeaknessFeature": "PositiveScoreMinusNegativeScore (feature index 5) \u2014 single-feature dependence",
+      "ReferenceStrengthFeature": "Recall3 (feature index 0) \u2014 auxiliary signal even when scores tie",
+      "ProposedRepairFeature": "Add Recall3 as tiebreaker when PositiveScoreMinusNegativeScore \u2264 0"
+    },
+    {
+      "CaseId": "crc-0009-chat-sample-001",
+      "EvalSampleId": "chat-sample-001",
+      "PositiveScoreMinusNegativeScore": -4.700000000000003,
+      "Recall3": 1,
+      "FailureReason": "candidate uses positiveScore-only logic; positiveScore-negativeScore \u2264 0 \u2192 tie \u2192 predicted as negative wins",
+      "CandidateWeaknessFeature": "PositiveScoreMinusNegativeScore (feature index 5) \u2014 single-feature dependence",
+      "ReferenceStrengthFeature": "Recall3 (feature index 0) \u2014 auxiliary signal even when scores tie",
+      "ProposedRepairFeature": "Add Recall3 as tiebreaker when PositiveScoreMinusNegativeScore \u2264 0"
+    }
+  ],
+  "CommonWeaknessFeatures": [
+    "PositiveScoreMinusNegativeScore tie/zero \u2192 candidate cannot discriminate",
+    "single-feature scoring \u2192 no fallback signal"
+  ],
+  "CommonRepairProposals": [
+    "Add Recall3 (feature index 0) as tiebreaker when positive-negative score delta \u2264 0",
+    "Add MRR (feature index 3) as secondary tiebreaker when recall ties",
+    "Combine score-delta with recall family using weighted sum (shadow-only)"
+  ]
+}

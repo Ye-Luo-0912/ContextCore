@@ -1,0 +1,25 @@
+﻿{
+  "ProposalId": "v10-repaired-shadow-scoring-caab0c8c9ce74ab49942d94126cc7f7b",
+  "ProposalVersion": "v10.10-repaired-shadow-scoring/v1",
+  "ProposalMode": "ShadowProposalOnly",
+  "ScoringRule": [
+    "score = 1.0 * (PositiveScoreMinusNegativeScore \u003E 0 ? 1 : 0)",
+    "    \u002B 0.6 * (Recall3 \u003E= 0.5 ? 1 : 0)",
+    "    \u002B 0.3 * (MRR \u003E= 0.5 ? 1 : 0)",
+    "predict positive wins if score \u003E 0.5"
+  ],
+  "AddedFeatures": [
+    "Recall3 as tiebreaker",
+    "MRR as secondary tiebreaker"
+  ],
+  "Rationale": [
+    "Add Recall3 (feature index 0) as tiebreaker when positive-negative score delta \u2264 0",
+    "Add MRR (feature index 3) as secondary tiebreaker when recall ties",
+    "Combine score-delta with recall family using weighted sum (shadow-only)"
+  ],
+  "RuntimeRerankerChanged": false,
+  "RuntimeRouterChanged": false,
+  "PackageOutputChanged": false,
+  "ProductionDecisionChanged": false,
+  "RuntimePilotReady": false
+}

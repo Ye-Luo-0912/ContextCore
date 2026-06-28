@@ -1860,6 +1860,68 @@ public static partial class EvalCommand
         Console.WriteLine($"[Eval] evidenceAccumulationPackPassed={report.EvidenceAccumulationPackPassed}; gatePassed={report.GatePassed}; total={report.TotalCases} ready={report.ReadyCases} blocked={report.BlockedCases} dominance={report.PositiveScoreDominanceDetected} leakageReduced={report.LeakageRiskReduced} accDropNoPositiveScore={report.SignalLeakageAblation.AccuracyDropFromPositiveScoreRemoval:F3} evidenceSufficient={report.EvidenceSufficient} pilotReady={report.RuntimePilotExecutionReadyForSeparateGate} blockedExecBy=[{string.Join(',', report.BlockedForRuntimePilotExecutionBy)}] recommendation={report.Recommendation}");
     }
 
+    private static async Task ExecuteLearningCounterexampleRepairPackAsync(
+        IReadOnlyList<string> args, string subcommand, CancellationToken ct)
+    {
+        var output = Path.GetFullPath(Path.Combine("learning", "v10"));
+        Directory.CreateDirectory(output);
+        var rtPath = Path.Combine("learning", "readiness", "learning-runtime-change-readiness-gate.json");
+        var rtGate = await ReadJsonFileAsync<LearningRuntimeChangeReadinessGateReport>(rtPath, ct).ConfigureAwait(false);
+        var rtPassed = rtGate is not null && rtGate.Passed;
+        var p15Path = Path.Combine("eval", "eval-report-p15-a3.json");
+        var p15 = await ReadJsonFileAsync<JsonDocument>(p15Path, ct).ConfigureAwait(false);
+        var p15Passed = false;
+        if (p15 is not null && p15.RootElement.TryGetProperty("PassRate", out var pr)) p15Passed = pr.GetDouble() >= 1.0;
+        var mainlineEvPath = Path.Combine("vector", "v8", "formal-retrieval-promotion-approval-evidence.json");
+        var mainlineRegPath = Path.Combine("vector", "v8", "formal-retrieval-promotion-approval-trust-registry.json");
+        var mainlineEvPresent = File.Exists(mainlineEvPath);
+        var mainlineRegPresent = File.Exists(mainlineRegPath);
+
+        var evidenceAccumPath = Path.Combine("learning", "v10", "evidence-accumulation-pack-gate.json");
+        var evidenceAccum = await ReadJsonFileAsync<LearningEvidenceAccumulationPackReport>(evidenceAccumPath, ct).ConfigureAwait(false);
+        var counterexamplePath = Path.Combine("learning", "v10", "counterexample-replay-report.json");
+        var hardNegSpecsPath = Path.Combine("learning", "v9", "hard-negative-expansion-candidates.jsonl");
+        var rankerPairs = LearningShadowImplementationPackRunner.LoadRankerPairs(Path.Combine("learning", "features", "ranking-pairs.jsonl"));
+        var hardNegSpecs = LearningCounterexampleRepairPackRunner.LoadHardNegativeSpecs(hardNegSpecsPath);
+        var failureFeedbackPath = Path.Combine("learning", "v9", "failure-diagnosis-feedback-loop-pack-gate.json");
+        var failureFeedback = await ReadJsonFileAsync<LearningFailureDiagnosisAndFeedbackLoopPackReport>(failureFeedbackPath, ct).ConfigureAwait(false);
+        var failureClusterIds = failureFeedback?.FailureDiagnosisInputPack.Clusters.Select(c => c.ClusterId).ToArray() ?? Array.Empty<string>();
+
+        var realContext = new LearningCounterexampleRepairPackContext
+        {
+            EvidenceAccumulationPackPresent = evidenceAccum is not null,
+            EvidenceAccumulationPackPassed = evidenceAccum?.GatePassed ?? false,
+            CounterexampleReplayPresent = File.Exists(counterexamplePath),
+            HardNegativeCandidatesPresent = hardNegSpecs.Count > 0,
+            HardNegativeCandidateCount = hardNegSpecs.Count,
+            RankingPairsPresent = rankerPairs.Count > 0,
+            V8ScopedActivationPreserved = evidenceAccum?.V8ScopedActivationPreserved ?? false,
+            RankerPairs = rankerPairs,
+            FailureClusterIds = failureClusterIds,
+            HardNegativeSpecs = hardNegSpecs,
+            PreviousEvidenceSufficiencyScore = evidenceAccum?.EvidenceSufficiencyRecomputed.NewEvidenceSufficiencyScore ?? 0,
+            OriginalCandidateFailureRate = evidenceAccum?.CounterexampleReplayReport.CandidateFailureRateOnCounterexamples ?? 0,
+            ReferenceFailureRate = evidenceAccum?.CounterexampleReplayReport.ReferenceFailureRateOnCounterexamples ?? 0
+        };
+
+        var isGate = string.Equals(subcommand, "learning-counterexample-repair-pack-gate", StringComparison.OrdinalIgnoreCase);
+        var opt = new LearningCounterexampleRepairPackOptions
+        {
+            IsGate = isGate,
+            Enabled = !CommandHelpers.HasFlag(args, "--disabled")
+        };
+        var runner = new LearningCounterexampleRepairPackRunner();
+        var report = runner.Run(realContext, output, rtPassed, p15Passed, mainlineEvPresent, mainlineRegPresent, opt);
+        var fn = isGate ? "counterexample-repair-pack-gate" : "counterexample-repair-pack";
+        var jp = Path.Combine(output, $"{fn}.json");
+        var mp = Path.Combine(output, $"{fn}.md");
+        await WriteJsonSafeAsync(report, jp, ct).ConfigureAwait(false);
+        await WriteTextAsync(LearningCounterexampleRepairPackRunner.BuildMarkdown(
+            isGate ? "Learning Counterexample Repair Pack (Gate)" : "Learning Counterexample Repair Pack", report), mp, ct).ConfigureAwait(false);
+        Console.WriteLine($"[Eval] Learning counterexample repair pack written: {jp}");
+        Console.WriteLine($"[Eval] counterexampleRepairPackPassed={report.CounterexampleRepairPackPassed}; gatePassed={report.GatePassed}; total={report.TotalCases} ready={report.ReadyCases} blocked={report.BlockedCases} boundLabels={report.EvidenceBoundShadowLabelCount} unbound={report.UnboundCandidateSpecCount} bindingRate={report.BindingCoverageRate:F3} origFailRate={report.OriginalCandidateFailureRate:F3} repairedFailRate={report.RepairedCandidateFailureRate:F3} refFailRate={report.ReferenceFailureRate:F3} improvement={report.RepairImprovement:F3} evidenceSufficient={report.EvidenceSufficient} pilotReady={report.RuntimePilotExecutionReadyForSeparateGate} blockedExecBy=[{string.Join(',', report.BlockedForRuntimePilotExecutionBy)}] recommendation={report.Recommendation}");
+    }
+
     private static bool ValidateTemplateFields(string jsonContent, string[] fieldPaths, List<string> missing, List<string> nonPlaceholder)
     {
         var doc = System.Text.Json.JsonDocument.Parse(jsonContent);
