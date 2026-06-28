@@ -1,0 +1,490 @@
+﻿{
+  "OperationId": "v9-learning-shadow-implementation-pack-a8911cca7df546ce8fea6595cb285eb9",
+  "CreatedAt": "2026-06-28T10:03:25.7204787+00:00",
+  "ShadowImplementationPackPassed": true,
+  "GatePassed": false,
+  "TotalCases": 21,
+  "PassedCases": 21,
+  "FailedCases": 0,
+  "ReadyCases": 1,
+  "BlockedCases": 20,
+  "Cases": [
+    {
+      "CaseName": "AllUpstreamClean",
+      "ExpectedStatus": "LearningShadowImplementationPackReady",
+      "ActualStatus": "LearningShadowImplementationPackReady",
+      "ExpectedBlockedReason": "",
+      "ActualBlockedReasons": [],
+      "Reasoning": "shadow implementation pack policy ready \u2014 all upstream and authority invariants satisfied; baselines may run shadow-only.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "BootstrapGateMissing",
+      "ExpectedStatus": "LearningShadowImplementationPackBlocked",
+      "ActualStatus": "LearningShadowImplementationPackBlocked",
+      "ExpectedBlockedReason": "BootstrapGateMissing",
+      "ActualBlockedReasons": [
+        "BootstrapGateMissing"
+      ],
+      "Reasoning": "1 blocked reason(s); shadow implementation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "BootstrapGateNotPassed",
+      "ExpectedStatus": "LearningShadowImplementationPackBlocked",
+      "ActualStatus": "LearningShadowImplementationPackBlocked",
+      "ExpectedBlockedReason": "BootstrapGateNotPassed",
+      "ActualBlockedReasons": [
+        "BootstrapGateNotPassed"
+      ],
+      "Reasoning": "1 blocked reason(s); shadow implementation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "RankingPairsMissing",
+      "ExpectedStatus": "LearningShadowImplementationPackBlocked",
+      "ActualStatus": "LearningShadowImplementationPackBlocked",
+      "ExpectedBlockedReason": "RankingPairsMissing",
+      "ActualBlockedReasons": [
+        "RankingPairsMissing"
+      ],
+      "Reasoning": "1 blocked reason(s); shadow implementation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "RouterIntentExamplesMissing",
+      "ExpectedStatus": "LearningShadowImplementationPackBlocked",
+      "ActualStatus": "LearningShadowImplementationPackBlocked",
+      "ExpectedBlockedReason": "RouterIntentExamplesMissing",
+      "ActualBlockedReasons": [
+        "RouterIntentExamplesMissing"
+      ],
+      "Reasoning": "1 blocked reason(s); shadow implementation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "ShadowOnlyFalse",
+      "ExpectedStatus": "LearningShadowImplementationPackBlocked",
+      "ActualStatus": "LearningShadowImplementationPackBlocked",
+      "ExpectedBlockedReason": "ShadowOnlyFalse",
+      "ActualBlockedReasons": [
+        "ShadowOnlyFalse"
+      ],
+      "Reasoning": "1 blocked reason(s); shadow implementation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "RuntimeAuthorityTrue",
+      "ExpectedStatus": "LearningShadowImplementationPackBlocked",
+      "ActualStatus": "LearningShadowImplementationPackBlocked",
+      "ExpectedBlockedReason": "RuntimeAuthorityTrue",
+      "ActualBlockedReasons": [
+        "RuntimeAuthorityTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); shadow implementation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "GateAuthorityTrue",
+      "ExpectedStatus": "LearningShadowImplementationPackBlocked",
+      "ActualStatus": "LearningShadowImplementationPackBlocked",
+      "ExpectedBlockedReason": "GateAuthorityTrue",
+      "ActualBlockedReasons": [
+        "GateAuthorityTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); shadow implementation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "RuntimeRerankerChangedTrue",
+      "ExpectedStatus": "LearningShadowImplementationPackBlocked",
+      "ActualStatus": "LearningShadowImplementationPackBlocked",
+      "ExpectedBlockedReason": "RuntimeRerankerChangedTrue",
+      "ActualBlockedReasons": [
+        "RuntimeRerankerChangedTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); shadow implementation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "RuntimeRouterChangedTrue",
+      "ExpectedStatus": "LearningShadowImplementationPackBlocked",
+      "ActualStatus": "LearningShadowImplementationPackBlocked",
+      "ExpectedBlockedReason": "RuntimeRouterChangedTrue",
+      "ActualBlockedReasons": [
+        "RuntimeRouterChangedTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); shadow implementation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "PackageOutputChangedTrue",
+      "ExpectedStatus": "LearningShadowImplementationPackBlocked",
+      "ActualStatus": "LearningShadowImplementationPackBlocked",
+      "ExpectedBlockedReason": "PackageOutputChangedTrue",
+      "ActualBlockedReasons": [
+        "PackageOutputChangedTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); shadow implementation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "FormalPackageWrittenTrue",
+      "ExpectedStatus": "LearningShadowImplementationPackBlocked",
+      "ActualStatus": "LearningShadowImplementationPackBlocked",
+      "ExpectedBlockedReason": "FormalPackageWrittenTrue",
+      "ActualBlockedReasons": [
+        "FormalPackageWrittenTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); shadow implementation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "GlobalDefaultOnTrue",
+      "ExpectedStatus": "LearningShadowImplementationPackBlocked",
+      "ActualStatus": "LearningShadowImplementationPackBlocked",
+      "ExpectedBlockedReason": "GlobalDefaultOnTrue",
+      "ActualBlockedReasons": [
+        "GlobalDefaultOnTrue"
+      ],
+      "Reasoning": "1 blocked reason(s); shadow implementation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "V8ScopedActivationLost",
+      "ExpectedStatus": "LearningShadowImplementationPackBlocked",
+      "ActualStatus": "LearningShadowImplementationPackBlocked",
+      "ExpectedBlockedReason": "V8ScopedActivationLost",
+      "ActualBlockedReasons": [
+        "V8ScopedActivationLost"
+      ],
+      "Reasoning": "1 blocked reason(s); shadow implementation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "RuntimeGateNotPassed",
+      "ExpectedStatus": "LearningShadowImplementationPackBlocked",
+      "ActualStatus": "LearningShadowImplementationPackBlocked",
+      "ExpectedBlockedReason": "RuntimeChangeGateNotPassed",
+      "ActualBlockedReasons": [
+        "RuntimeChangeGateNotPassed"
+      ],
+      "Reasoning": "1 blocked reason(s); shadow implementation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "P15GateNotPassed",
+      "ExpectedStatus": "LearningShadowImplementationPackBlocked",
+      "ActualStatus": "LearningShadowImplementationPackBlocked",
+      "ExpectedBlockedReason": "P15GateNotPassed",
+      "ActualBlockedReasons": [
+        "P15GateNotPassed"
+      ],
+      "Reasoning": "1 blocked reason(s); shadow implementation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "MainlineEvidencePresent",
+      "ExpectedStatus": "LearningShadowImplementationPackBlocked",
+      "ActualStatus": "LearningShadowImplementationPackBlocked",
+      "ExpectedBlockedReason": "MainlineEvidencePresent",
+      "ActualBlockedReasons": [
+        "MainlineEvidencePresent"
+      ],
+      "Reasoning": "1 blocked reason(s); shadow implementation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "MainlineTrustRegistryPresent",
+      "ExpectedStatus": "LearningShadowImplementationPackBlocked",
+      "ActualStatus": "LearningShadowImplementationPackBlocked",
+      "ExpectedBlockedReason": "MainlineTrustRegistryPresent",
+      "ActualBlockedReasons": [
+        "MainlineTrustRegistryPresent"
+      ],
+      "Reasoning": "1 blocked reason(s); shadow implementation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "BootstrapGateAndPairsMissing",
+      "ExpectedStatus": "LearningShadowImplementationPackBlocked",
+      "ActualStatus": "LearningShadowImplementationPackBlocked",
+      "ExpectedBlockedReason": "RankingPairsMissing",
+      "ActualBlockedReasons": [
+        "BootstrapGateMissing",
+        "RankingPairsMissing"
+      ],
+      "Reasoning": "2 blocked reason(s); shadow implementation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "AuthorityAndRuntimeRerankerBoth",
+      "ExpectedStatus": "LearningShadowImplementationPackBlocked",
+      "ActualStatus": "LearningShadowImplementationPackBlocked",
+      "ExpectedBlockedReason": "RuntimeRerankerChangedTrue",
+      "ActualBlockedReasons": [
+        "RuntimeAuthorityTrue",
+        "RuntimeRerankerChangedTrue"
+      ],
+      "Reasoning": "2 blocked reason(s); shadow implementation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "AllSafetyLeaksAtOnce",
+      "ExpectedStatus": "LearningShadowImplementationPackBlocked",
+      "ActualStatus": "LearningShadowImplementationPackBlocked",
+      "ExpectedBlockedReason": "ShadowOnlyFalse",
+      "ActualBlockedReasons": [
+        "FormalPackageWrittenTrue",
+        "GateAuthorityTrue",
+        "GlobalDefaultOnTrue",
+        "PackageOutputChangedTrue",
+        "RuntimeAuthorityTrue",
+        "ShadowOnlyFalse"
+      ],
+      "Reasoning": "6 blocked reason(s); shadow implementation pack blocked.",
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    }
+  ],
+  "CandidateRerankerBaselines": [
+    {
+      "BaselineName": "WeightedBaseline",
+      "TaskFamily": "CandidateReranker",
+      "Ready": true,
+      "NotReadyReason": "",
+      "TrainCount": 195,
+      "EvalCount": 58,
+      "Accuracy": 0.8620689655172413,
+      "PairwiseAccuracy": 0.8620689655172413,
+      "Loss": 0,
+      "TopFailures": [
+        "automation-sample-010:doc:automation-guide-\u003Ememory:automation-stopped-cron score=-1.258",
+        "automation-sample-010:doc:automation-guide-\u003Ememory:automation-stopped-cron score=-1.258",
+        "chat-sample-003:memory:chat-active-plan-\u003Ememory:chat-noise-keyword-1 score=-31.550",
+        "chat-sample-003:memory:chat-active-plan-\u003Ememory:chat-noise-keyword-1 score=-31.550",
+        "chat-sample-003:stable:preference-language-\u003Ememory:chat-noise-keyword-1 score=-41.083",
+        "chat-sample-003:stable:preference-language-\u003Ememory:chat-noise-keyword-1 score=-41.083",
+        "novel-sample-008:memory:novel-weapon-v2-\u003Ememory:novel-weapon-v1 score=-24.050",
+        "novel-sample-008:memory:novel-weapon-v2-\u003Ememory:novel-weapon-v1 score=-24.050"
+      ],
+      "ShadowOnly": true,
+      "RuntimeAuthority": false,
+      "GateAuthority": false
+    },
+    {
+      "BaselineName": "LogisticBaseline",
+      "TaskFamily": "CandidateReranker",
+      "Ready": true,
+      "NotReadyReason": "",
+      "TrainCount": 195,
+      "EvalCount": 58,
+      "Accuracy": 1,
+      "PairwiseAccuracy": 1,
+      "Loss": 0.03827118497542571,
+      "TopFailures": [],
+      "ShadowOnly": true,
+      "RuntimeAuthority": false,
+      "GateAuthority": false
+    },
+    {
+      "BaselineName": "TreeBaseline",
+      "TaskFamily": "CandidateReranker",
+      "Ready": true,
+      "NotReadyReason": "",
+      "TrainCount": 195,
+      "EvalCount": 58,
+      "Accuracy": 1,
+      "PairwiseAccuracy": 1,
+      "Loss": 0,
+      "TopFailures": [],
+      "ShadowOnly": true,
+      "RuntimeAuthority": false,
+      "GateAuthority": false
+    },
+    {
+      "BaselineName": "LightweightMLPShadowCandidate",
+      "TaskFamily": "CandidateReranker",
+      "Ready": false,
+      "NotReadyReason": "MLP training deferred to V9.3 dedicated phase to avoid pulling heavy ML dependency. Dataset exported in jsonl form for downstream training.",
+      "TrainCount": 195,
+      "EvalCount": 58,
+      "Accuracy": 0,
+      "PairwiseAccuracy": 0,
+      "Loss": 0,
+      "TopFailures": [],
+      "ShadowOnly": true,
+      "RuntimeAuthority": false,
+      "GateAuthority": false
+    }
+  ],
+  "RouterIntentBaselines": [
+    {
+      "BaselineName": "RouterIntentLogistic",
+      "TaskFamily": "RouterIntentClassifier",
+      "Ready": true,
+      "NotReadyReason": "",
+      "TrainCount": 130,
+      "EvalCount": 33,
+      "Accuracy": 0.12121212121212122,
+      "PairwiseAccuracy": 0,
+      "Loss": 0,
+      "TopFailures": [
+        "router-1136de63f72ea37d expected=CodingTask predicted=FuzzyQuestion score=-0.925",
+        "router-13c8bb5e7f886bb4 expected=CodingTask predicted=FuzzyQuestion score=-0.695",
+        "router-3337daf9ef84f6c5 expected=AutomationRecovery predicted=FuzzyQuestion score=-0.695",
+        "router-3e5a19a04f4e785e expected=CodingTask predicted=FuzzyQuestion score=-0.695",
+        "router-47ff8d690b44b56d expected=CodingTask predicted=FuzzyQuestion score=-0.695",
+        "router-4bb15058e41039ad expected=AutomationRecovery predicted=FuzzyQuestion score=-0.925",
+        "router-4bdb424223357c4e expected=CodingTask predicted=FuzzyQuestion score=-0.925",
+        "router-4f18f06d7df96d2b expected=NovelGeneration predicted=FuzzyQuestion score=-0.695",
+        "router-4fd69c633db064da expected=AuditDeprecated predicted=FuzzyQuestion score=-0.747",
+        "router-505a074fca61bef8 expected=NovelGeneration predicted=FuzzyQuestion score=-0.695"
+      ],
+      "ShadowOnly": true,
+      "RuntimeAuthority": false,
+      "GateAuthority": false
+    },
+    {
+      "BaselineName": "RouterIntentTree",
+      "TaskFamily": "RouterIntentClassifier",
+      "Ready": true,
+      "NotReadyReason": "",
+      "TrainCount": 130,
+      "EvalCount": 33,
+      "Accuracy": 0.06060606060606061,
+      "PairwiseAccuracy": 0,
+      "Loss": 0,
+      "TopFailures": [
+        "router-1136de63f72ea37d expected=CodingTask predicted=AuditDeprecated",
+        "router-13c8bb5e7f886bb4 expected=CodingTask predicted=AuditDeprecated",
+        "router-3337daf9ef84f6c5 expected=AutomationRecovery predicted=AuditDeprecated",
+        "router-3938b5bbf4c569eb expected=FuzzyQuestion predicted=AuditDeprecated",
+        "router-3e5a19a04f4e785e expected=CodingTask predicted=AuditDeprecated",
+        "router-47ff8d690b44b56d expected=CodingTask predicted=AuditDeprecated",
+        "router-4bb15058e41039ad expected=AutomationRecovery predicted=AuditDeprecated",
+        "router-4bdb424223357c4e expected=CodingTask predicted=AuditDeprecated",
+        "router-4f18f06d7df96d2b expected=NovelGeneration predicted=AuditDeprecated",
+        "router-4fd69c633db064da expected=AuditDeprecated predicted=FuzzyQuestion"
+      ],
+      "ShadowOnly": true,
+      "RuntimeAuthority": false,
+      "GateAuthority": false
+    }
+  ],
+  "HardNegativeCoverage": {
+    "HardNegativeCount": 18,
+    "CoveredEvalSamples": 18,
+    "TotalEvalSamples": 113,
+    "CoverageRate": 0.1592920353982301,
+    "HardNegativeTrainingReady": false,
+    "NotReadyReason": "hard-negative count below 50; awaiting V9.4 hard-negative-generation expansion",
+    "Gaps": [
+      "low hard-negative count (\u003C50); likely under-coverage on rare failure modes",
+      "coverage rate 0.16 below 0.30 threshold"
+    ],
+    "ShadowOnly": true
+  },
+  "ShadowComparisonSummary": {
+    "BestRankerCandidate": "LogisticBaseline",
+    "BestRankerPairwiseAccuracy": 1,
+    "BestRouterCandidate": "RouterIntentLogistic",
+    "BestRouterAccuracy": 0.12121212121212122,
+    "ResidualFailureClusters": [
+      "WeightedBaseline: 8 top failures (acc=0.862)",
+      "RouterIntentLogistic: 10 top failures (acc=0.121)",
+      "RouterIntentTree: 10 top failures (acc=0.061)"
+    ],
+    "NextTrainingPriorities": [
+      "Expand hard-negative dataset to 50\u002B samples (V9.4 LLM-assisted generation)",
+      "Train full MLP on exported dataset (V9.3 dedicated)",
+      "Improve top router baseline accuracy beyond 0.85",
+      "Run V9.4 LLM-assisted failure diagnosis on exported failure samples"
+    ],
+    "ShadowOnly": true,
+    "RuntimeAuthority": false,
+    "GateAuthority": false
+  },
+  "CandidateWeightedBaselineReady": true,
+  "CandidateLogisticBaselineReady": true,
+  "CandidateTreeBaselineReady": true,
+  "CandidateMLPShadowReady": false,
+  "MLPDatasetExportReady": true,
+  "RouterIntentLogisticBaselineReady": true,
+  "RouterIntentTreeBaselineReady": true,
+  "HardNegativeCoverageReady": true,
+  "FailureSampleExported": true,
+  "ShadowComparisonSummaryWritten": true,
+  "FailureSamplePaths": [
+    "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\learning\\v9\\failure-samples\\candidate-reranker-failures.jsonl",
+    "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\learning\\v9\\failure-samples\\router-intent-failures.jsonl"
+  ],
+  "ShadowComparisonSummaryPath": "learning/v9/shadow-comparison-summary.json",
+  "ShadowOnly": true,
+  "RuntimeAuthority": false,
+  "GateAuthority": false,
+  "RuntimeRerankerChanged": false,
+  "RuntimeRouterChanged": false,
+  "PackageOutputChanged": false,
+  "FormalPackageWritten": false,
+  "GlobalDefaultOn": false,
+  "V8ScopedActivationPreserved": true,
+  "UpstreamLearningLayerBootstrapGatePresent": true,
+  "UpstreamLearningLayerBootstrapGatePassed": true,
+  "MainlineEvidencePresent": false,
+  "MainlineTrustRegistryPresent": false,
+  "Recommendation": "ProceedToV9.4FailureDiagnosisAndHardNegativeLoop",
+  "NextAllowedPhase": "V9.4FailureDiagnosisAndHardNegativeLoop",
+  "BlockedReasons": [],
+  "Diagnostics": [
+    "total=21",
+    "realStatus=LearningShadowImplementationPackReady",
+    "rankerBaselineCount=4",
+    "routerBaselineCount=2",
+    "rankerPairsLoaded=253",
+    "routerExamplesLoaded=163",
+    "hardNegativeCount=18",
+    "hardNegativeCoverageRate=0.159"
+  ]
+}

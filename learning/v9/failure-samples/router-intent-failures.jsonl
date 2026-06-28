@@ -1,0 +1,20 @@
+﻿{"baseline":"RouterIntentLogistic","failure":"router-1136de63f72ea37d expected=CodingTask predicted=FuzzyQuestion score=-0.925"}
+{"baseline":"RouterIntentLogistic","failure":"router-13c8bb5e7f886bb4 expected=CodingTask predicted=FuzzyQuestion score=-0.695"}
+{"baseline":"RouterIntentLogistic","failure":"router-3337daf9ef84f6c5 expected=AutomationRecovery predicted=FuzzyQuestion score=-0.695"}
+{"baseline":"RouterIntentLogistic","failure":"router-3e5a19a04f4e785e expected=CodingTask predicted=FuzzyQuestion score=-0.695"}
+{"baseline":"RouterIntentLogistic","failure":"router-47ff8d690b44b56d expected=CodingTask predicted=FuzzyQuestion score=-0.695"}
+{"baseline":"RouterIntentLogistic","failure":"router-4bb15058e41039ad expected=AutomationRecovery predicted=FuzzyQuestion score=-0.925"}
+{"baseline":"RouterIntentLogistic","failure":"router-4bdb424223357c4e expected=CodingTask predicted=FuzzyQuestion score=-0.925"}
+{"baseline":"RouterIntentLogistic","failure":"router-4f18f06d7df96d2b expected=NovelGeneration predicted=FuzzyQuestion score=-0.695"}
+{"baseline":"RouterIntentLogistic","failure":"router-4fd69c633db064da expected=AuditDeprecated predicted=FuzzyQuestion score=-0.747"}
+{"baseline":"RouterIntentLogistic","failure":"router-505a074fca61bef8 expected=NovelGeneration predicted=FuzzyQuestion score=-0.695"}
+{"baseline":"RouterIntentTree","failure":"router-1136de63f72ea37d expected=CodingTask predicted=AuditDeprecated"}
+{"baseline":"RouterIntentTree","failure":"router-13c8bb5e7f886bb4 expected=CodingTask predicted=AuditDeprecated"}
+{"baseline":"RouterIntentTree","failure":"router-3337daf9ef84f6c5 expected=AutomationRecovery predicted=AuditDeprecated"}
+{"baseline":"RouterIntentTree","failure":"router-3938b5bbf4c569eb expected=FuzzyQuestion predicted=AuditDeprecated"}
+{"baseline":"RouterIntentTree","failure":"router-3e5a19a04f4e785e expected=CodingTask predicted=AuditDeprecated"}
+{"baseline":"RouterIntentTree","failure":"router-47ff8d690b44b56d expected=CodingTask predicted=AuditDeprecated"}
+{"baseline":"RouterIntentTree","failure":"router-4bb15058e41039ad expected=AutomationRecovery predicted=AuditDeprecated"}
+{"baseline":"RouterIntentTree","failure":"router-4bdb424223357c4e expected=CodingTask predicted=AuditDeprecated"}
+{"baseline":"RouterIntentTree","failure":"router-4f18f06d7df96d2b expected=NovelGeneration predicted=AuditDeprecated"}
+{"baseline":"RouterIntentTree","failure":"router-4fd69c633db064da expected=AuditDeprecated predicted=FuzzyQuestion"}

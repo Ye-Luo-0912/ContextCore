@@ -1,0 +1,8 @@
+﻿{"baseline":"WeightedBaseline","failure":"automation-sample-010:doc:automation-guide->memory:automation-stopped-cron score=-1.258"}
+{"baseline":"WeightedBaseline","failure":"automation-sample-010:doc:automation-guide->memory:automation-stopped-cron score=-1.258"}
+{"baseline":"WeightedBaseline","failure":"chat-sample-003:memory:chat-active-plan->memory:chat-noise-keyword-1 score=-31.550"}
+{"baseline":"WeightedBaseline","failure":"chat-sample-003:memory:chat-active-plan->memory:chat-noise-keyword-1 score=-31.550"}
+{"baseline":"WeightedBaseline","failure":"chat-sample-003:stable:preference-language->memory:chat-noise-keyword-1 score=-41.083"}
+{"baseline":"WeightedBaseline","failure":"chat-sample-003:stable:preference-language->memory:chat-noise-keyword-1 score=-41.083"}
+{"baseline":"WeightedBaseline","failure":"novel-sample-008:memory:novel-weapon-v2->memory:novel-weapon-v1 score=-24.050"}
+{"baseline":"WeightedBaseline","failure":"novel-sample-008:memory:novel-weapon-v2->memory:novel-weapon-v1 score=-24.050"}

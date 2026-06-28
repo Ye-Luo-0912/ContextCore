@@ -1,0 +1,20 @@
+﻿{
+  "BestRankerCandidate": "LogisticBaseline",
+  "BestRankerPairwiseAccuracy": 1,
+  "BestRouterCandidate": "RouterIntentLogistic",
+  "BestRouterAccuracy": 0.12121212121212122,
+  "ResidualFailureClusters": [
+    "WeightedBaseline: 8 top failures (acc=0.862)",
+    "RouterIntentLogistic: 10 top failures (acc=0.121)",
+    "RouterIntentTree: 10 top failures (acc=0.061)"
+  ],
+  "NextTrainingPriorities": [
+    "Expand hard-negative dataset to 50\u002B samples (V9.4 LLM-assisted generation)",
+    "Train full MLP on exported dataset (V9.3 dedicated)",
+    "Improve top router baseline accuracy beyond 0.85",
+    "Run V9.4 LLM-assisted failure diagnosis on exported failure samples"
+  ],
+  "ShadowOnly": true,
+  "RuntimeAuthority": false,
+  "GateAuthority": false
+}

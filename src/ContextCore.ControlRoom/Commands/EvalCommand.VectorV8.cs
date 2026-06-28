@@ -1443,6 +1443,62 @@ public static partial class EvalCommand
         Console.WriteLine($"[Eval] Learning layer bootstrap written: {jp}");
         Console.WriteLine($"[Eval] learningLayerBootstrapPassed={report.LearningLayerBootstrapPassed}; gatePassed={report.GatePassed}; total={report.TotalCases} ready={report.ReadyCases} blocked={report.BlockedCases} shadowOnly={report.ShadowOnly} runtimeAuthority={report.RuntimeAuthority} v8Preserved={report.V8ScopedActivationPreserved} recommendation={report.Recommendation} nextPhase={report.NextAllowedPhase}");
     }
+
+    private static async Task ExecuteLearningShadowImplementationPackAsync(
+        IReadOnlyList<string> args, string subcommand, CancellationToken ct)
+    {
+        var output = Path.GetFullPath(Path.Combine("learning", "v9"));
+        Directory.CreateDirectory(output);
+        var rtPath = Path.Combine("learning", "readiness", "learning-runtime-change-readiness-gate.json");
+        var rtGate = await ReadJsonFileAsync<LearningRuntimeChangeReadinessGateReport>(rtPath, ct).ConfigureAwait(false);
+        var rtPassed = rtGate is not null && rtGate.Passed;
+        var p15Path = Path.Combine("eval", "eval-report-p15-a3.json");
+        var p15 = await ReadJsonFileAsync<JsonDocument>(p15Path, ct).ConfigureAwait(false);
+        var p15Passed = false;
+        if (p15 is not null && p15.RootElement.TryGetProperty("PassRate", out var pr)) p15Passed = pr.GetDouble() >= 1.0;
+        var mainlineEvPath = Path.Combine("vector", "v8", "formal-retrieval-promotion-approval-evidence.json");
+        var mainlineRegPath = Path.Combine("vector", "v8", "formal-retrieval-promotion-approval-trust-registry.json");
+        var mainlineEvPresent = File.Exists(mainlineEvPath);
+        var mainlineRegPresent = File.Exists(mainlineRegPath);
+
+        var bootstrapGatePath = Path.Combine("learning", "v9", "learning-layer-bootstrap-gate.json");
+        var bootstrapGate = await ReadJsonFileAsync<LearningLayerBootstrapReport>(bootstrapGatePath, ct).ConfigureAwait(false);
+
+        var rankingPairsPath = Path.Combine("learning", "features", "ranking-pairs.jsonl");
+        var routerExamplesPath = Path.Combine("learning", "features", "router-intent-examples.jsonl");
+        var hardNegativesPath = Path.Combine("learning", "features", "hard-negatives.jsonl");
+        var rankerPairs = LearningShadowImplementationPackRunner.LoadRankerPairs(rankingPairsPath);
+        var routerExamples = LearningShadowImplementationPackRunner.LoadRouterExamples(routerExamplesPath);
+        var hardNegativeCount = File.Exists(hardNegativesPath) ? File.ReadAllLines(hardNegativesPath).Count(static l => !string.IsNullOrWhiteSpace(l)) : 0;
+
+        var realContext = new LearningShadowImplementationPackContext
+        {
+            BootstrapGatePresent = bootstrapGate is not null,
+            BootstrapGatePassed = bootstrapGate?.GatePassed ?? false,
+            V8ScopedActivationPreserved = bootstrapGate?.V8ScopedActivationPreserved ?? false,
+            RankingPairCount = rankerPairs.Count,
+            RouterExampleCount = routerExamples.Count,
+            HardNegativeCount = hardNegativeCount,
+            ShadowOnlyOverride = true
+        };
+
+        var isGate = string.Equals(subcommand, "learning-shadow-implementation-pack-gate", StringComparison.OrdinalIgnoreCase);
+        var opt = new LearningShadowImplementationPackOptions
+        {
+            IsGate = isGate,
+            Enabled = !CommandHelpers.HasFlag(args, "--disabled")
+        };
+        var runner = new LearningShadowImplementationPackRunner();
+        var report = runner.Run(realContext, rankerPairs, routerExamples, hardNegativeCount, output, rtPassed, p15Passed, mainlineEvPresent, mainlineRegPresent, opt);
+        var fn = isGate ? "shadow-implementation-pack-gate" : "shadow-implementation-pack";
+        var jp = Path.Combine(output, $"{fn}.json");
+        var mp = Path.Combine(output, $"{fn}.md");
+        await WriteJsonSafeAsync(report, jp, ct).ConfigureAwait(false);
+        await WriteTextAsync(LearningShadowImplementationPackRunner.BuildMarkdown(
+            isGate ? "Learning Shadow Implementation Pack (Gate)" : "Learning Shadow Implementation Pack", report), mp, ct).ConfigureAwait(false);
+        Console.WriteLine($"[Eval] Learning shadow implementation pack written: {jp}");
+        Console.WriteLine($"[Eval] shadowImplementationPackPassed={report.ShadowImplementationPackPassed}; gatePassed={report.GatePassed}; total={report.TotalCases} ready={report.ReadyCases} blocked={report.BlockedCases} bestRanker={report.ShadowComparisonSummary.BestRankerCandidate}({report.ShadowComparisonSummary.BestRankerPairwiseAccuracy:F3}) bestRouter={report.ShadowComparisonSummary.BestRouterCandidate}({report.ShadowComparisonSummary.BestRouterAccuracy:F3}) shadowOnly={report.ShadowOnly} recommendation={report.Recommendation} nextPhase={report.NextAllowedPhase}");
+    }
     private static bool ValidateTemplateFields(string jsonContent, string[] fieldPaths, List<string> missing, List<string> nonPlaceholder)
     {
         var doc = System.Text.Json.JsonDocument.Parse(jsonContent);
