@@ -2229,6 +2229,41 @@ public static partial class EvalCommand
             $"formalEvidenceSufficient={report.FormalEvidenceSufficient}");
     }
 
+    private static async Task ExecuteFormalEvidenceStabilizationReplayPilotReadinessAsync(
+        IReadOnlyList<string> args, string subcommand, CancellationToken ct)
+    {
+        var output = Path.GetFullPath(Path.Combine("learning", "v11"));
+        Directory.CreateDirectory(output);
+
+        var rtPath = Path.Combine("learning", "readiness", "learning-runtime-change-readiness-gate.json");
+        var rtGate = await ReadJsonFileAsync<LearningRuntimeChangeReadinessGateReport>(rtPath, ct).ConfigureAwait(false);
+        var rtPassed = rtGate is not null && rtGate.Passed;
+
+        var p15Path = Path.Combine("eval", "eval-report-p15-a3.json");
+        var p15 = await ReadJsonFileAsync<JsonDocument>(p15Path, ct).ConfigureAwait(false);
+        var p15Passed = false;
+        if (p15 is not null && p15.RootElement.TryGetProperty("PassRate", out var pr)) p15Passed = pr.GetDouble() >= 1.0;
+
+        var isGate = string.Equals(subcommand, "fesrp-gate", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(subcommand, "formal-evidence-stabilization-replay-pilot-readiness-gate", StringComparison.OrdinalIgnoreCase);
+        var opt = new FormalEvidenceStabilizationReplayPilotReadinessOptions { IsGate = isGate, Enabled = !CommandHelpers.HasFlag(args, "--disabled") };
+        var runner = new FormalEvidenceStabilizationReplayPilotReadinessRunner();
+        var report = runner.Run(rtPassed, p15Passed, output, opt);
+
+        var isShort = subcommand.StartsWith("fesrp", StringComparison.OrdinalIgnoreCase);
+        var fn = isShort ? (isGate ? "fesrp-gate" : "fesrp") : (isGate ? "formal-evidence-stabilization-replay-pilot-readiness-gate" : "formal-evidence-stabilization-replay-pilot-readiness");
+        var jp = Path.Combine(output, $"{fn}.json");
+        var mp = Path.Combine(output, $"{fn}.md");
+        await WriteJsonSafeAsync(report, jp, ct).ConfigureAwait(false);
+        await WriteTextAsync(FormalEvidenceStabilizationReplayPilotReadinessRunner.BuildMarkdown(
+            isGate ? "FESRP (Gate)" : "FESRP", report), mp, ct).ConfigureAwait(false);
+
+        Console.WriteLine($"[Eval] FESRP written: {jp}");
+        Console.WriteLine($"[Eval] packPassed={report.PackPassed}; gatePassed={report.GatePassed}; " +
+            $"formalRows={report.FormalRowsVerified} realizedIds={report.RealizedLabelIdsRecovered}; " +
+            $"postValidation={report.PostIngestionValidationPassed} rollback={report.RollbackDryRunPassed} replay={report.ReplayValidationPassed} pilot={report.PilotReadinessReady}");
+    }
+
     private static async Task ExecuteLearningFormalEvidenceRealizationR1PackAsync(
         IReadOnlyList<string> args, string subcommand, CancellationToken ct)
     {

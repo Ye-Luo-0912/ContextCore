@@ -1,0 +1,29 @@
+﻿{
+  "OperationId": "fesrp-04189430820749278389dc78a68fbe82",
+  "CreatedAt": "2026-06-29T10:11:01.7325444+00:00",
+  "PackPassed": true,
+  "GatePassed": true,
+  "Recommendation": "ProceedToPilotReadinessGate",
+  "FormalRowsVerified": 60,
+  "RealizedLabelIdsRecovered": 60,
+  "PostIngestionValidationPassed": true,
+  "RollbackDryRunPassed": true,
+  "ReplayValidationPassed": true,
+  "PilotReadinessReady": true,
+  "RuntimePilotExecutionApplied": false,
+  "RuntimePromotionApplied": false,
+  "RuntimeRerankerChanged": false,
+  "PackageOutputChanged": false,
+  "GlobalDefaultOn": false,
+  "FeedbackSignalAsGateAuthority": false,
+  "V8ScopedActivationPreserved": true,
+  "FormalTrainingSetChanged": true,
+  "BlockedReasons": [],
+  "Diagnostics": [
+    "totalLines=78 flcR1=60 sfhR1=60 canonical=60",
+    "realizedIdsRecovered=60",
+    "rollbackExists=True snapshotExists=True",
+    "postValidation=True rollbackDryRun=True replay=True",
+    "pilotReadiness=True packPassed=True gatePassed=True"
+  ]
+}

@@ -390,6 +390,10 @@ public static partial class EvalCommand
             !string.Equals(subcommand, "controlled-formal-evidence-ingestion-pack-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "cfip", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "cfip-gate", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "fesrp", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "fesrp-gate", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "formal-evidence-stabilization-replay-pilot-readiness", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "formal-evidence-stabilization-replay-pilot-readiness-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "learning-formal-evidence-realization-r1-pack", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "learning-formal-evidence-realization-r1-pack-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "dto-split-plan", StringComparison.OrdinalIgnoreCase) &&
@@ -716,6 +720,8 @@ public static partial class EvalCommand
             Console.WriteLine("  eval controlled-formal-evidence-ingestion-pack-gate");
             Console.WriteLine("  eval cfip");
             Console.WriteLine("  eval cfip-gate");
+            Console.WriteLine("  eval fesrp   (or formal-evidence-stabilization-replay-pilot-readiness)");
+            Console.WriteLine("  eval fesrp-gate");
             Console.WriteLine("  eval learning-formal-evidence-realization-r1-pack");
             Console.WriteLine("  eval learning-formal-evidence-realization-r1-pack-gate");
             Console.WriteLine("  eval dto-split-plan");
@@ -2276,6 +2282,15 @@ public static partial class EvalCommand
             || string.Equals(subcommand, "cfip-gate", StringComparison.OrdinalIgnoreCase))
         {
             await ExecuteControlledFormalEvidenceIngestionPackAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        if (string.Equals(subcommand, "fesrp", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(subcommand, "fesrp-gate", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(subcommand, "formal-evidence-stabilization-replay-pilot-readiness", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(subcommand, "formal-evidence-stabilization-replay-pilot-readiness-gate", StringComparison.OrdinalIgnoreCase))
+        {
+            await ExecuteFormalEvidenceStabilizationReplayPilotReadinessAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
             return;
         }
 
