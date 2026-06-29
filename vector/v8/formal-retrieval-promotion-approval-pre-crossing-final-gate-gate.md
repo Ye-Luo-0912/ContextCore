@@ -1,7 +1,7 @@
 ﻿# Pre-Crossing Final Gate (Gate)
 
-生成: `2026-06-26T19:23:01.3059346+00:00`
-操作: `frp-pre-crossing-final-gate-fef54db4846b4910bffa33faad16c65b`
+生成: `2026-06-27T02:04:22.8712262+00:00`
+操作: `frp-pre-crossing-final-gate-349c7b9e96d947a386feeec9f6424aed`
 
 ## Decision
 - PreCrossingFinalGatePassed: `True` GatePassed: `True`

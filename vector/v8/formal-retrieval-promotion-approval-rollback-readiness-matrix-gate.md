@@ -1,7 +1,7 @@
 ﻿# Rollback Readiness Matrix Gate
 
-生成: `2026-06-26T18:50:21.5866705+00:00`
-操作: `frp-rollback-readiness-matrix-5e75ac3dd0df4d7f852c6610cdaa035d`
+生成: `2026-06-26T19:22:59.1514603+00:00`
+操作: `frp-rollback-readiness-matrix-d4d01531be674fe6a232457a465584ad`
 
 ## Decision
 - RollbackReadinessMatrixPassed: `True` GatePassed: `True`

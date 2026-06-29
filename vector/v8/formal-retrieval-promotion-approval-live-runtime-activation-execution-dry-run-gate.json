@@ -1,6 +1,6 @@
 ﻿{
-  "OperationId": "frp-live-runtime-activation-execution-dry-run-5279d00be29f41f89d9d50c8859b7509",
-  "CreatedAt": "2026-06-28T04:29:54.6773143+00:00",
+  "OperationId": "frp-live-runtime-activation-execution-dry-run-faf057a012674ed3a33f809c77124db5",
+  "CreatedAt": "2026-06-28T05:28:22.4351965+00:00",
   "LiveRuntimeActivationExecutionDryRunPassed": true,
   "GatePassed": true,
   "TotalCases": 33,
@@ -852,7 +852,7 @@
   "AllRuntimeActivationArtifactsContentVerified": true,
   "LiveActivationDryRunContractComplete": true,
   "ExecutionPlan": {
-    "PlanId": "frp-live-runtime-activation-execution-plan-d74f0805975946bfacde35651e27b0b8",
+    "PlanId": "frp-live-runtime-activation-execution-plan-288e718d6f154c3cb383aadec41a3b01",
     "BoundGrantId": "frp-grant-9308474979b64f31b8fc7d260b19575f",
     "Capability": "FormalRetrievalActivation",
     "Scope": "demo-workspace/demo-collection",

@@ -1,7 +1,7 @@
 ﻿# Guarded Runtime Activation Gate Dry-Run (Gate)
 
-生成: `2026-06-27T05:44:57.4319124+00:00`
-操作: `frp-guarded-runtime-activation-dry-run-1c871dc94c2149849882f3aebbf1d5a9`
+生成: `2026-06-27T07:13:21.0791730+00:00`
+操作: `frp-guarded-runtime-activation-dry-run-6cd665c3257b463d8cefa90d87349927`
 
 ## Decision
 - GuardedRuntimeActivationDryRunPassed: `True` GatePassed: `True`
