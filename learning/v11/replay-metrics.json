@@ -3,6 +3,8 @@
   "counterexampleReplayPassed": true,
   "datasetLineCount": 78,
   "formalRowCount": 60,
+  "canonicalVerified": 60,
   "hardNegativeCoverageDelta": 60,
-  "reportId": "replay-88db8736d930443fa531962918f73151"
+  "rankerBaselineDeltaReady": true,
+  "reportId": "replay-2b6585669fca479ab62c0d3e73ec37ae"
 }

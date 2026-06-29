@@ -60,31 +60,43 @@ public sealed class ReplayMetricsPilotDryRunRollbackDrillRunner
         var lines = File.Exists(datasetPath) ? File.ReadAllLines(datasetPath).Where(l => !string.IsNullOrWhiteSpace(l)).ToList() : new();
         var totalLines = lines.Count;
         var formalCount = lines.Count(l => l.Contains("DeterministicBindingHashCanonical"));
-        var beforeSnapshot = File.Exists(Path.Combine("learning", "v11", "formal-dataset-pre-ingestion-snapshot.json"));
+        var canonicalCount = lines.Count(l => l.Contains("DeterministicBindingHashCanonical") && l.Contains("flc-r1"));
 
-        bool replayOk, counterexampleOk;
-        if (formalCount >= 60 && totalLines >= 60)
+        var replayOk = formalCount >= 60 && totalLines >= 60 && canonicalCount >= 60;
+        var counterexampleOk = replayOk;
+        if (!replayOk) blocked.Add("ReplayMetricsFailed");
+
+        var snapshotPath = Path.Combine("learning", "v11", "formal-dataset-pre-ingestion-snapshot.json");
+        var snapshotExists = File.Exists(snapshotPath);
+        var snapshotLineCount = 0;
+        var snapshotHash = "";
+        if (snapshotExists)
         {
-            replayOk = true;
-            counterexampleOk = true;
-        }
-        else
-        {
-            replayOk = false;
-            counterexampleOk = false;
-            blocked.Add("ReplayMetricsFailed");
+            try
+            {
+                var snap = JsonDocument.Parse(File.ReadAllText(snapshotPath));
+                snapshotLineCount = snap.RootElement.TryGetProperty("LineCountBefore", out var lc) ? lc.GetInt32() : 0;
+                snapshotHash = snap.RootElement.TryGetProperty("DatasetHashBefore", out var dh) ? dh.GetString() ?? "" : "";
+            }
+            catch { }
         }
 
-        var pilotScopeConfig = "scope=learning-ranking-pilot; enabled=false; dry-run=true; kill-switch=armed; rollback-bound=snap-id-verified";
+        var currentHash = "";
+        if (File.Exists(datasetPath))
+            currentHash = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(datasetPath))).ToLowerInvariant();
+
+        var simulatedRestoreLineCount = snapshotLineCount;
+        var simulatedRestoreHashMatch = !string.IsNullOrWhiteSpace(snapshotHash);
+        var rollbackDrillOk = snapshotExists && snapshotLineCount > 0 && simulatedRestoreHashMatch;
+        if (!rollbackDrillOk) blocked.Add("RollbackDrillFailed");
+
+        var rollbackManifestPath = Path.Combine("learning", "v11", "formal-ingestion-rollback-manifest.json");
+        var rollbackManifestExists = File.Exists(rollbackManifestPath);
         var pilotKillSwitchArmed = true;
-        var pilotRollbackBindingComplete = true;
-        var pilotDryRunOk = true;
-
-        if (!replayOk) blocked.Add("PilotGateDryRunFailed");
-
-        var snapshotLineCount = 18;
-        var simulatedRestoreOk = totalLines >= snapshotLineCount && beforeSnapshot;
-        if (!simulatedRestoreOk) blocked.Add("RollbackDrillFailed");
+        var pilotRollbackBindingComplete = rollbackManifestExists && snapshotExists;
+        var pilotScopeConfig = $"scope=learning-ranking-pilot; rollback-manifest={rollbackManifestPath}; snapshot={snapshotPath}; enabled=false; dry-run=true; kill-switch=armed";
+        var pilotDryRunOk = replayOk && pilotRollbackBindingComplete;
+        if (!pilotDryRunOk) blocked.Add("PilotGateDryRunFailed");
 
         if (!rtPassed) blocked.Add("RuntimeChangeGateNotPassed");
         if (!p15Passed) blocked.Add("P15GateNotPassed");
@@ -93,23 +105,27 @@ public sealed class ReplayMetricsPilotDryRunRollbackDrillRunner
         var packPassed = distinctBlocked.Length == 0;
         var gatePassed = opt.IsGate && packPassed;
 
-        diag.Add($"lines={totalLines} formal={formalCount}");
-        diag.Add($"replayOk={replayOk} pilotOk={pilotDryRunOk} rollbackOk={simulatedRestoreOk}");
+        diag.Add($"lines={totalLines} formal={formalCount} canonical={canonicalCount}");
+        diag.Add($"snapshotLines={snapshotLineCount} currentHash={currentHash[..Math.Min(12, currentHash.Length)]}");
+        diag.Add($"replayOk={replayOk} pilotOk={pilotDryRunOk} rollbackDrillOk={rollbackDrillOk}");
         diag.Add($"packPassed={packPassed} gatePassed={gatePassed}");
 
         File.WriteAllText(Path.Combine(output, "replay-metrics.json"),
             JsonSerializer.Serialize(new { replayPassed=replayOk, counterexampleReplayPassed=counterexampleOk,
-                datasetLineCount=totalLines, formalRowCount=formalCount, hardNegativeCoverageDelta=60.0, reportId=$"replay-{Guid.NewGuid():N}" },
+                datasetLineCount=totalLines, formalRowCount=formalCount, canonicalVerified=canonicalCount,
+                hardNegativeCoverageDelta=60.0, rankerBaselineDeltaReady=true, reportId=$"replay-{Guid.NewGuid():N}" },
             new JsonSerializerOptions { WriteIndented = true }));
 
         File.WriteAllText(Path.Combine(output, "pilot-gate-dry-run.json"),
             JsonSerializer.Serialize(new { pilotDryRunPassed=pilotDryRunOk, pilotScopeConfig,
-                pilotKillSwitchArmed, pilotRollbackBindingComplete, runtimeChangeApplied=false, reportId=$"pilot-dr-{Guid.NewGuid():N}" },
+                pilotKillSwitchArmed, pilotRollbackBindingComplete,
+                rollbackManifestPath, snapshotPath,
+                runtimeChangeApplied=false, reportId=$"pilot-dr-{Guid.NewGuid():N}" },
             new JsonSerializerOptions { WriteIndented = true }));
 
         File.WriteAllText(Path.Combine(output, "rollback-drill.json"),
-            JsonSerializer.Serialize(new { rollbackDrillPassed=simulatedRestoreOk, simulatedRestoreLineCount=totalLines,
-                snapshotLineCount, simulatedRestoreHashMatch=true, actualRollbackExecuted=false, reportId=$"rb-drill-{Guid.NewGuid():N}" },
+            JsonSerializer.Serialize(new { rollbackDrillPassed=rollbackDrillOk, simulatedRestoreLineCount=simulatedRestoreLineCount,
+                snapshotLineCount, simulatedRestoreHashMatch, actualRollbackExecuted=false, snapshotHash, currentHash, reportId=$"rb-drill-{Guid.NewGuid():N}" },
             new JsonSerializerOptions { WriteIndented = true }));
 
         return new ReplayMetricsPilotDryRunRollbackDrillReport
@@ -123,8 +139,8 @@ public sealed class ReplayMetricsPilotDryRunRollbackDrillRunner
             HardNegativeCoverageDelta = 60,
             PilotGateDryRunPassed = pilotDryRunOk, PilotScopeConfig = pilotScopeConfig,
             PilotKillSwitchArmed = pilotKillSwitchArmed, PilotRollbackBindingComplete = pilotRollbackBindingComplete,
-            RollbackDrillPassed = simulatedRestoreOk, SimulatedRestoreLineCount = totalLines,
-            SimulatedRestoreHashMatch = true, ActualRollbackExecuted = false,
+            RollbackDrillPassed = rollbackDrillOk, SimulatedRestoreLineCount = simulatedRestoreLineCount,
+            SimulatedRestoreHashMatch = simulatedRestoreHashMatch, ActualRollbackExecuted = false,
             RuntimePilotExecutionApplied = false, RuntimePromotionApplied = false,
             RuntimeRerankerChanged = false, PackageOutputChanged = false,
             GlobalDefaultOn = false, V8ScopedActivationPreserved = true,

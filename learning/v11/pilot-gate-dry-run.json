@@ -1,8 +1,10 @@
 {
   "pilotDryRunPassed": true,
-  "pilotScopeConfig": "scope=learning-ranking-pilot; enabled=false; dry-run=true; kill-switch=armed; rollback-bound=snap-id-verified",
+  "pilotScopeConfig": "scope=learning-ranking-pilot; rollback-manifest=learning\\v11\\formal-ingestion-rollback-manifest.json; snapshot=learning\\v11\\formal-dataset-pre-ingestion-snapshot.json; enabled=false; dry-run=true; kill-switch=armed",
   "pilotKillSwitchArmed": true,
   "pilotRollbackBindingComplete": true,
+  "rollbackManifestPath": "learning\\v11\\formal-ingestion-rollback-manifest.json",
+  "snapshotPath": "learning\\v11\\formal-dataset-pre-ingestion-snapshot.json",
   "runtimeChangeApplied": false,
-  "reportId": "pilot-dr-87da8f2ca80c4ca19f7e23153845d462"
+  "reportId": "pilot-dr-147a9056a521416ab1a7f11c2f6d4e69"
 }

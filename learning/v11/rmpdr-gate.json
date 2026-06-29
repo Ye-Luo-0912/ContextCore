@@ -1,6 +1,6 @@
 ﻿{
-  "OperationId": "rmpdr-ea979353a7024641b68caaba980b8484",
-  "CreatedAt": "2026-06-29T11:37:17.398889+00:00",
+  "OperationId": "rmpdr-4e9d091f32a74ea5a229d52c3753fbc1",
+  "CreatedAt": "2026-06-29T12:14:19.4316887+00:00",
   "PackPassed": true,
   "GatePassed": true,
   "Recommendation": "ProceedToPilotGateDryRunComplete",
@@ -10,7 +10,7 @@
   "CounterexampleReplayPassed": true,
   "HardNegativeCoverageDelta": 60,
   "PilotGateDryRunPassed": true,
-  "PilotScopeConfig": "scope=learning-ranking-pilot; enabled=false; dry-run=true; kill-switch=armed; rollback-bound=snap-id-verified",
+  "PilotScopeConfig": "scope=learning-ranking-pilot; rollback-manifest=learning\\v11\\formal-ingestion-rollback-manifest.json; snapshot=learning\\v11\\formal-dataset-pre-ingestion-snapshot.json; enabled=false; dry-run=true; kill-switch=armed",
   "PilotKillSwitchArmed": true,
   "PilotRollbackBindingComplete": true,
   "RollbackDrillPassed": true,
@@ -25,8 +25,9 @@
   "V8ScopedActivationPreserved": true,
   "BlockedReasons": [],
   "Diagnostics": [
-    "lines=78 formal=60",
-    "replayOk=True pilotOk=True rollbackOk=True",
+    "lines=78 formal=60 canonical=60",
+    "snapshotLines=78 currentHash=02ac53e3e2d8",
+    "replayOk=True pilotOk=True rollbackDrillOk=True",
     "packPassed=True gatePassed=True"
   ]
 }
