@@ -1,6 +1,6 @@
 ﻿{
-  "OperationId": "cmpbp-7e5706bbff744bc5b49494e142132bf0",
-  "CreatedAt": "2026-06-29T16:37:57.902922+00:00",
+  "OperationId": "cmpbp-cd15be33b13d4ea0880d29fbac3c0729",
+  "CreatedAt": "2026-06-29T17:12:50.5341452+00:00",
   "PackPassed": true,
   "GatePassed": true,
   "CanaryMatrixPassed": true,
@@ -8,6 +8,8 @@
   "AgreementScore": 100,
   "MarginDistributionReady": true,
   "ScoringSourceVerified": true,
+  "ScoringRowsBound": 60,
+  "SyntheticScoreCount": 0,
   "PromotionBoundaryReady": true,
   "PilotPreflightPassed": true,
   "KillSwitchArmed": true,

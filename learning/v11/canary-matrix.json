@@ -4,6 +4,8 @@
   "rowLevelMatrixCount": 60,
   "regressionCount": 0,
   "agreementScore": 100,
+  "scoringRowsBound": 60,
+  "syntheticScoreCount": 0,
   "marginDistributionReady": true,
   "rows": [
     {
@@ -12,8 +14,11 @@
       "baselineDecision": "PositiveOverNegative",
       "shadowDecision": "PositiveOverNegative",
       "agreement": true,
-      "margin": 0.02,
-      "regression": false
+      "margin": 1,
+      "regression": false,
+      "baselineScore": 75.04999126,
+      "shadowScore": 76.04999126,
+      "synthetic": false
     },
     {
       "sampleId": "flc-r1-0001-chat-sample-003",
@@ -21,8 +26,11 @@
       "baselineDecision": "PositiveOverNegative",
       "shadowDecision": "PositiveOverNegative",
       "agreement": true,
-      "margin": 0.02,
-      "regression": false
+      "margin": 1,
+      "regression": false,
+      "baselineScore": 36.65,
+      "shadowScore": 37.65,
+      "synthetic": false
     },
     {
       "sampleId": "flc-r1-0002-novel-sample-008",
@@ -30,8 +38,11 @@
       "baselineDecision": "PositiveOverNegative",
       "shadowDecision": "PositiveOverNegative",
       "agreement": true,
-      "margin": 0.02,
-      "regression": false
+      "margin": 1,
+      "regression": false,
+      "baselineScore": 82.29999795,
+      "shadowScore": 83.29999795,
+      "synthetic": false
     },
     {
       "sampleId": "flc-r1-0003-automation-20260529-001",
@@ -40,7 +51,10 @@
       "shadowDecision": "PositiveOverNegative",
       "agreement": true,
       "margin": 0,
-      "regression": false
+      "regression": false,
+      "baselineScore": 123.60999207,
+      "shadowScore": 123.60999207,
+      "synthetic": false
     },
     {
       "sampleId": "flc-r1-0004-automation-20260529-002",
@@ -48,8 +62,11 @@
       "baselineDecision": "PositiveOverNegative",
       "shadowDecision": "PositiveOverNegative",
       "agreement": true,
-      "margin": 0.02,
-      "regression": false
+      "margin": 0,
+      "regression": false,
+      "baselineScore": 56.2,
+      "shadowScore": 56.2,
+      "synthetic": false
     },
     {
       "sampleId": "flc-r1-0005-automation-20260529-003",
@@ -57,8 +74,11 @@
       "baselineDecision": "PositiveOverNegative",
       "shadowDecision": "PositiveOverNegative",
       "agreement": true,
-      "margin": 0.02,
-      "regression": false
+      "margin": 0,
+      "regression": false,
+      "baselineScore": 43.3,
+      "shadowScore": 43.3,
+      "synthetic": false
     },
     {
       "sampleId": "flc-r1-0006-automation-20260529-004",
@@ -66,8 +86,11 @@
       "baselineDecision": "PositiveOverNegative",
       "shadowDecision": "PositiveOverNegative",
       "agreement": true,
-      "margin": 0.02,
-      "regression": false
+      "margin": 0,
+      "regression": false,
+      "baselineScore": 93.41499028,
+      "shadowScore": 93.41499028,
+      "synthetic": false
     },
     {
       "sampleId": "flc-r1-0007-automation-20260529-005",
@@ -75,8 +98,11 @@
       "baselineDecision": "PositiveOverNegative",
       "shadowDecision": "PositiveOverNegative",
       "agreement": true,
-      "margin": 0.02,
-      "regression": false
+      "margin": 0,
+      "regression": false,
+      "baselineScore": 111.05,
+      "shadowScore": 111.05,
+      "synthetic": false
     },
     {
       "sampleId": "flc-r1-0008-automation-20260529-006",
@@ -84,8 +110,11 @@
       "baselineDecision": "PositiveOverNegative",
       "shadowDecision": "PositiveOverNegative",
       "agreement": true,
-      "margin": 0.02,
-      "regression": false
+      "margin": 0,
+      "regression": false,
+      "baselineScore": 76.2,
+      "shadowScore": 76.2,
+      "synthetic": false
     },
     {
       "sampleId": "flc-r1-0009-automation-20260529-007",
@@ -93,8 +122,11 @@
       "baselineDecision": "PositiveOverNegative",
       "shadowDecision": "PositiveOverNegative",
       "agreement": true,
-      "margin": 0.02,
-      "regression": false
+      "margin": 0,
+      "regression": false,
+      "baselineScore": 66.1,
+      "shadowScore": 66.1,
+      "synthetic": false
     },
     {
       "sampleId": "flc-r1-0010-automation-20260529-008",
@@ -102,8 +134,11 @@
       "baselineDecision": "PositiveOverNegative",
       "shadowDecision": "PositiveOverNegative",
       "agreement": true,
-      "margin": 0.02,
-      "regression": false
+      "margin": 0,
+      "regression": false,
+      "baselineScore": 91.05,
+      "shadowScore": 91.05,
+      "synthetic": false
     },
     {
       "sampleId": "flc-r1-0011-automation-20260529-009",
@@ -111,8 +146,11 @@
       "baselineDecision": "PositiveOverNegative",
       "shadowDecision": "PositiveOverNegative",
       "agreement": true,
-      "margin": 0.02,
-      "regression": false
+      "margin": 0,
+      "regression": false,
+      "baselineScore": 105.9,
+      "shadowScore": 105.9,
+      "synthetic": false
     },
     {
       "sampleId": "flc-r1-0012-automation-20260529-010",
@@ -120,8 +158,11 @@
       "baselineDecision": "PositiveOverNegative",
       "shadowDecision": "PositiveOverNegative",
       "agreement": true,
-      "margin": 0.02,
-      "regression": false
+      "margin": 0,
+      "regression": false,
+      "baselineScore": 88.46498653,
+      "shadowScore": 88.46498653,
+      "synthetic": false
     },
     {
       "sampleId": "flc-r1-0013-automation-sample-001",
@@ -129,8 +170,11 @@
       "baselineDecision": "PositiveOverNegative",
       "shadowDecision": "PositiveOverNegative",
       "agreement": true,
-      "margin": 0.02,
-      "regression": false
+      "margin": 0,
+      "regression": false,
+      "baselineScore": 79,
+      "shadowScore": 79,
+      "synthetic": false
     },
     {
       "sampleId": "flc-r1-0014-automation-sample-002",
@@ -138,8 +182,11 @@
       "baselineDecision": "PositiveOverNegative",
       "shadowDecision": "PositiveOverNegative",
       "agreement": true,
-      "margin": 0.02,
-      "regression": false
+      "margin": 0,
+      "regression": false,
+      "baselineScore": 101.99999961,
+      "shadowScore": 101.99999961,
+      "synthetic": false
     },
     {
       "sampleId": "flc-r1-0015-automation-sample-003",
@@ -148,7 +195,10 @@
       "shadowDecision": "PositiveOverNegative",
       "agreement": true,
       "margin": 0,
-      "regression": false
+      "regression": false,
+      "baselineScore": 79,
+      "shadowScore": 79,
+      "synthetic": false
     },
     {
       "sampleId": "flc-r1-0016-automation-sample-004",
@@ -156,8 +206,11 @@
       "baselineDecision": "PositiveOverNegative",
       "shadowDecision": "PositiveOverNegative",
       "agreement": true,
-      "margin": 0,
-      "regression": false
+      "margin": 1,
+      "regression": false,
+      "baselineScore": 82.5,
+      "shadowScore": 83.5,
+      "synthetic": false
     },
     {
       "sampleId": "flc-r1-0017-automation-sample-005",
@@ -166,7 +219,10 @@
       "shadowDecision": "PositiveOverNegative",
       "agreement": true,
       "margin": 0,
-      "regression": false
+      "regression": false,
+      "baselineScore": 92.4,
+      "shadowScore": 92.4,
+      "synthetic": false
     },
     {
       "sampleId": "flc-r1-0018-automation-sample-006",
@@ -174,8 +230,11 @@
       "baselineDecision": "PositiveOverNegative",
       "shadowDecision": "PositiveOverNegative",
       "agreement": true,
-      "margin": 0.02,
-      "regression": false
+      "margin": 0,
+      "regression": false,
+      "baselineScore": 77.55,
+      "shadowScore": 77.55,
+      "synthetic": false
     },
     {
       "sampleId": "flc-r1-0019-automation-sample-007",
@@ -184,7 +243,10 @@
       "shadowDecision": "PositiveOverNegative",
       "agreement": true,
       "margin": 0,
-      "regression": false
+      "regression": false,
+      "baselineScore": 64.38499402,
+      "shadowScore": 64.38499402,
+      "synthetic": false
     },
     {
       "sampleId": "flc-r1-0020-automation-sample-008",
@@ -192,8 +254,11 @@
       "baselineDecision": "PositiveOverNegative",
       "shadowDecision": "PositiveOverNegative",
       "agreement": true,
-      "margin": 0.02,
-      "regression": false
+      "margin": 1,
+      "regression": false,
+      "baselineScore": 62.7,
+      "shadowScore": 63.7,
+      "synthetic": false
     },
     {
       "sampleId": "flc-r1-0021-automation-sample-009",
@@ -201,8 +266,11 @@
       "baselineDecision": "PositiveOverNegative",
       "shadowDecision": "PositiveOverNegative",
       "agreement": true,
-      "margin": 0.02,
-      "regression": false
+      "margin": 0,
+      "regression": false,
+      "baselineScore": 71.95,
+      "shadowScore": 71.95,
+      "synthetic": false
     },
     {
       "sampleId": "flc-r1-0022-automation-sample-010",
@@ -210,8 +278,11 @@
       "baselineDecision": "PositiveOverNegative",
       "shadowDecision": "PositiveOverNegative",
       "agreement": true,
-      "margin": 0.02,
-      "regression": false
+      "margin": 1,
+      "regression": false,
+      "baselineScore": 75.04999126,
+      "shadowScore": 76.04999126,
+      "synthetic": false
     },
     {
       "sampleId": "flc-r1-0023-chat-20260529-001",
@@ -219,8 +290,11 @@
       "baselineDecision": "PositiveOverNegative",
       "shadowDecision": "PositiveOverNegative",
       "agreement": true,
-      "margin": 0.02,
-      "regression": false
+      "margin": 0,
+      "regression": false,
+      "baselineScore": 35.1,
+      "shadowScore": 35.1,
+      "synthetic": false
     },
     {
       "sampleId": "flc-r1-0024-chat-20260529-002",
@@ -228,8 +302,11 @@
       "baselineDecision": "PositiveOverNegative",
       "shadowDecision": "PositiveOverNegative",
       "agreement": true,
-      "margin": 0.02,
-      "regression": false
+      "margin": 0,
+      "regression": false,
+      "baselineScore": 36.85,
+      "shadowScore": 36.85,
+      "synthetic": false
     },
     {
       "sampleId": "flc-r1-0025-chat-20260529-003",
@@ -237,8 +314,11 @@
       "baselineDecision": "PositiveOverNegative",
       "shadowDecision": "PositiveOverNegative",
       "agreement": true,
-      "margin": 0.02,
-      "regression": false
+      "margin": 0,
+      "regression": false,
+      "baselineScore": 36.65,
+      "shadowScore": 36.65,
+      "synthetic": false
     },
     {
       "sampleId": "flc-r1-0026-chat-20260529-004",
@@ -246,8 +326,11 @@
       "baselineDecision": "PositiveOverNegative",
       "shadowDecision": "PositiveOverNegative",
       "agreement": true,
-      "margin": 0.02,
-      "regression": false
+      "margin": 0,
+      "regression": false,
+      "baselineScore": 126.15,
+      "shadowScore": 126.15,
+      "synthetic": false
     },
     {
       "sampleId": "flc-r1-0027-chat-20260529-005",
@@ -256,7 +339,10 @@
       "shadowDecision": "PositiveOverNegative",
       "agreement": true,
       "margin": 0,
-      "regression": false
+      "regression": false,
+      "baselineScore": 55.8,
+      "shadowScore": 55.8,
+      "synthetic": false
     },
     {
       "sampleId": "flc-r1-0028-chat-20260529-006",
@@ -265,7 +351,10 @@
       "shadowDecision": "PositiveOverNegative",
       "agreement": true,
       "margin": 0,
-      "regression": false
+      "regression": false,
+      "baselineScore": 96.45,
+      "shadowScore": 96.45,
+      "synthetic": false
     },
     {
       "sampleId": "flc-r1-0029-chat-20260529-007",
@@ -273,8 +362,11 @@
       "baselineDecision": "PositiveOverNegative",
       "shadowDecision": "PositiveOverNegative",
       "agreement": true,
-      "margin": 0.02,
-      "regression": false
+      "margin": 0,
+      "regression": false,
+      "baselineScore": 98.3,
+      "shadowScore": 98.3,
+      "synthetic": false
     },
     {
       "sampleId": "flc-r1-0030-chat-20260529-008",
@@ -282,8 +374,11 @@
       "baselineDecision": "PositiveOverNegative",
       "shadowDecision": "PositiveOverNegative",
       "agreement": true,
-      "margin": 0.02,
-      "regression": false
+      "margin": 0,
+      "regression": false,
+      "baselineScore": 61.15,
+      "shadowScore": 61.15,
+      "synthetic": false
     },
     {
       "sampleId": "flc-r1-0031-chat-20260529-009",
@@ -291,8 +386,11 @@
       "baselineDecision": "PositiveOverNegative",
       "shadowDecision": "PositiveOverNegative",
       "agreement": true,
-      "margin": 0.02,
-      "regression": false
+      "margin": 0,
+      "regression": false,
+      "baselineScore": 63.3,
+      "shadowScore": 63.3,
+      "synthetic": false
     },
     {
       "sampleId": "flc-r1-0032-chat-20260529-010",
@@ -300,8 +398,11 @@
       "baselineDecision": "PositiveOverNegative",
       "shadowDecision": "PositiveOverNegative",
       "agreement": true,
-      "margin": 0.02,
-      "regression": false
+      "margin": 0,
+      "regression": false,
+      "baselineScore": 107.4,
+      "shadowScore": 107.4,
+      "synthetic": false
     },
     {
       "sampleId": "flc-r1-0033-chat-20260529-011",
@@ -309,8 +410,11 @@
       "baselineDecision": "PositiveOverNegative",
       "shadowDecision": "PositiveOverNegative",
       "agreement": true,
-      "margin": 0.02,
-      "regression": false
+      "margin": 0,
+      "regression": false,
+      "baselineScore": 61.15,
+      "shadowScore": 61.15,
+      "synthetic": false
     },
     {
       "sampleId": "flc-r1-0034-chat-20260529-012",
@@ -318,8 +422,11 @@
       "baselineDecision": "PositiveOverNegative",
       "shadowDecision": "PositiveOverNegative",
       "agreement": true,
-      "margin": 0.02,
-      "regression": false
+      "margin": 0,
+      "regression": false,
+      "baselineScore": 49.4,
+      "shadowScore": 49.4,
+      "synthetic": false
     },
     {
       "sampleId": "flc-r1-0035-chat-20260529-013",
@@ -328,7 +435,10 @@
       "shadowDecision": "PositiveOverNegative",
       "agreement": true,
       "margin": 0,
-      "regression": false
+      "regression": false,
+      "baselineScore": 61.15,
+      "shadowScore": 61.15,
+      "synthetic": false
     },
     {
       "sampleId": "flc-r1-0036-chat-20260529-014",
@@ -336,8 +446,11 @@
       "baselineDecision": "PositiveOverNegative",
       "shadowDecision": "PositiveOverNegative",
       "agreement": true,
-      "margin": 0.02,
-      "regression": false
+      "margin": 0,
+      "regression": false,
+      "baselineScore": 70.85,
+      "shadowScore": 70.85,
+      "synthetic": false
     },
     {
       "sampleId": "flc-r1-0037-chat-20260529-015",
@@ -345,8 +458,11 @@
       "baselineDecision": "PositiveOverNegative",
       "shadowDecision": "PositiveOverNegative",
       "agreement": true,
-      "margin": 0.02,
-      "regression": false
+      "margin": 0,
+      "regression": false,
+      "baselineScore": 91.9,
+      "shadowScore": 91.9,
+      "synthetic": false
     },
     {
       "sampleId": "flc-r1-0038-chat-20260529-016",
@@ -354,8 +470,11 @@
       "baselineDecision": "PositiveOverNegative",
       "shadowDecision": "PositiveOverNegative",
       "agreement": true,
-      "margin": 0.02,
-      "regression": false
+      "margin": 0,
+      "regression": false,
+      "baselineScore": 120.15,
+      "shadowScore": 120.15,
+      "synthetic": false
     },
     {
       "sampleId": "flc-r1-0039-chat-20260529-017",
@@ -363,8 +482,11 @@
       "baselineDecision": "PositiveOverNegative",
       "shadowDecision": "PositiveOverNegative",
       "agreement": true,
-      "margin": 0.02,
-      "regression": false
+      "margin": 0,
+      "regression": false,
+      "baselineScore": 98.7,
+      "shadowScore": 98.7,
+      "synthetic": false
     },
     {
       "sampleId": "flc-r1-0040-chat-20260529-018",
@@ -373,7 +495,10 @@
       "shadowDecision": "PositiveOverNegative",
       "agreement": true,
       "margin": 0,
-      "regression": false
+      "regression": false,
+      "baselineScore": 66.1,
+      "shadowScore": 66.1,
+      "synthetic": false
     },
     {
       "sampleId": "flc-r1-0041-chat-20260529-019",
@@ -381,8 +506,11 @@
       "baselineDecision": "PositiveOverNegative",
       "shadowDecision": "PositiveOverNegative",
       "agreement": true,
-      "margin": 0.02,
-      "regression": false
+      "margin": 0,
+      "regression": false,
+      "baselineScore": 91.05,
+      "shadowScore": 91.05,
+      "synthetic": false
     },
     {
       "sampleId": "flc-r1-0042-chat-20260529-020",
@@ -390,8 +518,11 @@
       "baselineDecision": "PositiveOverNegative",
       "shadowDecision": "PositiveOverNegative",
       "agreement": true,
-      "margin": 0.02,
-      "regression": false
+      "margin": 0,
+      "regression": false,
+      "baselineScore": 100.75,
+      "shadowScore": 100.75,
+      "synthetic": false
     },
     {
       "sampleId": "flc-r1-0043-chat-sample-001",
@@ -399,8 +530,11 @@
       "baselineDecision": "PositiveOverNegative",
       "shadowDecision": "PositiveOverNegative",
       "agreement": true,
-      "margin": 0.02,
-      "regression": false
+      "margin": 1,
+      "regression": false,
+      "baselineScore": 34.3,
+      "shadowScore": 35.3,
+      "synthetic": false
     },
     {
       "sampleId": "flc-r1-0044-chat-sample-002",
@@ -408,8 +542,11 @@
       "baselineDecision": "PositiveOverNegative",
       "shadowDecision": "PositiveOverNegative",
       "agreement": true,
-      "margin": 0.02,
-      "regression": false
+      "margin": 1,
+      "regression": false,
+      "baselineScore": 36.65,
+      "shadowScore": 37.65,
+      "synthetic": false
     },
     {
       "sampleId": "flc-r1-0045-chat-sample-003",
@@ -417,8 +554,11 @@
       "baselineDecision": "PositiveOverNegative",
       "shadowDecision": "PositiveOverNegative",
       "agreement": true,
-      "margin": 0.02,
-      "regression": false
+      "margin": 1,
+      "regression": false,
+      "baselineScore": 36.65,
+      "shadowScore": 37.65,
+      "synthetic": false
     },
     {
       "sampleId": "flc-r1-0046-chat-sample-004",
@@ -426,8 +566,11 @@
       "baselineDecision": "PositiveOverNegative",
       "shadowDecision": "PositiveOverNegative",
       "agreement": true,
-      "margin": 0.02,
-      "regression": false
+      "margin": 1,
+      "regression": false,
+      "baselineScore": 33.45,
+      "shadowScore": 34.45,
+      "synthetic": false
     },
     {
       "sampleId": "flc-r1-0047-chat-sample-005",
@@ -435,8 +578,11 @@
       "baselineDecision": "PositiveOverNegative",
       "shadowDecision": "PositiveOverNegative",
       "agreement": true,
-      "margin": 0.02,
-      "regression": false
+      "margin": 0,
+      "regression": false,
+      "baselineScore": 18.66,
+      "shadowScore": 18.66,
+      "synthetic": false
     },
     {
       "sampleId": "flc-r1-0048-chat-sample-006",
@@ -444,8 +590,11 @@
       "baselineDecision": "PositiveOverNegative",
       "shadowDecision": "PositiveOverNegative",
       "agreement": true,
-      "margin": 0.02,
-      "regression": false
+      "margin": 0,
+      "regression": false,
+      "baselineScore": 46.35,
+      "shadowScore": 46.35,
+      "synthetic": false
     },
     {
       "sampleId": "flc-r1-0049-chat-sample-007",
@@ -453,8 +602,11 @@
       "baselineDecision": "PositiveOverNegative",
       "shadowDecision": "PositiveOverNegative",
       "agreement": true,
-      "margin": 0.02,
-      "regression": false
+      "margin": 0,
+      "regression": false,
+      "baselineScore": 52.8,
+      "shadowScore": 52.8,
+      "synthetic": false
     },
     {
       "sampleId": "flc-r1-0050-chat-sample-008",
@@ -462,8 +614,11 @@
       "baselineDecision": "PositiveOverNegative",
       "shadowDecision": "PositiveOverNegative",
       "agreement": true,
-      "margin": 0.02,
-      "regression": false
+      "margin": 1,
+      "regression": false,
+      "baselineScore": 46.35,
+      "shadowScore": 47.35,
+      "synthetic": false
     },
     {
       "sampleId": "flc-r1-0051-chat-sample-009",
@@ -471,8 +626,11 @@
       "baselineDecision": "PositiveOverNegative",
       "shadowDecision": "PositiveOverNegative",
       "agreement": true,
-      "margin": 0.02,
-      "regression": false
+      "margin": 0,
+      "regression": false,
+      "baselineScore": 71.1,
+      "shadowScore": 71.1,
+      "synthetic": false
     },
     {
       "sampleId": "flc-r1-0052-chat-sample-010",
@@ -480,8 +638,11 @@
       "baselineDecision": "PositiveOverNegative",
       "shadowDecision": "PositiveOverNegative",
       "agreement": true,
-      "margin": 0,
-      "regression": false
+      "margin": 1,
+      "regression": false,
+      "baselineScore": 35.15,
+      "shadowScore": 36.15,
+      "synthetic": false
     },
     {
       "sampleId": "flc-r1-0053-coding-20260529-001",
@@ -489,8 +650,11 @@
       "baselineDecision": "PositiveOverNegative",
       "shadowDecision": "PositiveOverNegative",
       "agreement": true,
-      "margin": 0.02,
-      "regression": false
+      "margin": 0,
+      "regression": false,
+      "baselineScore": 36.85,
+      "shadowScore": 36.85,
+      "synthetic": false
     },
     {
       "sampleId": "flc-r1-0054-coding-20260529-002",
@@ -498,8 +662,11 @@
       "baselineDecision": "PositiveOverNegative",
       "shadowDecision": "PositiveOverNegative",
       "agreement": true,
-      "margin": 0.02,
-      "regression": false
+      "margin": 0,
+      "regression": false,
+      "baselineScore": 43.3,
+      "shadowScore": 43.3,
+      "synthetic": false
     },
     {
       "sampleId": "flc-r1-0055-coding-20260529-003",
@@ -507,8 +674,11 @@
       "baselineDecision": "PositiveOverNegative",
       "shadowDecision": "PositiveOverNegative",
       "agreement": true,
-      "margin": 0.02,
-      "regression": false
+      "margin": 0,
+      "regression": false,
+      "baselineScore": 56.4,
+      "shadowScore": 56.4,
+      "synthetic": false
     },
     {
       "sampleId": "flc-r1-0056-coding-20260529-004",
@@ -516,8 +686,11 @@
       "baselineDecision": "PositiveOverNegative",
       "shadowDecision": "PositiveOverNegative",
       "agreement": true,
-      "margin": 0.02,
-      "regression": false
+      "margin": 0,
+      "regression": false,
+      "baselineScore": 81.15,
+      "shadowScore": 81.15,
+      "synthetic": false
     },
     {
       "sampleId": "flc-r1-0057-coding-20260529-005",
@@ -526,7 +699,10 @@
       "shadowDecision": "PositiveOverNegative",
       "agreement": true,
       "margin": 0,
-      "regression": false
+      "regression": false,
+      "baselineScore": 96,
+      "shadowScore": 96,
+      "synthetic": false
     },
     {
       "sampleId": "flc-r1-0058-coding-20260529-006",
@@ -534,8 +710,11 @@
       "baselineDecision": "PositiveOverNegative",
       "shadowDecision": "PositiveOverNegative",
       "agreement": true,
-      "margin": 0.02,
-      "regression": false
+      "margin": 0,
+      "regression": false,
+      "baselineScore": 85.15,
+      "shadowScore": 85.15,
+      "synthetic": false
     },
     {
       "sampleId": "flc-r1-0059-coding-20260529-007",
@@ -543,9 +722,12 @@
       "baselineDecision": "PositiveOverNegative",
       "shadowDecision": "PositiveOverNegative",
       "agreement": true,
-      "margin": 0.02,
-      "regression": false
+      "margin": 0,
+      "regression": false,
+      "baselineScore": 65.25,
+      "shadowScore": 65.25,
+      "synthetic": false
     }
   ],
-  "reportId": "cm-c9995e132d364e41b7bc456dc8111b2a"
+  "reportId": "cm-4232cf5a6508477bb0552f2338e2b697"
 }

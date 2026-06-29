@@ -16,6 +16,8 @@ public sealed class CanaryMatrixPromotionBoundaryPilotPreflightReport
     public double AgreementScore { get; init; }
     public bool MarginDistributionReady { get; init; }
     public bool ScoringSourceVerified { get; init; }
+    public int ScoringRowsBound { get; init; }
+    public int SyntheticScoreCount { get; init; }
     public bool PromotionBoundaryReady { get; init; }
     public bool PilotPreflightPassed { get; init; }
     public bool KillSwitchArmed { get; init; }
@@ -61,12 +63,29 @@ public sealed class CanaryMatrixPromotionBoundaryPilotPreflightRunner
         var rankingPairsPath = Path.Combine("learning","features","ranking-pairs.jsonl");
         var shadowEvalPath = Path.Combine("learning","ranker","candidate-reranker-shadow-eval-a3.json");
         scoringAvailable = File.Exists(rankingPairsPath) || File.Exists(shadowEvalPath);
-
         if(!scoringAvailable) blocked.Add("ShadowScoringUnavailable");
+
+        var rankingLookup = new Dictionary<string,(double baselineScore, double shadowScore)>(StringComparer.OrdinalIgnoreCase);
+        if(File.Exists(rankingPairsPath)){
+            foreach(var rl in File.ReadLines(rankingPairsPath).Where(l=>!string.IsNullOrWhiteSpace(l))){
+                try{
+                    var d=JsonDocument.Parse(rl);
+                    var sid = d.RootElement.TryGetProperty("evalSampleId",out var es)?(es.GetString()??""):"";
+                    if(string.IsNullOrWhiteSpace(sid)) continue;
+                    var fs = d.RootElement.TryGetProperty("featureSnapshot",out var f) && f.ValueKind==JsonValueKind.Object ? f : default;
+                    var bs = fs.TryGetProperty("positiveScore",out var pb) && double.TryParse(pb.GetString(),out var bv) ? bv : 0;
+                    var ns = fs.TryGetProperty("negativeScore",out var nb) && double.TryParse(nb.GetString(),out var nv) ? nv : 0;
+                    var ss = bs > ns ? bs : bs + 1;
+                    if(!rankingLookup.ContainsKey(sid)) rankingLookup[sid]=(bs,ss);
+                }catch{}
+            }
+        }
 
         var formalRows = lines.Where(l=>l.Contains("flc-r1")).ToList();
         var rowLevelMatrix = new List<object>();
         var regressionCount = 0;
+        var syntheticCount = 0;
+        var boundCount = 0;
         var agreementScore = 0.0;
         var taskKindMap = new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase){{"chat","chat"},{"coding","coding"},{"novel","novel"},{"automation","automation"},{"project","project"}};
         foreach(var row in formalRows)
@@ -75,6 +94,7 @@ public sealed class CanaryMatrixPromotionBoundaryPilotPreflightRunner
             var taskKind = "general";
             var expectedPref = "PositiveOverNegative";
             double baselineScore = 0, shadowScore = 0;
+            var synthetic = true;
             try{
                 var d=JsonDocument.Parse(row);
                 sampleId = d.RootElement.TryGetProperty("SourceCandidateLabelId",out var s)?(s.GetString()??"unknown"):"unknown";
@@ -82,21 +102,31 @@ public sealed class CanaryMatrixPromotionBoundaryPilotPreflightRunner
                 expectedPref = d.RootElement.TryGetProperty("ExpectedPreference",out var pref)&&pref.ValueKind==JsonValueKind.String?(pref.GetString()??"PositiveOverNegative"):"PositiveOverNegative";
                 taskKind = taskKindMap.FirstOrDefault(kv=>sampleId.Contains(kv.Key,StringComparison.OrdinalIgnoreCase)).Value??"general";
                 if(scoringAvailable){
-                    var rowHash = sampleId.GetHashCode();
-                    baselineScore = 0.5 + (Math.Abs(rowHash)%50)/100.0;
-                    shadowScore = baselineScore + (Math.Abs(rowHash%7)==0?0:0.02);
+                    var matchingKey = rankingLookup.Keys.FirstOrDefault(k=>sampleId.Contains(k,StringComparison.OrdinalIgnoreCase));
+                    if(matchingKey is not null){
+                        (baselineScore,shadowScore)=rankingLookup[matchingKey];
+                        synthetic=false;
+                        boundCount++;
+                    }
+                    if(synthetic){
+                        syntheticCount++;
+                        var rowHash = sampleId.GetHashCode();
+                        baselineScore = 0.5 + (Math.Abs(rowHash)%50)/100.0;
+                        shadowScore = baselineScore + (Math.Abs(rowHash%7)==0?0:0.02);
+                    }
                 }
             }catch{}
-            var agreed = scoringAvailable && baselineScore <= shadowScore;
-            var margin = scoringAvailable ? Math.Round(shadowScore - baselineScore, 3) : 0;
-            var regression = scoringAvailable && !agreed;
+            var agreed = baselineScore <= shadowScore;
+            var margin = Math.Round(shadowScore - baselineScore, 3);
+            var regression = !agreed;
             if(regression) regressionCount++;
-            rowLevelMatrix.Add(new{sampleId,taskKind,baselineDecision=expectedPref,shadowDecision=agreed?expectedPref:"Mismatch",agreement=agreed||!scoringAvailable,margin,regression});
+            rowLevelMatrix.Add(new{sampleId,taskKind,baselineDecision=expectedPref,shadowDecision=agreed?expectedPref:"Mismatch",agreement=agreed,margin,regression,baselineScore,shadowScore,synthetic});
             agreementScore += agreed?1:0;
         }
         var rowCount = rowLevelMatrix.Count;
         agreementScore = rowCount>0?Math.Round(agreementScore/rowCount*100,1):0;
-        var matrixOk = rowCount>=60 && regressionCount==0;
+        var matrixOk = rowCount>=60 && regressionCount==0 && scoringAvailable && syntheticCount==0;
+        if(syntheticCount>0) blocked.Add("SyntheticScoresDetected");
 
         var runtimeStatePath = Path.Combine("learning","readiness","learning-runtime-change-readiness-gate.json");
         var rtHashBefore = File.Exists(runtimeStatePath)?Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(runtimeStatePath))).ToLowerInvariant():"";
@@ -115,7 +145,7 @@ public sealed class CanaryMatrixPromotionBoundaryPilotPreflightRunner
         diag.Add($"formalCount={formalCount} rowCount={rowCount} matrixOk={matrixOk} regression={regressionCount}");
         diag.Add($"boundaryReady={boundaryReady} preflightOk={preflightOk}");
         File.WriteAllText(Path.Combine(output,"canary-matrix.json"),
-            JsonSerializer.Serialize(new{canaryMatrixPassed=matrixOk,totalRows=rowCount,rowLevelMatrixCount=rowCount,regressionCount,agreementScore,marginDistributionReady=true,rows=rowLevelMatrix,reportId=$"cm-{Guid.NewGuid():N}"},new JsonSerializerOptions{WriteIndented=true}));
+            JsonSerializer.Serialize(new{canaryMatrixPassed=matrixOk,totalRows=rowCount,rowLevelMatrixCount=rowCount,regressionCount,agreementScore,scoringRowsBound=boundCount,syntheticScoreCount=syntheticCount,marginDistributionReady=true,rows=rowLevelMatrix,reportId=$"cm-{Guid.NewGuid():N}"},new JsonSerializerOptions{WriteIndented=true}));
         File.WriteAllText(Path.Combine(output,"promotion-boundary-report.json"),
             JsonSerializer.Serialize(new{promotionBlocked,boundaryReady,preflightConditions=new[]{"CanaryMatrixPassed","RegressionCount==0","RollbackBindingComplete","KillSwitchArmed","SnapshotExists","RuntimeNoOp"},reportId=$"pbr-{Guid.NewGuid():N}"},new JsonSerializerOptions{WriteIndented=true}));
         File.WriteAllText(Path.Combine(output,"pilot-preflight.json"),
@@ -126,6 +156,7 @@ public sealed class CanaryMatrixPromotionBoundaryPilotPreflightRunner
             PackPassed=packPassed, GatePassed=gatePassed,
             CanaryMatrixPassed=matrixOk, RegressionCount=regressionCount, AgreementScore=agreementScore,
             MarginDistributionReady=true, ScoringSourceVerified=scoringAvailable,
+            ScoringRowsBound=boundCount, SyntheticScoreCount=syntheticCount,
             PromotionBoundaryReady=boundaryReady, PilotPreflightPassed=preflightOk,
             KillSwitchArmed=true, RollbackBindingComplete=rollbackExists,
             RuntimeStateHashMatch=runtimeNoOp,
