@@ -382,6 +382,8 @@ public static partial class EvalCommand
             !string.Equals(subcommand, "learning-formal-evidence-realization-pack-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "learning-controlled-formal-label-ingestion-staging", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "learning-controlled-formal-label-ingestion-staging-gate", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "learning-formal-evidence-realization-r1-pack", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "learning-formal-evidence-realization-r1-pack-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "dto-split-plan", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "dto-split-readiness-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "vector-retrieval-eval-protocol-audit", StringComparison.OrdinalIgnoreCase) &&
@@ -698,6 +700,8 @@ public static partial class EvalCommand
             Console.WriteLine("  eval learning-formal-evidence-realization-pack-gate");
             Console.WriteLine("  eval learning-controlled-formal-label-ingestion-staging");
             Console.WriteLine("  eval learning-controlled-formal-label-ingestion-staging-gate");
+            Console.WriteLine("  eval learning-formal-evidence-realization-r1-pack");
+            Console.WriteLine("  eval learning-formal-evidence-realization-r1-pack-gate");
             Console.WriteLine("  eval dto-split-plan");
             Console.WriteLine("  eval dto-split-readiness-gate");
             Console.WriteLine("  eval vector-retrieval-eval-protocol-audit");
@@ -2233,6 +2237,12 @@ public static partial class EvalCommand
             || string.Equals(subcommand, "learning-controlled-formal-label-ingestion-staging-gate", StringComparison.OrdinalIgnoreCase))
         {
             await ExecuteLearningControlledFormalLabelIngestionStagingPackAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+        if (string.Equals(subcommand, "learning-formal-evidence-realization-r1-pack", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(subcommand, "learning-formal-evidence-realization-r1-pack-gate", StringComparison.OrdinalIgnoreCase))
+        {
+            await ExecuteLearningFormalEvidenceRealizationR1PackAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
             return;
         }
 

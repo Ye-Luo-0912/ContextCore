@@ -1,0 +1,35 @@
+﻿{
+  "MapVersion": "v10.16R/terminology-compatibility-v1",
+  "Entries": [
+    {
+      "LegacyName": "HumanReviewAsGateAuthority",
+      "CanonicalName": "FeedbackSignalAsGateAuthority",
+      "Status": "DeprecatedCompatibilityOnly",
+      "Notes": "V10.16R rename \u2014 both must be false; canonical is the authority."
+    },
+    {
+      "LegacyName": "HumanFeedbackAutoIngest",
+      "CanonicalName": "FeedbackSignalAutoIngest",
+      "Status": "DeprecatedCompatibilityOnly",
+      "Notes": "V10.16R rename \u2014 both must be false."
+    },
+    {
+      "LegacyName": "HumanFeedbackAsSignal",
+      "CanonicalName": "ExternalFeedbackAcceptedAsSignal",
+      "Status": "DeprecatedCompatibilityOnly",
+      "Notes": "V10.16R rename \u2014 same semantics, broader scope."
+    },
+    {
+      "LegacyName": "HumanReviewBacklog*",
+      "CanonicalName": "ExternalFeedbackBacklog*",
+      "Status": "DeprecatedCompatibilityOnly",
+      "Notes": "V10.16R rename \u2014 V9.4 review queue is one of many possible external feedback sources."
+    }
+  ],
+  "MainPathPolicies": [
+    "Main recommendation MUST NOT reference \u0027human-review\u0027 / \u0027human-feedback\u0027 as required path.",
+    "External feedback is accepted as SIGNAL only, never as gate authority.",
+    "Canonical field names take precedence; legacy field names exist for upstream compatibility only.",
+    "ML/LLM/Runtime/Gate authority remains false across all paths."
+  ]
+}

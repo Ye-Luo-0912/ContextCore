@@ -1,0 +1,41 @@
+﻿{
+  "DecisionId": "v10.16R-formal-label-realization-decision-19e4049f15004d9fb43894c89c264e05",
+  "CreatedAt": "2026-06-29T04:20:24.3257631\u002B00:00",
+  "FormalLabelCandidateCount": 60,
+  "RealizableFormalLabelCount": 60,
+  "InvalidBindingCount": 0,
+  "FormalLabelCandidatesReady": true,
+  "FormalLabelsRealized": false,
+  "FormalEvidenceSufficient": false,
+  "RuntimePilotExecutionReadyForSeparateGate": false,
+  "BlockedForRuntimePilotExecutionBy": [
+    "FormalLabelsNotRealizedInDataset: controlled ingestion has not written the formal dataset.",
+    "FormalEvidenceInsufficient: shadow-bound canonical hash verified but formal dataset stays untouched.",
+    "RankingPairRowHashAndShadowLabelHashRequired: realization needs both attestations to be reproduced at ingest time."
+  ],
+  "ExternalFeedbackAcceptedAsSignal": true,
+  "FeedbackSignalAsGateAuthority": false,
+  "FeedbackSignalAutoIngest": false,
+  "FormalTrainingSetChanged": false,
+  "FormalLabelCandidatesAreFormal": false,
+  "MainRecommendationUsesHumanReview": false,
+  "AIArbitration": false,
+  "EvidenceSourcesConsidered": [
+    "learning/v10/formal-evidence-boundary-pack-gate.json",
+    "learning/v10/evidence-bound-hard-negative-labels.jsonl",
+    "learning/v10/formal-label-candidates-r1.jsonl",
+    "learning/v10/formal-label-integrity-manifest-r1.json",
+    "learning/v10/integrity-mutation-test-report.json",
+    "learning/v10/terminology-compatibility-map.json"
+  ],
+  "DecisionNotes": [
+    "FormalLabelCandidateCount=60",
+    "RealizableFormalLabelCount=60 (canonical hash verified \u002B evidence resolved \u002B preference derivable)",
+    "InvalidBindingCount=0",
+    "IntegrityManifest: ContractHashAlgorithmCompliance=True, AnyHashMismatch=False",
+    "Canonical hash contract: SHA256(sourceShadowLabelId | sourceCandidateSpecId | evidencePath | expectedPreference | rankingPairRowHash | shadowLabelHash).",
+    "Legacy V10.16 hash (sourceCandidateSpecId only) is retained as LegacySpecBindingHash for traceability \u2014 NEVER used as integrity authority.",
+    "Main recommendation does NOT require human-review path; external feedback is accepted as signal only.",
+    "FormalTrainingSetChanged=false / RuntimePilotExecutionReadyForSeparateGate=false until controlled ingestion writes the formal dataset."
+  ]
+}

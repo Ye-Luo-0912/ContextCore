@@ -1,0 +1,87 @@
+﻿{
+  "ReportId": "v10.16R-mutation-c2a999635db74c1eb42bfbaad4f4c32b",
+  "ReportVersion": "v10.16R/integrity-mutation-tests-v1",
+  "TestCases": [
+    {
+      "MutationName": "CorruptedCanonicalHash",
+      "Description": "DeterministicBindingHashCanonical replaced with zero-prefixed string",
+      "DetectedByCanonicalHash": true,
+      "DetectedByEvidencePathCheck": false,
+      "DetectedByExpectedPreferenceCheck": false,
+      "DetectedByCandidateFormalLeakCheck": false,
+      "DetectedByRankingPairRowHashCheck": false,
+      "DetectedByHashVersionCheck": false,
+      "DetectedOverall": true,
+      "FailureMode": "ZeroPrefixedHash"
+    },
+    {
+      "MutationName": "MissingEvidencePath",
+      "Description": "EvidencePath set to empty string",
+      "DetectedByCanonicalHash": false,
+      "DetectedByEvidencePathCheck": true,
+      "DetectedByExpectedPreferenceCheck": false,
+      "DetectedByCandidateFormalLeakCheck": false,
+      "DetectedByRankingPairRowHashCheck": false,
+      "DetectedByHashVersionCheck": false,
+      "DetectedOverall": true,
+      "FailureMode": "EmptyEvidencePath"
+    },
+    {
+      "MutationName": "ExpectedPreferenceMismatch",
+      "Description": "ExpectedPreference flipped to NegativeOverPositive",
+      "DetectedByCanonicalHash": false,
+      "DetectedByEvidencePathCheck": false,
+      "DetectedByExpectedPreferenceCheck": true,
+      "DetectedByCandidateFormalLeakCheck": false,
+      "DetectedByRankingPairRowHashCheck": false,
+      "DetectedByHashVersionCheck": false,
+      "DetectedOverall": true,
+      "FailureMode": "FlippedPreference"
+    },
+    {
+      "MutationName": "CandidateMarkedFormal",
+      "Description": "FormalLabelCandidateIsFormal set to true",
+      "DetectedByCanonicalHash": false,
+      "DetectedByEvidencePathCheck": false,
+      "DetectedByExpectedPreferenceCheck": false,
+      "DetectedByCandidateFormalLeakCheck": true,
+      "DetectedByRankingPairRowHashCheck": false,
+      "DetectedByHashVersionCheck": false,
+      "DetectedOverall": true,
+      "FailureMode": "FormalLeak"
+    },
+    {
+      "MutationName": "RankingPairRowHashMismatch",
+      "Description": "RankingPairRowHash replaced with arbitrary value",
+      "DetectedByCanonicalHash": false,
+      "DetectedByEvidencePathCheck": false,
+      "DetectedByExpectedPreferenceCheck": false,
+      "DetectedByCandidateFormalLeakCheck": false,
+      "DetectedByRankingPairRowHashCheck": true,
+      "DetectedByHashVersionCheck": false,
+      "DetectedOverall": true,
+      "FailureMode": "RankingHashMismatch"
+    },
+    {
+      "MutationName": "StaleContractHashVersion",
+      "Description": "HashInputVersion replaced with legacy V10.16 string",
+      "DetectedByCanonicalHash": false,
+      "DetectedByEvidencePathCheck": false,
+      "DetectedByExpectedPreferenceCheck": false,
+      "DetectedByCandidateFormalLeakCheck": false,
+      "DetectedByRankingPairRowHashCheck": false,
+      "DetectedByHashVersionCheck": true,
+      "DetectedOverall": true,
+      "FailureMode": "StaleVersion"
+    }
+  ],
+  "TotalMutationTests": 6,
+  "DetectedMutations": 6,
+  "IntegrityMutationTestsPassed": true,
+  "CorruptedHashDetected": true,
+  "MissingEvidencePathDetected": true,
+  "ExpectedPreferenceMismatchDetected": true,
+  "CandidateMarkedFormalDetected": true,
+  "RankingPairRowHashMismatchDetected": true,
+  "StaleContractHashVersionDetected": true
+}
