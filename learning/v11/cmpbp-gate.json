@@ -1,6 +1,6 @@
 ﻿{
-  "OperationId": "cmpbp-c1813d1596ee4a35bc11b0e6f5fb83c9",
-  "CreatedAt": "2026-06-29T15:54:44.0717587+00:00",
+  "OperationId": "cmpbp-30c1292069aa4d4baf1490519231cf61",
+  "CreatedAt": "2026-06-29T16:12:45.0288979+00:00",
   "PackPassed": true,
   "GatePassed": true,
   "CanaryMatrixPassed": true,
@@ -20,7 +20,7 @@
   "V8ScopedActivationPreserved": true,
   "BlockedReasons": [],
   "Diagnostics": [
-    "formalCount=60 matrixOk=True regression=0",
+    "formalCount=60 rowCount=60 matrixOk=True regression=0",
     "boundaryReady=True preflightOk=True"
   ]
 }

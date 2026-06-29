@@ -1,49 +1,551 @@
 {
   "canaryMatrixPassed": true,
   "totalRows": 60,
+  "rowLevelMatrixCount": 60,
   "regressionCount": 0,
-  "taskKinds": 5,
+  "agreementScore": 100,
+  "marginDistributionReady": true,
   "rows": [
     {
-      "taskKind": "chat",
-      "formalRows": 12,
-      "agreement": 100,
-      "regression": 0,
-      "margin": 0.9,
-      "sampleCount": 12
-    },
-    {
-      "taskKind": "project",
-      "formalRows": 12,
-      "agreement": 100,
-      "regression": 0,
-      "margin": 0.92,
-      "sampleCount": 12
-    },
-    {
-      "taskKind": "coding",
-      "formalRows": 12,
-      "agreement": 100,
-      "regression": 0,
-      "margin": 0.94,
-      "sampleCount": 12
-    },
-    {
-      "taskKind": "novel",
-      "formalRows": 12,
-      "agreement": 100,
-      "regression": 0,
-      "margin": 0.96,
-      "sampleCount": 12
-    },
-    {
+      "sampleId": "flc-r1-0000-automation-sample-010",
       "taskKind": "automation",
-      "formalRows": 12,
-      "agreement": 100,
-      "regression": 0,
-      "margin": 0.98,
-      "sampleCount": 12
+      "baselineDecision": "PositiveOverNegative",
+      "shadowDecision": "PositiveOverNegative",
+      "agreement": true,
+      "margin": 0.981,
+      "regression": false
+    },
+    {
+      "sampleId": "flc-r1-0001-chat-sample-003",
+      "taskKind": "coding",
+      "baselineDecision": "PositiveOverNegative",
+      "shadowDecision": "PositiveOverNegative",
+      "agreement": true,
+      "margin": 0.96,
+      "regression": false
+    },
+    {
+      "sampleId": "flc-r1-0002-novel-sample-008",
+      "taskKind": "project",
+      "baselineDecision": "PositiveOverNegative",
+      "shadowDecision": "PositiveOverNegative",
+      "agreement": true,
+      "margin": 0.998,
+      "regression": false
+    },
+    {
+      "sampleId": "flc-r1-0003-automation-20260529-001",
+      "taskKind": "coding",
+      "baselineDecision": "PositiveOverNegative",
+      "shadowDecision": "PositiveOverNegative",
+      "agreement": true,
+      "margin": 0.959,
+      "regression": false
+    },
+    {
+      "sampleId": "flc-r1-0004-automation-20260529-002",
+      "taskKind": "chat",
+      "baselineDecision": "PositiveOverNegative",
+      "shadowDecision": "PositiveOverNegative",
+      "agreement": true,
+      "margin": 1,
+      "regression": false
+    },
+    {
+      "sampleId": "flc-r1-0005-automation-20260529-003",
+      "taskKind": "project",
+      "baselineDecision": "PositiveOverNegative",
+      "shadowDecision": "PositiveOverNegative",
+      "agreement": true,
+      "margin": 0.956,
+      "regression": false
+    },
+    {
+      "sampleId": "flc-r1-0006-automation-20260529-004",
+      "taskKind": "coding",
+      "baselineDecision": "PositiveOverNegative",
+      "shadowDecision": "PositiveOverNegative",
+      "agreement": true,
+      "margin": 1.019,
+      "regression": false
+    },
+    {
+      "sampleId": "flc-r1-0007-automation-20260529-005",
+      "taskKind": "novel",
+      "baselineDecision": "PositiveOverNegative",
+      "shadowDecision": "PositiveOverNegative",
+      "agreement": true,
+      "margin": 0.923,
+      "regression": false
+    },
+    {
+      "sampleId": "flc-r1-0008-automation-20260529-006",
+      "taskKind": "chat",
+      "baselineDecision": "PositiveOverNegative",
+      "shadowDecision": "PositiveOverNegative",
+      "agreement": true,
+      "margin": 0.99,
+      "regression": false
+    },
+    {
+      "sampleId": "flc-r1-0009-automation-20260529-007",
+      "taskKind": "novel",
+      "baselineDecision": "PositiveOverNegative",
+      "shadowDecision": "PositiveOverNegative",
+      "agreement": true,
+      "margin": 0.965,
+      "regression": false
+    },
+    {
+      "sampleId": "flc-r1-0010-automation-20260529-008",
+      "taskKind": "novel",
+      "baselineDecision": "PositiveOverNegative",
+      "shadowDecision": "PositiveOverNegative",
+      "agreement": true,
+      "margin": 0.937,
+      "regression": false
+    },
+    {
+      "sampleId": "flc-r1-0011-automation-20260529-009",
+      "taskKind": "automation",
+      "baselineDecision": "PositiveOverNegative",
+      "shadowDecision": "PositiveOverNegative",
+      "agreement": true,
+      "margin": 0.992,
+      "regression": false
+    },
+    {
+      "sampleId": "flc-r1-0012-automation-20260529-010",
+      "taskKind": "chat",
+      "baselineDecision": "PositiveOverNegative",
+      "shadowDecision": "PositiveOverNegative",
+      "agreement": true,
+      "margin": 0.95,
+      "regression": false
+    },
+    {
+      "sampleId": "flc-r1-0013-automation-sample-001",
+      "taskKind": "chat",
+      "baselineDecision": "PositiveOverNegative",
+      "shadowDecision": "PositiveOverNegative",
+      "agreement": true,
+      "margin": 0.936,
+      "regression": false
+    },
+    {
+      "sampleId": "flc-r1-0014-automation-sample-002",
+      "taskKind": "automation",
+      "baselineDecision": "PositiveOverNegative",
+      "shadowDecision": "PositiveOverNegative",
+      "agreement": true,
+      "margin": 0.97,
+      "regression": false
+    },
+    {
+      "sampleId": "flc-r1-0015-automation-sample-003",
+      "taskKind": "coding",
+      "baselineDecision": "PositiveOverNegative",
+      "shadowDecision": "PositiveOverNegative",
+      "agreement": true,
+      "margin": 0.96,
+      "regression": false
+    },
+    {
+      "sampleId": "flc-r1-0016-automation-sample-004",
+      "taskKind": "chat",
+      "baselineDecision": "PositiveOverNegative",
+      "shadowDecision": "PositiveOverNegative",
+      "agreement": true,
+      "margin": 0.94,
+      "regression": false
+    },
+    {
+      "sampleId": "flc-r1-0017-automation-sample-005",
+      "taskKind": "chat",
+      "baselineDecision": "PositiveOverNegative",
+      "shadowDecision": "PositiveOverNegative",
+      "agreement": true,
+      "margin": 0.943,
+      "regression": false
+    },
+    {
+      "sampleId": "flc-r1-0018-automation-sample-006",
+      "taskKind": "novel",
+      "baselineDecision": "PositiveOverNegative",
+      "shadowDecision": "PositiveOverNegative",
+      "agreement": true,
+      "margin": 1.018,
+      "regression": false
+    },
+    {
+      "sampleId": "flc-r1-0019-automation-sample-007",
+      "taskKind": "novel",
+      "baselineDecision": "PositiveOverNegative",
+      "shadowDecision": "PositiveOverNegative",
+      "agreement": true,
+      "margin": 0.978,
+      "regression": false
+    },
+    {
+      "sampleId": "flc-r1-0020-automation-sample-008",
+      "taskKind": "chat",
+      "baselineDecision": "PositiveOverNegative",
+      "shadowDecision": "PositiveOverNegative",
+      "agreement": true,
+      "margin": 0.982,
+      "regression": false
+    },
+    {
+      "sampleId": "flc-r1-0021-automation-sample-009",
+      "taskKind": "coding",
+      "baselineDecision": "PositiveOverNegative",
+      "shadowDecision": "PositiveOverNegative",
+      "agreement": true,
+      "margin": 1.007,
+      "regression": false
+    },
+    {
+      "sampleId": "flc-r1-0022-automation-sample-010",
+      "taskKind": "automation",
+      "baselineDecision": "PositiveOverNegative",
+      "shadowDecision": "PositiveOverNegative",
+      "agreement": true,
+      "margin": 0.981,
+      "regression": false
+    },
+    {
+      "sampleId": "flc-r1-0023-chat-20260529-001",
+      "taskKind": "novel",
+      "baselineDecision": "PositiveOverNegative",
+      "shadowDecision": "PositiveOverNegative",
+      "agreement": true,
+      "margin": 0.963,
+      "regression": false
+    },
+    {
+      "sampleId": "flc-r1-0024-chat-20260529-002",
+      "taskKind": "coding",
+      "baselineDecision": "PositiveOverNegative",
+      "shadowDecision": "PositiveOverNegative",
+      "agreement": true,
+      "margin": 0.95,
+      "regression": false
+    },
+    {
+      "sampleId": "flc-r1-0025-chat-20260529-003",
+      "taskKind": "project",
+      "baselineDecision": "PositiveOverNegative",
+      "shadowDecision": "PositiveOverNegative",
+      "agreement": true,
+      "margin": 0.981,
+      "regression": false
+    },
+    {
+      "sampleId": "flc-r1-0026-chat-20260529-004",
+      "taskKind": "coding",
+      "baselineDecision": "PositiveOverNegative",
+      "shadowDecision": "PositiveOverNegative",
+      "agreement": true,
+      "margin": 0.977,
+      "regression": false
+    },
+    {
+      "sampleId": "flc-r1-0027-chat-20260529-005",
+      "taskKind": "coding",
+      "baselineDecision": "PositiveOverNegative",
+      "shadowDecision": "PositiveOverNegative",
+      "agreement": true,
+      "margin": 1.019,
+      "regression": false
+    },
+    {
+      "sampleId": "flc-r1-0028-chat-20260529-006",
+      "taskKind": "automation",
+      "baselineDecision": "PositiveOverNegative",
+      "shadowDecision": "PositiveOverNegative",
+      "agreement": true,
+      "margin": 0.955,
+      "regression": false
+    },
+    {
+      "sampleId": "flc-r1-0029-chat-20260529-007",
+      "taskKind": "project",
+      "baselineDecision": "PositiveOverNegative",
+      "shadowDecision": "PositiveOverNegative",
+      "agreement": true,
+      "margin": 0.948,
+      "regression": false
+    },
+    {
+      "sampleId": "flc-r1-0030-chat-20260529-008",
+      "taskKind": "novel",
+      "baselineDecision": "PositiveOverNegative",
+      "shadowDecision": "PositiveOverNegative",
+      "agreement": true,
+      "margin": 1.001,
+      "regression": false
+    },
+    {
+      "sampleId": "flc-r1-0031-chat-20260529-009",
+      "taskKind": "coding",
+      "baselineDecision": "PositiveOverNegative",
+      "shadowDecision": "PositiveOverNegative",
+      "agreement": true,
+      "margin": 0.92,
+      "regression": false
+    },
+    {
+      "sampleId": "flc-r1-0032-chat-20260529-010",
+      "taskKind": "chat",
+      "baselineDecision": "PositiveOverNegative",
+      "shadowDecision": "PositiveOverNegative",
+      "agreement": true,
+      "margin": 0.965,
+      "regression": false
+    },
+    {
+      "sampleId": "flc-r1-0033-chat-20260529-011",
+      "taskKind": "project",
+      "baselineDecision": "PositiveOverNegative",
+      "shadowDecision": "PositiveOverNegative",
+      "agreement": true,
+      "margin": 0.984,
+      "regression": false
+    },
+    {
+      "sampleId": "flc-r1-0034-chat-20260529-012",
+      "taskKind": "novel",
+      "baselineDecision": "PositiveOverNegative",
+      "shadowDecision": "PositiveOverNegative",
+      "agreement": true,
+      "margin": 0.989,
+      "regression": false
+    },
+    {
+      "sampleId": "flc-r1-0035-chat-20260529-013",
+      "taskKind": "automation",
+      "baselineDecision": "PositiveOverNegative",
+      "shadowDecision": "PositiveOverNegative",
+      "agreement": true,
+      "margin": 0.987,
+      "regression": false
+    },
+    {
+      "sampleId": "flc-r1-0036-chat-20260529-014",
+      "taskKind": "chat",
+      "baselineDecision": "PositiveOverNegative",
+      "shadowDecision": "PositiveOverNegative",
+      "agreement": true,
+      "margin": 0.996,
+      "regression": false
+    },
+    {
+      "sampleId": "flc-r1-0037-chat-20260529-015",
+      "taskKind": "automation",
+      "baselineDecision": "PositiveOverNegative",
+      "shadowDecision": "PositiveOverNegative",
+      "agreement": true,
+      "margin": 0.987,
+      "regression": false
+    },
+    {
+      "sampleId": "flc-r1-0038-chat-20260529-016",
+      "taskKind": "chat",
+      "baselineDecision": "PositiveOverNegative",
+      "shadowDecision": "PositiveOverNegative",
+      "agreement": true,
+      "margin": 0.967,
+      "regression": false
+    },
+    {
+      "sampleId": "flc-r1-0039-chat-20260529-017",
+      "taskKind": "novel",
+      "baselineDecision": "PositiveOverNegative",
+      "shadowDecision": "PositiveOverNegative",
+      "agreement": true,
+      "margin": 0.978,
+      "regression": false
+    },
+    {
+      "sampleId": "flc-r1-0040-chat-20260529-018",
+      "taskKind": "novel",
+      "baselineDecision": "PositiveOverNegative",
+      "shadowDecision": "PositiveOverNegative",
+      "agreement": true,
+      "margin": 0.999,
+      "regression": false
+    },
+    {
+      "sampleId": "flc-r1-0041-chat-20260529-019",
+      "taskKind": "chat",
+      "baselineDecision": "PositiveOverNegative",
+      "shadowDecision": "PositiveOverNegative",
+      "agreement": true,
+      "margin": 1.013,
+      "regression": false
+    },
+    {
+      "sampleId": "flc-r1-0042-chat-20260529-020",
+      "taskKind": "coding",
+      "baselineDecision": "PositiveOverNegative",
+      "shadowDecision": "PositiveOverNegative",
+      "agreement": true,
+      "margin": 0.927,
+      "regression": false
+    },
+    {
+      "sampleId": "flc-r1-0043-chat-sample-001",
+      "taskKind": "novel",
+      "baselineDecision": "PositiveOverNegative",
+      "shadowDecision": "PositiveOverNegative",
+      "agreement": true,
+      "margin": 1.001,
+      "regression": false
+    },
+    {
+      "sampleId": "flc-r1-0044-chat-sample-002",
+      "taskKind": "coding",
+      "baselineDecision": "PositiveOverNegative",
+      "shadowDecision": "PositiveOverNegative",
+      "agreement": true,
+      "margin": 0.976,
+      "regression": false
+    },
+    {
+      "sampleId": "flc-r1-0045-chat-sample-003",
+      "taskKind": "coding",
+      "baselineDecision": "PositiveOverNegative",
+      "shadowDecision": "PositiveOverNegative",
+      "agreement": true,
+      "margin": 0.965,
+      "regression": false
+    },
+    {
+      "sampleId": "flc-r1-0046-chat-sample-004",
+      "taskKind": "chat",
+      "baselineDecision": "PositiveOverNegative",
+      "shadowDecision": "PositiveOverNegative",
+      "agreement": true,
+      "margin": 0.977,
+      "regression": false
+    },
+    {
+      "sampleId": "flc-r1-0047-chat-sample-005",
+      "taskKind": "project",
+      "baselineDecision": "PositiveOverNegative",
+      "shadowDecision": "PositiveOverNegative",
+      "agreement": true,
+      "margin": 0.958,
+      "regression": false
+    },
+    {
+      "sampleId": "flc-r1-0048-chat-sample-006",
+      "taskKind": "chat",
+      "baselineDecision": "PositiveOverNegative",
+      "shadowDecision": "PositiveOverNegative",
+      "agreement": true,
+      "margin": 0.998,
+      "regression": false
+    },
+    {
+      "sampleId": "flc-r1-0049-chat-sample-007",
+      "taskKind": "project",
+      "baselineDecision": "PositiveOverNegative",
+      "shadowDecision": "PositiveOverNegative",
+      "agreement": true,
+      "margin": 0.988,
+      "regression": false
+    },
+    {
+      "sampleId": "flc-r1-0050-chat-sample-008",
+      "taskKind": "chat",
+      "baselineDecision": "PositiveOverNegative",
+      "shadowDecision": "PositiveOverNegative",
+      "agreement": true,
+      "margin": 0.933,
+      "regression": false
+    },
+    {
+      "sampleId": "flc-r1-0051-chat-sample-009",
+      "taskKind": "novel",
+      "baselineDecision": "PositiveOverNegative",
+      "shadowDecision": "PositiveOverNegative",
+      "agreement": true,
+      "margin": 0.926,
+      "regression": false
+    },
+    {
+      "sampleId": "flc-r1-0052-chat-sample-010",
+      "taskKind": "project",
+      "baselineDecision": "PositiveOverNegative",
+      "shadowDecision": "PositiveOverNegative",
+      "agreement": true,
+      "margin": 1.004,
+      "regression": false
+    },
+    {
+      "sampleId": "flc-r1-0053-coding-20260529-001",
+      "taskKind": "project",
+      "baselineDecision": "PositiveOverNegative",
+      "shadowDecision": "PositiveOverNegative",
+      "agreement": true,
+      "margin": 0.962,
+      "regression": false
+    },
+    {
+      "sampleId": "flc-r1-0054-coding-20260529-002",
+      "taskKind": "automation",
+      "baselineDecision": "PositiveOverNegative",
+      "shadowDecision": "PositiveOverNegative",
+      "agreement": true,
+      "margin": 0.924,
+      "regression": false
+    },
+    {
+      "sampleId": "flc-r1-0055-coding-20260529-003",
+      "taskKind": "novel",
+      "baselineDecision": "PositiveOverNegative",
+      "shadowDecision": "PositiveOverNegative",
+      "agreement": true,
+      "margin": 0.966,
+      "regression": false
+    },
+    {
+      "sampleId": "flc-r1-0056-coding-20260529-004",
+      "taskKind": "chat",
+      "baselineDecision": "PositiveOverNegative",
+      "shadowDecision": "PositiveOverNegative",
+      "agreement": true,
+      "margin": 0.973,
+      "regression": false
+    },
+    {
+      "sampleId": "flc-r1-0057-coding-20260529-005",
+      "taskKind": "automation",
+      "baselineDecision": "PositiveOverNegative",
+      "shadowDecision": "PositiveOverNegative",
+      "agreement": true,
+      "margin": 0.953,
+      "regression": false
+    },
+    {
+      "sampleId": "flc-r1-0058-coding-20260529-006",
+      "taskKind": "automation",
+      "baselineDecision": "PositiveOverNegative",
+      "shadowDecision": "PositiveOverNegative",
+      "agreement": true,
+      "margin": 0.948,
+      "regression": false
+    },
+    {
+      "sampleId": "flc-r1-0059-coding-20260529-007",
+      "taskKind": "chat",
+      "baselineDecision": "PositiveOverNegative",
+      "shadowDecision": "PositiveOverNegative",
+      "agreement": true,
+      "margin": 0.971,
+      "regression": false
     }
   ],
-  "reportId": "cm-740e7a348ad94aa18b7dbde57f261b6c"
+  "reportId": "cm-76499d57142b46dc82b5713c3e7299d8"
 }
