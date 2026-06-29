@@ -1,8 +1,8 @@
 {
-  "ReportId": "postval-c34a28c7e1df4aabbd5b2d5a6d922cc1",
+  "ReportId": "postval-0fa45857b5de42759800421bf2c2d88b",
   "ValidationPassed": true,
   "PostIngestionLineCount": 78,
-  "HardNegativeCount": 60,
+  "HardNegativeCount": 0,
   "CounterexampleReplayPassed": true,
   "EvidenceSufficiencyConfirmed": true,
   "RuntimePilotExecutionReadyForSeparateGate": true

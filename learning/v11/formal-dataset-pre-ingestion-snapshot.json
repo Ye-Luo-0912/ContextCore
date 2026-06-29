@@ -1,7 +1,7 @@
 {
-  "SnapshotId": "snap-b2dfd71973194660bb8968b360f21a0e",
-  "SnapshotAt": "2026-06-29T08:52:55.7217381+00:00",
+  "SnapshotId": "snap-9843008925be4d8ea9f2689986d2a950",
+  "SnapshotAt": "2026-06-29T09:24:32.0003133+00:00",
   "FormalDatasetPath": "learning\\features\\hard-negatives.jsonl",
-  "LineCountBefore": 18,
-  "DatasetHashBefore": "efba3ca40446153263906307b5da3edefbd928743767d72ae2255b2549687f7f"
+  "LineCountBefore": 78,
+  "DatasetHashBefore": "02ac53e3e2d8d8c484ec2da5f6a88f5bddb1aa95c0c898421fa85bc3322ffb2b"
 }

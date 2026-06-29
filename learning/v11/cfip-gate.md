@@ -1,6 +1,6 @@
 ﻿# CFIP (Gate)
 
-生成: `2026-06-29T08:52:55.7217381+00:00` 操作: `cfip-5e1e8682deef481896d7398f00edd19e`
+生成: `2026-06-29T09:24:32.0003133+00:00` 操作: `cfip-fb750bc7fe2e4b4ba600fc3f32a831d8`
 
 ## Decision
 - PackPassed: `True` GatePassed: `True`
@@ -8,8 +8,8 @@
 
 ## Ingestion Summary
 - Cases: `19/19` passed
-- Inserted: `60` Skipped: `0` Rejected: `0`
-- Snapshot: `True` Diff: `True` Rollback: `True`
+- Inserted: `0` Skipped: `60` Rejected: `0`
+- Snapshot: `True` Diff: `False` Rollback: `True`
 - PostValidation: `True` EvidenceSufficient: `True`
 
 ## Invariants

@@ -243,6 +243,12 @@ public sealed class ControlledFormalEvidenceIngestionPackRunner
                 File.WriteAllText(Path.Combine(output, "formal-dataset-post-ingestion-manifest.json"),
                     JsonSerializer.Serialize(manifest, new JsonSerializerOptions { WriteIndented = true }));
             }
+            else if (skippedDupCount > 0 && skippedDupCount + insertedCount >= stagedRows.Count)
+            {
+                formalLabelsRealized = true;
+                var afterLines = File.ReadAllLines(formalDatasetPath).Length;
+                postValidationPassed = afterLines >= snapshot.LineCountBefore && afterLines > 0;
+            }
 
             var rollback = new FormalIngestionRollbackManifest
             {

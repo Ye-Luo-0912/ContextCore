@@ -1,6 +1,6 @@
 ﻿{
-  "OperationId": "cfip-5e1e8682deef481896d7398f00edd19e",
-  "CreatedAt": "2026-06-29T08:52:55.7217381+00:00",
+  "OperationId": "cfip-fb750bc7fe2e4b4ba600fc3f32a831d8",
+  "CreatedAt": "2026-06-29T09:24:32.0003133+00:00",
   "ControlledFormalEvidenceIngestionPackPassed": true,
   "GatePassed": true,
   "Recommendation": "ProceedToPostIngestionValidation",
@@ -14,11 +14,11 @@
   "StagingSourceUsesCanonicalHash": true,
   "StagingSourceUsesLegacyHash": false,
   "FormalDatasetSnapshotReady": true,
-  "IngestionDiffReady": true,
+  "IngestionDiffReady": false,
   "RollbackManifestReady": true,
   "FormalLabelsRealized": true,
-  "InsertedFormalLabelCount": 60,
-  "SkippedDuplicateCount": 0,
+  "InsertedFormalLabelCount": 0,
+  "SkippedDuplicateCount": 60,
   "RejectedInvalidCount": 0,
   "PostIngestionValidationPassed": true,
   "FormalEvidenceSufficient": true,
@@ -266,7 +266,7 @@
   "Diagnostics": [
     "r1StagingPresent=True r1StagingPassed=True stagedCount=60",
     "canDoIngestion=True formalLabelsRealized=True",
-    "inserted=60 skipped=0 rejected=0",
+    "inserted=0 skipped=60 rejected=0",
     "packPassed=True gatePassed=True"
   ]
 }
