@@ -9,36 +9,41 @@
       "formalRows": 12,
       "agreement": 100,
       "regression": 0,
-      "margin": 0.95
+      "margin": 0.9,
+      "sampleCount": 12
     },
     {
       "taskKind": "project",
       "formalRows": 12,
       "agreement": 100,
       "regression": 0,
-      "margin": 0.95
+      "margin": 0.92,
+      "sampleCount": 12
     },
     {
       "taskKind": "coding",
       "formalRows": 12,
       "agreement": 100,
       "regression": 0,
-      "margin": 0.95
+      "margin": 0.94,
+      "sampleCount": 12
     },
     {
       "taskKind": "novel",
       "formalRows": 12,
       "agreement": 100,
       "regression": 0,
-      "margin": 0.95
+      "margin": 0.96,
+      "sampleCount": 12
     },
     {
       "taskKind": "automation",
       "formalRows": 12,
       "agreement": 100,
       "regression": 0,
-      "margin": 0.95
+      "margin": 0.98,
+      "sampleCount": 12
     }
   ],
-  "reportId": "cm-53c79f38044143b08b4d51c720a46738"
+  "reportId": "cm-740e7a348ad94aa18b7dbde57f261b6c"
 }
