@@ -1,0 +1,13 @@
+{
+  "promotionBlocked": true,
+  "boundaryReady": true,
+  "preflightConditions": [
+    "CanaryMatrixPassed",
+    "RegressionCount==0",
+    "RollbackBindingComplete",
+    "KillSwitchArmed",
+    "SnapshotExists",
+    "RuntimeNoOp"
+  ],
+  "reportId": "pbr-e9c005e1a36546f6a9237f828bd9164b"
+}

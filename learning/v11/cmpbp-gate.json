@@ -1,0 +1,24 @@
+﻿{
+  "OperationId": "cmpbp-23f75f1c7989430289a9eacd3d11f28d",
+  "CreatedAt": "2026-06-29T15:38:36.066195+00:00",
+  "PackPassed": true,
+  "GatePassed": true,
+  "CanaryMatrixPassed": true,
+  "RegressionCount": 0,
+  "AgreementScore": 100,
+  "PromotionBoundaryReady": true,
+  "PilotPreflightPassed": true,
+  "KillSwitchArmed": true,
+  "RollbackBindingComplete": true,
+  "RuntimePilotExecutionApplied": false,
+  "RuntimePromotionApplied": false,
+  "RuntimeRerankerChanged": false,
+  "PackageOutputChanged": false,
+  "GlobalDefaultOn": false,
+  "V8ScopedActivationPreserved": true,
+  "BlockedReasons": [],
+  "Diagnostics": [
+    "formalCount=60 matrixOk=True regression=0",
+    "boundaryReady=True preflightOk=True"
+  ]
+}

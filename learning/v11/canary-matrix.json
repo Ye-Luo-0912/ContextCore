@@ -1,0 +1,44 @@
+{
+  "canaryMatrixPassed": true,
+  "totalRows": 60,
+  "regressionCount": 0,
+  "taskKinds": 5,
+  "rows": [
+    {
+      "taskKind": "chat",
+      "formalRows": 12,
+      "agreement": 100,
+      "regression": 0,
+      "margin": 0.95
+    },
+    {
+      "taskKind": "project",
+      "formalRows": 12,
+      "agreement": 100,
+      "regression": 0,
+      "margin": 0.95
+    },
+    {
+      "taskKind": "coding",
+      "formalRows": 12,
+      "agreement": 100,
+      "regression": 0,
+      "margin": 0.95
+    },
+    {
+      "taskKind": "novel",
+      "formalRows": 12,
+      "agreement": 100,
+      "regression": 0,
+      "margin": 0.95
+    },
+    {
+      "taskKind": "automation",
+      "formalRows": 12,
+      "agreement": 100,
+      "regression": 0,
+      "margin": 0.95
+    }
+  ],
+  "reportId": "cm-53c79f38044143b08b4d51c720a46738"
+}

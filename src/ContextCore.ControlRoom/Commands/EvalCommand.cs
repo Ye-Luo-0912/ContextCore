@@ -396,6 +396,8 @@ public static partial class EvalCommand
             !string.Equals(subcommand, "rmpdr-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "sprsc", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "sprsc-gate", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "cmpbp", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "cmpbp-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "formal-evidence-stabilization-replay-pilot-readiness", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "formal-evidence-stabilization-replay-pilot-readiness-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "learning-formal-evidence-realization-r1-pack", StringComparison.OrdinalIgnoreCase) &&
@@ -730,6 +732,8 @@ public static partial class EvalCommand
             Console.WriteLine("  eval rmpdr-gate");
             Console.WriteLine("  eval sprsc   (strict-pilot-readiness-shadow-canary)");
             Console.WriteLine("  eval sprsc-gate");
+            Console.WriteLine("  eval cmpbp   (canary-matrix-promotion-boundary-pilot-preflight)");
+            Console.WriteLine("  eval cmpbp-gate");
             Console.WriteLine("  eval learning-formal-evidence-realization-r1-pack");
             Console.WriteLine("  eval learning-formal-evidence-realization-r1-pack-gate");
             Console.WriteLine("  eval dto-split-plan");
@@ -2313,6 +2317,13 @@ public static partial class EvalCommand
             || string.Equals(subcommand, "sprsc-gate", StringComparison.OrdinalIgnoreCase))
         {
             await ExecuteStrictPilotReadinessShadowCanaryAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        if (string.Equals(subcommand, "cmpbp", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(subcommand, "cmpbp-gate", StringComparison.OrdinalIgnoreCase))
+        {
+            await ExecuteCanaryMatrixPromotionBoundaryPilotPreflightAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
             return;
         }
 

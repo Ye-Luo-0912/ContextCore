@@ -2326,6 +2326,29 @@ public static partial class EvalCommand
             $"strict={report.StrictReadinessPassed} hashVerified={report.SnapshotHashVerified} canary={report.ShadowCanaryReplayPassed}");
     }
 
+    private static async Task ExecuteCanaryMatrixPromotionBoundaryPilotPreflightAsync(
+        IReadOnlyList<string> args, string subcommand, CancellationToken ct)
+    {
+        var output = Path.GetFullPath(Path.Combine("learning", "v11"));
+        Directory.CreateDirectory(output);
+        var rtGate = await ReadJsonFileAsync<LearningRuntimeChangeReadinessGateReport>(Path.Combine("learning","readiness","learning-runtime-change-readiness-gate.json"),ct).ConfigureAwait(false);
+        var rtPassed = rtGate is not null && rtGate.Passed;
+        var p15 = await ReadJsonFileAsync<JsonDocument>(Path.Combine("eval","eval-report-p15-a3.json"),ct).ConfigureAwait(false);
+        var p15Passed = false;
+        if(p15 is not null && p15.RootElement.TryGetProperty("PassRate",out var pr)) p15Passed = pr.GetDouble()>=1.0;
+
+        var isGate = string.Equals(subcommand,"cmpbp-gate",StringComparison.OrdinalIgnoreCase);
+        var opt = new CanaryMatrixPromotionBoundaryPilotPreflightOptions{IsGate=isGate,Enabled=!CommandHelpers.HasFlag(args,"--disabled")};
+        var report = new CanaryMatrixPromotionBoundaryPilotPreflightRunner().Run(rtPassed,p15Passed,output,opt);
+
+        var fn = isGate?"cmpbp-gate":"cmpbp";
+        await WriteJsonSafeAsync(report,Path.Combine(output,$"{fn}.json"),ct).ConfigureAwait(false);
+        await WriteTextAsync(CanaryMatrixPromotionBoundaryPilotPreflightRunner.BuildMarkdown(isGate?"CMPBP (Gate)":"CMPBP",report),Path.Combine(output,$"{fn}.md"),ct).ConfigureAwait(false);
+        Console.WriteLine($"[Eval] CMPBP written: {Path.Combine(output,$"{fn}.json")}");
+        Console.WriteLine($"[Eval] packPassed={report.PackPassed}; gatePassed={report.GatePassed}; " +
+            $"canary={report.CanaryMatrixPassed} boundary={report.PromotionBoundaryReady} preflight={report.PilotPreflightPassed}");
+    }
+
     private static async Task ExecuteLearningFormalEvidenceRealizationR1PackAsync(
         IReadOnlyList<string> args, string subcommand, CancellationToken ct)
     {
