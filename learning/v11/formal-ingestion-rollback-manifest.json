@@ -1,6 +1,6 @@
 {
-  "RollbackId": "rollback-3f7f70c8a903447d88e87ee06243a26d",
-  "SnapshotReference": "snap-656da35508154b5fa464aa64e52b6750",
+  "RollbackId": "rollback-a8330660274b4c929e5909b83fad3f40",
+  "SnapshotReference": "snap-b2dfd71973194660bb8968b360f21a0e",
   "RollbackProcedures": [
     "RestorePreIngestionSnapshot",
     "RecomputeHash",

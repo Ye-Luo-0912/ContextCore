@@ -164,18 +164,6 @@ public sealed class ControlledFormalEvidenceIngestionPackRunner
         var formalDatasetPath = Path.Combine("learning", "features", "hard-negatives.jsonl");
         var existingLines = File.Exists(formalDatasetPath) ? File.ReadAllLines(formalDatasetPath).Length : 0;
         var existingHash = ComputeFileHash(formalDatasetPath);
-
-        var canDoIngestion = realStatus == ControlledFormalEvidenceIngestionStatuses.Ready;
-        var insertedCount = 0;
-        var skippedDupCount = 0;
-        var rejectedInvCount = 0;
-        var ingestionDiffReady = false;
-        var snapshotReady = false;
-        var rollbackReady = false;
-        var formalLabelsRealized = false;
-        var postValidationPassed = false;
-        var ingestionIsControlled = false;
-
         var snapshot = new FormalDatasetPreIngestionSnapshot
         {
             SnapshotId = $"snap-{Guid.NewGuid():N}",
@@ -184,6 +172,18 @@ public sealed class ControlledFormalEvidenceIngestionPackRunner
             LineCountBefore = existingLines,
             DatasetHashBefore = existingHash,
         };
+        var insertedCount = 0;
+        var skippedDupCount = 0;
+        var rejectedInvCount = 0;
+        var realizedIds = new List<string>();
+        var ingestionDiffReady = false;
+        var snapshotReady = false;
+        var rollbackReady = false;
+        var formalLabelsRealized = false;
+        var postValidationPassed = false;
+        var ingestionIsControlled = false;
+
+        var canDoIngestion = realStatus == ControlledFormalEvidenceIngestionStatuses.Ready;
         snapshotReady = true;
 
         if (canDoIngestion && opt.IsGate)
@@ -191,8 +191,9 @@ public sealed class ControlledFormalEvidenceIngestionPackRunner
             ingestionIsControlled = true;
             var stagedPath = Path.Combine("learning", "v10", "staged-formal-hard-negatives-r1.jsonl");
             var stagedRows = File.Exists(stagedPath) ? File.ReadAllLines(stagedPath).Where(l => !string.IsNullOrWhiteSpace(l)).ToList() : new();
-            var existingRows = File.Exists(formalDatasetPath) ? File.ReadAllLines(formalDatasetPath).ToList() : new();
-            var existingSet = new HashSet<string>(existingRows.Where(l => !string.IsNullOrWhiteSpace(l)));
+            var existingRows = File.Exists(formalDatasetPath) ? File.ReadAllLines(formalDatasetPath).Where(l => !string.IsNullOrWhiteSpace(l)).ToList() : new();
+            var existingSet = new HashSet<string>(existingRows);
+            var newRows = new List<string>();
 
             foreach (var row in stagedRows)
             {
@@ -203,22 +204,26 @@ public sealed class ControlledFormalEvidenceIngestionPackRunner
                     var canonical = doc.RootElement.TryGetProperty("DeterministicBindingHashCanonical", out var c) ? c.GetString() : "";
                     if (string.IsNullOrWhiteSpace(canonical)) { rejectedInvCount++; continue; }
                     if (existingSet.Contains(row)) { skippedDupCount++; continue; }
+                    newRows.Add(row);
                     existingSet.Add(row);
                     insertedCount++;
+                    var labelId = doc.RootElement.TryGetProperty("SourceCandidateLabelId", out var cl) ? cl.GetString() ?? "" : "";
+                    if (!string.IsNullOrWhiteSpace(labelId)) realizedIds.Add(labelId);
                 }
                 catch { rejectedInvCount++; }
             }
 
             if (insertedCount > 0)
             {
-                var allRows = existingRows.Where(l => !string.IsNullOrWhiteSpace(l)).ToList();
-                allRows.AddRange(stagedRows.Where(l => !string.IsNullOrWhiteSpace(l) && !existingSet.Contains(l)));
+                var allRows = new List<string>(existingRows);
+                allRows.AddRange(newRows);
                 File.WriteAllLines(formalDatasetPath, allRows);
                 formalLabelsRealized = true;
 
                 var afterLines = File.ReadAllLines(formalDatasetPath).Length;
-                var afterHash = ComputeFileHash(formalDatasetPath);
-                postValidationPassed = afterLines >= snapshot.LineCountBefore + insertedCount;
+                var afterBytes = File.ReadAllBytes(formalDatasetPath);
+                var afterHash = Convert.ToHexString(SHA256.HashData(afterBytes)).ToLowerInvariant();
+                postValidationPassed = afterLines == snapshot.LineCountBefore + insertedCount;
 
                 var diff = new FormalDatasetIngestionDiff
                 {
@@ -257,9 +262,7 @@ public sealed class ControlledFormalEvidenceIngestionPackRunner
         var realization = new FormalLabelRealizationManifest
         {
             ManifestId = $"real-{Guid.NewGuid():N}", StagedLabelCount = stagedCount,
-            RealizedLabelIds = formalLabelsRealized
-                ? Enumerable.Range(0, insertedCount).Select(i => $"flc-r1-{i:D4}").ToList()
-                : new(),
+            RealizedLabelIds = realizedIds,
         };
         File.WriteAllText(Path.Combine(output, "formal-label-realization-manifest.json"),
             JsonSerializer.Serialize(realization, new JsonSerializerOptions { WriteIndented = true }));
@@ -281,7 +284,7 @@ public sealed class ControlledFormalEvidenceIngestionPackRunner
         var failedCases = cases.Count - passedCases;
         var distinctBlocked = realBlocked.Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(static x => x).ToArray();
         var packPassed = realStatus == ControlledFormalEvidenceIngestionStatuses.Ready && passedCases == cases.Count;
-        var gatePassed = opt.IsGate && packPassed;
+        var gatePassed = opt.IsGate && packPassed && postValidationPassed;
 
         diag.Add($"r1StagingPresent={r1StagingPresent} r1StagingPassed={r1StagingPassed} stagedCount={stagedCount}");
         diag.Add($"canDoIngestion={canDoIngestion} formalLabelsRealized={formalLabelsRealized}");
@@ -404,7 +407,12 @@ public sealed class ControlledFormalEvidenceIngestionPackRunner
         };
     }
 
-    private static string ComputeFileHash(string path) => File.Exists(path) ? Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(path))).ToLowerInvariant() : "";
+    private static string ComputeFileHash(string path)
+    {
+        if (!File.Exists(path)) return "";
+        var bytes = File.ReadAllBytes(path);
+        return Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+    }
     private static string ReadFileText(string path) => File.Exists(path) ? File.ReadAllText(path) : "";
 
     public static string BuildMarkdown(string title, ControlledFormalEvidenceIngestionPackReport r)
