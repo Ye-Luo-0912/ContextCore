@@ -394,6 +394,8 @@ public static partial class EvalCommand
             !string.Equals(subcommand, "fesrp-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "rmpdr", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "rmpdr-gate", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "sprsc", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "sprsc-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "formal-evidence-stabilization-replay-pilot-readiness", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "formal-evidence-stabilization-replay-pilot-readiness-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "learning-formal-evidence-realization-r1-pack", StringComparison.OrdinalIgnoreCase) &&
@@ -726,6 +728,8 @@ public static partial class EvalCommand
             Console.WriteLine("  eval fesrp-gate");
             Console.WriteLine("  eval rmpdr   (replay-metrics-pilot-dry-run-rollback-drill)");
             Console.WriteLine("  eval rmpdr-gate");
+            Console.WriteLine("  eval sprsc   (strict-pilot-readiness-shadow-canary)");
+            Console.WriteLine("  eval sprsc-gate");
             Console.WriteLine("  eval learning-formal-evidence-realization-r1-pack");
             Console.WriteLine("  eval learning-formal-evidence-realization-r1-pack-gate");
             Console.WriteLine("  eval dto-split-plan");
@@ -2302,6 +2306,13 @@ public static partial class EvalCommand
             || string.Equals(subcommand, "rmpdr-gate", StringComparison.OrdinalIgnoreCase))
         {
             await ExecuteReplayMetricsPilotDryRunRollbackDrillAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        if (string.Equals(subcommand, "sprsc", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(subcommand, "sprsc-gate", StringComparison.OrdinalIgnoreCase))
+        {
+            await ExecuteStrictPilotReadinessShadowCanaryAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
             return;
         }
 

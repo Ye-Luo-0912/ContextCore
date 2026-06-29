@@ -2299,6 +2299,33 @@ public static partial class EvalCommand
             $"formalRows={report.FormalRowCount} counterexample={report.CounterexampleReplayPassed}");
     }
 
+    private static async Task ExecuteStrictPilotReadinessShadowCanaryAsync(
+        IReadOnlyList<string> args, string subcommand, CancellationToken ct)
+    {
+        var output = Path.GetFullPath(Path.Combine("learning", "v11"));
+        Directory.CreateDirectory(output);
+        var rtPath = Path.Combine("learning", "readiness", "learning-runtime-change-readiness-gate.json");
+        var rtGate = await ReadJsonFileAsync<LearningRuntimeChangeReadinessGateReport>(rtPath, ct).ConfigureAwait(false);
+        var rtPassed = rtGate is not null && rtGate.Passed;
+        var p15Path = Path.Combine("eval", "eval-report-p15-a3.json");
+        var p15 = await ReadJsonFileAsync<JsonDocument>(p15Path, ct).ConfigureAwait(false);
+        var p15Passed = false;
+        if (p15 is not null && p15.RootElement.TryGetProperty("PassRate", out var pr)) p15Passed = pr.GetDouble() >= 1.0;
+
+        var isGate = string.Equals(subcommand, "sprsc-gate", StringComparison.OrdinalIgnoreCase);
+        var opt = new StrictPilotReadinessShadowCanaryOptions { IsGate = isGate, Enabled = !CommandHelpers.HasFlag(args, "--disabled") };
+        var runner = new StrictPilotReadinessShadowCanaryRunner();
+        var report = runner.Run(rtPassed, p15Passed, output, opt);
+
+        var fn = isGate ? "sprsc-gate" : "sprsc";
+        var jp = Path.Combine(output, $"{fn}.json"); var mp = Path.Combine(output, $"{fn}.md");
+        await WriteJsonSafeAsync(report, jp, ct).ConfigureAwait(false);
+        await WriteTextAsync(StrictPilotReadinessShadowCanaryRunner.BuildMarkdown(isGate?"SPRSC (Gate)":"SPRSC",report),mp,ct).ConfigureAwait(false);
+        Console.WriteLine($"[Eval] SPRSC written: {jp}");
+        Console.WriteLine($"[Eval] packPassed={report.PackPassed}; gatePassed={report.GatePassed}; " +
+            $"strict={report.StrictReadinessPassed} hashVerified={report.SnapshotHashVerified} canary={report.ShadowCanaryReplayPassed}");
+    }
+
     private static async Task ExecuteLearningFormalEvidenceRealizationR1PackAsync(
         IReadOnlyList<string> args, string subcommand, CancellationToken ct)
     {

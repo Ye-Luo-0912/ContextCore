@@ -1,0 +1,25 @@
+﻿{
+  "OperationId": "sprsc-98fa93d569d94b01b9dd20830e3fed09",
+  "CreatedAt": "2026-06-29T13:29:36.082109+00:00",
+  "PackPassed": true,
+  "GatePassed": true,
+  "Recommendation": "ShadowCanaryReady",
+  "StrictReadinessPassed": true,
+  "SnapshotHashVerified": true,
+  "RankerBaselineDelta": 0,
+  "ShadowCanaryPlanReady": true,
+  "ShadowCanaryReplayPassed": true,
+  "RollbackBindingVerified": true,
+  "KillSwitchArmed": true,
+  "RuntimePilotExecutionApplied": false,
+  "RuntimePromotionApplied": false,
+  "RuntimeRerankerChanged": false,
+  "PackageOutputChanged": false,
+  "GlobalDefaultOn": false,
+  "V8ScopedActivationPreserved": true,
+  "BlockedReasons": [],
+  "Diagnostics": [
+    "curHash=02ac53e3e2d8d8c4... snapHash=02ac53e3e2d8d8c4... verified=True",
+    "flcCount=60 strictOk=True canaryOk=True"
+  ]
+}

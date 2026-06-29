@@ -1,0 +1,10 @@
+{
+  "planId": "scp-e46ab12e1e6547dfac4d0dddd82c109a",
+  "scope": "learning-ranking-pilot-shadow-only",
+  "trafficSelector": "shadow-trace-only",
+  "candidateConfig": "formal-r1-candidates",
+  "killSwitchArmed": true,
+  "rollbackBinding": "learning\\v11\\formal-dataset-pre-ingestion-snapshot.json",
+  "runtimeChangeApplied": false,
+  "reportId": "scp-0e388a88680f4cafbda3c41487d725f0"
+}
