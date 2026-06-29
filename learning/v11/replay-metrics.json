@@ -1,0 +1,8 @@
+{
+  "replayPassed": true,
+  "counterexampleReplayPassed": true,
+  "datasetLineCount": 78,
+  "formalRowCount": 60,
+  "hardNegativeCoverageDelta": 60,
+  "reportId": "replay-88db8736d930443fa531962918f73151"
+}

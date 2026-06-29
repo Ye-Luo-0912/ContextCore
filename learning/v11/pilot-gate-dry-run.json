@@ -1,0 +1,8 @@
+{
+  "pilotDryRunPassed": true,
+  "pilotScopeConfig": "scope=learning-ranking-pilot; enabled=false; dry-run=true; kill-switch=armed; rollback-bound=snap-id-verified",
+  "pilotKillSwitchArmed": true,
+  "pilotRollbackBindingComplete": true,
+  "runtimeChangeApplied": false,
+  "reportId": "pilot-dr-87da8f2ca80c4ca19f7e23153845d462"
+}

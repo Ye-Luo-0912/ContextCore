@@ -1,0 +1,32 @@
+﻿{
+  "OperationId": "rmpdr-ea979353a7024641b68caaba980b8484",
+  "CreatedAt": "2026-06-29T11:37:17.398889+00:00",
+  "PackPassed": true,
+  "GatePassed": true,
+  "Recommendation": "ProceedToPilotGateDryRunComplete",
+  "ReplayMetricsPassed": true,
+  "DatasetLineCount": 78,
+  "FormalRowCount": 60,
+  "CounterexampleReplayPassed": true,
+  "HardNegativeCoverageDelta": 60,
+  "PilotGateDryRunPassed": true,
+  "PilotScopeConfig": "scope=learning-ranking-pilot; enabled=false; dry-run=true; kill-switch=armed; rollback-bound=snap-id-verified",
+  "PilotKillSwitchArmed": true,
+  "PilotRollbackBindingComplete": true,
+  "RollbackDrillPassed": true,
+  "SimulatedRestoreLineCount": 78,
+  "SimulatedRestoreHashMatch": true,
+  "ActualRollbackExecuted": false,
+  "RuntimePilotExecutionApplied": false,
+  "RuntimePromotionApplied": false,
+  "RuntimeRerankerChanged": false,
+  "PackageOutputChanged": false,
+  "GlobalDefaultOn": false,
+  "V8ScopedActivationPreserved": true,
+  "BlockedReasons": [],
+  "Diagnostics": [
+    "lines=78 formal=60",
+    "replayOk=True pilotOk=True rollbackOk=True",
+    "packPassed=True gatePassed=True"
+  ]
+}

@@ -2264,6 +2264,41 @@ public static partial class EvalCommand
             $"postValidation={report.PostIngestionValidationPassed} rollback={report.RollbackDryRunPassed} replay={report.ReplayValidationPassed} pilot={report.PilotReadinessReady}");
     }
 
+    private static async Task ExecuteReplayMetricsPilotDryRunRollbackDrillAsync(
+        IReadOnlyList<string> args, string subcommand, CancellationToken ct)
+    {
+        var output = Path.GetFullPath(Path.Combine("learning", "v11"));
+        Directory.CreateDirectory(output);
+
+        var rtPath = Path.Combine("learning", "readiness", "learning-runtime-change-readiness-gate.json");
+        var rtGate = await ReadJsonFileAsync<LearningRuntimeChangeReadinessGateReport>(rtPath, ct).ConfigureAwait(false);
+        var rtPassed = rtGate is not null && rtGate.Passed;
+
+        var p15Path = Path.Combine("eval", "eval-report-p15-a3.json");
+        var p15 = await ReadJsonFileAsync<JsonDocument>(p15Path, ct).ConfigureAwait(false);
+        var p15Passed = false;
+        if (p15 is not null && p15.RootElement.TryGetProperty("PassRate", out var pr)) p15Passed = pr.GetDouble() >= 1.0;
+
+        var isGate = string.Equals(subcommand, "rmpdr-gate", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(subcommand, "replay-metrics-pilot-dry-run-rollback-drill-gate", StringComparison.OrdinalIgnoreCase);
+        var opt = new ReplayMetricsPilotDryRunRollbackDrillOptions { IsGate = isGate, Enabled = !CommandHelpers.HasFlag(args, "--disabled") };
+        var runner = new ReplayMetricsPilotDryRunRollbackDrillRunner();
+        var report = runner.Run(rtPassed, p15Passed, output, opt);
+
+        var isShort = subcommand.StartsWith("rmpdr", StringComparison.OrdinalIgnoreCase);
+        var fn = isShort ? (isGate ? "rmpdr-gate" : "rmpdr") : (isGate ? "replay-metrics-pilot-dry-run-rollback-drill-gate" : "replay-metrics-pilot-dry-run-rollback-drill");
+        var jp = Path.Combine(output, $"{fn}.json");
+        var mp = Path.Combine(output, $"{fn}.md");
+        await WriteJsonSafeAsync(report, jp, ct).ConfigureAwait(false);
+        await WriteTextAsync(ReplayMetricsPilotDryRunRollbackDrillRunner.BuildMarkdown(
+            isGate ? "RMPDR (Gate)" : "RMPDR", report), mp, ct).ConfigureAwait(false);
+
+        Console.WriteLine($"[Eval] RMPDR written: {jp}");
+        Console.WriteLine($"[Eval] packPassed={report.PackPassed}; gatePassed={report.GatePassed}; " +
+            $"replay={report.ReplayMetricsPassed} pilot={report.PilotGateDryRunPassed} rollback={report.RollbackDrillPassed}; " +
+            $"formalRows={report.FormalRowCount} counterexample={report.CounterexampleReplayPassed}");
+    }
+
     private static async Task ExecuteLearningFormalEvidenceRealizationR1PackAsync(
         IReadOnlyList<string> args, string subcommand, CancellationToken ct)
     {

@@ -1,0 +1,8 @@
+{
+  "rollbackDrillPassed": true,
+  "simulatedRestoreLineCount": 78,
+  "snapshotLineCount": 18,
+  "simulatedRestoreHashMatch": true,
+  "actualRollbackExecuted": false,
+  "reportId": "rb-drill-458677b8cebf45ffb1fe2e21a3223ab9"
+}
