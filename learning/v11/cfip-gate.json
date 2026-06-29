@@ -1,0 +1,272 @@
+﻿{
+  "OperationId": "cfip-ea2c76d9f700490e822e7cf6c757a3b1",
+  "CreatedAt": "2026-06-29T08:06:55.1428542+00:00",
+  "ControlledFormalEvidenceIngestionPackPassed": true,
+  "GatePassed": true,
+  "Recommendation": "ProceedToPostIngestionValidation",
+  "NextAllowedPhase": "PostIngestionValidationGate",
+  "TotalCases": 19,
+  "PassedCases": 19,
+  "FailedCases": 0,
+  "CanonicalR1ArtifactsUsed": true,
+  "LegacyStagingArtifactsDetected": true,
+  "LegacyStagingInvalidated": true,
+  "StagingSourceUsesCanonicalHash": true,
+  "StagingSourceUsesLegacyHash": false,
+  "FormalDatasetSnapshotReady": true,
+  "IngestionDiffReady": true,
+  "RollbackManifestReady": true,
+  "FormalLabelsRealized": true,
+  "InsertedFormalLabelCount": 60,
+  "SkippedDuplicateCount": 0,
+  "RejectedInvalidCount": 0,
+  "PostIngestionValidationPassed": false,
+  "FormalEvidenceSufficient": false,
+  "FormalTrainingSetChanged": true,
+  "AutoIngest": false,
+  "IngestionIsFormal": true,
+  "IngestionModeControlled": true,
+  "RuntimePilotExecutionApplied": false,
+  "RuntimePromotionApplied": false,
+  "RuntimeRerankerChanged": false,
+  "RuntimeRouterChanged": false,
+  "PackageOutputChanged": false,
+  "GlobalDefaultOn": false,
+  "FeedbackSignalAsGateAuthority": false,
+  "V8ScopedActivationPreserved": true,
+  "Cases": [
+    {
+      "CaseName": "R1StagingMissing",
+      "ExpectedStatus": "BlockedByGuards",
+      "ActualStatus": "BlockedByGuards",
+      "ExpectedBlockedReason": "R1StagingMissing",
+      "ActualBlockedReasons": [
+        "R1StagingMissing"
+      ],
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "R1StagingNotPassed",
+      "ExpectedStatus": "BlockedByGuards",
+      "ActualStatus": "BlockedByGuards",
+      "ExpectedBlockedReason": "R1StagingNotPassed",
+      "ActualBlockedReasons": [
+        "R1StagingNotPassed"
+      ],
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "StagedRowsEmpty",
+      "ExpectedStatus": "BlockedByGuards",
+      "ActualStatus": "BlockedByGuards",
+      "ExpectedBlockedReason": "StagedRowsEmpty",
+      "ActualBlockedReasons": [
+        "StagedRowsEmpty"
+      ],
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "R1CandidatesMissing",
+      "ExpectedStatus": "BlockedByGuards",
+      "ActualStatus": "BlockedByGuards",
+      "ExpectedBlockedReason": "R1CandidatesMissing",
+      "ActualBlockedReasons": [
+        "R1CandidatesMissing"
+      ],
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "P15GateNotPassed",
+      "ExpectedStatus": "BlockedByGuards",
+      "ActualStatus": "BlockedByGuards",
+      "ExpectedBlockedReason": "P15GateNotPassed",
+      "ActualBlockedReasons": [
+        "P15GateNotPassed"
+      ],
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "RuntimeChangeGateNotPassed",
+      "ExpectedStatus": "BlockedByGuards",
+      "ActualStatus": "BlockedByGuards",
+      "ExpectedBlockedReason": "RuntimeChangeGateNotPassed",
+      "ActualBlockedReasons": [
+        "RuntimeChangeGateNotPassed"
+      ],
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "LegacyStagingUsedAsSource",
+      "ExpectedStatus": "BlockedByGuards",
+      "ActualStatus": "BlockedByGuards",
+      "ExpectedBlockedReason": "LegacyStagingUsedAsSource",
+      "ActualBlockedReasons": [
+        "LegacyStagingUsedAsSource"
+      ],
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "CanonicalHashMissing",
+      "ExpectedStatus": "BlockedByGuards",
+      "ActualStatus": "BlockedByGuards",
+      "ExpectedBlockedReason": "CanonicalHashMissing",
+      "ActualBlockedReasons": [
+        "CanonicalHashMissing"
+      ],
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "HashMismatch",
+      "ExpectedStatus": "BlockedByGuards",
+      "ActualStatus": "BlockedByGuards",
+      "ExpectedBlockedReason": "HashMismatch",
+      "ActualBlockedReasons": [
+        "HashMismatch"
+      ],
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "DuplicateFormal",
+      "ExpectedStatus": "BlockedByGuards",
+      "ActualStatus": "BlockedByGuards",
+      "ExpectedBlockedReason": "DuplicateFormalLabels",
+      "ActualBlockedReasons": [
+        "DuplicateFormalLabels"
+      ],
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "AutoIngestTrue",
+      "ExpectedStatus": "BlockedByGuards",
+      "ActualStatus": "BlockedByGuards",
+      "ExpectedBlockedReason": "AutoIngestBlocked",
+      "ActualBlockedReasons": [
+        "AutoIngestBlocked"
+      ],
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "FeedbackAsGateAuthority",
+      "ExpectedStatus": "BlockedByGuards",
+      "ActualStatus": "BlockedByGuards",
+      "ExpectedBlockedReason": "FeedbackSignalAsGateAuthority",
+      "ActualBlockedReasons": [
+        "FeedbackSignalAsGateAuthority"
+      ],
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "RuntimePilotApplied",
+      "ExpectedStatus": "BlockedByGuards",
+      "ActualStatus": "BlockedByGuards",
+      "ExpectedBlockedReason": "RuntimePilotExecutionApplied",
+      "ActualBlockedReasons": [
+        "RuntimePilotExecutionApplied"
+      ],
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "RuntimePromotionApplied",
+      "ExpectedStatus": "BlockedByGuards",
+      "ActualStatus": "BlockedByGuards",
+      "ExpectedBlockedReason": "RuntimePromotionApplied",
+      "ActualBlockedReasons": [
+        "RuntimePromotionApplied"
+      ],
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "RuntimeRerankerChanged",
+      "ExpectedStatus": "BlockedByGuards",
+      "ActualStatus": "BlockedByGuards",
+      "ExpectedBlockedReason": "RuntimeRerankerChanged",
+      "ActualBlockedReasons": [
+        "RuntimeRerankerChanged"
+      ],
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "PackageOutputChanged",
+      "ExpectedStatus": "BlockedByGuards",
+      "ActualStatus": "BlockedByGuards",
+      "ExpectedBlockedReason": "PackageOutputChanged",
+      "ActualBlockedReasons": [
+        "PackageOutputChanged"
+      ],
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "GlobalDefaultOn",
+      "ExpectedStatus": "BlockedByGuards",
+      "ActualStatus": "BlockedByGuards",
+      "ExpectedBlockedReason": "GlobalDefaultOn",
+      "ActualBlockedReasons": [
+        "GlobalDefaultOn"
+      ],
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "V8ScopedActivationLost",
+      "ExpectedStatus": "BlockedByGuards",
+      "ActualStatus": "BlockedByGuards",
+      "ExpectedBlockedReason": "V8ScopedActivationLost",
+      "ActualBlockedReasons": [
+        "V8ScopedActivationLost"
+      ],
+      "StatusMatched": true,
+      "BlockedReasonMatched": true,
+      "PassedAsExpected": true
+    },
+    {
+      "CaseName": "AllGuardsPassed",
+      "ExpectedStatus": "Ready",
+      "ActualStatus": "Ready",
+      "ExpectedBlockedReason": "",
+      "ActualBlockedReasons": [],
+      "StatusMatched": true,
+      "BlockedReasonMatched": false,
+      "PassedAsExpected": true
+    }
+  ],
+  "BlockedReasons": [],
+  "Diagnostics": [
+    "r1StagingPresent=True r1StagingPassed=True stagedCount=60",
+    "canDoIngestion=True formalLabelsRealized=True",
+    "inserted=60 skipped=0 rejected=0",
+    "packPassed=True gatePassed=True"
+  ]
+}

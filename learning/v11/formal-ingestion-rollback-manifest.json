@@ -1,0 +1,10 @@
+{
+  "RollbackId": "rollback-3f7f70c8a903447d88e87ee06243a26d",
+  "SnapshotReference": "snap-656da35508154b5fa464aa64e52b6750",
+  "RollbackProcedures": [
+    "RestorePreIngestionSnapshot",
+    "RecomputeHash",
+    "VerifyLineCount"
+  ],
+  "RestoreVerified": true
+}

@@ -2171,6 +2171,64 @@ public static partial class EvalCommand
             $"legacyDetected={report.LegacyStagingArtifactsDetected} legacyUsedAsSource={report.LegacyArtifactsUsedAsSource}");
     }
 
+    private static async Task ExecuteControlledFormalEvidenceIngestionPackAsync(
+        IReadOnlyList<string> args, string subcommand, CancellationToken ct)
+    {
+        var output = Path.GetFullPath(Path.Combine("learning", "v11"));
+        Directory.CreateDirectory(output);
+
+        var rtPath = Path.Combine("learning", "readiness", "learning-runtime-change-readiness-gate.json");
+        var rtGate = await ReadJsonFileAsync<LearningRuntimeChangeReadinessGateReport>(rtPath, ct).ConfigureAwait(false);
+        var rtPassed = rtGate is not null && rtGate.Passed;
+
+        var p15Path = Path.Combine("eval", "eval-report-p15-a3.json");
+        var p15 = await ReadJsonFileAsync<JsonDocument>(p15Path, ct).ConfigureAwait(false);
+        var p15Passed = false;
+        if (p15 is not null && p15.RootElement.TryGetProperty("PassRate", out var pr)) p15Passed = pr.GetDouble() >= 1.0;
+
+        var r1StagingGatePath = Path.Combine("learning", "v10", "controlled-formal-label-ingestion-staging-r1-pack-gate.json");
+        var r1StagingPresent = File.Exists(r1StagingGatePath);
+        bool r1StagingPassed = false; int stagedCount = 0;
+        if (r1StagingPresent)
+        {
+            try
+            {
+                var r1Doc = JsonDocument.Parse(await File.ReadAllTextAsync(r1StagingGatePath, ct).ConfigureAwait(false));
+                r1StagingPassed = r1Doc.RootElement.TryGetProperty("ControlledFormalLabelIngestionStagingR1PackPassed", out var rp) && rp.GetBoolean();
+                stagedCount = r1Doc.RootElement.TryGetProperty("StagedFormalLabelCount", out var sc) ? sc.GetInt32() : 0;
+            }
+            catch { }
+        }
+
+        var r1CandidatesPath = Path.Combine("learning", "v10", "formal-label-candidates-r1.jsonl");
+        var r1CandidatesPresent = File.Exists(r1CandidatesPath);
+        var r1ManifestPresent = File.Exists(Path.Combine("learning", "v10", "formal-label-integrity-manifest-r1.json"));
+
+        var isGate = string.Equals(subcommand, "cfip-gate", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(subcommand, "controlled-formal-evidence-ingestion-pack-gate", StringComparison.OrdinalIgnoreCase);
+        var opt = new ControlledFormalEvidenceIngestionPackOptions { IsGate = isGate, Enabled = !CommandHelpers.HasFlag(args, "--disabled") };
+        var runner = new ControlledFormalEvidenceIngestionPackRunner();
+        var report = runner.Run(r1StagingPresent, r1StagingPassed, stagedCount, r1CandidatesPresent, r1ManifestPresent, rtPassed, p15Passed, output, opt);
+
+        var isShort = subcommand.StartsWith("cfip", StringComparison.OrdinalIgnoreCase);
+        var fn = isShort
+            ? (isGate ? "cfip-gate" : "cfip")
+            : (isGate ? "controlled-formal-evidence-ingestion-pack-gate" : "controlled-formal-evidence-ingestion-pack");
+
+        var jp = Path.Combine(output, $"{fn}.json");
+        var mp = Path.Combine(output, $"{fn}.md");
+        await WriteJsonSafeAsync(report, jp, ct).ConfigureAwait(false);
+        await WriteTextAsync(ControlledFormalEvidenceIngestionPackRunner.BuildMarkdown(
+            isGate ? "CFIP (Gate)" : "CFIP", report), mp, ct).ConfigureAwait(false);
+
+        Console.WriteLine($"[Eval] Controlled formal evidence ingestion pack written: {jp}");
+        Console.WriteLine($"[Eval] packPassed={report.ControlledFormalEvidenceIngestionPackPassed}; gatePassed={report.GatePassed}; " +
+            $"cases={report.PassedCases}/{report.TotalCases} inserted={report.InsertedFormalLabelCount} " +
+            $"skipped={report.SkippedDuplicateCount} rejected={report.RejectedInvalidCount}; " +
+            $"postValidation={report.PostIngestionValidationPassed}; formalLabelsRealized={report.FormalLabelsRealized}; " +
+            $"formalEvidenceSufficient={report.FormalEvidenceSufficient}");
+    }
+
     private static async Task ExecuteLearningFormalEvidenceRealizationR1PackAsync(
         IReadOnlyList<string> args, string subcommand, CancellationToken ct)
     {

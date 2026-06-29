@@ -1,0 +1,9 @@
+{
+  "ReportId": "postval-10f70500de9d413db0a0af84fd4d0fb0",
+  "ValidationPassed": false,
+  "PostIngestionLineCount": 18,
+  "HardNegativeCount": 60,
+  "CounterexampleReplayPassed": true,
+  "EvidenceSufficiencyConfirmed": false,
+  "RuntimePilotExecutionReadyForSeparateGate": false
+}
