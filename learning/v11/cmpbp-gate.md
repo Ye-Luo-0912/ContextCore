@@ -1,10 +1,10 @@
 ﻿# CMPBP (Gate)
 
-生成: `2026-06-29T17:12:50.5341452+00:00` 操作: `cmpbp-cd15be33b13d4ea0880d29fbac3c0729`
+生成: `2026-06-29T17:58:35.1942089+00:00` 操作: `cmpbp-6c6642d0e7d94e7395a604ef2705372a`
 
 ## Decision
-- PackPassed: `True` GatePassed: `True`
-- Canary: `True` Regression: `0`
-- PromotionBoundary: `True` PilotPreflight: `True`
+- PackPassed: `False` GatePassed: `False`
+- Canary: `False` Regression: `11`
+- PromotionBoundary: `True` PilotPreflight: `False`
 
 V11.10-V11.12 canary matrix + promotion boundary + pilot preflight。

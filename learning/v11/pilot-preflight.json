@@ -1,11 +1,11 @@
 {
-  "pilotPreflightPassed": true,
+  "pilotPreflightPassed": false,
   "scopeVerified": true,
   "killSwitchArmed": true,
   "rollbackBindingComplete": true,
   "configDiffPreview": "no-change",
   "runtimeNoOp": true,
-  "runtimeHashBefore": "7c753e8a1c8e835345708ae1a2af3b2d3d4d75796915f3ad64cb435ddea8d16c",
-  "runtimeHashAfter": "7c753e8a1c8e835345708ae1a2af3b2d3d4d75796915f3ad64cb435ddea8d16c",
-  "reportId": "ppf-b33d2052e88e452e872c190ed958235a"
+  "runtimeHashBefore": "583762c58d9b261848ff2a8f212c4b2b27ff60be003198a6ca49628eb244a198",
+  "runtimeHashAfter": "583762c58d9b261848ff2a8f212c4b2b27ff60be003198a6ca49628eb244a198",
+  "reportId": "ppf-99269f712b4346918a60138c0b993d37"
 }

@@ -1,17 +1,19 @@
 ﻿{
-  "OperationId": "cmpbp-cd15be33b13d4ea0880d29fbac3c0729",
-  "CreatedAt": "2026-06-29T17:12:50.5341452+00:00",
-  "PackPassed": true,
-  "GatePassed": true,
-  "CanaryMatrixPassed": true,
-  "RegressionCount": 0,
-  "AgreementScore": 100,
+  "OperationId": "cmpbp-6c6642d0e7d94e7395a604ef2705372a",
+  "CreatedAt": "2026-06-29T17:58:35.1942089+00:00",
+  "PackPassed": false,
+  "GatePassed": false,
+  "CanaryMatrixPassed": false,
+  "RegressionCount": 11,
+  "AgreementScore": 20,
   "MarginDistributionReady": true,
   "ScoringSourceVerified": true,
   "ScoringRowsBound": 60,
-  "SyntheticScoreCount": 0,
+  "BaselineRowsBound": 60,
+  "ShadowRowsBound": 23,
+  "SyntheticScoreCount": 37,
   "PromotionBoundaryReady": true,
-  "PilotPreflightPassed": true,
+  "PilotPreflightPassed": false,
   "KillSwitchArmed": true,
   "RollbackBindingComplete": true,
   "RuntimeStateHashMatch": true,
@@ -21,9 +23,14 @@
   "PackageOutputChanged": false,
   "GlobalDefaultOn": false,
   "V8ScopedActivationPreserved": true,
-  "BlockedReasons": [],
+  "BlockedReasons": [
+    "CanaryMatrixFailed",
+    "PilotPreflightFailed",
+    "RegressionDetected",
+    "SyntheticScoresDetected"
+  ],
   "Diagnostics": [
-    "formalCount=60 rowCount=60 matrixOk=True regression=0",
-    "boundaryReady=True preflightOk=True"
+    "formalCount=60 rowCount=60 matrixOk=False regression=11",
+    "boundaryReady=True preflightOk=False"
   ]
 }
