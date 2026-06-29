@@ -1,0 +1,17 @@
+{
+  "OperationId": "legacy-guard-eb7e1ea8c0d449a58c8353d08afb2419",
+  "CreatedAt": "2026-06-29T07:18:07.9156378+00:00",
+  "LegacyFilesFound": [
+    "learning/v10/formal-label-candidates.jsonl",
+    "learning/v10/formal-label-integrity-manifest.json",
+    "learning/v10/formal-label-realization-decision.json",
+    "learning/v10/controlled-formal-label-ingestion-staging-pack.json",
+    "learning/v10/staged-formal-hard-negatives.jsonl",
+    "learning/v10/formal-label-ingestion-diff-preview.json",
+    "learning/v10/formal-label-ingestion-staging-decision.json",
+    "learning/v10/formal-label-quarantine-policy.json",
+    "learning/v10/formal-label-rollback-snapshot-plan.json"
+  ],
+  "LegacyInvalidated": true,
+  "AnyLegacyUsedAsSource": false
+}

@@ -1,0 +1,25 @@
+{
+  "AttestationId": "staging-attest-ec2939b541b641a79e2b1ac51ff4b9e1",
+  "CreatedAt": "2026-06-29T07:18:07.9140694+00:00",
+  "CanonicalR1Verified": true,
+  "SourceFilesUsed": [
+    "learning/v10/formal-label-candidates-r1.jsonl",
+    "learning/v10/formal-label-integrity-manifest-r1.json",
+    "learning/v10/formal-evidence-realization-pack-r1-gate.json",
+    "learning/v10/formal-label-realization-decision-r1.json",
+    "learning/v10/integrity-mutation-test-report.json",
+    "learning/v10/terminology-compatibility-map.json"
+  ],
+  "LegacyFilesDetectedButNotUsed": [
+    "learning/v10/formal-label-candidates.jsonl",
+    "learning/v10/formal-label-integrity-manifest.json",
+    "learning/v10/formal-label-realization-decision.json",
+    "learning/v10/controlled-formal-label-ingestion-staging-pack.json",
+    "learning/v10/staged-formal-hard-negatives.jsonl",
+    "learning/v10/formal-label-ingestion-diff-preview.json",
+    "learning/v10/formal-label-ingestion-staging-decision.json",
+    "learning/v10/formal-label-quarantine-policy.json",
+    "learning/v10/formal-label-rollback-snapshot-plan.json"
+  ],
+  "StagingSourceVersion": "v10.16R/canonical-v1"
+}

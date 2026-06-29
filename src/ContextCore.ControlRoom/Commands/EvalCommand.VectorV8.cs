@@ -2125,6 +2125,52 @@ public static partial class EvalCommand
             $"canonicalCoverage={report.CanonicalHashCoverage:F0}% legacyInvalidated={report.LegacyStagingInvalidated}; recommendation={report.Recommendation}");
     }
 
+    private static async Task ExecuteLearningControlledFormalLabelIngestionStagingR1SemanticCleanupAsync(
+        IReadOnlyList<string> args, string subcommand, CancellationToken ct)
+    {
+        var output = Path.GetFullPath(Path.Combine("learning", "v10"));
+        Directory.CreateDirectory(output);
+
+        var rtPath = Path.Combine("learning", "readiness", "learning-runtime-change-readiness-gate.json");
+        var rtGate = await ReadJsonFileAsync<LearningRuntimeChangeReadinessGateReport>(rtPath, ct).ConfigureAwait(false);
+        var rtPassed = rtGate is not null && rtGate.Passed;
+
+        var p15Path = Path.Combine("eval", "eval-report-p15-a3.json");
+        var p15 = await ReadJsonFileAsync<JsonDocument>(p15Path, ct).ConfigureAwait(false);
+        var p15Passed = false;
+        if (p15 is not null && p15.RootElement.TryGetProperty("PassRate", out var pr)) p15Passed = pr.GetDouble() >= 1.0;
+
+        var r1StagingPath = Path.Combine("learning", "v10", "controlled-formal-label-ingestion-staging-r1-pack-gate.json");
+        var r1StagingPresent = File.Exists(r1StagingPath);
+        var r1StagedCount = 0;
+        if (r1StagingPresent)
+        {
+            try
+            {
+                var r1Doc = JsonDocument.Parse(await File.ReadAllTextAsync(r1StagingPath, ct).ConfigureAwait(false));
+                r1StagedCount = r1Doc.RootElement.TryGetProperty("StagedFormalLabelCount", out var sc) ? sc.GetInt32() : 0;
+            }
+            catch { }
+        }
+
+        var isGate = string.Equals(subcommand, "learning-controlled-formal-label-ingestion-staging-r1-semantic-cleanup-gate", StringComparison.OrdinalIgnoreCase);
+        var opt = new LearningControlledFormalLabelIngestionStagingR1SemanticCleanupOptions { IsGate = isGate, Enabled = !CommandHelpers.HasFlag(args, "--disabled") };
+        var runner = new LearningControlledFormalLabelIngestionStagingR1SemanticCleanupRunner();
+        var report = runner.Run(r1StagingPresent, r1StagedCount, rtPassed, p15Passed, output, opt);
+
+        var fn = isGate ? "controlled-formal-label-ingestion-staging-r1-semantic-cleanup-pack-gate" : "controlled-formal-label-ingestion-staging-r1-semantic-cleanup-pack";
+        var jp = Path.Combine(output, $"{fn}.json");
+        var mp = Path.Combine(output, $"{fn}.md");
+        await WriteJsonSafeAsync(report, jp, ct).ConfigureAwait(false);
+        await WriteTextAsync(LearningControlledFormalLabelIngestionStagingR1SemanticCleanupRunner.BuildMarkdown(
+            isGate ? "Staging R1 Semantic Cleanup Pack (Gate)" : "Staging R1 Semantic Cleanup Pack", report), mp, ct).ConfigureAwait(false);
+
+        Console.WriteLine($"[Eval] R1 semantic cleanup pack written: {jp}");
+        Console.WriteLine($"[Eval] cleanupPassed={report.StagingR1SemanticCleanupPackPassed}; gatePassed={report.GatePassed}; " +
+            $"usesCanonical={report.StagingSourceUsesCanonicalHash} usesLegacy={report.StagingSourceUsesLegacyHash}; " +
+            $"legacyDetected={report.LegacyStagingArtifactsDetected} legacyUsedAsSource={report.LegacyArtifactsUsedAsSource}");
+    }
+
     private static async Task ExecuteLearningFormalEvidenceRealizationR1PackAsync(
         IReadOnlyList<string> args, string subcommand, CancellationToken ct)
     {
