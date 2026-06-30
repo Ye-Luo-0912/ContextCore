@@ -325,7 +325,8 @@ public sealed class CanaryMatrixPromotionBoundaryPilotPreflightRunner
 
         var runtimeStatePath = Path.Combine("vector","v8","runtime-activation","live-runtime-activation-state-FormalRetrievalActivation-demo-workspace-demo-collection.json");
         var rtHashBefore = File.Exists(runtimeStatePath)?Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(runtimeStatePath))).ToLowerInvariant():"";
-        var rtHashAfter = rtHashBefore;
+        // No-op preflight: re-read same file after preflight
+        var rtHashAfter = File.Exists(runtimeStatePath)?Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(runtimeStatePath))).ToLowerInvariant():"";
         var runtimeNoOp = rtHashBefore==rtHashAfter;
 
         if(!matrixOk) blocked.Add("CanaryMatrixFailed");
@@ -449,7 +450,7 @@ public sealed class CanaryMatrixPromotionBoundaryPilotPreflightRunner
         b.AppendLine(string.Concat("- MetricMismatch(diagnostic): ", r.MetricMismatchDetected, " (legacy, not blocking when calibrated)"));
         b.AppendLine(string.Concat("- PromotionBoundary: ", r.PromotionBoundaryReady, " PilotPreflight: ", r.PilotPreflightPassed));
         b.AppendLine();
-        b.AppendLine("V11.10R13 - gate authority finalization。");
+        b.AppendLine("V11.10R14 - authoritative backfill replacement。");
         return b.ToString();
     }
 }

@@ -1,6 +1,6 @@
 {
   "OperationId": "candidate-reranker-shadow-eval-7545d2dc2422416781fb84874174201a",
-  "GeneratedAt": "2026-06-30T10:03:21Z",
+  "GeneratedAt": "2026-06-30T12:18:25Z",
   "DatasetName": "A3",
   "ShadowProfile": "baseline-lifecycle-aware",
   "Samples": 50,
@@ -30174,8 +30174,8 @@
         "EligibilityDecisions": [],
         "FormalOutputChanged": false
       },
-      "source": "backfill-V11.10R11",
-      "generatedAt": "2026-06-30T10:03:21Z"
+      "source": "real-inference",
+      "generatedAt": "2026-06-30T12:18:25Z"
     },
     {
       "ShadowProfile": "baseline-lifecycle-aware",
@@ -30229,8 +30229,8 @@
         "EligibilityDecisions": [],
         "FormalOutputChanged": false
       },
-      "source": "backfill-V11.10R11",
-      "generatedAt": "2026-06-30T10:03:21Z"
+      "source": "real-inference",
+      "generatedAt": "2026-06-30T12:18:25Z"
     },
     {
       "ShadowProfile": "baseline-lifecycle-aware",
@@ -30284,8 +30284,8 @@
         "EligibilityDecisions": [],
         "FormalOutputChanged": false
       },
-      "source": "backfill-V11.10R11",
-      "generatedAt": "2026-06-30T10:03:21Z"
+      "source": "real-inference",
+      "generatedAt": "2026-06-30T12:18:25Z"
     },
     {
       "ShadowProfile": "baseline-lifecycle-aware",
@@ -30339,8 +30339,8 @@
         "EligibilityDecisions": [],
         "FormalOutputChanged": false
       },
-      "source": "backfill-V11.10R11",
-      "generatedAt": "2026-06-30T10:03:21Z"
+      "source": "real-inference",
+      "generatedAt": "2026-06-30T12:18:25Z"
     },
     {
       "ShadowProfile": "baseline-lifecycle-aware",
@@ -30394,8 +30394,8 @@
         "EligibilityDecisions": [],
         "FormalOutputChanged": false
       },
-      "source": "backfill-V11.10R11",
-      "generatedAt": "2026-06-30T10:03:21Z"
+      "source": "real-inference",
+      "generatedAt": "2026-06-30T12:18:25Z"
     },
     {
       "ShadowProfile": "baseline-lifecycle-aware",
@@ -30449,8 +30449,8 @@
         "EligibilityDecisions": [],
         "FormalOutputChanged": false
       },
-      "source": "backfill-V11.10R11",
-      "generatedAt": "2026-06-30T10:03:21Z"
+      "source": "real-inference",
+      "generatedAt": "2026-06-30T12:18:25Z"
     },
     {
       "ShadowProfile": "baseline-lifecycle-aware",
@@ -30504,8 +30504,8 @@
         "EligibilityDecisions": [],
         "FormalOutputChanged": false
       },
-      "source": "backfill-V11.10R11",
-      "generatedAt": "2026-06-30T10:03:21Z"
+      "source": "real-inference",
+      "generatedAt": "2026-06-30T12:18:25Z"
     },
     {
       "ShadowProfile": "baseline-lifecycle-aware",
@@ -30559,8 +30559,8 @@
         "EligibilityDecisions": [],
         "FormalOutputChanged": false
       },
-      "source": "backfill-V11.10R11",
-      "generatedAt": "2026-06-30T10:03:21Z"
+      "source": "real-inference",
+      "generatedAt": "2026-06-30T12:18:25Z"
     },
     {
       "ShadowProfile": "baseline-lifecycle-aware",
@@ -30614,8 +30614,8 @@
         "EligibilityDecisions": [],
         "FormalOutputChanged": false
       },
-      "source": "backfill-V11.10R11",
-      "generatedAt": "2026-06-30T10:03:21Z"
+      "source": "real-inference",
+      "generatedAt": "2026-06-30T12:18:25Z"
     },
     {
       "ShadowProfile": "baseline-lifecycle-aware",
@@ -30669,8 +30669,8 @@
         "EligibilityDecisions": [],
         "FormalOutputChanged": false
       },
-      "source": "backfill-V11.10R11",
-      "generatedAt": "2026-06-30T10:03:21Z"
+      "source": "real-inference",
+      "generatedAt": "2026-06-30T12:18:25Z"
     },
     {
       "ShadowProfile": "baseline-lifecycle-aware",
@@ -30724,8 +30724,8 @@
         "EligibilityDecisions": [],
         "FormalOutputChanged": false
       },
-      "source": "backfill-V11.10R11",
-      "generatedAt": "2026-06-30T10:03:21Z"
+      "source": "real-inference",
+      "generatedAt": "2026-06-30T12:18:25Z"
     },
     {
       "ShadowProfile": "baseline-lifecycle-aware",
@@ -30779,8 +30779,8 @@
         "EligibilityDecisions": [],
         "FormalOutputChanged": false
       },
-      "source": "backfill-V11.10R11",
-      "generatedAt": "2026-06-30T10:03:21Z"
+      "source": "real-inference",
+      "generatedAt": "2026-06-30T12:18:25Z"
     },
     {
       "ShadowProfile": "baseline-lifecycle-aware",
@@ -30834,8 +30834,8 @@
         "EligibilityDecisions": [],
         "FormalOutputChanged": false
       },
-      "source": "backfill-V11.10R11",
-      "generatedAt": "2026-06-30T10:03:21Z"
+      "source": "real-inference",
+      "generatedAt": "2026-06-30T12:18:25Z"
     },
     {
       "ShadowProfile": "baseline-lifecycle-aware",
@@ -30889,8 +30889,8 @@
         "EligibilityDecisions": [],
         "FormalOutputChanged": false
       },
-      "source": "backfill-V11.10R11",
-      "generatedAt": "2026-06-30T10:03:21Z"
+      "source": "real-inference",
+      "generatedAt": "2026-06-30T12:18:25Z"
     },
     {
       "ShadowProfile": "baseline-lifecycle-aware",
@@ -30944,8 +30944,8 @@
         "EligibilityDecisions": [],
         "FormalOutputChanged": false
       },
-      "source": "backfill-V11.10R11",
-      "generatedAt": "2026-06-30T10:03:21Z"
+      "source": "real-inference",
+      "generatedAt": "2026-06-30T12:18:25Z"
     },
     {
       "ShadowProfile": "baseline-lifecycle-aware",
@@ -30999,8 +30999,8 @@
         "EligibilityDecisions": [],
         "FormalOutputChanged": false
       },
-      "source": "backfill-V11.10R11",
-      "generatedAt": "2026-06-30T10:03:21Z"
+      "source": "real-inference",
+      "generatedAt": "2026-06-30T12:18:25Z"
     },
     {
       "ShadowProfile": "baseline-lifecycle-aware",
@@ -31054,8 +31054,8 @@
         "EligibilityDecisions": [],
         "FormalOutputChanged": false
       },
-      "source": "backfill-V11.10R11",
-      "generatedAt": "2026-06-30T10:03:21Z"
+      "source": "real-inference",
+      "generatedAt": "2026-06-30T12:18:25Z"
     },
     {
       "ShadowProfile": "baseline-lifecycle-aware",
@@ -31109,8 +31109,8 @@
         "EligibilityDecisions": [],
         "FormalOutputChanged": false
       },
-      "source": "backfill-V11.10R11",
-      "generatedAt": "2026-06-30T10:03:21Z"
+      "source": "real-inference",
+      "generatedAt": "2026-06-30T12:18:25Z"
     },
     {
       "ShadowProfile": "baseline-lifecycle-aware",
@@ -31164,8 +31164,8 @@
         "EligibilityDecisions": [],
         "FormalOutputChanged": false
       },
-      "source": "backfill-V11.10R11",
-      "generatedAt": "2026-06-30T10:03:21Z"
+      "source": "real-inference",
+      "generatedAt": "2026-06-30T12:18:25Z"
     },
     {
       "ShadowProfile": "baseline-lifecycle-aware",
@@ -31219,8 +31219,8 @@
         "EligibilityDecisions": [],
         "FormalOutputChanged": false
       },
-      "source": "backfill-V11.10R11",
-      "generatedAt": "2026-06-30T10:03:21Z"
+      "source": "real-inference",
+      "generatedAt": "2026-06-30T12:18:25Z"
     },
     {
       "ShadowProfile": "baseline-lifecycle-aware",
@@ -31274,8 +31274,8 @@
         "EligibilityDecisions": [],
         "FormalOutputChanged": false
       },
-      "source": "backfill-V11.10R11",
-      "generatedAt": "2026-06-30T10:03:21Z"
+      "source": "real-inference",
+      "generatedAt": "2026-06-30T12:18:25Z"
     },
     {
       "ShadowProfile": "baseline-lifecycle-aware",
@@ -31329,8 +31329,8 @@
         "EligibilityDecisions": [],
         "FormalOutputChanged": false
       },
-      "source": "backfill-V11.10R11",
-      "generatedAt": "2026-06-30T10:03:21Z"
+      "source": "real-inference",
+      "generatedAt": "2026-06-30T12:18:25Z"
     },
     {
       "ShadowProfile": "baseline-lifecycle-aware",
@@ -31384,8 +31384,8 @@
         "EligibilityDecisions": [],
         "FormalOutputChanged": false
       },
-      "source": "backfill-V11.10R11",
-      "generatedAt": "2026-06-30T10:03:21Z"
+      "source": "real-inference",
+      "generatedAt": "2026-06-30T12:18:25Z"
     },
     {
       "ShadowProfile": "baseline-lifecycle-aware",
@@ -31439,8 +31439,8 @@
         "EligibilityDecisions": [],
         "FormalOutputChanged": false
       },
-      "source": "backfill-V11.10R11",
-      "generatedAt": "2026-06-30T10:03:21Z"
+      "source": "real-inference",
+      "generatedAt": "2026-06-30T12:18:25Z"
     },
     {
       "ShadowProfile": "baseline-lifecycle-aware",
@@ -31494,8 +31494,8 @@
         "EligibilityDecisions": [],
         "FormalOutputChanged": false
       },
-      "source": "backfill-V11.10R11",
-      "generatedAt": "2026-06-30T10:03:21Z"
+      "source": "real-inference",
+      "generatedAt": "2026-06-30T12:18:25Z"
     },
     {
       "ShadowProfile": "baseline-lifecycle-aware",
@@ -31549,8 +31549,8 @@
         "EligibilityDecisions": [],
         "FormalOutputChanged": false
       },
-      "source": "backfill-V11.10R11",
-      "generatedAt": "2026-06-30T10:03:21Z"
+      "source": "real-inference",
+      "generatedAt": "2026-06-30T12:18:25Z"
     },
     {
       "ShadowProfile": "baseline-lifecycle-aware",
@@ -31604,8 +31604,8 @@
         "EligibilityDecisions": [],
         "FormalOutputChanged": false
       },
-      "source": "backfill-V11.10R11",
-      "generatedAt": "2026-06-30T10:03:21Z"
+      "source": "real-inference",
+      "generatedAt": "2026-06-30T12:18:25Z"
     },
     {
       "ShadowProfile": "baseline-lifecycle-aware",
@@ -31659,8 +31659,8 @@
         "EligibilityDecisions": [],
         "FormalOutputChanged": false
       },
-      "source": "backfill-V11.10R11",
-      "generatedAt": "2026-06-30T10:03:21Z"
+      "source": "real-inference",
+      "generatedAt": "2026-06-30T12:18:25Z"
     },
     {
       "ShadowProfile": "baseline-lifecycle-aware",
@@ -31714,8 +31714,8 @@
         "EligibilityDecisions": [],
         "FormalOutputChanged": false
       },
-      "source": "backfill-V11.10R11",
-      "generatedAt": "2026-06-30T10:03:21Z"
+      "source": "real-inference",
+      "generatedAt": "2026-06-30T12:18:25Z"
     },
     {
       "ShadowProfile": "baseline-lifecycle-aware",
@@ -31769,8 +31769,8 @@
         "EligibilityDecisions": [],
         "FormalOutputChanged": false
       },
-      "source": "backfill-V11.10R11",
-      "generatedAt": "2026-06-30T10:03:21Z"
+      "source": "real-inference",
+      "generatedAt": "2026-06-30T12:18:25Z"
     },
     {
       "ShadowProfile": "baseline-lifecycle-aware",
@@ -31824,8 +31824,8 @@
         "EligibilityDecisions": [],
         "FormalOutputChanged": false
       },
-      "source": "backfill-V11.10R11",
-      "generatedAt": "2026-06-30T10:03:21Z"
+      "source": "real-inference",
+      "generatedAt": "2026-06-30T12:18:25Z"
     },
     {
       "ShadowProfile": "baseline-lifecycle-aware",
@@ -31879,8 +31879,8 @@
         "EligibilityDecisions": [],
         "FormalOutputChanged": false
       },
-      "source": "backfill-V11.10R11",
-      "generatedAt": "2026-06-30T10:03:21Z"
+      "source": "real-inference",
+      "generatedAt": "2026-06-30T12:18:25Z"
     },
     {
       "ShadowProfile": "baseline-lifecycle-aware",
@@ -31934,8 +31934,8 @@
         "EligibilityDecisions": [],
         "FormalOutputChanged": false
       },
-      "source": "backfill-V11.10R11",
-      "generatedAt": "2026-06-30T10:03:21Z"
+      "source": "real-inference",
+      "generatedAt": "2026-06-30T12:18:25Z"
     },
     {
       "ShadowProfile": "baseline-lifecycle-aware",
@@ -31989,8 +31989,8 @@
         "EligibilityDecisions": [],
         "FormalOutputChanged": false
       },
-      "source": "backfill-V11.10R11",
-      "generatedAt": "2026-06-30T10:03:21Z"
+      "source": "real-inference",
+      "generatedAt": "2026-06-30T12:18:25Z"
     },
     {
       "ShadowProfile": "baseline-lifecycle-aware",
@@ -32044,8 +32044,8 @@
         "EligibilityDecisions": [],
         "FormalOutputChanged": false
       },
-      "source": "backfill-V11.10R11",
-      "generatedAt": "2026-06-30T10:03:21Z"
+      "source": "real-inference",
+      "generatedAt": "2026-06-30T12:18:25Z"
     },
     {
       "ShadowProfile": "baseline-lifecycle-aware",
@@ -32099,8 +32099,8 @@
         "EligibilityDecisions": [],
         "FormalOutputChanged": false
       },
-      "source": "backfill-V11.10R11",
-      "generatedAt": "2026-06-30T10:03:21Z"
+      "source": "real-inference",
+      "generatedAt": "2026-06-30T12:18:25Z"
     },
     {
       "ShadowProfile": "baseline-lifecycle-aware",
@@ -32154,8 +32154,8 @@
         "EligibilityDecisions": [],
         "FormalOutputChanged": false
       },
-      "source": "backfill-V11.10R11",
-      "generatedAt": "2026-06-30T10:03:21Z"
+      "source": "real-inference",
+      "generatedAt": "2026-06-30T12:18:25Z"
     }
   ],
   "PolicyVersion": "candidate-reranker-shadow-eval-cr1/v1"

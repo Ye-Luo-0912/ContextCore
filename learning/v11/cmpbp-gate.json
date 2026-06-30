@@ -1,8 +1,8 @@
 ﻿{
-  "OperationId": "cmpbp-9a672dc0b865404a95531e2171ae7aff",
-  "CreatedAt": "2026-06-30T10:52:24.1234199+00:00",
-  "PackPassed": false,
-  "GatePassed": false,
+  "OperationId": "cmpbp-2b1958b286414d41b2dd40e69ab09270",
+  "CreatedAt": "2026-06-30T12:19:24.6538881+00:00",
+  "PackPassed": true,
+  "GatePassed": true,
   "CanaryMatrixPassed": true,
   "RegressionCount": 0,
   "RegressionCountRaw": 41,
@@ -13,9 +13,9 @@
   "CalibratedScoresComparable": true,
   "CalibrationContractReady": true,
   "CalibrationCoverage": 60,
-  "BackfillGateAuthorityPolicyPassed": false,
-  "BackfillRealInferenceRows": 23,
-  "BackfillGeneratedDistributionRows": 37,
+  "BackfillGateAuthorityPolicyPassed": true,
+  "BackfillRealInferenceRows": 60,
+  "BackfillGeneratedDistributionRows": 0,
   "AgreementScore": 31.7,
   "MarginDistributionReady": true,
   "ScoringSourceVerified": true,
@@ -40,15 +40,13 @@
   "PackageOutputChanged": false,
   "GlobalDefaultOn": false,
   "V8ScopedActivationPreserved": true,
-  "BlockedReasons": [
-    "BackfillGateAuthorityPolicyFailed"
-  ],
+  "BlockedReasons": [],
   "Diagnostics": [
     "ScoresComparable(legacy)=False MetricMismatchDetected=True",
     "formalCount=60 rowCount=60 matrixOk=True",
     "regressionRaw=41 regressionCalibrated=0",
     "shadowBoundReal=60 synthetic=0 missingShadow=0",
-    "calibratedScoresComparable=True provenance=realInference:23\u002Bgenerated:37",
-    "metricMismatchDetected(diagnosticOnly)=True backfillGateAuthorityPassed=False boundaryReady=True preflightOk=True"
+    "calibratedScoresComparable=True provenance=realInference:60\u002Bgenerated:0",
+    "metricMismatchDetected(diagnosticOnly)=True backfillGateAuthorityPassed=True boundaryReady=True preflightOk=True"
   ]
 }

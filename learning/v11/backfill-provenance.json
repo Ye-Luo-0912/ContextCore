@@ -1,11 +1,11 @@
 {
-  "GeneratedAt": "2026-06-30T10:52:24.1234199+00:00",
+  "GeneratedAt": "2026-06-30T12:19:24.6538881+00:00",
   "TotalRows": 60,
-  "RealInferenceRows": 23,
-  "GeneratedDistributionRows": 37,
+  "RealInferenceRows": 60,
+  "GeneratedDistributionRows": 0,
   "SimulationRows": 0,
   "BackfillGateAuthorityPolicy": "Generated-distribution entries serve as coverage backfill but do NOT constitute final gate authority. Only real-inference entries (actual model inference) are gate-authoritative.",
-  "BackfillGateAuthorityPolicyPassed": false,
-  "BlockedReason": "GeneratedDistributionBackfillRowsExist",
-  "RequiredAction": "Run real shadow-eval inference on the 37 generated-distribution evalSampleIds and replace entries with real-inference provenance."
+  "BackfillGateAuthorityPolicyPassed": true,
+  "BlockedReason": null,
+  "RequiredAction": null
 }

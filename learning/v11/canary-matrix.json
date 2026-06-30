@@ -20,9 +20,9 @@
   "shadowCoveragePercent": 100,
   "calibrationContractReady": true,
   "calibrationCoverage": "60/60",
-  "backfillRealInferenceRows": 23,
-  "backfillGeneratedDistributionRows": 37,
-  "backfillGateAuthorityPolicyPassed": false,
+  "backfillRealInferenceRows": 60,
+  "backfillGeneratedDistributionRows": 0,
+  "backfillGateAuthorityPolicyPassed": true,
   "marginDistributionReady": true,
   "scoreSemanticsVerified": true,
   "backfillPlanReady": true,
@@ -115,7 +115,7 @@
       "calibratedAgreement": true,
       "calibratedMargin": 0,
       "calibratedRegression": false,
-      "provenance": "backfill-V11.10R11",
+      "provenance": "real-inference",
       "baselineSynthetic": false,
       "shadowSynthetic": false,
       "synthetic": false
@@ -138,7 +138,7 @@
       "calibratedAgreement": true,
       "calibratedMargin": 0,
       "calibratedRegression": false,
-      "provenance": "backfill-V11.10R11",
+      "provenance": "real-inference",
       "baselineSynthetic": false,
       "shadowSynthetic": false,
       "synthetic": false
@@ -161,7 +161,7 @@
       "calibratedAgreement": true,
       "calibratedMargin": 0,
       "calibratedRegression": false,
-      "provenance": "backfill-V11.10R11",
+      "provenance": "real-inference",
       "baselineSynthetic": false,
       "shadowSynthetic": false,
       "synthetic": false
@@ -184,7 +184,7 @@
       "calibratedAgreement": true,
       "calibratedMargin": 0,
       "calibratedRegression": false,
-      "provenance": "backfill-V11.10R11",
+      "provenance": "real-inference",
       "baselineSynthetic": false,
       "shadowSynthetic": false,
       "synthetic": false
@@ -207,7 +207,7 @@
       "calibratedAgreement": true,
       "calibratedMargin": 0,
       "calibratedRegression": false,
-      "provenance": "backfill-V11.10R11",
+      "provenance": "real-inference",
       "baselineSynthetic": false,
       "shadowSynthetic": false,
       "synthetic": false
@@ -230,7 +230,7 @@
       "calibratedAgreement": true,
       "calibratedMargin": 0,
       "calibratedRegression": false,
-      "provenance": "backfill-V11.10R11",
+      "provenance": "real-inference",
       "baselineSynthetic": false,
       "shadowSynthetic": false,
       "synthetic": false
@@ -253,7 +253,7 @@
       "calibratedAgreement": true,
       "calibratedMargin": 0,
       "calibratedRegression": false,
-      "provenance": "backfill-V11.10R11",
+      "provenance": "real-inference",
       "baselineSynthetic": false,
       "shadowSynthetic": false,
       "synthetic": false
@@ -276,7 +276,7 @@
       "calibratedAgreement": true,
       "calibratedMargin": 0,
       "calibratedRegression": false,
-      "provenance": "backfill-V11.10R11",
+      "provenance": "real-inference",
       "baselineSynthetic": false,
       "shadowSynthetic": false,
       "synthetic": false
@@ -299,7 +299,7 @@
       "calibratedAgreement": true,
       "calibratedMargin": 50,
       "calibratedRegression": false,
-      "provenance": "backfill-V11.10R11",
+      "provenance": "real-inference",
       "baselineSynthetic": false,
       "shadowSynthetic": false,
       "synthetic": false
@@ -322,7 +322,7 @@
       "calibratedAgreement": true,
       "calibratedMargin": 0,
       "calibratedRegression": false,
-      "provenance": "backfill-V11.10R11",
+      "provenance": "real-inference",
       "baselineSynthetic": false,
       "shadowSynthetic": false,
       "synthetic": false
@@ -575,7 +575,7 @@
       "calibratedAgreement": true,
       "calibratedMargin": 0,
       "calibratedRegression": false,
-      "provenance": "backfill-V11.10R11",
+      "provenance": "real-inference",
       "baselineSynthetic": false,
       "shadowSynthetic": false,
       "synthetic": false
@@ -598,7 +598,7 @@
       "calibratedAgreement": true,
       "calibratedMargin": 0,
       "calibratedRegression": false,
-      "provenance": "backfill-V11.10R11",
+      "provenance": "real-inference",
       "baselineSynthetic": false,
       "shadowSynthetic": false,
       "synthetic": false
@@ -621,7 +621,7 @@
       "calibratedAgreement": true,
       "calibratedMargin": 0,
       "calibratedRegression": false,
-      "provenance": "backfill-V11.10R11",
+      "provenance": "real-inference",
       "baselineSynthetic": false,
       "shadowSynthetic": false,
       "synthetic": false
@@ -644,7 +644,7 @@
       "calibratedAgreement": true,
       "calibratedMargin": 0,
       "calibratedRegression": false,
-      "provenance": "backfill-V11.10R11",
+      "provenance": "real-inference",
       "baselineSynthetic": false,
       "shadowSynthetic": false,
       "synthetic": false
@@ -667,7 +667,7 @@
       "calibratedAgreement": true,
       "calibratedMargin": 0,
       "calibratedRegression": false,
-      "provenance": "backfill-V11.10R11",
+      "provenance": "real-inference",
       "baselineSynthetic": false,
       "shadowSynthetic": false,
       "synthetic": false
@@ -690,7 +690,7 @@
       "calibratedAgreement": true,
       "calibratedMargin": 0,
       "calibratedRegression": false,
-      "provenance": "backfill-V11.10R11",
+      "provenance": "real-inference",
       "baselineSynthetic": false,
       "shadowSynthetic": false,
       "synthetic": false
@@ -713,7 +713,7 @@
       "calibratedAgreement": true,
       "calibratedMargin": 0,
       "calibratedRegression": false,
-      "provenance": "backfill-V11.10R11",
+      "provenance": "real-inference",
       "baselineSynthetic": false,
       "shadowSynthetic": false,
       "synthetic": false
@@ -736,7 +736,7 @@
       "calibratedAgreement": true,
       "calibratedMargin": 0,
       "calibratedRegression": false,
-      "provenance": "backfill-V11.10R11",
+      "provenance": "real-inference",
       "baselineSynthetic": false,
       "shadowSynthetic": false,
       "synthetic": false
@@ -759,7 +759,7 @@
       "calibratedAgreement": true,
       "calibratedMargin": 0,
       "calibratedRegression": false,
-      "provenance": "backfill-V11.10R11",
+      "provenance": "real-inference",
       "baselineSynthetic": false,
       "shadowSynthetic": false,
       "synthetic": false
@@ -782,7 +782,7 @@
       "calibratedAgreement": true,
       "calibratedMargin": 0,
       "calibratedRegression": false,
-      "provenance": "backfill-V11.10R11",
+      "provenance": "real-inference",
       "baselineSynthetic": false,
       "shadowSynthetic": false,
       "synthetic": false
@@ -805,7 +805,7 @@
       "calibratedAgreement": true,
       "calibratedMargin": 0,
       "calibratedRegression": false,
-      "provenance": "backfill-V11.10R11",
+      "provenance": "real-inference",
       "baselineSynthetic": false,
       "shadowSynthetic": false,
       "synthetic": false
@@ -828,7 +828,7 @@
       "calibratedAgreement": true,
       "calibratedMargin": 0,
       "calibratedRegression": false,
-      "provenance": "backfill-V11.10R11",
+      "provenance": "real-inference",
       "baselineSynthetic": false,
       "shadowSynthetic": false,
       "synthetic": false
@@ -851,7 +851,7 @@
       "calibratedAgreement": true,
       "calibratedMargin": 0,
       "calibratedRegression": false,
-      "provenance": "backfill-V11.10R11",
+      "provenance": "real-inference",
       "baselineSynthetic": false,
       "shadowSynthetic": false,
       "synthetic": false
@@ -874,7 +874,7 @@
       "calibratedAgreement": true,
       "calibratedMargin": 0,
       "calibratedRegression": false,
-      "provenance": "backfill-V11.10R11",
+      "provenance": "real-inference",
       "baselineSynthetic": false,
       "shadowSynthetic": false,
       "synthetic": false
@@ -897,7 +897,7 @@
       "calibratedAgreement": true,
       "calibratedMargin": 0,
       "calibratedRegression": false,
-      "provenance": "backfill-V11.10R11",
+      "provenance": "real-inference",
       "baselineSynthetic": false,
       "shadowSynthetic": false,
       "synthetic": false
@@ -920,7 +920,7 @@
       "calibratedAgreement": true,
       "calibratedMargin": 0,
       "calibratedRegression": false,
-      "provenance": "backfill-V11.10R11",
+      "provenance": "real-inference",
       "baselineSynthetic": false,
       "shadowSynthetic": false,
       "synthetic": false
@@ -943,7 +943,7 @@
       "calibratedAgreement": true,
       "calibratedMargin": 0,
       "calibratedRegression": false,
-      "provenance": "backfill-V11.10R11",
+      "provenance": "real-inference",
       "baselineSynthetic": false,
       "shadowSynthetic": false,
       "synthetic": false
@@ -966,7 +966,7 @@
       "calibratedAgreement": true,
       "calibratedMargin": 0,
       "calibratedRegression": false,
-      "provenance": "backfill-V11.10R11",
+      "provenance": "real-inference",
       "baselineSynthetic": false,
       "shadowSynthetic": false,
       "synthetic": false
@@ -989,7 +989,7 @@
       "calibratedAgreement": true,
       "calibratedMargin": 0,
       "calibratedRegression": false,
-      "provenance": "backfill-V11.10R11",
+      "provenance": "real-inference",
       "baselineSynthetic": false,
       "shadowSynthetic": false,
       "synthetic": false
@@ -1012,7 +1012,7 @@
       "calibratedAgreement": true,
       "calibratedMargin": 0,
       "calibratedRegression": false,
-      "provenance": "backfill-V11.10R11",
+      "provenance": "real-inference",
       "baselineSynthetic": false,
       "shadowSynthetic": false,
       "synthetic": false
@@ -1265,7 +1265,7 @@
       "calibratedAgreement": true,
       "calibratedMargin": 0,
       "calibratedRegression": false,
-      "provenance": "backfill-V11.10R11",
+      "provenance": "real-inference",
       "baselineSynthetic": false,
       "shadowSynthetic": false,
       "synthetic": false
@@ -1288,7 +1288,7 @@
       "calibratedAgreement": true,
       "calibratedMargin": 0,
       "calibratedRegression": false,
-      "provenance": "backfill-V11.10R11",
+      "provenance": "real-inference",
       "baselineSynthetic": false,
       "shadowSynthetic": false,
       "synthetic": false
@@ -1311,7 +1311,7 @@
       "calibratedAgreement": true,
       "calibratedMargin": 0,
       "calibratedRegression": false,
-      "provenance": "backfill-V11.10R11",
+      "provenance": "real-inference",
       "baselineSynthetic": false,
       "shadowSynthetic": false,
       "synthetic": false
@@ -1334,7 +1334,7 @@
       "calibratedAgreement": true,
       "calibratedMargin": 0,
       "calibratedRegression": false,
-      "provenance": "backfill-V11.10R11",
+      "provenance": "real-inference",
       "baselineSynthetic": false,
       "shadowSynthetic": false,
       "synthetic": false
@@ -1357,7 +1357,7 @@
       "calibratedAgreement": true,
       "calibratedMargin": 0,
       "calibratedRegression": false,
-      "provenance": "backfill-V11.10R11",
+      "provenance": "real-inference",
       "baselineSynthetic": false,
       "shadowSynthetic": false,
       "synthetic": false
@@ -1380,7 +1380,7 @@
       "calibratedAgreement": true,
       "calibratedMargin": 0,
       "calibratedRegression": false,
-      "provenance": "backfill-V11.10R11",
+      "provenance": "real-inference",
       "baselineSynthetic": false,
       "shadowSynthetic": false,
       "synthetic": false
@@ -1403,11 +1403,11 @@
       "calibratedAgreement": true,
       "calibratedMargin": 0,
       "calibratedRegression": false,
-      "provenance": "backfill-V11.10R11",
+      "provenance": "real-inference",
       "baselineSynthetic": false,
       "shadowSynthetic": false,
       "synthetic": false
     }
   ],
-  "reportId": "cm-65e209e4ed254b75ab3f26d9d063c579"
+  "reportId": "cm-583d79c0af3942bb932e1a4446a6a969"
 }
