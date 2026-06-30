@@ -1,5 +1,5 @@
 {
-  "GeneratedAt": "2026-06-30T09:50:50.0663885+00:00",
+  "GeneratedAt": "2026-06-30T10:07:08.5412939+00:00",
   "ScoresComparable": false,
   "MetricMismatchDetected": true,
   "BaselineMetric": "positiveScore",
@@ -9,7 +9,7 @@
   "ShadowSource": "candidate-reranker-shadow-eval-a3.json SampleResults.FormalMrr/ShadowMrr",
   "ShadowSemantics": "Aggregate ranked-list retrieval MRR scaled to 0-100. Measures overall retrieval ranking quality across all candidates.",
   "ComparabilityAnalysis": "Baseline measures per-pair feature quality; shadow measures aggregate retrieval quality. Same numeric range (0-100) but different levels of abstraction. Direct comparison is a category error.",
-  "RegressionCountRaw": 11,
+  "RegressionCountRaw": 41,
   "RegressionCountComparable": 0,
   "NormalizationRequired": "Both metrics need to be mapped to a common regret-aligned scale before comparison.",
   "Recommendation": "Use a common metric (e.g. both expressed as recall@k or precision@k) or apply calibration/normalization.",

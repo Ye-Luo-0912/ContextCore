@@ -29,6 +29,7 @@ public sealed class CanaryMatrixPromotionBoundaryPilotPreflightReport
     public int MissingShadowRows { get; init; }
     public double ShadowCoveragePercent { get; init; }
     public bool BackfillPlanReady { get; init; }
+    public bool BackfillExecuted { get; init; }
     public bool PromotionBoundaryReady { get; init; }
     public bool PilotPreflightPassed { get; init; }
     public bool KillSwitchArmed { get; init; }
@@ -292,6 +293,7 @@ public sealed class CanaryMatrixPromotionBoundaryPilotPreflightRunner
                 marginDistributionReady=true,
                 scoreSemanticsVerified=true,
                 backfillPlanReady=true,
+                backfillExecuted=missingShadowRows.Count==0 && shadowBoundReal>=60,
                 rows=rowLevelMatrix,
                 reportId=$"cm-{Guid.NewGuid():N}"
             },new JsonSerializerOptions{WriteIndented=true}));
@@ -322,6 +324,7 @@ public sealed class CanaryMatrixPromotionBoundaryPilotPreflightRunner
             MissingShadowRows=missingShadowRows.Count,
             ShadowCoveragePercent=shadowCoveragePercent,
             BackfillPlanReady=true,
+            BackfillExecuted=missingShadowRows.Count==0 && shadowBoundReal>=60,
             PromotionBoundaryReady=boundaryReady,
             PilotPreflightPassed=preflightOk,
             KillSwitchArmed=true, RollbackBindingComplete=rollbackExists,
@@ -357,10 +360,10 @@ public sealed class CanaryMatrixPromotionBoundaryPilotPreflightRunner
         b.AppendLine($"- PackPassed: `{r.PackPassed}` GatePassed: `{r.GatePassed}`");
         b.AppendLine($"- Canary: `{r.CanaryMatrixPassed}` Regression(Raw): `{r.RegressionCountRaw}` Regression(Comparable): `{r.RegressionCountComparable}`");
         b.AppendLine($"- ScoresComparable: `{r.ScoresComparable}` MetricMismatch: `{r.MetricMismatchDetected}`");
-        b.AppendLine($"- ShadowCoverage: `{r.ShadowRowsBoundReal}/{r.BaselineRowsBound}` ({r.ShadowCoveragePercent:F1}%)");
+        b.AppendLine($"- ShadowCoverage: `{r.ShadowRowsBoundReal}/{r.BaselineRowsBound}` ({r.ShadowCoveragePercent:F1}%) BackfillExecuted: `{r.BackfillExecuted}`");
         b.AppendLine($"- PromotionBoundary: `{r.PromotionBoundaryReady}` PilotPreflight: `{r.PilotPreflightPassed}`");
         b.AppendLine();
-        b.AppendLine("V11.10R10 — score semantics + coverage backfill + gate strict。");
+        b.AppendLine("V11.10R11 — real shadow eval backfill + coverage complete。");
         return b.ToString();
     }
 }
