@@ -1,5 +1,5 @@
 {
-  "pilotPreflightPassed": true,
+  "pilotPreflightPassed": false,
   "scopeVerified": true,
   "killSwitchArmed": true,
   "rollbackBindingComplete": true,
@@ -7,5 +7,5 @@
   "runtimeNoOp": true,
   "runtimeHashBefore": "583762c58d9b261848ff2a8f212c4b2b27ff60be003198a6ca49628eb244a198",
   "runtimeHashAfter": "583762c58d9b261848ff2a8f212c4b2b27ff60be003198a6ca49628eb244a198",
-  "reportId": "ppf-3a0edf4ca08747388d33563154b8be13"
+  "reportId": "ppf-18e04c40ff7f45fbaf8d1cfd6c450ac3"
 }

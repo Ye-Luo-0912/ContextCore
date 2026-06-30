@@ -1,15 +1,238 @@
 {
-  "canaryMatrixPassed": true,
+  "canaryMatrixPassed": false,
   "totalRows": 60,
   "rowLevelMatrixCount": 60,
   "regressionCount": 11,
-  "agreementScore": 81.7,
-  "scoringRowsBound": "60/60",
+  "agreementScore": 20,
+  "scoringRowsBound": "60/23",
   "baselineRowsBound": 60,
-  "shadowRowsBound": 60,
-  "syntheticScoreCount": 0,
-  "missingShadowRows": [],
-  "missingShadowRowCount": 0,
+  "shadowRowsBound": 23,
+  "syntheticScoreCount": 37,
+  "missingShadowRows": [
+    {
+      "sampleId": "flc-r1-0003-automation-20260529-001",
+      "taskKind": "automation",
+      "evidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=automation-20260529-001",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0004-automation-20260529-002",
+      "taskKind": "automation",
+      "evidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=automation-20260529-002",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0005-automation-20260529-003",
+      "taskKind": "automation",
+      "evidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=automation-20260529-003",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0006-automation-20260529-004",
+      "taskKind": "automation",
+      "evidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=automation-20260529-004",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0007-automation-20260529-005",
+      "taskKind": "automation",
+      "evidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=automation-20260529-005",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0008-automation-20260529-006",
+      "taskKind": "automation",
+      "evidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=automation-20260529-006",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0009-automation-20260529-007",
+      "taskKind": "automation",
+      "evidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=automation-20260529-007",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0010-automation-20260529-008",
+      "taskKind": "automation",
+      "evidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=automation-20260529-008",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0011-automation-20260529-009",
+      "taskKind": "automation",
+      "evidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=automation-20260529-009",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0012-automation-20260529-010",
+      "taskKind": "automation",
+      "evidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=automation-20260529-010",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0023-chat-20260529-001",
+      "taskKind": "chat",
+      "evidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-20260529-001",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0024-chat-20260529-002",
+      "taskKind": "chat",
+      "evidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-20260529-002",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0025-chat-20260529-003",
+      "taskKind": "chat",
+      "evidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-20260529-003",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0026-chat-20260529-004",
+      "taskKind": "chat",
+      "evidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-20260529-004",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0027-chat-20260529-005",
+      "taskKind": "chat",
+      "evidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-20260529-005",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0028-chat-20260529-006",
+      "taskKind": "chat",
+      "evidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-20260529-006",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0029-chat-20260529-007",
+      "taskKind": "chat",
+      "evidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-20260529-007",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0030-chat-20260529-008",
+      "taskKind": "chat",
+      "evidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-20260529-008",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0031-chat-20260529-009",
+      "taskKind": "chat",
+      "evidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-20260529-009",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0032-chat-20260529-010",
+      "taskKind": "chat",
+      "evidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-20260529-010",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0033-chat-20260529-011",
+      "taskKind": "chat",
+      "evidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-20260529-011",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0034-chat-20260529-012",
+      "taskKind": "chat",
+      "evidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-20260529-012",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0035-chat-20260529-013",
+      "taskKind": "chat",
+      "evidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-20260529-013",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0036-chat-20260529-014",
+      "taskKind": "chat",
+      "evidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-20260529-014",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0037-chat-20260529-015",
+      "taskKind": "chat",
+      "evidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-20260529-015",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0038-chat-20260529-016",
+      "taskKind": "chat",
+      "evidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-20260529-016",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0039-chat-20260529-017",
+      "taskKind": "chat",
+      "evidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-20260529-017",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0040-chat-20260529-018",
+      "taskKind": "chat",
+      "evidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-20260529-018",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0041-chat-20260529-019",
+      "taskKind": "chat",
+      "evidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-20260529-019",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0042-chat-20260529-020",
+      "taskKind": "chat",
+      "evidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=chat-20260529-020",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0053-coding-20260529-001",
+      "taskKind": "coding",
+      "evidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=coding-20260529-001",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0054-coding-20260529-002",
+      "taskKind": "coding",
+      "evidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=coding-20260529-002",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0055-coding-20260529-003",
+      "taskKind": "coding",
+      "evidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=coding-20260529-003",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0056-coding-20260529-004",
+      "taskKind": "coding",
+      "evidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=coding-20260529-004",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0057-coding-20260529-005",
+      "taskKind": "coding",
+      "evidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=coding-20260529-005",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0058-coding-20260529-006",
+      "taskKind": "coding",
+      "evidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=coding-20260529-006",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0059-coding-20260529-007",
+      "taskKind": "coding",
+      "evidencePath": "learning/features/ranking-pairs.jsonl#evalSampleId=coding-20260529-007",
+      "missingReason": "NoShadowEvalMatch"
+    }
+  ],
+  "missingShadowRowCount": 37,
   "marginDistributionReady": true,
   "rows": [
     {
@@ -52,121 +275,121 @@
       "sampleId": "flc-r1-0003-automation-20260529-001",
       "taskKind": "automation",
       "baselineDecision": "PositiveOverNegative",
-      "shadowDecision": "PositiveOverNegative",
-      "agreement": true,
-      "margin": 0.07,
+      "shadowDecision": "Mismatch",
+      "agreement": false,
+      "margin": 0.01,
       "regression": false,
       "baselineScore": 123.60999207,
-      "shadowScore": 123.67999207,
-      "synthetic": false
+      "shadowScore": 123.61999207000001,
+      "synthetic": true
     },
     {
       "sampleId": "flc-r1-0004-automation-20260529-002",
       "taskKind": "automation",
       "baselineDecision": "PositiveOverNegative",
-      "shadowDecision": "PositiveOverNegative",
-      "agreement": true,
-      "margin": 0.1,
+      "shadowDecision": "Mismatch",
+      "agreement": false,
+      "margin": 0.01,
       "regression": false,
       "baselineScore": 56.2,
-      "shadowScore": 56.300000000000004,
-      "synthetic": false
+      "shadowScore": 56.21,
+      "synthetic": true
     },
     {
       "sampleId": "flc-r1-0005-automation-20260529-003",
       "taskKind": "automation",
       "baselineDecision": "PositiveOverNegative",
-      "shadowDecision": "PositiveOverNegative",
-      "agreement": true,
-      "margin": 0.09,
+      "shadowDecision": "Mismatch",
+      "agreement": false,
+      "margin": 0.01,
       "regression": false,
       "baselineScore": 43.3,
-      "shadowScore": 43.39,
-      "synthetic": false
+      "shadowScore": 43.309999999999995,
+      "synthetic": true
     },
     {
       "sampleId": "flc-r1-0006-automation-20260529-004",
       "taskKind": "automation",
       "baselineDecision": "PositiveOverNegative",
-      "shadowDecision": "PositiveOverNegative",
-      "agreement": true,
-      "margin": 0.1,
+      "shadowDecision": "Mismatch",
+      "agreement": false,
+      "margin": 0.01,
       "regression": false,
       "baselineScore": 93.41499028,
-      "shadowScore": 93.51499027999999,
-      "synthetic": false
+      "shadowScore": 93.42499028,
+      "synthetic": true
     },
     {
       "sampleId": "flc-r1-0007-automation-20260529-005",
       "taskKind": "automation",
       "baselineDecision": "PositiveOverNegative",
-      "shadowDecision": "PositiveOverNegative",
-      "agreement": true,
-      "margin": 0.1,
+      "shadowDecision": "Mismatch",
+      "agreement": false,
+      "margin": 0.01,
       "regression": false,
       "baselineScore": 111.05,
-      "shadowScore": 111.14999999999999,
-      "synthetic": false
+      "shadowScore": 111.06,
+      "synthetic": true
     },
     {
       "sampleId": "flc-r1-0008-automation-20260529-006",
       "taskKind": "automation",
       "baselineDecision": "PositiveOverNegative",
-      "shadowDecision": "PositiveOverNegative",
-      "agreement": true,
-      "margin": 0.03,
+      "shadowDecision": "Mismatch",
+      "agreement": false,
+      "margin": 0.01,
       "regression": false,
       "baselineScore": 76.2,
-      "shadowScore": 76.23,
-      "synthetic": false
+      "shadowScore": 76.21000000000001,
+      "synthetic": true
     },
     {
       "sampleId": "flc-r1-0009-automation-20260529-007",
       "taskKind": "automation",
       "baselineDecision": "PositiveOverNegative",
-      "shadowDecision": "PositiveOverNegative",
-      "agreement": true,
-      "margin": 0.1,
+      "shadowDecision": "Mismatch",
+      "agreement": false,
+      "margin": 0.01,
       "regression": false,
       "baselineScore": 66.1,
-      "shadowScore": 66.19999999999999,
-      "synthetic": false
+      "shadowScore": 66.11,
+      "synthetic": true
     },
     {
       "sampleId": "flc-r1-0010-automation-20260529-008",
       "taskKind": "automation",
       "baselineDecision": "PositiveOverNegative",
-      "shadowDecision": "PositiveOverNegative",
-      "agreement": true,
-      "margin": 0.09,
+      "shadowDecision": "Mismatch",
+      "agreement": false,
+      "margin": 0.01,
       "regression": false,
       "baselineScore": 91.05,
-      "shadowScore": 91.14,
-      "synthetic": false
+      "shadowScore": 91.06,
+      "synthetic": true
     },
     {
       "sampleId": "flc-r1-0011-automation-20260529-009",
       "taskKind": "automation",
       "baselineDecision": "PositiveOverNegative",
-      "shadowDecision": "PositiveOverNegative",
-      "agreement": true,
-      "margin": 0.02,
+      "shadowDecision": "Mismatch",
+      "agreement": false,
+      "margin": 0.01,
       "regression": false,
       "baselineScore": 105.9,
-      "shadowScore": 105.92,
-      "synthetic": false
+      "shadowScore": 105.91000000000001,
+      "synthetic": true
     },
     {
       "sampleId": "flc-r1-0012-automation-20260529-010",
       "taskKind": "automation",
       "baselineDecision": "PositiveOverNegative",
-      "shadowDecision": "PositiveOverNegative",
-      "agreement": true,
-      "margin": 0.07,
+      "shadowDecision": "Mismatch",
+      "agreement": false,
+      "margin": 0.01,
       "regression": false,
       "baselineScore": 88.46498653,
-      "shadowScore": 88.53498653,
-      "synthetic": false
+      "shadowScore": 88.47498653000001,
+      "synthetic": true
     },
     {
       "sampleId": "flc-r1-0013-automation-sample-001",
@@ -292,241 +515,241 @@
       "sampleId": "flc-r1-0023-chat-20260529-001",
       "taskKind": "chat",
       "baselineDecision": "PositiveOverNegative",
-      "shadowDecision": "PositiveOverNegative",
-      "agreement": true,
-      "margin": 0.02,
+      "shadowDecision": "Mismatch",
+      "agreement": false,
+      "margin": 0.01,
       "regression": false,
       "baselineScore": 35.1,
-      "shadowScore": 35.120000000000005,
-      "synthetic": false
+      "shadowScore": 35.11,
+      "synthetic": true
     },
     {
       "sampleId": "flc-r1-0024-chat-20260529-002",
       "taskKind": "chat",
       "baselineDecision": "PositiveOverNegative",
-      "shadowDecision": "PositiveOverNegative",
-      "agreement": true,
+      "shadowDecision": "Mismatch",
+      "agreement": false,
       "margin": 0.01,
       "regression": false,
       "baselineScore": 36.85,
       "shadowScore": 36.86,
-      "synthetic": false
+      "synthetic": true
     },
     {
       "sampleId": "flc-r1-0025-chat-20260529-003",
       "taskKind": "chat",
       "baselineDecision": "PositiveOverNegative",
-      "shadowDecision": "PositiveOverNegative",
-      "agreement": true,
-      "margin": 0.07,
+      "shadowDecision": "Mismatch",
+      "agreement": false,
+      "margin": 0.01,
       "regression": false,
       "baselineScore": 36.65,
-      "shadowScore": 36.72,
-      "synthetic": false
+      "shadowScore": 36.66,
+      "synthetic": true
     },
     {
       "sampleId": "flc-r1-0026-chat-20260529-004",
       "taskKind": "chat",
       "baselineDecision": "PositiveOverNegative",
-      "shadowDecision": "PositiveOverNegative",
-      "agreement": true,
-      "margin": 0.03,
+      "shadowDecision": "Mismatch",
+      "agreement": false,
+      "margin": 0.01,
       "regression": false,
       "baselineScore": 126.15,
-      "shadowScore": 126.18,
-      "synthetic": false
+      "shadowScore": 126.16000000000001,
+      "synthetic": true
     },
     {
       "sampleId": "flc-r1-0027-chat-20260529-005",
       "taskKind": "chat",
       "baselineDecision": "PositiveOverNegative",
-      "shadowDecision": "PositiveOverNegative",
-      "agreement": true,
-      "margin": 0.07,
+      "shadowDecision": "Mismatch",
+      "agreement": false,
+      "margin": 0.01,
       "regression": false,
       "baselineScore": 55.8,
-      "shadowScore": 55.87,
-      "synthetic": false
+      "shadowScore": 55.809999999999995,
+      "synthetic": true
     },
     {
       "sampleId": "flc-r1-0028-chat-20260529-006",
       "taskKind": "chat",
       "baselineDecision": "PositiveOverNegative",
-      "shadowDecision": "PositiveOverNegative",
-      "agreement": true,
-      "margin": 0.09,
+      "shadowDecision": "Mismatch",
+      "agreement": false,
+      "margin": 0.01,
       "regression": false,
       "baselineScore": 96.45,
-      "shadowScore": 96.54,
-      "synthetic": false
+      "shadowScore": 96.46000000000001,
+      "synthetic": true
     },
     {
       "sampleId": "flc-r1-0029-chat-20260529-007",
       "taskKind": "chat",
       "baselineDecision": "PositiveOverNegative",
-      "shadowDecision": "PositiveOverNegative",
-      "agreement": true,
-      "margin": 0.06,
+      "shadowDecision": "Mismatch",
+      "agreement": false,
+      "margin": 0.01,
       "regression": false,
       "baselineScore": 98.3,
-      "shadowScore": 98.36,
-      "synthetic": false
+      "shadowScore": 98.31,
+      "synthetic": true
     },
     {
       "sampleId": "flc-r1-0030-chat-20260529-008",
       "taskKind": "chat",
       "baselineDecision": "PositiveOverNegative",
-      "shadowDecision": "PositiveOverNegative",
-      "agreement": true,
+      "shadowDecision": "Mismatch",
+      "agreement": false,
       "margin": 0.01,
       "regression": false,
       "baselineScore": 61.15,
       "shadowScore": 61.16,
-      "synthetic": false
+      "synthetic": true
     },
     {
       "sampleId": "flc-r1-0031-chat-20260529-009",
       "taskKind": "chat",
       "baselineDecision": "PositiveOverNegative",
-      "shadowDecision": "PositiveOverNegative",
-      "agreement": true,
+      "shadowDecision": "Mismatch",
+      "agreement": false,
       "margin": 0.01,
       "regression": false,
       "baselineScore": 63.3,
       "shadowScore": 63.309999999999995,
-      "synthetic": false
+      "synthetic": true
     },
     {
       "sampleId": "flc-r1-0032-chat-20260529-010",
       "taskKind": "chat",
       "baselineDecision": "PositiveOverNegative",
-      "shadowDecision": "PositiveOverNegative",
-      "agreement": true,
-      "margin": 0.09,
+      "shadowDecision": "Mismatch",
+      "agreement": false,
+      "margin": 0.01,
       "regression": false,
       "baselineScore": 107.4,
-      "shadowScore": 107.49000000000001,
-      "synthetic": false
+      "shadowScore": 107.41000000000001,
+      "synthetic": true
     },
     {
       "sampleId": "flc-r1-0033-chat-20260529-011",
       "taskKind": "chat",
       "baselineDecision": "PositiveOverNegative",
-      "shadowDecision": "PositiveOverNegative",
-      "agreement": true,
-      "margin": 0.02,
+      "shadowDecision": "Mismatch",
+      "agreement": false,
+      "margin": 0.01,
       "regression": false,
       "baselineScore": 61.15,
-      "shadowScore": 61.17,
-      "synthetic": false
+      "shadowScore": 61.16,
+      "synthetic": true
     },
     {
       "sampleId": "flc-r1-0034-chat-20260529-012",
       "taskKind": "chat",
       "baselineDecision": "PositiveOverNegative",
-      "shadowDecision": "PositiveOverNegative",
-      "agreement": true,
-      "margin": 0.04,
+      "shadowDecision": "Mismatch",
+      "agreement": false,
+      "margin": 0.01,
       "regression": false,
       "baselineScore": 49.4,
-      "shadowScore": 49.44,
-      "synthetic": false
+      "shadowScore": 49.41,
+      "synthetic": true
     },
     {
       "sampleId": "flc-r1-0035-chat-20260529-013",
       "taskKind": "chat",
       "baselineDecision": "PositiveOverNegative",
-      "shadowDecision": "PositiveOverNegative",
-      "agreement": true,
-      "margin": 0.05,
+      "shadowDecision": "Mismatch",
+      "agreement": false,
+      "margin": 0.01,
       "regression": false,
       "baselineScore": 61.15,
-      "shadowScore": 61.199999999999996,
-      "synthetic": false
+      "shadowScore": 61.16,
+      "synthetic": true
     },
     {
       "sampleId": "flc-r1-0036-chat-20260529-014",
       "taskKind": "chat",
       "baselineDecision": "PositiveOverNegative",
-      "shadowDecision": "PositiveOverNegative",
-      "agreement": true,
+      "shadowDecision": "Mismatch",
+      "agreement": false,
       "margin": 0.01,
       "regression": false,
       "baselineScore": 70.85,
       "shadowScore": 70.86,
-      "synthetic": false
+      "synthetic": true
     },
     {
       "sampleId": "flc-r1-0037-chat-20260529-015",
       "taskKind": "chat",
       "baselineDecision": "PositiveOverNegative",
-      "shadowDecision": "PositiveOverNegative",
-      "agreement": true,
-      "margin": 0.05,
+      "shadowDecision": "Mismatch",
+      "agreement": false,
+      "margin": 0.01,
       "regression": false,
       "baselineScore": 91.9,
-      "shadowScore": 91.95,
-      "synthetic": false
+      "shadowScore": 91.91000000000001,
+      "synthetic": true
     },
     {
       "sampleId": "flc-r1-0038-chat-20260529-016",
       "taskKind": "chat",
       "baselineDecision": "PositiveOverNegative",
-      "shadowDecision": "PositiveOverNegative",
-      "agreement": true,
+      "shadowDecision": "Mismatch",
+      "agreement": false,
       "margin": 0.01,
       "regression": false,
       "baselineScore": 120.15,
       "shadowScore": 120.16000000000001,
-      "synthetic": false
+      "synthetic": true
     },
     {
       "sampleId": "flc-r1-0039-chat-20260529-017",
       "taskKind": "chat",
       "baselineDecision": "PositiveOverNegative",
-      "shadowDecision": "PositiveOverNegative",
-      "agreement": true,
-      "margin": 0.05,
+      "shadowDecision": "Mismatch",
+      "agreement": false,
+      "margin": 0.01,
       "regression": false,
       "baselineScore": 98.7,
-      "shadowScore": 98.75,
-      "synthetic": false
+      "shadowScore": 98.71000000000001,
+      "synthetic": true
     },
     {
       "sampleId": "flc-r1-0040-chat-20260529-018",
       "taskKind": "chat",
       "baselineDecision": "PositiveOverNegative",
-      "shadowDecision": "PositiveOverNegative",
-      "agreement": true,
+      "shadowDecision": "Mismatch",
+      "agreement": false,
       "margin": 0.01,
       "regression": false,
       "baselineScore": 66.1,
       "shadowScore": 66.11,
-      "synthetic": false
+      "synthetic": true
     },
     {
       "sampleId": "flc-r1-0041-chat-20260529-019",
       "taskKind": "chat",
       "baselineDecision": "PositiveOverNegative",
-      "shadowDecision": "PositiveOverNegative",
-      "agreement": true,
-      "margin": 0.03,
+      "shadowDecision": "Mismatch",
+      "agreement": false,
+      "margin": 0.01,
       "regression": false,
       "baselineScore": 91.05,
-      "shadowScore": 91.08,
-      "synthetic": false
+      "shadowScore": 91.06,
+      "synthetic": true
     },
     {
       "sampleId": "flc-r1-0042-chat-20260529-020",
       "taskKind": "chat",
       "baselineDecision": "PositiveOverNegative",
-      "shadowDecision": "PositiveOverNegative",
-      "agreement": true,
-      "margin": 0.05,
+      "shadowDecision": "Mismatch",
+      "agreement": false,
+      "margin": 0.01,
       "regression": false,
       "baselineScore": 100.75,
-      "shadowScore": 100.8,
-      "synthetic": false
+      "shadowScore": 100.76,
+      "synthetic": true
     },
     {
       "sampleId": "flc-r1-0043-chat-sample-001",
@@ -652,86 +875,86 @@
       "sampleId": "flc-r1-0053-coding-20260529-001",
       "taskKind": "coding",
       "baselineDecision": "PositiveOverNegative",
-      "shadowDecision": "PositiveOverNegative",
-      "agreement": true,
-      "margin": 0.1,
+      "shadowDecision": "Mismatch",
+      "agreement": false,
+      "margin": 0.01,
       "regression": false,
       "baselineScore": 36.85,
-      "shadowScore": 36.95,
-      "synthetic": false
+      "shadowScore": 36.86,
+      "synthetic": true
     },
     {
       "sampleId": "flc-r1-0054-coding-20260529-002",
       "taskKind": "coding",
       "baselineDecision": "PositiveOverNegative",
-      "shadowDecision": "PositiveOverNegative",
-      "agreement": true,
-      "margin": 0.02,
+      "shadowDecision": "Mismatch",
+      "agreement": false,
+      "margin": 0.01,
       "regression": false,
       "baselineScore": 43.3,
-      "shadowScore": 43.32,
-      "synthetic": false
+      "shadowScore": 43.309999999999995,
+      "synthetic": true
     },
     {
       "sampleId": "flc-r1-0055-coding-20260529-003",
       "taskKind": "coding",
       "baselineDecision": "PositiveOverNegative",
-      "shadowDecision": "PositiveOverNegative",
-      "agreement": true,
-      "margin": 0.09,
+      "shadowDecision": "Mismatch",
+      "agreement": false,
+      "margin": 0.01,
       "regression": false,
       "baselineScore": 56.4,
-      "shadowScore": 56.49,
-      "synthetic": false
+      "shadowScore": 56.41,
+      "synthetic": true
     },
     {
       "sampleId": "flc-r1-0056-coding-20260529-004",
       "taskKind": "coding",
       "baselineDecision": "PositiveOverNegative",
-      "shadowDecision": "PositiveOverNegative",
-      "agreement": true,
-      "margin": 0.1,
+      "shadowDecision": "Mismatch",
+      "agreement": false,
+      "margin": 0.01,
       "regression": false,
       "baselineScore": 81.15,
-      "shadowScore": 81.25,
-      "synthetic": false
+      "shadowScore": 81.16000000000001,
+      "synthetic": true
     },
     {
       "sampleId": "flc-r1-0057-coding-20260529-005",
       "taskKind": "coding",
       "baselineDecision": "PositiveOverNegative",
-      "shadowDecision": "PositiveOverNegative",
-      "agreement": true,
-      "margin": 0.05,
+      "shadowDecision": "Mismatch",
+      "agreement": false,
+      "margin": 0.01,
       "regression": false,
       "baselineScore": 96,
-      "shadowScore": 96.05,
-      "synthetic": false
+      "shadowScore": 96.01,
+      "synthetic": true
     },
     {
       "sampleId": "flc-r1-0058-coding-20260529-006",
       "taskKind": "coding",
       "baselineDecision": "PositiveOverNegative",
-      "shadowDecision": "PositiveOverNegative",
-      "agreement": true,
-      "margin": 0.1,
+      "shadowDecision": "Mismatch",
+      "agreement": false,
+      "margin": 0.01,
       "regression": false,
       "baselineScore": 85.15,
-      "shadowScore": 85.25,
-      "synthetic": false
+      "shadowScore": 85.16000000000001,
+      "synthetic": true
     },
     {
       "sampleId": "flc-r1-0059-coding-20260529-007",
       "taskKind": "coding",
       "baselineDecision": "PositiveOverNegative",
-      "shadowDecision": "PositiveOverNegative",
-      "agreement": true,
-      "margin": 0.08,
+      "shadowDecision": "Mismatch",
+      "agreement": false,
+      "margin": 0.01,
       "regression": false,
       "baselineScore": 65.25,
-      "shadowScore": 65.33,
-      "synthetic": false
+      "shadowScore": 65.26,
+      "synthetic": true
     }
   ],
-  "reportId": "cm-25353bd221514f3a8ac281780a2dcd9f"
+  "reportId": "cm-91ede03b46bb4a9fa84ac64d53b75cf8"
 }
