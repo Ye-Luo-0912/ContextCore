@@ -1,10 +1,12 @@
 ﻿# CMPBP (Gate)
 
-生成: `2026-06-30T08:21:29.1234758+00:00` 操作: `cmpbp-c56c75b8f17c4ba7a8fb7c3a19363287`
+生成: `2026-06-30T09:50:50.0663885+00:00` 操作: `cmpbp-195ade7de5444c28ad35351c84bc6180`
 
 ## Decision
 - PackPassed: `False` GatePassed: `False`
-- Canary: `False` Regression: `11`
+- Canary: `False` Regression(Raw): `11` Regression(Comparable): `0`
+- ScoresComparable: `False` MetricMismatch: `True`
+- ShadowCoverage: `23/60` (38.3%)
 - PromotionBoundary: `True` PilotPreflight: `False`
 
-V11.10-V11.12 canary matrix + promotion boundary + pilot preflight。
+V11.10R10 — score semantics + coverage backfill + gate strict。

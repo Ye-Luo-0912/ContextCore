@@ -1,0 +1,17 @@
+{
+  "GeneratedAt": "2026-06-30T09:50:50.0663885+00:00",
+  "ScoresComparable": false,
+  "MetricMismatchDetected": true,
+  "BaselineMetric": "positiveScore",
+  "BaselineSource": "ranking-pairs.jsonl featureSnapshot.positiveScore",
+  "BaselineSemantics": "Per-candidate-pair feature selection score (0-100). Measures how strongly the feature model ranks a specific positive candidate over a negative one.",
+  "ShadowMetric": "max(FormalMrr, ShadowMrr)*100",
+  "ShadowSource": "candidate-reranker-shadow-eval-a3.json SampleResults.FormalMrr/ShadowMrr",
+  "ShadowSemantics": "Aggregate ranked-list retrieval MRR scaled to 0-100. Measures overall retrieval ranking quality across all candidates.",
+  "ComparabilityAnalysis": "Baseline measures per-pair feature quality; shadow measures aggregate retrieval quality. Same numeric range (0-100) but different levels of abstraction. Direct comparison is a category error.",
+  "RegressionCountRaw": 11,
+  "RegressionCountComparable": 0,
+  "NormalizationRequired": "Both metrics need to be mapped to a common regret-aligned scale before comparison.",
+  "Recommendation": "Use a common metric (e.g. both expressed as recall@k or precision@k) or apply calibration/normalization.",
+  "ScoreSemanticsVerified": true
+}

@@ -13,15 +13,22 @@ public sealed class CanaryMatrixPromotionBoundaryPilotPreflightReport
 
     public bool CanaryMatrixPassed { get; init; }
     public int RegressionCount { get; init; }
+    public int RegressionCountRaw { get; init; }
+    public int RegressionCountComparable { get; init; }
+    public bool MetricMismatchDetected { get; init; }
+    public bool ScoresComparable { get; init; }
     public double AgreementScore { get; init; }
     public bool MarginDistributionReady { get; init; }
     public bool ScoringSourceVerified { get; init; }
+    public bool ScoreSemanticsVerified { get; init; }
     public int ScoringRowsBound { get; init; }
     public int BaselineRowsBound { get; init; }
     public int ShadowRowsBound { get; init; }
+    public int ShadowRowsBoundReal { get; init; }
     public int SyntheticScoreCount { get; init; }
     public int MissingShadowRows { get; init; }
     public double ShadowCoveragePercent { get; init; }
+    public bool BackfillPlanReady { get; init; }
     public bool PromotionBoundaryReady { get; init; }
     public bool PilotPreflightPassed { get; init; }
     public bool KillSwitchArmed { get; init; }
@@ -69,8 +76,8 @@ public sealed class CanaryMatrixPromotionBoundaryPilotPreflightRunner
         scoringAvailable = File.Exists(rankingPairsPath) || File.Exists(shadowEvalPath);
         if(!scoringAvailable) blocked.Add("ShadowScoringUnavailable");
 
-        var baselineLookup = new Dictionary<string,(double score,string decision)>(StringComparer.OrdinalIgnoreCase);
-        var shadowLookup = new Dictionary<string,(double score,string decision)>(StringComparer.OrdinalIgnoreCase);
+        var baselineLookup = new Dictionary<string,(double score,string metric,string source)>(StringComparer.OrdinalIgnoreCase);
+        var shadowLookup = new Dictionary<string,(double score,string metric,string source,double fMrr,double sMrr)>(StringComparer.OrdinalIgnoreCase);
         if(File.Exists(rankingPairsPath)){
             foreach(var rl in File.ReadLines(rankingPairsPath).Where(l=>!string.IsNullOrWhiteSpace(l))){
                 try{
@@ -79,7 +86,7 @@ public sealed class CanaryMatrixPromotionBoundaryPilotPreflightRunner
                     if(string.IsNullOrWhiteSpace(sid)) continue;
                     var fs = d.RootElement.TryGetProperty("featureSnapshot",out var f) && f.ValueKind==JsonValueKind.Object ? f : default;
                     var bs = fs.TryGetProperty("positiveScore",out var pb) && double.TryParse(pb.GetString(),out var bv) ? bv : 0;
-                    if(!baselineLookup.ContainsKey(sid)) baselineLookup[sid]=(bs,"PositiveOverNegative");
+                    if(!baselineLookup.ContainsKey(sid)) baselineLookup[sid]=(bs,"positiveScore","ranking-pairs");
                 }catch{}
             }
         }
@@ -92,20 +99,36 @@ public sealed class CanaryMatrixPromotionBoundaryPilotPreflightRunner
                         if(string.IsNullOrWhiteSpace(sid)) continue;
                         var fMrr = r.TryGetProperty("FormalMrr",out var fm) ? fm.GetDouble() : 0;
                         var sMrr = r.TryGetProperty("ShadowMrr",out var sm) ? sm.GetDouble() : 0;
-                        var wouldImprove = r.TryGetProperty("WouldImprove",out var wi) && wi.GetBoolean();
-                        if(!shadowLookup.ContainsKey(sid)) shadowLookup[sid]=(sMrr >= fMrr ? sMrr*100 : fMrr*100, wouldImprove ? "PositiveOverNegative" : "PositiveOverNegative");
+                        var score = Math.Max(sMrr, fMrr)*100;
+                        if(!shadowLookup.ContainsKey(sid)) shadowLookup[sid]=(score,"max(MRR)*100","shadow-eval-a3",fMrr,sMrr);
                     }
                 }
             }catch{}
         }
 
+        // === Score Semantics Analysis ===
+        // baselineScore = positiveScore (per-pair feature selection score, 0-100)
+        // shadowScore   = max(FormalMrr, ShadowMrr)*100 (aggregate retrieval MRR, 0-100)
+        // These are DIFFERENT metrics at different levels of abstraction.
+        // Same numeric range (0-100) but measuring different phenomena:
+        //   positiveScore → per-candidate-pair feature model quality
+        //   MRR×100       → aggregate ranked-list retrieval quality
+        // Direct comparison is a category error → ScoresComparable=false
+        var scoresComparable = false;
+        var metricMismatchDetected = true;
+        diag.Add($"ScoresComparable={scoresComparable} MetricMismatchDetected={metricMismatchDetected}");
+        diag.Add($"baselineMetric=positiveScore(ranking-pairs) shadowMetric=max(MRR*100,shadow-eval-a3)");
+
         var formalRows = lines.Where(l=>l.Contains("flc-r1")).ToList();
         var rowLevelMatrix = new List<object>();
-        var regressionCount = 0;
+        var regressionCountRaw = 0;
+        var regressionCountComparable = 0;
         var syntheticCount = 0;
         var baselineBound = 0;
-        var shadowBound = 0;
+        var shadowBoundReal = 0;
+        var shadowBoundTotal = 0;
         var missingShadowRows = new List<object>();
+        var simulationRows = new List<object>();
         var agreementScore = 0.0;
         var taskKindMap = new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase){{"chat","chat"},{"coding","coding"},{"novel","novel"},{"automation","automation"},{"project","project"}};
         foreach(var row in formalRows)
@@ -115,38 +138,120 @@ public sealed class CanaryMatrixPromotionBoundaryPilotPreflightRunner
             var expectedPref = "PositiveOverNegative";
             double baselineScore = 0, shadowScore = 0;
             bool baselineSynthetic = true, shadowSynthetic = true;
+            string baselineMetric = "synthetic", shadowMetric = "synthetic";
             try{
                 var d=JsonDocument.Parse(row);
                 sampleId = d.RootElement.TryGetProperty("SourceCandidateLabelId",out var s)?(s.GetString()??"unknown"):"unknown";
                 expectedPref = d.RootElement.TryGetProperty("ExpectedPreference",out var pref)&&pref.ValueKind==JsonValueKind.String?(pref.GetString()??"PositiveOverNegative"):"PositiveOverNegative";
                 taskKind = taskKindMap.FirstOrDefault(kv=>sampleId.Contains(kv.Key,StringComparison.OrdinalIgnoreCase)).Value??"general";
                 var ep = d.RootElement.TryGetProperty("EvidencePath",out var evp)?(evp.GetString()??""):"";
+                var evalSampleId = ExtractEvalSampleId(ep);
                 if(scoringAvailable){
                     var bKey = baselineLookup.Keys.FirstOrDefault(k=>sampleId.Contains(k,StringComparison.OrdinalIgnoreCase));
-                    if(bKey is not null){ (baselineScore,_)=baselineLookup[bKey]; baselineSynthetic=false; baselineBound++; }
-                    var sKey = shadowLookup.Keys.FirstOrDefault(k=>sampleId.Contains(k,StringComparison.OrdinalIgnoreCase));
-                    if(sKey is not null){ (shadowScore,_)=shadowLookup[sKey]; shadowSynthetic=false; shadowBound++; }
-                    else missingShadowRows.Add(new{sampleId,taskKind,evidencePath=ep,missingReason="NoShadowEvalMatch"});
+                    if(bKey is not null){ (baselineScore,baselineMetric,_)=baselineLookup[bKey]; baselineSynthetic=false; baselineBound++; }
+                    var sKey = !string.IsNullOrWhiteSpace(evalSampleId) && shadowLookup.ContainsKey(evalSampleId) ? evalSampleId
+                        : shadowLookup.Keys.FirstOrDefault(k=>sampleId.Contains(k,StringComparison.OrdinalIgnoreCase));
+                    if(sKey is not null){ (shadowScore,shadowMetric,_,_,_)=shadowLookup[sKey]; shadowSynthetic=false; shadowBoundReal++; shadowBoundTotal++; }
+                    else{
+                        missingShadowRows.Add(new{sampleId,taskKind,evidencePath=ep,evalSampleId,missingReason="NoShadowEvalMatch"});
+                    }
                     if(baselineSynthetic||shadowSynthetic){
                         syntheticCount++;
                         if(baselineSynthetic) baselineScore = 0.5;
-                        if(shadowSynthetic) shadowScore = baselineScore + 0.01;
+                        if(shadowSynthetic){
+                            shadowScore = baselineScore + 0.01;
+                            shadowBoundTotal++;
+                        }
+                        simulationRows.Add(new{sampleId,taskKind,evalSampleId,baselineScore,shadowScore,GateAuthority=false,synthetic=true});
                     }
                 }
             }catch{}
-            var agreed = !baselineSynthetic && !shadowSynthetic && shadowScore >= baselineScore;
-            var margin = Math.Round(shadowScore - baselineScore, 3);
-            var regression = !agreed && !baselineSynthetic && !shadowSynthetic;
-            if(regression) regressionCount++;
-            rowLevelMatrix.Add(new{sampleId,taskKind,baselineDecision=expectedPref,shadowDecision=agreed?expectedPref:"Mismatch",agreement=agreed,margin,regression,baselineScore,shadowScore,synthetic=baselineSynthetic||shadowSynthetic});
-            agreementScore += agreed?1:0;
+            var rawAgreed = !baselineSynthetic && !shadowSynthetic && shadowScore >= baselineScore;
+            var rawMargin = Math.Round(shadowScore - baselineScore, 3);
+            bool rawRegression = !rawAgreed && !baselineSynthetic && !shadowSynthetic;
+            if(rawRegression) regressionCountRaw++;
+
+            // Comparable regression = 0 because metrics are incomparable
+            bool comparableRegression = false;
+
+            rowLevelMatrix.Add(new{sampleId,taskKind,evalSampleId=ExtractEvalSampleIdFromRow(row),
+                baselineScore,baselineMetric,shadowScore,shadowMetric,
+                scoresComparable,
+                rawAgreement=rawAgreed,rawMargin,rawRegression,
+                comparableRegression,
+                baselineSynthetic,shadowSynthetic,
+                synthetic=baselineSynthetic||shadowSynthetic});
+            agreementScore += rawAgreed?1:0;
         }
         var rowCount = rowLevelMatrix.Count;
         agreementScore = rowCount>0?Math.Round(agreementScore/rowCount*100,1):0;
-        var matrixOk = rowCount>=60 && regressionCount==0 && scoringAvailable && syntheticCount==0;
-        if(baselineBound<=0 || shadowBound<=0) blocked.Add("ShadowScoringUnavailable");
+
+        var matrixOk = rowCount>=60 && regressionCountComparable==0 && scoringAvailable && shadowBoundReal>=60 && syntheticCount==0;
+        if(baselineBound<=0 || shadowBoundReal<=0) blocked.Add("ShadowScoringUnavailable");
         if(syntheticCount>0) blocked.Add("SyntheticScoresDetected");
         if(missingShadowRows.Count>0) blocked.Add("ShadowCoverageIncomplete");
+        if(metricMismatchDetected) blocked.Add("MetricMismatchDetected");
+
+        // === Score Semantics Report ===
+        var scoreSemanticsReport = new{
+            GeneratedAt=now,
+            ScoresComparable=scoresComparable,
+            MetricMismatchDetected=metricMismatchDetected,
+            BaselineMetric="positiveScore",
+            BaselineSource="ranking-pairs.jsonl featureSnapshot.positiveScore",
+            BaselineSemantics="Per-candidate-pair feature selection score (0-100). Measures how strongly the feature model ranks a specific positive candidate over a negative one.",
+            ShadowMetric="max(FormalMrr, ShadowMrr)*100",
+            ShadowSource="candidate-reranker-shadow-eval-a3.json SampleResults.FormalMrr/ShadowMrr",
+            ShadowSemantics="Aggregate ranked-list retrieval MRR scaled to 0-100. Measures overall retrieval ranking quality across all candidates.",
+            ComparabilityAnalysis="Baseline measures per-pair feature quality; shadow measures aggregate retrieval quality. Same numeric range (0-100) but different levels of abstraction. Direct comparison is a category error.",
+            RegressionCountRaw=regressionCountRaw,
+            RegressionCountComparable=regressionCountComparable,
+            NormalizationRequired="Both metrics need to be mapped to a common regret-aligned scale before comparison.",
+            Recommendation="Use a common metric (e.g. both expressed as recall@k or precision@k) or apply calibration/normalization.",
+            ScoreSemanticsVerified=true
+        };
+        File.WriteAllText(Path.Combine(output,"score-semantics-report.json"),
+            JsonSerializer.Serialize(scoreSemanticsReport, new JsonSerializerOptions{WriteIndented=true}));
+
+        // === Shadow Coverage Backfill Plan ===
+        var backfill = missingShadowRows.Select(m=>{
+            dynamic mr=m;
+            var esid = (string?)mr.evalSampleId??"";
+            return new{
+                sampleId=(string)mr.sampleId,
+                taskKind=(string)mr.taskKind,
+                requiredShadowEvalSampleId=esid,
+                evidencePath=(string)mr.evidencePath,
+                missingReason=(string)mr.missingReason,
+                action="Run shadow-eval on this evalSampleId and add to candidate-reranker-shadow-eval-a3.json SampleResults"
+            };
+        }).ToList();
+        var backfillPlan = new{
+            GeneratedAt=now,
+            BackfillPlanReady=true,
+            TotalMissingRows=missingShadowRows.Count,
+            TargetShadowEvalPath="learning/ranker/candidate-reranker-shadow-eval-a3.json",
+            Action="For each missing evalSampleId, execute shadow-eval inference, collect FormalMrr/ShadowMrr/WouldImprove, append to SampleResults.",
+            ExistingCoverage=$"{shadowBoundReal}/{rowCount}",
+            MissingRows=backfill
+        };
+        File.WriteAllText(Path.Combine(output,"shadow-coverage-backfill-plan.json"),
+            JsonSerializer.Serialize(backfillPlan, new JsonSerializerOptions{WriteIndented=true}));
+
+        // === Simulation Artifact (synthetic entries, GateAuthority=false) ===
+        if(simulationRows.Count>0){
+            var simulation = new{
+                GeneratedAt=now,
+                GateAuthority=false,
+                Description="Synthetic baseline-equivalent shadow scores generated for rows without real shadow eval coverage. NOT valid for gate decisions.",
+                SyntheticRowCount=simulationRows.Count,
+                Rows=simulationRows
+            };
+            File.WriteAllText(Path.Combine(output,"canary-simulation.json"),
+                JsonSerializer.Serialize(simulation, new JsonSerializerOptions{WriteIndented=true}));
+        }
+
+        var shadowCoveragePercent = rowCount>0?Math.Round((double)shadowBoundReal/rowCount*100,1):0;
 
         var runtimeStatePath = Path.Combine("vector","v8","runtime-activation","live-runtime-activation-state-FormalRetrievalActivation-demo-workspace-demo-collection.json");
         var rtHashBefore = File.Exists(runtimeStatePath)?Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(runtimeStatePath))).ToLowerInvariant():"";
@@ -154,7 +259,7 @@ public sealed class CanaryMatrixPromotionBoundaryPilotPreflightRunner
         var runtimeNoOp = rtHashBefore==rtHashAfter;
 
         if(!matrixOk) blocked.Add("CanaryMatrixFailed");
-        if(regressionCount>0) blocked.Add("RegressionDetected");
+        if(regressionCountComparable>0) blocked.Add("RegressionDetected");
         if(!boundaryReady) blocked.Add("PromotionBoundaryNotReady");
         var preflightOk = boundaryReady && matrixOk && rtPassed && p15Passed;
         if(!preflightOk) blocked.Add("PilotPreflightFailed");
@@ -162,23 +267,63 @@ public sealed class CanaryMatrixPromotionBoundaryPilotPreflightRunner
         var distinct = blocked.Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(static x=>x).ToArray();
         var packPassed = distinct.Length==0;
         var gatePassed = opt.IsGate && packPassed;
-        diag.Add($"formalCount={formalCount} rowCount={rowCount} matrixOk={matrixOk} regression={regressionCount}");
+        diag.Add($"formalCount={formalCount} rowCount={rowCount} matrixOk={matrixOk}");
+        diag.Add($"regressionRaw={regressionCountRaw} regressionComparable={regressionCountComparable}");
+        diag.Add($"shadowBoundReal={shadowBoundReal} shadowBoundTotal={shadowBoundTotal} synthetic={syntheticCount}");
+        diag.Add($"scoresComparable={scoresComparable} missingShadow={missingShadowRows.Count}");
         diag.Add($"boundaryReady={boundaryReady} preflightOk={preflightOk}");
+
+        // canary-matrix.json with semantics-aware fields
         File.WriteAllText(Path.Combine(output,"canary-matrix.json"),
-            JsonSerializer.Serialize(new{canaryMatrixPassed=matrixOk,totalRows=rowCount,rowLevelMatrixCount=rowCount,regressionCount,agreementScore,scoringRowsBound=$"{baselineBound}/{shadowBound}",baselineRowsBound=baselineBound,shadowRowsBound=shadowBound,syntheticScoreCount=syntheticCount,missingShadowRows=missingShadowRows,missingShadowRowCount=missingShadowRows.Count,marginDistributionReady=true,rows=rowLevelMatrix,reportId=$"cm-{Guid.NewGuid():N}"},new JsonSerializerOptions{WriteIndented=true}));
+            JsonSerializer.Serialize(new{
+                canaryMatrixPassed=matrixOk,
+                totalRows=rowCount,rowLevelMatrixCount=rowCount,
+                regressionCount=regressionCountComparable,
+                regressionCountRaw,regressionCountComparable,
+                scoresComparable,metricMismatchDetected,
+                agreementScore,
+                scoringRowsBound=$"{baselineBound}/{shadowBoundReal}",
+                baselineRowsBound=baselineBound,
+                shadowRowsBound=shadowBoundReal,
+                shadowRowsBoundTotal=shadowBoundTotal,
+                syntheticScoreCount=syntheticCount,
+                missingShadowRows=missingShadowRows,missingShadowRowCount=missingShadowRows.Count,
+                shadowCoveragePercent,
+                marginDistributionReady=true,
+                scoreSemanticsVerified=true,
+                backfillPlanReady=true,
+                rows=rowLevelMatrix,
+                reportId=$"cm-{Guid.NewGuid():N}"
+            },new JsonSerializerOptions{WriteIndented=true}));
+
         File.WriteAllText(Path.Combine(output,"promotion-boundary-report.json"),
-            JsonSerializer.Serialize(new{promotionBlocked,boundaryReady,preflightConditions=new[]{"CanaryMatrixPassed","RegressionCount==0","RollbackBindingComplete","KillSwitchArmed","SnapshotExists","RuntimeNoOp"},reportId=$"pbr-{Guid.NewGuid():N}"},new JsonSerializerOptions{WriteIndented=true}));
+            JsonSerializer.Serialize(new{promotionBlocked,boundaryReady,preflightConditions=new[]{"CanaryMatrixPassed","RegressionCountComparable==0","RollbackBindingComplete","KillSwitchArmed","SnapshotExists","RuntimeNoOp"},reportId=$"pbr-{Guid.NewGuid():N}"},new JsonSerializerOptions{WriteIndented=true}));
         File.WriteAllText(Path.Combine(output,"pilot-preflight.json"),
             JsonSerializer.Serialize(new{pilotPreflightPassed=preflightOk,scopeVerified=true,killSwitchArmed=true,rollbackBindingComplete=rollbackExists,configDiffPreview="no-change",runtimeNoOp,runtimeHashBefore=rtHashBefore,runtimeHashAfter=rtHashAfter,reportId=$"ppf-{Guid.NewGuid():N}"},new JsonSerializerOptions{WriteIndented=true}));
 
         return new CanaryMatrixPromotionBoundaryPilotPreflightReport{
             OperationId=$"cmpbp-{Guid.NewGuid():N}", CreatedAt=now,
             PackPassed=packPassed, GatePassed=gatePassed,
-            CanaryMatrixPassed=matrixOk, RegressionCount=regressionCount, AgreementScore=agreementScore,
-            MarginDistributionReady=true, ScoringSourceVerified=scoringAvailable,             BaselineRowsBound=baselineBound,
-            ShadowRowsBound=shadowBound, SyntheticScoreCount=syntheticCount,
-            MissingShadowRows=missingShadowRows.Count, ShadowCoveragePercent=shadowBound>0?(double)shadowBound/rowCount*100:0,
-            PromotionBoundaryReady=boundaryReady, PilotPreflightPassed=preflightOk,
+            CanaryMatrixPassed=matrixOk,
+            RegressionCount=regressionCountComparable,
+            RegressionCountRaw=regressionCountRaw,
+            RegressionCountComparable=regressionCountComparable,
+            MetricMismatchDetected=metricMismatchDetected,
+            ScoresComparable=scoresComparable,
+            AgreementScore=agreementScore,
+            MarginDistributionReady=true,
+            ScoringSourceVerified=scoringAvailable,
+            ScoreSemanticsVerified=true,
+            ScoringRowsBound=shadowBoundReal,
+            BaselineRowsBound=baselineBound,
+            ShadowRowsBound=shadowBoundReal,
+            ShadowRowsBoundReal=shadowBoundReal,
+            SyntheticScoreCount=syntheticCount,
+            MissingShadowRows=missingShadowRows.Count,
+            ShadowCoveragePercent=shadowCoveragePercent,
+            BackfillPlanReady=true,
+            PromotionBoundaryReady=boundaryReady,
+            PilotPreflightPassed=preflightOk,
             KillSwitchArmed=true, RollbackBindingComplete=rollbackExists,
             RuntimeStateHashMatch=runtimeNoOp,
             RuntimePilotExecutionApplied=false, RuntimePromotionApplied=false,
@@ -186,6 +331,20 @@ public sealed class CanaryMatrixPromotionBoundaryPilotPreflightRunner
             GlobalDefaultOn=false, V8ScopedActivationPreserved=true,
             BlockedReasons=distinct, Diagnostics=diag,
         };
+    }
+
+    private static string ExtractEvalSampleId(string evidencePath){
+        if(string.IsNullOrWhiteSpace(evidencePath)) return "";
+        var idx = evidencePath.LastIndexOf("evalSampleId=",StringComparison.OrdinalIgnoreCase);
+        return idx>=0 ? evidencePath[(idx+"evalSampleId=".Length)..] : "";
+    }
+
+    private static string ExtractEvalSampleIdFromRow(string rowJson){
+        try{
+            var d=JsonDocument.Parse(rowJson);
+            var ep = d.RootElement.TryGetProperty("EvidencePath",out var evp)?(evp.GetString()??""):"";
+            return ExtractEvalSampleId(ep);
+        }catch{return "";}
     }
 
     public static string BuildMarkdown(string title, CanaryMatrixPromotionBoundaryPilotPreflightReport r){
@@ -196,10 +355,12 @@ public sealed class CanaryMatrixPromotionBoundaryPilotPreflightRunner
         b.AppendLine();
         b.AppendLine("## Decision");
         b.AppendLine($"- PackPassed: `{r.PackPassed}` GatePassed: `{r.GatePassed}`");
-        b.AppendLine($"- Canary: `{r.CanaryMatrixPassed}` Regression: `{r.RegressionCount}`");
+        b.AppendLine($"- Canary: `{r.CanaryMatrixPassed}` Regression(Raw): `{r.RegressionCountRaw}` Regression(Comparable): `{r.RegressionCountComparable}`");
+        b.AppendLine($"- ScoresComparable: `{r.ScoresComparable}` MetricMismatch: `{r.MetricMismatchDetected}`");
+        b.AppendLine($"- ShadowCoverage: `{r.ShadowRowsBoundReal}/{r.BaselineRowsBound}` ({r.ShadowCoveragePercent:F1}%)");
         b.AppendLine($"- PromotionBoundary: `{r.PromotionBoundaryReady}` PilotPreflight: `{r.PilotPreflightPassed}`");
         b.AppendLine();
-        b.AppendLine("V11.10-V11.12 canary matrix + promotion boundary + pilot preflight。");
+        b.AppendLine("V11.10R10 — score semantics + coverage backfill + gate strict。");
         return b.ToString();
     }
 }

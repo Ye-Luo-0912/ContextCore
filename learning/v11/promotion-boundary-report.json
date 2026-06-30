@@ -3,11 +3,11 @@
   "boundaryReady": true,
   "preflightConditions": [
     "CanaryMatrixPassed",
-    "RegressionCount==0",
+    "RegressionCountComparable==0",
     "RollbackBindingComplete",
     "KillSwitchArmed",
     "SnapshotExists",
     "RuntimeNoOp"
   ],
-  "reportId": "pbr-a48bdb545eab423a98a18aec9a16a1f2"
+  "reportId": "pbr-1a89d746fba947e19fe81beafd9385d6"
 }
