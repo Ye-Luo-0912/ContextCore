@@ -1,9 +1,8 @@
 {
-  "GeneratedAt": "2026-06-30T10:07:08.5412939+00:00",
+  "GeneratedAt": "2026-06-30T10:32:10.1396177+00:00",
   "BackfillPlanReady": true,
   "TotalMissingRows": 0,
   "TargetShadowEvalPath": "learning/ranker/candidate-reranker-shadow-eval-a3.json",
-  "Action": "For each missing evalSampleId, execute shadow-eval inference, collect FormalMrr/ShadowMrr/WouldImprove, append to SampleResults.",
   "ExistingCoverage": "60/60",
   "MissingRows": []
 }

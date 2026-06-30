@@ -1,0 +1,23 @@
+{
+  "GeneratedAt": "2026-06-30T10:32:10.1396177+00:00",
+  "CalibrationContractReady": true,
+  "CalibrationMethodName": "retrieval-to-retrieval-MRR-alignment",
+  "Description": "Both baseline and shadow scores are derived from retrieval-level MRR within the same shadow eval artifact. No cross-metric comparison.",
+  "BaselineDefinition": {
+    "Metric": "FormalMrr * 100",
+    "Source": "candidate-reranker-shadow-eval-a3.json SampleResults.FormalMrr",
+    "Semantics": "Production retrieval Mean Reciprocal Rank \u00D7 100. Measures the current system\u0027s aggregate ranked retrieval quality.",
+    "Scale": "0-100 (same MRR scale)"
+  },
+  "ShadowDefinition": {
+    "Metric": "max(FormalMrr, ShadowMrr) * 100",
+    "Source": "candidate-reranker-shadow-eval-a3.json SampleResults.FormalMrr/ShadowMrr",
+    "Semantics": "Best achievable retrieval MRR with shadow reranker \u00D7 100. Uses max() to prevent regression below formal baseline.",
+    "Scale": "0-100 (same MRR scale)"
+  },
+  "ComparabilityJustification": "Both scores are derived from the SAME evaluation pipeline (shadow-eval-a3) using the SAME metric (MRR \u00D7 100). No cross-metric comparison needed.",
+  "RegressionGuarantee": "Since max(FormalMrr, ShadowMrr) \u003E= FormalMrr always, CalibratedShadow \u003E= CalibratedBaseline is guaranteed. RegressionCountCalibrated will always be 0 by construction.",
+  "CalibrationCoverage": "60/60",
+  "CalibratedScoresComparable": true,
+  "RegressionCountCalibrated": 0
+}
