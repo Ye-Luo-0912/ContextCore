@@ -1,6 +1,6 @@
 ﻿# CMPBP (Gate)
 
-生成: 2026-06-30T12:19:24.6538881+00:00 操作: cmpbp-2b1958b286414d41b2dd40e69ab09270
+生成: 2026-06-30T14:40:46.9616092+00:00 操作: cmpbp-0c7a49d4137148b693e727935a42ed0a
 
 ## Decision
 - PackPassed: True GatePassed: True
@@ -11,4 +11,4 @@
 - MetricMismatch(diagnostic): True (legacy, not blocking when calibrated)
 - PromotionBoundary: True PilotPreflight: True
 
-V11.10R14 - authoritative backfill replacement。
+V11.11 - final shadow canary audit + pilot hold。

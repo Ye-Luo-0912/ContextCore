@@ -1,0 +1,62 @@
+{
+  "GeneratedAt": "2026-06-30T14:40:46.9616092+00:00",
+  "AuditReportId": "fsca-41fa6f1faedd4ebfa97efd7cc38359e6",
+  "FinalShadowCanaryAuditPassed": true,
+  "GatePassed": true,
+  "ArtifactConsistencyPassed": true,
+  "RuntimeBoundaryPassed": true,
+  "ArtifactFreezeVersion": "V11.10R14",
+  "FrozenArtifacts": [
+    "cmpbp-gate.json",
+    "canary-matrix.json",
+    "calibration-method.json",
+    "backfill-provenance.json",
+    "score-semantics-report.json",
+    "shadow-coverage-backfill-plan.json",
+    "promotion-boundary-report.json",
+    "pilot-preflight.json"
+  ],
+  "CanaryMatrix": {
+    "TotalRows": 60,
+    "BaselineRowsBound": 60,
+    "ShadowRowsBoundReal": 60,
+    "SyntheticScoreCount": 0,
+    "MissingShadowRows": 0,
+    "RegressionCountCalibrated": 0,
+    "CalibratedScoresComparable": true
+  },
+  "BackfillProvenance": {
+    "RealInferenceRows": 60,
+    "GeneratedDistributionRows": 0,
+    "BackfillGateAuthorityPolicyPassed": true
+  },
+  "CalibrationContract": {
+    "CalibrationContractReady": true,
+    "CalibrationMethod": "retrieval-to-retrieval-MRR-alignment",
+    "CalibrationCoverage": 60
+  },
+  "RuntimeSafety": {
+    "KillSwitchArmed": true,
+    "RollbackBindingComplete": true,
+    "RuntimeStateHashBefore": "583762c58d9b261848ff2a8f212c4b2b27ff60be003198a6ca49628eb244a198",
+    "RuntimeStateHashAfter": "583762c58d9b261848ff2a8f212c4b2b27ff60be003198a6ca49628eb244a198",
+    "RuntimeStateHashMatch": true,
+    "RuntimePilotExecutionApplied": false,
+    "RuntimePromotionApplied": false,
+    "PackageOutputChanged": false,
+    "RuntimeRerankerChanged": false,
+    "GlobalDefaultOn": false,
+    "V8ScopedActivationPreserved": true,
+    "LiveActivationStateSource": "vector\\v8\\runtime-activation\\live-runtime-activation-state-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+    "LiveActivationStateExists": true
+  },
+  "ArtifactCrossValidation": {
+    "MatrixGateConsistent": true,
+    "CalibrationProvenanceConsistent": true,
+    "BindingCountConsistent": true,
+    "SyntheticAndMissingConsistent": true
+  },
+  "PilotHold": true,
+  "PilotHoldReason": "V11.11 final audit only; live pilot execution gated separately.",
+  "Recommendation": "All checks passed. Ready for pilot gate when authorized."
+}

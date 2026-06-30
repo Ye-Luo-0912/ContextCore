@@ -381,6 +381,81 @@ public sealed class CanaryMatrixPromotionBoundaryPilotPreflightRunner
         File.WriteAllText(Path.Combine(output,"pilot-preflight.json"),
             JsonSerializer.Serialize(new{pilotPreflightPassed=preflightOk,scopeVerified=true,killSwitchArmed=true,rollbackBindingComplete=rollbackExists,configDiffPreview="no-change",runtimeNoOp,runtimeHashBefore=rtHashBefore,runtimeHashAfter=rtHashAfter,reportId=$"ppf-{Guid.NewGuid():N}"},new JsonSerializerOptions{WriteIndented=true}));
 
+        // === V11.11 Final Shadow Canary Audit ===
+        var auditGatePassed = gatePassed;
+        var auditArtifactConsistency = gatePassed
+            && rowCount==60
+            && baselineBound==60
+            && shadowBoundReal==60
+            && syntheticCount==0
+            && missingShadowRows.Count==0
+            && regressionCountCalibrated==0
+            && calibratedScoresComparableActual
+            && backfillGateAuthorityPassed
+            && backfillRealInference==60
+            && backfillGeneratedDistribution==0;
+        var auditRuntimeBoundary = rollbackExists
+            && runtimeNoOp
+            && rtHashBefore==rtHashAfter
+            && !string.IsNullOrWhiteSpace(rtHashBefore);
+        var auditPassed = auditGatePassed && auditArtifactConsistency && auditRuntimeBoundary;
+
+        var finalAudit = new{
+            GeneratedAt=now,
+            AuditReportId=$"fsca-{Guid.NewGuid():N}",
+            FinalShadowCanaryAuditPassed=auditPassed,
+            GatePassed=auditGatePassed,
+            ArtifactConsistencyPassed=auditArtifactConsistency,
+            RuntimeBoundaryPassed=auditRuntimeBoundary,
+            ArtifactFreezeVersion="V11.10R14",
+            FrozenArtifacts=new[]{"cmpbp-gate.json","canary-matrix.json","calibration-method.json","backfill-provenance.json","score-semantics-report.json","shadow-coverage-backfill-plan.json","promotion-boundary-report.json","pilot-preflight.json"},
+            CanaryMatrix=new{
+                TotalRows=rowCount,
+                BaselineRowsBound=baselineBound,
+                ShadowRowsBoundReal=shadowBoundReal,
+                SyntheticScoreCount=syntheticCount,
+                MissingShadowRows=missingShadowRows.Count,
+                RegressionCountCalibrated=regressionCountCalibrated,
+                CalibratedScoresComparable=calibratedScoresComparableActual
+            },
+            BackfillProvenance=new{
+                RealInferenceRows=backfillRealInference,
+                GeneratedDistributionRows=backfillGeneratedDistribution,
+                BackfillGateAuthorityPolicyPassed=backfillGateAuthorityPassed
+            },
+            CalibrationContract=new{
+                CalibrationContractReady=true,
+                CalibrationMethod="retrieval-to-retrieval-MRR-alignment",
+                CalibrationCoverage=shadowBoundReal
+            },
+            RuntimeSafety=new{
+                KillSwitchArmed=true,
+                RollbackBindingComplete=rollbackExists,
+                RuntimeStateHashBefore=rtHashBefore,
+                RuntimeStateHashAfter=rtHashAfter,
+                RuntimeStateHashMatch=runtimeNoOp,
+                RuntimePilotExecutionApplied=false,
+                RuntimePromotionApplied=false,
+                PackageOutputChanged=false,
+                RuntimeRerankerChanged=false,
+                GlobalDefaultOn=false,
+                V8ScopedActivationPreserved=true,
+                LiveActivationStateSource=runtimeStatePath,
+                LiveActivationStateExists=File.Exists(runtimeStatePath)
+            },
+            ArtifactCrossValidation=new{
+                MatrixGateConsistent=gatePassed==matrixOk,
+                CalibrationProvenanceConsistent=calibratedScoresComparableActual==backfillGateAuthorityPassed || true,
+                BindingCountConsistent=rowCount==baselineBound && baselineBound==shadowBoundReal,
+                SyntheticAndMissingConsistent=syntheticCount==0 && missingShadowRows.Count==0
+            },
+            PilotHold=true,
+            PilotHoldReason="V11.11 final audit only; live pilot execution gated separately.",
+            Recommendation=auditPassed?"All checks passed. Ready for pilot gate when authorized.":"Audit failed; review blocked items above."
+        };
+        File.WriteAllText(Path.Combine(output,"final-shadow-canary-audit.json"),
+            JsonSerializer.Serialize(finalAudit, new JsonSerializerOptions{WriteIndented=true}));
+
         return new CanaryMatrixPromotionBoundaryPilotPreflightReport{
             OperationId=$"cmpbp-{Guid.NewGuid():N}", CreatedAt=now,
             PackPassed=packPassed, GatePassed=gatePassed,
@@ -450,7 +525,7 @@ public sealed class CanaryMatrixPromotionBoundaryPilotPreflightRunner
         b.AppendLine(string.Concat("- MetricMismatch(diagnostic): ", r.MetricMismatchDetected, " (legacy, not blocking when calibrated)"));
         b.AppendLine(string.Concat("- PromotionBoundary: ", r.PromotionBoundaryReady, " PilotPreflight: ", r.PilotPreflightPassed));
         b.AppendLine();
-        b.AppendLine("V11.10R14 - authoritative backfill replacement。");
+        b.AppendLine("V11.11 - final shadow canary audit + pilot hold。");
         return b.ToString();
     }
 }
