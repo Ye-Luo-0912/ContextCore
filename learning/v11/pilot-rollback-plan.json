@@ -1,0 +1,19 @@
+{
+  "GeneratedAt": "2026-06-30T18:10:29.0782663+00:00",
+  "PlanId": "prp-c8858119d4484e7091ddc5e969060400",
+  "RollbackReady": true,
+  "PilotExecuted": true,
+  "KillSwitchPresent": true,
+  "KillSwitchPath": "learning/v11/formal-ingestion-rollback-manifest.json",
+  "RollbackBindingComplete": true,
+  "RollbackSteps": [
+    "1. Set RuntimePilotExecutionApplied=false in pilot-execution-report.json",
+    "2. Revert runtime activation to pre-pilot hash: 583762c58d9b261848ff2a8f212c4b2b27ff60be003198a6ca49628eb244a198",
+    "3. Restore from pre-ingestion snapshot: learning/v11/formal-dataset-pre-ingestion-snapshot.json",
+    "4. Re-run CMPBP gate to verify pre-pilot state"
+  ],
+  "RuntimeStateBeforePilot": "583762c58d9b261848ff2a8f212c4b2b27ff60be003198a6ca49628eb244a198",
+  "RuntimeStateAfterPilot": "583762c58d9b261848ff2a8f212c4b2b27ff60be003198a6ca49628eb244a198",
+  "RuntimeUnchanged": true,
+  "VerifiedRollbackPossible": true
+}

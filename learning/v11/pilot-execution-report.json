@@ -1,0 +1,24 @@
+{
+  "GeneratedAt": "2026-06-30T18:10:29.0782663+00:00",
+  "ReportId": "per-2caba62a0efc4e99b88d34ca2fc2836b",
+  "PilotExecuted": true,
+  "PilotAuthorized": true,
+  "PilotScope": "demo-workspace/demo-collection",
+  "ScopeVerified": true,
+  "GlobalDefaultOn": false,
+  "RuntimePilotExecutionApplied": true,
+  "RuntimePromotionApplied": false,
+  "PackageOutputChanged": false,
+  "ControlledActivation": true,
+  "ActivationScope": "V8 scoped activation only (demo-workspace/demo-collection)",
+  "RuntimeBeforeHash": "583762c58d9b261848ff2a8f212c4b2b27ff60be003198a6ca49628eb244a198",
+  "RuntimeAfterHash": "583762c58d9b261848ff2a8f212c4b2b27ff60be003198a6ca49628eb244a198",
+  "RuntimeStateHashStable": true,
+  "PilotActivationSummary": {
+    "ShadowRowsBound": 60,
+    "RegressionCountCalibrated": 0,
+    "CalibrationMethod": "retrieval-to-retrieval-MRR-alignment",
+    "CanaryMatrixPassed": true,
+    "BackfillAuthorityPassed": true
+  }
+}

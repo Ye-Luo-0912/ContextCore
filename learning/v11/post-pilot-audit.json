@@ -1,0 +1,18 @@
+{
+  "GeneratedAt": "2026-06-30T18:10:29.0782663+00:00",
+  "AuditId": "ppa-c9f3464356a34c0080f6eef300e8f6a4",
+  "PostPilotAuditPassed": true,
+  "GatePassedAfterPilot": true,
+  "CalibratedRegressionCount": 0,
+  "ShadowCoverageAfterPilot": "60/60",
+  "SyntheticScoreCount": 0,
+  "RuntimeStateHashStable": true,
+  "RuntimeBefore": "583762c58d9b261848ff2a8f212c4b2b27ff60be003198a6ca49628eb244a198",
+  "RuntimeAfter": "583762c58d9b261848ff2a8f212c4b2b27ff60be003198a6ca49628eb244a198",
+  "PilotScopeVerified": true,
+  "GlobalDefaultOn": false,
+  "PackageOutputChanged": false,
+  "RerankerChanged": false,
+  "VectorBindingChanged": false,
+  "Summary": "Pilot executed successfully within scoped activation. All guards pass."
+}

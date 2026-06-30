@@ -2338,15 +2338,22 @@ public static partial class EvalCommand
         if(p15 is not null && p15.RootElement.TryGetProperty("PassRate",out var pr)) p15Passed = pr.GetDouble()>=1.0;
 
         var isGate = string.Equals(subcommand,"cmpbp-gate",StringComparison.OrdinalIgnoreCase);
-        var opt = new CanaryMatrixPromotionBoundaryPilotPreflightOptions{IsGate=isGate,Enabled=!CommandHelpers.HasFlag(args,"--disabled")};
+        var isPilot = string.Equals(subcommand,"cmpbp-pilot",StringComparison.OrdinalIgnoreCase);
+        var opt = new CanaryMatrixPromotionBoundaryPilotPreflightOptions{
+            IsGate=isGate||isPilot,
+            Enabled=!CommandHelpers.HasFlag(args,"--disabled"),
+            PilotAuthorized=isPilot
+        };
         var report = new CanaryMatrixPromotionBoundaryPilotPreflightRunner().Run(rtPassed,p15Passed,output,opt);
 
-        var fn = isGate?"cmpbp-gate":"cmpbp";
+        var fn = isGate?"cmpbp-gate":isPilot?"cmpbp-pilot":"cmpbp";
+        var title = isGate?"CMPBP (Gate)":isPilot?"CMPBP (Pilot)":"CMPBP";
         await WriteJsonSafeAsync(report,Path.Combine(output,$"{fn}.json"),ct).ConfigureAwait(false);
-        await WriteTextAsync(CanaryMatrixPromotionBoundaryPilotPreflightRunner.BuildMarkdown(isGate?"CMPBP (Gate)":"CMPBP",report),Path.Combine(output,$"{fn}.md"),ct).ConfigureAwait(false);
+        await WriteTextAsync(CanaryMatrixPromotionBoundaryPilotPreflightRunner.BuildMarkdown(title,report),Path.Combine(output,$"{fn}.md"),ct).ConfigureAwait(false);
         Console.WriteLine($"[Eval] CMPBP written: {Path.Combine(output,$"{fn}.json")}");
         Console.WriteLine($"[Eval] packPassed={report.PackPassed}; gatePassed={report.GatePassed}; " +
-            $"canary={report.CanaryMatrixPassed} boundary={report.PromotionBoundaryReady} preflight={report.PilotPreflightPassed}");
+            $"canary={report.CanaryMatrixPassed} boundary={report.PromotionBoundaryReady} preflight={report.PilotPreflightPassed}" +
+            (isPilot?$" pilotExecuted={report.PilotExecuted}":""));
     }
 
     private static async Task ExecuteLearningFormalEvidenceRealizationR1PackAsync(
