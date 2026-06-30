@@ -1,5 +1,5 @@
 {
-  "GeneratedAt": "2026-06-30T10:32:10.1396177+00:00",
+  "GeneratedAt": "2026-06-30T10:52:24.1234199+00:00",
   "CalibrationContractReady": true,
   "CalibrationMethodName": "retrieval-to-retrieval-MRR-alignment",
   "Description": "Both baseline and shadow scores are derived from retrieval-level MRR within the same shadow eval artifact. No cross-metric comparison.",

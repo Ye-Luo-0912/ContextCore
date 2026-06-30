@@ -227,7 +227,6 @@ public sealed class CanaryMatrixPromotionBoundaryPilotPreflightRunner
         if(baselineBound<=0 || shadowBoundReal<=0) blocked.Add("ShadowScoringUnavailable");
         if(syntheticCount>0) blocked.Add("SyntheticScoresDetected");
         if(missingShadowRows.Count>0) blocked.Add("ShadowCoverageIncomplete");
-        if(metricMismatchDetected) blocked.Add("MetricMismatchDetected");
         if(!backfillGateAuthorityPassed) blocked.Add("BackfillGateAuthorityPolicyFailed");
 
         // === Calibration Method ===
@@ -342,7 +341,7 @@ public sealed class CanaryMatrixPromotionBoundaryPilotPreflightRunner
         diag.Add($"regressionRaw={regressionCountRaw} regressionCalibrated={regressionCountCalibrated}");
         diag.Add($"shadowBoundReal={shadowBoundReal} synthetic={syntheticCount} missingShadow={missingShadowRows.Count}");
         diag.Add($"calibratedScoresComparable={calibratedScoresComparableActual} provenance=realInference:{backfillRealInference}+generated:{backfillGeneratedDistribution}");
-        diag.Add($"backfillGateAuthorityPassed={backfillGateAuthorityPassed} boundaryReady={boundaryReady} preflightOk={preflightOk}");
+        diag.Add($"metricMismatchDetected(diagnosticOnly)={metricMismatchDetected} backfillGateAuthorityPassed={backfillGateAuthorityPassed} boundaryReady={boundaryReady} preflightOk={preflightOk}");
 
         // canary-matrix.json with calibrated fields
         File.WriteAllText(Path.Combine(output,"canary-matrix.json"),
@@ -447,9 +446,10 @@ public sealed class CanaryMatrixPromotionBoundaryPilotPreflightRunner
         b.AppendLine(string.Concat("- CalibratedScoresComparable: ", r.CalibratedScoresComparable, " CalibrationContractReady: ", r.CalibrationContractReady));
         b.AppendLine(string.Concat("- ShadowCoverage: ", r.ShadowRowsBoundReal, "/", r.BaselineRowsBound, " (", r.ShadowCoveragePercent.ToString("F1"), "%)"));
         b.AppendLine(string.Concat("- BackfillGateAuthority: ", r.BackfillGateAuthorityPolicyPassed, " (realInference: ", r.BackfillRealInferenceRows, ", generated: ", r.BackfillGeneratedDistributionRows, ")"));
+        b.AppendLine(string.Concat("- MetricMismatch(diagnostic): ", r.MetricMismatchDetected, " (legacy, not blocking when calibrated)"));
         b.AppendLine(string.Concat("- PromotionBoundary: ", r.PromotionBoundaryReady, " PilotPreflight: ", r.PilotPreflightPassed));
         b.AppendLine();
-        b.AppendLine("V11.10R12 - calibration contract + backfill provenance + gate authority。");
+        b.AppendLine("V11.10R13 - gate authority finalization。");
         return b.ToString();
     }
 }

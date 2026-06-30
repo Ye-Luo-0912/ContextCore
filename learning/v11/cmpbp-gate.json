@@ -1,6 +1,6 @@
 ﻿{
-  "OperationId": "cmpbp-2cb970a054a649329231485fd37b2838",
-  "CreatedAt": "2026-06-30T10:32:10.1396177+00:00",
+  "OperationId": "cmpbp-9a672dc0b865404a95531e2171ae7aff",
+  "CreatedAt": "2026-06-30T10:52:24.1234199+00:00",
   "PackPassed": false,
   "GatePassed": false,
   "CanaryMatrixPassed": true,
@@ -41,8 +41,7 @@
   "GlobalDefaultOn": false,
   "V8ScopedActivationPreserved": true,
   "BlockedReasons": [
-    "BackfillGateAuthorityPolicyFailed",
-    "MetricMismatchDetected"
+    "BackfillGateAuthorityPolicyFailed"
   ],
   "Diagnostics": [
     "ScoresComparable(legacy)=False MetricMismatchDetected=True",
@@ -50,6 +49,6 @@
     "regressionRaw=41 regressionCalibrated=0",
     "shadowBoundReal=60 synthetic=0 missingShadow=0",
     "calibratedScoresComparable=True provenance=realInference:23\u002Bgenerated:37",
-    "backfillGateAuthorityPassed=False boundaryReady=True preflightOk=True"
+    "metricMismatchDetected(diagnosticOnly)=True backfillGateAuthorityPassed=False boundaryReady=True preflightOk=True"
   ]
 }
