@@ -20,6 +20,8 @@ public sealed class CanaryMatrixPromotionBoundaryPilotPreflightReport
     public int BaselineRowsBound { get; init; }
     public int ShadowRowsBound { get; init; }
     public int SyntheticScoreCount { get; init; }
+    public int MissingShadowRows { get; init; }
+    public double ShadowCoveragePercent { get; init; }
     public bool PromotionBoundaryReady { get; init; }
     public bool PilotPreflightPassed { get; init; }
     public bool KillSwitchArmed { get; init; }
@@ -103,6 +105,7 @@ public sealed class CanaryMatrixPromotionBoundaryPilotPreflightRunner
         var syntheticCount = 0;
         var baselineBound = 0;
         var shadowBound = 0;
+        var missingShadowRows = new List<object>();
         var agreementScore = 0.0;
         var taskKindMap = new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase){{"chat","chat"},{"coding","coding"},{"novel","novel"},{"automation","automation"},{"project","project"}};
         foreach(var row in formalRows)
@@ -122,6 +125,7 @@ public sealed class CanaryMatrixPromotionBoundaryPilotPreflightRunner
                     if(bKey is not null){ (baselineScore,_)=baselineLookup[bKey]; baselineSynthetic=false; baselineBound++; }
                     var sKey = shadowLookup.Keys.FirstOrDefault(k=>sampleId.Contains(k,StringComparison.OrdinalIgnoreCase));
                     if(sKey is not null){ (shadowScore,_)=shadowLookup[sKey]; shadowSynthetic=false; shadowBound++; }
+                    else missingShadowRows.Add(new{sampleId,taskKind,evidencePath=row.Contains("EvidencePath")?"":"",missingReason="NoShadowEvalMatch"});
                     if(baselineSynthetic||shadowSynthetic){
                         syntheticCount++;
                         if(baselineSynthetic) baselineScore = 0.5;
@@ -141,6 +145,7 @@ public sealed class CanaryMatrixPromotionBoundaryPilotPreflightRunner
         var matrixOk = rowCount>=60 && regressionCount==0 && scoringAvailable && syntheticCount==0;
         if(baselineBound<=0 || shadowBound<=0) blocked.Add("ShadowScoringUnavailable");
         if(syntheticCount>0) blocked.Add("SyntheticScoresDetected");
+        if(missingShadowRows.Count>0) blocked.Add("ShadowCoverageIncomplete");
 
         var runtimeStatePath = Path.Combine("vector","v8","runtime-activation","live-runtime-activation-state-FormalRetrievalActivation-demo-workspace-demo-collection.json");
         var rtHashBefore = File.Exists(runtimeStatePath)?Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(runtimeStatePath))).ToLowerInvariant():"";
@@ -159,7 +164,7 @@ public sealed class CanaryMatrixPromotionBoundaryPilotPreflightRunner
         diag.Add($"formalCount={formalCount} rowCount={rowCount} matrixOk={matrixOk} regression={regressionCount}");
         diag.Add($"boundaryReady={boundaryReady} preflightOk={preflightOk}");
         File.WriteAllText(Path.Combine(output,"canary-matrix.json"),
-            JsonSerializer.Serialize(new{canaryMatrixPassed=matrixOk,totalRows=rowCount,rowLevelMatrixCount=rowCount,regressionCount,agreementScore,scoringRowsBound=$"{baselineBound}/{shadowBound}",baselineRowsBound=baselineBound,shadowRowsBound=shadowBound,syntheticScoreCount=syntheticCount,marginDistributionReady=true,rows=rowLevelMatrix,reportId=$"cm-{Guid.NewGuid():N}"},new JsonSerializerOptions{WriteIndented=true}));
+            JsonSerializer.Serialize(new{canaryMatrixPassed=matrixOk,totalRows=rowCount,rowLevelMatrixCount=rowCount,regressionCount,agreementScore,scoringRowsBound=$"{baselineBound}/{shadowBound}",baselineRowsBound=baselineBound,shadowRowsBound=shadowBound,syntheticScoreCount=syntheticCount,missingShadowRows=missingShadowRows,missingShadowRowCount=missingShadowRows.Count,marginDistributionReady=true,rows=rowLevelMatrix,reportId=$"cm-{Guid.NewGuid():N}"},new JsonSerializerOptions{WriteIndented=true}));
         File.WriteAllText(Path.Combine(output,"promotion-boundary-report.json"),
             JsonSerializer.Serialize(new{promotionBlocked,boundaryReady,preflightConditions=new[]{"CanaryMatrixPassed","RegressionCount==0","RollbackBindingComplete","KillSwitchArmed","SnapshotExists","RuntimeNoOp"},reportId=$"pbr-{Guid.NewGuid():N}"},new JsonSerializerOptions{WriteIndented=true}));
         File.WriteAllText(Path.Combine(output,"pilot-preflight.json"),
@@ -169,9 +174,9 @@ public sealed class CanaryMatrixPromotionBoundaryPilotPreflightRunner
             OperationId=$"cmpbp-{Guid.NewGuid():N}", CreatedAt=now,
             PackPassed=packPassed, GatePassed=gatePassed,
             CanaryMatrixPassed=matrixOk, RegressionCount=regressionCount, AgreementScore=agreementScore,
-            MarginDistributionReady=true, ScoringSourceVerified=scoringAvailable,
-            ScoringRowsBound=baselineBound, BaselineRowsBound=baselineBound,
+            MarginDistributionReady=true, ScoringSourceVerified=scoringAvailable,             BaselineRowsBound=baselineBound,
             ShadowRowsBound=shadowBound, SyntheticScoreCount=syntheticCount,
+            MissingShadowRows=missingShadowRows.Count, ShadowCoveragePercent=shadowBound>0?(double)shadowBound/rowCount*100:0,
             PromotionBoundaryReady=boundaryReady, PilotPreflightPassed=preflightOk,
             KillSwitchArmed=true, RollbackBindingComplete=rollbackExists,
             RuntimeStateHashMatch=runtimeNoOp,

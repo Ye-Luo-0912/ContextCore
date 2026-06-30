@@ -8,6 +8,231 @@
   "baselineRowsBound": 60,
   "shadowRowsBound": 23,
   "syntheticScoreCount": 37,
+  "missingShadowRows": [
+    {
+      "sampleId": "flc-r1-0003-automation-20260529-001",
+      "taskKind": "automation",
+      "evidencePath": "",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0004-automation-20260529-002",
+      "taskKind": "automation",
+      "evidencePath": "",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0005-automation-20260529-003",
+      "taskKind": "automation",
+      "evidencePath": "",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0006-automation-20260529-004",
+      "taskKind": "automation",
+      "evidencePath": "",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0007-automation-20260529-005",
+      "taskKind": "automation",
+      "evidencePath": "",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0008-automation-20260529-006",
+      "taskKind": "automation",
+      "evidencePath": "",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0009-automation-20260529-007",
+      "taskKind": "automation",
+      "evidencePath": "",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0010-automation-20260529-008",
+      "taskKind": "automation",
+      "evidencePath": "",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0011-automation-20260529-009",
+      "taskKind": "automation",
+      "evidencePath": "",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0012-automation-20260529-010",
+      "taskKind": "automation",
+      "evidencePath": "",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0023-chat-20260529-001",
+      "taskKind": "chat",
+      "evidencePath": "",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0024-chat-20260529-002",
+      "taskKind": "chat",
+      "evidencePath": "",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0025-chat-20260529-003",
+      "taskKind": "chat",
+      "evidencePath": "",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0026-chat-20260529-004",
+      "taskKind": "chat",
+      "evidencePath": "",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0027-chat-20260529-005",
+      "taskKind": "chat",
+      "evidencePath": "",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0028-chat-20260529-006",
+      "taskKind": "chat",
+      "evidencePath": "",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0029-chat-20260529-007",
+      "taskKind": "chat",
+      "evidencePath": "",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0030-chat-20260529-008",
+      "taskKind": "chat",
+      "evidencePath": "",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0031-chat-20260529-009",
+      "taskKind": "chat",
+      "evidencePath": "",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0032-chat-20260529-010",
+      "taskKind": "chat",
+      "evidencePath": "",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0033-chat-20260529-011",
+      "taskKind": "chat",
+      "evidencePath": "",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0034-chat-20260529-012",
+      "taskKind": "chat",
+      "evidencePath": "",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0035-chat-20260529-013",
+      "taskKind": "chat",
+      "evidencePath": "",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0036-chat-20260529-014",
+      "taskKind": "chat",
+      "evidencePath": "",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0037-chat-20260529-015",
+      "taskKind": "chat",
+      "evidencePath": "",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0038-chat-20260529-016",
+      "taskKind": "chat",
+      "evidencePath": "",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0039-chat-20260529-017",
+      "taskKind": "chat",
+      "evidencePath": "",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0040-chat-20260529-018",
+      "taskKind": "chat",
+      "evidencePath": "",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0041-chat-20260529-019",
+      "taskKind": "chat",
+      "evidencePath": "",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0042-chat-20260529-020",
+      "taskKind": "chat",
+      "evidencePath": "",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0053-coding-20260529-001",
+      "taskKind": "coding",
+      "evidencePath": "",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0054-coding-20260529-002",
+      "taskKind": "coding",
+      "evidencePath": "",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0055-coding-20260529-003",
+      "taskKind": "coding",
+      "evidencePath": "",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0056-coding-20260529-004",
+      "taskKind": "coding",
+      "evidencePath": "",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0057-coding-20260529-005",
+      "taskKind": "coding",
+      "evidencePath": "",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0058-coding-20260529-006",
+      "taskKind": "coding",
+      "evidencePath": "",
+      "missingReason": "NoShadowEvalMatch"
+    },
+    {
+      "sampleId": "flc-r1-0059-coding-20260529-007",
+      "taskKind": "coding",
+      "evidencePath": "",
+      "missingReason": "NoShadowEvalMatch"
+    }
+  ],
+  "missingShadowRowCount": 37,
   "marginDistributionReady": true,
   "rows": [
     {
@@ -731,5 +956,5 @@
       "synthetic": true
     }
   ],
-  "reportId": "cm-5d6e1548051b4eea95cf09f2fa3be811"
+  "reportId": "cm-7fd000600a9d48caaacc915d989c015f"
 }
