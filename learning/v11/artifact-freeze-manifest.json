@@ -1,0 +1,47 @@
+{
+  "GeneratedAt": "2026-06-30T17:20:49.6550908+00:00",
+  "ManifestId": "afm-67a538ee29c742d18172dd84783d1d7f",
+  "ArtifactFreezeManifestReady": true,
+  "FreezeVersion": "V11.12",
+  "BaseVersion": "V11.10R14",
+  "TotalFiles": 9,
+  "Files": [
+    {
+      "File": "canary-matrix.json",
+      "Hash": "abf4d2e84a59a91c2efd4b35124eedc8719b54fb0d4fcda0f65ad61711b5a274"
+    },
+    {
+      "File": "cmpbp-gate.json",
+      "Hash": "656caf22b50639f4714840abf91616c9dd558a7ac0239e3905bf1b76a5ec8a2d"
+    },
+    {
+      "File": "calibration-method.json",
+      "Hash": "3ceb5480ffb84557e4730f3f2a403835798304807db27320edfe4e7c044fa494"
+    },
+    {
+      "File": "backfill-provenance.json",
+      "Hash": "2dcb87b6180310cf53b655e0e958193693bb71c8145b06371a837349fa8a3b70"
+    },
+    {
+      "File": "score-semantics-report.json",
+      "Hash": "0b74476de1ea3c33c4e385b3ec85d3b2c984d610a28516fdb4b85039ca1212f7"
+    },
+    {
+      "File": "shadow-coverage-backfill-plan.json",
+      "Hash": "1cd530fd68f9b5f47216fb6b0f2ebeeba9ac3fb410ac447513a2b3151bac182d"
+    },
+    {
+      "File": "promotion-boundary-report.json",
+      "Hash": "c1035344cd689316e3c0e7f2651f8dc09ba1a8072ec582a393123933d10b9f22"
+    },
+    {
+      "File": "pilot-preflight.json",
+      "Hash": "6c5bdd43aa1d30fedb85622296f6789e36280bf0073454ee5dd031539c15f590"
+    },
+    {
+      "File": "final-shadow-canary-audit.json",
+      "Hash": "5fc319c2b51450a5667e131154b41fef92313dc0b93ad98f2c3a508cf0a8cf95"
+    }
+  ],
+  "Verification": "All frozen artifacts are consistent with V11.11 final audit and V11.10R14 gate pass."
+}

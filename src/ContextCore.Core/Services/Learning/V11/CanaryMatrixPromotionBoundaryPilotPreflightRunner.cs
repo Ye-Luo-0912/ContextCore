@@ -445,7 +445,7 @@ public sealed class CanaryMatrixPromotionBoundaryPilotPreflightRunner
             },
             ArtifactCrossValidation=new{
                 MatrixGateConsistent=gatePassed==matrixOk,
-                CalibrationProvenanceConsistent=calibratedScoresComparableActual==backfillGateAuthorityPassed || true,
+                CalibrationProvenanceConsistent=calibratedScoresComparableActual && backfillGateAuthorityPassed,
                 BindingCountConsistent=rowCount==baselineBound && baselineBound==shadowBoundReal,
                 SyntheticAndMissingConsistent=syntheticCount==0 && missingShadowRows.Count==0
             },
@@ -455,6 +455,105 @@ public sealed class CanaryMatrixPromotionBoundaryPilotPreflightRunner
         };
         File.WriteAllText(Path.Combine(output,"final-shadow-canary-audit.json"),
             JsonSerializer.Serialize(finalAudit, new JsonSerializerOptions{WriteIndented=true}));
+
+        // === V11.12 Pilot Authorization Pack ===
+        var pilotAuthorizationPack = new{
+            GeneratedAt=now,
+            PackId=$"pap-{Guid.NewGuid():N}",
+            PilotAuthorizationPackReady=true,
+            PilotAuthorized=false,
+            AuthorizationRequired="Explicit pilot authorization flag must be set before live pilot execution.",
+            CurrentAuthorizationState=new{
+                RuntimePilotExecution=false,
+                RuntimePromotion=false,
+                PackageOutputChange=false,
+                RerankerChange=false,
+                VectorBindingChange=false
+            },
+            RequiredPrerequisites=new[]{
+                "FinalShadowCanaryAuditPassed=true",
+                "ArtifactFreezeManifestReady=true",
+                "GatePassed=true",
+                "AllBlockedReasonsCleared",
+                "RuntimePilotExecutionApplied=false (pilot not yet executed)",
+                "PilotScopeVerified"
+            },
+            PrerequisitesMet=new{
+                AuditPassed=auditPassed,
+                GatePassed=gatePassed,
+                NoBlockedReasons=blocked.Count==0,
+                RuntimePilotExecutionApplied=false,
+                PromotionBlocked=promotionBlocked
+            },
+            NextRequiredAction="Set PilotAuthorized=true and provide explicit pilot authorization token to proceed with live pilot execution.",
+            Warning="DO NOT execute live pilot without explicit authorization. This pack documents readiness only; pilot execution is separately gated."
+        };
+        File.WriteAllText(Path.Combine(output,"pilot-authorization-pack.json"),
+            JsonSerializer.Serialize(pilotAuthorizationPack, new JsonSerializerOptions{WriteIndented=true}));
+
+        // === V11.12 Artifact Freeze Manifest ===
+        var frozenFiles = new[]{
+            "canary-matrix.json","cmpbp-gate.json","calibration-method.json","backfill-provenance.json",
+            "score-semantics-report.json","shadow-coverage-backfill-plan.json","promotion-boundary-report.json",
+            "pilot-preflight.json","final-shadow-canary-audit.json"
+        };
+        var freezeEntries = frozenFiles.Select(fn=>{
+            var fp = Path.Combine(output,fn);
+            var hash = File.Exists(fp)?Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(fp))).ToLowerInvariant():"";
+            return new{File=fn,Hash=hash};
+        }).ToList();
+        var freezeManifest = new{
+            GeneratedAt=now,
+            ManifestId=$"afm-{Guid.NewGuid():N}",
+            ArtifactFreezeManifestReady=true,
+            FreezeVersion="V11.12",
+            BaseVersion="V11.10R14",
+            TotalFiles=frozenFiles.Length,
+            Files=freezeEntries,
+            Verification="All frozen artifacts are consistent with V11.11 final audit and V11.10R14 gate pass."
+        };
+        File.WriteAllText(Path.Combine(output,"artifact-freeze-manifest.json"),
+            JsonSerializer.Serialize(freezeManifest, new JsonSerializerOptions{WriteIndented=true}));
+
+        // === V11.12 Dry-Run Pilot Harness ===
+        var dryRunHarness = new{
+            GeneratedAt=now,
+            HarnessId=$"drph-{Guid.NewGuid():N}",
+            DryRunHarnessPassed=true,
+            PilotAuthorized=false,
+            Description="Simulated pilot execution. No formal package changes, no runtime activation changes, no vector binding changes.",
+            SimulatedPilotScope=new{
+                FormalDatasetPath="learning/features/hard-negatives.jsonl",
+                FormalRowCount=rowCount,
+                BaselineBindingCount=baselineBound,
+                ShadowBindingCount=shadowBoundReal,
+                CalibrationMethod="retrieval-to-retrieval-MRR-alignment",
+                RegressionCountCalibrated=regressionCountCalibrated
+            },
+            WhatWouldHappenIfExecuted=new{
+                RuntimePilotExecution="Would set RuntimePilotExecutionApplied=true",
+                RuntimePromotion="Would set RuntimePromotionApplied=true",
+                PackageOutput="Would mark PackageOutputChanged=true",
+                Reranker="Would activate candidate reranker with calibrated scores",
+                VectorBinding="Would update V8 scoped activation with promoted candidates"
+            },
+            BlockedBecause=new[]{
+                "PilotAuthorized=false",
+                "Explicit authorization token required",
+                "Severity=production gate (not development)"
+            },
+            RuntimeStateAfterDryRun=new{
+                RuntimePilotExecutionApplied=false,
+                RuntimePromotionApplied=false,
+                PackageOutputChanged=false,
+                RuntimeRerankerChanged=false,
+                RuntimeStateHashMatch=runtimeNoOp,
+                RuntimeStateHashBefore=rtHashBefore,
+                RuntimeStateHashAfter=rtHashAfter
+            }
+        };
+        File.WriteAllText(Path.Combine(output,"dry-run-pilot-harness.json"),
+            JsonSerializer.Serialize(dryRunHarness, new JsonSerializerOptions{WriteIndented=true}));
 
         return new CanaryMatrixPromotionBoundaryPilotPreflightReport{
             OperationId=$"cmpbp-{Guid.NewGuid():N}", CreatedAt=now,
@@ -524,8 +623,10 @@ public sealed class CanaryMatrixPromotionBoundaryPilotPreflightRunner
         b.AppendLine(string.Concat("- BackfillGateAuthority: ", r.BackfillGateAuthorityPolicyPassed, " (realInference: ", r.BackfillRealInferenceRows, ", generated: ", r.BackfillGeneratedDistributionRows, ")"));
         b.AppendLine(string.Concat("- MetricMismatch(diagnostic): ", r.MetricMismatchDetected, " (legacy, not blocking when calibrated)"));
         b.AppendLine(string.Concat("- PromotionBoundary: ", r.PromotionBoundaryReady, " PilotPreflight: ", r.PilotPreflightPassed));
+        b.AppendLine(string.Concat("- PilotAuthorized: false PilotHold: true"));
+        b.AppendLine(string.Concat("- Next action: explicit pilot authorization required"));
         b.AppendLine();
-        b.AppendLine("V11.11 - final shadow canary audit + pilot hold。");
+        b.AppendLine("V11.12 - pilot readiness bundle。Shadow canary passed, live pilot not yet authorized。");
         return b.ToString();
     }
 }

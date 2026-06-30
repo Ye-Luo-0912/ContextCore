@@ -1,6 +1,6 @@
 ﻿# CMPBP (Gate)
 
-生成: 2026-06-30T14:40:46.9616092+00:00 操作: cmpbp-0c7a49d4137148b693e727935a42ed0a
+生成: 2026-06-30T17:20:49.6550908+00:00 操作: cmpbp-699b3aa67f814e038a45eb1fe3f525f7
 
 ## Decision
 - PackPassed: True GatePassed: True
@@ -10,5 +10,7 @@
 - BackfillGateAuthority: True (realInference: 60, generated: 0)
 - MetricMismatch(diagnostic): True (legacy, not blocking when calibrated)
 - PromotionBoundary: True PilotPreflight: True
+- PilotAuthorized: false PilotHold: true
+- Next action: explicit pilot authorization required
 
-V11.11 - final shadow canary audit + pilot hold。
+V11.12 - pilot readiness bundle。Shadow canary passed, live pilot not yet authorized。

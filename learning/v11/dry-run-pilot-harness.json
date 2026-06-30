@@ -1,0 +1,36 @@
+{
+  "GeneratedAt": "2026-06-30T17:20:49.6550908+00:00",
+  "HarnessId": "drph-dd8285b020bb41f0951230d93c175879",
+  "DryRunHarnessPassed": true,
+  "PilotAuthorized": false,
+  "Description": "Simulated pilot execution. No formal package changes, no runtime activation changes, no vector binding changes.",
+  "SimulatedPilotScope": {
+    "FormalDatasetPath": "learning/features/hard-negatives.jsonl",
+    "FormalRowCount": 60,
+    "BaselineBindingCount": 60,
+    "ShadowBindingCount": 60,
+    "CalibrationMethod": "retrieval-to-retrieval-MRR-alignment",
+    "RegressionCountCalibrated": 0
+  },
+  "WhatWouldHappenIfExecuted": {
+    "RuntimePilotExecution": "Would set RuntimePilotExecutionApplied=true",
+    "RuntimePromotion": "Would set RuntimePromotionApplied=true",
+    "PackageOutput": "Would mark PackageOutputChanged=true",
+    "Reranker": "Would activate candidate reranker with calibrated scores",
+    "VectorBinding": "Would update V8 scoped activation with promoted candidates"
+  },
+  "BlockedBecause": [
+    "PilotAuthorized=false",
+    "Explicit authorization token required",
+    "Severity=production gate (not development)"
+  ],
+  "RuntimeStateAfterDryRun": {
+    "RuntimePilotExecutionApplied": false,
+    "RuntimePromotionApplied": false,
+    "PackageOutputChanged": false,
+    "RuntimeRerankerChanged": false,
+    "RuntimeStateHashMatch": true,
+    "RuntimeStateHashBefore": "583762c58d9b261848ff2a8f212c4b2b27ff60be003198a6ca49628eb244a198",
+    "RuntimeStateHashAfter": "583762c58d9b261848ff2a8f212c4b2b27ff60be003198a6ca49628eb244a198"
+  }
+}

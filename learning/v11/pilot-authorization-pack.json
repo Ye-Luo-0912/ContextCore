@@ -1,0 +1,31 @@
+{
+  "GeneratedAt": "2026-06-30T17:20:49.6550908+00:00",
+  "PackId": "pap-708232a4b02f4872a7325d2322eb109d",
+  "PilotAuthorizationPackReady": true,
+  "PilotAuthorized": false,
+  "AuthorizationRequired": "Explicit pilot authorization flag must be set before live pilot execution.",
+  "CurrentAuthorizationState": {
+    "RuntimePilotExecution": false,
+    "RuntimePromotion": false,
+    "PackageOutputChange": false,
+    "RerankerChange": false,
+    "VectorBindingChange": false
+  },
+  "RequiredPrerequisites": [
+    "FinalShadowCanaryAuditPassed=true",
+    "ArtifactFreezeManifestReady=true",
+    "GatePassed=true",
+    "AllBlockedReasonsCleared",
+    "RuntimePilotExecutionApplied=false (pilot not yet executed)",
+    "PilotScopeVerified"
+  ],
+  "PrerequisitesMet": {
+    "AuditPassed": true,
+    "GatePassed": true,
+    "NoBlockedReasons": true,
+    "RuntimePilotExecutionApplied": false,
+    "PromotionBlocked": true
+  },
+  "NextRequiredAction": "Set PilotAuthorized=true and provide explicit pilot authorization token to proceed with live pilot execution.",
+  "Warning": "DO NOT execute live pilot without explicit authorization. This pack documents readiness only; pilot execution is separately gated."
+}
