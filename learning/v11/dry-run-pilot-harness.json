@@ -1,6 +1,6 @@
 {
-  "GeneratedAt": "2026-07-01T07:40:32.0575288+00:00",
-  "HarnessId": "drph-0720527c479d42fd99cc7d5c8bfe1b75",
+  "GeneratedAt": "2026-07-01T08:16:43.9126555+00:00",
+  "HarnessId": "drph-7875c94b0b2d43dca43af9ac03a1b974",
   "DryRunHarnessPassed": true,
   "PilotAuthorized": false,
   "Description": "Simulated pilot execution. No formal package changes, no runtime activation changes, no vector binding changes.",

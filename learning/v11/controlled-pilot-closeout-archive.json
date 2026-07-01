@@ -1,32 +1,30 @@
 {
   "GeneratedAt": "2026-07-01T08:16:43.9126555+00:00",
-  "FreezeId": "pcf-99cd87710551497c9731e202709f68ad",
-  "ControlledPilotCloseoutFreezePassed": true,
-  "CloseoutVersion": "V11.17",
-  "PilotScope": "demo-workspace/demo-collection",
-  "FrozenFromVersions": [
+  "ArchiveId": "cpca-db6e84a1e14f465982424f398941c4ea",
+  "CloseoutArchiveReady": true,
+  "ArchivedVersions": [
     "V11.13",
     "V11.14",
     "V11.15",
-    "V11.16"
+    "V11.16",
+    "V11.17"
   ],
   "SourceCommit": "7f8da8122f70b4cdedc0cfefa6896eab01f2b659",
-  "CloseoutCommit": "7f8da8122f70b4cdedc0cfefa6896eab01f2b659",
-  "ArtifactCommitRange": "V11.10R10..7f8da812",
-  "ControlledPilotSummary": {
+  "CloseoutSourceCommit": "7f8da8122f70b4cdedc0cfefa6896eab01f2b659",
+  "AuditAcceptedCommit": "7f8da8122f70b4cdedc0cfefa6896eab01f2b659",
+  "ArchivalStatus": "ARCHIVED - controlled pilot V11.13-V11.17 permanently recorded.",
+  "ControlledPilotOutcome": {
     "PilotExecuted": true,
     "PilotAuthorized": true,
-    "ObservationWindowPassed": true,
-    "StabilityPassed": true,
-    "RollbackDrillPassed": true,
-    "ConsistencyAuditPassed": true,
     "GatePassed": true,
     "RegressionCountCalibrated": 0,
     "ShadowCoverage": "60/60",
-    "RuntimeStateStable": true,
+    "SyntheticScoreCount": 0,
+    "RuntimeStable": true,
+    "Scope": "demo-workspace/demo-collection",
     "GlobalDefaultOn": false
   },
-  "FrozenArtifacts": [
+  "FrozenCoreArtifacts": [
     {
       "File": "cmpbp-pilot.json",
       "Hash": "744234cf3c24c895ab830fad477f9b7b5f11d6346379a1b6640d2e51e3703094"
@@ -66,26 +64,8 @@
     {
       "File": "pilot-stability-report.json",
       "Hash": "90106b142e12cfe775b3d082f3038ea23692689f3aafc655abc78a0d8217100a"
-    },
-    {
-      "File": "rollback-drill-evidence.json",
-      "Hash": "880f0d3d32c56a445929939b1ab1c8d49cdeacd0d5fa575cc65bad9beccc6d47"
-    },
-    {
-      "File": "canary-matrix.json",
-      "Hash": "0a5654070ea0e428edbce824062beae4b44ed3acb5ce0b755fb9d3fca2ee1307"
-    },
-    {
-      "File": "calibration-method.json",
-      "Hash": "e944d2bf60c4e6d3225e544c4d545beb0dd3dfc27dd263ea380dcfa1b6cb6ca1"
-    },
-    {
-      "File": "backfill-provenance.json",
-      "Hash": "5198c3daac604a048763ecbf4f4045b1e878bb96fb3b7b898cd8c717145f62b1"
     }
   ],
-  "CloseoutDecision": "CONTROLLED PILOT CLOSED OUT. All audits pass. Scope: demo-workspace/demo-collection. Ready for freeze archive.",
-  "LatestAcceptedCommit": "7f8da8122f70b4cdedc0cfefa6896eab01f2b659",
-  "CloseoutMetadataValid": true,
-  "NextPhase": "Wider pilot requires explicit re-authorization via wider-pilot-decision-pack.json."
+  "ArchiveIntegrityVerified": true,
+  "RetrievalInstructions": "All archived artifacts are in learning/v11/. Closeout freeze is in pilot-closeout-freeze.json."
 }

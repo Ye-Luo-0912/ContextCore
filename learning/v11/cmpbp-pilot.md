@@ -1,6 +1,6 @@
 ﻿# CMPBP (Pilot)
 
-生成: 2026-07-01T07:40:32.0575288+00:00 操作: cmpbp-df5d09b7311c431c901c678156f6744a
+生成: 2026-07-01T08:16:43.9126555+00:00 操作: cmpbp-2ec903935c9e4e78bb1e8a2550e24888
 
 ## Decision
 - PackPassed: True GatePassed: True
@@ -14,4 +14,4 @@
 - GlobalDefaultOn: False RollbackReady: True PostPilotAudit: True
 - RuntimePilotExecutionApplied: True
 
-V11.17 - closeout metadata cleanup & wider-pilot pre-authorization readiness。
+V11.18 - closeout archive & wider-pilot authorization gate。Archived, wider pilot requires explicit gate pass。

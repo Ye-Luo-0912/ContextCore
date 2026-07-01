@@ -1,0 +1,30 @@
+{
+  "GeneratedAt": "2026-07-01T08:16:43.9126555+00:00",
+  "GateId": "wpag-24c12916f9e1477b9f3e7e345760eccd",
+  "WiderPilotAuthorizationGateReady": true,
+  "WiderPilotAuthorized": false,
+  "WiderPilotGatePassed": false,
+  "GateName": "wider-pilot-authorization-gate",
+  "Description": "Formal authorization gate for wider pilot. Must pass all conditions before wider pilot can execute.",
+  "RequiredConditions": [
+    "Explicit authorization token provided",
+    "Target scope defined (beyond demo-workspace/demo-collection)",
+    "Wider rollback plan validated",
+    "Wider observation plan approved (minimum rounds, failure thresholds)",
+    "Controlled pilot closeout archive complete",
+    "PilotAuthorized reset and re-issued for wider scope",
+    "All controlled pilot artifacts consistent and archived"
+  ],
+  "CurrentStatus": {
+    "AuthorizationTokenPresent": false,
+    "WiderScopeDefined": false,
+    "WiderRollbackPlanValidated": false,
+    "WiderObservationPlanApproved": false,
+    "ControlledPilotCloseoutComplete": true,
+    "PilotAuthorizedForWider": false
+  },
+  "ConditionsMet": 0,
+  "ConditionsRequired": 7,
+  "BlockedReason": "All 7 conditions require explicit action. No condition auto-satisfies. Wider pilot must be explicitly authorized.",
+  "NextAction": "Define wider scope, prepare authorization materials, submit for explicit authorization review."
+}

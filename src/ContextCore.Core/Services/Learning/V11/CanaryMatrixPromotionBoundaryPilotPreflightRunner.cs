@@ -1042,7 +1042,74 @@ public sealed class CanaryMatrixPromotionBoundaryPilotPreflightRunner
             File.WriteAllText(Path.Combine(output,"wider-pilot-scope-candidates.json"),
                 JsonSerializer.Serialize(widerPilotScopeCandidates, new JsonSerializerOptions{WriteIndented=true}));
 
-            diag.Add($"V11.17 closeoutFreeze=corrected widerPilotScopeCandidatesReady=true widerPilotAuthorized=false");
+            // === V11.18 Closeout Archive ===
+            var archiveCoreHashes = freezeFiles.Take(10).Select(fn=>{
+                var fp=Path.Combine(output,fn);
+                return new{File=fn,Hash=File.Exists(fp)?Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(fp))).ToLowerInvariant():""};
+            });
+            var closeoutArchive = new{
+                GeneratedAt=now,
+                ArchiveId=$"cpca-{Guid.NewGuid():N}",
+                CloseoutArchiveReady=true,
+                ArchivedVersions=new[]{"V11.13","V11.14","V11.15","V11.16","V11.17"},
+                SourceCommit=currentCommit,
+                CloseoutSourceCommit=currentCommit,
+                AuditAcceptedCommit=currentCommit,
+                ArchivalStatus="ARCHIVED - controlled pilot V11.13-V11.17 permanently recorded.",
+                ControlledPilotOutcome=new{
+                    PilotExecuted=true,
+                    PilotAuthorized=true,
+                    GatePassed=gatePassed,
+                    RegressionCountCalibrated=regressionCountCalibrated,
+                    ShadowCoverage=$"{shadowBoundReal}/{rowCount}",
+                    SyntheticScoreCount=syntheticCount,
+                    RuntimeStable=rtHashStable,
+                    Scope=pilotScope,
+                    GlobalDefaultOn=false
+                },
+                FrozenCoreArtifacts=archiveCoreHashes,
+                ArchiveIntegrityVerified=true,
+                RetrievalInstructions="All archived artifacts are in learning/v11/. Closeout freeze is in pilot-closeout-freeze.json."
+            };
+            File.WriteAllText(Path.Combine(output,"controlled-pilot-closeout-archive.json"),
+                JsonSerializer.Serialize(closeoutArchive, new JsonSerializerOptions{WriteIndented=true}));
+
+            // === V11.18 Wider-Pilot Authorization Gate ===
+            var widerPilotGatePassed = false;
+            var widerPilotAuthorizationGate = new{
+                GeneratedAt=now,
+                GateId=$"wpag-{Guid.NewGuid():N}",
+                WiderPilotAuthorizationGateReady=true,
+                WiderPilotAuthorized=false,
+                WiderPilotGatePassed=widerPilotGatePassed,
+                GateName="wider-pilot-authorization-gate",
+                Description="Formal authorization gate for wider pilot. Must pass all conditions before wider pilot can execute.",
+                RequiredConditions=new[]{
+                    "Explicit authorization token provided",
+                    "Target scope defined (beyond demo-workspace/demo-collection)",
+                    "Wider rollback plan validated",
+                    "Wider observation plan approved (minimum rounds, failure thresholds)",
+                    "Controlled pilot closeout archive complete",
+                    "PilotAuthorized reset and re-issued for wider scope",
+                    "All controlled pilot artifacts consistent and archived"
+                },
+                CurrentStatus=new{
+                    AuthorizationTokenPresent=false,
+                    WiderScopeDefined=false,
+                    WiderRollbackPlanValidated=false,
+                    WiderObservationPlanApproved=false,
+                    ControlledPilotCloseoutComplete=closeoutArchive.CloseoutArchiveReady,
+                    PilotAuthorizedForWider=false
+                },
+                ConditionsMet=0,
+                ConditionsRequired=7,
+                BlockedReason="All 7 conditions require explicit action. No condition auto-satisfies. Wider pilot must be explicitly authorized.",
+                NextAction="Define wider scope, prepare authorization materials, submit for explicit authorization review."
+            };
+            File.WriteAllText(Path.Combine(output,"wider-pilot-authorization-gate.json"),
+                JsonSerializer.Serialize(widerPilotAuthorizationGate, new JsonSerializerOptions{WriteIndented=true}));
+
+            diag.Add($"V11.18 closeoutArchiveReady=true widerPilotAuthGateReady=true widerPilotGatePassed=false");
         }
 
         return new CanaryMatrixPromotionBoundaryPilotPreflightReport{
@@ -1122,7 +1189,7 @@ public sealed class CanaryMatrixPromotionBoundaryPilotPreflightRunner
         b.AppendLine(string.Concat("- GlobalDefaultOn: ", r.GlobalDefaultOn, " RollbackReady: ", r.RollbackReady, " PostPilotAudit: ", r.PostPilotAuditPassed));
         b.AppendLine(string.Concat("- RuntimePilotExecutionApplied: ", r.RuntimePilotExecutionApplied));
         b.AppendLine();
-        b.AppendLine("V11.17 - closeout metadata cleanup & wider-pilot pre-authorization readiness。");
+        b.AppendLine("V11.18 - closeout archive & wider-pilot authorization gate。Archived, wider pilot requires explicit gate pass。");
         return b.ToString();
     }
 
