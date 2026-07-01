@@ -1,0 +1,64 @@
+{
+  "GeneratedAt": "2026-07-01T10:59:36.5663189\u002B00:00",
+  "SpecVersion": "V13.1",
+  "AllCandidatesUnified": true,
+  "SingleUnifiedModel": true,
+  "UnifiedCandidate": {
+    "Description": "Single candidate type replacing VectorQueryPreviewCandidate, ContextMemoryItem, HybridCandidateSource, relation graph candidates, and keyword/lexical candidates",
+    "Fields": {
+      "CandidateId": "string \u2014 unique identifier across all source types",
+      "ItemId": "string \u2014 original item reference",
+      "SourceType": "byte enum (CandidateSourceType: Vector,Memory,Graph,Keyword,Anchor,Constraint)",
+      "Contribution": "byte enum (SourceContribution: Primary,Supplementary,Fallback,Diagnostic)",
+      "Authority": "byte enum (DataAuthorityKind: Authoritative,Shadow,Diagnostic,Synthetic,Derived)",
+      "InputSource": "byte enum (InputSourceKind: User,Llm,Tool,Web,File,Runtime,System)",
+      "Layer": "string \u2014 memory layer (Working,Stable,Active,Deprecated)",
+      "Lifecycle": "string \u2014 lifecycle state (Current,Stale,Superseded,Rejected,Historical)",
+      "Content": "string \u2014 candidate content text",
+      "ContentFormat": "string \u2014 content format (text,json,markdown)",
+      "EstimatedTokens": "int \u2014 token estimate for budget planning",
+      "Tags": "string[] \u2014 classification tags",
+      "SourceRefs": "string[] \u2014 source document references",
+      "RelationRefs": "string[] \u2014 graph relation references",
+      "Metadata": "dict \u2014 extensible metadata",
+      "CreatedAt": "datetime",
+      "UpdatedAt": "datetime"
+    },
+    "Replaces": [
+      "VectorQueryPreviewCandidate (VectorIndexDtos.cs:300)",
+      "ContextMemoryItem (MemoryDtos.cs:150)",
+      "WorkingMemoryItem (MemoryDtos.cs:205)",
+      "HybridCandidateBuilder string constants (dense/lexical/anchor)",
+      "RelationExplainResponse graph candidates",
+      "LexicalCandidateProvider keyword candidates"
+    ]
+  },
+  "Enums": {
+    "CandidateSourceType": [
+      "Vector=1",
+      "Memory=2",
+      "Graph=3",
+      "Keyword=4",
+      "Anchor=5",
+      "Constraint=6"
+    ],
+    "SourceContribution": [
+      "Primary=1",
+      "Supplementary=2",
+      "Fallback=3",
+      "Diagnostic=4"
+    ],
+    "ScoringFeature": [
+      "Relevance=0",
+      "Authority=1",
+      "Freshness=2",
+      "StructuralFit=3",
+      "UserPreference=4"
+    ],
+    "ExistingEnums": [
+      "InputSourceKind",
+      "DataAuthorityKind",
+      "DataUsageFlags"
+    ]
+  }
+}

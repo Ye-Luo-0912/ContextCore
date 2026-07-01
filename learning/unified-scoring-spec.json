@@ -1,0 +1,71 @@
+{
+  "GeneratedAt": "2026-07-01T10:59:36.5663189\u002B00:00",
+  "SpecVersion": "V13.1",
+  "SingleScoringPipeline": true,
+  "NoDuplicateScoringLogic": true,
+  "ExplainabilityRequired": true,
+  "Engine": {
+    "Name": "UnifiedCandidateScorer",
+    "Description": "Single scoring pipeline: score(UnifiedCandidate, QueryContext) -\u003E UnifiedScore with per-feature explanation",
+    "Signature": "UnifiedScore Score(UnifiedCandidate candidate, QueryContext context)",
+    "Output": "UnifiedScore with FinalScore [0..1], per-feature breakdown, and human-readable rationale"
+  },
+  "Features": [
+    {
+      "Feature": "Relevance",
+      "Weight": 1,
+      "Range": "[0..1]",
+      "Description": "Semantic, lexical, and anchor match strength between query and candidate",
+      "Computation": "weighted composite: 0.4*semantic \u002B 0.35*lexical \u002B 0.25*anchor_match",
+      "Explainability": "top 3 contributing terms/anchors with individual scores"
+    },
+    {
+      "Feature": "Authority",
+      "Weight": 0.8,
+      "Range": "[0..1]",
+      "Description": "Source trustworthiness and evidence backing",
+      "Computation": "AuthorityKind mapping: Authoritative=1.0, Shadow=0.7, Derived=0.5, Diagnostic=0.3, Synthetic=0.1",
+      "Explainability": "authority kind \u002B source provenance"
+    },
+    {
+      "Feature": "Freshness",
+      "Weight": 0.6,
+      "Range": "[0..1]",
+      "Description": "Temporal relevance \u2014 how recently the candidate was created/updated",
+      "Computation": "decay function: max(0, 1 - days_since_update/365)",
+      "Explainability": "days since last update"
+    },
+    {
+      "Feature": "StructuralFit",
+      "Weight": 0.5,
+      "Range": "[0..1]",
+      "Description": "How well the candidate fits the target section/packaging structure",
+      "Computation": "token_budget_fit * section_type_match * lifecycle_suitability",
+      "Explainability": "target section, estimated tokens vs budget, lifecycle impact"
+    },
+    {
+      "Feature": "UserPreference",
+      "Weight": 0.4,
+      "Range": "[0..1]",
+      "Description": "User preference signals from feedback, implicit interaction, explicit selection",
+      "Computation": "weighted preference signal aggregation (feedback \u002B selection \u002B interaction)",
+      "Explainability": "preference source (feedback/selection/interaction) with recency"
+    }
+  ],
+  "FinalScore": {
+    "Formula": "sum(feature.score * feature.weight) / sum(weights)",
+    "Normalization": "Clamped to [0..1]",
+    "Penalties": [
+      "Lifecycle penalty: Rejected -0.4, Deprecated -0.22, Superseded -0.22, Historical -0.16",
+      "Hard exclusion: content matching \u0027\u7EDD\u4E0D\u4F7F\u7528/\u5F7B\u5E95\u820D\u5F03\u4E0D\u7528\u0027 \u2192 score=0"
+    ]
+  },
+  "DeprecatedScoring": [
+    "ItemScoreBreakdown (13-dimension) in BasicContextPackageBuilder.cs \u2014 replaced by UnifiedCandidateScorer",
+    "ScoreWorkingMemoryForAnchors() in BasicContextPackageBuilder.cs \u2014 replaced by Relevance feature",
+    "ScoreStableMemoryForInjection() in ContextRecallSignalPolicy.cs \u2014 split into Relevance \u002B Authority \u002B Freshness",
+    "LifecycleAwareRankerShadowScorer \u2014 absorbed into Freshness/StructuralFit with diagnostic override",
+    "LexicalCandidateProvider.ScoreEntry() \u2014 absorbed into Relevance feature (lexical sub-dimension)",
+    "HybridCandidateBuilder.Build() \u2014 replaced by UnifiedCandidate construction via CandidateAggregator"
+  ]
+}

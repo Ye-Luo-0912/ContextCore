@@ -1,0 +1,72 @@
+{
+  "GeneratedAt": "2026-07-01T10:59:36.5663189\u002B00:00",
+  "ReportVersion": "V13.1",
+  "VectorMemoryGraphUnified": true,
+  "PackageBuilderSeparated": true,
+  "Description": "All retrieval sources (vector, memory, graph, keyword) converge through CandidateAggregator before scoring. No source outputs directly into final results.",
+  "Architecture": {
+    "Before": "Vector \u2192 vector candidates | Memory \u2192 memory candidates | Graph \u2192 relation candidates | Keyword \u2192 lexical candidates | Each has own scoring \u2192 Package builder merges \u002B scores again",
+    "After": "Vector \u2192 CandidateAggregator | Memory \u2192 CandidateAggregator | Graph \u2192 CandidateAggregator | Keyword \u2192 CandidateAggregator | \u2192 UnifiedCandidateScorer \u2192 Packaging (token budget \u002B dedup \u002B sectioning only)",
+    "KeyChange": "Scoring and ranking moved OUT of package builder and INTO unified pipeline. Package builder becomes a pure structural operation."
+  },
+  "CandidateAggregator": {
+    "Description": "Central convergence point for all retrieval sources. Transforms source-specific results into UnifiedCandidates with traceable provenance.",
+    "Methods": [
+      "Register(VectorQueryResult) -\u003E IReadOnlyList\u003CUnifiedCandidate\u003E",
+      "Register(MemoryRecallResult) -\u003E IReadOnlyList\u003CUnifiedCandidate\u003E",
+      "Register(GraphExpansionResult) -\u003E IReadOnlyList\u003CUnifiedCandidate\u003E",
+      "Register(KeywordMatchResult) -\u003E IReadOnlyList\u003CUnifiedCandidate\u003E",
+      "Aggregate() -\u003E CandidateAggregatorResult with dedup, scoring, and ordering"
+    ],
+    "DedupStrategy": "CandidateId-based dedup; conflicts resolved by Contribution priority (Primary \u003E Supplementary \u003E Fallback \u003E Diagnostic)",
+    "Ordering": "By FinalScore descending, then EstimatedTokens descending, then CreatedAt descending"
+  },
+  "PackageBuilderScope": [
+    "Token budgeting \u2014 enforce per-section and total token limits",
+    "Deduplication \u2014 remove duplicates across sections",
+    "Section assignment \u2014 route candidates to target sections",
+    "Lifecycle filtering \u2014 reject/keep based on lifecycle state",
+    "Constraint enforcement \u2014 apply must-have/must-not rules",
+    "Output formatting \u2014 final package structure"
+  ],
+  "PackageBuilderRemoved": [
+    "ScoreWorkingMemoryForAnchors() \u2014 moved to UnifiedCandidateScorer.Relevance",
+    "ScoreStableMemoryForInjection() \u2014 split across Relevance/Authority/Freshness features",
+    "RecallWorkingMemory() scoring portion \u2014 absorbed by CandidateAggregator \u002B UnifiedCandidateScorer",
+    "RetrievalPackingPolicy.OrderCandidates() \u2014 replaced by UnifiedScore.FinalScore ordering",
+    "ItemScoreBreakdown \u2014 replaced by FeatureScore breakdown",
+    "ResolveWorkingMemoryReserveScore() \u2014 absorbed by StructuralFit feature"
+  ],
+  "SourceMapping": [
+    {
+      "Source": "Vector (dense/embedding)",
+      "SourceType": "CandidateSourceType.Vector",
+      "Contribution": "Primary"
+    },
+    {
+      "Source": "Memory (working/stable)",
+      "SourceType": "CandidateSourceType.Memory",
+      "Contribution": "Primary"
+    },
+    {
+      "Source": "Graph (relation expansion)",
+      "SourceType": "CandidateSourceType.Graph",
+      "Contribution": "Supplementary"
+    },
+    {
+      "Source": "Keyword (lexical match)",
+      "SourceType": "CandidateSourceType.Keyword",
+      "Contribution": "Supplementary"
+    },
+    {
+      "Source": "Anchor (semantic/keyword anchors)",
+      "SourceType": "CandidateSourceType.Anchor",
+      "Contribution": "Fallback"
+    },
+    {
+      "Source": "Constraint (must-have rules)",
+      "SourceType": "CandidateSourceType.Constraint",
+      "Contribution": "Diagnostic"
+    }
+  ]
+}

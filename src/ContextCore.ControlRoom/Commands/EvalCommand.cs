@@ -402,6 +402,7 @@ public static partial class EvalCommand
             !string.Equals(subcommand, "cmpbp-wider", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "input-provenance-scan", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "main-flow-cleanup", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "unified-scoring-convergence", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "formal-evidence-stabilization-replay-pilot-readiness", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "formal-evidence-stabilization-replay-pilot-readiness-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "learning-formal-evidence-realization-r1-pack", StringComparison.OrdinalIgnoreCase) &&
@@ -742,6 +743,7 @@ public static partial class EvalCommand
         Console.WriteLine("  eval cmpbp-wider (wider pilot with token + scope)");
         Console.WriteLine("  eval input-provenance-scan (data provenance inventory)");
         Console.WriteLine("  eval main-flow-cleanup (main flow cleanup report)");
+        Console.WriteLine("  eval unified-scoring-convergence");
             Console.WriteLine("  eval learning-formal-evidence-realization-r1-pack");
             Console.WriteLine("  eval learning-formal-evidence-realization-r1-pack-gate");
             Console.WriteLine("  eval dto-split-plan");
@@ -2346,6 +2348,12 @@ public static partial class EvalCommand
         if (string.Equals(subcommand, "main-flow-cleanup", StringComparison.OrdinalIgnoreCase))
         {
             await ExecuteMainFlowCleanupAsync(cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        if (string.Equals(subcommand, "unified-scoring-convergence", StringComparison.OrdinalIgnoreCase))
+        {
+            await ExecuteUnifiedScoringConvergenceAsync(cancellationToken).ConfigureAwait(false);
             return;
         }
 

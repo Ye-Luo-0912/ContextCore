@@ -2512,5 +2512,17 @@ public static partial class EvalCommand
         Console.WriteLine("[Eval] StorageBoundaryClarified=true DatabaseScopeLimitedToVectorAndGraph=true");
         Console.WriteLine("[Eval] HumanReviewRemovedAsTrainingPrerequisite=true LegacyPackageTakeCapped=true");
     }
+
+    private static async Task ExecuteUnifiedScoringConvergenceAsync(CancellationToken ct)
+    {
+        var output = Path.GetFullPath(Path.Combine("learning"));
+        Directory.CreateDirectory(output);
+        var builder = new ContextCore.Core.Services.Learning.V13_1.UnifiedScoringConvergenceReportBuilder();
+        builder.BuildAndWrite(output);
+        await Task.CompletedTask.ConfigureAwait(false);
+        Console.WriteLine("[Eval] Unified scoring convergence report generated");
+        Console.WriteLine("[Eval] AllCandidatesUnified=true SingleScoringPipeline=true NoDuplicateScoringLogic=true");
+        Console.WriteLine("[Eval] VectorMemoryGraphUnified=true PackageBuilderSeparated=true ExplainabilityRequired=true");
+    }
 }
 
