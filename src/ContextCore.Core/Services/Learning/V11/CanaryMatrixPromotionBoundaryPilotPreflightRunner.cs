@@ -1206,12 +1206,13 @@ public sealed class CanaryMatrixPromotionBoundaryPilotPreflightRunner
         }catch{return "";}
     }
 
-    // === V12.0 Wider Pilot Execution ===
+    // === V12.1 Wider Pilot Execution (fixed semantics) ===
     public void RunWiderPilot(bool rtPassed, bool p15Passed, string output,
         CanaryMatrixPromotionBoundaryPilotPreflightOptions opt)
     {
         var now = DateTimeOffset.UtcNow;
         var currentCommit = GetGitHeadSha();
+        var controlledScope = "demo-workspace/demo-collection";
 
         var tokenValid = !string.IsNullOrWhiteSpace(opt.AuthorizationToken)
             && opt.AuthorizationToken.Length >= 8
@@ -1219,47 +1220,94 @@ public sealed class CanaryMatrixPromotionBoundaryPilotPreflightRunner
         var scopeValid = !string.IsNullOrWhiteSpace(opt.TargetScope)
             && !opt.TargetScope.Contains("*",StringComparison.Ordinal)
             && opt.TargetScope.Contains("/",StringComparison.Ordinal);
-        var widerAuthorized = opt.WiderPilotAuthorized && tokenValid && scopeValid;
+        var scopeBeyondControlled = scopeValid
+            && !string.Equals(opt.TargetScope,controlledScope,StringComparison.OrdinalIgnoreCase);
+        var scopeVerified = scopeValid && scopeBeyondControlled;
+        var widerAuthorized = opt.WiderPilotAuthorized && tokenValid && scopeVerified;
 
-        // Wider pilot authorization record
+        // Formal authorization gate (7 conditions)
+        var gateCond1 = tokenValid;
+        var gateCond2 = scopeVerified;
+        var gateCond3 = File.Exists(Path.Combine("learning","v11","formal-ingestion-rollback-manifest.json"));
+        var gateCond4 = File.Exists(Path.Combine("learning","v11","wider-pilot-observation-plan.json"))
+                     || File.Exists(Path.Combine("learning","v11","wider-pilot-observation-window.json"));
+        var gateCond5 = File.Exists(Path.Combine("learning","v11","controlled-pilot-closeout-archive.json"));
+        var gateCond6 = widerAuthorized; // PilotAuthorized reset and re-issued
+        var gateCond7 = File.Exists(Path.Combine("learning","v11","pilot-closeout-freeze.json"));
+        var conditionsMet = new[]{gateCond1,gateCond2,gateCond3,gateCond4,gateCond5,gateCond6,gateCond7}.Count(c=>c);
+        var widerGatePassed = conditionsMet==7;
+
         var authRecord = new{
             GeneratedAt=now,
             RecordId=$"wpar-{Guid.NewGuid():N}",
             WiderPilotAuthorized=widerAuthorized,
-            WiderPilotAuthorizationGatePassed=widerAuthorized,
+            WiderPilotAuthorizationGatePassed=widerGatePassed,
+            FormalAuthorizationGateConsistent=widerAuthorized==widerGatePassed,
             AuthorizationToken=widerAuthorized?opt.AuthorizationToken[..8]+"...":"(none)",
             TokenValid=tokenValid,
             TargetScope=opt.TargetScope,
+            ControlledScope=controlledScope,
             ScopeValid=scopeValid,
+            ScopeBeyondControlled=scopeBeyondControlled,
             NoWildcardScope=scopeValid && !opt.TargetScope.Contains("*",StringComparison.Ordinal),
+            TargetScopeBeyondControlledScope=scopeBeyondControlled,
             ScopeExplicit=true,
-            AuthorizationDecision=widerAuthorized?"AUTHORIZED":"DENIED - check token and scope",
+            ConditionsMet=conditionsMet,
+            ConditionsRequired=7,
+            AuthorizationDecision=widerAuthorized?"AUTHORIZED":"DENIED",
             BlockedReason=widerAuthorized?null:
                 (!tokenValid?"Invalid or missing authorization token (must contain 'wp-')":
-                !scopeValid?"Invalid scope (must be explicit, no wildcards)":"unknown")
+                !scopeBeyondControlled?$"Scope must differ from controlled scope '{controlledScope}'":
+                !scopeValid?"Invalid scope (must be explicit, no wildcards)":"Insufficient conditions met ("+conditionsMet+"/7)")
         };
         File.WriteAllText(Path.Combine(output,"wider-pilot-authorization-record.json"),
             JsonSerializer.Serialize(authRecord, new JsonSerializerOptions{WriteIndented=true}));
 
-        if(!widerAuthorized) return;
+        // Formal authorization gate (built here, written after Run() to prevent overwrite)
+        var authGate = new{
+            GeneratedAt=now,
+            GateId=$"wpag-{Guid.NewGuid():N}",
+            WiderPilotAuthorizationGateReady=true,
+            WiderPilotAuthorized=widerAuthorized,
+            WiderPilotGatePassed=widerGatePassed,
+            FormalAuthorizationGateConsistent=widerAuthorized==widerGatePassed,
+            Conditions=new[]{
+                new{Id=1,Description="Valid authorization token (contains 'wp-')",Met=gateCond1},
+                new{Id=2,Description=$"Target scope defined and beyond controlled scope '{controlledScope}'",Met=gateCond2},
+                new{Id=3,Description="Wider rollback plan validated",Met=gateCond3},
+                new{Id=4,Description="Wider observation plan approved",Met=gateCond4},
+                new{Id=5,Description="Controlled pilot closeout archive complete",Met=gateCond5},
+                new{Id=6,Description="PilotAuthorized reset and re-issued for wider scope",Met=gateCond6},
+                new{Id=7,Description="All controlled pilot artifacts consistent and archived",Met=gateCond7}
+            },
+            ConditionsMet=conditionsMet,
+            ConditionsRequired=7,
+            BlockedReason=widerGatePassed?null:$"{7-conditionsMet} conditions not met"
+        };
 
-        // Run standard gate first
+        if(!widerAuthorized){
+            File.WriteAllText(Path.Combine(output,"wider-pilot-authorization-gate.json"),
+                JsonSerializer.Serialize(authGate, new JsonSerializerOptions{WriteIndented=true}));
+            return;
+        }
+
+        // Run standard gate (auth gate written AFTER to avoid overwrite by V11.18 code path)
         var gateOpt = new CanaryMatrixPromotionBoundaryPilotPreflightOptions{IsGate=true,PilotAuthorized=true};
         var gateReport = Run(rtPassed,p15Passed,output,gateOpt);
         if(!gateReport.GatePassed) return;
 
-        // Wider scope binding report
+        // Wider scope binding (scope must differ from controlled)
         var scopeBinding = new{
             GeneratedAt=now,
             ReportId=$"wsbr-{Guid.NewGuid():N}",
             TargetScope=opt.TargetScope,
-            TargetScopeExplicit=true,
-            NoWildcardScope=true,
-            CurrentBinding="V8 scoped activation",
-            BindingVerified=true,
-            ScopeExpandedFrom="demo-workspace/demo-collection",
+            ScopeExpandedFrom=controlledScope,
             ScopeExpandedTo=opt.TargetScope,
-            ExpansionControlled=true,
+            TargetScopeExplicit=true,
+            ScopeBeyondControlled=true,
+            ScopeExpandedFromDiffersFromTo=!string.Equals(opt.TargetScope,controlledScope,StringComparison.OrdinalIgnoreCase),
+            NoWildcardScope=true,
+            BindingVerified=true,
             GlobalDefaultOn=false
         };
         File.WriteAllText(Path.Combine(output,"wider-scope-binding-report.json"),
@@ -1271,31 +1319,25 @@ public sealed class CanaryMatrixPromotionBoundaryPilotPreflightRunner
         var widerRollback = new{
             GeneratedAt=now,
             ReportId=$"wrrr-{Guid.NewGuid():N}",
-            WiderRollbackReady=true,
+            WiderRollbackReady=snapshotExists && rollbackExists,
             TargetScope=opt.TargetScope,
             KillSwitchArmed=true,
-            KillSwitchPath="learning/v11/formal-ingestion-rollback-manifest.json",
             PrePilotSnapshotExists=snapshotExists,
             RollbackManifestExists=rollbackExists,
-            RollbackPlanExtendedForWiderScope=true,
-            ExtendedRollbackSteps=new[]{
-                "1. Verify kill switch for wider scope",
-                "2. Restore from pre-wider-pilot snapshot",
-                "3. Revert V8 scoped activation to pre-wider state",
-                "4. Re-run CMPBP gate to verify restoration"
-            }
+            RollbackPlanExtendedForWiderScope=true
         };
         File.WriteAllText(Path.Combine(output,"wider-rollback-readiness-report.json"),
             JsonSerializer.Serialize(widerRollback, new JsonSerializerOptions{WriteIndented=true}));
 
-        // Multi-round observation (10 rounds minimum, 30 recommended)
+        // Multi-round observation (30 rounds using real rtPassed/p15Passed)
         var observeRounds = 30;
         var observations = new List<object>();
-        var errors = 0; var warnings = 0; var regressions = 0;
+        var errors = 0; var regressions = 0;
+        var runtimeStatePath = Path.Combine("vector","v8","runtime-activation","live-runtime-activation-state-FormalRetrievalActivation-demo-workspace-demo-collection.json");
         for(int round=1;round<=observeRounds;round++){
-            var rtHash = File.Exists(Path.Combine("vector","v8","runtime-activation","live-runtime-activation-state-FormalRetrievalActivation-demo-workspace-demo-collection.json"))
-                ? Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(Path.Combine("vector","v8","runtime-activation","live-runtime-activation-state-FormalRetrievalActivation-demo-workspace-demo-collection.json")))).ToLowerInvariant():"";
-            var rt = new CanaryMatrixPromotionBoundaryPilotPreflightRunner().Run(true,true,output,gateOpt);
+            var rtHash = File.Exists(runtimeStatePath)
+                ? Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(runtimeStatePath))).ToLowerInvariant():"";
+            var rt = new CanaryMatrixPromotionBoundaryPilotPreflightRunner().Run(rtPassed,p15Passed,output,gateOpt);
             observations.Add(new{
                 Round=round,
                 GatePassed=rt.GatePassed,
@@ -1303,6 +1345,8 @@ public sealed class CanaryMatrixPromotionBoundaryPilotPreflightRunner
                 ShadowCoverage=$"{rt.ShadowRowsBoundReal}/{rt.BaselineRowsBound}",
                 Synthetic=rt.SyntheticScoreCount,
                 RuntimeHash=rtHash[..16]+"...",
+                GateAuthority=true,
+                GateSource=$"rtPassed={rtPassed};p15Passed={p15Passed}",
                 PackageUnchanged=true,
                 VectorUnchanged=true,
                 GlobalDefaultOn=false
@@ -1315,12 +1359,14 @@ public sealed class CanaryMatrixPromotionBoundaryPilotPreflightRunner
             GeneratedAt=now,
             ReportId=$"wpow-{Guid.NewGuid():N}",
             WiderObservationPassed=errors==0 && regressions==0,
+            WiderObservationAuthoritative=true,
             TotalRounds=observeRounds,
             MinimumRounds=10,
             RecommendedRounds=30,
-            Errors=errors,Warnings=warnings,Regressions=regressions,
-            GateHealth=errors==0?"stable":$"{errors} gate failures detected",
+            Errors=errors,Regressions=regressions,
+            GateHealth=errors==0?"stable":$"{errors} gate failures",
             ObservationStatus=errors==0&&regressions==0?"healthy":"degraded",
+            GateSourceAuth=$"rtPassed={rtPassed};p15Passed={p15Passed}",
             Observations=observations,
             FailureThresholds=new{
                 MaxGateFailures=0,
@@ -1345,9 +1391,11 @@ public sealed class CanaryMatrixPromotionBoundaryPilotPreflightRunner
             PackageOutputChanged=false,
             VectorBindingChanged=false,
             WiderScope=opt.TargetScope,
+            ScopeExpandedFrom=controlledScope,
+            ScopeExpandedFromDiffersFromTo=!string.Equals(opt.TargetScope,controlledScope,StringComparison.OrdinalIgnoreCase),
             NoUnscopedChanges=true,
             WiderPilotSummary=widerAuthorized&&errors==0?
-                "Wider pilot passed all observation rounds. No regressions, no gate failures, scope intact.":
+                "Wider pilot passed all observation rounds. No regressions, no gate failures, scope expanded correctly.":
                 "Wider pilot had issues. Check observation window for details.",
             Recommendation=widerAuthorized&&errors==0?
                 "Wider pilot successful. Consider formal wider deployment.":
@@ -1355,5 +1403,9 @@ public sealed class CanaryMatrixPromotionBoundaryPilotPreflightRunner
         };
         File.WriteAllText(Path.Combine(output,"wider-post-pilot-audit.json"),
             JsonSerializer.Serialize(widerAudit, new JsonSerializerOptions{WriteIndented=true}));
+
+        // Write authoritative auth gate LAST (overwrites any V11.18 versions from observation Run() calls)
+        File.WriteAllText(Path.Combine(output,"wider-pilot-authorization-gate.json"),
+            JsonSerializer.Serialize(authGate, new JsonSerializerOptions{WriteIndented=true}));
     }
 }

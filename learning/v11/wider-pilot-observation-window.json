@@ -1,15 +1,16 @@
 {
-  "GeneratedAt": "2026-07-01T08:42:01.538762+00:00",
-  "ReportId": "wpow-0989f25f8c3e452687360046d5f5fba3",
+  "GeneratedAt": "2026-07-01T09:08:16.2941224+00:00",
+  "ReportId": "wpow-bad80115b09b4909822b66a1463ef714",
   "WiderObservationPassed": true,
+  "WiderObservationAuthoritative": true,
   "TotalRounds": 30,
   "MinimumRounds": 10,
   "RecommendedRounds": 30,
   "Errors": 0,
-  "Warnings": 0,
   "Regressions": 0,
   "GateHealth": "stable",
   "ObservationStatus": "healthy",
+  "GateSourceAuth": "rtPassed=True;p15Passed=True",
   "Observations": [
     {
       "Round": 1,
@@ -18,6 +19,8 @@
       "ShadowCoverage": "60/60",
       "Synthetic": 0,
       "RuntimeHash": "583762c58d9b2618...",
+      "GateAuthority": true,
+      "GateSource": "rtPassed=True;p15Passed=True",
       "PackageUnchanged": true,
       "VectorUnchanged": true,
       "GlobalDefaultOn": false
@@ -29,6 +32,8 @@
       "ShadowCoverage": "60/60",
       "Synthetic": 0,
       "RuntimeHash": "583762c58d9b2618...",
+      "GateAuthority": true,
+      "GateSource": "rtPassed=True;p15Passed=True",
       "PackageUnchanged": true,
       "VectorUnchanged": true,
       "GlobalDefaultOn": false
@@ -40,6 +45,8 @@
       "ShadowCoverage": "60/60",
       "Synthetic": 0,
       "RuntimeHash": "583762c58d9b2618...",
+      "GateAuthority": true,
+      "GateSource": "rtPassed=True;p15Passed=True",
       "PackageUnchanged": true,
       "VectorUnchanged": true,
       "GlobalDefaultOn": false
@@ -51,6 +58,8 @@
       "ShadowCoverage": "60/60",
       "Synthetic": 0,
       "RuntimeHash": "583762c58d9b2618...",
+      "GateAuthority": true,
+      "GateSource": "rtPassed=True;p15Passed=True",
       "PackageUnchanged": true,
       "VectorUnchanged": true,
       "GlobalDefaultOn": false
@@ -62,6 +71,8 @@
       "ShadowCoverage": "60/60",
       "Synthetic": 0,
       "RuntimeHash": "583762c58d9b2618...",
+      "GateAuthority": true,
+      "GateSource": "rtPassed=True;p15Passed=True",
       "PackageUnchanged": true,
       "VectorUnchanged": true,
       "GlobalDefaultOn": false
@@ -73,6 +84,8 @@
       "ShadowCoverage": "60/60",
       "Synthetic": 0,
       "RuntimeHash": "583762c58d9b2618...",
+      "GateAuthority": true,
+      "GateSource": "rtPassed=True;p15Passed=True",
       "PackageUnchanged": true,
       "VectorUnchanged": true,
       "GlobalDefaultOn": false
@@ -84,6 +97,8 @@
       "ShadowCoverage": "60/60",
       "Synthetic": 0,
       "RuntimeHash": "583762c58d9b2618...",
+      "GateAuthority": true,
+      "GateSource": "rtPassed=True;p15Passed=True",
       "PackageUnchanged": true,
       "VectorUnchanged": true,
       "GlobalDefaultOn": false
@@ -95,6 +110,8 @@
       "ShadowCoverage": "60/60",
       "Synthetic": 0,
       "RuntimeHash": "583762c58d9b2618...",
+      "GateAuthority": true,
+      "GateSource": "rtPassed=True;p15Passed=True",
       "PackageUnchanged": true,
       "VectorUnchanged": true,
       "GlobalDefaultOn": false
@@ -106,6 +123,8 @@
       "ShadowCoverage": "60/60",
       "Synthetic": 0,
       "RuntimeHash": "583762c58d9b2618...",
+      "GateAuthority": true,
+      "GateSource": "rtPassed=True;p15Passed=True",
       "PackageUnchanged": true,
       "VectorUnchanged": true,
       "GlobalDefaultOn": false
@@ -117,6 +136,8 @@
       "ShadowCoverage": "60/60",
       "Synthetic": 0,
       "RuntimeHash": "583762c58d9b2618...",
+      "GateAuthority": true,
+      "GateSource": "rtPassed=True;p15Passed=True",
       "PackageUnchanged": true,
       "VectorUnchanged": true,
       "GlobalDefaultOn": false
@@ -128,6 +149,8 @@
       "ShadowCoverage": "60/60",
       "Synthetic": 0,
       "RuntimeHash": "583762c58d9b2618...",
+      "GateAuthority": true,
+      "GateSource": "rtPassed=True;p15Passed=True",
       "PackageUnchanged": true,
       "VectorUnchanged": true,
       "GlobalDefaultOn": false
@@ -139,6 +162,8 @@
       "ShadowCoverage": "60/60",
       "Synthetic": 0,
       "RuntimeHash": "583762c58d9b2618...",
+      "GateAuthority": true,
+      "GateSource": "rtPassed=True;p15Passed=True",
       "PackageUnchanged": true,
       "VectorUnchanged": true,
       "GlobalDefaultOn": false
@@ -150,6 +175,8 @@
       "ShadowCoverage": "60/60",
       "Synthetic": 0,
       "RuntimeHash": "583762c58d9b2618...",
+      "GateAuthority": true,
+      "GateSource": "rtPassed=True;p15Passed=True",
       "PackageUnchanged": true,
       "VectorUnchanged": true,
       "GlobalDefaultOn": false
@@ -161,6 +188,8 @@
       "ShadowCoverage": "60/60",
       "Synthetic": 0,
       "RuntimeHash": "583762c58d9b2618...",
+      "GateAuthority": true,
+      "GateSource": "rtPassed=True;p15Passed=True",
       "PackageUnchanged": true,
       "VectorUnchanged": true,
       "GlobalDefaultOn": false
@@ -172,6 +201,8 @@
       "ShadowCoverage": "60/60",
       "Synthetic": 0,
       "RuntimeHash": "583762c58d9b2618...",
+      "GateAuthority": true,
+      "GateSource": "rtPassed=True;p15Passed=True",
       "PackageUnchanged": true,
       "VectorUnchanged": true,
       "GlobalDefaultOn": false
@@ -183,6 +214,8 @@
       "ShadowCoverage": "60/60",
       "Synthetic": 0,
       "RuntimeHash": "583762c58d9b2618...",
+      "GateAuthority": true,
+      "GateSource": "rtPassed=True;p15Passed=True",
       "PackageUnchanged": true,
       "VectorUnchanged": true,
       "GlobalDefaultOn": false
@@ -194,6 +227,8 @@
       "ShadowCoverage": "60/60",
       "Synthetic": 0,
       "RuntimeHash": "583762c58d9b2618...",
+      "GateAuthority": true,
+      "GateSource": "rtPassed=True;p15Passed=True",
       "PackageUnchanged": true,
       "VectorUnchanged": true,
       "GlobalDefaultOn": false
@@ -205,6 +240,8 @@
       "ShadowCoverage": "60/60",
       "Synthetic": 0,
       "RuntimeHash": "583762c58d9b2618...",
+      "GateAuthority": true,
+      "GateSource": "rtPassed=True;p15Passed=True",
       "PackageUnchanged": true,
       "VectorUnchanged": true,
       "GlobalDefaultOn": false
@@ -216,6 +253,8 @@
       "ShadowCoverage": "60/60",
       "Synthetic": 0,
       "RuntimeHash": "583762c58d9b2618...",
+      "GateAuthority": true,
+      "GateSource": "rtPassed=True;p15Passed=True",
       "PackageUnchanged": true,
       "VectorUnchanged": true,
       "GlobalDefaultOn": false
@@ -227,6 +266,8 @@
       "ShadowCoverage": "60/60",
       "Synthetic": 0,
       "RuntimeHash": "583762c58d9b2618...",
+      "GateAuthority": true,
+      "GateSource": "rtPassed=True;p15Passed=True",
       "PackageUnchanged": true,
       "VectorUnchanged": true,
       "GlobalDefaultOn": false
@@ -238,6 +279,8 @@
       "ShadowCoverage": "60/60",
       "Synthetic": 0,
       "RuntimeHash": "583762c58d9b2618...",
+      "GateAuthority": true,
+      "GateSource": "rtPassed=True;p15Passed=True",
       "PackageUnchanged": true,
       "VectorUnchanged": true,
       "GlobalDefaultOn": false
@@ -249,6 +292,8 @@
       "ShadowCoverage": "60/60",
       "Synthetic": 0,
       "RuntimeHash": "583762c58d9b2618...",
+      "GateAuthority": true,
+      "GateSource": "rtPassed=True;p15Passed=True",
       "PackageUnchanged": true,
       "VectorUnchanged": true,
       "GlobalDefaultOn": false
@@ -260,6 +305,8 @@
       "ShadowCoverage": "60/60",
       "Synthetic": 0,
       "RuntimeHash": "583762c58d9b2618...",
+      "GateAuthority": true,
+      "GateSource": "rtPassed=True;p15Passed=True",
       "PackageUnchanged": true,
       "VectorUnchanged": true,
       "GlobalDefaultOn": false
@@ -271,6 +318,8 @@
       "ShadowCoverage": "60/60",
       "Synthetic": 0,
       "RuntimeHash": "583762c58d9b2618...",
+      "GateAuthority": true,
+      "GateSource": "rtPassed=True;p15Passed=True",
       "PackageUnchanged": true,
       "VectorUnchanged": true,
       "GlobalDefaultOn": false
@@ -282,6 +331,8 @@
       "ShadowCoverage": "60/60",
       "Synthetic": 0,
       "RuntimeHash": "583762c58d9b2618...",
+      "GateAuthority": true,
+      "GateSource": "rtPassed=True;p15Passed=True",
       "PackageUnchanged": true,
       "VectorUnchanged": true,
       "GlobalDefaultOn": false
@@ -293,6 +344,8 @@
       "ShadowCoverage": "60/60",
       "Synthetic": 0,
       "RuntimeHash": "583762c58d9b2618...",
+      "GateAuthority": true,
+      "GateSource": "rtPassed=True;p15Passed=True",
       "PackageUnchanged": true,
       "VectorUnchanged": true,
       "GlobalDefaultOn": false
@@ -304,6 +357,8 @@
       "ShadowCoverage": "60/60",
       "Synthetic": 0,
       "RuntimeHash": "583762c58d9b2618...",
+      "GateAuthority": true,
+      "GateSource": "rtPassed=True;p15Passed=True",
       "PackageUnchanged": true,
       "VectorUnchanged": true,
       "GlobalDefaultOn": false
@@ -315,6 +370,8 @@
       "ShadowCoverage": "60/60",
       "Synthetic": 0,
       "RuntimeHash": "583762c58d9b2618...",
+      "GateAuthority": true,
+      "GateSource": "rtPassed=True;p15Passed=True",
       "PackageUnchanged": true,
       "VectorUnchanged": true,
       "GlobalDefaultOn": false
@@ -326,6 +383,8 @@
       "ShadowCoverage": "60/60",
       "Synthetic": 0,
       "RuntimeHash": "583762c58d9b2618...",
+      "GateAuthority": true,
+      "GateSource": "rtPassed=True;p15Passed=True",
       "PackageUnchanged": true,
       "VectorUnchanged": true,
       "GlobalDefaultOn": false
@@ -337,6 +396,8 @@
       "ShadowCoverage": "60/60",
       "Synthetic": 0,
       "RuntimeHash": "583762c58d9b2618...",
+      "GateAuthority": true,
+      "GateSource": "rtPassed=True;p15Passed=True",
       "PackageUnchanged": true,
       "VectorUnchanged": true,
       "GlobalDefaultOn": false

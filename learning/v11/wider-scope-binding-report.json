@@ -1,13 +1,13 @@
 {
-  "GeneratedAt": "2026-07-01T08:42:01.538762+00:00",
-  "ReportId": "wsbr-ed147425f451439a9dc0bc5fbc1e48ca",
-  "TargetScope": "demo-workspace/demo-collection",
-  "TargetScopeExplicit": true,
-  "NoWildcardScope": true,
-  "CurrentBinding": "V8 scoped activation",
-  "BindingVerified": true,
+  "GeneratedAt": "2026-07-01T09:08:16.2941224+00:00",
+  "ReportId": "wsbr-2499357630114f1c8829c0ba29171166",
+  "TargetScope": "demo-workspace/extended-collections",
   "ScopeExpandedFrom": "demo-workspace/demo-collection",
-  "ScopeExpandedTo": "demo-workspace/demo-collection",
-  "ExpansionControlled": true,
+  "ScopeExpandedTo": "demo-workspace/extended-collections",
+  "TargetScopeExplicit": true,
+  "ScopeBeyondControlled": true,
+  "ScopeExpandedFromDiffersFromTo": true,
+  "NoWildcardScope": true,
+  "BindingVerified": true,
   "GlobalDefaultOn": false
 }

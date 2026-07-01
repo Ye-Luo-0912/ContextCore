@@ -1,14 +1,20 @@
 {
-  "GeneratedAt": "2026-07-01T08:42:01.538762+00:00",
-  "RecordId": "wpar-3c74cb90bf8c4cc5822c6c152db0b144",
+  "GeneratedAt": "2026-07-01T09:08:16.2941224+00:00",
+  "RecordId": "wpar-0aa22cbf3fc04cf7987616412d718b1d",
   "WiderPilotAuthorized": true,
   "WiderPilotAuthorizationGatePassed": true,
+  "FormalAuthorizationGateConsistent": true,
   "AuthorizationToken": "wp-v12-a...",
   "TokenValid": true,
-  "TargetScope": "demo-workspace/demo-collection",
+  "TargetScope": "demo-workspace/extended-collections",
+  "ControlledScope": "demo-workspace/demo-collection",
   "ScopeValid": true,
+  "ScopeBeyondControlled": true,
   "NoWildcardScope": true,
+  "TargetScopeBeyondControlledScope": true,
   "ScopeExplicit": true,
+  "ConditionsMet": 7,
+  "ConditionsRequired": 7,
   "AuthorizationDecision": "AUTHORIZED",
   "BlockedReason": null
 }

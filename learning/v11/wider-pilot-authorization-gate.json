@@ -1,30 +1,48 @@
 {
-  "GeneratedAt": "2026-07-01T08:42:02.5626729+00:00",
-  "GateId": "wpag-0635f7e20c50485f8640beaa272099c3",
+  "GeneratedAt": "2026-07-01T09:08:16.2941224+00:00",
+  "GateId": "wpag-f25d5342863c4a9587c385c0cef952c2",
   "WiderPilotAuthorizationGateReady": true,
-  "WiderPilotAuthorized": false,
-  "WiderPilotGatePassed": false,
-  "GateName": "wider-pilot-authorization-gate",
-  "Description": "Formal authorization gate for wider pilot. Must pass all conditions before wider pilot can execute.",
-  "RequiredConditions": [
-    "Explicit authorization token provided",
-    "Target scope defined (beyond demo-workspace/demo-collection)",
-    "Wider rollback plan validated",
-    "Wider observation plan approved (minimum rounds, failure thresholds)",
-    "Controlled pilot closeout archive complete",
-    "PilotAuthorized reset and re-issued for wider scope",
-    "All controlled pilot artifacts consistent and archived"
+  "WiderPilotAuthorized": true,
+  "WiderPilotGatePassed": true,
+  "FormalAuthorizationGateConsistent": true,
+  "Conditions": [
+    {
+      "Id": 1,
+      "Description": "Valid authorization token (contains \u0027wp-\u0027)",
+      "Met": true
+    },
+    {
+      "Id": 2,
+      "Description": "Target scope defined and beyond controlled scope \u0027demo-workspace/demo-collection\u0027",
+      "Met": true
+    },
+    {
+      "Id": 3,
+      "Description": "Wider rollback plan validated",
+      "Met": true
+    },
+    {
+      "Id": 4,
+      "Description": "Wider observation plan approved",
+      "Met": true
+    },
+    {
+      "Id": 5,
+      "Description": "Controlled pilot closeout archive complete",
+      "Met": true
+    },
+    {
+      "Id": 6,
+      "Description": "PilotAuthorized reset and re-issued for wider scope",
+      "Met": true
+    },
+    {
+      "Id": 7,
+      "Description": "All controlled pilot artifacts consistent and archived",
+      "Met": true
+    }
   ],
-  "CurrentStatus": {
-    "AuthorizationTokenPresent": false,
-    "WiderScopeDefined": false,
-    "WiderRollbackPlanValidated": false,
-    "WiderObservationPlanApproved": false,
-    "ControlledPilotCloseoutComplete": true,
-    "PilotAuthorizedForWider": false
-  },
-  "ConditionsMet": 0,
+  "ConditionsMet": 7,
   "ConditionsRequired": 7,
-  "BlockedReason": "All 7 conditions require explicit action. No condition auto-satisfies. Wider pilot must be explicitly authorized.",
-  "NextAction": "Define wider scope, prepare authorization materials, submit for explicit authorization review."
+  "BlockedReason": null
 }

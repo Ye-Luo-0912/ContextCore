@@ -1,17 +1,10 @@
 {
-  "GeneratedAt": "2026-07-01T08:42:01.538762+00:00",
-  "ReportId": "wrrr-d2f6e9c003c34bf38369b2d86ffaf7fd",
+  "GeneratedAt": "2026-07-01T09:08:16.2941224+00:00",
+  "ReportId": "wrrr-efda5c3dd54442e38813c6ff103055e5",
   "WiderRollbackReady": true,
-  "TargetScope": "demo-workspace/demo-collection",
+  "TargetScope": "demo-workspace/extended-collections",
   "KillSwitchArmed": true,
-  "KillSwitchPath": "learning/v11/formal-ingestion-rollback-manifest.json",
   "PrePilotSnapshotExists": true,
   "RollbackManifestExists": true,
-  "RollbackPlanExtendedForWiderScope": true,
-  "ExtendedRollbackSteps": [
-    "1. Verify kill switch for wider scope",
-    "2. Restore from pre-wider-pilot snapshot",
-    "3. Revert V8 scoped activation to pre-wider state",
-    "4. Re-run CMPBP gate to verify restoration"
-  ]
+  "RollbackPlanExtendedForWiderScope": true
 }

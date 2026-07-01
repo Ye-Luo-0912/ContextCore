@@ -1,6 +1,6 @@
 {
-  "GeneratedAt": "2026-07-01T08:42:02.5626729+00:00",
-  "FreezeId": "pcf-60f1c36ea40d4e9db6cd7997b28c9bfb",
+  "GeneratedAt": "2026-07-01T09:08:17.300835+00:00",
+  "FreezeId": "pcf-147c971e8c454465a15ba09a01eb5d2b",
   "ControlledPilotCloseoutFreezePassed": true,
   "CloseoutVersion": "V11.17",
   "PilotScope": "demo-workspace/demo-collection",
@@ -10,9 +10,9 @@
     "V11.15",
     "V11.16"
   ],
-  "SourceCommit": "981b776ea4978a688af036b60c8c2c3796a86b70",
-  "CloseoutCommit": "981b776ea4978a688af036b60c8c2c3796a86b70",
-  "ArtifactCommitRange": "V11.10R10..981b776e",
+  "SourceCommit": "644b765a8f0b3edaf06402bdea22326459dd82a9",
+  "CloseoutCommit": "644b765a8f0b3edaf06402bdea22326459dd82a9",
+  "ArtifactCommitRange": "V11.10R10..644b765a",
   "ControlledPilotSummary": {
     "PilotExecuted": true,
     "PilotAuthorized": true,
@@ -33,59 +33,59 @@
     },
     {
       "File": "pilot-execution-report.json",
-      "Hash": "fbf454d6c1fffbc6f9f312b7cd03d8022c6aa1cec2f8baa4b42219403f5ec2ee"
+      "Hash": "5297d42e4a0ae25f93758cf767c19e260ad3b495570a299ff7934a23e600b5d5"
     },
     {
       "File": "post-pilot-audit.json",
-      "Hash": "b1a1c89a1feeae927f3b0c8a55d91cec95e7a6c6a8f4a4a2afe57f16595002e6"
+      "Hash": "46393df1b9cc0b1c6e51cf2892ec1899d9f93bfd26576d0a3e70f0fbd5ff6fa7"
     },
     {
       "File": "post-pilot-consistency-audit.json",
-      "Hash": "9280514a3927acd576080d0c19d716267ab352c80c784a998c7f6aed0cbe3f2c"
+      "Hash": "fd45edc131de91251cc5ad7996d8c4062c570d0b0948023b2d90fd145d4e6244"
     },
     {
       "File": "pilot-authorization-consumption-record.json",
-      "Hash": "e84d3b704b183cbfffd5a5389e462958f443519fcab887e3a4c70356e1f5c595"
+      "Hash": "3ec8933016391df83b785211ac5df1299b31858b81af07a55113acfdd8ac6186"
     },
     {
       "File": "runtime-pilot-execution-ledger.json",
-      "Hash": "21b3978e01a965fba2272679e44e50f9f631101823e25e9907e6f262a7000a06"
+      "Hash": "273612ade1088100b05726c4d54a724dc41baa4966b060078d21ea057b6dc922"
     },
     {
       "File": "pilot-rollback-plan.json",
-      "Hash": "d4f895602838b0d00a6f2da6d2b3eb957c281b5e4db62c7a85908ec05d63459f"
+      "Hash": "51bf396bb2bea5f46972140ca1b30370dc90d604e4740d5c2925ff67bf04d8f7"
     },
     {
       "File": "rollback-dry-run-report.json",
-      "Hash": "1910ca437a5546b4b0aa6cab0f6821de9ad7692008d831bedfb9f36d4e47a808"
+      "Hash": "73f6e30b4ec226c73452c692c72228c9888944d1eb3bc8019e8e694e41da34b5"
     },
     {
       "File": "pilot-observation-window.json",
-      "Hash": "1ecebe01e15dc7ab73a2db3401f153483a35cccbbecfb14c46d514e1d58fea4f"
+      "Hash": "ce3ff95ed8d8ee1b36762095e6438971b956e44055affd4d28d84c8e9044d3bb"
     },
     {
       "File": "pilot-stability-report.json",
-      "Hash": "894afc573421aaa99a6a30f459ee30d66118155abd98423436f6b4d822880f25"
+      "Hash": "0732ae5a0ee47085ddfe1a0b1a1b0fe507feead721e9ec47237eaab7b77405d1"
     },
     {
       "File": "rollback-drill-evidence.json",
-      "Hash": "553ed861493caa509f54427aee6e974047ac2d237bde399c4d4acd0bd5f50663"
+      "Hash": "15d693d7f536d8e656284805125c2aed6b0f96bc301336cfa0656bf7e86fe588"
     },
     {
       "File": "canary-matrix.json",
-      "Hash": "2965ec0bc0424217c3cc369fa02b9d71a3e901052573b00624f91de15b802013"
+      "Hash": "38708039de1039e8e8be9c097e4ec1a471ea744dbfa0317424ed5bc0164b585c"
     },
     {
       "File": "calibration-method.json",
-      "Hash": "83f0299bc58e5c9b4f8870542db42db7a07ce01797afd8c7a86b6ef5eece85d1"
+      "Hash": "779d03d560c8ae8b0066c3ae55af7020f859bd671595f0de2244d7cae10a7b30"
     },
     {
       "File": "backfill-provenance.json",
-      "Hash": "c4f6d854ed1445a874fd2f4750ac2c5c9b66c6fe14a1d9a398960fb7a1901acb"
+      "Hash": "366034991f39a72ca270aba4a84784585d998f2af46c4526e039e0813e043120"
     }
   ],
   "CloseoutDecision": "CONTROLLED PILOT CLOSED OUT. All audits pass. Scope: demo-workspace/demo-collection. Ready for freeze archive.",
-  "LatestAcceptedCommit": "981b776ea4978a688af036b60c8c2c3796a86b70",
+  "LatestAcceptedCommit": "644b765a8f0b3edaf06402bdea22326459dd82a9",
   "CloseoutMetadataValid": true,
   "NextPhase": "Wider pilot requires explicit re-authorization via wider-pilot-decision-pack.json."
 }

@@ -1,6 +1,6 @@
 {
-  "GeneratedAt": "2026-07-01T08:42:02.5626729+00:00",
-  "PlanId": "wpop-21d120735af34917997273736b8e63b8",
+  "GeneratedAt": "2026-07-01T09:08:17.300835+00:00",
+  "PlanId": "wpop-924b046564e84b1aa1d489ba891750e5",
   "LongerObservationPlanReady": true,
   "PlannedScope": "Wider pilot (to be defined explicitly in authorization)",
   "ObservationDesign": {
@@ -28,7 +28,7 @@
   },
   "TransitionFromControlledPilot": {
     "ControlledPilotClosedOut": true,
-    "CloseoutFreezeId": "pcf-60f1c36ea40d4e9db6cd7997b28c9bfb",
+    "CloseoutFreezeId": "pcf-147c971e8c454465a15ba09a01eb5d2b",
     "ControlledResultsCarriedForward": true,
     "BaselineEstablished": "60/60 coverage, 0 calibrated regression, gate passed"
   }
