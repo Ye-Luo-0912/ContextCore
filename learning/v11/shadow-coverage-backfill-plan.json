@@ -1,5 +1,5 @@
 {
-  "GeneratedAt": "2026-07-01T07:04:09.09529+00:00",
+  "GeneratedAt": "2026-07-01T07:40:32.0575288+00:00",
   "BackfillPlanReady": true,
   "TotalMissingRows": 0,
   "TargetShadowEvalPath": "learning/ranker/candidate-reranker-shadow-eval-a3.json",

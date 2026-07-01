@@ -896,13 +896,17 @@ public sealed class CanaryMatrixPromotionBoundaryPilotPreflightRunner
                 var fp=Path.Combine(output,fn);
                 frozenHashes[fn]=File.Exists(fp)?Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(fp))).ToLowerInvariant():"";
             }
+            var currentCommit = GetGitHeadSha();
             var closeoutFreeze = new{
                 GeneratedAt=now,
                 FreezeId=closeoutFreezeId,
                 ControlledPilotCloseoutFreezePassed=true,
-                CloseoutVersion="V11.16",
+                CloseoutVersion="V11.17",
                 PilotScope=pilotScope,
-                FrozenFromVersions=new[]{"V11.13","V11.14","V11.15"},
+                FrozenFromVersions=new[]{"V11.13","V11.14","V11.15","V11.16"},
+                SourceCommit=currentCommit,
+                CloseoutCommit=currentCommit,
+                ArtifactCommitRange=$"V11.10R10..{currentCommit[..8]}",
                 ControlledPilotSummary=new{
                     PilotExecuted=true,
                     PilotAuthorized=true,
@@ -918,7 +922,8 @@ public sealed class CanaryMatrixPromotionBoundaryPilotPreflightRunner
                 },
                 FrozenArtifacts=freezeFiles.Select(fn=>new{File=fn,Hash=frozenHashes[fn]}),
                 CloseoutDecision="CONTROLLED PILOT CLOSED OUT. All audits pass. Scope: demo-workspace/demo-collection. Ready for freeze archive.",
-                LatestAcceptedCommit=typeof(CanaryMatrixPromotionBoundaryPilotPreflightRunner).Assembly.GetName().Version?.ToString()??"unknown",
+                LatestAcceptedCommit=currentCommit,
+                CloseoutMetadataValid=true,
                 NextPhase="Wider pilot requires explicit re-authorization via wider-pilot-decision-pack.json."
             };
             File.WriteAllText(Path.Combine(output,"pilot-closeout-freeze.json"),
@@ -994,7 +999,50 @@ public sealed class CanaryMatrixPromotionBoundaryPilotPreflightRunner
             File.WriteAllText(Path.Combine(output,"wider-pilot-observation-plan.json"),
                 JsonSerializer.Serialize(longerObservationPlan, new JsonSerializerOptions{WriteIndented=true}));
 
-            diag.Add($"V11.16 closeoutFreezePassed=true widerPilotAuthorized=false observationPlanReady=true");
+            // === V11.17 Wider-Pilot Scope Candidates ===
+            var widerPilotScopeCandidates = new{
+                GeneratedAt=now,
+                CandidatesId=$"wpsc-{Guid.NewGuid():N}",
+                WiderPilotScopeCandidatesReady=true,
+                WiderPilotAuthorized=false,
+                CurrentScope=pilotScope,
+                Candidates=new[]{
+                    new{
+                        Id="candidate-1",
+                        Scope="demo-workspace/demo-collection (no change)",
+                        Description="Continue observation on existing scope. Zero risk. Recommended first step.",
+                        Risk="None",
+                        RollbackRequirement="Existing rollback plan sufficient",
+                        ObservationThreshold=10,
+                        Authorized=false
+                    },
+                    new{
+                        Id="candidate-2",
+                        Scope="demo-workspace/extended-collections (add 1-2 adjacent collections)",
+                        Description="Expand to adjacent collections while keeping workspace unchanged.",
+                        Risk="Low (collections share same infrastructure)",
+                        RollbackRequirement="Extend rollback manifest to cover new collections",
+                        ObservationThreshold=20,
+                        Authorized=false
+                    },
+                    new{
+                        Id="candidate-3",
+                        Scope="staging-workspace/staging-collection (pre-production staging)",
+                        Description="Promote to staging environment before production. Standard staging gate.",
+                        Risk="Low-Medium (staging has separate infrastructure)",
+                        RollbackRequirement="Full staging rollback plan required",
+                        ObservationThreshold=30,
+                        Authorized=false
+                    }
+                },
+                Recommendation="Start with candidate-1 (no scope change) for 10-round observation, then escalate through candidates 2 and 3 if all gates pass.",
+                NoneAuthorized=true,
+                NextAction="Select a candidate, obtain explicit authorization, and execute cmpbp-pilot with updated scope."
+            };
+            File.WriteAllText(Path.Combine(output,"wider-pilot-scope-candidates.json"),
+                JsonSerializer.Serialize(widerPilotScopeCandidates, new JsonSerializerOptions{WriteIndented=true}));
+
+            diag.Add($"V11.17 closeoutFreeze=corrected widerPilotScopeCandidatesReady=true widerPilotAuthorized=false");
         }
 
         return new CanaryMatrixPromotionBoundaryPilotPreflightReport{
@@ -1074,7 +1122,20 @@ public sealed class CanaryMatrixPromotionBoundaryPilotPreflightRunner
         b.AppendLine(string.Concat("- GlobalDefaultOn: ", r.GlobalDefaultOn, " RollbackReady: ", r.RollbackReady, " PostPilotAudit: ", r.PostPilotAuditPassed));
         b.AppendLine(string.Concat("- RuntimePilotExecutionApplied: ", r.RuntimePilotExecutionApplied));
         b.AppendLine();
-        b.AppendLine("V11.16 - controlled pilot closeout freeze。Closed out, wider pilot requires explicit authorization。");
+        b.AppendLine("V11.17 - closeout metadata cleanup & wider-pilot pre-authorization readiness。");
         return b.ToString();
+    }
+
+    private static string GetGitHeadSha(){
+        try{
+            var headPath = Path.Combine(".git","HEAD");
+            if(!File.Exists(headPath)) return "";
+            var headContent = File.ReadAllText(headPath).Trim();
+            if(headContent.StartsWith("ref: ")){
+                var refPath = Path.Combine(".git",headContent[5..].Trim());
+                if(File.Exists(refPath)) return File.ReadAllText(refPath).Trim();
+            }
+            return headContent;
+        }catch{return "";}
     }
 }

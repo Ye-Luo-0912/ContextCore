@@ -1,18 +1,18 @@
 {
-  "GeneratedAt": "2026-07-01T07:04:09.09529+00:00",
-  "ReportId": "pow-b301abbb7ed14e258136149a9dd4eb3b",
+  "GeneratedAt": "2026-07-01T07:40:32.0575288+00:00",
+  "ReportId": "pow-fa29d13fa1964e30b3087c3fa53cc853",
   "PilotObservationWindowPassed": true,
   "Scope": "demo-workspace/demo-collection",
   "ObservationPeriod": {
-    "Start": "2026-07-01T07:04:09.09529+00:00",
-    "End": "2026-07-01T07:04:09.09529+00:00",
+    "Start": "2026-07-01T07:40:32.0575288+00:00",
+    "End": "2026-07-01T07:40:32.0575288+00:00",
     "Duration": "single-shot (no-op pilot)"
   },
   "ObservationRounds": 1,
   "Observations": [
     {
       "Round": 1,
-      "Timestamp": "2026-07-01T07:04:09.09529+00:00",
+      "Timestamp": "2026-07-01T07:40:32.0575288+00:00",
       "GatePassed": true,
       "RuntimeHashStable": true,
       "RegressionCountCalibrated": 0,

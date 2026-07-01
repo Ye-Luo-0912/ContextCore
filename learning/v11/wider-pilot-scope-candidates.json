@@ -1,0 +1,39 @@
+{
+  "GeneratedAt": "2026-07-01T07:40:32.0575288+00:00",
+  "CandidatesId": "wpsc-0c645617f4d84b59be019cb28963fccc",
+  "WiderPilotScopeCandidatesReady": true,
+  "WiderPilotAuthorized": false,
+  "CurrentScope": "demo-workspace/demo-collection",
+  "Candidates": [
+    {
+      "Id": "candidate-1",
+      "Scope": "demo-workspace/demo-collection (no change)",
+      "Description": "Continue observation on existing scope. Zero risk. Recommended first step.",
+      "Risk": "None",
+      "RollbackRequirement": "Existing rollback plan sufficient",
+      "ObservationThreshold": 10,
+      "Authorized": false
+    },
+    {
+      "Id": "candidate-2",
+      "Scope": "demo-workspace/extended-collections (add 1-2 adjacent collections)",
+      "Description": "Expand to adjacent collections while keeping workspace unchanged.",
+      "Risk": "Low (collections share same infrastructure)",
+      "RollbackRequirement": "Extend rollback manifest to cover new collections",
+      "ObservationThreshold": 20,
+      "Authorized": false
+    },
+    {
+      "Id": "candidate-3",
+      "Scope": "staging-workspace/staging-collection (pre-production staging)",
+      "Description": "Promote to staging environment before production. Standard staging gate.",
+      "Risk": "Low-Medium (staging has separate infrastructure)",
+      "RollbackRequirement": "Full staging rollback plan required",
+      "ObservationThreshold": 30,
+      "Authorized": false
+    }
+  ],
+  "Recommendation": "Start with candidate-1 (no scope change) for 10-round observation, then escalate through candidates 2 and 3 if all gates pass.",
+  "NoneAuthorized": true,
+  "NextAction": "Select a candidate, obtain explicit authorization, and execute cmpbp-pilot with updated scope."
+}

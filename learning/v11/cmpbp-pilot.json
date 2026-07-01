@@ -1,6 +1,6 @@
 ﻿{
-  "OperationId": "cmpbp-3515d17b42e84232a7aabfdefca02073",
-  "CreatedAt": "2026-07-01T07:04:09.09529+00:00",
+  "OperationId": "cmpbp-df5d09b7311c431c901c678156f6744a",
+  "CreatedAt": "2026-07-01T07:40:32.0575288+00:00",
   "PackPassed": true,
   "GatePassed": true,
   "CanaryMatrixPassed": true,
@@ -54,6 +54,6 @@
     "calibratedScoresComparable=True provenance=realInference:60\u002Bgenerated:0",
     "metricMismatchDetected(diagnosticOnly)=True backfillGateAuthorityPassed=True boundaryReady=True preflightOk=True",
     "V11.14 postPilotHardening=complete ledgerReady=true rollbackDryRun=true consistencyPassed=true",
-    "V11.16 closeoutFreezePassed=true widerPilotAuthorized=false observationPlanReady=true"
+    "V11.17 closeoutFreeze=corrected widerPilotScopeCandidatesReady=true widerPilotAuthorized=false"
   ]
 }

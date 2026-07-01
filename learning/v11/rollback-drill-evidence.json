@@ -1,6 +1,6 @@
 {
-  "GeneratedAt": "2026-07-01T07:04:09.09529+00:00",
-  "EvidenceId": "rde-89b476a196f4473988d0edd1c9aace9a",
+  "GeneratedAt": "2026-07-01T07:40:32.0575288+00:00",
+  "EvidenceId": "rde-ba41c55642f34e11bde2e904b3ce1783",
   "RollbackDrillEvidencePassed": true,
   "DrillType": "dry-run (no actual rollback executed)",
   "Scope": "demo-workspace/demo-collection",
