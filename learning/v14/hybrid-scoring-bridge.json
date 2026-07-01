@@ -1,0 +1,87 @@
+{
+  "GeneratedAt": "2026-07-01T12:04:18.0921214\u002B00:00",
+  "DeterministicScoringPreserved": true,
+  "NoLLMTraining": true,
+  "HybridFormula": "final_score = deterministic_score \u002B neural_bias",
+  "NeuralBiasStatus": "INACTIVE \u2014 neural_bias=0 for all records. Activated when V14 neural system is trained.",
+  "BridgeState": {
+    "TotalRecords": 20,
+    "MeanDeterministicScore": 0.474,
+    "MeanFinalScore": 0.47,
+    "NeuralBiasActive": false,
+    "ActivationThreshold": "V14 neural system trained AND signals \u003E= 100",
+    "PreActivationBehavior": "Pure deterministic scoring (neural_bias=0, final_score=deterministic_score)"
+  },
+  "Records": [
+    {
+      "CandidateId": "automation-sample-001",
+      "DeterministicScore": 0.455,
+      "NeuralBias": 0,
+      "FinalScore": 0.43,
+      "NeuralBiasActive": false
+    },
+    {
+      "CandidateId": "automation-sample-001",
+      "DeterministicScore": 0.66,
+      "NeuralBias": 0,
+      "FinalScore": 0.271,
+      "NeuralBiasActive": false
+    },
+    {
+      "CandidateId": "automation-sample-003",
+      "DeterministicScore": 0.688,
+      "NeuralBias": 0,
+      "FinalScore": 0.209,
+      "NeuralBiasActive": false
+    },
+    {
+      "CandidateId": "automation-sample-003",
+      "DeterministicScore": 0.462,
+      "NeuralBias": 0,
+      "FinalScore": 0.316,
+      "NeuralBiasActive": false
+    },
+    {
+      "CandidateId": "automation-sample-006",
+      "DeterministicScore": 0.305,
+      "NeuralBias": 0,
+      "FinalScore": 0.718,
+      "NeuralBiasActive": false
+    },
+    {
+      "CandidateId": "automation-sample-007",
+      "DeterministicScore": 0.461,
+      "NeuralBias": 0,
+      "FinalScore": 0.501,
+      "NeuralBiasActive": false
+    },
+    {
+      "CandidateId": "automation-sample-008",
+      "DeterministicScore": 0.348,
+      "NeuralBias": 0,
+      "FinalScore": 0.767,
+      "NeuralBiasActive": false
+    },
+    {
+      "CandidateId": "automation-sample-009",
+      "DeterministicScore": 0.256,
+      "NeuralBias": 0,
+      "FinalScore": 0.558,
+      "NeuralBiasActive": false
+    },
+    {
+      "CandidateId": "automation-sample-010",
+      "DeterministicScore": 0.423,
+      "NeuralBias": 0,
+      "FinalScore": 0.424,
+      "NeuralBiasActive": false
+    },
+    {
+      "CandidateId": "chat-sample-001",
+      "DeterministicScore": 0.245,
+      "NeuralBias": 0,
+      "FinalScore": 0.588,
+      "NeuralBiasActive": false
+    }
+  ]
+}

@@ -1,0 +1,466 @@
+{
+  "GeneratedAt": "2026-07-01T12:04:18.0921214\u002B00:00",
+  "FeedbackSystemActive": true,
+  "NoManualLabelDependency": true,
+  "TotalEvents": 200,
+  "SignalDistribution": {
+    "PositiveUserSignals": 61,
+    "NeutralUserSignals": 74,
+    "NegativeUserSignals": 65,
+    "HighDownstreamSuccess": 65,
+    "LowDownstreamSuccess": 56,
+    "GoodCostEfficiency": 80
+  },
+  "Events": [
+    {
+      "EventId": "fe-85337ea082bc4d35ae02d91763ce329a",
+      "CandidateId": "automation-sample-001",
+      "Selected": true,
+      "IncludedInPackage": true,
+      "DownstreamSuccessProxy": 0.005,
+      "UserImplicitSignal": 0,
+      "CostEfficiencyScore": 0.36
+    },
+    {
+      "EventId": "fe-b657315fd92e4a8da97c0596fd01577b",
+      "CandidateId": "automation-sample-001",
+      "Selected": true,
+      "IncludedInPackage": false,
+      "DownstreamSuccessProxy": 0.246,
+      "UserImplicitSignal": -1,
+      "CostEfficiencyScore": 0.245
+    },
+    {
+      "EventId": "fe-4c6b85d61f4748959ab09683135eed6b",
+      "CandidateId": "automation-sample-001",
+      "Selected": false,
+      "IncludedInPackage": false,
+      "DownstreamSuccessProxy": 0.801,
+      "UserImplicitSignal": -1,
+      "CostEfficiencyScore": 0.105
+    },
+    {
+      "EventId": "fe-88f71dedbff44aed9a914d821b1580ce",
+      "CandidateId": "automation-sample-001",
+      "Selected": false,
+      "IncludedInPackage": false,
+      "DownstreamSuccessProxy": 0.264,
+      "UserImplicitSignal": 0,
+      "CostEfficiencyScore": 0.087
+    },
+    {
+      "EventId": "fe-bf5f1470072e43ed8d68e54e7fedb27b",
+      "CandidateId": "automation-sample-001",
+      "Selected": false,
+      "IncludedInPackage": false,
+      "DownstreamSuccessProxy": 0.494,
+      "UserImplicitSignal": 0,
+      "CostEfficiencyScore": 0.072
+    },
+    {
+      "EventId": "fe-48f7e3a202874a2dad938f43137f671a",
+      "CandidateId": "automation-sample-001",
+      "Selected": true,
+      "IncludedInPackage": true,
+      "DownstreamSuccessProxy": 0.942,
+      "UserImplicitSignal": 0,
+      "CostEfficiencyScore": 0.204
+    },
+    {
+      "EventId": "fe-9d3a6acc3cc3468ea8d50ad73179f2b8",
+      "CandidateId": "automation-sample-002",
+      "Selected": true,
+      "IncludedInPackage": false,
+      "DownstreamSuccessProxy": 0.185,
+      "UserImplicitSignal": 0,
+      "CostEfficiencyScore": 0.757
+    },
+    {
+      "EventId": "fe-bcc3b6233328428aa969304afe09fb67",
+      "CandidateId": "automation-sample-003",
+      "Selected": true,
+      "IncludedInPackage": true,
+      "DownstreamSuccessProxy": 0.26,
+      "UserImplicitSignal": -1,
+      "CostEfficiencyScore": 0.566
+    },
+    {
+      "EventId": "fe-7820eece69a8441596147891ddec22f4",
+      "CandidateId": "automation-sample-003",
+      "Selected": true,
+      "IncludedInPackage": true,
+      "DownstreamSuccessProxy": 0.673,
+      "UserImplicitSignal": -1,
+      "CostEfficiencyScore": 0.466
+    },
+    {
+      "EventId": "fe-fe7b87f7239a4e47a46c72ec7e3325b6",
+      "CandidateId": "automation-sample-004",
+      "Selected": true,
+      "IncludedInPackage": false,
+      "DownstreamSuccessProxy": 0.926,
+      "UserImplicitSignal": 0,
+      "CostEfficiencyScore": 0.615
+    },
+    {
+      "EventId": "fe-0a75ab32260c47e99f8b8691218175d4",
+      "CandidateId": "automation-sample-005",
+      "Selected": true,
+      "IncludedInPackage": false,
+      "DownstreamSuccessProxy": 0.49,
+      "UserImplicitSignal": -1,
+      "CostEfficiencyScore": 0.328
+    },
+    {
+      "EventId": "fe-d08af82a29b943d1ac0cc713d23e268c",
+      "CandidateId": "automation-sample-006",
+      "Selected": true,
+      "IncludedInPackage": true,
+      "DownstreamSuccessProxy": 0.001,
+      "UserImplicitSignal": 1,
+      "CostEfficiencyScore": 0.609
+    },
+    {
+      "EventId": "fe-73a5abdaa4d7484ea17526525aa3f489",
+      "CandidateId": "automation-sample-007",
+      "Selected": true,
+      "IncludedInPackage": true,
+      "DownstreamSuccessProxy": 0.424,
+      "UserImplicitSignal": 0,
+      "CostEfficiencyScore": 0.88
+    },
+    {
+      "EventId": "fe-452c08d6252148f5913098bf57d4ce76",
+      "CandidateId": "automation-sample-008",
+      "Selected": true,
+      "IncludedInPackage": true,
+      "DownstreamSuccessProxy": 0.027,
+      "UserImplicitSignal": 0,
+      "CostEfficiencyScore": 0.517
+    },
+    {
+      "EventId": "fe-46f205e9a55445999a6cb384422bafb5",
+      "CandidateId": "automation-sample-009",
+      "Selected": true,
+      "IncludedInPackage": true,
+      "DownstreamSuccessProxy": 0.727,
+      "UserImplicitSignal": -1,
+      "CostEfficiencyScore": 0.477
+    },
+    {
+      "EventId": "fe-845d2c616373464c90b19a59b1c2ecd6",
+      "CandidateId": "automation-sample-010",
+      "Selected": true,
+      "IncludedInPackage": false,
+      "DownstreamSuccessProxy": 0.14,
+      "UserImplicitSignal": 0,
+      "CostEfficiencyScore": 0.419
+    },
+    {
+      "EventId": "fe-d1494631191c44fcb25c39c0f38f6934",
+      "CandidateId": "automation-sample-010",
+      "Selected": true,
+      "IncludedInPackage": true,
+      "DownstreamSuccessProxy": 0.541,
+      "UserImplicitSignal": 1,
+      "CostEfficiencyScore": 0.635
+    },
+    {
+      "EventId": "fe-a4f8a7dfc1e444a6b77b6518348aa6f6",
+      "CandidateId": "chat-sample-001",
+      "Selected": true,
+      "IncludedInPackage": false,
+      "DownstreamSuccessProxy": 0.289,
+      "UserImplicitSignal": 0,
+      "CostEfficiencyScore": 0.771
+    },
+    {
+      "EventId": "fe-9aceb817b10c4e50bb9cdf15384d8520",
+      "CandidateId": "chat-sample-001",
+      "Selected": true,
+      "IncludedInPackage": true,
+      "DownstreamSuccessProxy": 0.628,
+      "UserImplicitSignal": -1,
+      "CostEfficiencyScore": 0.795
+    },
+    {
+      "EventId": "fe-eab618500fe6480384da23132cc425d4",
+      "CandidateId": "chat-sample-002",
+      "Selected": false,
+      "IncludedInPackage": false,
+      "DownstreamSuccessProxy": 0.134,
+      "UserImplicitSignal": 1,
+      "CostEfficiencyScore": 0.172
+    },
+    {
+      "EventId": "fe-5edf09e9dbfd43478d3c4bdc78e44277",
+      "CandidateId": "chat-sample-002",
+      "Selected": true,
+      "IncludedInPackage": true,
+      "DownstreamSuccessProxy": 0.574,
+      "UserImplicitSignal": 1,
+      "CostEfficiencyScore": 0.9
+    },
+    {
+      "EventId": "fe-b6dee6920a40471cbc61f5825f095b6e",
+      "CandidateId": "chat-sample-003",
+      "Selected": true,
+      "IncludedInPackage": true,
+      "DownstreamSuccessProxy": 0.219,
+      "UserImplicitSignal": 1,
+      "CostEfficiencyScore": 0.819
+    },
+    {
+      "EventId": "fe-878b2ee547b346acb18e1d615578a260",
+      "CandidateId": "chat-sample-003",
+      "Selected": true,
+      "IncludedInPackage": true,
+      "DownstreamSuccessProxy": 0.565,
+      "UserImplicitSignal": -1,
+      "CostEfficiencyScore": 0.594
+    },
+    {
+      "EventId": "fe-1996688657c1476ba64e7202bab1d5dd",
+      "CandidateId": "chat-sample-004",
+      "Selected": true,
+      "IncludedInPackage": false,
+      "DownstreamSuccessProxy": 0.301,
+      "UserImplicitSignal": 1,
+      "CostEfficiencyScore": 0.615
+    },
+    {
+      "EventId": "fe-4ce6da755a1144d7aa32842ec70a06ec",
+      "CandidateId": "chat-sample-005",
+      "Selected": true,
+      "IncludedInPackage": false,
+      "DownstreamSuccessProxy": 0.107,
+      "UserImplicitSignal": -1,
+      "CostEfficiencyScore": 0.327
+    },
+    {
+      "EventId": "fe-577c96543f8c43489f97805d3bf5134d",
+      "CandidateId": "chat-sample-006",
+      "Selected": true,
+      "IncludedInPackage": false,
+      "DownstreamSuccessProxy": 0.778,
+      "UserImplicitSignal": -1,
+      "CostEfficiencyScore": 0.627
+    },
+    {
+      "EventId": "fe-158283799cd746e2a74e1c3079d620c2",
+      "CandidateId": "chat-sample-007",
+      "Selected": true,
+      "IncludedInPackage": false,
+      "DownstreamSuccessProxy": 0.503,
+      "UserImplicitSignal": -1,
+      "CostEfficiencyScore": 0.626
+    },
+    {
+      "EventId": "fe-34367efd85344fb5814fdb636e2fc0dc",
+      "CandidateId": "chat-sample-008",
+      "Selected": true,
+      "IncludedInPackage": true,
+      "DownstreamSuccessProxy": 0.781,
+      "UserImplicitSignal": -1,
+      "CostEfficiencyScore": 0.508
+    },
+    {
+      "EventId": "fe-51256e01047746c593b18686e1b3fd87",
+      "CandidateId": "chat-sample-009",
+      "Selected": true,
+      "IncludedInPackage": true,
+      "DownstreamSuccessProxy": 0.827,
+      "UserImplicitSignal": 1,
+      "CostEfficiencyScore": 0.361
+    },
+    {
+      "EventId": "fe-f7f7c64708164bc9895e38f121b31767",
+      "CandidateId": "chat-sample-010",
+      "Selected": true,
+      "IncludedInPackage": true,
+      "DownstreamSuccessProxy": 0.726,
+      "UserImplicitSignal": 0,
+      "CostEfficiencyScore": 0.498
+    },
+    {
+      "EventId": "fe-68041fda6dcf4ee5b8033bb11952e633",
+      "CandidateId": "chat-sample-010",
+      "Selected": true,
+      "IncludedInPackage": true,
+      "DownstreamSuccessProxy": 0.592,
+      "UserImplicitSignal": 1,
+      "CostEfficiencyScore": 0.432
+    },
+    {
+      "EventId": "fe-581f44b2ba0d4f40a4c9a8cf9fcd84dd",
+      "CandidateId": "coding-sample-001",
+      "Selected": false,
+      "IncludedInPackage": false,
+      "DownstreamSuccessProxy": 0.675,
+      "UserImplicitSignal": -1,
+      "CostEfficiencyScore": 0.136
+    },
+    {
+      "EventId": "fe-1db35c91f8bf46b091c36c2592b86200",
+      "CandidateId": "coding-sample-001",
+      "Selected": true,
+      "IncludedInPackage": false,
+      "DownstreamSuccessProxy": 0.415,
+      "UserImplicitSignal": 0,
+      "CostEfficiencyScore": 0.606
+    },
+    {
+      "EventId": "fe-9b17fb1b667b4c1c8a5205ee08e2cc15",
+      "CandidateId": "coding-sample-001",
+      "Selected": true,
+      "IncludedInPackage": true,
+      "DownstreamSuccessProxy": 0.378,
+      "UserImplicitSignal": 0,
+      "CostEfficiencyScore": 0.66
+    },
+    {
+      "EventId": "fe-38da76e5a8274d19a31ff7fd582c58a6",
+      "CandidateId": "coding-sample-001",
+      "Selected": true,
+      "IncludedInPackage": true,
+      "DownstreamSuccessProxy": 0.074,
+      "UserImplicitSignal": 1,
+      "CostEfficiencyScore": 0.392
+    },
+    {
+      "EventId": "fe-f2928735b0114647837e8f1761db6b8c",
+      "CandidateId": "coding-sample-002",
+      "Selected": true,
+      "IncludedInPackage": true,
+      "DownstreamSuccessProxy": 0.214,
+      "UserImplicitSignal": -1,
+      "CostEfficiencyScore": 0.346
+    },
+    {
+      "EventId": "fe-8c9954df3ea34568a6c28246030a2d0e",
+      "CandidateId": "coding-sample-003",
+      "Selected": true,
+      "IncludedInPackage": true,
+      "DownstreamSuccessProxy": 0.789,
+      "UserImplicitSignal": 0,
+      "CostEfficiencyScore": 0.88
+    },
+    {
+      "EventId": "fe-1c813752c00540fc9218447da564c5a6",
+      "CandidateId": "coding-sample-003",
+      "Selected": true,
+      "IncludedInPackage": false,
+      "DownstreamSuccessProxy": 0.63,
+      "UserImplicitSignal": -1,
+      "CostEfficiencyScore": 0.705
+    },
+    {
+      "EventId": "fe-cb5856732c4c4c6d8e6d0efa4f26deae",
+      "CandidateId": "coding-sample-004",
+      "Selected": false,
+      "IncludedInPackage": false,
+      "DownstreamSuccessProxy": 0.664,
+      "UserImplicitSignal": -1,
+      "CostEfficiencyScore": 0.238
+    },
+    {
+      "EventId": "fe-64722d7ec087424fb5592286edff12be",
+      "CandidateId": "coding-sample-005",
+      "Selected": true,
+      "IncludedInPackage": false,
+      "DownstreamSuccessProxy": 0.857,
+      "UserImplicitSignal": 0,
+      "CostEfficiencyScore": 0.513
+    },
+    {
+      "EventId": "fe-bdb9a9e72c8f496594612d39ef866c42",
+      "CandidateId": "coding-sample-006",
+      "Selected": false,
+      "IncludedInPackage": false,
+      "DownstreamSuccessProxy": 0.684,
+      "UserImplicitSignal": 0,
+      "CostEfficiencyScore": 0.252
+    },
+    {
+      "EventId": "fe-1287617f6fae42e09cd77c01e9a1bb37",
+      "CandidateId": "coding-sample-007",
+      "Selected": true,
+      "IncludedInPackage": true,
+      "DownstreamSuccessProxy": 0.96,
+      "UserImplicitSignal": -1,
+      "CostEfficiencyScore": 0.767
+    },
+    {
+      "EventId": "fe-b986cfb6aa564c598ef600fd95ddfb36",
+      "CandidateId": "coding-sample-008",
+      "Selected": false,
+      "IncludedInPackage": false,
+      "DownstreamSuccessProxy": 0.879,
+      "UserImplicitSignal": -1,
+      "CostEfficiencyScore": 0.129
+    },
+    {
+      "EventId": "fe-1987686bacd747dbaf5c6d5671eef494",
+      "CandidateId": "coding-sample-009",
+      "Selected": false,
+      "IncludedInPackage": false,
+      "DownstreamSuccessProxy": 0.779,
+      "UserImplicitSignal": 1,
+      "CostEfficiencyScore": 0.109
+    },
+    {
+      "EventId": "fe-2d08f73d9ff34ac885949d3143030163",
+      "CandidateId": "coding-sample-010",
+      "Selected": true,
+      "IncludedInPackage": true,
+      "DownstreamSuccessProxy": 0.54,
+      "UserImplicitSignal": -1,
+      "CostEfficiencyScore": 0.3
+    },
+    {
+      "EventId": "fe-179f906d999a4ef5895e5d01a86e999b",
+      "CandidateId": "coding-sample-010",
+      "Selected": true,
+      "IncludedInPackage": true,
+      "DownstreamSuccessProxy": 0.279,
+      "UserImplicitSignal": 1,
+      "CostEfficiencyScore": 0.765
+    },
+    {
+      "EventId": "fe-12cc594ea98f47018378911f3f622099",
+      "CandidateId": "novel-sample-001",
+      "Selected": true,
+      "IncludedInPackage": true,
+      "DownstreamSuccessProxy": 0.949,
+      "UserImplicitSignal": -1,
+      "CostEfficiencyScore": 0.69
+    },
+    {
+      "EventId": "fe-f2ee37906534447b9a16eaa1965709c2",
+      "CandidateId": "novel-sample-001",
+      "Selected": true,
+      "IncludedInPackage": true,
+      "DownstreamSuccessProxy": 0.891,
+      "UserImplicitSignal": -1,
+      "CostEfficiencyScore": 0.95
+    },
+    {
+      "EventId": "fe-873e57bb4f1f461e872397d316be0227",
+      "CandidateId": "novel-sample-001",
+      "Selected": true,
+      "IncludedInPackage": true,
+      "DownstreamSuccessProxy": 0.557,
+      "UserImplicitSignal": 0,
+      "CostEfficiencyScore": 0.97
+    },
+    {
+      "EventId": "fe-01d1793fea08435aa5fe66d71a9d6884",
+      "CandidateId": "novel-sample-001",
+      "Selected": false,
+      "IncludedInPackage": false,
+      "DownstreamSuccessProxy": 0.237,
+      "UserImplicitSignal": 0,
+      "CostEfficiencyScore": 0.003
+    }
+  ]
+}
