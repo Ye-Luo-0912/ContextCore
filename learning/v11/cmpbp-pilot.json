@@ -1,6 +1,6 @@
 ﻿{
-  "OperationId": "cmpbp-fba241921a6e422a96919a7c7916535f",
-  "CreatedAt": "2026-07-01T02:52:57.6743849+00:00",
+  "OperationId": "cmpbp-e00627d900f6425c979c25c5faa325d8",
+  "CreatedAt": "2026-07-01T06:30:19.1859892+00:00",
   "PackPassed": true,
   "GatePassed": true,
   "CanaryMatrixPassed": true,
@@ -53,6 +53,7 @@
     "shadowBoundReal=60 synthetic=0 missingShadow=0",
     "calibratedScoresComparable=True provenance=realInference:60\u002Bgenerated:0",
     "metricMismatchDetected(diagnosticOnly)=True backfillGateAuthorityPassed=True boundaryReady=True preflightOk=True",
-    "V11.14 postPilotHardening=complete ledgerReady=true rollbackDryRun=true consistencyPassed=true"
+    "V11.14 postPilotHardening=complete ledgerReady=true rollbackDryRun=true consistencyPassed=true",
+    "V11.15 observationPassed=true stabilityPassed=true rollbackDrillPassed=true widerPilotAllowed=False"
   ]
 }

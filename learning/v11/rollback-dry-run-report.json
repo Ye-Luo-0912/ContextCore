@@ -1,6 +1,6 @@
 {
-  "GeneratedAt": "2026-07-01T02:52:57.6743849+00:00",
-  "ProofId": "rdrp-b08d50c2e8f64ca5bdbeba0356823ea4",
+  "GeneratedAt": "2026-07-01T06:30:19.1859892+00:00",
+  "ProofId": "rdrp-a00072b3a6b842c097e100075ef2282c",
   "RollbackDryRunPassed": true,
   "Summary": "Rollback steps verified as executable without actually rolling back.",
   "StepVerifications": [

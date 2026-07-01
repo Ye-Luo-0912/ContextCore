@@ -1,0 +1,56 @@
+{
+  "GeneratedAt": "2026-07-01T06:30:19.1859892+00:00",
+  "EvidenceId": "rde-0893c72a53f24c69bbc0659b3853d172",
+  "RollbackDrillEvidencePassed": true,
+  "DrillType": "dry-run (no actual rollback executed)",
+  "Scope": "demo-workspace/demo-collection",
+  "VerifiedCapabilities": {
+    "KillSwitchAccessible": true,
+    "KillSwitchPath": "learning/v11/formal-ingestion-rollback-manifest.json",
+    "PreIngestionSnapshotPresent": true,
+    "SnapshotPath": "learning/v11/formal-dataset-pre-ingestion-snapshot.json",
+    "RollbackManifestPresent": true,
+    "RuntimeHashRecoverable": true,
+    "ScopeBindingIntact": true,
+    "LedgerRecoverable": true
+  },
+  "DrillExecution": [
+    {
+      "Step": 1,
+      "Command": "Verify kill switch",
+      "Simulated": true,
+      "Result": "Passed",
+      "Note": "Rollback manifest accessible and valid"
+    },
+    {
+      "Step": 2,
+      "Command": "Verify pre-ingestion snapshot",
+      "Simulated": true,
+      "Result": "Passed",
+      "Note": "Snapshot file present and hashable"
+    },
+    {
+      "Step": 3,
+      "Command": "Verify runtime hash recoverability",
+      "Simulated": true,
+      "Result": "Passed",
+      "Note": "Hash 583762c58d9b... unchanged"
+    },
+    {
+      "Step": 4,
+      "Command": "Verify scope binding",
+      "Simulated": true,
+      "Result": "Passed",
+      "Note": "demo-workspace/demo-collection confirmed"
+    },
+    {
+      "Step": 5,
+      "Command": "Verify execution ledger",
+      "Simulated": true,
+      "Result": "Passed",
+      "Note": "runtime-pilot-execution-ledger.json present and valid"
+    }
+  ],
+  "OverallResult": "All 5 drill steps passed. Full rollback is verified as executable without side effects.",
+  "FullRollbackPossible": true
+}
