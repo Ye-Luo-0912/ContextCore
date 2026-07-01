@@ -1,0 +1,88 @@
+{
+  "GeneratedAt": "2026-07-01T11:43:04.9918679\u002B00:00",
+  "FeatureVectorStable": true,
+  "Dimension": 10,
+  "Normalization": "All features normalized to [0..1] via min-max or byte-enum-to-float mapping",
+  "Features": [
+    {
+      "Index": 0,
+      "Name": "FeatureIndex.SourceType",
+      "Type": "float32",
+      "Range": "[0..1]",
+      "Description": "CandidateSourceType enum \u2192 1/6 increments",
+      "Source": "UnifiedCandidate.SourceType"
+    },
+    {
+      "Index": 1,
+      "Name": "FeatureIndex.Authority",
+      "Type": "float32",
+      "Range": "[0..1]",
+      "Description": "DataAuthorityKind \u2192 linear scale: Authoritative=1.0, Shadow=0.7, Derived=0.5, Diagnostic=0.3, Synthetic=0.1",
+      "Source": "UnifiedCandidate.Authority"
+    },
+    {
+      "Index": 2,
+      "Name": "FeatureIndex.StrategyType",
+      "Type": "float32",
+      "Range": "[0..1]",
+      "Description": "StrategyIntent enum \u2192 1/8 increments",
+      "Source": "StrategySelectionResult.SelectedIntent"
+    },
+    {
+      "Index": 3,
+      "Name": "FeatureIndex.VectorScore",
+      "Type": "float32",
+      "Range": "[0..1]",
+      "Description": "Vector/dense similarity score from retrieval",
+      "Source": "VectorQueryPreviewCandidate.Similarity"
+    },
+    {
+      "Index": 4,
+      "Name": "FeatureIndex.GraphScore",
+      "Type": "float32",
+      "Range": "[0..1]",
+      "Description": "Graph expansion confidence (relation evidence strength)",
+      "Source": "RelationExplainResponse.Confidence"
+    },
+    {
+      "Index": 5,
+      "Name": "FeatureIndex.MemoryScore",
+      "Type": "float32",
+      "Range": "[0..1]",
+      "Description": "Memory recall score (ItemScoreBreakdown.FinalScore / 100)",
+      "Source": "ItemScoreBreakdown.FinalScore"
+    },
+    {
+      "Index": 6,
+      "Name": "FeatureIndex.RecencyScore",
+      "Type": "float32",
+      "Range": "[0..1]",
+      "Description": "Time decay: max(0, 1 - days_since_update/365)",
+      "Source": "UnifiedCandidate.UpdatedAt"
+    },
+    {
+      "Index": 7,
+      "Name": "FeatureIndex.TokenCost",
+      "Type": "float32",
+      "Range": "[0..1]",
+      "Description": "EstimatedTokens / max_tokens_in_batch, clamped",
+      "Source": "UnifiedCandidate.EstimatedTokens"
+    },
+    {
+      "Index": 8,
+      "Name": "FeatureIndex.UserPreferenceSignal",
+      "Type": "float32",
+      "Range": "[0..1]",
+      "Description": "Aggregated from FeedbackEvent (click/use/success signals)",
+      "Source": "FeedbackEvent aggregation"
+    },
+    {
+      "Index": 9,
+      "Name": "FeatureIndex.HistoricalSuccessRate",
+      "Type": "float32",
+      "Range": "[0..1]",
+      "Description": "CandidateFeedbackSummary.EffectivenessRate",
+      "Source": "CandidateFeedbackSummary"
+    }
+  ]
+}

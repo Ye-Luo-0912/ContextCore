@@ -1,0 +1,79 @@
+{
+  "GeneratedAt": "2026-07-01T11:43:04.9918679\u002B00:00",
+  "StrategyHybridScoringActive": true,
+  "RetrievalUnchanged": true,
+  "ScoringPipeline": {
+    "Description": "Hybrid = Strategy (V13.3) \u002B Neural (V14 MLP) with configurable blend alpha",
+    "Stages": [
+      {
+        "Stage": 1,
+        "Name": "Feature Extraction",
+        "Description": "Extract CandidateFeatureVector from UnifiedCandidate \u002B context"
+      },
+      {
+        "Stage": 2,
+        "Name": "Strategy Scoring",
+        "Description": "V13.3 strategy-based feature scoring \u2192 StrategyScore"
+      },
+      {
+        "Stage": 3,
+        "Name": "Neural Scoring",
+        "Description": "V14 MLP inference on CandidateFeatureVector \u2192 NeuralScore (selection, ranking, drop)"
+      },
+      {
+        "Stage": 4,
+        "Name": "Hybrid Blend",
+        "Description": "FinalScore = alpha \u00D7 StrategyScore \u002B (1-alpha) \u00D7 NeuralScore\u3002alpha=0.7 initially, converges to 0.3 as neural learns"
+      },
+      {
+        "Stage": 5,
+        "Name": "Deterministic Guard",
+        "Description": "If neural model not trained (signals \u003C 100) \u2192 alpha=1.0, pure strategy fallback"
+      }
+    ],
+    "BlendAlphaSchedule": [
+      {
+        "SignalsCollected": "0-99",
+        "Alpha": 1,
+        "Mode": "strategy-only (deterministic fallback)"
+      },
+      {
+        "SignalsCollected": "100-499",
+        "Alpha": 0.7,
+        "Mode": "strategy-heavy hybrid"
+      },
+      {
+        "SignalsCollected": "500-999",
+        "Alpha": 0.5,
+        "Mode": "balanced hybrid"
+      },
+      {
+        "SignalsCollected": "1000-4999",
+        "Alpha": 0.3,
+        "Mode": "neural-leaning hybrid"
+      },
+      {
+        "SignalsCollected": "5000\u002B",
+        "Alpha": 0.2,
+        "Mode": "neural-dominant (strategy as safety net)"
+      }
+    ],
+    "CurrentState": {
+      "TotalSignals": 200,
+      "BlendAlpha": 0.7,
+      "Mode": "strategy-heavy hybrid",
+      "NextMilestone": 500
+    }
+  },
+  "Safety": {
+    "DeterministicFallbackExists": true,
+    "FallbackTrigger": "Neural model unavailable OR signals \u003C 100",
+    "NoRuntimeMutation": true,
+    "NoLLmInvolvement": true,
+    "NoExternalDependency": true,
+    "NoManualLabeling": true,
+    "RetrievalUnchanged": true,
+    "PackageBuilderUnchanged": true,
+    "CandidatePipelineUnchanged": true
+  }
+}

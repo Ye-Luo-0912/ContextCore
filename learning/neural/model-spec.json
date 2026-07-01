@@ -1,0 +1,51 @@
+{
+  "GeneratedAt": "2026-07-01T11:43:04.9918679\u002B00:00",
+  "NeuralSelectionEnabled": true,
+  "LlmNotInTrainingLoop": true,
+  "DeterministicFallbackExists": true,
+  "Model": {
+    "ModelId": "context-selector-mlp-v1",
+    "Architecture": "3-layer MLP: 10 \u2192 16 \u2192 8 \u2192 3 (selection_score, ranking_score, drop_probability)",
+    "TotalParameters": 339,
+    "HiddenLayers": "ReLU(Linear(10,16)) \u2192 ReLU(Linear(16,8)) \u2192 Sigmoid(Linear(8,3))",
+    "Activation": {
+      "Layer1": "ReLU",
+      "Layer2": "ReLU",
+      "Output": "Sigmoid"
+    },
+    "Optimizer": "SGD(momentum=0.9, lr=0.001)",
+    "Loss": "WeightedMSE: 0.4 \u00D7 L_selection \u002B 0.35 \u00D7 L_ranking \u002B 0.25 \u00D7 L_drop",
+    "Regularization": {
+      "BatchNorm": "After each hidden layer",
+      "Dropout": "0.1 training, 0.0 inference"
+    },
+    "Deterministic": {
+      "Seed": 42,
+      "Note": "Same seed \u002B same data \u2192 same weights \u2192 reproducible outputs"
+    },
+    "Replaceable": true,
+    "AlternativeModels": [
+      "LightGBM (gradient boosted trees)",
+      "Linear\u002Bnonlinear hybrid (Linear(10,8)\u2192ReLU\u2192Linear(8,3))",
+      "KNN-weighted (k=5, cosine similarity)"
+    ]
+  },
+  "Training": {
+    "DataSource": "LearningSignal collection (auto-collected from runtime)",
+    "MinSamplesBeforeTraining": 100,
+    "BatchSize": 32,
+    "EpochsInitial": 50,
+    "EpochsFineTune": 10,
+    "ValidationSplit": 0.2,
+    "EarlyStoppingPatience": 5,
+    "TrainingFrequency": "After each N operations (configurable, default N=100)",
+    "NoExternalDependency": true,
+    "Note": "All training data is collected internally. No external labeling, no LLM, no human review required."
+  },
+  "Fallback": {
+    "DeterministicFallbackExists": true,
+    "FallbackCondition": "When LearningSignal count \u003C MinSamplesBeforeTraining (100) OR model load fails",
+    "FallbackBehavior": "BlendAlpha=0 \u2192 pure strategy scoring (V13.3 deterministic pipeline)",
+    "DegradationGraceful": true
+  }
+}
