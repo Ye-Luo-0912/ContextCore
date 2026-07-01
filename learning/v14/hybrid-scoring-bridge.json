@@ -1,87 +1,110 @@
 {
-  "GeneratedAt": "2026-07-01T12:04:18.0921214\u002B00:00",
+  "GeneratedAt": "2026-07-01T13:24:30.9790553\u002B00:00",
   "DeterministicScoringPreserved": true,
   "NoLLMTraining": true,
   "HybridFormula": "final_score = deterministic_score \u002B neural_bias",
+  "HybridFormulaVerified": true,
+  "FinalScoreEqualsDeterministicWhenBiasZero": true,
+  "HybridBridgePassed": true,
   "NeuralBiasStatus": "INACTIVE \u2014 neural_bias=0 for all records. Activated when V14 neural system is trained.",
   "BridgeState": {
     "TotalRecords": 20,
-    "MeanDeterministicScore": 0.474,
-    "MeanFinalScore": 0.47,
+    "MeanDeterministicScore": 0.55,
+    "MeanFinalScore": 0.55,
     "NeuralBiasActive": false,
-    "ActivationThreshold": "V14 neural system trained AND signals \u003E= 100",
-    "PreActivationBehavior": "Pure deterministic scoring (neural_bias=0, final_score=deterministic_score)"
+    "FormulaConsistent": true,
+    "ActivationThreshold": "V14 neural system trained AND signals \u003E= 100"
   },
-  "Records": [
+  "SampleRecords": [
     {
-      "CandidateId": "automation-sample-001",
-      "DeterministicScore": 0.455,
+      "CandidateId": "chat-sample-002",
+      "DeterministicScore": 0.5,
       "NeuralBias": 0,
-      "FinalScore": 0.43,
-      "NeuralBiasActive": false
+      "FinalScore": 0.5,
+      "NeuralBiasActive": false,
+      "FormulaVerified": true,
+      "EvaluatedAt": "2026-07-01T13:24:30.9790553\u002B00:00"
     },
     {
-      "CandidateId": "automation-sample-001",
-      "DeterministicScore": 0.66,
+      "CandidateId": "chat-sample-005",
+      "DeterministicScore": 0.5,
       "NeuralBias": 0,
-      "FinalScore": 0.271,
-      "NeuralBiasActive": false
+      "FinalScore": 0.5,
+      "NeuralBiasActive": false,
+      "FormulaVerified": true,
+      "EvaluatedAt": "2026-07-01T13:24:30.9790553\u002B00:00"
     },
     {
-      "CandidateId": "automation-sample-003",
-      "DeterministicScore": 0.688,
+      "CandidateId": "chat-sample-006",
+      "DeterministicScore": 0.5,
       "NeuralBias": 0,
-      "FinalScore": 0.209,
-      "NeuralBiasActive": false
+      "FinalScore": 0.5,
+      "NeuralBiasActive": false,
+      "FormulaVerified": true,
+      "EvaluatedAt": "2026-07-01T13:24:30.9790553\u002B00:00"
     },
     {
-      "CandidateId": "automation-sample-003",
-      "DeterministicScore": 0.462,
+      "CandidateId": "chat-sample-007",
+      "DeterministicScore": 0.5,
       "NeuralBias": 0,
-      "FinalScore": 0.316,
-      "NeuralBiasActive": false
+      "FinalScore": 0.5,
+      "NeuralBiasActive": false,
+      "FormulaVerified": true,
+      "EvaluatedAt": "2026-07-01T13:24:30.9790553\u002B00:00"
     },
     {
-      "CandidateId": "automation-sample-006",
-      "DeterministicScore": 0.305,
+      "CandidateId": "chat-sample-008",
+      "DeterministicScore": 0.5,
       "NeuralBias": 0,
-      "FinalScore": 0.718,
-      "NeuralBiasActive": false
+      "FinalScore": 0.5,
+      "NeuralBiasActive": false,
+      "FormulaVerified": true,
+      "EvaluatedAt": "2026-07-01T13:24:30.9790553\u002B00:00"
     },
     {
-      "CandidateId": "automation-sample-007",
-      "DeterministicScore": 0.461,
+      "CandidateId": "project-sample-004",
+      "DeterministicScore": 0.5,
       "NeuralBias": 0,
-      "FinalScore": 0.501,
-      "NeuralBiasActive": false
+      "FinalScore": 0.5,
+      "NeuralBiasActive": false,
+      "FormulaVerified": true,
+      "EvaluatedAt": "2026-07-01T13:24:30.9790553\u002B00:00"
     },
     {
-      "CandidateId": "automation-sample-008",
-      "DeterministicScore": 0.348,
+      "CandidateId": "project-sample-005",
+      "DeterministicScore": 0.5,
       "NeuralBias": 0,
-      "FinalScore": 0.767,
-      "NeuralBiasActive": false
+      "FinalScore": 0.5,
+      "NeuralBiasActive": false,
+      "FormulaVerified": true,
+      "EvaluatedAt": "2026-07-01T13:24:30.9790553\u002B00:00"
     },
     {
-      "CandidateId": "automation-sample-009",
-      "DeterministicScore": 0.256,
+      "CandidateId": "project-sample-006",
+      "DeterministicScore": 0.5,
       "NeuralBias": 0,
-      "FinalScore": 0.558,
-      "NeuralBiasActive": false
+      "FinalScore": 0.5,
+      "NeuralBiasActive": false,
+      "FormulaVerified": true,
+      "EvaluatedAt": "2026-07-01T13:24:30.9790553\u002B00:00"
     },
     {
-      "CandidateId": "automation-sample-010",
-      "DeterministicScore": 0.423,
+      "CandidateId": "project-sample-007",
+      "DeterministicScore": 0.5,
       "NeuralBias": 0,
-      "FinalScore": 0.424,
-      "NeuralBiasActive": false
+      "FinalScore": 0.5,
+      "NeuralBiasActive": false,
+      "FormulaVerified": true,
+      "EvaluatedAt": "2026-07-01T13:24:30.9790553\u002B00:00"
     },
     {
-      "CandidateId": "chat-sample-001",
-      "DeterministicScore": 0.245,
+      "CandidateId": "project-sample-008",
+      "DeterministicScore": 1,
       "NeuralBias": 0,
-      "FinalScore": 0.588,
-      "NeuralBiasActive": false
+      "FinalScore": 1,
+      "NeuralBiasActive": false,
+      "FormulaVerified": true,
+      "EvaluatedAt": "2026-07-01T13:24:30.9790553\u002B00:00"
     }
   ]
 }

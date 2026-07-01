@@ -1,0 +1,19 @@
+{
+  "GeneratedAt": "2026-07-01T13:24:30.9790553\u002B00:00",
+  "LearningDataPipelineReady": true,
+  "SyntheticRecordCount": 0,
+  "RuntimeClaimMatchesEvidence": true,
+  "FeedbackEventsRealOrUnknown": true,
+  "NoRandomSignals": true,
+  "HybridFormulaVerified": true,
+  "FinalScoreEqualsDeterministicWhenBiasZero": true,
+  "NoDivideByZeroRisk": true,
+  "HistoricalBaselineMissing": true,
+  "RetrievalUnchanged": true,
+  "RuntimePromotionApplied": false,
+  "PackageOutputChanged": false,
+  "VectorBindingChanged": false,
+  "BlockedReasons": [],
+  "TotalFeatureRecords": 87,
+  "TotalFeedbackEvents": 87
+}
