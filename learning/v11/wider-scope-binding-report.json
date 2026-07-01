@@ -1,0 +1,13 @@
+{
+  "GeneratedAt": "2026-07-01T08:42:01.538762+00:00",
+  "ReportId": "wsbr-ed147425f451439a9dc0bc5fbc1e48ca",
+  "TargetScope": "demo-workspace/demo-collection",
+  "TargetScopeExplicit": true,
+  "NoWildcardScope": true,
+  "CurrentBinding": "V8 scoped activation",
+  "BindingVerified": true,
+  "ScopeExpandedFrom": "demo-workspace/demo-collection",
+  "ScopeExpandedTo": "demo-workspace/demo-collection",
+  "ExpansionControlled": true,
+  "GlobalDefaultOn": false
+}

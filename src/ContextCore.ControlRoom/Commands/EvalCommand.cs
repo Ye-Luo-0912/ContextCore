@@ -399,6 +399,7 @@ public static partial class EvalCommand
             !string.Equals(subcommand, "cmpbp", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "cmpbp-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "cmpbp-pilot", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "cmpbp-wider", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "formal-evidence-stabilization-replay-pilot-readiness", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "formal-evidence-stabilization-replay-pilot-readiness-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "learning-formal-evidence-realization-r1-pack", StringComparison.OrdinalIgnoreCase) &&
@@ -736,6 +737,7 @@ public static partial class EvalCommand
         Console.WriteLine("  eval cmpbp   (canary-matrix-promotion-boundary-pilot-preflight)");
         Console.WriteLine("  eval cmpbp-gate");
         Console.WriteLine("  eval cmpbp-pilot (authorized pilot execution)");
+        Console.WriteLine("  eval cmpbp-wider (wider pilot with token + scope)");
             Console.WriteLine("  eval learning-formal-evidence-realization-r1-pack");
             Console.WriteLine("  eval learning-formal-evidence-realization-r1-pack-gate");
             Console.WriteLine("  eval dto-split-plan");
@@ -2324,7 +2326,8 @@ public static partial class EvalCommand
 
         if (string.Equals(subcommand, "cmpbp", StringComparison.OrdinalIgnoreCase)
             || string.Equals(subcommand, "cmpbp-gate", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(subcommand, "cmpbp-pilot", StringComparison.OrdinalIgnoreCase))
+            || string.Equals(subcommand, "cmpbp-pilot", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(subcommand, "cmpbp-wider", StringComparison.OrdinalIgnoreCase))
         {
             await ExecuteCanaryMatrixPromotionBoundaryPilotPreflightAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
             return;

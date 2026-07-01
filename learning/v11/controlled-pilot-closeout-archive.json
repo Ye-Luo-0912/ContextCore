@@ -1,6 +1,6 @@
 {
-  "GeneratedAt": "2026-07-01T08:16:43.9126555+00:00",
-  "ArchiveId": "cpca-db6e84a1e14f465982424f398941c4ea",
+  "GeneratedAt": "2026-07-01T08:42:02.5626729+00:00",
+  "ArchiveId": "cpca-b3f6dfe2293b47dcb0ebc17020fd731d",
   "CloseoutArchiveReady": true,
   "ArchivedVersions": [
     "V11.13",
@@ -9,9 +9,9 @@
     "V11.16",
     "V11.17"
   ],
-  "SourceCommit": "7f8da8122f70b4cdedc0cfefa6896eab01f2b659",
-  "CloseoutSourceCommit": "7f8da8122f70b4cdedc0cfefa6896eab01f2b659",
-  "AuditAcceptedCommit": "7f8da8122f70b4cdedc0cfefa6896eab01f2b659",
+  "SourceCommit": "981b776ea4978a688af036b60c8c2c3796a86b70",
+  "CloseoutSourceCommit": "981b776ea4978a688af036b60c8c2c3796a86b70",
+  "AuditAcceptedCommit": "981b776ea4978a688af036b60c8c2c3796a86b70",
   "ArchivalStatus": "ARCHIVED - controlled pilot V11.13-V11.17 permanently recorded.",
   "ControlledPilotOutcome": {
     "PilotExecuted": true,
@@ -27,43 +27,43 @@
   "FrozenCoreArtifacts": [
     {
       "File": "cmpbp-pilot.json",
-      "Hash": "744234cf3c24c895ab830fad477f9b7b5f11d6346379a1b6640d2e51e3703094"
+      "Hash": "655013535da7ac75a19a7a93fb375da7f328ae1c18eafba308010f43683802a2"
     },
     {
       "File": "pilot-execution-report.json",
-      "Hash": "6cbe7fe23bbe9cb21d6affa298e892c405d4b32072a790c26259fce2283c5d9d"
+      "Hash": "fbf454d6c1fffbc6f9f312b7cd03d8022c6aa1cec2f8baa4b42219403f5ec2ee"
     },
     {
       "File": "post-pilot-audit.json",
-      "Hash": "d1baef94c0ded19dd8151f352665072ab4f661e32b6cd9c02afa2d7b08c9116f"
+      "Hash": "b1a1c89a1feeae927f3b0c8a55d91cec95e7a6c6a8f4a4a2afe57f16595002e6"
     },
     {
       "File": "post-pilot-consistency-audit.json",
-      "Hash": "edddba5710ff42d6f69576128550cca8996c27a219dc3a1093f476953f7cde67"
+      "Hash": "9280514a3927acd576080d0c19d716267ab352c80c784a998c7f6aed0cbe3f2c"
     },
     {
       "File": "pilot-authorization-consumption-record.json",
-      "Hash": "ed8ce027a41bd307660939661638a9d191c01ed00f6ec356dbfe0bb9aa2665cb"
+      "Hash": "e84d3b704b183cbfffd5a5389e462958f443519fcab887e3a4c70356e1f5c595"
     },
     {
       "File": "runtime-pilot-execution-ledger.json",
-      "Hash": "f67a6aaa83b5f5e97984ef8e6d7539109936a929c122bad0bcabb8b1bb485c41"
+      "Hash": "21b3978e01a965fba2272679e44e50f9f631101823e25e9907e6f262a7000a06"
     },
     {
       "File": "pilot-rollback-plan.json",
-      "Hash": "bfa0e62cd6da67f28d493379a88085d07052fa6bb0ef5e1ff3c29733ec985544"
+      "Hash": "d4f895602838b0d00a6f2da6d2b3eb957c281b5e4db62c7a85908ec05d63459f"
     },
     {
       "File": "rollback-dry-run-report.json",
-      "Hash": "ce79d0af7601748f6ccabc4878ff250c37b152f85c8753daaca69593ea4f1b62"
+      "Hash": "1910ca437a5546b4b0aa6cab0f6821de9ad7692008d831bedfb9f36d4e47a808"
     },
     {
       "File": "pilot-observation-window.json",
-      "Hash": "6f8d2f4cd8db0e7736ce0a140eec8bf9922169db1ae419985d364360ffae885e"
+      "Hash": "1ecebe01e15dc7ab73a2db3401f153483a35cccbbecfb14c46d514e1d58fea4f"
     },
     {
       "File": "pilot-stability-report.json",
-      "Hash": "90106b142e12cfe775b3d082f3038ea23692689f3aafc655abc78a0d8217100a"
+      "Hash": "894afc573421aaa99a6a30f459ee30d66118155abd98423436f6b4d822880f25"
     }
   ],
   "ArchiveIntegrityVerified": true,

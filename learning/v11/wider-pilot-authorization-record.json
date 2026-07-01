@@ -1,0 +1,14 @@
+{
+  "GeneratedAt": "2026-07-01T08:42:01.538762+00:00",
+  "RecordId": "wpar-3c74cb90bf8c4cc5822c6c152db0b144",
+  "WiderPilotAuthorized": true,
+  "WiderPilotAuthorizationGatePassed": true,
+  "AuthorizationToken": "wp-v12-a...",
+  "TokenValid": true,
+  "TargetScope": "demo-workspace/demo-collection",
+  "ScopeValid": true,
+  "NoWildcardScope": true,
+  "ScopeExplicit": true,
+  "AuthorizationDecision": "AUTHORIZED",
+  "BlockedReason": null
+}

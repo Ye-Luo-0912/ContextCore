@@ -1,6 +1,6 @@
 {
-  "GeneratedAt": "2026-07-01T08:16:43.9126555+00:00",
-  "AuditId": "ppca-97d3f6075eab410ca4f4cca4f6d0aab8",
+  "GeneratedAt": "2026-07-01T08:42:02.5626729+00:00",
+  "AuditId": "ppca-e4de874ae35c4a6d9082f586c589a57f",
   "PostPilotConsistencyAuditPassed": true,
   "CrossCheckedArtifacts": [
     "cmpbp-pilot.json",

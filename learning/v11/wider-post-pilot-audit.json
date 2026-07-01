@@ -1,0 +1,17 @@
+{
+  "GeneratedAt": "2026-07-01T08:42:01.538762+00:00",
+  "AuditId": "wppa-5555c88294a44af8b17f64db196cf6f1",
+  "WiderPostPilotAuditPassed": true,
+  "GateConsistency": true,
+  "RegressionCheck": true,
+  "CoverageCheck": true,
+  "SyntheticCheck": true,
+  "GlobalDefaultOn": false,
+  "RuntimePromotionApplied": false,
+  "PackageOutputChanged": false,
+  "VectorBindingChanged": false,
+  "WiderScope": "demo-workspace/demo-collection",
+  "NoUnscopedChanges": true,
+  "WiderPilotSummary": "Wider pilot passed all observation rounds. No regressions, no gate failures, scope intact.",
+  "Recommendation": "Wider pilot successful. Consider formal wider deployment."
+}

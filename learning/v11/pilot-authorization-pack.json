@@ -1,6 +1,6 @@
 {
-  "GeneratedAt": "2026-07-01T08:16:43.9126555+00:00",
-  "PackId": "pap-3717a7c3c5854172bcb4d4224c9928c3",
+  "GeneratedAt": "2026-07-01T08:42:02.5626729+00:00",
+  "PackId": "pap-f8a1509a7bc643708f1bcd18053badf5",
   "PilotAuthorizationPackReady": true,
   "PilotAuthorized": false,
   "AuthorizationRequired": "Explicit pilot authorization flag must be set before live pilot execution.",

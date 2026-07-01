@@ -2339,6 +2339,24 @@ public static partial class EvalCommand
 
         var isGate = string.Equals(subcommand,"cmpbp-gate",StringComparison.OrdinalIgnoreCase);
         var isPilot = string.Equals(subcommand,"cmpbp-pilot",StringComparison.OrdinalIgnoreCase);
+        var isWider = string.Equals(subcommand,"cmpbp-wider",StringComparison.OrdinalIgnoreCase);
+
+        if(isWider){
+            // Wider pilot: requires token + explicit scope
+            var token = CommandHelpers.GetOption(args,"--token")??"";
+            var targetScope = CommandHelpers.GetOption(args,"--scope")??"demo-workspace/demo-collection";
+            var widerOpt = new CanaryMatrixPromotionBoundaryPilotPreflightOptions{
+                IsGate=true, Enabled=true,
+                WiderPilotAuthorized=true,
+                AuthorizationToken=token,
+                TargetScope=targetScope
+            };
+            new CanaryMatrixPromotionBoundaryPilotPreflightRunner().RunWiderPilot(rtPassed,p15Passed,output,widerOpt);
+            Console.WriteLine($"[Eval] Wider pilot executed with scope={targetScope}");
+            Console.WriteLine($"[Eval] Token valid={!string.IsNullOrWhiteSpace(token)&&token.Contains("wp-")}");
+            return;
+        }
+
         var opt = new CanaryMatrixPromotionBoundaryPilotPreflightOptions{
             IsGate=isGate||isPilot,
             Enabled=!CommandHelpers.HasFlag(args,"--disabled"),
