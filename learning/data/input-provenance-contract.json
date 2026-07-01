@@ -1,0 +1,66 @@
+{
+  "GeneratedAt": "2026-07-01T09:40:39.2765508\u002B00:00",
+  "InputProvenanceContractReady": true,
+  "StableEnumsReady": true,
+  "EnumDefinitions": {
+    "InputSourceKind": [
+      "Unknown",
+      "User",
+      "Llm",
+      "Tool",
+      "Web",
+      "File",
+      "Runtime",
+      "System"
+    ],
+    "InputActorKind": [
+      "Unknown",
+      "User",
+      "Assistant",
+      "Tool",
+      "Web",
+      "Runtime",
+      "System"
+    ],
+    "DataAuthorityKind": [
+      "Unknown",
+      "Authoritative",
+      "Shadow",
+      "Diagnostic",
+      "Synthetic"
+    ],
+    "LabelStatusKind": [
+      "Unknown",
+      "Unlabeled",
+      "WeakLabel",
+      "HumanApproved",
+      "Rejected"
+    ],
+    "LearningDataKind": [
+      "Unknown",
+      "RuntimeTrace",
+      "RankingPair",
+      "HardNegative",
+      "RouterExample",
+      "ShadowEvalRow",
+      "GateDecision",
+      "PromotionDecision",
+      "DocumentChunk"
+    ],
+    "DataUsageFlags": [
+      "None",
+      "Gate",
+      "Training",
+      "Eval",
+      "Audit",
+      "Runtime"
+    ]
+  },
+  "ProvenanceRules": {
+    "SyntheticNotInGate": "Synthetic authority must not have Gate usage flag",
+    "DiagnosticNotInTraining": "Diagnostic authority must not have Training usage flag",
+    "LlmNotDefaultAuthoritative": "LLM source must not be Authoritative unless explicitly labeled",
+    "EveryChunkMustTraceToDocument": "Chunk lineage must be complete and traceable",
+    "EveryDatasetMustHaveClassification": "SourceKind \u002B Authority \u002B UsageFlags required"
+  }
+}

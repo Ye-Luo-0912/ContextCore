@@ -2488,5 +2488,17 @@ public static partial class EvalCommand
 
         return current;
     }
+
+    private static async Task ExecuteInputProvenanceScanAsync(CancellationToken ct)
+    {
+        var output = Path.GetFullPath(Path.Combine("learning","data"));
+        Directory.CreateDirectory(output);
+        var scanner = new ContextCore.Core.Services.Learning.V13.InputProvenanceScanner();
+        var report = scanner.ScanAndEvaluate(output);
+        await Task.CompletedTask.ConfigureAwait(false);
+        Console.WriteLine($"[Eval] Input provenance scan: {report.TotalDatasets} datasets, {report.TotalRecords} records");
+        Console.WriteLine($"[Eval] Gate passed={report.GatePassed} sourceKind={report.EveryDatasetHasSourceKind} authority={report.EveryDatasetHasAuthority} usageFlags={report.EveryDatasetHasUsageFlags}");
+        Console.WriteLine($"[Eval] SyntheticLeakage={report.SyntheticGateLeakage} DiagnosticLeakage={report.DiagnosticTrainingLeakage}");
+    }
 }
 

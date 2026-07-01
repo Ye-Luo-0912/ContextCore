@@ -1,0 +1,16 @@
+{
+  "GeneratedAt": "2026-07-01T09:40:39.2765508\u002B00:00",
+  "GatePassed": true,
+  "TotalDatasets": 4,
+  "TotalRecords": 581,
+  "EveryDatasetHasSourceKind": true,
+  "EveryDatasetHasAuthority": true,
+  "EveryDatasetHasUsageFlags": true,
+  "EveryChunkCanTraceToDocument": true,
+  "SyntheticGateLeakage": 0,
+  "DiagnosticTrainingLeakage": 0,
+  "RuntimePromotionApplied": false,
+  "PackageOutputChanged": false,
+  "VectorBindingChanged": false,
+  "BlockedReasons": []
+}

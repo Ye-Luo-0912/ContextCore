@@ -1,0 +1,53 @@
+{
+  "GeneratedAt": "2026-07-01T09:40:39.2765508\u002B00:00",
+  "ChunkLineageContractReady": true,
+  "EveryChunkCanTraceToDocument": true,
+  "LineageChain": "chunk \u2192 documentVersion \u2192 document \u2192 rootInput",
+  "DocumentCount": 4,
+  "Documents": [
+    {
+      "DocumentId": "doc-a85956eb44f37c26",
+      "DocumentVersionId": "doc-a85956eb44f37c26-v1",
+      "RootInputId": "input-doc-a85956eb",
+      "SourcePath": "learning\\features\\ranking-pairs.jsonl",
+      "SourceKind": 6,
+      "Authority": 1,
+      "LineCount": 253,
+      "ChunkCount": 1,
+      "SourceHash": "78d3a534504eb789e7866fa9026d82d868f2f58b042d00626c1b9b88764779c1"
+    },
+    {
+      "DocumentId": "doc-b4d06644c5942582",
+      "DocumentVersionId": "doc-b4d06644c5942582-v1",
+      "RootInputId": "input-doc-b4d06644",
+      "SourcePath": "learning\\features\\hard-negatives.jsonl",
+      "SourceKind": 6,
+      "Authority": 1,
+      "LineCount": 78,
+      "ChunkCount": 1,
+      "SourceHash": "02ac53e3e2d8d8c484ec2da5f6a88f5bddb1aa95c0c898421fa85bc3322ffb2b"
+    },
+    {
+      "DocumentId": "doc-d40dbcf7daebfcdf",
+      "DocumentVersionId": "doc-d40dbcf7daebfcdf-v1",
+      "RootInputId": "input-doc-d40dbcf7",
+      "SourcePath": "learning\\features\\router-intent-examples.jsonl",
+      "SourceKind": 6,
+      "Authority": 1,
+      "LineCount": 163,
+      "ChunkCount": 1,
+      "SourceHash": "bbb468fc24833b0e017668da40f9eabb6a2aed3c1117031e84c63708e7bab0a3"
+    },
+    {
+      "DocumentId": "doc-9b7cf655823b4b33",
+      "DocumentVersionId": "doc-9b7cf655823b4b33-v1",
+      "RootInputId": "input-doc-9b7cf655",
+      "SourcePath": "learning\\ranker\\candidate-reranker-shadow-eval-a3.json",
+      "SourceKind": 6,
+      "Authority": 2,
+      "LineCount": 87,
+      "ChunkCount": 1,
+      "SourceHash": "ed17bac11555d0d2d04dfbf7ab72e62f876156359068cfb02c0ee79bd9f4bc99"
+    }
+  ]
+}
