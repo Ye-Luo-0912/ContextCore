@@ -1,0 +1,60 @@
+{
+  "GeneratedAt": "2026-07-01T11:29:12.1674084\u002B00:00",
+  "CandidatePipelineUnchanged": true,
+  "PackageBuilderSeparated": true,
+  "LlmNotInScoringPath": true,
+  "Pipeline": {
+    "Stages": [
+      {
+        "Stage": 1,
+        "Name": "CandidateAggregator",
+        "Action": "Collects UnifiedCandidates from all sources (vector, memory, graph, keyword)",
+        "Input": "Raw source results",
+        "Output": "Deduped UnifiedCandidate list"
+      },
+      {
+        "Stage": 2,
+        "Name": "StrategySelector",
+        "Action": "Selects scoring strategy based on query context (intent, domain, memory pressure, token budget)",
+        "Input": "QueryContext \u002B Domain",
+        "Output": "StrategySelectionResult (strategyId \u002B version)"
+      },
+      {
+        "Stage": 3,
+        "Name": "UnifiedCandidateScorer",
+        "Action": "Scores each candidate using strategy\u0027s feature weights",
+        "Input": "UnifiedCandidate list \u002B StrategyProfile",
+        "Output": "UnifiedScore list with per-feature explanation"
+      },
+      {
+        "Stage": 4,
+        "Name": "LifecycleFilter",
+        "Action": "Applies lifecycle penalties per strategy\u0027s LifecyclePenaltyFactor",
+        "Input": "UnifiedScore list",
+        "Output": "Filtered \u002B adjusted scores"
+      },
+      {
+        "Stage": 5,
+        "Name": "PackageBuilder",
+        "Action": "Token budget \u002B dedup \u002B sectioning (no scoring)",
+        "Input": "Filtered UnifiedScore list",
+        "Output": "Final context package"
+      }
+    ],
+    "LlmBoundary": {
+      "Allowed": [
+        "SuggestStrategy (advisory only)",
+        "ExplainRanking (post-hoc)",
+        "ProposeCandidateHints (supplementary)"
+      ],
+      "Forbidden": [
+        "Score candidates",
+        "Execute selection",
+        "Mutate state",
+        "Override strategy weights",
+        "Directly modify package output"
+      ],
+      "Description": "LLM is restricted to advisory role. Strategy selection may accept LLM suggestion as input, but the final decision is deterministic via StrategySelector."
+    }
+  }
+}

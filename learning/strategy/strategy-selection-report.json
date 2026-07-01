@@ -1,0 +1,114 @@
+{
+  "GeneratedAt": "2026-07-01T11:29:12.1674084\u002B00:00",
+  "StrategyBasedRouting": true,
+  "SelectionMechanism": "Rule-based selector: intent\u2192domain mapping \u002B memory pressure threshold \u002B token budget constraint \u2192 strategy selection. LLM may suggest but final decision is deterministic.",
+  "SelectionRules": [
+    {
+      "Condition": "Intent=coding",
+      "Strategy": "recall-broad v1",
+      "Reason": "Coding benefits from broad recall surface"
+    },
+    {
+      "Condition": "Intent=audit",
+      "Strategy": "audit-strict v1",
+      "Reason": "Audit requires maximum authority, no recency bias"
+    },
+    {
+      "Condition": "Intent=eval",
+      "Strategy": "speed-fast v1 (experimental)",
+      "Reason": "Eval prioritizes speed over precision"
+    },
+    {
+      "Condition": "MemoryPressure=high",
+      "Strategy": "memory-dense v1",
+      "Reason": "High memory pressure \u2192 prioritize working memory signals"
+    },
+    {
+      "Condition": "TokenBudget\u003C4000",
+      "Strategy": "compression-tight v1",
+      "Reason": "Low budget \u2192 aggressive compression"
+    },
+    {
+      "Condition": "Default",
+      "Strategy": "balanced-default v2",
+      "Reason": "General chat, no special conditions"
+    }
+  ],
+  "Scenarios": [
+    {
+      "Input": {
+        "QueryText": "how to fix NullReferenceException",
+        "Intent": "coding",
+        "MemoryPressure": "low",
+        "TokenBudget": 12000,
+        "CandidateCount": 45
+      },
+      "Selected": {
+        "SelectedStrategyId": "recall-broad",
+        "SelectedVersion": "v1",
+        "Intent": "Recall"
+      },
+      "SelectionReason": "Coding intent \u2192 broad recall. Low memory pressure \u2192 can handle 80 candidates. High token budget \u2192 no compression needed."
+    },
+    {
+      "Input": {
+        "QueryText": "summarize the project status",
+        "Intent": "chat",
+        "MemoryPressure": "medium",
+        "TokenBudget": 6000,
+        "CandidateCount": 60
+      },
+      "Selected": {
+        "SelectedStrategyId": "balanced-default",
+        "SelectedVersion": "v2",
+        "Intent": "Balanced"
+      },
+      "SelectionReason": "General chat intent \u2192 balanced default. Medium pressure \u2192 no specialty needed. Default strategy v2 (active)."
+    },
+    {
+      "Input": {
+        "QueryText": "what changed in the last hour",
+        "Intent": "chat",
+        "MemoryPressure": "high",
+        "TokenBudget": 4000,
+        "CandidateCount": 80
+      },
+      "Selected": {
+        "SelectedStrategyId": "memory-dense",
+        "SelectedVersion": "v1",
+        "Intent": "MemoryAware"
+      },
+      "SelectionReason": "Temporal query (\u0027last hour\u0027) \u002B high memory pressure \u2192 memory-dense strategy prioritizes recent working memory with strong user preference signals."
+    },
+    {
+      "Input": {
+        "QueryText": "audit all deprecated entries",
+        "Intent": "audit",
+        "MemoryPressure": "low",
+        "TokenBudget": 16000,
+        "CandidateCount": 200
+      },
+      "Selected": {
+        "SelectedStrategyId": "audit-strict",
+        "SelectedVersion": "v1",
+        "Intent": "Precision"
+      },
+      "SelectionReason": "Audit mode \u2192 strict strategy. Maximum authority (2.0), no freshness/user preference, 100 candidates, aggressive lifecycle penalty."
+    },
+    {
+      "Input": {
+        "QueryText": "quick eval batch run",
+        "Intent": "eval",
+        "MemoryPressure": "low",
+        "TokenBudget": 2000,
+        "CandidateCount": 30
+      },
+      "Selected": {
+        "SelectedStrategyId": "speed-fast",
+        "SelectedVersion": "v1",
+        "Intent": "Speed"
+      },
+      "SelectionReason": "Eval mode \u2192 speed strategy. Minimal overhead, 15 candidates, relaxed filters. Experimental lifecycle."
+    }
+  ]
+}

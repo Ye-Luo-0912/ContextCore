@@ -1,0 +1,220 @@
+{
+  "GeneratedAt": "2026-07-01T11:29:12.1674084\u002B00:00",
+  "StrategySystemEnabled": true,
+  "NoGlobalScoringFunction": true,
+  "StrategyBasedRouting": true,
+  "StrategyVersioningEnabled": true,
+  "TotalStrategies": 9,
+  "ActiveStrategies": 5,
+  "CandidateStrategies": 2,
+  "ExperimentalStrategies": 1,
+  "DeprecatedStrategies": 1,
+  "Intents": [
+    "Unknown",
+    "Precision",
+    "Recall",
+    "Compression",
+    "MemoryAware",
+    "GraphAware",
+    "Speed",
+    "Balanced"
+  ],
+  "Domains": [
+    "Unknown",
+    "Chat",
+    "Coding",
+    "Audit",
+    "Eval",
+    "Production",
+    "Diagnostic"
+  ],
+  "Lifecycles": [
+    "Experimental",
+    "Candidate",
+    "Active",
+    "Deprecated",
+    "Retired"
+  ],
+  "Strategies": [
+    {
+      "StrategyId": "precision-core",
+      "Version": "v1",
+      "Intent": "Precision",
+      "Domain": "Chat",
+      "Lifecycle": "Active",
+      "Weights": {
+        "RelevanceWeight": 1,
+        "AuthorityWeight": 1,
+        "FreshnessWeight": 0.4,
+        "StructuralFitWeight": 0.7,
+        "UserPreferenceWeight": 0.3
+      },
+      "LifecyclePenaltyFactor": 1.2,
+      "MaxCandidates": 40,
+      "PreferGraphCandidates": false,
+      "PreferMemoryCandidates": false,
+      "PreferVectorCandidates": true,
+      "Description": "High-precision chat mode: strong authority \u002B lifecycle penalty, limits to 40 candidates"
+    },
+    {
+      "StrategyId": "recall-broad",
+      "Version": "v1",
+      "Intent": "Recall",
+      "Domain": "Coding",
+      "Lifecycle": "Active",
+      "Weights": {
+        "RelevanceWeight": 1,
+        "AuthorityWeight": 0.5,
+        "FreshnessWeight": 0.8,
+        "StructuralFitWeight": 0.3,
+        "UserPreferenceWeight": 0.5
+      },
+      "LifecyclePenaltyFactor": 0.7,
+      "MaxCandidates": 80,
+      "PreferGraphCandidates": false,
+      "PreferMemoryCandidates": true,
+      "PreferVectorCandidates": false,
+      "Description": "Broad recall for coding: relaxed authority, freshness boost, 80 candidates"
+    },
+    {
+      "StrategyId": "memory-dense",
+      "Version": "v1",
+      "Intent": "MemoryAware",
+      "Domain": "Chat",
+      "Lifecycle": "Active",
+      "Weights": {
+        "RelevanceWeight": 1,
+        "AuthorityWeight": 0.6,
+        "FreshnessWeight": 0.5,
+        "StructuralFitWeight": 0.5,
+        "UserPreferenceWeight": 0.7
+      },
+      "LifecyclePenaltyFactor": 0.8,
+      "MaxCandidates": 60,
+      "PreferGraphCandidates": false,
+      "PreferMemoryCandidates": true,
+      "PreferVectorCandidates": false,
+      "Description": "Memory-heavy chat: strong user preference signals, prefers working/stable memory"
+    },
+    {
+      "StrategyId": "graph-expand",
+      "Version": "v1",
+      "Intent": "GraphAware",
+      "Domain": "Production",
+      "Lifecycle": "Candidate",
+      "Weights": {
+        "RelevanceWeight": 0.9,
+        "AuthorityWeight": 0.7,
+        "FreshnessWeight": 0.5,
+        "StructuralFitWeight": 0.6,
+        "UserPreferenceWeight": 0.3
+      },
+      "LifecyclePenaltyFactor": 1,
+      "MaxCandidates": 50,
+      "PreferGraphCandidates": true,
+      "PreferMemoryCandidates": false,
+      "PreferVectorCandidates": false,
+      "Description": "Graph-aware production: relation expansion candidates get priority"
+    },
+    {
+      "StrategyId": "compression-tight",
+      "Version": "v1",
+      "Intent": "Compression",
+      "Domain": "Production",
+      "Lifecycle": "Candidate",
+      "Weights": {
+        "RelevanceWeight": 1.2,
+        "AuthorityWeight": 0.8,
+        "FreshnessWeight": 0.3,
+        "StructuralFitWeight": 0.9,
+        "UserPreferenceWeight": 0.2
+      },
+      "LifecyclePenaltyFactor": 1.5,
+      "MaxCandidates": 20,
+      "PreferGraphCandidates": false,
+      "PreferMemoryCandidates": false,
+      "PreferVectorCandidates": true,
+      "Description": "Tight compression: minimal candidates, high relevance \u002B structural fit, aggressive lifecycle filtering"
+    },
+    {
+      "StrategyId": "balanced-default",
+      "Version": "v2",
+      "Intent": "Balanced",
+      "Domain": "Chat",
+      "Lifecycle": "Active",
+      "Weights": {
+        "RelevanceWeight": 1,
+        "AuthorityWeight": 0.8,
+        "FreshnessWeight": 0.6,
+        "StructuralFitWeight": 0.5,
+        "UserPreferenceWeight": 0.4
+      },
+      "LifecyclePenaltyFactor": 1,
+      "MaxCandidates": 60,
+      "PreferGraphCandidates": false,
+      "PreferMemoryCandidates": false,
+      "PreferVectorCandidates": false,
+      "Description": "Balanced default v2: equal weight distribution, 60 candidates, no source preference"
+    },
+    {
+      "StrategyId": "balanced-default",
+      "Version": "v1",
+      "Intent": "Balanced",
+      "Domain": "Chat",
+      "Lifecycle": "Deprecated",
+      "Weights": {
+        "RelevanceWeight": 1,
+        "AuthorityWeight": 1,
+        "FreshnessWeight": 0.5,
+        "StructuralFitWeight": 0.5,
+        "UserPreferenceWeight": 0.5
+      },
+      "LifecyclePenaltyFactor": 1,
+      "MaxCandidates": 60,
+      "PreferGraphCandidates": false,
+      "PreferMemoryCandidates": false,
+      "PreferVectorCandidates": false,
+      "Description": "Balanced default v1 (deprecated \u2014 replaced by v2 with lowered Authority weight)"
+    },
+    {
+      "StrategyId": "speed-fast",
+      "Version": "v1",
+      "Intent": "Speed",
+      "Domain": "Eval",
+      "Lifecycle": "Experimental",
+      "Weights": {
+        "RelevanceWeight": 0.8,
+        "AuthorityWeight": 0.3,
+        "FreshnessWeight": 0.2,
+        "StructuralFitWeight": 0.2,
+        "UserPreferenceWeight": 0.1
+      },
+      "LifecyclePenaltyFactor": 0.5,
+      "MaxCandidates": 15,
+      "PreferGraphCandidates": false,
+      "PreferMemoryCandidates": false,
+      "PreferVectorCandidates": true,
+      "Description": "Fast eval: minimal scoring overhead, 15 candidates, relaxed filters"
+    },
+    {
+      "StrategyId": "audit-strict",
+      "Version": "v1",
+      "Intent": "Precision",
+      "Domain": "Audit",
+      "Lifecycle": "Active",
+      "Weights": {
+        "RelevanceWeight": 1,
+        "AuthorityWeight": 2,
+        "FreshnessWeight": 0,
+        "StructuralFitWeight": 0.3,
+        "UserPreferenceWeight": 0
+      },
+      "LifecyclePenaltyFactor": 2,
+      "MaxCandidates": 100,
+      "PreferGraphCandidates": false,
+      "PreferMemoryCandidates": false,
+      "PreferVectorCandidates": false,
+      "Description": "Strict audit: maximum authority, no freshness/user preference, full candidate set"
+    }
+  ]
+}
