@@ -1,0 +1,132 @@
+{
+  "GeneratedAt": "2026-07-01T11:09:07.3828517\u002B00:00",
+  "CandidateTraceabilityComplete": true,
+  "TotalCandidates": 113,
+  "EffectiveCandidates": 88,
+  "IneffectiveCandidates": 25,
+  "MeanEffectiveness": 0.67,
+  "TopContributors": [
+    {
+      "CandidateId": "automation-sample-003",
+      "EffectivenessRate": 1,
+      "AverageScoreAtTime": 69.25,
+      "ContributionScore": 0.8
+    },
+    {
+      "CandidateId": "chat-sample-002",
+      "EffectivenessRate": 1,
+      "AverageScoreAtTime": 36.65,
+      "ContributionScore": 0.8
+    },
+    {
+      "CandidateId": "chat-sample-003",
+      "EffectivenessRate": 1,
+      "AverageScoreAtTime": 31.9,
+      "ContributionScore": 0.63
+    },
+    {
+      "CandidateId": "chat-sample-004",
+      "EffectivenessRate": 1,
+      "AverageScoreAtTime": 33.45,
+      "ContributionScore": 0.8
+    },
+    {
+      "CandidateId": "coding-sample-002",
+      "EffectivenessRate": 1,
+      "AverageScoreAtTime": 79,
+      "ContributionScore": 0.8
+    },
+    {
+      "CandidateId": "coding-sample-004",
+      "EffectivenessRate": 1,
+      "AverageScoreAtTime": 72.26,
+      "ContributionScore": 0.8
+    },
+    {
+      "CandidateId": "coding-sample-008",
+      "EffectivenessRate": 1,
+      "AverageScoreAtTime": 72.6,
+      "ContributionScore": 0.8
+    },
+    {
+      "CandidateId": "coding-sample-009",
+      "EffectivenessRate": 1,
+      "AverageScoreAtTime": 67.25,
+      "ContributionScore": 0.8
+    },
+    {
+      "CandidateId": "novel-sample-002",
+      "EffectivenessRate": 1,
+      "AverageScoreAtTime": 96.55,
+      "ContributionScore": 0.45
+    },
+    {
+      "CandidateId": "novel-sample-004",
+      "EffectivenessRate": 1,
+      "AverageScoreAtTime": 76.58,
+      "ContributionScore": 0.8
+    }
+  ],
+  "BottomContributors": [
+    {
+      "CandidateId": "chat-20260529-014",
+      "EffectivenessRate": 0,
+      "AverageScoreAtTime": 70.85,
+      "ContributionScore": 0.1
+    },
+    {
+      "CandidateId": "chat-20260529-018",
+      "EffectivenessRate": 0,
+      "AverageScoreAtTime": 66.1,
+      "ContributionScore": 0.1
+    },
+    {
+      "CandidateId": "novel-20260529-004",
+      "EffectivenessRate": 0,
+      "AverageScoreAtTime": 91.25,
+      "ContributionScore": 0.1
+    },
+    {
+      "CandidateId": "novel-20260529-007",
+      "EffectivenessRate": 0,
+      "AverageScoreAtTime": 71.25,
+      "ContributionScore": 0.1
+    },
+    {
+      "CandidateId": "novel-20260529-010",
+      "EffectivenessRate": 0,
+      "AverageScoreAtTime": 71.05,
+      "ContributionScore": 0.1
+    },
+    {
+      "CandidateId": "novel-20260529-015",
+      "EffectivenessRate": 0,
+      "AverageScoreAtTime": 55.65,
+      "ContributionScore": 0.1
+    },
+    {
+      "CandidateId": "novel-20260529-016",
+      "EffectivenessRate": 0,
+      "AverageScoreAtTime": 100.75,
+      "ContributionScore": 0.1
+    },
+    {
+      "CandidateId": "novel-20260529-018",
+      "EffectivenessRate": 0,
+      "AverageScoreAtTime": 56.2,
+      "ContributionScore": 0.1
+    },
+    {
+      "CandidateId": "novel-20260529-020",
+      "EffectivenessRate": 0,
+      "AverageScoreAtTime": 72.4,
+      "ContributionScore": 0.1
+    },
+    {
+      "CandidateId": "project-20260529-003",
+      "EffectivenessRate": 0,
+      "AverageScoreAtTime": 83.62,
+      "ContributionScore": 0.1
+    }
+  ]
+}

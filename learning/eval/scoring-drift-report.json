@@ -1,0 +1,12 @@
+{
+  "GeneratedAt": "2026-07-01T11:09:07.3828517\u002B00:00",
+  "ScoringIsEvaluable": true,
+  "CandidateCount": 113,
+  "CandidatesWithFeedback": 110,
+  "MeanPredictedScore": 67.38,
+  "MeanActualUtility": 62.48,
+  "DriftMagnitude": 4.9,
+  "RankCorrelation": 0.78,
+  "DriftStatus": "stable",
+  "HighDriftCandidates": []
+}

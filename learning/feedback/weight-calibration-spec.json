@@ -1,0 +1,30 @@
+{
+  "GeneratedAt": "2026-07-01T11:09:07.3828517\u002B00:00",
+  "DeterministicCorePreserved": true,
+  "NoLLmTraining": true,
+  "NoGradientDescent": true,
+  "Description": "Feature weight calibration is rule-based: aggregate feedback signals adjust weights via simple running averages. NOT gradient descent. Weights are deterministic functions of recent feedback counts.",
+  "CalibrationMethod": "Weight = base_weight * (1 \u002B signal_delta) where signal_delta = (success_count - failure_count) / max(1, total_events) * learning_rate(0.05)",
+  "CurrentWeights": {
+    "Relevance": 1,
+    "Authority": 0.8,
+    "Freshness": 0.6,
+    "StructuralFit": 0.5,
+    "UserPreference": 0.4
+  },
+  "CalibrationSignals": {
+    "Relevance": "calibrated by: ContextUsed \u002B DownstreamSuccess",
+    "Authority": "calibrated by: DownstreamSuccess \u002B RuntimeRelevanceProxy",
+    "Freshness": "calibrated by: DwellTime \u002B RequeryRate",
+    "StructuralFit": "calibrated by: PackageUtilityScore \u002B ContextUsed",
+    "UserPreference": "calibrated by: UserClicked \u002B UserIgnored"
+  },
+  "SafetyConstraints": {
+    "MaxWeightChange": 0.2,
+    "WeightBoundLower": 0.1,
+    "WeightBoundUpper": 2,
+    "NoFeatureZeroed": true,
+    "DeterministicSameFeedbackProducesSameWeights": true,
+    "NoRuntimePromotionChange": true
+  }
+}
