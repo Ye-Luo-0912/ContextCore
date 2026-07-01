@@ -1,6 +1,6 @@
 ﻿# CMPBP (Pilot)
 
-生成: 2026-07-01T06:30:19.1859892+00:00 操作: cmpbp-e00627d900f6425c979c25c5faa325d8
+生成: 2026-07-01T07:04:09.0952900+00:00 操作: cmpbp-3515d17b42e84232a7aabfdefca02073
 
 ## Decision
 - PackPassed: True GatePassed: True
@@ -14,4 +14,4 @@
 - GlobalDefaultOn: False RollbackReady: True PostPilotAudit: True
 - RuntimePilotExecutionApplied: True
 
-V11.15 - post-pilot observation & closeout。Stable, no regressions, ready for closeout freeze。
+V11.16 - controlled pilot closeout freeze。Closed out, wider pilot requires explicit authorization。

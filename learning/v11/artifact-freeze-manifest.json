@@ -1,6 +1,6 @@
 {
-  "GeneratedAt": "2026-07-01T06:30:19.1859892+00:00",
-  "ManifestId": "afm-c110222e291b4e55ba5aaea55243a34f",
+  "GeneratedAt": "2026-07-01T07:04:09.09529+00:00",
+  "ManifestId": "afm-df4a0237920041849626368424c3d45c",
   "ArtifactFreezeManifestReady": true,
   "FreezeVersion": "V11.12",
   "BaseVersion": "V11.10R14",
@@ -8,7 +8,7 @@
   "Files": [
     {
       "File": "canary-matrix.json",
-      "Hash": "06ccf223e41746e90d7fd11eb060e13b7e59b0e07926959003ad56595c945537"
+      "Hash": "8fd5ffe376343dda202b6ed40b3042521b313a54c2a48b50c3abb3810607167c"
     },
     {
       "File": "cmpbp-gate.json",
@@ -16,31 +16,31 @@
     },
     {
       "File": "calibration-method.json",
-      "Hash": "41035ab5ddf1ff435f5a6e88e69e2e26272c6e9839127844b650455d7ba14b5a"
+      "Hash": "866e25d70d8ecd996bd089aea0c16b64c46797d72bc5955549de818ff97e84ca"
     },
     {
       "File": "backfill-provenance.json",
-      "Hash": "60885409661c3793b175dd119240209a8781dee6e341686c181c35715275f5c0"
+      "Hash": "898a80e812dc55274f62e87616eeaee58c4cbc9884fb38907d088db2f18d3705"
     },
     {
       "File": "score-semantics-report.json",
-      "Hash": "1ad47d6d36f541cfbe31ae17ae2edaf39b5ae5b4db78f42ae285df253a7d1044"
+      "Hash": "4c67237655275c6c495a2a1df6b2eb4f3be027f2d3423a074c8ac2978565c94e"
     },
     {
       "File": "shadow-coverage-backfill-plan.json",
-      "Hash": "8b9c41408f0997da6ca06f206d928c1d4cb356e138a43a73431a59b517a215d8"
+      "Hash": "c002773d53b08596f0f42c3cf657a9d5be06f3dda0bacdc2802018aa97d8172e"
     },
     {
       "File": "promotion-boundary-report.json",
-      "Hash": "20fb18be1969b2d1b21b5b39b6c2e5e3d0ac004be4a0ba331e5af4ad26ef3016"
+      "Hash": "d6414ae82fd2165ff13c9e0af9101d079f17917faa4146410cb76487f5998ff1"
     },
     {
       "File": "pilot-preflight.json",
-      "Hash": "76c5f1b1fe563360344c4c008e9cad2e624d5cc30e0820587c5fb8d0b291d269"
+      "Hash": "221a7de11e64985d969d5a346d3a0867b6227fbbf9083817dc155d6509300039"
     },
     {
       "File": "final-shadow-canary-audit.json",
-      "Hash": "5aee9901809cb49eb6bc8e9df7dea9d78409083adad9146434c38a41c9c8e944"
+      "Hash": "5a4b84cb33cb72c92502fad4943b143a32abacb1795afea51bdf8dd41d5dc01a"
     }
   ],
   "Verification": "All frozen artifacts are consistent with V11.11 final audit and V11.10R14 gate pass."

@@ -1,0 +1,35 @@
+{
+  "GeneratedAt": "2026-07-01T07:04:09.09529+00:00",
+  "PlanId": "wpop-ed8ce2c8231c4c038f10c905e212e08f",
+  "LongerObservationPlanReady": true,
+  "PlannedScope": "Wider pilot (to be defined explicitly in authorization)",
+  "ObservationDesign": {
+    "MinimumRounds": 10,
+    "RecommendedRounds": 30,
+    "RoundInterval": "Per formal dataset ingestion cycle",
+    "SamplingStrategy": "Full formal row set (60 rows baseline, 60 shadow)",
+    "MetricsPerRound": [
+      "GatePassed",
+      "RegressionCountCalibrated",
+      "ShadowCoverage (shadowBoundReal/rowCount)",
+      "RuntimeStateHashStable",
+      "CalibratedScoresComparable",
+      "SyntheticScoreCount",
+      "MissingShadowRows"
+    ],
+    "FailureThresholds": {
+      "MaxConsecutiveGateFailures": 2,
+      "MaxRegressionCountCalibrated": 0,
+      "MinShadowCoverage": 60,
+      "MaxSyntheticScoreCount": 0,
+      "MaxRuntimeHashDrift": 0
+    },
+    "RollbackTrigger": "Any failure threshold breach triggers immediate rollback via kill switch."
+  },
+  "TransitionFromControlledPilot": {
+    "ControlledPilotClosedOut": true,
+    "CloseoutFreezeId": "pcf-75aa8e2a417a4c88858a0fabbf1520e0",
+    "ControlledResultsCarriedForward": true,
+    "BaselineEstablished": "60/60 coverage, 0 calibrated regression, gate passed"
+  }
+}

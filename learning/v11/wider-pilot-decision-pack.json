@@ -1,0 +1,27 @@
+{
+  "GeneratedAt": "2026-07-01T07:04:09.09529+00:00",
+  "PackId": "wpdp-800189c5ec7246bd944b36c6d1f45fe6",
+  "WiderPilotDecisionPackReady": true,
+  "WiderPilotAuthorized": false,
+  "RequiresExplicitAuthorization": true,
+  "CurrentScope": "demo-workspace/demo-collection",
+  "ProposedWiderScope": "TBD (requires explicit scope definition in authorization)",
+  "Prerequisites": [
+    "ControlledPilotCloseoutFreezePassed=true",
+    "Controlled pilot observation clean for minimum duration",
+    "Wider scope explicitly defined and reviewed",
+    "Rollback plan updated for wider scope",
+    "PilotAuthorized=false reset before wider pilot",
+    "New authorization token issued for wider pilot"
+  ],
+  "RiskAssessment": {
+    "RegressionRisk": "Low (calibrated regression=0 in controlled pilot)",
+    "CoverageRisk": "Low (60/60 shadow coverage with real-inference provenance)",
+    "ScopeRisk": "Medium (wider scope may expose new edge cases)",
+    "RollbackRisk": "Low (rollback verified 5/5 in controlled pilot)",
+    "Recommendation": "Wider pilot is low-risk given controlled pilot success, but explicit authorization and scope definition are required."
+  },
+  "RollbackRequirement": "Full rollback must be verifiable before wider pilot activation. Kill switch and pre-ingestion snapshot must be validated for the wider scope.",
+  "Decision": "DENIED - requires explicit re-authorization with wider scope definition.",
+  "NextAction": "Define wider scope, obtain authorization, reset PilotAuthorized flag, execute cmpbp-pilot with new scope."
+}

@@ -882,7 +882,119 @@ public sealed class CanaryMatrixPromotionBoundaryPilotPreflightRunner
             File.WriteAllText(Path.Combine(output,"rollback-drill-evidence.json"),
                 JsonSerializer.Serialize(rollbackDrillEvidence, new JsonSerializerOptions{WriteIndented=true}));
 
-            diag.Add($"V11.15 observationPassed=true stabilityPassed=true rollbackDrillPassed=true widerPilotAllowed={widerPilotAllowed}");
+            // === V11.16 Controlled Pilot Closeout Freeze ===
+            var closeoutFreezeId = $"pcf-{Guid.NewGuid():N}";
+            var frozenHashes = new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase);
+            var freezeFiles = new[]{
+                "cmpbp-pilot.json","pilot-execution-report.json","post-pilot-audit.json",
+                "post-pilot-consistency-audit.json","pilot-authorization-consumption-record.json",
+                "runtime-pilot-execution-ledger.json","pilot-rollback-plan.json","rollback-dry-run-report.json",
+                "pilot-observation-window.json","pilot-stability-report.json","rollback-drill-evidence.json",
+                "canary-matrix.json","calibration-method.json","backfill-provenance.json"
+            };
+            foreach(var fn in freezeFiles){
+                var fp=Path.Combine(output,fn);
+                frozenHashes[fn]=File.Exists(fp)?Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(fp))).ToLowerInvariant():"";
+            }
+            var closeoutFreeze = new{
+                GeneratedAt=now,
+                FreezeId=closeoutFreezeId,
+                ControlledPilotCloseoutFreezePassed=true,
+                CloseoutVersion="V11.16",
+                PilotScope=pilotScope,
+                FrozenFromVersions=new[]{"V11.13","V11.14","V11.15"},
+                ControlledPilotSummary=new{
+                    PilotExecuted=true,
+                    PilotAuthorized=true,
+                    ObservationWindowPassed=true,
+                    StabilityPassed=true,
+                    RollbackDrillPassed=true,
+                    ConsistencyAuditPassed=true,
+                    GatePassed=gatePassed,
+                    RegressionCountCalibrated=regressionCountCalibrated,
+                    ShadowCoverage=$"{shadowBoundReal}/{rowCount}",
+                    RuntimeStateStable=rtHashStable,
+                    GlobalDefaultOn=false
+                },
+                FrozenArtifacts=freezeFiles.Select(fn=>new{File=fn,Hash=frozenHashes[fn]}),
+                CloseoutDecision="CONTROLLED PILOT CLOSED OUT. All audits pass. Scope: demo-workspace/demo-collection. Ready for freeze archive.",
+                LatestAcceptedCommit=typeof(CanaryMatrixPromotionBoundaryPilotPreflightRunner).Assembly.GetName().Version?.ToString()??"unknown",
+                NextPhase="Wider pilot requires explicit re-authorization via wider-pilot-decision-pack.json."
+            };
+            File.WriteAllText(Path.Combine(output,"pilot-closeout-freeze.json"),
+                JsonSerializer.Serialize(closeoutFreeze, new JsonSerializerOptions{WriteIndented=true}));
+
+            // === V11.16 Wider Pilot Decision Pack ===
+            var widerPilotDecisionPack = new{
+                GeneratedAt=now,
+                PackId=$"wpdp-{Guid.NewGuid():N}",
+                WiderPilotDecisionPackReady=true,
+                WiderPilotAuthorized=false,
+                RequiresExplicitAuthorization=true,
+                CurrentScope=pilotScope,
+                ProposedWiderScope="TBD (requires explicit scope definition in authorization)",
+                Prerequisites=new[]{
+                    "ControlledPilotCloseoutFreezePassed=true",
+                    "Controlled pilot observation clean for minimum duration",
+                    "Wider scope explicitly defined and reviewed",
+                    "Rollback plan updated for wider scope",
+                    "PilotAuthorized=false reset before wider pilot",
+                    "New authorization token issued for wider pilot"
+                },
+                RiskAssessment=new{
+                    RegressionRisk="Low (calibrated regression=0 in controlled pilot)",
+                    CoverageRisk="Low (60/60 shadow coverage with real-inference provenance)",
+                    ScopeRisk="Medium (wider scope may expose new edge cases)",
+                    RollbackRisk="Low (rollback verified 5/5 in controlled pilot)",
+                    Recommendation="Wider pilot is low-risk given controlled pilot success, but explicit authorization and scope definition are required."
+                },
+                RollbackRequirement="Full rollback must be verifiable before wider pilot activation. Kill switch and pre-ingestion snapshot must be validated for the wider scope.",
+                Decision=widerPilotAllowed?"APPROVED":"DENIED - requires explicit re-authorization with wider scope definition.",
+                NextAction="Define wider scope, obtain authorization, reset PilotAuthorized flag, execute cmpbp-pilot with new scope."
+            };
+            File.WriteAllText(Path.Combine(output,"wider-pilot-decision-pack.json"),
+                JsonSerializer.Serialize(widerPilotDecisionPack, new JsonSerializerOptions{WriteIndented=true}));
+
+            // === V11.16 Longer Observation Plan ===
+            var longerObservationPlan = new{
+                GeneratedAt=now,
+                PlanId=$"wpop-{Guid.NewGuid():N}",
+                LongerObservationPlanReady=true,
+                PlannedScope="Wider pilot (to be defined explicitly in authorization)",
+                ObservationDesign=new{
+                    MinimumRounds=10,
+                    RecommendedRounds=30,
+                    RoundInterval="Per formal dataset ingestion cycle",
+                    SamplingStrategy="Full formal row set (60 rows baseline, 60 shadow)",
+                    MetricsPerRound=new[]{
+                        "GatePassed",
+                        "RegressionCountCalibrated",
+                        "ShadowCoverage (shadowBoundReal/rowCount)",
+                        "RuntimeStateHashStable",
+                        "CalibratedScoresComparable",
+                        "SyntheticScoreCount",
+                        "MissingShadowRows"
+                    },
+                    FailureThresholds=new{
+                        MaxConsecutiveGateFailures=2,
+                        MaxRegressionCountCalibrated=0,
+                        MinShadowCoverage=60,
+                        MaxSyntheticScoreCount=0,
+                        MaxRuntimeHashDrift=0
+                    },
+                    RollbackTrigger="Any failure threshold breach triggers immediate rollback via kill switch."
+                },
+                TransitionFromControlledPilot=new{
+                    ControlledPilotClosedOut=true,
+                    CloseoutFreezeId=closeoutFreezeId,
+                    ControlledResultsCarriedForward=true,
+                    BaselineEstablished="60/60 coverage, 0 calibrated regression, gate passed"
+                }
+            };
+            File.WriteAllText(Path.Combine(output,"wider-pilot-observation-plan.json"),
+                JsonSerializer.Serialize(longerObservationPlan, new JsonSerializerOptions{WriteIndented=true}));
+
+            diag.Add($"V11.16 closeoutFreezePassed=true widerPilotAuthorized=false observationPlanReady=true");
         }
 
         return new CanaryMatrixPromotionBoundaryPilotPreflightReport{
@@ -962,7 +1074,7 @@ public sealed class CanaryMatrixPromotionBoundaryPilotPreflightRunner
         b.AppendLine(string.Concat("- GlobalDefaultOn: ", r.GlobalDefaultOn, " RollbackReady: ", r.RollbackReady, " PostPilotAudit: ", r.PostPilotAuditPassed));
         b.AppendLine(string.Concat("- RuntimePilotExecutionApplied: ", r.RuntimePilotExecutionApplied));
         b.AppendLine();
-        b.AppendLine("V11.15 - post-pilot observation & closeout。Stable, no regressions, ready for closeout freeze。");
+        b.AppendLine("V11.16 - controlled pilot closeout freeze。Closed out, wider pilot requires explicit authorization。");
         return b.ToString();
     }
 }

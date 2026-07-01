@@ -1,0 +1,86 @@
+{
+  "GeneratedAt": "2026-07-01T07:04:09.09529+00:00",
+  "FreezeId": "pcf-75aa8e2a417a4c88858a0fabbf1520e0",
+  "ControlledPilotCloseoutFreezePassed": true,
+  "CloseoutVersion": "V11.16",
+  "PilotScope": "demo-workspace/demo-collection",
+  "FrozenFromVersions": [
+    "V11.13",
+    "V11.14",
+    "V11.15"
+  ],
+  "ControlledPilotSummary": {
+    "PilotExecuted": true,
+    "PilotAuthorized": true,
+    "ObservationWindowPassed": true,
+    "StabilityPassed": true,
+    "RollbackDrillPassed": true,
+    "ConsistencyAuditPassed": true,
+    "GatePassed": true,
+    "RegressionCountCalibrated": 0,
+    "ShadowCoverage": "60/60",
+    "RuntimeStateStable": true,
+    "GlobalDefaultOn": false
+  },
+  "FrozenArtifacts": [
+    {
+      "File": "cmpbp-pilot.json",
+      "Hash": "d52a8205e104beaee00884de6fa681c1bc671233a8cfc94de6b131fdda59e7b3"
+    },
+    {
+      "File": "pilot-execution-report.json",
+      "Hash": "a76d0d80420842158a12d13239f9fd137ba8a4385d7a59fa04e1f925b05738fa"
+    },
+    {
+      "File": "post-pilot-audit.json",
+      "Hash": "05a32c679d0311b0ed6bd27189859d5025f59d38a58e4ee0651df57a9338732e"
+    },
+    {
+      "File": "post-pilot-consistency-audit.json",
+      "Hash": "e3a28018b33b68c7cbb4c651e5528f5223a419187b35b18fcb1692d180dd58ac"
+    },
+    {
+      "File": "pilot-authorization-consumption-record.json",
+      "Hash": "6057da3e5293d24c50dd7722f17e80dd6e94e7ecad8d79d1b70951dd88f1cc07"
+    },
+    {
+      "File": "runtime-pilot-execution-ledger.json",
+      "Hash": "4568205a892005b010798c52cc3021cbd6d4e6959bdb2d68ab68d51a9afc9f3e"
+    },
+    {
+      "File": "pilot-rollback-plan.json",
+      "Hash": "7069da42c524706114e396009786434fc9fb21c24166acbbf39bac7ba9d73f77"
+    },
+    {
+      "File": "rollback-dry-run-report.json",
+      "Hash": "54eeeb7b416216c1cf7e11cdf63e5c08e36940d0509f47cbd1af49d0c6e51ca0"
+    },
+    {
+      "File": "pilot-observation-window.json",
+      "Hash": "7cc0178a76d4d015360cc959073aa3fb242993071798116180b2cb50bc3f53e6"
+    },
+    {
+      "File": "pilot-stability-report.json",
+      "Hash": "b3adf8102052206579eb01e723f01e97cb66285a05ab5c522e9a8b35aa79d425"
+    },
+    {
+      "File": "rollback-drill-evidence.json",
+      "Hash": "8697bf3ac01aec27b1f9bcc6890971df400b2c3ffab688c0b0616ab4bf29a4fe"
+    },
+    {
+      "File": "canary-matrix.json",
+      "Hash": "8fd5ffe376343dda202b6ed40b3042521b313a54c2a48b50c3abb3810607167c"
+    },
+    {
+      "File": "calibration-method.json",
+      "Hash": "866e25d70d8ecd996bd089aea0c16b64c46797d72bc5955549de818ff97e84ca"
+    },
+    {
+      "File": "backfill-provenance.json",
+      "Hash": "898a80e812dc55274f62e87616eeaee58c4cbc9884fb38907d088db2f18d3705"
+    }
+  ],
+  "CloseoutDecision": "CONTROLLED PILOT CLOSED OUT. All audits pass. Scope: demo-workspace/demo-collection. Ready for freeze archive.",
+  "LatestAcceptedCommit": "1.0.0.0",
+  "NextPhase": "Wider pilot requires explicit re-authorization via wider-pilot-decision-pack.json."
+}

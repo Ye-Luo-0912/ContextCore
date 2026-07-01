@@ -1,6 +1,6 @@
 {
-  "GeneratedAt": "2026-07-01T06:30:19.1859892+00:00",
-  "AuditReportId": "fsca-91229149817a420c9246bb183720e05e",
+  "GeneratedAt": "2026-07-01T07:04:09.09529+00:00",
+  "AuditReportId": "fsca-ad4d40f54d6f44159c4b37eb896b0f2e",
   "FinalShadowCanaryAuditPassed": true,
   "GatePassed": true,
   "ArtifactConsistencyPassed": true,
