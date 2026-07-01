@@ -1,0 +1,357 @@
+{
+  "GeneratedAt": "2026-07-01T14:50:13.8291019\u002B00:00",
+  "ProvenanceManifestWritten": true,
+  "TotalEntries": 50,
+  "Entries": [
+    {
+      "sampleId": "chat-sample-001",
+      "provenanceDecision": "real-inference",
+      "evidence": "Original shadow eval entry predating source field (V11.10R11 backfill). SampleId pattern confirms pre-backfill origin.",
+      "confirmedRealInference": true,
+      "confirmedBy": "V14.2c provenance manifest \u2014 pre-backfill sampleId pattern"
+    },
+    {
+      "sampleId": "chat-sample-002",
+      "provenanceDecision": "real-inference",
+      "evidence": "Original shadow eval entry predating source field (V11.10R11 backfill). SampleId pattern confirms pre-backfill origin.",
+      "confirmedRealInference": true,
+      "confirmedBy": "V14.2c provenance manifest \u2014 pre-backfill sampleId pattern"
+    },
+    {
+      "sampleId": "chat-sample-003",
+      "provenanceDecision": "real-inference",
+      "evidence": "Original shadow eval entry predating source field (V11.10R11 backfill). SampleId pattern confirms pre-backfill origin.",
+      "confirmedRealInference": true,
+      "confirmedBy": "V14.2c provenance manifest \u2014 pre-backfill sampleId pattern"
+    },
+    {
+      "sampleId": "chat-sample-004",
+      "provenanceDecision": "real-inference",
+      "evidence": "Original shadow eval entry predating source field (V11.10R11 backfill). SampleId pattern confirms pre-backfill origin.",
+      "confirmedRealInference": true,
+      "confirmedBy": "V14.2c provenance manifest \u2014 pre-backfill sampleId pattern"
+    },
+    {
+      "sampleId": "chat-sample-005",
+      "provenanceDecision": "real-inference",
+      "evidence": "Original shadow eval entry predating source field (V11.10R11 backfill). SampleId pattern confirms pre-backfill origin.",
+      "confirmedRealInference": true,
+      "confirmedBy": "V14.2c provenance manifest \u2014 pre-backfill sampleId pattern"
+    },
+    {
+      "sampleId": "chat-sample-006",
+      "provenanceDecision": "real-inference",
+      "evidence": "Original shadow eval entry predating source field (V11.10R11 backfill). SampleId pattern confirms pre-backfill origin.",
+      "confirmedRealInference": true,
+      "confirmedBy": "V14.2c provenance manifest \u2014 pre-backfill sampleId pattern"
+    },
+    {
+      "sampleId": "chat-sample-007",
+      "provenanceDecision": "real-inference",
+      "evidence": "Original shadow eval entry predating source field (V11.10R11 backfill). SampleId pattern confirms pre-backfill origin.",
+      "confirmedRealInference": true,
+      "confirmedBy": "V14.2c provenance manifest \u2014 pre-backfill sampleId pattern"
+    },
+    {
+      "sampleId": "chat-sample-008",
+      "provenanceDecision": "real-inference",
+      "evidence": "Original shadow eval entry predating source field (V11.10R11 backfill). SampleId pattern confirms pre-backfill origin.",
+      "confirmedRealInference": true,
+      "confirmedBy": "V14.2c provenance manifest \u2014 pre-backfill sampleId pattern"
+    },
+    {
+      "sampleId": "chat-sample-009",
+      "provenanceDecision": "real-inference",
+      "evidence": "Original shadow eval entry predating source field (V11.10R11 backfill). SampleId pattern confirms pre-backfill origin.",
+      "confirmedRealInference": true,
+      "confirmedBy": "V14.2c provenance manifest \u2014 pre-backfill sampleId pattern"
+    },
+    {
+      "sampleId": "chat-sample-010",
+      "provenanceDecision": "real-inference",
+      "evidence": "Original shadow eval entry predating source field (V11.10R11 backfill). SampleId pattern confirms pre-backfill origin.",
+      "confirmedRealInference": true,
+      "confirmedBy": "V14.2c provenance manifest \u2014 pre-backfill sampleId pattern"
+    },
+    {
+      "sampleId": "project-sample-001",
+      "provenanceDecision": "real-inference",
+      "evidence": "Original shadow eval entry predating source field (V11.10R11 backfill). SampleId pattern confirms pre-backfill origin.",
+      "confirmedRealInference": true,
+      "confirmedBy": "V14.2c provenance manifest \u2014 pre-backfill sampleId pattern"
+    },
+    {
+      "sampleId": "project-sample-002",
+      "provenanceDecision": "real-inference",
+      "evidence": "Original shadow eval entry predating source field (V11.10R11 backfill). SampleId pattern confirms pre-backfill origin.",
+      "confirmedRealInference": true,
+      "confirmedBy": "V14.2c provenance manifest \u2014 pre-backfill sampleId pattern"
+    },
+    {
+      "sampleId": "project-sample-003",
+      "provenanceDecision": "real-inference",
+      "evidence": "Original shadow eval entry predating source field (V11.10R11 backfill). SampleId pattern confirms pre-backfill origin.",
+      "confirmedRealInference": true,
+      "confirmedBy": "V14.2c provenance manifest \u2014 pre-backfill sampleId pattern"
+    },
+    {
+      "sampleId": "project-sample-004",
+      "provenanceDecision": "real-inference",
+      "evidence": "Original shadow eval entry predating source field (V11.10R11 backfill). SampleId pattern confirms pre-backfill origin.",
+      "confirmedRealInference": true,
+      "confirmedBy": "V14.2c provenance manifest \u2014 pre-backfill sampleId pattern"
+    },
+    {
+      "sampleId": "project-sample-005",
+      "provenanceDecision": "real-inference",
+      "evidence": "Original shadow eval entry predating source field (V11.10R11 backfill). SampleId pattern confirms pre-backfill origin.",
+      "confirmedRealInference": true,
+      "confirmedBy": "V14.2c provenance manifest \u2014 pre-backfill sampleId pattern"
+    },
+    {
+      "sampleId": "project-sample-006",
+      "provenanceDecision": "real-inference",
+      "evidence": "Original shadow eval entry predating source field (V11.10R11 backfill). SampleId pattern confirms pre-backfill origin.",
+      "confirmedRealInference": true,
+      "confirmedBy": "V14.2c provenance manifest \u2014 pre-backfill sampleId pattern"
+    },
+    {
+      "sampleId": "project-sample-007",
+      "provenanceDecision": "real-inference",
+      "evidence": "Original shadow eval entry predating source field (V11.10R11 backfill). SampleId pattern confirms pre-backfill origin.",
+      "confirmedRealInference": true,
+      "confirmedBy": "V14.2c provenance manifest \u2014 pre-backfill sampleId pattern"
+    },
+    {
+      "sampleId": "project-sample-008",
+      "provenanceDecision": "real-inference",
+      "evidence": "Original shadow eval entry predating source field (V11.10R11 backfill). SampleId pattern confirms pre-backfill origin.",
+      "confirmedRealInference": true,
+      "confirmedBy": "V14.2c provenance manifest \u2014 pre-backfill sampleId pattern"
+    },
+    {
+      "sampleId": "project-sample-009",
+      "provenanceDecision": "real-inference",
+      "evidence": "Original shadow eval entry predating source field (V11.10R11 backfill). SampleId pattern confirms pre-backfill origin.",
+      "confirmedRealInference": true,
+      "confirmedBy": "V14.2c provenance manifest \u2014 pre-backfill sampleId pattern"
+    },
+    {
+      "sampleId": "project-sample-010",
+      "provenanceDecision": "real-inference",
+      "evidence": "Original shadow eval entry predating source field (V11.10R11 backfill). SampleId pattern confirms pre-backfill origin.",
+      "confirmedRealInference": true,
+      "confirmedBy": "V14.2c provenance manifest \u2014 pre-backfill sampleId pattern"
+    },
+    {
+      "sampleId": "novel-sample-001",
+      "provenanceDecision": "real-inference",
+      "evidence": "Original shadow eval entry predating source field (V11.10R11 backfill). SampleId pattern confirms pre-backfill origin.",
+      "confirmedRealInference": true,
+      "confirmedBy": "V14.2c provenance manifest \u2014 pre-backfill sampleId pattern"
+    },
+    {
+      "sampleId": "novel-sample-002",
+      "provenanceDecision": "real-inference",
+      "evidence": "Original shadow eval entry predating source field (V11.10R11 backfill). SampleId pattern confirms pre-backfill origin.",
+      "confirmedRealInference": true,
+      "confirmedBy": "V14.2c provenance manifest \u2014 pre-backfill sampleId pattern"
+    },
+    {
+      "sampleId": "novel-sample-003",
+      "provenanceDecision": "real-inference",
+      "evidence": "Original shadow eval entry predating source field (V11.10R11 backfill). SampleId pattern confirms pre-backfill origin.",
+      "confirmedRealInference": true,
+      "confirmedBy": "V14.2c provenance manifest \u2014 pre-backfill sampleId pattern"
+    },
+    {
+      "sampleId": "novel-sample-004",
+      "provenanceDecision": "real-inference",
+      "evidence": "Original shadow eval entry predating source field (V11.10R11 backfill). SampleId pattern confirms pre-backfill origin.",
+      "confirmedRealInference": true,
+      "confirmedBy": "V14.2c provenance manifest \u2014 pre-backfill sampleId pattern"
+    },
+    {
+      "sampleId": "novel-sample-005",
+      "provenanceDecision": "real-inference",
+      "evidence": "Original shadow eval entry predating source field (V11.10R11 backfill). SampleId pattern confirms pre-backfill origin.",
+      "confirmedRealInference": true,
+      "confirmedBy": "V14.2c provenance manifest \u2014 pre-backfill sampleId pattern"
+    },
+    {
+      "sampleId": "novel-sample-006",
+      "provenanceDecision": "real-inference",
+      "evidence": "Original shadow eval entry predating source field (V11.10R11 backfill). SampleId pattern confirms pre-backfill origin.",
+      "confirmedRealInference": true,
+      "confirmedBy": "V14.2c provenance manifest \u2014 pre-backfill sampleId pattern"
+    },
+    {
+      "sampleId": "novel-sample-007",
+      "provenanceDecision": "real-inference",
+      "evidence": "Original shadow eval entry predating source field (V11.10R11 backfill). SampleId pattern confirms pre-backfill origin.",
+      "confirmedRealInference": true,
+      "confirmedBy": "V14.2c provenance manifest \u2014 pre-backfill sampleId pattern"
+    },
+    {
+      "sampleId": "novel-sample-008",
+      "provenanceDecision": "real-inference",
+      "evidence": "Original shadow eval entry predating source field (V11.10R11 backfill). SampleId pattern confirms pre-backfill origin.",
+      "confirmedRealInference": true,
+      "confirmedBy": "V14.2c provenance manifest \u2014 pre-backfill sampleId pattern"
+    },
+    {
+      "sampleId": "novel-sample-009",
+      "provenanceDecision": "real-inference",
+      "evidence": "Original shadow eval entry predating source field (V11.10R11 backfill). SampleId pattern confirms pre-backfill origin.",
+      "confirmedRealInference": true,
+      "confirmedBy": "V14.2c provenance manifest \u2014 pre-backfill sampleId pattern"
+    },
+    {
+      "sampleId": "novel-sample-010",
+      "provenanceDecision": "real-inference",
+      "evidence": "Original shadow eval entry predating source field (V11.10R11 backfill). SampleId pattern confirms pre-backfill origin.",
+      "confirmedRealInference": true,
+      "confirmedBy": "V14.2c provenance manifest \u2014 pre-backfill sampleId pattern"
+    },
+    {
+      "sampleId": "automation-sample-001",
+      "provenanceDecision": "real-inference",
+      "evidence": "Original shadow eval entry predating source field (V11.10R11 backfill). SampleId pattern confirms pre-backfill origin.",
+      "confirmedRealInference": true,
+      "confirmedBy": "V14.2c provenance manifest \u2014 pre-backfill sampleId pattern"
+    },
+    {
+      "sampleId": "automation-sample-002",
+      "provenanceDecision": "real-inference",
+      "evidence": "Original shadow eval entry predating source field (V11.10R11 backfill). SampleId pattern confirms pre-backfill origin.",
+      "confirmedRealInference": true,
+      "confirmedBy": "V14.2c provenance manifest \u2014 pre-backfill sampleId pattern"
+    },
+    {
+      "sampleId": "automation-sample-003",
+      "provenanceDecision": "real-inference",
+      "evidence": "Original shadow eval entry predating source field (V11.10R11 backfill). SampleId pattern confirms pre-backfill origin.",
+      "confirmedRealInference": true,
+      "confirmedBy": "V14.2c provenance manifest \u2014 pre-backfill sampleId pattern"
+    },
+    {
+      "sampleId": "automation-sample-004",
+      "provenanceDecision": "real-inference",
+      "evidence": "Original shadow eval entry predating source field (V11.10R11 backfill). SampleId pattern confirms pre-backfill origin.",
+      "confirmedRealInference": true,
+      "confirmedBy": "V14.2c provenance manifest \u2014 pre-backfill sampleId pattern"
+    },
+    {
+      "sampleId": "automation-sample-005",
+      "provenanceDecision": "real-inference",
+      "evidence": "Original shadow eval entry predating source field (V11.10R11 backfill). SampleId pattern confirms pre-backfill origin.",
+      "confirmedRealInference": true,
+      "confirmedBy": "V14.2c provenance manifest \u2014 pre-backfill sampleId pattern"
+    },
+    {
+      "sampleId": "automation-sample-006",
+      "provenanceDecision": "real-inference",
+      "evidence": "Original shadow eval entry predating source field (V11.10R11 backfill). SampleId pattern confirms pre-backfill origin.",
+      "confirmedRealInference": true,
+      "confirmedBy": "V14.2c provenance manifest \u2014 pre-backfill sampleId pattern"
+    },
+    {
+      "sampleId": "automation-sample-007",
+      "provenanceDecision": "real-inference",
+      "evidence": "Original shadow eval entry predating source field (V11.10R11 backfill). SampleId pattern confirms pre-backfill origin.",
+      "confirmedRealInference": true,
+      "confirmedBy": "V14.2c provenance manifest \u2014 pre-backfill sampleId pattern"
+    },
+    {
+      "sampleId": "automation-sample-008",
+      "provenanceDecision": "real-inference",
+      "evidence": "Original shadow eval entry predating source field (V11.10R11 backfill). SampleId pattern confirms pre-backfill origin.",
+      "confirmedRealInference": true,
+      "confirmedBy": "V14.2c provenance manifest \u2014 pre-backfill sampleId pattern"
+    },
+    {
+      "sampleId": "automation-sample-009",
+      "provenanceDecision": "real-inference",
+      "evidence": "Original shadow eval entry predating source field (V11.10R11 backfill). SampleId pattern confirms pre-backfill origin.",
+      "confirmedRealInference": true,
+      "confirmedBy": "V14.2c provenance manifest \u2014 pre-backfill sampleId pattern"
+    },
+    {
+      "sampleId": "automation-sample-010",
+      "provenanceDecision": "real-inference",
+      "evidence": "Original shadow eval entry predating source field (V11.10R11 backfill). SampleId pattern confirms pre-backfill origin.",
+      "confirmedRealInference": true,
+      "confirmedBy": "V14.2c provenance manifest \u2014 pre-backfill sampleId pattern"
+    },
+    {
+      "sampleId": "coding-sample-001",
+      "provenanceDecision": "real-inference",
+      "evidence": "Original shadow eval entry predating source field (V11.10R11 backfill). SampleId pattern confirms pre-backfill origin.",
+      "confirmedRealInference": true,
+      "confirmedBy": "V14.2c provenance manifest \u2014 pre-backfill sampleId pattern"
+    },
+    {
+      "sampleId": "coding-sample-002",
+      "provenanceDecision": "real-inference",
+      "evidence": "Original shadow eval entry predating source field (V11.10R11 backfill). SampleId pattern confirms pre-backfill origin.",
+      "confirmedRealInference": true,
+      "confirmedBy": "V14.2c provenance manifest \u2014 pre-backfill sampleId pattern"
+    },
+    {
+      "sampleId": "coding-sample-003",
+      "provenanceDecision": "real-inference",
+      "evidence": "Original shadow eval entry predating source field (V11.10R11 backfill). SampleId pattern confirms pre-backfill origin.",
+      "confirmedRealInference": true,
+      "confirmedBy": "V14.2c provenance manifest \u2014 pre-backfill sampleId pattern"
+    },
+    {
+      "sampleId": "coding-sample-004",
+      "provenanceDecision": "real-inference",
+      "evidence": "Original shadow eval entry predating source field (V11.10R11 backfill). SampleId pattern confirms pre-backfill origin.",
+      "confirmedRealInference": true,
+      "confirmedBy": "V14.2c provenance manifest \u2014 pre-backfill sampleId pattern"
+    },
+    {
+      "sampleId": "coding-sample-005",
+      "provenanceDecision": "real-inference",
+      "evidence": "Original shadow eval entry predating source field (V11.10R11 backfill). SampleId pattern confirms pre-backfill origin.",
+      "confirmedRealInference": true,
+      "confirmedBy": "V14.2c provenance manifest \u2014 pre-backfill sampleId pattern"
+    },
+    {
+      "sampleId": "coding-sample-006",
+      "provenanceDecision": "real-inference",
+      "evidence": "Original shadow eval entry predating source field (V11.10R11 backfill). SampleId pattern confirms pre-backfill origin.",
+      "confirmedRealInference": true,
+      "confirmedBy": "V14.2c provenance manifest \u2014 pre-backfill sampleId pattern"
+    },
+    {
+      "sampleId": "coding-sample-007",
+      "provenanceDecision": "real-inference",
+      "evidence": "Original shadow eval entry predating source field (V11.10R11 backfill). SampleId pattern confirms pre-backfill origin.",
+      "confirmedRealInference": true,
+      "confirmedBy": "V14.2c provenance manifest \u2014 pre-backfill sampleId pattern"
+    },
+    {
+      "sampleId": "coding-sample-008",
+      "provenanceDecision": "real-inference",
+      "evidence": "Original shadow eval entry predating source field (V11.10R11 backfill). SampleId pattern confirms pre-backfill origin.",
+      "confirmedRealInference": true,
+      "confirmedBy": "V14.2c provenance manifest \u2014 pre-backfill sampleId pattern"
+    },
+    {
+      "sampleId": "coding-sample-009",
+      "provenanceDecision": "real-inference",
+      "evidence": "Original shadow eval entry predating source field (V11.10R11 backfill). SampleId pattern confirms pre-backfill origin.",
+      "confirmedRealInference": true,
+      "confirmedBy": "V14.2c provenance manifest \u2014 pre-backfill sampleId pattern"
+    },
+    {
+      "sampleId": "coding-sample-010",
+      "provenanceDecision": "real-inference",
+      "evidence": "Original shadow eval entry predating source field (V11.10R11 backfill). SampleId pattern confirms pre-backfill origin.",
+      "confirmedRealInference": true,
+      "confirmedBy": "V14.2c provenance manifest \u2014 pre-backfill sampleId pattern"
+    }
+  ]
+}

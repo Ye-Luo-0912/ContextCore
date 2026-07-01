@@ -1,18 +1,24 @@
 {
-  "GeneratedAt": "2026-07-01T13:56:53.7885736\u002B00:00",
+  "GeneratedAt": "2026-07-01T14:50:13.8291019\u002B00:00",
   "RuntimeTraceAvailable": true,
   "RuntimeTraceParsed": true,
   "RuntimeTraceRowsRead": 30,
-  "RuntimeTraceCandidateCount": 0,
+  "RuntimeTraceCandidateCount": 120,
   "RuntimeTraceRowsBound": 0,
   "RuntimeTraceRowsUnbound": 87,
   "RuntimeTraceBindingRate": 0,
   "RuntimeTraceBindingReady": false,
-  "JoinMethod": "candidateId exact match, fallback to substring containment",
-  "RuntimeTraceBindingAttempted": true,
+  "JoinStrategies": {
+    "Exact": 0,
+    "Substring": 0,
+    "Normalized": 0
+  },
+  "UnboundReasonBreakdown": [
+    {
+      "Reason": "shadow_eval_vs_graph_trace_namespace_mismatch",
+      "Count": 87
+    }
+  ],
   "TraceSourcePath": "learning\\graph-shadow\\graph-expansion-shadow-traces.jsonl",
-  "BoundByExact": 0,
-  "BoundBySubstring": 0,
-  "Unbound": 87,
-  "Note": "Successfully parsed 30 trace rows with 0 total candidate entries. Bound 0/87 feature records."
+  "Note": "Parsed 30 trace rows, 120 candidate IDs extracted with sourceId\u002BtargetId\u002Bmetadata. Bound 0/87 feature records. Unbound: 87 \u2014 graph trace uses different ID namespace than shadow eval."
 }

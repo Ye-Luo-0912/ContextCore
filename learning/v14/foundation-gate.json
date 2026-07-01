@@ -1,15 +1,17 @@
 {
-  "GeneratedAt": "2026-07-01T13:56:53.7885736\u002B00:00",
+  "GeneratedAt": "2026-07-01T14:50:13.8291019\u002B00:00",
   "OfflineFeatureDatasetReady": true,
   "RuntimeTraceBindingAttempted": true,
   "RuntimeTraceAvailable": true,
   "RuntimeTraceParsed": true,
   "RuntimeTraceRowsRead": 30,
+  "RuntimeTraceCandidateCount": 120,
   "RuntimeTraceRowsBound": 0,
   "RuntimeTraceBindingRate": 0,
   "RuntimeTraceBindingReady": false,
   "LearningDataPipelineReady": false,
-  "UnknownSourceCount": 50,
+  "ProvenanceManifestWritten": true,
+  "UnknownSourceCount": 0,
   "SyntheticRecordCount": 0,
   "ShadowEvalFieldsNotMisreportedAsRuntime": true,
   "NoRandomSignals": true,
@@ -20,9 +22,7 @@
   "PackageOutputChanged": false,
   "VectorBindingChanged": false,
   "Diagnostics": [
-    "TraceParsed=True TraceRowsRead=30 TraceCandidates=0"
+    "TraceParsed=True RowsRead=30 Candidates=120 Keys=15"
   ],
-  "BlockedReasons": [
-    "UnknownSourceCount=50"
-  ]
+  "BlockedReasons": []
 }
