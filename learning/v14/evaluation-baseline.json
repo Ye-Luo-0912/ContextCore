@@ -1,0 +1,136 @@
+{
+  "GeneratedAt": "2026-07-01T13:43:50.8037755\u002B00:00",
+  "BaselineEstablished": true,
+  "BaselineVersion": "V14.2-first-run",
+  "TotalCandidates": 87,
+  "MeanEffectiveness": 0.632,
+  "HistoricalBaselineMissing": true,
+  "RankingDriftAvailable": false,
+  "RankingDriftReason": "First evaluation baseline \u2014 no prior ranking to compare against",
+  "Top10": [
+    {
+      "CandidateId": "chat-sample-002",
+      "Count": 1,
+      "Included": 1,
+      "Effectiveness": 1
+    },
+    {
+      "CandidateId": "chat-sample-005",
+      "Count": 1,
+      "Included": 1,
+      "Effectiveness": 1
+    },
+    {
+      "CandidateId": "chat-sample-006",
+      "Count": 1,
+      "Included": 1,
+      "Effectiveness": 1
+    },
+    {
+      "CandidateId": "chat-sample-007",
+      "Count": 1,
+      "Included": 1,
+      "Effectiveness": 1
+    },
+    {
+      "CandidateId": "chat-sample-008",
+      "Count": 1,
+      "Included": 1,
+      "Effectiveness": 1
+    },
+    {
+      "CandidateId": "project-sample-004",
+      "Count": 1,
+      "Included": 1,
+      "Effectiveness": 1
+    },
+    {
+      "CandidateId": "project-sample-005",
+      "Count": 1,
+      "Included": 1,
+      "Effectiveness": 1
+    },
+    {
+      "CandidateId": "project-sample-006",
+      "Count": 1,
+      "Included": 1,
+      "Effectiveness": 1
+    },
+    {
+      "CandidateId": "project-sample-007",
+      "Count": 1,
+      "Included": 1,
+      "Effectiveness": 1
+    },
+    {
+      "CandidateId": "project-sample-008",
+      "Count": 1,
+      "Included": 1,
+      "Effectiveness": 1
+    }
+  ],
+  "Bottom10": [
+    {
+      "CandidateId": "automation-20260529-006",
+      "Count": 1,
+      "Included": 0,
+      "Effectiveness": 0
+    },
+    {
+      "CandidateId": "automation-20260529-007",
+      "Count": 1,
+      "Included": 0,
+      "Effectiveness": 0
+    },
+    {
+      "CandidateId": "automation-20260529-008",
+      "Count": 1,
+      "Included": 0,
+      "Effectiveness": 0
+    },
+    {
+      "CandidateId": "chat-20260529-003",
+      "Count": 1,
+      "Included": 0,
+      "Effectiveness": 0
+    },
+    {
+      "CandidateId": "chat-20260529-006",
+      "Count": 1,
+      "Included": 0,
+      "Effectiveness": 0
+    },
+    {
+      "CandidateId": "chat-20260529-008",
+      "Count": 1,
+      "Included": 0,
+      "Effectiveness": 0
+    },
+    {
+      "CandidateId": "chat-20260529-009",
+      "Count": 1,
+      "Included": 0,
+      "Effectiveness": 0
+    },
+    {
+      "CandidateId": "chat-20260529-016",
+      "Count": 1,
+      "Included": 0,
+      "Effectiveness": 0
+    },
+    {
+      "CandidateId": "chat-20260529-020",
+      "Count": 1,
+      "Included": 0,
+      "Effectiveness": 0
+    },
+    {
+      "CandidateId": "coding-20260529-005",
+      "Count": 1,
+      "Included": 0,
+      "Effectiveness": 0
+    }
+  ],
+  "LearningDataPipelineReady": true,
+  "BlockedReasons": []
+}

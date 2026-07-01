@@ -1,0 +1,14 @@
+{
+  "GeneratedAt": "2026-07-01T13:43:50.8037755\u002B00:00",
+  "FeedbackSystemActive": true,
+  "FeedbackEventsRealOrUnknown": true,
+  "NoRandomSignals": true,
+  "TotalEvents": 87,
+  "FeedbackJsonlWritten": true,
+  "JsonlPath": "learning/v14/feedback-events.jsonl",
+  "SignalBreakdown": {
+    "PositiveUserSignals": 55,
+    "NeutralUserSignals": 32,
+    "HighDownstreamSuccess": 4
+  }
+}

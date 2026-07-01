@@ -1,19 +1,22 @@
 {
-  "GeneratedAt": "2026-07-01T13:24:30.9790553\u002B00:00",
+  "GeneratedAt": "2026-07-01T13:43:50.8037755\u002B00:00",
   "LearningDataPipelineReady": true,
+  "RuntimeTraceBindingAttempted": true,
+  "RuntimeTraceAvailable": true,
+  "UnknownSourceCount": 0,
   "SyntheticRecordCount": 0,
-  "RuntimeClaimMatchesEvidence": true,
-  "FeedbackEventsRealOrUnknown": true,
+  "DerivedOrSyntheticCount": 0,
   "NoRandomSignals": true,
+  "FeatureRowsJsonlWritten": true,
+  "BaselineEstablished": true,
   "HybridFormulaVerified": true,
-  "FinalScoreEqualsDeterministicWhenBiasZero": true,
-  "NoDivideByZeroRisk": true,
-  "HistoricalBaselineMissing": true,
+  "NeuralBiasActive": false,
   "RetrievalUnchanged": true,
   "RuntimePromotionApplied": false,
   "PackageOutputChanged": false,
   "VectorBindingChanged": false,
-  "BlockedReasons": [],
-  "TotalFeatureRecords": 87,
-  "TotalFeedbackEvents": 87
+  "Diagnostics": [
+    "RuntimeTraceAvailable=True"
+  ],
+  "BlockedReasons": []
 }

@@ -1,110 +1,97 @@
 {
-  "GeneratedAt": "2026-07-01T13:24:30.9790553\u002B00:00",
+  "GeneratedAt": "2026-07-01T13:43:50.8037755\u002B00:00",
   "DeterministicScoringPreserved": true,
-  "NoLLMTraining": true,
   "HybridFormula": "final_score = deterministic_score \u002B neural_bias",
   "HybridFormulaVerified": true,
   "FinalScoreEqualsDeterministicWhenBiasZero": true,
   "HybridBridgePassed": true,
-  "NeuralBiasStatus": "INACTIVE \u2014 neural_bias=0 for all records. Activated when V14 neural system is trained.",
+  "NeuralBiasActive": false,
+  "NeuralBiasStatus": "INACTIVE \u2014 neural_bias=0 for all records",
   "BridgeState": {
     "TotalRecords": 20,
-    "MeanDeterministicScore": 0.55,
-    "MeanFinalScore": 0.55,
-    "NeuralBiasActive": false,
     "FormulaConsistent": true,
     "ActivationThreshold": "V14 neural system trained AND signals \u003E= 100"
   },
   "SampleRecords": [
     {
-      "CandidateId": "chat-sample-002",
-      "DeterministicScore": 0.5,
-      "NeuralBias": 0,
-      "FinalScore": 0.5,
-      "NeuralBiasActive": false,
-      "FormulaVerified": true,
-      "EvaluatedAt": "2026-07-01T13:24:30.9790553\u002B00:00"
+      "candidateId": "chat-sample-002",
+      "deterministicScore": 0.5,
+      "neuralBias": 0,
+      "finalScore": 0.5,
+      "neuralBiasActive": false,
+      "formulaVerified": true
     },
     {
-      "CandidateId": "chat-sample-005",
-      "DeterministicScore": 0.5,
-      "NeuralBias": 0,
-      "FinalScore": 0.5,
-      "NeuralBiasActive": false,
-      "FormulaVerified": true,
-      "EvaluatedAt": "2026-07-01T13:24:30.9790553\u002B00:00"
+      "candidateId": "chat-sample-005",
+      "deterministicScore": 0.5,
+      "neuralBias": 0,
+      "finalScore": 0.5,
+      "neuralBiasActive": false,
+      "formulaVerified": true
     },
     {
-      "CandidateId": "chat-sample-006",
-      "DeterministicScore": 0.5,
-      "NeuralBias": 0,
-      "FinalScore": 0.5,
-      "NeuralBiasActive": false,
-      "FormulaVerified": true,
-      "EvaluatedAt": "2026-07-01T13:24:30.9790553\u002B00:00"
+      "candidateId": "chat-sample-006",
+      "deterministicScore": 0.5,
+      "neuralBias": 0,
+      "finalScore": 0.5,
+      "neuralBiasActive": false,
+      "formulaVerified": true
     },
     {
-      "CandidateId": "chat-sample-007",
-      "DeterministicScore": 0.5,
-      "NeuralBias": 0,
-      "FinalScore": 0.5,
-      "NeuralBiasActive": false,
-      "FormulaVerified": true,
-      "EvaluatedAt": "2026-07-01T13:24:30.9790553\u002B00:00"
+      "candidateId": "chat-sample-007",
+      "deterministicScore": 0.5,
+      "neuralBias": 0,
+      "finalScore": 0.5,
+      "neuralBiasActive": false,
+      "formulaVerified": true
     },
     {
-      "CandidateId": "chat-sample-008",
-      "DeterministicScore": 0.5,
-      "NeuralBias": 0,
-      "FinalScore": 0.5,
-      "NeuralBiasActive": false,
-      "FormulaVerified": true,
-      "EvaluatedAt": "2026-07-01T13:24:30.9790553\u002B00:00"
+      "candidateId": "chat-sample-008",
+      "deterministicScore": 0.5,
+      "neuralBias": 0,
+      "finalScore": 0.5,
+      "neuralBiasActive": false,
+      "formulaVerified": true
     },
     {
-      "CandidateId": "project-sample-004",
-      "DeterministicScore": 0.5,
-      "NeuralBias": 0,
-      "FinalScore": 0.5,
-      "NeuralBiasActive": false,
-      "FormulaVerified": true,
-      "EvaluatedAt": "2026-07-01T13:24:30.9790553\u002B00:00"
+      "candidateId": "project-sample-004",
+      "deterministicScore": 0.5,
+      "neuralBias": 0,
+      "finalScore": 0.5,
+      "neuralBiasActive": false,
+      "formulaVerified": true
     },
     {
-      "CandidateId": "project-sample-005",
-      "DeterministicScore": 0.5,
-      "NeuralBias": 0,
-      "FinalScore": 0.5,
-      "NeuralBiasActive": false,
-      "FormulaVerified": true,
-      "EvaluatedAt": "2026-07-01T13:24:30.9790553\u002B00:00"
+      "candidateId": "project-sample-005",
+      "deterministicScore": 0.5,
+      "neuralBias": 0,
+      "finalScore": 0.5,
+      "neuralBiasActive": false,
+      "formulaVerified": true
     },
     {
-      "CandidateId": "project-sample-006",
-      "DeterministicScore": 0.5,
-      "NeuralBias": 0,
-      "FinalScore": 0.5,
-      "NeuralBiasActive": false,
-      "FormulaVerified": true,
-      "EvaluatedAt": "2026-07-01T13:24:30.9790553\u002B00:00"
+      "candidateId": "project-sample-006",
+      "deterministicScore": 0.5,
+      "neuralBias": 0,
+      "finalScore": 0.5,
+      "neuralBiasActive": false,
+      "formulaVerified": true
     },
     {
-      "CandidateId": "project-sample-007",
-      "DeterministicScore": 0.5,
-      "NeuralBias": 0,
-      "FinalScore": 0.5,
-      "NeuralBiasActive": false,
-      "FormulaVerified": true,
-      "EvaluatedAt": "2026-07-01T13:24:30.9790553\u002B00:00"
+      "candidateId": "project-sample-007",
+      "deterministicScore": 0.5,
+      "neuralBias": 0,
+      "finalScore": 0.5,
+      "neuralBiasActive": false,
+      "formulaVerified": true
     },
     {
-      "CandidateId": "project-sample-008",
-      "DeterministicScore": 1,
-      "NeuralBias": 0,
-      "FinalScore": 1,
-      "NeuralBiasActive": false,
-      "FormulaVerified": true,
-      "EvaluatedAt": "2026-07-01T13:24:30.9790553\u002B00:00"
+      "candidateId": "project-sample-008",
+      "deterministicScore": 1,
+      "neuralBias": 0,
+      "finalScore": 1,
+      "neuralBiasActive": false,
+      "formulaVerified": true
     }
   ]
 }
