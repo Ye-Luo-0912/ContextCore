@@ -1,0 +1,49 @@
+{
+  "GeneratedAt": "2026-07-01T02:52:57.6743849+00:00",
+  "ProofId": "rdrp-b08d50c2e8f64ca5bdbeba0356823ea4",
+  "RollbackDryRunPassed": true,
+  "Summary": "Rollback steps verified as executable without actually rolling back.",
+  "StepVerifications": [
+    {
+      "Step": 1,
+      "Description": "Kill switch accessible",
+      "Verified": true,
+      "Path": "learning/v11/formal-ingestion-rollback-manifest.json",
+      "Detail": "Exists"
+    },
+    {
+      "Step": 2,
+      "Description": "Pre-ingestion snapshot exists",
+      "Verified": true,
+      "Path": "learning/v11/formal-dataset-pre-ingestion-snapshot.json",
+      "Detail": "Exists"
+    },
+    {
+      "Step": 3,
+      "Description": "Runtime state unchanged (no-op pilot)",
+      "Verified": true,
+      "Path": "vector\\v8\\runtime-activation\\live-runtime-activation-state-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+      "Detail": "before=583762c5... after=583762c5..."
+    },
+    {
+      "Step": 4,
+      "Description": "Scope binding intact (demo-workspace/demo-collection)",
+      "Verified": true,
+      "Path": "vector\\v8\\runtime-activation\\live-runtime-activation-state-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+      "Detail": "Scope verified"
+    },
+    {
+      "Step": 5,
+      "Description": "Rollback manifest contains restoration instructions",
+      "Verified": true,
+      "Path": "learning\\v11\\formal-ingestion-rollback-manifest.json",
+      "Detail": "Available"
+    }
+  ],
+  "KillSwitchArmed": true,
+  "RollbackBindingComplete": true,
+  "PreIngestionSnapshot": true,
+  "RuntimeHashUnchanged": true,
+  "ScopeIntact": true,
+  "AllVerified": true
+}

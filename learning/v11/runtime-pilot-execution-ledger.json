@@ -1,0 +1,20 @@
+{
+  "GeneratedAt": "2026-07-01T02:52:57.6743849+00:00",
+  "LedgerId": "rel-3539d0143bf149bf97f8ece1b739922c",
+  "RuntimeExecutionLedgerReady": true,
+  "RuntimeStatePath": "vector\\v8\\runtime-activation\\live-runtime-activation-state-FormalRetrievalActivation-demo-workspace-demo-collection.json",
+  "RuntimeBeforeHash": "583762c58d9b261848ff2a8f212c4b2b27ff60be003198a6ca49628eb244a198",
+  "RuntimeAfterHash": "583762c58d9b261848ff2a8f212c4b2b27ff60be003198a6ca49628eb244a198",
+  "RuntimeUnchanged": true,
+  "UnchangedBecause": "No-op preflight: pilot activation is scoped to V8 activation record only. Live runtime state file unchanged.",
+  "ChangedFields": [],
+  "RuntimePilotExecutionApplied": true,
+  "RuntimePilotExecutionAuthoritySource": "V11.13 pilot execution with PilotAuthorized=true",
+  "RuntimePromotionApplied": false,
+  "PackageOutputChanged": false,
+  "RuntimeRerankerChanged": false,
+  "VectorBindingChanged": false,
+  "GlobalDefaultOn": false,
+  "LiveActivationStateExists": true,
+  "V8ScopedActivationPreserved": true
+}

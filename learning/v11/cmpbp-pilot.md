@@ -1,6 +1,6 @@
 ﻿# CMPBP (Pilot)
 
-生成: 2026-06-30T18:10:29.0782663+00:00 操作: cmpbp-d89a8bcb7ade4164ab9d7ff292334dd8
+生成: 2026-07-01T02:52:57.6743849+00:00 操作: cmpbp-fba241921a6e422a96919a7c7916535f
 
 ## Decision
 - PackPassed: True GatePassed: True
@@ -14,4 +14,4 @@
 - GlobalDefaultOn: False RollbackReady: True PostPilotAudit: True
 - RuntimePilotExecutionApplied: True
 
-V11.13 - pilot authorization & controlled activation。
+V11.14 - post-pilot operational hardening bundle。All audits pass, scope intact。

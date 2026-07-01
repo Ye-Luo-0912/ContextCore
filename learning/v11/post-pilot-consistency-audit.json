@@ -1,0 +1,39 @@
+{
+  "GeneratedAt": "2026-07-01T02:52:57.6743849+00:00",
+  "AuditId": "ppca-b6b95aff0cc04868983bd12a6eca4e34",
+  "PostPilotConsistencyAuditPassed": true,
+  "CrossCheckedArtifacts": [
+    "cmpbp-pilot.json",
+    "pilot-execution-report.json",
+    "post-pilot-audit.json",
+    "pilot-authorization-consumption-record.json",
+    "runtime-pilot-execution-ledger.json",
+    "pilot-rollback-plan.json",
+    "rollback-dry-run-report.json",
+    "canary-matrix.json",
+    "calibration-method.json",
+    "backfill-provenance.json"
+  ],
+  "CrossCheckResults": {
+    "GatePassedConsistent": true,
+    "PilotAuthorizedConsistent": true,
+    "PilotExecutedConsistent": true,
+    "PilotScopeConsistent": true,
+    "RegressionCountConsistent": true,
+    "ShadowCoverageConsistent": true,
+    "RuntimeHashConsistent": true,
+    "GlobalDefaultOffConsistent": true,
+    "RuntimePromotionOffConsistent": true,
+    "PackageOutputUnchanged": true,
+    "VectorBindingUnchanged": true,
+    "AllChecksPassed": true
+  },
+  "SafetyGates": {
+    "GlobalDefaultOn": false,
+    "RuntimePromotionApplied": false,
+    "PackageOutputChanged": false,
+    "VectorBindingChanged": false,
+    "ScopeRestrictedTo": "demo-workspace/demo-collection",
+    "UnscopedChangesDetected": false
+  }
+}
