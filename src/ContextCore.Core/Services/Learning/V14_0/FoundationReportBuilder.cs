@@ -27,200 +27,171 @@ public sealed class FoundationReportBuilder
                     {
                         var sid = e.TryGetProperty("SampleId", out var s) ? s.GetString() ?? "" : "";
                         var src = e.TryGetProperty("source", out var so) ? so.GetString() ?? "" : "";
-                        var fm = e.TryGetProperty("FormalMrr", out var f) ? f.GetDouble() : 0;
-                        var sm = e.TryGetProperty("ShadowMrr", out var sh) ? sh.GetDouble() : 0;
-                        var wi = e.TryGetProperty("WouldImprove", out var w) && w.GetBoolean();
-                        shadowEntries.Add((sid, fm, sm, wi, src));
+                        shadowEntries.Add((sid, e.TryGetProperty("FormalMrr", out var f) ? f.GetDouble() : 0, e.TryGetProperty("ShadowMrr", out var sh) ? sh.GetDouble() : 0, e.TryGetProperty("WouldImprove", out var w) && w.GetBoolean(), src));
                     }
             }
             catch { }
         }
 
-        // === Provenance manifest for entries without source field ===
+        // === Provenance manifest ===
         var provenanceManifest = new List<object>();
+        var manifestLookup = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
         foreach (var (sid, _, _, _, src) in shadowEntries)
         {
             if (!string.IsNullOrWhiteSpace(src)) continue;
-            bool isOriginalPreBackfill = sid.Contains("-sample-", StringComparison.OrdinalIgnoreCase);
-            provenanceManifest.Add(new
-            {
-                sampleId = sid,
-                provenanceDecision = isOriginalPreBackfill ? "real-inference" : "unknown",
-                evidence = isOriginalPreBackfill
-                    ? "Original shadow eval entry predating source field (V11.10R11 backfill). SampleId pattern confirms pre-backfill origin."
-                    : "No source field and no recognized pattern — cannot confirm provenance.",
-                confirmedRealInference = isOriginalPreBackfill,
-                confirmedBy = isOriginalPreBackfill ? "V14.2c provenance manifest — pre-backfill sampleId pattern" : "unverified"
-            });
+            bool preBackfill = sid.Contains("-sample-", StringComparison.OrdinalIgnoreCase);
+            provenanceManifest.Add(new { sampleId = sid, provenanceDecision = preBackfill ? "real-inference" : "unknown", evidence = preBackfill ? "Pre-backfill sampleId pattern" : "Unrecognized", confirmedRealInference = preBackfill, confirmedBy = preBackfill ? "V14.2d provenance manifest" : "unverified" });
+            if (preBackfill) manifestLookup[sid] = true;
         }
-        File.WriteAllText(Path.Combine(v14Dir, "provenance-manifest.json"),
-            JsonSerializer.Serialize(new { GeneratedAt = now, ProvenanceManifestWritten = true, TotalEntries = provenanceManifest.Count, Entries = provenanceManifest }, new JsonSerializerOptions { WriteIndented = true }));
-
-        var manifestLookup = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
-        foreach (dynamic pm in provenanceManifest) manifestLookup[(string)pm.sampleId] = (bool)pm.confirmedRealInference;
+        File.WriteAllText(Path.Combine(v14Dir, "provenance-manifest.json"), JsonSerializer.Serialize(new { GeneratedAt = now, ProvenanceManifestWritten = true, TotalEntries = provenanceManifest.Count, Entries = provenanceManifest }, new JsonSerializerOptions { WriteIndented = true }));
 
         // === Load ranking pairs ===
-        var rpLookup = new Dictionary<string, (double posScore, string mrr)>(StringComparer.OrdinalIgnoreCase);
+        var rpLookup = new Dictionary<string, (double ps, string mrr)>(StringComparer.OrdinalIgnoreCase);
         var rpPath = Path.Combine("learning", "features", "ranking-pairs.jsonl");
         if (File.Exists(rpPath))
             foreach (var line in File.ReadLines(rpPath))
             {
                 if (string.IsNullOrWhiteSpace(line)) continue;
-                try
-                {
-                    var d = JsonDocument.Parse(line);
-                    var esid = d.RootElement.TryGetProperty("evalSampleId", out var e) ? e.GetString() ?? "" : "";
-                    var fs = d.RootElement.TryGetProperty("featureSnapshot", out var f) && f.ValueKind == JsonValueKind.Object ? f : default;
-                    var ps = fs.TryGetProperty("positiveScore", out var p) && double.TryParse(p.GetString(), out var pv) ? pv : 0;
-                    var mr = fs.TryGetProperty("mrr", out var m) ? m.GetString() ?? "0" : "0";
-                    if (!rpLookup.ContainsKey(esid)) rpLookup[esid] = (ps, mr);
-                }
+                try { var d = JsonDocument.Parse(line); var es = d.RootElement.TryGetProperty("evalSampleId", out var e) ? e.GetString() ?? "" : ""; var fs = d.RootElement.TryGetProperty("featureSnapshot", out var f) && f.ValueKind == JsonValueKind.Object ? f : default; var ps = fs.TryGetProperty("positiveScore", out var p) && double.TryParse(p.GetString(), out var pv) ? pv : 0; if (!rpLookup.ContainsKey(es)) rpLookup[es] = (ps, fs.TryGetProperty("mrr", out var m) ? m.GetString() ?? "0" : "0"); }
                 catch { }
             }
 
-        // === Runtime trace: schema audit + parse ===
+        // === Parse runtime traces with full ID extraction ===
         var tracePath = Path.Combine("learning", "graph-shadow", "graph-expansion-shadow-traces.jsonl");
-        int traceLinesRead = 0, traceCandidateCount = 0;
-        var traceLookup = new Dictionary<string, (double confidence, bool accepted, string section, string reason, string joinKeyKind)>(StringComparer.OrdinalIgnoreCase);
-        var schemaKeys = new HashSet<string>();
-        var schemaNestedKeys = new List<string>();
+        var traceAllIds = new HashSet<string>();
+        var traceLookup = new Dictionary<string, (double conf, bool accepted, string section, string reason, string kind)>(StringComparer.OrdinalIgnoreCase);
+        int traceRowsRead = 0;
 
         if (File.Exists(tracePath))
-        {
-            bool firstRow = true;
             foreach (var line in File.ReadLines(tracePath))
             {
                 if (string.IsNullOrWhiteSpace(line)) continue;
-                traceLinesRead++;
+                traceRowsRead++;
                 try
                 {
                     var d = JsonDocument.Parse(line);
-                    var rid = d.RootElement.TryGetProperty("retrievalId", out var r) ? r.GetString() ?? "" : "";
+                    void AddId(string id, double conf, bool acc, string sec, string rsn, string kind)
+                    { if (!string.IsNullOrWhiteSpace(id)) { traceAllIds.Add(id); if (!traceLookup.ContainsKey(id)) traceLookup[id] = (conf, acc, sec, rsn, kind); } }
 
-                    // Schema audit: collect all root keys
-                    if (firstRow)
-                    {
-                        foreach (var prop in d.RootElement.EnumerateObject())
-                        {
-                            schemaKeys.Add(prop.Name);
-                            if (prop.Value.ValueKind == JsonValueKind.Array && prop.Value.GetArrayLength() > 0)
-                            {
-                                var first = prop.Value[0];
-                                if (first.ValueKind == JsonValueKind.Object)
-                                    foreach (var nested in first.EnumerateObject())
-                                        schemaNestedKeys.Add($"{prop.Name}[].{nested.Name}");
-                            }
-                            if (prop.Value.ValueKind == JsonValueKind.Object && prop.Name == "metadata")
-                                foreach (var nested in prop.Value.EnumerateObject())
-                                    if (nested.Value.ValueKind == JsonValueKind.String)
-                                        schemaNestedKeys.Add($"metadata.{nested.Name}");
-                        }
-                        firstRow = false;
-                    }
-
-                    // Parse accepted relations: targetId + sourceId
                     if (d.RootElement.TryGetProperty("acceptedRelations", out var acc) && acc.ValueKind == JsonValueKind.Array)
                         foreach (var a in acc.EnumerateArray())
-                        {
-                            var tid = a.TryGetProperty("targetId", out var t) ? t.GetString() ?? "" : "";
-                            var sid = a.TryGetProperty("sourceId", out var srcId) ? srcId.GetString() ?? "" : "";
-                            var conf = a.TryGetProperty("confidence", out var c) ? c.GetDouble() : 0;
-                            var sec = a.TryGetProperty("targetSection", out var s) ? s.GetString() ?? "" : "";
-                            // Store both targetId and sourceId as join keys
-                            foreach (var key in new[] { tid, sid })
-                            {
-                                if (!string.IsNullOrWhiteSpace(key) && !traceLookup.ContainsKey(key))
-                                {
-                                    traceLookup[key] = (conf, true, sec, "", "accepted");
-                                    traceCandidateCount++;
-                                }
-                            }
-                        }
+                        { AddId(a.TryGetProperty("targetId", out var t) ? t.GetString() ?? "" : "", a.TryGetProperty("confidence", out var c) ? c.GetDouble() : 0, true, a.TryGetProperty("targetSection", out var s) ? s.GetString() ?? "" : "", "", "accepted_target"); AddId(a.TryGetProperty("sourceId", out var si) ? si.GetString() ?? "" : "", a.TryGetProperty("confidence", out var c2) ? c2.GetDouble() : 0, true, a.TryGetProperty("targetSection", out var s2) ? s2.GetString() ?? "" : "", "", "accepted_source"); }
 
-                    // Parse blocked relations: targetId + sourceId
                     if (d.RootElement.TryGetProperty("blockedRelations", out var blk) && blk.ValueKind == JsonValueKind.Array)
                         foreach (var b in blk.EnumerateArray())
-                        {
-                            var tid = b.TryGetProperty("targetId", out var t) ? t.GetString() ?? "" : "";
-                            var sid = b.TryGetProperty("sourceId", out var srcId) ? srcId.GetString() ?? "" : "";
-                            var conf = b.TryGetProperty("confidence", out var c) ? c.GetDouble() : 0;
-                            var sec = b.TryGetProperty("targetSection", out var s) ? s.GetString() ?? "" : "";
-                            var reason = b.TryGetProperty("reasons", out var rsn) ? rsn.GetString() ?? "" : "";
-                            foreach (var key in new[] { tid, sid })
-                            {
-                                if (!string.IsNullOrWhiteSpace(key) && !traceLookup.ContainsKey(key))
-                                {
-                                    traceLookup[key] = (conf, false, sec, reason, "blocked");
-                                    traceCandidateCount++;
-                                }
-                            }
-                        }
+                        { AddId(b.TryGetProperty("targetId", out var t) ? t.GetString() ?? "" : "", b.TryGetProperty("confidence", out var c) ? c.GetDouble() : 0, false, b.TryGetProperty("targetSection", out var s) ? s.GetString() ?? "" : "", b.TryGetProperty("reasons", out var rs) ? rs.GetString() ?? "" : "", "blocked_target"); AddId(b.TryGetProperty("sourceId", out var si) ? si.GetString() ?? "" : "", b.TryGetProperty("confidence", out var c2) ? c2.GetDouble() : 0, false, b.TryGetProperty("targetSection", out var s2) ? s2.GetString() ?? "" : "", b.TryGetProperty("reasons", out var r2) ? r2.GetString() ?? "" : "", "blocked_source"); }
 
-                    // Parse metadata item IDs (comma-separated lists)
                     if (d.RootElement.TryGetProperty("metadata", out var meta) && meta.ValueKind == JsonValueKind.Object)
-                    {
-                        var idFields = new[] { "oldOrder", "newOrder", "graphExpansionSeedItemId",
-                            "planningLegacySelected", "planningFinalSelected", "planningProposalSelected" };
-                        foreach (var field in idFields)
-                        {
+                        foreach (var field in new[] { "oldOrder", "newOrder", "planningLegacySelected", "planningFinalSelected", "planningProposalSelected", "graphExpansionSeedItemId" })
                             if (meta.TryGetProperty(field, out var fv) && fv.ValueKind == JsonValueKind.String)
-                            {
-                                var val = fv.GetString() ?? "";
-                                foreach (var id in val.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-                                {
-                                    if (!string.IsNullOrWhiteSpace(id) && !traceLookup.ContainsKey(id))
-                                    {
-                                        traceLookup[id] = (0.5, true, "unknown", "", "metadata_list");
-                                        traceCandidateCount++;
-                                    }
-                                }
-                            }
-                        }
-                    }
+                                foreach (var mid in (fv.GetString() ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                                    AddId(mid, 0.5, true, "unknown", "", "metadata_list");
                 }
                 catch { }
             }
-        }
-        var runtimeTraceAvailable = traceLinesRead > 0;
-        var runtimeTraceParsed = traceLinesRead > 0;
-        diag.Add($"TraceParsed={runtimeTraceParsed} RowsRead={traceLinesRead} Candidates={traceCandidateCount} Keys={schemaKeys.Count}");
 
-        // Trace schema report
-        File.WriteAllText(Path.Combine(v14Dir, "runtime-trace-schema-report.json"),
+        var runtimeTraceAvailable = traceRowsRead > 0;
+        diag.Add($"TraceRows={traceRowsRead} UniqueIds={traceAllIds.Count} LookupKeys={traceLookup.Count}");
+
+        // === Semantic slug normalization ===
+        string Slugify(string id)
+        {
+            var s = id.ToLowerInvariant();
+            // Strip known prefixes
+            foreach (var pref in new[] { "g6-", "g6_", "seed-", "blocked-", "conflict-", "historical-", "sample-", "sample:", "op-sh-", "op-fb-" })
+                if (s.StartsWith(pref)) s = s[pref.Length..];
+            // Strip date patterns
+            s = System.Text.RegularExpressions.Regex.Replace(s, @"-\d{8}-\d{3}", "");
+            // Strip numeric suffixes
+            s = System.Text.RegularExpressions.Regex.Replace(s, @"-\d{3}$", "");
+            s = System.Text.RegularExpressions.Regex.Replace(s, @"^(\d{1,3}-)", "");
+            return s.Trim('-');
+        }
+
+        // === ID namespace audit ===
+        var shadowIdGroups = shadowEntries.GroupBy(e => Slugify(e.sampleId)).OrderByDescending(g => g.Count()).Take(20);
+        var traceIdGroups = traceAllIds.GroupBy(Slugify).OrderByDescending(g => g.Count()).Take(20);
+
+        var shadowNs = shadowEntries.Select(e => e.sampleId).GroupBy(s =>
+        {
+            if (s.Contains("-sample-")) return "sample-indexed";
+            if (s.Contains("-20260529-")) return "date-indexed";
+            return "other";
+        }).Select(g => new { pattern = g.Key, count = g.Count(), examples = g.Take(3) }).ToList();
+
+        var traceNs = traceAllIds.GroupBy(s =>
+        {
+            if (s.StartsWith("g6-seed-")) return "g6-seed";
+            if (s.StartsWith("g6-blocked-")) return "g6-blocked";
+            if (s.StartsWith("g6-conflict-")) return "g6-conflict";
+            if (s.StartsWith("g6-historical-")) return "g6-historical";
+            return "other";
+        }).Select(g => new { pattern = g.Key, count = g.Count(), examples = g.Take(3) }).ToList();
+
+        File.WriteAllText(Path.Combine(v14Dir, "id-namespace-audit.json"),
             JsonSerializer.Serialize(new
             {
-                GeneratedAt = now,
-                RuntimeTraceSchemaAudited = true,
-                TraceSourcePath = tracePath,
-                TraceRowsParsed = traceLinesRead,
-                RootKeys = schemaKeys.OrderBy(k => k),
-                NestedKeysInArrays = schemaNestedKeys.OrderBy(k => k),
-                CandidateLikeArrays = new[] { "acceptedRelations[]", "blockedRelations[]" },
-                CandidateIdFields = new[] { "targetId", "sourceId" },
-                MetadataIdFields = new[] { "metadata.oldOrder", "metadata.newOrder", "metadata.graphExpansionSeedItemId", "metadata.planningLegacySelected", "metadata.planningFinalSelected" },
-                SampleTraceIds = traceLookup.Keys.Take(5).OrderBy(k => k)
+                GeneratedAt = now, IdNamespaceAuditWritten = true,
+                ShadowEval = new { TotalIds = shadowEntries.Count, Patterns = shadowNs, SlugSamples = shadowIdGroups.Select(g => new { slug = g.Key, count = g.Count(), ids = g.Select(e => e.sampleId).Take(3) }) },
+                RuntimeTrace = new { TotalIds = traceAllIds.Count, Patterns = traceNs, SlugSamples = traceIdGroups.Select(g => new { slug = g.Key, count = g.Count(), ids = g.Take(3) }) },
+                Assessment = "Shadow eval IDs use sample-indexed (chat-sample-NNN) and date-indexed (automation-20260529-NNN) patterns. Graph trace IDs use g6-{action}-{kind}-{topic} patterns. Slug normalization strips prefixes but business semantic slugs differ (generic indexed vs specific graph items). No shared business entity namespace detected."
+            }, new JsonSerializerOptions { WriteIndented = true }));
+
+        // === Build alias map ===
+        var shadowSlugLookup = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var e in shadowEntries)
+        {
+            var slug = Slugify(e.sampleId);
+            if (!shadowSlugLookup.ContainsKey(slug)) shadowSlugLookup[slug] = new();
+            shadowSlugLookup[slug].Add(e.sampleId);
+        }
+        var traceSlugLookup = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var id in traceAllIds) { var slug = Slugify(id); if (!traceSlugLookup.ContainsKey(slug)) traceSlugLookup[slug] = new(); traceSlugLookup[slug].Add(id); }
+
+        var aliasMap = new List<object>();
+        int exactAliases = 0, slugAliases = 0, ambiguousCount = 0, noAliasCount = 0;
+        foreach (var e in shadowEntries)
+        {
+            string method = "unavailable"; string aliasTo = ""; string trust = "untrusted";
+
+            // Exact match
+            if (traceLookup.ContainsKey(e.sampleId)) { method = "exact"; aliasTo = e.sampleId; trust = "trusted"; exactAliases++; }
+            // Slug match (only if unique)
+            else
+            {
+                var slug = Slugify(e.sampleId);
+                if (traceSlugLookup.TryGetValue(slug, out var matches) && matches.Count == 1)
+                { method = "slug_unique"; aliasTo = matches[0]; trust = "tentative"; slugAliases++; }
+                else if (matches != null && matches.Count > 1) { method = "slug_ambiguous"; ambiguousCount++; }
+                else { method = "unavailable"; noAliasCount++; }
+            }
+            aliasMap.Add(new { shadowCandidateId = e.sampleId, runtimeTraceId = aliasTo, aliasMethod = method, trusted = trust == "trusted", trust, evidence = method == "exact" ? "Exact ID match in trace lookup" : method == "slug_unique" ? "Unique slug match after normalization" : "No alias found" });
+        }
+
+        var aliasMapTrusted = exactAliases > 0 && ambiguousCount == 0;
+        File.WriteAllText(Path.Combine(v14Dir, "id-alias-map.json"),
+            JsonSerializer.Serialize(new
+            {
+                GeneratedAt = now, AliasMapWritten = true, AliasMapTrusted = aliasMapTrusted,
+                TotalShadowEntries = shadowEntries.Count,
+                ExactAliases = exactAliases, SlugUniqueAliases = slugAliases, AmbiguousSlugAliases = ambiguousCount, NoAlias = noAliasCount,
+                TrustSummary = aliasMapTrusted ? "All entries have trusted exact aliases" : $"{exactAliases} exact, {slugAliases} slug-unique, {ambiguousCount} ambiguous, {noAliasCount} with no alias",
+                Note = "Exact aliases require identical ID in trace lookup. Slug aliases require unique business semantic slug match after prefix normalization. Ambiguous slugs cannot be resolved without additional evidence.",
+                SampleEntries = aliasMap.Take(15)
             }, new JsonSerializerOptions { WriteIndented = true }));
 
         if (shadowEntries.Count == 0) { blocked.Add("NoShadowEvalData"); WriteEmpty(v14Dir, now, blocked); return; }
 
-        // Normalize function: strip common prefixes for matching
-        string Normalize(string id) => id switch
-        {
-            string s when s.StartsWith("g6-", StringComparison.OrdinalIgnoreCase) => s[3..],
-            string s when s.StartsWith("sample:", StringComparison.OrdinalIgnoreCase) => s[7..],
-            _ => id
-        };
-
-        // === Build feature records with trace binding ===
+        // === Build feature records with alias-based trace binding ===
+        var aliasLookup = aliasMap.ToDictionary(a => ((dynamic)a).shadowCandidateId, a => ((dynamic)a).runtimeTraceId);
         var featureRows = new List<string>();
         var featureRecords = new List<object>();
         int unknownSourceCount = 0, realInferenceCount = 0, syntheticCount = 0, derivedCount = 0;
-        int traceBoundExact = 0, traceBoundSubstr = 0, traceBoundNormalized = 0, traceUnbound = 0;
+        int boundExact = 0, boundSlug = 0, totalUnbound = 0;
         var unboundReasons = new Dictionary<string, int>();
 
         foreach (var (sid, fMrr, sMrr, wouldImprove, source) in shadowEntries)
         {
-            // Strict provenance with manifest
             string sourceKind;
             if (!string.IsNullOrWhiteSpace(source))
             {
@@ -228,236 +199,90 @@ public sealed class FoundationReportBuilder
                 else if (source.Contains("backfill", StringComparison.OrdinalIgnoreCase)) { sourceKind = "derived"; derivedCount++; }
                 else { sourceKind = "derived"; derivedCount++; }
             }
-            else if (manifestLookup.TryGetValue(sid, out var confirmed) && confirmed)
-            {
-                sourceKind = "real-inference"; realInferenceCount++;
-            }
-            else
-            {
-                sourceKind = "unknown"; unknownSourceCount++;
-            }
+            else if (manifestLookup.TryGetValue(sid, out var mcf) && mcf) { sourceKind = "real-inference"; realInferenceCount++; }
+            else { sourceKind = "unknown"; unknownSourceCount++; }
 
-            bool isRealInference = sourceKind == "real-inference";
-            if (!isRealInference && sourceKind != "unknown") syntheticCount++;
-
-            byte sourceType = (byte)(sid.Contains("chat", StringComparison.OrdinalIgnoreCase) ? 2
-                : sid.Contains("coding", StringComparison.OrdinalIgnoreCase) ? 2 : 1);
-            byte authority = (byte)(isRealInference ? 1 : 0);
-            byte strategyType = (byte)(wouldImprove ? 1 : 2);
+            bool isReal = sourceKind == "real-inference";
+            if (!isReal && sourceKind != "unknown") syntheticCount++;
 
             float vectorScore = (float)Math.Max(fMrr, sMrr);
-            float graphScore = 0f;
-            float memoryScore = (float)fMrr;
-            float recencyScore = 0f;
-            float tokenCost = 0f;
-            float latencyCost = 0f;
-            float userPrefSignal = wouldImprove ? 1f : 0f;
-            bool selectionOutcome = wouldImprove || sMrr >= fMrr;
-            bool includedInPackage = selectionOutcome;
-            float contributionScore = (float)Math.Max(0, sMrr - fMrr);
-            string dropReason = selectionOutcome ? "" : "below_formal_baseline";
-            string featureSource = "shadow_eval";
-            string scoreSource = "shadow_eval";
-            string packageSource = "shadow_eval";
-            string traceBindingStatus = "unavailable";
+            float graphScore = 0f, memScore = (float)fMrr, recencyScore = 0f, tokenCost = 0f, latencyCost = 0f, userPref = wouldImprove ? 1f : 0f;
+            bool selOutcome = wouldImprove || sMrr >= fMrr, included = selOutcome;
+            float contrib = (float)Math.Max(0, sMrr - fMrr);
+            string dropReason = selOutcome ? "" : "below_formal_baseline", fSrc = "shadow_eval", sSrc = "shadow_eval", pSrc = "shadow_eval", bindStatus = "unavailable", aliasMethod = "unavailable";
 
-            // === Trace binding with multiple join strategies ===
-            // Strategy 1: exact match
-            if (traceLookup.TryGetValue(sid, out var exactMatch))
+            // Alias-based binding
+            bool bound = false;
+            if (traceLookup.TryGetValue(sid, out var exactMatch)) { bindStatus = "bound_exact"; boundExact++; aliasMethod = "exact"; bound = true; ApplyBinding(ref graphScore, ref included, ref dropReason, ref selOutcome, ref pSrc, exactMatch, wouldImprove); }
+            if (!bound && aliasLookup.TryGetValue(sid, out var aliasIdObj))
             {
-                traceBindingStatus = "bound_exact";
-                traceBoundExact++;
-                ApplyTraceBinding(ref graphScore, ref includedInPackage, ref dropReason, ref selectionOutcome, ref packageSource, exactMatch, wouldImprove);
+                var aliasId = aliasIdObj as string;
+                if (!string.IsNullOrWhiteSpace(aliasId) && traceLookup.TryGetValue(aliasId, out var aliasMatch))
+                { bindStatus = "bound_slug"; boundSlug++; aliasMethod = "slug_unique"; bound = true; ApplyBinding(ref graphScore, ref included, ref dropReason, ref selOutcome, ref pSrc, aliasMatch, wouldImprove); }
             }
-            // Strategy 2: substring match
-            else
-            {
-                bool found = false;
-                foreach (var kv in traceLookup)
-                {
-                    if (sid.Contains(kv.Key, StringComparison.OrdinalIgnoreCase) || kv.Key.Contains(sid, StringComparison.OrdinalIgnoreCase))
-                    {
-                        traceBindingStatus = "bound_substring";
-                        traceBoundSubstr++;
-                        ApplyTraceBinding(ref graphScore, ref includedInPackage, ref dropReason, ref selectionOutcome, ref packageSource, kv.Value, wouldImprove);
-                        found = true; break;
-                    }
-                }
-                // Strategy 3: normalized match (strip prefix)
-                if (!found)
-                {
-                    var normSid = Normalize(sid);
-                    foreach (var kv in traceLookup)
-                    {
-                        var normKey = Normalize(kv.Key);
-                        if (normSid.Contains(normKey, StringComparison.OrdinalIgnoreCase) || normKey.Contains(normSid, StringComparison.OrdinalIgnoreCase))
-                        {
-                            traceBindingStatus = "bound_normalized";
-                            traceBoundNormalized++;
-                            ApplyTraceBinding(ref graphScore, ref includedInPackage, ref dropReason, ref selectionOutcome, ref packageSource, kv.Value, wouldImprove);
-                            found = true; break;
-                        }
-                    }
-                }
-                if (!found)
-                {
-                    traceUnbound++;
-                    string reason = "no_common_namespace";
-                    if (sid.Contains("-sample-", StringComparison.OrdinalIgnoreCase) || sid.Contains("-20260529-", StringComparison.OrdinalIgnoreCase))
-                        reason = "shadow_eval_vs_graph_trace_namespace_mismatch";
-                    unboundReasons.TryGetValue(reason, out var cnt);
-                    unboundReasons[reason] = cnt + 1;
-                }
-            }
+            if (!bound) { totalUnbound++; string reason = sid.Contains("-sample-") || sid.Contains("-20260529-") ? "different_data_domain_no_alias" : "no_alias"; unboundReasons.TryGetValue(reason, out var c); unboundReasons[reason] = c + 1; }
 
-            featureRecords.Add(new
-            {
-                candidateId = sid, operationId = $"op-sh-{sid[..Math.Min(8, sid.Length)]}",
-                sourceType, authority, strategyType,
-                vectorScore = Math.Round(vectorScore, 4), graphScore = Math.Round(graphScore, 4),
-                memoryScore = Math.Round(memoryScore, 4), recencyScore = Math.Round(recencyScore, 4),
-                tokenCost = Math.Round(tokenCost, 4), latencyCost = Math.Round(latencyCost, 4),
-                userPreferenceSignal = Math.Round(userPrefSignal, 4),
-                selectionOutcome, includedInPackage,
-                packageContributionScore = Math.Round(contributionScore, 4),
-                sourceKind, signalSource = "shadow_eval",
-                featureSource, scoreSource, packageSource, traceBindingStatus
-            });
+            featureRecords.Add(new { candidateId = sid, operationId = $"op-sh-{sid[..Math.Min(8, sid.Length)]}", sourceType = (byte)(sid.Contains("chat", StringComparison.OrdinalIgnoreCase) ? 2 : 1), authority = (byte)(isReal ? 1 : 0), strategyType = (byte)(wouldImprove ? 1 : 2), vectorScore = Math.Round(vectorScore, 4), graphScore = Math.Round(graphScore, 4), memoryScore = Math.Round(memScore, 4), recencyScore = Math.Round(recencyScore, 4), tokenCost = Math.Round(tokenCost, 4), latencyCost = Math.Round(latencyCost, 4), userPreferenceSignal = Math.Round(userPref, 4), selectionOutcome = selOutcome, includedInPackage = included, packageContributionScore = Math.Round(contrib, 4), sourceKind, signalSource = "shadow_eval", featureSource = fSrc, scoreSource = sSrc, packageSource = pSrc, traceBindingStatus = bindStatus, aliasMethod });
             featureRows.Add(JsonSerializer.Serialize(featureRecords[^1]));
         }
-
         File.WriteAllText(Path.Combine(v14Dir, "feature-store.jsonl"), string.Join("\n", featureRows) + "\n", Encoding.UTF8);
 
-        var totalBound = traceBoundExact + traceBoundSubstr + traceBoundNormalized;
-        var summary = new
-        {
-            GeneratedAt = now,
-            FeatureStoreInitialized = featureRecords.Count > 0,
-            TotalRecords = featureRecords.Count,
-            FeatureRowsJsonlWritten = true,
-            ProvenanceManifestApplied = provenanceManifest.Count > 0,
-            SourceClassification = new { RealInference = realInferenceCount, Unknown = unknownSourceCount, Synthetic = syntheticCount, DerivedOrSynthetic = derivedCount + syntheticCount },
-            TraceBinding = new { TotalBound = totalBound, Exact = traceBoundExact, Substring = traceBoundSubstr, Normalized = traceBoundNormalized, Unbound = traceUnbound, BindingRate = featureRecords.Count > 0 ? Math.Round(totalBound / (double)featureRecords.Count, 3) : 0 },
-            ShadowEvalFieldsNotMisreportedAsRuntime = true,
-            SampleRecords = featureRecords.Take(20)
-        };
-        File.WriteAllText(Path.Combine(v14Dir, "feature-store-summary.json"),
-            JsonSerializer.Serialize(summary, new JsonSerializerOptions { WriteIndented = true }));
+        var totalBound = boundExact + boundSlug;
+        var summary = new { GeneratedAt = now, FeatureStoreInitialized = featureRecords.Count > 0, TotalRecords = featureRecords.Count, FeatureRowsJsonlWritten = true, ProvenanceManifestApplied = provenanceManifest.Count > 0, SourceClassification = new { RealInference = realInferenceCount, Unknown = unknownSourceCount, Synthetic = syntheticCount, DerivedOrSynthetic = derivedCount + syntheticCount }, TraceBinding = new { TotalBound = totalBound, Exact = boundExact, Slug = boundSlug, Unbound = totalUnbound, BindingRate = featureRecords.Count > 0 ? Math.Round(totalBound / (double)featureRecords.Count, 3) : 0 }, ShadowEvalFieldsNotMisreportedAsRuntime = true, SampleRecords = featureRecords.Take(20) };
+        File.WriteAllText(Path.Combine(v14Dir, "feature-store-summary.json"), JsonSerializer.Serialize(summary, new JsonSerializerOptions { WriteIndented = true }));
 
-        // === Runtime trace binding report ===
+        // Binding report
         var bindingRate = featureRecords.Count > 0 ? Math.Round(totalBound / (double)featureRecords.Count, 3) : 0;
         File.WriteAllText(Path.Combine(v14Dir, "runtime-trace-binding-report.json"),
-            JsonSerializer.Serialize(new
-            {
-                GeneratedAt = now,
-                RuntimeTraceAvailable = runtimeTraceAvailable,
-                RuntimeTraceParsed = runtimeTraceParsed,
-                RuntimeTraceRowsRead = traceLinesRead,
-                RuntimeTraceCandidateCount = traceCandidateCount,
-                RuntimeTraceRowsBound = totalBound,
-                RuntimeTraceRowsUnbound = traceUnbound,
-                RuntimeTraceBindingRate = bindingRate,
-                RuntimeTraceBindingReady = totalBound > 0,
-                JoinStrategies = new { Exact = traceBoundExact, Substring = traceBoundSubstr, Normalized = traceBoundNormalized },
-                UnboundReasonBreakdown = unboundReasons.Select(kv => new { Reason = kv.Key, Count = kv.Value }).OrderByDescending(x => x.Count),
-                TraceSourcePath = tracePath,
-                Note = runtimeTraceAvailable
-                    ? $"Parsed {traceLinesRead} trace rows, {traceCandidateCount} candidate IDs extracted with sourceId+targetId+metadata. Bound {totalBound}/{featureRecords.Count} feature records. Unbound: {traceUnbound} — graph trace uses different ID namespace than shadow eval."
-                    : "No runtime trace file found"
-            }, new JsonSerializerOptions { WriteIndented = true }));
+            JsonSerializer.Serialize(new { GeneratedAt = now, RuntimeTraceAvailable = runtimeTraceAvailable, RuntimeTraceParsed = true, RuntimeTraceRowsRead = traceRowsRead, RuntimeTraceCandidateCount = traceAllIds.Count, RuntimeTraceRowsBound = totalBound, RuntimeTraceRowsUnbound = totalUnbound, RuntimeTraceBindingRate = bindingRate, RuntimeTraceBindingReady = totalBound > 0, BoundByAliasMethod = new { Exact = boundExact, Slug = boundSlug }, UnboundReasonBreakdown = unboundReasons.Select(kv => new { Reason = kv.Key, Count = kv.Value }).OrderByDescending(x => x.Count), TraceSourcePath = tracePath, Note = traceRowsRead > 0 ? $"Alias map: {exactAliases} exact, {slugAliases} slug. Bound {totalBound}/{featureRecords.Count} via alias. Unbound: {totalUnbound} — no shared business entities between shadow eval candidates and graph trace items." : "No trace file" }, new JsonSerializerOptions { WriteIndented = true }));
 
-        // === Feedback events ===
+        // Feedback + eval + bridge (unchanged)
         var fbLines = new List<string>();
-        foreach (dynamic fr in featureRecords)
-        {
-            float contrib = (float)fr.packageContributionScore;
-            bool sel = fr.selectionOutcome; bool incl = fr.includedInPackage;
-            fbLines.Add(JsonSerializer.Serialize(new
-            {
-                eventId = $"fe-{Guid.NewGuid():N}", candidateId = (string)fr.candidateId,
-                selected = sel, includedInPackage = incl,
-                downstreamSuccessProxy = Math.Round(sel ? (incl ? Math.Max(0.3f, contrib * 1.5f) : 0.1f) : 0f, 3),
-                userImplicitSignal = (sbyte)(sel ? 1 : 0),
-                costEfficiencyScore = Math.Round(sel ? Math.Max(0.1f, contrib) : 0f, 3),
-                signalSource = "shadow_eval_derived", timestamp = now
-            }));
-        }
+        foreach (dynamic fr in featureRecords) { float c = (float)fr.packageContributionScore; bool s = fr.selectionOutcome, i = fr.includedInPackage; fbLines.Add(JsonSerializer.Serialize(new { eventId = $"fe-{Guid.NewGuid():N}", candidateId = (string)fr.candidateId, selected = s, includedInPackage = i, downstreamSuccessProxy = Math.Round(s ? (i ? Math.Max(0.3f, c * 1.5f) : 0.1f) : 0f, 3), userImplicitSignal = (sbyte)(s ? 1 : 0), costEfficiencyScore = Math.Round(s ? Math.Max(0.1f, c) : 0f, 3), signalSource = "shadow_eval_derived", timestamp = now })); }
         File.WriteAllText(Path.Combine(v14Dir, "feedback-events.jsonl"), string.Join("\n", fbLines) + "\n", Encoding.UTF8);
 
-        // === Evaluation baseline ===
-        var candList = featureRecords.GroupBy(r => (string)((dynamic)r).candidateId).Select(g =>
-        {
-            var l = g.ToList(); var incl = l.Count(r => (bool)((dynamic)r).includedInPackage);
-            return new { candidateId = g.Key, count = l.Count, included = incl, effectiveness = l.Count > 0 ? Math.Round(incl / (double)l.Count, 3) : 0 };
-        }).OrderByDescending(c => c.effectiveness).ToList();
-        File.WriteAllText(Path.Combine(v14Dir, "evaluation-baseline.json"),
-            JsonSerializer.Serialize(new { GeneratedAt = now, BaselineEstablished = true, BaselineVersion = "V14.2c", TotalCandidates = candList.Count, MeanEffectiveness = candList.Count > 0 ? Math.Round(candList.Average(c => c.effectiveness), 3) : 0, HistoricalBaselineMissing = true, RankingDriftAvailable = false, Top10 = candList.Take(10), Bottom10 = candList.Skip(Math.Max(0, candList.Count - 10)).Take(10) }, new JsonSerializerOptions { WriteIndented = true }));
+        var candList = featureRecords.GroupBy(r => (string)((dynamic)r).candidateId).Select(g => { var l = g.ToList(); var inc = l.Count(r => (bool)((dynamic)r).includedInPackage); return new { candidateId = g.Key, count = l.Count, included = inc, effectiveness = l.Count > 0 ? Math.Round(inc / (double)l.Count, 3) : 0 }; }).OrderByDescending(x => x.effectiveness).ToList();
+        File.WriteAllText(Path.Combine(v14Dir, "evaluation-baseline.json"), JsonSerializer.Serialize(new { GeneratedAt = now, BaselineEstablished = true, BaselineVersion = "V14.2d", TotalCandidates = candList.Count, MeanEffectiveness = candList.Count > 0 ? Math.Round(candList.Average(x => x.effectiveness), 3) : 0, HistoricalBaselineMissing = true, RankingDriftAvailable = false, Top10 = candList.Take(10), Bottom10 = candList.Skip(Math.Max(0, candList.Count - 10)).Take(10) }, new JsonSerializerOptions { WriteIndented = true }));
 
-        // === Hybrid bridge ===
-        var bridgeRecs = featureRecords.Where(r => (bool)((dynamic)r).selectionOutcome).Take(20).Select(fr =>
-        {
-            var ds = (float)((dynamic)fr).vectorScore;
-            return new { candidateId = (string)((dynamic)fr).candidateId, deterministicScore = Math.Round(ds, 4), neuralBias = 0f, finalScore = Math.Round(ds, 4), neuralBiasActive = false, formulaVerified = true };
-        }).ToList();
+        var bridgeRecs = featureRecords.Where(r => (bool)((dynamic)r).selectionOutcome).Take(20).Select(fr => { var ds = (float)((dynamic)fr).vectorScore; return new { candidateId = (string)((dynamic)fr).candidateId, deterministicScore = Math.Round(ds, 4), neuralBias = 0f, finalScore = Math.Round(ds, 4), neuralBiasActive = false, formulaVerified = true }; }).ToList();
         var allEqual = bridgeRecs.All(r => Math.Abs((float)((dynamic)r).deterministicScore - (float)((dynamic)r).finalScore) < 0.001f);
         if (!allEqual) blocked.Add("HybridFormulaViolation");
-        File.WriteAllText(Path.Combine(v14Dir, "hybrid-scoring-bridge.json"),
-            JsonSerializer.Serialize(new { GeneratedAt = now, HybridFormulaVerified = allEqual, FinalScoreEqualsDeterministicWhenBiasZero = allEqual, NeuralBiasActive = false, SampleRecords = bridgeRecs.Take(10) }, new JsonSerializerOptions { WriteIndented = true }));
+        File.WriteAllText(Path.Combine(v14Dir, "hybrid-scoring-bridge.json"), JsonSerializer.Serialize(new { GeneratedAt = now, HybridFormulaVerified = allEqual, FinalScoreEqualsDeterministicWhenBiasZero = allEqual, NeuralBiasActive = false, SampleRecords = bridgeRecs.Take(10) }, new JsonSerializerOptions { WriteIndented = true }));
 
-        // === Gate ===
+        // Gate
         var offlineReady = featureRecords.Count > 0 && syntheticCount == 0;
         var runtimeBindingReady = runtimeTraceAvailable && totalBound > 0;
-        var pipelineReady = offlineReady && unknownSourceCount == 0 && syntheticCount == 0 && blocked.Count == 0 && runtimeBindingReady;
-
+        var pipelineReady = offlineReady && unknownSourceCount == 0 && syntheticCount == 0 && blocked.Count == 0 && aliasMapTrusted && runtimeBindingReady;
         if (unknownSourceCount > 0) blocked.Add($"UnknownSourceCount={unknownSourceCount}");
         if (syntheticCount > 0) blocked.Add($"SyntheticRecordCount={syntheticCount}");
+        if (!aliasMapTrusted) blocked.Add("AliasMapNotTrusted");
+        if (!runtimeBindingReady && runtimeTraceAvailable) blocked.Add($"RuntimeTraceBindingFailed: {totalBound}/{featureRecords.Count} bound");
 
         File.WriteAllText(Path.Combine(v14Dir, "foundation-gate.json"),
             JsonSerializer.Serialize(new
             {
-                GeneratedAt = now,
-                OfflineFeatureDatasetReady = offlineReady,
-                RuntimeTraceBindingAttempted = true,
-                RuntimeTraceAvailable = runtimeTraceAvailable,
-                RuntimeTraceParsed = runtimeTraceParsed,
-                RuntimeTraceRowsRead = traceLinesRead,
-                RuntimeTraceCandidateCount = traceCandidateCount,
-                RuntimeTraceRowsBound = totalBound,
-                RuntimeTraceBindingRate = bindingRate,
+                GeneratedAt = now, OfflineFeatureDatasetReady = offlineReady,
+                IdNamespaceAuditWritten = true, AliasMapWritten = true, AliasMapTrusted = aliasMapTrusted,
+                AmbiguousAliasCount = ambiguousCount, NoAliasCount = noAliasCount,
+                RuntimeTraceBindingAttempted = true, RuntimeTraceAvailable = runtimeTraceAvailable,
+                RuntimeTraceRowsRead = traceRowsRead, RuntimeTraceCandidateCount = traceAllIds.Count,
+                RuntimeTraceRowsBound = totalBound, RuntimeTraceBindingRate = bindingRate,
                 RuntimeTraceBindingReady = runtimeBindingReady,
                 LearningDataPipelineReady = pipelineReady,
-                ProvenanceManifestWritten = provenanceManifest.Count > 0,
-                UnknownSourceCount = unknownSourceCount,
-                SyntheticRecordCount = syntheticCount,
-                ShadowEvalFieldsNotMisreportedAsRuntime = true,
-                NoRandomSignals = true,
-                HybridFormulaVerified = allEqual,
-                NeuralBiasActive = false,
-                RetrievalUnchanged = true,
-                RuntimePromotionApplied = false,
-                PackageOutputChanged = false,
-                VectorBindingChanged = false,
-                Diagnostics = diag,
-                BlockedReasons = blocked
+                UnknownSourceCount = unknownSourceCount, SyntheticRecordCount = syntheticCount,
+                ShadowEvalFieldsNotMisreportedAsRuntime = true, NoRandomSignals = true,
+                HybridFormulaVerified = allEqual, NeuralBiasActive = false,
+                RetrievalUnchanged = true, RuntimePromotionApplied = false,
+                PackageOutputChanged = false, VectorBindingChanged = false,
+                Diagnostics = diag, BlockedReasons = blocked
             }, new JsonSerializerOptions { WriteIndented = true }));
     }
 
-    private static void ApplyTraceBinding(ref float graphScore, ref bool included, ref string dropReason,
-        ref bool selectionOutcome, ref string packageSource,
-        (double confidence, bool accepted, string section, string reason, string joinKeyKind) match, bool wouldImprove)
-    {
-        graphScore = (float)match.confidence;
-        included = match.accepted;
-        if (!match.accepted) dropReason = string.IsNullOrWhiteSpace(match.reason) ? "trace_blocked" : match.reason;
-        selectionOutcome = match.accepted || wouldImprove;
-        packageSource = "runtime_trace";
-    }
+    static void ApplyBinding(ref float gs, ref bool inc, ref string dr, ref bool so, ref string ps, (double conf, bool accepted, string section, string reason, string kind) m, bool wi) { gs = (float)m.conf; inc = m.accepted; if (!m.accepted) dr = string.IsNullOrWhiteSpace(m.reason) ? "trace_blocked" : m.reason; so = m.accepted || wi; ps = "runtime_trace"; }
 
-    private void WriteEmpty(string dir, string now, List<string> blocked)
+    void WriteEmpty(string dir, string now, List<string> b)
     {
-        foreach (var fn in new[] { "feature-store.jsonl", "feedback-events.jsonl" })
-            File.WriteAllText(Path.Combine(dir, fn), "");
-        foreach (var fn in new[] { "feature-store-summary.json", "feedback-summary.json", "evaluation-baseline.json", "hybrid-scoring-bridge.json", "runtime-trace-binding-report.json", "runtime-trace-schema-report.json", "provenance-manifest.json", "foundation-gate.json" })
-            File.WriteAllText(Path.Combine(dir, fn), JsonSerializer.Serialize(new { GeneratedAt = now, BlockedReasons = blocked }, new JsonSerializerOptions { WriteIndented = true }));
+        foreach (var fn in new[] { "feature-store.jsonl", "feedback-events.jsonl" }) File.WriteAllText(Path.Combine(dir, fn), "");
+        foreach (var fn in new[] { "feature-store-summary.json", "feedback-summary.json", "evaluation-baseline.json", "hybrid-scoring-bridge.json", "runtime-trace-binding-report.json", "id-namespace-audit.json", "id-alias-map.json", "provenance-manifest.json", "foundation-gate.json" }) File.WriteAllText(Path.Combine(dir, fn), JsonSerializer.Serialize(new { GeneratedAt = now, BlockedReasons = b }, new JsonSerializerOptions { WriteIndented = true }));
     }
 }

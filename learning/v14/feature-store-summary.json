@@ -1,5 +1,5 @@
 {
-  "GeneratedAt": "2026-07-01T14:50:13.8291019\u002B00:00",
+  "GeneratedAt": "2026-07-01T17:01:44.1934728\u002B00:00",
   "FeatureStoreInitialized": true,
   "TotalRecords": 87,
   "FeatureRowsJsonlWritten": true,
@@ -13,8 +13,7 @@
   "TraceBinding": {
     "TotalBound": 0,
     "Exact": 0,
-    "Substring": 0,
-    "Normalized": 0,
+    "Slug": 0,
     "Unbound": 87,
     "BindingRate": 0
   },
@@ -41,7 +40,8 @@
       "featureSource": "shadow_eval",
       "scoreSource": "shadow_eval",
       "packageSource": "shadow_eval",
-      "traceBindingStatus": "unavailable"
+      "traceBindingStatus": "unavailable",
+      "aliasMethod": "unavailable"
     },
     {
       "candidateId": "chat-sample-002",
@@ -64,7 +64,8 @@
       "featureSource": "shadow_eval",
       "scoreSource": "shadow_eval",
       "packageSource": "shadow_eval",
-      "traceBindingStatus": "unavailable"
+      "traceBindingStatus": "unavailable",
+      "aliasMethod": "unavailable"
     },
     {
       "candidateId": "chat-sample-003",
@@ -87,7 +88,8 @@
       "featureSource": "shadow_eval",
       "scoreSource": "shadow_eval",
       "packageSource": "shadow_eval",
-      "traceBindingStatus": "unavailable"
+      "traceBindingStatus": "unavailable",
+      "aliasMethod": "unavailable"
     },
     {
       "candidateId": "chat-sample-004",
@@ -110,7 +112,8 @@
       "featureSource": "shadow_eval",
       "scoreSource": "shadow_eval",
       "packageSource": "shadow_eval",
-      "traceBindingStatus": "unavailable"
+      "traceBindingStatus": "unavailable",
+      "aliasMethod": "unavailable"
     },
     {
       "candidateId": "chat-sample-005",
@@ -133,7 +136,8 @@
       "featureSource": "shadow_eval",
       "scoreSource": "shadow_eval",
       "packageSource": "shadow_eval",
-      "traceBindingStatus": "unavailable"
+      "traceBindingStatus": "unavailable",
+      "aliasMethod": "unavailable"
     },
     {
       "candidateId": "chat-sample-006",
@@ -156,7 +160,8 @@
       "featureSource": "shadow_eval",
       "scoreSource": "shadow_eval",
       "packageSource": "shadow_eval",
-      "traceBindingStatus": "unavailable"
+      "traceBindingStatus": "unavailable",
+      "aliasMethod": "unavailable"
     },
     {
       "candidateId": "chat-sample-007",
@@ -179,7 +184,8 @@
       "featureSource": "shadow_eval",
       "scoreSource": "shadow_eval",
       "packageSource": "shadow_eval",
-      "traceBindingStatus": "unavailable"
+      "traceBindingStatus": "unavailable",
+      "aliasMethod": "unavailable"
     },
     {
       "candidateId": "chat-sample-008",
@@ -202,7 +208,8 @@
       "featureSource": "shadow_eval",
       "scoreSource": "shadow_eval",
       "packageSource": "shadow_eval",
-      "traceBindingStatus": "unavailable"
+      "traceBindingStatus": "unavailable",
+      "aliasMethod": "unavailable"
     },
     {
       "candidateId": "chat-sample-009",
@@ -225,7 +232,8 @@
       "featureSource": "shadow_eval",
       "scoreSource": "shadow_eval",
       "packageSource": "shadow_eval",
-      "traceBindingStatus": "unavailable"
+      "traceBindingStatus": "unavailable",
+      "aliasMethod": "unavailable"
     },
     {
       "candidateId": "chat-sample-010",
@@ -248,7 +256,8 @@
       "featureSource": "shadow_eval",
       "scoreSource": "shadow_eval",
       "packageSource": "shadow_eval",
-      "traceBindingStatus": "unavailable"
+      "traceBindingStatus": "unavailable",
+      "aliasMethod": "unavailable"
     },
     {
       "candidateId": "project-sample-001",
@@ -271,7 +280,8 @@
       "featureSource": "shadow_eval",
       "scoreSource": "shadow_eval",
       "packageSource": "shadow_eval",
-      "traceBindingStatus": "unavailable"
+      "traceBindingStatus": "unavailable",
+      "aliasMethod": "unavailable"
     },
     {
       "candidateId": "project-sample-002",
@@ -294,7 +304,8 @@
       "featureSource": "shadow_eval",
       "scoreSource": "shadow_eval",
       "packageSource": "shadow_eval",
-      "traceBindingStatus": "unavailable"
+      "traceBindingStatus": "unavailable",
+      "aliasMethod": "unavailable"
     },
     {
       "candidateId": "project-sample-003",
@@ -317,7 +328,8 @@
       "featureSource": "shadow_eval",
       "scoreSource": "shadow_eval",
       "packageSource": "shadow_eval",
-      "traceBindingStatus": "unavailable"
+      "traceBindingStatus": "unavailable",
+      "aliasMethod": "unavailable"
     },
     {
       "candidateId": "project-sample-004",
@@ -340,7 +352,8 @@
       "featureSource": "shadow_eval",
       "scoreSource": "shadow_eval",
       "packageSource": "shadow_eval",
-      "traceBindingStatus": "unavailable"
+      "traceBindingStatus": "unavailable",
+      "aliasMethod": "unavailable"
     },
     {
       "candidateId": "project-sample-005",
@@ -363,7 +376,8 @@
       "featureSource": "shadow_eval",
       "scoreSource": "shadow_eval",
       "packageSource": "shadow_eval",
-      "traceBindingStatus": "unavailable"
+      "traceBindingStatus": "unavailable",
+      "aliasMethod": "unavailable"
     },
     {
       "candidateId": "project-sample-006",
@@ -386,7 +400,8 @@
       "featureSource": "shadow_eval",
       "scoreSource": "shadow_eval",
       "packageSource": "shadow_eval",
-      "traceBindingStatus": "unavailable"
+      "traceBindingStatus": "unavailable",
+      "aliasMethod": "unavailable"
     },
     {
       "candidateId": "project-sample-007",
@@ -409,7 +424,8 @@
       "featureSource": "shadow_eval",
       "scoreSource": "shadow_eval",
       "packageSource": "shadow_eval",
-      "traceBindingStatus": "unavailable"
+      "traceBindingStatus": "unavailable",
+      "aliasMethod": "unavailable"
     },
     {
       "candidateId": "project-sample-008",
@@ -432,7 +448,8 @@
       "featureSource": "shadow_eval",
       "scoreSource": "shadow_eval",
       "packageSource": "shadow_eval",
-      "traceBindingStatus": "unavailable"
+      "traceBindingStatus": "unavailable",
+      "aliasMethod": "unavailable"
     },
     {
       "candidateId": "project-sample-009",
@@ -455,7 +472,8 @@
       "featureSource": "shadow_eval",
       "scoreSource": "shadow_eval",
       "packageSource": "shadow_eval",
-      "traceBindingStatus": "unavailable"
+      "traceBindingStatus": "unavailable",
+      "aliasMethod": "unavailable"
     },
     {
       "candidateId": "project-sample-010",
@@ -478,7 +496,8 @@
       "featureSource": "shadow_eval",
       "scoreSource": "shadow_eval",
       "packageSource": "shadow_eval",
-      "traceBindingStatus": "unavailable"
+      "traceBindingStatus": "unavailable",
+      "aliasMethod": "unavailable"
     }
   ]
 }
