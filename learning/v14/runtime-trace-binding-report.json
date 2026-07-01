@@ -1,0 +1,18 @@
+{
+  "GeneratedAt": "2026-07-01T13:56:53.7885736\u002B00:00",
+  "RuntimeTraceAvailable": true,
+  "RuntimeTraceParsed": true,
+  "RuntimeTraceRowsRead": 30,
+  "RuntimeTraceCandidateCount": 0,
+  "RuntimeTraceRowsBound": 0,
+  "RuntimeTraceRowsUnbound": 87,
+  "RuntimeTraceBindingRate": 0,
+  "RuntimeTraceBindingReady": false,
+  "JoinMethod": "candidateId exact match, fallback to substring containment",
+  "RuntimeTraceBindingAttempted": true,
+  "TraceSourcePath": "learning\\graph-shadow\\graph-expansion-shadow-traces.jsonl",
+  "BoundByExact": 0,
+  "BoundBySubstring": 0,
+  "Unbound": 87,
+  "Note": "Successfully parsed 30 trace rows with 0 total candidate entries. Bound 0/87 feature records."
+}

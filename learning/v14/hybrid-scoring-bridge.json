@@ -1,17 +1,8 @@
 {
-  "GeneratedAt": "2026-07-01T13:43:50.8037755\u002B00:00",
-  "DeterministicScoringPreserved": true,
-  "HybridFormula": "final_score = deterministic_score \u002B neural_bias",
+  "GeneratedAt": "2026-07-01T13:56:53.7885736\u002B00:00",
   "HybridFormulaVerified": true,
   "FinalScoreEqualsDeterministicWhenBiasZero": true,
-  "HybridBridgePassed": true,
   "NeuralBiasActive": false,
-  "NeuralBiasStatus": "INACTIVE \u2014 neural_bias=0 for all records",
-  "BridgeState": {
-    "TotalRecords": 20,
-    "FormulaConsistent": true,
-    "ActivationThreshold": "V14 neural system trained AND signals \u003E= 100"
-  },
   "SampleRecords": [
     {
       "candidateId": "chat-sample-002",
