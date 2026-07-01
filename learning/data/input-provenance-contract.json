@@ -1,7 +1,7 @@
 {
-  "GeneratedAt": "2026-07-01T09:40:39.2765508\u002B00:00",
+  "GeneratedAt": "2026-07-01T10:00:06.6063912\u002B00:00",
   "InputProvenanceContractReady": true,
-  "StableEnumsReady": true,
+  "StableEnumContractReady": true,
   "EnumDefinitions": {
     "InputSourceKind": [
       "Unknown",
@@ -27,17 +27,23 @@
       "Authoritative",
       "Shadow",
       "Diagnostic",
-      "Synthetic"
+      "Synthetic",
+      "Derived"
     ],
     "LabelStatusKind": [
       "Unknown",
       "Unlabeled",
-      "WeakLabel",
-      "HumanApproved",
+      "WeakSignal",
+      "SelfEvaluated",
+      "UserPreferred",
+      "EvidenceConfirmed",
       "Rejected"
     ],
     "LearningDataKind": [
       "Unknown",
+      "InputEnvelope",
+      "Document",
+      "DocumentChunk",
       "RuntimeTrace",
       "RankingPair",
       "HardNegative",
@@ -45,7 +51,7 @@
       "ShadowEvalRow",
       "GateDecision",
       "PromotionDecision",
-      "DocumentChunk"
+      "FeedbackSignal"
     ],
     "DataUsageFlags": [
       "None",
@@ -53,14 +59,16 @@
       "Training",
       "Eval",
       "Audit",
-      "Runtime"
+      "Runtime",
+      "Retrieval",
+      "Packaging"
     ]
   },
-  "ProvenanceRules": {
-    "SyntheticNotInGate": "Synthetic authority must not have Gate usage flag",
-    "DiagnosticNotInTraining": "Diagnostic authority must not have Training usage flag",
-    "LlmNotDefaultAuthoritative": "LLM source must not be Authoritative unless explicitly labeled",
-    "EveryChunkMustTraceToDocument": "Chunk lineage must be complete and traceable",
-    "EveryDatasetMustHaveClassification": "SourceKind \u002B Authority \u002B UsageFlags required"
+  "AuthorityRules": {
+    "LlmNotAuthoritativeDefault": "LLM output \u2192 Derived or Diagnostic, never Authoritative by default",
+    "SyntheticNotInGate": "Synthetic authority must not carry Gate usage flag",
+    "DiagnosticNotInTraining": "Diagnostic/Derived authority must not carry Training unless self-evaluated",
+    "WebToolFileUserRuntimeMustBeTraceable": "Web/Tool/File/User/Runtime source \u2192 sourceRef required",
+    "TrainingTarget": "Better context selection, ranking, filtering, and return \u2014 NOT LLM training. Human labels are one feedback signal among many."
   }
 }

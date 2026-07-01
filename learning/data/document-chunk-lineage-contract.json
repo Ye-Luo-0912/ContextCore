@@ -1,9 +1,10 @@
 {
-  "GeneratedAt": "2026-07-01T09:40:39.2765508\u002B00:00",
+  "GeneratedAt": "2026-07-01T10:00:06.6063912\u002B00:00",
   "ChunkLineageContractReady": true,
+  "ChunkLineageContractHasRootInput": true,
   "EveryChunkCanTraceToDocument": true,
   "LineageChain": "chunk \u2192 documentVersion \u2192 document \u2192 rootInput",
-  "DocumentCount": 4,
+  "DocumentCount": 10,
   "Documents": [
     {
       "DocumentId": "doc-a85956eb44f37c26",
@@ -48,6 +49,72 @@
       "LineCount": 87,
       "ChunkCount": 1,
       "SourceHash": "ed17bac11555d0d2d04dfbf7ab72e62f876156359068cfb02c0ee79bd9f4bc99"
+    },
+    {
+      "DocumentId": "doc-ac9ef6134001ad00",
+      "DocumentVersionId": "doc-ac9ef6134001ad00-v1",
+      "RootInputId": "input-doc-ac9ef613",
+      "SourcePath": "wider-pilot-authorization-gate.json",
+      "SourceKind": 7,
+      "Authority": 3,
+      "LineCount": 1,
+      "ChunkCount": 1,
+      "SourceHash": "d6bbc7ac590f9bc42b210444d01c570c35b8902312ecd7a3f5374842f3c1d4cc"
+    },
+    {
+      "DocumentId": "doc-3a340d7b70d78370",
+      "DocumentVersionId": "doc-3a340d7b70d78370-v1",
+      "RootInputId": "input-doc-3a340d7b",
+      "SourcePath": "wider-pilot-authorization-record.json",
+      "SourceKind": 7,
+      "Authority": 3,
+      "LineCount": 1,
+      "ChunkCount": 1,
+      "SourceHash": "566fee8c9f2c654aee5bc80196d8a4a24a87fbe0ca9d594d6dd2836e4cb75cff"
+    },
+    {
+      "DocumentId": "doc-0b8678d872e1d6a9",
+      "DocumentVersionId": "doc-0b8678d872e1d6a9-v1",
+      "RootInputId": "input-doc-0b8678d8",
+      "SourcePath": "wider-pilot-decision-pack.json",
+      "SourceKind": 7,
+      "Authority": 3,
+      "LineCount": 1,
+      "ChunkCount": 1,
+      "SourceHash": "5c96156b578906c586179a8dd1e0ee796f377a97e6f25249cf795b418ee6b88f"
+    },
+    {
+      "DocumentId": "doc-b3345c91b76e05ba",
+      "DocumentVersionId": "doc-b3345c91b76e05ba-v1",
+      "RootInputId": "input-doc-b3345c91",
+      "SourcePath": "wider-pilot-observation-plan.json",
+      "SourceKind": 7,
+      "Authority": 3,
+      "LineCount": 1,
+      "ChunkCount": 1,
+      "SourceHash": "c1ea84e8e73f1fa530f68cefd463a9f6d0487d0b97a3f7367cf09b0399783471"
+    },
+    {
+      "DocumentId": "doc-c98d2d72d5b3a339",
+      "DocumentVersionId": "doc-c98d2d72d5b3a339-v1",
+      "RootInputId": "input-doc-c98d2d72",
+      "SourcePath": "wider-pilot-observation-window.json",
+      "SourceKind": 7,
+      "Authority": 3,
+      "LineCount": 1,
+      "ChunkCount": 1,
+      "SourceHash": "a1f1450f94602afceafa1321b459787697bb6a31ec76e3a50b24fdf0c2e57179"
+    },
+    {
+      "DocumentId": "doc-1cb22bb3202d0879",
+      "DocumentVersionId": "doc-1cb22bb3202d0879-v1",
+      "RootInputId": "input-doc-1cb22bb3",
+      "SourcePath": "wider-pilot-scope-candidates.json",
+      "SourceKind": 7,
+      "Authority": 3,
+      "LineCount": 1,
+      "ChunkCount": 1,
+      "SourceHash": "4b99a5828055247e00452948e535e295563f3f5d7b04f856dcf5398f269d2494"
     }
   ]
 }

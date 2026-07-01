@@ -1,6 +1,5 @@
 namespace ContextCore.Core.Services.Learning.V13;
 
-// Byte-backed enums for stable classification
 public enum InputSourceKind : byte
 {
     Unknown = 0,
@@ -30,29 +29,35 @@ public enum DataAuthorityKind : byte
     Authoritative = 1,
     Shadow = 2,
     Diagnostic = 3,
-    Synthetic = 4
+    Synthetic = 4,
+    Derived = 5
 }
 
 public enum LabelStatusKind : byte
 {
     Unknown = 0,
     Unlabeled = 1,
-    WeakLabel = 2,
-    HumanApproved = 3,
-    Rejected = 4
+    WeakSignal = 2,
+    SelfEvaluated = 3,
+    UserPreferred = 4,
+    EvidenceConfirmed = 5,
+    Rejected = 6
 }
 
 public enum LearningDataKind : byte
 {
     Unknown = 0,
-    RuntimeTrace = 1,
-    RankingPair = 2,
-    HardNegative = 3,
-    RouterExample = 4,
-    ShadowEvalRow = 5,
-    GateDecision = 6,
-    PromotionDecision = 7,
-    DocumentChunk = 8
+    InputEnvelope = 1,
+    Document = 2,
+    DocumentChunk = 3,
+    RuntimeTrace = 4,
+    RankingPair = 5,
+    HardNegative = 6,
+    RouterExample = 7,
+    ShadowEvalRow = 8,
+    GateDecision = 9,
+    PromotionDecision = 10,
+    FeedbackSignal = 11
 }
 
 [Flags]
@@ -63,5 +68,7 @@ public enum DataUsageFlags : ushort
     Training = 2,
     Eval = 4,
     Audit = 8,
-    Runtime = 16
+    Runtime = 16,
+    Retrieval = 32,
+    Packaging = 64
 }
