@@ -136,7 +136,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
             QueryText = request.QueryText,
             Tags = request.RequiredTags,
             Types = request.RequiredTypes,
-            Take = int.MaxValue,
+            Take = 500, // V13: capped from int.MaxValue — legacy package path safe bound
             IncludeContent = true
         };
 

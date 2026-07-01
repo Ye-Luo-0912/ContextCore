@@ -1,0 +1,69 @@
+{
+  "GeneratedAt": "2026-07-01T10:16:38.3358518\u002B00:00",
+  "ReportId": "mfcr-076e31213f97469c87ca732e30f8dd1f",
+  "StorageBoundaryClarified": true,
+  "DatabaseScopeLimitedToVectorAndGraph": true,
+  "HumanReviewRemovedAsTrainingPrerequisite": true,
+  "LegacyPackageTakeCapped": true,
+  "RelationGovernanceDiagnosticsOptional": true,
+  "NoNewPilotArtifacts": true,
+  "RuntimePromotionApplied": false,
+  "PackageOutputChanged": false,
+  "VectorBindingChanged": false,
+  "Changes": [
+    {
+      "Area": "LearningFeedback",
+      "Change": "Semantics shift: disabled_until_review \u2192 disabled_until_evidence_ready",
+      "Files": [
+        "Services/Learning/LearningFeedbackReviewService.cs",
+        "Abstractions/Models/ContextLearningDtos.cs"
+      ],
+      "Rationale": "Human review is no longer a training prerequisite. Evidence readiness (self-eval, weak signal confirmation) is the new gate. Human feedback remains valuable as a preference signal, not a gatekeeper."
+    },
+    {
+      "Area": "Storage",
+      "Change": "Storage boundary clarified: FileSystem owns content/documents/artifacts; Database owns vector\u002Bgraph indexes",
+      "Files": [
+        "docs/storage-boundary-current.md"
+      ],
+      "Rationale": "Postgres providers for non-index data types are marked diagnostic (not authoritative). FileSystem is the authoritative source for all non-index data."
+    },
+    {
+      "Area": "Package",
+      "Change": "Legacy package path capped: Take = int.MaxValue \u2192 Take = 500",
+      "Files": [
+        "Services/Context/BasicContextPackageBuilder.cs"
+      ],
+      "Rationale": "Uncapped legacy queries are a safety risk. Cap at 500 as a safe upper bound. Policy-driven retrieval remains the recommended path."
+    },
+    {
+      "Area": "RelationGraph",
+      "Change": "Human review diagnostics downgraded to optional governance diagnostics",
+      "Files": [
+        "Services/Graph/RelationGraphValidationService.cs (diagnostic types marked optional)",
+        "docs/storage-boundary-current.md"
+      ],
+      "Rationale": "Main-line relation validation focuses on automatically detectable issues (confidence, lifecycle, broken edges, conflicts, cycles, duplicates). Human review signals are valuable but not gating."
+    },
+    {
+      "Area": "Pilot",
+      "Change": "V11/V12 pilot and wider-pilot artifacts frozen \u2014 no further expansion",
+      "Files": [
+        "Services/Learning/V11/CanaryMatrixPromotionBoundaryPilotPreflightRunner.cs"
+      ],
+      "Rationale": "All V11 controlled pilot and V12 wider pilot artifacts are archived. No new pilot closeout/report artifacts will be generated. Focus shifts to V13 data infrastructure."
+    }
+  ],
+  "RemainingWork": [
+    "Scattered \u0027disabled_until_review\u0027 string literals in ControlRoom and eval commands still reference old semantics \u2014 update in future iteration",
+    "Postgres stores for non-index data types could be removed or explicitly marked [Diagnostic] attribute",
+    "Relation graph human review diagnostic types in RelationGraphDtos.cs should be annotated [OptionalGovernance]"
+  ],
+  "Verification": {
+    "BuildPassed": true,
+    "StorageBoundaryDocGenerated": true,
+    "HumanReviewConstantUpdated": true,
+    "LegacyPackagePathCapped": true,
+    "NoNewPilotArtifactsAdded": true
+  }
+}

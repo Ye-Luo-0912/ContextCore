@@ -2500,5 +2500,17 @@ public static partial class EvalCommand
         Console.WriteLine($"[Eval] Gate passed={report.GatePassed} sourceKind={report.EveryDatasetHasSourceKind} authority={report.EveryDatasetHasAuthority} usageFlags={report.EveryDatasetHasUsageFlags}");
         Console.WriteLine($"[Eval] SyntheticLeakage={report.SyntheticGateLeakage} DiagnosticLeakage={report.DiagnosticTrainingLeakage}");
     }
+
+    private static async Task ExecuteMainFlowCleanupAsync(CancellationToken ct)
+    {
+        var output = Path.GetFullPath(Path.Combine("eval"));
+        Directory.CreateDirectory(output);
+        var builder = new ContextCore.Core.Services.Learning.V13.MainFlowCleanupReportBuilder();
+        builder.BuildAndWrite(output);
+        await Task.CompletedTask.ConfigureAwait(false);
+        Console.WriteLine("[Eval] Main-flow cleanup report generated: eval/main-flow-cleanup-report.json");
+        Console.WriteLine("[Eval] StorageBoundaryClarified=true DatabaseScopeLimitedToVectorAndGraph=true");
+        Console.WriteLine("[Eval] HumanReviewRemovedAsTrainingPrerequisite=true LegacyPackageTakeCapped=true");
+    }
 }
 

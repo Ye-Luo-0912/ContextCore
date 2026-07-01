@@ -361,7 +361,7 @@ public sealed class LearningFeedbackReviewRecord
 
     public bool RedactionChecked { get; init; }
 
-    public string TrainingUse { get; init; } = "disabled_until_review";
+    public string TrainingUse { get; init; } = "disabled_until_evidence_ready"; // V13: was "disabled_until_review"
 
     public DateTimeOffset ReviewedAt { get; init; }
 

@@ -11,7 +11,8 @@ namespace ContextCore.Core.Services;
 public sealed class LearningFeedbackReviewService
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
-    private const string DisabledTrainingUse = "disabled_until_review";
+    /// V13: "disabled_until_evidence_ready" — human review is no longer a training prerequisite.
+    private const string DisabledTrainingUse = "disabled_until_evidence_ready";
     private readonly ILearningFeedbackStore _feedbackStore;
     private readonly ILearningFeedbackReviewStore _reviewStore;
 
@@ -277,7 +278,8 @@ public sealed class LearningFeedbackReviewService
 public sealed class LearningFeedbackFeatureCandidateBuilder
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
-    private const string DisabledTrainingUse = "disabled_until_review";
+    /// V13: "disabled_until_evidence_ready"
+    private const string DisabledTrainingUse = "disabled_until_evidence_ready";
     private readonly ILearningFeedbackStore _feedbackStore;
     private readonly ILearningFeedbackReviewStore _reviewStore;
 
