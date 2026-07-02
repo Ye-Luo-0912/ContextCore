@@ -1,5 +1,8 @@
 {
-  "GeneratedAt": "2026-07-02T08:15:16.3969694\u002B00:00",
+  "GeneratedAt": "2026-07-02T10:34:02.6171182\u002B00:00",
   "HybridFormulaVerified": true,
-  "NeuralBiasActive": false
+  "NeuralBiasActive": false,
+  "RuntimePromotionApplied": false,
+  "PackageOutputChanged": false,
+  "VectorBindingChanged": false
 }

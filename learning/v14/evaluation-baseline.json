@@ -1,8 +1,69 @@
 {
-  "GeneratedAt": "2026-07-02T08:15:16.3969694\u002B00:00",
-  "BaselineEstablished": false,
-  "BaselineVersion": "V14.3b",
-  "TotalCandidates": 0,
-  "MeanEffectiveness": 0,
-  "Top10": []
+  "GeneratedAt": "2026-07-02T10:34:02.6171182\u002B00:00",
+  "BaselineEstablished": true,
+  "BaselineVersion": "V14.Full",
+  "TotalCandidates": 17,
+  "MeanEffectiveness": 0.647,
+  "Top10": [
+    {
+      "candidateId": "task-smoke",
+      "count": 1,
+      "included": 1,
+      "effectiveness": 1
+    },
+    {
+      "candidateId": "hc-01",
+      "count": 1,
+      "included": 1,
+      "effectiveness": 1
+    },
+    {
+      "candidateId": "hc-02",
+      "count": 1,
+      "included": 1,
+      "effectiveness": 1
+    },
+    {
+      "candidateId": "wm-03",
+      "count": 1,
+      "included": 1,
+      "effectiveness": 1
+    },
+    {
+      "candidateId": "wm-02",
+      "count": 1,
+      "included": 1,
+      "effectiveness": 1
+    },
+    {
+      "candidateId": "wm-01",
+      "count": 1,
+      "included": 1,
+      "effectiveness": 1
+    },
+    {
+      "candidateId": "gc-02",
+      "count": 1,
+      "included": 1,
+      "effectiveness": 1
+    },
+    {
+      "candidateId": "gc-01",
+      "count": 1,
+      "included": 1,
+      "effectiveness": 1
+    },
+    {
+      "candidateId": "ctx-07",
+      "count": 1,
+      "included": 1,
+      "effectiveness": 1
+    },
+    {
+      "candidateId": "ctx-08",
+      "count": 1,
+      "included": 1,
+      "effectiveness": 1
+    }
+  ]
 }

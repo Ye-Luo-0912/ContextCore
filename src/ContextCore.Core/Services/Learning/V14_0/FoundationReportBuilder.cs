@@ -8,7 +8,6 @@ public sealed class FoundationReportBuilder
 {
     public void BuildAndWrite(string outputDir)
     {
-        // Read real trace file(s) — use latest smoke or main trace
         var v14Dir = Path.Combine(outputDir, "learning", "v14");
         Directory.CreateDirectory(v14Dir);
 
@@ -29,8 +28,8 @@ public sealed class FoundationReportBuilder
         bool hasTrace = traceRowsRead > 0;
 
         // === Seed row detection ===
-        bool noSeedRows = traceLines.All(l => !l.Contains("sink-init", StringComparison.Ordinal) && !l.Contains("seed-test", StringComparison.Ordinal) && !l.Contains("op-sink", StringComparison.Ordinal));
-        int seedRowCount = traceLines.Count(l => l.Contains("sink-init", StringComparison.Ordinal) || l.Contains("seed-test", StringComparison.Ordinal) || l.Contains("op-sink", StringComparison.Ordinal));
+        bool noSeedRows = traceLines.All(l => !l.Contains("sink-init", StringComparison.Ordinal) && !l.Contains("seed-test", StringComparison.Ordinal) && !l.Contains("op-sink", StringComparison.Ordinal) && !l.Contains("\"sourceId\":\"seed-", StringComparison.Ordinal) && !l.Contains("\"operationId\":\"seed", StringComparison.Ordinal));
+        int seedRowCount = traceLines.Count(l => l.Contains("sink-init", StringComparison.Ordinal) || l.Contains("seed-test", StringComparison.Ordinal) || l.Contains("op-sink", StringComparison.Ordinal) || l.Contains("\"sourceId\":\"seed-", StringComparison.Ordinal) || l.Contains("\"operationId\":\"seed", StringComparison.Ordinal));
 
         // === Trace metrics from content ===
         int selectedCount = 0, droppedCount = 0;
@@ -43,7 +42,7 @@ public sealed class FoundationReportBuilder
             try
             {
                 var d = JsonDocument.Parse(line).RootElement;
-                if (d.TryGetProperty("selectedByScoring", out var sel) && sel.GetBoolean()) selectedCount++; else droppedCount++;
+                if (d.TryGetProperty("includedInPackage", out var inc) && inc.GetBoolean()) selectedCount++; else droppedCount++;
                 if (d.TryGetProperty("section", out var sec)) { var s = sec.GetString() ?? "unknown"; sectionMap.TryGetValue(s, out var sc); sectionMap[s] = sc + 1; }
                 if (d.TryGetProperty("retrievalChannel", out var ch)) { var c = (int)(ch.GetByte()); channelMap.TryGetValue(c, out var cc); channelMap[c] = cc + 1; }
                 if (d.TryGetProperty("traceSource", out var ts) && ts.TryGetByte(out var tsv) && tsv == 3) producedByRuntimeSink++;
@@ -63,20 +62,48 @@ public sealed class FoundationReportBuilder
             foreach (var f in r.MissingOptionalFields) { fieldBreakdown.TryGetValue(f, out var c); fieldBreakdown[f] = c + 1; }
         }
 
+        var hasSectionCoverage = sectionMap.Count > 0;
+        var hasMultiChannel = channelMap.Keys.Distinct().Count() > 1 || (channelMap.Count == 1 && !channelMap.ContainsKey(2));
+        var selectedTraceCount = traceLines.Count(l => { try { var d = JsonDocument.Parse(l).RootElement; return d.TryGetProperty("includedInPackage", out var inc) && inc.GetBoolean(); } catch { return false; } });
+        var droppedTraceCount = traceRowsRead - selectedTraceCount;
+
         File.WriteAllText(Path.Combine(v14Dir, "runtime-candidate-trace-validation.json"),
-            JsonSerializer.Serialize(new { GeneratedAt = now, TotalRowsRead = traceRowsRead, MissingCriticalFieldCount = validator.MissingCriticalFieldCount, MissingOptionalFieldCount = validator.MissingOptionalFieldCount, MissingFieldBreakdown = fieldBreakdown.OrderByDescending(kv => kv.Value).Select(kv => new { Field = kv.Key, Count = kv.Value }), Reports = validator.Reports.Take(10) }, new JsonSerializerOptions { WriteIndented = true }));
+            JsonSerializer.Serialize(new
+            {
+                GeneratedAt = now,
+                TotalRows = traceRowsRead,
+                ParseErrorCount = validator.ParseErrorCount,
+                MissingCriticalFieldCount = validator.MissingCriticalFieldCount,
+                MissingOptionalFieldCount = validator.MissingOptionalFieldCount,
+                MissingFieldBreakdown = fieldBreakdown.OrderByDescending(kv => kv.Value).Select(kv => new { Field = kv.Key, Count = kv.Value }),
+                SeedTraceRowCount = seedRowCount,
+                SelectedTraceCount = selectedTraceCount,
+                DroppedTraceCount = droppedTraceCount,
+                SectionCoverage = sectionMap.OrderByDescending(kv => kv.Value).Select(kv => new { Section = kv.Key, Count = kv.Value }),
+                RetrievalChannelCoverage = channelMap.OrderByDescending(kv => kv.Value).Select(kv => new { Channel = kv.Key, Count = kv.Value }),
+                Reports = validator.Reports.Take(10)
+            }, new JsonSerializerOptions { WriteIndented = true }));
 
         // Contract doc + instrumentation plan (keep minimal)
         File.WriteAllText(Path.Combine(v14Dir, "runtime-candidate-trace-contract.json"),
-            JsonSerializer.Serialize(new { GeneratedAt = now, RuntimeCandidateTraceContractReady = true, SchemaVersion = "V14.3b", Fields = new[] { "operationId", "requestId", "candidateId", "sourceId", "sourceType", "authority", "strategyType", "retrievalChannel", "traceSource", "deterministicScore", "strategyScore", "finalScore", "selectedByScoring", "includedInPackage", "droppedReason", "tokenCost", "section", "recordedAt" } }, new JsonSerializerOptions { WriteIndented = true }));
+            JsonSerializer.Serialize(new { GeneratedAt = now, RuntimeCandidateTraceContractReady = true, SchemaVersion = "V14.Full", Fields = new[] { "operationId", "requestId", "candidateId", "sourceId", "sourceType", "authority", "strategyType", "retrievalChannel", "traceSource", "deterministicScore", "strategyScore", "finalScore", "selectedByScoring", "includedInPackage", "droppedReason", "tokenCost", "section", "recordedAt" } }, new JsonSerializerOptions { WriteIndented = true }));
         File.WriteAllText(Path.Combine(v14Dir, "runtime-candidate-instrumentation-plan.json"),
             JsonSerializer.Serialize(new { GeneratedAt = now, RuntimeCandidateTraceWriterEnabled = hasTrace, RuntimeCandidateTraceSinkImplemented = true, SectionPaths = new[] { "current_task", "hard_constraints", "recent_context", "working_memory", "stable_memory", "global_context", "soft_constraints", "related_context", "legacy" } }, new JsonSerializerOptions { WriteIndented = true }));
 
-        // Gate conditions
+        // Gate conditions (stronger)
         if (!hasTrace) blocked.Add("NoRuntimeCandidateTraceRows");
+        if (traceRowsRead > 0 && !hasTrace) blocked.Add("TraceFileEmpty");
         if (!noSeedRows) blocked.Add($"SeedTestRowsDetected: {seedRowCount} seed rows");
+        if (seedRowCount > 0) blocked.Add($"SeedRowCount={seedRowCount}");
         if (producedByRuntimeSink == 0) blocked.Add("NoTraceRowsFromRuntimeSink");
+        if (producedByRuntimeSink != traceRowsRead) blocked.Add($"producedByRuntimeSink({producedByRuntimeSink}) != total({traceRowsRead})");
         if (validator.MissingCriticalFieldCount > 0) blocked.Add($"MissingCriticalFieldCount={validator.MissingCriticalFieldCount}");
+        if (validator.ParseErrorCount > 0) blocked.Add($"ParseErrorCount={validator.ParseErrorCount}");
+        if (traceRowsRead < 10) blocked.Add($"RuntimeCandidateTraceRowsRead={traceRowsRead} < 10");
+        if (selectedTraceCount == 0) blocked.Add("SelectedTraceCount=0");
+        if (droppedTraceCount == 0) blocked.Add("DroppedTraceCount=0");
+        if (!hasSectionCoverage) blocked.Add("SectionCoverageEmpty");
+        if (!hasMultiChannel) blocked.Add("RetrievalChannelCoverageInsufficient");
 
         // Feature store from real traces (no synthesis)
         var featureRows = new List<string>();
@@ -99,18 +126,32 @@ public sealed class FoundationReportBuilder
         File.WriteAllText(Path.Combine(v14Dir, "feedback-events.jsonl"), string.Join("\n", fbLines) + "\n", Encoding.UTF8);
 
         File.WriteAllText(Path.Combine(v14Dir, "feature-store-summary.json"),
-            JsonSerializer.Serialize(new { GeneratedAt = now, FeatureStoreInitialized = hasTrace, TotalRecords = featureRows.Count, FeatureRowsFromRuntimeTrace = featureRows.Count, TraceRowsProducedByRuntimeSink = producedByRuntimeSink > 0, FoundationReportBuilderDoesNotSynthesizeRuntimeTrace = true, NoSeedTraceRows = noSeedRows }, new JsonSerializerOptions { WriteIndented = true }));
+            JsonSerializer.Serialize(new { GeneratedAt = now, FeatureStoreInitialized = hasTrace, TotalRecords = featureRows.Count, FeatureRowsFromRuntimeTrace = featureRows.Count, FeedbackRowsFromRuntimeTrace = fbLines.Count, TraceRowsProducedByRuntimeSink = producedByRuntimeSink > 0, FoundationReportBuilderDoesNotSynthesizeRuntimeTrace = true, NoSeedTraceRows = noSeedRows }, new JsonSerializerOptions { WriteIndented = true }));
 
         // Evaluation baseline
         var cands = traceLines.Select(line => { try { var d = JsonDocument.Parse(line).RootElement; return (d.TryGetProperty("candidateId", out var c) ? c.GetString() ?? "" : "", d.TryGetProperty("includedInPackage", out var i) && i.GetBoolean()); } catch { return ("", false); } }).GroupBy(x => x.Item1).Where(g => !string.IsNullOrWhiteSpace(g.Key)).Select(g => new { candidateId = g.Key, count = g.Count(), included = g.Count(x => x.Item2), effectiveness = g.Count() > 0 ? Math.Round(g.Count(x => x.Item2) / (double)g.Count(), 3) : 0 }).OrderByDescending(x => x.effectiveness).ToList();
         File.WriteAllText(Path.Combine(v14Dir, "evaluation-baseline.json"),
-            JsonSerializer.Serialize(new { GeneratedAt = now, BaselineEstablished = hasTrace, BaselineVersion = "V14.3b", TotalCandidates = cands.Count, MeanEffectiveness = cands.Count > 0 ? Math.Round(cands.Average(x => x.effectiveness), 3) : 0, Top10 = cands.Take(10) }, new JsonSerializerOptions { WriteIndented = true }));
+            JsonSerializer.Serialize(new { GeneratedAt = now, BaselineEstablished = hasTrace, BaselineVersion = "V14.Full", TotalCandidates = cands.Count, MeanEffectiveness = cands.Count > 0 ? Math.Round(cands.Average(x => x.effectiveness), 3) : 0, Top10 = cands.Take(10) }, new JsonSerializerOptions { WriteIndented = true }));
 
         File.WriteAllText(Path.Combine(v14Dir, "hybrid-scoring-bridge.json"),
-            JsonSerializer.Serialize(new { GeneratedAt = now, HybridFormulaVerified = true, NeuralBiasActive = false }, new JsonSerializerOptions { WriteIndented = true }));
+            JsonSerializer.Serialize(new { GeneratedAt = now, HybridFormulaVerified = true, NeuralBiasActive = false, RuntimePromotionApplied = false, PackageOutputChanged = false, VectorBindingChanged = false }, new JsonSerializerOptions { WriteIndented = true }));
 
-        // Gate decision
-        bool pipelineReady = hasTrace && noSeedRows && producedByRuntimeSink > 0 && validator.MissingCriticalFieldCount == 0 && featureRows.Count > 0 && blocked.Count == 0;
+        // Gate decision (strengthened)
+        bool pipelineReady = hasTrace
+            && traceRowsRead >= 10
+            && noSeedRows
+            && seedRowCount == 0
+            && producedByRuntimeSink == traceRowsRead
+            && producedByRuntimeSink > 0
+            && validator.MissingCriticalFieldCount == 0
+            && validator.ParseErrorCount == 0
+            && featureRows.Count == traceRowsRead
+            && fbLines.Count == traceRowsRead
+            && selectedTraceCount > 0
+            && droppedTraceCount > 0
+            && hasSectionCoverage
+            && hasMultiChannel
+            && blocked.Count == 0;
 
         File.WriteAllText(Path.Combine(v14Dir, "foundation-gate.json"),
             JsonSerializer.Serialize(new
@@ -118,23 +159,26 @@ public sealed class FoundationReportBuilder
                 GeneratedAt = now,
                 RuntimeCandidateTraceSinkImplemented = true,
                 RuntimeCandidateTraceSinkEnabled = hasTrace,
+                TraceRowsProducedByRuntimeSink = producedByRuntimeSink == traceRowsRead && producedByRuntimeSink > 0,
                 RuntimeCandidateTraceRowsRead = traceRowsRead,
-                RuntimeCandidateTraceRowsProducedByRuntimeSink = producedByRuntimeSink > 0,
-                TraceRowsProducedByRuntimeSink = producedByRuntimeSink > 0,
+                producedByRuntimeSink = producedByRuntimeSink,
                 NoSeedTraceRows = noSeedRows,
                 SeedRowCount = seedRowCount,
                 FeatureRowsFromRuntimeTrace = featureRows.Count,
+                FeedbackRowsFromRuntimeTrace = fbLines.Count,
                 FoundationReportBuilderDoesNotSynthesizeRuntimeTrace = true,
                 MissingCriticalFieldCount = validator.MissingCriticalFieldCount,
                 MissingOptionalFieldCount = validator.MissingOptionalFieldCount,
+                ParseErrorCount = validator.ParseErrorCount,
                 MissingFieldBreakdown = fieldBreakdown.OrderByDescending(kv => kv.Value).Select(kv => new { Field = kv.Key, Count = kv.Value }),
-                SelectedTraceCount = selectedCount,
-                DroppedTraceCount = droppedCount,
+                SelectedTraceCount = selectedTraceCount,
+                DroppedTraceCount = droppedTraceCount,
                 SectionCoverage = sectionMap.OrderByDescending(kv => kv.Value).Select(kv => new { Section = kv.Key, Count = kv.Value }),
                 RetrievalChannelCoverage = channelMap.OrderByDescending(kv => kv.Value).Select(kv => new { Channel = kv.Key, Count = kv.Value }),
                 RuntimeTraceBindingReady = hasTrace,
                 RuntimeTraceBindingRate = hasTrace ? 1.0 : 0,
                 LearningDataPipelineReady = pipelineReady,
+                V14FullClosureReady = pipelineReady,
                 ShadowEvalAliasRepairDeprecated = true,
                 SyntheticRecordCount = 0,
                 NoRandomSignals = true,
@@ -157,13 +201,17 @@ public sealed class FoundationReportBuilder
         md.AppendLine("## Gate Status");
         md.AppendLine();
         md.AppendLine($"- LearningDataPipelineReady: {pipelineReady}");
+        md.AppendLine($"- V14FullClosureReady: {pipelineReady}");
         md.AppendLine($"- NoSeedTraceRows: {noSeedRows} (seed rows found: {seedRowCount})");
         md.AppendLine($"- TraceRowsRead: {traceRowsRead}");
         md.AppendLine($"- ProducedByRuntimeSink: {producedByRuntimeSink} of {traceRowsRead}");
-        md.AppendLine($"- SelectedTraceCount: {selectedCount}");
-        md.AppendLine($"- DroppedTraceCount: {droppedCount}");
+        md.AppendLine($"- ParseErrorCount: {validator.ParseErrorCount}");
+        md.AppendLine($"- SelectedTraceCount: {selectedTraceCount}");
+        md.AppendLine($"- DroppedTraceCount: {droppedTraceCount}");
         md.AppendLine($"- MissingCriticalFieldCount: {validator.MissingCriticalFieldCount}");
         md.AppendLine($"- MissingOptionalFieldCount: {validator.MissingOptionalFieldCount}");
+        md.AppendLine($"- FeatureRowsFromRuntimeTrace: {featureRows.Count}");
+        md.AppendLine($"- FeedbackRowsFromRuntimeTrace: {fbLines.Count}");
         md.AppendLine();
         md.AppendLine("## Section Coverage");
         foreach (var kv in sectionMap.OrderByDescending(kv => kv.Value))
@@ -188,6 +236,6 @@ public sealed class FoundationReportBuilder
         File.WriteAllText(Path.Combine(v14Dir, "v14-full-closure-report.md"), md.ToString());
 
         File.WriteAllText(Path.Combine(v14Dir, "provenance-manifest.json"),
-            JsonSerializer.Serialize(new { GeneratedAt = now, ProvenanceManifestWritten = true }, new JsonSerializerOptions { WriteIndented = true }));
+            JsonSerializer.Serialize(new { GeneratedAt = now, ProvenanceManifestWritten = true, SchemaVersion = "V14.Full" }, new JsonSerializerOptions { WriteIndented = true }));
     }
 }

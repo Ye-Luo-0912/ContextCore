@@ -2569,32 +2569,165 @@ public static partial class EvalCommand
         var tracePath = System.IO.Path.Combine("learning", "v14", "runtime-candidate-trace.jsonl");
         System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(tracePath)!);
 
-        using var sink = new ContextCore.Core.Services.Learning.V14_0.FileRuntimeCandidateTraceSink(tracePath);
+        if (File.Exists(tracePath)) File.Delete(tracePath);
+
+        var sink = new ContextCore.Core.Services.Learning.V14_0.FileRuntimeCandidateTraceSink(tracePath);
         ContextCore.Core.Services.Learning.V14_0.RuntimeCandidateTraceSinkAccessor.Current = sink;
         ContextCore.Core.Services.Learning.V14_0.RuntimeCandidateTraceSinkAccessor.CurrentOperationId = "op-smoke-v14";
         ContextCore.Core.Services.Learning.V14_0.RuntimeCandidateTraceSinkAccessor.CurrentRequestId = "req-smoke-v14";
 
         try
         {
-            // Build a real package using in-memory stores
+            var now = DateTimeOffset.UtcNow;
+            var ws = "smoke-ws";
+            var col = "smoke-col";
+
+            // Seed context store with 14 items for recent_context - distinctive prefixes for drop detection
             var store = new ContextCore.Storage.InMemory.Stores.InMemoryContextStore();
+            for (int i = 1; i <= 14; i++)
+            {
+                var prefix = (char)('A' + (i - 1) % 26);
+                await store.SaveAsync(new ContextCore.Abstractions.Models.ContextItem
+                {
+                    Id = $"ctx-{i:D2}", WorkspaceId = ws, CollectionId = col,
+                    Type = "document", Title = $"SmokeDoc_{i:D2}",
+                    Content = $"[{prefix}] Smoke corpus item {i:D2} content ".PadRight(500, 'y'),
+                    Importance = i * 0.5, CreatedAt = now.AddMinutes(-i), UpdatedAt = now.AddMinutes(-i)
+                }, ct).ConfigureAwait(false);
+            }
+
+            // Seed memory store with working + stable + deprecated for drop traces
+            var memStore = new ContextCore.Storage.InMemory.InMemoryMemoryStore();
+            for (int i = 1; i <= 3; i++)
+            {
+                await memStore.SaveAsync(new ContextCore.Abstractions.Models.ContextMemoryItem
+                {
+                    Id = $"wm-{i:D2}", WorkspaceId = ws, CollectionId = col,
+                    Layer = ContextCore.Abstractions.Models.ContextMemoryLayer.Working,
+                    Status = ContextCore.Abstractions.Models.ContextMemoryStatus.Active,
+                    Type = "note", Content = $"WM{i} smoke data",
+                    Importance = 0.7 + i * 0.05, Confidence = 0.8, UpdatedAt = now.AddMinutes(-i)
+                }, ct).ConfigureAwait(false);
+            }
+            for (int i = 1; i <= 2; i++)
+            {
+                await memStore.SaveAsync(new ContextCore.Abstractions.Models.ContextMemoryItem
+                {
+                    Id = $"sm-{i:D2}", WorkspaceId = ws, CollectionId = col,
+                    Layer = ContextCore.Abstractions.Models.ContextMemoryLayer.Stable,
+                    Status = ContextCore.Abstractions.Models.ContextMemoryStatus.Stable,
+                    Type = "note", Content = $"SM{i} stable data",
+                    Importance = 0.6, Confidence = 0.9, UpdatedAt = now.AddDays(-i)
+                }, ct).ConfigureAwait(false);
+            }
+            // Deprecated working memory - triggers explicit drops in non-audit mode
+            await memStore.SaveAsync(new ContextCore.Abstractions.Models.ContextMemoryItem
+            {
+                Id = "wm-dep", WorkspaceId = ws, CollectionId = col,
+                Layer = ContextCore.Abstractions.Models.ContextMemoryLayer.Working,
+                Status = ContextCore.Abstractions.Models.ContextMemoryStatus.Deprecated,
+                Type = "note", Content = "Deprecated working memory item",
+                Importance = 0.3, Confidence = 0.4, UpdatedAt = now.AddDays(-30)
+            }, ct).ConfigureAwait(false);
+            await memStore.SetCurrentTaskAsync(new ContextCore.Abstractions.Models.WorkingMemoryCurrentTask
+            {
+                TaskId = "task-smoke", WorkspaceId = ws, CollectionId = col,
+                Title = "V14 Smoke", Description = "Runtime trace smoke test task",
+                Status = "active", CreatedAt = now, UpdatedAt = now
+            }, ct).ConfigureAwait(false);
+
+            // Seed constraint store: active + deprecated for drop traces
+            var constraintStore = new ContextCore.Storage.InMemory.Stores.InMemoryConstraintStore();
+            for (int i = 1; i <= 2; i++)
+            {
+                await constraintStore.SaveAsync(new ContextCore.Abstractions.Models.ContextConstraint
+                {
+                    Id = $"hc-{i:D2}", WorkspaceId = ws, CollectionId = col,
+                    Level = ContextCore.Abstractions.Models.ConstraintLevel.Hard,
+                    Status = ContextCore.Abstractions.Models.ContextMemoryStatus.Active,
+                    Content = $"HC{i}: mandatory smoke rule",
+                    Confidence = 0.9, CreatedAt = now, UpdatedAt = now
+                }, ct).ConfigureAwait(false);
+                await constraintStore.SaveAsync(new ContextCore.Abstractions.Models.ContextConstraint
+                {
+                    Id = $"sc-{i:D2}", WorkspaceId = ws, CollectionId = col,
+                    Level = ContextCore.Abstractions.Models.ConstraintLevel.Soft,
+                    Status = ContextCore.Abstractions.Models.ContextMemoryStatus.Active,
+                    Content = $"SC{i}: preferred smoke guideline",
+                    Confidence = 0.7, CreatedAt = now, UpdatedAt = now
+                }, ct).ConfigureAwait(false);
+            }
+            // Deprecated constraints - trigger explicit drops
+            await constraintStore.SaveAsync(new ContextCore.Abstractions.Models.ContextConstraint
+            {
+                Id = "hc-dep", WorkspaceId = ws, CollectionId = col,
+                Level = ContextCore.Abstractions.Models.ConstraintLevel.Hard,
+                Status = ContextCore.Abstractions.Models.ContextMemoryStatus.Deprecated,
+                Content = "Deprecated hard constraint",
+                Confidence = 0.3, CreatedAt = now.AddDays(-60), UpdatedAt = now.AddDays(-60)
+            }, ct).ConfigureAwait(false);
+            await constraintStore.SaveAsync(new ContextCore.Abstractions.Models.ContextConstraint
+            {
+                Id = "sc-dep", WorkspaceId = ws, CollectionId = col,
+                Level = ContextCore.Abstractions.Models.ConstraintLevel.Soft,
+                Status = ContextCore.Abstractions.Models.ContextMemoryStatus.Rejected,
+                Content = "Rejected soft constraint",
+                Confidence = 0.2, CreatedAt = now.AddDays(-60), UpdatedAt = now.AddDays(-60)
+            }, ct).ConfigureAwait(false);
+
+            // Seed global context store
+            var globalStore = new ContextCore.Storage.InMemory.InMemoryGlobalContextStore();
+            for (int i = 1; i <= 2; i++)
+            {
+                await globalStore.SaveAsync(new ContextCore.Abstractions.Models.ContextGlobalItem
+                {
+                    Id = $"gc-{i:D2}", WorkspaceId = ws, CollectionId = col,
+                    Type = "context", Content = $"GC{i} global smoke",
+                    Importance = 0.5 + i * 0.1, CreatedAt = now, UpdatedAt = now
+                }, ct).ConfigureAwait(false);
+            }
+
+            // Seed relation store for related_context
+            var relationStore = new ContextCore.Storage.InMemory.InMemoryRelationStore();
+            await relationStore.SaveAsync(new ContextCore.Abstractions.Models.ContextRelation
+            {
+                Id = "rel-01", WorkspaceId = ws, CollectionId = col,
+                SourceId = "wm-01", TargetId = "sm-01",
+                RelationType = "references", Weight = 0.8, Confidence = 0.9, CreatedAt = now
+            }, ct).ConfigureAwait(false);
+
             var tokenizer = new ContextCore.Core.DefaultContextTokenizerResolver();
-            var builder = new ContextCore.Core.BasicContextPackageBuilder(store, null, null, null, null, null, tokenizer);
+            var builder = new ContextCore.Core.BasicContextPackageBuilder(
+                store, constraintStore, globalStore, memStore, relationStore,
+                null, tokenizer, memStore);
+
+            // Low token budget to force some sections to be dropped
+            var policy = new ContextCore.Abstractions.Models.ContextPackagePolicy
+            {
+                Id = "smoke-pol", WorkspaceId = ws, CollectionId = col,
+                Name = "V14Smoke", TokenBudget = 500,
+                IncludeGlobalContext = true,
+                IncludeHardConstraints = true,
+                IncludeSoftConstraints = true,
+                IncludeWorkingMemory = true,
+                IncludeStableMemory = true,
+                IncludeRecentRawContext = true,
+                MaxRecentItems = 3,
+                SectionOrder = new[] { "current_task" }
+            };
 
             var request = new ContextCore.Abstractions.Models.ContextPackageRequest
             {
-                WorkspaceId = "smoke-ws-v14",
-                CollectionId = "smoke-col-v14",
-                TokenBudget = 4000,
-                QueryText = "smoke test query for runtime trace validation"
+                WorkspaceId = ws, CollectionId = col,
+                TokenBudget = 500, QueryText = "smoke",
+                Policy = policy
             };
-
             var result = await builder.BuildDetailedAsync(request, ct).ConfigureAwait(false);
-            Console.WriteLine($"[Smoke] Package built: sections={result.Package.Sections.Count} selected={result.SelectedItems.Count} dropped={result.DroppedItems.Count}");
+            Console.WriteLine($"[Smoke] Package builder exercised: sections={result.Package.Sections.Count} selected={result.SelectedItems.Count} dropped={result.DroppedItems.Count}");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[Smoke] Build failed (expected with empty stores): {ex.GetType().Name}");
+            Console.WriteLine($"[Smoke] Builder error: {ex.GetType().Name}: {ex.Message}");
         }
         finally
         {
@@ -2602,10 +2735,10 @@ public static partial class EvalCommand
             ContextCore.Core.Services.Learning.V14_0.RuntimeCandidateTraceSinkAccessor.Current = new ContextCore.Core.Services.Learning.V14_0.NullRuntimeCandidateTraceSink();
         }
 
-        var fb = new ContextCore.Core.Services.Learning.V14_0.FoundationReportBuilder();
-        fb.BuildAndWrite(".");
-        Console.WriteLine("[Eval] V14 Runtime Trace Smoke completed");
-        Console.WriteLine($"[Eval] TraceSink rows written: {sink.WriteCount}");
+        sink.Dispose(); // close file before FoundationReportBuilder reads it
+
+        new ContextCore.Core.Services.Learning.V14_0.FoundationReportBuilder().BuildAndWrite(".");
+        Console.WriteLine("[Eval] V14 Runtime Trace Smoke done");
     }
 }
 

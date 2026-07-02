@@ -1,25 +1,39 @@
 # V14-Full Closure Report
 
-Generated: 2026-07-02T08:15:16.3969694+00:00
+Generated: 2026-07-02T10:34:02.6171182+00:00
 
 ## Gate Status
 
-- LearningDataPipelineReady: False
+- LearningDataPipelineReady: True
+- V14FullClosureReady: True
 - NoSeedTraceRows: True (seed rows found: 0)
-- TraceRowsRead: 0
-- ProducedByRuntimeSink: 0 of 0
-- SelectedTraceCount: 0
-- DroppedTraceCount: 0
+- TraceRowsRead: 17
+- ProducedByRuntimeSink: 17 of 17
+- ParseErrorCount: 0
+- SelectedTraceCount: 11
+- DroppedTraceCount: 6
 - MissingCriticalFieldCount: 0
 - MissingOptionalFieldCount: 0
+- FeatureRowsFromRuntimeTrace: 17
+- FeedbackRowsFromRuntimeTrace: 17
 
 ## Section Coverage
+- hard_constraints: 3
+- working_memory: 3
+- recent_context: 3
+- soft_constraints: 3
+- global_context: 2
+- stable_memory: 2
+- current_task: 1
 
 ## Retrieval Channel Coverage
+- Channel 2: 7
+- Channel 6: 6
+- Channel 4: 3
+- Channel 5: 1
 
 ## Blocked Reasons
-- NoRuntimeCandidateTraceRows
-- NoTraceRowsFromRuntimeSink
+- NONE
 
 ## Artifacts
 - runtime-candidate-trace.jsonl: runtime trace source
@@ -28,4 +42,4 @@ Generated: 2026-07-02T08:15:16.3969694+00:00
 - feedback-events.jsonl: derived feedback signals
 - foundation-gate.json: quality gate
 
-V14FullClosureReady: False
+V14FullClosureReady: True

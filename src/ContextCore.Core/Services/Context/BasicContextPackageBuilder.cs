@@ -189,11 +189,12 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                     sectionName,
                     sectionResult.Reason,
                     sectionResult.ActualTokens));
+                WriteTraceRow(candidate, sectionName, true, sectionResult.Reason, selectedByScoring: true);
             }
                 else
                 {
                     droppedItems.Add(CreateDropped(candidate, "token budget exhausted"));
-                    WriteTraceRow(candidate, sectionName, false, "token budget exhausted");
+                    WriteTraceRow(candidate, sectionName, false, "token budget exhausted", selectedByScoring: true);
                 }
         }
 
@@ -348,9 +349,11 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
             }
             droppedItems.AddRange(hardConstraints
                 .Where(item => !IsActive(item))
-                .Select(item => CreateDropped(
-                    PackageTraceCandidate.FromConstraint(item, "hard_constraint", 100, EstimatePackageTokens(item.Content, tokenContext)),
-                    "constraint is deprecated or rejected")));
+                .Select(item => {
+                    var c = PackageTraceCandidate.FromConstraint(item, "hard_constraint", 100, EstimatePackageTokens(item.Content, tokenContext));
+                    WriteTraceRow(c, "hard_constraints", false, "constraint is deprecated or rejected", selectedByScoring: false);
+                    return CreateDropped(c, "constraint is deprecated or rejected");
+                }));
 
             var hardCandidates = activeHardConstraints
                 .Select(item => PackageTraceCandidate.FromConstraint(item, "hard_constraint", 100, EstimatePackageTokens(item.Content, tokenContext)))
@@ -515,6 +518,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                 {
                     foreach (var candidate in historicalCandidates)
                     {
+                        WriteTraceRow(candidate, "historical_context", false, "deprecated memory is excluded in non-audit mode", selectedByScoring: false);
                         droppedItems.Add(CreateDropped(candidate, "deprecated memory is excluded in non-audit mode"));
                     }
                 }
@@ -572,9 +576,11 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
             }
 
             droppedItems.AddRange(excludedRecent.Select(item =>
-                CreateDropped(
-                    PackageTraceCandidate.FromRecent(item, "recent_context", item.Relevance * 79.0, EstimatePackageTokens(item.Content, tokenContext)),
-                    item.ExcludeReason ?? "recent context excluded")));
+            {
+                var c = PackageTraceCandidate.FromRecent(item, "recent_context", item.Relevance * 79.0, EstimatePackageTokens(item.Content, tokenContext));
+                WriteTraceRow(c, "recent_context", false, item.ExcludeReason ?? "recent context excluded", selectedByScoring: false);
+                return CreateDropped(c, item.ExcludeReason ?? "recent context excluded");
+            }));
 
             var recentCandidates = includedRecent
                 .Select(item => PackageTraceCandidate.FromRecent(item, "recent_context", item.Relevance * 79.0, EstimatePackageTokens(item.Content, tokenContext)))
@@ -693,9 +699,11 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
             }
             droppedItems.AddRange(softConstraints
                 .Where(item => !IsActive(item))
-                .Select(item => CreateDropped(
-                    PackageTraceCandidate.FromConstraint(item, "soft_constraint", 15.0, EstimatePackageTokens(item.Content, tokenContext)),
-                    "constraint is deprecated or rejected")));
+                .Select(item => {
+                    var c = PackageTraceCandidate.FromConstraint(item, "soft_constraint", 15.0, EstimatePackageTokens(item.Content, tokenContext));
+                    WriteTraceRow(c, "soft_constraints", false, "constraint is deprecated or rejected", selectedByScoring: false);
+                    return CreateDropped(c, "constraint is deprecated or rejected");
+                }));
 
             var softCandidates = activeSoftConstraints
                 .Select(item => PackageTraceCandidate.FromConstraint(item, "soft_constraint", 15.0, EstimatePackageTokens(item.Content, tokenContext)))
@@ -3597,6 +3605,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                         }
                     }
 
+                    WriteTraceRow(candidate, sectionName, false, "referenced by duplicate section", selectedByScoring: true);
                     selectedItems.Add(CreateDecision(
                         candidate,
                         sectionName,
@@ -3628,6 +3637,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                 else
                 {
                     droppedItems.Add(CreateDropped(candidate, "token budget exhausted"));
+                    WriteTraceRow(candidate, sectionName, false, "token budget exhausted", selectedByScoring: true);
                 }
             }
         }
@@ -3636,31 +3646,35 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
             foreach (var candidate in candidates)
             {
                 droppedItems.Add(CreateDropped(candidate, sectionResult.Reason));
-                WriteTraceRow(candidate, sectionName, false, sectionResult.Reason);
+                WriteTraceRow(candidate, sectionName, false, sectionResult.Reason, selectedByScoring: false);
             }
         }
     }
 
-    private static void WriteTraceRow(PackageTraceCandidate c, string section, bool included, string reason)
+    private static void WriteTraceRow(PackageTraceCandidate c, string section, bool included, string reason,
+        bool selectedByScoring = true)
     {
         var sink = RuntimeCandidateTraceSinkAccessor.Current;
         if (!sink.Enabled) return;
         try
         {
+            var kind = c.Kind;
+            var (srcType, auth, stratType, chan) = MapTraceFields(kind, section, c);
             sink.Write(new RuntimeCandidateTraceRow
             {
                 OperationId = RuntimeCandidateTraceSinkAccessor.CurrentOperationId ?? "unknown",
                 RequestId = RuntimeCandidateTraceSinkAccessor.CurrentRequestId ?? "unknown",
                 CandidateId = c.Id,
                 SourceId = c.Id,
-                SourceType = (byte)1,
-                Authority = (byte)1,
-                StrategyType = (byte)2,
-                RetrievalChannel = (byte)2, // Memory
+                SourceType = srcType,
+                Authority = auth,
+                StrategyType = stratType,
+                RetrievalChannel = chan,
                 TraceSource = (byte)3, // PackageTrace
                 DeterministicScore = c.Score,
+                StrategyScore = c.Score,
                 FinalScore = c.Score,
-                SelectedByScoring = included,
+                SelectedByScoring = selectedByScoring,
                 IncludedInPackage = included,
                 DroppedReason = included ? "" : reason,
                 TokenCost = c.EstimatedTokens,
@@ -3668,6 +3682,62 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
             });
         }
         catch { /* trace write failure must not affect main flow */ }
+    }
+
+    private static (byte sourceType, byte authority, byte strategyType, byte retrievalChannel) MapTraceFields(
+        string kind, string section, PackageTraceCandidate c)
+    {
+        var kindLower = kind?.ToLowerInvariant() ?? section?.ToLowerInvariant() ?? "";
+        var sectionLower = section?.ToLowerInvariant() ?? "";
+
+        byte sourceType = kindLower switch
+        {
+            "raw" or "legacy" => 1,
+            "current_task" => 6,
+            "hard_constraint" or "soft_constraint" or "merged_constraint" => 3,
+            "working_memory" or "stable_memory" or "historical_context" => 2,
+            "global_context" => 4,
+            "recent_context" => 5,
+            "related_context" => 7,
+            _ => 1
+        };
+
+        byte authority = kindLower switch
+        {
+            "raw" or "legacy" or "recent_context" => 2,
+            "current_task" => 5,
+            "hard_constraint" or "soft_constraint" or "merged_constraint" or "constraints" => 1,
+            "working_memory" => 5,
+            "stable_memory" => 1,
+            "global_context" => 1,
+            "related_context" => 4,
+            "historical_context" => 3,
+            _ => 1
+        };
+
+        byte strategyType = kindLower switch
+        {
+            "current_task" => 4,
+            "hard_constraint" or "soft_constraint" or "merged_constraint" or "constraints" => 3,
+            "working_memory" or "recent_context" => 1,
+            "stable_memory" => 2,
+            "global_context" => 2,
+            "related_context" => 5,
+            "raw" or "legacy" => 1,
+            _ => 1
+        };
+
+        byte retrievalChannel = sectionLower switch
+        {
+            "raw" or "legacy" => sectionLower == "legacy" ? (byte)4 : (byte)4,
+            "current_task" => (byte)5,
+            "hard_constraints" or "soft_constraints" or "constraints" => kindLower.Contains("constraint") ? (byte)6 : (byte)2,
+            "working_memory" or "stable_memory" or "global_context" or "historical_context" => (byte)2,
+            "recent_context" => (byte)4,
+            "related_context" => (byte)3,
+            _ => (byte)2
+        };
+        return (sourceType, authority, strategyType, retrievalChannel);
     }
 
     private static void AddSectionDecisions(

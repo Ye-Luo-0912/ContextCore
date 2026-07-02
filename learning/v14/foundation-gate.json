@@ -1,24 +1,73 @@
 {
-  "GeneratedAt": "2026-07-02T08:15:16.3969694\u002B00:00",
+  "GeneratedAt": "2026-07-02T10:34:02.6171182\u002B00:00",
   "RuntimeCandidateTraceSinkImplemented": true,
-  "RuntimeCandidateTraceSinkEnabled": false,
-  "RuntimeCandidateTraceRowsRead": 0,
-  "RuntimeCandidateTraceRowsProducedByRuntimeSink": false,
-  "TraceRowsProducedByRuntimeSink": false,
+  "RuntimeCandidateTraceSinkEnabled": true,
+  "TraceRowsProducedByRuntimeSink": true,
+  "RuntimeCandidateTraceRowsRead": 17,
+  "producedByRuntimeSink": 17,
   "NoSeedTraceRows": true,
   "SeedRowCount": 0,
-  "FeatureRowsFromRuntimeTrace": 0,
+  "FeatureRowsFromRuntimeTrace": 17,
+  "FeedbackRowsFromRuntimeTrace": 17,
   "FoundationReportBuilderDoesNotSynthesizeRuntimeTrace": true,
   "MissingCriticalFieldCount": 0,
   "MissingOptionalFieldCount": 0,
+  "ParseErrorCount": 0,
   "MissingFieldBreakdown": [],
-  "SelectedTraceCount": 0,
-  "DroppedTraceCount": 0,
-  "SectionCoverage": [],
-  "RetrievalChannelCoverage": [],
-  "RuntimeTraceBindingReady": false,
-  "RuntimeTraceBindingRate": 0,
-  "LearningDataPipelineReady": false,
+  "SelectedTraceCount": 11,
+  "DroppedTraceCount": 6,
+  "SectionCoverage": [
+    {
+      "Section": "hard_constraints",
+      "Count": 3
+    },
+    {
+      "Section": "working_memory",
+      "Count": 3
+    },
+    {
+      "Section": "recent_context",
+      "Count": 3
+    },
+    {
+      "Section": "soft_constraints",
+      "Count": 3
+    },
+    {
+      "Section": "global_context",
+      "Count": 2
+    },
+    {
+      "Section": "stable_memory",
+      "Count": 2
+    },
+    {
+      "Section": "current_task",
+      "Count": 1
+    }
+  ],
+  "RetrievalChannelCoverage": [
+    {
+      "Channel": 2,
+      "Count": 7
+    },
+    {
+      "Channel": 6,
+      "Count": 6
+    },
+    {
+      "Channel": 4,
+      "Count": 3
+    },
+    {
+      "Channel": 5,
+      "Count": 1
+    }
+  ],
+  "RuntimeTraceBindingReady": true,
+  "RuntimeTraceBindingRate": 1,
+  "LearningDataPipelineReady": true,
+  "V14FullClosureReady": true,
   "ShadowEvalAliasRepairDeprecated": true,
   "SyntheticRecordCount": 0,
   "NoRandomSignals": true,
@@ -29,8 +78,5 @@
   "PackageOutputChanged": false,
   "VectorBindingChanged": false,
   "Diagnostics": [],
-  "BlockedReasons": [
-    "NoRuntimeCandidateTraceRows",
-    "NoTraceRowsFromRuntimeSink"
-  ]
+  "BlockedReasons": []
 }

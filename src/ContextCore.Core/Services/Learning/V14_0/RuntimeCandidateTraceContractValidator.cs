@@ -9,12 +9,13 @@ public sealed class RuntimeCandidateTraceContractValidator
 
     public int MissingCriticalFieldCount { get; private set; }
     public int MissingOptionalFieldCount { get; private set; }
+    public int ParseErrorCount { get; private set; }
     public IReadOnlyList<RuntimeCandidateTraceMissingFieldReport> Reports { get; private set; } = Array.Empty<RuntimeCandidateTraceMissingFieldReport>();
 
     public void Validate(IReadOnlyList<string> jsonLines)
     {
         var reports = new List<RuntimeCandidateTraceMissingFieldReport>();
-        int crit = 0, opt = 0;
+        int crit = 0, opt = 0, parseErr = 0;
         foreach (var line in jsonLines)
         {
             if (string.IsNullOrWhiteSpace(line)) continue;
@@ -47,10 +48,11 @@ public sealed class RuntimeCandidateTraceContractValidator
                     });
                 }
             }
-            catch { crit++; reports.Add(new RuntimeCandidateTraceMissingFieldReport { RowIdentifier = "parse_error", MissingCriticalFields = new[] { "json_parse" } }); }
+            catch { parseErr++; reports.Add(new RuntimeCandidateTraceMissingFieldReport { RowIdentifier = "parse_error", MissingCriticalFields = new[] { "json_parse" } }); }
         }
         MissingCriticalFieldCount = crit;
         MissingOptionalFieldCount = opt;
+        ParseErrorCount = parseErr;
         Reports = reports;
     }
 }
