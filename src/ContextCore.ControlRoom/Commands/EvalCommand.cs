@@ -407,6 +407,7 @@ public static partial class EvalCommand
             !string.Equals(subcommand, "strategy-scoring-registry", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "neural-selection", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "v14-foundation", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "v14-runtime-trace-smoke", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "formal-evidence-stabilization-replay-pilot-readiness", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "formal-evidence-stabilization-replay-pilot-readiness-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "learning-formal-evidence-realization-r1-pack", StringComparison.OrdinalIgnoreCase) &&
@@ -752,6 +753,7 @@ public static partial class EvalCommand
         Console.WriteLine("  eval strategy-scoring-registry");
         Console.WriteLine("  eval neural-selection (feature schema + model spec + hybrid scoring)");
         Console.WriteLine("  eval v14-foundation (feature store + feedback + evaluation)");
+        Console.WriteLine("  eval v14-runtime-trace-smoke (real package build trace)");
             Console.WriteLine("  eval learning-formal-evidence-realization-r1-pack");
             Console.WriteLine("  eval learning-formal-evidence-realization-r1-pack-gate");
             Console.WriteLine("  eval dto-split-plan");
@@ -2386,6 +2388,12 @@ public static partial class EvalCommand
         if (string.Equals(subcommand, "v14-foundation", StringComparison.OrdinalIgnoreCase))
         {
             await ExecuteV14FoundationAsync(cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        if (string.Equals(subcommand, "v14-runtime-trace-smoke", StringComparison.OrdinalIgnoreCase))
+        {
+            await ExecuteV14RuntimeTraceSmokeAsync(cancellationToken).ConfigureAwait(false);
             return;
         }
 

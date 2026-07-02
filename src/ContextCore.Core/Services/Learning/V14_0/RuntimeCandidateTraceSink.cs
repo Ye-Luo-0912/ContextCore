@@ -35,7 +35,7 @@ public sealed class FileRuntimeCandidateTraceSink : IRuntimeCandidateTraceSink, 
         _path = filePath ?? System.IO.Path.Combine("learning", "v14", "runtime-candidate-trace.jsonl");
         var dir = System.IO.Path.GetDirectoryName(_path);
         if (!string.IsNullOrWhiteSpace(dir)) System.IO.Directory.CreateDirectory(dir);
-        try { _writer = new StreamWriter(_path, true, Encoding.UTF8) { AutoFlush = false }; }
+        try { _writer = new StreamWriter(new FileStream(_path, FileMode.Append, FileAccess.Write, FileShare.Read), Encoding.UTF8) { AutoFlush = false }; }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"[TraceSink] Failed to open {_path}: {ex.Message}");

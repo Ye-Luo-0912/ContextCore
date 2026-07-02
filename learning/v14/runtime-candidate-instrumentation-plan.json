@@ -1,11 +1,16 @@
 {
-  "GeneratedAt": "2026-07-02T07:27:12.8612162\u002B00:00",
-  "RuntimeCandidateTraceWriterEnabled": true,
+  "GeneratedAt": "2026-07-02T08:15:16.3969694\u002B00:00",
+  "RuntimeCandidateTraceWriterEnabled": false,
   "RuntimeCandidateTraceSinkImplemented": true,
-  "ShadowEvalAliasRepairDeprecated": true,
-  "InstrumentationPoints": [
-    "BasicContextPackageBuilder.AddSectionDecisionsWithDedup",
-    "BasicContextPackageBuilder.AddSectionDecisions",
-    "RetrievalPackingPolicy.Pack (planned)"
+  "SectionPaths": [
+    "current_task",
+    "hard_constraints",
+    "recent_context",
+    "working_memory",
+    "stable_memory",
+    "global_context",
+    "soft_constraints",
+    "related_context",
+    "legacy"
   ]
 }

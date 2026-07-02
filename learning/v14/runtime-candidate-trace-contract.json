@@ -1,8 +1,8 @@
 {
-  "GeneratedAt": "2026-07-02T07:27:12.8612162\u002B00:00",
+  "GeneratedAt": "2026-07-02T08:15:16.3969694\u002B00:00",
   "RuntimeCandidateTraceContractReady": true,
   "SchemaVersion": "V14.3b",
-  "TraceRowFields": [
+  "Fields": [
     "operationId",
     "requestId",
     "candidateId",

@@ -1,9 +1,9 @@
 {
-  "GeneratedAt": "2026-07-02T07:27:12.8612162\u002B00:00",
-  "FeatureStoreInitialized": true,
-  "TotalRecords": 1,
-  "FeatureRowsFromRuntimeTrace": 1,
-  "TraceRowsProducedByRuntimeSink": true,
+  "GeneratedAt": "2026-07-02T08:15:16.3969694\u002B00:00",
+  "FeatureStoreInitialized": false,
+  "TotalRecords": 0,
+  "FeatureRowsFromRuntimeTrace": 0,
+  "TraceRowsProducedByRuntimeSink": false,
   "FoundationReportBuilderDoesNotSynthesizeRuntimeTrace": true,
-  "Note": "All traces written by RuntimeCandidateTraceSink in main pipeline. No synthesis in builder."
+  "NoSeedTraceRows": true
 }

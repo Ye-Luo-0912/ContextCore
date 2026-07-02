@@ -2557,29 +2557,55 @@ public static partial class EvalCommand
 
     private static async Task ExecuteV14FoundationAsync(CancellationToken ct)
     {
-        var tracePath = System.IO.Path.Combine("learning", "v14", $"runtime-candidate-trace.jsonl");
-        System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(tracePath)!);
-        // Write a minimal valid trace line so the builder has something to read
-        // (in production, the package builder would write real traces)
-        if (!System.IO.File.Exists(tracePath))
-        {
-            var sampleRow = System.Text.Json.JsonSerializer.Serialize(new {
-                operationId = "op-sink-init", requestId = "req-sink-init", candidateId = "sink-init-001",
-                sourceId = "sink-init-001", sourceType = (byte)1, authority = (byte)1, strategyType = (byte)2,
-                retrievalChannel = (byte)1, traceSource = (byte)3,
-                deterministicScore = 0.5, strategyScore = 0.5, finalScore = 0.5,
-                selectedByScoring = true, includedInPackage = true, droppedReason = "",
-                tokenCost = 0.01, section = "test", recordedAt = DateTimeOffset.UtcNow.ToString("O")
-            });
-            System.IO.File.WriteAllText(tracePath, sampleRow + "\n");
-        }
-
         var builder = new ContextCore.Core.Services.Learning.V14_0.FoundationReportBuilder();
         builder.BuildAndWrite(".");
         await Task.CompletedTask.ConfigureAwait(false);
         Console.WriteLine("[Eval] V14 Foundation artifacts generated");
-        Console.WriteLine("[Eval] RuntimeCandidateTraceSinkImplemented=true FeatureStoreInitialized=true");
-        Console.WriteLine("[Eval] DeterministicScoringPreserved=true NoLLMTraining=true RetrievalUnchanged=true");
+        Console.WriteLine("[Eval] DeterministicScoringPreserved=true RetrievalUnchanged=true");
+    }
+
+    private static async Task ExecuteV14RuntimeTraceSmokeAsync(CancellationToken ct)
+    {
+        var tracePath = System.IO.Path.Combine("learning", "v14", "runtime-candidate-trace.jsonl");
+        System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(tracePath)!);
+
+        using var sink = new ContextCore.Core.Services.Learning.V14_0.FileRuntimeCandidateTraceSink(tracePath);
+        ContextCore.Core.Services.Learning.V14_0.RuntimeCandidateTraceSinkAccessor.Current = sink;
+        ContextCore.Core.Services.Learning.V14_0.RuntimeCandidateTraceSinkAccessor.CurrentOperationId = "op-smoke-v14";
+        ContextCore.Core.Services.Learning.V14_0.RuntimeCandidateTraceSinkAccessor.CurrentRequestId = "req-smoke-v14";
+
+        try
+        {
+            // Build a real package using in-memory stores
+            var store = new ContextCore.Storage.InMemory.Stores.InMemoryContextStore();
+            var tokenizer = new ContextCore.Core.DefaultContextTokenizerResolver();
+            var builder = new ContextCore.Core.BasicContextPackageBuilder(store, null, null, null, null, null, tokenizer);
+
+            var request = new ContextCore.Abstractions.Models.ContextPackageRequest
+            {
+                WorkspaceId = "smoke-ws-v14",
+                CollectionId = "smoke-col-v14",
+                TokenBudget = 4000,
+                QueryText = "smoke test query for runtime trace validation"
+            };
+
+            var result = await builder.BuildDetailedAsync(request, ct).ConfigureAwait(false);
+            Console.WriteLine($"[Smoke] Package built: sections={result.Package.Sections.Count} selected={result.SelectedItems.Count} dropped={result.DroppedItems.Count}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Smoke] Build failed (expected with empty stores): {ex.GetType().Name}");
+        }
+        finally
+        {
+            await sink.FlushAsync(ct).ConfigureAwait(false);
+            ContextCore.Core.Services.Learning.V14_0.RuntimeCandidateTraceSinkAccessor.Current = new ContextCore.Core.Services.Learning.V14_0.NullRuntimeCandidateTraceSink();
+        }
+
+        var fb = new ContextCore.Core.Services.Learning.V14_0.FoundationReportBuilder();
+        fb.BuildAndWrite(".");
+        Console.WriteLine("[Eval] V14 Runtime Trace Smoke completed");
+        Console.WriteLine($"[Eval] TraceSink rows written: {sink.WriteCount}");
     }
 }
 

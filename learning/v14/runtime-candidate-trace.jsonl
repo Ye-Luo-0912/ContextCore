@@ -1,1 +1,1 @@
-{"operationId":"op-sink-init","requestId":"req-sink-init","candidateId":"sink-init-001","sourceId":"sink-init-001","sourceType":1,"authority":1,"strategyType":2,"retrievalChannel":1,"traceSource":3,"deterministicScore":0.5,"strategyScore":0.5,"finalScore":0.5,"selectedByScoring":true,"includedInPackage":true,"droppedReason":"","tokenCost":0.01,"section":"test","recordedAt":"2026-07-02T07:27:12.8290767\u002B00:00"}
+﻿
