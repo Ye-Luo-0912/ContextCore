@@ -3,6 +3,7 @@ using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services;
 using ContextCore.Core.Services.Graph;
+using ContextCore.Core.Services.Learning.V14_0;
 
 namespace ContextCore.Core;
 
@@ -189,10 +190,11 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                     sectionResult.Reason,
                     sectionResult.ActualTokens));
             }
-            else
-            {
-                droppedItems.Add(CreateDropped(candidate, sectionResult.Reason));
-            }
+                else
+                {
+                    droppedItems.Add(CreateDropped(candidate, "token budget exhausted"));
+                    WriteTraceRow(candidate, sectionName, false, "token budget exhausted");
+                }
         }
 
         var package = CreatePackage(request, request.CollectionId, sections, sourceRefs, estimatedTokens, tokenContext);
@@ -3618,6 +3620,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                         sectionName,
                         sectionResult.Reason,
                         candidate.EstimatedTokens);
+                    WriteTraceRow(candidate, sectionName, true, sectionResult.Reason);
                     selectedItems.Add(decision);
                     globalSelectedIds.Add(candidate.Id);
                     primaryDecisions[candidate.Id] = decision;
@@ -3633,8 +3636,38 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
             foreach (var candidate in candidates)
             {
                 droppedItems.Add(CreateDropped(candidate, sectionResult.Reason));
+                WriteTraceRow(candidate, sectionName, false, sectionResult.Reason);
             }
         }
+    }
+
+    private static void WriteTraceRow(PackageTraceCandidate c, string section, bool included, string reason)
+    {
+        var sink = RuntimeCandidateTraceSinkAccessor.Current;
+        if (!sink.Enabled) return;
+        try
+        {
+            sink.Write(new RuntimeCandidateTraceRow
+            {
+                OperationId = RuntimeCandidateTraceSinkAccessor.CurrentOperationId ?? "unknown",
+                RequestId = RuntimeCandidateTraceSinkAccessor.CurrentRequestId ?? "unknown",
+                CandidateId = c.Id,
+                SourceId = c.Id,
+                SourceType = (byte)1,
+                Authority = (byte)1,
+                StrategyType = (byte)2,
+                RetrievalChannel = (byte)2, // Memory
+                TraceSource = (byte)3, // PackageTrace
+                DeterministicScore = c.Score,
+                FinalScore = c.Score,
+                SelectedByScoring = included,
+                IncludedInPackage = included,
+                DroppedReason = included ? "" : reason,
+                TokenCost = c.EstimatedTokens,
+                Section = section
+            });
+        }
+        catch { /* trace write failure must not affect main flow */ }
     }
 
     private static void AddSectionDecisions(

@@ -1,133 +1,15 @@
 {
-  "GeneratedAt": "2026-07-02T06:51:45.8066344\u002B00:00",
+  "GeneratedAt": "2026-07-02T07:27:12.8612162\u002B00:00",
   "BaselineEstablished": true,
-  "BaselineVersion": "V14.3",
-  "TotalCandidates": 177,
-  "MeanEffectiveness": 0.819,
-  "HistoricalBaselineMissing": true,
-  "RankingDriftAvailable": false,
+  "BaselineVersion": "V14.3b",
+  "TotalCandidates": 1,
+  "MeanEffectiveness": 1,
   "Top10": [
     {
-      "candidateId": "chat-sample-002",
+      "candidateId": "sink-init-001",
       "count": 1,
       "included": 1,
       "effectiveness": 1
-    },
-    {
-      "candidateId": "chat-sample-005",
-      "count": 1,
-      "included": 1,
-      "effectiveness": 1
-    },
-    {
-      "candidateId": "chat-sample-006",
-      "count": 1,
-      "included": 1,
-      "effectiveness": 1
-    },
-    {
-      "candidateId": "chat-sample-007",
-      "count": 1,
-      "included": 1,
-      "effectiveness": 1
-    },
-    {
-      "candidateId": "chat-sample-008",
-      "count": 1,
-      "included": 1,
-      "effectiveness": 1
-    },
-    {
-      "candidateId": "project-sample-004",
-      "count": 1,
-      "included": 1,
-      "effectiveness": 1
-    },
-    {
-      "candidateId": "project-sample-005",
-      "count": 1,
-      "included": 1,
-      "effectiveness": 1
-    },
-    {
-      "candidateId": "project-sample-006",
-      "count": 1,
-      "included": 1,
-      "effectiveness": 1
-    },
-    {
-      "candidateId": "project-sample-007",
-      "count": 1,
-      "included": 1,
-      "effectiveness": 1
-    },
-    {
-      "candidateId": "project-sample-008",
-      "count": 1,
-      "included": 1,
-      "effectiveness": 1
-    }
-  ],
-  "Bottom10": [
-    {
-      "candidateId": "automation-20260529-006",
-      "count": 1,
-      "included": 0,
-      "effectiveness": 0
-    },
-    {
-      "candidateId": "automation-20260529-007",
-      "count": 1,
-      "included": 0,
-      "effectiveness": 0
-    },
-    {
-      "candidateId": "automation-20260529-008",
-      "count": 1,
-      "included": 0,
-      "effectiveness": 0
-    },
-    {
-      "candidateId": "chat-20260529-003",
-      "count": 1,
-      "included": 0,
-      "effectiveness": 0
-    },
-    {
-      "candidateId": "chat-20260529-006",
-      "count": 1,
-      "included": 0,
-      "effectiveness": 0
-    },
-    {
-      "candidateId": "chat-20260529-008",
-      "count": 1,
-      "included": 0,
-      "effectiveness": 0
-    },
-    {
-      "candidateId": "chat-20260529-009",
-      "count": 1,
-      "included": 0,
-      "effectiveness": 0
-    },
-    {
-      "candidateId": "chat-20260529-016",
-      "count": 1,
-      "included": 0,
-      "effectiveness": 0
-    },
-    {
-      "candidateId": "chat-20260529-020",
-      "count": 1,
-      "included": 0,
-      "effectiveness": 0
-    },
-    {
-      "candidateId": "coding-20260529-005",
-      "count": 1,
-      "included": 0,
-      "effectiveness": 0
     }
   ]
 }

@@ -1,74 +1,11 @@
 {
-  "GeneratedAt": "2026-07-02T06:51:45.8066344\u002B00:00",
+  "GeneratedAt": "2026-07-02T07:27:12.8612162\u002B00:00",
   "RuntimeCandidateTraceWriterEnabled": true,
+  "RuntimeCandidateTraceSinkImplemented": true,
   "ShadowEvalAliasRepairDeprecated": true,
-  "Description": "Shadow-only trace writer inserts UnifiedCandidateTrace rows at each retrieval/scoring/package stage without modifying outputs. All trace rows use the unified contract schema with common operationId \u002B candidateId namespace.",
   "InstrumentationPoints": [
-    {
-      "Stage": "VectorRecall",
-      "InsertPoint": "After VectorQueryPreviewCandidate list is built, before eligibility filtering",
-      "Fields": [
-        "candidateId=ItemId",
-        "sourceType=Vector",
-        "retrievalChannel=Vector",
-        "deterministicScore=Similarity",
-        "sourceId=EntryId"
-      ]
-    },
-    {
-      "Stage": "MemoryRecall",
-      "InsertPoint": "After WorkingMemory/StableMemory recall, before anchor scoring",
-      "Fields": [
-        "candidateId=ItemId",
-        "sourceType=Memory",
-        "retrievalChannel=Memory"
-      ]
-    },
-    {
-      "Stage": "GraphExpansion",
-      "InsertPoint": "After relation expansion, per accepted/blocked relation",
-      "Fields": [
-        "candidateId=targetId",
-        "sourceType=Graph",
-        "retrievalChannel=Graph",
-        "selectedByScoring=accepted",
-        "droppedReason=reasons"
-      ]
-    },
-    {
-      "Stage": "KeywordMatch",
-      "InsertPoint": "After LexicalCandidateProvider.ScoreEntry()",
-      "Fields": [
-        "candidateId=ItemId",
-        "sourceType=Keyword",
-        "retrievalChannel=Keyword"
-      ]
-    },
-    {
-      "Stage": "UnifiedScoring",
-      "InsertPoint": "After UnifiedCandidateScorer.Score() per candidate",
-      "Fields": [
-        "strategyScore=FeatureScore weighted sum",
-        "finalScore=HybridScore.FinalScore"
-      ]
-    },
-    {
-      "Stage": "PackageBuilder",
-      "InsertPoint": "After section assignment, per included/dropped candidate",
-      "Fields": [
-        "includedInPackage=true/false",
-        "droppedReason=reason",
-        "tokenCost=EstimatedTokens",
-        "section=targetSection"
-      ]
-    }
-  ],
-  "ShadowOnlyBehavior": [
-    "Writes to learning/v14/runtime-candidate-trace.jsonl only",
-    "No impact on runtime scoring decisions",
-    "No impact on package output",
-    "No impact on vector/graph binding",
-    "Missing fields written as \u0027Unknown\u0027 / 0 \u2014 never faked"
-  ],
-  "TraceFormat": "JSONL, one row per candidate per operation, append-only"
+    "BasicContextPackageBuilder.AddSectionDecisionsWithDedup",
+    "BasicContextPackageBuilder.AddSectionDecisions",
+    "RetrievalPackingPolicy.Pack (planned)"
+  ]
 }

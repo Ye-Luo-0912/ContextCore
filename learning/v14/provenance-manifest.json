@@ -1,5 +1,4 @@
 {
-  "GeneratedAt": "2026-07-02T06:51:45.8066344\u002B00:00",
-  "ProvenanceManifestWritten": true,
-  "Note": "Provenance is now embedded in trace rows as provenanceSource field."
+  "GeneratedAt": "2026-07-02T07:27:12.8612162\u002B00:00",
+  "ProvenanceManifestWritten": true
 }

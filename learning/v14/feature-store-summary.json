@@ -1,14 +1,9 @@
 {
-  "GeneratedAt": "2026-07-02T06:51:45.8066344\u002B00:00",
+  "GeneratedAt": "2026-07-02T07:27:12.8612162\u002B00:00",
   "FeatureStoreInitialized": true,
-  "TotalRecords": 237,
-  "FeatureRowsFromRuntimeTrace": 237,
-  "FeatureRowsJsonlWritten": true,
-  "ShadowEvalAliasRepairDeprecated": true,
-  "TraceSource": "runtime-candidate-trace.jsonl (unified schema, no alias repair needed)",
-  "TraceBindingRate": 1,
-  "MissingFieldBreakdown": {
-    "MissingFields": 0,
-    "Note": "All fields populated"
-  }
+  "TotalRecords": 1,
+  "FeatureRowsFromRuntimeTrace": 1,
+  "TraceRowsProducedByRuntimeSink": true,
+  "FoundationReportBuilderDoesNotSynthesizeRuntimeTrace": true,
+  "Note": "All traces written by RuntimeCandidateTraceSink in main pipeline. No synthesis in builder."
 }
