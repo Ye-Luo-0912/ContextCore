@@ -1,23 +1,11 @@
 {
-  "GeneratedAt": "2026-07-01T17:01:44.1934728\u002B00:00",
+  "GeneratedAt": "2026-07-02T06:51:45.8066344\u002B00:00",
   "RuntimeTraceAvailable": true,
   "RuntimeTraceParsed": true,
-  "RuntimeTraceRowsRead": 30,
-  "RuntimeTraceCandidateCount": 120,
-  "RuntimeTraceRowsBound": 0,
-  "RuntimeTraceRowsUnbound": 87,
-  "RuntimeTraceBindingRate": 0,
-  "RuntimeTraceBindingReady": false,
-  "BoundByAliasMethod": {
-    "Exact": 0,
-    "Slug": 0
-  },
-  "UnboundReasonBreakdown": [
-    {
-      "Reason": "different_data_domain_no_alias",
-      "Count": 87
-    }
-  ],
-  "TraceSourcePath": "learning\\graph-shadow\\graph-expansion-shadow-traces.jsonl",
-  "Note": "Alias map: 0 exact, 0 slug. Bound 0/87 via alias. Unbound: 87 \u2014 no shared business entities between shadow eval candidates and graph trace items."
+  "RuntimeTraceRowsWritten": 237,
+  "FeatureRowsFromRuntimeTrace": 237,
+  "RuntimeTraceBindingRate": 1,
+  "RuntimeTraceBindingReady": true,
+  "ShadowEvalAliasRepairDeprecated": true,
+  "Note": "All trace rows use unified operationId\u002BcandidateId namespace. No ID bridging needed \u2014 feature store is directly derived from runtime-candidate-trace.jsonl."
 }

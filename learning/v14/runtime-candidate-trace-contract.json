@@ -1,0 +1,44 @@
+{
+  "GeneratedAt": "2026-07-02T06:51:45.8066344\u002B00:00",
+  "RuntimeCandidateTraceContractReady": true,
+  "SchemaVersion": "V14.3",
+  "Description": "Unified runtime candidate trace row. Every retrieval/scoring/package candidate writes the SAME schema using operationId \u002B candidateId as join key. Eliminates the shadow_eval vs graph-shadow ID namespace divide.",
+  "RequiredFields": [
+    "operationId:string",
+    "candidateId:string",
+    "sourceId:string",
+    "sourceType:byte(CandidateSourceType)",
+    "authority:byte(DataAuthorityKind)",
+    "retrievalChannel:byte(RetrievalChannel)",
+    "traceSource:byte(TraceSource)"
+  ],
+  "ComputedFields": [
+    "deterministicScore:float32",
+    "strategyScore:float32",
+    "finalScore:float32",
+    "selectedByScoring:bool",
+    "includedInPackage:bool",
+    "droppedReason:string",
+    "tokenCost:float32",
+    "section:string"
+  ],
+  "TraceRowFields": [
+    "operationId",
+    "candidateId",
+    "sourceId",
+    "sourceType",
+    "authority",
+    "strategyType",
+    "retrievalChannel",
+    "traceSource",
+    "deterministicScore",
+    "strategyScore",
+    "finalScore",
+    "selectedByScoring",
+    "includedInPackage",
+    "droppedReason",
+    "tokenCost",
+    "section",
+    "recordedAt"
+  ]
+}

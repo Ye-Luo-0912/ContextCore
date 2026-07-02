@@ -1,9 +1,9 @@
 {
-  "GeneratedAt": "2026-07-01T17:01:44.1934728\u002B00:00",
+  "GeneratedAt": "2026-07-02T06:51:45.8066344\u002B00:00",
   "BaselineEstablished": true,
-  "BaselineVersion": "V14.2d",
-  "TotalCandidates": 87,
-  "MeanEffectiveness": 0.632,
+  "BaselineVersion": "V14.3",
+  "TotalCandidates": 177,
+  "MeanEffectiveness": 0.819,
   "HistoricalBaselineMissing": true,
   "RankingDriftAvailable": false,
   "Top10": [
