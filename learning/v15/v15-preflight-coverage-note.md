@@ -1,7 +1,7 @@
 # V14→V15 Preflight Coverage Note
 
-Generated: 2026-07-03T06:04:29.5152765+00:00
-Sections detected: 22
+Generated: 2026-07-03T11:58:48.5973647+00:00
+Sections detected: 47
 - LegacyRawCoverageDetected: True
 - RelatedContextCoverageDetected: True
 - All target sections covered

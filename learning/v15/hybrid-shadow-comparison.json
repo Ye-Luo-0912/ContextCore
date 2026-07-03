@@ -1,5 +1,5 @@
 {
-  "GeneratedAt": "2026-07-03T06:04:29.5152765\u002B00:00",
+  "GeneratedAt": "2026-07-03T11:58:48.5973647\u002B00:00",
   "ComparisonMethod": "Deterministic (V14) vs Neural (V15 dry-run MLP forward pass)",
   "DeterministicScoring": {
     "Source": "V14 strategy \u002B trace-derived scores",
@@ -15,13 +15,13 @@
     "BlendNote": "Alpha=1.0: pure deterministic. Neural scores exist only in this shadow report."
   },
   "ComparisonStatistics": {
-    "SpearmanRankCorrelation": 0.8327,
-    "SelectionDirectionAgreementRate": 0.6667,
-    "MeanDeterministicNormalized": 0.7063,
-    "MeanNeuralSelection": 0.4992,
+    "SpearmanRankCorrelation": 0.7266,
+    "SelectionDirectionAgreementRate": 0.6897,
+    "MeanDeterministicNormalized": 0.583,
+    "MeanNeuralSelection": 0.4979,
     "MaxDeterministicNormalized": 1,
     "MaxNeuralSelection": 0.51,
-    "MinDeterministicNormalized": 0.0836,
+    "MinDeterministicNormalized": 0.0818,
     "MinNeuralSelection": 0.4846
   },
   "SafetyAssurance": {

@@ -1,9 +1,9 @@
 {
-  "GeneratedAt": "2026-07-03T06:04:27.0286444\u002B00:00",
+  "GeneratedAt": "2026-07-03T11:58:46.3020050\u002B00:00",
   "BaselineEstablished": true,
   "BaselineVersion": "V14.Full",
-  "TotalCandidates": 28,
-  "MeanEffectiveness": 0.625,
+  "TotalCandidates": 74,
+  "MeanEffectiveness": 0.631,
   "Top10": [
     {
       "candidateId": "task-smoke",

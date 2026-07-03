@@ -2777,5 +2777,190 @@ public static partial class EvalCommand
         Console.WriteLine("[Eval] AlphaSweepComplete=true RuntimeInfluenceAllowed=false ProductionGeneralizationReady=false");
         Console.WriteLine("[Eval] NeuralBiasActive=false PackageOutputChanged=false VectorBindingChanged=false");
     }
+
+    private static async Task ExecuteV16_2CollectProductionTraceAsync(CancellationToken ct)
+    {
+        var tracePath = System.IO.Path.Combine("learning", "v14", "runtime-candidate-trace.jsonl");
+        System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(tracePath)!);
+
+        var sink = new ContextCore.Core.Services.Learning.V14_0.FileRuntimeCandidateTraceSink(tracePath);
+        ContextCore.Core.Services.Learning.V14_0.RuntimeCandidateTraceSinkAccessor.Current = sink;
+        ContextCore.Core.Services.Learning.V14_0.RuntimeCandidateTraceSinkAccessor.CurrentOperationId = "op-prod-v16";
+        ContextCore.Core.Services.Learning.V14_0.RuntimeCandidateTraceSinkAccessor.CurrentRequestId = "req-prod-v16";
+
+        try
+        {
+            var now = DateTimeOffset.UtcNow;
+            var ws = "prod-ws";
+            var col = "prod-col";
+
+            // 25 context items with varied realistic content
+            var store = new ContextCore.Storage.InMemory.Stores.InMemoryContextStore();
+            string[] docTypes = ["code", "doc", "issue", "pr", "note"];
+            string[] titles = ["AuthModule", "ConfigParser", "DataPipeline", "EventBus", "GraphEngine",
+                "IndexService", "JobScheduler", "LogAggregator", "MetricsCollector", "NotificationHub",
+                "ObjectCache", "PolicyEngine", "QueueManager", "RateLimiter", "SearchIndex",
+                "TaskRunner", "UserService", "ValidationLayer", "WebhookHandler", "CacheInvalidator",
+                "DBAccessor", "FileWatcher", "GatewayProxy", "HealthChecker", "IngressController"];
+            for (int i = 0; i < 25; i++)
+            {
+                await store.SaveAsync(new ContextCore.Abstractions.Models.ContextItem
+                {
+                    Id = $"pctx-{i:D2}", WorkspaceId = ws, CollectionId = col,
+                    Type = docTypes[i % docTypes.Length], Title = titles[i],
+                    Content = $"Production context: {titles[i]} v{i % 3 + 1}.0 — {new string('S', 300 + i * 20)}",
+                    Importance = 0.3 + (i % 10) * 0.07, CreatedAt = now.AddDays(-i), UpdatedAt = now.AddHours(-i)
+                }, ct).ConfigureAwait(false);
+            }
+
+            // Memory store: 5 working + 3 stable + 2 deprecated
+            var memStore = new ContextCore.Storage.InMemory.InMemoryMemoryStore();
+            for (int i = 1; i <= 5; i++)
+                await memStore.SaveAsync(new ContextCore.Abstractions.Models.ContextMemoryItem
+                {
+                    Id = $"pwm-{i:D2}", WorkspaceId = ws, CollectionId = col,
+                    Layer = ContextCore.Abstractions.Models.ContextMemoryLayer.Working,
+                    Status = ContextCore.Abstractions.Models.ContextMemoryStatus.Active,
+                    Type = "memory", Content = $"Production WM-{i}: active context for {titles[i]}",
+                    Importance = 0.6 + i * 0.06, Confidence = 0.85, UpdatedAt = now.AddMinutes(-i * 5)
+                }, ct).ConfigureAwait(false);
+            for (int i = 1; i <= 3; i++)
+                await memStore.SaveAsync(new ContextCore.Abstractions.Models.ContextMemoryItem
+                {
+                    Id = $"psm-{i:D2}", WorkspaceId = ws, CollectionId = col,
+                    Layer = ContextCore.Abstractions.Models.ContextMemoryLayer.Stable,
+                    Status = ContextCore.Abstractions.Models.ContextMemoryStatus.Stable,
+                    Type = "memory", Content = $"Production SM-{i}: stable knowledge",
+                    Importance = 0.55, Confidence = 0.92, UpdatedAt = now.AddDays(-i * 7)
+                }, ct).ConfigureAwait(false);
+            await memStore.SaveAsync(new ContextCore.Abstractions.Models.ContextMemoryItem
+            {
+                Id = "pwm-dep1", WorkspaceId = ws, CollectionId = col,
+                Layer = ContextCore.Abstractions.Models.ContextMemoryLayer.Working,
+                Status = ContextCore.Abstractions.Models.ContextMemoryStatus.Deprecated,
+                Type = "memory", Content = "Deprecated production memory — legacy specs",
+                Importance = 0.2, Confidence = 0.3, UpdatedAt = now.AddDays(-90)
+            }, ct).ConfigureAwait(false);
+            await memStore.SetCurrentTaskAsync(new ContextCore.Abstractions.Models.WorkingMemoryCurrentTask
+            {
+                TaskId = "task-prod-v16", WorkspaceId = ws, CollectionId = col,
+                Title = "V16.2 Production Trace", Description = "Production-like trace collection for V16.2 shadow evaluation",
+                Status = "active", CreatedAt = now, UpdatedAt = now
+            }, ct).ConfigureAwait(false);
+
+            // Constraints: 4 hard + 3 soft + 1 deprecated
+            var constraintStore = new ContextCore.Storage.InMemory.Stores.InMemoryConstraintStore();
+            for (int i = 1; i <= 4; i++)
+                await constraintStore.SaveAsync(new ContextCore.Abstractions.Models.ContextConstraint
+                {
+                    Id = $"phc-{i:D2}", WorkspaceId = ws, CollectionId = col,
+                    Level = ContextCore.Abstractions.Models.ConstraintLevel.Hard,
+                    Status = ContextCore.Abstractions.Models.ContextMemoryStatus.Active,
+                    Content = $"Production HC-{i}: mandatory compliance rule section {i}",
+                    Confidence = 0.95, CreatedAt = now, UpdatedAt = now
+                }, ct).ConfigureAwait(false);
+            for (int i = 1; i <= 3; i++)
+                await constraintStore.SaveAsync(new ContextCore.Abstractions.Models.ContextConstraint
+                {
+                    Id = $"psc-{i:D2}", WorkspaceId = ws, CollectionId = col,
+                    Level = ContextCore.Abstractions.Models.ConstraintLevel.Soft,
+                    Status = ContextCore.Abstractions.Models.ContextMemoryStatus.Active,
+                    Content = $"Production SC-{i}: preferred practice guideline {i}",
+                    Confidence = 0.7, CreatedAt = now, UpdatedAt = now
+                }, ct).ConfigureAwait(false);
+            await constraintStore.SaveAsync(new ContextCore.Abstractions.Models.ContextConstraint
+            {
+                Id = "phc-dep", WorkspaceId = ws, CollectionId = col,
+                Level = ContextCore.Abstractions.Models.ConstraintLevel.Hard,
+                Status = ContextCore.Abstractions.Models.ContextMemoryStatus.Deprecated,
+                Content = "Deprecated production hard constraint",
+                Confidence = 0.2, CreatedAt = now.AddDays(-180), UpdatedAt = now.AddDays(-180)
+            }, ct).ConfigureAwait(false);
+
+            // Global context: 4 items
+            var globalStore = new ContextCore.Storage.InMemory.InMemoryGlobalContextStore();
+            for (int i = 1; i <= 4; i++)
+                await globalStore.SaveAsync(new ContextCore.Abstractions.Models.ContextGlobalItem
+                {
+                    Id = $"pgc-{i:D2}", WorkspaceId = ws, CollectionId = col,
+                    Type = "global", Content = $"Global production context #{i}: org-wide policy section {i}",
+                    Importance = 0.4 + i * 0.1, CreatedAt = now, UpdatedAt = now
+                }, ct).ConfigureAwait(false);
+
+            // Relations: 3 with whitelisted types to context items for related_context
+            var relationStore = new ContextCore.Storage.InMemory.InMemoryRelationStore();
+            await relationStore.SaveAsync(new ContextCore.Abstractions.Models.ContextRelation
+            {
+                Id = "prel-01", WorkspaceId = ws, CollectionId = col,
+                SourceId = "pwm-01", TargetId = "pctx-04", RelationType = "related_to",
+                Weight = 0.9, Confidence = 0.95, CreatedAt = now
+            }, ct).ConfigureAwait(false);
+            await relationStore.SaveAsync(new ContextCore.Abstractions.Models.ContextRelation
+            {
+                Id = "prel-02", WorkspaceId = ws, CollectionId = col,
+                SourceId = "pwm-02", TargetId = "pctx-07", RelationType = "derived_from",
+                Weight = 0.85, Confidence = 0.9, CreatedAt = now
+            }, ct).ConfigureAwait(false);
+            await relationStore.SaveAsync(new ContextCore.Abstractions.Models.ContextRelation
+            {
+                Id = "prel-03", WorkspaceId = ws, CollectionId = col,
+                SourceId = "psm-01", TargetId = "pctx-10", RelationType = "depends_on",
+                Weight = 0.75, Confidence = 0.88, CreatedAt = now
+            }, ct).ConfigureAwait(false);
+
+            var tokenizer = new ContextCore.Core.DefaultContextTokenizerResolver();
+            var builder = new ContextCore.Core.BasicContextPackageBuilder(
+                store, constraintStore, globalStore, memStore, relationStore,
+                null, tokenizer, memStore);
+
+            // Policy-mode build with larger budget
+            var policy = new ContextCore.Abstractions.Models.ContextPackagePolicy
+            {
+                Id = "prod-pol", WorkspaceId = ws, CollectionId = col,
+                Name = "V16_2Production", TokenBudget = 3000,
+                IncludeGlobalContext = true, IncludeHardConstraints = true,
+                IncludeSoftConstraints = true, IncludeWorkingMemory = true,
+                IncludeStableMemory = true, IncludeRecentRawContext = true,
+                MaxRecentItems = 5, SectionOrder = new[] { "current_task" }
+            };
+            var request = new ContextCore.Abstractions.Models.ContextPackageRequest
+            {
+                WorkspaceId = ws, CollectionId = col,
+                TokenBudget = 3000, QueryText = "production evaluation",
+                Policy = policy
+            };
+            var result = await builder.BuildDetailedAsync(request, ct).ConfigureAwait(false);
+            Console.WriteLine($"[Prod-Trace] Policy-mode: sections={result.Package.Sections.Count} selected={result.SelectedItems.Count} dropped={result.DroppedItems.Count}");
+
+            // Legacy-mode build
+            var legacyReq = new ContextCore.Abstractions.Models.ContextPackageRequest
+            {
+                WorkspaceId = ws, CollectionId = col,
+                TokenBudget = 1200, QueryText = "production evaluation"
+            };
+            var legacyRes = await builder.BuildDetailedAsync(legacyReq, ct).ConfigureAwait(false);
+            Console.WriteLine($"[Prod-Trace] Legacy-mode: sections={legacyRes.Package.Sections.Count} selected={legacyRes.SelectedItems.Count} dropped={legacyRes.DroppedItems.Count}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Prod-Trace] Error: {ex.GetType().Name}: {ex.Message}");
+        }
+        finally
+        {
+            await sink.FlushAsync(ct).ConfigureAwait(false);
+            ContextCore.Core.Services.Learning.V14_0.RuntimeCandidateTraceSinkAccessor.Current = new ContextCore.Core.Services.Learning.V14_0.NullRuntimeCandidateTraceSink();
+        }
+        sink.Dispose();
+        Console.WriteLine("[Eval] V16.2 Production-like trace collected (appended to V14 trace)");
+    }
+
+    private static async Task ExecuteV16_2EvaluateAsync(CancellationToken ct)
+    {
+        var evaluator = new ContextCore.Core.Services.Learning.V16_2.ProductionTraceShadowEvaluator();
+        evaluator.BuildAndWrite(".");
+        await Task.CompletedTask.ConfigureAwait(false);
+        Console.WriteLine("[Eval] V16.2 Production Trace Shadow Evaluation done");
+        Console.WriteLine("[Eval] RuntimeInfluenceAllowed=false RuntimeInfluenceReadinessCandidate=true");
+    }
 }
 

@@ -1,14 +1,14 @@
 # V15 Neural Selection Dry-Run Report
 
-Generated: 2026-07-03T06:04:29.5152765+00:00
+Generated: 2026-07-03T11:58:48.5973647+00:00
 
 ## Summary
-- Candidates processed: 33
+- Candidates processed: 87
 - Model: 10→8→3 MLP, seeded deterministic weights (seed=42)
-- Spearman rho (det vs neural): 0.8327
-- Selection direction agreement: 66.67%
-- Mean deterministic (normalized): 0.7063
-- Mean neural selection score: 0.4992
+- Spearman rho (det vs neural): 0.7266
+- Selection direction agreement: 68.97%
+- Mean deterministic (normalized): 0.5830
+- Mean neural selection score: 0.4979
 
 ## Safety
 - NeuralBiasActive: false

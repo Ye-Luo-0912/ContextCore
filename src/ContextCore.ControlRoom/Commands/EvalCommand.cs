@@ -410,6 +410,8 @@ public static partial class EvalCommand
             !string.Equals(subcommand, "v14-runtime-trace-smoke", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "v15-neural-dry-run", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "v16-hybrid-shadow", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "v16_2-collect-production-trace", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "v16_2-evaluate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "formal-evidence-stabilization-replay-pilot-readiness", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "formal-evidence-stabilization-replay-pilot-readiness-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "learning-formal-evidence-realization-r1-pack", StringComparison.OrdinalIgnoreCase) &&
@@ -2408,6 +2410,18 @@ public static partial class EvalCommand
         if (string.Equals(subcommand, "v16-hybrid-shadow", StringComparison.OrdinalIgnoreCase))
         {
             await ExecuteV16HybridShadowAsync(cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        if (string.Equals(subcommand, "v16_2-collect-production-trace", StringComparison.OrdinalIgnoreCase))
+        {
+            await ExecuteV16_2CollectProductionTraceAsync(cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        if (string.Equals(subcommand, "v16_2-evaluate", StringComparison.OrdinalIgnoreCase))
+        {
+            await ExecuteV16_2EvaluateAsync(cancellationToken).ConfigureAwait(false);
             return;
         }
 

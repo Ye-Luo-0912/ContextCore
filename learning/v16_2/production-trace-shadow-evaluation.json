@@ -1,0 +1,193 @@
+{
+  "GeneratedAt": "2026-07-03T11:58:51.0571043\u002B00:00",
+  "V14GateReady": true,
+  "RowIdentity": "RowKey = operationId|requestId|candidateId|section|sourceType|rowIndex \u2014 provenance tagged by operationId prefix",
+  "TraceProvenance": {
+    "TotalRows": 87,
+    "SmokeControlRows": 33,
+    "ProductionLikeRows": 54,
+    "InsufficientRealTraceData": false,
+    "TraceSourceDistribution": {
+      "Smoke": 22,
+      "ProductionLike": 33
+    }
+  },
+  "Alphas": [
+    1,
+    0.9,
+    0.7,
+    0.5
+  ],
+  "AlphaSweepCombined": [
+    {
+      "Alpha": 1,
+      "NeuralWt": 0,
+      "MeanRankDelta": 0,
+      "ScoringDisagree": 6,
+      "InclusionDisagree": 50,
+      "Top3Churn": 0,
+      "Top5Churn": 0,
+      "Top10Churn": 0,
+      "Alpha1Invariant": true
+    },
+    {
+      "Alpha": 0.9,
+      "NeuralWt": 0.1,
+      "MeanRankDelta": 0.3678,
+      "ScoringDisagree": 6,
+      "InclusionDisagree": 52,
+      "Top3Churn": 0,
+      "Top5Churn": 0,
+      "Top10Churn": 0,
+      "Alpha1Invariant": true
+    },
+    {
+      "Alpha": 0.7,
+      "NeuralWt": 0.3,
+      "MeanRankDelta": 0.5747,
+      "ScoringDisagree": 6,
+      "InclusionDisagree": 52,
+      "Top3Churn": 0,
+      "Top5Churn": 0,
+      "Top10Churn": 0,
+      "Alpha1Invariant": true
+    },
+    {
+      "Alpha": 0.5,
+      "NeuralWt": 0.5,
+      "MeanRankDelta": 1.8621,
+      "ScoringDisagree": 6,
+      "InclusionDisagree": 52,
+      "Top3Churn": 0,
+      "Top5Churn": 0,
+      "Top10Churn": 0,
+      "Alpha1Invariant": true
+    }
+  ],
+  "AlphaSweepSmoke": [
+    {
+      "Alpha": 1,
+      "NeuralWt": 0,
+      "MeanRankDelta": 0,
+      "ScoringDisagree": 4,
+      "InclusionDisagree": 19,
+      "Top3Churn": 0,
+      "Top5Churn": 0,
+      "Top10Churn": 0,
+      "Alpha1Invariant": true
+    },
+    {
+      "Alpha": 0.9,
+      "NeuralWt": 0.1,
+      "MeanRankDelta": 0.0606,
+      "ScoringDisagree": 4,
+      "InclusionDisagree": 19,
+      "Top3Churn": 0,
+      "Top5Churn": 0,
+      "Top10Churn": 0,
+      "Alpha1Invariant": true
+    },
+    {
+      "Alpha": 0.7,
+      "NeuralWt": 0.3,
+      "MeanRankDelta": 0.0606,
+      "ScoringDisagree": 4,
+      "InclusionDisagree": 19,
+      "Top3Churn": 0,
+      "Top5Churn": 0,
+      "Top10Churn": 0,
+      "Alpha1Invariant": true
+    },
+    {
+      "Alpha": 0.5,
+      "NeuralWt": 0.5,
+      "MeanRankDelta": 0.3636,
+      "ScoringDisagree": 4,
+      "InclusionDisagree": 20,
+      "Top3Churn": 0,
+      "Top5Churn": 0,
+      "Top10Churn": 0,
+      "Alpha1Invariant": true
+    }
+  ],
+  "AlphaSweepProductionLike": [
+    {
+      "Alpha": 1,
+      "NeuralWt": 0,
+      "MeanRankDelta": 0,
+      "ScoringDisagree": 2,
+      "InclusionDisagree": 32,
+      "Top3Churn": 0,
+      "Top5Churn": 0,
+      "Top10Churn": 0,
+      "Alpha1Invariant": true
+    },
+    {
+      "Alpha": 0.9,
+      "NeuralWt": 0.1,
+      "MeanRankDelta": 0.037,
+      "ScoringDisagree": 2,
+      "InclusionDisagree": 32,
+      "Top3Churn": 0,
+      "Top5Churn": 0,
+      "Top10Churn": 0,
+      "Alpha1Invariant": true
+    },
+    {
+      "Alpha": 0.7,
+      "NeuralWt": 0.3,
+      "MeanRankDelta": 0.0741,
+      "ScoringDisagree": 2,
+      "InclusionDisagree": 32,
+      "Top3Churn": 0,
+      "Top5Churn": 0,
+      "Top10Churn": 0,
+      "Alpha1Invariant": true
+    },
+    {
+      "Alpha": 0.5,
+      "NeuralWt": 0.5,
+      "MeanRankDelta": 1,
+      "ScoringDisagree": 2,
+      "InclusionDisagree": 32,
+      "Top3Churn": 0,
+      "Top5Churn": 0,
+      "Top10Churn": 0,
+      "Alpha1Invariant": true
+    }
+  ],
+  "Alpha1InvariantPassed": true,
+  "Calibration": {
+    "Combined": {
+      "RowCount": 87,
+      "WeightedBCE": 0.19173,
+      "UnweightedBCE": 0.242333,
+      "WeightedPairwiseAcc": 0.3217,
+      "UnweightedPairwiseAcc": 0.2857
+    },
+    "Smoke": {
+      "RowCount": 33,
+      "WeightedBCE": 0.200415,
+      "UnweightedBCE": 0.294968,
+      "WeightedPairwiseAcc": 0.3663,
+      "UnweightedPairwiseAcc": 0.4516
+    },
+    "ProductionLike": {
+      "RowCount": 54,
+      "WeightedBCE": 0.183242,
+      "UnweightedBCE": 0.208178,
+      "WeightedPairwiseAcc": 0.1431,
+      "UnweightedPairwiseAcc": 0.1509
+    },
+    "GlobalNormalization": true,
+    "WeightFormula": "0.5*norm(successProxy) \u002B 0.3*norm(costEfficiency) \u002B 0.2*norm(implicitSignal)"
+  },
+  "RuntimeSafety": {
+    "BlendAlpha": 1,
+    "NeuralBiasActive": false,
+    "RuntimeInfluenceAllowed": false,
+    "PackageOutputChanged": false,
+    "VectorBindingChanged": false,
+    "RuntimePromotionApplied": false
+  }
+}

@@ -1,45 +1,45 @@
 {
-  "GeneratedAt": "2026-07-03T06:04:27.0286444\u002B00:00",
-  "TotalRows": 33,
+  "GeneratedAt": "2026-07-03T11:58:46.3020050\u002B00:00",
+  "TotalRows": 87,
   "ParseErrorCount": 0,
   "MissingCriticalFieldCount": 0,
   "MissingOptionalFieldCount": 0,
   "MissingFieldBreakdown": [],
   "SeedTraceRowCount": 0,
-  "SelectedTraceCount": 21,
-  "DroppedTraceCount": 12,
+  "SelectedTraceCount": 56,
+  "DroppedTraceCount": 31,
   "SectionCoverage": [
     {
       "Section": "hard_constraints",
-      "Count": 3
+      "Count": 8
     },
     {
       "Section": "working_memory",
-      "Count": 3
+      "Count": 8
     },
     {
       "Section": "recent_context",
-      "Count": 3
-    },
-    {
-      "Section": "soft_constraints",
-      "Count": 3
+      "Count": 8
     },
     {
       "Section": "global_context",
-      "Count": 2
+      "Count": 6
+    },
+    {
+      "Section": "soft_constraints",
+      "Count": 6
     },
     {
       "Section": "stable_memory",
-      "Count": 2
+      "Count": 5
     },
     {
       "Section": "related_context",
-      "Count": 2
+      "Count": 5
     },
     {
       "Section": "current_task",
-      "Count": 1
+      "Count": 2
     },
     {
       "Section": "SmokeDoc_14",
@@ -96,28 +96,128 @@
     {
       "Section": "SmokeDoc_01",
       "Count": 1
+    },
+    {
+      "Section": "NotificationHub",
+      "Count": 1
+    },
+    {
+      "Section": "CacheInvalidator",
+      "Count": 1
+    },
+    {
+      "Section": "MetricsCollector",
+      "Count": 1
+    },
+    {
+      "Section": "WebhookHandler",
+      "Count": 1
+    },
+    {
+      "Section": "LogAggregator",
+      "Count": 1
+    },
+    {
+      "Section": "ValidationLayer",
+      "Count": 1
+    },
+    {
+      "Section": "JobScheduler",
+      "Count": 1
+    },
+    {
+      "Section": "UserService",
+      "Count": 1
+    },
+    {
+      "Section": "IndexService",
+      "Count": 1
+    },
+    {
+      "Section": "TaskRunner",
+      "Count": 1
+    },
+    {
+      "Section": "GraphEngine",
+      "Count": 1
+    },
+    {
+      "Section": "SearchIndex",
+      "Count": 1
+    },
+    {
+      "Section": "IngressController",
+      "Count": 1
+    },
+    {
+      "Section": "EventBus",
+      "Count": 1
+    },
+    {
+      "Section": "RateLimiter",
+      "Count": 1
+    },
+    {
+      "Section": "HealthChecker",
+      "Count": 1
+    },
+    {
+      "Section": "DataPipeline",
+      "Count": 1
+    },
+    {
+      "Section": "QueueManager",
+      "Count": 1
+    },
+    {
+      "Section": "GatewayProxy",
+      "Count": 1
+    },
+    {
+      "Section": "ConfigParser",
+      "Count": 1
+    },
+    {
+      "Section": "PolicyEngine",
+      "Count": 1
+    },
+    {
+      "Section": "FileWatcher",
+      "Count": 1
+    },
+    {
+      "Section": "AuthModule",
+      "Count": 1
+    },
+    {
+      "Section": "ObjectCache",
+      "Count": 1
+    },
+    {
+      "Section": "DBAccessor",
+      "Count": 1
     }
   ],
   "RetrievalChannelCoverage": [
     {
       "Channel": 2,
-      "Count": 21
+      "Count": 58
     },
     {
       "Channel": 6,
-      "Count": 6
+      "Count": 14
     },
     {
       "Channel": 4,
-      "Count": 3
+      "Count": 8
     },
     {
       "Channel": 3,
-      "Count": 2
+      "Count": 5
     },
     {
       "Channel": 5,
-      "Count": 1
+      "Count": 2
     }
   ],
   "Reports": []
