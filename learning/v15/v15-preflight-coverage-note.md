@@ -1,9 +1,9 @@
 # V14→V15 Preflight Coverage Note
 
-Generated: 2026-07-03T03:03:15.3380258+00:00
+Generated: 2026-07-03T05:01:51.8615451+00:00
 
 ## V14 Smoke Trace Coverage Gaps
-- Total trace rows: 17
+- Total trace rows: 33
 - Covered sections: current_task, hard_constraints, working_memory, global_context, recent_context, stable_memory, soft_constraints
 - **Missing sections: related_context, legacy/raw**
 

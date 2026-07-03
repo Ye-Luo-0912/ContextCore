@@ -1,12 +1,12 @@
 # V15 Hybrid Shadow Comparison
 
-Generated: 2026-07-03T03:03:15.3380258+00:00
+Generated: 2026-07-03T05:01:51.8615451+00:00
 
 ## Deterministic vs Neural Score Comparison
-- Spearman rank correlation: 0.5674
-- Direction agreement: 47.06%
-- Mean deterministic (normalized): 0.4807
-- Mean neural selection: 0.4953
+- Spearman rank correlation: 0.8327
+- Direction agreement: 66.67%
+- Mean deterministic (normalized): 0.7063
+- Mean neural selection: 0.4992
 
 ## Scoring Pipeline Status
 - BlendAlpha: 1.0 (pure deterministic, V15 dry-run)

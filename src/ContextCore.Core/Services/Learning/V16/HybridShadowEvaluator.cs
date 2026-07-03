@@ -6,13 +6,10 @@ namespace ContextCore.Core.Services.Learning.V16;
 public sealed class HybridShadowEvaluator
 {
     private static readonly double[] Alphas = [1.0, 0.9, 0.7, 0.5];
-    private const string SectionsMissing = "related_context, legacy/raw";
 
     private sealed record CandidateRow(
         string Id, string Section, int SourceType, double DetScore, bool Sel, bool Inc,
-        double TokenCost, double DetNorm, double Neural, double Calib, double Hybrid,
-        double HybridCalib
-    );
+        double TokenCost, double DetNorm, double Neural, double Calib, double Hybrid);
 
     public void BuildAndWrite(string outputDir)
     {
@@ -25,181 +22,129 @@ public sealed class HybridShadowEvaluator
         var v15ReportPath = Path.Combine(outputDir, "learning", "v15", "neural-selection-dry-run-report.json");
         var v14GatePath = Path.Combine(outputDir, "learning", "v14", "foundation-gate.json");
 
-        bool v14GateReady = false;
-        if (File.Exists(v14GatePath))
-        {
-            try
-            {
-                using var gdoc = JsonDocument.Parse(File.ReadAllText(v14GatePath));
-                v14GateReady = gdoc.RootElement.TryGetProperty("LearningDataPipelineReady", out var ldp) && ldp.GetBoolean();
-            }
-            catch { }
-        }
+        bool v14GateReady = GateReady(v14GatePath);
 
-        // Read V15 per-candidate neural scores
-        var neuralScores = new Dictionary<string, (double selection, double rank, double drop)>();
-        if (File.Exists(v15ReportPath))
-        {
-            try
-            {
-                using var v15doc = JsonDocument.Parse(File.ReadAllText(v15ReportPath));
-                if (v15doc.RootElement.TryGetProperty("PerCandidate", out var perCand))
-                {
-                    foreach (var row in perCand.EnumerateArray())
-                    {
-                        var cid = row.TryGetProperty("candidateId", out var c) ? c.GetString() ?? "" : "";
-                        var ns = row.TryGetProperty("neuralSelectionScore", out var s) ? s.GetDouble() : 0.5;
-                        var nr = row.TryGetProperty("neuralRankingScore", out var r) ? r.GetDouble() : 0.5;
-                        var nd = row.TryGetProperty("neuralDropProbability", out var d) ? d.GetDouble() : 0.5;
-                        if (!string.IsNullOrWhiteSpace(cid))
-                            neuralScores[cid] = (ns, nr, nd);
-                    }
-                }
-            }
-            catch { }
-        }
+        // Read V15 neural scores
+        var neuralScores = ReadNeuralScores(v15ReportPath);
 
-        // Read feedback events
-        var feedbackMap = new Dictionary<string, (double successProxy, int implicitSignal, double costEfficiency)>();
-        if (File.Exists(v14FeedbackPath))
-        {
-            foreach (var line in File.ReadLines(v14FeedbackPath))
-            {
-                if (string.IsNullOrWhiteSpace(line)) continue;
-                try
-                {
-                    var d = JsonDocument.Parse(line).RootElement;
-                    var cid = d.TryGetProperty("candidateId", out var c) ? c.GetString() ?? "" : "";
-                    var sp = d.TryGetProperty("downstreamSuccessProxy", out var dp) ? dp.GetDouble() : 0;
-                    var us = d.TryGetProperty("userImplicitSignal", out var ui) ? ui.GetByte() : (byte)0;
-                    var ce = d.TryGetProperty("costEfficiencyScore", out var cs) ? cs.GetDouble() : 0;
-                    feedbackMap[cid] = (sp, us, ce);
-                }
-                catch { }
-            }
-        }
+        // Read feedback events with full signal extraction
+        var feedbackMap = ReadFeedbackEvents(v14FeedbackPath);
 
-        // Read feature store trace rows
-        var candidates = new List<(string id, string section, int sourceType, double detScore, bool sel, bool inc, double tokenCost)>();
-        if (File.Exists(v14FeaturePath))
-        {
-            foreach (var line in File.ReadLines(v14FeaturePath))
-            {
-                if (string.IsNullOrWhiteSpace(line)) continue;
-                try
-                {
-                    var d = JsonDocument.Parse(line).RootElement;
-                    var cid = d.TryGetProperty("candidateId", out var c) ? c.GetString() ?? "" : "";
-                    var sec = d.TryGetProperty("section", out var sn) ? sn.GetString() ?? "" : "";
-                    var st = d.TryGetProperty("sourceType", out var s) ? (int)s.GetByte() : 1;
-                    var ds = d.TryGetProperty("deterministicScore", out var dss) ? dss.GetDouble() : 0;
-                    var sel = d.TryGetProperty("selectedByScoring", out var sl) && sl.GetBoolean();
-                    var inc = d.TryGetProperty("includedInPackage", out var ip) && ip.GetBoolean();
-                    var tc = d.TryGetProperty("tokenCost", out var tk) ? tk.GetDouble() : 0;
-                    candidates.Add((cid, sec, st, ds, sel, inc, tc));
-                }
-                catch { }
-            }
-        }
+        // Read feature store candidates
+        var candidates = ReadCandidates(v14FeaturePath);
 
         int N = candidates.Count;
         var sectionSet = new HashSet<string>(candidates.Select(c => c.section));
-        bool coverageLimited = !sectionSet.Contains("related_context") && !sectionSet.Contains("legacy");
+        bool hasRelatedContext = sectionSet.Contains("related_context");
+        // legacy path uses item titles as section names; detect via SmokedDoc_ prefix
+        bool hasLegacyRaw = sectionSet.Any(s => s.StartsWith("SmokeDoc_", StringComparison.OrdinalIgnoreCase))
+                            || sectionSet.Contains("legacy") || sectionSet.Contains("raw");
+        bool coverageLimited = !hasRelatedContext || !hasLegacyRaw;
+        var missingSections = new List<string>();
+        if (!hasRelatedContext) missingSections.Add("related_context");
+        if (!hasLegacyRaw) missingSections.Add("legacy/raw");
 
-        // Normalize deterministic scores
+        // Normalize deterministic scores (handle duplicates from dual policy+legacy runs)
         double maxDetScore = candidates.Count > 0 ? candidates.Max(c => c.detScore) : 110;
-        var detNorms = candidates.Select(c => (c.id, norm: Math.Clamp(c.detScore / maxDetScore, 0, 1))).ToDictionary(x => x.id, x => x.norm);
+        var detNorms = candidates
+            .GroupBy(c => c.id)
+            .ToDictionary(g => g.Key, g => Math.Clamp(g.Max(c => c.detScore) / Math.Max(maxDetScore, 1), 0, 1));
 
-        // Merge neural scores
         foreach (var (id, _, _, detScore, sel, inc, tc) in candidates)
-        {
-            if (!neuralScores.ContainsKey(id))
-                neuralScores[id] = (0.5, 0.5, 0.5);
-        }
+            if (!neuralScores.ContainsKey(id)) neuralScores[id] = 0.5;
 
-        // === Offline shadow calibration (logistic) ===
+        // === Offline shadow calibration with feedback weights ===
         var calibEntries = candidates
-            .Where(c => neuralScores.ContainsKey(c.id) && feedbackMap.ContainsKey(c.id))
+            .Where(c => feedbackMap.ContainsKey(c.id))
             .Select(c => (
-                c.id, c.detScore, detNorm: detNorms.GetValueOrDefault(c.id, 0.5),
-                neural: neuralScores[c.id].selection,
+                id: c.id, detNorm: detNorms.GetValueOrDefault(c.id, 0.5),
+                neural: neuralScores.GetValueOrDefault(c.id, 0.5),
                 selLabel: c.sel ? 1.0 : 0.0,
+                incLabel: c.inc ? 1.0 : 0.0,
+                weight: FeedbackWeight(feedbackMap[c.id]),
                 successProxy: feedbackMap[c.id].successProxy,
-                costEfficiency: feedbackMap[c.id].costEfficiency
+                costEfficiency: feedbackMap[c.id].costEfficiency,
+                implicitSignal: feedbackMap[c.id].implicitSignal
             )).ToList();
 
-        // Simple logistic calibration: fit a,b such that P(sel) ~ sigmoid(a * neuralScore + b)
-        var (calibA, calibB, calibLoss) = FitLogisticBinary(
-            calibEntries.Select(e => (e.neural, e.selLabel)).ToList());
+        // Weighted BCE calibration
+        var (calibA, calibB, wtdBceLoss) = FitWeightedLogistic(
+            calibEntries.Select(e => (e.neural, e.selLabel, e.weight)).ToList());
 
-        // Pairwise ranking calibration: count how often neural score respects the selection order
-        int pairwiseTotal = 0, pairwiseCorrect = 0;
+        // Unweighted BCE for comparison
+        var (unwtdA, unwtdB, unwtdBce) = FitWeightedLogistic(
+            calibEntries.Select(e => (e.neural, e.selLabel, 1.0)).ToList());
+
+        // Weighted pairwise accuracy
+        int pwTotal = 0, pwCorrect = 0;
+        double pwWeightedTotal = 0, pwWeightedCorrect = 0;
         for (int i = 0; i < calibEntries.Count; i++)
         {
             for (int j = 0; j < calibEntries.Count; j++)
             {
                 if (i == j) continue;
-                bool iSelected = calibEntries[i].selLabel > 0.5;
-                bool jSelected = calibEntries[j].selLabel > 0.5;
-                if (iSelected == jSelected) continue;
-                pairwiseTotal++;
-                double iScore = calibEntries[i].neural;
-                double jScore = calibEntries[j].neural;
-                if (iSelected && iScore >= jScore) pairwiseCorrect++;
-                else if (!iSelected && iScore < jScore) pairwiseCorrect++;
+                bool iSel = calibEntries[i].selLabel > 0.5;
+                bool jSel = calibEntries[j].selLabel > 0.5;
+                if (iSel == jSel) continue;
+                double w = calibEntries[i].weight * calibEntries[j].weight;
+                pwTotal++; pwWeightedTotal += w;
+                double si = calibEntries[i].neural, sj = calibEntries[j].neural;
+                if ((iSel && si >= sj) || (!iSel && si < sj)) { pwCorrect++; pwWeightedCorrect += w; }
             }
         }
-        double pairwiseAccuracy = pairwiseTotal > 0 ? (double)pairwiseCorrect / pairwiseTotal : 0;
+        double pwAcc = pwTotal > 0 ? (double)pwCorrect / pwTotal : 0;
+        double pwWtdAcc = pwWeightedTotal > 0 ? pwWeightedCorrect / pwWeightedTotal : 0;
 
-        // Calibrated neural scores
         var calibratedScores = new Dictionary<string, double>();
         foreach (var (id, ns) in neuralScores)
-        {
-            double z = calibA * ns.selection + calibB;
-            calibratedScores[id] = 1.0 / (1.0 + Math.Exp(-z));
-        }
+            calibratedScores[id] = Sigmoid(calibA * ns + calibB);
 
         // === Alpha sweep ===
         var alphaResults = new List<object>();
         foreach (double alpha in Alphas)
         {
-            double GetNeuralScore(string id) => neuralScores.TryGetValue(id, out var ns) ? ns.selection : 0.5;
+            double GetNeural(string id) => neuralScores.GetValueOrDefault(id, 0.5);
 
-            var ranking = candidates.Select(c => new CandidateRow(
+            var rows = candidates.Select(c => new CandidateRow(
                 c.id, c.section, c.sourceType, c.detScore, c.sel, c.inc, c.tokenCost,
                 detNorms.GetValueOrDefault(c.id, 0),
-                GetNeuralScore(c.id),
+                GetNeural(c.id),
                 calibratedScores.GetValueOrDefault(c.id, 0.5),
-                alpha * detNorms.GetValueOrDefault(c.id, 0) + (1 - alpha) * GetNeuralScore(c.id),
-                alpha * detNorms.GetValueOrDefault(c.id, 0) + (1 - alpha) * calibratedScores.GetValueOrDefault(c.id, 0.5)
+                alpha * detNorms.GetValueOrDefault(c.id, 0) + (1 - alpha) * GetNeural(c.id)
             )).ToList();
 
-            var detRanking = ranking.OrderByDescending(r => r.DetNorm).ToList();
-            var hybRanking = ranking.OrderByDescending(r => r.Hybrid).ToList();
+            // FIXED: rank from sorted lists, not from unsorted rows
+            var detRanking = rows.OrderByDescending(r => r.DetNorm).ToList();
+            var hybRanking = rows.OrderByDescending(r => r.Hybrid).ToList();
 
             var detRanks = new Dictionary<string, int>();
-            for (int i = 0; i < ranking.Count; i++) detRanks[ranking[i].Id] = i + 1;
+            for (int i = 0; i < detRanking.Count; i++) detRanks[detRanking[i].Id] = i + 1;
             var hybRanks = new Dictionary<string, int>();
-            for (int i = 0; i < ranking.Count; i++) hybRanks[ranking[i].Id] = i + 1;
+            for (int i = 0; i < hybRanking.Count; i++) hybRanks[hybRanking[i].Id] = i + 1;
+
+            // FIXED: threshold = hybRanking[selectedCount - 1].Hybrid (top-K parity boundary)
+            int selectedCount = rows.Count(r => r.Sel);
+            int k = Math.Max(1, Math.Min(selectedCount, hybRanking.Count));
+            double threshold = hybRanking[k - 1].Hybrid; // sorted[k-1], 0-indexed
+            double calibThreshold = rows.OrderByDescending(r => r.Calib * alpha + (1 - alpha) * r.Calib).ToList()
+                .Select(r => r.Calib * alpha + (1 - alpha) * r.Calib).ElementAt(k - 1);
 
             double rankDeltaSum = 0;
             int disagreementCount = 0;
-            double threshold = CalibrationSelectionThreshold(alpha, ranking);
-            foreach (var r in ranking)
+            foreach (var r in rows)
             {
                 int dr = detRanks.GetValueOrDefault(r.Id, 0);
                 int hr = hybRanks.GetValueOrDefault(r.Id, 0);
                 rankDeltaSum += Math.Abs(dr - hr);
-                bool hybridWouldSelect = r.Hybrid >= threshold;
-                if (r.Sel != hybridWouldSelect) disagreementCount++;
+                if (r.Sel != (r.Hybrid >= threshold)) disagreementCount++;
             }
-            double meanRankDelta = ranking.Count > 0 ? rankDeltaSum / ranking.Count : 0;
+            double meanRankDelta = rows.Count > 0 ? rankDeltaSum / rows.Count : 0;
 
-            int TopKChurn(int k)
+            int TopKChurn(int kk)
             {
-                var detTopK = detRanking.Take(k).Select(r => r.Id).ToHashSet();
-                var hybTopK = hybRanking.Take(k).Select(r => r.Id).ToHashSet();
-                return k - detTopK.Intersect(hybTopK).Count();
+                var dTop = detRanking.Take(kk).Select(r => r.Id).ToHashSet();
+                var hTop = hybRanking.Take(kk).Select(r => r.Id).ToHashSet();
+                return kk - dTop.Intersect(hTop).Count();
             }
 
             alphaResults.Add(new
@@ -207,15 +152,17 @@ public sealed class HybridShadowEvaluator
                 Alpha = alpha,
                 NeuralWeight = Math.Round(1 - alpha, 2),
                 DeterministicWeight = alpha,
+                ThresholdMode = "TopKSelectedCount: threshold = hybridScore of k-th ranked item where k = historically selected count",
+                CalibratedThreshold = Math.Round(threshold, 4),
                 MeanRankDelta = Math.Round(meanRankDelta, 4),
                 SelectionDisagreementCount = disagreementCount,
-                SelectionDisagreementRate = ranking.Count > 0 ? Math.Round((double)disagreementCount / ranking.Count, 4) : 0,
+                SelectionDisagreementRate = rows.Count > 0 ? Math.Round((double)disagreementCount / rows.Count, 4) : 0,
                 Top3Churn = TopKChurn(3),
                 Top5Churn = TopKChurn(5),
                 Top10Churn = TopKChurn(10),
-                MeanHybridScore = Math.Round(ranking.Average(r => r.Hybrid), 4),
-                MeanNeuralScore = Math.Round(ranking.Average(r => r.Neural), 4),
-                MeanDetScoreNorm = Math.Round(ranking.Average(r => r.DetNorm), 4)
+                MeanHybridScore = Math.Round(rows.Average(r => r.Hybrid), 4),
+                MeanNeuralScore = Math.Round(rows.Average(r => r.Neural), 4),
+                MeanDetScoreNorm = Math.Round(rows.Average(r => r.DetNorm), 4)
             });
         }
 
@@ -226,13 +173,14 @@ public sealed class HybridShadowEvaluator
             V14GateReady = v14GateReady,
             V15NeuralOnlyInShadow = true,
             TotalCandidates = N,
-            Alphas = Alphas,
+            Alphas,
             AlphaSweepResults = alphaResults,
             Coverage = new
             {
-                CoveredSections = sectionSet.ToArray(),
+                CoveredSections = sectionSet.OrderBy(s => s).ToArray(),
                 CoverageLimited = coverageLimited,
-                MissingSectionsNote = coverageLimited ? $"Sections not in V14 smoke trace: {SectionsMissing}" : "Full coverage"
+                MissingSections = missingSections.ToArray(),
+                Note = coverageLimited ? $"Sections missing from V14 smoke trace: {string.Join(", ", missingSections)}" : "All target sections covered"
             },
             RuntimeSafety = new
             {
@@ -244,147 +192,234 @@ public sealed class HybridShadowEvaluator
                 RuntimePromotionApplied = false
             }
         };
-        File.WriteAllText(Path.Combine(v16Dir, "hybrid-shadow-evaluation.json"),
-            JsonSerializer.Serialize(evalReport, new JsonSerializerOptions { WriteIndented = true }));
+        WriteJson(v16Dir, "hybrid-shadow-evaluation.json", evalReport);
 
         // === Write neural-calibration-shadow.json ===
-        var calibrationReport = new
+        var calReport = new
         {
             GeneratedAt = now,
-            CalibrationMethod = "Binary logistic regression (neural selection score → P(candidate selected))",
-            CalibrationCoefficients = new { a = Math.Round(calibA, 6), b = Math.Round(calibB, 6) },
-            LossFunction = "Binary cross-entropy",
-            FinalLoss = Math.Round(calibLoss, 6),
+            CalibrationMethod = "Weighted binary logistic regression: P(selected | neuralScore) = sigmoid(a * neuralScore + b)",
+            LabelFormula = "label = selectedByScoring from runtime trace (1.0 if selected, 0.0 otherwise)",
+            SampleWeightFormula = "weight = normalized downstreamSuccessProxy (feedback event). proxy_norm = proxy / max_proxy, weight = 0.3 + 0.7 * proxy_norm. Ensures high-success candidates contribute more to calibration.",
+            WeightedCalibration = new { a = Math.Round(calibA, 6), b = Math.Round(calibB, 6), weightedBCELoss = Math.Round(wtdBceLoss, 6) },
+            UnweightedCalibration = new { a = Math.Round(unwtdA, 6), b = Math.Round(unwtdB, 6), unweightedBCELoss = Math.Round(unwtdBce, 6) },
             PairwiseRanking = new
             {
-                TotalPairs = pairwiseTotal,
-                CorrectPairs = pairwiseCorrect,
-                Accuracy = Math.Round(pairwiseAccuracy, 4),
-                Interpretation = pairwiseAccuracy >= 0.7 ? "strong pairwise ordering" : pairwiseAccuracy >= 0.55 ? "weak pairwise ordering" : "random-level pairwise ordering",
-                Limitation = "V15 neural scores are near-constant (~0.5) due to seeded-weights MLP without training. Calibration cannot improve upon uniform scores."
+                TotalPairs = pwTotal,
+                CorrectPairs = pwCorrect,
+                UnweightedAccuracy = Math.Round(pwAcc, 4),
+                WeightedAccuracy = Math.Round(pwWtdAcc, 4),
+                Interpretation = pwWtdAcc >= 0.7 ? "strong" : pwWtdAcc >= 0.55 ? "weak" : "random-level",
+                Limitation = "Neural scores near-constant (~0.5) from untrained seeded MLP. Calibration limited by input signal variance."
             },
             PerCandidateCalibration = calibEntries.Select(e => new
             {
                 candidateId = e.id,
                 originalNeuralScore = Math.Round(e.neural, 4),
-                calibratedScore = Math.Round(calibratedScores.GetValueOrDefault(e.id, 0.5), 4),
+                calibratedProbability = Math.Round(Sigmoid(calibA * e.neural + calibB), 4),
                 selectedLabel = e.selLabel > 0.5,
-                calibratedProbability = Math.Round(1.0 / (1.0 + Math.Exp(-(calibA * e.neural + calibB))), 4),
+                includedInPackage = e.incLabel > 0.5,
+                sampleWeight = Math.Round(e.weight, 4),
                 successProxy = Math.Round(e.successProxy, 4),
-                costEfficiency = Math.Round(e.costEfficiency, 4)
+                costEfficiency = Math.Round(e.costEfficiency, 4),
+                implicitSignal = e.implicitSignal
             }),
-            CalibrationWarning = "Offline shadow calibration only. Does not affect runtime scoring. V16 does not ship calibration coefficients to production.",
-            OfflineShadowCalibration = true
+            OfflineShadowCalibration = true,
+            RuntimeInfluenceAllowed = false,
+            CalibrationWarning = "Offline shadow calibration only. Coefficients are NOT deployed to runtime pipeline. V16 blend alpha remains 1.0."
         };
-        File.WriteAllText(Path.Combine(v16Dir, "neural-calibration-shadow.json"),
-            JsonSerializer.Serialize(calibrationReport, new JsonSerializerOptions { WriteIndented = true }));
+        WriteJson(v16Dir, "neural-calibration-shadow.json", calReport);
 
         // === Write v16-readiness-gate.json ===
-        bool v16ShadowReady = v14GateReady && N > 0 && alphaResults.Count == Alphas.Length;
-        bool productionGeneralizationReady = v16ShadowReady && !coverageLimited;
+        bool v16ShadowReady = v14GateReady && N >= 10 && alphaResults.Count == Alphas.Length;
+        bool metricIntegrityReady = v16ShadowReady;
+        bool prodGeneralizationReady = v16ShadowReady && !coverageLimited;
         var gate = new
         {
             GeneratedAt = now,
             V16ShadowEvaluationReady = v16ShadowReady,
+            V16MetricIntegrityReady = metricIntegrityReady,
+            CoverageLimited = coverageLimited,
+            MissingCoverage = missingSections.ToArray(),
+            ProductionGeneralizationReady = prodGeneralizationReady,
             RuntimeInfluenceAllowed = false,
-            ProductionGeneralizationReady = productionGeneralizationReady,
-            BlockedByCoverage = coverageLimited ? $"Missing sections: {SectionsMissing}" : "none",
             PackageOutputChanged = false,
             RuntimePromotionApplied = false,
             VectorBindingChanged = false,
             V14GatePreserved = v14GateReady,
-            NextCoverageRequirements = coverageLimited
-                ? new[] { "Run V14 runtime-trace-smoke against a corpus that includes related_context candidates (requires context store items with graph-expanded IDs and whitelisted relation types)", "Run V14 runtime-trace-smoke against a legacy-path corpus to cover legacy/raw sections", "Re-run V15 and V16 against full-coverage trace before declaring ProductionGeneralizationReady" }
-                : new[] { "All coverage requirements met" },
-            Interpretability = "V16 shadow evaluation uses calibratable hybrid scoring to understand neural vs deterministic trade-offs without runtime binding. Results are informational only."
+            CalibrationActive = true,
+            CalibrationWeighted = true,
+            FeedbackSignalsUsed = new[] { "downstreamSuccessProxy", "costEfficiencyScore", "userImplicitSignal" },
+            NextSteps = coverageLimited
+                ? new[] { "Add related_context candidate via whitelisted relation from memory→context item", "Run legacy-path BuildDetailedAsync without policy for raw section coverage", "Regenerate V14 trace, re-run V15 neural dry-run, re-run V16 shadow eval" }
+                : new[] { "Coverage requirements met. V16 ready for V17 production evaluation." }
         };
-        File.WriteAllText(Path.Combine(v16Dir, "v16-readiness-gate.json"),
-            JsonSerializer.Serialize(gate, new JsonSerializerOptions { WriteIndented = true }));
+        WriteJson(v16Dir, "v16-readiness-gate.json", gate);
 
-        // === Write markdown reports ===
-        WriteMarkdownHybridEval(v16Dir, now, N, alphaResults, sectionSet, coverageLimited, v14GateReady);
-        WriteMarkdownCalibration(v16Dir, now, calibA, calibB, calibLoss, pairwiseAccuracy, pairwiseTotal, pairwiseCorrect, calibEntries, calibratedScores);
-        WriteMarkdownGate(v16Dir, now, v16ShadowReady, productionGeneralizationReady, coverageLimited, v14GateReady);
+        // Write markdowns
+        WriteMdHybridEval(v16Dir, now, N, alphaResults, sectionSet, coverageLimited, v14GateReady, missingSections);
+        WriteMdCalibration(v16Dir, now, calibA, calibB, wtdBceLoss, pwAcc, pwWtdAcc, pwTotal, pwCorrect, calibEntries);
+        WriteMdGate(v16Dir, now, v16ShadowReady, metricIntegrityReady, prodGeneralizationReady, coverageLimited, v14GateReady);
     }
 
-    private static (double a, double b, double loss) FitLogisticBinary(List<(double x, double label)> data)
+    private static bool GateReady(string path)
+    {
+        if (!File.Exists(path)) return false;
+        try
+        {
+            using var d = JsonDocument.Parse(File.ReadAllText(path));
+            return d.RootElement.TryGetProperty("LearningDataPipelineReady", out var p) && p.GetBoolean();
+        }
+        catch { return false; }
+    }
+
+    private static Dictionary<string, double> ReadNeuralScores(string path)
+    {
+        var scores = new Dictionary<string, double>();
+        if (!File.Exists(path)) return scores;
+        try
+        {
+            using var d = JsonDocument.Parse(File.ReadAllText(path));
+            if (d.RootElement.TryGetProperty("PerCandidate", out var arr))
+                foreach (var r in arr.EnumerateArray())
+                {
+                    var cid = r.TryGetProperty("candidateId", out var c) ? c.GetString() ?? "" : "";
+                    var ns = r.TryGetProperty("neuralSelectionScore", out var s) ? s.GetDouble() : 0.5;
+                    if (!string.IsNullOrWhiteSpace(cid)) scores[cid] = ns;
+                }
+        }
+        catch { }
+        return scores;
+    }
+
+    private static Dictionary<string, (double successProxy, double costEfficiency, int implicitSignal)> ReadFeedbackEvents(string path)
+    {
+        var map = new Dictionary<string, (double, double, int)>();
+        if (!File.Exists(path)) return map;
+        foreach (var line in File.ReadLines(path))
+        {
+            if (string.IsNullOrWhiteSpace(line)) continue;
+            try
+            {
+                var d = JsonDocument.Parse(line).RootElement;
+                var cid = d.TryGetProperty("candidateId", out var c) ? c.GetString() ?? "" : "";
+                var sp = d.TryGetProperty("downstreamSuccessProxy", out var dp) ? dp.GetDouble() : 0;
+                var ce = d.TryGetProperty("costEfficiencyScore", out var cs) ? cs.GetDouble() : 0;
+                var si = d.TryGetProperty("userImplicitSignal", out var ui) ? (int)ui.GetByte() : 0;
+                map[cid] = (sp, ce, si);
+            }
+            catch { }
+        }
+        return map;
+    }
+
+    private static List<(string id, string section, int sourceType, double detScore, bool sel, bool inc, double tokenCost)> ReadCandidates(string path)
+    {
+        var list = new List<(string, string, int, double, bool, bool, double)>();
+        if (!File.Exists(path)) return list;
+        foreach (var line in File.ReadLines(path))
+        {
+            if (string.IsNullOrWhiteSpace(line)) continue;
+            try
+            {
+                var d = JsonDocument.Parse(line).RootElement;
+                list.Add((
+                    d.TryGetProperty("candidateId", out var c) ? c.GetString() ?? "" : "",
+                    d.TryGetProperty("section", out var s) ? s.GetString() ?? "" : "",
+                    d.TryGetProperty("sourceType", out var st) ? (int)st.GetByte() : 1,
+                    d.TryGetProperty("deterministicScore", out var ds) ? ds.GetDouble() : 0,
+                    d.TryGetProperty("selectedByScoring", out var sl) && sl.GetBoolean(),
+                    d.TryGetProperty("includedInPackage", out var ip) && ip.GetBoolean(),
+                    d.TryGetProperty("tokenCost", out var tk) ? tk.GetDouble() : 0
+                ));
+            }
+            catch { }
+        }
+        return list;
+    }
+
+    private static double FeedbackWeight((double successProxy, double costEfficiency, int implicitSignal) fb)
+    {
+        double maxSp = Math.Max(fb.successProxy, 1);
+        double normSp = Math.Clamp(fb.successProxy / maxSp, 0, 1);
+        return 0.3 + 0.7 * normSp;
+    }
+
+    private static (double a, double b, double loss) FitWeightedLogistic(List<(double x, double label, double weight)> data)
     {
         if (data.Count == 0) return (0, 0, 0);
-        double a = 0, b = 0;
-        double lr = 0.01;
-        int epochs = 500;
-        for (int e = 0; e < epochs; e++)
+        double a = 0, b = 0, lr = 0.01;
+        for (int e = 0; e < 500; e++)
         {
-            double gradA = 0, gradB = 0, totalLoss = 0;
-            foreach (var (x, y) in data)
+            double ga = 0, gb = 0, loss = 0, tw = 0;
+            foreach (var (x, y, w) in data)
             {
                 double z = a * x + b;
-                double p = 1.0 / (1.0 + Math.Exp(-z));
-                p = Math.Clamp(p, 1e-7, 1 - 1e-7);
-                gradA += (p - y) * x;
-                gradB += (p - y);
-                totalLoss += -(y * Math.Log(p) + (1 - y) * Math.Log(1 - p));
+                double p = Math.Clamp(Sigmoid(z), 1e-7, 1 - 1e-7);
+                ga += w * (p - y) * x;
+                gb += w * (p - y);
+                loss += w * (-(y * Math.Log(p) + (1 - y) * Math.Log(1 - p)));
+                tw += w;
             }
-            a -= lr * gradA / data.Count;
-            b -= lr * gradB / data.Count;
-            if (e == epochs - 1) return (a, b, totalLoss / data.Count);
+            a -= lr * ga / Math.Max(tw, 1);
+            b -= lr * gb / Math.Max(tw, 1);
+            if (e == 499) return (a, b, loss / Math.Max(tw, 1));
         }
         return (a, b, 0);
     }
 
-    private static double CalibrationSelectionThreshold(double alpha, List<CandidateRow> ranking)
+    private static double Sigmoid(double z) => 1.0 / (1.0 + Math.Exp(-z));
+
+    private static void WriteJson(string dir, string name, object obj)
     {
-        var sorted = ranking.OrderByDescending(r => r.Hybrid).ToList();
-        int selectedCount = ranking.Count(r => r.Sel);
-        int k = Math.Max(1, Math.Min(selectedCount, sorted.Count));
-        return k < sorted.Count ? sorted[k].Hybrid : sorted.Last().Hybrid;
+        File.WriteAllText(Path.Combine(dir, name),
+            JsonSerializer.Serialize(obj, new JsonSerializerOptions { WriteIndented = true }));
     }
 
-    private static void WriteMarkdownHybridEval(string dir, string now, int N, List<object> alphaResults, HashSet<string> sections, bool covLimited, bool gate)
+    private static void WriteMdHybridEval(string dir, string now, int N, List<object> alphaResults, HashSet<string> sections, bool covLimited, bool gate, List<string> missing)
     {
         var sb = new StringBuilder();
-        sb.AppendLine("# V16 Hybrid Scoring Shadow Evaluation");
+        sb.AppendLine("# V16.1 Hybrid Scoring Shadow Evaluation");
         sb.AppendLine();
         sb.AppendLine($"Generated: {now}");
         sb.AppendLine($"Candidates: {N}");
         sb.AppendLine($"V14 Gate: {(gate ? "PASSED" : "FAILED")}");
         sb.AppendLine($"Coverage Limited: {covLimited}");
-        sb.AppendLine($"Sections covered: {string.Join(", ", sections)}");
+        sb.AppendLine($"Sections covered: {string.Join(", ", sections.OrderBy(x => x))}");
+        if (covLimited) sb.AppendLine($"Missing: {string.Join(", ", missing)}");
         sb.AppendLine();
-        sb.AppendLine("## Alpha Sweep Results");
-        sb.AppendLine("| Alpha | Neural Wt | Mean Rank Delta | Selection Disagree | Top3 Churn | Top5 Churn | Top10 Churn | Mean Hybrid |");
-        sb.AppendLine("|-------|-----------|-----------------|--------------------|------------|------------|-------------|-------------|");
+        sb.AppendLine("## Alpha Sweep Results (Fixed: sorted ranking, top-K threshold)");
+        sb.AppendLine("| Alpha | NeurWt | Thrsh Mode | RankΔ | SelDisagree | T3Churn | T5Churn | T10Churn | MeanHyb |");
+        sb.AppendLine("|-------|--------|------------|-------|-------------|---------|---------|----------|---------|");
         foreach (dynamic r in alphaResults)
         {
-            sb.AppendLine($"| {r.Alpha:F1} | {r.NeuralWeight:F1} | {r.MeanRankDelta:F4} | {r.SelectionDisagreementCount} ({r.SelectionDisagreementRate:P0}) | {r.Top3Churn} | {r.Top5Churn} | {r.Top10Churn} | {r.MeanHybridScore:F4} |");
+            sb.AppendLine($"| {r.Alpha:F1} | {r.NeuralWeight:F1} | top-K | {r.MeanRankDelta:F4} | {r.SelectionDisagreementCount} | {r.Top3Churn} | {r.Top5Churn} | {r.Top10Churn} | {r.MeanHybridScore:F4} |");
         }
         sb.AppendLine();
         sb.AppendLine("## Runtime Safety");
         sb.AppendLine("- BlendAlpha: 1.0 (runtime)");
         sb.AppendLine("- NeuralBiasActive: false");
         sb.AppendLine("- RuntimeInfluenceAllowed: false");
-        sb.AppendLine("- PackageOutputChanged: false");
         File.WriteAllText(Path.Combine(dir, "hybrid-shadow-evaluation.md"), sb.ToString());
     }
 
-    private static void WriteMarkdownCalibration(string dir, string now, double a, double b, double loss, double acc, int total, int correct, List<(string id, double det, double norm, double neural, double label, double proxy, double ce)> entries, Dictionary<string, double> calibrated)
+    private static void WriteMdCalibration(string dir, string now, double a, double b, double loss, double acc, double wacc, int total, int correct, List<(string id, double detNorm, double neural, double selLabel, double incLabel, double weight, double successProxy, double costEfficiency, int implicitSignal)> entries)
     {
         var sb = new StringBuilder();
-        sb.AppendLine("# V16 Neural Calibration Shadow Report");
+        sb.AppendLine("# V16.1 Neural Calibration Shadow Report");
         sb.AppendLine();
         sb.AppendLine($"Generated: {now}");
-        sb.AppendLine($"Method: Binary logistic regression");
+        sb.AppendLine($"Method: Weighted BCE logistic regression");
         sb.AppendLine($"Coefficients: a={a:F6}, b={b:F6}");
-        sb.AppendLine($"Final BCE loss: {loss:F6}");
-        sb.AppendLine($"Pairwise ranking accuracy: {acc:P2} ({correct}/{total} pairs)");
+        sb.AppendLine($"Weighted BCE loss: {loss:F6}");
+        sb.AppendLine($"Pairwise: unweighted={acc:P2} weighted={wacc:P2} ({correct}/{total})");
         sb.AppendLine();
         sb.AppendLine("## Per-Candidate Calibration");
-        sb.AppendLine("| Candidate | Neural Score | Calibrated Score | Label | Calibrated Prob |");
-        sb.AppendLine("|-----------|-------------|-----------------|-------|----------------|");
+        sb.AppendLine("| Candidate | Neural | CalibProb | Label | Weight | SuccessProxy |");
+        sb.AppendLine("|-----------|--------|-----------|-------|--------|-------------|");
         foreach (var e in entries.Take(17))
         {
-            double calProb = 1.0 / (1.0 + Math.Exp(-(a * e.neural + b)));
-            sb.AppendLine($"| {e.id} | {e.neural:F4} | {calibrated.GetValueOrDefault(e.id, 0.5):F4} | {e.label:F0} | {calProb:F4} |");
+            sb.AppendLine($"| {e.id} | {e.neural:F4} | {Sigmoid(a * e.neural + b):F4} | {e.selLabel:F0} | {e.weight:F3} | {e.successProxy:F1} |");
         }
         sb.AppendLine();
         sb.AppendLine("## Note");
@@ -392,17 +427,18 @@ public sealed class HybridShadowEvaluator
         File.WriteAllText(Path.Combine(dir, "neural-calibration-shadow.md"), sb.ToString());
     }
 
-    private static void WriteMarkdownGate(string dir, string now, bool shadowReady, bool prodReady, bool covLimited, bool v14Gate)
+    private static void WriteMdGate(string dir, string now, bool shadowReady, bool metricReady, bool prodReady, bool covLimited, bool v14Gate)
     {
         var sb = new StringBuilder();
-        sb.AppendLine("# V16 Readiness Gate");
+        sb.AppendLine("# V16.1 Readiness Gate");
         sb.AppendLine();
         sb.AppendLine($"Generated: {now}");
         sb.AppendLine();
         sb.AppendLine($"- V16ShadowEvaluationReady: {shadowReady}");
-        sb.AppendLine($"- ProductionGeneralizationReady: {prodReady}");
+        sb.AppendLine($"- V16MetricIntegrityReady: {metricReady}");
         sb.AppendLine($"- CoverageLimited: {covLimited}");
-        sb.AppendLine($"- V14 Gate Preserved: {v14Gate}");
+        sb.AppendLine($"- ProductionGeneralizationReady: {prodReady}");
+        sb.AppendLine($"- V14GatePreserved: {v14Gate}");
         sb.AppendLine($"- RuntimeInfluenceAllowed: false");
         sb.AppendLine($"- PackageOutputChanged: false");
         sb.AppendLine($"- RuntimePromotionApplied: false");

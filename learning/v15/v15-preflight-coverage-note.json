@@ -1,5 +1,5 @@
 {
-  "GeneratedAt": "2026-07-03T03:03:15.3380258\u002B00:00",
+  "GeneratedAt": "2026-07-03T05:01:51.8615451\u002B00:00",
   "Note": "V14\u2192V15 preflight coverage assessment",
   "V14CurrentCoverage": {
     "SectionCount": 7,
@@ -18,7 +18,7 @@
     ],
     "RelatedContextNote": "related_context was not exercised because relation targets were memory IDs, not context store IDs, and \u0027references\u0027 relation type was not in the default whitelist",
     "LegacyRawNote": "legacy/raw is exclusive to the legacy build path and was not exercised in the policy-mode smoke",
-    "TraceRowCount": 17,
+    "TraceRowCount": 33,
     "SmokeEvaluationSource": "v14-runtime-trace-smoke deterministic seed corpus"
   },
   "V15CoverageLimitation": {

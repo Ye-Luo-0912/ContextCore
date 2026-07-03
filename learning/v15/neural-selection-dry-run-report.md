@@ -1,14 +1,14 @@
 # V15 Neural Selection Dry-Run Report
 
-Generated: 2026-07-03T03:03:15.3380258+00:00
+Generated: 2026-07-03T05:01:51.8615451+00:00
 
 ## Summary
-- Candidates processed: 17
+- Candidates processed: 33
 - Model: 10→8→3 MLP, seeded deterministic weights (seed=42)
-- Spearman rho (det vs neural): 0.5674
-- Selection direction agreement: 47.06%
-- Mean deterministic (normalized): 0.4807
-- Mean neural selection score: 0.4953
+- Spearman rho (det vs neural): 0.8327
+- Selection direction agreement: 66.67%
+- Mean deterministic (normalized): 0.7063
+- Mean neural selection score: 0.4992
 
 ## Safety
 - NeuralBiasActive: false
@@ -32,8 +32,8 @@ Generated: 2026-07-03T03:03:15.3380258+00:00
 | ctx-07 | recent_context | 0.7182 | 0.5000 | 0.5000 | 0.5000 | yes |
 | ctx-08 | recent_context | 0.7182 | 0.5000 | 0.5000 | 0.5000 | yes |
 | ctx-09 | recent_context | 0.7182 | 0.5000 | 0.5000 | 0.5000 | yes |
-| sm-01 | stable_memory | 0.1391 | 0.4969 | 0.4892 | 0.4974 | yes |
-| sm-02 | stable_memory | 0.1391 | 0.4969 | 0.4892 | 0.4974 | yes |
+| sm-01 | stable_memory | 0.1391 | 0.4855 | 0.4850 | 0.4812 | no |
+| sm-02 | stable_memory | 0.1391 | 0.4855 | 0.4850 | 0.4812 | no |
 | sc-dep | soft_constraints | 0.1455 | 0.5000 | 0.5000 | 0.5000 | no |
-| sc-01 | soft_constraints | 0.1682 | 0.5000 | 0.5000 | 0.5000 | no |
-| sc-02 | soft_constraints | 0.1682 | 0.5000 | 0.5000 | 0.5000 | no |
+| sc-01 | soft_constraints | 0.1682 | 0.4932 | 0.4946 | 0.4908 | no |
+| sc-02 | soft_constraints | 0.1682 | 0.4932 | 0.4946 | 0.4908 | no |

@@ -1,21 +1,21 @@
 {
-  "GeneratedAt": "2026-07-02T10:34:02.6171182\u002B00:00",
+  "GeneratedAt": "2026-07-03T05:01:42.9123090\u002B00:00",
   "RuntimeCandidateTraceSinkImplemented": true,
   "RuntimeCandidateTraceSinkEnabled": true,
   "TraceRowsProducedByRuntimeSink": true,
-  "RuntimeCandidateTraceRowsRead": 17,
-  "producedByRuntimeSink": 17,
+  "RuntimeCandidateTraceRowsRead": 33,
+  "producedByRuntimeSink": 33,
   "NoSeedTraceRows": true,
   "SeedRowCount": 0,
-  "FeatureRowsFromRuntimeTrace": 17,
-  "FeedbackRowsFromRuntimeTrace": 17,
+  "FeatureRowsFromRuntimeTrace": 33,
+  "FeedbackRowsFromRuntimeTrace": 33,
   "FoundationReportBuilderDoesNotSynthesizeRuntimeTrace": true,
   "MissingCriticalFieldCount": 0,
   "MissingOptionalFieldCount": 0,
   "ParseErrorCount": 0,
   "MissingFieldBreakdown": [],
-  "SelectedTraceCount": 11,
-  "DroppedTraceCount": 6,
+  "SelectedTraceCount": 21,
+  "DroppedTraceCount": 12,
   "SectionCoverage": [
     {
       "Section": "hard_constraints",
@@ -42,14 +42,74 @@
       "Count": 2
     },
     {
+      "Section": "related_context",
+      "Count": 2
+    },
+    {
       "Section": "current_task",
+      "Count": 1
+    },
+    {
+      "Section": "SmokeDoc_14",
+      "Count": 1
+    },
+    {
+      "Section": "SmokeDoc_13",
+      "Count": 1
+    },
+    {
+      "Section": "SmokeDoc_12",
+      "Count": 1
+    },
+    {
+      "Section": "SmokeDoc_11",
+      "Count": 1
+    },
+    {
+      "Section": "SmokeDoc_10",
+      "Count": 1
+    },
+    {
+      "Section": "SmokeDoc_09",
+      "Count": 1
+    },
+    {
+      "Section": "SmokeDoc_08",
+      "Count": 1
+    },
+    {
+      "Section": "SmokeDoc_07",
+      "Count": 1
+    },
+    {
+      "Section": "SmokeDoc_06",
+      "Count": 1
+    },
+    {
+      "Section": "SmokeDoc_05",
+      "Count": 1
+    },
+    {
+      "Section": "SmokeDoc_04",
+      "Count": 1
+    },
+    {
+      "Section": "SmokeDoc_03",
+      "Count": 1
+    },
+    {
+      "Section": "SmokeDoc_02",
+      "Count": 1
+    },
+    {
+      "Section": "SmokeDoc_01",
       "Count": 1
     }
   ],
   "RetrievalChannelCoverage": [
     {
       "Channel": 2,
-      "Count": 7
+      "Count": 21
     },
     {
       "Channel": 6,
@@ -58,6 +118,10 @@
     {
       "Channel": 4,
       "Count": 3
+    },
+    {
+      "Channel": 3,
+      "Count": 2
     },
     {
       "Channel": 5,

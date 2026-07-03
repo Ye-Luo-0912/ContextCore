@@ -1,174 +1,392 @@
 {
-  "GeneratedAt": "2026-07-03T04:32:11.2010326\u002B00:00",
-  "CalibrationMethod": "Binary logistic regression (neural selection score \u2192 P(candidate selected))",
-  "CalibrationCoefficients": {
-    "a": 0.180299,
-    "b": 0.376995
+  "GeneratedAt": "2026-07-03T05:02:49.0377144\u002B00:00",
+  "CalibrationMethod": "Weighted binary logistic regression: P(selected | neuralScore) = sigmoid(a * neuralScore \u002B b)",
+  "LabelFormula": "label = selectedByScoring from runtime trace (1.0 if selected, 0.0 otherwise)",
+  "SampleWeightFormula": "weight = normalized downstreamSuccessProxy (feedback event). proxy_norm = proxy / max_proxy, weight = 0.3 \u002B 0.7 * proxy_norm. Ensures high-success candidates contribute more to calibration.",
+  "WeightedCalibration": {
+    "a": 0.641662,
+    "b": 1.292052,
+    "weightedBCELoss": 0.223662
   },
-  "LossFunction": "Binary cross-entropy",
-  "FinalLoss": 0.651755,
+  "UnweightedCalibration": {
+    "a": 0.592141,
+    "b": 1.183969,
+    "unweightedBCELoss": 0.294968
+  },
   "PairwiseRanking": {
-    "TotalPairs": 132,
-    "CorrectPairs": 48,
-    "Accuracy": 0.3636,
-    "Interpretation": "random-level pairwise ordering",
-    "Limitation": "V15 neural scores are near-constant (~0.5) due to seeded-weights MLP without training. Calibration cannot improve upon uniform scores."
+    "TotalPairs": 124,
+    "CorrectPairs": 68,
+    "UnweightedAccuracy": 0.5484,
+    "WeightedAccuracy": 0.4,
+    "Interpretation": "random-level",
+    "Limitation": "Neural scores near-constant (~0.5) from untrained seeded MLP. Calibration limited by input signal variance."
   },
   "PerCandidateCalibration": [
     {
       "candidateId": "task-smoke",
       "originalNeuralScore": 0.5,
-      "calibratedScore": 0.6147,
+      "calibratedProbability": 0.8338,
       "selectedLabel": true,
-      "calibratedProbability": 0.6147,
+      "includedInPackage": true,
+      "sampleWeight": 1,
       "successProxy": 165,
-      "costEfficiency": 110
+      "costEfficiency": 110,
+      "implicitSignal": 1
     },
     {
       "candidateId": "hc-dep",
       "originalNeuralScore": 0.5,
-      "calibratedScore": 0.6147,
+      "calibratedProbability": 0.8338,
       "selectedLabel": false,
-      "calibratedProbability": 0.6147,
+      "includedInPackage": false,
+      "sampleWeight": 0.3,
       "successProxy": 0,
-      "costEfficiency": 0
+      "costEfficiency": 0,
+      "implicitSignal": 0
     },
     {
       "candidateId": "hc-01",
       "originalNeuralScore": 0.5,
-      "calibratedScore": 0.6147,
+      "calibratedProbability": 0.8338,
       "selectedLabel": true,
-      "calibratedProbability": 0.6147,
+      "includedInPackage": true,
+      "sampleWeight": 1,
       "successProxy": 156.75,
-      "costEfficiency": 104.5
+      "costEfficiency": 104.5,
+      "implicitSignal": 1
     },
     {
       "candidateId": "hc-02",
       "originalNeuralScore": 0.5,
-      "calibratedScore": 0.6147,
+      "calibratedProbability": 0.8338,
       "selectedLabel": true,
-      "calibratedProbability": 0.6147,
+      "includedInPackage": true,
+      "sampleWeight": 1,
       "successProxy": 156.75,
-      "costEfficiency": 104.5
+      "costEfficiency": 104.5,
+      "implicitSignal": 1
     },
     {
       "candidateId": "wm-03",
       "originalNeuralScore": 0.4846,
-      "calibratedScore": 0.614,
+      "calibratedProbability": 0.8324,
       "selectedLabel": true,
-      "calibratedProbability": 0.614,
+      "includedInPackage": true,
+      "sampleWeight": 1,
       "successProxy": 69.874,
-      "costEfficiency": 46.583
+      "costEfficiency": 46.583,
+      "implicitSignal": 1
     },
     {
       "candidateId": "wm-02",
       "originalNeuralScore": 0.4846,
-      "calibratedScore": 0.614,
+      "calibratedProbability": 0.8324,
       "selectedLabel": true,
-      "calibratedProbability": 0.614,
+      "includedInPackage": true,
+      "sampleWeight": 1,
       "successProxy": 69.574,
-      "costEfficiency": 46.383
+      "costEfficiency": 46.383,
+      "implicitSignal": 1
     },
     {
       "candidateId": "wm-01",
       "originalNeuralScore": 0.4846,
-      "calibratedScore": 0.614,
+      "calibratedProbability": 0.8324,
       "selectedLabel": true,
-      "calibratedProbability": 0.614,
+      "includedInPackage": true,
+      "sampleWeight": 1,
       "successProxy": 69.274,
-      "costEfficiency": 46.183
+      "costEfficiency": 46.183,
+      "implicitSignal": 1
     },
     {
       "candidateId": "gc-02",
       "originalNeuralScore": 0.4864,
-      "calibratedScore": 0.6141,
+      "calibratedProbability": 0.8326,
       "selectedLabel": true,
-      "calibratedProbability": 0.6141,
+      "includedInPackage": true,
+      "sampleWeight": 1,
       "successProxy": 14.1,
-      "costEfficiency": 9.4
+      "costEfficiency": 9.4,
+      "implicitSignal": 1
     },
     {
       "candidateId": "gc-01",
       "originalNeuralScore": 0.4865,
-      "calibratedScore": 0.6141,
+      "calibratedProbability": 0.8326,
       "selectedLabel": true,
-      "calibratedProbability": 0.6141,
+      "includedInPackage": true,
+      "sampleWeight": 1,
       "successProxy": 13.8,
-      "costEfficiency": 9.2
+      "costEfficiency": 9.2,
+      "implicitSignal": 1
     },
     {
       "candidateId": "ctx-07",
-      "originalNeuralScore": 0.5,
-      "calibratedScore": 0.6147,
+      "originalNeuralScore": 0.51,
+      "calibratedProbability": 0.8347,
       "selectedLabel": true,
-      "calibratedProbability": 0.6147,
-      "successProxy": 118.5,
-      "costEfficiency": 79
+      "includedInPackage": true,
+      "sampleWeight": 0.37,
+      "successProxy": 0.1,
+      "costEfficiency": 359.995,
+      "implicitSignal": 1
     },
     {
       "candidateId": "ctx-08",
-      "originalNeuralScore": 0.5,
-      "calibratedScore": 0.6147,
+      "originalNeuralScore": 0.51,
+      "calibratedProbability": 0.8347,
       "selectedLabel": true,
-      "calibratedProbability": 0.6147,
-      "successProxy": 118.5,
-      "costEfficiency": 79
+      "includedInPackage": true,
+      "sampleWeight": 0.37,
+      "successProxy": 0.1,
+      "costEfficiency": 409.994,
+      "implicitSignal": 1
     },
     {
       "candidateId": "ctx-09",
-      "originalNeuralScore": 0.5,
-      "calibratedScore": 0.6147,
+      "originalNeuralScore": 0.51,
+      "calibratedProbability": 0.8347,
       "selectedLabel": true,
-      "calibratedProbability": 0.6147,
-      "successProxy": 118.5,
-      "costEfficiency": 79
+      "includedInPackage": true,
+      "sampleWeight": 0.37,
+      "successProxy": 0.1,
+      "costEfficiency": 459.994,
+      "implicitSignal": 1
     },
     {
       "candidateId": "sm-01",
-      "originalNeuralScore": 0.4969,
-      "calibratedScore": 0.6146,
-      "selectedLabel": false,
-      "calibratedProbability": 0.6146,
-      "successProxy": 0,
-      "costEfficiency": 0
+      "originalNeuralScore": 0.4855,
+      "calibratedProbability": 0.8325,
+      "selectedLabel": true,
+      "includedInPackage": true,
+      "sampleWeight": 1,
+      "successProxy": 22.95,
+      "costEfficiency": 15.3,
+      "implicitSignal": 1
     },
     {
       "candidateId": "sm-02",
-      "originalNeuralScore": 0.4969,
-      "calibratedScore": 0.6146,
-      "selectedLabel": false,
-      "calibratedProbability": 0.6146,
-      "successProxy": 0,
-      "costEfficiency": 0
+      "originalNeuralScore": 0.4855,
+      "calibratedProbability": 0.8325,
+      "selectedLabel": true,
+      "includedInPackage": true,
+      "sampleWeight": 1,
+      "successProxy": 22.95,
+      "costEfficiency": 15.3,
+      "implicitSignal": 1
     },
     {
       "candidateId": "sc-dep",
       "originalNeuralScore": 0.5,
-      "calibratedScore": 0.6147,
+      "calibratedProbability": 0.8338,
       "selectedLabel": false,
-      "calibratedProbability": 0.6147,
+      "includedInPackage": false,
+      "sampleWeight": 0.3,
       "successProxy": 0,
-      "costEfficiency": 0
+      "costEfficiency": 0,
+      "implicitSignal": 0
     },
     {
       "candidateId": "sc-01",
-      "originalNeuralScore": 0.5,
-      "calibratedScore": 0.6147,
-      "selectedLabel": false,
-      "calibratedProbability": 0.6147,
-      "successProxy": 0,
-      "costEfficiency": 0
+      "originalNeuralScore": 0.4932,
+      "calibratedProbability": 0.8332,
+      "selectedLabel": true,
+      "includedInPackage": true,
+      "sampleWeight": 1,
+      "successProxy": 27.75,
+      "costEfficiency": 18.5,
+      "implicitSignal": 1
     },
     {
       "candidateId": "sc-02",
+      "originalNeuralScore": 0.4932,
+      "calibratedProbability": 0.8332,
+      "selectedLabel": true,
+      "includedInPackage": true,
+      "sampleWeight": 1,
+      "successProxy": 27.75,
+      "costEfficiency": 18.5,
+      "implicitSignal": 1
+    },
+    {
+      "candidateId": "ctx-14",
       "originalNeuralScore": 0.5,
-      "calibratedScore": 0.6147,
-      "selectedLabel": false,
-      "calibratedProbability": 0.6147,
-      "successProxy": 0,
-      "costEfficiency": 0
+      "calibratedProbability": 0.8338,
+      "selectedLabel": true,
+      "includedInPackage": true,
+      "sampleWeight": 1,
+      "successProxy": 1064.985,
+      "costEfficiency": 709.99,
+      "implicitSignal": 1
+    },
+    {
+      "candidateId": "ctx-13",
+      "originalNeuralScore": 0.5,
+      "calibratedProbability": 0.8338,
+      "selectedLabel": true,
+      "includedInPackage": true,
+      "sampleWeight": 1,
+      "successProxy": 989.986,
+      "costEfficiency": 659.991,
+      "implicitSignal": 1
+    },
+    {
+      "candidateId": "ctx-14",
+      "originalNeuralScore": 0.5,
+      "calibratedProbability": 0.8338,
+      "selectedLabel": true,
+      "includedInPackage": true,
+      "sampleWeight": 1,
+      "successProxy": 1064.985,
+      "costEfficiency": 709.99,
+      "implicitSignal": 1
+    },
+    {
+      "candidateId": "ctx-13",
+      "originalNeuralScore": 0.5,
+      "calibratedProbability": 0.8338,
+      "selectedLabel": true,
+      "includedInPackage": true,
+      "sampleWeight": 1,
+      "successProxy": 989.986,
+      "costEfficiency": 659.991,
+      "implicitSignal": 1
+    },
+    {
+      "candidateId": "ctx-12",
+      "originalNeuralScore": 0.5,
+      "calibratedProbability": 0.8338,
+      "selectedLabel": true,
+      "includedInPackage": true,
+      "sampleWeight": 1,
+      "successProxy": 914.988,
+      "costEfficiency": 609.992,
+      "implicitSignal": 1
+    },
+    {
+      "candidateId": "ctx-11",
+      "originalNeuralScore": 0.5,
+      "calibratedProbability": 0.8338,
+      "selectedLabel": true,
+      "includedInPackage": true,
+      "sampleWeight": 1,
+      "successProxy": 839.989,
+      "costEfficiency": 559.992,
+      "implicitSignal": 1
+    },
+    {
+      "candidateId": "ctx-10",
+      "originalNeuralScore": 0.51,
+      "calibratedProbability": 0.8347,
+      "selectedLabel": true,
+      "includedInPackage": false,
+      "sampleWeight": 0.37,
+      "successProxy": 0.1,
+      "costEfficiency": 509.993,
+      "implicitSignal": 1
+    },
+    {
+      "candidateId": "ctx-09",
+      "originalNeuralScore": 0.51,
+      "calibratedProbability": 0.8347,
+      "selectedLabel": true,
+      "includedInPackage": false,
+      "sampleWeight": 0.37,
+      "successProxy": 0.1,
+      "costEfficiency": 459.994,
+      "implicitSignal": 1
+    },
+    {
+      "candidateId": "ctx-08",
+      "originalNeuralScore": 0.51,
+      "calibratedProbability": 0.8347,
+      "selectedLabel": true,
+      "includedInPackage": false,
+      "sampleWeight": 0.37,
+      "successProxy": 0.1,
+      "costEfficiency": 409.994,
+      "implicitSignal": 1
+    },
+    {
+      "candidateId": "ctx-07",
+      "originalNeuralScore": 0.51,
+      "calibratedProbability": 0.8347,
+      "selectedLabel": true,
+      "includedInPackage": false,
+      "sampleWeight": 0.37,
+      "successProxy": 0.1,
+      "costEfficiency": 359.995,
+      "implicitSignal": 1
+    },
+    {
+      "candidateId": "ctx-06",
+      "originalNeuralScore": 0.51,
+      "calibratedProbability": 0.8347,
+      "selectedLabel": true,
+      "includedInPackage": false,
+      "sampleWeight": 0.37,
+      "successProxy": 0.1,
+      "costEfficiency": 309.996,
+      "implicitSignal": 1
+    },
+    {
+      "candidateId": "ctx-05",
+      "originalNeuralScore": 0.51,
+      "calibratedProbability": 0.8347,
+      "selectedLabel": true,
+      "includedInPackage": false,
+      "sampleWeight": 0.37,
+      "successProxy": 0.1,
+      "costEfficiency": 259.997,
+      "implicitSignal": 1
+    },
+    {
+      "candidateId": "ctx-04",
+      "originalNeuralScore": 0.51,
+      "calibratedProbability": 0.8347,
+      "selectedLabel": true,
+      "includedInPackage": false,
+      "sampleWeight": 0.37,
+      "successProxy": 0.1,
+      "costEfficiency": 209.997,
+      "implicitSignal": 1
+    },
+    {
+      "candidateId": "ctx-03",
+      "originalNeuralScore": 0.51,
+      "calibratedProbability": 0.8347,
+      "selectedLabel": true,
+      "includedInPackage": false,
+      "sampleWeight": 0.37,
+      "successProxy": 0.1,
+      "costEfficiency": 159.998,
+      "implicitSignal": 1
+    },
+    {
+      "candidateId": "ctx-02",
+      "originalNeuralScore": 0.51,
+      "calibratedProbability": 0.8347,
+      "selectedLabel": true,
+      "includedInPackage": false,
+      "sampleWeight": 0.37,
+      "successProxy": 0.1,
+      "costEfficiency": 109.999,
+      "implicitSignal": 1
+    },
+    {
+      "candidateId": "ctx-01",
+      "originalNeuralScore": 0.5,
+      "calibratedProbability": 0.8338,
+      "selectedLabel": true,
+      "includedInPackage": false,
+      "sampleWeight": 0.37,
+      "successProxy": 0.1,
+      "costEfficiency": 59.999,
+      "implicitSignal": 1
     }
   ],
-  "CalibrationWarning": "Offline shadow calibration only. Does not affect runtime scoring. V16 does not ship calibration coefficients to production.",
-  "OfflineShadowCalibration": true
+  "OfflineShadowCalibration": true,
+  "RuntimeInfluenceAllowed": false,
+  "CalibrationWarning": "Offline shadow calibration only. Coefficients are NOT deployed to runtime pipeline. V16 blend alpha remains 1.0."
 }

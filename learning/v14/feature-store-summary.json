@@ -1,9 +1,9 @@
 {
-  "GeneratedAt": "2026-07-02T10:34:02.6171182\u002B00:00",
+  "GeneratedAt": "2026-07-03T05:01:42.9123090\u002B00:00",
   "FeatureStoreInitialized": true,
-  "TotalRecords": 17,
-  "FeatureRowsFromRuntimeTrace": 17,
-  "FeedbackRowsFromRuntimeTrace": 17,
+  "TotalRecords": 33,
+  "FeatureRowsFromRuntimeTrace": 33,
+  "FeedbackRowsFromRuntimeTrace": 33,
   "TraceRowsProducedByRuntimeSink": true,
   "FoundationReportBuilderDoesNotSynthesizeRuntimeTrace": true,
   "NoSeedTraceRows": true

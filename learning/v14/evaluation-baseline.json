@@ -1,9 +1,9 @@
 {
-  "GeneratedAt": "2026-07-02T10:34:02.6171182\u002B00:00",
+  "GeneratedAt": "2026-07-03T05:01:42.9123090\u002B00:00",
   "BaselineEstablished": true,
   "BaselineVersion": "V14.Full",
-  "TotalCandidates": 17,
-  "MeanEffectiveness": 0.647,
+  "TotalCandidates": 28,
+  "MeanEffectiveness": 0.625,
   "Top10": [
     {
       "candidateId": "task-smoke",
@@ -54,13 +54,13 @@
       "effectiveness": 1
     },
     {
-      "candidateId": "ctx-07",
+      "candidateId": "sm-01",
       "count": 1,
       "included": 1,
       "effectiveness": 1
     },
     {
-      "candidateId": "ctx-08",
+      "candidateId": "sm-02",
       "count": 1,
       "included": 1,
       "effectiveness": 1

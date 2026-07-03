@@ -1,17 +1,23 @@
 {
-  "GeneratedAt": "2026-07-03T04:32:11.2010326\u002B00:00",
+  "GeneratedAt": "2026-07-03T05:02:49.0377144\u002B00:00",
   "V16ShadowEvaluationReady": true,
+  "V16MetricIntegrityReady": true,
+  "CoverageLimited": false,
+  "MissingCoverage": [],
+  "ProductionGeneralizationReady": true,
   "RuntimeInfluenceAllowed": false,
-  "ProductionGeneralizationReady": false,
-  "BlockedByCoverage": "Missing sections: related_context, legacy/raw",
   "PackageOutputChanged": false,
   "RuntimePromotionApplied": false,
   "VectorBindingChanged": false,
   "V14GatePreserved": true,
-  "NextCoverageRequirements": [
-    "Run V14 runtime-trace-smoke against a corpus that includes related_context candidates (requires context store items with graph-expanded IDs and whitelisted relation types)",
-    "Run V14 runtime-trace-smoke against a legacy-path corpus to cover legacy/raw sections",
-    "Re-run V15 and V16 against full-coverage trace before declaring ProductionGeneralizationReady"
+  "CalibrationActive": true,
+  "CalibrationWeighted": true,
+  "FeedbackSignalsUsed": [
+    "downstreamSuccessProxy",
+    "costEfficiencyScore",
+    "userImplicitSignal"
   ],
-  "Interpretability": "V16 shadow evaluation uses calibratable hybrid scoring to understand neural vs deterministic trade-offs without runtime binding. Results are informational only."
+  "NextSteps": [
+    "Coverage requirements met. V16 ready for V17 production evaluation."
+  ]
 }

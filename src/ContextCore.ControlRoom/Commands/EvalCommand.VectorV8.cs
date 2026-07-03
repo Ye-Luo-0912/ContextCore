@@ -2687,13 +2687,20 @@ public static partial class EvalCommand
                 }, ct).ConfigureAwait(false);
             }
 
-            // Seed relation store for related_context
+            // Seed relation store for related_context - must use whitelisted relation type
+            // and target a context store item so ResolveRelatedContextAsync finds it
             var relationStore = new ContextCore.Storage.InMemory.InMemoryRelationStore();
             await relationStore.SaveAsync(new ContextCore.Abstractions.Models.ContextRelation
             {
                 Id = "rel-01", WorkspaceId = ws, CollectionId = col,
-                SourceId = "wm-01", TargetId = "sm-01",
-                RelationType = "references", Weight = 0.8, Confidence = 0.9, CreatedAt = now
+                SourceId = "wm-01", TargetId = "ctx-14",
+                RelationType = "related_to", Weight = 0.8, Confidence = 0.9, CreatedAt = now
+            }, ct).ConfigureAwait(false);
+            await relationStore.SaveAsync(new ContextCore.Abstractions.Models.ContextRelation
+            {
+                Id = "rel-02", WorkspaceId = ws, CollectionId = col,
+                SourceId = "wm-02", TargetId = "ctx-13",
+                RelationType = "derived_from", Weight = 0.7, Confidence = 0.85, CreatedAt = now
             }, ct).ConfigureAwait(false);
 
             var tokenizer = new ContextCore.Core.DefaultContextTokenizerResolver();
@@ -2701,11 +2708,12 @@ public static partial class EvalCommand
                 store, constraintStore, globalStore, memStore, relationStore,
                 null, tokenizer, memStore);
 
-            // Low token budget to force some sections to be dropped
+            // Policy-mode build: exercises current_task, constraints, working/stable/global memory,
+            // recent_context, and related_context (via graph expansion from wm-01->ctx-14)
             var policy = new ContextCore.Abstractions.Models.ContextPackagePolicy
             {
                 Id = "smoke-pol", WorkspaceId = ws, CollectionId = col,
-                Name = "V14Smoke", TokenBudget = 500,
+                Name = "V14Smoke", TokenBudget = 800,
                 IncludeGlobalContext = true,
                 IncludeHardConstraints = true,
                 IncludeSoftConstraints = true,
@@ -2719,11 +2727,20 @@ public static partial class EvalCommand
             var request = new ContextCore.Abstractions.Models.ContextPackageRequest
             {
                 WorkspaceId = ws, CollectionId = col,
-                TokenBudget = 500, QueryText = "smoke",
+                TokenBudget = 800, QueryText = "smoke",
                 Policy = policy
             };
             var result = await builder.BuildDetailedAsync(request, ct).ConfigureAwait(false);
-            Console.WriteLine($"[Smoke] Package builder exercised: sections={result.Package.Sections.Count} selected={result.SelectedItems.Count} dropped={result.DroppedItems.Count}");
+            Console.WriteLine($"[Smoke] Policy-mode: sections={result.Package.Sections.Count} selected={result.SelectedItems.Count} dropped={result.DroppedItems.Count}");
+
+            // Legacy-mode build: exercises legacy/raw section path
+            var legacyRequest = new ContextCore.Abstractions.Models.ContextPackageRequest
+            {
+                WorkspaceId = ws, CollectionId = col,
+                TokenBudget = 400, QueryText = "smoke"
+            };
+            var legacyResult = await builder.BuildDetailedAsync(legacyRequest, ct).ConfigureAwait(false);
+            Console.WriteLine($"[Smoke] Legacy-mode: sections={legacyResult.Package.Sections.Count} selected={legacyResult.SelectedItems.Count} dropped={legacyResult.DroppedItems.Count}");
         }
         catch (Exception ex)
         {
@@ -2735,7 +2752,7 @@ public static partial class EvalCommand
             ContextCore.Core.Services.Learning.V14_0.RuntimeCandidateTraceSinkAccessor.Current = new ContextCore.Core.Services.Learning.V14_0.NullRuntimeCandidateTraceSink();
         }
 
-        sink.Dispose(); // close file before FoundationReportBuilder reads it
+        sink.Dispose();
 
         new ContextCore.Core.Services.Learning.V14_0.FoundationReportBuilder().BuildAndWrite(".");
         Console.WriteLine("[Eval] V14 Runtime Trace Smoke done");
