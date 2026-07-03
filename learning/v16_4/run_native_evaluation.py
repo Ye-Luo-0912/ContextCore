@@ -14,9 +14,15 @@ from datetime import datetime, timezone
 BASE = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.dirname(os.path.dirname(BASE))
 
-NATIVE_TRACE = os.path.join(BASE, "native-runtime-candidate-trace-dry-run-002.jsonl")
-if not os.path.exists(NATIVE_TRACE):
-    NATIVE_TRACE = os.path.join(BASE, "native-runtime-candidate-trace-dry-run-001.jsonl")
+def _find_latest_trace():
+    pattern = os.path.join(BASE, "native-runtime-candidate-trace-*.jsonl")
+    import glob
+    files = sorted(glob.glob(pattern), reverse=True)
+    if files:
+        return files[0]
+    return os.path.join(BASE, "native-runtime-candidate-trace.jsonl")
+
+NATIVE_TRACE = _find_latest_trace()
 
 OUT_EVAL_JSON = os.path.join(BASE, "native-dry-run-evaluation.json")
 OUT_EVAL_MD = os.path.join(BASE, "native-dry-run-evaluation.md")

@@ -2965,27 +2965,37 @@ public static partial class EvalCommand
 
     private static async Task ExecuteV16_4NativeTraceCollectAsync(IReadOnlyList<string> args, CancellationToken ct)
     {
-        // Parse --runId argument (defaults to timestamp-based)
-        string runId = string.Empty;
+        // Parse --runId argument; auto-generate timestamp if missing or empty
+        string? runId = null;
+        bool generatedRunId = true;
         for (int i = 1; i < args.Count - 1; i++)
         {
             if (string.Equals(args[i], "--runId", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Count)
             {
-                runId = args[i + 1];
+                var arg = args[i + 1];
+                if (!string.IsNullOrWhiteSpace(arg))
+                {
+                    runId = arg;
+                    generatedRunId = false;
+                }
                 break;
             }
         }
-        runId ??= DateTimeOffset.UtcNow.ToString("yyyyMMdd-HHmmss");
+        if (string.IsNullOrWhiteSpace(runId))
+        {
+            runId = DateTimeOffset.UtcNow.ToString("yyyyMMdd-HHmmss");
+            generatedRunId = true;
+        }
 
         var outputDir = System.IO.Path.Combine("learning", "v16_4");
         System.IO.Directory.CreateDirectory(outputDir);
         var tracePath = System.IO.Path.Combine(outputDir, $"native-runtime-candidate-trace-{runId}.jsonl");
 
-        // Idempotency: if trace file already exists for this runId, reject (not overwrite)
+        // Idempotency: reject if trace file already exists for this runId
         if (File.Exists(tracePath))
         {
             Console.WriteLine($"[V16.4] ERROR: Trace file already exists for runId={runId}: {tracePath}");
-            Console.WriteLine("[V16.4] Idempotency: refusing to overwrite. Use a different --runId.");
+            Console.WriteLine("[V16.4] Idempotency: RejectExistingRunId — refusing to overwrite. Use a different --runId.");
             Console.WriteLine("[V16.4] CollectorIdempotencyReady=false");
 
             var idempotencyFailGate = new
@@ -2993,10 +3003,14 @@ public static partial class EvalCommand
                 GeneratedAt = DateTimeOffset.UtcNow.ToString("o"),
                 CollectorMode = "NativeRuntimeCandidateTracePreview",
                 RunId = runId,
+                GeneratedRunId = generatedRunId,
                 TracePath = tracePath,
+                IdempotencyMode = "RejectExistingRunId",
+                RunScopedTracePath = true,
+                SharedTraceAppend = false,
                 CollectorIdempotencyReady = false,
                 IdempotencyCheck = "FileExists_Rejected",
-                IdempotencyNote = "Trace file already exists for this runId. Use a unique --runId to collect a new trace.",
+                IdempotencyNote = "Trace file already exists for this runId. Use a unique --runId to collect a new trace. Timestamped runIds are auto-generated when --runId is not provided.",
                 RuntimeInfluenceAllowed = false,
                 PackageOutputChanged = false,
                 VectorBindingChanged = false,
@@ -3008,7 +3022,7 @@ public static partial class EvalCommand
             return;
         }
 
-        Console.WriteLine($"[V16.4] Native trace collection dry run: runId={runId}");
+        Console.WriteLine($"[V16.4] Native trace collection dry run: runId={runId} (generated={generatedRunId})");
         Console.WriteLine($"[V16.4] Output: {tracePath}");
 
         var sink = new ContextCore.Core.Services.Learning.V14_0.FileRuntimeCandidateTraceSink(tracePath);
@@ -3209,11 +3223,12 @@ public static partial class EvalCommand
         var validator = new ContextCore.Core.Services.Learning.V14_0.RuntimeCandidateTraceContractValidator();
         validator.Validate(traceLines);
 
-        // Section coverage
+        // Section coverage and count semantics
         var sectionCoverage = new System.Collections.Generic.Dictionary<string, int>();
         var channelCoverage = new System.Collections.Generic.Dictionary<int, int>();
         var traceSourceCoverage = new System.Collections.Generic.Dictionary<int, int>();
-        int selectedCount = 0, droppedCount = 0;
+        int scoringSelectedCount = 0, scoringRejectedCount = 0;
+        int packageIncludedCount = 0, packageDroppedCount = 0;
 
         foreach (var line in traceLines)
         {
@@ -3237,10 +3252,18 @@ public static partial class EvalCommand
                     var tsVal = ts.ValueKind == JsonValueKind.Number ? ts.GetInt32() : 0;
                     traceSourceCoverage[tsVal] = traceSourceCoverage.GetValueOrDefault(tsVal) + 1;
                 }
-                if (root.TryGetProperty("selectedByScoring", out var sel) && sel.ValueKind == JsonValueKind.True)
-                    selectedCount++;
-                if (root.TryGetProperty("includedInPackage", out var inc) && inc.ValueKind == JsonValueKind.False)
-                    droppedCount++;
+                // Scoring selection: selectedByScoring = true or false
+                if (root.TryGetProperty("selectedByScoring", out var sel))
+                {
+                    if (sel.ValueKind == JsonValueKind.True) scoringSelectedCount++;
+                    else if (sel.ValueKind == JsonValueKind.False) scoringRejectedCount++;
+                }
+                // Package inclusion: includedInPackage = true or false
+                if (root.TryGetProperty("includedInPackage", out var inc))
+                {
+                    if (inc.ValueKind == JsonValueKind.True) packageIncludedCount++;
+                    else if (inc.ValueKind == JsonValueKind.False) packageDroppedCount++;
+                }
             }
             catch { }
         }
@@ -3253,6 +3276,7 @@ public static partial class EvalCommand
         {
             GeneratedAt = DateTimeOffset.UtcNow.ToString("o"),
             RunId = runId,
+            GeneratedRunId = generatedRunId,
             TracePath = tracePath,
             CollectorMode = "NativeRuntimeCandidateTracePreview",
             TraceCaptureOnly = true,
@@ -3260,8 +3284,18 @@ public static partial class EvalCommand
             ParseErrorCount = validator.ParseErrorCount,
             MissingCriticalFieldCount = validator.MissingCriticalFieldCount,
             MissingOptionalFieldCount = validator.MissingOptionalFieldCount,
-            SelectedTraceCount = selectedCount,
-            DroppedTraceCount = droppedCount,
+            ScoringSelectedCount = scoringSelectedCount,
+            ScoringSelectedDefinition = "selectedByScoring == true: candidate passed scoring threshold and was selected",
+            ScoringRejectedCount = scoringRejectedCount,
+            ScoringRejectedDefinition = "selectedByScoring == false: candidate was explicitly rejected by scoring (deprecated, lifecycle-filtered, etc.)",
+            ScoringSemanticCheck = $"ScoringSelected({scoringSelectedCount}) + ScoringRejected({scoringRejectedCount}) == TotalRows({traceLines.Count})",
+            ScoringConsistent = scoringSelectedCount + scoringRejectedCount == traceLines.Count,
+            PackageIncludedCount = packageIncludedCount,
+            PackageIncludedDefinition = "includedInPackage == true: candidate made it into the final package",
+            PackageDroppedCount = packageDroppedCount,
+            PackageDroppedDefinition = "includedInPackage == false: candidate was dropped (token budget, dedup, exclusion)",
+            PackageSemanticCheck = $"PackageIncluded({packageIncludedCount}) + PackageDropped({packageDroppedCount}) == TotalRows({traceLines.Count})",
+            PackageConsistent = packageIncludedCount + packageDroppedCount == traceLines.Count,
             SectionCoverage = sectionCoverage.OrderByDescending(kv => kv.Value).Select(kv => new { Section = kv.Key, Count = kv.Value }).ToList(),
             RetrievalChannelCoverage = channelCoverage.OrderBy(kv => kv.Key).Select(kv => new { Channel = kv.Key, Count = kv.Value }).ToList(),
             TraceSourceCoverage = traceSourceCoverage.OrderBy(kv => kv.Key).Select(kv => new { TraceSource = kv.Key, Count = kv.Value }).ToList(),
@@ -3283,16 +3317,24 @@ public static partial class EvalCommand
         {
             GeneratedAt = DateTimeOffset.UtcNow.ToString("o"),
             RunId = runId,
+            GeneratedRunId = generatedRunId,
             CollectorMode = "NativeRuntimeCandidateTracePreview",
             TraceCaptureOnly = true,
+            IdempotencyMode = "RejectExistingRunId",
+            RunScopedTracePath = true,
+            SharedTraceAppend = false,
             NativeTraceCollected = nativeTraceCollected,
             NativeTraceFilePath = tracePath,
             NativeProductionTraceReady = nativeProductionTraceReady,
             NativeProductionTraceReadyNote = "Always false for dry-run collection. Requires real production traffic.",
             NativeRuntimeDryRunTraceReady = nativeRuntimeDryRunTraceReady,
             CollectorIdempotencyReady = collectorIdempotencyReady,
-            CollectorIdempotencyNote = "runId-scoped output path ensures no duplicate append. Same runId re-run rejects with error.",
+            CollectorIdempotencyNote = "runId-scoped output path ensures no duplicate append. Same runId re-run rejects with error. Timestamp runId generated when --runId not provided.",
             TraceCount = traceLines.Count,
+            ScoringSelectedCount = scoringSelectedCount,
+            ScoringRejectedCount = scoringRejectedCount,
+            PackageIncludedCount = packageIncludedCount,
+            PackageDroppedCount = packageDroppedCount,
             ValidationCriticalErrors = validator.MissingCriticalFieldCount,
             ValidationParseErrors = validator.ParseErrorCount,
             AllRowsTraceSource3 = allTraceSource3,

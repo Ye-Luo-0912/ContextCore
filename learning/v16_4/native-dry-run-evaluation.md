@@ -1,5 +1,5 @@
 # V16.4 Native Dry-Run Evaluation
-Generated: 2026-07-03T15:16:54.519548+00:00 | Rows: 49 | Alpha1: PASS | AllRowsTraceSource3: True
+Generated: 2026-07-03T19:24:23.272439+00:00 | Rows: 49 | Alpha1: PASS | AllRowsTraceSource3: True
 
 | Alpha | NW | RankΔ | SDis | IDis | T3 | T5 | T10 | α1 |
 |---|---|---|---|---|---|---|---|---|

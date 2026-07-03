@@ -1,6 +1,6 @@
 {
-  "GeneratedAt": "2026-07-03T15:16:54.519548+00:00",
-  "TraceFile": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\learning\\v16_4\\native-runtime-candidate-trace-dry-run-002.jsonl",
+  "GeneratedAt": "2026-07-03T19:24:23.272439+00:00",
+  "TraceFile": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\learning\\v16_4\\native-runtime-candidate-trace-repair-002.jsonl",
   "TotalRows": 49,
   "CollectorMode": "NativeRuntimeCandidateTracePreview",
   "AllRowsTraceSource3": true,
