@@ -1,0 +1,35 @@
+{
+  "GeneratedAt": "2026-07-03T03:03:15.3380258\u002B00:00",
+  "ComparisonMethod": "Deterministic (V14) vs Neural (V15 dry-run MLP forward pass)",
+  "DeterministicScoring": {
+    "Source": "V14 strategy \u002B trace-derived scores",
+    "Preserved": true,
+    "RetrievalUnchanged": true
+  },
+  "NeuralScoring": {
+    "Source": "V15 10\u21928\u21923 MLP seeded dry-run weights",
+    "InRuntimePipeline": false,
+    "InShadowArtifactsOnly": true,
+    "NeuralBiasActive": false,
+    "BlendAlpha": 1,
+    "BlendNote": "Alpha=1.0: pure deterministic. Neural scores exist only in this shadow report."
+  },
+  "ComparisonStatistics": {
+    "SpearmanRankCorrelation": 0.5674,
+    "SelectionDirectionAgreementRate": 0.4706,
+    "MeanDeterministicNormalized": 0.4807,
+    "MeanNeuralSelection": 0.4953,
+    "MaxDeterministicNormalized": 1,
+    "MaxNeuralSelection": 0.5,
+    "MinDeterministicNormalized": 0.0836,
+    "MinNeuralSelection": 0.4846
+  },
+  "SafetyAssurance": {
+    "PackageOutputChanged": false,
+    "VectorBindingChanged": false,
+    "RuntimePromotionApplied": false,
+    "NeuralBiasActive": false,
+    "NeuralScoresOnlyInShadow": true,
+    "V14GatePreserved": true
+  }
+}

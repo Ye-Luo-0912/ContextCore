@@ -1,0 +1,28 @@
+{
+  "GeneratedAt": "2026-07-03T03:03:15.3380258\u002B00:00",
+  "Note": "V14\u2192V15 preflight coverage assessment",
+  "V14CurrentCoverage": {
+    "SectionCount": 7,
+    "CoveredSections": [
+      "current_task",
+      "hard_constraints",
+      "working_memory",
+      "global_context",
+      "recent_context",
+      "stable_memory",
+      "soft_constraints"
+    ],
+    "MissingSections": [
+      "related_context",
+      "legacy/raw"
+    ],
+    "RelatedContextNote": "related_context was not exercised because relation targets were memory IDs, not context store IDs, and \u0027references\u0027 relation type was not in the default whitelist",
+    "LegacyRawNote": "legacy/raw is exclusive to the legacy build path and was not exercised in the policy-mode smoke",
+    "TraceRowCount": 17,
+    "SmokeEvaluationSource": "v14-runtime-trace-smoke deterministic seed corpus"
+  },
+  "V15CoverageLimitation": {
+    "Warning": "V15 dry-run feature vectors are derived from V14 smoke trace coverage gaps. Missing related_context and legacy/raw sections mean neural scoring has not been tested on graph-expanded or raw-document candidates. Do not interpret selection agreement statistics as production generalization capability.",
+    "Recommendation": "Rerun V15 dry-run against a full production trace (not smoke) before reducing BlendAlpha below 1.0."
+  }
+}

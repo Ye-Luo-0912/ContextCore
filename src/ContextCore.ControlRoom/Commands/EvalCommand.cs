@@ -408,6 +408,7 @@ public static partial class EvalCommand
             !string.Equals(subcommand, "neural-selection", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "v14-foundation", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "v14-runtime-trace-smoke", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "v15-neural-dry-run", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "formal-evidence-stabilization-replay-pilot-readiness", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "formal-evidence-stabilization-replay-pilot-readiness-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "learning-formal-evidence-realization-r1-pack", StringComparison.OrdinalIgnoreCase) &&
@@ -2394,6 +2395,12 @@ public static partial class EvalCommand
         if (string.Equals(subcommand, "v14-runtime-trace-smoke", StringComparison.OrdinalIgnoreCase))
         {
             await ExecuteV14RuntimeTraceSmokeAsync(cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        if (string.Equals(subcommand, "v15-neural-dry-run", StringComparison.OrdinalIgnoreCase))
+        {
+            await ExecuteV15NeuralDryRunAsync(cancellationToken).ConfigureAwait(false);
             return;
         }
 

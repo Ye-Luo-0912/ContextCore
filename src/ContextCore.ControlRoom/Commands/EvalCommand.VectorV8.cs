@@ -2740,5 +2740,15 @@ public static partial class EvalCommand
         new ContextCore.Core.Services.Learning.V14_0.FoundationReportBuilder().BuildAndWrite(".");
         Console.WriteLine("[Eval] V14 Runtime Trace Smoke done");
     }
+
+    private static async Task ExecuteV15NeuralDryRunAsync(CancellationToken ct)
+    {
+        var builder = new ContextCore.Core.Services.Learning.V15.NeuralDryRunBuilder();
+        builder.BuildAndWrite(".");
+        await Task.CompletedTask.ConfigureAwait(false);
+        Console.WriteLine("[Eval] V15 Neural Dry-Run artifacts generated");
+        Console.WriteLine("[Eval] NeuralBiasActive=false NeuralOnlyInShadow=true PackageOutputChanged=false");
+        Console.WriteLine("[Eval] NeuralSelectionScoreExclusiveToShadow=true DeterministicScoringPreserved=true");
+    }
 }
 
