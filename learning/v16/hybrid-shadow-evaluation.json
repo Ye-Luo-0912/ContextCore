@@ -1,0 +1,91 @@
+{
+  "GeneratedAt": "2026-07-03T04:32:11.2010326\u002B00:00",
+  "V14GateReady": true,
+  "V15NeuralOnlyInShadow": true,
+  "TotalCandidates": 17,
+  "Alphas": [
+    1,
+    0.9,
+    0.7,
+    0.5
+  ],
+  "AlphaSweepResults": [
+    {
+      "Alpha": 1,
+      "NeuralWeight": 0,
+      "DeterministicWeight": 1,
+      "MeanRankDelta": 0,
+      "SelectionDisagreementCount": 5,
+      "SelectionDisagreementRate": 0.2941,
+      "Top3Churn": 0,
+      "Top5Churn": 0,
+      "Top10Churn": 0,
+      "MeanHybridScore": 0.4807,
+      "MeanNeuralScore": 0.4953,
+      "MeanDetScoreNorm": 0.4807
+    },
+    {
+      "Alpha": 0.9,
+      "NeuralWeight": 0.1,
+      "DeterministicWeight": 0.9,
+      "MeanRankDelta": 0,
+      "SelectionDisagreementCount": 5,
+      "SelectionDisagreementRate": 0.2941,
+      "Top3Churn": 0,
+      "Top5Churn": 0,
+      "Top10Churn": 0,
+      "MeanHybridScore": 0.4821,
+      "MeanNeuralScore": 0.4953,
+      "MeanDetScoreNorm": 0.4807
+    },
+    {
+      "Alpha": 0.7,
+      "NeuralWeight": 0.3,
+      "DeterministicWeight": 0.7,
+      "MeanRankDelta": 0,
+      "SelectionDisagreementCount": 5,
+      "SelectionDisagreementRate": 0.2941,
+      "Top3Churn": 0,
+      "Top5Churn": 0,
+      "Top10Churn": 0,
+      "MeanHybridScore": 0.4851,
+      "MeanNeuralScore": 0.4953,
+      "MeanDetScoreNorm": 0.4807
+    },
+    {
+      "Alpha": 0.5,
+      "NeuralWeight": 0.5,
+      "DeterministicWeight": 0.5,
+      "MeanRankDelta": 0,
+      "SelectionDisagreementCount": 5,
+      "SelectionDisagreementRate": 0.2941,
+      "Top3Churn": 0,
+      "Top5Churn": 0,
+      "Top10Churn": 0,
+      "MeanHybridScore": 0.488,
+      "MeanNeuralScore": 0.4953,
+      "MeanDetScoreNorm": 0.4807
+    }
+  ],
+  "Coverage": {
+    "CoveredSections": [
+      "current_task",
+      "hard_constraints",
+      "working_memory",
+      "global_context",
+      "recent_context",
+      "stable_memory",
+      "soft_constraints"
+    ],
+    "CoverageLimited": true,
+    "MissingSectionsNote": "Sections not in V14 smoke trace: related_context, legacy/raw"
+  },
+  "RuntimeSafety": {
+    "BlendAlpha": 1,
+    "NeuralBiasActive": false,
+    "RuntimeInfluenceAllowed": false,
+    "PackageOutputChanged": false,
+    "VectorBindingChanged": false,
+    "RuntimePromotionApplied": false
+  }
+}

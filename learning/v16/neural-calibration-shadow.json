@@ -1,0 +1,174 @@
+{
+  "GeneratedAt": "2026-07-03T04:32:11.2010326\u002B00:00",
+  "CalibrationMethod": "Binary logistic regression (neural selection score \u2192 P(candidate selected))",
+  "CalibrationCoefficients": {
+    "a": 0.180299,
+    "b": 0.376995
+  },
+  "LossFunction": "Binary cross-entropy",
+  "FinalLoss": 0.651755,
+  "PairwiseRanking": {
+    "TotalPairs": 132,
+    "CorrectPairs": 48,
+    "Accuracy": 0.3636,
+    "Interpretation": "random-level pairwise ordering",
+    "Limitation": "V15 neural scores are near-constant (~0.5) due to seeded-weights MLP without training. Calibration cannot improve upon uniform scores."
+  },
+  "PerCandidateCalibration": [
+    {
+      "candidateId": "task-smoke",
+      "originalNeuralScore": 0.5,
+      "calibratedScore": 0.6147,
+      "selectedLabel": true,
+      "calibratedProbability": 0.6147,
+      "successProxy": 165,
+      "costEfficiency": 110
+    },
+    {
+      "candidateId": "hc-dep",
+      "originalNeuralScore": 0.5,
+      "calibratedScore": 0.6147,
+      "selectedLabel": false,
+      "calibratedProbability": 0.6147,
+      "successProxy": 0,
+      "costEfficiency": 0
+    },
+    {
+      "candidateId": "hc-01",
+      "originalNeuralScore": 0.5,
+      "calibratedScore": 0.6147,
+      "selectedLabel": true,
+      "calibratedProbability": 0.6147,
+      "successProxy": 156.75,
+      "costEfficiency": 104.5
+    },
+    {
+      "candidateId": "hc-02",
+      "originalNeuralScore": 0.5,
+      "calibratedScore": 0.6147,
+      "selectedLabel": true,
+      "calibratedProbability": 0.6147,
+      "successProxy": 156.75,
+      "costEfficiency": 104.5
+    },
+    {
+      "candidateId": "wm-03",
+      "originalNeuralScore": 0.4846,
+      "calibratedScore": 0.614,
+      "selectedLabel": true,
+      "calibratedProbability": 0.614,
+      "successProxy": 69.874,
+      "costEfficiency": 46.583
+    },
+    {
+      "candidateId": "wm-02",
+      "originalNeuralScore": 0.4846,
+      "calibratedScore": 0.614,
+      "selectedLabel": true,
+      "calibratedProbability": 0.614,
+      "successProxy": 69.574,
+      "costEfficiency": 46.383
+    },
+    {
+      "candidateId": "wm-01",
+      "originalNeuralScore": 0.4846,
+      "calibratedScore": 0.614,
+      "selectedLabel": true,
+      "calibratedProbability": 0.614,
+      "successProxy": 69.274,
+      "costEfficiency": 46.183
+    },
+    {
+      "candidateId": "gc-02",
+      "originalNeuralScore": 0.4864,
+      "calibratedScore": 0.6141,
+      "selectedLabel": true,
+      "calibratedProbability": 0.6141,
+      "successProxy": 14.1,
+      "costEfficiency": 9.4
+    },
+    {
+      "candidateId": "gc-01",
+      "originalNeuralScore": 0.4865,
+      "calibratedScore": 0.6141,
+      "selectedLabel": true,
+      "calibratedProbability": 0.6141,
+      "successProxy": 13.8,
+      "costEfficiency": 9.2
+    },
+    {
+      "candidateId": "ctx-07",
+      "originalNeuralScore": 0.5,
+      "calibratedScore": 0.6147,
+      "selectedLabel": true,
+      "calibratedProbability": 0.6147,
+      "successProxy": 118.5,
+      "costEfficiency": 79
+    },
+    {
+      "candidateId": "ctx-08",
+      "originalNeuralScore": 0.5,
+      "calibratedScore": 0.6147,
+      "selectedLabel": true,
+      "calibratedProbability": 0.6147,
+      "successProxy": 118.5,
+      "costEfficiency": 79
+    },
+    {
+      "candidateId": "ctx-09",
+      "originalNeuralScore": 0.5,
+      "calibratedScore": 0.6147,
+      "selectedLabel": true,
+      "calibratedProbability": 0.6147,
+      "successProxy": 118.5,
+      "costEfficiency": 79
+    },
+    {
+      "candidateId": "sm-01",
+      "originalNeuralScore": 0.4969,
+      "calibratedScore": 0.6146,
+      "selectedLabel": false,
+      "calibratedProbability": 0.6146,
+      "successProxy": 0,
+      "costEfficiency": 0
+    },
+    {
+      "candidateId": "sm-02",
+      "originalNeuralScore": 0.4969,
+      "calibratedScore": 0.6146,
+      "selectedLabel": false,
+      "calibratedProbability": 0.6146,
+      "successProxy": 0,
+      "costEfficiency": 0
+    },
+    {
+      "candidateId": "sc-dep",
+      "originalNeuralScore": 0.5,
+      "calibratedScore": 0.6147,
+      "selectedLabel": false,
+      "calibratedProbability": 0.6147,
+      "successProxy": 0,
+      "costEfficiency": 0
+    },
+    {
+      "candidateId": "sc-01",
+      "originalNeuralScore": 0.5,
+      "calibratedScore": 0.6147,
+      "selectedLabel": false,
+      "calibratedProbability": 0.6147,
+      "successProxy": 0,
+      "costEfficiency": 0
+    },
+    {
+      "candidateId": "sc-02",
+      "originalNeuralScore": 0.5,
+      "calibratedScore": 0.6147,
+      "selectedLabel": false,
+      "calibratedProbability": 0.6147,
+      "successProxy": 0,
+      "costEfficiency": 0
+    }
+  ],
+  "CalibrationWarning": "Offline shadow calibration only. Does not affect runtime scoring. V16 does not ship calibration coefficients to production.",
+  "OfflineShadowCalibration": true
+}

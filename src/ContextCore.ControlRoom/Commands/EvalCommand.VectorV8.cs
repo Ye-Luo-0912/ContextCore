@@ -2750,5 +2750,15 @@ public static partial class EvalCommand
         Console.WriteLine("[Eval] NeuralBiasActive=false NeuralOnlyInShadow=true PackageOutputChanged=false");
         Console.WriteLine("[Eval] NeuralSelectionScoreExclusiveToShadow=true DeterministicScoringPreserved=true");
     }
+
+    private static async Task ExecuteV16HybridShadowAsync(CancellationToken ct)
+    {
+        var evaluator = new ContextCore.Core.Services.Learning.V16.HybridShadowEvaluator();
+        evaluator.BuildAndWrite(".");
+        await Task.CompletedTask.ConfigureAwait(false);
+        Console.WriteLine("[Eval] V16 Hybrid Shadow Evaluation artifacts generated");
+        Console.WriteLine("[Eval] AlphaSweepComplete=true RuntimeInfluenceAllowed=false ProductionGeneralizationReady=false");
+        Console.WriteLine("[Eval] NeuralBiasActive=false PackageOutputChanged=false VectorBindingChanged=false");
+    }
 }
 
