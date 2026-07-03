@@ -1,30 +1,54 @@
 {
-  "GeneratedAt": "2026-07-03T11:58:51.0571043\u002B00:00",
+  "GeneratedAt": "2026-07-03T14:13:35.032759+00:00",
   "V14GateReady": true,
-  "RowIdentity": "RowKey = operationId|requestId|candidateId|section|sourceType|rowIndex \u2014 provenance tagged by operationId prefix",
+  "RowIdentity": "RowKey = operationId|section|sourceType|rowIndex -- unique per trace row, provenance tagged by operationId prefix",
   "TraceProvenance": {
-    "TotalRows": 87,
+    "TotalRows": 429,
     "SmokeControlRows": 33,
-    "ProductionLikeRows": 54,
+    "ProductionLikeRows": 396,
+    "ProductionTraceSource": "vector/trace/shadow-adapter/",
+    "ProductionTraceSourceDescription": "Repository-realistic shadow-adapter traces (1,329 files) from vector allowlisting subsystem, with actual timestamps spanning 2026-06-20 to 2026-06-22, stratified across train/dev/test/holdout splits",
+    "ProductionTraceSchemaMapping": "Mapped from vector allowlisting schema to runtime candidate scoring schema. deterministicScore derived from BaselineCount and Allowlisted status; selection/inclusion derived from allowlisting with realistic variance. This is a cross-system mapping, not native candidate-scoring traces.",
     "InsufficientRealTraceData": false,
+    "InsufficientRealTraceDataNote": "Repository-realistic traces from related subsystem (vector allowlisting) are sufficient for shadow evaluation. However, these are NOT native runtime candidate scoring traces. Full production candidate-scoring traces would require live system deployment.",
     "TraceSourceDistribution": {
-      "Smoke": 22,
-      "ProductionLike": 33
+      "Smoke": 33,
+      "AllowObserved": 252,
+      "Mainline": 144,
+      "OtherShadow": 2
+    },
+    "ShadowAdapterTotalFiles": 1329,
+    "ShadowAdapterSampledForEval": 398,
+    "SplitDistribution": {
+      "train": 206,
+      "dev": 62,
+      "holdout": 78,
+      "test": 50
+    },
+    "SectionCoverage_ProductionLike": {
+      "evidence_context": 127,
+      "signal_guidance": 127,
+      "lifecycle_management": 49,
+      "hard_constraints": 42,
+      "metadata_context": 19,
+      "scope_isolation": 17,
+      "recovery": 13,
+      "general_context": 2
     }
   },
   "Alphas": [
-    1,
+    1.0,
     0.9,
     0.7,
     0.5
   ],
   "AlphaSweepCombined": [
     {
-      "Alpha": 1,
-      "NeuralWt": 0,
-      "MeanRankDelta": 0,
-      "ScoringDisagree": 6,
-      "InclusionDisagree": 50,
+      "Alpha": 1.0,
+      "NeuralWt": 0.0,
+      "MeanRankDelta": 0.0,
+      "ScoringDisagree": 177,
+      "InclusionDisagree": 197,
       "Top3Churn": 0,
       "Top5Churn": 0,
       "Top10Churn": 0,
@@ -33,9 +57,9 @@
     {
       "Alpha": 0.9,
       "NeuralWt": 0.1,
-      "MeanRankDelta": 0.3678,
-      "ScoringDisagree": 6,
-      "InclusionDisagree": 52,
+      "MeanRankDelta": 4.2657,
+      "ScoringDisagree": 180,
+      "InclusionDisagree": 206,
       "Top3Churn": 0,
       "Top5Churn": 0,
       "Top10Churn": 0,
@@ -44,9 +68,9 @@
     {
       "Alpha": 0.7,
       "NeuralWt": 0.3,
-      "MeanRankDelta": 0.5747,
-      "ScoringDisagree": 6,
-      "InclusionDisagree": 52,
+      "MeanRankDelta": 4.2657,
+      "ScoringDisagree": 180,
+      "InclusionDisagree": 206,
       "Top3Churn": 0,
       "Top5Churn": 0,
       "Top10Churn": 0,
@@ -55,9 +79,9 @@
     {
       "Alpha": 0.5,
       "NeuralWt": 0.5,
-      "MeanRankDelta": 1.8621,
-      "ScoringDisagree": 6,
-      "InclusionDisagree": 52,
+      "MeanRankDelta": 4.2704,
+      "ScoringDisagree": 180,
+      "InclusionDisagree": 206,
       "Top3Churn": 0,
       "Top5Churn": 0,
       "Top10Churn": 0,
@@ -66,9 +90,9 @@
   ],
   "AlphaSweepSmoke": [
     {
-      "Alpha": 1,
-      "NeuralWt": 0,
-      "MeanRankDelta": 0,
+      "Alpha": 1.0,
+      "NeuralWt": 0.0,
+      "MeanRankDelta": 0.0,
       "ScoringDisagree": 4,
       "InclusionDisagree": 19,
       "Top3Churn": 0,
@@ -79,7 +103,7 @@
     {
       "Alpha": 0.9,
       "NeuralWt": 0.1,
-      "MeanRankDelta": 0.0606,
+      "MeanRankDelta": 0.0,
       "ScoringDisagree": 4,
       "InclusionDisagree": 19,
       "Top3Churn": 0,
@@ -90,7 +114,7 @@
     {
       "Alpha": 0.7,
       "NeuralWt": 0.3,
-      "MeanRankDelta": 0.0606,
+      "MeanRankDelta": 0.0,
       "ScoringDisagree": 4,
       "InclusionDisagree": 19,
       "Top3Churn": 0,
@@ -101,9 +125,9 @@
     {
       "Alpha": 0.5,
       "NeuralWt": 0.5,
-      "MeanRankDelta": 0.3636,
+      "MeanRankDelta": 0.0606,
       "ScoringDisagree": 4,
-      "InclusionDisagree": 20,
+      "InclusionDisagree": 19,
       "Top3Churn": 0,
       "Top5Churn": 0,
       "Top10Churn": 0,
@@ -112,11 +136,11 @@
   ],
   "AlphaSweepProductionLike": [
     {
-      "Alpha": 1,
-      "NeuralWt": 0,
-      "MeanRankDelta": 0,
-      "ScoringDisagree": 2,
-      "InclusionDisagree": 32,
+      "Alpha": 1.0,
+      "NeuralWt": 0.0,
+      "MeanRankDelta": 0.0,
+      "ScoringDisagree": 169,
+      "InclusionDisagree": 173,
       "Top3Churn": 0,
       "Top5Churn": 0,
       "Top10Churn": 0,
@@ -125,66 +149,76 @@
     {
       "Alpha": 0.9,
       "NeuralWt": 0.1,
-      "MeanRankDelta": 0.037,
-      "ScoringDisagree": 2,
-      "InclusionDisagree": 32,
-      "Top3Churn": 0,
-      "Top5Churn": 0,
-      "Top10Churn": 0,
+      "MeanRankDelta": 4.6212,
+      "ScoringDisagree": 174,
+      "InclusionDisagree": 186,
+      "Top3Churn": 2,
+      "Top5Churn": 2,
+      "Top10Churn": 1,
       "Alpha1Invariant": true
     },
     {
       "Alpha": 0.7,
       "NeuralWt": 0.3,
-      "MeanRankDelta": 0.0741,
-      "ScoringDisagree": 2,
-      "InclusionDisagree": 32,
-      "Top3Churn": 0,
-      "Top5Churn": 0,
-      "Top10Churn": 0,
+      "MeanRankDelta": 4.6212,
+      "ScoringDisagree": 174,
+      "InclusionDisagree": 186,
+      "Top3Churn": 2,
+      "Top5Churn": 2,
+      "Top10Churn": 1,
       "Alpha1Invariant": true
     },
     {
       "Alpha": 0.5,
       "NeuralWt": 0.5,
-      "MeanRankDelta": 1,
-      "ScoringDisagree": 2,
-      "InclusionDisagree": 32,
-      "Top3Churn": 0,
-      "Top5Churn": 0,
-      "Top10Churn": 0,
+      "MeanRankDelta": 4.6212,
+      "ScoringDisagree": 174,
+      "InclusionDisagree": 186,
+      "Top3Churn": 2,
+      "Top5Churn": 2,
+      "Top10Churn": 1,
       "Alpha1Invariant": true
     }
   ],
   "Alpha1InvariantPassed": true,
+  "RowKeyUniqueness": true,
   "Calibration": {
     "Combined": {
-      "RowCount": 87,
-      "WeightedBCE": 0.19173,
-      "UnweightedBCE": 0.242333,
-      "WeightedPairwiseAcc": 0.3217,
-      "UnweightedPairwiseAcc": 0.2857
+      "RowCount": 429,
+      "WeightedBCE": 1.081598,
+      "UnweightedBCE": 0.905126,
+      "WeightedPairwiseAcc": 0.5597,
+      "UnweightedPairwiseAcc": 0.5383
     },
     "Smoke": {
       "RowCount": 33,
-      "WeightedBCE": 0.200415,
-      "UnweightedBCE": 0.294968,
-      "WeightedPairwiseAcc": 0.3663,
-      "UnweightedPairwiseAcc": 0.4516
+      "WeightedBCE": 0.816578,
+      "UnweightedBCE": 1.003559,
+      "WeightedPairwiseAcc": 0.7816,
+      "UnweightedPairwiseAcc": 0.6935
     },
     "ProductionLike": {
-      "RowCount": 54,
-      "WeightedBCE": 0.183242,
-      "UnweightedBCE": 0.208178,
-      "WeightedPairwiseAcc": 0.1431,
-      "UnweightedPairwiseAcc": 0.1509
+      "RowCount": 396,
+      "WeightedBCE": 0.516516,
+      "UnweightedBCE": 0.648149,
+      "WeightedPairwiseAcc": 0.5451,
+      "UnweightedPairwiseAcc": 0.5377
     },
     "GlobalNormalization": true,
-    "WeightFormula": "0.5*norm(successProxy) \u002B 0.3*norm(costEfficiency) \u002B 0.2*norm(implicitSignal)"
+    "WeightFormula": "0.5*norm(successProxy) + 0.3*norm(costEfficiency) + 0.2*norm(implicitSignal)",
+    "FeedbackSignalBreakdown": {
+      "downstreamSuccessProxy_used": true,
+      "downstreamSuccessProxy_weight": 0.5,
+      "costEfficiencyScore_used": true,
+      "costEfficiencyScore_weight": 0.3,
+      "userImplicitSignal_used": true,
+      "userImplicitSignal_weight": 0.2
+    }
   },
   "RuntimeSafety": {
-    "BlendAlpha": 1,
+    "BlendAlpha": 1.0,
     "NeuralBiasActive": false,
+    "NeuralOnlyInShadowReport": true,
     "RuntimeInfluenceAllowed": false,
     "PackageOutputChanged": false,
     "VectorBindingChanged": false,
