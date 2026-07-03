@@ -1,5 +1,5 @@
 {
-  "GeneratedAt": "2026-07-03T14:13:35.032759+00:00",
+  "GeneratedAt": "2026-07-03T14:29:43.913698+00:00",
   "V16_2ProductionTraceShadowReady": true,
   "V16_2MetricIntegrityReady": true,
   "Alpha1InvariantPassed": true,
@@ -11,20 +11,54 @@
     "ProductionLikeSectionsCovered": true,
     "ShadowAdapterStrataCovered": true
   },
+  "NativeProductionTraceReady": false,
+  "NativeProductionTrace": false,
+  "NativeProductionTraceNote": "No native runtime candidate scoring production traces exist. All traces are repository-generated or cross-system mapped.",
+  "RepositoryRealisticShadowAdapterReady": true,
+  "ShadowAdapterSchemaMapped": true,
+  "ShadowAdapterSchemaMappingNote": "Vector allowlisting schema mapped to runtime candidate scoring schema. Scores derived from BaselineCount and Allowlisted status with deterministic variance. Not a lossless mapping.",
+  "CrossSystemMapping": true,
+  "MetricQualityGate": {
+    "ProductionLikeWeightedPairwiseAcc": 0.5451,
+    "PairwiseThreshold": 0.55,
+    "PairwiseAboveThreshold": false,
+    "ProductionLikeCalibrationUseful": false,
+    "MetricQualityBlocked": true,
+    "MetricQualityReason": "ProductionLikeWeightedPairwiseAcc=0.5451 < threshold=0.55. Cross-system mapped calibration signal is too weak to substantiate readiness. Native production candidate-scoring traces are required for meaningful calibration."
+  },
+  "SplitMetricStability": {
+    "SplitMetricStabilityScore": 0.3333,
+    "SplitStable": false,
+    "SmokeMeanRankDelta_NonAlpha1": [
+      0.0,
+      0.0,
+      0.0606
+    ],
+    "ProdMeanRankDelta_NonAlpha1": [
+      4.6212,
+      4.6212,
+      4.6212
+    ],
+    "StabilityCheck": "Smoke topK churn=0 (expected for low-variance neural scores); produced metrics consistent."
+  },
   "InsufficientRealTraceData": false,
   "InsufficientRealTraceDataNote": "Repository-realistic shadow-adapter traces are used. Native production candidate-scoring runtime traces are not available. Cross-system mapping applied.",
   "RuntimeInfluenceAllowed": false,
-  "RuntimeInfluenceReadinessCandidate": true,
-  "ProductionGeneralizationReady": true,
-  "ProductionGeneralizationNote": "Production-like trace from shadow-adapter evaluated with stable split metrics across alpha sweep.",
+  "RuntimeInfluenceReadinessCandidate": "guarded_candidate_below_threshold",
+  "RuntimeInfluenceReadinessCandidateNote": "Guarded but below calibration threshold: ProductionLikeWeightedPairwiseAcc=0.5451 < 0.55. Native production traces required to improve calibration.",
+  "ProductionGeneralizationReady": false,
+  "ProductionGeneralizationNote": "Cross-system mapped shadow-adapter traces do not substantiate production generalization. NativeProductionTrace=false. Native runtime candidate scoring traces are required before ProductionGeneralizationReady can be true.",
   "PackageOutputChanged": false,
   "RuntimePromotionApplied": false,
   "VectorBindingChanged": false,
   "V14GatePreserved": true,
+  "CollectorMode": "PythonReproducibleEvaluator",
+  "CollectorModeNote": "No C# collect command. Evaluator reads from pre-existing trace files. Deterministic random seed (42). No append/idempotency risk.",
   "NextSteps": [
-    "V16.2 shadow evaluation complete with repository-realistic shadow-adapter traces (396 prod-like rows, 33 smoke control)",
-    "RuntimeInfluenceAllowed remains false",
-    "Runtime-influence shadow gating is the declared V17 entry condition",
-    "Ready for V17: runtime-influence shadow evaluation on full production trace"
+    "V16.2 Repair B: metric-qualified, guarded readiness gate. Shadow evaluation complete.",
+    "RuntimeInfluenceAllowed remains false.",
+    "ProductionGeneralizationReady=false (cross-system mapped traces do not qualify).",
+    "NativeProductionTraceReady=false (no native production runtime candidate traces exist).",
+    "Next: acquire native production runtime candidate traces before V17 runtime-influence shadow gating."
   ]
 }

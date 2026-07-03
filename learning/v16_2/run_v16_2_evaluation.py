@@ -516,6 +516,11 @@ def main():
         "ProductionTraceSchemaMapping": "Mapped from vector allowlisting schema to runtime candidate scoring schema. deterministicScore derived from BaselineCount and Allowlisted status; selection/inclusion derived from allowlisting with realistic variance. This is a cross-system mapping, not native candidate-scoring traces.",
         "InsufficientRealTraceData": False,
         "InsufficientRealTraceDataNote": "Repository-realistic traces from related subsystem (vector allowlisting) are sufficient for shadow evaluation. However, these are NOT native runtime candidate scoring traces. Full production candidate-scoring traces would require live system deployment.",
+        "NativeProductionTrace": False,
+        "TraceSource": "shadow-adapter",
+        "CrossSystemMapping": True,
+        "CollectorMode": "PythonReproducibleEvaluator",
+        "CollectorModeNote": "No C# collect command used. Trace data sourced from pre-existing vector/trace/shadow-adapter/ files. Evaluation is fully reproducible via run_v16_2_evaluation.py with deterministic seed (42). No append risk.",
         "TraceSourceDistribution": {
             "Smoke": len(smoke_rows),
             "AllowObserved": sum(1 for r in prod_like_rows_filtered if r["_traceSourceClass"] == "allow-observed"),
@@ -666,19 +671,92 @@ RuntimeInfluenceAllowed: false | PackageOutputChanged: false | VectorBindingChan
     print(f"Written: {OUT_MD}")
 
     # -----------------------------------------------------------------------
-    # Readiness Gate
+    # Readiness Gate (V16.2 Repair B: metric-qualified, guarded)
     # -----------------------------------------------------------------------
     metric_ready = alpha1_invariant_passed and row_key_uniqueness
-    production_ready = len(prod_like_rows_filtered) >= 50 and not trace_provenance.get("InsufficientRealTraceData", True)
 
-    # Check split metric stability
+    # =====================================================================
+    # Metric-Quality Gate
+    # =====================================================================
+    PAIRWISE_THRESHOLD = 0.55
+    prod_pairwise = calib_prod["WeightedPairwiseAcc"]
+    pairwise_above_threshold = prod_pairwise >= PAIRWISE_THRESHOLD
+
+    calibration_useful = pairwise_above_threshold
+    metric_quality_blocked = not calibration_useful
+    if metric_quality_blocked:
+        metric_quality_reason = (
+            f"ProductionLikeWeightedPairwiseAcc={prod_pairwise:.4f} < threshold={PAIRWISE_THRESHOLD}. "
+            "Cross-system mapped calibration signal is too weak to substantiate readiness. "
+            "Native production candidate-scoring traces are required for meaningful calibration."
+        )
+    else:
+        metric_quality_reason = (
+            f"ProductionLikeWeightedPairwiseAcc={prod_pairwise:.4f} >= threshold={PAIRWISE_THRESHOLD}. "
+            "Calibration signal sufficient for guarded readiness."
+        )
+
+    # =====================================================================
+    # Split Metric Stability (computed, not hardcoded)
+    # =====================================================================
     smoke_mean_rank_delta = [m["MeanRankDelta"] for m in v15_smoke_metrics if m["Alpha"] != 1.0]
     prod_mean_rank_delta = [m["MeanRankDelta"] for m in v15_prod_metrics if m["Alpha"] != 1.0]
-    smoke_churn = [m["Top3Churn"] + m["Top5Churn"] + m["Top10Churn"] for m in v15_smoke_metrics]
-    prod_churn = [m["Top3Churn"] + m["Top5Churn"] + m["Top10Churn"] for m in v15_prod_metrics]
 
-    # Stability: both splits show similar directional behavior
-    split_stable = True  # smoke and prod metrics are consistent
+    # Compute stability score: for each non-1.0 alpha, compare smoke vs prod directional behavior
+    stability_components = []
+    for s_metric, p_metric in zip(v15_smoke_metrics, v15_prod_metrics):
+        if s_metric["Alpha"] == 1.0:
+            continue
+        # Comparison: smoke and prod should show same directional trend as neural weight increases
+        s_mrd = s_metric["MeanRankDelta"]
+        p_mrd = p_metric["MeanRankDelta"]
+        s_churn = s_metric["Top3Churn"] + s_metric["Top5Churn"] + s_metric["Top10Churn"]
+        p_churn = p_metric["Top3Churn"] + p_metric["Top5Churn"] + p_metric["Top10Churn"]
+
+        # Check directional agreement on rank delta (both non-zero in same direction)
+        mrd_agree = (s_mrd == 0 and p_mrd == 0) or (s_mrd > 0 and p_mrd > 0)
+        # Check that top-k churn is 0 for smoke (consistent with small neural score variance)
+        churn_consistent = s_churn == 0
+        stability_components.append(1.0 if mrd_agree and churn_consistent else 0.0)
+
+    split_metric_stability_score = round(sum(stability_components) / len(stability_components), 4) if stability_components else 0.0
+    split_stable = split_metric_stability_score >= 0.5
+
+    # =====================================================================
+    # Gate Semantics
+    # =====================================================================
+
+    # ProductionGeneralizationReady cannot be true on cross-system mapped trace
+    # The shadow-adapter is a different subsystem; native runtime candidate traces needed
+    production_generalization_ready = False
+    production_generalization_note = (
+        "Cross-system mapped shadow-adapter traces do not substantiate production generalization. "
+        "NativeProductionTrace=false. Native runtime candidate scoring traces are required "
+        "before ProductionGeneralizationReady can be true."
+    )
+
+    # RuntimeInfluenceReadinessCandidate: guarded only if metric quality passes AND metrics are stable
+    if metric_ready and calibration_useful and split_stable:
+        runtime_influence_readiness_candidate = "guarded_candidate"
+        readiness_candidate_note = (
+            "Guarded: alpha1 invariant passes, RowKey unique, pairwise acc above threshold, "
+            "split metrics stable. Gated behind native production trace."
+        )
+    elif metric_ready and not calibration_useful:
+        runtime_influence_readiness_candidate = "guarded_candidate_below_threshold"
+        readiness_candidate_note = (
+            f"Guarded but below calibration threshold: ProductionLikeWeightedPairwiseAcc={prod_pairwise:.4f} < {PAIRWISE_THRESHOLD}. "
+            "Native production traces required to improve calibration."
+        )
+    elif metric_ready and not split_stable:
+        runtime_influence_readiness_candidate = "guarded_candidate_unstable"
+        readiness_candidate_note = (
+            f"Guarded but split metrics unstable: SplitMetricStabilityScore={split_metric_stability_score}. "
+            "Further investigation needed."
+        )
+    else:
+        runtime_influence_readiness_candidate = False
+        readiness_candidate_note = "Metric integrity not met (alpha1 invariant or RowKey uniqueness failed)."
 
     gate = {
         "GeneratedAt": now,
@@ -693,21 +771,52 @@ RuntimeInfluenceAllowed: false | PackageOutputChanged: false | VectorBindingChan
             "ProductionLikeSectionsCovered": len(all_sections_prod) > 5,
             "ShadowAdapterStrataCovered": len(split_dist) >= 2,
         },
+        # ===== NEW: Trace Provenance Boundary =====
+        "NativeProductionTraceReady": False,
+        "NativeProductionTrace": False,
+        "NativeProductionTraceNote": "No native runtime candidate scoring production traces exist. All traces are repository-generated or cross-system mapped.",
+        "RepositoryRealisticShadowAdapterReady": True,
+        "ShadowAdapterSchemaMapped": True,
+        "ShadowAdapterSchemaMappingNote": "Vector allowlisting schema mapped to runtime candidate scoring schema. Scores derived from BaselineCount and Allowlisted status with deterministic variance. Not a lossless mapping.",
+        "CrossSystemMapping": True,
+        # ===== NEW: Metric-Quality Gate =====
+        "MetricQualityGate": {
+            "ProductionLikeWeightedPairwiseAcc": prod_pairwise,
+            "PairwiseThreshold": PAIRWISE_THRESHOLD,
+            "PairwiseAboveThreshold": pairwise_above_threshold,
+            "ProductionLikeCalibrationUseful": calibration_useful,
+            "MetricQualityBlocked": metric_quality_blocked,
+            "MetricQualityReason": metric_quality_reason,
+        },
+        # ===== NEW: Split Metric Stability =====
+        "SplitMetricStability": {
+            "SplitMetricStabilityScore": split_metric_stability_score,
+            "SplitStable": split_stable,
+            "SmokeMeanRankDelta_NonAlpha1": smoke_mean_rank_delta,
+            "ProdMeanRankDelta_NonAlpha1": prod_mean_rank_delta,
+            "StabilityCheck": "Smoke topK churn=0 (expected for low-variance neural scores); produced metrics consistent.",
+        },
+        # ===== CORRECTED: Readiness =====
         "InsufficientRealTraceData": trace_provenance.get("InsufficientRealTraceData", False),
         "InsufficientRealTraceDataNote": "Repository-realistic shadow-adapter traces are used. Native production candidate-scoring runtime traces are not available. Cross-system mapping applied.",
         "RuntimeInfluenceAllowed": False,
-        "RuntimeInfluenceReadinessCandidate": metric_ready,
-        "ProductionGeneralizationReady": production_ready and split_stable,
-        "ProductionGeneralizationNote": "Production-like trace from shadow-adapter evaluated with stable split metrics across alpha sweep." if (production_ready and split_stable) else "Insufficient production-like trace data or unstable split metrics for production generalization.",
+        "RuntimeInfluenceReadinessCandidate": runtime_influence_readiness_candidate,
+        "RuntimeInfluenceReadinessCandidateNote": readiness_candidate_note,
+        "ProductionGeneralizationReady": production_generalization_ready,
+        "ProductionGeneralizationNote": production_generalization_note,
+        # ===== SAFETY =====
         "PackageOutputChanged": False,
         "RuntimePromotionApplied": False,
         "VectorBindingChanged": False,
         "V14GatePreserved": True,
+        "CollectorMode": "PythonReproducibleEvaluator",
+        "CollectorModeNote": "No C# collect command. Evaluator reads from pre-existing trace files. Deterministic random seed (42). No append/idempotency risk.",
         "NextSteps": [
-            "V16.2 shadow evaluation complete with repository-realistic shadow-adapter traces (396 prod-like rows, 33 smoke control)",
-            "RuntimeInfluenceAllowed remains false",
-            "Runtime-influence shadow gating is the declared V17 entry condition",
-            "Ready for V17: runtime-influence shadow evaluation on full production trace" if metric_ready else "Blocked on metric integrity before V17",
+            "V16.2 Repair B: metric-qualified, guarded readiness gate. Shadow evaluation complete.",
+            "RuntimeInfluenceAllowed remains false.",
+            "ProductionGeneralizationReady=false (cross-system mapped traces do not qualify).",
+            "NativeProductionTraceReady=false (no native production runtime candidate traces exist).",
+            "Next: acquire native production runtime candidate traces before V17 runtime-influence shadow gating.",
         ],
     }
 
@@ -715,34 +824,68 @@ RuntimeInfluenceAllowed: false | PackageOutputChanged: false | VectorBindingChan
         json.dump(gate, fh, indent=2, ensure_ascii=False)
     print(f"Written: {OUT_GATE_JSON}")
 
-    gate_md = f"""# V16.2 Runtime-Influence Readiness Gate
+    gate_md = f"""# V16.2 Runtime-Influence Readiness Gate (Repair B)
 Generated: {now}
+
+## Core Gates
 - V16_2ProductionTraceShadowReady: {gate['V16_2ProductionTraceShadowReady']}
 - V16_2MetricIntegrityReady: {gate['V16_2MetricIntegrityReady']}
 - Alpha1InvariantPassed: {gate['Alpha1InvariantPassed']}
 - RowKeyUniqueness: {gate['RowKeyUniqueness']}
+
+## Trace Provenance Boundary
+- NativeProductionTraceReady: {gate['NativeProductionTraceReady']}
+- NativeProductionTrace: {gate['NativeProductionTrace']}
+- RepositoryRealisticShadowAdapterReady: {gate['RepositoryRealisticShadowAdapterReady']}
+- ShadowAdapterSchemaMapped: {gate['ShadowAdapterSchemaMapped']}
+- CrossSystemMapping: {gate['CrossSystemMapping']}
+
+## Metric-Quality Gate
+- ProductionLikeWeightedPairwiseAcc: {prod_pairwise:.4f} (threshold: {PAIRWISE_THRESHOLD})
+- PairwiseAboveThreshold: {pairwise_above_threshold}
+- ProductionLikeCalibrationUseful: {calibration_useful}
+- MetricQualityBlocked: {metric_quality_blocked}
+- Reason: {metric_quality_reason}
+
+## Split Metric Stability
+- SplitMetricStabilityScore: {split_metric_stability_score:.4f}
+- SplitStable: {split_stable}
+- Smoke MeanRankΔ (non-α1): {smoke_mean_rank_delta}
+- Prod MeanRankΔ (non-α1): {prod_mean_rank_delta}
+
+## Readiness
 - RuntimeInfluenceAllowed: {gate['RuntimeInfluenceAllowed']}
 - RuntimeInfluenceReadinessCandidate: {gate['RuntimeInfluenceReadinessCandidate']}
 - ProductionGeneralizationReady: {gate['ProductionGeneralizationReady']}
 - InsufficientRealTraceData: {gate['InsufficientRealTraceData']}
+
+## Safety
 - PackageOutputChanged: {gate['PackageOutputChanged']}
 - RuntimePromotionApplied: {gate['RuntimePromotionApplied']}
 - VectorBindingChanged: {gate['VectorBindingChanged']}
 - V14GatePreserved: {gate['V14GatePreserved']}
+
+## Collector
+- CollectorMode: {gate['CollectorMode']}
 """
     with open(OUT_GATE_MD, "w", encoding="utf-8") as fh:
         fh.write(gate_md)
     print(f"Written: {OUT_GATE_MD}")
 
     # Summary
-    print(f"\n=== V16.2 Evaluation Summary ===")
+    print(f"\n=== V16.2 Repair B Evaluation Summary ===")
     print(f"Smoke rows: {len(smoke_rows)}")
     print(f"Production-like rows: {len(prod_like_rows_filtered)}")
     print(f"Alpha1Invariant: {alpha1_invariant_passed}")
     print(f"RowKeyUniqueness: {row_key_uniqueness}")
-    print(f"Combined WeightedBCE: {calib_combined['WeightedBCE']:.5f}")
     print(f"V16_2MetricIntegrityReady: {metric_ready}")
-    print(f"ProductionGeneralizationReady: {production_ready and split_stable}")
+    print(f"ProductionLikeWeightedPairwiseAcc: {prod_pairwise:.4f} (threshold: {PAIRWISE_THRESHOLD})")
+    print(f"PairwiseAboveThreshold: {pairwise_above_threshold}")
+    print(f"MetricQualityBlocked: {metric_quality_blocked}")
+    print(f"SplitMetricStabilityScore: {split_metric_stability_score:.4f}")
+    print(f"SplitStable: {split_stable}")
+    print(f"ProductionGeneralizationReady: {production_generalization_ready}")
+    print(f"RuntimeInfluenceReadinessCandidate: {runtime_influence_readiness_candidate}")
 
 
 if __name__ == "__main__":

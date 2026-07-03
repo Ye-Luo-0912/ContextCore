@@ -1,5 +1,5 @@
 # V16.2 Production-Trace Shadow Evaluation
-Generated: 2026-07-03T14:13:35.032759+00:00 | Total: 429 rows (smoke=33, prod-like=396) | V14Gate: PASS | Alpha1Invariant: PASS | RowKeyUniqueness: PASS
+Generated: 2026-07-03T14:29:43.913698+00:00 | Total: 429 rows (smoke=33, prod-like=396) | V14Gate: PASS | Alpha1Invariant: PASS | RowKeyUniqueness: PASS
 
 ## Trace Provenance
 - Smoke control: 33 rows from learning/v14/runtime-candidate-trace.jsonl

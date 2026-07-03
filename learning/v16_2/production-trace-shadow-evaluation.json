@@ -1,5 +1,5 @@
 {
-  "GeneratedAt": "2026-07-03T14:13:35.032759+00:00",
+  "GeneratedAt": "2026-07-03T14:29:43.913698+00:00",
   "V14GateReady": true,
   "RowIdentity": "RowKey = operationId|section|sourceType|rowIndex -- unique per trace row, provenance tagged by operationId prefix",
   "TraceProvenance": {
@@ -11,6 +11,11 @@
     "ProductionTraceSchemaMapping": "Mapped from vector allowlisting schema to runtime candidate scoring schema. deterministicScore derived from BaselineCount and Allowlisted status; selection/inclusion derived from allowlisting with realistic variance. This is a cross-system mapping, not native candidate-scoring traces.",
     "InsufficientRealTraceData": false,
     "InsufficientRealTraceDataNote": "Repository-realistic traces from related subsystem (vector allowlisting) are sufficient for shadow evaluation. However, these are NOT native runtime candidate scoring traces. Full production candidate-scoring traces would require live system deployment.",
+    "NativeProductionTrace": false,
+    "TraceSource": "shadow-adapter",
+    "CrossSystemMapping": true,
+    "CollectorMode": "PythonReproducibleEvaluator",
+    "CollectorModeNote": "No C# collect command used. Trace data sourced from pre-existing vector/trace/shadow-adapter/ files. Evaluation is fully reproducible via run_v16_2_evaluation.py with deterministic seed (42). No append risk.",
     "TraceSourceDistribution": {
       "Smoke": 33,
       "AllowObserved": 252,
