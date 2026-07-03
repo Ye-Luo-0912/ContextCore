@@ -1,0 +1,172 @@
+{
+  "GeneratedAt": "2026-07-03T15:00:59.267282+00:00",
+  "SchemaVersion": "V16.3-native-1.0",
+  "SchemaOrigin": "RuntimeCandidateTraceModels.cs (src/ContextCore.Core/Services/Learning/V14_0/)",
+  "CollectionPoint": "BasicContextPackageBuilder.WriteTraceRow() at line 3654",
+  "CollectorClass": "RuntimeCandidateTraceSinkAccessor -> FileRuntimeCandidateTraceSink",
+  "NativeTraceDefinition": "Trace captured directly from the runtime candidate scoring pipeline, NOT from cross-system mapped shadow-adapter data. traceSource=PackageTrace(3).",
+  "Fields": [
+    {
+      "name": "operationId",
+      "type": "string",
+      "required": true,
+      "critical": true,
+      "description": "The operation/scenario ID. For native collection, set by CurrentOperationId on sink accessor before pipeline execution.",
+      "nativeSource": "RuntimeCandidateTraceSinkAccessor.CurrentOperationId"
+    },
+    {
+      "name": "requestId",
+      "type": "string",
+      "required": false,
+      "critical": false,
+      "description": "Correlated request ID. Set by CurrentRequestId on sink accessor.",
+      "nativeSource": "RuntimeCandidateTraceSinkAccessor.CurrentRequestId"
+    },
+    {
+      "name": "candidateId",
+      "type": "string",
+      "required": true,
+      "critical": true,
+      "description": "Unique candidate identifier from the scoring pipeline.",
+      "nativeSource": "candidate.Id (UnifiedCandidate or MemoryItem/ContextItem)"
+    },
+    {
+      "name": "sourceId",
+      "type": "string",
+      "required": false,
+      "critical": false,
+      "description": "Source identifier. Currently duplicates candidateId.",
+      "nativeSource": "item.SourceId"
+    },
+    {
+      "name": "sourceType",
+      "type": "byte",
+      "required": true,
+      "critical": true,
+      "description": "1=raw/legacy, 2=memory, 3=constraint, 4=global, 5=recent, 6=task, 7=related",
+      "nativeSource": "item.SourceType (from section context)"
+    },
+    {
+      "name": "authority",
+      "type": "byte",
+      "required": true,
+      "critical": true,
+      "description": "1=constraint/stable/global, 2=raw/recent, 3=historical, 4=related, 5=task/working",
+      "nativeSource": "Derived from sourceType and section during MapTraceFields()"
+    },
+    {
+      "name": "strategyType",
+      "type": "byte",
+      "required": false,
+      "critical": false,
+      "description": "1=working_memory/recent, 2=stable_memory/global, 3=constraint, 4=current_task, 5=related_context",
+      "nativeSource": "Derived from section during MapTraceFields()"
+    },
+    {
+      "name": "retrievalChannel",
+      "type": "byte",
+      "required": true,
+      "critical": true,
+      "description": "0=Unknown, 1=Vector, 2=Memory, 3=Graph, 4=Keyword, 5=Anchor, 6=Constraint",
+      "nativeSource": "item.RetrievalChannel or derived from context"
+    },
+    {
+      "name": "traceSource",
+      "type": "byte",
+      "required": true,
+      "critical": true,
+      "description": "0=Unknown, 1=ShadowEval, 2=GraphShadow, 3=PackageTrace, 4=RetrievalTrace. Native always 3=PackageTrace.",
+      "nativeSource": "Hardcoded to (byte)3 in WriteTraceRow() line 3673"
+    },
+    {
+      "name": "deterministicScore",
+      "type": "double",
+      "required": false,
+      "critical": false,
+      "description": "Legacy bounded-additive score (11-dimension). Computed per section by ScoreWorkingMemoryForAnchors() etc.",
+      "nativeSource": "c.Score from section scoring (11-dimension for memory, fixed for task/constraint/global)"
+    },
+    {
+      "name": "strategyScore",
+      "type": "double",
+      "required": false,
+      "critical": false,
+      "description": "Strategy-based feature score. Currently identical to deterministicScore (unified scorer not yet wired at runtime).",
+      "nativeSource": "c.Score (forward-compatibility field)"
+    },
+    {
+      "name": "finalScore",
+      "type": "double",
+      "required": false,
+      "critical": false,
+      "description": "Final blended score. Currently identical to deterministicScore (hybrid blend not yet wired at runtime).",
+      "nativeSource": "c.Score (forward-compatibility field)"
+    },
+    {
+      "name": "selectedByScoring",
+      "type": "bool",
+      "required": false,
+      "critical": false,
+      "description": "Whether scoring selected this candidate. True by default; false for explicitly rejected items (deprecated constraints, lifecycle-filtered).",
+      "nativeSource": "Parameter passed to WriteTraceRow()"
+    },
+    {
+      "name": "includedInPackage",
+      "type": "bool",
+      "required": false,
+      "critical": false,
+      "description": "Whether the candidate actually made it into the final package. False if dropped by token budget, dedup, or exclusion.",
+      "nativeSource": "Parameter passed to WriteTraceRow()"
+    },
+    {
+      "name": "droppedReason",
+      "type": "string",
+      "required": false,
+      "critical": false,
+      "description": "If not included, why. Examples: 'token budget exhausted', 'constraint is deprecated or rejected', 'filtered by lifecycle'.",
+      "nativeSource": "Set during package assembly in BuildWithPolicyAsync()"
+    },
+    {
+      "name": "tokenCost",
+      "type": "double",
+      "required": false,
+      "critical": false,
+      "description": "Estimated token count for this candidate's content.",
+      "nativeSource": "c.TokenEstimate or derived from content length"
+    },
+    {
+      "name": "section",
+      "type": "string",
+      "required": false,
+      "critical": false,
+      "description": "The package section this candidate maps to (current_task, hard_constraints, working_memory, global_context, recent_context, stable_memory, soft_constraints, related_context, or legacy raw doc name).",
+      "nativeSource": "Section name from BuildWithPolicyAsync() loop context"
+    },
+    {
+      "name": "recordedAt",
+      "type": "DateTimeOffset",
+      "required": false,
+      "critical": false,
+      "description": "ISO 8601 timestamp of trace recording.",
+      "nativeSource": "DateTimeOffset.UtcNow"
+    }
+  ],
+  "CollectionPipeline": {
+    "EntryPoint": "BasicContextPackageBuilder.BuildDetailedAsync()",
+    "TraceWritePoint": "BasicContextPackageBuilder.WriteTraceRow() at line 3654",
+    "TraceWriteCondition": "RuntimeCandidateTraceSinkAccessor.Current.Enabled == true",
+    "TraceFormat": "JSONL (one JSON object per line)",
+    "TraceSourceEnum": "PackageTrace = 3",
+    "OutputPath": "learning/v14/runtime-candidate-trace.jsonl (or configurable via FileRuntimeCandidateTraceSink constructor)"
+  },
+  "VsV16_2_ShadowAdapter": {
+    "V16_2_TraceSource": "Cross-system mapped from vector/trace/shadow-adapter/ (vector allowlisting schema)",
+    "V16_3_TraceSource": "Native from BasicContextPackageBuilder.WriteTraceRow() (candidate scoring schema)",
+    "V16_2_TraceSourceValue": "1 (mapped, not native)",
+    "V16_3_TraceSourceValue": "3 (PackageTrace, native)",
+    "V16_2_ScoresDerived": true,
+    "V16_3_ScoresNative": true,
+    "V16_2_SelectionDerived": true,
+    "V16_3_SelectionNative": true
+  }
+}

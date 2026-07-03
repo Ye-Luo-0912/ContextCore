@@ -1,0 +1,41 @@
+{
+  "GeneratedAt": "2026-07-03T15:00:59.267282+00:00",
+  "CollectorMode": "NativeRuntimeCandidateTracePreview",
+  "TraceCaptureOnly": true,
+  "RuntimeInfluenceSafeguards": {
+    "RuntimeInfluenceAllowed": false,
+    "NeuralBiasActive": false,
+    "NeuralOnlyInShadowReport": true,
+    "HybridBlendAlpha": 1.0,
+    "HybridBlendNote": "Alpha=1.0 means pure deterministic scoring at runtime. Neural scores computed only in shadow evaluation, never at runtime."
+  },
+  "PackageOutputSafety": {
+    "PackageOutputChanged": false,
+    "PackageOutputNote": "Trace collection is append-only. Package output is unmodified. no mutation to selectedItems, droppedItems, or package structure."
+  },
+  "VectorBindingSafety": {
+    "VectorBindingChanged": false,
+    "VectorBindingNote": "No changes to vector retrieval, embedding generation, or allowlisting. shadow-adapter traces are pre-collected, not live."
+  },
+  "RetrievalSafety": {
+    "RetrievalUnchanged": true,
+    "RetrievalNote": "Candidate retrieval paths unmodified. trace collection is observation-only, downstream of retrieval."
+  },
+  "ScoringSafety": {
+    "ScoringUnchanged": true,
+    "ScoringNote": "All scoring functions (ScoreWorkingMemoryForAnchors, constraint scoring, legacy scoring) unmodified. Trace captures their output without altering it."
+  },
+  "WriteSafety": {
+    "WritePathIsConfigurable": true,
+    "WritePathDefault": "learning/v14/runtime-candidate-trace.jsonl",
+    "WriteMode": "Append-only JSONL (FileRuntimeCandidateTraceSink)",
+    "Idempotency": "Each operation generates a new file or new timestamp. No duplicate-append risk if operationId unique per run.",
+    "DiskSafety": "Standard JSONL file write. No database mutation, no in-memory mutation beyond sink buffer."
+  },
+  "FallbackSafety": {
+    "NullSinkDefault": true,
+    "NullSinkNote": "If no FileRuntimeCandidateTraceSink is configured (Enabled=false), NullRuntimeCandidateTraceSink is used. No trace is written. No runtime impact."
+  },
+  "V14GatePreserved": true,
+  "V16_2GatePreservedNote": "V16.2 readiness gate remains as-is. V16.3 does not invalidate V16.2 shadow evaluation."
+}

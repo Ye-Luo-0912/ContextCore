@@ -1,0 +1,54 @@
+{
+  "GeneratedAt": "2026-07-03T15:00:59.267282+00:00",
+  "V14GateReady": true,
+  "V16_2GatePreserved": true,
+  "V16_2GateState": "guarded_candidate_below_threshold",
+  "ReadinessAssessment": {
+    "NativeProductionTraceReady": false,
+    "NativeProductionTraceReadyReason": "No native runtime candidate scoring traces have been collected yet. The collector infrastructure exists (RuntimeCandidateTraceSink + WriteTraceRow) but has not been run against live production traffic. Current environment has only synthetic/smoke traces.",
+    "NativeTraceCollectorReady": true,
+    "NativeTraceCollectorReadyReason": "Collection infrastructure is fully implemented in source:\n  - RuntimeCandidateTraceSink (IRuntimeCandidateTraceSink, FileRuntimeCandidateTraceSink, NullRuntimeCandidateTraceSink)\n  - RuntimeCandidateTraceModels (18-field schema)\n  - RuntimeCandidateTraceContractValidator (6 critical fields validation)\n  - BasicContextPackageBuilder.WriteTraceRow() (inline trace capture)\n  - RuntimeCandidateTraceSinkAccessor (static wiring point)\nCollection can be activated by setting RuntimeCandidateTraceSinkAccessor.Current to a FileRuntimeCandidateTraceSink before pipeline execution.",
+    "CollectorMode": "NativeRuntimeCandidateTracePreview",
+    "ShadowAdapterFallbackReady": true,
+    "ShadowAdapterFallbackNote": "V16.2 shadow-adapter mapped traces remain available as fallback/control group for comparison with native traces.",
+    "CrossSystemMapping": false,
+    "CrossSystemMappingNote": "V16.3 uses native schema, NOT cross-system mapped. ShadowAdapterSchemaMapped remains true for V16.2 control group only."
+  },
+  "CollectorActivationPlan": {
+    "Step1": "Create FileRuntimeCandidateTraceSink with output path to learning/v16_3/native-runtime-candidate-trace.jsonl",
+    "Step2": "Set RuntimeCandidateTraceSinkAccessor.Current to the file sink",
+    "Step3": "Set RuntimeCandidateTraceSinkAccessor.CurrentOperationId to a unique operation ID (e.g. 'native-v16_3-{timestamp}')",
+    "Step4": "Set RuntimeCandidateTraceSinkAccessor.CurrentRequestId accordingly",
+    "Step5": "Execute BasicContextPackageBuilder.BuildDetailedAsync() against target workspace/collection",
+    "Step6": "After build completes, read the JSONL output file",
+    "Step7": "Run V16.2 alpha sweep + calibration on the native trace data",
+    "Step8": "Compare native trace metrics with shadow-adapter mapped trace metrics",
+    "PreActivationChecklist": [
+      "Verify RuntimeInfluenceAllowed == false in all code paths",
+      "Verify NeuralBiasActive == false",
+      "Verify HybridBlendAlpha == 1.0",
+      "Verify PackageOutputChanged == false",
+      "Verify VectorBindingChanged == false",
+      "Verify BasicContextPackageBuilder.WriteTraceRow() only appends, never mutates",
+      "Verify NullRuntimeCandidateTraceSink is default (no accidental trace spam)"
+    ]
+  },
+  "ExpectedNativeTraceCharacteristics": {
+    "traceSource": "3 (PackageTrace) for every row",
+    "deterministicScore_NotIdenticalToNeural": "deterministicScore != neuralScore (neural score is not in trace; it's derived during shadow evaluation)",
+    "selectedByScoring_ReflectsRuntime": "True for scored-and-kept, False for rejected/deprecated",
+    "includedInPackage_ReflectsBudget": "False for token-budget-dropped items with droppedReason='token budget exhausted'",
+    "section_Diverse": "All 8+ section types represented (current_task, hard_constraints, working_memory, global_context, recent_context, stable_memory, soft_constraints, related_context, raw legacy docs)",
+    "operationId_UniquePerRun": "Each collection run produces rows with a unique operationId prefix",
+    "RowCount": "Varies by workspace/collection complexity; typically 30-200 rows per operation"
+  },
+  "GateSemantics": {
+    "RuntimeInfluenceAllowed": false,
+    "PackageOutputChanged": false,
+    "VectorBindingChanged": false,
+    "RuntimePromotionApplied": false,
+    "ProductionGeneralizationReady": false,
+    "ProductionGeneralizationNote": "Native collection must complete and pass metric-quality gate before ProductionGeneralizationReady can be true. Shadow-adapter mapped traces do not qualify.",
+    "NextStep": "Activate collector against actual workspaces/collections to produce native runtime candidate scoring traces. Then run V16.2 evaluation pipeline on native traces."
+  }
+}
