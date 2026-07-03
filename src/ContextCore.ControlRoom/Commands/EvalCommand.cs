@@ -412,6 +412,7 @@ public static partial class EvalCommand
             !string.Equals(subcommand, "v16-hybrid-shadow", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "v16_2-collect-production-trace", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "v16_2-evaluate", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "v16_4-native-trace-collect", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "formal-evidence-stabilization-replay-pilot-readiness", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "formal-evidence-stabilization-replay-pilot-readiness-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "learning-formal-evidence-realization-r1-pack", StringComparison.OrdinalIgnoreCase) &&
@@ -758,6 +759,7 @@ public static partial class EvalCommand
         Console.WriteLine("  eval neural-selection (feature schema + model spec + hybrid scoring)");
         Console.WriteLine("  eval v14-foundation (feature store + feedback + evaluation)");
         Console.WriteLine("  eval v14-runtime-trace-smoke (real package build trace)");
+        Console.WriteLine("  eval v16_4-native-trace-collect [--runId <runId>] (native runtime candidate-scoring trace dry run)");
             Console.WriteLine("  eval learning-formal-evidence-realization-r1-pack");
             Console.WriteLine("  eval learning-formal-evidence-realization-r1-pack-gate");
             Console.WriteLine("  eval dto-split-plan");
@@ -2422,6 +2424,12 @@ public static partial class EvalCommand
         if (string.Equals(subcommand, "v16_2-evaluate", StringComparison.OrdinalIgnoreCase))
         {
             await ExecuteV16_2EvaluateAsync(cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        if (string.Equals(subcommand, "v16_4-native-trace-collect", StringComparison.OrdinalIgnoreCase))
+        {
+            await ExecuteV16_4NativeTraceCollectAsync(args, cancellationToken).ConfigureAwait(false);
             return;
         }
 

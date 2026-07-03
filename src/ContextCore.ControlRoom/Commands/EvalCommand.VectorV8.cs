@@ -2962,5 +2962,362 @@ public static partial class EvalCommand
         Console.WriteLine("[Eval] V16.2 Production Trace Shadow Evaluation done");
         Console.WriteLine("[Eval] RuntimeInfluenceAllowed=false RuntimeInfluenceReadinessCandidate=true");
     }
+
+    private static async Task ExecuteV16_4NativeTraceCollectAsync(IReadOnlyList<string> args, CancellationToken ct)
+    {
+        // Parse --runId argument (defaults to timestamp-based)
+        string runId = string.Empty;
+        for (int i = 1; i < args.Count - 1; i++)
+        {
+            if (string.Equals(args[i], "--runId", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Count)
+            {
+                runId = args[i + 1];
+                break;
+            }
+        }
+        runId ??= DateTimeOffset.UtcNow.ToString("yyyyMMdd-HHmmss");
+
+        var outputDir = System.IO.Path.Combine("learning", "v16_4");
+        System.IO.Directory.CreateDirectory(outputDir);
+        var tracePath = System.IO.Path.Combine(outputDir, $"native-runtime-candidate-trace-{runId}.jsonl");
+
+        // Idempotency: if trace file already exists for this runId, reject (not overwrite)
+        if (File.Exists(tracePath))
+        {
+            Console.WriteLine($"[V16.4] ERROR: Trace file already exists for runId={runId}: {tracePath}");
+            Console.WriteLine("[V16.4] Idempotency: refusing to overwrite. Use a different --runId.");
+            Console.WriteLine("[V16.4] CollectorIdempotencyReady=false");
+
+            var idempotencyFailGate = new
+            {
+                GeneratedAt = DateTimeOffset.UtcNow.ToString("o"),
+                CollectorMode = "NativeRuntimeCandidateTracePreview",
+                RunId = runId,
+                TracePath = tracePath,
+                CollectorIdempotencyReady = false,
+                IdempotencyCheck = "FileExists_Rejected",
+                IdempotencyNote = "Trace file already exists for this runId. Use a unique --runId to collect a new trace.",
+                RuntimeInfluenceAllowed = false,
+                PackageOutputChanged = false,
+                VectorBindingChanged = false,
+                NativeTraceCollected = false,
+                NativeProductionTraceReady = false,
+            };
+            var idempotencyFailGatePath = System.IO.Path.Combine(outputDir, "native-trace-collection-gate.json");
+            System.IO.File.WriteAllText(idempotencyFailGatePath, JsonSerializer.Serialize(idempotencyFailGate, JsonOptions), System.Text.Encoding.UTF8);
+            return;
+        }
+
+        Console.WriteLine($"[V16.4] Native trace collection dry run: runId={runId}");
+        Console.WriteLine($"[V16.4] Output: {tracePath}");
+
+        var sink = new ContextCore.Core.Services.Learning.V14_0.FileRuntimeCandidateTraceSink(tracePath);
+        ContextCore.Core.Services.Learning.V14_0.RuntimeCandidateTraceSinkAccessor.Current = sink;
+        ContextCore.Core.Services.Learning.V14_0.RuntimeCandidateTraceSinkAccessor.CurrentOperationId = $"op-native-v16_4-{runId}";
+        ContextCore.Core.Services.Learning.V14_0.RuntimeCandidateTraceSinkAccessor.CurrentRequestId = $"req-native-v16_4-{runId}";
+
+        int policySelected = 0, policyDropped = 0, legacySelected = 0, legacyDropped = 0;
+
+        try
+        {
+            var now = DateTimeOffset.UtcNow;
+            var ws = "native-ws";
+            var col = "native-col";
+
+            // Seed context store with diverse items for section coverage
+            var store = new ContextCore.Storage.InMemory.Stores.InMemoryContextStore();
+            string[] docTitles = [
+                "AuthModule", "ConfigParser", "DataPipeline", "EventBus", "GraphEngine",
+                "IndexService", "JobScheduler", "LogAggregator", "MetricsCollector", "NotificationHub",
+                "ObjectCache", "PolicyEngine", "QueueManager", "RateLimiter", "SearchIndex",
+                "TaskRunner", "UserService", "ValidationLayer", "WebhookHandler", "CacheInvalidator"
+            ];
+            string[] docTypes = ["code", "doc", "issue", "pr", "note"];
+            for (int i = 0; i < 20; i++)
+            {
+                await store.SaveAsync(new ContextCore.Abstractions.Models.ContextItem
+                {
+                    Id = $"nctx-{i:D2}", WorkspaceId = ws, CollectionId = col,
+                    Type = docTypes[i % docTypes.Length], Title = docTitles[i],
+                    Content = $"Native trace context: {docTitles[i]} v{i % 5 + 1}.0 — {new string('X', 250 + i * 15)}",
+                    Importance = 0.25 + (i % 10) * 0.075, CreatedAt = now.AddDays(-i), UpdatedAt = now.AddHours(-i)
+                }, ct).ConfigureAwait(false);
+            }
+
+            // Memory store: working + stable + deprecated
+            var memStore = new ContextCore.Storage.InMemory.InMemoryMemoryStore();
+            for (int i = 1; i <= 5; i++)
+                await memStore.SaveAsync(new ContextCore.Abstractions.Models.ContextMemoryItem
+                {
+                    Id = $"nmw-{i:D2}", WorkspaceId = ws, CollectionId = col,
+                    Layer = ContextCore.Abstractions.Models.ContextMemoryLayer.Working,
+                    Status = ContextCore.Abstractions.Models.ContextMemoryStatus.Active,
+                    Type = "memory", Content = $"Native WM-{i}: active context for {docTitles[i - 1]}",
+                    Importance = 0.6 + i * 0.06, Confidence = 0.85, UpdatedAt = now.AddMinutes(-i * 5)
+                }, ct).ConfigureAwait(false);
+            for (int i = 1; i <= 3; i++)
+                await memStore.SaveAsync(new ContextCore.Abstractions.Models.ContextMemoryItem
+                {
+                    Id = $"nsm-{i:D2}", WorkspaceId = ws, CollectionId = col,
+                    Layer = ContextCore.Abstractions.Models.ContextMemoryLayer.Stable,
+                    Status = ContextCore.Abstractions.Models.ContextMemoryStatus.Stable,
+                    Type = "memory", Content = $"Native SM-{i}: stable knowledge reference",
+                    Importance = 0.55, Confidence = 0.92, UpdatedAt = now.AddDays(-i * 7)
+                }, ct).ConfigureAwait(false);
+            // Deprecated memory for drop traces
+            await memStore.SaveAsync(new ContextCore.Abstractions.Models.ContextMemoryItem
+            {
+                Id = "nmw-dep", WorkspaceId = ws, CollectionId = col,
+                Layer = ContextCore.Abstractions.Models.ContextMemoryLayer.Working,
+                Status = ContextCore.Abstractions.Models.ContextMemoryStatus.Deprecated,
+                Type = "memory", Content = "Deprecated native memory item",
+                Importance = 0.2, Confidence = 0.3, UpdatedAt = now.AddDays(-90)
+            }, ct).ConfigureAwait(false);
+            await memStore.SetCurrentTaskAsync(new ContextCore.Abstractions.Models.WorkingMemoryCurrentTask
+            {
+                TaskId = $"task-native-{runId}", WorkspaceId = ws, CollectionId = col,
+                Title = "V16.4 Native Trace Dry Run", Description = "Native runtime candidate-scoring trace collection dry run",
+                Status = "active", CreatedAt = now, UpdatedAt = now
+            }, ct).ConfigureAwait(false);
+
+            // Constraints: hard + soft + deprecated
+            var constraintStore = new ContextCore.Storage.InMemory.Stores.InMemoryConstraintStore();
+            for (int i = 1; i <= 4; i++)
+                await constraintStore.SaveAsync(new ContextCore.Abstractions.Models.ContextConstraint
+                {
+                    Id = $"nhc-{i:D2}", WorkspaceId = ws, CollectionId = col,
+                    Level = ContextCore.Abstractions.Models.ConstraintLevel.Hard,
+                    Status = ContextCore.Abstractions.Models.ContextMemoryStatus.Active,
+                    Content = $"Native HC-{i}: mandatory compliance rule {i}",
+                    Confidence = 0.95, CreatedAt = now, UpdatedAt = now
+                }, ct).ConfigureAwait(false);
+            for (int i = 1; i <= 3; i++)
+                await constraintStore.SaveAsync(new ContextCore.Abstractions.Models.ContextConstraint
+                {
+                    Id = $"nsc-{i:D2}", WorkspaceId = ws, CollectionId = col,
+                    Level = ContextCore.Abstractions.Models.ConstraintLevel.Soft,
+                    Status = ContextCore.Abstractions.Models.ContextMemoryStatus.Active,
+                    Content = $"Native SC-{i}: preferred practice guideline {i}",
+                    Confidence = 0.7, CreatedAt = now, UpdatedAt = now
+                }, ct).ConfigureAwait(false);
+            // Deprecated constraints for drop traces
+            await constraintStore.SaveAsync(new ContextCore.Abstractions.Models.ContextConstraint
+            {
+                Id = "nhc-dep", WorkspaceId = ws, CollectionId = col,
+                Level = ContextCore.Abstractions.Models.ConstraintLevel.Hard,
+                Status = ContextCore.Abstractions.Models.ContextMemoryStatus.Deprecated,
+                Content = "Deprecated native hard constraint",
+                Confidence = 0.2, CreatedAt = now.AddDays(-180), UpdatedAt = now.AddDays(-180)
+            }, ct).ConfigureAwait(false);
+            await constraintStore.SaveAsync(new ContextCore.Abstractions.Models.ContextConstraint
+            {
+                Id = "nsc-dep", WorkspaceId = ws, CollectionId = col,
+                Level = ContextCore.Abstractions.Models.ConstraintLevel.Soft,
+                Status = ContextCore.Abstractions.Models.ContextMemoryStatus.Rejected,
+                Content = "Rejected native soft constraint",
+                Confidence = 0.15, CreatedAt = now.AddDays(-180), UpdatedAt = now.AddDays(-180)
+            }, ct).ConfigureAwait(false);
+
+            // Global context
+            var globalStore = new ContextCore.Storage.InMemory.InMemoryGlobalContextStore();
+            for (int i = 1; i <= 4; i++)
+                await globalStore.SaveAsync(new ContextCore.Abstractions.Models.ContextGlobalItem
+                {
+                    Id = $"ngc-{i:D2}", WorkspaceId = ws, CollectionId = col,
+                    Type = "global", Content = $"Native global context #{i}: org-wide policy",
+                    Importance = 0.4 + i * 0.1, CreatedAt = now, UpdatedAt = now
+                }, ct).ConfigureAwait(false);
+
+            // Relation store for related_context
+            var relationStore = new ContextCore.Storage.InMemory.InMemoryRelationStore();
+            await relationStore.SaveAsync(new ContextCore.Abstractions.Models.ContextRelation
+            {
+                Id = "nrel-01", WorkspaceId = ws, CollectionId = col,
+                SourceId = "nmw-01", TargetId = "nctx-04", RelationType = "related_to",
+                Weight = 0.9, Confidence = 0.95, CreatedAt = now
+            }, ct).ConfigureAwait(false);
+            await relationStore.SaveAsync(new ContextCore.Abstractions.Models.ContextRelation
+            {
+                Id = "nrel-02", WorkspaceId = ws, CollectionId = col,
+                SourceId = "nmw-02", TargetId = "nctx-07", RelationType = "derived_from",
+                Weight = 0.85, Confidence = 0.9, CreatedAt = now
+            }, ct).ConfigureAwait(false);
+
+            var tokenizer = new ContextCore.Core.DefaultContextTokenizerResolver();
+            var builder = new ContextCore.Core.BasicContextPackageBuilder(
+                store, constraintStore, globalStore, memStore, relationStore,
+                null, tokenizer, memStore);
+
+            // Policy-mode build
+            var policy = new ContextCore.Abstractions.Models.ContextPackagePolicy
+            {
+                Id = "native-pol", WorkspaceId = ws, CollectionId = col,
+                Name = "V16_4Native", TokenBudget = 3000,
+                IncludeGlobalContext = true, IncludeHardConstraints = true,
+                IncludeSoftConstraints = true, IncludeWorkingMemory = true,
+                IncludeStableMemory = true, IncludeRecentRawContext = true,
+                MaxRecentItems = 5, SectionOrder = new[] { "current_task" }
+            };
+            var request = new ContextCore.Abstractions.Models.ContextPackageRequest
+            {
+                WorkspaceId = ws, CollectionId = col,
+                TokenBudget = 3000, QueryText = "native trace dry run",
+                Policy = policy
+            };
+            var result = await builder.BuildDetailedAsync(request, ct).ConfigureAwait(false);
+            policySelected = result.SelectedItems.Count;
+            policyDropped = result.DroppedItems.Count;
+            Console.WriteLine($"[V16.4] Policy-mode: sections={result.Package.Sections.Count} selected={policySelected} dropped={policyDropped}");
+
+            // Legacy-mode build
+            var legacyReq = new ContextCore.Abstractions.Models.ContextPackageRequest
+            {
+                WorkspaceId = ws, CollectionId = col,
+                TokenBudget = 1200, QueryText = "native trace dry run"
+            };
+            var legacyRes = await builder.BuildDetailedAsync(legacyReq, ct).ConfigureAwait(false);
+            legacySelected = legacyRes.SelectedItems.Count;
+            legacyDropped = legacyRes.DroppedItems.Count;
+            Console.WriteLine($"[V16.4] Legacy-mode: sections={legacyRes.Package.Sections.Count} selected={legacySelected} dropped={legacyDropped}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[V16.4] Builder error: {ex.GetType().Name}: {ex.Message}");
+        }
+        finally
+        {
+            await sink.FlushAsync(ct).ConfigureAwait(false);
+            ContextCore.Core.Services.Learning.V14_0.RuntimeCandidateTraceSinkAccessor.Current = new ContextCore.Core.Services.Learning.V14_0.NullRuntimeCandidateTraceSink();
+        }
+        sink.Dispose();
+
+        // -----------------------------------------------------------------------
+        // Validation
+        // -----------------------------------------------------------------------
+        var traceLines = new List<string>();
+        if (File.Exists(tracePath))
+        {
+            foreach (var line in File.ReadLines(tracePath))
+            {
+                if (!string.IsNullOrWhiteSpace(line))
+                    traceLines.Add(line);
+            }
+        }
+
+        Console.WriteLine($"[V16.4] Trace rows written: {traceLines.Count}");
+
+        var validator = new ContextCore.Core.Services.Learning.V14_0.RuntimeCandidateTraceContractValidator();
+        validator.Validate(traceLines);
+
+        // Section coverage
+        var sectionCoverage = new System.Collections.Generic.Dictionary<string, int>();
+        var channelCoverage = new System.Collections.Generic.Dictionary<int, int>();
+        var traceSourceCoverage = new System.Collections.Generic.Dictionary<int, int>();
+        int selectedCount = 0, droppedCount = 0;
+
+        foreach (var line in traceLines)
+        {
+            try
+            {
+                var doc = JsonDocument.Parse(line);
+                var root = doc.RootElement;
+
+                if (root.TryGetProperty("section", out var sec))
+                {
+                    var secStr = sec.GetString() ?? "unknown";
+                    sectionCoverage[secStr] = sectionCoverage.GetValueOrDefault(secStr) + 1;
+                }
+                if (root.TryGetProperty("retrievalChannel", out var ch))
+                {
+                    var chVal = ch.ValueKind == JsonValueKind.Number ? ch.GetInt32() : 0;
+                    channelCoverage[chVal] = channelCoverage.GetValueOrDefault(chVal) + 1;
+                }
+                if (root.TryGetProperty("traceSource", out var ts))
+                {
+                    var tsVal = ts.ValueKind == JsonValueKind.Number ? ts.GetInt32() : 0;
+                    traceSourceCoverage[tsVal] = traceSourceCoverage.GetValueOrDefault(tsVal) + 1;
+                }
+                if (root.TryGetProperty("selectedByScoring", out var sel) && sel.ValueKind == JsonValueKind.True)
+                    selectedCount++;
+                if (root.TryGetProperty("includedInPackage", out var inc) && inc.ValueKind == JsonValueKind.False)
+                    droppedCount++;
+            }
+            catch { }
+        }
+
+        // All native rows must have traceSource=3 (PackageTrace)
+        bool allTraceSource3 = traceSourceCoverage.Count == 0 || (traceSourceCoverage.Count == 1 && traceSourceCoverage.ContainsKey(3));
+
+        // Build validation report
+        var validation = new
+        {
+            GeneratedAt = DateTimeOffset.UtcNow.ToString("o"),
+            RunId = runId,
+            TracePath = tracePath,
+            CollectorMode = "NativeRuntimeCandidateTracePreview",
+            TraceCaptureOnly = true,
+            TotalRows = traceLines.Count,
+            ParseErrorCount = validator.ParseErrorCount,
+            MissingCriticalFieldCount = validator.MissingCriticalFieldCount,
+            MissingOptionalFieldCount = validator.MissingOptionalFieldCount,
+            SelectedTraceCount = selectedCount,
+            DroppedTraceCount = droppedCount,
+            SectionCoverage = sectionCoverage.OrderByDescending(kv => kv.Value).Select(kv => new { Section = kv.Key, Count = kv.Value }).ToList(),
+            RetrievalChannelCoverage = channelCoverage.OrderBy(kv => kv.Key).Select(kv => new { Channel = kv.Key, Count = kv.Value }).ToList(),
+            TraceSourceCoverage = traceSourceCoverage.OrderBy(kv => kv.Key).Select(kv => new { TraceSource = kv.Key, Count = kv.Value }).ToList(),
+            AllRowsTraceSource3 = allTraceSource3,
+            TraceSource3Note = "traceSource=3 (PackageTrace) is the native trace source. All rows from native collection MUST have traceSource=3.",
+        };
+
+        var validationPath = System.IO.Path.Combine(outputDir, "native-runtime-trace-validation.json");
+        System.IO.File.WriteAllText(validationPath, JsonSerializer.Serialize(validation, JsonOptions), System.Text.Encoding.UTF8);
+        Console.WriteLine($"[V16.4] Validation written: {validationPath}");
+
+        // Safety gate
+        bool nativeTraceCollected = traceLines.Count > 0 && validator.ParseErrorCount == 0 && validator.MissingCriticalFieldCount == 0;
+        bool nativeProductionTraceReady = false; // always false unless real production traffic
+        bool nativeRuntimeDryRunTraceReady = nativeTraceCollected && allTraceSource3;
+        bool collectorIdempotencyReady = true;
+
+        var gate = new
+        {
+            GeneratedAt = DateTimeOffset.UtcNow.ToString("o"),
+            RunId = runId,
+            CollectorMode = "NativeRuntimeCandidateTracePreview",
+            TraceCaptureOnly = true,
+            NativeTraceCollected = nativeTraceCollected,
+            NativeTraceFilePath = tracePath,
+            NativeProductionTraceReady = nativeProductionTraceReady,
+            NativeProductionTraceReadyNote = "Always false for dry-run collection. Requires real production traffic.",
+            NativeRuntimeDryRunTraceReady = nativeRuntimeDryRunTraceReady,
+            CollectorIdempotencyReady = collectorIdempotencyReady,
+            CollectorIdempotencyNote = "runId-scoped output path ensures no duplicate append. Same runId re-run rejects with error.",
+            TraceCount = traceLines.Count,
+            ValidationCriticalErrors = validator.MissingCriticalFieldCount,
+            ValidationParseErrors = validator.ParseErrorCount,
+            AllRowsTraceSource3 = allTraceSource3,
+            SinglePatchSetOperation = true,
+            PolicySelectedCount = policySelected,
+            PolicyDroppedCount = policyDropped,
+            LegacySelectedCount = legacySelected,
+            LegacyDroppedCount = legacyDropped,
+            RuntimeInfluenceAllowed = false,
+            PackageOutputChanged = false,
+            RuntimePromotionApplied = false,
+            VectorBindingChanged = false,
+            NeuralBiasActive = false,
+            ProductionGeneralizationReady = false,
+            V14GatePreserved = true,
+            V16_2GatePreserved = true,
+        };
+
+        var gatePath = System.IO.Path.Combine(outputDir, "native-trace-collection-gate.json");
+        System.IO.File.WriteAllText(gatePath, JsonSerializer.Serialize(gate, JsonOptions), System.Text.Encoding.UTF8);
+        Console.WriteLine($"[V16.4] Gate written: {gatePath}");
+
+        Console.WriteLine("[V16.4] Native Runtime Trace Collection Dry Run complete");
+        Console.WriteLine($"[V16.4] NativeTraceCollected={nativeTraceCollected} NativeRuntimeDryRunTraceReady={nativeRuntimeDryRunTraceReady}");
+        Console.WriteLine("[V16.4] RuntimeInfluenceAllowed=false PackageOutputChanged=false VectorBindingChanged=false");
+    }
 }
 
