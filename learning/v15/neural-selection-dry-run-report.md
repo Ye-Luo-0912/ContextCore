@@ -1,6 +1,6 @@
 # V15 Neural Selection Dry-Run Report
 
-Generated: 2026-07-03T05:01:51.8615451+00:00
+Generated: 2026-07-03T06:04:29.5152765+00:00
 
 ## Summary
 - Candidates processed: 33

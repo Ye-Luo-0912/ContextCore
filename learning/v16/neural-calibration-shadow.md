@@ -1,31 +1,6 @@
 # V16.1 Neural Calibration Shadow Report
-
-Generated: 2026-07-03T05:02:49.0377144+00:00
-Method: Weighted BCE logistic regression
-Coefficients: a=0.641662, b=1.292052
-Weighted BCE loss: 0.223662
-Pairwise: unweighted=54.84% weighted=40.00% (68/124)
-
-## Per-Candidate Calibration
-| Candidate | Neural | CalibProb | Label | Weight | SuccessProxy |
-|-----------|--------|-----------|-------|--------|-------------|
-| task-smoke | 0.5000 | 0.8338 | 1 | 1.000 | 165.0 |
-| hc-dep | 0.5000 | 0.8338 | 0 | 0.300 | 0.0 |
-| hc-01 | 0.5000 | 0.8338 | 1 | 1.000 | 156.8 |
-| hc-02 | 0.5000 | 0.8338 | 1 | 1.000 | 156.8 |
-| wm-03 | 0.4846 | 0.8324 | 1 | 1.000 | 69.9 |
-| wm-02 | 0.4846 | 0.8324 | 1 | 1.000 | 69.6 |
-| wm-01 | 0.4846 | 0.8324 | 1 | 1.000 | 69.3 |
-| gc-02 | 0.4864 | 0.8326 | 1 | 1.000 | 14.1 |
-| gc-01 | 0.4865 | 0.8326 | 1 | 1.000 | 13.8 |
-| ctx-07 | 0.5100 | 0.8347 | 1 | 0.370 | 0.1 |
-| ctx-08 | 0.5100 | 0.8347 | 1 | 0.370 | 0.1 |
-| ctx-09 | 0.5100 | 0.8347 | 1 | 0.370 | 0.1 |
-| sm-01 | 0.4855 | 0.8325 | 1 | 1.000 | 22.9 |
-| sm-02 | 0.4855 | 0.8325 | 1 | 1.000 | 22.9 |
-| sc-dep | 0.5000 | 0.8338 | 0 | 0.300 | 0.0 |
-| sc-01 | 0.4932 | 0.8332 | 1 | 1.000 | 27.8 |
-| sc-02 | 0.4932 | 0.8332 | 1 | 1.000 | 27.8 |
-
-## Note
-Offline shadow calibration only. Not deployed to runtime.
+Generated: 2026-07-03T06:04:32.0700912+00:00 | Method: Weighted BCE logistic | a=0.662626 b=1.322243 loss=0.200415
+Global max: successProxy=1065.0 costEfficiency=710.0 implicitSignal=1.0
+Weight: 0.5*norm(successProxy) + 0.3*norm(costEfficiency) + 0.2*norm(implicitSignal)
+Pairwise: unweighted=45.16% weighted=36.63% (28/62)
+## Offline shadow only. Not deployed to runtime.

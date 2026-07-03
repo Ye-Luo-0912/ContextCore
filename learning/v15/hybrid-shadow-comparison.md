@@ -1,6 +1,6 @@
 # V15 Hybrid Shadow Comparison
 
-Generated: 2026-07-03T05:01:51.8615451+00:00
+Generated: 2026-07-03T06:04:29.5152765+00:00
 
 ## Deterministic vs Neural Score Comparison
 - Spearman rank correlation: 0.8327

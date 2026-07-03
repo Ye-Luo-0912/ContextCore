@@ -1,5 +1,5 @@
 {
-  "GeneratedAt": "2026-07-03T05:01:51.8615451\u002B00:00",
+  "GeneratedAt": "2026-07-03T06:04:29.5152765\u002B00:00",
   "ComparisonMethod": "Deterministic (V14) vs Neural (V15 dry-run MLP forward pass)",
   "DeterministicScoring": {
     "Source": "V14 strategy \u002B trace-derived scores",

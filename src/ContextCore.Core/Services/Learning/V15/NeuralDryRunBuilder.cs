@@ -229,25 +229,73 @@ public sealed class NeuralDryRunBuilder
         File.WriteAllText(Path.Combine(v15Dir, "hybrid-shadow-comparison.json"),
             JsonSerializer.Serialize(hybridComparison, new JsonSerializerOptions { WriteIndented = true }));
 
-        // === Write V14/V15 preflight coverage note ===
+        // === Write V14/V15 preflight coverage note (dynamic from V14 artifacts) ===
+        // Read V14 runtime-trace-validation for section coverage
+        var v14Sections = new List<string>();
+        var v14Missing = new List<string>(new[] { "related_context", "legacy/raw" });
+        bool legacyRawDetected = false;
+        bool relatedContextDetected = false;
+        var v14ValidationPath = Path.Combine(outputDir, "learning", "v14", "runtime-candidate-trace-validation.json");
+        if (File.Exists(v14ValidationPath))
+        {
+            try
+            {
+                using var vdoc = JsonDocument.Parse(File.ReadAllText(v14ValidationPath));
+                if (vdoc.RootElement.TryGetProperty("SectionCoverage", out var secCov))
+                {
+                    foreach (var s in secCov.EnumerateArray())
+                    {
+                        var sName = s.TryGetProperty("Section", out var sn) ? sn.GetString() ?? "" : "";
+                        if (!string.IsNullOrWhiteSpace(sName)) v14Sections.Add(sName);
+                    }
+                }
+            }
+            catch { }
+        }
+        // Fallback: scan feature store for sections
+        if (v14Sections.Count == 0)
+        {
+            var fsPath = Path.Combine(outputDir, "learning", "v14", "feature-store.jsonl");
+            if (File.Exists(fsPath))
+            {
+                var secSet = new HashSet<string>();
+                foreach (var line in File.ReadLines(fsPath).Where(l => !string.IsNullOrWhiteSpace(l)))
+                {
+                    try { var d = JsonDocument.Parse(line).RootElement; if (d.TryGetProperty("section", out var se)) { var s = se.GetString() ?? ""; if (!string.IsNullOrWhiteSpace(s)) secSet.Add(s); } } catch { }
+                }
+                v14Sections = secSet.ToList();
+            }
+        }
+        relatedContextDetected = v14Sections.Contains("related_context");
+        legacyRawDetected = v14Sections.Any(s => s.StartsWith("SmokeDoc_", StringComparison.OrdinalIgnoreCase)) || v14Sections.Contains("legacy") || v14Sections.Contains("raw");
+        v14Missing.Clear();
+        if (!relatedContextDetected) v14Missing.Add("related_context");
+        if (!legacyRawDetected) v14Missing.Add("legacy/raw");
+
         var preflightNote = new
         {
             GeneratedAt = now,
-            Note = "V14→V15 preflight coverage assessment",
+            Note = "V14→V15 preflight coverage assessment (dynamically read from V14 artifacts)",
             V14CurrentCoverage = new
             {
-                SectionCount = 7,
-                CoveredSections = new[] { "current_task", "hard_constraints", "working_memory", "global_context", "recent_context", "stable_memory", "soft_constraints" },
-                MissingSections = new[] { "related_context", "legacy/raw" },
-                RelatedContextNote = "related_context was not exercised because relation targets were memory IDs, not context store IDs, and 'references' relation type was not in the default whitelist",
-                LegacyRawNote = "legacy/raw is exclusive to the legacy build path and was not exercised in the policy-mode smoke",
+                SectionCount = v14Sections.Count,
+                SectionNames = v14Sections.OrderBy(s => s).ToArray(),
+                SectionCountCanonical = v14Sections.Count,
+                RelatedContextCoverageDetected = relatedContextDetected,
+                LegacyRawCoverageDetected = legacyRawDetected,
+                MissingSections = v14Missing.ToArray(),
                 TraceRowCount = totalCandidates,
-                SmokeEvaluationSource = "v14-runtime-trace-smoke deterministic seed corpus"
+                SmokeEvaluationSource = "v14-runtime-trace-smoke dual-mode (policy + legacy)"
             },
             V15CoverageLimitation = new
             {
-                Warning = "V15 dry-run feature vectors are derived from V14 smoke trace coverage gaps. Missing related_context and legacy/raw sections mean neural scoring has not been tested on graph-expanded or raw-document candidates. Do not interpret selection agreement statistics as production generalization capability.",
-                Recommendation = "Rerun V15 dry-run against a full production trace (not smoke) before reducing BlendAlpha below 1.0."
+                CoverageSufficientForDryRun = v14Missing.Count == 0,
+                Warning = v14Missing.Count > 0
+                    ? "V15 dry-run feature vectors are derived from V14 smoke trace with coverage gaps. Missing sections: " + string.Join(", ", v14Missing) + ". Do not interpret selection agreement statistics as production generalization capability."
+                    : "All target sections covered. V15 dry-run coverage is sufficient for shadow evaluation.",
+                Recommendation = v14Missing.Count > 0
+                    ? "Fix V14 smoke to cover missing sections before reducing BlendAlpha below 1.0."
+                    : "V15 coverage is complete. Proceed to V16 shadow evaluation."
             }
         };
         File.WriteAllText(Path.Combine(v15Dir, "v15-preflight-coverage-note.json"),
@@ -256,7 +304,7 @@ public sealed class NeuralDryRunBuilder
         // === Write markdown reports ===
         WriteMarkdownDryRunReport(v15Dir, now, totalCandidates, spearmanRho, agreementRate, meanDet, meanNeural, comparisonRows);
         WriteMarkdownHybridComparison(v15Dir, now, spearmanRho, agreementRate, meanDet, meanNeural, allDetScores, allSelectionScores, v14GateReady);
-        WriteMarkdownPreflightNote(v15Dir, now, totalCandidates);
+        WriteMarkdownPreflightNote(v15Dir, now, legacyRawDetected, relatedContextDetected, v14Sections.Count, v14Missing);
     }
 
     private static float[] BuildFeatureVector(int sourceType, int authority, int strategyType, double detScore, double tokenCost, bool selected, bool included)
@@ -413,27 +461,22 @@ public sealed class NeuralDryRunBuilder
         File.WriteAllText(Path.Combine(dir, "hybrid-shadow-comparison.md"), sb.ToString());
     }
 
-    private static void WriteMarkdownPreflightNote(string dir, string now, int total)
+    private static void WriteMarkdownPreflightNote(string dir, string now, bool legacyDetected, bool relatedDetected, int sectionCount, List<string> missing)
     {
         var sb = new StringBuilder();
         sb.AppendLine("# V14→V15 Preflight Coverage Note");
         sb.AppendLine();
         sb.AppendLine($"Generated: {now}");
+        sb.AppendLine($"Sections detected: {sectionCount}");
+        sb.AppendLine($"- LegacyRawCoverageDetected: {legacyDetected}");
+        sb.AppendLine($"- RelatedContextCoverageDetected: {relatedDetected}");
+        if (missing.Count > 0) sb.AppendLine($"- Missing: {string.Join(", ", missing)}");
+        else sb.AppendLine("- All target sections covered");
         sb.AppendLine();
-        sb.AppendLine("## V14 Smoke Trace Coverage Gaps");
-        sb.AppendLine($"- Total trace rows: {total}");
-        sb.AppendLine("- Covered sections: current_task, hard_constraints, working_memory, global_context, recent_context, stable_memory, soft_constraints");
-        sb.AppendLine("- **Missing sections: related_context, legacy/raw**");
-        sb.AppendLine();
-        sb.AppendLine("## Impact on V15 Neural Dry-Run");
-        sb.AppendLine("- Feature vectors derived only from covered sections");
-        sb.AppendLine("- related_context: relation expansion candidates not present in training feature set");
-        sb.AppendLine("- legacy/raw: raw document candidates not present in training feature set");
-        sb.AppendLine();
-        sb.AppendLine("## Warning");
-        sb.AppendLine("V15 dry-run selection agreement statistics are computed on a **smoke corpus with known coverage gaps**.");
-        sb.AppendLine("Do not interpret these statistics as production generalization capability.");
-        sb.AppendLine("Re-run against a full production trace before reducing BlendAlpha below 1.0.");
+        if (missing.Count > 0)
+            sb.AppendLine("## Warning\nCoverage gaps remain. Do not interpret V15 metrics as production generalization.\nRe-run V14 smoke with full coverage before reducing BlendAlpha.");
+        else
+            sb.AppendLine("## Status\nCoverage sufficient for V16 shadow evaluation. Proceed.");
         File.WriteAllText(Path.Combine(dir, "v15-preflight-coverage-note.md"), sb.ToString());
     }
 }

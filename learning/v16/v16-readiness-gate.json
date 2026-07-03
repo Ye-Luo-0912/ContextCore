@@ -1,23 +1,33 @@
 {
-  "GeneratedAt": "2026-07-03T05:02:49.0377144\u002B00:00",
+  "GeneratedAt": "2026-07-03T06:04:32.0700912\u002B00:00",
   "V16ShadowEvaluationReady": true,
   "V16MetricIntegrityReady": true,
+  "Alpha1InvariantPassed": true,
   "CoverageLimited": false,
   "MissingCoverage": [],
-  "ProductionGeneralizationReady": true,
+  "LegacyRawCoverageDetected": true,
+  "RelatedContextCoverageDetected": true,
+  "V17ShadowEvaluationEntryReady": true,
+  "ProductionGeneralizationReady": false,
+  "ProductionGeneralizationNote": "Based on smoke corpus (33 rows, seeded stores). Production generalization requires full real-trace evaluation.",
   "RuntimeInfluenceAllowed": false,
   "PackageOutputChanged": false,
   "RuntimePromotionApplied": false,
   "VectorBindingChanged": false,
   "V14GatePreserved": true,
-  "CalibrationActive": true,
-  "CalibrationWeighted": true,
-  "FeedbackSignalsUsed": [
-    "downstreamSuccessProxy",
-    "costEfficiencyScore",
-    "userImplicitSignal"
-  ],
+  "Calibration": {
+    "Active": true,
+    "Weighted": true,
+    "SignalsUsed": [
+      "downstreamSuccessProxy",
+      "costEfficiencyScore",
+      "userImplicitSignal"
+    ],
+    "GlobalNormalization": true
+  },
   "NextSteps": [
-    "Coverage requirements met. V16 ready for V17 production evaluation."
+    "V17: full production-trace shadow evaluation",
+    "V17: evaluate against real-world selection outcomes, not smoke corpus",
+    "V17: verify production generalization before declaring ProductionGeneralizationReady=true"
   ]
 }
