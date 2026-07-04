@@ -1,0 +1,32 @@
+﻿{
+  "GeneratedAt": "2026-07-04T18:35:31.2109046\u002B00:00",
+  "NativeProductionTraceReady": false,
+  "NativeProductionTraceReadyPermanentUntil": [
+    "real workspace (not synthetic \u0027native-ws\u0027)",
+    "real collection (not synthetic \u0027native-col\u0027)",
+    "real query/task patterns (not seeded \u0027Native trace context: ...\u0027)",
+    "traceSource=3 for all rows (PackageTrace)",
+    "validation errors = 0 (critical \u002B parse)",
+    "multiple runs (not single dry-run)",
+    "WeightedPairwiseAcc \u003E= 0.55 on production data",
+    "ScoringSelectedCount \u003E 0 AND ScoringRejectedCount \u003E 0",
+    "PackageIncludedCount \u003E 0 AND PackageDroppedCount \u003E 0"
+  ],
+  "CurrentState": {
+    "HasRealWorkspace": false,
+    "HasRealWorkspaceReason": "V16.4 dry-run uses synthetic \u0027native-ws\u0027/\u0027native-col\u0027 with in-memory seeded stores.",
+    "HasRealCollection": false,
+    "HasRealQueryPatterns": false,
+    "AllRowsTraceSource3": true,
+    "ValidationErrorsZero": true,
+    "MultipleRuns": false,
+    "MultipleRunsReason": "Only single dry-run collected (repair-002). Multiple production runs required.",
+    "WeightedPairwiseAccSufficient": false,
+    "WeightedPairwiseAccCurrent": 0.5192,
+    "WeightedPairwiseAccThreshold": 0.55,
+    "ScoringSelectedCountPositive": true,
+    "ScoringRejectedCountPositive": true,
+    "PackageIncludedCountPositive": true,
+    "PackageDroppedCountPositive": true
+  }
+}

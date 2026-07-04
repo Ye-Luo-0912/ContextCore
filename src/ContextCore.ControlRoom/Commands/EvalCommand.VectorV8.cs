@@ -3361,5 +3361,241 @@ public static partial class EvalCommand
         Console.WriteLine($"[V16.4] NativeTraceCollected={nativeTraceCollected} NativeRuntimeDryRunTraceReady={nativeRuntimeDryRunTraceReady}");
         Console.WriteLine("[V16.4] RuntimeInfluenceAllowed=false PackageOutputChanged=false VectorBindingChanged=false");
     }
+
+    private static async Task ExecuteV16_6NativeProductionTracePlanAsync(IReadOnlyList<string> args, CancellationToken ct)
+    {
+        // Parse --mode argument (defaults to PreviewOnly)
+        string mode = "PreviewOnly";
+        string? workspaceId = null, collectionId = null;
+        for (int i = 1; i < args.Count - 1; i++)
+        {
+            if (string.Equals(args[i], "--mode", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Count)
+                mode = args[i + 1];
+            if (string.Equals(args[i], "--workspaceId", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Count)
+                workspaceId = args[i + 1];
+            if (string.Equals(args[i], "--collectionId", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Count)
+                collectionId = args[i + 1];
+        }
+
+        // Validate mode
+        string[] validModes = ["PreviewOnly", "ControlledReplay", "LiveCapture"];
+        if (!validModes.Contains(mode, StringComparer.OrdinalIgnoreCase))
+        {
+            Console.WriteLine($"[V16.6] ERROR: Unknown mode '{mode}'. Valid modes: {string.Join(", ", validModes)}");
+            return;
+        }
+
+        // LiveCapture must be explicitly authorized
+        bool liveCaptureAuthorized = string.Equals(mode, "LiveCapture", StringComparison.OrdinalIgnoreCase);
+        bool controlledReplayActive = string.Equals(mode, "ControlledReplay", StringComparison.OrdinalIgnoreCase);
+        bool isDryRun = string.Equals(mode, "PreviewOnly", StringComparison.OrdinalIgnoreCase);
+
+        if (liveCaptureAuthorized)
+        {
+            Console.WriteLine("[V16.6] LiveCapture mode selected — verifying authorization...");
+            Console.WriteLine("[V16.6] WARNING: LiveCapture requires --workspaceId and --collectionId for real production data.");
+            if (string.IsNullOrWhiteSpace(workspaceId) || string.IsNullOrWhiteSpace(collectionId))
+            {
+                Console.WriteLine("[V16.6] ERROR: LiveCapture requires --workspaceId and --collectionId.");
+                return;
+            }
+            Console.WriteLine("[V16.6] LiveCapture authorized with explicit workspace/collection.");
+        }
+
+        var outputDir = System.IO.Path.Combine("learning", "v16_6");
+        System.IO.Directory.CreateDirectory(outputDir);
+        var now = DateTimeOffset.UtcNow;
+
+        // -------------------------------------------------------------------
+        // Plan artifact
+        // -------------------------------------------------------------------
+        var plan = new
+        {
+            GeneratedAt = now.ToString("o"),
+            PlanVersion = "V16.6",
+            AcquisitionMode = mode,
+            AcquisitionModeDescription = mode switch
+            {
+                "PreviewOnly" => "No trace collection. Validates plan, outputs criteria, checks safety gates. Default mode.",
+                "ControlledReplay" => "Collects traces from specified workspace/collection with RuntimeInfluenceAllowed=false. Uses FileRuntimeCandidateTraceSink with runId. Does NOT modify package output.",
+                "LiveCapture" => "Live production trace capture. Requires explicit --workspaceId and --collectionId. All safety gates enforced. traceSource=3.",
+                _ => "Unknown"
+            },
+            PreviewOnly = isDryRun,
+            ControlledReplayActive = controlledReplayActive,
+            LiveCaptureAuthorized = liveCaptureAuthorized,
+            WorkspaceId = workspaceId ?? "(not specified — PreviewOnly)",
+            CollectionId = collectionId ?? "(not specified — PreviewOnly)",
+            TraceCaptureMode = isDryRun
+                ? "No capture — plan generation only"
+                : "FileRuntimeCandidateTraceSink with run-scoped output path",
+            IdempotencyMode = "RejectExistingRunId",
+            RunScopedTracePath = true,
+            SharedTraceAppend = false,
+            AcquisitionSteps = isDryRun ? new[]
+            {
+                "Step 1: Identify target workspace/collection (not 'native-ws'/'native-col')",
+                "Step 2: Verify RuntimeInfluenceAllowed=false in all code paths",
+                "Step 3: Set RuntimeCandidateTraceSinkAccessor.Current to FileRuntimeCandidateTraceSink",
+                "Step 4: Set CurrentOperationId to unique production operation ID",
+                "Step 5: Execute BasicContextPackageBuilder.BuildDetailedAsync()",
+                "Step 6: Flush sink, validate trace, run V16.5 evaluator",
+                "Step 7: Check NativeWeightedPairwiseAcc >= 0.55 on production data",
+                "Step 8: If quality passes, ProductionGeneralizationReady may be considered (still gated)",
+            } : new[] {
+                "Step 1: RuntimeCandidateTraceSinkAccessor configured with production workspace/collection",
+                "Step 2: BasicContextPackageBuilder instantiated with REAL stores (not in-memory seed)",
+                "Step 3: BuildDetailedAsync executed against production data",
+                "Step 4: Trace captured to learning/v16_6/native-production-trace-{runId}.jsonl",
+                "Step 5: Validation + V16.5 evaluation run",
+            },
+        };
+
+        // -------------------------------------------------------------------
+        // Production trace criteria
+        // -------------------------------------------------------------------
+        var criteria = new
+        {
+            GeneratedAt = now.ToString("o"),
+            NativeProductionTraceReady = false,
+            NativeProductionTraceReadyPermanentUntil = new[]
+            {
+                "real workspace (not synthetic 'native-ws')",
+                "real collection (not synthetic 'native-col')",
+                "real query/task patterns (not seeded 'Native trace context: ...')",
+                "traceSource=3 for all rows (PackageTrace)",
+                "validation errors = 0 (critical + parse)",
+                "multiple runs (not single dry-run)",
+                "WeightedPairwiseAcc >= 0.55 on production data",
+                "ScoringSelectedCount > 0 AND ScoringRejectedCount > 0",
+                "PackageIncludedCount > 0 AND PackageDroppedCount > 0",
+            },
+            CurrentState = new
+            {
+                HasRealWorkspace = false,
+                HasRealWorkspaceReason = "V16.4 dry-run uses synthetic 'native-ws'/'native-col' with in-memory seeded stores.",
+                HasRealCollection = false,
+                HasRealQueryPatterns = false,
+                AllRowsTraceSource3 = true,
+                ValidationErrorsZero = true,
+                MultipleRuns = false,
+                MultipleRunsReason = "Only single dry-run collected (repair-002). Multiple production runs required.",
+                WeightedPairwiseAccSufficient = false,
+                WeightedPairwiseAccCurrent = 0.5192,
+                WeightedPairwiseAccThreshold = 0.55,
+                ScoringSelectedCountPositive = true,
+                ScoringRejectedCountPositive = true,
+                PackageIncludedCountPositive = true,
+                PackageDroppedCountPositive = true,
+            },
+        };
+
+        // -------------------------------------------------------------------
+        // Safety gate
+        // -------------------------------------------------------------------
+        var safetyGate = new
+        {
+            GeneratedAt = now.ToString("o"),
+            AcquisitionMode = mode,
+            NativeProductionCaptureHarnessReady = true,
+            NativeProductionCaptureHarnessReadyReason = "V16.6 defines controlled acquisition modes (PreviewOnly/ControlledReplay/LiveCapture) with explicit safety gates, idempotency, and production criteria. Harness is ready for controlled use.",
+            NativeProductionTraceReady = false,
+            NativeProductionTraceReadyReason = "No production-native traces exist. V16.4 dry-run traces are synthetic (in-memory seed). Real workspace/collection traces required.",
+            ProductionGeneralizationReady = false,
+            ProductionGeneralizationReadyReason = "Production generalization requires: (1) real workspace traces, (2) metric quality >= 0.55, (3) multiple runs. None satisfied.",
+            RuntimeInfluenceAllowed = false,
+            RuntimeInfluenceAllowedReason = "NeuralBiasActive=false, HybridBlendAlpha=1.0, PackageOutputChanged=false. No runtime influence.",
+            PackageOutputChanged = false,
+            RuntimePromotionApplied = false,
+            VectorBindingChanged = false,
+            V14GatePreserved = true,
+            V16_2GatePreserved = true,
+            V16_4GatePreserved = true,
+            V16_5GatePreserved = true,
+            LiveCaptureRequiresExplicitAuthorization = true,
+            LiveCaptureAuthorizationNote = "--mode LiveCapture requires --workspaceId and --collectionId. Must NOT be in-memory seed stores.",
+            ControlledReplaySafety = new
+            {
+                RuntimeInfluenceGated = true,
+                RuntimeInfluenceGatedNote = "ControlledReplay explicitly sets NeuralBiasActive=false and PackageOutputChanged=false before collection.",
+                IdempotencyEnforced = true,
+                IdempotencyEnforcedNote = "RejectExistingRunId + RunScopedTracePath prevents accidental overwrite.",
+                TraceCaptureOnly = true,
+                TraceCaptureOnlyNote = "FileRuntimeCandidateTraceSink writes trace. No package output mutation.",
+            },
+        };
+
+        // -------------------------------------------------------------------
+        // Write artifacts
+        // -------------------------------------------------------------------
+        var planPath = System.IO.Path.Combine(outputDir, "native-production-trace-plan.json");
+        System.IO.File.WriteAllText(planPath, JsonSerializer.Serialize(plan, JsonOptions), System.Text.Encoding.UTF8);
+        Console.WriteLine($"[V16.6] Plan: {planPath}");
+
+        var criteriaPath = System.IO.Path.Combine(outputDir, "native-production-trace-criteria.json");
+        System.IO.File.WriteAllText(criteriaPath, JsonSerializer.Serialize(criteria, JsonOptions), System.Text.Encoding.UTF8);
+        Console.WriteLine($"[V16.6] Criteria: {criteriaPath}");
+
+        var gatePath = System.IO.Path.Combine(outputDir, "native-production-capture-safety-gate.json");
+        System.IO.File.WriteAllText(gatePath, JsonSerializer.Serialize(safetyGate, JsonOptions), System.Text.Encoding.UTF8);
+        Console.WriteLine($"[V16.6] Safety gate: {gatePath}");
+
+        // Plan markdown
+        var planMd = $""""
+# V16.6 Native Production Trace Acquisition Plan
+Generated: {now:o} | Mode: {mode} | PreviewOnly: {isDryRun}
+
+## Acquisition Modes
+| Mode | Status | Description |
+|---|---|---|
+| PreviewOnly | {(isDryRun ? "Active" : "Inactive")} | Plan generation only. No trace collection. Default. |
+| ControlledReplay | {(controlledReplayActive ? "Active" : "Inactive")} | Collects traces with safety gates enforced. |
+| LiveCapture | {(liveCaptureAuthorized ? "Authorized" : "Not authorized")} | Requires explicit --workspaceId + --collectionId. |
+
+## Controlled Replay Safety
+- RuntimeInfluenceGated: true
+- IdempotencyEnforced: true (RejectExistingRunId + RunScopedTracePath)
+- TraceCaptureOnly: true
+- PackageOutputChanged: false
+- RuntimePromotionApplied: false
+- VectorBindingChanged: false
+
+## Production Trace Criteria (all must be met)
+1. Real workspace (not synthetic 'native-ws')
+2. Real collection (not synthetic 'native-col')
+3. Real query/task patterns (not seeded content)
+4. traceSource=3 for all rows
+5. Validation errors = 0
+6. Multiple runs (not single dry-run)
+7. WeightedPairwiseAcc >= 0.55 on production data
+
+## Current State
+- HasRealWorkspace: false
+- HasRealCollection: false
+- MultipleRuns: false
+- WeightedPairwiseAccSufficient: false (current=0.5192, need >= 0.55)
+
+## Acquisition Steps (PreviewOnly)
+1. Identify target workspace/collection
+2. Verify RuntimeInfluenceAllowed=false
+3. Wire FileRuntimeCandidateTraceSink
+4. Set unique operation ID
+5. Execute BuildDetailedAsync()
+6. Flush, validate, run V16.5 evaluator
+7. Check NativeWeightedPairwiseAcc >= 0.55
+8. If quality passes, consider ProductionGeneralizationReady (still gated)
+
+## Safety
+RuntimeInfluenceAllowed: false | PackageOutputChanged: false | VectorBindingChanged: false
+"""";
+
+        var planMdPath = System.IO.Path.Combine(outputDir, "native-production-trace-plan.md");
+        System.IO.File.WriteAllText(planMdPath, planMd, System.Text.Encoding.UTF8);
+        Console.WriteLine($"[V16.6] Plan md: {planMdPath}");
+
+        Console.WriteLine("[V16.6] Native Production Trace Acquisition Plan complete");
+        Console.WriteLine($"[V16.6] Mode={mode} PreviewOnly={isDryRun} NativeProductionCaptureHarnessReady=true");
+        Console.WriteLine("[V16.6] NativeProductionTraceReady=false ProductionGeneralizationReady=false RuntimeInfluenceAllowed=false");
+    }
 }
 

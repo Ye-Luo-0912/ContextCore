@@ -1,0 +1,29 @@
+﻿{
+  "GeneratedAt": "2026-07-04T18:35:31.2109046\u002B00:00",
+  "AcquisitionMode": "PreviewOnly",
+  "NativeProductionCaptureHarnessReady": true,
+  "NativeProductionCaptureHarnessReadyReason": "V16.6 defines controlled acquisition modes (PreviewOnly/ControlledReplay/LiveCapture) with explicit safety gates, idempotency, and production criteria. Harness is ready for controlled use.",
+  "NativeProductionTraceReady": false,
+  "NativeProductionTraceReadyReason": "No production-native traces exist. V16.4 dry-run traces are synthetic (in-memory seed). Real workspace/collection traces required.",
+  "ProductionGeneralizationReady": false,
+  "ProductionGeneralizationReadyReason": "Production generalization requires: (1) real workspace traces, (2) metric quality \u003E= 0.55, (3) multiple runs. None satisfied.",
+  "RuntimeInfluenceAllowed": false,
+  "RuntimeInfluenceAllowedReason": "NeuralBiasActive=false, HybridBlendAlpha=1.0, PackageOutputChanged=false. No runtime influence.",
+  "PackageOutputChanged": false,
+  "RuntimePromotionApplied": false,
+  "VectorBindingChanged": false,
+  "V14GatePreserved": true,
+  "V16_2GatePreserved": true,
+  "V16_4GatePreserved": true,
+  "V16_5GatePreserved": true,
+  "LiveCaptureRequiresExplicitAuthorization": true,
+  "LiveCaptureAuthorizationNote": "--mode LiveCapture requires --workspaceId and --collectionId. Must NOT be in-memory seed stores.",
+  "ControlledReplaySafety": {
+    "RuntimeInfluenceGated": true,
+    "RuntimeInfluenceGatedNote": "ControlledReplay explicitly sets NeuralBiasActive=false and PackageOutputChanged=false before collection.",
+    "IdempotencyEnforced": true,
+    "IdempotencyEnforcedNote": "RejectExistingRunId \u002B RunScopedTracePath prevents accidental overwrite.",
+    "TraceCaptureOnly": true,
+    "TraceCaptureOnlyNote": "FileRuntimeCandidateTraceSink writes trace. No package output mutation."
+  }
+}

@@ -1,0 +1,25 @@
+﻿{
+  "GeneratedAt": "2026-07-04T18:35:31.2109046\u002B00:00",
+  "PlanVersion": "V16.6",
+  "AcquisitionMode": "PreviewOnly",
+  "AcquisitionModeDescription": "No trace collection. Validates plan, outputs criteria, checks safety gates. Default mode.",
+  "PreviewOnly": true,
+  "ControlledReplayActive": false,
+  "LiveCaptureAuthorized": false,
+  "WorkspaceId": "(not specified \u2014 PreviewOnly)",
+  "CollectionId": "(not specified \u2014 PreviewOnly)",
+  "TraceCaptureMode": "No capture \u2014 plan generation only",
+  "IdempotencyMode": "RejectExistingRunId",
+  "RunScopedTracePath": true,
+  "SharedTraceAppend": false,
+  "AcquisitionSteps": [
+    "Step 1: Identify target workspace/collection (not \u0027native-ws\u0027/\u0027native-col\u0027)",
+    "Step 2: Verify RuntimeInfluenceAllowed=false in all code paths",
+    "Step 3: Set RuntimeCandidateTraceSinkAccessor.Current to FileRuntimeCandidateTraceSink",
+    "Step 4: Set CurrentOperationId to unique production operation ID",
+    "Step 5: Execute BasicContextPackageBuilder.BuildDetailedAsync()",
+    "Step 6: Flush sink, validate trace, run V16.5 evaluator",
+    "Step 7: Check NativeWeightedPairwiseAcc \u003E= 0.55 on production data",
+    "Step 8: If quality passes, ProductionGeneralizationReady may be considered (still gated)"
+  ]
+}
