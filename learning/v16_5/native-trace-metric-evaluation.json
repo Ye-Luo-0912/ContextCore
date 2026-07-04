@@ -1,0 +1,228 @@
+{
+  "GeneratedAt": "2026-07-04T09:57:29.272554+00:00",
+  "EvaluatorVersion": "V16.5",
+  "TraceSource": "learning/v16_4/native-runtime-candidate-trace-*.jsonl",
+  "NativeTraceRuns": [
+    "repair-002"
+  ],
+  "NativeTraceRunCount": 1,
+  "TotalCombinedRows": 49,
+  "Alpha1InvariantPassed_Combined": true,
+  "AllRowsTraceSource3": true,
+  "AlphaSweepCombined": [
+    {
+      "Alpha": 1.0,
+      "NeuralWt": 0.0,
+      "MeanRankDelta": 0.0,
+      "ScoringDisagree": 4,
+      "InclusionDisagree": 22,
+      "Top3Churn": 0,
+      "Top5Churn": 0,
+      "Top10Churn": 0,
+      "Alpha1Invariant": true
+    },
+    {
+      "Alpha": 0.9,
+      "NeuralWt": 0.1,
+      "MeanRankDelta": 0.2857,
+      "ScoringDisagree": 4,
+      "InclusionDisagree": 22,
+      "Top3Churn": 1,
+      "Top5Churn": 0,
+      "Top10Churn": 0,
+      "Alpha1Invariant": true
+    },
+    {
+      "Alpha": 0.7,
+      "NeuralWt": 0.3,
+      "MeanRankDelta": 0.2857,
+      "ScoringDisagree": 4,
+      "InclusionDisagree": 22,
+      "Top3Churn": 1,
+      "Top5Churn": 0,
+      "Top10Churn": 0,
+      "Alpha1Invariant": true
+    },
+    {
+      "Alpha": 0.5,
+      "NeuralWt": 0.5,
+      "MeanRankDelta": 0.2857,
+      "ScoringDisagree": 4,
+      "InclusionDisagree": 22,
+      "Top3Churn": 1,
+      "Top5Churn": 0,
+      "Top10Churn": 0,
+      "Alpha1Invariant": true
+    }
+  ],
+  "CalibrationCombined": {
+    "RowCount": 49,
+    "WeightedBCE": 0.54555,
+    "UnweightedBCE": 0.666105,
+    "WeightedPairwiseAcc": 0.5192,
+    "UnweightedPairwiseAcc": 0.5319
+  },
+  "CoverageCombined": {
+    "SectionCoverage": {
+      "hard_constraints": 5,
+      "working_memory": 5,
+      "recent_context": 5,
+      "global_context": 4,
+      "soft_constraints": 4,
+      "stable_memory": 3,
+      "related_context": 2,
+      "current_task": 1,
+      "NotificationHub": 1,
+      "CacheInvalidator": 1,
+      "MetricsCollector": 1,
+      "WebhookHandler": 1,
+      "LogAggregator": 1,
+      "ValidationLayer": 1,
+      "JobScheduler": 1,
+      "UserService": 1,
+      "IndexService": 1,
+      "TaskRunner": 1,
+      "GraphEngine": 1,
+      "SearchIndex": 1,
+      "EventBus": 1,
+      "RateLimiter": 1,
+      "DataPipeline": 1,
+      "QueueManager": 1,
+      "ConfigParser": 1,
+      "PolicyEngine": 1,
+      "AuthModule": 1,
+      "ObjectCache": 1
+    },
+    "RetrievalChannelCoverage": {
+      "2": 32,
+      "3": 2,
+      "4": 5,
+      "5": 1,
+      "6": 9
+    },
+    "AllRowsTraceSource3": true,
+    "ScoringSelectedCount": 47,
+    "ScoringRejectedCount": 2,
+    "ScoringConsistent": true,
+    "PackageIncludedCount": 36,
+    "PackageDroppedCount": 13,
+    "PackageConsistent": true
+  },
+  "PerRun": {
+    "repair-002": {
+      "TraceFile": "learning/v16_4/native-runtime-candidate-trace-repair-002.jsonl",
+      "TotalRows": 49,
+      "Alpha1InvariantPassed": true,
+      "AlphaSweep": [
+        {
+          "Alpha": 1.0,
+          "NeuralWt": 0.0,
+          "MeanRankDelta": 0.0,
+          "ScoringDisagree": 4,
+          "InclusionDisagree": 22,
+          "Top3Churn": 0,
+          "Top5Churn": 0,
+          "Top10Churn": 0,
+          "Alpha1Invariant": true
+        },
+        {
+          "Alpha": 0.9,
+          "NeuralWt": 0.1,
+          "MeanRankDelta": 0.2857,
+          "ScoringDisagree": 4,
+          "InclusionDisagree": 22,
+          "Top3Churn": 1,
+          "Top5Churn": 0,
+          "Top10Churn": 0,
+          "Alpha1Invariant": true
+        },
+        {
+          "Alpha": 0.7,
+          "NeuralWt": 0.3,
+          "MeanRankDelta": 0.2857,
+          "ScoringDisagree": 4,
+          "InclusionDisagree": 22,
+          "Top3Churn": 1,
+          "Top5Churn": 0,
+          "Top10Churn": 0,
+          "Alpha1Invariant": true
+        },
+        {
+          "Alpha": 0.5,
+          "NeuralWt": 0.5,
+          "MeanRankDelta": 0.2857,
+          "ScoringDisagree": 4,
+          "InclusionDisagree": 22,
+          "Top3Churn": 1,
+          "Top5Churn": 0,
+          "Top10Churn": 0,
+          "Alpha1Invariant": true
+        }
+      ],
+      "Calibration": {
+        "RowCount": 49,
+        "WeightedBCE": 0.54555,
+        "UnweightedBCE": 0.666105,
+        "WeightedPairwiseAcc": 0.5192,
+        "UnweightedPairwiseAcc": 0.5319
+      },
+      "Coverage": {
+        "SectionCoverage": {
+          "hard_constraints": 5,
+          "working_memory": 5,
+          "recent_context": 5,
+          "global_context": 4,
+          "soft_constraints": 4,
+          "stable_memory": 3,
+          "related_context": 2,
+          "current_task": 1,
+          "NotificationHub": 1,
+          "CacheInvalidator": 1,
+          "MetricsCollector": 1,
+          "WebhookHandler": 1,
+          "LogAggregator": 1,
+          "ValidationLayer": 1,
+          "JobScheduler": 1,
+          "UserService": 1,
+          "IndexService": 1,
+          "TaskRunner": 1,
+          "GraphEngine": 1,
+          "SearchIndex": 1,
+          "EventBus": 1,
+          "RateLimiter": 1,
+          "DataPipeline": 1,
+          "QueueManager": 1,
+          "ConfigParser": 1,
+          "PolicyEngine": 1,
+          "AuthModule": 1,
+          "ObjectCache": 1
+        },
+        "RetrievalChannelCoverage": {
+          "2": 32,
+          "3": 2,
+          "4": 5,
+          "5": 1,
+          "6": 9
+        },
+        "AllRowsTraceSource3": true,
+        "ScoringSelectedCount": 47,
+        "ScoringRejectedCount": 2,
+        "ScoringConsistent": true,
+        "PackageIncludedCount": 36,
+        "PackageDroppedCount": 13,
+        "PackageConsistent": true
+      }
+    }
+  },
+  "MetricQualityGate": {
+    "NativeWeightedPairwiseAcc_Combined": 0.5192,
+    "PairwiseThreshold": 0.55,
+    "PairwiseAboveThreshold": false,
+    "NativeMetricQualityReady": false,
+    "NativeMetricQualityReason": "NativeWeightedPairwiseAcc=0.5192 < 0.55. Native dry-run calibration signal too weak. Metric-quality blocked until WeightedPairwiseAcc reaches threshold on native production candidate-scoring traces."
+  },
+  "RuntimeInfluenceAllowed": false,
+  "PackageOutputChanged": false,
+  "VectorBindingChanged": false,
+  "RuntimePromotionApplied": false
+}

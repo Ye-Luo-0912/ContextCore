@@ -1,0 +1,50 @@
+{
+  "GeneratedAt": "2026-07-04T09:57:29.272554+00:00",
+  "V14GatePreserved": true,
+  "V16_2GatePreserved": true,
+  "V16_4GatePreserved": true,
+  "BoundaryDeclaration": {
+    "NativeRuntimeDryRunTraceReady": true,
+    "NativeRuntimeDryRunTraceReadyNote": "V16.4 native dry-run collector produces valid native runtime candidate-scoring traces. traceSource=3, 0 validation errors. This is a DRY RUN — in-memory stores, synthetic content.",
+    "NativeProductionTraceReady": false,
+    "NativeProductionTraceReadyNote": "Production readiness requires traces from LIVE production traffic (real workspaces, real collections, real query patterns). Dry-run traces from in-memory seeded stores do NOT qualify.",
+    "DryRunVsProduction": {
+      "DryRun": "In-memory stores, synthetic content, fixed seed, deterministic environment.",
+      "Production": "Real workspaces/collections, real user queries, live scoring pipeline, actual token budgets.",
+      "DryRunCannotSubstitute": true,
+      "DryRunCannotSubstituteReason": "Dry-run traces lack: real score distributions, real section diversity, real selection/drop patterns, real token pressure, real workspace complexity."
+    }
+  },
+  "MetricQualityBoundary": {
+    "NativeDryRunWeightedPairwiseAcc": 0.5192,
+    "PairwiseThreshold": 0.55,
+    "PairwiseAboveThreshold": false,
+    "NativeMetricQualityReady": false,
+    "NativeMetricQualityBlocked": true,
+    "NativeMetricQualityReason": "Native dry-run WeightedPairwiseAcc=0.5192 is below threshold 0.55. Metric-quality evaluation is blocked. Real production traces may yield different calibration signal."
+  },
+  "ProductionEntryConditions": {
+    "NativeTraceCollected": true,
+    "NativeTraceValidationPassed": true,
+    "NativeMetricQualityPassed": false,
+    "NativeProductionTraceReady": false,
+    "ConditionsForProductionReadiness": [
+      "1. Native trace collected from LIVE workspace/collection (not seeded in-memory)",
+      "2. Native trace has traceSource=3 for all rows",
+      "3. Native trace passes validation (0 critical errors, 0 parse errors)",
+      "4. Native trace WeightedPairwiseAcc >= 0.55 on production data",
+      "5. Calibration signal stable across multiple production trace runs",
+      "6. No runtime influence, package output, or vector binding changes"
+    ]
+  },
+  "SafetyGates": {
+    "RuntimeInfluenceAllowed": false,
+    "PackageOutputChanged": false,
+    "RuntimePromotionApplied": false,
+    "VectorBindingChanged": false,
+    "NeuralBiasActive": false,
+    "ProductionGeneralizationReady": false,
+    "ProductionGeneralizationReadyNote": "Blocked until native PRODUCTION traces are collected and pass metric-quality gate. Dry-run traces do not generalize to production."
+  },
+  "NextStep": "Collect native traces from live workspaces/collections. Re-run V16.5 evaluator on production-native traces. ProductionGeneralizationReady only after production-native metric quality passes."
+}
