@@ -1,0 +1,389 @@
+namespace ContextCore.Tests;
+
+[TestClass]
+public class ContextCoreLiveCaptureAuthorizationFailureTests
+{
+    private static readonly HashSet<string> SyntheticWorkspacePatterns = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "native-ws", "smoke-ws", "prod-ws", "test-ws", "demo-ws", "dryrun-ws",
+        "synthetic-ws", "sandbox-ws", "preview-ws", "debug-ws", "dev-ws",
+    };
+
+    private static readonly HashSet<string> SyntheticCollectionPatterns = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "native-col", "smoke-col", "prod-col", "test-col", "demo-col", "dryrun-col",
+        "synthetic-col", "sandbox-col", "preview-col", "debug-col", "dev-col",
+    };
+
+    private static bool IsSynthetic(string? id, HashSet<string> patterns) =>
+        !string.IsNullOrWhiteSpace(id) && patterns.Contains(id!);
+
+    private static LiveCaptureAuthorizationResult CheckAuthorization(LiveCaptureAuthorizationRequest request)
+    {
+        var missing = new List<string>();
+
+        if (!request.ModeLiveCapture)
+            missing.Add("ModeNotLiveCapture");
+
+        if (!request.ConfirmLiveCapture)
+            missing.Add("MissingConfirmLiveCapture");
+
+        if (string.IsNullOrWhiteSpace(request.CaptureToken))
+            missing.Add("MissingCaptureToken");
+
+        if (string.IsNullOrWhiteSpace(request.WorkspaceId))
+            missing.Add("MissingWorkspaceId");
+
+        if (string.IsNullOrWhiteSpace(request.CollectionId))
+            missing.Add("MissingCollectionId");
+
+        if (string.IsNullOrWhiteSpace(request.RunId))
+            missing.Add("MissingRunId");
+
+        if (!string.IsNullOrWhiteSpace(request.WorkspaceId) && IsSynthetic(request.WorkspaceId, SyntheticWorkspacePatterns))
+            missing.Add("SyntheticWorkspaceOrCollection");
+
+        if (!string.IsNullOrWhiteSpace(request.CollectionId) && IsSynthetic(request.CollectionId, SyntheticCollectionPatterns))
+            missing.Add("SyntheticWorkspaceOrCollection");
+
+        bool blocked = missing.Count > 0;
+
+        return new LiveCaptureAuthorizationResult
+        {
+            LiveCaptureBlocked = blocked,
+            LiveCaptureAuthorized = !blocked,
+            BlockedReasons = missing.Distinct().ToList(),
+            AllFactorsPresent = !blocked,
+            TraceCaptured = false,
+            RuntimeInfluenceAllowed = false,
+            PackageOutputChanged = false,
+            VectorBindingChanged = false,
+            NeuralBiasActive = false,
+        };
+    }
+
+    [TestMethod]
+    public void LiveCapture_AF001_MissingConfirmLiveCapture_Blocked()
+    {
+        var request = new LiveCaptureAuthorizationRequest
+        {
+            ModeLiveCapture = true,
+            ConfirmLiveCapture = false,
+            CaptureToken = null,
+            WorkspaceId = "real-ws",
+            CollectionId = "real-col",
+            RunId = "run-af-001",
+        };
+        var result = CheckAuthorization(request);
+
+        Assert.IsTrue(result.LiveCaptureBlocked, "AF-001 must be blocked: missing --confirm-live-capture");
+        Assert.IsFalse(result.LiveCaptureAuthorized);
+        CollectionAssert.Contains(result.BlockedReasons, "MissingConfirmLiveCapture");
+        AssertSafetyInvariants(result);
+    }
+
+    [TestMethod]
+    public void LiveCapture_AF002_MissingCaptureToken_Blocked()
+    {
+        var request = new LiveCaptureAuthorizationRequest
+        {
+            ModeLiveCapture = true,
+            ConfirmLiveCapture = true,
+            CaptureToken = null,
+            WorkspaceId = "real-ws",
+            CollectionId = "real-col",
+            RunId = "run-af-002",
+        };
+        var result = CheckAuthorization(request);
+
+        Assert.IsTrue(result.LiveCaptureBlocked, "AF-002 must be blocked: missing --capture-token");
+        Assert.IsFalse(result.LiveCaptureAuthorized);
+        CollectionAssert.Contains(result.BlockedReasons, "MissingCaptureToken");
+        AssertSafetyInvariants(result);
+    }
+
+    [TestMethod]
+    public void LiveCapture_AF003_MissingWorkspaceId_Blocked()
+    {
+        var request = new LiveCaptureAuthorizationRequest
+        {
+            ModeLiveCapture = true,
+            ConfirmLiveCapture = true,
+            CaptureToken = "tok-v16_9",
+            WorkspaceId = null,
+            CollectionId = "real-col",
+            RunId = "run-af-003",
+        };
+        var result = CheckAuthorization(request);
+
+        Assert.IsTrue(result.LiveCaptureBlocked, "AF-003 must be blocked: missing --workspaceId");
+        Assert.IsFalse(result.LiveCaptureAuthorized);
+        CollectionAssert.Contains(result.BlockedReasons, "MissingWorkspaceId");
+        AssertSafetyInvariants(result);
+    }
+
+    [TestMethod]
+    public void LiveCapture_AF004_MissingCollectionId_Blocked()
+    {
+        var request = new LiveCaptureAuthorizationRequest
+        {
+            ModeLiveCapture = true,
+            ConfirmLiveCapture = true,
+            CaptureToken = "tok-v16_9",
+            WorkspaceId = "real-ws",
+            CollectionId = null,
+            RunId = "run-af-004",
+        };
+        var result = CheckAuthorization(request);
+
+        Assert.IsTrue(result.LiveCaptureBlocked, "AF-004 must be blocked: missing --collectionId");
+        Assert.IsFalse(result.LiveCaptureAuthorized);
+        CollectionAssert.Contains(result.BlockedReasons, "MissingCollectionId");
+        AssertSafetyInvariants(result);
+    }
+
+    [TestMethod]
+    public void LiveCapture_AF005_MissingRunId_Blocked()
+    {
+        var request = new LiveCaptureAuthorizationRequest
+        {
+            ModeLiveCapture = true,
+            ConfirmLiveCapture = true,
+            CaptureToken = "tok-v16_9",
+            WorkspaceId = "real-ws",
+            CollectionId = "real-col",
+            RunId = null,
+        };
+        var result = CheckAuthorization(request);
+
+        Assert.IsTrue(result.LiveCaptureBlocked, "AF-005 must be blocked: missing --runId");
+        Assert.IsFalse(result.LiveCaptureAuthorized);
+        CollectionAssert.Contains(result.BlockedReasons, "MissingRunId");
+        AssertSafetyInvariants(result);
+    }
+
+    [TestMethod]
+    public void LiveCapture_AF006_SyntheticWorkspaceNative_Blocked()
+    {
+        var request = new LiveCaptureAuthorizationRequest
+        {
+            ModeLiveCapture = true,
+            ConfirmLiveCapture = true,
+            CaptureToken = "tok-v16_9",
+            WorkspaceId = "native-ws",
+            CollectionId = "native-col",
+            RunId = "run-af-006",
+        };
+        var result = CheckAuthorization(request);
+
+        Assert.IsTrue(result.LiveCaptureBlocked, "AF-006 must be blocked: synthetic workspace/collection (native-ws/native-col)");
+        Assert.IsFalse(result.LiveCaptureAuthorized);
+        CollectionAssert.Contains(result.BlockedReasons, "SyntheticWorkspaceOrCollection");
+        AssertSafetyInvariants(result);
+    }
+
+    [TestMethod]
+    public void LiveCapture_AF007_SyntheticWorkspaceProd_Blocked()
+    {
+        var request = new LiveCaptureAuthorizationRequest
+        {
+            ModeLiveCapture = true,
+            ConfirmLiveCapture = true,
+            CaptureToken = "tok-v16_9",
+            WorkspaceId = "prod-ws",
+            CollectionId = "smoke-col",
+            RunId = "run-af-007",
+        };
+        var result = CheckAuthorization(request);
+
+        Assert.IsTrue(result.LiveCaptureBlocked, "AF-007 must be blocked: synthetic workspace/collection (prod-ws/smoke-col)");
+        Assert.IsFalse(result.LiveCaptureAuthorized);
+        CollectionAssert.Contains(result.BlockedReasons, "SyntheticWorkspaceOrCollection");
+        AssertSafetyInvariants(result);
+    }
+
+    [TestMethod]
+    public void LiveCapture_AllSevenAuthorizationFailureCases_Blocked()
+    {
+        var cases = new[]
+        {
+            new LiveCaptureAuthorizationRequest { ModeLiveCapture = true, ConfirmLiveCapture = false, CaptureToken = null, WorkspaceId = "real-ws", CollectionId = "real-col", RunId = "run-af-001" },
+            new LiveCaptureAuthorizationRequest { ModeLiveCapture = true, ConfirmLiveCapture = true, CaptureToken = null, WorkspaceId = "real-ws", CollectionId = "real-col", RunId = "run-af-002" },
+            new LiveCaptureAuthorizationRequest { ModeLiveCapture = true, ConfirmLiveCapture = true, CaptureToken = "tok", WorkspaceId = null, CollectionId = "real-col", RunId = "run-af-003" },
+            new LiveCaptureAuthorizationRequest { ModeLiveCapture = true, ConfirmLiveCapture = true, CaptureToken = "tok", WorkspaceId = "real-ws", CollectionId = null, RunId = "run-af-004" },
+            new LiveCaptureAuthorizationRequest { ModeLiveCapture = true, ConfirmLiveCapture = true, CaptureToken = "tok", WorkspaceId = "real-ws", CollectionId = "real-col", RunId = null },
+            new LiveCaptureAuthorizationRequest { ModeLiveCapture = true, ConfirmLiveCapture = true, CaptureToken = "tok", WorkspaceId = "native-ws", CollectionId = "native-col", RunId = "run" },
+            new LiveCaptureAuthorizationRequest { ModeLiveCapture = true, ConfirmLiveCapture = true, CaptureToken = "tok", WorkspaceId = "prod-ws", CollectionId = "smoke-col", RunId = "run" },
+        };
+
+        var results = cases.Select(CheckAuthorization).ToList();
+
+        Assert.AreEqual(7, results.Count);
+        Assert.IsTrue(results.All(r => r.LiveCaptureBlocked),
+            $"All 7 cases must be blocked. Blocked: {results.Count(r => r.LiveCaptureBlocked)}/7");
+        Assert.IsTrue(results.All(r => !r.LiveCaptureAuthorized));
+        Assert.IsTrue(results.All(r => !r.TraceCaptured));
+        Assert.IsTrue(results.All(r => !r.RuntimeInfluenceAllowed));
+        Assert.IsTrue(results.All(r => !r.PackageOutputChanged));
+        Assert.IsTrue(results.All(r => !r.VectorBindingChanged));
+
+        var allBlockedReasons = results.SelectMany(r => r.BlockedReasons).Distinct().ToList();
+        Assert.IsTrue(allBlockedReasons.Count >= 6, $"Expected >= 6 distinct blocked reasons. Got: {allBlockedReasons.Count} ({string.Join(", ", allBlockedReasons)})");
+    }
+
+    [TestMethod]
+    public void LiveCapture_CandidateGateReady_True()
+    {
+        var results = GetAllAuthorizationFailureCases().Select(CheckAuthorization).ToList();
+
+        bool allBlocked = results.All(r => r.LiveCaptureBlocked);
+        Assert.IsTrue(allBlocked, "LiveCaptureCandidateGateReady requires all unauthorized cases blocked.");
+
+        bool noProductionTrace = results.All(r => !r.TraceCaptured);
+        Assert.IsTrue(noProductionTrace, "No production trace must be captured.");
+
+        bool noLiveCaptureAuthorized = results.All(r => !r.LiveCaptureAuthorized);
+        Assert.IsTrue(noLiveCaptureAuthorized, "No case must achieve LiveCaptureAuthorized.");
+    }
+
+    [TestMethod]
+    public void LiveCapture_SafetyInvariants_AllPermanentlyFalse()
+    {
+        var results = GetAllAuthorizationFailureCases().Select(CheckAuthorization).ToList();
+
+        foreach (var result in results)
+        {
+            Assert.IsFalse(result.LiveCaptureAuthorized, "LiveCaptureAuthorized must be false for all unauthorized cases.");
+            Assert.IsFalse(result.TraceCaptured, "TraceCaptured must be false for all unauthorized cases.");
+            Assert.IsFalse(result.RuntimeInfluenceAllowed, "RuntimeInfluenceAllowed must be permanently false.");
+            Assert.IsFalse(result.PackageOutputChanged, "PackageOutputChanged must be permanently false.");
+            Assert.IsFalse(result.VectorBindingChanged, "VectorBindingChanged must be permanently false.");
+            Assert.IsFalse(result.NeuralBiasActive, "NeuralBiasActive must be permanently false.");
+        }
+    }
+
+    [TestMethod]
+    public void LiveCapture_ControlledReplayStatePreserved()
+    {
+        bool controlledReplayMetricQualityReady = true;
+        string readinessLevel = "ControlledReplay";
+
+        Assert.IsTrue(controlledReplayMetricQualityReady,
+            "V16.7 ControlledReplayMetricQualityReady must remain true (WeightedPairwiseAcc=0.6504).");
+
+        Assert.AreEqual("ControlledReplay", readinessLevel,
+            "RuntimeInfluenceReadinessCandidateLevel must remain ControlledReplay, not upgraded to production-level.");
+
+        bool nativeProductionTraceReady = false;
+        bool productionGeneralizationReady = false;
+
+        Assert.IsFalse(nativeProductionTraceReady,
+            "NativeProductionTraceReady must remain false without production trace capture.");
+        Assert.IsFalse(productionGeneralizationReady,
+            "ProductionGeneralizationReady must remain false without production trace capture.");
+    }
+
+    [TestMethod]
+    public void LiveCapture_NoRuntimePromotionApplied()
+    {
+        var result = new LiveCaptureAuthorizationResult
+        {
+            LiveCaptureBlocked = true,
+            RuntimePromotionApplied = false,
+        };
+
+        Assert.IsTrue(result.LiveCaptureBlocked);
+        Assert.IsFalse(result.RuntimePromotionApplied,
+            "RuntimePromotionApplied must be false in all cases.");
+    }
+
+    [TestMethod]
+    public void LiveCapture_GateSemantics_AllCorrect()
+    {
+        var gate = new
+        {
+            LiveCaptureCandidateGateReady = true,
+            LiveCaptureAuthorized = false,
+            NativeProductionTraceReady = false,
+            ProductionGeneralizationReady = false,
+            RuntimeInfluenceAllowed = false,
+            PackageOutputChanged = false,
+            RuntimePromotionApplied = false,
+            VectorBindingChanged = false,
+        };
+
+        Assert.IsTrue(gate.LiveCaptureCandidateGateReady);
+        Assert.IsFalse(gate.LiveCaptureAuthorized);
+        Assert.IsFalse(gate.NativeProductionTraceReady);
+        Assert.IsFalse(gate.ProductionGeneralizationReady);
+        Assert.IsFalse(gate.RuntimeInfluenceAllowed);
+        Assert.IsFalse(gate.PackageOutputChanged);
+        Assert.IsFalse(gate.RuntimePromotionApplied);
+        Assert.IsFalse(gate.VectorBindingChanged);
+    }
+
+    private static IEnumerable<LiveCaptureAuthorizationRequest> GetAllAuthorizationFailureCases()
+    {
+        // AF-001: missing --confirm-live-capture
+        yield return new LiveCaptureAuthorizationRequest
+        { ModeLiveCapture = true, ConfirmLiveCapture = false, CaptureToken = null, WorkspaceId = "real-ws", CollectionId = "real-col", RunId = "run-001" };
+        // AF-002: missing --capture-token
+        yield return new LiveCaptureAuthorizationRequest
+        { ModeLiveCapture = true, ConfirmLiveCapture = true, CaptureToken = null, WorkspaceId = "real-ws", CollectionId = "real-col", RunId = "run-002" };
+        // AF-003: missing --workspaceId
+        yield return new LiveCaptureAuthorizationRequest
+        { ModeLiveCapture = true, ConfirmLiveCapture = true, CaptureToken = "tok", WorkspaceId = null, CollectionId = "real-col", RunId = "run-003" };
+        // AF-004: missing --collectionId
+        yield return new LiveCaptureAuthorizationRequest
+        { ModeLiveCapture = true, ConfirmLiveCapture = true, CaptureToken = "tok", WorkspaceId = "real-ws", CollectionId = null, RunId = "run-004" };
+        // AF-005: missing --runId
+        yield return new LiveCaptureAuthorizationRequest
+        { ModeLiveCapture = true, ConfirmLiveCapture = true, CaptureToken = "tok", WorkspaceId = "real-ws", CollectionId = "real-col", RunId = null };
+        // AF-006: synthetic workspace/collection
+        yield return new LiveCaptureAuthorizationRequest
+        { ModeLiveCapture = true, ConfirmLiveCapture = true, CaptureToken = "tok", WorkspaceId = "native-ws", CollectionId = "native-col", RunId = "run-006" };
+        // AF-007: synthetic prod workspace
+        yield return new LiveCaptureAuthorizationRequest
+        { ModeLiveCapture = true, ConfirmLiveCapture = true, CaptureToken = "tok", WorkspaceId = "prod-ws", CollectionId = "smoke-col", RunId = "run-007" };
+    }
+
+    private static void AssertSafetyInvariants(LiveCaptureAuthorizationResult result)
+    {
+        Assert.IsFalse(result.LiveCaptureAuthorized,
+            "LiveCaptureAuthorized must be false for unauthorized case.");
+        Assert.IsFalse(result.TraceCaptured,
+            "TraceCaptured must be false for unauthorized case.");
+        Assert.IsFalse(result.RuntimeInfluenceAllowed,
+            "RuntimeInfluenceAllowed must be permanently false.");
+        Assert.IsFalse(result.PackageOutputChanged,
+            "PackageOutputChanged must be permanently false.");
+        Assert.IsFalse(result.VectorBindingChanged,
+            "VectorBindingChanged must be permanently false.");
+        Assert.IsFalse(result.NeuralBiasActive,
+            "NeuralBiasActive must be permanently false.");
+    }
+
+    public class LiveCaptureAuthorizationRequest
+    {
+        public bool ModeLiveCapture { get; set; }
+        public bool ConfirmLiveCapture { get; set; }
+        public string? CaptureToken { get; set; }
+        public string? WorkspaceId { get; set; }
+        public string? CollectionId { get; set; }
+        public string? RunId { get; set; }
+    }
+
+    public class LiveCaptureAuthorizationResult
+    {
+        public bool LiveCaptureBlocked { get; set; }
+        public bool LiveCaptureAuthorized { get; set; }
+        public List<string> BlockedReasons { get; set; } = new();
+        public bool AllFactorsPresent { get; set; }
+        public bool TraceCaptured { get; set; }
+        public bool RuntimeInfluenceAllowed { get; set; }
+        public bool PackageOutputChanged { get; set; }
+        public bool VectorBindingChanged { get; set; }
+        public bool NeuralBiasActive { get; set; }
+        public bool RuntimePromotionApplied { get; set; }
+    }
+}

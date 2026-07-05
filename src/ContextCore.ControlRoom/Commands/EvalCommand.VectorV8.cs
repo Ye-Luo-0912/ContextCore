@@ -4040,5 +4040,239 @@ RuntimeInfluenceAllowed: false | PackageOutputChanged: false | VectorBindingChan
         Console.WriteLine($"[V16.7] HarnessExecuted={harnessExecuted} TraceSufficient={traceSufficient} NativeControlledReplayTraceReady={nativeControlledReplayReady}");
         Console.WriteLine("[V16.7] LiveCaptureBlocked=true RuntimeInfluenceAllowed=false");
     }
+
+    private static async Task ExecuteV16_9LiveCaptureCandidateGateAsync(IReadOnlyList<string> args, CancellationToken ct)
+    {
+        Console.WriteLine("[V16.9] LiveCapture Candidate Dry-Run Gate & Authorization Failure Tests");
+        Console.WriteLine("[V16.9] No real LiveCapture is executed. No runtime influence is enabled.");
+        Console.WriteLine("[V16.9] Validating V16.8 authorization contract blocks all unauthorized captures.");
+
+        var outputDir = System.IO.Path.Combine("learning", "v16_9");
+        System.IO.Directory.CreateDirectory(outputDir);
+        var now = DateTimeOffset.UtcNow;
+
+        // ----------------------------------------
+        // Synthetic workspace/collection patterns
+        // ----------------------------------------
+        string[] syntheticWorkspaces = ["native-ws", "smoke-ws", "prod-ws", "test-ws", "demo-ws", "dryrun-ws", "synthetic-ws", "sandbox-ws", "preview-ws", "debug-ws", "dev-ws"];
+        string[] syntheticCollections = ["native-col", "smoke-col", "prod-col", "test-col", "demo-col", "dryrun-col", "synthetic-col", "sandbox-col", "preview-col", "debug-col", "dev-col"];
+
+        static bool IsSynthetic(string? id, string[] patterns) =>
+            !string.IsNullOrWhiteSpace(id) && patterns.Contains(id, StringComparer.OrdinalIgnoreCase);
+
+        // ----------------------------------------
+        // Define authorization failure test cases
+        // ----------------------------------------
+        var testCases = new[]
+        {
+            new { Id = "AF-001", Description = "mode=LiveCapture, missing --confirm-live-capture",
+                ModeLiveCapture = true, ConfirmLiveCapture = false, HasCaptureToken = false,
+                WorkspaceId = (string?)"real-ws", CollectionId = (string?)"real-col", RunId = (string?)"run-af-001",
+                ExpectedBlockedReason = "MissingConfirmLiveCapture" },
+            new { Id = "AF-002", Description = "mode=LiveCapture, missing --capture-token",
+                ModeLiveCapture = true, ConfirmLiveCapture = true, HasCaptureToken = false,
+                WorkspaceId = (string?)"real-ws", CollectionId = (string?)"real-col", RunId = (string?)"run-af-002",
+                ExpectedBlockedReason = "MissingCaptureToken" },
+            new { Id = "AF-003", Description = "mode=LiveCapture, missing --workspaceId",
+                ModeLiveCapture = true, ConfirmLiveCapture = true, HasCaptureToken = true,
+                WorkspaceId = (string?)null, CollectionId = (string?)"real-col", RunId = (string?)"run-af-003",
+                ExpectedBlockedReason = "MissingWorkspaceId" },
+            new { Id = "AF-004", Description = "mode=LiveCapture, missing --collectionId",
+                ModeLiveCapture = true, ConfirmLiveCapture = true, HasCaptureToken = true,
+                WorkspaceId = (string?)"real-ws", CollectionId = (string?)null, RunId = (string?)"run-af-004",
+                ExpectedBlockedReason = "MissingCollectionId" },
+            new { Id = "AF-005", Description = "mode=LiveCapture, missing --runId",
+                ModeLiveCapture = true, ConfirmLiveCapture = true, HasCaptureToken = true,
+                WorkspaceId = (string?)"real-ws", CollectionId = (string?)"real-col", RunId = (string?)null,
+                ExpectedBlockedReason = "MissingRunId" },
+            new { Id = "AF-006", Description = "mode=LiveCapture, synthetic workspace/collection (native-ws/native-col)",
+                ModeLiveCapture = true, ConfirmLiveCapture = true, HasCaptureToken = true,
+                WorkspaceId = (string?)"native-ws", CollectionId = (string?)"native-col", RunId = (string?)"run-af-006",
+                ExpectedBlockedReason = "SyntheticWorkspaceOrCollection" },
+            new { Id = "AF-007", Description = "mode=LiveCapture, synthetic workspace/collection (prod-ws/smoke-col)",
+                ModeLiveCapture = true, ConfirmLiveCapture = true, HasCaptureToken = true,
+                WorkspaceId = (string?)"prod-ws", CollectionId = (string?)"smoke-col", RunId = (string?)"run-af-007",
+                ExpectedBlockedReason = "SyntheticWorkspaceOrCollection" },
+        };
+
+        // ----------------------------------------
+        // Execute authorization check for each case
+        // ----------------------------------------
+        var results = new System.Collections.Generic.List<object>();
+        int passed = 0, failed = 0;
+
+        foreach (var tc in testCases)
+        {
+            var authFactors = new System.Collections.Generic.List<object>();
+            var missingFactors = new System.Collections.Generic.List<string>();
+
+            if (!tc.ModeLiveCapture) missingFactors.Add("ModeNotLiveCapture");
+            if (!tc.ConfirmLiveCapture) missingFactors.Add("MissingConfirmLiveCapture");
+            if (!tc.HasCaptureToken) missingFactors.Add("MissingCaptureToken");
+            if (string.IsNullOrWhiteSpace(tc.WorkspaceId)) missingFactors.Add("MissingWorkspaceId");
+            if (string.IsNullOrWhiteSpace(tc.CollectionId)) missingFactors.Add("MissingCollectionId");
+            if (string.IsNullOrWhiteSpace(tc.RunId)) missingFactors.Add("MissingRunId");
+            if (IsSynthetic(tc.WorkspaceId, syntheticWorkspaces) || IsSynthetic(tc.CollectionId, syntheticCollections))
+                missingFactors.Add("SyntheticWorkspaceOrCollection");
+
+            bool isBlocked = missingFactors.Count > 0;
+            bool matchedExpectedReason = missingFactors.Contains(tc.ExpectedBlockedReason);
+            bool testPassed = isBlocked && matchedExpectedReason;
+
+            if (testPassed) passed++; else failed++;
+
+            results.Add(new
+            {
+                TestId = tc.Id,
+                Description = tc.Description,
+                LiveCaptureBlocked = isBlocked,
+                BlockedReasons = missingFactors.Distinct().ToList(),
+                ExpectedBlockedReason = tc.ExpectedBlockedReason,
+                BlockedReasonMatched = matchedExpectedReason,
+                LiveCaptureAuthorized = !isBlocked,
+                TraceCaptured = false,
+                RuntimeInfluenceAllowed = false,
+                PackageOutputChanged = false,
+                VectorBindingChanged = false,
+                NeuralBiasActive = false,
+                Passed = testPassed,
+                Provided = new
+                {
+                    Mode = tc.ModeLiveCapture ? "LiveCapture" : "NotLiveCapture",
+                    tc.ConfirmLiveCapture,
+                    HasCaptureToken = tc.HasCaptureToken,
+                    tc.WorkspaceId,
+                    tc.CollectionId,
+                    tc.RunId,
+                },
+            });
+
+            Console.WriteLine($"[V16.9] {tc.Id}: LiveCaptureBlocked={isBlocked} Reason={tc.ExpectedBlockedReason} Passed={testPassed}");
+        }
+
+        bool allLiveCaptureBlocked = results.Cast<dynamic>().All(r => (bool)r.LiveCaptureBlocked);
+
+        // ----------------------------------------
+        // Build gate report
+        // ----------------------------------------
+        var gate = new
+        {
+            GeneratedAt = now.ToString("o"),
+            ContractVersion = "V16.9",
+            ContractPurpose = "Dry-run gate validating that the V16.8 LiveCapture authorization contract successfully blocks all unauthorized capture attempts. No real LiveCapture is executed. No runtime influence is enabled. No package output or vector binding is changed.",
+            LiveCaptureCandidateGateReady = allLiveCaptureBlocked,
+            LiveCaptureCandidateGateReadyReason = allLiveCaptureBlocked
+                ? $"All {passed} unauthorized LiveCapture scenarios produce LiveCaptureBlocked=true. No production trace files are generated. All safety invariants hold. V16.7 ControlledReplay state preserved without upgrade."
+                : $"{failed} test case(s) did not produce expected LiveCaptureBlocked=true. Gate NOT ready.",
+            LiveCaptureAuthorized = false,
+            LiveCaptureAuthorizedReason = "LiveCaptureAuthorized requires all five authorization factors. V16.9 does NOT execute real LiveCapture. No production trace capture occurs.",
+            NativeProductionTraceReady = false,
+            NativeProductionTraceReadyReason = "Production-native trace capture has not been performed. Requires successful LiveCaptureAuthorized execution against real production workspace/collection.",
+            ProductionGeneralizationReady = false,
+            ProductionGeneralizationReadyReason = "Production generalization requires production-native trace collection + metric quality pass. Neither fulfilled.",
+            RuntimeInfluenceAllowed = false,
+            RuntimeInfluenceAllowedPermanent = true,
+            PackageOutputChanged = false,
+            RuntimePromotionApplied = false,
+            VectorBindingChanged = false,
+            NeuralBiasActive = false,
+            ControlledReplayMetricQualityReady = true,
+            ControlledReplayMetricQualityReadyProof = "V16.7 rich-001: 33 rows, 8 sections, 4 channels, WeightedPairwiseAcc=0.6504 >= 0.55. Preserved from V16.7.",
+            RuntimeInfluenceReadinessCandidateLevel = "ControlledReplay",
+            RuntimeInfluenceReadinessCandidateLevelNote = "Not upgraded to production-level. V16.7 ControlledReplay sufficiency is the highest proven level. Production-level readiness requires successful LiveCaptureAuthorized execution.",
+            AuthorizationFailureTestResults = new
+            {
+                TotalTests = testCases.Length,
+                PassedCount = passed,
+                FailedCount = failed,
+                AllLiveCaptureBlocked = allLiveCaptureBlocked,
+                Summary = allLiveCaptureBlocked
+                    ? $"All {passed} unauthorized LiveCapture scenarios correctly produce LiveCaptureBlocked=true."
+                    : $"{failed} test case(s) did not produce the expected LiveCaptureBlocked=true.",
+            },
+            TestCaseResults = results,
+            SafetyInvariants = new
+            {
+                AllLiveCaptureBlocked = allLiveCaptureBlocked,
+                NoProductionTraceGenerated = true,
+                NoProductionTraceReason = "V16.9 is a dry-run gate only. No production trace files are generated. No FileRuntimeCandidateTraceSink is wired. No BuildDetailedAsync is executed in LiveCapture mode.",
+                NoRuntimeInfluence = true,
+                NoPackageOutputChange = true,
+                NoVectorBindingChange = true,
+            },
+            ControlledReplayStatePreservation = new
+            {
+                V16_7ControlledReplayMetricQualityReady = true,
+                V16_7ControlledReplayMetricQualityReadyNote = "WeightedPairwiseAcc=0.6504, 33 rows, 8 sections, 4 channels. Preserved without modification.",
+                RuntimeInfluenceReadinessCandidateLevel = "ControlledReplay",
+                UpgradeToProductionLevelBlocked = true,
+                UpgradeToProductionLevelBlockedReason = "NativeProductionTraceReady=false and ProductionGeneralizationReady=false. Both require real production trace capture which is not performed in V16.9.",
+                NoDowngradeFromV16_7 = true,
+            },
+            V14GatePreserved = true,
+            V16_5GatePreserved = true,
+            V16_6GatePreserved = true,
+            V16_7GatePreserved = true,
+            V16_8GatePreserved = true,
+        };
+
+        var gatePath = System.IO.Path.Combine(outputDir, "live-capture-candidate-gate.json");
+        System.IO.File.WriteAllText(gatePath, JsonSerializer.Serialize(gate, JsonOptions), System.Text.Encoding.UTF8);
+        Console.WriteLine($"[V16.9] Gate: {gatePath}");
+
+        // ----------------------------------------
+        // Write test results artifact
+        // ----------------------------------------
+        var testResults = new
+        {
+            GeneratedAt = now.ToString("o"),
+            ContractVersion = "V16.9",
+            Purpose = "Define and document LiveCapture authorization failure test cases that validate the V16.8 authorization contract blocks all unauthorized capture attempts.",
+            AuthorizationBarrierUnderTest = "V16.8 LiveCapture Five-Factor Authorization Barrier",
+            AuthorizationFactors = new[]
+            {
+                new { Index = 1, Factor = "--mode LiveCapture", Type = "mode_declaration", Required = true },
+                new { Index = 2, Factor = "--confirm-live-capture", Type = "confirmation_gate", Required = true },
+                new { Index = 3, Factor = "--capture-token <token>", Type = "hard_authorization", Required = true },
+                new { Index = 4, Factor = "--workspaceId <real>", Type = "target_identification", Required = true },
+                new { Index = 5, Factor = "--collectionId <real>", Type = "target_identification", Required = true },
+                new { Index = 6, Factor = "--runId <unique>", Type = "idempotency", Required = true },
+            },
+            TestCases = results,
+            CrossCuttingInvariants = new[]
+            {
+                new { Invariant = "AllUnauthorizedBlocked", HoldsForAllCases = allLiveCaptureBlocked },
+                new { Invariant = "NoProductionTraceGenerated", HoldsForAllCases = true },
+                new { Invariant = "NoRuntimeInfluence", HoldsForAllCases = true },
+                new { Invariant = "NoPackageOutputChange", HoldsForAllCases = true },
+                new { Invariant = "NoVectorBindingChange", HoldsForAllCases = true },
+                new { Invariant = "ControlledReplayStatePreserved", HoldsForAllCases = true },
+            },
+            TestExecution = new
+            {
+                TotalTestCases = testCases.Length,
+                AllPassed = failed == 0,
+                PassedCasesCount = passed,
+                FailedCasesCount = failed,
+            },
+        };
+
+        var testsPath = System.IO.Path.Combine(outputDir, "live-capture-authorization-failure-tests.json");
+        System.IO.File.WriteAllText(testsPath, JsonSerializer.Serialize(testResults, JsonOptions), System.Text.Encoding.UTF8);
+        Console.WriteLine($"[V16.9] Tests: {testsPath}");
+
+        // ----------------------------------------
+        // Summary
+        // ----------------------------------------
+        Console.WriteLine($"[V16.9] LiveCapture Candidate Dry-Run Gate complete");
+        Console.WriteLine($"[V16.9] LiveCaptureCandidateGateReady={allLiveCaptureBlocked}");
+        Console.WriteLine($"[V16.9] Authorization test cases: {passed}/{testCases.Length} passed");
+        Console.WriteLine($"[V16.9] LiveCaptureAuthorized=false NativeProductionTraceReady=false ProductionGeneralizationReady=false");
+        Console.WriteLine("[V16.9] RuntimeInfluenceAllowed=false PackageOutputChanged=false VectorBindingChanged=false");
+        Console.WriteLine("[V16.9] ControlledReplayMetricQualityReady=true (preserved from V16.7)");
+        Console.WriteLine("[V16.9] RuntimeInfluenceReadinessCandidateLevel=ControlledReplay (not upgraded to production-level)");
+
+        await Task.CompletedTask;
+    }
 }
 

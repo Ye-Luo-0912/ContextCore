@@ -1,0 +1,231 @@
+{
+  "GeneratedAt": "2026-07-05T06:20:41.809553+00:00",
+  "ContractVersion": "V16.9",
+  "Purpose": "Define and document LiveCapture authorization failure test cases that validate the V16.8 authorization contract blocks all unauthorized capture attempts.",
+  "AuthorizationBarrierUnderTest": "V16.8 LiveCapture Five-Factor Authorization Barrier",
+  "AuthorizationFactors": [
+    {
+      "Index": 1,
+      "Factor": "--mode LiveCapture",
+      "Type": "mode_declaration",
+      "Required": true
+    },
+    {
+      "Index": 2,
+      "Factor": "--confirm-live-capture",
+      "Type": "confirmation_gate",
+      "Required": true
+    },
+    {
+      "Index": 3,
+      "Factor": "--capture-token <token>",
+      "Type": "hard_authorization",
+      "Required": true
+    },
+    {
+      "Index": 4,
+      "Factor": "--workspaceId <real>",
+      "Type": "target_identification",
+      "Required": true
+    },
+    {
+      "Index": 5,
+      "Factor": "--collectionId <real>",
+      "Type": "target_identification",
+      "Required": true
+    },
+    {
+      "Index": 6,
+      "Factor": "--runId <unique>",
+      "Type": "idempotency",
+      "Required": true
+    }
+  ],
+  "TestCases": [
+    {
+      "Id": "AF-001",
+      "Name": "MissingConfirmLiveCapture",
+      "Description": "mode=LiveCapture with all other factors present except --confirm-live-capture. Capture must be blocked.",
+      "AuthorizationRequest": {
+        "Mode": "LiveCapture",
+        "ConfirmLiveCapture": false,
+        "CaptureToken": null,
+        "WorkspaceId": "real-ws",
+        "CollectionId": "real-col",
+        "RunId": "run-af-001"
+      },
+      "ExpectedResult": {
+        "LiveCaptureBlocked": true,
+        "BlockedReason": "MissingConfirmLiveCapture",
+        "LiveCaptureAuthorized": false,
+        "TraceCaptured": false,
+        "RuntimeInfluenceAllowed": false,
+        "PackageOutputChanged": false,
+        "VectorBindingChanged": false
+      }
+    },
+    {
+      "Id": "AF-002",
+      "Name": "MissingCaptureToken",
+      "Description": "mode=LiveCapture with --confirm-live-capture but missing --capture-token.",
+      "AuthorizationRequest": {
+        "Mode": "LiveCapture",
+        "ConfirmLiveCapture": true,
+        "CaptureToken": null,
+        "WorkspaceId": "real-ws",
+        "CollectionId": "real-col",
+        "RunId": "run-af-002"
+      },
+      "ExpectedResult": {
+        "LiveCaptureBlocked": true,
+        "BlockedReason": "MissingCaptureToken",
+        "LiveCaptureAuthorized": false,
+        "TraceCaptured": false,
+        "RuntimeInfluenceAllowed": false,
+        "PackageOutputChanged": false,
+        "VectorBindingChanged": false
+      }
+    },
+    {
+      "Id": "AF-003",
+      "Name": "MissingWorkspaceId",
+      "Description": "mode=LiveCapture with --confirm-live-capture and --capture-token but missing --workspaceId.",
+      "AuthorizationRequest": {
+        "Mode": "LiveCapture",
+        "ConfirmLiveCapture": true,
+        "CaptureToken": "tok-v16_9",
+        "WorkspaceId": null,
+        "CollectionId": "real-col",
+        "RunId": "run-af-003"
+      },
+      "ExpectedResult": {
+        "LiveCaptureBlocked": true,
+        "BlockedReason": "MissingWorkspaceId",
+        "LiveCaptureAuthorized": false,
+        "TraceCaptured": false,
+        "RuntimeInfluenceAllowed": false,
+        "PackageOutputChanged": false,
+        "VectorBindingChanged": false
+      }
+    },
+    {
+      "Id": "AF-004",
+      "Name": "MissingCollectionId",
+      "Description": "mode=LiveCapture with --confirm-live-capture, --capture-token, and --workspaceId but missing --collectionId.",
+      "AuthorizationRequest": {
+        "Mode": "LiveCapture",
+        "ConfirmLiveCapture": true,
+        "CaptureToken": "tok-v16_9",
+        "WorkspaceId": "real-ws",
+        "CollectionId": null,
+        "RunId": "run-af-004"
+      },
+      "ExpectedResult": {
+        "LiveCaptureBlocked": true,
+        "BlockedReason": "MissingCollectionId",
+        "LiveCaptureAuthorized": false,
+        "TraceCaptured": false,
+        "RuntimeInfluenceAllowed": false,
+        "PackageOutputChanged": false,
+        "VectorBindingChanged": false
+      }
+    },
+    {
+      "Id": "AF-005",
+      "Name": "MissingRunId",
+      "Description": "mode=LiveCapture with all factors except --runId.",
+      "AuthorizationRequest": {
+        "Mode": "LiveCapture",
+        "ConfirmLiveCapture": true,
+        "CaptureToken": "tok-v16_9",
+        "WorkspaceId": "real-ws",
+        "CollectionId": "real-col",
+        "RunId": null
+      },
+      "ExpectedResult": {
+        "LiveCaptureBlocked": true,
+        "BlockedReason": "MissingRunId",
+        "LiveCaptureAuthorized": false,
+        "TraceCaptured": false,
+        "RuntimeInfluenceAllowed": false,
+        "PackageOutputChanged": false,
+        "VectorBindingChanged": false
+      }
+    },
+    {
+      "Id": "AF-006",
+      "Name": "SyntheticWorkspaceOrCollection",
+      "Description": "mode=LiveCapture with all factors but synthetic workspace/collection IDs.",
+      "AuthorizationRequest": {
+        "Mode": "LiveCapture",
+        "ConfirmLiveCapture": true,
+        "CaptureToken": "tok-v16_9",
+        "WorkspaceId": "native-ws",
+        "CollectionId": "native-col",
+        "RunId": "run-af-006"
+      },
+      "ExpectedResult": {
+        "LiveCaptureBlocked": true,
+        "BlockedReason": "SyntheticWorkspaceOrCollection",
+        "LiveCaptureAuthorized": false,
+        "TraceCaptured": false,
+        "RuntimeInfluenceAllowed": false,
+        "PackageOutputChanged": false,
+        "VectorBindingChanged": false
+      }
+    },
+    {
+      "Id": "AF-007",
+      "Name": "SyntheticProdWorkspace",
+      "Description": "mode=LiveCapture with all factors but --workspaceId=prod-ws.",
+      "AuthorizationRequest": {
+        "Mode": "LiveCapture",
+        "ConfirmLiveCapture": true,
+        "CaptureToken": "tok-v16_9",
+        "WorkspaceId": "prod-ws",
+        "CollectionId": "smoke-col",
+        "RunId": "run-af-007"
+      },
+      "ExpectedResult": {
+        "LiveCaptureBlocked": true,
+        "BlockedReason": "SyntheticWorkspaceOrCollection",
+        "LiveCaptureAuthorized": false,
+        "TraceCaptured": false,
+        "RuntimeInfluenceAllowed": false,
+        "PackageOutputChanged": false,
+        "VectorBindingChanged": false
+      }
+    }
+  ],
+  "CrossCuttingInvariants": [
+    {
+      "Invariant": "AllUnauthorizedBlocked",
+      "HoldsForAllCases": true
+    },
+    {
+      "Invariant": "NoProductionTraceGenerated",
+      "HoldsForAllCases": true
+    },
+    {
+      "Invariant": "NoRuntimeInfluence",
+      "HoldsForAllCases": true
+    },
+    {
+      "Invariant": "NoPackageOutputChange",
+      "HoldsForAllCases": true
+    },
+    {
+      "Invariant": "NoVectorBindingChange",
+      "HoldsForAllCases": true
+    },
+    {
+      "Invariant": "ControlledReplayStatePreserved",
+      "HoldsForAllCases": true
+    }
+  ],
+  "TestExecution": {
+    "TotalTestCases": 7,
+    "AllPassed": true,
+    "FailedCases": []
+  }
+}
