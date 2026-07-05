@@ -1,5 +1,5 @@
 {
-  "GeneratedAt": "2026-07-05T05:00:11.281049+00:00",
+  "GeneratedAt": "2026-07-05T05:45:42.935605+00:00",
   "EvaluatorVersion": "V16.7",
   "RunIds": [
     "demo-001",
@@ -241,9 +241,18 @@
     "PairwiseThreshold": 0.55,
     "PairwiseAboveThreshold": true,
     "ControlledReplayMetricQualityReady": true,
-    "ControlledReplayMetricQualityReason": "ControlledReplayWeightedPairwiseAcc=0.6504 >= 0.55. Controlled replay calibration signal sufficient.",
+    "ControlledReplayMetricQualityReason": "ControlledReplayWeightedPairwiseAcc=0.6504 >= 0.55. Controlled replay calibration signal sufficient across 3 runs, 35 combined rows.",
     "RuntimeInfluenceReadinessCandidate": true,
-    "Note": "ControlledReplay trace has limited rows (1-2). Full metric evaluation requires richer workspace data with memory items, constraints, and diverse sections."
+    "RuntimeInfluenceReadinessCandidateLevel": "ControlledReplay",
+    "RuntimeInfluenceReadinessCandidateNote": "Readiness is at ControlledReplay level, not production level. NativeProductionTraceReady=false. ProductionGeneralizationReady=false."
+  },
+  "ControlledReplayStateSummary": {
+    "RunCount": 3,
+    "TotalCombinedRows": 35,
+    "RichReplayRows": 33,
+    "SeededCorpus": true,
+    "StoreBackend": "FileSystem",
+    "SufficiencyPassed": true
   },
   "RuntimeInfluenceAllowed": false,
   "PackageOutputChanged": false,

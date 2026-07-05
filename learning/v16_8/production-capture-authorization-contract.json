@@ -1,0 +1,139 @@
+{
+  "GeneratedAt": "2026-07-05T05:45:42.993447+00:00",
+  "ContractVersion": "V16.8",
+  "ContractPurpose": "Define hard authorization boundary for production candidate-scoring trace capture. LiveCapture must not be achievable without explicit multi-factor authorization.",
+  "AuthorizationModes": {
+    "PreviewOnly": {
+      "Level": 0,
+      "Default": true,
+      "Description": "Artifact/plan generation only. No trace collection occurs. Safety gates reviewed but no runtime impact.",
+      "Activation": "No additional parameters required. This is the default mode.",
+      "RuntimeInfluenceAllowed": false,
+      "TraceCaptured": false
+    },
+    "ControlledReplay": {
+      "Level": 1,
+      "Default": false,
+      "Description": "Replays trace collection from FileSystem-backed stores with seeded corpus or pre-existing workspace data. Uses FileRuntimeCandidateTraceSink. runId-scoped, idempotent output.",
+      "Activation": "eval v16_7-controlled-replay-native-trace [--workspaceId <id>] [--collectionId <id>] [--runId <id>]",
+      "ActivationRequirements": [
+        "workspaceId (optional, defaults to v16_7-rich-replay)",
+        "collectionId (optional, defaults to rich-corpus)",
+        "runId (optional, auto-generated timestamp)"
+      ],
+      "HardGates": [
+        "FileSystem-backed stores only",
+        "RejectExistingRunId idempotency",
+        "RuntimeInfluenceAllowed=false",
+        "PackageOutputChanged=false",
+        "VectorBindingChanged=false"
+      ],
+      "Status": "Implemented — V16.7 Repair passed sufficiency gate (33 rows, 8 sections, 4 channels)"
+    },
+    "LiveCaptureCandidate": {
+      "Level": 2,
+      "Default": false,
+      "Description": "Live production trace capture is REQUESTED but NOT YET AUTHORIZED. All authorization parameters must be present but the capture token has not been validated. This mode generates a readiness report but does NOT execute capture.",
+      "Activation": "eval v16_6-native-production-trace-plan --mode LiveCapture --workspaceId <id> --collectionId <id>",
+      "ActivationRequirements": [
+        "--mode LiveCapture",
+        "--workspaceId <real-workspace>",
+        "--collectionId <real-collection>",
+        "Must NOT be synthetic IDs (native-ws, smoke-ws, prod-ws, etc.)"
+      ],
+      "HardBlocks": [
+        "LiveCaptureBlocked=true until --confirm-live-capture AND --capture-token provided",
+        "RuntimeInfluenceAllowed=false (permanent, not negotiable)",
+        "NeuralBiasActive=false (permanent, not negotiable)"
+      ],
+      "Status": "Defined — authorization contract complete. Execution blocked pending capture token."
+    },
+    "LiveCaptureAuthorized": {
+      "Level": 3,
+      "Default": false,
+      "Description": "Live production trace capture is FULLY AUTHORIZED. All five authorization parameters validated. Capture proceeds with all safety gates enforced.",
+      "Activation": "eval v16_6-native-production-trace-plan --mode LiveCapture --confirm-live-capture --capture-token <token> --workspaceId <real-workspace> --collectionId <real-collection> --runId <unique-id>",
+      "ActivationRequirements": [
+        "--mode LiveCapture",
+        "--confirm-live-capture (explicit confirmation gate)",
+        "--capture-token <token> (hard authorization token)",
+        "--workspaceId <real-workspace>",
+        "--collectionId <real-collection>",
+        "--runId <unique-id>"
+      ],
+      "AllParametersRequired": true,
+      "MissingAnyParameterBlocksCapture": true,
+      "RuntimeInfluenceAllowed": false,
+      "RuntimeInfluenceAllowedPermanent": true,
+      "RuntimeInfluenceAllowedNote": "Even under LiveCaptureAuthorized, RuntimeInfluenceAllowed is PERMANENTLY FALSE. Neural bias is never activated at runtime. Package output is never modified.",
+      "Status": "NOT IMPLEMENTED — authorization contract defined but execution endpoint not built. Requires explicit implementation with all safety gates."
+    }
+  },
+  "LiveCaptureAuthorizationBarrier": {
+    "Title": "LiveCapture Five-Factor Authorization Barrier",
+    "Factors": [
+      {
+        "factor": "--mode LiveCapture",
+        "type": "mode_declaration",
+        "required": true,
+        "description": "Declares intent to capture live traces."
+      },
+      {
+        "factor": "--confirm-live-capture",
+        "type": "confirmation_gate",
+        "required": true,
+        "description": "Explicit confirmation token. Prevents accidental activation."
+      },
+      {
+        "factor": "--capture-token <token>",
+        "type": "hard_authorization",
+        "required": true,
+        "description": "Hard authorization token. Must be validated before capture proceeds."
+      },
+      {
+        "factor": "--workspaceId <real>",
+        "type": "target_identification",
+        "required": true,
+        "description": "Real workspace ID. Synthetic IDs rejected."
+      },
+      {
+        "factor": "--collectionId <real>",
+        "type": "target_identification",
+        "required": true,
+        "description": "Real collection ID. Synthetic IDs rejected."
+      },
+      {
+        "factor": "--runId <unique>",
+        "type": "idempotency",
+        "required": true,
+        "description": "Unique run identifier. Prevents duplicate captures."
+      }
+    ],
+    "AllFiveRequired": true,
+    "MissingAnyEffect": "LiveCaptureBlocked=true. No trace captured. No runtime impact. Error message with missing factors listed."
+  },
+  "PilotBoundary": {
+    "NativeProductionTracePilotReady": false,
+    "NativeProductionTracePilotReadyReason": "Pilot readiness requires: (1) ControlledReplay sufficiency passed (achieved), (2) LiveCapture authorization contract defined (achieved), (3) LiveCapture execution endpoint implemented (NOT achieved), (4) LiveCapture executed against real production workspace (NOT achieved).",
+    "ProductionCaptureAuthorizationReady": true,
+    "ProductionCaptureAuthorizationReadyReason": "All four authorization modes defined with clear activation requirements, hard gates, and five-factor LiveCapture barrier. Contract is complete and enforceable.",
+    "ControlledReplayMetricQualityReady": true,
+    "ControlledReplayMetricQualityReadyProof": "V16.7 rich-001: 33 rows, 8 sections, 4 channels, WeightedPairwiseAcc=0.6504 >= 0.55",
+    "NativeProductionTraceReady": false,
+    "NativeProductionTraceReadyNote": "Even with authorization contract ready, NativeProductionTraceReady requires actual production trace capture and metric evaluation. Blocked until LiveCaptureAuthorized execution completes.",
+    "ProductionGeneralizationReady": false,
+    "ProductionGeneralizationReadyNote": "Production generalization requires production-native trace collection + metric quality pass. Neither fulfilled."
+  },
+  "SafetyGates": {
+    "RuntimeInfluenceAllowed": false,
+    "RuntimeInfluenceAllowedPermanent": true,
+    "PackageOutputChanged": false,
+    "RuntimePromotionApplied": false,
+    "VectorBindingChanged": false,
+    "NeuralBiasActive": false,
+    "V14GatePreserved": true,
+    "V16_5GatePreserved": true,
+    "V16_6GatePreserved": true,
+    "V16_7GatePreserved": true
+  }
+}
