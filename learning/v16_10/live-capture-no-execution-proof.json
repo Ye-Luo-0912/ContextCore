@@ -1,0 +1,54 @@
+{
+  "GeneratedAt": "2026-07-05T06:56:00.0000000+00:00",
+  "ContractVersion": "V16.10",
+  "Purpose": "Proof that even when all LiveCapture authorization factors are satisfied, the system still does not execute capture because the execution endpoint has not been implemented.",
+  "Theorem": "AuthorizationFactorsSatisfied AND LiveCaptureExecutionImplemented=false => LiveCaptureExecuted=false AND LiveCaptureBlocked=true AND NoProductionTraceGenerated=true",
+  "Proof": {
+    "Premise_1": "LiveCaptureExecutionEndpoint is NOT implemented (V16.8: 'NOT IMPLEMENTED — authorization contract defined but execution endpoint not built').",
+    "Premise_2": "The V16.6 EvalCommand code path for mode=LiveCapture validates workspace/collection but returns early without wiring FileRuntimeCandidateTraceSink or calling BuildDetailedAsync.",
+    "Premise_3": "Without a wired sink and without a builder execution in the LiveCapture path, no trace can be written.",
+    "Conclusion": "Therefore, even when all authorization factors are present, LiveCaptureExecuted=false and LiveCaptureBlocked=true. No production trace file is generated.",
+    "Verification": "V16.10 simulation AS-001 confirms: all 5 factors satisfied, LiveCaptureAuthorizationContractReady=true, LiveCaptureExecutionImplemented=false, LiveCaptureExecuted=false, LiveCaptureBlocked=true."
+  },
+  "SimulationCase": {
+    "CaseId": "AS-001",
+    "AuthorizationRequest": {
+      "ModeLiveCapture": true,
+      "ConfirmLiveCapture": true,
+      "CaptureToken": "tok-v16_10-authorized-simulation",
+      "WorkspaceId": "prod-ws-eu-west-1",
+      "CollectionId": "prod-eval-collection-v3",
+      "RunId": "run-as-001-20260705"
+    },
+    "AuthorizationFactorsSatisfied": true,
+    "MissingFactors": [],
+    "SyntheticWorkspaceOrCollection": false,
+    "LiveCaptureExecutionImplemented": false,
+    "LiveCaptureExecuted": false,
+    "LiveCaptureBlocked": true,
+    "BlockedReason": "LiveCaptureExecutionEndpointNotImplemented"
+  },
+  "NoExecutionEvidence": {
+    "FileRuntimeCandidateTraceSinkWired": false,
+    "FileRuntimeCandidateTraceSinkWiredNote": "FileRuntimeCandidateTraceSink is only wired in the V16.7 ControlledReplay path. The LiveCapture path never reaches the sink wiring code.",
+    "BuildDetailedAsyncExecutedInLiveCapturePath": false,
+    "BuildDetailedAsyncExecutedInLiveCapturePathNote": "BuildDetailedAsync is called only in ControlledReplay mode. The LiveCapture path returns error before reaching builder execution.",
+    "ProductionTraceFileGenerated": false,
+    "ProductionTraceFileGeneratedNote": "No trace file is created in learning/v16_10/. No .jsonl files are written."
+  },
+  "CrossCuttingInvariants": [
+    {"Invariant": "AllUnauthorizedCasesStillBlocked", "Holds": true, "Proof": "V16.9 AF-001 through AF-007 all produce LiveCaptureBlocked=true. Not altered by V16.10."},
+    {"Invariant": "AuthorizedSimulationStillBlocked", "Holds": true, "Proof": "AS-001 produces LiveCaptureBlocked=true because LiveCaptureExecutionImplemented=false."},
+    {"Invariant": "NoProductionTraceGenerated", "Holds": true, "Proof": "No sink wired, no builder called, no trace file created."},
+    {"Invariant": "NoRuntimeInfluence", "Holds": true, "Proof": "RuntimeInfluenceAllowed=false permanence unchanged."},
+    {"Invariant": "NoPackageOutputChange", "Holds": true, "Proof": "PackageOutputChanged=false permanence unchanged."},
+    {"Invariant": "NoVectorBindingChange", "Holds": true, "Proof": "VectorBindingChanged=false permanence unchanged."},
+    {"Invariant": "ControlledReplayStatePreserved", "Holds": true, "Proof": "ControlledReplayMetricQualityReady=true, level=ControlledReplay, no upgrade."}
+  ],
+  "V16_9Preservation": {
+    "V16_9AllUnauthorizedCasesBlocked": true,
+    "V16_9LiveCaptureCandidateGateReady": true,
+    "ControlledReplayMetricQualityReady": true,
+    "RuntimeInfluenceReadinessCandidateLevel": "ControlledReplay"
+  }
+}

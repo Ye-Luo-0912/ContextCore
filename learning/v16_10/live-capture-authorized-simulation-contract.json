@@ -1,0 +1,93 @@
+{
+  "GeneratedAt": "2026-07-05T06:56:00.0000000+00:00",
+  "ContractVersion": "V16.10",
+  "ContractPurpose": "Define the authorized simulation contract for LiveCapture. When all five authorization factors are satisfied but the execution endpoint is not yet implemented, the system must still block capture without producing any production trace. This proves that authorization alone is insufficient without implementation.",
+  "SimulationCase": {
+    "CaseId": "AS-001",
+    "CaseName": "FullyAuthorizedSimulationNotExecuted",
+    "Description": "All five LiveCapture authorization factors are present and satisfy the authorization barrier, but the execution endpoint has not been implemented. The system must recognize authorization completeness while still blocking execution.",
+    "AuthorizationRequest": {
+      "Mode": "LiveCapture",
+      "ConfirmLiveCapture": true,
+      "CaptureToken": "tok-v16_10-authorized-simulation",
+      "WorkspaceId": "prod-ws-eu-west-1",
+      "CollectionId": "prod-eval-collection-v3",
+      "RunId": "run-as-001-20260705"
+    },
+    "AuthorizationCheck": {
+      "ModeLiveCapture": true,
+      "ConfirmLiveCapturePresent": true,
+      "CaptureTokenPresent": true,
+      "WorkspaceIdPresent": true,
+      "WorkspaceIdRealLooking": true,
+      "CollectionIdPresent": true,
+      "CollectionIdRealLooking": true,
+      "RunIdPresent": true,
+      "SyntheticWorkspace": false,
+      "SyntheticCollection": false,
+      "AllFactorsSatisfied": true
+    },
+    "ExecutionCheck": {
+      "LiveCaptureExecutionEndpointImplemented": false,
+      "LiveCaptureExecutionEndpointImplementedNote": "V16.8 authorization contract defines LiveCaptureAuthorized (Level 3) but explicitly states 'NOT IMPLEMENTED — authorization contract defined but execution endpoint not built. Requires explicit implementation with all safety gates.'",
+      "LiveCaptureExecuted": false,
+      "LiveCaptureExecutedReason": "LiveCaptureExecutionEndpointImplemented=false. Even when all authorization factors are satisfied, the execution path does not exist. No FileRuntimeCandidateTraceSink is wired. No BuildDetailedAsync is called in LiveCapture mode.",
+      "LiveCaptureBlocked": true,
+      "LiveCaptureBlockedReason": "LiveCaptureExecutionImplemented=false. Authorization factors satisfied but execution endpoint missing.",
+      "NoProductionTraceGenerated": true,
+      "NoFileRuntimeCandidateTraceSinkWired": true,
+      "NoBuildDetailedAsyncExecutedInLiveCapturePath": true
+    }
+  },
+  "AuthorizationContractCompleteness": {
+    "LiveCaptureAuthorizationContractReady": true,
+    "LiveCaptureAuthorizationContractReadyReason": "V16.8 defines all four authorization modes (PreviewOnly, ControlledReplay, LiveCaptureCandidate, LiveCaptureAuthorized) with clear activation requirements, five-factor barrier, and hard gates. V16.9 proved all unauthorized cases blocked. V16.10 extends proof to authorized-but-not-implemented case.",
+    "LiveCaptureAuthorizationFactorsSatisfied": true,
+    "LiveCaptureAuthorizationFactorsSatisfiedNote": "All five factors present for the simulation case. The authorization barrier logic correctly recognizes this as factor-complete.",
+    "LiveCaptureExecutionImplemented": false,
+    "LiveCaptureExecutionImplementedNote": "The LiveCaptureAuthorized execution endpoint has not been built. The V16.6 code path validates mode=LiveCapture but returns early without wiring FileRuntimeCandidateTraceSink or executing BuildDetailedAsync in LiveCapture mode.",
+    "LiveCaptureAuthorized": false,
+    "LiveCaptureAuthorizedBlockedReason": "LiveCaptureExecutionImplemented=false. Authorization factors alone do not grant LiveCaptureAuthorized status. Implementation endpoint required."
+  },
+  "GateSemantics": {
+    "LiveCaptureAuthorizationContractReady": true,
+    "LiveCaptureAuthorizationFactorsSatisfied": true,
+    "LiveCaptureExecutionImplemented": false,
+    "LiveCaptureAuthorized": false,
+    "LiveCaptureBlocked": true,
+    "NativeProductionTraceReady": false,
+    "NativeProductionTraceReadyNote": "Requires successful LiveCaptureAuthorized execution against real production workspace/collection. Not achieved.",
+    "ProductionGeneralizationReady": false,
+    "ProductionGeneralizationReadyNote": "Requires production-native trace collection + metric quality pass. Neither fulfilled.",
+    "RuntimeInfluenceAllowed": false,
+    "RuntimeInfluenceAllowedPermanent": true,
+    "PackageOutputChanged": false,
+    "RuntimePromotionApplied": false,
+    "VectorBindingChanged": false,
+    "NeuralBiasActive": false
+  },
+  "V16_9Preservation": {
+    "AllUnauthorizedFailureCasesStillBlocked": true,
+    "AllUnauthorizedFailureCasesStillBlockedProof": "V16.9 AF-001 through AF-007 all produce LiveCaptureBlocked=true. V16.10 adds AS-001 which also produces LiveCaptureBlocked=true (execution not implemented). All 8 cases blocked.",
+    "V16_9LiveCaptureCandidateGateReadyPreserved": true,
+    "ControlledReplayMetricQualityReady": true,
+    "ControlledReplayMetricQualityReadyProof": "V16.7 rich-001: WeightedPairwiseAcc=0.6504 >= 0.55. Preserved without modification.",
+    "RuntimeInfluenceReadinessCandidateLevel": "ControlledReplay",
+    "RuntimeInfluenceReadinessCandidateLevelNote": "Still ControlledReplay level. No upgrade to production-level. Production-level requires LiveCaptureExecutionImplemented=true AND successful execution."
+  },
+  "SafetyInvariants": {
+    "NoProductionTraceGenerated": true,
+    "NoFileRuntimeCandidateTraceSinkWired": true,
+    "NoBuildDetailedAsyncExecutedInLiveCapturePath": true,
+    "NoRuntimeInfluence": true,
+    "NoPackageOutputChange": true,
+    "NoVectorBindingChange": true,
+    "NoNeuralBias": true
+  },
+  "V14GatePreserved": true,
+  "V16_5GatePreserved": true,
+  "V16_6GatePreserved": true,
+  "V16_7GatePreserved": true,
+  "V16_8GatePreserved": true,
+  "V16_9GatePreserved": true
+}

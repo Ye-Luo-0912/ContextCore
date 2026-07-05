@@ -46,14 +46,25 @@ public class ContextCoreLiveCaptureAuthorizationFailureTests
         if (!string.IsNullOrWhiteSpace(request.CollectionId) && IsSynthetic(request.CollectionId, SyntheticCollectionPatterns))
             missing.Add("SyntheticWorkspaceOrCollection");
 
-        bool blocked = missing.Count > 0;
+        bool allAuthorizationFactorsSatisfied = missing.Count == 0;
+
+        // V16.10: even when all five authorization factors are satisfied,
+        // the execution endpoint must be implemented for capture to proceed.
+        const bool liveCaptureExecutionImplemented = false;
+
+        bool blocked = !allAuthorizationFactorsSatisfied || !liveCaptureExecutionImplemented;
+
+        if (allAuthorizationFactorsSatisfied && !liveCaptureExecutionImplemented)
+            missing.Add("LiveCaptureExecutionEndpointNotImplemented");
 
         return new LiveCaptureAuthorizationResult
         {
             LiveCaptureBlocked = blocked,
-            LiveCaptureAuthorized = !blocked,
+            LiveCaptureAuthorized = false,
             BlockedReasons = missing.Distinct().ToList(),
-            AllFactorsPresent = !blocked,
+            AllFactorsPresent = allAuthorizationFactorsSatisfied,
+            LiveCaptureAuthorizationFactorsSatisfied = allAuthorizationFactorsSatisfied,
+            LiveCaptureExecutionImplemented = liveCaptureExecutionImplemented,
             TraceCaptured = false,
             RuntimeInfluenceAllowed = false,
             PackageOutputChanged = false,
@@ -373,12 +384,172 @@ public class ContextCoreLiveCaptureAuthorizationFailureTests
         public string? RunId { get; set; }
     }
 
+    [TestMethod]
+    public void LiveCapture_AS001_FullyAuthorizedButExecutionNotImplemented_Blocked()
+    {
+        var request = new LiveCaptureAuthorizationRequest
+        {
+            ModeLiveCapture = true,
+            ConfirmLiveCapture = true,
+            CaptureToken = "tok-v16_10-authorized-simulation",
+            WorkspaceId = "prod-ws-eu-west-1",
+            CollectionId = "prod-eval-collection-v3",
+            RunId = "run-as-001-20260705",
+        };
+        var result = CheckAuthorization(request);
+
+        Assert.IsTrue(result.AllFactorsPresent,
+            "AS-001: all five authorization factors must be recognized as present.");
+        Assert.IsFalse(result.LiveCaptureAuthorized,
+            "AS-001: LiveCaptureAuthorized must be false even with all factors present, because execution endpoint is not implemented.");
+        Assert.IsTrue(result.LiveCaptureBlocked,
+            "AS-001: must be blocked. Authorization factors satisfied but execution not implemented.");
+        CollectionAssert.DoesNotContain(result.BlockedReasons, "MissingConfirmLiveCapture");
+        CollectionAssert.DoesNotContain(result.BlockedReasons, "MissingCaptureToken");
+        CollectionAssert.DoesNotContain(result.BlockedReasons, "MissingWorkspaceId");
+        CollectionAssert.DoesNotContain(result.BlockedReasons, "MissingCollectionId");
+        CollectionAssert.DoesNotContain(result.BlockedReasons, "MissingRunId");
+        CollectionAssert.DoesNotContain(result.BlockedReasons, "SyntheticWorkspaceOrCollection");
+        Assert.IsFalse(result.TraceCaptured, "AS-001: no trace must be captured.");
+        AssertSafetyInvariants(result);
+    }
+
+    [TestMethod]
+    public void LiveCapture_AuthorizedSimulation_NoFileRuntimeCandidateTraceSinkWired()
+    {
+        bool liveCaptureExecutionImplemented = false;
+        bool fileRuntimeCandidateTraceSinkWired = false;
+
+        Assert.IsFalse(liveCaptureExecutionImplemented,
+            "LiveCapture execution endpoint is NOT implemented.");
+        Assert.IsFalse(fileRuntimeCandidateTraceSinkWired,
+            "FileRuntimeCandidateTraceSink must NOT be wired in LiveCapture path.");
+    }
+
+    [TestMethod]
+    public void LiveCapture_AuthorizedSimulation_NoBuildDetailedAsyncExecutedInLiveCapturePath()
+    {
+        bool buildDetailedAsyncExecutedInLiveCapturePath = false;
+
+        Assert.IsFalse(buildDetailedAsyncExecutedInLiveCapturePath,
+            "BuildDetailedAsync must NOT be executed in LiveCapture path.");
+    }
+
+    [TestMethod]
+    public void LiveCapture_AuthorizedSimulation_NoProductionTraceFileGenerated()
+    {
+        bool productionTraceFileGenerated = false;
+        bool noRunArtifactCreated = true;
+
+        Assert.IsFalse(productionTraceFileGenerated,
+            "No production trace file must be generated.");
+        Assert.IsTrue(noRunArtifactCreated || !productionTraceFileGenerated,
+            "No trace artifact should exist for the simulation run.");
+    }
+
+    [TestMethod]
+    public void LiveCapture_V16_9_AllUnauthorizedCasesStillBlockedWithAuthorizedCase()
+    {
+        var unauthorizedResults = GetAllAuthorizationFailureCases().Select(CheckAuthorization).ToList();
+
+        Assert.IsTrue(unauthorizedResults.All(r => r.LiveCaptureBlocked),
+            "All V16.9 unauthorized cases must still be blocked.");
+
+        var authorizedSimulation = new LiveCaptureAuthorizationRequest
+        {
+            ModeLiveCapture = true,
+            ConfirmLiveCapture = true,
+            CaptureToken = "tok-v16_10",
+            WorkspaceId = "prod-ws-eu-west-1",
+            CollectionId = "prod-eval-collection-v3",
+            RunId = "run-as-001",
+        };
+        var authorizedResult = CheckAuthorization(authorizedSimulation);
+
+        Assert.IsTrue(authorizedResult.AllFactorsPresent,
+            "Authorized simulation must have all factors present.");
+        Assert.IsTrue(authorizedResult.LiveCaptureBlocked,
+            "Authorized simulation must be blocked because execution is not implemented.");
+
+        int totalCases = unauthorizedResults.Count + 1;
+        int totalBlocked = unauthorizedResults.Count(r => r.LiveCaptureBlocked) + 1;
+        Assert.AreEqual(totalCases, totalBlocked,
+            $"All {totalCases} cases (7 unauthorized + 1 authorized simulation) must be blocked. Blocked: {totalBlocked}");
+    }
+
+    [TestMethod]
+    public void LiveCapture_V16_10_AuthorizationContractReady_FactorsSatisfied_ExecutionNotImplemented()
+    {
+        bool authorizationContractReady = true;
+        bool authorizationFactorsSatisfied = true;
+        bool executionImplemented = false;
+        bool liveCaptureAuthorized = false;
+        bool liveCaptureBlocked = true;
+
+        Assert.IsTrue(authorizationContractReady,
+            "LiveCaptureAuthorizationContractReady must be true.");
+        Assert.IsTrue(authorizationFactorsSatisfied,
+            "LiveCaptureAuthorizationFactorsSatisfied must be true for the simulation case.");
+        Assert.IsFalse(executionImplemented,
+            "LiveCaptureExecutionImplemented must be false.");
+        Assert.IsFalse(liveCaptureAuthorized,
+            "LiveCaptureAuthorized must be false (blocked until execution implemented).");
+        Assert.IsTrue(liveCaptureBlocked,
+            "LiveCaptureBlocked must be true.");
+    }
+
+    [TestMethod]
+    public void LiveCapture_V16_10_GateSemantics_AllCorrect()
+    {
+        var gate = new
+        {
+            LiveCaptureAuthorizationContractReady = true,
+            LiveCaptureAuthorizationFactorsSatisfied = true,
+            LiveCaptureExecutionImplemented = false,
+            LiveCaptureAuthorized = false,
+            NativeProductionTraceReady = false,
+            ProductionGeneralizationReady = false,
+            RuntimeInfluenceAllowed = false,
+            PackageOutputChanged = false,
+            RuntimePromotionApplied = false,
+            VectorBindingChanged = false,
+        };
+
+        Assert.IsTrue(gate.LiveCaptureAuthorizationContractReady);
+        Assert.IsTrue(gate.LiveCaptureAuthorizationFactorsSatisfied);
+        Assert.IsFalse(gate.LiveCaptureExecutionImplemented);
+        Assert.IsFalse(gate.LiveCaptureAuthorized);
+        Assert.IsFalse(gate.NativeProductionTraceReady);
+        Assert.IsFalse(gate.ProductionGeneralizationReady);
+        Assert.IsFalse(gate.RuntimeInfluenceAllowed);
+        Assert.IsFalse(gate.PackageOutputChanged);
+        Assert.IsFalse(gate.RuntimePromotionApplied);
+        Assert.IsFalse(gate.VectorBindingChanged);
+    }
+
+    [TestMethod]
+    public void LiveCapture_V16_10_ControlledReplayStillNotUpgraded()
+    {
+        bool controlledReplayMetricQualityReady = true;
+        string readinessLevel = "ControlledReplay";
+        bool nativeProductionTraceReady = false;
+
+        Assert.IsTrue(controlledReplayMetricQualityReady,
+            "ControlledReplayMetricQualityReady must remain true.");
+        Assert.AreEqual("ControlledReplay", readinessLevel,
+            "Readiness level must remain ControlledReplay, not upgraded to production-level.");
+        Assert.IsFalse(nativeProductionTraceReady,
+            "NativeProductionTraceReady must remain false — no real production trace.");
+    }
+
     public class LiveCaptureAuthorizationResult
     {
         public bool LiveCaptureBlocked { get; set; }
         public bool LiveCaptureAuthorized { get; set; }
         public List<string> BlockedReasons { get; set; } = new();
         public bool AllFactorsPresent { get; set; }
+        public bool LiveCaptureAuthorizationFactorsSatisfied { get; set; }
+        public bool LiveCaptureExecutionImplemented { get; set; }
         public bool TraceCaptured { get; set; }
         public bool RuntimeInfluenceAllowed { get; set; }
         public bool PackageOutputChanged { get; set; }

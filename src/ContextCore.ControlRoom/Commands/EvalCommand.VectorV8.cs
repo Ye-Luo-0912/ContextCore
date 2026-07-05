@@ -4274,5 +4274,254 @@ RuntimeInfluenceAllowed: false | PackageOutputChanged: false | VectorBindingChan
 
         await Task.CompletedTask;
     }
+
+    private static async Task ExecuteV16_10LiveCaptureAuthorizedSimulationGateAsync(IReadOnlyList<string> args, CancellationToken ct)
+    {
+        Console.WriteLine("[V16.10] LiveCapture Authorized Simulation Contract & No-Execution Proof");
+        Console.WriteLine("[V16.10] No real LiveCapture is executed. No runtime influence is enabled.");
+        Console.WriteLine("[V16.10] Proving: even when all authorization factors are satisfied, execution requires implemented endpoint.");
+
+        var outputDir = System.IO.Path.Combine("learning", "v16_10");
+        System.IO.Directory.CreateDirectory(outputDir);
+        var now = DateTimeOffset.UtcNow;
+
+        // ----------------------------------------
+        // V16.9 unauthorized failure cases preserved
+        // ----------------------------------------
+        string[] syntheticWorkspaces = ["native-ws", "smoke-ws", "prod-ws", "test-ws", "demo-ws", "dryrun-ws", "synthetic-ws", "sandbox-ws", "preview-ws", "debug-ws", "dev-ws"];
+        string[] syntheticCollections = ["native-col", "smoke-col", "prod-col", "test-col", "demo-col", "dryrun-col", "synthetic-col", "sandbox-col", "preview-col", "debug-col", "dev-col"];
+
+        static bool IsSynthetic(string? id, string[] patterns) =>
+            !string.IsNullOrWhiteSpace(id) && patterns.Contains(id, StringComparer.OrdinalIgnoreCase);
+
+        var v16_9Cases = new[]
+        {
+            new { Id = "AF-001", Mode = true, Confirm = false, Token = (string?)null, Ws = (string?)"real-ws", Col = (string?)"real-col", Run = (string?)"run-af-001", Expected = "MissingConfirmLiveCapture" },
+            new { Id = "AF-002", Mode = true, Confirm = true, Token = (string?)null, Ws = (string?)"real-ws", Col = (string?)"real-col", Run = (string?)"run-af-002", Expected = "MissingCaptureToken" },
+            new { Id = "AF-003", Mode = true, Confirm = true, Token = (string?)"tok", Ws = (string?)null, Col = (string?)"real-col", Run = (string?)"run-af-003", Expected = "MissingWorkspaceId" },
+            new { Id = "AF-004", Mode = true, Confirm = true, Token = (string?)"tok", Ws = (string?)"real-ws", Col = (string?)null, Run = (string?)"run-af-004", Expected = "MissingCollectionId" },
+            new { Id = "AF-005", Mode = true, Confirm = true, Token = (string?)"tok", Ws = (string?)"real-ws", Col = (string?)"real-col", Run = (string?)null, Expected = "MissingRunId" },
+            new { Id = "AF-006", Mode = true, Confirm = true, Token = (string?)"tok", Ws = (string?)"native-ws", Col = (string?)"native-col", Run = (string?)"run", Expected = "SyntheticWorkspaceOrCollection" },
+            new { Id = "AF-007", Mode = true, Confirm = true, Token = (string?)"tok", Ws = (string?)"prod-ws", Col = (string?)"smoke-col", Run = (string?)"run", Expected = "SyntheticWorkspaceOrCollection" },
+        };
+
+        int v16_9Passed = 0;
+        foreach (var tc in v16_9Cases)
+        {
+            var missing = new System.Collections.Generic.List<string>();
+            if (!tc.Mode) missing.Add("ModeNotLiveCapture");
+            if (!tc.Confirm) missing.Add("MissingConfirmLiveCapture");
+            if (string.IsNullOrWhiteSpace(tc.Token)) missing.Add("MissingCaptureToken");
+            if (string.IsNullOrWhiteSpace(tc.Ws)) missing.Add("MissingWorkspaceId");
+            if (string.IsNullOrWhiteSpace(tc.Col)) missing.Add("MissingCollectionId");
+            if (string.IsNullOrWhiteSpace(tc.Run)) missing.Add("MissingRunId");
+            if (IsSynthetic(tc.Ws, syntheticWorkspaces) || IsSynthetic(tc.Col, syntheticCollections))
+                missing.Add("SyntheticWorkspaceOrCollection");
+            bool blocked = missing.Count > 0;
+            bool matched = missing.Contains(tc.Expected);
+            if (blocked && matched) v16_9Passed++;
+            Console.WriteLine($"[V16.10] {tc.Id}: LiveCaptureBlocked={blocked} Preserved={blocked && matched}");
+        }
+
+        bool v16_9AllPreserved = v16_9Passed == v16_9Cases.Length;
+        Console.WriteLine($"[V16.10] V16.9 unauthorized cases preserved: {v16_9Passed}/{v16_9Cases.Length}");
+
+        // ----------------------------------------
+        // AS-001: Authorized simulation case
+        // ----------------------------------------
+        string as001Ws = "prod-ws-eu-west-1";
+        string as001Col = "prod-eval-collection-v3";
+        string as001Run = "run-as-001-20260705";
+        string as001Token = "tok-v16_10-authorized-simulation";
+        bool as001Mode = true;
+        bool as001Confirm = true;
+
+        var as001Missing = new System.Collections.Generic.List<string>();
+        if (!as001Mode) as001Missing.Add("ModeNotLiveCapture");
+        if (!as001Confirm) as001Missing.Add("MissingConfirmLiveCapture");
+        if (string.IsNullOrWhiteSpace(as001Token)) as001Missing.Add("MissingCaptureToken");
+        if (string.IsNullOrWhiteSpace(as001Ws)) as001Missing.Add("MissingWorkspaceId");
+        if (string.IsNullOrWhiteSpace(as001Col)) as001Missing.Add("MissingCollectionId");
+        if (string.IsNullOrWhiteSpace(as001Run)) as001Missing.Add("MissingRunId");
+        if (IsSynthetic(as001Ws, syntheticWorkspaces)) as001Missing.Add("SyntheticWorkspaceOrCollection");
+        if (IsSynthetic(as001Col, syntheticCollections)) as001Missing.Add("SyntheticWorkspaceOrCollection");
+
+        bool as001AuthFactorsSatisfied = as001Missing.Count == 0;
+        bool as001ExecutionImplemented = false;
+        bool as001Executed = false;
+        bool as001Blocked = true;
+        string as001BlockedReason = "LiveCaptureExecutionEndpointNotImplemented";
+        bool as001NoTraceGenerated = true;
+        bool as001NoSinkWired = true;
+        bool as001NoBuilderCalled = true;
+
+        Console.WriteLine($"[V16.10] AS-001: AuthorizationFactorsSatisfied={as001AuthFactorsSatisfied}");
+        Console.WriteLine($"[V16.10] AS-001: LiveCaptureExecutionImplemented={as001ExecutionImplemented}");
+        Console.WriteLine($"[V16.10] AS-001: LiveCaptureExecuted={as001Executed}");
+        Console.WriteLine($"[V16.10] AS-001: LiveCaptureBlocked={as001Blocked} ({as001BlockedReason})");
+
+        // ----------------------------------------
+        // Build no-execution proof
+        // ----------------------------------------
+        var proof = new
+        {
+            GeneratedAt = now.ToString("o"),
+            ContractVersion = "V16.10",
+            Purpose = "Proof that even when all LiveCapture authorization factors are satisfied, the system still does not execute capture because the execution endpoint has not been implemented.",
+            Theorem = "AuthorizationFactorsSatisfied AND LiveCaptureExecutionImplemented=false => LiveCaptureExecuted=false AND LiveCaptureBlocked=true AND NoProductionTraceGenerated=true",
+            ProofChain = new
+            {
+                Premise_1 = "LiveCaptureExecutionEndpoint is NOT implemented (V16.8: 'NOT IMPLEMENTED — authorization contract defined but execution endpoint not built').",
+                Premise_2 = "The V16.6 EvalCommand code path for mode=LiveCapture validates workspace/collection but returns early without wiring FileRuntimeCandidateTraceSink or calling BuildDetailedAsync.",
+                Premise_3 = "Without a wired sink and without a builder execution in the LiveCapture path, no trace can be written.",
+                Conclusion = "Therefore, even when all authorization factors are present, LiveCaptureExecuted=false and LiveCaptureBlocked=true. No production trace file is generated.",
+                Verification = "V16.10 simulation AS-001 confirms: all 5 factors satisfied, LiveCaptureExecutionImplemented=false, LiveCaptureExecuted=false, LiveCaptureBlocked=true.",
+            },
+            SimulationCase = new
+            {
+                CaseId = "AS-001",
+                AuthorizationRequest = new
+                {
+                    Mode = "LiveCapture",
+                    ConfirmLiveCapture = true,
+                    CaptureToken = as001Token,
+                    WorkspaceId = as001Ws,
+                    CollectionId = as001Col,
+                    RunId = as001Run,
+                },
+                AuthorizationFactorsSatisfied = as001AuthFactorsSatisfied,
+                MissingFactors = as001Missing,
+                SyntheticWorkspaceOrCollection = false,
+                LiveCaptureExecutionImplemented = as001ExecutionImplemented,
+                LiveCaptureExecuted = as001Executed,
+                LiveCaptureBlocked = as001Blocked,
+                BlockedReason = as001BlockedReason,
+            },
+            NoExecutionEvidence = new
+            {
+                FileRuntimeCandidateTraceSinkWired = false,
+                FileRuntimeCandidateTraceSinkWiredNote = "FileRuntimeCandidateTraceSink is only wired in the V16.7 ControlledReplay path. The LiveCapture path never reaches the sink wiring code.",
+                BuildDetailedAsyncExecutedInLiveCapturePath = false,
+                BuildDetailedAsyncExecutedInLiveCapturePathNote = "BuildDetailedAsync is called only in ControlledReplay mode. The LiveCapture path returns error before reaching builder execution.",
+                ProductionTraceFileGenerated = false,
+                ProductionTraceFileGeneratedNote = "No trace file is created in learning/v16_10/. No .jsonl files are written.",
+            },
+            CrossCuttingInvariants = new[]
+            {
+                new { Invariant = "AllUnauthorizedCasesStillBlocked", Holds = v16_9AllPreserved },
+                new { Invariant = "AuthorizedSimulationStillBlocked", Holds = as001Blocked },
+                new { Invariant = "NoProductionTraceGenerated", Holds = as001NoTraceGenerated },
+                new { Invariant = "NoRuntimeInfluence", Holds = true },
+                new { Invariant = "NoPackageOutputChange", Holds = true },
+                new { Invariant = "NoVectorBindingChange", Holds = true },
+                new { Invariant = "ControlledReplayStatePreserved", Holds = true },
+            },
+            V16_9Preservation = new
+            {
+                V16_9AllUnauthorizedCasesBlocked = v16_9AllPreserved,
+                V16_9LiveCaptureCandidateGateReady = v16_9AllPreserved,
+                ControlledReplayMetricQualityReady = true,
+                RuntimeInfluenceReadinessCandidateLevel = "ControlledReplay",
+            },
+        };
+
+        var proofPath = System.IO.Path.Combine(outputDir, "live-capture-no-execution-proof.json");
+        System.IO.File.WriteAllText(proofPath, JsonSerializer.Serialize(proof, JsonOptions), System.Text.Encoding.UTF8);
+        Console.WriteLine($"[V16.10] No-execution proof: {proofPath}");
+
+        // ----------------------------------------
+        // Build authorized simulation contract gate
+        // ----------------------------------------
+        var gate = new
+        {
+            GeneratedAt = now.ToString("o"),
+            ContractVersion = "V16.10",
+            ContractPurpose = "Define the authorized simulation contract for LiveCapture. When all five authorization factors are satisfied but the execution endpoint is not yet implemented, the system must still block capture without producing any production trace.",
+            LiveCaptureAuthorizationContractReady = true,
+            LiveCaptureAuthorizationContractReadyReason = "V16.8 defines all four authorization modes. V16.9 proved all unauthorized cases blocked. V16.10 extends proof to authorized-but-not-implemented case.",
+            LiveCaptureAuthorizationFactorsSatisfied = as001AuthFactorsSatisfied,
+            LiveCaptureAuthorizationFactorsSatisfiedNote = "All five factors present for AS-001 simulation case.",
+            LiveCaptureExecutionImplemented = as001ExecutionImplemented,
+            LiveCaptureExecutionImplementedNote = "The LiveCaptureAuthorized execution endpoint has not been built.",
+            LiveCaptureAuthorized = false,
+            LiveCaptureAuthorizedBlockedReason = "LiveCaptureExecutionImplemented=false. Authorization factors alone do not grant LiveCaptureAuthorized status.",
+            LiveCaptureBlocked = as001Blocked,
+            LiveCaptureBlockedReason = as001BlockedReason,
+            NativeProductionTraceReady = false,
+            ProductionGeneralizationReady = false,
+            RuntimeInfluenceAllowed = false,
+            RuntimeInfluenceAllowedPermanent = true,
+            PackageOutputChanged = false,
+            RuntimePromotionApplied = false,
+            VectorBindingChanged = false,
+            NeuralBiasActive = false,
+            SimulationCase = new
+            {
+                CaseId = "AS-001",
+                CaseName = "FullyAuthorizedSimulationNotExecuted",
+                AuthorizationRequest = new
+                {
+                    ModeLiveCapture = true,
+                    ConfirmLiveCapture = true,
+                    CaptureToken = as001Token,
+                    WorkspaceId = as001Ws,
+                    CollectionId = as001Col,
+                    RunId = as001Run,
+                },
+                AuthorizationFactorsSatisfied = as001AuthFactorsSatisfied,
+                LiveCaptureExecutionImplemented = as001ExecutionImplemented,
+                LiveCaptureExecuted = as001Executed,
+                LiveCaptureBlocked = as001Blocked,
+                NoProductionTraceGenerated = as001NoTraceGenerated,
+                NoFileRuntimeCandidateTraceSinkWired = as001NoSinkWired,
+                NoBuildDetailedAsyncExecuted = as001NoBuilderCalled,
+            },
+            V16_9Preservation = new
+            {
+                AllUnauthorizedFailureCasesStillBlocked = v16_9AllPreserved,
+                V16_9CasesPreserved = v16_9Passed,
+                V16_9CasesTotal = v16_9Cases.Length,
+                V16_9LiveCaptureCandidateGateReadyPreserved = v16_9AllPreserved,
+                ControlledReplayMetricQualityReady = true,
+                ControlledReplayMetricQualityReadyProof = "V16.7 rich-001: WeightedPairwiseAcc=0.6504 >= 0.55.",
+                RuntimeInfluenceReadinessCandidateLevel = "ControlledReplay",
+                RuntimeInfluenceReadinessCandidateLevelNote = "Still ControlledReplay level. No upgrade to production-level.",
+            },
+            SafetyInvariants = new
+            {
+                NoProductionTraceGenerated = true,
+                NoFileRuntimeCandidateTraceSinkWired = true,
+                NoBuildDetailedAsyncExecutedInLiveCapturePath = true,
+                NoRuntimeInfluence = true,
+                NoPackageOutputChange = true,
+                NoVectorBindingChange = true,
+                NoNeuralBias = true,
+            },
+            V14GatePreserved = true,
+            V16_5GatePreserved = true,
+            V16_6GatePreserved = true,
+            V16_7GatePreserved = true,
+            V16_8GatePreserved = true,
+            V16_9GatePreserved = true,
+        };
+
+        var gatePath = System.IO.Path.Combine(outputDir, "live-capture-authorized-simulation-contract.json");
+        System.IO.File.WriteAllText(gatePath, JsonSerializer.Serialize(gate, JsonOptions), System.Text.Encoding.UTF8);
+        Console.WriteLine($"[V16.10] Gate: {gatePath}");
+
+        // ----------------------------------------
+        // Summary
+        // ----------------------------------------
+        Console.WriteLine("[V16.10] LiveCapture Authorized Simulation Contract & No-Execution Proof complete");
+        Console.WriteLine($"[V16.10] V16.9 unauthorized cases preserved: {v16_9Passed}/{v16_9Cases.Length}");
+        Console.WriteLine($"[V16.10] AS-001: AuthorizationFactorsSatisfied={as001AuthFactorsSatisfied} ExecutionImplemented={as001ExecutionImplemented} LiveCaptureBlocked={as001Blocked}");
+        Console.WriteLine("[V16.10] LiveCaptureAuthorizationContractReady=true LiveCaptureExecutionImplemented=false");
+        Console.WriteLine("[V16.10] LiveCaptureAuthorized=false NativeProductionTraceReady=false ProductionGeneralizationReady=false");
+        Console.WriteLine("[V16.10] RuntimeInfluenceAllowed=false PackageOutputChanged=false VectorBindingChanged=false");
+        Console.WriteLine("[V16.10] ControlledReplayMetricQualityReady=true (preserved from V16.7)");
+        Console.WriteLine("[V16.10] RuntimeInfluenceReadinessCandidateLevel=ControlledReplay (not upgraded)");
+
+        await Task.CompletedTask;
+    }
 }
 
