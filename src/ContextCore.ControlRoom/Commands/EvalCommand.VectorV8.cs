@@ -5055,5 +5055,256 @@ RuntimeInfluenceAllowed: false | PackageOutputChanged: false | VectorBindingChan
 
         await Task.CompletedTask;
     }
+
+    private static async Task ExecuteV16_11PhaseLedgerGateAsync(IReadOnlyList<string> args, CancellationToken ct)
+    {
+        Console.WriteLine("[V16.11] Phase Ledger & Final Acceptance Boundary Gate");
+        Console.WriteLine("[V16.11] Auditable phase ledger covering V16.2 Repair B through V16.11.");
+        Console.WriteLine("[V16.11] Highest proven readiness: ControlledReplay (V16.7).");
+
+        var outputDir = System.IO.Path.Combine("learning", "v16_11");
+        System.IO.Directory.CreateDirectory(outputDir);
+        var now = DateTimeOffset.UtcNow;
+
+        // ----------------------------------------
+        // Phase ledger data
+        // ----------------------------------------
+        var phases = new[]
+        {
+            new { Version = "V16.2", Phase = "Repair B — Shadow Evaluation", Status = "Accepted",
+                HighestReadiness = "ShadowEval",
+                Accepted = "guarded_candidate_below_threshold, ProductionLikeWPA=0.5451 < 0.55",
+                Blocked = "MetricQualityBlocked=true, CrossSystemMapping=true" },
+            new { Version = "V16.3", Phase = "Native Trace Readiness Contract", Status = "Accepted",
+                HighestReadiness = "NativeTraceCollectorPreview",
+                Accepted = "CollectorReady=true, Privacy contract in place, CollectionEnabled=false",
+                Blocked = "NativeProductionTraceReady=false, No production trace collected" },
+            new { Version = "V16.4", Phase = "Native Trace Dry Run", Status = "Accepted",
+                HighestReadiness = "NativeDryRun",
+                Accepted = "49 rows, 0 errors, all traceSource=3, DryRunTraceReady=true",
+                Blocked = "Synthetic workspace only, not real production data" },
+            new { Version = "V16.5", Phase = "Native Trace Metric Eval", Status = "Accepted",
+                HighestReadiness = "NativeMetricEval_DryRun",
+                Accepted = "49 rows evaluated, WPA=0.5192",
+                Blocked = "MetricQualityReady=false (0.5192 < 0.55)" },
+            new { Version = "V16.6", Phase = "Production Trace Plan", Status = "Accepted",
+                HighestReadiness = "AcquisitionPlan",
+                Accepted = "HarnessReady=true, 4 auth modes defined",
+                Blocked = "Plan only, LiveCapture not executed" },
+            new { Version = "V16.7", Phase = "Controlled Replay — HIGHEST PROVEN", Status = "Accepted",
+                HighestReadiness = "ControlledReplay",
+                Accepted = "33 rows, 8 sections, 4 channels, WPA=0.6504 >= 0.55",
+                Blocked = "FileSystem only, seeded corpus, not production traffic" },
+            new { Version = "V16.8", Phase = "Authorization Contract", Status = "Accepted",
+                HighestReadiness = "AuthorizationContractReady",
+                Accepted = "4 auth modes, 5-factor LiveCapture barrier",
+                Blocked = "Execution endpoint not built" },
+            new { Version = "V16.9", Phase = "Candidate Dry-Run Gate", Status = "Accepted",
+                HighestReadiness = "CandidateGateReady",
+                Accepted = "7/7 unauthorized cases blocked",
+                Blocked = "LiveCapture not authorized" },
+            new { Version = "V16.10", Phase = "Authorized Simulation", Status = "Accepted",
+                HighestReadiness = "AuthorizedSimulation",
+                Accepted = "All 5 factors satisfied, still blocked",
+                Blocked = "Execution endpoint not implemented" },
+            new { Version = "V16.11", Phase = "Execution Skeleton", Status = "Accepted",
+                HighestReadiness = "ExecutionSkeleton_HardBlocked",
+                Accepted = "Skeleton exists, hard-blocked, no trace generated",
+                Blocked = "Execution not allowed, no production trace" },
+        };
+
+        // ----------------------------------------
+        // Phase ledger
+        // ----------------------------------------
+        var phaseLedger = new
+        {
+            GeneratedAt = now.ToString("o"),
+            ContractVersion = "V16.11",
+            DocumentType = "PhaseLedger",
+            Purpose = "Auditable phase ledger tracking accepted state, blocked state, and highest readiness for V16.2–V16.11.",
+            LedgerCoverage = "V16.2 – V16.11",
+            HighestReadinessLevel = "ControlledReplay",
+            HighestReadinessLevelAchievedIn = "V16.7",
+            VersionOrderingNote = "Latest commit may be V16.3 backfill but ledger covers V16.2–V16.11. DO NOT infer readiness from commit message.",
+            NextAllowedPhase = "NativeProductionTraceExecutionDesignReview",
+            NextDisallowedPhase = "V17 Runtime influence activation",
+            PermanentInvariants = new
+            {
+                NativeProductionTraceReady = false,
+                ProductionGeneralizationReady = false,
+                LiveCaptureExecutionImplemented = false,
+                RuntimeInfluenceAllowed = false,
+                RuntimeInfluenceAllowedPermanent = true,
+                PackageOutputChanged = false,
+                RuntimePromotionApplied = false,
+                VectorBindingChanged = false,
+            },
+            Phases = phases.Select(p => new
+            {
+                p.Version,
+                p.Phase,
+                p.Status,
+                AcceptedState = p.Accepted,
+                BlockedState = p.Blocked,
+                p.HighestReadiness,
+            }).ToList(),
+        };
+
+        var ledgerPath = System.IO.Path.Combine(outputDir, "phase-ledger.json");
+        System.IO.File.WriteAllText(ledgerPath, JsonSerializer.Serialize(phaseLedger, JsonOptions), System.Text.Encoding.UTF8);
+        Console.WriteLine($"[V16.11] Phase ledger: {ledgerPath}");
+
+        // ----------------------------------------
+        // Phase ledger MD
+        // ----------------------------------------
+        var phaseMd = $""""
+# V16.11 Phase Ledger
+
+Generated: {now:o} | Coverage: V16.2 Repair B – V16.11
+
+## Purpose
+
+Auditable phase ledger tracking every V16 phase. **Do not infer readiness from latest commit message or version number.**
+
+## Highest Proven Readiness: ControlledReplay (V16.7)
+
+No phase since V16.7 has surpassed ControlledReplay readiness.
+
+## Phase Summary
+
+| Version | Phase | Status | Highest Readiness |
+|---|---|---|---|
+{string.Join("\n", phases.Select(p => $"| {p.Version} | {p.Phase} | {p.Status} | {p.HighestReadiness} |"))}
+
+## Permanent Invariants (all versions)
+
+| Invariant | Value |
+|---|---|
+| NativeProductionTraceReady | false |
+| ProductionGeneralizationReady | false |
+| RuntimeInfluenceAllowed | false (permanent) |
+| PackageOutputChanged | false |
+| VectorBindingChanged | false |
+| LiveCaptureExecutionImplemented | false |
+
+## Next Allowed vs Disallowed
+
+- Next Allowed: NativeProductionTraceExecutionDesignReview
+- Next Disallowed: V17 Runtime influence activation
+"""";
+
+        var phaseMdPath = System.IO.Path.Combine(outputDir, "phase-ledger.md");
+        System.IO.File.WriteAllText(phaseMdPath, phaseMd, System.Text.Encoding.UTF8);
+        Console.WriteLine($"[V16.11] Phase ledger MD: {phaseMdPath}");
+
+        // ----------------------------------------
+        // Final acceptance boundary gate
+        // ----------------------------------------
+        var boundary = new
+        {
+            GeneratedAt = now.ToString("o"),
+            ContractVersion = "V16.11",
+            DocumentType = "FinalAcceptanceBoundaryGate",
+            Purpose = "Hard limit of V16 phase readiness. No phase may claim readiness beyond ControlledReplay without explicit production trace capture implementation.",
+            BoundaryDefinition = new
+            {
+                HighestReadinessLevel = "ControlledReplay",
+                HighestReadinessLevelAchievedBy = "V16.7",
+                ReadinessCapAt = "ControlledReplay",
+                ReadinessCapReason = "NativeProductionTraceReady requires actual production trace capture. Not performed in any V16 phase.",
+            },
+            GateHardLimits = new
+            {
+                NativeProductionTraceReady = false,
+                ProductionGeneralizationReady = false,
+                LiveCaptureExecutionImplemented = false,
+                RuntimeInfluenceAllowed = false,
+                RuntimeInfluenceAllowedPermanent = true,
+                PackageOutputChanged = false,
+                RuntimePromotionApplied = false,
+                VectorBindingChanged = false,
+                NeuralBiasActive = false,
+            },
+            PhaseTransitionRules = new
+            {
+                NextAllowedPhase = "NativeProductionTraceExecutionDesignReview",
+                NextDisallowedPhase = "V17 Runtime influence activation",
+                PhaseCrossingGuard = "No phase may cross from V16 to production-runtime-influence without NativeProductionTraceExecutionDesignReview.",
+            },
+            CrossVersionInvariants = new
+            {
+                AllRuntimeInfluenceAllowed_False = true,
+                AllPackageOutputChanged_False = true,
+                AllVectorBindingChanged_False = true,
+                AllNativeProductionTraceReady_False = true,
+                AllProductionGeneralizationReady_False = true,
+                AllLiveCaptureExecutionImplemented_False = true,
+                ControlledReplayMetricQualityReady_True_FromV16_7 = true,
+            },
+            VersionOrderingClarification = new
+            {
+                LatestCommitMayBeV16_3_Backfill = true,
+                LedgerCoversV16_2_ThroughV16_11 = true,
+                DoNotInferReadinessFromCommitMessage = true,
+                DoNotInferReadinessFromVersionNumber = true,
+            },
+        };
+
+        var boundaryPath = System.IO.Path.Combine(outputDir, "final-acceptance-boundary-gate.json");
+        System.IO.File.WriteAllText(boundaryPath, JsonSerializer.Serialize(boundary, JsonOptions), System.Text.Encoding.UTF8);
+        Console.WriteLine($"[V16.11] Final acceptance boundary gate: {boundaryPath}");
+
+        // ----------------------------------------
+        // Final acceptance boundary MD
+        // ----------------------------------------
+        var boundaryMd = $""""
+# V16.11 Final Acceptance Boundary Gate
+
+Generated: {now:o}
+
+## Highest Readiness Level: ControlledReplay (V16.7)
+
+## Hard Limits
+
+| Gate | Value |
+|---|---|
+| HighestReadinessLevel | ControlledReplay |
+| NativeProductionTraceReady | false |
+| ProductionGeneralizationReady | false |
+| LiveCaptureExecutionImplemented | false |
+| RuntimeInfluenceAllowed | false (PERMANENT) |
+| PackageOutputChanged | false |
+| RuntimePromotionApplied | false |
+| VectorBindingChanged | false |
+
+## Phase Transition
+
+| Direction | Phase |
+|---|---|
+| Next Allowed | NativeProductionTraceExecutionDesignReview |
+| Next Disallowed | V17 Runtime influence activation |
+
+## Version Ordering
+
+Do not infer readiness from latest commit message. Always consult phase ledger.
+"""";
+
+        var boundaryMdPath = System.IO.Path.Combine(outputDir, "final-acceptance-boundary-gate.md");
+        System.IO.File.WriteAllText(boundaryMdPath, boundaryMd, System.Text.Encoding.UTF8);
+        Console.WriteLine($"[V16.11] Final acceptance boundary MD: {boundaryMdPath}");
+
+        // ----------------------------------------
+        // Summary
+        // ----------------------------------------
+        Console.WriteLine("[V16.11] Phase Ledger & Final Acceptance Boundary Gate complete");
+        Console.WriteLine($"[V16.11] {phases.Length} phases covered: V16.2 – V16.11");
+        Console.WriteLine($"[V16.11] HighestReadinessLevel=ControlledReplay (V16.7)");
+        Console.WriteLine("[V16.11] NativeProductionTraceReady=false ProductionGeneralizationReady=false");
+        Console.WriteLine("[V16.11] LiveCaptureExecutionImplemented=false RuntimeInfluenceAllowed=false (permanent)");
+        Console.WriteLine("[V16.11] NextAllowed=NativeProductionTraceExecutionDesignReview");
+        Console.WriteLine("[V16.11] NextDisallowed=V17 Runtime influence activation");
+
+        await Task.CompletedTask;
+    }
 }
 

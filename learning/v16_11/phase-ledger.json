@@ -1,0 +1,225 @@
+{
+  "GeneratedAt": "2026-07-05T08:10:00.0000000+00:00",
+  "ContractVersion": "V16.11",
+  "DocumentType": "PhaseLedger",
+  "Purpose": "Auditable phase ledger tracking the accepted state, blocked state, and highest readiness level for every phase from V16.2 Repair B through V16.11. This ledger prevents artifact consumers from inferring readiness by looking only at the latest commit or version number.",
+  "LedgerCoverage": "V16.2 – V16.11",
+  "HighestReadinessLevel": "ControlledReplay",
+  "HighestReadinessLevelAchievedIn": "V16.7",
+  "NativeProductionTraceReady": false,
+  "ProductionGeneralizationReady": false,
+  "LiveCaptureExecutionImplemented": false,
+  "RuntimeInfluenceAllowed": false,
+  "PackageOutputChanged": false,
+  "RuntimePromotionApplied": false,
+  "VectorBindingChanged": false,
+  "NextAllowedPhase": "NativeProductionTraceExecutionDesignReview",
+  "NextDisallowedPhase": "V17 Runtime influence activation",
+  "VersionOrderingNote": "The latest commit to main may be V16.3 (backfill) but the ledger covers V16.2–V16.11. DO NOT infer current phase readiness from the latest commit message. Always consult this ledger.",
+  "Phases": [
+    {
+      "Version": "V16.2",
+      "PhaseName": "Repair B — Production Trace Shadow Evaluation",
+      "Status": "Accepted",
+      "AcceptedState": {
+        "RuntimeInfluenceReadinessCandidate": "guarded_candidate_below_threshold",
+        "ProductionLikeWeightedPairwiseAcc": 0.5451,
+        "MetricQualityThreshold": 0.55,
+        "MetricQualityBlocked": true,
+        "ProductionGeneralizationReady": false,
+        "CrossSystemMapping": true,
+        "CrossSystemMappingNote": "Shadow-adapter traces are NOT native. traceSource=mapped(1), not native(3)."
+      },
+      "BlockedState": {
+        "MetricQualityBelowThreshold": true,
+        "NoProductionGeneralization": true,
+        "CrossSystemMappingBlocksNativeClaim": true
+      },
+      "HighestReadinessLevel": "ShadowEval"
+    },
+    {
+      "Version": "V16.3",
+      "PhaseName": "Native Runtime Trace Readiness Contract",
+      "Status": "Accepted",
+      "AcceptedState": {
+        "NativeTraceCollectorReady": true,
+        "NativeTraceCollectorReadyReason": "Collection infrastructure fully implemented: RuntimeCandidateTraceSink, 18-field schema, contract validator, WriteTraceRow(), SinkAccessor.",
+        "NativeTraceCollectionEnabled": false,
+        "NativeTraceCollectionEnabledReason": "Collection switched off by default. No production traces generated.",
+        "NativeProductionTraceReady": false,
+        "CollectorMode": "NativeRuntimeCandidateTracePreview",
+        "CrossSystemMapping": false,
+        "PrivacyContractInPlace": true,
+        "PrivacyContract": "No raw user content, no API keys, no prompt text, candidate content hash/redacted/metadata only."
+      },
+      "BlockedState": {
+        "NativeProductionTraceReady": true,
+        "ProductionTraceNotCollected": true
+      },
+      "HighestReadinessLevel": "NativeTraceCollectorPreview"
+    },
+    {
+      "Version": "V16.4",
+      "PhaseName": "Native Runtime Trace Collection Dry Run",
+      "Status": "Accepted",
+      "AcceptedState": {
+        "NativeRuntimeDryRunTraceReady": true,
+        "NativeTraceCollected": true,
+        "TraceCount": 49,
+        "AllRowsTraceSource3": true,
+        "ValidationParseErrors": 0,
+        "ValidationMissingCriticalFields": 0,
+        "NativeProductionTraceReady": false,
+        "NativeProductionTraceReadyReason": "Dry-run uses synthetic 'native-ws'/'native-col' with in-memory seeded stores. Not real production traffic."
+      },
+      "BlockedState": {
+        "SyntheticWorkspaceOnly": true,
+        "NoRealProductionData": true,
+        "NativeProductionTraceReady": true
+      },
+      "HighestReadinessLevel": "NativeDryRun"
+    },
+    {
+      "Version": "V16.5",
+      "PhaseName": "Native Trace Metric Evaluation",
+      "Status": "Accepted",
+      "AcceptedState": {
+        "NativeMetricQualityReady": false,
+        "WeightedPairwiseAcc_DryRun": 0.5192,
+        "MetricQualityThreshold": 0.55,
+        "MetricQualityAboveThreshold": false,
+        "TotalCombinedRows_DryRun": 49
+      },
+      "BlockedState": {
+        "MetricQualityBelowThreshold": true,
+        "DryRunDataOnly": true,
+        "NoProductionMetricPass": true
+      },
+      "HighestReadinessLevel": "NativeMetricEvaluation_DryRun"
+    },
+    {
+      "Version": "V16.6",
+      "PhaseName": "Native Production Trace Acquisition Plan",
+      "Status": "Accepted",
+      "AcceptedState": {
+        "NativeProductionCaptureHarnessReady": true,
+        "AcquisitionMode": "PreviewOnly (default)",
+        "LiveCaptureAuthorized": false,
+        "LiveCaptureNotExecuted": true,
+        "NativeProductionTraceReady": false,
+        "ProductionGeneralizationReady": false
+      },
+      "BlockedState": {
+        "PlanOnly": true,
+        "NoLiveCapture": true,
+        "NativeProductionTraceReady": true
+      },
+      "HighestReadinessLevel": "AcquisitionPlan"
+    },
+    {
+      "Version": "V16.7",
+      "PhaseName": "Controlled Replay Native Trace",
+      "Status": "Accepted — HIGHEST PROVEN READINESS",
+      "AcceptedState": {
+        "NativeControlledReplayTraceReady": true,
+        "ControlledReplayTraceSufficient": true,
+        "Sufficiency": {
+          "TotalRows": 33, "SectionCount": 8, "RetrievalChannelCount": 4,
+          "ScoringSelectedPositive": true, "ScoringRejectedPositive": true,
+          "PackageIncludedPositive": true, "PackageDroppedPositive": true
+        },
+        "ControlledReplayMetricQualityReady": true,
+        "WeightedPairwiseAcc": 0.6504,
+        "MetricQualityAboveThreshold": true,
+        "AcquisitionMode": "ControlledReplay",
+        "StoreBackend": "FileSystem",
+        "LiveCaptureBlocked": true,
+        "NativeProductionTraceReady": false,
+        "NativeProductionTraceReadyReason": "ControlledReplay uses FileSystem-backed stores with seeded corpus, not live production traffic."
+      },
+      "BlockedState": {
+        "FileSystemStoreOnly": true,
+        "SeededCorpusNotProduction": true,
+        "LiveCaptureBlocked": true,
+        "NativeProductionTraceReady": true
+      },
+      "HighestReadinessLevel": "ControlledReplay",
+      "HighestReadinessLevelNote": "THIS IS THE HIGHEST PROVEN READINESS LEVEL ACROSS ALL V16 PHASES. No phase since V16.7 has surpassed ControlledReplay readiness."
+    },
+    {
+      "Version": "V16.8",
+      "PhaseName": "Production Capture Authorization Contract",
+      "Status": "Accepted",
+      "AcceptedState": {
+        "ProductionCaptureAuthorizationReady": true,
+        "AuthorizationModesDefined": 4,
+        "LiveCaptureFiveFactorBarrierDefined": true,
+        "ControlledReplayMetricQualityReady": true,
+        "NativeProductionTraceReady": false,
+        "ProductionGeneralizationReady": false,
+        "RuntimeInfluenceAllowedPermanent": true
+      },
+      "BlockedState": {
+        "LiveCaptureExecutionEndpointNotBuilt": true,
+        "NativeProductionTracePilotReady": true
+      },
+      "HighestReadinessLevel": "AuthorizationContractReady"
+    },
+    {
+      "Version": "V16.9",
+      "PhaseName": "LiveCapture Candidate Dry-Run Gate",
+      "Status": "Accepted",
+      "AcceptedState": {
+        "LiveCaptureCandidateGateReady": true,
+        "AuthorizationFailureTests": {"Total": 7, "Passed": 7, "Failed": 0},
+        "AllUnauthorizedCasesBlocked": true,
+        "LiveCaptureAuthorized": false,
+        "ControlledReplayMetricQualityReady": true
+      },
+      "BlockedState": {
+        "LiveCaptureNotAuthorized": true,
+        "ProductionTraceNotGenerated": true
+      },
+      "HighestReadinessLevel": "CandidateGateReady"
+    },
+    {
+      "Version": "V16.10",
+      "PhaseName": "LiveCapture Authorized Simulation Contract",
+      "Status": "Accepted",
+      "AcceptedState": {
+        "LiveCaptureAuthorizationContractReady": true,
+        "LiveCaptureAuthorizationFactorsSatisfied": true,
+        "LiveCaptureExecutionImplemented": false,
+        "LiveCaptureExecuted": false,
+        "LiveCaptureBlocked": true,
+        "LiveCaptureBlockedReason": "Execution endpoint not implemented"
+      },
+      "BlockedState": {
+        "ExecutionEndpointMissing": true,
+        "NoProductionTraceCapture": true
+      },
+      "HighestReadinessLevel": "AuthorizedSimulation"
+    },
+    {
+      "Version": "V16.11",
+      "PhaseName": "LiveCapture Execution Endpoint Skeleton",
+      "Status": "Accepted",
+      "AcceptedState": {
+        "LiveCaptureExecutionSkeletonExists": true,
+        "LiveCaptureExecutionImplemented": false,
+        "LiveCaptureExecuted": false,
+        "LiveCaptureBlocked": true,
+        "BlockedReason": "ExecutionSkeletonHardBlocked",
+        "NoFileRuntimeCandidateTraceSinkWired": true,
+        "NoBuildDetailedAsyncExecuted": true,
+        "NoProductionTraceGenerated": true
+      },
+      "BlockedState": {
+        "SkeletonHardBlocked": true,
+        "NoExecutionAllowed": true,
+        "NoProductionTrace": true
+      },
+      "HighestReadinessLevel": "ExecutionSkeleton_HardBlocked"
+    }
+  ]
+}
