@@ -1,0 +1,39 @@
+﻿{
+  "GeneratedAt": "2026-07-05T02:52:13.5187330\u002B00:00",
+  "RunId": "graph-001",
+  "GeneratedRunId": false,
+  "AcquisitionMode": "ControlledReplay",
+  "WorkspaceId": "graph-shadow-samples",
+  "CollectionId": "test",
+  "StoreBackend": "FileSystem",
+  "StoreRoot": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\context-core-data",
+  "TracePath": "learning\\v16_7\\native-controlled-replay-trace-graph-001.jsonl",
+  "TraceCaptureOnly": true,
+  "TotalRows": 1,
+  "ParseErrorCount": 0,
+  "MissingCriticalFieldCount": 0,
+  "ScoringSelectedCount": 1,
+  "ScoringRejectedCount": 0,
+  "ScoringConsistent": true,
+  "PackageIncludedCount": 1,
+  "PackageDroppedCount": 0,
+  "PackageConsistent": true,
+  "SectionCoverage": [
+    {
+      "Section": "current_task",
+      "Count": 1
+    }
+  ],
+  "RetrievalChannelCoverage": [
+    {
+      "Channel": 5,
+      "Count": 1
+    }
+  ],
+  "AllRowsTraceSource3": true,
+  "BuildError": null,
+  "PolicySelected": 1,
+  "PolicyDropped": 0,
+  "LegacySelected": 0,
+  "LegacyDropped": 0
+}

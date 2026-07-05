@@ -1,0 +1,194 @@
+{
+  "GeneratedAt": "2026-07-05T02:53:06.940073+00:00",
+  "EvaluatorVersion": "V16.7",
+  "RunIds": [
+    "demo-001",
+    "graph-001"
+  ],
+  "RunCount": 2,
+  "TotalCombinedRows": 2,
+  "Alpha1InvariantPassed_Combined": true,
+  "AllRowsTraceSource3": true,
+  "AlphaSweepCombined": [
+    {
+      "Alpha": 1.0,
+      "NeuralWt": 0.0,
+      "MeanRankDelta": 0.0,
+      "ScoringDisagree": 0,
+      "InclusionDisagree": 0,
+      "Top3Churn": 0,
+      "Top5Churn": 0,
+      "Top10Churn": 0,
+      "Alpha1Invariant": true
+    },
+    {
+      "Alpha": 0.9,
+      "NeuralWt": 0.1,
+      "MeanRankDelta": 0.0,
+      "ScoringDisagree": 0,
+      "InclusionDisagree": 0,
+      "Top3Churn": 0,
+      "Top5Churn": 0,
+      "Top10Churn": 0,
+      "Alpha1Invariant": true
+    },
+    {
+      "Alpha": 0.7,
+      "NeuralWt": 0.3,
+      "MeanRankDelta": 0.0,
+      "ScoringDisagree": 0,
+      "InclusionDisagree": 0,
+      "Top3Churn": 0,
+      "Top5Churn": 0,
+      "Top10Churn": 0,
+      "Alpha1Invariant": true
+    },
+    {
+      "Alpha": 0.5,
+      "NeuralWt": 0.5,
+      "MeanRankDelta": 0.0,
+      "ScoringDisagree": 0,
+      "InclusionDisagree": 0,
+      "Top3Churn": 0,
+      "Top5Churn": 0,
+      "Top10Churn": 0,
+      "Alpha1Invariant": true
+    }
+  ],
+  "CalibrationCombined": {
+    "RowCount": 2,
+    "WeightedBCE": 0.200086,
+    "UnweightedBCE": 0.200086,
+    "WeightedPairwiseAcc": 0.5,
+    "UnweightedPairwiseAcc": 0.5
+  },
+  "PerRun": {
+    "demo-001": {
+      "path": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\learning\\v16_7\\native-controlled-replay-trace-demo-001.jsonl",
+      "rows": 1,
+      "sweep": [
+        {
+          "Alpha": 1.0,
+          "NeuralWt": 0.0,
+          "MeanRankDelta": 0.0,
+          "ScoringDisagree": 0,
+          "InclusionDisagree": 0,
+          "Top3Churn": 0,
+          "Top5Churn": 0,
+          "Top10Churn": 0,
+          "Alpha1Invariant": true
+        },
+        {
+          "Alpha": 0.9,
+          "NeuralWt": 0.1,
+          "MeanRankDelta": 0.0,
+          "ScoringDisagree": 0,
+          "InclusionDisagree": 0,
+          "Top3Churn": 0,
+          "Top5Churn": 0,
+          "Top10Churn": 0,
+          "Alpha1Invariant": true
+        },
+        {
+          "Alpha": 0.7,
+          "NeuralWt": 0.3,
+          "MeanRankDelta": 0.0,
+          "ScoringDisagree": 0,
+          "InclusionDisagree": 0,
+          "Top3Churn": 0,
+          "Top5Churn": 0,
+          "Top10Churn": 0,
+          "Alpha1Invariant": true
+        },
+        {
+          "Alpha": 0.5,
+          "NeuralWt": 0.5,
+          "MeanRankDelta": 0.0,
+          "ScoringDisagree": 0,
+          "InclusionDisagree": 0,
+          "Top3Churn": 0,
+          "Top5Churn": 0,
+          "Top10Churn": 0,
+          "Alpha1Invariant": true
+        }
+      ],
+      "calib": {
+        "RowCount": 1,
+        "WeightedBCE": 0.200086,
+        "UnweightedBCE": 0.200086,
+        "WeightedPairwiseAcc": 0.5,
+        "UnweightedPairwiseAcc": 0.5
+      }
+    },
+    "graph-001": {
+      "path": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\learning\\v16_7\\native-controlled-replay-trace-graph-001.jsonl",
+      "rows": 1,
+      "sweep": [
+        {
+          "Alpha": 1.0,
+          "NeuralWt": 0.0,
+          "MeanRankDelta": 0.0,
+          "ScoringDisagree": 0,
+          "InclusionDisagree": 0,
+          "Top3Churn": 0,
+          "Top5Churn": 0,
+          "Top10Churn": 0,
+          "Alpha1Invariant": true
+        },
+        {
+          "Alpha": 0.9,
+          "NeuralWt": 0.1,
+          "MeanRankDelta": 0.0,
+          "ScoringDisagree": 0,
+          "InclusionDisagree": 0,
+          "Top3Churn": 0,
+          "Top5Churn": 0,
+          "Top10Churn": 0,
+          "Alpha1Invariant": true
+        },
+        {
+          "Alpha": 0.7,
+          "NeuralWt": 0.3,
+          "MeanRankDelta": 0.0,
+          "ScoringDisagree": 0,
+          "InclusionDisagree": 0,
+          "Top3Churn": 0,
+          "Top5Churn": 0,
+          "Top10Churn": 0,
+          "Alpha1Invariant": true
+        },
+        {
+          "Alpha": 0.5,
+          "NeuralWt": 0.5,
+          "MeanRankDelta": 0.0,
+          "ScoringDisagree": 0,
+          "InclusionDisagree": 0,
+          "Top3Churn": 0,
+          "Top5Churn": 0,
+          "Top10Churn": 0,
+          "Alpha1Invariant": true
+        }
+      ],
+      "calib": {
+        "RowCount": 1,
+        "WeightedBCE": 0.200086,
+        "UnweightedBCE": 0.200086,
+        "WeightedPairwiseAcc": 0.5,
+        "UnweightedPairwiseAcc": 0.5
+      }
+    }
+  },
+  "MetricQualityGate": {
+    "ControlledReplayWeightedPairwiseAcc": 0.5,
+    "PairwiseThreshold": 0.55,
+    "PairwiseAboveThreshold": false,
+    "ControlledReplayMetricQualityReady": false,
+    "ControlledReplayMetricQualityReason": "ControlledReplayWeightedPairwiseAcc=0.5000 < 0.55 or insufficient rows (2). Metric-quality blocked. Real production traces with richer data required.",
+    "RuntimeInfluenceReadinessCandidate": false,
+    "Note": "ControlledReplay trace has limited rows (1-2). Full metric evaluation requires richer workspace data with memory items, constraints, and diverse sections."
+  },
+  "RuntimeInfluenceAllowed": false,
+  "PackageOutputChanged": false,
+  "VectorBindingChanged": false,
+  "RuntimePromotionApplied": false
+}

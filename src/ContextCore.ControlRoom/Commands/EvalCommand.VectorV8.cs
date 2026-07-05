@@ -3597,5 +3597,274 @@ RuntimeInfluenceAllowed: false | PackageOutputChanged: false | VectorBindingChan
         Console.WriteLine($"[V16.6] Mode={mode} PreviewOnly={isDryRun} NativeProductionCaptureHarnessReady=true");
         Console.WriteLine("[V16.6] NativeProductionTraceReady=false ProductionGeneralizationReady=false RuntimeInfluenceAllowed=false");
     }
+
+    private static async Task ExecuteV16_7ControlledReplayNativeTraceAsync(IReadOnlyList<string> args, CancellationToken ct)
+    {
+        // Parse arguments
+        string? workspaceId = null, collectionId = null, runId = null;
+        string mode = "ControlledReplay"; // fixed mode for this command
+        bool generatedRunId = true;
+
+        for (int i = 1; i < args.Count - 1; i++)
+        {
+            if (string.Equals(args[i], "--workspaceId", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Count)
+                workspaceId = args[i + 1];
+            if (string.Equals(args[i], "--collectionId", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Count)
+                collectionId = args[i + 1];
+            if (string.Equals(args[i], "--runId", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Count)
+            {
+                var arg = args[i + 1];
+                if (!string.IsNullOrWhiteSpace(arg)) { runId = arg; generatedRunId = false; }
+            }
+        }
+
+        // LiveCapture is explicitly blocked
+        if (string.Equals(mode, "LiveCapture", StringComparison.OrdinalIgnoreCase))
+        {
+            Console.WriteLine("[V16.7] ERROR: LiveCapture mode is NOT implemented.");
+            Console.WriteLine("[V16.7] LiveCapture requires --confirm-live-capture token. This mode has NOT been authorized.");
+            return;
+        }
+
+        // Validate required args
+        if (string.IsNullOrWhiteSpace(workspaceId) || string.IsNullOrWhiteSpace(collectionId))
+        {
+            Console.WriteLine("[V16.7] ERROR: ControlledReplay requires --workspaceId and --collectionId.");
+            Console.WriteLine("[V16.7] Example: eval v16_7-controlled-replay-native-trace --workspaceId demo-workspace --collectionId demo-collection");
+            return;
+        }
+
+        // Synthetic block: reject synthetic workspace/collection IDs
+        string[] syntheticIds = ["native-ws", "native-col", "smoke-ws", "smoke-col", "prod-ws", "prod-col"];
+        if (syntheticIds.Contains(workspaceId, StringComparer.OrdinalIgnoreCase) ||
+            syntheticIds.Contains(collectionId, StringComparer.OrdinalIgnoreCase))
+        {
+            Console.WriteLine($"[V16.7] ERROR: Synthetic workspace/collection rejected: {workspaceId}/{collectionId}");
+            Console.WriteLine("[V16.7] ControlledReplay requires real repository-backed stores, not in-memory seed.");
+            Console.WriteLine("[V16.7] Valid examples: demo-workspace/demo-collection, graph-shadow-samples/test");
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(runId))
+        {
+            runId = DateTimeOffset.UtcNow.ToString("yyyyMMdd-HHmmss");
+            generatedRunId = true;
+        }
+
+        var outputDir = System.IO.Path.Combine("learning", "v16_7");
+        System.IO.Directory.CreateDirectory(outputDir);
+        var tracePath = System.IO.Path.Combine(outputDir, $"native-controlled-replay-trace-{runId}.jsonl");
+
+        // Idempotency
+        if (File.Exists(tracePath))
+        {
+            Console.WriteLine($"[V16.7] ERROR: Trace file exists for runId={runId}. Idempotency: RejectExistingRunId.");
+            return;
+        }
+
+        Console.WriteLine($"[V16.7] ControlledReplay: ws={workspaceId} col={collectionId} runId={runId} (generated={generatedRunId})");
+        Console.WriteLine($"[V16.7] Output: {tracePath}");
+
+        // -- Construct FileSystem stores (real repository-backed, NOT in-memory) --
+        var storageRoot = System.IO.Path.GetFullPath(System.IO.Path.Combine("context-core-data"));
+        var storageOptions = new ContextCore.Storage.FileSystem.FileStorageOptions
+        {
+            RootPath = storageRoot
+        };
+
+        var contextStore = new ContextCore.Storage.FileSystem.Stores.FileContextStore(storageOptions);
+        var memoryStore = new ContextCore.Storage.FileSystem.Stores.FileMemoryStore(storageOptions);
+        var constraintStore = new ContextCore.Storage.FileSystem.Stores.FileConstraintStore(storageOptions);
+        var globalStore = new ContextCore.Storage.FileSystem.Stores.FileGlobalContextStore(storageOptions);
+        var relationStore = new ContextCore.Storage.FileSystem.Stores.FileRelationStore(storageOptions);
+
+        Console.WriteLine($"[V16.7] Stores: FileSystem-backed from {storageRoot}");
+        Console.WriteLine($"[V16.7] Not in-memory seed — real repository stores");
+
+        // Wire trace sink
+        var sink = new ContextCore.Core.Services.Learning.V14_0.FileRuntimeCandidateTraceSink(tracePath);
+        ContextCore.Core.Services.Learning.V14_0.RuntimeCandidateTraceSinkAccessor.Current = sink;
+        ContextCore.Core.Services.Learning.V14_0.RuntimeCandidateTraceSinkAccessor.CurrentOperationId = $"op-native-v16_7-{runId}";
+        ContextCore.Core.Services.Learning.V14_0.RuntimeCandidateTraceSinkAccessor.CurrentRequestId = $"req-native-v16_7-{runId}";
+
+        int policySelected = 0, policyDropped = 0, legacySelected = 0, legacyDropped = 0;
+        string? buildError = null;
+
+        try
+        {
+            var tokenizer = new ContextCore.Core.DefaultContextTokenizerResolver();
+            var builder = new ContextCore.Core.BasicContextPackageBuilder(
+                contextStore, constraintStore, globalStore, memoryStore, relationStore,
+                null, tokenizer, memoryStore);
+
+            // Policy-mode build
+            var policy = new ContextCore.Abstractions.Models.ContextPackagePolicy
+            {
+                Id = "v16_7-pol", WorkspaceId = workspaceId, CollectionId = collectionId,
+                Name = "V16_7ControlledReplay", TokenBudget = 3000,
+                IncludeGlobalContext = true, IncludeHardConstraints = true,
+                IncludeSoftConstraints = true, IncludeWorkingMemory = true,
+                IncludeStableMemory = true, IncludeRecentRawContext = true,
+                MaxRecentItems = 5, SectionOrder = new[] { "current_task" }
+            };
+            var request = new ContextCore.Abstractions.Models.ContextPackageRequest
+            {
+                WorkspaceId = workspaceId, CollectionId = collectionId,
+                TokenBudget = 3000, QueryText = "controlled replay trace",
+                Policy = policy
+            };
+            var result = await builder.BuildDetailedAsync(request, ct).ConfigureAwait(false);
+            policySelected = result.SelectedItems.Count;
+            policyDropped = result.DroppedItems.Count;
+            Console.WriteLine($"[V16.7] Policy-mode: sections={result.Package.Sections.Count} selected={policySelected} dropped={policyDropped}");
+
+            // Legacy-mode build
+            var legacyReq = new ContextCore.Abstractions.Models.ContextPackageRequest
+            {
+                WorkspaceId = workspaceId, CollectionId = collectionId,
+                TokenBudget = 1200, QueryText = "controlled replay trace"
+            };
+            var legacyRes = await builder.BuildDetailedAsync(legacyReq, ct).ConfigureAwait(false);
+            legacySelected = legacyRes.SelectedItems.Count;
+            legacyDropped = legacyRes.DroppedItems.Count;
+            Console.WriteLine($"[V16.7] Legacy-mode: sections={legacyRes.Package.Sections.Count} selected={legacySelected} dropped={legacyDropped}");
+        }
+        catch (Exception ex)
+        {
+            buildError = $"{ex.GetType().Name}: {ex.Message}";
+            Console.WriteLine($"[V16.7] Builder error: {buildError}");
+        }
+        finally
+        {
+            await sink.FlushAsync(ct).ConfigureAwait(false);
+            ContextCore.Core.Services.Learning.V14_0.RuntimeCandidateTraceSinkAccessor.Current =
+                new ContextCore.Core.Services.Learning.V14_0.NullRuntimeCandidateTraceSink();
+        }
+        sink.Dispose();
+
+        // -- Validation --
+        var traceLines = new List<string>();
+        if (File.Exists(tracePath))
+        {
+            foreach (var line in File.ReadLines(tracePath))
+                if (!string.IsNullOrWhiteSpace(line))
+                    traceLines.Add(line);
+        }
+        Console.WriteLine($"[V16.7] Trace rows written: {traceLines.Count}");
+
+        var validator = new ContextCore.Core.Services.Learning.V14_0.RuntimeCandidateTraceContractValidator();
+        validator.Validate(traceLines);
+
+        // Count semantics
+        int scoringSel = 0, scoringRej = 0, pkgInc = 0, pkgDrop = 0;
+        var secCov = new Dictionary<string, int>();
+        var chCov = new Dictionary<int, int>();
+        var tsCov = new Dictionary<int, int>();
+
+        foreach (var line in traceLines)
+        {
+            try
+            {
+                var doc = JsonDocument.Parse(line);
+                var root = doc.RootElement;
+                if (root.TryGetProperty("section", out var s))
+                    { var k = s.GetString() ?? "unknown"; secCov[k] = secCov.GetValueOrDefault(k) + 1; }
+                if (root.TryGetProperty("retrievalChannel", out var ch))
+                    { var v = ch.ValueKind == JsonValueKind.Number ? ch.GetInt32() : 0; chCov[v] = chCov.GetValueOrDefault(v) + 1; }
+                if (root.TryGetProperty("traceSource", out var ts))
+                    { var v = ts.ValueKind == JsonValueKind.Number ? ts.GetInt32() : 0; tsCov[v] = tsCov.GetValueOrDefault(v) + 1; }
+                if (root.TryGetProperty("selectedByScoring", out var sel))
+                    { if (sel.ValueKind == JsonValueKind.True) scoringSel++; else if (sel.ValueKind == JsonValueKind.False) scoringRej++; }
+                if (root.TryGetProperty("includedInPackage", out var inc))
+                    { if (inc.ValueKind == JsonValueKind.True) pkgInc++; else if (inc.ValueKind == JsonValueKind.False) pkgDrop++; }
+            }
+            catch { }
+        }
+
+        bool allTs3 = tsCov.Count == 1 && tsCov.ContainsKey(3);
+        bool scoresConsistent = scoringSel + scoringRej == traceLines.Count;
+        bool pkgConsistent = pkgInc + pkgDrop == traceLines.Count;
+        bool nativeCollected = traceLines.Count > 0 && validator.ParseErrorCount == 0 && validator.MissingCriticalFieldCount == 0;
+
+        // -- Validation artifact --
+        var validation = new
+        {
+            GeneratedAt = DateTimeOffset.UtcNow.ToString("o"),
+            RunId = runId,
+            GeneratedRunId = generatedRunId,
+            AcquisitionMode = "ControlledReplay",
+            WorkspaceId = workspaceId,
+            CollectionId = collectionId,
+            StoreBackend = "FileSystem",
+            StoreRoot = storageRoot,
+            TracePath = tracePath,
+            TraceCaptureOnly = true,
+            TotalRows = traceLines.Count,
+            ParseErrorCount = validator.ParseErrorCount,
+            MissingCriticalFieldCount = validator.MissingCriticalFieldCount,
+            ScoringSelectedCount = scoringSel,
+            ScoringRejectedCount = scoringRej,
+            ScoringConsistent = scoresConsistent,
+            PackageIncludedCount = pkgInc,
+            PackageDroppedCount = pkgDrop,
+            PackageConsistent = pkgConsistent,
+            SectionCoverage = secCov.OrderByDescending(kv => kv.Value).Select(kv => new { Section = kv.Key, Count = kv.Value }).ToList(),
+            RetrievalChannelCoverage = chCov.OrderBy(kv => kv.Key).Select(kv => new { Channel = kv.Key, Count = kv.Value }).ToList(),
+            AllRowsTraceSource3 = allTs3,
+            BuildError = buildError,
+            PolicySelected = policySelected,
+            PolicyDropped = policyDropped,
+            LegacySelected = legacySelected,
+            LegacyDropped = legacyDropped,
+        };
+
+        var valPath = System.IO.Path.Combine(outputDir, "native-controlled-replay-validation.json");
+        System.IO.File.WriteAllText(valPath, JsonSerializer.Serialize(validation, JsonOptions), System.Text.Encoding.UTF8);
+        Console.WriteLine($"[V16.7] Validation: {valPath}");
+
+        // -- Gate --
+        bool dryRunReady = nativeCollected && allTs3 && scoresConsistent && pkgConsistent;
+
+        var gate = new
+        {
+            GeneratedAt = DateTimeOffset.UtcNow.ToString("o"),
+            RunId = runId,
+            GeneratedRunId = generatedRunId,
+            AcquisitionMode = "ControlledReplay",
+            WorkspaceId = workspaceId,
+            CollectionId = collectionId,
+            StoreBackend = "FileSystem",
+            NativeControlledReplayTraceReady = dryRunReady,
+            NativeControlledReplayTraceReadyReason = dryRunReady
+                ? "Trace collected from real FileSystem stores, traceSource=3, validation passed, counts consistent."
+                : $"Trace collection failed or validation errors: collected={nativeCollected} allTs3={allTs3} scoresConsistent={scoresConsistent} pkgConsistent={pkgConsistent}",
+            NativeProductionTraceReady = false,
+            NativeProductionTraceReadyReason = "ControlledReplay uses FileSystem-backed stores, not live production traffic. NativeProductionTraceReady requires actual production environment with live user traffic.",
+            ProductionGeneralizationReady = false,
+            ProductionGeneralizationReadyReason = "ControlledReplay is a replay, not production generalization. Blocked until production-native traces pass metric quality.",
+            LiveCaptureBlocked = true,
+            LiveCaptureBlockedReason = "LiveCapture requires --confirm-live-capture token. Not implemented in V16.7.",
+            IdempotencyMode = "RejectExistingRunId",
+            RunScopedTracePath = true,
+            SharedTraceAppend = false,
+            CollectorIdempotencyReady = true,
+            RuntimeInfluenceAllowed = false,
+            PackageOutputChanged = false,
+            RuntimePromotionApplied = false,
+            VectorBindingChanged = false,
+            NeuralBiasActive = false,
+            V14GatePreserved = true,
+            V16_5GatePreserved = true,
+            V16_6GatePreserved = true,
+        };
+
+        var gatePath = System.IO.Path.Combine(outputDir, "native-controlled-replay-gate.json");
+        System.IO.File.WriteAllText(gatePath, JsonSerializer.Serialize(gate, JsonOptions), System.Text.Encoding.UTF8);
+        Console.WriteLine($"[V16.7] Gate: {gatePath}");
+
+        Console.WriteLine("[V16.7] ControlledReplay Native Trace Collection complete");
+        Console.WriteLine($"[V16.7] NativeControlledReplayTraceReady={dryRunReady} LiveCaptureBlocked=true");
+        Console.WriteLine("[V16.7] RuntimeInfluenceAllowed=false PackageOutputChanged=false VectorBindingChanged=false");
+    }
 }
 

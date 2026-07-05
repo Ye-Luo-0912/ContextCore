@@ -414,6 +414,7 @@ public static partial class EvalCommand
             !string.Equals(subcommand, "v16_2-evaluate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "v16_4-native-trace-collect", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "v16_6-native-production-trace-plan", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "v16_7-controlled-replay-native-trace", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "formal-evidence-stabilization-replay-pilot-readiness", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "formal-evidence-stabilization-replay-pilot-readiness-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "learning-formal-evidence-realization-r1-pack", StringComparison.OrdinalIgnoreCase) &&
@@ -762,6 +763,7 @@ public static partial class EvalCommand
         Console.WriteLine("  eval v14-runtime-trace-smoke (real package build trace)");
         Console.WriteLine("  eval v16_4-native-trace-collect [--runId <runId>] (native runtime candidate-scoring trace dry run)");
         Console.WriteLine("  eval v16_6-native-production-trace-plan [--mode <PreviewOnly|ControlledReplay>] (production trace acquisition plan)");
+        Console.WriteLine("  eval v16_7-controlled-replay-native-trace --workspaceId <id> --collectionId <id> [--runId <id>] (controlled replay trace from real stores)");
             Console.WriteLine("  eval learning-formal-evidence-realization-r1-pack");
             Console.WriteLine("  eval learning-formal-evidence-realization-r1-pack-gate");
             Console.WriteLine("  eval dto-split-plan");
@@ -2438,6 +2440,12 @@ public static partial class EvalCommand
         if (string.Equals(subcommand, "v16_6-native-production-trace-plan", StringComparison.OrdinalIgnoreCase))
         {
             await ExecuteV16_6NativeProductionTracePlanAsync(args, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        if (string.Equals(subcommand, "v16_7-controlled-replay-native-trace", StringComparison.OrdinalIgnoreCase))
+        {
+            await ExecuteV16_7ControlledReplayNativeTraceAsync(args, cancellationToken).ConfigureAwait(false);
             return;
         }
 
