@@ -5145,7 +5145,7 @@ RuntimeInfluenceAllowed: false | PackageOutputChanged: false | VectorBindingChan
                 p.Phase,
                 p.Status,
                 AcceptedState = p.Accepted,
-                BlockedState = p.Blocked,
+                BlockedClaims = p.Blocked,
                 p.HighestReadiness,
             }).ToList(),
         };

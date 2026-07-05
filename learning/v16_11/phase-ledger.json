@@ -30,10 +30,10 @@
         "CrossSystemMapping": true,
         "CrossSystemMappingNote": "Shadow-adapter traces are NOT native. traceSource=mapped(1), not native(3)."
       },
-      "BlockedState": {
-        "MetricQualityBelowThreshold": true,
-        "NoProductionGeneralization": true,
-        "CrossSystemMappingBlocksNativeClaim": true
+      "BlockedClaims": {
+        "MetricQualityBelowThresholdBlocked": true,
+        "NoProductionGeneralizationBlocked": true,
+        "CrossSystemMappingBlocksNativeClaimBlocked": true
       },
       "HighestReadinessLevel": "ShadowEval"
     },
@@ -52,9 +52,9 @@
         "PrivacyContractInPlace": true,
         "PrivacyContract": "No raw user content, no API keys, no prompt text, candidate content hash/redacted/metadata only."
       },
-      "BlockedState": {
-        "NativeProductionTraceReady": true,
-        "ProductionTraceNotCollected": true
+      "BlockedClaims": {
+        "NativeProductionTraceReadyBlocked": true,
+        "ProductionTraceNotCollectedBlocked": true
       },
       "HighestReadinessLevel": "NativeTraceCollectorPreview"
     },
@@ -72,10 +72,10 @@
         "NativeProductionTraceReady": false,
         "NativeProductionTraceReadyReason": "Dry-run uses synthetic 'native-ws'/'native-col' with in-memory seeded stores. Not real production traffic."
       },
-      "BlockedState": {
-        "SyntheticWorkspaceOnly": true,
-        "NoRealProductionData": true,
-        "NativeProductionTraceReady": true
+      "BlockedClaims": {
+        "SyntheticWorkspaceOnlyBlocked": true,
+        "NoRealProductionDataBlocked": true,
+        "NativeProductionTraceReadyBlocked": true
       },
       "HighestReadinessLevel": "NativeDryRun"
     },
@@ -90,10 +90,10 @@
         "MetricQualityAboveThreshold": false,
         "TotalCombinedRows_DryRun": 49
       },
-      "BlockedState": {
-        "MetricQualityBelowThreshold": true,
-        "DryRunDataOnly": true,
-        "NoProductionMetricPass": true
+      "BlockedClaims": {
+        "MetricQualityBelowThresholdBlocked": true,
+        "DryRunDataOnlyBlocked": true,
+        "NoProductionMetricPassBlocked": true
       },
       "HighestReadinessLevel": "NativeMetricEvaluation_DryRun"
     },
@@ -109,10 +109,10 @@
         "NativeProductionTraceReady": false,
         "ProductionGeneralizationReady": false
       },
-      "BlockedState": {
-        "PlanOnly": true,
-        "NoLiveCapture": true,
-        "NativeProductionTraceReady": true
+      "BlockedClaims": {
+        "PlanOnlyBlocked": true,
+        "NoLiveCaptureBlocked": true,
+        "NativeProductionTraceReadyBlocked": true
       },
       "HighestReadinessLevel": "AcquisitionPlan"
     },
@@ -137,11 +137,11 @@
         "NativeProductionTraceReady": false,
         "NativeProductionTraceReadyReason": "ControlledReplay uses FileSystem-backed stores with seeded corpus, not live production traffic."
       },
-      "BlockedState": {
-        "FileSystemStoreOnly": true,
-        "SeededCorpusNotProduction": true,
+      "BlockedClaims": {
+        "FileSystemStoreOnlyBlocked": true,
+        "SeededCorpusNotProductionBlocked": true,
         "LiveCaptureBlocked": true,
-        "NativeProductionTraceReady": true
+        "NativeProductionTraceReadyBlocked": true
       },
       "HighestReadinessLevel": "ControlledReplay",
       "HighestReadinessLevelNote": "THIS IS THE HIGHEST PROVEN READINESS LEVEL ACROSS ALL V16 PHASES. No phase since V16.7 has surpassed ControlledReplay readiness."
@@ -159,9 +159,9 @@
         "ProductionGeneralizationReady": false,
         "RuntimeInfluenceAllowedPermanent": true
       },
-      "BlockedState": {
-        "LiveCaptureExecutionEndpointNotBuilt": true,
-        "NativeProductionTracePilotReady": true
+      "BlockedClaims": {
+        "LiveCaptureExecutionEndpointNotBuiltBlocked": true,
+        "NativeProductionTracePilotReadyBlocked": true
       },
       "HighestReadinessLevel": "AuthorizationContractReady"
     },
@@ -176,9 +176,9 @@
         "LiveCaptureAuthorized": false,
         "ControlledReplayMetricQualityReady": true
       },
-      "BlockedState": {
-        "LiveCaptureNotAuthorized": true,
-        "ProductionTraceNotGenerated": true
+      "BlockedClaims": {
+        "LiveCaptureNotAuthorizedBlocked": true,
+        "ProductionTraceNotGeneratedBlocked": true
       },
       "HighestReadinessLevel": "CandidateGateReady"
     },
@@ -194,9 +194,9 @@
         "LiveCaptureBlocked": true,
         "LiveCaptureBlockedReason": "Execution endpoint not implemented"
       },
-      "BlockedState": {
-        "ExecutionEndpointMissing": true,
-        "NoProductionTraceCapture": true
+      "BlockedClaims": {
+        "ExecutionEndpointMissingBlocked": true,
+        "NoProductionTraceCaptureBlocked": true
       },
       "HighestReadinessLevel": "AuthorizedSimulation"
     },
@@ -214,10 +214,10 @@
         "NoBuildDetailedAsyncExecuted": true,
         "NoProductionTraceGenerated": true
       },
-      "BlockedState": {
+      "BlockedClaims": {
         "SkeletonHardBlocked": true,
-        "NoExecutionAllowed": true,
-        "NoProductionTrace": true
+        "NoExecutionAllowedBlocked": true,
+        "NoProductionTraceBlocked": true
       },
       "HighestReadinessLevel": "ExecutionSkeleton_HardBlocked"
     }
