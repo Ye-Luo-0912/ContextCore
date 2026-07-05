@@ -1,0 +1,94 @@
+{
+  "GeneratedAt": "2026-07-05T07:35:00.0000000+00:00",
+  "ContractVersion": "V16.11",
+  "ContractPurpose": "LiveCapture execution endpoint skeleton. The skeleton accepts all authorization parameters but is hard-blocked by default. Even with all factors satisfied, no production trace is captured. This is a structural safety gate: the endpoint exists to prove parameter plumbing, but execution is explicitly disabled.",
+  "ExecutionSkeleton": {
+    "Endpoint": "eval v16_11-live-capture-execution-skeleton",
+    "Status": "Skeleton exists, hard-blocked by default",
+    "Implemented": false,
+    "HardBlocked": true,
+    "HardBlockedReason": "ExecutionSkeletonHardBlocked — the skeleton is designed to validate parameter plumbing without executing capture. Real execution requires explicit implementation that goes beyond this skeleton.",
+    "AcceptedParameters": [
+      "--mode LiveCapture",
+      "--confirm-live-capture",
+      "--capture-token <token>",
+      "--workspaceId <real>",
+      "--collectionId <real>",
+      "--runId <unique>"
+    ],
+    "BehaviorWhenAllParametersPresent": {
+      "AllAuthorizationFactorsSatisfied": true,
+      "LiveCaptureExecutionEndpointSkeletonExists": true,
+      "LiveCaptureExecutionImplemented": false,
+      "LiveCaptureExecuted": false,
+      "LiveCaptureBlocked": true,
+      "BlockedReason": "ExecutionSkeletonHardBlocked",
+      "NoProductionTraceGenerated": true,
+      "NoFileRuntimeCandidateTraceSinkWired": true,
+      "NoBuildDetailedAsyncExecutedInLiveCapturePath": true,
+      "RuntimeCandidateTraceSinkAccessorNotChangedToFileSink": true
+    },
+    "BehaviorWhenIncompleteParameters": {
+      "AllAuthorizationFactorsSatisfied": false,
+      "LiveCaptureBlocked": true,
+      "BlockedReason": "MissingAuthorizationFactors — same as V16.9 behavior"
+    }
+  },
+  "GateSemantics": {
+    "LiveCaptureExecutionSkeletonExists": true,
+    "LiveCaptureExecutionSkeletonHardBlocked": true,
+    "LiveCaptureExecutionImplemented": false,
+    "LiveCaptureAuthorizationContractReady": true,
+    "LiveCaptureAuthorizationFactorsSatisfied": true,
+    "LiveCaptureAuthorized": false,
+    "LiveCaptureBlocked": true,
+    "LiveCaptureBlockedReason": "ExecutionSkeletonHardBlocked",
+    "NativeProductionTraceReady": false,
+    "NativeProductionTraceReadyNote": "Requires LiveCaptureExecutionImplemented=true AND successful execution. Not achieved.",
+    "ProductionGeneralizationReady": false,
+    "ProductionGeneralizationReadyNote": "Requires production-native trace collection + metric quality pass. Neither fulfilled.",
+    "RuntimeInfluenceAllowed": false,
+    "RuntimeInfluenceAllowedPermanent": true,
+    "PackageOutputChanged": false,
+    "RuntimePromotionApplied": false,
+    "VectorBindingChanged": false,
+    "NeuralBiasActive": false
+  },
+  "NoTraceOutputAudit": {
+    "AuditedAt": "2026-07-05T07:35:00.0000000+00:00",
+    "DirectoryAudited": "learning/v16_11/",
+    "JsonlTraceFilesFound": 0,
+    "JsonlTraceFilesNotFoundMessage": "No .jsonl production trace files exist in learning/v16_11/.",
+    "FileRuntimeCandidateTraceSinkWired": false,
+    "FileRuntimeCandidateTraceSinkWiredAuditNote": "FileRuntimeCandidateTraceSink is never instantiated or wired in the V16.11 skeleton path.",
+    "BuildDetailedAsyncExecutedInLiveCapturePath": false,
+    "BuildDetailedAsyncExecutedAuditNote": "BuildDetailedAsync is never called in the V16.11 skeleton path.",
+    "RuntimeCandidateTraceSinkAccessorCurrentPreserved": true,
+    "RuntimeCandidateTraceSinkAccessorAuditNote": "RuntimeCandidateTraceSinkAccessor.Current is never set to a FileRuntimeCandidateTraceSink. It remains whatever it was before the skeleton execution (typically NullSink).",
+    "AuditResult": "PASS — no production trace output detected. Skeleton is clean."
+  },
+  "PreviousGatesPreserved": {
+    "V16_9": {
+      "AllUnauthorizedFailureCasesStillBlocked": true,
+      "AF001ThroughAF007Blocked": true,
+      "LiveCaptureCandidateGateReadyPreserved": true
+    },
+    "V16_10": {
+      "AS001FullyAuthorizedStillBlocked": true,
+      "AuthorizationContractReadyPreserved": true
+    },
+    "ControlledReplay": {
+      "ControlledReplayMetricQualityReady": true,
+      "ControlledReplayMetricQualityReadyProof": "V16.7 rich-001: WeightedPairwiseAcc=0.6504 >= 0.55.",
+      "RuntimeInfluenceReadinessCandidateLevel": "ControlledReplay",
+      "NotUpgradedToProductionLevel": true
+    }
+  },
+  "V14GatePreserved": true,
+  "V16_5GatePreserved": true,
+  "V16_6GatePreserved": true,
+  "V16_7GatePreserved": true,
+  "V16_8GatePreserved": true,
+  "V16_9GatePreserved": true,
+  "V16_10GatePreserved": true
+}

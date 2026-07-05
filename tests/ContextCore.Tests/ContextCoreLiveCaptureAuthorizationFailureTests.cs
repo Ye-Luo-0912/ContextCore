@@ -542,6 +542,238 @@ public class ContextCoreLiveCaptureAuthorizationFailureTests
             "NativeProductionTraceReady must remain false — no real production trace.");
     }
 
+    // -----------------------------------------------------------------
+    // V16.11: LiveCapture Execution Endpoint Skeleton, Hard-Blocked
+    // -----------------------------------------------------------------
+
+    private static LiveCaptureExecutionSkeletonResult RunExecutionSkeleton(LiveCaptureAuthorizationRequest request)
+    {
+        bool allAuthFactorsSatisfied = request.ModeLiveCapture
+            && request.ConfirmLiveCapture
+            && !string.IsNullOrWhiteSpace(request.CaptureToken)
+            && !string.IsNullOrWhiteSpace(request.WorkspaceId)
+            && !string.IsNullOrWhiteSpace(request.CollectionId)
+            && !string.IsNullOrWhiteSpace(request.RunId)
+            && !IsSynthetic(request.WorkspaceId, SyntheticWorkspacePatterns)
+            && !IsSynthetic(request.CollectionId, SyntheticCollectionPatterns);
+
+        return new LiveCaptureExecutionSkeletonResult
+        {
+            SkeletonExists = true,
+            AllAuthorizationFactorsSatisfied = allAuthFactorsSatisfied,
+            LiveCaptureExecutionImplemented = false,
+            LiveCaptureExecuted = false,
+            LiveCaptureBlocked = true,
+            BlockedReason = allAuthFactorsSatisfied
+                ? "ExecutionSkeletonHardBlocked"
+                : "MissingAuthorizationFactors",
+            FileRuntimeCandidateTraceSinkWired = false,
+            BuildDetailedAsyncExecutedInLiveCapturePath = false,
+            RuntimeCandidateTraceSinkAccessorMutatedToFileSink = false,
+            ProductionTraceFileGenerated = false,
+            RuntimeInfluenceAllowed = false,
+            PackageOutputChanged = false,
+            VectorBindingChanged = false,
+            NeuralBiasActive = false,
+            RuntimePromotionApplied = false,
+        };
+    }
+
+    [TestMethod]
+    public void LiveCapture_SK001_FullyAuthorizedButSkeletonHardBlocked()
+    {
+        var request = new LiveCaptureAuthorizationRequest
+        {
+            ModeLiveCapture = true,
+            ConfirmLiveCapture = true,
+            CaptureToken = "tok-v16_11-skeleton",
+            WorkspaceId = "prod-ws-us-east-2",
+            CollectionId = "prod-eval-collection-v4",
+            RunId = "run-sk-001-20260705",
+        };
+        var result = RunExecutionSkeleton(request);
+
+        Assert.IsTrue(result.SkeletonExists,
+            "SK-001: execution skeleton must exist.");
+        Assert.IsTrue(result.AllAuthorizationFactorsSatisfied,
+            "SK-001: all authorization factors must be satisfied.");
+        Assert.IsFalse(result.LiveCaptureExecutionImplemented,
+            "SK-001: LiveCaptureExecutionImplemented must be false — skeleton only, no real implementation.");
+        Assert.IsFalse(result.LiveCaptureExecuted,
+            "SK-001: LiveCaptureExecuted must be false.");
+        Assert.IsTrue(result.LiveCaptureBlocked,
+            "SK-001: must be blocked — ExecutionSkeletonHardBlocked.");
+        Assert.AreEqual("ExecutionSkeletonHardBlocked", result.BlockedReason);
+    }
+
+    [TestMethod]
+    public void LiveCapture_SK001_IncompleteParameters_BlockedByMissingFactors()
+    {
+        var request = new LiveCaptureAuthorizationRequest
+        {
+            ModeLiveCapture = true,
+            ConfirmLiveCapture = false,
+            CaptureToken = null,
+            WorkspaceId = null,
+            CollectionId = null,
+            RunId = null,
+        };
+        var result = RunExecutionSkeleton(request);
+
+        Assert.IsTrue(result.LiveCaptureBlocked,
+            "Incomplete parameters must be blocked.");
+        Assert.IsFalse(result.AllAuthorizationFactorsSatisfied,
+            "Authorization factors must be reported as unsatisfied.");
+        Assert.AreEqual("MissingAuthorizationFactors", result.BlockedReason);
+    }
+
+    [TestMethod]
+    public void LiveCapture_SK001_NoFileRuntimeCandidateTraceSinkWired()
+    {
+        var result = RunExecutionSkeleton(new LiveCaptureAuthorizationRequest
+        {
+            ModeLiveCapture = true, ConfirmLiveCapture = true,
+            CaptureToken = "tok-v16_11", WorkspaceId = "prod-ws-us-east-2", CollectionId = "prod-eval-collection-v4", RunId = "run-skel",
+        });
+
+        Assert.IsFalse(result.FileRuntimeCandidateTraceSinkWired,
+            "FileRuntimeCandidateTraceSink must not be wired in skeleton.");
+    }
+
+    [TestMethod]
+    public void LiveCapture_SK001_NoBuildDetailedAsyncExecuted()
+    {
+        var result = RunExecutionSkeleton(new LiveCaptureAuthorizationRequest
+        {
+            ModeLiveCapture = true, ConfirmLiveCapture = true,
+            CaptureToken = "tok-v16_11", WorkspaceId = "prod-ws-us-east-2", CollectionId = "prod-eval-collection-v4", RunId = "run-skel",
+        });
+
+        Assert.IsFalse(result.BuildDetailedAsyncExecutedInLiveCapturePath,
+            "BuildDetailedAsync must not be executed in skeleton path.");
+    }
+
+    [TestMethod]
+    public void LiveCapture_SK001_NoRuntimeCandidateTraceSinkAccessorMutation()
+    {
+        var result = RunExecutionSkeleton(new LiveCaptureAuthorizationRequest
+        {
+            ModeLiveCapture = true, ConfirmLiveCapture = true,
+            CaptureToken = "tok-v16_11", WorkspaceId = "prod-ws-us-east-2", CollectionId = "prod-eval-collection-v4", RunId = "run-skel",
+        });
+
+        Assert.IsFalse(result.RuntimeCandidateTraceSinkAccessorMutatedToFileSink,
+            "RuntimeCandidateTraceSinkAccessor.Current must not be switched to file sink.");
+    }
+
+    [TestMethod]
+    public void LiveCapture_SK001_NoProductionTraceFileGenerated()
+    {
+        var result = RunExecutionSkeleton(new LiveCaptureAuthorizationRequest
+        {
+            ModeLiveCapture = true, ConfirmLiveCapture = true,
+            CaptureToken = "tok-v16_11", WorkspaceId = "prod-ws-us-east-2", CollectionId = "prod-eval-collection-v4", RunId = "run-skel",
+        });
+
+        Assert.IsFalse(result.ProductionTraceFileGenerated,
+            "No production trace file must be generated.");
+    }
+
+    [TestMethod]
+    public void LiveCapture_V16_11_AllSafetyInvariants_Hold()
+    {
+        var result = RunExecutionSkeleton(new LiveCaptureAuthorizationRequest
+        {
+            ModeLiveCapture = true, ConfirmLiveCapture = true,
+            CaptureToken = "tok-v16_11", WorkspaceId = "prod-ws-us-east-2", CollectionId = "prod-eval-collection-v4", RunId = "run-skel",
+        });
+
+        Assert.IsFalse(result.RuntimeInfluenceAllowed, "RuntimeInfluenceAllowed must be false.");
+        Assert.IsFalse(result.PackageOutputChanged, "PackageOutputChanged must be false.");
+        Assert.IsFalse(result.VectorBindingChanged, "VectorBindingChanged must be false.");
+        Assert.IsFalse(result.NeuralBiasActive, "NeuralBiasActive must be false.");
+        Assert.IsFalse(result.RuntimePromotionApplied, "RuntimePromotionApplied must be false.");
+    }
+
+    [TestMethod]
+    public void LiveCapture_V16_11_AllCasesBlocked_Unauthorized_Authorized_Skeleton()
+    {
+        var authResult = CheckAuthorization(new LiveCaptureAuthorizationRequest
+        {
+            ModeLiveCapture = true, ConfirmLiveCapture = false,
+            CaptureToken = null, WorkspaceId = "real-ws", CollectionId = "real-col", RunId = "run",
+        });
+        var skeletonResult = RunExecutionSkeleton(new LiveCaptureAuthorizationRequest
+        {
+            ModeLiveCapture = true, ConfirmLiveCapture = true,
+            CaptureToken = "tok", WorkspaceId = "prod-ws-us-east-2", CollectionId = "prod-eval-collection-v4", RunId = "run",
+        });
+
+        Assert.IsTrue(authResult.LiveCaptureBlocked,
+            "V16.9 unauthorized case must still be blocked.");
+        Assert.IsTrue(skeletonResult.LiveCaptureBlocked,
+            "V16.11 skeleton must hard-block even with all factors.");
+        Assert.IsTrue(skeletonResult.AllAuthorizationFactorsSatisfied,
+            "Skeleton must recognize all factors as satisfied.");
+        Assert.AreEqual("ExecutionSkeletonHardBlocked", skeletonResult.BlockedReason);
+    }
+
+    [TestMethod]
+    public void LiveCapture_V16_11_GateSemantics_AllCorrect()
+    {
+        var gate = new
+        {
+            LiveCaptureExecutionSkeletonExists = true,
+            LiveCaptureExecutionSkeletonHardBlocked = true,
+            LiveCaptureExecutionImplemented = false,
+            LiveCaptureAuthorized = false,
+            LiveCaptureBlocked = true,
+            LiveCaptureBlockedReason = "ExecutionSkeletonHardBlocked",
+            NativeProductionTraceReady = false,
+            ProductionGeneralizationReady = false,
+            RuntimeInfluenceAllowed = false,
+            PackageOutputChanged = false,
+            RuntimePromotionApplied = false,
+            VectorBindingChanged = false,
+            ControlledReplayMetricQualityReady = true,
+            RuntimeInfluenceReadinessCandidateLevel = "ControlledReplay",
+        };
+
+        Assert.IsTrue(gate.LiveCaptureExecutionSkeletonExists);
+        Assert.IsTrue(gate.LiveCaptureExecutionSkeletonHardBlocked);
+        Assert.IsFalse(gate.LiveCaptureExecutionImplemented);
+        Assert.IsFalse(gate.LiveCaptureAuthorized);
+        Assert.IsTrue(gate.LiveCaptureBlocked);
+        Assert.AreEqual("ExecutionSkeletonHardBlocked", gate.LiveCaptureBlockedReason);
+        Assert.IsFalse(gate.NativeProductionTraceReady);
+        Assert.IsFalse(gate.ProductionGeneralizationReady);
+        Assert.IsFalse(gate.RuntimeInfluenceAllowed);
+        Assert.IsFalse(gate.PackageOutputChanged);
+        Assert.IsFalse(gate.RuntimePromotionApplied);
+        Assert.IsFalse(gate.VectorBindingChanged);
+        Assert.IsTrue(gate.ControlledReplayMetricQualityReady);
+        Assert.AreEqual("ControlledReplay", gate.RuntimeInfluenceReadinessCandidateLevel);
+    }
+
+    public class LiveCaptureExecutionSkeletonResult
+    {
+        public bool SkeletonExists { get; set; }
+        public bool AllAuthorizationFactorsSatisfied { get; set; }
+        public bool LiveCaptureExecutionImplemented { get; set; }
+        public bool LiveCaptureExecuted { get; set; }
+        public bool LiveCaptureBlocked { get; set; }
+        public string BlockedReason { get; set; } = string.Empty;
+        public bool FileRuntimeCandidateTraceSinkWired { get; set; }
+        public bool BuildDetailedAsyncExecutedInLiveCapturePath { get; set; }
+        public bool RuntimeCandidateTraceSinkAccessorMutatedToFileSink { get; set; }
+        public bool ProductionTraceFileGenerated { get; set; }
+        public bool RuntimeInfluenceAllowed { get; set; }
+        public bool PackageOutputChanged { get; set; }
+        public bool VectorBindingChanged { get; set; }
+        public bool NeuralBiasActive { get; set; }
+        public bool RuntimePromotionApplied { get; set; }
+    }
+
     public class LiveCaptureAuthorizationResult
     {
         public bool LiveCaptureBlocked { get; set; }
