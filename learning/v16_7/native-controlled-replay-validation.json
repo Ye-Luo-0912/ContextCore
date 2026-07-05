@@ -1,39 +1,80 @@
 ﻿{
-  "GeneratedAt": "2026-07-05T02:52:13.5187330\u002B00:00",
-  "RunId": "graph-001",
+  "GeneratedAt": "2026-07-05T04:59:56.0647949\u002B00:00",
+  "RunId": "rich-001",
   "GeneratedRunId": false,
   "AcquisitionMode": "ControlledReplay",
-  "WorkspaceId": "graph-shadow-samples",
-  "CollectionId": "test",
+  "WorkspaceId": "v16_7-rich-replay",
+  "CollectionId": "rich-corpus",
   "StoreBackend": "FileSystem",
+  "SeededCorpus": true,
   "StoreRoot": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\context-core-data",
-  "TracePath": "learning\\v16_7\\native-controlled-replay-trace-graph-001.jsonl",
+  "TracePath": "learning\\v16_7\\native-controlled-replay-trace-rich-001.jsonl",
   "TraceCaptureOnly": true,
-  "TotalRows": 1,
+  "TotalRows": 33,
   "ParseErrorCount": 0,
   "MissingCriticalFieldCount": 0,
-  "ScoringSelectedCount": 1,
-  "ScoringRejectedCount": 0,
+  "ScoringSelectedCount": 30,
+  "ScoringRejectedCount": 3,
   "ScoringConsistent": true,
-  "PackageIncludedCount": 1,
-  "PackageDroppedCount": 0,
+  "PackageIncludedCount": 30,
+  "PackageDroppedCount": 3,
   "PackageConsistent": true,
   "SectionCoverage": [
     {
+      "Section": "working_memory",
+      "Count": 8
+    },
+    {
+      "Section": "hard_constraints",
+      "Count": 7
+    },
+    {
+      "Section": "soft_constraints",
+      "Count": 6
+    },
+    {
+      "Section": "global_context",
+      "Count": 4
+    },
+    {
+      "Section": "stable_memory",
+      "Count": 3
+    },
+    {
+      "Section": "related_context",
+      "Count": 3
+    },
+    {
       "Section": "current_task",
+      "Count": 1
+    },
+    {
+      "Section": "historical_context",
       "Count": 1
     }
   ],
   "RetrievalChannelCoverage": [
     {
+      "Channel": 2,
+      "Count": 16
+    },
+    {
+      "Channel": 3,
+      "Count": 3
+    },
+    {
       "Channel": 5,
       "Count": 1
+    },
+    {
+      "Channel": 6,
+      "Count": 13
     }
   ],
   "AllRowsTraceSource3": true,
   "BuildError": null,
-  "PolicySelected": 1,
-  "PolicyDropped": 0,
+  "PolicySelected": 30,
+  "PolicyDropped": 3,
   "LegacySelected": 0,
   "LegacyDropped": 0
 }

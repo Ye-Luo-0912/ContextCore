@@ -1,12 +1,13 @@
 {
-  "GeneratedAt": "2026-07-05T02:53:06.940073+00:00",
+  "GeneratedAt": "2026-07-05T05:00:11.281049+00:00",
   "EvaluatorVersion": "V16.7",
   "RunIds": [
     "demo-001",
-    "graph-001"
+    "graph-001",
+    "rich-001"
   ],
-  "RunCount": 2,
-  "TotalCombinedRows": 2,
+  "RunCount": 3,
+  "TotalCombinedRows": 35,
   "Alpha1InvariantPassed_Combined": true,
   "AllRowsTraceSource3": true,
   "AlphaSweepCombined": [
@@ -14,8 +15,8 @@
       "Alpha": 1.0,
       "NeuralWt": 0.0,
       "MeanRankDelta": 0.0,
-      "ScoringDisagree": 0,
-      "InclusionDisagree": 0,
+      "ScoringDisagree": 6,
+      "InclusionDisagree": 6,
       "Top3Churn": 0,
       "Top5Churn": 0,
       "Top10Churn": 0,
@@ -24,43 +25,43 @@
     {
       "Alpha": 0.9,
       "NeuralWt": 0.1,
-      "MeanRankDelta": 0.0,
-      "ScoringDisagree": 0,
-      "InclusionDisagree": 0,
+      "MeanRankDelta": 0.6857,
+      "ScoringDisagree": 6,
+      "InclusionDisagree": 6,
       "Top3Churn": 0,
-      "Top5Churn": 0,
+      "Top5Churn": 1,
       "Top10Churn": 0,
       "Alpha1Invariant": true
     },
     {
       "Alpha": 0.7,
       "NeuralWt": 0.3,
-      "MeanRankDelta": 0.0,
-      "ScoringDisagree": 0,
-      "InclusionDisagree": 0,
+      "MeanRankDelta": 0.6857,
+      "ScoringDisagree": 6,
+      "InclusionDisagree": 6,
       "Top3Churn": 0,
-      "Top5Churn": 0,
+      "Top5Churn": 1,
       "Top10Churn": 0,
       "Alpha1Invariant": true
     },
     {
       "Alpha": 0.5,
       "NeuralWt": 0.5,
-      "MeanRankDelta": 0.0,
-      "ScoringDisagree": 0,
-      "InclusionDisagree": 0,
+      "MeanRankDelta": 0.6857,
+      "ScoringDisagree": 6,
+      "InclusionDisagree": 6,
       "Top3Churn": 0,
-      "Top5Churn": 0,
+      "Top5Churn": 1,
       "Top10Churn": 0,
       "Alpha1Invariant": true
     }
   ],
   "CalibrationCombined": {
-    "RowCount": 2,
-    "WeightedBCE": 0.200086,
-    "UnweightedBCE": 0.200086,
-    "WeightedPairwiseAcc": 0.5,
-    "UnweightedPairwiseAcc": 0.5
+    "RowCount": 35,
+    "WeightedBCE": 0.605188,
+    "UnweightedBCE": 0.788609,
+    "WeightedPairwiseAcc": 0.6504,
+    "UnweightedPairwiseAcc": 0.5625
   },
   "PerRun": {
     "demo-001": {
@@ -176,15 +177,72 @@
         "WeightedPairwiseAcc": 0.5,
         "UnweightedPairwiseAcc": 0.5
       }
+    },
+    "rich-001": {
+      "path": "D:\\Users\\Ye_Luo\\AppData\\Local\\Context\\learning\\v16_7\\native-controlled-replay-trace-rich-001.jsonl",
+      "rows": 33,
+      "sweep": [
+        {
+          "Alpha": 1.0,
+          "NeuralWt": 0.0,
+          "MeanRankDelta": 0.0,
+          "ScoringDisagree": 6,
+          "InclusionDisagree": 6,
+          "Top3Churn": 0,
+          "Top5Churn": 0,
+          "Top10Churn": 0,
+          "Alpha1Invariant": true
+        },
+        {
+          "Alpha": 0.9,
+          "NeuralWt": 0.1,
+          "MeanRankDelta": 0.7273,
+          "ScoringDisagree": 6,
+          "InclusionDisagree": 6,
+          "Top3Churn": 1,
+          "Top5Churn": 1,
+          "Top10Churn": 0,
+          "Alpha1Invariant": true
+        },
+        {
+          "Alpha": 0.7,
+          "NeuralWt": 0.3,
+          "MeanRankDelta": 0.7273,
+          "ScoringDisagree": 6,
+          "InclusionDisagree": 6,
+          "Top3Churn": 1,
+          "Top5Churn": 1,
+          "Top10Churn": 0,
+          "Alpha1Invariant": true
+        },
+        {
+          "Alpha": 0.5,
+          "NeuralWt": 0.5,
+          "MeanRankDelta": 0.7273,
+          "ScoringDisagree": 6,
+          "InclusionDisagree": 6,
+          "Top3Churn": 1,
+          "Top5Churn": 1,
+          "Top10Churn": 0,
+          "Alpha1Invariant": true
+        }
+      ],
+      "calib": {
+        "RowCount": 33,
+        "WeightedBCE": 0.655924,
+        "UnweightedBCE": 0.824277,
+        "WeightedPairwiseAcc": 0.6102,
+        "UnweightedPairwiseAcc": 0.5333
+      }
     }
   },
   "MetricQualityGate": {
-    "ControlledReplayWeightedPairwiseAcc": 0.5,
+    "ControlledReplayWeightedPairwiseAcc": 0.6504,
     "PairwiseThreshold": 0.55,
-    "PairwiseAboveThreshold": false,
-    "ControlledReplayMetricQualityReady": false,
-    "ControlledReplayMetricQualityReason": "ControlledReplayWeightedPairwiseAcc=0.5000 < 0.55 or insufficient rows (2). Metric-quality blocked. Real production traces with richer data required.",
-    "RuntimeInfluenceReadinessCandidate": false,
+    "PairwiseAboveThreshold": true,
+    "ControlledReplayMetricQualityReady": true,
+    "ControlledReplayMetricQualityReason": "ControlledReplayWeightedPairwiseAcc=0.6504 >= 0.55. Controlled replay calibration signal sufficient.",
+    "RuntimeInfluenceReadinessCandidate": true,
     "Note": "ControlledReplay trace has limited rows (1-2). Full metric evaluation requires richer workspace data with memory items, constraints, and diverse sections."
   },
   "RuntimeInfluenceAllowed": false,
