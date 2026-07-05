@@ -42,13 +42,23 @@
     "operationId_UniquePerRun": "Each collection run produces rows with a unique operationId prefix",
     "RowCount": "Varies by workspace/collection complexity; typically 30-200 rows per operation"
   },
-  "GateSemantics": {
-    "RuntimeInfluenceAllowed": false,
-    "PackageOutputChanged": false,
-    "VectorBindingChanged": false,
-    "RuntimePromotionApplied": false,
-    "ProductionGeneralizationReady": false,
-    "ProductionGeneralizationNote": "Native collection must complete and pass metric-quality gate before ProductionGeneralizationReady can be true. Shadow-adapter mapped traces do not qualify.",
-    "NextStep": "Activate collector against actual workspaces/collections to produce native runtime candidate scoring traces. Then run V16.2 evaluation pipeline on native traces."
+    "GateSemantics": {
+      "RuntimeInfluenceAllowed": false,
+      "PackageOutputChanged": false,
+      "VectorBindingChanged": false,
+      "RuntimePromotionApplied": false,
+      "NativeProductionTraceReady": false,
+      "NativeTraceCollectionEnabled": false,
+      "ProductionGeneralizationReady": false,
+      "ProductionGeneralizationNote": "Native collection must complete and pass metric-quality gate before ProductionGeneralizationReady can be true. Shadow-adapter mapped traces do not qualify.",
+      "NextStep": "Activate collector against actual workspaces/collections to produce native runtime candidate scoring traces. Then run V16.2 evaluation pipeline on native traces."
+    },
+    "ProvenanceBoundary": {
+      "NativeTraceSourceOnly": true,
+      "NativeTraceSourceOnlyNote": "Only native traceSource=3 (PackageTrace) traces qualify for NativeProductionTraceReady. Shadow-adapter mapped traces (traceSource=1) do NOT qualify and cannot be used to inflate readiness metrics.",
+      "ShadowAdapterCannotImpersonate": true,
+      "ShadowAdapterCannotImpersonateReason": "traceSource field is hardcoded to 3 in native traces and 1 in mapped traces. Different schema mappings produce different score distributions. Cross-system mapping is detectable and disqualified."
+    },
+    "V16_2RepairBGatePreserved": true,
+    "V16_2RepairBGatePreservedNote": "V16.2 Repair B (guarded_candidate_below_threshold, ProductionLikeWeightedPairwiseAcc=0.5451 < 0.55) remains the authoritative readiness gate for runtime influence. V16.3 does not override or weaken this gate."
   }
-}

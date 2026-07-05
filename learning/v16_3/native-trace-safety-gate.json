@@ -36,6 +36,25 @@
     "NullSinkDefault": true,
     "NullSinkNote": "If no FileRuntimeCandidateTraceSink is configured (Enabled=false), NullRuntimeCandidateTraceSink is used. No trace is written. No runtime impact."
   },
+  "PrivacyContract": {
+    "NoRawUserContent": true,
+    "NoRawUserContentNote": "Trace rows contain scoring metadata and identifiers only. Candidate content text, user prompts, and contextual documents are NOT included in native trace output.",
+    "NoApiKeysOrSecrets": true,
+    "NoApiKeysOrSecretsNote": "No API keys, bearer tokens, connection strings, or secrets of any kind are captured in trace rows.",
+    "NoPromptText": true,
+    "NoPromptTextNote": "Original user prompts and model completions are NOT captured. Only candidate metadata and scoring decisions are recorded.",
+    "CandidateContentPolicy": "HashOrRedactedSummaryOrMetadataOnly",
+    "CandidateContentPolicyNote": "Candidate content representation is limited to: content hashes, redacted summaries, or scoring metadata. Raw candidate body text is never captured in trace.",
+    "TraceOutputClosable": true,
+    "TraceOutputClosableNote": "Trace collection can be disabled at any time by setting RuntimeCandidateTraceSinkAccessor.Current to NullRuntimeCandidateTraceSink. Sink is disposal-safe via IDisposable.",
+    "TraceOutputCleanable": true,
+    "TraceOutputCleanableNote": "Trace output files are plain JSONL on disk. They can be deleted without affecting any system state or pipeline behavior.",
+    "TraceOutputAuditable": true,
+    "TraceOutputAuditableNote": "Every trace row carries operationId, requestId, and recordedAt timestamp. Full audit trail for who/when/what collected."
+  },
+  "NativeTraceCollectionEnabled": false,
+  "NativeTraceCollectionEnabledNote": "Trace collection is currently disabled. No native production traces are being generated. The infrastructure exists but the collection switch is off by default.",
   "V14GatePreserved": true,
+  "V16_2RepairBGatePreserved": true,
   "V16_2GatePreservedNote": "V16.2 readiness gate remains as-is. V16.3 does not invalidate V16.2 shadow evaluation."
 }

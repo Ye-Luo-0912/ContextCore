@@ -413,6 +413,7 @@ public static partial class EvalCommand
             !string.Equals(subcommand, "v16_2-collect-production-trace", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "v16_2-evaluate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "v16_4-native-trace-collect", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "v16_3-native-trace-readiness-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "v16_6-native-production-trace-plan", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "v16_7-controlled-replay-native-trace", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "v16_9-live-capture-candidate-gate", StringComparison.OrdinalIgnoreCase) &&
@@ -764,6 +765,7 @@ public static partial class EvalCommand
         Console.WriteLine("  eval neural-selection (feature schema + model spec + hybrid scoring)");
         Console.WriteLine("  eval v14-foundation (feature store + feedback + evaluation)");
         Console.WriteLine("  eval v14-runtime-trace-smoke (real package build trace)");
+        Console.WriteLine("  eval v16_3-native-trace-readiness-gate (native trace schema contract, privacy boundary, safety gate)");
         Console.WriteLine("  eval v16_4-native-trace-collect [--runId <runId>] (native runtime candidate-scoring trace dry run)");
         Console.WriteLine("  eval v16_6-native-production-trace-plan [--mode <PreviewOnly|ControlledReplay>] (production trace acquisition plan)");
         Console.WriteLine("  eval v16_7-controlled-replay-native-trace --workspaceId <id> --collectionId <id> [--runId <id>] (controlled replay trace from real stores)");
@@ -2434,6 +2436,12 @@ public static partial class EvalCommand
         if (string.Equals(subcommand, "v16_2-evaluate", StringComparison.OrdinalIgnoreCase))
         {
             await ExecuteV16_2EvaluateAsync(cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        if (string.Equals(subcommand, "v16_3-native-trace-readiness-gate", StringComparison.OrdinalIgnoreCase))
+        {
+            await ExecuteV16_3NativeTraceReadinessGateAsync(args, cancellationToken).ConfigureAwait(false);
             return;
         }
 

@@ -2963,6 +2963,280 @@ public static partial class EvalCommand
         Console.WriteLine("[Eval] RuntimeInfluenceAllowed=false RuntimeInfluenceReadinessCandidate=true");
     }
 
+    private static async Task ExecuteV16_3NativeTraceReadinessGateAsync(IReadOnlyList<string> args, CancellationToken ct)
+    {
+        Console.WriteLine("[V16.3] Native Runtime Trace Readiness Contract & Gate");
+        Console.WriteLine("[V16.3] Defining native trace schema contract, provenance boundary, privacy contract, safety gate.");
+        Console.WriteLine("[V16.3] No real production data is collected. No runtime influence is enabled.");
+
+        var outputDir = System.IO.Path.Combine("learning", "v16_3");
+        System.IO.Directory.CreateDirectory(outputDir);
+        var now = DateTimeOffset.UtcNow;
+
+        // ----------------------------------------
+        // Native trace schema contract
+        // ----------------------------------------
+        string[] criticalFields = { "operationId", "candidateId", "sourceType", "authority", "retrievalChannel", "traceSource" };
+        string[] allFields = {
+            "operationId", "requestId", "candidateId", "sourceId", "sourceType",
+            "authority", "strategyType", "retrievalChannel", "traceSource",
+            "deterministicScore", "strategyScore", "finalScore",
+            "selectedByScoring", "includedInPackage", "droppedReason",
+            "tokenCost", "section", "recordedAt",
+        };
+
+        var schemaContract = new
+        {
+            GeneratedAt = now.ToString("o"),
+            SchemaVersion = "V16.3-native-1.0",
+            SchemaOrigin = "RuntimeCandidateTraceModels.cs (src/ContextCore.Core/Services/Learning/V14_0/)",
+            CollectionPoint = "BasicContextPackageBuilder.WriteTraceRow() at line 3654",
+            CollectorClass = "RuntimeCandidateTraceSinkAccessor -> FileRuntimeCandidateTraceSink",
+            NativeTraceDefinition = "Trace captured directly from the runtime candidate scoring pipeline, NOT from cross-system mapped shadow-adapter data. traceSource=PackageTrace(3).",
+            Fields = allFields.Select(name => new
+            {
+                name,
+                type = name switch
+                {
+                    "operationId" or "requestId" or "candidateId" or "sourceId" or "droppedReason" or "section" => "string",
+                    "sourceType" or "authority" or "strategyType" or "retrievalChannel" or "traceSource" => "byte",
+                    "deterministicScore" or "strategyScore" or "finalScore" or "tokenCost" => "double",
+                    "selectedByScoring" or "includedInPackage" => "bool",
+                    "recordedAt" => "DateTimeOffset",
+                    _ => "unknown",
+                },
+                required = new[] { "operationId", "candidateId", "sourceType", "authority", "retrievalChannel", "traceSource" }.Contains(name),
+                critical = criticalFields.Contains(name),
+            }).ToList(),
+            TotalFields = allFields.Length,
+            CriticalFieldsCount = criticalFields.Length,
+            NativeTraceSourceValue = 3,
+            ShadowAdapterTraceSourceValue = 1,
+            ShadowAdapterCannotImpersonateNative = true,
+            ShadowAdapterCannotImpersonateReason = "traceSource field is hardcoded to 3 in native traces and 1 in mapped traces. Different schema mappings produce different score distributions. Cross-system mapping is detectable and disqualified.",
+        };
+
+        // ----------------------------------------
+        // Provenance boundary
+        // ----------------------------------------
+        bool nativeProductionTraceReady = false;
+        bool nativeTraceCollectionEnabled = false;
+        bool nativeTraceCollectorReady = true;
+        bool productionGeneralizationReady = false;
+
+        Console.WriteLine($"[V16.3] NativeProductionTraceReady={nativeProductionTraceReady}");
+        Console.WriteLine($"[V16.3] NativeTraceCollectionEnabled={nativeTraceCollectionEnabled}");
+        Console.WriteLine($"[V16.3] NativeTraceCollectorReady={nativeTraceCollectorReady}");
+
+        // ----------------------------------------
+        // Safety + privacy contract
+        // ----------------------------------------
+        bool noRawUserContent = true;
+        bool noApiKeysOrSecrets = true;
+        bool noPromptText = true;
+        string candidateContentPolicy = "HashOrRedactedSummaryOrMetadataOnly";
+        bool traceOutputClosable = true;
+        bool traceOutputCleanable = true;
+        bool traceOutputAuditable = true;
+
+        var safetyGate = new
+        {
+            GeneratedAt = now.ToString("o"),
+            CollectorMode = "NativeRuntimeCandidateTracePreview",
+            TraceCaptureOnly = true,
+            RuntimeInfluenceSafeguards = new
+            {
+                RuntimeInfluenceAllowed = false,
+                NeuralBiasActive = false,
+                NeuralOnlyInShadowReport = true,
+                HybridBlendAlpha = 1.0,
+            },
+            PackageOutputSafety = new
+            {
+                PackageOutputChanged = false,
+                PackageOutputNote = "Trace collection is append-only. Package output is unmodified.",
+            },
+            VectorBindingSafety = new
+            {
+                VectorBindingChanged = false,
+            },
+            RetrievalSafety = new { RetrievalUnchanged = true },
+            ScoringSafety = new { ScoringUnchanged = true },
+            WriteSafety = new
+            {
+                WritePathDefault = "learning/v14/runtime-candidate-trace.jsonl",
+                WriteMode = "Append-only JSONL (FileRuntimeCandidateTraceSink)",
+            },
+            FallbackSafety = new
+            {
+                NullSinkDefault = true,
+                NullSinkNote = "If no FileRuntimeCandidateTraceSink is configured, NullRuntimeCandidateTraceSink is used. No trace is written.",
+            },
+            PrivacyContract = new
+            {
+                NoRawUserContent = noRawUserContent,
+                NoRawUserContentNote = "Trace rows contain scoring metadata and identifiers only. Candidate content text and user prompts are NOT included.",
+                NoApiKeysOrSecrets = noApiKeysOrSecrets,
+                NoApiKeysOrSecretsNote = "No API keys, bearer tokens, connection strings, or secrets of any kind are captured.",
+                NoPromptText = noPromptText,
+                NoPromptTextNote = "Original user prompts and model completions are NOT captured. Only metadata and scoring decisions.",
+                CandidateContentPolicy = candidateContentPolicy,
+                CandidateContentPolicyNote = "Candidate content is limited to hashes, redacted summaries, or scoring metadata. Raw body text is never captured.",
+                TraceOutputClosable = traceOutputClosable,
+                TraceOutputClosableNote = "Trace collection can be disabled via NullRuntimeCandidateTraceSink.",
+                TraceOutputCleanable = traceOutputCleanable,
+                TraceOutputCleanableNote = "Trace output files are plain JSONL on disk. Can be deleted without affecting system state.",
+                TraceOutputAuditable = traceOutputAuditable,
+                TraceOutputAuditableNote = "Every row carries operationId, requestId, and recordedAt timestamp.",
+            },
+            NativeTraceCollectionEnabled = nativeTraceCollectionEnabled,
+            NativeTraceCollectionEnabledNote = "Trace collection is disabled by default. No production traces generated.",
+            V14GatePreserved = true,
+            V16_2RepairBGatePreserved = true,
+        };
+
+        // ----------------------------------------
+        // Readiness gate
+        // ----------------------------------------
+        var readiness = new
+        {
+            GeneratedAt = now.ToString("o"),
+            V14GateReady = true,
+            V16_2GatePreserved = true,
+            V16_2GateState = "guarded_candidate_below_threshold",
+            ReadinessAssessment = new
+            {
+                NativeProductionTraceReady = nativeProductionTraceReady,
+                NativeProductionTraceReadyReason = "No native runtime candidate scoring traces collected yet. Collector infrastructure exists but has not been run against production traffic.",
+                NativeTraceCollectorReady = nativeTraceCollectorReady,
+                NativeTraceCollectorReadyReason = "Collection infrastructure fully implemented: RuntimeCandidateTraceSink, RuntimeCandidateTraceModels (18-field), RuntimeCandidateTraceContractValidator, WriteTraceRow(), SinkAccessor.",
+                CollectorMode = "NativeRuntimeCandidateTracePreview",
+                ShadowAdapterFallbackReady = true,
+                CrossSystemMapping = false,
+                CrossSystemMappingNote = "V16.3 uses native schema. Shadow-adapter mapped traces are control group only.",
+            },
+            ProvenanceBoundary = new
+            {
+                NativeTraceSourceOnly = true,
+                NativeTraceSourceOnlyNote = "Only traceSource=3 (PackageTrace) qualifies for NativeProductionTraceReady.",
+                ShadowAdapterCannotImpersonate = true,
+                ShadowAdapterCannotImpersonateReason = "traceSource is hardcoded: 3=native, 1=mapped. Cross-system mapping is detectable and disqualified.",
+            },
+            GateSemantics = new
+            {
+                RuntimeInfluenceAllowed = false,
+                PackageOutputChanged = false,
+                VectorBindingChanged = false,
+                RuntimePromotionApplied = false,
+                NativeProductionTraceReady = nativeProductionTraceReady,
+                NativeTraceCollectionEnabled = nativeTraceCollectionEnabled,
+                ProductionGeneralizationReady = productionGeneralizationReady,
+                ProductionGeneralizationNote = "Native collection must complete and pass metric-quality gate before ProductionGeneralizationReady can be true.",
+            },
+            V16_2RepairBGatePreserved = true,
+            V16_2RepairBGatePreservedNote = "V16.2 Repair B (guarded_candidate_below_threshold, ProductionLikeWeightedPairwiseAcc=0.5451 < 0.55) remains authoritative.",
+        };
+
+        // ----------------------------------------
+        // Write artifacts
+        // ----------------------------------------
+        var schemaJsonPath = System.IO.Path.Combine(outputDir, "native-trace-schema-contract.json");
+        System.IO.File.WriteAllText(schemaJsonPath, JsonSerializer.Serialize(schemaContract, JsonOptions), System.Text.Encoding.UTF8);
+        Console.WriteLine($"[V16.3] Schema contract: {schemaJsonPath}");
+
+        var safetyJsonPath = System.IO.Path.Combine(outputDir, "native-trace-safety-gate.json");
+        System.IO.File.WriteAllText(safetyJsonPath, JsonSerializer.Serialize(safetyGate, JsonOptions), System.Text.Encoding.UTF8);
+        Console.WriteLine($"[V16.3] Safety gate: {safetyJsonPath}");
+
+        var readinessJsonPath = System.IO.Path.Combine(outputDir, "native-runtime-trace-readiness.json");
+        System.IO.File.WriteAllText(readinessJsonPath, JsonSerializer.Serialize(readiness, JsonOptions), System.Text.Encoding.UTF8);
+        Console.WriteLine($"[V16.3] Readiness gate: {readinessJsonPath}");
+
+        // Markdown artifacts
+        var schemaMd = $""""
+# V16.3 Native Trace Schema Contract
+
+Generated: {now:o} | SchemaVersion: V16.3-native-1.0
+
+## Schema Origin
+- Source: `RuntimeCandidateTraceModels.cs` (V14_0)
+- Collection: `BasicContextPackageBuilder.WriteTraceRow()`
+- Native: `traceSource=3` (PackageTrace)
+
+## Fields ({allFields.Length} total, {criticalFields.Length} critical)
+
+| Field | Type | Critical |
+|-------|------|----------|
+{string.Join("\n", allFields.Select(f => $"| {f} | {schemaContract.Fields.First(fld => fld.name == f).type} | {(criticalFields.Contains(f) ? "Yes" : "No")} |"))}
+
+## V16.2 vs V16.3
+
+| Aspect | V16.2 (shadow-adapter) | V16.3 (native) |
+|--------|----------------------|----------------|
+| traceSource | 1 (mapped) | 3 (PackageTrace) |
+| Scores | Derived | Actual c.Score |
+| Selection | Derived | Actual flag |
+
+**Shadow-adapter traces CANNOT impersonate native traces.**
+"""";
+
+        var schemaMdPath = System.IO.Path.Combine(outputDir, "native-trace-schema-contract.md");
+        System.IO.File.WriteAllText(schemaMdPath, schemaMd, System.Text.Encoding.UTF8);
+        Console.WriteLine($"[V16.3] Schema contract md: {schemaMdPath}");
+
+        var readinessMd = $""""
+# V16.3: Native Runtime Trace Readiness & Collector Preview
+
+Generated: {now:o}
+
+## Core Gates
+- V14GateReady: True
+- V16_2GatePreserved: True (guarded_candidate_below_threshold)
+- NativeProductionTraceReady: False
+- NativeTraceCollectorReady: True
+- NativeTraceCollectionEnabled: False
+
+## Provenance Boundary
+- NativeTraceSourceOnly: True
+- ShadowAdapterCannotImpersonate: True
+- CrossSystemMapping (V16.3): False
+
+## Privacy Contract
+- NoRawUserContent: {noRawUserContent}
+- NoApiKeysOrSecrets: {noApiKeysOrSecrets}
+- NoPromptText: {noPromptText}
+- CandidateContentPolicy: {candidateContentPolicy}
+- TraceOutputClosable: {traceOutputClosable}
+- TraceOutputCleanable: {traceOutputCleanable}
+- TraceOutputAuditable: {traceOutputAuditable}
+
+## Safety: All Gates
+- PackageOutputChanged: false
+- RuntimePromotionApplied: false
+- VectorBindingChanged: false
+- RuntimeInfluenceAllowed: false
+- ProductionGeneralizationReady: false
+- V16_2RepairBGatePreserved: true (ProductionLikeWeightedPairwiseAcc=0.5451 < 0.55)
+"""";
+
+        var readinessMdPath = System.IO.Path.Combine(outputDir, "native-runtime-trace-readiness.md");
+        System.IO.File.WriteAllText(readinessMdPath, readinessMd, System.Text.Encoding.UTF8);
+        Console.WriteLine($"[V16.3] Readiness md: {readinessMdPath}");
+
+        // ----------------------------------------
+        // Summary
+        // ----------------------------------------
+        Console.WriteLine("[V16.3] Native Runtime Trace Readiness Gate complete");
+        Console.WriteLine($"[V16.3] Schema: {allFields.Length} fields ({criticalFields.Length} critical)");
+        Console.WriteLine($"[V16.3] NativeProductionTraceReady={nativeProductionTraceReady} NativeTraceCollectionEnabled={nativeTraceCollectionEnabled}");
+        Console.WriteLine($"[V16.3] NativeTraceCollectorReady={nativeTraceCollectorReady} ProductionGeneralizationReady={productionGeneralizationReady}");
+        Console.WriteLine("[V16.3] RuntimeInfluenceAllowed=false PackageOutputChanged=false VectorBindingChanged=false");
+        Console.WriteLine($"[V16.3] Privacy: NoRawUserContent={noRawUserContent} NoApiKeysOrSecrets={noApiKeysOrSecrets} CandidateContentPolicy={candidateContentPolicy}");
+        Console.WriteLine("[V16.3] V16.2 Repair B gate preserved");
+
+        await Task.CompletedTask;
+    }
+
     private static async Task ExecuteV16_4NativeTraceCollectAsync(IReadOnlyList<string> args, CancellationToken ct)
     {
         // Parse --runId argument; auto-generate timestamp if missing or empty

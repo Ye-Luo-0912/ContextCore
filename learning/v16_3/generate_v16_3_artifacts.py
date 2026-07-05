@@ -21,6 +21,7 @@ BASE = os.path.dirname(os.path.abspath(__file__))
 OUT_READINESS_JSON = os.path.join(BASE, "native-runtime-trace-readiness.json")
 OUT_READINESS_MD = os.path.join(BASE, "native-runtime-trace-readiness.md")
 OUT_SCHEMA_JSON = os.path.join(BASE, "native-trace-schema-contract.json")
+OUT_SCHEMA_MD = os.path.join(BASE, "native-trace-schema-contract.md")
 OUT_SAFETY_JSON = os.path.join(BASE, "native-trace-safety-gate.json")
 
 
@@ -244,7 +245,26 @@ def generate():
             "NullSinkDefault": True,
             "NullSinkNote": "If no FileRuntimeCandidateTraceSink is configured (Enabled=false), NullRuntimeCandidateTraceSink is used. No trace is written. No runtime impact.",
         },
+        "PrivacyContract": {
+            "NoRawUserContent": True,
+            "NoRawUserContentNote": "Trace rows contain scoring metadata and identifiers only. Candidate content text, user prompts, and contextual documents are NOT included in native trace output.",
+            "NoApiKeysOrSecrets": True,
+            "NoApiKeysOrSecretsNote": "No API keys, bearer tokens, connection strings, or secrets of any kind are captured in trace rows.",
+            "NoPromptText": True,
+            "NoPromptTextNote": "Original user prompts and model completions are NOT captured. Only candidate metadata and scoring decisions are recorded.",
+            "CandidateContentPolicy": "HashOrRedactedSummaryOrMetadataOnly",
+            "CandidateContentPolicyNote": "Candidate content representation is limited to: content hashes, redacted summaries, or scoring metadata. Raw candidate body text is never captured in trace.",
+            "TraceOutputClosable": True,
+            "TraceOutputClosableNote": "Trace collection can be disabled at any time by setting RuntimeCandidateTraceSinkAccessor.Current to NullRuntimeCandidateTraceSink.",
+            "TraceOutputCleanable": True,
+            "TraceOutputCleanableNote": "Trace output files are plain JSONL on disk. They can be deleted without affecting any system state.",
+            "TraceOutputAuditable": True,
+            "TraceOutputAuditableNote": "Every trace row carries operationId, requestId, and recordedAt timestamp. Full audit trail.",
+        },
+        "NativeTraceCollectionEnabled": False,
+        "NativeTraceCollectionEnabledNote": "Trace collection is currently disabled. No native production traces are being generated.",
         "V14GatePreserved": True,
+        "V16_2RepairBGatePreserved": True,
         "V16_2GatePreservedNote": "V16.2 readiness gate remains as-is. V16.3 does not invalidate V16.2 shadow evaluation.",
     }
 
@@ -300,10 +320,19 @@ def generate():
             "PackageOutputChanged": False,
             "VectorBindingChanged": False,
             "RuntimePromotionApplied": False,
+            "NativeProductionTraceReady": False,
+            "NativeTraceCollectionEnabled": False,
             "ProductionGeneralizationReady": False,
-            "ProductionGeneralizationNote": "Native collection must complete and pass metric-quality gate before ProductionGeneralizationReady can be true. Shadow-adapter mapped traces do not qualify.",
-            "NextStep": "Activate collector against actual workspaces/collections to produce native runtime candidate scoring traces. Then run V16.2 evaluation pipeline on native traces.",
+            "ProductionGeneralizationNote": "Native collection must complete and pass metric-quality gate before ProductionGeneralizationReady can be true.",
+            "NextStep": "Activate collector against actual workspaces/collections to produce native runtime candidate scoring traces.",
         },
+        "ProvenanceBoundary": {
+            "NativeTraceSourceOnly": True,
+            "ShadowAdapterCannotImpersonate": True,
+            "ShadowAdapterCannotImpersonateReason": "traceSource field is hardcoded to 3 in native traces and 1 in mapped traces.",
+        },
+        "V16_2RepairBGatePreserved": True,
+        "V16_2RepairBGatePreservedNote": "V16.2 Repair B (guarded_candidate_below_threshold, ProductionLikeWeightedPairwiseAcc=0.5451 < 0.55) remains authoritative.",
     }
 
     # =========================================================================
@@ -312,6 +341,56 @@ def generate():
     with open(OUT_SCHEMA_JSON, "w", encoding="utf-8") as fh:
         json.dump(schema_contract, fh, indent=2, ensure_ascii=False)
     print(f"Written: {OUT_SCHEMA_JSON}")
+
+    # -----------------------------------------------------------------------
+    # Schema contract markdown
+    # -----------------------------------------------------------------------
+    schema_md = f"""# V16.3 Native Trace Schema Contract
+
+Generated: {now} | SchemaVersion: V16.3-native-1.0
+
+## Schema Origin
+- Source: `RuntimeCandidateTraceModels.cs` (V14_0)
+- Collection point: `BasicContextPackageBuilder.WriteTraceRow()`
+- Collector: `RuntimeCandidateTraceSinkAccessor` -> `FileRuntimeCandidateTraceSink`
+- Definition: Native trace from runtime scoring pipeline. `traceSource=3` (PackageTrace).
+
+## Required Fields (11 critical)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| operationId | string | Operation/scenario ID |
+| requestId | string | Correlated request ID |
+| candidateId | string | Unique candidate identifier |
+| sourceId | string | Source identifier |
+| sourceType | byte | 1=raw, 2=memory, 3=constraint, 4=global, 5=recent, 6=task, 7=related |
+| section | string | Package section name |
+| deterministicScore | double | Legacy bounded-additive score |
+| selectedByScoring | bool | Whether scoring selected candidate |
+| includedInPackage | bool | Whether in final package |
+| tokenCost | double | Estimated token count |
+| recordedAt | DateTimeOffset | ISO 8601 timestamp |
+
+## Full Schema (18 fields)
+
+See `native-trace-schema-contract.json` for complete field definitions including authority, strategyType, retrievalChannel, traceSource, strategyScore, finalScore, droppedReason.
+
+## V16.2 vs V16.3
+
+| Aspect | V16.2 (shadow-adapter) | V16.3 (native) |
+|--------|----------------------|----------------|
+| Trace source | vector/trace/shadow-adapter/ | WriteTraceRow() |
+| Schema | Cross-system mapped | Native (18-field) |
+| traceSource | Mapped to 1 | Native 3 |
+| Scores | Derived | Actual c.Score |
+| Selection | Derived | Actual flag |
+
+Shadow-adapter traces CANNOT impersonate native traces (traceSource=1 != 3).
+"""
+
+    with open(OUT_SCHEMA_MD, "w", encoding="utf-8") as fh:
+        fh.write(schema_md)
+    print(f"Written: {OUT_SCHEMA_MD}")
 
     with open(OUT_SAFETY_JSON, "w", encoding="utf-8") as fh:
         json.dump(safety_gate, fh, indent=2, ensure_ascii=False)
