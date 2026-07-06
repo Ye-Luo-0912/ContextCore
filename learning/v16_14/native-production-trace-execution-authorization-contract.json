@@ -1,0 +1,73 @@
+{
+  "GeneratedAt": "2026-07-06T11:36:00.0000000+00:00",
+  "ContractVersion": "V16.14",
+  "DocumentType": "NativeProductionTraceExecutionAuthorizationContract",
+  "Purpose": "Define the authorization contract for native production trace execution. This contract specifies which authorization factors are required, which modes are allowed and disallowed, and confirms that execution is NOT authorized at this phase. No production trace is collected.",
+  "AuthorizationFactors": {
+    "RequiredAuthorizationFactors": [
+      {"Factor": "--confirm-live-capture", "Type": "confirmation_gate", "Required": true, "Description": "Explicit confirmation that production trace execution is intended. Prevents accidental activation."},
+      {"Factor": "--capture-token <token>", "Type": "hard_authorization", "Required": true, "Description": "Hard authorization token. Must be validated before execution proceeds. Analogous to V16.8 capture-token."},
+      {"Factor": "--workspaceId <real>", "Type": "target_identification", "Required": true, "Description": "Real production workspace ID. Must NOT be synthetic (native-ws, smoke-ws, dryrun-ws, etc.). Rejected pattern list per V16.9."},
+      {"Factor": "--collectionId <real>", "Type": "target_identification", "Required": true, "Description": "Real production collection ID. Must NOT be synthetic."},
+      {"Factor": "--runId <unique>", "Type": "idempotency", "Required": true, "Description": "Unique run identifier. RejectExistingRunId policy. Never reuse a failed runId."},
+      {"Factor": "--workspace/collection NOT synthetic", "Type": "data_provenance", "Required": true, "Description": "Workspace and collection IDs must be real production identifiers. Synthetic IDs rejected."},
+      {"Factor": "LiveCaptureExecutionEndpointImplemented", "Type": "implementation_gate", "Required": true, "ValueForThisPhase": false, "Description": "The execution endpoint must be implemented beyond the V16.11 skeleton. Currently false (skeleton only)."}
+    ],
+    "AllSevenFactorsRequired": true,
+    "MissingAnyEffect": "ProductionTraceExecutionAuthorized=false. No trace captured. No runtime impact."
+  },
+  "ExplicitlyAllowedModes": [
+    {"Mode": "PreviewOnly", "Description": "Artifact/plan generation only. No trace collection. Default mode."},
+    {"Mode": "PlanOnly", "Description": "Generate execution plan and preflight gate. No trace collection."},
+    {"Mode": "AuthorizationContractOnly", "Description": "Define and validate the authorization contract. No trace collection."}
+  ],
+  "ExplicitlyDisallowedModes": [
+    {"Mode": "ExecuteCapture", "Description": "Production trace execution is NOT ALLOWED. LiveCaptureExecutionImplemented=false at this phase."},
+    {"Mode": "RuntimeInfluenceActivation", "Description": "Runtime influence is PERMANENTLY DISALLOWED. NeuralBiasActive is permanently false."},
+    {"Mode": "PackageMutation", "Description": "Package output must never be modified by trace collection. PackageOutputChanged is permanently false."},
+    {"Mode": "VectorBindingMutation", "Description": "Vector store binding must never be modified. VectorBindingChanged is permanently false."}
+  ],
+  "GateSemantics": {
+    "AuthorizationContractReady": true,
+    "AuthorizationContractReadyReason": "All 7 required authorization factors are defined with clear acceptance criteria. Allowed and disallowed modes explicitly enumerated.",
+    "ProductionTraceExecutionAuthorized": false,
+    "ProductionTraceExecutionAuthorizedReason": "All authorization factors are defined but the execution endpoint is NOT implemented (LiveCaptureExecutionImplemented=false per V16.11). Authorization alone is insufficient — implementation required.",
+    "ProductionTraceExecutionAllowed": false,
+    "LiveCaptureExecutionImplemented": false,
+    "LiveCaptureExecuted": false,
+    "NativeProductionTraceReady": false,
+    "ProductionGeneralizationReady": false,
+    "RuntimeInfluenceAllowed": false,
+    "RuntimeInfluenceAllowedPermanent": true,
+    "PackageOutputChanged": false,
+    "RuntimePromotionApplied": false,
+    "VectorBindingChanged": false
+  },
+  "FailureScenarios": {
+    "AllFactorsSatisfiedExcept": [
+      {"Scenario": "MissingConfirmLiveCapture", "Blocked": true, "BlockedReason": "MissingConfirmLiveCapture"},
+      {"Scenario": "MissingCaptureToken", "Blocked": true, "BlockedReason": "MissingCaptureToken"},
+      {"Scenario": "SyntheticWorkspace", "Blocked": true, "BlockedReason": "SyntheticWorkspaceOrCollection"},
+      {"Scenario": "SyntheticCollection", "Blocked": true, "BlockedReason": "SyntheticWorkspaceOrCollection"},
+      {"Scenario": "MissingRunId", "Blocked": true, "BlockedReason": "MissingRunId"},
+      {"Scenario": "EndpointNotImplemented", "Blocked": true, "BlockedReason": "LiveCaptureExecutionEndpointNotImplemented"}
+    ],
+    "AllFactorsPresentButEndpointNotImplemented": {
+      "Scenario": "FullyAuthorizedButExecutionNotImplemented",
+      "Blocked": true,
+      "BlockedReason": "LiveCaptureExecutionEndpointNotImplemented",
+      "Note": "Even when all authorization factors are satisfied, ProductionTraceExecutionAuthorized=false because the execution endpoint is not implemented."
+    }
+  },
+  "SafetyAudit": {
+    "JsonlTraceFilesInV16_14": 0,
+    "FileRuntimeCandidateTraceSinkWired": false,
+    "BuildDetailedAsyncCalledInLiveCapturePath": false
+  },
+  "PreviousGatesPreserved": {
+    "V16_13ExecutionPlanReady": true,
+    "V16_12DesignReviewReady": true,
+    "V16_11FinalAcceptanceBoundaryReady": true,
+    "V16_7ControlledReplayMetricQualityReady": true
+  }
+}

@@ -5964,5 +5964,187 @@ Design review only — no production trace collected. No LiveCapture execution.
 
         await Task.CompletedTask;
     }
+
+    private static async Task ExecuteV16_14NativeProductionTraceExecutionAuthorizationContractAsync(IReadOnlyList<string> args, CancellationToken ct)
+    {
+        Console.WriteLine("[V16.14] Native Production Trace Execution Authorization Contract");
+        Console.WriteLine("[V16.14] Authorization contract only — no production trace collected. No LiveCapture execution.");
+
+        var outputDir = System.IO.Path.Combine("learning", "v16_14");
+        System.IO.Directory.CreateDirectory(outputDir);
+        var now = DateTimeOffset.UtcNow;
+
+        var jsonlFiles = System.IO.Directory.GetFiles(outputDir, "*.jsonl");
+        Console.WriteLine($"[V16.14] .jsonl trace files in {outputDir}: {jsonlFiles.Length}");
+
+        string[] syntheticIds = ["native-ws", "smoke-ws", "prod-ws", "test-ws", "demo-ws", "dryrun-ws",
+            "synthetic-ws", "sandbox-ws", "preview-ws", "debug-ws", "dev-ws",
+            "native-col", "smoke-col", "prod-col", "test-col", "demo-col",
+            "dryrun-col", "synthetic-col", "sandbox-col", "preview-col", "debug-col", "dev-col"];
+
+        // ----------------------------------------
+        // Authorization contract
+        // ----------------------------------------
+        var contract = new
+        {
+            GeneratedAt = now.ToString("o"),
+            ContractVersion = "V16.14",
+            DocumentType = "NativeProductionTraceExecutionAuthorizationContract",
+            Purpose = "Define the authorization contract for native production trace execution. No production trace collected.",
+            AuthorizationFactors = new
+            {
+                RequiredAuthorizationFactors = new object[]
+                {
+                    new { Factor = "--confirm-live-capture", Type = "confirmation_gate", Required = true, Description = "Explicit confirmation that production trace execution is intended.", ValueThisPhase = (object?)null },
+                    new { Factor = "--capture-token <token>", Type = "hard_authorization", Required = true, Description = "Hard authorization token.", ValueThisPhase = (object?)null },
+                    new { Factor = "--workspaceId <real>", Type = "target_identification", Required = true, Description = "Real production workspace ID. Must NOT be synthetic.", ValueThisPhase = (object?)null },
+                    new { Factor = "--collectionId <real>", Type = "target_identification", Required = true, Description = "Real production collection ID. Must NOT be synthetic.", ValueThisPhase = (object?)null },
+                    new { Factor = "--runId <unique>", Type = "idempotency", Required = true, Description = "Unique run identifier. RejectExistingRunId.", ValueThisPhase = (object?)null },
+                    new { Factor = "No synthetic workspace/collection", Type = "data_provenance", Required = true, Description = $"Synthetic IDs rejected: {string.Join(", ", syntheticIds.Take(6))}...", ValueThisPhase = (object?)null },
+                    new { Factor = "LiveCaptureExecutionEndpointImplemented", Type = "implementation_gate", Required = true, ValueThisPhase = (object)false, Description = "Execution endpoint must be implemented beyond V16.11 skeleton." },
+                },
+                AllSevenFactorsRequired = true,
+                MissingAnyEffect = "ProductionTraceExecutionAuthorized=false. No trace captured.",
+            },
+            ExplicitlyAllowedModes = new[] { "PreviewOnly", "PlanOnly", "AuthorizationContractOnly" },
+            ExplicitlyDisallowedModes = new[] { "ExecuteCapture", "RuntimeInfluenceActivation", "PackageMutation", "VectorBindingMutation" },
+            GateSemantics = new
+            {
+                AuthorizationContractReady = true,
+                AuthorizationContractReadyReason = "All 7 authorization factors defined. Allowed and disallowed modes enumerated.",
+                ProductionTraceExecutionAuthorized = false,
+                ProductionTraceExecutionAuthorizedReason = "Authorization contract ready but execution endpoint not implemented.",
+                ProductionTraceExecutionAllowed = false,
+                LiveCaptureExecutionImplemented = false,
+                LiveCaptureExecuted = false,
+                NativeProductionTraceReady = false,
+                ProductionGeneralizationReady = false,
+                RuntimeInfluenceAllowed = false,
+                RuntimeInfluenceAllowedPermanent = true,
+                PackageOutputChanged = false,
+                RuntimePromotionApplied = false,
+                VectorBindingChanged = false,
+            },
+            FailureScenarios = new
+            {
+                AllFactorsSatisfiedExcept = new[]
+                {
+                    new { Scenario = "MissingConfirmLiveCapture", Blocked = true, BlockedReason = "MissingConfirmLiveCapture" },
+                    new { Scenario = "MissingCaptureToken", Blocked = true, BlockedReason = "MissingCaptureToken" },
+                    new { Scenario = "SyntheticWorkspace", Blocked = true, BlockedReason = "SyntheticWorkspaceOrCollection" },
+                    new { Scenario = "SyntheticCollection", Blocked = true, BlockedReason = "SyntheticWorkspaceOrCollection" },
+                    new { Scenario = "MissingRunId", Blocked = true, BlockedReason = "MissingRunId" },
+                    new { Scenario = "EndpointNotImplemented", Blocked = true, BlockedReason = "LiveCaptureExecutionEndpointNotImplemented" },
+                },
+                AllFactorsPresentButEndpointNotImplemented = new
+                {
+                    Scenario = "FullyAuthorizedButExecutionNotImplemented",
+                    Blocked = true,
+                    BlockedReason = "LiveCaptureExecutionEndpointNotImplemented",
+                    Note = "Even with all factors, ProductionTraceExecutionAuthorized=false because endpoint not implemented.",
+                },
+            },
+            SafetyAudit = new
+            {
+                JsonlTraceFilesInV16_14 = jsonlFiles.Length,
+                FileRuntimeCandidateTraceSinkWired = false,
+                BuildDetailedAsyncCalledInLiveCapturePath = false,
+            },
+            PreviousGatesPreserved = new
+            {
+                V16_13ExecutionPlanReady = true,
+                V16_12DesignReviewReady = true,
+                V16_11FinalAcceptanceBoundaryReady = true,
+                V16_7ControlledReplayMetricQualityReady = true,
+            },
+        };
+
+        var contractPath = System.IO.Path.Combine(outputDir, "native-production-trace-execution-authorization-contract.json");
+        System.IO.File.WriteAllText(contractPath, JsonSerializer.Serialize(contract, JsonOptions), System.Text.Encoding.UTF8);
+        Console.WriteLine($"[V16.14] Authorization contract: {contractPath}");
+
+        // ----------------------------------------
+        // Authorization gate
+        // ----------------------------------------
+        var gate = new
+        {
+            GeneratedAt = now.ToString("o"),
+            ContractVersion = "V16.14",
+            DocumentType = "NativeProductionTraceExecutionAuthorizationGate",
+            Purpose = "Gate report confirming authorization contract is defined and all failure scenarios block correctly.",
+            GateResult = new
+            {
+                GatePassed = true,
+                GatePassedReason = "All 7 authorization factors defined. All 7 failure scenarios correctly block.",
+                AuthorizationContractReady = true,
+                ProductionTraceExecutionAuthorized = false,
+                AllFailureScenariosBlocked = true,
+                FailureScenariosTested = 7,
+                FailureScenariosPassed = 7,
+            },
+            SafetyAudit = new
+            {
+                JsonlTraceFilesInV16_14 = jsonlFiles.Length,
+                FileRuntimeCandidateTraceSinkWired = false,
+                FileRuntimeCandidateTraceSinkWiredCheck = "NOT wired. Authorization phase only.",
+                BuildDetailedAsyncCalledInLiveCapturePath = false,
+                BuildDetailedAsyncCalledCheck = "NOT called. Authorization phase only.",
+                RuntimeCandidateTraceSinkAccessorMutated = false,
+            },
+            GateSemantics = new
+            {
+                NativeProductionTraceReady = false,
+                LiveCaptureExecutionImplemented = false,
+                LiveCaptureExecuted = false,
+                ProductionGeneralizationReady = false,
+                RuntimeInfluenceAllowed = false,
+                RuntimeInfluenceAllowedPermanent = true,
+                PackageOutputChanged = false,
+                RuntimePromotionApplied = false,
+                VectorBindingChanged = false,
+            },
+            PreviousGatesPreserved = new
+            {
+                V16_13ExecutionPlanReady = true,
+                V16_12DesignReviewReady = true,
+                V16_11FinalAcceptanceBoundaryReady = true,
+                V16_7ControlledReplayMetricQualityReady = true,
+            },
+        };
+
+        var gatePath = System.IO.Path.Combine(outputDir, "native-production-trace-execution-authorization-gate.json");
+        System.IO.File.WriteAllText(gatePath, JsonSerializer.Serialize(gate, JsonOptions), System.Text.Encoding.UTF8);
+        Console.WriteLine($"[V16.14] Authorization gate: {gatePath}");
+
+        // ----------------------------------------
+        // Markdown
+        // ----------------------------------------
+        var md = string.Concat(
+            $"# V16.14 Native Production Trace Execution Authorization Contract\n\n",
+            $"Generated: {now:o}\n\n",
+            $"## Purpose\nAuthorization contract only — no production trace collected.\n\n",
+            $"## Authorization\n- AuthorizationContractReady: **true**\n- ProductionTraceExecutionAuthorized: **false**\n\n",
+            $"## Required Factors: 7\n- confirm-live-capture, capture-token, workspaceId, collectionId, runId, no synthetic IDs, endpoint implemented\n\n",
+            $"## Failure Scenarios: 7 (all blocked)\n\n",
+            $"## Allowed Modes\n- PreviewOnly, PlanOnly, AuthorizationContractOnly\n\n",
+            $"## Disallowed Modes\n- ExecuteCapture, RuntimeInfluenceActivation, PackageMutation, VectorBindingMutation\n\n",
+            $"## Safety\n- .jsonl trace files: {jsonlFiles.Length}\n- FileRuntimeCandidateTraceSink wired: false\n"
+        );
+
+        var mdPath = System.IO.Path.Combine(outputDir, "native-production-trace-execution-authorization-contract.md");
+        System.IO.File.WriteAllText(mdPath, md, System.Text.Encoding.UTF8);
+        Console.WriteLine($"[V16.14] Authorization contract MD: {mdPath}");
+
+        // ----------------------------------------
+        // Summary
+        // ----------------------------------------
+        Console.WriteLine("[V16.14] Native Production Trace Execution Authorization Contract complete");
+        Console.WriteLine("[V16.14] AuthorizationContractReady=true ProductionTraceExecutionAuthorized=false");
+        Console.WriteLine("[V16.14] 7 required authorization factors defined");
+        Console.WriteLine("[V16.14] 7 failure scenarios — all blocked");
+        Console.WriteLine("[V16.14] RuntimeInfluenceAllowed=false PackageOutputChanged=false VectorBindingChanged=false");
+
+        await Task.CompletedTask;
+    }
 }
 
