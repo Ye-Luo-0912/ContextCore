@@ -6902,6 +6902,67 @@ Design review only — no production trace collected. No LiveCapture execution.
             System.IO.Path.Combine(outputDir, "native-production-trace-execution-endpoint-implementation-approval-gate.json"),
             JsonSerializer.Serialize(gate, JsonOptions), System.Text.Encoding.UTF8);
 
+        // Decision boundary
+        var boundary = new
+        {
+            GeneratedAt = now.ToString("o"),
+            ContractVersion = "V16.17",
+            DocumentType = "NativeProductionTraceExecutionEndpointImplementationDecisionBoundary",
+            Purpose = "Implementation decision boundary. Does NOT authorize implementation.",
+            GateResult = new
+            {
+                EndpointImplementationApprovalReady = true,
+                EndpointImplementationApproved = false,
+                EndpointImplementationDecisionAllowed = false,
+                EndpointImplementationDecisionAllowedReason = "Implementation requires final approval.",
+                EndpointImplementationAllowed = false,
+                EndpointImplemented = false,
+                ProductionTraceExecutionAuthorized = false,
+                ProductionTraceExecutionAllowed = false,
+                LiveCaptureExecutionImplemented = false,
+                LiveCaptureExecuted = false,
+                NativeProductionTraceReady = false,
+            },
+            SafetyAudit = new
+            {
+                JsonlTraceFilesInV16_17 = jsonlFiles.Length,
+                FileRuntimeCandidateTraceSinkWired = false,
+                BuildDetailedAsyncCalledInLiveCapturePath = false,
+                RuntimeCandidateTraceSinkAccessorMutated = false,
+                NoImplementationCodeWritten = true,
+            },
+            GateSemantics = new
+            {
+                RuntimeInfluenceAllowed = false,
+                RuntimeInfluenceAllowedPermanent = true,
+                PackageOutputChanged = false,
+                RuntimePromotionApplied = false,
+                VectorBindingChanged = false,
+                ProductionGeneralizationReady = false,
+            },
+            PhaseTransition = new
+            {
+                NextAllowedPhase = "NativeProductionTraceExecutionEndpointImplementationFinalApproval",
+                NextAllowedPhaseDescription = "Final approval decision.",
+                NextDisallowedPhase = "RuntimeInfluenceActivation",
+                NextDisallowedPhaseReason = "Runtime influence is permanently false.",
+            },
+            PreviousGatesPreserved = new
+            {
+                V16_16ImplementationPlanReady = true,
+                V16_15EndpointDesignReady = true,
+                V16_14AuthorizationContractReady = true,
+                V16_13ExecutionPlanReady = true,
+                V16_12DesignReviewReady = true,
+                V16_11FinalAcceptanceBoundaryReady = true,
+                V16_7ControlledReplayMetricQualityReady = true,
+            },
+        };
+
+        System.IO.File.WriteAllText(
+            System.IO.Path.Combine(outputDir, "native-production-trace-execution-endpoint-implementation-decision-boundary.json"),
+            JsonSerializer.Serialize(boundary, JsonOptions), System.Text.Encoding.UTF8);
+
         var md = string.Concat(
             $"# V16.17 Endpoint Implementation Approval\n\nGenerated: {now:o}\n\n",
             $"Approval gate only.\n\n",
