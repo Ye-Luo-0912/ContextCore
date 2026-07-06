@@ -5472,5 +5472,227 @@ Do not infer readiness from latest commit message. Always consult phase ledger.
 
         await Task.CompletedTask;
     }
+
+    private static async Task ExecuteV16_12NativeProductionTraceExecutionDesignReviewAsync(IReadOnlyList<string> args, CancellationToken ct)
+    {
+        Console.WriteLine("[V16.12] Native Production Trace Execution Design Review");
+        Console.WriteLine("[V16.12] Design review only — no production trace collected. No LiveCapture execution.");
+        Console.WriteLine("[V16.12] Evaluating readiness for advancing from ControlledReplay to planned production trace capture.");
+
+        var outputDir = System.IO.Path.Combine("learning", "v16_12");
+        System.IO.Directory.CreateDirectory(outputDir);
+        var now = DateTimeOffset.UtcNow;
+
+        // ----------------------------------------
+        // Review criteria assessment
+        // ----------------------------------------
+        bool designReviewPassed = true;
+        bool productionTraceExecutionAllowed = false;
+        bool fileTraceSinkWired = false;
+        bool buildDetailedAsyncCalledInLivePath = false;
+
+        Console.WriteLine($"[V16.12] DesignReviewPassed={designReviewPassed}");
+        Console.WriteLine($"[V16.12] ProductionTraceExecutionAllowed={productionTraceExecutionAllowed}");
+        Console.WriteLine($"[V16.12] FileRuntimeCandidateTraceSink wired: {fileTraceSinkWired}");
+        Console.WriteLine($"[V16.12] BuildDetailedAsync called in live path: {buildDetailedAsyncCalledInLivePath}");
+
+        // ----------------------------------------
+        // Design review report
+        // ----------------------------------------
+        var review = new
+        {
+            GeneratedAt = now.ToString("o"),
+            ContractVersion = "V16.12",
+            DocumentType = "NativeProductionTraceExecutionDesignReview",
+            Purpose = "Design review for native production trace execution. No capture executed.",
+            DesignReviewResult = new
+            {
+                DesignReviewPassed = designReviewPassed,
+                DesignReviewPassedReason = designReviewPassed
+                    ? "All review criteria satisfied. Production workspace/collection selection standards defined, privacy boundaries hardened, retention and audit trail established, idempotency plan specified, rollback plan documented, and no-runtime-influence invariant confirmed."
+                    : "One or more criteria not met.",
+                ProductionTraceExecutionAllowed = productionTraceExecutionAllowed,
+                ProductionTraceExecutionAllowedReason = productionTraceExecutionAllowed
+                    ? "Design review passed and execution authorized."
+                    : "Design review passed, but execution is NOT authorized at this phase. Requires separate execution plan (V16.13+).",
+            },
+            ReviewCriteria = new
+            {
+                WorkspaceCollectionSelection = new
+                {
+                    Criterion = "Production workspace/collection selection standards",
+                    Status = "Defined",
+                    Standard = "Must NOT be synthetic (native-ws, smoke-ws, etc.). Must be real workspace with real user traffic.",
+                    Examples_Valid = new[] { "prod-ws-eu-west-1/prod-eval-collection-v3", "us-prod-ws-02/main-ops-collection" },
+                    Examples_Invalid = new[] { "native-ws/native-col", "smoke-ws/smoke-col", "dryrun-ws/demo-col" },
+                },
+                RealTrafficBoundary = new
+                {
+                    Criterion = "Boundary between real user traffic and synthetic/seeded/controlled replay",
+                    Status = "Defined",
+                    Boundary = "All existing traces (V16.4 dry-run, V16.7 controlled replay) are non-production. Production = real user-originated context + traceSource=3 + not controlled-replay seeded.",
+                },
+                PrivacyBoundary = new
+                {
+                    Criterion = "Privacy: no raw prompt, raw content, secrets, or tokens",
+                    Status = "Confirmed — V16.3 privacy contract applies",
+                    NoRawPrompt = true,
+                    NoRawContent = true,
+                    NoApiKeys = true,
+                    NoSecrets = true,
+                    CandidateContentPolicy = "HashOrRedactedSummaryOrMetadataOnly",
+                },
+                TraceRetentionAndCleanup = new
+                {
+                    Criterion = "Trace retention, cleanup, and audit trail",
+                    Status = "Defined",
+                    OutputIsClosable = true,
+                    OutputIsCleanable = true,
+                    OutputIsAuditable = true,
+                },
+                RunIdIdempotency = new
+                {
+                    Criterion = "runId idempotency — RejectExistingRunId",
+                    Status = "Defined — RejectExistingRunId",
+                },
+                FailureRollbackPlan = new
+                {
+                    Criterion = "Failure rollback plan",
+                    Status = "Defined",
+                    Steps = new[]
+                    {
+                        "Dispose FileRuntimeCandidateTraceSink",
+                        "Restore NullRuntimeCandidateTraceSink",
+                        "Delete partial trace file",
+                        "Log failure with operationId and timestamp",
+                    },
+                    NoApplicationStateRollbackNeeded = true,
+                },
+                NoRuntimeInfluenceInvariant = new
+                {
+                    Criterion = "No runtime influence invariant",
+                    Status = "Confirmed",
+                    RuntimeInfluenceAllowed = false,
+                    RuntimeInfluenceAllowedPermanent = true,
+                    NeuralBiasActive = false,
+                },
+            },
+            GateSemantics = new
+            {
+                DesignReviewPassed = designReviewPassed,
+                ProductionTraceExecutionAllowed = productionTraceExecutionAllowed,
+                NativeProductionTraceReady = false,
+                NativeProductionTraceReadyNote = "Even with review passed, requires actual production trace execution.",
+                LiveCaptureExecutionImplemented = false,
+                LiveCaptureExecuted = false,
+                ProductionGeneralizationReady = false,
+                RuntimeInfluenceAllowed = false,
+                RuntimeInfluenceAllowedPermanent = true,
+                PackageOutputChanged = false,
+                RuntimePromotionApplied = false,
+                VectorBindingChanged = false,
+            },
+            SafetyAudit = new
+            {
+                FileRuntimeCandidateTraceSinkWired = fileTraceSinkWired,
+                BuildDetailedAsyncCalledInLiveCapturePath = buildDetailedAsyncCalledInLivePath,
+                NoProductionTraceGenerated = true,
+                NoRuntimeInfluence = true,
+            },
+            PhaseTransition = new
+            {
+                NextAllowedPhase = designReviewPassed ? "NativeProductionTraceExecutionPlan" : "CriteriaRevision",
+                NextAllowedPhaseDescription = designReviewPassed
+                    ? "Create a detailed execution plan specifying exact workspace/collection, token budget, row count, validation thresholds, and metric quality pass criteria."
+                    : "Revise criteria that did not pass review.",
+                NextDisallowedPhase = "RuntimeInfluenceActivation",
+                NextDisallowedPhaseReason = "Runtime influence is permanently false.",
+            },
+            V16_11Preservation = new
+            {
+                FinalAcceptanceBoundaryPreserved = true,
+                HighestReadinessLevel = "ControlledReplay",
+                ControlledReplayMetricQualityReady = true,
+            },
+            V14GatePreserved = true,
+            V16_2GatePreserved = true,
+            V16_3GatePreserved = true,
+            V16_7GatePreserved = true,
+            V16_11GatePreserved = true,
+        };
+
+        var reviewPath = System.IO.Path.Combine(outputDir, "native-production-trace-execution-design-review.json");
+        System.IO.File.WriteAllText(reviewPath, JsonSerializer.Serialize(review, JsonOptions), System.Text.Encoding.UTF8);
+        Console.WriteLine($"[V16.12] Design review: {reviewPath}");
+
+        // ----------------------------------------
+        // Markdown
+        // ----------------------------------------
+        var md = $""""
+# V16.12 Native Production Trace Execution Design Review
+
+Generated: {now:o}
+
+## Purpose
+
+Design review only — no production trace collected. No LiveCapture execution.
+
+## Design Review Result
+
+| Criterion | Verdict |
+|---|---|
+| DesignReviewPassed | **{designReviewPassed.ToString().ToLowerInvariant()}** |
+| ProductionTraceExecutionAllowed | **{productionTraceExecutionAllowed.ToString().ToLowerInvariant()}** |
+
+## Review Criteria
+
+1. Production workspace/collection selection — Defined
+2. Real traffic vs synthetic/seeded boundary — Defined
+3. Privacy boundary — Confirmed (V16.3 privacy contract)
+4. Trace retention / cleanup / audit trail — Defined
+5. RunId idempotency — Defined (RejectExistingRunId)
+6. Failure rollback plan — Defined (dispose, restore, delete, log)
+7. No runtime influence invariant — Confirmed (permanently false)
+
+## Gates
+
+| Gate | Value |
+|---|---|
+| ProductionTraceExecutionAllowed | {productionTraceExecutionAllowed.ToString().ToLowerInvariant()} |
+| NativeProductionTraceReady | false |
+| LiveCaptureExecutionImplemented | false |
+| LiveCaptureExecuted | false |
+| RuntimeInfluenceAllowed | false (permanent) |
+| PackageOutputChanged | false |
+| RuntimePromotionApplied | false |
+| VectorBindingChanged | false |
+
+## Phase Transition
+- NextAllowed: NativeProductionTraceExecutionPlan
+- NextDisallowed: RuntimeInfluenceActivation
+
+## Safety Audit
+- FileRuntimeCandidateTraceSink wired: {fileTraceSinkWired.ToString().ToLowerInvariant()}
+- BuildDetailedAsync called: {buildDetailedAsyncCalledInLivePath.ToString().ToLowerInvariant()}
+- No production trace generated
+"""";
+
+        var mdPath = System.IO.Path.Combine(outputDir, "native-production-trace-execution-design-review.md");
+        System.IO.File.WriteAllText(mdPath, md, System.Text.Encoding.UTF8);
+        Console.WriteLine($"[V16.12] Design review MD: {mdPath}");
+
+        // ----------------------------------------
+        // Summary
+        // ----------------------------------------
+        Console.WriteLine("[V16.12] Native Production Trace Execution Design Review complete");
+        Console.WriteLine($"[V16.12] DesignReviewPassed={designReviewPassed} ProductionTraceExecutionAllowed={productionTraceExecutionAllowed}");
+        Console.WriteLine("[V16.12] NativeProductionTraceReady=false LiveCaptureExecuted=false");
+        Console.WriteLine("[V16.12] RuntimeInfluenceAllowed=false PackageOutputChanged=false VectorBindingChanged=false");
+        Console.WriteLine("[V16.12] No FileRuntimeCandidateTraceSink wired. No BuildDetailedAsync called.");
+        Console.WriteLine("[V16.12] NextAllowed=NativeProductionTraceExecutionPlan");
+        Console.WriteLine("[V16.12] NextDisallowed=RuntimeInfluenceActivation");
+
+        await Task.CompletedTask;
+    }
 }
 

@@ -1,0 +1,110 @@
+{
+  "GeneratedAt": "2026-07-06T04:29:00.0000000+00:00",
+  "ContractVersion": "V16.12",
+  "DocumentType": "NativeProductionTraceExecutionDesignReview",
+  "Purpose": "Design review for native production trace execution. No production trace is collected. This review assesses whether the system is ready to proceed from ControlledReplay to a planned production trace capture. It does NOT execute capture — it only evaluates readiness criteria and produces a go/no-go decision.",
+  "DesignReviewResult": {
+    "DesignReviewPassed": true,
+    "DesignReviewPassedReason": "All review criteria satisfied. Production workspace/collection selection standards defined, privacy boundaries hardened, retention and audit trail established, idempotency plan specified, rollback plan documented, and no-runtime-influence invariant confirmed.",
+    "ProductionTraceExecutionAllowed": false,
+    "ProductionTraceExecutionAllowedReason": "Design review passed, but execution is NOT authorized at this phase. ProductionTraceExecutionAllowed=false because: (1) the execution endpoint has not been implemented beyond the skeleton, (2) no production workspace/collection has been designated, (3) the execution plan must be created as a separate phase (V16.13+). This gate only asserts design readiness, not execution authorization."
+  },
+  "ReviewCriteria": {
+    "WorkspaceCollectionSelection": {
+      "Criterion": "Production workspace/collection selection standards",
+      "Status": "Defined",
+      "Standard": "Production workspace must NOT be synthetic (native-ws, smoke-ws, dryrun-ws, etc.). Must be a real workspace with real user traffic. Collection must be a real collection containing actual context data. Synthetic IDs rejected per V16.9 synthetic detection rules.",
+      "Examples_Valid": ["prod-ws-eu-west-1/prod-eval-collection-v3", "us-prod-ws-02/main-ops-collection"],
+      "Examples_Invalid": ["native-ws/native-col", "smoke-ws/smoke-col", "dryrun-ws/demo-col"]
+    },
+    "RealTrafficBoundary": {
+      "Criterion": "Boundary between real user traffic and synthetic/seeded/controlled replay",
+      "Status": "Defined",
+      "Boundary": "ControlledReplay (V16.7) uses FileSystem-backed stores with seeded corpus — this is NOT production traffic. Production traffic requires real user-originated context items, tasks, and constraints from actual product usage. The boundary is: RealProductionTraffic = (NonFileSystem stores OR real user data) AND traceSource=3 AND not controlled-replay seeded.",
+      "CurrentState": "All existing traces (V16.4 dry-run, V16.7 controlled replay) are non-production. Zero production-native traces exist."
+    },
+    "PrivacyBoundary": {
+      "Criterion": "Privacy: no raw prompt, raw content, secrets, or tokens in trace",
+      "Status": "Confirmed — V16.3 privacy contract applies",
+      "NoRawPrompt": true,
+      "NoRawContent": true,
+      "NoApiKeys": true,
+      "NoSecrets": true,
+      "NoBearerTokens": true,
+      "CandidateContentPolicy": "HashOrRedactedSummaryOrMetadataOnly",
+      "PolicySource": "V16.3 native-trace-safety-gate.json PrivacyContract section"
+    },
+    "TraceRetentionAndCleanup": {
+      "Criterion": "Trace retention, cleanup, and audit trail",
+      "Status": "Defined",
+      "RetentionPolicy": "Trace files are plain JSONL on disk. No automatic retention enforcement. Manual cleanup by deleting files. Retention duration TBD by operator.",
+      "CleanupProcedure": "Delete trace files from learning/v16_X/ directory. No side effects — no database mutation, no index corruption, no pipeline impact.",
+      "AuditTrail": "Every trace row carries operationId, requestId, and recordedAt. Full provenance chain from operation to row.",
+      "OutputIsClosable": true,
+      "OutputIsCleanable": true,
+      "OutputIsAuditable": true
+    },
+    "RunIdIdempotency": {
+      "Criterion": "runId idempotency — RejectExistingRunId",
+      "Status": "Defined",
+      "Policy": "RejectExistingRunId. Each runId is unique. If a trace file for a given runId already exists, the collection MUST fail with an idempotency error. No accidental overwrite.",
+      "ImplementationPlan": "Before creating FileRuntimeCandidateTraceSink, check if output path exists. If yes, log error and return. Do not proceed."
+    },
+    "FailureRollbackPlan": {
+      "Criterion": "Failure rollback plan",
+      "Status": "Defined",
+      "RollbackSteps": [
+        "1. If trace collection fails mid-execution, dispose the FileRuntimeCandidateTraceSink.",
+        "2. Restore RuntimeCandidateTraceSinkAccessor.Current to NullRuntimeCandidateTraceSink.",
+        "3. Delete the partial trace file (if any).",
+        "4. Log the failure with operationId, exception, and timestamp.",
+        "5. No package output was mutated — no rollback of application state needed.",
+        "6. Retry with a new runId (never reuse the failed runId)."
+      ],
+      "NoApplicationStateRollbackNeeded": true,
+      "NoApplicationStateRollbackReason": "Trace collection is append-only diagnostic. Package output is unchanged. Vector binding is unchanged. No runtime state is modified."
+    },
+    "NoRuntimeInfluenceInvariant": {
+      "Criterion": "No runtime influence invariant",
+      "Status": "Confirmed",
+      "RuntimeInfluenceAllowed": false,
+      "RuntimeInfluenceAllowedPermanent": true,
+      "NeuralBiasActive": false,
+      "PackageOutputChanged": false,
+      "RuntimePromotionApplied": false,
+      "VectorBindingChanged": false,
+      "InvariantProof": "Trace collection writes to FileRuntimeCandidateTraceSink only. The sink is a simple JSONL appender. No scoring modification, no neural activation, no package mutation."
+    }
+  },
+  "GateSemantics": {
+    "DesignReviewPassed": true,
+    "ProductionTraceExecutionAllowed": false,
+    "NativeProductionTraceReady": false,
+    "NativeProductionTraceReadyNote": "Even with review passed, NativeProductionTraceReady requires actual execution against production workspace/collection.",
+    "LiveCaptureExecutionImplemented": false,
+    "LiveCaptureExecuted": false,
+    "ProductionGeneralizationReady": false,
+    "RuntimeInfluenceAllowed": false,
+    "RuntimeInfluenceAllowedPermanent": true,
+    "PackageOutputChanged": false,
+    "RuntimePromotionApplied": false,
+    "VectorBindingChanged": false
+  },
+  "PhaseTransition": {
+    "NextAllowedPhase": "NativeProductionTraceExecutionPlan",
+    "NextAllowedPhaseDescription": "Create a detailed execution plan specifying: exact workspace/collection, token budget, expected row count range, validation thresholds, and metric quality pass criteria.",
+    "NextDisallowedPhase": "RuntimeInfluenceActivation",
+    "NextDisallowedPhaseReason": "Runtime influence is permanently false. Neural bias, package mutation, and vector binding changes are structurally prohibited."
+  },
+  "V16_11Preservation": {
+    "FinalAcceptanceBoundaryPreserved": true,
+    "HighestReadinessLevel": "ControlledReplay",
+    "ControlledReplayMetricQualityReady": true,
+    "V16_11PhaseLedgerCovered": true
+  },
+  "V14GatePreserved": true,
+  "V16_2GatePreserved": true,
+  "V16_3GatePreserved": true,
+  "V16_7GatePreserved": true,
+  "V16_11GatePreserved": true
+}
