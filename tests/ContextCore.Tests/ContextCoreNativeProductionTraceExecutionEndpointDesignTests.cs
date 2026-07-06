@@ -203,4 +203,122 @@ public class ContextCoreNativeProductionTraceExecutionEndpointDesignTests
         Assert.AreEqual(0, jsonlFiles.Length,
             $"No .jsonl trace files must exist in v16_15 directory. Found: {jsonlFiles.Length}");
     }
+
+    // -----------------------------------------------------------------
+    // Generator parity & preflight tests
+    // -----------------------------------------------------------------
+
+    [TestMethod]
+    public void GeneratorParity_RunGeneratorAndValidateDesignSchema()
+    {
+        var assembly = typeof(ContextCore.ControlRoom.Commands.EvalCommand).Assembly;
+        var type = assembly.GetType("ContextCore.ControlRoom.Commands.EvalCommand")!;
+        var method = type.GetMethod("ExecuteV16_15NativeProductionTraceExecutionEndpointDesignAsync",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+
+        var task = method.Invoke(null, [Array.Empty<string>(), CancellationToken.None]) as Task;
+        Assert.IsNotNull(task);
+        task!.GetAwaiter().GetResult();
+
+        var path = ResolveArtifactPath("native-production-trace-execution-endpoint-implementation-design.json");
+        using var doc = JsonDocument.Parse(File.ReadAllText(path));
+        var root = doc.RootElement;
+
+        Assert.AreEqual("V16.15", root.GetProperty("ContractVersion").GetString());
+
+        // Verify RequiredArgs are objects (not strings)
+        var args = root.GetProperty("CliEndpointShape").GetProperty("RequiredArgs");
+        Assert.AreEqual(5, args.GetArrayLength());
+        var first = args[0];
+        Assert.IsTrue(first.TryGetProperty("Arg", out _));
+        Assert.IsTrue(first.TryGetProperty("Description", out _));
+
+        // Verify AuthorizationContractIntegration has FactorsCheck array (not just count)
+        var auth = root.GetProperty("AuthorizationContractIntegration");
+        Assert.IsTrue(auth.TryGetProperty("IntegrationPlan", out _));
+        var factors = auth.GetProperty("FactorsCheck");
+        Assert.AreEqual(7, factors.GetArrayLength());
+
+        // Verify SyntheticRejection has full patterns array (not just count)
+        var synth = root.GetProperty("SyntheticRejection");
+        Assert.IsTrue(synth.TryGetProperty("RejectionPlan", out _));
+        var patterns = synth.GetProperty("SyntheticPatterns");
+        Assert.IsTrue(patterns.GetArrayLength() >= 20, "Patterns must be full array, not count.");
+    }
+
+    [TestMethod]
+    public void GeneratorParity_SinkWiringPlan_HasFullSteps_NotSummary()
+    {
+        var path = ResolveArtifactPath("native-production-trace-execution-endpoint-implementation-design.json");
+        using var doc = JsonDocument.Parse(File.ReadAllText(path));
+        var plan = doc.RootElement.GetProperty("FileRuntimeCandidateTraceSinkWiringPlan");
+
+        // Must have Step1...Step6, not just a "Steps" count field
+        Assert.IsFalse(plan.TryGetProperty("Steps", out _),
+            "Sink wiring plan must NOT be summarized as 'Steps'. Must have Step1...Step6.");
+        Assert.IsTrue(plan.TryGetProperty("Step1", out _));
+        Assert.IsTrue(plan.TryGetProperty("Step6", out _));
+    }
+
+    [TestMethod]
+    public void GeneratorParity_RollbackPlan_HasFullSteps_NotSummary()
+    {
+        var path = ResolveArtifactPath("native-production-trace-execution-endpoint-implementation-design.json");
+        using var doc = JsonDocument.Parse(File.ReadAllText(path));
+        var plan = doc.RootElement.GetProperty("RollbackCleanupPlan");
+
+        Assert.IsFalse(plan.TryGetProperty("Steps", out _),
+            "Rollback plan must NOT be summarized as 'Steps'.");
+        Assert.IsTrue(plan.TryGetProperty("Step1", out _));
+        Assert.IsTrue(plan.TryGetProperty("Step6", out _));
+    }
+
+    [TestMethod]
+    public void PreflightGate_ReadsAndValidatesAllRequiredFields()
+    {
+        var path = ResolveArtifactPath("native-production-trace-execution-endpoint-implementation-preflight.json");
+        Assert.IsTrue(File.Exists(path), "Preflight artifact must exist.");
+
+        using var doc = JsonDocument.Parse(File.ReadAllText(path));
+        var root = doc.RootElement;
+
+        var gateResult = root.GetProperty("GateResult");
+        Assert.IsTrue(gateResult.GetProperty("EndpointImplementationDesignReady").GetBoolean());
+        Assert.IsTrue(gateResult.GetProperty("EndpointImplementationPreflightReady").GetBoolean());
+        Assert.IsFalse(gateResult.GetProperty("EndpointImplementationAllowed").GetBoolean());
+        Assert.IsFalse(gateResult.GetProperty("EndpointImplemented").GetBoolean());
+        Assert.IsFalse(gateResult.GetProperty("ProductionTraceExecutionAuthorized").GetBoolean());
+        Assert.IsFalse(gateResult.GetProperty("LiveCaptureExecutionImplemented").GetBoolean());
+        Assert.IsFalse(gateResult.GetProperty("LiveCaptureExecuted").GetBoolean());
+        Assert.IsFalse(gateResult.GetProperty("NativeProductionTraceReady").GetBoolean());
+    }
+
+    [TestMethod]
+    public void PreflightGate_PhaseTransition_NextAllowedAndDisallowed()
+    {
+        var path = ResolveArtifactPath("native-production-trace-execution-endpoint-implementation-preflight.json");
+        using var doc = JsonDocument.Parse(File.ReadAllText(path));
+        var transition = doc.RootElement.GetProperty("PhaseTransition");
+
+        Assert.AreEqual("NativeProductionTraceExecutionEndpointImplementationPlan",
+            transition.GetProperty("NextAllowedPhase").GetString());
+        Assert.AreEqual("RuntimeInfluenceActivation",
+            transition.GetProperty("NextDisallowedPhase").GetString());
+    }
+
+    [TestMethod]
+    public void GeneratorParity_AllArtifactsHaveContractVersionV16_15()
+    {
+        var files = new[] { "native-production-trace-execution-endpoint-implementation-design.json",
+            "native-production-trace-execution-endpoint-implementation-design-gate.json",
+            "native-production-trace-execution-endpoint-implementation-preflight.json" };
+
+        foreach (var file in files)
+        {
+            var path = ResolveArtifactPath(file);
+            using var doc = JsonDocument.Parse(File.ReadAllText(path));
+            Assert.AreEqual("V16.15", doc.RootElement.GetProperty("ContractVersion").GetString(),
+                $"{file}: ContractVersion must be V16.15.");
+        }
+    }
 }

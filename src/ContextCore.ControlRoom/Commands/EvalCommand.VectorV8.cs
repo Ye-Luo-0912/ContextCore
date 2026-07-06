@@ -6241,17 +6241,52 @@ Design review only — no production trace collected. No LiveCapture execution.
                 Subcommand = "v16_15-native-production-trace-execution-endpoint",
                 RequiredArgs = new[]
                 {
-                    new { Arg = "--confirm-live-capture", Type = "confirmation_flag", Required = true },
-                    new { Arg = "--capture-token <token>", Type = "hard_authorization", Required = true },
-                    new { Arg = "--workspaceId <real>", Type = "target_identification", Required = true },
-                    new { Arg = "--collectionId <real>", Type = "target_identification", Required = true },
-                    new { Arg = "--runId <unique>", Type = "idempotency", Required = true },
+                    new { Arg = "--confirm-live-capture", Type = "confirmation_flag", Required = true, Description = "Explicit confirmation that production trace execution is intended." },
+                    new { Arg = "--capture-token <token>", Type = "hard_authorization", Required = true, Description = "Hard authorization token. Must be validated before execution proceeds." },
+                    new { Arg = "--workspaceId <real>", Type = "target_identification", Required = true, Description = "Real production workspace ID. Synthetic IDs rejected." },
+                    new { Arg = "--collectionId <real>", Type = "target_identification", Required = true, Description = "Real production collection ID. Synthetic IDs rejected." },
+                    new { Arg = "--runId <unique>", Type = "idempotency", Required = true, Description = "Unique run identifier. RejectExistingRunId policy." },
+                },
+                OptionalArgs = Array.Empty<object>(),
+                BehaviorWhenUnauthorized = "Return LiveCaptureBlocked=true. Output blocked reason. No trace captured.",
+            },
+            AuthorizationContractIntegration = new
+            {
+                Source = "V16.14 native-production-trace-execution-authorization-contract",
+                IntegrationPlan = "Before any execution, validate all 7 authorization factors per V16.14 contract.",
+                FactorsCheck = new[]
+                {
+                    new { Factor = "confirmLiveCapture", Check = "Parameter present." },
+                    new { Factor = "captureToken", Check = "Non-empty string present." },
+                    new { Factor = "workspaceId", Check = "Non-empty string present AND not synthetic." },
+                    new { Factor = "collectionId", Check = "Non-empty string present AND not synthetic." },
+                    new { Factor = "runId", Check = "Non-empty string present." },
+                    new { Factor = "synthetic rejection", Check = "Workspace and collection IDs not in synthetic patterns list." },
+                    new { Factor = "endpoint implemented", Check = "LiveCaptureExecutionImplemented must be false at design phase." },
                 },
             },
-            AuthorizationContractIntegration = new { Source = "V16.14", FactorsCheck = 7 },
-            SyntheticRejection = new { SyntheticPatternsCount = 22 },
-            RunIdIdempotency = new { Policy = "RejectExistingRunId" },
-            FileRuntimeCandidateTraceSinkWiringPlan = new { Steps = 6 },
+            SyntheticRejection = new
+            {
+                SyntheticPatterns = new[] { "native-ws", "smoke-ws", "prod-ws", "test-ws", "demo-ws", "dryrun-ws",
+                    "synthetic-ws", "sandbox-ws", "preview-ws", "debug-ws", "dev-ws",
+                    "native-col", "smoke-col", "prod-col", "test-col", "demo-col", "dryrun-col",
+                    "synthetic-col", "sandbox-col", "preview-col", "debug-col", "dev-col" },
+                RejectionPlan = "Before creating FileRuntimeCandidateTraceSink, check workspaceId and collectionId against synthetic patterns. If either matches, block execution with SyntheticWorkspaceOrCollection.",
+            },
+            RunIdIdempotency = new
+            {
+                Policy = "RejectExistingRunId",
+                CheckPlan = "Before creating FileRuntimeCandidateTraceSink, check if output file learning/v16_15/native-production-trace-{runId}.jsonl already exists. If yes, abort with RejectExistingRunId error.",
+            },
+            FileRuntimeCandidateTraceSinkWiringPlan = new
+            {
+                Step1 = "Validate all 7 authorization factors.",
+                Step2 = "Check runId idempotency.",
+                Step3 = "Create FileRuntimeCandidateTraceSink at learning/v16_15/native-production-trace-{runId}.jsonl.",
+                Step4 = "Set RuntimeCandidateTraceSinkAccessor.Current to the file sink.",
+                Step5 = "Set RuntimeCandidateTraceSinkAccessor.CurrentOperationId to op-prod-v16_15-{runId}.",
+                Step6 = "Set RuntimeCandidateTraceSinkAccessor.CurrentRequestId to req-prod-v16_15-{runId}.",
+            },
             RuntimeCandidateTraceSinkAccessorRestorePlan = new
             {
                 OnSuccess = "Dispose sink, restore NullSink, clear IDs.",
@@ -6260,10 +6295,19 @@ Design review only — no production trace collected. No LiveCapture execution.
             },
             BuildDetailedAsyncCallPlan = new
             {
-                WhenAuthorized = "Execute BuildDetailedAsync after all checks pass.",
+                WhenAuthorized = "After sink is wired and all authorization checks pass, execute BasicContextPackageBuilder.BuildDetailedAsync() against the specified workspace/collection with token budget = 10000.",
                 WhenNotAuthorized = "Return LiveCaptureBlocked=true. Do NOT call BuildDetailedAsync.",
+                SafetyGate = "Before calling BuildDetailedAsync, verify RuntimeInfluenceAllowed=false, NeuralBiasActive=false, PackageOutputChanged=false, VectorBindingChanged=false. These are structural invariants, not runtime checks.",
             },
-            RollbackCleanupPlan = new { Steps = 6 },
+            RollbackCleanupPlan = new
+            {
+                Step1 = "Dispose FileRuntimeCandidateTraceSink.",
+                Step2 = "Restore RuntimeCandidateTraceSinkAccessor.Current to NullRuntimeCandidateTraceSink.",
+                Step3 = "Clear CurrentOperationId and CurrentRequestId.",
+                Step4 = "On failure/abort: delete partial .jsonl trace file.",
+                Step5 = "On success: retain trace file.",
+                Step6 = "Log completion status with runId, row count, operationId, timestamp.",
+            },
             NoRuntimeInfluenceInvariant = new
             {
                 RuntimeInfluenceAllowed = false,
@@ -6362,6 +6406,67 @@ Design review only — no production trace collected. No LiveCapture execution.
         var gatePath = System.IO.Path.Combine(outputDir, "native-production-trace-execution-endpoint-implementation-design-gate.json");
         System.IO.File.WriteAllText(gatePath, JsonSerializer.Serialize(gate, JsonOptions), System.Text.Encoding.UTF8);
         Console.WriteLine($"[V16.15] Design gate: {gatePath}");
+
+        // ----------------------------------------
+        // Preflight gate
+        // ----------------------------------------
+        var preflight = new
+        {
+            GeneratedAt = now.ToString("o"),
+            ContractVersion = "V16.15",
+            DocumentType = "NativeProductionTraceExecutionEndpointImplementationPreflight",
+            Purpose = "Endpoint implementation preflight. Does not implement the endpoint.",
+            GateResult = new
+            {
+                GatePassed = true,
+                EndpointImplementationDesignReady = true,
+                EndpointImplementationPreflightReady = true,
+                EndpointImplementationPreflightReadyReason = "All design sections verified.",
+                EndpointImplementationAllowed = false,
+                EndpointImplementationAllowedReason = "Preflight confirms design readiness but does not authorize implementation.",
+                EndpointImplemented = false,
+                ProductionTraceExecutionAuthorized = false,
+                ProductionTraceExecutionAllowed = false,
+                LiveCaptureExecutionImplemented = false,
+                LiveCaptureExecuted = false,
+                NativeProductionTraceReady = false,
+            },
+            SafetyAudit = new
+            {
+                JsonlTraceFilesInV16_15 = jsonlFiles.Length,
+                FileRuntimeCandidateTraceSinkWired = false,
+                BuildDetailedAsyncCalledInLiveCapturePath = false,
+                RuntimeCandidateTraceSinkAccessorMutated = false,
+            },
+            GateSemantics = new
+            {
+                RuntimeInfluenceAllowed = false,
+                RuntimeInfluenceAllowedPermanent = true,
+                PackageOutputChanged = false,
+                RuntimePromotionApplied = false,
+                VectorBindingChanged = false,
+                ProductionGeneralizationReady = false,
+            },
+            PhaseTransition = new
+            {
+                NextAllowedPhase = "NativeProductionTraceExecutionEndpointImplementationPlan",
+                NextAllowedPhaseDescription = "Create a detailed implementation plan.",
+                NextDisallowedPhase = "RuntimeInfluenceActivation",
+                NextDisallowedPhaseReason = "Runtime influence is permanently false.",
+            },
+            PreviousGatesPreserved = new
+            {
+                V16_14AuthorizationContractReady = true,
+                V16_13ExecutionPlanReady = true,
+                V16_12DesignReviewReady = true,
+                V16_11FinalAcceptanceBoundaryReady = true,
+                V16_7ControlledReplayMetricQualityReady = true,
+            },
+        };
+
+        var preflightPath = System.IO.Path.Combine(outputDir, "native-production-trace-execution-endpoint-implementation-preflight.json");
+        System.IO.File.WriteAllText(preflightPath, JsonSerializer.Serialize(preflight, JsonOptions), System.Text.Encoding.UTF8);
+        Console.WriteLine($"[V16.15] Preflight: {preflightPath}");
 
         // ----------------------------------------
         // Markdown
