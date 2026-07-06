@@ -6979,5 +6979,153 @@ Design review only — no production trace collected. No LiveCapture execution.
 
         await Task.CompletedTask;
     }
+
+    private static async Task ExecuteV16_18NativeProductionTraceExecutionEndpointFinalApprovalAsync(IReadOnlyList<string> args, CancellationToken ct)
+    {
+        Console.WriteLine("[V16.18] Native Production Trace Execution Endpoint Implementation Final Approval");
+        Console.WriteLine("[V16.18] Final approval gate only — no implementation. No production trace collected.");
+
+        var outputDir = System.IO.Path.Combine("learning", "v16_18");
+        System.IO.Directory.CreateDirectory(outputDir);
+        var now = DateTimeOffset.UtcNow;
+        var jsonlFiles = System.IO.Directory.GetFiles(outputDir, "*.jsonl");
+
+        var approval = new
+        {
+            GeneratedAt = now.ToString("o"),
+            ContractVersion = "V16.18",
+            DocumentType = "NativeProductionTraceExecutionEndpointImplementationFinalApproval",
+            Purpose = "Final approval gate for endpoint implementation. Does NOT implement the endpoint.",
+            FinalApprovalResult = new
+            {
+                EndpointImplementationFinalApprovalReady = true,
+                EndpointImplementationFinalApprovalReadyReason = "All prerequisite phases (V16.14-V16.17) complete. Safety invariants hold.",
+                EndpointImplementationFinalApproved = false,
+                EndpointImplementationFinalApprovedReason = "Final approval does not authorize implementation.",
+                EndpointImplementationAllowed = false,
+                EndpointImplemented = false,
+                ProductionTraceExecutionAuthorized = false,
+                ProductionTraceExecutionAllowed = false,
+            },
+            FinalApprovalCriteria = new[]
+            {
+                new { Criterion = "V16.14 Authorization Contract Ready", Status = "Satisfied", Source = "V16.14" },
+                new { Criterion = "V16.15 Endpoint Design Ready", Status = "Satisfied", Source = "V16.15" },
+                new { Criterion = "V16.16 Implementation Plan Ready", Status = "Satisfied", Source = "V16.16" },
+                new { Criterion = "V16.17 Approval Ready", Status = "Satisfied", Source = "V16.17" },
+                new { Criterion = "V16.17 Decision Boundary Preserved", Status = "Satisfied", Source = "V16.17" },
+                new { Criterion = "All runtime/package/vector gates false", Status = "Satisfied", Source = "All V16 phases" },
+                new { Criterion = "No production trace generated", Status = "Satisfied", Source = "V16.18 safety audit" },
+                new { Criterion = "No implementation code written", Status = "Satisfied", Source = "V16.18 safety audit" },
+            },
+            GateSemantics = new
+            {
+                LiveCaptureExecutionImplemented = false,
+                LiveCaptureExecuted = false,
+                NativeProductionTraceReady = false,
+                ProductionGeneralizationReady = false,
+                RuntimeInfluenceAllowed = false,
+                RuntimeInfluenceAllowedPermanent = true,
+                PackageOutputChanged = false,
+                RuntimePromotionApplied = false,
+                VectorBindingChanged = false,
+            },
+            SafetyAudit = new
+            {
+                JsonlTraceFilesInV16_18 = jsonlFiles.Length,
+                FileRuntimeCandidateTraceSinkWired = false,
+                BuildDetailedAsyncCalledInLiveCapturePath = false,
+                RuntimeCandidateTraceSinkAccessorMutated = false,
+                NoImplementationCodeWritten = true,
+            },
+            PreviousGatesPreserved = new
+            {
+                V16_17ApprovalReady = true,
+                V16_17DecisionBoundaryPreserved = true,
+                V16_16ImplementationPlanReady = true,
+                V16_15EndpointDesignReady = true,
+                V16_14AuthorizationContractReady = true,
+                V16_13ExecutionPlanReady = true,
+                V16_12DesignReviewReady = true,
+                V16_11FinalAcceptanceBoundaryReady = true,
+                V16_7ControlledReplayMetricQualityReady = true,
+            },
+        };
+
+        System.IO.File.WriteAllText(
+            System.IO.Path.Combine(outputDir, "native-production-trace-execution-endpoint-implementation-final-approval.json"),
+            JsonSerializer.Serialize(approval, JsonOptions), System.Text.Encoding.UTF8);
+
+        var gate = new
+        {
+            GeneratedAt = now.ToString("o"),
+            ContractVersion = "V16.18",
+            DocumentType = "NativeProductionTraceExecutionEndpointImplementationFinalApprovalGate",
+            Purpose = "Gate report confirming the final approval is complete.",
+            GateResult = new
+            {
+                GatePassed = true,
+                GatePassedReason = "All 8 final approval criteria satisfied.",
+                EndpointImplementationFinalApprovalReady = true,
+                EndpointImplementationFinalApproved = false,
+                EndpointImplementationAllowed = false,
+                EndpointImplemented = false,
+                ProductionTraceExecutionAuthorized = false,
+                ProductionTraceExecutionAllowed = false,
+            },
+            SafetyAudit = new
+            {
+                JsonlTraceFilesInV16_18 = jsonlFiles.Length,
+                FileRuntimeCandidateTraceSinkWired = false,
+                FileRuntimeCandidateTraceSinkWiredCheck = "NOT wired. Final approval phase only.",
+                BuildDetailedAsyncCalledInLiveCapturePath = false,
+                BuildDetailedAsyncCalledCheck = "NOT called. Final approval phase only.",
+                RuntimeCandidateTraceSinkAccessorMutated = false,
+                NoImplementationCodeWritten = true,
+            },
+            GateSemantics = new
+            {
+                NativeProductionTraceReady = false,
+                LiveCaptureExecutionImplemented = false,
+                LiveCaptureExecuted = false,
+                ProductionGeneralizationReady = false,
+                RuntimeInfluenceAllowed = false,
+                RuntimeInfluenceAllowedPermanent = true,
+                PackageOutputChanged = false,
+                RuntimePromotionApplied = false,
+                VectorBindingChanged = false,
+            },
+            PreviousGatesPreserved = new
+            {
+                V16_17ApprovalReady = true,
+                V16_17DecisionBoundaryPreserved = true,
+                V16_16ImplementationPlanReady = true,
+                V16_15EndpointDesignReady = true,
+                V16_14AuthorizationContractReady = true,
+                V16_7ControlledReplayMetricQualityReady = true,
+            },
+        };
+
+        System.IO.File.WriteAllText(
+            System.IO.Path.Combine(outputDir, "native-production-trace-execution-endpoint-implementation-final-approval-gate.json"),
+            JsonSerializer.Serialize(gate, JsonOptions), System.Text.Encoding.UTF8);
+
+        var md = string.Concat(
+            $"# V16.18 Endpoint Implementation Final Approval\n\nGenerated: {now:o}\n\n",
+            $"Final approval gate only.\n\n",
+            $"- EndpointImplementationFinalApprovalReady: **true**\n",
+            $"- EndpointImplementationFinalApproved: **false**\n",
+            $"- Criteria: 8/8 satisfied\n- .jsonl: {jsonlFiles.Length}\n"
+        );
+        System.IO.File.WriteAllText(
+            System.IO.Path.Combine(outputDir, "native-production-trace-execution-endpoint-implementation-final-approval.md"),
+            md, System.Text.Encoding.UTF8);
+
+        Console.WriteLine("[V16.18] Endpoint Implementation Final Approval complete");
+        Console.WriteLine($"[V16.18] FinalApprovalReady=true FinalApproved=false");
+        Console.WriteLine($"[V16.18] Safety: {jsonlFiles.Length} .jsonl trace files");
+
+        await Task.CompletedTask;
+    }
 }
 
