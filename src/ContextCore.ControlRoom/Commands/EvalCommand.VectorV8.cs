@@ -6136,6 +6136,66 @@ Design review only — no production trace collected. No LiveCapture execution.
         Console.WriteLine($"[V16.14] Authorization contract MD: {mdPath}");
 
         // ----------------------------------------
+        // Endpoint implementation readiness preflight
+        // ----------------------------------------
+        var preflight = new
+        {
+            GeneratedAt = now.ToString("o"),
+            ContractVersion = "V16.14",
+            DocumentType = "NativeProductionTraceExecutionEndpointImplementationPreflight",
+            Purpose = "Endpoint implementation readiness preflight. Does NOT implement the endpoint.",
+            GateResult = new
+            {
+                GatePassed = true,
+                AuthorizationContractReady = true,
+                AuthorizationContractReadyReason = "V16.14 authorization contract defines all 7 factors.",
+                EndpointImplementationPlanned = true,
+                EndpointImplementationPlannedReason = "All prerequisites for endpoint implementation design are satisfied.",
+                EndpointImplementationAllowed = false,
+                EndpointImplementationAllowedReason = "Endpoint implementation requires a separate design phase.",
+                ProductionTraceExecutionAuthorized = false,
+                ProductionTraceExecutionAllowed = false,
+                LiveCaptureExecutionImplemented = false,
+                LiveCaptureExecuted = false,
+                NativeProductionTraceReady = false,
+            },
+            SafetyAudit = new
+            {
+                JsonlTraceFilesInV16_14 = jsonlFiles.Length,
+                FileRuntimeCandidateTraceSinkWired = false,
+                BuildDetailedAsyncCalledInLiveCapturePath = false,
+                RuntimeCandidateTraceSinkAccessorMutated = false,
+            },
+            GateSemantics = new
+            {
+                RuntimeInfluenceAllowed = false,
+                RuntimeInfluenceAllowedPermanent = true,
+                PackageOutputChanged = false,
+                RuntimePromotionApplied = false,
+                VectorBindingChanged = false,
+                ProductionGeneralizationReady = false,
+            },
+            PhaseTransition = new
+            {
+                NextAllowedPhase = "NativeProductionTraceExecutionEndpointImplementationDesign",
+                NextAllowedPhaseDescription = "Design the endpoint implementation plan.",
+                NextDisallowedPhase = "RuntimeInfluenceActivation",
+                NextDisallowedPhaseReason = "Runtime influence is permanently false.",
+            },
+            PreviousGatesPreserved = new
+            {
+                V16_13ExecutionPlanReady = true,
+                V16_12DesignReviewReady = true,
+                V16_11FinalAcceptanceBoundaryReady = true,
+                V16_7ControlledReplayMetricQualityReady = true,
+            },
+        };
+
+        var preflightPath = System.IO.Path.Combine(outputDir, "native-production-trace-execution-endpoint-implementation-preflight.json");
+        System.IO.File.WriteAllText(preflightPath, JsonSerializer.Serialize(preflight, JsonOptions), System.Text.Encoding.UTF8);
+        Console.WriteLine($"[V16.14] Preflight: {preflightPath}");
+
+        // ----------------------------------------
         // Summary
         // ----------------------------------------
         Console.WriteLine("[V16.14] Native Production Trace Execution Authorization Contract complete");

@@ -247,4 +247,121 @@ public class ContextCoreNativeProductionTraceExecutionAuthorizationContractTests
         var disallowed = root.GetProperty("ExplicitlyDisallowedModes");
         Assert.IsTrue(disallowed.GetArrayLength() >= 4, "Must have at least 4 disallowed modes.");
     }
+
+    // -----------------------------------------------------------------
+    // Generator parity & preflight tests
+    // -----------------------------------------------------------------
+
+    [TestMethod]
+    public void GeneratorParity_RunGeneratorAndValidateContractSchema()
+    {
+        var assembly = typeof(ContextCore.ControlRoom.Commands.EvalCommand).Assembly;
+        var type = assembly.GetType("ContextCore.ControlRoom.Commands.EvalCommand")!;
+        var method = type.GetMethod("ExecuteV16_14NativeProductionTraceExecutionAuthorizationContractAsync",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+
+        var task = method.Invoke(null, [Array.Empty<string>(), CancellationToken.None]) as Task;
+        Assert.IsNotNull(task);
+        task!.GetAwaiter().GetResult();
+
+        var path = ResolveArtifactPath("native-production-trace-execution-authorization-contract.json");
+        using var doc = JsonDocument.Parse(File.ReadAllText(path));
+        var root = doc.RootElement;
+
+        Assert.AreEqual("V16.14", root.GetProperty("ContractVersion").GetString());
+
+        var factors = root.GetProperty("AuthorizationFactors");
+        Assert.AreEqual(7, factors.GetProperty("RequiredAuthorizationFactors").GetArrayLength());
+
+        var allowed = root.GetProperty("ExplicitlyAllowedModes");
+        Assert.AreEqual(3, allowed.GetArrayLength());
+
+        var disallowed = root.GetProperty("ExplicitlyDisallowedModes");
+        Assert.AreEqual(4, disallowed.GetArrayLength());
+    }
+
+    [TestMethod]
+    public void GeneratorParity_GateHasFullSafetyAudit()
+    {
+        var path = ResolveArtifactPath("native-production-trace-execution-authorization-gate.json");
+        using var doc = JsonDocument.Parse(File.ReadAllText(path));
+        var root = doc.RootElement;
+
+        var safety = root.GetProperty("SafetyAudit");
+        Assert.IsTrue(safety.TryGetProperty("RuntimeCandidateTraceSinkAccessorMutated", out _),
+            "SafetyAudit must include RuntimeCandidateTraceSinkAccessorMutated.");
+        Assert.IsTrue(safety.TryGetProperty("FileRuntimeCandidateTraceSinkWiredCheck", out _));
+        Assert.IsTrue(safety.TryGetProperty("BuildDetailedAsyncCalledCheck", out _));
+
+        var gates = root.GetProperty("GateSemantics");
+        Assert.IsFalse(gates.GetProperty("LiveCaptureExecutionImplemented").GetBoolean());
+        Assert.IsFalse(gates.GetProperty("LiveCaptureExecuted").GetBoolean());
+    }
+
+    [TestMethod]
+    public void PreflightGate_ReadsAndValidatesAllRequiredFields()
+    {
+        var path = ResolveArtifactPath("native-production-trace-execution-endpoint-implementation-preflight.json");
+        Assert.IsTrue(File.Exists(path), "Preflight artifact must exist.");
+
+        using var doc = JsonDocument.Parse(File.ReadAllText(path));
+        var root = doc.RootElement;
+
+        Assert.AreEqual("NativeProductionTraceExecutionEndpointImplementationPreflight",
+            root.GetProperty("DocumentType").GetString());
+
+        var gateResult = root.GetProperty("GateResult");
+        Assert.IsTrue(gateResult.GetProperty("AuthorizationContractReady").GetBoolean());
+        Assert.IsTrue(gateResult.GetProperty("EndpointImplementationPlanned").GetBoolean());
+        Assert.IsFalse(gateResult.GetProperty("EndpointImplementationAllowed").GetBoolean());
+        Assert.IsFalse(gateResult.GetProperty("ProductionTraceExecutionAuthorized").GetBoolean());
+        Assert.IsFalse(gateResult.GetProperty("LiveCaptureExecutionImplemented").GetBoolean());
+        Assert.IsFalse(gateResult.GetProperty("LiveCaptureExecuted").GetBoolean());
+        Assert.IsFalse(gateResult.GetProperty("NativeProductionTraceReady").GetBoolean());
+    }
+
+    [TestMethod]
+    public void PreflightGate_PhaseTransition_NextAllowedAndDisallowed()
+    {
+        var path = ResolveArtifactPath("native-production-trace-execution-endpoint-implementation-preflight.json");
+        using var doc = JsonDocument.Parse(File.ReadAllText(path));
+        var root = doc.RootElement;
+
+        var transition = root.GetProperty("PhaseTransition");
+        Assert.AreEqual("NativeProductionTraceExecutionEndpointImplementationDesign",
+            transition.GetProperty("NextAllowedPhase").GetString());
+        Assert.AreEqual("RuntimeInfluenceActivation",
+            transition.GetProperty("NextDisallowedPhase").GetString());
+    }
+
+    [TestMethod]
+    public void PreflightGate_AllRuntimeGatesFalse()
+    {
+        var path = ResolveArtifactPath("native-production-trace-execution-endpoint-implementation-preflight.json");
+        using var doc = JsonDocument.Parse(File.ReadAllText(path));
+        var root = doc.RootElement;
+
+        var gates = root.GetProperty("GateSemantics");
+        Assert.IsFalse(gates.GetProperty("RuntimeInfluenceAllowed").GetBoolean());
+        Assert.IsTrue(gates.GetProperty("RuntimeInfluenceAllowedPermanent").GetBoolean());
+        Assert.IsFalse(gates.GetProperty("PackageOutputChanged").GetBoolean());
+        Assert.IsFalse(gates.GetProperty("RuntimePromotionApplied").GetBoolean());
+        Assert.IsFalse(gates.GetProperty("VectorBindingChanged").GetBoolean());
+    }
+
+    [TestMethod]
+    public void GeneratorParity_AllArtifactsHaveContractVersionV16_14()
+    {
+        var files = new[] { "native-production-trace-execution-authorization-contract.json",
+            "native-production-trace-execution-authorization-gate.json",
+            "native-production-trace-execution-endpoint-implementation-preflight.json" };
+
+        foreach (var file in files)
+        {
+            var path = ResolveArtifactPath(file);
+            using var doc = JsonDocument.Parse(File.ReadAllText(path));
+            Assert.AreEqual("V16.14", doc.RootElement.GetProperty("ContractVersion").GetString(),
+                $"{file}: ContractVersion must be V16.14.");
+        }
+    }
 }
