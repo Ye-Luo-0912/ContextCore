@@ -1,0 +1,120 @@
+{
+  "GeneratedAt": "2026-07-06T13:50:00.0000000+00:00",
+  "ContractVersion": "V16.16",
+  "DocumentType": "NativeProductionTraceExecutionEndpointImplementationPlan",
+  "Purpose": "Detailed implementation plan for the native production trace execution endpoint. This is a PLAN ONLY — no implementation code is written. No production trace is collected. No FileRuntimeCandidateTraceSink wired. No BuildDetailedAsync called in live capture path.",
+  "PlanStatus": {
+    "EndpointImplementationPlanReady": true,
+    "EndpointImplementationAllowed": false,
+    "EndpointImplementationAllowedReason": "Plan is defined and ready for review, but actual implementation requires a separate phase. No code changes are committed at this phase.",
+    "EndpointImplemented": false
+  },
+  "TargetFilesAndClasses": {
+    "PrimaryTarget": {
+      "File": "src/ContextCore.ControlRoom/Commands/EvalCommand.VectorV8.cs",
+      "Method": "ExecuteV16_16NativeProductionTraceExecutionEndpointAsync",
+      "Purpose": "CLI endpoint for native production trace execution."
+    },
+    "AuthorizationValidationTarget": {
+      "Method": "ValidateAllSevenAuthorizationFactors",
+      "Purpose": "Validates all 7 authorization factors from V16.14 contract before any execution."
+    },
+    "SinkManagementTarget": {
+      "Classes": [
+        { "Name": "RuntimeCandidateTraceSinkAccessor", "Purpose": "Static wiring point for trace sink." },
+        { "Name": "FileRuntimeCandidateTraceSink", "Purpose": "JSONL file-backed trace sink." },
+        { "Name": "NullRuntimeCandidateTraceSink", "Purpose": "No-op default sink for restore." }
+      ]
+    }
+  },
+  "CliDispatchShape": {
+    "Subcommand": "v16_16-native-production-trace-execution-endpoint",
+    "Args": [
+      {"Arg": "--confirm-live-capture", "Required": true, "Type": "confirmation_flag"},
+      {"Arg": "--capture-token <token>", "Required": true, "Type": "hard_authorization"},
+      {"Arg": "--workspaceId <real>", "Required": true, "Type": "target_identification"},
+      {"Arg": "--collectionId <real>", "Required": true, "Type": "target_identification"},
+      {"Arg": "--runId <unique>", "Required": true, "Type": "idempotency"}
+    ]
+  },
+  "GuardOrder": [
+    {"Sequence": 1, "Guard": "confirmLiveCapture", "Check": "Parameter present.", "IfMissing": "Block with MissingConfirmLiveCapture."},
+    {"Sequence": 2, "Guard": "captureToken", "Check": "Non-empty string present.", "IfMissing": "Block with MissingCaptureToken."},
+    {"Sequence": 3, "Guard": "workspaceId/collectionId present", "Check": "Both non-empty.", "IfMissing": "Block with MissingWorkspaceId or MissingCollectionId."},
+    {"Sequence": 4, "Guard": "synthetic rejection", "Check": "Neither workspace nor collection in synthetic patterns list.", "IfSynthetic": "Block with SyntheticWorkspaceOrCollection."},
+    {"Sequence": 5, "Guard": "runId present", "Check": "Non-empty string present.", "IfMissing": "Block with MissingRunId."},
+    {"Sequence": 6, "Guard": "RejectExistingRunId", "Check": "Output file does not already exist.", "IfExists": "Block with RejectExistingRunId."},
+    {"Sequence": 7, "Guard": "safety invariants", "Check": "RuntimeInfluenceAllowed=false, NeuralBiasActive=false, PackageOutputChanged=false, VectorBindingChanged=false.", "IfViolated": "Hard abort — these are structural invariants. Must never be violated."}
+  ],
+  "DryRunBehavior": {
+    "Enabled": true,
+    "Description": "When --dry-run flag is present, execute all guards but do NOT wire FileRuntimeCandidateTraceSink and do NOT call BuildDetailedAsync. Output the decision that would be made (blocked/authorized) with the reason.",
+    "OutputExample": "DryRun: All guards passed. Would wire sink and execute capture with runId=<runId>. Actual execution requires --confirm-live-capture without --dry-run."
+  },
+  "BlockedBehavior": {
+    "WhenAnyGuardFails": "Return LiveCaptureBlocked=true with specific blocked reason. Do NOT wire sink. Do NOT call BuildDetailedAsync. Output the blocked reason to console.",
+    "OutputExample": "LiveCaptureBlocked=true. Reason: SyntheticWorkspaceOrCollection (workspaceId='native-ws' is synthetic)."
+  },
+  "SinkLifecycle": [
+    {"Step": 1, "Phase": "Pre-execution", "Action": "All 7 guards pass."},
+    {"Step": 2, "Phase": "Wiring", "Action": "Create FileRuntimeCandidateTraceSink at learning/v16_16/native-production-trace-{runId}.jsonl."},
+    {"Step": 3, "Phase": "Wiring", "Action": "Set RuntimeCandidateTraceSinkAccessor.Current to the file sink."},
+    {"Step": 4, "Phase": "Wiring", "Action": "Set CurrentOperationId to op-prod-v16_16-{runId}."},
+    {"Step": 5, "Phase": "Wiring", "Action": "Set CurrentRequestId to req-prod-v16_16-{runId}."},
+    {"Step": 6, "Phase": "Execution", "Action": "Call BuildDetailedAsync ONLY after all guards pass and sink is wired."},
+    {"Step": 7, "Phase": "Post-execution", "Action": "Call sink.FlushAsync()."},
+    {"Step": 8, "Phase": "Post-execution", "Action": "Dispose sink."},
+    {"Step": 9, "Phase": "Restore", "Action": "Set RuntimeCandidateTraceSinkAccessor.Current back to NullRuntimeCandidateTraceSink."},
+    {"Step": 10, "Phase": "Restore", "Action": "Clear CurrentOperationId and CurrentRequestId."}
+  ],
+  "FailureRollback": {
+    "OnBuildError": "Dispose sink. Restore NullSink. Delete partial trace file. Log error with runId, exception, timestamp.",
+    "OnIdempotencyViolation": "Return error immediately — no sink was created, nothing to roll back.",
+    "OnValidationFailure": "Dispose sink. Restore NullSink. Delete trace file. Mark as INVALID — do not count toward metric quality.",
+    "AlwaysRestore": true,
+    "AlwaysRestoreNote": "RuntimeCandidateTraceSinkAccessor.Current MUST always be restored to NullRuntimeCandidateTraceSink after execution, regardless of success or failure."
+  },
+  "TestPlan": {
+    "UnitTestsPlanned": [
+      {"Test": "AuthorizationFactorValidation_AllSevenFactorsChecked"},
+      {"Test": "SyntheticRejection_AllSyntheticPatternsRejected"},
+      {"Test": "RejectExistingRunId_WhenFileExists_Aborts"},
+      {"Test": "SinkLifecycle_WiredAndRestored_Correctly"},
+      {"Test": "BuildDetailedAsync_OnlyCalledAfterAllGuards_Pass"},
+      {"Test": "BuildDetailedAsync_NotCalledWhenBlocked"},
+      {"Test": "NoRuntimeInfluence_RuntimeInfluenceAllowed_PermanentlyFalse"}
+    ],
+    "IntegrationTestsPlanned": [],
+    "ProductionTestsPlanned": []
+  },
+  "GateSemantics": {
+    "EndpointImplementationPlanReady": true,
+    "EndpointImplementationAllowed": false,
+    "EndpointImplemented": false,
+    "ProductionTraceExecutionAuthorized": false,
+    "ProductionTraceExecutionAllowed": false,
+    "LiveCaptureExecutionImplemented": false,
+    "LiveCaptureExecuted": false,
+    "NativeProductionTraceReady": false,
+    "ProductionGeneralizationReady": false,
+    "RuntimeInfluenceAllowed": false,
+    "RuntimeInfluenceAllowedPermanent": true,
+    "PackageOutputChanged": false,
+    "RuntimePromotionApplied": false,
+    "VectorBindingChanged": false
+  },
+  "SafetyAudit": {
+    "JsonlTraceFilesInV16_16": 0,
+    "FileRuntimeCandidateTraceSinkWired": false,
+    "BuildDetailedAsyncCalledInLiveCapturePath": false,
+    "RuntimeCandidateTraceSinkAccessorMutated": false
+  },
+  "PreviousGatesPreserved": {
+    "V16_15EndpointDesignReady": true,
+    "V16_14AuthorizationContractReady": true,
+    "V16_13ExecutionPlanReady": true,
+    "V16_12DesignReviewReady": true,
+    "V16_11FinalAcceptanceBoundaryReady": true,
+    "V16_7ControlledReplayMetricQualityReady": true
+  }
+}

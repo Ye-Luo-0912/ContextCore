@@ -424,6 +424,7 @@ public static partial class EvalCommand
             !string.Equals(subcommand, "v16_13-native-production-trace-execution-plan", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "v16_14-native-production-trace-execution-authorization-contract", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "v16_15-native-production-trace-execution-endpoint-design", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "v16_16-native-production-trace-execution-endpoint-implementation-plan", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "formal-evidence-stabilization-replay-pilot-readiness", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "formal-evidence-stabilization-replay-pilot-readiness-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "learning-formal-evidence-realization-r1-pack", StringComparison.OrdinalIgnoreCase) &&
@@ -782,6 +783,7 @@ public static partial class EvalCommand
             Console.WriteLine("  eval v16_13-native-production-trace-execution-plan (native production trace execution plan)");
             Console.WriteLine("  eval v16_14-native-production-trace-execution-authorization-contract (native production trace execution authorization contract)");
             Console.WriteLine("  eval v16_15-native-production-trace-execution-endpoint-design (native production trace execution endpoint implementation design)");
+            Console.WriteLine("  eval v16_16-native-production-trace-execution-endpoint-implementation-plan (native production trace execution endpoint implementation plan)");
             Console.WriteLine("  eval learning-formal-evidence-realization-r1-pack");
             Console.WriteLine("  eval learning-formal-evidence-realization-r1-pack-gate");
             Console.WriteLine("  eval dto-split-plan");
@@ -2518,6 +2520,12 @@ public static partial class EvalCommand
         if (string.Equals(subcommand, "v16_15-native-production-trace-execution-endpoint-design", StringComparison.OrdinalIgnoreCase))
         {
             await ExecuteV16_15NativeProductionTraceExecutionEndpointDesignAsync(args, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        if (string.Equals(subcommand, "v16_16-native-production-trace-execution-endpoint-implementation-plan", StringComparison.OrdinalIgnoreCase))
+        {
+            await ExecuteV16_16NativeProductionTraceExecutionEndpointImplementationPlanAsync(args, cancellationToken).ConfigureAwait(false);
             return;
         }
 
