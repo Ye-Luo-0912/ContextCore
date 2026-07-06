@@ -139,4 +139,101 @@ public class ContextCoreNativeProductionTraceExecutionEndpointImplementationPlan
         var dir = System.IO.Path.GetDirectoryName(planPath)!;
         Assert.AreEqual(0, Directory.GetFiles(dir, "*.jsonl").Length);
     }
+
+    // -----------------------------------------------------------------
+    // Generator parity & preflight tests
+    // -----------------------------------------------------------------
+
+    [TestMethod]
+    public void GeneratorParity_RunGeneratorAndValidatePlanSchema()
+    {
+        var assembly = typeof(ContextCore.ControlRoom.Commands.EvalCommand).Assembly;
+        var type = assembly.GetType("ContextCore.ControlRoom.Commands.EvalCommand")!;
+        var method = type.GetMethod("ExecuteV16_16NativeProductionTraceExecutionEndpointImplementationPlanAsync",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+
+        var task = method.Invoke(null, [Array.Empty<string>(), CancellationToken.None]) as Task;
+        Assert.IsNotNull(task);
+        task!.GetAwaiter().GetResult();
+
+        var path = ResolveArtifactPath("native-production-trace-execution-endpoint-implementation-plan.json");
+        using var doc = JsonDocument.Parse(File.ReadAllText(path));
+        var root = doc.RootElement;
+
+        Assert.AreEqual("V16.16", root.GetProperty("ContractVersion").GetString());
+
+        // Verify TargetFilesAndClasses has all three sub-targets
+        var targets = root.GetProperty("TargetFilesAndClasses");
+        Assert.IsTrue(targets.TryGetProperty("AuthorizationValidationTarget", out _));
+        Assert.IsTrue(targets.TryGetProperty("SinkManagementTarget", out _));
+
+        // Verify CliDispatchShape.Args have Type field
+        var args = root.GetProperty("CliDispatchShape").GetProperty("Args");
+        Assert.IsTrue(args[0].TryGetProperty("Type", out _));
+
+        // Verify DryRunBehavior, BlockedBehavior, TestPlan exist
+        Assert.IsTrue(root.TryGetProperty("DryRunBehavior", out _));
+        Assert.IsTrue(root.TryGetProperty("BlockedBehavior", out _));
+        Assert.IsTrue(root.TryGetProperty("TestPlan", out _));
+    }
+
+    [TestMethod]
+    public void GeneratorParity_GuardOrder_IsFullArray_NotSummary()
+    {
+        var path = ResolveArtifactPath("native-production-trace-execution-endpoint-implementation-plan.json");
+        using var doc = JsonDocument.Parse(File.ReadAllText(path));
+        var guards = doc.RootElement.GetProperty("GuardOrder");
+        Assert.AreEqual(7, guards.GetArrayLength(), "Must have 7 full guard entries, not a summary.");
+    }
+
+    [TestMethod]
+    public void GeneratorParity_FailureRollback_HasAlwaysRestoreNote()
+    {
+        var path = ResolveArtifactPath("native-production-trace-execution-endpoint-implementation-plan.json");
+        using var doc = JsonDocument.Parse(File.ReadAllText(path));
+        var rollback = doc.RootElement.GetProperty("FailureRollback");
+        Assert.IsTrue(rollback.TryGetProperty("AlwaysRestoreNote", out _));
+    }
+
+    [TestMethod]
+    public void PreflightGate_ReadsAndValidatesAllRequiredFields()
+    {
+        var path = ResolveArtifactPath("native-production-trace-execution-endpoint-implementation-authorization-preflight.json");
+        Assert.IsTrue(File.Exists(path));
+
+        using var doc = JsonDocument.Parse(File.ReadAllText(path));
+        var gateResult = doc.RootElement.GetProperty("GateResult");
+        Assert.IsTrue(gateResult.GetProperty("EndpointImplementationPlanReady").GetBoolean());
+        Assert.IsTrue(gateResult.GetProperty("EndpointImplementationAuthorizationPreflightReady").GetBoolean());
+        Assert.IsFalse(gateResult.GetProperty("EndpointImplementationAllowed").GetBoolean());
+        Assert.IsFalse(gateResult.GetProperty("EndpointImplemented").GetBoolean());
+        Assert.IsFalse(gateResult.GetProperty("LiveCaptureExecutionImplemented").GetBoolean());
+    }
+
+    [TestMethod]
+    public void PreflightGate_PhaseTransition_NextAllowedAndDisallowed()
+    {
+        var path = ResolveArtifactPath("native-production-trace-execution-endpoint-implementation-authorization-preflight.json");
+        using var doc = JsonDocument.Parse(File.ReadAllText(path));
+        var transition = doc.RootElement.GetProperty("PhaseTransition");
+        Assert.AreEqual("NativeProductionTraceExecutionEndpointImplementationApproval",
+            transition.GetProperty("NextAllowedPhase").GetString());
+        Assert.AreEqual("RuntimeInfluenceActivation",
+            transition.GetProperty("NextDisallowedPhase").GetString());
+    }
+
+    [TestMethod]
+    public void GeneratorParity_AllArtifactsHaveContractVersionV16_16()
+    {
+        var files = new[] { "native-production-trace-execution-endpoint-implementation-plan.json",
+            "native-production-trace-execution-endpoint-implementation-plan-gate.json",
+            "native-production-trace-execution-endpoint-implementation-authorization-preflight.json" };
+
+        foreach (var file in files)
+        {
+            var path = ResolveArtifactPath(file);
+            using var doc = JsonDocument.Parse(File.ReadAllText(path));
+            Assert.AreEqual("V16.16", doc.RootElement.GetProperty("ContractVersion").GetString());
+        }
+    }
 }

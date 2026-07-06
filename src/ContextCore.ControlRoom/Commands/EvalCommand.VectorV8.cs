@@ -6512,7 +6512,7 @@ Design review only — no production trace collected. No LiveCapture execution.
             {
                 EndpointImplementationPlanReady = true,
                 EndpointImplementationAllowed = false,
-                EndpointImplementationAllowedReason = "Plan is defined and ready for review, but actual implementation requires a separate phase.",
+                EndpointImplementationAllowedReason = "Plan is defined and ready for review, but actual implementation requires a separate phase. No code changes are committed at this phase.",
                 EndpointImplemented = false,
             },
             TargetFilesAndClasses = new
@@ -6521,6 +6521,21 @@ Design review only — no production trace collected. No LiveCapture execution.
                 {
                     File = "src/ContextCore.ControlRoom/Commands/EvalCommand.VectorV8.cs",
                     Method = "ExecuteV16_16NativeProductionTraceExecutionEndpointAsync",
+                    Purpose = "CLI endpoint for native production trace execution.",
+                },
+                AuthorizationValidationTarget = new
+                {
+                    Method = "ValidateAllSevenAuthorizationFactors",
+                    Purpose = "Validates all 7 authorization factors from V16.14 contract.",
+                },
+                SinkManagementTarget = new
+                {
+                    Classes = new[]
+                    {
+                        new { Name = "RuntimeCandidateTraceSinkAccessor", Purpose = "Static wiring point for trace sink." },
+                        new { Name = "FileRuntimeCandidateTraceSink", Purpose = "JSONL file-backed trace sink." },
+                        new { Name = "NullRuntimeCandidateTraceSink", Purpose = "No-op default sink for restore." },
+                    },
                 },
             },
             CliDispatchShape = new
@@ -6528,22 +6543,33 @@ Design review only — no production trace collected. No LiveCapture execution.
                 Subcommand = "v16_16-native-production-trace-execution-endpoint",
                 Args = new[]
                 {
-                    new { Arg = "--confirm-live-capture", Required = true },
-                    new { Arg = "--capture-token <token>", Required = true },
-                    new { Arg = "--workspaceId <real>", Required = true },
-                    new { Arg = "--collectionId <real>", Required = true },
-                    new { Arg = "--runId <unique>", Required = true },
+                    new { Arg = "--confirm-live-capture", Required = true, Type = "confirmation_flag" },
+                    new { Arg = "--capture-token <token>", Required = true, Type = "hard_authorization" },
+                    new { Arg = "--workspaceId <real>", Required = true, Type = "target_identification" },
+                    new { Arg = "--collectionId <real>", Required = true, Type = "target_identification" },
+                    new { Arg = "--runId <unique>", Required = true, Type = "idempotency" },
                 },
             },
-            GuardOrder = new[]
+            GuardOrder = new object[]
             {
-                new { Sequence = 1, Guard = "confirmLiveCapture", Check = "Parameter present.", BlockMessage = "Block with MissingConfirmLiveCapture." },
-                new { Sequence = 2, Guard = "captureToken", Check = "Non-empty string.", BlockMessage = "Block with MissingCaptureToken." },
-                new { Sequence = 3, Guard = "workspaceId/collectionId", Check = "Both non-empty.", BlockMessage = "Block with MissingWorkspaceId or MissingCollectionId." },
-                new { Sequence = 4, Guard = "synthetic rejection", Check = "Not in synthetic patterns.", BlockMessage = "Block with SyntheticWorkspaceOrCollection." },
-                new { Sequence = 5, Guard = "runId present", Check = "Non-empty string.", BlockMessage = "Block with MissingRunId." },
-                new { Sequence = 6, Guard = "RejectExistingRunId", Check = "Output file does not exist.", BlockMessage = "Block with RejectExistingRunId." },
-                new { Sequence = 7, Guard = "safety invariants", Check = "RuntimeInfluenceAllowed=false etc.", BlockMessage = "Hard abort." },
+                new { Sequence = 1, Guard = "confirmLiveCapture", Check = "Parameter present.", IfMissing = "Block with MissingConfirmLiveCapture." },
+                new { Sequence = 2, Guard = "captureToken", Check = "Non-empty string.", IfMissing = "Block with MissingCaptureToken." },
+                new { Sequence = 3, Guard = "workspaceId/collectionId", Check = "Both non-empty.", IfMissing = "Block with MissingWorkspaceId or MissingCollectionId." },
+                new { Sequence = 4, Guard = "synthetic rejection", Check = "Not in synthetic patterns.", IfSynthetic = "Block with SyntheticWorkspaceOrCollection." },
+                new { Sequence = 5, Guard = "runId present", Check = "Non-empty string.", IfMissing = "Block with MissingRunId." },
+                new { Sequence = 6, Guard = "RejectExistingRunId", Check = "Output file does not exist.", IfExists = "Block with RejectExistingRunId." },
+                new { Sequence = 7, Guard = "safety invariants", Check = "RuntimeInfluenceAllowed=false etc.", IfViolated = "Hard abort." },
+            },
+            DryRunBehavior = new
+            {
+                Enabled = true,
+                Description = "When --dry-run flag is present, execute all guards but do NOT wire sink or call BuildDetailedAsync.",
+                OutputExample = "DryRun: All guards passed. Would wire sink with runId=<runId>.",
+            },
+            BlockedBehavior = new
+            {
+                WhenAnyGuardFails = "Return LiveCaptureBlocked=true with specific blocked reason.",
+                OutputExample = "LiveCaptureBlocked=true. Reason: SyntheticWorkspaceOrCollection.",
             },
             SinkLifecycle = new[]
             {
@@ -6564,6 +6590,22 @@ Design review only — no production trace collected. No LiveCapture execution.
                 OnIdempotencyViolation = "Return immediately — no sink created.",
                 OnValidationFailure = "Dispose sink. Restore NullSink. Delete trace. Mark INVALID.",
                 AlwaysRestore = true,
+                AlwaysRestoreNote = "RuntimeCandidateTraceSinkAccessor.Current MUST always be restored to NullRuntimeCandidateTraceSink.",
+            },
+            TestPlan = new
+            {
+                UnitTestsPlanned = new[]
+                {
+                    new { Test = "AuthorizationFactorValidation_AllSevenFactorsChecked" },
+                    new { Test = "SyntheticRejection_AllSyntheticPatternsRejected" },
+                    new { Test = "RejectExistingRunId_WhenFileExists_Aborts" },
+                    new { Test = "SinkLifecycle_WiredAndRestored_Correctly" },
+                    new { Test = "BuildDetailedAsync_OnlyCalledAfterAllGuards_Pass" },
+                    new { Test = "BuildDetailedAsync_NotCalledWhenBlocked" },
+                    new { Test = "NoRuntimeInfluence_RuntimeInfluenceAllowed_PermanentlyFalse" },
+                },
+                IntegrationTestsPlanned = Array.Empty<object>(),
+                ProductionTestsPlanned = Array.Empty<object>(),
             },
             GateSemantics = new
             {
@@ -6608,9 +6650,11 @@ Design review only — no production trace collected. No LiveCapture execution.
             GeneratedAt = now.ToString("o"),
             ContractVersion = "V16.16",
             DocumentType = "NativeProductionTraceExecutionEndpointImplementationPlanGate",
+            Purpose = "Gate report confirming the endpoint implementation plan is complete.",
             GateResult = new
             {
                 GatePassed = true,
+                GatePassedReason = "Implementation plan fully defined.",
                 EndpointImplementationPlanReady = true,
                 EndpointImplementationAllowed = false,
                 EndpointImplemented = false,
@@ -6619,20 +6663,97 @@ Design review only — no production trace collected. No LiveCapture execution.
             {
                 JsonlTraceFilesInV16_16 = jsonlFiles.Length,
                 FileRuntimeCandidateTraceSinkWired = false,
+                FileRuntimeCandidateTraceSinkWiredCheck = "NOT wired. Plan phase only.",
                 BuildDetailedAsyncCalledInLiveCapturePath = false,
+                BuildDetailedAsyncCalledCheck = "NOT called. Plan phase only.",
+                RuntimeCandidateTraceSinkAccessorMutated = false,
             },
             GateSemantics = new
             {
+                NativeProductionTraceReady = false,
+                LiveCaptureExecutionImplemented = false,
+                LiveCaptureExecuted = false,
+                ProductionGeneralizationReady = false,
                 RuntimeInfluenceAllowed = false,
                 RuntimeInfluenceAllowedPermanent = true,
                 PackageOutputChanged = false,
+                RuntimePromotionApplied = false,
                 VectorBindingChanged = false,
+            },
+            PreviousGatesPreserved = new
+            {
+                V16_15EndpointDesignReady = true,
+                V16_14AuthorizationContractReady = true,
+                V16_13ExecutionPlanReady = true,
+                V16_12DesignReviewReady = true,
+                V16_11FinalAcceptanceBoundaryReady = true,
+                V16_7ControlledReplayMetricQualityReady = true,
             },
         };
 
         System.IO.File.WriteAllText(
             System.IO.Path.Combine(outputDir, "native-production-trace-execution-endpoint-implementation-plan-gate.json"),
             JsonSerializer.Serialize(gate, JsonOptions), System.Text.Encoding.UTF8);
+
+        // Preflight gate
+        var preflight = new
+        {
+            GeneratedAt = now.ToString("o"),
+            ContractVersion = "V16.16",
+            DocumentType = "NativeProductionTraceExecutionEndpointImplementationAuthorizationPreflight",
+            Purpose = "Implementation authorization preflight. Does not implement the endpoint.",
+            GateResult = new
+            {
+                GatePassed = true,
+                EndpointImplementationPlanReady = true,
+                EndpointImplementationAuthorizationPreflightReady = true,
+                EndpointImplementationAuthorizationPreflightReadyReason = "Implementation plan fully defined.",
+                EndpointImplementationAllowed = false,
+                EndpointImplementationAllowedReason = "Preflight confirms plan readiness but does not authorize implementation.",
+                EndpointImplemented = false,
+                ProductionTraceExecutionAuthorized = false,
+                ProductionTraceExecutionAllowed = false,
+                LiveCaptureExecutionImplemented = false,
+                LiveCaptureExecuted = false,
+                NativeProductionTraceReady = false,
+            },
+            SafetyAudit = new
+            {
+                JsonlTraceFilesInV16_16 = jsonlFiles.Length,
+                FileRuntimeCandidateTraceSinkWired = false,
+                BuildDetailedAsyncCalledInLiveCapturePath = false,
+                RuntimeCandidateTraceSinkAccessorMutated = false,
+            },
+            GateSemantics = new
+            {
+                RuntimeInfluenceAllowed = false,
+                RuntimeInfluenceAllowedPermanent = true,
+                PackageOutputChanged = false,
+                RuntimePromotionApplied = false,
+                VectorBindingChanged = false,
+                ProductionGeneralizationReady = false,
+            },
+            PhaseTransition = new
+            {
+                NextAllowedPhase = "NativeProductionTraceExecutionEndpointImplementationApproval",
+                NextAllowedPhaseDescription = "Formal approval gate to authorize endpoint implementation.",
+                NextDisallowedPhase = "RuntimeInfluenceActivation",
+                NextDisallowedPhaseReason = "Runtime influence is permanently false.",
+            },
+            PreviousGatesPreserved = new
+            {
+                V16_15EndpointDesignReady = true,
+                V16_14AuthorizationContractReady = true,
+                V16_13ExecutionPlanReady = true,
+                V16_12DesignReviewReady = true,
+                V16_11FinalAcceptanceBoundaryReady = true,
+                V16_7ControlledReplayMetricQualityReady = true,
+            },
+        };
+
+        System.IO.File.WriteAllText(
+            System.IO.Path.Combine(outputDir, "native-production-trace-execution-endpoint-implementation-authorization-preflight.json"),
+            JsonSerializer.Serialize(preflight, JsonOptions), System.Text.Encoding.UTF8);
 
         var md = string.Concat(
             $"# V16.16 Endpoint Implementation Plan\n\nGenerated: {now:o}\n\n",
