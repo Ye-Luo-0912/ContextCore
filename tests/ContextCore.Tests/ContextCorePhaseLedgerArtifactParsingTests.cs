@@ -265,5 +265,164 @@ public class ContextCorePhaseLedgerArtifactParsingTests
         Assert.IsTrue(clarification.GetProperty("LedgerCoversAllV16_2_ThroughV16_11").GetBoolean(),
             "Ledger coverage must be explicit.");
     }
+
+    // -----------------------------------------------------------------
+    // Generator reproducibility tests
+    // -----------------------------------------------------------------
+
+    [TestMethod]
+    public void GeneratorReproducibility_BlockedClaimsAreJsonObjects_NotStrings()
+    {
+        var path = ResolveArtifactPath("phase-ledger.json");
+        using var doc = JsonDocument.Parse(File.ReadAllText(path));
+
+        foreach (var phase in doc.RootElement.GetProperty("Phases").EnumerateArray())
+        {
+            var version = phase.GetProperty("Version").GetString();
+            var blockedClaims = phase.GetProperty("BlockedClaims");
+
+            Assert.AreEqual(JsonValueKind.Object, blockedClaims.ValueKind,
+                $"{version}: BlockedClaims must be a JSON Object, got {blockedClaims.ValueKind}. " +
+                "String-based BlockedClaims are forbidden — they indicate a generator bug.");
+        }
+    }
+
+    [TestMethod]
+    public void GeneratorReproducibility_AllBlockedClaimsFieldsHaveBlockedSuffix()
+    {
+        var path = ResolveArtifactPath("phase-ledger.json");
+        using var doc = JsonDocument.Parse(File.ReadAllText(path));
+
+        var allowedWithoutSuffix = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "LiveCaptureBlocked",
+        };
+
+        foreach (var phase in doc.RootElement.GetProperty("Phases").EnumerateArray())
+        {
+            var version = phase.GetProperty("Version").GetString();
+            var blockedClaims = phase.GetProperty("BlockedClaims");
+
+            foreach (var claim in blockedClaims.EnumerateObject())
+            {
+                string name = claim.Name;
+
+                Assert.IsTrue(
+                    name.EndsWith("Blocked", StringComparison.OrdinalIgnoreCase) || allowedWithoutSuffix.Contains(name),
+                    $"{version}: BlockedClaim '{name}' must end with 'Blocked' suffix or be in allowed list. " +
+                    "Plain readiness boolean names under BlockedClaims are ambiguous and forbidden.");
+            }
+        }
+    }
+
+    [TestMethod]
+    public void GeneratorReproducibility_AcceptedStateAreJsonObjects()
+    {
+        var path = ResolveArtifactPath("phase-ledger.json");
+        using var doc = JsonDocument.Parse(File.ReadAllText(path));
+
+        foreach (var phase in doc.RootElement.GetProperty("Phases").EnumerateArray())
+        {
+            var version = phase.GetProperty("Version").GetString();
+            var acceptedState = phase.GetProperty("AcceptedState");
+
+            Assert.AreEqual(JsonValueKind.Object, acceptedState.ValueKind,
+                $"{version}: AcceptedState must be a JSON Object, got {acceptedState.ValueKind}. " +
+                "String-based AcceptedState is forbidden — it indicates a generator regression.");
+        }
+    }
+
+    [TestMethod]
+    public void GeneratorReproducibility_NoAmbiguousReadinessBooleansInBlockedClaims()
+    {
+        var path = ResolveArtifactPath("phase-ledger.json");
+        using var doc = JsonDocument.Parse(File.ReadAllText(path));
+
+        var forbiddenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "NativeProductionTraceReady",
+            "ProductionGeneralizationReady",
+            "RuntimeInfluenceAllowed",
+            "PackageOutputChanged",
+            "VectorBindingChanged",
+            "LiveCaptureExecutionImplemented",
+            "LiveCaptureAuthorized",
+        };
+
+        foreach (var phase in doc.RootElement.GetProperty("Phases").EnumerateArray())
+        {
+            var version = phase.GetProperty("Version").GetString();
+            var blockedClaims = phase.GetProperty("BlockedClaims");
+
+            foreach (var claim in blockedClaims.EnumerateObject())
+            {
+                Assert.IsFalse(forbiddenNames.Contains(claim.Name),
+                    $"{version}: Ambiguous readiness boolean '{claim.Name}' found in BlockedClaims. " +
+                    $"Should be '{claim.Name}Blocked' instead. This is a generator schema hygiene violation.");
+            }
+        }
+    }
+
+    [TestMethod]
+    public void GeneratorReproducibility_TopLevelInvariantsAlwaysFalse()
+    {
+        var path = ResolveArtifactPath("phase-ledger.json");
+        using var doc = JsonDocument.Parse(File.ReadAllText(path));
+        var root = doc.RootElement;
+
+        Assert.IsFalse(root.TryGetProperty("ProductionGeneralizationReady", out var pgr) && pgr.GetBoolean(),
+            "ProductionGeneralizationReady must be false at top level.");
+    }
+
+    [TestMethod]
+    public void GeneratorReproducibility_RunGeneratorAndValidateOutputSchema()
+    {
+        // Invoke the private generator method via reflection
+        var assembly = typeof(ContextCore.ControlRoom.Commands.EvalCommand).Assembly;
+        var partialType = assembly.GetType("ContextCore.ControlRoom.Commands.EvalCommand");
+        Assert.IsNotNull(partialType, "EvalCommand type must be resolvable.");
+
+        var method = partialType!.GetMethod("ExecuteV16_11PhaseLedgerGateAsync",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+        Assert.IsNotNull(method, "ExecuteV16_11PhaseLedgerGateAsync must be resolvable.");
+
+        var task = method!.Invoke(null, [Array.Empty<string>(), CancellationToken.None]) as Task;
+        Assert.IsNotNull(task);
+        task!.GetAwaiter().GetResult();
+
+        // Read the generated output
+        var generatedPath = TestRepoFileResolver.Resolve("learning", "v16_11", "phase-ledger.json");
+        Assert.IsTrue(File.Exists(generatedPath),
+            $"Generator must produce phase-ledger.json at: {generatedPath}");
+
+        using var doc = JsonDocument.Parse(File.ReadAllText(generatedPath));
+        var root = doc.RootElement;
+
+        // Validate top-level structure
+        Assert.AreEqual("V16.11", root.GetProperty("ContractVersion").GetString());
+        Assert.AreEqual("ControlledReplay", root.GetProperty("HighestReadinessLevel").GetString());
+
+        // Validate every phase has BlockedClaims as objects and correct naming
+        foreach (var phase in root.GetProperty("Phases").EnumerateArray())
+        {
+            var version = phase.GetProperty("Version").GetString();
+            var blockedClaims = phase.GetProperty("BlockedClaims");
+
+            Assert.AreEqual(JsonValueKind.Object, blockedClaims.ValueKind,
+                $"{version}: Generator must produce BlockedClaims as JSON Object.");
+
+            var acceptedState = phase.GetProperty("AcceptedState");
+            Assert.AreEqual(JsonValueKind.Object, acceptedState.ValueKind,
+                $"{version}: Generator must produce AcceptedState as JSON Object.");
+
+            foreach (var claim in blockedClaims.EnumerateObject())
+            {
+                Assert.IsTrue(
+                    claim.Name.EndsWith("Blocked", StringComparison.OrdinalIgnoreCase)
+                    || claim.Name == "LiveCaptureBlocked",
+                    $"{version}: Generator-produced BlockedClaim '{claim.Name}' must end with 'Blocked'.");
+            }
+        }
+    }
 }
 

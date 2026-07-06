@@ -5069,53 +5069,221 @@ RuntimeInfluenceAllowed: false | PackageOutputChanged: false | VectorBindingChan
         // ----------------------------------------
         // Phase ledger data
         // ----------------------------------------
-        var phases = new[]
+        object[] phases =
         {
-            new { Version = "V16.2", Phase = "Repair B — Shadow Evaluation", Status = "Accepted",
-                HighestReadiness = "ShadowEval",
-                Accepted = "guarded_candidate_below_threshold, ProductionLikeWPA=0.5451 < 0.55",
-                Blocked = "MetricQualityBlocked=true, CrossSystemMapping=true" },
-            new { Version = "V16.3", Phase = "Native Trace Readiness Contract", Status = "Accepted",
-                HighestReadiness = "NativeTraceCollectorPreview",
-                Accepted = "CollectorReady=true, Privacy contract in place, CollectionEnabled=false",
-                Blocked = "NativeProductionTraceReady=false, No production trace collected" },
-            new { Version = "V16.4", Phase = "Native Trace Dry Run", Status = "Accepted",
-                HighestReadiness = "NativeDryRun",
-                Accepted = "49 rows, 0 errors, all traceSource=3, DryRunTraceReady=true",
-                Blocked = "Synthetic workspace only, not real production data" },
-            new { Version = "V16.5", Phase = "Native Trace Metric Eval", Status = "Accepted",
-                HighestReadiness = "NativeMetricEval_DryRun",
-                Accepted = "49 rows evaluated, WPA=0.5192",
-                Blocked = "MetricQualityReady=false (0.5192 < 0.55)" },
-            new { Version = "V16.6", Phase = "Production Trace Plan", Status = "Accepted",
-                HighestReadiness = "AcquisitionPlan",
-                Accepted = "HarnessReady=true, 4 auth modes defined",
-                Blocked = "Plan only, LiveCapture not executed" },
-            new { Version = "V16.7", Phase = "Controlled Replay — HIGHEST PROVEN", Status = "Accepted",
-                HighestReadiness = "ControlledReplay",
-                Accepted = "33 rows, 8 sections, 4 channels, WPA=0.6504 >= 0.55",
-                Blocked = "FileSystem only, seeded corpus, not production traffic" },
-            new { Version = "V16.8", Phase = "Authorization Contract", Status = "Accepted",
-                HighestReadiness = "AuthorizationContractReady",
-                Accepted = "4 auth modes, 5-factor LiveCapture barrier",
-                Blocked = "Execution endpoint not built" },
-            new { Version = "V16.9", Phase = "Candidate Dry-Run Gate", Status = "Accepted",
-                HighestReadiness = "CandidateGateReady",
-                Accepted = "7/7 unauthorized cases blocked",
-                Blocked = "LiveCapture not authorized" },
-            new { Version = "V16.10", Phase = "Authorized Simulation", Status = "Accepted",
-                HighestReadiness = "AuthorizedSimulation",
-                Accepted = "All 5 factors satisfied, still blocked",
-                Blocked = "Execution endpoint not implemented" },
-            new { Version = "V16.11", Phase = "Execution Skeleton", Status = "Accepted",
-                HighestReadiness = "ExecutionSkeleton_HardBlocked",
-                Accepted = "Skeleton exists, hard-blocked, no trace generated",
-                Blocked = "Execution not allowed, no production trace" },
+            new
+            {
+                Version = "V16.2", PhaseName = "Repair B — Production Trace Shadow Evaluation",
+                Status = "Accepted", HighestReadinessLevel = "ShadowEval",
+                AcceptedState = (object)new
+                {
+                    RuntimeInfluenceReadinessCandidate = "guarded_candidate_below_threshold",
+                    ProductionLikeWeightedPairwiseAcc = 0.5451,
+                    MetricQualityThreshold = 0.55,
+                    MetricQualityBlocked = true,
+                    ProductionGeneralizationReady = false,
+                    CrossSystemMapping = true,
+                    CrossSystemMappingNote = "Shadow-adapter traces are NOT native. traceSource=mapped(1), not native(3).",
+                },
+                BlockedClaims = new
+                {
+                    MetricQualityBelowThresholdBlocked = true,
+                    NoProductionGeneralizationBlocked = true,
+                    CrossSystemMappingBlocksNativeClaimBlocked = true,
+                },
+            },
+            new
+            {
+                Version = "V16.3", PhaseName = "Native Runtime Trace Readiness Contract",
+                Status = "Accepted", HighestReadinessLevel = "NativeTraceCollectorPreview",
+                AcceptedState = (object)new
+                {
+                    NativeTraceCollectorReady = true,
+                    NativeTraceCollectionEnabled = false,
+                    NativeProductionTraceReady = false,
+                    CollectorMode = "NativeRuntimeCandidateTracePreview",
+                    CrossSystemMapping = false,
+                    PrivacyContractInPlace = true,
+                },
+                BlockedClaims = new
+                {
+                    NativeProductionTraceReadyBlocked = true,
+                    ProductionTraceNotCollectedBlocked = true,
+                },
+            },
+            new
+            {
+                Version = "V16.4", PhaseName = "Native Runtime Trace Collection Dry Run",
+                Status = "Accepted", HighestReadinessLevel = "NativeDryRun",
+                AcceptedState = (object)new
+                {
+                    NativeRuntimeDryRunTraceReady = true,
+                    NativeTraceCollected = true,
+                    TraceCount = 49,
+                    AllRowsTraceSource3 = true,
+                    ValidationParseErrors = 0,
+                    ValidationMissingCriticalFields = 0,
+                    NativeProductionTraceReady = false,
+                },
+                BlockedClaims = new
+                {
+                    SyntheticWorkspaceOnlyBlocked = true,
+                    NoRealProductionDataBlocked = true,
+                    NativeProductionTraceReadyBlocked = true,
+                },
+            },
+            new
+            {
+                Version = "V16.5", PhaseName = "Native Trace Metric Evaluation",
+                Status = "Accepted", HighestReadinessLevel = "NativeMetricEvaluation_DryRun",
+                AcceptedState = (object)new
+                {
+                    NativeMetricQualityReady = false,
+                    WeightedPairwiseAcc_DryRun = 0.5192,
+                    MetricQualityThreshold = 0.55,
+                    MetricQualityAboveThreshold = false,
+                    TotalCombinedRows_DryRun = 49,
+                },
+                BlockedClaims = new
+                {
+                    MetricQualityBelowThresholdBlocked = true,
+                    DryRunDataOnlyBlocked = true,
+                    NoProductionMetricPassBlocked = true,
+                },
+            },
+            new
+            {
+                Version = "V16.6", PhaseName = "Native Production Trace Acquisition Plan",
+                Status = "Accepted", HighestReadinessLevel = "AcquisitionPlan",
+                AcceptedState = (object)new
+                {
+                    NativeProductionCaptureHarnessReady = true,
+                    AcquisitionMode = "PreviewOnly (default)",
+                    LiveCaptureAuthorized = false,
+                    LiveCaptureNotExecuted = true,
+                    NativeProductionTraceReady = false,
+                    ProductionGeneralizationReady = false,
+                },
+                BlockedClaims = new
+                {
+                    PlanOnlyBlocked = true,
+                    NoLiveCaptureBlocked = true,
+                    NativeProductionTraceReadyBlocked = true,
+                },
+            },
+            new
+            {
+                Version = "V16.7", PhaseName = "Controlled Replay Native Trace",
+                Status = "Accepted — HIGHEST PROVEN READINESS", HighestReadinessLevel = "ControlledReplay",
+                AcceptedState = (object)new
+                {
+                    NativeControlledReplayTraceReady = true,
+                    ControlledReplayTraceSufficient = true,
+                    ControlledReplayMetricQualityReady = true,
+                    WeightedPairwiseAcc = 0.6504,
+                    MetricQualityAboveThreshold = true,
+                    AcquisitionMode = "ControlledReplay",
+                    StoreBackend = "FileSystem",
+                    LiveCaptureBlocked = true,
+                    NativeProductionTraceReady = false,
+                },
+                BlockedClaims = new
+                {
+                    FileSystemStoreOnlyBlocked = true,
+                    SeededCorpusNotProductionBlocked = true,
+                    LiveCaptureBlocked = true,
+                    NativeProductionTraceReadyBlocked = true,
+                },
+            },
+            new
+            {
+                Version = "V16.8", PhaseName = "Production Capture Authorization Contract",
+                Status = "Accepted", HighestReadinessLevel = "AuthorizationContractReady",
+                AcceptedState = (object)new
+                {
+                    ProductionCaptureAuthorizationReady = true,
+                    AuthorizationModesDefined = 4,
+                    LiveCaptureFiveFactorBarrierDefined = true,
+                    ControlledReplayMetricQualityReady = true,
+                    NativeProductionTraceReady = false,
+                    ProductionGeneralizationReady = false,
+                    RuntimeInfluenceAllowedPermanent = true,
+                },
+                BlockedClaims = new
+                {
+                    LiveCaptureExecutionEndpointNotBuiltBlocked = true,
+                    NativeProductionTracePilotReadyBlocked = true,
+                },
+            },
+            new
+            {
+                Version = "V16.9", PhaseName = "LiveCapture Candidate Dry-Run Gate",
+                Status = "Accepted", HighestReadinessLevel = "CandidateGateReady",
+                AcceptedState = (object)new
+                {
+                    LiveCaptureCandidateGateReady = true,
+                    AllUnauthorizedCasesBlocked = true,
+                    LiveCaptureAuthorized = false,
+                    ControlledReplayMetricQualityReady = true,
+                },
+                BlockedClaims = new
+                {
+                    LiveCaptureNotAuthorizedBlocked = true,
+                    ProductionTraceNotGeneratedBlocked = true,
+                },
+            },
+            new
+            {
+                Version = "V16.10", PhaseName = "LiveCapture Authorized Simulation Contract",
+                Status = "Accepted", HighestReadinessLevel = "AuthorizedSimulation",
+                AcceptedState = (object)new
+                {
+                    LiveCaptureAuthorizationContractReady = true,
+                    LiveCaptureAuthorizationFactorsSatisfied = true,
+                    LiveCaptureExecutionImplemented = false,
+                    LiveCaptureExecuted = false,
+                    LiveCaptureBlocked = true,
+                },
+                BlockedClaims = new
+                {
+                    ExecutionEndpointMissingBlocked = true,
+                    NoProductionTraceCaptureBlocked = true,
+                },
+            },
+            new
+            {
+                Version = "V16.11", PhaseName = "LiveCapture Execution Endpoint Skeleton",
+                Status = "Accepted", HighestReadinessLevel = "ExecutionSkeleton_HardBlocked",
+                AcceptedState = (object)new
+                {
+                    LiveCaptureExecutionSkeletonExists = true,
+                    LiveCaptureExecutionImplemented = false,
+                    LiveCaptureExecuted = false,
+                    LiveCaptureBlocked = true,
+                    BlockedReason = "ExecutionSkeletonHardBlocked",
+                    NoFileRuntimeCandidateTraceSinkWired = true,
+                    NoBuildDetailedAsyncExecuted = true,
+                    NoProductionTraceGenerated = true,
+                },
+                BlockedClaims = new
+                {
+                    SkeletonHardBlocked = true,
+                    NoExecutionAllowedBlocked = true,
+                    NoProductionTraceBlocked = true,
+                },
+            },
         };
 
         // ----------------------------------------
-        // Phase ledger
+        // Phase ledger — construct Phases via JsonNode to ensure object serialization
         // ----------------------------------------
+        var phasesArray = new System.Text.Json.Nodes.JsonArray();
+        foreach (var phase in phases)
+        {
+            var phaseJson = JsonSerializer.Serialize(phase, phase.GetType(), JsonOptions);
+            phasesArray.Add(System.Text.Json.Nodes.JsonNode.Parse(phaseJson));
+        }
+
         var phaseLedger = new
         {
             GeneratedAt = now.ToString("o"),
@@ -5128,26 +5296,15 @@ RuntimeInfluenceAllowed: false | PackageOutputChanged: false | VectorBindingChan
             VersionOrderingNote = "Latest commit may be V16.3 backfill but ledger covers V16.2–V16.11. DO NOT infer readiness from commit message.",
             NextAllowedPhase = "NativeProductionTraceExecutionDesignReview",
             NextDisallowedPhase = "V17 Runtime influence activation",
-            PermanentInvariants = new
-            {
-                NativeProductionTraceReady = false,
-                ProductionGeneralizationReady = false,
-                LiveCaptureExecutionImplemented = false,
-                RuntimeInfluenceAllowed = false,
-                RuntimeInfluenceAllowedPermanent = true,
-                PackageOutputChanged = false,
-                RuntimePromotionApplied = false,
-                VectorBindingChanged = false,
-            },
-            Phases = phases.Select(p => new
-            {
-                p.Version,
-                p.Phase,
-                p.Status,
-                AcceptedState = p.Accepted,
-                BlockedClaims = p.Blocked,
-                p.HighestReadiness,
-            }).ToList(),
+            NativeProductionTraceReady = false,
+            ProductionGeneralizationReady = false,
+            LiveCaptureExecutionImplemented = false,
+            RuntimeInfluenceAllowed = false,
+            RuntimeInfluenceAllowedPermanent = true,
+            PackageOutputChanged = false,
+            RuntimePromotionApplied = false,
+            VectorBindingChanged = false,
+            Phases = phasesArray,
         };
 
         var ledgerPath = System.IO.Path.Combine(outputDir, "phase-ledger.json");
@@ -5174,7 +5331,16 @@ No phase since V16.7 has surpassed ControlledReplay readiness.
 
 | Version | Phase | Status | Highest Readiness |
 |---|---|---|---|
-{string.Join("\n", phases.Select(p => $"| {p.Version} | {p.Phase} | {p.Status} | {p.HighestReadiness} |"))}
+| V16.2 | Repair B — Production Trace Shadow Evaluation | Accepted | ShadowEval |
+| V16.3 | Native Runtime Trace Readiness Contract | Accepted | NativeTraceCollectorPreview |
+| V16.4 | Native Runtime Trace Collection Dry Run | Accepted | NativeDryRun |
+| V16.5 | Native Trace Metric Evaluation | Accepted | NativeMetricEvaluation_DryRun |
+| V16.6 | Native Production Trace Acquisition Plan | Accepted | AcquisitionPlan |
+| V16.7 | Controlled Replay Native Trace | Accepted — HIGHEST PROVEN | ControlledReplay |
+| V16.8 | Production Capture Authorization Contract | Accepted | AuthorizationContractReady |
+| V16.9 | LiveCapture Candidate Dry-Run Gate | Accepted | CandidateGateReady |
+| V16.10 | LiveCapture Authorized Simulation Contract | Accepted | AuthorizedSimulation |
+| V16.11 | LiveCapture Execution Endpoint Skeleton | Accepted | ExecutionSkeleton_HardBlocked |
 
 ## Permanent Invariants (all versions)
 
@@ -5244,9 +5410,9 @@ No phase since V16.7 has surpassed ControlledReplay readiness.
             VersionOrderingClarification = new
             {
                 LatestCommitMayBeV16_3_Backfill = true,
-                LedgerCoversV16_2_ThroughV16_11 = true,
-                DoNotInferReadinessFromCommitMessage = true,
-                DoNotInferReadinessFromVersionNumber = true,
+                LedgerCoversAllV16_2_ThroughV16_11 = true,
+                DoNotInferReadinessFromLatestCommitMessage = true,
+                DoNotInferReadinessFromVersionNumberOrdering = true,
             },
         };
 
