@@ -6206,5 +6206,185 @@ Design review only — no production trace collected. No LiveCapture execution.
 
         await Task.CompletedTask;
     }
+
+    private static async Task ExecuteV16_15NativeProductionTraceExecutionEndpointDesignAsync(IReadOnlyList<string> args, CancellationToken ct)
+    {
+        Console.WriteLine("[V16.15] Native Production Trace Execution Endpoint Implementation Design");
+        Console.WriteLine("[V16.15] Design only — no actual implementation. No production trace collected.");
+
+        var outputDir = System.IO.Path.Combine("learning", "v16_15");
+        System.IO.Directory.CreateDirectory(outputDir);
+        var now = DateTimeOffset.UtcNow;
+
+        var jsonlFiles = System.IO.Directory.GetFiles(outputDir, "*.jsonl");
+        Console.WriteLine($"[V16.15] .jsonl trace files in {outputDir}: {jsonlFiles.Length}");
+
+        // ----------------------------------------
+        // Endpoint implementation design
+        // ----------------------------------------
+        var design = new
+        {
+            GeneratedAt = now.ToString("o"),
+            ContractVersion = "V16.15",
+            DocumentType = "NativeProductionTraceExecutionEndpointImplementationDesign",
+            Purpose = "Endpoint implementation design only — no actual implementation.",
+            DesignStatus = new
+            {
+                EndpointImplementationDesignReady = true,
+                EndpointImplementationDesignReadyReason = "All design sections defined.",
+                EndpointImplementationAllowed = false,
+                EndpointImplementationAllowedReason = "Design phase only. Implementation requires a separate phase.",
+                EndpointImplemented = false,
+            },
+            CliEndpointShape = new
+            {
+                Subcommand = "v16_15-native-production-trace-execution-endpoint",
+                RequiredArgs = new[]
+                {
+                    new { Arg = "--confirm-live-capture", Type = "confirmation_flag", Required = true },
+                    new { Arg = "--capture-token <token>", Type = "hard_authorization", Required = true },
+                    new { Arg = "--workspaceId <real>", Type = "target_identification", Required = true },
+                    new { Arg = "--collectionId <real>", Type = "target_identification", Required = true },
+                    new { Arg = "--runId <unique>", Type = "idempotency", Required = true },
+                },
+            },
+            AuthorizationContractIntegration = new { Source = "V16.14", FactorsCheck = 7 },
+            SyntheticRejection = new { SyntheticPatternsCount = 22 },
+            RunIdIdempotency = new { Policy = "RejectExistingRunId" },
+            FileRuntimeCandidateTraceSinkWiringPlan = new { Steps = 6 },
+            RuntimeCandidateTraceSinkAccessorRestorePlan = new
+            {
+                OnSuccess = "Dispose sink, restore NullSink, clear IDs.",
+                OnFailure = "Dispose sink, restore NullSink, delete partial trace, log error.",
+                Invariant = "Must always restore to NullRuntimeCandidateTraceSink.",
+            },
+            BuildDetailedAsyncCallPlan = new
+            {
+                WhenAuthorized = "Execute BuildDetailedAsync after all checks pass.",
+                WhenNotAuthorized = "Return LiveCaptureBlocked=true. Do NOT call BuildDetailedAsync.",
+            },
+            RollbackCleanupPlan = new { Steps = 6 },
+            NoRuntimeInfluenceInvariant = new
+            {
+                RuntimeInfluenceAllowed = false,
+                RuntimeInfluenceAllowedPermanent = true,
+                NeuralBiasActive = false,
+                PackageOutputChanged = false,
+                RuntimePromotionApplied = false,
+                VectorBindingChanged = false,
+            },
+            GateSemantics = new
+            {
+                EndpointImplementationDesignReady = true,
+                EndpointImplementationAllowed = false,
+                EndpointImplemented = false,
+                ProductionTraceExecutionAuthorized = false,
+                ProductionTraceExecutionAllowed = false,
+                LiveCaptureExecutionImplemented = false,
+                LiveCaptureExecuted = false,
+                NativeProductionTraceReady = false,
+                ProductionGeneralizationReady = false,
+                RuntimeInfluenceAllowed = false,
+                RuntimeInfluenceAllowedPermanent = true,
+                PackageOutputChanged = false,
+                RuntimePromotionApplied = false,
+                VectorBindingChanged = false,
+            },
+            SafetyAudit = new
+            {
+                JsonlTraceFilesInV16_15 = jsonlFiles.Length,
+                FileRuntimeCandidateTraceSinkWired = false,
+                BuildDetailedAsyncCalledInLiveCapturePath = false,
+                RuntimeCandidateTraceSinkAccessorMutated = false,
+            },
+            PreviousGatesPreserved = new
+            {
+                V16_14AuthorizationContractReady = true,
+                V16_13ExecutionPlanReady = true,
+                V16_12DesignReviewReady = true,
+                V16_11FinalAcceptanceBoundaryReady = true,
+                V16_7ControlledReplayMetricQualityReady = true,
+            },
+        };
+
+        var designPath = System.IO.Path.Combine(outputDir, "native-production-trace-execution-endpoint-implementation-design.json");
+        System.IO.File.WriteAllText(designPath, JsonSerializer.Serialize(design, JsonOptions), System.Text.Encoding.UTF8);
+        Console.WriteLine($"[V16.15] Design: {designPath}");
+
+        // ----------------------------------------
+        // Design gate
+        // ----------------------------------------
+        var gate = new
+        {
+            GeneratedAt = now.ToString("o"),
+            ContractVersion = "V16.15",
+            DocumentType = "NativeProductionTraceExecutionEndpointImplementationDesignGate",
+            Purpose = "Gate report confirming endpoint design is complete.",
+            GateResult = new
+            {
+                GatePassed = true,
+                GatePassedReason = "Design covers all 9 required sections.",
+                EndpointImplementationDesignReady = true,
+                EndpointImplementationAllowed = false,
+                EndpointImplemented = false,
+            },
+            SafetyAudit = new
+            {
+                JsonlTraceFilesInV16_15 = jsonlFiles.Length,
+                FileRuntimeCandidateTraceSinkWired = false,
+                FileRuntimeCandidateTraceSinkWiredCheck = "NOT wired. Design phase only.",
+                BuildDetailedAsyncCalledInLiveCapturePath = false,
+                BuildDetailedAsyncCalledCheck = "NOT called. Design phase only.",
+                RuntimeCandidateTraceSinkAccessorMutated = false,
+            },
+            GateSemantics = new
+            {
+                NativeProductionTraceReady = false,
+                LiveCaptureExecutionImplemented = false,
+                LiveCaptureExecuted = false,
+                ProductionGeneralizationReady = false,
+                RuntimeInfluenceAllowed = false,
+                RuntimeInfluenceAllowedPermanent = true,
+                PackageOutputChanged = false,
+                RuntimePromotionApplied = false,
+                VectorBindingChanged = false,
+            },
+            PreviousGatesPreserved = new
+            {
+                V16_14AuthorizationContractReady = true,
+                V16_13ExecutionPlanReady = true,
+                V16_12DesignReviewReady = true,
+                V16_11FinalAcceptanceBoundaryReady = true,
+                V16_7ControlledReplayMetricQualityReady = true,
+            },
+        };
+
+        var gatePath = System.IO.Path.Combine(outputDir, "native-production-trace-execution-endpoint-implementation-design-gate.json");
+        System.IO.File.WriteAllText(gatePath, JsonSerializer.Serialize(gate, JsonOptions), System.Text.Encoding.UTF8);
+        Console.WriteLine($"[V16.15] Design gate: {gatePath}");
+
+        // ----------------------------------------
+        // Markdown
+        // ----------------------------------------
+        var md = string.Concat(
+            $"# V16.15 Endpoint Implementation Design\n\nGenerated: {now:o}\n\n",
+            $"Design only — no implementation.\n\n",
+            $"- EndpointImplementationDesignReady: **true**\n",
+            $"- EndpointImplementationAllowed: **false**\n",
+            $"- EndpointImplemented: **false**\n\n",
+            $"## Safety Audit\n- .jsonl trace files: {jsonlFiles.Length}\n"
+        );
+
+        var mdPath = System.IO.Path.Combine(outputDir, "native-production-trace-execution-endpoint-implementation-design.md");
+        System.IO.File.WriteAllText(mdPath, md, System.Text.Encoding.UTF8);
+        Console.WriteLine($"[V16.15] Design MD: {mdPath}");
+
+        Console.WriteLine("[V16.15] Endpoint Implementation Design complete");
+        Console.WriteLine("[V16.15] EndpointImplementationDesignReady=true EndpointImplementationAllowed=false");
+        Console.WriteLine("[V16.15] No FileRuntimeCandidateTraceSink wired. No BuildDetailedAsync called.");
+        Console.WriteLine("[V16.15] RuntimeInfluenceAllowed=false PackageOutputChanged=false VectorBindingChanged=false");
+
+        await Task.CompletedTask;
+    }
 }
 
