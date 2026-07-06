@@ -1,0 +1,104 @@
+{
+  "GeneratedAt": "2026-07-06T05:54:00.0000000+00:00",
+  "ContractVersion": "V16.13",
+  "DocumentType": "NativeProductionTraceExecutionPlan",
+  "Purpose": "Detailed execution plan for native production trace capture. This is a PLAN ONLY — no production trace is collected. No LiveCapture execution. The plan defines all parameters needed for future authorized execution.",
+  "PlanStatus": {
+    "ProductionTraceExecutionPlanned": true,
+    "ProductionTraceExecutionAllowed": false,
+    "ProductionTraceExecutionAllowedReason": "Plan is defined and ready, but execution requires explicit authorization (--confirm-live-capture + --capture-token per V16.8 contract) AND the execution endpoint must be implemented beyond the V16.11 skeleton."
+  },
+  "WorkspaceCollectionTemplate": {
+    "Field": "workspaceId",
+    "Type": "string",
+    "Required": true,
+    "Description": "Real production workspace ID. Must NOT be synthetic (native-ws, smoke-ws, dryrun-ws, etc.). Must contain real user traffic. Value to be filled at execution time.",
+    "PlaceholderOnly": true,
+    "PlaceholderValue": "<PROD_WORKSPACE_ID>",
+    "SyntheticIdsRejected": ["native-ws", "smoke-ws", "prod-ws", "test-ws", "demo-ws", "dryrun-ws", "synthetic-ws", "sandbox-ws", "preview-ws", "debug-ws", "dev-ws"]
+  },
+  "CollectionTemplate": {
+    "Field": "collectionId",
+    "Type": "string",
+    "Required": true,
+    "Description": "Real production collection ID. Must NOT be synthetic.",
+    "PlaceholderOnly": true,
+    "PlaceholderValue": "<PROD_COLLECTION_ID>"
+  },
+  "TokenBudget": {
+    "DefaultTokenBudget": 10000,
+    "Description": "Token budget for BuildDetailedAsync. Controls how many items are scored and selected. Same budget used in V16.7 controlled replay."
+  },
+  "ExpectedRowCount": {
+    "MinimumExpectedRows": 30,
+    "MaximumExpectedRows": 200,
+    "Reasoning": "V16.4 dry-run produced 49 rows with synthetic seeded stores. V16.7 controlled replay produced 33 rows with FileSystem seeded stores. Production workspace with real data is expected to produce 30-200 trace rows depending on workspace complexity."
+  },
+  "TraceOutputPath": {
+    "Pattern": "learning/v16_13/native-production-trace-{runId}.jsonl",
+    "Directory": "learning/v16_13/",
+    "Format": "JSONL (one JSON object per line)",
+    "traceSource": 3,
+    "traceSourceNote": "All rows must have traceSource=3 (PackageTrace)."
+  },
+  "RunIdPolicy": {
+    "Policy": "RejectExistingRunId",
+    "Description": "Before creating FileRuntimeCandidateTraceSink, check if output path exists. If yes, abort with idempotency error. Each runId must be unique.",
+    "runIdFormat": "run-{timestamp}-{sequence}",
+    "RetryPolicy": "Never reuse a failed runId. Generate a new unique runId for each retry."
+  },
+  "ValidationThresholds": {
+    "ParseErrorCount": 0,
+    "ParseErrorCountDescription": "Zero parse errors allowed. Any malformed JSONL line fails validation.",
+    "MissingCriticalFieldCount": 0,
+    "MissingCriticalFieldCountDescription": "Zero missing critical fields. Critical fields: operationId, candidateId, sourceType, authority, retrievalChannel, traceSource.",
+    "AllRowsTraceSource3": true,
+    "AllRowsTraceSource3Description": "Every trace row must have traceSource=3 (PackageTrace). Any row with traceSource != 3 fails validation.",
+    "NativeWeightedPairwiseAccThreshold": 0.55,
+    "NativeWeightedPairwiseAccThresholdDescription": "WeightedPairwiseAcc must be >= 0.55 on combined native trace data. This is the same threshold used for ControlledReplay metric quality in V16.7.",
+    "ScoringSelectedCountPositive": true,
+    "ScoringSelectedCountPositiveDescription": "At least one candidate must be selected by scoring (selectedByScoring=true).",
+    "ScoringRejectedCountPositive": true,
+    "ScoringRejectedCountPositiveDescription": "At least one candidate must be rejected by scoring (selectedByScoring=false).",
+    "PackageIncludedCountPositive": true,
+    "PackageIncludedCountPositiveDescription": "At least one candidate must be included in the package (includedInPackage=true).",
+    "PackageDroppedCountPositive": true,
+    "PackageDroppedCountPositiveDescription": "At least one candidate must be dropped from the package (includedInPackage=false)."
+  },
+  "AbortConditions": {
+    "BuildError": "If BasicContextPackageBuilder.BuildDetailedAsync() throws an exception, abort collection immediately. Dispose sink. Restore NullSink. Delete partial trace file.",
+    "IdempotencyViolation": "If trace file already exists for runId, abort with RejectExistingRunId error.",
+    "ValidationFailure": "If any validation threshold is not met (ParseErrorCount > 0 OR MissingCriticalFieldCount > 0 OR not AllRowsTraceSource3), mark trace as INVALID. Do not count toward metric quality pass.",
+    "MetricQualityFailure": "If NativeWeightedPairwiseAcc < 0.55 on traced data, do NOT set NativeProductionTraceReady=true. Do NOT set ProductionGeneralizationReady=true."
+  },
+  "RollbackCleanupProcedure": {
+    "Step1": "Call sink.FlushAsync() then sink.Dispose() to flush and release file handle.",
+    "Step2": "Set RuntimeCandidateTraceSinkAccessor.Current back to NullRuntimeCandidateTraceSink.",
+    "Step3": "Clear RuntimeCandidateTraceSinkAccessor.CurrentOperationId and CurrentRequestId (set to null).",
+    "Step4": "If collection failed or was aborted, delete the partial .jsonl trace file.",
+    "Step5": "If collection succeeded, the trace file is retained as production trace artifact.",
+    "Step6": "Log completion status (success/failure/abort) with runId, row count, operationId, timestamp.",
+    "Note": "No application state rollback needed — trace collection is diagnostic append-only."
+  },
+  "GateSemantics": {
+    "ProductionTraceExecutionPlanned": true,
+    "ProductionTraceExecutionAllowed": false,
+    "NativeProductionTraceReady": false,
+    "LiveCaptureExecutionImplemented": false,
+    "LiveCaptureExecuted": false,
+    "ProductionGeneralizationReady": false,
+    "RuntimeInfluenceAllowed": false,
+    "RuntimeInfluenceAllowedPermanent": true,
+    "PackageOutputChanged": false,
+    "RuntimePromotionApplied": false,
+    "VectorBindingChanged": false
+  },
+  "V16_12Preservation": {
+    "V16_12DesignReviewPassed": true,
+    "V16_12DesignReviewPreserved": true
+  },
+  "V14GatePreserved": true,
+  "V16_7GatePreserved": true,
+  "V16_11GatePreserved": true,
+  "V16_12GatePreserved": true
+}

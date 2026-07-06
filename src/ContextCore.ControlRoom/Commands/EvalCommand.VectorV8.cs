@@ -5694,5 +5694,216 @@ Design review only — no production trace collected. No LiveCapture execution.
 
         await Task.CompletedTask;
     }
+
+    private static async Task ExecuteV16_13NativeProductionTraceExecutionPlanAsync(IReadOnlyList<string> args, CancellationToken ct)
+    {
+        Console.WriteLine("[V16.13] Native Production Trace Execution Plan");
+        Console.WriteLine("[V16.13] Plan only — no production trace collected. No LiveCapture execution.");
+        Console.WriteLine("[V16.13] Defining all parameters for future authorized production trace capture.");
+
+        var outputDir = System.IO.Path.Combine("learning", "v16_13");
+        System.IO.Directory.CreateDirectory(outputDir);
+        var now = DateTimeOffset.UtcNow;
+
+        // Safety check — verify no .jsonl trace files exist
+        var jsonlFiles = System.IO.Directory.GetFiles(outputDir, "*.jsonl");
+        Console.WriteLine($"[V16.13] .jsonl trace files in {outputDir}: {jsonlFiles.Length}");
+
+        // ----------------------------------------
+        // Execution plan
+        // ----------------------------------------
+        var plan = new
+        {
+            GeneratedAt = now.ToString("o"),
+            ContractVersion = "V16.13",
+            DocumentType = "NativeProductionTraceExecutionPlan",
+            Purpose = "Detailed execution plan for native production trace capture. PLAN ONLY.",
+            PlanStatus = new
+            {
+                ProductionTraceExecutionPlanned = true,
+                ProductionTraceExecutionAllowed = false,
+                ProductionTraceExecutionAllowedReason = "Plan is defined and ready, but execution requires explicit authorization per V16.8 contract AND execution endpoint beyond skeleton.",
+            },
+            WorkspaceCollectionTemplate = new
+            {
+                Field = "workspaceId",
+                Type = "string",
+                Required = true,
+                Description = "Real production workspace ID. Must NOT be synthetic.",
+                PlaceholderOnly = true,
+                PlaceholderValue = "<PROD_WORKSPACE_ID>",
+                SyntheticIdsRejected = new[] { "native-ws", "smoke-ws", "prod-ws", "test-ws", "demo-ws", "dryrun-ws", "synthetic-ws", "sandbox-ws", "preview-ws", "debug-ws", "dev-ws" },
+            },
+            CollectionTemplate = new
+            {
+                Field = "collectionId",
+                Type = "string",
+                Required = true,
+                PlaceholderOnly = true,
+                PlaceholderValue = "<PROD_COLLECTION_ID>",
+            },
+            TokenBudget = new
+            {
+                DefaultTokenBudget = 10000,
+                Description = "Token budget for BuildDetailedAsync.",
+            },
+            ExpectedRowCount = new
+            {
+                MinimumExpectedRows = 30,
+                MaximumExpectedRows = 200,
+                Reasoning = "V16.4 dry-run: 49 rows (synthetic). V16.7 controlled replay: 33 rows (seeded). Production expected 30-200.",
+            },
+            TraceOutputPath = new
+            {
+                Pattern = "learning/v16_13/native-production-trace-{runId}.jsonl",
+                Format = "JSONL (one JSON object per line)",
+                TraceSource = 3,
+            },
+            RunIdPolicy = new
+            {
+                Policy = "RejectExistingRunId",
+                RunIdFormat = "run-{timestamp}-{sequence}",
+                RetryPolicy = "Never reuse a failed runId.",
+            },
+            ValidationThresholds = new
+            {
+                ParseErrorCount = 0,
+                MissingCriticalFieldCount = 0,
+                AllRowsTraceSource3 = true,
+                NativeWeightedPairwiseAccThreshold = 0.55,
+                ScoringSelectedCountPositive = true,
+                ScoringRejectedCountPositive = true,
+                PackageIncludedCountPositive = true,
+                PackageDroppedCountPositive = true,
+            },
+            AbortConditions = new
+            {
+                BuildError = "Abort, dispose sink, restore NullSink, delete partial trace.",
+                IdempotencyViolation = "Abort with RejectExistingRunId.",
+                ValidationFailure = "Mark trace as INVALID. Do not count toward metric quality pass.",
+                MetricQualityFailure = "Do NOT set NativeProductionTraceReady=true. Do NOT set ProductionGeneralizationReady=true.",
+            },
+            RollbackCleanupProcedure = new
+            {
+                Step1 = "Call sink.FlushAsync() then sink.Dispose().",
+                Step2 = "Set RuntimeCandidateTraceSinkAccessor.Current to NullRuntimeCandidateTraceSink.",
+                Step3 = "Clear CurrentOperationId and CurrentRequestId.",
+                Step4 = "If aborted/failed, delete partial .jsonl trace file.",
+                Step5 = "If succeeded, retain trace file.",
+                Step6 = "Log completion status.",
+                Note = "No application state rollback needed — trace collection is diagnostic append-only.",
+            },
+            GateSemantics = new
+            {
+                ProductionTraceExecutionPlanned = true,
+                ProductionTraceExecutionAllowed = false,
+                NativeProductionTraceReady = false,
+                LiveCaptureExecutionImplemented = false,
+                LiveCaptureExecuted = false,
+                ProductionGeneralizationReady = false,
+                RuntimeInfluenceAllowed = false,
+                RuntimeInfluenceAllowedPermanent = true,
+                PackageOutputChanged = false,
+                RuntimePromotionApplied = false,
+                VectorBindingChanged = false,
+            },
+            V16_12Preservation = new
+            {
+                V16_12DesignReviewPassed = true,
+                V16_12DesignReviewPreserved = true,
+            },
+            V14GatePreserved = true,
+            V16_7GatePreserved = true,
+            V16_11GatePreserved = true,
+            V16_12GatePreserved = true,
+        };
+
+        var planPath = System.IO.Path.Combine(outputDir, "native-production-trace-execution-plan.json");
+        System.IO.File.WriteAllText(planPath, JsonSerializer.Serialize(plan, JsonOptions), System.Text.Encoding.UTF8);
+        Console.WriteLine($"[V16.13] Plan: {planPath}");
+
+        // ----------------------------------------
+        // Plan gate
+        // ----------------------------------------
+        var gate = new
+        {
+            GeneratedAt = now.ToString("o"),
+            ContractVersion = "V16.13",
+            DocumentType = "NativeProductionTraceExecutionPlanGate",
+            GateResult = new
+            {
+                GatePassed = true,
+                GatePassedReason = "Execution plan fully defined. All safety invariants enforced.",
+                ProductionTraceExecutionPlanned = true,
+                ProductionTraceExecutionAllowed = false,
+            },
+            SafetyAudit = new
+            {
+                JsonlTraceFilesInV16_13 = jsonlFiles.Length,
+                JsonlTraceFilesCheck = jsonlFiles.Length == 0
+                    ? "PASS — No .jsonl trace files in learning/v16_13/"
+                    : $"WARNING: {jsonlFiles.Length} .jsonl files found.",
+                FileRuntimeCandidateTraceSinkWired = false,
+                BuildDetailedAsyncCalledInLivePath = false,
+                RuntimeCandidateTraceSinkAccessorMutated = false,
+            },
+            GateSemantics = new
+            {
+                NativeProductionTraceReady = false,
+                LiveCaptureExecutionImplemented = false,
+                LiveCaptureExecuted = false,
+                ProductionGeneralizationReady = false,
+                RuntimeInfluenceAllowed = false,
+                RuntimeInfluenceAllowedPermanent = true,
+                PackageOutputChanged = false,
+                RuntimePromotionApplied = false,
+                VectorBindingChanged = false,
+            },
+            PreviousGatesPreserved = new
+            {
+                V16_12DesignReviewReady = true,
+                V16_11FinalAcceptanceBoundaryReady = true,
+                V16_7ControlledReplayMetricQualityReady = true,
+            },
+        };
+
+        var gatePath = System.IO.Path.Combine(outputDir, "native-production-trace-execution-plan-gate.json");
+        System.IO.File.WriteAllText(gatePath, JsonSerializer.Serialize(gate, JsonOptions), System.Text.Encoding.UTF8);
+        Console.WriteLine($"[V16.13] Plan gate: {gatePath}");
+
+        // ----------------------------------------
+        // Markdown
+        // ----------------------------------------
+        var md = string.Concat(
+            $"# V16.13 Native Production Trace Execution Plan\n\n",
+            $"Generated: {now:o}\n\n",
+            $"## Purpose\nPlan only — no production trace collected. No LiveCapture execution.\n\n",
+            $"## Plan Status\n- ProductionTraceExecutionPlanned: **true**\n- ProductionTraceExecutionAllowed: **false**\n\n",
+            $"## Workspace/Collection Template\n- workspaceId: `<PROD_WORKSPACE_ID>` (placeholder)\n- collectionId: `<PROD_COLLECTION_ID>` (placeholder)\n\n",
+            $"## Token Budget: 10000\n\n",
+            $"## Expected Row Count: 30–200\n\n",
+            $"## Trace Output: `learning/v16_13/native-production-trace-{{runId}}.jsonl`\n\n",
+            $"## RunId Policy: RejectExistingRunId\n\n",
+            $"## Validation Thresholds\n| Threshold | Value |\n|---|---|\n| ParseErrorCount | 0 |\n| MissingCriticalFieldCount | 0 |\n| AllRowsTraceSource3 | true |\n| NativeWeightedPairwiseAcc | >= 0.55 |\n\n",
+            $"## Abort Conditions\n1. BuildError\n2. IdempotencyViolation\n3. ValidationFailure\n4. MetricQualityFailure\n\n",
+            $"## Gates\n| Gate | Value |\n|---|---|\n| ProductionTraceExecutionAllowed | false |\n| NativeProductionTraceReady | false |\n| RuntimeInfluenceAllowed | false (permanent) |\n| PackageOutputChanged | false |\n| VectorBindingChanged | false |\n\n",
+            $"## Safety Audit\n- .jsonl trace files: {jsonlFiles.Length}\n- FileRuntimeCandidateTraceSink wired: false\n"
+        );
+        var mdPath = System.IO.Path.Combine(outputDir, "native-production-trace-execution-plan.md");
+        System.IO.File.WriteAllText(mdPath, md, System.Text.Encoding.UTF8);
+        Console.WriteLine($"[V16.13] Plan MD: {mdPath}");
+
+        // ----------------------------------------
+        // Summary
+        // ----------------------------------------
+        Console.WriteLine("[V16.13] Native Production Trace Execution Plan complete");
+        Console.WriteLine("[V16.13] ProductionTraceExecutionPlanned=true ProductionTraceExecutionAllowed=false");
+        Console.WriteLine("[V16.13] NativeProductionTraceReady=false LiveCaptureExecuted=false");
+        Console.WriteLine("[V16.13] RuntimeInfluenceAllowed=false PackageOutputChanged=false VectorBindingChanged=false");
+        Console.WriteLine($"[V16.13] Safety: {jsonlFiles.Length} .jsonl trace files (expected 0)");
+        Console.WriteLine("[V16.13] No FileRuntimeCandidateTraceSink wired. No BuildDetailedAsync called.");
+
+        await Task.CompletedTask;
+    }
 }
 

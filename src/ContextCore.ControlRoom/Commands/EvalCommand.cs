@@ -421,6 +421,7 @@ public static partial class EvalCommand
             !string.Equals(subcommand, "v16_11-live-capture-execution-skeleton", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "v16_11-phase-ledger-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "v16_12-native-production-trace-execution-design-review", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "v16_13-native-production-trace-execution-plan", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "formal-evidence-stabilization-replay-pilot-readiness", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "formal-evidence-stabilization-replay-pilot-readiness-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "learning-formal-evidence-realization-r1-pack", StringComparison.OrdinalIgnoreCase) &&
@@ -776,6 +777,7 @@ public static partial class EvalCommand
             Console.WriteLine("  eval v16_11-live-capture-execution-skeleton [--mode LiveCapture --confirm-live-capture --capture-token <tok> --workspaceId <id> --collectionId <id> --runId <id>] (execution skeleton, hard-blocked)");
             Console.WriteLine("  eval v16_11-phase-ledger-gate (phase ledger & final acceptance boundary gate)");
             Console.WriteLine("  eval v16_12-native-production-trace-execution-design-review (native production trace execution design review)");
+            Console.WriteLine("  eval v16_13-native-production-trace-execution-plan (native production trace execution plan)");
             Console.WriteLine("  eval learning-formal-evidence-realization-r1-pack");
             Console.WriteLine("  eval learning-formal-evidence-realization-r1-pack-gate");
             Console.WriteLine("  eval dto-split-plan");
@@ -2494,6 +2496,12 @@ public static partial class EvalCommand
         if (string.Equals(subcommand, "v16_12-native-production-trace-execution-design-review", StringComparison.OrdinalIgnoreCase))
         {
             await ExecuteV16_12NativeProductionTraceExecutionDesignReviewAsync(args, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        if (string.Equals(subcommand, "v16_13-native-production-trace-execution-plan", StringComparison.OrdinalIgnoreCase))
+        {
+            await ExecuteV16_13NativeProductionTraceExecutionPlanAsync(args, cancellationToken).ConfigureAwait(false);
             return;
         }
 
