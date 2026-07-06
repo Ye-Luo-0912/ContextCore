@@ -5872,6 +5872,65 @@ Design review only — no production trace collected. No LiveCapture execution.
         Console.WriteLine($"[V16.13] Plan gate: {gatePath}");
 
         // ----------------------------------------
+        // Preflight gate
+        // ----------------------------------------
+        var preflight = new
+        {
+            GeneratedAt = now.ToString("o"),
+            ContractVersion = "V16.13",
+            DocumentType = "NativeProductionTraceExecutionPreflightGate",
+            Purpose = "Preflight gate that determines whether the system is ready to enter a future execution phase. Does NOT execute capture.",
+            GateResult = new
+            {
+                GatePassed = true,
+                ExecutionPlanComplete = true,
+                ExecutionPlanCompleteReason = "All plan sections defined.",
+                ProductionTraceExecutionAllowed = false,
+                ProductionTraceExecutionAllowedReason = "Preflight does not authorize execution.",
+                LiveCaptureExecutionImplemented = false,
+                NativeProductionTraceReady = false,
+                NoProductionTraceGenerated = true,
+                NoFileRuntimeCandidateTraceSinkWired = true,
+                NoBuildDetailedAsyncCalled = true,
+            },
+            SafetyAudit = new
+            {
+                JsonlTraceFilesInV16_13 = jsonlFiles.Length,
+                FileRuntimeCandidateTraceSinkWired = false,
+                BuildDetailedAsyncCalledInLiveCapturePath = false,
+                RuntimeCandidateTraceSinkAccessorMutated = false,
+            },
+            GateSemantics = new
+            {
+                RuntimeInfluenceAllowed = false,
+                RuntimeInfluenceAllowedPermanent = true,
+                PackageOutputChanged = false,
+                RuntimePromotionApplied = false,
+                VectorBindingChanged = false,
+                ProductionGeneralizationReady = false,
+                NativeProductionTraceReady = false,
+                LiveCaptureExecutionImplemented = false,
+            },
+            PhaseTransition = new
+            {
+                NextAllowedPhase = "NativeProductionTraceExecutionAuthorizationContract",
+                NextAllowedPhaseDescription = "Define authorization contract specifics for native production trace execution.",
+                NextDisallowedPhase = "RuntimeInfluenceActivation",
+                NextDisallowedPhaseReason = "Runtime influence is permanently false.",
+            },
+            PreviousGatesPreserved = new
+            {
+                V16_12DesignReviewReady = true,
+                V16_11FinalAcceptanceBoundaryReady = true,
+                V16_7ControlledReplayMetricQualityReady = true,
+            },
+        };
+
+        var preflightPath = System.IO.Path.Combine(outputDir, "native-production-trace-execution-preflight-gate.json");
+        System.IO.File.WriteAllText(preflightPath, JsonSerializer.Serialize(preflight, JsonOptions), System.Text.Encoding.UTF8);
+        Console.WriteLine($"[V16.13] Preflight gate: {preflightPath}");
+
+        // ----------------------------------------
         // Markdown
         // ----------------------------------------
         var md = string.Concat(

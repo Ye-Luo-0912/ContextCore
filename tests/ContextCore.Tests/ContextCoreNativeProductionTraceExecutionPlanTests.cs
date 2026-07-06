@@ -240,4 +240,124 @@ public class ContextCoreNativeProductionTraceExecutionPlanTests
         Assert.AreEqual(0, jsonlFiles.Length,
             $"No .jsonl trace files must exist in v16_13 directory. Found: {jsonlFiles.Length}");
     }
+
+    // -----------------------------------------------------------------
+    // Generator parity tests
+    // -----------------------------------------------------------------
+
+    [TestMethod]
+    public void GeneratorParity_RunGeneratorAndValidatePlanSchema()
+    {
+        var assembly = typeof(ContextCore.ControlRoom.Commands.EvalCommand).Assembly;
+        var type = assembly.GetType("ContextCore.ControlRoom.Commands.EvalCommand")!;
+        var method = type.GetMethod("ExecuteV16_13NativeProductionTraceExecutionPlanAsync",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+
+        var task = method.Invoke(null, [Array.Empty<string>(), CancellationToken.None]) as Task;
+        Assert.IsNotNull(task);
+        task!.GetAwaiter().GetResult();
+
+        var path = ResolveArtifactPath("native-production-trace-execution-plan.json");
+        using var doc = JsonDocument.Parse(File.ReadAllText(path));
+        var root = doc.RootElement;
+
+        Assert.AreEqual("V16.13", root.GetProperty("ContractVersion").GetString());
+        Assert.AreEqual("NativeProductionTraceExecutionPlan", root.GetProperty("DocumentType").GetString());
+
+        var planStatus = root.GetProperty("PlanStatus");
+        Assert.IsTrue(planStatus.GetProperty("ProductionTraceExecutionPlanned").GetBoolean());
+        Assert.IsFalse(planStatus.GetProperty("ProductionTraceExecutionAllowed").GetBoolean());
+    }
+
+    [TestMethod]
+    public void GeneratorParity_WorkspaceCollectionTemplate_PlaceholderOnly()
+    {
+        var path = ResolveArtifactPath("native-production-trace-execution-plan.json");
+        using var doc = JsonDocument.Parse(File.ReadAllText(path));
+        var root = doc.RootElement;
+
+        var ws = root.GetProperty("WorkspaceCollectionTemplate");
+        Assert.IsTrue(ws.GetProperty("PlaceholderOnly").GetBoolean());
+        Assert.IsTrue(ws.GetProperty("PlaceholderValue").GetString()!.StartsWith("<"));
+        Assert.IsTrue(ws.TryGetProperty("SyntheticIdsRejected", out var rejected));
+        Assert.IsTrue(rejected.GetArrayLength() > 5, "SyntheticIdsRejected must have at least 6 entries.");
+
+        var col = root.GetProperty("CollectionTemplate");
+        Assert.IsTrue(col.GetProperty("PlaceholderOnly").GetBoolean());
+        Assert.IsTrue(col.GetProperty("PlaceholderValue").GetString()!.StartsWith("<"));
+    }
+
+    [TestMethod]
+    public void GeneratorParity_GateSemantics_AllFalseGatesPresent()
+    {
+        var path = ResolveArtifactPath("native-production-trace-execution-plan.json");
+        using var doc = JsonDocument.Parse(File.ReadAllText(path));
+        var root = doc.RootElement;
+
+        var gates = root.GetProperty("GateSemantics");
+
+        Assert.IsFalse(gates.GetProperty("LiveCaptureExecuted").GetBoolean());
+        Assert.IsFalse(gates.GetProperty("LiveCaptureExecutionImplemented").GetBoolean());
+        Assert.IsFalse(gates.GetProperty("ProductionGeneralizationReady").GetBoolean());
+        Assert.IsTrue(gates.GetProperty("RuntimeInfluenceAllowedPermanent").GetBoolean());
+        Assert.IsFalse(gates.GetProperty("RuntimePromotionApplied").GetBoolean());
+    }
+
+    [TestMethod]
+    public void GeneratorParity_PlanGate_HasFullSafetyAudit()
+    {
+        var path = ResolveArtifactPath("native-production-trace-execution-plan-gate.json");
+        using var doc = JsonDocument.Parse(File.ReadAllText(path));
+        var root = doc.RootElement;
+
+        var safety = root.GetProperty("SafetyAudit");
+        Assert.IsTrue(safety.TryGetProperty("RuntimeCandidateTraceSinkAccessorMutated", out _),
+            "SafetyAudit must include RuntimeCandidateTraceSinkAccessorMutated.");
+        Assert.IsFalse(safety.GetProperty("FileRuntimeCandidateTraceSinkWired").GetBoolean());
+        Assert.IsFalse(safety.GetProperty("BuildDetailedAsyncCalledInLivePath").GetBoolean());
+    }
+
+    [TestMethod]
+    public void GeneratorParity_PreflightGate_ValidatesAllRequiredFields()
+    {
+        var path = ResolveArtifactPath("native-production-trace-execution-preflight-gate.json");
+        Assert.IsTrue(File.Exists(path), "Preflight gate must exist.");
+
+        using var doc = JsonDocument.Parse(File.ReadAllText(path));
+        var root = doc.RootElement;
+
+        Assert.AreEqual("NativeProductionTraceExecutionPreflightGate", root.GetProperty("DocumentType").GetString());
+
+        var gateResult = root.GetProperty("GateResult");
+        Assert.IsTrue(gateResult.GetProperty("ExecutionPlanComplete").GetBoolean());
+        Assert.IsFalse(gateResult.GetProperty("ProductionTraceExecutionAllowed").GetBoolean());
+        Assert.IsFalse(gateResult.GetProperty("LiveCaptureExecutionImplemented").GetBoolean());
+        Assert.IsFalse(gateResult.GetProperty("NativeProductionTraceReady").GetBoolean());
+        Assert.IsTrue(gateResult.GetProperty("NoProductionTraceGenerated").GetBoolean());
+
+        var safety = root.GetProperty("SafetyAudit");
+        Assert.AreEqual(0, safety.GetProperty("JsonlTraceFilesInV16_13").GetInt32());
+
+        var transition = root.GetProperty("PhaseTransition");
+        Assert.AreEqual("NativeProductionTraceExecutionAuthorizationContract",
+            transition.GetProperty("NextAllowedPhase").GetString());
+        Assert.AreEqual("RuntimeInfluenceActivation",
+            transition.GetProperty("NextDisallowedPhase").GetString());
+    }
+
+    [TestMethod]
+    public void GeneratorParity_AllArtifacts_HaveMatchingContractVersion()
+    {
+        var files = new[] { "native-production-trace-execution-plan.json",
+            "native-production-trace-execution-plan-gate.json",
+            "native-production-trace-execution-preflight-gate.json" };
+
+        foreach (var file in files)
+        {
+            var path = ResolveArtifactPath(file);
+            using var doc = JsonDocument.Parse(File.ReadAllText(path));
+            Assert.AreEqual("V16.13", doc.RootElement.GetProperty("ContractVersion").GetString(),
+                $"{file}: ContractVersion must be V16.13.");
+        }
+    }
 }
