@@ -1,0 +1,35 @@
+{
+  "GeneratedAt": "2026-07-07T09:23:00.0000000+00:00", "ContractVersion": "V16.23",
+  "DocumentType": "NativeProductionTraceEndpointApprovalValidatorStateMachine",
+  "Purpose": "State machine defining valid validation states and transitions. NoArtifactToReview is the current and only valid active state.",
+  "CurrentState": "NoArtifactToReview",
+  "States": [
+    {"State": "NoArtifactToReview", "Description": "No approval artifact exists. Validator is idle.", "IsActive": true},
+    {"State": "ArtifactDetected", "Description": "Approval artifact found at expected path.", "IsActive": false},
+    {"State": "SchemaValidation", "Description": "Artifact loaded and schema validation running.", "IsActive": false},
+    {"State": "RejectionPolicyEvaluation", "Description": "Schema valid, evaluating 15 rejection reasons.", "IsActive": false},
+    {"State": "QuarantineEvaluation", "Description": "Rejection passed, evaluating 9 quarantine conditions.", "IsActive": false},
+    {"State": "ValidatedApproval", "Description": "All validations passed. Approval accepted.", "IsActive": false},
+    {"State": "RejectedApproval", "Description": "Validation failed. Approval rejected.", "IsActive": false},
+    {"State": "GoCandidate", "Description": "Validated and quarantine cleared. Ready for Go decision.", "IsActive": false},
+    {"State": "ErrorState", "Description": "Unexpected error during validation.", "IsActive": false}
+  ],
+  "ValidTransitions": [
+    {"From": "NoArtifactToReview", "To": "ArtifactDetected", "Trigger": "Approval artifact appears at expected path"},
+    {"From": "ArtifactDetected", "To": "SchemaValidation", "Trigger": "Artifact loaded successfully"},
+    {"From": "ArtifactDetected", "To": "ErrorState", "Trigger": "Artifact file read error or malformed JSON"},
+    {"From": "SchemaValidation", "To": "RejectionPolicyEvaluation", "Trigger": "Schema valid (all 14 fields present and valid)"},
+    {"From": "SchemaValidation", "To": "RejectedApproval", "Trigger": "Schema invalid"},
+    {"From": "RejectionPolicyEvaluation", "To": "QuarantineEvaluation", "Trigger": "Zero rejection reasons triggered"},
+    {"From": "RejectionPolicyEvaluation", "To": "RejectedApproval", "Trigger": "One or more rejection reasons triggered"},
+    {"From": "QuarantineEvaluation", "To": "ValidatedApproval", "Trigger": "All 9 quarantine conditions satisfied"},
+    {"From": "QuarantineEvaluation", "To": "RejectedApproval", "Trigger": "Quarantine not cleared"},
+    {"From": "ValidatedApproval", "To": "GoCandidate", "Trigger": "Static scan clean, generator parity preserved"},
+    {"From": "ErrorState", "To": "NoArtifactToReview", "Trigger": "Error resolved, artifact path invalidated"}
+  ],
+  "ForbiddenTransitions": [
+    {"From": "NoArtifactToReview", "To": "GoCandidate", "Reason": "Cannot skip validation process."},
+    {"From": "ValidatedApproval", "To": "Implementation", "Reason": "Approval is not implementation. See V16.18 DoNotMisinterpret."},
+    {"From": "GoCandidate", "To": "Implementation", "Reason": "GoCandidate requires separate implementation authorization."}
+  ]
+}

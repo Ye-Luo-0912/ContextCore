@@ -1,0 +1,23 @@
+{
+  "GeneratedAt": "2026-07-07T09:23:00.0000000+00:00", "ContractVersion": "V16.23",
+  "DocumentType": "NativeProductionTraceEndpointApprovalValidatorRejectionMapping",
+  "Purpose": "Structured mapping of V16.22 rejection reasons to error codes, severity, and audit fields. Currently: only MissingArtifact is triggered.",
+  "Mappings": [
+    {"Reason": "MissingArtifact", "SourceRule": "ReviewFramework", "Severity": "Critical", "BlocksGo": true, "ErrorCode": "APPROVAL-001", "UserFacingMessage": "No approval artifact found. Implementation cannot proceed.", "AuditField": "MissingArtifact", "Triggered": true},
+    {"Reason": "MissingApproverIdentity", "SourceRule": "ApproverIdentity_Required_NonEmpty", "Severity": "Critical", "BlocksGo": true, "ErrorCode": "APPROVAL-002", "UserFacingMessage": "Approver identity is missing or empty.", "AuditField": "MissingApproverIdentity", "Triggered": false},
+    {"Reason": "MissingOrInvalidApprovalToken", "SourceRule": "ApprovalToken_Required_Unique", "Severity": "Critical", "BlocksGo": true, "ErrorCode": "APPROVAL-003", "UserFacingMessage": "Approval token is missing, empty, or duplicate.", "AuditField": "InvalidApprovalToken", "Triggered": false},
+    {"Reason": "MissingApprovalTimestamp", "SourceRule": "ApprovalTimestamp_Required", "Severity": "Critical", "BlocksGo": true, "ErrorCode": "APPROVAL-004", "UserFacingMessage": "Approval timestamp is missing or invalid.", "AuditField": "MissingTimestamp", "Triggered": false},
+    {"Reason": "ExpiredApproval", "SourceRule": "ExpirationDate_Future", "Severity": "Critical", "BlocksGo": true, "ErrorCode": "APPROVAL-005", "UserFacingMessage": "Approval has expired.", "AuditField": "ExpiredApproval", "Triggered": false},
+    {"Reason": "FinalApprovedNotTrue", "SourceRule": "FinalApproved_MustBeTrue", "Severity": "Critical", "BlocksGo": true, "ErrorCode": "APPROVAL-006", "UserFacingMessage": "EndpointImplementationFinalApproved must be true.", "AuditField": "FinalApprovedNotTrue", "Triggered": false},
+    {"Reason": "ImplementationAllowedNotTrue", "SourceRule": "ImplementationAllowed_MustBeTrue", "Severity": "Critical", "BlocksGo": true, "ErrorCode": "APPROVAL-007", "UserFacingMessage": "EndpointImplementationAllowed must be true.", "AuditField": "ImplAllowedNotTrue", "Triggered": false},
+    {"Reason": "EmptyApprovedFiles", "SourceRule": "ApprovedFiles_NonEmpty", "Severity": "Critical", "BlocksGo": true, "ErrorCode": "APPROVAL-008", "UserFacingMessage": "ApprovedFiles list is empty.", "AuditField": "EmptyApprovedFiles", "Triggered": false},
+    {"Reason": "ScopeExceedsApprovedFiles", "SourceRule": "ApprovedFiles_LimitedScope", "Severity": "Critical", "BlocksGo": true, "ErrorCode": "APPROVAL-009", "UserFacingMessage": "Implementation scope exceeds approved files.", "AuditField": "ScopeExceeded", "Triggered": false},
+    {"Reason": "InvalidCommandShape", "SourceRule": "ApprovedCommandShape_Match", "Severity": "Critical", "BlocksGo": true, "ErrorCode": "APPROVAL-010", "UserFacingMessage": "Command shape does not match expected.", "AuditField": "InvalidCmdShape", "Triggered": false},
+    {"Reason": "GuardOrderMismatch", "SourceRule": "ApprovedGuardOrder_Matches7Guards", "Severity": "Critical", "BlocksGo": true, "ErrorCode": "APPROVAL-011", "UserFacingMessage": "Guard order does not match 7-guard sequence.", "AuditField": "GuardMismatch", "Triggered": false},
+    {"Reason": "MissingRollbackPlan", "SourceRule": "ApprovedRollbackPlan_RequiredSteps", "Severity": "Critical", "BlocksGo": true, "ErrorCode": "APPROVAL-012", "UserFacingMessage": "Rollback plan missing required steps.", "AuditField": "MissingRollback", "Triggered": false},
+    {"Reason": "MissingRiskAcceptanceSignature", "SourceRule": "RiskAcceptanceSignature_Required", "Severity": "Critical", "BlocksGo": true, "ErrorCode": "APPROVAL-013", "UserFacingMessage": "Risk acceptance signature missing.", "AuditField": "MissingRiskSig", "Triggered": false},
+    {"Reason": "MissingRevocationConditions", "SourceRule": "RevocationConditions_Required", "Severity": "Warning", "BlocksGo": true, "ErrorCode": "APPROVAL-014", "UserFacingMessage": "Revocation conditions missing.", "AuditField": "MissingRevoke", "Triggered": false},
+    {"Reason": "InvalidApprovalScope", "SourceRule": "ApprovalScope_Exact", "Severity": "Critical", "BlocksGo": true, "ErrorCode": "APPROVAL-015", "UserFacingMessage": "Approval scope is not NativeProductionTraceEndpointImplementation.", "AuditField": "InvalidScope", "Triggered": false}
+  ],
+  "MappingSummary": {"TotalMappings": 15, "CriticalSeverity": 14, "WarningSeverity": 1, "TriggeredMappings": 1, "NotEvaluatedMappings": 14}
+}

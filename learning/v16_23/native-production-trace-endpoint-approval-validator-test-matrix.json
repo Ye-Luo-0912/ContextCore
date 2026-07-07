@@ -1,0 +1,26 @@
+{
+  "GeneratedAt": "2026-07-07T09:23:00.0000000+00:00", "ContractVersion": "V16.23",
+  "DocumentType": "NativeProductionTraceEndpointApprovalValidatorTestMatrix",
+  "Purpose": "Test matrix covering 17 scenarios for the approval artifact validator. Current: all are plan-level definitions, not executable tests.",
+  "TestMatrixStatus": {"TestMatrixReady": true, "ValidatorNotImplemented": true, "TestsNeverExecuted": true},
+  "Scenarios": [
+    {"Id": "T-001", "Scenario": "Missing artifact", "ApprovalArtifactExists": false, "InputArtifact": "none", "ExpectedOutcome": "ApprovalRejected", "ExpectedReason": "APPROVAL-001", "GoDecision": false},
+    {"Id": "T-002", "Scenario": "Malformed JSON artifact", "ApprovalArtifactExists": true, "InputArtifact": "malformed", "ExpectedOutcome": "ApprovalRejected", "ExpectedReason": "ErrorState", "GoDecision": false},
+    {"Id": "T-003", "Scenario": "Missing required fields", "ApprovalArtifactExists": true, "InputArtifact": "missing-fields", "ExpectedOutcome": "ApprovalRejected", "ExpectedReason": "SchemaValidation", "GoDecision": false},
+    {"Id": "T-004", "Scenario": "FinalApproved=false", "ApprovalArtifactExists": true, "InputArtifact": "final-approved-false", "ExpectedOutcome": "ApprovalRejected", "ExpectedReason": "APPROVAL-006", "GoDecision": false},
+    {"Id": "T-005", "Scenario": "ImplementationAllowed=false", "ApprovalArtifactExists": true, "InputArtifact": "impl-allowed-false", "ExpectedOutcome": "ApprovalRejected", "ExpectedReason": "APPROVAL-007", "GoDecision": false},
+    {"Id": "T-006", "Scenario": "Empty ApprovedFiles", "ApprovalArtifactExists": true, "InputArtifact": "empty-files", "ExpectedOutcome": "ApprovalRejected", "ExpectedReason": "APPROVAL-008", "GoDecision": false},
+    {"Id": "T-007", "Scenario": "Scope expansion", "ApprovalArtifactExists": true, "InputArtifact": "scope-expanded", "ExpectedOutcome": "ApprovalRejected", "ExpectedReason": "APPROVAL-009", "GoDecision": false},
+    {"Id": "T-008", "Scenario": "Invalid command shape", "ApprovalArtifactExists": true, "InputArtifact": "wrong-cmd", "ExpectedOutcome": "ApprovalRejected", "ExpectedReason": "APPROVAL-010", "GoDecision": false},
+    {"Id": "T-009", "Scenario": "Guard order mismatch", "ApprovalArtifactExists": true, "InputArtifact": "bad-guards", "ExpectedOutcome": "ApprovalRejected", "ExpectedReason": "APPROVAL-011", "GoDecision": false},
+    {"Id": "T-010", "Scenario": "Missing rollback plan", "ApprovalArtifactExists": true, "InputArtifact": "no-rollback", "ExpectedOutcome": "ApprovalRejected", "ExpectedReason": "APPROVAL-012", "GoDecision": false},
+    {"Id": "T-011", "Scenario": "Missing risk signature", "ApprovalArtifactExists": true, "InputArtifact": "no-risk-sig", "ExpectedOutcome": "ApprovalRejected", "ExpectedReason": "APPROVAL-013", "GoDecision": false},
+    {"Id": "T-012", "Scenario": "Expired approval", "ApprovalArtifactExists": true, "InputArtifact": "expired", "ExpectedOutcome": "ApprovalRejected", "ExpectedReason": "APPROVAL-005", "GoDecision": false},
+    {"Id": "T-013", "Scenario": "Revoked approval", "ApprovalArtifactExists": true, "InputArtifact": "revoked", "ExpectedOutcome": "ApprovalRejected", "ExpectedReason": "APPROVAL-014", "GoDecision": false},
+    {"Id": "T-014", "Scenario": "Valid approval but quarantine active", "ApprovalArtifactExists": true, "InputArtifact": "valid-quarantine", "ExpectedOutcome": "ApprovalRejected", "ExpectedReason": "QuarantineEvaluation", "GoDecision": false},
+    {"Id": "T-015", "Scenario": "Valid approval but static scan dirty", "ApprovalArtifactExists": true, "InputArtifact": "valid-dirty-scan", "ExpectedOutcome": "ApprovalRejected", "ExpectedReason": "StaticScan", "GoDecision": false},
+    {"Id": "T-016", "Scenario": "Valid approval happy-path simulation", "ApprovalArtifactExists": true, "InputArtifact": "valid-all", "ExpectedOutcome": "ApprovalAccepted", "ExpectedReason": "none", "GoDecision": true},
+    {"Id": "T-017", "Scenario": "Missing approver identity", "ApprovalArtifactExists": true, "InputArtifact": "no-approver", "ExpectedOutcome": "ApprovalRejected", "ExpectedReason": "APPROVAL-002", "GoDecision": false}
+  ],
+  "Summary": {"TotalScenarios": 17, "GoScenarios": 1, "NoGoScenarios": 16, "AllArePlanDefinitions": true, "NoneExecuted": true}
+}

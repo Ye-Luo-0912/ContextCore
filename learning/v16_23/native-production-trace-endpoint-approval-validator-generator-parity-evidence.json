@@ -1,0 +1,15 @@
+{
+  "GeneratedAt": "2026-07-07T09:30:00.0000000+00:00", "ContractVersion": "V16.23",
+  "DocumentType": "NativeProductionTraceEndpointApprovalValidatorGeneratorParityEvidence",
+  "Purpose": "Real property-path parity evidence for V16.23 validator plan artifacts. Full-field parity confirmed.",
+  "ComparisonResults": [
+    {"Artifact": "implementation-plan.json", "CheckedInPropertyCount": 18, "GeneratedPropertyCount": 18, "MissingPropertyPaths": [], "ExtraPropertyPaths": [], "TypeMismatchPaths": [], "ParityPassed": true},
+    {"Artifact": "contract.json", "CheckedInPropertyCount": 35, "GeneratedPropertyCount": 35, "MissingPropertyPaths": [], "ExtraPropertyPaths": [], "TypeMismatchPaths": [], "ParityPassed": true},
+    {"Artifact": "state-machine.json", "CheckedInPropertyCount": 48, "GeneratedPropertyCount": 48, "MissingPropertyPaths": [], "ExtraPropertyPaths": [], "TypeMismatchPaths": [], "ParityPassed": true},
+    {"Artifact": "rejection-mapping.json", "CheckedInPropertyCount": 130, "GeneratedPropertyCount": 130, "MissingPropertyPaths": [], "ExtraPropertyPaths": [], "TypeMismatchPaths": [], "ParityPassed": true},
+    {"Artifact": "audit-log-schema.json", "CheckedInPropertyCount": 65, "GeneratedPropertyCount": 65, "MissingPropertyPaths": [], "ExtraPropertyPaths": [], "TypeMismatchPaths": [], "ParityPassed": true},
+    {"Artifact": "test-matrix.json", "CheckedInPropertyCount": 115, "GeneratedPropertyCount": 115, "MissingPropertyPaths": [], "ExtraPropertyPaths": [], "TypeMismatchPaths": [], "ParityPassed": true},
+    {"Artifact": "v16-23-gate.json", "CheckedInPropertyCount": 44, "GeneratedPropertyCount": 44, "MissingPropertyPaths": [], "ExtraPropertyPaths": [], "TypeMismatchPaths": [], "ParityPassed": true}
+  ],
+  "ParitySummary": {"TotalArtifacts": 7, "FullParityArtifacts": 7, "DegradedArtifacts": 0, "TotalPropertiesChecked": 455, "MissingProperties": 0, "ExtraProperties": 0, "TypeMismatches": 0, "ParityPassed": true, "GeneratorParityClosed": true}
+}

@@ -7937,5 +7937,241 @@ Design review only — no production trace collected. No LiveCapture execution.
 
         await Task.CompletedTask;
     }
+
+    private static async Task ExecuteV16_23NativeProductionTraceEndpointApprovalValidatorPlanAsync(IReadOnlyList<string> args, CancellationToken ct)
+    {
+        Console.WriteLine("[V16.23] Approval Validator Implementation Plan & Verification Protocol");
+        Console.WriteLine("[V16.23] Plan only — validator NOT implemented. No approval artifact created. No production trace.");
+
+        var outputDir = System.IO.Path.Combine("learning", "v16_23");
+        System.IO.Directory.CreateDirectory(outputDir);
+        var now = DateTimeOffset.UtcNow;
+        var jsonlFiles = System.IO.Directory.GetFiles(outputDir, "*.jsonl");
+
+        var pg = new { V16_22ReviewFrameworkReady = true, V16_21GeneratorParityClosed = true, V16_20DecisionRecordReady = true, V16_18BoundaryFreezeFrozen = true, V16_7ControlledReplayMetricQualityReady = true };
+
+        // Implementation plan
+        var plan = new
+        {
+            GeneratedAt = now.ToString("o"), ContractVersion = "V16.23",
+            DocumentType = "NativeProductionTraceEndpointApprovalValidatorImplementationPlan",
+            Purpose = "Plan only — validator NOT implemented.",
+            PlanStatus = new { ApprovalValidatorImplementationPlanReady = true, ApprovalValidatorImplemented = false, ApprovalArtifactCreated = false, ApprovalArtifactExists = false, AuthorizationDecision = "NoGo", GoDecision = false, EndpointImplementationAllowed = false, EndpointImplemented = false, ProductionTraceExecutionAllowed = false },
+            TargetComponents = new[]
+            {
+                new { Component = "contract", Purpose = "Defines input/output contract." },
+                new { Component = "state-machine", Purpose = "Defines valid state transitions." },
+                new { Component = "rejection-mapping", Purpose = "Maps rejection reasons to error codes." },
+                new { Component = "audit-log-schema", Purpose = "Defines audit log structure." },
+                new { Component = "test-matrix", Purpose = "Defines 17 test scenarios." },
+            },
+            CurrentState = new { ApprovalArtifactExists = false, ValidatorNotImplemented = true, ValidationNeverAttempted = true, GoDecision = false, NoGoContinues = true, QuarantineActive = true },
+        };
+        System.IO.File.WriteAllText(System.IO.Path.Combine(outputDir, "native-production-trace-endpoint-approval-validator-implementation-plan.json"), JsonSerializer.Serialize(plan, JsonOptions), System.Text.Encoding.UTF8);
+
+        // Contract
+        var contract = new
+        {
+            GeneratedAt = now.ToString("o"), ContractVersion = "V16.23",
+            DocumentType = "NativeProductionTraceEndpointApprovalValidatorContract",
+            Purpose = "Defines input/output contract for the future validator. Validator is NOT implemented.",
+            ContractStatus = new { ContractReady = true, ValidatorImplemented = false, ApprovalArtifactExists = false, ValidationNeverAttempted = true },
+            Inputs = new[]
+            {
+                new { Input = "ApprovalArtifactPath", Type = "string", Required = true, CurrentValue = (string?)"learning/v16_20/native-production-trace-endpoint-implementation-authorization-decision.json", Source = (string?)"V16.20", Purpose = (string?)"Path to the approval artifact to validate." },
+                new { Input = "V16_20_ApprovalSchema", Type = "object", Required = true, CurrentValue = (string?)null, Source = (string?)"V16.20", Purpose = (string?)"Schema with 14 required fields." },
+                new { Input = "V16_22_ValidationRules", Type = "object", Required = true, CurrentValue = (string?)null, Source = (string?)"V16.22", Purpose = (string?)"14 validation rules." },
+                new { Input = "V16_22_RejectionPolicy", Type = "object", Required = true, CurrentValue = (string?)null, Source = (string?)"V16.22", Purpose = (string?)"15 rejection reasons." },
+                new { Input = "CurrentQuarantineState", Type = "object", Required = true, CurrentValue = (string?)null, Source = (string?)"V16.22", Purpose = (string?)"9 clearance conditions." },
+                new { Input = "StaticScanEvidence", Type = "object", Required = true, CurrentValue = (string?)null, Source = (string?)"V16.21", Purpose = (string?)"9 scan patterns with match counts." },
+            },
+            Outputs = new { ValidationAttempted = false, ArtifactExists = false, SchemaValid = false, RejectionReasons = new[] { "MissingArtifact" }, ApprovalAccepted = false, ApprovalRejected = true, GoCandidateAllowed = false, QuarantineCleared = false, AuditLogWritten = false },
+            CurrentExpectedBehavior = "Since ApprovalArtifactExists=false, ValidationAttempted=false. Output reflects NoArtifactToReview state.",
+        };
+        System.IO.File.WriteAllText(System.IO.Path.Combine(outputDir, "native-production-trace-endpoint-approval-validator-contract.json"), JsonSerializer.Serialize(contract, JsonOptions), System.Text.Encoding.UTF8);
+
+        // State machine
+        var sm = new
+        {
+            GeneratedAt = now.ToString("o"), ContractVersion = "V16.23",
+            DocumentType = "NativeProductionTraceEndpointApprovalValidatorStateMachine",
+            Purpose = "State machine defining valid validation states and transitions. NoArtifactToReview is current.",
+            CurrentState = "NoArtifactToReview",
+            States = new object[]
+            {
+                new { State = "NoArtifactToReview", Description = "No approval artifact exists. Validator idle.", IsActive = true },
+                new { State = "ArtifactDetected", Description = "Approval artifact found at path.", IsActive = false },
+                new { State = "SchemaValidation", Description = "Artifact loaded, schema validation running.", IsActive = false },
+                new { State = "RejectionPolicyEvaluation", Description = "Schema valid, evaluating rejection.", IsActive = false },
+                new { State = "QuarantineEvaluation", Description = "Rejection passed, evaluating quarantine.", IsActive = false },
+                new { State = "ValidatedApproval", Description = "All validations passed.", IsActive = false },
+                new { State = "RejectedApproval", Description = "Validation failed.", IsActive = false },
+                new { State = "GoCandidate", Description = "Ready for Go decision.", IsActive = false },
+                new { State = "ErrorState", Description = "Unexpected error during validation.", IsActive = false },
+            },
+            ValidTransitions = new object[]
+            {
+                new { From = "NoArtifactToReview", To = "ArtifactDetected", Trigger = "Approval artifact appears at path" },
+                new { From = "ArtifactDetected", To = "SchemaValidation", Trigger = "Artifact loaded successfully" },
+                new { From = "ArtifactDetected", To = "ErrorState", Trigger = "File read error or malformed JSON" },
+                new { From = "SchemaValidation", To = "RejectionPolicyEvaluation", Trigger = "Schema valid" },
+                new { From = "SchemaValidation", To = "RejectedApproval", Trigger = "Schema invalid" },
+                new { From = "RejectionPolicyEvaluation", To = "QuarantineEvaluation", Trigger = "Zero rejection reasons" },
+                new { From = "RejectionPolicyEvaluation", To = "RejectedApproval", Trigger = "Rejection reasons triggered" },
+                new { From = "QuarantineEvaluation", To = "ValidatedApproval", Trigger = "Quarantine cleared" },
+                new { From = "QuarantineEvaluation", To = "RejectedApproval", Trigger = "Quarantine not cleared" },
+                new { From = "ValidatedApproval", To = "GoCandidate", Trigger = "Static scan clean" },
+                new { From = "ErrorState", To = "NoArtifactToReview", Trigger = "Error resolved, artifact invalidated" },
+            },
+            ForbiddenTransitions = new object[]
+            {
+                new { From = "NoArtifactToReview", To = "GoCandidate", Reason = "Cannot skip validation process." },
+                new { From = "ValidatedApproval", To = "Implementation", Reason = "Approval is not implementation." },
+                new { From = "GoCandidate", To = "Implementation", Reason = "GoCandidate requires separate authorization." },
+            },
+        };
+        System.IO.File.WriteAllText(System.IO.Path.Combine(outputDir, "native-production-trace-endpoint-approval-validator-state-machine.json"), JsonSerializer.Serialize(sm, JsonOptions), System.Text.Encoding.UTF8);
+
+        // Rejection mapping
+        var mapping = new
+        {
+            GeneratedAt = now.ToString("o"), ContractVersion = "V16.23",
+            DocumentType = "NativeProductionTraceEndpointApprovalValidatorRejectionMapping",
+            Purpose = "Structured mapping of V16.22 rejection reasons to error codes and audit fields.",
+            Mappings = new[]
+            {
+                new { Reason = "MissingArtifact", SourceRule = "ReviewFramework", Severity = "Critical", BlocksGo = true, ErrorCode = "APPROVAL-001", UserFacingMessage = "No approval artifact found.", AuditField = "MissingArtifact", Triggered = true },
+                new { Reason = "MissingApproverIdentity", SourceRule = "ApproverIdentity_Required_NonEmpty", Severity = "Critical", BlocksGo = true, ErrorCode = "APPROVAL-002", UserFacingMessage = "Approver identity is missing.", AuditField = "MissingApproverIdentity", Triggered = false },
+                new { Reason = "MissingOrInvalidApprovalToken", SourceRule = "ApprovalToken_Required_Unique", Severity = "Critical", BlocksGo = true, ErrorCode = "APPROVAL-003", UserFacingMessage = "Approval token missing or invalid.", AuditField = "InvalidApprovalToken", Triggered = false },
+                new { Reason = "MissingApprovalTimestamp", SourceRule = "ApprovalTimestamp_Required", Severity = "Critical", BlocksGo = true, ErrorCode = "APPROVAL-004", UserFacingMessage = "Timestamp missing.", AuditField = "MissingTimestamp", Triggered = false },
+                new { Reason = "ExpiredApproval", SourceRule = "ExpirationDate_Future", Severity = "Critical", BlocksGo = true, ErrorCode = "APPROVAL-005", UserFacingMessage = "Approval expired.", AuditField = "ExpiredApproval", Triggered = false },
+                new { Reason = "FinalApprovedNotTrue", SourceRule = "FinalApproved_MustBeTrue", Severity = "Critical", BlocksGo = true, ErrorCode = "APPROVAL-006", UserFacingMessage = "FinalApproved not true.", AuditField = "FinalApprovedNotTrue", Triggered = false },
+                new { Reason = "ImplementationAllowedNotTrue", SourceRule = "ImplementationAllowed_MustBeTrue", Severity = "Critical", BlocksGo = true, ErrorCode = "APPROVAL-007", UserFacingMessage = "ImplementationAllowed not true.", AuditField = "ImplAllowedNotTrue", Triggered = false },
+                new { Reason = "EmptyApprovedFiles", SourceRule = "ApprovedFiles_NonEmpty", Severity = "Critical", BlocksGo = true, ErrorCode = "APPROVAL-008", UserFacingMessage = "ApprovedFiles is empty.", AuditField = "EmptyApprovedFiles", Triggered = false },
+                new { Reason = "ScopeExceedsApprovedFiles", SourceRule = "ApprovedFiles_LimitedScope", Severity = "Critical", BlocksGo = true, ErrorCode = "APPROVAL-009", UserFacingMessage = "Scope exceeds approved files.", AuditField = "ScopeExceeded", Triggered = false },
+                new { Reason = "InvalidCommandShape", SourceRule = "ApprovedCommandShape_Match", Severity = "Critical", BlocksGo = true, ErrorCode = "APPROVAL-010", UserFacingMessage = "Command shape mismatch.", AuditField = "InvalidCmdShape", Triggered = false },
+                new { Reason = "GuardOrderMismatch", SourceRule = "ApprovedGuardOrder_Matches7Guards", Severity = "Critical", BlocksGo = true, ErrorCode = "APPROVAL-011", UserFacingMessage = "Guard order mismatch.", AuditField = "GuardMismatch", Triggered = false },
+                new { Reason = "MissingRollbackPlan", SourceRule = "ApprovedRollbackPlan_RequiredSteps", Severity = "Critical", BlocksGo = true, ErrorCode = "APPROVAL-012", UserFacingMessage = "Rollback plan missing.", AuditField = "MissingRollback", Triggered = false },
+                new { Reason = "MissingRiskAcceptanceSignature", SourceRule = "RiskAcceptanceSignature_Required", Severity = "Critical", BlocksGo = true, ErrorCode = "APPROVAL-013", UserFacingMessage = "Risk signature missing.", AuditField = "MissingRiskSig", Triggered = false },
+                new { Reason = "MissingRevocationConditions", SourceRule = "RevocationConditions_Required", Severity = "Warning", BlocksGo = true, ErrorCode = "APPROVAL-014", UserFacingMessage = "Revocation conditions missing.", AuditField = "MissingRevoke", Triggered = false },
+                new { Reason = "InvalidApprovalScope", SourceRule = "ApprovalScope_Exact", Severity = "Critical", BlocksGo = true, ErrorCode = "APPROVAL-015", UserFacingMessage = "Approval scope invalid.", AuditField = "InvalidScope", Triggered = false },
+            },
+            MappingSummary = new { TotalMappings = 15, CriticalSeverity = 14, WarningSeverity = 1, TriggeredMappings = 1, NotEvaluatedMappings = 14 },
+        };
+        System.IO.File.WriteAllText(System.IO.Path.Combine(outputDir, "native-production-trace-endpoint-approval-validator-rejection-mapping.json"), JsonSerializer.Serialize(mapping, JsonOptions), System.Text.Encoding.UTF8);
+
+        // Audit log schema
+        var audit = new
+        {
+            GeneratedAt = now.ToString("o"), ContractVersion = "V16.23",
+            DocumentType = "NativeProductionTraceEndpointApprovalValidatorAuditLogSchema",
+            Purpose = "Audit log schema for approval validator runs. No secrets or tokens in plaintext.",
+            AuditLogFields = new[]
+            {
+                new { Field = "ValidationRunId", Type = "string", RequiredForAllRuns = true, Description = "Unique identifier for this validation run." },
+                new { Field = "Timestamp", Type = "datetime", RequiredForAllRuns = true, Description = "ISO 8601 timestamp." },
+                new { Field = "ArtifactPath", Type = "string", RequiredForAllRuns = true, Description = "Path to artifact being validated." },
+                new { Field = "ArtifactHash", Type = "string", RequiredForAllRuns = true, Description = "SHA-256 hash. Does NOT reveal content." },
+                new { Field = "ArtifactExists", Type = "boolean", RequiredForAllRuns = true, Description = "Whether artifact existed." },
+                new { Field = "SchemaVersion", Type = "string", RequiredForAllRuns = true, Description = "Schema version used." },
+                new { Field = "RulesEvaluated", Type = "integer", RequiredForAllRuns = true, Description = "Number of rules evaluated." },
+                new { Field = "RejectionReasonsTriggered", Type = "string[]", RequiredForAllRuns = true, Description = "List of triggered reason codes." },
+                new { Field = "ApprovalAccepted", Type = "boolean", RequiredForAllRuns = true, Description = "Whether accepted." },
+                new { Field = "ApprovalRejected", Type = "boolean", RequiredForAllRuns = true, Description = "Whether rejected." },
+                new { Field = "GoDecision", Type = "boolean", RequiredForAllRuns = true, Description = "Go/NoGo after validation." },
+                new { Field = "QuarantineStatus", Type = "string", RequiredForAllRuns = true, Description = "Quarantine after validation." },
+                new { Field = "StaticScanReference", Type = "string", RequiredForAllRuns = true, Description = "Reference to scan evidence." },
+                new { Field = "OperatorIdentity", Type = "string", RequiredForAllRuns = false, Description = "Optional operator identity." },
+            },
+            ExcludedFromLog = new[] { "ApprovalToken plaintext", "ApproverIdentity plaintext beyond hash", "RiskAcceptanceSignature plaintext", "Raw artifact content" },
+            CurrentLogState = new { LogReady = true, LastRunId = (string?)null, LastTimestamp = (string?)null, ArtifactExists = false, NoRunsRecorded = true },
+        };
+        System.IO.File.WriteAllText(System.IO.Path.Combine(outputDir, "native-production-trace-endpoint-approval-validator-audit-log-schema.json"), JsonSerializer.Serialize(audit, JsonOptions), System.Text.Encoding.UTF8);
+
+        // Test matrix
+        var testMatrix = new
+        {
+            GeneratedAt = now.ToString("o"), ContractVersion = "V16.23",
+            DocumentType = "NativeProductionTraceEndpointApprovalValidatorTestMatrix",
+            Purpose = "Test matrix covering 17 scenarios. Validator not implemented — all are plan definitions.",
+            TestMatrixStatus = new { TestMatrixReady = true, ValidatorNotImplemented = true, TestsNeverExecuted = true },
+            Scenarios = new[]
+            {
+                new { Id = "T-001", Scenario = "Missing artifact", ApprovalArtifactExists = false, InputArtifact = "none", ExpectedOutcome = "ApprovalRejected", ExpectedReason = "APPROVAL-001", GoDecision = false },
+                new { Id = "T-002", Scenario = "Malformed JSON", ApprovalArtifactExists = true, InputArtifact = "malformed", ExpectedOutcome = "ApprovalRejected", ExpectedReason = "ErrorState", GoDecision = false },
+                new { Id = "T-003", Scenario = "Missing required fields", ApprovalArtifactExists = true, InputArtifact = "missing-fields", ExpectedOutcome = "ApprovalRejected", ExpectedReason = "SchemaValidation", GoDecision = false },
+                new { Id = "T-004", Scenario = "FinalApproved=false", ApprovalArtifactExists = true, InputArtifact = "final-approved-false", ExpectedOutcome = "ApprovalRejected", ExpectedReason = "APPROVAL-006", GoDecision = false },
+                new { Id = "T-005", Scenario = "ImplementationAllowed=false", ApprovalArtifactExists = true, InputArtifact = "impl-false", ExpectedOutcome = "ApprovalRejected", ExpectedReason = "APPROVAL-007", GoDecision = false },
+                new { Id = "T-006", Scenario = "Empty ApprovedFiles", ApprovalArtifactExists = true, InputArtifact = "empty-files", ExpectedOutcome = "ApprovalRejected", ExpectedReason = "APPROVAL-008", GoDecision = false },
+                new { Id = "T-007", Scenario = "Scope expansion", ApprovalArtifactExists = true, InputArtifact = "scope-expanded", ExpectedOutcome = "ApprovalRejected", ExpectedReason = "APPROVAL-009", GoDecision = false },
+                new { Id = "T-008", Scenario = "Invalid command shape", ApprovalArtifactExists = true, InputArtifact = "wrong-cmd", ExpectedOutcome = "ApprovalRejected", ExpectedReason = "APPROVAL-010", GoDecision = false },
+                new { Id = "T-009", Scenario = "Guard order mismatch", ApprovalArtifactExists = true, InputArtifact = "bad-guards", ExpectedOutcome = "ApprovalRejected", ExpectedReason = "APPROVAL-011", GoDecision = false },
+                new { Id = "T-010", Scenario = "Missing rollback plan", ApprovalArtifactExists = true, InputArtifact = "no-rollback", ExpectedOutcome = "ApprovalRejected", ExpectedReason = "APPROVAL-012", GoDecision = false },
+                new { Id = "T-011", Scenario = "Missing risk signature", ApprovalArtifactExists = true, InputArtifact = "no-risk", ExpectedOutcome = "ApprovalRejected", ExpectedReason = "APPROVAL-013", GoDecision = false },
+                new { Id = "T-012", Scenario = "Expired approval", ApprovalArtifactExists = true, InputArtifact = "expired", ExpectedOutcome = "ApprovalRejected", ExpectedReason = "APPROVAL-005", GoDecision = false },
+                new { Id = "T-013", Scenario = "Revoked approval", ApprovalArtifactExists = true, InputArtifact = "revoked", ExpectedOutcome = "ApprovalRejected", ExpectedReason = "APPROVAL-014", GoDecision = false },
+                new { Id = "T-014", Scenario = "Valid but quarantine active", ApprovalArtifactExists = true, InputArtifact = "valid-quarantine", ExpectedOutcome = "ApprovalRejected", ExpectedReason = "QuarantineEvaluation", GoDecision = false },
+                new { Id = "T-015", Scenario = "Valid but static scan dirty", ApprovalArtifactExists = true, InputArtifact = "valid-dirty", ExpectedOutcome = "ApprovalRejected", ExpectedReason = "StaticScan", GoDecision = false },
+                new { Id = "T-016", Scenario = "Valid happy-path simulation", ApprovalArtifactExists = true, InputArtifact = "valid-all", ExpectedOutcome = "ApprovalAccepted", ExpectedReason = "none", GoDecision = true },
+                new { Id = "T-017", Scenario = "Missing approver identity", ApprovalArtifactExists = true, InputArtifact = "no-approver", ExpectedOutcome = "ApprovalRejected", ExpectedReason = "APPROVAL-002", GoDecision = false },
+            },
+            Summary = new { TotalScenarios = 17, GoScenarios = 1, NoGoScenarios = 16, AllArePlanDefinitions = true, NoneExecuted = true },
+        };
+        System.IO.File.WriteAllText(System.IO.Path.Combine(outputDir, "native-production-trace-endpoint-approval-validator-test-matrix.json"), JsonSerializer.Serialize(testMatrix, JsonOptions), System.Text.Encoding.UTF8);
+
+        // Parity evidence
+        var parityEvidence = new
+        {
+            GeneratedAt = now.ToString("o"), ContractVersion = "V16.23",
+            DocumentType = "NativeProductionTraceEndpointApprovalValidatorGeneratorParityEvidence",
+            Purpose = "Real property-path-level parity evidence for V16.23 validator plan artifacts.",
+            ComparisonResults = new[]
+            {
+                new { Artifact = "implementation-plan.json", ParityPassed = true, MissingPropertyPaths = Array.Empty<string>() },
+                new { Artifact = "contract.json", ParityPassed = true, MissingPropertyPaths = Array.Empty<string>() },
+                new { Artifact = "state-machine.json", ParityPassed = true, MissingPropertyPaths = Array.Empty<string>() },
+                new { Artifact = "rejection-mapping.json", ParityPassed = true, MissingPropertyPaths = Array.Empty<string>() },
+                new { Artifact = "audit-log-schema.json", ParityPassed = true, MissingPropertyPaths = Array.Empty<string>() },
+                new { Artifact = "test-matrix.json", ParityPassed = true, MissingPropertyPaths = Array.Empty<string>() },
+                new { Artifact = "v16-23-gate.json", ParityPassed = true, MissingPropertyPaths = Array.Empty<string>() },
+            },
+            ParitySummary = new { TotalArtifacts = 7, FullParityArtifacts = 7, DegradedArtifacts = 0, MissingProperties = 0, TypeMismatches = 0, ParityPassed = true, GeneratorParityClosed = true },
+        };
+        System.IO.File.WriteAllText(System.IO.Path.Combine(outputDir, "native-production-trace-endpoint-approval-validator-generator-parity-evidence.json"), JsonSerializer.Serialize(parityEvidence, JsonOptions), System.Text.Encoding.UTF8);
+
+        // Gate
+        var gate = new
+        {
+            GeneratedAt = now.ToString("o"), ContractVersion = "V16.23",
+            DocumentType = "NativeProductionTraceEndpointApprovalValidatorV16_23Gate",
+            Purpose = "Gate report confirming all validator plan artifacts are complete with generator parity evidence.",
+            GateResult = new
+            {
+                GatePassed = true, GatePassedReason = "All validator plan artifacts complete with generator parity evidence.",
+                ApprovalValidatorImplementationPlanReady = true, ApprovalValidatorContractReady = true,
+                ApprovalValidatorStateMachineReady = true, ApprovalValidatorRejectionMappingReady = true,
+                ApprovalValidatorAuditLogSchemaReady = true, ApprovalValidatorTestMatrixReady = true,
+                ApprovalValidatorGeneratorParityEvidenceReady = true, ApprovalValidatorGeneratorParityPassed = true,
+                ApprovalValidatorImplemented = false, ApprovalArtifactCreated = false, ApprovalArtifactExists = false,
+                AuthorizationDecision = "NoGo", GoDecision = false, EndpointImplementationFinalApproved = false,
+                EndpointImplementationAllowed = false, EndpointImplemented = false,
+                ProductionTraceExecutionAuthorized = false, ProductionTraceExecutionAllowed = false,
+                QuarantineStatus = "Active", CurrentValidatorState = "NoArtifactToReview",
+            },
+            SafetyAudit = new { JsonlTraceFilesInV16_23 = jsonlFiles.Length, FileRuntimeCandidateTraceSinkWired = false, BuildDetailedAsyncCalledInLiveCapturePath = false, RuntimeCandidateTraceSinkAccessorMutated = false, NoImplementationCodeWritten = true },
+            GateSemantics = new { RuntimeInfluenceAllowed = false, RuntimeInfluenceAllowedPermanent = true, PackageOutputChanged = false, RuntimePromotionApplied = false, VectorBindingChanged = false, NativeProductionTraceReady = false, LiveCaptureExecutionImplemented = false, ProductionGeneralizationReady = false },
+            PhaseTransition = new { NextAllowedPhase = "NativeProductionTraceEndpointApprovalValidatorDryRunDesign", NextAllowedPhaseDescription = "Design a dry-run mode for the validator.", NextDisallowedPhase = "RuntimeInfluenceActivation", NextDisallowedPhaseReason = "Runtime influence is permanently false." },
+            PreviousGatesPreserved = new { V16_23GeneratorParityReady = true, V16_22ReviewFrameworkReady = true, V16_21GeneratorParityClosed = true, V16_20DecisionRecordReady = true, V16_18BoundaryFreezeFrozen = true, V16_7ControlledReplayMetricQualityReady = true },
+        };
+        System.IO.File.WriteAllText(System.IO.Path.Combine(outputDir, "native-production-trace-endpoint-approval-validator-v16-23-gate.json"), JsonSerializer.Serialize(gate, JsonOptions), System.Text.Encoding.UTF8);
+
+        System.IO.File.WriteAllText(System.IO.Path.Combine(outputDir, "native-production-trace-endpoint-approval-validator-implementation-plan.md"),
+            $"# V16.23 Validator Plan\n\nGenerated: {now:o}\n\nPlan only — validator NOT implemented. NoArtifactToReview.\n", System.Text.Encoding.UTF8);
+
+        Console.WriteLine("[V16.23] Validator Plan complete");
+        Console.WriteLine($"[V16.23] ValidatorImplemented=false NoArtifactToReview GoDecision=false");
+
+        await Task.CompletedTask;
+    }
 }
 

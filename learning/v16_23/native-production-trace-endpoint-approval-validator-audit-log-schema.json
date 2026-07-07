@@ -1,0 +1,23 @@
+{
+  "GeneratedAt": "2026-07-07T09:23:00.0000000+00:00", "ContractVersion": "V16.23",
+  "DocumentType": "NativeProductionTraceEndpointApprovalValidatorAuditLogSchema",
+  "Purpose": "Audit log schema for approval validator runs. Defines what is recorded for each validation attempt. No secrets or tokens in plaintext.",
+  "AuditLogFields": [
+    {"Field": "ValidationRunId", "Type": "string", "RequiredForAllRuns": true, "Description": "Unique identifier for this validation run."},
+    {"Field": "Timestamp", "Type": "datetime", "RequiredForAllRuns": true, "Description": "ISO 8601 timestamp of validation run."},
+    {"Field": "ArtifactPath", "Type": "string", "RequiredForAllRuns": true, "Description": "Path to the approval artifact being validated."},
+    {"Field": "ArtifactHash", "Type": "string", "RequiredForAllRuns": true, "Description": "SHA-256 hash of the artifact file content. Does NOT reveal content."},
+    {"Field": "ArtifactExists", "Type": "boolean", "RequiredForAllRuns": true, "Description": "Whether the artifact file existed at time of validation."},
+    {"Field": "SchemaVersion", "Type": "string", "RequiredForAllRuns": true, "Description": "Schema version used for validation."},
+    {"Field": "RulesEvaluated", "Type": "integer", "RequiredForAllRuns": true, "Description": "Number of validation rules evaluated."},
+    {"Field": "RejectionReasonsTriggered", "Type": "string[]", "RequiredForAllRuns": true, "Description": "List of rejection reason codes triggered."},
+    {"Field": "ApprovalAccepted", "Type": "boolean", "RequiredForAllRuns": true, "Description": "Whether approval was accepted."},
+    {"Field": "ApprovalRejected", "Type": "boolean", "RequiredForAllRuns": true, "Description": "Whether approval was rejected."},
+    {"Field": "GoDecision", "Type": "boolean", "RequiredForAllRuns": true, "Description": "Current Go/NoGo decision after validation."},
+    {"Field": "QuarantineStatus", "Type": "string", "RequiredForAllRuns": true, "Description": "Quarantine status after validation."},
+    {"Field": "StaticScanReference", "Type": "string", "RequiredForAllRuns": true, "Description": "Reference to the static scan evidence used."},
+    {"Field": "OperatorIdentity", "Type": "string", "RequiredForAllRuns": false, "Description": "Optional operator identity. Not required for automated runs."}
+  ],
+  "ExcludedFromLog": ["ApprovalToken plaintext", "ApproverIdentity plaintext beyond hash", "RiskAcceptanceSignature plaintext", "Raw artifact content"],
+  "CurrentLogState": {"LogReady": true, "LastRunId": null, "LastTimestamp": null, "ArtifactExists": false, "NoRunsRecorded": true}
+}

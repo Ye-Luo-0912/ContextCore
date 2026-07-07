@@ -1,0 +1,23 @@
+{
+  "GeneratedAt": "2026-07-07T09:23:00.0000000+00:00", "ContractVersion": "V16.23",
+  "DocumentType": "NativeProductionTraceEndpointApprovalValidatorContract",
+  "Purpose": "Defines the input/output contract for the future approval artifact validator. Validator is NOT implemented.",
+  "ContractStatus": {
+    "ContractReady": true, "ValidatorImplemented": false,
+    "ApprovalArtifactExists": false, "ValidationNeverAttempted": true
+  },
+  "Inputs": [
+    {"Input": "ApprovalArtifactPath", "Type": "string", "Required": true, "CurrentValue": "learning/v16_20/native-production-trace-endpoint-implementation-authorization-decision.json"},
+    {"Input": "V16_20_ApprovalSchema", "Source": "V16.20 approval-artifact-schema", "Required": true, "Purpose": "Schema with 14 required fields"},
+    {"Input": "V16_22_ValidationRules", "Source": "V16.22 validation-rules", "Required": true, "Purpose": "14 validation rules"},
+    {"Input": "V16_22_RejectionPolicy", "Source": "V16.22 rejection-policy", "Required": true, "Purpose": "15 rejection reasons"},
+    {"Input": "CurrentQuarantineState", "Source": "V16.22 pre-go-quarantine-policy", "Required": true, "Purpose": "9 clearance conditions"},
+    {"Input": "StaticScanEvidence", "Source": "V16.21 static-scan-evidence", "Required": true, "Purpose": "9 scan patterns with match counts"}
+  ],
+  "Outputs": {
+    "ValidationAttempted": false, "ArtifactExists": false, "SchemaValid": false,
+    "RejectionReasons": ["MissingArtifact"], "ApprovalAccepted": false, "ApprovalRejected": true,
+    "GoCandidateAllowed": false, "QuarantineCleared": false, "AuditLogWritten": false
+  },
+  "CurrentExpectedBehavior": "Since ApprovalArtifactExists=false, ValidationAttempted=false. Output reflects NoArtifactToReview state."
+}
