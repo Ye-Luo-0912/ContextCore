@@ -1,0 +1,23 @@
+{
+  "GeneratedAt": "2026-07-07T06:59:00.0000000+00:00",
+  "ContractVersion": "V16.21",
+  "DocumentType": "NativeProductionTraceEndpointPolicyComplianceReport",
+  "Purpose": "Aggregated policy compliance report summarizing V16.20 decision record, no-go policy, V16.21 static scan evidence, approval absence proof, and generator parity closure.",
+  "ComplianceComponents": [
+    {"Component": "V16.20 Decision Record", "Ready": true, "Decision": "NoGo", "Compliant": true},
+    {"Component": "V16.20 No-Go Enforcement Policy", "Ready": true, "11OperationsBlocked": true, "Compliant": true},
+    {"Component": "V16.21 Static Scan Evidence", "Ready": true, "DisallowedMatches": 0, "Compliant": true},
+    {"Component": "V16.21 Approval Artifact Absence Proof", "Ready": true, "ArtifactExists": false, "Compliant": true},
+    {"Component": "V16.21 Generator Parity Closure", "Ready": true, "FullFieldParity": true, "Compliant": true}
+  ],
+  "ReportSummary": {
+    "CurrentCompliance": "CompliantNoGo",
+    "GoDecision": false,
+    "AuthorizationDecision": "NoGo",
+    "ImplementationAllowed": false,
+    "AllComponentsReady": true,
+    "AllComponentsCompliant": true,
+    "JsonlTraceFiles": 0,
+    "DisallowedMatchCount": 0
+  }
+}
