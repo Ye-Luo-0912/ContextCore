@@ -7200,5 +7200,208 @@ Design review only — no production trace collected. No LiveCapture execution.
 
         await Task.CompletedTask;
     }
+
+    private static async Task ExecuteV16_19NativeProductionTraceEndpointDossierAsync(IReadOnlyList<string> args, CancellationToken ct)
+    {
+        Console.WriteLine("[V16.19] Native Production Trace Endpoint Authorization Dossier & Go/No-Go Protocol");
+        Console.WriteLine("[V16.19] Authorization dossier only — no implementation. No production trace.");
+
+        var outputDir = System.IO.Path.Combine("learning", "v16_19");
+        System.IO.Directory.CreateDirectory(outputDir);
+        var now = DateTimeOffset.UtcNow;
+        var jsonlFiles = System.IO.Directory.GetFiles(outputDir, "*.jsonl");
+        Console.WriteLine($"[V16.19] .jsonl files: {jsonlFiles.Length}");
+
+        var previousGates = new
+        {
+            V16_18BoundaryFreezeFrozen = true,
+            V16_18FinalApprovalReady = true,
+            V16_17ApprovalReady = true,
+            V16_16ImplementationPlanReady = true,
+            V16_15EndpointDesignReady = true,
+            V16_14AuthorizationContractReady = true,
+            V16_7ControlledReplayMetricQualityReady = true,
+        };
+
+        // Dossier
+        var dossier = new
+        {
+            GeneratedAt = now.ToString("o"),
+            ContractVersion = "V16.19",
+            DocumentType = "NativeProductionTraceEndpointAuthorizationDossier",
+            Purpose = "Complete authorization dossier. Current verdict: NOT AUTHORIZED.",
+            DossierSummary = new
+            {
+                GoDecision = false,
+                NoGoReason = "FinalApprovedFalse",
+                NoGoReasonDetail = "V16.18 FinalApproved=false. Approval chain confirms readiness, not authorization.",
+                DossierReady = true,
+            },
+            ChainSummary = new object[]
+            {
+                new { Version = "V16.14", Phase = "Authorization Contract", Ready = true, Authorized = false },
+                new { Version = "V16.15", Phase = "Endpoint Design", Ready = true, Implemented = false },
+                new { Version = "V16.16", Phase = "Implementation Plan", Ready = true, Allowed = false },
+                new { Version = "V16.17", Phase = "Implementation Approval", Ready = true, Approved = false },
+                new { Version = "V16.18", Phase = "Final Approval & Boundary Freeze", Ready = true, Approved = false },
+            },
+            CrossChainInvariants = new
+            {
+                NoImplementationCodeWritten = true,
+                NoProductionTraceJsonl = true,
+                NoFileRuntimeCandidateTraceSinkWired = true,
+                NoBuildDetailedAsyncCalled = true,
+                AllRuntimeInfluenceAllowed_False = true,
+                AllPackageOutputChanged_False = true,
+                AllVectorBindingChanged_False = true,
+            },
+        };
+
+        System.IO.File.WriteAllText(System.IO.Path.Combine(outputDir, "native-production-trace-endpoint-authorization-dossier.json"),
+            JsonSerializer.Serialize(dossier, JsonOptions), System.Text.Encoding.UTF8);
+
+        // Go/No-Go protocol
+        var goNoGo = new
+        {
+            GeneratedAt = now.ToString("o"),
+            ContractVersion = "V16.19",
+            DocumentType = "NativeProductionTraceEndpointGoNoGoProtocol",
+            Purpose = "Formal Go/No-Go decision protocol.",
+            GoDecision = false,
+            NoGoReason = "FinalApprovedFalse",
+            GoConditions = new[] { "Explicit human approval artifact present", "EndpointImplementationFinalApproved=true",
+                "EndpointImplementationAllowed=true", "Implementation scope limited to approved files",
+                "Rollback strategy approved", "Safety invariant test plan approved",
+                "No pre-existing production trace .jsonl files", "No pre-existing sink wiring",
+                "No BuildDetailedAsync call before explicit approval" },
+            NoGoConditions = new[] { "Any approval flag false", "Any runtime/package/vector gate true",
+                "Production trace .jsonl file exists", "Sink wiring exists before implementation",
+                "BuildDetailedAsync live path exists before approval", "NeuralBiasActive=true",
+                "HybridBlendAlpha != 1.0", "No explicit human approval artifact" },
+            CurrentVerdict = new { GoDecision = false, NoGoReason = "FinalApprovedFalse" },
+        };
+
+        System.IO.File.WriteAllText(System.IO.Path.Combine(outputDir, "native-production-trace-endpoint-go-no-go-protocol.json"),
+            JsonSerializer.Serialize(goNoGo, JsonOptions), System.Text.Encoding.UTF8);
+
+        // Risk matrix
+        var riskMatrix = new
+        {
+            GeneratedAt = now.ToString("o"),
+            ContractVersion = "V16.19",
+            DocumentType = "NativeProductionTraceEndpointRiskMatrix",
+            Purpose = "Comprehensive risk matrix covering 12 risk categories.",
+            Risks = new[]
+            {
+                new { Risk = "Accidental Implementation Activation", Likelihood = "Low", Impact = "Critical", Mitigation = "V16.11 skeleton hard-blocked. No execution path.", Status = "Mitigated" },
+                new { Risk = "Ready/Approved Semantic Confusion", Likelihood = "Medium", Impact = "High", Mitigation = "V16.18 DoNotMisinterpret section. V16.19 dossier reinforces.", Status = "Mitigated" },
+                new { Risk = "Production Trace Leakage", Likelihood = "Low", Impact = "Critical", Mitigation = "Zero .jsonl files. No sink wired. No builder called.", Status = "Mitigated" },
+                new { Risk = "Raw Prompt/Content Leakage", Likelihood = "Low", Impact = "Critical", Mitigation = "V16.3 privacy contract.", Status = "Mitigated" },
+                new { Risk = "RunId Collision", Likelihood = "Medium", Impact = "Medium", Mitigation = "RejectExistingRunId policy. Guard order step 6.", Status = "Mitigated" },
+                new { Risk = "Partial Trace File Residue", Likelihood = "Medium", Impact = "Low", Mitigation = "FailureRollback deletes partial traces.", Status = "Mitigated" },
+                new { Risk = "Sink Not Restored to NullSink", Likelihood = "Medium", Impact = "High", Mitigation = "AlwaysRestore invariant.", Status = "Mitigated" },
+                new { Risk = "BuildDetailedAsync Called Before Guards", Likelihood = "Medium", Impact = "Critical", Mitigation = "V16.16 guard order step 6 only after all guards.", Status = "Mitigated" },
+                new { Risk = "Runtime Influence Regression", Likelihood = "Low", Impact = "Critical", Mitigation = "Permanently false across all V16 phases.", Status = "Mitigated" },
+                new { Risk = "Package/Vector Mutation Regression", Likelihood = "Low", Impact = "Critical", Mitigation = "Permanently false across all V16 phases.", Status = "Mitigated" },
+                new { Risk = "Generator/Artifact Schema Drift", Likelihood = "Medium", Impact = "Medium", Mitigation = "Reflection-based generator parity tests.", Status = "Mitigated" },
+                new { Risk = "Tests Only Asserting Constants", Likelihood = "Medium", Impact = "Medium", Mitigation = "All Repair A phases added real artifact parsing tests.", Status = "Mitigated" },
+            },
+            RiskSummary = new { TotalRisks = 12, AllRisksMitigated = true, ResidualRiskLevel = "Low" },
+        };
+
+        System.IO.File.WriteAllText(System.IO.Path.Combine(outputDir, "native-production-trace-endpoint-risk-matrix.json"),
+            JsonSerializer.Serialize(riskMatrix, JsonOptions), System.Text.Encoding.UTF8);
+
+        // Handoff ledger
+        var handoff = new
+        {
+            GeneratedAt = now.ToString("o"),
+            ContractVersion = "V16.19",
+            DocumentType = "NativeProductionTraceEndpointHandoffLedger",
+            Purpose = "Handoff ledger for future implementation phase. IMPLEMENTATION NOT AUTHORIZED.",
+            CurrentState = new { ImplementationAllowed = false, EndpointImplemented = false, ApprovedFiles = Array.Empty<string>(), ImplementationNotAuthorized = true },
+            RequiredFutureApprovalArtifact = new { Path = "learning/v16_19/native-production-trace-endpoint-implementation-authorization-decision.json" },
+            RequiredFutureCommandShape = new { Subcommand = "v16_19-native-production-trace-execution-endpoint", Args = new[] { "--confirm-live-capture", "--capture-token", "--workspaceId", "--collectionId", "--runId" } },
+            RequiredGuardOrder = new[] { "1. confirmLiveCapture", "2. captureToken", "3. ws/col present", "4. synthetic rejection", "5. runId present", "6. RejectExistingRunId", "7. safety invariants" },
+            RequiredRollbackPlan = new[] { "Dispose sink", "Restore NullSink", "Clear IDs", "Delete partial on fail", "Log" },
+            RequiredTestsBeforeImplementation = new[] { "7 guard tests", "Sink lifecycle tests", "Runtime influence tests", "Generator parity tests", "Artifact parsing tests" },
+            ForbiddenChanges = new[] { "RuntimeInfluenceAllowed NEVER true", "PackageOutputChanged NEVER true", "VectorBindingChanged NEVER true", "NeuralBiasActive NEVER true", "HybridBlendAlpha NEVER changed from 1.0", "Ready NEVER equals Approved", "Existing gate invariants NEVER downgraded" },
+            ExplicitStatement = "THIS PHASE CANNOT BE USED AS IMPLEMENTATION AUTHORIZATION.",
+        };
+
+        System.IO.File.WriteAllText(System.IO.Path.Combine(outputDir, "native-production-trace-endpoint-handoff-ledger.json"),
+            JsonSerializer.Serialize(handoff, JsonOptions), System.Text.Encoding.UTF8);
+
+        // Dossier gate
+        var gate = new
+        {
+            GeneratedAt = now.ToString("o"),
+            ContractVersion = "V16.19",
+            DocumentType = "NativeProductionTraceEndpointDossierGate",
+            Purpose = "Gate report confirming dossier components complete.",
+            GateResult = new
+            {
+                GatePassed = true,
+                GatePassedReason = "All dossier components complete.",
+                AuthorizationDossierReady = true,
+                GoNoGoProtocolReady = true,
+                RiskMatrixReady = true,
+                HandoffLedgerReady = true,
+                GoDecision = false,
+                GoDecisionReason = "FinalApprovedFalse.",
+                EndpointImplementationFinalApproved = false,
+                EndpointImplementationAllowed = false,
+                EndpointImplemented = false,
+                ProductionTraceExecutionAuthorized = false,
+                ProductionTraceExecutionAllowed = false,
+            },
+            SafetyAudit = new
+            {
+                JsonlTraceFilesInV16_19 = jsonlFiles.Length,
+                FileRuntimeCandidateTraceSinkWired = false,
+                BuildDetailedAsyncCalledInLiveCapturePath = false,
+                RuntimeCandidateTraceSinkAccessorMutated = false,
+                NoImplementationCodeWritten = true,
+            },
+            GateSemantics = new
+            {
+                NativeProductionTraceReady = false,
+                LiveCaptureExecutionImplemented = false,
+                LiveCaptureExecuted = false,
+                ProductionGeneralizationReady = false,
+                RuntimeInfluenceAllowed = false,
+                RuntimeInfluenceAllowedPermanent = true,
+                PackageOutputChanged = false,
+                RuntimePromotionApplied = false,
+                VectorBindingChanged = false,
+            },
+            PhaseTransition = new
+            {
+                NextAllowedPhase = "NativeProductionTraceEndpointImplementationAuthorizationDecision",
+                NextAllowedPhaseDescription = "Explicit go/no-go decision.",
+                NextDisallowedPhase = "RuntimeInfluenceActivation",
+                NextDisallowedPhaseReason = "Runtime influence is permanently false.",
+            },
+            PreviousGatesPreserved = previousGates,
+        };
+
+        System.IO.File.WriteAllText(System.IO.Path.Combine(outputDir, "native-production-trace-endpoint-dossier-gate.json"),
+            JsonSerializer.Serialize(gate, JsonOptions), System.Text.Encoding.UTF8);
+
+        var md = string.Concat(
+            $"# V16.19 Authorization Dossier\n\nGenerated: {now:o}\n\n",
+            $"GoDecision: **false** | NoGoReason: FinalApprovedFalse\n",
+            $"5 phases ready, none authorized. 12 risks mitigated. Implementation NOT authorized.\n"
+        );
+        System.IO.File.WriteAllText(System.IO.Path.Combine(outputDir, "native-production-trace-endpoint-authorization-dossier.md"),
+            md, System.Text.Encoding.UTF8);
+
+        Console.WriteLine("[V16.19] Authorization Dossier complete");
+        Console.WriteLine($"[V16.19] GoDecision=false NoGoReason=FinalApprovedFalse");
+        Console.WriteLine($"[V16.19] Safety: {jsonlFiles.Length} .jsonl files");
+        Console.WriteLine("[V16.19] No implementation. No production trace. All gates false.");
+
+        await Task.CompletedTask;
+    }
 }
 

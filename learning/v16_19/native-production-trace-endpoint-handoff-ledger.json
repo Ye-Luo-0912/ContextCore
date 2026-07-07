@@ -1,0 +1,60 @@
+{
+  "GeneratedAt": "2026-07-07T06:05:00.0000000+00:00",
+  "ContractVersion": "V16.19",
+  "DocumentType": "NativeProductionTraceEndpointHandoffLedger",
+  "Purpose": "Handoff ledger for a future implementation phase. Documents what is required, what is allowed, and what is forbidden when transitioning from the V16 approval chain to actual endpoint implementation. Current state: IMPLEMENTATION NOT AUTHORIZED.",
+  "CurrentState": {
+    "ImplementationAllowed": false,
+    "EndpointImplemented": false,
+    "ApprovedFiles": [],
+    "ImplementationNotAuthorized": true,
+    "ImplementationNotAuthorizedNote": "V16.18 final approval is ReadyButNotApproved. GoDecision=false per V16.19 go/no-go protocol. This handoff ledger cannot be used as implementation authorization. It is a planning reference only."
+  },
+  "RequiredFutureApprovalArtifact": {
+    "Path": "learning/v16_19/native-production-trace-endpoint-implementation-authorization-decision.json",
+    "RequiredFields": [
+      "ApproverIdentity", "ApprovalTimestamp", "ApprovalToken",
+      "EndpointImplementationFinalApproved (set to true)",
+      "EndpointImplementationAllowed (set to true)",
+      "ImplementationFilesScope", "RollbackApprovalSignature",
+      "TestPlanApprovalSignature"
+    ]
+  },
+  "RequiredFutureCommandShape": {
+    "Subcommand": "v16_19-native-production-trace-execution-endpoint",
+    "Args": ["--confirm-live-capture", "--capture-token", "--workspaceId", "--collectionId", "--runId"]
+  },
+  "RequiredGuardOrder": [
+    "1. confirmLiveCapture present",
+    "2. captureToken present",
+    "3. workspaceId/collectionId present",
+    "4. synthetic workspace/collection rejection",
+    "5. runId present",
+    "6. RejectExistingRunId",
+    "7. safety invariants (RuntimeInfluenceAllowed=false, NeuralBiasActive=false, PackageOutputChanged=false, VectorBindingChanged=false)"
+  ],
+  "RequiredRollbackPlan": [
+    "Dispose FileRuntimeCandidateTraceSink",
+    "Restore RuntimeCandidateTraceSinkAccessor.Current to NullRuntimeCandidateTraceSink",
+    "Clear CurrentOperationId and CurrentRequestId",
+    "Delete partial trace file on failure",
+    "Log completion status"
+  ],
+  "RequiredTestsBeforeImplementation": [
+    "All 7 guard tests passing",
+    "Sink lifecycle tests (10-step validation)",
+    "Runtime influence regression tests (all false invariant)",
+    "Generator parity tests (no schema drift)",
+    "Artifact parsing tests (all V16 entity fields present)"
+  ],
+  "ForbiddenChanges": [
+    "RuntimeInfluenceAllowed must NEVER be set to true",
+    "PackageOutputChanged must NEVER be set to true",
+    "VectorBindingChanged must NEVER be set to true",
+    "NeuralBiasActive must NEVER be set to true",
+    "HybridBlendAlpha must NEVER be changed from 1.0 at runtime",
+    "Ready flags must NEVER be interpreted as Approved/Authorized",
+    "Existing gate invariants must NEVER be downgraded"
+  ],
+  "ExplicitStatement": "THIS PHASE (V16.19) CANNOT BE USED AS IMPLEMENTATION AUTHORIZATION. The dossier, go/no-go protocol, risk matrix, and handoff ledger document readiness for review. They do NOT authorize implementation. An explicit authorization decision artifact is required."
+}
