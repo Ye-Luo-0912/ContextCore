@@ -87,6 +87,23 @@ public class ContextCoreNativeProductionTraceEndpointReviewFrameworkTests
     }
 
     [TestMethod]
+    public void CheckedInGate_HasReviewFrameworkGeneratorParityFields_BeforeGeneratorRuns()
+    {
+        // Verify the checked-in gate has the new parity evidence fields BEFORE the generator overwrites.
+        using var doc = JsonDocument.Parse(File.ReadAllText(Resolve("native-production-trace-endpoint-v16-22-gate.json")));
+        var gr = doc.RootElement.GetProperty("GateResult");
+        Assert.IsTrue(gr.TryGetProperty("ReviewFrameworkGeneratorParityEvidenceReady", out _),
+            "Checked-in gate MUST have ReviewFrameworkGeneratorParityEvidenceReady before generator runs.");
+        Assert.IsTrue(gr.TryGetProperty("ReviewFrameworkGeneratorParityPassed", out _),
+            "Checked-in gate MUST have ReviewFrameworkGeneratorParityPassed before generator runs.");
+        var pt = doc.RootElement.GetProperty("PhaseTransition");
+        Assert.IsTrue(pt.TryGetProperty("NextAllowedPhaseDescription", out _));
+        Assert.IsTrue(pt.TryGetProperty("NextDisallowedPhaseReason", out _));
+        var pg = doc.RootElement.GetProperty("PreviousGatesPreserved");
+        Assert.IsTrue(pg.TryGetProperty("V16_22ReviewFrameworkGeneratorParityReady", out _));
+    }
+
+    [TestMethod]
     public void GeneratorParity_RunGeneratorAndCheckKeyFields()
     {
         var assembly = typeof(ContextCore.ControlRoom.Commands.EvalCommand).Assembly;
