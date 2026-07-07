@@ -1,0 +1,33 @@
+{
+  "GeneratedAt": "2026-07-07T06:39:00.0000000+00:00",
+  "ContractVersion": "V16.20",
+  "DocumentType": "NativeProductionTraceEndpointApprovalArtifactSchema",
+  "Purpose": "Defines the exact schema for the future human approval artifact that would authorize Go transition. This artifact does NOT currently exist. It defines what MUST exist for Go to become possible.",
+  "SchemaVersion": "V16.20-approval-1.0",
+  "SchemaExists": false,
+  "SchemaExistsNote": "This schema defines what the approval artifact MUST look like. No such artifact currently exists. GoDecision remains false.",
+  "RequiredFields": [
+    {"Field": "ApproverIdentity", "Type": "string", "Required": true, "Description": "Full name and role of the human approver."},
+    {"Field": "ApprovalTimestamp", "Type": "datetime", "Required": true, "Description": "ISO 8601 timestamp of approval."},
+    {"Field": "ApprovalToken", "Type": "string", "Required": true, "Description": "Unique approval token. Cryptographically verifiable."},
+    {"Field": "ApprovalScope", "Type": "string", "Required": true, "Description": "Scope of approval: 'NativeProductionTraceEndpointImplementation'."},
+    {"Field": "EndpointImplementationFinalApproved", "Type": "boolean", "Required": true, "MustBe": true, "Description": "Must be explicitly set to true."},
+    {"Field": "EndpointImplementationAllowed", "Type": "boolean", "Required": true, "MustBe": true, "Description": "Must be explicitly set to true."},
+    {"Field": "ApprovedFiles", "Type": "string[]", "Required": true, "MustNotBeEmpty": true, "Description": "List of files approved for implementation changes."},
+    {"Field": "ApprovedCommandShape", "Type": "object", "Required": true, "Description": "Exact CLI subcommand and arg list."},
+    {"Field": "ApprovedGuardOrder", "Type": "string[]", "Required": true, "MinLength": 7, "Description": "Ordered list of 7 guards that must be enforced."},
+    {"Field": "ApprovedRollbackPlan", "Type": "string[]", "Required": true, "Description": "Rollback steps per V16.16."},
+    {"Field": "ApprovedTestPlan", "Type": "string[]", "Required": true, "Description": "List of tests that must pass before implementation."},
+    {"Field": "RiskAcceptanceSignature", "Type": "string", "Required": true, "Description": "Explicit signature accepting all risks from V16.19 risk matrix."},
+    {"Field": "ExpirationDate", "Type": "datetime", "Required": true, "Description": "Approval expires after this date. Requires re-approval."},
+    {"Field": "RevocationConditions", "Type": "string[]", "Required": true, "Description": "Conditions under which approval is revoked."}
+  ],
+  "SchemaValidationRules": [
+    "All MustBe fields must be explicitly true — false or absent rejects approval.",
+    "ApprovedFiles MustNotBeEmpty.",
+    "ApprovedGuardOrder must have at least 7 entries matching V16.16 guard order.",
+    "RiskAcceptanceSignature must not be empty.",
+    "ExpirationDate must be in the future.",
+    "ApprovalToken must be non-empty and unique."
+  ]
+}

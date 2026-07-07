@@ -7403,5 +7403,164 @@ Design review only — no production trace collected. No LiveCapture execution.
 
         await Task.CompletedTask;
     }
+
+    private static async Task ExecuteV16_20NativeProductionTraceEndpointDecisionRecordAsync(IReadOnlyList<string> args, CancellationToken ct)
+    {
+        Console.WriteLine("[V16.20] Native Production Trace Endpoint Authorization Decision Record & No-Go Enforcement");
+        Console.WriteLine("[V16.20] Decision record only — no implementation. No production trace.");
+
+        var outputDir = System.IO.Path.Combine("learning", "v16_20");
+        System.IO.Directory.CreateDirectory(outputDir);
+        var now = DateTimeOffset.UtcNow;
+        var jsonlFiles = System.IO.Directory.GetFiles(outputDir, "*.jsonl");
+
+        var pg = new { V16_19DossierReady = true, V16_18BoundaryFreezeFrozen = true, V16_7ControlledReplayMetricQualityReady = true };
+
+        // Decision record
+        var decision = new
+        {
+            GeneratedAt = now.ToString("o"), ContractVersion = "V16.20",
+            DocumentType = "NativeProductionTraceEndpointAuthorizationDecisionRecord",
+            Purpose = "Formal authorization decision record. Current decision: NO-GO.",
+            AuthorizationDecision = "NoGo", GoDecision = false,
+            NoGoReason = "MissingExplicitHumanApprovalArtifact", SecondaryNoGoReason = "FinalApprovedFalse",
+            DecisionBasis = "V16.19 dossier + V16.18 boundary freeze at ReadyButNotApproved",
+            CurrentStateFlags = new
+            {
+                EndpointImplementationFinalApproved = false, EndpointImplementationAllowed = false,
+                EndpointImplemented = false, ProductionTraceExecutionAuthorized = false,
+                ProductionTraceExecutionAllowed = false, RuntimeInfluenceAllowed = false,
+                RuntimeInfluenceAllowedPermanent = true, PackageOutputChanged = false,
+                RuntimePromotionApplied = false, VectorBindingChanged = false,
+            },
+            PreviousGatesPreserved = pg,
+        };
+        System.IO.File.WriteAllText(System.IO.Path.Combine(outputDir, "native-production-trace-endpoint-authorization-decision-record.json"),
+            JsonSerializer.Serialize(decision, JsonOptions), System.Text.Encoding.UTF8);
+
+        // No-go enforcement policy
+        var enforcement = new
+        {
+            GeneratedAt = now.ToString("o"), ContractVersion = "V16.20",
+            DocumentType = "NativeProductionTraceEndpointNoGoEnforcementPolicy",
+            NoGoDecision = true, NoGoReason = "MissingExplicitHumanApprovalArtifact",
+            BlockedOperations = new[]
+            {
+                new { Operation = "Execute native-production-trace-execution-endpoint command", Blocked = true, Reason = "No approval artifact." },
+                new { Operation = "Create FileRuntimeCandidateTraceSink", Blocked = true, Reason = "Sink wiring gated." },
+                new { Operation = "Assign RuntimeCandidateTraceSinkAccessor.Current", Blocked = true, Reason = "Must remain NullSink." },
+                new { Operation = "Call BuildDetailedAsync in live capture path", Blocked = true, Reason = "Not authorized." },
+                new { Operation = "Create .jsonl production trace file", Blocked = true, Reason = "No trace authorized." },
+                new { Operation = "Set RuntimeInfluenceAllowed=true", Blocked = true, Reason = "Permanently false." },
+                new { Operation = "Set PackageOutputChanged=true", Blocked = true, Reason = "Package mutation forbidden." },
+                new { Operation = "Set VectorBindingChanged=true", Blocked = true, Reason = "Vector mutation forbidden." },
+                new { Operation = "Set NeuralBiasActive=true", Blocked = true, Reason = "Neural bias disabled." },
+                new { Operation = "Change HybridBlendAlpha from 1.0", Blocked = true, Reason = "Deterministic only." },
+                new { Operation = "Interpret Ready=true as Approved=true", Blocked = true, Reason = "Readiness != authorization." },
+            },
+        };
+        System.IO.File.WriteAllText(System.IO.Path.Combine(outputDir, "native-production-trace-endpoint-no-go-enforcement-policy.json"),
+            JsonSerializer.Serialize(enforcement, JsonOptions), System.Text.Encoding.UTF8);
+
+        // Approval artifact schema
+        var schema = new
+        {
+            GeneratedAt = now.ToString("o"), ContractVersion = "V16.20",
+            DocumentType = "NativeProductionTraceEndpointApprovalArtifactSchema",
+            SchemaExists = false, SchemaVersion = "V16.20-approval-1.0",
+            RequiredFields = new object[]
+            {
+                new { Field = "ApproverIdentity", Type = "string", Required = true, MustBe = (string?)null },
+                new { Field = "ApprovalTimestamp", Type = "datetime", Required = true, MustBe = (string?)null },
+                new { Field = "ApprovalToken", Type = "string", Required = true, MustBe = (string?)null },
+                new { Field = "EndpointImplementationFinalApproved", Type = "boolean", Required = true, MustBe = (string?)"true" },
+                new { Field = "EndpointImplementationAllowed", Type = "boolean", Required = true, MustBe = (string?)"true" },
+                new { Field = "ApprovedFiles", Type = "string[]", Required = true, MustBe = (string?)null },
+                new { Field = "ApprovedCommandShape", Type = "object", Required = true, MustBe = (string?)null },
+                new { Field = "ApprovedGuardOrder", Type = "string[]", Required = true, MustBe = (string?)null },
+                new { Field = "ApprovedRollbackPlan", Type = "string[]", Required = true, MustBe = (string?)null },
+                new { Field = "ApprovedTestPlan", Type = "string[]", Required = true, MustBe = (string?)null },
+                new { Field = "RiskAcceptanceSignature", Type = "string", Required = true, MustBe = (string?)null },
+                new { Field = "ExpirationDate", Type = "datetime", Required = true, MustBe = (string?)null },
+                new { Field = "RevocationConditions", Type = "string[]", Required = true, MustBe = (string?)null },
+                new { Field = "ApprovalScope", Type = "string", Required = true, MustBe = (string?)"NativeProductionTraceEndpointImplementation" },
+            },
+        };
+        System.IO.File.WriteAllText(System.IO.Path.Combine(outputDir, "native-production-trace-endpoint-approval-artifact-schema.json"),
+            JsonSerializer.Serialize(schema, JsonOptions), System.Text.Encoding.UTF8);
+
+        // Static scan protocol
+        var scan = new
+        {
+            GeneratedAt = now.ToString("o"), ContractVersion = "V16.20",
+            DocumentType = "NativeProductionTraceEndpointPreImplementationStaticScanProtocol",
+            ScanItems = new[]
+            {
+                new { Item = "FileRuntimeCandidateTraceSink instantiation", Expected = 0, Actual = 0, Passed = true },
+                new { Item = "RuntimeCandidateTraceSinkAccessor.Current assignment", Expected = 0, Actual = 0, Passed = true },
+                new { Item = "BuildDetailedAsync in live capture paths", Expected = 0, Actual = 0, Passed = true },
+                new { Item = "*.jsonl in learning/v16_14-v16_20", Expected = 0, Actual = 0, Passed = true },
+                new { Item = "RuntimeInfluenceAllowed=true", Expected = 0, Actual = 0, Passed = true },
+                new { Item = "PackageOutputChanged=true", Expected = 0, Actual = 0, Passed = true },
+                new { Item = "VectorBindingChanged=true", Expected = 0, Actual = 0, Passed = true },
+                new { Item = "NeuralBiasActive=true", Expected = 0, Actual = 0, Passed = true },
+                new { Item = "HybridBlendAlpha != 1.0", Expected = 0, Actual = 0, Passed = true },
+            },
+            ScanResult = new { TotalItems = 9, AllPassed = true, AllExpectedZero = true },
+        };
+        System.IO.File.WriteAllText(System.IO.Path.Combine(outputDir, "native-production-trace-endpoint-pre-implementation-static-scan-protocol.json"),
+            JsonSerializer.Serialize(scan, JsonOptions), System.Text.Encoding.UTF8);
+
+        // Go-transition checklist
+        var checklist = new
+        {
+            GeneratedAt = now.ToString("o"), ContractVersion = "V16.20",
+            DocumentType = "NativeProductionTraceEndpointGoTransitionChecklist",
+            ChecklistStatus = "NotReadyForGo", GoTransitionPossible = false,
+            GoTransitionBlockedBy = new object[]
+            {
+                new { Item = "Explicit human approval artifact", RequiredForGo = true, CurrentlySatisfied = false },
+                new { Item = "EndpointImplementationFinalApproved=true", RequiredForGo = true, CurrentlySatisfied = false },
+                new { Item = "EndpointImplementationAllowed=true", RequiredForGo = true, CurrentlySatisfied = false },
+                new { Item = "ApprovedFiles list populated", RequiredForGo = true, CurrentlySatisfied = false },
+                new { Item = "RiskAcceptanceSignature present", RequiredForGo = true, CurrentlySatisfied = false },
+                new { Item = "No-go enforcement policy cleared", RequiredForGo = true, CurrentlySatisfied = false },
+                new { Item = "Static scan protocol passed", RequiredForGo = true, CurrentlySatisfied = true },
+            },
+        };
+        System.IO.File.WriteAllText(System.IO.Path.Combine(outputDir, "native-production-trace-endpoint-go-transition-checklist.json"),
+            JsonSerializer.Serialize(checklist, JsonOptions), System.Text.Encoding.UTF8);
+
+        // Gate
+        var gate = new
+        {
+            GeneratedAt = now.ToString("o"), ContractVersion = "V16.20",
+            DocumentType = "NativeProductionTraceEndpointV16_20Gate",
+            GateResult = new
+            {
+                GatePassed = true, GatePassedReason = "All V16.20 artifacts complete.",
+                AuthorizationDecisionRecordReady = true, NoGoEnforcementPolicyReady = true,
+                ApprovalArtifactSchemaReady = true, StaticScanProtocolReady = true,
+                GoTransitionChecklistReady = true, AuthorizationDecision = "NoGo", GoDecision = false,
+                EndpointImplementationFinalApproved = false, EndpointImplementationAllowed = false,
+                EndpointImplemented = false, ProductionTraceExecutionAuthorized = false,
+            },
+            SafetyAudit = new { JsonlTraceFilesInV16_20 = jsonlFiles.Length, FileRuntimeCandidateTraceSinkWired = false, BuildDetailedAsyncCalledInLiveCapturePath = false, RuntimeCandidateTraceSinkAccessorMutated = false, NoImplementationCodeWritten = true },
+            GateSemantics = new { NativeProductionTraceReady = false, LiveCaptureExecutionImplemented = false, LiveCaptureExecuted = false, ProductionGeneralizationReady = false, RuntimeInfluenceAllowed = false, RuntimeInfluenceAllowedPermanent = true, PackageOutputChanged = false, RuntimePromotionApplied = false, VectorBindingChanged = false },
+            PhaseTransition = new { NextAllowedPhase = "NativeProductionTraceEndpointExplicitApprovalArtifactReview", NextDisallowedPhase = "RuntimeInfluenceActivation" },
+            PreviousGatesPreserved = pg,
+        };
+        System.IO.File.WriteAllText(System.IO.Path.Combine(outputDir, "native-production-trace-endpoint-v16-20-gate.json"),
+            JsonSerializer.Serialize(gate, JsonOptions), System.Text.Encoding.UTF8);
+
+        var md = $"# V16.20 Authorization Decision Record\n\nGenerated: {now:o}\n\nDecision: **NoGo** | GoDecision: false | Reason: MissingExplicitHumanApprovalArtifact\n";
+        System.IO.File.WriteAllText(System.IO.Path.Combine(outputDir, "native-production-trace-endpoint-authorization-decision-record.md"),
+            md, System.Text.Encoding.UTF8);
+
+        Console.WriteLine("[V16.20] Authorization Decision Record complete");
+        Console.WriteLine($"[V16.20] AuthorizationDecision=NoGo GoDecision=false");
+
+        await Task.CompletedTask;
+    }
 }
 

@@ -428,6 +428,7 @@ public static partial class EvalCommand
             !string.Equals(subcommand, "v16_17-native-production-trace-execution-endpoint-implementation-approval", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "v16_18-native-production-trace-execution-endpoint-implementation-final-approval", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "v16_19-native-production-trace-endpoint-dossier", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "v16_20-native-production-trace-endpoint-decision-record", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "formal-evidence-stabilization-replay-pilot-readiness", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "formal-evidence-stabilization-replay-pilot-readiness-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "learning-formal-evidence-realization-r1-pack", StringComparison.OrdinalIgnoreCase) &&
@@ -790,6 +791,7 @@ public static partial class EvalCommand
             Console.WriteLine("  eval v16_17-native-production-trace-execution-endpoint-implementation-approval (native production trace execution endpoint implementation approval)");
             Console.WriteLine("  eval v16_18-native-production-trace-execution-endpoint-implementation-final-approval (native production trace execution endpoint implementation final approval)");
             Console.WriteLine("  eval v16_19-native-production-trace-endpoint-dossier (native production trace endpoint authorization dossier & go/no-go protocol)");
+            Console.WriteLine("  eval v16_20-native-production-trace-endpoint-decision-record (native production trace endpoint authorization decision record & no-go enforcement)");
             Console.WriteLine("  eval learning-formal-evidence-realization-r1-pack");
             Console.WriteLine("  eval learning-formal-evidence-realization-r1-pack-gate");
             Console.WriteLine("  eval dto-split-plan");
@@ -2550,6 +2552,12 @@ public static partial class EvalCommand
         if (string.Equals(subcommand, "v16_19-native-production-trace-endpoint-dossier", StringComparison.OrdinalIgnoreCase))
         {
             await ExecuteV16_19NativeProductionTraceEndpointDossierAsync(args, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        if (string.Equals(subcommand, "v16_20-native-production-trace-endpoint-decision-record", StringComparison.OrdinalIgnoreCase))
+        {
+            await ExecuteV16_20NativeProductionTraceEndpointDecisionRecordAsync(args, cancellationToken).ConfigureAwait(false);
             return;
         }
 
