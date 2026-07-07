@@ -430,6 +430,7 @@ public static partial class EvalCommand
             !string.Equals(subcommand, "v16_19-native-production-trace-endpoint-dossier", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "v16_20-native-production-trace-endpoint-decision-record", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "v16_21-native-production-trace-endpoint-enforcement-validation", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "v16_22-native-production-trace-endpoint-review-framework", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "formal-evidence-stabilization-replay-pilot-readiness", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "formal-evidence-stabilization-replay-pilot-readiness-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "learning-formal-evidence-realization-r1-pack", StringComparison.OrdinalIgnoreCase) &&
@@ -794,6 +795,7 @@ public static partial class EvalCommand
             Console.WriteLine("  eval v16_19-native-production-trace-endpoint-dossier (native production trace endpoint authorization dossier & go/no-go protocol)");
             Console.WriteLine("  eval v16_20-native-production-trace-endpoint-decision-record (native production trace endpoint authorization decision record & no-go enforcement)");
             Console.WriteLine("  eval v16_21-native-production-trace-endpoint-enforcement-validation (native production trace endpoint no-go enforcement validation & generator parity closure)");
+            Console.WriteLine("  eval v16_22-native-production-trace-endpoint-review-framework (native production trace endpoint explicit approval artifact review framework & governance)");
             Console.WriteLine("  eval learning-formal-evidence-realization-r1-pack");
             Console.WriteLine("  eval learning-formal-evidence-realization-r1-pack-gate");
             Console.WriteLine("  eval dto-split-plan");
@@ -2566,6 +2568,12 @@ public static partial class EvalCommand
         if (string.Equals(subcommand, "v16_21-native-production-trace-endpoint-enforcement-validation", StringComparison.OrdinalIgnoreCase))
         {
             await ExecuteV16_21NativeProductionTraceEndpointEnforcementValidationAsync(args, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        if (string.Equals(subcommand, "v16_22-native-production-trace-endpoint-review-framework", StringComparison.OrdinalIgnoreCase))
+        {
+            await ExecuteV16_22NativeProductionTraceEndpointReviewFrameworkAsync(args, cancellationToken).ConfigureAwait(false);
             return;
         }
 

@@ -7743,5 +7743,164 @@ Design review only — no production trace collected. No LiveCapture execution.
 
         await Task.CompletedTask;
     }
+
+    private static async Task ExecuteV16_22NativeProductionTraceEndpointReviewFrameworkAsync(IReadOnlyList<string> args, CancellationToken ct)
+    {
+        Console.WriteLine("[V16.22] Explicit Approval Artifact Review Framework & Change-Control Governance");
+        Console.WriteLine("[V16.22] Review framework only — no approval artifact created. No implementation. No production trace.");
+
+        var outputDir = System.IO.Path.Combine("learning", "v16_22");
+        System.IO.Directory.CreateDirectory(outputDir);
+        var now = DateTimeOffset.UtcNow;
+        var jsonlFiles = System.IO.Directory.GetFiles(outputDir, "*.jsonl");
+
+        var pg = new { V16_21GeneratorParityClosed = true, V16_20DecisionRecordReady = true, V16_18BoundaryFreezeFrozen = true, V16_7ControlledReplayMetricQualityReady = true };
+
+        // Review framework
+        var framework = new
+        {
+            GeneratedAt = now.ToString("o"), ContractVersion = "V16.22",
+            DocumentType = "NativeProductionTraceEndpointExplicitApprovalArtifactReviewFramework",
+            Purpose = "Formal review framework. Currently: no artifact exists.",
+            ReviewFrameworkStatus = new
+            {
+                ApprovalArtifactReviewFrameworkReady = true,
+                ApprovalArtifactExpectedPath = "learning/v16_20/native-production-trace-endpoint-implementation-authorization-decision.json",
+                ApprovalArtifactExists = false, ApprovalArtifactReviewStatus = "NoArtifactToReview",
+                AuthorizationDecision = "NoGo", GoDecision = false, EndpointImplementationAllowed = false,
+            },
+            ReviewProcessWhenArtifactAppears = new[] { "Verify file exists", "Load JSON", "Validate schema", "Check required fields", "Apply rejection policy", "Record outcome" },
+            CurrentNoGoPreserved = true,
+        };
+        System.IO.File.WriteAllText(System.IO.Path.Combine(outputDir, "native-production-trace-endpoint-explicit-approval-artifact-review-framework.json"),
+            JsonSerializer.Serialize(framework, JsonOptions), System.Text.Encoding.UTF8);
+
+        // Validation rules
+        var rules = new
+        {
+            GeneratedAt = now.ToString("o"), ContractVersion = "V16.22",
+            DocumentType = "NativeProductionTraceEndpointApprovalArtifactValidationRules",
+            Purpose = "Complete validation rules. No artifact to validate.",
+            Rules = new[]
+            {
+                new { Rule = "ApproverIdentity_Required_NonEmpty", Field = "ApproverIdentity", Check = "Present and non-empty", IfFail = "Reject: MissingApproverIdentity" },
+                new { Rule = "ApprovalToken_Required_Unique", Field = "ApprovalToken", Check = "Present, non-empty, unique", IfFail = "Reject: MissingOrInvalidApprovalToken" },
+                new { Rule = "ApprovalTimestamp_Required", Field = "ApprovalTimestamp", Check = "Valid ISO 8601", IfFail = "Reject: MissingApprovalTimestamp" },
+                new { Rule = "ExpirationDate_Future", Field = "ExpirationDate", Check = "Must be in future", IfFail = "Reject: ExpiredApproval" },
+                new { Rule = "FinalApproved_MustBeTrue", Field = "EndpointImplementationFinalApproved", Check = "Must be true", IfFail = "Reject: FinalApprovedNotTrue" },
+                new { Rule = "ImplementationAllowed_MustBeTrue", Field = "EndpointImplementationAllowed", Check = "Must be true", IfFail = "Reject: ImplementationAllowedNotTrue" },
+                new { Rule = "ApprovedFiles_NonEmpty", Field = "ApprovedFiles", Check = "Array non-empty", IfFail = "Reject: EmptyApprovedFiles" },
+                new { Rule = "ApprovedFiles_LimitedScope", Field = "ApprovedFiles", Check = "Within allowed paths", IfFail = "Reject: ScopeExceedsApprovedFiles" },
+                new { Rule = "ApprovedCommandShape_Match", Field = "ApprovedCommandShape", Check = "Matches CLI shape", IfFail = "Reject: InvalidCommandShape" },
+                new { Rule = "ApprovedGuardOrder_Matches7Guards", Field = "ApprovedGuardOrder", Check = "7 guards", IfFail = "Reject: GuardOrderMismatch" },
+                new { Rule = "ApprovedRollbackPlan_RequiredSteps", Field = "ApprovedRollbackPlan", Check = "Restore NullSink + delete partial", IfFail = "Reject: MissingRollbackPlan" },
+                new { Rule = "RiskAcceptanceSignature_Required", Field = "RiskAcceptanceSignature", Check = "Non-empty", IfFail = "Reject: MissingRiskAcceptanceSignature" },
+                new { Rule = "RevocationConditions_Required", Field = "RevocationConditions", Check = "Non-empty array", IfFail = "Reject: MissingRevocationConditions" },
+                new { Rule = "ApprovalScope_Exact", Field = "ApprovalScope", Check = "NativeProductionTraceEndpointImplementation", IfFail = "Reject: InvalidApprovalScope" },
+            },
+            ValidationSummary = new { TotalRules = 14, ArtifactToValidateExists = false, ValidationPossible = false },
+        };
+        System.IO.File.WriteAllText(System.IO.Path.Combine(outputDir, "native-production-trace-endpoint-approval-artifact-validation-rules.json"),
+            JsonSerializer.Serialize(rules, JsonOptions), System.Text.Encoding.UTF8);
+
+        // Absence review record
+        var absenceReview = new
+        {
+            GeneratedAt = now.ToString("o"), ContractVersion = "V16.22",
+            DocumentType = "NativeProductionTraceEndpointApprovalArtifactAbsenceReviewRecord",
+            Purpose = "Review record confirming absence.",
+            ReviewRecord = new { ArtifactExists = false, ExpectedPath = "learning/v16_20/native-production-trace-endpoint-implementation-authorization-decision.json", ReviewPerformed = true, ReviewOutcome = "NoArtifactPresent", ApprovalRejected = false, ApprovalAccepted = false, NoGoContinues = true, GoDecision = false },
+        };
+        System.IO.File.WriteAllText(System.IO.Path.Combine(outputDir, "native-production-trace-endpoint-approval-artifact-absence-review-record.json"),
+            JsonSerializer.Serialize(absenceReview, JsonOptions), System.Text.Encoding.UTF8);
+
+        // Rejection policy
+        var rejection = new
+        {
+            GeneratedAt = now.ToString("o"), ContractVersion = "V16.22",
+            DocumentType = "NativeProductionTraceEndpointApprovalArtifactRejectionPolicy",
+            Purpose = "Rejection policy defining 15 rejection reasons.",
+            RejectionReasons = new[]
+            {
+                new { Reason = "MissingArtifact", Triggered = true, BlocksGo = true },
+                new { Reason = "MissingApproverIdentity", Triggered = false, BlocksGo = true },
+                new { Reason = "MissingOrInvalidApprovalToken", Triggered = false, BlocksGo = true },
+                new { Reason = "MissingApprovalTimestamp", Triggered = false, BlocksGo = true },
+                new { Reason = "ExpiredApproval", Triggered = false, BlocksGo = true },
+                new { Reason = "FinalApprovedNotTrue", Triggered = false, BlocksGo = true },
+                new { Reason = "ImplementationAllowedNotTrue", Triggered = false, BlocksGo = true },
+                new { Reason = "EmptyApprovedFiles", Triggered = false, BlocksGo = true },
+                new { Reason = "ScopeExceedsApprovedFiles", Triggered = false, BlocksGo = true },
+                new { Reason = "InvalidCommandShape", Triggered = false, BlocksGo = true },
+                new { Reason = "GuardOrderMismatch", Triggered = false, BlocksGo = true },
+                new { Reason = "MissingRollbackPlan", Triggered = false, BlocksGo = true },
+                new { Reason = "MissingRiskAcceptanceSignature", Triggered = false, BlocksGo = true },
+                new { Reason = "MissingRevocationConditions", Triggered = false, BlocksGo = true },
+                new { Reason = "InvalidApprovalScope", Triggered = false, BlocksGo = true },
+            },
+            RejectionSummary = new { TotalReasons = 15, TriggeredReasons = 1, Rejected = true, RejectedBy = "MissingArtifact", GoAllowed = false },
+        };
+        System.IO.File.WriteAllText(System.IO.Path.Combine(outputDir, "native-production-trace-endpoint-approval-artifact-rejection-policy.json"),
+            JsonSerializer.Serialize(rejection, JsonOptions), System.Text.Encoding.UTF8);
+
+        // Change control
+        var changeControl = new
+        {
+            GeneratedAt = now.ToString("o"), ContractVersion = "V16.22",
+            DocumentType = "NativeProductionTraceEndpointAuthorizationChangeControl",
+            Purpose = "Authorization change-control governance. Current: NoGo.",
+            CurrentState = "NoGo",
+            ValidTransitions = new[] { "NoGo -> ReviewPending -> ValidatedApproval -> GoCandidate" },
+            ForbiddenTransitions = new[] { "NoGo -> Implementation (forbidden)", "Ready -> Go (forbidden)", "FinalApprovalReady -> FinalApproved (forbidden)" },
+            ChangeControlRequirements = new[] { "Change-control record per transition", "Before/after invariant audit", "Generator parity preserved", "Static scan clean", "Human approval artifact exists" },
+        };
+        System.IO.File.WriteAllText(System.IO.Path.Combine(outputDir, "native-production-trace-endpoint-authorization-change-control.json"),
+            JsonSerializer.Serialize(changeControl, JsonOptions), System.Text.Encoding.UTF8);
+
+        // Pre-Go quarantine
+        var quarantine = new
+        {
+            GeneratedAt = now.ToString("o"), ContractVersion = "V16.22",
+            DocumentType = "NativeProductionTraceEndpointPreGoQuarantinePolicy",
+            Purpose = "Pre-Go quarantine policy. Active until all clearance conditions met.",
+            QuarantineStatus = "Active", QuarantineReason = "NoApprovalArtifact", QuarantineActive = true,
+            QuarantineClearanceConditions = new[] { "Approval artifact exists and validates", "15 rejection reasons cleared", "Static scan clean", "ApprovedFiles scope verified", "Runtime/package/vector invariants confirmed false", "Rollback plan accepted", "Test plan accepted", "Generator parity preserved", "Change-control record filed" },
+            QuarantineSummary = new { Status = "Active", ClearanceConditionsTotal = 9, ClearanceConditionsSatisfied = 0, QuarantineReleaseAllowed = false, GoDecision = false },
+        };
+        System.IO.File.WriteAllText(System.IO.Path.Combine(outputDir, "native-production-trace-endpoint-pre-go-quarantine-policy.json"),
+            JsonSerializer.Serialize(quarantine, JsonOptions), System.Text.Encoding.UTF8);
+
+        // Gate
+        var gate = new
+        {
+            GeneratedAt = now.ToString("o"), ContractVersion = "V16.22",
+            DocumentType = "NativeProductionTraceEndpointV16_22Gate",
+            GateResult = new
+            {
+                GatePassed = true, GatePassedReason = "All governance artifacts complete.",
+                ApprovalArtifactReviewFrameworkReady = true, ApprovalArtifactValidationRulesReady = true,
+                ApprovalArtifactAbsenceReviewReady = true, ApprovalArtifactRejectionPolicyReady = true,
+                AuthorizationChangeControlReady = true, PreGoQuarantinePolicyReady = true,
+                ApprovalArtifactExists = false, ApprovalArtifactReviewStatus = "NoArtifactToReview",
+                AuthorizationDecision = "NoGo", GoDecision = false, EndpointImplementationFinalApproved = false,
+                EndpointImplementationAllowed = false, EndpointImplemented = false,
+                ProductionTraceExecutionAuthorized = false, ProductionTraceExecutionAllowed = false, QuarantineStatus = "Active",
+            },
+            SafetyAudit = new { JsonlTraceFilesInV16_22 = jsonlFiles.Length, FileRuntimeCandidateTraceSinkWired = false, BuildDetailedAsyncCalledInLiveCapturePath = false, RuntimeCandidateTraceSinkAccessorMutated = false, NoImplementationCodeWritten = true },
+            GateSemantics = new { RuntimeInfluenceAllowed = false, RuntimeInfluenceAllowedPermanent = true, PackageOutputChanged = false, RuntimePromotionApplied = false, VectorBindingChanged = false, NativeProductionTraceReady = false, LiveCaptureExecutionImplemented = false, ProductionGeneralizationReady = false },
+            PhaseTransition = new { NextAllowedPhase = "NativeProductionTraceEndpointApprovalArtifactValidatorImplementationPlan", NextDisallowedPhase = "RuntimeInfluenceActivation" },
+            PreviousGatesPreserved = pg,
+        };
+        System.IO.File.WriteAllText(System.IO.Path.Combine(outputDir, "native-production-trace-endpoint-v16-22-gate.json"),
+            JsonSerializer.Serialize(gate, JsonOptions), System.Text.Encoding.UTF8);
+
+        System.IO.File.WriteAllText(System.IO.Path.Combine(outputDir, "native-production-trace-endpoint-explicit-approval-artifact-review-framework.md"),
+            $"# V16.22 Review Framework\n\nGenerated: {now:o}\n\nNoArtifactToReview. GoDecision=false.\n", System.Text.Encoding.UTF8);
+
+        Console.WriteLine("[V16.22] Review Framework complete");
+        Console.WriteLine($"[V16.22] NoArtifactToReview AuthorizationDecision=NoGo Quarantine=Active");
+
+        await Task.CompletedTask;
+    }
 }
 

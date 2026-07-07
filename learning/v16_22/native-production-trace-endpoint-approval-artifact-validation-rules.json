@@ -1,0 +1,23 @@
+{
+  "GeneratedAt": "2026-07-07T07:33:00.0000000+00:00",
+  "ContractVersion": "V16.22",
+  "DocumentType": "NativeProductionTraceEndpointApprovalArtifactValidationRules",
+  "Purpose": "Complete validation rules for the approval artifact. Defines all acceptance and rejection criteria per V16.20 schema. Currently: no artifact to validate.",
+  "Rules": [
+    {"Rule": "ApproverIdentity_Required_NonEmpty", "Field": "ApproverIdentity", "Check": "Present and non-empty string", "IfFail": "Reject: MissingApproverIdentity"},
+    {"Rule": "ApprovalToken_Required_Unique", "Field": "ApprovalToken", "Check": "Present, non-empty, unique", "IfFail": "Reject: MissingOrInvalidApprovalToken"},
+    {"Rule": "ApprovalTimestamp_Required", "Field": "ApprovalTimestamp", "Check": "Valid ISO 8601 datetime", "IfFail": "Reject: MissingApprovalTimestamp"},
+    {"Rule": "ExpirationDate_Future", "Field": "ExpirationDate", "Check": "Must be in the future", "IfFail": "Reject: ExpiredApproval"},
+    {"Rule": "FinalApproved_MustBeTrue", "Field": "EndpointImplementationFinalApproved", "Check": "Must be explicitly true", "IfFail": "Reject: FinalApprovedNotTrue"},
+    {"Rule": "ImplementationAllowed_MustBeTrue", "Field": "EndpointImplementationAllowed", "Check": "Must be explicitly true", "IfFail": "Reject: ImplementationAllowedNotTrue"},
+    {"Rule": "ApprovedFiles_NonEmpty", "Field": "ApprovedFiles", "Check": "Array with at least one file path", "IfFail": "Reject: EmptyApprovedFiles"},
+    {"Rule": "ApprovedFiles_LimitedScope", "Field": "ApprovedFiles", "Check": "All files must be within allowed implementation paths", "IfFail": "Reject: ScopeExceedsApprovedFiles"},
+    {"Rule": "ApprovedCommandShape_Match", "Field": "ApprovedCommandShape", "Check": "Must match expected CLI shape", "IfFail": "Reject: InvalidCommandShape"},
+    {"Rule": "ApprovedGuardOrder_Matches7Guards", "Field": "ApprovedGuardOrder", "Check": "Must have exactly 7 guards matching V16.16 order", "IfFail": "Reject: GuardOrderMismatch"},
+    {"Rule": "ApprovedRollbackPlan_RequiredSteps", "Field": "ApprovedRollbackPlan", "Check": "Must contain restore NullSink and delete partial trace", "IfFail": "Reject: MissingRollbackPlan"},
+    {"Rule": "RiskAcceptanceSignature_Required", "Field": "RiskAcceptanceSignature", "Check": "Non-empty signature string", "IfFail": "Reject: MissingRiskAcceptanceSignature"},
+    {"Rule": "RevocationConditions_Required", "Field": "RevocationConditions", "Check": "Non-empty array of conditions", "IfFail": "Reject: MissingRevocationConditions"},
+    {"Rule": "ApprovalScope_Exact", "Field": "ApprovalScope", "Check": "Must be 'NativeProductionTraceEndpointImplementation'", "IfFail": "Reject: InvalidApprovalScope"}
+  ],
+  "ValidationSummary": {"TotalRules": 14, "ArtifactToValidateExists": false, "ValidationPossible": false}
+}

@@ -1,0 +1,24 @@
+{
+  "GeneratedAt": "2026-07-07T07:33:00.0000000+00:00",
+  "ContractVersion": "V16.22",
+  "DocumentType": "NativeProductionTraceEndpointApprovalArtifactRejectionPolicy",
+  "Purpose": "Rejection policy defining all reasons an approval artifact would be rejected. Currently: no artifact to reject.",
+  "RejectionReasons": [
+    {"Reason": "MissingArtifact", "Description": "Approval artifact does not exist at expected path.", "Triggered": true, "BlocksGo": true},
+    {"Reason": "MissingApproverIdentity", "Description": "ApproverIdentity field missing or empty.", "Triggered": false, "BlocksGo": true},
+    {"Reason": "MissingOrInvalidApprovalToken", "Description": "ApprovalToken field missing, empty, or duplicate.", "Triggered": false, "BlocksGo": true},
+    {"Reason": "MissingApprovalTimestamp", "Description": "ApprovalTimestamp missing or invalid.", "Triggered": false, "BlocksGo": true},
+    {"Reason": "ExpiredApproval", "Description": "ExpirationDate is in the past.", "Triggered": false, "BlocksGo": true},
+    {"Reason": "FinalApprovedNotTrue", "Description": "EndpointImplementationFinalApproved is not true.", "Triggered": false, "BlocksGo": true},
+    {"Reason": "ImplementationAllowedNotTrue", "Description": "EndpointImplementationAllowed is not true.", "Triggered": false, "BlocksGo": true},
+    {"Reason": "EmptyApprovedFiles", "Description": "ApprovedFiles list is empty.", "Triggered": false, "BlocksGo": true},
+    {"Reason": "ScopeExceedsApprovedFiles", "Description": "ApprovedFiles contains paths outside allowed scope.", "Triggered": false, "BlocksGo": true},
+    {"Reason": "InvalidCommandShape", "Description": "ApprovedCommandShape does not match expected CLI.", "Triggered": false, "BlocksGo": true},
+    {"Reason": "GuardOrderMismatch", "Description": "ApprovedGuardOrder does not match 7-guard order.", "Triggered": false, "BlocksGo": true},
+    {"Reason": "MissingRollbackPlan", "Description": "ApprovedRollbackPlan missing required steps.", "Triggered": false, "BlocksGo": true},
+    {"Reason": "MissingRiskAcceptanceSignature", "Description": "RiskAcceptanceSignature missing or empty.", "Triggered": false, "BlocksGo": true},
+    {"Reason": "MissingRevocationConditions", "Description": "RevocationConditions missing or empty.", "Triggered": false, "BlocksGo": true},
+    {"Reason": "InvalidApprovalScope", "Description": "ApprovalScope not NativeProductionTraceEndpointImplementation.", "Triggered": false, "BlocksGo": true}
+  ],
+  "RejectionSummary": {"TotalReasons": 15, "TriggeredReasons": 1, "Rejected": true, "RejectedBy": "MissingArtifact", "GoAllowed": false}
+}

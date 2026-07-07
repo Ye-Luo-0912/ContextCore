@@ -1,0 +1,24 @@
+{
+  "GeneratedAt": "2026-07-07T07:33:00.0000000+00:00",
+  "ContractVersion": "V16.22",
+  "DocumentType": "NativeProductionTraceEndpointAuthorizationChangeControl",
+  "Purpose": "Authorization change-control governance. Defines valid state transitions, audit requirements, and direct-transition prohibitions. Current state: NoGo.",
+  "CurrentState": "NoGo",
+  "ValidTransitions": [
+    {"From": "NoGo", "To": "ReviewPending", "Requires": "Explicit human approval artifact appears at expected path", "Allowed": true},
+    {"From": "ReviewPending", "To": "ValidatedApproval", "Requires": "All 14 validation rules pass, 15 rejection reasons cleared", "Allowed": true},
+    {"From": "ValidatedApproval", "To": "GoCandidate", "Requires": "Static scan clean, quarantine cleared, generator parity preserved, runtime/package/vector invariants confirmed", "Allowed": true}
+  ],
+  "ForbiddenTransitions": [
+    {"From": "NoGo", "To": "Implementation", "Reason": "Direct NoGo->Implementation is structurally forbidden. Must pass through ReviewPending -> ValidatedApproval -> GoCandidate."},
+    {"From": "Ready", "To": "Go", "Reason": "Ready flags are NEVER equal to Approved/Go. See V16.18 DoNotMisinterpret."},
+    {"From": "FinalApprovalReady", "To": "FinalApproved", "Reason": "V16.18 boundary frozen at ReadyButNotApproved. Requires human approval artifact."}
+  ],
+  "ChangeControlRequirements": [
+    "Every transition requires a change-control record with timestamp",
+    "Before/after invariant audit: RuntimeInfluenceAllowed, PackageOutputChanged, VectorBindingChanged must remain false",
+    "Generator parity must be preserved across transition",
+    "Static scan must be clean (zero disallowed matches)",
+    "Explicit human approval artifact must exist and validate"
+  ]
+}
