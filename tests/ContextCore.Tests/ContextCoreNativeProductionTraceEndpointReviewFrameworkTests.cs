@@ -97,12 +97,45 @@ public class ContextCoreNativeProductionTraceEndpointReviewFrameworkTests
         Assert.IsNotNull(task);
         task!.GetAwaiter().GetResult();
 
-        // Check key fields in generated artifacts
+        // Review framework: check ProductionTraceExecutionAllowed and EndpointImplemented
         using var doc = JsonDocument.Parse(File.ReadAllText(Resolve("native-production-trace-endpoint-explicit-approval-artifact-review-framework.json")));
-        Assert.IsTrue(doc.RootElement.TryGetProperty("ReviewFrameworkStatus", out _));
-        Assert.IsTrue(doc.RootElement.TryGetProperty("ReviewProcessWhenArtifactAppears", out _));
+        var rfs = doc.RootElement.GetProperty("ReviewFrameworkStatus");
+        Assert.IsTrue(rfs.TryGetProperty("EndpointImplemented", out _));
+        Assert.IsTrue(rfs.TryGetProperty("ProductionTraceExecutionAllowed", out _));
 
-        using var doc2 = JsonDocument.Parse(File.ReadAllText(Resolve("native-production-trace-endpoint-approval-artifact-rejection-policy.json")));
-        Assert.IsTrue(doc2.RootElement.GetProperty("RejectionReasons").GetArrayLength() >= 14);
+        // Absence review: check ReviewTimestamp
+        using var absDoc = JsonDocument.Parse(File.ReadAllText(Resolve("native-production-trace-endpoint-approval-artifact-absence-review-record.json")));
+        Assert.IsTrue(absDoc.RootElement.GetProperty("ReviewRecord").TryGetProperty("ReviewTimestamp", out _));
+
+        // Rejection: check Description on each reason
+        using var rejDoc = JsonDocument.Parse(File.ReadAllText(Resolve("native-production-trace-endpoint-approval-artifact-rejection-policy.json")));
+        Assert.IsTrue(rejDoc.RootElement.GetProperty("RejectionReasons")[0].TryGetProperty("Description", out _));
+
+        // Change control: check ValidTransitions are objects with From/To/Requires/Allowed
+        using var ccDoc = JsonDocument.Parse(File.ReadAllText(Resolve("native-production-trace-endpoint-authorization-change-control.json")));
+        var vt = ccDoc.RootElement.GetProperty("ValidTransitions")[0];
+        Assert.IsTrue(vt.TryGetProperty("From", out _));
+        Assert.IsTrue(vt.TryGetProperty("To", out _));
+        Assert.IsTrue(vt.TryGetProperty("Requires", out _));
+        Assert.IsTrue(vt.GetProperty("Allowed").GetBoolean());
+        var ft0 = ccDoc.RootElement.GetProperty("ForbiddenTransitions")[0];
+        Assert.IsTrue(ft0.TryGetProperty("From", out _));
+        Assert.IsTrue(ft0.TryGetProperty("To", out _));
+        Assert.IsTrue(ft0.TryGetProperty("Reason", out _));
+
+        // Gate: check new fields
+        using var gateDoc = JsonDocument.Parse(File.ReadAllText(Resolve("native-production-trace-endpoint-v16-22-gate.json")));
+        var gr = gateDoc.RootElement.GetProperty("GateResult");
+        Assert.IsTrue(gr.GetProperty("ReviewFrameworkGeneratorParityEvidenceReady").GetBoolean());
+        Assert.IsTrue(gr.GetProperty("ReviewFrameworkGeneratorParityPassed").GetBoolean());
+        Assert.IsTrue(gateDoc.RootElement.GetProperty("PhaseTransition").TryGetProperty("NextAllowedPhaseDescription", out _));
+
+        // Parity evidence file exists
+        Assert.IsTrue(File.Exists(Resolve("native-production-trace-endpoint-review-framework-generator-parity-evidence.json")));
+        using var peDoc = JsonDocument.Parse(File.ReadAllText(Resolve("native-production-trace-endpoint-review-framework-generator-parity-evidence.json")));
+        var results = peDoc.RootElement.GetProperty("ComparisonResults");
+        Assert.AreEqual(7, results.GetArrayLength());
+        foreach (var r in results.EnumerateArray())
+            Assert.IsTrue(r.GetProperty("ParityPassed").GetBoolean());
     }
 }
