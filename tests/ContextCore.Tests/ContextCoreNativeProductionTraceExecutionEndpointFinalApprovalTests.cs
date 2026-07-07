@@ -96,4 +96,66 @@ public class ContextCoreNativeProductionTraceExecutionEndpointFinalApprovalTests
         var p = ResolveArtifactPath("native-production-trace-execution-endpoint-implementation-final-approval.json");
         Assert.AreEqual(0, Directory.GetFiles(System.IO.Path.GetDirectoryName(p)!, "*.jsonl").Length);
     }
+
+    // -----------------------------------------------------------------
+    // Boundary freeze & non-implementation ledger tests
+    // -----------------------------------------------------------------
+
+    [TestMethod]
+    public void BoundaryFreeze_ReadsAndValidates_FrozenReadyButNotApproved()
+    {
+        var path = ResolveArtifactPath("native-production-trace-execution-endpoint-final-boundary-freeze.json");
+        Assert.IsTrue(File.Exists(path));
+        using var doc = JsonDocument.Parse(File.ReadAllText(path));
+        var freeze = doc.RootElement.GetProperty("BoundaryFreeze");
+
+        Assert.AreEqual("ReadyButNotApproved", freeze.GetProperty("FrozenState").GetString());
+        Assert.IsTrue(freeze.GetProperty("EndpointImplementationFinalApprovalReady").GetBoolean());
+        Assert.IsFalse(freeze.GetProperty("EndpointImplementationFinalApproved").GetBoolean());
+        Assert.IsFalse(freeze.GetProperty("EndpointImplementationAllowed").GetBoolean());
+        Assert.IsFalse(freeze.GetProperty("EndpointImplemented").GetBoolean());
+        Assert.IsFalse(freeze.GetProperty("LiveCaptureExecutionImplemented").GetBoolean());
+        Assert.IsFalse(freeze.GetProperty("NativeProductionTraceReady").GetBoolean());
+    }
+
+    [TestMethod]
+    public void BoundaryFreeze_DoNotMisinterpret_Explicit()
+    {
+        var path = ResolveArtifactPath("native-production-trace-execution-endpoint-final-boundary-freeze.json");
+        using var doc = JsonDocument.Parse(File.ReadAllText(path));
+        Assert.IsTrue(doc.RootElement.TryGetProperty("DoNotMisinterpret", out var dmi));
+        Assert.IsTrue(dmi.GetArrayLength() >= 3);
+    }
+
+    [TestMethod]
+    public void NonImplementationLedger_ReadsAndValidates_FivePhases_AllReadyNotApproved()
+    {
+        var path = ResolveArtifactPath("native-production-trace-execution-endpoint-non-implementation-ledger.json");
+        Assert.IsTrue(File.Exists(path));
+        using var doc = JsonDocument.Parse(File.ReadAllText(path));
+        var entries = doc.RootElement.GetProperty("LedgerEntries");
+
+        Assert.AreEqual(5, entries.GetArrayLength());
+        foreach (var e in entries.EnumerateArray())
+        {
+            Assert.IsTrue(e.GetProperty("Ready").GetBoolean(),
+                $"{e.GetProperty("Version").GetString()}: Ready must be true.");
+            Assert.IsFalse(e.GetProperty("Approved").GetBoolean(),
+                $"{e.GetProperty("Version").GetString()}: Approved must be false.");
+            Assert.IsFalse(e.GetProperty("Implemented").GetBoolean(),
+                $"{e.GetProperty("Version").GetString()}: Implemented must be false.");
+        }
+    }
+
+    [TestMethod]
+    public void NonImplementationLedger_CrossCuttingConfirmation_AllTrue()
+    {
+        var path = ResolveArtifactPath("native-production-trace-execution-endpoint-non-implementation-ledger.json");
+        using var doc = JsonDocument.Parse(File.ReadAllText(path));
+        var conf = doc.RootElement.GetProperty("CrossCuttingConfirmation");
+        Assert.IsTrue(conf.GetProperty("NoProductionTraceJsonl").GetBoolean());
+        Assert.IsTrue(conf.GetProperty("NoFileRuntimeCandidateTraceSinkWired").GetBoolean());
+        Assert.IsTrue(conf.GetProperty("NoRuntimeInfluence").GetBoolean());
+        Assert.IsTrue(conf.GetProperty("NoImplementationCodeWritten").GetBoolean());
+    }
 }

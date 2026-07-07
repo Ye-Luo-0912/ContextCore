@@ -7121,6 +7121,79 @@ Design review only — no production trace collected. No LiveCapture execution.
             System.IO.Path.Combine(outputDir, "native-production-trace-execution-endpoint-implementation-final-approval.md"),
             md, System.Text.Encoding.UTF8);
 
+        // Boundary freeze
+        var boundary = new
+        {
+            GeneratedAt = now.ToString("o"),
+            ContractVersion = "V16.18",
+            DocumentType = "NativeProductionTraceExecutionEndpointFinalBoundaryFreeze",
+            Purpose = "Final boundary freeze for V16.14-V16.18 approval chain.",
+            BoundaryFreeze = new
+            {
+                FrozenState = "ReadyButNotApproved",
+                EndpointImplementationFinalApprovalReady = true,
+                EndpointImplementationFinalApproved = false,
+                EndpointImplementationAllowed = false,
+                EndpointImplemented = false,
+                ProductionTraceExecutionAuthorized = false,
+                ProductionTraceExecutionAllowed = false,
+                LiveCaptureExecutionImplemented = false,
+                LiveCaptureExecuted = false,
+                NativeProductionTraceReady = false,
+            },
+            SafetyInvariants = new
+            {
+                RuntimeInfluenceAllowed = false,
+                RuntimeInfluenceAllowedPermanent = true,
+                PackageOutputChanged = false,
+                RuntimePromotionApplied = false,
+                VectorBindingChanged = false,
+                NoProductionTraceGenerated = true,
+                NoImplementationCodeWritten = true,
+            },
+            DoNotMisinterpret = new[]
+            {
+                "FinalApprovalReady=true does NOT mean FinalApproved=true",
+                "Gate passed does NOT mean implementation authorized",
+                "Criteria satisfied does NOT mean capture allowed",
+            },
+        };
+
+        System.IO.File.WriteAllText(
+            System.IO.Path.Combine(outputDir, "native-production-trace-execution-endpoint-final-boundary-freeze.json"),
+            JsonSerializer.Serialize(boundary, JsonOptions), System.Text.Encoding.UTF8);
+
+        // Non-implementation ledger
+        var ledger = new
+        {
+            GeneratedAt = now.ToString("o"),
+            ContractVersion = "V16.18",
+            DocumentType = "NativeProductionTraceExecutionEndpointNonImplementationLedger",
+            Purpose = "Non-implementation ledger documenting approval chain state.",
+            LedgerEntries = new[]
+            {
+                new { Version = "V16.14", Phase = "Authorization Contract", Ready = true, Approved = false, Implemented = false },
+                new { Version = "V16.15", Phase = "Endpoint Design", Ready = true, Approved = false, Implemented = false },
+                new { Version = "V16.16", Phase = "Implementation Plan", Ready = true, Approved = false, Implemented = false },
+                new { Version = "V16.17", Phase = "Implementation Approval", Ready = true, Approved = false, Implemented = false },
+                new { Version = "V16.18", Phase = "Final Approval", Ready = true, Approved = false, Implemented = false },
+            },
+            CrossCuttingConfirmation = new
+            {
+                NoProductionTraceJsonl = true,
+                NoFileRuntimeCandidateTraceSinkWired = true,
+                NoBuildDetailedAsyncCalled = true,
+                NoRuntimeInfluence = true,
+                NoPackageMutation = true,
+                NoVectorBindingMutation = true,
+                NoImplementationCodeWritten = true,
+            },
+        };
+
+        System.IO.File.WriteAllText(
+            System.IO.Path.Combine(outputDir, "native-production-trace-execution-endpoint-non-implementation-ledger.json"),
+            JsonSerializer.Serialize(ledger, JsonOptions), System.Text.Encoding.UTF8);
+
         Console.WriteLine("[V16.18] Endpoint Implementation Final Approval complete");
         Console.WriteLine($"[V16.18] FinalApprovalReady=true FinalApproved=false");
         Console.WriteLine($"[V16.18] Safety: {jsonlFiles.Length} .jsonl trace files");
