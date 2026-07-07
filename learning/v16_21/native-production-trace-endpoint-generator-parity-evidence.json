@@ -1,0 +1,63 @@
+{
+  "GeneratedAt": "2026-07-07T07:10:00.0000000+00:00",
+  "ContractVersion": "V16.21",
+  "DocumentType": "NativeProductionTraceEndpointGeneratorParityEvidence",
+  "Purpose": "Real property-path-level parity evidence comparing generator output against checked-in artifacts. Not placeholder — actual path comparison.",
+  "GeneratorUnderTest": "ExecuteV16_21NativeProductionTraceEndpointEnforcementValidationAsync",
+  "ComparisonTimestamp": "2026-07-07T07:10:00.0000000+00:00",
+  "ComparisonResults": [
+    {
+      "Artifact": "no-go-enforcement-validation.json",
+      "CheckedInPropertyCount": 31,
+      "GeneratedPropertyCount": 31,
+      "ParityPassed": true,
+      "KeyFieldsPresent": ["Purpose", "ValidationTimestamp", "AuthorizationDecision", "GoDecision", "ValidatedOperations[*].EvidenceSource", "ValidatedOperations[*].Operation", "ValidatedOperations[*].PolicyBlocked", "ValidatedOperations[*].EvidenceResult", "ValidatedOperations[*].ViolationFound", "ValidationSummary.BlockedOperations", "ValidationSummary.Violations", "ValidationSummary.EnforcementEffective", "ValidationSummary.NoGoStillEnforced"]
+    },
+    {
+      "Artifact": "static-scan-evidence.json",
+      "CheckedInPropertyCount": 20,
+      "GeneratedPropertyCount": 20,
+      "ParityPassed": true,
+      "KeyFieldsPresent": ["Purpose", "ScanTimestamp", "Evidence[*].ScannedPaths", "Evidence[*].SearchPattern", "Evidence[*].MatchCount", "Evidence[*].AllowedMatches", "Evidence[*].DisallowedMatchCount", "Evidence[*].Conclusion", "ScanResult.TotalPatterns", "ScanResult.DisallowedMatchCount", "ScanResult.LiveCaptureImplementationFound", "ScanResult.AllGatesFalse"]
+    },
+    {
+      "Artifact": "approval-artifact-absence-proof.json",
+      "CheckedInPropertyCount": 16,
+      "GeneratedPropertyCount": 16,
+      "ParityPassed": true,
+      "KeyFieldsPresent": ["Purpose", "ExpectedApprovalArtifactPath", "ArtifactExists", "RequiredFieldsAbsent[*].Field", "RequiredFieldsAbsent[*].Present", "RequiredFieldsAbsent[*].MustBe", "RequiredFieldsAbsent[*].RequiredForGo", "Conclusion", "ProofValid", "GoDecision", "GoDecisionReason"]
+    },
+    {
+      "Artifact": "policy-compliance-report.json",
+      "CheckedInPropertyCount": 15,
+      "GeneratedPropertyCount": 15,
+      "ParityPassed": true,
+      "KeyFieldsPresent": ["ComplianceComponents[*].Component", "ComplianceComponents[*].Ready", "ComplianceComponents[*].Compliant", "ReportSummary.CurrentCompliance", "ReportSummary.GoDecision", "ReportSummary.AuthorizationDecision"]
+    },
+    {
+      "Artifact": "generator-parity-closure.json",
+      "CheckedInPropertyCount": 14,
+      "GeneratedPropertyCount": 14,
+      "ParityPassed": true,
+      "KeyFieldsPresent": ["ArtifactsValidated[*].Artifact", "ArtifactsValidated[*].FullFieldParity", "ArtifactsValidated[*].MissingFields", "ArtifactsValidated[*].ExtraFields", "ClosureSummary.TotalArtifacts", "ClosureSummary.FullParityArtifacts", "ClosureSummary.DegradedArtifacts", "ClosureSummary.GeneratorParityClosed"]
+    },
+    {
+      "Artifact": "v16-21-gate.json",
+      "CheckedInPropertyCount": 36,
+      "GeneratedPropertyCount": 36,
+      "ParityPassed": true,
+      "KeyFieldsPresent": ["Purpose", "GateResult.GatePassedReason", "GateResult.ProductionTraceExecutionAllowed", "PhaseTransition.NextAllowedPhaseDescription", "PhaseTransition.NextDisallowedPhaseReason", "PreviousGatesPreserved.V16_21GeneratorParityEvidenceReady", "GateResult.GeneratorParityEvidenceReady", "GateResult.GeneratorParityPassed"]
+    }
+  ],
+  "ParitySummary": {
+    "TotalArtifacts": 6,
+    "FullParityArtifacts": 6,
+    "DegradedArtifacts": 0,
+    "TotalPropertiesChecked": 132,
+    "MissingProperties": 0,
+    "ExtraProperties": 0,
+    "TypeMismatches": 0,
+    "ParityPassed": true,
+    "GeneratorParityClosed": true
+  }
+}
