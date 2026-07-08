@@ -432,6 +432,7 @@ public static partial class EvalCommand
             !string.Equals(subcommand, "v16_21-native-production-trace-endpoint-enforcement-validation", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "v16_22-native-production-trace-endpoint-review-framework", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "v16_23-native-production-trace-endpoint-approval-validator-plan", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(subcommand, "v16_24-native-production-trace-endpoint-dry-run-architecture", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "formal-evidence-stabilization-replay-pilot-readiness", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "formal-evidence-stabilization-replay-pilot-readiness-gate", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(subcommand, "learning-formal-evidence-realization-r1-pack", StringComparison.OrdinalIgnoreCase) &&
@@ -798,6 +799,7 @@ public static partial class EvalCommand
             Console.WriteLine("  eval v16_21-native-production-trace-endpoint-enforcement-validation (native production trace endpoint no-go enforcement validation & generator parity closure)");
             Console.WriteLine("  eval v16_22-native-production-trace-endpoint-review-framework (native production trace endpoint explicit approval artifact review framework & governance)");
             Console.WriteLine("  eval v16_23-native-production-trace-endpoint-approval-validator-plan (native production trace endpoint approval validator implementation plan & verification protocol)");
+            Console.WriteLine("  eval v16_24-native-production-trace-endpoint-dry-run-architecture (native production trace endpoint approval validator dry-run simulation architecture & evidence harness)");
             Console.WriteLine("  eval learning-formal-evidence-realization-r1-pack");
             Console.WriteLine("  eval learning-formal-evidence-realization-r1-pack-gate");
             Console.WriteLine("  eval dto-split-plan");
@@ -2582,6 +2584,12 @@ public static partial class EvalCommand
         if (string.Equals(subcommand, "v16_23-native-production-trace-endpoint-approval-validator-plan", StringComparison.OrdinalIgnoreCase))
         {
             await ExecuteV16_23NativeProductionTraceEndpointApprovalValidatorPlanAsync(args, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        if (string.Equals(subcommand, "v16_24-native-production-trace-endpoint-dry-run-architecture", StringComparison.OrdinalIgnoreCase))
+        {
+            await ExecuteV16_24NativeProductionTraceEndpointDryRunArchitectureAsync(args, cancellationToken).ConfigureAwait(false);
             return;
         }
 
