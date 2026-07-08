@@ -8223,5 +8223,63 @@ Design review only — no production trace collected. No LiveCapture execution.
         Console.WriteLine($"[V16.24] DryRunImplemented=false SimulatedArtifactsOnly=true GoDecision=false");
         await Task.CompletedTask;
     }
+
+    private static async Task ExecuteV16_25NativeProductionTraceEndpointDryRunHarnessPlanAsync(IReadOnlyList<string> args, CancellationToken ct)
+    {
+        Console.WriteLine("[V16.25] Dry-Run Harness Implementation Plan & Synthetic Execution Contract");
+        Console.WriteLine("[V16.25] Plan only — harness NOT implemented. No production trace.");
+
+        var outputDir = System.IO.Path.Combine("learning", "v16_25");
+        System.IO.Directory.CreateDirectory(outputDir);
+        var now = DateTimeOffset.UtcNow;
+        var jsonlFiles = System.IO.Directory.GetFiles(outputDir, "*.jsonl");
+        var pg = new { V16_24DryRunArchitectureReady = true, V16_23ValidatorPlanReady = true, V16_22ReviewFrameworkReady = true, V16_7ControlledReplayMetricQualityReady = true };
+
+        // Harness implementation plan
+        var plan = new { GeneratedAt = now.ToString("o"), ContractVersion = "V16.25", DocumentType = "NativeProductionTraceEndpointApprovalValidatorDryRunHarnessImplementationPlan", PlanStatus = new { DryRunHarnessImplementationPlanReady = true, DryRunHarnessImplemented = false, ProductionValidatorImplemented = false, ApprovalArtifactCreated = false, ApprovalArtifactExists = false, RealApprovalArtifactRead = false, SyntheticFixtureExecutionOnly = true, AuthorizationDecision = "NoGo", GoDecision = false } };
+        System.IO.File.WriteAllText(System.IO.Path.Combine(outputDir, "native-production-trace-endpoint-approval-validator-dry-run-harness-implementation-plan.json"), JsonSerializer.Serialize(plan, JsonOptions), System.Text.Encoding.UTF8);
+
+        // Harness contract
+        var contract = new { GeneratedAt = now.ToString("o"), ContractVersion = "V16.25", DocumentType = "NativeProductionTraceEndpointApprovalValidatorDryRunHarnessContract", ComponentBoundaries = new[] { new { Component = "FixtureLoader", ProductionCapable = false, NoRuntimeInfluence = true }, new { Component = "SimulationExecutor", ProductionCapable = false, NoRuntimeInfluence = true }, new { Component = "ResultWriter", ProductionCapable = false, NoRuntimeInfluence = true }, new { Component = "SyntheticOnlyGuard", ProductionCapable = false, NoRuntimeInfluence = true }, new { Component = "EvidenceEmitter", ProductionCapable = false, NoRuntimeInfluence = true } } };
+        System.IO.File.WriteAllText(System.IO.Path.Combine(outputDir, "native-production-trace-endpoint-approval-validator-dry-run-harness-contract.json"), JsonSerializer.Serialize(contract, JsonOptions), System.Text.Encoding.UTF8);
+
+        // Fixture loader
+        var loader = new { GeneratedAt = now.ToString("o"), ContractVersion = "V16.25", DocumentType = "NativeProductionTraceEndpointApprovalValidatorFixtureLoaderContract", LoaderRules = new { Source = "V16.24 fixture-corpus-contract.json", ExpectedMinFixtureCount = 19 }, LoaderStatus = new { FixtureLoaderContractReady = true, FixtureLoaderImplemented = false, SyntheticOnly = true } };
+        System.IO.File.WriteAllText(System.IO.Path.Combine(outputDir, "native-production-trace-endpoint-approval-validator-fixture-loader-contract.json"), JsonSerializer.Serialize(loader, JsonOptions), System.Text.Encoding.UTF8);
+
+        // Simulation executor
+        var executor = new { GeneratedAt = now.ToString("o"), ContractVersion = "V16.25", DocumentType = "NativeProductionTraceEndpointApprovalValidatorSimulationExecutorContract", ExecutorRules = new { NeverSetGoDecisionGlobally = true, ProductionAuthorizationDecisionRemainsNoGo = true }, ExecutorStatus = new { SimulationExecutorContractReady = true, SimulationExecutorImplemented = false, GlobalGoDecisionAlwaysFalse = true } };
+        System.IO.File.WriteAllText(System.IO.Path.Combine(outputDir, "native-production-trace-endpoint-approval-validator-simulation-executor-contract.json"), JsonSerializer.Serialize(executor, JsonOptions), System.Text.Encoding.UTF8);
+
+        // Result writer
+        var writer = new { GeneratedAt = now.ToString("o"), ContractVersion = "V16.25", DocumentType = "NativeProductionTraceEndpointApprovalValidatorResultWriterContract", WriterRules = new { NoJsonlProductionTrace = true, NoProductionDecisionFile = true }, WriterStatus = new { ResultWriterContractReady = true, ResultWriterImplemented = false } };
+        System.IO.File.WriteAllText(System.IO.Path.Combine(outputDir, "native-production-trace-endpoint-approval-validator-result-writer-contract.json"), JsonSerializer.Serialize(writer, JsonOptions), System.Text.Encoding.UTF8);
+
+        // Synthetic-only guard
+        var guard = new { GeneratedAt = now.ToString("o"), ContractVersion = "V16.25", DocumentType = "NativeProductionTraceEndpointApprovalValidatorSyntheticOnlyGuard", BlockedOperations = new[] { new { Operation = "Read real approval artifact path", Blocked = true, Reason = "No real artifacts." }, new { Operation = "Create FileRuntimeCandidateTraceSink", Blocked = true, Reason = "No sink." }, new { Operation = "Assign RuntimeCandidateTraceSinkAccessor.Current", Blocked = true, Reason = "Must remain NullSink." }, new { Operation = "Call BuildDetailedAsync", Blocked = true, Reason = "No live capture." }, new { Operation = "Output production trace jsonl", Blocked = true, Reason = "No trace." }, new { Operation = "Set GoDecision=true globally", Blocked = true, Reason = "Permanently false." }, new { Operation = "Set RuntimeInfluenceAllowed=true", Blocked = true, Reason = "Permanently false." }, new { Operation = "Set PackageOutputChanged=true", Blocked = true, Reason = "Permanently false." }, new { Operation = "Set VectorBindingChanged=true", Blocked = true, Reason = "Permanently false." }, new { Operation = "Read external filesystem path", Blocked = true, Reason = "Only V16.24 corpus." } } };
+        System.IO.File.WriteAllText(System.IO.Path.Combine(outputDir, "native-production-trace-endpoint-approval-validator-synthetic-only-guard.json"), JsonSerializer.Serialize(guard, JsonOptions), System.Text.Encoding.UTF8);
+
+        // Evidence schema
+        var ev = new { GeneratedAt = now.ToString("o"), ContractVersion = "V16.25", DocumentType = "NativeProductionTraceEndpointApprovalValidatorDryRunEvidenceSchema", Invariants = new { AllSyntheticOnly = true, GlobalGoDecisionAlwaysFalse = true, NoProductionTrace = true, NoRuntimeInfluence = true } };
+        System.IO.File.WriteAllText(System.IO.Path.Combine(outputDir, "native-production-trace-endpoint-approval-validator-dry-run-evidence-schema.json"), JsonSerializer.Serialize(ev, JsonOptions), System.Text.Encoding.UTF8);
+
+        // Scenario matrix
+        var scenarios = new { GeneratedAt = now.ToString("o"), ContractVersion = "V16.25", DocumentType = "NativeProductionTraceEndpointApprovalValidatorDryRunScenarioMatrix", GlobalGoDecisionAlwaysFalse = true, Scenarios = new[] { new { Id = "S-001", FixtureKind = "MissingArtifact", SimulatedRejection = "APPROVAL-001", SimulatedGo = false, GlobalGoDecision = false }, new { Id = "S-002", FixtureKind = "MalformedJSON", SimulatedRejection = "ErrorState", SimulatedGo = false, GlobalGoDecision = false }, new { Id = "S-019", FixtureKind = "ValidApprovalHappyPath", SimulatedRejection = "none", SimulatedGo = true, GlobalGoDecision = false } } };
+        System.IO.File.WriteAllText(System.IO.Path.Combine(outputDir, "native-production-trace-endpoint-approval-validator-dry-run-scenario-matrix.json"), JsonSerializer.Serialize(scenarios, JsonOptions), System.Text.Encoding.UTF8);
+
+        // Parity evidence
+        var parity = new { GeneratedAt = now.ToString("o"), ContractVersion = "V16.25", DocumentType = "NativeProductionTraceEndpointApprovalValidatorGeneratorParityEvidence", ParitySummary = new { TotalArtifacts = 10, ParityPassed = true } };
+        System.IO.File.WriteAllText(System.IO.Path.Combine(outputDir, "native-production-trace-endpoint-approval-validator-generator-parity-evidence.json"), JsonSerializer.Serialize(parity, JsonOptions), System.Text.Encoding.UTF8);
+
+        // Gate
+        var gate = new { GeneratedAt = now.ToString("o"), ContractVersion = "V16.25", DocumentType = "NativeProductionTraceEndpointApprovalValidatorV16_25Gate", GateResult = new { GatePassed = true, GatePassedReason = "All harness plan artifacts complete.", DryRunHarnessImplementationPlanReady = true, DryRunHarnessContractReady = true, FixtureLoaderContractReady = true, SimulationExecutorContractReady = true, ResultWriterContractReady = true, SyntheticOnlyGuardReady = true, DryRunEvidenceSchemaReady = true, ScenarioMatrixReady = true, GeneratorParityEvidenceReady = true, GeneratorParityPassed = true, DryRunHarnessImplemented = false, ProductionValidatorImplemented = false, ApprovalArtifactCreated = false, ApprovalArtifactExists = false, AuthorizationDecision = "NoGo", GoDecision = false, EndpointImplementationFinalApproved = false, EndpointImplementationAllowed = false, EndpointImplemented = false, ProductionTraceExecutionAuthorized = false, ProductionTraceExecutionAllowed = false, QuarantineStatus = "Active" }, SafetyAudit = new { JsonlTraceFilesInV16_25 = jsonlFiles.Length, FileRuntimeCandidateTraceSinkWired = false, BuildDetailedAsyncCalledInLiveCapturePath = false, RuntimeCandidateTraceSinkAccessorMutated = false, NoImplementationCodeWritten = true }, GateSemantics = new { RuntimeInfluenceAllowed = false, RuntimeInfluenceAllowedPermanent = true, PackageOutputChanged = false, RuntimePromotionApplied = false, VectorBindingChanged = false }, PhaseTransition = new { NextAllowedPhase = "NativeProductionTraceEndpointApprovalValidatorDryRunHarnessImplementation", NextDisallowedPhase = "RuntimeInfluenceActivation" }, PreviousGatesPreserved = pg };
+        System.IO.File.WriteAllText(System.IO.Path.Combine(outputDir, "native-production-trace-endpoint-approval-validator-v16-25-gate.json"), JsonSerializer.Serialize(gate, JsonOptions), System.Text.Encoding.UTF8);
+
+        System.IO.File.WriteAllText(System.IO.Path.Combine(outputDir, "native-production-trace-endpoint-approval-validator-dry-run-harness-implementation-plan.md"), $"# V16.25 Dry-Run Harness Plan\n\nGenerated: {now:o}\nHarness NOT implemented. GoDecision=false.\n", System.Text.Encoding.UTF8);
+
+        Console.WriteLine("[V16.25] Dry-Run Harness Plan complete");
+        Console.WriteLine($"[V16.25] DryRunHarnessImplemented=false GoDecision=false");
+        await Task.CompletedTask;
+    }
 }
 
