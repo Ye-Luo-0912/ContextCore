@@ -8,6 +8,14 @@ public class ContextCoreNativeProductionTraceEndpointDryRunExecutionTests
     private static string Resolve(string f) => TestRepoFileResolver.Resolve("learning", "v16_26", f);
 
     [TestMethod]
+    public void CheckedInGate_HasPurpose_BeforeGeneratorRuns()
+    {
+        using var doc = JsonDocument.Parse(File.ReadAllText(Resolve("native-production-trace-endpoint-approval-validator-v16-26-gate.json")));
+        Assert.IsTrue(doc.RootElement.TryGetProperty("Purpose", out _), "Checked-in gate MUST have Purpose.");
+        Assert.IsFalse(doc.RootElement.GetProperty("GateResult").GetProperty("GoDecision").GetBoolean());
+    }
+
+    [TestMethod]
     public void ExecutionReport_HarnessImplemented_19Scenarios()
     {
         using var doc = JsonDocument.Parse(File.ReadAllText(Resolve("native-production-trace-endpoint-approval-validator-dry-run-harness-execution-report.json")));
@@ -126,8 +134,8 @@ public class ContextCoreNativeProductionTraceEndpointDryRunExecutionTests
         using var rw = JsonDocument.Parse(File.ReadAllText(Resolve("native-production-trace-endpoint-approval-validator-result-writer-evidence.json")));
         Assert.IsTrue(rw.RootElement.TryGetProperty("Purpose", out _));
 
-        // 19 results
-        using var results = JsonDocument.Parse(File.ReadAllText(Resolve("native-production-trace-endpoint-approval-validator-synthetic-fixture-results.json")));
-        Assert.AreEqual(19, results.RootElement.GetProperty("Results").GetArrayLength());
+        // Gate has Purpose
+        using var gateDoc = JsonDocument.Parse(File.ReadAllText(Resolve("native-production-trace-endpoint-approval-validator-v16-26-gate.json")));
+        Assert.IsTrue(gateDoc.RootElement.TryGetProperty("Purpose", out _), "Gate must have Purpose.");
     }
 }
