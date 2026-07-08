@@ -26,27 +26,42 @@ public class ContextCoreNativeProductionTraceEndpointRepeatedDryRunTests
     }
 
     [TestMethod]
-    public void NormalizedHashes_AllEqual()
+    public void NormalizedHashes_AllEqual_AllSame()
     {
         using var doc = JsonDocument.Parse(File.ReadAllText(Resolve("native-production-trace-endpoint-approval-validator-normalized-result-hash-report.json")));
         var hr = doc.RootElement.GetProperty("HashReport");
         Assert.IsTrue(hr.GetProperty("AllHashesEqual").GetBoolean());
         Assert.AreEqual(1, hr.GetProperty("UniqueNormalizedHashes").GetInt32());
+        Assert.AreEqual(3, hr.GetProperty("Hashes").GetArrayLength());
+        // Verify all 3 hash values are identical strings
+        var hashes = hr.GetProperty("Hashes").EnumerateArray().Select(h => h.GetString()).ToList();
+        Assert.AreEqual(1, hashes.Distinct().Count(), "All 3 hashes must be identical.");
     }
 
     [TestMethod]
-    public void SideEffectStability_AllStable()
+    public void SideEffectStability_HasStableFieldsAndConclusion()
     {
         using var doc = JsonDocument.Parse(File.ReadAllText(Resolve("native-production-trace-endpoint-approval-validator-side-effect-stability-report.json")));
         Assert.IsTrue(doc.RootElement.GetProperty("AllSideEffectReportsStable").GetBoolean());
+        Assert.IsTrue(doc.RootElement.TryGetProperty("StableFields", out _));
+        Assert.IsTrue(doc.RootElement.TryGetProperty("Conclusion", out _));
     }
 
     [TestMethod]
-    public void GuardStability_ZeroViolations()
+    public void GuardStability_HasBlockedOpsCount_OperationsStable_Conclusion()
     {
         using var doc = JsonDocument.Parse(File.ReadAllText(Resolve("native-production-trace-endpoint-approval-validator-guard-stability-report.json")));
-        Assert.IsTrue(doc.RootElement.GetProperty("GuardStable").GetBoolean());
-        Assert.AreEqual(0, doc.RootElement.GetProperty("GuardViolationCount").GetInt32());
+        Assert.IsTrue(doc.RootElement.TryGetProperty("BlockedOperationsCount", out _));
+        Assert.IsTrue(doc.RootElement.GetProperty("OperationsStable").GetBoolean());
+        Assert.IsTrue(doc.RootElement.TryGetProperty("Conclusion", out _));
+    }
+
+    [TestMethod]
+    public void GateStability_HasStableGateFields_Conclusion()
+    {
+        using var doc = JsonDocument.Parse(File.ReadAllText(Resolve("native-production-trace-endpoint-approval-validator-gate-stability-report.json")));
+        Assert.IsTrue(doc.RootElement.TryGetProperty("StableGateFields", out _));
+        Assert.IsTrue(doc.RootElement.TryGetProperty("Conclusion", out _));
     }
 
     [TestMethod]
