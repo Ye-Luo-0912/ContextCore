@@ -98,9 +98,35 @@ public class ContextCoreNativeProductionTraceEndpointDryRunExecutionTests
         Assert.IsNotNull(task);
         task!.GetAwaiter().GetResult();
 
+        // Execution report has Purpose
         using var doc = JsonDocument.Parse(File.ReadAllText(Resolve("native-production-trace-endpoint-approval-validator-dry-run-harness-execution-report.json")));
+        Assert.IsTrue(doc.RootElement.TryGetProperty("Purpose", out _));
         Assert.IsTrue(doc.RootElement.GetProperty("ExecutionStatus").GetProperty("SyntheticDryRunHarnessImplemented").GetBoolean());
 
+        // Guard report has Purpose, BlockReason, ExternalFilesystemRead, RuntimeInfluenceAllowed, PackageOutputChanged, VectorBindingChanged
+        using var guard = JsonDocument.Parse(File.ReadAllText(Resolve("native-production-trace-endpoint-approval-validator-synthetic-guard-execution-report.json")));
+        Assert.IsTrue(guard.RootElement.TryGetProperty("Purpose", out _));
+        Assert.IsTrue(guard.RootElement.GetProperty("BlockedOperations")[0].TryGetProperty("BlockReason", out _));
+        var gr = guard.RootElement.GetProperty("GuardResult");
+        Assert.IsTrue(gr.TryGetProperty("ExternalFilesystemRead", out _));
+        Assert.IsTrue(gr.TryGetProperty("RuntimeInfluenceAllowed", out _));
+        Assert.IsTrue(gr.TryGetProperty("PackageOutputChanged", out _));
+        Assert.IsTrue(gr.TryGetProperty("VectorBindingChanged", out _));
+
+        // Audit evidence has Purpose
+        using var audit = JsonDocument.Parse(File.ReadAllText(Resolve("native-production-trace-endpoint-approval-validator-audit-evidence.json")));
+        Assert.IsTrue(audit.RootElement.TryGetProperty("Purpose", out _));
+
+        // No side effects report has Purpose and Conclusion
+        using var nse = JsonDocument.Parse(File.ReadAllText(Resolve("native-production-trace-endpoint-approval-validator-no-production-side-effects-report.json")));
+        Assert.IsTrue(nse.RootElement.TryGetProperty("Purpose", out _));
+        Assert.IsTrue(nse.RootElement.TryGetProperty("Conclusion", out _));
+
+        // Result writer evidence has Purpose
+        using var rw = JsonDocument.Parse(File.ReadAllText(Resolve("native-production-trace-endpoint-approval-validator-result-writer-evidence.json")));
+        Assert.IsTrue(rw.RootElement.TryGetProperty("Purpose", out _));
+
+        // 19 results
         using var results = JsonDocument.Parse(File.ReadAllText(Resolve("native-production-trace-endpoint-approval-validator-synthetic-fixture-results.json")));
         Assert.AreEqual(19, results.RootElement.GetProperty("Results").GetArrayLength());
     }
