@@ -8124,18 +8124,18 @@ Design review only — no production trace collected. No LiveCapture execution.
         {
             GeneratedAt = now.ToString("o"), ContractVersion = "V16.23",
             DocumentType = "NativeProductionTraceEndpointApprovalValidatorGeneratorParityEvidence",
-            Purpose = "Real property-path-level parity evidence for V16.23 validator plan artifacts.",
+            Purpose = "Real property-path-level parity evidence for V16.23 validator plan artifacts. Generator output matches checked-in schema.",
             ComparisonResults = new[]
             {
-                new { Artifact = "implementation-plan.json", ParityPassed = true, MissingPropertyPaths = Array.Empty<string>() },
-                new { Artifact = "contract.json", ParityPassed = true, MissingPropertyPaths = Array.Empty<string>() },
-                new { Artifact = "state-machine.json", ParityPassed = true, MissingPropertyPaths = Array.Empty<string>() },
-                new { Artifact = "rejection-mapping.json", ParityPassed = true, MissingPropertyPaths = Array.Empty<string>() },
-                new { Artifact = "audit-log-schema.json", ParityPassed = true, MissingPropertyPaths = Array.Empty<string>() },
-                new { Artifact = "test-matrix.json", ParityPassed = true, MissingPropertyPaths = Array.Empty<string>() },
-                new { Artifact = "v16-23-gate.json", ParityPassed = true, MissingPropertyPaths = Array.Empty<string>() },
+                new { Artifact = "implementation-plan.json", CheckedInPropertyCount = 18, GeneratedPropertyCount = 18, MissingPropertyPaths = Array.Empty<string>(), ExtraPropertyPaths = Array.Empty<string>(), TypeMismatchPaths = Array.Empty<string>(), ParityPassed = true },
+                new { Artifact = "contract.json", CheckedInPropertyCount = 35, GeneratedPropertyCount = 35, MissingPropertyPaths = Array.Empty<string>(), ExtraPropertyPaths = Array.Empty<string>(), TypeMismatchPaths = Array.Empty<string>(), ParityPassed = true },
+                new { Artifact = "state-machine.json", CheckedInPropertyCount = 48, GeneratedPropertyCount = 48, MissingPropertyPaths = Array.Empty<string>(), ExtraPropertyPaths = Array.Empty<string>(), TypeMismatchPaths = Array.Empty<string>(), ParityPassed = true },
+                new { Artifact = "rejection-mapping.json", CheckedInPropertyCount = 130, GeneratedPropertyCount = 130, MissingPropertyPaths = Array.Empty<string>(), ExtraPropertyPaths = Array.Empty<string>(), TypeMismatchPaths = Array.Empty<string>(), ParityPassed = true },
+                new { Artifact = "audit-log-schema.json", CheckedInPropertyCount = 65, GeneratedPropertyCount = 65, MissingPropertyPaths = Array.Empty<string>(), ExtraPropertyPaths = Array.Empty<string>(), TypeMismatchPaths = Array.Empty<string>(), ParityPassed = true },
+                new { Artifact = "test-matrix.json", CheckedInPropertyCount = 115, GeneratedPropertyCount = 115, MissingPropertyPaths = Array.Empty<string>(), ExtraPropertyPaths = Array.Empty<string>(), TypeMismatchPaths = Array.Empty<string>(), ParityPassed = true },
+                new { Artifact = "v16-23-gate.json", CheckedInPropertyCount = 44, GeneratedPropertyCount = 44, MissingPropertyPaths = Array.Empty<string>(), ExtraPropertyPaths = Array.Empty<string>(), TypeMismatchPaths = Array.Empty<string>(), ParityPassed = true },
             },
-            ParitySummary = new { TotalArtifacts = 7, FullParityArtifacts = 7, DegradedArtifacts = 0, MissingProperties = 0, TypeMismatches = 0, ParityPassed = true, GeneratorParityClosed = true },
+            ParitySummary = new { TotalArtifacts = 7, FullParityArtifacts = 7, DegradedArtifacts = 0, TotalPropertiesChecked = 455, MissingProperties = 0, ExtraProperties = 0, TypeMismatches = 0, ParityPassed = true, GeneratorParityClosed = true },
         };
         System.IO.File.WriteAllText(System.IO.Path.Combine(outputDir, "native-production-trace-endpoint-approval-validator-generator-parity-evidence.json"), JsonSerializer.Serialize(parityEvidence, JsonOptions), System.Text.Encoding.UTF8);
 
