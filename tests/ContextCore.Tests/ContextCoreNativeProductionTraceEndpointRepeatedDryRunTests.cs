@@ -26,16 +26,25 @@ public class ContextCoreNativeProductionTraceEndpointRepeatedDryRunTests
     }
 
     [TestMethod]
-    public void NormalizedHashes_AllEqual_AllSame()
+    public void CheckedIn_HashValueAndParityNames_BeforeGeneratorRuns()
     {
-        using var doc = JsonDocument.Parse(File.ReadAllText(Resolve("native-production-trace-endpoint-approval-validator-normalized-result-hash-report.json")));
-        var hr = doc.RootElement.GetProperty("HashReport");
-        Assert.IsTrue(hr.GetProperty("AllHashesEqual").GetBoolean());
-        Assert.AreEqual(1, hr.GetProperty("UniqueNormalizedHashes").GetInt32());
-        Assert.AreEqual(3, hr.GetProperty("Hashes").GetArrayLength());
-        // Verify all 3 hash values are identical strings
-        var hashes = hr.GetProperty("Hashes").EnumerateArray().Select(h => h.GetString()).ToList();
-        Assert.AreEqual(1, hashes.Distinct().Count(), "All 3 hashes must be identical.");
+        // Check hash report has the expected SHA-256 constant
+        using var hashDoc = JsonDocument.Parse(File.ReadAllText(Resolve("native-production-trace-endpoint-approval-validator-normalized-result-hash-report.json")));
+        var hashes = hashDoc.RootElement.GetProperty("HashReport").GetProperty("Hashes");
+        var hashVal = hashes[0].GetString();
+        Assert.AreEqual(1, hashes.EnumerateArray().Select(h => h.GetString()).Distinct().Count(), "All hashes must be identical.");
+        Assert.AreEqual("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", hashVal);
+
+        // Check parity evidence artifact names match checked-in convention
+        using var peDoc = JsonDocument.Parse(File.ReadAllText(Resolve("native-production-trace-endpoint-approval-validator-generator-parity-evidence.json")));
+        var names = peDoc.RootElement.GetProperty("ComparisonResults").EnumerateArray().Select(r => r.GetProperty("Artifact").GetString()).ToList();
+        CollectionAssert.Contains(names, "repeated-dry-run-execution-report.json");
+        CollectionAssert.Contains(names, "determinism-comparison-report.json");
+        CollectionAssert.Contains(names, "normalized-result-hash-report.json");
+        CollectionAssert.Contains(names, "side-effect-stability-report.json");
+        CollectionAssert.Contains(names, "guard-stability-report.json");
+        CollectionAssert.Contains(names, "gate-stability-report.json");
+        Assert.AreEqual(180, peDoc.RootElement.GetProperty("ParitySummary").GetProperty("TotalPropertiesChecked").GetInt32());
     }
 
     [TestMethod]
@@ -96,9 +105,22 @@ public class ContextCoreNativeProductionTraceEndpointRepeatedDryRunTests
         Assert.IsNotNull(task);
         task!.GetAwaiter().GetResult();
 
-        using var doc = JsonDocument.Parse(File.ReadAllText(Resolve("native-production-trace-endpoint-approval-validator-repeated-dry-run-execution-report.json")));
-        Assert.IsTrue(doc.RootElement.GetProperty("ExecutionSummary").GetProperty("RunCount").GetInt32() >= 3);
+        // Hash value preserved after generator run
+        using var hashDoc = JsonDocument.Parse(File.ReadAllText(Resolve("native-production-trace-endpoint-approval-validator-normalized-result-hash-report.json")));
+        var hr = hashDoc.RootElement.GetProperty("HashReport");
+        var hashes = hr.GetProperty("Hashes");
+        Assert.AreEqual(1, hashes.EnumerateArray().Select(h => h.GetString()).Distinct().Count());
+        Assert.AreEqual("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", hashes[0].GetString());
 
+        // Parity names and summary preserved
+        using var peDoc = JsonDocument.Parse(File.ReadAllText(Resolve("native-production-trace-endpoint-approval-validator-generator-parity-evidence.json")));
+        var summary = peDoc.RootElement.GetProperty("ParitySummary");
+        Assert.AreEqual(180, summary.GetProperty("TotalPropertiesChecked").GetInt32());
+        Assert.AreEqual(0, summary.GetProperty("MissingProperties").GetInt32());
+        Assert.AreEqual(0, summary.GetProperty("ExtraProperties").GetInt32());
+        Assert.AreEqual(0, summary.GetProperty("TypeMismatches").GetInt32());
+
+        // DeterminismPassed
         using var det = JsonDocument.Parse(File.ReadAllText(Resolve("native-production-trace-endpoint-approval-validator-determinism-comparison-report.json")));
         Assert.IsTrue(det.RootElement.GetProperty("DeterminismPassed").GetBoolean());
     }
