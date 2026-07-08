@@ -79,15 +79,22 @@ public class ContextCoreNativeProductionTraceEndpointDryRunHarnessTests
     }
 
     [TestMethod]
-    public void CheckedIn_ParityEvidence_HasFullFields_BeforeGeneratorRuns()
+    public void CheckedIn_ParityEvidence_HasExactCounts_BeforeGeneratorRuns()
     {
         using var doc = JsonDocument.Parse(File.ReadAllText(Resolve("native-production-trace-endpoint-approval-validator-generator-parity-evidence.json")));
-        var cr0 = doc.RootElement.GetProperty("ComparisonResults")[0];
-        Assert.IsTrue(cr0.TryGetProperty("CheckedInPropertyCount", out _));
-        Assert.IsTrue(cr0.TryGetProperty("GeneratedPropertyCount", out _));
-        Assert.IsTrue(cr0.TryGetProperty("ExtraPropertyPaths", out _));
-        Assert.IsTrue(cr0.TryGetProperty("TypeMismatchPaths", out _));
-        Assert.IsTrue(doc.RootElement.GetProperty("ParitySummary").TryGetProperty("TotalPropertiesChecked", out _));
+        var results = doc.RootElement.GetProperty("ComparisonResults");
+        Assert.AreEqual(10, results.GetArrayLength());
+        Assert.AreEqual(25, results[0].GetProperty("CheckedInPropertyCount").GetInt32(), "harness-plan count");
+        Assert.AreEqual(18, results[1].GetProperty("CheckedInPropertyCount").GetInt32(), "harness-contract count");
+        Assert.AreEqual(115, results[7].GetProperty("CheckedInPropertyCount").GetInt32(), "scenario-matrix count");
+        Assert.AreEqual(50, results[9].GetProperty("CheckedInPropertyCount").GetInt32(), "gate count");
+
+        var ps = doc.RootElement.GetProperty("ParitySummary");
+        Assert.AreEqual(375, ps.GetProperty("TotalPropertiesChecked").GetInt32());
+        Assert.AreEqual(0, ps.GetProperty("MissingProperties").GetInt32());
+        Assert.AreEqual(0, ps.GetProperty("ExtraProperties").GetInt32());
+        Assert.AreEqual(0, ps.GetProperty("TypeMismatches").GetInt32());
+        Assert.IsTrue(ps.GetProperty("ParityPassed").GetBoolean());
     }
 
     [TestMethod]
@@ -105,7 +112,11 @@ public class ContextCoreNativeProductionTraceEndpointDryRunHarnessTests
         Assert.IsTrue(sm.RootElement.GetProperty("Scenarios").GetArrayLength() >= 19, "Generator must produce >= 19 scenarios.");
 
         using var pe = JsonDocument.Parse(File.ReadAllText(Resolve("native-production-trace-endpoint-approval-validator-generator-parity-evidence.json")));
-        Assert.IsTrue(pe.RootElement.GetProperty("ComparisonResults")[0].TryGetProperty("CheckedInPropertyCount", out _));
-        Assert.IsTrue(pe.RootElement.GetProperty("ComparisonResults")[0].TryGetProperty("ExtraPropertyPaths", out _));
+        var results = pe.RootElement.GetProperty("ComparisonResults");
+        Assert.AreEqual(25, results[0].GetProperty("CheckedInPropertyCount").GetInt32(), "generator: harness-plan must be 25");
+        Assert.AreEqual(18, results[1].GetProperty("CheckedInPropertyCount").GetInt32(), "generator: harness-contract must be 18");
+        Assert.AreEqual(115, results[7].GetProperty("CheckedInPropertyCount").GetInt32(), "generator: scenario-matrix must be 115");
+        Assert.AreEqual(375, pe.RootElement.GetProperty("ParitySummary").GetProperty("TotalPropertiesChecked").GetInt32(), "generator: TotalPropertiesChecked must be 375");
+        Assert.AreEqual(0, pe.RootElement.GetProperty("ParitySummary").GetProperty("MissingProperties").GetInt32());
     }
 }
