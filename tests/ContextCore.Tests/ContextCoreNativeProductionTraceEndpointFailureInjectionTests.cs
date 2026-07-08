@@ -52,7 +52,28 @@ public class ContextCoreNativeProductionTraceEndpointFailureInjectionTests
         var dr = doc.RootElement.GetProperty("DetectionResult");
         Assert.IsTrue(dr.GetProperty("DeterminismBreakDetected").GetBoolean());
         Assert.IsTrue(dr.GetProperty("DeterminismBreakContained").GetBoolean());
+        Assert.IsTrue(dr.GetProperty("HashMismatchDetected").GetBoolean());
+        Assert.IsTrue(dr.GetProperty("ScenarioMismatchDetected").GetBoolean());
         Assert.IsFalse(dr.GetProperty("GlobalGoDecision").GetBoolean());
+    }
+
+    [TestMethod]
+    public void NoSideEffects_HasConclusion_AndFullFields()
+    {
+        using var doc = JsonDocument.Parse(File.ReadAllText(Resolve("native-production-trace-endpoint-approval-validator-no-production-side-effects-report.json")));
+        var r = doc.RootElement.GetProperty("Report");
+        Assert.IsTrue(doc.RootElement.TryGetProperty("Conclusion", out _));
+        Assert.IsFalse(r.GetProperty("BuildDetailedAsyncCalled").GetBoolean());
+        Assert.IsFalse(r.GetProperty("EndpointImplementation").GetBoolean());
+        Assert.IsFalse(r.GetProperty("RuntimeCandidateTraceSinkAccessorMutated").GetBoolean());
+    }
+
+    [TestMethod]
+    public void Recovery_HasQuarantineStatus()
+    {
+        using var doc = JsonDocument.Parse(File.ReadAllText(Resolve("native-production-trace-endpoint-approval-validator-recovery-and-clean-state-report.json")));
+        var rr = doc.RootElement.GetProperty("RecoveryResult");
+        Assert.AreEqual("Active", rr.GetProperty("QuarantineStatus").GetString());
     }
 
     [TestMethod]
