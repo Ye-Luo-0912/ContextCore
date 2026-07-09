@@ -6,16 +6,17 @@ namespace ContextCore.Service;
 public sealed class StorageOptions
 {
 	/// <summary>
-	/// 存储提供商类型：当前 Service-ready 的值为 <c>filesystem</c> 或 <c>memory</c>。
-	/// <c>postgres</c> 仍处于 Experimental/Partial 状态，完整契约补齐前不允许作为服务后端启动。
+	/// 存储提供商类型：<c>filesystem</c> / <c>memory</c> / <c>postgres</c> 均可作为服务后端启动。
+	/// <c>postgres</c> 已实现核心存储契约（context / memory / relation / vector / jobs 等，含 pgvector），
+	/// 但 learning feedback / review store 仍为 <see cref="UnsupportedLearningFeedbackStore"/>，
+	/// 待补齐后可移除 <see cref="AllowExperimentalPostgres"/> 标志位。
 	/// </summary>
 	public string Provider { get; set; } = "filesystem";
 
 	/// <summary>
-	/// 是否显式承认 PostgreSQL 仍处于实验阶段。
-	/// 当前版本即使设置为 <c>true</c> 也不会启动 PostgreSQL provider，
-	/// 该开关仅用于让错误信息区分“误配置”和“明确尝试实验能力”。
-	/// 注意：它不是绕过启动保护的开关，避免半成品 provider 造成数据分裂。
+	/// 是否显式承认 PostgreSQL 仍处于实验阶段（部分学习反馈契约未实现）。
+	/// 该标志位不阻止 postgres provider 启动，仅用于在日志和诊断中区分
+	/// “误配置”与“明确尝试实验能力”，便于运维定位问题。
 	/// </summary>
 	public bool AllowExperimentalPostgres { get; set; }
 

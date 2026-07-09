@@ -58,6 +58,11 @@ var ingestion = new BasicContextIngestionService(store);
 var compressor = new MockContextCompressor();
 var relationBuilder = new RelationBuilder();
 
+Console.WriteLine("============================================================");
+Console.WriteLine(" ContextCore.AppHost — 演示程序（非生产入口）");
+Console.WriteLine(" 使用 MockContextCompressor（无语义压缩）+ 硬编码种子数据。");
+Console.WriteLine(" 生产请运行 ContextCore.Service（ASP.NET Core Web API）。");
+Console.WriteLine("============================================================");
 Console.WriteLine("ContextCore AppHost starting.");
 Console.WriteLine($"Workspace: {appOptions.WorkspaceId}, Collection: {appOptions.CollectionId}");
 // storageOptions.ResolvedRootPath 已展开环境变量并转为绝对路径
