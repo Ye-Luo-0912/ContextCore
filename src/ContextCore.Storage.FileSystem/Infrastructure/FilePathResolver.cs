@@ -179,6 +179,16 @@ public sealed class FilePathResolver
 	public string GetPackageBuildTraceDirectory(string workspaceId, string collectionId)
 		=> GetTraceCategoryDirectory(workspaceId, collectionId, "package-build");
 
+	// ── Decision Traces (V17.0) ─────────────────────────────────────────────
+
+	/// <summary>获取统一决策记录 trace JSONL 文件路径。</summary>
+	public string GetDecisionTraceJsonlPath(string workspaceId, string collectionId)
+		=> Path.Combine(GetCollectionDirectory(workspaceId, collectionId), "decision", "traces.jsonl");
+
+	/// <summary>获取统一决策记录 trace 目录。</summary>
+	public string GetDecisionTraceDirectory(string workspaceId, string collectionId)
+		=> Path.Combine(GetCollectionDirectory(workspaceId, collectionId), "decision");
+
 	/// <summary>获取上下文包策略 JSONL 文件路径。</summary>
 	public string GetPackagePoliciesJsonlPath(string workspaceId, string collectionId)
 		=> Path.Combine(GetCollectionDirectory(workspaceId, collectionId), "packages", "policies.jsonl");

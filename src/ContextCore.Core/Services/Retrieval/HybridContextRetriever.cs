@@ -25,6 +25,7 @@ public sealed class HybridContextRetriever : IContextRetriever
     private readonly GraphExpansionShadowTraceBuilder? _graphExpansionShadowTraceBuilder;
     private readonly RetrievalResultAssembler _resultAssembler;
     private readonly IRetrievalTraceStore? _traceStore;
+    private readonly IDecisionTraceStore? _decisionTraceStore;
     private readonly RetrievalTraceAssembler _traceAssembler;
     private readonly IRetrievalChannelExecutor _vectorRecallChannelExecutor;
 
@@ -48,9 +49,11 @@ public sealed class HybridContextRetriever : IContextRetriever
         LifecycleAwareRankerShadowOptions? rankerShadowOptions = null,
         LifecycleAwareRankerTraceBuilder? rankerShadowTraceBuilder = null,
         GraphExpansionShadowOptions? graphExpansionShadowOptions = null,
-        GraphExpansionShadowTraceBuilder? graphExpansionShadowTraceBuilder = null)
+        GraphExpansionShadowTraceBuilder? graphExpansionShadowTraceBuilder = null,
+        IDecisionTraceStore? decisionTraceStore = null)
     {
         _traceStore = traceStore;
+        _decisionTraceStore = decisionTraceStore;
         _attentionScorer = attentionScorer;
         _attentionProfileExperimentRunner = attentionScorer is null
             ? null
@@ -262,6 +265,25 @@ public sealed class HybridContextRetriever : IContextRetriever
 
         var result = _resultAssembler.Assemble(operationId, request, effectivePacked, trace, metadata);
         CoreMetrics.RetrievalDuration.Record(_sw.Elapsed.TotalMilliseconds);
+
+        // V17.0: 投影只读 decision trace，不改变 result。
+        if (_decisionTraceStore is not null)
+        {
+            try
+            {
+                var decisionRecord = ContextDecisionProjector.ProjectRetrieval(result);
+                await _decisionTraceStore.SaveAsync(decisionRecord, cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch
+            {
+                // decision trace 写入失败不得影响正式检索输出。
+            }
+        }
+
         return result;
     }
 

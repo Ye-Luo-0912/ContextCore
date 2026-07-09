@@ -215,7 +215,8 @@ internal static class CoreExtensions
 			sp.GetRequiredService<IContextTokenizerResolver>(),
 			sp.GetService<IWorkingMemoryService>(),
 			sp.GetRequiredService<GraphExpansionApplyOptions>(),
-			sp.GetRequiredService<GraphExpansionApplyPolicy>()));
+			sp.GetRequiredService<GraphExpansionApplyPolicy>(),
+			sp.GetService<IDecisionTraceStore>()));
 		services.AddSingleton<IContextPackageBuilder>(sp =>
 			sp.GetRequiredService<BasicContextPackageBuilder>());
 
@@ -236,7 +237,8 @@ internal static class CoreExtensions
 			sp.GetRequiredService<LifecycleAwareRankerShadowOptions>(),
 			sp.GetRequiredService<LifecycleAwareRankerTraceBuilder>(),
 			sp.GetRequiredService<GraphExpansionShadowOptions>(),
-			sp.GetRequiredService<GraphExpansionShadowTraceBuilder>()));
+			sp.GetRequiredService<GraphExpansionShadowTraceBuilder>(),
+			sp.GetService<IDecisionTraceStore>()));
 		services.AddSingleton<IContextRetriever>(sp => sp.GetRequiredService<HybridContextRetriever>());
 
 		services.AddSingleton<LoggingContextEventSink>();
@@ -267,6 +269,8 @@ internal static class CoreExtensions
 		services.AddSingleton<ContextRuntimeService>();
 		services.AddSingleton<IContextRuntimeService>(sp =>
 			sp.GetRequiredService<ContextRuntimeService>());
+		services.AddSingleton<ContextDecisionAuditRunner>(sp => new ContextDecisionAuditRunner(
+			sp.GetRequiredService<IDecisionTraceStore>()));
 		services.AddSingleton<ShortTermMaintenanceRuntimeState>(sp =>
 		{
 			var state = new ShortTermMaintenanceRuntimeState();

@@ -99,3 +99,20 @@ public interface IContextPackagePolicyStore
         ContextPackagePolicyQuery query,
         CancellationToken cancellationToken = default);
 }
+
+/// <summary>
+/// 持久化统一上下文决策记录（V17.0 decision trace）。
+/// 该 store 只写只读 trace artifact，不参与 retrieval/package/planning 运行时决策。
+/// </summary>
+public interface IDecisionTraceStore
+{
+    Task SaveAsync(
+        ContextDecisionRecord record,
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<ContextDecisionRecord>> QueryRecentAsync(
+        string workspaceId,
+        string collectionId,
+        int take,
+        CancellationToken cancellationToken = default);
+}

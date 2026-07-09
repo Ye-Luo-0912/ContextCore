@@ -69,6 +69,7 @@ internal static class StorageExtensions
 		services.AddContextCorePostgresStorage(pgOptions);
 		services.AddSingleton<ILearningFeedbackStore>(_ => new UnsupportedLearningFeedbackStore("postgres"));
 		services.AddSingleton<ILearningFeedbackReviewStore>(_ => new UnsupportedLearningFeedbackReviewStore("postgres"));
+		services.AddSingleton<IDecisionTraceStore>(_ => new UnsupportedDecisionTraceStore("postgres"));
 	}
 
 	private static void RegisterFileSystem(IServiceCollection services, StorageOptions options)
@@ -157,6 +158,13 @@ internal static class StorageExtensions
 				sp.GetRequiredService<FileFormatSerializer>()));
 		services.AddSingleton<IRetrievalTraceStore>(sp =>
 			sp.GetRequiredService<FileRetrievalTraceStore>());
+
+		services.AddSingleton<FileDecisionTraceStore>(sp =>
+			new FileDecisionTraceStore(
+				sp.GetRequiredService<FilePathResolver>(),
+				sp.GetRequiredService<FileFormatSerializer>()));
+		services.AddSingleton<IDecisionTraceStore>(sp =>
+			sp.GetRequiredService<FileDecisionTraceStore>());
 
         services.AddSingleton<FileShortTermMemoryStore>(sp =>
             new FileShortTermMemoryStore(
@@ -369,6 +377,8 @@ internal static class StorageExtensions
 
 		services.AddSingleton<InMemoryRetrievalTraceStore>();
 		services.AddSingleton<IRetrievalTraceStore>(sp => sp.GetRequiredService<InMemoryRetrievalTraceStore>());
+		services.AddSingleton<InMemoryDecisionTraceStore>();
+		services.AddSingleton<IDecisionTraceStore>(sp => sp.GetRequiredService<InMemoryDecisionTraceStore>());
 		services.AddSingleton<InMemoryContextPackagePolicyStore>();
 		services.AddSingleton<IContextPackagePolicyStore>(sp => sp.GetRequiredService<InMemoryContextPackagePolicyStore>());
 

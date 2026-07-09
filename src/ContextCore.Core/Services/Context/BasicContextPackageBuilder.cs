@@ -17,6 +17,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
     private readonly IMemoryStore? _memoryStore;
     private readonly IRelationStore? _relationStore;
     private readonly IContextPackageBuildTraceStore? _traceStore;
+    private readonly IDecisionTraceStore? _decisionTraceStore;
     private readonly IContextTokenizerResolver _tokenizerResolver;
     private readonly IWorkingMemoryService? _workingMemoryService;
     private readonly GraphExpansionApplyOptions _graphExpansionApplyOptions;
@@ -41,7 +42,8 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         IContextTokenizerResolver? tokenizerResolver = null,
         IWorkingMemoryService? workingMemoryService = null,
         GraphExpansionApplyOptions? graphExpansionApplyOptions = null,
-        GraphExpansionApplyPolicy? graphExpansionApplyPolicy = null)
+        GraphExpansionApplyPolicy? graphExpansionApplyPolicy = null,
+        IDecisionTraceStore? decisionTraceStore = null)
     {
         _store = store;
         _constraintStore = constraintStore;
@@ -53,6 +55,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         _workingMemoryService = workingMemoryService;
         _graphExpansionApplyOptions = graphExpansionApplyOptions ?? new GraphExpansionApplyOptions();
         _graphExpansionApplyPolicy = graphExpansionApplyPolicy;
+        _decisionTraceStore = decisionTraceStore;
     }
 
     public async Task<ContextPackage> BuildAsync(
@@ -86,6 +89,24 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         if (_traceStore is not null)
         {
             await _traceStore.SaveAsync(result, cancellationToken).ConfigureAwait(false);
+        }
+
+        // V17.0: 投影只读 decision trace，不改变 result。
+        if (_decisionTraceStore is not null)
+        {
+            try
+            {
+                var decisionRecord = ContextDecisionProjector.ProjectPackage(result);
+                await _decisionTraceStore.SaveAsync(decisionRecord, cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch
+            {
+                // decision trace 写入失败不得影响正式 package 输出。
+            }
         }
 
         CoreMetrics.PackageBuildDuration.Record(sw.Elapsed.TotalMilliseconds);
