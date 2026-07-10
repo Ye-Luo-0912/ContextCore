@@ -29,6 +29,8 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
     private readonly RecentContextFilter _recentContextFilter = new();
     private readonly ContextAnchorExtractor _anchorExtractor = new();
     private readonly RetrievalPlanner _planner = new();
+    private static readonly ModeBudgetProfileRegistry ModeBudgetProfiles = ModeBudgetProfileRegistry.CreateDefault();
+    private static readonly DomainKeywordProfile DomainKeywords = DomainKeywordProfile.CreateProduction();
 
     public BasicContextPackageBuilder(IContextStore store)
         : this(store, null, null, null, null, null, null)
@@ -284,20 +286,8 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         var primaryDecisions = new Dictionary<string, ContextPackageDecision>(StringComparer.OrdinalIgnoreCase);
 
         // 显式审计模式判定
-        var isAuditMode = !string.IsNullOrWhiteSpace(request.QueryText) && (
-            request.QueryText.Contains("废弃", StringComparison.OrdinalIgnoreCase)
-            || request.QueryText.Contains("作废", StringComparison.OrdinalIgnoreCase)
-            || request.QueryText.Contains("草稿", StringComparison.OrdinalIgnoreCase)
-            || request.QueryText.Contains("草案", StringComparison.OrdinalIgnoreCase)
-            || request.QueryText.Contains("旧版", StringComparison.OrdinalIgnoreCase)
-            || request.QueryText.Contains("旧", StringComparison.OrdinalIgnoreCase)
-            || request.QueryText.Contains("放弃", StringComparison.OrdinalIgnoreCase)
-            || request.QueryText.Contains("舍弃", StringComparison.OrdinalIgnoreCase)
-            || request.QueryText.Contains("审计", StringComparison.OrdinalIgnoreCase)
-            || request.QueryText.Contains("legacy", StringComparison.OrdinalIgnoreCase)
-            || request.QueryText.Contains("deprecated", StringComparison.OrdinalIgnoreCase)
-            || request.QueryText.Contains("audit", StringComparison.OrdinalIgnoreCase)
-        );
+        var isAuditMode = !string.IsNullOrWhiteSpace(request.QueryText)
+            && DomainKeywords.AuditModeKeywords.Any(k => request.QueryText.Contains(k, StringComparison.OrdinalIgnoreCase));
 
         if (ShouldIncludeCurrentTaskSection(request, policy))
         {
@@ -462,7 +452,8 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                 true,
                 tokenBudget,
                 packageModeName,
-                packageMustHitIds);
+                packageMustHitIds,
+                policy.EnableStrictRelevanceFilter);
             workingWithBreakdowns = EnsureReservedWorkingMemoryCandidates(
                 workingCandidatesRaw,
                 workingWithBreakdowns,
@@ -470,7 +461,8 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                 isAuditMode,
                 true,
                 packageModeName,
-                packageMustHitIds);
+                packageMustHitIds,
+                policy.EnableStrictRelevanceFilter);
 
             workingMemory = workingWithBreakdowns.Select(x => x.Item).ToArray();
 
@@ -1144,7 +1136,8 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         bool allowDeprecated = false,
         int tokenBudget = 0,
         string modeName = "",
-        IReadOnlySet<string>? reserveIds = null)
+        IReadOnlySet<string>? reserveIds = null,
+        bool enableStrictRelevanceFilter = false)
     {
         var maxTake = take > 0 ? take : 20;
         var filteredCandidates = candidates.Where(item =>
@@ -1184,7 +1177,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         return filteredCandidates
             .Select(item =>
             {
-                var bd = ScoreWorkingMemoryForAnchors(item, anchors, isAuditMode, allowDeprecated || isAuditMode);
+                var bd = ScoreWorkingMemoryForAnchors(item, anchors, isAuditMode, allowDeprecated || isAuditMode, enableStrictRelevanceFilter);
                 var reserveScore = ResolveWorkingMemoryReserveScore(item, modeName, reserveIds);
                 return (Item: item, Breakdown: bd, ReserveScore: reserveScore);
             })
@@ -1213,7 +1206,8 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         bool isAuditMode,
         bool allowDeprecated,
         string modeName,
-        IReadOnlySet<string> reserveIds)
+        IReadOnlySet<string> reserveIds,
+        bool enableStrictRelevanceFilter = false)
     {
         if (reserveIds.Count == 0)
         {
@@ -1243,7 +1237,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                 continue;
             }
 
-            result.Add((item, ScoreWorkingMemoryForAnchors(item, anchors, isAuditMode, allowDeprecated || isAuditMode)));
+            result.Add((item, ScoreWorkingMemoryForAnchors(item, anchors, isAuditMode, allowDeprecated || isAuditMode, enableStrictRelevanceFilter)));
             selectedIds.Add(item.Id);
         }
 
@@ -1266,7 +1260,8 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         ContextMemoryItem item,
         IReadOnlyList<ContextAnchor> anchors,
         bool isAuditMode,
-        bool allowDeprecated = false)
+        bool allowDeprecated = false,
+        bool enableStrictRelevanceFilter = false)
     {
         var memoryState = ResolveMemoryProcessState(item);
         var isDeprecated = item.Status == ContextMemoryStatus.Deprecated ||
@@ -1299,6 +1294,19 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         var searchText = CreateMemorySearchText(item);
         var hasSpecificAnchors = anchors.Any(ContextRecallSignalPolicy.IsSpecificRecallAnchor);
         if (isAuditMode && hasSpecificAnchors)
+        {
+            var anyAnchorMatch = anchors.Any(a => ContextRecallSignalPolicy.IsSpecificRecallAnchor(a)
+                && searchText.Contains(a.Name, StringComparison.OrdinalIgnoreCase));
+            if (!anyAnchorMatch)
+            {
+                return ZeroBreakdown();
+            }
+        }
+
+        // 严格相关性过滤（早期锚点零匹配拦截）：当请求存在具体锚点但当前项无任何锚点匹配时，
+        // 直接降为零分。生产路径默认关闭；仅由评测运行器或显式调试请求通过 policy.EnableStrictRelevanceFilter 开启。
+        // 高重要度（>= 0.8）核心信息豁免，避免误杀关键记忆。
+        if (enableStrictRelevanceFilter && hasSpecificAnchors && item.Importance < 0.8)
         {
             var anyAnchorMatch = anchors.Any(a => ContextRecallSignalPolicy.IsSpecificRecallAnchor(a)
                 && searchText.Contains(a.Name, StringComparison.OrdinalIgnoreCase));
@@ -1344,17 +1352,6 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                 string.Equals(tag, "stress", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(tag, "budget", StringComparison.OrdinalIgnoreCase)))
         {
-            // 如果有提取到锚点，但该项没有匹配到任何锚点（即在当前查询下完全不相关），直接过滤
-            if (item.WorkspaceId.StartsWith("eval-", StringComparison.OrdinalIgnoreCase) && hasSpecificAnchors)
-            {
-                var anyMatch = anchors.Any(a => ContextRecallSignalPolicy.IsSpecificRecallAnchor(a)
-                    && searchText.Contains(a.Name, StringComparison.OrdinalIgnoreCase));
-                if (!anyMatch)
-                {
-                    return ZeroBreakdown();
-                }
-            }
-
             return new ItemScoreBreakdown
             {
                 BaseScore   = 1.0,
@@ -1443,25 +1440,17 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         }
 
         // ── 维度 7.5: RelevanceFilter ────────────────────────────────────────
-        // 如果有提取到锚点，但该项既没有匹配到任何锚点，也没有匹配到任何查询意图词，则视为完全不相关，直接过滤
+        // 严格相关性过滤：当请求存在具体锚点但当前项锚点分数与任务意图分数均为零时，
+        // 将低重要度条目降为零分以避免噪音污染召回结果。
+        // 生产路径默认关闭；仅由评测运行器或显式调试请求通过 policy.EnableStrictRelevanceFilter 开启。
         var totalAnchorScore = semanticAnchorScore + rawTokenMatchScore;
-        if (item.WorkspaceId.StartsWith("eval-", StringComparison.OrdinalIgnoreCase)
+        if (enableStrictRelevanceFilter
             && hasSpecificAnchors
             && totalAnchorScore <= 0.0
-            && taskIntentScore <= 0.0)
+            && taskIntentScore <= 0.0
+            && item.Importance < 0.8)
         {
-            // 对于重要性较高 (>= 0.8) 的核心信息，豁免过滤
-            if (item.Importance < 0.8)
-            {
-                if (isDeprecated && allowDeprecated)
-                {
-                    // 豁免已链接到活跃版本的 deprecated/superseded 记忆，不进行 zero 过滤
-                }
-                else
-                {
-                    return ZeroBreakdown();
-                }
-            }
+            return ZeroBreakdown();
         }
 
         // ── 维度 8: RecencyScore ─────────────────────────────────────────────
@@ -1480,7 +1469,6 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         // ── 维度 10: LifecyclePenalty (有界加性负分，不用乘法) ───────────────
         // 对 active 但无任何 anchor 匹配 of 项施加有界负分惩罚
         double lifecyclePenalty = 0.0;
-        totalAnchorScore = semanticAnchorScore + rawTokenMatchScore;
         if (isCurrentlyActive && hasSpecificAnchors && totalAnchorScore <= 0.0)
         {
             // 有界惩罚：最多减去 (BaseScore + LayerScore + StatusScore) 的 70%，不超过 -15
@@ -1626,16 +1614,13 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         }
         else if (IsMode(modeName, "ChatMode", "Chat"))
         {
-            if (ContainsAny(searchText,
-                    "stable preference", "preference", "偏好",
-                    "scope", "边界", "作用域",
-                    "active task", "active", "当前", "计划", "结论"))
+            if (ContainsAny(searchText, DomainKeywords.ChatModeBoostKeywords.ToArray()))
             {
                 score += 900.0;
             }
         }
 
-        if (ContainsAny(searchText, "stress-test", "压力测试", "无用字符"))
+        if (ContainsAny(searchText, DomainKeywords.FixturePenaltyKeywords.ToArray()))
         {
             score -= 500.0;
         }
@@ -2160,14 +2145,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
 
         if (enumMode != ContextPackageMode.None)
         {
-            return enumMode switch
-            {
-                ContextPackageMode.Chat => CreateChatModeBudgetProfile(),
-                ContextPackageMode.Novel => CreateNovelModeBudgetProfile(),
-                ContextPackageMode.Automation => CreateAutomationModeBudgetProfile(),
-                ContextPackageMode.Coding => CreateCodingModeBudgetProfile(),
-                _ => null
-            };
+            return ModeBudgetProfiles.Resolve(enumMode);
         }
 
         // 向后兼容：从 metadata 字符串读取。
@@ -2179,14 +2157,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
             "contextMode",
             "taskMode");
         var normalizedMode = NormalizeModeName(mode);
-        return normalizedMode switch
-        {
-            "chatmode" or "chat" => CreateChatModeBudgetProfile(),
-            "novelmode" or "novel" => CreateNovelModeBudgetProfile(),
-            "automationmode" or "automation" => CreateAutomationModeBudgetProfile(),
-            "codingmode" or "coding" => CreateCodingModeBudgetProfile(),
-            _ => null
-        };
+        return ModeBudgetProfiles.Resolve(normalizedMode);
     }
 
     private static string NormalizeModeName(string? mode)
@@ -2218,106 +2189,6 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         }
 
         return null;
-    }
-
-    private static ModeBudgetProfile CreateChatModeBudgetProfile()
-    {
-        return new ModeBudgetProfile(
-            "ChatMode",
-            2_400,
-            new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["current_task"] = 0.12,
-                ["hard_constraints"] = 0.12,
-                ["constraints"] = 0.16,
-                ["recent_context"] = 0.28,
-                ["working_memory"] = 0.24,
-                ["stable_memory"] = 0.10,
-                ["global_context"] = 0.08,
-                ["soft_constraints"] = 0.08,
-                ["related_context"] = 0.10,
-                ["evidence"] = 0.08,
-                ["historical_context"] = 0.08,
-                ["conflict_evidence"] = 0.08,
-                ["deprecated_evidence"] = 0.08,
-                ["excluded"] = 0.06,
-                ["uncertainties"] = 0.06
-            });
-    }
-
-    private static ModeBudgetProfile CreateNovelModeBudgetProfile()
-    {
-        return new ModeBudgetProfile(
-            "NovelMode",
-            6_000,
-            new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["current_task"] = 0.08,
-                ["hard_constraints"] = 0.08,
-                ["constraints"] = 0.12,
-                ["recent_context"] = 0.18,
-                ["working_memory"] = 0.16,
-                ["stable_memory"] = 0.34,
-                ["global_context"] = 0.24,
-                ["soft_constraints"] = 0.12,
-                ["related_context"] = 0.22,
-                ["evidence"] = 0.16,
-                ["historical_context"] = 0.10,
-                ["conflict_evidence"] = 0.10,
-                ["deprecated_evidence"] = 0.10,
-                ["excluded"] = 0.06,
-                ["uncertainties"] = 0.06
-            });
-    }
-
-    private static ModeBudgetProfile CreateAutomationModeBudgetProfile()
-    {
-        return new ModeBudgetProfile(
-            "AutomationMode",
-            4_000,
-            new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["current_task"] = 0.14,
-                ["hard_constraints"] = 0.16,
-                ["constraints"] = 0.20,
-                ["recent_context"] = 0.16,
-                ["working_memory"] = 0.26,
-                ["stable_memory"] = 0.10,
-                ["global_context"] = 0.08,
-                ["soft_constraints"] = 0.08,
-                ["related_context"] = 0.18,
-                ["evidence"] = 0.14,
-                ["historical_context"] = 0.08,
-                ["conflict_evidence"] = 0.08,
-                ["deprecated_evidence"] = 0.08,
-                ["excluded"] = 0.08,
-                ["uncertainties"] = 0.10
-            });
-    }
-
-    private static ModeBudgetProfile CreateCodingModeBudgetProfile()
-    {
-        return new ModeBudgetProfile(
-            "CodingMode",
-            5_000,
-            new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["current_task"] = 0.12,
-                ["hard_constraints"] = 0.16,
-                ["constraints"] = 0.20,
-                ["recent_context"] = 0.20,
-                ["working_memory"] = 0.28,
-                ["stable_memory"] = 0.16,
-                ["global_context"] = 0.10,
-                ["soft_constraints"] = 0.08,
-                ["related_context"] = 0.22,
-                ["evidence"] = 0.16,
-                ["historical_context"] = 0.08,
-                ["conflict_evidence"] = 0.08,
-                ["deprecated_evidence"] = 0.08,
-                ["excluded"] = 0.08,
-                ["uncertainties"] = 0.08
-            });
     }
 
     private static string? ReadSetting(
@@ -3403,23 +3274,18 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         }
 
         if (IsMode(modeName, "NovelMode", "Novel") &&
-            ContainsAny(searchText,
-                "character-state", "foreshadow", "world-rule", "item-state",
-                "plot-hook", "ending-plan"))
+            ContainsAny(searchText, DomainKeywords.NovelModeReserveBoostKeywords.ToArray()))
         {
             score += 9_000.0;
         }
 
         if (IsMode(modeName, "ChatMode", "Chat") &&
-            ContainsAny(searchText,
-                "stable:preference", "preference-language", "preference",
-                "scope", "active-task", "active task", "current-task", "plan", "conclusion",
-                "promotion-policy", "no-promote", "promote", "提升", "临时情绪", "重复解释", "oneoff", "一次性"))
+            ContainsAny(searchText, DomainKeywords.ChatModeReserveBoostKeywords.ToArray()))
         {
             score += 9_000.0;
         }
 
-        if (ContainsAny(searchText, "stress-test", "budget-stress"))
+        if (ContainsAny(searchText, DomainKeywords.FixturePenaltyKeywords.ToArray()))
         {
             score -= 500.0;
         }
@@ -4571,25 +4437,6 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         public int PriorityRank { get; }
 
         public int Index { get; }
-    }
-
-    private sealed class ModeBudgetProfile
-    {
-        public ModeBudgetProfile(
-            string modeName,
-            int defaultTokenBudget,
-            IReadOnlyDictionary<string, double> sectionRatios)
-        {
-            ModeName = modeName;
-            DefaultTokenBudget = defaultTokenBudget;
-            SectionRatios = sectionRatios;
-        }
-
-        public string ModeName { get; }
-
-        public int DefaultTokenBudget { get; }
-
-        public IReadOnlyDictionary<string, double> SectionRatios { get; }
     }
 
     private sealed class ContextEvidenceEntry

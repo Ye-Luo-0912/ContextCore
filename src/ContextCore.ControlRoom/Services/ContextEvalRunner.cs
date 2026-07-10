@@ -579,7 +579,8 @@ public sealed class ContextEvalRunner
                 IncludeWorkingMemory = true,
                 IncludeStableMemory = true,
                 IncludeRecentRawContext = true,
-                MaxRecentItems = 20
+                MaxRecentItems = 20,
+                EnableStrictRelevanceFilter = true
             },
             Metadata = new Dictionary<string, string>
             {

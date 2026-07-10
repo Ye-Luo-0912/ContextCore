@@ -9,39 +9,8 @@ namespace ContextCore.Core;
 /// </summary>
 internal static class ContextRecallSignalPolicy
 {
-    private static readonly string[] LongTermMemoryKeywords =
-    [
-        "preference",
-        "偏好",
-        "project",
-        "项目",
-        "background",
-        "背景",
-        "style",
-        "风格",
-        "safety",
-        "security",
-        "安全",
-        "密钥",
-        "secret",
-        "boundary",
-        "边界",
-        "principle",
-        "原则",
-        "constraint",
-        "约束",
-        "rule",
-        "规则",
-        "world",
-        "世界观",
-        "设定",
-        "performance",
-        "性能",
-        "test",
-        "测试",
-        "risk",
-        "风险"
-    ];
+    private static readonly DomainKeywordProfile DefaultDomainKeywords = DomainKeywordProfile.CreateProduction();
+    private static string[] LongTermMemoryKeywords => DefaultDomainKeywords.LongTermMemoryKeywords.ToArray();
 
     public static bool IsSpecificRecallAnchor(ContextAnchor anchor)
     {

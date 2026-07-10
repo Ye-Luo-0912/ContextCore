@@ -474,6 +474,13 @@ public sealed class ContextPackagePolicy
     /// <summary>各节的 Token 预算配置（节名 → 最大 Token 数）。</summary>
     public Dictionary<string, int> SectionTokenBudgets { get; init; } = new();
 
+    /// <summary>
+    /// 启用严格相关性过滤：当请求存在具体锚点但当前项锚点分数与任务意图分数均为零时，
+    /// 将低重要度条目降为零分以避免噪音污染召回结果。
+    /// 生产路径默认关闭；仅由评测运行器或显式调试请求开启。
+    /// </summary>
+    public bool EnableStrictRelevanceFilter { get; init; } = false;
+
     /// <summary>策略附加元数据。</summary>
     public Dictionary<string, string> Metadata { get; init; } = new();
 }
