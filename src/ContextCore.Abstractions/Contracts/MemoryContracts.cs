@@ -2,6 +2,17 @@ using ContextCore.Abstractions.Models;
 
 namespace ContextCore.Abstractions;
 
+/// <summary>图遍历方向。</summary>
+public enum RelationDirection
+{
+    /// <summary>仅出边（source → target）。</summary>
+    Outgoing,
+    /// <summary>仅入边（target ← source）。</summary>
+    Incoming,
+    /// <summary>出边和入边（默认）。</summary>
+    Both
+}
+
 /// <summary>存储和查询上下文条目之间的有向关系。</summary>
 public interface IRelationStore
 {
@@ -44,6 +55,35 @@ public interface IRelationStore
         string workspaceId,
         string collectionId,
         string relationType,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>按 ID 获取单条关系。不存在时返回 null。</summary>
+    Task<ContextRelation?> GetAsync(
+        string workspaceId,
+        string collectionId,
+        string relationId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>按 ID 删除单条关系。返回是否删除成功。</summary>
+    Task<bool> DeleteAsync(
+        string workspaceId,
+        string collectionId,
+        string relationId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>批量 upsert，实现应在单连接单事务中完成（Postgres）或原子写入（FileSystem）。</summary>
+    Task BatchUpsertAsync(
+        IEnumerable<ContextRelation> relations,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>查询邻居节点（合并出边和入边），支持方向过滤和分页。</summary>
+    Task<IReadOnlyList<ContextRelation>> QueryNeighborsAsync(
+        string workspaceId,
+        string collectionId,
+        string itemId,
+        RelationDirection direction = RelationDirection.Both,
+        int take = 100,
+        int skip = 0,
         CancellationToken cancellationToken = default);
 }
 

@@ -98,15 +98,96 @@ public sealed class FileRelationStore : IRelationStore
         }
     }
 
-    public async Task SaveManyAsync(
+    public Task SaveManyAsync(
+        IEnumerable<ContextRelation> relations,
+        CancellationToken cancellationToken = default)
+    {
+        return BatchUpsertAsync(relations, cancellationToken);
+    }
+
+    /// <summary>
+    /// 批量 upsert：按 (workspaceId, collectionId) 分组，每组在单个写锁内完成读改写并原子替换文件。
+    /// </summary>
+    public async Task BatchUpsertAsync(
         IEnumerable<ContextRelation> relations,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(relations);
 
-        foreach (var relation in relations)
+        var normalized = relations.Select(Normalize).ToArray();
+        if (normalized.Length == 0)
         {
-            await SaveAsync(relation, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            foreach (var group in normalized.GroupBy(r =>
+                _paths.GetRelationsJsonlPath(r.WorkspaceId, r.CollectionId)))
+            {
+                var path = group.Key;
+                var incoming = group.ToArray();
+                var incomingIds = new HashSet<string>(
+                    incoming.Select(r => r.Id),
+                    StringComparer.OrdinalIgnoreCase);
+
+                var existing = await _jsonLines.ReadAsync<ContextRelation>(path, cancellationToken)
+                    .ConfigureAwait(false);
+                var merged = existing
+                    .Where(r => !incomingIds.Contains(r.Id))
+                    .Concat(incoming);
+
+                await _jsonLines.WriteAsync(path, merged, cancellationToken).ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <summary>查询邻居节点，支持方向过滤和分页。</summary>
+    public async Task<IReadOnlyList<ContextRelation>> QueryNeighborsAsync(
+        string workspaceId,
+        string collectionId,
+        string itemId,
+        RelationDirection direction = RelationDirection.Both,
+        int take = 100,
+        int skip = 0,
+        CancellationToken cancellationToken = default)
+    {
+        var effectiveTake = take > 0 ? take : 100;
+        var effectiveSkip = skip > 0 ? skip : 0;
+
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var path = _paths.GetRelationsJsonlPath(workspaceId, collectionId);
+            var relations = await _jsonLines.ReadAsync<ContextRelation>(path, cancellationToken)
+                .ConfigureAwait(false);
+
+            IEnumerable<ContextRelation> filtered = direction switch
+            {
+                RelationDirection.Outgoing => relations.Where(relation =>
+                    string.Equals(relation.SourceId, itemId, StringComparison.OrdinalIgnoreCase)),
+                RelationDirection.Incoming => relations.Where(relation =>
+                    string.Equals(relation.TargetId, itemId, StringComparison.OrdinalIgnoreCase)),
+                _ => relations.Where(relation =>
+                    string.Equals(relation.SourceId, itemId, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(relation.TargetId, itemId, StringComparison.OrdinalIgnoreCase))
+            };
+
+            return [.. filtered
+                .OrderByDescending(relation => relation.Weight)
+                .ThenByDescending(relation => relation.Confidence)
+                .ThenByDescending(relation => relation.CreatedAt)
+                .Skip(effectiveSkip)
+                .Take(effectiveTake)];
+        }
+        finally
+        {
+            _gate.Release();
         }
     }
 
@@ -130,12 +211,14 @@ public sealed class FileRelationStore : IRelationStore
             }
 
             var take = query.Take > 0 ? query.Take : 50;
+            var skip = query.Skip > 0 ? query.Skip : 0;
 
             return [.. relations
                 .Where(relation => Matches(relation, query))
                 .OrderByDescending(relation => relation.Weight)
                 .ThenByDescending(relation => relation.Confidence)
                 .ThenByDescending(relation => relation.CreatedAt)
+                .Skip(skip)
                 .Take(take)];
         }
         finally
@@ -290,7 +373,13 @@ public sealed class FileRelationStore : IRelationStore
             Confidence = relation.Confidence,
             SourceRefs = [.. relation.SourceRefs],
             Metadata = new Dictionary<string, string>(relation.Metadata),
-            CreatedAt = relation.CreatedAt == default ? now : relation.CreatedAt
+            CreatedAt = relation.CreatedAt == default ? now : relation.CreatedAt,
+            SourceNodeKind = relation.SourceNodeKind,
+            TargetNodeKind = relation.TargetNodeKind,
+            Lifecycle = relation.Lifecycle,
+            ReviewStatus = relation.ReviewStatus,
+            UpdatedAt = relation.UpdatedAt,
+            Provenance = relation.Provenance
         };
     }
 }

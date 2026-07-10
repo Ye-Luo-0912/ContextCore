@@ -297,6 +297,62 @@ public sealed class ScopedRelationGovernanceStore : IRelationStore
             token => _postgresStore.QueryByTypeAsync(workspaceId, collectionId, relationType, token),
             cancellationToken);
 
+    public Task<ContextRelation?> GetAsync(string workspaceId, string collectionId, string relationId, CancellationToken cancellationToken = default)
+        => ExecuteReadAsync(
+            "service-relation-get",
+            workspaceId,
+            collectionId,
+            "RelationGet",
+            token => _fileStore.GetAsync(workspaceId, collectionId, relationId, token),
+            token => _postgresStore.GetAsync(workspaceId, collectionId, relationId, token),
+            cancellationToken);
+
+    public async Task<bool> DeleteAsync(string workspaceId, string collectionId, string relationId, CancellationToken cancellationToken = default)
+    {
+        if (!_status.ShouldUsePostgresPrimary(workspaceId, collectionId))
+        {
+            return await _fileStore.DeleteAsync(workspaceId, collectionId, relationId, cancellationToken).ConfigureAwait(false);
+        }
+
+        try
+        {
+            var result = await _postgresStore.DeleteAsync(workspaceId, collectionId, relationId, cancellationToken).ConfigureAwait(false);
+            await _fileStore.DeleteAsync(workspaceId, collectionId, relationId, cancellationToken).ConfigureAwait(false);
+            return result;
+        }
+        catch (Exception) when (_options.FallbackToFileSystem)
+        {
+            return await _fileStore.DeleteAsync(workspaceId, collectionId, relationId, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    public Task BatchUpsertAsync(IEnumerable<ContextRelation> relations, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(relations);
+        var list = relations.ToList();
+        if (list.Count == 0) return Task.CompletedTask;
+        var workspaceId = list[0].WorkspaceId;
+        var collectionId = list[0].CollectionId;
+        return ExecuteWriteAsync(
+            "service-relation-batch-upsert",
+            workspaceId,
+            collectionId,
+            "RelationBatchUpsert",
+            token => _fileStore.BatchUpsertAsync(list, token),
+            token => _postgresStore.BatchUpsertAsync(list, token),
+            cancellationToken);
+    }
+
+    public Task<IReadOnlyList<ContextRelation>> QueryNeighborsAsync(string workspaceId, string collectionId, string itemId, RelationDirection direction = RelationDirection.Both, int take = 100, int skip = 0, CancellationToken cancellationToken = default)
+        => ExecuteReadAsync(
+            "service-relation-neighbors",
+            workspaceId,
+            collectionId,
+            "RelationNeighborsQuery",
+            token => _fileStore.QueryNeighborsAsync(workspaceId, collectionId, itemId, direction, take, skip, token),
+            token => _postgresStore.QueryNeighborsAsync(workspaceId, collectionId, itemId, direction, take, skip, token),
+            cancellationToken);
+
     private async Task ExecuteWriteAsync(
         string operationId,
         string workspaceId,

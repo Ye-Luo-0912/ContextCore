@@ -619,4 +619,7 @@ public sealed class ContextRelationQuery
 
     /// <summary>最多返回的记录数，默认 50。</summary>
     public int Take { get; init; } = 50;
+
+    /// <summary>跳过的记录数（分页偏移），默认 0。</summary>
+    public int Skip { get; init; }
 }

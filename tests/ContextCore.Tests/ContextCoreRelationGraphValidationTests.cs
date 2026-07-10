@@ -892,6 +892,232 @@ public sealed class ContextCoreRelationGraphValidationTests
         }
     }
 
+    [TestMethod]
+    [TestCategory("GraphStoreContract")]
+    public async Task RelationStore_GetAsync_ShouldReturnRelationById()
+    {
+        var store = new InMemoryRelationStore();
+        var relation = TestRelation("rel-get-1", "src-a", ContextRelationTypes.References, "tgt-b");
+        await store.SaveAsync(relation);
+
+        var result = await store.GetAsync("ws-test", "col-test", "rel-get-1");
+
+        Assert.IsNotNull(result);
+        Assert.AreEqual("rel-get-1", result!.Id);
+        Assert.AreEqual("src-a", result.SourceId);
+    }
+
+    [TestMethod]
+    [TestCategory("GraphStoreContract")]
+    public async Task RelationStore_GetAsync_ShouldReturnNullWhenNotFound()
+    {
+        var store = new InMemoryRelationStore();
+
+        var result = await store.GetAsync("ws-test", "col-test", "nonexistent");
+
+        Assert.IsNull(result);
+    }
+
+    [TestMethod]
+    [TestCategory("GraphStoreContract")]
+    public async Task RelationStore_DeleteAsync_ShouldRemoveRelation()
+    {
+        var store = new InMemoryRelationStore();
+        await store.SaveAsync(TestRelation("rel-del-1", "src-a", ContextRelationTypes.References, "tgt-b"));
+
+        var deleted = await store.DeleteAsync("ws-test", "col-test", "rel-del-1");
+
+        Assert.IsTrue(deleted);
+        Assert.IsNull(await store.GetAsync("ws-test", "col-test", "rel-del-1"));
+    }
+
+    [TestMethod]
+    [TestCategory("GraphStoreContract")]
+    public async Task RelationStore_DeleteAsync_ShouldReturnFalseWhenNotFound()
+    {
+        var store = new InMemoryRelationStore();
+
+        var deleted = await store.DeleteAsync("ws-test", "col-test", "nonexistent");
+
+        Assert.IsFalse(deleted);
+    }
+
+    [TestMethod]
+    [TestCategory("GraphStoreContract")]
+    public async Task RelationStore_BatchUpsertAsync_ShouldWriteAllRelations()
+    {
+        var store = new InMemoryRelationStore();
+        var relations = new[]
+        {
+            TestRelation("rel-batch-1", "src-a", ContextRelationTypes.References, "tgt-b"),
+            TestRelation("rel-batch-2", "src-a", ContextRelationTypes.DerivedFrom, "tgt-c"),
+            TestRelation("rel-batch-3", "src-b", ContextRelationTypes.DependsOn, "tgt-a")
+        };
+
+        await store.BatchUpsertAsync(relations);
+
+        var all = await store.QueryAsync(new ContextRelationQuery
+        {
+            WorkspaceId = "ws-test",
+            CollectionId = "col-test",
+            Take = int.MaxValue
+        });
+        Assert.AreEqual(3, all.Count);
+    }
+
+    [TestMethod]
+    [TestCategory("GraphStoreContract")]
+    public async Task RelationStore_BatchUpsertAsync_ShouldUpdateExistingRelations()
+    {
+        var store = new InMemoryRelationStore();
+        await store.SaveAsync(TestRelation("rel-upsert-1", "src-a", ContextRelationTypes.References, "tgt-b", weight: 0.5));
+
+        // 同 ID 更新 weight
+        await store.BatchUpsertAsync(new[]
+        {
+            TestRelation("rel-upsert-1", "src-a", ContextRelationTypes.References, "tgt-b", weight: 0.9)
+        });
+
+        var result = await store.GetAsync("ws-test", "col-test", "rel-upsert-1");
+        Assert.IsNotNull(result);
+        Assert.AreEqual(0.9, result!.Weight);
+    }
+
+    [TestMethod]
+    [TestCategory("GraphStoreContract")]
+    public async Task RelationStore_QueryNeighborsAsync_ShouldReturnBothDirections()
+    {
+        var store = new InMemoryRelationStore();
+        // 出边: src-a → tgt-b, src-a → tgt-c
+        await store.SaveAsync(TestRelation("rel-out-1", "src-a", ContextRelationTypes.References, "tgt-b"));
+        await store.SaveAsync(TestRelation("rel-out-2", "src-a", ContextRelationTypes.DerivedFrom, "tgt-c"));
+        // 入边: src-d → src-a
+        await store.SaveAsync(TestRelation("rel-in-1", "src-d", ContextRelationTypes.DependsOn, "src-a"));
+
+        var neighbors = await store.QueryNeighborsAsync("ws-test", "col-test", "src-a", RelationDirection.Both);
+
+        Assert.AreEqual(3, neighbors.Count);
+    }
+
+    [TestMethod]
+    [TestCategory("GraphStoreContract")]
+    public async Task RelationStore_QueryNeighborsAsync_ShouldFilterByDirection()
+    {
+        var store = new InMemoryRelationStore();
+        await store.SaveAsync(TestRelation("rel-out-1", "src-a", ContextRelationTypes.References, "tgt-b"));
+        await store.SaveAsync(TestRelation("rel-in-1", "src-d", ContextRelationTypes.DependsOn, "src-a"));
+
+        var outgoing = await store.QueryNeighborsAsync("ws-test", "col-test", "src-a", RelationDirection.Outgoing);
+        var incoming = await store.QueryNeighborsAsync("ws-test", "col-test", "src-a", RelationDirection.Incoming);
+
+        Assert.AreEqual(1, outgoing.Count);
+        Assert.AreEqual("tgt-b", outgoing[0].TargetId);
+        Assert.AreEqual(1, incoming.Count);
+        Assert.AreEqual("src-d", incoming[0].SourceId);
+    }
+
+    [TestMethod]
+    [TestCategory("GraphStoreContract")]
+    public async Task RelationStore_QueryNeighborsAsync_ShouldApplyPagination()
+    {
+        var store = new InMemoryRelationStore();
+        for (var i = 0; i < 10; i++)
+        {
+            await store.SaveAsync(TestRelation($"rel-page-{i}", "src-a", ContextRelationTypes.References, $"tgt-{i}"));
+        }
+
+        var firstPage = await store.QueryNeighborsAsync("ws-test", "col-test", "src-a", RelationDirection.Outgoing, take: 5, skip: 0);
+        var secondPage = await store.QueryNeighborsAsync("ws-test", "col-test", "src-a", RelationDirection.Outgoing, take: 5, skip: 5);
+
+        Assert.AreEqual(5, firstPage.Count);
+        Assert.AreEqual(5, secondPage.Count);
+    }
+
+    [TestMethod]
+    [TestCategory("GraphStoreContract")]
+    public async Task RelationStore_QueryAsync_ShouldSupportSkipPagination()
+    {
+        var store = new InMemoryRelationStore();
+        for (var i = 0; i < 5; i++)
+        {
+            await store.SaveAsync(TestRelation($"rel-skip-{i}", "src-a", ContextRelationTypes.References, $"tgt-{i}"));
+        }
+
+        var firstPage = await store.QueryAsync(new ContextRelationQuery
+        {
+            WorkspaceId = "ws-test",
+            CollectionId = "col-test",
+            SourceId = "src-a",
+            Take = 2,
+            Skip = 0
+        });
+        var secondPage = await store.QueryAsync(new ContextRelationQuery
+        {
+            WorkspaceId = "ws-test",
+            CollectionId = "col-test",
+            SourceId = "src-a",
+            Take = 2,
+            Skip = 2
+        });
+
+        Assert.AreEqual(2, firstPage.Count);
+        Assert.AreEqual(2, secondPage.Count);
+        // 确保不同页不重复
+        Assert.IsFalse(firstPage.Any(a => secondPage.Any(b => b.Id == a.Id)));
+    }
+
+    [TestMethod]
+    [TestCategory("GraphStoreContract")]
+    public async Task RelationStore_ShouldPreserveGraphContractFields()
+    {
+        var store = new InMemoryRelationStore();
+        var relation = new ContextRelation
+        {
+            Id = "rel-contract-preserve",
+            WorkspaceId = "ws-test",
+            CollectionId = "col-test",
+            SourceId = "src-a",
+            TargetId = "tgt-b",
+            RelationType = ContextRelationTypes.DerivedFrom,
+            Weight = 0.8,
+            Confidence = 0.9,
+            SourceNodeKind = nameof(GraphNodeKind.StableMemory),
+            TargetNodeKind = nameof(GraphNodeKind.Package),
+            Lifecycle = RelationLifecycles.Active,
+            ReviewStatus = RelationReviewStatuses.Reviewed,
+            UpdatedAt = DateTimeOffset.UtcNow,
+            Provenance = "compression",
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+
+        await store.SaveAsync(relation);
+        var result = await store.GetAsync("ws-test", "col-test", "rel-contract-preserve");
+
+        Assert.IsNotNull(result);
+        Assert.AreEqual(nameof(GraphNodeKind.StableMemory), result!.SourceNodeKind);
+        Assert.AreEqual(nameof(GraphNodeKind.Package), result.TargetNodeKind);
+        Assert.AreEqual(RelationLifecycles.Active, result.Lifecycle);
+        Assert.AreEqual(RelationReviewStatuses.Reviewed, result.ReviewStatus);
+        Assert.AreEqual("compression", result.Provenance);
+    }
+
+    private static ContextRelation TestRelation(
+        string id, string sourceId, string relationType, string targetId, double weight = 1.0)
+    {
+        return new ContextRelation
+        {
+            Id = id,
+            WorkspaceId = "ws-test",
+            CollectionId = "col-test",
+            SourceId = sourceId,
+            TargetId = targetId,
+            RelationType = relationType,
+            Weight = weight,
+            Confidence = 1.0,
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+    }
+
     private static RelationGraphFixture CreateFixture()
     {
         var relationStore = new InMemoryRelationStore();

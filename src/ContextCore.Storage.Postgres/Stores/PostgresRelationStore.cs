@@ -121,12 +121,64 @@ WHERE workspace_id = @workspace_id
         return await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task SaveManyAsync(IEnumerable<ContextRelation> relations, CancellationToken cancellationToken = default)
+    public Task SaveManyAsync(IEnumerable<ContextRelation> relations, CancellationToken cancellationToken = default)
+    {
+        return BatchUpsertAsync(relations, cancellationToken);
+    }
+
+    public async Task BatchUpsertAsync(IEnumerable<ContextRelation> relations, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(relations);
-        foreach (var relation in relations)
+        var list = relations.ToList();
+        if (list.Count == 0) return;
+
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+
+        try
         {
-            await SaveAsync(relation, cancellationToken).ConfigureAwait(false);
+            foreach (var relation in list)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var normalized = Normalize(relation);
+                await using var command = connection.CreateCommand();
+                command.Transaction = (NpgsqlTransaction)transaction;
+                command.CommandTimeout = Options.CommandTimeoutSeconds;
+                command.CommandText = $"""
+INSERT INTO {Table("relations")} (
+    workspace_id, collection_id, id, source_id, target_id, relation_type,
+    weight, confidence, created_at, data)
+VALUES (
+    @workspace_id, @collection_id, @id, @source_id, @target_id, @relation_type,
+    @weight, @confidence, @created_at, @data)
+ON CONFLICT (workspace_id, collection_id, id) DO UPDATE SET
+    source_id = EXCLUDED.source_id,
+    target_id = EXCLUDED.target_id,
+    relation_type = EXCLUDED.relation_type,
+    weight = EXCLUDED.weight,
+    confidence = EXCLUDED.confidence,
+    created_at = EXCLUDED.created_at,
+    data = EXCLUDED.data;
+""";
+                command.Parameters.AddWithValue("workspace_id", normalized.WorkspaceId);
+                command.Parameters.AddWithValue("collection_id", normalized.CollectionId);
+                command.Parameters.AddWithValue("id", normalized.Id);
+                command.Parameters.AddWithValue("source_id", normalized.SourceId);
+                command.Parameters.AddWithValue("target_id", normalized.TargetId);
+                command.Parameters.AddWithValue("relation_type", normalized.RelationType);
+                command.Parameters.AddWithValue("weight", normalized.Weight);
+                command.Parameters.AddWithValue("confidence", normalized.Confidence);
+                command.Parameters.AddWithValue("created_at", normalized.CreatedAt);
+                AddJson(command, "data", normalized);
+                await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+            throw;
         }
     }
 
@@ -171,12 +223,14 @@ WHERE workspace_id = @workspace_id
         }
 
         command.Parameters.AddWithValue("take", TakeOrDefault(query.Take));
+        var skip = query.Skip > 0 ? query.Skip : 0;
+        command.Parameters.AddWithValue("skip", skip);
         command.CommandText = $"""
 SELECT data
 FROM {Table("relations")}
 WHERE {string.Join(" AND ", filters)}
 ORDER BY weight DESC, confidence DESC, created_at DESC
-LIMIT @take;
+LIMIT @take OFFSET @skip;
 """;
 
         var results = new List<ContextRelation>();
@@ -207,6 +261,50 @@ LIMIT @take;
     public Task<IReadOnlyList<ContextRelation>> QueryByTypeAsync(string workspaceId, string collectionId, string relationType, CancellationToken cancellationToken = default)
     {
         return QueryAsync(new ContextRelationQuery { WorkspaceId = workspaceId, CollectionId = collectionId, RelationType = relationType, Take = int.MaxValue }, cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<ContextRelation>> QueryNeighborsAsync(
+        string workspaceId, string collectionId, string itemId,
+        RelationDirection direction = RelationDirection.Both,
+        int take = 100, int skip = 0,
+        CancellationToken cancellationToken = default)
+    {
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+
+        var filters = new List<string> { "workspace_id = @workspace_id", "collection_id = @collection_id" };
+        command.Parameters.AddWithValue("workspace_id", workspaceId);
+        command.Parameters.AddWithValue("collection_id", collectionId);
+
+        switch (direction)
+        {
+            case RelationDirection.Outgoing:
+                filters.Add("source_id = @item_id");
+                break;
+            case RelationDirection.Incoming:
+                filters.Add("target_id = @item_id");
+                break;
+            default:
+                filters.Add("(source_id = @item_id OR target_id = @item_id)");
+                break;
+        }
+        command.Parameters.AddWithValue("item_id", itemId);
+
+        var effectiveTake = take > 0 ? take : 100;
+        var effectiveSkip = skip > 0 ? skip : 0;
+        command.Parameters.AddWithValue("take", effectiveTake);
+        command.Parameters.AddWithValue("skip", effectiveSkip);
+
+        command.CommandText = $"""
+SELECT data
+FROM {Table("relations")}
+WHERE {string.Join(" AND ", filters)}
+ORDER BY weight DESC, confidence DESC, created_at DESC
+LIMIT @take OFFSET @skip;
+""";
+        return await ReadRelationsAsync(command, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>按 lifecycle 元数据查询；兼容 PascalCase/camelCase 两种 JSON 键名。</summary>
@@ -335,7 +433,13 @@ ORDER BY weight DESC, confidence DESC, created_at DESC;
             Confidence = relation.Confidence,
             SourceRefs = relation.SourceRefs.ToArray(),
             Metadata = new Dictionary<string, string>(relation.Metadata),
-            CreatedAt = relation.CreatedAt == default ? DateTimeOffset.UtcNow : relation.CreatedAt
+            CreatedAt = relation.CreatedAt == default ? DateTimeOffset.UtcNow : relation.CreatedAt,
+            SourceNodeKind = relation.SourceNodeKind,
+            TargetNodeKind = relation.TargetNodeKind,
+            Lifecycle = relation.Lifecycle,
+            ReviewStatus = relation.ReviewStatus,
+            UpdatedAt = relation.UpdatedAt,
+            Provenance = relation.Provenance
         };
     }
 }

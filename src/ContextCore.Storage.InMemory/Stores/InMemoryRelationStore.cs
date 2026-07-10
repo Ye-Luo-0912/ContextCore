@@ -26,6 +26,13 @@ public sealed class InMemoryRelationStore : IRelationStore
         IEnumerable<ContextRelation> relations,
         CancellationToken cancellationToken = default)
     {
+        return BatchUpsertAsync(relations, cancellationToken);
+    }
+
+    public Task BatchUpsertAsync(
+        IEnumerable<ContextRelation> relations,
+        CancellationToken cancellationToken = default)
+    {
         ArgumentNullException.ThrowIfNull(relations);
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -41,6 +48,69 @@ public sealed class InMemoryRelationStore : IRelationStore
         return Task.CompletedTask;
     }
 
+    public Task<ContextRelation?> GetAsync(
+        string workspaceId,
+        string collectionId,
+        string relationId,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult(
+            _relations.TryGetValue(Key(workspaceId, collectionId, relationId), out var relation)
+                ? Clone(relation)
+                : null);
+    }
+
+    public Task<bool> DeleteAsync(
+        string workspaceId,
+        string collectionId,
+        string relationId,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult(
+            _relations.TryRemove(Key(workspaceId, collectionId, relationId), out _));
+    }
+
+    public Task<IReadOnlyList<ContextRelation>> QueryNeighborsAsync(
+        string workspaceId,
+        string collectionId,
+        string itemId,
+        RelationDirection direction = RelationDirection.Both,
+        int take = 100,
+        int skip = 0,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var effectiveTake = take > 0 ? take : 100;
+        var effectiveSkip = skip > 0 ? skip : 0;
+
+        IEnumerable<ContextRelation> filtered = _relations.Values
+            .Where(item => string.Equals(item.WorkspaceId, workspaceId, StringComparison.OrdinalIgnoreCase))
+            .Where(item => string.Equals(item.CollectionId, collectionId, StringComparison.OrdinalIgnoreCase));
+
+        filtered = direction switch
+        {
+            RelationDirection.Outgoing => filtered.Where(item => string.Equals(item.SourceId, itemId, StringComparison.OrdinalIgnoreCase)),
+            RelationDirection.Incoming => filtered.Where(item => string.Equals(item.TargetId, itemId, StringComparison.OrdinalIgnoreCase)),
+            _ => filtered.Where(item =>
+                string.Equals(item.SourceId, itemId, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(item.TargetId, itemId, StringComparison.OrdinalIgnoreCase))
+        };
+
+        var results = filtered
+            .OrderByDescending(item => item.Weight)
+            .ThenByDescending(item => item.Confidence)
+            .ThenByDescending(item => item.CreatedAt)
+            .Skip(effectiveSkip)
+            .Take(effectiveTake)
+            .Select(item => Clone(item))
+            .ToArray();
+
+        return Task.FromResult<IReadOnlyList<ContextRelation>>(results);
+    }
+
     public Task<IReadOnlyList<ContextRelation>> QueryAsync(
         ContextRelationQuery query,
         CancellationToken cancellationToken = default)
@@ -49,6 +119,7 @@ public sealed class InMemoryRelationStore : IRelationStore
         cancellationToken.ThrowIfCancellationRequested();
 
         var take = query.Take > 0 ? query.Take : 50;
+        var skip = query.Skip > 0 ? query.Skip : 0;
         var results = _relations.Values
             .Where(item => string.Equals(item.WorkspaceId, query.WorkspaceId, StringComparison.OrdinalIgnoreCase))
             .Where(item => string.IsNullOrWhiteSpace(query.CollectionId)
@@ -65,6 +136,7 @@ public sealed class InMemoryRelationStore : IRelationStore
             .OrderByDescending(item => item.Weight)
             .ThenByDescending(item => item.Confidence)
             .ThenByDescending(item => item.CreatedAt)
+            .Skip(skip)
             .Take(take)
             .Select(item => Clone(item))
             .ToArray();
@@ -146,7 +218,13 @@ public sealed class InMemoryRelationStore : IRelationStore
             Confidence = relation.Confidence,
             SourceRefs = relation.SourceRefs.ToArray(),
             Metadata = new Dictionary<string, string>(relation.Metadata),
-            CreatedAt = relation.CreatedAt == default ? DateTimeOffset.UtcNow : relation.CreatedAt
+            CreatedAt = relation.CreatedAt == default ? DateTimeOffset.UtcNow : relation.CreatedAt,
+            SourceNodeKind = relation.SourceNodeKind,
+            TargetNodeKind = relation.TargetNodeKind,
+            Lifecycle = relation.Lifecycle,
+            ReviewStatus = relation.ReviewStatus,
+            UpdatedAt = relation.UpdatedAt,
+            Provenance = relation.Provenance
         };
     }
 
