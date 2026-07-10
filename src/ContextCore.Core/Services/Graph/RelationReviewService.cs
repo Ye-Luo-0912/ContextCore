@@ -208,8 +208,7 @@ public sealed class RelationReviewService
             }
         }
 
-        metadata["lifecycle"] = toLifecycle;
-        metadata["reviewStatus"] = toReviewStatus;
+        // 审计字段保留在 Metadata 中（非状态字段）
         metadata["lastReviewId"] = reviewId;
         metadata["reviewId"] = reviewId;
         metadata["lastReviewAction"] = action;
@@ -233,7 +232,14 @@ public sealed class RelationReviewService
             Confidence = relation.Confidence,
             SourceRefs = relation.SourceRefs.ToArray(),
             Metadata = metadata,
-            CreatedAt = relation.CreatedAt == default ? reviewedAt : relation.CreatedAt
+            CreatedAt = relation.CreatedAt == default ? reviewedAt : relation.CreatedAt,
+            // GRAPH-08：正式字段作为唯一运行时来源
+            SourceNodeKind = relation.SourceNodeKind,
+            TargetNodeKind = relation.TargetNodeKind,
+            Lifecycle = toLifecycle,
+            ReviewStatus = toReviewStatus,
+            UpdatedAt = reviewedAt,
+            Provenance = "relation_review"
         };
     }
 
@@ -331,11 +337,22 @@ public sealed class RelationReviewService
 
     private static string ResolveLifecycle(ContextRelation relation)
     {
-        return ReadMetadata(relation.Metadata, "lifecycle") ?? StableMemoryLifecycle.Active;
+        // GRAPH-08：正式字段作为唯一运行时来源；Metadata 仅在旧数据迁移时兜底
+        if (!string.IsNullOrWhiteSpace(relation.Lifecycle)
+            && !string.Equals(relation.Lifecycle, RelationLifecycles.Active, StringComparison.OrdinalIgnoreCase))
+        {
+            return relation.Lifecycle;
+        }
+        return ReadMetadata(relation.Metadata, "lifecycle") ?? relation.Lifecycle;
     }
 
     private static string ResolveReviewStatus(ContextRelation relation)
     {
+        // GRAPH-08：正式字段作为唯一运行时来源；Metadata 仅在旧数据迁移时兜底
+        if (!string.IsNullOrWhiteSpace(relation.ReviewStatus))
+        {
+            return relation.ReviewStatus;
+        }
         return ReadMetadata(relation.Metadata, "reviewStatus") ?? string.Empty;
     }
 

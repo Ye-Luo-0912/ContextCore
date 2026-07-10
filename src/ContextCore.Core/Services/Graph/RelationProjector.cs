@@ -57,7 +57,7 @@ public sealed class RelationProjector : IRelationProjector
                 CreatedAt = now,
                 SourceNodeKind = nameof(GraphNodeKind.ContextItem),
                 TargetNodeKind = nameof(GraphNodeKind.ContextItem),
-                Lifecycle = RelationLifecycles.Active,
+                Lifecycle = StableMemoryLifecycle.Active,
                 ReviewStatus = string.Empty,
                 UpdatedAt = now,
                 Provenance = ProvenanceIngest
@@ -208,8 +208,7 @@ public sealed class RelationProjector : IRelationProjector
             ["createdFrom"] = "stable_lifecycle_review",
             ["confidence"] = "1.0",
             ["confidenceReason"] = "stable_lifecycle_review",
-            ["lifecycle"] = StableMemoryLifecycle.Active,
-            ["reviewStatus"] = RelationReviewStatuses.Reviewed,
+            // GRAPH-08：lifecycle/reviewStatus 由正式字段承载，Metadata 不再双写
             ["policyVersion"] = policyVersion,
             ["sourceRefs"] = string.Join(',', sourceRefs),
             ["evidenceRefs"] = string.Join(',', evidenceRefs)
@@ -235,7 +234,7 @@ public sealed class RelationProjector : IRelationProjector
             CreatedAt = request.Now,
             SourceNodeKind = sourceNodeKind,
             TargetNodeKind = replacementNodeKind,
-            Lifecycle = RelationLifecycles.Active,
+            Lifecycle = StableMemoryLifecycle.Active,
             ReviewStatus = RelationReviewStatuses.Reviewed,
             UpdatedAt = request.Now,
             Provenance = ProvenanceLifecycleReview
@@ -260,7 +259,7 @@ public sealed class RelationProjector : IRelationProjector
             CreatedAt = request.Now,
             SourceNodeKind = replacementNodeKind,
             TargetNodeKind = sourceNodeKind,
-            Lifecycle = RelationLifecycles.Active,
+            Lifecycle = StableMemoryLifecycle.Active,
             ReviewStatus = RelationReviewStatuses.Reviewed,
             UpdatedAt = request.Now,
             Provenance = ProvenanceLifecycleReview
@@ -306,7 +305,7 @@ public sealed class RelationProjector : IRelationProjector
             CreatedAt = now,
             SourceNodeKind = nameof(GraphNodeKind.ContextItem),
             TargetNodeKind = targetNodeKind,
-            Lifecycle = RelationLifecycles.Active,
+            Lifecycle = StableMemoryLifecycle.Active,
             ReviewStatus = string.Empty,
             UpdatedAt = now,
             Provenance = ProvenanceCompression
@@ -345,7 +344,7 @@ public sealed class RelationProjector : IRelationProjector
             CreatedAt = now,
             SourceNodeKind = nameof(GraphNodeKind.ContextItem),
             TargetNodeKind = nameof(GraphNodeKind.Operation),
-            Lifecycle = RelationLifecycles.Active,
+            Lifecycle = StableMemoryLifecycle.Active,
             ReviewStatus = string.Empty,
             UpdatedAt = now,
             Provenance = ProvenanceCompression
@@ -387,7 +386,7 @@ public sealed class RelationProjector : IRelationProjector
             CreatedAt = now,
             SourceNodeKind = sourceNodeKind,
             TargetNodeKind = targetNodeKind,
-            Lifecycle = RelationLifecycles.Active,
+            Lifecycle = StableMemoryLifecycle.Active,
             ReviewStatus = RelationReviewStatuses.Reviewed,
             UpdatedAt = now,
             Provenance = ProvenancePromotion

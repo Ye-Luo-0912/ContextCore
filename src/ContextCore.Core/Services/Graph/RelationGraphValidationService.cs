@@ -564,11 +564,22 @@ public sealed class RelationGraphValidationService
 
     private static string ResolveRelationLifecycle(ContextRelation relation)
     {
-        return ReadMetadata(relation.Metadata, "lifecycle") ?? StableMemoryLifecycle.Active;
+        // GRAPH-08：正式字段作为唯一运行时来源；Metadata 仅在旧数据迁移时兜底
+        if (!string.IsNullOrWhiteSpace(relation.Lifecycle)
+            && !string.Equals(relation.Lifecycle, RelationLifecycles.Active, StringComparison.OrdinalIgnoreCase))
+        {
+            return relation.Lifecycle;
+        }
+        return ReadMetadata(relation.Metadata, "lifecycle") ?? relation.Lifecycle;
     }
 
     private static string ResolveReviewStatus(ContextRelation relation)
     {
+        // GRAPH-08：正式字段作为唯一运行时来源；Metadata 仅在旧数据迁移时兜底
+        if (!string.IsNullOrWhiteSpace(relation.ReviewStatus))
+        {
+            return relation.ReviewStatus;
+        }
         return ReadMetadata(relation.Metadata, "reviewStatus") ?? string.Empty;
     }
 

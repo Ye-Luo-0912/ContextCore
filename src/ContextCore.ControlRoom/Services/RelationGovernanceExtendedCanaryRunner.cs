@@ -412,7 +412,11 @@ public sealed class RelationGovernanceExtendedCanaryRunner
                 ["source"] = "relation_governance_extended_canary",
                 ["policyVersion"] = "db2.8"
             },
-            CreatedAt = createdAt
+            CreatedAt = createdAt,
+            Lifecycle = lifecycle,
+            ReviewStatus = reviewStatus,
+            UpdatedAt = DateTimeOffset.UtcNow,
+            Provenance = "canary_runner"
         };
     }
 
@@ -435,7 +439,13 @@ public sealed class RelationGovernanceExtendedCanaryRunner
             Confidence = confidence,
             SourceRefs = relation.SourceRefs,
             Metadata = metadata,
-            CreatedAt = relation.CreatedAt
+            CreatedAt = relation.CreatedAt,
+            SourceNodeKind = relation.SourceNodeKind,
+            TargetNodeKind = relation.TargetNodeKind,
+            Lifecycle = relation.Lifecycle,
+            ReviewStatus = relation.ReviewStatus,
+            UpdatedAt = relation.UpdatedAt,
+            Provenance = relation.Provenance
         };
     }
 

@@ -211,9 +211,11 @@ public sealed class RelationTraversalEngine
         var lifecycle = relation.Lifecycle ?? string.Empty;
         var reviewStatus = relation.ReviewStatus ?? string.Empty;
 
+        // GRAPH-08：正式字段作为唯一来源；Rejected lifecycle 与 Deprecated 同级别排除
         if (!profile.AllowDeprecatedRelations
             && (string.Equals(lifecycle, RelationLifecycles.Deprecated, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(lifecycle, RelationLifecycles.Superseded, StringComparison.OrdinalIgnoreCase)))
+                || string.Equals(lifecycle, RelationLifecycles.Superseded, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(lifecycle, StableMemoryLifecycle.Rejected, StringComparison.OrdinalIgnoreCase)))
         {
             return false;
         }

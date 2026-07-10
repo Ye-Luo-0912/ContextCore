@@ -290,7 +290,11 @@ public sealed class RelationGovernanceCanaryRunner
                 ["reviewStatus"] = "Reviewed",
                 ["source"] = "relation_governance_runtime_canary"
             },
-            CreatedAt = createdAt
+            CreatedAt = createdAt,
+            Lifecycle = StableMemoryLifecycle.Active,
+            ReviewStatus = RelationReviewStatuses.Reviewed,
+            UpdatedAt = DateTimeOffset.UtcNow,
+            Provenance = "canary_runner"
         };
     }
 

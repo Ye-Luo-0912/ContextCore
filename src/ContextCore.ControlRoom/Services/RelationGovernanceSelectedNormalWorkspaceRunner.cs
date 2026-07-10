@@ -254,7 +254,11 @@ public sealed class RelationGovernanceSelectedNormalWorkspaceRunner
                 ["evidenceRefs"] = "selected-normal-canary-evidence:api-roundtrip",
                 ["source"] = "relation_governance_selected_normal_workspace_canary"
             },
-            CreatedAt = DateTimeOffset.UtcNow
+            CreatedAt = DateTimeOffset.UtcNow,
+            Lifecycle = StableMemoryLifecycle.Active,
+            ReviewStatus = RelationReviewStatuses.Reviewed,
+            UpdatedAt = DateTimeOffset.UtcNow,
+            Provenance = "canary_runner"
         };
 
         await router.SaveRelationAsync("selected-normal-client-api-write", relation, cancellationToken).ConfigureAwait(false);

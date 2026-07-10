@@ -307,24 +307,64 @@ LIMIT @take OFFSET @skip;
         return await ReadRelationsAsync(command, cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>按 lifecycle 元数据查询；兼容 PascalCase/camelCase 两种 JSON 键名。</summary>
-    public Task<IReadOnlyList<ContextRelation>> QueryByLifecycleAsync(
+    /// <summary>按 lifecycle 查询；GRAPH-08 起优先查正式字段，兼容旧 Metadata 数据。</summary>
+    public async Task<IReadOnlyList<ContextRelation>> QueryByLifecycleAsync(
         string workspaceId,
         string collectionId,
         string lifecycle,
         CancellationToken cancellationToken = default)
     {
-        return QueryByMetadataAsync(workspaceId, collectionId, ["lifecycle", "Lifecycle"], lifecycle, cancellationToken);
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+        command.CommandText = $"""
+SELECT data
+FROM {Table("relations")}
+WHERE workspace_id = @workspace_id
+  AND collection_id = @collection_id
+  AND (
+      data ->> 'Lifecycle' = @expected_value
+      OR data -> 'Metadata' ->> 'lifecycle' = @expected_value
+      OR data -> 'Metadata' ->> 'Lifecycle' = @expected_value
+      OR data -> 'metadata' ->> 'lifecycle' = @expected_value
+  )
+ORDER BY weight DESC, confidence DESC, created_at DESC;
+""";
+        command.Parameters.AddWithValue("workspace_id", workspaceId);
+        command.Parameters.AddWithValue("collection_id", collectionId);
+        command.Parameters.AddWithValue("expected_value", lifecycle);
+        return await ReadRelationsAsync(command, cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>按 reviewStatus 元数据查询；兼容 PascalCase/camelCase 两种 JSON 键名。</summary>
-    public Task<IReadOnlyList<ContextRelation>> QueryByReviewStatusAsync(
+    /// <summary>按 reviewStatus 查询；GRAPH-08 起优先查正式字段，兼容旧 Metadata 数据。</summary>
+    public async Task<IReadOnlyList<ContextRelation>> QueryByReviewStatusAsync(
         string workspaceId,
         string collectionId,
         string reviewStatus,
         CancellationToken cancellationToken = default)
     {
-        return QueryByMetadataAsync(workspaceId, collectionId, ["reviewStatus", "ReviewStatus"], reviewStatus, cancellationToken);
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+        command.CommandText = $"""
+SELECT data
+FROM {Table("relations")}
+WHERE workspace_id = @workspace_id
+  AND collection_id = @collection_id
+  AND (
+      data ->> 'ReviewStatus' = @expected_value
+      OR data -> 'Metadata' ->> 'reviewStatus' = @expected_value
+      OR data -> 'Metadata' ->> 'ReviewStatus' = @expected_value
+      OR data -> 'metadata' ->> 'reviewStatus' = @expected_value
+  )
+ORDER BY weight DESC, confidence DESC, created_at DESC;
+""";
+        command.Parameters.AddWithValue("workspace_id", workspaceId);
+        command.Parameters.AddWithValue("collection_id", collectionId);
+        command.Parameters.AddWithValue("expected_value", reviewStatus);
+        return await ReadRelationsAsync(command, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>查询 replacement chain 相关边，不执行图扩展或运行时排序。</summary>

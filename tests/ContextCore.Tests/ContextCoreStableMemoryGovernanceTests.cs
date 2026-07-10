@@ -281,8 +281,8 @@ public sealed class ContextCoreStableMemoryGovernanceTests
             && relation.Metadata["reason"] == "newer stable item"
             && relation.Metadata["confidence"] == "1.0"
             && relation.Metadata["confidenceReason"] == "stable_lifecycle_review"
-            && relation.Metadata["lifecycle"] == StableMemoryLifecycle.Active
-            && relation.Metadata["reviewStatus"] == "Reviewed"
+            && relation.Lifecycle == StableMemoryLifecycle.Active
+            && relation.ReviewStatus == "Reviewed"
             && relation.Metadata["sourceOperationId"] == result.OperationId
             && relation.Metadata["sourceItemId"] == "stable-old"
             && relation.Metadata["createdFrom"] == "stable_lifecycle_review"
@@ -294,7 +294,7 @@ public sealed class ContextCoreStableMemoryGovernanceTests
             && relation.TargetId == "stable-old"
             && relation.Metadata["reviewId"] == result!.ReviewId
             && relation.Metadata["confidenceReason"] == "stable_lifecycle_review"
-            && relation.Metadata["reviewStatus"] == "Reviewed"));
+            && relation.ReviewStatus == "Reviewed"));
     }
 
     [TestMethod]

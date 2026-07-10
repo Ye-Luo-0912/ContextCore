@@ -3745,7 +3745,11 @@ public static partial class EvalCommand
                 Confidence = confidence,
                 SourceRefs = evidenceRefs.ToArray(),
                 Metadata = metadata,
-                CreatedAt = createdAt
+                CreatedAt = createdAt,
+                Lifecycle = lifecycle,
+                ReviewStatus = RelationReviewStatuses.Reviewed,
+                UpdatedAt = DateTimeOffset.UtcNow,
+                Provenance = "relation_expansion_profile_shadow_fixture"
             };
         }
     }
@@ -14389,7 +14393,11 @@ public static partial class EvalCommand
                 ["reviewStatus"] = reviewStatus,
                 ["source"] = "postgres_relation_store_parity"
             },
-            CreatedAt = createdAt
+            CreatedAt = createdAt,
+            Lifecycle = lifecycle,
+            ReviewStatus = reviewStatus,
+            UpdatedAt = DateTimeOffset.UtcNow,
+            Provenance = "postgres_relation_store_parity"
         };
     }
 

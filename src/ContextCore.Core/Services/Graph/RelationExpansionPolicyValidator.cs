@@ -171,11 +171,22 @@ public sealed class RelationExpansionPolicyValidator
 
     public static string ResolveLifecycle(ContextRelation relation)
     {
+        // GRAPH-08：正式字段作为唯一运行时来源；Metadata 仅在旧数据迁移时兜底
+        if (!string.IsNullOrWhiteSpace(relation.Lifecycle)
+            && !string.Equals(relation.Lifecycle, RelationLifecycles.Active, StringComparison.OrdinalIgnoreCase))
+        {
+            return NormalizeState(relation.Lifecycle, "Active");
+        }
         return NormalizeState(ResolveMetadata(relation, "lifecycle"), "Active");
     }
 
     public static string ResolveReviewStatus(ContextRelation relation)
     {
+        // GRAPH-08：正式字段作为唯一运行时来源；Metadata 仅在旧数据迁移时兜底
+        if (!string.IsNullOrWhiteSpace(relation.ReviewStatus))
+        {
+            return NormalizeState(relation.ReviewStatus, string.Empty);
+        }
         return NormalizeState(ResolveMetadata(relation, "reviewStatus"), string.Empty);
     }
 

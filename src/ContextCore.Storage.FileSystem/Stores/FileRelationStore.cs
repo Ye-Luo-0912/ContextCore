@@ -86,10 +86,7 @@ public sealed class FileRelationStore : IRelationStore
             }
 
             Directory.CreateDirectory(Path.GetDirectoryName(path) ?? ".");
-            await File.WriteAllLinesAsync(
-                path,
-                retained.Select(item => System.Text.Json.JsonSerializer.Serialize(item)),
-                cancellationToken).ConfigureAwait(false);
+            await _jsonLines.WriteAsync(path, retained, cancellationToken).ConfigureAwait(false);
             return true;
         }
         finally

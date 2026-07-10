@@ -250,7 +250,11 @@ public sealed class RelationGovernanceSelectedWorkspaceCanaryRunner
                 ["evidenceRefs"] = "selected-canary-evidence:api-roundtrip",
                 ["source"] = "relation_governance_selected_workspace_canary"
             },
-            CreatedAt = DateTimeOffset.UtcNow
+            CreatedAt = DateTimeOffset.UtcNow,
+            Lifecycle = StableMemoryLifecycle.Active,
+            ReviewStatus = RelationReviewStatuses.Reviewed,
+            UpdatedAt = DateTimeOffset.UtcNow,
+            Provenance = "canary_runner"
         };
 
         await router.SaveRelationAsync("selected-client-api-write", relation, cancellationToken).ConfigureAwait(false);

@@ -84,6 +84,9 @@ public sealed class RelationTypeNormalizer
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
         var confidence = relation.Confidence;
+        // GRAPH-08：正式字段作为默认值
+        var lifecycle = relation.Lifecycle;
+        var reviewStatus = relation.ReviewStatus;
 
         if (CanBackfillDeterministicEvidence(relation))
         {
@@ -94,6 +97,7 @@ public sealed class RelationTypeNormalizer
             metadata.TryAdd("sourceItemId", relation.SourceId);
             metadata.TryAdd("createdFrom", FixtureBackfillCreatedFrom);
             metadata.TryAdd("confidenceReason", "deterministic_fixture_relation");
+            // Metadata 仅兜底（旧数据迁移）
             metadata.TryAdd("lifecycle", StableMemoryLifecycle.Active);
             metadata.TryAdd("reviewStatus", RelationReviewStatuses.Reviewed);
             metadata.TryAdd("policyVersion", PolicyVersion);
@@ -107,15 +111,22 @@ public sealed class RelationTypeNormalizer
             AddIfMissing(sourceRefs, relation.SourceId);
             AddIfMissing(sourceRefs, relation.TargetId);
             AddIfMissing(sourceRefs, $"fixture:relation:{relation.Id}");
+            // 正式字段
+            lifecycle = StableMemoryLifecycle.Active;
+            reviewStatus = RelationReviewStatuses.Reviewed;
         }
         else if (!HasEvidence(relation))
         {
+            // Metadata 仅兜底（旧数据迁移）
             metadata.TryAdd("reviewStatus", RelationReviewStatuses.NeedsEvidence);
             metadata.TryAdd("lifecycle", ContextMemoryStatus.Candidate.ToString());
             metadata.TryAdd("policyVersion", PolicyVersion);
+            // 正式字段
+            reviewStatus = RelationReviewStatuses.NeedsEvidence;
+            lifecycle = ContextMemoryStatus.Candidate.ToString();
         }
 
-        return Clone(relation, normalizedType, confidence, sourceRefs, metadata);
+        return Clone(relation, normalizedType, confidence, sourceRefs, metadata, lifecycle, reviewStatus);
     }
 
     public static bool HasEvidence(ContextRelation relation)
@@ -135,11 +146,21 @@ public sealed class RelationTypeNormalizer
 
     public static bool HasLifecycle(ContextRelation relation)
     {
+        // GRAPH-08：正式字段优先，Metadata 仅兜底
+        if (!string.IsNullOrWhiteSpace(relation.Lifecycle))
+        {
+            return true;
+        }
         return HasMetadataValue(relation.Metadata, "lifecycle");
     }
 
     public static bool HasReviewStatus(ContextRelation relation)
     {
+        // GRAPH-08：正式字段优先，Metadata 仅兜底
+        if (!string.IsNullOrWhiteSpace(relation.ReviewStatus))
+        {
+            return true;
+        }
         return HasMetadataValue(relation.Metadata, "reviewStatus");
     }
 
@@ -169,7 +190,9 @@ public sealed class RelationTypeNormalizer
         string relationType,
         double confidence,
         IReadOnlyList<string> sourceRefs,
-        IReadOnlyDictionary<string, string> metadata)
+        IReadOnlyDictionary<string, string> metadata,
+        string? lifecycleOverride = null,
+        string? reviewStatusOverride = null)
     {
         return new ContextRelation
         {
@@ -183,7 +206,14 @@ public sealed class RelationTypeNormalizer
             Confidence = confidence,
             SourceRefs = sourceRefs.ToArray(),
             Metadata = new Dictionary<string, string>(metadata, StringComparer.OrdinalIgnoreCase),
-            CreatedAt = relation.CreatedAt
+            CreatedAt = relation.CreatedAt,
+            // GRAPH-08：保留正式字段
+            SourceNodeKind = relation.SourceNodeKind,
+            TargetNodeKind = relation.TargetNodeKind,
+            Lifecycle = lifecycleOverride ?? relation.Lifecycle,
+            ReviewStatus = reviewStatusOverride ?? relation.ReviewStatus,
+            UpdatedAt = relation.UpdatedAt,
+            Provenance = relation.Provenance
         };
     }
 

@@ -91,8 +91,8 @@ public sealed class ContextCoreRelationExpansionShadowEvalTests
 
         Assert.AreEqual(ContextRelationTypes.Replaces, backfilled.RelationType);
         Assert.AreEqual(1.0, backfilled.Confidence);
-        Assert.AreEqual(StableMemoryLifecycle.Active, backfilled.Metadata["lifecycle"]);
-        Assert.AreEqual(RelationReviewStatuses.Reviewed, backfilled.Metadata["reviewStatus"]);
+        Assert.AreEqual(StableMemoryLifecycle.Active, backfilled.Lifecycle);
+        Assert.AreEqual(RelationReviewStatuses.Reviewed, backfilled.ReviewStatus);
         Assert.AreEqual(RelationTypeNormalizer.FixtureBackfillCreatedFrom, backfilled.Metadata["createdFrom"]);
         Assert.IsTrue(backfilled.SourceRefs.Contains("fixture:relation:rel:fixture"));
     }

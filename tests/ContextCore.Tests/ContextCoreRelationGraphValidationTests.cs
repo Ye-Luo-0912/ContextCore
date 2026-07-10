@@ -299,8 +299,9 @@ public sealed class ContextCoreRelationGraphValidationTests
 
         Assert.IsNotNull(result);
         Assert.AreEqual(StableMemoryLifecycle.Rejected, result!.ToLifecycle);
-        Assert.AreEqual(RelationReviewStatuses.Rejected, updated.Metadata["reviewStatus"]);
-        Assert.AreEqual(StableMemoryLifecycle.Rejected, updated.Metadata["lifecycle"]);
+        // GRAPH-08：正式字段作为唯一运行时来源
+        Assert.AreEqual(RelationReviewStatuses.Rejected, updated.ReviewStatus);
+        Assert.AreEqual(StableMemoryLifecycle.Rejected, updated.Lifecycle);
     }
 
     [TestMethod]
@@ -315,7 +316,7 @@ public sealed class ContextCoreRelationGraphValidationTests
 
         Assert.IsNotNull(result);
         Assert.AreEqual(StableMemoryLifecycle.Deprecated, result!.ToLifecycle);
-        Assert.AreEqual(StableMemoryLifecycle.Deprecated, result.Relation.Metadata["lifecycle"]);
+        Assert.AreEqual(StableMemoryLifecycle.Deprecated, result.Relation.Lifecycle);
     }
 
     [TestMethod]
@@ -330,7 +331,7 @@ public sealed class ContextCoreRelationGraphValidationTests
 
         Assert.IsNotNull(result);
         Assert.AreEqual(RelationReviewStatuses.NeedsEvidence, result!.ToReviewStatus);
-        Assert.AreEqual(RelationReviewStatuses.NeedsEvidence, result.Relation.Metadata["reviewStatus"]);
+        Assert.AreEqual(RelationReviewStatuses.NeedsEvidence, result.Relation.ReviewStatus);
     }
 
     [TestMethod]
