@@ -9,7 +9,14 @@ using ContextCore.Storage.Postgres.Stores;
 
 namespace ContextCore.Service.Infrastructure;
 
-/// <summary>Relation governance scoped service mode 的状态与门禁读取服务。</summary>
+/// <summary>
+/// Relation governance scoped service mode 的状态与门禁读取服务。
+/// GRAPH-12: 仅以下 3 个 JSON 文件为硬门禁（阻断生产 runtime）：
+///   1. postgres-relation-governance-readiness-gate.json
+///   2. postgres-relation-provider-switch-gate.json
+///   3. postgres-relation-runtime-canary-report.json
+/// 其余 storage/postgres/*.json 均为非阻塞 canary 报告，仅供 ControlRoomService 状态聚合展示。
+/// </summary>
 public sealed class RelationGovernanceScopedServiceModeStatusService
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
