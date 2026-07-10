@@ -1,23 +1,69 @@
-{
-  "GeneratedAt": "2026-07-07T06:39:00.0000000+00:00",
+﻿{
+  "GeneratedAt": "2026-07-10T09:07:15.9318158\u002B00:00",
   "ContractVersion": "V16.20",
+  "EvidenceTier": "Synthetic",
+  "ProductionCapacityProven": false,
+  "SyntheticOnlyDisclaimer": "\u6B64\u62A5\u544A\u4E3A Synthetic \u4EA7\u7269\uFF0C\u4E0D\u80FD\u8BC1\u660E\u751F\u4EA7\u80FD\u529B\u3002\u4EC5\u7528\u4E8E\u9A8C\u8BC1\u62A5\u544A\u751F\u6210\u903B\u8F91\u672C\u8EAB\u3002",
   "DocumentType": "NativeProductionTraceEndpointPreImplementationStaticScanProtocol",
-  "Purpose": "Pre-implementation static scan protocol. Defines what must be scanned before any implementation is authorized. Current expected result: all zero/false.",
   "ScanItems": [
-    {"Item": "FileRuntimeCandidateTraceSink instantiation in V16.14–V16.20 paths", "Expected": 0, "Actual": 0, "Passed": true},
-    {"Item": "RuntimeCandidateTraceSinkAccessor.Current assignment", "Expected": 0, "Actual": 0, "Passed": true},
-    {"Item": "BuildDetailedAsync calls in endpoint/dossier code paths", "Expected": 0, "Actual": 0, "Passed": true},
-    {"Item": "*.jsonl files in learning/v16_14–v16_20", "Expected": 0, "Actual": 0, "Passed": true},
-    {"Item": "RuntimeInfluenceAllowed=true in any source", "Expected": 0, "Actual": 0, "Passed": true},
-    {"Item": "PackageOutputChanged=true in any source", "Expected": 0, "Actual": 0, "Passed": true},
-    {"Item": "VectorBindingChanged=true in any source", "Expected": 0, "Actual": 0, "Passed": true},
-    {"Item": "NeuralBiasActive=true in any source", "Expected": 0, "Actual": 0, "Passed": true},
-    {"Item": "HybridBlendAlpha != 1.0 in runtime paths", "Expected": 0, "Actual": 0, "Passed": true}
+    {
+      "Item": "FileRuntimeCandidateTraceSink instantiation",
+      "Expected": 0,
+      "Actual": 0,
+      "Passed": true
+    },
+    {
+      "Item": "RuntimeCandidateTraceSinkAccessor.Current assignment",
+      "Expected": 0,
+      "Actual": 0,
+      "Passed": true
+    },
+    {
+      "Item": "BuildDetailedAsync in live capture paths",
+      "Expected": 0,
+      "Actual": 0,
+      "Passed": true
+    },
+    {
+      "Item": "*.jsonl in learning/v16_14-v16_20",
+      "Expected": 0,
+      "Actual": 0,
+      "Passed": true
+    },
+    {
+      "Item": "RuntimeInfluenceAllowed=true",
+      "Expected": 0,
+      "Actual": 0,
+      "Passed": true
+    },
+    {
+      "Item": "PackageOutputChanged=true",
+      "Expected": 0,
+      "Actual": 0,
+      "Passed": true
+    },
+    {
+      "Item": "VectorBindingChanged=true",
+      "Expected": 0,
+      "Actual": 0,
+      "Passed": true
+    },
+    {
+      "Item": "NeuralBiasActive=true",
+      "Expected": 0,
+      "Actual": 0,
+      "Passed": true
+    },
+    {
+      "Item": "HybridBlendAlpha != 1.0",
+      "Expected": 0,
+      "Actual": 0,
+      "Passed": true
+    }
   ],
   "ScanResult": {
     "TotalItems": 9,
     "AllPassed": true,
-    "AllExpectedZero": true,
-    "Conclusion": "No forbidden patterns found. Environment is clean for potential future implementation."
+    "AllExpectedZero": true
   }
 }

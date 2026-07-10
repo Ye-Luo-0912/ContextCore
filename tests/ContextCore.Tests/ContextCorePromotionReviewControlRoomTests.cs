@@ -6,6 +6,7 @@ namespace ContextCore.Tests;
 
 /// <summary>覆盖 ControlRoom Promotion Review 的候选项查询和状态更新。</summary>
 [TestClass]
+[TestCategory("ControlRoom")]
 public sealed class ContextCorePromotionReviewControlRoomTests
 {
     [TestMethod]

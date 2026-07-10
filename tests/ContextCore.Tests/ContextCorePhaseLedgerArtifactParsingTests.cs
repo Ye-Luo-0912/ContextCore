@@ -3,6 +3,7 @@ using System.Text.Json;
 namespace ContextCore.Tests;
 
 [TestClass]
+[TestCategory("Unit")]
 public class ContextCorePhaseLedgerArtifactParsingTests
 {
     private static string ResolveArtifactPath(string fileName) =>

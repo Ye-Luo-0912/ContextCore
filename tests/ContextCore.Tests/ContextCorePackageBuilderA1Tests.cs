@@ -9,6 +9,7 @@ namespace ContextCore.Tests;
 
 /// <summary>覆盖 A1 Context Package Builder 主干中的短期筛选与锚点提取能力。</summary>
 [TestClass]
+[TestCategory("Package")]
 public sealed class ContextCorePackageBuilderA1Tests
 {
     [TestMethod]

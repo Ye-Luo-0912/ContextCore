@@ -8,6 +8,7 @@ using ContextCore.Storage.InMemory;
 namespace ContextCore.Tests;
 
 [TestClass]
+[TestCategory("Learning")]
 public sealed class ContextCoreLearningOfflineBaselineTests
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);

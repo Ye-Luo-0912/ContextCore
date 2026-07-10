@@ -11,6 +11,7 @@ using ContextCore.Storage.InMemory.Stores;
 namespace ContextCore.Tests;
 
 [TestClass]
+[TestCategory("Relation")]
 public sealed class ContextCoreRelationGraphValidationTests
 {
     [TestMethod]

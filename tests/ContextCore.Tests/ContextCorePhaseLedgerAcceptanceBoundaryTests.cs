@@ -1,6 +1,7 @@
 namespace ContextCore.Tests;
 
 [TestClass]
+[TestCategory("Unit")]
 public class ContextCorePhaseLedgerAcceptanceBoundaryTests
 {
     private static readonly IReadOnlyList<string> V16Phases = new List<string>

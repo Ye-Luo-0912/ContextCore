@@ -4,6 +4,7 @@ using ContextCore.Core.Services;
 namespace ContextCore.Tests;
 
 [TestClass]
+[TestCategory("Vector")]
 public class ContextCoreVectorLifecycleMetadataRepairPlanTests
 {
     [TestMethod]

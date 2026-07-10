@@ -5,6 +5,7 @@ namespace ContextCore.Tests;
 
 /// <summary>覆盖 A3 评测样本读取器。</summary>
 [TestClass]
+[TestCategory("Unit")]
 public sealed class ContextCoreEvalSampleLoaderTests
 {
     [TestMethod]

@@ -8,6 +8,7 @@ namespace ContextCore.Tests;
 
 /// <summary>覆盖 Promotion Candidate Store 的读写分离和状态过滤。</summary>
 [TestClass]
+[TestCategory("Unit")]
 public sealed class ContextCorePromotionCandidateStoreTests
 {
     [TestMethod]

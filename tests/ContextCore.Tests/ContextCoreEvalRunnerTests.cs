@@ -8,6 +8,7 @@ namespace ContextCore.Tests;
 
 /// <summary>覆盖 ContextEvalRunner 评测运行器及其指标计算。</summary>
 [TestClass]
+[TestCategory("Unit")]
 public sealed class ContextCoreEvalRunnerTests
 {
     private const string PromotionRuleConstraintText =

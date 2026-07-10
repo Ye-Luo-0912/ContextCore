@@ -5,6 +5,7 @@ namespace ContextCore.Tests;
 
 /// <summary>覆盖 A3 上下文评测样本结构。</summary>
 [TestClass]
+[TestCategory("Unit")]
 public sealed class ContextCoreEvalSampleTests
 {
     [TestMethod]

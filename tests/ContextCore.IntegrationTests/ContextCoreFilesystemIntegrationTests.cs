@@ -17,6 +17,7 @@ namespace ContextCore.IntegrationTests;
 
 /// <summary>覆盖文件系统端到端、模型路由、打包策略和控制室报告导出链路。</summary>
 [TestClass]
+[TestCategory("Integration")]
 public sealed class ContextCoreFilesystemIntegrationTests
 {
     [TestMethod]

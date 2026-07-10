@@ -12,6 +12,7 @@ using ContextCore.Storage.InMemory.Stores;
 namespace ContextCore.Tests;
 
 [TestClass]
+[TestCategory("Learning")]
 public sealed class ContextCoreLearningFeatureDatasetTests
 {
     private const string WorkspaceId = "workspace-learning-features";

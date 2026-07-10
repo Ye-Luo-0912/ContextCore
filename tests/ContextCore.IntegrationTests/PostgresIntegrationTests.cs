@@ -20,6 +20,9 @@ namespace ContextCore.IntegrationTests;
 /// </para>
 /// </summary>
 [TestClass]
+[TestCategory("Integration")]
+[TestCategory("Postgres")]
+[TestCategory("DockerRequired")]
 public sealed class PostgresIntegrationTests
 {
     // pgvector 官方镜像，含 pg 17 + vector 扩展
@@ -36,6 +39,7 @@ public sealed class PostgresIntegrationTests
         // 若无法使用 Docker，跳过所有测试
         if (!await IsDockerAvailableAsync())
         {
+            Console.WriteLine("[PostgresIntegrationTests] Docker 不可用，所有测试将标记为 Inconclusive。");
             return;
         }
 
@@ -84,7 +88,7 @@ public sealed class PostgresIntegrationTests
     [TestCategory("Postgres")]
     public async Task Migration_ShouldCreateAllTablesIdempotently()
     {
-        if (ShouldSkip) return;
+        if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。此结果不证明 Postgres 能力通过。"); return; }
 
         var (factory, migrationRunner, _) = CreateInfrastructure("mig_");
         try
@@ -108,7 +112,7 @@ public sealed class PostgresIntegrationTests
     [TestCategory("Postgres")]
     public async Task ContextStore_SaveAndGet_ShouldRoundtrip()
     {
-        if (ShouldSkip) return;
+        if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。此结果不证明 Postgres 能力通过。"); return; }
 
         var (factory, migrationRunner, serializer) = CreateInfrastructure("ctx_");
         try
@@ -151,7 +155,7 @@ public sealed class PostgresIntegrationTests
     [TestCategory("Postgres")]
     public async Task ContextStore_ListQuery_ShouldFilterByCollection()
     {
-        if (ShouldSkip) return;
+        if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。此结果不证明 Postgres 能力通过。"); return; }
 
         var (factory, migrationRunner, serializer) = CreateInfrastructure("ctxq_");
         try
@@ -190,7 +194,7 @@ public sealed class PostgresIntegrationTests
     [TestCategory("Postgres")]
     public async Task MemoryStore_SaveAndPromotion_ShouldRoundtrip()
     {
-        if (ShouldSkip) return;
+        if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。此结果不证明 Postgres 能力通过。"); return; }
 
         var (factory, migrationRunner, serializer) = CreateInfrastructure("mem_");
         try
@@ -255,7 +259,7 @@ public sealed class PostgresIntegrationTests
     [TestCategory("Postgres")]
     public async Task RelationStore_SaveAndQuery_ShouldBuildGraph()
     {
-        if (ShouldSkip) return;
+        if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。此结果不证明 Postgres 能力通过。"); return; }
 
         var (factory, migrationRunner, serializer) = CreateInfrastructure("rel_");
         try
@@ -309,7 +313,7 @@ public sealed class PostgresIntegrationTests
     [TestCategory("Postgres")]
     public async Task VectorStore_UpsertAndGet_ShouldRoundtrip()
     {
-        if (ShouldSkip) return;
+        if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。此结果不证明 Postgres 能力通过。"); return; }
 
         var (factory, migrationRunner, serializer) = CreateInfrastructure("vec_");
         try
@@ -352,7 +356,7 @@ public sealed class PostgresIntegrationTests
     [TestCategory("Postgres")]
     public async Task VectorStore_SearchByVector_ShouldReturnNearest()
     {
-        if (ShouldSkip) return;
+        if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。此结果不证明 Postgres 能力通过。"); return; }
 
         var (factory, migrationRunner, serializer) = CreateInfrastructure("vsrch_");
         try
@@ -410,7 +414,7 @@ public sealed class PostgresIntegrationTests
     [TestCategory("Postgres")]
     public async Task ConstraintStore_SaveAndQuery_ShouldFilter()
     {
-        if (ShouldSkip) return;
+        if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。此结果不证明 Postgres 能力通过。"); return; }
 
         var (factory, migrationRunner, serializer) = CreateInfrastructure("cst_");
         try
@@ -452,7 +456,7 @@ public sealed class PostgresIntegrationTests
     [TestCategory("Postgres")]
     public async Task JobQueue_EnqueueAndDequeue_ShouldRoundtrip()
     {
-        if (ShouldSkip) return;
+        if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。此结果不证明 Postgres 能力通过。"); return; }
 
         var (factory, migrationRunner, serializer) = CreateInfrastructure("jq_");
         try
@@ -490,7 +494,7 @@ public sealed class PostgresIntegrationTests
     [TestCategory("Postgres")]
     public async Task JobQueue_CompleteAndFail_ShouldUpdateState()
     {
-        if (ShouldSkip) return;
+        if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。此结果不证明 Postgres 能力通过。"); return; }
 
         var (factory, migrationRunner, serializer) = CreateInfrastructure("jqcf_");
         try
@@ -535,7 +539,7 @@ public sealed class PostgresIntegrationTests
     [TestCategory("Postgres")]
     public async Task PackageBuildTraceStore_SaveAndQuery_ShouldRoundtrip()
     {
-        if (ShouldSkip) return;
+        if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。此结果不证明 Postgres 能力通过。"); return; }
 
         var (factory, migrationRunner, serializer) = CreateInfrastructure("pbt_");
         try
@@ -575,7 +579,7 @@ public sealed class PostgresIntegrationTests
     [TestCategory("Postgres")]
     public async Task RetrievalTraceStore_SaveAndQuery_ShouldRoundtrip()
     {
-        if (ShouldSkip) return;
+        if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。此结果不证明 Postgres 能力通过。"); return; }
 
         var (factory, migrationRunner, serializer) = CreateInfrastructure("rtr_");
         try
@@ -613,7 +617,7 @@ public sealed class PostgresIntegrationTests
     [TestCategory("Postgres")]
     public async Task EventSink_EmitAndQuery_ShouldRoundtrip()
     {
-        if (ShouldSkip) return;
+        if (ShouldSkip) { Assert.Inconclusive("Docker 不可用 — Postgres 集成测试已跳过。此结果不证明 Postgres 能力通过。"); return; }
 
         var (factory, migrationRunner, serializer) = CreateInfrastructure("ev_");
         try

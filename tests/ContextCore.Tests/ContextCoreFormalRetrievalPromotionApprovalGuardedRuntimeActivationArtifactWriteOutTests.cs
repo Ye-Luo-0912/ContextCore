@@ -3,6 +3,8 @@ using ContextCore.Core.Services;
 namespace ContextCore.Tests;
 
 [TestClass]
+[TestCategory("Retrieval")]
+[TestCategory("Gate")]
 public class ContextCoreFormalRetrievalPromotionApprovalGuardedRuntimeActivationArtifactWriteOutTests
 {
     private const string TestCapability = PolicyAuthorityKnownCapabilities.FormalRetrievalActivation;

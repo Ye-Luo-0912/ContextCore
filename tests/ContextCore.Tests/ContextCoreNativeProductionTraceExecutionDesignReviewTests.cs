@@ -1,6 +1,8 @@
 namespace ContextCore.Tests;
 
 [TestClass]
+[TestCategory("Synthetic")]
+[TestCategory("Gate")]
 public class ContextCoreNativeProductionTraceExecutionDesignReviewTests
 {
     [TestMethod]

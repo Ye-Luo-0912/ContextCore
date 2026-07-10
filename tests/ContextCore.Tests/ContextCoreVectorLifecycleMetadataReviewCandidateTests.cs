@@ -7,6 +7,7 @@ using ContextCore.Storage.InMemory;
 namespace ContextCore.Tests;
 
 [TestClass]
+[TestCategory("Vector")]
 public class ContextCoreVectorLifecycleMetadataReviewCandidateTests
 {
     [TestMethod]

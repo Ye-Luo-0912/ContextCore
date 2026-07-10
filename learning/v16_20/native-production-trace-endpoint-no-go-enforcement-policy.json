@@ -1,26 +1,64 @@
-{
-  "GeneratedAt": "2026-07-07T06:39:00.0000000+00:00",
+﻿{
+  "GeneratedAt": "2026-07-10T09:07:15.9318158\u002B00:00",
   "ContractVersion": "V16.20",
   "DocumentType": "NativeProductionTraceEndpointNoGoEnforcementPolicy",
-  "Purpose": "No-Go enforcement policy that blocks all forbidden operations until an explicit human approval artifact is present. This policy is enforceable: any operation blocked by this policy must not proceed.",
   "NoGoDecision": true,
   "NoGoReason": "MissingExplicitHumanApprovalArtifact",
   "BlockedOperations": [
-    {"Operation": "Execute native-production-trace-execution-endpoint command", "Blocked": true, "Reason": "No human approval artifact. AuthorizationDecision=NoGo."},
-    {"Operation": "Create FileRuntimeCandidateTraceSink", "Blocked": true, "Reason": "No production trace capture authorized. Sink wiring is gated."},
-    {"Operation": "Assign RuntimeCandidateTraceSinkAccessor.Current", "Blocked": true, "Reason": "Sink accessor must remain NullRuntimeCandidateTraceSink."},
-    {"Operation": "Call BuildDetailedAsync in live capture path", "Blocked": true, "Reason": "Live capture path not implemented or authorized."},
-    {"Operation": "Create .jsonl production trace file", "Blocked": true, "Reason": "No production trace collection authorized."},
-    {"Operation": "Set RuntimeInfluenceAllowed=true", "Blocked": true, "Reason": "Permanently false. Structural invariant."},
-    {"Operation": "Set PackageOutputChanged=true", "Blocked": true, "Reason": "Permanently false. Package mutation forbidden."},
-    {"Operation": "Set VectorBindingChanged=true", "Blocked": true, "Reason": "Permanently false. Vector binding mutation forbidden."},
-    {"Operation": "Set NeuralBiasActive=true", "Blocked": true, "Reason": "Neural bias is permanently disabled."},
-    {"Operation": "Change HybridBlendAlpha from 1.0", "Blocked": true, "Reason": "Runtime scoring must remain deterministic."},
-    {"Operation": "Interpret Ready=true as Approved=true", "Blocked": true, "Reason": "Readiness is not authorization. See V16.18 DoNotMisinterpret."}
-  ],
-  "EnforcementStatus": {
-    "AllBlockedOperationsEnforced": true,
-    "NoBlockedOperationAllowed": true,
-    "RequiresApprovalArtifactToClear": true
-  }
+    {
+      "Operation": "Execute native-production-trace-execution-endpoint command",
+      "Blocked": true,
+      "Reason": "No approval artifact."
+    },
+    {
+      "Operation": "Create FileRuntimeCandidateTraceSink",
+      "Blocked": true,
+      "Reason": "Sink wiring gated."
+    },
+    {
+      "Operation": "Assign RuntimeCandidateTraceSinkAccessor.Current",
+      "Blocked": true,
+      "Reason": "Must remain NullSink."
+    },
+    {
+      "Operation": "Call BuildDetailedAsync in live capture path",
+      "Blocked": true,
+      "Reason": "Not authorized."
+    },
+    {
+      "Operation": "Create .jsonl production trace file",
+      "Blocked": true,
+      "Reason": "No trace authorized."
+    },
+    {
+      "Operation": "Set RuntimeInfluenceAllowed=true",
+      "Blocked": true,
+      "Reason": "Permanently false."
+    },
+    {
+      "Operation": "Set PackageOutputChanged=true",
+      "Blocked": true,
+      "Reason": "Package mutation forbidden."
+    },
+    {
+      "Operation": "Set VectorBindingChanged=true",
+      "Blocked": true,
+      "Reason": "Vector mutation forbidden."
+    },
+    {
+      "Operation": "Set NeuralBiasActive=true",
+      "Blocked": true,
+      "Reason": "Neural bias disabled."
+    },
+    {
+      "Operation": "Change HybridBlendAlpha from 1.0",
+      "Blocked": true,
+      "Reason": "Deterministic only."
+    },
+    {
+      "Operation": "Interpret Ready=true as Approved=true",
+      "Blocked": true,
+      "Reason": "Readiness != authorization."
+    }
+  ]
 }

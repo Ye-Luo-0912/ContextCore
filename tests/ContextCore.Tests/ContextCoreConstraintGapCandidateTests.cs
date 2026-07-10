@@ -9,6 +9,7 @@ using ContextCore.Storage.InMemory.Stores;
 namespace ContextCore.Tests;
 
 [TestClass]
+[TestCategory("Constraint")]
 public sealed class ContextCoreConstraintGapCandidateTests
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);

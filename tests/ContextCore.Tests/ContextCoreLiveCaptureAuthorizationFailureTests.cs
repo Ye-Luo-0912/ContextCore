@@ -1,6 +1,7 @@
 namespace ContextCore.Tests;
 
 [TestClass]
+[TestCategory("Unit")]
 public class ContextCoreLiveCaptureAuthorizationFailureTests
 {
     private static readonly HashSet<string> SyntheticWorkspacePatterns = new(StringComparer.OrdinalIgnoreCase)

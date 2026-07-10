@@ -8,6 +8,7 @@ using ContextCore.Storage.InMemory.Stores;
 namespace ContextCore.Tests;
 
 [TestClass]
+[TestCategory("Unit")]
 public sealed class ContextCoreInputPipelineTests
 {
     [TestMethod]

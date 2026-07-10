@@ -10,6 +10,7 @@ using ContextCore.Storage.InMemory.Stores;
 namespace ContextCore.Tests;
 
 [TestClass]
+[TestCategory("Dataset")]
 public sealed class ContextCorePolicyFeedbackDatasetTests
 {
     private const string WorkspaceId = "workspace-policy-feedback";

@@ -6,6 +6,7 @@ namespace ContextCore.Tests;
 
 /// <summary>覆盖文件系统存储的读写分离、写锁和 JSONL 并发写入行为。</summary>
 [TestClass]
+[TestCategory("Unit")]
 public sealed class ContextCoreFileSystemConcurrencyTests
 {
     [TestMethod]

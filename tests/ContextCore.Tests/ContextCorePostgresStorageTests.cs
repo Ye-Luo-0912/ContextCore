@@ -17,6 +17,8 @@ namespace ContextCore.Tests;
 
 /// <summary>覆盖 PostgreSQL 存储后端的迁移 SQL、序列化和 DI 注册。</summary>
 [TestClass]
+[TestCategory("Storage")]
+[TestCategory("Postgres")]
 public sealed class ContextCorePostgresStorageTests
 {
     [TestMethod]

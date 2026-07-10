@@ -15,6 +15,7 @@ namespace ContextCore.Tests;
 
 /// <summary>验证 ContextCore.Service + ContextCore.Client 的 HTTP 级端到端可用性。</summary>
 [TestClass]
+[TestCategory("Smoke")]
 public sealed class ContextCoreServiceSmokeTests
 {
     [TestMethod]

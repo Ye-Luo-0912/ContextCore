@@ -3,6 +3,8 @@ using System.Text.Json;
 namespace ContextCore.Tests;
 
 [TestClass]
+[TestCategory("Synthetic")]
+[TestCategory("Gate")]
 public class ContextCoreNativeProductionTraceEndpointDossierTests
 {
     private static string ResolveArtifactPath(string fileName) =>

@@ -6,6 +6,7 @@ using System.Text.Json.Nodes;
 namespace ContextCore.Tests;
 
 [TestClass]
+[TestCategory("Retrieval")]
 public class ContextCoreRetrievalDatasetV2MetadataContractTests
 {
     [TestMethod]

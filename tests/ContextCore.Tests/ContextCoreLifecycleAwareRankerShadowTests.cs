@@ -8,6 +8,7 @@ using ContextCore.Storage.InMemory;
 namespace ContextCore.Tests;
 
 [TestClass]
+[TestCategory("Shadow")]
 public sealed class ContextCoreLifecycleAwareRankerShadowTests
 {
     [TestMethod]

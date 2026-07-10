@@ -7,6 +7,7 @@ namespace ContextCore.Tests;
 /// hybrid retrieval preview 测试；验证 label-free、确定性、union 去重、风险策略、formal retrieval 禁用。
 /// </summary>
 [TestClass]
+[TestCategory("Retrieval")]
 public class ContextCoreHybridRetrievalPreviewTests
 {
     // ===== LexicalCandidateProvider =====

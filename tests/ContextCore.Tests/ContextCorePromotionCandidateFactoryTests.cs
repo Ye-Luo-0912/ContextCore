@@ -5,6 +5,7 @@ namespace ContextCore.Tests;
 
 /// <summary>覆盖 Promotion Review 候选状态的初始映射。</summary>
 [TestClass]
+[TestCategory("Unit")]
 public sealed class ContextCorePromotionCandidateFactoryTests
 {
     [TestMethod]

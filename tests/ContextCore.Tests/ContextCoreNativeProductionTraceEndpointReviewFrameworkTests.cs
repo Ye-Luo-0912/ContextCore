@@ -3,6 +3,8 @@ using System.Text.Json;
 namespace ContextCore.Tests;
 
 [TestClass]
+[TestCategory("Synthetic")]
+[TestCategory("Gate")]
 public class ContextCoreNativeProductionTraceEndpointReviewFrameworkTests
 {
     private static string Resolve(string f) => TestRepoFileResolver.Resolve("learning", "v16_22", f);

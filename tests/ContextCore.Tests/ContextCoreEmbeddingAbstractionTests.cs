@@ -9,6 +9,7 @@ namespace ContextCore.Tests;
 
 /// <summary>覆盖 P3 embedding 与向量检索公共契约。</summary>
 [TestClass]
+[TestCategory("Embedding")]
 public sealed class ContextCoreEmbeddingAbstractionTests
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);

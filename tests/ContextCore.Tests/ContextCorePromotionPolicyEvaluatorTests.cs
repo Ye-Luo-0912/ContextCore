@@ -5,6 +5,7 @@ namespace ContextCore.Tests;
 
 /// <summary>覆盖 A2 Promotion 条件的轻量规则评估，确保默认只返回建议、不执行写入。</summary>
 [TestClass]
+[TestCategory("Unit")]
 public sealed class ContextCorePromotionPolicyEvaluatorTests
 {
     [TestMethod]

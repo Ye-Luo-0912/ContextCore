@@ -1,6 +1,7 @@
 namespace ContextCore.Tests;
 
 [TestClass]
+[TestCategory("Contract")]
 public class ContextCoreNativeTraceReadinessContractTests
 {
     private static readonly IReadOnlyList<string> NativeTraceCriticalFields = new List<string>

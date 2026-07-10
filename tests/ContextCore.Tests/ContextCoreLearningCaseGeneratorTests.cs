@@ -5,6 +5,7 @@ using ContextCore.Core.Services;
 namespace ContextCore.Tests;
 
 [TestClass]
+[TestCategory("Learning")]
 public sealed class ContextCoreLearningCaseGeneratorTests
 {
     private readonly RuleBasedContextLearningCaseGenerator _generator = new();

@@ -3,10 +3,25 @@ using System.Text.Json;
 namespace ContextCore.Tests;
 
 [TestClass]
+[TestCategory("Synthetic")]
+[TestCategory("Gate")]
 public class ContextCoreNativeProductionTraceEndpointDecisionRecordTests
 {
     private static string ResolveArtifactPath(string fileName) =>
         TestRepoFileResolver.Resolve("learning", "v16_20", fileName);
+
+    // 清理 bin 目录下上一轮测试残留的生成器输出，避免测试顺序不确定导致读到旧 artifact。
+    // GeneratorParity 测试运行时会重新生成 fresh artifact；其他测试在 bin 无残留时
+    // 通过 TestRepoFileResolver 向上回溯读取仓库提交的 artifact。
+    [ClassInitialize]
+    public static void ClassInitialize(TestContext _)
+    {
+        var binLearningDir = System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "learning", "v16_20");
+        if (System.IO.Directory.Exists(binLearningDir))
+        {
+            System.IO.Directory.Delete(binLearningDir, recursive: true);
+        }
+    }
 
     [TestMethod]
     public void DecisionRecord_AuthorizationDecision_NoGo()

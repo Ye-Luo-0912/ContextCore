@@ -10,6 +10,7 @@ using ContextCore.Storage.InMemory.Stores;
 namespace ContextCore.Tests;
 
 [TestClass]
+[TestCategory("Shadow")]
 public sealed class ContextCorePlanningShadowTests
 {
     [TestMethod]

@@ -9,6 +9,7 @@ namespace ContextCore.Tests;
 
 /// <summary>覆盖 CandidateConstraint 人工 activate / reject 审核链路。</summary>
 [TestClass]
+[TestCategory("Constraint")]
 public sealed class ContextCoreCandidateConstraintReviewTests
 {
     [TestMethod]

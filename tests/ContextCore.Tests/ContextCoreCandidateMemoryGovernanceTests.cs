@@ -9,6 +9,7 @@ using ContextCore.Storage.InMemory.Stores;
 namespace ContextCore.Tests;
 
 [TestClass]
+[TestCategory("Memory")]
 public sealed class ContextCoreCandidateMemoryGovernanceTests
 {
     [TestMethod]

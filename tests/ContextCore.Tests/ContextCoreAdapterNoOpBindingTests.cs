@@ -6,6 +6,7 @@ using ContextCore.Abstractions.Models;
 namespace ContextCore.Tests;
 
 [TestClass]
+[TestCategory("Unit")]
 public class ContextCoreAdapterNoOpBindingTests
 {
     [TestMethod]

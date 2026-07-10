@@ -4,6 +4,7 @@ using ContextCore.ControlRoom.Services;
 namespace ContextCore.Tests;
 
 [TestClass]
+[TestCategory("Unit")]
 public sealed class ContextCoreAttentionProfileSelectionTests
 {
     [TestMethod]

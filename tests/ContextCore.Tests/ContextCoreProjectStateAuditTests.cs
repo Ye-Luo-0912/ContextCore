@@ -5,6 +5,7 @@ using ContextCore.Core.Services;
 namespace ContextCore.Tests;
 
 [TestClass]
+[TestCategory("Unit")]
 public class ContextCoreProjectStateAuditTests
 {
     [TestMethod]

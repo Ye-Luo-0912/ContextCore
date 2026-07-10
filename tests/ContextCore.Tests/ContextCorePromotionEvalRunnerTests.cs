@@ -5,6 +5,7 @@ namespace ContextCore.Tests;
 
 /// <summary>覆盖 A2 Promotion Eval 指标计算。</summary>
 [TestClass]
+[TestCategory("Unit")]
 public sealed class ContextCorePromotionEvalRunnerTests
 {
     [TestMethod]

@@ -6,6 +6,7 @@ using ContextCore.Storage.InMemory;
 namespace ContextCore.Tests;
 
 [TestClass]
+[TestCategory("Memory")]
 public sealed class ContextCoreShortTermMemoryCompactionTests
 {
     [TestMethod]

@@ -22,6 +22,7 @@ namespace ContextCore.Tests;
 
 /// <summary>覆盖 MVP 阶段核心存储、打包、控制室和模型网关行为的回归测试。</summary>
 [TestClass]
+[TestCategory("Unit")]
 public sealed class ContextCoreMvpTests
 {
     [TestMethod]

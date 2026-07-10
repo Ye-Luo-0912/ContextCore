@@ -13,6 +13,7 @@ namespace ContextCore.Tests;
 /// 验证 decision trace 不改变 package/retrieval 正式输出，非激活契约恒成立，投影保留 ID。
 /// </summary>
 [TestClass]
+[TestCategory("Unit")]
 public sealed class ContextCoreDecisionTraceTests
 {
     private static readonly string WorkspaceId = "workspace-decision";

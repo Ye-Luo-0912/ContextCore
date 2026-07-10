@@ -13,6 +13,8 @@ namespace ContextCore.Tests;
 
 /// <summary>覆盖 ControlRoom 的 minimal service mode 观测链路。</summary>
 [TestClass]
+[TestCategory("Service")]
+[TestCategory("Integration")]
 public sealed class ContextCoreControlRoomServiceModeTests
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);

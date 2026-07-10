@@ -1,6 +1,7 @@
 namespace ContextCore.Tests;
 
 [TestClass]
+[TestCategory("Unit")]
 public sealed class ContextCoreRunbookTests
 {
     [TestMethod]

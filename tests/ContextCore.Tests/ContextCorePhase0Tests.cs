@@ -13,6 +13,7 @@ namespace ContextCore.Tests;
 
 /// <summary>覆盖 Phase 0 后台任务与压缩链路的基础行为。</summary>
 [TestClass]
+[TestCategory("Unit")]
 public sealed class ContextCorePhase0Tests
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);

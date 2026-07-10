@@ -19,6 +19,7 @@ namespace ContextCore.Tests;
 
 /// <summary>覆盖 Vector Index Foundation V1 的纯基础设施行为，不接正式 retrieval/package。</summary>
 [TestClass]
+[TestCategory("Vector")]
 public sealed class ContextCoreVectorIndexFoundationTests
 {
     [TestMethod]

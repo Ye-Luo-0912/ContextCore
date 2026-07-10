@@ -7,6 +7,7 @@ using ContextCore.Storage.FileSystem.Stores;
 namespace ContextCore.Tests;
 
 [TestClass]
+[TestCategory("Unit")]
 public sealed class ContextCoreFilesystemLayoutTests
 {
     [TestMethod]

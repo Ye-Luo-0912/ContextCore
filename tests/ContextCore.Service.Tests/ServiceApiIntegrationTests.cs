@@ -16,6 +16,7 @@ namespace ContextCore.Service.Tests;
 
 /// <summary>覆盖 ContextCore.Service 的 HTTP API 与后台作业链路。</summary>
 [TestClass]
+[TestCategory("Integration")]
 public sealed class ServiceApiIntegrationTests
 {
     [TestMethod]

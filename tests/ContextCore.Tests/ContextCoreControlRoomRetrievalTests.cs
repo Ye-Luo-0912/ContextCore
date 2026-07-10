@@ -18,6 +18,7 @@ namespace ContextCore.Tests;
 
 /// <summary>覆盖 ControlRoom 的 Retrieval Debug 展示链路。</summary>
 [TestClass]
+[TestCategory("Retrieval")]
 public sealed class ContextCoreControlRoomRetrievalTests
 {
     [TestMethod]

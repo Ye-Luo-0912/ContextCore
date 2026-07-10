@@ -13,6 +13,7 @@ namespace ContextCore.Tests;
 
 /// <summary>覆盖 P3-4 混合检索的规则召回、向量召回、关系扩展和 trace。</summary>
 [TestClass]
+[TestCategory("Retrieval")]
 public sealed class ContextCoreHybridRetrievalTests
 {
     [TestMethod]

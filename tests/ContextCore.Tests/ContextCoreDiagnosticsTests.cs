@@ -14,6 +14,7 @@ namespace ContextCore.Tests;
 
 /// <summary>覆盖 ContextCore 诊断链路：ILogger 事件、ActivitySource span 与模型网关标签。</summary>
 [TestClass]
+[TestCategory("Unit")]
 public sealed class ContextCoreDiagnosticsTests
 {
     [TestMethod]
