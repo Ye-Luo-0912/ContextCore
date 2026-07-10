@@ -2044,8 +2044,8 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
             ContextRelationTypes.RelatedTo,
             ContextRelationTypes.Replaces,
             ContextRelationTypes.Contradicts,
-            "supersedes",
-            "conflicts_with"
+            ContextRelationTypes.Supersedes,
+            ContextRelationTypes.ConflictsWith
         ];
     }
 

@@ -1,5 +1,45 @@
 namespace ContextCore.Abstractions.Models;
 
+/// <summary>图节点的正式种类枚举，用于关系端点类型治理。</summary>
+public enum GraphNodeKind
+{
+    /// <summary>未知或未指定。</summary>
+    Unknown,
+    /// <summary>通用上下文条目。</summary>
+    ContextItem,
+    /// <summary>稳定记忆。</summary>
+    StableMemory,
+    /// <summary>稳定约束。</summary>
+    StableConstraint,
+    /// <summary>候选记忆。</summary>
+    CandidateMemory,
+    /// <summary>候选约束。</summary>
+    CandidateConstraint,
+    /// <summary>约束（通用）。</summary>
+    Constraint,
+    /// <summary>全局记忆。</summary>
+    GlobalMemory,
+    /// <summary>决策记录。</summary>
+    DecisionRecord,
+    /// <summary>上下文包（正式图节点）。</summary>
+    Package,
+    /// <summary>操作（如压缩、摄取等操作的唯一标识，正式图节点）。</summary>
+    Operation
+}
+
+/// <summary>关系生命周期状态常量。</summary>
+public static class RelationLifecycles
+{
+    /// <summary>活跃（默认）。</summary>
+    public const string Active = "active";
+
+    /// <summary>已废弃。</summary>
+    public const string Deprecated = "deprecated";
+
+    /// <summary>已被替代。</summary>
+    public const string Superseded = "superseded";
+}
+
 /// <summary>关系类型定义，用于图谱基础层校验和只读展示。</summary>
 public sealed class RelationTypeDefinition
 {

@@ -744,6 +744,154 @@ public sealed class ContextCoreRelationGraphValidationTests
         StringAssert.Contains(rendered, "audit_context=1");
     }
 
+    [TestMethod]
+    [TestCategory("GraphContract")]
+    public void GraphNodeKind_ShouldIncludePackageAndOperation()
+    {
+        // Package 和 Operation 是正式图节点
+        Assert.IsTrue(Enum.IsDefined(typeof(GraphNodeKind), nameof(GraphNodeKind.Package)));
+        Assert.IsTrue(Enum.IsDefined(typeof(GraphNodeKind), nameof(GraphNodeKind.Operation)));
+        Assert.IsTrue(Enum.IsDefined(typeof(GraphNodeKind), nameof(GraphNodeKind.ContextItem)));
+        Assert.IsTrue(Enum.IsDefined(typeof(GraphNodeKind), nameof(GraphNodeKind.DecisionRecord)));
+    }
+
+    [TestMethod]
+    [TestCategory("GraphContract")]
+    public void ContextRelation_ShouldHaveFormalLifecycleAndProvenanceFields()
+    {
+        var relation = new ContextRelation
+        {
+            Id = "rel-contract-test",
+            SourceId = "source-a",
+            TargetId = "target-b",
+            RelationType = ContextRelationTypes.DerivedFrom
+        };
+
+        // 默认 lifecycle 为 active
+        Assert.AreEqual(RelationLifecycles.Active, relation.Lifecycle);
+        // 未审核时 ReviewStatus 为空
+        Assert.AreEqual(string.Empty, relation.ReviewStatus);
+        // 新属性存在且可为空
+        Assert.AreEqual(string.Empty, relation.SourceNodeKind);
+        Assert.AreEqual(string.Empty, relation.TargetNodeKind);
+        Assert.IsNull(relation.Provenance);
+        // UpdatedAt 默认值为 DateTimeOffset.MinValue（未更新）
+        Assert.AreEqual(DateTimeOffset.MinValue, relation.UpdatedAt);
+    }
+
+    [TestMethod]
+    [TestCategory("GraphContract")]
+    public void RelationLifecycles_ShouldDefineExpectedValues()
+    {
+        Assert.AreEqual("active", RelationLifecycles.Active);
+        Assert.AreEqual("deprecated", RelationLifecycles.Deprecated);
+        Assert.AreEqual("superseded", RelationLifecycles.Superseded);
+    }
+
+    [TestMethod]
+    [TestCategory("GraphContract")]
+    public void RelationTypeRegistry_AllTypesShouldHaveConstantInContextRelationTypes()
+    {
+        var registry = new RelationTypeRegistry();
+        var knownConstants = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ContextRelationTypes.DerivedFrom,
+            ContextRelationTypes.Summarizes,
+            ContextRelationTypes.GeneratedBy,
+            ContextRelationTypes.References,
+            ContextRelationTypes.IncludedInPackage,
+            ContextRelationTypes.RelatedTo,
+            ContextRelationTypes.DependsOn,
+            ContextRelationTypes.Contradicts,
+            ContextRelationTypes.Duplicates,
+            ContextRelationTypes.Replaces,
+            ContextRelationTypes.SupersededBy,
+            ContextRelationTypes.ReplacedBy,
+            ContextRelationTypes.AppliesTo,
+            ContextRelationTypes.PromotedFrom,
+            ContextRelationTypes.EvidenceFor,
+            ContextRelationTypes.Contains,
+            ContextRelationTypes.Supports,
+            ContextRelationTypes.Requires,
+            ContextRelationTypes.Blocks,
+            ContextRelationTypes.ConflictsWith,
+            ContextRelationTypes.SameAs,
+            ContextRelationTypes.Supersedes
+        };
+
+        foreach (var definition in registry.GetAll())
+        {
+            Assert.IsTrue(
+                knownConstants.Contains(definition.Type),
+                $"Registry 类型 '{definition.Type}' 没有对应的 ContextRelationTypes 常量");
+        }
+    }
+
+    [TestMethod]
+    [TestCategory("GraphContract")]
+    public void RelationTypeRegistry_IncludedInPackageShouldTargetPackageNodes()
+    {
+        var registry = new RelationTypeRegistry();
+        var definition = registry.Find(ContextRelationTypes.IncludedInPackage);
+
+        Assert.IsNotNull(definition);
+        Assert.IsTrue(
+            definition!.AllowedTargetKinds.Contains(nameof(GraphNodeKind.Package)),
+            "IncludedInPackage 关系的 targetKinds 应包含 Package 节点种类");
+    }
+
+    [TestMethod]
+    [TestCategory("GraphContract")]
+    public void RelationTypeRegistry_GeneratedByShouldTargetOperationNodes()
+    {
+        var registry = new RelationTypeRegistry();
+        var definition = registry.Find(ContextRelationTypes.GeneratedBy);
+
+        Assert.IsNotNull(definition);
+        Assert.IsTrue(
+            definition!.AllowedTargetKinds.Contains(nameof(GraphNodeKind.Operation)),
+            "GeneratedBy 关系的 targetKinds 应包含 Operation 节点种类");
+    }
+
+    [TestMethod]
+    [TestCategory("GraphContract")]
+    public void RelationTypeRegistry_ShouldRegisterAllFormalTypes()
+    {
+        var registry = new RelationTypeRegistry();
+        var types = registry.GetAll();
+
+        // 所有 ContextRelationTypes 常量都应在 Registry 中注册（Supersedes 是 legacy 别名除外）
+        var requiredTypes = new[]
+        {
+            ContextRelationTypes.Contains,
+            ContextRelationTypes.References,
+            ContextRelationTypes.DerivedFrom,
+            ContextRelationTypes.EvidenceFor,
+            ContextRelationTypes.Supports,
+            ContextRelationTypes.DependsOn,
+            ContextRelationTypes.Requires,
+            ContextRelationTypes.Blocks,
+            ContextRelationTypes.ConflictsWith,
+            ContextRelationTypes.AppliesTo,
+            ContextRelationTypes.SupersededBy,
+            ContextRelationTypes.Replaces,
+            ContextRelationTypes.ReplacedBy,
+            ContextRelationTypes.SameAs,
+            ContextRelationTypes.Contradicts,
+            ContextRelationTypes.Duplicates,
+            ContextRelationTypes.IncludedInPackage,
+            ContextRelationTypes.GeneratedBy,
+            ContextRelationTypes.PromotedFrom,
+            ContextRelationTypes.Summarizes,
+            ContextRelationTypes.RelatedTo
+        };
+
+        foreach (var type in requiredTypes)
+        {
+            Assert.IsNotNull(registry.Find(type), $"Registry 缺少类型 '{type}' 的注册");
+        }
+    }
+
     private static RelationGraphFixture CreateFixture()
     {
         var relationStore = new InMemoryRelationStore();

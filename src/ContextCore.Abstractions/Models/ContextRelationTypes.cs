@@ -47,4 +47,25 @@ public static class ContextRelationTypes
 
     /// <summary>作为另一条目的证据来源。</summary>
     public const string EvidenceFor = "evidence_for";
+
+    /// <summary>包含另一条目（层级包含关系）。</summary>
+    public const string Contains = "contains";
+
+    /// <summary>支持另一条目（论据支撑）。</summary>
+    public const string Supports = "supports";
+
+    /// <summary>要求另一条目（约束依赖）。</summary>
+    public const string Requires = "requires";
+
+    /// <summary>阻塞另一条目（互斥约束）。</summary>
+    public const string Blocks = "blocks";
+
+    /// <summary>与另一条目存在冲突。</summary>
+    public const string ConflictsWith = "conflicts_with";
+
+    /// <summary>与另一条目内容相同（等价关系）。</summary>
+    public const string SameAs = "same_as";
+
+    /// <summary>取代另一条目（legacy 别名，等价于 Replaces）。</summary>
+    public const string Supersedes = "supersedes";
 }

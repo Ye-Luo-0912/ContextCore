@@ -3,33 +3,39 @@ using ContextCore.Abstractions.Models;
 
 namespace ContextCore.Core.Services.Graph;
 
-/// <summary>关系类型注册表，提供图谱校验所需的第一版 taxonomy。</summary>
+/// <summary>关系类型注册表，提供图谱校验所需的正式 taxonomy。所有类型常量均引用 ContextRelationTypes。</summary>
 public sealed class RelationTypeRegistry
 {
     private readonly IReadOnlyDictionary<string, RelationTypeDefinition> _definitions;
 
     /// <summary>
-    /// 关系类型注册表，用于存储和管理不同类型的关系定义。这些关系定义包括它们的名称、权重、是否需要证据支持以及适用的源和目标种类。
-    /// 该类在初始化时预定义了一系列的关系类型，并将其存储在一个字典中以便快速查找。
+    /// 关系类型注册表，统一管理所有关系类型定义。所有类型名称均通过 ContextRelationTypes 常量引用，
+    /// 确保契约层与实现层对齐。节点种类词表覆盖 GraphNodeKind 全部正式节点（含 Package、Operation）。
     /// </summary>
     public RelationTypeRegistry()
     {
         var definitions = new[]
         {
-            Definition("contains", inverse: null, weight: 0.7, sourceKinds: ["*"], targetKinds: ["*"]),
-            Definition("references", inverse: null, weight: 0.5, requiresEvidence: true, sourceKinds: ["*"], targetKinds: ["*"]),
+            Definition(ContextRelationTypes.Contains, inverse: null, weight: 0.7, sourceKinds: ["*"], targetKinds: ["*"]),
+            Definition(ContextRelationTypes.References, inverse: null, weight: 0.5, requiresEvidence: true, sourceKinds: ["*"], targetKinds: ["*"]),
             Definition(ContextRelationTypes.DerivedFrom, inverse: null, weight: 0.8, requiresEvidence: true, sourceKinds: ["*"], targetKinds: ["*"]),
-            Definition(ContextRelationTypes.EvidenceFor, inverse: null, weight: 0.8, requiresEvidence: true, sourceKinds: ["*"], targetKinds: ["StableMemory", "StableConstraint", "DecisionRecord", "CandidateMemory", "CandidateConstraint"]),
-            Definition("supports", inverse: null, weight: 0.6, requiresEvidence: true, sourceKinds: ["*"], targetKinds: ["*"]),
+            Definition(ContextRelationTypes.EvidenceFor, inverse: null, weight: 0.8, requiresEvidence: true, sourceKinds: ["*"], targetKinds: [nameof(GraphNodeKind.StableMemory), nameof(GraphNodeKind.StableConstraint), nameof(GraphNodeKind.DecisionRecord), nameof(GraphNodeKind.CandidateMemory), nameof(GraphNodeKind.CandidateConstraint)]),
+            Definition(ContextRelationTypes.Supports, inverse: null, weight: 0.6, requiresEvidence: true, sourceKinds: ["*"], targetKinds: ["*"]),
             Definition(ContextRelationTypes.DependsOn, inverse: null, weight: 0.6, sourceKinds: ["*"], targetKinds: ["*"]),
-            Definition("requires", inverse: null, weight: 0.7, sourceKinds: ["*"], targetKinds: ["StableConstraint", "CandidateConstraint", "Constraint"]),
-            Definition("blocks", inverse: null, weight: 0.7, sourceKinds: ["*"], targetKinds: ["*"]),
-            Definition("conflicts_with", directional: false, inverse: "conflicts_with", weight: 0.8, requiresEvidence: true, sourceKinds: ["*"], targetKinds: ["*"]),
-            Definition(ContextRelationTypes.AppliesTo, inverse: null, weight: 0.9, requiresEvidence: true, sourceKinds: ["StableConstraint", "CandidateConstraint", "Constraint"], targetKinds: ["*"]),
-            Definition(ContextRelationTypes.SupersededBy, inverse: ContextRelationTypes.Replaces, weight: 1.0, requiresEvidence: true, sourceKinds: ["StableMemory", "StableConstraint", "DecisionRecord", "GlobalMemory"], targetKinds: ["StableMemory", "StableConstraint", "DecisionRecord", "GlobalMemory"]),
-            Definition(ContextRelationTypes.Replaces, inverse: ContextRelationTypes.SupersededBy, weight: 1.0, requiresEvidence: true, sourceKinds: ["StableMemory", "StableConstraint", "DecisionRecord", "GlobalMemory"], targetKinds: ["StableMemory", "StableConstraint", "DecisionRecord", "GlobalMemory"]),
-            Definition("replaced_by", inverse: ContextRelationTypes.Replaces, weight: 1.0, requiresEvidence: true, sourceKinds: ["StableMemory", "StableConstraint", "DecisionRecord", "GlobalMemory"], targetKinds: ["StableMemory", "StableConstraint", "DecisionRecord", "GlobalMemory"]),
-            Definition("same_as", directional: false, inverse: "same_as", weight: 0.7, requiresEvidence: true, sourceKinds: ["*"], targetKinds: ["*"]),
+            Definition(ContextRelationTypes.Requires, inverse: null, weight: 0.7, sourceKinds: ["*"], targetKinds: [nameof(GraphNodeKind.StableConstraint), nameof(GraphNodeKind.CandidateConstraint), nameof(GraphNodeKind.Constraint)]),
+            Definition(ContextRelationTypes.Blocks, inverse: null, weight: 0.7, sourceKinds: ["*"], targetKinds: ["*"]),
+            Definition(ContextRelationTypes.ConflictsWith, directional: false, inverse: ContextRelationTypes.ConflictsWith, weight: 0.8, requiresEvidence: true, sourceKinds: ["*"], targetKinds: ["*"]),
+            Definition(ContextRelationTypes.AppliesTo, inverse: null, weight: 0.9, requiresEvidence: true, sourceKinds: [nameof(GraphNodeKind.StableConstraint), nameof(GraphNodeKind.CandidateConstraint), nameof(GraphNodeKind.Constraint)], targetKinds: ["*"]),
+            Definition(ContextRelationTypes.SupersededBy, inverse: ContextRelationTypes.Replaces, weight: 1.0, requiresEvidence: true, sourceKinds: [nameof(GraphNodeKind.StableMemory), nameof(GraphNodeKind.StableConstraint), nameof(GraphNodeKind.DecisionRecord), nameof(GraphNodeKind.GlobalMemory)], targetKinds: [nameof(GraphNodeKind.StableMemory), nameof(GraphNodeKind.StableConstraint), nameof(GraphNodeKind.DecisionRecord), nameof(GraphNodeKind.GlobalMemory)]),
+            Definition(ContextRelationTypes.Replaces, inverse: ContextRelationTypes.SupersededBy, weight: 1.0, requiresEvidence: true, sourceKinds: [nameof(GraphNodeKind.StableMemory), nameof(GraphNodeKind.StableConstraint), nameof(GraphNodeKind.DecisionRecord), nameof(GraphNodeKind.GlobalMemory)], targetKinds: [nameof(GraphNodeKind.StableMemory), nameof(GraphNodeKind.StableConstraint), nameof(GraphNodeKind.DecisionRecord), nameof(GraphNodeKind.GlobalMemory)]),
+            Definition(ContextRelationTypes.ReplacedBy, inverse: ContextRelationTypes.Replaces, weight: 1.0, requiresEvidence: true, sourceKinds: [nameof(GraphNodeKind.StableMemory), nameof(GraphNodeKind.StableConstraint), nameof(GraphNodeKind.DecisionRecord), nameof(GraphNodeKind.GlobalMemory)], targetKinds: [nameof(GraphNodeKind.StableMemory), nameof(GraphNodeKind.StableConstraint), nameof(GraphNodeKind.DecisionRecord), nameof(GraphNodeKind.GlobalMemory)]),
+            Definition(ContextRelationTypes.SameAs, directional: false, inverse: ContextRelationTypes.SameAs, weight: 0.7, requiresEvidence: true, sourceKinds: ["*"], targetKinds: ["*"]),
+            Definition(ContextRelationTypes.Contradicts, directional: false, inverse: ContextRelationTypes.Contradicts, weight: 0.8, requiresEvidence: true, sourceKinds: ["*"], targetKinds: ["*"]),
+            Definition(ContextRelationTypes.Duplicates, directional: false, inverse: ContextRelationTypes.Duplicates, weight: 0.7, requiresEvidence: true, sourceKinds: ["*"], targetKinds: ["*"]),
+            Definition(ContextRelationTypes.IncludedInPackage, inverse: null, weight: 0.5, sourceKinds: ["*"], targetKinds: [nameof(GraphNodeKind.Package)]),
+            Definition(ContextRelationTypes.GeneratedBy, inverse: null, weight: 0.6, sourceKinds: ["*"], targetKinds: [nameof(GraphNodeKind.Operation)]),
+            Definition(ContextRelationTypes.PromotedFrom, inverse: null, weight: 0.7, sourceKinds: [nameof(GraphNodeKind.StableMemory), nameof(GraphNodeKind.StableConstraint)], targetKinds: [nameof(GraphNodeKind.CandidateMemory), nameof(GraphNodeKind.CandidateConstraint)]),
+            Definition(ContextRelationTypes.Summarizes, inverse: null, weight: 0.7, requiresEvidence: true, sourceKinds: ["*"], targetKinds: ["*"]),
             Definition(ContextRelationTypes.RelatedTo, directional: false, inverse: ContextRelationTypes.RelatedTo, weight: 0.3, sourceKinds: ["*"], targetKinds: ["*"], warnings: ["Weak generic relation; prefer a specific relation type when possible."])
         };
 
@@ -48,20 +54,6 @@ public sealed class RelationTypeRegistry
         return _definitions.GetValueOrDefault(relationType);
     }
 
-    /// <summary>
-    /// 创建并返回一个新的关系类型定义。
-    /// </summary>
-    /// <param name="type">关系类型的名称。</param>
-    /// <param name="directional">指示该关系是否具有方向性，默认为true。</param>
-    /// <param name="inverse">该关系的逆向关系类型名称，可选参数，默认为null。</param>
-    /// <param name="weight">关系的默认权重，默认值为0.5。</param>
-    /// <param name="requiresEvidence">指示该关系是否需要证据支持，默认为false。</param>
-    /// <param name="auditOnly">指示该关系是否仅用于审核，默认为false。</param>
-    /// <param name="allowsNormalExpansion">指示该关系是否允许常规扩展，默认为true。</param>
-    /// <param name="sourceKinds">允许作为源节点的种类列表，可选参数，默认为空列表。</param>
-    /// <param name="targetKinds">允许作为目标节点的种类列表，可选参数，默认为空列表。</param>
-    /// <param name="warnings">与该关系类型相关的警告信息列表，可选参数，默认为空列表。</param>
-    /// <returns>根据提供的参数构建的关系类型定义实例。</returns>
     private static RelationTypeDefinition Definition(
         string type,
         bool directional = true,

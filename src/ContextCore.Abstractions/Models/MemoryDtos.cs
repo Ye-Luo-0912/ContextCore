@@ -101,6 +101,24 @@ public sealed class ContextRelation
 
     /// <summary>创建时间。</summary>
     public DateTimeOffset CreatedAt { get; init; }
+
+    /// <summary>源节点种类（GraphNodeKind 名称），空表示未指定。</summary>
+    public string SourceNodeKind { get; init; } = string.Empty;
+
+    /// <summary>目标节点种类（GraphNodeKind 名称），空表示未指定。</summary>
+    public string TargetNodeKind { get; init; } = string.Empty;
+
+    /// <summary>关系生命周期状态（RelationLifecycles 值），默认 active。</summary>
+    public string Lifecycle { get; init; } = RelationLifecycles.Active;
+
+    /// <summary>审核状态（RelationReviewStatuses 值），空表示未审核。</summary>
+    public string ReviewStatus { get; init; } = string.Empty;
+
+    /// <summary>最后更新时间；与 CreatedAt 相同时表示从未更新。</summary>
+    public DateTimeOffset UpdatedAt { get; init; }
+
+    /// <summary>来源标识（创建此关系的来源操作或服务名称，如 "compression"、"promotion"、"lifecycle-review"）。</summary>
+    public string? Provenance { get; init; }
 }
 
 /// <summary>表示作用于工作空间或集合的约束规则。</summary>
