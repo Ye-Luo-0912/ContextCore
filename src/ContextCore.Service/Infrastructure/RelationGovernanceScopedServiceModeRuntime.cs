@@ -353,6 +353,17 @@ public sealed class ScopedRelationGovernanceStore : IRelationStore
             token => _postgresStore.QueryNeighborsAsync(workspaceId, collectionId, itemId, direction, take, skip, token),
             cancellationToken);
 
+    /// <summary>GRAPH-10：统一邻居查询委托。</summary>
+    public Task<IReadOnlyList<ContextRelation>> QueryNeighborsAsync(RelationNeighborQuery query, CancellationToken cancellationToken = default)
+        => ExecuteReadAsync(
+            "service-relation-neighbors-unified",
+            query.WorkspaceId,
+            query.CollectionId,
+            "RelationNeighborsQuery",
+            token => _fileStore.QueryNeighborsAsync(query, token),
+            token => _postgresStore.QueryNeighborsAsync(query, token),
+            cancellationToken);
+
     private async Task ExecuteWriteAsync(
         string operationId,
         string workspaceId,

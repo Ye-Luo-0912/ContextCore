@@ -85,6 +85,14 @@ public interface IRelationStore
         int take = 100,
         int skip = 0,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// GRAPH-10：统一邻居查询。携带方向、类型、置信度、生命周期、分页和扫描上限。
+    /// Postgres 在 SQL 中过滤和 Limit；File/InMemory 在内存中过滤。
+    /// </summary>
+    Task<IReadOnlyList<ContextRelation>> QueryNeighborsAsync(
+        RelationNeighborQuery query,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>

@@ -1368,3 +1368,43 @@ public sealed class RelationSubgraphEdge
 
     public int Depth { get; init; }
 }
+
+/// <summary>
+/// GRAPH-10：统一邻居查询 DTO。携带方向、类型、置信度、生命周期、分页和扫描上限，
+/// 代替多个 QueryBy 方法。Postgres 在 SQL 中过滤和 Limit；File/InMemory 在内存中过滤。
+/// </summary>
+public sealed class RelationNeighborQuery
+{
+    /// <summary>所属工作空间 ID（必填）。</summary>
+    public required string WorkspaceId { get; init; }
+
+    /// <summary>筛选指定集合（可选）。</summary>
+    public string? CollectionId { get; init; }
+
+    /// <summary>查询邻居的种子条目 ID（必填）。</summary>
+    public required string ItemId { get; init; }
+
+    /// <summary>方向过滤：出边、入边或双向。</summary>
+    public RelationDirection Direction { get; init; } = RelationDirection.Both;
+
+    /// <summary>筛选指定关系类型（可选）。为空时允许所有类型。</summary>
+    public string? RelationType { get; init; }
+
+    /// <summary>最低置信度阈值（可选）。默认 0，不过滤。</summary>
+    public double MinConfidence { get; init; }
+
+    /// <summary>排除的生命周期值列表（可选）。匹配的关系将被过滤掉。</summary>
+    public IReadOnlyList<string> ExcludedLifecycles { get; init; } = Array.Empty<string>();
+
+    /// <summary>排除的 ReviewStatus 值列表（可选）。</summary>
+    public IReadOnlyList<string> ExcludedReviewStatuses { get; init; } = Array.Empty<string>();
+
+    /// <summary>返回记录数上限（分页 Take）。默认 100。</summary>
+    public int Take { get; init; } = 100;
+
+    /// <summary>跳过的记录数（分页 Skip）。默认 0。</summary>
+    public int Skip { get; init; }
+
+    /// <summary>扫描上限：从数据源读取的最大行数，防止全表扫描。默认 1000。</summary>
+    public int MaxScan { get; init; } = 1000;
+}

@@ -188,6 +188,76 @@ public sealed class FileRelationStore : IRelationStore
         }
     }
 
+    /// <summary>GRAPH-10：统一邻居查询，在内存中过滤。</summary>
+    public async Task<IReadOnlyList<ContextRelation>> QueryNeighborsAsync(
+        RelationNeighborQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        var effectiveTake = query.Take > 0 ? query.Take : 100;
+        var effectiveSkip = query.Skip > 0 ? query.Skip : 0;
+        var maxScan = query.MaxScan > 0 ? query.MaxScan : 1000;
+        var excludedLifecycles = query.ExcludedLifecycles.Count > 0
+            ? new HashSet<string>(query.ExcludedLifecycles, StringComparer.OrdinalIgnoreCase)
+            : null;
+        var excludedReviewStatuses = query.ExcludedReviewStatuses.Count > 0
+            ? new HashSet<string>(query.ExcludedReviewStatuses, StringComparer.OrdinalIgnoreCase)
+            : null;
+
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var path = _paths.GetRelationsJsonlPath(query.WorkspaceId, query.CollectionId);
+            var relations = await _jsonLines.ReadAsync<ContextRelation>(path, cancellationToken)
+                .ConfigureAwait(false);
+
+            IEnumerable<ContextRelation> filtered = query.Direction switch
+            {
+                RelationDirection.Outgoing => relations.Where(relation =>
+                    string.Equals(relation.SourceId, query.ItemId, StringComparison.OrdinalIgnoreCase)),
+                RelationDirection.Incoming => relations.Where(relation =>
+                    string.Equals(relation.TargetId, query.ItemId, StringComparison.OrdinalIgnoreCase)),
+                _ => relations.Where(relation =>
+                    string.Equals(relation.SourceId, query.ItemId, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(relation.TargetId, query.ItemId, StringComparison.OrdinalIgnoreCase))
+            };
+
+            if (!string.IsNullOrWhiteSpace(query.RelationType))
+            {
+                filtered = filtered.Where(relation =>
+                    string.Equals(relation.RelationType, query.RelationType, StringComparison.OrdinalIgnoreCase));
+            }
+
+            if (query.MinConfidence > 0)
+            {
+                filtered = filtered.Where(relation => relation.Confidence >= query.MinConfidence);
+            }
+
+            if (excludedLifecycles is not null)
+            {
+                filtered = filtered.Where(relation => !excludedLifecycles.Contains(relation.Lifecycle ?? string.Empty));
+            }
+
+            if (excludedReviewStatuses is not null)
+            {
+                filtered = filtered.Where(relation => !excludedReviewStatuses.Contains(relation.ReviewStatus ?? string.Empty));
+            }
+
+            return [.. filtered
+                .Take(maxScan)
+                .OrderByDescending(relation => relation.Weight)
+                .ThenByDescending(relation => relation.Confidence)
+                .ThenByDescending(relation => relation.CreatedAt)
+                .Skip(effectiveSkip)
+                .Take(effectiveTake)];
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
     public async Task<IReadOnlyList<ContextRelation>> QueryAsync(
         ContextRelationQuery query,
         CancellationToken cancellationToken = default)

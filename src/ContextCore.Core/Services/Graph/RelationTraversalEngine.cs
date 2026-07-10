@@ -42,6 +42,25 @@ public sealed class RelationTraversalEngine
         var maxRelations = request.MaxRelationsOverride ?? 300;
         var minConfidence = profile.MinConfidence;
 
+        // GRAPH-10：构建存储层排除列表，将过滤下推到 QueryNeighborsAsync
+        var excludedLifecycles = new List<string>();
+        if (!profile.AllowDeprecatedRelations)
+        {
+            excludedLifecycles.Add(RelationLifecycles.Deprecated);
+            excludedLifecycles.Add(RelationLifecycles.Superseded);
+            excludedLifecycles.Add(StableMemoryLifecycle.Rejected);
+        }
+
+        var excludedReviewStatuses = new List<string>();
+        if (!profile.AllowRejectedRelations)
+        {
+            excludedReviewStatuses.Add(RelationReviewStatuses.Rejected);
+        }
+        if (!profile.AllowCandidateRelations)
+        {
+            excludedReviewStatuses.Add(RelationReviewStatuses.NeedsEvidence);
+        }
+
         var seeds = request.Seeds
             .Where(s => !string.IsNullOrWhiteSpace(s.ItemId))
             .ToArray();
@@ -56,12 +75,15 @@ public sealed class RelationTraversalEngine
             };
         }
 
+        // GRAPH-10：visitedNodes 仅用于环检测（含种子）；discoveredCount 统计扩展引入的新节点数（不含种子）。
+        // maxNodes 约束的是"图扩展能引入的最大新节点数"，种子作为查询起点不占用扩展预算。
         var visitedNodes = seeds.Select(s => s.ItemId).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var visitedEdges = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var edges = new List<RelationTraversalEdge>();
         var maxDepthReached = 0;
         var truncated = false;
         var relationCount = 0;
+        var discoveredCount = 0;
 
         // 分层 BFS
         var currentFrontier = seeds
@@ -70,7 +92,8 @@ public sealed class RelationTraversalEngine
 
         for (var depth = 1; depth <= maxDepth && currentFrontier.Length > 0; depth++)
         {
-            if (relationCount >= maxRelations || edges.Count >= maxNodes)
+            // GRAPH-10：maxNodes 约束的是新发现的节点数（不含种子），而非边数或总节点数
+            if (relationCount >= maxRelations || discoveredCount >= maxNodes)
             {
                 truncated = true;
                 break;
@@ -81,24 +104,30 @@ public sealed class RelationTraversalEngine
             foreach (var node in currentFrontier)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                if (relationCount >= maxRelations || edges.Count >= maxNodes)
+                if (relationCount >= maxRelations || discoveredCount >= maxNodes)
                 {
                     truncated = true;
                     break;
                 }
 
+                // GRAPH-10：使用统一 RelationNeighborQuery 替代 QueryBySource + QueryByTarget 双查询
                 var relations = await QueryRelationsAsync(
                     request.WorkspaceId,
                     request.CollectionId,
                     node.ItemId,
                     request.Direction,
+                    profile,
+                    minConfidence,
+                    excludedLifecycles,
+                    excludedReviewStatuses,
+                    maxFanout,
                     cancellationToken).ConfigureAwait(false);
 
                 var filtered = relations
                     .Where(r => IsAllowedType(r, profile))
                     .Where(r => r.Confidence >= minConfidence)
                     .Where(r => IsAllowedLifecycle(r, profile))
-                    .Where(r => visitedEdges.Add(EdgeKey(r, node.ItemId, request.Direction)))
+                    .Where(r => visitedEdges.Add(EdgeKey(r)))
                     .OrderByDescending(r => ResolveWeight(r, profile))
                     .ThenByDescending(r => r.Confidence)
                     .ThenByDescending(r => r.CreatedAt)
@@ -108,7 +137,7 @@ public sealed class RelationTraversalEngine
                 foreach (var relation in filtered)
                 {
                     relationCount++;
-                    if (relationCount > maxRelations || edges.Count >= maxNodes)
+                    if (relationCount > maxRelations || discoveredCount >= maxNodes)
                     {
                         truncated = true;
                         break;
@@ -120,12 +149,18 @@ public sealed class RelationTraversalEngine
                         continue;
                     }
 
-                    var path = $"{node.Path} -[{relation.RelationType}]-> {neighborId}";
+                    // GRAPH-10：修正 incoming path 方向 — 入边用 <-[type]- 箭头
+                    var isOutgoing = string.Equals(relation.SourceId, node.ItemId, StringComparison.OrdinalIgnoreCase);
+                    var path = isOutgoing
+                        ? $"{node.Path} -[{relation.RelationType}]-> {neighborId}"
+                        : $"{node.Path} <-[{relation.RelationType}]- {neighborId}";
                     maxDepthReached = Math.Max(maxDepthReached, depth);
                     edges.Add(new RelationTraversalEdge(relation, depth, node.Score, path, neighborId));
 
-                    if (visitedNodes.Add(neighborId) && nextFrontier.Count < maxFanout)
+                    // GRAPH-10：移除 per-node nextFrontier.Count < maxFanout 限制，统一在层末截断
+                    if (visitedNodes.Add(neighborId))
                     {
+                        discoveredCount++;
                         nextFrontier.Add(new TraversalNode(neighborId, depth, node.Score, path));
                     }
                 }
@@ -146,30 +181,45 @@ public sealed class RelationTraversalEngine
         };
     }
 
+    /// <summary>
+    /// GRAPH-10：使用统一 RelationNeighborQuery 查询邻居，将方向/类型/置信度/生命周期过滤下推到存储层。
+    /// Both 方向只需一次查询（而非原来的 QueryBySource + QueryByTarget 两次）。
+    /// </summary>
     private async Task<IReadOnlyList<ContextRelation>> QueryRelationsAsync(
         string workspaceId,
         string? collectionId,
         string itemId,
         RelationDirection direction,
+        RelationExpansionProfile profile,
+        double minConfidence,
+        IReadOnlyList<string> excludedLifecycles,
+        IReadOnlyList<string> excludedReviewStatuses,
+        int maxFanout,
         CancellationToken cancellationToken)
     {
-        var results = new List<ContextRelation>();
-
-        if (direction is RelationDirection.Outgoing or RelationDirection.Both)
+        // 如果 profile 只允许单一类型，下推到存储层
+        string? relationType = null;
+        if (profile.AllowedRelationTypes.Count == 1)
         {
-            var outgoing = await _relationStore!.QueryBySourceAsync(
-                workspaceId, collectionId, itemId, cancellationToken).ConfigureAwait(false);
-            results.AddRange(outgoing);
+            relationType = profile.AllowedRelationTypes[0];
         }
 
-        if (direction is RelationDirection.Incoming or RelationDirection.Both)
+        var query = new RelationNeighborQuery
         {
-            var incoming = await _relationStore!.QueryByTargetAsync(
-                workspaceId, collectionId, itemId, cancellationToken).ConfigureAwait(false);
-            results.AddRange(incoming);
-        }
+            WorkspaceId = workspaceId,
+            CollectionId = collectionId,
+            ItemId = itemId,
+            Direction = direction,
+            RelationType = relationType,
+            MinConfidence = minConfidence,
+            ExcludedLifecycles = excludedLifecycles,
+            ExcludedReviewStatuses = excludedReviewStatuses,
+            Take = Math.Max(maxFanout * 2, 50),
+            Skip = 0,
+            MaxScan = Math.Max(maxFanout * 10, 500)
+        };
 
-        return results;
+        return await _relationStore!.QueryNeighborsAsync(query, cancellationToken).ConfigureAwait(false);
     }
 
     private static string ResolveNeighborId(ContextRelation relation, string currentNodeId)
@@ -181,13 +231,13 @@ public sealed class RelationTraversalEngine
         return relation.SourceId;
     }
 
-    private static string EdgeKey(ContextRelation relation, string currentNodeId, RelationDirection direction)
+    /// <summary>
+    /// GRAPH-10：边去重 key — 使用 relation 的正式 SourceId/TargetId 规范化，
+    /// 确保 A→B 和 B→A 两条不同的有向边不会被错误合并。
+    /// </summary>
+    private static string EdgeKey(ContextRelation relation)
     {
-        // 对于双向遍历，同一条边可能从两个方向被访问，需要规范化 key
-        var neighborId = ResolveNeighborId(relation, currentNodeId);
-        return string.Equals(relation.SourceId, currentNodeId, StringComparison.OrdinalIgnoreCase)
-            ? $"{currentNodeId}\u001f{neighborId}\u001f{relation.RelationType}"
-            : $"{neighborId}\u001f{currentNodeId}\u001f{relation.RelationType}";
+        return $"{relation.SourceId}\u001f{relation.TargetId}\u001f{relation.RelationType}";
     }
 
     private static bool IsAllowedType(ContextRelation relation, RelationExpansionProfile profile)

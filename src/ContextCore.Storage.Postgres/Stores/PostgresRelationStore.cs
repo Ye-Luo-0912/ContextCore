@@ -307,6 +307,99 @@ LIMIT @take OFFSET @skip;
         return await ReadRelationsAsync(command, cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>GRAPH-10：统一邻居查询，在 SQL 中过滤和 Limit。</summary>
+    public async Task<IReadOnlyList<ContextRelation>> QueryNeighborsAsync(
+        RelationNeighborQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+
+        var filters = new List<string> { "workspace_id = @workspace_id" };
+        command.Parameters.AddWithValue("workspace_id", query.WorkspaceId);
+
+        if (!string.IsNullOrWhiteSpace(query.CollectionId))
+        {
+            filters.Add("collection_id = @collection_id");
+            command.Parameters.AddWithValue("collection_id", query.CollectionId);
+        }
+
+        switch (query.Direction)
+        {
+            case RelationDirection.Outgoing:
+                filters.Add("source_id = @item_id");
+                break;
+            case RelationDirection.Incoming:
+                filters.Add("target_id = @item_id");
+                break;
+            default:
+                filters.Add("(source_id = @item_id OR target_id = @item_id)");
+                break;
+        }
+        command.Parameters.AddWithValue("item_id", query.ItemId);
+
+        if (!string.IsNullOrWhiteSpace(query.RelationType))
+        {
+            filters.Add("data ->> 'RelationType' = @relation_type");
+            command.Parameters.AddWithValue("relation_type", query.RelationType);
+        }
+
+        if (query.MinConfidence > 0)
+        {
+            filters.Add("data ->> 'Confidence'::numeric >= @min_confidence");
+            command.Parameters.AddWithValue("min_confidence", query.MinConfidence);
+        }
+
+        if (query.ExcludedLifecycles.Count > 0)
+        {
+            var paramNames = new List<string>();
+            for (var i = 0; i < query.ExcludedLifecycles.Count; i++)
+            {
+                var paramName = $"ex_lc_{i}";
+                paramNames.Add($"@{paramName}");
+                command.Parameters.AddWithValue(paramName, query.ExcludedLifecycles[i]);
+            }
+            filters.Add($"(data ->> 'Lifecycle' IS NULL OR data ->> 'Lifecycle' NOT IN ({string.Join(", ", paramNames)}))");
+        }
+
+        if (query.ExcludedReviewStatuses.Count > 0)
+        {
+            var paramNames = new List<string>();
+            for (var i = 0; i < query.ExcludedReviewStatuses.Count; i++)
+            {
+                var paramName = $"ex_rs_{i}";
+                paramNames.Add($"@{paramName}");
+                command.Parameters.AddWithValue(paramName, query.ExcludedReviewStatuses[i]);
+            }
+            filters.Add($"(data ->> 'ReviewStatus' IS NULL OR data ->> 'ReviewStatus' NOT IN ({string.Join(", ", paramNames)}))");
+        }
+
+        var effectiveTake = query.Take > 0 ? query.Take : 100;
+        var effectiveSkip = query.Skip > 0 ? query.Skip : 0;
+        var maxScan = query.MaxScan > 0 ? query.MaxScan : 1000;
+        command.Parameters.AddWithValue("take", effectiveTake);
+        command.Parameters.AddWithValue("skip", effectiveSkip);
+        command.Parameters.AddWithValue("max_scan", maxScan);
+
+        command.CommandText = $"""
+SELECT data
+FROM (
+    SELECT data
+    FROM {Table("relations")}
+    WHERE {string.Join(" AND ", filters)}
+    LIMIT @max_scan
+) scanned
+ORDER BY data ->> 'Weight' DESC NULLS LAST,
+         data ->> 'Confidence' DESC NULLS LAST,
+         data ->> 'CreatedAt' DESC NULLS LAST
+LIMIT @take OFFSET @skip;
+""";
+        return await ReadRelationsAsync(command, cancellationToken).ConfigureAwait(false);
+    }
+
     /// <summary>按 lifecycle 查询；GRAPH-08 起优先查正式字段，兼容旧 Metadata 数据。</summary>
     public async Task<IReadOnlyList<ContextRelation>> QueryByLifecycleAsync(
         string workspaceId,

@@ -111,6 +111,74 @@ public sealed class InMemoryRelationStore : IRelationStore
         return Task.FromResult<IReadOnlyList<ContextRelation>>(results);
     }
 
+    /// <summary>GRAPH-10：统一邻居查询，在内存中过滤。</summary>
+    public Task<IReadOnlyList<ContextRelation>> QueryNeighborsAsync(
+        RelationNeighborQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var effectiveTake = query.Take > 0 ? query.Take : 100;
+        var effectiveSkip = query.Skip > 0 ? query.Skip : 0;
+        var maxScan = query.MaxScan > 0 ? query.MaxScan : 1000;
+        var excludedLifecycles = query.ExcludedLifecycles.Count > 0
+            ? new HashSet<string>(query.ExcludedLifecycles, StringComparer.OrdinalIgnoreCase)
+            : null;
+        var excludedReviewStatuses = query.ExcludedReviewStatuses.Count > 0
+            ? new HashSet<string>(query.ExcludedReviewStatuses, StringComparer.OrdinalIgnoreCase)
+            : null;
+
+        IEnumerable<ContextRelation> filtered = _relations.Values
+            .Where(item => string.Equals(item.WorkspaceId, query.WorkspaceId, StringComparison.OrdinalIgnoreCase));
+
+        if (!string.IsNullOrWhiteSpace(query.CollectionId))
+        {
+            filtered = filtered.Where(item => string.Equals(item.CollectionId, query.CollectionId, StringComparison.OrdinalIgnoreCase));
+        }
+
+        filtered = query.Direction switch
+        {
+            RelationDirection.Outgoing => filtered.Where(item => string.Equals(item.SourceId, query.ItemId, StringComparison.OrdinalIgnoreCase)),
+            RelationDirection.Incoming => filtered.Where(item => string.Equals(item.TargetId, query.ItemId, StringComparison.OrdinalIgnoreCase)),
+            _ => filtered.Where(item =>
+                string.Equals(item.SourceId, query.ItemId, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(item.TargetId, query.ItemId, StringComparison.OrdinalIgnoreCase))
+        };
+
+        if (!string.IsNullOrWhiteSpace(query.RelationType))
+        {
+            filtered = filtered.Where(item => string.Equals(item.RelationType, query.RelationType, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (query.MinConfidence > 0)
+        {
+            filtered = filtered.Where(item => item.Confidence >= query.MinConfidence);
+        }
+
+        if (excludedLifecycles is not null)
+        {
+            filtered = filtered.Where(item => !excludedLifecycles.Contains(item.Lifecycle ?? string.Empty));
+        }
+
+        if (excludedReviewStatuses is not null)
+        {
+            filtered = filtered.Where(item => !excludedReviewStatuses.Contains(item.ReviewStatus ?? string.Empty));
+        }
+
+        var results = filtered
+            .Take(maxScan)
+            .OrderByDescending(item => item.Weight)
+            .ThenByDescending(item => item.Confidence)
+            .ThenByDescending(item => item.CreatedAt)
+            .Skip(effectiveSkip)
+            .Take(effectiveTake)
+            .Select(item => Clone(item))
+            .ToArray();
+
+        return Task.FromResult<IReadOnlyList<ContextRelation>>(results);
+    }
+
     public Task<IReadOnlyList<ContextRelation>> QueryAsync(
         ContextRelationQuery query,
         CancellationToken cancellationToken = default)

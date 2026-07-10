@@ -659,7 +659,7 @@ public sealed class PostgresIntegrationTests
 
     // ── Docker 可用性检测 ────────────────────────────────────────────────
 
-    private static async Task<bool> IsDockerAvailableAsync()
+    internal static async Task<bool> IsDockerAvailableAsync()
     {
         try
         {
