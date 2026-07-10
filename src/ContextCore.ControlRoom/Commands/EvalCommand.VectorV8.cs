@@ -3,6 +3,11 @@ using ContextCore.Abstractions.Models;
 using ContextCore.ControlRoom.Commands;
 using ContextCore.Core.Services;
 
+// GRAPH-12: historical eval runners are intentionally used by this diagnostic eval command.
+// They are marked [Obsolete] to prevent production code from depending on them, but the
+// eval harness is their sole legitimate consumer. Suppress CS0618 here to keep the build clean.
+#pragma warning disable CS0618
+
 namespace ContextCore.ControlRoom.Commands;
 
 public static partial class EvalCommand
@@ -8525,6 +8530,8 @@ Design review only — no production trace collected. No LiveCapture execution.
         return System.IO.Directory.GetFiles(dirPath, searchPattern, System.IO.SearchOption.AllDirectories).Length;
     }
 }
+
+#pragma warning restore CS0618
 
 
 
