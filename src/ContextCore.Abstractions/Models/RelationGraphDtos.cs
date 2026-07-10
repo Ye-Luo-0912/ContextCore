@@ -1346,6 +1346,18 @@ public sealed class RelationSubgraphNode
     public int Depth { get; init; }
 
     public string? NodeKind { get; init; }
+
+    /// <summary>GRAPH-13: 节点标题（条目标题或摘要首行），供 UI 紧凑展示。</summary>
+    public string? Title { get; init; }
+
+    /// <summary>GRAPH-13: 节点摘要，供 UI 紧凑展示。</summary>
+    public string? Summary { get; init; }
+
+    /// <summary>GRAPH-13: 节点生命周期（Active/Deprecated/Superseded）。</summary>
+    public string? Lifecycle { get; init; }
+
+    /// <summary>GRAPH-13: 节点审核状态（Reviewed/Rejected/NeedsEvidence）。</summary>
+    public string? ReviewStatus { get; init; }
 }
 
 public sealed class RelationSubgraphEdge

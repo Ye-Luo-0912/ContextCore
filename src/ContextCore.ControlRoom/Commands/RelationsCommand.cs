@@ -93,24 +93,69 @@ public static class RelationsCommand
     {
         if (args.Count == 0)
         {
-            Console.WriteLine("用法：relations filter <id> --type <relationType> [--depth N] [--direction outgoing|incoming|both]");
+            Console.WriteLine("用法：relations filter <id> [--type <relationType>] [--min-confidence <0..1>] [--exclude-lifecycle <a,b,c>] [--exclude-review-status <a,b,c>] [--depth N] [--direction outgoing|incoming|both]");
             return;
         }
 
         var itemId = args[0];
         var typeOption = CommandHelpers.GetOption(args, "--type");
-        if (string.IsNullOrWhiteSpace(typeOption))
-        {
-            Console.WriteLine("filter 子命令需要 --type <relationType> 参数。");
-            return;
-        }
-
         var depth = CommandHelpers.GetIntOption(args, "--depth", 2);
         var direction = CommandHelpers.GetOption(args, "--direction") ?? "both";
+        var minConfidence = CommandHelpers.GetDoubleOption(args, "--min-confidence", 0.0);
+        var excludeLifecycles = ParseCommaList(CommandHelpers.GetOption(args, "--exclude-lifecycle"));
+        var excludeReviewStatuses = ParseCommaList(CommandHelpers.GetOption(args, "--exclude-review-status"));
 
+        string[]? allowedTypes = string.IsNullOrWhiteSpace(typeOption) ? null : [typeOption];
         var subgraph = await service.GetRelationSubgraphAsync(
-            itemId, depth, direction, [typeOption], cancellationToken).ConfigureAwait(false);
+            itemId, depth, direction, allowedTypes, cancellationToken).ConfigureAwait(false);
+
+        if (minConfidence > 0 || excludeLifecycles.Length > 0 || excludeReviewStatuses.Length > 0)
+        {
+            subgraph = FilterSubgraph(subgraph, minConfidence, excludeLifecycles, excludeReviewStatuses);
+        }
+
         RenderSubgraph(subgraph);
+    }
+
+    private static string[] ParseCommaList(string? value)
+        => string.IsNullOrWhiteSpace(value)
+            ? []
+            : value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    /// <summary>GRAPH-13: 在客户端对子图边进行后置过滤（按置信度/生命周期/审核状态）。</summary>
+    private static RelationSubgraph FilterSubgraph(
+        RelationSubgraph subgraph,
+        double minConfidence,
+        string[] excludeLifecycles,
+        string[] excludeReviewStatuses)
+    {
+        var filteredEdges = subgraph.Edges
+            .Where(e => e.Confidence >= minConfidence)
+            .Where(e => !excludeLifecycles.Any(x => string.Equals(x, e.Lifecycle, StringComparison.OrdinalIgnoreCase)))
+            .Where(e => !excludeReviewStatuses.Any(x => string.Equals(x, e.ReviewStatus, StringComparison.OrdinalIgnoreCase)))
+            .ToArray();
+
+        var referencedNodeIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        referencedNodeIds.Add(subgraph.RootItemId);
+        foreach (var edge in filteredEdges)
+        {
+            referencedNodeIds.Add(edge.SourceId);
+            referencedNodeIds.Add(edge.TargetId);
+        }
+
+        var filteredNodes = subgraph.Nodes
+            .Where(n => referencedNodeIds.Contains(n.ItemId))
+            .ToArray();
+
+        return new RelationSubgraph
+        {
+            RootItemId = subgraph.RootItemId,
+            Nodes = filteredNodes,
+            Edges = filteredEdges,
+            MaxDepthReached = subgraph.MaxDepthReached,
+            Truncated = subgraph.Truncated,
+            Warnings = subgraph.Warnings
+        };
     }
 
     private static async Task ExecuteChainAsync(
@@ -175,21 +220,29 @@ public static class RelationsCommand
             }
         }
 
+        var nodeLookup = subgraph.Nodes.ToDictionary(static n => n.ItemId, StringComparer.OrdinalIgnoreCase);
+
         Console.WriteLine();
         Console.WriteLine("节点：");
-        foreach (var node in subgraph.Nodes)
+        foreach (var node in subgraph.Nodes.OrderBy(static n => n.Depth).ThenBy(static n => n.ItemId, StringComparer.OrdinalIgnoreCase))
         {
+            var indent = new string(' ', node.Depth * 2);
             var kind = string.IsNullOrWhiteSpace(node.NodeKind) ? string.Empty : $" [{node.NodeKind}]";
-            Console.WriteLine($"  depth={node.Depth}  {node.ItemId}{kind}");
+            var lifecycle = string.IsNullOrWhiteSpace(node.Lifecycle) ? string.Empty : $" ({node.Lifecycle})";
+            var title = string.IsNullOrWhiteSpace(node.Title) ? string.Empty : $" \"{node.Title}\"";
+            Console.WriteLine($"{indent}depth={node.Depth}  {node.ItemId}{kind}{lifecycle}{title}");
         }
 
         Console.WriteLine();
         Console.WriteLine("边：");
-        foreach (var edge in subgraph.Edges)
+        foreach (var edge in subgraph.Edges.OrderBy(static e => e.Depth).ThenBy(static e => e.SourceId, StringComparer.OrdinalIgnoreCase))
         {
+            var indent = new string(' ', edge.Depth * 2);
             var lifecycle = string.IsNullOrWhiteSpace(edge.Lifecycle) ? string.Empty : $" lifecycle={edge.Lifecycle}";
             var review = string.IsNullOrWhiteSpace(edge.ReviewStatus) ? string.Empty : $" review={edge.ReviewStatus}";
-            Console.WriteLine($"  depth={edge.Depth}  {edge.SourceId} -[{edge.RelationType}]-> {edge.TargetId}  w={edge.Weight:0.##} c={edge.Confidence:0.##}{lifecycle}{review}");
+            var sourceTitle = nodeLookup.TryGetValue(edge.SourceId, out var src) && !string.IsNullOrWhiteSpace(src.Title) ? $" \"{src.Title}\"" : string.Empty;
+            var targetTitle = nodeLookup.TryGetValue(edge.TargetId, out var tgt) && !string.IsNullOrWhiteSpace(tgt.Title) ? $" \"{tgt.Title}\"" : string.Empty;
+            Console.WriteLine($"{indent}{edge.SourceId}{sourceTitle} -[{edge.RelationType}]-> {edge.TargetId}{targetTitle}  w={edge.Weight:0.##} c={edge.Confidence:0.##}{lifecycle}{review}");
         }
     }
 
@@ -198,7 +251,7 @@ public static class RelationsCommand
         Console.WriteLine("relations 子命令：");
         Console.WriteLine("  show <id>                                                    显示条目的直接出入关系");
         Console.WriteLine("  expand <id> [--depth N] [--direction outgoing|incoming|both] 以指定深度展开关系子图（默认 depth=2，direction=both）");
-        Console.WriteLine("  filter <id> --type <relationType> [--depth N] [--direction …] 按关系类型过滤展开子图");
+        Console.WriteLine("  filter <id> [--type <relationType>] [--min-confidence <0..1>] [--exclude-lifecycle <a,b,c>] [--exclude-review-status <a,b,c>] [--depth N] [--direction …] 按类型/置信度/生命周期/审核状态过滤子图");
         Console.WriteLine("  chain <id> [--depth N] [--direction …]                       替换链视图（沿 SupersededBy/Replaces 遍历）");
         Console.WriteLine("  conflicts <id> [--depth N] [--direction …]                   冲突视图（沿 ConflictsWith/Contradicts 遍历）");
         Console.WriteLine("  help                                                         显示本帮助");

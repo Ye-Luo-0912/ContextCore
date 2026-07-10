@@ -369,6 +369,8 @@ internal static class RelationEndpoints
 			string? direction,
 			string? types,
 			IRelationStore relations,
+			IMemoryStore memoryStore,
+			IContextStore contextStore,
 			HttpContext httpContext,
 			CancellationToken ct) =>
 			{
@@ -434,6 +436,7 @@ internal static class RelationEndpoints
 					var engine = new RelationTraversalEngine(relations);
 					var result = await engine.TraverseAsync(request, ct).ConfigureAwait(false);
 					var subgraph = RelationSubgraphBuilder.Build(itemId, result);
+					subgraph = await EnrichSubgraphNodesAsync(subgraph, workspaceId, collectionId, memoryStore, contextStore, ct).ConfigureAwait(false);
 					return Results.Ok(subgraph);
 				}
 				catch (Exception ex)
@@ -461,6 +464,77 @@ internal static class RelationEndpoints
 			Reviewer = request.Reviewer,
 			Reason = request.Reason,
 			Metadata = new Dictionary<string, string>(request.Metadata, StringComparer.OrdinalIgnoreCase)
+		};
+	}
+
+	/// <summary>GRAPH-13: 从记忆/上下文存储中查找节点元数据，丰富子图节点。</summary>
+	private static async Task<RelationSubgraph> EnrichSubgraphNodesAsync(
+		RelationSubgraph subgraph,
+		string workspaceId,
+		string collectionId,
+		IMemoryStore memoryStore,
+		IContextStore contextStore,
+		CancellationToken cancellationToken)
+	{
+		if (subgraph.Nodes.Count == 0)
+		{
+			return subgraph;
+		}
+
+		var lookup = new Dictionary<string, (string? Title, string? Summary, string? Lifecycle, string? ReviewStatus)>(StringComparer.OrdinalIgnoreCase);
+
+		foreach (var itemId in subgraph.Nodes.Select(static n => n.ItemId).Distinct(StringComparer.OrdinalIgnoreCase))
+		{
+			var memory = await memoryStore.GetAsync(workspaceId, collectionId, itemId, cancellationToken).ConfigureAwait(false);
+			if (memory is not null)
+			{
+				var firstLine = memory.Content.AsSpan().Trim();
+				var newlineIdx = firstLine.IndexOf('\n');
+				var title = newlineIdx >= 0 ? firstLine[..newlineIdx].Trim().ToString() : firstLine.ToString();
+				if (title.Length > 60) title = title[..60] + "…";
+				lookup[itemId] = (title, memory.Content.Length > 120 ? memory.Content[..120] + "…" : memory.Content, memory.Status.ToString(), null);
+				continue;
+			}
+
+			var context = await contextStore.GetAsync(workspaceId, collectionId, itemId, cancellationToken).ConfigureAwait(false);
+			if (context is not null)
+			{
+				var title = string.IsNullOrWhiteSpace(context.Title) ? context.Type : context.Title;
+				lookup[itemId] = (title, context.Content.Length > 120 ? context.Content[..120] + "…" : context.Content, null, null);
+			}
+		}
+
+		if (lookup.Count == 0)
+		{
+			return subgraph;
+		}
+
+		var enrichedNodes = subgraph.Nodes.Select(n =>
+		{
+			if (!lookup.TryGetValue(n.ItemId, out var meta))
+			{
+				return n;
+			}
+			return new RelationSubgraphNode
+			{
+				ItemId = n.ItemId,
+				Depth = n.Depth,
+				NodeKind = n.NodeKind,
+				Title = meta.Title ?? n.Title,
+				Summary = meta.Summary ?? n.Summary,
+				Lifecycle = meta.Lifecycle ?? n.Lifecycle,
+				ReviewStatus = meta.ReviewStatus ?? n.ReviewStatus
+			};
+		}).ToArray();
+
+		return new RelationSubgraph
+		{
+			RootItemId = subgraph.RootItemId,
+			Nodes = enrichedNodes,
+			Edges = subgraph.Edges,
+			MaxDepthReached = subgraph.MaxDepthReached,
+			Truncated = subgraph.Truncated,
+			Warnings = subgraph.Warnings
 		};
 	}
 }

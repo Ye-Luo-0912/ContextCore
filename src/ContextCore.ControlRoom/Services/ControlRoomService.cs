@@ -8878,7 +8878,74 @@ public sealed class ControlRoomService
 
         var engine = new RelationTraversalEngine(_state.RelationStore);
         var result = await engine.TraverseAsync(request, cancellationToken).ConfigureAwait(false);
-        return RelationSubgraphBuilder.Build(itemId, result);
+        var subgraph = RelationSubgraphBuilder.Build(itemId, result);
+        return await EnrichSubgraphNodesAsync(subgraph, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>GRAPH-13: 从记忆存储中查找节点元数据（标题/摘要/状态），丰富子图节点。</summary>
+    private async Task<RelationSubgraph> EnrichSubgraphNodesAsync(RelationSubgraph subgraph, CancellationToken cancellationToken)
+    {
+        if (subgraph.Nodes.Count == 0)
+        {
+            return subgraph;
+        }
+
+        var itemIds = subgraph.Nodes.Select(static n => n.ItemId).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        var lookup = new Dictionary<string, (string? Title, string? Summary, string? Lifecycle, string? ReviewStatus)>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var itemId in itemIds)
+        {
+            var memory = await _state.MemoryStore.GetAsync(_state.WorkspaceId, _state.CollectionId, itemId, cancellationToken).ConfigureAwait(false);
+            if (memory is not null)
+            {
+                var firstLine = memory.Content.AsSpan().Trim();
+                var newlineIdx = firstLine.IndexOf('\n');
+                var title = newlineIdx >= 0 ? firstLine[..newlineIdx].Trim().ToString() : firstLine.ToString();
+                if (title.Length > 60) title = title[..60] + "…";
+                lookup[itemId] = (title, memory.Content.Length > 120 ? memory.Content[..120] + "…" : memory.Content, memory.Status.ToString(), null);
+                continue;
+            }
+
+            var context = await _state.ContextStore.GetAsync(_state.WorkspaceId, _state.CollectionId, itemId, cancellationToken).ConfigureAwait(false);
+            if (context is not null)
+            {
+                var title = string.IsNullOrWhiteSpace(context.Title) ? context.Type : context.Title;
+                lookup[itemId] = (title, context.Content.Length > 120 ? context.Content[..120] + "…" : context.Content, null, null);
+            }
+        }
+
+        if (lookup.Count == 0)
+        {
+            return subgraph;
+        }
+
+        var enrichedNodes = subgraph.Nodes.Select(n =>
+        {
+            if (!lookup.TryGetValue(n.ItemId, out var meta))
+            {
+                return n;
+            }
+            return new RelationSubgraphNode
+            {
+                ItemId = n.ItemId,
+                Depth = n.Depth,
+                NodeKind = n.NodeKind,
+                Title = meta.Title ?? n.Title,
+                Summary = meta.Summary ?? n.Summary,
+                Lifecycle = meta.Lifecycle ?? n.Lifecycle,
+                ReviewStatus = meta.ReviewStatus ?? n.ReviewStatus
+            };
+        }).ToArray();
+
+        return new RelationSubgraph
+        {
+            RootItemId = subgraph.RootItemId,
+            Nodes = enrichedNodes,
+            Edges = subgraph.Edges,
+            MaxDepthReached = subgraph.MaxDepthReached,
+            Truncated = subgraph.Truncated,
+            Warnings = subgraph.Warnings
+        };
     }
 
     private static RelationDirection ParseRelationDirection(string direction)
