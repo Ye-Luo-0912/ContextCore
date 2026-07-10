@@ -188,7 +188,7 @@ public sealed class ContextCoreRelationGraphValidationTests
         var fixture = CreateFixture();
         await fixture.MemoryStore.SaveAsync(StableMemory("stable-a", lifecycle: StableMemoryLifecycle.Superseded, supersededBy: "stable-b"));
         await fixture.MemoryStore.SaveAsync(StableMemory("stable-b", lifecycle: StableMemoryLifecycle.Superseded, supersededBy: "stable-a"));
-        await fixture.RelationStore.SaveManyAsync(
+        await fixture.RelationStore.BatchUpsertAsync(
         [
             Relation("rel-a-b-super", "stable-a", ContextRelationTypes.SupersededBy, "stable-b", withEvidence: true),
             Relation("rel-b-a-repl", "stable-b", ContextRelationTypes.Replaces, "stable-a", withEvidence: true),
@@ -207,7 +207,7 @@ public sealed class ContextCoreRelationGraphValidationTests
         var fixture = CreateFixture();
         await fixture.MemoryStore.SaveAsync(StableMemory("stable-a"));
         await fixture.MemoryStore.SaveAsync(StableMemory("stable-b"));
-        await fixture.RelationStore.SaveManyAsync(
+        await fixture.RelationStore.BatchUpsertAsync(
         [
             Relation("rel-dup-1", "stable-a", "references", "stable-b", withEvidence: true),
             Relation("rel-dup-2", "stable-a", "references", "stable-b", withEvidence: true)
@@ -224,7 +224,7 @@ public sealed class ContextCoreRelationGraphValidationTests
         var fixture = CreateFixture();
         await fixture.MemoryStore.SaveAsync(StableMemory("stable-old", lifecycle: StableMemoryLifecycle.Superseded, supersededBy: "stable-new"));
         await fixture.MemoryStore.SaveAsync(StableMemory("stable-new", replaces: "stable-old"));
-        await fixture.RelationStore.SaveManyAsync(
+        await fixture.RelationStore.BatchUpsertAsync(
         [
             Relation("rel-s3-super", "stable-old", ContextRelationTypes.SupersededBy, "stable-new", withEvidence: true),
             Relation("rel-s3-replaces", "stable-new", ContextRelationTypes.Replaces, "stable-old", withEvidence: true)
@@ -243,7 +243,7 @@ public sealed class ContextCoreRelationGraphValidationTests
         var fixture = CreateFixture();
         await fixture.MemoryStore.SaveAsync(StableMemory("stable-old", lifecycle: StableMemoryLifecycle.Superseded, supersededBy: "stable-new"));
         await fixture.MemoryStore.SaveAsync(StableMemory("stable-new", replaces: "stable-old"));
-        await fixture.RelationStore.SaveManyAsync(
+        await fixture.RelationStore.BatchUpsertAsync(
         [
             Relation("rel-s3-super", "stable-old", ContextRelationTypes.SupersededBy, "stable-new", withEvidence: true),
             Relation("rel-s3-replaces", "stable-new", ContextRelationTypes.Replaces, "stable-old", withEvidence: true)
@@ -352,7 +352,7 @@ public sealed class ContextCoreRelationGraphValidationTests
         var fixture = CreateFixture();
         await fixture.MemoryStore.SaveAsync(StableMemory("stable-old", lifecycle: StableMemoryLifecycle.Superseded, supersededBy: "stable-new"));
         await fixture.MemoryStore.SaveAsync(StableMemory("stable-new", replaces: "stable-old"));
-        await fixture.RelationStore.SaveManyAsync(
+        await fixture.RelationStore.BatchUpsertAsync(
         [
             WithMetadata(Relation("rel-rejected-super", "stable-old", ContextRelationTypes.SupersededBy, "stable-new", withEvidence: true), new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
@@ -633,11 +633,11 @@ public sealed class ContextCoreRelationGraphValidationTests
             "item-target",
             confidence: 1.0,
             withEvidence: true));
-        var before = await fixture.RelationStore.QueryBySourceAsync("workspace-test", "collection-test", "item-root");
+        var before = await fixture.RelationStore.QueryAsync(new ContextRelationQuery { WorkspaceId = "workspace-test", CollectionId = "collection-test", SourceId = "item-root", Take = int.MaxValue });
 
         _ = await fixture.PreviewService.PreviewAsync(PreviewRequest("item-root", "normal-v1"));
 
-        var after = await fixture.RelationStore.QueryBySourceAsync("workspace-test", "collection-test", "item-root");
+        var after = await fixture.RelationStore.QueryAsync(new ContextRelationQuery { WorkspaceId = "workspace-test", CollectionId = "collection-test", SourceId = "item-root", Take = int.MaxValue });
         CollectionAssert.AreEquivalent(before.Select(item => item.Id).ToArray(), after.Select(item => item.Id).ToArray());
     }
 
@@ -995,7 +995,7 @@ public sealed class ContextCoreRelationGraphValidationTests
         // 入边: src-d → src-a
         await store.SaveAsync(TestRelation("rel-in-1", "src-d", ContextRelationTypes.DependsOn, "src-a"));
 
-        var neighbors = await store.QueryNeighborsAsync("ws-test", "col-test", "src-a", RelationDirection.Both);
+        var neighbors = await store.QueryNeighborsAsync(new RelationNeighborQuery { WorkspaceId = "ws-test", CollectionId = "col-test", ItemId = "src-a", Direction = RelationDirection.Both });
 
         Assert.AreEqual(3, neighbors.Count);
     }
@@ -1008,8 +1008,8 @@ public sealed class ContextCoreRelationGraphValidationTests
         await store.SaveAsync(TestRelation("rel-out-1", "src-a", ContextRelationTypes.References, "tgt-b"));
         await store.SaveAsync(TestRelation("rel-in-1", "src-d", ContextRelationTypes.DependsOn, "src-a"));
 
-        var outgoing = await store.QueryNeighborsAsync("ws-test", "col-test", "src-a", RelationDirection.Outgoing);
-        var incoming = await store.QueryNeighborsAsync("ws-test", "col-test", "src-a", RelationDirection.Incoming);
+        var outgoing = await store.QueryNeighborsAsync(new RelationNeighborQuery { WorkspaceId = "ws-test", CollectionId = "col-test", ItemId = "src-a", Direction = RelationDirection.Outgoing });
+        var incoming = await store.QueryNeighborsAsync(new RelationNeighborQuery { WorkspaceId = "ws-test", CollectionId = "col-test", ItemId = "src-a", Direction = RelationDirection.Incoming });
 
         Assert.AreEqual(1, outgoing.Count);
         Assert.AreEqual("tgt-b", outgoing[0].TargetId);
@@ -1027,8 +1027,8 @@ public sealed class ContextCoreRelationGraphValidationTests
             await store.SaveAsync(TestRelation($"rel-page-{i}", "src-a", ContextRelationTypes.References, $"tgt-{i}"));
         }
 
-        var firstPage = await store.QueryNeighborsAsync("ws-test", "col-test", "src-a", RelationDirection.Outgoing, take: 5, skip: 0);
-        var secondPage = await store.QueryNeighborsAsync("ws-test", "col-test", "src-a", RelationDirection.Outgoing, take: 5, skip: 5);
+        var firstPage = await store.QueryNeighborsAsync(new RelationNeighborQuery { WorkspaceId = "ws-test", CollectionId = "col-test", ItemId = "src-a", Direction = RelationDirection.Outgoing, Take = 5, Skip = 0 });
+        var secondPage = await store.QueryNeighborsAsync(new RelationNeighborQuery { WorkspaceId = "ws-test", CollectionId = "col-test", ItemId = "src-a", Direction = RelationDirection.Outgoing, Take = 5, Skip = 5 });
 
         Assert.AreEqual(5, firstPage.Count);
         Assert.AreEqual(5, secondPage.Count);

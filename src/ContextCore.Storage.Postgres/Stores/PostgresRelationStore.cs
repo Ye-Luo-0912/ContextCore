@@ -2,6 +2,7 @@ using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Storage.Postgres.Infrastructure;
 using Npgsql;
+using NpgsqlTypes;
 
 namespace ContextCore.Storage.Postgres.Stores;
 
@@ -13,42 +14,9 @@ public sealed class PostgresRelationStore : PostgresStoreBase, IRelationStore
     {
     }
 
-    public async Task SaveAsync(ContextRelation relation, CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(relation);
-        var normalized = Normalize(relation);
-        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
-        await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
-        await using var command = connection.CreateCommand();
-        command.CommandTimeout = Options.CommandTimeoutSeconds;
-        command.CommandText = $"""
-INSERT INTO {Table("relations")} (
-    workspace_id, collection_id, id, source_id, target_id, relation_type,
-    weight, confidence, created_at, data)
-VALUES (
-    @workspace_id, @collection_id, @id, @source_id, @target_id, @relation_type,
-    @weight, @confidence, @created_at, @data)
-ON CONFLICT (workspace_id, collection_id, id) DO UPDATE SET
-    source_id = EXCLUDED.source_id,
-    target_id = EXCLUDED.target_id,
-    relation_type = EXCLUDED.relation_type,
-    weight = EXCLUDED.weight,
-    confidence = EXCLUDED.confidence,
-    created_at = EXCLUDED.created_at,
-    data = EXCLUDED.data;
-""";
-        command.Parameters.AddWithValue("workspace_id", normalized.WorkspaceId);
-        command.Parameters.AddWithValue("collection_id", normalized.CollectionId);
-        command.Parameters.AddWithValue("id", normalized.Id);
-        command.Parameters.AddWithValue("source_id", normalized.SourceId);
-        command.Parameters.AddWithValue("target_id", normalized.TargetId);
-        command.Parameters.AddWithValue("relation_type", normalized.RelationType);
-        command.Parameters.AddWithValue("weight", normalized.Weight);
-        command.Parameters.AddWithValue("confidence", normalized.Confidence);
-        command.Parameters.AddWithValue("created_at", normalized.CreatedAt);
-        AddJson(command, "data", normalized);
-        await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
-    }
+    /// <summary>GRAPH-11：SaveAsync 委托 BatchUpsertAsync，保留为单条便利方法。</summary>
+    public Task SaveAsync(ContextRelation relation, CancellationToken cancellationToken = default)
+        => BatchUpsertAsync([relation], cancellationToken);
 
     /// <summary>按关系 ID 读取单条边；供 Postgres provider diagnostics/parity 使用，不改变 IRelationStore 契约。</summary>
     public async Task<ContextRelation?> GetAsync(
@@ -121,11 +89,9 @@ WHERE workspace_id = @workspace_id
         return await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public Task SaveManyAsync(IEnumerable<ContextRelation> relations, CancellationToken cancellationToken = default)
-    {
-        return BatchUpsertAsync(relations, cancellationToken);
-    }
-
+    /// <summary>
+    /// GRAPH-11：批量 upsert 改用 NpgsqlBatch，单次往返提交所有语句；单事务保证原子性。
+    /// </summary>
     public async Task BatchUpsertAsync(IEnumerable<ContextRelation> relations, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(relations);
@@ -138,14 +104,17 @@ WHERE workspace_id = @workspace_id
 
         try
         {
+            // GRAPH-11：NpgsqlBatch 单次往返提交全部 upsert 语句
+            using var batch = new NpgsqlBatch(connection as NpgsqlConnection, transaction as NpgsqlTransaction);
+            batch.Timeout = Options.CommandTimeoutSeconds;
+
             foreach (var relation in list)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var normalized = Normalize(relation);
-                await using var command = connection.CreateCommand();
-                command.Transaction = (NpgsqlTransaction)transaction;
-                command.CommandTimeout = Options.CommandTimeoutSeconds;
-                command.CommandText = $"""
+                var batchCommand = new NpgsqlBatchCommand
+                {
+                    CommandText = $"""
 INSERT INTO {Table("relations")} (
     workspace_id, collection_id, id, source_id, target_id, relation_type,
     weight, confidence, created_at, data)
@@ -160,19 +129,23 @@ ON CONFLICT (workspace_id, collection_id, id) DO UPDATE SET
     confidence = EXCLUDED.confidence,
     created_at = EXCLUDED.created_at,
     data = EXCLUDED.data;
-""";
-                command.Parameters.AddWithValue("workspace_id", normalized.WorkspaceId);
-                command.Parameters.AddWithValue("collection_id", normalized.CollectionId);
-                command.Parameters.AddWithValue("id", normalized.Id);
-                command.Parameters.AddWithValue("source_id", normalized.SourceId);
-                command.Parameters.AddWithValue("target_id", normalized.TargetId);
-                command.Parameters.AddWithValue("relation_type", normalized.RelationType);
-                command.Parameters.AddWithValue("weight", normalized.Weight);
-                command.Parameters.AddWithValue("confidence", normalized.Confidence);
-                command.Parameters.AddWithValue("created_at", normalized.CreatedAt);
-                AddJson(command, "data", normalized);
-                await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+"""
+                };
+                batchCommand.Parameters.AddWithValue("workspace_id", normalized.WorkspaceId);
+                batchCommand.Parameters.AddWithValue("collection_id", normalized.CollectionId);
+                batchCommand.Parameters.AddWithValue("id", normalized.Id);
+                batchCommand.Parameters.AddWithValue("source_id", normalized.SourceId);
+                batchCommand.Parameters.AddWithValue("target_id", normalized.TargetId);
+                batchCommand.Parameters.AddWithValue("relation_type", normalized.RelationType);
+                batchCommand.Parameters.AddWithValue("weight", normalized.Weight);
+                batchCommand.Parameters.AddWithValue("confidence", normalized.Confidence);
+                batchCommand.Parameters.AddWithValue("created_at", normalized.CreatedAt);
+                var dataParam = batchCommand.Parameters.Add("data", NpgsqlDbType.Jsonb);
+                dataParam.Value = Serializer.Serialize(normalized);
+                batch.BatchCommands.Add(batchCommand);
             }
+
+            await batch.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         }
         catch
@@ -241,70 +214,6 @@ LIMIT @take OFFSET @skip;
         }
 
         return results;
-    }
-
-    public Task<IReadOnlyList<ContextRelation>> QueryForItemAsync(string workspaceId, string collectionId, string itemId, CancellationToken cancellationToken = default)
-    {
-        return QueryAsync(new ContextRelationQuery { WorkspaceId = workspaceId, CollectionId = collectionId, ItemId = itemId, Take = int.MaxValue }, cancellationToken);
-    }
-
-    public Task<IReadOnlyList<ContextRelation>> QueryBySourceAsync(string workspaceId, string collectionId, string sourceId, CancellationToken cancellationToken = default)
-    {
-        return QueryAsync(new ContextRelationQuery { WorkspaceId = workspaceId, CollectionId = collectionId, SourceId = sourceId, Take = int.MaxValue }, cancellationToken);
-    }
-
-    public Task<IReadOnlyList<ContextRelation>> QueryByTargetAsync(string workspaceId, string collectionId, string targetId, CancellationToken cancellationToken = default)
-    {
-        return QueryAsync(new ContextRelationQuery { WorkspaceId = workspaceId, CollectionId = collectionId, TargetId = targetId, Take = int.MaxValue }, cancellationToken);
-    }
-
-    public Task<IReadOnlyList<ContextRelation>> QueryByTypeAsync(string workspaceId, string collectionId, string relationType, CancellationToken cancellationToken = default)
-    {
-        return QueryAsync(new ContextRelationQuery { WorkspaceId = workspaceId, CollectionId = collectionId, RelationType = relationType, Take = int.MaxValue }, cancellationToken);
-    }
-
-    public async Task<IReadOnlyList<ContextRelation>> QueryNeighborsAsync(
-        string workspaceId, string collectionId, string itemId,
-        RelationDirection direction = RelationDirection.Both,
-        int take = 100, int skip = 0,
-        CancellationToken cancellationToken = default)
-    {
-        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
-        await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
-        await using var command = connection.CreateCommand();
-        command.CommandTimeout = Options.CommandTimeoutSeconds;
-
-        var filters = new List<string> { "workspace_id = @workspace_id", "collection_id = @collection_id" };
-        command.Parameters.AddWithValue("workspace_id", workspaceId);
-        command.Parameters.AddWithValue("collection_id", collectionId);
-
-        switch (direction)
-        {
-            case RelationDirection.Outgoing:
-                filters.Add("source_id = @item_id");
-                break;
-            case RelationDirection.Incoming:
-                filters.Add("target_id = @item_id");
-                break;
-            default:
-                filters.Add("(source_id = @item_id OR target_id = @item_id)");
-                break;
-        }
-        command.Parameters.AddWithValue("item_id", itemId);
-
-        var effectiveTake = take > 0 ? take : 100;
-        var effectiveSkip = skip > 0 ? skip : 0;
-        command.Parameters.AddWithValue("take", effectiveTake);
-        command.Parameters.AddWithValue("skip", effectiveSkip);
-
-        command.CommandText = $"""
-SELECT data
-FROM {Table("relations")}
-WHERE {string.Join(" AND ", filters)}
-ORDER BY weight DESC, confidence DESC, created_at DESC
-LIMIT @take OFFSET @skip;
-""";
-        return await ReadRelationsAsync(command, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>GRAPH-10：统一邻居查询，在 SQL 中过滤和 Limit。</summary>

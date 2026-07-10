@@ -231,13 +231,13 @@ public sealed class ContextCoreGraphProjectionTaxonomyTests
         // 第一次 ingest：refs = [B, C]
         await service.IngestAsync(CreateContextItem("item-a", refs: ["item-b", "item-c"]));
 
-        var afterFirst = await relationStore.QueryBySourceAsync("workspace-test", "collection-test", "item-a");
+        var afterFirst = await relationStore.QueryAsync(new ContextRelationQuery { WorkspaceId = "workspace-test", CollectionId = "collection-test", SourceId = "item-a", Take = int.MaxValue });
         Assert.AreEqual(2, afterFirst.Count, "Should have 2 related_to edges after first ingest");
 
         // 第二次 ingest：refs = [B, D] — C 被移除，D 被新增
         await service.IngestAsync(CreateContextItem("item-a", refs: ["item-b", "item-d"]));
 
-        var afterSecond = await relationStore.QueryBySourceAsync("workspace-test", "collection-test", "item-a");
+        var afterSecond = await relationStore.QueryAsync(new ContextRelationQuery { WorkspaceId = "workspace-test", CollectionId = "collection-test", SourceId = "item-a", Take = int.MaxValue });
         var targetIds = afterSecond.Select(r => r.TargetId).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         Assert.AreEqual(2, afterSecond.Count, "Should still have 2 related_to edges");
@@ -256,12 +256,12 @@ public sealed class ContextCoreGraphProjectionTaxonomyTests
         var service = new BasicContextIngestionService(contextStore, projector, relationStore);
 
         await service.IngestAsync(CreateContextItem("item-x", refs: ["item-y", "item-z"]));
-        Assert.AreEqual(2, (await relationStore.QueryBySourceAsync("workspace-test", "collection-test", "item-x")).Count);
+        Assert.AreEqual(2, (await relationStore.QueryAsync(new ContextRelationQuery { WorkspaceId = "workspace-test", CollectionId = "collection-test", SourceId = "item-x", Take = int.MaxValue })).Count);
 
         // 清空 refs
         await service.IngestAsync(CreateContextItem("item-x", refs: []));
 
-        var remaining = await relationStore.QueryBySourceAsync("workspace-test", "collection-test", "item-x");
+        var remaining = await relationStore.QueryAsync(new ContextRelationQuery { WorkspaceId = "workspace-test", CollectionId = "collection-test", SourceId = "item-x", Take = int.MaxValue });
         Assert.AreEqual(0, remaining.Count, "All related_to edges should be deleted when refs cleared");
     }
 

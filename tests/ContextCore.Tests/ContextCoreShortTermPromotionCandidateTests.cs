@@ -153,7 +153,7 @@ public sealed class ContextCoreShortTermPromotionCandidateTests
 
         var result = await service.AcceptAsync(candidate.CandidateId, CreateReviewRequest("accept-op-1", "接受为候选记忆。"));
         var target = await memoryStore.GetAsync("workspace-test", "collection-test", result!.TargetItemId!);
-        var relations = await relationStore.QueryForItemAsync("workspace-test", "collection-test", target!.Id);
+        var relations = await relationStore.QueryAsync(new ContextRelationQuery { WorkspaceId = "workspace-test", CollectionId = "collection-test", ItemId = target!.Id, Take = int.MaxValue });
 
         Assert.AreEqual(PromotionCandidateStatus.Accepted, result.Status);
         Assert.AreEqual("memory", result.TargetItemKind);

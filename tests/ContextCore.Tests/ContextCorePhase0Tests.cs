@@ -79,10 +79,13 @@ public sealed class ContextCorePhase0Tests
             CollectionId = "collection-test",
             Key = "phase0"
         });
-        var relations = await relationStore.QueryBySourceAsync(
-            "workspace-test",
-            "collection-test",
-            "job-compress-1-summary");
+        var relations = await relationStore.QueryAsync(new ContextRelationQuery
+        {
+            WorkspaceId = "workspace-test",
+            CollectionId = "collection-test",
+            SourceId = "job-compress-1-summary",
+            Take = int.MaxValue
+        });
 
         Assert.AreEqual(1, summaries.Count);
         Assert.IsTrue(summaries[0].Content.Contains("Important source content", StringComparison.OrdinalIgnoreCase));

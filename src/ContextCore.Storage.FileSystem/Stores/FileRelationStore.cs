@@ -1,9 +1,14 @@
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
+using System.Text;
 
 namespace ContextCore.Storage.FileSystem.Stores;
 
 /// <summary>基于文件系统的 <see cref="IRelationStore"/> 实现，关系数据持久化为 JSONL 文件。</summary>
+/// <remarks>
+/// GRAPH-11：BatchUpsert 通过命名 Mutex 实现跨实例互斥，解决不同 FileRelationStore 实例并发读旧数据后覆盖新数据的问题。
+/// 进程内仍用 SemaphoreSlim 做异步门控，避免 Mutex 长时间阻塞线程池线程。
+/// </remarks>
 public sealed class FileRelationStore : IRelationStore
 {
     private readonly SemaphoreSlim _gate = new(1, 1);
@@ -21,24 +26,9 @@ public sealed class FileRelationStore : IRelationStore
         _jsonLines = new FileJsonLineStore(serializer);
     }
 
-    public async Task SaveAsync(ContextRelation relation, CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(relation);
-
-        var normalized = Normalize(relation);
-        var path = _paths.GetRelationsJsonlPath(normalized.WorkspaceId, normalized.CollectionId);
-
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            await _jsonLines.UpsertAsync(path, normalized, item => item.Id, cancellationToken)
-                .ConfigureAwait(false);
-        }
-        finally
-        {
-            _gate.Release();
-        }
-    }
+    /// <summary>GRAPH-11：SaveAsync 委托 BatchUpsertAsync，保留为单条便利方法。</summary>
+    public Task SaveAsync(ContextRelation relation, CancellationToken cancellationToken = default)
+        => BatchUpsertAsync([relation], cancellationToken);
 
     /// <summary>按关系 ID 读取单条边；供 provider parity/diagnostics 使用。</summary>
     public async Task<ContextRelation?> GetAsync(
@@ -95,15 +85,9 @@ public sealed class FileRelationStore : IRelationStore
         }
     }
 
-    public Task SaveManyAsync(
-        IEnumerable<ContextRelation> relations,
-        CancellationToken cancellationToken = default)
-    {
-        return BatchUpsertAsync(relations, cancellationToken);
-    }
-
     /// <summary>
-    /// 批量 upsert：按 (workspaceId, collectionId) 分组，每组在单个写锁内完成读改写并原子替换文件。
+    /// 批量 upsert：按 (workspaceId, collectionId) 分组，每组在跨实例互斥锁内完成读改写并原子替换文件。
+    /// GRAPH-11：使用命名 Mutex 解决不同 store 实例并发读旧数据后覆盖新数据的问题。
     /// </summary>
     public async Task BatchUpsertAsync(
         IEnumerable<ContextRelation> relations,
@@ -124,6 +108,8 @@ public sealed class FileRelationStore : IRelationStore
                 _paths.GetRelationsJsonlPath(r.WorkspaceId, r.CollectionId)))
             {
                 var path = group.Key;
+                // GRAPH-11：跨实例互斥 — 不同 FileRelationStore 实例共享同一文件，必须串行读改写
+                using var fileLock = AcquireCrossInstanceLock(path);
                 var incoming = group.ToArray();
                 var incomingIds = new HashSet<string>(
                     incoming.Select(r => r.Id),
@@ -137,50 +123,6 @@ public sealed class FileRelationStore : IRelationStore
 
                 await _jsonLines.WriteAsync(path, merged, cancellationToken).ConfigureAwait(false);
             }
-        }
-        finally
-        {
-            _gate.Release();
-        }
-    }
-
-    /// <summary>查询邻居节点，支持方向过滤和分页。</summary>
-    public async Task<IReadOnlyList<ContextRelation>> QueryNeighborsAsync(
-        string workspaceId,
-        string collectionId,
-        string itemId,
-        RelationDirection direction = RelationDirection.Both,
-        int take = 100,
-        int skip = 0,
-        CancellationToken cancellationToken = default)
-    {
-        var effectiveTake = take > 0 ? take : 100;
-        var effectiveSkip = skip > 0 ? skip : 0;
-
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            var path = _paths.GetRelationsJsonlPath(workspaceId, collectionId);
-            var relations = await _jsonLines.ReadAsync<ContextRelation>(path, cancellationToken)
-                .ConfigureAwait(false);
-
-            IEnumerable<ContextRelation> filtered = direction switch
-            {
-                RelationDirection.Outgoing => relations.Where(relation =>
-                    string.Equals(relation.SourceId, itemId, StringComparison.OrdinalIgnoreCase)),
-                RelationDirection.Incoming => relations.Where(relation =>
-                    string.Equals(relation.TargetId, itemId, StringComparison.OrdinalIgnoreCase)),
-                _ => relations.Where(relation =>
-                    string.Equals(relation.SourceId, itemId, StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(relation.TargetId, itemId, StringComparison.OrdinalIgnoreCase))
-            };
-
-            return [.. filtered
-                .OrderByDescending(relation => relation.Weight)
-                .ThenByDescending(relation => relation.Confidence)
-                .ThenByDescending(relation => relation.CreatedAt)
-                .Skip(effectiveSkip)
-                .Take(effectiveTake)];
         }
         finally
         {
@@ -294,84 +236,32 @@ public sealed class FileRelationStore : IRelationStore
         }
     }
 
-    public Task<IReadOnlyList<ContextRelation>> QueryForItemAsync(
-        string workspaceId,
-        string collectionId,
-        string itemId,
-        CancellationToken cancellationToken = default)
+    /// <summary>
+    /// GRAPH-11：基于文件路径的命名 Mutex，提供跨进程/跨实例互斥。
+    /// Mutex 名称 sanitize 为合法字符；使用 using 确保释放。
+    /// </summary>
+    private static Mutex AcquireCrossInstanceLock(string path)
     {
-        return QueryAsync(new ContextRelationQuery
+        // 将路径转为合法 Mutex 名称（去掉反斜杠、冒号等非法字符）
+        var safe = new StringBuilder(path.Length);
+        foreach (var ch in path)
         {
-            WorkspaceId = workspaceId,
-            CollectionId = collectionId,
-            ItemId = itemId,
-            Take = int.MaxValue
-        }, cancellationToken);
-    }
-
-    public Task<IReadOnlyList<ContextRelation>> QueryBySourceAsync(
-        string workspaceId,
-        string collectionId,
-        string sourceId,
-        CancellationToken cancellationToken = default)
-    {
-        return QueryAsync(
-            workspaceId,
-            collectionId,
-            relation => string.Equals(relation.SourceId, sourceId, StringComparison.OrdinalIgnoreCase),
-            cancellationToken);
-    }
-
-    public Task<IReadOnlyList<ContextRelation>> QueryByTargetAsync(
-        string workspaceId,
-        string collectionId,
-        string targetId,
-        CancellationToken cancellationToken = default)
-    {
-        return QueryAsync(
-            workspaceId,
-            collectionId,
-            relation => string.Equals(relation.TargetId, targetId, StringComparison.OrdinalIgnoreCase),
-            cancellationToken);
-    }
-
-    public Task<IReadOnlyList<ContextRelation>> QueryByTypeAsync(
-        string workspaceId,
-        string collectionId,
-        string relationType,
-        CancellationToken cancellationToken = default)
-    {
-        return QueryAsync(
-            workspaceId,
-            collectionId,
-            relation => string.Equals(relation.RelationType, relationType, StringComparison.OrdinalIgnoreCase),
-            cancellationToken);
-    }
-
-    private async Task<IReadOnlyList<ContextRelation>> QueryAsync(
-        string workspaceId,
-        string collectionId,
-        Func<ContextRelation, bool> predicate,
-        CancellationToken cancellationToken)
-    {
-        var path = _paths.GetRelationsJsonlPath(workspaceId, collectionId);
-
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            var relations = await _jsonLines.ReadAsync<ContextRelation>(path, cancellationToken)
-                .ConfigureAwait(false);
-
-            return [.. relations
-                .Where(predicate)
-                .OrderByDescending(relation => relation.Weight)
-                .ThenByDescending(relation => relation.Confidence)
-                .ThenByDescending(relation => relation.CreatedAt)];
+            safe.Append(char.IsLetterOrDigit(ch) || ch == '_' || ch == '-' || ch == '.' ? ch : '_');
         }
-        finally
+        var mutex = new Mutex(initiallyOwned: true, name: "Global\\cc-rel-" + safe.ToString(), out var createdNew);
+        if (!createdNew)
         {
-            _gate.Release();
+            // 另一实例已持有；等待获取
+            try
+            {
+                mutex.WaitOne();
+            }
+            catch (AbandonedMutexException)
+            {
+                // 前一持有者异常退出；仍获得锁，继续
+            }
         }
+        return mutex;
     }
 
     private IReadOnlyList<string> ResolveCollectionIds(string workspaceId, string? collectionId)

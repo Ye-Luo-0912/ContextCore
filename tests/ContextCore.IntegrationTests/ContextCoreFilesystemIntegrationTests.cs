@@ -165,7 +165,7 @@ public sealed class ContextCoreFilesystemIntegrationTests
             var reloadedContext = await new FileContextStore(storage).GetAsync(item.WorkspaceId, item.CollectionId, item.Id);
             var reloadedWorking = await new FileMemoryStore(storage).GetAsync(item.WorkspaceId, item.CollectionId, workingMemory.Id);
             var reloadedStable = await new FileMemoryStore(storage).GetAsync(item.WorkspaceId, item.CollectionId, stableMemory.Id);
-            var reloadedRelation = await new FileRelationStore(storage).QueryForItemAsync(item.WorkspaceId, item.CollectionId, item.Id);
+            var reloadedRelation = await new FileRelationStore(storage).QueryAsync(new ContextRelationQuery { WorkspaceId = item.WorkspaceId, CollectionId = item.CollectionId, ItemId = item.Id, Take = int.MaxValue });
             var reloadedConstraint = await new FileConstraintStore(storage).QueryAsync(new ContextConstraintQuery
             {
                 WorkspaceId = item.WorkspaceId,

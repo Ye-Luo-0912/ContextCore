@@ -156,7 +156,7 @@ public class ContextCoreGraphTraversalSafetyTests
         Assert.AreEqual("A", result.Edges[0].Relation.SourceId);
         Assert.AreEqual("B", result.Edges[0].Relation.TargetId);
 
-        var bOutgoing = await store.QueryBySourceAsync("ws-test", "col-test", "B");
+        var bOutgoing = await store.QueryAsync(new ContextRelationQuery { WorkspaceId = "ws-test", CollectionId = "col-test", SourceId = "B", Take = int.MaxValue });
         Assert.AreEqual(0, bOutgoing.Count,
             "B has no outgoing relations because B does not exist in the store");
     }

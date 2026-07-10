@@ -317,8 +317,8 @@ internal static class RelationEndpoints
 			IRelationStore relations,
 			CancellationToken ct) =>
 		{
-			var outgoing = await relations.QueryBySourceAsync(workspaceId, collectionId, itemId, ct);
-			var incoming = await relations.QueryByTargetAsync(workspaceId, collectionId, itemId, ct);
+			var outgoing = await relations.QueryAsync(new ContextRelationQuery { WorkspaceId = workspaceId, CollectionId = collectionId, SourceId = itemId, Take = int.MaxValue }, ct);
+			var incoming = await relations.QueryAsync(new ContextRelationQuery { WorkspaceId = workspaceId, CollectionId = collectionId, TargetId = itemId, Take = int.MaxValue }, ct);
 			return Results.Ok(new ContextCoreRelationLookupResponse
 			{
 				ItemId = itemId,
@@ -348,8 +348,8 @@ internal static class RelationEndpoints
 					field: "workspaceId,collectionId");
 			}
 
-			var outgoing = await relations.QueryBySourceAsync(workspaceId, collectionId, itemId, ct);
-			var incoming = await relations.QueryByTargetAsync(workspaceId, collectionId, itemId, ct);
+			var outgoing = await relations.QueryAsync(new ContextRelationQuery { WorkspaceId = workspaceId, CollectionId = collectionId, SourceId = itemId, Take = int.MaxValue }, ct);
+			var incoming = await relations.QueryAsync(new ContextRelationQuery { WorkspaceId = workspaceId, CollectionId = collectionId, TargetId = itemId, Take = int.MaxValue }, ct);
 			return Results.Ok(new ContextCoreRelationLookupResponse
 			{
 				ItemId = itemId,

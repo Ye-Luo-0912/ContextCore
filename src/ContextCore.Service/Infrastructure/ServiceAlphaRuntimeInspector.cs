@@ -343,7 +343,7 @@ internal sealed class ServiceAlphaRuntimeInspector
                     RelationType = "deep-probe",
                     CreatedAt = now
                 }, token).ConfigureAwait(false);
-                var readBack = await relationStore.QueryBySourceAsync(SystemWorkspaceId, HealthCollectionId, DeepContextId, token).ConfigureAwait(false);
+                var readBack = await relationStore.QueryAsync(new ContextRelationQuery { WorkspaceId = SystemWorkspaceId, CollectionId = HealthCollectionId, SourceId = DeepContextId, Take = int.MaxValue }, token).ConfigureAwait(false);
                 if (!readBack.Any(item => item.Id == DeepRelationId))
                 {
                     throw new InvalidOperationException("deep relation probe 写入后未能按 source 查询到。");

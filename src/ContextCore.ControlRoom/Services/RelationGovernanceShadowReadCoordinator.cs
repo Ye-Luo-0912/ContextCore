@@ -51,20 +51,20 @@ public sealed class RelationGovernanceShadowReadCoordinator
 
     public Task<IReadOnlyList<ContextRelation>> QueryBySourceAsync(string operationId, string workspaceId, string collectionId, string sourceId, CancellationToken cancellationToken = default)
         => ExecuteAsync(operationId, workspaceId, collectionId, "RelationBySource", sourceId,
-            token => _fileRelationStore.QueryBySourceAsync(workspaceId, collectionId, sourceId, token),
-            token => _postgresRelationStore.QueryBySourceAsync(workspaceId, collectionId, sourceId, token),
+            token => _fileRelationStore.QueryAsync(new ContextRelationQuery { WorkspaceId = workspaceId, CollectionId = collectionId, SourceId = sourceId, Take = int.MaxValue }, token),
+            token => _postgresRelationStore.QueryAsync(new ContextRelationQuery { WorkspaceId = workspaceId, CollectionId = collectionId, SourceId = sourceId, Take = int.MaxValue }, token),
             cancellationToken);
 
     public Task<IReadOnlyList<ContextRelation>> QueryByTargetAsync(string operationId, string workspaceId, string collectionId, string targetId, CancellationToken cancellationToken = default)
         => ExecuteAsync(operationId, workspaceId, collectionId, "RelationByTarget", targetId,
-            token => _fileRelationStore.QueryByTargetAsync(workspaceId, collectionId, targetId, token),
-            token => _postgresRelationStore.QueryByTargetAsync(workspaceId, collectionId, targetId, token),
+            token => _fileRelationStore.QueryAsync(new ContextRelationQuery { WorkspaceId = workspaceId, CollectionId = collectionId, TargetId = targetId, Take = int.MaxValue }, token),
+            token => _postgresRelationStore.QueryAsync(new ContextRelationQuery { WorkspaceId = workspaceId, CollectionId = collectionId, TargetId = targetId, Take = int.MaxValue }, token),
             cancellationToken);
 
     public Task<IReadOnlyList<ContextRelation>> QueryByTypeAsync(string operationId, string workspaceId, string collectionId, string relationType, CancellationToken cancellationToken = default)
         => ExecuteAsync(operationId, workspaceId, collectionId, "RelationByType", relationType,
-            token => _fileRelationStore.QueryByTypeAsync(workspaceId, collectionId, relationType, token),
-            token => _postgresRelationStore.QueryByTypeAsync(workspaceId, collectionId, relationType, token),
+            token => _fileRelationStore.QueryAsync(new ContextRelationQuery { WorkspaceId = workspaceId, CollectionId = collectionId, RelationType = relationType, Take = int.MaxValue }, token),
+            token => _postgresRelationStore.QueryAsync(new ContextRelationQuery { WorkspaceId = workspaceId, CollectionId = collectionId, RelationType = relationType, Take = int.MaxValue }, token),
             cancellationToken);
 
     public Task<IReadOnlyList<ContextRelation>> QueryByLifecycleAsync(string operationId, string workspaceId, string collectionId, string lifecycle, CancellationToken cancellationToken = default)
@@ -136,7 +136,7 @@ public sealed class RelationGovernanceShadowReadCoordinator
 
     private async Task<IReadOnlyList<ContextRelation>> QueryFileReplacementChainAsync(string workspaceId, string collectionId, string itemId, CancellationToken cancellationToken)
     {
-        var relations = await _fileRelationStore.QueryForItemAsync(workspaceId, collectionId, itemId, cancellationToken).ConfigureAwait(false);
+        var relations = await _fileRelationStore.QueryAsync(new ContextRelationQuery { WorkspaceId = workspaceId, CollectionId = collectionId, ItemId = itemId, Take = int.MaxValue }, cancellationToken).ConfigureAwait(false);
         return [.. relations.Where(static relation =>
             string.Equals(relation.RelationType, ContextRelationTypes.SupersededBy, StringComparison.OrdinalIgnoreCase)
             || string.Equals(relation.RelationType, ContextRelationTypes.Replaces, StringComparison.OrdinalIgnoreCase)

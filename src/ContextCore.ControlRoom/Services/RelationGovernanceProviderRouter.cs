@@ -116,8 +116,8 @@ public sealed class RelationGovernanceProviderRouter
             workspaceId,
             collectionId,
             "RelationSourceQuery",
-            token => _fileRelationStore.QueryBySourceAsync(workspaceId, collectionId, sourceId, token),
-            token => _postgresRelationStore.QueryBySourceAsync(workspaceId, collectionId, sourceId, token),
+            token => _fileRelationStore.QueryAsync(new ContextRelationQuery { WorkspaceId = workspaceId, CollectionId = collectionId, SourceId = sourceId, Take = int.MaxValue }, token),
+            token => _postgresRelationStore.QueryAsync(new ContextRelationQuery { WorkspaceId = workspaceId, CollectionId = collectionId, SourceId = sourceId, Take = int.MaxValue }, token),
             false,
             cancellationToken);
 
@@ -127,8 +127,8 @@ public sealed class RelationGovernanceProviderRouter
             workspaceId,
             collectionId,
             "RelationTargetQuery",
-            token => _fileRelationStore.QueryByTargetAsync(workspaceId, collectionId, targetId, token),
-            token => _postgresRelationStore.QueryByTargetAsync(workspaceId, collectionId, targetId, token),
+            token => _fileRelationStore.QueryAsync(new ContextRelationQuery { WorkspaceId = workspaceId, CollectionId = collectionId, TargetId = targetId, Take = int.MaxValue }, token),
+            token => _postgresRelationStore.QueryAsync(new ContextRelationQuery { WorkspaceId = workspaceId, CollectionId = collectionId, TargetId = targetId, Take = int.MaxValue }, token),
             false,
             cancellationToken);
 
@@ -138,8 +138,8 @@ public sealed class RelationGovernanceProviderRouter
             workspaceId,
             collectionId,
             "RelationTypeQuery",
-            token => _fileRelationStore.QueryByTypeAsync(workspaceId, collectionId, relationType, token),
-            token => _postgresRelationStore.QueryByTypeAsync(workspaceId, collectionId, relationType, token),
+            token => _fileRelationStore.QueryAsync(new ContextRelationQuery { WorkspaceId = workspaceId, CollectionId = collectionId, RelationType = relationType, Take = int.MaxValue }, token),
+            token => _postgresRelationStore.QueryAsync(new ContextRelationQuery { WorkspaceId = workspaceId, CollectionId = collectionId, RelationType = relationType, Take = int.MaxValue }, token),
             false,
             cancellationToken);
 
@@ -179,7 +179,7 @@ public sealed class RelationGovernanceProviderRouter
             "RelationReplacementChainQuery",
             async token =>
             {
-                var relations = await _fileRelationStore.QueryForItemAsync(workspaceId, collectionId, itemId, token).ConfigureAwait(false);
+                var relations = await _fileRelationStore.QueryAsync(new ContextRelationQuery { WorkspaceId = workspaceId, CollectionId = collectionId, ItemId = itemId, Take = int.MaxValue }, token).ConfigureAwait(false);
                 return [.. relations.Where(IsReplacementRelation)];
             },
             token => _postgresRelationStore.QueryReplacementChainRelationsAsync(workspaceId, collectionId, itemId, token),

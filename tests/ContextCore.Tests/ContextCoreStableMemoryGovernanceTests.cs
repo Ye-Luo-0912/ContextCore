@@ -268,8 +268,8 @@ public sealed class ContextCoreStableMemoryGovernanceTests
         var result = await fixture.ReviewService.SupersedeAsync(
             "stable-old",
             CreateLifecycleRequest("newer stable item", replacementItemId: "stable-new"));
-        var outgoing = await fixture.RelationStore.QueryBySourceAsync("workspace-test", "collection-test", "stable-old");
-        var replacementOutgoing = await fixture.RelationStore.QueryBySourceAsync("workspace-test", "collection-test", "stable-new");
+        var outgoing = await fixture.RelationStore.QueryAsync(new ContextRelationQuery { WorkspaceId = "workspace-test", CollectionId = "collection-test", SourceId = "stable-old", Take = int.MaxValue });
+        var replacementOutgoing = await fixture.RelationStore.QueryAsync(new ContextRelationQuery { WorkspaceId = "workspace-test", CollectionId = "collection-test", SourceId = "stable-new", Take = int.MaxValue });
 
         Assert.IsNotNull(result);
         Assert.IsTrue(outgoing.Any(relation =>
@@ -336,7 +336,7 @@ public sealed class ContextCoreStableMemoryGovernanceTests
             }));
         await fixture.MemoryStore.SaveAsync(CreateStableMemory("stable-new", "preference", "New stable preference.", ["evidence-new"]));
         await fixture.MemoryStore.SaveAsync(CreateStableMemory("stable-other", "preference", "Other stable preference.", ["evidence-other"]));
-        await fixture.RelationStore.SaveManyAsync(
+        await fixture.RelationStore.BatchUpsertAsync(
         [
             CreateReplacementRelation("stable-old", "stable-other", ContextRelationTypes.SupersededBy),
             CreateReplacementRelation("stable-other", "stable-old", ContextRelationTypes.Replaces)
@@ -405,7 +405,7 @@ public sealed class ContextCoreStableMemoryGovernanceTests
                 ["sourceStableReviewCandidateId"] = "src-b",
                 ["evidenceRefs"] = "evidence-b"
             }));
-        await fixture.RelationStore.SaveManyAsync(
+        await fixture.RelationStore.BatchUpsertAsync(
         [
             CreateReplacementRelation("stable-a", "stable-b", ContextRelationTypes.SupersededBy),
             CreateReplacementRelation("stable-b", "stable-a", ContextRelationTypes.Replaces),

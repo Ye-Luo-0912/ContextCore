@@ -238,15 +238,6 @@ public sealed class ScopedRelationGovernanceStore : IRelationStore
             token => _postgresStore.SaveAsync(relation, token),
             cancellationToken);
 
-    public async Task SaveManyAsync(IEnumerable<ContextRelation> relations, CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(relations);
-        foreach (var relation in relations)
-        {
-            await SaveAsync(relation, cancellationToken).ConfigureAwait(false);
-        }
-    }
-
     public Task<IReadOnlyList<ContextRelation>> QueryAsync(ContextRelationQuery query, CancellationToken cancellationToken = default)
         => ExecuteReadAsync(
             "service-relation-query",
@@ -255,46 +246,6 @@ public sealed class ScopedRelationGovernanceStore : IRelationStore
             "RelationList",
             token => _fileStore.QueryAsync(query, token),
             token => _postgresStore.QueryAsync(query, token),
-            cancellationToken);
-
-    public Task<IReadOnlyList<ContextRelation>> QueryForItemAsync(string workspaceId, string collectionId, string itemId, CancellationToken cancellationToken = default)
-        => ExecuteReadAsync(
-            "service-relation-item-query",
-            workspaceId,
-            collectionId,
-            "RelationItemQuery",
-            token => _fileStore.QueryForItemAsync(workspaceId, collectionId, itemId, token),
-            token => _postgresStore.QueryForItemAsync(workspaceId, collectionId, itemId, token),
-            cancellationToken);
-
-    public Task<IReadOnlyList<ContextRelation>> QueryBySourceAsync(string workspaceId, string collectionId, string sourceId, CancellationToken cancellationToken = default)
-        => ExecuteReadAsync(
-            "service-relation-source-query",
-            workspaceId,
-            collectionId,
-            "RelationSourceQuery",
-            token => _fileStore.QueryBySourceAsync(workspaceId, collectionId, sourceId, token),
-            token => _postgresStore.QueryBySourceAsync(workspaceId, collectionId, sourceId, token),
-            cancellationToken);
-
-    public Task<IReadOnlyList<ContextRelation>> QueryByTargetAsync(string workspaceId, string collectionId, string targetId, CancellationToken cancellationToken = default)
-        => ExecuteReadAsync(
-            "service-relation-target-query",
-            workspaceId,
-            collectionId,
-            "RelationTargetQuery",
-            token => _fileStore.QueryByTargetAsync(workspaceId, collectionId, targetId, token),
-            token => _postgresStore.QueryByTargetAsync(workspaceId, collectionId, targetId, token),
-            cancellationToken);
-
-    public Task<IReadOnlyList<ContextRelation>> QueryByTypeAsync(string workspaceId, string collectionId, string relationType, CancellationToken cancellationToken = default)
-        => ExecuteReadAsync(
-            "service-relation-type-query",
-            workspaceId,
-            collectionId,
-            "RelationTypeQuery",
-            token => _fileStore.QueryByTypeAsync(workspaceId, collectionId, relationType, token),
-            token => _postgresStore.QueryByTypeAsync(workspaceId, collectionId, relationType, token),
             cancellationToken);
 
     public Task<ContextRelation?> GetAsync(string workspaceId, string collectionId, string relationId, CancellationToken cancellationToken = default)
@@ -342,16 +293,6 @@ public sealed class ScopedRelationGovernanceStore : IRelationStore
             token => _postgresStore.BatchUpsertAsync(list, token),
             cancellationToken);
     }
-
-    public Task<IReadOnlyList<ContextRelation>> QueryNeighborsAsync(string workspaceId, string collectionId, string itemId, RelationDirection direction = RelationDirection.Both, int take = 100, int skip = 0, CancellationToken cancellationToken = default)
-        => ExecuteReadAsync(
-            "service-relation-neighbors",
-            workspaceId,
-            collectionId,
-            "RelationNeighborsQuery",
-            token => _fileStore.QueryNeighborsAsync(workspaceId, collectionId, itemId, direction, take, skip, token),
-            token => _postgresStore.QueryNeighborsAsync(workspaceId, collectionId, itemId, direction, take, skip, token),
-            cancellationToken);
 
     /// <summary>GRAPH-10：统一邻居查询委托。</summary>
     public Task<IReadOnlyList<ContextRelation>> QueryNeighborsAsync(RelationNeighborQuery query, CancellationToken cancellationToken = default)

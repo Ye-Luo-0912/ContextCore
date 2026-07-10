@@ -14,47 +14,19 @@ public enum RelationDirection
 }
 
 /// <summary>存储和查询上下文条目之间的有向关系。</summary>
+/// <remarks>
+/// GRAPH-11：接口精简为 5 个核心方法 + SaveAsync 薄包装。
+/// 核心：Get/Delete/BatchUpsert/Query/QueryNeighbors(RelationNeighborQuery)。
+/// SaveAsync 保留为单条便利方法，实现委托 BatchUpsertAsync；旧 SaveMany/QueryForItem/QueryBySource/QueryByTarget/QueryByType 已移除，统一走 Query。
+/// </remarks>
 public interface IRelationStore
 {
-    /// <summary>保存或更新一条关系。</summary>
+    /// <summary>保存或更新一条关系。等价于 BatchUpsertAsync([relation])，保留为单条便利方法。</summary>
     Task SaveAsync(ContextRelation relation, CancellationToken cancellationToken = default);
 
-    /// <summary>批量保存或更新关系，适合压缩和打包后一次写入多个边。</summary>
-    Task SaveManyAsync(
-        IEnumerable<ContextRelation> relations,
-        CancellationToken cancellationToken = default);
-
-    /// <summary>按条件查询关系。</summary>
+    /// <summary>按条件查询关系。SourceId/TargetId/ItemId/RelationType 均通过 ContextRelationQuery 过滤，取代旧 QueryBy* 方法。</summary>
     Task<IReadOnlyList<ContextRelation>> QueryAsync(
         ContextRelationQuery query,
-        CancellationToken cancellationToken = default);
-
-    /// <summary>查询指定条目的所有出边和入边。</summary>
-    Task<IReadOnlyList<ContextRelation>> QueryForItemAsync(
-        string workspaceId,
-        string collectionId,
-        string itemId,
-        CancellationToken cancellationToken = default);
-
-    /// <summary>查询指定来源条目的出边。</summary>
-    Task<IReadOnlyList<ContextRelation>> QueryBySourceAsync(
-        string workspaceId,
-        string collectionId,
-        string sourceId,
-        CancellationToken cancellationToken = default);
-
-    /// <summary>查询指向指定目标条目的入边。</summary>
-    Task<IReadOnlyList<ContextRelation>> QueryByTargetAsync(
-        string workspaceId,
-        string collectionId,
-        string targetId,
-        CancellationToken cancellationToken = default);
-
-    /// <summary>查询指定类型的关系。</summary>
-    Task<IReadOnlyList<ContextRelation>> QueryByTypeAsync(
-        string workspaceId,
-        string collectionId,
-        string relationType,
         CancellationToken cancellationToken = default);
 
     /// <summary>按 ID 获取单条关系。不存在时返回 null。</summary>
@@ -74,16 +46,6 @@ public interface IRelationStore
     /// <summary>批量 upsert，实现应在单连接单事务中完成（Postgres）或原子写入（FileSystem）。</summary>
     Task BatchUpsertAsync(
         IEnumerable<ContextRelation> relations,
-        CancellationToken cancellationToken = default);
-
-    /// <summary>查询邻居节点（合并出边和入边），支持方向过滤和分页。</summary>
-    Task<IReadOnlyList<ContextRelation>> QueryNeighborsAsync(
-        string workspaceId,
-        string collectionId,
-        string itemId,
-        RelationDirection direction = RelationDirection.Both,
-        int take = 100,
-        int skip = 0,
         CancellationToken cancellationToken = default);
 
     /// <summary>

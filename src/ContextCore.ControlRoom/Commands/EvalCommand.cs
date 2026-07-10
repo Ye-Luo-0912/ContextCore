@@ -3706,7 +3706,7 @@ public static partial class EvalCommand
                 [$"evidence:fanout-{i:00}"]));
         }
 
-        await relationStore.SaveManyAsync(relations, cancellationToken).ConfigureAwait(false);
+        await relationStore.BatchUpsertAsync(relations, cancellationToken).ConfigureAwait(false);
 
         ContextRelation Relation(
             string id,
@@ -9764,7 +9764,7 @@ public static partial class EvalCommand
             IReadOnlyList<ContextRelation> relations;
             try
             {
-                relations = await relationStore.QueryForItemAsync(workspaceId, collectionId, pair.Key, cancellationToken)
+                relations = await relationStore.QueryAsync(new ContextRelationQuery { WorkspaceId = workspaceId, CollectionId = collectionId, ItemId = pair.Key, Take = int.MaxValue }, cancellationToken)
                     .ConfigureAwait(false);
             }
             catch (IOException)
@@ -13323,18 +13323,18 @@ public static partial class EvalCommand
             "ListMismatch",
             mismatches).ConfigureAwait(false);
         var sourcePassed = await CompareQueryAsync(
-            fileStore.QueryBySourceAsync(workspaceId, collectionId, "item-b", cancellationToken),
-            postgresStore.QueryBySourceAsync(workspaceId, collectionId, "item-b", cancellationToken),
+            fileStore.QueryAsync(new ContextRelationQuery { WorkspaceId = workspaceId, CollectionId = collectionId, SourceId = "item-b", Take = int.MaxValue }, cancellationToken),
+            postgresStore.QueryAsync(new ContextRelationQuery { WorkspaceId = workspaceId, CollectionId = collectionId, SourceId = "item-b", Take = int.MaxValue }, cancellationToken),
             "SourceQueryMismatch",
             mismatches).ConfigureAwait(false);
         var targetPassed = await CompareQueryAsync(
-            fileStore.QueryByTargetAsync(workspaceId, collectionId, "item-c", cancellationToken),
-            postgresStore.QueryByTargetAsync(workspaceId, collectionId, "item-c", cancellationToken),
+            fileStore.QueryAsync(new ContextRelationQuery { WorkspaceId = workspaceId, CollectionId = collectionId, TargetId = "item-c", Take = int.MaxValue }, cancellationToken),
+            postgresStore.QueryAsync(new ContextRelationQuery { WorkspaceId = workspaceId, CollectionId = collectionId, TargetId = "item-c", Take = int.MaxValue }, cancellationToken),
             "TargetQueryMismatch",
             mismatches).ConfigureAwait(false);
         var typePassed = await CompareQueryAsync(
-            fileStore.QueryByTypeAsync(workspaceId, collectionId, ContextRelationTypes.Replaces, cancellationToken),
-            postgresStore.QueryByTypeAsync(workspaceId, collectionId, ContextRelationTypes.Replaces, cancellationToken),
+            fileStore.QueryAsync(new ContextRelationQuery { WorkspaceId = workspaceId, CollectionId = collectionId, RelationType = ContextRelationTypes.Replaces, Take = int.MaxValue }, cancellationToken),
+            postgresStore.QueryAsync(new ContextRelationQuery { WorkspaceId = workspaceId, CollectionId = collectionId, RelationType = ContextRelationTypes.Replaces, Take = int.MaxValue }, cancellationToken),
             "TypeQueryMismatch",
             mismatches).ConfigureAwait(false);
 
@@ -13581,18 +13581,18 @@ public static partial class EvalCommand
                 "GovernanceRelationListMismatch",
                 mismatches).ConfigureAwait(false),
             await CompareQueryAsync(
-                fileRelationStore.QueryBySourceAsync(workspaceId, collectionId, "gov-source-a", cancellationToken),
-                postgresRelationStore.QueryBySourceAsync(workspaceId, collectionId, "gov-source-a", cancellationToken),
+                fileRelationStore.QueryAsync(new ContextRelationQuery { WorkspaceId = workspaceId, CollectionId = collectionId, SourceId = "gov-source-a", Take = int.MaxValue }, cancellationToken),
+                postgresRelationStore.QueryAsync(new ContextRelationQuery { WorkspaceId = workspaceId, CollectionId = collectionId, SourceId = "gov-source-a", Take = int.MaxValue }, cancellationToken),
                 "GovernanceSourceQueryMismatch",
                 mismatches).ConfigureAwait(false),
             await CompareQueryAsync(
-                fileRelationStore.QueryByTargetAsync(workspaceId, collectionId, "gov-target-b", cancellationToken),
-                postgresRelationStore.QueryByTargetAsync(workspaceId, collectionId, "gov-target-b", cancellationToken),
+                fileRelationStore.QueryAsync(new ContextRelationQuery { WorkspaceId = workspaceId, CollectionId = collectionId, TargetId = "gov-target-b", Take = int.MaxValue }, cancellationToken),
+                postgresRelationStore.QueryAsync(new ContextRelationQuery { WorkspaceId = workspaceId, CollectionId = collectionId, TargetId = "gov-target-b", Take = int.MaxValue }, cancellationToken),
                 "GovernanceTargetQueryMismatch",
                 mismatches).ConfigureAwait(false),
             await CompareQueryAsync(
-                fileRelationStore.QueryByTypeAsync(workspaceId, collectionId, ContextRelationTypes.Replaces, cancellationToken),
-                postgresRelationStore.QueryByTypeAsync(workspaceId, collectionId, ContextRelationTypes.Replaces, cancellationToken),
+                fileRelationStore.QueryAsync(new ContextRelationQuery { WorkspaceId = workspaceId, CollectionId = collectionId, RelationType = ContextRelationTypes.Replaces, Take = int.MaxValue }, cancellationToken),
+                postgresRelationStore.QueryAsync(new ContextRelationQuery { WorkspaceId = workspaceId, CollectionId = collectionId, RelationType = ContextRelationTypes.Replaces, Take = int.MaxValue }, cancellationToken),
                 "GovernanceTypeQueryMismatch",
                 mismatches).ConfigureAwait(false),
             SameIds(

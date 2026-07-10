@@ -3621,9 +3621,9 @@ private static async Task ExecuteStorageCheckAsync(
                     CreatedAt = now
                 };
                 await state.RelationStore.SaveAsync(relation, token);
-                var readBack = await state.RelationStore.QueryBySourceAsync(ProbeWs, ProbeColl, probeId, token);
+                var readBack = await state.RelationStore.QueryAsync(new ContextRelationQuery { WorkspaceId = ProbeWs, CollectionId = ProbeColl, SourceId = probeId, Take = int.MaxValue }, token);
                 if (!readBack.Any(r => r.Id == probeId))
-                    throw new InvalidOperationException("写入成功但 QueryBySourceAsync 找不到探针关系");
+                    throw new InvalidOperationException("写入成功但 QueryAsync 找不到探针关系");
                 return "写入→QueryBySource 成功（接口无 DeleteAsync）";
             }),
 

@@ -831,9 +831,9 @@ public sealed class ContextCoreMvpTests
 
             await store.SaveAsync(relation);
 
-            var bySource = await store.QueryBySourceAsync("workspace-test", "collection-test", "source-1");
-            var byTarget = await store.QueryByTargetAsync("workspace-test", "collection-test", "target-1");
-            var byType = await store.QueryByTypeAsync("workspace-test", "collection-test", "supports");
+            var bySource = await store.QueryAsync(new ContextRelationQuery { WorkspaceId = "workspace-test", CollectionId = "collection-test", SourceId = "source-1", Take = int.MaxValue });
+            var byTarget = await store.QueryAsync(new ContextRelationQuery { WorkspaceId = "workspace-test", CollectionId = "collection-test", TargetId = "target-1", Take = int.MaxValue });
+            var byType = await store.QueryAsync(new ContextRelationQuery { WorkspaceId = "workspace-test", CollectionId = "collection-test", RelationType = "supports", Take = int.MaxValue });
 
             Assert.AreEqual(1, bySource.Count);
             Assert.AreEqual(1, byTarget.Count);
@@ -2597,7 +2597,7 @@ public sealed class ContextCoreMvpTests
 
             await store.SaveAsync(relation);
 
-            var results = await store.QueryBySourceAsync("workspace-test", "collection-test", "source-1");
+            var results = await store.QueryAsync(new ContextRelationQuery { WorkspaceId = "workspace-test", CollectionId = "collection-test", SourceId = "source-1", Take = int.MaxValue });
 
             Assert.AreEqual(1, results.Count);
             Assert.AreEqual("relation-source", results[0].Id);
@@ -2631,7 +2631,7 @@ public sealed class ContextCoreMvpTests
                 targetId: "target-2",
                 relationType: ContextRelationTypes.DependsOn));
 
-            var results = await store.QueryByTargetAsync("workspace-test", "collection-test", "target-1");
+            var results = await store.QueryAsync(new ContextRelationQuery { WorkspaceId = "workspace-test", CollectionId = "collection-test", TargetId = "target-1", Take = int.MaxValue });
 
             Assert.AreEqual(1, results.Count);
             Assert.AreEqual("matched", results[0].Id);
@@ -4587,7 +4587,7 @@ public sealed class ContextCoreMvpTests
 
     private static async Task AssertSaveManyAndQueryForItemAsync(IRelationStore store)
     {
-        await store.SaveManyAsync(new[]
+        await store.BatchUpsertAsync(new[]
         {
             CreateRelation(
                 id: "outgoing",
@@ -4606,7 +4606,7 @@ public sealed class ContextCoreMvpTests
                 relationType: ContextRelationTypes.RelatedTo)
         });
 
-        var results = await store.QueryForItemAsync("workspace-test", "collection-test", "source-1");
+        var results = await store.QueryAsync(new ContextRelationQuery { WorkspaceId = "workspace-test", CollectionId = "collection-test", ItemId = "source-1", Take = int.MaxValue });
 
         Assert.AreEqual(2, results.Count);
         Assert.IsTrue(results.Any(item => item.Id == "outgoing"));

@@ -1666,7 +1666,7 @@ public sealed class ServiceApiIntegrationTests
             CollectionAssert.Contains(targetMemory.SourceRefs.ToArray(), decision.CandidateId);
             CollectionAssert.Contains(targetMemory.SourceRefs.ToArray(), "event-review-1");
 
-            var relations = await relationStore.QueryForItemAsync("workspace-review", "collection-review", targetMemory.Id);
+            var relations = await relationStore.QueryAsync(new ContextRelationQuery { WorkspaceId = "workspace-review", CollectionId = "collection-review", ItemId = targetMemory.Id, Take = int.MaxValue });
             Assert.IsTrue(relations.Any(item => item.RelationType == ContextRelationTypes.PromotedFrom));
             Assert.IsTrue(relations.Any(item => item.RelationType == ContextRelationTypes.EvidenceFor));
 

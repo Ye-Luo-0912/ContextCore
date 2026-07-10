@@ -8825,16 +8825,8 @@ public sealed class ControlRoomService
         string id,
         CancellationToken cancellationToken = default)
     {
-        var upstream = await _state.RelationStore.QueryByTargetAsync(
-            _state.WorkspaceId,
-            _state.CollectionId,
-            id,
-            cancellationToken).ConfigureAwait(false);
-        var downstream = await _state.RelationStore.QueryBySourceAsync(
-            _state.WorkspaceId,
-            _state.CollectionId,
-            id,
-            cancellationToken).ConfigureAwait(false);
+        var upstream = await _state.RelationStore.QueryAsync(new ContextRelationQuery { WorkspaceId = _state.WorkspaceId, CollectionId = _state.CollectionId, TargetId = id, Take = int.MaxValue }, cancellationToken).ConfigureAwait(false);
+        var downstream = await _state.RelationStore.QueryAsync(new ContextRelationQuery { WorkspaceId = _state.WorkspaceId, CollectionId = _state.CollectionId, SourceId = id, Take = int.MaxValue }, cancellationToken).ConfigureAwait(false);
 
         return new RelationGraph
         {
@@ -9529,11 +9521,7 @@ public sealed class ControlRoomService
         string id,
         CancellationToken cancellationToken)
     {
-        return _state.RelationStore.QueryForItemAsync(
-            _state.WorkspaceId,
-            _state.CollectionId,
-            id,
-            cancellationToken);
+        return _state.RelationStore.QueryAsync(new ContextRelationQuery { WorkspaceId = _state.WorkspaceId, CollectionId = _state.CollectionId, ItemId = id, Take = int.MaxValue }, cancellationToken);
     }
 
     private static ContextMemoryLayer? ParseMemoryLayer(string layer)

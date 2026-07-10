@@ -9,25 +9,9 @@ public sealed class InMemoryRelationStore : IRelationStore
 {
     private readonly ConcurrentDictionary<string, ContextRelation> _relations = new();
 
+    /// <summary>GRAPH-11：SaveAsync 委托 BatchUpsertAsync，保留为单条便利方法。</summary>
     public Task SaveAsync(ContextRelation relation, CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(relation);
-        cancellationToken.ThrowIfCancellationRequested();
-
-        var normalized = relation.Id.Length == 0
-            ? Clone(relation, Guid.NewGuid().ToString("N"))
-            : Clone(relation);
-        _relations[Key(normalized.WorkspaceId, normalized.CollectionId, normalized.Id)] = normalized;
-
-        return Task.CompletedTask;
-    }
-
-    public Task SaveManyAsync(
-        IEnumerable<ContextRelation> relations,
-        CancellationToken cancellationToken = default)
-    {
-        return BatchUpsertAsync(relations, cancellationToken);
-    }
+        => BatchUpsertAsync([relation], cancellationToken);
 
     public Task BatchUpsertAsync(
         IEnumerable<ContextRelation> relations,
@@ -70,45 +54,6 @@ public sealed class InMemoryRelationStore : IRelationStore
         cancellationToken.ThrowIfCancellationRequested();
         return Task.FromResult(
             _relations.TryRemove(Key(workspaceId, collectionId, relationId), out _));
-    }
-
-    public Task<IReadOnlyList<ContextRelation>> QueryNeighborsAsync(
-        string workspaceId,
-        string collectionId,
-        string itemId,
-        RelationDirection direction = RelationDirection.Both,
-        int take = 100,
-        int skip = 0,
-        CancellationToken cancellationToken = default)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-
-        var effectiveTake = take > 0 ? take : 100;
-        var effectiveSkip = skip > 0 ? skip : 0;
-
-        IEnumerable<ContextRelation> filtered = _relations.Values
-            .Where(item => string.Equals(item.WorkspaceId, workspaceId, StringComparison.OrdinalIgnoreCase))
-            .Where(item => string.Equals(item.CollectionId, collectionId, StringComparison.OrdinalIgnoreCase));
-
-        filtered = direction switch
-        {
-            RelationDirection.Outgoing => filtered.Where(item => string.Equals(item.SourceId, itemId, StringComparison.OrdinalIgnoreCase)),
-            RelationDirection.Incoming => filtered.Where(item => string.Equals(item.TargetId, itemId, StringComparison.OrdinalIgnoreCase)),
-            _ => filtered.Where(item =>
-                string.Equals(item.SourceId, itemId, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(item.TargetId, itemId, StringComparison.OrdinalIgnoreCase))
-        };
-
-        var results = filtered
-            .OrderByDescending(item => item.Weight)
-            .ThenByDescending(item => item.Confidence)
-            .ThenByDescending(item => item.CreatedAt)
-            .Skip(effectiveSkip)
-            .Take(effectiveTake)
-            .Select(item => Clone(item))
-            .ToArray();
-
-        return Task.FromResult<IReadOnlyList<ContextRelation>>(results);
     }
 
     /// <summary>GRAPH-10：统一邻居查询，在内存中过滤。</summary>
@@ -210,66 +155,6 @@ public sealed class InMemoryRelationStore : IRelationStore
             .ToArray();
 
         return Task.FromResult<IReadOnlyList<ContextRelation>>(results);
-    }
-
-    public Task<IReadOnlyList<ContextRelation>> QueryForItemAsync(
-        string workspaceId,
-        string collectionId,
-        string itemId,
-        CancellationToken cancellationToken = default)
-    {
-        return QueryAsync(new ContextRelationQuery
-        {
-            WorkspaceId = workspaceId,
-            CollectionId = collectionId,
-            ItemId = itemId,
-            Take = int.MaxValue
-        }, cancellationToken);
-    }
-
-    public Task<IReadOnlyList<ContextRelation>> QueryBySourceAsync(
-        string workspaceId,
-        string collectionId,
-        string sourceId,
-        CancellationToken cancellationToken = default)
-    {
-        return QueryAsync(new ContextRelationQuery
-        {
-            WorkspaceId = workspaceId,
-            CollectionId = collectionId,
-            SourceId = sourceId,
-            Take = int.MaxValue
-        }, cancellationToken);
-    }
-
-    public Task<IReadOnlyList<ContextRelation>> QueryByTargetAsync(
-        string workspaceId,
-        string collectionId,
-        string targetId,
-        CancellationToken cancellationToken = default)
-    {
-        return QueryAsync(new ContextRelationQuery
-        {
-            WorkspaceId = workspaceId,
-            CollectionId = collectionId,
-            TargetId = targetId,
-            Take = int.MaxValue
-        }, cancellationToken);
-    }
-
-    public Task<IReadOnlyList<ContextRelation>> QueryByTypeAsync(
-        string workspaceId,
-        string collectionId,
-        string relationType,
-        CancellationToken cancellationToken = default)
-    {
-        return QueryAsync(new ContextRelationQuery
-        {
-            WorkspaceId = workspaceId,
-            CollectionId = collectionId,
-            RelationType = relationType,
-            Take = int.MaxValue
-        }, cancellationToken);
     }
 
     private static ContextRelation Clone(ContextRelation relation, string? id = null)
