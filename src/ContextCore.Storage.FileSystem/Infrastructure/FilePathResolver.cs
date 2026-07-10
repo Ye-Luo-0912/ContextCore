@@ -26,15 +26,37 @@ public sealed class FilePathResolver
 	/// <summary>获取存储根目录的绝对路径。</summary>
 	public string RootPath => _root;
 
+	/// <summary>
+	/// 对路径 segment 进行安全规范化：替换非法字符、截断超长 ID、空白回退为 default。
+	/// 委托给 <see cref="ContextCoreDataLayout.SanitizeSegment"/> 保证与 artifact 路径一致。
+	/// </summary>
+	public string SanitizeSegment(string segment) => _layout.SanitizeSegment(segment);
+
+	/// <summary>
+	/// 确保解析后的绝对路径位于存储根目录内，防止 rooted path、../ 遍历和 UNC 逃逸。
+	/// </summary>
+	public string EnsureInsideRoot(string fullPath)
+	{
+		var normalized = Path.GetFullPath(fullPath);
+		var rootWithSep = _root.EndsWith(Path.DirectorySeparatorChar) || _root.EndsWith(Path.AltDirectorySeparatorChar)
+			? _root
+			: _root + Path.DirectorySeparatorChar;
+		if (!normalized.StartsWith(rootWithSep, StringComparison.OrdinalIgnoreCase) && !normalized.Equals(_root, StringComparison.OrdinalIgnoreCase))
+		{
+			throw new InvalidOperationException($"路径逃逸出存储根目录: {normalized} (root={_root})");
+		}
+		return normalized;
+	}
+
 	// ── Collections ──────────────────────────────────────────────────────────
 
 	/// <summary>获取指定工作空间下所有集合的根目录。</summary>
 	public string GetCollectionsDirectory(string workspaceId)
-		=> Path.Combine(_root, "workspaces", workspaceId, "collections");
+		=> EnsureInsideRoot(Path.Combine(_root, "workspaces", SanitizeSegment(workspaceId), "collections"));
 
 	/// <summary>获取指定集合的目录。</summary>
 	public string GetCollectionDirectory(string workspaceId, string collectionId)
-		=> Path.Combine(GetCollectionsDirectory(workspaceId), collectionId);
+		=> EnsureInsideRoot(Path.Combine(GetCollectionsDirectory(workspaceId), SanitizeSegment(collectionId)));
 
 	/// <summary>获取集合元数据文件路径（collection.json）。</summary>
 	public string GetCollectionFilePath(string workspaceId, string collectionId)
@@ -70,7 +92,7 @@ public sealed class FilePathResolver
 			ContextContentFormat.Html => ".html",
 			_ => ".txt"
 		};
-		return Path.Combine(GetRawDirectory(workspaceId, collectionId), itemId + ext);
+		return Path.Combine(GetRawDirectory(workspaceId, collectionId), SanitizeSegment(itemId) + ext);
 	}
 
 	// ── Relations ────────────────────────────────────────────────────────────
@@ -103,13 +125,13 @@ public sealed class FilePathResolver
 
 	/// <summary>获取工作空间全局约束 JSONL 文件路径。</summary>
 	public string GetGlobalConstraintsJsonlPath(string workspaceId)
-		=> Path.Combine(_root, workspaceId, "global-constraints.jsonl");
+		=> EnsureInsideRoot(Path.Combine(_root, SanitizeSegment(workspaceId), "global-constraints.jsonl"));
 
 	// ── Global Context ───────────────────────────────────────────────────────
 
 	/// <summary>获取工作空间全局上下文 JSONL 文件路径。</summary>
 	public string GetGlobalContextJsonlPath(string workspaceId)
-		=> Path.Combine(_root, workspaceId, "global-context.jsonl");
+		=> EnsureInsideRoot(Path.Combine(_root, SanitizeSegment(workspaceId), "global-context.jsonl"));
 
 	// ── Index ────────────────────────────────────────────────────────────────
 
@@ -416,12 +438,7 @@ public sealed class FilePathResolver
 			Extension = ".jsonl"
 		});
 		var tracesRoot = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(path)!, "..", ".."));
-		var categoryPath = Path.GetFullPath(Path.Combine(tracesRoot, category));
-		if (!categoryPath.StartsWith(tracesRoot, StringComparison.OrdinalIgnoreCase))
-		{
-			throw new InvalidOperationException("trace category path escaped traces root.");
-		}
-
-		return categoryPath;
+		var categoryPath = Path.GetFullPath(Path.Combine(tracesRoot, SanitizeSegment(category)));
+		return EnsureInsideRoot(categoryPath);
 	}
 }
