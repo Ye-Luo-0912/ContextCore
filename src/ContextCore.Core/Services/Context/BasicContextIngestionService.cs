@@ -11,10 +11,17 @@ namespace ContextCore.Core;
 public sealed class BasicContextIngestionService
 {
     private readonly IContextStore _store;
+    private readonly IRelationProjector? _relationProjector;
+    private readonly IRelationStore? _relationStore;
 
-    public BasicContextIngestionService(IContextStore store)
+    public BasicContextIngestionService(
+        IContextStore store,
+        IRelationProjector? relationProjector = null,
+        IRelationStore? relationStore = null)
     {
         _store = store;
+        _relationProjector = relationProjector;
+        _relationStore = relationStore;
     }
 
     /// <summary>规范化并保存一个上下文条目，若未提供 ID 则自动生成。</summary>
@@ -58,6 +65,15 @@ public sealed class BasicContextIngestionService
         };
 
         await _store.SaveAsync(normalized, cancellationToken).ConfigureAwait(false);
+
+        if (_relationProjector is not null && _relationStore is not null)
+        {
+            var ingestRelations = _relationProjector.ProjectForIngest(normalized);
+            if (ingestRelations.Count > 0)
+            {
+                await _relationStore.BatchUpsertAsync(ingestRelations, cancellationToken).ConfigureAwait(false);
+            }
+        }
 
         return normalized;
     }

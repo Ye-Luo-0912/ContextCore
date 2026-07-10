@@ -24,29 +24,30 @@ internal static class CompressionEndpoints
 			IContextStore store,
 			IContextIndex index,
 			IRelationStore relationStore,
-			RelationBuilder relationBuilder,
-			CancellationToken ct) =>
+		IRelationProjector relationProjector,
+		CancellationToken ct) =>
+	{
+		var response = await compressor.CompressAsync(request, ct);
+
+		// 同步压缩不仅返回结果，也把生成条目、索引提示和关系写回存储，便于后续查询/打包复用。
+		foreach (var item in response.GeneratedItems)
 		{
-			var response = await compressor.CompressAsync(request, ct);
+			await store.SaveAsync(item, ct);
+		}
 
-			// 同步压缩不仅返回结果，也把生成条目、索引提示和关系写回存储，便于后续查询/打包复用。
-			foreach (var item in response.GeneratedItems)
-			{
-				await store.SaveAsync(item, ct);
-			}
+		foreach (var entry in response.IndexHints)
+		{
+			await index.UpsertAsync(entry, ct);
+		}
 
-			foreach (var entry in response.IndexHints)
-			{
-				await index.UpsertAsync(entry, ct);
-			}
+		var compressionRelations = relationProjector.ProjectForCompression(response);
+		if (compressionRelations.Count > 0)
+		{
+			await relationStore.BatchUpsertAsync(compressionRelations, ct);
+		}
 
-			foreach (var relation in relationBuilder.BuildForCompressionResponse(response))
-			{
-				await relationStore.SaveAsync(relation, ct);
-			}
-
-			return Results.Ok(response);
-		})
+		return Results.Ok(response);
+	})
 		.WithName("RunCompressionSync")
 		.WithSummary("同步执行压缩并保存生成结果");
 

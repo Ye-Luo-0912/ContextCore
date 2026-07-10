@@ -87,6 +87,34 @@ public interface IRelationStore
         CancellationToken cancellationToken = default);
 }
 
+/// <summary>
+/// 统一的关系生产投影器，在 Ingest/Compression/Promotion/Lifecycle Review 四个流程中生成图边。
+/// 实现负责统一填充 GRAPH-01 契约字段（SourceNodeKind/TargetNodeKind/Lifecycle/ReviewStatus/UpdatedAt/Provenance）。
+/// 生成的关系列表由调用者通过 IRelationStore.BatchUpsertAsync 落库。
+/// </summary>
+public interface IRelationProjector
+{
+    /// <summary>Ingest 流程：从 <see cref="ContextItem.Refs"/> 生成 related_to 关系。</summary>
+    IReadOnlyList<ContextRelation> ProjectForIngest(ContextItem item);
+
+    /// <summary>Compression 流程：从压缩响应生成 derived_from/summarizes/generated_by 关系。</summary>
+    IReadOnlyList<ContextRelation> ProjectForCompression(CompressionResponse response);
+
+    /// <summary>Promotion 流程：从晋升候选生成 promoted_from/derived_from/evidence_for 关系。</summary>
+    /// <param name="candidate">晋升候选项。</param>
+    /// <param name="targetItemId">晋升目标条目 ID（mem:stp: 或 constraint:stp: 前缀）。</param>
+    /// <param name="targetKind">目标种类（"memory" 或 "constraint"）。</param>
+    /// <param name="now">投影时间戳。</param>
+    IReadOnlyList<ContextRelation> ProjectForPromotion(
+        ShortTermPromotionCandidate candidate,
+        string targetItemId,
+        string targetKind,
+        DateTimeOffset now);
+
+    /// <summary>Lifecycle Review 流程：从 supersede 生成 superseded_by/replaces 关系对。</summary>
+    IReadOnlyList<ContextRelation> ProjectForSupersede(SupersedeProjectionRequest request);
+}
+
 /// <summary>存储 Relation review / lifecycle 人工操作审核历史。</summary>
 public interface IRelationReviewStore
 {

@@ -9,6 +9,7 @@ using ContextCore.ControlRoom.Screens;
 using ContextCore.ControlRoom.Services;
 using ContextCore.Core;
 using ContextCore.Core.Services;
+using ContextCore.Core.Services.Graph;
 using ContextCore.ModelGateway;
 using ContextCore.ModelGateway.Adapters;
 using ContextCore.ModelGateway.Infrastructure;
@@ -2097,7 +2098,6 @@ public sealed class ContextCoreMvpTests
                 "workspace-test",
                 "collection-test");
             var service = new ControlRoomService(state);
-            var relationBuilder = new RelationBuilder();
             var validationService = new CollectionValidationService(state.ContextStore, state.RelationStore);
             var now = DateTimeOffset.UtcNow;
 
@@ -2229,9 +2229,6 @@ public sealed class ContextCoreMvpTests
                 }
             });
 
-            var packageRelations = relationBuilder.BuildForPackage(package);
-            await state.RelationStore.SaveManyAsync(packageRelations);
-
             var validationReport = await validationService.ValidateAsync("workspace-test", "collection-test");
             var dashboard = await service.GetDashboardAsync();
             var markdown = await service.BuildMarkdownReportAsync();
@@ -2245,8 +2242,6 @@ public sealed class ContextCoreMvpTests
             CollectionAssert.Contains(sectionNames, "soft_constraints");
             CollectionAssert.Contains(sectionNames, "related_context");
             Assert.IsTrue(package.EstimatedTokens <= 500);
-            Assert.IsTrue(packageRelations.Count > 0);
-            Assert.IsTrue(packageRelations.All(item => item.RelationType == ContextRelationTypes.IncludedInPackage));
             Assert.IsTrue(validationReport.Succeeded);
             Assert.IsTrue(validationReport.Issues.Count == 0);
             Assert.AreEqual(2, dashboard.Memory.GlobalItems);
@@ -2678,7 +2673,7 @@ public sealed class ContextCoreMvpTests
     public async Task RelationBuilder_ShouldCreateDerivedFromRelations()
     {
         var compressor = new MockContextCompressor();
-        var builder = new RelationBuilder();
+        var projector = new RelationProjector();
         var input1 = CreateItem(
             id: "input-1",
             type: "note",
@@ -2700,7 +2695,7 @@ public sealed class ContextCoreMvpTests
             Options = new CompressionOptions()
         });
 
-        var relations = builder.BuildForCompressionResponse(response);
+        var relations = projector.ProjectForCompression(response);
         var derivedFromRelations = relations
             .Where(item => item.RelationType == ContextRelationTypes.DerivedFrom)
             .ToArray();
@@ -2719,7 +2714,7 @@ public sealed class ContextCoreMvpTests
     public async Task RelationBuilder_ShouldCreateSummarizesRelationsForSummary()
     {
         var compressor = new MockContextCompressor();
-        var builder = new RelationBuilder();
+        var projector = new RelationProjector();
         var input = CreateItem(
             id: "input-1",
             type: "note",
@@ -2736,7 +2731,7 @@ public sealed class ContextCoreMvpTests
             Options = new CompressionOptions()
         });
 
-        var relations = builder.BuildForCompressionResponse(response);
+        var relations = projector.ProjectForCompression(response);
         var summary = response.GeneratedItems.Single();
         var summarizes = relations.Single(item => item.RelationType == ContextRelationTypes.Summarizes);
 
@@ -2750,7 +2745,7 @@ public sealed class ContextCoreMvpTests
     public async Task RelationBuilder_ShouldCreateGeneratedByRelationsForCompressionOutput()
     {
         var compressor = new MockContextCompressor();
-        var builder = new RelationBuilder();
+        var projector = new RelationProjector();
         var input = CreateItem(
             id: "input-1",
             type: "note",
@@ -2767,7 +2762,7 @@ public sealed class ContextCoreMvpTests
             Options = new CompressionOptions()
         });
 
-        var relations = builder.BuildForCompressionResponse(response);
+        var relations = projector.ProjectForCompression(response);
         var summary = response.GeneratedItems.Single();
         var generatedBy = relations.Single(item => item.RelationType == ContextRelationTypes.GeneratedBy);
 
@@ -2780,7 +2775,7 @@ public sealed class ContextCoreMvpTests
     [TestMethod]
     public void RelationBuilder_ShouldCreateRelatedToRelationsFromItemRefs()
     {
-        var builder = new RelationBuilder();
+        var projector = new RelationProjector();
         var now = DateTimeOffset.UtcNow;
         var item = new ContextItem
         {
@@ -2796,7 +2791,7 @@ public sealed class ContextCoreMvpTests
             UpdatedAt = now
         };
 
-        var relations = builder.BuildForContextItem(item);
+        var relations = projector.ProjectForIngest(item);
 
         Assert.AreEqual(2, relations.Count);
         Assert.IsTrue(relations.All(relation => relation.RelationType == ContextRelationTypes.RelatedTo));
@@ -2805,52 +2800,6 @@ public sealed class ContextCoreMvpTests
             new[] { "target-1", "target-2" },
             relations.Select(relation => relation.TargetId).ToArray());
         Assert.IsTrue(relations.All(relation => relation.Weight == 0.7));
-    }
-
-    [TestMethod]
-    public void PackageRelationBuilder_ShouldCreateIncludedInPackageRelations()
-    {
-        var builder = new RelationBuilder();
-        var package = new ContextPackage
-        {
-            PackageId = "package-1",
-            WorkspaceId = "workspace-test",
-            CollectionId = "collection-test",
-            Sections = new[]
-            {
-                new ContextPackageSection
-                {
-                    Name = "recent_context",
-                    Priority = 70,
-                    Content = "Recent raw context.",
-                    ContentFormat = ContextContentFormat.Markdown,
-                    SourceRefs = new[] { "source:raw-1" },
-                    ItemRefs = new[] { "raw-1" },
-                    EstimatedTokens = 10
-                },
-                new ContextPackageSection
-                {
-                    Name = "legacy_section",
-                    Priority = 10,
-                    Content = "Fallback source refs.",
-                    ContentFormat = ContextContentFormat.Markdown,
-                    SourceRefs = new[] { "fallback-ref-1" },
-                    EstimatedTokens = 6
-                }
-            },
-            EstimatedTokens = 16,
-            SourceRefs = new[] { "source:raw-1", "fallback-ref-1" },
-            CreatedAt = DateTimeOffset.UtcNow
-        };
-
-        var relations = builder.BuildForPackage(package);
-
-        Assert.AreEqual(2, relations.Count);
-        Assert.IsTrue(relations.All(item => item.RelationType == ContextRelationTypes.IncludedInPackage));
-        Assert.IsTrue(relations.Any(item => item.SourceId == "raw-1" && item.TargetId == "package-1"));
-        Assert.IsTrue(relations.Any(item => item.SourceId == "fallback-ref-1" && item.TargetId == "package-1"));
-        Assert.IsTrue(relations.All(item => item.WorkspaceId == "workspace-test"));
-        Assert.IsTrue(relations.All(item => item.CollectionId == "collection-test"));
     }
 
     [TestMethod]

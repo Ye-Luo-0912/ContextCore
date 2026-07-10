@@ -1,6 +1,7 @@
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services;
+using ContextCore.Core.Services.Graph;
 using ContextCore.Core.Services.Promotion;
 using ContextCore.Storage.InMemory;
 using ContextCore.Storage.InMemory.Stores;
@@ -422,7 +423,10 @@ public sealed class ContextCoreShortTermPromotionCandidateTests
             candidateStore,
             memoryStore,
             constraintStore,
-            relationStore);
+            relationStore,
+            null,
+            null,
+            new RelationProjector());
     }
 
     private static ShortTermPromotionCandidateService CreateServiceWithLearning(
@@ -446,7 +450,8 @@ public sealed class ContextCoreShortTermPromotionCandidateTests
             constraintStore,
             relationStore,
             learningStore,
-            new RuleBasedContextLearningCaseGenerator());
+            new RuleBasedContextLearningCaseGenerator(),
+            new RelationProjector());
     }
 
     private static Task<IReadOnlyList<ShortTermPromotionCandidate>> GenerateDefaultAsync(ShortTermPromotionCandidateService service)

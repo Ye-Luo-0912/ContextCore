@@ -1264,3 +1264,22 @@ public static class RelationGraphDiagnosticTypes
 
     public const string RelationReviewHistoryMissing = nameof(RelationReviewHistoryMissing);
 }
+
+/// <summary>
+/// Supersede 投影请求，解构 StableLifecycleReviewService 的私有 StableSource 以便跨层传递给 IRelationProjector。
+/// </summary>
+public sealed record SupersedeProjectionRequest(
+    string WorkspaceId,
+    string CollectionId,
+    string SourceId,
+    string ReplacementId,
+    string SourceStableKind,
+    string ReplacementStableKind,
+    string ReviewId,
+    string OperationId,
+    string Reviewer,
+    string Reason,
+    IReadOnlyList<string> SourceRefs,
+    IReadOnlyList<string> EvidenceRefs,
+    IReadOnlyDictionary<string, string> RequestMetadata,
+    DateTimeOffset Now);

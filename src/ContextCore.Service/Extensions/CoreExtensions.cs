@@ -42,7 +42,8 @@ internal static class CoreExtensions
 			sp.GetService<IConstraintStore>(),
 			sp.GetService<IRelationStore>(),
 			sp.GetService<IContextLearningStore>(),
-			sp.GetService<IContextLearningCaseGenerator>()));
+			sp.GetService<IContextLearningCaseGenerator>(),
+			sp.GetService<IRelationProjector>()));
 		services.AddSingleton(sp => new StableReviewCandidateService(
 			sp.GetRequiredService<IShortTermPromotionCandidateStore>(),
 			sp.GetRequiredService<IStableReviewCandidateStore>(),
@@ -87,7 +88,8 @@ internal static class CoreExtensions
 			sp.GetService<IGlobalContextStore>(),
 			sp.GetService<IStableLifecycleReviewStore>(),
 			sp.GetService<IRelationStore>(),
-			sp.GetRequiredService<StableMemoryGovernanceService>()));
+			sp.GetRequiredService<StableMemoryGovernanceService>(),
+			sp.GetService<IRelationProjector>()));
 		services.AddSingleton(sp => new RelationReviewService(
 			sp.GetService<IRelationStore>(),
 			sp.GetService<IRelationReviewStore>(),
@@ -168,7 +170,7 @@ internal static class CoreExtensions
 		services.AddSingleton<ContextValidationService>();
 		services.AddSingleton<IContextValidationService>(sp => sp.GetRequiredService<ContextValidationService>());
 		services.AddSingleton<CollectionValidationService>();
-		services.AddSingleton<RelationBuilder>();
+		services.AddSingleton<IRelationProjector, RelationProjector>();
 		services.AddSingleton<RelationTypeRegistry>();
 		services.AddSingleton<RelationExpansionProfileRegistry>();
 		services.AddSingleton<RelationExpansionPolicyValidator>();

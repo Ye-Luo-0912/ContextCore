@@ -19,6 +19,7 @@ public sealed class ShortTermPromotionCandidateService
     private readonly IRelationStore? _relationStore;
     private readonly IContextLearningStore? _learningStore;
     private readonly IContextLearningCaseGenerator? _learningCaseGenerator;
+    private readonly IRelationProjector? _relationProjector;
 
     public ShortTermPromotionCandidateService(
         IShortTermMemoryStore shortTermMemoryStore,
@@ -44,7 +45,7 @@ public sealed class ShortTermPromotionCandidateService
         IConstraintStore? constraintStore,
         IRelationStore? relationStore,
         IContextLearningStore? learningStore)
-        : this(shortTermMemoryStore, candidateStore, memoryStore, constraintStore, relationStore, learningStore, null)
+        : this(shortTermMemoryStore, candidateStore, memoryStore, constraintStore, relationStore, learningStore, null, null)
     {
     }
 
@@ -56,6 +57,19 @@ public sealed class ShortTermPromotionCandidateService
         IRelationStore? relationStore,
         IContextLearningStore? learningStore,
         IContextLearningCaseGenerator? learningCaseGenerator)
+        : this(shortTermMemoryStore, candidateStore, memoryStore, constraintStore, relationStore, learningStore, learningCaseGenerator, null)
+    {
+    }
+
+    public ShortTermPromotionCandidateService(
+        IShortTermMemoryStore shortTermMemoryStore,
+        IShortTermPromotionCandidateStore candidateStore,
+        IMemoryStore? memoryStore,
+        IConstraintStore? constraintStore,
+        IRelationStore? relationStore,
+        IContextLearningStore? learningStore,
+        IContextLearningCaseGenerator? learningCaseGenerator,
+        IRelationProjector? relationProjector)
     {
         _shortTermMemoryStore = shortTermMemoryStore;
         _candidateStore = candidateStore;
@@ -64,6 +78,7 @@ public sealed class ShortTermPromotionCandidateService
         _relationStore = relationStore;
         _learningStore = learningStore;
         _learningCaseGenerator = learningCaseGenerator;
+        _relationProjector = relationProjector;
     }
 
     public async Task<IReadOnlyList<ShortTermPromotionCandidate>> GenerateAsync(
@@ -669,18 +684,17 @@ public sealed class ShortTermPromotionCandidateService
             return;
         }
 
-        var relations = new List<ContextRelation>
+        if (_relationProjector is null)
         {
-            BuildRelation(candidate, targetItemId, candidate.CandidateId, ContextRelationTypes.PromotedFrom, targetKind, now),
-            BuildRelation(candidate, targetItemId, candidate.SourceWorkingItemId, ContextRelationTypes.DerivedFrom, targetKind, now)
-        };
+            warnings.Add("当前 provider 未注册 relation projector，未写入 evidence chain 关系。");
+            return;
+        }
 
-        relations.AddRange(candidate.EvidenceRefs
-            .Where(static value => !string.IsNullOrWhiteSpace(value))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Select(evidenceRef => BuildRelation(candidate, evidenceRef, targetItemId, ContextRelationTypes.EvidenceFor, targetKind, now)));
-
-        await _relationStore.SaveManyAsync(relations, cancellationToken).ConfigureAwait(false);
+        var relations = _relationProjector.ProjectForPromotion(candidate, targetItemId, targetKind, now);
+        if (relations.Count > 0)
+        {
+            await _relationStore.BatchUpsertAsync(relations, cancellationToken).ConfigureAwait(false);
+        }
     }
 
     private static ContextMemoryItem BuildCandidateMemory(
@@ -769,36 +783,6 @@ public sealed class ShortTermPromotionCandidateService
             ["promotionFlow"] = "short-term-promotion-review/v1"
         };
         return metadata;
-    }
-
-    private static ContextRelation BuildRelation(
-        ShortTermPromotionCandidate candidate,
-        string sourceId,
-        string targetId,
-        string relationType,
-        string targetKind,
-        DateTimeOffset now)
-    {
-        return new ContextRelation
-        {
-            Id = $"rel:stp:{BuildShortHash($"{candidate.CandidateId}\u001f{sourceId}\u001f{targetId}\u001f{relationType}")}",
-            WorkspaceId = candidate.WorkspaceId,
-            CollectionId = candidate.CollectionId,
-            SourceId = sourceId,
-            TargetId = targetId,
-            RelationType = relationType,
-            Weight = 1.0,
-            Confidence = candidate.Confidence,
-            SourceRefs = candidate.EvidenceRefs.ToArray(),
-            Metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["sourceCandidateId"] = candidate.CandidateId,
-                ["sourceWorkingItemId"] = candidate.SourceWorkingItemId,
-                ["targetKind"] = targetKind,
-                ["promotionFlow"] = "short-term-promotion-review/v1"
-            },
-            CreatedAt = now
-        };
     }
 
     private static string BuildAcceptedContent(ShortTermPromotionCandidate candidate)

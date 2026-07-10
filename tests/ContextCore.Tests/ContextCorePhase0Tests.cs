@@ -3,6 +3,7 @@ using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Core;
 using ContextCore.Core.Jobs;
+using ContextCore.Core.Services.Graph;
 using ContextCore.Service;
 using ContextCore.Storage.FileSystem;
 using ContextCore.Storage.FileSystem.Stores;
@@ -29,7 +30,7 @@ public sealed class ContextCorePhase0Tests
             index,
             new MockContextCompressor(),
             relationStore,
-            new RelationBuilder());
+            new RelationProjector());
 
         await contextStore.SaveAsync(new ContextItem
         {

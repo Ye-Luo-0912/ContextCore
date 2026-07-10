@@ -13,6 +13,7 @@ public sealed class StableLifecycleReviewService
     private readonly IGlobalContextStore? _globalContextStore;
     private readonly IStableLifecycleReviewStore? _reviewStore;
     private readonly IRelationStore? _relationStore;
+    private readonly IRelationProjector? _relationProjector;
     private readonly StableMemoryGovernanceService _governanceService;
 
     public StableLifecycleReviewService(
@@ -21,7 +22,8 @@ public sealed class StableLifecycleReviewService
         IGlobalContextStore? globalContextStore,
         IStableLifecycleReviewStore? reviewStore,
         IRelationStore? relationStore,
-        StableMemoryGovernanceService governanceService)
+        StableMemoryGovernanceService governanceService,
+        IRelationProjector? relationProjector = null)
     {
         _memoryStore = memoryStore;
         _constraintStore = constraintStore;
@@ -29,6 +31,7 @@ public sealed class StableLifecycleReviewService
         _reviewStore = reviewStore;
         _relationStore = relationStore;
         _governanceService = governanceService;
+        _relationProjector = relationProjector;
     }
 
     public Task<IReadOnlyList<StableLifecycleReviewRecord>> GetReviewsAsync(
@@ -495,68 +498,31 @@ public sealed class StableLifecycleReviewService
             throw new ArgumentException("relation-aware supersede 需要 source 和 replacement 都具备 CollectionId。", nameof(source));
         }
 
-        var evidenceRefs = source.EvidenceRefs
-            .Concat(replacement.EvidenceRefs)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-        var sourceRefs = source.SourceRefs
-            .Concat(replacement.SourceRefs)
-            .Append(reviewId)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-        var policyVersion = requestMetadata.TryGetValue("policyVersion", out var configuredPolicyVersion)
-            && !string.IsNullOrWhiteSpace(configuredPolicyVersion)
-            ? configuredPolicyVersion
-            : "stable-lifecycle-review-v1";
-        var metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        if (_relationProjector is null || _relationStore is null)
         {
-            ["source"] = "stable_lifecycle_review",
-            ["reviewId"] = reviewId,
-            ["reviewer"] = reviewer,
-            ["reason"] = reason,
-            ["createdAt"] = now.ToString("O"),
-            ["sourceOperationId"] = operationId,
-            ["sourceItemId"] = source.Id,
-            ["createdBy"] = reviewer,
-            ["createdFrom"] = "stable_lifecycle_review",
-            ["confidence"] = "1.0",
-            ["confidenceReason"] = "stable_lifecycle_review",
-            ["lifecycle"] = StableMemoryLifecycle.Active,
-            ["reviewStatus"] = "Reviewed",
-            ["policyVersion"] = policyVersion,
-            ["sourceRefs"] = string.Join(',', sourceRefs),
-            ["evidenceRefs"] = string.Join(',', evidenceRefs)
-        };
-        var supersededBy = new ContextRelation
-        {
-            Id = $"rel-{BuildShortHash($"{reviewId}\u001fsuperseded_by")}",
-            WorkspaceId = source.WorkspaceId,
-            CollectionId = source.CollectionId,
-            SourceId = source.Id,
-            TargetId = replacement.Id,
-            RelationType = ContextRelationTypes.SupersededBy,
-            Weight = 1.0,
-            Confidence = 1.0,
-            SourceRefs = sourceRefs,
-            Metadata = new Dictionary<string, string>(metadata, StringComparer.OrdinalIgnoreCase),
-            CreatedAt = now
-        };
-        var replaces = new ContextRelation
-        {
-            Id = $"rel-{BuildShortHash($"{reviewId}\u001freplaces")}",
-            WorkspaceId = replacement.WorkspaceId,
-            CollectionId = replacement.CollectionId,
-            SourceId = replacement.Id,
-            TargetId = source.Id,
-            RelationType = ContextRelationTypes.Replaces,
-            Weight = 1.0,
-            Confidence = 1.0,
-            SourceRefs = sourceRefs,
-            Metadata = new Dictionary<string, string>(metadata, StringComparer.OrdinalIgnoreCase),
-            CreatedAt = now
-        };
+            return Task.CompletedTask;
+        }
 
-        return _relationStore!.SaveManyAsync([supersededBy, replaces], cancellationToken);
+        var request = new SupersedeProjectionRequest(
+            source.WorkspaceId,
+            source.CollectionId!,
+            source.Id,
+            replacement.Id,
+            source.StableKind,
+            replacement.StableKind,
+            reviewId,
+            operationId,
+            reviewer,
+            reason,
+            source.SourceRefs.Concat(replacement.SourceRefs).ToArray(),
+            source.EvidenceRefs.Concat(replacement.EvidenceRefs).ToArray(),
+            requestMetadata,
+            now);
+
+        var relations = _relationProjector.ProjectForSupersede(request);
+        return relations.Count > 0
+            ? _relationStore.BatchUpsertAsync(relations, cancellationToken)
+            : Task.CompletedTask;
     }
 
     private static Dictionary<string, string> CreateReviewMetadata(

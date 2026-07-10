@@ -36,20 +36,20 @@ public sealed class CompressionJobProcessor : IContextJobProcessor
     private readonly IContextIndex _index;
     private readonly IContextCompressor _compressor;
     private readonly IRelationStore _relationStore;
-    private readonly RelationBuilder _relationBuilder;
+    private readonly IRelationProjector _relationProjector;
 
     public CompressionJobProcessor(
         IContextStore contextStore,
         IContextIndex index,
         IContextCompressor compressor,
         IRelationStore relationStore,
-        RelationBuilder relationBuilder)
+        IRelationProjector relationProjector)
     {
         _contextStore = contextStore;
         _index = index;
         _compressor = compressor;
         _relationStore = relationStore;
-        _relationBuilder = relationBuilder;
+        _relationProjector = relationProjector;
     }
 
     public ContextJobKind Kind => ContextJobKind.Compression;
@@ -94,9 +94,10 @@ public sealed class CompressionJobProcessor : IContextJobProcessor
             await _index.UpsertAsync(entry, cancellationToken).ConfigureAwait(false);
         }
 
-        foreach (var relation in _relationBuilder.BuildForCompressionResponse(response))
+        var compressionRelations = _relationProjector.ProjectForCompression(response);
+        if (compressionRelations.Count > 0)
         {
-            await _relationStore.SaveAsync(relation, cancellationToken).ConfigureAwait(false);
+            await _relationStore.BatchUpsertAsync(compressionRelations, cancellationToken).ConfigureAwait(false);
         }
     }
 

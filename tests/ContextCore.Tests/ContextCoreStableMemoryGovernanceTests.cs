@@ -3,6 +3,7 @@ using ContextCore.Abstractions.Models;
 using ContextCore.ControlRoom.Rendering;
 using ContextCore.ControlRoom.Services;
 using ContextCore.Core.Services;
+using ContextCore.Core.Services.Graph;
 using ContextCore.Storage.InMemory;
 using ContextCore.Storage.InMemory.Stores;
 
@@ -552,7 +553,8 @@ public sealed class ContextCoreStableMemoryGovernanceTests
             globalStore,
             reviewStore,
             relationStore,
-            service);
+            service,
+            new RelationProjector());
         return new StableMemoryFixture(memoryStore, constraintStore, globalStore, relationStore, stableReviewStore, reviewStore, service, reviewService);
     }
 

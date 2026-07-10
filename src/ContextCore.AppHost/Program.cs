@@ -4,6 +4,7 @@ using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Core;
 using ContextCore.Core.Services;
+using ContextCore.Core.Services.Graph;
 using ContextCore.Storage.FileSystem;
 using ContextCore.Storage.FileSystem.Stores;
 
@@ -52,11 +53,11 @@ var runtime = new ContextRuntimeService(
     inputIngestionService,
     new ContextValidationService(),
     eventSink);
-var ingestion = new BasicContextIngestionService(store);
+var relationProjector = new RelationProjector();
+var ingestion = new BasicContextIngestionService(store, relationProjector, relationStore);
 // TODO-DEMO [P0-1]：MockContextCompressor 不调用任何模型 API，生成的摘要无语义价值。
 // 生产使用前请替换为真实 LLM 压缩实现。参见：TODO.md → P0-1
 var compressor = new MockContextCompressor();
-var relationBuilder = new RelationBuilder();
 
 Console.WriteLine("============================================================");
 Console.WriteLine(" ContextCore.AppHost — 演示程序（非生产入口）");
@@ -130,10 +131,10 @@ foreach (var indexHint in compressionResponse.IndexHints)
     await index.UpsertAsync(indexHint);
 }
 
-var compressionRelations = relationBuilder.BuildForCompressionResponse(compressionResponse);
-foreach (var relation in compressionRelations)
+var compressionRelations = relationProjector.ProjectForCompression(compressionResponse);
+if (compressionRelations.Count > 0)
 {
-    await relationStore.SaveAsync(relation);
+    await relationStore.BatchUpsertAsync(compressionRelations);
 }
 
 Console.WriteLine($"Saved generated items: {compressionResponse.GeneratedItems.Count}; index hints: {compressionResponse.IndexHints.Count}; relations: {compressionRelations.Count}.");
@@ -153,14 +154,6 @@ var package = await runtime.BuildPackageAsync(new ContextPackageRequest
 });
 
 Console.WriteLine($"Package built: {package.PackageId}, sections: {package.Sections.Count}, estimated tokens: {package.EstimatedTokens}.");
-
-var packageRelations = relationBuilder.BuildForPackage(package);
-foreach (var relation in packageRelations)
-{
-    await relationStore.SaveAsync(relation);
-}
-
-Console.WriteLine($"Package relations saved: {packageRelations.Count}.");
 
 if (appOptions.PrintPackage)
 {
