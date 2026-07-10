@@ -141,7 +141,7 @@ public sealed class RelationGovernanceSelectedWorkspaceCanaryRunner
                 ? "BlockedByMismatch"
                 : postgresFailureCount > 0
                     ? "BlockedByPostgresFailure"
-                    : HasLatencyRisk(traces)
+                    : RelationGovernanceCanaryTraceHelpers.HasLatencyRisk(traces)
                         ? "BlockedByLatency"
                         : traces.Count >= Math.Min(_options.MaxOperations, 20)
                           && extended.GraphExpansionPreviewParityPassed
@@ -319,8 +319,8 @@ public sealed class RelationGovernanceSelectedWorkspaceCanaryRunner
         bool cleanupPerformed,
         string recommendation)
     {
-        var readTraces = traces.Where(IsReadTrace).ToArray();
-        var writeTraces = traces.Where(IsWriteTrace).ToArray();
+        var readTraces = traces.Where(RelationGovernanceCanaryTraceHelpers.IsReadTrace).ToArray();
+        var writeTraces = traces.Where(RelationGovernanceCanaryTraceHelpers.IsWriteTrace).ToArray();
         var fallbackTraces = traces.Where(static trace => trace.FallbackUsed).ToArray();
         return new PostgresRelationSelectedWorkspaceCanaryReport
         {
@@ -335,9 +335,9 @@ public sealed class RelationGovernanceSelectedWorkspaceCanaryRunner
             ComparisonTraceCount = traces.Count(static trace => string.Equals(trace.PrimaryProvider, "Postgres", StringComparison.OrdinalIgnoreCase)),
             MismatchCount = traces.Count(static trace => trace.MismatchDetected) + mismatches.Count,
             PostgresFailureCount = traces.Count(static trace => !string.IsNullOrWhiteSpace(trace.PostgresError)),
-            AveragePostgresReadMs = AverageDuration(readTraces),
-            AveragePostgresWriteMs = AverageDuration(writeTraces),
-            AverageFileSystemFallbackMs = AverageDuration(fallbackTraces),
+            AveragePostgresReadMs = RelationGovernanceCanaryTraceHelpers.AverageDuration(readTraces),
+            AveragePostgresWriteMs = RelationGovernanceCanaryTraceHelpers.AverageDuration(writeTraces),
+            AverageFileSystemFallbackMs = RelationGovernanceCanaryTraceHelpers.AverageDuration(fallbackTraces),
             GraphExpansionPreviewParityPassed = graphParity,
             ReviewLifecycleParityPassed = reviewParity,
             DiagnosticsParityPassed = diagnosticsParity,
@@ -353,27 +353,4 @@ public sealed class RelationGovernanceSelectedWorkspaceCanaryRunner
         };
     }
 
-    private static bool IsReadTrace(RelationGovernanceProviderSwitchTrace trace)
-    {
-        return trace.OperationKind.Contains("Query", StringComparison.OrdinalIgnoreCase)
-               || trace.OperationKind.Contains("Get", StringComparison.OrdinalIgnoreCase)
-               || trace.OperationKind.Contains("Latest", StringComparison.OrdinalIgnoreCase)
-               || trace.OperationKind.StartsWith("RelationDiagnosticsBy", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static bool IsWriteTrace(RelationGovernanceProviderSwitchTrace trace)
-    {
-        return trace.OperationKind.Contains("Write", StringComparison.OrdinalIgnoreCase)
-               || trace.OperationKind.Contains("Delete", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static bool HasLatencyRisk(IReadOnlyList<RelationGovernanceProviderSwitchTrace> traces)
-    {
-        return traces.Count > 0 && traces.Average(static trace => trace.DurationMs) > 5000;
-    }
-
-    private static double AverageDuration(IReadOnlyList<RelationGovernanceProviderSwitchTrace> traces)
-    {
-        return traces.Count == 0 ? 0 : traces.Average(static trace => trace.DurationMs);
-    }
 }

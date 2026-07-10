@@ -13,7 +13,7 @@ public sealed class ProductionTraceShadowEvaluator
         double TokenCost, string Provenance, double DetNorm, double Neural, double Hybrid
     );
 
-    public void BuildAndWrite(string outputDir)
+    public void BuildAndWrite(string outputDir, bool smokeOnly = false)
     {
         var vDir = Path.Combine(outputDir, "learning", "v16_2");
         Directory.CreateDirectory(vDir);
@@ -27,7 +27,7 @@ public sealed class ProductionTraceShadowEvaluator
         bool v14GateReady = GateReady(v14GatePath);
         var neuralScores = ReadNeuralScores(v15Report);
         var feedbackMap = ReadFeedbackEvents(v14Feedback);
-        var rawRows = ReadTraceRows(v14Feature);
+        var rawRows = ReadTraceRows(v14Feature, smokeOnly);
 
         int N = rawRows.Count;
         var smokeRows = rawRows.Where(r => r.Provenance == "smoke").ToList();
@@ -263,7 +263,7 @@ public sealed class ProductionTraceShadowEvaluator
         return m;
     }
 
-    private static List<TraceRow> ReadTraceRows(string p)
+    private static List<TraceRow> ReadTraceRows(string p, bool smokeOnly)
     {
         var l = new List<TraceRow>(); if (!File.Exists(p)) return l;
         int idx = 0;
@@ -274,7 +274,7 @@ public sealed class ProductionTraceShadowEvaluator
             {
                 var d = JsonDocument.Parse(ln).RootElement;
                 var oid = d.TryGetProperty("operationId", out var o) ? o.GetString() ?? "" : "";
-                string provenance = oid.StartsWith("op-prod", StringComparison.OrdinalIgnoreCase) ? "production-like" : "smoke";
+                string provenance = smokeOnly ? "smoke" : (oid.StartsWith("op-prod", StringComparison.OrdinalIgnoreCase) ? "production-like" : "smoke");
                 var rid = d.TryGetProperty("requestId", out var r) ? r.GetString() ?? "" : "";
                 var cid = d.TryGetProperty("candidateId", out var c) ? c.GetString() ?? "" : "";
                 var sec = d.TryGetProperty("section", out var s) ? s.GetString() ?? "" : "";

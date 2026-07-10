@@ -140,6 +140,7 @@ public sealed class ControlledFormalEvidenceIngestionPackOptions
 }
 
 // ---- Runner ----
+[Obsolete("Historical eval runner, candidate for migration to Evaluation tools.")]
 public sealed class ControlledFormalEvidenceIngestionPackRunner
 {
     public ControlledFormalEvidenceIngestionPackReport Run(

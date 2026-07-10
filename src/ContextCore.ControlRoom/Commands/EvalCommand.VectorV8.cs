@@ -2769,10 +2769,10 @@ public static partial class EvalCommand
 
     private static async Task ExecuteV16HybridShadowAsync(CancellationToken ct)
     {
-        var evaluator = new ContextCore.Core.Services.Learning.V16.HybridShadowEvaluator();
-        evaluator.BuildAndWrite(".");
+        var evaluator = new ContextCore.Core.Services.Learning.V16_2.ProductionTraceShadowEvaluator();
+        evaluator.BuildAndWrite(".", smokeOnly: true);
         await Task.CompletedTask.ConfigureAwait(false);
-        Console.WriteLine("[Eval] V16 Hybrid Shadow Evaluation artifacts generated");
+        Console.WriteLine("[Eval] V16 Hybrid Shadow Evaluation artifacts generated (delegated to V16.2 smoke-only mode)");
         Console.WriteLine("[Eval] AlphaSweepComplete=true RuntimeInfluenceAllowed=false ProductionGeneralizationReady=false");
         Console.WriteLine("[Eval] NeuralBiasActive=false PackageOutputChanged=false VectorBindingChanged=false");
     }

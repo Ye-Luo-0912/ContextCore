@@ -165,6 +165,7 @@ public sealed record LearningShadowImplementationPackScenario(
     bool MainlineEvidencePresent, bool MainlineRegistryPresent,
     string ExpectedStatus, string? ExpectedBlockedReason);
 
+[Obsolete("Historical eval runner, candidate for migration to Evaluation tools.")]
 public sealed class LearningShadowImplementationPackRunner
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };

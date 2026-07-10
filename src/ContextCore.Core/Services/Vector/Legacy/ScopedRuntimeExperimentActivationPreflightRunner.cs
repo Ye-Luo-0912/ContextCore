@@ -103,8 +103,8 @@ public sealed class ScopedRuntimeExperimentActivationPreflightRunner
         builder.AppendLine($"- ReadyForRuntimeSwitch: `{report.ReadyForRuntimeSwitch}`");
         builder.AppendLine($"- RiskAfterPolicy: `{report.RiskAfterPolicy}`");
         builder.AppendLine($"- FormalOutputChanged: `{report.FormalOutputChanged}`");
-        AppendList(builder, "Selected Scopes", report.SelectedScopes);
-        AppendList(builder, "Blocked Reasons", report.BlockedReasons);
+        PreflightReportHelpers.AppendList(builder, "Selected Scopes", report.SelectedScopes);
+        PreflightReportHelpers.AppendList(builder, "Blocked Reasons", report.BlockedReasons);
         builder.AppendLine();
         builder.AppendLine("Route output is DryRunOnly. V4.13 does not write formal packages or mutate runtime bindings.");
         return builder.ToString();
@@ -372,20 +372,4 @@ public sealed class ScopedRuntimeExperimentActivationPreflightRunner
 
     private static string Escape(string value)
         => value.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal);
-
-    private static void AppendList(StringBuilder builder, string title, IReadOnlyList<string> values)
-    {
-        builder.AppendLine();
-        builder.AppendLine($"## {title}");
-        if (values.Count == 0)
-        {
-            builder.AppendLine("- (empty)");
-            return;
-        }
-
-        foreach (var value in values)
-        {
-            builder.AppendLine($"- `{value}`");
-        }
-    }
 }

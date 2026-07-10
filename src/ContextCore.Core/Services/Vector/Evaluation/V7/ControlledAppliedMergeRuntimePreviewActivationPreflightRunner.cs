@@ -278,11 +278,11 @@ public sealed class ControlledAppliedMergeRuntimePreviewActivationPreflightRunne
         b.AppendLine($"- NoRuntimeMutationInvariant: `{report.NoRuntimeMutationInvariant}`");
         b.AppendLine();
 
-        AppendList(b, "Allowlisted Scopes", report.AllowlistedScopes);
-        AppendList(b, "Allowed Actions", report.AllowedActions);
-        AppendList(b, "Forbidden Actions", report.ForbiddenActions);
-        AppendList(b, "Blocked Reasons", report.BlockedReasons);
-        AppendList(b, "Diagnostics", report.Diagnostics);
+        PreflightReportHelpers.AppendList(b, "Allowlisted Scopes", report.AllowlistedScopes);
+        PreflightReportHelpers.AppendList(b, "Allowed Actions", report.AllowedActions);
+        PreflightReportHelpers.AppendList(b, "Forbidden Actions", report.ForbiddenActions);
+        PreflightReportHelpers.AppendList(b, "Blocked Reasons", report.BlockedReasons);
+        PreflightReportHelpers.AppendList(b, "Diagnostics", report.Diagnostics);
 
         b.AppendLine();
         b.AppendLine("V7.2 scoped runtime preview activation preflight. 安装/验证 runtime preview 入口，但仍保持 preview-only、scope-only、no formal output mutation。不接 formal retrieval，不做 global runtime switch，不写 formal package，不改 PackingPolicy/package output，不绑定正式 IVectorIndexStore。");
@@ -321,17 +321,5 @@ public sealed class ControlledAppliedMergeRuntimePreviewActivationPreflightRunne
         if (blocked.Any(static r => r.Contains("Formal", StringComparison.OrdinalIgnoreCase) || r.Contains("Package", StringComparison.OrdinalIgnoreCase) || r.Contains("Packing", StringComparison.OrdinalIgnoreCase)))
             return ControlledAppliedMergeRuntimePreviewActivationPreflightRecommendations.BlockedByFormalOutputMutation;
         return ControlledAppliedMergeRuntimePreviewActivationPreflightRecommendations.KeepPreviewOnly;
-    }
-
-    private static void AppendList(StringBuilder b, string title, IReadOnlyList<string> values)
-    {
-        b.AppendLine();
-        b.AppendLine($"## {title}");
-        if (values.Count == 0)
-        {
-            b.AppendLine("- (empty)");
-            return;
-        }
-        foreach (var v in values) b.AppendLine($"- `{v}`");
     }
 }

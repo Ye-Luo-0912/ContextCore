@@ -89,6 +89,7 @@ public sealed class LearningControlledFormalLabelIngestionStagingR1PackOptions
     public bool IsGate { get; init; }
 }
 
+[Obsolete("Historical eval runner, candidate for migration to Evaluation tools.")]
 public sealed class LearningControlledFormalLabelIngestionStagingR1PackRunner
 {
     public LearningControlledFormalLabelIngestionStagingR1PackReport Run(

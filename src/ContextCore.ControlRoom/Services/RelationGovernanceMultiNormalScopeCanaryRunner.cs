@@ -148,7 +148,7 @@ public sealed class RelationGovernanceMultiNormalScopeCanaryRunner
                     ? "BlockedByMismatch"
                     : postgresFailureCount > 0
                         ? "BlockedByPostgresFailure"
-                        : HasLatencyRisk(traces)
+                        : RelationGovernanceCanaryTraceHelpers.HasLatencyRisk(traces)
                             ? "BlockedByLatency"
                             : traces.Count >= Math.Min(_options.MaxOperationsPerScope * enabledScopes.Length, 120)
                                 ? "ReadyForLimitedScopeExpansion"
@@ -290,8 +290,8 @@ public sealed class RelationGovernanceMultiNormalScopeCanaryRunner
         IReadOnlyList<string> blocked,
         string recommendation)
     {
-        var readTraces = traces.Where(IsReadTrace).ToArray();
-        var writeTraces = traces.Where(IsWriteTrace).ToArray();
+        var readTraces = traces.Where(RelationGovernanceCanaryTraceHelpers.IsReadTrace).ToArray();
+        var writeTraces = traces.Where(RelationGovernanceCanaryTraceHelpers.IsWriteTrace).ToArray();
         return new PostgresRelationMultiNormalScopeCanaryReport
         {
             GatePassed = gatePassed,
@@ -310,10 +310,10 @@ public sealed class RelationGovernanceMultiNormalScopeCanaryRunner
             PostgresFailureCount = reports.Sum(static item => item.Report.PostgresFailureCount),
             ScopeLeakCount = reports.Sum(static item => item.Report.ScopeLeakCount) + crossScopeLeakCount + (nonAllowlistedScopeChecked ? 0 : 1),
             NonAllowlistedScopeChecked = nonAllowlistedScopeChecked,
-            AveragePostgresReadMs = AverageDuration(readTraces),
-            P95PostgresReadMs = PercentileDuration(readTraces, 0.95),
-            AveragePostgresWriteMs = AverageDuration(writeTraces),
-            P95PostgresWriteMs = PercentileDuration(writeTraces, 0.95),
+            AveragePostgresReadMs = RelationGovernanceCanaryTraceHelpers.AverageDuration(readTraces),
+            P95PostgresReadMs = RelationGovernanceCanaryTraceHelpers.PercentileDuration(readTraces, 0.95),
+            AveragePostgresWriteMs = RelationGovernanceCanaryTraceHelpers.AverageDuration(writeTraces),
+            P95PostgresWriteMs = RelationGovernanceCanaryTraceHelpers.PercentileDuration(writeTraces, 0.95),
             PerScopeStatus =
             [
                 .. reports.Select(static item => new RelationGovernanceMultiNormalScopeStatus
@@ -342,42 +342,6 @@ public sealed class RelationGovernanceMultiNormalScopeCanaryRunner
             BlockedReasons = blocked,
             Recommendation = recommendation
         };
-    }
-
-    private static bool IsReadTrace(RelationGovernanceProviderSwitchTrace trace)
-    {
-        return trace.OperationKind.Contains("Query", StringComparison.OrdinalIgnoreCase)
-               || trace.OperationKind.Contains("Get", StringComparison.OrdinalIgnoreCase)
-               || trace.OperationKind.Contains("Latest", StringComparison.OrdinalIgnoreCase)
-               || trace.OperationKind.StartsWith("RelationDiagnosticsBy", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static bool IsWriteTrace(RelationGovernanceProviderSwitchTrace trace)
-    {
-        return trace.OperationKind.Contains("Write", StringComparison.OrdinalIgnoreCase)
-               || trace.OperationKind.Contains("Delete", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static bool HasLatencyRisk(IReadOnlyList<RelationGovernanceProviderSwitchTrace> traces)
-    {
-        return traces.Count > 0 && traces.Average(static trace => trace.DurationMs) > 5000;
-    }
-
-    private static double AverageDuration(IReadOnlyList<RelationGovernanceProviderSwitchTrace> traces)
-    {
-        return traces.Count == 0 ? 0 : traces.Average(static trace => trace.DurationMs);
-    }
-
-    private static double PercentileDuration(IReadOnlyList<RelationGovernanceProviderSwitchTrace> traces, double percentile)
-    {
-        if (traces.Count == 0)
-        {
-            return 0;
-        }
-
-        var ordered = traces.Select(static trace => trace.DurationMs).OrderBy(static value => value).ToArray();
-        var index = (int)Math.Ceiling(percentile * ordered.Length) - 1;
-        return ordered[Math.Clamp(index, 0, ordered.Length - 1)];
     }
 
     private static void AddIfFalse(ICollection<string> blocked, bool condition, string reason)

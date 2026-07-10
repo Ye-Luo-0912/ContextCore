@@ -282,6 +282,7 @@ public sealed record LearningFormalEvidenceRealizationR1PackScenario(
     bool MainlineEvidencePresent, bool MainlineRegistryPresent,
     string ExpectedStatus, string? ExpectedBlockedReason);
 
+[Obsolete("Historical eval runner, candidate for migration to Evaluation tools.")]
 public sealed class LearningFormalEvidenceRealizationR1PackRunner
 {
     private static readonly JsonSerializerOptions WriteIndented = new() { WriteIndented = true };

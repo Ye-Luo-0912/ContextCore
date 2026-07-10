@@ -294,10 +294,10 @@ public sealed class ScopedRuntimePreviewActivationWindowPreflightRunner
         b.AppendLine($"- NoRuntimeMutationInvariant: `{r.NoRuntimeMutationInvariant}`");
         b.AppendLine();
 
-        AppendList(b, "Allowed Actions", r.AllowedActions);
-        AppendList(b, "Forbidden Actions", r.ForbiddenActions);
-        AppendList(b, "Blocked Reasons", r.BlockedReasons);
-        AppendList(b, "Diagnostics", r.Diagnostics);
+        PreflightReportHelpers.AppendList(b, "Allowed Actions", r.AllowedActions);
+        PreflightReportHelpers.AppendList(b, "Forbidden Actions", r.ForbiddenActions);
+        PreflightReportHelpers.AppendList(b, "Blocked Reasons", r.BlockedReasons);
+        PreflightReportHelpers.AppendList(b, "Diagnostics", r.Diagnostics);
 
         b.AppendLine();
         b.AppendLine("V7.9 scoped runtime preview activation window preflight。启动前预检：验证 activation window contract 可安全执行。ConfigPatchWritten=false, RuntimeActivation=false。GatePassed=false is expected for non-gate artifact; *-gate artifact is authoritative。");
@@ -331,13 +331,5 @@ public sealed class ScopedRuntimePreviewActivationWindowPreflightRunner
         if (blocked.Any(static r => r.Contains("Safety", StringComparison.OrdinalIgnoreCase)))
             return ScopedRuntimePreviewActivationWindowPreflightRecommendations.BlockedBySafetyBoundaryViolation;
         return ScopedRuntimePreviewActivationWindowPreflightRecommendations.KeepPreviewOnly;
-    }
-
-    private static void AppendList(StringBuilder b, string title, IReadOnlyList<string> values)
-    {
-        b.AppendLine();
-        b.AppendLine($"## {title}");
-        if (values.Count == 0) { b.AppendLine("- (empty)"); return; }
-        foreach (var v in values) b.AppendLine($"- `{v}`");
     }
 }
