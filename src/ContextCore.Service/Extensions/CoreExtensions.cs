@@ -120,8 +120,12 @@ internal static class CoreExtensions
 		services.AddSingleton(sp => new GraphExpansionShadowTraceExportService(
 			sp.GetService<IRetrievalTraceStore>()));
 		services.AddSingleton<GraphExpansionShadowTraceQualityReportBuilder>();
-		services.AddSingleton<IEmbeddingGenerator, DeterministicHashEmbeddingGenerator>();
-		services.AddSingleton(sp => new VectorReindexPlanner(
+	// Embedding provider 注册由 AddEmbeddingProviders 扩展方法在 Program.cs 中显式调用，
+	// 根据 EmbeddingProviderOptions.ProviderType 条件注册 IEmbeddingGenerator / IEmbeddingProvider。
+	// - DeterministicHash: 仅注册 IEmbeddingGenerator（基础设施测试/预览），不注册 IEmbeddingProvider，IsSemanticRetrieval=false
+	// - OnnxLocal: 注册 IEmbeddingGenerator + IEmbeddingProvider（真正语义检索），需配置模型路径
+	// - Disabled: 不注册任何 embedding 服务
+	services.AddSingleton(sp => new VectorReindexPlanner(
 			sp.GetService<IContextStore>(),
 			sp.GetService<IMemoryStore>(),
 			sp.GetService<IVectorIndexStore>(),
@@ -344,6 +348,58 @@ internal static class CoreExtensions
 			return new ModelHealthService(gatewayOptions, adapters, resolver);
 		});
 
+		return services;
+	}
+
+	/// <summary>
+	/// 根据 EmbeddingProviderOptions.ProviderType 显式注册 embedding provider。
+	/// - DeterministicHash: 仅注册 IEmbeddingGenerator（基础设施测试/预览），不注册 IEmbeddingProvider，IsSemanticRetrieval=false
+	/// - OnnxLocal: 注册 IEmbeddingGenerator + IEmbeddingProvider（真正语义检索），需配置模型路径
+	/// - Disabled: 不注册任何 embedding 服务
+	/// 通过条件注册避免 nullable 工厂返回值，确保 GetService&lt;T&gt; 在未注册时返回 null。
+	/// </summary>
+	public static IServiceCollection AddEmbeddingProviders(this IServiceCollection services, EmbeddingProviderOptions options)
+	{
+		ArgumentNullException.ThrowIfNull(options);
+
+		if (!options.Enabled || string.Equals(options.ProviderType, EmbeddingProviderTypes.Disabled, StringComparison.OrdinalIgnoreCase))
+		{
+			return services;
+		}
+
+		if (string.Equals(options.ProviderType, EmbeddingProviderTypes.OnnxLocal, StringComparison.OrdinalIgnoreCase))
+		{
+			// OnnxEmbeddingGenerator 接收 EmbeddingProviderOptions 并内部转换为 EmbeddingOptions
+			services.AddSingleton<IEmbeddingGenerator>(new ContextCore.Embedding.OnnxEmbeddingGenerator(options));
+
+			if (options.IsSemanticRetrieval)
+			{
+				// 检索路径 IEmbeddingProvider 需要独立的 EmbeddingOptions（含缓存上限）
+				var embeddingOptions = new ContextCore.Embedding.EmbeddingOptions
+				{
+					ModelName = string.IsNullOrWhiteSpace(options.EmbeddingModel)
+						? ContextCore.Embedding.EmbeddingModelPaths.DefaultModelName
+						: options.EmbeddingModel,
+					Dimensions = Math.Max(0, options.Dimension),
+					MaxBatchSize = options.BatchSize > 0 ? options.BatchSize : 32,
+					Normalize = options.Normalize,
+					ModelPath = options.ModelPath,
+					VocabularyPath = options.TokenizerPath,
+					MaxSequenceLength = options.MaxTokens > 0 ? options.MaxTokens : 256,
+					PoolingStrategy = Enum.TryParse<ContextCore.Embedding.EmbeddingPoolingStrategy>(options.PoolingStrategy, ignoreCase: true, out var pooling)
+						? pooling
+						: null,
+					EnableContentHashCache = true
+				};
+				var cacheMax = options.CacheMaxEntries > 0 ? options.CacheMaxEntries : 10000;
+				services.AddSingleton<IEmbeddingProvider>(new ContextCore.Embedding.OnnxEmbeddingProvider(embeddingOptions, cacheMax));
+			}
+			return services;
+		}
+
+		// 默认：DeterministicHash（仅用于可重复基础设施测试和预览，不是语义检索）
+		var dimension = options.Dimension > 0 ? options.Dimension : 16;
+		services.AddSingleton<IEmbeddingGenerator>(new DeterministicHashEmbeddingGenerator(dimension));
 		return services;
 	}
 }

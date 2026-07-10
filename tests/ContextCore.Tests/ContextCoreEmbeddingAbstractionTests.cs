@@ -402,6 +402,129 @@ public sealed class ContextCoreEmbeddingAbstractionTests
         }
     }
 
+    [TestMethod]
+    public void EmbeddingCacheService_LRU_ShouldEvictOldestWhenCapacityExceeded()
+    {
+        var cache = new EmbeddingCacheService(maxEntries: 3);
+        var model = "test-model";
+
+        cache.Store(model, "hash-1", MakeVector("v1"));
+        cache.Store(model, "hash-2", MakeVector("v2"));
+        cache.Store(model, "hash-3", MakeVector("v3"));
+
+        Assert.AreEqual(3, cache.Count);
+
+        // 访问 hash-1，使其成为最近使用
+        cache.TryGet(model, "hash-1", out _);
+
+        // 插入 hash-4，应淘汰最久未访问的 hash-2
+        cache.Store(model, "hash-4", MakeVector("v4"));
+
+        Assert.AreEqual(3, cache.Count);
+        Assert.IsFalse(cache.TryGet(model, "hash-2", out _));
+        Assert.IsTrue(cache.TryGet(model, "hash-1", out _));
+        Assert.IsTrue(cache.TryGet(model, "hash-3", out _));
+        Assert.IsTrue(cache.TryGet(model, "hash-4", out _));
+    }
+
+    [TestMethod]
+    public void EmbeddingCacheService_StoreRange_ShouldBatchInsertAndEvict()
+    {
+        var cache = new EmbeddingCacheService(maxEntries: 5);
+        var model = "batch-model";
+
+        var items = new List<(string, EmbeddingVector)>
+        {
+            ("h1", MakeVector("v1")),
+            ("h2", MakeVector("v2")),
+            ("h3", MakeVector("v3")),
+            ("h4", MakeVector("v4")),
+            ("h5", MakeVector("v5")),
+            ("h6", MakeVector("v6")),
+            ("h7", MakeVector("v7"))
+        };
+
+        cache.StoreRange(model, items);
+
+        // 上限 5，应淘汰最旧的 h1/h2
+        Assert.AreEqual(5, cache.Count);
+        Assert.IsFalse(cache.TryGet(model, "h1", out _));
+        Assert.IsFalse(cache.TryGet(model, "h2", out _));
+        Assert.IsTrue(cache.TryGet(model, "h7", out _));
+    }
+
+    [TestMethod]
+    public void EmbeddingCacheService_UnlimitedCapacity_ShouldNotEvict()
+    {
+        var cache = new EmbeddingCacheService(maxEntries: 0);
+        var model = "unlimited-model";
+
+        for (var i = 0; i < 100; i++)
+        {
+            cache.Store(model, $"hash-{i}", MakeVector($"v{i}"));
+        }
+
+        Assert.AreEqual(100, cache.Count);
+    }
+
+    [TestMethod]
+    public async Task OnnxEmbeddingProvider_DisposeAsync_ShouldReleaseSession()
+    {
+        var factory = new FakeOnnxEmbeddingSessionFactory(dimensions: 3);
+        var manager = new OnnxEmbeddingSessionManager(new EmbeddingOptions
+        {
+            ModelName = "dispose-test",
+            Dimensions = 3,
+            IdleUnloadAfter = TimeSpan.FromHours(1)
+        }, factory);
+        var provider = new OnnxEmbeddingProvider(
+            new EmbeddingOptions { ModelName = "dispose-test", Dimensions = 3 },
+            manager,
+            new EmbeddingCacheService());
+
+        // 触发 session 加载
+        await provider.EmbedAsync(new EmbeddingRequest
+        {
+            ModelName = "dispose-test",
+            Inputs = [new EmbeddingInput { Id = "i1", Text = "test" }]
+        });
+
+        Assert.IsTrue(manager.IsLoaded);
+        Assert.IsFalse(factory.CreatedSessions.Single().Disposed);
+
+        await provider.DisposeAsync();
+
+        Assert.IsFalse(manager.IsLoaded);
+        Assert.IsTrue(factory.CreatedSessions.Single().Disposed);
+    }
+
+    [TestMethod]
+    public async Task OnnxEmbeddingGenerator_DisposeAsync_ShouldNotThrowWhenProviderNotCreated()
+    {
+        var options = new EmbeddingProviderOptions
+        {
+            ProviderType = EmbeddingProviderTypes.OnnxLocal,
+            ProviderId = "dispose-gen-test",
+            Dimension = 3,
+            IsSemanticRetrieval = true,
+            ModelPath = "nonexistent.onnx"
+        };
+        var generator = new OnnxEmbeddingGenerator(options);
+
+        // 未触发 Lazy<OnnxEmbeddingProvider>，DisposeAsync 不应抛异常
+        await generator.DisposeAsync();
+    }
+
+    private static EmbeddingVector MakeVector(string id)
+    {
+        return new EmbeddingVector
+        {
+            InputId = id,
+            Values = [1f, 2f, 3f],
+            Norm = (float)Math.Sqrt(14)
+        };
+    }
+
     private static double Cosine(IReadOnlyList<float> left, IReadOnlyList<float> right)
     {
         var length = Math.Min(left.Count, right.Count);

@@ -10,6 +10,7 @@
   <ItemGroup>
     <ProjectReference Include="..\ContextCore.Abstractions\ContextCore.Abstractions.csproj" />
     <ProjectReference Include="..\ContextCore.Core\ContextCore.Core.csproj" />
+    <ProjectReference Include="..\ContextCore.Embedding\ContextCore.Embedding.csproj" />
     <ProjectReference Include="..\ContextCore.ModelGateway\ContextCore.ModelGateway.csproj" />
     <ProjectReference Include="..\ContextCore.Storage.FileSystem\ContextCore.Storage.FileSystem.csproj" />
     <ProjectReference Include="..\ContextCore.Storage.InMemory\ContextCore.Storage.InMemory.csproj" />

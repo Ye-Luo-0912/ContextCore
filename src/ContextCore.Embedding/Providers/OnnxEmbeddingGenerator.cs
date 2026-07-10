@@ -4,7 +4,7 @@ using ContextCore.Abstractions.Models;
 namespace ContextCore.Embedding;
 
 /// <summary>将本地 ONNX embedding provider 适配为 V1 vector index generator。</summary>
-public sealed class OnnxEmbeddingGenerator : IEmbeddingGenerator, IEmbeddingGeneratorDescriptor
+public sealed class OnnxEmbeddingGenerator : IEmbeddingGenerator, IEmbeddingGeneratorDescriptor, IAsyncDisposable
 {
     private readonly EmbeddingProviderOptions _options;
     private readonly IEmbeddingTokenizer? _tokenizer;
@@ -187,6 +187,15 @@ public sealed class OnnxEmbeddingGenerator : IEmbeddingGenerator, IEmbeddingGene
     {
         var bytes = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(text ?? string.Empty));
         return Convert.ToHexString(bytes).ToLowerInvariant();
+    }
+
+    /// <summary>释放底层 ONNX provider 及会话，供 DI 容器在应用关闭时调用。</summary>
+    public async ValueTask DisposeAsync()
+    {
+        if (_provider.IsValueCreated)
+        {
+            await _provider.Value.DisposeAsync().ConfigureAwait(false);
+        }
     }
 }
 

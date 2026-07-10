@@ -1,4 +1,4 @@
-﻿namespace ContextCore.Abstractions.Models;
+namespace ContextCore.Abstractions.Models;
 
 
 /// <summary>Vector index 使用的 embedding provider 类型。</summary>
@@ -38,6 +38,19 @@ public sealed class EmbeddingProviderOptions
     public string Device { get; init; } = "cpu";
 
     public bool Enabled { get; init; } = true;
+
+    /// <summary>
+    /// 标记该 provider 是否提供真正的语义检索能力。
+    /// DeterministicHash 仅为可重复基础设施测试 provider，不产生语义向量，应设为 false。
+    /// OnnxLocal / Mock / External 等真正模型 provider 应设为 true。
+    /// </summary>
+    public bool IsSemanticRetrieval { get; init; } = false;
+
+    /// <summary>
+    /// Embedding 缓存最大条目数，超过后按 LRU 策略淘汰最久未访问的条目。
+    /// 设为 0 表示不缓存，设为负数表示无上限（不推荐生产使用）。
+    /// </summary>
+    public int CacheMaxEntries { get; init; } = 10000;
 }
 
 

@@ -6,7 +6,7 @@ using ContextCore.Embedding.Utilities;
 namespace ContextCore.Embedding;
 
 /// <summary>通过可插拔 ONNX 会话执行 embedding 的 provider。</summary>
-public sealed class OnnxEmbeddingProvider : IEmbeddingProvider
+public sealed class OnnxEmbeddingProvider : IEmbeddingProvider, IAsyncDisposable
 {
     private readonly EmbeddingCacheService _cache;
     private readonly OnnxEmbeddingSessionManager _sessionManager;
@@ -23,6 +23,17 @@ public sealed class OnnxEmbeddingProvider : IEmbeddingProvider
         _options = options;
         _sessionManager = sessionManager;
         _cache = cache ?? new EmbeddingCacheService();
+    }
+
+    /// <summary>
+    /// 便捷构造函数：根据 options 创建 sessionManager，并根据 cacheMaxEntries 创建有上限的缓存。
+    /// </summary>
+    public OnnxEmbeddingProvider(EmbeddingOptions options, int cacheMaxEntries)
+        : this(
+            options,
+            new OnnxEmbeddingSessionManager(options),
+            new EmbeddingCacheService(cacheMaxEntries))
+    {
     }
 
     public async Task<EmbeddingResult> EmbedAsync(
@@ -228,5 +239,12 @@ public sealed class OnnxEmbeddingProvider : IEmbeddingProvider
         return string.IsNullOrWhiteSpace(text)
             ? 0
             : Math.Max(1, text.Length / 4);
+    }
+
+    /// <summary>释放底层 ONNX 会话，供 DI 容器在应用关闭时调用。</summary>
+    public async ValueTask DisposeAsync()
+    {
+        await _sessionManager.ForceUnloadAsync().ConfigureAwait(false);
+        _cache.Clear();
     }
 }

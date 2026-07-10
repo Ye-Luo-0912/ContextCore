@@ -120,6 +120,9 @@ var relationGovernanceProviderSwitchOptions = relationGovernanceProviderSwitchSe
 	? relationGovernanceProviderSwitchSection.Get<RelationGovernanceProviderSwitchOptions>() ?? new RelationGovernanceProviderSwitchOptions()
 	: builder.Configuration.GetSection("RelationGovernance:ProviderSwitch").Get<RelationGovernanceProviderSwitchOptions>()
 		?? new RelationGovernanceProviderSwitchOptions();
+var embeddingProviderOptions = builder.Configuration
+	.GetSection("EmbeddingProvider")
+	.Get<EmbeddingProviderOptions>() ?? new EmbeddingProviderOptions();
 var routerShadowOptions = new RouterShadowOptions
 {
 	Enabled = learningRouterShadowOptions.Enabled,
@@ -144,6 +147,8 @@ builder.Services.AddSingleton(graphExpansionShadowOptions);
 builder.Services.AddSingleton(graphExpansionApplyServiceOptions);
 builder.Services.AddSingleton(graphExpansionApplyOptions);
 builder.Services.AddSingleton(relationGovernanceProviderSwitchOptions);
+builder.Services.AddSingleton(embeddingProviderOptions);
+builder.Services.AddSingleton(Microsoft.Extensions.Options.Options.Create(embeddingProviderOptions));
 builder.Services.Configure<JobWorkerOptions>(builder.Configuration.GetSection("JobWorker"));
 builder.Services.Configure<ShortTermMaintenanceOptions>(builder.Configuration.GetSection("ShortTermMaintenance"));
 builder.Services.AddHostedService<ContextJobWorker>();
@@ -173,7 +178,8 @@ builder.Services
 	})
 	.AddContextStorage(storageOptions)
 	.AddContextCore()
-	.AddContextModelGateway(builder.Configuration);
+	.AddContextModelGateway(builder.Configuration)
+	.AddEmbeddingProviders(embeddingProviderOptions);
 
 // ── 可观测性（OpenTelemetry，按 Observability:Enabled 条件启用）─────────
 var otlpEndpoint = builder.Configuration["Observability:OtlpEndpoint"];
@@ -411,6 +417,55 @@ if (storageOptions.IsPostgres)
 			"[FATAL] PostgreSQL 启动验证异常。服务将中止。");
 		await app.StopAsync();
 		return;
+	}
+}
+
+// ── Embedding Provider 启动 readiness 检查 ────────────────────────────
+// 验证配置的 embedding provider 是否可用：维度校验、模型文件存在性检查。
+// 检查失败时输出明确警告，但不阻止服务启动（embedding 为可选能力）。
+{
+	var embOptions = app.Services.GetRequiredService<EmbeddingProviderOptions>();
+	if (embOptions.Enabled && !string.Equals(embOptions.ProviderType, EmbeddingProviderTypes.Disabled, StringComparison.OrdinalIgnoreCase))
+	{
+		if (embOptions.Dimension <= 0)
+		{
+			logger.LogWarning(
+				"[Embedding] Provider={ProviderType} Dimension={Dimension} 无效，embedding 服务不可用。",
+				embOptions.ProviderType, embOptions.Dimension);
+		}
+		else if (string.Equals(embOptions.ProviderType, EmbeddingProviderTypes.OnnxLocal, StringComparison.OrdinalIgnoreCase))
+		{
+			if (string.IsNullOrWhiteSpace(embOptions.ModelPath) || !File.Exists(embOptions.ModelPath))
+			{
+				logger.LogWarning(
+					"[Embedding] OnnxLocal provider 模型文件不存在：ModelPath={ModelPath}。" +
+					"向量召回通道将不可用。请通过 EmbeddingProvider:ModelPath 配置有效的 ONNX 模型路径。",
+					embOptions.ModelPath ?? "(未配置)");
+			}
+			else if (!embOptions.IsSemanticRetrieval)
+			{
+				logger.LogWarning(
+					"[Embedding] OnnxLocal provider 已配置但 IsSemanticRetrieval=false。" +
+					"向量召回通道将不启用。如需语义检索，请设置 EmbeddingProvider:IsSemanticRetrieval=true。");
+			}
+			else
+			{
+				logger.LogInformation(
+					"[Embedding] OnnxLocal provider 就绪：Model={Model}, Dimension={Dimension}, IsSemanticRetrieval=true。",
+					embOptions.EmbeddingModel, embOptions.Dimension);
+			}
+		}
+		else if (string.Equals(embOptions.ProviderType, EmbeddingProviderTypes.DeterministicHash, StringComparison.OrdinalIgnoreCase))
+		{
+			logger.LogInformation(
+				"[Embedding] DeterministicHash provider 就绪：Dimension={Dimension}, IsSemanticRetrieval={IsSemantic}。" +
+				"注意：DeterministicHash 不是语义检索，仅用于可重复基础设施测试和预览。",
+				embOptions.Dimension, embOptions.IsSemanticRetrieval);
+		}
+	}
+	else
+	{
+		logger.LogInformation("[Embedding] Embedding 服务已禁用（ProviderType=Disabled 或 Enabled=false）。");
 	}
 }
 
