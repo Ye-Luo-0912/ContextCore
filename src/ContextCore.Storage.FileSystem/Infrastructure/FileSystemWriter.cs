@@ -58,6 +58,39 @@ public sealed class FileSystemWriter
         await writer.FlushAsync(cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// 在单个写锁内批量追加多行，避免逐行获取锁的开销。
+    /// </summary>
+    public async Task AppendLinesAsync(
+        string path,
+        IReadOnlyList<string> lines,
+        CancellationToken cancellationToken = default)
+    {
+        if (lines.Count == 0)
+        {
+            return;
+        }
+
+        await using var lease = await _locks.AcquireWriteLockAsync(path, cancellationToken).ConfigureAwait(false);
+        EnsureDirectory(path);
+
+        await using var stream = new FileStream(
+            path,
+            FileMode.Append,
+            FileAccess.Write,
+            FileShare.Read,
+            bufferSize: 4096,
+            FileOptions.Asynchronous);
+        await using var writer = new StreamWriter(stream, Utf8NoBom);
+        foreach (var line in lines)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            await writer.WriteLineAsync(line.AsMemory(), cancellationToken).ConfigureAwait(false);
+        }
+
+        await writer.FlushAsync(cancellationToken).ConfigureAwait(false);
+    }
+
     public async Task UpdateLinesAsync(
         string path,
         Func<IReadOnlyList<string>, IReadOnlyList<string>> update,

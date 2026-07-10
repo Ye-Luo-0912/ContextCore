@@ -30,12 +30,9 @@ public sealed class FileShortTermMemoryStore : IShortTermMemoryStore
         try
         {
             var path = _paths.GetShortTermRawEventsJsonlPath(normalized.WorkspaceId, normalized.CollectionId);
-            var items = await ReadJsonLinesWithLegacyAsync<ShortTermRawEvent>(
-                path,
-                _paths.GetLegacyShortTermRawEventsJsonlPath(normalized.WorkspaceId, normalized.CollectionId),
-                static item => item.EventId,
-                cancellationToken).ConfigureAwait(false);
-            await _jsonLines.WriteAsync(path, items.Append(normalized), cancellationToken).ConfigureAwait(false);
+            // 真正 append：不再读取全量重写，直接追加单行。
+            // legacy 文件中的旧数据由 ReadJsonLinesWithLegacyAsync 在读取时自动合并，无需在此迁移。
+            await _jsonLines.AppendAsync(path, normalized, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -128,12 +125,8 @@ public sealed class FileShortTermMemoryStore : IShortTermMemoryStore
         try
         {
             var path = _paths.GetShortTermArchivedRawEventsJsonlPath(workspaceId, collectionId);
-            var existing = await ReadJsonLinesWithLegacyAsync<ShortTermRawEvent>(
-                path,
-                _paths.GetLegacyShortTermArchivedRawEventsJsonlPath(workspaceId, collectionId),
-                static item => item.EventId,
-                cancellationToken).ConfigureAwait(false);
-            await _jsonLines.WriteAsync(path, existing.Concat(items.Select(Normalize)), cancellationToken).ConfigureAwait(false);
+            // 真正 append：批量追加归档项，不再读取全量重写。
+            await _jsonLines.AppendRangeAsync(path, items.Select(Normalize), cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -155,12 +148,8 @@ public sealed class FileShortTermMemoryStore : IShortTermMemoryStore
         try
         {
             var path = _paths.GetShortTermArchivedWorkingItemsJsonlPath(workspaceId, collectionId);
-            var existing = await ReadJsonLinesWithLegacyAsync<ShortTermWorkingItem>(
-                path,
-                _paths.GetLegacyShortTermArchivedWorkingItemsJsonlPath(workspaceId, collectionId),
-                static item => item.ItemId,
-                cancellationToken).ConfigureAwait(false);
-            await _jsonLines.WriteAsync(path, existing.Concat(items.Select(Normalize)), cancellationToken).ConfigureAwait(false);
+            // 真正 append：批量追加归档项，不再读取全量重写。
+            await _jsonLines.AppendRangeAsync(path, items.Select(Normalize), cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -319,12 +308,8 @@ public sealed class FileShortTermMemoryStore : IShortTermMemoryStore
         try
         {
             var path = _paths.GetShortTermCompactionRunsJsonlPath(run.WorkspaceId, run.CollectionId);
-            var existing = await ReadJsonLinesWithLegacyAsync<ShortTermCompactionRun>(
-                path,
-                _paths.GetLegacyShortTermCompactionRunsJsonlPath(run.WorkspaceId, run.CollectionId),
-                static item => item.RunId,
-                cancellationToken).ConfigureAwait(false);
-            await _jsonLines.WriteAsync(path, existing.Append(Normalize(run)), cancellationToken).ConfigureAwait(false);
+            // 真正 append：直接追加单行，不再读取全量重写。
+            await _jsonLines.AppendAsync(path, Normalize(run), cancellationToken).ConfigureAwait(false);
         }
         finally
         {

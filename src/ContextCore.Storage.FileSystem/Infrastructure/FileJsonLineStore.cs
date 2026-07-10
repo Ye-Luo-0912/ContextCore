@@ -67,6 +67,24 @@ public sealed class FileJsonLineStore
     }
 
     /// <summary>
+    /// 在单个写锁内批量追加多条 JSONL 记录，避免逐条获取锁的开销。
+    /// </summary>
+    public async Task AppendRangeAsync<T>(
+        string path,
+        IEnumerable<T> items,
+        CancellationToken cancellationToken = default)
+    {
+        var lines = items.Select(item => _serializer.Serialize(item)).ToArray();
+        if (lines.Length == 0)
+        {
+            return;
+        }
+
+        await _writer.AppendLinesAsync(path, lines, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
     /// 按键对 JSONL 文件中的记录执行 Upsert（存在则更新，不存在则追加）。
     /// 读改写在同一个写锁内完成，避免并发写入互相覆盖。
     /// </summary>
