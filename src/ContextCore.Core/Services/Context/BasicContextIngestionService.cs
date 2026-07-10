@@ -69,10 +69,8 @@ public sealed class BasicContextIngestionService
         if (_relationProjector is not null && _relationStore is not null)
         {
             var ingestRelations = _relationProjector.ProjectForIngest(normalized);
-            if (ingestRelations.Count > 0)
-            {
-                await _relationStore.BatchUpsertAsync(ingestRelations, cancellationToken).ConfigureAwait(false);
-            }
+            // GRAPH-09：Ingest reconcile — 新增需要的边，删除已经移除的 refs 边。
+            await ReconcileIngestRelationsAsync(normalized, ingestRelations, cancellationToken).ConfigureAwait(false);
         }
 
         return normalized;
@@ -85,5 +83,47 @@ public sealed class BasicContextIngestionService
         var hash = SHA256.HashData(bytes);
 
         return Convert.ToHexString(hash).ToLowerInvariant();
+    }
+
+    /// <summary>
+    /// GRAPH-09：Ingest reconcile — 新增需要的 related_to 边，删除已经移除的 refs 边。
+    /// 仅清理由 ingest 生产的 related_to 边（Provenance="ingest"），不影响其他 projector 生产的边。
+    /// </summary>
+    private async Task ReconcileIngestRelationsAsync(
+        ContextItem item,
+        IReadOnlyList<ContextRelation> newRelations,
+        CancellationToken cancellationToken)
+    {
+        if (newRelations.Count > 0)
+        {
+            await _relationStore!.BatchUpsertAsync(newRelations, cancellationToken).ConfigureAwait(false);
+        }
+
+        // 查询该条目现有的所有 related_to 出边
+        var existingRelations = await _relationStore!.QueryAsync(new ContextRelationQuery
+        {
+            WorkspaceId = item.WorkspaceId,
+            CollectionId = item.CollectionId,
+            SourceId = item.Id,
+            RelationType = ContextRelationTypes.RelatedTo,
+            Take = int.MaxValue
+        }, cancellationToken).ConfigureAwait(false);
+
+        var newTargetIds = newRelations
+            .Select(static r => r.TargetId)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        // 删除目标已不在当前 Refs 中的旧 related_to 边
+        foreach (var existing in existingRelations)
+        {
+            if (!newTargetIds.Contains(existing.TargetId))
+            {
+                await _relationStore.DeleteAsync(
+                    item.WorkspaceId,
+                    item.CollectionId,
+                    existing.Id,
+                    cancellationToken).ConfigureAwait(false);
+            }
+        }
     }
 }
