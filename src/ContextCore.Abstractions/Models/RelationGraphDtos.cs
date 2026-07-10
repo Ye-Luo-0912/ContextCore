@@ -1322,3 +1322,49 @@ public sealed record RelationTraversalEdge(
     double SourceScore,
     string Path,
     string NeighborId);
+
+/// <summary>关系子图 DTO，包含节点和边的快照，用于可视化与分析。</summary>
+public sealed class RelationSubgraph
+{
+    public string RootItemId { get; init; } = string.Empty;
+
+    public IReadOnlyList<RelationSubgraphNode> Nodes { get; init; } = Array.Empty<RelationSubgraphNode>();
+
+    public IReadOnlyList<RelationSubgraphEdge> Edges { get; init; } = Array.Empty<RelationSubgraphEdge>();
+
+    public int MaxDepthReached { get; init; }
+
+    public bool Truncated { get; init; }
+
+    public IReadOnlyList<string> Warnings { get; init; } = Array.Empty<string>();
+}
+
+public sealed class RelationSubgraphNode
+{
+    public string ItemId { get; init; } = string.Empty;
+
+    public int Depth { get; init; }
+
+    public string? NodeKind { get; init; }
+}
+
+public sealed class RelationSubgraphEdge
+{
+    public string RelationId { get; init; } = string.Empty;
+
+    public string SourceId { get; init; } = string.Empty;
+
+    public string TargetId { get; init; } = string.Empty;
+
+    public string RelationType { get; init; } = string.Empty;
+
+    public double Weight { get; init; }
+
+    public double Confidence { get; init; }
+
+    public string? Lifecycle { get; init; }
+
+    public string? ReviewStatus { get; init; }
+
+    public int Depth { get; init; }
+}

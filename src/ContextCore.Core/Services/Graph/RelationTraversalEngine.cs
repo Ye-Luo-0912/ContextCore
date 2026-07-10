@@ -245,3 +245,67 @@ public sealed class RelationTraversalEngine
 
     private sealed record TraversalNode(string ItemId, int Depth, double Score, string Path);
 }
+
+/// <summary>
+/// 从 <see cref="RelationTraversalResult"/> 构建 <see cref="RelationSubgraph"/> 的静态辅助类。
+/// 提取去重后的节点列表与扁平化的边列表，供 ControlRoom 命令和 Service 端点复用。
+/// </summary>
+public static class RelationSubgraphBuilder
+{
+    public static RelationSubgraph Build(
+        string rootItemId,
+        RelationTraversalResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+
+        var nodes = new List<RelationSubgraphNode>();
+        var nodeIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        // 添加根节点
+        if (!string.IsNullOrWhiteSpace(rootItemId))
+        {
+            nodes.Add(new RelationSubgraphNode { ItemId = rootItemId, Depth = 0 });
+            nodeIds.Add(rootItemId);
+        }
+
+        // 从边中提取 neighbor 节点（depth = edge.Depth）
+        foreach (var edge in result.Edges)
+        {
+            var neighborId = edge.NeighborId;
+            if (nodeIds.Add(neighborId))
+            {
+                nodes.Add(new RelationSubgraphNode
+                {
+                    ItemId = neighborId,
+                    Depth = edge.Depth,
+                    NodeKind = string.Equals(edge.Relation.TargetId, neighborId, StringComparison.OrdinalIgnoreCase)
+                        ? edge.Relation.TargetNodeKind
+                        : edge.Relation.SourceNodeKind
+                });
+            }
+        }
+
+        var edges = result.Edges.Select(edge => new RelationSubgraphEdge
+        {
+            RelationId = edge.Relation.Id,
+            SourceId = edge.Relation.SourceId,
+            TargetId = edge.Relation.TargetId,
+            RelationType = edge.Relation.RelationType,
+            Weight = edge.Relation.Weight,
+            Confidence = edge.Relation.Confidence,
+            Lifecycle = edge.Relation.Lifecycle,
+            ReviewStatus = edge.Relation.ReviewStatus,
+            Depth = edge.Depth
+        }).ToArray();
+
+        return new RelationSubgraph
+        {
+            RootItemId = rootItemId ?? string.Empty,
+            Nodes = nodes.ToArray(),
+            Edges = edges,
+            MaxDepthReached = result.MaxDepthReached,
+            Truncated = result.Truncated,
+            Warnings = result.Warnings
+        };
+    }
+}

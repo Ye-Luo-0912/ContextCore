@@ -1755,6 +1755,44 @@ public sealed class ContextCoreClient
         return await GetRequiredAsync<ContextCoreRelationsResponse>(path, cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// 调用 <c>GET /api/relations/{workspaceId}/{collectionId}/{itemId}/subgraph</c> 获取关系子图。
+    /// </summary>
+    /// <param name="itemId">根条目 ID。</param>
+    /// <param name="workspaceId">工作空间 ID。</param>
+    /// <param name="collectionId">集合 ID。</param>
+    /// <param name="depth">最大遍历深度，默认 2。</param>
+    /// <param name="direction">遍历方向（outgoing|incoming|both），默认 both。</param>
+    /// <param name="allowedTypes">可选的关系类型白名单。</param>
+    public async Task<RelationSubgraph> GetRelationSubgraphAsync(
+        string itemId,
+        string workspaceId,
+        string collectionId,
+        int depth = 2,
+        string direction = "both",
+        string[]? allowedTypes = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(itemId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(collectionId);
+
+        var parts = new List<string>
+        {
+            $"workspaceId={Escape(workspaceId)}",
+            $"collectionId={Escape(collectionId)}",
+            $"depth={depth}",
+            $"direction={Escape(direction)}"
+        };
+        if (allowedTypes is { Length: > 0 })
+        {
+            parts.Add($"types={Escape(string.Join(",", allowedTypes))}");
+        }
+
+        var path = $"api/relations/{Escape(workspaceId)}/{Escape(collectionId)}/{Escape(itemId)}/subgraph?{string.Join('&', parts)}";
+        return await GetRequiredAsync<RelationSubgraph>(path, cancellationToken).ConfigureAwait(false);
+    }
+
     public async Task<IReadOnlyList<RelationTypeDefinition>> GetRelationTypesAsync(
         CancellationToken cancellationToken = default)
     {

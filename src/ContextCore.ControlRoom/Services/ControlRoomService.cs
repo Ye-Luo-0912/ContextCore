@@ -8844,6 +8844,79 @@ public sealed class ControlRoomService
         };
     }
 
+    /// <summary>
+    /// 构建以 <paramref name="itemId"/> 为根的关系子图。Direct 模式使用 <see cref="RelationTraversalEngine"/>；
+    /// Service 模式调用 <c>GET /api/relations/{workspaceId}/{collectionId}/{itemId}/subgraph</c>。
+    /// </summary>
+    /// <param name="itemId">根条目 ID。</param>
+    /// <param name="depth">最大遍历深度，默认 2。</param>
+    /// <param name="direction">遍历方向（outgoing|incoming|both），默认 both。</param>
+    /// <param name="allowedTypes">可选的允许关系类型白名单；为空表示不过滤。</param>
+    public async Task<RelationSubgraph> GetRelationSubgraphAsync(
+        string itemId,
+        int depth = 2,
+        string direction = "both",
+        string[]? allowedTypes = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(itemId);
+
+        if (_state.IsServiceMode)
+        {
+            return await GetServiceClient().GetRelationSubgraphAsync(
+                itemId,
+                _state.WorkspaceId,
+                _state.CollectionId,
+                depth,
+                direction,
+                allowedTypes,
+                cancellationToken).ConfigureAwait(false);
+        }
+
+        var parsedDirection = ParseRelationDirection(direction);
+        var profile = BuildSubgraphProfile(depth, allowedTypes);
+        var request = new RelationTraversalRequest
+        {
+            WorkspaceId = _state.WorkspaceId,
+            CollectionId = _state.CollectionId,
+            Seeds = [new RelationTraversalSeed(itemId)],
+            Profile = profile,
+            Direction = parsedDirection
+        };
+
+        var engine = new RelationTraversalEngine(_state.RelationStore);
+        var result = await engine.TraverseAsync(request, cancellationToken).ConfigureAwait(false);
+        return RelationSubgraphBuilder.Build(itemId, result);
+    }
+
+    private static RelationDirection ParseRelationDirection(string direction)
+    {
+        return direction?.ToLowerInvariant() switch
+        {
+            "outgoing" or "out" => RelationDirection.Outgoing,
+            "incoming" or "in" => RelationDirection.Incoming,
+            _ => RelationDirection.Both,
+        };
+    }
+
+    private static RelationExpansionProfile BuildSubgraphProfile(int depth, string[]? allowedTypes)
+    {
+        var safeDepth = Math.Max(1, depth);
+        return new RelationExpansionProfile
+        {
+            MaxDepth = safeDepth,
+            MaxFanout = 16,
+            MinConfidence = 0.0,
+            AllowCandidateRelations = true,
+            AllowDeprecatedRelations = true,
+            AllowRejectedRelations = true,
+            RequireEvidence = false,
+            AllowedRelationTypes = allowedTypes is { Length: > 0 }
+                ? allowedTypes
+                : Array.Empty<string>()
+        };
+    }
+
     public async Task<IReadOnlyList<IndexSearchResult>> SearchIndexAsync(
         string keyword,
         CancellationToken cancellationToken = default)

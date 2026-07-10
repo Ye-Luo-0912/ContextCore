@@ -331,12 +331,12 @@ internal static class RelationEndpoints
 		.WithSummary("获取条目的出入关系");
 
 		app.MapGet("/api/relations/{itemId}", async Task<IResult> (
-			string itemId,
-			string? workspaceId,
-			string? collectionId,
-			IRelationStore relations,
-			HttpContext httpContext,
-			CancellationToken ct) =>
+		string itemId,
+		string? workspaceId,
+		string? collectionId,
+		IRelationStore relations,
+		HttpContext httpContext,
+		CancellationToken ct) =>
 		{
 			if (string.IsNullOrWhiteSpace(workspaceId) || string.IsNullOrWhiteSpace(collectionId))
 			{
@@ -361,8 +361,92 @@ internal static class RelationEndpoints
 		.WithName("GetRelationsByItemId")
 		.WithSummary("按路线图短路径获取条目的出入关系");
 
-		return app;
-	}
+		app.MapGet("/api/relations/{workspaceId}/{collectionId}/{itemId}/subgraph", async Task<IResult> (
+			string workspaceId,
+			string collectionId,
+			string itemId,
+			int? depth,
+			string? direction,
+			string? types,
+			IRelationStore relations,
+			HttpContext httpContext,
+			CancellationToken ct) =>
+			{
+				if (string.IsNullOrWhiteSpace(workspaceId) || string.IsNullOrWhiteSpace(collectionId))
+				{
+					return ContextCoreHttpResultMapper.InvalidRequest(
+						httpContext,
+						string.Empty,
+						"relations.subgraph",
+						"workspaceId 和 collectionId 为必填参数。",
+						field: "workspaceId,collectionId");
+				}
+
+				if (string.IsNullOrWhiteSpace(itemId))
+				{
+					return ContextCoreHttpResultMapper.InvalidRequest(
+						httpContext,
+						string.Empty,
+						"relations.subgraph",
+						"itemId 为必填参数。",
+						field: "itemId");
+				}
+
+				try
+				{
+					var safeDepth = depth is > 0 ? depth.Value : 2;
+					var parsedDirection = (direction ?? "both").ToLowerInvariant() switch
+					{
+						"outgoing" or "out" => RelationDirection.Outgoing,
+						"incoming" or "in" => RelationDirection.Incoming,
+						_ => RelationDirection.Both,
+					};
+
+					string[]? allowedTypes = null;
+					if (!string.IsNullOrWhiteSpace(types))
+					{
+						allowedTypes = types.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+					}
+
+					var profile = new RelationExpansionProfile
+					{
+						MaxDepth = safeDepth,
+						MaxFanout = 16,
+						MinConfidence = 0.0,
+						AllowCandidateRelations = true,
+						AllowDeprecatedRelations = true,
+						AllowRejectedRelations = true,
+						RequireEvidence = false,
+						AllowedRelationTypes = allowedTypes is { Length: > 0 }
+							? allowedTypes
+							: Array.Empty<string>()
+					};
+
+					var request = new RelationTraversalRequest
+					{
+						WorkspaceId = workspaceId,
+						CollectionId = collectionId,
+						Seeds = [new RelationTraversalSeed(itemId)],
+						Profile = profile,
+						Direction = parsedDirection
+					};
+
+					var engine = new RelationTraversalEngine(relations);
+					var result = await engine.TraverseAsync(request, ct).ConfigureAwait(false);
+					var subgraph = RelationSubgraphBuilder.Build(itemId, result);
+					return Results.Ok(subgraph);
+				}
+				catch (Exception ex)
+				{
+					return ContextCoreHttpResultMapper.Error(httpContext, ex, string.Empty, "relations.subgraph");
+				}
+			})
+			.WithTags("Relations")
+			.WithName("GetRelationSubgraph")
+			.WithSummary("以指定条目为根构建关系子图，返回去重后的节点和边快照");
+
+	return app;
+}
 
 	private static RelationReviewRequest NormalizeRelationReviewRequest(
 		RelationReviewRequest request,
