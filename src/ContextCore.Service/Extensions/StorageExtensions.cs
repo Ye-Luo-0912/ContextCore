@@ -70,6 +70,21 @@ internal static class StorageExtensions
 		services.AddSingleton<ILearningFeedbackStore>(_ => new UnsupportedLearningFeedbackStore("postgres"));
 		services.AddSingleton<ILearningFeedbackReviewStore>(_ => new UnsupportedLearningFeedbackReviewStore("postgres"));
 		services.AddSingleton<IDecisionTraceStore>(_ => new UnsupportedDecisionTraceStore("postgres"));
+		// Postgres 尚未实现的存储契约，显式注册为 Unsupported，避免运行时静默丢弃数据
+		services.AddSingleton<IShortTermMemoryStore>(_ => new UnsupportedShortTermMemoryStore("postgres"));
+		services.AddSingleton<IShortTermPromotionCandidateStore>(_ => new UnsupportedShortTermPromotionCandidateStore("postgres"));
+		services.AddSingleton<ICandidateMemoryReviewStore>(_ => new UnsupportedCandidateMemoryReviewStore("postgres"));
+		services.AddSingleton<IStableReviewCandidateStore>(_ => new UnsupportedStableReviewCandidateStore("postgres"));
+		services.AddSingleton<IContextLearningStore>(_ => new UnsupportedContextLearningStore("postgres"));
+		services.AddSingleton<IRouterIntentShadowTraceStore>(_ => new UnsupportedRouterIntentShadowTraceStore("postgres"));
+		services.AddSingleton<IVectorReindexReportStore>(_ => new UnsupportedVectorReindexReportStore("postgres"));
+		services.AddSingleton<IVectorLifecycleMetadataReviewCandidateStore>(_ => new UnsupportedVectorLifecycleMetadataReviewCandidateStore("postgres"));
+		services.AddSingleton<IVectorLifecycleMetadataReviewStore>(_ => new UnsupportedVectorLifecycleMetadataReviewStore("postgres"));
+		services.AddSingleton<IVectorLifecycleSidecarMetadataStore>(_ => new UnsupportedVectorLifecycleSidecarMetadataStore("postgres"));
+		services.AddSingleton<IArtifactStore>(_ => new UnsupportedArtifactStore("postgres"));
+		services.AddSingleton<IStableLifecycleReviewStore>(_ => new UnsupportedStableLifecycleReviewStore("postgres"));
+		services.AddSingleton<ICandidateConstraintReviewStore>(_ => new UnsupportedCandidateConstraintReviewStore("postgres"));
+		services.AddSingleton<IConstraintGapCandidateStore>(_ => new UnsupportedConstraintGapCandidateStore("postgres"));
 	}
 
 	private static void RegisterFileSystem(IServiceCollection services, StorageOptions options)

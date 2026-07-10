@@ -49,11 +49,13 @@ public sealed class ControlRoomService
         HttpClient? serviceHttpClient = null,
         RetrievalAttentionRerankOptions? attentionRerankOptions = null,
         RetrievalPlanningOptions? retrievalPlanningOptions = null,
-        GraphExpansionApplyOptions? graphExpansionApplyOptions = null)
+        GraphExpansionApplyOptions? graphExpansionApplyOptions = null,
+        string? apiKey = null,
+        string? apiKeyHeaderName = null)
     {
         if (mode == ControlRoomMode.Service)
         {
-            return CreateServiceState(workspaceId, collectionId, serviceBaseUrl, serviceHttpClient);
+            return CreateServiceState(workspaceId, collectionId, serviceBaseUrl, serviceHttpClient, apiKey, apiKeyHeaderName);
         }
 
         var resolvedRootPath = FileStorageOptions.ResolveRootPath(rootPath);
@@ -290,7 +292,9 @@ public sealed class ControlRoomService
         string workspaceId,
         string collectionId,
         string? serviceBaseUrl,
-        HttpClient? serviceHttpClient = null)
+        HttpClient? serviceHttpClient = null,
+        string? apiKey = null,
+        string? apiKeyHeaderName = null)
     {
         if (string.IsNullOrWhiteSpace(serviceBaseUrl))
         {
@@ -305,6 +309,16 @@ public sealed class ControlRoomService
         if (httpClient.BaseAddress is null)
         {
             httpClient.BaseAddress = new Uri(normalizedBaseUrl, UriKind.Absolute);
+        }
+
+        // 注入 API Key 认证头：当 Service 启用 RequireApiKey 时，每个请求都需携带正确的 key。
+        // 认证头在 HttpClient 上设置一次，ContextCoreClient 发出的所有请求都会自动带上。
+        if (!string.IsNullOrWhiteSpace(apiKey))
+        {
+            var headerName = string.IsNullOrWhiteSpace(apiKeyHeaderName)
+                ? "X-ContextCore-Key"
+                : apiKeyHeaderName;
+            httpClient.DefaultRequestHeaders.Add(headerName, apiKey);
         }
 
         var client = new ContextCoreClient(httpClient);

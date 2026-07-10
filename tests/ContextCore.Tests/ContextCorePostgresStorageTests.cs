@@ -113,7 +113,7 @@ public sealed class ContextCorePostgresStorageTests
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(IRelationReviewStore)));
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(IVectorStore)));
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(PostgresVectorIndexStore)));
-        Assert.IsFalse(services.Any(item => item.ServiceType == typeof(IVectorIndexStore)));
+        Assert.IsTrue(services.Any(item => item.ServiceType == typeof(IVectorIndexStore)));
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(IRetrievalTraceStore)));
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(PostgresLearningFeedbackStore)));
         Assert.IsFalse(services.Any(item => item.ServiceType == typeof(ILearningFeedbackStore)));

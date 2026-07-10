@@ -69,6 +69,7 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<PostgresVectorStore>();
         services.AddSingleton<IVectorStore>(sp => sp.GetRequiredService<PostgresVectorStore>());
         services.AddSingleton<PostgresVectorIndexStore>();
+        services.AddSingleton<IVectorIndexStore>(sp => sp.GetRequiredService<PostgresVectorIndexStore>());
 
         // RetrievalTraceStore
         services.AddSingleton<PostgresRetrievalTraceStore>();
@@ -91,6 +92,7 @@ public static class PostgresServiceCollectionExtensions
 
         // PostgresContextEventSink
         services.AddSingleton<PostgresContextEventSink>();
+        services.AddSingleton<IContextEventSink>(sp => sp.GetRequiredService<PostgresContextEventSink>());
 
         return services;
     }

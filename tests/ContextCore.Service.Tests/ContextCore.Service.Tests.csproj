@@ -22,6 +22,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\ContextCore.Abstractions\ContextCore.Abstractions.csproj" />
     <ProjectReference Include="..\..\src\ContextCore.Client\ContextCore.Client.csproj" />
+    <ProjectReference Include="..\..\src\ContextCore.ControlRoom\ContextCore.ControlRoom.csproj" />
     <ProjectReference Include="..\..\src\ContextCore.Service\ContextCore.Service.csproj" />
     <ProjectReference Include="..\..\src\ContextCore.Storage.FileSystem\ContextCore.Storage.FileSystem.csproj" />
   </ItemGroup>

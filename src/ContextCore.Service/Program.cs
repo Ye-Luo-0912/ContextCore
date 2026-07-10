@@ -7,6 +7,7 @@ using ContextCore.Service.Hosting;
 using ContextCore.Service.Infrastructure;
 using ContextCore.Core.Services;
 using ContextCore.Storage.FileSystem;
+using ContextCore.Storage.Postgres;
 using ContextCore.Storage.Postgres.Infrastructure;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
@@ -355,14 +356,15 @@ app.Lifetime.ApplicationStarted.Register(() =>
 	}
 });
 
-// ── PostgreSQL 启动连接验证（fail-fast）────────────────────────────────
-// 在 app.Run() 前执行一次 SELECT 1，确保 Postgres 可达；失败则 LogCritical 并中止进程。
-// 这是 B1 §9.2 fail-fast 保护，避免 Postgres 不可达时服务静默启动但存储全部报错。
+// ── PostgreSQL 启动连接与 schema version 验证（fail-fast）────────────
+// 在 app.Run() 前先执行 SELECT 1 确认 Postgres 可达，再校验 schema version 是否与当前代码期望一致；
+// 任一环节失败则 LogCritical 并中止进程。这是 B1 §9.2 fail-fast 保护，避免数据库不可达或 schema 过期时
+// 服务静默启动但存储全部报错。超时设为 30 秒（schema 校验比 SELECT 1 慢）。
 if (storageOptions.IsPostgres)
 {
 	try
 	{
-		using var startupCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+		using var startupCts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
 		var pgFactory = app.Services.GetRequiredService<PostgresConnectionFactory>();
 		var (pgOk, pgError) = await pgFactory.PingAsync(startupCts.Token);
 		if (!pgOk)
@@ -374,12 +376,39 @@ if (storageOptions.IsPostgres)
 			await app.StopAsync();
 			return;
 		}
-		logger.LogInformation("PostgreSQL 连接验证成功（SELECT 1 通过）。");
+
+		// 连接可达后，进一步校验 schema version，确保表结构与代码期望一致
+		var migrationRunner = app.Services.GetRequiredService<PostgresMigrationRunner>();
+		var schemaReport = await migrationRunner.VerifySchemaAsync(startupCts.Token);
+		var schemaOutOfDate = schemaReport.MissingRequiredTableCount > 0
+			|| schemaReport.MissingIndexCount > 0
+			|| schemaReport.CurrentSchemaVersion != PostgresMigrationRunner.SchemaVersion;
+		if (schemaOutOfDate)
+		{
+			logger.LogCritical(
+				"[FATAL] PostgreSQL schema 验证失败。服务将中止。" +
+				"当前版本：{CurrentVersion}，期望版本：{ExpectedVersion}。" +
+				"缺失必需表数量：{MissingTableCount}，缺失索引数量：{MissingIndexCount}。" +
+				"缺失必需表：{MissingTables}。" +
+				"诊断信息：{Diagnostics}。" +
+				"请通过 POST /api/admin/storage/postgres/migrations/apply 执行迁移后再启动服务。",
+				schemaReport.CurrentSchemaVersion,
+				PostgresMigrationRunner.SchemaVersion,
+				schemaReport.MissingRequiredTableCount,
+				schemaReport.MissingIndexCount,
+				string.Join(", ", schemaReport.MissingRequiredTables),
+				string.Join(", ", schemaReport.Diagnostics));
+			await app.StopAsync();
+			return;
+		}
+		logger.LogInformation(
+			"PostgreSQL 启动验证成功：连接可达，schema version={CurrentVersion}。",
+			schemaReport.CurrentSchemaVersion);
 	}
 	catch (Exception ex)
 	{
 		logger.LogCritical(ex,
-			"[FATAL] PostgreSQL 连接验证异常。服务将中止。");
+			"[FATAL] PostgreSQL 启动验证异常。服务将中止。");
 		await app.StopAsync();
 		return;
 	}
@@ -412,6 +441,30 @@ internal static class ServiceCommandLine
 			if (IsOption(arg, "--storage") && i + 1 < args.Length)
 			{
 				normalized.Add("--Storage:Provider");
+				normalized.Add(args[++i]);
+				continue;
+			}
+
+			// --api-key-env <VAR_NAME>：从环境变量读取 API Key，避免在命令行历史中留下密钥。
+			// 这是推荐的注入方式，命令行参数中不会回显 key 值。
+			if (IsOption(arg, "--api-key-env") && i + 1 < args.Length)
+			{
+				var envVar = args[++i];
+				var apiKey = Environment.GetEnvironmentVariable(envVar);
+				if (!string.IsNullOrWhiteSpace(apiKey))
+				{
+					normalized.Add("--Security:ApiKey");
+					normalized.Add(apiKey);
+				}
+				// 不回显 envVar 名称到命令行参数，避免暴露环境变量命名
+				continue;
+			}
+
+			// --api-key <value>：直接传递 API Key 值。不推荐使用，会在命令行历史中留下密钥。
+			// SecurityOptions 的启动日志只输出布尔值，不会回显 key 值。
+			if (IsOption(arg, "--api-key") && i + 1 < args.Length)
+			{
+				normalized.Add("--Security:ApiKey");
 				normalized.Add(args[++i]);
 				continue;
 			}

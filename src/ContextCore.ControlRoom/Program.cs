@@ -124,8 +124,9 @@ static async Task RunInteractiveAsync(
     CancellationToken cancellationToken)
 {
     // 启动时显示存储根目录绝对路径，便于确认数据读写位置
+    // Service 模式下显示认证状态（enabled/disabled），不回显 key 值
     Console.WriteLine(parsed.IsServiceMode
-        ? $"[ControlRoom] Service: {parsed.ServiceBaseUrl}"
+        ? $"[ControlRoom] Service: {parsed.ServiceBaseUrl}, Auth: {(string.IsNullOrWhiteSpace(parsed.ApiKey) ? "disabled" : "enabled")}"
         : $"[ControlRoom] Storage root: {parsed.RootPath}");
     var autoRefresh = false;
     var refreshSeconds = Math.Max(1, parsed.RefreshSeconds);
@@ -597,7 +598,13 @@ static ControlRoomState CreateState(Cli parsed, WorkspaceSelection selection)
         selection.WorkspaceId,
         selection.CollectionId,
         parsed.Mode,
-        parsed.ServiceBaseUrl);
+        parsed.ServiceBaseUrl,
+        serviceHttpClient: null,
+        attentionRerankOptions: null,
+        retrievalPlanningOptions: null,
+        graphExpansionApplyOptions: null,
+        apiKey: parsed.ApiKey,
+        apiKeyHeaderName: parsed.ApiKeyHeaderName);
 }
 
 static WorkspaceSelection ResolveWorkspaceSelection(Cli parsed)
@@ -770,6 +777,7 @@ static void PrintHelp()
       --refresh <seconds>    自动刷新间隔。默认：2
       --storage <kind>       filesystem 或 memory。默认：filesystem
       --service <baseUrl>    启用 Service 模式并连接到指定 ContextCore.Service
+      --api-key-env <VAR>    从环境变量读取 Service API Key（推荐，避免命令行历史泄露）
     """);
 }
 
@@ -794,6 +802,15 @@ internal sealed class Cli
     public int RefreshSeconds { get; init; } = 2;
 
     public string? ServiceBaseUrl { get; init; }
+
+    /// <summary>
+    /// 调用 Service 时使用的 API Key。为空表示不携带认证头（仅当 Service 禁用 RequireApiKey 时可用）。
+    /// 优先级：命令行 <c>--api-key-env</c> &gt; appsettings.json ControlRoom:ApiKey &gt; ~/.contextcore/secrets.json Security:ApiKey。
+    /// </summary>
+    public string? ApiKey { get; init; }
+
+    /// <summary>API Key 请求头名称，需与服务端 Security:ApiKeyHeaderName 一致。默认 X-ContextCore-Key。</summary>
+    public string ApiKeyHeaderName { get; init; } = "X-ContextCore-Key";
 
     public bool WorkspaceSpecified { get; init; }
 
@@ -829,6 +846,15 @@ internal sealed class Cli
             ? parsedRefresh
             : defaults.RefreshSeconds > 0 ? defaults.RefreshSeconds : 2;
 
+        // API Key 优先级：命令行 --api-key-env（从环境变量读取） > defaults.ApiKey（appsettings.json / secrets.json）
+        var apiKeyEnv = ReadOption(tokens, "--api-key-env");
+        var apiKey = apiKeyEnv is not null
+            ? Environment.GetEnvironmentVariable(apiKeyEnv)
+            : defaults.ApiKey;
+        var apiKeyHeaderName = string.IsNullOrWhiteSpace(defaults.ApiKeyHeaderName)
+            ? "X-ContextCore-Key"
+            : defaults.ApiKeyHeaderName;
+
         string? command = null;
         var commandArgs = new List<string>();
         for (var i = 0; i < tokens.Count; i++)
@@ -854,6 +880,8 @@ internal sealed class Cli
             Storage = storage,
             RefreshSeconds = refreshSeconds,
             ServiceBaseUrl = serviceBaseUrl,
+            ApiKey = apiKey,
+            ApiKeyHeaderName = apiKeyHeaderName,
             WorkspaceSpecified = workspaceText is not null,
             CollectionSpecified = collectionText is not null,
             Command = command,
@@ -876,7 +904,7 @@ internal sealed class Cli
 
     private static bool IsGlobalOption(string token)
     {
-        return token is "--workspace" or "--collection" or "--root" or "--storage" or "--refresh" or "--service";
+        return token is "--workspace" or "--collection" or "--root" or "--storage" or "--refresh" or "--service" or "--api-key-env";
     }
 }
 
@@ -898,6 +926,15 @@ internal sealed class ControlRoomDefaults
 
     public int RefreshSeconds { get; init; }
 
+    /// <summary>
+    /// 调用 Service 时使用的 API Key。从 appsettings.json 的 ControlRoom:ApiKey
+    /// 或 ~/.contextcore/secrets.json 的 Security:ApiKey 读取。
+    /// </summary>
+    public string? ApiKey { get; init; }
+
+    /// <summary>API Key 请求头名称，需与服务端 Security:ApiKeyHeaderName 一致。默认 X-ContextCore-Key。</summary>
+    public string? ApiKeyHeaderName { get; init; }
+
     public static ControlRoomDefaults Load()
     {
         var result = new MutableDefaults();
@@ -908,6 +945,10 @@ internal sealed class ControlRoomDefaults
         {
             ApplyJson(currentDirectorySettings, result);
         }
+
+        // 读取用户私有配置 ~/.contextcore/secrets.json 的 Security:ApiKey（与 Service 端 UserPrivateConfiguration 一致）。
+        // 仅在 appsettings.json 未显式配置 ControlRoom:ApiKey 时回退，避免覆盖仓库内显式配置。
+        ApplyUserSecrets(result);
 
         return result.ToImmutable();
     }
@@ -932,6 +973,8 @@ internal sealed class ControlRoomDefaults
         defaults.CollectionId = ReadString(controlRoom, "CollectionId") ?? defaults.CollectionId;
         defaults.RootPath = ReadString(controlRoom, "RootPath") ?? defaults.RootPath;
         defaults.Storage = ReadString(controlRoom, "Storage") ?? defaults.Storage;
+        defaults.ApiKey = ReadString(controlRoom, "ApiKey") ?? defaults.ApiKey;
+        defaults.ApiKeyHeaderName = ReadString(controlRoom, "ApiKeyHeaderName") ?? defaults.ApiKeyHeaderName;
 
         if (defaults.RefreshSeconds <= 0
             && controlRoom.TryGetProperty("RefreshSeconds", out var refresh)
@@ -939,6 +982,51 @@ internal sealed class ControlRoomDefaults
             && refresh.TryGetInt32(out var refreshSeconds))
         {
             defaults.RefreshSeconds = refreshSeconds;
+        }
+    }
+
+    /// <summary>
+    /// 从 ~/.contextcore/secrets.json 读取 Security:ApiKey 和 Security:ApiKeyHeaderName。
+    /// 参照 Service 端 UserPrivateConfiguration 的目录解析与 JSON 加载逻辑。
+    /// </summary>
+    private static void ApplyUserSecrets(MutableDefaults defaults)
+    {
+        var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        if (string.IsNullOrWhiteSpace(userProfile))
+        {
+            userProfile = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        }
+        if (string.IsNullOrWhiteSpace(userProfile))
+        {
+            return;
+        }
+
+        var secretsPath = Path.Combine(userProfile, ".contextcore", "secrets.json");
+        if (!File.Exists(secretsPath))
+        {
+            return;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(File.ReadAllText(secretsPath));
+            if (!document.RootElement.TryGetProperty("Security", out var security)
+                || security.ValueKind != JsonValueKind.Object)
+            {
+                return;
+            }
+
+            // 仅在未显式配置时回退，保持 appsettings.json 的优先级
+            defaults.ApiKey ??= ReadString(security, "ApiKey");
+            defaults.ApiKeyHeaderName ??= ReadString(security, "ApiKeyHeaderName");
+        }
+        catch (JsonException)
+        {
+            // secrets.json 解析失败时静默跳过，避免因私有配置损坏阻断启动
+        }
+        catch (IOException)
+        {
+            // 读取失败时静默跳过
         }
     }
 
@@ -959,6 +1047,8 @@ internal sealed class ControlRoomDefaults
         public string? RootPath { get; set; }
         public string? Storage { get; set; }
         public int RefreshSeconds { get; set; }
+        public string? ApiKey { get; set; }
+        public string? ApiKeyHeaderName { get; set; }
 
         public ControlRoomDefaults ToImmutable()
         {
@@ -970,7 +1060,9 @@ internal sealed class ControlRoomDefaults
                 CollectionId = CollectionId,
                 RootPath = RootPath,
                 Storage = Storage,
-                RefreshSeconds = RefreshSeconds
+                RefreshSeconds = RefreshSeconds,
+                ApiKey = ApiKey,
+                ApiKeyHeaderName = ApiKeyHeaderName
             };
         }
     }
