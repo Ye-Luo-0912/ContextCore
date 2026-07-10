@@ -111,7 +111,7 @@ public sealed class ControlRoomService
             var relationExpansionProfileRegistry = new RelationExpansionProfileRegistry();
             var relationExpansionValidator = new RelationExpansionPolicyValidator(new RelationTypeRegistry());
             var relationExpansionPreviewService = new RelationExpansionPreviewService(
-                relationStore,
+                new RelationTraversalEngine(relationStore),
                 relationExpansionProfileRegistry,
                 relationExpansionValidator);
             var graphExpansionApplyPolicy = new GraphExpansionApplyPolicy(
@@ -225,7 +225,7 @@ public sealed class ControlRoomService
         var fileRelationExpansionProfileRegistry = new RelationExpansionProfileRegistry();
         var fileRelationExpansionValidator = new RelationExpansionPolicyValidator(new RelationTypeRegistry());
         var fileRelationExpansionPreviewService = new RelationExpansionPreviewService(
-            fileRelationStore,
+            new RelationTraversalEngine(fileRelationStore),
             fileRelationExpansionProfileRegistry,
             fileRelationExpansionValidator);
         var fileGraphExpansionApplyPolicy = new GraphExpansionApplyPolicy(

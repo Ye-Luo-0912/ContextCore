@@ -26,7 +26,7 @@ public sealed class ShadowRetrievalPlanExecutor
         var contextObjectResolver = new DefaultContextObjectResolver(contextStore, memoryStore);
         var relationExpansionService = relationStore is null
             ? null
-            : new RelationExpansionService(relationStore, contextObjectResolver);
+            : new RelationExpansionService(new RelationTraversalEngine(relationStore), contextObjectResolver);
 
         _mandatoryRecallChannelExecutor = new MandatoryRecallChannelExecutor(contextStore, memoryStore);
         _contextRecallChannelExecutor = new ContextRecallChannelExecutor(contextStore);

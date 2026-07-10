@@ -132,7 +132,7 @@ public sealed class ContextCoreHybridRetrievalTests
         await relationStore.SaveAsync(Relation("rel-seed-target", "memory-seed", "relation-target", ContextRelationTypes.RelatedTo, now));
 
         var resolver = new DefaultContextObjectResolver(contextStore, memoryStore);
-        var expansionService = new RelationExpansionService(relationStore, resolver);
+        var expansionService = new RelationExpansionService(new RelationTraversalEngine(relationStore), resolver);
         var executor = new RelationRecallChannelExecutor(new RelationFrontierBuilder(), expansionService);
 
         var result = await executor.ExecuteAsync(RetrievalChannelContext.Create(
@@ -1580,7 +1580,7 @@ public sealed class ContextCoreHybridRetrievalTests
     {
         var profileRegistry = new RelationExpansionProfileRegistry();
         var validator = new RelationExpansionPolicyValidator(new RelationTypeRegistry());
-        var previewService = new RelationExpansionPreviewService(relationStore, profileRegistry, validator);
+        var previewService = new RelationExpansionPreviewService(new RelationTraversalEngine(relationStore), profileRegistry, validator);
         return new GraphExpansionShadowTraceBuilder(previewService);
     }
 

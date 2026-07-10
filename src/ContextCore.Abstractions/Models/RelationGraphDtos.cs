@@ -1283,3 +1283,42 @@ public sealed record SupersedeProjectionRequest(
     IReadOnlyList<string> EvidenceRefs,
     IReadOnlyDictionary<string, string> RequestMetadata,
     DateTimeOffset Now);
+
+/// <summary>统一关系遍历请求。</summary>
+public sealed class RelationTraversalRequest
+{
+    public required string WorkspaceId { get; init; }
+
+    public string? CollectionId { get; init; }
+
+    public required IReadOnlyList<RelationTraversalSeed> Seeds { get; init; }
+
+    public required RelationExpansionProfile Profile { get; init; }
+
+    public RelationDirection Direction { get; init; } = RelationDirection.Outgoing;
+
+    public int? MaxNodesOverride { get; init; }
+
+    public int? MaxRelationsOverride { get; init; }
+}
+
+public sealed record RelationTraversalSeed(string ItemId, double Score = 1.0);
+
+/// <summary>统一关系遍历结果。</summary>
+public sealed class RelationTraversalResult
+{
+    public required IReadOnlyList<RelationTraversalEdge> Edges { get; init; }
+
+    public int MaxDepthReached { get; init; }
+
+    public bool Truncated { get; init; }
+
+    public IReadOnlyList<string> Warnings { get; init; } = Array.Empty<string>();
+}
+
+public sealed record RelationTraversalEdge(
+    ContextRelation Relation,
+    int Depth,
+    double SourceScore,
+    string Path,
+    string NeighborId);

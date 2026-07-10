@@ -24,6 +24,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
     private readonly GraphExpansionApplyPolicy? _graphExpansionApplyPolicy;
     private readonly IContextStore _store;
     private readonly IRuntimeCandidateTraceSink _runtimeCandidateTraceSink;
+    private readonly RelationTraversalEngine? _traversalEngine;
     private readonly AsyncLocal<string?> _currentOperationId = new();
     private readonly AsyncLocal<string?> _currentRequestId = new();
     private readonly RecentContextFilter _recentContextFilter = new();
@@ -49,7 +50,8 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         GraphExpansionApplyOptions? graphExpansionApplyOptions = null,
         GraphExpansionApplyPolicy? graphExpansionApplyPolicy = null,
         IDecisionTraceStore? decisionTraceStore = null,
-        IRuntimeCandidateTraceSink? runtimeCandidateTraceSink = null)
+        IRuntimeCandidateTraceSink? runtimeCandidateTraceSink = null,
+        RelationTraversalEngine? traversalEngine = null)
     {
         _store = store;
         _constraintStore = constraintStore;
@@ -63,6 +65,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         _graphExpansionApplyPolicy = graphExpansionApplyPolicy;
         _decisionTraceStore = decisionTraceStore;
         _runtimeCandidateTraceSink = runtimeCandidateTraceSink ?? new NullRuntimeCandidateTraceSink();
+        _traversalEngine = traversalEngine;
     }
 
     public async Task<ContextPackage> BuildAsync(
@@ -1907,108 +1910,105 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
             .Where(sourceId => !string.IsNullOrWhiteSpace(sourceId))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
-        var relatedItems = new List<ContextItem>();
-        var relatedItemIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var seenNodes = new HashSet<string>(seedIds, StringComparer.OrdinalIgnoreCase);
-        var frontier = new Queue<(string NodeId, int Depth)>();
+        if (seedIds.Length == 0)
+        {
+            return Array.Empty<ContextItem>();
+        }
+
         var relationTypes = ResolveRelationTypeWhitelist(request, policy);
         var maxDepth = ResolveIntSetting(request, policy, "relationExpansionDepth", 1, min: 1, max: 2);
         var maxNodes = ResolveIntSetting(request, policy, "relationMaxNodes", 20, min: 1, max: 100);
         var maxRelations = ResolveIntSetting(request, policy, "relationMaxRelations", 60, min: 1, max: 300);
         var minConfidence = ResolveDoubleSetting(request, policy, "relationMinConfidence", 0.35, min: 0, max: 1);
-        var scannedRelations = 0;
 
-        foreach (var sourceId in seedIds)
+        // 通过统一遍历引擎执行双向 BFS；engine 不过滤置信度（MinConfidence=0），由 caller 做置信度过滤和 low-confidence 收集。
+        var profile = new RelationExpansionProfile
         {
-            frontier.Enqueue((sourceId, 0));
+            ProfileId = "package-builder",
+            Mode = "Normal",
+            MaxDepth = maxDepth,
+            MaxFanout = Math.Max(20, maxRelations),
+            AllowedRelationTypes = [..relationTypes],
+            MinConfidence = 0.0,
+            AllowDeprecatedRelations = true,
+            AllowCandidateRelations = true,
+            AllowRejectedRelations = true,
+            RequireEvidence = false
+        };
+
+        var traversalRequest = new RelationTraversalRequest
+        {
+            WorkspaceId = workspaceId,
+            CollectionId = collectionId,
+            Seeds = seedIds.Select(seedId => new RelationTraversalSeed(seedId)).ToArray(),
+            Profile = profile,
+            Direction = RelationDirection.Both,
+            MaxNodesOverride = maxNodes,
+            MaxRelationsOverride = maxRelations
+        };
+
+        var engine = _traversalEngine ?? new RelationTraversalEngine(_relationStore);
+        var traversalResult = await engine.TraverseAsync(traversalRequest, cancellationToken).ConfigureAwait(false);
+
+        var relatedItems = new List<ContextItem>();
+        var relatedItemIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        // low-confidence 关系收集：在置信度过滤前采集，按置信度升序取前 20，去重。
+        foreach (var relation in traversalResult.Edges
+            .Where(edge => edge.Relation.Confidence < minConfidence)
+            .OrderBy(edge => edge.Relation.Confidence)
+            .Take(20)
+            .Select(edge => edge.Relation))
+        {
+            if (!lowConfidenceRelations.Any(item => string.Equals(item.Id, relation.Id, StringComparison.OrdinalIgnoreCase)))
+            {
+                lowConfidenceRelations.Add(relation);
+            }
         }
 
-        // 图谱扩展处于打包热路径：默认只走 1 跳，并设置节点/关系上限，防止关系图膨胀拖慢包构建。
-        // 读取出边和入边是为了覆盖“原始项 -> 相关项”和“生成项 -> 原始项”两类常见关系方向。
-        while (frontier.Count > 0 && relatedItems.Count < maxNodes && scannedRelations < maxRelations)
+        var containsDeprecatedKeywordInQuery = !string.IsNullOrWhiteSpace(request.QueryText) && (
+            request.QueryText.Contains("废弃", StringComparison.OrdinalIgnoreCase)
+            || request.QueryText.Contains("作废", StringComparison.OrdinalIgnoreCase)
+            || request.QueryText.Contains("legacy", StringComparison.OrdinalIgnoreCase)
+            || request.QueryText.Contains("deprecated", StringComparison.OrdinalIgnoreCase));
+
+        var scannedRelations = 0;
+        foreach (var edge in traversalResult.Edges
+            .Where(e => e.Relation.Confidence >= minConfidence)
+            .OrderByDescending(e => e.Relation.Weight)
+            .ThenByDescending(e => e.Relation.Confidence))
         {
-            var (sourceId, depth) = frontier.Dequeue();
-            if (depth >= maxDepth)
+            scannedRelations++;
+            if (scannedRelations > maxRelations || relatedItems.Count >= maxNodes)
+            {
+                break;
+            }
+
+            var relatedId = edge.NeighborId;
+            if (string.IsNullOrWhiteSpace(relatedId) || !relatedItemIds.Add(relatedId))
             {
                 continue;
             }
 
-            var outgoingRelations = await _relationStore!.QueryBySourceAsync(
+            var target = await _store.GetAsync(
                 workspaceId,
                 collectionId,
-                sourceId,
-                cancellationToken).ConfigureAwait(false);
-            var incomingRelations = await _relationStore.QueryByTargetAsync(
-                workspaceId,
-                collectionId,
-                sourceId,
+                relatedId,
                 cancellationToken).ConfigureAwait(false);
 
-            var candidates = outgoingRelations
-                .Select(relation => (Relation: relation, RelatedId: relation.TargetId))
-                .Concat(incomingRelations.Select(relation => (Relation: relation, RelatedId: relation.SourceId)))
-                .Where(candidate => relationTypes.Contains(candidate.Relation.RelationType))
-                .Where(candidate => !string.IsNullOrWhiteSpace(candidate.RelatedId))
-                .ToArray();
-
-            foreach (var relation in candidates
-                .Where(candidate => candidate.Relation.Confidence < minConfidence)
-                .OrderBy(candidate => candidate.Relation.Confidence)
-                .Take(20)
-                .Select(candidate => candidate.Relation))
+            if (target is null)
             {
-                if (!lowConfidenceRelations.Any(item => string.Equals(item.Id, relation.Id, StringComparison.OrdinalIgnoreCase)))
-                {
-                    lowConfidenceRelations.Add(relation);
-                }
+                continue;
             }
 
-            foreach (var candidate in candidates
-                .Where(candidate => candidate.Relation.Confidence >= minConfidence)
-                .OrderByDescending(candidate => candidate.Relation.Weight)
-                .ThenByDescending(candidate => candidate.Relation.Confidence))
+            var isDeprecated = target.Tags.Any(tag =>
+                string.Equals(tag, "deprecated", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(tag, "legacy", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(tag, "superseded", StringComparison.OrdinalIgnoreCase));
+
+            if (!isDeprecated || containsDeprecatedKeywordInQuery)
             {
-                scannedRelations++;
-                if (scannedRelations > maxRelations || relatedItems.Count >= maxNodes)
-                {
-                    break;
-                }
-
-                var nextDepth = depth + 1;
-                var shouldTraverse = seenNodes.Add(candidate.RelatedId);
-                if (relatedItemIds.Add(candidate.RelatedId))
-                {
-                    var target = await _store.GetAsync(
-                        workspaceId,
-                        collectionId,
-                        candidate.RelatedId,
-                        cancellationToken).ConfigureAwait(false);
-
-                    if (target is not null)
-                    {
-                        var isDeprecated = target.Tags.Any(tag =>
-                            string.Equals(tag, "deprecated", StringComparison.OrdinalIgnoreCase)
-                            || string.Equals(tag, "legacy", StringComparison.OrdinalIgnoreCase)
-                            || string.Equals(tag, "superseded", StringComparison.OrdinalIgnoreCase));
-                        
-                        var containsDeprecatedKeywordInQuery = !string.IsNullOrWhiteSpace(request.QueryText) && (
-                            request.QueryText.Contains("废弃", StringComparison.OrdinalIgnoreCase)
-                            || request.QueryText.Contains("作废", StringComparison.OrdinalIgnoreCase)
-                            || request.QueryText.Contains("legacy", StringComparison.OrdinalIgnoreCase)
-                            || request.QueryText.Contains("deprecated", StringComparison.OrdinalIgnoreCase)
-                        );
-
-                        if (!isDeprecated || containsDeprecatedKeywordInQuery)
-                        {
-                            relatedItems.Add(target);
-                        }
-                    }
-                }
-
-                if (shouldTraverse && nextDepth < maxDepth)
-                {
-                    frontier.Enqueue((candidate.RelatedId, nextDepth));
-                }
+                relatedItems.Add(target);
             }
         }
 

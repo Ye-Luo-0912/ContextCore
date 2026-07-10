@@ -3654,7 +3654,7 @@ public static partial class EvalCommand
 
         var profileRegistry = new RelationExpansionProfileRegistry();
         var validator = new RelationExpansionPolicyValidator(new RelationTypeRegistry());
-        var previewService = new RelationExpansionPreviewService(relationStore, profileRegistry, validator);
+        var previewService = new RelationExpansionPreviewService(new RelationTraversalEngine(relationStore), profileRegistry, validator);
         var builder = new RelationExpansionProfileShadowReportBuilder(profileRegistry, previewService);
         var report = await builder
             .BuildAsync(workspaceId, collectionId, ["item-normal", "item-audit", "item-old", "item-depth"], cancellationToken)

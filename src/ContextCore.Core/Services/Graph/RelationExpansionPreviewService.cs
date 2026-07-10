@@ -6,16 +6,16 @@ namespace ContextCore.Core.Services.Graph;
 /// <summary>构建 relation expansion preview，不改变 retrieval、packing 或 package 输出。</summary>
 public sealed class RelationExpansionPreviewService
 {
-    private readonly IRelationStore? _relationStore;
+    private readonly RelationTraversalEngine? _traversalEngine;
     private readonly RelationExpansionProfileRegistry _profileRegistry;
     private readonly RelationExpansionPolicyValidator _validator;
 
     public RelationExpansionPreviewService(
-        IRelationStore? relationStore,
+        RelationTraversalEngine? traversalEngine,
         RelationExpansionProfileRegistry profileRegistry,
         RelationExpansionPolicyValidator validator)
     {
-        _relationStore = relationStore;
+        _traversalEngine = traversalEngine;
         _profileRegistry = profileRegistry;
         _validator = validator;
     }
@@ -38,58 +38,73 @@ public sealed class RelationExpansionPreviewService
         var accepted = new List<RelationExpansionPreviewRelation>();
         var blocked = new List<RelationExpansionPreviewRelation>();
 
-        if (_relationStore is null)
+        if (_traversalEngine is null)
         {
             warnings.Add("relation store is not registered.");
             return BuildResponse(request, profile, accepted, blocked, warnings);
         }
 
-        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { request.ItemId };
-        var frontier = new Queue<FrontierNode>();
-        frontier.Enqueue(new FrontierNode(request.ItemId, 0, request.ItemId));
-
-        while (frontier.Count > 0)
+        // engine 做最小化过滤：仅 dedup + depth 控制；不做 type/fanout/confidence/lifecycle 过滤，
+        // 让 validator 在 post-processing 中用规范化类型做完整 acceptance/blocking 决策（保持 legacy 类型归一化、FanoutExceeded 等行为）。
+        var engineProfile = new RelationExpansionProfile
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            var node = frontier.Dequeue();
-            var nextDepth = node.Depth + 1;
-            if (nextDepth > profile.MaxDepth)
+            ProfileId = profile.ProfileId,
+            Mode = profile.Mode,
+            Intent = profile.Intent,
+            MaxDepth = profile.MaxDepth,
+            MaxFanout = 10000,
+            AllowedRelationTypes = Array.Empty<string>(),
+            BlockedRelationTypes = Array.Empty<string>(),
+            MinConfidence = 0.0,
+            AllowCandidateRelations = true,
+            AllowDeprecatedRelations = true,
+            AllowRejectedRelations = true,
+            RequireEvidence = false,
+            AuditOnlyTypes = profile.AuditOnlyTypes,
+            WeightByRelationType = new Dictionary<string, double>(profile.WeightByRelationType, StringComparer.OrdinalIgnoreCase),
+            LifecyclePolicy = profile.LifecyclePolicy,
+            TraversalPolicies = profile.TraversalPolicies
+        };
+
+        var traversalRequest = new RelationTraversalRequest
+        {
+            WorkspaceId = request.WorkspaceId,
+            CollectionId = request.CollectionId,
+            Seeds = [new RelationTraversalSeed(request.ItemId)],
+            Profile = engineProfile,
+            Direction = RelationDirection.Outgoing,
+            MaxNodesOverride = 500,
+            MaxRelationsOverride = 2000
+        };
+
+        var traversalResult = await _traversalEngine.TraverseAsync(traversalRequest, cancellationToken).ConfigureAwait(false);
+
+        // 重新计算 per-node fanoutIndex：按 (Depth, SourceId) 分组，组内按 weight/confidence 降序编号。
+        var fanoutIndexByGroup = new Dictionary<(int Depth, string SourceId), int>();
+        var orderedEdges = traversalResult.Edges
+            .OrderBy(e => e.Depth)
+            .ThenBy(e => e.Relation.SourceId, StringComparer.OrdinalIgnoreCase)
+            .ThenByDescending(e => _validator.ResolveWeight(e.Relation, profile))
+            .ThenByDescending(e => RelationExpansionPolicyValidator.ResolveConfidence(e.Relation))
+            .ThenByDescending(e => e.Relation.CreatedAt)
+            .ToArray();
+
+        foreach (var edge in orderedEdges)
+        {
+            var groupKey = (edge.Depth, edge.Relation.SourceId);
+            fanoutIndexByGroup.TryGetValue(groupKey, out var fanoutIndex);
+            fanoutIndex++;
+            fanoutIndexByGroup[groupKey] = fanoutIndex;
+
+            var validation = _validator.Validate(edge.Relation, profile, edge.Depth, fanoutIndex);
+            var previewRelation = BuildPreviewRelation(edge.Relation, profile, validation, edge.Depth, edge.Path);
+            if (validation.Accepted)
             {
-                continue;
+                accepted.Add(previewRelation);
             }
-
-            var outgoing = await _relationStore
-                .QueryBySourceAsync(request.WorkspaceId, request.CollectionId!, node.ItemId, cancellationToken)
-                .ConfigureAwait(false);
-            var ordered = outgoing
-                .OrderByDescending(relation => _validator.ResolveWeight(relation, profile))
-                .ThenByDescending(RelationExpansionPolicyValidator.ResolveConfidence)
-                .ThenByDescending(relation => relation.CreatedAt)
-                .ThenBy(relation => relation.Id, StringComparer.OrdinalIgnoreCase)
-                .ToArray();
-
-            var fanoutIndex = 0;
-            foreach (var relation in ordered)
+            else
             {
-                fanoutIndex++;
-                var validation = _validator.Validate(relation, profile, nextDepth, fanoutIndex);
-                var previewRelation = BuildPreviewRelation(relation, profile, validation, nextDepth, node.Path);
-                if (validation.Accepted)
-                {
-                    accepted.Add(previewRelation);
-                    if (!visited.Contains(relation.TargetId) && nextDepth < profile.MaxDepth)
-                    {
-                        visited.Add(relation.TargetId);
-                        frontier.Enqueue(new FrontierNode(
-                            relation.TargetId,
-                            nextDepth,
-                            $"{node.Path} --{relation.RelationType}--> {relation.TargetId}"));
-                    }
-                }
-                else
-                {
-                    blocked.Add(previewRelation);
-                }
+                blocked.Add(previewRelation);
             }
         }
 
@@ -120,7 +135,7 @@ public sealed class RelationExpansionPreviewService
             SectionReason = validation.SectionReason,
             RiskIfNormalSelected = validation.RiskIfNormalSelected,
             RiskAfterSectionRouting = validation.RiskAfterSectionRouting,
-            Path = $"{sourcePath} --{_validator.ResolveNormalizedRelationType(relation)}--> {relation.TargetId}",
+            Path = sourcePath,
             Reasons = validation.Reasons,
             Warnings = validation.Warnings,
             Metadata = new Dictionary<string, string>(relation.Metadata, StringComparer.OrdinalIgnoreCase)
@@ -151,6 +166,4 @@ public sealed class RelationExpansionPreviewService
             Warnings = warnings.ToArray()
         };
     }
-
-    private sealed record FrontierNode(string ItemId, int Depth, string Path);
 }

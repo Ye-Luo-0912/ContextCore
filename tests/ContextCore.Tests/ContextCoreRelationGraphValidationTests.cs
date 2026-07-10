@@ -1136,7 +1136,7 @@ public sealed class ContextCoreRelationGraphValidationTests
         var reviewService = new RelationReviewService(relationStore, reviewStore, registry, service);
         var profileRegistry = new RelationExpansionProfileRegistry();
         var expansionValidator = new RelationExpansionPolicyValidator(registry);
-        var previewService = new RelationExpansionPreviewService(relationStore, profileRegistry, expansionValidator);
+        var previewService = new RelationExpansionPreviewService(new RelationTraversalEngine(relationStore), profileRegistry, expansionValidator);
         return new RelationGraphFixture(
             relationStore,
             memoryStore,

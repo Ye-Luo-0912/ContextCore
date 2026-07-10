@@ -174,8 +174,10 @@ internal static class CoreExtensions
 		services.AddSingleton<RelationTypeRegistry>();
 		services.AddSingleton<RelationExpansionProfileRegistry>();
 		services.AddSingleton<RelationExpansionPolicyValidator>();
+		services.AddSingleton<RelationTraversalEngine>(sp => new RelationTraversalEngine(
+			sp.GetService<IRelationStore>()));
 		services.AddSingleton(sp => new RelationExpansionPreviewService(
-			sp.GetService<IRelationStore>(),
+			sp.GetRequiredService<RelationTraversalEngine>(),
 			sp.GetRequiredService<RelationExpansionProfileRegistry>(),
 			sp.GetRequiredService<RelationExpansionPolicyValidator>()));
 		services.AddSingleton(sp => new GraphExpansionApplyPolicy(
@@ -224,7 +226,8 @@ internal static class CoreExtensions
 			sp.GetRequiredService<GraphExpansionApplyOptions>(),
 			sp.GetRequiredService<GraphExpansionApplyPolicy>(),
 			sp.GetService<IDecisionTraceStore>(),
-			sp.GetService<IRuntimeCandidateTraceSink>()));
+			sp.GetService<IRuntimeCandidateTraceSink>(),
+			sp.GetRequiredService<RelationTraversalEngine>()));
 		services.AddSingleton<IContextPackageBuilder>(sp =>
 			sp.GetRequiredService<BasicContextPackageBuilder>());
 

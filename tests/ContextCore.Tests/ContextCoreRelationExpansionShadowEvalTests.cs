@@ -639,7 +639,7 @@ public sealed class ContextCoreRelationExpansionShadowEvalTests
         var validator = new RelationExpansionPolicyValidator(typeRegistry);
         return (
             new RelationExpansionShadowEvalRunner(profileRegistry, typeRegistry, new PlanningIntentDetector()),
-            new RelationExpansionPreviewService(relationStore, profileRegistry, validator));
+            new RelationExpansionPreviewService(new RelationTraversalEngine(relationStore), profileRegistry, validator));
     }
 
     private static ContextEvalResult FormalResult(string sampleId, IReadOnlyList<string> selected)
@@ -694,7 +694,7 @@ public sealed class ContextCoreRelationExpansionShadowEvalTests
 
         var profileRegistry = new RelationExpansionProfileRegistry();
         var validator = new RelationExpansionPolicyValidator(new RelationTypeRegistry());
-        var preview = new RelationExpansionPreviewService(relationStore, profileRegistry, validator);
+        var preview = new RelationExpansionPreviewService(new RelationTraversalEngine(relationStore), profileRegistry, validator);
         var applyPolicy = new GraphExpansionApplyPolicy(preview, contextStore);
         var builder = new BasicContextPackageBuilder(
             contextStore,

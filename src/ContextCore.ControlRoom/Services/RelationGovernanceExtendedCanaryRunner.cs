@@ -321,8 +321,8 @@ public sealed class RelationGovernanceExtendedCanaryRunner
     {
         var registry = new RelationExpansionProfileRegistry();
         var validator = new RelationExpansionPolicyValidator(new RelationTypeRegistry());
-        var filePreview = new RelationExpansionPreviewService(_fileRelationStore, registry, validator);
-        var postgresPreview = new RelationExpansionPreviewService(_postgresRelationStore, registry, validator);
+        var filePreview = new RelationExpansionPreviewService(new RelationTraversalEngine(_fileRelationStore), registry, validator);
+        var postgresPreview = new RelationExpansionPreviewService(new RelationTraversalEngine(_postgresRelationStore), registry, validator);
         var passed = true;
 
         foreach (var profileId in PreviewProfiles)

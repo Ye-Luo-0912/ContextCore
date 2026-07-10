@@ -4,18 +4,18 @@ using ContextCore.Abstractions.Models;
 namespace ContextCore.Core.Services.Graph;
 
 /// <summary>
-/// 执行关系扩展：查询 relation store、解析 target、保持 relation paths 和现有评分语义。
+/// 执行关系扩展：通过统一遍历引擎查询 relation store、解析 target、保持 relation paths 和现有评分语义。
 /// </summary>
 internal sealed class RelationExpansionService
 {
-    private readonly IRelationStore _relationStore;
+    private readonly RelationTraversalEngine _traversalEngine;
     private readonly IContextObjectResolver _contextObjectResolver;
 
     public RelationExpansionService(
-        IRelationStore relationStore,
+        RelationTraversalEngine traversalEngine,
         IContextObjectResolver contextObjectResolver)
     {
-        _relationStore = relationStore;
+        _traversalEngine = traversalEngine;
         _contextObjectResolver = contextObjectResolver;
     }
 
@@ -34,90 +34,84 @@ internal sealed class RelationExpansionService
                 BuildMetadata(frontier, unresolvedTargets: 0));
         }
 
+        var profile = new RelationExpansionProfile
+        {
+            ProfileId = "retrieval-frontier",
+            Mode = "Normal",
+            MaxDepth = frontier.MaxDepth,
+            MaxFanout = frontier.MaxFanout,
+            AllowedRelationTypes = frontier.AllowedRelationTypes,
+            // retrieval 路径不做置信度过滤（原实现也没有）；lifecycle 过滤不影响，因为原实现检查 resolved object 的 deprecated 状态
+            MinConfidence = 0.0,
+            AllowDeprecatedRelations = frontier.AllowDeprecated,
+            AllowCandidateRelations = true,
+            AllowRejectedRelations = true,
+            RequireEvidence = false
+        };
+
+        var request = new RelationTraversalRequest
+        {
+            WorkspaceId = workspaceId,
+            CollectionId = collectionId,
+            Seeds = frontier.Seeds
+                .Select(seed => new RelationTraversalSeed(seed.SourceId, seed.Score))
+                .ToArray(),
+            Profile = profile,
+            Direction = RelationDirection.Outgoing
+        };
+
+        var traversalResult = await _traversalEngine.TraverseAsync(request, cancellationToken).ConfigureAwait(false);
+
         var channelCandidates = new List<RetrievalChannelCandidate>();
         var added = 0;
         var unresolvedTargets = 0;
-        var visitedNodes = frontier.Seeds
-            .Select(seed => seed.SourceId)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var visitedEdges = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var currentFrontier = frontier.Seeds
-            .Select(seed => new RelationExpansionNode(seed.SourceId, seed.Score, seed.Path))
+
+        // 出边遍历：邻居即 relation.TargetId，批量解析后逐边评分
+        var targetIds = traversalResult.Edges
+            .Select(edge => edge.Relation.TargetId)
+            .Where(targetId => !string.IsNullOrWhiteSpace(targetId))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
-        for (var depth = 1; depth <= frontier.MaxDepth && currentFrontier.Length > 0; depth++)
+        var resolutions = targetIds.Length == 0
+            ? Array.Empty<ContextObjectResolution>()
+            : (await _contextObjectResolver.ResolveManyAsync(
+                workspaceId,
+                collectionId,
+                targetIds,
+                cancellationToken).ConfigureAwait(false)).ToArray();
+        var resolutionMap = resolutions.ToDictionary(resolution => resolution.RequestedId, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var edge in traversalResult.Edges)
         {
-            var nextFrontier = new List<RelationExpansionNode>(capacity: Math.Min(frontier.MaxFanout, currentFrontier.Length * 2));
-
-            foreach (var node in currentFrontier)
+            var targetId = edge.Relation.TargetId;
+            if (!resolutionMap.TryGetValue(targetId, out var resolution)
+                || !resolution.Found
+                || resolution.ResolvedObject is null)
             {
-                var relations = await _relationStore.QueryForItemAsync(
-                    workspaceId,
-                    collectionId,
-                    node.SourceId,
-                    cancellationToken).ConfigureAwait(false);
-
-                var outgoingRelations = relations
-                    .Where(relation => string.Equals(relation.SourceId, node.SourceId, StringComparison.OrdinalIgnoreCase))
-                    .Where(relation => ShouldIncludeRelationType(relation, frontier.AllowedRelationTypes))
-                    .Where(relation => visitedEdges.Add($"{relation.SourceId}\u001f{relation.TargetId}\u001f{relation.RelationType}"))
-                    .ToArray();
-
-                if (outgoingRelations.Length == 0)
-                {
-                    continue;
-                }
-
-                var resolutions = await _contextObjectResolver.ResolveManyAsync(
-                    workspaceId,
-                    collectionId,
-                    outgoingRelations.Select(relation => relation.TargetId).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
-                    cancellationToken).ConfigureAwait(false);
-                var resolutionMap = resolutions.ToDictionary(resolution => resolution.RequestedId, StringComparer.OrdinalIgnoreCase);
-
-                foreach (var relation in outgoingRelations)
-                {
-                    var resolution = resolutionMap[relation.TargetId];
-                    if (!resolution.Found || resolution.ResolvedObject is null)
-                    {
-                        unresolvedTargets++;
-                        continue;
-                    }
-
-                    if (!CanUseResolvedTarget(resolution.ResolvedObject, frontier.AllowDeprecated))
-                    {
-                        continue;
-                    }
-
-                    var score = RetrievalCandidatePolicy.ScoreRelationTarget(
-                        node.Score,
-                        relation,
-                        resolution.ResolvedObject.Importance,
-                        depth);
-                    var relationPath = $"{node.Path} -[{relation.RelationType}]-> {resolution.ResolvedObject.Id}";
-                    channelCandidates.Add(RetrievalChannelCandidate.FromRelationTarget(
-                        channelSource: "relation",
-                        resolution.ResolvedObject.ToRelationTarget(),
-                        score,
-                        $"关系扩展 d{depth} {relation.RelationType} -> {node.SourceId}",
-                        relationPaths: [relationPath],
-                        scoreBreakdown: new Dictionary<string, double> { ["relation"] = score }));
-
-                    added++;
-                    if (visitedNodes.Add(resolution.ResolvedObject.Id) && nextFrontier.Count < frontier.MaxFanout)
-                    {
-                        nextFrontier.Add(new RelationExpansionNode(
-                            resolution.ResolvedObject.Id,
-                            score,
-                            relationPath));
-                    }
-                }
+                unresolvedTargets++;
+                continue;
             }
 
-            currentFrontier = nextFrontier
-                .OrderByDescending(item => item.Score)
-                .Take(frontier.MaxFanout)
-                .ToArray();
+            if (!CanUseResolvedTarget(resolution.ResolvedObject, frontier.AllowDeprecated))
+            {
+                continue;
+            }
+
+            var score = RetrievalCandidatePolicy.ScoreRelationTarget(
+                edge.SourceScore,
+                edge.Relation,
+                resolution.ResolvedObject.Importance,
+                edge.Depth);
+            channelCandidates.Add(RetrievalChannelCandidate.FromRelationTarget(
+                channelSource: "relation",
+                resolution.ResolvedObject.ToRelationTarget(),
+                score,
+                $"关系扩展 d{edge.Depth} {edge.Relation.RelationType} -> {edge.Relation.SourceId}",
+                relationPaths: [edge.Path],
+                scoreBreakdown: new Dictionary<string, double> { ["relation"] = score }));
+
+            added++;
         }
 
         return new RetrievalChannelResult(
@@ -141,14 +135,6 @@ internal sealed class RelationExpansionService
         };
     }
 
-    private static bool ShouldIncludeRelationType(
-        ContextRelation relation,
-        IReadOnlyList<string> allowedRelationTypes)
-    {
-        return allowedRelationTypes.Count == 0
-            || allowedRelationTypes.Contains(relation.RelationType, StringComparer.OrdinalIgnoreCase);
-    }
-
     private static bool CanUseResolvedTarget(ResolvedContextObject resolvedObject, bool allowDeprecated)
     {
         if (resolvedObject.ContextItem is not null)
@@ -163,6 +149,4 @@ internal sealed class RelationExpansionService
 
         return false;
     }
-
-    private sealed record RelationExpansionNode(string SourceId, double Score, string Path);
 }

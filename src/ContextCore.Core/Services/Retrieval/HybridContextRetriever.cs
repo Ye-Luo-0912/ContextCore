@@ -71,7 +71,7 @@ public sealed class HybridContextRetriever : IContextRetriever
         var relationFrontierBuilder = new RelationFrontierBuilder();
         var relationExpansionService = relationStore is null
             ? null
-            : new RelationExpansionService(relationStore, contextObjectResolver);
+            : new RelationExpansionService(new RelationTraversalEngine(relationStore), contextObjectResolver);
         _mandatoryRecallChannelExecutor = new MandatoryRecallChannelExecutor(contextStore, memoryStore);
         _contextRecallChannelExecutor = new ContextRecallChannelExecutor(contextStore);
         _memoryRecallChannelExecutor = new MemoryRecallChannelExecutor(memoryStore);

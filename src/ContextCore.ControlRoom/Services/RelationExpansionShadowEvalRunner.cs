@@ -91,7 +91,7 @@ public sealed class RelationExpansionShadowEvalRunner
             await SeedRelationsAsync(relationStore, corpus.Relations, workspaceId, collectionId, lifecycleByItemId, cancellationToken)
                 .ConfigureAwait(false);
             var validator = new RelationExpansionPolicyValidator(_relationTypeRegistry);
-            var previewService = new RelationExpansionPreviewService(relationStore, _profileRegistry, validator);
+            var previewService = new RelationExpansionPreviewService(new RelationTraversalEngine(relationStore), _profileRegistry, validator);
 
             foreach (var sample in evalSamples)
             {
