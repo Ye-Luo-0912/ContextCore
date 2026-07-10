@@ -1,4 +1,4 @@
-﻿using ContextCore.Abstractions.Models;
+using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services;
 
 namespace ContextCore.Tests;
@@ -116,9 +116,10 @@ public class ContextCoreFormalRetrievalIntegrationDecisionTests
     {
         var source = File.ReadAllText(ResolveRepoFile(
             "src",
-            "ContextCore.Core",
-            "Services",
+            "ContextCore.Evaluation",
             "Vector",
+            "Evaluation",
+            "Gates",
             "FormalRetrievalIntegrationDecisionRunner.cs"));
 
         Assert.IsFalse(source.Contains("sample.SampleId ==", StringComparison.Ordinal));

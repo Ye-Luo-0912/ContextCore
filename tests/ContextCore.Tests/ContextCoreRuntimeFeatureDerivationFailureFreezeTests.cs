@@ -1,4 +1,4 @@
-﻿using ContextCore.Abstractions.Models;
+using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services;
 
 namespace ContextCore.Tests;
@@ -48,7 +48,7 @@ public class ContextCoreRuntimeFeatureDerivationFailureFreezeTests
     public void FailureFreeze_HasNoKnownFixtureTerms()
     {
         var sourcePath = ResolveRepoFile(
-            "src", "ContextCore.Core", "Services", "Vector",
+            "src", "ContextCore.Evaluation", "Vector", "Evaluation", "Gates",
             "RuntimeFeatureDerivationFailureFreezeRunner.cs");
         var source = File.ReadAllText(Path.GetFullPath(sourcePath));
 

@@ -1,4 +1,4 @@
-﻿using ContextCore.Abstractions.Models;
+using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services;
 
 namespace ContextCore.Tests;
@@ -109,7 +109,7 @@ public class ContextCoreOutputTokenPriorityShadowGateTests
     [TestMethod]
     public void OutputTokenPriorityShadow_SourceDoesNotSpecialCaseSamplesOrItems()
     {
-        var source = File.ReadAllText(ResolveRepoFile("src", "ContextCore.Core", "Services", "Vector", "Evaluation", "Gates", "OutputTokenPriorityShadowGateRunner.cs"));
+        var source = File.ReadAllText(ResolveRepoFile("src", "ContextCore.Evaluation", "Vector", "Evaluation", "Gates", "OutputTokenPriorityShadowGateRunner.cs"));
         Assert.IsFalse(source.Contains("sample.SampleId ==", StringComparison.Ordinal));
         Assert.IsFalse(source.Contains("item.ItemId ==", StringComparison.Ordinal));
         Assert.IsFalse(source.Contains("sample-pkg", StringComparison.Ordinal));

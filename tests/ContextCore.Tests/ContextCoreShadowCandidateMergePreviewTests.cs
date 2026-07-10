@@ -1,4 +1,4 @@
-﻿using ContextCore.Abstractions.Models;
+using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services;
 
 namespace ContextCore.Tests;
@@ -96,7 +96,7 @@ public class ContextCoreShadowCandidateMergePreviewTests
     [TestMethod]
     public void ShadowCandidateMergePreview_SourceDoesNotSpecialCaseSamplesOrItems()
     {
-        var source = File.ReadAllText(ResolveRepoFile("src", "ContextCore.Core", "Services", "Vector", "Evaluation", "V6", "ShadowCandidateMergePreviewRunner.cs"));
+        var source = File.ReadAllText(ResolveRepoFile("src", "ContextCore.Evaluation", "Vector", "Evaluation", "V6", "ShadowCandidateMergePreviewRunner.cs"));
         Assert.IsFalse(source.Contains("sample.SampleId ==", StringComparison.Ordinal));
         Assert.IsFalse(source.Contains("item.ItemId ==", StringComparison.Ordinal));
         Assert.IsFalse(source.Contains("mustHitItemId ==", StringComparison.Ordinal));
@@ -199,7 +199,7 @@ public class ContextCoreShadowCandidateMergePreviewTests
     [TestMethod]
     public void ShadowCandidateMergePreviewObservation_SourceDoesNotSpecialCaseSamplesOrItems()
     {
-        var source = File.ReadAllText(ResolveRepoFile("src", "ContextCore.Core", "Services", "Vector", "Evaluation", "V6", "ShadowCandidateMergePreviewObservationRunner.cs"));
+        var source = File.ReadAllText(ResolveRepoFile("src", "ContextCore.Evaluation", "Vector", "Evaluation", "V6", "ShadowCandidateMergePreviewObservationRunner.cs"));
         Assert.IsFalse(source.Contains("sample.SampleId ==", StringComparison.Ordinal));
         Assert.IsFalse(source.Contains("item.ItemId ==", StringComparison.Ordinal));
         Assert.IsFalse(source.Contains("mustHitItemId ==", StringComparison.Ordinal));
@@ -317,7 +317,7 @@ public class ContextCoreShadowCandidateMergePreviewTests
     [TestMethod]
     public void ShadowMergeStabilityFreeze_SourceDoesNotSpecialCaseSamplesOrItems()
     {
-        var source = File.ReadAllText(ResolveRepoFile("src", "ContextCore.Core", "Services", "Vector", "Evaluation", "Gates", "ShadowMergeStabilityFreezeRunner.cs"));
+        var source = File.ReadAllText(ResolveRepoFile("src", "ContextCore.Evaluation", "Vector", "Evaluation", "Gates", "ShadowMergeStabilityFreezeRunner.cs"));
         Assert.IsFalse(source.Contains("sample.SampleId ==", StringComparison.Ordinal));
         Assert.IsFalse(source.Contains("item.ItemId ==", StringComparison.Ordinal));
         Assert.IsFalse(source.Contains("mustHitItemId ==", StringComparison.Ordinal));
@@ -649,7 +649,7 @@ public class ContextCoreShadowCandidateMergePreviewTests
     [TestMethod]
     public void ControlledShadowMergeObservationWindow_SourceDoesNotSpecialCaseSamplesOrItems()
     {
-        var source = File.ReadAllText(ResolveRepoFile("src", "ContextCore.Core", "Services", "Vector", "Evaluation", "V6", "ControlledShadowMergeObservationWindowRunner.cs"));
+        var source = File.ReadAllText(ResolveRepoFile("src", "ContextCore.Evaluation", "Vector", "Evaluation", "V6", "ControlledShadowMergeObservationWindowRunner.cs"));
         Assert.IsFalse(source.Contains("sample.SampleId ==", StringComparison.Ordinal));
         Assert.IsFalse(source.Contains("item.ItemId ==", StringComparison.Ordinal));
         Assert.IsFalse(source.Contains("mustHitItemId ==", StringComparison.Ordinal));
@@ -660,7 +660,7 @@ public class ContextCoreShadowCandidateMergePreviewTests
     [TestMethod]
     public void ControlledShadowMergeDryRunGate_SourceDoesNotSpecialCaseSamplesOrItems()
     {
-        var source = File.ReadAllText(ResolveRepoFile("src", "ContextCore.Core", "Services", "Vector", "Evaluation", "Gates", "ControlledShadowMergeDryRunGateRunner.cs"));
+        var source = File.ReadAllText(ResolveRepoFile("src", "ContextCore.Evaluation", "Vector", "Evaluation", "Gates", "ControlledShadowMergeDryRunGateRunner.cs"));
         Assert.IsFalse(source.Contains("sample.SampleId ==", StringComparison.Ordinal));
         Assert.IsFalse(source.Contains("item.ItemId ==", StringComparison.Ordinal));
         Assert.IsFalse(source.Contains("mustHitItemId ==", StringComparison.Ordinal));
@@ -671,7 +671,7 @@ public class ContextCoreShadowCandidateMergePreviewTests
     [TestMethod]
     public void ControlledShadowMergeProposal_SourceDoesNotSpecialCaseSamplesOrItems()
     {
-        var source = File.ReadAllText(ResolveRepoFile("src", "ContextCore.Core", "Services", "Vector", "Evaluation", "V6", "ControlledShadowMergeProposalRunner.cs"));
+        var source = File.ReadAllText(ResolveRepoFile("src", "ContextCore.Evaluation", "Vector", "Evaluation", "V6", "ControlledShadowMergeProposalRunner.cs"));
         Assert.IsFalse(source.Contains("sample.SampleId ==", StringComparison.Ordinal));
         Assert.IsFalse(source.Contains("item.ItemId ==", StringComparison.Ordinal));
         Assert.IsFalse(source.Contains("mustHitItemId ==", StringComparison.Ordinal));
@@ -782,7 +782,7 @@ public class ContextCoreShadowCandidateMergePreviewTests
     [TestMethod]
     public void ControlledShadowMergeFreeze_SourceDoesNotSpecialCaseSamplesOrItems()
     {
-        var source = File.ReadAllText(ResolveRepoFile("src", "ContextCore.Core", "Services", "Vector", "Evaluation", "Gates", "ControlledShadowMergeFreezeRunner.cs"));
+        var source = File.ReadAllText(ResolveRepoFile("src", "ContextCore.Evaluation", "Vector", "Evaluation", "Gates", "ControlledShadowMergeFreezeRunner.cs"));
         Assert.IsFalse(source.Contains("sample.SampleId ==", StringComparison.Ordinal));
         Assert.IsFalse(source.Contains("item.ItemId ==", StringComparison.Ordinal));
         Assert.IsFalse(source.Contains("mustHitItemId ==", StringComparison.Ordinal));
@@ -890,7 +890,7 @@ public class ContextCoreShadowCandidateMergePreviewTests
     [TestMethod]
     public void ControlledAppliedMergeProposal_SourceDoesNotSpecialCaseSamplesOrItems()
     {
-        var source = File.ReadAllText(ResolveRepoFile("src", "ContextCore.Core", "Services", "Vector", "Evaluation", "V6", "ControlledAppliedMergeProposalRunner.cs"));
+        var source = File.ReadAllText(ResolveRepoFile("src", "ContextCore.Evaluation", "Vector", "Evaluation", "V6", "ControlledAppliedMergeProposalRunner.cs"));
         Assert.IsFalse(source.Contains("sample.SampleId ==", StringComparison.Ordinal));
         Assert.IsFalse(source.Contains("item.ItemId ==", StringComparison.Ordinal));
         Assert.IsFalse(source.Contains("mustHitItemId ==", StringComparison.Ordinal));

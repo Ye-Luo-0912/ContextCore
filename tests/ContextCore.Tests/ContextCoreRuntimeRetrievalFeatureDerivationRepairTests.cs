@@ -1,4 +1,4 @@
-﻿using ContextCore.Abstractions.Models;
+using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services;
 
 namespace ContextCore.Tests;
@@ -135,7 +135,7 @@ public class ContextCoreRuntimeRetrievalFeatureDerivationRepairTests
     {
         var paths = new[]
         {
-            ResolveRepoFile("src", "ContextCore.Core", "Services", "Vector", "Evaluation", "V5", "RuntimeRetrievalFeatureDerivationRepairRunner.cs"),
+            ResolveRepoFile("src", "ContextCore.Evaluation", "Vector", "Evaluation", "V5", "RuntimeRetrievalFeatureDerivationRepairRunner.cs"),
             ResolveRepoFile("src", "ContextCore.Core", "Services", "Vector", "CanonicalRuntimeAnchorResolver.cs"),
             ResolveRepoFile("src", "ContextCore.Core", "Services", "Vector", "RuntimeRelationIntentDeriver.cs")
         };

@@ -1,4 +1,4 @@
-﻿using ContextCore.Abstractions.Models;
+using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services;
 
 namespace ContextCore.Tests;
@@ -62,7 +62,7 @@ public class ContextCoreEnrichedCandidateSourceRepairRecheckTests
     [TestMethod]
     public void EnrichedCandidateSourceRepairRecheck_SourceDoesNotSpecialCaseSamplesOrItems()
     {
-        var source = File.ReadAllText(ResolveRepoFile("src", "ContextCore.Core", "Services", "Vector", "Evaluation", "V5", "EnrichedCandidateSourceRepairRecheckRunner.cs"));
+        var source = File.ReadAllText(ResolveRepoFile("src", "ContextCore.Evaluation", "Vector", "Evaluation", "V5", "EnrichedCandidateSourceRepairRecheckRunner.cs"));
         Assert.IsFalse(source.Contains("sample.SampleId ==", StringComparison.Ordinal));
         Assert.IsFalse(source.Contains("item.ItemId ==", StringComparison.Ordinal));
         Assert.IsFalse(source.Contains("sample-pkg", StringComparison.Ordinal));

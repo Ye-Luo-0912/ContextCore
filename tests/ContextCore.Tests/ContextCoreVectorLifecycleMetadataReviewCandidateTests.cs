@@ -1,4 +1,4 @@
-﻿using ContextCore.Abstractions.Models;
+using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services;
 using ContextCore.Storage.FileSystem;
 using ContextCore.Storage.FileSystem.Stores;
@@ -167,9 +167,9 @@ public class ContextCoreVectorLifecycleMetadataReviewCandidateTests
             ResolveRepoFile("src", "ContextCore.Core", "Services", "Vector", "VectorLifecycleMetadataReviewCandidateService.cs"),
             ResolveRepoFile("src", "ContextCore.Core", "Services", "Vector", "VectorLifecycleMetadataReviewService.cs"),
             ResolveRepoFile("src", "ContextCore.Core", "Services", "Vector", "VectorLifecycleSidecarResolver.cs"),
-            ResolveRepoFile("src", "ContextCore.Core", "Services", "Vector", "Evaluation", "V5", "VectorSidecarEligibilityPreviewRunner.cs"),
+            ResolveRepoFile("src", "ContextCore.Evaluation", "Vector", "Evaluation", "V5", "VectorSidecarEligibilityPreviewRunner.cs"),
             ResolveRepoFile("src", "ContextCore.Core", "Services", "Vector", "VectorLifecycleMetadataReviewBatchService.cs"),
-            ResolveRepoFile("src", "ContextCore.Core", "Services", "Vector", "Evaluation", "V5", "VectorLifecycleMetadataEvidenceBackfillRunner.cs"),
+            ResolveRepoFile("src", "ContextCore.Evaluation", "Vector", "Evaluation", "V5", "VectorLifecycleMetadataEvidenceBackfillRunner.cs"),
             ResolveRepoFile("src", "ContextCore.Storage.FileSystem", "Stores", "FileVectorLifecycleMetadataReviewCandidateStore.cs"),
             ResolveRepoFile("src", "ContextCore.Storage.FileSystem", "Stores", "FileVectorLifecycleMetadataReviewStore.cs"),
             ResolveRepoFile("src", "ContextCore.Storage.FileSystem", "Stores", "FileVectorLifecycleSidecarMetadataStore.cs"),

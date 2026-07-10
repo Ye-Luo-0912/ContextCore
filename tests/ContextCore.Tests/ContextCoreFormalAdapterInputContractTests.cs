@@ -1,4 +1,4 @@
-﻿using System.Reflection;
+using System.Reflection;
 using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services;
 
@@ -134,9 +134,10 @@ public class ContextCoreFormalAdapterInputContractTests
     {
         var source = File.ReadAllText(ResolveRepoFile(
             "src",
-            "ContextCore.Core",
-            "Services",
+            "ContextCore.Evaluation",
             "Vector",
+            "Evaluation",
+            "V6",
             "FormalAdapterInputContractRunner.cs"));
 
         Assert.IsFalse(source.Contains("sample.SampleId ==", StringComparison.Ordinal));

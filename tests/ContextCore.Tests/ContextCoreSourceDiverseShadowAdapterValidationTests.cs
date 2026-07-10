@@ -1,4 +1,4 @@
-﻿using ContextCore.Abstractions.Models;
+using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services;
 
 namespace ContextCore.Tests;
@@ -85,7 +85,7 @@ public class ContextCoreSourceDiverseShadowAdapterValidationTests
     [TestMethod]
     public void SourceDiverseShadowAdapterValidation_SourceDoesNotSpecialCaseSamplesOrItems()
     {
-        var source = File.ReadAllText(ResolveRepoFile("src", "ContextCore.Core", "Services", "Vector", "Evaluation", "V6", "SourceDiverseShadowAdapterValidationRunner.cs"));
+        var source = File.ReadAllText(ResolveRepoFile("src", "ContextCore.Evaluation", "Vector", "Evaluation", "V6", "SourceDiverseShadowAdapterValidationRunner.cs"));
         Assert.IsFalse(source.Contains("sample.SampleId ==", StringComparison.Ordinal));
         Assert.IsFalse(source.Contains("item.ItemId ==", StringComparison.Ordinal));
         Assert.IsFalse(source.Contains("mustHitItemId ==", StringComparison.Ordinal));

@@ -1,4 +1,4 @@
-﻿using ContextCore.Abstractions.Models;
+using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services;
 
 namespace ContextCore.Tests;
@@ -140,9 +140,10 @@ public class ContextCoreRuntimeRetrievalFeatureDerivationTests
     {
         var sourcePath = ResolveRepoFile(
             "src",
-            "ContextCore.Core",
-            "Services",
+            "ContextCore.Evaluation",
             "Vector",
+            "Evaluation",
+            "V5",
             "RuntimeRetrievalFeatureDerivationPreviewRunner.cs");
         var source = File.ReadAllText(Path.GetFullPath(sourcePath));
 

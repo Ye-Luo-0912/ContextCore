@@ -82,7 +82,7 @@ public sealed class RouterDisagreementTriageRunner
         var examples = sourceExamples
             .Where(static example => string.Equals(example.TaskKind, "RouterIntent", StringComparison.OrdinalIgnoreCase)
                 || string.IsNullOrWhiteSpace(example.TaskKind))
-            .Where(static example => !string.IsNullOrWhiteSpace(RouterIntentEvaluationRunner.GetIntentLabel(example)))
+            .Where(static example => !string.IsNullOrWhiteSpace(RouterIntentClassifierLabelResolver.GetIntentLabel(example)))
             .ToArray();
         if (examples.Length == 0)
         {
@@ -101,7 +101,7 @@ public sealed class RouterDisagreementTriageRunner
         var trainExamples = split.TrainExamples.Length == 0 ? examples : split.TrainExamples;
         var testExamples = split.TestExamples.Length == 0 ? examples : split.TestExamples;
         var labelCounts = trainExamples
-            .GroupBy(RouterIntentEvaluationRunner.GetIntentLabel, StringComparer.OrdinalIgnoreCase)
+            .GroupBy(RouterIntentClassifierLabelResolver.GetIntentLabel, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(static group => NormalizeIntent(group.Key), static group => group.Count(), StringComparer.OrdinalIgnoreCase);
 
         var runtime = new ExistingRuleBasedRouterBaseline();
@@ -198,7 +198,7 @@ public sealed class RouterDisagreementTriageRunner
         RouterIntentClassifier shadow,
         IReadOnlyDictionary<string, int> labelCounts)
     {
-        var expectedIntent = NormalizeIntent(RouterIntentEvaluationRunner.GetIntentLabel(example));
+        var expectedIntent = NormalizeIntent(RouterIntentClassifierLabelResolver.GetIntentLabel(example));
         var runtimePrediction = runtime.Predict(example);
         var shadowPrediction = shadow.Predict(example);
         var runtimeIntent = NormalizeIntent(runtimePrediction.Intent);

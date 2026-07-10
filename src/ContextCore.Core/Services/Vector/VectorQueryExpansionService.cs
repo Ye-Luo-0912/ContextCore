@@ -48,7 +48,7 @@ public sealed class VectorQueryExpansionService
         var profile = Resolve(profileId);
         var queryAnchors = request.QueryAnchors.Count > 0
             ? CleanSignals(request.QueryAnchors, profile.MaxSignalCount)
-            : VectorMissSetRepresentationAuditRunner.ExtractAnchors(request.QueryText, profile.MaxSignalCount);
+            : QueryAnchorExtractor.ExtractAnchors(request.QueryText, profile.MaxSignalCount);
         var signals = new List<string>();
         var warnings = new List<string>();
 

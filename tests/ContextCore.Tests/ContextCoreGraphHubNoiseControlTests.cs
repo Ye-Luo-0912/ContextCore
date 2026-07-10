@@ -1,4 +1,4 @@
-﻿using ContextCore.Abstractions.Models;
+using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services;
 
 namespace ContextCore.Tests;
@@ -34,7 +34,7 @@ public class ContextCoreGraphHubNoiseControlTests
     [TestMethod]
     public void HubNoiseControl_HasNoKnownFixtureTerms()
     {
-        var source = File.ReadAllText(ResolveRepoFile("src", "ContextCore.Core", "Services", "Vector", "Evaluation", "V6", "GraphHubNoiseControlRunner.cs"));
+        var source = File.ReadAllText(ResolveRepoFile("src", "ContextCore.Evaluation", "Vector", "Evaluation", "V6", "GraphHubNoiseControlRunner.cs"));
         foreach (var f in new[] { "林风", "苍穹大陆", "九转金丹", "龙魂草", "拍卖行" })
             Assert.IsFalse(source.Contains(f, StringComparison.Ordinal));
     }

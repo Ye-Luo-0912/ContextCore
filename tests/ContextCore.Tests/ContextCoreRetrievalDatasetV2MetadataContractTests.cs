@@ -1,4 +1,4 @@
-﻿using ContextCore.Abstractions.Models;
+using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -104,9 +104,10 @@ public class ContextCoreRetrievalDatasetV2MetadataContractTests
     {
         var sourcePath = ResolveRepoFile(
             "src",
-            "ContextCore.Core",
-            "Services",
+            "ContextCore.Evaluation",
             "Vector",
+            "Evaluation",
+            "Dataset",
             "RetrievalDatasetV2MetadataContractRunner.cs");
         var source = File.ReadAllText(Path.GetFullPath(sourcePath));
 
@@ -394,9 +395,10 @@ public class ContextCoreRetrievalDatasetV2MetadataContractTests
     {
         var sourcePath = ResolveRepoFile(
             "src",
-            "ContextCore.Core",
-            "Services",
+            "ContextCore.Evaluation",
             "Vector",
+            "Evaluation",
+            "Dataset",
             "RetrievalDatasetV2Generator.cs");
         var source = File.ReadAllText(Path.GetFullPath(sourcePath));
 
@@ -798,9 +800,10 @@ public class ContextCoreRetrievalDatasetV2MetadataContractTests
     {
         var sourcePath = ResolveRepoFile(
             "src",
-            "ContextCore.Core",
-            "Services",
+            "ContextCore.Evaluation",
             "Vector",
+            "Evaluation",
+            "V5",
             "HybridUnionScoringRepairRunner.cs");
         var source = File.ReadAllText(Path.GetFullPath(sourcePath));
         var start = source.IndexOf("private static double ScoreForProfile", StringComparison.Ordinal);
@@ -907,9 +910,10 @@ public class ContextCoreRetrievalDatasetV2MetadataContractTests
     {
         var sourcePath = ResolveRepoFile(
             "src",
-            "ContextCore.Core",
-            "Services",
+            "ContextCore.Evaluation",
             "Vector",
+            "Evaluation",
+            "V5",
             "HybridScoringRiskRegressionTriageRunner.cs");
         var source = File.ReadAllText(Path.GetFullPath(sourcePath));
         var start = source.IndexOf("private static double ScoreForProfile", StringComparison.Ordinal);
@@ -5468,7 +5472,7 @@ public class ContextCoreRetrievalDatasetV2MetadataContractTests
     private static Dictionary<string, IReadOnlyList<string>> CleanGitStatusCategories()
         => new(StringComparer.OrdinalIgnoreCase)
         {
-            ["source code"] = ["src/ContextCore.Core/Services/Learning/FoundationReproducibilityRunner.cs"],
+            ["source code"] = ["src/ContextCore.Evaluation/Learning/FoundationReproducibilityRunner.cs"],
             ["tests"] = ["tests/ContextCore.Tests/ContextCoreRetrievalDatasetV2MetadataContractTests.cs"],
             ["docs"] = ["docs/ContextCore_Foundation_Freeze_Report.md"],
             ["generated reports"] = ["foundation/foundation-release-candidate-gate.json"],

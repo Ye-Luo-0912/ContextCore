@@ -475,10 +475,3 @@ public sealed class ContextCoreFoundationFreezeRunner
         }
     }
 }
-
-public readonly record struct P15ReportStatus(
-    bool Passed,
-    int TotalSamples,
-    int FailedSamples,
-    int InvalidSamples,
-    string Status);

@@ -128,7 +128,7 @@ public sealed class RouterIntentShadowReportBuilder
         var examples = sourceExamples
             .Where(static example => string.Equals(example.TaskKind, "RouterIntent", StringComparison.OrdinalIgnoreCase)
                 || string.IsNullOrWhiteSpace(example.TaskKind))
-            .Where(static example => !string.IsNullOrWhiteSpace(RouterIntentEvaluationRunner.GetIntentLabel(example)))
+            .Where(static example => !string.IsNullOrWhiteSpace(RouterIntentClassifierLabelResolver.GetIntentLabel(example)))
             .ToArray();
         if (examples.Length == 0)
         {
@@ -244,7 +244,7 @@ public sealed class RouterIntentShadowReportBuilder
         RouterIntentClassifier runtime,
         RouterIntentClassifier shadow)
     {
-        var actual = NormalizeIntent(RouterIntentEvaluationRunner.GetIntentLabel(example));
+        var actual = NormalizeIntent(RouterIntentClassifierLabelResolver.GetIntentLabel(example));
         var runtimePrediction = runtime.Predict(example);
         var shadowPrediction = shadow.Predict(example);
         var runtimeIntent = NormalizeIntent(runtimePrediction.Intent);

@@ -1,4 +1,4 @@
-﻿using ContextCore.Abstractions.Models;
+using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services;
 
 namespace ContextCore.Tests;
@@ -87,7 +87,7 @@ public class ContextCoreSourceAwareRankingRepairTests
     [TestMethod]
     public void SourceAwareRankingRepair_SourceDoesNotSpecialCaseSamplesOrItems()
     {
-        var source = File.ReadAllText(ResolveRepoFile("src", "ContextCore.Core", "Services", "Vector", "Evaluation", "V5", "SourceAwareRankingRepairRunner.cs"));
+        var source = File.ReadAllText(ResolveRepoFile("src", "ContextCore.Evaluation", "Vector", "Evaluation", "V5", "SourceAwareRankingRepairRunner.cs"));
         Assert.IsFalse(source.Contains(".ExpectedTargetSection", StringComparison.Ordinal));
         Assert.IsFalse(source.Contains("sample.SampleId ==", StringComparison.Ordinal));
         Assert.IsFalse(source.Contains("item.ItemId ==", StringComparison.Ordinal));

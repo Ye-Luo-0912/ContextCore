@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services;
 
@@ -86,8 +86,7 @@ public class ContextCoreProjectStateAuditTests
     {
         var sourcePath = ResolveRepoFile(
             "src",
-            "ContextCore.Core",
-            "Services",
+            "ContextCore.Evaluation",
             "Learning",
             "ProjectStateAuditRunner.cs");
         var source = File.ReadAllText(Path.GetFullPath(sourcePath));
