@@ -172,6 +172,22 @@ public sealed class ModelRoleRoute
     public bool HighRiskTask { get; init; }
 }
 
+/// <summary>模型网关弹性策略配置：重试退避、健康检查缓存等。</summary>
+public sealed class ModelGatewayResilienceOptions
+{
+    /// <summary>重试基础延迟（指数退避的基数），默认 1 秒。</summary>
+    public TimeSpan RetryBaseDelay { get; init; } = TimeSpan.FromSeconds(1);
+
+    /// <summary>重试最大延迟上限，默认 30 秒。</summary>
+    public TimeSpan RetryMaxDelay { get; init; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>健康检查结果缓存 TTL，默认 30 秒。设为 Zero 表示不缓存。</summary>
+    public TimeSpan HealthCheckCacheTtl { get; init; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>健康检查探针请求的超时时长，默认 15 秒。</summary>
+    public TimeSpan HealthCheckTimeout { get; init; } = TimeSpan.FromSeconds(15);
+}
+
 /// <summary>模型网关的全局配置，包含所有模型端点与路由规则。</summary>
 public sealed class ModelGatewayOptions
 {
@@ -186,6 +202,9 @@ public sealed class ModelGatewayOptions
 
     /// <summary>角色路由规则列表。</summary>
     public IReadOnlyList<ModelRoleRoute> Routes { get; init; } = Array.Empty<ModelRoleRoute>();
+
+    /// <summary>弹性策略配置；为 null 时使用默认值。</summary>
+    public ModelGatewayResilienceOptions? Resilience { get; init; }
 }
 
 /// <summary>向模型网关发送的推理请求。</summary>

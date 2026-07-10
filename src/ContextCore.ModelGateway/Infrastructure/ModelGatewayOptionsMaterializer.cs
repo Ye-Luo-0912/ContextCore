@@ -43,7 +43,8 @@ public static class ModelGatewayOptionsMaterializer
             ApiProviders = options.ApiProviders,
             ModelProfiles = options.ModelProfiles,
             Models = models.Values.ToArray(),
-            Routes = options.Routes
+            Routes = options.Routes,
+            Resilience = options.Resilience
         };
     }
 

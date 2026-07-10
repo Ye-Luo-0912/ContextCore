@@ -149,12 +149,37 @@ public abstract class HttpChatCompletionAdapterBase : IModelAdapter
 
             if (!response.IsSuccessStatusCode)
             {
+                // 解析 Retry-After 响应头（429 限流场景），供网关重试延迟决策使用。
+                int? retryAfterMs = null;
+                if (response.Headers.TryGetValues("Retry-After", out var retryAfterValues))
+                {
+                    var retryAfterValue = retryAfterValues.FirstOrDefault();
+                    if (!string.IsNullOrWhiteSpace(retryAfterValue))
+                    {
+                        // 优先按秒数解析（HTTP 规范允许整数秒）。
+                        if (int.TryParse(retryAfterValue, out var retryAfterSeconds) && retryAfterSeconds > 0)
+                        {
+                            retryAfterMs = retryAfterSeconds * 1000;
+                        }
+                        // 尝试按 HTTP-date 解析。
+                        else if (DateTimeOffset.TryParse(retryAfterValue, out var retryAfterDate))
+                        {
+                            var delta = retryAfterDate - DateTimeOffset.UtcNow;
+                            if (delta > TimeSpan.Zero)
+                            {
+                                retryAfterMs = (int)Math.Ceiling(delta.TotalMilliseconds);
+                            }
+                        }
+                    }
+                }
+
                 return Failure(
                     operationId,
                     $"HTTP {(int)response.StatusCode} {response.ReasonPhrase}: {Truncate(responseText, 240)}",
                     ClassifyHttpStatus(response.StatusCode),
                     (int)response.StatusCode,
-                    stopwatch.ElapsedMilliseconds);
+                    stopwatch.ElapsedMilliseconds,
+                    retryAfterMs);
             }
 
             return ParseCompletionResponse(operationId, responseText, stopwatch.ElapsedMilliseconds);
@@ -295,7 +320,8 @@ public abstract class HttpChatCompletionAdapterBase : IModelAdapter
         string errorMessage,
         string failureReason,
         int? statusCode = null,
-        long latencyMs = 0)
+        long latencyMs = 0,
+        int? retryAfterMs = null)
     {
         var metadata = new Dictionary<string, string>
         {
@@ -308,6 +334,11 @@ public abstract class HttpChatCompletionAdapterBase : IModelAdapter
         if (statusCode is not null)
         {
             metadata["httpStatusCode"] = statusCode.Value.ToString();
+        }
+
+        if (retryAfterMs is not null && retryAfterMs.Value > 0)
+        {
+            metadata["retryAfterMs"] = retryAfterMs.Value.ToString();
         }
 
         return new ModelResponse

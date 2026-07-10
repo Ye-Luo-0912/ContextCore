@@ -3239,6 +3239,302 @@ public sealed class ContextCoreMvpTests
     }
 
     [TestMethod]
+    public async Task ModelGateway_ShouldNotRetry_WhenFailureIsNonTransient()
+    {
+        // InvalidJson 是确定性故障，不应触发重试。
+        var primary = TestModelAdapter.Sequence("primary-model",
+            _ => new ModelResponse
+            {
+                OperationId = _.OperationId,
+                Content = "{invalid",
+                Succeeded = true,
+                Metadata = new Dictionary<string, string> { ["failureReason"] = "none" }
+            },
+            _ => new ModelResponse
+            {
+                OperationId = _.OperationId,
+                Content = "should not reach here",
+                Succeeded = true
+            });
+
+        var gateway = new ConfigurableModelGateway(
+            CreateModelGatewayOptions(highRisk: false, enableFallback: false, maxRetryCount: 3),
+            new IModelAdapter[] { primary });
+
+        var response = await gateway.CompleteAsync(new ModelRequest
+        {
+            OperationId = "model-non-transient",
+            Role = ModelRole.Router,
+            Prompt = "Return invalid JSON.",
+            ResponseFormat = "json"
+        });
+
+        // InvalidJson 导致验证失败，但只调用一次（不重试）
+        Assert.IsFalse(response.Succeeded);
+        Assert.AreEqual("invalid_json", response.Metadata["failureReason"]);
+        Assert.AreEqual(1, primary.CallCount);
+    }
+
+    [TestMethod]
+    public async Task ModelGateway_ShouldRetryTransientFailure_WithBackoffDelay()
+    {
+        // ServerError 是瞬态故障，应重试。使用 Sequence 模拟先失败后成功。
+        var primary = TestModelAdapter.Sequence("primary-model",
+            _ => new ModelResponse
+            {
+                OperationId = _.OperationId,
+                Content = string.Empty,
+                Succeeded = false,
+                ErrorMessage = "server error",
+                Metadata = new Dictionary<string, string> { ["failureReason"] = "server_error" }
+            },
+            _ => new ModelResponse
+            {
+                OperationId = _.OperationId,
+                Content = "recovered",
+                Succeeded = true
+            });
+
+        var options = CreateModelGatewayOptions(
+            highRisk: false,
+            enableFallback: false,
+            maxRetryCount: 2);
+        options = new ModelGatewayOptions
+        {
+            Models = options.Models,
+            Routes = options.Routes,
+            Resilience = new ModelGatewayResilienceOptions
+            {
+                RetryBaseDelay = TimeSpan.FromMilliseconds(10),
+                RetryMaxDelay = TimeSpan.FromMilliseconds(50)
+            }
+        };
+
+        var gateway = new ConfigurableModelGateway(options, new IModelAdapter[] { primary });
+
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        var response = await gateway.CompleteAsync(new ModelRequest
+        {
+            OperationId = "model-retry-transient",
+            Role = ModelRole.Router,
+            Prompt = "Retry on server error."
+        });
+        stopwatch.Stop();
+
+        Assert.IsTrue(response.Succeeded);
+        Assert.AreEqual("recovered", response.Content);
+        Assert.AreEqual(2, primary.CallCount);
+        // 退避延迟应至少 10ms（第一次重试前的 baseDelay）
+        Assert.IsTrue(stopwatch.ElapsedMilliseconds >= 8, $"Expected >= 8ms delay, got {stopwatch.ElapsedMilliseconds}ms");
+    }
+
+    [TestMethod]
+    public async Task ModelGateway_ShouldRetryFallbackModel_WhenFallbackAlsoFailsInitially()
+    {
+        // 主模型超时 → 回退到备用模型，备用模型第一次也失败但第二次成功（验证备用模型也有重试）
+        var primary = TestModelAdapter.Throws("primary-model", new TimeoutException("primary timed out"));
+        var fallback = TestModelAdapter.Sequence("fallback-model",
+            _ => new ModelResponse
+            {
+                OperationId = _.OperationId,
+                Content = string.Empty,
+                Succeeded = false,
+                ErrorMessage = "server error",
+                Metadata = new Dictionary<string, string> { ["failureReason"] = "server_error" }
+            },
+            _ => new ModelResponse
+            {
+                OperationId = _.OperationId,
+                Content = "fallback recovered",
+                Succeeded = true
+            });
+
+        var options = CreateModelGatewayOptions(
+            highRisk: false,
+            enableFallback: true,
+            maxRetryCount: 2);
+        options = new ModelGatewayOptions
+        {
+            Models = options.Models,
+            Routes = options.Routes,
+            Resilience = new ModelGatewayResilienceOptions
+            {
+                RetryBaseDelay = TimeSpan.FromMilliseconds(5),
+                RetryMaxDelay = TimeSpan.FromMilliseconds(20)
+            }
+        };
+
+        var gateway = new ConfigurableModelGateway(options, new IModelAdapter[] { primary, fallback });
+
+        var response = await gateway.CompleteAsync(new ModelRequest
+        {
+            OperationId = "model-fallback-retry",
+            Role = ModelRole.Router,
+            Prompt = "Retry fallback model."
+        });
+
+        Assert.IsTrue(response.Succeeded);
+        Assert.AreEqual("fallback recovered", response.Content);
+        Assert.AreEqual("true", response.Metadata["fallbackUsed"]);
+        // 主模型 maxRetryCount=2 → 尝试 3 次（1+2 重试）都超时后才回退到备用模型。
+        Assert.AreEqual(3, primary.CallCount);
+        // 备用模型第 1 次失败（server_error）→ 重试 → 第 2 次成功，共调用 2 次。
+        Assert.AreEqual(2, fallback.CallCount);
+    }
+
+    [TestMethod]
+    public async Task ModelHealthService_ShouldCacheResults_WithinTtl()
+    {
+        var callCount = 0;
+        var adapter = TestModelAdapter.Custom("test-model", (request, ct) =>
+        {
+            callCount++;
+            return Task.FromResult(new ModelResponse
+            {
+                OperationId = request.OperationId,
+                Content = "pong",
+                Succeeded = true
+            });
+        });
+
+        var options = new ModelGatewayOptions
+        {
+            Models = new[]
+            {
+                new ModelEndpointOptions
+                {
+                    Name = "test-model",
+                    Provider = "mock",
+                    Endpoint = "mock://test",
+                    Enabled = true
+                }
+            },
+            Resilience = new ModelGatewayResilienceOptions
+            {
+                HealthCheckCacheTtl = TimeSpan.FromSeconds(5),
+                HealthCheckTimeout = TimeSpan.FromSeconds(10)
+            }
+        };
+
+        var healthService = new ModelHealthService(options, new[] { (IModelAdapter)adapter });
+
+        // 第一次调用发起真实请求
+        var first = await healthService.CheckAsync("test-model");
+        Assert.AreEqual(ModelAvailability.Available, first.Availability);
+        Assert.AreEqual(1, callCount);
+
+        // 第二次调用应命中缓存
+        var second = await healthService.CheckAsync("test-model");
+        Assert.AreEqual(ModelAvailability.Available, second.Availability);
+        Assert.AreEqual(1, callCount); // 适配器未被再次调用
+
+        // 清除缓存后应重新请求
+        healthService.InvalidateCache();
+        var third = await healthService.CheckAsync("test-model");
+        Assert.AreEqual(ModelAvailability.Available, third.Availability);
+        Assert.AreEqual(2, callCount);
+    }
+
+    [TestMethod]
+    public async Task ModelHealthService_ShouldNotCache_WhenTtlIsZero()
+    {
+        var callCount = 0;
+        var adapter = TestModelAdapter.Custom("no-cache-model", (request, ct) =>
+        {
+            callCount++;
+            return Task.FromResult(new ModelResponse
+            {
+                OperationId = request.OperationId,
+                Content = "pong",
+                Succeeded = true
+            });
+        });
+
+        var options = new ModelGatewayOptions
+        {
+            Models = new[]
+            {
+                new ModelEndpointOptions
+                {
+                    Name = "no-cache-model",
+                    Provider = "mock",
+                    Endpoint = "mock://test",
+                    Enabled = true
+                }
+            },
+            Resilience = new ModelGatewayResilienceOptions
+            {
+                HealthCheckCacheTtl = TimeSpan.Zero
+            }
+        };
+
+        var healthService = new ModelHealthService(options, new[] { (IModelAdapter)adapter });
+
+        await healthService.CheckAsync("no-cache-model");
+        await healthService.CheckAsync("no-cache-model");
+
+        Assert.AreEqual(2, callCount); // 每次都发起真实请求
+    }
+
+    [TestMethod]
+    public async Task ModelGateway_ShouldUseRetryAfterMs_WhenPresentInMetadata()
+    {
+        // 模拟 429 限流 + Retry-After 头，验证网关优先使用 retryAfterMs 而非指数退避
+        var primary = TestModelAdapter.Sequence("primary-model",
+            _ => new ModelResponse
+            {
+                OperationId = _.OperationId,
+                Content = string.Empty,
+                Succeeded = false,
+                ErrorMessage = "HTTP 429 Too Many Requests",
+                Metadata = new Dictionary<string, string>
+                {
+                    ["failureReason"] = "rate_limit",
+                    ["retryAfterMs"] = "50"
+                }
+            },
+            _ => new ModelResponse
+            {
+                OperationId = _.OperationId,
+                Content = "after rate limit",
+                Succeeded = true
+            });
+
+        var options = CreateModelGatewayOptions(
+            highRisk: false,
+            enableFallback: false,
+            maxRetryCount: 2);
+        // 设置一个较大的指数退避基数，验证 Retry-After 优先于退避
+        options = new ModelGatewayOptions
+        {
+            Models = options.Models,
+            Routes = options.Routes,
+            Resilience = new ModelGatewayResilienceOptions
+            {
+                RetryBaseDelay = TimeSpan.FromSeconds(10),
+                RetryMaxDelay = TimeSpan.FromSeconds(30)
+            }
+        };
+
+        var gateway = new ConfigurableModelGateway(options, new IModelAdapter[] { primary });
+
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        var response = await gateway.CompleteAsync(new ModelRequest
+        {
+            OperationId = "model-retry-after",
+            Role = ModelRole.Router,
+            Prompt = "Handle rate limit."
+        });
+        stopwatch.Stop();
+
+        Assert.IsTrue(response.Succeeded);
+        Assert.AreEqual(2, primary.CallCount);
+        // Retry-After 50ms 应远小于指数退避的 10s
+        Assert.IsTrue(stopwatch.ElapsedMilliseconds < 2000,
+            $"Expected < 2000ms (Retry-After=50ms), got {stopwatch.ElapsedMilliseconds}ms");
+    }
+
+    [TestMethod]
     public async Task OpenAiCompatibleAdapter_ShouldPostChatCompletions_WithJsonResponseFormatAndUsage()
     {
         var handler = CaptureHttpMessageHandler.Json("""
@@ -4646,6 +4942,13 @@ public sealed class ContextCoreMvpTests
                 OutputTokens = 2,
                 Succeeded = true
             }));
+        }
+
+        public static TestModelAdapter Custom(
+            string name,
+            Func<ModelRequest, CancellationToken, Task<ModelResponse>> handler)
+        {
+            return new TestModelAdapter(name, handler);
         }
 
         public static TestModelAdapter Failure(string name, string errorMessage)

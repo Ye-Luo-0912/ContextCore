@@ -15,6 +15,7 @@ public sealed class ConfigurableModelGateway : IModelGateway
     private readonly ModelGatewayOptions _options;
     private readonly IReadOnlyDictionary<string, ModelEndpointOptions> _modelOptions;
     private readonly IModelUsageLogStore _usageLogStore;
+    private readonly ModelGatewayResilienceOptions _resilience;
 
     public ConfigurableModelGateway(ModelGatewayOptions options)
         : this(options, ModelAdapterFactory.CreateAdapters(options), new InMemoryModelUsageLogStore())
@@ -33,6 +34,7 @@ public sealed class ConfigurableModelGateway : IModelGateway
         _modelOptions = _options.Models.ToDictionary(model => model.Name, StringComparer.OrdinalIgnoreCase);
         _adapters = adapters.ToDictionary(adapter => adapter.Name, StringComparer.OrdinalIgnoreCase);
         _usageLogStore = usageLogStore ?? new InMemoryModelUsageLogStore();
+        _resilience = options.Resilience ?? new ModelGatewayResilienceOptions();
     }
 
     public async Task<ModelResponse> CompleteAsync(
@@ -123,10 +125,10 @@ public sealed class ConfigurableModelGateway : IModelGateway
             return primary.Response;
         }
 
-        var fallback = await ExecuteAttemptAsync(
+        var fallback = await ExecuteWithRetryAsync(
             fallbackModelName!,
             request,
-            attempt: 1,
+            route.MaxRetryCount,
             fallbackUsed: true,
             fallbackReason: primary.FailureReason.ToMetadataValue(),
             cancellationToken).ConfigureAwait(false);
@@ -176,9 +178,72 @@ public sealed class ConfigurableModelGateway : IModelGateway
             {
                 return last;
             }
+
+            // 原因感知重试：仅对瞬态故障重试，确定性故障（InvalidJson/EmptyResponse）直接返回。
+            if (!IsTransientFailure(last.FailureReason))
+            {
+                return last;
+            }
+
+            // 最后一次尝试后不再等待。
+            if (attempt < attempts)
+            {
+                await ApplyRetryDelayAsync(last, attempt, cancellationToken).ConfigureAwait(false);
+            }
         }
 
         return last!;
+    }
+
+    /// <summary>判断失败原因是否为瞬态故障（值得重试）。</summary>
+    private static bool IsTransientFailure(ModelFailureReason reason)
+    {
+        return reason is ModelFailureReason.Timeout
+            or ModelFailureReason.RateLimit
+            or ModelFailureReason.ServerError
+            or ModelFailureReason.Unavailable;
+    }
+
+    /// <summary>应用重试延迟：优先使用 Retry-After，否则指数退避 + 抖动。</summary>
+    private async Task ApplyRetryDelayAsync(ModelAttemptResult last, int attempt, CancellationToken cancellationToken)
+    {
+        // 如果适配器返回了 retryAfterMs 元数据（来自 429 响应头），优先使用。
+        if (last.Response.Metadata.TryGetValue("retryAfterMs", out var retryAfterText)
+            && int.TryParse(retryAfterText, out var retryAfterMs)
+            && retryAfterMs > 0)
+        {
+            try
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(retryAfterMs), cancellationToken).ConfigureAwait(false);
+                return;
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+        }
+
+        // 指数退避：baseDelay * 2^(attempt-1)，加 ±25% 抖动。
+        var baseMs = _resilience.RetryBaseDelay.TotalMilliseconds;
+        var maxMs = _resilience.RetryMaxDelay.TotalMilliseconds;
+        if (baseMs <= 0)
+        {
+            return;
+        }
+
+        var exponentialMs = baseMs * Math.Pow(2, attempt - 1);
+        var cappedMs = Math.Min(exponentialMs, maxMs);
+        var jitter = cappedMs * (0.75 + Random.Shared.NextDouble() * 0.5);
+        var delayMs = Math.Min(jitter, maxMs);
+
+        try
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(delayMs), cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // 取消时静默返回，让外层循环处理取消。
+        }
     }
 
     private async Task<ModelAttemptResult> ExecuteAttemptAsync(
@@ -242,6 +307,10 @@ public sealed class ConfigurableModelGateway : IModelGateway
         ModelResponse response;
         try
         {
+            // 网关层通过 linked token + CancelAfter 传递超时取消信号（供非 HTTP 适配器使用）。
+            // HTTP 适配器（HttpChatCompletionAdapterBase）内部也创建自己的 linked token，
+            // 两者使用相同的 modelOptions.Timeout 值，不构成双重超时——只是冗余的取消信号源。
+            // 移除了之前的 WaitAsync 调用，避免 WaitAsync 掩盖 adapter 层的取消原因。
             using var timeoutSource = modelOptions.Timeout > TimeSpan.Zero
                 ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)
                 : null;
@@ -251,13 +320,9 @@ public sealed class ConfigurableModelGateway : IModelGateway
             }
 
             var effectiveToken = timeoutSource?.Token ?? cancellationToken;
-            var adapterTask = adapter.CompleteAsync(
+            response = await adapter.CompleteAsync(
                 CreateAdapterRequest(request, operationId, modelName, attempt, fallbackUsed, fallbackReason),
-                effectiveToken);
-
-            response = modelOptions.Timeout > TimeSpan.Zero
-                ? await adapterTask.WaitAsync(modelOptions.Timeout, cancellationToken).ConfigureAwait(false)
-                : await adapterTask.ConfigureAwait(false);
+                effectiveToken).ConfigureAwait(false);
         }
         catch (TimeoutException ex)
         {
@@ -490,8 +555,7 @@ public sealed class ConfigurableModelGateway : IModelGateway
             return ModelFailureReason.RateLimit;
         }
 
-        if (error.Contains("server", StringComparison.OrdinalIgnoreCase)
-            || error.Contains("5", StringComparison.OrdinalIgnoreCase))
+        if (error.Contains("server", StringComparison.OrdinalIgnoreCase))
         {
             return ModelFailureReason.ServerError;
         }
