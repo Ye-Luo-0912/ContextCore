@@ -525,5 +525,11 @@ public sealed class ContextPackageRequest
 
     public ContextPackagePolicy? Policy { get; init; }
 
+    /// <summary>请求级 OperationId，用于 trace 串线。未指定时由 builder 自动生成。</summary>
+    public string? OperationId { get; init; }
+
+    /// <summary>请求级 RequestId，用于 trace 串线。未指定时由 builder 自动生成。</summary>
+    public string? RequestId { get; init; }
+
     public Dictionary<string, string> Metadata { get; init; } = new();
 }

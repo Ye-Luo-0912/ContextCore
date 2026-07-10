@@ -2572,9 +2572,7 @@ public static partial class EvalCommand
         if (File.Exists(tracePath)) File.Delete(tracePath);
 
         var sink = new ContextCore.Core.Services.Learning.V14_0.FileRuntimeCandidateTraceSink(tracePath);
-        ContextCore.Core.Services.Learning.V14_0.RuntimeCandidateTraceSinkAccessor.Current = sink;
-        ContextCore.Core.Services.Learning.V14_0.RuntimeCandidateTraceSinkAccessor.CurrentOperationId = "op-smoke-v14";
-        ContextCore.Core.Services.Learning.V14_0.RuntimeCandidateTraceSinkAccessor.CurrentRequestId = "req-smoke-v14";
+        // sink 通过构造函数注入 builder，OperationId/RequestId 由请求携带，不再使用全局 accessor
 
         try
         {
@@ -2706,7 +2704,7 @@ public static partial class EvalCommand
             var tokenizer = new ContextCore.Core.DefaultContextTokenizerResolver();
             var builder = new ContextCore.Core.BasicContextPackageBuilder(
                 store, constraintStore, globalStore, memStore, relationStore,
-                null, tokenizer, memStore);
+                null, tokenizer, memStore, runtimeCandidateTraceSink: sink);
 
             // Policy-mode build: exercises current_task, constraints, working/stable/global memory,
             // recent_context, and related_context (via graph expansion from wm-01->ctx-14)
@@ -2728,7 +2726,8 @@ public static partial class EvalCommand
             {
                 WorkspaceId = ws, CollectionId = col,
                 TokenBudget = 800, QueryText = "smoke",
-                Policy = policy
+                Policy = policy,
+                OperationId = "op-smoke-v14", RequestId = "req-smoke-v14"
             };
             var result = await builder.BuildDetailedAsync(request, ct).ConfigureAwait(false);
             Console.WriteLine($"[Smoke] Policy-mode: sections={result.Package.Sections.Count} selected={result.SelectedItems.Count} dropped={result.DroppedItems.Count}");
@@ -2737,7 +2736,8 @@ public static partial class EvalCommand
             var legacyRequest = new ContextCore.Abstractions.Models.ContextPackageRequest
             {
                 WorkspaceId = ws, CollectionId = col,
-                TokenBudget = 400, QueryText = "smoke"
+                TokenBudget = 400, QueryText = "smoke",
+                OperationId = "op-smoke-v14", RequestId = "req-smoke-v14"
             };
             var legacyResult = await builder.BuildDetailedAsync(legacyRequest, ct).ConfigureAwait(false);
             Console.WriteLine($"[Smoke] Legacy-mode: sections={legacyResult.Package.Sections.Count} selected={legacyResult.SelectedItems.Count} dropped={legacyResult.DroppedItems.Count}");
@@ -2749,7 +2749,6 @@ public static partial class EvalCommand
         finally
         {
             await sink.FlushAsync(ct).ConfigureAwait(false);
-            ContextCore.Core.Services.Learning.V14_0.RuntimeCandidateTraceSinkAccessor.Current = new ContextCore.Core.Services.Learning.V14_0.NullRuntimeCandidateTraceSink();
         }
 
         sink.Dispose();
@@ -2784,9 +2783,7 @@ public static partial class EvalCommand
         System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(tracePath)!);
 
         var sink = new ContextCore.Core.Services.Learning.V14_0.FileRuntimeCandidateTraceSink(tracePath);
-        ContextCore.Core.Services.Learning.V14_0.RuntimeCandidateTraceSinkAccessor.Current = sink;
-        ContextCore.Core.Services.Learning.V14_0.RuntimeCandidateTraceSinkAccessor.CurrentOperationId = "op-prod-v16";
-        ContextCore.Core.Services.Learning.V14_0.RuntimeCandidateTraceSinkAccessor.CurrentRequestId = "req-prod-v16";
+        // sink 通过构造函数注入 builder，OperationId/RequestId 由请求携带，不再使用全局 accessor
 
         try
         {
@@ -2911,7 +2908,7 @@ public static partial class EvalCommand
             var tokenizer = new ContextCore.Core.DefaultContextTokenizerResolver();
             var builder = new ContextCore.Core.BasicContextPackageBuilder(
                 store, constraintStore, globalStore, memStore, relationStore,
-                null, tokenizer, memStore);
+                null, tokenizer, memStore, runtimeCandidateTraceSink: sink);
 
             // Policy-mode build with larger budget
             var policy = new ContextCore.Abstractions.Models.ContextPackagePolicy
@@ -2927,7 +2924,8 @@ public static partial class EvalCommand
             {
                 WorkspaceId = ws, CollectionId = col,
                 TokenBudget = 3000, QueryText = "production evaluation",
-                Policy = policy
+                Policy = policy,
+                OperationId = "op-prod-v16", RequestId = "req-prod-v16"
             };
             var result = await builder.BuildDetailedAsync(request, ct).ConfigureAwait(false);
             Console.WriteLine($"[Prod-Trace] Policy-mode: sections={result.Package.Sections.Count} selected={result.SelectedItems.Count} dropped={result.DroppedItems.Count}");
@@ -2936,7 +2934,8 @@ public static partial class EvalCommand
             var legacyReq = new ContextCore.Abstractions.Models.ContextPackageRequest
             {
                 WorkspaceId = ws, CollectionId = col,
-                TokenBudget = 1200, QueryText = "production evaluation"
+                TokenBudget = 1200, QueryText = "production evaluation",
+                OperationId = "op-prod-v16", RequestId = "req-prod-v16"
             };
             var legacyRes = await builder.BuildDetailedAsync(legacyReq, ct).ConfigureAwait(false);
             Console.WriteLine($"[Prod-Trace] Legacy-mode: sections={legacyRes.Package.Sections.Count} selected={legacyRes.SelectedItems.Count} dropped={legacyRes.DroppedItems.Count}");
@@ -2948,7 +2947,6 @@ public static partial class EvalCommand
         finally
         {
             await sink.FlushAsync(ct).ConfigureAwait(false);
-            ContextCore.Core.Services.Learning.V14_0.RuntimeCandidateTraceSinkAccessor.Current = new ContextCore.Core.Services.Learning.V14_0.NullRuntimeCandidateTraceSink();
         }
         sink.Dispose();
         Console.WriteLine("[Eval] V16.2 Production-like trace collected (appended to V14 trace)");
@@ -3300,9 +3298,7 @@ Generated: {now:o}
         Console.WriteLine($"[V16.4] Output: {tracePath}");
 
         var sink = new ContextCore.Core.Services.Learning.V14_0.FileRuntimeCandidateTraceSink(tracePath);
-        ContextCore.Core.Services.Learning.V14_0.RuntimeCandidateTraceSinkAccessor.Current = sink;
-        ContextCore.Core.Services.Learning.V14_0.RuntimeCandidateTraceSinkAccessor.CurrentOperationId = $"op-native-v16_4-{runId}";
-        ContextCore.Core.Services.Learning.V14_0.RuntimeCandidateTraceSinkAccessor.CurrentRequestId = $"req-native-v16_4-{runId}";
+        // sink 通过构造函数注入 builder，OperationId/RequestId 由请求携带，不再使用全局 accessor
 
         int policySelected = 0, policyDropped = 0, legacySelected = 0, legacyDropped = 0;
 
@@ -3434,7 +3430,7 @@ Generated: {now:o}
             var tokenizer = new ContextCore.Core.DefaultContextTokenizerResolver();
             var builder = new ContextCore.Core.BasicContextPackageBuilder(
                 store, constraintStore, globalStore, memStore, relationStore,
-                null, tokenizer, memStore);
+                null, tokenizer, memStore, runtimeCandidateTraceSink: sink);
 
             // Policy-mode build
             var policy = new ContextCore.Abstractions.Models.ContextPackagePolicy
@@ -3450,7 +3446,8 @@ Generated: {now:o}
             {
                 WorkspaceId = ws, CollectionId = col,
                 TokenBudget = 3000, QueryText = "native trace dry run",
-                Policy = policy
+                Policy = policy,
+                OperationId = $"op-native-v16_4-{runId}", RequestId = $"req-native-v16_4-{runId}"
             };
             var result = await builder.BuildDetailedAsync(request, ct).ConfigureAwait(false);
             policySelected = result.SelectedItems.Count;
@@ -3461,7 +3458,8 @@ Generated: {now:o}
             var legacyReq = new ContextCore.Abstractions.Models.ContextPackageRequest
             {
                 WorkspaceId = ws, CollectionId = col,
-                TokenBudget = 1200, QueryText = "native trace dry run"
+                TokenBudget = 1200, QueryText = "native trace dry run",
+                OperationId = $"op-native-v16_4-{runId}", RequestId = $"req-native-v16_4-{runId}"
             };
             var legacyRes = await builder.BuildDetailedAsync(legacyReq, ct).ConfigureAwait(false);
             legacySelected = legacyRes.SelectedItems.Count;
@@ -3475,7 +3473,6 @@ Generated: {now:o}
         finally
         {
             await sink.FlushAsync(ct).ConfigureAwait(false);
-            ContextCore.Core.Services.Learning.V14_0.RuntimeCandidateTraceSinkAccessor.Current = new ContextCore.Core.Services.Learning.V14_0.NullRuntimeCandidateTraceSink();
         }
         sink.Dispose();
 
@@ -4069,9 +4066,7 @@ RuntimeInfluenceAllowed: false | PackageOutputChanged: false | VectorBindingChan
 
         // Wire trace sink
         var sink = new ContextCore.Core.Services.Learning.V14_0.FileRuntimeCandidateTraceSink(tracePath);
-        ContextCore.Core.Services.Learning.V14_0.RuntimeCandidateTraceSinkAccessor.Current = sink;
-        ContextCore.Core.Services.Learning.V14_0.RuntimeCandidateTraceSinkAccessor.CurrentOperationId = $"op-native-v16_7-{runId}";
-        ContextCore.Core.Services.Learning.V14_0.RuntimeCandidateTraceSinkAccessor.CurrentRequestId = $"req-native-v16_7-{runId}";
+        // sink 通过构造函数注入 builder，OperationId/RequestId 由请求携带，不再使用全局 accessor
 
         int policySelected = 0, policyDropped = 0, legacySelected = 0, legacyDropped = 0;
         string? buildError = null;
@@ -4081,7 +4076,7 @@ RuntimeInfluenceAllowed: false | PackageOutputChanged: false | VectorBindingChan
             var tokenizer = new ContextCore.Core.DefaultContextTokenizerResolver();
             var builder = new ContextCore.Core.BasicContextPackageBuilder(
                 contextStore, constraintStore, globalStore, memoryStore, relationStore,
-                null, tokenizer, memoryStore);
+                null, tokenizer, memoryStore, runtimeCandidateTraceSink: sink);
 
             // Policy-mode build
             var policy = new ContextCore.Abstractions.Models.ContextPackagePolicy
@@ -4097,7 +4092,8 @@ RuntimeInfluenceAllowed: false | PackageOutputChanged: false | VectorBindingChan
             {
                 WorkspaceId = workspaceId, CollectionId = collectionId,
                 TokenBudget = 10000, QueryText = "controlled replay trace",
-                Policy = policy
+                Policy = policy,
+                OperationId = $"op-native-v16_7-{runId}", RequestId = $"req-native-v16_4-{runId}"
             };
             var result = await builder.BuildDetailedAsync(request, ct).ConfigureAwait(false);
             policySelected = result.SelectedItems.Count;
@@ -4108,7 +4104,8 @@ RuntimeInfluenceAllowed: false | PackageOutputChanged: false | VectorBindingChan
             var legacyReq = new ContextCore.Abstractions.Models.ContextPackageRequest
             {
                 WorkspaceId = workspaceId, CollectionId = collectionId,
-                TokenBudget = 3000, QueryText = "controlled replay trace"
+                TokenBudget = 3000, QueryText = "controlled replay trace",
+                OperationId = $"op-native-v16_7-{runId}", RequestId = $"req-native-v16_4-{runId}"
             };
             var legacyRes = await builder.BuildDetailedAsync(legacyReq, ct).ConfigureAwait(false);
             legacySelected = legacyRes.SelectedItems.Count;
@@ -4123,8 +4120,6 @@ RuntimeInfluenceAllowed: false | PackageOutputChanged: false | VectorBindingChan
         finally
         {
             await sink.FlushAsync(ct).ConfigureAwait(false);
-            ContextCore.Core.Services.Learning.V14_0.RuntimeCandidateTraceSinkAccessor.Current =
-                new ContextCore.Core.Services.Learning.V14_0.NullRuntimeCandidateTraceSink();
         }
         sink.Dispose();
 

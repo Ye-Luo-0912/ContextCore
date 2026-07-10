@@ -23,6 +23,9 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
     private readonly GraphExpansionApplyOptions _graphExpansionApplyOptions;
     private readonly GraphExpansionApplyPolicy? _graphExpansionApplyPolicy;
     private readonly IContextStore _store;
+    private readonly IRuntimeCandidateTraceSink _runtimeCandidateTraceSink;
+    private readonly AsyncLocal<string?> _currentOperationId = new();
+    private readonly AsyncLocal<string?> _currentRequestId = new();
     private readonly RecentContextFilter _recentContextFilter = new();
     private readonly ContextAnchorExtractor _anchorExtractor = new();
     private readonly RetrievalPlanner _planner = new();
@@ -43,7 +46,8 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         IWorkingMemoryService? workingMemoryService = null,
         GraphExpansionApplyOptions? graphExpansionApplyOptions = null,
         GraphExpansionApplyPolicy? graphExpansionApplyPolicy = null,
-        IDecisionTraceStore? decisionTraceStore = null)
+        IDecisionTraceStore? decisionTraceStore = null,
+        IRuntimeCandidateTraceSink? runtimeCandidateTraceSink = null)
     {
         _store = store;
         _constraintStore = constraintStore;
@@ -56,6 +60,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         _graphExpansionApplyOptions = graphExpansionApplyOptions ?? new GraphExpansionApplyOptions();
         _graphExpansionApplyPolicy = graphExpansionApplyPolicy;
         _decisionTraceStore = decisionTraceStore;
+        _runtimeCandidateTraceSink = runtimeCandidateTraceSink ?? new NullRuntimeCandidateTraceSink();
     }
 
     public async Task<ContextPackage> BuildAsync(
@@ -72,6 +77,26 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
     {
         ArgumentNullException.ThrowIfNull(request);
 
+        // TRACE-01: 设置请求级 trace 上下文（AsyncLocal），替代全局静态状态。
+        var prevOpId = _currentOperationId.Value;
+        var prevReqId = _currentRequestId.Value;
+        _currentOperationId.Value = request.OperationId ?? Guid.NewGuid().ToString("N");
+        _currentRequestId.Value = request.RequestId ?? Guid.NewGuid().ToString("N");
+        try
+        {
+            return await BuildDetailedCoreAsync(request, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _currentOperationId.Value = prevOpId;
+            _currentRequestId.Value = prevReqId;
+        }
+    }
+
+    private async Task<ContextPackageBuildResult> BuildDetailedCoreAsync(
+        ContextPackageRequest request,
+        CancellationToken cancellationToken)
+    {
         var sw = System.Diagnostics.Stopwatch.StartNew();
         ContextPackageBuildResult result;
         if (request.Policy is not null)
@@ -3590,7 +3615,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         return tokenBudget == int.MaxValue || tokenBudget <= 0 ? 0 : tokenBudget;
     }
 
-    private static void AddSectionDecisionsWithDedup(
+    private void AddSectionDecisionsWithDedup(
         ICollection<ContextPackageDecision> selectedItems,
         ICollection<DroppedContextItem> droppedItems,
         IReadOnlyList<PackageTraceCandidate> candidates,
@@ -3672,19 +3697,18 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         }
     }
 
-    private static void WriteTraceRow(PackageTraceCandidate c, string section, bool included, string reason,
+    private void WriteTraceRow(PackageTraceCandidate c, string section, bool included, string reason,
         bool selectedByScoring = true)
     {
-        var sink = RuntimeCandidateTraceSinkAccessor.Current;
-        if (!sink.Enabled) return;
+        if (!_runtimeCandidateTraceSink.Enabled) return;
         try
         {
             var kind = c.Kind;
             var (srcType, auth, stratType, chan) = MapTraceFields(kind, section, c);
-            sink.Write(new RuntimeCandidateTraceRow
+            _runtimeCandidateTraceSink.Write(new RuntimeCandidateTraceRow
             {
-                OperationId = RuntimeCandidateTraceSinkAccessor.CurrentOperationId ?? "unknown",
-                RequestId = RuntimeCandidateTraceSinkAccessor.CurrentRequestId ?? "unknown",
+                OperationId = _currentOperationId.Value ?? "unknown",
+                RequestId = _currentRequestId.Value ?? "unknown",
                 CandidateId = c.Id,
                 SourceId = c.Id,
                 SourceType = srcType,

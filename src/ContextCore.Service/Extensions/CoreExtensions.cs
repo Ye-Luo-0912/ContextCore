@@ -5,6 +5,7 @@ using ContextCore.Core.Jobs;
 using ContextCore.Core.Services;
 using ContextCore.Core.Services.Attention;
 using ContextCore.Core.Services.Graph;
+using ContextCore.Core.Services.Learning.V14_0;
 using ContextCore.Core.Services.Planning;
 using ContextCore.Core.Services.Promotion;
 using ContextCore.Core.Services.Retrieval;
@@ -216,7 +217,8 @@ internal static class CoreExtensions
 			sp.GetService<IWorkingMemoryService>(),
 			sp.GetRequiredService<GraphExpansionApplyOptions>(),
 			sp.GetRequiredService<GraphExpansionApplyPolicy>(),
-			sp.GetService<IDecisionTraceStore>()));
+			sp.GetService<IDecisionTraceStore>(),
+			sp.GetService<IRuntimeCandidateTraceSink>()));
 		services.AddSingleton<IContextPackageBuilder>(sp =>
 			sp.GetRequiredService<BasicContextPackageBuilder>());
 
