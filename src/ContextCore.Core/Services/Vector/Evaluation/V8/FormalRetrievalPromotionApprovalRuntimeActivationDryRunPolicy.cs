@@ -467,6 +467,9 @@ public static class FormalRetrievalPromotionApprovalRuntimeActivationDryRunPolic
             ? $"all bindings consistent; grant '{boundGrantId}' for capability '{boundCapability}' in scope '{boundScope}'. Activation plan recorded. ActivationDryRunOnly=true; RuntimeActivationAllowed=false; nothing applied to runtime."
             : $"{distinctBlocked.Length} blocked reason(s); activation dry-run blocked.";
 
+        // P3-05: 编译器流分析在方法末尾丢失了 executionReport 的 non-null 跟踪；
+        // 在此引入局部变量以安全解引用（第 214 行已保证 executionReport 不为 null）。
+        var execReport = executionReport!;
         return new RuntimeActivationDryRunDecision
         {
             Status = status,
@@ -483,13 +486,13 @@ public static class FormalRetrievalPromotionApprovalRuntimeActivationDryRunPolic
             RuntimeSwitchAllowed = false,
             ConfigPatchAppliedToRuntime = false,
             // carry from V8.18 — 这些 carry 值即便 blocked 也保留 upstream 的事实。
-            Crossed = executionReport.Crossed,
-            ArtifactOnly = executionReport.ArtifactOnly,
-            CapabilityGrantWritten = executionReport.CapabilityGrantWritten,
-            ConfigPatchWritten = executionReport.ConfigPatchWritten,
-            RollbackSnapshotWritten = executionReport.RollbackSnapshotWritten,
-            AuditLogWritten = executionReport.AuditLogWritten,
-            RevocationRecordWritten = executionReport.RevocationRecordWritten
+            Crossed = execReport.Crossed,
+            ArtifactOnly = execReport.ArtifactOnly,
+            CapabilityGrantWritten = execReport.CapabilityGrantWritten,
+            ConfigPatchWritten = execReport.ConfigPatchWritten,
+            RollbackSnapshotWritten = execReport.RollbackSnapshotWritten,
+            AuditLogWritten = execReport.AuditLogWritten,
+            RevocationRecordWritten = execReport.RevocationRecordWritten
         };
     }
 

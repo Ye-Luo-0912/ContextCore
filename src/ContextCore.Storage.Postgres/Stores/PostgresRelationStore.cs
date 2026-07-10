@@ -256,6 +256,19 @@ LIMIT @take OFFSET @skip;
             command.Parameters.AddWithValue("relation_type", query.RelationType);
         }
 
+        // P3-02：多类型过滤优先于单类型，在 LIMIT 前下推到 SQL
+        if (query.AllowedRelationTypes.Count > 0)
+        {
+            var paramNames = new List<string>();
+            for (var i = 0; i < query.AllowedRelationTypes.Count; i++)
+            {
+                var paramName = $"allowed_rt_{i}";
+                paramNames.Add($"@{paramName}");
+                command.Parameters.AddWithValue(paramName, query.AllowedRelationTypes[i]);
+            }
+            filters.Add($"data ->> 'RelationType' IN ({string.Join(", ", paramNames)})");
+        }
+
         if (query.MinConfidence > 0)
         {
             filters.Add("data ->> 'Confidence'::numeric >= @min_confidence");

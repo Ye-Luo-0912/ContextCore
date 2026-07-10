@@ -146,11 +146,15 @@ public sealed class FileRelationStore : IRelationStore
         var excludedReviewStatuses = query.ExcludedReviewStatuses.Count > 0
             ? new HashSet<string>(query.ExcludedReviewStatuses, StringComparer.OrdinalIgnoreCase)
             : null;
+        // P3-02：多类型过滤优先于单类型
+        var allowedTypes = query.AllowedRelationTypes.Count > 0
+            ? new HashSet<string>(query.AllowedRelationTypes, StringComparer.OrdinalIgnoreCase)
+            : null;
 
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var path = _paths.GetRelationsJsonlPath(query.WorkspaceId, query.CollectionId);
+            var path = _paths.GetRelationsJsonlPath(query.WorkspaceId, query.CollectionId ?? string.Empty);
             var relations = await _jsonLines.ReadAsync<ContextRelation>(path, cancellationToken)
                 .ConfigureAwait(false);
 
@@ -165,7 +169,11 @@ public sealed class FileRelationStore : IRelationStore
                     || string.Equals(relation.TargetId, query.ItemId, StringComparison.OrdinalIgnoreCase))
             };
 
-            if (!string.IsNullOrWhiteSpace(query.RelationType))
+            if (allowedTypes is not null)
+            {
+                filtered = filtered.Where(relation => allowedTypes.Contains(relation.RelationType));
+            }
+            else if (!string.IsNullOrWhiteSpace(query.RelationType))
             {
                 filtered = filtered.Where(relation =>
                     string.Equals(relation.RelationType, query.RelationType, StringComparison.OrdinalIgnoreCase));

@@ -197,11 +197,16 @@ public sealed class RelationTraversalEngine
         int maxFanout,
         CancellationToken cancellationToken)
     {
-        // 如果 profile 只允许单一类型，下推到存储层
+        // P3-02：多类型下推到存储层，避免高权重非允许边在 Take 窗口外丢失合法边
         string? relationType = null;
+        IReadOnlyList<string> allowedTypes = Array.Empty<string>();
         if (profile.AllowedRelationTypes.Count == 1)
         {
             relationType = profile.AllowedRelationTypes[0];
+        }
+        else if (profile.AllowedRelationTypes.Count > 1)
+        {
+            allowedTypes = profile.AllowedRelationTypes;
         }
 
         var query = new RelationNeighborQuery
@@ -211,6 +216,7 @@ public sealed class RelationTraversalEngine
             ItemId = itemId,
             Direction = direction,
             RelationType = relationType,
+            AllowedRelationTypes = allowedTypes,
             MinConfidence = minConfidence,
             ExcludedLifecycles = excludedLifecycles,
             ExcludedReviewStatuses = excludedReviewStatuses,

@@ -38,6 +38,9 @@ public static class RelationsCommand
             case "conflicts":
                 await ExecuteConflictsAsync(service, rest, cancellationToken);
                 return;
+            case "migrate":
+                await ExecuteMigrateAsync(service, rest, cancellationToken);
+                return;
             case "help":
             case "-h":
             case "--help":
@@ -246,6 +249,22 @@ public static class RelationsCommand
         }
     }
 
+    private static async Task ExecuteMigrateAsync(
+        ControlRoomService service,
+        IReadOnlyList<string> args,
+        CancellationToken cancellationToken)
+    {
+        var report = await service.MigrateRelationsAsync(cancellationToken).ConfigureAwait(false);
+
+        Console.WriteLine("关系旧数据迁移完成：");
+        Console.WriteLine($"  扫描关系总数：{report.TotalRelations}");
+        Console.WriteLine($"  实际更新关系：{report.UpdatedRelations}");
+        Console.WriteLine($"  NodeKind 回填：{report.NodeKindBackfilled} 次");
+        Console.WriteLine($"  Lifecycle 回填：{report.LifecycleBackfilled} 次");
+        Console.WriteLine($"  ReviewStatus 回填：{report.ReviewStatusBackfilled} 次");
+        Console.WriteLine($"  Provenance 回填：{report.ProvenanceBackfilled} 次");
+    }
+
     private static void PrintHelp()
     {
         Console.WriteLine("relations 子命令：");
@@ -254,6 +273,7 @@ public static class RelationsCommand
         Console.WriteLine("  filter <id> [--type <relationType>] [--min-confidence <0..1>] [--exclude-lifecycle <a,b,c>] [--exclude-review-status <a,b,c>] [--depth N] [--direction …] 按类型/置信度/生命周期/审核状态过滤子图");
         Console.WriteLine("  chain <id> [--depth N] [--direction …]                       替换链视图（沿 SupersededBy/Replaces 遍历）");
         Console.WriteLine("  conflicts <id> [--depth N] [--direction …]                   冲突视图（沿 ConflictsWith/Contradicts 遍历）");
+        Console.WriteLine("  migrate                                                      P3-03：回填旧关系数据的 NodeKind/Provenance/Lifecycle/ReviewStatus 正式字段");
         Console.WriteLine("  help                                                         显示本帮助");
     }
 }

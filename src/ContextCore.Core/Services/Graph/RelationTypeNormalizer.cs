@@ -65,69 +65,8 @@ public sealed class RelationTypeNormalizer
         return Clone(relation, normalizedType, relation.Confidence, relation.SourceRefs, metadata);
     }
 
-    public ContextRelation NormalizeAndBackfillFixtureRelation(
-        ContextRelation relation,
-        string sourceOperationId = "relation-corpus-hygiene-g5.1")
-    {
-        ArgumentNullException.ThrowIfNull(relation);
-
-        var normalizedType = Normalize(relation.RelationType);
-        var metadata = new Dictionary<string, string>(relation.Metadata, StringComparer.OrdinalIgnoreCase);
-        if (!string.Equals(normalizedType, relation.RelationType, StringComparison.OrdinalIgnoreCase))
-        {
-            metadata.TryAdd("originalRelationType", relation.RelationType);
-            metadata["normalizedRelationType"] = normalizedType;
-        }
-
-        var sourceRefs = relation.SourceRefs
-            .Where(item => !string.IsNullOrWhiteSpace(item))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-        var confidence = relation.Confidence;
-        // GRAPH-08：正式字段作为默认值
-        var lifecycle = relation.Lifecycle;
-        var reviewStatus = relation.ReviewStatus;
-
-        if (CanBackfillDeterministicEvidence(relation))
-        {
-            metadata.TryAdd("evidenceRefs", $"fixture:relation:{relation.Id}");
-            metadata.TryAdd("sourceRefs", string.Join(",", new[] { relation.SourceId, relation.TargetId }
-                .Where(item => !string.IsNullOrWhiteSpace(item))));
-            metadata.TryAdd("sourceOperationId", sourceOperationId);
-            metadata.TryAdd("sourceItemId", relation.SourceId);
-            metadata.TryAdd("createdFrom", FixtureBackfillCreatedFrom);
-            metadata.TryAdd("confidenceReason", "deterministic_fixture_relation");
-            // Metadata 仅兜底（旧数据迁移）
-            metadata.TryAdd("lifecycle", StableMemoryLifecycle.Active);
-            metadata.TryAdd("reviewStatus", RelationReviewStatuses.Reviewed);
-            metadata.TryAdd("policyVersion", PolicyVersion);
-
-            if (confidence <= 0)
-            {
-                confidence = 1.0;
-            }
-
-            metadata.TryAdd("confidence", confidence.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture));
-            AddIfMissing(sourceRefs, relation.SourceId);
-            AddIfMissing(sourceRefs, relation.TargetId);
-            AddIfMissing(sourceRefs, $"fixture:relation:{relation.Id}");
-            // 正式字段
-            lifecycle = StableMemoryLifecycle.Active;
-            reviewStatus = RelationReviewStatuses.Reviewed;
-        }
-        else if (!HasEvidence(relation))
-        {
-            // Metadata 仅兜底（旧数据迁移）
-            metadata.TryAdd("reviewStatus", RelationReviewStatuses.NeedsEvidence);
-            metadata.TryAdd("lifecycle", ContextMemoryStatus.Candidate.ToString());
-            metadata.TryAdd("policyVersion", PolicyVersion);
-            // 正式字段
-            reviewStatus = RelationReviewStatuses.NeedsEvidence;
-            lifecycle = ContextMemoryStatus.Candidate.ToString();
-        }
-
-        return Clone(relation, normalizedType, confidence, sourceRefs, metadata, lifecycle, reviewStatus);
-    }
+    // P3-04：CanBackfillDeterministicEvidence 和 NormalizeAndBackfillFixtureRelation 已移至
+    // ControlRoom 的 RelationEvalBackfillPolicy，不再留在生产 Core。
 
     public static bool HasEvidence(ContextRelation relation)
     {
@@ -164,26 +103,7 @@ public sealed class RelationTypeNormalizer
         return HasMetadataValue(relation.Metadata, "reviewStatus");
     }
 
-    public static bool CanBackfillDeterministicEvidence(ContextRelation relation)
-    {
-        if (string.IsNullOrWhiteSpace(relation.Id)
-            || string.IsNullOrWhiteSpace(relation.SourceId)
-            || string.IsNullOrWhiteSpace(relation.TargetId))
-        {
-            return false;
-        }
-
-        if (relation.WorkspaceId.StartsWith("eval", StringComparison.OrdinalIgnoreCase)
-            || relation.Id.StartsWith("rel:", StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
-        var createdFrom = ReadMetadata(relation.Metadata, "createdFrom", "source", "generatedBy");
-        return createdFrom.Contains("fixture", StringComparison.OrdinalIgnoreCase)
-            || createdFrom.Contains("deterministic", StringComparison.OrdinalIgnoreCase)
-            || createdFrom.Contains("stable_lifecycle_review", StringComparison.OrdinalIgnoreCase);
-    }
+    // P3-04：CanBackfillDeterministicEvidence 已移至 ControlRoom 的 RelationEvalBackfillPolicy
 
     private static ContextRelation Clone(
         ContextRelation relation,

@@ -70,7 +70,6 @@ public static partial class EvalCommand
 
         var auditPath = Path.Combine("vector", "v8", "formal-retrieval-promotion-readiness-gate.json");
         var audit = await ReadJsonFileAsync<FormalRetrievalPromotionReadinessAuditReport>(auditPath, ct).ConfigureAwait(false);
-        var upstreamReadinessArtifactPath = "vector/v8/formal-retrieval-promotion-readiness-gate.json";
 
         var closePath = Path.Combine("vector", "v7", "live-activation-closeout-gate.json");
         var closeout = await ReadJsonFileAsync<ScopedRuntimePreviewLiveActivationCloseoutReport>(closePath, ct).ConfigureAwait(false);
@@ -485,7 +484,7 @@ public static partial class EvalCommand
             && intake.VectorStoreBindingChanged == false && intake.GlobalDefaultOn == false && intake.ConfigPatchWritten == false
             && intake.RuntimeActivation == false && intake.NoRuntimeMutationInvariant == true;
         var intakeReasonsClean = intakeHasReasons
-            && !intake.BlockedReasons.Any(r => r.Contains("Runtime") || r.Contains("Package") || r.Contains("Packing")
+            && !intake!.BlockedReasons.Any(r => r.Contains("Runtime") || r.Contains("Package") || r.Contains("Packing")
                 || r.Contains("Vector") || r.Contains("Config") || r.Contains("Safety") || r.Contains("Activation") || r.Contains("Mutation"));
         var intakeBlockedClean = intakeHasReasons && intakeSafetyOk && intakeReasonsClean;
 

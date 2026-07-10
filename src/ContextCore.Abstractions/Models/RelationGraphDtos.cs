@@ -1402,6 +1402,12 @@ public sealed class RelationNeighborQuery
     /// <summary>筛选指定关系类型（可选）。为空时允许所有类型。</summary>
     public string? RelationType { get; init; }
 
+    /// <summary>
+    /// P3-02：筛选多个关系类型（可选）。非空时优先于 <see cref="RelationType"/>，
+    /// 存储层在 Take/排序前按列表过滤，避免高权重非允许边把合法边挤出窗口。
+    /// </summary>
+    public IReadOnlyList<string> AllowedRelationTypes { get; init; } = Array.Empty<string>();
+
     /// <summary>最低置信度阈值（可选）。默认 0，不过滤。</summary>
     public double MinConfidence { get; init; }
 
@@ -1419,4 +1425,26 @@ public sealed class RelationNeighborQuery
 
     /// <summary>扫描上限：从数据源读取的最大行数，防止全表扫描。默认 1000。</summary>
     public int MaxScan { get; init; } = 1000;
+}
+
+/// <summary>P3-03：关系旧数据迁移报告。</summary>
+public sealed class RelationMigrationReport
+{
+    /// <summary>扫描的关系总数。</summary>
+    public int TotalRelations { get; init; }
+
+    /// <summary>实际更新的关系数。</summary>
+    public int UpdatedRelations { get; set; }
+
+    /// <summary>回填 NodeKind 的次数（每条关系最多 2 次：source + target）。</summary>
+    public int NodeKindBackfilled { get; set; }
+
+    /// <summary>回填 Lifecycle 的次数。</summary>
+    public int LifecycleBackfilled { get; set; }
+
+    /// <summary>回填 ReviewStatus 的次数。</summary>
+    public int ReviewStatusBackfilled { get; set; }
+
+    /// <summary>回填 Provenance 的次数。</summary>
+    public int ProvenanceBackfilled { get; set; }
 }

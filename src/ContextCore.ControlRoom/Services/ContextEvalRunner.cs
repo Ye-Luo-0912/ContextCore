@@ -129,7 +129,7 @@ public sealed class ContextEvalRunner
                     await state.MemoryStore.SaveAsync(normalizedMem);
                 }
 
-                var relationTypeNormalizer = new RelationTypeNormalizer();
+                var evalBackfillPolicy = new RelationEvalBackfillPolicy();
                 foreach (var rel in corpus.Relations)
                 {
                     var normalizedRel = new ContextRelation
@@ -147,7 +147,7 @@ public sealed class ContextEvalRunner
                         CreatedAt = DateTimeOffset.UtcNow
                     };
                     await state.RelationStore
-                        .SaveAsync(relationTypeNormalizer.NormalizeAndBackfillFixtureRelation(
+                        .SaveAsync(evalBackfillPolicy.NormalizeAndBackfillFixtureRelation(
                             normalizedRel,
                             "context-eval-runner"))
                         .ConfigureAwait(false);

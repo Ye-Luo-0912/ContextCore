@@ -17,6 +17,7 @@ public sealed class RelationGraphValidationService
     private readonly IGlobalContextStore? _globalContextStore;
     private readonly RelationTypeRegistry _registry;
     private readonly RelationTypeNormalizer _typeNormalizer = new();
+    private readonly IRelationBackfillPolicy? _backfillPolicy;
 
     public RelationGraphValidationService(
         IRelationStore? relationStore,
@@ -24,7 +25,8 @@ public sealed class RelationGraphValidationService
         IMemoryStore? memoryStore,
         IConstraintStore? constraintStore,
         IGlobalContextStore? globalContextStore,
-        RelationTypeRegistry registry)
+        RelationTypeRegistry registry,
+        IRelationBackfillPolicy? backfillPolicy = null)
     {
         _relationStore = relationStore;
         _contextStore = contextStore;
@@ -32,6 +34,7 @@ public sealed class RelationGraphValidationService
         _constraintStore = constraintStore;
         _globalContextStore = globalContextStore;
         _registry = registry;
+        _backfillPolicy = backfillPolicy;
     }
 
     public async Task<RelationGraphDiagnosticsReport> ValidateAsync(
@@ -283,7 +286,7 @@ public sealed class RelationGraphValidationService
 
             if (definition.RequiresEvidence && ResolveEvidenceRefs(relation).Count == 0)
             {
-                if (RelationTypeNormalizer.CanBackfillDeterministicEvidence(relation))
+                if (_backfillPolicy?.CanBackfillDeterministicEvidence(relation) == true)
                 {
                     diagnostics.Add(BuildDiagnostic(
                         relation,

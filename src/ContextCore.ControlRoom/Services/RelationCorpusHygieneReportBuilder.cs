@@ -16,18 +16,28 @@ public sealed class RelationCorpusHygieneReportBuilder
 
     private readonly RelationTypeRegistry _typeRegistry;
     private readonly RelationTypeNormalizer _typeNormalizer;
+    private readonly RelationEvalBackfillPolicy _backfillPolicy;
 
     public RelationCorpusHygieneReportBuilder()
-        : this(new RelationTypeRegistry(), new RelationTypeNormalizer())
+        : this(new RelationTypeRegistry(), new RelationTypeNormalizer(), new RelationEvalBackfillPolicy())
     {
     }
 
     public RelationCorpusHygieneReportBuilder(
         RelationTypeRegistry typeRegistry,
         RelationTypeNormalizer typeNormalizer)
+        : this(typeRegistry, typeNormalizer, new RelationEvalBackfillPolicy())
+    {
+    }
+
+    public RelationCorpusHygieneReportBuilder(
+        RelationTypeRegistry typeRegistry,
+        RelationTypeNormalizer typeNormalizer,
+        RelationEvalBackfillPolicy backfillPolicy)
     {
         _typeRegistry = typeRegistry;
         _typeNormalizer = typeNormalizer;
+        _backfillPolicy = backfillPolicy;
     }
 
     public async Task<RelationCorpusHygieneReport> BuildAsync(
@@ -117,7 +127,7 @@ public sealed class RelationCorpusHygieneReportBuilder
 
             if (missingFields.Count > 0)
             {
-                var canBackfillEvidence = RelationTypeNormalizer.CanBackfillDeterministicEvidence(relation);
+                var canBackfillEvidence = _backfillPolicy.CanBackfillDeterministicEvidence(relation);
                 backfills.Add(new RelationCorpusBackfillCandidate
                 {
                     Category = entry.Category,
@@ -127,7 +137,7 @@ public sealed class RelationCorpusHygieneReportBuilder
                     NormalizedType = normalizedType,
                     MissingFields = missingFields.ToArray(),
                     CanBackfillEvidence = canBackfillEvidence,
-                    BackfillPolicy = canBackfillEvidence ? RelationTypeNormalizer.FixtureBackfillCreatedFrom : "manual_review_required",
+                    BackfillPolicy = canBackfillEvidence ? RelationEvalBackfillPolicy.FixtureBackfillCreatedFrom : "manual_review_required",
                     Suggestion = canBackfillEvidence
                         ? "shadow backfill evidenceRefs/sourceRefs/sourceOperationId/confidence/lifecycle/reviewStatus"
                         : "do not fabricate evidence; mark reviewStatus=NeedsEvidence and lifecycle=Candidate"
@@ -236,7 +246,7 @@ public sealed class RelationCorpusHygieneReportBuilder
         ContextRelation relation,
         string sourceOperationId)
     {
-        return _typeNormalizer.NormalizeAndBackfillFixtureRelation(relation, sourceOperationId);
+        return _backfillPolicy.NormalizeAndBackfillFixtureRelation(relation, sourceOperationId);
     }
 
     private static void AppendFindings(

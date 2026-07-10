@@ -186,13 +186,16 @@ internal static class CoreExtensions
 			sp.GetService<IMemoryStore>(),
 			sp.GetService<IConstraintStore>()));
 		services.AddSingleton<RelationExpansionProfileShadowReportBuilder>();
+		// P3-04：生产 Service 不注入 IRelationBackfillPolicy（eval 特判只在 ControlRoom 使用）。
+		// RelationGraphValidationService 接受 null，CanBackfillDeterministicEvidence 返回 false。
 		services.AddSingleton(sp => new RelationGraphValidationService(
 			sp.GetService<IRelationStore>(),
 			sp.GetService<IContextStore>(),
 			sp.GetService<IMemoryStore>(),
 			sp.GetService<IConstraintStore>(),
 			sp.GetService<IGlobalContextStore>(),
-			sp.GetRequiredService<RelationTypeRegistry>()));
+			sp.GetRequiredService<RelationTypeRegistry>(),
+			backfillPolicy: null));
 		services.AddSingleton<IContextTokenizerResolver, DefaultContextTokenizerResolver>();
 		services.AddSingleton<IContextCompressor>(sp =>
 		{

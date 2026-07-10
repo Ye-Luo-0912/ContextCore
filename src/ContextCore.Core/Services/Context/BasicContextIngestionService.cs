@@ -113,10 +113,12 @@ public sealed class BasicContextIngestionService
             .Select(static r => r.TargetId)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        // 删除目标已不在当前 Refs 中的旧 related_to 边
+        // P3-01：只删除由 ingest 投影器生产的边（Provenance="ingest"），保留人工或其他 projector 产生的边。
+        // 这避免误删 compression/promotion/lifecycle-review 等流程产生的 related_to 边。
         foreach (var existing in existingRelations)
         {
-            if (!newTargetIds.Contains(existing.TargetId))
+            if (!newTargetIds.Contains(existing.TargetId)
+                && string.Equals(existing.Provenance, "ingest", StringComparison.OrdinalIgnoreCase))
             {
                 await _relationStore.DeleteAsync(
                     item.WorkspaceId,

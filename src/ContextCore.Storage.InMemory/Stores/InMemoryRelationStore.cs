@@ -73,6 +73,10 @@ public sealed class InMemoryRelationStore : IRelationStore
         var excludedReviewStatuses = query.ExcludedReviewStatuses.Count > 0
             ? new HashSet<string>(query.ExcludedReviewStatuses, StringComparer.OrdinalIgnoreCase)
             : null;
+        // P3-02：多类型过滤优先于单类型
+        var allowedTypes = query.AllowedRelationTypes.Count > 0
+            ? new HashSet<string>(query.AllowedRelationTypes, StringComparer.OrdinalIgnoreCase)
+            : null;
 
         IEnumerable<ContextRelation> filtered = _relations.Values
             .Where(item => string.Equals(item.WorkspaceId, query.WorkspaceId, StringComparison.OrdinalIgnoreCase));
@@ -91,7 +95,11 @@ public sealed class InMemoryRelationStore : IRelationStore
                 || string.Equals(item.TargetId, query.ItemId, StringComparison.OrdinalIgnoreCase))
         };
 
-        if (!string.IsNullOrWhiteSpace(query.RelationType))
+        if (allowedTypes is not null)
+        {
+            filtered = filtered.Where(item => allowedTypes.Contains(item.RelationType));
+        }
+        else if (!string.IsNullOrWhiteSpace(query.RelationType))
         {
             filtered = filtered.Where(item => string.Equals(item.RelationType, query.RelationType, StringComparison.OrdinalIgnoreCase));
         }

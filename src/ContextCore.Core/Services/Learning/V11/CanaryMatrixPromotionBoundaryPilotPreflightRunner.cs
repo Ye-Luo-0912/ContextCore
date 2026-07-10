@@ -137,7 +137,6 @@ public sealed class CanaryMatrixPromotionBoundaryPilotPreflightRunner
         var formalRows = lines.Where(l=>l.Contains("flc-r1")).ToList();
         var rowLevelMatrix = new List<object>();
         var regressionCountRaw = 0;
-        var regressionCountComparable = 0;
         var syntheticCount = 0;
         var baselineBound = 0;
         var shadowBoundReal = 0;

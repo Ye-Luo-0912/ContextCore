@@ -125,8 +125,8 @@ public static class FormalRetrievalPromotionApprovalPreCrossingFinalGatePolicy
                 string.Equals(grantReadyCase!.RequestedCapability, rollbackReadyCase!.RequestedCapability, StringComparison.Ordinal)
                 && string.Equals(grantReadyCase.RequestedCapability, signOffRecordedCase!.RequestedCapability, StringComparison.Ordinal);
             scopeAligned =
-                string.Equals(grantReadyCase.RequestedScope, rollbackReadyCase.RequestedScope, StringComparison.Ordinal)
-                && string.Equals(grantReadyCase.RequestedScope, signOffRecordedCase.RequestedScope, StringComparison.Ordinal);
+                string.Equals(grantReadyCase!.RequestedScope, rollbackReadyCase!.RequestedScope, StringComparison.Ordinal)
+                && string.Equals(grantReadyCase!.RequestedScope, signOffRecordedCase!.RequestedScope, StringComparison.Ordinal);
 
             if (!capabilityAligned) blocked.Add(PreCrossingBlockedReasons.CapabilityMismatchAcrossUpstreamGates);
             if (!scopeAligned) blocked.Add(PreCrossingBlockedReasons.ScopeMismatchAcrossUpstreamGates);

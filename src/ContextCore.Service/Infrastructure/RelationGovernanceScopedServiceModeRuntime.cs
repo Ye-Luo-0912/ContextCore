@@ -306,7 +306,7 @@ public sealed class ScopedRelationGovernanceStore : IRelationStore
         => ExecuteReadAsync(
             "service-relation-neighbors-unified",
             query.WorkspaceId,
-            query.CollectionId,
+            query.CollectionId ?? string.Empty,
             "RelationNeighborsQuery",
             token => _fileStore.QueryNeighborsAsync(query, token),
             token => _postgresStore.QueryNeighborsAsync(query, token),

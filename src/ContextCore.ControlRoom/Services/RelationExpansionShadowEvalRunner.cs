@@ -23,6 +23,7 @@ public sealed class RelationExpansionShadowEvalRunner
     private readonly RelationExpansionProfileRegistry _profileRegistry;
     private readonly RelationTypeRegistry _relationTypeRegistry;
     private readonly RelationTypeNormalizer _typeNormalizer;
+    private readonly RelationEvalBackfillPolicy _backfillPolicy;
     private readonly PlanningIntentDetector _intentDetector;
 
     public RelationExpansionShadowEvalRunner()
@@ -34,12 +35,14 @@ public sealed class RelationExpansionShadowEvalRunner
         RelationExpansionProfileRegistry profileRegistry,
         RelationTypeRegistry relationTypeRegistry,
         PlanningIntentDetector intentDetector,
-        RelationTypeNormalizer? typeNormalizer = null)
+        RelationTypeNormalizer? typeNormalizer = null,
+        RelationEvalBackfillPolicy? backfillPolicy = null)
     {
         _profileRegistry = profileRegistry;
         _relationTypeRegistry = relationTypeRegistry;
         _intentDetector = intentDetector;
         _typeNormalizer = typeNormalizer ?? new RelationTypeNormalizer();
+        _backfillPolicy = backfillPolicy ?? new RelationEvalBackfillPolicy();
     }
 
     public async Task<RelationExpansionShadowEvalReport> RunAsync(
@@ -544,7 +547,7 @@ public sealed class RelationExpansionShadowEvalRunner
                 metadata["targetExists"] = "false";
             }
 
-            var seededRelation = _typeNormalizer.NormalizeAndBackfillFixtureRelation(new ContextRelation
+            var seededRelation = _backfillPolicy.NormalizeAndBackfillFixtureRelation(new ContextRelation
             {
                 Id = relation.Id,
                 WorkspaceId = workspaceId,

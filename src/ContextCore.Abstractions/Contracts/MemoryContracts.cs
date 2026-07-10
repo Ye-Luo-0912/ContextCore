@@ -58,6 +58,22 @@ public interface IRelationStore
 }
 
 /// <summary>
+/// P3-04：关系回填策略接口。生产 Core 使用默认实现（不回填），
+/// Evaluation 工具使用 eval/fixture/deterministic 感知实现。
+/// 将 eval 特判从生产 Core 移到 Evaluation 工具层。
+/// </summary>
+public interface IRelationBackfillPolicy
+{
+    /// <summary>判断关系是否可确定性回填证据（eval fixture / deterministic 关系）。</summary>
+    bool CanBackfillDeterministicEvidence(ContextRelation relation);
+
+    /// <summary>标准化关系类型并回填 fixture 元数据（eval corpus hygiene 专用）。</summary>
+    ContextRelation NormalizeAndBackfillFixtureRelation(
+        ContextRelation relation,
+        string sourceOperationId = "relation-corpus-hygiene-g5.1");
+}
+
+/// <summary>
 /// 统一的关系生产投影器，在 Ingest/Compression/Promotion/Lifecycle Review 四个流程中生成图边。
 /// 实现负责统一填充 GRAPH-01 契约字段（SourceNodeKind/TargetNodeKind/Lifecycle/ReviewStatus/UpdatedAt/Provenance）。
 /// 生成的关系列表由调用者通过 IRelationStore.BatchUpsertAsync 落库。

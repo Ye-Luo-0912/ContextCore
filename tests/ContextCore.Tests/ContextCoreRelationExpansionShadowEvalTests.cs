@@ -86,14 +86,14 @@ public sealed class ContextCoreRelationExpansionShadowEvalTests
             CreatedAt = DateTimeOffset.UtcNow
         };
 
-        var backfilled = new RelationTypeNormalizer()
+        var backfilled = new RelationEvalBackfillPolicy()
             .NormalizeAndBackfillFixtureRelation(relation, "test-operation");
 
         Assert.AreEqual(ContextRelationTypes.Replaces, backfilled.RelationType);
         Assert.AreEqual(1.0, backfilled.Confidence);
         Assert.AreEqual(StableMemoryLifecycle.Active, backfilled.Lifecycle);
         Assert.AreEqual(RelationReviewStatuses.Reviewed, backfilled.ReviewStatus);
-        Assert.AreEqual(RelationTypeNormalizer.FixtureBackfillCreatedFrom, backfilled.Metadata["createdFrom"]);
+        Assert.AreEqual(RelationEvalBackfillPolicy.FixtureBackfillCreatedFrom, backfilled.Metadata["createdFrom"]);
         Assert.IsTrue(backfilled.SourceRefs.Contains("fixture:relation:rel:fixture"));
     }
 

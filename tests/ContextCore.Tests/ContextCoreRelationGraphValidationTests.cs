@@ -1132,7 +1132,8 @@ public sealed class ContextCoreRelationGraphValidationTests
             memoryStore,
             constraintStore,
             globalStore,
-            registry);
+            registry,
+            new RelationEvalBackfillPolicy());
         var reviewStore = new InMemoryRelationReviewStore();
         var reviewService = new RelationReviewService(relationStore, reviewStore, registry, service);
         var profileRegistry = new RelationExpansionProfileRegistry();
