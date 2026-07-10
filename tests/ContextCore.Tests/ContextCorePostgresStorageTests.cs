@@ -1586,19 +1586,6 @@ public sealed class ContextCorePostgresStorageTests
     }
 
     [TestMethod]
-    public void RelationGovernanceShadowReadOptions_ShouldBeDisabledByDefault()
-    {
-        var options = new RelationGovernanceShadowReadOptions();
-
-        Assert.IsFalse(options.Enabled);
-        Assert.IsTrue(options.TraceEnabled);
-        Assert.IsFalse(options.ReadPostgres);
-        Assert.IsTrue(options.CompareResults);
-        Assert.IsFalse(options.FailOnMismatch);
-        Assert.IsTrue(options.MaxTraceItems > 0);
-    }
-
-    [TestMethod]
     public void RelationGovernanceShadowReadTrace_ShouldRecordFallbackWithoutBlockingFilesystemRead()
     {
         var trace = new RelationGovernanceShadowReadTrace
@@ -1663,8 +1650,8 @@ public sealed class ContextCorePostgresStorageTests
             }
         };
 
-        var first = RelationGovernanceShadowReadCoordinator.ComputeStableHash(new[] { relationA });
-        var second = RelationGovernanceShadowReadCoordinator.ComputeStableHash(new[] { relationB });
+        var first = ShadowReadComparisonHelper.ComputeCanonicalStableHash(new[] { relationA });
+        var second = ShadowReadComparisonHelper.ComputeCanonicalStableHash(new[] { relationB });
 
         Assert.AreEqual(first, second);
     }

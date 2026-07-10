@@ -13960,39 +13960,65 @@ public static partial class EvalCommand
         await dualCoordinator.AppendReviewAsync("shadow-seed-review", review, cancellationToken).ConfigureAwait(false);
         await dualCoordinator.WriteDiagnosticsAsync("shadow-seed-diagnostics", diagnostics, cancellationToken).ConfigureAwait(false);
 
-        var shadowCoordinator = new RelationGovernanceShadowReadCoordinator(
+        // GRAPH-12：合并 ShadowReadCoordinator 到 ProviderRouter，使用 ShadowRead 模式替代独立 coordinator
+        Func<RelationGovernanceProviderSwitchTrace, CancellationToken, Task> routerTraceSink = async (switchTrace, token) =>
+        {
+            var shadowTrace = new RelationGovernanceShadowReadTrace
+            {
+                OperationId = switchTrace.OperationId,
+                WorkspaceId = switchTrace.WorkspaceId,
+                CollectionId = switchTrace.CollectionId,
+                ReadKind = switchTrace.OperationKind,
+                FileSystemReadSucceeded = true,
+                PostgresReadSucceeded = !switchTrace.FallbackUsed && string.IsNullOrEmpty(switchTrace.PostgresError),
+                MismatchDetected = switchTrace.MismatchDetected,
+                MismatchReason = switchTrace.MismatchDetected
+                    ? (string.IsNullOrEmpty(switchTrace.PostgresError) ? "ResultHashMismatch" : "PostgresReadFailed")
+                    : string.Empty,
+                PostgresError = switchTrace.PostgresError,
+                FallbackUsed = switchTrace.FallbackUsed,
+                FileSystemDurationMs = switchTrace.DurationMs,
+                CreatedAt = switchTrace.CreatedAt
+            };
+            await traceSink(shadowTrace, token).ConfigureAwait(false);
+        };
+        var shadowRouter = new RelationGovernanceProviderRouter(
             fileRelationStore,
             fileReviewStore,
             fileDiagnosticsStore,
             postgresRelationStore,
             postgresReviewStore,
             postgresDiagnosticsStore,
-            new RelationGovernanceShadowReadOptions
+            new RelationGovernanceProviderSwitchOptions
             {
                 Enabled = true,
-                ReadPostgres = true,
-                TraceEnabled = true,
-                CompareResults = true,
-                FailOnMismatch = false,
-                MaxTraceItems = 100
+                Mode = RelationGovernanceProviderMode.ShadowRead,
+                AllowedWorkspaces = [workspaceId],
+                AllowedCollections = [collectionId],
+                FallbackToFileSystem = true,
+                ContinueComparisonTrace = true,
+                FailClosedOnMismatch = false,
+                RequireReadinessGate = false
             },
-            traceSink);
+            readinessGatePassed: false,
+            shadowReadQualityReady: false,
+            routerTraceSink);
 
-        await shadowCoordinator.GetRelationAsync("shadow-read-get", workspaceId, collectionId, relation.Id, cancellationToken).ConfigureAwait(false);
-        await shadowCoordinator.ListRelationsAsync("shadow-read-list", workspaceId, collectionId, cancellationToken).ConfigureAwait(false);
-        await shadowCoordinator.QueryBySourceAsync("shadow-read-source", workspaceId, collectionId, relation.SourceId, cancellationToken).ConfigureAwait(false);
-        await shadowCoordinator.QueryByTargetAsync("shadow-read-target", workspaceId, collectionId, relation.TargetId, cancellationToken).ConfigureAwait(false);
-        await shadowCoordinator.QueryByTypeAsync("shadow-read-type", workspaceId, collectionId, relation.RelationType, cancellationToken).ConfigureAwait(false);
-        await shadowCoordinator.QueryByLifecycleAsync("shadow-read-lifecycle", workspaceId, collectionId, "Active", cancellationToken).ConfigureAwait(false);
-        await shadowCoordinator.QueryByReviewStatusAsync("shadow-read-review-status", workspaceId, collectionId, "Reviewed", cancellationToken).ConfigureAwait(false);
-        await shadowCoordinator.QueryReplacementChainAsync("shadow-read-replacement", workspaceId, collectionId, relation.SourceId, cancellationToken).ConfigureAwait(false);
-        await shadowCoordinator.GetLatestReviewAsync("shadow-read-review-latest", workspaceId, collectionId, relation.Id, cancellationToken).ConfigureAwait(false);
-        await shadowCoordinator.QueryReviewsAsync("shadow-read-review-list", workspaceId, collectionId, relation.Id, cancellationToken).ConfigureAwait(false);
-        await shadowCoordinator.QueryReviewsByStatusAsync("shadow-read-review-filter", workspaceId, collectionId, RelationReviewStatuses.Reviewed, cancellationToken).ConfigureAwait(false);
-        await shadowCoordinator.QueryDiagnosticsByRelationAsync("shadow-read-diagnostics-relation", workspaceId, collectionId, relation.Id, cancellationToken).ConfigureAwait(false);
-        await shadowCoordinator.QueryDiagnosticsByItemAsync("shadow-read-diagnostics-item", workspaceId, collectionId, relation.TargetId, cancellationToken).ConfigureAwait(false);
-        await shadowCoordinator.QueryDiagnosticsByKindAsync("shadow-read-diagnostics-kind", workspaceId, collectionId, "MissingEvidence", cancellationToken).ConfigureAwait(false);
-        await shadowCoordinator.QueryDiagnosticsBySeverityAsync("shadow-read-diagnostics-severity", workspaceId, collectionId, "Warning", cancellationToken).ConfigureAwait(false);
+        await shadowRouter.GetRelationAsync("shadow-read-get", workspaceId, collectionId, relation.Id, cancellationToken).ConfigureAwait(false);
+        await shadowRouter.QueryRelationsAsync("shadow-read-list", workspaceId, collectionId, cancellationToken).ConfigureAwait(false);
+        await shadowRouter.QueryBySourceAsync("shadow-read-source", workspaceId, collectionId, relation.SourceId, cancellationToken).ConfigureAwait(false);
+        await shadowRouter.QueryByTargetAsync("shadow-read-target", workspaceId, collectionId, relation.TargetId, cancellationToken).ConfigureAwait(false);
+        await shadowRouter.QueryByTypeAsync("shadow-read-type", workspaceId, collectionId, relation.RelationType, cancellationToken).ConfigureAwait(false);
+        await shadowRouter.QueryByLifecycleAsync("shadow-read-lifecycle", workspaceId, collectionId, "Active", cancellationToken).ConfigureAwait(false);
+        await shadowRouter.QueryByReviewStatusAsync("shadow-read-review-status", workspaceId, collectionId, "Reviewed", cancellationToken).ConfigureAwait(false);
+        await shadowRouter.QueryReplacementChainRelationsAsync("shadow-read-replacement", workspaceId, collectionId, relation.SourceId, cancellationToken).ConfigureAwait(false);
+        await shadowRouter.GetLatestReviewAsync("shadow-read-review-latest", workspaceId, collectionId, relation.Id, cancellationToken).ConfigureAwait(false);
+        await shadowRouter.QueryReviewsAsync("shadow-read-review-list", workspaceId, collectionId, relation.Id, cancellationToken).ConfigureAwait(false);
+        await shadowRouter.QueryReviewsByStatusAsync("shadow-read-review-filter", workspaceId, collectionId, RelationReviewStatuses.Reviewed, cancellationToken).ConfigureAwait(false);
+        await shadowRouter.QueryDiagnosticsByRelationAsync("shadow-read-diagnostics-relation", workspaceId, collectionId, relation.Id, cancellationToken).ConfigureAwait(false);
+        await shadowRouter.QueryDiagnosticsByItemAsync("shadow-read-diagnostics-item", workspaceId, collectionId, relation.TargetId, cancellationToken).ConfigureAwait(false);
+        await shadowRouter.QueryDiagnosticsByKindAsync("shadow-read-diagnostics-kind", workspaceId, collectionId, "MissingEvidence", cancellationToken).ConfigureAwait(false);
+        await shadowRouter.QueryDiagnosticsBySeverityAsync("shadow-read-diagnostics-severity", workspaceId, collectionId, "Warning", cancellationToken).ConfigureAwait(false);
 
         if (cleanupConfirm)
         {

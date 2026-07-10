@@ -6,7 +6,7 @@ using ContextCore.Abstractions.Models;
 namespace ContextCore.ControlRoom.Services;
 
 /// <summary>Shared shadow-read comparison helpers: stable hashing and canonicalization for dual-write/dual-read coordinators.</summary>
-internal static class ShadowReadComparisonHelper
+public static class ShadowReadComparisonHelper
 {
     private static readonly JsonSerializerOptions CanonicalJsonOptions = new()
     {

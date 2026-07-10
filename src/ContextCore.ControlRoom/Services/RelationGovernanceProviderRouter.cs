@@ -197,6 +197,18 @@ public sealed class RelationGovernanceProviderRouter
             false,
             cancellationToken);
 
+    /// <summary>GRAPH-12：合并自 ShadowReadCoordinator，按 review status 查询审核记录。</summary>
+    public Task<IReadOnlyList<RelationReviewRecord>> QueryReviewsByStatusAsync(string operationId, string workspaceId, string collectionId, string reviewStatus, CancellationToken cancellationToken = default)
+        => ExecuteReadAsync(
+            operationId,
+            workspaceId,
+            collectionId,
+            "RelationReviewByStatus",
+            token => _fileReviewStore.QueryByReviewStatusAsync(workspaceId, collectionId, reviewStatus, token),
+            token => _postgresReviewStore.QueryByReviewStatusAsync(workspaceId, collectionId, reviewStatus, token),
+            false,
+            cancellationToken);
+
     public Task<RelationReviewRecord?> GetLatestReviewAsync(string operationId, string workspaceId, string collectionId, string relationId, CancellationToken cancellationToken = default)
         => ExecuteReadAsync(
             operationId,
@@ -343,8 +355,8 @@ public sealed class RelationGovernanceProviderRouter
                 try
                 {
                     var postgresResult = await postgresOperation(cancellationToken).ConfigureAwait(false);
-                    var fileHash = RelationGovernanceShadowReadCoordinator.ComputeStableHash(result);
-                    var postgresHash = RelationGovernanceShadowReadCoordinator.ComputeStableHash(postgresResult);
+                    var fileHash = ShadowReadComparisonHelper.ComputeCanonicalStableHash(result);
+                    var postgresHash = ShadowReadComparisonHelper.ComputeCanonicalStableHash(postgresResult);
                     mismatchDetected = !string.Equals(fileHash, postgresHash, StringComparison.Ordinal);
                     if (mismatchDetected && _options.FailClosedOnMismatch)
                     {
@@ -377,8 +389,8 @@ public sealed class RelationGovernanceProviderRouter
             if (_options.ContinueComparisonTrace)
             {
                 var fileResult = await fileOperation(cancellationToken).ConfigureAwait(false);
-                var postgresHash = RelationGovernanceShadowReadCoordinator.ComputeStableHash(result);
-                var fileHash = RelationGovernanceShadowReadCoordinator.ComputeStableHash(fileResult);
+                var postgresHash = ShadowReadComparisonHelper.ComputeCanonicalStableHash(result);
+                var fileHash = ShadowReadComparisonHelper.ComputeCanonicalStableHash(fileResult);
                 mismatchDetected = !string.Equals(postgresHash, fileHash, StringComparison.Ordinal);
                 if (mismatchDetected)
                 {

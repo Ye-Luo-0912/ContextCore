@@ -670,21 +670,6 @@ public sealed class PostgresRelationDualWriteQualityReport
     public string Recommendation { get; init; } = string.Empty;
 }
 
-public sealed class RelationGovernanceShadowReadOptions
-{
-    public bool Enabled { get; init; }
-
-    public bool TraceEnabled { get; init; } = true;
-
-    public bool ReadPostgres { get; init; }
-
-    public bool CompareResults { get; init; } = true;
-
-    public bool FailOnMismatch { get; init; }
-
-    public int MaxTraceItems { get; init; } = 100;
-}
-
 public sealed class RelationGovernanceShadowReadTrace
 {
     public string OperationId { get; init; } = string.Empty;
