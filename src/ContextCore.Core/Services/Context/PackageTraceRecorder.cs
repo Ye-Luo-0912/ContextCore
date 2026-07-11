@@ -8,6 +8,12 @@ internal sealed class PackageTraceRecorder
     private readonly IRuntimeCandidateTraceSink _traceSink;
     private readonly Func<string?> _getOperationId;
     private readonly Func<string?> _getRequestId;
+    private int _traceMapFailures;
+    private int _traceSinkWriteFailures;
+
+    public int TraceMapFailures => _traceMapFailures;
+    public int TraceSinkWriteFailures => _traceSinkWriteFailures;
+    public int TraceWriteFailures => _traceMapFailures + _traceSinkWriteFailures;
 
     public PackageTraceRecorder(
         IRuntimeCandidateTraceSink traceSink,
@@ -36,6 +42,7 @@ internal sealed class PackageTraceRecorder
 
         if (sectionResult.Added)
         {
+            var isFirstNewCandidate = true;
             for (int i = 0; i < candidates.Count; i++)
             {
                 var candidate = candidates[i];
@@ -56,21 +63,24 @@ internal sealed class PackageTraceRecorder
                     }
 
                     WriteTraceRow(candidate, sectionName, false, "referenced by duplicate section", selectedByScoring: true);
-                    selectedItems.Add(CreateDecision(
-                        candidate,
-                        sectionName,
-                        "referenced by duplicate section",
-                        0));
                     continue;
                 }
 
-                var isKept = (i == 0);
-                if (i > 0 && !string.IsNullOrEmpty(sectionContent) && !string.IsNullOrEmpty(candidate.Content))
+                var isKept = isFirstNewCandidate;
+                if (!isKept && !string.IsNullOrEmpty(sectionContent) && !string.IsNullOrEmpty(candidate.Content))
                 {
-                    var testLength = Math.Min(candidate.Content.Length, 15);
-                    var testStr = candidate.Content[..testLength];
-                    isKept = sectionContent.Contains(testStr, StringComparison.OrdinalIgnoreCase);
+                    if (candidate.Content.Length >= 10)
+                    {
+                        var testLength = Math.Min(candidate.Content.Length, 50);
+                        var testStr = candidate.Content[..testLength];
+                        isKept = sectionContent.Contains(testStr, StringComparison.OrdinalIgnoreCase);
+                        if (!isKept && !string.IsNullOrEmpty(candidate.Id))
+                        {
+                            isKept = sectionContent.Contains(candidate.Id, StringComparison.OrdinalIgnoreCase);
+                        }
+                    }
                 }
+                isFirstNewCandidate = false;
 
                 if (isKept)
                 {
@@ -86,8 +96,9 @@ internal sealed class PackageTraceRecorder
                 }
                 else
                 {
-                    droppedItems.Add(CreateDropped(candidate, "token budget exhausted"));
-                    WriteTraceRow(candidate, sectionName, false, "token budget exhausted", selectedByScoring: true);
+                    var dropReason = "content not retained in section output";
+                    droppedItems.Add(CreateDropped(candidate, dropReason));
+                    WriteTraceRow(candidate, sectionName, false, dropReason, selectedByScoring: true);
                 }
             }
         }
@@ -105,11 +116,12 @@ internal sealed class PackageTraceRecorder
         bool selectedByScoring = true)
     {
         if (!_traceSink.Enabled) return;
+        RuntimeCandidateTraceRow? row = null;
         try
         {
             var kind = c.Kind;
             var (srcType, auth, stratType, chan) = MapTraceFields(kind, section, c);
-            _traceSink.Write(new RuntimeCandidateTraceRow
+            row = new RuntimeCandidateTraceRow
             {
                 OperationId = _getOperationId() ?? "unknown",
                 RequestId = _getRequestId() ?? "unknown",
@@ -128,9 +140,24 @@ internal sealed class PackageTraceRecorder
                 DroppedReason = included ? "" : reason,
                 TokenCost = c.EstimatedTokens,
                 Section = section
-            });
+            };
         }
-        catch { /* trace write failure must not affect main flow */ }
+        catch (Exception)
+        {
+            /* field mapping failure must not affect main flow */
+            Interlocked.Increment(ref _traceMapFailures);
+            return;
+        }
+
+        try
+        {
+            _traceSink.Write(row);
+        }
+        catch (Exception)
+        {
+            /* sink write failure must not affect main flow */
+            Interlocked.Increment(ref _traceSinkWriteFailures);
+        }
     }
 
     private static (byte sourceType, byte authority, byte strategyType, byte retrievalChannel) MapTraceFields(
@@ -208,11 +235,18 @@ internal sealed class PackageTraceRecorder
             {
                 var candidate = candidates[i];
                 var isKept = (i == 0);
-                if (i > 0 && !string.IsNullOrEmpty(sectionContent) && !string.IsNullOrEmpty(candidate.Content))
+                if (!isKept && !string.IsNullOrEmpty(sectionContent) && !string.IsNullOrEmpty(candidate.Content))
                 {
-                    var testLength = Math.Min(candidate.Content.Length, 15);
-                    var testStr = candidate.Content[..testLength];
-                    isKept = sectionContent.Contains(testStr, StringComparison.OrdinalIgnoreCase);
+                    if (candidate.Content.Length >= 10)
+                    {
+                        var testLength = Math.Min(candidate.Content.Length, 50);
+                        var testStr = candidate.Content[..testLength];
+                        isKept = sectionContent.Contains(testStr, StringComparison.OrdinalIgnoreCase);
+                        if (!isKept && !string.IsNullOrEmpty(candidate.Id))
+                        {
+                            isKept = sectionContent.Contains(candidate.Id, StringComparison.OrdinalIgnoreCase);
+                        }
+                    }
                 }
 
                 if (isKept)
@@ -225,7 +259,7 @@ internal sealed class PackageTraceRecorder
                 }
                 else
                 {
-                    droppedItems.Add(CreateDropped(candidate, "token budget exhausted"));
+                    droppedItems.Add(CreateDropped(candidate, "content not retained in section output"));
                 }
             }
         }

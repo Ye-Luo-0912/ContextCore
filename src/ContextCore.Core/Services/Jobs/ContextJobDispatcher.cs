@@ -37,19 +37,22 @@ public sealed class CompressionJobProcessor : IContextJobProcessor
     private readonly IContextCompressor _compressor;
     private readonly IRelationStore _relationStore;
     private readonly IRelationProjector _relationProjector;
+    private readonly IRelationProjectionWriter? _projectionWriter;
 
     public CompressionJobProcessor(
         IContextStore contextStore,
         IContextIndex index,
         IContextCompressor compressor,
         IRelationStore relationStore,
-        IRelationProjector relationProjector)
+        IRelationProjector relationProjector,
+        IRelationProjectionWriter? projectionWriter = null)
     {
         _contextStore = contextStore;
         _index = index;
         _compressor = compressor;
         _relationStore = relationStore;
         _relationProjector = relationProjector;
+        _projectionWriter = projectionWriter;
     }
 
     public ContextJobKind Kind => ContextJobKind.Compression;
@@ -97,7 +100,15 @@ public sealed class CompressionJobProcessor : IContextJobProcessor
         var compressionRelations = _relationProjector.ProjectForCompression(response);
         if (compressionRelations.Count > 0)
         {
-            await _relationStore.BatchUpsertAsync(compressionRelations, cancellationToken).ConfigureAwait(false);
+            // 4.4：通过 IRelationProjectionWriter 统一写入边界；若未注入则回退到 BatchUpsertAsync。
+            if (_projectionWriter is not null)
+            {
+                await _projectionWriter.WriteAsync(compressionRelations, "compression", cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                await _relationStore.BatchUpsertAsync(compressionRelations, cancellationToken).ConfigureAwait(false);
+            }
         }
     }
 

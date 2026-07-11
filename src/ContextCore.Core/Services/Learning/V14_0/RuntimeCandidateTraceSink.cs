@@ -8,6 +8,11 @@ public interface IRuntimeCandidateTraceSink
     void Write(RuntimeCandidateTraceRow row);
     int WriteCount { get; }
     Task FlushAsync(CancellationToken ct = default);
+
+    /// <summary>Number of Write calls that threw an exception. Default 0 for sinks that never fail.</summary>
+    int WriteFailures => 0;
+    /// <summary>Number of rows dropped (e.g. because the underlying writer is unavailable). Default 0.</summary>
+    int DroppedCount => 0;
 }
 
 public sealed class NullRuntimeCandidateTraceSink : IRuntimeCandidateTraceSink
@@ -24,11 +29,15 @@ public sealed class FileRuntimeCandidateTraceSink : IRuntimeCandidateTraceSink, 
     private readonly object _lock = new();
     private StreamWriter? _writer;
     private int _writeCount;
+    private int _writeFailures;
+    private int _droppedDueToNullWriter;
     private bool _disposed;
 
     public bool Enabled => true;
     public string Path => _path;
     public int WriteCount => _writeCount;
+    public int WriteFailures => _writeFailures;
+    public int DroppedCount => _droppedDueToNullWriter;
 
     public FileRuntimeCandidateTraceSink(string? filePath = null)
     {
@@ -38,16 +47,20 @@ public sealed class FileRuntimeCandidateTraceSink : IRuntimeCandidateTraceSink, 
         try { _writer = new StreamWriter(new FileStream(_path, FileMode.Append, FileAccess.Write, FileShare.Read), Encoding.UTF8) { AutoFlush = false }; }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[TraceSink] Failed to open {_path}: {ex.Message}");
+            System.Diagnostics.Trace.WriteLine($"[TraceSink] Failed to open {_path}: {ex.Message}");
             _writer = null;
         }
     }
 
     public void Write(RuntimeCandidateTraceRow row)
     {
-        if (_writer is null) return;
+        if (_writer is null)
+        {
+            Interlocked.Increment(ref _droppedDueToNullWriter);
+            return;
+        }
         try { var line = row.ToJsonLine(); lock (_lock) { _writer.WriteLine(line); _writeCount++; } }
-        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[TraceSink] Write failed: {ex.Message}"); }
+        catch (Exception ex) { Interlocked.Increment(ref _writeFailures); System.Diagnostics.Trace.WriteLine($"[TraceSink] Write failed: {ex.Message}"); }
     }
 
     public void Dispose()
@@ -60,7 +73,7 @@ public sealed class FileRuntimeCandidateTraceSink : IRuntimeCandidateTraceSink, 
     {
         if (_writer is null) return;
         try { lock (_lock) { _writer.Flush(); } await Task.CompletedTask.ConfigureAwait(false); }
-        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[TraceSink] Flush failed: {ex.Message}"); }
+        catch (Exception ex) { System.Diagnostics.Trace.WriteLine($"[TraceSink] Flush failed: {ex.Message}"); }
     }
 }
 

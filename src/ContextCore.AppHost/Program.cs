@@ -54,7 +54,12 @@ var runtime = new ContextRuntimeService(
     new ContextValidationService(),
     eventSink);
 var relationProjector = new RelationProjector();
-var ingestion = new BasicContextIngestionService(store, relationProjector, relationStore);
+// 4.4：构造 RelationProjectorOutputValidator + RelationProjectionWriter，建立统一写入边界。
+var relationTypeRegistry = new RelationTypeRegistry();
+var relationTypeNormalizer = new RelationTypeNormalizer();
+var relationOutputValidator = new RelationProjectorOutputValidator(relationTypeRegistry, relationTypeNormalizer);
+var relationProjectionWriter = new RelationProjectionWriter(relationStore, relationOutputValidator);
+var ingestion = new BasicContextIngestionService(store, relationProjector, relationStore, relationProjectionWriter);
 // TODO-DEMO [P0-1]：MockContextCompressor 不调用任何模型 API，生成的摘要无语义价值。
 // 生产使用前请替换为真实 LLM 压缩实现。参见：TODO.md → P0-1
 var compressor = new MockContextCompressor();
@@ -134,7 +139,8 @@ foreach (var indexHint in compressionResponse.IndexHints)
 var compressionRelations = relationProjector.ProjectForCompression(compressionResponse);
 if (compressionRelations.Count > 0)
 {
-    await relationStore.BatchUpsertAsync(compressionRelations);
+    // 4.4：通过 IRelationProjectionWriter 统一写入边界。
+    await relationProjectionWriter.WriteAsync(compressionRelations, "compression");
 }
 
 Console.WriteLine($"Saved generated items: {compressionResponse.GeneratedItems.Count}; index hints: {compressionResponse.IndexHints.Count}; relations: {compressionRelations.Count}.");

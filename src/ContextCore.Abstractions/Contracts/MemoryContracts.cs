@@ -101,6 +101,15 @@ public interface IRelationProjector
     IReadOnlyList<ContextRelation> ProjectForSupersede(SupersedeProjectionRequest request);
 }
 
+/// <summary>统一的关系投影写入边界：验证 + 落库。</summary>
+public interface IRelationProjectionWriter
+{
+    Task<RelationProjectionWriteResult> WriteAsync(
+        IReadOnlyList<ContextRelation> relations,
+        string provenance,
+        CancellationToken cancellationToken = default);
+}
+
 /// <summary>存储 Relation review / lifecycle 人工操作审核历史。</summary>
 public interface IRelationReviewStore
 {

@@ -14,6 +14,7 @@ public sealed class StableLifecycleReviewService
     private readonly IStableLifecycleReviewStore? _reviewStore;
     private readonly IRelationStore? _relationStore;
     private readonly IRelationProjector? _relationProjector;
+    private readonly IRelationProjectionWriter? _projectionWriter;
     private readonly StableMemoryGovernanceService _governanceService;
 
     public StableLifecycleReviewService(
@@ -23,7 +24,8 @@ public sealed class StableLifecycleReviewService
         IStableLifecycleReviewStore? reviewStore,
         IRelationStore? relationStore,
         StableMemoryGovernanceService governanceService,
-        IRelationProjector? relationProjector = null)
+        IRelationProjector? relationProjector = null,
+        IRelationProjectionWriter? projectionWriter = null)
     {
         _memoryStore = memoryStore;
         _constraintStore = constraintStore;
@@ -32,6 +34,7 @@ public sealed class StableLifecycleReviewService
         _relationStore = relationStore;
         _governanceService = governanceService;
         _relationProjector = relationProjector;
+        _projectionWriter = projectionWriter;
     }
 
     public Task<IReadOnlyList<StableLifecycleReviewRecord>> GetReviewsAsync(
@@ -520,9 +523,18 @@ public sealed class StableLifecycleReviewService
             now);
 
         var relations = _relationProjector.ProjectForSupersede(request);
-        return relations.Count > 0
-            ? _relationStore.BatchUpsertAsync(relations, cancellationToken)
-            : Task.CompletedTask;
+        if (relations.Count == 0)
+        {
+            return Task.CompletedTask;
+        }
+
+        // 4.4：通过 IRelationProjectionWriter 统一写入边界；若未注入则回退到 BatchUpsertAsync。
+        if (_projectionWriter is not null)
+        {
+            return _projectionWriter.WriteAsync(relations, "lifecycle-review", cancellationToken);
+        }
+
+        return _relationStore.BatchUpsertAsync(relations, cancellationToken);
     }
 
     private static Dictionary<string, string> CreateReviewMetadata(

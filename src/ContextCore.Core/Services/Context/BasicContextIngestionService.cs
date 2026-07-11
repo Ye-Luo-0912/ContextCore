@@ -13,15 +13,18 @@ public sealed class BasicContextIngestionService
     private readonly IContextStore _store;
     private readonly IRelationProjector? _relationProjector;
     private readonly IRelationStore? _relationStore;
+    private readonly IRelationProjectionWriter? _projectionWriter;
 
     public BasicContextIngestionService(
         IContextStore store,
         IRelationProjector? relationProjector = null,
-        IRelationStore? relationStore = null)
+        IRelationStore? relationStore = null,
+        IRelationProjectionWriter? projectionWriter = null)
     {
         _store = store;
         _relationProjector = relationProjector;
         _relationStore = relationStore;
+        _projectionWriter = projectionWriter;
     }
 
     /// <summary>规范化并保存一个上下文条目，若未提供 ID 则自动生成。</summary>
@@ -70,6 +73,7 @@ public sealed class BasicContextIngestionService
         {
             var ingestRelations = _relationProjector.ProjectForIngest(normalized);
             // GRAPH-09：Ingest reconcile — 新增需要的边，删除已经移除的 refs 边。
+            // 4.4：通过 IRelationProjectionWriter 写入，若未注入则回退到 BatchUpsertAsync。
             await ReconcileIngestRelationsAsync(normalized, ingestRelations, cancellationToken).ConfigureAwait(false);
         }
 
@@ -96,7 +100,15 @@ public sealed class BasicContextIngestionService
     {
         if (newRelations.Count > 0)
         {
-            await _relationStore!.BatchUpsertAsync(newRelations, cancellationToken).ConfigureAwait(false);
+            // 4.4：通过 IRelationProjectionWriter 统一写入边界；若未注入则回退到 BatchUpsertAsync。
+            if (_projectionWriter is not null)
+            {
+                await _projectionWriter.WriteAsync(newRelations, "ingest", cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                await _relationStore!.BatchUpsertAsync(newRelations, cancellationToken).ConfigureAwait(false);
+            }
         }
 
         // 查询该条目现有的所有 related_to 出边

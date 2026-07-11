@@ -20,6 +20,7 @@ public sealed class ShortTermPromotionCandidateService
     private readonly IContextLearningStore? _learningStore;
     private readonly IContextLearningCaseGenerator? _learningCaseGenerator;
     private readonly IRelationProjector? _relationProjector;
+    private readonly IRelationProjectionWriter? _projectionWriter;
 
     public ShortTermPromotionCandidateService(
         IShortTermMemoryStore shortTermMemoryStore,
@@ -70,6 +71,20 @@ public sealed class ShortTermPromotionCandidateService
         IContextLearningStore? learningStore,
         IContextLearningCaseGenerator? learningCaseGenerator,
         IRelationProjector? relationProjector)
+        : this(shortTermMemoryStore, candidateStore, memoryStore, constraintStore, relationStore, learningStore, learningCaseGenerator, relationProjector, null)
+    {
+    }
+
+    public ShortTermPromotionCandidateService(
+        IShortTermMemoryStore shortTermMemoryStore,
+        IShortTermPromotionCandidateStore candidateStore,
+        IMemoryStore? memoryStore,
+        IConstraintStore? constraintStore,
+        IRelationStore? relationStore,
+        IContextLearningStore? learningStore,
+        IContextLearningCaseGenerator? learningCaseGenerator,
+        IRelationProjector? relationProjector,
+        IRelationProjectionWriter? projectionWriter)
     {
         _shortTermMemoryStore = shortTermMemoryStore;
         _candidateStore = candidateStore;
@@ -79,6 +94,7 @@ public sealed class ShortTermPromotionCandidateService
         _learningStore = learningStore;
         _learningCaseGenerator = learningCaseGenerator;
         _relationProjector = relationProjector;
+        _projectionWriter = projectionWriter;
     }
 
     public async Task<IReadOnlyList<ShortTermPromotionCandidate>> GenerateAsync(
@@ -693,7 +709,21 @@ public sealed class ShortTermPromotionCandidateService
         var relations = _relationProjector.ProjectForPromotion(candidate, targetItemId, targetKind, now);
         if (relations.Count > 0)
         {
-            await _relationStore.BatchUpsertAsync(relations, cancellationToken).ConfigureAwait(false);
+            // 4.4：通过 IRelationProjectionWriter 统一写入边界；若未注入则回退到 BatchUpsertAsync。
+            if (_projectionWriter is not null)
+            {
+                var writeResult = await _projectionWriter
+                    .WriteAsync(relations, "promotion", cancellationToken)
+                    .ConfigureAwait(false);
+                if (writeResult.SkippedCount > 0)
+                {
+                    warnings.Add($"promotion projector 跳过 {writeResult.SkippedCount} 条 High 级诊断 relation。");
+                }
+            }
+            else
+            {
+                await _relationStore.BatchUpsertAsync(relations, cancellationToken).ConfigureAwait(false);
+            }
         }
     }
 

@@ -262,7 +262,8 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
             package,
             tokenBudget,
             selectedItems,
-            droppedItems);
+            droppedItems,
+            traceRecorder: _traceRecorder);
     }
 
     private async Task<ContextPackageBuildResult> BuildWithPolicyAsync(
@@ -994,7 +995,8 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
             selectedItems,
             droppedItems,
             uncertainties,
-            retrievalPlan);
+            retrievalPlan,
+            traceRecorder: _traceRecorder);
     }
 
     private async Task<GraphExpansionSectionContribution> BuildGraphExpansionContributionAsync(
@@ -2654,6 +2656,15 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
             : "0";
     }
 
+    private static void AddTraceHealthMetadata(
+        IDictionary<string, string> metadata,
+        PackageTraceRecorder traceRecorder)
+    {
+        metadata["traceWriteFailures"] = traceRecorder.TraceWriteFailures.ToString();
+        metadata["traceMapFailures"] = traceRecorder.TraceMapFailures.ToString();
+        metadata["traceSinkWriteFailures"] = traceRecorder.TraceSinkWriteFailures.ToString();
+    }
+
     private static void AddGraphExpansionMetadata(
         IDictionary<string, string> metadata,
         GraphExpansionSectionContribution contribution)
@@ -2736,7 +2747,8 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         IReadOnlyList<ContextPackageDecision> selectedItems,
         IReadOnlyList<DroppedContextItem> droppedItems,
         IReadOnlyList<ContextPackageUncertainty>? uncertainties = null,
-        RetrievalPlan? plan = null)
+        RetrievalPlan? plan = null,
+        PackageTraceRecorder? traceRecorder = null)
     {
         var metadata = new Dictionary<string, string>(package.Metadata);
         if (!string.IsNullOrWhiteSpace(request.Policy?.Id))
@@ -2764,6 +2776,10 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         var budget = BuildBudgetReport(package, tokenBudget, request);
         var output = BuildStandardOutput(package, droppedItems, resolvedUncertainties, budget);
         AddDiagnosticMetadata(metadata, tokenBudget, package.EstimatedTokens, droppedItems.Count, resolvedUncertainties.Count);
+        if (traceRecorder is not null)
+        {
+            AddTraceHealthMetadata(metadata, traceRecorder);
+        }
 
         return new ContextPackageBuildResult
         {

@@ -5,12 +5,11 @@ using ContextCore.Abstractions.Models;
 namespace ContextCore.Core.Services;
 
 /// <summary>
-/// 项目主线状态审计：只读取既有报告并输出汇总，不改变运行时、检索绑定或 package 输出。
+/// 项目主线状态审计：通过 <see cref="CapabilityRegistry"/> 驱动能力矩阵，读取既有 gate 报告并输出汇总。
+/// 不改变运行时、检索绑定或 package 输出。
 /// </summary>
 public sealed class ProjectStateAuditRunner
 {
-    private const string OverallStatus = "FoundationFrozen_FormalRetrievalPlanOnly";
-
     private static readonly string[] MustDoBeforeFormalRetrieval =
     [
         "Build ShadowFormalRetrievalAdapter as the next V5 phase.",
@@ -44,6 +43,7 @@ public sealed class ProjectStateAuditRunner
     public ProjectStateAuditReport BuildProjectStateAudit(string repositoryRoot)
     {
         var matrix = BuildMatrix(repositoryRoot);
+        var overallStatus = DeriveOverallStatus(matrix);
         var gaps = BuildMainlineGaps(matrix);
         var ready = matrix
             .Where(static entry => string.Equals(entry.Status, ProjectStateAuditStatuses.Frozen, StringComparison.OrdinalIgnoreCase)
@@ -71,7 +71,7 @@ public sealed class ProjectStateAuditRunner
         {
             OperationId = $"project-state-audit-{Guid.NewGuid():N}",
             CreatedAt = DateTimeOffset.UtcNow,
-            CurrentOverallStatus = OverallStatus,
+            CurrentOverallStatus = overallStatus,
             Recommendation = missing.Length == 0
                 ? ProjectStateAuditRecommendations.ReadyForMainlineGapRepairPlanning
                 : ProjectStateAuditRecommendations.NeedsMissingReportRegeneration,
@@ -179,35 +179,118 @@ public sealed class ProjectStateAuditRunner
         return builder.ToString();
     }
 
+    /// <summary>
+    /// 基于 <see cref="CapabilityRegistry"/> 构建能力就绪矩阵。
+    /// </summary>
     private static IReadOnlyList<CapabilityReadinessMatrixEntry> BuildMatrix(string repositoryRoot)
     {
-        return
-        [
-            Entry(repositoryRoot, "Foundation", "Foundation", "foundation/foundation-release-candidate-gate.json", ProjectStateAuditStatuses.Frozen),
-            Entry(repositoryRoot, "ServiceFoundation", "Service", "service/service-foundation-freeze-gate.json", ProjectStateAuditStatuses.Frozen),
-            Entry(repositoryRoot, "StorageFoundation", "Storage", "foundation/foundation-freeze-report.json", ProjectStateAuditStatuses.Frozen),
-            Entry(repositoryRoot, "RelationGovernancePostgres", "Graph", "storage/postgres/postgres-relation-governance-readiness-gate.json", ProjectStateAuditStatuses.Ready),
-            Entry(repositoryRoot, "LearningFeedbackPostgres", "Learning", "storage/postgres/postgres-learning-feedback-freeze-gate.json", ProjectStateAuditStatuses.Ready),
-            Entry(repositoryRoot, "JobQueuePostgres", "Storage", "storage/postgres/postgres-job-queue-freeze-gate.json", ProjectStateAuditStatuses.Ready),
-            Entry(repositoryRoot, "VectorPostgresProvider", "Vector", "storage/postgres/postgres-vector-freeze-gate.json", ProjectStateAuditStatuses.PreviewOnly),
-            Entry(repositoryRoot, "VectorFormalPreview", "Vector", "vector/v4/vector-formal-preview-freeze-gate.json", ProjectStateAuditStatuses.PreviewOnly),
-            Entry(repositoryRoot, "ScopedRuntimeExperiment", "Runtime Experiment", "vector/v4/runtime-experiment/promotion-decision.json", ProjectStateAuditStatuses.PreviewOnly),
-            Entry(repositoryRoot, "FormalRetrievalIntegrationPlan", "Vector", "vector/v5/formal-retrieval-integration-plan-gate.json", ProjectStateAuditStatuses.PlanOnly),
-            Entry(repositoryRoot, "RouterGuardedOptIn", "Router", "learning/router/router-guarded-optin-readiness-gate.json", ProjectStateAuditStatuses.PreviewOnly),
-            Entry(repositoryRoot, "CandidateReranker", "Reranker", "eval/vector-retrieval-shadow-readiness-gate.json", ProjectStateAuditStatuses.PreviewOnly),
-            Entry(repositoryRoot, "RuntimeChangeGate", "Learning", "learning/readiness/learning-runtime-change-readiness-gate.json", ProjectStateAuditStatuses.Ready),
-            Entry(repositoryRoot, "InputDatasetV2", "Input", "vector/dataset-v2/generated/materialization-gate.json", ProjectStateAuditStatuses.Ready),
-            Entry(repositoryRoot, "OutputPackageAssembly", "Output", "vector/v4/vector-shadow-package-comparison-gate.json", ProjectStateAuditStatuses.PreviewOnly)
-        ];
+        var entries = new List<CapabilityReadinessMatrixEntry>(CapabilityRegistry.Capabilities.Count);
+        foreach (var capability in CapabilityRegistry.Capabilities)
+        {
+            entries.Add(Entry(repositoryRoot, capability));
+        }
+
+        return entries;
+    }
+
+    /// <summary>
+    /// 派生 OverallStatus：基于矩阵中各条目状态聚合，不使用硬编码常量。
+    /// </summary>
+    private static string DeriveOverallStatus(IReadOnlyList<CapabilityReadinessMatrixEntry> matrix)
+    {
+        if (matrix.Count == 0)
+        {
+            return "Empty";
+        }
+
+        var hasBlocked = false;
+        var hasUnknown = false;
+        var hasPlanOnly = false;
+        var hasPreviewOnly = false;
+        var hasReady = false;
+        var hasFrozen = false;
+
+        foreach (var entry in matrix)
+        {
+            if (string.Equals(entry.Status, ProjectStateAuditStatuses.Blocked, StringComparison.OrdinalIgnoreCase))
+            {
+                hasBlocked = true;
+            }
+            else if (string.Equals(entry.Status, ProjectStateAuditStatuses.Unknown, StringComparison.OrdinalIgnoreCase))
+            {
+                hasUnknown = true;
+            }
+            else if (string.Equals(entry.Status, ProjectStateAuditStatuses.PlanOnly, StringComparison.OrdinalIgnoreCase))
+            {
+                hasPlanOnly = true;
+            }
+            else if (string.Equals(entry.Status, ProjectStateAuditStatuses.PreviewOnly, StringComparison.OrdinalIgnoreCase))
+            {
+                hasPreviewOnly = true;
+            }
+            else if (string.Equals(entry.Status, ProjectStateAuditStatuses.Ready, StringComparison.OrdinalIgnoreCase))
+            {
+                hasReady = true;
+            }
+            else if (string.Equals(entry.Status, ProjectStateAuditStatuses.Frozen, StringComparison.OrdinalIgnoreCase))
+            {
+                hasFrozen = true;
+            }
+        }
+
+        if (hasBlocked || hasUnknown)
+        {
+            return "Blocked_RequiresGapRepair";
+        }
+
+        if (hasFrozen && hasPlanOnly)
+        {
+            return "FoundationFrozen_FormalRetrievalPlanOnly";
+        }
+
+        if (hasFrozen && hasPreviewOnly)
+        {
+            return "FoundationFrozen_PreviewOnly";
+        }
+
+        if (hasFrozen && hasReady)
+        {
+            return "FoundationFrozen_ReadyForPromotion";
+        }
+
+        if (hasReady)
+        {
+            return "Ready_FoundationPending";
+        }
+
+        return "Mixed";
     }
 
     private static CapabilityReadinessMatrixEntry Entry(
         string repositoryRoot,
-        string capabilityId,
-        string area,
-        string relativePath,
-        string successStatus)
+        CapabilityRegistry.CapabilityDescriptor capability)
     {
+        var relativePath = capability.SourceReportPath ?? string.Empty;
+        var hasReport = !string.IsNullOrEmpty(relativePath);
+
+        // 结构性能力 (无 gate artifact)：直接采信 ExpectedStatus，不要求文件存在。
+        if (!hasReport)
+        {
+            return new CapabilityReadinessMatrixEntry
+            {
+                CapabilityId = capability.CapabilityId,
+                Area = capability.Area,
+                Status = capability.ExpectedStatus,
+                Recommendation = capability.ExpectedStatus,
+                SourceReportPath = relativePath,
+                SourceReportExists = true,
+                ReadyForRuntime = false,
+                FormalRetrievalAllowed = false,
+                RuntimeSwitchAllowed = false,
+                BlockedReasons = Array.Empty<string>()
+            };
+        }
+
         var exists = File.Exists(Path.Combine(repositoryRoot, relativePath));
         var passed = exists && ReadAnyBoolean(repositoryRoot, relativePath, "FreezePassed", "GatePassed", "PlanPassed", "Passed", "RecheckPassed", "SmokePassed", "ExperimentPassed");
         var recommendation = exists
@@ -218,7 +301,7 @@ public sealed class ProjectStateAuditRunner
         {
             blocked.Add("MissingReport");
         }
-        else if (!passed && !string.Equals(successStatus, ProjectStateAuditStatuses.PreviewOnly, StringComparison.OrdinalIgnoreCase))
+        else if (!passed && !string.Equals(capability.ExpectedStatus, ProjectStateAuditStatuses.PreviewOnly, StringComparison.OrdinalIgnoreCase))
         {
             blocked.Add("GateNotPassed");
         }
@@ -238,14 +321,14 @@ public sealed class ProjectStateAuditRunner
 
         return new CapabilityReadinessMatrixEntry
         {
-            CapabilityId = capabilityId,
-            Area = area,
+            CapabilityId = capability.CapabilityId,
+            Area = capability.Area,
             Status = !exists
                 ? ProjectStateAuditStatuses.Unknown
-                : blocked.Count == 0 || string.Equals(successStatus, ProjectStateAuditStatuses.PreviewOnly, StringComparison.OrdinalIgnoreCase)
-                    ? successStatus
+                : blocked.Count == 0 || string.Equals(capability.ExpectedStatus, ProjectStateAuditStatuses.PreviewOnly, StringComparison.OrdinalIgnoreCase)
+                    ? capability.ExpectedStatus
                     : ProjectStateAuditStatuses.Blocked,
-            Recommendation = string.IsNullOrWhiteSpace(recommendation) ? successStatus : recommendation,
+            Recommendation = string.IsNullOrWhiteSpace(recommendation) ? capability.ExpectedStatus : recommendation,
             SourceReportPath = relativePath,
             SourceReportExists = exists,
             ReadyForRuntime = readyForRuntime,
@@ -259,12 +342,12 @@ public sealed class ProjectStateAuditRunner
     {
         return
         [
-            Gap("graph-recall-quality", "Graph", "High", "Graph recall, noise, and relation quality still need a mainline formal-candidate audit.", "Relation governance storage is frozen, but formal retrieval graph contribution is still not integrated.", "Run relation quality and noise audit before graph candidates can influence formal retrieval.", "must-do before formal retrieval"),
-            Gap("vector-ranking-precision", "Vector", "High", "Vector recall and ranking are validated through preview/shadow gates but remain outside formal retrieval.", "V5 integration plan is PlanOnly and requires ShadowFormalRetrievalAdapter next.", "Build shadow adapter and compare vector candidates against package assembly without mutation.", "must-do before formal retrieval"),
-            Gap("input-evidence-provenance", "Input", "High", "Input ingestion evidence, provenance, and lifecycle metadata remain the strongest formal-readiness dependency.", "Dataset V2 is materialized, while legacy candidate review showed evidence/source/provenance gaps.", "Require Dataset V2 metadata contract and backfill checks before formal adapter input use.", "must-do before formal retrieval"),
-            Gap("output-package-policy", "Output", "High", "Output package assembly, token budget, and priority policy have not accepted formal vector changes.", "Shadow package comparison kept PackageOutputChanged=false and PackingPolicyChanged=false.", "Add formal adapter package comparison with explicit token budget and priority invariants.", "must-do before formal retrieval"),
-            Gap("learning-training-readiness", "Learning", "Medium", "Learning feedback has approved-data surfaces but no runtime training or negative-sample promotion path.", "Runtime-change gate remains pass-only while runtime switch stays forbidden.", "Define approved feedback and negative sample shadow-training readiness before any learning-driven ranking switch.", "can-defer"),
-            Gap("performance-runner-complexity", "Foundation", "Medium", "Phase report runners and artifact readers are duplicated across many gates.", $"Current audit matrix reads {matrix.Count} capability artifacts.", "Consolidate report reading and markdown helpers after the V5 adapter gate is stable.", "optimization later"),
+            Gap("graph-recall-quality", "Graph", "High", "Graph recall, noise, and relation quality still need a mainline formal-candidate audit.", "GraphProjector and RelationTraversalEngine are Ready but not wired to formal retrieval.", "Run relation quality and noise audit before graph candidates influence formal retrieval.", "must-do before formal retrieval"),
+            Gap("vector-ranking-precision", "Vector", "High", "Vector recall and ranking are validated through preview/shadow gates but remain outside formal retrieval.", "FormalRetrievalIntegrationPlan is PlanOnly and requires ShadowFormalRetrievalAdapter next.", "Build shadow adapter and compare vector candidates against package assembly without mutation.", "must-do before formal retrieval"),
+            Gap("input-evidence-provenance", "Input", "High", "Input ingestion evidence, provenance, and lifecycle metadata remain the strongest formal-readiness dependency.", "InputDatasetV2 is Ready but formal adapter input contract is not enforced.", "Require Dataset V2 metadata contract and backfill checks before formal adapter input use.", "must-do before formal retrieval"),
+            Gap("output-package-policy", "Output", "High", "Output package assembly, token budget, and priority policy have not accepted formal vector changes.", "PackageBuilderDecomposition is Ready but formal package comparison is not integrated.", "Add formal adapter package comparison with explicit token budget and priority invariants.", "must-do before formal retrieval"),
+            Gap("learning-training-readiness", "Learning", "Medium", "Learning feedback has approved-data surfaces but no runtime training or negative-sample promotion path.", "RuntimeChangeGate is Ready but runtime switch stays forbidden.", "Define approved feedback and negative sample shadow-training readiness before any learning-driven ranking switch.", "can-defer"),
+            Gap("performance-runner-complexity", "Architecture", "Medium", "Phase report runners and artifact readers are duplicated across many gates.", $"Current audit matrix reads {matrix.Count} capability artifacts.", "Consolidate report reading and markdown helpers after the V5 adapter gate is stable.", "optimization later"),
             Gap("side-branch-artifact-cleanup", "Service", "Low", "Superseded side-branch reports and smoke artifacts should be archived after mainline freeze points are tagged.", "Foundation and service freezes already carry critical summaries.", "Prune or archive obsolete generated artifacts later without touching gate inputs.", "side-branch cleanup later")
         ];
     }
@@ -292,11 +375,11 @@ public sealed class ProjectStateAuditRunner
         =>
         [
             "Formal retrieval must not be enabled from preview or experiment freeze reports alone.",
-            "Graph relation quality can add noise if relation evidence is not audited at formal-candidate time.",
+            "Graph relation quality can add noise if relation evidence is not audited at formal-candidate time (GraphProjector/RelationTraversalEngine).",
             "Vector ranking improvements can regress precision unless post-scoring risk gates remain final.",
-            "Input lifecycle metadata gaps can block or misroute otherwise relevant candidates.",
-            "Package assembly must preserve token budget, priority, and formal output invariants.",
-            "Learning feedback is not yet a runtime training signal."
+            "Input lifecycle metadata gaps can block or misroute otherwise relevant candidates (InputDatasetV2).",
+            "Package assembly must preserve token budget, priority, and formal output invariants (PackageBuilderDecomposition).",
+            "Learning feedback is not yet a runtime training signal (RuntimeChangeGate)."
         ];
 
     private static IReadOnlyList<string> BuildPerformanceGaps()
@@ -312,9 +395,9 @@ public sealed class ProjectStateAuditRunner
         [
             "V5.1 ShadowFormalRetrievalAdapter Plan",
             "V5.2 Formal Adapter Shadow Package Comparison",
-            "Graph Relation Quality and Noise Audit",
-            "Input Evidence/Provenance Contract Enforcement",
-            "Output Token Budget and Priority Policy Shadow Gate"
+            "Graph Relation Quality and Noise Audit (GraphProjector/RelationTraversalEngine)",
+            "Input Evidence/Provenance Contract Enforcement (InputDatasetV2)",
+            "Output Token Budget and Priority Policy Shadow Gate (PackageBuilderDecomposition)"
         ];
 
     private static bool ReadAnyBoolean(string repositoryRoot, string relativePath, params string[] propertyNames)

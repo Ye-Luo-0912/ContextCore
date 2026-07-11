@@ -1265,6 +1265,28 @@ public static class RelationGraphDiagnosticTypes
     public const string RelationReviewHistoryMissing = nameof(RelationReviewHistoryMissing);
 }
 
+/// <summary>Projector 输出诊断记录。</summary>
+public sealed record RelationProjectorOutputDiagnostic(
+    string Severity,
+    string DiagnosticType,
+    string RelationId,
+    string Message);
+
+/// <summary>
+/// IRelationProjectionWriter.WriteAsync 的返回结果：包含本次写入的 provenance、
+/// 请求/写入/跳过计数、是否通过 High 级诊断验证，以及诊断和被跳过的 relation id 列表。
+/// </summary>
+public sealed class RelationProjectionWriteResult
+{
+    public string Provenance { get; init; } = string.Empty;
+    public int WrittenCount { get; init; }
+    public int SkippedCount { get; init; }
+    public int RequestedCount { get; init; }
+    public bool IsValid { get; init; }
+    public IReadOnlyList<RelationProjectorOutputDiagnostic> Diagnostics { get; init; } = Array.Empty<RelationProjectorOutputDiagnostic>();
+    public IReadOnlyList<string> SkippedRelationIds { get; init; } = Array.Empty<string>();
+}
+
 /// <summary>
 /// Supersede 投影请求，解构 StableLifecycleReviewService 的私有 StableSource 以便跨层传递给 IRelationProjector。
 /// </summary>

@@ -18,7 +18,7 @@ public class ContextCoreProjectStateAuditTests
 
             var report = new ProjectStateAuditRunner().BuildProjectStateAudit(root);
 
-            Assert.AreEqual("FoundationFrozen_FormalRetrievalPlanOnly", report.CurrentOverallStatus);
+            Assert.AreEqual("Blocked_RequiresGapRepair", report.CurrentOverallStatus);
             Assert.IsTrue(report.ReadyCapabilities.Contains("Foundation"));
             Assert.IsTrue(report.PreviewOnlyCapabilities.Contains("FormalRetrievalIntegrationPlan"));
             Assert.IsTrue(report.BlockedCapabilities.Contains("FormalRetrievalRuntimeSwitch"));

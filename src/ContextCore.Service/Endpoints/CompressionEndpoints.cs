@@ -19,14 +19,15 @@ internal static class CompressionEndpoints
 
 		//
 		group.MapPost("/sync", async Task<IResult> (
-			CompressionRequest request,
-			IContextCompressor compressor,
-			IContextStore store,
-			IContextIndex index,
-			IRelationStore relationStore,
-		IRelationProjector relationProjector,
-		CancellationToken ct) =>
-	{
+		CompressionRequest request,
+		IContextCompressor compressor,
+		IContextStore store,
+		IContextIndex index,
+		IRelationStore relationStore,
+	IRelationProjector relationProjector,
+	IRelationProjectionWriter projectionWriter,
+	CancellationToken ct) =>
+{
 		var response = await compressor.CompressAsync(request, ct);
 
 		// 同步压缩不仅返回结果，也把生成条目、索引提示和关系写回存储，便于后续查询/打包复用。
@@ -43,11 +44,12 @@ internal static class CompressionEndpoints
 		var compressionRelations = relationProjector.ProjectForCompression(response);
 		if (compressionRelations.Count > 0)
 		{
-			await relationStore.BatchUpsertAsync(compressionRelations, ct);
+			// 4.4：通过 IRelationProjectionWriter 统一写入边界。
+			await projectionWriter.WriteAsync(compressionRelations, "compression", ct);
 		}
 
 		return Results.Ok(response);
-	})
+})
 		.WithName("RunCompressionSync")
 		.WithSummary("同步执行压缩并保存生成结果");
 

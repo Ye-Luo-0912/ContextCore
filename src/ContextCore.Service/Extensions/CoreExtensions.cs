@@ -43,7 +43,8 @@ internal static class CoreExtensions
 			sp.GetService<IRelationStore>(),
 			sp.GetService<IContextLearningStore>(),
 			sp.GetService<IContextLearningCaseGenerator>(),
-			sp.GetService<IRelationProjector>()));
+			sp.GetService<IRelationProjector>(),
+			sp.GetService<IRelationProjectionWriter>()));
 		services.AddSingleton(sp => new StableReviewCandidateService(
 			sp.GetRequiredService<IShortTermPromotionCandidateStore>(),
 			sp.GetRequiredService<IStableReviewCandidateStore>(),
@@ -89,7 +90,8 @@ internal static class CoreExtensions
 			sp.GetService<IStableLifecycleReviewStore>(),
 			sp.GetService<IRelationStore>(),
 			sp.GetRequiredService<StableMemoryGovernanceService>(),
-			sp.GetService<IRelationProjector>()));
+			sp.GetService<IRelationProjector>(),
+			sp.GetService<IRelationProjectionWriter>()));
 		services.AddSingleton(sp => new RelationReviewService(
 			sp.GetService<IRelationStore>(),
 			sp.GetService<IRelationReviewStore>(),
@@ -172,6 +174,13 @@ internal static class CoreExtensions
 		services.AddSingleton<CollectionValidationService>();
 		services.AddSingleton<IRelationProjector, RelationProjector>();
 		services.AddSingleton<RelationTypeRegistry>();
+		// 4.4：RelationProjectorOutputValidator / RelationProjectionWriter 统一写入边界注册。
+		// 使用 Singleton 生命周期：writer 依赖 IRelationStore(Singleton) 和 validator(Singleton)，
+		// 且被 BasicContextIngestionService/CompressionJobProcessor 等 Singleton 服务消费，
+		// 使用 Scoped 会产生 captive dependency。
+		services.AddSingleton<RelationTypeNormalizer>();
+		services.AddSingleton<RelationProjectorOutputValidator>();
+		services.AddSingleton<IRelationProjectionWriter, RelationProjectionWriter>();
 		services.AddSingleton<RelationExpansionProfileRegistry>();
 		services.AddSingleton<RelationExpansionPolicyValidator>();
 		services.AddSingleton<RelationTraversalEngine>(sp => new RelationTraversalEngine(

@@ -154,10 +154,3 @@ public sealed class RelationProjectorOutputValidator
         return false;
     }
 }
-
-/// <summary>Projector 输出诊断记录。</summary>
-public sealed record RelationProjectorOutputDiagnostic(
-    string Severity,
-    string DiagnosticType,
-    string RelationId,
-    string Message);
