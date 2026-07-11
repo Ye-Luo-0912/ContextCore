@@ -1,11 +1,13 @@
 using System.Text.Json;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
+using ContextCore.Client;
 using ContextCore.Core;
 using ContextCore.Core.Services;
 using ContextCore.Core.Services.Attention;
 using ContextCore.Core.Services.Planning;
 using ContextCore.Core.Services.Retrieval;
+using ContextCore.Evaluation.Hosting;
 using ContextCore.Embedding;
 using ContextCore.Storage.InMemory;
 using ContextCore.Storage.InMemory.Stores;
@@ -56,9 +58,7 @@ public sealed class PlanningShadowEvalRunner
 
             var workspaceId = $"eval-{category}";
             var collectionId = "test";
-            var state = ControlRoomService.CreateState(
-                "memory",
-                "eval",
+            var state = EvalStateFactory.CreateInMemoryState(
                 workspaceId,
                 collectionId);
             await SeedCorpusAsync(state, corpus, workspaceId, collectionId, cancellationToken)
@@ -143,9 +143,7 @@ public sealed class PlanningShadowEvalRunner
 
             var workspaceId = $"eval-{category}";
             var collectionId = "test";
-            var state = ControlRoomService.CreateState(
-                "memory",
-                "eval",
+            var state = EvalStateFactory.CreateInMemoryState(
                 workspaceId,
                 collectionId);
             await SeedCorpusAsync(state, corpus, workspaceId, collectionId, cancellationToken)
@@ -287,7 +285,7 @@ public sealed class PlanningShadowEvalRunner
     }
 
     private static async Task SeedCorpusAsync(
-        ControlRoomState state,
+        IEvalState state,
         ContextEvalCorpus corpus,
         string workspaceId,
         string collectionId,
@@ -425,7 +423,7 @@ public sealed class PlanningShadowEvalRunner
     }
 
     private static async Task<ContextRetrievalRequest> CreateRetrievalRequestAsync(
-        ControlRoomState state,
+        IEvalState state,
         string workspaceId,
         string collectionId,
         ContextEvalSample sample,

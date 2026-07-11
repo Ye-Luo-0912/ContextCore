@@ -100,7 +100,7 @@ static async Task ExecuteCommandAsync(
             await PolicyCommand.ExecuteAsync(service, commandArgs, cancellationToken);
             break;
         case "eval":
-            await EvalCommand.ExecuteAsync(service, commandArgs, cancellationToken);
+            await DispatchEvalCommandAsync(service, commandArgs, cancellationToken);
             break;
         case "backup":
             await BackupCommand.ExecuteAsync(service, commandArgs, cancellationToken);
@@ -116,6 +116,39 @@ static async Task ExecuteCommandAsync(
             Environment.ExitCode = 2;
             break;
     }
+}
+
+static async Task DispatchEvalCommandAsync(
+    ControlRoomService service,
+    IReadOnlyList<string> args,
+    CancellationToken cancellationToken)
+{
+    // Reflection dispatch: ControlRoom 不再编译期引用 ContextCore.Evaluation。
+    // ContextCore.Evaluation.dll 在运行时通过 ReferenceOutputAssembly=false 部署到输出目录。
+    var assembly = System.Reflection.Assembly.Load("ContextCore.Evaluation");
+    var type = assembly.GetType("ContextCore.ControlRoom.Commands.EvalCommand");
+    if (type is null)
+    {
+        Console.Error.WriteLine("Error: EvalCommand 类型未找到（请确认 ContextCore.Evaluation 程序集已部署）。");
+        Environment.ExitCode = 2;
+        return;
+    }
+
+    var method = type.GetMethod(
+        "ExecuteAsync",
+        System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static,
+        binder: null,
+        types: [typeof(ContextCore.Client.IEvalHost), typeof(IReadOnlyList<string>), typeof(CancellationToken)],
+        modifiers: null);
+    if (method is null)
+    {
+        Console.Error.WriteLine("Error: EvalCommand.ExecuteAsync 方法未找到。");
+        Environment.ExitCode = 2;
+        return;
+    }
+
+    var task = (Task)method.Invoke(null, [service, args, cancellationToken])!;
+    await task.ConfigureAwait(false);
 }
 
 static async Task RunInteractiveAsync(
@@ -575,7 +608,7 @@ static async Task RunInteractiveAsync(
                     ShowServiceModeUnsupported("评测报告");
                     break;
                 }
-                await EvalCommand.ExecuteAsync(service, ["report"], cancellationToken).ConfigureAwait(false);
+                await DispatchEvalCommandAsync(service, ["report"], cancellationToken).ConfigureAwait(false);
                 if (WaitForBackOrQuit() == ControlRoomActionKind.Quit)
                 {
                     return;

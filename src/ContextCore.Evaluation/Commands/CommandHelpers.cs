@@ -1,0 +1,49 @@
+namespace ContextCore.ControlRoom.Commands;
+
+/// <summary>解析命令行参数的内部工具类（Evaluation 副本，与 ControlRoom 内的 CommandHelpers 保持一致）。</summary>
+internal static class CommandHelpers
+{
+    public static string? GetOption(IReadOnlyList<string> args, string name)
+    {
+        for (var i = 0; i < args.Count - 1; i++)
+        {
+            if (string.Equals(args[i], name, StringComparison.OrdinalIgnoreCase))
+            {
+                return args[i + 1];
+            }
+        }
+
+        return null;
+    }
+
+    public static int GetIntOption(IReadOnlyList<string> args, string name, int defaultValue)
+    {
+        return int.TryParse(GetOption(args, name), out var value) ? value : defaultValue;
+    }
+
+    public static double GetDoubleOption(IReadOnlyList<string> args, string name, double defaultValue)
+    {
+        var raw = GetOption(args, name);
+        return double.TryParse(raw, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var value)
+            ? value
+            : defaultValue;
+    }
+
+    public static bool HasFlag(IReadOnlyList<string> args, string name)
+    {
+        return args.Any(arg => string.Equals(arg, name, StringComparison.OrdinalIgnoreCase));
+    }
+
+    public static IReadOnlyList<string> GetMultiOption(IReadOnlyList<string> args, string name)
+    {
+        var results = new List<string>();
+        for (var i = 0; i < args.Count - 1; i++)
+        {
+            if (string.Equals(args[i], name, StringComparison.OrdinalIgnoreCase))
+            {
+                results.Add(args[i + 1]);
+            }
+        }
+        return results;
+    }
+}

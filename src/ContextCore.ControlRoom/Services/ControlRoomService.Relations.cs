@@ -165,21 +165,34 @@ public sealed partial class ControlRoomService
     }
 
     /// <summary>
-    /// P3-03：关系旧数据迁移 — 回填 NodeKind/Provenance/Lifecycle/ReviewStatus 正式字段。
-    /// 从 Metadata fallback 读取值写入正式字段，从 MemoryStore/ContextStore 推断 NodeKind，
+    /// P3.1-d：关系旧数据迁移 — 回填 NodeKind/Provenance/Lifecycle/ReviewStatus 正式字段。
+    /// 支持 collection 范围限定、dry-run（默认）/--apply 实际写入、批量节点加载。
+    /// 从 Metadata fallback 读取值写入正式字段，从 MemoryStore/ContextStore 批量推断 NodeKind，
     /// 从 Metadata createdFrom/source/generatedBy 推断 Provenance。
     /// 返回迁移统计。
     /// </summary>
-    public async Task<RelationMigrationReport> MigrateRelationsAsync(CancellationToken cancellationToken = default)
+    public async Task<RelationMigrationReport> MigrateRelationsAsync(
+        RelationMigrationOptions? options = null,
+        CancellationToken cancellationToken = default)
     {
+        options ??= new RelationMigrationOptions();
+
         var relations = await _state.RelationStore.QueryAsync(new ContextRelationQuery
         {
             WorkspaceId = _state.WorkspaceId,
+            CollectionId = options.CollectionId,
             Take = int.MaxValue
         }, cancellationToken).ConfigureAwait(false);
 
+        // P3.1-d: 批量加载节点类型查找表（按关系所属 collection 分组），避免 N+1 GetAsync 调用。
+        var nodeKindLookups = await BuildNodeKindLookupsAsync(relations, cancellationToken).ConfigureAwait(false);
+
         var toUpdate = new List<ContextRelation>();
-        var stats = new RelationMigrationReport { TotalRelations = relations.Count };
+        var stats = new RelationMigrationReport
+        {
+            TotalRelations = relations.Count,
+            DryRun = !options.Apply
+        };
 
         foreach (var relation in relations)
         {
@@ -190,10 +203,14 @@ public sealed partial class ControlRoomService
             var reviewStatus = relation.ReviewStatus;
             var provenance = relation.Provenance;
 
-            // 回填 NodeKind：从 MemoryStore/ContextStore 查找条目推断
+            var lookup = nodeKindLookups.TryGetValue(relation.CollectionId, out var l)
+                ? l
+                : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+            // 回填 NodeKind：从批量查找表推断
             if (string.IsNullOrWhiteSpace(sourceNodeKind))
             {
-                sourceNodeKind = await InferNodeKindAsync(relation.SourceId, cancellationToken).ConfigureAwait(false);
+                sourceNodeKind = InferNodeKind(relation.SourceId, lookup);
                 if (!string.IsNullOrWhiteSpace(sourceNodeKind))
                 {
                     changed = true;
@@ -202,7 +219,7 @@ public sealed partial class ControlRoomService
             }
             if (string.IsNullOrWhiteSpace(targetNodeKind))
             {
-                targetNodeKind = await InferNodeKindAsync(relation.TargetId, cancellationToken).ConfigureAwait(false);
+                targetNodeKind = InferNodeKind(relation.TargetId, lookup);
                 if (!string.IsNullOrWhiteSpace(targetNodeKind))
                 {
                     changed = true;
@@ -269,9 +286,14 @@ public sealed partial class ControlRoomService
                     Provenance = provenance
                 });
             }
+            else
+            {
+                stats.SkippedRelations++;
+            }
         }
 
-        if (toUpdate.Count > 0)
+        // P3.1-d: 仅在显式 --apply 时写入，dry-run 不落盘
+        if (options.Apply && toUpdate.Count > 0)
         {
             await _state.RelationStore.BatchUpsertAsync(toUpdate, cancellationToken).ConfigureAwait(false);
         }
@@ -280,48 +302,92 @@ public sealed partial class ControlRoomService
         return stats;
     }
 
-    /// <summary>P3-03：从 MemoryStore/ContextStore 查找条目推断 NodeKind。</summary>
-    private async Task<string> InferNodeKindAsync(string itemId, CancellationToken cancellationToken)
+    /// <summary>P3.1-d：按 collection 批量加载 MemoryStore/ContextStore 构建 itemId -> NodeKind 查找表。</summary>
+    private async Task<Dictionary<string, Dictionary<string, string>>> BuildNodeKindLookupsAsync(
+        IReadOnlyList<ContextRelation> relations,
+        CancellationToken cancellationToken)
+    {
+        var lookups = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
+
+        // 仅对需要推断 NodeKind 的关系所属 collection 建表
+        var collectionsNeedingLookup = relations
+            .Where(r => string.IsNullOrWhiteSpace(r.SourceNodeKind) || string.IsNullOrWhiteSpace(r.TargetNodeKind))
+            .Select(r => r.CollectionId)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        foreach (var collectionId in collectionsNeedingLookup)
+        {
+            var lookup = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+            var memories = await _state.MemoryStore.QueryAsync(new ContextMemoryQuery
+            {
+                WorkspaceId = _state.WorkspaceId,
+                CollectionId = collectionId.Length == 0 ? null : collectionId,
+                Take = int.MaxValue
+            }, cancellationToken).ConfigureAwait(false);
+            foreach (var memory in memories)
+            {
+                lookup[memory.Id] = ClassifyNodeKind(memory);
+            }
+
+            var contexts = await _state.ContextStore.QueryAsync(new ContextQuery
+            {
+                WorkspaceId = _state.WorkspaceId,
+                CollectionId = collectionId.Length == 0 ? null : collectionId,
+                Take = int.MaxValue
+            }, cancellationToken).ConfigureAwait(false);
+            foreach (var context in contexts)
+            {
+                // MemoryStore 优先（已分类），仅对未命中的 context 条目补 ContextItem
+                if (!lookup.ContainsKey(context.Id))
+                {
+                    lookup[context.Id] = nameof(GraphNodeKind.ContextItem);
+                }
+            }
+
+            lookups[collectionId] = lookup;
+        }
+
+        return lookups;
+    }
+
+    /// <summary>P3.1-d：从批量查找表推断单个条目的 NodeKind。</summary>
+    private static string InferNodeKind(string itemId, Dictionary<string, string> lookup)
     {
         if (string.IsNullOrWhiteSpace(itemId))
         {
             return string.Empty;
         }
 
-        var memory = await _state.MemoryStore.GetAsync(_state.WorkspaceId, _state.CollectionId, itemId, cancellationToken).ConfigureAwait(false);
-        if (memory is not null)
+        return lookup.TryGetValue(itemId, out var kind) ? kind : string.Empty;
+    }
+
+    /// <summary>P3.1-d：根据记忆层与类型分类 NodeKind（原 InferNodeKindAsync 的分类逻辑）。</summary>
+    private static string ClassifyNodeKind(ContextMemoryItem memory)
+    {
+        if (memory.Layer == ContextMemoryLayer.Global)
         {
-            if (memory.Layer == ContextMemoryLayer.Global)
-            {
-                return nameof(GraphNodeKind.GlobalMemory);
-            }
-            if (memory.Layer == ContextMemoryLayer.Stable)
-            {
-                if (memory.Type.Contains("constraint", StringComparison.OrdinalIgnoreCase))
-                {
-                    return nameof(GraphNodeKind.StableConstraint);
-                }
-                if (memory.Type.Contains("decision", StringComparison.OrdinalIgnoreCase))
-                {
-                    return nameof(GraphNodeKind.DecisionRecord);
-                }
-                return nameof(GraphNodeKind.StableMemory);
-            }
-            // Working/Candidate layer
+            return nameof(GraphNodeKind.GlobalMemory);
+        }
+        if (memory.Layer == ContextMemoryLayer.Stable)
+        {
             if (memory.Type.Contains("constraint", StringComparison.OrdinalIgnoreCase))
             {
-                return nameof(GraphNodeKind.CandidateConstraint);
+                return nameof(GraphNodeKind.StableConstraint);
             }
-            return nameof(GraphNodeKind.CandidateMemory);
+            if (memory.Type.Contains("decision", StringComparison.OrdinalIgnoreCase))
+            {
+                return nameof(GraphNodeKind.DecisionRecord);
+            }
+            return nameof(GraphNodeKind.StableMemory);
         }
-
-        var context = await _state.ContextStore.GetAsync(_state.WorkspaceId, _state.CollectionId, itemId, cancellationToken).ConfigureAwait(false);
-        if (context is not null)
+        // Working/Candidate layer
+        if (memory.Type.Contains("constraint", StringComparison.OrdinalIgnoreCase))
         {
-            return nameof(GraphNodeKind.ContextItem);
+            return nameof(GraphNodeKind.CandidateConstraint);
         }
-
-        return string.Empty;
+        return nameof(GraphNodeKind.CandidateMemory);
     }
 
     /// <summary>P3-03：从 Metadata createdFrom/source/generatedBy 推断 Provenance。</summary>

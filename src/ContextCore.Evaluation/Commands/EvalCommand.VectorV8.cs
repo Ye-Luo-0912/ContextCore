@@ -416,7 +416,8 @@ public static partial class EvalCommand
             && intake.ConfigPatchWritten == false
             && intake.RuntimeActivation == false
             && intake.NoRuntimeMutationInvariant == true;
-        var intakeReasonsClean = intakeHasRequiredReasons
+        var intakeReasonsClean = intake is not null
+            && intakeHasRequiredReasons
             && !intake.BlockedReasons.Any(r => r.Contains("Runtime", StringComparison.OrdinalIgnoreCase)
                 || r.Contains("Package", StringComparison.OrdinalIgnoreCase)
                 || r.Contains("Packing", StringComparison.OrdinalIgnoreCase)

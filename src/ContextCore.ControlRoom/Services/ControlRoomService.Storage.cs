@@ -794,8 +794,8 @@ public sealed partial class ControlRoomService
     {
         var path = Path.Combine(
             Directory.GetCurrentDirectory(),
-            RouterIntentEvaluationRunner.DefaultOutputDirectory,
-            RouterIntentEvaluationRunner.ReportFileName);
+            EvalReportPaths.RouterOutputDirectory,
+            EvalReportPaths.RouterIntentBaselineReportFileName);
         if (!File.Exists(path))
         {
             return null;
@@ -905,8 +905,8 @@ public sealed partial class ControlRoomService
     {
         var path = Path.Combine(
             Directory.GetCurrentDirectory(),
-            RouterIntentShadowReportBuilder.DefaultOutputDirectory,
-            RouterIntentShadowReportBuilder.TraceQualityReportFileName);
+            EvalReportPaths.RouterOutputDirectory,
+            EvalReportPaths.RouterShadowTraceQualityReportFileName);
         if (!File.Exists(path))
         {
             return null;
@@ -933,7 +933,7 @@ public sealed partial class ControlRoomService
     {
         var path = Path.Combine(
             Directory.GetCurrentDirectory(),
-            RouterDisagreementTriageRunner.DefaultOutputDirectory,
+            EvalReportPaths.RouterOutputDirectory,
             fileName);
         if (!File.Exists(path))
         {
@@ -959,8 +959,8 @@ public sealed partial class ControlRoomService
     {
         var path = Path.Combine(
             Directory.GetCurrentDirectory(),
-            RouterDisagreementTriageRunner.DefaultOutputDirectory,
-            RouterDisagreementTriageRunner.HardNegativesFileName);
+            EvalReportPaths.RouterOutputDirectory,
+            EvalReportPaths.RouterHardNegativesFileName);
         if (!File.Exists(path))
         {
             return 0;
@@ -990,8 +990,8 @@ public sealed partial class ControlRoomService
     {
         var path = Path.Combine(
             Directory.GetCurrentDirectory(),
-            RouterGuardedOptInReadinessGateRunner.DefaultOutputDirectory,
-            RouterGuardedOptInReadinessGateRunner.ReportFileName);
+            EvalReportPaths.RouterOutputDirectory,
+            EvalReportPaths.RouterGuardedOptInReadinessGateReportFileName);
         if (!File.Exists(path))
         {
             return null;
@@ -1018,7 +1018,7 @@ public sealed partial class ControlRoomService
     {
         var path = Path.Combine(
             Directory.GetCurrentDirectory(),
-            CandidateRerankerShadowEvalRunner.DefaultOutputDirectory,
+            EvalReportPaths.RankerOutputDirectory,
             fileName);
         if (!File.Exists(path))
         {
@@ -1046,7 +1046,7 @@ public sealed partial class ControlRoomService
     {
         var path = Path.Combine(
             Directory.GetCurrentDirectory(),
-            CandidateRerankerFeatureCompletenessRunner.DefaultOutputDirectory,
+            EvalReportPaths.RankerOutputDirectory,
             fileName);
         if (!File.Exists(path))
         {
@@ -1074,7 +1074,7 @@ public sealed partial class ControlRoomService
     {
         var path = Path.Combine(
             Directory.GetCurrentDirectory(),
-            CandidateRerankerShadowFailureAuditRunner.DefaultOutputDirectory,
+            EvalReportPaths.RankerOutputDirectory,
             fileName);
         if (!File.Exists(path))
         {
@@ -1102,7 +1102,7 @@ public sealed partial class ControlRoomService
     {
         var path = Path.Combine(
             Directory.GetCurrentDirectory(),
-            CandidateRerankerScoreDistributionRunner.DefaultOutputDirectory,
+            EvalReportPaths.RankerOutputDirectory,
             fileName);
         if (!File.Exists(path))
         {
@@ -1130,7 +1130,7 @@ public sealed partial class ControlRoomService
     {
         var path = Path.Combine(
             Directory.GetCurrentDirectory(),
-            CandidateRerankerListwiseCalibrationRunner.DefaultOutputDirectory,
+            EvalReportPaths.RankerOutputDirectory,
             fileName);
         if (!File.Exists(path))
         {
@@ -1158,7 +1158,7 @@ public sealed partial class ControlRoomService
     {
         var path = Path.Combine(
             Directory.GetCurrentDirectory(),
-            CandidateRerankerFormalPriorityAlignmentRunner.DefaultOutputDirectory,
+            EvalReportPaths.RankerOutputDirectory,
             fileName);
         if (!File.Exists(path))
         {
@@ -1181,8 +1181,8 @@ public sealed partial class ControlRoomService
     {
         var path = Path.Combine(
             Directory.GetCurrentDirectory(),
-            CandidateRerankerShadowTraceQualityReportBuilder.DefaultOutputDirectory,
-            CandidateRerankerShadowTraceQualityReportBuilder.ReportFileName);
+            EvalReportPaths.RankerOutputDirectory,
+            EvalReportPaths.RankerShadowTraceQualityReportFileName);
         if (!File.Exists(path))
         {
             return null;
@@ -1208,8 +1208,8 @@ public sealed partial class ControlRoomService
     {
         var path = Path.Combine(
             Directory.GetCurrentDirectory(),
-            LearningReadinessFreezeRunner.DefaultOutputDirectory,
-            LearningReadinessFreezeRunner.FreezeReportFileName);
+            EvalReportPaths.ReadinessOutputDirectory,
+            EvalReportPaths.LearningReadinessFreezeReportFileName);
         if (!File.Exists(path))
         {
             return null;
@@ -1235,8 +1235,8 @@ public sealed partial class ControlRoomService
     {
         var path = Path.Combine(
             Directory.GetCurrentDirectory(),
-            LearningReadinessFreezeRunner.DefaultOutputDirectory,
-            LearningReadinessFreezeRunner.RuntimeGateFileName);
+            EvalReportPaths.ReadinessOutputDirectory,
+            EvalReportPaths.LearningRuntimeChangeReadinessGateFileName);
         if (!File.Exists(path))
         {
             return null;
@@ -4034,7 +4034,7 @@ public sealed partial class ControlRoomService
         {
             var path = Path.Combine(
                 Directory.GetCurrentDirectory(),
-                ContextCoreFoundationFreezeRunner.DefaultOutputDirectory,
+                EvalReportPaths.FoundationOutputDirectory,
                 fileName);
             if (!File.Exists(path))
             {

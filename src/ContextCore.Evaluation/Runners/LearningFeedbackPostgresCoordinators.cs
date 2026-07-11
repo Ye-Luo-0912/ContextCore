@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
@@ -213,5 +215,9 @@ public sealed class LearningFeedbackShadowReadCoordinator
     }
 
     public static string ComputeStableHash<T>(T value)
-        => ShadowReadComparisonHelper.ComputeStableHash(value, new JsonSerializerOptions(JsonSerializerDefaults.Web), lowercase: false);
+    {
+        var json = JsonSerializer.Serialize(value, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(json));
+        return Convert.ToHexString(bytes);
+    }
 }

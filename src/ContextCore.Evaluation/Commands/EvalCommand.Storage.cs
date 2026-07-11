@@ -7,7 +7,6 @@ using ContextCore.Abstractions.Models;
 using ContextCore.Client;
 using ContextCore.Core;
 using ContextCore.Core.Services;
-using ContextCore.ControlRoom.Rendering;
 using ContextCore.ControlRoom.Services;
 using ContextCore.Core.Services.Graph;
 using ContextCore.Core.Services.Planning;
@@ -3206,7 +3205,7 @@ private static async Task ExecutePostgresVectorParityAsync(
     }
 
 private static async Task ExecutePostgresVectorProviderScopedReindexPlanAsync(
-        ControlRoomService service,
+        IEvalHost service,
         IReadOnlyList<string> args,
         CancellationToken cancellationToken)
     {
@@ -3242,7 +3241,7 @@ private static async Task ExecutePostgresVectorProviderScopedReindexPlanAsync(
     }
 
 private static async Task ExecutePostgresVectorProviderScopedReindexApplyAsync(
-        ControlRoomService service,
+        IEvalHost service,
         IReadOnlyList<string> args,
         CancellationToken cancellationToken)
     {
@@ -3278,7 +3277,7 @@ private static async Task ExecutePostgresVectorProviderScopedReindexApplyAsync(
     }
 
 private static async Task ExecutePostgresVectorProviderScopedReindexQualityAsync(
-        ControlRoomService service,
+        IEvalHost service,
         IReadOnlyList<string> args,
         CancellationToken cancellationToken)
     {
@@ -3317,7 +3316,7 @@ private static async Task ExecutePostgresVectorProviderScopedReindexQualityAsync
     }
 
 private static async Task ExecutePostgresVectorQueryPreviewAsync(
-        ControlRoomService service,
+        IEvalHost service,
         IReadOnlyList<string> args,
         CancellationToken cancellationToken)
     {
@@ -3374,7 +3373,7 @@ private static async Task ExecutePostgresVectorQueryPreviewAsync(
     }
 
 private static async Task ExecutePostgresVectorShadowEvalAsync(
-        ControlRoomService service,
+        IEvalHost service,
         IReadOnlyList<string> args,
         string subcommand,
         CancellationToken cancellationToken)
@@ -3547,7 +3546,7 @@ private static async Task ExecutePostgresVectorFreezeGateAsync(
     }
 
 private static async Task ExecuteStorageCheckAsync(
-        ControlRoomService service,
+        IEvalHost service,
         CancellationToken cancellationToken)
     {
         var state = service.State;

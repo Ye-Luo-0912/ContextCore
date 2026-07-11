@@ -14,7 +14,7 @@ public enum ControlRoomMode
 }
 
 /// <summary>控制室运行时状态对象，持有当前工作区、集合及各存储层的服务引用。</summary>
-public sealed class ControlRoomState
+public sealed class ControlRoomState : IEvalState
 {
     public ControlRoomMode Mode { get; init; } = ControlRoomMode.Direct;
 

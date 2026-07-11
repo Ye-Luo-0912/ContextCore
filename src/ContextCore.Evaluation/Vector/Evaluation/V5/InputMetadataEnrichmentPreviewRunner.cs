@@ -502,14 +502,6 @@ public sealed class InputMetadataEnrichmentPreviewRunner
         => value.Replace("|", "\\|", StringComparison.Ordinal);
 }
 
-public static class InputMetadataEnrichmentPreviewRecommendations
-{
-    public const string ReadyForSourceRepairRecheck = nameof(ReadyForSourceRepairRecheck);
-    public const string NeedsSourceDiverseDataset = nameof(NeedsSourceDiverseDataset);
-    public const string NeedsInputMetadataEnrichment = nameof(NeedsInputMetadataEnrichment);
-    public const string BlockedByProtocolMismatch = nameof(BlockedByProtocolMismatch);
-}
-
 public sealed class InputMetadataEnrichmentPreviewOptions
 {
     public RetrievalEvalProtocol? Protocol { get; init; }
@@ -525,68 +517,3 @@ public sealed class InputMetadataEnrichmentPreviewOptions
     public bool ReadyForRuntimeSwitch { get; init; }
 }
 
-public sealed class InputMetadataCoverageSnapshot
-{
-    public int CorpusItemCount { get; init; }
-    public int SourceRefPresentCount { get; init; }
-    public int EvidenceRefPresentCount { get; init; }
-    public int ProvenancePresentCount { get; init; }
-    public int SourceFingerprintPresentCount { get; init; }
-    public int RelationMetadataPresentCount { get; init; }
-    public int LifecycleMetadataPresentCount { get; init; }
-    public int CanonicalMetadataTokenCount { get; init; }
-    public int QueryDerivedAnchorCount { get; init; }
-    public int CoverageScore { get; init; }
-}
-
-public sealed class InputMetadataEnrichmentPreviewReport
-{
-    public string OperationId { get; init; } = string.Empty;
-    public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
-    public bool PreviewPassed { get; init; }
-    public bool GatePassed { get; init; }
-    public string Recommendation { get; init; } = InputMetadataEnrichmentPreviewRecommendations.BlockedByProtocolMismatch;
-    public RetrievalEvalProtocol Protocol { get; init; } = new();
-    public int CorpusItemCount { get; init; }
-    public int SampleCount { get; init; }
-    public InputMetadataCoverageSnapshot BeforeCoverage { get; init; } = new();
-    public InputMetadataCoverageSnapshot AfterCoverage { get; init; } = new();
-    public int MetadataCoverageDelta { get; init; }
-    public double BeforeRecall { get; init; }
-    public double AfterRecall { get; init; }
-    public double RecallDelta { get; init; }
-    public double BeforeMrr { get; init; }
-    public double AfterMrr { get; init; }
-    public double MrrDelta { get; init; }
-    public double BeforeHoldoutMarginalRecall { get; init; }
-    public double AfterHoldoutMarginalRecall { get; init; }
-    public double HoldoutMarginalRecallDelta { get; init; }
-    public double BeforeHoldoutMarginalMrr { get; init; }
-    public double AfterHoldoutMarginalMrr { get; init; }
-    public double HoldoutMarginalMrrDelta { get; init; }
-    public IReadOnlyList<CandidateSourceContributionSummary> BeforeSourceSummaries { get; init; } = Array.Empty<CandidateSourceContributionSummary>();
-    public IReadOnlyList<CandidateSourceContributionSummary> AfterSourceSummaries { get; init; } = Array.Empty<CandidateSourceContributionSummary>();
-    public IReadOnlyList<CandidateSourceDiscriminabilitySplitSummary> BeforeSplitSummaries { get; init; } = Array.Empty<CandidateSourceDiscriminabilitySplitSummary>();
-    public IReadOnlyList<CandidateSourceDiscriminabilitySplitSummary> AfterSplitSummaries { get; init; } = Array.Empty<CandidateSourceDiscriminabilitySplitSummary>();
-    public int IndependentNonDenseSourceCount { get; init; }
-    public int NonDiscriminativeSourceCount { get; init; }
-    public double TemplateHomogeneityScore { get; init; }
-    public int RiskAfterPolicy { get; init; }
-    public int MustNotHitRiskAfterPolicy { get; init; }
-    public int LifecycleRiskAfterPolicy { get; init; }
-    public int FormalOutputChanged { get; init; }
-    public bool FormalPackageWritten { get; init; }
-    public bool PackageOutputChanged { get; init; }
-    public bool PackingPolicyChanged { get; init; }
-    public bool RuntimeMutated { get; init; }
-    public bool VectorStoreBindingChanged { get; init; }
-    public bool FormalRetrievalAllowed { get; init; }
-    public bool RuntimeSwitchAllowed { get; init; }
-    public bool ReadyForRuntimeSwitch { get; init; }
-    public bool UseForRuntime { get; init; }
-    public bool RuntimeChangeGatePassed { get; init; }
-    public bool V511ProtocolGatePassed { get; init; }
-    public RuntimeObservableFeatureContractSourceScan SourceScan { get; init; } = new();
-    public IReadOnlyDictionary<string, string> SourceReports { get; init; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-    public IReadOnlyList<string> BlockedReasons { get; init; } = Array.Empty<string>();
-}

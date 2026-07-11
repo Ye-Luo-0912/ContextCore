@@ -1447,4 +1447,20 @@ public sealed class RelationMigrationReport
 
     /// <summary>回填 Provenance 的次数。</summary>
     public int ProvenanceBackfilled { get; set; }
+
+    /// <summary>已是最新、无需变更的关系数。</summary>
+    public int SkippedRelations { get; set; }
+
+    /// <summary>是否为 dry-run（未实际写入）。</summary>
+    public bool DryRun { get; init; }
+}
+
+/// <summary>P3.1-d：关系迁移选项。</summary>
+public sealed class RelationMigrationOptions
+{
+    /// <summary>限定迁移的集合范围（null = 工作空间内所有集合）。</summary>
+    public string? CollectionId { get; init; }
+
+    /// <summary>是否实际写入变更。默认 false（dry-run，仅报告将变更的内容）。</summary>
+    public bool Apply { get; init; }
 }

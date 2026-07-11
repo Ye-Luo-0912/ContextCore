@@ -160,26 +160,6 @@ public sealed class FormalRetrievalIntegrationFreezeRunner
     }
 }
 
-/// <summary>正式检索集成冻结报告。</summary>
-public sealed class FormalRetrievalIntegrationFreezeReport
-{
-    public string OperationId { get; init; } = ""; public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
-    public bool FreezePassed { get; init; }
-    public string Recommendation { get; init; } = "KeepPreviewOnly";
-    public bool FormalRetrievalAllowed { get; init; } public bool RuntimeSwitchAllowed { get; init; }
-    public bool ReadyForRuntimeSwitch { get; init; } public bool UseForRuntime { get; init; }
-    public bool PackageOutputChanged { get; init; } public bool PackingPolicyChanged { get; init; }
-    public bool RuntimeMutated { get; init; } public bool VectorStoreBindingChanged { get; init; }
-    public bool FormalPackageWritten { get; init; }
-    public string SelectedProfile { get; init; } = "combined-safe";
-    public string EvalProtocol { get; init; } = "V5.11";
-    public string InputContract { get; init; } = "formal-adapter-input-contract-v1";
-    public string OutputPolicyShadowGate { get; init; } = "V5.15 passed";
-    public string IntegrationDecision { get; init; } = "V5.17 passed";
-    public IReadOnlyList<string> FrozenArtifactPaths { get; init; } = Array.Empty<string>();
-    public IReadOnlyList<string> BlockedReasons { get; init; } = Array.Empty<string>();
-}
-
 /// <summary>空操作绑定计划报告。</summary>
 public sealed class AdapterNoOpBindingPlanReport
 {

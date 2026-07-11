@@ -7,7 +7,6 @@ using ContextCore.Abstractions.Models;
 using ContextCore.Client;
 using ContextCore.Core;
 using ContextCore.Core.Services;
-using ContextCore.ControlRoom.Rendering;
 using ContextCore.ControlRoom.Services;
 using ContextCore.Core.Services.Graph;
 using ContextCore.Core.Services.Planning;

@@ -7,7 +7,6 @@ using ContextCore.Abstractions.Models;
 using ContextCore.Client;
 using ContextCore.Core;
 using ContextCore.Core.Services;
-using ContextCore.ControlRoom.Rendering;
 using ContextCore.ControlRoom.Services;
 using ContextCore.Core.Services.Graph;
 using ContextCore.Core.Services.Planning;
@@ -555,7 +554,7 @@ public static partial class EvalCommand
     private const int Qwen3Dimension = 1024;
 
     public static async Task ExecuteAsync(
-        ControlRoomService service,
+        IEvalHost service,
         IReadOnlyList<string> args,
         CancellationToken cancellationToken = default)
     {
@@ -3249,7 +3248,7 @@ public static partial class EvalCommand
     }
 
     private static async Task ExecuteRankerShadowTraceQualityAsync(
-        ControlRoomService service,
+        IEvalHost service,
         IReadOnlyList<string> args,
         CancellationToken cancellationToken)
     {
@@ -3547,7 +3546,7 @@ public static partial class EvalCommand
     }
 
     private static async Task ExecuteCandidateRerankerShadowTraceQualityAsync(
-        ControlRoomService service,
+        IEvalHost service,
         IReadOnlyList<string> args,
         CancellationToken cancellationToken)
     {
@@ -3590,7 +3589,7 @@ public static partial class EvalCommand
     }
 
     private static async Task ExecuteGraphExpansionShadowTraceQualityAsync(
-        ControlRoomService service,
+        IEvalHost service,
         IReadOnlyList<string> args,
         CancellationToken cancellationToken)
     {
@@ -4348,7 +4347,7 @@ public static partial class EvalCommand
     }
 
     private static async Task ExecuteExportLearningFeaturesAsync(
-        ControlRoomService service,
+        IEvalHost service,
         IReadOnlyList<string> args,
         CancellationToken cancellationToken)
     {
@@ -4382,7 +4381,7 @@ public static partial class EvalCommand
     }
 
     private static async Task ExecuteVectorReindexPlanAsync(
-        ControlRoomService service,
+        IEvalHost service,
         IReadOnlyList<string> args,
         CancellationToken cancellationToken)
     {
@@ -4417,7 +4416,7 @@ public static partial class EvalCommand
     }
 
     private static async Task ExecuteVectorReindexApplyAsync(
-        ControlRoomService service,
+        IEvalHost service,
         IReadOnlyList<string> args,
         CancellationToken cancellationToken)
     {
@@ -4440,7 +4439,7 @@ public static partial class EvalCommand
                 .ConfigureAwait(false);
             await WriteTextAsync(JsonSerializer.Serialize(response, JsonOptions), outputPath, cancellationToken)
                 .ConfigureAwait(false);
-            await WriteTextAsync(ServiceOperationalRenderer.RenderVectorReindexSubmit(response), markdownPath, cancellationToken)
+            await WriteTextAsync(EvalVectorRenderer.RenderVectorReindexSubmit(response), markdownPath, cancellationToken)
                 .ConfigureAwait(false);
             Console.WriteLine($"[Eval] Vector reindex job submitted: {response.Job.JobId}");
             return;
@@ -4472,7 +4471,7 @@ public static partial class EvalCommand
     }
 
     private static async Task ExecuteVectorIndexDiagnosticsAsync(
-        ControlRoomService service,
+        IEvalHost service,
         IReadOnlyList<string> args,
         CancellationToken cancellationToken)
     {
@@ -4511,7 +4510,7 @@ public static partial class EvalCommand
     }
 
     private static async Task ExecuteVectorIndexCoverageAsync(
-        ControlRoomService service,
+        IEvalHost service,
         IReadOnlyList<string> args,
         CancellationToken cancellationToken)
     {
@@ -4564,7 +4563,7 @@ public static partial class EvalCommand
     }
 
     private static async Task ExecuteVectorLifecycleMetadataCoverageAsync(
-        ControlRoomService service,
+        IEvalHost service,
         IReadOnlyList<string> args,
         CancellationToken cancellationToken)
     {
@@ -4635,7 +4634,7 @@ public static partial class EvalCommand
     }
 
     private static async Task ExecuteVectorLifecycleMetadataBackfillAsync(
-        ControlRoomService service,
+        IEvalHost service,
         IReadOnlyList<string> args,
         bool apply,
         CancellationToken cancellationToken)
@@ -4724,7 +4723,7 @@ public static partial class EvalCommand
     }
 
     private static async Task ExecuteVectorQueryPreviewAsync(
-        ControlRoomService service,
+        IEvalHost service,
         IReadOnlyList<string> args,
         CancellationToken cancellationToken)
     {
@@ -4768,13 +4767,13 @@ public static partial class EvalCommand
 
         await WriteTextAsync(JsonSerializer.Serialize(result, JsonOptions), outputPath, cancellationToken)
             .ConfigureAwait(false);
-        await WriteTextAsync(ServiceOperationalRenderer.RenderVectorQueryPreview(result), markdownPath, cancellationToken)
+        await WriteTextAsync(EvalVectorRenderer.RenderVectorQueryPreview(result), markdownPath, cancellationToken)
             .ConfigureAwait(false);
         Console.WriteLine($"[Eval] Vector query preview written: {outputPath}");
     }
 
     private static async Task ExecuteVectorQueryShadowEvalAsync(
-        ControlRoomService service,
+        IEvalHost service,
         IReadOnlyList<string> args,
         CancellationToken cancellationToken)
     {
@@ -4899,7 +4898,7 @@ public static partial class EvalCommand
     }
 
     private static async Task ExecuteVectorQueryProfileSweepAsync(
-        ControlRoomService service,
+        IEvalHost service,
         IReadOnlyList<string> args,
         CancellationToken cancellationToken)
     {
@@ -5024,7 +5023,7 @@ public static partial class EvalCommand
     }
 
     private static async Task ExecuteVectorResidualRiskAuditAsync(
-        ControlRoomService service,
+        IEvalHost service,
         IReadOnlyList<string> args,
         CancellationToken cancellationToken)
     {
@@ -5127,7 +5126,7 @@ public static partial class EvalCommand
     }
 
     private static async Task ExecuteVectorRecallLossAuditAsync(
-        ControlRoomService service,
+        IEvalHost service,
         IReadOnlyList<string> args,
         CancellationToken cancellationToken)
     {
@@ -5257,7 +5256,7 @@ public static partial class EvalCommand
     }
 
     private static async Task ExecuteVectorSafeRecallRecoveryAsync(
-        ControlRoomService service,
+        IEvalHost service,
         IReadOnlyList<string> args,
         CancellationToken cancellationToken)
     {
@@ -5346,7 +5345,7 @@ public static partial class EvalCommand
     }
 
     private static async Task ExecuteVectorRankerFusionShadowAsync(
-        ControlRoomService service,
+        IEvalHost service,
         IReadOnlyList<string> args,
         CancellationToken cancellationToken)
     {
@@ -5454,7 +5453,7 @@ public static partial class EvalCommand
     }
 
     private static async Task ExecuteVectorRepresentationBenchmarkAsync(
-        ControlRoomService service,
+        IEvalHost service,
         IReadOnlyList<string> args,
         CancellationToken cancellationToken)
     {
@@ -5595,7 +5594,7 @@ public static partial class EvalCommand
     }
 
     private static async Task ExecuteVectorRetrievalShadowReadinessGateAsync(
-        ControlRoomService service,
+        IEvalHost service,
         IReadOnlyList<string> args,
         CancellationToken cancellationToken)
     {
@@ -5719,7 +5718,7 @@ public static partial class EvalCommand
     }
 
     private static async Task ExecuteVectorQueryExpansionShadowAsync(
-        ControlRoomService service,
+        IEvalHost service,
         IReadOnlyList<string> args,
         CancellationToken cancellationToken)
     {
@@ -5924,7 +5923,7 @@ public static partial class EvalCommand
     }
 
     private static async Task ExecuteVectorQwen3ShadowEvalAsync(
-        ControlRoomService service,
+        IEvalHost service,
         IReadOnlyList<string> args,
         CancellationToken cancellationToken)
     {
@@ -5961,7 +5960,7 @@ public static partial class EvalCommand
     }
 
     private static async Task ExecuteVectorProviderComparisonV310Async(
-        ControlRoomService service,
+        IEvalHost service,
         IReadOnlyList<string> args,
         CancellationToken cancellationToken)
     {
@@ -6146,7 +6145,7 @@ public static partial class EvalCommand
     }
 
     private static async Task ExecuteVectorRetrievalDatasetAlignmentAuditAsync(
-        ControlRoomService service,
+        IEvalHost service,
         IReadOnlyList<string> args,
         string subcommand,
         CancellationToken cancellationToken)
@@ -6257,7 +6256,7 @@ public static partial class EvalCommand
     }
 
     private static async Task ExecuteVectorEligibilityRecallLossTriageAsync(
-        ControlRoomService service,
+        IEvalHost service,
         IReadOnlyList<string> args,
         string subcommand,
         CancellationToken cancellationToken)
@@ -6363,7 +6362,7 @@ public static partial class EvalCommand
     }
 
     private static async Task ExecuteVectorLifecycleMetadataRepairPlanAsync(
-        ControlRoomService service,
+        IEvalHost service,
         IReadOnlyList<string> args,
         string subcommand,
         CancellationToken cancellationToken)
@@ -6473,7 +6472,7 @@ public static partial class EvalCommand
     }
 
     private static async Task ExecuteVectorLifecycleMetadataReviewCandidatesAsync(
-        ControlRoomService service,
+        IEvalHost service,
         IReadOnlyList<string> args,
         string subcommand,
         CancellationToken cancellationToken)
@@ -6546,7 +6545,7 @@ public static partial class EvalCommand
     }
 
     private static async Task ExecuteVectorLifecycleMetadataReviewAsync(
-        ControlRoomService service,
+        IEvalHost service,
         IReadOnlyList<string> args,
         string subcommand,
         CancellationToken cancellationToken)
@@ -6597,7 +6596,7 @@ public static partial class EvalCommand
     }
 
     private static async Task ExecuteVectorSidecarEligibilityPreviewAsync(
-        ControlRoomService service,
+        IEvalHost service,
         IReadOnlyList<string> args,
         string subcommand,
         CancellationToken cancellationToken)
@@ -6637,7 +6636,7 @@ public static partial class EvalCommand
     }
 
     private static async Task ExecuteVectorLifecycleMetadataEvidenceBackfillAsync(
-        ControlRoomService service,
+        IEvalHost service,
         IReadOnlyList<string> args,
         string subcommand,
         CancellationToken cancellationToken)
@@ -6679,7 +6678,7 @@ public static partial class EvalCommand
     }
 
     private static async Task ExecuteRetrievalDatasetV2MetadataContractAsync(
-        ControlRoomService service,
+        IEvalHost service,
         IReadOnlyList<string> args,
         string subcommand,
         CancellationToken cancellationToken)
@@ -6748,7 +6747,7 @@ public static partial class EvalCommand
     }
 
     private static async Task ExecuteRetrievalDatasetV2GenerationAsync(
-        ControlRoomService service,
+        IEvalHost service,
         IReadOnlyList<string> args,
         string subcommand,
         CancellationToken cancellationToken)
@@ -6924,7 +6923,7 @@ public static partial class EvalCommand
     }
 
     private static RetrievalDatasetV2GenerationOptions BuildRetrievalDatasetV2GenerationOptions(
-        ControlRoomService service,
+        IEvalHost service,
         IReadOnlyList<string> args)
     {
         var dryRun = !CommandHelpers.HasFlag(args, "--confirm") || CommandHelpers.HasFlag(args, "--dry-run");
@@ -7083,7 +7082,7 @@ public static partial class EvalCommand
     }
 
     private static async Task ExecuteRetrievalDatasetV2StressAsync(
-        ControlRoomService service,
+        IEvalHost service,
         IReadOnlyList<string> args,
         string subcommand,
         CancellationToken cancellationToken)
@@ -7197,7 +7196,7 @@ public static partial class EvalCommand
     }
 
     private static RetrievalDatasetV2StressOptions BuildRetrievalDatasetV2StressOptions(
-        ControlRoomService service,
+        IEvalHost service,
         IReadOnlyList<string> args)
     {
         var dryRun = !CommandHelpers.HasFlag(args, "--confirm") || CommandHelpers.HasFlag(args, "--dry-run");
@@ -9246,7 +9245,7 @@ public static partial class EvalCommand
     }
 
     private static async Task ExecuteVectorLifecycleMetadataReviewBatchAsync(
-        ControlRoomService service,
+        IEvalHost service,
         IReadOnlyList<string> args,
         string subcommand,
         CancellationToken cancellationToken)
@@ -9918,7 +9917,7 @@ public static partial class EvalCommand
                    && parsed);
     }
 
-    private static FileStorageOptions BuildEvalFileStorageOptions(ControlRoomService service)
+    private static FileStorageOptions BuildEvalFileStorageOptions(IEvalHost service)
     {
         return !service.State.IsServiceMode
                && string.Equals(service.State.StorageKind, "filesystem", StringComparison.OrdinalIgnoreCase)
@@ -10249,7 +10248,7 @@ public static partial class EvalCommand
     }
 
     private static async Task ExecuteVectorHybridPreviewAsync(
-        ControlRoomService service,
+        IEvalHost service,
         IReadOnlyList<string> args,
         CancellationToken cancellationToken)
     {
@@ -10286,7 +10285,7 @@ public static partial class EvalCommand
     }
 
     private static async Task ExecuteVectorHybridShadowEvalAsync(
-        ControlRoomService service,
+        IEvalHost service,
         IReadOnlyList<string> args,
         CancellationToken cancellationToken)
     {
@@ -10340,7 +10339,7 @@ public static partial class EvalCommand
     }
 
     private static async Task ExecuteVectorHybridRecallRegressionAuditAsync(
-        ControlRoomService service,
+        IEvalHost service,
         IReadOnlyList<string> args,
         CancellationToken cancellationToken)
     {
@@ -10588,7 +10587,7 @@ public static partial class EvalCommand
     }
 
     private static async Task<VectorEmbeddingProviderComparisonResult> BuildProviderComparisonResultAsync(
-        ControlRoomService service,
+        IEvalHost service,
         IReadOnlyList<VectorReindexSourceItem> sourceItems,
         IReadOnlyList<ContextEvalSample> samples,
         string workspaceId,
@@ -11033,7 +11032,7 @@ public static partial class EvalCommand
     }
 
     private static async Task<VectorReindexRequest> BuildVectorReindexRequestAsync(
-        ControlRoomService service,
+        IEvalHost service,
         IReadOnlyList<string> args,
         bool apply,
         CancellationToken cancellationToken)
@@ -11079,7 +11078,7 @@ public static partial class EvalCommand
     }
 
     private static async Task<VectorReindexRequest> BuildVectorCoverageReindexRequestAsync(
-        ControlRoomService service,
+        IEvalHost service,
         IReadOnlyList<string> args,
         CancellationToken cancellationToken)
     {
@@ -11111,7 +11110,7 @@ public static partial class EvalCommand
     }
 
     private static VectorQueryPreviewRequest BuildVectorQueryPreviewRequest(
-        ControlRoomService service,
+        IEvalHost service,
         IReadOnlyList<string> args,
         string queryText)
     {
@@ -11358,13 +11357,13 @@ public static partial class EvalCommand
         return string.Equals(ResolveVectorSourceMode(args), VectorStoreSourceMode, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static string ResolveVectorCommandWorkspaceId(ControlRoomService service, IReadOnlyList<string> args)
+    private static string ResolveVectorCommandWorkspaceId(IEvalHost service, IReadOnlyList<string> args)
     {
         return CommandHelpers.GetOption(args, "--workspace")
                ?? (IsVectorStoreSourceMode(args) ? service.State.WorkspaceId : VectorEvalCorpusWorkspaceId);
     }
 
-    private static string ResolveVectorCommandCollectionId(ControlRoomService service, IReadOnlyList<string> args)
+    private static string ResolveVectorCommandCollectionId(IEvalHost service, IReadOnlyList<string> args)
     {
         return CommandHelpers.GetOption(args, "--collection")
                ?? (IsVectorStoreSourceMode(args) ? service.State.CollectionId : VectorEvalCorpusCollectionId);
@@ -11396,7 +11395,7 @@ public static partial class EvalCommand
     }
 
     private static async Task<IReadOnlyList<VectorReindexSourceItem>> LoadPostgresVectorProviderScopedReindexSourceItemsAsync(
-        ControlRoomService service,
+        IEvalHost service,
         IReadOnlyList<string> args,
         CancellationToken cancellationToken)
     {
@@ -11637,7 +11636,7 @@ public static partial class EvalCommand
     }
 
     private static VectorReindexCliInfrastructure CreateVectorReindexInfrastructure(
-        ControlRoomService service,
+        IEvalHost service,
         bool saveReports,
         IReadOnlyList<VectorReindexSourceItem>? sourceItems = null,
         EmbeddingProviderOptions? providerOptions = null)

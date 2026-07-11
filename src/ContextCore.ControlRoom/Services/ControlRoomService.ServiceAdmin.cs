@@ -1482,11 +1482,11 @@ public sealed partial class ControlRoomService
             RouterShadowTraceQualityReport = await ReadRouterShadowTraceQualityReportAsync(cancellationToken)
                 .ConfigureAwait(false),
             RouterDisagreementTriageA3Report = await ReadRouterDisagreementTriageReportAsync(
-                    RouterDisagreementTriageRunner.A3ReportFileName,
+                    EvalReportPaths.RouterDisagreementTriageA3ReportFileName,
                     cancellationToken)
                 .ConfigureAwait(false),
             RouterDisagreementTriageExtendedReport = await ReadRouterDisagreementTriageReportAsync(
-                    RouterDisagreementTriageRunner.ExtendedReportFileName,
+                    EvalReportPaths.RouterDisagreementTriageExtendedReportFileName,
                     cancellationToken)
                 .ConfigureAwait(false),
             RouterHardNegativeCount = await ReadRouterHardNegativeCountAsync(cancellationToken)
@@ -1494,51 +1494,51 @@ public sealed partial class ControlRoomService
             RouterGuardedOptInReadinessGateReport = await ReadRouterGuardedOptInReadinessGateReportAsync(cancellationToken)
                 .ConfigureAwait(false),
             CandidateRerankerFeatureCompletenessA3Report = await ReadCandidateRerankerFeatureCompletenessReportAsync(
-                    CandidateRerankerFeatureCompletenessRunner.A3ReportFileName,
+                    EvalReportPaths.RankerFeatureCompletenessA3ReportFileName,
                     cancellationToken)
                 .ConfigureAwait(false),
             CandidateRerankerFeatureCompletenessExtendedReport = await ReadCandidateRerankerFeatureCompletenessReportAsync(
-                    CandidateRerankerFeatureCompletenessRunner.ExtendedReportFileName,
+                    EvalReportPaths.RankerFeatureCompletenessExtendedReportFileName,
                     cancellationToken)
                 .ConfigureAwait(false),
             CandidateRerankerShadowEvalA3Report = await ReadCandidateRerankerShadowEvalReportAsync(
-                    CandidateRerankerShadowEvalRunner.A3ReportFileName,
+                    EvalReportPaths.RankerShadowEvalA3ReportFileName,
                     cancellationToken)
                 .ConfigureAwait(false),
             CandidateRerankerShadowEvalExtendedReport = await ReadCandidateRerankerShadowEvalReportAsync(
-                    CandidateRerankerShadowEvalRunner.ExtendedReportFileName,
+                    EvalReportPaths.RankerShadowEvalExtendedReportFileName,
                     cancellationToken)
                 .ConfigureAwait(false),
             CandidateRerankerShadowFailureAuditA3Report = await ReadCandidateRerankerShadowFailureAuditReportAsync(
-                    CandidateRerankerShadowFailureAuditRunner.A3ReportFileName,
+                    EvalReportPaths.RankerShadowFailureAuditA3ReportFileName,
                     cancellationToken)
                 .ConfigureAwait(false),
             CandidateRerankerShadowFailureAuditExtendedReport = await ReadCandidateRerankerShadowFailureAuditReportAsync(
-                    CandidateRerankerShadowFailureAuditRunner.ExtendedReportFileName,
+                    EvalReportPaths.RankerShadowFailureAuditExtendedReportFileName,
                     cancellationToken)
                 .ConfigureAwait(false),
             CandidateRerankerScoreDistributionA3Report = await ReadCandidateRerankerScoreDistributionReportAsync(
-                    CandidateRerankerScoreDistributionRunner.A3ReportFileName,
+                    EvalReportPaths.RankerScoreDistributionA3ReportFileName,
                     cancellationToken)
                 .ConfigureAwait(false),
             CandidateRerankerScoreDistributionExtendedReport = await ReadCandidateRerankerScoreDistributionReportAsync(
-                    CandidateRerankerScoreDistributionRunner.ExtendedReportFileName,
+                    EvalReportPaths.RankerScoreDistributionExtendedReportFileName,
                     cancellationToken)
                 .ConfigureAwait(false),
             CandidateRerankerListwiseCalibrationA3Report = await ReadCandidateRerankerListwiseCalibrationReportAsync(
-                    CandidateRerankerListwiseCalibrationRunner.A3ReportFileName,
+                    EvalReportPaths.RankerListwiseCalibrationA3ReportFileName,
                     cancellationToken)
                 .ConfigureAwait(false),
             CandidateRerankerListwiseCalibrationExtendedReport = await ReadCandidateRerankerListwiseCalibrationReportAsync(
-                    CandidateRerankerListwiseCalibrationRunner.ExtendedReportFileName,
+                    EvalReportPaths.RankerListwiseCalibrationExtendedReportFileName,
                     cancellationToken)
                 .ConfigureAwait(false),
             CandidateRerankerFormalPriorityAlignmentA3Report = await ReadCandidateRerankerFormalPriorityAlignmentReportAsync(
-                    CandidateRerankerFormalPriorityAlignmentRunner.A3ReportFileName,
+                    EvalReportPaths.RankerFormalPriorityAlignmentA3ReportFileName,
                     cancellationToken)
                 .ConfigureAwait(false),
             CandidateRerankerFormalPriorityAlignmentExtendedReport = await ReadCandidateRerankerFormalPriorityAlignmentReportAsync(
-                    CandidateRerankerFormalPriorityAlignmentRunner.ExtendedReportFileName,
+                    EvalReportPaths.RankerFormalPriorityAlignmentExtendedReportFileName,
                     cancellationToken)
                 .ConfigureAwait(false),
             CandidateRerankerShadowTraceQualityReport = await ReadCandidateRerankerShadowTraceQualityReportAsync(cancellationToken)

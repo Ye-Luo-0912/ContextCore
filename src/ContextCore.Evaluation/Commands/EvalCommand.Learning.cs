@@ -7,7 +7,6 @@ using ContextCore.Abstractions.Models;
 using ContextCore.Client;
 using ContextCore.Core;
 using ContextCore.Core.Services;
-using ContextCore.ControlRoom.Rendering;
 using ContextCore.ControlRoom.Services;
 using ContextCore.Core.Services.Graph;
 using ContextCore.Core.Services.Planning;
@@ -177,7 +176,7 @@ public static partial class EvalCommand
 
 
     private static async Task ExecuteLearningFeedbackSummaryAsync(
-        ControlRoomService service,
+        IEvalHost service,
         IReadOnlyList<string> args,
         CancellationToken cancellationToken)
     {
@@ -213,7 +212,7 @@ public static partial class EvalCommand
 
 
     private static async Task ExecuteLearningFeedbackReviewSummaryAsync(
-        ControlRoomService service,
+        IEvalHost service,
         IReadOnlyList<string> args,
         CancellationToken cancellationToken)
     {
@@ -251,7 +250,7 @@ public static partial class EvalCommand
 
 
     private static async Task ExecuteLearningFeedbackFeatureCandidatesAsync(
-        ControlRoomService service,
+        IEvalHost service,
         IReadOnlyList<string> args,
         CancellationToken cancellationToken)
     {
@@ -288,7 +287,7 @@ public static partial class EvalCommand
 
 
     private static async Task ExecuteLearningFeedbackQualityAsync(
-        ControlRoomService service,
+        IEvalHost service,
         IReadOnlyList<string> args,
         CancellationToken cancellationToken)
     {
@@ -334,7 +333,7 @@ public static partial class EvalCommand
 
 
     private static async Task ExecuteLearningFeedbackReviewSmokeAsync(
-        ControlRoomService service,
+        IEvalHost service,
         IReadOnlyList<string> args,
         CancellationToken cancellationToken)
     {
@@ -515,7 +514,7 @@ public static partial class EvalCommand
 
 
     private static async Task ExecuteLearningApprovedFeedbackDatasetGateAsync(
-        ControlRoomService service,
+        IEvalHost service,
         IReadOnlyList<string> args,
         CancellationToken cancellationToken)
     {
@@ -550,7 +549,7 @@ public static partial class EvalCommand
 
 
     private static async Task ExecuteLearningFeedbackSmokeAsync(
-        ControlRoomService service,
+        IEvalHost service,
         IReadOnlyList<string> args,
         CancellationToken cancellationToken)
     {
@@ -661,7 +660,7 @@ public static partial class EvalCommand
     }
 
     private static async Task<LearningFeedbackQualityReport> BuildLearningFeedbackQualityReportAsync(
-        ControlRoomService service,
+        IEvalHost service,
         LearningFeedbackEventQuery query,
         CancellationToken cancellationToken)
     {
@@ -742,7 +741,7 @@ public static partial class EvalCommand
     }
 
     private static LearningFeedbackEventQuery BuildLearningFeedbackQuery(
-        ControlRoomService service,
+        IEvalHost service,
         IReadOnlyList<string> args,
         int defaultLimit)
     {
@@ -783,7 +782,7 @@ public static partial class EvalCommand
     }
 
     private static LearningFeedbackSubmitRequest BuildLearningFeedbackSubmitRequest(
-        ControlRoomService service,
+        IEvalHost service,
         IReadOnlyList<string> args,
         bool requireExplicitTarget)
     {
@@ -1006,7 +1005,7 @@ public static partial class EvalCommand
         }
     }
 
-    private static PolicyFeedbackDatasetService? CreatePolicyFeedbackDatasetServiceForEval(ControlRoomService service)
+    private static PolicyFeedbackDatasetService? CreatePolicyFeedbackDatasetServiceForEval(IEvalHost service)
     {
         if (service.State.IsServiceMode || string.IsNullOrWhiteSpace(service.State.RootPath))
         {
@@ -1030,7 +1029,7 @@ public static partial class EvalCommand
     }
 
 private static async Task ExecuteExportLearningFeedbackAsync(
-        ControlRoomService service,
+        IEvalHost service,
         IReadOnlyList<string> args,
         CancellationToken cancellationToken)
     {
@@ -1063,7 +1062,7 @@ private static async Task ExecuteExportLearningFeedbackAsync(
 
 
     private static async Task ExecuteSubmitLearningFeedbackAsync(
-        ControlRoomService service,
+        IEvalHost service,
         IReadOnlyList<string> args,
         CancellationToken cancellationToken)
     {

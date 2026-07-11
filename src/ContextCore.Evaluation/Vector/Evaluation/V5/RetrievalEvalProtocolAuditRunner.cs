@@ -1079,36 +1079,6 @@ public sealed class RetrievalEvalProtocolAuditRunner
     private readonly record struct TemplateHomogeneityResult(double Score, int SignatureCount, int DuplicateSignatureCount);
 }
 
-public static class RetrievalCandidateSourceIds
-{
-    public const string Dense = "dense";
-    public const string Lexical = "lexical";
-    public const string Anchor = "anchor";
-    public const string EvidenceSource = "evidence-source";
-    public const string Relation = "relation";
-    public const string Metadata = "metadata";
-}
-
-public static class RetrievalEvalProtocolRecommendations
-{
-    public const string ReadyForSourceRepairRecheck = nameof(ReadyForSourceRepairRecheck);
-    public const string NeedsSourceDiverseDataset = nameof(NeedsSourceDiverseDataset);
-    public const string NeedsInputMetadataEnrichment = nameof(NeedsInputMetadataEnrichment);
-    public const string BlockedByProtocolMismatch = nameof(BlockedByProtocolMismatch);
-}
-
-public sealed class RetrievalEvalProtocol
-{
-    public string ProtocolVersion { get; init; } = "retrieval-eval-protocol-v1";
-    public int VectorTopK { get; init; } = 5;
-    public int MergedTopK { get; init; } = 8;
-    public int FinalTopK { get; init; } = 5;
-    public double ScoreThreshold { get; init; } = 0.0;
-    public string DeterministicTieBreak { get; init; } = "score_desc_source_precedence_candidate_id_ordinal";
-    public string TrainSplit { get; init; } = "train";
-    public string HoldoutSplit { get; init; } = "holdout";
-}
-
 public sealed class RetrievalEvalProtocolAuditOptions
 {
     public RetrievalEvalProtocol? Protocol { get; init; }
@@ -1121,47 +1091,6 @@ public sealed class RetrievalEvalProtocolAuditOptions
     public bool FormalRetrievalAllowed { get; init; }
     public bool RuntimeSwitchAllowed { get; init; }
     public bool ReadyForRuntimeSwitch { get; init; }
-}
-
-public sealed class RetrievalProtocolMetricSet
-{
-    public string ProfileName { get; init; } = string.Empty;
-    public int SampleCount { get; init; }
-    public int HitCount { get; init; }
-    public int MustHitCount { get; init; }
-    public double Recall { get; init; }
-    public double Mrr { get; init; }
-    public int RiskAfterPolicy { get; init; }
-    public int MustNotHitRiskAfterPolicy { get; init; }
-    public int LifecycleRiskAfterPolicy { get; init; }
-    public string Signature { get; init; } = string.Empty;
-}
-
-public sealed class CandidateSourceContributionSummary
-{
-    public string SourceId { get; init; } = string.Empty;
-    public int CandidateCount { get; init; }
-    public int UniqueCandidateCount { get; init; }
-    public int UniqueMustHitRecoveryCount { get; init; }
-    public double SourceRecall { get; init; }
-    public double SourceMrr { get; init; }
-    public double MarginalRecall { get; init; }
-    public double MarginalMrr { get; init; }
-    public double OverlapRateWithDense { get; init; }
-    public double SourceOverlapRate { get; init; }
-    public bool NonDiscriminative { get; init; }
-}
-
-public sealed class CandidateSourceDiscriminabilitySplitSummary
-{
-    public string Split { get; init; } = string.Empty;
-    public string Difficulty { get; init; } = string.Empty;
-    public int SampleCount { get; init; }
-    public int UniqueCandidateCount { get; init; }
-    public int UniqueMustHitRecoveryCount { get; init; }
-    public double MarginalRecall { get; init; }
-    public double MarginalMrr { get; init; }
-    public double SourceOverlapRate { get; init; }
 }
 
 public sealed record RetrievalEvalProtocolAuditBundle(
@@ -1217,71 +1146,3 @@ public sealed class RetrievalEvalProtocolAuditReport
     public IReadOnlyList<string> BlockedReasons { get; init; } = Array.Empty<string>();
 }
 
-public sealed class CandidateSourceDiscriminabilityAuditReport
-{
-    public string OperationId { get; init; } = string.Empty;
-    public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
-    public bool AuditPassed { get; init; }
-    public string Recommendation { get; init; } = RetrievalEvalProtocolRecommendations.BlockedByProtocolMismatch;
-    public RetrievalEvalProtocol Protocol { get; init; } = new();
-    public int SampleCount { get; init; }
-    public int CorpusItemCount { get; init; }
-    public double BaselineRecall { get; init; }
-    public double BaselineMrr { get; init; }
-    public double MergedRecall { get; init; }
-    public double MergedMrr { get; init; }
-    public IReadOnlyList<CandidateSourceContributionSummary> SourceSummaries { get; init; } = Array.Empty<CandidateSourceContributionSummary>();
-    public IReadOnlyList<CandidateSourceDiscriminabilitySplitSummary> SplitSummaries { get; init; } = Array.Empty<CandidateSourceDiscriminabilitySplitSummary>();
-    public double TemplateHomogeneityScore { get; init; }
-    public bool TemplateHomogeneityDetected { get; init; }
-    public int TemplateSignatureCount { get; init; }
-    public int DuplicateTemplateSignatureCount { get; init; }
-    public bool SourceNonDiscriminativeDetected { get; init; }
-    public int NonDiscriminativeSourceCount { get; init; }
-    public int RiskAfterPolicy { get; init; }
-    public int MustNotHitRiskAfterPolicy { get; init; }
-    public int LifecycleRiskAfterPolicy { get; init; }
-    public int FormalOutputChanged { get; init; }
-    public bool FormalPackageWritten { get; init; }
-    public bool PackageOutputChanged { get; init; }
-    public bool PackingPolicyChanged { get; init; }
-    public bool RuntimeMutated { get; init; }
-    public bool VectorStoreBindingChanged { get; init; }
-    public bool FormalRetrievalAllowed { get; init; }
-    public bool RuntimeSwitchAllowed { get; init; }
-    public bool ReadyForRuntimeSwitch { get; init; }
-    public bool UseForRuntime { get; init; }
-    public IReadOnlyDictionary<string, string> SourceReports { get; init; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-    public IReadOnlyList<string> BlockedReasons { get; init; } = Array.Empty<string>();
-}
-
-public sealed class RetrievalEvalProtocolGateReport
-{
-    public string OperationId { get; init; } = string.Empty;
-    public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
-    public bool GatePassed { get; init; }
-    public string Recommendation { get; init; } = RetrievalEvalProtocolRecommendations.BlockedByProtocolMismatch;
-    public RetrievalEvalProtocol Protocol { get; init; } = new();
-    public bool BaselineProtocolReproducible { get; init; }
-    public bool TieBreakDeterministic { get; init; }
-    public int HashOrderSensitivityCount { get; init; }
-    public bool EvalLabelScoringDetected { get; init; }
-    public bool EvalLabelCandidateGenerationDetected { get; init; }
-    public bool SourceNonDiscriminativeDetected { get; init; }
-    public bool TemplateHomogeneityDetected { get; init; }
-    public bool RuntimeChangeGatePassed { get; init; }
-    public int RiskAfterPolicy { get; init; }
-    public int MustNotHitRiskAfterPolicy { get; init; }
-    public int LifecycleRiskAfterPolicy { get; init; }
-    public int FormalOutputChanged { get; init; }
-    public bool FormalPackageWritten { get; init; }
-    public bool PackageOutputChanged { get; init; }
-    public bool PackingPolicyChanged { get; init; }
-    public bool RuntimeMutated { get; init; }
-    public bool VectorStoreBindingChanged { get; init; }
-    public bool FormalRetrievalAllowed { get; init; }
-    public bool RuntimeSwitchAllowed { get; init; }
-    public bool ReadyForRuntimeSwitch { get; init; }
-    public bool UseForRuntime { get; init; }
-    public IReadOnlyList<string> BlockedReasons { get; init; } = Array.Empty<string>();
-}

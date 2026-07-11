@@ -2,9 +2,11 @@ using System.Text;
 using System.Text.Json;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
+using ContextCore.Client;
 using ContextCore.Core;
 using ContextCore.Core.Services;
 using ContextCore.Core.Services.Graph;
+using ContextCore.Evaluation.Hosting;
 using ContextCore.Storage.InMemory;
 using ContextCore.Storage.InMemory.Stores;
 
@@ -71,9 +73,7 @@ public sealed class ContextEvalRunner
             // 2. 初始化 InMemory 隔离状态
             var workspaceId = $"eval-{category}";
             var collectionId = "test";
-            var state = ControlRoomService.CreateState(
-                "memory",
-                "eval",
+            var state = EvalStateFactory.CreateInMemoryState(
                 workspaceId,
                 collectionId,
                 attentionRerankOptions: _attentionRerankOptions,
@@ -329,7 +329,7 @@ public sealed class ContextEvalRunner
     }
 
     private static async Task<IReadOnlyList<ContextConstraint>> ActivateConstraintGapFixturesForSampleAsync(
-        ControlRoomState state,
+        IEvalState state,
         IReadOnlyList<ConstraintGapCandidate> activatedConstraintGaps,
         string workspaceId,
         string collectionId,
@@ -400,7 +400,7 @@ public sealed class ContextEvalRunner
     }
 
     private static async Task ResetActivatedConstraintGapFixturesAsync(
-        ControlRoomState state,
+        IEvalState state,
         IReadOnlyList<ContextConstraint> activatedConstraints)
     {
         if (activatedConstraints.Count == 0)
@@ -480,7 +480,7 @@ public sealed class ContextEvalRunner
     }
 
     private static async Task<ContextEvalResult> EvaluateSampleAsync(
-        ControlRoomState state,
+        IEvalState state,
         string workspaceId,
         string collectionId,
         ContextEvalSample sample,
@@ -1086,7 +1086,7 @@ public sealed class ContextEvalRunner
     }
 
     private static async Task<IReadOnlyList<string>> BuildConstraintClosureDiagnosticsAsync(
-        ControlRoomState state,
+        IEvalState state,
         string workspaceId,
         string collectionId,
         IReadOnlyList<string> expectedConstraints,

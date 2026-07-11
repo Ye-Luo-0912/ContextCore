@@ -2974,7 +2974,7 @@ public static class ServiceOperationalRenderer
         if (readinessRegistry is null)
         {
             builder.AppendLine("- status : not generated");
-            builder.AppendLine($"- path   : {Path.Combine(LearningReadinessFreezeRunner.DefaultOutputDirectory, LearningReadinessFreezeRunner.FreezeReportFileName)}");
+            builder.AppendLine($"- path   : {Path.Combine(EvalReportPaths.ReadinessOutputDirectory, EvalReportPaths.LearningReadinessFreezeReportFileName)}");
             builder.AppendLine("- action : run eval learning-readiness-freeze-report");
         }
         else
@@ -2998,7 +2998,7 @@ public static class ServiceOperationalRenderer
         if (foundation is null)
         {
             builder.AppendLine("- status : not generated");
-            builder.AppendLine($"- path   : {Path.Combine(ContextCoreFoundationFreezeRunner.DefaultOutputDirectory, "foundation-release-candidate-gate.json")}");
+            builder.AppendLine($"- path   : {Path.Combine(EvalReportPaths.FoundationOutputDirectory, "foundation-release-candidate-gate.json")}");
             builder.AppendLine("- action : run eval foundation-release-candidate-gate");
         }
         else
@@ -3200,7 +3200,7 @@ public static class ServiceOperationalRenderer
         if (runtimeGate is null)
         {
             builder.AppendLine("- status : not generated");
-            builder.AppendLine($"- path   : {Path.Combine(LearningReadinessFreezeRunner.DefaultOutputDirectory, LearningReadinessFreezeRunner.RuntimeGateFileName)}");
+            builder.AppendLine($"- path   : {Path.Combine(EvalReportPaths.ReadinessOutputDirectory, EvalReportPaths.LearningRuntimeChangeReadinessGateFileName)}");
             builder.AppendLine("- action : run eval learning-runtime-change-readiness-gate");
         }
         else
@@ -3216,7 +3216,7 @@ public static class ServiceOperationalRenderer
         if (routerReport is null)
         {
             builder.AppendLine("- status : not generated");
-            builder.AppendLine($"- path   : {Path.Combine(RouterIntentEvaluationRunner.DefaultOutputDirectory, RouterIntentEvaluationRunner.ReportFileName)}");
+            builder.AppendLine($"- path   : {Path.Combine(EvalReportPaths.RouterOutputDirectory, EvalReportPaths.RouterIntentBaselineReportFileName)}");
         }
         else
         {
@@ -3237,7 +3237,7 @@ public static class ServiceOperationalRenderer
         if (routerShadow is null)
         {
             builder.AppendLine("- status : not generated");
-            builder.AppendLine($"- path   : {Path.Combine(RouterIntentShadowReportBuilder.DefaultOutputDirectory, RouterIntentShadowReportBuilder.TraceQualityReportFileName)}");
+            builder.AppendLine($"- path   : {Path.Combine(EvalReportPaths.RouterOutputDirectory, EvalReportPaths.RouterShadowTraceQualityReportFileName)}");
             builder.AppendLine("- action : run eval router-shadow-trace-quality");
         }
         else
@@ -3264,7 +3264,7 @@ public static class ServiceOperationalRenderer
         if (routerTriageA3 is null && routerTriageExtended is null)
         {
             builder.AppendLine("- status : not generated");
-            builder.AppendLine($"- path   : {Path.Combine(RouterDisagreementTriageRunner.DefaultOutputDirectory, RouterDisagreementTriageRunner.A3ReportFileName)}");
+            builder.AppendLine($"- path   : {Path.Combine(EvalReportPaths.RouterOutputDirectory, EvalReportPaths.RouterDisagreementTriageA3ReportFileName)}");
             builder.AppendLine("- action : run eval router-disagreement-triage");
         }
         else
@@ -3299,7 +3299,7 @@ public static class ServiceOperationalRenderer
         if (routerGate is null)
         {
             builder.AppendLine("- status : not generated");
-            builder.AppendLine($"- path   : {Path.Combine(RouterGuardedOptInReadinessGateRunner.DefaultOutputDirectory, RouterGuardedOptInReadinessGateRunner.ReportFileName)}");
+            builder.AppendLine($"- path   : {Path.Combine(EvalReportPaths.RouterOutputDirectory, EvalReportPaths.RouterGuardedOptInReadinessGateReportFileName)}");
             builder.AppendLine("- action : run eval router-guarded-optin-readiness-gate");
         }
         else
@@ -3320,7 +3320,7 @@ public static class ServiceOperationalRenderer
         if (featureA3 is null && featureExtended is null)
         {
             builder.AppendLine("- status : not generated");
-            builder.AppendLine($"- path   : {Path.Combine(CandidateRerankerFeatureCompletenessRunner.DefaultOutputDirectory, CandidateRerankerFeatureCompletenessRunner.A3ReportFileName)}");
+            builder.AppendLine($"- path   : {Path.Combine(EvalReportPaths.RankerOutputDirectory, EvalReportPaths.RankerFeatureCompletenessA3ReportFileName)}");
             builder.AppendLine("- action : run eval candidate-reranker-feature-completeness");
         }
         else
@@ -3344,8 +3344,8 @@ public static class ServiceOperationalRenderer
         if (rerankerA3 is null && rerankerExtended is null && rerankerTraceQuality is null)
         {
             builder.AppendLine("- status : not generated");
-            builder.AppendLine($"- eval   : {Path.Combine(CandidateRerankerShadowEvalRunner.DefaultOutputDirectory, CandidateRerankerShadowEvalRunner.A3ReportFileName)}");
-            builder.AppendLine($"- traces : {Path.Combine(CandidateRerankerShadowTraceQualityReportBuilder.DefaultOutputDirectory, CandidateRerankerShadowTraceQualityReportBuilder.ReportFileName)}");
+            builder.AppendLine($"- eval   : {Path.Combine(EvalReportPaths.RankerOutputDirectory, EvalReportPaths.RankerShadowEvalA3ReportFileName)}");
+            builder.AppendLine($"- traces : {Path.Combine(EvalReportPaths.RankerOutputDirectory, EvalReportPaths.RankerShadowTraceQualityReportFileName)}");
             builder.AppendLine("- action : run eval candidate-reranker-shadow-eval and eval candidate-reranker-shadow-trace-quality");
         }
         else
@@ -3376,7 +3376,7 @@ public static class ServiceOperationalRenderer
         if (rerankerAuditA3 is null && rerankerAuditExtended is null)
         {
             builder.AppendLine("- status : not generated");
-            builder.AppendLine($"- path   : {Path.Combine(CandidateRerankerShadowFailureAuditRunner.DefaultOutputDirectory, CandidateRerankerShadowFailureAuditRunner.A3ReportFileName)}");
+            builder.AppendLine($"- path   : {Path.Combine(EvalReportPaths.RankerOutputDirectory, EvalReportPaths.RankerShadowFailureAuditA3ReportFileName)}");
             builder.AppendLine("- action : run eval candidate-reranker-shadow-failure-audit");
         }
         else
@@ -3415,8 +3415,8 @@ public static class ServiceOperationalRenderer
         if (scoreDistributionA3 is null && scoreDistributionExtended is null && listwiseA3 is null && listwiseExtended is null)
         {
             builder.AppendLine("- status : not generated");
-            builder.AppendLine($"- score  : {Path.Combine(CandidateRerankerScoreDistributionRunner.DefaultOutputDirectory, CandidateRerankerScoreDistributionRunner.A3ReportFileName)}");
-            builder.AppendLine($"- list   : {Path.Combine(CandidateRerankerListwiseCalibrationRunner.DefaultOutputDirectory, CandidateRerankerListwiseCalibrationRunner.A3ReportFileName)}");
+            builder.AppendLine($"- score  : {Path.Combine(EvalReportPaths.RankerOutputDirectory, EvalReportPaths.RankerScoreDistributionA3ReportFileName)}");
+            builder.AppendLine($"- list   : {Path.Combine(EvalReportPaths.RankerOutputDirectory, EvalReportPaths.RankerListwiseCalibrationA3ReportFileName)}");
             builder.AppendLine("- action : run eval candidate-reranker-score-distribution and eval candidate-reranker-listwise-calibration");
         }
         else
@@ -3461,7 +3461,7 @@ public static class ServiceOperationalRenderer
         if (formalPriorityA3 is null && formalPriorityExtended is null)
         {
             builder.AppendLine("- status : not generated");
-            builder.AppendLine($"- path   : {Path.Combine(CandidateRerankerFormalPriorityAlignmentRunner.DefaultOutputDirectory, CandidateRerankerFormalPriorityAlignmentRunner.A3ReportFileName)}");
+            builder.AppendLine($"- path   : {Path.Combine(EvalReportPaths.RankerOutputDirectory, EvalReportPaths.RankerFormalPriorityAlignmentA3ReportFileName)}");
             builder.AppendLine("- action : run eval candidate-reranker-formal-priority-alignment");
         }
         else

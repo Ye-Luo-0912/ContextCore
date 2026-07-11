@@ -156,22 +156,6 @@ public sealed class ShadowAdapterDeltaDiagnosticsRunner
     }
 }
 
-public sealed class ShadowAdapterDeltaDiagnosticsReport
-{
-    public string OperationId { get; init; } = ""; public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
-    public bool DiagnosticsPassed { get; init; }
-    public string Recommendations { get; init; } = "Blocked";
-    public int SampleCount { get; init; }
-    public int BaselinePoolSize { get; init; } public int ShadowPoolSize { get; init; }
-    public int OverlapCount { get; init; } public double OverlapRate { get; init; }
-    public int BaselineOnlyCount { get; init; } public int ShadowOnlyCount { get; init; }
-    public int FilteredByEligibilityCount { get; init; } public int FilteredByLifecycleCount { get; init; }
-    public int FilteredByBelowTopKCount { get; init; } public int FilteredByDuplicateCount { get; init; }
-    public IReadOnlyList<string> DeltaZeroCauses { get; init; } = Array.Empty<string>();
-    public IReadOnlyList<string> Diagnostics { get; init; } = Array.Empty<string>();
-    public IReadOnlyList<string> BlockedReasons { get; init; } = Array.Empty<string>();
-}
-
 public sealed class ShadowAdapterDeltaDiagnosticsOptions
 {
     public int TopK { get; init; } = 5;

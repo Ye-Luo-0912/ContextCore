@@ -396,50 +396,6 @@ public sealed class QueryDrivenCandidateSourceRepairRunner
     private sealed class CoverageTotals { public void Count(RetrievalDatasetV2Sample s, IReadOnlyCollection<string> b, IReadOnlyCollection<string> c) { } }
 }
 
-/// <summary>查询驱动候选源修复报告 DTO。</summary>
-public sealed class QueryDrivenCandidateSourceRepairReport
-{
-    public string OperationId { get; init; } = ""; public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
-    public bool ReportPassed { get; init; } public bool GatePassed { get; init; }
-    public string Recommendation { get; init; } = "KeepBaselineOnly";
-    public string BestProfileId { get; init; } = ""; public string BestProfileLabel { get; init; } = "";
-    public int TopK { get; init; } public int SampleCount { get; init; }
-    public int TrainSampleCount { get; init; } public int HoldoutSampleCount { get; init; }
-    public double TrainBaselineRecall { get; init; } public double TrainBaselineMrr { get; init; }
-    public double TrainDerivedRecall { get; init; } public double TrainDerivedMrr { get; init; }
-    public double HoldoutBaselineRecall { get; init; } public double HoldoutBaselineMrr { get; init; }
-    public double HoldoutDerivedRecall { get; init; } public double HoldoutDerivedMrr { get; init; }
-    public QueryDrivenCandidateSourceRepairProfile DenseBaseline { get; init; } = new();
-    public QueryDrivenCandidateSourceRepairProfile DenseLexical { get; init; } = new();
-    public QueryDrivenCandidateSourceRepairProfile DenseAnchors { get; init; } = new();
-    public QueryDrivenCandidateSourceRepairProfile DenseRelation { get; init; } = new();
-    public QueryDrivenCandidateSourceRepairProfile DenseMetadata { get; init; } = new();
-    public QueryDrivenCandidateSourceRepairProfile CombinedSource { get; init; } = new();
-    public double DerivedRecallDelta { get; init; } public double DerivedMrrDelta { get; init; }
-    public int RiskAfterPolicy { get; init; } public int MustNotHitRiskAfterPolicy { get; init; }
-    public int LifecycleRiskAfterPolicy { get; init; } public int SectionMismatchCount { get; init; }
-    public int ForbiddenSampleAnnotationReadCount { get; init; }
-    public int FormalOutputChanged { get; init; } public bool FormalSelectedSetChanged { get; init; }
-    public bool FormalPackageWritten { get; init; } public bool PackageOutputChanged { get; init; }
-    public bool PackingPolicyChanged { get; init; } public bool RuntimeMutated { get; init; }
-    public bool VectorStoreBindingChanged { get; init; } public bool FormalRetrievalAllowed { get; init; }
-    public bool RuntimeSwitchAllowed { get; init; } public bool ReadyForRuntimeSwitch { get; init; }
-    public bool UseForRuntime { get; init; } public bool NoRuntimeMutationInvariant { get; init; }
-    public double MaxAllowedHoldoutRecallRegression { get; init; } public double MaxAllowedHoldoutMrrRegression { get; init; }
-    public double MinLexicalScore { get; init; } public double MinAnchorScore { get; init; }
-    public RuntimeObservableFeatureContractSourceScan SourceScan { get; init; } = new();
-    public IReadOnlyList<string> BlockedReasons { get; init; } = Array.Empty<string>();
-    public IReadOnlyDictionary<string, string> SourceReports { get; init; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-}
-
-/// <summary>查询驱动候选源修复 profile DTO。</summary>
-public sealed class QueryDrivenCandidateSourceRepairProfile
-{
-    public string ProfileId { get; init; } = ""; public string ProfileLabel { get; init; } = "";
-    public double Recall { get; init; } public double Mrr { get; init; }
-    public int MustHitBelowTopK { get; init; } public int HitCount { get; init; } public int TotalMustHitCount { get; init; }
-}
-
 /// <summary>查询驱动候选源修复选项。</summary>
 public sealed class QueryDrivenCandidateSourceRepairOptions
 {
