@@ -1,5 +1,9 @@
 namespace ContextCore.Abstractions.Models;
 
+// P3-05: 这些 eval-only DTO 从 ContextCore.Abstractions\Models\AttentionProfileSelectionDtos.cs 物理迁移到 Evaluation 项目。
+// 命名空间保持 ContextCore.Abstractions.Models 以避免调用方 using 变更。
+// 仅被 Evaluation / ControlRoom eval 命令 / tests 引用，不被 Core 运行时或 Service 使用。
+
 /// <summary>Attention profile selection report generated from baseline and extended eval reports.</summary>
 public sealed class AttentionProfileSelectionReport
 {
