@@ -32,6 +32,8 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
     private readonly RetrievalPlanner _planner = new();
     private static readonly ModeBudgetProfileRegistry ModeBudgetProfiles = ModeBudgetProfileRegistry.CreateDefault();
     private static readonly DomainKeywordProfile DomainKeywords = DomainKeywordProfile.CreateProduction();
+    private static readonly WorkingMemoryScoringProfile ScoringProfile = WorkingMemoryScoringProfile.CreateDefault();
+    private static readonly PackagePriorityProfile PriorityProfile = PackagePriorityProfile.CreateDefault();
 
     public BasicContextPackageBuilder(IContextStore store)
         : this(store, null, null, null, null, null, null)
@@ -1280,14 +1282,12 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         if (isDeprecated)
         {
             // 极端否定词：任何场景都绝对强力排除
-            if (content.Contains("绝不使用", StringComparison.OrdinalIgnoreCase) ||
-                content.Contains("彻底舍弃不用", StringComparison.OrdinalIgnoreCase) ||
-                content.Contains("绝不参考", StringComparison.OrdinalIgnoreCase))
+            if (DomainKeywords.DeprecatedContentHardRejectionKeywords.Any(k => content.Contains(k, StringComparison.OrdinalIgnoreCase)))
             {
                 return ZeroBreakdown();
             }
             // 柔性废弃词：仅在普通场景下过滤
-            if (!isAuditMode && content.Contains("不再需要参考", StringComparison.OrdinalIgnoreCase))
+            if (!isAuditMode && DomainKeywords.DeprecatedContentSoftRejectionKeywords.Any(k => content.Contains(k, StringComparison.OrdinalIgnoreCase)))
             {
                 return ZeroBreakdown();
             }
@@ -1308,8 +1308,8 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
 
         // 严格相关性过滤（早期锚点零匹配拦截）：当请求存在具体锚点但当前项无任何锚点匹配时，
         // 直接降为零分。生产路径默认关闭；仅由评测运行器或显式调试请求通过 policy.EnableStrictRelevanceFilter 开启。
-        // 高重要度（>= 0.8）核心信息豁免，避免误杀关键记忆。
-        if (enableStrictRelevanceFilter && hasSpecificAnchors && item.Importance < 0.8)
+        // 高重要度（>= StrictRelevanceImportanceThreshold）核心信息豁免，避免误杀关键记忆。
+        if (enableStrictRelevanceFilter && hasSpecificAnchors && item.Importance < ScoringProfile.StrictRelevanceImportanceThreshold)
         {
             var anyAnchorMatch = anchors.Any(a => ContextRecallSignalPolicy.IsSpecificRecallAnchor(a)
                 && searchText.Contains(a.Name, StringComparison.OrdinalIgnoreCase));
@@ -1319,30 +1319,30 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
             }
         }
 
-        // ── 维度 1: BaseScore (bounded 0~8) ──────────────────────────────────
-        var baseScore = Math.Min(8.0, item.Importance * 4.0 + item.Confidence * 2.0);
+        // ── 维度 1: BaseScore (bounded 0~Cap) ────────────────────────────────
+        var baseScore = Math.Min(ScoringProfile.BaseScoreCap, item.Importance * ScoringProfile.BaseScoreImportanceMultiplier + item.Confidence * ScoringProfile.BaseScoreConfidenceMultiplier);
 
         // ── 维度 2: LayerScore ───────────────────────────────────────────────
         var layerScore = item.Layer switch
         {
-            ContextMemoryLayer.Working => 4.0,
-            ContextMemoryLayer.Stable  => 2.0,
-            _                          => 1.0
+            ContextMemoryLayer.Working => ScoringProfile.LayerScoreWorking,
+            ContextMemoryLayer.Stable  => ScoringProfile.LayerScoreStable,
+            _                          => ScoringProfile.LayerScoreDefault
         };
 
         // ── 维度 3: StatusScore (additive, can be negative) ──────────────────
         double statusScore;
         if (isRejected)
         {
-            statusScore = -30.0;
+            statusScore = ScoringProfile.StatusScoreRejected;
         }
         else if (isDeprecated)
         {
-            statusScore = (isAuditMode || allowDeprecated) ? +20.0 : -12.0;
+            statusScore = (isAuditMode || allowDeprecated) ? ScoringProfile.StatusScoreDeprecatedAudit : ScoringProfile.StatusScoreDeprecatedNormal;
         }
         else if (isCurrentlyActive)
         {
-            statusScore = isAuditMode ? +0.5 : +5.0;
+            statusScore = isAuditMode ? ScoringProfile.StatusScoreActiveAudit : ScoringProfile.StatusScoreActiveNormal;
         }
         else
         {
@@ -1357,10 +1357,10 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         {
             return new ItemScoreBreakdown
             {
-                BaseScore   = 1.0,
+                BaseScore   = ScoringProfile.StressTestPlaceholderScore,
                 LayerScore  = 0,
                 StatusScore = 0,
-                FinalScore  = 1.0  // 固定占位分，不参与主竞争
+                FinalScore  = ScoringProfile.StressTestPlaceholderScore  // 固定占位分，不参与主竞争
             };
         }
 
@@ -1383,16 +1383,16 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                 var isRawToken = string.Equals(anchor.Source, "request.query", StringComparison.OrdinalIgnoreCase);
                 if (isRawToken)
                 {
-                    var rawBonus = isCurrentlyActive ? anchor.Weight * 9.0 :
-                                  isDeprecated && (isAuditMode || allowDeprecated) ? anchor.Weight * 7.0 : 0.0;
+                    var rawBonus = isCurrentlyActive ? anchor.Weight * ScoringProfile.AnchorRawTokenActiveMultiplier :
+                                  isDeprecated && (isAuditMode || allowDeprecated) ? anchor.Weight * ScoringProfile.AnchorRawTokenDeprecatedMultiplier : 0.0;
                     rawTokenMatchScore += rawBonus;
                     if (anchor.Type is AnchorType.Topic or AnchorType.Entity or AnchorType.Constraint or AnchorType.Task)
                         rawMatchCount++;
                 }
                 else
                 {
-                    var semBonus = isCurrentlyActive ? anchor.Weight * 18.0 :
-                                  isDeprecated && (isAuditMode || allowDeprecated) ? anchor.Weight * 13.0 : 0.0;
+                    var semBonus = isCurrentlyActive ? anchor.Weight * ScoringProfile.AnchorSemanticActiveMultiplier :
+                                  isDeprecated && (isAuditMode || allowDeprecated) ? anchor.Weight * ScoringProfile.AnchorSemanticDeprecatedMultiplier : 0.0;
                     semanticAnchorScore += semBonus;
                     if (anchor.Type is AnchorType.Topic or AnchorType.Entity or AnchorType.Constraint or AnchorType.Task)
                         semanticMatchCount++;
@@ -1403,11 +1403,11 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         // 双轨命中奖励：同时有语义锚点和词项命中，额外奖励
         double anchorMatchBonus = 0.0;
         if (semanticAnchorScore > 0 && rawTokenMatchScore > 0)
-            anchorMatchBonus = isAuditMode ? 8.0 : 10.0;
+            anchorMatchBonus = isAuditMode ? ScoringProfile.AnchorMatchBonusBothAudit : ScoringProfile.AnchorMatchBonusBoth;
         else if (semanticAnchorScore > 0)
-            anchorMatchBonus = 5.0;
+            anchorMatchBonus = ScoringProfile.AnchorMatchBonusSemanticOnly;
         else if (rawTokenMatchScore > 0)
-            anchorMatchBonus = 3.0;
+            anchorMatchBonus = ScoringProfile.AnchorMatchBonusRawOnly;
 
         // 审计场景下，非废弃项需要有足够的 anchor 命中才能通过
         if (isAuditMode && !isDeprecated && hasSpecificAnchors)
@@ -1426,7 +1426,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         double modeMatchScore = 0.0;
         var modeAnchor = anchors.FirstOrDefault(a => a.Type == AnchorType.Mode);
         if (modeAnchor is not null && searchText.Contains(modeAnchor.Name, StringComparison.OrdinalIgnoreCase))
-            modeMatchScore = 3.0;
+            modeMatchScore = ScoringProfile.ModeMatchScore;
 
         // ── 维度 7: TaskIntentScore ──────────────────────────────────────────
         // 提取 query 词中含义词（长度>=2的中文词或英文词）匹配 content
@@ -1434,12 +1434,12 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         var rawQueryAnchor = anchors.Where(a =>
             ContextRecallSignalPolicy.IsSpecificRecallAnchor(a) &&
             string.Equals(a.Source, "request.query", StringComparison.OrdinalIgnoreCase) &&
-            a.Name.Length >= 2).Take(12).ToArray();
+            a.Name.Length >= 2).Take(ScoringProfile.TaskIntentMaxAnchors).ToArray();
         if (rawQueryAnchor.Length > 0 && content.Length > 0)
         {
             var intentHits = rawQueryAnchor.Count(a =>
                 content.Contains(a.Name, StringComparison.OrdinalIgnoreCase));
-            taskIntentScore = Math.Min(6.0, intentHits * 1.5);
+            taskIntentScore = Math.Min(ScoringProfile.TaskIntentScoreCap, intentHits * ScoringProfile.TaskIntentScorePerHit);
         }
 
         // ── 维度 7.5: RelevanceFilter ────────────────────────────────────────
@@ -1451,7 +1451,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
             && hasSpecificAnchors
             && totalAnchorScore <= 0.0
             && taskIntentScore <= 0.0
-            && item.Importance < 0.8)
+            && item.Importance < ScoringProfile.StrictRelevanceImportanceThreshold)
         {
             return ZeroBreakdown();
         }
@@ -1460,11 +1460,11 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         double recencyScore = 0.0;
         var ageHours = (DateTimeOffset.UtcNow - item.UpdatedAt).TotalHours;
         if (ageHours <= 24)
-            recencyScore = 15.0;
+            recencyScore = ScoringProfile.RecencyScore24Hours;
         else if (ageHours <= 24 * 7)
-            recencyScore = 8.0;
+            recencyScore = ScoringProfile.RecencyScore7Days;
         else if (ageHours <= 24 * 30)
-            recencyScore = 3.0;
+            recencyScore = ScoringProfile.RecencyScore30Days;
 
         // ── 维度 9: RelationScore (预留，当前为 0) ───────────────────────────
         double relationScore = 0.0;
@@ -1474,9 +1474,9 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         double lifecyclePenalty = 0.0;
         if (isCurrentlyActive && hasSpecificAnchors && totalAnchorScore <= 0.0)
         {
-            // 有界惩罚：最多减去 (BaseScore + LayerScore + StatusScore) 的 70%，不超过 -15
+            // 有界惩罚：最多减去 (BaseScore + LayerScore + StatusScore) 的 LifecyclePenaltyRatio，不超过 -LifecyclePenaltyCap
             var positiveSum = baseScore + layerScore + statusScore;
-            lifecyclePenalty = -Math.Min(15.0, Math.Max(0.0, positiveSum * 0.70));
+            lifecyclePenalty = -Math.Min(ScoringProfile.LifecyclePenaltyCap, Math.Max(0.0, positiveSum * ScoringProfile.LifecyclePenaltyRatio));
         }
 
         // ── 维度 11: RedundancyPenalty (预留) ────────────────────────────────
@@ -1597,20 +1597,14 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         var score = reserveIds is not null && reserveIds.Contains(item.Id) ? 10_000.0 : 0.0;
         if (IsMode(modeName, "AutomationMode", "Automation"))
         {
-            if (ContainsAny(searchText,
-                    "last-error", "last error", "错误", "失败",
-                    "recovery", "恢复点", "retry", "重试",
-                    "dead-letter", "死信队列", "worker", "stats", "统计"))
+            if (ContainsAny(searchText, DomainKeywords.AutomationModeWorkingMemoryReserveKeywords.ToArray()))
             {
                 score += 900.0;
             }
         }
         else if (IsMode(modeName, "NovelMode", "Novel"))
         {
-            if (ContainsAny(searchText,
-                    "character-state", "人物状态", "foreshadow", "伏笔",
-                    "world", "世界观", "约束", "item-state", "物品状态",
-                    "断剑", "ending", "结局"))
+            if (ContainsAny(searchText, DomainKeywords.NovelModeWorkingMemoryReserveKeywords.ToArray()))
             {
                 score += 900.0;
             }
@@ -1639,22 +1633,19 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         var searchText = CreateMemorySearchText(item);
         var score = reserveIds is not null && reserveIds.Contains(item.Id) ? 10_000.0 : 0.0;
         if (IsMode(modeName, "ChatMode", "Chat") &&
-            ContainsAny(
-                searchText,
-                "preference", "偏好", "language", "中文", "scope", "边界", "安全",
-                "promotion-policy", "no-promote", "promote", "提升", "临时情绪", "重复解释", "oneoff", "一次性"))
+            ContainsAny(searchText, DomainKeywords.ChatModeStableMemoryReserveKeywords.ToArray()))
         {
             score += 900.0;
         }
 
         if (IsMode(modeName, "NovelMode", "Novel") &&
-            ContainsAny(searchText, "world", "世界观", "constraint", "约束", "item", "character"))
+            ContainsAny(searchText, DomainKeywords.NovelModeStableMemoryReserveKeywords.ToArray()))
         {
             score += 600.0;
         }
 
         if (IsMode(modeName, "AutomationMode", "Automation") &&
-            ContainsAny(searchText, "safety", "retry", "dead-letter", "recovery", "安全", "重试"))
+            ContainsAny(searchText, DomainKeywords.AutomationModeStableMemoryReserveKeywords.ToArray()))
         {
             score += 600.0;
         }
@@ -3191,57 +3182,57 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
             if (normalized.Contains("system", StringComparison.Ordinal)
                 || normalized.Contains("safety", StringComparison.Ordinal))
             {
-                return 600;
+                return PriorityProfile.PriorityRankSystem;
             }
 
             if (normalized.Contains("current", StringComparison.Ordinal)
                 || normalized.Contains("input", StringComparison.Ordinal))
             {
-                return 500;
+                return PriorityProfile.PriorityRankCurrent;
             }
 
             if (normalized.Contains("runtime", StringComparison.Ordinal))
             {
-                return 400;
+                return PriorityProfile.PriorityRankRuntime;
             }
 
             if (normalized.Contains("project", StringComparison.Ordinal))
             {
-                return 300;
+                return PriorityProfile.PriorityRankProject;
             }
 
             if (normalized.Contains("user", StringComparison.Ordinal)
                 || normalized.Contains("stable", StringComparison.Ordinal))
             {
-                return 200;
+                return PriorityProfile.PriorityRankUser;
             }
 
             if (normalized.Contains("domain", StringComparison.Ordinal)
                 || normalized.Contains("soft", StringComparison.Ordinal))
             {
-                return 100;
+                return PriorityProfile.PriorityRankDomain;
             }
         }
 
         if (item.Kind.Equals("recent_context", StringComparison.OrdinalIgnoreCase))
         {
-            return 500;
+            return PriorityProfile.PriorityRankRecentContext;
         }
 
         if (item.Kind.Equals("working_memory", StringComparison.OrdinalIgnoreCase)
             && TryReadMetadata(item.Metadata, out var state, "state", "status", "processState")
             && state.Equals("active", StringComparison.OrdinalIgnoreCase))
         {
-            return 450;
+            return PriorityProfile.PriorityRankWorkingMemoryActive;
         }
 
         return item.Kind switch
         {
-            "hard_constraint" => 550,
-            "working_memory" => 350,
-            "global_context" => 250,
-            "stable_memory" => 200,
-            "soft_constraint" => 100,
+            "hard_constraint" => PriorityProfile.PriorityRankHardConstraint,
+            "working_memory" => PriorityProfile.PriorityRankWorkingMemory,
+            "global_context" => PriorityProfile.PriorityRankGlobalContext,
+            "stable_memory" => PriorityProfile.PriorityRankStableMemory,
+            "soft_constraint" => PriorityProfile.PriorityRankSoftConstraint,
             _ => 0
         };
     }
@@ -3266,9 +3257,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         var metadata = string.Join(' ', item.Metadata.Select(pair => $"{pair.Key} {pair.Value}"));
         var searchText = string.Join(' ', item.ItemId, item.Kind, item.Type, item.SectionName, item.Reason, metadata, string.Join(' ', item.SourceRefs));
         if (IsMode(modeName, "AutomationMode", "Automation") &&
-            ContainsAny(searchText,
-                "last-error", "error-log", "recovery", "recovery-point",
-                "retry", "dead-letter", "queue-state", "worker-stats"))
+            ContainsAny(searchText, DomainKeywords.AutomationModePackageOrderKeywords.ToArray()))
         {
             score += 9_000.0;
         }
@@ -3992,50 +3981,50 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         if (constraint.Level == ConstraintLevel.System
             || ContainsConstraintSignal(constraint, "system", "safety", "系统", "安全"))
         {
-            return ("系统/安全", 600);
+            return ("系统/安全", PriorityProfile.ConstraintMergeRankSystem);
         }
 
         if (ContainsConstraintSignal(constraint, "current", "input", "request", "当前", "输入"))
         {
-            return ("当前输入", 500);
+            return ("当前输入", PriorityProfile.ConstraintMergeRankCurrent);
         }
 
         if (constraint.Level == ConstraintLevel.Runtime
             || ContainsConstraintSignal(constraint, "runtime", "运行时"))
         {
-            return ("运行时", 400);
+            return ("运行时", PriorityProfile.ConstraintMergeRankRuntime);
         }
 
         if (ContainsConstraintSignal(constraint, "mode", "模式"))
         {
-            return ("模式", 350);
+            return ("模式", PriorityProfile.ConstraintMergeRankMode);
         }
 
         if (ContainsConstraintSignal(constraint, "project", "项目"))
         {
-            return ("项目", 300);
+            return ("项目", PriorityProfile.ConstraintMergeRankProject);
         }
 
         if (constraint.Level == ConstraintLevel.Hard)
         {
-            return ("硬约束", 450);
+            return ("硬约束", PriorityProfile.ConstraintMergeRankHard);
         }
 
         if (constraint.Level == ConstraintLevel.User
             || ContainsConstraintSignal(constraint, "user", "stable", "用户", "稳定"))
         {
-            return ("用户稳定", 200);
+            return ("用户稳定", PriorityProfile.ConstraintMergeRankUser);
         }
 
         if (constraint.Level == ConstraintLevel.Domain
             || ContainsConstraintSignal(constraint, "domain", "领域"))
         {
-            return ("领域软约束", 100);
+            return ("领域软约束", PriorityProfile.ConstraintMergeRankDomain);
         }
 
         return constraint.Level == ConstraintLevel.Soft
-            ? ("软约束", 100)
-            : ("未分类约束", 0);
+            ? ("软约束", PriorityProfile.ConstraintMergeRankSoft)
+            : ("未分类约束", PriorityProfile.ConstraintMergeRankUnclassified);
     }
 
     private static bool ContainsConstraintSignal(
