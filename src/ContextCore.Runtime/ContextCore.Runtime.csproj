@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>ContextCore.Runtime</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ContextCore.Abstractions\ContextCore.Abstractions.csproj" />
+    <ProjectReference Include="..\ContextCore.Core\ContextCore.Core.csproj" />
+    <ProjectReference Include="..\ContextCore.Storage.InMemory\ContextCore.Storage.InMemory.csproj" />
+  </ItemGroup>
+
+</Project>

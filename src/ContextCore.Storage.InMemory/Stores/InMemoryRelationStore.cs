@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
+using ContextCore.Storage.Shared;
 
 namespace ContextCore.Storage.InMemory;
 
@@ -23,7 +24,7 @@ public sealed class InMemoryRelationStore : IRelationStore
         foreach (var relation in relations)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var normalized = ContextNormalizers.Normalize(relation);
+            var normalized = CompositeContextNormalizer.Normalize(relation);
             _relations[Key(normalized.WorkspaceId, normalized.CollectionId, normalized.Id)] = normalized;
         }
 
@@ -39,7 +40,7 @@ public sealed class InMemoryRelationStore : IRelationStore
         cancellationToken.ThrowIfCancellationRequested();
         return Task.FromResult(
             _relations.TryGetValue(Key(workspaceId, collectionId, relationId), out var relation)
-                ? ContextNormalizers.Clone(relation)
+                ? CompositeContextNormalizer.Clone(relation)
                 : null);
     }
 
@@ -124,7 +125,7 @@ public sealed class InMemoryRelationStore : IRelationStore
             .ThenByDescending(item => item.CreatedAt)
             .Skip(effectiveSkip)
             .Take(effectiveTake)
-            .Select(item => ContextNormalizers.Clone(item))
+            .Select(item => CompositeContextNormalizer.Clone(item))
             .ToArray();
 
         return Task.FromResult<IReadOnlyList<ContextRelation>>(results);
@@ -157,7 +158,7 @@ public sealed class InMemoryRelationStore : IRelationStore
             .ThenByDescending(item => item.CreatedAt)
             .Skip(skip)
             .Take(take)
-            .Select(item => ContextNormalizers.Clone(item))
+            .Select(item => CompositeContextNormalizer.Clone(item))
             .ToArray();
 
         return Task.FromResult<IReadOnlyList<ContextRelation>>(results);

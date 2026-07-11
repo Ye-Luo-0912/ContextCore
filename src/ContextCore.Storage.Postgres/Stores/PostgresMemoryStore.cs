@@ -1,5 +1,6 @@
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
+using ContextCore.Storage.Shared;
 using ContextCore.Storage.Postgres.Infrastructure;
 
 namespace ContextCore.Storage.Postgres.Stores;
@@ -18,7 +19,7 @@ public sealed class PostgresMemoryStore : PostgresStoreBase, IMemoryStore
     public async Task SaveAsync(ContextMemoryItem item, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(item);
-        var normalized = ContextNormalizers.Normalize(item);
+        var normalized = CompositeContextNormalizer.Normalize(item);
         await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
         await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();

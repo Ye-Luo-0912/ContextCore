@@ -123,32 +123,21 @@ static async Task DispatchEvalCommandAsync(
     IReadOnlyList<string> args,
     CancellationToken cancellationToken)
 {
-    // Reflection dispatch: ControlRoom 不再编译期引用 ContextCore.Evaluation。
+    // 通过 Assembly.Load 加载 Evaluation 程序集，查找 IEvalCommandInvoker 实现。
     // ContextCore.Evaluation.dll 在运行时通过 ReferenceOutputAssembly=false 部署到输出目录。
     var assembly = System.Reflection.Assembly.Load("ContextCore.Evaluation");
-    var type = assembly.GetType("ContextCore.ControlRoom.Commands.EvalCommand");
-    if (type is null)
+    var invokerType = assembly.GetTypes()
+        .FirstOrDefault(t => typeof(ContextCore.Evaluation.Contracts.IEvalCommandInvoker).IsAssignableFrom(t)
+            && !t.IsAbstract);
+    if (invokerType is null)
     {
-        Console.Error.WriteLine("Error: EvalCommand 类型未找到（请确认 ContextCore.Evaluation 程序集已部署）。");
+        Console.Error.WriteLine("Error: IEvalCommandInvoker 实现未找到（请确认 ContextCore.Evaluation 程序集已部署）。");
         Environment.ExitCode = 2;
         return;
     }
 
-    var method = type.GetMethod(
-        "ExecuteAsync",
-        System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static,
-        binder: null,
-        types: [typeof(ContextCore.Client.IEvalHost), typeof(IReadOnlyList<string>), typeof(CancellationToken)],
-        modifiers: null);
-    if (method is null)
-    {
-        Console.Error.WriteLine("Error: EvalCommand.ExecuteAsync 方法未找到。");
-        Environment.ExitCode = 2;
-        return;
-    }
-
-    var task = (Task)method.Invoke(null, [service, args, cancellationToken])!;
-    await task.ConfigureAwait(false);
+    var invoker = (ContextCore.Evaluation.Contracts.IEvalCommandInvoker)Activator.CreateInstance(invokerType)!;
+    await invoker.ExecuteAsync(service, args, cancellationToken).ConfigureAwait(false);
 }
 
 static async Task RunInteractiveAsync(

@@ -1,6 +1,7 @@
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Client;
+using ContextCore.Evaluation.Contracts;
 using ContextCore.Core;
 using ContextCore.Storage.FileSystem;
 

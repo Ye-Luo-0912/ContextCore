@@ -1,4 +1,5 @@
 using ContextCore.Abstractions.Models;
+using ContextCore.Evaluation.Contracts;
 using System.Text;
 
 namespace ContextCore.Core.Services;

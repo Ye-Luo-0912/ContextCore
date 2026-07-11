@@ -5,6 +5,7 @@ using System.Text.Json;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Client;
+using ContextCore.Evaluation.Contracts;
 using ContextCore.Core;
 using ContextCore.Core.Services;
 using ContextCore.ControlRoom.Services;
@@ -20,7 +21,7 @@ using ContextCore.Storage.Postgres;
 using ContextCore.Storage.Postgres.Infrastructure;
 using ContextCore.Storage.Postgres.Stores;
 
-namespace ContextCore.ControlRoom.Commands;
+namespace ContextCore.Evaluation.Commands;
 
 public static partial class EvalCommand
 {

@@ -4,6 +4,8 @@
     <ProjectReference Include="..\ContextCore.Abstractions\ContextCore.Abstractions.csproj" />
     <ProjectReference Include="..\ContextCore.Client\ContextCore.Client.csproj" />
     <ProjectReference Include="..\ContextCore.Core\ContextCore.Core.csproj" />
+    <ProjectReference Include="..\ContextCore.Evaluation.Contracts\ContextCore.Evaluation.Contracts.csproj" />
+    <ProjectReference Include="..\ContextCore.Runtime\ContextCore.Runtime.csproj" />
     <ProjectReference Include="..\ContextCore.Evaluation\ContextCore.Evaluation.csproj">
       <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
       <OutputItemType>Content</OutputItemType>

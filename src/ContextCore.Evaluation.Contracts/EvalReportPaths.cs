@@ -1,4 +1,4 @@
-namespace ContextCore.Abstractions.Models;
+namespace ContextCore.Evaluation.Contracts;
 
 /// <summary>
 /// Eval report output paths and file names shared between ControlRoom and Evaluation.

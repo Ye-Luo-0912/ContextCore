@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
+using ContextCore.Storage.Shared;
 
 namespace ContextCore.Storage.InMemory.Stores;
 
@@ -14,7 +15,7 @@ public sealed class InMemoryConstraintStore : IConstraintStore
         ArgumentNullException.ThrowIfNull(constraint);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var normalized = ContextNormalizers.Clone(constraint, string.IsNullOrWhiteSpace(constraint.Id) ? Guid.NewGuid().ToString("N") : constraint.Id);
+        var normalized = CompositeContextNormalizer.Clone(constraint, string.IsNullOrWhiteSpace(constraint.Id) ? Guid.NewGuid().ToString("N") : constraint.Id);
         _constraints[Key(normalized.WorkspaceId, normalized.CollectionId, normalized.Id)] = normalized;
 
         return Task.CompletedTask;
@@ -29,7 +30,7 @@ public sealed class InMemoryConstraintStore : IConstraintStore
 
         var match = _constraints.Values.FirstOrDefault(item =>
             string.Equals(item.Id, constraintId, StringComparison.OrdinalIgnoreCase));
-        return Task.FromResult(match is null ? null : ContextNormalizers.Clone(match));
+        return Task.FromResult(match is null ? null : CompositeContextNormalizer.Clone(match));
     }
 
     public Task<IReadOnlyList<ContextConstraint>> QueryAsync(
@@ -56,7 +57,7 @@ public sealed class InMemoryConstraintStore : IConstraintStore
             .ThenByDescending(item => item.Confidence)
             .ThenByDescending(item => item.UpdatedAt)
             .Take(take)
-            .Select(item => ContextNormalizers.Clone(item))
+            .Select(item => CompositeContextNormalizer.Clone(item))
             .ToArray();
 
         return Task.FromResult<IReadOnlyList<ContextConstraint>>(results);

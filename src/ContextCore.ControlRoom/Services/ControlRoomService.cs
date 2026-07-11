@@ -3,11 +3,12 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
-using ContextCore.ControlRoom.Hosting;
 using ContextCore.ControlRoom.Models;
 using ContextCore.Client;
 using ContextCore.Core;
 using ContextCore.Core.Services;
+using ContextCore.Evaluation.Contracts;
+using ContextCore.Runtime;
 using ContextCore.Core.Services.Attention;
 using ContextCore.Core.Services.Graph;
 using ContextCore.Core.Services.Planning;
@@ -96,7 +97,7 @@ public sealed partial class ControlRoomService : IEvalHost
             var modelAdapters = ModelAdapterFactory.CreateAdapters(modelOptions, apiKeyResolver);
             var modelUsageLogStore = new InMemoryModelUsageLogStore();
             var tokenizerResolver = new DefaultContextTokenizerResolver();
-            var runtime = RuntimeBuilder.BuildCoreServices(new RuntimeBuildContext
+            var runtime = ContextRuntimeBuilder.Build(new RuntimeBuildOptions
             {
                 ContextStore = contextStore,
                 MemoryStore = memoryStore,
@@ -179,7 +180,7 @@ public sealed partial class ControlRoomService : IEvalHost
         var fileModelAdapters = ModelAdapterFactory.CreateAdapters(fileModelOptions, fileApiKeyResolver);
         var fileModelUsageLogStore = new InMemoryModelUsageLogStore();
         var fileTokenizerResolver = new DefaultContextTokenizerResolver();
-        var fileRuntime = RuntimeBuilder.BuildCoreServices(new RuntimeBuildContext
+        var fileRuntime = ContextRuntimeBuilder.Build(new RuntimeBuildOptions
         {
             ContextStore = fileContextStore,
             MemoryStore = fileMemoryStore,

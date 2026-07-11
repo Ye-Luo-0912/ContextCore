@@ -149,8 +149,8 @@ public class ContextCoreNativeProductionTraceExecutionEndpointImplementationPlan
     [TestMethod]
     public void GeneratorParity_RunGeneratorAndValidatePlanSchema()
     {
-        var assembly = typeof(ContextCore.ControlRoom.Commands.EvalCommand).Assembly;
-        var type = assembly.GetType("ContextCore.ControlRoom.Commands.EvalCommand")!;
+        var assembly = typeof(ContextCore.Evaluation.Commands.EvalCommand).Assembly;
+        var type = assembly.GetType("ContextCore.Evaluation.Commands.EvalCommand")!;
         var method = type.GetMethod("ExecuteV16_16NativeProductionTraceExecutionEndpointImplementationPlanAsync",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
 

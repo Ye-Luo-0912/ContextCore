@@ -1,5 +1,6 @@
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
+using ContextCore.Storage.Shared;
 using System.Text;
 
 namespace ContextCore.Storage.FileSystem.Stores;
@@ -95,7 +96,7 @@ public sealed class FileRelationStore : IRelationStore
     {
         ArgumentNullException.ThrowIfNull(relations);
 
-        var normalized = relations.Select(ContextNormalizers.Normalize).ToArray();
+        var normalized = relations.Select(CompositeContextNormalizer.Normalize).ToArray();
         if (normalized.Length == 0)
         {
             return;

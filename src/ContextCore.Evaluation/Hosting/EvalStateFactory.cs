@@ -1,6 +1,7 @@
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Client;
+using ContextCore.Evaluation.Contracts;
 using ContextCore.Core;
 using ContextCore.Core.Services;
 using ContextCore.Core.Services.Attention;
@@ -11,6 +12,7 @@ using ContextCore.Embedding;
 using ContextCore.Embedding.Providers;
 using ContextCore.ModelGateway;
 using ContextCore.ModelGateway.Infrastructure;
+using ContextCore.Runtime;
 using ContextCore.Storage.FileSystem;
 using ContextCore.Storage.InMemory;
 using ContextCore.Storage.InMemory.Stores;
@@ -60,63 +62,23 @@ internal static class EvalStateFactory
         var modelUsageLogStore = new InMemoryModelUsageLogStore();
         var tokenizerResolver = new DefaultContextTokenizerResolver();
 
-        // 规划主链
-        var planningSnapshotService = new PlanningSnapshotService(
-            new InMemoryShortTermMemoryStore(new ShortTermMemoryPolicy()),
-            memoryStore,
-            constraintStore,
-            new InMemoryContextLearningStore());
-        var planningSafetyProfile = RetrievalPlanSafetyProfile.CreateDefault();
-        var planningProposalService = new RetrievalPlanProposalService(
-            planningSnapshotService,
-            new PlanningIntentDetector(),
-            planningSafetyProfile);
-        var planningValidator = new RetrievalPlanProposalValidator(planningSafetyProfile);
-        var planningShadowExecutor = new ShadowRetrievalPlanExecutor(
-            contextStore,
-            memoryStore,
-            relationStore,
-            planningValidator,
-            constraintStore);
-
-        // 关系扩展主链
-        var relationExpansionProfileRegistry = new RelationExpansionProfileRegistry();
-        var relationExpansionValidator = new RelationExpansionPolicyValidator(new RelationTypeRegistry());
-        var relationExpansionPreviewService = new RelationExpansionPreviewService(
-            new RelationTraversalEngine(relationStore),
-            relationExpansionProfileRegistry,
-            relationExpansionValidator);
-        var graphExpansionApplyPolicy = new GraphExpansionApplyPolicy(
-            relationExpansionPreviewService,
-            contextStore,
-            memoryStore,
-            constraintStore);
-
-        // 晋升/注意力/包构建/检索器
-        var promotionService = new BasicMemoryPromotionService(memoryStore, memoryStore);
-        var attentionScorer = new RuleBasedContextAttentionScorer();
-        var packageBuilder = new BasicContextPackageBuilder(
-            contextStore,
-            constraintStore,
-            globalStore,
-            memoryStore,
-            relationStore,
-            tokenizerResolver: tokenizerResolver,
-            workingMemoryService: memoryStore,
-            graphExpansionApplyOptions: graphExpansionApplyOptions,
-            graphExpansionApplyPolicy: graphExpansionApplyPolicy);
-        var retriever = new HybridContextRetriever(
-            contextStore,
-            memoryStore,
-            relationStore,
-            embeddingProvider,
-            vectorStore,
-            retrievalTraceStore,
-            attentionScorer,
-            attentionRerankOptions: attentionRerankOptions,
-            planningOptions: retrievalPlanningOptions,
-            planningProposalService: planningProposalService,
-            planningShadowExecutor: planningShadowExecutor);
+        var runtime = ContextRuntimeBuilder.Build(new RuntimeBuildOptions
+        {
+            ContextStore = contextStore,
+            MemoryStore = memoryStore,
+            ConstraintStore = constraintStore,
+            RelationStore = relationStore,
+            GlobalContextStore = globalStore,
+            VectorStore = vectorStore,
+            EmbeddingProvider = embeddingProvider,
+            RetrievalTraceStore = retrievalTraceStore,
+            TokenizerResolver = tokenizerResolver,
+            PromotionRecordStore = memoryStore,
+            WorkingMemoryService = memoryStore,
+            GraphExpansionApplyOptions = graphExpansionApplyOptions,
+            AttentionRerankOptions = attentionRerankOptions,
+            RetrievalPlanningOptions = retrievalPlanningOptions
+        });
 
         return new EvalState
         {
@@ -133,9 +95,9 @@ internal static class EvalStateFactory
             GlobalContextStore = globalStore,
             JobQueue = jobQueue,
             JobQueryStore = jobQueue,
-            PromotionService = promotionService,
+            PromotionService = runtime.PromotionService,
             PromotionCandidateStore = memoryStore,
-            PackageBuilder = packageBuilder,
+            PackageBuilder = runtime.PackageBuilder,
             TokenizerResolver = tokenizerResolver,
             PackagePolicyStore = packagePolicyStore,
             LearningFeedbackStore = learningFeedbackStore,
@@ -144,7 +106,7 @@ internal static class EvalStateFactory
             VectorStore = vectorStore,
             EmbeddingProvider = embeddingProvider,
             RetrievalTraceStore = retrievalTraceStore,
-            Retriever = retriever,
+            Retriever = runtime.Retriever,
             ModelGatewayOptions = modelOptions,
             ModelHealthService = new ModelHealthService(modelOptions, modelAdapters, apiKeyResolver),
             ModelUsageLogStore = modelUsageLogStore

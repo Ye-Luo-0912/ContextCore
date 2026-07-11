@@ -20,7 +20,7 @@ using ContextCore.Storage.Postgres;
 using ContextCore.Storage.Postgres.Infrastructure;
 using ContextCore.Storage.Postgres.Stores;
 
-namespace ContextCore.ControlRoom.Commands;
+namespace ContextCore.Evaluation.Commands;
 
 public static partial class EvalCommand
 {

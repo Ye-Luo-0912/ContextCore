@@ -1,5 +1,6 @@
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
+using ContextCore.Storage.Shared;
 using ContextCore.Storage.Postgres.Infrastructure;
 using Npgsql;
 using NpgsqlTypes;
@@ -111,7 +112,7 @@ WHERE workspace_id = @workspace_id
             foreach (var relation in list)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                var normalized = ContextNormalizers.Normalize(relation);
+                var normalized = CompositeContextNormalizer.Normalize(relation);
                 var batchCommand = new NpgsqlBatchCommand
                 {
                     CommandText = $"""

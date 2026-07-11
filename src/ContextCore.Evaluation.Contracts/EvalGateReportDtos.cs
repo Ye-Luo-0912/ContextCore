@@ -1,6 +1,6 @@
 using ContextCore.Abstractions.Models;
 
-namespace ContextCore.Core.Services;
+namespace ContextCore.Evaluation.Contracts;
 
 public static class RetrievalCandidateSourceIds
 {

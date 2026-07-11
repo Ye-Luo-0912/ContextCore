@@ -4,6 +4,7 @@ using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Client;
 using ContextCore.Core.Services;
+using ContextCore.Evaluation.Contracts;
 using ContextCore.ControlRoom.Services;
 using ContextCore.ControlRoom.Models;
 

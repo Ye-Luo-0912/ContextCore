@@ -1,5 +1,6 @@
 using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services;
+using ContextCore.Evaluation.Contracts;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 

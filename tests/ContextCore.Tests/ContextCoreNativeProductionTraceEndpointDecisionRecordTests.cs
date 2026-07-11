@@ -118,8 +118,8 @@ public class ContextCoreNativeProductionTraceEndpointDecisionRecordTests
     [TestMethod]
     public void GeneratorParity_RunGeneratorAndValidateAllArtifacts()
     {
-        var assembly = typeof(ContextCore.ControlRoom.Commands.EvalCommand).Assembly;
-        var type = assembly.GetType("ContextCore.ControlRoom.Commands.EvalCommand")!;
+        var assembly = typeof(ContextCore.Evaluation.Commands.EvalCommand).Assembly;
+        var type = assembly.GetType("ContextCore.Evaluation.Commands.EvalCommand")!;
         var method = type.GetMethod("ExecuteV16_20NativeProductionTraceEndpointDecisionRecordAsync",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
         var task = method.Invoke(null, [Array.Empty<string>(), CancellationToken.None]) as Task;

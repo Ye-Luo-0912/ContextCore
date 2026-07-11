@@ -1,9 +1,8 @@
 using System.Text.Json;
 using ContextCore.Abstractions.Models;
-using ContextCore.ControlRoom.Commands;
 using ContextCore.Core.Services;
 
-namespace ContextCore.ControlRoom.Commands;
+namespace ContextCore.Evaluation.Commands;
 
 public static partial class EvalCommand
 {

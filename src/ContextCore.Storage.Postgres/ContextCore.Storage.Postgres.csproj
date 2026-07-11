@@ -1,7 +1,8 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
     <ProjectReference Include="..\ContextCore.Abstractions\ContextCore.Abstractions.csproj" />
+    <ProjectReference Include="..\ContextCore.Storage.Shared\ContextCore.Storage.Shared.csproj" />
   </ItemGroup>
 
   <ItemGroup>

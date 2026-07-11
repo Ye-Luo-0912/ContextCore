@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
+using ContextCore.Storage.Shared;
 
 namespace ContextCore.Storage.InMemory;
 
@@ -26,7 +27,7 @@ public sealed class InMemoryMemoryStore : IMemoryStore, IWorkingMemoryService, I
         ArgumentNullException.ThrowIfNull(item);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var normalized = ContextNormalizers.Normalize(item);
+        var normalized = CompositeContextNormalizer.Normalize(item);
         _items[ItemKey(normalized.WorkspaceId, normalized.CollectionId, normalized.Id)] = normalized;
 
         return Task.CompletedTask;
@@ -106,7 +107,7 @@ public sealed class InMemoryMemoryStore : IMemoryStore, IWorkingMemoryService, I
 
     public async Task<WorkingMemoryItem> AddAsync(WorkingMemoryItem item, CancellationToken cancellationToken = default)
     {
-        var working = ContextNormalizers.Normalize(item);
+        var working = CompositeContextNormalizer.Normalize(item);
         await SaveAsync(ToMemoryItem(working), cancellationToken).ConfigureAwait(false);
         return working;
     }
@@ -159,7 +160,7 @@ public sealed class InMemoryMemoryStore : IMemoryStore, IWorkingMemoryService, I
         cancellationToken.ThrowIfCancellationRequested();
         return Task.FromResult(
             _activeContexts.TryGetValue(ScopeKey(workspaceId, collectionId), out var activeContext)
-                ? ContextNormalizers.Clone(activeContext)
+                ? CompositeContextNormalizer.Clone(activeContext)
                 : null);
     }
 
@@ -170,10 +171,10 @@ public sealed class InMemoryMemoryStore : IMemoryStore, IWorkingMemoryService, I
         ArgumentNullException.ThrowIfNull(activeContext);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var normalized = ContextNormalizers.Normalize(activeContext);
+        var normalized = CompositeContextNormalizer.Normalize(activeContext);
         _activeContexts[ScopeKey(normalized.WorkspaceId, normalized.CollectionId)] = normalized;
 
-        return Task.FromResult(ContextNormalizers.Clone(normalized));
+        return Task.FromResult(CompositeContextNormalizer.Clone(normalized));
     }
 
     public Task<WorkingMemoryCurrentTask?> GetCurrentTaskAsync(
@@ -184,7 +185,7 @@ public sealed class InMemoryMemoryStore : IMemoryStore, IWorkingMemoryService, I
         cancellationToken.ThrowIfCancellationRequested();
         return Task.FromResult(
             _currentTasks.TryGetValue(ScopeKey(workspaceId, collectionId), out var currentTask)
-                ? ContextNormalizers.Clone(currentTask)
+                ? CompositeContextNormalizer.Clone(currentTask)
                 : null);
     }
 
@@ -195,10 +196,10 @@ public sealed class InMemoryMemoryStore : IMemoryStore, IWorkingMemoryService, I
         ArgumentNullException.ThrowIfNull(currentTask);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var normalized = ContextNormalizers.Normalize(currentTask);
+        var normalized = CompositeContextNormalizer.Normalize(currentTask);
         _currentTasks[ScopeKey(normalized.WorkspaceId, normalized.CollectionId)] = normalized;
 
-        return Task.FromResult(ContextNormalizers.Clone(normalized));
+        return Task.FromResult(CompositeContextNormalizer.Clone(normalized));
     }
 
     public Task SavePromotionRecordAsync(
@@ -232,7 +233,7 @@ public sealed class InMemoryMemoryStore : IMemoryStore, IWorkingMemoryService, I
                     .Where(item => string.Equals(item.CollectionId, collectionId, StringComparison.OrdinalIgnoreCase))
                     .OrderByDescending(item => item.CreatedAt)
                     .Take(count)
-                    .Select(item => ContextNormalizers.Clone(item))
+                    .Select(item => CompositeContextNormalizer.Clone(item))
             ]);
         }
     }
@@ -251,7 +252,7 @@ public sealed class InMemoryMemoryStore : IMemoryStore, IWorkingMemoryService, I
         ArgumentNullException.ThrowIfNull(candidate);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var normalized = ContextNormalizers.Normalize(candidate);
+        var normalized = CompositeContextNormalizer.Normalize(candidate);
         _promotionCandidates[CandidateKey(normalized.WorkspaceId, normalized.CollectionId, normalized.Id)] = normalized;
 
         return Task.CompletedTask;
@@ -275,7 +276,7 @@ public sealed class InMemoryMemoryStore : IMemoryStore, IWorkingMemoryService, I
 
         return Task.FromResult(
             _promotionCandidates.TryGetValue(CandidateKey(workspaceId, collectionId, id), out var candidate)
-                ? ContextNormalizers.Clone(candidate)
+                ? CompositeContextNormalizer.Clone(candidate)
                 : null);
     }
 
@@ -295,7 +296,7 @@ public sealed class InMemoryMemoryStore : IMemoryStore, IWorkingMemoryService, I
             .Where(item => status is null || item.Status == status.Value)
             .OrderByDescending(item => item.UpdatedAt)
             .Take(count)
-            .Select(item => ContextNormalizers.Clone(item))
+            .Select(item => CompositeContextNormalizer.Clone(item))
             .ToArray();
 
         return Task.FromResult<IReadOnlyList<PromotionCandidate>>(candidates);
@@ -317,7 +318,7 @@ public sealed class InMemoryMemoryStore : IMemoryStore, IWorkingMemoryService, I
             return null;
         }
 
-        var updated = ContextNormalizers.Clone(
+        var updated = CompositeContextNormalizer.Clone(
             existing,
             status: status,
             reviewer: reviewer,

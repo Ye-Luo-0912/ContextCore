@@ -379,8 +379,8 @@ public class ContextCorePhaseLedgerArtifactParsingTests
     public void GeneratorReproducibility_RunGeneratorAndValidateOutputSchema()
     {
         // Invoke the private generator method via reflection
-        var assembly = typeof(ContextCore.ControlRoom.Commands.EvalCommand).Assembly;
-        var partialType = assembly.GetType("ContextCore.ControlRoom.Commands.EvalCommand");
+        var assembly = typeof(ContextCore.Evaluation.Commands.EvalCommand).Assembly;
+        var partialType = assembly.GetType("ContextCore.Evaluation.Commands.EvalCommand");
         Assert.IsNotNull(partialType, "EvalCommand type must be resolvable.");
 
         var method = partialType!.GetMethod("ExecuteV16_11PhaseLedgerGateAsync",

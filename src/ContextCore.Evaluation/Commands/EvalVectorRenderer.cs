@@ -1,7 +1,7 @@
 using System.Text;
 using ContextCore.Abstractions.Models;
 
-namespace ContextCore.ControlRoom.Commands;
+namespace ContextCore.Evaluation.Commands;
 
 /// <summary>
 /// Eval-local vector rendering helpers. Duplicated from ServiceOperationalRenderer

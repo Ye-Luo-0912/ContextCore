@@ -1,5 +1,6 @@
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
+using ContextCore.Storage.Shared;
 
 namespace ContextCore.Storage.FileSystem.Stores;
 
@@ -35,7 +36,7 @@ public sealed class FileMemoryStore : IMemoryStore, IWorkingMemoryService, IProm
     {
         ArgumentNullException.ThrowIfNull(item);
 
-        var normalized = ContextNormalizers.Normalize(item);
+        var normalized = CompositeContextNormalizer.Normalize(item);
 
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
@@ -96,7 +97,7 @@ public sealed class FileMemoryStore : IMemoryStore, IWorkingMemoryService, IProm
 
                 if (match is not null)
                 {
-                    return ContextNormalizers.Clone(match);
+                    return CompositeContextNormalizer.Clone(match);
                 }
             }
 
@@ -145,7 +146,7 @@ public sealed class FileMemoryStore : IMemoryStore, IWorkingMemoryService, IProm
                     .ThenByDescending(item => item.UpdatedAt)
                     .Skip(skip)
                     .Take(take)
-                    .Select(ContextNormalizers.Clone)
+                    .Select(CompositeContextNormalizer.Clone)
             ];
         }
         finally
@@ -197,7 +198,7 @@ public sealed class FileMemoryStore : IMemoryStore, IWorkingMemoryService, IProm
     {
         ArgumentNullException.ThrowIfNull(item);
 
-        var workingItem = ContextNormalizers.Normalize(new ContextMemoryItem
+        var workingItem = CompositeContextNormalizer.Normalize(new ContextMemoryItem
         {
             Id = item.Id,
             WorkspaceId = item.WorkspaceId,
@@ -229,7 +230,7 @@ public sealed class FileMemoryStore : IMemoryStore, IWorkingMemoryService, IProm
     {
         ArgumentNullException.ThrowIfNull(item);
 
-        var workingItem = ContextNormalizers.Normalize(item);
+        var workingItem = CompositeContextNormalizer.Normalize(item);
 
         await SaveAsync(ToMemoryItem(workingItem), cancellationToken).ConfigureAwait(false);
 
@@ -306,7 +307,7 @@ public sealed class FileMemoryStore : IMemoryStore, IWorkingMemoryService, IProm
                 return null;
             }
 
-            return ContextNormalizers.Clone(ContextNormalizers.Normalize(activeContext));
+            return CompositeContextNormalizer.Clone(CompositeContextNormalizer.Normalize(activeContext));
         }
         finally
         {
@@ -320,7 +321,7 @@ public sealed class FileMemoryStore : IMemoryStore, IWorkingMemoryService, IProm
     {
         ArgumentNullException.ThrowIfNull(activeContext);
 
-        var normalized = ContextNormalizers.Normalize(activeContext);
+        var normalized = CompositeContextNormalizer.Normalize(activeContext);
 
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
@@ -330,7 +331,7 @@ public sealed class FileMemoryStore : IMemoryStore, IWorkingMemoryService, IProm
                 normalized,
                 cancellationToken).ConfigureAwait(false);
 
-            return ContextNormalizers.Clone(normalized);
+            return CompositeContextNormalizer.Clone(normalized);
         }
         finally
         {
@@ -355,7 +356,7 @@ public sealed class FileMemoryStore : IMemoryStore, IWorkingMemoryService, IProm
                 return null;
             }
 
-            return ContextNormalizers.Clone(ContextNormalizers.Normalize(currentTask));
+            return CompositeContextNormalizer.Clone(CompositeContextNormalizer.Normalize(currentTask));
         }
         finally
         {
@@ -369,7 +370,7 @@ public sealed class FileMemoryStore : IMemoryStore, IWorkingMemoryService, IProm
     {
         ArgumentNullException.ThrowIfNull(currentTask);
 
-        var normalized = ContextNormalizers.Normalize(currentTask);
+        var normalized = CompositeContextNormalizer.Normalize(currentTask);
 
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
@@ -379,7 +380,7 @@ public sealed class FileMemoryStore : IMemoryStore, IWorkingMemoryService, IProm
                 normalized,
                 cancellationToken).ConfigureAwait(false);
 
-            return ContextNormalizers.Clone(normalized);
+            return CompositeContextNormalizer.Clone(normalized);
         }
         finally
         {
@@ -447,7 +448,7 @@ public sealed class FileMemoryStore : IMemoryStore, IWorkingMemoryService, IProm
     {
         ArgumentNullException.ThrowIfNull(candidate);
 
-        var normalized = ContextNormalizers.Normalize(candidate);
+        var normalized = CompositeContextNormalizer.Normalize(candidate);
         var path = _paths.GetPromotionCandidatesJsonlPath(normalized.WorkspaceId, normalized.CollectionId);
 
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -485,7 +486,7 @@ public sealed class FileMemoryStore : IMemoryStore, IWorkingMemoryService, IProm
             var candidate = candidates.FirstOrDefault(item =>
                 string.Equals(item.Id, id, StringComparison.OrdinalIgnoreCase));
 
-            return candidate is null ? null : ContextNormalizers.Clone(candidate);
+            return candidate is null ? null : CompositeContextNormalizer.Clone(candidate);
         }
         finally
         {
@@ -512,7 +513,7 @@ public sealed class FileMemoryStore : IMemoryStore, IWorkingMemoryService, IProm
                 .Where(item => status is null || item.Status == status.Value)
                 .OrderByDescending(item => item.UpdatedAt)
                 .Take(count)
-                .Select(item => ContextNormalizers.Clone(item))
+                .Select(item => CompositeContextNormalizer.Clone(item))
                 .ToArray();
         }
         finally
@@ -544,7 +545,7 @@ public sealed class FileMemoryStore : IMemoryStore, IWorkingMemoryService, IProm
                 return null;
             }
 
-            var updatedCandidate = ContextNormalizers.Clone(
+            var updatedCandidate = CompositeContextNormalizer.Clone(
                 current,
                 status: status,
                 reviewer: reviewer,
@@ -558,7 +559,7 @@ public sealed class FileMemoryStore : IMemoryStore, IWorkingMemoryService, IProm
 
             await _jsonLines.WriteAsync(path, updated, cancellationToken).ConfigureAwait(false);
 
-            return ContextNormalizers.Clone(updatedCandidate);
+            return CompositeContextNormalizer.Clone(updatedCandidate);
         }
         finally
         {

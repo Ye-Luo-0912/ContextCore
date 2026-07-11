@@ -1,5 +1,6 @@
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
+using ContextCore.Storage.Shared;
 
 namespace ContextCore.Storage.FileSystem.Stores;
 
@@ -25,7 +26,7 @@ public sealed class FileConstraintStore : IConstraintStore
     {
         ArgumentNullException.ThrowIfNull(constraint);
 
-        var normalized = ContextNormalizers.Normalize(constraint);
+        var normalized = CompositeContextNormalizer.Normalize(constraint);
         var path = GetPath(normalized.WorkspaceId, normalized.CollectionId);
 
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -58,7 +59,7 @@ public sealed class FileConstraintStore : IConstraintStore
                     string.Equals(item.Id, constraintId, StringComparison.OrdinalIgnoreCase));
                 if (globalMatch is not null)
                 {
-                    return ContextNormalizers.Normalize(globalMatch);
+                    return CompositeContextNormalizer.Normalize(globalMatch);
                 }
 
                 foreach (var collectionId in ResolveCollectionIds(workspaceId))
@@ -70,7 +71,7 @@ public sealed class FileConstraintStore : IConstraintStore
                         string.Equals(item.Id, constraintId, StringComparison.OrdinalIgnoreCase));
                     if (match is not null)
                     {
-                        return ContextNormalizers.Normalize(match);
+                        return CompositeContextNormalizer.Normalize(match);
                     }
                 }
             }

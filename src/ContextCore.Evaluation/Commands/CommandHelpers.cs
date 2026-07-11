@@ -1,4 +1,4 @@
-namespace ContextCore.ControlRoom.Commands;
+namespace ContextCore.Evaluation.Commands;
 
 /// <summary>解析命令行参数的内部工具类（Evaluation 副本，与 ControlRoom 内的 CommandHelpers 保持一致）。</summary>
 internal static class CommandHelpers

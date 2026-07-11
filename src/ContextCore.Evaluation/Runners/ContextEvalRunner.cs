@@ -3,6 +3,7 @@ using System.Text.Json;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Client;
+using ContextCore.Evaluation.Contracts;
 using ContextCore.Core;
 using ContextCore.Core.Services;
 using ContextCore.Core.Services.Graph;
