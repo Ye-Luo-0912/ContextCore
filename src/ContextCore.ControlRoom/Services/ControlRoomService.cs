@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
+using ContextCore.ControlRoom.Hosting;
 using ContextCore.ControlRoom.Models;
 using ContextCore.Client;
 using ContextCore.Core;
@@ -91,34 +92,23 @@ public sealed class ControlRoomService
             var modelAdapters = ModelAdapterFactory.CreateAdapters(modelOptions, apiKeyResolver);
             var modelUsageLogStore = new InMemoryModelUsageLogStore();
             var tokenizerResolver = new DefaultContextTokenizerResolver();
-            var planningSnapshotService = new PlanningSnapshotService(
-                new InMemoryShortTermMemoryStore(new ShortTermMemoryPolicy()),
-                memoryStore,
-                constraintStore,
-                new InMemoryContextLearningStore());
-            var planningSafetyProfile = RetrievalPlanSafetyProfile.CreateDefault();
-            var planningProposalService = new RetrievalPlanProposalService(
-                planningSnapshotService,
-                new PlanningIntentDetector(),
-                planningSafetyProfile);
-            var planningValidator = new RetrievalPlanProposalValidator(planningSafetyProfile);
-            var planningShadowExecutor = new ShadowRetrievalPlanExecutor(
-                contextStore,
-                memoryStore,
-                relationStore,
-                planningValidator,
-                constraintStore);
-            var relationExpansionProfileRegistry = new RelationExpansionProfileRegistry();
-            var relationExpansionValidator = new RelationExpansionPolicyValidator(new RelationTypeRegistry());
-            var relationExpansionPreviewService = new RelationExpansionPreviewService(
-                new RelationTraversalEngine(relationStore),
-                relationExpansionProfileRegistry,
-                relationExpansionValidator);
-            var graphExpansionApplyPolicy = new GraphExpansionApplyPolicy(
-                relationExpansionPreviewService,
-                contextStore,
-                memoryStore,
-                constraintStore);
+            var runtime = RuntimeBuilder.BuildCoreServices(new RuntimeBuildContext
+            {
+                ContextStore = contextStore,
+                MemoryStore = memoryStore,
+                ConstraintStore = constraintStore,
+                RelationStore = relationStore,
+                GlobalContextStore = globalStore,
+                VectorStore = vectorStore,
+                EmbeddingProvider = embeddingProvider,
+                RetrievalTraceStore = retrievalTraceStore,
+                TokenizerResolver = tokenizerResolver,
+                PromotionRecordStore = memoryStore,
+                WorkingMemoryService = memoryStore,
+                GraphExpansionApplyOptions = graphExpansionApplyOptions,
+                AttentionRerankOptions = attentionRerankOptions,
+                RetrievalPlanningOptions = retrievalPlanningOptions
+            });
 
             return new ControlRoomState
             {
@@ -136,18 +126,9 @@ public sealed class ControlRoomService
                 GlobalContextStore = globalStore,
                 JobQueue = jobQueue,
                 JobQueryStore = jobQueue,
-                PromotionService = new BasicMemoryPromotionService(memoryStore, memoryStore),
+                PromotionService = runtime.PromotionService,
                 PromotionCandidateStore = memoryStore,
-                PackageBuilder = new BasicContextPackageBuilder(
-                    contextStore,
-                    constraintStore,
-                    globalStore,
-                    memoryStore,
-                    relationStore,
-                    tokenizerResolver: tokenizerResolver,
-                    workingMemoryService: memoryStore,
-                    graphExpansionApplyOptions: graphExpansionApplyOptions,
-                    graphExpansionApplyPolicy: graphExpansionApplyPolicy),
+                PackageBuilder = runtime.PackageBuilder,
                 TokenizerResolver = tokenizerResolver,
                 PackagePolicyStore = packagePolicyStore,
                 LearningFeedbackStore = learningFeedbackStore,
@@ -156,18 +137,7 @@ public sealed class ControlRoomService
                 VectorStore = vectorStore,
                 EmbeddingProvider = embeddingProvider,
                 RetrievalTraceStore = retrievalTraceStore,
-                Retriever = new HybridContextRetriever(
-                    contextStore,
-                    memoryStore,
-                    relationStore,
-                    embeddingProvider,
-                    vectorStore,
-                    retrievalTraceStore,
-                    new RuleBasedContextAttentionScorer(),
-                    attentionRerankOptions: attentionRerankOptions,
-                    planningOptions: retrievalPlanningOptions,
-                    planningProposalService: planningProposalService,
-                    planningShadowExecutor: planningShadowExecutor),
+                Retriever = runtime.Retriever,
                 ModelGatewayOptions = modelOptions,
                 ModelHealthService = new ModelHealthService(modelOptions, modelAdapters, apiKeyResolver),
                 ModelUsageLogStore = modelUsageLogStore
@@ -205,34 +175,23 @@ public sealed class ControlRoomService
         var fileModelAdapters = ModelAdapterFactory.CreateAdapters(fileModelOptions, fileApiKeyResolver);
         var fileModelUsageLogStore = new InMemoryModelUsageLogStore();
         var fileTokenizerResolver = new DefaultContextTokenizerResolver();
-        var filePlanningSnapshotService = new PlanningSnapshotService(
-            new InMemoryShortTermMemoryStore(new ShortTermMemoryPolicy()),
-            fileMemoryStore,
-            fileConstraintStore,
-            new InMemoryContextLearningStore());
-        var filePlanningSafetyProfile = RetrievalPlanSafetyProfile.CreateDefault();
-        var filePlanningProposalService = new RetrievalPlanProposalService(
-            filePlanningSnapshotService,
-            new PlanningIntentDetector(),
-            filePlanningSafetyProfile);
-        var filePlanningValidator = new RetrievalPlanProposalValidator(filePlanningSafetyProfile);
-        var filePlanningShadowExecutor = new ShadowRetrievalPlanExecutor(
-            fileContextStore,
-            fileMemoryStore,
-            fileRelationStore,
-            filePlanningValidator,
-            fileConstraintStore);
-        var fileRelationExpansionProfileRegistry = new RelationExpansionProfileRegistry();
-        var fileRelationExpansionValidator = new RelationExpansionPolicyValidator(new RelationTypeRegistry());
-        var fileRelationExpansionPreviewService = new RelationExpansionPreviewService(
-            new RelationTraversalEngine(fileRelationStore),
-            fileRelationExpansionProfileRegistry,
-            fileRelationExpansionValidator);
-        var fileGraphExpansionApplyPolicy = new GraphExpansionApplyPolicy(
-            fileRelationExpansionPreviewService,
-            fileContextStore,
-            fileMemoryStore,
-            fileConstraintStore);
+        var fileRuntime = RuntimeBuilder.BuildCoreServices(new RuntimeBuildContext
+        {
+            ContextStore = fileContextStore,
+            MemoryStore = fileMemoryStore,
+            ConstraintStore = fileConstraintStore,
+            RelationStore = fileRelationStore,
+            GlobalContextStore = fileGlobalStore,
+            VectorStore = fileVectorStore,
+            EmbeddingProvider = fileEmbeddingProvider,
+            RetrievalTraceStore = fileRetrievalTraceStore,
+            TokenizerResolver = fileTokenizerResolver,
+            PromotionRecordStore = fileMemoryStore,
+            WorkingMemoryService = fileMemoryStore,
+            GraphExpansionApplyOptions = graphExpansionApplyOptions,
+            AttentionRerankOptions = attentionRerankOptions,
+            RetrievalPlanningOptions = retrievalPlanningOptions
+        });
 
         return new ControlRoomState
         {
@@ -250,18 +209,9 @@ public sealed class ControlRoomService
             GlobalContextStore = fileGlobalStore,
             JobQueue = fileJobQueue,
             JobQueryStore = fileJobQueue,
-            PromotionService = new BasicMemoryPromotionService(fileMemoryStore, fileMemoryStore),
+            PromotionService = fileRuntime.PromotionService,
             PromotionCandidateStore = fileMemoryStore,
-            PackageBuilder = new BasicContextPackageBuilder(
-                fileContextStore,
-                fileConstraintStore,
-                fileGlobalStore,
-                fileMemoryStore,
-                fileRelationStore,
-                tokenizerResolver: fileTokenizerResolver,
-                workingMemoryService: fileMemoryStore,
-                graphExpansionApplyOptions: graphExpansionApplyOptions,
-                graphExpansionApplyPolicy: fileGraphExpansionApplyPolicy),
+            PackageBuilder = fileRuntime.PackageBuilder,
             TokenizerResolver = fileTokenizerResolver,
             PackagePolicyStore = filePackagePolicyStore,
             LearningFeedbackStore = fileLearningFeedbackStore,
@@ -270,18 +220,7 @@ public sealed class ControlRoomService
             VectorStore = fileVectorStore,
             EmbeddingProvider = fileEmbeddingProvider,
             RetrievalTraceStore = fileRetrievalTraceStore,
-            Retriever = new HybridContextRetriever(
-                fileContextStore,
-                fileMemoryStore,
-                fileRelationStore,
-                fileEmbeddingProvider,
-                fileVectorStore,
-                fileRetrievalTraceStore,
-                new RuleBasedContextAttentionScorer(),
-                attentionRerankOptions: attentionRerankOptions,
-                planningOptions: retrievalPlanningOptions,
-                planningProposalService: filePlanningProposalService,
-                planningShadowExecutor: filePlanningShadowExecutor),
+            Retriever = fileRuntime.Retriever,
             ModelGatewayOptions = fileModelOptions,
             ModelHealthService = new ModelHealthService(fileModelOptions, fileModelAdapters, fileApiKeyResolver),
             ModelUsageLogStore = fileModelUsageLogStore

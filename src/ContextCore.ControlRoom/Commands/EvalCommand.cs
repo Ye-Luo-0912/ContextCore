@@ -26,6 +26,509 @@ namespace ContextCore.ControlRoom.Commands;
 /// <summary>执行上下文评测并生成报告的命令。</summary>
 public static partial class EvalCommand
 {
+    private static readonly HashSet<string> s_knownSubcommands = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "run",
+        "report",
+        "perf",
+        "perf-scale",
+        "retrieval",
+        "attention-profile-selection",
+        "guarded-rerank-comparison",
+        "guarded-order-quality",
+        "guarded-profile-sweep",
+        "planning-shadow",
+        "planning-shadow-quality",
+        "planning-shadow-recall-loss",
+        "planning-optin-comparison",
+        "planning-optin-fallback-analysis",
+        "planning-optin-constraint-safety",
+        "extended-failure-triage",
+        "export-learning-features",
+        "learning-dataset-quality",
+        "router-intent-baseline",
+        "router-shadow-trace-quality",
+        "router-intent-shadow-eval",
+        "router-disagreement-triage",
+        "router-guarded-optin-readiness-gate",
+        "learning-readiness-freeze-report",
+        "learning-runtime-change-readiness-gate",
+        "learning-feedback-summary",
+        "export-learning-feedback",
+        "learning-feedback-review-summary",
+        "learning-feedback-feature-candidates",
+        "learning-feedback-quality",
+        "learning-feedback-review-smoke",
+        "learning-approved-feedback-dataset-gate",
+        "submit-learning-feedback",
+        "learning-feedback-smoke",
+        "learning-baseline",
+        "learning-baseline-router",
+        "learning-baseline-ranker",
+        "learning-ranker-ablation",
+        "learning-ranker-weight-sweep",
+        "learning-ranker-residual-audit",
+        "learning-hard-negatives",
+        "learning-lifecycle-aware-ranker",
+        "lifecycle-ranker-shadow",
+        "ranker-shadow-trace-quality",
+        "candidate-reranker-feature-completeness",
+        "candidate-reranker-shadow-eval",
+        "candidate-reranker-shadow-failure-audit",
+        "candidate-reranker-score-distribution",
+        "candidate-reranker-listwise-calibration",
+        "candidate-reranker-formal-priority-alignment",
+        "candidate-reranker-shadow-trace-quality",
+        "graph-expansion-shadow-trace-quality",
+        "graph-expansion-optin-comparison",
+        "graph-expansion-guarded-optin-gate",
+        "vector-reindex-plan",
+        "vector-reindex-apply",
+        "vector-index-diagnostics",
+        "vector-index-coverage",
+        "vector-lifecycle-metadata-coverage",
+        "vector-lifecycle-metadata-backfill-plan",
+        "vector-lifecycle-metadata-backfill-apply",
+        "vector-query-preview",
+        "vector-query-shadow-eval",
+        "vector-query-profile-sweep",
+        "vector-residual-risk-audit",
+        "vector-recall-loss-audit",
+        "vector-safe-recall-recovery",
+        "vector-ranker-fusion-shadow",
+        "vector-representation-benchmark",
+        "vector-query-expansion-shadow",
+        "vector-retrieval-shadow-readiness-gate",
+        "embedding-provider-smoke",
+        "vector-provider-comparison",
+        "vector-qwen3-shadow-eval",
+        "vector-qwen3-readiness-gate",
+        "vector-provider-configuration-sanity-audit",
+        "vector-provider-comparison-freeze",
+        "vector-hybrid-preview",
+        "vector-hybrid-shadow-eval",
+        "vector-hybrid-readiness-gate",
+        "vector-hybrid-recall-regression-audit",
+        "vector-hybrid-freeze-gate",
+        "vector-retrieval-dataset-alignment-audit",
+        "vector-retrieval-dataset-alignment-audit-a3",
+        "vector-retrieval-dataset-alignment-audit-extended",
+        "vector-eligibility-recall-loss-triage",
+        "vector-eligibility-recall-loss-triage-a3",
+        "vector-eligibility-recall-loss-triage-extended",
+        "vector-lifecycle-metadata-repair-plan",
+        "vector-lifecycle-metadata-repair-plan-a3",
+        "vector-lifecycle-metadata-repair-plan-extended",
+        "vector-lifecycle-metadata-review-candidates-generate",
+        "vector-lifecycle-metadata-review-candidates",
+        "vector-lifecycle-metadata-review-summary",
+        "vector-lifecycle-metadata-sidecar-preview",
+        "vector-lifecycle-metadata-review-smoke",
+        "vector-sidecar-eligibility-preview",
+        "vector-sidecar-eligibility-recheck",
+        "vector-sidecar-eligibility-quality",
+        "vector-lifecycle-metadata-review-batch-create",
+        "vector-lifecycle-metadata-review-batch-export",
+        "vector-lifecycle-metadata-review-batch-import",
+        "vector-lifecycle-metadata-review-batch-validate",
+        "vector-lifecycle-metadata-review-batch-apply-preview",
+        "vector-lifecycle-metadata-review-batch-import-smoke",
+        "vector-lifecycle-metadata-evidence-backfill-preview",
+        "vector-lifecycle-metadata-evidence-backfill-audit",
+        "vector-retrieval-dataset-v2-contract",
+        "vector-retrieval-dataset-v2-validator",
+        "vector-legacy-dataset-limitation-report",
+        "retrieval-dataset-v2-generate",
+        "retrieval-dataset-v2-validate",
+        "retrieval-dataset-v2-quality",
+        "retrieval-dataset-v2-materialization-gate",
+        "retrieval-dataset-v2-shadow-eval",
+        "retrieval-dataset-v2-dense-shadow-eval",
+        "retrieval-dataset-v2-hybrid-shadow-eval",
+        "retrieval-dataset-v2-readiness-gate",
+        "retrieval-dataset-v2-stress-generate",
+        "retrieval-dataset-v2-leakage-audit",
+        "retrieval-dataset-v2-anchor-dominance-audit",
+        "retrieval-dataset-v2-stress-shadow-eval",
+        "retrieval-dataset-v2-stress-readiness-gate",
+        "retrieval-dataset-v2-stress-failure-triage",
+        "retrieval-dataset-v2-stress-failure-triage-holdout",
+        "retrieval-dataset-v2-stress-failure-clusters",
+        "retrieval-dataset-v2-hybrid-scoring-repair-preview",
+        "retrieval-dataset-v2-hybrid-scoring-repair-shadow-eval",
+        "retrieval-dataset-v2-hybrid-scoring-repair-gate",
+        "retrieval-dataset-v2-hybrid-scoring-risk-triage",
+        "retrieval-dataset-v2-hybrid-scoring-risk-triage-holdout",
+        "retrieval-dataset-v2-stress-freeze-gate",
+        "vector-v4-readiness-recheck",
+        "vector-guarded-formal-retrieval-preview",
+        "vector-guarded-formal-retrieval-preview-gate",
+        "vector-shadow-package-comparison",
+        "vector-shadow-package-comparison-gate",
+        "vector-scoped-formal-preview-optin-plan",
+        "vector-scoped-formal-preview-optin-smoke",
+        "vector-scoped-formal-preview-optin-gate",
+        "vector-limited-formal-preview-observation",
+        "vector-limited-formal-preview-observation-gate",
+        "vector-formal-preview-freeze-gate",
+        "vector-scoped-runtime-experiment-plan",
+        "vector-scoped-runtime-experiment-dry-run",
+        "vector-scoped-runtime-experiment-gate",
+        "vector-scoped-runtime-experiment-dry-run-observation",
+        "vector-scoped-runtime-experiment-dry-run-observation-gate",
+        "vector-scoped-runtime-experiment-design-freeze-gate",
+        "vector-scoped-runtime-experiment-proposal",
+        "vector-scoped-runtime-experiment-proposal-gate",
+        "vector-scoped-runtime-experiment-config-preview",
+        "vector-scoped-runtime-experiment-approval-preview",
+        "vector-scoped-runtime-experiment-approve",
+        "vector-scoped-runtime-experiment-approval-summary",
+        "vector-scoped-runtime-experiment-approval-request-preview",
+        "vector-scoped-runtime-experiment-approve-runtime",
+        "vector-scoped-runtime-experiment-approval-gate",
+        "vector-scoped-runtime-experiment-noop-harness",
+        "vector-scoped-runtime-experiment-noop-harness-gate",
+        "vector-scoped-runtime-experiment-harness-freeze-gate",
+        "vector-guarded-scoped-runtime-experiment-plan",
+        "vector-guarded-scoped-runtime-experiment-plan-gate",
+        "vector-scoped-runtime-experiment-activation-preflight",
+        "vector-scoped-runtime-experiment-dry-run-route",
+        "vector-scoped-runtime-experiment-activation-gate",
+        "vector-guarded-scoped-runtime-experiment",
+        "vector-guarded-scoped-runtime-experiment-observation",
+        "vector-guarded-scoped-runtime-experiment-gate",
+        "vector-guarded-scoped-runtime-experiment-rollback-smoke",
+        "vector-scoped-runtime-experiment-observation-window",
+        "vector-scoped-runtime-experiment-observation-window-summary",
+        "vector-scoped-runtime-experiment-observation-window-gate",
+        "vector-scoped-runtime-experiment-observation-freeze",
+        "vector-scoped-runtime-experiment-promotion-decision",
+        "vector-formal-retrieval-integration-plan",
+        "vector-formal-retrieval-integration-plan-gate",
+        "vector-shadow-formal-retrieval-adapter-plan",
+        "vector-shadow-formal-retrieval-adapter-plan-gate",
+        "vector-shadow-formal-retrieval-adapter",
+        "vector-shadow-formal-retrieval-adapter-gate",
+        "vector-formal-adapter-package-shadow-comparison",
+        "vector-formal-adapter-package-shadow-comparison-gate",
+        "vector-graph-retrieval-quality-audit",
+        "vector-graph-retrieval-quality-gate",
+        "vector-retrieval-quality-repair-preview",
+        "vector-retrieval-quality-repair-gate",
+        "vector-runtime-observable-feature-contract",
+        "vector-runtime-observable-feature-contract-gate",
+        "vector-runtime-feature-derivation-preview",
+        "vector-runtime-feature-derivation-gate",
+        "vector-runtime-feature-derivation-repair",
+        "vector-runtime-feature-derivation-repair-gate",
+        "vector-runtime-feature-derivation-failure-freeze",
+        "vector-graph-hub-noise-control-preview",
+        "vector-graph-hub-noise-control-gate",
+        "vector-query-driven-candidate-source-repair",
+        "vector-query-driven-candidate-source-repair-gate",
+        "vector-formal-retrieval-integration-freeze",
+        "vector-adapter-noop-binding-plan",
+        "vector-formal-retrieval-integration-freeze-gate",
+        "vector-adapter-noop-binding-smoke",
+        "vector-adapter-noop-binding-gate",
+        "vector-scoped-shadow-adapter-invocation",
+        "vector-scoped-shadow-adapter-invocation-gate",
+        "vector-mainline-shadow-adapter-package-comparison",
+        "vector-mainline-shadow-adapter-package-comparison-gate",
+        "architecture-cleanup-plan",
+        "architecture-cleanup-readiness-gate",
+        "architecture-cleanup-freeze",
+        "architecture-cleanup-freeze-gate",
+        "controlled-applied-merge-runtime-preview-plan",
+        "controlled-applied-merge-runtime-preview-plan-gate",
+        "controlled-applied-merge-runtime-preview-dry-run",
+        "controlled-applied-merge-runtime-preview-dry-run-gate",
+        "controlled-applied-merge-runtime-preview-activation-preflight",
+        "controlled-applied-merge-runtime-preview-activation-preflight-gate",
+        "controlled-applied-merge-runtime-preview-observation-window",
+        "controlled-applied-merge-runtime-preview-observation-window-gate",
+        "controlled-applied-merge-runtime-preview-observation-hardening",
+        "controlled-applied-merge-runtime-preview-observation-hardening-gate",
+        "controlled-applied-merge-runtime-preview-observation-freeze",
+        "controlled-applied-merge-runtime-preview-observation-freeze-gate",
+        "scoped-runtime-preview-approval-plan",
+        "scoped-runtime-preview-approval-plan-gate",
+        "scoped-runtime-preview-authorization",
+        "scoped-runtime-preview-authorization-gate",
+        "scoped-runtime-preview-authorization-hardening",
+        "scoped-runtime-preview-authorization-hardening-gate",
+        "scoped-runtime-preview-activation-preparation",
+        "scoped-runtime-preview-activation-preparation-gate",
+        "scoped-runtime-preview-activation-dry-run",
+        "scoped-runtime-preview-activation-dry-run-gate",
+        "scoped-runtime-preview-activation-window-preflight",
+        "scoped-runtime-preview-activation-window-preflight-gate",
+        "scoped-runtime-preview-activation-window-noop-execution",
+        "scoped-runtime-preview-activation-window-noop-execution-gate",
+        "scoped-runtime-preview-activation-live-readiness-freeze",
+        "scoped-runtime-preview-activation-live-readiness-freeze-gate",
+        "scoped-runtime-preview-live-activation-execution-plan",
+        "scoped-runtime-preview-live-activation-execution-plan-gate",
+        "scoped-runtime-preview-live-activation-execution",
+        "scoped-runtime-preview-live-activation-execution-gate",
+        "scoped-runtime-preview-live-activation-observation",
+        "scoped-runtime-preview-live-activation-observation-gate",
+        "scoped-runtime-preview-live-activation-summary-freeze",
+        "scoped-runtime-preview-live-activation-summary-freeze-gate",
+        "scoped-runtime-preview-live-activation-closeout",
+        "scoped-runtime-preview-live-activation-closeout-gate",
+        "formal-retrieval-promotion-readiness-audit",
+        "formal-retrieval-promotion-readiness-gate",
+        "formal-retrieval-promotion-plan",
+        "formal-retrieval-promotion-plan-gate",
+        "formal-retrieval-promotion-approval",
+        "formal-retrieval-promotion-approval-gate",
+        "formal-retrieval-promotion-approval-evidence-seal",
+        "formal-retrieval-promotion-approval-evidence-seal-gate",
+        "formal-retrieval-promotion-external-approval-intake",
+        "formal-retrieval-promotion-external-approval-intake-gate",
+        "formal-retrieval-promotion-external-approval-submission-pack",
+        "formal-retrieval-promotion-external-approval-submission-pack-gate",
+        "formal-retrieval-promotion-external-approval-dry-run",
+        "formal-retrieval-promotion-external-approval-dry-run-gate",
+        "formal-retrieval-promotion-external-approval-dry-run-negative-matrix",
+        "formal-retrieval-promotion-external-approval-dry-run-negative-matrix-gate",
+        "formal-retrieval-promotion-external-approval-quarantine-scan",
+        "formal-retrieval-promotion-external-approval-quarantine-scan-gate",
+        "formal-retrieval-promotion-external-approval-quarantine-negative-matrix",
+        "formal-retrieval-promotion-external-approval-quarantine-negative-matrix-gate",
+        "formal-retrieval-promotion-external-approval-quarantine-positive-matrix",
+        "formal-retrieval-promotion-external-approval-quarantine-positive-matrix-gate",
+        "formal-retrieval-promotion-approval-trust-chain-validation-matrix",
+        "formal-retrieval-promotion-approval-trust-chain-validation-matrix-gate",
+        "formal-retrieval-promotion-approval-policy-authority-matrix",
+        "formal-retrieval-promotion-approval-policy-authority-matrix-gate",
+        "formal-retrieval-promotion-approval-grant-application-matrix",
+        "formal-retrieval-promotion-approval-grant-application-matrix-gate",
+        "formal-retrieval-promotion-approval-rollback-readiness-matrix",
+        "formal-retrieval-promotion-approval-rollback-readiness-matrix-gate",
+        "formal-retrieval-promotion-approval-operator-sign-off-matrix",
+        "formal-retrieval-promotion-approval-operator-sign-off-matrix-gate",
+        "formal-retrieval-promotion-approval-pre-crossing-final-gate",
+        "formal-retrieval-promotion-approval-pre-crossing-final-gate-gate",
+        "formal-retrieval-promotion-approval-dedicated-crossing-dry-run",
+        "formal-retrieval-promotion-approval-dedicated-crossing-dry-run-gate",
+        "formal-retrieval-promotion-approval-dedicated-crossing-execution",
+        "formal-retrieval-promotion-approval-dedicated-crossing-execution-gate",
+        "formal-retrieval-promotion-approval-runtime-activation-dry-run",
+        "formal-retrieval-promotion-approval-runtime-activation-dry-run-gate",
+        "formal-retrieval-promotion-approval-guarded-runtime-activation-gate-dry-run",
+        "formal-retrieval-promotion-approval-guarded-runtime-activation-gate-dry-run-gate",
+        "formal-retrieval-promotion-approval-guarded-runtime-activation-artifact-write-out",
+        "formal-retrieval-promotion-approval-guarded-runtime-activation-artifact-write-out-gate",
+        "formal-retrieval-promotion-approval-runtime-activation-artifact-integrity",
+        "formal-retrieval-promotion-approval-runtime-activation-artifact-integrity-gate",
+        "formal-retrieval-promotion-approval-live-runtime-activation-execution-dry-run",
+        "formal-retrieval-promotion-approval-live-runtime-activation-execution-dry-run-gate",
+        "formal-retrieval-promotion-approval-guarded-live-runtime-activation-execution",
+        "formal-retrieval-promotion-approval-guarded-live-runtime-activation-execution-gate",
+        "formal-retrieval-promotion-approval-scoped-live-activation-observation",
+        "formal-retrieval-promotion-approval-scoped-live-activation-observation-gate",
+        "formal-retrieval-promotion-approval-scoped-live-activation-safety-closeout",
+        "formal-retrieval-promotion-approval-scoped-live-activation-safety-closeout-gate",
+        "learning-layer-bootstrap",
+        "learning-layer-bootstrap-gate",
+        "learning-shadow-implementation-pack",
+        "learning-shadow-implementation-pack-gate",
+        "learning-failure-diagnosis-feedback-loop-pack",
+        "learning-failure-diagnosis-feedback-loop-pack-gate",
+        "learning-shadow-promotion-readiness-pack",
+        "learning-shadow-promotion-readiness-pack-gate",
+        "learning-controlled-runtime-pilot-gate-pack",
+        "learning-controlled-runtime-pilot-gate-pack-gate",
+        "learning-evidence-calibrated-self-validation-pack",
+        "learning-evidence-calibrated-self-validation-pack-gate",
+        "learning-evidence-accumulation-pack",
+        "learning-evidence-accumulation-pack-gate",
+        "learning-counterexample-repair-pack",
+        "learning-counterexample-repair-pack-gate",
+        "learning-formal-evidence-boundary-pack",
+        "learning-formal-evidence-boundary-pack-gate",
+        "learning-formal-evidence-realization-pack",
+        "learning-formal-evidence-realization-pack-gate",
+        "learning-controlled-formal-label-ingestion-staging",
+        "learning-controlled-formal-label-ingestion-staging-gate",
+        "learning-controlled-formal-label-ingestion-staging-r1-pack",
+        "learning-controlled-formal-label-ingestion-staging-r1-pack-gate",
+        "learning-controlled-formal-label-ingestion-staging-r1-semantic-cleanup",
+        "learning-controlled-formal-label-ingestion-staging-r1-semantic-cleanup-gate",
+        "controlled-formal-evidence-ingestion-pack",
+        "controlled-formal-evidence-ingestion-pack-gate",
+        "cfip",
+        "cfip-gate",
+        "fesrp",
+        "fesrp-gate",
+        "rmpdr",
+        "rmpdr-gate",
+        "sprsc",
+        "sprsc-gate",
+        "cmpbp",
+        "cmpbp-gate",
+        "cmpbp-pilot",
+        "cmpbp-wider",
+        "input-provenance-scan",
+        "main-flow-cleanup",
+        "unified-scoring-convergence",
+        "feedback-loop-eval",
+        "strategy-scoring-registry",
+        "neural-selection",
+        "v14-foundation",
+        "v14-runtime-trace-smoke",
+        "v15-neural-dry-run",
+        "v16-hybrid-shadow",
+        "v16_2-collect-production-trace",
+        "v16_2-evaluate",
+        "v16_4-native-trace-collect",
+        "v16_3-native-trace-readiness-gate",
+        "v16_6-native-production-trace-plan",
+        "v16_7-controlled-replay-native-trace",
+        "v16_9-live-capture-candidate-gate",
+        "v16_10-live-capture-authorized-simulation-gate",
+        "v16_11-live-capture-execution-skeleton",
+        "v16_11-phase-ledger-gate",
+        "v16_12-native-production-trace-execution-design-review",
+        "v16_13-native-production-trace-execution-plan",
+        "v16_14-native-production-trace-execution-authorization-contract",
+        "v16_15-native-production-trace-execution-endpoint-design",
+        "v16_16-native-production-trace-execution-endpoint-implementation-plan",
+        "v16_17-native-production-trace-execution-endpoint-implementation-approval",
+        "v16_18-native-production-trace-execution-endpoint-implementation-final-approval",
+        "v16_19-native-production-trace-endpoint-dossier",
+        "v16_20-native-production-trace-endpoint-decision-record",
+        "v16_21-native-production-trace-endpoint-enforcement-validation",
+        "v16_22-native-production-trace-endpoint-review-framework",
+        "v16_23-native-production-trace-endpoint-approval-validator-plan",
+        "v16_24-native-production-trace-endpoint-dry-run-architecture",
+        "v16_25-native-production-trace-endpoint-dry-run-harness-plan",
+        "v16_26-native-production-trace-endpoint-approval-validator-dry-run-harness",
+        "v16_27-native-production-trace-endpoint-approval-validator-repeated-dry-run",
+        "v16_28-native-production-trace-endpoint-approval-validator-failure-injection",
+        "formal-evidence-stabilization-replay-pilot-readiness",
+        "formal-evidence-stabilization-replay-pilot-readiness-gate",
+        "learning-formal-evidence-realization-r1-pack",
+        "learning-formal-evidence-realization-r1-pack-gate",
+        "dto-split-plan",
+        "dto-split-readiness-gate",
+        "vector-retrieval-eval-protocol-audit",
+        "vector-candidate-source-discriminability-audit",
+        "vector-retrieval-eval-protocol-gate",
+        "vector-input-metadata-enrichment-preview",
+        "vector-input-metadata-enrichment-gate",
+        "vector-enriched-candidate-source-repair-recheck",
+        "vector-enriched-candidate-source-repair-recheck-gate",
+        "vector-source-aware-ranking-repair",
+        "vector-source-aware-ranking-repair-gate",
+        "vector-output-token-priority-shadow",
+        "vector-output-token-priority-shadow-gate",
+        "vector-formal-adapter-input-contract",
+        "vector-formal-adapter-input-contract-gate",
+        "vector-formal-retrieval-integration-decision",
+        "vector-formal-retrieval-integration-decision-gate",
+        "project-state-audit",
+        "mainline-gap-map",
+        "generated-artifact-path-hygiene-audit",
+        "generated-artifact-path-hygiene-gate",
+        "foundation-freeze-report",
+        "foundation-release-candidate-gate",
+        "foundation-reproducibility-check",
+        "service-foundation-status-smoke",
+        "service-readiness-api-smoke",
+        "service-api-security-diagnostics",
+        "service-report-navigation-smoke",
+        "service-api-contract-report",
+        "service-api-contract-freeze-gate",
+        "service-auth-diagnostics",
+        "service-auth-enforcement-smoke",
+        "service-deployment-profile-gate",
+        "service-openapi-contract-export",
+        "service-client-contract-snapshot",
+        "service-api-contract-drift-gate",
+        "service-hosted-deployment-smoke",
+        "service-readonly-runtime-smoke",
+        "service-hosted-api-contract-smoke",
+        "service-foundation-freeze-gate",
+        "relation-expansion-profile-shadow",
+        "relation-corpus-hygiene",
+        "relation-expansion-shadow-eval",
+        "learning-ranker-analysis",
+        "storage-check",
+        "storage-boundary-report",
+        "postgres-storage-diagnostics",
+        "postgres-migration-preview",
+        "postgres-migration-apply",
+        "postgres-migration-smoke",
+        "postgres-relation-store-diagnostics",
+        "postgres-relation-store-parity",
+        "postgres-relation-review-diagnostics",
+        "postgres-relation-review-parity",
+        "postgres-relation-governance-parity",
+        "postgres-relation-governance-readiness-gate",
+        "postgres-relation-dual-write-smoke",
+        "postgres-relation-dual-write-quality",
+        "postgres-relation-shadow-read-smoke",
+        "postgres-relation-shadow-read-quality",
+        "postgres-relation-provider-switch-smoke",
+        "postgres-relation-provider-switch-gate",
+        "postgres-relation-runtime-canary",
+        "postgres-relation-scoped-service-mode-smoke",
+        "postgres-relation-scoped-service-mode-gate",
+        "postgres-relation-scoped-extended-canary",
+        "postgres-relation-selected-workspace-canary",
+        "postgres-relation-scoped-expansion-plan",
+        "postgres-relation-scoped-expansion-smoke",
+        "postgres-relation-scoped-expansion-gate",
+        "postgres-relation-scoped-observation-window",
+        "postgres-relation-scoped-observation-quality",
+        "postgres-relation-selected-normal-workspace-canary",
+        "postgres-relation-limited-normal-scope-observation",
+        "postgres-relation-limited-normal-scope-quality",
+        "postgres-relation-multi-normal-scope-canary",
+        "postgres-relation-multi-normal-scope-quality",
+        "postgres-learning-feedback-diagnostics",
+        "postgres-learning-feedback-parity",
+        "postgres-learning-feedback-readiness-gate",
+        "postgres-learning-feedback-dual-write-smoke",
+        "postgres-learning-feedback-shadow-read-smoke",
+        "postgres-learning-feedback-provider-quality",
+        "postgres-learning-feedback-scoped-service-mode-smoke",
+        "postgres-learning-feedback-scoped-service-mode-gate",
+        "postgres-learning-feedback-selected-normal-scope-canary",
+        "postgres-learning-feedback-limited-scope-observation",
+        "postgres-learning-feedback-limited-scope-quality",
+        "postgres-learning-feedback-freeze-gate",
+        "postgres-job-queue-diagnostics",
+        "postgres-job-queue-parity",
+        "postgres-job-queue-lease-smoke",
+        "postgres-job-queue-dual-write-smoke",
+        "postgres-job-queue-shadow-read-smoke",
+        "postgres-job-queue-provider-quality",
+        "postgres-job-queue-scoped-worker-canary",
+        "postgres-job-queue-scoped-worker-quality",
+        "postgres-job-queue-limited-worker-scope-observation",
+        "postgres-job-queue-limited-worker-scope-quality",
+        "postgres-job-queue-freeze-gate",
+        "postgres-vector-diagnostics",
+        "postgres-vector-compatibility",
+        "postgres-vector-provider-smoke",
+        "postgres-vector-parity",
+        "postgres-vector-provider-scoped-reindex-plan",
+        "postgres-vector-provider-scoped-reindex-apply",
+        "postgres-vector-provider-scoped-reindex-quality",
+        "postgres-vector-query-preview",
+        "postgres-vector-shadow-eval",
+        "postgres-vector-shadow-eval-a3",
+        "postgres-vector-shadow-eval-extended",
+        "postgres-vector-freeze-gate",
+        "chunk-ablation",
+        "idle-unload",
+        "fs-vector-perf"
+    };
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
@@ -57,505 +560,7 @@ public static partial class EvalCommand
         CancellationToken cancellationToken = default)
     {
         var subcommand = args.Count > 0 ? args[0] : string.Empty;
-        if (!string.Equals(subcommand, "run", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "report", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "perf", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "perf-scale", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "retrieval", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "attention-profile-selection", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "guarded-rerank-comparison", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "guarded-order-quality", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "guarded-profile-sweep", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "planning-shadow", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "planning-shadow-quality", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "planning-shadow-recall-loss", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "planning-optin-comparison", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "planning-optin-fallback-analysis", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "planning-optin-constraint-safety", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "extended-failure-triage", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "export-learning-features", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "learning-dataset-quality", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "router-intent-baseline", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "router-shadow-trace-quality", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "router-intent-shadow-eval", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "router-disagreement-triage", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "router-guarded-optin-readiness-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "learning-readiness-freeze-report", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "learning-runtime-change-readiness-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "learning-feedback-summary", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "export-learning-feedback", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "learning-feedback-review-summary", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "learning-feedback-feature-candidates", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "learning-feedback-quality", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "learning-feedback-review-smoke", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "learning-approved-feedback-dataset-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "submit-learning-feedback", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "learning-feedback-smoke", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "learning-baseline", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "learning-baseline-router", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "learning-baseline-ranker", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "learning-ranker-ablation", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "learning-ranker-weight-sweep", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "learning-ranker-residual-audit", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "learning-hard-negatives", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "learning-lifecycle-aware-ranker", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "lifecycle-ranker-shadow", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "ranker-shadow-trace-quality", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "candidate-reranker-feature-completeness", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "candidate-reranker-shadow-eval", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "candidate-reranker-shadow-failure-audit", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "candidate-reranker-score-distribution", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "candidate-reranker-listwise-calibration", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "candidate-reranker-formal-priority-alignment", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "candidate-reranker-shadow-trace-quality", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "graph-expansion-shadow-trace-quality", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "graph-expansion-optin-comparison", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "graph-expansion-guarded-optin-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-reindex-plan", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-reindex-apply", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-index-diagnostics", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-index-coverage", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-lifecycle-metadata-coverage", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-lifecycle-metadata-backfill-plan", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-lifecycle-metadata-backfill-apply", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-query-preview", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-query-shadow-eval", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-query-profile-sweep", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-residual-risk-audit", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-recall-loss-audit", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-safe-recall-recovery", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-ranker-fusion-shadow", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-representation-benchmark", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-query-expansion-shadow", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-retrieval-shadow-readiness-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "embedding-provider-smoke", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-provider-comparison", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-qwen3-shadow-eval", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-qwen3-readiness-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-provider-configuration-sanity-audit", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-provider-comparison-freeze", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-hybrid-preview", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-hybrid-shadow-eval", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-hybrid-readiness-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-hybrid-recall-regression-audit", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-hybrid-freeze-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-retrieval-dataset-alignment-audit", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-retrieval-dataset-alignment-audit-a3", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-retrieval-dataset-alignment-audit-extended", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-eligibility-recall-loss-triage", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-eligibility-recall-loss-triage-a3", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-eligibility-recall-loss-triage-extended", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-lifecycle-metadata-repair-plan", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-lifecycle-metadata-repair-plan-a3", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-lifecycle-metadata-repair-plan-extended", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-lifecycle-metadata-review-candidates-generate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-lifecycle-metadata-review-candidates", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-lifecycle-metadata-review-summary", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-lifecycle-metadata-sidecar-preview", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-lifecycle-metadata-review-smoke", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-sidecar-eligibility-preview", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-sidecar-eligibility-recheck", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-sidecar-eligibility-quality", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-lifecycle-metadata-review-batch-create", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-lifecycle-metadata-review-batch-export", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-lifecycle-metadata-review-batch-import", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-lifecycle-metadata-review-batch-validate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-lifecycle-metadata-review-batch-apply-preview", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-lifecycle-metadata-review-batch-import-smoke", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-lifecycle-metadata-evidence-backfill-preview", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-lifecycle-metadata-evidence-backfill-audit", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-retrieval-dataset-v2-contract", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-retrieval-dataset-v2-validator", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-legacy-dataset-limitation-report", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "retrieval-dataset-v2-generate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "retrieval-dataset-v2-validate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "retrieval-dataset-v2-quality", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "retrieval-dataset-v2-materialization-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "retrieval-dataset-v2-shadow-eval", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "retrieval-dataset-v2-dense-shadow-eval", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "retrieval-dataset-v2-hybrid-shadow-eval", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "retrieval-dataset-v2-readiness-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "retrieval-dataset-v2-stress-generate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "retrieval-dataset-v2-leakage-audit", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "retrieval-dataset-v2-anchor-dominance-audit", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "retrieval-dataset-v2-stress-shadow-eval", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "retrieval-dataset-v2-stress-readiness-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "retrieval-dataset-v2-stress-failure-triage", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "retrieval-dataset-v2-stress-failure-triage-holdout", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "retrieval-dataset-v2-stress-failure-clusters", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "retrieval-dataset-v2-hybrid-scoring-repair-preview", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "retrieval-dataset-v2-hybrid-scoring-repair-shadow-eval", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "retrieval-dataset-v2-hybrid-scoring-repair-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "retrieval-dataset-v2-hybrid-scoring-risk-triage", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "retrieval-dataset-v2-hybrid-scoring-risk-triage-holdout", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "retrieval-dataset-v2-stress-freeze-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-v4-readiness-recheck", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-guarded-formal-retrieval-preview", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-guarded-formal-retrieval-preview-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-shadow-package-comparison", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-shadow-package-comparison-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-scoped-formal-preview-optin-plan", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-scoped-formal-preview-optin-smoke", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-scoped-formal-preview-optin-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-limited-formal-preview-observation", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-limited-formal-preview-observation-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-formal-preview-freeze-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-scoped-runtime-experiment-plan", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-scoped-runtime-experiment-dry-run", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-scoped-runtime-experiment-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-scoped-runtime-experiment-dry-run-observation", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-scoped-runtime-experiment-dry-run-observation-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-scoped-runtime-experiment-design-freeze-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-scoped-runtime-experiment-proposal", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-scoped-runtime-experiment-proposal-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-scoped-runtime-experiment-config-preview", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-scoped-runtime-experiment-approval-preview", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-scoped-runtime-experiment-approve", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-scoped-runtime-experiment-approval-summary", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-scoped-runtime-experiment-approval-request-preview", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-scoped-runtime-experiment-approve-runtime", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-scoped-runtime-experiment-approval-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-scoped-runtime-experiment-noop-harness", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-scoped-runtime-experiment-noop-harness-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-scoped-runtime-experiment-harness-freeze-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-guarded-scoped-runtime-experiment-plan", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-guarded-scoped-runtime-experiment-plan-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-scoped-runtime-experiment-activation-preflight", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-scoped-runtime-experiment-dry-run-route", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-scoped-runtime-experiment-activation-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-guarded-scoped-runtime-experiment", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-guarded-scoped-runtime-experiment-observation", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-guarded-scoped-runtime-experiment-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-guarded-scoped-runtime-experiment-rollback-smoke", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-scoped-runtime-experiment-observation-window", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-scoped-runtime-experiment-observation-window-summary", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-scoped-runtime-experiment-observation-window-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-scoped-runtime-experiment-observation-freeze", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-scoped-runtime-experiment-promotion-decision", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-formal-retrieval-integration-plan", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-formal-retrieval-integration-plan-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-shadow-formal-retrieval-adapter-plan", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-shadow-formal-retrieval-adapter-plan-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-shadow-formal-retrieval-adapter", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-shadow-formal-retrieval-adapter-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-formal-adapter-package-shadow-comparison", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-formal-adapter-package-shadow-comparison-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-graph-retrieval-quality-audit", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-graph-retrieval-quality-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-retrieval-quality-repair-preview", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-retrieval-quality-repair-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-runtime-observable-feature-contract", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-runtime-observable-feature-contract-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-runtime-feature-derivation-preview", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-runtime-feature-derivation-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-runtime-feature-derivation-repair", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-runtime-feature-derivation-repair-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-runtime-feature-derivation-failure-freeze", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-graph-hub-noise-control-preview", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-graph-hub-noise-control-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-query-driven-candidate-source-repair", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-query-driven-candidate-source-repair-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-formal-retrieval-integration-freeze", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-adapter-noop-binding-plan", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-formal-retrieval-integration-freeze-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-adapter-noop-binding-smoke", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-adapter-noop-binding-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-scoped-shadow-adapter-invocation", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-scoped-shadow-adapter-invocation-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-mainline-shadow-adapter-package-comparison", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-mainline-shadow-adapter-package-comparison-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "architecture-cleanup-plan", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "architecture-cleanup-readiness-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "architecture-cleanup-freeze", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "architecture-cleanup-freeze-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "controlled-applied-merge-runtime-preview-plan", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "controlled-applied-merge-runtime-preview-plan-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "controlled-applied-merge-runtime-preview-dry-run", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "controlled-applied-merge-runtime-preview-dry-run-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "controlled-applied-merge-runtime-preview-activation-preflight", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "controlled-applied-merge-runtime-preview-activation-preflight-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "controlled-applied-merge-runtime-preview-observation-window", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "controlled-applied-merge-runtime-preview-observation-window-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "controlled-applied-merge-runtime-preview-observation-hardening", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "controlled-applied-merge-runtime-preview-observation-hardening-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "controlled-applied-merge-runtime-preview-observation-freeze", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "controlled-applied-merge-runtime-preview-observation-freeze-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "scoped-runtime-preview-approval-plan", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "scoped-runtime-preview-approval-plan-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "scoped-runtime-preview-authorization", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "scoped-runtime-preview-authorization-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "scoped-runtime-preview-authorization-hardening", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "scoped-runtime-preview-authorization-hardening-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "scoped-runtime-preview-activation-preparation", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "scoped-runtime-preview-activation-preparation-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "scoped-runtime-preview-activation-dry-run", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "scoped-runtime-preview-activation-dry-run-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "scoped-runtime-preview-activation-window-preflight", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "scoped-runtime-preview-activation-window-preflight-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "scoped-runtime-preview-activation-window-noop-execution", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "scoped-runtime-preview-activation-window-noop-execution-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "scoped-runtime-preview-activation-live-readiness-freeze", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "scoped-runtime-preview-activation-live-readiness-freeze-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "scoped-runtime-preview-live-activation-execution-plan", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "scoped-runtime-preview-live-activation-execution-plan-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "scoped-runtime-preview-live-activation-execution", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "scoped-runtime-preview-live-activation-execution-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "scoped-runtime-preview-live-activation-observation", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "scoped-runtime-preview-live-activation-observation-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "scoped-runtime-preview-live-activation-summary-freeze", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "scoped-runtime-preview-live-activation-summary-freeze-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "scoped-runtime-preview-live-activation-closeout", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "scoped-runtime-preview-live-activation-closeout-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "formal-retrieval-promotion-readiness-audit", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "formal-retrieval-promotion-readiness-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "formal-retrieval-promotion-plan", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "formal-retrieval-promotion-plan-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "formal-retrieval-promotion-approval", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "formal-retrieval-promotion-approval-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "formal-retrieval-promotion-approval-evidence-seal", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "formal-retrieval-promotion-approval-evidence-seal-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "formal-retrieval-promotion-external-approval-intake", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "formal-retrieval-promotion-external-approval-intake-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "formal-retrieval-promotion-external-approval-submission-pack", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "formal-retrieval-promotion-external-approval-submission-pack-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "formal-retrieval-promotion-external-approval-dry-run", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "formal-retrieval-promotion-external-approval-dry-run-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "formal-retrieval-promotion-external-approval-dry-run-negative-matrix", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "formal-retrieval-promotion-external-approval-dry-run-negative-matrix-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "formal-retrieval-promotion-external-approval-quarantine-scan", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "formal-retrieval-promotion-external-approval-quarantine-scan-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "formal-retrieval-promotion-external-approval-quarantine-negative-matrix", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "formal-retrieval-promotion-external-approval-quarantine-negative-matrix-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "formal-retrieval-promotion-external-approval-quarantine-positive-matrix", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "formal-retrieval-promotion-external-approval-quarantine-positive-matrix-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "formal-retrieval-promotion-approval-trust-chain-validation-matrix", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "formal-retrieval-promotion-approval-trust-chain-validation-matrix-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "formal-retrieval-promotion-approval-policy-authority-matrix", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "formal-retrieval-promotion-approval-policy-authority-matrix-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "formal-retrieval-promotion-approval-grant-application-matrix", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "formal-retrieval-promotion-approval-grant-application-matrix-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "formal-retrieval-promotion-approval-rollback-readiness-matrix", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "formal-retrieval-promotion-approval-rollback-readiness-matrix-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "formal-retrieval-promotion-approval-operator-sign-off-matrix", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "formal-retrieval-promotion-approval-operator-sign-off-matrix-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "formal-retrieval-promotion-approval-pre-crossing-final-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "formal-retrieval-promotion-approval-pre-crossing-final-gate-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "formal-retrieval-promotion-approval-dedicated-crossing-dry-run", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "formal-retrieval-promotion-approval-dedicated-crossing-dry-run-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "formal-retrieval-promotion-approval-dedicated-crossing-execution", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "formal-retrieval-promotion-approval-dedicated-crossing-execution-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "formal-retrieval-promotion-approval-runtime-activation-dry-run", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "formal-retrieval-promotion-approval-runtime-activation-dry-run-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "formal-retrieval-promotion-approval-guarded-runtime-activation-gate-dry-run", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "formal-retrieval-promotion-approval-guarded-runtime-activation-gate-dry-run-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "formal-retrieval-promotion-approval-guarded-runtime-activation-artifact-write-out", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "formal-retrieval-promotion-approval-guarded-runtime-activation-artifact-write-out-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "formal-retrieval-promotion-approval-runtime-activation-artifact-integrity", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "formal-retrieval-promotion-approval-runtime-activation-artifact-integrity-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "formal-retrieval-promotion-approval-live-runtime-activation-execution-dry-run", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "formal-retrieval-promotion-approval-live-runtime-activation-execution-dry-run-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "formal-retrieval-promotion-approval-guarded-live-runtime-activation-execution", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "formal-retrieval-promotion-approval-guarded-live-runtime-activation-execution-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "formal-retrieval-promotion-approval-scoped-live-activation-observation", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "formal-retrieval-promotion-approval-scoped-live-activation-observation-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "formal-retrieval-promotion-approval-scoped-live-activation-safety-closeout", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "formal-retrieval-promotion-approval-scoped-live-activation-safety-closeout-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "learning-layer-bootstrap", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "learning-layer-bootstrap-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "learning-shadow-implementation-pack", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "learning-shadow-implementation-pack-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "learning-failure-diagnosis-feedback-loop-pack", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "learning-failure-diagnosis-feedback-loop-pack-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "learning-shadow-promotion-readiness-pack", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "learning-shadow-promotion-readiness-pack-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "learning-controlled-runtime-pilot-gate-pack", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "learning-controlled-runtime-pilot-gate-pack-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "learning-evidence-calibrated-self-validation-pack", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "learning-evidence-calibrated-self-validation-pack-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "learning-evidence-accumulation-pack", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "learning-evidence-accumulation-pack-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "learning-counterexample-repair-pack", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "learning-counterexample-repair-pack-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "learning-formal-evidence-boundary-pack", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "learning-formal-evidence-boundary-pack-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "learning-formal-evidence-realization-pack", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "learning-formal-evidence-realization-pack-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "learning-controlled-formal-label-ingestion-staging", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "learning-controlled-formal-label-ingestion-staging-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "learning-controlled-formal-label-ingestion-staging-r1-pack", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "learning-controlled-formal-label-ingestion-staging-r1-pack-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "learning-controlled-formal-label-ingestion-staging-r1-semantic-cleanup", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "learning-controlled-formal-label-ingestion-staging-r1-semantic-cleanup-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "controlled-formal-evidence-ingestion-pack", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "controlled-formal-evidence-ingestion-pack-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "cfip", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "cfip-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "fesrp", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "fesrp-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "rmpdr", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "rmpdr-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "sprsc", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "sprsc-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "cmpbp", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "cmpbp-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "cmpbp-pilot", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "cmpbp-wider", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "input-provenance-scan", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "main-flow-cleanup", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "unified-scoring-convergence", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "feedback-loop-eval", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "strategy-scoring-registry", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "neural-selection", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "v14-foundation", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "v14-runtime-trace-smoke", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "v15-neural-dry-run", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "v16-hybrid-shadow", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "v16_2-collect-production-trace", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "v16_2-evaluate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "v16_4-native-trace-collect", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "v16_3-native-trace-readiness-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "v16_6-native-production-trace-plan", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "v16_7-controlled-replay-native-trace", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "v16_9-live-capture-candidate-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "v16_10-live-capture-authorized-simulation-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "v16_11-live-capture-execution-skeleton", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "v16_11-phase-ledger-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "v16_12-native-production-trace-execution-design-review", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "v16_13-native-production-trace-execution-plan", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "v16_14-native-production-trace-execution-authorization-contract", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "v16_15-native-production-trace-execution-endpoint-design", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "v16_16-native-production-trace-execution-endpoint-implementation-plan", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "v16_17-native-production-trace-execution-endpoint-implementation-approval", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "v16_18-native-production-trace-execution-endpoint-implementation-final-approval", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "v16_19-native-production-trace-endpoint-dossier", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "v16_20-native-production-trace-endpoint-decision-record", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "v16_21-native-production-trace-endpoint-enforcement-validation", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "v16_22-native-production-trace-endpoint-review-framework", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "v16_23-native-production-trace-endpoint-approval-validator-plan", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "v16_24-native-production-trace-endpoint-dry-run-architecture", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "v16_25-native-production-trace-endpoint-dry-run-harness-plan", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "v16_26-native-production-trace-endpoint-approval-validator-dry-run-harness", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "v16_27-native-production-trace-endpoint-approval-validator-repeated-dry-run", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "v16_28-native-production-trace-endpoint-approval-validator-failure-injection", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "formal-evidence-stabilization-replay-pilot-readiness", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "formal-evidence-stabilization-replay-pilot-readiness-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "learning-formal-evidence-realization-r1-pack", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "learning-formal-evidence-realization-r1-pack-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "dto-split-plan", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "dto-split-readiness-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-retrieval-eval-protocol-audit", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-candidate-source-discriminability-audit", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-retrieval-eval-protocol-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-input-metadata-enrichment-preview", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-input-metadata-enrichment-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-enriched-candidate-source-repair-recheck", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-enriched-candidate-source-repair-recheck-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-source-aware-ranking-repair", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-source-aware-ranking-repair-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-output-token-priority-shadow", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-output-token-priority-shadow-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-formal-adapter-input-contract", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-formal-adapter-input-contract-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-formal-retrieval-integration-decision", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "vector-formal-retrieval-integration-decision-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "project-state-audit", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "mainline-gap-map", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "generated-artifact-path-hygiene-audit", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "generated-artifact-path-hygiene-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "foundation-freeze-report", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "foundation-release-candidate-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "foundation-reproducibility-check", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "service-foundation-status-smoke", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "service-readiness-api-smoke", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "service-api-security-diagnostics", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "service-report-navigation-smoke", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "service-api-contract-report", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "service-api-contract-freeze-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "service-auth-diagnostics", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "service-auth-enforcement-smoke", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "service-deployment-profile-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "service-openapi-contract-export", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "service-client-contract-snapshot", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "service-api-contract-drift-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "service-hosted-deployment-smoke", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "service-readonly-runtime-smoke", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "service-hosted-api-contract-smoke", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "service-foundation-freeze-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "relation-expansion-profile-shadow", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "relation-corpus-hygiene", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "relation-expansion-shadow-eval", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "learning-ranker-analysis", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "storage-check", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "storage-boundary-report", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-storage-diagnostics", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-migration-preview", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-migration-apply", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-migration-smoke", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-relation-store-diagnostics", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-relation-store-parity", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-relation-review-diagnostics", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-relation-review-parity", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-relation-governance-parity", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-relation-governance-readiness-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-relation-dual-write-smoke", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-relation-dual-write-quality", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-relation-shadow-read-smoke", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-relation-shadow-read-quality", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-relation-provider-switch-smoke", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-relation-provider-switch-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-relation-runtime-canary", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-relation-scoped-service-mode-smoke", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-relation-scoped-service-mode-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-relation-scoped-extended-canary", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-relation-selected-workspace-canary", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-relation-scoped-expansion-plan", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-relation-scoped-expansion-smoke", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-relation-scoped-expansion-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-relation-scoped-observation-window", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-relation-scoped-observation-quality", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-relation-selected-normal-workspace-canary", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-relation-limited-normal-scope-observation", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-relation-limited-normal-scope-quality", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-relation-multi-normal-scope-canary", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-relation-multi-normal-scope-quality", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-learning-feedback-diagnostics", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-learning-feedback-parity", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-learning-feedback-readiness-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-learning-feedback-dual-write-smoke", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-learning-feedback-shadow-read-smoke", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-learning-feedback-provider-quality", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-learning-feedback-scoped-service-mode-smoke", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-learning-feedback-scoped-service-mode-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-learning-feedback-selected-normal-scope-canary", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-learning-feedback-limited-scope-observation", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-learning-feedback-limited-scope-quality", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-learning-feedback-freeze-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-job-queue-diagnostics", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-job-queue-parity", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-job-queue-lease-smoke", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-job-queue-dual-write-smoke", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-job-queue-shadow-read-smoke", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-job-queue-provider-quality", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-job-queue-scoped-worker-canary", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-job-queue-scoped-worker-quality", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-job-queue-limited-worker-scope-observation", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-job-queue-limited-worker-scope-quality", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-job-queue-freeze-gate", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-vector-diagnostics", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-vector-compatibility", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-vector-provider-smoke", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-vector-parity", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-vector-provider-scoped-reindex-plan", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-vector-provider-scoped-reindex-apply", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-vector-provider-scoped-reindex-quality", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-vector-query-preview", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-vector-shadow-eval", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-vector-shadow-eval-a3", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-vector-shadow-eval-extended", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(subcommand, "postgres-vector-freeze-gate", StringComparison.OrdinalIgnoreCase) &&
-        !string.Equals(subcommand, "chunk-ablation", StringComparison.OrdinalIgnoreCase) &&
-        !string.Equals(subcommand, "idle-unload", StringComparison.OrdinalIgnoreCase) &&
-        !string.Equals(subcommand, "fs-vector-perf", StringComparison.OrdinalIgnoreCase))
+        if (!s_knownSubcommands.Contains(subcommand))
         {
             Console.WriteLine("eval supports:\n  eval run [--category <name>] [--include-batches] [--out <path>]\n  eval report [<path>]\n  eval attention-profile-selection [--baseline <path>] [--extended <path>] [--out <path.json>] [--md-out <path.md>]\n  eval guarded-rerank-comparison [--category <name>] [--include-batches] [--profile <id>] [--out <path.json>]\n  eval guarded-order-quality [--category <name>] [--include-batches] [--profile <id>] [--out <path.json>]\n  eval guarded-profile-sweep [--category <name>] [--include-batches] [--out <path.json>]\n  eval planning-shadow [--category <name>] [--include-batches] [--out <path.json>] [--triage-out <path.json>]\n  eval planning-shadow-quality [--category <name>] [--include-batches] [--out <path.json>]\n  eval planning-shadow-recall-loss [--category <name>] [--include-batches] [--out <path.json>]\n  eval planning-optin-comparison [--category <name>] [--include-batches] [--opt-in-intents <csv>] [--out <path.json>]\n  eval planning-optin-fallback-analysis [--category <name>] [--include-batches] [--opt-in-intents <csv>] [--candidate-intents <csv>] [--out <path.json>]\n  eval planning-optin-constraint-safety [--category <name>] [--include-batches] [--opt-in-intents <csv>] [--candidate-intents <csv>] [--out <path.json>]\n  eval extended-failure-triage [--input <eval-report.json>] [--out <path.json>] [--md-out <path.md>]\n  eval export-learning-features [--out-dir <dir>] [--workspace <id>] [--collection <id>] [--eval-reports <csv>] [--planning-shadow-reports <csv>]\n  eval learning-dataset-quality [--features-dir <dir>] [--out <path.json>] [--md-out <path.md>]\n  eval router-intent-baseline [--features-dir <dir>] [--input <path.jsonl>] [--out-dir <dir>]\n  eval router-shadow-trace-quality [--workspace <id>] [--collection <id>] [--input <path.jsonl>] [--out <path.json>] [--md-out <path.md>]\n  eval router-intent-shadow-eval [--input <path.jsonl>] [--out-dir <dir>]\n  eval learning-baseline --task router|ranker [--features-dir <dir>] [--out-dir <dir>]\n  eval learning-baseline-router [--features-dir <dir>] [--out-dir <dir>]\n  eval learning-baseline-ranker [--features-dir <dir>] [--out-dir <dir>]\n  eval learning-ranker-ablation [--features-dir <dir>] [--out-dir <dir>]\n  eval learning-ranker-weight-sweep [--features-dir <dir>] [--out-dir <dir>]\n  eval learning-ranker-residual-audit [--features-dir <dir>] [--out-dir <dir>]\n  eval learning-hard-negatives [--residual-audit <path>] [--features-dir <dir>] [--out-dir <dir>]\n  eval learning-lifecycle-aware-ranker [--features-dir <dir>] [--out-dir <dir>]\n  eval lifecycle-ranker-shadow [--category <name>] [--include-batches] [--profile <id>] [--out <path.json>]\n  eval ranker-shadow-trace-quality [--workspace <id>] [--collection <id>] [--take <n>] [--out <path.json>] [--md-out <path.md>]\n  eval graph-expansion-shadow-trace-quality [--workspace <id>] [--collection <id>] [--take <n>] [--out <path.json>] [--md-out <path.md>]\n  eval graph-expansion-optin-comparison [--category <name>] [--out-a3 <path.json>] [--out-extended <path.json>] [--md-out <path.md>]\n  eval relation-expansion-profile-shadow [--out <path.json>] [--md-out <path.md>]\n  eval relation-corpus-hygiene [--out <path.json>] [--md-out <path.md>]\n  eval relation-expansion-shadow-eval [--category <name>] [--out-a3 <path.json>] [--out-extended <path.json>] [--md-out <path.md>]\n  eval learning-ranker-analysis [--features-dir <dir>] [--out-dir <dir>]\n  eval perf [--out <path.json>]\n  eval perf-scale [--size 1000] [--fake-vectors] [--out <path.json>]\n  eval retrieval [--out <path.json>]\n  eval storage-check\n  eval chunk-ablation\n  eval idle-unload\n  eval fs-vector-perf [--size 1000]");
             Console.WriteLine("  eval graph-expansion-guarded-optin-gate [--category <name>] [--out-a3 <path.json>] [--out-extended <path.json>] [--md-out <path.md>] [--gate-out <path.json>] [--gate-md-out <path.md>]");
