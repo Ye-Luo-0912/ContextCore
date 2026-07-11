@@ -95,7 +95,7 @@ public sealed class FileRelationStore : IRelationStore
     {
         ArgumentNullException.ThrowIfNull(relations);
 
-        var normalized = relations.Select(Normalize).ToArray();
+        var normalized = relations.Select(ContextNormalizers.Normalize).ToArray();
         if (normalized.Length == 0)
         {
             return;
@@ -320,31 +320,5 @@ public sealed class FileRelationStore : IRelationStore
 
         return string.IsNullOrWhiteSpace(query.RelationType)
                || string.Equals(relation.RelationType, query.RelationType, StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static ContextRelation Normalize(ContextRelation relation)
-    {
-        var now = DateTimeOffset.UtcNow;
-
-        return new ContextRelation
-        {
-            Id = string.IsNullOrWhiteSpace(relation.Id) ? Guid.NewGuid().ToString("N") : relation.Id,
-            WorkspaceId = relation.WorkspaceId,
-            CollectionId = relation.CollectionId,
-            SourceId = relation.SourceId,
-            TargetId = relation.TargetId,
-            RelationType = relation.RelationType,
-            Weight = relation.Weight,
-            Confidence = relation.Confidence,
-            SourceRefs = [.. relation.SourceRefs],
-            Metadata = new Dictionary<string, string>(relation.Metadata),
-            CreatedAt = relation.CreatedAt == default ? now : relation.CreatedAt,
-            SourceNodeKind = relation.SourceNodeKind,
-            TargetNodeKind = relation.TargetNodeKind,
-            Lifecycle = relation.Lifecycle,
-            ReviewStatus = relation.ReviewStatus,
-            UpdatedAt = relation.UpdatedAt,
-            Provenance = relation.Provenance
-        };
     }
 }

@@ -23,9 +23,7 @@ public sealed class InMemoryRelationStore : IRelationStore
         foreach (var relation in relations)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var normalized = relation.Id.Length == 0
-                ? Clone(relation, Guid.NewGuid().ToString("N"))
-                : Clone(relation);
+            var normalized = ContextNormalizers.Normalize(relation);
             _relations[Key(normalized.WorkspaceId, normalized.CollectionId, normalized.Id)] = normalized;
         }
 
@@ -41,7 +39,7 @@ public sealed class InMemoryRelationStore : IRelationStore
         cancellationToken.ThrowIfCancellationRequested();
         return Task.FromResult(
             _relations.TryGetValue(Key(workspaceId, collectionId, relationId), out var relation)
-                ? Clone(relation)
+                ? ContextNormalizers.Clone(relation)
                 : null);
     }
 
@@ -126,7 +124,7 @@ public sealed class InMemoryRelationStore : IRelationStore
             .ThenByDescending(item => item.CreatedAt)
             .Skip(effectiveSkip)
             .Take(effectiveTake)
-            .Select(item => Clone(item))
+            .Select(item => ContextNormalizers.Clone(item))
             .ToArray();
 
         return Task.FromResult<IReadOnlyList<ContextRelation>>(results);
@@ -159,34 +157,10 @@ public sealed class InMemoryRelationStore : IRelationStore
             .ThenByDescending(item => item.CreatedAt)
             .Skip(skip)
             .Take(take)
-            .Select(item => Clone(item))
+            .Select(item => ContextNormalizers.Clone(item))
             .ToArray();
 
         return Task.FromResult<IReadOnlyList<ContextRelation>>(results);
-    }
-
-    private static ContextRelation Clone(ContextRelation relation, string? id = null)
-    {
-        return new ContextRelation
-        {
-            Id = id ?? relation.Id,
-            WorkspaceId = relation.WorkspaceId,
-            CollectionId = relation.CollectionId,
-            SourceId = relation.SourceId,
-            TargetId = relation.TargetId,
-            RelationType = relation.RelationType,
-            Weight = relation.Weight,
-            Confidence = relation.Confidence,
-            SourceRefs = relation.SourceRefs.ToArray(),
-            Metadata = new Dictionary<string, string>(relation.Metadata),
-            CreatedAt = relation.CreatedAt == default ? DateTimeOffset.UtcNow : relation.CreatedAt,
-            SourceNodeKind = relation.SourceNodeKind,
-            TargetNodeKind = relation.TargetNodeKind,
-            Lifecycle = relation.Lifecycle,
-            ReviewStatus = relation.ReviewStatus,
-            UpdatedAt = relation.UpdatedAt,
-            Provenance = relation.Provenance
-        };
     }
 
     private static string Key(string workspaceId, string collectionId, string id)

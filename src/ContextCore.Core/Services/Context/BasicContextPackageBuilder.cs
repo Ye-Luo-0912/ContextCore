@@ -25,6 +25,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
     private readonly IContextStore _store;
     private readonly IRuntimeCandidateTraceSink _runtimeCandidateTraceSink;
     private readonly RelationTraversalEngine? _traversalEngine;
+    private readonly PackageTraceRecorder _traceRecorder;
     private readonly AsyncLocal<string?> _currentOperationId = new();
     private readonly AsyncLocal<string?> _currentRequestId = new();
     private readonly RecentContextFilter _recentContextFilter = new();
@@ -68,6 +69,10 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         _decisionTraceStore = decisionTraceStore;
         _runtimeCandidateTraceSink = runtimeCandidateTraceSink ?? new NullRuntimeCandidateTraceSink();
         _traversalEngine = traversalEngine;
+        _traceRecorder = new PackageTraceRecorder(
+            _runtimeCandidateTraceSink,
+            () => _currentOperationId.Value,
+            () => _currentRequestId.Value);
     }
 
     public async Task<ContextPackage> BuildAsync(
@@ -237,17 +242,17 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
             var candidate = PackageTraceCandidate.FromContextItem(item, "raw", score, itemTokens);
             if (sectionResult.Added)
             {
-                selectedItems.Add(CreateDecision(
+                selectedItems.Add(PackageTraceRecorder.CreateDecision(
                     candidate,
                     sectionName,
                     sectionResult.Reason,
                     sectionResult.ActualTokens));
-                WriteTraceRow(candidate, sectionName, true, sectionResult.Reason, selectedByScoring: true);
+                _traceRecorder.WriteTraceRow(candidate, sectionName, true, sectionResult.Reason, selectedByScoring: true);
             }
                 else
                 {
-                    droppedItems.Add(CreateDropped(candidate, "token budget exhausted"));
-                    WriteTraceRow(candidate, sectionName, false, "token budget exhausted", selectedByScoring: true);
+                    droppedItems.Add(PackageTraceRecorder.CreateDropped(candidate, "token budget exhausted"));
+                    _traceRecorder.WriteTraceRow(candidate, sectionName, false, "token budget exhausted", selectedByScoring: true);
                 }
         }
 
@@ -320,7 +325,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                     tokenContext,
                     ref estimatedTokens);
                 
-                AddSectionDecisionsWithDedup(
+                _traceRecorder.AddSectionDecisionsWithDedup(
                     selectedItems,
                     droppedItems,
                     [currentTaskCandidate],
@@ -392,8 +397,8 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                 .Where(item => !IsActive(item))
                 .Select(item => {
                     var c = PackageTraceCandidate.FromConstraint(item, "hard_constraint", 100, EstimatePackageTokens(item.Content, tokenContext));
-                    WriteTraceRow(c, "hard_constraints", false, "constraint is deprecated or rejected", selectedByScoring: false);
-                    return CreateDropped(c, "constraint is deprecated or rejected");
+                    _traceRecorder.WriteTraceRow(c, "hard_constraints", false, "constraint is deprecated or rejected", selectedByScoring: false);
+                    return PackageTraceRecorder.CreateDropped(c, "constraint is deprecated or rejected");
                 }));
 
             var hardCandidates = activeHardConstraints
@@ -420,7 +425,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                     tokenContext,
                     ref estimatedTokens);
 
-                AddSectionDecisionsWithDedup(
+                _traceRecorder.AddSectionDecisionsWithDedup(
                     selectedItems,
                     droppedItems,
                     hardCandidates,
@@ -506,7 +511,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                     tokenContext,
                     ref estimatedTokens);
 
-                AddSectionDecisionsWithDedup(
+                _traceRecorder.AddSectionDecisionsWithDedup(
                     selectedItems,
                     droppedItems,
                     workingCandidates,
@@ -547,7 +552,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                         tokenContext,
                         ref estimatedTokens);
 
-                    AddSectionDecisionsWithDedup(
+                    _traceRecorder.AddSectionDecisionsWithDedup(
                         selectedItems,
                         droppedItems,
                         historicalCandidates,
@@ -561,8 +566,8 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                 {
                     foreach (var candidate in historicalCandidates)
                     {
-                        WriteTraceRow(candidate, "historical_context", false, "deprecated memory is excluded in non-audit mode", selectedByScoring: false);
-                        droppedItems.Add(CreateDropped(candidate, "deprecated memory is excluded in non-audit mode"));
+                        _traceRecorder.WriteTraceRow(candidate, "historical_context", false, "deprecated memory is excluded in non-audit mode", selectedByScoring: false);
+                        droppedItems.Add(PackageTraceRecorder.CreateDropped(candidate, "deprecated memory is excluded in non-audit mode"));
                     }
                 }
             }
@@ -600,7 +605,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                 tokenContext,
                 ref estimatedTokens);
 
-            AddSectionDecisionsWithDedup(
+            _traceRecorder.AddSectionDecisionsWithDedup(
                 selectedItems,
                 droppedItems,
                 globalCandidates,
@@ -621,8 +626,8 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
             droppedItems.AddRange(excludedRecent.Select(item =>
             {
                 var c = PackageTraceCandidate.FromRecent(item, "recent_context", item.Relevance * 79.0, EstimatePackageTokens(item.Content, tokenContext));
-                WriteTraceRow(c, "recent_context", false, item.ExcludeReason ?? "recent context excluded", selectedByScoring: false);
-                return CreateDropped(c, item.ExcludeReason ?? "recent context excluded");
+                _traceRecorder.WriteTraceRow(c, "recent_context", false, item.ExcludeReason ?? "recent context excluded", selectedByScoring: false);
+                return PackageTraceRecorder.CreateDropped(c, item.ExcludeReason ?? "recent context excluded");
             }));
 
             var recentCandidates = includedRecent
@@ -646,7 +651,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                 tokenContext,
                 ref estimatedTokens);
 
-            AddSectionDecisionsWithDedup(
+            _traceRecorder.AddSectionDecisionsWithDedup(
                 selectedItems,
                 droppedItems,
                 recentCandidates,
@@ -712,7 +717,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                 tokenContext,
                 ref estimatedTokens);
 
-            AddSectionDecisionsWithDedup(
+            _traceRecorder.AddSectionDecisionsWithDedup(
                 selectedItems,
                 droppedItems,
                 stableCandidates,
@@ -744,8 +749,8 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                 .Where(item => !IsActive(item))
                 .Select(item => {
                     var c = PackageTraceCandidate.FromConstraint(item, "soft_constraint", 15.0, EstimatePackageTokens(item.Content, tokenContext));
-                    WriteTraceRow(c, "soft_constraints", false, "constraint is deprecated or rejected", selectedByScoring: false);
-                    return CreateDropped(c, "constraint is deprecated or rejected");
+                    _traceRecorder.WriteTraceRow(c, "soft_constraints", false, "constraint is deprecated or rejected", selectedByScoring: false);
+                    return PackageTraceRecorder.CreateDropped(c, "constraint is deprecated or rejected");
                 }));
 
             var softCandidates = activeSoftConstraints
@@ -769,7 +774,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                 tokenContext,
                 ref estimatedTokens);
 
-            AddSectionDecisionsWithDedup(
+            _traceRecorder.AddSectionDecisionsWithDedup(
                 selectedItems,
                 droppedItems,
                 softCandidates,
@@ -817,7 +822,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                 tokenContext,
                 ref estimatedTokens);
 
-            AddSectionDecisionsWithDedup(
+            _traceRecorder.AddSectionDecisionsWithDedup(
                 selectedItems,
                 droppedItems,
                 mergedCandidates,
@@ -875,7 +880,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                     tokenContext,
                     ref estimatedTokens);
 
-                AddSectionDecisionsWithDedup(
+                _traceRecorder.AddSectionDecisionsWithDedup(
                     selectedItems,
                     droppedItems,
                     relatedCandidates,
@@ -3470,263 +3475,6 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         return tokenBudget == int.MaxValue || tokenBudget <= 0 ? 0 : tokenBudget;
     }
 
-    private void AddSectionDecisionsWithDedup(
-        ICollection<ContextPackageDecision> selectedItems,
-        ICollection<DroppedContextItem> droppedItems,
-        IReadOnlyList<PackageTraceCandidate> candidates,
-        string sectionName,
-        SectionBuildResult sectionResult,
-        HashSet<string> globalSelectedIds,
-        Dictionary<string, ContextPackageDecision> primaryDecisions,
-        string sectionContent = "")
-    {
-        if (candidates.Count == 0)
-        {
-            return;
-        }
-
-        if (sectionResult.Added)
-        {
-            for (int i = 0; i < candidates.Count; i++)
-            {
-                var candidate = candidates[i];
-                if (globalSelectedIds.Contains(candidate.Id))
-                {
-                    if (primaryDecisions.TryGetValue(candidate.Id, out var primaryDecision))
-                    {
-                        var refsList = new List<string>();
-                        if (primaryDecision.Metadata.TryGetValue("alsoReferencedBy", out var existingRefs))
-                        {
-                            refsList.AddRange(existingRefs.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
-                        }
-                        if (!refsList.Contains(sectionName, StringComparer.OrdinalIgnoreCase))
-                        {
-                            refsList.Add(sectionName);
-                            primaryDecision.Metadata["alsoReferencedBy"] = string.Join(",", refsList);
-                        }
-                    }
-
-                    WriteTraceRow(candidate, sectionName, false, "referenced by duplicate section", selectedByScoring: true);
-                    selectedItems.Add(CreateDecision(
-                        candidate,
-                        sectionName,
-                        "referenced by duplicate section",
-                        0));
-                    continue;
-                }
-
-                var isKept = (i == 0);
-                if (i > 0 && !string.IsNullOrEmpty(sectionContent) && !string.IsNullOrEmpty(candidate.Content))
-                {
-                    var testLength = Math.Min(candidate.Content.Length, 15);
-                    var testStr = candidate.Content[..testLength];
-                    isKept = sectionContent.Contains(testStr, StringComparison.OrdinalIgnoreCase);
-                }
-
-                if (isKept)
-                {
-                    var decision = CreateDecision(
-                        candidate,
-                        sectionName,
-                        sectionResult.Reason,
-                        candidate.EstimatedTokens);
-                    WriteTraceRow(candidate, sectionName, true, sectionResult.Reason);
-                    selectedItems.Add(decision);
-                    globalSelectedIds.Add(candidate.Id);
-                    primaryDecisions[candidate.Id] = decision;
-                }
-                else
-                {
-                    droppedItems.Add(CreateDropped(candidate, "token budget exhausted"));
-                    WriteTraceRow(candidate, sectionName, false, "token budget exhausted", selectedByScoring: true);
-                }
-            }
-        }
-        else
-        {
-            foreach (var candidate in candidates)
-            {
-                droppedItems.Add(CreateDropped(candidate, sectionResult.Reason));
-                WriteTraceRow(candidate, sectionName, false, sectionResult.Reason, selectedByScoring: false);
-            }
-        }
-    }
-
-    private void WriteTraceRow(PackageTraceCandidate c, string section, bool included, string reason,
-        bool selectedByScoring = true)
-    {
-        if (!_runtimeCandidateTraceSink.Enabled) return;
-        try
-        {
-            var kind = c.Kind;
-            var (srcType, auth, stratType, chan) = MapTraceFields(kind, section, c);
-            _runtimeCandidateTraceSink.Write(new RuntimeCandidateTraceRow
-            {
-                OperationId = _currentOperationId.Value ?? "unknown",
-                RequestId = _currentRequestId.Value ?? "unknown",
-                CandidateId = c.Id,
-                SourceId = c.Id,
-                SourceType = srcType,
-                Authority = auth,
-                StrategyType = stratType,
-                RetrievalChannel = chan,
-                TraceSource = (byte)3, // PackageTrace
-                DeterministicScore = c.Score,
-                StrategyScore = c.Score,
-                FinalScore = c.Score,
-                SelectedByScoring = selectedByScoring,
-                IncludedInPackage = included,
-                DroppedReason = included ? "" : reason,
-                TokenCost = c.EstimatedTokens,
-                Section = section
-            });
-        }
-        catch { /* trace write failure must not affect main flow */ }
-    }
-
-    private static (byte sourceType, byte authority, byte strategyType, byte retrievalChannel) MapTraceFields(
-        string kind, string section, PackageTraceCandidate c)
-    {
-        var kindLower = kind?.ToLowerInvariant() ?? section?.ToLowerInvariant() ?? "";
-        var sectionLower = section?.ToLowerInvariant() ?? "";
-
-        byte sourceType = kindLower switch
-        {
-            "raw" or "legacy" => 1,
-            "current_task" => 6,
-            "hard_constraint" or "soft_constraint" or "merged_constraint" => 3,
-            "working_memory" or "stable_memory" or "historical_context" => 2,
-            "global_context" => 4,
-            "recent_context" => 5,
-            "related_context" => 7,
-            _ => 1
-        };
-
-        byte authority = kindLower switch
-        {
-            "raw" or "legacy" or "recent_context" => 2,
-            "current_task" => 5,
-            "hard_constraint" or "soft_constraint" or "merged_constraint" or "constraints" => 1,
-            "working_memory" => 5,
-            "stable_memory" => 1,
-            "global_context" => 1,
-            "related_context" => 4,
-            "historical_context" => 3,
-            _ => 1
-        };
-
-        byte strategyType = kindLower switch
-        {
-            "current_task" => 4,
-            "hard_constraint" or "soft_constraint" or "merged_constraint" or "constraints" => 3,
-            "working_memory" or "recent_context" => 1,
-            "stable_memory" => 2,
-            "global_context" => 2,
-            "related_context" => 5,
-            "raw" or "legacy" => 1,
-            _ => 1
-        };
-
-        byte retrievalChannel = sectionLower switch
-        {
-            "raw" or "legacy" => sectionLower == "legacy" ? (byte)4 : (byte)4,
-            "current_task" => (byte)5,
-            "hard_constraints" or "soft_constraints" or "constraints" => kindLower.Contains("constraint") ? (byte)6 : (byte)2,
-            "working_memory" or "stable_memory" or "global_context" or "historical_context" => (byte)2,
-            "recent_context" => (byte)4,
-            "related_context" => (byte)3,
-            _ => (byte)2
-        };
-        return (sourceType, authority, strategyType, retrievalChannel);
-    }
-
-    private static void AddSectionDecisions(
-        ICollection<ContextPackageDecision> selectedItems,
-        ICollection<DroppedContextItem> droppedItems,
-        IReadOnlyList<PackageTraceCandidate> candidates,
-        string sectionName,
-        SectionBuildResult sectionResult,
-        string sectionContent = "")
-    {
-        if (candidates.Count == 0)
-        {
-            return;
-        }
-
-        if (sectionResult.Added)
-        {
-            for (int i = 0; i < candidates.Count; i++)
-            {
-                var candidate = candidates[i];
-                var isKept = (i == 0);
-                if (i > 0 && !string.IsNullOrEmpty(sectionContent) && !string.IsNullOrEmpty(candidate.Content))
-                {
-                    var testLength = Math.Min(candidate.Content.Length, 15);
-                    var testStr = candidate.Content[..testLength];
-                    isKept = sectionContent.Contains(testStr, StringComparison.OrdinalIgnoreCase);
-                }
-
-                if (isKept)
-                {
-                    selectedItems.Add(CreateDecision(
-                        candidate,
-                        sectionName,
-                        sectionResult.Reason,
-                        candidate.EstimatedTokens));
-                }
-                else
-                {
-                    droppedItems.Add(CreateDropped(candidate, "token budget exhausted"));
-                }
-            }
-        }
-        else
-        {
-            foreach (var candidate in candidates)
-            {
-                droppedItems.Add(CreateDropped(candidate, sectionResult.Reason));
-            }
-        }
-    }
-
-    private static ContextPackageDecision CreateDecision(
-        PackageTraceCandidate candidate,
-        string sectionName,
-        string reason,
-        int estimatedTokens)
-    {
-        return new ContextPackageDecision
-        {
-            ItemId = candidate.Id,
-            Kind = candidate.Kind,
-            Type = candidate.Type,
-            SectionName = sectionName,
-            Reason = reason,
-            Score = candidate.Score,
-            EstimatedTokens = estimatedTokens,
-            SourceRefs = candidate.SourceRefs,
-            Metadata = new Dictionary<string, string>(candidate.Metadata),
-            ScoreBreakdown = candidate.ScoreBreakdown
-        };
-    }
-
-    private static DroppedContextItem CreateDropped(
-        PackageTraceCandidate candidate,
-        string reason)
-    {
-        return new DroppedContextItem
-        {
-            ItemId = candidate.Id,
-            Kind = candidate.Kind,
-            Type = candidate.Type,
-            Reason = reason,
-            Score = candidate.Score,
-            EstimatedTokens = candidate.EstimatedTokens,
-            SourceRefs = candidate.SourceRefs,
-            Metadata = new Dictionary<string, string>(candidate.Metadata)
-        };
-    }
-
     private static string FormatConstraints(IReadOnlyList<ContextConstraint> constraints, int tokenBudget = 0)
     {
         if (tokenBudget > 0 && tokenBudget <= 200)
@@ -4255,7 +4003,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
             and not ContextMemoryStatus.Rejected;
     }
 
-    private static IReadOnlyList<string> ResolveSourceRefs(ContextItem item)
+    internal static IReadOnlyList<string> ResolveSourceRefs(ContextItem item)
     {
         if (item.SourceRefs.Count > 0)
         {
@@ -4379,7 +4127,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
 
     private sealed record TokenEstimationContext(string? ModelName, string Source, bool IsFallback);
 
-    private sealed class SectionBuildResult
+    internal sealed class SectionBuildResult
     {
         private SectionBuildResult(bool added, string reason, int actualTokens)
         {
@@ -4459,169 +4207,4 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         public string Reason { get; }
     }
 
-    private sealed class PackageTraceCandidate
-    {
-        private PackageTraceCandidate(
-            string id,
-            string kind,
-            string type,
-            double score,
-            int estimatedTokens,
-            IReadOnlyList<string> sourceRefs,
-            string content,
-            Dictionary<string, string>? metadata = null,
-            ItemScoreBreakdown? scoreBreakdown = null)
-        {
-            Id = id;
-            Kind = kind;
-            Type = type;
-            Score = score;
-            EstimatedTokens = estimatedTokens;
-            SourceRefs = sourceRefs;
-            Content = content ?? string.Empty;
-            Metadata = metadata ?? new Dictionary<string, string>();
-            ScoreBreakdown = scoreBreakdown;
-        }
-
-        public string Id { get; }
-        public string Kind { get; }
-        public string Type { get; }
-        public double Score { get; }
-        public int EstimatedTokens { get; }
-        public IReadOnlyList<string> SourceRefs { get; }
-        public string Content { get; }
-        public Dictionary<string, string> Metadata { get; }
-
-        /// <summary>评分明细，仅 working_memory / historical_context 路径下填充。</summary>
-        public ItemScoreBreakdown? ScoreBreakdown { get; }
-
-        public static PackageTraceCandidate FromContextItem(
-            ContextItem item,
-            string kind,
-            double score,
-            int? estimatedTokens = null)
-        {
-            return new PackageTraceCandidate(
-                item.Id,
-                kind,
-                item.Type,
-                score,
-                estimatedTokens ?? EstimateTokens(item.Content),
-                ResolveSourceRefs(item),
-                item.Content,
-                item.Metadata);
-        }
-
-        /// <summary>从 旧式 double score 创建（兼容）。</summary>
-        public static PackageTraceCandidate FromMemory(
-            ContextMemoryItem item,
-            string kind,
-            double score,
-            int? estimatedTokens = null)
-        {
-            return new PackageTraceCandidate(
-                item.Id,
-                kind,
-                item.Type,
-                score,
-                estimatedTokens ?? EstimateTokens(item.Content),
-                item.SourceRefs.Count > 0 ? item.SourceRefs.ToArray() : new[] { item.Id },
-                item.Content,
-                item.Metadata);
-        }
-
-        /// <summary>从 ItemScoreBreakdown 创建，自动使用 FinalScore。</summary>
-        public static PackageTraceCandidate FromMemory(
-            ContextMemoryItem item,
-            string kind,
-            ItemScoreBreakdown breakdown,
-            int? estimatedTokens = null)
-        {
-            return new PackageTraceCandidate(
-                item.Id,
-                kind,
-                item.Type,
-                breakdown.FinalScore,
-                estimatedTokens ?? EstimateTokens(item.Content),
-                item.SourceRefs.Count > 0 ? item.SourceRefs.ToArray() : new[] { item.Id },
-                item.Content,
-                new Dictionary<string, string>(item.Metadata),
-                breakdown);
-        }
-
-        public static PackageTraceCandidate FromGlobal(
-            ContextGlobalItem item,
-            string kind,
-            double score,
-            int? estimatedTokens = null)
-        {
-            return new PackageTraceCandidate(
-                item.Id,
-                kind,
-                item.Type,
-                score,
-                estimatedTokens ?? EstimateTokens(item.Content),
-                item.SourceRefs.Count > 0 ? item.SourceRefs.ToArray() : new[] { item.Id },
-                item.Content,
-                item.Metadata);
-        }
-
-        public static PackageTraceCandidate FromConstraint(
-            ContextConstraint item,
-            string kind,
-            double score,
-            int? estimatedTokens = null)
-        {
-            return new PackageTraceCandidate(
-                item.Id,
-                kind,
-                "constraint",
-                score + item.Confidence * 5,
-                estimatedTokens ?? EstimateTokens(item.Content),
-                item.SourceRefs.Count > 0 ? item.SourceRefs.ToArray() : new[] { item.Id },
-                item.Content,
-                item.Metadata);
-        }
-
-        public static PackageTraceCandidate FromCurrentTask(
-            WorkingMemoryCurrentTask item,
-            int? estimatedTokens = null)
-        {
-            return new PackageTraceCandidate(
-                item.TaskId,
-                "current_task",
-                "task",
-                110,
-                estimatedTokens ?? EstimateTokens(item.Description),
-                [.. new[] { $"task:{item.TaskId}" }
-                    .Concat(item.Metadata.TryGetValue("sourceRef", out var sourceRef) && !string.IsNullOrWhiteSpace(sourceRef)
-                        ? new[] { sourceRef }
-                        : Array.Empty<string>())],
-                item.Title + " " + item.Description,
-                item.Metadata);
-        }
-
-        public static PackageTraceCandidate FromRecent(
-            RecentContextItem item,
-            string kind,
-            double score,
-            int? estimatedTokens = null)
-        {
-            return new PackageTraceCandidate(
-                item.SourceItemId,
-                kind,
-                "recent",
-                score,
-                estimatedTokens ?? EstimateTokens(item.Content),
-                item.SourceRefs.Count > 0 ? item.SourceRefs.ToArray() : new[] { item.SourceItemId },
-                item.Content,
-                new Dictionary<string, string>
-                {
-                    ["relevance"] = item.Relevance.ToString("0.000"),
-                    ["recencyWeight"] = item.RecencyWeight.ToString("0.000"),
-                    ["reason"] = item.Reason,
-                    ["sourceTurnId"] = item.SourceTurnId ?? string.Empty
-                });
-        }
-    }
 }

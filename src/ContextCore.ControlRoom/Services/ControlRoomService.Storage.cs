@@ -109,586 +109,200 @@ public sealed partial class ControlRoomService
         }
     }
 
-    private static PostgresRelationReviewProviderDiagnostics BuildPostgresRelationReviewProviderDiagnostics(string rootPath)
-    {
-        return ReadPostgresReport<PostgresRelationReviewProviderDiagnostics>(
-            rootPath,
-            "postgres-relation-review-diagnostics.json",
-            new PostgresRelationReviewProviderDiagnostics
-            {
-                ActiveRuntimeProvider = "FileSystemRelationStore",
-                Diagnostics = ["RelationReviewDiagnosticsReportMissing"],
-                Recommendation = "RunEvalPostgresRelationReviewDiagnostics"
-            });
-    }
+    private static PostgresRelationReviewProviderDiagnostics BuildPostgresRelationReviewProviderDiagnostics(string rootPath) =>
+        ReadPostgresReport(rootPath, "postgres-relation-review-diagnostics.json",
+            new PostgresRelationReviewProviderDiagnostics { ActiveRuntimeProvider = "FileSystemRelationStore", Diagnostics = ["RelationReviewDiagnosticsReportMissing"], Recommendation = "RunEvalPostgresRelationReviewDiagnostics" });
 
-    private static PostgresRelationReviewParityReport BuildPostgresRelationReviewParityReport(string rootPath)
-    {
-        return ReadPostgresReport<PostgresRelationReviewParityReport>(
-            rootPath,
-            "postgres-relation-review-parity-report.json",
-            new PostgresRelationReviewParityReport
-            {
-                Diagnostics = ["RelationReviewParityReportMissing"],
-                Recommendation = "RunEvalPostgresRelationReviewParity"
-            });
-    }
+    private static PostgresRelationReviewParityReport BuildPostgresRelationReviewParityReport(string rootPath) =>
+        ReadPostgresReport(rootPath, "postgres-relation-review-parity-report.json",
+            new PostgresRelationReviewParityReport { Diagnostics = ["RelationReviewParityReportMissing"], Recommendation = "RunEvalPostgresRelationReviewParity" });
 
-    private static PostgresRelationGovernanceParityReport BuildPostgresRelationGovernanceParityReport(string rootPath)
-    {
-        return ReadPostgresReport<PostgresRelationGovernanceParityReport>(
-            rootPath,
-            "postgres-relation-governance-parity-report.json",
-            new PostgresRelationGovernanceParityReport
-            {
-                Diagnostics = ["RelationGovernanceParityReportMissing"],
-                Recommendation = "RunEvalPostgresRelationGovernanceParity"
-            });
-    }
+    private static PostgresRelationGovernanceParityReport BuildPostgresRelationGovernanceParityReport(string rootPath) =>
+        ReadPostgresReport(rootPath, "postgres-relation-governance-parity-report.json",
+            new PostgresRelationGovernanceParityReport { Diagnostics = ["RelationGovernanceParityReportMissing"], Recommendation = "RunEvalPostgresRelationGovernanceParity" });
 
-    private static PostgresRelationGovernanceReadinessGateReport BuildPostgresRelationGovernanceReadinessGateReport(string rootPath)
-    {
-        return ReadPostgresReport<PostgresRelationGovernanceReadinessGateReport>(
-            rootPath,
-            "postgres-relation-governance-readiness-gate.json",
-            new PostgresRelationGovernanceReadinessGateReport
-            {
-                BlockedReasons = ["RelationGovernanceReadinessGateReportMissing"],
-                Recommendation = "RunEvalPostgresRelationGovernanceReadinessGate"
-            });
-    }
+    private static PostgresRelationGovernanceReadinessGateReport BuildPostgresRelationGovernanceReadinessGateReport(string rootPath) =>
+        ReadPostgresReport(rootPath, "postgres-relation-governance-readiness-gate.json",
+            new PostgresRelationGovernanceReadinessGateReport { BlockedReasons = ["RelationGovernanceReadinessGateReportMissing"], Recommendation = "RunEvalPostgresRelationGovernanceReadinessGate" });
 
-    private static PostgresRelationDualWriteQualityReport BuildPostgresRelationDualWriteQualityReport(string rootPath)
-    {
-        return ReadPostgresReport<PostgresRelationDualWriteQualityReport>(
-            rootPath,
-            "postgres-relation-dual-write-quality-report.json",
-            new PostgresRelationDualWriteQualityReport
-            {
-                Diagnostics = ["RelationDualWriteQualityReportMissing"],
-                Recommendation = "RunEvalPostgresRelationDualWriteQuality"
-            });
-    }
+    private static PostgresRelationDualWriteQualityReport BuildPostgresRelationDualWriteQualityReport(string rootPath) =>
+        ReadPostgresReport(rootPath, "postgres-relation-dual-write-quality-report.json",
+            new PostgresRelationDualWriteQualityReport { Diagnostics = ["RelationDualWriteQualityReportMissing"], Recommendation = "RunEvalPostgresRelationDualWriteQuality" });
 
-    private static PostgresRelationShadowReadQualityReport BuildPostgresRelationShadowReadQualityReport(string rootPath)
-    {
-        return ReadPostgresReport<PostgresRelationShadowReadQualityReport>(
-            rootPath,
-            "postgres-relation-shadow-read-quality-report.json",
-            new PostgresRelationShadowReadQualityReport
-            {
-                Diagnostics = ["RelationShadowReadQualityReportMissing"],
-                Recommendation = "RunEvalPostgresRelationShadowReadQuality"
-            });
-    }
+    private static PostgresRelationShadowReadQualityReport BuildPostgresRelationShadowReadQualityReport(string rootPath) =>
+        ReadPostgresReport(rootPath, "postgres-relation-shadow-read-quality-report.json",
+            new PostgresRelationShadowReadQualityReport { Diagnostics = ["RelationShadowReadQualityReportMissing"], Recommendation = "RunEvalPostgresRelationShadowReadQuality" });
 
-    private static PostgresRelationProviderSwitchSmokeReport BuildPostgresRelationProviderSwitchSmokeReport(string rootPath)
-    {
-        return ReadPostgresReport<PostgresRelationProviderSwitchSmokeReport>(
-            rootPath,
-            "postgres-relation-provider-switch-smoke-report.json",
-            new PostgresRelationProviderSwitchSmokeReport
-            {
-                Diagnostics = ["RelationProviderSwitchSmokeReportMissing"],
-                Recommendation = "RunEvalPostgresRelationProviderSwitchSmoke"
-            });
-    }
+    private static PostgresRelationProviderSwitchSmokeReport BuildPostgresRelationProviderSwitchSmokeReport(string rootPath) =>
+        ReadPostgresReport(rootPath, "postgres-relation-provider-switch-smoke-report.json",
+            new PostgresRelationProviderSwitchSmokeReport { Diagnostics = ["RelationProviderSwitchSmokeReportMissing"], Recommendation = "RunEvalPostgresRelationProviderSwitchSmoke" });
 
-    private static PostgresRelationProviderSwitchGateReport BuildPostgresRelationProviderSwitchGateReport(string rootPath)
-    {
-        return ReadPostgresReport<PostgresRelationProviderSwitchGateReport>(
-            rootPath,
-            "postgres-relation-provider-switch-gate.json",
-            new PostgresRelationProviderSwitchGateReport
-            {
-                BlockedReasons = ["RelationProviderSwitchGateReportMissing"],
-                Recommendation = "RunEvalPostgresRelationProviderSwitchGate"
-            });
-    }
+    private static PostgresRelationProviderSwitchGateReport BuildPostgresRelationProviderSwitchGateReport(string rootPath) =>
+        ReadPostgresReport(rootPath, "postgres-relation-provider-switch-gate.json",
+            new PostgresRelationProviderSwitchGateReport { BlockedReasons = ["RelationProviderSwitchGateReportMissing"], Recommendation = "RunEvalPostgresRelationProviderSwitchGate" });
 
-    private static PostgresRelationRuntimeCanaryReport BuildPostgresRelationRuntimeCanaryReport(string rootPath)
-    {
-        return ReadPostgresReport<PostgresRelationRuntimeCanaryReport>(
-            rootPath,
-            "postgres-relation-runtime-canary-report.json",
-            new PostgresRelationRuntimeCanaryReport
-            {
-                Diagnostics = ["RelationRuntimeCanaryReportMissing"],
-                Recommendation = "RunEvalPostgresRelationRuntimeCanary"
-            });
-    }
+    private static PostgresRelationRuntimeCanaryReport BuildPostgresRelationRuntimeCanaryReport(string rootPath) =>
+        ReadPostgresReport(rootPath, "postgres-relation-runtime-canary-report.json",
+            new PostgresRelationRuntimeCanaryReport { Diagnostics = ["RelationRuntimeCanaryReportMissing"], Recommendation = "RunEvalPostgresRelationRuntimeCanary" });
 
-    private static PostgresRelationScopedExtendedCanaryReport BuildPostgresRelationScopedExtendedCanaryReport(string rootPath)
-    {
-        return ReadPostgresReport<PostgresRelationScopedExtendedCanaryReport>(
-            rootPath,
-            "postgres-relation-scoped-extended-canary-report.json",
-            new PostgresRelationScopedExtendedCanaryReport
-            {
-                Diagnostics = ["RelationScopedExtendedCanaryReportMissing"],
-                Recommendation = "RunEvalPostgresRelationScopedExtendedCanary"
-            });
-    }
+    private static PostgresRelationScopedExtendedCanaryReport BuildPostgresRelationScopedExtendedCanaryReport(string rootPath) =>
+        ReadPostgresReport(rootPath, "postgres-relation-scoped-extended-canary-report.json",
+            new PostgresRelationScopedExtendedCanaryReport { Diagnostics = ["RelationScopedExtendedCanaryReportMissing"], Recommendation = "RunEvalPostgresRelationScopedExtendedCanary" });
 
-    private static PostgresRelationSelectedWorkspaceCanaryReport BuildPostgresRelationSelectedWorkspaceCanaryReport(string rootPath)
-    {
-        return ReadPostgresReport<PostgresRelationSelectedWorkspaceCanaryReport>(
-            rootPath,
-            "postgres-relation-selected-workspace-canary-report.json",
-            new PostgresRelationSelectedWorkspaceCanaryReport
-            {
-                Diagnostics = ["RelationSelectedWorkspaceCanaryReportMissing"],
-                Recommendation = "RunEvalPostgresRelationSelectedWorkspaceCanary"
-            });
-    }
+    private static PostgresRelationSelectedWorkspaceCanaryReport BuildPostgresRelationSelectedWorkspaceCanaryReport(string rootPath) =>
+        ReadPostgresReport(rootPath, "postgres-relation-selected-workspace-canary-report.json",
+            new PostgresRelationSelectedWorkspaceCanaryReport { Diagnostics = ["RelationSelectedWorkspaceCanaryReportMissing"], Recommendation = "RunEvalPostgresRelationSelectedWorkspaceCanary" });
 
-    private static PostgresRelationScopedExpansionReport BuildPostgresRelationScopedExpansionReport(string rootPath)
-    {
-        return ReadPostgresReport<PostgresRelationScopedExpansionReport>(
-            rootPath,
-            "postgres-relation-scoped-expansion-smoke-report.json",
-            new PostgresRelationScopedExpansionReport
-            {
-                Diagnostics = ["RelationScopedExpansionReportMissing"],
-                Recommendation = "RunEvalPostgresRelationScopedExpansionSmoke"
-            });
-    }
+    private static PostgresRelationScopedExpansionReport BuildPostgresRelationScopedExpansionReport(string rootPath) =>
+        ReadPostgresReport(rootPath, "postgres-relation-scoped-expansion-smoke-report.json",
+            new PostgresRelationScopedExpansionReport { Diagnostics = ["RelationScopedExpansionReportMissing"], Recommendation = "RunEvalPostgresRelationScopedExpansionSmoke" });
 
-    private static PostgresRelationScopedObservationReport BuildPostgresRelationScopedObservationReport(string rootPath)
-    {
-        return ReadPostgresReport<PostgresRelationScopedObservationReport>(
-            rootPath,
-            "postgres-relation-scoped-observation-quality-report.json",
-            new PostgresRelationScopedObservationReport
-            {
-                Diagnostics = ["RelationScopedObservationReportMissing"],
-                Recommendation = "RunEvalPostgresRelationScopedObservationQuality"
-            });
-    }
+    private static PostgresRelationScopedObservationReport BuildPostgresRelationScopedObservationReport(string rootPath) =>
+        ReadPostgresReport(rootPath, "postgres-relation-scoped-observation-quality-report.json",
+            new PostgresRelationScopedObservationReport { Diagnostics = ["RelationScopedObservationReportMissing"], Recommendation = "RunEvalPostgresRelationScopedObservationQuality" });
 
-    private static PostgresRelationSelectedNormalWorkspaceCanaryReport BuildPostgresRelationSelectedNormalWorkspaceCanaryReport(string rootPath)
-    {
-        return ReadPostgresReport<PostgresRelationSelectedNormalWorkspaceCanaryReport>(
-            rootPath,
-            "postgres-relation-selected-normal-workspace-canary-report.json",
-            new PostgresRelationSelectedNormalWorkspaceCanaryReport
-            {
-                Diagnostics = ["RelationSelectedNormalWorkspaceCanaryReportMissing"],
-                Recommendation = "RunEvalPostgresRelationSelectedNormalWorkspaceCanary"
-            });
-    }
+    private static PostgresRelationSelectedNormalWorkspaceCanaryReport BuildPostgresRelationSelectedNormalWorkspaceCanaryReport(string rootPath) =>
+        ReadPostgresReport(rootPath, "postgres-relation-selected-normal-workspace-canary-report.json",
+            new PostgresRelationSelectedNormalWorkspaceCanaryReport { Diagnostics = ["RelationSelectedNormalWorkspaceCanaryReportMissing"], Recommendation = "RunEvalPostgresRelationSelectedNormalWorkspaceCanary" });
 
-    private static PostgresRelationLimitedNormalScopeObservationReport BuildPostgresRelationLimitedNormalScopeObservationReport(string rootPath)
-    {
-        return ReadPostgresReport<PostgresRelationLimitedNormalScopeObservationReport>(
-            rootPath,
-            "postgres-relation-limited-normal-scope-quality-report.json",
-            new PostgresRelationLimitedNormalScopeObservationReport
-            {
-                Diagnostics = ["RelationLimitedNormalScopeObservationReportMissing"],
-                Recommendation = "RunEvalPostgresRelationLimitedNormalScopeObservation"
-            });
-    }
+    private static PostgresRelationLimitedNormalScopeObservationReport BuildPostgresRelationLimitedNormalScopeObservationReport(string rootPath) =>
+        ReadPostgresReport(rootPath, "postgres-relation-limited-normal-scope-quality-report.json",
+            new PostgresRelationLimitedNormalScopeObservationReport { Diagnostics = ["RelationLimitedNormalScopeObservationReportMissing"], Recommendation = "RunEvalPostgresRelationLimitedNormalScopeObservation" });
 
-    private static PostgresRelationMultiNormalScopeCanaryReport BuildPostgresRelationMultiNormalScopeCanaryReport(string rootPath)
-    {
-        return ReadPostgresReport<PostgresRelationMultiNormalScopeCanaryReport>(
-            rootPath,
-            "postgres-relation-multi-normal-scope-quality-report.json",
-            new PostgresRelationMultiNormalScopeCanaryReport
-            {
-                Diagnostics = ["RelationMultiNormalScopeCanaryReportMissing"],
-                Recommendation = "RunEvalPostgresRelationMultiNormalScopeCanary"
-            });
-    }
+    private static PostgresRelationMultiNormalScopeCanaryReport BuildPostgresRelationMultiNormalScopeCanaryReport(string rootPath) =>
+        ReadPostgresReport(rootPath, "postgres-relation-multi-normal-scope-quality-report.json",
+            new PostgresRelationMultiNormalScopeCanaryReport { Diagnostics = ["RelationMultiNormalScopeCanaryReportMissing"], Recommendation = "RunEvalPostgresRelationMultiNormalScopeCanary" });
 
-    private static PostgresLearningFeedbackDiagnosticsReport BuildPostgresLearningFeedbackDiagnosticsReport(string rootPath)
-    {
-        return ReadPostgresReport<PostgresLearningFeedbackDiagnosticsReport>(
-            rootPath,
-            "postgres-learning-feedback-diagnostics.json",
-            new PostgresLearningFeedbackDiagnosticsReport
-            {
-                Diagnostics = ["PostgresLearningFeedbackDiagnosticsReportMissing"],
-                Status = "RunEvalPostgresLearningFeedbackDiagnostics"
-            });
-    }
+    private static PostgresLearningFeedbackDiagnosticsReport BuildPostgresLearningFeedbackDiagnosticsReport(string rootPath) =>
+        ReadPostgresReport(rootPath, "postgres-learning-feedback-diagnostics.json",
+            new PostgresLearningFeedbackDiagnosticsReport { Diagnostics = ["PostgresLearningFeedbackDiagnosticsReportMissing"], Status = "RunEvalPostgresLearningFeedbackDiagnostics" });
 
-    private static PostgresLearningFeedbackParityReport BuildPostgresLearningFeedbackParityReport(string rootPath)
-    {
-        return ReadPostgresReport<PostgresLearningFeedbackParityReport>(
-            rootPath,
-            "postgres-learning-feedback-parity-report.json",
-            new PostgresLearningFeedbackParityReport
-            {
-                Diagnostics = ["PostgresLearningFeedbackParityReportMissing"],
-                Recommendation = "RunEvalPostgresLearningFeedbackParity"
-            });
-    }
+    private static PostgresLearningFeedbackParityReport BuildPostgresLearningFeedbackParityReport(string rootPath) =>
+        ReadPostgresReport(rootPath, "postgres-learning-feedback-parity-report.json",
+            new PostgresLearningFeedbackParityReport { Diagnostics = ["PostgresLearningFeedbackParityReportMissing"], Recommendation = "RunEvalPostgresLearningFeedbackParity" });
 
-    private static LearningFeedbackPostgresReadinessGateReport BuildPostgresLearningFeedbackReadinessGateReport(string rootPath)
-    {
-        return ReadPostgresReport<LearningFeedbackPostgresReadinessGateReport>(
-            rootPath,
-            "postgres-learning-feedback-readiness-gate.json",
-            new LearningFeedbackPostgresReadinessGateReport
-            {
-                FailedConditions = ["PostgresLearningFeedbackReadinessGateMissing"],
-                Recommendation = "RunEvalPostgresLearningFeedbackReadinessGate"
-            });
-    }
+    private static LearningFeedbackPostgresReadinessGateReport BuildPostgresLearningFeedbackReadinessGateReport(string rootPath) =>
+        ReadPostgresReport(rootPath, "postgres-learning-feedback-readiness-gate.json",
+            new LearningFeedbackPostgresReadinessGateReport { FailedConditions = ["PostgresLearningFeedbackReadinessGateMissing"], Recommendation = "RunEvalPostgresLearningFeedbackReadinessGate" });
 
-    private static LearningFeedbackDualWriteSmokeReport BuildPostgresLearningFeedbackDualWriteSmokeReport(string rootPath)
-    {
-        return ReadPostgresReport<LearningFeedbackDualWriteSmokeReport>(
-            rootPath,
-            "postgres-learning-feedback-dual-write-smoke-report.json",
-            new LearningFeedbackDualWriteSmokeReport
-            {
-                Mismatches = ["PostgresLearningFeedbackDualWriteSmokeReportMissing"],
-                Recommendation = "RunEvalPostgresLearningFeedbackDualWriteSmoke"
-            });
-    }
+    private static LearningFeedbackDualWriteSmokeReport BuildPostgresLearningFeedbackDualWriteSmokeReport(string rootPath) =>
+        ReadPostgresReport(rootPath, "postgres-learning-feedback-dual-write-smoke-report.json",
+            new LearningFeedbackDualWriteSmokeReport { Mismatches = ["PostgresLearningFeedbackDualWriteSmokeReportMissing"], Recommendation = "RunEvalPostgresLearningFeedbackDualWriteSmoke" });
 
-    private static LearningFeedbackShadowReadSmokeReport BuildPostgresLearningFeedbackShadowReadSmokeReport(string rootPath)
-    {
-        return ReadPostgresReport<LearningFeedbackShadowReadSmokeReport>(
-            rootPath,
-            "postgres-learning-feedback-shadow-read-smoke-report.json",
-            new LearningFeedbackShadowReadSmokeReport
-            {
-                Mismatches = ["PostgresLearningFeedbackShadowReadSmokeReportMissing"],
-                Recommendation = "RunEvalPostgresLearningFeedbackShadowReadSmoke"
-            });
-    }
+    private static LearningFeedbackShadowReadSmokeReport BuildPostgresLearningFeedbackShadowReadSmokeReport(string rootPath) =>
+        ReadPostgresReport(rootPath, "postgres-learning-feedback-shadow-read-smoke-report.json",
+            new LearningFeedbackShadowReadSmokeReport { Mismatches = ["PostgresLearningFeedbackShadowReadSmokeReportMissing"], Recommendation = "RunEvalPostgresLearningFeedbackShadowReadSmoke" });
 
-    private static LearningFeedbackProviderQualityReport BuildPostgresLearningFeedbackProviderQualityReport(string rootPath)
-    {
-        return ReadPostgresReport<LearningFeedbackProviderQualityReport>(
-            rootPath,
-            "postgres-learning-feedback-provider-quality-report.json",
-            new LearningFeedbackProviderQualityReport
-            {
-                Diagnostics = ["PostgresLearningFeedbackProviderQualityReportMissing"],
-                Recommendation = "RunEvalPostgresLearningFeedbackProviderQuality"
-            });
-    }
+    private static LearningFeedbackProviderQualityReport BuildPostgresLearningFeedbackProviderQualityReport(string rootPath) =>
+        ReadPostgresReport(rootPath, "postgres-learning-feedback-provider-quality-report.json",
+            new LearningFeedbackProviderQualityReport { Diagnostics = ["PostgresLearningFeedbackProviderQualityReportMissing"], Recommendation = "RunEvalPostgresLearningFeedbackProviderQuality" });
 
-    private static LearningFeedbackSelectedNormalScopeCanaryReport BuildPostgresLearningFeedbackSelectedNormalScopeCanaryReport(string rootPath)
-    {
-        return ReadPostgresReport<LearningFeedbackSelectedNormalScopeCanaryReport>(
-            rootPath,
-            "postgres-learning-feedback-selected-normal-scope-canary-report.json",
-            new LearningFeedbackSelectedNormalScopeCanaryReport
-            {
-                BlockedReasons = ["PostgresLearningFeedbackSelectedNormalScopeCanaryReportMissing"],
-                Recommendation = "RunEvalPostgresLearningFeedbackSelectedNormalScopeCanary"
-            });
-    }
+    private static LearningFeedbackSelectedNormalScopeCanaryReport BuildPostgresLearningFeedbackSelectedNormalScopeCanaryReport(string rootPath) =>
+        ReadPostgresReport(rootPath, "postgres-learning-feedback-selected-normal-scope-canary-report.json",
+            new LearningFeedbackSelectedNormalScopeCanaryReport { BlockedReasons = ["PostgresLearningFeedbackSelectedNormalScopeCanaryReportMissing"], Recommendation = "RunEvalPostgresLearningFeedbackSelectedNormalScopeCanary" });
 
-    private static LearningFeedbackLimitedScopeObservationReport BuildPostgresLearningFeedbackLimitedScopeObservationReport(string rootPath)
-    {
-        return ReadPostgresReport<LearningFeedbackLimitedScopeObservationReport>(
-            rootPath,
-            "postgres-learning-feedback-limited-scope-observation-report.json",
-            new LearningFeedbackLimitedScopeObservationReport
-            {
-                BlockedReasons = ["PostgresLearningFeedbackLimitedScopeObservationReportMissing"],
-                Recommendation = "RunEvalPostgresLearningFeedbackLimitedScopeObservation"
-            });
-    }
+    private static LearningFeedbackLimitedScopeObservationReport BuildPostgresLearningFeedbackLimitedScopeObservationReport(string rootPath) =>
+        ReadPostgresReport(rootPath, "postgres-learning-feedback-limited-scope-observation-report.json",
+            new LearningFeedbackLimitedScopeObservationReport { BlockedReasons = ["PostgresLearningFeedbackLimitedScopeObservationReportMissing"], Recommendation = "RunEvalPostgresLearningFeedbackLimitedScopeObservation" });
 
-    private static LearningFeedbackLimitedScopeQualityReport BuildPostgresLearningFeedbackLimitedScopeQualityReport(string rootPath)
-    {
-        return ReadPostgresReport<LearningFeedbackLimitedScopeQualityReport>(
-            rootPath,
-            "postgres-learning-feedback-limited-scope-quality-report.json",
-            new LearningFeedbackLimitedScopeQualityReport
-            {
-                BlockedReasons = ["PostgresLearningFeedbackLimitedScopeQualityReportMissing"],
-                Recommendation = "RunEvalPostgresLearningFeedbackLimitedScopeQuality"
-            });
-    }
+    private static LearningFeedbackLimitedScopeQualityReport BuildPostgresLearningFeedbackLimitedScopeQualityReport(string rootPath) =>
+        ReadPostgresReport(rootPath, "postgres-learning-feedback-limited-scope-quality-report.json",
+            new LearningFeedbackLimitedScopeQualityReport { BlockedReasons = ["PostgresLearningFeedbackLimitedScopeQualityReportMissing"], Recommendation = "RunEvalPostgresLearningFeedbackLimitedScopeQuality" });
 
-    private static LearningFeedbackPostgresFreezeGateReport BuildPostgresLearningFeedbackFreezeGateReport(string rootPath)
-    {
-        return ReadPostgresReport<LearningFeedbackPostgresFreezeGateReport>(
-            rootPath,
-            "postgres-learning-feedback-freeze-gate.json",
-            new LearningFeedbackPostgresFreezeGateReport
-            {
-                BlockedReasons = ["PostgresLearningFeedbackFreezeGateMissing"],
-                Recommendation = "RunEvalPostgresLearningFeedbackFreezeGate"
-            });
-    }
+    private static LearningFeedbackPostgresFreezeGateReport BuildPostgresLearningFeedbackFreezeGateReport(string rootPath) =>
+        ReadPostgresReport(rootPath, "postgres-learning-feedback-freeze-gate.json",
+            new LearningFeedbackPostgresFreezeGateReport { BlockedReasons = ["PostgresLearningFeedbackFreezeGateMissing"], Recommendation = "RunEvalPostgresLearningFeedbackFreezeGate" });
 
-    private static PostgresJobQueueDiagnosticsReport BuildPostgresJobQueueDiagnosticsReport(string rootPath)
-    {
-        return ReadPostgresReport<PostgresJobQueueDiagnosticsReport>(
-            rootPath,
-            "postgres-job-queue-diagnostics.json",
-            new PostgresJobQueueDiagnosticsReport
-            {
-                Diagnostics = ["PostgresJobQueueDiagnosticsMissing"],
-                Recommendation = "RunEvalPostgresJobQueueDiagnostics"
-            });
-    }
+    private static PostgresJobQueueDiagnosticsReport BuildPostgresJobQueueDiagnosticsReport(string rootPath) =>
+        ReadPostgresReport(rootPath, "postgres-job-queue-diagnostics.json",
+            new PostgresJobQueueDiagnosticsReport { Diagnostics = ["PostgresJobQueueDiagnosticsMissing"], Recommendation = "RunEvalPostgresJobQueueDiagnostics" });
 
-    private static PostgresJobQueueParityReport BuildPostgresJobQueueParityReport(string rootPath)
-    {
-        return ReadPostgresReport<PostgresJobQueueParityReport>(
-            rootPath,
-            "postgres-job-queue-parity-report.json",
-            new PostgresJobQueueParityReport
-            {
-                Diagnostics = ["PostgresJobQueueParityMissing"],
-                Recommendation = "RunEvalPostgresJobQueueParity"
-            });
-    }
+    private static PostgresJobQueueParityReport BuildPostgresJobQueueParityReport(string rootPath) =>
+        ReadPostgresReport(rootPath, "postgres-job-queue-parity-report.json",
+            new PostgresJobQueueParityReport { Diagnostics = ["PostgresJobQueueParityMissing"], Recommendation = "RunEvalPostgresJobQueueParity" });
 
-    private static PostgresJobQueueLeaseSmokeReport BuildPostgresJobQueueLeaseSmokeReport(string rootPath)
-    {
-        return ReadPostgresReport<PostgresJobQueueLeaseSmokeReport>(
-            rootPath,
-            "postgres-job-queue-lease-smoke-report.json",
-            new PostgresJobQueueLeaseSmokeReport
-            {
-                Diagnostics = ["PostgresJobQueueLeaseSmokeMissing"],
-                Recommendation = "RunEvalPostgresJobQueueLeaseSmoke"
-            });
-    }
+    private static PostgresJobQueueLeaseSmokeReport BuildPostgresJobQueueLeaseSmokeReport(string rootPath) =>
+        ReadPostgresReport(rootPath, "postgres-job-queue-lease-smoke-report.json",
+            new PostgresJobQueueLeaseSmokeReport { Diagnostics = ["PostgresJobQueueLeaseSmokeMissing"], Recommendation = "RunEvalPostgresJobQueueLeaseSmoke" });
 
-    private static PostgresJobQueueDualWriteSmokeReport BuildPostgresJobQueueDualWriteSmokeReport(string rootPath)
-    {
-        return ReadPostgresReport<PostgresJobQueueDualWriteSmokeReport>(
-            rootPath,
-            "postgres-job-queue-dual-write-smoke-report.json",
-            new PostgresJobQueueDualWriteSmokeReport
-            {
-                Diagnostics = ["PostgresJobQueueDualWriteSmokeMissing"],
-                Recommendation = "RunEvalPostgresJobQueueDualWriteSmoke"
-            });
-    }
+    private static PostgresJobQueueDualWriteSmokeReport BuildPostgresJobQueueDualWriteSmokeReport(string rootPath) =>
+        ReadPostgresReport(rootPath, "postgres-job-queue-dual-write-smoke-report.json",
+            new PostgresJobQueueDualWriteSmokeReport { Diagnostics = ["PostgresJobQueueDualWriteSmokeMissing"], Recommendation = "RunEvalPostgresJobQueueDualWriteSmoke" });
 
-    private static PostgresJobQueueShadowReadSmokeReport BuildPostgresJobQueueShadowReadSmokeReport(string rootPath)
-    {
-        return ReadPostgresReport<PostgresJobQueueShadowReadSmokeReport>(
-            rootPath,
-            "postgres-job-queue-shadow-read-smoke-report.json",
-            new PostgresJobQueueShadowReadSmokeReport
-            {
-                Diagnostics = ["PostgresJobQueueShadowReadSmokeMissing"],
-                Recommendation = "RunEvalPostgresJobQueueShadowReadSmoke"
-            });
-    }
+    private static PostgresJobQueueShadowReadSmokeReport BuildPostgresJobQueueShadowReadSmokeReport(string rootPath) =>
+        ReadPostgresReport(rootPath, "postgres-job-queue-shadow-read-smoke-report.json",
+            new PostgresJobQueueShadowReadSmokeReport { Diagnostics = ["PostgresJobQueueShadowReadSmokeMissing"], Recommendation = "RunEvalPostgresJobQueueShadowReadSmoke" });
 
-    private static PostgresJobQueueProviderQualityReport BuildPostgresJobQueueProviderQualityReport(string rootPath)
-    {
-        return ReadPostgresReport<PostgresJobQueueProviderQualityReport>(
-            rootPath,
-            "postgres-job-queue-provider-quality-report.json",
-            new PostgresJobQueueProviderQualityReport
-            {
-                Diagnostics = ["PostgresJobQueueProviderQualityMissing"],
-                Recommendation = "RunEvalPostgresJobQueueProviderQuality"
-            });
-    }
+    private static PostgresJobQueueProviderQualityReport BuildPostgresJobQueueProviderQualityReport(string rootPath) =>
+        ReadPostgresReport(rootPath, "postgres-job-queue-provider-quality-report.json",
+            new PostgresJobQueueProviderQualityReport { Diagnostics = ["PostgresJobQueueProviderQualityMissing"], Recommendation = "RunEvalPostgresJobQueueProviderQuality" });
 
-    private static PostgresJobQueueScopedWorkerCanaryReport BuildPostgresJobQueueScopedWorkerCanaryReport(string rootPath)
-    {
-        return ReadPostgresReport<PostgresJobQueueScopedWorkerCanaryReport>(
-            rootPath,
-            "postgres-job-queue-scoped-worker-canary-report.json",
-            new PostgresJobQueueScopedWorkerCanaryReport
-            {
-                Diagnostics = ["PostgresJobQueueScopedWorkerCanaryMissing"],
-                Recommendation = "RunEvalPostgresJobQueueScopedWorkerCanary"
-            });
-    }
+    private static PostgresJobQueueScopedWorkerCanaryReport BuildPostgresJobQueueScopedWorkerCanaryReport(string rootPath) =>
+        ReadPostgresReport(rootPath, "postgres-job-queue-scoped-worker-canary-report.json",
+            new PostgresJobQueueScopedWorkerCanaryReport { Diagnostics = ["PostgresJobQueueScopedWorkerCanaryMissing"], Recommendation = "RunEvalPostgresJobQueueScopedWorkerCanary" });
 
-    private static PostgresJobQueueScopedWorkerQualityReport BuildPostgresJobQueueScopedWorkerQualityReport(string rootPath)
-    {
-        return ReadPostgresReport<PostgresJobQueueScopedWorkerQualityReport>(
-            rootPath,
-            "postgres-job-queue-scoped-worker-quality-report.json",
-            new PostgresJobQueueScopedWorkerQualityReport
-            {
-                Diagnostics = ["PostgresJobQueueScopedWorkerQualityMissing"],
-                Recommendation = "RunEvalPostgresJobQueueScopedWorkerQuality"
-            });
-    }
+    private static PostgresJobQueueScopedWorkerQualityReport BuildPostgresJobQueueScopedWorkerQualityReport(string rootPath) =>
+        ReadPostgresReport(rootPath, "postgres-job-queue-scoped-worker-quality-report.json",
+            new PostgresJobQueueScopedWorkerQualityReport { Diagnostics = ["PostgresJobQueueScopedWorkerQualityMissing"], Recommendation = "RunEvalPostgresJobQueueScopedWorkerQuality" });
 
-    private static PostgresJobQueueLimitedWorkerScopeObservationReport BuildPostgresJobQueueLimitedWorkerScopeObservationReport(string rootPath)
-    {
-        return ReadPostgresReport<PostgresJobQueueLimitedWorkerScopeObservationReport>(
-            rootPath,
-            "postgres-job-queue-limited-worker-scope-observation-report.json",
-            new PostgresJobQueueLimitedWorkerScopeObservationReport
-            {
-                Diagnostics = ["PostgresJobQueueLimitedWorkerScopeObservationMissing"],
-                Recommendation = "RunEvalPostgresJobQueueLimitedWorkerScopeObservation"
-            });
-    }
+    private static PostgresJobQueueLimitedWorkerScopeObservationReport BuildPostgresJobQueueLimitedWorkerScopeObservationReport(string rootPath) =>
+        ReadPostgresReport(rootPath, "postgres-job-queue-limited-worker-scope-observation-report.json",
+            new PostgresJobQueueLimitedWorkerScopeObservationReport { Diagnostics = ["PostgresJobQueueLimitedWorkerScopeObservationMissing"], Recommendation = "RunEvalPostgresJobQueueLimitedWorkerScopeObservation" });
 
-    private static PostgresJobQueueLimitedWorkerScopeQualityReport BuildPostgresJobQueueLimitedWorkerScopeQualityReport(string rootPath)
-    {
-        return ReadPostgresReport<PostgresJobQueueLimitedWorkerScopeQualityReport>(
-            rootPath,
-            "postgres-job-queue-limited-worker-scope-quality-report.json",
-            new PostgresJobQueueLimitedWorkerScopeQualityReport
-            {
-                Diagnostics = ["PostgresJobQueueLimitedWorkerScopeQualityMissing"],
-                Recommendation = "RunEvalPostgresJobQueueLimitedWorkerScopeQuality"
-            });
-    }
+    private static PostgresJobQueueLimitedWorkerScopeQualityReport BuildPostgresJobQueueLimitedWorkerScopeQualityReport(string rootPath) =>
+        ReadPostgresReport(rootPath, "postgres-job-queue-limited-worker-scope-quality-report.json",
+            new PostgresJobQueueLimitedWorkerScopeQualityReport { Diagnostics = ["PostgresJobQueueLimitedWorkerScopeQualityMissing"], Recommendation = "RunEvalPostgresJobQueueLimitedWorkerScopeQuality" });
 
-    private static JobQueuePostgresFreezeGateReport BuildPostgresJobQueueFreezeGateReport(string rootPath)
-    {
-        return ReadPostgresReport<JobQueuePostgresFreezeGateReport>(
-            rootPath,
-            "postgres-job-queue-freeze-gate.json",
-            new JobQueuePostgresFreezeGateReport
-            {
-                BlockedReasons = ["PostgresJobQueueFreezeGateMissing"],
-                Recommendation = "RunEvalPostgresJobQueueFreezeGate"
-            });
-    }
+    private static JobQueuePostgresFreezeGateReport BuildPostgresJobQueueFreezeGateReport(string rootPath) =>
+        ReadPostgresReport(rootPath, "postgres-job-queue-freeze-gate.json",
+            new JobQueuePostgresFreezeGateReport { BlockedReasons = ["PostgresJobQueueFreezeGateMissing"], Recommendation = "RunEvalPostgresJobQueueFreezeGate" });
 
-    private static PostgresVectorDiagnosticsReport BuildPostgresVectorDiagnosticsReport(string rootPath)
-    {
-        return ReadPostgresReport<PostgresVectorDiagnosticsReport>(
-            rootPath,
-            "postgres-vector-diagnostics.json",
-            new PostgresVectorDiagnosticsReport
-            {
-                Diagnostics = ["PostgresVectorDiagnosticsMissing"],
-                Recommendation = "RunEvalPostgresVectorDiagnostics"
-            });
-    }
+    private static PostgresVectorDiagnosticsReport BuildPostgresVectorDiagnosticsReport(string rootPath) =>
+        ReadPostgresReport(rootPath, "postgres-vector-diagnostics.json",
+            new PostgresVectorDiagnosticsReport { Diagnostics = ["PostgresVectorDiagnosticsMissing"], Recommendation = "RunEvalPostgresVectorDiagnostics" });
 
-    private static PostgresVectorCompatibilityReport BuildPostgresVectorCompatibilityReport(string rootPath)
-    {
-        return ReadPostgresReport<PostgresVectorCompatibilityReport>(
-            rootPath,
-            "postgres-vector-compatibility.json",
-            new PostgresVectorCompatibilityReport
-            {
-                Diagnostics = ["PostgresVectorCompatibilityMissing"],
-                Recommendation = "RunEvalPostgresVectorCompatibility"
-            });
-    }
+    private static PostgresVectorCompatibilityReport BuildPostgresVectorCompatibilityReport(string rootPath) =>
+        ReadPostgresReport(rootPath, "postgres-vector-compatibility.json",
+            new PostgresVectorCompatibilityReport { Diagnostics = ["PostgresVectorCompatibilityMissing"], Recommendation = "RunEvalPostgresVectorCompatibility" });
 
-    private static PostgresVectorProviderSmokeReport BuildPostgresVectorProviderSmokeReport(string rootPath)
-    {
-        return ReadPostgresReport<PostgresVectorProviderSmokeReport>(
-            rootPath,
-            "postgres-vector-provider-smoke-report.json",
-            new PostgresVectorProviderSmokeReport
-            {
-                Diagnostics = ["PostgresVectorProviderSmokeMissing"],
-                Recommendation = "RunEvalPostgresVectorProviderSmoke"
-            });
-    }
+    private static PostgresVectorProviderSmokeReport BuildPostgresVectorProviderSmokeReport(string rootPath) =>
+        ReadPostgresReport(rootPath, "postgres-vector-provider-smoke-report.json",
+            new PostgresVectorProviderSmokeReport { Diagnostics = ["PostgresVectorProviderSmokeMissing"], Recommendation = "RunEvalPostgresVectorProviderSmoke" });
 
-    private static PostgresVectorIndexParityReport BuildPostgresVectorIndexParityReport(string rootPath)
-    {
-        return ReadPostgresReport<PostgresVectorIndexParityReport>(
-            rootPath,
-            "postgres-vector-parity-report.json",
-            new PostgresVectorIndexParityReport
-            {
-                Diagnostics = ["PostgresVectorParityMissing"],
-                Recommendation = "RunEvalPostgresVectorParity"
-            });
-    }
+    private static PostgresVectorIndexParityReport BuildPostgresVectorIndexParityReport(string rootPath) =>
+        ReadPostgresReport(rootPath, "postgres-vector-parity-report.json",
+            new PostgresVectorIndexParityReport { Diagnostics = ["PostgresVectorParityMissing"], Recommendation = "RunEvalPostgresVectorParity" });
 
-    private static PostgresVectorProviderScopedReindexPlan BuildPostgresVectorProviderScopedReindexPlan(string rootPath)
-    {
-        return ReadPostgresReport<PostgresVectorProviderScopedReindexPlan>(
-            rootPath,
-            "postgres-vector-provider-scoped-reindex-plan.json",
-            new PostgresVectorProviderScopedReindexPlan
-            {
-                Diagnostics = ["PostgresVectorProviderScopedReindexPlanMissing"],
-                Recommendation = "RunEvalPostgresVectorProviderScopedReindexPlan"
-            });
-    }
+    private static PostgresVectorProviderScopedReindexPlan BuildPostgresVectorProviderScopedReindexPlan(string rootPath) =>
+        ReadPostgresReport(rootPath, "postgres-vector-provider-scoped-reindex-plan.json",
+            new PostgresVectorProviderScopedReindexPlan { Diagnostics = ["PostgresVectorProviderScopedReindexPlanMissing"], Recommendation = "RunEvalPostgresVectorProviderScopedReindexPlan" });
 
-    private static PostgresVectorProviderScopedReindexResult BuildPostgresVectorProviderScopedReindexResult(string rootPath)
-    {
-        return ReadPostgresReport<PostgresVectorProviderScopedReindexResult>(
-            rootPath,
-            "postgres-vector-provider-scoped-reindex-apply-report.json",
-            new PostgresVectorProviderScopedReindexResult
-            {
-                Diagnostics = ["PostgresVectorProviderScopedReindexApplyMissing"],
-                Recommendation = "RunEvalPostgresVectorProviderScopedReindexApply"
-            });
-    }
+    private static PostgresVectorProviderScopedReindexResult BuildPostgresVectorProviderScopedReindexResult(string rootPath) =>
+        ReadPostgresReport(rootPath, "postgres-vector-provider-scoped-reindex-apply-report.json",
+            new PostgresVectorProviderScopedReindexResult { Diagnostics = ["PostgresVectorProviderScopedReindexApplyMissing"], Recommendation = "RunEvalPostgresVectorProviderScopedReindexApply" });
 
-    private static PostgresVectorProviderScopedReindexReport BuildPostgresVectorProviderScopedReindexReport(string rootPath)
-    {
-        return ReadPostgresReport<PostgresVectorProviderScopedReindexReport>(
-            rootPath,
-            "postgres-vector-provider-scoped-reindex-quality-report.json",
-            new PostgresVectorProviderScopedReindexReport
-            {
-                Diagnostics = ["PostgresVectorProviderScopedReindexQualityMissing"],
-                Recommendation = "RunEvalPostgresVectorProviderScopedReindexQuality"
-            });
-    }
+    private static PostgresVectorProviderScopedReindexReport BuildPostgresVectorProviderScopedReindexReport(string rootPath) =>
+        ReadPostgresReport(rootPath, "postgres-vector-provider-scoped-reindex-quality-report.json",
+            new PostgresVectorProviderScopedReindexReport { Diagnostics = ["PostgresVectorProviderScopedReindexQualityMissing"], Recommendation = "RunEvalPostgresVectorProviderScopedReindexQuality" });
 
-    private static PostgresVectorQueryPreviewReport BuildPostgresVectorQueryPreviewReport(string rootPath)
-    {
-        return ReadPostgresReport<PostgresVectorQueryPreviewReport>(
-            rootPath,
-            "postgres-vector-query-preview-report.json",
-            new PostgresVectorQueryPreviewReport
-            {
-                Diagnostics = ["PostgresVectorQueryPreviewMissing"],
-                Recommendation = "RunEvalPostgresVectorQueryPreview"
-            });
-    }
+    private static PostgresVectorQueryPreviewReport BuildPostgresVectorQueryPreviewReport(string rootPath) =>
+        ReadPostgresReport(rootPath, "postgres-vector-query-preview-report.json",
+            new PostgresVectorQueryPreviewReport { Diagnostics = ["PostgresVectorQueryPreviewMissing"], Recommendation = "RunEvalPostgresVectorQueryPreview" });
 
     private static PostgresVectorShadowEvalReport BuildPostgresVectorShadowEvalReport(
         string rootPath,
         string fileName,
-        string datasetName)
-    {
-        return ReadPostgresReport<PostgresVectorShadowEvalReport>(
-            rootPath,
-            fileName,
-            new PostgresVectorShadowEvalReport
-            {
-                DatasetName = datasetName,
-                Diagnostics = ["PostgresVectorShadowEvalMissing"],
-                Recommendation = "RunEvalPostgresVectorShadowEval"
-            });
-    }
+        string datasetName) =>
+        ReadPostgresReport(rootPath, fileName,
+            new PostgresVectorShadowEvalReport { DatasetName = datasetName, Diagnostics = ["PostgresVectorShadowEvalMissing"], Recommendation = "RunEvalPostgresVectorShadowEval" });
 
-    private static PostgresVectorShadowEvalSummaryReport BuildPostgresVectorShadowEvalSummaryReport(string rootPath)
-    {
-        return ReadPostgresReport<PostgresVectorShadowEvalSummaryReport>(
-            rootPath,
-            "postgres-vector-shadow-eval-summary.json",
-            new PostgresVectorShadowEvalSummaryReport
-            {
-                Diagnostics = ["PostgresVectorShadowEvalSummaryMissing"],
-                Recommendation = "RunEvalPostgresVectorShadowEval"
-            });
-    }
+    private static PostgresVectorShadowEvalSummaryReport BuildPostgresVectorShadowEvalSummaryReport(string rootPath) =>
+        ReadPostgresReport(rootPath, "postgres-vector-shadow-eval-summary.json",
+            new PostgresVectorShadowEvalSummaryReport { Diagnostics = ["PostgresVectorShadowEvalSummaryMissing"], Recommendation = "RunEvalPostgresVectorShadowEval" });
 
-    private static VectorPostgresProviderFreezeGateReport BuildPostgresVectorFreezeGateReport(string rootPath)
-    {
-        return ReadPostgresReport<VectorPostgresProviderFreezeGateReport>(
-            rootPath,
-            "postgres-vector-freeze-gate.json",
-            new VectorPostgresProviderFreezeGateReport
-            {
-                BlockedReasons = ["PostgresVectorFreezeGateMissing"],
-                Recommendation = "RunEvalPostgresVectorFreezeGate"
-            });
-    }
+    private static VectorPostgresProviderFreezeGateReport BuildPostgresVectorFreezeGateReport(string rootPath) =>
+        ReadPostgresReport(rootPath, "postgres-vector-freeze-gate.json",
+            new VectorPostgresProviderFreezeGateReport { BlockedReasons = ["PostgresVectorFreezeGateMissing"], Recommendation = "RunEvalPostgresVectorFreezeGate" });
 
     private static T ReadPostgresReport<T>(string rootPath, string fileName, T fallback)
     {

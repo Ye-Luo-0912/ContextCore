@@ -35,7 +35,7 @@ public sealed class FileMemoryStore : IMemoryStore, IWorkingMemoryService, IProm
     {
         ArgumentNullException.ThrowIfNull(item);
 
-        var normalized = Normalize(item);
+        var normalized = ContextNormalizers.Normalize(item);
 
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
@@ -96,7 +96,7 @@ public sealed class FileMemoryStore : IMemoryStore, IWorkingMemoryService, IProm
 
                 if (match is not null)
                 {
-                    return Clone(match);
+                    return ContextNormalizers.Clone(match);
                 }
             }
 
@@ -145,7 +145,7 @@ public sealed class FileMemoryStore : IMemoryStore, IWorkingMemoryService, IProm
                     .ThenByDescending(item => item.UpdatedAt)
                     .Skip(skip)
                     .Take(take)
-                    .Select(Clone)
+                    .Select(ContextNormalizers.Clone)
             ];
         }
         finally
@@ -197,7 +197,7 @@ public sealed class FileMemoryStore : IMemoryStore, IWorkingMemoryService, IProm
     {
         ArgumentNullException.ThrowIfNull(item);
 
-        var workingItem = Normalize(new ContextMemoryItem
+        var workingItem = ContextNormalizers.Normalize(new ContextMemoryItem
         {
             Id = item.Id,
             WorkspaceId = item.WorkspaceId,
@@ -229,7 +229,7 @@ public sealed class FileMemoryStore : IMemoryStore, IWorkingMemoryService, IProm
     {
         ArgumentNullException.ThrowIfNull(item);
 
-        var workingItem = Normalize(item);
+        var workingItem = ContextNormalizers.Normalize(item);
 
         await SaveAsync(ToMemoryItem(workingItem), cancellationToken).ConfigureAwait(false);
 
@@ -306,7 +306,7 @@ public sealed class FileMemoryStore : IMemoryStore, IWorkingMemoryService, IProm
                 return null;
             }
 
-            return Clone(Normalize(activeContext));
+            return ContextNormalizers.Clone(ContextNormalizers.Normalize(activeContext));
         }
         finally
         {
@@ -320,7 +320,7 @@ public sealed class FileMemoryStore : IMemoryStore, IWorkingMemoryService, IProm
     {
         ArgumentNullException.ThrowIfNull(activeContext);
 
-        var normalized = Normalize(activeContext);
+        var normalized = ContextNormalizers.Normalize(activeContext);
 
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
@@ -330,7 +330,7 @@ public sealed class FileMemoryStore : IMemoryStore, IWorkingMemoryService, IProm
                 normalized,
                 cancellationToken).ConfigureAwait(false);
 
-            return Clone(normalized);
+            return ContextNormalizers.Clone(normalized);
         }
         finally
         {
@@ -355,7 +355,7 @@ public sealed class FileMemoryStore : IMemoryStore, IWorkingMemoryService, IProm
                 return null;
             }
 
-            return Clone(Normalize(currentTask));
+            return ContextNormalizers.Clone(ContextNormalizers.Normalize(currentTask));
         }
         finally
         {
@@ -369,7 +369,7 @@ public sealed class FileMemoryStore : IMemoryStore, IWorkingMemoryService, IProm
     {
         ArgumentNullException.ThrowIfNull(currentTask);
 
-        var normalized = Normalize(currentTask);
+        var normalized = ContextNormalizers.Normalize(currentTask);
 
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
@@ -379,7 +379,7 @@ public sealed class FileMemoryStore : IMemoryStore, IWorkingMemoryService, IProm
                 normalized,
                 cancellationToken).ConfigureAwait(false);
 
-            return Clone(normalized);
+            return ContextNormalizers.Clone(normalized);
         }
         finally
         {
@@ -447,7 +447,7 @@ public sealed class FileMemoryStore : IMemoryStore, IWorkingMemoryService, IProm
     {
         ArgumentNullException.ThrowIfNull(candidate);
 
-        var normalized = Normalize(candidate);
+        var normalized = ContextNormalizers.Normalize(candidate);
         var path = _paths.GetPromotionCandidatesJsonlPath(normalized.WorkspaceId, normalized.CollectionId);
 
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -485,7 +485,7 @@ public sealed class FileMemoryStore : IMemoryStore, IWorkingMemoryService, IProm
             var candidate = candidates.FirstOrDefault(item =>
                 string.Equals(item.Id, id, StringComparison.OrdinalIgnoreCase));
 
-            return candidate is null ? null : Clone(candidate);
+            return candidate is null ? null : ContextNormalizers.Clone(candidate);
         }
         finally
         {
@@ -512,7 +512,7 @@ public sealed class FileMemoryStore : IMemoryStore, IWorkingMemoryService, IProm
                 .Where(item => status is null || item.Status == status.Value)
                 .OrderByDescending(item => item.UpdatedAt)
                 .Take(count)
-                .Select(item => Clone(item))
+                .Select(item => ContextNormalizers.Clone(item))
                 .ToArray();
         }
         finally
@@ -544,7 +544,7 @@ public sealed class FileMemoryStore : IMemoryStore, IWorkingMemoryService, IProm
                 return null;
             }
 
-            var updatedCandidate = Clone(
+            var updatedCandidate = ContextNormalizers.Clone(
                 current,
                 status: status,
                 reviewer: reviewer,
@@ -558,7 +558,7 @@ public sealed class FileMemoryStore : IMemoryStore, IWorkingMemoryService, IProm
 
             await _jsonLines.WriteAsync(path, updated, cancellationToken).ConfigureAwait(false);
 
-            return Clone(updatedCandidate);
+            return ContextNormalizers.Clone(updatedCandidate);
         }
         finally
         {
@@ -696,149 +696,6 @@ public sealed class FileMemoryStore : IMemoryStore, IWorkingMemoryService, IProm
         return true;
     }
 
-    private static ContextMemoryItem Normalize(ContextMemoryItem item)
-    {
-        var now = DateTimeOffset.UtcNow;
-
-        return new ContextMemoryItem
-        {
-            Id = string.IsNullOrWhiteSpace(item.Id) ? Guid.NewGuid().ToString("N") : item.Id,
-            WorkspaceId = item.WorkspaceId,
-            CollectionId = item.CollectionId,
-            Layer = item.Layer,
-            Status = item.Status,
-            Type = item.Type,
-            Content = item.Content,
-            ContentFormat = item.ContentFormat,
-            Tags = item.Tags.ToArray(),
-            SourceRefs = item.SourceRefs.ToArray(),
-            RelationRefs = item.RelationRefs.ToArray(),
-            Importance = item.Importance,
-            Confidence = item.Confidence,
-            Version = item.Version <= 0 ? 1 : item.Version,
-            Metadata = new Dictionary<string, string>(item.Metadata),
-            CreatedAt = item.CreatedAt == default ? now : item.CreatedAt,
-            UpdatedAt = item.UpdatedAt == default ? now : item.UpdatedAt
-        };
-    }
-
-    private static WorkingMemoryItem Normalize(WorkingMemoryItem item)
-    {
-        var now = DateTimeOffset.UtcNow;
-
-        return new WorkingMemoryItem
-        {
-            Id = string.IsNullOrWhiteSpace(item.Id) ? Guid.NewGuid().ToString("N") : item.Id,
-            WorkspaceId = item.WorkspaceId,
-            CollectionId = item.CollectionId,
-            Type = item.Type,
-            Content = item.Content,
-            ContentFormat = item.ContentFormat,
-            Tags = item.Tags.ToArray(),
-            SourceRefs = item.SourceRefs.ToArray(),
-            RelationRefs = item.RelationRefs.ToArray(),
-            Importance = item.Importance,
-            Confidence = item.Confidence,
-            Metadata = new Dictionary<string, string>(item.Metadata),
-            CreatedAt = item.CreatedAt == default ? now : item.CreatedAt,
-            UpdatedAt = item.UpdatedAt == default ? now : item.UpdatedAt
-        };
-    }
-
-    private static WorkingMemoryActiveContext Normalize(WorkingMemoryActiveContext item)
-    {
-        return new WorkingMemoryActiveContext
-        {
-            WorkspaceId = item.WorkspaceId,
-            CollectionId = item.CollectionId,
-            CurrentTaskId = string.IsNullOrWhiteSpace(item.CurrentTaskId) ? null : item.CurrentTaskId,
-            Summary = item.Summary,
-            MemoryRefs = item.MemoryRefs
-                .Where(value => !string.IsNullOrWhiteSpace(value))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToArray(),
-            ContextRefs = item.ContextRefs
-                .Where(value => !string.IsNullOrWhiteSpace(value))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToArray(),
-            Metadata = new Dictionary<string, string>(item.Metadata),
-            UpdatedAt = item.UpdatedAt == default ? DateTimeOffset.UtcNow : item.UpdatedAt
-        };
-    }
-
-    private static WorkingMemoryCurrentTask Normalize(WorkingMemoryCurrentTask item)
-    {
-        var now = DateTimeOffset.UtcNow;
-
-        return new WorkingMemoryCurrentTask
-        {
-            TaskId = string.IsNullOrWhiteSpace(item.TaskId) ? Guid.NewGuid().ToString("N") : item.TaskId,
-            WorkspaceId = item.WorkspaceId,
-            CollectionId = item.CollectionId,
-            Title = item.Title,
-            Description = item.Description,
-            Status = item.Status,
-            Tags = item.Tags
-                .Where(value => !string.IsNullOrWhiteSpace(value))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToArray(),
-            Metadata = new Dictionary<string, string>(item.Metadata),
-            CreatedAt = item.CreatedAt == default ? now : item.CreatedAt,
-            UpdatedAt = item.UpdatedAt == default ? now : item.UpdatedAt
-        };
-    }
-
-    private static PromotionCandidate Normalize(PromotionCandidate item)
-    {
-        var now = DateTimeOffset.UtcNow;
-
-        return new PromotionCandidate
-        {
-            Id = string.IsNullOrWhiteSpace(item.Id) ? Guid.NewGuid().ToString("N") : item.Id,
-            WorkspaceId = item.WorkspaceId,
-            CollectionId = item.CollectionId,
-            SourceId = item.SourceId,
-            SourceKind = item.SourceKind,
-            Content = item.Content,
-            TargetLayer = item.TargetLayer,
-            Status = item.Status,
-            Decision = item.Decision,
-            Category = item.Category,
-            Reason = item.Reason,
-            Confidence = item.Confidence,
-            MatchedRules = item.MatchedRules.ToArray(),
-            SourceRefs = item.SourceRefs.ToArray(),
-            Reviewer = item.Reviewer,
-            Metadata = new Dictionary<string, string>(item.Metadata),
-            CreatedAt = item.CreatedAt == default ? now : item.CreatedAt,
-            UpdatedAt = item.UpdatedAt == default ? now : item.UpdatedAt
-        };
-    }
-
-    private static ContextMemoryItem Clone(ContextMemoryItem item)
-    {
-        return new ContextMemoryItem
-        {
-            Id = item.Id,
-            WorkspaceId = item.WorkspaceId,
-            CollectionId = item.CollectionId,
-            Layer = item.Layer,
-            Status = item.Status,
-            Type = item.Type,
-            Content = item.Content,
-            ContentFormat = item.ContentFormat,
-            Tags = item.Tags.ToArray(),
-            SourceRefs = item.SourceRefs.ToArray(),
-            RelationRefs = item.RelationRefs.ToArray(),
-            Importance = item.Importance,
-            Confidence = item.Confidence,
-            Version = item.Version,
-            Metadata = new Dictionary<string, string>(item.Metadata),
-            CreatedAt = item.CreatedAt,
-            UpdatedAt = item.UpdatedAt
-        };
-    }
-
     private static WorkingMemoryItem FromMemoryItem(ContextMemoryItem item)
     {
         return new WorkingMemoryItem
@@ -881,68 +738,6 @@ public sealed class FileMemoryStore : IMemoryStore, IWorkingMemoryService, IProm
             Metadata = new Dictionary<string, string>(item.Metadata),
             CreatedAt = item.CreatedAt,
             UpdatedAt = item.UpdatedAt
-        };
-    }
-
-    private static WorkingMemoryActiveContext Clone(WorkingMemoryActiveContext item)
-    {
-        return new WorkingMemoryActiveContext
-        {
-            WorkspaceId = item.WorkspaceId,
-            CollectionId = item.CollectionId,
-            CurrentTaskId = item.CurrentTaskId,
-            Summary = item.Summary,
-            MemoryRefs = item.MemoryRefs.ToArray(),
-            ContextRefs = item.ContextRefs.ToArray(),
-            Metadata = new Dictionary<string, string>(item.Metadata),
-            UpdatedAt = item.UpdatedAt
-        };
-    }
-
-    private static WorkingMemoryCurrentTask Clone(WorkingMemoryCurrentTask item)
-    {
-        return new WorkingMemoryCurrentTask
-        {
-            TaskId = item.TaskId,
-            WorkspaceId = item.WorkspaceId,
-            CollectionId = item.CollectionId,
-            Title = item.Title,
-            Description = item.Description,
-            Status = item.Status,
-            Tags = item.Tags.ToArray(),
-            Metadata = new Dictionary<string, string>(item.Metadata),
-            CreatedAt = item.CreatedAt,
-            UpdatedAt = item.UpdatedAt
-        };
-    }
-
-    private static PromotionCandidate Clone(
-        PromotionCandidate item,
-        PromotionCandidateStatus? status = null,
-        string? reviewer = null,
-        string? reason = null,
-        DateTimeOffset? updatedAt = null)
-    {
-        return new PromotionCandidate
-        {
-            Id = item.Id,
-            WorkspaceId = item.WorkspaceId,
-            CollectionId = item.CollectionId,
-            SourceId = item.SourceId,
-            SourceKind = item.SourceKind,
-            Content = item.Content,
-            TargetLayer = item.TargetLayer,
-            Status = status ?? item.Status,
-            Decision = item.Decision,
-            Category = item.Category,
-            Reason = reason ?? item.Reason,
-            Confidence = item.Confidence,
-            MatchedRules = item.MatchedRules.ToArray(),
-            SourceRefs = item.SourceRefs.ToArray(),
-            Reviewer = reviewer ?? item.Reviewer,
-            Metadata = new Dictionary<string, string>(item.Metadata),
-            CreatedAt = item.CreatedAt,
-            UpdatedAt = updatedAt ?? item.UpdatedAt
         };
     }
 

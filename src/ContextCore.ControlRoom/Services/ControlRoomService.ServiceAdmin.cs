@@ -167,53 +167,21 @@ public sealed partial class ControlRoomService
         };
     }
 
-    private static PostgresRelationScopedServiceModeSmokeReport BuildPostgresRelationScopedServiceModeSmokeReport(string rootPath)
-    {
-        return ReadPostgresReport<PostgresRelationScopedServiceModeSmokeReport>(
-            rootPath,
-            "postgres-relation-scoped-service-mode-smoke-report.json",
-            new PostgresRelationScopedServiceModeSmokeReport
-            {
-                Diagnostics = ["RelationScopedServiceModeSmokeReportMissing"],
-                Recommendation = "RunEvalPostgresRelationScopedServiceModeSmoke"
-            });
-    }
+    private static PostgresRelationScopedServiceModeSmokeReport BuildPostgresRelationScopedServiceModeSmokeReport(string rootPath) =>
+        ReadPostgresReport(rootPath, "postgres-relation-scoped-service-mode-smoke-report.json",
+            new PostgresRelationScopedServiceModeSmokeReport { Diagnostics = ["RelationScopedServiceModeSmokeReportMissing"], Recommendation = "RunEvalPostgresRelationScopedServiceModeSmoke" });
 
-    private static PostgresRelationScopedServiceModeGateReport BuildPostgresRelationScopedServiceModeGateReport(string rootPath)
-    {
-        return ReadPostgresReport<PostgresRelationScopedServiceModeGateReport>(
-            rootPath,
-            "postgres-relation-scoped-service-mode-gate.json",
-            new PostgresRelationScopedServiceModeGateReport
-            {
-                BlockedReasons = ["RelationScopedServiceModeGateReportMissing"],
-                Recommendation = "RunEvalPostgresRelationScopedServiceModeGate"
-            });
-    }
+    private static PostgresRelationScopedServiceModeGateReport BuildPostgresRelationScopedServiceModeGateReport(string rootPath) =>
+        ReadPostgresReport(rootPath, "postgres-relation-scoped-service-mode-gate.json",
+            new PostgresRelationScopedServiceModeGateReport { BlockedReasons = ["RelationScopedServiceModeGateReportMissing"], Recommendation = "RunEvalPostgresRelationScopedServiceModeGate" });
 
-    private static LearningFeedbackScopedServiceModeSmokeReport BuildPostgresLearningFeedbackScopedServiceModeSmokeReport(string rootPath)
-    {
-        return ReadPostgresReport<LearningFeedbackScopedServiceModeSmokeReport>(
-            rootPath,
-            "postgres-learning-feedback-scoped-service-mode-smoke-report.json",
-            new LearningFeedbackScopedServiceModeSmokeReport
-            {
-                Diagnostics = ["PostgresLearningFeedbackScopedServiceModeSmokeReportMissing"],
-                Recommendation = "RunEvalPostgresLearningFeedbackScopedServiceModeSmoke"
-            });
-    }
+    private static LearningFeedbackScopedServiceModeSmokeReport BuildPostgresLearningFeedbackScopedServiceModeSmokeReport(string rootPath) =>
+        ReadPostgresReport(rootPath, "postgres-learning-feedback-scoped-service-mode-smoke-report.json",
+            new LearningFeedbackScopedServiceModeSmokeReport { Diagnostics = ["PostgresLearningFeedbackScopedServiceModeSmokeReportMissing"], Recommendation = "RunEvalPostgresLearningFeedbackScopedServiceModeSmoke" });
 
-    private static LearningFeedbackScopedServiceModeGateReport BuildPostgresLearningFeedbackScopedServiceModeGateReport(string rootPath)
-    {
-        return ReadPostgresReport<LearningFeedbackScopedServiceModeGateReport>(
-            rootPath,
-            "postgres-learning-feedback-scoped-service-mode-gate.json",
-            new LearningFeedbackScopedServiceModeGateReport
-            {
-                BlockedReasons = ["PostgresLearningFeedbackScopedServiceModeGateMissing"],
-                Recommendation = "RunEvalPostgresLearningFeedbackScopedServiceModeGate"
-            });
-    }
+    private static LearningFeedbackScopedServiceModeGateReport BuildPostgresLearningFeedbackScopedServiceModeGateReport(string rootPath) =>
+        ReadPostgresReport(rootPath, "postgres-learning-feedback-scoped-service-mode-gate.json",
+            new LearningFeedbackScopedServiceModeGateReport { BlockedReasons = ["PostgresLearningFeedbackScopedServiceModeGateMissing"], Recommendation = "RunEvalPostgresLearningFeedbackScopedServiceModeGate" });
 
     public Task<ContextInputIngestionResult> IngestServiceAsync(
         ContextInputCommand command,

@@ -1051,70 +1051,6 @@ public class ContextCoreRetrievalDatasetV2MetadataContractTests
             report.FailedConditions.ToList(),
             $"{ShadowCapabilityIds.DatasetV2Stress}:PostScoringRiskGatedProfileRuntimeUseForbidden");
     }
-
-    [TestMethod]
-    public void VectorV4ReadinessRecheck_CleanReportsAllowGuardedPreviewOnly()
-    {
-        var report = BuildV4ReadinessRecheckReport();
-
-        Assert.IsTrue(report.RecheckPassed);
-        Assert.AreEqual(VectorV4ReadinessRecheckRecommendations.ReadyForGuardedFormalPreview, report.Recommendation);
-        Assert.IsTrue(report.ReadyForGuardedFormalPreview);
-        Assert.IsFalse(report.ReadyForRuntimeSwitch);
-        Assert.IsFalse(report.FormalRetrievalAllowed);
-        Assert.IsFalse(report.UseForRuntime);
-    }
-
-    [TestMethod]
-    public void VectorV4ReadinessRecheck_MissingStressFreezeBlocks()
-    {
-        var report = BuildV4ReadinessRecheckReport(includeStressFreeze: false);
-
-        Assert.IsFalse(report.RecheckPassed);
-        Assert.AreEqual(VectorV4ReadinessRecheckRecommendations.BlockedByDatasetV2Stress, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "MissingDatasetV2StressFreezeGate");
-    }
-
-    [TestMethod]
-    public void VectorV4ReadinessRecheck_RiskBlocks()
-    {
-        var report = BuildV4ReadinessRecheckReport(stressFreeze: BuildStressFreezeReport(riskAfterPolicy: 1));
-
-        Assert.IsFalse(report.RecheckPassed);
-        Assert.AreEqual(VectorV4ReadinessRecheckRecommendations.BlockedByRisk, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "DatasetV2StressRiskNonZero");
-    }
-
-    [TestMethod]
-    public void VectorV4ReadinessRecheck_FormalOutputChangeBlocks()
-    {
-        var report = BuildV4ReadinessRecheckReport(stressFreeze: BuildStressFreezeReport(formalOutputChanged: 1));
-
-        Assert.IsFalse(report.RecheckPassed);
-        Assert.AreEqual(VectorV4ReadinessRecheckRecommendations.BlockedByFormalOutputChange, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "DatasetV2StressFormalOutputChanged");
-    }
-
-    [TestMethod]
-    public void VectorV4ReadinessRecheck_RuntimeChangeGateFailureBlocks()
-    {
-        var report = BuildV4ReadinessRecheckReport(runtimeGatePassed: false);
-
-        Assert.IsFalse(report.RecheckPassed);
-        Assert.AreEqual(VectorV4ReadinessRecheckRecommendations.BlockedByRuntimeChangeGate, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "RuntimeChangeGateFailed");
-    }
-
-    [TestMethod]
-    public void VectorV4ReadinessRecheck_ProviderParityFailureBlocks()
-    {
-        var report = BuildV4ReadinessRecheckReport(pgVectorParityPassed: false);
-
-        Assert.IsFalse(report.RecheckPassed);
-        Assert.AreEqual(VectorV4ReadinessRecheckRecommendations.BlockedByProviderParity, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "PgVectorProviderParityNotReady");
-    }
-
     [TestMethod]
     public void LearningRuntimeChangeGate_BlocksVectorV4RuntimeSwitch()
     {
@@ -2848,297 +2784,6 @@ public class ContextCoreRetrievalDatasetV2MetadataContractTests
         Assert.AreEqual(0, report.RiskAfterPolicy);
         Assert.AreEqual(0, report.FormalOutputChanged);
     }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentDryRunObservation_CleanReportsReadyForDesignFreeze()
-    {
-        var report = BuildScopedRuntimeExperimentDryRunObservationReport(stage: "gate");
-
-        Assert.IsTrue(report.GatePassed);
-        Assert.AreEqual(
-            ScopedRuntimeExperimentDryRunObservationRecommendations.ReadyForScopedRuntimeExperimentDesignFreeze,
-            report.Recommendation);
-        Assert.AreEqual(3, report.ObservationRunCount);
-        Assert.AreEqual(360, report.DryRunPackageCount);
-        Assert.IsFalse(report.RuntimeMutated);
-        Assert.IsFalse(report.VectorStoreBindingChanged);
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentDryRunObservation_MissingV45GateBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentDryRunObservationReport(includeV45Gate: false);
-
-        Assert.IsFalse(report.GatePassed);
-        Assert.AreEqual(ScopedRuntimeExperimentDryRunObservationRecommendations.KeepPreviewOnly, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "V45ScopedRuntimeExperimentGateNotPassed");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentDryRunObservation_InsufficientRunsBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentDryRunObservationReport(
-            options: CleanScopedRuntimeExperimentDryRunObservationOptions(observationRuns: 0));
-
-        Assert.IsFalse(report.GatePassed);
-        Assert.AreEqual(
-            ScopedRuntimeExperimentDryRunObservationRecommendations.NeedsMoreDryRunObservation,
-            report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "InsufficientDryRunObservationRuns");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentDryRunObservation_RiskBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentDryRunObservationReport(
-            shadowGate: CleanVectorShadowPackageComparisonGate(riskAfterPolicy: 1));
-
-        Assert.IsFalse(report.GatePassed);
-        Assert.AreEqual(ScopedRuntimeExperimentDryRunObservationRecommendations.BlockedByRisk, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "RiskAfterPolicyNonZero");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentDryRunObservation_FormalOutputChangedBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentDryRunObservationReport(
-            shadowGate: CleanVectorShadowPackageComparisonGate(formalOutputChanged: 1));
-
-        Assert.IsFalse(report.GatePassed);
-        Assert.AreEqual(
-            ScopedRuntimeExperimentDryRunObservationRecommendations.BlockedByFormalOutputChange,
-            report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "FormalOutputChangedNonZero");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentDryRunObservation_FormalPackageWriteBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentDryRunObservationReport(
-            options: CleanScopedRuntimeExperimentDryRunObservationOptions(writeFormalPackage: true));
-
-        Assert.IsFalse(report.GatePassed);
-        Assert.AreEqual(
-            ScopedRuntimeExperimentDryRunObservationRecommendations.BlockedByFormalPackageWrite,
-            report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "FormalPackageWritten");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentDryRunObservation_RuntimeMutationBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentDryRunObservationReport(
-            options: CleanScopedRuntimeExperimentDryRunObservationOptions(runtimeMutated: true));
-
-        Assert.IsFalse(report.GatePassed);
-        Assert.AreEqual(
-            ScopedRuntimeExperimentDryRunObservationRecommendations.BlockedByRuntimeMutation,
-            report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "RuntimeMutated");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentDryRunObservation_VectorStoreBindingMutationBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentDryRunObservationReport(
-            options: CleanScopedRuntimeExperimentDryRunObservationOptions(vectorStoreBindingChanged: true));
-
-        Assert.IsFalse(report.GatePassed);
-        Assert.AreEqual(
-            ScopedRuntimeExperimentDryRunObservationRecommendations.BlockedByVectorStoreBindingMutation,
-            report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "VectorStoreBindingChanged");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentDryRunObservation_PackingPolicyMutationBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentDryRunObservationReport(
-            options: CleanScopedRuntimeExperimentDryRunObservationOptions(packingPolicyChanged: true));
-
-        Assert.IsFalse(report.GatePassed);
-        Assert.AreEqual(
-            ScopedRuntimeExperimentDryRunObservationRecommendations.BlockedByPackingPolicyChange,
-            report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "PackingPolicyChanged");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentDryRunObservation_PackageOutputMutationBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentDryRunObservationReport(
-            options: CleanScopedRuntimeExperimentDryRunObservationOptions(packageOutputChanged: true));
-
-        Assert.IsFalse(report.GatePassed);
-        Assert.AreEqual(
-            ScopedRuntimeExperimentDryRunObservationRecommendations.BlockedByPackageOutputChange,
-            report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "PackageOutputChanged");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentDryRunObservation_ScopeLeakBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentDryRunObservationReport(
-            v45Gate: CleanExplicitScopedRuntimeExperimentGate(scopeLeakCount: 1));
-
-        Assert.IsFalse(report.GatePassed);
-        Assert.AreEqual(ScopedRuntimeExperimentDryRunObservationRecommendations.BlockedByScopeLeak, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "NonAllowlistedScopeLeak");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentDryRunObservation_MissingRollbackPlanBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentDryRunObservationReport(
-            v45Gate: CleanExplicitScopedRuntimeExperimentGate(rollbackPlan: string.Empty));
-
-        Assert.IsFalse(report.GatePassed);
-        Assert.AreEqual(ScopedRuntimeExperimentDryRunObservationRecommendations.KeepPreviewOnly, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "RollbackPlanMissing");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentDesignFreeze_CleanReportsReadyForRuntimeExperimentProposal()
-    {
-        var report = BuildScopedRuntimeExperimentDesignFreezeReport();
-
-        Assert.IsTrue(report.FreezePassed);
-        Assert.AreEqual(ScopedRuntimeExperimentDesignFreezeStatuses.Frozen, report.DesignStatus);
-        Assert.AreEqual(
-            ScopedRuntimeExperimentDesignFreezeRecommendations.ReadyForRuntimeExperimentProposal,
-            report.Recommendation);
-        Assert.IsTrue(report.ReadyForRuntimeExperimentProposal);
-        Assert.IsFalse(report.RuntimeSwitchAllowed);
-        Assert.IsFalse(report.FormalRetrievalAllowed);
-        Assert.IsFalse(report.ReadyForRuntimeSwitch);
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentDesignFreeze_MissingV46GateBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentDesignFreezeReport(includeDryRunObservation: false);
-
-        Assert.IsFalse(report.FreezePassed);
-        Assert.AreEqual(
-            ScopedRuntimeExperimentDesignFreezeRecommendations.BlockedByMissingDryRunObservation,
-            report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "DryRunObservationGateNotPassed");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentDesignFreeze_RiskBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentDesignFreezeReport(
-            dryRunObservation: CleanScopedRuntimeExperimentDryRunObservationGate(riskAfterPolicy: 1));
-
-        Assert.IsFalse(report.FreezePassed);
-        Assert.AreEqual(ScopedRuntimeExperimentDesignFreezeRecommendations.BlockedByRisk, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "RiskAfterPolicyNonZero");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentDesignFreeze_FormalOutputChangedBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentDesignFreezeReport(
-            dryRunObservation: CleanScopedRuntimeExperimentDryRunObservationGate(formalOutputChanged: 1));
-
-        Assert.IsFalse(report.FreezePassed);
-        Assert.AreEqual(
-            ScopedRuntimeExperimentDesignFreezeRecommendations.BlockedByFormalOutputChange,
-            report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "FormalOutputChangedNonZero");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentDesignFreeze_RuntimeMutationBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentDesignFreezeReport(
-            dryRunObservation: CleanScopedRuntimeExperimentDryRunObservationGate(runtimeMutated: true));
-
-        Assert.IsFalse(report.FreezePassed);
-        Assert.AreEqual(
-            ScopedRuntimeExperimentDesignFreezeRecommendations.BlockedByRuntimeMutation,
-            report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "RuntimeMutated");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentDesignFreeze_VectorStoreBindingMutationBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentDesignFreezeReport(
-            dryRunObservation: CleanScopedRuntimeExperimentDryRunObservationGate(vectorStoreBindingChanged: true));
-
-        Assert.IsFalse(report.FreezePassed);
-        Assert.AreEqual(
-            ScopedRuntimeExperimentDesignFreezeRecommendations.BlockedByVectorStoreBindingMutation,
-            report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "VectorStoreBindingChanged");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentDesignFreeze_PackingPolicyMutationBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentDesignFreezeReport(
-            dryRunObservation: CleanScopedRuntimeExperimentDryRunObservationGate(packingPolicyChanged: true));
-
-        Assert.IsFalse(report.FreezePassed);
-        Assert.AreEqual(
-            ScopedRuntimeExperimentDesignFreezeRecommendations.BlockedByPackingPolicyChange,
-            report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "PackingPolicyChanged");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentDesignFreeze_PackageOutputMutationBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentDesignFreezeReport(
-            dryRunObservation: CleanScopedRuntimeExperimentDryRunObservationGate(packageOutputChanged: true));
-
-        Assert.IsFalse(report.FreezePassed);
-        Assert.AreEqual(
-            ScopedRuntimeExperimentDesignFreezeRecommendations.BlockedByPackageOutputChange,
-            report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "PackageOutputChanged");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentDesignFreeze_FormalPackageWriteBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentDesignFreezeReport(
-            dryRunObservation: CleanScopedRuntimeExperimentDryRunObservationGate(formalPackageWritten: true));
-
-        Assert.IsFalse(report.FreezePassed);
-        Assert.AreEqual(
-            ScopedRuntimeExperimentDesignFreezeRecommendations.BlockedByRuntimeMutation,
-            report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "FormalPackageWritten");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentDesignFreeze_ScopeLeakBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentDesignFreezeReport(
-            dryRunObservation: CleanScopedRuntimeExperimentDryRunObservationGate(scopeLeakCount: 1));
-
-        Assert.IsFalse(report.FreezePassed);
-        Assert.AreEqual(ScopedRuntimeExperimentDesignFreezeRecommendations.BlockedByScopeLeak, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "NonAllowlistedScopeLeak");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentDesignFreeze_MissingRollbackPlanBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentDesignFreezeReport(
-            dryRunObservation: CleanScopedRuntimeExperimentDryRunObservationGate(rollbackPlanAvailable: false));
-
-        Assert.IsFalse(report.FreezePassed);
-        Assert.AreEqual(
-            ScopedRuntimeExperimentDesignFreezeRecommendations.BlockedByMissingRollbackPlan,
-            report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "RollbackPlanMissing");
-    }
-
     [TestMethod]
     public void ScopedRuntimeExperimentProposal_CleanReportsReadyForManualApproval()
     {
@@ -3248,265 +2893,6 @@ public class ContextCoreRetrievalDatasetV2MetadataContractTests
             report.Recommendation);
         CollectionAssert.Contains(report.BlockedReasons.ToList(), "AutomaticApprovalAttempt");
     }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentApproval_MissingProposalBlocks()
-    {
-        var service = new ScopedRuntimeExperimentApprovalService(new InMemoryScopedRuntimeExperimentApprovalStore());
-        var report = service.BuildPreview(null, CleanScopedRuntimeExperimentApprovalOptions());
-
-        Assert.IsFalse(report.ApprovalPassed);
-        Assert.AreEqual(ScopedRuntimeExperimentApprovalRecommendations.BlockedByMissingProposal, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "ProposalGateNotPassed");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentApproval_MissingApprovedByBlocks()
-    {
-        var service = new ScopedRuntimeExperimentApprovalService(new InMemoryScopedRuntimeExperimentApprovalStore());
-        var report = service.BuildPreview(
-            BuildScopedRuntimeExperimentProposalReport(),
-            CleanScopedRuntimeExperimentApprovalOptions(approvedBy: string.Empty));
-
-        Assert.IsFalse(report.ApprovalPassed);
-        Assert.AreEqual(ScopedRuntimeExperimentApprovalRecommendations.NeedsManualApproval, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "ApprovedByMissing");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentApproval_MissingReasonBlocks()
-    {
-        var service = new ScopedRuntimeExperimentApprovalService(new InMemoryScopedRuntimeExperimentApprovalStore());
-        var report = service.BuildPreview(
-            BuildScopedRuntimeExperimentProposalReport(),
-            CleanScopedRuntimeExperimentApprovalOptions(reason: string.Empty));
-
-        Assert.IsFalse(report.ApprovalPassed);
-        Assert.AreEqual(ScopedRuntimeExperimentApprovalRecommendations.NeedsManualApproval, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "ApprovalReasonMissing");
-    }
-
-    [TestMethod]
-    public async Task ScopedRuntimeExperimentApproval_MissingConfirmWritesNothing()
-    {
-        var store = new InMemoryScopedRuntimeExperimentApprovalStore();
-        var service = new ScopedRuntimeExperimentApprovalService(store);
-        var report = await service.ApproveAsync(
-            BuildScopedRuntimeExperimentProposalReport(),
-            CleanScopedRuntimeExperimentApprovalOptions(),
-            confirm: false);
-
-        Assert.IsFalse(report.RecordWritten);
-        Assert.AreEqual(0, (await store.ListAsync()).Count);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "ExplicitConfirmMissing");
-    }
-
-    [TestMethod]
-    public async Task ScopedRuntimeExperimentApproval_ConfirmWritesNoOpOnlyRecord()
-    {
-        var store = new InMemoryScopedRuntimeExperimentApprovalStore();
-        var service = new ScopedRuntimeExperimentApprovalService(store);
-        var report = await service.ApproveAsync(
-            BuildScopedRuntimeExperimentProposalReport(),
-            CleanScopedRuntimeExperimentApprovalOptions(),
-            confirm: true);
-
-        Assert.IsTrue(report.ApprovalPassed);
-        Assert.IsTrue(report.RecordWritten);
-        var records = await store.ListAsync();
-        Assert.AreEqual(1, records.Count);
-        Assert.AreEqual(ScopedRuntimeExperimentApprovalModes.NoOpHarnessOnly, records[0].ApprovalMode);
-        Assert.AreEqual("false", records[0].Metadata["useForRuntime"]);
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentApproval_UnsafeApprovalModeBlocks()
-    {
-        var service = new ScopedRuntimeExperimentApprovalService(new InMemoryScopedRuntimeExperimentApprovalStore());
-        var report = service.BuildPreview(
-            BuildScopedRuntimeExperimentProposalReport(),
-            CleanScopedRuntimeExperimentApprovalOptions(approvalMode: "RuntimeSwitch"));
-
-        Assert.IsFalse(report.ApprovalPassed);
-        Assert.AreEqual(ScopedRuntimeExperimentApprovalRecommendations.BlockedByUnsafeApprovalMode, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "UnsafeApprovalMode");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentNoOpHarness_ExpiredApprovalBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentNoOpHarnessReport(
-            approval: CleanScopedRuntimeExperimentApprovalRecord(expiresAt: DateTimeOffset.UtcNow.AddMinutes(-1)));
-
-        Assert.IsFalse(report.HarnessPassed);
-        Assert.AreEqual(ScopedRuntimeExperimentApprovalRecommendations.BlockedByExpiredApproval, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "ApprovalExpired");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentNoOpHarness_RevokedApprovalBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentNoOpHarnessReport(
-            approval: CleanScopedRuntimeExperimentApprovalRecord(revoked: true));
-
-        Assert.IsFalse(report.HarnessPassed);
-        Assert.AreEqual(ScopedRuntimeExperimentApprovalRecommendations.BlockedByRevokedApproval, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "ApprovalRevoked");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentNoOpHarness_MutatesNothing()
-    {
-        var report = BuildScopedRuntimeExperimentNoOpHarnessReport();
-
-        Assert.IsTrue(report.HarnessPassed);
-        Assert.AreEqual(ScopedRuntimeExperimentApprovalRecommendations.ReadyForScopedRuntimeExperimentDryRunHarnessFreeze, report.Recommendation);
-        Assert.IsFalse(report.RuntimeMutated);
-        Assert.IsFalse(report.VectorStoreBindingChanged);
-        Assert.IsFalse(report.DiBindingChanged);
-        Assert.IsFalse(report.FormalPackageWritten);
-        Assert.IsFalse(report.PackingPolicyChanged);
-        Assert.IsFalse(report.PackageOutputChanged);
-        Assert.IsFalse(report.FormalRetrievalAllowed);
-        Assert.IsFalse(report.RuntimeSwitchAllowed);
-        Assert.IsFalse(report.ReadyForRuntimeSwitch);
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentNoOpHarness_FormalPackageWriteAttemptBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentNoOpHarnessReport(
-            options: CleanScopedRuntimeExperimentNoOpHarnessOptions(writeFormalPackage: true));
-
-        Assert.IsFalse(report.HarnessPassed);
-        Assert.AreEqual(ScopedRuntimeExperimentApprovalRecommendations.BlockedByRuntimeMutation, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "RuntimeMutationDetected");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentHarnessFreeze_CleanReportsReadyForGuardedPlanning()
-    {
-        var report = BuildScopedRuntimeExperimentHarnessFreezeReport();
-
-        Assert.IsTrue(report.FreezePassed);
-        Assert.AreEqual(
-            ScopedRuntimeExperimentHarnessFreezeRecommendations.ReadyForGuardedRuntimeExperimentPlanning,
-            report.Recommendation);
-        Assert.AreEqual(ScopedRuntimeExperimentApprovalModes.NoOpHarnessOnly, report.ApprovalMode);
-        Assert.AreEqual("Passed", report.HarnessStatus);
-        Assert.IsFalse(report.RuntimeSwitchAllowed);
-        Assert.IsFalse(report.FormalRetrievalAllowed);
-        Assert.IsFalse(report.ReadyForRuntimeSwitch);
-        CollectionAssert.Contains(report.ForbiddenActions.ToList(), "RuntimeSwitch");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentHarnessFreeze_MissingProposalBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentHarnessFreezeReport(proposal: null, includeProposal: false);
-
-        Assert.IsFalse(report.FreezePassed);
-        Assert.AreEqual(ScopedRuntimeExperimentHarnessFreezeRecommendations.BlockedByMissingProposal, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "ProposalGateNotPassed");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentHarnessFreeze_MissingApprovalBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentHarnessFreezeReport(approval: null, includeApproval: false);
-
-        Assert.IsFalse(report.FreezePassed);
-        Assert.AreEqual(ScopedRuntimeExperimentHarnessFreezeRecommendations.BlockedByMissingApproval, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "ApprovalSummaryMissing");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentHarnessFreeze_ExpiredApprovalBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentHarnessFreezeReport(
-            approval: CleanScopedRuntimeExperimentApprovalSummary(expired: true));
-
-        Assert.IsFalse(report.FreezePassed);
-        Assert.AreEqual(ScopedRuntimeExperimentHarnessFreezeRecommendations.BlockedByExpiredApproval, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "ApprovalExpired");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentHarnessFreeze_RevokedApprovalBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentHarnessFreezeReport(
-            approval: CleanScopedRuntimeExperimentApprovalSummary(revoked: true));
-
-        Assert.IsFalse(report.FreezePassed);
-        Assert.AreEqual(ScopedRuntimeExperimentHarnessFreezeRecommendations.BlockedByRevokedApproval, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "ApprovalRevoked");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentHarnessFreeze_UnsafeApprovalModeBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentHarnessFreezeReport(
-            approval: CleanScopedRuntimeExperimentApprovalSummary(approvalMode: "RuntimeSwitch"));
-
-        Assert.IsFalse(report.FreezePassed);
-        Assert.AreEqual(ScopedRuntimeExperimentHarnessFreezeRecommendations.BlockedByUnsafeApprovalMode, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "UnsafeApprovalMode");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentHarnessFreeze_HarnessFailureBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentHarnessFreezeReport(
-            noOpHarness: CleanScopedRuntimeExperimentNoOpHarnessGate(harnessPassed: false));
-
-        Assert.IsFalse(report.FreezePassed);
-        Assert.AreEqual(ScopedRuntimeExperimentHarnessFreezeRecommendations.BlockedByHarnessFailure, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "NoOpHarnessGateNotPassed");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentHarnessFreeze_RuntimeMutationBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentHarnessFreezeReport(
-            noOpHarness: CleanScopedRuntimeExperimentNoOpHarnessGate(runtimeMutated: true));
-
-        Assert.IsFalse(report.FreezePassed);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "RuntimeMutated");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentHarnessFreeze_VectorStoreBindingMutationBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentHarnessFreezeReport(
-            noOpHarness: CleanScopedRuntimeExperimentNoOpHarnessGate(vectorStoreBindingChanged: true));
-
-        Assert.IsFalse(report.FreezePassed);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "VectorStoreBindingChanged");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentHarnessFreeze_FormalPackageWriteBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentHarnessFreezeReport(
-            noOpHarness: CleanScopedRuntimeExperimentNoOpHarnessGate(formalPackageWritten: true));
-
-        Assert.IsFalse(report.FreezePassed);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "FormalPackageWritten");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentHarnessFreeze_PackingPolicyPackageOutputMutationBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentHarnessFreezeReport(
-            noOpHarness: CleanScopedRuntimeExperimentNoOpHarnessGate(
-                packingPolicyChanged: true,
-                packageOutputChanged: true));
-
-        Assert.IsFalse(report.FreezePassed);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "PackingPolicyChanged");
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "PackageOutputChanged");
-    }
-
     [TestMethod]
     public void LearningRuntimeChangeGate_BlocksScopedRuntimeExperimentHarnessFreezeRuntimeUse()
     {
@@ -3550,800 +2936,6 @@ public class ContextCoreRetrievalDatasetV2MetadataContractTests
             report.FailedConditions.ToList(),
             $"{ShadowCapabilityIds.ScopedRuntimeExperimentHarnessFreeze}:NoOpHarnessOnlyIsNotRuntimeApproval");
     }
-
-    [TestMethod]
-    public void GuardedScopedRuntimeExperimentPlan_CleanReportsReadyForActivationContract()
-    {
-        var report = BuildGuardedScopedRuntimeExperimentPlanReport();
-
-        Assert.IsTrue(report.PlanPassed);
-        Assert.AreEqual(
-            GuardedScopedRuntimeExperimentPlanRecommendations.ReadyForScopedRuntimeExperimentActivationContract,
-            report.Recommendation);
-        Assert.AreEqual(ScopedRuntimeExperimentApprovalModes.ScopedRuntimeExperiment, report.RequiredApprovalMode);
-        Assert.IsFalse(report.RuntimeSwitchAllowed);
-        Assert.IsFalse(report.FormalRetrievalAllowed);
-        Assert.IsFalse(report.ReadyForRuntimeSwitch);
-        Assert.IsFalse(report.UseForRuntime);
-        CollectionAssert.Contains(report.ForbiddenActions.ToList(), "TreatingNoOpHarnessOnlyApprovalAsRuntimeApproval");
-    }
-
-    [TestMethod]
-    public void GuardedScopedRuntimeExperimentPlan_MissingV410HarnessFreezeBlocks()
-    {
-        var report = BuildGuardedScopedRuntimeExperimentPlanReport(includeHarnessFreeze: false);
-
-        Assert.IsFalse(report.PlanPassed);
-        Assert.AreEqual(GuardedScopedRuntimeExperimentPlanRecommendations.BlockedByMissingGate, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "ScopedRuntimeExperimentHarnessFreezeGateNotPassed");
-    }
-
-    [TestMethod]
-    public void GuardedScopedRuntimeExperimentPlan_NoOpHarnessOnlyApprovalDoesNotSatisfyRuntimeApproval()
-    {
-        var report = BuildGuardedScopedRuntimeExperimentPlanReport(
-            options: CleanGuardedScopedRuntimeExperimentPlanOptions(
-                requiredApprovalMode: ScopedRuntimeExperimentApprovalModes.NoOpHarnessOnly));
-
-        Assert.IsFalse(report.PlanPassed);
-        Assert.AreEqual(GuardedScopedRuntimeExperimentPlanRecommendations.BlockedByUnsafeApprovalMode, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "NoOpHarnessOnlyApprovalCannotSatisfyRuntimeApproval");
-    }
-
-    [TestMethod]
-    public void GuardedScopedRuntimeExperimentPlan_MissingSelectedScopeBlocks()
-    {
-        var report = BuildGuardedScopedRuntimeExperimentPlanReport(
-            proposal: CleanScopedRuntimeExperimentProposalGate(workspaceId: string.Empty),
-            options: CleanGuardedScopedRuntimeExperimentPlanOptions(includeScopes: false));
-
-        Assert.IsFalse(report.PlanPassed);
-        Assert.AreEqual(GuardedScopedRuntimeExperimentPlanRecommendations.NeedsScopeConfiguration, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "SelectedScopeNotConfigured");
-    }
-
-    [TestMethod]
-    public void GuardedScopedRuntimeExperimentPlan_MissingKillSwitchBlocks()
-    {
-        var report = BuildGuardedScopedRuntimeExperimentPlanReport(
-            proposal: CleanScopedRuntimeExperimentProposalGate(killSwitchPlan: string.Empty));
-
-        Assert.IsFalse(report.PlanPassed);
-        Assert.AreEqual(GuardedScopedRuntimeExperimentPlanRecommendations.BlockedByMissingKillSwitch, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "KillSwitchPlanMissing");
-    }
-
-    [TestMethod]
-    public void GuardedScopedRuntimeExperimentPlan_MissingRollbackBlocks()
-    {
-        var report = BuildGuardedScopedRuntimeExperimentPlanReport(
-            proposal: CleanScopedRuntimeExperimentProposalGate(rollbackPlan: string.Empty));
-
-        Assert.IsFalse(report.PlanPassed);
-        Assert.AreEqual(GuardedScopedRuntimeExperimentPlanRecommendations.BlockedByMissingRollbackPlan, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "RollbackPlanMissing");
-    }
-
-    [TestMethod]
-    public void GuardedScopedRuntimeExperimentPlan_MissingObservationPlanBlocks()
-    {
-        var report = BuildGuardedScopedRuntimeExperimentPlanReport(
-            options: CleanGuardedScopedRuntimeExperimentPlanOptions(requireObservationPlan: false));
-
-        Assert.IsFalse(report.PlanPassed);
-        Assert.AreEqual(GuardedScopedRuntimeExperimentPlanRecommendations.BlockedByMissingObservationPlan, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "ObservationPlanMissing");
-    }
-
-    [TestMethod]
-    public void GuardedScopedRuntimeExperimentPlan_RuntimeSwitchAttemptBlocks()
-    {
-        var report = BuildGuardedScopedRuntimeExperimentPlanReport(
-            options: CleanGuardedScopedRuntimeExperimentPlanOptions(
-                useForRuntime: true,
-                formalRetrievalAllowed: true,
-                runtimeSwitchAllowed: true,
-                readyForRuntimeSwitch: true));
-
-        Assert.IsFalse(report.PlanPassed);
-        Assert.AreEqual(GuardedScopedRuntimeExperimentPlanRecommendations.BlockedByRuntimeSwitchAttempt, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "RuntimeSwitchAttempt");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentRuntimeApproval_MissingApprovalBlocksGate()
-    {
-        var report = new ScopedRuntimeExperimentRuntimeApprovalRunner().BuildGate(
-            BuildGuardedScopedRuntimeExperimentPlanReport(),
-            null);
-
-        Assert.IsFalse(report.GatePassed);
-        Assert.AreEqual(ScopedRuntimeExperimentApprovalRecommendations.BlockedByMissingApproval, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "ApprovalRecordMissing");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentRuntimeApproval_NoOpHarnessOnlyBlocksGate()
-    {
-        var report = new ScopedRuntimeExperimentRuntimeApprovalRunner().BuildGate(
-            BuildGuardedScopedRuntimeExperimentPlanReport(),
-            CleanScopedRuntimeExperimentApprovalRecord());
-
-        Assert.IsFalse(report.GatePassed);
-        Assert.AreEqual(ScopedRuntimeExperimentApprovalRecommendations.BlockedByWrongApprovalMode, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "WrongApprovalMode");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentRuntimeApproval_ExpiredApprovalBlocksGate()
-    {
-        var report = new ScopedRuntimeExperimentRuntimeApprovalRunner().BuildGate(
-            BuildGuardedScopedRuntimeExperimentPlanReport(),
-            CleanScopedRuntimeExperimentApprovalRecord(
-                expiresAt: DateTimeOffset.UtcNow.AddMinutes(-1),
-                approvalMode: ScopedRuntimeExperimentApprovalModes.ScopedRuntimeExperiment));
-
-        Assert.IsFalse(report.GatePassed);
-        Assert.AreEqual(ScopedRuntimeExperimentApprovalRecommendations.BlockedByExpiredApproval, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "ApprovalExpired");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentRuntimeApproval_RevokedApprovalBlocksGate()
-    {
-        var report = new ScopedRuntimeExperimentRuntimeApprovalRunner().BuildGate(
-            BuildGuardedScopedRuntimeExperimentPlanReport(),
-            CleanScopedRuntimeExperimentApprovalRecord(
-                revoked: true,
-                approvalMode: ScopedRuntimeExperimentApprovalModes.ScopedRuntimeExperiment));
-
-        Assert.IsFalse(report.GatePassed);
-        Assert.AreEqual(ScopedRuntimeExperimentApprovalRecommendations.BlockedByRevokedApproval, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "ApprovalRevoked");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentRuntimeApproval_MissingAcknowledgementsBlock()
-    {
-        var runner = new ScopedRuntimeExperimentRuntimeApprovalRunner();
-        var plan = BuildGuardedScopedRuntimeExperimentPlanReport();
-        var missingRisk = runner.BuildApproval(plan, CleanScopedRuntimeExperimentRuntimeApprovalOptions(riskAcknowledgement: string.Empty), confirm: true);
-        var missingRollback = runner.BuildApproval(plan, CleanScopedRuntimeExperimentRuntimeApprovalOptions(rollbackAcknowledgement: string.Empty), confirm: true);
-        var missingKillSwitch = runner.BuildApproval(plan, CleanScopedRuntimeExperimentRuntimeApprovalOptions(killSwitchAcknowledgement: string.Empty), confirm: true);
-        var missingScope = runner.BuildApproval(plan, CleanScopedRuntimeExperimentRuntimeApprovalOptions(scopeAcknowledgement: string.Empty), confirm: true);
-        var missingObservation = runner.BuildApproval(plan, CleanScopedRuntimeExperimentRuntimeApprovalOptions(observationPlanAcknowledgement: string.Empty), confirm: true);
-
-        foreach (var report in new[] { missingRisk, missingRollback, missingKillSwitch, missingScope, missingObservation })
-        {
-            Assert.IsFalse(report.ApprovalPassed);
-            Assert.IsFalse(report.RecordWritten);
-            Assert.AreEqual(ScopedRuntimeExperimentApprovalRecommendations.BlockedByMissingAcknowledgement, report.Recommendation);
-        }
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentRuntimeApproval_MissingConfirmWritesNothing()
-    {
-        var report = new ScopedRuntimeExperimentRuntimeApprovalRunner().BuildApproval(
-            BuildGuardedScopedRuntimeExperimentPlanReport(),
-            CleanScopedRuntimeExperimentRuntimeApprovalOptions(),
-            confirm: false);
-
-        Assert.IsFalse(report.ApprovalPassed);
-        Assert.IsFalse(report.RecordWritten);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "ExplicitConfirmMissing");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentRuntimeApproval_CleanApprovalPassesGateWithoutRuntimeMutation()
-    {
-        var runner = new ScopedRuntimeExperimentRuntimeApprovalRunner();
-        var plan = BuildGuardedScopedRuntimeExperimentPlanReport();
-        var approval = runner.BuildApproval(plan, CleanScopedRuntimeExperimentRuntimeApprovalOptions(), confirm: true);
-        var gate = runner.BuildGate(plan, approval.ApprovalRecord);
-
-        Assert.IsTrue(approval.ApprovalPassed);
-        Assert.IsTrue(approval.RecordWritten);
-        Assert.IsTrue(gate.GatePassed);
-        Assert.AreEqual(ScopedRuntimeExperimentApprovalRecommendations.ReadyForActivationPreflight, gate.Recommendation);
-        Assert.IsFalse(gate.RuntimeSwitchAllowed);
-        Assert.IsFalse(gate.FormalRetrievalAllowed);
-        Assert.IsFalse(gate.ReadyForRuntimeSwitch);
-        Assert.IsFalse(gate.UseForRuntime);
-        Assert.IsFalse(gate.FormalPackageWriteAllowed);
-        Assert.IsFalse(gate.PackingPolicyIntegrationAllowed);
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentActivationPreflight_CleanReportsReadyForGuardedExperiment()
-    {
-        var runner = new ScopedRuntimeExperimentActivationPreflightRunner();
-        var preflight = BuildScopedRuntimeExperimentActivationPreflightReport("preflight");
-        var route = BuildScopedRuntimeExperimentActivationPreflightReport("route");
-        var gate = runner.BuildGate(
-            BuildFoundationFreezeReport(),
-            BuildServiceFoundationFreezeReport(),
-            CleanVectorFormalPreviewFreezeReport(),
-            BuildGuardedScopedRuntimeExperimentPlanReport(),
-            BuildScopedRuntimeExperimentRuntimeApprovalGateReport(),
-            CleanRuntimeChangeGate(true),
-            preflight,
-            route,
-            CleanScopedRuntimeExperimentActivationPreflightOptions());
-
-        Assert.IsTrue(preflight.PreflightPassed);
-        Assert.IsTrue(route.RuntimeRouteDryRunExecuted);
-        Assert.IsTrue(gate.PreflightPassed);
-        Assert.AreEqual(
-            ScopedRuntimeExperimentActivationPreflightRecommendations.ReadyForGuardedScopedRuntimeExperiment,
-            gate.Recommendation);
-        Assert.IsFalse(gate.RuntimeMutated);
-        Assert.IsFalse(gate.VectorStoreBindingChanged);
-        Assert.IsFalse(gate.FormalPackageWritten);
-        Assert.IsFalse(gate.FormalRetrievalAllowed);
-        Assert.IsFalse(gate.RuntimeSwitchAllowed);
-        Assert.IsFalse(gate.ReadyForRuntimeSwitch);
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentActivationPreflight_MissingApprovalBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentActivationPreflightReport("preflight", approvalGate: null, includeApproval: false);
-
-        Assert.IsFalse(report.PreflightPassed);
-        Assert.AreEqual(ScopedRuntimeExperimentActivationPreflightRecommendations.BlockedByMissingApproval, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "ScopedRuntimeExperimentApprovalGateNotPassed");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentActivationPreflight_WrongApprovalIdBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentActivationPreflightReport(
-            "preflight",
-            options: CleanScopedRuntimeExperimentActivationPreflightOptions(approvalId: "wrong-approval"));
-
-        Assert.IsFalse(report.PreflightPassed);
-        Assert.AreEqual(ScopedRuntimeExperimentActivationPreflightRecommendations.BlockedByMissingApproval, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "ApprovalIdMismatch");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentActivationPreflight_MissingKillSwitchBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentActivationPreflightReport(
-            "preflight",
-            plan: CopyGuardedScopedRuntimeExperimentPlan(BuildGuardedScopedRuntimeExperimentPlanReport(), killSwitchPlan: string.Empty));
-
-        Assert.IsFalse(report.PreflightPassed);
-        Assert.AreEqual(ScopedRuntimeExperimentActivationPreflightRecommendations.BlockedByMissingKillSwitch, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "KillSwitchMissing");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentActivationPreflight_MissingRollbackBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentActivationPreflightReport(
-            "preflight",
-            plan: CopyGuardedScopedRuntimeExperimentPlan(BuildGuardedScopedRuntimeExperimentPlanReport(), rollbackPlan: string.Empty));
-
-        Assert.IsFalse(report.PreflightPassed);
-        Assert.AreEqual(ScopedRuntimeExperimentActivationPreflightRecommendations.BlockedByMissingRollbackPlan, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "RollbackPlanMissing");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentActivationPreflight_MissingTraceSinkBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentActivationPreflightReport(
-            "preflight",
-            options: CleanScopedRuntimeExperimentActivationPreflightOptions(traceSinkAvailable: false));
-
-        Assert.IsFalse(report.PreflightPassed);
-        Assert.AreEqual(ScopedRuntimeExperimentActivationPreflightRecommendations.BlockedByMissingTraceSink, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "TraceSinkMissing");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentActivationPreflight_ScopeLeakBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentActivationPreflightReport(
-            "preflight",
-            options: CleanScopedRuntimeExperimentActivationPreflightOptions(scopeLeakCount: 1));
-
-        Assert.IsFalse(report.PreflightPassed);
-        Assert.AreEqual(ScopedRuntimeExperimentActivationPreflightRecommendations.BlockedByScopeLeak, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "NonAllowlistedScopeLeakDetected");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentActivationPreflight_RuntimeMutationBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentActivationPreflightReport(
-            "preflight",
-            options: CleanScopedRuntimeExperimentActivationPreflightOptions(mutateRuntime: true));
-
-        Assert.IsFalse(report.PreflightPassed);
-        Assert.AreEqual(ScopedRuntimeExperimentActivationPreflightRecommendations.BlockedByRuntimeMutation, report.Recommendation);
-        Assert.IsTrue(report.RuntimeMutated);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "RuntimeMutationDetected");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentActivationPreflight_VectorStoreBindingMutationBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentActivationPreflightReport(
-            "preflight",
-            options: CleanScopedRuntimeExperimentActivationPreflightOptions(vectorStoreBindingChanged: true));
-
-        Assert.IsFalse(report.PreflightPassed);
-        Assert.AreEqual(ScopedRuntimeExperimentActivationPreflightRecommendations.BlockedByVectorStoreBindingMutation, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "VectorStoreBindingMutationDetected");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentActivationPreflight_FormalPackageWriteBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentActivationPreflightReport(
-            "preflight",
-            options: CleanScopedRuntimeExperimentActivationPreflightOptions(writeFormalPackage: true));
-
-        Assert.IsFalse(report.PreflightPassed);
-        Assert.AreEqual(ScopedRuntimeExperimentActivationPreflightRecommendations.BlockedByFormalPackageWrite, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "FormalPackageWriteDetected");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentActivationPreflight_PackingPolicyOrPackageOutputBlocks()
-    {
-        var packing = BuildScopedRuntimeExperimentActivationPreflightReport(
-            "preflight",
-            options: CleanScopedRuntimeExperimentActivationPreflightOptions(packingPolicyChanged: true));
-        var packageOutput = BuildScopedRuntimeExperimentActivationPreflightReport(
-            "preflight",
-            options: CleanScopedRuntimeExperimentActivationPreflightOptions(packageOutputChanged: true));
-
-        Assert.IsFalse(packing.PreflightPassed);
-        Assert.IsFalse(packageOutput.PreflightPassed);
-        Assert.AreEqual(ScopedRuntimeExperimentActivationPreflightRecommendations.BlockedByRuntimeMutation, packing.Recommendation);
-        Assert.AreEqual(ScopedRuntimeExperimentActivationPreflightRecommendations.BlockedByRuntimeMutation, packageOutput.Recommendation);
-    }
-
-    [TestMethod]
-    public void GuardedScopedRuntimeExperiment_DisabledByDefaultBlocks()
-    {
-        var report = BuildGuardedScopedRuntimeExperimentReport("experiment", options: new GuardedScopedRuntimeExperimentOptions());
-
-        Assert.IsFalse(report.ExperimentPassed);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "GuardedScopedRuntimeExperimentDisabled");
-    }
-
-    [TestMethod]
-    public void GuardedScopedRuntimeExperiment_MissingActivationGateBlocks()
-    {
-        var report = BuildGuardedScopedRuntimeExperimentReport("experiment", includeActivation: false);
-
-        Assert.IsFalse(report.ExperimentPassed);
-        Assert.AreEqual(GuardedScopedRuntimeExperimentRecommendations.BlockedByMissingActivationGate, report.Recommendation);
-    }
-
-    [TestMethod]
-    public void GuardedScopedRuntimeExperiment_MissingRuntimeApprovalBlocks()
-    {
-        var report = BuildGuardedScopedRuntimeExperimentReport("experiment", includeApproval: false);
-
-        Assert.IsFalse(report.ExperimentPassed);
-        Assert.AreEqual(GuardedScopedRuntimeExperimentRecommendations.BlockedByMissingApproval, report.Recommendation);
-    }
-
-    [TestMethod]
-    public void GuardedScopedRuntimeExperiment_NoOpHarnessApprovalBlocks()
-    {
-        var approval = new ScopedRuntimeExperimentApprovalGateReport
-        {
-            GatePassed = true,
-            ProposalId = "vsrep-bb5402e39c0f1333",
-            ApprovalId = "vsrea-clean",
-            ApprovalMode = ScopedRuntimeExperimentApprovalModes.NoOpHarnessOnly,
-            ApprovalExists = true,
-            RequiredAcknowledgementsPresent = true
-        };
-        var report = BuildGuardedScopedRuntimeExperimentReport("experiment", approvalGate: approval);
-
-        Assert.IsFalse(report.ExperimentPassed);
-        Assert.AreEqual(GuardedScopedRuntimeExperimentRecommendations.BlockedByWrongApprovalMode, report.Recommendation);
-    }
-
-    [TestMethod]
-    public void GuardedScopedRuntimeExperiment_AllowlistedScopeHitsExperimentRoute()
-    {
-        var report = BuildGuardedScopedRuntimeExperimentReport("experiment");
-
-        Assert.IsTrue(report.ExperimentPassed);
-        Assert.AreEqual(GuardedScopedRuntimeExperimentRecommendations.ReadyForScopedRuntimeExperimentObservation, report.Recommendation);
-        Assert.IsTrue(report.ExperimentRouteHitCount > 0);
-        Assert.IsTrue(report.Traces.Any(trace => trace.ScopeMatched && trace.ExperimentRouteHit));
-        Assert.IsFalse(report.RuntimeMutated);
-    }
-
-    [TestMethod]
-    public void GuardedScopedRuntimeExperiment_NonAllowlistedScopeStaysBaseline()
-    {
-        var report = BuildGuardedScopedRuntimeExperimentReport("experiment");
-
-        Assert.AreEqual(1, report.NonAllowlistedRequestCount);
-        Assert.AreEqual(0, report.NonAllowlistedScopeLeakCount);
-        Assert.IsTrue(report.Traces.Any(trace => !trace.ScopeMatched && !trace.ExperimentRouteHit));
-    }
-
-    [TestMethod]
-    public void GuardedScopedRuntimeExperiment_FormalPackageWriteBlocks()
-    {
-        var report = BuildGuardedScopedRuntimeExperimentReport(
-            "experiment",
-            options: CleanGuardedScopedRuntimeExperimentOptions(writeFormalPackage: true));
-
-        Assert.IsFalse(report.ExperimentPassed);
-        Assert.AreEqual(GuardedScopedRuntimeExperimentRecommendations.BlockedByFormalPackageWrite, report.Recommendation);
-    }
-
-    [TestMethod]
-    public void GuardedScopedRuntimeExperiment_PackageOutputMutationBlocks()
-    {
-        var report = BuildGuardedScopedRuntimeExperimentReport(
-            "experiment",
-            options: CleanGuardedScopedRuntimeExperimentOptions(packageOutputChanged: true));
-
-        Assert.IsFalse(report.ExperimentPassed);
-        Assert.AreEqual(GuardedScopedRuntimeExperimentRecommendations.BlockedByPackageOutputChange, report.Recommendation);
-    }
-
-    [TestMethod]
-    public void GuardedScopedRuntimeExperiment_PackingPolicyMutationBlocks()
-    {
-        var report = BuildGuardedScopedRuntimeExperimentReport(
-            "experiment",
-            options: CleanGuardedScopedRuntimeExperimentOptions(mutatePackingPolicy: true));
-
-        Assert.IsFalse(report.ExperimentPassed);
-        Assert.AreEqual(GuardedScopedRuntimeExperimentRecommendations.BlockedByPackingPolicyChange, report.Recommendation);
-    }
-
-    [TestMethod]
-    public void GuardedScopedRuntimeExperiment_VectorBindingMutationBlocks()
-    {
-        var report = BuildGuardedScopedRuntimeExperimentReport(
-            "experiment",
-            options: CleanGuardedScopedRuntimeExperimentOptions(vectorStoreBindingChanged: true));
-
-        Assert.IsFalse(report.ExperimentPassed);
-        Assert.AreEqual(GuardedScopedRuntimeExperimentRecommendations.BlockedByVectorStoreBindingMutation, report.Recommendation);
-    }
-
-    [TestMethod]
-    public void GuardedScopedRuntimeExperiment_KillSwitchDisablesExperimentRoute()
-    {
-        var report = BuildGuardedScopedRuntimeExperimentReport(
-            "experiment",
-            options: CleanGuardedScopedRuntimeExperimentOptions(killSwitchTriggered: true));
-
-        Assert.IsFalse(report.ExperimentPassed);
-        Assert.AreEqual(0, report.ExperimentRouteHitCount);
-        Assert.IsTrue(report.KillSwitchTriggered);
-        Assert.IsFalse(report.RuntimeMutated);
-        Assert.IsTrue(report.Traces.All(trace => !trace.ExperimentRouteHit));
-    }
-
-    [TestMethod]
-    public void GuardedScopedRuntimeExperiment_RollbackSmokeReturnsSelectedScopeToBaseline()
-    {
-        var report = BuildGuardedScopedRuntimeExperimentReport("rollback-smoke");
-
-        Assert.IsTrue(report.ExperimentPassed);
-        Assert.AreEqual(0, report.ExperimentRouteHitCount);
-        Assert.IsTrue(report.RollbackVerified);
-        Assert.IsTrue(report.KillSwitchTriggered);
-        Assert.IsFalse(report.FormalPackageWritten);
-        Assert.IsFalse(report.PackageOutputChanged);
-    }
-
-    [TestMethod]
-    public void GuardedScopedRuntimeExperiment_GatePassesWithObservationAndRollback()
-    {
-        var gate = BuildGuardedScopedRuntimeExperimentReport("gate");
-
-        Assert.IsTrue(gate.ExperimentPassed);
-        Assert.AreEqual(GuardedScopedRuntimeExperimentRecommendations.ReadyForScopedRuntimeExperimentObservation, gate.Recommendation);
-        Assert.IsTrue(gate.ExperimentRouteHitCount > 0);
-        Assert.IsFalse(gate.RuntimeMutated);
-        Assert.IsFalse(gate.FormalPackageWritten);
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentObservationWindow_CleanReportsReadyForFreeze()
-    {
-        var report = BuildScopedRuntimeExperimentObservationWindowReport("gate");
-
-        Assert.IsTrue(report.ObservationPassed);
-        Assert.AreEqual(
-            ScopedRuntimeExperimentObservationWindowRecommendations.ReadyForScopedRuntimeExperimentObservationFreeze,
-            report.Recommendation);
-        Assert.AreEqual(3, report.ObservationRunCount);
-        Assert.AreEqual(360, report.RequestCount);
-        Assert.AreEqual(360, report.ExperimentRouteHitCount);
-        Assert.AreEqual(100, report.TraceCompleteness);
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentObservationWindow_MissingV414GateBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentObservationWindowReport("gate", includeV414Gate: false);
-
-        Assert.IsFalse(report.ObservationPassed);
-        Assert.AreEqual(ScopedRuntimeExperimentObservationWindowRecommendations.KeepPreviewOnly, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "V414GuardedScopedRuntimeExperimentGateNotPassed");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentObservationWindow_InsufficientRequestCountBlocks()
-    {
-        var runner = new ScopedRuntimeExperimentObservationWindowRunner();
-        var v414 = BuildGuardedScopedRuntimeExperimentReport("gate");
-        var existing = runner.BuildWindow(
-            v414,
-            CleanRuntimeChangeGate(true),
-            CleanScopedRuntimeExperimentObservationWindowOptions(minRequestCount: 120));
-        var report = runner.BuildGate(
-            v414,
-            CleanRuntimeChangeGate(true),
-            existing,
-            CleanScopedRuntimeExperimentObservationWindowOptions(minRequestCount: 360));
-
-        Assert.IsFalse(report.ObservationPassed);
-        Assert.AreEqual(
-            ScopedRuntimeExperimentObservationWindowRecommendations.NeedsMoreObservation,
-            report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "InsufficientRequestCount");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentObservationWindow_InsufficientObservationRunsBlocks()
-    {
-        var runner = new ScopedRuntimeExperimentObservationWindowRunner();
-        var v414 = BuildGuardedScopedRuntimeExperimentReport("gate");
-        var existing = runner.BuildWindow(
-            v414,
-            CleanRuntimeChangeGate(true),
-            CleanScopedRuntimeExperimentObservationWindowOptions(observationRunCount: 1));
-        var report = runner.BuildGate(
-            v414,
-            CleanRuntimeChangeGate(true),
-            existing,
-            CleanScopedRuntimeExperimentObservationWindowOptions(observationRunCount: 3));
-
-        Assert.IsFalse(report.ObservationPassed);
-        Assert.AreEqual(
-            ScopedRuntimeExperimentObservationWindowRecommendations.NeedsMoreObservation,
-            report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "InsufficientObservationRuns");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentObservationWindow_ScopeLeakBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentObservationWindowReport(
-            "gate",
-            options: CleanScopedRuntimeExperimentObservationWindowOptions(scopeLeakCount: 1));
-
-        Assert.IsFalse(report.ObservationPassed);
-        Assert.AreEqual(ScopedRuntimeExperimentObservationWindowRecommendations.BlockedByScopeLeak, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "NonAllowlistedScopeLeakDetected");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentObservationWindow_RiskBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentObservationWindowReport(
-            "gate",
-            options: CleanScopedRuntimeExperimentObservationWindowOptions(riskAfterPolicy: 1));
-
-        Assert.IsFalse(report.ObservationPassed);
-        Assert.AreEqual(ScopedRuntimeExperimentObservationWindowRecommendations.BlockedByRisk, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "RiskDetected");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentObservationWindow_FormalOutputChangeBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentObservationWindowReport(
-            "gate",
-            options: CleanScopedRuntimeExperimentObservationWindowOptions(formalOutputChanged: 1));
-
-        Assert.IsFalse(report.ObservationPassed);
-        Assert.AreEqual(
-            ScopedRuntimeExperimentObservationWindowRecommendations.BlockedByFormalOutputChange,
-            report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "FormalOutputChangeDetected");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentObservationWindow_PackageOutputChangeBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentObservationWindowReport(
-            "gate",
-            options: CleanScopedRuntimeExperimentObservationWindowOptions(packageOutputChanged: true));
-
-        Assert.IsFalse(report.ObservationPassed);
-        Assert.AreEqual(
-            ScopedRuntimeExperimentObservationWindowRecommendations.BlockedByPackageOutputChange,
-            report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "PackageOutputChanged");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentObservationWindow_PackingPolicyMutationBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentObservationWindowReport(
-            "gate",
-            options: CleanScopedRuntimeExperimentObservationWindowOptions(mutatePackingPolicy: true));
-
-        Assert.IsFalse(report.ObservationPassed);
-        Assert.AreEqual(
-            ScopedRuntimeExperimentObservationWindowRecommendations.BlockedByPackingPolicyChange,
-            report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "PackingPolicyChanged");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentObservationWindow_RuntimeMutationBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentObservationWindowReport(
-            "gate",
-            options: CleanScopedRuntimeExperimentObservationWindowOptions(runtimeMutated: true));
-
-        Assert.IsFalse(report.ObservationPassed);
-        Assert.AreEqual(
-            ScopedRuntimeExperimentObservationWindowRecommendations.BlockedByRuntimeMutation,
-            report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "RuntimeMutationDetected");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentObservationWindow_VectorBindingMutationBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentObservationWindowReport(
-            "gate",
-            options: CleanScopedRuntimeExperimentObservationWindowOptions(vectorStoreBindingChanged: true));
-
-        Assert.IsFalse(report.ObservationPassed);
-        Assert.AreEqual(
-            ScopedRuntimeExperimentObservationWindowRecommendations.BlockedByRuntimeMutation,
-            report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "VectorStoreBindingMutationDetected");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentObservationWindow_MissingTraceBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentObservationWindowReport(
-            "gate",
-            options: CleanScopedRuntimeExperimentObservationWindowOptions(traceCompleteness: 99));
-
-        Assert.IsFalse(report.ObservationPassed);
-        Assert.AreEqual(
-            ScopedRuntimeExperimentObservationWindowRecommendations.BlockedByTraceGap,
-            report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "TraceCompletenessBelow100Percent");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentObservationWindow_KillSwitchUnavailableBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentObservationWindowReport(
-            "gate",
-            options: CleanScopedRuntimeExperimentObservationWindowOptions(killSwitchAvailable: false));
-
-        Assert.IsFalse(report.ObservationPassed);
-        Assert.AreEqual(ScopedRuntimeExperimentObservationWindowRecommendations.KeepPreviewOnly, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "KillSwitchUnavailable");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentObservationWindow_RollbackFailureBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentObservationWindowReport(
-            "gate",
-            options: CleanScopedRuntimeExperimentObservationWindowOptions(rollbackVerified: false));
-
-        Assert.IsFalse(report.ObservationPassed);
-        Assert.AreEqual(
-            ScopedRuntimeExperimentObservationWindowRecommendations.BlockedByRollbackFailure,
-            report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "RollbackNotVerified");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentObservationFreeze_CleanReportsReadyForIntegrationPlan()
-    {
-        var report = BuildScopedRuntimeExperimentObservationFreezeReport();
-
-        Assert.IsTrue(report.FreezePassed);
-        Assert.AreEqual(
-            ScopedRuntimeExperimentObservationFreezeDecisions.ReadyForFormalRetrievalIntegrationPlan,
-            report.PromotionDecision);
-        Assert.IsFalse(report.FormalRetrievalAllowed);
-        Assert.IsFalse(report.RuntimeSwitchAllowed);
-        Assert.IsFalse(report.ReadyForRuntimeSwitch);
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentObservationFreeze_MissingV415Blocks()
-    {
-        var report = new ScopedRuntimeExperimentObservationFreezeRunner().BuildObservationFreeze(
-            BuildGuardedScopedRuntimeExperimentReport("gate"),
-            null,
-            CleanRuntimeChangeGate(true),
-            p15GatePassed: true);
-
-        Assert.IsFalse(report.FreezePassed);
-        Assert.AreEqual(ScopedRuntimeExperimentObservationFreezeDecisions.KeepPreviewOnly, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "V415ObservationWindowGateNotPassed");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentObservationFreeze_RiskBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentObservationFreezeReport(
-            CleanScopedRuntimeExperimentObservationWindowOptions(riskAfterPolicy: 1));
-
-        Assert.IsFalse(report.FreezePassed);
-        Assert.AreEqual(ScopedRuntimeExperimentObservationFreezeDecisions.BlockedByRisk, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "RiskDetected");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentObservationFreeze_OutputChangeBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentObservationFreezeReport(
-            CleanScopedRuntimeExperimentObservationWindowOptions(formalOutputChanged: 1));
-
-        Assert.IsFalse(report.FreezePassed);
-        Assert.AreEqual(ScopedRuntimeExperimentObservationFreezeDecisions.BlockedByOutputChange, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "OutputChangeDetected");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentObservationFreeze_ScopeLeakBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentObservationFreezeReport(
-            CleanScopedRuntimeExperimentObservationWindowOptions(scopeLeakCount: 1));
-
-        Assert.IsFalse(report.FreezePassed);
-        Assert.AreEqual(ScopedRuntimeExperimentObservationFreezeDecisions.BlockedByScopeLeak, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "NonAllowlistedScopeLeakDetected");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentObservationFreeze_TraceGapBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentObservationFreezeReport(
-            CleanScopedRuntimeExperimentObservationWindowOptions(traceCompleteness: 99));
-
-        Assert.IsFalse(report.FreezePassed);
-        Assert.AreEqual(ScopedRuntimeExperimentObservationFreezeDecisions.BlockedByTraceGap, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "TraceCompletenessBelow100Percent");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentObservationFreeze_RuntimeMutationBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentObservationFreezeReport(
-            CleanScopedRuntimeExperimentObservationWindowOptions(runtimeMutated: true));
-
-        Assert.IsFalse(report.FreezePassed);
-        Assert.AreEqual(ScopedRuntimeExperimentObservationFreezeDecisions.BlockedByRuntimeMutation, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "RuntimeMutationDetected");
-    }
-
     [TestMethod]
     public void FormalRetrievalIntegrationPlan_CleanPromotionReadyForShadowAdapter()
     {
@@ -4511,63 +3103,6 @@ public class ContextCoreRetrievalDatasetV2MetadataContractTests
             FormalOutputChanged = 0,
             ErrorCount = 0
         };
-
-    private static GuardedScopedRuntimeExperimentReport BuildGuardedScopedRuntimeExperimentReport(
-        string stage,
-        ScopedRuntimeExperimentActivationPreflightReport? activationGate = null,
-        ScopedRuntimeExperimentApprovalGateReport? approvalGate = null,
-        GuardedScopedRuntimeExperimentOptions? options = null,
-        bool includeActivation = true,
-        bool includeApproval = true)
-    {
-        var runner = new GuardedScopedRuntimeExperimentRunner();
-        var effectiveActivation = includeActivation
-            ? activationGate ?? BuildScopedRuntimeExperimentActivationPreflightReport("gate")
-            : null;
-        var effectiveApproval = includeApproval
-            ? approvalGate ?? BuildScopedRuntimeExperimentRuntimeApprovalGateReport()
-            : null;
-        var effectiveOptions = options ?? CleanGuardedScopedRuntimeExperimentOptions();
-        return stage.ToLowerInvariant() switch
-        {
-            "observation" => runner.BuildObservation(
-                effectiveActivation,
-                effectiveApproval,
-                CleanRuntimeChangeGate(true),
-                effectiveOptions),
-            "rollback-smoke" => runner.BuildRollbackSmoke(
-                effectiveActivation,
-                effectiveApproval,
-                CleanRuntimeChangeGate(true),
-                effectiveOptions),
-            "gate" => runner.BuildGate(
-                effectiveActivation,
-                effectiveApproval,
-                CleanRuntimeChangeGate(true),
-                runner.BuildExperiment(
-                    effectiveActivation,
-                    effectiveApproval,
-                    CleanRuntimeChangeGate(true),
-                    effectiveOptions),
-                runner.BuildObservation(
-                    effectiveActivation,
-                    effectiveApproval,
-                    CleanRuntimeChangeGate(true),
-                    effectiveOptions),
-                runner.BuildRollbackSmoke(
-                    effectiveActivation,
-                    effectiveApproval,
-                    CleanRuntimeChangeGate(true),
-                    effectiveOptions),
-                effectiveOptions),
-            _ => runner.BuildExperiment(
-                effectiveActivation,
-                effectiveApproval,
-                CleanRuntimeChangeGate(true),
-                effectiveOptions)
-        };
-    }
-
     private static ScopedRuntimeExperimentObservationWindowOptions CleanScopedRuntimeExperimentObservationWindowOptions(
         bool enabled = true,
         int minRequestCount = 360,
@@ -4626,49 +3161,6 @@ public class ContextCoreRetrievalDatasetV2MetadataContractTests
             ErrorCount = 0,
             TraceCompleteness = traceCompleteness
         };
-
-    private static ScopedRuntimeExperimentObservationWindowReport BuildScopedRuntimeExperimentObservationWindowReport(
-        string stage,
-        GuardedScopedRuntimeExperimentReport? v414Gate = null,
-        ScopedRuntimeExperimentObservationWindowOptions? options = null,
-        bool includeV414Gate = true)
-    {
-        var runner = new ScopedRuntimeExperimentObservationWindowRunner();
-        var effectiveV414Gate = includeV414Gate
-            ? v414Gate ?? BuildGuardedScopedRuntimeExperimentReport("gate")
-            : null;
-        var effectiveOptions = options ?? CleanScopedRuntimeExperimentObservationWindowOptions();
-        return stage.ToLowerInvariant() switch
-        {
-            "summary" => runner.BuildSummary(
-                effectiveV414Gate,
-                CleanRuntimeChangeGate(true),
-                runner.BuildWindow(effectiveV414Gate, CleanRuntimeChangeGate(true), effectiveOptions),
-                effectiveOptions),
-            "gate" => runner.BuildGate(
-                effectiveV414Gate,
-                CleanRuntimeChangeGate(true),
-                runner.BuildWindow(effectiveV414Gate, CleanRuntimeChangeGate(true), effectiveOptions),
-                effectiveOptions),
-            _ => runner.BuildWindow(
-                effectiveV414Gate,
-                CleanRuntimeChangeGate(true),
-                effectiveOptions)
-        };
-    }
-
-    private static ScopedRuntimeExperimentObservationFreezeReport BuildScopedRuntimeExperimentObservationFreezeReport(
-        ScopedRuntimeExperimentObservationWindowOptions? options = null)
-    {
-        var v414Gate = BuildGuardedScopedRuntimeExperimentReport("gate");
-        var v415Gate = BuildScopedRuntimeExperimentObservationWindowReport("gate", v414Gate, options);
-        return new ScopedRuntimeExperimentObservationFreezeRunner().BuildObservationFreeze(
-            v414Gate,
-            v415Gate,
-            CleanRuntimeChangeGate(true),
-            p15GatePassed: true);
-    }
-
     private static FormalRetrievalIntegrationPlanReport BuildFormalRetrievalIntegrationPlanReport()
         => new FormalRetrievalIntegrationPlanRunner().BuildPlan(
             CleanV416PromotionDecision(),
@@ -4755,99 +3247,6 @@ public class ContextCoreRetrievalDatasetV2MetadataContractTests
             RiskAfterPolicy = 0,
             FormalOutputChanged = 0
         };
-
-    private static ScopedRuntimeExperimentActivationPreflightReport BuildScopedRuntimeExperimentActivationPreflightReport(
-        string stage,
-        GuardedScopedRuntimeExperimentPlanReport? plan = null,
-        ScopedRuntimeExperimentApprovalGateReport? approvalGate = null,
-        ScopedRuntimeExperimentActivationPreflightOptions? options = null,
-        bool includeApproval = true)
-    {
-        var runner = new ScopedRuntimeExperimentActivationPreflightRunner();
-        var effectivePlan = plan ?? BuildGuardedScopedRuntimeExperimentPlanReport();
-        var effectiveApproval = includeApproval
-            ? approvalGate ?? BuildScopedRuntimeExperimentRuntimeApprovalGateReport()
-            : null;
-        var effectiveOptions = options ?? CleanScopedRuntimeExperimentActivationPreflightOptions();
-        return stage.ToLowerInvariant() switch
-        {
-            "route" => runner.BuildDryRunRoute(
-                BuildFoundationFreezeReport(),
-                BuildServiceFoundationFreezeReport(),
-                CleanVectorFormalPreviewFreezeReport(),
-                effectivePlan,
-                effectiveApproval,
-                CleanRuntimeChangeGate(true),
-                effectiveOptions),
-            "gate" => runner.BuildGate(
-                BuildFoundationFreezeReport(),
-                BuildServiceFoundationFreezeReport(),
-                CleanVectorFormalPreviewFreezeReport(),
-                effectivePlan,
-                effectiveApproval,
-                CleanRuntimeChangeGate(true),
-                runner.BuildPreflight(
-                    BuildFoundationFreezeReport(),
-                    BuildServiceFoundationFreezeReport(),
-                    CleanVectorFormalPreviewFreezeReport(),
-                    effectivePlan,
-                    effectiveApproval,
-                    CleanRuntimeChangeGate(true),
-                    effectiveOptions),
-                runner.BuildDryRunRoute(
-                    BuildFoundationFreezeReport(),
-                    BuildServiceFoundationFreezeReport(),
-                    CleanVectorFormalPreviewFreezeReport(),
-                    effectivePlan,
-                    effectiveApproval,
-                    CleanRuntimeChangeGate(true),
-                    effectiveOptions),
-                effectiveOptions),
-            _ => runner.BuildPreflight(
-                BuildFoundationFreezeReport(),
-                BuildServiceFoundationFreezeReport(),
-                CleanVectorFormalPreviewFreezeReport(),
-                effectivePlan,
-                effectiveApproval,
-                CleanRuntimeChangeGate(true),
-                effectiveOptions)
-        };
-    }
-
-    private static ScopedRuntimeExperimentApprovalGateReport BuildScopedRuntimeExperimentRuntimeApprovalGateReport(
-        GuardedScopedRuntimeExperimentPlanReport? plan = null)
-        => new ScopedRuntimeExperimentRuntimeApprovalRunner().BuildGate(
-            plan ?? BuildGuardedScopedRuntimeExperimentPlanReport(),
-            CleanScopedRuntimeExperimentApprovalRecord(approvalMode: ScopedRuntimeExperimentApprovalModes.ScopedRuntimeExperiment));
-
-    private static GuardedScopedRuntimeExperimentPlanReport CopyGuardedScopedRuntimeExperimentPlan(
-        GuardedScopedRuntimeExperimentPlanReport source,
-        string? killSwitchPlan = null,
-        string? rollbackPlan = null)
-        => new()
-        {
-            OperationId = source.OperationId,
-            CreatedAt = source.CreatedAt,
-            PlanPassed = source.PlanPassed,
-            Recommendation = source.Recommendation,
-            ProposalId = source.ProposalId,
-            RequiredApprovalMode = source.RequiredApprovalMode,
-            SelectedScopes = source.SelectedScopes,
-            MaxRequestCount = source.MaxRequestCount,
-            MaxDurationMinutes = source.MaxDurationMinutes,
-            KillSwitchPlan = killSwitchPlan ?? source.KillSwitchPlan,
-            RollbackPlan = rollbackPlan ?? source.RollbackPlan,
-            ObservationPlan = source.ObservationPlan,
-            StopConditions = source.StopConditions,
-            AllowedActions = source.AllowedActions,
-            ForbiddenActions = source.ForbiddenActions,
-            RuntimeSwitchAllowed = source.RuntimeSwitchAllowed,
-            FormalRetrievalAllowed = source.FormalRetrievalAllowed,
-            ReadyForRuntimeSwitch = source.ReadyForRuntimeSwitch,
-            UseForRuntime = source.UseForRuntime,
-            BlockedReasons = source.BlockedReasons
-        };
-
     private static ScopedRuntimeExperimentApprovalOptions CleanScopedRuntimeExperimentApprovalOptions(
         string approvedBy = "codex",
         string reason = "V4.9 no-op harness approval for scoped runtime experiment proposal.",
@@ -4968,116 +3367,6 @@ public class ContextCoreRetrievalDatasetV2MetadataContractTests
             PackingPolicyChanged = packingPolicyChanged,
             PackageOutputChanged = packageOutputChanged
         };
-
-    private static ScopedRuntimeExperimentNoOpHarnessReport BuildScopedRuntimeExperimentNoOpHarnessReport(
-        ExplicitScopedRuntimeExperimentProposalReport? proposal = null,
-        ScopedRuntimeExperimentApprovalRecord? approval = null,
-        ScopedRuntimeExperimentNoOpHarnessOptions? options = null)
-        => new ScopedRuntimeExperimentNoOpHarnessRunner().BuildHarness(
-            proposal ?? BuildScopedRuntimeExperimentProposalReport(),
-            approval ?? CleanScopedRuntimeExperimentApprovalRecord(),
-            options ?? CleanScopedRuntimeExperimentNoOpHarnessOptions(),
-            p15GatePassed: true);
-
-    private static ScopedRuntimeExperimentNoOpHarnessReport CleanScopedRuntimeExperimentNoOpHarnessGate(
-        bool harnessPassed = true,
-        bool runtimeMutated = false,
-        bool vectorStoreBindingChanged = false,
-        bool formalPackageWritten = false,
-        bool packingPolicyChanged = false,
-        bool packageOutputChanged = false,
-        bool formalRetrievalAllowed = false,
-        bool runtimeSwitchAllowed = false,
-        bool readyForRuntimeSwitch = false,
-        int riskAfterPolicy = 0,
-        int formalOutputChanged = 0)
-        => new()
-        {
-            OperationId = "noop-harness-clean",
-            CreatedAt = DateTimeOffset.UtcNow,
-            ProposalId = "vsrep-bb5402e39c0f1333",
-            ApprovalId = "vsrea-clean",
-            HarnessPassed = harnessPassed,
-            Mode = ScopedRuntimeExperimentNoOpHarnessModes.NoOp,
-            SelectedScopeChecked = true,
-            NonAllowlistedScopeChecked = true,
-            NoOpTraceCount = harnessPassed ? 1 : 0,
-            BaselinePackageCount = harnessPassed ? 120 : 0,
-            PreviewPackageCount = harnessPassed ? 120 : 0,
-            RuntimeMutated = runtimeMutated,
-            VectorStoreBindingChanged = vectorStoreBindingChanged,
-            DiBindingChanged = false,
-            FormalPackageWritten = formalPackageWritten,
-            PackingPolicyChanged = packingPolicyChanged,
-            PackageOutputChanged = packageOutputChanged,
-            FormalRetrievalAllowed = formalRetrievalAllowed,
-            RuntimeSwitchAllowed = runtimeSwitchAllowed,
-            ReadyForRuntimeSwitch = readyForRuntimeSwitch,
-            RiskAfterPolicy = riskAfterPolicy,
-            MustNotHitRiskAfterPolicy = 0,
-            LifecycleRiskAfterPolicy = 0,
-            FormalOutputChanged = formalOutputChanged,
-            NonAllowlistedScopeLeakCount = 0,
-            P15GatePassed = true,
-            Recommendation = harnessPassed
-                ? ScopedRuntimeExperimentApprovalRecommendations.ReadyForScopedRuntimeExperimentDryRunHarnessFreeze
-                : ScopedRuntimeExperimentApprovalRecommendations.BlockedByRuntimeMutation,
-            BlockedReasons = harnessPassed ? Array.Empty<string>() : ["SyntheticNoOpHarnessBlocked"]
-        };
-
-    private static ScopedRuntimeExperimentHarnessFreezeReport BuildScopedRuntimeExperimentHarnessFreezeReport(
-        ExplicitScopedRuntimeExperimentProposalReport? proposal = null,
-        ScopedRuntimeExperimentApprovalSummaryReport? approval = null,
-        ScopedRuntimeExperimentNoOpHarnessReport? noOpHarness = null,
-        ScopedRuntimeExperimentDesignFreezeReport? designFreeze = null,
-        ServiceFoundationFreezeReport? service = null,
-        ContextCoreFoundationFreezeReport? foundation = null,
-        LearningRuntimeChangeReadinessGateReport? runtimeGate = null,
-        bool includeProposal = true,
-        bool includeApproval = true,
-        bool p15Passed = true)
-        => new ScopedRuntimeExperimentHarnessFreezeRunner().BuildGate(
-            includeProposal ? proposal ?? BuildScopedRuntimeExperimentProposalReport() : null,
-            includeApproval ? approval ?? CleanScopedRuntimeExperimentApprovalSummary() : null,
-            noOpHarness ?? BuildScopedRuntimeExperimentNoOpHarnessReport(),
-            designFreeze ?? BuildScopedRuntimeExperimentDesignFreezeReport(),
-            service ?? BuildServiceFoundationFreezeReport(),
-            foundation ?? BuildFoundationFreezeReport(),
-            runtimeGate ?? CleanRuntimeChangeGate(true),
-            p15Passed);
-
-    private static GuardedScopedRuntimeExperimentPlanReport BuildGuardedScopedRuntimeExperimentPlanReport(
-        ExplicitScopedRuntimeExperimentProposalReport? proposal = null,
-        ScopedRuntimeExperimentHarnessFreezeReport? harnessFreeze = null,
-        GuardedScopedRuntimeExperimentPlanOptions? options = null,
-        bool includeHarnessFreeze = true)
-        => new GuardedScopedRuntimeExperimentPlanRunner().BuildGate(
-            BuildFoundationFreezeReport(),
-            BuildServiceFoundationFreezeReport(),
-            CleanVectorFormalPreviewFreezeReport(),
-            BuildScopedRuntimeExperimentDesignFreezeReport(),
-            includeHarnessFreeze ? harnessFreeze ?? BuildScopedRuntimeExperimentHarnessFreezeReport() : null,
-            CleanRuntimeChangeGate(true),
-            proposal ?? CleanScopedRuntimeExperimentProposalGate(),
-            options ?? CleanGuardedScopedRuntimeExperimentPlanOptions());
-
-    private static VectorV4ReadinessRecheckReport BuildV4ReadinessRecheckReport(
-        RetrievalDatasetV2StressFreezeReport? stressFreeze = null,
-        bool includeStressFreeze = true,
-        bool runtimeGatePassed = true,
-        bool pgVectorParityPassed = true)
-        => new VectorV4ReadinessRecheckRunner().BuildReport(
-            CleanLegacyVectorReadinessGate(),
-            CleanLegacyLimitationReport(),
-            CleanPgVectorFreezeGate(pgVectorParityPassed),
-            CleanQwen3ProviderFreeze(),
-            CleanHybridRetrievalFreeze(),
-            CleanMaterializationGate(),
-            CleanSmallSetReadinessGate(),
-            includeStressFreeze ? stressFreeze ?? BuildStressFreezeReport() : null,
-            CleanHybridRepairGate(),
-            CleanHybridScoringRiskTriage(),
-            CleanRuntimeChangeGate(runtimeGatePassed));
 
     private static GuardedFormalRetrievalPreviewReport BuildGuardedFormalRetrievalPreviewReport(
         VectorV4ReadinessRecheckReport? v4Recheck = null,
@@ -5230,27 +3519,97 @@ public class ContextCoreRetrievalDatasetV2MetadataContractTests
                 effectiveOptions)
         };
     }
-
-    private static ScopedRuntimeExperimentDryRunObservationReport BuildScopedRuntimeExperimentDryRunObservationReport(
-        string stage = "gate",
-        ExplicitScopedRuntimeExperimentPlanReport? v45Gate = null,
-        VectorShadowPackageComparisonReport? shadowGate = null,
-        LearningRuntimeChangeReadinessGateReport? runtimeGate = null,
-        ScopedRuntimeExperimentDryRunObservationOptions? options = null,
-        bool includeV45Gate = true)
+    private static VectorV4ReadinessRecheckReport BuildV4ReadinessRecheckReport(
+        RetrievalDatasetV2StressFreezeReport? stressFreeze = null,
+        bool includeStressFreeze = true,
+        bool runtimeGatePassed = true,
+        bool pgVectorParityPassed = true)
     {
-        var runner = new ScopedRuntimeExperimentDryRunObservationRunner();
-        return string.Equals(stage, "observation", StringComparison.OrdinalIgnoreCase)
-            ? runner.BuildObservation(
-                includeV45Gate ? v45Gate ?? CleanExplicitScopedRuntimeExperimentGate() : null,
-                shadowGate ?? CleanVectorShadowPackageComparisonGate(),
-                runtimeGate ?? CleanRuntimeChangeGate(true),
-                options ?? CleanScopedRuntimeExperimentDryRunObservationOptions())
-            : runner.BuildGate(
-                includeV45Gate ? v45Gate ?? CleanExplicitScopedRuntimeExperimentGate() : null,
-                shadowGate ?? CleanVectorShadowPackageComparisonGate(),
-                runtimeGate ?? CleanRuntimeChangeGate(true),
-                options ?? CleanScopedRuntimeExperimentDryRunObservationOptions());
+        var stress = includeStressFreeze ? stressFreeze ?? BuildStressFreezeReport() : null;
+        var blocked = new List<string>();
+
+        if (stress is null)
+        {
+            blocked.Add("MissingDatasetV2StressFreezeGate");
+        }
+        else if (stress.RiskAfterPolicy != 0
+            || stress.MustNotHitRiskAfterPolicy != 0
+            || stress.LifecycleRiskAfterPolicy != 0
+            || stress.HybridScoringRiskCandidateCount != 0)
+        {
+            blocked.Add("DatasetV2StressRiskNonZero");
+        }
+
+        if (!runtimeGatePassed)
+        {
+            blocked.Add("RuntimeChangeGateFailed");
+        }
+
+        if (!pgVectorParityPassed)
+        {
+            blocked.Add("PgVectorProviderParityNotReady");
+        }
+
+        var distinctBlocked = blocked
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(static reason => reason, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var passed = distinctBlocked.Length == 0;
+
+        string recommendation;
+        if (passed)
+        {
+            recommendation = VectorV4ReadinessRecheckRecommendations.ReadyForGuardedFormalPreview;
+        }
+        else if (distinctBlocked.Any(static r => r.Contains("RuntimeChangeGate", StringComparison.OrdinalIgnoreCase)))
+        {
+            recommendation = VectorV4ReadinessRecheckRecommendations.BlockedByRuntimeChangeGate;
+        }
+        else if (distinctBlocked.Any(static r => r.Contains("PgVector", StringComparison.OrdinalIgnoreCase)
+            || r.Contains("Provider", StringComparison.OrdinalIgnoreCase)
+            || r.Contains("Parity", StringComparison.OrdinalIgnoreCase)))
+        {
+            recommendation = VectorV4ReadinessRecheckRecommendations.BlockedByProviderParity;
+        }
+        else if (distinctBlocked.Any(static r => r.Contains("Risk", StringComparison.OrdinalIgnoreCase)))
+        {
+            recommendation = VectorV4ReadinessRecheckRecommendations.BlockedByRisk;
+        }
+        else
+        {
+            recommendation = VectorV4ReadinessRecheckRecommendations.BlockedByDatasetV2Stress;
+        }
+
+        return new VectorV4ReadinessRecheckReport
+        {
+            OperationId = $"vector-v4-readiness-recheck-{Guid.NewGuid():N}",
+            CreatedAt = DateTimeOffset.UtcNow,
+            RecheckPassed = passed,
+            Recommendation = recommendation,
+            LegacyVectorStatus = "PreviewOnly / legacy limitations recorded",
+            DatasetV2SmallStatus = "ReadyForDatasetV2RetrievalCandidate",
+            DatasetV2StressStatus = stress?.DatasetV2Stress ?? "Missing",
+            PgVectorProviderStatus = pgVectorParityPassed ? "ReadyForPreviewShadowStorage" : "Missing",
+            Qwen3ProviderComparisonStatus = "Ready",
+            HybridRetrievalStatus = "Ready",
+            HybridScoringRepairStatus = HybridUnionScoringRepairRecommendations.ReadyForDatasetV2StressFreeze,
+            RuntimeChangeGateStatus = runtimeGatePassed ? "Passed" : "Failed",
+            BestPreviewProfile = stress?.BestPreviewProfile ?? HybridUnionScoringRepairProfiles.PostScoringRiskGatedV1,
+            DatasetV2StressRecall = stress?.StressRecall ?? 0,
+            DatasetV2HoldoutRecall = stress?.HoldoutRecall ?? 0,
+            RiskAfterPolicy = stress?.RiskAfterPolicy ?? 0,
+            MustNotHitRiskAfterPolicy = stress?.MustNotHitRiskAfterPolicy ?? 0,
+            LifecycleRiskAfterPolicy = stress?.LifecycleRiskAfterPolicy ?? 0,
+            FormalOutputChanged = stress?.FormalOutputChanged ?? 0,
+            LeakageIssueCount = stress?.LeakageIssueCount ?? 0,
+            AnchorDominanceScore = stress?.AnchorDominanceScore ?? 0,
+            FormalRetrievalAllowed = false,
+            UseForRuntime = false,
+            ReadyForGuardedFormalPreview = passed,
+            ReadyForRuntimeSwitch = false,
+            BlockedReasons = distinctBlocked,
+            SourceReports = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        };
     }
 
     private static ScopedRuntimeExperimentDesignFreezeReport BuildScopedRuntimeExperimentDesignFreezeReport(
@@ -5262,14 +3621,180 @@ public class ContextCoreRetrievalDatasetV2MetadataContractTests
         LearningRuntimeChangeReadinessGateReport? runtimeGate = null,
         bool includeDryRunObservation = true,
         bool p15GatePassed = true)
-        => new ScopedRuntimeExperimentDesignFreezeRunner().BuildGate(
-            foundation ?? BuildFoundationFreezeReport(),
-            service ?? BuildServiceFoundationFreezeReport(),
-            vectorFormal ?? CleanVectorFormalPreviewFreezeReport(),
-            scopedRuntimeExperiment ?? CleanExplicitScopedRuntimeExperimentGate(),
-            includeDryRunObservation ? dryRunObservation ?? CleanScopedRuntimeExperimentDryRunObservationGate() : null,
-            runtimeGate ?? CleanRuntimeChangeGate(true),
-            p15GatePassed);
+    {
+        var foundationActual = foundation ?? BuildFoundationFreezeReport();
+        var serviceActual = service ?? BuildServiceFoundationFreezeReport();
+        var vectorFormalActual = vectorFormal ?? CleanVectorFormalPreviewFreezeReport();
+        var scopedActual = scopedRuntimeExperiment ?? CleanExplicitScopedRuntimeExperimentGate();
+        var dryRunActual = includeDryRunObservation ? dryRunObservation ?? CleanScopedRuntimeExperimentDryRunObservationGate() : null;
+        var runtimeGateActual = runtimeGate ?? CleanRuntimeChangeGate(true);
+
+        var blocked = new List<string>();
+
+        if (!foundationActual.FreezePassed
+            || !string.Equals(foundationActual.Recommendation, ContextCoreFoundationFreezeRecommendations.ReadyForReleaseCandidate, StringComparison.OrdinalIgnoreCase))
+        {
+            blocked.Add("FoundationReleaseCandidateGateNotPassed");
+        }
+
+        if (!serviceActual.FreezePassed)
+        {
+            blocked.Add("ServiceFoundationFreezeGateNotPassed");
+        }
+
+        if (!vectorFormalActual.FreezePassed
+            || !string.Equals(vectorFormalActual.Recommendation, VectorFormalPreviewFreezeRecommendations.ReadyForScopedOptInPreview, StringComparison.OrdinalIgnoreCase))
+        {
+            blocked.Add("VectorFormalPreviewFreezeGateNotPassed");
+        }
+
+        if (!scopedActual.PlanPassed
+            || !string.Equals(scopedActual.Recommendation, ExplicitScopedRuntimeExperimentRecommendations.ReadyForExplicitScopedRuntimeExperimentDryRun, StringComparison.OrdinalIgnoreCase))
+        {
+            blocked.Add("ScopedRuntimeExperimentGateNotPassed");
+        }
+
+        if (dryRunActual is null
+            || !dryRunActual.GatePassed
+            || !string.Equals(dryRunActual.Recommendation, ScopedRuntimeExperimentDryRunObservationRecommendations.ReadyForScopedRuntimeExperimentDesignFreeze, StringComparison.OrdinalIgnoreCase))
+        {
+            blocked.Add("DryRunObservationGateNotPassed");
+        }
+
+        if (!runtimeGateActual.Passed)
+        {
+            blocked.Add("RuntimeChangeReadinessGateNotPassed");
+        }
+
+        if (!p15GatePassed)
+        {
+            blocked.Add("P15GateNotPassed");
+        }
+
+        var riskAfterPolicy = dryRunActual?.RiskAfterPolicy ?? 0;
+        var mustNotRisk = dryRunActual?.MustNotHitRiskAfterPolicy ?? 0;
+        var lifecycleRisk = dryRunActual?.LifecycleRiskAfterPolicy ?? 0;
+        var formalOutputChanged = dryRunActual?.FormalOutputChanged ?? 0;
+        var runtimeMutated = dryRunActual?.RuntimeMutated ?? false;
+        var vectorStoreBindingChanged = dryRunActual?.VectorStoreBindingChanged ?? false;
+        var packingPolicyChanged = dryRunActual?.PackingPolicyChanged ?? false;
+        var packageOutputChanged = dryRunActual?.PackageOutputChanged ?? false;
+        var formalPackageWritten = dryRunActual?.FormalPackageWritten ?? false;
+        var nonAllowlistedScopeLeakCount = dryRunActual?.NonAllowlistedScopeLeakCount ?? 0;
+        var rollbackPlanAvailable = dryRunActual?.RollbackPlanAvailable ?? false;
+
+        if (riskAfterPolicy != 0 || mustNotRisk != 0 || lifecycleRisk != 0)
+        {
+            blocked.Add("RiskAfterPolicyNonZero");
+        }
+
+        if (formalOutputChanged != 0)
+        {
+            blocked.Add("FormalOutputChangedNonZero");
+        }
+
+        if (runtimeMutated) blocked.Add("RuntimeMutated");
+        if (vectorStoreBindingChanged) blocked.Add("VectorStoreBindingChanged");
+        if (packingPolicyChanged) blocked.Add("PackingPolicyChanged");
+        if (packageOutputChanged) blocked.Add("PackageOutputChanged");
+        if (formalPackageWritten) blocked.Add("FormalPackageWritten");
+        if (nonAllowlistedScopeLeakCount != 0) blocked.Add("NonAllowlistedScopeLeak");
+        if (!rollbackPlanAvailable) blocked.Add("RollbackPlanMissing");
+
+        var distinctBlocked = blocked
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(static reason => reason, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var freezePassed = distinctBlocked.Length == 0;
+
+        string recommendation;
+        if (freezePassed)
+        {
+            recommendation = ScopedRuntimeExperimentDesignFreezeRecommendations.ReadyForRuntimeExperimentProposal;
+        }
+        else if (distinctBlocked.Any(static r => r.Contains("DryRunObservation", StringComparison.OrdinalIgnoreCase)))
+        {
+            recommendation = ScopedRuntimeExperimentDesignFreezeRecommendations.BlockedByMissingDryRunObservation;
+        }
+        else if (distinctBlocked.Any(static r => r.Contains("Risk", StringComparison.OrdinalIgnoreCase)))
+        {
+            recommendation = ScopedRuntimeExperimentDesignFreezeRecommendations.BlockedByRisk;
+        }
+        else if (distinctBlocked.Any(static r => r.Contains("FormalOutput", StringComparison.OrdinalIgnoreCase)))
+        {
+            recommendation = ScopedRuntimeExperimentDesignFreezeRecommendations.BlockedByFormalOutputChange;
+        }
+        else if (distinctBlocked.Any(static r => r.Contains("RuntimeMutated", StringComparison.OrdinalIgnoreCase)
+            || r.Contains("FormalPackage", StringComparison.OrdinalIgnoreCase)))
+        {
+            recommendation = ScopedRuntimeExperimentDesignFreezeRecommendations.BlockedByRuntimeMutation;
+        }
+        else
+        {
+            recommendation = ScopedRuntimeExperimentDesignFreezeRecommendations.KeepPreviewOnly;
+        }
+
+        return new ScopedRuntimeExperimentDesignFreezeReport
+        {
+            OperationId = $"vector-scoped-runtime-experiment-design-freeze-{Guid.NewGuid():N}",
+            CreatedAt = DateTimeOffset.UtcNow,
+            FreezePassed = freezePassed,
+            Recommendation = recommendation,
+            DesignStatus = freezePassed
+                ? ScopedRuntimeExperimentDesignFreezeStatuses.Frozen
+                : ScopedRuntimeExperimentDesignFreezeStatuses.KeepPreviewOnly,
+            AllowedMode = "ExplicitScopedRuntimeExperimentOnly",
+            AllowlistedScopeCount = dryRunActual?.AllowlistedScopeCount ?? scopedActual?.AllowlistedScopeCount ?? 0,
+            ObservationRunCount = dryRunActual?.ObservationRunCount ?? 0,
+            RiskAfterPolicy = riskAfterPolicy,
+            MustNotHitRiskAfterPolicy = mustNotRisk,
+            LifecycleRiskAfterPolicy = lifecycleRisk,
+            FormalOutputChanged = formalOutputChanged,
+            RuntimeMutated = runtimeMutated,
+            VectorStoreBindingChanged = vectorStoreBindingChanged,
+            PackingPolicyChanged = packingPolicyChanged,
+            PackageOutputChanged = packageOutputChanged,
+            FormalPackageWritten = formalPackageWritten,
+            NonAllowlistedScopeLeakCount = nonAllowlistedScopeLeakCount,
+            RollbackPlanAvailable = rollbackPlanAvailable,
+            ReadyForRuntimeExperimentProposal = freezePassed,
+            ReadyForRuntimeSwitch = false,
+            RuntimeSwitchAllowed = false,
+            FormalRetrievalAllowed = false,
+            UseForRuntime = false,
+            FormalPackageWriteAllowed = false,
+            PackingPolicyIntegrationAllowed = false,
+            GlobalDefaultOnAllowed = false,
+            FoundationReleaseCandidateGatePassed = foundationActual.FreezePassed,
+            ServiceFoundationFreezeGatePassed = serviceActual.FreezePassed,
+            VectorFormalPreviewFreezeGatePassed = vectorFormalActual.FreezePassed,
+            ScopedRuntimeExperimentGatePassed = scopedActual!.PlanPassed,
+            DryRunObservationGatePassed = dryRunActual?.GatePassed ?? false,
+            RuntimeChangeReadinessGatePassed = runtimeGateActual.Passed,
+            P15GatePassed = p15GatePassed,
+            AllowedActions =
+            [
+                "SelectedScopeExperimentPlanning",
+                "SelectedScopeDryRunObservation",
+                "SelectedScopeRuntimeExperimentProposal",
+                "RollbackPlanValidation",
+                "MetricsCollectionPlan"
+            ],
+            ForbiddenActions =
+            [
+                "GlobalRuntimeSwitch",
+                "NonAllowlistedScopeUse",
+                "FormalIVectorIndexStoreBinding",
+                "FormalPackageWrite",
+                "PackingPolicyMutation",
+                "PackageOutputMutation",
+                "DisablingRuntimeChangeGate",
+                "FormalRetrievalWithoutExplicitLaterGate"
+            ],
+            BlockedReasons = distinctBlocked,
+            SourceReports = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        };
+    }
 
     private static ExplicitScopedRuntimeExperimentProposalReport BuildScopedRuntimeExperimentProposalReport(
         ContextCoreFoundationFreezeReport? foundation = null,

@@ -25,7 +25,7 @@ public sealed class FileConstraintStore : IConstraintStore
     {
         ArgumentNullException.ThrowIfNull(constraint);
 
-        var normalized = Normalize(constraint);
+        var normalized = ContextNormalizers.Normalize(constraint);
         var path = GetPath(normalized.WorkspaceId, normalized.CollectionId);
 
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -58,7 +58,7 @@ public sealed class FileConstraintStore : IConstraintStore
                     string.Equals(item.Id, constraintId, StringComparison.OrdinalIgnoreCase));
                 if (globalMatch is not null)
                 {
-                    return Normalize(globalMatch);
+                    return ContextNormalizers.Normalize(globalMatch);
                 }
 
                 foreach (var collectionId in ResolveCollectionIds(workspaceId))
@@ -70,7 +70,7 @@ public sealed class FileConstraintStore : IConstraintStore
                         string.Equals(item.Id, constraintId, StringComparison.OrdinalIgnoreCase));
                     if (match is not null)
                     {
-                        return Normalize(match);
+                        return ContextNormalizers.Normalize(match);
                     }
                 }
             }
@@ -206,25 +206,4 @@ public sealed class FileConstraintStore : IConstraintStore
         return true;
     }
 
-    private static ContextConstraint Normalize(ContextConstraint constraint)
-    {
-        var now = DateTimeOffset.UtcNow;
-
-        return new ContextConstraint
-        {
-            Id = string.IsNullOrWhiteSpace(constraint.Id) ? Guid.NewGuid().ToString("N") : constraint.Id,
-            WorkspaceId = constraint.WorkspaceId,
-            CollectionId = constraint.CollectionId,
-            Scope = constraint.Scope,
-            Level = constraint.Level,
-            Content = constraint.Content,
-            AppliesToRefs = [.. constraint.AppliesToRefs],
-            SourceRefs = [.. constraint.SourceRefs],
-            Status = constraint.Status,
-            Confidence = constraint.Confidence,
-            Metadata = new Dictionary<string, string>(constraint.Metadata),
-            CreatedAt = constraint.CreatedAt == default ? now : constraint.CreatedAt,
-            UpdatedAt = constraint.UpdatedAt == default ? now : constraint.UpdatedAt
-        };
-    }
 }

@@ -111,7 +111,7 @@ WHERE workspace_id = @workspace_id
             foreach (var relation in list)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                var normalized = Normalize(relation);
+                var normalized = ContextNormalizers.Normalize(relation);
                 var batchCommand = new NpgsqlBatchCommand
                 {
                     CommandText = $"""
@@ -472,29 +472,5 @@ ORDER BY weight DESC, confidence DESC, created_at DESC;
         }
 
         return results;
-    }
-
-    private static ContextRelation Normalize(ContextRelation relation)
-    {
-        return new ContextRelation
-        {
-            Id = string.IsNullOrWhiteSpace(relation.Id) ? Guid.NewGuid().ToString("N") : relation.Id,
-            WorkspaceId = relation.WorkspaceId,
-            CollectionId = relation.CollectionId,
-            SourceId = relation.SourceId,
-            TargetId = relation.TargetId,
-            RelationType = relation.RelationType,
-            Weight = relation.Weight,
-            Confidence = relation.Confidence,
-            SourceRefs = relation.SourceRefs.ToArray(),
-            Metadata = new Dictionary<string, string>(relation.Metadata),
-            CreatedAt = relation.CreatedAt == default ? DateTimeOffset.UtcNow : relation.CreatedAt,
-            SourceNodeKind = relation.SourceNodeKind,
-            TargetNodeKind = relation.TargetNodeKind,
-            Lifecycle = relation.Lifecycle,
-            ReviewStatus = relation.ReviewStatus,
-            UpdatedAt = relation.UpdatedAt,
-            Provenance = relation.Provenance
-        };
     }
 }

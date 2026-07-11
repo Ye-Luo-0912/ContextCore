@@ -18,7 +18,7 @@ public sealed class PostgresMemoryStore : PostgresStoreBase, IMemoryStore
     public async Task SaveAsync(ContextMemoryItem item, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(item);
-        var normalized = Normalize(item);
+        var normalized = ContextNormalizers.Normalize(item);
         await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
         await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
@@ -170,30 +170,5 @@ LIMIT @take;
             CreatedAt = item.CreatedAt,
             UpdatedAt = DateTimeOffset.UtcNow
         }, cancellationToken).ConfigureAwait(false);
-    }
-
-    private static ContextMemoryItem Normalize(ContextMemoryItem item)
-    {
-        var now = DateTimeOffset.UtcNow;
-        return new ContextMemoryItem
-        {
-            Id = string.IsNullOrWhiteSpace(item.Id) ? Guid.NewGuid().ToString("N") : item.Id,
-            WorkspaceId = item.WorkspaceId,
-            CollectionId = item.CollectionId,
-            Layer = item.Layer,
-            Status = item.Status,
-            Type = item.Type,
-            Content = item.Content,
-            ContentFormat = item.ContentFormat,
-            Tags = item.Tags.ToArray(),
-            SourceRefs = item.SourceRefs.ToArray(),
-            RelationRefs = item.RelationRefs.ToArray(),
-            Importance = item.Importance,
-            Confidence = item.Confidence,
-            Version = item.Version <= 0 ? 1 : item.Version,
-            Metadata = new Dictionary<string, string>(item.Metadata),
-            CreatedAt = item.CreatedAt == default ? now : item.CreatedAt,
-            UpdatedAt = item.UpdatedAt == default ? now : item.UpdatedAt
-        };
     }
 }

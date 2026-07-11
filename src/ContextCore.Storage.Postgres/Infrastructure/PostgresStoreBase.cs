@@ -70,4 +70,30 @@ public abstract class PostgresStoreBase
     }
 
     protected static int TakeOrDefault(int take) => take > 0 ? take : 50;
+
+    /// <summary>
+    /// 执行命令并返回首行首列的 JSON 标量反序列化结果；当结果为空或空白时返回 null。
+    /// 封装 Postgres store 中常见的 <c>ExecuteScalarAsync</c> + <c>Serializer.Deserialize</c> 模式。
+    /// </summary>
+    protected async Task<T?> ExecuteScalarJsonAsync<T>(NpgsqlCommand command, CancellationToken cancellationToken)
+    {
+        var json = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false) as string;
+        return string.IsNullOrWhiteSpace(json) ? default : Serializer.Deserialize<T>(json);
+    }
+
+    /// <summary>
+    /// 执行命令并按读取器流式反序列化第 0 列的 JSON 行，返回只读列表。
+    /// 封装 Postgres store 中常见的 <c>ExecuteReaderAsync</c> + <c>reader.GetString(0)</c> + <c>Serializer.Deserialize</c> 模式。
+    /// </summary>
+    protected async Task<IReadOnlyList<T>> ExecuteReaderJsonAsync<T>(NpgsqlCommand command, CancellationToken cancellationToken)
+    {
+        var results = new List<T>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            results.Add(Serializer.Deserialize<T>(reader.GetString(0)));
+        }
+
+        return results;
+    }
 }
