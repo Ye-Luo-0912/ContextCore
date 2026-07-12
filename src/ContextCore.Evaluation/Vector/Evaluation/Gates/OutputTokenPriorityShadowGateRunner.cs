@@ -155,9 +155,7 @@ public sealed class OutputTokenPriorityShadowGateRunner
         }
 
         var protocol = protocolGate?.Protocol ?? options.Protocol ?? sourceAwareGate?.Protocol ?? new RetrievalEvalProtocol();
-        var enrichedDataset = dataset.CorpusItems.Count == 0
-            ? dataset
-            : InputMetadataEnrichmentPreviewRunner.BuildEnrichedProjection(dataset);
+        var enrichedDataset = dataset;
         var topK = Math.Max(1, protocol.FinalTopK);
         var itemProfiles = enrichedDataset.CorpusItems.Select(BuildItemProfile).ToArray();
         var itemMap = itemProfiles.ToDictionary(static profile => profile.Item.ItemId, StringComparer.OrdinalIgnoreCase);

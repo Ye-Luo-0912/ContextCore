@@ -96,55 +96,24 @@ public static partial class EvalCommand
         s_registry.RegisterWithUsage("vector-reindex-apply", "  eval vector-reindex-apply --confirm [--source eval-corpus|store] [--contexts <dir>] [--workspace <id>] [--collection <id>] [--provider deterministic-hash|onnx-local] [--force] [--batch-size <n>] [--max-items <n>] [--out <path.json>] [--md-out <path.md>]");
         s_registry.RegisterWithUsage("vector-index-diagnostics", "  eval vector-index-diagnostics [--workspace <id>] [--collection <id>] [--provider deterministic-hash|onnx-local] [--out <path.json>] [--md-out <path.md>]");
         s_registry.RegisterWithUsage("vector-index-coverage", "  eval vector-index-coverage [--source eval-corpus|store] [--contexts <dir>] [--workspace <id>] [--collection <id>] [--provider deterministic-hash|onnx-local] [--max-items <n>] [--out <path.json>] [--md-out <path.md>]");
-        s_registry.RegisterWithUsage("vector-lifecycle-metadata-coverage", "  eval vector-lifecycle-metadata-coverage [--source eval-corpus|store] [--contexts <dir>] [--workspace <id>] [--collection <id>] [--provider deterministic-hash|onnx-local] [--out <path.json>] [--md-out <path.md>]");
-        s_registry.RegisterWithUsage("vector-lifecycle-metadata-backfill-plan", "  eval vector-lifecycle-metadata-backfill-plan [--source eval-corpus|store] [--workspace <id>] [--collection <id>] [--provider deterministic-hash|onnx-local] [--out <path.json>] [--md-out <path.md>]");
-        s_registry.RegisterWithUsage("vector-lifecycle-metadata-backfill-apply", "  eval vector-lifecycle-metadata-backfill-apply --confirm [--source eval-corpus|store] [--workspace <id>] [--collection <id>] [--provider deterministic-hash|onnx-local] [--out <path.json>] [--md-out <path.md>]");
+
         s_registry.RegisterWithUsage("vector-query-preview", "  eval vector-query-preview --query <text> [--profile <id>] [--workspace <id>] [--collection <id>] [--provider deterministic-hash|onnx-local] [--top-k <n>] [--layer <layer>] [--item-kind <kind>] [--min-similarity <score>] [--out <path.json>] [--md-out <path.md>]");
-        s_registry.RegisterWithUsage("vector-query-shadow-eval", "  eval vector-query-shadow-eval [--category <name>] [--profile <id>] [--provider deterministic-hash|onnx-local] [--top-k <n>] [--layer <layer>] [--item-kind <kind>] [--min-similarity <score>] [--out-a3 <path.json>] [--out-extended <path.json>] [--md-out <path.md>]");
-        s_registry.RegisterWithUsage("vector-query-profile-sweep", "  eval vector-query-profile-sweep [--category <name>] [--source eval-corpus|store] [--contexts <dir>] [--workspace <id>] [--collection <id>] [--provider deterministic-hash|onnx-local] [--provider-type DeterministicHash|OnnxLocal] [--model-path <local.onnx>] [--tokenizer-path <vocab.txt>] [--out-a3 <path.json>] [--out-extended <path.json>] [--md-out <path.md>]");
-        s_registry.RegisterWithUsage("vector-residual-risk-audit", "  eval vector-residual-risk-audit [--category <name>] [--profile <id>] [--provider deterministic-hash|onnx-local] [--top-k <n>] [--min-similarity <score>] [--out-a3 <path.json>] [--out-extended <path.json>] [--md-out <path.md>]");
-        s_registry.RegisterWithUsage("vector-recall-loss-audit", "  eval vector-recall-loss-audit [--category <name>] [--profile <id>] [--provider deterministic-hash|onnx-local] [--top-k <n>] [--layer <layer>] [--item-kind <kind>] [--min-similarity <score>] [--out-a3 <path.json>] [--out-extended <path.json>] [--md-out <path.md>]");
-        s_registry.RegisterWithUsage("vector-safe-recall-recovery", "  eval vector-safe-recall-recovery [--category <name>] [--provider deterministic-hash|onnx-local] [--out-a3 <path.json>] [--out-extended <path.json>] [--md-out <path.md>]");
-        s_registry.RegisterWithUsage("vector-ranker-fusion-shadow", "  eval vector-ranker-fusion-shadow [--category <name>] [--profile <id>] [--provider deterministic-hash|onnx-local] [--top-k <n>] [--min-similarity <score>] [--out-a3 <path.json>] [--out-extended <path.json>] [--md-out <path.md>]");
-        s_registry.RegisterWithUsage("vector-representation-benchmark", "  eval vector-representation-benchmark [--category <name>] [--profile <id>] [--provider deterministic-hash|onnx-local] [--top-k <n>] [--min-similarity <score>] [--out-a3 <path.json>] [--out-extended <path.json>] [--audit-out-a3 <path.json>] [--audit-out-extended <path.json>] [--md-out <path.md>] [--audit-md-out <path.md>]");
-        s_registry.RegisterWithUsage("vector-query-expansion-shadow", "  eval vector-query-expansion-shadow [--category <name>] [--profile <id>] [--provider deterministic-hash|onnx-local] [--top-k <n>] [--min-similarity <score>] [--out-a3 <path.json>] [--out-extended <path.json>] [--md-out <path.md>]");
-        s_registry.RegisterWithUsage("vector-retrieval-shadow-readiness-gate", "  eval vector-retrieval-shadow-readiness-gate [--category <name>] [--profile <id>] [--provider deterministic-hash|onnx-local] [--top-k <n>] [--layer <layer>] [--item-kind <kind>] [--min-similarity <score>] [--out <path.json>] [--md-out <path.md>]");
         s_registry.RegisterWithUsage("embedding-provider-smoke", "  eval embedding-provider-smoke [--provider deterministic-hash|onnx-local|qwen3] [--model-path <local.onnx>] [--tokenizer-path <vocab.txt|tokenizer.json>] [--dimension <n>] [--out <path.json>] [--md-out <path.md>]");
         s_registry.RegisterWithUsage("vector-provider-comparison", "  eval vector-provider-comparison [--providers current,qwen3] [--out <path.json>] [--md-out <path.md>]");
         s_registry.RegisterWithUsage("vector-qwen3-shadow-eval", "  eval vector-qwen3-shadow-eval [--category <name>] [--profile <id>] [--top-k <n>]");
         s_registry.RegisterWithUsage("vector-qwen3-readiness-gate", "  eval vector-qwen3-readiness-gate [--out <path.json>] [--md-out <path.md>]");
         s_registry.RegisterWithUsage("vector-provider-configuration-sanity-audit", "  eval vector-provider-configuration-sanity-audit [--out <path.json>] [--md-out <path.md>]");
         s_registry.RegisterWithUsage("vector-provider-comparison-freeze", "  eval vector-provider-comparison-freeze [--out <path.json>] [--md-out <path.md>]");
-        s_registry.RegisterWithUsage("vector-hybrid-preview", "  eval vector-hybrid-preview [--category <name>] [--profile <id>] [--top-k <n>] [--out <path.json>] [--md-out <path.md>]");
-        s_registry.RegisterWithUsage("vector-hybrid-shadow-eval", "  eval vector-hybrid-shadow-eval [--category <name>] [--profile <id>] [--top-k <n>]");
         s_registry.RegisterWithUsage("vector-hybrid-readiness-gate", "  eval vector-hybrid-readiness-gate [--out <path.json>] [--md-out <path.md>]");
-        s_registry.RegisterWithUsage("vector-hybrid-recall-regression-audit", "  eval vector-hybrid-recall-regression-audit [--category <name>] [--profile <id>] [--out <path.json>] [--md-out <path.md>]");
         s_registry.RegisterWithUsage("vector-hybrid-freeze-gate", "  eval vector-hybrid-freeze-gate [--out <path.json>] [--md-out <path.md>]");
         s_registry.RegisterWithUsage("vector-retrieval-dataset-alignment-audit", "  eval vector-retrieval-dataset-alignment-audit [--category <name>] [--profile <id>] [--provider deterministic-hash|onnx-local|qwen3] [--out-a3 <path.json>] [--out-extended <path.json>] [--out-summary <path.json>] [--md-out <path.md>]");
         s_registry.RegisterWithUsage("vector-retrieval-dataset-alignment-audit-a3", "  eval vector-retrieval-dataset-alignment-audit-a3 [--category <name>] [--profile <id>] [--provider deterministic-hash|onnx-local|qwen3] [--out <path.json>] [--md-out <path.md>]");
         s_registry.RegisterWithUsage("vector-retrieval-dataset-alignment-audit-extended", "  eval vector-retrieval-dataset-alignment-audit-extended [--category <name>] [--profile <id>] [--provider deterministic-hash|onnx-local|qwen3] [--out <path.json>] [--md-out <path.md>]");
-        s_registry.RegisterWithUsage("vector-eligibility-recall-loss-triage", "  eval vector-eligibility-recall-loss-triage [--category <name>] [--profile <id>] [--provider deterministic-hash|onnx-local|qwen3] [--out-a3 <path.json>] [--out-extended <path.json>] [--out-summary <path.json>] [--md-out <path.md>]");
-        s_registry.RegisterWithUsage("vector-eligibility-recall-loss-triage-a3", "  eval vector-eligibility-recall-loss-triage-a3 [--category <name>] [--profile <id>] [--provider deterministic-hash|onnx-local|qwen3] [--out <path.json>] [--md-out <path.md>]");
-        s_registry.RegisterWithUsage("vector-eligibility-recall-loss-triage-extended", "  eval vector-eligibility-recall-loss-triage-extended [--category <name>] [--profile <id>] [--provider deterministic-hash|onnx-local|qwen3] [--out <path.json>] [--md-out <path.md>]");
-        s_registry.RegisterWithUsage("vector-lifecycle-metadata-repair-plan", "  eval vector-lifecycle-metadata-repair-plan [--category <name>] [--profile <id>] [--provider deterministic-hash|onnx-local|qwen3] [--out-a3 <path.json>] [--out-extended <path.json>] [--out-summary <path.json>] [--md-out <path.md>]");
-        s_registry.RegisterWithUsage("vector-lifecycle-metadata-repair-plan-a3", "  eval vector-lifecycle-metadata-repair-plan-a3 [--category <name>] [--profile <id>] [--provider deterministic-hash|onnx-local|qwen3] [--out <path.json>] [--md-out <path.md>]");
-        s_registry.RegisterWithUsage("vector-lifecycle-metadata-repair-plan-extended", "  eval vector-lifecycle-metadata-repair-plan-extended [--category <name>] [--profile <id>] [--provider deterministic-hash|onnx-local|qwen3] [--out <path.json>] [--md-out <path.md>]");
         s_registry.RegisterWithUsage("vector-lifecycle-metadata-review-candidates-generate", "  eval vector-lifecycle-metadata-review-candidates-generate [--workspace <id>] [--collection <id>] [--repair-plan <vector/eligibility/*.json>] [--out <path.json>] [--md-out <path.md>]");
         s_registry.RegisterWithUsage("vector-lifecycle-metadata-review-candidates", "  eval vector-lifecycle-metadata-review-candidates [--workspace <id>] [--collection <id>] [--status <name>] [--layer <name>] [--item-kind <name>] [--must-hit <id>] [--source-eval-set <name>] [--out <path.json>] [--md-out <path.md>]");
         s_registry.RegisterWithUsage("vector-lifecycle-metadata-review-summary", "  eval vector-lifecycle-metadata-review-summary [--workspace <id>] [--collection <id>] [--out <path.json>] [--md-out <path.md>]");
         s_registry.RegisterWithUsage("vector-lifecycle-metadata-sidecar-preview", "  eval vector-lifecycle-metadata-sidecar-preview [--workspace <id>] [--collection <id>] [--out <path.json>] [--md-out <path.md>]");
         s_registry.RegisterWithUsage("vector-lifecycle-metadata-review-smoke", "  eval vector-lifecycle-metadata-review-smoke [--out <path.json>] [--md-out <path.md>]");
-        s_registry.RegisterWithUsage("vector-sidecar-eligibility-preview", "  eval vector-sidecar-eligibility-preview [--workspace <id>] [--collection <id>] [--out <path.json>] [--md-out <path.md>]");
-        s_registry.RegisterWithUsage("vector-sidecar-eligibility-recheck", "  eval vector-sidecar-eligibility-recheck [--workspace <id>] [--collection <id>] [--out <path.json>] [--md-out <path.md>]");
-        s_registry.RegisterWithUsage("vector-sidecar-eligibility-quality", "  eval vector-sidecar-eligibility-quality [--workspace <id>] [--collection <id>] [--out <path.json>] [--md-out <path.md>]");
-        s_registry.RegisterWithUsage("vector-lifecycle-metadata-review-batch-create", "  eval vector-lifecycle-metadata-review-batch-create [--workspace <id>] [--collection <id>] [--created-by <name>]");
-        s_registry.RegisterWithUsage("vector-lifecycle-metadata-review-batch-export", "  eval vector-lifecycle-metadata-review-batch-export [--batch-id <id>]");
-        s_registry.RegisterWithUsage("vector-lifecycle-metadata-review-batch-import", "  eval vector-lifecycle-metadata-review-batch-import [--batch-id <id>] [--input <review-sheet.jsonl>]");
-        s_registry.RegisterWithUsage("vector-lifecycle-metadata-review-batch-validate", "  eval vector-lifecycle-metadata-review-batch-validate [--batch-id <id>]");
-        s_registry.RegisterWithUsage("vector-lifecycle-metadata-review-batch-apply-preview", "  eval vector-lifecycle-metadata-review-batch-apply-preview [--batch-id <id>]");
-        s_registry.RegisterWithUsage("vector-lifecycle-metadata-review-batch-import-smoke", "  eval vector-lifecycle-metadata-review-batch-import-smoke");
-        s_registry.RegisterCommandOnly("vector-lifecycle-metadata-evidence-backfill-preview");
-        s_registry.RegisterCommandOnly("vector-lifecycle-metadata-evidence-backfill-audit");
         s_registry.RegisterCommandOnly("vector-retrieval-dataset-v2-contract");
         s_registry.RegisterCommandOnly("vector-retrieval-dataset-v2-validator");
         s_registry.RegisterCommandOnly("vector-legacy-dataset-limitation-report");
@@ -167,55 +136,13 @@ public static partial class EvalCommand
         s_registry.RegisterCommandOnly("retrieval-dataset-v2-hybrid-scoring-repair-preview");
         s_registry.RegisterCommandOnly("retrieval-dataset-v2-hybrid-scoring-repair-shadow-eval");
         s_registry.RegisterCommandOnly("retrieval-dataset-v2-hybrid-scoring-repair-gate");
-        s_registry.RegisterCommandOnly("retrieval-dataset-v2-hybrid-scoring-risk-triage");
-        s_registry.RegisterCommandOnly("retrieval-dataset-v2-hybrid-scoring-risk-triage-holdout");
         s_registry.RegisterCommandOnly("retrieval-dataset-v2-stress-freeze-gate");
-        s_registry.RegisterCommandOnly("vector-shadow-package-comparison");
-        s_registry.RegisterCommandOnly("vector-shadow-package-comparison-gate");
         s_registry.RegisterCommandOnly("vector-formal-preview-freeze-gate");
-        s_registry.RegisterWithUsage("vector-formal-retrieval-integration-plan", "  eval vector-formal-retrieval-integration-plan");
-        s_registry.RegisterWithUsage("vector-formal-retrieval-integration-plan-gate", "  eval vector-formal-retrieval-integration-plan-gate");
-        s_registry.RegisterWithUsage("vector-shadow-formal-retrieval-adapter-plan", "  eval vector-shadow-formal-retrieval-adapter-plan");
-        s_registry.RegisterWithUsage("vector-shadow-formal-retrieval-adapter-plan-gate", "  eval vector-shadow-formal-retrieval-adapter-plan-gate");
-        s_registry.RegisterWithUsage("vector-shadow-formal-retrieval-adapter", "  eval vector-shadow-formal-retrieval-adapter");
-        s_registry.RegisterWithUsage("vector-shadow-formal-retrieval-adapter-gate", "  eval vector-shadow-formal-retrieval-adapter-gate");
-        s_registry.RegisterWithUsage("vector-formal-adapter-package-shadow-comparison", "  eval vector-formal-adapter-package-shadow-comparison");
-        s_registry.RegisterWithUsage("vector-formal-adapter-package-shadow-comparison-gate", "  eval vector-formal-adapter-package-shadow-comparison-gate");
-        s_registry.RegisterWithUsage("vector-graph-retrieval-quality-audit", "  eval vector-graph-retrieval-quality-audit");
-        s_registry.RegisterWithUsage("vector-graph-retrieval-quality-gate", "  eval vector-graph-retrieval-quality-gate");
-        s_registry.RegisterWithUsage("vector-retrieval-quality-repair-preview", "  eval vector-retrieval-quality-repair-preview");
-        s_registry.RegisterWithUsage("vector-retrieval-quality-repair-gate", "  eval vector-retrieval-quality-repair-gate");
-        s_registry.RegisterWithUsage("vector-runtime-observable-feature-contract", "  eval vector-runtime-observable-feature-contract");
-        s_registry.RegisterWithUsage("vector-runtime-observable-feature-contract-gate", "  eval vector-runtime-observable-feature-contract-gate");
-        s_registry.RegisterWithUsage("vector-runtime-feature-derivation-preview", "  eval vector-runtime-feature-derivation-preview");
-        s_registry.RegisterWithUsage("vector-runtime-feature-derivation-gate", "  eval vector-runtime-feature-derivation-gate");
-        s_registry.RegisterWithUsage("vector-runtime-feature-derivation-repair", "  eval vector-runtime-feature-derivation-repair");
-        s_registry.RegisterWithUsage("vector-runtime-feature-derivation-repair-gate", "  eval vector-runtime-feature-derivation-repair-gate");
-        s_registry.RegisterWithUsage("vector-runtime-feature-derivation-failure-freeze", "  eval vector-runtime-feature-derivation-failure-freeze");
-        s_registry.RegisterWithUsage("vector-query-driven-candidate-source-repair", "  eval vector-query-driven-candidate-source-repair");
-        s_registry.RegisterWithUsage("vector-query-driven-candidate-source-repair-gate", "  eval vector-query-driven-candidate-source-repair-gate");
-        s_registry.RegisterWithUsage("vector-formal-retrieval-integration-freeze", "  eval vector-formal-retrieval-integration-freeze");
-        s_registry.RegisterWithUsage("vector-formal-retrieval-integration-freeze-gate", "  eval vector-formal-retrieval-integration-freeze-gate");
         s_registry.RegisterWithUsage("architecture-cleanup-readiness-gate", "  eval architecture-cleanup-readiness-gate");
         s_registry.RegisterWithUsage("architecture-cleanup-freeze", "  eval architecture-cleanup-freeze");
         s_registry.RegisterWithUsage("architecture-cleanup-freeze-gate", "  eval architecture-cleanup-freeze-gate");
         s_registry.RegisterWithUsage("dto-split-plan", "  eval dto-split-plan");
         s_registry.RegisterWithUsage("dto-split-readiness-gate", "  eval dto-split-readiness-gate");
-        s_registry.RegisterWithUsage("vector-retrieval-eval-protocol-audit", "  eval vector-retrieval-eval-protocol-audit");
-        s_registry.RegisterWithUsage("vector-candidate-source-discriminability-audit", "  eval vector-candidate-source-discriminability-audit");
-        s_registry.RegisterWithUsage("vector-retrieval-eval-protocol-gate", "  eval vector-retrieval-eval-protocol-gate");
-        s_registry.RegisterWithUsage("vector-input-metadata-enrichment-preview", "  eval vector-input-metadata-enrichment-preview");
-        s_registry.RegisterWithUsage("vector-input-metadata-enrichment-gate", "  eval vector-input-metadata-enrichment-gate");
-        s_registry.RegisterWithUsage("vector-enriched-candidate-source-repair-recheck", "  eval vector-enriched-candidate-source-repair-recheck");
-        s_registry.RegisterWithUsage("vector-enriched-candidate-source-repair-recheck-gate", "  eval vector-enriched-candidate-source-repair-recheck-gate");
-        s_registry.RegisterWithUsage("vector-source-aware-ranking-repair", "  eval vector-source-aware-ranking-repair");
-        s_registry.RegisterWithUsage("vector-source-aware-ranking-repair-gate", "  eval vector-source-aware-ranking-repair-gate");
-        s_registry.RegisterWithUsage("vector-output-token-priority-shadow", "  eval vector-output-token-priority-shadow");
-        s_registry.RegisterWithUsage("vector-output-token-priority-shadow-gate", "  eval vector-output-token-priority-shadow-gate");
-        s_registry.RegisterWithUsage("vector-formal-retrieval-integration-decision", "  eval vector-formal-retrieval-integration-decision");
-        s_registry.RegisterWithUsage("vector-formal-retrieval-integration-decision-gate", "  eval vector-formal-retrieval-integration-decision-gate");
-        s_registry.RegisterWithUsage("project-state-audit", "  eval project-state-audit");
-        s_registry.RegisterWithUsage("mainline-gap-map", "  eval mainline-gap-map");
         s_registry.RegisterWithUsage("generated-artifact-path-hygiene-audit", "  eval generated-artifact-path-hygiene-audit [--scan-dir <dir>]");
         s_registry.RegisterWithUsage("generated-artifact-path-hygiene-gate", "  eval generated-artifact-path-hygiene-gate [--scan-dir <dir>]");
         s_registry.RegisterWithUsage("foundation-freeze-report", "  eval foundation-freeze-report");
@@ -783,81 +710,9 @@ public static partial class EvalCommand
             return true;
         }
 
-        if (string.Equals(subcommand, "vector-lifecycle-metadata-coverage", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteVectorLifecycleMetadataCoverageAsync(service, args, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "vector-lifecycle-metadata-backfill-plan", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteVectorLifecycleMetadataBackfillAsync(service, args, apply: false, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "vector-lifecycle-metadata-backfill-apply", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteVectorLifecycleMetadataBackfillAsync(service, args, apply: true, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
         if (string.Equals(subcommand, "vector-query-preview", StringComparison.OrdinalIgnoreCase))
         {
             await ExecuteVectorQueryPreviewAsync(service, args, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "vector-query-shadow-eval", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteVectorQueryShadowEvalAsync(service, args, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "vector-query-profile-sweep", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteVectorQueryProfileSweepAsync(service, args, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "vector-residual-risk-audit", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteVectorResidualRiskAuditAsync(service, args, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "vector-recall-loss-audit", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteVectorRecallLossAuditAsync(service, args, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "vector-safe-recall-recovery", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteVectorSafeRecallRecoveryAsync(service, args, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "vector-ranker-fusion-shadow", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteVectorRankerFusionShadowAsync(service, args, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "vector-representation-benchmark", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteVectorRepresentationBenchmarkAsync(service, args, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "vector-query-expansion-shadow", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteVectorQueryExpansionShadowAsync(service, args, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "vector-retrieval-shadow-readiness-gate", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteVectorRetrievalShadowReadinessGateAsync(service, args, cancellationToken).ConfigureAwait(false);
             return true;
         }
 
@@ -897,27 +752,9 @@ public static partial class EvalCommand
             return true;
         }
 
-        if (string.Equals(subcommand, "vector-hybrid-preview", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteVectorHybridPreviewAsync(service, args, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "vector-hybrid-shadow-eval", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteVectorHybridShadowEvalAsync(service, args, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
         if (string.Equals(subcommand, "vector-hybrid-readiness-gate", StringComparison.OrdinalIgnoreCase))
         {
             await ExecuteVectorHybridReadinessGateAsync(args, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "vector-hybrid-recall-regression-audit", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteVectorHybridRecallRegressionAuditAsync(service, args, cancellationToken).ConfigureAwait(false);
             return true;
         }
 
@@ -932,22 +769,6 @@ public static partial class EvalCommand
             || string.Equals(subcommand, "vector-retrieval-dataset-alignment-audit-extended", StringComparison.OrdinalIgnoreCase))
         {
             await ExecuteVectorRetrievalDatasetAlignmentAuditAsync(service, args, subcommand, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "vector-eligibility-recall-loss-triage", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(subcommand, "vector-eligibility-recall-loss-triage-a3", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(subcommand, "vector-eligibility-recall-loss-triage-extended", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteVectorEligibilityRecallLossTriageAsync(service, args, subcommand, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "vector-lifecycle-metadata-repair-plan", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(subcommand, "vector-lifecycle-metadata-repair-plan-a3", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(subcommand, "vector-lifecycle-metadata-repair-plan-extended", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteVectorLifecycleMetadataRepairPlanAsync(service, args, subcommand, cancellationToken).ConfigureAwait(false);
             return true;
         }
 
@@ -966,14 +787,6 @@ public static partial class EvalCommand
             return true;
         }
 
-        if (string.Equals(subcommand, "vector-sidecar-eligibility-preview", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(subcommand, "vector-sidecar-eligibility-recheck", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(subcommand, "vector-sidecar-eligibility-quality", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteVectorSidecarEligibilityPreviewAsync(service, args, subcommand, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
         if (string.Equals(subcommand, "vector-lifecycle-metadata-review-batch-create", StringComparison.OrdinalIgnoreCase)
             || string.Equals(subcommand, "vector-lifecycle-metadata-review-batch-export", StringComparison.OrdinalIgnoreCase)
             || string.Equals(subcommand, "vector-lifecycle-metadata-review-batch-import", StringComparison.OrdinalIgnoreCase)
@@ -982,13 +795,6 @@ public static partial class EvalCommand
             || string.Equals(subcommand, "vector-lifecycle-metadata-review-batch-import-smoke", StringComparison.OrdinalIgnoreCase))
         {
             await ExecuteVectorLifecycleMetadataReviewBatchAsync(service, args, subcommand, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "vector-lifecycle-metadata-evidence-backfill-preview", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(subcommand, "vector-lifecycle-metadata-evidence-backfill-audit", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteVectorLifecycleMetadataEvidenceBackfillAsync(service, args, subcommand, cancellationToken).ConfigureAwait(false);
             return true;
         }
 
@@ -1044,112 +850,15 @@ public static partial class EvalCommand
             return true;
         }
 
-        if (string.Equals(subcommand, "retrieval-dataset-v2-hybrid-scoring-risk-triage", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(subcommand, "retrieval-dataset-v2-hybrid-scoring-risk-triage-holdout", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteRetrievalDatasetV2HybridScoringRiskTriageAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
         if (string.Equals(subcommand, "retrieval-dataset-v2-stress-freeze-gate", StringComparison.OrdinalIgnoreCase))
         {
             await ExecuteRetrievalDatasetV2StressFreezeGateAsync(cancellationToken).ConfigureAwait(false);
             return true;
         }
 
-        if (string.Equals(subcommand, "vector-shadow-package-comparison", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(subcommand, "vector-shadow-package-comparison-gate", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteVectorShadowPackageComparisonAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
         if (string.Equals(subcommand, "vector-formal-preview-freeze-gate", StringComparison.OrdinalIgnoreCase))
         {
             await ExecuteVectorFormalPreviewFreezeGateAsync(cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "vector-formal-retrieval-integration-plan", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(subcommand, "vector-formal-retrieval-integration-plan-gate", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteFormalRetrievalIntegrationPlanAsync(subcommand, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "vector-shadow-formal-retrieval-adapter-plan", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(subcommand, "vector-shadow-formal-retrieval-adapter-plan-gate", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteShadowFormalRetrievalAdapterPlanAsync(subcommand, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "vector-shadow-formal-retrieval-adapter", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(subcommand, "vector-shadow-formal-retrieval-adapter-gate", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteShadowFormalRetrievalAdapterAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "vector-formal-adapter-package-shadow-comparison", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(subcommand, "vector-formal-adapter-package-shadow-comparison-gate", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteFormalAdapterPackageShadowComparisonAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "vector-graph-retrieval-quality-audit", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(subcommand, "vector-graph-retrieval-quality-gate", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteGraphVectorRetrievalQualityAuditAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "vector-retrieval-quality-repair-preview", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(subcommand, "vector-retrieval-quality-repair-gate", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteRetrievalQualityRepairPreviewAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "vector-runtime-observable-feature-contract", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(subcommand, "vector-runtime-observable-feature-contract-gate", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteRuntimeObservableFeatureContractAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "vector-runtime-feature-derivation-preview", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(subcommand, "vector-runtime-feature-derivation-gate", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteRuntimeFeatureDerivationPreviewAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "vector-runtime-feature-derivation-repair", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(subcommand, "vector-runtime-feature-derivation-repair-gate", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteRuntimeFeatureDerivationRepairAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "vector-runtime-feature-derivation-failure-freeze", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteRuntimeFeatureDerivationFailureFreezeAsync(args, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "vector-query-driven-candidate-source-repair", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(subcommand, "vector-query-driven-candidate-source-repair-gate", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteQueryDrivenCandidateSourceRepairAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "vector-formal-retrieval-integration-freeze", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(subcommand, "vector-formal-retrieval-integration-freeze-gate", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteFormalRetrievalIntegrationFreezeAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
             return true;
         }
 
@@ -1175,56 +884,6 @@ public static partial class EvalCommand
             || string.Equals(subcommand, "dto-split-readiness-gate", StringComparison.OrdinalIgnoreCase))
         {
             await ExecuteDtoSplitPlanAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "vector-retrieval-eval-protocol-audit", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(subcommand, "vector-candidate-source-discriminability-audit", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(subcommand, "vector-retrieval-eval-protocol-gate", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteRetrievalEvalProtocolAuditAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "vector-input-metadata-enrichment-preview", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(subcommand, "vector-input-metadata-enrichment-gate", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteInputMetadataEnrichmentPreviewAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "vector-enriched-candidate-source-repair-recheck", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(subcommand, "vector-enriched-candidate-source-repair-recheck-gate", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteEnrichedCandidateSourceRepairRecheckAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "vector-source-aware-ranking-repair", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(subcommand, "vector-source-aware-ranking-repair-gate", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteSourceAwareRankingRepairAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "vector-output-token-priority-shadow", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(subcommand, "vector-output-token-priority-shadow-gate", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteOutputTokenPriorityShadowAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "vector-formal-retrieval-integration-decision", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(subcommand, "vector-formal-retrieval-integration-decision-gate", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteFormalRetrievalIntegrationDecisionAsync(subcommand, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "project-state-audit", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(subcommand, "mainline-gap-map", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteProjectStateAuditAsync(subcommand, cancellationToken).ConfigureAwait(false);
             return true;
         }
 
