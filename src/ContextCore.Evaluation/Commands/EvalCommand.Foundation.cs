@@ -53,43 +53,4 @@ private static async Task ExecuteFoundationFreezeAsync(
         Console.WriteLine($"[Eval] ContextCore foundation freeze report written: {jsonPath}");
         Console.WriteLine($"[Eval] freezePassed={report.FreezePassed}; foundation={report.ContextCoreFoundation}; vector={report.VectorFoundation}; runtimeSwitch={report.RuntimeSwitchAllowed}; recommendation={report.Recommendation}; missingReports={report.MissingReportCount}; missingDocs={report.MissingDocCount}");
     }
-
-private static async Task ExecuteFoundationReproducibilityCheckAsync(CancellationToken cancellationToken)
-    {
-        var outputDirectory = Path.GetFullPath(FoundationReproducibilityRunner.DefaultOutputDirectory);
-        Directory.CreateDirectory(outputDirectory);
-
-        var readinessOutput = Path.Combine(Directory.GetCurrentDirectory(), LearningReadinessFreezeRunner.DefaultOutputDirectory);
-        var readinessRunner = new LearningReadinessFreezeRunner();
-        await readinessRunner.RunFreezeReportAsync(readinessOutput, cancellationToken).ConfigureAwait(false);
-        await readinessRunner.RunRuntimeChangeGateAsync(readinessOutput, cancellationToken).ConfigureAwait(false);
-
-        var foundationReport = await new ContextCoreFoundationFreezeRunner()
-            .BuildFromCurrentFilesAsync(Directory.GetCurrentDirectory(), cancellationToken)
-            .ConfigureAwait(false);
-        await WriteTextAsync(
-                JsonSerializer.Serialize(foundationReport, JsonOptions),
-                Path.Combine(outputDirectory, "foundation-release-candidate-gate.json"),
-                cancellationToken)
-            .ConfigureAwait(false);
-        await WriteTextAsync(
-                ContextCoreFoundationFreezeRunner.BuildMarkdown(foundationReport),
-                Path.Combine(outputDirectory, "foundation-release-candidate-gate.md"),
-                cancellationToken)
-            .ConfigureAwait(false);
-
-        var report = await new FoundationReproducibilityRunner()
-            .BuildFromCurrentFilesAsync(Directory.GetCurrentDirectory(), cancellationToken)
-            .ConfigureAwait(false);
-
-        var jsonPath = Path.Combine(outputDirectory, "foundation-reproducibility-check.json");
-        var markdownPath = Path.Combine(outputDirectory, "foundation-reproducibility-check.md");
-        await WriteTextAsync(JsonSerializer.Serialize(report, JsonOptions), jsonPath, cancellationToken)
-            .ConfigureAwait(false);
-        await WriteTextAsync(FoundationReproducibilityRunner.BuildMarkdown(report), markdownPath, cancellationToken)
-            .ConfigureAwait(false);
-
-        Console.WriteLine($"[Eval] Foundation reproducibility check written: {jsonPath}");
-        Console.WriteLine($"[Eval] passed={report.ReproducibilityPassed}; recommendation={report.Recommendation}; foundationGate={report.FoundationGateStatus}; runtimeGate={report.RuntimeChangeGateStatus}; p15={report.P15GateStatus}; localSecrets={report.LocalSecretPathCount}");
-    }
 }
