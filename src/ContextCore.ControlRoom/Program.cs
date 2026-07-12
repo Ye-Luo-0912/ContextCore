@@ -766,9 +766,6 @@ static void PrintHelp()
       context room --workspace default --collection test policy list
       context room --workspace default --collection test policy edit default-context --token-budget 1600
       context room --workspace default --collection test package-preview --policy default-context
-      context room eval run --out eval-report.md
-      context room eval run --include-batches --out eval-report-all.md
-      context room eval report eval-report.json
 
     选项：
       --workspace <id>       工作区 id。默认：default
