@@ -233,7 +233,6 @@ internal static class CoreExtensions
 			sp.GetRequiredService<IDecisionTraceStore>(),
 			sp.GetService<IDecisionEvidenceProvider>()));
 		services.AddSingleton<IDecisionEvidenceProvider, NullDecisionEvidenceProvider>();
-		services.AddSingleton<IContextEvolutionAgent, NullContextEvolutionAgent>();
 		services.AddSingleton<ShortTermMaintenanceRuntimeState>(sp =>
 		{
 			var state = new ShortTermMaintenanceRuntimeState();
