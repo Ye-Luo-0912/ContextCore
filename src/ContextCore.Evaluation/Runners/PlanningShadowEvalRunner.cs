@@ -286,7 +286,7 @@ public sealed class PlanningShadowEvalRunner
     }
 
     private static async Task SeedCorpusAsync(
-        IEvalState state,
+        IEvalStateCore state,
         ContextEvalCorpus corpus,
         string workspaceId,
         string collectionId,
@@ -424,7 +424,7 @@ public sealed class PlanningShadowEvalRunner
     }
 
     private static async Task<ContextRetrievalRequest> CreateRetrievalRequestAsync(
-        IEvalState state,
+        IEvalStateCore state,
         string workspaceId,
         string collectionId,
         ContextEvalSample sample,

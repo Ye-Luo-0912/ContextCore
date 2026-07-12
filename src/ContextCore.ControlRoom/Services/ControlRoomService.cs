@@ -43,7 +43,7 @@ public sealed partial class ControlRoomService : IEvalHost
     /// <summary>直接访问底层状态（供 ControlRoom 命令使用，不对外暴露为公开 API）。</summary>
     public ControlRoomState State => _state;
 
-    IEvalState IEvalHost.State => _state;
+    IEvalStateServiceMode IEvalHost.State => _state;
 
     public static ControlRoomState CreateState(
         string storageKind,
@@ -80,10 +80,6 @@ public sealed partial class ControlRoomService : IEvalHost
             var packagePolicyStore = new InMemoryContextPackagePolicyStore();
             var learningFeedbackStore = new InMemoryLearningFeedbackStore();
             var learningFeedbackReviewStore = new InMemoryLearningFeedbackReviewStore();
-            var memoryArtifactStore = new FileArtifactStore(new FileStorageOptions
-            {
-                RootPath = Path.Combine(resolvedRootPath, "memory-artifacts")
-            });
             var globalStore = new InMemoryGlobalContextStore();
             var jobQueue = new InMemoryJobQueue();
             var embeddingProvider = new MockEmbeddingProvider(new EmbeddingOptions
@@ -110,6 +106,8 @@ public sealed partial class ControlRoomService : IEvalHost
                 TokenizerResolver = tokenizerResolver,
                 PromotionRecordStore = memoryStore,
                 WorkingMemoryService = memoryStore,
+                ShortTermMemoryStore = new InMemoryShortTermMemoryStore(new ShortTermMemoryPolicy()),
+                LearningStore = new InMemoryContextLearningStore(),
                 GraphExpansionApplyOptions = graphExpansionApplyOptions,
                 AttentionRerankOptions = attentionRerankOptions,
                 RetrievalPlanningOptions = retrievalPlanningOptions
@@ -138,7 +136,6 @@ public sealed partial class ControlRoomService : IEvalHost
                 PackagePolicyStore = packagePolicyStore,
                 LearningFeedbackStore = learningFeedbackStore,
                 LearningFeedbackReviewStore = learningFeedbackReviewStore,
-                ArtifactStore = memoryArtifactStore,
                 VectorStore = vectorStore,
                 EmbeddingProvider = embeddingProvider,
                 RetrievalTraceStore = retrievalTraceStore,
@@ -160,7 +157,6 @@ public sealed partial class ControlRoomService : IEvalHost
         var filePackagePolicyStore = new FileContextPackagePolicyStore(options);
         var fileLearningFeedbackStore = new FileLearningFeedbackStore(options);
         var fileLearningFeedbackReviewStore = new FileLearningFeedbackReviewStore(options);
-        var fileArtifactStore = new FileArtifactStore(options);
         var fileGlobalStore = new FileGlobalContextStore(options);
         var fileJobQueue = new FileContextJobQueue(options);
         var embeddingOptions = new EmbeddingOptions
@@ -193,6 +189,8 @@ public sealed partial class ControlRoomService : IEvalHost
             TokenizerResolver = fileTokenizerResolver,
             PromotionRecordStore = fileMemoryStore,
             WorkingMemoryService = fileMemoryStore,
+            ShortTermMemoryStore = new InMemoryShortTermMemoryStore(new ShortTermMemoryPolicy()),
+            LearningStore = new InMemoryContextLearningStore(),
             GraphExpansionApplyOptions = graphExpansionApplyOptions,
             AttentionRerankOptions = attentionRerankOptions,
             RetrievalPlanningOptions = retrievalPlanningOptions
@@ -221,7 +219,6 @@ public sealed partial class ControlRoomService : IEvalHost
             PackagePolicyStore = filePackagePolicyStore,
             LearningFeedbackStore = fileLearningFeedbackStore,
             LearningFeedbackReviewStore = fileLearningFeedbackReviewStore,
-            ArtifactStore = fileArtifactStore,
             VectorStore = fileVectorStore,
             EmbeddingProvider = fileEmbeddingProvider,
             RetrievalTraceStore = fileRetrievalTraceStore,
@@ -276,10 +273,6 @@ public sealed partial class ControlRoomService : IEvalHost
         var packagePolicyStore = new InMemoryContextPackagePolicyStore();
         var learningFeedbackStore = new InMemoryLearningFeedbackStore();
         var learningFeedbackReviewStore = new InMemoryLearningFeedbackReviewStore();
-        var serviceArtifactStore = new FileArtifactStore(new FileStorageOptions
-        {
-            RootPath = FileStorageOptions.DefaultRootPath
-        });
         var globalStore = new InMemoryGlobalContextStore();
         var jobQueue = new InMemoryJobQueue();
         var embeddingProvider = new MockEmbeddingProvider(new EmbeddingOptions
@@ -325,7 +318,6 @@ public sealed partial class ControlRoomService : IEvalHost
             PackagePolicyStore = packagePolicyStore,
             LearningFeedbackStore = learningFeedbackStore,
             LearningFeedbackReviewStore = learningFeedbackReviewStore,
-            ArtifactStore = serviceArtifactStore,
             VectorStore = vectorStore,
             EmbeddingProvider = embeddingProvider,
             RetrievalTraceStore = retrievalTraceStore,

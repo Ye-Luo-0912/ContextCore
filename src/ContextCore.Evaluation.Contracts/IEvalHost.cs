@@ -10,7 +10,7 @@ namespace ContextCore.Evaluation.Contracts;
 /// </summary>
 public interface IEvalHost
 {
-    IEvalState State { get; }
+    IEvalStateServiceMode State { get; }
 
     Task<LearningFeedbackSubmitResult> SubmitLearningFeedbackAsync(
         LearningFeedbackSubmitRequest request,

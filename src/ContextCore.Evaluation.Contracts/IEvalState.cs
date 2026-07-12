@@ -5,16 +5,41 @@ using ContextCore.Client;
 namespace ContextCore.Evaluation.Contracts;
 
 /// <summary>
-/// 评测运行时所需的最小状态视图，由 ControlRoomState（ControlRoom 侧）和 EvalState（Evaluation 侧）实现。
-/// 承载于 Evaluation.Contracts，使 Evaluation 可以引用而不依赖 ControlRoom，且不污染 Client SDK。
+/// 评测运行时所需的最小状态视图，仅包含 Evaluation runners 实际使用的主链 stores 与服务。
+/// 由 ControlRoomState（ControlRoom 侧）和 EvalState（Evaluation 侧）实现。
 /// </summary>
-public interface IEvalState
+public interface IEvalStateCore
 {
-    bool IsServiceMode { get; }
-
     string WorkspaceId { get; }
 
     string CollectionId { get; }
+
+    IContextStore ContextStore { get; }
+
+    IMemoryStore MemoryStore { get; }
+
+    IConstraintStore ConstraintStore { get; }
+
+    IRelationStore RelationStore { get; }
+
+    IVectorStore VectorStore { get; }
+
+    IEmbeddingProvider EmbeddingProvider { get; }
+
+    IContextRetriever Retriever { get; }
+
+    IContextPackageBuilder PackageBuilder { get; }
+}
+
+/// <summary>
+/// EvalCommand 与 IEvalHost 所需的扩展状态视图，在 IEvalStateCore 之上增加
+/// Service/host 模式判定、服务客户端、学习反馈存储、作业队列、检索 trace、
+/// 模型网关健康，以及存储路径解析所需的判别字段。
+/// ControlRoomService 通过 IEvalHost.State 暴露此接口；Evaluation runners 仅依赖 IEvalStateCore。
+/// </summary>
+public interface IEvalStateServiceMode : IEvalStateCore
+{
+    bool IsServiceMode { get; }
 
     string StorageKind { get; }
 
@@ -24,53 +49,19 @@ public interface IEvalState
 
     ContextCoreClient? ServiceClient { get; }
 
-    IContextStore ContextStore { get; }
-
-    IContextIndex Index { get; }
-
-    IMemoryStore MemoryStore { get; }
-
-    IWorkingMemoryService WorkingMemory { get; }
-
-    IConstraintStore ConstraintStore { get; }
-
-    IRelationStore RelationStore { get; }
-
-    IGlobalContextStore GlobalContextStore { get; }
-
     IContextJobQueue JobQueue { get; }
 
     IContextJobQueryStore JobQueryStore { get; }
-
-    IMemoryPromotionService PromotionService { get; }
-
-    IPromotionCandidateStore PromotionCandidateStore { get; }
-
-    IContextPackageBuilder PackageBuilder { get; }
-
-    IContextPackagePolicyStore PackagePolicyStore { get; }
 
     ILearningFeedbackStore LearningFeedbackStore { get; }
 
     ILearningFeedbackReviewStore LearningFeedbackReviewStore { get; }
 
-    IArtifactStore ArtifactStore { get; }
-
-    IContextTokenizerResolver TokenizerResolver { get; }
-
-    IVectorStore VectorStore { get; }
-
-    IEmbeddingProvider EmbeddingProvider { get; }
-
     IRetrievalTraceStore RetrievalTraceStore { get; }
-
-    IContextRetriever Retriever { get; }
 
     ModelGatewayOptions ModelGatewayOptions { get; }
 
     IModelHealthService ModelHealthService { get; }
 
     IModelUsageLogStore ModelUsageLogStore { get; }
-
-    ContextPackage? LastPackage { get; set; }
 }

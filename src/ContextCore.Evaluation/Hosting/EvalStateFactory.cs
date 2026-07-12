@@ -25,7 +25,7 @@ namespace ContextCore.Evaluation.Hosting;
 /// </summary>
 internal static class EvalStateFactory
 {
-    public static IEvalState CreateInMemoryState(
+    public static IEvalStateServiceMode CreateInMemoryState(
         string workspaceId,
         string collectionId,
         RetrievalAttentionRerankOptions? attentionRerankOptions = null,
@@ -44,10 +44,6 @@ internal static class EvalStateFactory
         var packagePolicyStore = new InMemoryContextPackagePolicyStore();
         var learningFeedbackStore = new InMemoryLearningFeedbackStore();
         var learningFeedbackReviewStore = new InMemoryLearningFeedbackReviewStore();
-        var memoryArtifactStore = new FileArtifactStore(new FileStorageOptions
-        {
-            RootPath = Path.Combine(resolvedRootPath, "memory-artifacts")
-        });
         var globalStore = new InMemoryGlobalContextStore();
         var jobQueue = new InMemoryJobQueue();
         var embeddingProvider = new MockEmbeddingProvider(new EmbeddingOptions
@@ -75,6 +71,8 @@ internal static class EvalStateFactory
             TokenizerResolver = tokenizerResolver,
             PromotionRecordStore = memoryStore,
             WorkingMemoryService = memoryStore,
+            ShortTermMemoryStore = new InMemoryShortTermMemoryStore(new ShortTermMemoryPolicy()),
+            LearningStore = new InMemoryContextLearningStore(),
             GraphExpansionApplyOptions = graphExpansionApplyOptions,
             AttentionRerankOptions = attentionRerankOptions,
             RetrievalPlanningOptions = retrievalPlanningOptions
@@ -102,7 +100,6 @@ internal static class EvalStateFactory
             PackagePolicyStore = packagePolicyStore,
             LearningFeedbackStore = learningFeedbackStore,
             LearningFeedbackReviewStore = learningFeedbackReviewStore,
-            ArtifactStore = memoryArtifactStore,
             VectorStore = vectorStore,
             EmbeddingProvider = embeddingProvider,
             RetrievalTraceStore = retrievalTraceStore,
@@ -114,8 +111,8 @@ internal static class EvalStateFactory
     }
 }
 
-/// <summary>评测隔离运行时状态，实现 IEvalState。仅用于 InMemory 评测场景。</summary>
-internal sealed class EvalState : IEvalState
+/// <summary>评测隔离运行时状态，实现 IEvalStateServiceMode。仅用于 InMemory 评测场景。</summary>
+internal sealed class EvalState : IEvalStateServiceMode
 {
     public bool IsServiceMode => false;
 
@@ -160,8 +157,6 @@ internal sealed class EvalState : IEvalState
     public ILearningFeedbackStore LearningFeedbackStore { get; init; } = default!;
 
     public ILearningFeedbackReviewStore LearningFeedbackReviewStore { get; init; } = default!;
-
-    public IArtifactStore ArtifactStore { get; init; } = default!;
 
     public IContextTokenizerResolver TokenizerResolver { get; init; } = new DefaultContextTokenizerResolver();
 

@@ -330,7 +330,7 @@ public sealed class ContextEvalRunner
     }
 
     private static async Task<IReadOnlyList<ContextConstraint>> ActivateConstraintGapFixturesForSampleAsync(
-        IEvalState state,
+        IEvalStateCore state,
         IReadOnlyList<ConstraintGapCandidate> activatedConstraintGaps,
         string workspaceId,
         string collectionId,
@@ -401,7 +401,7 @@ public sealed class ContextEvalRunner
     }
 
     private static async Task ResetActivatedConstraintGapFixturesAsync(
-        IEvalState state,
+        IEvalStateCore state,
         IReadOnlyList<ContextConstraint> activatedConstraints)
     {
         if (activatedConstraints.Count == 0)
@@ -481,7 +481,7 @@ public sealed class ContextEvalRunner
     }
 
     private static async Task<ContextEvalResult> EvaluateSampleAsync(
-        IEvalState state,
+        IEvalStateCore state,
         string workspaceId,
         string collectionId,
         ContextEvalSample sample,
@@ -1087,7 +1087,7 @@ public sealed class ContextEvalRunner
     }
 
     private static async Task<IReadOnlyList<string>> BuildConstraintClosureDiagnosticsAsync(
-        IEvalState state,
+        IEvalStateCore state,
         string workspaceId,
         string collectionId,
         IReadOnlyList<string> expectedConstraints,
