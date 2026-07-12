@@ -9,19 +9,22 @@ namespace ContextCore.Storage.FileSystem.Stores;
 /// 集合元数据以 JSON 文件保存，条目内容单独存储并通过 JSONL 元数据索引管理。
 /// </summary>
 /// <remarks>
-/// P5-5: 读路径无锁（原子文件替换保证一致性），写路径保留 SemaphoreSlim 串行读改写。
-/// collection 级 metadata cache 带文件 mtime 失效检测，避免重复全量扫描 items.jsonl。
+/// P0-fix: 读路径恢复 SemaphoreSlim 保证内容与 metadata 跨文件一致性。
+/// 原子替换只保证单文件完整，不保证 content+metadata 组成同一快照。
+/// collection 级 metadata cache 带 mtime 双重校验和容量上限。
 /// </remarks>
 public sealed class FileContextStore : IContextStore, IContextCollectionStore
 {
-    private readonly SemaphoreSlim _writeGate = new(1, 1);
+    private const int MaxCacheEntries = 256;
+
+    private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly FilePathResolver _paths;
     private readonly FileFormatSerializer _serializer;
     private readonly FileSystemReader _reader;
     private readonly FileSystemWriter _writer;
 
-    // P5-5: collection 级 immutable metadata cache, keyed by items.jsonl path.
-    // Invalidation: file mtime mismatch → cache miss → re-read.
+    // collection 级 immutable metadata cache, keyed by items.jsonl path.
+    // P0-fix: mtime 双重校验（读前+读后），容量上限 256 防止无限增长。
     private readonly ConcurrentDictionary<string, MetadataCacheEntry> _metadataCache = new(StringComparer.OrdinalIgnoreCase);
 
     private sealed record MetadataCacheEntry(
@@ -46,14 +49,14 @@ public sealed class FileContextStore : IContextStore, IContextCollectionStore
         ArgumentNullException.ThrowIfNull(item);
         ValidateRequiredIds(item.WorkspaceId, item.CollectionId);
 
-        await _writeGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             Directory.CreateDirectory(_paths.GetItemsDirectory(item.WorkspaceId, item.CollectionId));
             Directory.CreateDirectory(_paths.GetRawDirectory(item.WorkspaceId, item.CollectionId));
             await EnsureCollectionFileAsync(item.WorkspaceId, item.CollectionId, cancellationToken).ConfigureAwait(false);
 
-            var existingMetadata = await ReadItemMetadataAsync(
+            var existingMetadata = await ReadItemMetadataLockedAsync(
                 item.WorkspaceId,
                 item.CollectionId,
                 cancellationToken).ConfigureAwait(false);
@@ -96,10 +99,13 @@ public sealed class FileContextStore : IContextStore, IContextCollectionStore
         }
         finally
         {
-            _writeGate.Release();
+            _gate.Release();
         }
     }
 
+    /// <summary>
+    /// P0-fix: 读路径加锁，保证 metadata 与 content 跨文件一致性。
+    /// </summary>
     public async Task<ContextItem?> GetAsync(
         string workspaceId,
         string collectionId,
@@ -108,17 +114,28 @@ public sealed class FileContextStore : IContextStore, IContextCollectionStore
     {
         ValidateRequiredIds(workspaceId, collectionId);
 
-        // P5-5: no read lock — atomic file replacement guarantees consistent reads
-        var metadata = await ReadItemMetadataAsync(workspaceId, collectionId, cancellationToken)
-            .ConfigureAwait(false);
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var metadata = await ReadItemMetadataLockedAsync(workspaceId, collectionId, cancellationToken)
+                .ConfigureAwait(false);
 
-        var match = metadata.FirstOrDefault(item => item.Id == id);
+            var match = metadata.FirstOrDefault(item => item.Id == id);
 
-        return match is null
-            ? null
-            : await MaterializeAsync(match, includeContent: true, cancellationToken).ConfigureAwait(false);
+            return match is null
+                ? null
+                : await MaterializeAsync(match, includeContent: true, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _gate.Release();
+        }
     }
 
+    /// <summary>
+    /// P0-fix: 读路径加锁，保证 metadata 与 content 跨文件一致性。
+    /// Two-phase query: filter+paginate metadata first, read content only for final candidates.
+    /// </summary>
     public async Task<IReadOnlyList<ContextItem>> QueryAsync(
         ContextQuery query,
         CancellationToken cancellationToken = default)
@@ -130,73 +147,79 @@ public sealed class FileContextStore : IContextStore, IContextCollectionStore
             throw new ArgumentException("WorkspaceId is required.", nameof(query));
         }
 
-        // P5-5: no read lock — atomic file replacement guarantees consistent reads.
-        // Two-phase query: filter+paginate metadata first, read content only for final candidates.
-        var collectionIds = ResolveCollectionIds(query.WorkspaceId, query.CollectionId);
-        var hasQueryText = !string.IsNullOrWhiteSpace(query.QueryText);
-
-        // Phase 1: filter by metadata (no content I/O)
-        var candidates = new List<ContextItemMetadata>();
-        foreach (var collectionId in collectionIds)
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
         {
-            var metadataEntries = await ReadItemMetadataAsync(
-                query.WorkspaceId,
-                collectionId,
-                cancellationToken).ConfigureAwait(false);
+            var collectionIds = ResolveCollectionIds(query.WorkspaceId, query.CollectionId);
+            var hasQueryText = !string.IsNullOrWhiteSpace(query.QueryText);
 
-            foreach (var metadata in metadataEntries)
+            // Phase 1: filter by metadata (no content I/O)
+            var candidates = new List<ContextItemMetadata>();
+            foreach (var collectionId in collectionIds)
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                if (MatchesMetadata(metadata, query))
-                {
-                    candidates.Add(metadata);
-                }
-            }
-        }
+                var metadataEntries = await ReadItemMetadataLockedAsync(
+                    query.WorkspaceId,
+                    collectionId,
+                    cancellationToken).ConfigureAwait(false);
 
-        var skip = Math.Max(0, query.Skip);
-        var take = query.Take > 0 ? query.Take : 50;
-
-        // Phase 2a: query text requires content — read all candidates, filter by text, then paginate
-        if (hasQueryText)
-        {
-            var textFiltered = new List<ContextItem>();
-            foreach (var metadata in candidates)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                var item = await MaterializeAsync(metadata, includeContent: true, cancellationToken)
-                    .ConfigureAwait(false);
-                if (MatchesQueryText(item, query.QueryText))
+                foreach (var metadata in metadataEntries)
                 {
-                    textFiltered.Add(item);
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (MatchesMetadata(metadata, query))
+                    {
+                        candidates.Add(metadata);
+                    }
                 }
             }
 
-            return textFiltered
-                .OrderByDescending(item => item.UpdatedAt)
+            var skip = Math.Max(0, query.Skip);
+            var take = query.Take > 0 ? query.Take : 50;
+
+            // Phase 2a: query text requires content — read all candidates, filter by text, then paginate
+            if (hasQueryText)
+            {
+                var textFiltered = new List<ContextItem>();
+                foreach (var metadata in candidates)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var item = await MaterializeAsync(metadata, includeContent: true, cancellationToken)
+                        .ConfigureAwait(false);
+                    if (MatchesQueryText(item, query.QueryText))
+                    {
+                        textFiltered.Add(item);
+                    }
+                }
+
+                return textFiltered
+                    .OrderByDescending(item => item.UpdatedAt)
+                    .Skip(skip)
+                    .Take(take)
+                    .Select(item => query.IncludeContent ? item : WithoutContent(item))
+                    .ToArray();
+            }
+
+            // Phase 2b: no query text — paginate metadata first, read content only for the final page
+            var page = candidates
+                .OrderByDescending(metadata => metadata.UpdatedAt)
                 .Skip(skip)
                 .Take(take)
-                .Select(item => query.IncludeContent ? item : WithoutContent(item))
                 .ToArray();
+
+            var results = new List<ContextItem>(page.Length);
+            foreach (var metadata in page)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var item = await MaterializeAsync(metadata, includeContent: query.IncludeContent, cancellationToken)
+                    .ConfigureAwait(false);
+                results.Add(item);
+            }
+
+            return results;
         }
-
-        // Phase 2b: no query text — paginate metadata first, read content only for the final page
-        var page = candidates
-            .OrderByDescending(metadata => metadata.UpdatedAt)
-            .Skip(skip)
-            .Take(take)
-            .ToArray();
-
-        var results = new List<ContextItem>(page.Length);
-        foreach (var metadata in page)
+        finally
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            var item = await MaterializeAsync(metadata, includeContent: query.IncludeContent, cancellationToken)
-                .ConfigureAwait(false);
-            results.Add(item);
+            _gate.Release();
         }
-
-        return results;
     }
 
     public async Task DeleteAsync(
@@ -207,10 +230,10 @@ public sealed class FileContextStore : IContextStore, IContextCollectionStore
     {
         ValidateRequiredIds(workspaceId, collectionId);
 
-        await _writeGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var metadataEntries = await ReadItemMetadataAsync(workspaceId, collectionId, cancellationToken)
+            var metadataEntries = await ReadItemMetadataLockedAsync(workspaceId, collectionId, cancellationToken)
                 .ConfigureAwait(false);
 
             var match = metadataEntries.FirstOrDefault(metadata => metadata.Id == id);
@@ -235,7 +258,7 @@ public sealed class FileContextStore : IContextStore, IContextCollectionStore
         }
         finally
         {
-            _writeGate.Release();
+            _gate.Release();
         }
     }
 
@@ -246,7 +269,7 @@ public sealed class FileContextStore : IContextStore, IContextCollectionStore
         ArgumentNullException.ThrowIfNull(collection);
         ValidateRequiredIds(collection.WorkspaceId, collection.Id);
 
-        await _writeGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             Directory.CreateDirectory(_paths.GetCollectionDirectory(collection.WorkspaceId, collection.Id));
@@ -259,10 +282,11 @@ public sealed class FileContextStore : IContextStore, IContextCollectionStore
         }
         finally
         {
-            _writeGate.Release();
+            _gate.Release();
         }
     }
 
+    /// <summary>单文件原子读写，无需跨文件一致性保证。</summary>
     public async Task<ContextCollection?> GetCollectionAsync(
         string workspaceId,
         string collectionId,
@@ -270,7 +294,6 @@ public sealed class FileContextStore : IContextStore, IContextCollectionStore
     {
         ValidateRequiredIds(workspaceId, collectionId);
 
-        // P5-5: no read lock — atomic file replacement guarantees consistent reads
         var path = _paths.GetCollectionFilePath(workspaceId, collectionId);
         var json = await _reader.ReadAllTextAsync(path, cancellationToken)
             .ConfigureAwait(false);
@@ -306,18 +329,21 @@ public sealed class FileContextStore : IContextStore, IContextCollectionStore
             .ConfigureAwait(false);
     }
 
-    private async Task<IReadOnlyList<ContextItemMetadata>> ReadItemMetadataAsync(
+    /// <summary>
+    /// P0-fix: 调用方已持有 _gate 锁。带 mtime 缓存和读后复核。
+    /// </summary>
+    private async Task<IReadOnlyList<ContextItemMetadata>> ReadItemMetadataLockedAsync(
         string workspaceId,
         string collectionId,
         CancellationToken cancellationToken)
     {
         var path = _paths.GetItemsJsonlPath(workspaceId, collectionId);
 
-        // P5-5: check metadata cache with mtime invalidation
-        var lastWrite = TryGetLastWriteUtc(path);
-        if (lastWrite is not null
+        // 检查缓存（调用方持锁，无竞态）
+        var mtimeBefore = TryGetLastWriteUtc(path);
+        if (mtimeBefore is not null
             && _metadataCache.TryGetValue(path, out var cached)
-            && cached.LastWriteUtc == lastWrite.Value)
+            && cached.LastWriteUtc == mtimeBefore.Value)
         {
             return cached.Metadata;
         }
@@ -332,9 +358,12 @@ public sealed class FileContextStore : IContextStore, IContextCollectionStore
             .Cast<ContextItemMetadata>()
             .ToArray();
 
-        if (lastWrite is not null)
+        // P0-fix: 读后复核 mtime；持锁期间不会有并发写，但防御性校验
+        var mtimeAfter = TryGetLastWriteUtc(path);
+        if (mtimeBefore is not null && mtimeAfter is not null && mtimeBefore == mtimeAfter)
         {
-            _metadataCache[path] = new MetadataCacheEntry(lastWrite.Value, metadata);
+            EnforceCacheBound();
+            _metadataCache[path] = new MetadataCacheEntry(mtimeAfter.Value, metadata);
         }
 
         return metadata;
@@ -344,6 +373,15 @@ public sealed class FileContextStore : IContextStore, IContextCollectionStore
     {
         var path = _paths.GetItemsJsonlPath(workspaceId, collectionId);
         _metadataCache.TryRemove(path, out _);
+    }
+
+    /// <summary>P0-fix: 防止缓存无限增长；超过上限时清空（本地开发场景，简单策略）。</summary>
+    private void EnforceCacheBound()
+    {
+        if (_metadataCache.Count >= MaxCacheEntries)
+        {
+            _metadataCache.Clear();
+        }
     }
 
     private static DateTime? TryGetLastWriteUtc(string path)
