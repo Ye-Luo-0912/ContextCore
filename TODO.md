@@ -1,6 +1,6 @@
 # ContextCore 项目路线图
 
-> 最近更新：P1-5 EvalCommand 分发重构 + P1-4 报告 DTO 瘦身 + P0 并发锁修复 + P2 治理文档清理（2026-07-13）
+> 最近更新：DTO-R1~R4 报告 DTO 治理 + P1-5 EvalCommand 分发重构 + P0 并发锁修复 + P2 治理文档清理（2026-07-13）
 
 > 本文件是 ContextCore 的**唯一当前路线图**。docs/ 下的 freeze / report / audit / plan 类文档均为历史快照，仅供回溯，不作为设计依据。
 
@@ -8,14 +8,14 @@
 
 ## 当前阶段
 
-**架构治理收口后维护期** — P5（P5-0 ~ P5-6）全量推进、P0 并发正确性修复、P1 边界收尾、P1-5 分发重构均已完成。剩余 P1-4 DTO 深度瘦身属高风险大型重构，暂缓。
+**DTO 治理与架构收口完成期** — P5（P5-0 ~ P5-6）全量推进、P0 并发正确性修复、P1 边界收尾、P1-5 分发重构、DTO-R1~R4 报告 DTO 治理均已完成。剩余 Domain/Api/Ports 重新划分和进一步合并模式属高风险大型架构重构，暂缓。
 
 ---
 
 ## 硬边界
 
 - ControlRoom 和 Service 不再编译期引用 Evaluation（P3.1 已完成）
-- Evaluation 依赖只能是 Evaluation → Core/Storage/Abstractions/Client/Runtime/Evaluation.Contracts
+- Evaluation 依赖只能是 Evaluation → Core/Storage/Abstractions/Client/Runtime
 - Abstractions 只承载 Contracts/DTOs/Enums/跨层协议，不含实现逻辑
 - Client 只承载 Service client，不被 eval host 接口污染
 - 构建必须 0 警告 0 错误
@@ -28,25 +28,34 @@
 
 | 指标 | 当前值 | 目标 |
 |------|--------|------|
-| 生产代码总行数 | ~181,010 | < 220k |
-| Evaluation 代码行数 | ~51,687 | < 70k |
-| ControlRoom 代码行数 | ~23,509 | < 20k（接近） |
+| 生产代码总行数 | ~175,000 | < 220k |
+| Evaluation 代码行数 | ~52,000 | < 70k |
+| ControlRoom 代码行数 | ~22,000 | < 20k（接近） |
 | EvalCommand.cs 单文件行数 | 7,987 | P1-5 已完成 |
 | 构建 | 0 警告 / 0 错误 | 0 / 0 |
-| 测试 | 1265 通过 / 0 失败 | 0 失败 |
+| 测试 | 1323 通过 / 0 失败 | 0 失败 |
 
 ---
 
 ## 已完成工作
 
+### DTO 报告治理（DTO-R1 ~ DTO-R4）
+
+| 阶段 | Commit | 内容 | 结果 |
+|------|--------|------|------|
+| DTO-R1 | `eaa7c40` | 删除 VectorGateReportDtos 中 100 个死类型（ControlledAppliedMergeRuntimePreview*/ScopedRuntimePreview*/FormalRetrievalPromotion* 三大家族 + 6 个孤立类型） | 3818 → 1140 行（-2678） |
+| DTO-R2 | `306678a` | 消除 ControlRoom 报告 DTO 复制：删除 Contracts/EvalGateReportDtos.cs（63 类型），创建 9 个轻量 snapshot record + JsonDocument 解析 | -1133 行净减 |
+| DTO-R3 | `5831342` | 收回 Evaluation 边界：修正 46 个错误命名空间，迁移 63 个 EvalGate 类型 + IEvalHost/IEvalState 到 Evaluation，删除 Evaluation.Contracts 项目 | 82 文件变更 |
+| DTO-R4 | `7c13f95` | 拆分 VectorEvalReportDtos.cs（5226 行）：15 个 eval-only 类型移入 Evaluation/Models/，79 个共享类型留 Abstractions 分两文件 | 原 5226 行文件删除 |
+
 ### P0：FileSystem 并发锁与缓存一致性修复（commit `d9c5fd8`）
 
-1. **Mutex 泄漏修复** — `FileRelationStore` 命名 Mutex 在 async/await 线程切换下 `ReleaseMutex` 静默失败。改用进程级 `SemaphoreSlim` 字典（非线程亲和），`ProcessLockLease.Dispose` 正确 Release。
-2. **DeleteAsync 跨实例锁统一** — `DeleteAsync` 原先未进入与 `BatchUpsertAsync` 相同的跨实例锁，可能丢失更新。现已统一走同一进程级文件锁。
-3. **FileContextStore 跨文件一致性** — 原子替换只保证单文件完整，不保证 content + metadata 同一快照。读路径恢复 SemaphoreSlim 读锁。
-4. **mtime 缓存竞态** — 读前取 mtime → 读文件 → 读后复核 mtime，防止读取期间文件被替换时缓存脏数据。
-5. **缓存容量上限** — `MaxCacheEntries = 256`，超过时清空，防止按路径无限增长。
-6. **并发测试** — 新增 `FileSystemStoreConcurrencyTests`（9 个测试：双实例并发 upsert/delete、取消、超时、无死锁、无 Mutex 泄漏）。
+1. **Mutex 泄漏修复** — `FileRelationStore` 命名 Mutex 在 async/await 线程切换下 `ReleaseMutex` 静默失败。改用进程级 `SemaphoreSlim` 字典。
+2. **DeleteAsync 跨实例锁统一** — 统一走同一进程级文件锁。
+3. **FileContextStore 跨文件一致性** — 读路径恢复 SemaphoreSlim 读锁。
+4. **mtime 缓存竞态** — 读前取 mtime → 读文件 → 读后复核 mtime。
+5. **缓存容量上限** — `MaxCacheEntries = 256`。
+6. **并发测试** — 新增 `FileSystemStoreConcurrencyTests`（9 个测试）。
 
 ### P5：架构治理与代码精简
 
@@ -62,29 +71,21 @@
 
 ### P1：ControlRoom / Evaluation 边界收尾
 
-- **P1-1 命名空间迁移**（commit `2bf93bc`）— 39 个 Evaluation 文件从 `ContextCore.ControlRoom.Services` 迁移到 `ContextCore.Evaluation.Runners` / `ContextCore.Evaluation`，7 个 EvalCommand partial 与 8 个测试同步更新。完成。
-- **P1-2 移除过时 eval 帮助**（commit `f706c8e`）— ControlRoom `Program.cs` 删除已移除的 `context room eval ...` 帮助文本。完成。
+- **P1-1 命名空间迁移**（commit `2bf93bc`）— 39 个 Evaluation 文件命名空间迁移。完成。
+- **P1-2 移除过时 eval 帮助**（commit `f706c8e`）— ControlRoom `Program.cs` 删除已移除的 eval 帮助文本。完成。
 - **P1-3 删除无消费者模型**（commit `f706c8e`）— `ReportSnapshot.cs` 无消费者，已删除。完成。
-
-### P1-5：EvalCommand 分发重构（commit `da575ac`）
-
-`EvalCommand.cs` 从 10,338 行降至 7,987 行（-2,351 行）。`BuildSubcommandRegistry` 现在直接为全部 40 个子命令注册 handler，`ExecuteAsync` 用 `registry.TryGetEntry` 替代 470 行 if-chain。44 个孤立 Execute 方法（P5-1 遗留死代码）已删除。
-
-### P1-4：精简 ControlRoom 报告 DTO（部分完成）
-
-`ReportSummaryRegistry` 23 个 descriptor 中 21 个无外部消费者，已删除（272 → 28 行，仅保留 2 个 OPT descriptor）。
-
-`Contracts/EvalGateReportDtos.cs` 中的 39 个报告 DTO 类型仍被 `ControlRoomService.Storage.cs` 用于 JSON 反序列化和 dashboard 字段映射，无法直接删除。进一步瘦身需将强类型反序列化替换为轻量 `JsonDocument` 解析，属高风险大型重构，暂缓。
+- **P1-4 精简 ReportSummaryRegistry**（commit `a10e91e`）— 23 个 descriptor 删除 21 个，272 → 28 行。完成。
+- **P1-5 EvalCommand 分发重构**（commit `da575ac`）— Registry 直接持有 handler，消除 470 行 if-chain，44 个孤立方法删除，10286 → 7987 行。完成。
 
 ### P2：治理文档清理（commit `40f127f`）
 
-重写 `TODO.md` 为唯一当前路线图。9 个历史治理文档（Freeze/Plan/Audit/Report/Gap_Map/新阶段）顶部标注历史快照。
+重写 `TODO.md` 为唯一当前路线图。9 个历史治理文档顶部标注历史快照。
 
 ### 早期阶段（P3 / P4）
 
 | Commit | 描述 |
 |--------|------|
-| `56a66d0` | P4 后架构纠偏：建立 Storage.Shared/Evaluation.Contracts/Runtime，统一 composition，迁移 eval host 接口 |
+| `56a66d0` | P4 后架构纠偏：建立 Storage.Shared/Evaluation.Contracts/Runtime，统一 composition |
 | `01ef145` | 治理修复：审计 runner、graph 写入边界、package dedup、trace 可观测性 |
 | `1a49eb9` | P4: 删除 eval 历史代码、精简报告体系、提取共享存储工具、拆分 PackageBuilder |
 | `ba17bb8` | P3.1: 断开 ControlRoom/Service 对 Evaluation 的编译期依赖，迁移 Eval CLI |
@@ -98,14 +99,16 @@
 
 ## 下一阶段任务
 
-### P1-4 深度瘦身（暂缓，高风险）
+### DTO-R4 剩余部分（暂缓，高风险）
 
-将 `ControlRoomService.Storage.cs` 中强类型报告 DTO 反序列化替换为轻量 `JsonDocument` 解析，然后删除 `Contracts/EvalGateReportDtos.cs`（39 个类型、1608 行）。风险：需逐字段验证 dashboard 显示不受影响。
+**Domain/Api/Ports 重新划分** — 将 Abstractions 的 50+ 文件按 Domain（ContextItem/Memory/Relation/Constraint）、Api（Service/Client request/response）、Ports（接口和跨层命令）重新组织。风险：涉及上百个消费者文件的命名空间变更，Abstractions 是最底层项目。需单独评估。
+
+**进一步合并模式** — 将 Relation/LearningFeedback/JobQueue/Vector 重复定义的 diagnostics/parity/smoke/quality/gate/freeze 模型收敛为少量内部组合模型（OperationalReport<TDetails>、GateDecision、ProviderCheck、OperationScope、ProviderIdentity）。风险：大型设计任务，需逐类型验证。不要退化为 Dictionary<string,object> 或万能 nullable DTO。
 
 ### 延迟项
 
-- **Service DI 收敛到 ContextRuntimeBuilder** — Service ASP.NET DI 仍由 CoreExtensions.AddContextCore 自行注册 80+ 服务，是三套 composition 中唯一未收敛到 ContextCore.Runtime 的宿主。风险较高（生产路径），需单独评估。
-- **IEvalState 上帝接口拆分** — 当前暴露 32 个成员，Evaluation 实际只用 ~8-10 个。可拆为 `IEvalStateCore` / `IEvalStateServiceMode`。
+- **Service DI 收敛到 ContextRuntimeBuilder** — Service ASP.NET DI 仍由 CoreExtensions.AddContextCore 自行注册 80+ 服务。风险较高（生产路径），需单独评估。
+- **IEvalState 上帝接口拆分** — 当前暴露 32 个成员，Evaluation 实际只用 ~8-10 个。可拆为 `IEvalStateCore` / `IEvalStateServiceMode`（DTO-R3 已迁移到 Evaluation.Hosting）。
 - **eval-only DTO 迁移** — P5-1 遗留，部分 eval-only DTO 仍在非 Evaluation 项目中。
 
 ---
