@@ -50,25 +50,4 @@ public class ContextCoreAdapterNoOpBindingTests
         // clean up
         try { File.Delete(result.TracePath); Directory.Delete(traceDir, true); } catch { }
     }
-
-    [TestMethod]
-    public void SmokeRunner_WithFreezeGate_Passes()
-    {
-        var freeze = new FormalRetrievalIntegrationFreezeReport { FreezePassed = true };
-        var report = new AdapterNoOpBindingSmokeRunner().RunSmoke(freeze);
-        Assert.IsTrue(report.SmokePassed);
-        Assert.AreEqual(2, report.InvocationCount);
-        Assert.AreEqual(0, report.AddCount);
-        Assert.AreEqual(0, report.RemoveCount);
-        Assert.IsFalse(report.FormalSelectedSetChanged);
-        Assert.IsFalse(report.RuntimeMutated);
-    }
-
-    [TestMethod]
-    public void SmokeRunner_WithoutFreezeGate_Blocks()
-    {
-        var report = new AdapterNoOpBindingSmokeRunner().RunSmoke(null);
-        Assert.IsFalse(report.SmokePassed);
-        Assert.IsTrue(report.BlockedReasons.Contains("FreezeGateNotPassed"));
-    }
 }

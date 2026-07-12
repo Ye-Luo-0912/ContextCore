@@ -170,22 +170,9 @@ public static partial class EvalCommand
         s_registry.RegisterCommandOnly("retrieval-dataset-v2-hybrid-scoring-risk-triage");
         s_registry.RegisterCommandOnly("retrieval-dataset-v2-hybrid-scoring-risk-triage-holdout");
         s_registry.RegisterCommandOnly("retrieval-dataset-v2-stress-freeze-gate");
-        s_registry.RegisterCommandOnly("vector-guarded-formal-retrieval-preview");
-        s_registry.RegisterCommandOnly("vector-guarded-formal-retrieval-preview-gate");
         s_registry.RegisterCommandOnly("vector-shadow-package-comparison");
         s_registry.RegisterCommandOnly("vector-shadow-package-comparison-gate");
-        s_registry.RegisterCommandOnly("vector-scoped-formal-preview-optin-plan");
-        s_registry.RegisterCommandOnly("vector-scoped-formal-preview-optin-smoke");
-        s_registry.RegisterCommandOnly("vector-scoped-formal-preview-optin-gate");
-        s_registry.RegisterCommandOnly("vector-limited-formal-preview-observation");
-        s_registry.RegisterCommandOnly("vector-limited-formal-preview-observation-gate");
         s_registry.RegisterCommandOnly("vector-formal-preview-freeze-gate");
-        s_registry.RegisterCommandOnly("vector-scoped-runtime-experiment-plan");
-        s_registry.RegisterCommandOnly("vector-scoped-runtime-experiment-dry-run");
-        s_registry.RegisterCommandOnly("vector-scoped-runtime-experiment-gate");
-        s_registry.RegisterCommandOnly("vector-scoped-runtime-experiment-proposal");
-        s_registry.RegisterCommandOnly("vector-scoped-runtime-experiment-proposal-gate");
-        s_registry.RegisterCommandOnly("vector-scoped-runtime-experiment-config-preview");
         s_registry.RegisterWithUsage("vector-formal-retrieval-integration-plan", "  eval vector-formal-retrieval-integration-plan");
         s_registry.RegisterWithUsage("vector-formal-retrieval-integration-plan-gate", "  eval vector-formal-retrieval-integration-plan-gate");
         s_registry.RegisterWithUsage("vector-shadow-formal-retrieval-adapter-plan", "  eval vector-shadow-formal-retrieval-adapter-plan");
@@ -205,61 +192,13 @@ public static partial class EvalCommand
         s_registry.RegisterWithUsage("vector-runtime-feature-derivation-repair", "  eval vector-runtime-feature-derivation-repair");
         s_registry.RegisterWithUsage("vector-runtime-feature-derivation-repair-gate", "  eval vector-runtime-feature-derivation-repair-gate");
         s_registry.RegisterWithUsage("vector-runtime-feature-derivation-failure-freeze", "  eval vector-runtime-feature-derivation-failure-freeze");
-        s_registry.RegisterWithUsage("vector-graph-hub-noise-control-preview", "  eval vector-graph-hub-noise-control-preview");
-        s_registry.RegisterWithUsage("vector-graph-hub-noise-control-gate", "  eval vector-graph-hub-noise-control-gate");
         s_registry.RegisterWithUsage("vector-query-driven-candidate-source-repair", "  eval vector-query-driven-candidate-source-repair");
         s_registry.RegisterWithUsage("vector-query-driven-candidate-source-repair-gate", "  eval vector-query-driven-candidate-source-repair-gate");
         s_registry.RegisterWithUsage("vector-formal-retrieval-integration-freeze", "  eval vector-formal-retrieval-integration-freeze");
-        s_registry.RegisterWithUsage("vector-adapter-noop-binding-plan", "  eval vector-adapter-noop-binding-plan");
         s_registry.RegisterWithUsage("vector-formal-retrieval-integration-freeze-gate", "  eval vector-formal-retrieval-integration-freeze-gate");
-        s_registry.RegisterWithUsage("vector-adapter-noop-binding-smoke", "  eval vector-adapter-noop-binding-smoke");
-        s_registry.RegisterWithUsage("vector-adapter-noop-binding-gate", "  eval vector-adapter-noop-binding-gate");
-        s_registry.RegisterWithUsage("vector-scoped-shadow-adapter-invocation", "  eval vector-scoped-shadow-adapter-invocation");
-        s_registry.RegisterWithUsage("vector-scoped-shadow-adapter-invocation-gate", "  eval vector-scoped-shadow-adapter-invocation-gate");
-        s_registry.RegisterWithUsage("vector-mainline-shadow-adapter-package-comparison", "  eval vector-mainline-shadow-adapter-package-comparison");
-        s_registry.RegisterWithUsage("vector-mainline-shadow-adapter-package-comparison-gate", "  eval vector-mainline-shadow-adapter-package-comparison-gate");
-        s_registry.RegisterWithUsage("architecture-cleanup-plan", "  eval architecture-cleanup-plan");
         s_registry.RegisterWithUsage("architecture-cleanup-readiness-gate", "  eval architecture-cleanup-readiness-gate");
         s_registry.RegisterWithUsage("architecture-cleanup-freeze", "  eval architecture-cleanup-freeze");
         s_registry.RegisterWithUsage("architecture-cleanup-freeze-gate", "  eval architecture-cleanup-freeze-gate");
-        s_registry.RegisterWithUsage("controlled-applied-merge-runtime-preview-plan", "  eval controlled-applied-merge-runtime-preview-plan [--max-requests <n>] [--max-duration-minutes <n>]");
-        s_registry.RegisterWithUsage("controlled-applied-merge-runtime-preview-plan-gate", "  eval controlled-applied-merge-runtime-preview-plan-gate [--max-requests <n>] [--max-duration-minutes <n>]");
-        s_registry.RegisterWithUsage("controlled-applied-merge-runtime-preview-dry-run", "  eval controlled-applied-merge-runtime-preview-dry-run [--observation-runs <n>] [--max-token-delta-total <n>]");
-        s_registry.RegisterWithUsage("controlled-applied-merge-runtime-preview-dry-run-gate", "  eval controlled-applied-merge-runtime-preview-dry-run-gate [--observation-runs <n>] [--max-token-delta-total <n>]");
-        s_registry.RegisterWithUsage("controlled-applied-merge-runtime-preview-activation-preflight", "  eval controlled-applied-merge-runtime-preview-activation-preflight");
-        s_registry.RegisterWithUsage("controlled-applied-merge-runtime-preview-activation-preflight-gate", "  eval controlled-applied-merge-runtime-preview-activation-preflight-gate");
-        s_registry.RegisterWithUsage("controlled-applied-merge-runtime-preview-observation-window", "  eval controlled-applied-merge-runtime-preview-observation-window [--observation-runs <n>] [--max-requests <n>] [--max-duration-minutes <n>]");
-        s_registry.RegisterWithUsage("controlled-applied-merge-runtime-preview-observation-window-gate", "  eval controlled-applied-merge-runtime-preview-observation-window-gate [--observation-runs <n>] [--max-requests <n>] [--max-duration-minutes <n>]");
-        s_registry.RegisterWithUsage("controlled-applied-merge-runtime-preview-observation-hardening", "  eval controlled-applied-merge-runtime-preview-observation-hardening [--min-runs <n>] [--min-requests <n>] [--max-duration-minutes <n>] [--requests-per-run <n>]");
-        s_registry.RegisterWithUsage("controlled-applied-merge-runtime-preview-observation-hardening-gate", "  eval controlled-applied-merge-runtime-preview-observation-hardening-gate [--min-runs <n>] [--min-requests <n>] [--max-duration-minutes <n>] [--requests-per-run <n>]");
-        s_registry.RegisterWithUsage("controlled-applied-merge-runtime-preview-observation-freeze", "  eval controlled-applied-merge-runtime-preview-observation-freeze [--test-baseline <n>]");
-        s_registry.RegisterWithUsage("controlled-applied-merge-runtime-preview-observation-freeze-gate", "  eval controlled-applied-merge-runtime-preview-observation-freeze-gate [--test-baseline <n>]");
-        s_registry.RegisterWithUsage("scoped-runtime-preview-approval-plan", "  eval scoped-runtime-preview-approval-plan [--validity-days <n>] [--kill-switch-seconds <n>] [--rollback-minutes <n>] [--trace-retention-days <n>]");
-        s_registry.RegisterWithUsage("scoped-runtime-preview-approval-plan-gate", "  eval scoped-runtime-preview-approval-plan-gate [--validity-days <n>] [--kill-switch-seconds <n>] [--rollback-minutes <n>] [--trace-retention-days <n>]");
-        s_registry.RegisterWithUsage("scoped-runtime-preview-authorization", "  eval scoped-runtime-preview-authorization [--approved-by <name>]");
-        s_registry.RegisterWithUsage("scoped-runtime-preview-authorization-gate", "  eval scoped-runtime-preview-authorization-gate [--approved-by <name>]");
-        s_registry.RegisterWithUsage("scoped-runtime-preview-authorization-hardening", "  eval scoped-runtime-preview-authorization-hardening [--approved-by <name>]");
-        s_registry.RegisterWithUsage("scoped-runtime-preview-authorization-hardening-gate", "  eval scoped-runtime-preview-authorization-hardening-gate [--approved-by <name>]");
-        s_registry.RegisterWithUsage("scoped-runtime-preview-activation-preparation", "  eval scoped-runtime-preview-activation-preparation [--approved-by <name>] [--max-observations <n>]");
-        s_registry.RegisterWithUsage("scoped-runtime-preview-activation-preparation-gate", "  eval scoped-runtime-preview-activation-preparation-gate [--approved-by <name>] [--max-observations <n>]");
-        s_registry.RegisterWithUsage("scoped-runtime-preview-activation-dry-run", "  eval scoped-runtime-preview-activation-dry-run [--approved-by <name>] [--dry-runs <n>]");
-        s_registry.RegisterWithUsage("scoped-runtime-preview-activation-dry-run-gate", "  eval scoped-runtime-preview-activation-dry-run-gate [--approved-by <name>] [--dry-runs <n>]");
-        s_registry.RegisterWithUsage("scoped-runtime-preview-activation-window-preflight", "  eval scoped-runtime-preview-activation-window-preflight [--approved-by <name>] [--max-window-minutes <n>] [--max-requests <n>]");
-        s_registry.RegisterWithUsage("scoped-runtime-preview-activation-window-preflight-gate", "  eval scoped-runtime-preview-activation-window-preflight-gate [--approved-by <name>] [--max-window-minutes <n>] [--max-requests <n>]");
-        s_registry.RegisterWithUsage("scoped-runtime-preview-activation-window-noop-execution", "  eval scoped-runtime-preview-activation-window-noop-execution [--approved-by <name>] [--min-windows <n>] [--requests-per-window <n>] [--min-requests <n>]");
-        s_registry.RegisterWithUsage("scoped-runtime-preview-activation-window-noop-execution-gate", "  eval scoped-runtime-preview-activation-window-noop-execution-gate [--approved-by <name>] [--min-windows <n>] [--requests-per-window <n>] [--min-requests <n>]");
-        s_registry.RegisterWithUsage("scoped-runtime-preview-activation-live-readiness-freeze", "  eval scoped-runtime-preview-activation-live-readiness-freeze [--approved-by <name>]");
-        s_registry.RegisterWithUsage("scoped-runtime-preview-activation-live-readiness-freeze-gate", "  eval scoped-runtime-preview-activation-live-readiness-freeze-gate [--approved-by <name>] [--final-approved-by <name>]");
-        s_registry.RegisterWithUsage("scoped-runtime-preview-live-activation-execution-plan", "  eval scoped-runtime-preview-live-activation-execution-plan [--approved-by <name>] [--final-approved-by <name>]");
-        s_registry.RegisterWithUsage("scoped-runtime-preview-live-activation-execution-plan-gate", "  eval scoped-runtime-preview-live-activation-execution-plan-gate [--approved-by <name>] [--final-approved-by <name>]");
-        s_registry.RegisterWithUsage("scoped-runtime-preview-live-activation-execution", "  eval scoped-runtime-preview-live-activation-execution [--final-approved-by <name>] [--execution-plan-id <id>] [--execute-live-activation]");
-        s_registry.RegisterWithUsage("scoped-runtime-preview-live-activation-execution-gate", "  eval scoped-runtime-preview-live-activation-execution-gate [--final-approved-by <name>] [--execution-plan-id <id>] [--execute-live-activation]");
-        s_registry.RegisterWithUsage("scoped-runtime-preview-live-activation-observation", "  eval scoped-runtime-preview-live-activation-observation [--observation-runs <n>] [--requests-per-run <n>]");
-        s_registry.RegisterWithUsage("scoped-runtime-preview-live-activation-observation-gate", "  eval scoped-runtime-preview-live-activation-observation-gate [--observation-runs <n>] [--requests-per-run <n>]");
-        s_registry.RegisterWithUsage("scoped-runtime-preview-live-activation-summary-freeze", "  eval scoped-runtime-preview-live-activation-summary-freeze");
-        s_registry.RegisterWithUsage("scoped-runtime-preview-live-activation-summary-freeze-gate", "  eval scoped-runtime-preview-live-activation-summary-freeze-gate");
-        s_registry.RegisterWithUsage("scoped-runtime-preview-live-activation-closeout", "  eval scoped-runtime-preview-live-activation-closeout");
-        s_registry.RegisterWithUsage("scoped-runtime-preview-live-activation-closeout-gate", "  eval scoped-runtime-preview-live-activation-closeout-gate");
         s_registry.RegisterWithUsage("dto-split-plan", "  eval dto-split-plan");
         s_registry.RegisterWithUsage("dto-split-readiness-gate", "  eval dto-split-readiness-gate");
         s_registry.RegisterWithUsage("vector-retrieval-eval-protocol-audit", "  eval vector-retrieval-eval-protocol-audit");
@@ -273,8 +212,6 @@ public static partial class EvalCommand
         s_registry.RegisterWithUsage("vector-source-aware-ranking-repair-gate", "  eval vector-source-aware-ranking-repair-gate");
         s_registry.RegisterWithUsage("vector-output-token-priority-shadow", "  eval vector-output-token-priority-shadow");
         s_registry.RegisterWithUsage("vector-output-token-priority-shadow-gate", "  eval vector-output-token-priority-shadow-gate");
-        s_registry.RegisterWithUsage("vector-formal-adapter-input-contract", "  eval vector-formal-adapter-input-contract [--formal-source <path>]");
-        s_registry.RegisterWithUsage("vector-formal-adapter-input-contract-gate", "  eval vector-formal-adapter-input-contract-gate [--formal-source <path>]");
         s_registry.RegisterWithUsage("vector-formal-retrieval-integration-decision", "  eval vector-formal-retrieval-integration-decision");
         s_registry.RegisterWithUsage("vector-formal-retrieval-integration-decision-gate", "  eval vector-formal-retrieval-integration-decision-gate");
         s_registry.RegisterWithUsage("project-state-audit", "  eval project-state-audit");
@@ -1120,13 +1057,6 @@ public static partial class EvalCommand
             return true;
         }
 
-        if (string.Equals(subcommand, "vector-guarded-formal-retrieval-preview", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(subcommand, "vector-guarded-formal-retrieval-preview-gate", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteVectorGuardedFormalRetrievalPreviewAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
         if (string.Equals(subcommand, "vector-shadow-package-comparison", StringComparison.OrdinalIgnoreCase)
             || string.Equals(subcommand, "vector-shadow-package-comparison-gate", StringComparison.OrdinalIgnoreCase))
         {
@@ -1134,40 +1064,9 @@ public static partial class EvalCommand
             return true;
         }
 
-        if (string.Equals(subcommand, "vector-scoped-formal-preview-optin-plan", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(subcommand, "vector-scoped-formal-preview-optin-smoke", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(subcommand, "vector-scoped-formal-preview-optin-gate", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteScopedFormalPreviewOptInAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "vector-limited-formal-preview-observation", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(subcommand, "vector-limited-formal-preview-observation-gate", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteLimitedFormalPreviewObservationAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
         if (string.Equals(subcommand, "vector-formal-preview-freeze-gate", StringComparison.OrdinalIgnoreCase))
         {
             await ExecuteVectorFormalPreviewFreezeGateAsync(cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "vector-scoped-runtime-experiment-plan", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(subcommand, "vector-scoped-runtime-experiment-dry-run", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(subcommand, "vector-scoped-runtime-experiment-gate", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteExplicitScopedRuntimeExperimentAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "vector-scoped-runtime-experiment-proposal", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(subcommand, "vector-scoped-runtime-experiment-proposal-gate", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(subcommand, "vector-scoped-runtime-experiment-config-preview", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteScopedRuntimeExperimentProposalAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
             return true;
         }
 
@@ -1240,13 +1139,6 @@ public static partial class EvalCommand
             return true;
         }
 
-        if (string.Equals(subcommand, "vector-graph-hub-noise-control-preview", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(subcommand, "vector-graph-hub-noise-control-gate", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteGraphHubNoiseControlAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
         if (string.Equals(subcommand, "vector-query-driven-candidate-source-repair", StringComparison.OrdinalIgnoreCase)
             || string.Equals(subcommand, "vector-query-driven-candidate-source-repair-gate", StringComparison.OrdinalIgnoreCase))
         {
@@ -1258,39 +1150,6 @@ public static partial class EvalCommand
             || string.Equals(subcommand, "vector-formal-retrieval-integration-freeze-gate", StringComparison.OrdinalIgnoreCase))
         {
             await ExecuteFormalRetrievalIntegrationFreezeAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "vector-adapter-noop-binding-plan", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteFormalRetrievalIntegrationFreezeAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "vector-adapter-noop-binding-smoke", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(subcommand, "vector-adapter-noop-binding-gate", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteAdapterNoOpBindingSmokeAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "vector-scoped-shadow-adapter-invocation", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(subcommand, "vector-scoped-shadow-adapter-invocation-gate", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteScopedShadowAdapterInvocationAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "vector-mainline-shadow-adapter-package-comparison", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(subcommand, "vector-mainline-shadow-adapter-package-comparison-gate", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteMainlineShadowAdapterPackageComparisonAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "architecture-cleanup-plan", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteArchitectureCleanupPlanAsync(cancellationToken).ConfigureAwait(false);
             return true;
         }
 
@@ -1309,139 +1168,6 @@ public static partial class EvalCommand
         if (string.Equals(subcommand, "architecture-cleanup-freeze-gate", StringComparison.OrdinalIgnoreCase))
         {
             await ExecuteArchitectureCleanupFreezeGateAsync(cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "controlled-applied-merge-runtime-preview-plan", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(subcommand, "controlled-applied-merge-runtime-preview-plan-gate", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteControlledAppliedMergeRuntimePreviewPlanAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "controlled-applied-merge-runtime-preview-dry-run", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(subcommand, "controlled-applied-merge-runtime-preview-dry-run-gate", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteControlledAppliedMergeRuntimePreviewDryRunAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "controlled-applied-merge-runtime-preview-activation-preflight", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(subcommand, "controlled-applied-merge-runtime-preview-activation-preflight-gate", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteControlledAppliedMergeRuntimePreviewActivationPreflightAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "controlled-applied-merge-runtime-preview-observation-window", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(subcommand, "controlled-applied-merge-runtime-preview-observation-window-gate", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteControlledAppliedMergeRuntimePreviewObservationWindowAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "controlled-applied-merge-runtime-preview-observation-hardening", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(subcommand, "controlled-applied-merge-runtime-preview-observation-hardening-gate", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteControlledAppliedMergeRuntimePreviewObservationHardeningAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "controlled-applied-merge-runtime-preview-observation-freeze", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(subcommand, "controlled-applied-merge-runtime-preview-observation-freeze-gate", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteControlledAppliedMergeRuntimePreviewObservationFreezeAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "scoped-runtime-preview-approval-plan", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(subcommand, "scoped-runtime-preview-approval-plan-gate", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteScopedRuntimePreviewApprovalPlanAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "scoped-runtime-preview-authorization", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(subcommand, "scoped-runtime-preview-authorization-gate", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteScopedRuntimePreviewAuthorizationAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "scoped-runtime-preview-authorization-hardening", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(subcommand, "scoped-runtime-preview-authorization-hardening-gate", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteScopedRuntimePreviewAuthorizationHardeningAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "scoped-runtime-preview-activation-preparation", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(subcommand, "scoped-runtime-preview-activation-preparation-gate", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteScopedRuntimePreviewActivationPreparationAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "scoped-runtime-preview-activation-dry-run", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(subcommand, "scoped-runtime-preview-activation-dry-run-gate", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteScopedRuntimePreviewActivationDryRunAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "scoped-runtime-preview-activation-window-preflight", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(subcommand, "scoped-runtime-preview-activation-window-preflight-gate", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteScopedRuntimePreviewActivationWindowPreflightAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "scoped-runtime-preview-activation-window-noop-execution", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(subcommand, "scoped-runtime-preview-activation-window-noop-execution-gate", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteScopedRuntimePreviewActivationWindowNoOpExecutionAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "scoped-runtime-preview-activation-live-readiness-freeze", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(subcommand, "scoped-runtime-preview-activation-live-readiness-freeze-gate", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteScopedRuntimePreviewActivationLiveReadinessFreezeAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "scoped-runtime-preview-live-activation-execution-plan", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(subcommand, "scoped-runtime-preview-live-activation-execution-plan-gate", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteScopedRuntimePreviewLiveActivationExecutionPlanAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "scoped-runtime-preview-live-activation-execution", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(subcommand, "scoped-runtime-preview-live-activation-execution-gate", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteScopedRuntimePreviewLiveActivationExecutionAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "scoped-runtime-preview-live-activation-observation", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(subcommand, "scoped-runtime-preview-live-activation-observation-gate", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteScopedRuntimePreviewLiveActivationObservationAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "scoped-runtime-preview-live-activation-summary-freeze", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(subcommand, "scoped-runtime-preview-live-activation-summary-freeze-gate", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteScopedRuntimePreviewLiveActivationSummaryFreezeAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "scoped-runtime-preview-live-activation-closeout", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(subcommand, "scoped-runtime-preview-live-activation-closeout-gate", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteScopedRuntimePreviewLiveActivationCloseoutAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
             return true;
         }
 
@@ -1485,13 +1211,6 @@ public static partial class EvalCommand
             || string.Equals(subcommand, "vector-output-token-priority-shadow-gate", StringComparison.OrdinalIgnoreCase))
         {
             await ExecuteOutputTokenPriorityShadowAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        if (string.Equals(subcommand, "vector-formal-adapter-input-contract", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(subcommand, "vector-formal-adapter-input-contract-gate", StringComparison.OrdinalIgnoreCase))
-        {
-            await ExecuteFormalAdapterInputContractAsync(args, subcommand, cancellationToken).ConfigureAwait(false);
             return true;
         }
 

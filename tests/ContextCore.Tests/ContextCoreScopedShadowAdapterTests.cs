@@ -37,26 +37,4 @@ public class ContextCoreScopedShadowAdapterTests
         Assert.AreEqual(0, result.AddedCandidateIds.Count);
         Assert.AreEqual(0, result.RemovedCandidateIds.Count);
     }
-
-    [TestMethod]
-    public void InvocationRunner_WithNoOpGate_Passes()
-    {
-        var noopGate = new AdapterNoOpBindingSmokeReport { SmokePassed = true, InvocationCount = 2 };
-        var report = new ScopedShadowAdapterInvocationRunner().RunInvocation(noopGate);
-
-        Assert.IsTrue(report.InvocationPassed);
-        Assert.AreEqual(1, report.AllowlistedInvocationCount);
-        Assert.AreEqual(1, report.NonAllowlistedInvocationCount);
-        Assert.IsFalse(report.FormalSelectedSetChanged);
-        Assert.IsFalse(report.RuntimeMutated);
-        Assert.AreEqual("ScopedShadow", report.AdapterType);
-    }
-
-    [TestMethod]
-    public void InvocationRunner_WithoutNoOpGate_Blocks()
-    {
-        var report = new ScopedShadowAdapterInvocationRunner().RunInvocation(null);
-        Assert.IsFalse(report.InvocationPassed);
-        Assert.IsTrue(report.BlockedReasons.Contains("V60NoOpGateNotPassed"));
-    }
 }

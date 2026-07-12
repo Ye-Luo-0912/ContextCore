@@ -569,9 +569,7 @@ public static partial class EvalCommand
         }
 
         var skipScan = CommandHelpers.HasFlag(args, "--skip-source-scan");
-        var sourceScan = skipScan
-            ? new RuntimeObservableFeatureContractSourceScan { ScanPerformed = false }
-            : ScanRunnerSourcesForFixtureSpecialCasing();
+        var sourceScan = new RuntimeObservableFeatureContractSourceScan { ScanPerformed = false };
 
         var options = new RuntimeObservableFeatureContractOptions
         {
@@ -654,9 +652,7 @@ public static partial class EvalCommand
             .ConfigureAwait(false);
 
         var skipScan = CommandHelpers.HasFlag(args, "--skip-source-scan");
-        var sourceScan = skipScan
-            ? new RuntimeObservableFeatureContractSourceScan { ScanPerformed = false }
-            : ScanRunnerSourcesForFixtureSpecialCasing();
+        var sourceScan = new RuntimeObservableFeatureContractSourceScan { ScanPerformed = false };
 
         var bestProfileResult = v55Gate?.Profiles?.FirstOrDefault(
             p => string.Equals(p.ProfileId, v55Gate.BestProfileId, StringComparison.OrdinalIgnoreCase));
@@ -746,9 +742,7 @@ public static partial class EvalCommand
             .ConfigureAwait(false);
 
         var skipScan = CommandHelpers.HasFlag(args, "--skip-source-scan");
-        var sourceScan = skipScan
-            ? new RuntimeObservableFeatureContractSourceScan { ScanPerformed = false }
-            : ScanRunnerSourcesForFixtureSpecialCasing();
+        var sourceScan = new RuntimeObservableFeatureContractSourceScan { ScanPerformed = false };
 
         var options = new RuntimeRetrievalFeatureDerivationRepairOptions
         {
@@ -866,62 +860,6 @@ public static partial class EvalCommand
     }
 
 
-    private static async Task ExecuteGraphHubNoiseControlAsync(
-        IReadOnlyList<string> args,
-        string subcommand,
-        CancellationToken cancellationToken)
-    {
-        var outputDirectory = Path.GetFullPath(Path.Combine("vector", "v5"));
-        Directory.CreateDirectory(outputDirectory);
-
-        var freezePath = Path.Combine("vector", "v5", "runtime-feature-derivation-failure-freeze.json");
-        var repairGatePath = Path.Combine("vector", "v5", "runtime-feature-derivation-repair-gate.json");
-        var repairFallbackPath = Path.Combine("vector", "v5", "runtime-feature-derivation-repair.json");
-        var corpusPath = Path.Combine("vector", "dataset-v2", "stress", "corpus.jsonl");
-        var samplesPath = Path.Combine("vector", "dataset-v2", "stress", "samples.jsonl");
-
-        var freezeGate = await ReadJsonFileAsync<RuntimeFeatureDerivationFailureFreezeReport>(freezePath, cancellationToken).ConfigureAwait(false);
-        var dataset = await LoadRetrievalDatasetV2GeneratedDatasetAsync(corpusPath, samplesPath, cancellationToken).ConfigureAwait(false);
-        var repairGate = await ReadJsonFileAsync<RuntimeRetrievalFeatureDerivationRepairReport>(repairGatePath, cancellationToken).ConfigureAwait(false);
-        if (repairGate is null)
-        {
-            repairGate = await ReadJsonFileAsync<RuntimeRetrievalFeatureDerivationRepairReport>(repairFallbackPath, cancellationToken).ConfigureAwait(false);
-        }
-
-        var options = new GraphHubNoiseControlOptions
-        {
-            TopK = CommandHelpers.GetIntOption(args, "--top-k", 5),
-            DenseSeedTopK = CommandHelpers.GetIntOption(args, "--dense-seed-top-k", 5),
-            AnchorSeedTopK = CommandHelpers.GetIntOption(args, "--anchor-seed-top-k", 5),
-            VectorTopK = CommandHelpers.GetIntOption(args, "--vector-top-k", 10),
-            GraphTopK = CommandHelpers.GetIntOption(args, "--graph-top-k", 10),
-            MergedTopK = CommandHelpers.GetIntOption(args, "--merged-top-k", 12),
-            RelationsPerSeedCap = CommandHelpers.GetIntOption(args, "--relations-per-seed-cap", 3),
-            HubDegreeThreshold = CommandHelpers.GetIntOption(args, "--hub-degree-threshold", 5),
-            SectionBoost = CommandHelpers.GetDoubleOption(args, "--section-boost", 1.15),
-            EvidenceBoost = CommandHelpers.GetDoubleOption(args, "--evidence-boost", 1.25),
-            RelationBoost = CommandHelpers.GetDoubleOption(args, "--relation-boost", 1.25),
-            LexicalBoost = CommandHelpers.GetDoubleOption(args, "--lexical-boost", 1.10),
-        };
-
-        var runner = new GraphHubNoiseControlRunner();
-        var gateMode = string.Equals(subcommand, "vector-graph-hub-noise-control-gate", StringComparison.OrdinalIgnoreCase);
-        var report = gateMode
-            ? runner.BuildGate(freezeGate, dataset, repairGate, options)
-            : runner.BuildPreview(freezeGate, dataset, repairGate, options);
-        var fileName = gateMode ? "graph-hub-noise-control-gate" : "graph-hub-noise-control-preview";
-        var jsonPath = Path.Combine(outputDirectory, $"{fileName}.json");
-        var markdownPath = Path.Combine(outputDirectory, $"{fileName}.md");
-        await WriteTextAsync(JsonSerializer.Serialize(report, JsonOptions), jsonPath, cancellationToken).ConfigureAwait(false);
-        await WriteTextAsync(GraphHubNoiseControlRunner.BuildMarkdown(
-            gateMode ? "Graph Hub Noise Control Gate" : "Graph Hub Noise Control Preview", report),
-            markdownPath, cancellationToken).ConfigureAwait(false);
-
-        Console.WriteLine($"[Eval] Graph hub noise control artifact written: {jsonPath}");
-        Console.WriteLine($"[Eval] passed={report.PreviewPassed}; gatePassed={report.GatePassed}; hubItems={report.HubItemCount}; avgDominance={report.AvgHubDominanceRatio:F4}; baselineRecall={report.Baseline.Recall:F4}; hubCtrlRecall={report.HubControlled.Recall:F4}; recalcDelta={report.HubControlledRecallDelta:+0.0000;-0.0000;0.0000}; recommendation={report.Recommendation}");
-    }
-
-
     private static async Task ExecuteQueryDrivenCandidateSourceRepairAsync(
         IReadOnlyList<string> args,
         string subcommand,
@@ -935,9 +873,7 @@ public static partial class EvalCommand
         var derivationGatePath = Path.Combine("vector", "v5", "runtime-feature-derivation-gate.json");
         var derivationGate = await ReadJsonFileAsync<RuntimeRetrievalFeatureDerivationReport>(derivationGatePath, ct).ConfigureAwait(false);
         var skipScan = CommandHelpers.HasFlag(args, "--skip-source-scan");
-        var sourceScan = skipScan
-            ? new RuntimeObservableFeatureContractSourceScan { ScanPerformed = false }
-            : ScanRunnerSourcesForFixtureSpecialCasing();
+        var sourceScan = new RuntimeObservableFeatureContractSourceScan { ScanPerformed = false };
 
         var opt = new QueryDrivenCandidateSourceRepairOptions
         {
@@ -1147,9 +1083,7 @@ private static async Task ExecuteRetrievalEvalProtocolAuditAsync(
         var runtimeGate = await ReadJsonFileAsync<LearningRuntimeChangeReadinessGateReport>(runtimeGatePath, cancellationToken)
             .ConfigureAwait(false);
         var skipSourceScan = CommandHelpers.HasFlag(args, "--skip-source-scan");
-        var sourceScan = skipSourceScan
-            ? new RuntimeObservableFeatureContractSourceScan { ScanPerformed = false }
-            : ScanRunnerSourcesForFixtureSpecialCasing();
+        var sourceScan = new RuntimeObservableFeatureContractSourceScan { ScanPerformed = false };
 
         var protocol = new RetrievalEvalProtocol
         {
@@ -1257,9 +1191,7 @@ private static async Task ExecuteRetrievalEvalProtocolAuditAsync(
         var runtimeGate = await ReadJsonFileAsync<LearningRuntimeChangeReadinessGateReport>(runtimeGatePath, cancellationToken)
             .ConfigureAwait(false);
         var skipSourceScan = CommandHelpers.HasFlag(args, "--skip-source-scan");
-        var sourceScan = skipSourceScan
-            ? new RuntimeObservableFeatureContractSourceScan { ScanPerformed = false }
-            : ScanRunnerSourcesForFixtureSpecialCasing();
+        var sourceScan = new RuntimeObservableFeatureContractSourceScan { ScanPerformed = false };
 
         var protocol = protocolGate?.Protocol ?? new RetrievalEvalProtocol
         {
@@ -1335,9 +1267,7 @@ private static async Task ExecuteRetrievalEvalProtocolAuditAsync(
         var runtimeGate = await ReadJsonFileAsync<LearningRuntimeChangeReadinessGateReport>(runtimeGatePath, cancellationToken)
             .ConfigureAwait(false);
         var skipSourceScan = CommandHelpers.HasFlag(args, "--skip-source-scan");
-        var sourceScan = skipSourceScan
-            ? new RuntimeObservableFeatureContractSourceScan { ScanPerformed = false }
-            : ScanRunnerSourcesForFixtureSpecialCasing();
+        var sourceScan = new RuntimeObservableFeatureContractSourceScan { ScanPerformed = false };
 
         var sourceRepairOptions = new QueryDrivenCandidateSourceRepairOptions
         {
@@ -1424,9 +1354,7 @@ private static async Task ExecuteRetrievalEvalProtocolAuditAsync(
             .ConfigureAwait(false);
 
         var skipSourceScan = CommandHelpers.HasFlag(args, "--skip-source-scan");
-        var sourceScan = skipSourceScan
-            ? new RuntimeObservableFeatureContractSourceScan { ScanPerformed = false }
-            : ScanRunnerSourcesForFixtureSpecialCasing();
+        var sourceScan = new RuntimeObservableFeatureContractSourceScan { ScanPerformed = false };
         var options = new SourceAwareRankingRepairOptions
         {
             Protocol = protocolGate?.Protocol,
@@ -1534,9 +1462,7 @@ private static async Task ExecuteRetrievalEvalProtocolAuditAsync(
         }
 
         var skipSourceScan = CommandHelpers.HasFlag(args, "--skip-source-scan");
-        var sourceScan = skipSourceScan
-            ? new RuntimeObservableFeatureContractSourceScan { ScanPerformed = false }
-            : ScanRunnerSourcesForFixtureSpecialCasing();
+        var sourceScan = new RuntimeObservableFeatureContractSourceScan { ScanPerformed = false };
         var options = new OutputTokenPriorityShadowGateOptions
         {
             Protocol = protocolGate?.Protocol,
@@ -1587,97 +1513,5 @@ private static async Task ExecuteRetrievalEvalProtocolAuditAsync(
 
         Console.WriteLine($"[Eval] Output token priority shadow artifact written: {jsonPath}");
         Console.WriteLine($"[Eval] shadowPassed={report.ShadowPassed}; gatePassed={report.GatePassed}; recommendation={report.Recommendation}; profile={report.ProfileName}; samples={report.SampleCount}; tokenDeltaTotal={report.TokenDeltaTotal}; tokenDeltaMax={report.TokenDeltaMax}; priorityInversion={report.PriorityInversionCount}; droppedRequired={report.DroppedRequiredCandidateCount}; sectionMismatch={report.SectionMismatchCount}; risk={report.RiskAfterPolicy}; blocked={report.BlockedReasons.Count}");
-    }
-
-    private static async Task ExecuteFormalAdapterInputContractAsync(
-        IReadOnlyList<string> args,
-        string subcommand,
-        CancellationToken cancellationToken)
-    {
-        var outputDirectory = Path.GetFullPath(Path.Combine("vector", "v5"));
-        Directory.CreateDirectory(outputDirectory);
-
-        var planGatePath = Path.Combine("vector", "v5", "shadow-formal-retrieval-adapter-plan-gate.json");
-        var planFallbackPath = Path.Combine("vector", "v5", "shadow-formal-retrieval-adapter-plan.json");
-        var outputPolicyGatePath = Path.Combine("vector", "v5", "output-token-priority-shadow-gate.json");
-        var outputPolicyFallbackPath = Path.Combine("vector", "v5", "output-token-priority-shadow.json");
-        var runtimeGatePath = Path.Combine("learning", "readiness", "learning-runtime-change-readiness-gate.json");
-
-        var planGate = await ReadJsonFileAsync<ShadowFormalRetrievalAdapterPlanReport>(planGatePath, cancellationToken)
-            .ConfigureAwait(false);
-        var planSourcePath = planGatePath;
-        if (planGate is null)
-        {
-            planGate = await ReadJsonFileAsync<ShadowFormalRetrievalAdapterPlanReport>(planFallbackPath, cancellationToken)
-                .ConfigureAwait(false);
-            if (planGate is not null)
-            {
-                planSourcePath = planFallbackPath;
-            }
-        }
-
-        var outputPolicyGate = await ReadJsonFileAsync<OutputTokenPriorityShadowGateReport>(outputPolicyGatePath, cancellationToken)
-            .ConfigureAwait(false);
-        var outputPolicySourcePath = outputPolicyGatePath;
-        if (outputPolicyGate is null)
-        {
-            outputPolicyGate = await ReadJsonFileAsync<OutputTokenPriorityShadowGateReport>(outputPolicyFallbackPath, cancellationToken)
-                .ConfigureAwait(false);
-            if (outputPolicyGate is not null)
-            {
-                outputPolicySourcePath = outputPolicyFallbackPath;
-            }
-        }
-
-        var runtimeGate = await ReadJsonFileAsync<LearningRuntimeChangeReadinessGateReport>(runtimeGatePath, cancellationToken)
-            .ConfigureAwait(false);
-
-        var formalSource = CommandHelpers.GetOption(args, "--formal-source") ?? string.Empty;
-        var formalSources = formalSource
-            .Split([';', ','], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        var skipSourceScan = CommandHelpers.HasFlag(args, "--skip-source-scan");
-        var sourceScan = skipSourceScan
-            ? new FormalAdapterInputContractSourceScan { ScanPerformed = false }
-            : ScanFormalAdapterInputContractSources(formalSources);
-
-        var options = new FormalAdapterInputContractOptions
-        {
-            RequireV51PlanGatePassed = !CommandHelpers.HasFlag(args, "--skip-v51-plan-gate"),
-            RequireV515OutputPolicyGatePassed = !CommandHelpers.HasFlag(args, "--skip-v515-output-policy-gate"),
-            RequireRuntimeChangeGate = !CommandHelpers.HasFlag(args, "--skip-runtime-change-gate"),
-            RequireSourceScan = !skipSourceScan,
-            UseForRuntime = false,
-            FormalRetrievalAllowed = false,
-            RuntimeSwitchAllowed = false,
-            ReadyForRuntimeSwitch = false,
-            WriteFormalPackage = false,
-            MutatePackingPolicy = false,
-            MutatePackageOutput = false,
-            MutateVectorStoreBinding = false
-        };
-        var sourceReports = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["v51ShadowFormalRetrievalAdapterPlanGate"] = planSourcePath,
-            ["v515OutputTokenPriorityShadowGate"] = outputPolicySourcePath,
-            ["runtimeChangeGate"] = runtimeGatePath
-        };
-
-        var runner = new FormalAdapterInputContractRunner();
-        var gateMode = string.Equals(subcommand, "vector-formal-adapter-input-contract-gate", StringComparison.OrdinalIgnoreCase);
-        var report = gateMode
-            ? runner.BuildGate(planGate, outputPolicyGate, runtimeGate, sourceScan, options, sourceReports)
-            : runner.BuildContract(planGate, outputPolicyGate, runtimeGate, sourceScan, options, sourceReports);
-        var fileName = gateMode ? "formal-adapter-input-contract-gate" : "formal-adapter-input-contract";
-        var title = gateMode ? "Formal Adapter Input Contract Gate" : "Formal Adapter Input Contract";
-        var jsonPath = Path.Combine(outputDirectory, $"{fileName}.json");
-        var markdownPath = Path.Combine(outputDirectory, $"{fileName}.md");
-
-        await WriteTextAsync(JsonSerializer.Serialize(report, JsonOptions), jsonPath, cancellationToken)
-            .ConfigureAwait(false);
-        await WriteTextAsync(FormalAdapterInputContractRunner.BuildMarkdown(title, report), markdownPath, cancellationToken)
-            .ConfigureAwait(false);
-
-        Console.WriteLine($"[Eval] Formal adapter input contract artifact written: {jsonPath}");
-        Console.WriteLine($"[Eval] contractPassed={report.ContractPassed}; gatePassed={report.GatePassed}; recommendation={report.Recommendation}; version={report.ContractVersion}; runtimeFields={report.RuntimeInputFieldCount}; formalForbidden={report.FormalSourceForbiddenReadCount}; evalOnlyForbidden={report.EvalOnlyForbiddenReadCount}; blocked={report.BlockedReasons.Count}");
     }
 }

@@ -1092,69 +1092,6 @@ public class ContextCoreRetrievalDatasetV2MetadataContractTests
     }
 
     [TestMethod]
-    public void GuardedFormalRetrievalPreview_CleanReportsReadyForShadowPackageComparison()
-    {
-        var report = BuildGuardedFormalRetrievalPreviewReport();
-
-        Assert.IsTrue(report.PreviewPassed);
-        Assert.AreEqual(GuardedFormalRetrievalPreviewRecommendations.ReadyForShadowPackageComparison, report.Recommendation);
-        Assert.IsFalse(report.FormalRetrievalAllowed);
-        Assert.IsFalse(report.UseForRuntime);
-        Assert.IsFalse(report.ReadyForRuntimeSwitch);
-        Assert.IsFalse(report.PackingPolicyChanged);
-        Assert.IsFalse(report.PackageOutputChanged);
-    }
-
-    [TestMethod]
-    public void GuardedFormalRetrievalPreview_V4RecheckNotPassedBlocks()
-    {
-        var report = BuildGuardedFormalRetrievalPreviewReport(
-            v4Recheck: BuildV4ReadinessRecheckReport(stressFreeze: BuildStressFreezeReport(riskAfterPolicy: 1)));
-
-        Assert.IsFalse(report.PreviewPassed);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "V4RecheckNotPassed");
-    }
-
-    [TestMethod]
-    public void GuardedFormalRetrievalPreview_RiskBlocks()
-    {
-        var report = BuildGuardedFormalRetrievalPreviewReport(
-            riskTriage: CleanHybridScoringRiskTriage(riskCandidateCount: 1));
-
-        Assert.IsFalse(report.PreviewPassed);
-        Assert.AreEqual(GuardedFormalRetrievalPreviewRecommendations.BlockedByRisk, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "HybridScoringRiskTriageNotClean");
-    }
-
-    [TestMethod]
-    public void GuardedFormalRetrievalPreview_FormalOutputChangeBlocks()
-    {
-        var report = BuildGuardedFormalRetrievalPreviewReport(
-            repairGate: CleanHybridRepairGate(formalOutputChanged: 1));
-
-        Assert.IsFalse(report.PreviewPassed);
-        Assert.AreEqual(GuardedFormalRetrievalPreviewRecommendations.BlockedByFormalOutputChange, report.Recommendation);
-        Assert.AreEqual(1, report.FormalOutputChanged);
-    }
-
-    [TestMethod]
-    public void GuardedFormalRetrievalPreview_RuntimeSwitchAttemptBlocks()
-    {
-        var report = BuildGuardedFormalRetrievalPreviewReport(
-            options: new GuardedFormalRetrievalPreviewOptions
-            {
-                Enabled = true,
-                ProfileName = HybridUnionScoringRepairProfiles.PostScoringRiskGatedV1,
-                UseForRuntime = true,
-                FormalRetrievalAllowed = false
-            });
-
-        Assert.IsFalse(report.PreviewPassed);
-        Assert.AreEqual(GuardedFormalRetrievalPreviewRecommendations.BlockedByRuntimeSwitchAttempt, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "RuntimeSwitchAttempt");
-    }
-
-    [TestMethod]
     public void LearningRuntimeChangeGate_BlocksGuardedFormalPreviewRuntimeUse()
     {
         var registry = new LearningReadinessRegistry
@@ -1321,114 +1258,6 @@ public class ContextCoreRetrievalDatasetV2MetadataContractTests
     }
 
     [TestMethod]
-    public void ScopedFormalPreviewOptIn_DefaultOffKeepsPreviewOnly()
-    {
-        var report = new ScopedFormalPreviewOptInRunner().BuildPlan(
-            BuildV4ReadinessRecheckReport(),
-            CleanGuardedFormalPreviewGate(),
-            CleanVectorShadowPackageComparisonGate());
-
-        Assert.IsFalse(report.PlanPassed);
-        Assert.AreEqual(ScopedFormalPreviewOptInRecommendations.KeepPreviewOnly, report.Recommendation);
-        Assert.AreEqual(ScopedFormalPreviewOptInModes.Off, report.Mode);
-        Assert.AreEqual(0, report.PreviewPackageCount);
-        Assert.IsFalse(report.FormalRetrievalAllowed);
-        Assert.IsFalse(report.UseForRuntime);
-    }
-
-    [TestMethod]
-    public void ScopedFormalPreviewOptIn_MissingV42GateBlocks()
-    {
-        var report = new ScopedFormalPreviewOptInRunner().BuildGate(
-            BuildV4ReadinessRecheckReport(),
-            CleanGuardedFormalPreviewGate(),
-            shadowPackageGate: null,
-            CleanScopedFormalPreviewOptions());
-
-        Assert.IsFalse(report.GatePassed);
-        Assert.AreEqual(ScopedFormalPreviewOptInRecommendations.BlockedByMissingGate, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "ShadowPackageComparisonGateNotPassed");
-    }
-
-    [TestMethod]
-    public void ScopedFormalPreviewOptIn_AllowlistedScopeGeneratesPreviewOnly()
-    {
-        var report = BuildScopedFormalPreviewOptInReport(stage: "smoke");
-
-        Assert.IsTrue(report.SmokePassed);
-        Assert.AreEqual(ScopedFormalPreviewOptInRecommendations.ReadyForLimitedFormalPreviewObservation, report.Recommendation);
-        Assert.AreEqual(1, report.AllowlistedScopeCount);
-        Assert.IsTrue(report.PreviewPackageCount > 0);
-        Assert.IsFalse(report.FormalPackageWritten);
-        Assert.IsFalse(report.RuntimeMutated);
-    }
-
-    [TestMethod]
-    public void ScopedFormalPreviewOptIn_NonAllowlistedScopeRemainsBaseline()
-    {
-        var report = BuildScopedFormalPreviewOptInReport(stage: "smoke");
-
-        Assert.IsTrue(report.NonAllowlistedScopeChecked);
-        Assert.AreEqual(0, report.NonAllowlistedScopeLeakCount);
-        Assert.IsTrue(report.BaselinePackageCount > 0);
-    }
-
-    [TestMethod]
-    public void ScopedFormalPreviewOptIn_FormalPackageWriteAttemptBlocks()
-    {
-        var report = BuildScopedFormalPreviewOptInReport(
-            options: CleanScopedFormalPreviewOptions(writeFormalPackage: true));
-
-        Assert.IsFalse(report.GatePassed);
-        Assert.AreEqual(ScopedFormalPreviewOptInRecommendations.BlockedByRuntimeMutation, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "FormalPackageWriteAttempt");
-    }
-
-    [TestMethod]
-    public void ScopedFormalPreviewOptIn_RuntimeMutationBlocks()
-    {
-        var report = BuildScopedFormalPreviewOptInReport(
-            options: CleanScopedFormalPreviewOptions(useForRuntime: true));
-
-        Assert.IsFalse(report.GatePassed);
-        Assert.AreEqual(ScopedFormalPreviewOptInRecommendations.BlockedByRuntimeMutation, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "RuntimeMutationAttempt");
-    }
-
-    [TestMethod]
-    public void ScopedFormalPreviewOptIn_PackingPolicyChangeBlocks()
-    {
-        var report = BuildScopedFormalPreviewOptInReport(
-            shadowPackageGate: CleanVectorShadowPackageComparisonGate(packingPolicyChanged: true));
-
-        Assert.IsFalse(report.GatePassed);
-        Assert.AreEqual(ScopedFormalPreviewOptInRecommendations.BlockedByPackingPolicyChange, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "PackingPolicyChanged");
-    }
-
-    [TestMethod]
-    public void ScopedFormalPreviewOptIn_PackageOutputChangeBlocks()
-    {
-        var report = BuildScopedFormalPreviewOptInReport(
-            shadowPackageGate: CleanVectorShadowPackageComparisonGate(packageOutputChanged: true));
-
-        Assert.IsFalse(report.GatePassed);
-        Assert.AreEqual(ScopedFormalPreviewOptInRecommendations.BlockedByPackageOutputChange, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "PackageOutputChanged");
-    }
-
-    [TestMethod]
-    public void ScopedFormalPreviewOptIn_ScopeLeakBlocks()
-    {
-        var report = BuildScopedFormalPreviewOptInReport(
-            options: CleanScopedFormalPreviewOptions(includeNonAllowlistedInAllowlist: true));
-
-        Assert.IsFalse(report.GatePassed);
-        Assert.AreEqual(ScopedFormalPreviewOptInRecommendations.BlockedByScopeLeak, report.Recommendation);
-        Assert.AreEqual(1, report.NonAllowlistedScopeLeakCount);
-    }
-
-    [TestMethod]
     public void LearningRuntimeChangeGate_BlocksScopedFormalPreviewRuntimeUse()
     {
         var registry = new LearningReadinessRegistry
@@ -1466,117 +1295,6 @@ public class ContextCoreRetrievalDatasetV2MetadataContractTests
         CollectionAssert.Contains(
             report.FailedConditions.ToList(),
             $"{ShadowCapabilityIds.ScopedFormalPreviewOptIn}:ScopedFormalPreviewOptInPackageMutationForbidden");
-    }
-
-    [TestMethod]
-    public void LimitedFormalPreviewObservation_CleanReportsReadyForFormalPreviewFreeze()
-    {
-        var report = BuildLimitedFormalPreviewObservationReport(stage: "gate");
-
-        Assert.IsTrue(report.GatePassed);
-        Assert.AreEqual(LimitedFormalPreviewObservationRecommendations.ReadyForFormalPreviewFreeze, report.Recommendation);
-        Assert.AreEqual(3, report.ObservationRunCount);
-        Assert.AreEqual(360, report.PreviewPackageCount);
-        Assert.AreEqual(0, report.RiskAfterPolicy);
-        Assert.IsFalse(report.FormalPackageWritten);
-        Assert.IsFalse(report.RuntimeMutated);
-    }
-
-    [TestMethod]
-    public void LimitedFormalPreviewObservation_MissingV43GateBlocks()
-    {
-        var report = new LimitedFormalPreviewObservationRunner().BuildGate(
-            scopedOptInGate: null,
-            CleanVectorShadowPackageComparisonGate(),
-            CleanLimitedFormalPreviewObservationOptions());
-
-        Assert.IsFalse(report.GatePassed);
-        Assert.AreEqual(LimitedFormalPreviewObservationRecommendations.KeepPreviewOnly, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "ScopedFormalPreviewOptInGateNotPassed");
-    }
-
-    [TestMethod]
-    public void LimitedFormalPreviewObservation_RiskBlocksGate()
-    {
-        var report = BuildLimitedFormalPreviewObservationReport(
-            shadowPackageGate: CleanVectorShadowPackageComparisonGate(riskAfterPolicy: 1));
-
-        Assert.IsFalse(report.GatePassed);
-        Assert.AreEqual(LimitedFormalPreviewObservationRecommendations.BlockedByRisk, report.Recommendation);
-    }
-
-    [TestMethod]
-    public void LimitedFormalPreviewObservation_FormalOutputChangedBlocks()
-    {
-        var report = BuildLimitedFormalPreviewObservationReport(
-            shadowPackageGate: CleanVectorShadowPackageComparisonGate(formalOutputChanged: 1));
-
-        Assert.IsFalse(report.GatePassed);
-        Assert.AreEqual(LimitedFormalPreviewObservationRecommendations.BlockedByFormalOutputChange, report.Recommendation);
-    }
-
-    [TestMethod]
-    public void LimitedFormalPreviewObservation_PackageOutputChangedBlocks()
-    {
-        var report = BuildLimitedFormalPreviewObservationReport(
-            shadowPackageGate: CleanVectorShadowPackageComparisonGate(packageOutputChanged: true));
-
-        Assert.IsFalse(report.GatePassed);
-        Assert.AreEqual(LimitedFormalPreviewObservationRecommendations.BlockedByPackageOutputChange, report.Recommendation);
-    }
-
-    [TestMethod]
-    public void LimitedFormalPreviewObservation_PackingPolicyChangedBlocks()
-    {
-        var report = BuildLimitedFormalPreviewObservationReport(
-            shadowPackageGate: CleanVectorShadowPackageComparisonGate(packingPolicyChanged: true));
-
-        Assert.IsFalse(report.GatePassed);
-        Assert.AreEqual(LimitedFormalPreviewObservationRecommendations.BlockedByPackingPolicyChange, report.Recommendation);
-    }
-
-    [TestMethod]
-    public void LimitedFormalPreviewObservation_FormalPackageWriteBlocks()
-    {
-        var report = BuildLimitedFormalPreviewObservationReport(
-            options: CleanLimitedFormalPreviewObservationOptions(writeFormalPackage: true));
-
-        Assert.IsFalse(report.GatePassed);
-        Assert.AreEqual(LimitedFormalPreviewObservationRecommendations.BlockedByRuntimeMutation, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "FormalPackageWritten");
-    }
-
-    [TestMethod]
-    public void LimitedFormalPreviewObservation_RuntimeMutationBlocks()
-    {
-        var report = BuildLimitedFormalPreviewObservationReport(
-            options: CleanLimitedFormalPreviewObservationOptions(useForRuntime: true));
-
-        Assert.IsFalse(report.GatePassed);
-        Assert.AreEqual(LimitedFormalPreviewObservationRecommendations.BlockedByRuntimeMutation, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "RuntimeMutated");
-    }
-
-    [TestMethod]
-    public void LimitedFormalPreviewObservation_ScopeLeakBlocks()
-    {
-        var report = BuildLimitedFormalPreviewObservationReport(
-            scopedGate: BuildScopedFormalPreviewOptInReport(options: CleanScopedFormalPreviewOptions(includeNonAllowlistedInAllowlist: true)));
-
-        Assert.IsFalse(report.GatePassed);
-        Assert.AreEqual(LimitedFormalPreviewObservationRecommendations.BlockedByScopeLeak, report.Recommendation);
-        Assert.AreEqual(1, report.NonAllowlistedScopeLeakCount);
-    }
-
-    [TestMethod]
-    public void LimitedFormalPreviewObservation_InsufficientRunsBlocks()
-    {
-        var report = BuildLimitedFormalPreviewObservationReport(
-            options: CleanLimitedFormalPreviewObservationOptions(observationRuns: 0));
-
-        Assert.IsFalse(report.GatePassed);
-        Assert.AreEqual(LimitedFormalPreviewObservationRecommendations.NeedsMoreObservation, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "InsufficientObservationRuns");
     }
 
     [TestMethod]
@@ -2622,279 +2340,6 @@ public class ContextCoreRetrievalDatasetV2MetadataContractTests
     }
 
     [TestMethod]
-    public void ExplicitScopedRuntimeExperiment_DefaultDisabledKeepsPreviewOnly()
-    {
-        var report = BuildExplicitScopedRuntimeExperimentReport(options: new ExplicitScopedRuntimeExperimentPlanOptions());
-
-        Assert.IsFalse(report.PlanPassed);
-        Assert.AreEqual(ExplicitScopedRuntimeExperimentRecommendations.KeepPreviewOnly, report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "ExplicitScopedRuntimeExperimentPlanningDisabled");
-        Assert.IsFalse(report.UseForRuntime);
-        Assert.IsFalse(report.FormalRetrievalAllowed);
-    }
-
-    [TestMethod]
-    public void ExplicitScopedRuntimeExperiment_CleanReportsPassDryRunGate()
-    {
-        var report = BuildExplicitScopedRuntimeExperimentReport(stage: "gate");
-
-        Assert.IsTrue(report.PlanPassed);
-        Assert.AreEqual(
-            ExplicitScopedRuntimeExperimentRecommendations.ReadyForExplicitScopedRuntimeExperimentDryRun,
-            report.Recommendation);
-        Assert.AreEqual(1, report.AllowlistedScopeCount);
-        Assert.IsTrue(report.NonAllowlistedScopeChecked);
-        Assert.IsFalse(report.RuntimeSwitchAllowed);
-        Assert.IsFalse(report.FormalRetrievalAllowed);
-        Assert.IsFalse(report.ReadyForRuntimeSwitch);
-        Assert.IsFalse(report.FormalPackageWritten);
-    }
-
-    [TestMethod]
-    public void ExplicitScopedRuntimeExperiment_MissingFoundationFreezeBlocks()
-    {
-        var report = BuildExplicitScopedRuntimeExperimentReport(
-            foundation: null,
-            includeFoundation: false);
-
-        Assert.IsFalse(report.PlanPassed);
-        Assert.AreEqual(
-            ExplicitScopedRuntimeExperimentRecommendations.BlockedByMissingFoundationFreeze,
-            report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "FoundationFreezeOrReproducibilityGateNotPassed");
-    }
-
-    [TestMethod]
-    public void ExplicitScopedRuntimeExperiment_MissingServiceFreezeBlocks()
-    {
-        var report = BuildExplicitScopedRuntimeExperimentReport(
-            service: null,
-            includeService: false);
-
-        Assert.IsFalse(report.PlanPassed);
-        Assert.AreEqual(
-            ExplicitScopedRuntimeExperimentRecommendations.BlockedByMissingServiceFreeze,
-            report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "ServiceFoundationFreezeGateNotPassed");
-    }
-
-    [TestMethod]
-    public void ExplicitScopedRuntimeExperiment_MissingVectorFormalPreviewFreezeBlocks()
-    {
-        var report = BuildExplicitScopedRuntimeExperimentReport(
-            vectorFormal: null,
-            includeVectorFormal: false);
-
-        Assert.IsFalse(report.PlanPassed);
-        Assert.AreEqual(
-            ExplicitScopedRuntimeExperimentRecommendations.BlockedByMissingFoundationFreeze,
-            report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "VectorFormalPreviewFreezeGateNotPassed");
-    }
-
-    [TestMethod]
-    public void ExplicitScopedRuntimeExperiment_MissingSelectedScopeBlocks()
-    {
-        var report = BuildExplicitScopedRuntimeExperimentReport(
-            options: CleanExplicitScopedRuntimeExperimentOptions(includeScopes: false));
-
-        Assert.IsFalse(report.PlanPassed);
-        Assert.AreEqual(
-            ExplicitScopedRuntimeExperimentRecommendations.NeedsScopeConfiguration,
-            report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "SelectedScopeNotConfigured");
-    }
-
-    [TestMethod]
-    public void ExplicitScopedRuntimeExperiment_RuntimeSwitchAttemptBlocks()
-    {
-        var report = BuildExplicitScopedRuntimeExperimentReport(
-            options: CleanExplicitScopedRuntimeExperimentOptions(readyForRuntimeSwitch: true));
-
-        Assert.IsFalse(report.PlanPassed);
-        Assert.AreEqual(
-            ExplicitScopedRuntimeExperimentRecommendations.BlockedByRuntimeSwitchAttempt,
-            report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "RuntimeSwitchOrMutationAttempt");
-    }
-
-    [TestMethod]
-    public void ExplicitScopedRuntimeExperiment_FormalRetrievalEnableBlocks()
-    {
-        var report = BuildExplicitScopedRuntimeExperimentReport(
-            options: CleanExplicitScopedRuntimeExperimentOptions(formalRetrievalAllowed: true));
-
-        Assert.IsFalse(report.PlanPassed);
-        Assert.AreEqual(
-            ExplicitScopedRuntimeExperimentRecommendations.BlockedByRuntimeSwitchAttempt,
-            report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "RuntimeSwitchOrMutationAttempt");
-    }
-
-    [TestMethod]
-    public void ExplicitScopedRuntimeExperiment_FormalPackageWriteBlocks()
-    {
-        var report = BuildExplicitScopedRuntimeExperimentReport(
-            options: CleanExplicitScopedRuntimeExperimentOptions(writeFormalPackage: true));
-
-        Assert.IsFalse(report.PlanPassed);
-        Assert.AreEqual(
-            ExplicitScopedRuntimeExperimentRecommendations.BlockedByRuntimeSwitchAttempt,
-            report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "FormalPackageWriteAttempt");
-    }
-
-    [TestMethod]
-    public void ExplicitScopedRuntimeExperiment_PackingPolicyChangeBlocks()
-    {
-        var report = BuildExplicitScopedRuntimeExperimentReport(
-            shadowGate: CleanVectorShadowPackageComparisonGate(packingPolicyChanged: true));
-
-        Assert.IsFalse(report.PlanPassed);
-        Assert.AreEqual(
-            ExplicitScopedRuntimeExperimentRecommendations.BlockedByRuntimeSwitchAttempt,
-            report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "PackingPolicyChanged");
-    }
-
-    [TestMethod]
-    public void ExplicitScopedRuntimeExperiment_NonAllowlistedScopeLeakBlocks()
-    {
-        var report = BuildExplicitScopedRuntimeExperimentReport(
-            scopedGate: BuildScopedFormalPreviewOptInReport(
-                options: CleanScopedFormalPreviewOptions(includeNonAllowlistedInAllowlist: true)));
-
-        Assert.IsFalse(report.PlanPassed);
-        Assert.AreEqual(
-            ExplicitScopedRuntimeExperimentRecommendations.BlockedByScopeLeak,
-            report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "NonAllowlistedScopeLeak");
-    }
-
-    [TestMethod]
-    public void ExplicitScopedRuntimeExperiment_DryRunMutatesNothing()
-    {
-        var report = BuildExplicitScopedRuntimeExperimentReport(stage: "dry-run");
-
-        Assert.IsTrue(report.PlanPassed);
-        Assert.IsTrue(report.DryRunSupported);
-        Assert.IsFalse(report.RuntimeMutated);
-        Assert.IsFalse(report.FormalPackageWritten);
-        Assert.IsFalse(report.PackingPolicyChanged);
-        Assert.IsFalse(report.PackageOutputChanged);
-        Assert.AreEqual(0, report.RiskAfterPolicy);
-        Assert.AreEqual(0, report.FormalOutputChanged);
-    }
-    [TestMethod]
-    public void ScopedRuntimeExperimentProposal_CleanReportsReadyForManualApproval()
-    {
-        var report = BuildScopedRuntimeExperimentProposalReport();
-
-        Assert.IsTrue(report.ProposalPassed);
-        Assert.AreEqual(
-            ExplicitScopedRuntimeExperimentProposalRecommendations.ReadyForManualExperimentApproval,
-            report.Recommendation);
-        Assert.IsTrue(report.ApprovalRequired);
-        Assert.IsFalse(report.Approved);
-        Assert.IsFalse(report.RuntimeSwitchAllowed);
-        Assert.IsFalse(report.FormalRetrievalAllowed);
-        Assert.IsFalse(report.ReadyForRuntimeSwitch);
-        Assert.IsFalse(report.UseForRuntime);
-        Assert.IsFalse(report.WriteFormalPackage);
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentProposal_MissingV47DesignFreezeBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentProposalReport(includeDesignFreeze: false);
-
-        Assert.IsFalse(report.ProposalPassed);
-        Assert.AreEqual(
-            ExplicitScopedRuntimeExperimentProposalRecommendations.BlockedByMissingGate,
-            report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "ScopedRuntimeExperimentDesignFreezeGateNotPassed");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentProposal_MissingScopeBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentProposalReport(
-            options: CleanScopedRuntimeExperimentProposalOptions(workspaceId: string.Empty));
-
-        Assert.IsFalse(report.ProposalPassed);
-        Assert.AreEqual(
-            ExplicitScopedRuntimeExperimentProposalRecommendations.NeedsScopeConfiguration,
-            report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "SelectedScopeNotConfigured");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentProposal_MissingRollbackPlanBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentProposalReport(
-            options: CleanScopedRuntimeExperimentProposalOptions(rollbackPlan: string.Empty));
-
-        Assert.IsFalse(report.ProposalPassed);
-        Assert.AreEqual(
-            ExplicitScopedRuntimeExperimentProposalRecommendations.BlockedByMissingRollbackPlan,
-            report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "RollbackPlanMissing");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentProposal_MissingKillSwitchBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentProposalReport(
-            options: CleanScopedRuntimeExperimentProposalOptions(killSwitchPlan: string.Empty));
-
-        Assert.IsFalse(report.ProposalPassed);
-        Assert.AreEqual(
-            ExplicitScopedRuntimeExperimentProposalRecommendations.BlockedByMissingKillSwitch,
-            report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "KillSwitchPlanMissing");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentProposal_RuntimeSwitchAttemptBlocks()
-    {
-        var report = BuildScopedRuntimeExperimentProposalReport(
-            options: CleanScopedRuntimeExperimentProposalOptions(useForRuntime: true));
-
-        Assert.IsFalse(report.ProposalPassed);
-        Assert.AreEqual(
-            ExplicitScopedRuntimeExperimentProposalRecommendations.BlockedByRuntimeSwitchAttempt,
-            report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "RuntimeSwitchAttempt");
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentProposal_ConfigPreviewDoesNotWriteRuntimeConfig()
-    {
-        var report = BuildScopedRuntimeExperimentProposalReport();
-
-        Assert.IsTrue(report.ProposedConfigPatch.Count > 0);
-        Assert.AreEqual("none", report.ProposedConfigPatch["writeTarget"]);
-        Assert.AreEqual("false", report.ProposedConfigPatch["useForRuntime"]);
-        Assert.IsFalse(report.ConfigPatchWritten);
-        Assert.IsFalse(report.DiBindingChanged);
-        Assert.IsFalse(report.PackingPolicyChanged);
-        Assert.IsFalse(report.PackageOutputChanged);
-    }
-
-    [TestMethod]
-    public void ScopedRuntimeExperimentProposal_CannotMarkApprovedAutomatically()
-    {
-        var report = BuildScopedRuntimeExperimentProposalReport(
-            options: CleanScopedRuntimeExperimentProposalOptions(approved: true));
-
-        Assert.IsFalse(report.ProposalPassed);
-        Assert.IsFalse(report.Approved);
-        Assert.AreEqual(
-            ExplicitScopedRuntimeExperimentProposalRecommendations.BlockedByRuntimeSwitchAttempt,
-            report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToList(), "AutomaticApprovalAttempt");
-    }
-    [TestMethod]
     public void LearningRuntimeChangeGate_BlocksScopedRuntimeExperimentHarnessFreezeRuntimeUse()
     {
         var registry = new LearningReadinessRegistry
@@ -3369,24 +2814,6 @@ public class ContextCoreRetrievalDatasetV2MetadataContractTests
             PackageOutputChanged = packageOutputChanged
         };
 
-    private static GuardedFormalRetrievalPreviewReport BuildGuardedFormalRetrievalPreviewReport(
-        VectorV4ReadinessRecheckReport? v4Recheck = null,
-        RetrievalDatasetV2StressFreezeReport? stressFreeze = null,
-        HybridUnionScoringRepairReport? repairGate = null,
-        HybridScoringRiskRegressionTriageReport? riskTriage = null,
-        GuardedFormalRetrievalPreviewOptions? options = null)
-        => new GuardedFormalRetrievalPreviewRunner().BuildPreview(
-            RiskTriageDataset(),
-            v4Recheck ?? BuildV4ReadinessRecheckReport(),
-            stressFreeze ?? BuildStressFreezeReport(),
-            repairGate ?? CleanHybridRepairGate(),
-            riskTriage ?? CleanHybridScoringRiskTriage(),
-            options ?? new GuardedFormalRetrievalPreviewOptions
-            {
-                Enabled = true,
-                ProfileName = HybridUnionScoringRepairProfiles.PostScoringRiskGatedV1
-            });
-
     private static VectorShadowPackageComparisonReport BuildVectorShadowPackageComparisonReport(
         RetrievalDatasetV2GeneratedDataset? dataset = null,
         GuardedFormalRetrievalPreviewReport? guardedGate = null,
@@ -3400,52 +2827,6 @@ public class ContextCoreRetrievalDatasetV2MetadataContractTests
                 ProfileName = HybridUnionScoringRepairProfiles.PostScoringRiskGatedV1
             });
 
-    private static ScopedFormalPreviewOptInReport BuildScopedFormalPreviewOptInReport(
-        string stage = "gate",
-        VectorV4ReadinessRecheckReport? v4Recheck = null,
-        GuardedFormalRetrievalPreviewReport? guardedGate = null,
-        VectorShadowPackageComparisonReport? shadowPackageGate = null,
-        ScopedFormalPreviewOptInOptions? options = null)
-    {
-        var runner = new ScopedFormalPreviewOptInRunner();
-        return stage switch
-        {
-            "plan" => runner.BuildPlan(
-                v4Recheck ?? BuildV4ReadinessRecheckReport(),
-                guardedGate ?? CleanGuardedFormalPreviewGate(),
-                shadowPackageGate ?? CleanVectorShadowPackageComparisonGate(),
-                options ?? CleanScopedFormalPreviewOptions()),
-            "smoke" => runner.BuildSmoke(
-                v4Recheck ?? BuildV4ReadinessRecheckReport(),
-                guardedGate ?? CleanGuardedFormalPreviewGate(),
-                shadowPackageGate ?? CleanVectorShadowPackageComparisonGate(),
-                options ?? CleanScopedFormalPreviewOptions()),
-            _ => runner.BuildGate(
-                v4Recheck ?? BuildV4ReadinessRecheckReport(),
-                guardedGate ?? CleanGuardedFormalPreviewGate(),
-                shadowPackageGate ?? CleanVectorShadowPackageComparisonGate(),
-                options ?? CleanScopedFormalPreviewOptions())
-        };
-    }
-
-    private static LimitedFormalPreviewObservationReport BuildLimitedFormalPreviewObservationReport(
-        string stage = "gate",
-        ScopedFormalPreviewOptInReport? scopedGate = null,
-        VectorShadowPackageComparisonReport? shadowPackageGate = null,
-        LimitedFormalPreviewObservationOptions? options = null)
-    {
-        var runner = new LimitedFormalPreviewObservationRunner();
-        return string.Equals(stage, "observation", StringComparison.OrdinalIgnoreCase)
-            ? runner.BuildObservation(
-                scopedGate ?? BuildScopedFormalPreviewOptInReport(),
-                shadowPackageGate ?? CleanVectorShadowPackageComparisonGate(),
-                options ?? CleanLimitedFormalPreviewObservationOptions())
-            : runner.BuildGate(
-                scopedGate ?? BuildScopedFormalPreviewOptInReport(),
-                shadowPackageGate ?? CleanVectorShadowPackageComparisonGate(),
-                options ?? CleanLimitedFormalPreviewObservationOptions());
-    }
-
     private static VectorFormalPreviewFreezeReport BuildVectorFormalPreviewFreezeReport(
         VectorV4ReadinessRecheckReport? v4Recheck = null,
         GuardedFormalRetrievalPreviewReport? guardedGate = null,
@@ -3458,68 +2839,10 @@ public class ContextCoreRetrievalDatasetV2MetadataContractTests
             v4Recheck ?? BuildV4ReadinessRecheckReport(),
             guardedGate ?? CleanGuardedFormalPreviewGate(),
             shadowGate ?? CleanVectorShadowPackageComparisonGate(),
-            scopedGate ?? BuildScopedFormalPreviewOptInReport(),
+            scopedGate ?? CleanScopedFormalPreviewOptInGate(),
             includeLimitedGate ? limitedGate ?? CleanLimitedFormalPreviewObservationGate() : null,
             runtimeGate ?? new LearningRuntimeChangeReadinessGateReport { Passed = true });
 
-    private static ExplicitScopedRuntimeExperimentPlanReport BuildExplicitScopedRuntimeExperimentReport(
-        string stage = "gate",
-        ContextCoreFoundationFreezeReport? foundation = null,
-        FoundationReproducibilityReport? reproducibility = null,
-        ServiceFoundationFreezeReport? service = null,
-        VectorFormalPreviewFreezeReport? vectorFormal = null,
-        LearningRuntimeChangeReadinessGateReport? runtimeGate = null,
-        GuardedFormalRetrievalPreviewReport? guardedGate = null,
-        VectorShadowPackageComparisonReport? shadowGate = null,
-        ScopedFormalPreviewOptInReport? scopedGate = null,
-        LimitedFormalPreviewObservationReport? limitedGate = null,
-        ExplicitScopedRuntimeExperimentPlanOptions? options = null,
-        bool includeFoundation = true,
-        bool includeService = true,
-        bool includeVectorFormal = true)
-    {
-        var runner = new ExplicitScopedRuntimeExperimentPlanRunner();
-        var effectiveOptions = options ?? CleanExplicitScopedRuntimeExperimentOptions(
-            mode: string.Equals(stage, "plan", StringComparison.OrdinalIgnoreCase)
-                ? ExplicitScopedRuntimeExperimentModes.PlanOnly
-                : ExplicitScopedRuntimeExperimentModes.DryRun);
-        return stage.ToLowerInvariant() switch
-        {
-            "plan" => runner.BuildPlan(
-                includeFoundation ? foundation ?? BuildFoundationFreezeReport() : null,
-                reproducibility ?? BuildFoundationReproducibilityReport(),
-                includeService ? service ?? BuildServiceFoundationFreezeReport() : null,
-                includeVectorFormal ? vectorFormal ?? CleanVectorFormalPreviewFreezeReport() : null,
-                runtimeGate ?? CleanRuntimeChangeGate(true),
-                guardedGate ?? CleanGuardedFormalPreviewGate(),
-                shadowGate ?? CleanVectorShadowPackageComparisonGate(),
-                scopedGate ?? BuildScopedFormalPreviewOptInReport(),
-                limitedGate ?? CleanLimitedFormalPreviewObservationGate(),
-                effectiveOptions),
-            "dry-run" => runner.BuildDryRun(
-                includeFoundation ? foundation ?? BuildFoundationFreezeReport() : null,
-                reproducibility ?? BuildFoundationReproducibilityReport(),
-                includeService ? service ?? BuildServiceFoundationFreezeReport() : null,
-                includeVectorFormal ? vectorFormal ?? CleanVectorFormalPreviewFreezeReport() : null,
-                runtimeGate ?? CleanRuntimeChangeGate(true),
-                guardedGate ?? CleanGuardedFormalPreviewGate(),
-                shadowGate ?? CleanVectorShadowPackageComparisonGate(),
-                scopedGate ?? BuildScopedFormalPreviewOptInReport(),
-                limitedGate ?? CleanLimitedFormalPreviewObservationGate(),
-                effectiveOptions),
-            _ => runner.BuildGate(
-                includeFoundation ? foundation ?? BuildFoundationFreezeReport() : null,
-                reproducibility ?? BuildFoundationReproducibilityReport(),
-                includeService ? service ?? BuildServiceFoundationFreezeReport() : null,
-                includeVectorFormal ? vectorFormal ?? CleanVectorFormalPreviewFreezeReport() : null,
-                runtimeGate ?? CleanRuntimeChangeGate(true),
-                guardedGate ?? CleanGuardedFormalPreviewGate(),
-                shadowGate ?? CleanVectorShadowPackageComparisonGate(),
-                scopedGate ?? BuildScopedFormalPreviewOptInReport(),
-                limitedGate ?? CleanLimitedFormalPreviewObservationGate(),
-                effectiveOptions)
-        };
-    }
     private static VectorV4ReadinessRecheckReport BuildV4ReadinessRecheckReport(
         RetrievalDatasetV2StressFreezeReport? stressFreeze = null,
         bool includeStressFreeze = true,
@@ -3796,24 +3119,6 @@ public class ContextCoreRetrievalDatasetV2MetadataContractTests
             SourceReports = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         };
     }
-
-    private static ExplicitScopedRuntimeExperimentProposalReport BuildScopedRuntimeExperimentProposalReport(
-        ContextCoreFoundationFreezeReport? foundation = null,
-        FoundationReproducibilityReport? reproducibility = null,
-        ServiceFoundationFreezeReport? service = null,
-        VectorFormalPreviewFreezeReport? vectorFormal = null,
-        ScopedRuntimeExperimentDesignFreezeReport? designFreeze = null,
-        LearningRuntimeChangeReadinessGateReport? runtimeGate = null,
-        ExplicitScopedRuntimeExperimentProposalOptions? options = null,
-        bool includeDesignFreeze = true)
-        => new ExplicitScopedRuntimeExperimentProposalRunner().BuildGate(
-            foundation ?? BuildFoundationFreezeReport(),
-            reproducibility ?? BuildFoundationReproducibilityReport(),
-            service ?? BuildServiceFoundationFreezeReport(),
-            vectorFormal ?? CleanVectorFormalPreviewFreezeReport(),
-            includeDesignFreeze ? designFreeze ?? BuildScopedRuntimeExperimentDesignFreezeReport() : null,
-            runtimeGate ?? CleanRuntimeChangeGate(true),
-            options ?? CleanScopedRuntimeExperimentProposalOptions());
 
     private static ContextCoreFoundationFreezeReport BuildFoundationFreezeReport(
         PostgresRelationMultiNormalScopeCanaryReport? relation = null,
@@ -4361,6 +3666,70 @@ public class ContextCoreRetrievalDatasetV2MetadataContractTests
                 ? LimitedFormalPreviewObservationRecommendations.ReadyForFormalPreviewFreeze
                 : LimitedFormalPreviewObservationRecommendations.BlockedByRisk,
             BlockedReasons = clean ? Array.Empty<string>() : ["SyntheticLimitedFormalPreviewObservationGateBlocked"]
+        };
+    }
+
+    private static ScopedFormalPreviewOptInReport CleanScopedFormalPreviewOptInGate(
+        int riskAfterPolicy = 0,
+        int formalOutputChanged = 0,
+        bool packageOutputChanged = false,
+        bool packingPolicyChanged = false,
+        bool formalPackageWritten = false,
+        bool runtimeMutated = false,
+        int scopeLeakCount = 0,
+        bool gatePassed = true)
+    {
+        var clean = gatePassed
+            && riskAfterPolicy == 0
+            && formalOutputChanged == 0
+            && !packageOutputChanged
+            && !packingPolicyChanged
+            && !formalPackageWritten
+            && !runtimeMutated
+            && scopeLeakCount == 0;
+        return new ScopedFormalPreviewOptInReport
+        {
+            OperationId = "vector-scoped-formal-preview-opt-in-gate-test",
+            CreatedAt = DateTimeOffset.UtcNow,
+            PlanPassed = clean,
+            SmokePassed = clean,
+            GatePassed = clean,
+            Mode = ScopedFormalPreviewOptInModes.PreviewOnly,
+            ProfileName = HybridUnionScoringRepairProfiles.PostScoringRiskGatedV1,
+            WorkspaceAllowlist = ["contextcore_eval"],
+            CollectionAllowlist = ["dataset-v2-stress"],
+            EvalScopeAllowlist = ["dataset-v2-stress"],
+            SelectedWorkspaceId = "contextcore_eval",
+            SelectedCollectionId = "dataset-v2-stress",
+            SelectedEvalScope = "dataset-v2-stress",
+            NonAllowlistedWorkspaceId = "contextcore_other",
+            NonAllowlistedCollectionId = "dataset-v2-other",
+            NonAllowlistedEvalScope = "dataset-v2-other",
+            ScopeCount = 2,
+            AllowlistedScopeCount = 1,
+            NonAllowlistedScopeChecked = true,
+            PreviewPackageCount = 120,
+            BaselinePackageCount = 120,
+            CandidateAddCount = 19,
+            CandidateRemoveCount = 19,
+            TokenDeltaTotal = 55,
+            TokenDeltaMax = 5,
+            RiskAfterPolicy = riskAfterPolicy,
+            MustNotHitRiskAfterPolicy = 0,
+            LifecycleRiskAfterPolicy = 0,
+            FormalOutputChanged = formalOutputChanged,
+            PackageOutputChanged = packageOutputChanged,
+            PackingPolicyChanged = packingPolicyChanged,
+            FormalPackageWritten = formalPackageWritten,
+            RuntimeMutated = runtimeMutated,
+            NonAllowlistedScopeLeakCount = scopeLeakCount,
+            UseForRuntime = false,
+            FormalRetrievalAllowed = false,
+            ReadyForRuntimeSwitch = false,
+            Recommendation = clean
+                ? ScopedFormalPreviewOptInRecommendations.ReadyForLimitedFormalPreviewObservation
+                : ScopedFormalPreviewOptInRecommendations.BlockedByRisk,
+            BlockedReasons = clean ? Array.Empty<string>() : ["SyntheticScopedFormalPreviewOptInGateBlocked"]
         };
     }
 
