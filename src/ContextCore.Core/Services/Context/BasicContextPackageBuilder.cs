@@ -141,7 +141,18 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
 
         if (_traceStore is not null)
         {
-            await _traceStore.SaveAsync(result, cancellationToken).ConfigureAwait(false);
+            try
+            {
+                await _traceStore.SaveAsync(result, cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch
+            {
+                // P5-0.4: package trace 写入失败不得影响正式 package 构建。
+            }
         }
 
         // V17.0: 投影只读 decision trace，不改变 result。

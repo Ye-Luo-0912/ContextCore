@@ -195,11 +195,13 @@ public sealed class FileRelationStore : IRelationStore
                 filtered = filtered.Where(relation => !excludedReviewStatuses.Contains(relation.ReviewStatus ?? string.Empty));
             }
 
+            // P5-0.3: 先排序再 Take(maxScan)，避免文件后部高权重关系永远进不了结果。
+            // 文件已被完整读入内存，提前 Take 并不减少磁盘 I/O，反而丢失正确性。
             return [.. filtered
-                .Take(maxScan)
                 .OrderByDescending(relation => relation.Weight)
                 .ThenByDescending(relation => relation.Confidence)
                 .ThenByDescending(relation => relation.CreatedAt)
+                .Take(maxScan)
                 .Skip(effectiveSkip)
                 .Take(effectiveTake)];
         }

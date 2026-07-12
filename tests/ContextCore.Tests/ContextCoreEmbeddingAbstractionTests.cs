@@ -254,6 +254,129 @@ public sealed class ContextCoreEmbeddingAbstractionTests
     }
 
     [TestMethod]
+    public async Task OnnxEmbeddingSessionManager_ConcurrentLoad_CreatesOnlyOneSession()
+    {
+        // P5-0.1: 验证 single-flight —— 并发请求只创建一个 Session，loser Session 被释放
+        var factory = new FakeOnnxEmbeddingSessionFactory(dimensions: 3);
+        var manager = new OnnxEmbeddingSessionManager(new EmbeddingOptions
+        {
+            ModelName = "onnx-concurrent",
+            IdleUnloadAfter = TimeSpan.FromMinutes(5)
+        }, factory);
+
+        // 模拟 10 个并发请求
+        var tasks = Enumerable.Range(0, 10)
+            .Select(_ => manager.GetSessionAsync())
+            .ToArray();
+
+        var sessions = await Task.WhenAll(tasks);
+
+        // 所有请求返回同一个 session 实例
+        var firstSession = sessions[0];
+        foreach (var s in sessions)
+        {
+            Assert.AreSame(firstSession, s);
+        }
+
+        // LoadCount 只增加 1（single-flight 生效）
+        Assert.AreEqual(1, manager.LoadCount);
+
+        // factory 只创建 1 个 session（因为 single-flight 串行化）
+        Assert.AreEqual(1, factory.CreatedSessions.Count);
+    }
+
+    [TestMethod]
+    public async Task OnnxEmbeddingSessionManager_ConcurrentLoad_AfterUnload_ReloadsOnce()
+    {
+        // P5-0.1: 验证卸载后并发重载仍然 single-flight
+        var factory = new FakeOnnxEmbeddingSessionFactory(dimensions: 3);
+        var manager = new OnnxEmbeddingSessionManager(new EmbeddingOptions
+        {
+            ModelName = "onnx-reload",
+            IdleUnloadAfter = TimeSpan.FromSeconds(1)
+        }, factory);
+
+        // 首次加载
+        await manager.GetSessionAsync();
+        Assert.AreEqual(1, manager.LoadCount);
+
+        // 卸载
+        await manager.UnloadIfIdleAsync(DateTimeOffset.UtcNow.AddSeconds(2));
+        Assert.IsFalse(manager.IsLoaded);
+
+        // 并发重载
+        var tasks = Enumerable.Range(0, 8)
+            .Select(_ => manager.GetSessionAsync())
+            .ToArray();
+        await Task.WhenAll(tasks);
+
+        // LoadCount 只增加 1（第二次加载也是 single-flight）
+        Assert.AreEqual(2, manager.LoadCount);
+        Assert.AreEqual(2, factory.CreatedSessions.Count);
+
+        // 第一个 session 在卸载时已释放，第二个 session 仍活跃
+        Assert.IsTrue(factory.CreatedSessions[0].Disposed);
+        Assert.IsFalse(factory.CreatedSessions[1].Disposed);
+    }
+
+    [TestMethod]
+    public async Task OnnxEmbeddingSessionManager_SlowFactory_ConcurrentLoad_DisposesLosers()
+    {
+        // P5-0.1: 验证 slow factory 场景下 loser session 被正确释放
+        var factory = new SlowFakeOnnxEmbeddingSessionFactory(dimensions: 3, delay: TimeSpan.FromMilliseconds(50));
+        var manager = new OnnxEmbeddingSessionManager(new EmbeddingOptions
+        {
+            ModelName = "onnx-slow",
+            IdleUnloadAfter = TimeSpan.FromMinutes(5)
+        }, factory);
+
+        var tasks = Enumerable.Range(0, 5)
+            .Select(_ => manager.GetSessionAsync())
+            .ToArray();
+        var sessions = await Task.WhenAll(tasks);
+
+        // 所有请求返回同一个 session
+        foreach (var s in sessions)
+        {
+            Assert.AreSame(sessions[0], s);
+        }
+
+        // LoadCount 只增加 1
+        Assert.AreEqual(1, manager.LoadCount);
+
+        // slow factory 可能创建多个 session（因为 single-flight 串行化，实际只创建 1 个）
+        // 但如果有 loser，它们必须被释放
+        var liveSessions = factory.CreatedSessions.Where(s => !s.Disposed).ToList();
+        Assert.AreEqual(1, liveSessions.Count);
+    }
+
+    private sealed class SlowFakeOnnxEmbeddingSessionFactory : IOnnxEmbeddingSessionFactory
+    {
+        private readonly int _dimensions;
+        private readonly TimeSpan _delay;
+
+        public SlowFakeOnnxEmbeddingSessionFactory(int dimensions, TimeSpan delay)
+        {
+            _dimensions = dimensions;
+            _delay = delay;
+        }
+
+        public List<FakeOnnxEmbeddingSession> CreatedSessions { get; } = new();
+
+        public async Task<IOnnxEmbeddingSession> CreateAsync(
+            EmbeddingOptions options,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            await Task.Delay(_delay, cancellationToken).ConfigureAwait(false);
+
+            var session = new FakeOnnxEmbeddingSession(options.ModelName, _dimensions);
+            CreatedSessions.Add(session);
+            return session;
+        }
+    }
+
+    [TestMethod]
     public async Task OnnxEmbeddingProvider_ShouldSupportBatchEmbeddingAndContentHashCache()
     {
         var cache = new EmbeddingCacheService();

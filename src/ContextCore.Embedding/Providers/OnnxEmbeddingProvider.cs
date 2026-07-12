@@ -58,6 +58,17 @@ public sealed class OnnxEmbeddingProvider : IEmbeddingProvider, IAsyncDisposable
         var missHashes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var cacheHits = 0;
         var sw = System.Diagnostics.Stopwatch.StartNew();
+
+        // P5-0.2: 预建 inputId -> inputIndex 字典，排序复杂度从 O(n²) 降为 O(n log n)
+        var inputOrder = new Dictionary<string, int>(request.Inputs.Count, StringComparer.OrdinalIgnoreCase);
+        for (var i = 0; i < request.Inputs.Count; i++)
+        {
+            var inputId = request.Inputs[i].Id;
+            if (!string.IsNullOrEmpty(inputId) && !inputOrder.ContainsKey(inputId))
+            {
+                inputOrder[inputId] = i;
+            }
+        }
         try
         {
             foreach (var input in request.Inputs)
@@ -90,9 +101,7 @@ public sealed class OnnxEmbeddingProvider : IEmbeddingProvider, IAsyncDisposable
                     Succeeded = true,
                     Vectors =
                     [
-                        .. vectors
-                            .OrderBy(vector => request.Inputs.Select((input, index) => new { input.Id, Index = index })
-                                .First(item => item.Id == vector.InputId).Index)
+                        .. SortByInputOrder(vectors, inputOrder)
                     ],
                     Usage = new ContextOperationUsage
                     {
@@ -166,10 +175,7 @@ public sealed class OnnxEmbeddingProvider : IEmbeddingProvider, IAsyncDisposable
                 Dimensions = vectors.FirstOrDefault()?.Values.Count
                              ?? (_options.Dimensions > 0 ? _options.Dimensions : 0),
                 Succeeded = true,
-                Vectors = vectors
-                    .OrderBy(vector => request.Inputs.Select((input, index) => new { input.Id, Index = index })
-                        .First(item => item.Id == vector.InputId).Index)
-                    .ToArray(),
+                Vectors = SortByInputOrder(vectors, inputOrder),
                 Usage = new ContextOperationUsage
                 {
                     InputTokens = request.Inputs.Sum(input => EstimateTokens(input.Text)),
@@ -239,6 +245,24 @@ public sealed class OnnxEmbeddingProvider : IEmbeddingProvider, IAsyncDisposable
         return string.IsNullOrWhiteSpace(text)
             ? 0
             : Math.Max(1, text.Length / 4);
+    }
+
+    /// <summary>
+    /// P5-0.2: 按输入顺序排序向量。使用预建的 inputOrder 字典，复杂度 O(n log n)。
+    /// 未找到 inputId 的向量排在末尾（保持稳定顺序）。
+    /// </summary>
+    private static EmbeddingVector[] SortByInputOrder(
+        List<EmbeddingVector> vectors,
+        Dictionary<string, int> inputOrder)
+    {
+        if (vectors.Count <= 1)
+        {
+            return vectors.ToArray();
+        }
+
+        return vectors
+            .OrderBy(vector => inputOrder.TryGetValue(vector.InputId, out var index) ? index : int.MaxValue)
+            .ToArray();
     }
 
     /// <summary>释放底层 ONNX 会话，供 DI 容器在应用关闭时调用。</summary>

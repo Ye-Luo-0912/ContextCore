@@ -1,9 +1,14 @@
 namespace ContextCore.Embedding;
 
 /// <summary>按需加载并在空闲后卸载 ONNX embedding 会话。</summary>
+/// <remarks>
+/// P5-0.1：使用 SemaphoreSlim 实现 single-flight 加载，确保同一时刻只有一个 Session 被创建。
+/// 并发请求中，loser 创建的 Session 会被释放，避免原生内存和模型资源泄漏。
+/// </remarks>
 public sealed class OnnxEmbeddingSessionManager
 {
     private readonly IOnnxEmbeddingSessionFactory _factory;
+    private readonly SemaphoreSlim _loadGate = new(1, 1);
     private readonly object _gate = new();
     private readonly EmbeddingOptions _options;
     private IOnnxEmbeddingSession? _session;
@@ -46,18 +51,7 @@ public sealed class OnnxEmbeddingSessionManager
     public async Task<IOnnxEmbeddingSession> GetSessionAsync(
         CancellationToken cancellationToken = default)
     {
-        IOnnxEmbeddingSession? existing;
-        lock (_gate)
-        {
-            existing = _session;
-            if (existing is not null)
-            {
-                _lastUsedAt = DateTimeOffset.UtcNow;
-                return existing;
-            }
-        }
-
-        var created = await _factory.CreateAsync(_options, cancellationToken).ConfigureAwait(false);
+        // Fast path: session already loaded
         lock (_gate)
         {
             if (_session is not null)
@@ -65,11 +59,56 @@ public sealed class OnnxEmbeddingSessionManager
                 _lastUsedAt = DateTimeOffset.UtcNow;
                 return _session;
             }
+        }
 
-            _session = created;
-            _lastUsedAt = DateTimeOffset.UtcNow;
-            LoadCount++;
-            return _session;
+        // Single-flight: only one request creates the session at a time
+        await _loadGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            // Double-check after acquiring the gate
+            lock (_gate)
+            {
+                if (_session is not null)
+                {
+                    _lastUsedAt = DateTimeOffset.UtcNow;
+                    return _session;
+                }
+            }
+
+            var created = await _factory.CreateAsync(_options, cancellationToken).ConfigureAwait(false);
+
+            lock (_gate)
+            {
+                // Another request may have loaded a session while we were creating
+                if (_session is not null)
+                {
+                    _lastUsedAt = DateTimeOffset.UtcNow;
+                    // We are the loser: dispose our created session to prevent resource leak
+                    _ = DisposeSessionAsync(created);
+                    return _session;
+                }
+
+                _session = created;
+                _lastUsedAt = DateTimeOffset.UtcNow;
+                LoadCount++;
+                return _session;
+            }
+        }
+        finally
+        {
+            _loadGate.Release();
+        }
+    }
+
+    private static async ValueTask DisposeSessionAsync(IOnnxEmbeddingSession session)
+    {
+        try
+        {
+            await session.DisposeAsync().ConfigureAwait(false);
+        }
+        catch
+        {
+            // Best-effort disposal; swallow exceptions to avoid masking the caller's path
         }
     }
 

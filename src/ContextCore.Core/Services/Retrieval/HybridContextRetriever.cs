@@ -258,9 +258,20 @@ public sealed class HybridContextRetriever : IContextRetriever
 
         if (_traceStore is not null)
         {
-            trace = await SuppressDuplicateGraphExpansionShadowTraceAsync(trace, cancellationToken)
-                .ConfigureAwait(false);
-            await _traceStore.SaveAsync(trace, cancellationToken).ConfigureAwait(false);
+            try
+            {
+                trace = await SuppressDuplicateGraphExpansionShadowTraceAsync(trace, cancellationToken)
+                    .ConfigureAwait(false);
+                await _traceStore.SaveAsync(trace, cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch
+            {
+                // P5-0.4: retrieval trace 写入失败不得影响正式检索输出。
+            }
         }
 
         var result = _resultAssembler.Assemble(operationId, request, effectivePacked, trace, metadata);
