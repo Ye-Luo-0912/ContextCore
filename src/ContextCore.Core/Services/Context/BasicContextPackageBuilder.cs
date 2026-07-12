@@ -34,7 +34,6 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
     private int _decisionTraceWriteFailures;
     private DateTimeOffset _decisionTraceLastFailureAt;
     private string? _decisionTraceLastFailureCategory;
-    private static readonly ModeBudgetProfileRegistry ModeBudgetProfiles = ModeBudgetProfileRegistry.CreateDefault();
     private static readonly PackagePriorityProfile PriorityProfile = PackagePriorityProfile.CreateDefault();
 
     /// <summary>decision trace 写入失败次数（fail-open，不影响正式 package 输出）。</summary>
@@ -294,12 +293,12 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         CancellationToken cancellationToken)
     {
         var tokenContext = CreateTokenEstimationContext(request);
-        var workspaceId = NormalizeRequiredValue(request.WorkspaceId);
-        var collectionId = NormalizeRequiredValue(policy.CollectionId, request.CollectionId);
-        var modeBudgetProfile = ResolveModeBudgetProfile(request, policy);
-        var tokenBudget = ResolveTokenBudget(request, policy, modeBudgetProfile);
-        var packageModeName = ResolvePackageModeName(request, policy, modeBudgetProfile);
-        var packageMustHitIds = ResolvePackageMustHitIds(request);
+        var workspaceId = PackagePolicyResolver.NormalizeRequiredValue(request.WorkspaceId);
+        var collectionId = PackagePolicyResolver.NormalizeRequiredValue(policy.CollectionId, request.CollectionId);
+        var modeBudgetProfile = PackagePolicyResolver.ResolveModeBudgetProfile(request, policy);
+        var tokenBudget = PackagePolicyResolver.ResolveTokenBudget(request, policy, modeBudgetProfile);
+        var packageModeName = PackagePolicyResolver.ResolvePackageModeName(request, policy, modeBudgetProfile);
+        var packageMustHitIds = PackagePolicyResolver.ResolvePackageMustHitIds(request);
 
         var sections = new List<ContextPackageSection>();
         var sourceRefs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -323,7 +322,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         var isAuditMode = !string.IsNullOrWhiteSpace(request.QueryText)
             && WorkingMemoryRecaller.DomainKeywords.AuditModeKeywords.Any(k => request.QueryText.Contains(k, StringComparison.OrdinalIgnoreCase));
 
-        if (ShouldIncludeCurrentTaskSection(request, policy))
+        if (PackagePolicyResolver.ShouldIncludeCurrentTaskSection(request, policy))
         {
             var currentTask = await ResolveCurrentTaskAsync(
                 request,
@@ -339,14 +338,14 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                     sections,
                     sourceRefs,
                     "current_task",
-                    GetPriority(policy, "current_task", 110),
+                    PackageSectionBudgetResolver.GetPriority(policy, "current_task", 110),
                     content,
                     ContextContentFormat.Markdown,
                     currentTaskCandidate.SourceRefs,
                     [currentTask.TaskId],
                     [currentTask.TaskId],
                     tokenBudget,
-                    ResolveSectionTokenBudget(policy, modeBudgetProfile, "current_task", tokenBudget),
+                    PackageSectionBudgetResolver.ResolveSectionTokenBudget(policy, modeBudgetProfile, "current_task", tokenBudget),
                     tokenContext,
                     ref estimatedTokens);
                 
@@ -401,7 +400,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
             CreatedAt        = DateTimeOffset.UtcNow
         });
 
-        if ((policy.IncludeHardConstraints || !ShouldIncludeMergedConstraintsSection(request, policy)) && _constraintStore is not null)
+        if ((policy.IncludeHardConstraints || !PackagePolicyResolver.ShouldIncludeMergedConstraintsSection(request, policy)) && _constraintStore is not null)
         {
             var hardConstraints = await _constraintStore.QueryAsync(
                 new ContextConstraintQuery
@@ -440,14 +439,14 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                     sections,
                     sourceRefs,
                     "hard_constraints",
-                    GetPriority(policy, "hard_constraints", 100),
+                    PackageSectionBudgetResolver.GetPriority(policy, "hard_constraints", 100),
                     hardContent,
                     ContextContentFormat.Markdown,
                     ContextItemRefResolver.ResolveSourceRefs(activeHardConstraints),
                     ContextItemRefResolver.ResolveItemRefs(activeHardConstraints),
                     ContextItemRefResolver.ResolveItemRefs(activeHardConstraints),
                     tokenBudget,
-                    ResolveSectionTokenBudget(policy, modeBudgetProfile, "hard_constraints", tokenBudget),
+                    PackageSectionBudgetResolver.ResolveSectionTokenBudget(policy, modeBudgetProfile, "hard_constraints", tokenBudget),
                     tokenContext,
                     ref estimatedTokens);
 
@@ -527,14 +526,14 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                     sections,
                     sourceRefs,
                     "working_memory",
-                    GetPriority(policy, "working_memory", 90),
+                    PackageSectionBudgetResolver.GetPriority(policy, "working_memory", 90),
                     workingContent,
                     ContextContentFormat.Markdown,
                     ContextItemRefResolver.ResolveSourceRefs(activeWorking),
                     ContextItemRefResolver.ResolveItemRefs(activeWorking),
                     ContextItemRefResolver.ResolveItemRefs(activeWorking),
                     tokenBudget,
-                    ResolveSectionTokenBudget(policy, modeBudgetProfile, "working_memory", tokenBudget),
+                    PackageSectionBudgetResolver.ResolveSectionTokenBudget(policy, modeBudgetProfile, "working_memory", tokenBudget),
                     tokenContext,
                     ref estimatedTokens);
 
@@ -569,14 +568,14 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                         sections,
                         sourceRefs,
                         "historical_context",
-                        GetPriority(policy, "historical_context", 15),
+                        PackageSectionBudgetResolver.GetPriority(policy, "historical_context", 15),
                         historicalContent,
                         ContextContentFormat.Markdown,
                         ContextItemRefResolver.ResolveSourceRefs(deprecatedWorking),
                         ContextItemRefResolver.ResolveItemRefs(deprecatedWorking),
                         ContextItemRefResolver.ResolveItemRefs(deprecatedWorking),
                         tokenBudget,
-                        ResolveHistoricalSectionTokenBudget(policy, modeBudgetProfile, "historical_context", tokenBudget),
+                        PackageSectionBudgetResolver.ResolveHistoricalSectionTokenBudget(policy, modeBudgetProfile, "historical_context", tokenBudget),
                         tokenContext,
                         ref estimatedTokens);
 
@@ -623,14 +622,14 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                 sections,
                 sourceRefs,
                 "global_context",
-                GetPriority(policy, "global_context", 80),
+                PackageSectionBudgetResolver.GetPriority(policy, "global_context", 80),
                 globalContent,
                 ContextContentFormat.Markdown,
                 ContextItemRefResolver.ResolveSourceRefs(globalItems),
                 ContextItemRefResolver.ResolveItemRefs(globalItems),
                 ContextItemRefResolver.ResolveItemRefs(globalItems),
                 tokenBudget,
-                ResolveSectionTokenBudget(policy, modeBudgetProfile, "global_context", tokenBudget),
+                PackageSectionBudgetResolver.ResolveSectionTokenBudget(policy, modeBudgetProfile, "global_context", tokenBudget),
                 tokenContext,
                 ref estimatedTokens);
 
@@ -670,14 +669,14 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                 sections,
                 sourceRefs,
                 "recent_context",
-                GetPriority(policy, "recent_context", 70),
+                PackageSectionBudgetResolver.GetPriority(policy, "recent_context", 70),
                 recentContent,
                 ContextContentFormat.Markdown,
                 ContextItemRefResolver.ResolveSourceRefs(includedRecent),
                 ContextItemRefResolver.ResolveItemRefs(includedRecent),
                 ContextItemRefResolver.ResolveItemRefs(includedRecent),
                 tokenBudget,
-                ResolveSectionTokenBudget(policy, modeBudgetProfile, "recent_context", tokenBudget),
+                PackageSectionBudgetResolver.ResolveSectionTokenBudget(policy, modeBudgetProfile, "recent_context", tokenBudget),
                 tokenContext,
                 ref estimatedTokens);
 
@@ -737,14 +736,14 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                 sections,
                 sourceRefs,
                 "stable_memory",
-                GetPriority(policy, "stable_memory", 60),
+                PackageSectionBudgetResolver.GetPriority(policy, "stable_memory", 60),
                 stableContent,
                 ContextContentFormat.Markdown,
                 ContextItemRefResolver.ResolveSourceRefs(stableMemory),
                 ContextItemRefResolver.ResolveItemRefs(stableMemory),
                 ContextItemRefResolver.ResolveItemRefs(stableMemory),
                 tokenBudget,
-                ResolveSectionTokenBudget(policy, modeBudgetProfile, "stable_memory", tokenBudget),
+                PackageSectionBudgetResolver.ResolveSectionTokenBudget(policy, modeBudgetProfile, "stable_memory", tokenBudget),
                 tokenContext,
                 ref estimatedTokens);
 
@@ -795,14 +794,14 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                 sections,
                 sourceRefs,
                 "soft_constraints",
-                GetPriority(policy, "soft_constraints", 50),
+                PackageSectionBudgetResolver.GetPriority(policy, "soft_constraints", 50),
                 softContent,
                 ContextContentFormat.Markdown,
                 ContextItemRefResolver.ResolveSourceRefs(activeSoftConstraints),
                 ContextItemRefResolver.ResolveItemRefs(activeSoftConstraints),
                 ContextItemRefResolver.ResolveItemRefs(activeSoftConstraints),
                 tokenBudget,
-                ResolveSectionTokenBudget(policy, modeBudgetProfile, "soft_constraints", tokenBudget),
+                PackageSectionBudgetResolver.ResolveSectionTokenBudget(policy, modeBudgetProfile, "soft_constraints", tokenBudget),
                 tokenContext,
                 ref estimatedTokens);
 
@@ -817,7 +816,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
             itemReferences);
         }
 
-        if (ShouldIncludeMergedConstraintsSection(request, policy))
+        if (PackagePolicyResolver.ShouldIncludeMergedConstraintsSection(request, policy))
         {
             var mergedConstraints = await ResolveMergedConstraintsAsync(
                 request,
@@ -844,14 +843,14 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                 sections,
                 sourceRefs,
                 "constraints",
-                GetPriority(policy, "constraints", 95),
+                PackageSectionBudgetResolver.GetPriority(policy, "constraints", 95),
                 mergedContent,
                 ContextContentFormat.Markdown,
                 ContextItemRefResolver.ResolveSourceRefs(activeMergedConstraints),
                 ContextItemRefResolver.ResolveItemRefs(activeMergedConstraints),
                 ContextItemRefResolver.ResolveItemRefs(activeMergedConstraints),
                 tokenBudget,
-                ResolveSectionTokenBudget(policy, modeBudgetProfile, "constraints", tokenBudget),
+                PackageSectionBudgetResolver.ResolveSectionTokenBudget(policy, modeBudgetProfile, "constraints", tokenBudget),
                 tokenContext,
                 ref estimatedTokens);
 
@@ -903,14 +902,14 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                     sections,
                     sourceRefs,
                     "related_context",
-                    GetPriority(policy, "related_context", 40),
+                    PackageSectionBudgetResolver.GetPriority(policy, "related_context", 40),
                     relatedContent,
                     ContextContentFormat.Markdown,
                     ContextItemRefResolver.ResolveSourceRefs(relatedItems),
                     ContextItemRefResolver.ResolveItemRefs(relatedItems),
                     ContextItemRefResolver.ResolveItemRefs(relatedItems),
                     tokenBudget,
-                    ResolveSectionTokenBudget(policy, modeBudgetProfile, "related_context", tokenBudget),
+                    PackageSectionBudgetResolver.ResolveSectionTokenBudget(policy, modeBudgetProfile, "related_context", tokenBudget),
                     tokenContext,
                     ref estimatedTokens);
 
@@ -926,21 +925,21 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
             }
         }
 
-        if (ShouldIncludeEvidenceSection(request, policy, selectedItems.Count > 0))
+        if (PackagePolicyResolver.ShouldIncludeEvidenceSection(request, policy, selectedItems.Count > 0))
         {
             var evidenceItems = PackageSectionFormatter.BuildEvidenceEntries(sections, selectedItems);
             AddSection(
                 sections,
                 sourceRefs,
                 "evidence",
-                GetPriority(policy, "evidence", 25),
+                PackageSectionBudgetResolver.GetPriority(policy, "evidence", 25),
                 PackageSectionFormatter.FormatEvidenceEntries(evidenceItems),
                 ContextContentFormat.Markdown,
                 evidenceItems.SelectMany(item => item.SourceRefs).ToArray(),
                 evidenceItems.Select(item => item.ItemId).ToArray(),
                 Array.Empty<string>(),
                 tokenBudget,
-                ResolveSectionTokenBudget(policy, modeBudgetProfile, "evidence", tokenBudget),
+                PackageSectionBudgetResolver.ResolveSectionTokenBudget(policy, modeBudgetProfile, "evidence", tokenBudget),
                 tokenContext,
                 ref estimatedTokens);
         }
@@ -952,38 +951,38 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
             lowConfidenceRelations,
             tokenBudget,
             estimatedTokens);
-        if (ShouldIncludeDiagnosticsSection(request, policy, "excluded", droppedItems.Count > 0))
+        if (PackagePolicyResolver.ShouldIncludeDiagnosticsSection(request, policy, "excluded", droppedItems.Count > 0))
         {
             AddSection(
                 sections,
                 sourceRefs,
                 "excluded",
-                GetPriority(policy, "excluded", 20),
+                PackageSectionBudgetResolver.GetPriority(policy, "excluded", 20),
                 PackageSectionFormatter.FormatDroppedItems(droppedItems),
                 ContextContentFormat.Markdown,
                 Array.Empty<string>(),
                 droppedItems.Select(item => item.ItemId).ToArray(),
                 Array.Empty<string>(),
                 tokenBudget,
-                ResolveDiagnosticsSectionTokenBudget(policy, modeBudgetProfile, "excluded", tokenBudget),
+                PackageSectionBudgetResolver.ResolveDiagnosticsSectionTokenBudget(policy, modeBudgetProfile, "excluded", tokenBudget),
                 tokenContext,
                 ref estimatedTokens);
         }
 
-        if (ShouldIncludeDiagnosticsSection(request, policy, "uncertainties", uncertainties.Count > 0))
+        if (PackagePolicyResolver.ShouldIncludeDiagnosticsSection(request, policy, "uncertainties", uncertainties.Count > 0))
         {
             AddSection(
                 sections,
                 sourceRefs,
                 "uncertainties",
-                GetPriority(policy, "uncertainties", 10),
+                PackageSectionBudgetResolver.GetPriority(policy, "uncertainties", 10),
                 PackageSectionFormatter.FormatUncertainties(uncertainties),
                 ContextContentFormat.Markdown,
                 Array.Empty<string>(),
                 uncertainties.SelectMany(item => item.ItemRefs).ToArray(),
                 Array.Empty<string>(),
                 tokenBudget,
-                ResolveDiagnosticsSectionTokenBudget(policy, modeBudgetProfile, "uncertainties", tokenBudget),
+                PackageSectionBudgetResolver.ResolveDiagnosticsSectionTokenBudget(policy, modeBudgetProfile, "uncertainties", tokenBudget),
                 tokenContext,
                 ref estimatedTokens);
         }
@@ -1010,7 +1009,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         AddDiagnosticMetadata(metadata, tokenBudget, estimatedTokens, droppedItems.Count, uncertainties.Count);
         AddGraphExpansionMetadata(metadata, graphExpansionContribution);
 
-        var orderedSections = OrderSections(sections, policy);
+        var orderedSections = PackageSectionBudgetResolver.OrderSections(sections, policy);
 
         var package = new ContextPackage
         {
@@ -1125,7 +1124,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
             return Array.Empty<string>();
         }
 
-        var maxSeeds = ResolveIntSetting(request, policy, "graphSeedMaxNodes", 12, min: 1, max: 50);
+        var maxSeeds = PackagePolicyResolver.ResolveIntSetting(request, policy, "graphSeedMaxNodes", 12, min: 1, max: 50);
         var candidates = GraphSeedResolver.ExtractGraphSeedCandidates(workingMemory, anchors)
             .Select(GraphSeedResolver.NormalizeGraphSeedCandidate)
             .Where(value => !string.IsNullOrWhiteSpace(value))
@@ -1200,11 +1199,11 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
             return Array.Empty<ContextItem>();
         }
 
-        var relationTypes = ResolveRelationTypeWhitelist(request, policy);
-        var maxDepth = ResolveIntSetting(request, policy, "relationExpansionDepth", 1, min: 1, max: 2);
-        var maxNodes = ResolveIntSetting(request, policy, "relationMaxNodes", 20, min: 1, max: 100);
-        var maxRelations = ResolveIntSetting(request, policy, "relationMaxRelations", 60, min: 1, max: 300);
-        var minConfidence = ResolveDoubleSetting(request, policy, "relationMinConfidence", 0.35, min: 0, max: 1);
+        var relationTypes = PackagePolicyResolver.ResolveRelationTypeWhitelist(request, policy);
+        var maxDepth = PackagePolicyResolver.ResolveIntSetting(request, policy, "relationExpansionDepth", 1, min: 1, max: 2);
+        var maxNodes = PackagePolicyResolver.ResolveIntSetting(request, policy, "relationMaxNodes", 20, min: 1, max: 100);
+        var maxRelations = PackagePolicyResolver.ResolveIntSetting(request, policy, "relationMaxRelations", 60, min: 1, max: 300);
+        var minConfidence = PackagePolicyResolver.ResolveDoubleSetting(request, policy, "relationMinConfidence", 0.35, min: 0, max: 1);
 
         // 通过统一遍历引擎执行双向 BFS；engine 不过滤置信度（MinConfidence=0），由 caller 做置信度过滤和 low-confidence 收集。
         var profile = new RelationExpansionProfile
@@ -1303,282 +1302,18 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
             .ToArray();
     }
 
-    private static HashSet<string> ResolveRelationTypeWhitelist(
-        ContextPackageRequest request,
-        ContextPackagePolicy policy)
-    {
-        var configured = ReadSetting(request, policy, "relationTypeWhitelist");
-        var values = string.IsNullOrWhiteSpace(configured)
-            ? DefaultRelationTypeWhitelist()
-            : configured.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-
-        return values
-            .Where(value => !string.IsNullOrWhiteSpace(value))
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-    }
-
-    private static IReadOnlyList<string> DefaultRelationTypeWhitelist()
-    {
-        return
-        [
-            ContextRelationTypes.DependsOn,
-            ContextRelationTypes.DerivedFrom,
-            ContextRelationTypes.Summarizes,
-            ContextRelationTypes.GeneratedBy,
-            ContextRelationTypes.IncludedInPackage,
-            ContextRelationTypes.RelatedTo,
-            ContextRelationTypes.Replaces,
-            ContextRelationTypes.Contradicts,
-            ContextRelationTypes.Supersedes,
-            ContextRelationTypes.ConflictsWith
-        ];
-    }
-
-    private static int ResolveIntSetting(
-        ContextPackageRequest request,
-        ContextPackagePolicy policy,
-        string key,
-        int defaultValue,
-        int min,
-        int max)
-    {
-        return int.TryParse(ReadSetting(request, policy, key), out var value)
-            ? Math.Clamp(value, min, max)
-            : defaultValue;
-    }
-
-    private static double ResolveDoubleSetting(
-        ContextPackageRequest request,
-        ContextPackagePolicy policy,
-        string key,
-        double defaultValue,
-        double min,
-        double max)
-    {
-        return double.TryParse(ReadSetting(request, policy, key), out var value)
-            ? Math.Clamp(value, min, max)
-            : defaultValue;
-    }
-
-    private static int ResolveTokenBudget(
-        ContextPackageRequest request,
-        ContextPackagePolicy policy,
-        ModeBudgetProfile? modeBudgetProfile)
-    {
-        if (policy.TokenBudget > 0)
-        {
-            return policy.TokenBudget;
-        }
-
-        if (request.TokenBudget > 0)
-        {
-            return request.TokenBudget;
-        }
-
-        return modeBudgetProfile is not null
-            ? modeBudgetProfile.DefaultTokenBudget
-            : int.MaxValue;
-    }
-
-    private static string ResolvePackageModeName(
-        ContextPackageRequest request,
-        ContextPackagePolicy policy,
-        ModeBudgetProfile? modeBudgetProfile)
-    {
-        if (!string.IsNullOrWhiteSpace(modeBudgetProfile?.ModeName))
-        {
-            return modeBudgetProfile.ModeName;
-        }
-
-        return ReadFirstSetting(request, policy, "mode", "packageMode", "contextMode", "taskMode") ?? string.Empty;
-    }
-
-    private static IReadOnlySet<string> ResolvePackageMustHitIds(ContextPackageRequest request)
-    {
-        var values = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var key in new[]
-        {
-            "eval.mustHit",
-            "package.mustHit",
-            "mustHit",
-            "attention.mustHit"
-        })
-        {
-            if (!request.Metadata.TryGetValue(key, out var raw) || string.IsNullOrWhiteSpace(raw))
-            {
-                continue;
-            }
-
-            foreach (var value in raw.Split([',', ';', '，', '；', '|', '\r', '\n', '\t', ' '],
-                         StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-            {
-                values.Add(value);
-            }
-        }
-
-        return values;
-    }
-
-    private static ModeBudgetProfile? ResolveModeBudgetProfile(
-        ContextPackageRequest request,
-        ContextPackagePolicy policy)
-    {
-        // 优先读取强类型枚举（request.Mode > policy.Mode > metadata string）。
-        var enumMode = request.Mode != ContextPackageMode.None
-            ? request.Mode
-            : policy.Mode;
-
-        if (enumMode != ContextPackageMode.None)
-        {
-            return ModeBudgetProfiles.Resolve(enumMode);
-        }
-
-        // 向后兼容：从 metadata 字符串读取。
-        var mode = ReadFirstSetting(
-            request,
-            policy,
-            "mode",
-            "packageMode",
-            "contextMode",
-            "taskMode");
-        var normalizedMode = WorkingMemoryRecaller.NormalizeModeName(mode);
-        return ModeBudgetProfiles.Resolve(normalizedMode);
-    }
-
-    private static string? ReadFirstSetting(
-        ContextPackageRequest request,
-        ContextPackagePolicy policy,
-        params string[] keys)
-    {
-        foreach (var key in keys)
-        {
-            var value = ReadSetting(request, policy, key);
-            if (!string.IsNullOrWhiteSpace(value))
-            {
-                return value;
-            }
-        }
-
-        return null;
-    }
-
-    private static string? ReadSetting(
-        ContextPackageRequest request,
-        ContextPackagePolicy policy,
-        string key)
-    {
-        if (request.Metadata.TryGetValue(key, out var requestValue)
-            && !string.IsNullOrWhiteSpace(requestValue))
-        {
-            return requestValue;
-        }
-
-        return policy.Metadata.TryGetValue(key, out var policyValue)
-            && !string.IsNullOrWhiteSpace(policyValue)
-            ? policyValue
-            : null;
-    }
-
-    private static bool ShouldIncludeDiagnosticsSection(
-        ContextPackageRequest request,
-        ContextPackagePolicy policy,
-        string sectionName,
-        bool hasContent)
-    {
-        if (!hasContent)
-        {
-            return false;
-        }
-
-        return ResolveBoolSetting(request, policy, "includeDiagnosticsSections")
-            || ResolveBoolSetting(request, policy, $"include{ToPascalCase(sectionName)}Section")
-            || ResolveBoolSetting(request, policy, $"{sectionName}.enabled");
-    }
-
-    private static bool ShouldIncludeMergedConstraintsSection(
-        ContextPackageRequest request,
-        ContextPackagePolicy policy)
-    {
-        return ResolveBoolSetting(request, policy, "includeMergedConstraintsSection")
-            || ResolveBoolSetting(request, policy, "includeConstraintsSection")
-            || ResolveBoolSetting(request, policy, "constraints.enabled")
-            || ResolveBoolSetting(request, policy, "constraintsSection.enabled");
-    }
-
-    private static bool ShouldIncludeCurrentTaskSection(
-        ContextPackageRequest request,
-        ContextPackagePolicy policy)
-    {
-        return ResolveBoolSetting(request, policy, "includeCurrentTaskSection")
-            || ResolveBoolSetting(request, policy, "includeCurrentTask")
-            || ResolveBoolSetting(request, policy, "currentTask.enabled")
-            || ResolveBoolSetting(request, policy, "current_task.enabled")
-            || policy.SectionOrder.Any(section =>
-                string.Equals(NormalizeSectionKey(section), "current_task", StringComparison.OrdinalIgnoreCase));
-    }
-
-    private static bool ShouldIncludeEvidenceSection(
-        ContextPackageRequest request,
-        ContextPackagePolicy policy,
-        bool hasContent)
-    {
-        if (!hasContent)
-        {
-            return false;
-        }
-
-        return ResolveBoolSetting(request, policy, "includeEvidenceSection")
-            || ResolveBoolSetting(request, policy, "includeEvidence")
-            || ResolveBoolSetting(request, policy, "evidence.enabled")
-            || policy.SectionOrder.Any(section =>
-                string.Equals(NormalizeSectionKey(section), "evidence", StringComparison.OrdinalIgnoreCase));
-    }
-
-    private static bool ResolveBoolSetting(
-        ContextPackageRequest request,
-        ContextPackagePolicy policy,
-        string key)
-    {
-        var value = ReadSetting(request, policy, key);
-        return value is not null
-            && (string.Equals(value, "true", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(value, "1", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(value, "yes", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(value, "on", StringComparison.OrdinalIgnoreCase));
-    }
-
-    private static string ToPascalCase(string value)
-    {
-        var words = value.Split(['_', '-', '.', ' '], StringSplitOptions.RemoveEmptyEntries);
-        return string.Concat(words.Select(word =>
-            char.ToUpperInvariant(word[0]) + (word.Length == 1 ? string.Empty : word[1..])));
-    }
-
-    private static string NormalizeRequiredValue(params string?[] values)
-    {
-        foreach (var value in values)
-        {
-            if (!string.IsNullOrWhiteSpace(value))
-            {
-                return value;
-            }
-        }
-
-        return string.Empty;
-    }
-
     private async Task<IReadOnlyList<ContextConstraint>> ResolveMergedConstraintsAsync(
         ContextPackageRequest request,
         ContextPackagePolicy policy,
         string collectionId,
         CancellationToken cancellationToken)
     {
-        var workspaceId = NormalizeRequiredValue(request.WorkspaceId);
+        var workspaceId = PackagePolicyResolver.NormalizeRequiredValue(request.WorkspaceId);
         var constraints = new List<ContextConstraint>();
         if (_constraintStore is not null)
         {
             // 合并约束只在显式开启时查询，并设置上限，避免为了可选 section 触发无界扫描。
-            var take = ResolveIntSetting(request, policy, "constraintMergeMaxItems", 100, 1, 500);
+            var take = PackagePolicyResolver.ResolveIntSetting(request, policy, "constraintMergeMaxItems", 100, 1, 500);
             var storedConstraints = await _constraintStore.QueryAsync(
                 new ContextConstraintQuery
                 {
@@ -1900,7 +1635,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         int estimatedTokens,
         TokenEstimationContext tokenContext)
     {
-        var workspaceId = NormalizeRequiredValue(request.WorkspaceId);
+        var workspaceId = PackagePolicyResolver.NormalizeRequiredValue(request.WorkspaceId);
         return new ContextPackage
         {
             PackageId = Guid.NewGuid().ToString("N"),
@@ -2050,9 +1785,9 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         }
 
         var packageModeName = request.Policy is null
-            ? ReadFirstSetting(request, new ContextPackagePolicy(), "mode", "packageMode", "contextMode", "taskMode") ?? string.Empty
-            : ResolvePackageModeName(request, request.Policy, ResolveModeBudgetProfile(request, request.Policy));
-        var packageMustHitIds = ResolvePackageMustHitIds(request);
+            ? PackagePolicyResolver.ReadFirstSetting(request, new ContextPackagePolicy(), "mode", "packageMode", "contextMode", "taskMode") ?? string.Empty
+            : PackagePolicyResolver.ResolvePackageModeName(request, request.Policy, PackagePolicyResolver.ResolveModeBudgetProfile(request, request.Policy));
+        var packageMustHitIds = PackagePolicyResolver.ResolvePackageMustHitIds(request);
         var sortedSelected = selectedItems
             .OrderByDescending(item => ResolvePackageOrderScore(item, packageModeName, packageMustHitIds))
             .ThenByDescending(item => item.Score)
@@ -2665,7 +2400,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         var policy = request.Policy;
         var modeBudgetProfile = policy is null
             ? null
-            : ResolveModeBudgetProfile(request, policy);
+            : PackagePolicyResolver.ResolveModeBudgetProfile(request, policy);
 
         return new ContextPackageBudgetReport
         {
@@ -2683,7 +2418,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                 {
                     var allocatedTokens = policy is null
                         ? 0
-                        : ResolveReportedSectionTokenBudget(policy, modeBudgetProfile, section.Name, tokenBudget);
+                        : PackageSectionBudgetResolver.ResolveReportedSectionTokenBudget(policy, modeBudgetProfile, section.Name, tokenBudget);
                     if (allocatedTokens <= 0 && normalizedBudget > 0)
                     {
                         allocatedTokens = normalizedBudget;
@@ -2700,23 +2435,6 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                     };
                 })
                 .ToArray()
-        };
-    }
-
-    private static int ResolveReportedSectionTokenBudget(
-        ContextPackagePolicy policy,
-        ModeBudgetProfile? modeBudgetProfile,
-        string sectionName,
-        int tokenBudget)
-    {
-        var normalized = NormalizeSectionKey(sectionName);
-        return normalized switch
-        {
-            "excluded" or "uncertainties" =>
-                ResolveDiagnosticsSectionTokenBudget(policy, modeBudgetProfile, sectionName, tokenBudget),
-            "historical_context" or "deprecated_evidence" or "conflict_evidence" =>
-                ResolveHistoricalSectionTokenBudget(policy, modeBudgetProfile, sectionName, tokenBudget),
-            _ => ResolveSectionTokenBudget(policy, modeBudgetProfile, sectionName, tokenBudget)
         };
     }
 
@@ -2764,19 +2482,19 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         params string[] names)
     {
         var normalizedNames = names
-            .Select(NormalizeSectionKey)
+            .Select(PackageSectionBudgetResolver.NormalizeSectionKey)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         return sections
-            .Where(section => normalizedNames.Contains(NormalizeSectionKey(section.SectionName)))
+            .Where(section => normalizedNames.Contains(PackageSectionBudgetResolver.NormalizeSectionKey(section.SectionName)))
             .ToArray();
     }
 
     private static bool IsSection(ContextPackageOutputItem section, string name)
     {
         return string.Equals(
-            NormalizeSectionKey(section.SectionName),
-            NormalizeSectionKey(name),
+            PackageSectionBudgetResolver.NormalizeSectionKey(section.SectionName),
+            PackageSectionBudgetResolver.NormalizeSectionKey(name),
             StringComparison.OrdinalIgnoreCase);
     }
 
@@ -2918,201 +2636,6 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
     {
         return !string.IsNullOrWhiteSpace(value)
             && signals.Any(signal => value.Contains(signal, StringComparison.OrdinalIgnoreCase));
-    }
-
-    private static IReadOnlyList<ContextPackageSection> OrderSections(
-        IReadOnlyList<ContextPackageSection> sections,
-        ContextPackagePolicy policy)
-    {
-        var sectionOrder = policy.SectionOrder
-            .Where(value => !string.IsNullOrWhiteSpace(value))
-            .Select(NormalizeSectionKey)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Select((name, index) => new { Name = name, Index = index })
-            .ToDictionary(item => item.Name, item => item.Index, StringComparer.OrdinalIgnoreCase);
-
-        var indexedSections = sections
-            .Select((section, index) =>
-            {
-                var rank = sectionOrder.TryGetValue(NormalizeSectionKey(section.Name), out var explicitRank)
-                    ? explicitRank
-                    : int.MaxValue;
-
-                return new
-                {
-                    Section = section,
-                    Index = index,
-                    Rank = rank
-                };
-            })
-            .ToArray();
-
-        return [.. indexedSections
-            .OrderBy(item => item.Rank)
-            .ThenByDescending(item => item.Rank == int.MaxValue ? item.Section.Priority : 0)
-            .ThenBy(item => item.Index)
-            .Select(item => item.Section)];
-    }
-
-    private static int GetPriority(ContextPackagePolicy policy, string sectionName, int defaultPriority)
-    {
-        return TryGetSectionSetting(policy.SectionPriorities, sectionName, out var priority)
-            ? priority
-            : defaultPriority;
-    }
-
-    private static int GetSectionTokenBudget(ContextPackagePolicy policy, string sectionName)
-    {
-        return TryGetSectionSetting(policy.SectionTokenBudgets, sectionName, out var budget) && budget > 0
-            ? budget
-            : 0;
-    }
-
-    private static int ResolveSectionTokenBudget(
-        ContextPackagePolicy policy,
-        ModeBudgetProfile? modeBudgetProfile,
-        string sectionName,
-        int tokenBudget)
-    {
-        var explicitBudget = GetSectionTokenBudget(policy, sectionName);
-        if (explicitBudget > 0)
-        {
-            return explicitBudget;
-        }
-
-        if (modeBudgetProfile is null || tokenBudget <= 0 || tokenBudget == int.MaxValue)
-        {
-            return 0;
-        }
-
-        var normalizedSectionName = NormalizeSectionKey(sectionName);
-        return modeBudgetProfile.SectionRatios.TryGetValue(normalizedSectionName, out var ratio) && ratio > 0
-            ? Math.Max(1, (int)Math.Round(tokenBudget * ratio, MidpointRounding.AwayFromZero))
-            : 0;
-    }
-
-    private static int ResolveDiagnosticsSectionTokenBudget(
-        ContextPackagePolicy policy,
-        ModeBudgetProfile? modeBudgetProfile,
-        string sectionName,
-        int tokenBudget)
-    {
-        var explicitBudget = GetSectionTokenBudget(policy, sectionName);
-        if (explicitBudget > 0)
-        {
-            return explicitBudget;
-        }
-
-        if (tokenBudget <= 0 || tokenBudget == int.MaxValue)
-        {
-            return 0;
-        }
-
-        var baseBudget = ResolveSectionTokenBudget(policy, modeBudgetProfile, sectionName, tokenBudget);
-        var normalized = NormalizeSectionKey(sectionName);
-        var ratio = normalized switch
-        {
-            "evidence" => 0.04,
-            "excluded" => 0.03,
-            "uncertainties" => 0.03,
-            _ => 0.03
-        };
-        var cap = Math.Max(tokenBudget <= 200 ? 8 : 32, (int)Math.Round(tokenBudget * ratio, MidpointRounding.AwayFromZero));
-        cap = Math.Min(cap, tokenBudget <= 200 ? 16 : 160);
-        return baseBudget > 0 ? Math.Min(baseBudget, cap) : cap;
-    }
-
-    private static int ResolveHistoricalSectionTokenBudget(
-        ContextPackagePolicy policy,
-        ModeBudgetProfile? modeBudgetProfile,
-        string sectionName,
-        int tokenBudget)
-    {
-        var explicitBudget = GetSectionTokenBudget(policy, sectionName);
-        if (explicitBudget > 0)
-        {
-            return explicitBudget;
-        }
-
-        if (tokenBudget <= 0 || tokenBudget == int.MaxValue)
-        {
-            return 0;
-        }
-
-        var baseBudget = ResolveSectionTokenBudget(policy, modeBudgetProfile, sectionName, tokenBudget);
-        var cap = Math.Max(48, (int)Math.Round(tokenBudget * 0.10, MidpointRounding.AwayFromZero));
-        cap = Math.Min(cap, 600);
-        return baseBudget > 0 ? Math.Min(baseBudget, cap) : cap;
-    }
-
-    private static bool TryGetSectionSetting(
-        IReadOnlyDictionary<string, int> settings,
-        string sectionName,
-        out int value)
-    {
-        if (settings.TryGetValue(sectionName, out value))
-        {
-            return true;
-        }
-
-        var normalizedSectionName = NormalizeSectionKey(sectionName);
-        foreach (var (key, configuredValue) in settings)
-        {
-            if (string.Equals(NormalizeSectionKey(key), normalizedSectionName, StringComparison.OrdinalIgnoreCase))
-            {
-                value = configuredValue;
-                return true;
-            }
-        }
-
-        foreach (var fallbackKey in new[] { "default", "*" })
-        {
-            foreach (var (key, configuredValue) in settings)
-            {
-                if (string.Equals(NormalizeSectionKey(key), fallbackKey, StringComparison.OrdinalIgnoreCase))
-                {
-                    value = configuredValue;
-                    return true;
-                }
-            }
-        }
-
-        value = default;
-        return false;
-    }
-
-    private static string NormalizeSectionKey(string? sectionName)
-    {
-        if (string.IsNullOrWhiteSpace(sectionName))
-        {
-            return string.Empty;
-        }
-
-        var normalized = sectionName.Trim().ToLowerInvariant()
-            .Replace('-', '_')
-            .Replace(' ', '_')
-            .Replace('.', '_');
-
-        while (normalized.Contains("__", StringComparison.Ordinal))
-        {
-            normalized = normalized.Replace("__", "_");
-        }
-
-        var compact = normalized.Replace("_", string.Empty);
-        return compact switch
-        {
-            "hardconstraint" or "hardconstraints" => "hard_constraints",
-            "softconstraint" or "softconstraints" => "soft_constraints",
-            "currenttask" => "current_task",
-            "workingmemory" => "working_memory",
-            "stablememory" => "stable_memory",
-            "globalcontext" => "global_context",
-            "recentcontext" or "recentrawcontext" or "rawcontext" => "recent_context",
-            "relatedcontext" => "related_context",
-            "excluded" or "excludeditems" => "excluded",
-            "uncertainty" or "uncertainties" => "uncertainties",
-            _ => normalized
-        };
     }
 
     private static bool IsActive(ContextConstraint constraint)
