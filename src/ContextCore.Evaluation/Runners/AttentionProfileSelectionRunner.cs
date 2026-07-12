@@ -3,7 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using ContextCore.Abstractions.Models;
 
-namespace ContextCore.ControlRoom.Services;
+namespace ContextCore.Evaluation.Runners;
 
 /// <summary>Builds a conservative profile selection report from attention shadow eval outputs.</summary>
 public sealed class AttentionProfileSelectionRunner

@@ -2,7 +2,7 @@ using ContextCore.Abstractions.Models;
 using ContextCore.Storage.FileSystem.Stores;
 using ContextCore.Storage.Postgres.Stores;
 
-namespace ContextCore.ControlRoom.Services;
+namespace ContextCore.Evaluation.Runners;
 
 /// <summary>多个 normal scope 的受控 canary；只扩大显式 scope，不启用全局默认 provider。</summary>
 public sealed class RelationGovernanceMultiNormalScopeCanaryRunner

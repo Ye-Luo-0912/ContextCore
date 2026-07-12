@@ -7,7 +7,7 @@ using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Storage.Postgres.Stores;
 
-namespace ContextCore.ControlRoom.Services;
+namespace ContextCore.Evaluation.Runners;
 
 /// <summary>Learning feedback provider 路由器；默认 FileSystemPrimary，Postgres primary 只允许显式 scoped smoke。</summary>
 public sealed class LearningFeedbackProviderRouter

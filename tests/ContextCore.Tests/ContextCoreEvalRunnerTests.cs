@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.ControlRoom.Services;
+using ContextCore.Evaluation.Runners;
 
 namespace ContextCore.Tests;
 

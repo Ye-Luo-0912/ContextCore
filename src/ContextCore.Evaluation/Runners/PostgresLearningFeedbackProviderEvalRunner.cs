@@ -9,7 +9,7 @@ using ContextCore.Storage.Postgres;
 using ContextCore.Storage.Postgres.Infrastructure;
 using ContextCore.Storage.Postgres.Stores;
 
-namespace ContextCore.ControlRoom.Services;
+namespace ContextCore.Evaluation.Runners;
 
 /// <summary>DB3 learning feedback PostgreSQL provider 的 diagnostics/parity runner。</summary>
 public sealed class PostgresLearningFeedbackProviderEvalRunner

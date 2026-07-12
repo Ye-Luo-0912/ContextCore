@@ -8,7 +8,7 @@ using ContextCore.Storage.Postgres;
 using ContextCore.Storage.Postgres.Infrastructure;
 using ContextCore.Storage.Postgres.Stores;
 
-namespace ContextCore.ControlRoom.Services;
+namespace ContextCore.Evaluation.Runners;
 
 /// <summary>DB5.3 pgvector query preview；只读对比，不接正式 retrieval。</summary>
 public sealed class PostgresVectorQueryPreviewRunner

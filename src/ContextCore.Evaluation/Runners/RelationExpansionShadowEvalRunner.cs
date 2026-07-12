@@ -7,7 +7,7 @@ using ContextCore.Core.Services.Graph;
 using ContextCore.Core.Services.Planning;
 using ContextCore.Storage.InMemory;
 
-namespace ContextCore.ControlRoom.Services;
+namespace ContextCore.Evaluation.Runners;
 
 /// <summary>在 eval 样本上运行 relation expansion profile preview，不改变正式 retrieval/package 输出。</summary>
 public sealed class RelationExpansionShadowEvalRunner

@@ -1,7 +1,7 @@
 using System.Text;
 using ContextCore.Abstractions.Models;
 
-namespace ContextCore.ControlRoom.Services;
+namespace ContextCore.Evaluation.Runners;
 
 /// <summary>V3.10.F Qwen3 provider 配置一致性审计；只读取报告，不改变任何 runtime 行为。</summary>
 public sealed class VectorProviderConfigurationSanityAuditRunner

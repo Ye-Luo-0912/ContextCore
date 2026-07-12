@@ -1,7 +1,7 @@
 using System.Text;
 using ContextCore.Abstractions.Models;
 
-namespace ContextCore.ControlRoom.Services;
+namespace ContextCore.Evaluation.Runners;
 
 /// <summary>V3.10.F embedding provider comparison freeze；只读取报告，不启用正式向量检索，不切换 preview provider。</summary>
 public sealed class EmbeddingProviderComparisonFreezeRunner

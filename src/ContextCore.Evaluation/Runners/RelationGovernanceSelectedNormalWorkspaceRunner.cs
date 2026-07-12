@@ -2,7 +2,7 @@ using ContextCore.Abstractions.Models;
 using ContextCore.Storage.FileSystem.Stores;
 using ContextCore.Storage.Postgres.Stores;
 
-namespace ContextCore.ControlRoom.Services;
+namespace ContextCore.Evaluation.Runners;
 
 /// <summary>受控 normal workspace 的 relation governance canary；只验证显式 scope，不升级全局默认 provider。</summary>
 public sealed class RelationGovernanceSelectedNormalWorkspaceRunner

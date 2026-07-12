@@ -2,7 +2,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using ContextCore.Abstractions.Models;
 
-namespace ContextCore.ControlRoom.Services;
+namespace ContextCore.Evaluation.Runners;
 
 /// <summary>构建 extended eval failed 样本的只读归因报告。</summary>
 public static class ExtendedFailureTriageReportBuilder

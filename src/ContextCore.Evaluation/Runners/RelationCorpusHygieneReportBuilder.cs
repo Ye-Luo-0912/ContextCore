@@ -3,7 +3,7 @@ using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services;
 using ContextCore.Core.Services.Graph;
 
-namespace ContextCore.ControlRoom.Services;
+namespace ContextCore.Evaluation.Runners;
 
 /// <summary>从 eval fixture corpus 文件构建 relation corpus hygiene 报告。</summary>
 public sealed class RelationCorpusHygieneReportBuilder

@@ -11,7 +11,7 @@ using ContextCore.Evaluation.Hosting;
 using ContextCore.Storage.InMemory;
 using ContextCore.Storage.InMemory.Stores;
 
-namespace ContextCore.ControlRoom.Services;
+namespace ContextCore.Evaluation.Runners;
 
 /// <summary>
 /// 上下文评测运行器，支持 Chat, Project, Novel, Automation, Coding 多场景上下文评测。

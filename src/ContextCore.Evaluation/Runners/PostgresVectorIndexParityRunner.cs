@@ -7,7 +7,7 @@ using ContextCore.Storage.Postgres;
 using ContextCore.Storage.Postgres.Infrastructure;
 using ContextCore.Storage.Postgres.Stores;
 
-namespace ContextCore.ControlRoom.Services;
+namespace ContextCore.Evaluation.Runners;
 
 /// <summary>DB5.1 VectorIndexStore FileSystem/Postgres parity eval。</summary>
 public sealed class PostgresVectorIndexParityRunner

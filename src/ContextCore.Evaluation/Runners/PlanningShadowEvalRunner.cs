@@ -13,7 +13,7 @@ using ContextCore.Embedding;
 using ContextCore.Storage.InMemory;
 using ContextCore.Storage.InMemory.Stores;
 
-namespace ContextCore.ControlRoom.Services;
+namespace ContextCore.Evaluation.Runners;
 
 /// <summary>运行 planning proposal shadow retrieval comparison，不影响正式 eval/package 输出。</summary>
 public sealed class PlanningShadowEvalRunner

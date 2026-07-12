@@ -2,7 +2,7 @@ using ContextCore.Abstractions.Models;
 using ContextCore.Storage.FileSystem.Stores;
 using ContextCore.Storage.Postgres.Stores;
 
-namespace ContextCore.ControlRoom.Services;
+namespace ContextCore.Evaluation.Runners;
 
 /// <summary>selected normal scope 的延长观察窗口；只复用 canary 操作集，不改变全局 provider。</summary>
 public sealed class RelationGovernanceLimitedNormalScopeObservationRunner

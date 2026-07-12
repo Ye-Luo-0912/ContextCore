@@ -1,6 +1,6 @@
 using ContextCore.Abstractions.Models;
 
-namespace ContextCore.ControlRoom.Services;
+namespace ContextCore.Evaluation.Runners;
 
 /// <summary>
 /// Shared trace-analysis helpers extracted from the relation governance canary

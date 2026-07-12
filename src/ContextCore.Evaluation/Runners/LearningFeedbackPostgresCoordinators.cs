@@ -5,7 +5,7 @@ using System.Text.Json;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 
-namespace ContextCore.ControlRoom.Services;
+namespace ContextCore.Evaluation.Runners;
 
 /// <summary>Learning feedback dual-write 旁路协调器；正式写入仍以 FileSystem 为准。</summary>
 public sealed class LearningFeedbackDualWriteCoordinator

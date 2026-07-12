@@ -9,7 +9,7 @@ using ContextCore.Embedding;
 using ContextCore.Storage.InMemory;
 using ContextCore.Storage.InMemory.Stores;
 
-namespace ContextCore.ControlRoom.Services;
+namespace ContextCore.Evaluation.Runners;
 
 /// <summary>
 /// 专项检索评测运行器（A5 §7.1）。

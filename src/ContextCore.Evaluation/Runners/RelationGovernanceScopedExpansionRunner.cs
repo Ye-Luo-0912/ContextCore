@@ -3,7 +3,7 @@ using ContextCore.Storage.FileSystem;
 using ContextCore.Storage.FileSystem.Stores;
 using ContextCore.Storage.Postgres.Stores;
 
-namespace ContextCore.ControlRoom.Services;
+namespace ContextCore.Evaluation.Runners;
 
 /// <summary>Relation governance scoped service mode 扩容 canary；只面向显式 scope rule。</summary>
 public sealed class RelationGovernanceScopedExpansionRunner

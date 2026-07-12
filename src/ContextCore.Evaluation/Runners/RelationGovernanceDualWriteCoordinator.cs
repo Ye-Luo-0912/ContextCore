@@ -3,7 +3,7 @@ using ContextCore.Abstractions.Models;
 using ContextCore.Storage.FileSystem.Stores;
 using ContextCore.Storage.Postgres.Stores;
 
-namespace ContextCore.ControlRoom.Services;
+namespace ContextCore.Evaluation.Runners;
 
 /// <summary>Relation governance 双写协调器；FileSystem 始终是 source of truth。</summary>
 public sealed class RelationGovernanceDualWriteCoordinator

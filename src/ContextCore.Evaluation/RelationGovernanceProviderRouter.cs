@@ -1,9 +1,10 @@
 using System.Diagnostics;
 using ContextCore.Abstractions.Models;
+using ContextCore.Evaluation.Runners;
 using ContextCore.Storage.FileSystem.Stores;
 using ContextCore.Storage.Postgres.Stores;
 
-namespace ContextCore.ControlRoom.Services;
+namespace ContextCore.Evaluation;
 
 /// <summary>Relation governance provider 路由器；默认 FileSystemPrimary，Postgres primary 只允许显式 guarded scope。</summary>
 public sealed class RelationGovernanceProviderRouter

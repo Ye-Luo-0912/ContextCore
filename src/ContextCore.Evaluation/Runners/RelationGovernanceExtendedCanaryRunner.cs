@@ -3,7 +3,7 @@ using ContextCore.Core.Services.Graph;
 using ContextCore.Storage.FileSystem.Stores;
 using ContextCore.Storage.Postgres.Stores;
 
-namespace ContextCore.ControlRoom.Services;
+namespace ContextCore.Evaluation.Runners;
 
 /// <summary>Relation governance scoped provider 的扩展 canary；只在显式隔离 scope 中运行。</summary>
 public sealed class RelationGovernanceExtendedCanaryRunner

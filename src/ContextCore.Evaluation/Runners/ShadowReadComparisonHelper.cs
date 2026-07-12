@@ -3,7 +3,7 @@ using System.Text;
 using System.Text.Json;
 using ContextCore.Abstractions.Models;
 
-namespace ContextCore.ControlRoom.Services;
+namespace ContextCore.Evaluation.Runners;
 
 /// <summary>Shared shadow-read comparison helpers: stable hashing and canonicalization for dual-write/dual-read coordinators.</summary>
 public static class ShadowReadComparisonHelper

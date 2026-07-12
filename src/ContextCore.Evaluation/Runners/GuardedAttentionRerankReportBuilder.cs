@@ -1,6 +1,6 @@
 using ContextCore.Abstractions.Models;
 
-namespace ContextCore.ControlRoom.Services;
+namespace ContextCore.Evaluation.Runners;
 
 /// <summary>Builds an eval-level summary for guarded attention rerank experiments.</summary>
 public static class GuardedAttentionRerankReportBuilder

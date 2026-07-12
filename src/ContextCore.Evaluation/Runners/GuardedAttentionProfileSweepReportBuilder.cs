@@ -1,7 +1,7 @@
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 
-namespace ContextCore.ControlRoom.Services;
+namespace ContextCore.Evaluation.Runners;
 
 /// <summary>Builds per-profile selected-order summaries for guarded attention weight sweeps.</summary>
 public static class GuardedAttentionProfileSweepReportBuilder

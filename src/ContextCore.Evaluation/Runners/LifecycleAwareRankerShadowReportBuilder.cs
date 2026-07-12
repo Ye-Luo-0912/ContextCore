@@ -1,7 +1,7 @@
 using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services;
 
-namespace ContextCore.ControlRoom.Services;
+namespace ContextCore.Evaluation.Runners;
 
 /// <summary>Builds lifecycle-aware ranker shadow reports from immutable eval diagnostics.</summary>
 public static class LifecycleAwareRankerShadowReportBuilder

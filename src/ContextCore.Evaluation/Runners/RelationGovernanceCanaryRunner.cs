@@ -2,7 +2,7 @@ using ContextCore.Abstractions.Models;
 using ContextCore.Storage.FileSystem.Stores;
 using ContextCore.Storage.Postgres.Stores;
 
-namespace ContextCore.ControlRoom.Services;
+namespace ContextCore.Evaluation.Runners;
 
 /// <summary>Relation governance 运行时 canary；只在显式 allowlist scope 中验证 guarded provider switch。</summary>
 public sealed class RelationGovernanceCanaryRunner

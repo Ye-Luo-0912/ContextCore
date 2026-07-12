@@ -1,7 +1,7 @@
 using System.Text;
 using ContextCore.Abstractions.Models;
 
-namespace ContextCore.ControlRoom.Services;
+namespace ContextCore.Evaluation.Runners;
 
 /// <summary>对 graph expansion guarded opt-in 与 baseline package 进行离线对比。</summary>
 public sealed class GraphExpansionOptInComparisonRunner

@@ -6,7 +6,7 @@ using ContextCore.Storage.Postgres.Infrastructure;
 using ContextCore.Storage.Postgres.Stores;
 using Npgsql;
 
-namespace ContextCore.ControlRoom.Services;
+namespace ContextCore.Evaluation.Runners;
 
 /// <summary>DB5.0 pgvector VectorIndexStore provider 的 diagnostics / compatibility / smoke runner。</summary>
 public sealed class PostgresVectorIndexProviderEvalRunner

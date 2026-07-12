@@ -1,7 +1,7 @@
 using System.Text;
 using ContextCore.Abstractions.Models;
 
-namespace ContextCore.ControlRoom.Services;
+namespace ContextCore.Evaluation.Runners;
 
 /// <summary>DB5.F pgvector provider freeze gate；只读取报告，不启用正式向量检索。</summary>
 public sealed class VectorPostgresProviderFreezeGateRunner

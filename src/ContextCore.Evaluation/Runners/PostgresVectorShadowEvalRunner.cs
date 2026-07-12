@@ -8,7 +8,7 @@ using ContextCore.Storage.Postgres;
 using ContextCore.Storage.Postgres.Infrastructure;
 using ContextCore.Storage.Postgres.Stores;
 
-namespace ContextCore.ControlRoom.Services;
+namespace ContextCore.Evaluation.Runners;
 
 /// <summary>DB5.4 pgvector shadow eval；只读对比，不改变正式检索。</summary>
 public sealed class PostgresVectorShadowEvalRunner

@@ -2,7 +2,7 @@ using ContextCore.Abstractions.Models;
 using ContextCore.Storage.FileSystem.Stores;
 using ContextCore.Storage.Postgres.Stores;
 
-namespace ContextCore.ControlRoom.Services;
+namespace ContextCore.Evaluation.Runners;
 
 /// <summary>Relation governance scoped runtime 观测窗口；只采集显式 scope 的 provider 行为。</summary>
 public sealed class RelationGovernanceScopedObservationRunner

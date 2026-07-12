@@ -1,7 +1,7 @@
 using System.Text;
 using ContextCore.Abstractions.Models;
 
-namespace ContextCore.ControlRoom.Services;
+namespace ContextCore.Evaluation.Runners;
 
 /// <summary>V3.10 Qwen3 provider 对比与 readiness gate；仅用于 preview/shadow/eval。</summary>
 public sealed class VectorQwen3ProviderEvalRunner

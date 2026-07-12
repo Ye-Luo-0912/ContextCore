@@ -2,7 +2,7 @@ using ContextCore.Abstractions.Models;
 using ContextCore.Storage.FileSystem.Stores;
 using ContextCore.Storage.Postgres.Stores;
 
-namespace ContextCore.ControlRoom.Services;
+namespace ContextCore.Evaluation.Runners;
 
 /// <summary>受控 selected workspace 的 relation governance canary；仍禁止全局默认启用。</summary>
 public sealed class RelationGovernanceSelectedWorkspaceCanaryRunner

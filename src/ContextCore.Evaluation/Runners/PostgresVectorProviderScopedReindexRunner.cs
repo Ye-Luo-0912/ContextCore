@@ -6,7 +6,7 @@ using ContextCore.Storage.Postgres;
 using ContextCore.Storage.Postgres.Infrastructure;
 using ContextCore.Storage.Postgres.Stores;
 
-namespace ContextCore.ControlRoom.Services;
+namespace ContextCore.Evaluation.Runners;
 
 /// <summary>DB5.2 provider-scoped pgvector reindex runner；只写 PostgresVectorIndexStore，不接正式 retrieval。</summary>
 public sealed class PostgresVectorProviderScopedReindexRunner
