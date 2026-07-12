@@ -30,8 +30,8 @@ public sealed partial class ControlRoomService
         string id,
         CancellationToken cancellationToken = default)
     {
-        var upstream = await _state.RelationStore.QueryAsync(new ContextRelationQuery { WorkspaceId = _state.WorkspaceId, CollectionId = _state.CollectionId, TargetId = id, Take = int.MaxValue }, cancellationToken).ConfigureAwait(false);
-        var downstream = await _state.RelationStore.QueryAsync(new ContextRelationQuery { WorkspaceId = _state.WorkspaceId, CollectionId = _state.CollectionId, SourceId = id, Take = int.MaxValue }, cancellationToken).ConfigureAwait(false);
+        var upstream = await _state.RelationStore!.QueryAsync(new ContextRelationQuery { WorkspaceId = _state.WorkspaceId, CollectionId = _state.CollectionId, TargetId = id, Take = int.MaxValue }, cancellationToken).ConfigureAwait(false);
+        var downstream = await _state.RelationStore!.QueryAsync(new ContextRelationQuery { WorkspaceId = _state.WorkspaceId, CollectionId = _state.CollectionId, SourceId = id, Take = int.MaxValue }, cancellationToken).ConfigureAwait(false);
 
         return new RelationGraph
         {
@@ -81,7 +81,7 @@ public sealed partial class ControlRoomService
             Direction = parsedDirection
         };
 
-        var engine = new RelationTraversalEngine(_state.RelationStore);
+        var engine = new RelationTraversalEngine(_state.RelationStore!);
         var result = await engine.TraverseAsync(request, cancellationToken).ConfigureAwait(false);
         var subgraph = RelationSubgraphBuilder.Build(itemId, result);
         return await EnrichSubgraphNodesAsync(subgraph, cancellationToken).ConfigureAwait(false);
@@ -100,7 +100,7 @@ public sealed partial class ControlRoomService
 
         foreach (var itemId in itemIds)
         {
-            var memory = await _state.MemoryStore.GetAsync(_state.WorkspaceId, _state.CollectionId, itemId, cancellationToken).ConfigureAwait(false);
+            var memory = await _state.MemoryStore!.GetAsync(_state.WorkspaceId, _state.CollectionId, itemId, cancellationToken).ConfigureAwait(false);
             if (memory is not null)
             {
                 var firstLine = memory.Content.AsSpan().Trim();
@@ -111,7 +111,7 @@ public sealed partial class ControlRoomService
                 continue;
             }
 
-            var context = await _state.ContextStore.GetAsync(_state.WorkspaceId, _state.CollectionId, itemId, cancellationToken).ConfigureAwait(false);
+            var context = await _state.ContextStore!.GetAsync(_state.WorkspaceId, _state.CollectionId, itemId, cancellationToken).ConfigureAwait(false);
             if (context is not null)
             {
                 var title = string.IsNullOrWhiteSpace(context.Title) ? context.Type : context.Title;
@@ -176,7 +176,7 @@ public sealed partial class ControlRoomService
     {
         options ??= new RelationMigrationOptions();
 
-        var relations = await _state.RelationStore.QueryAsync(new ContextRelationQuery
+        var relations = await _state.RelationStore!.QueryAsync(new ContextRelationQuery
         {
             WorkspaceId = _state.WorkspaceId,
             CollectionId = options.CollectionId,
@@ -294,7 +294,7 @@ public sealed partial class ControlRoomService
         // P3.1-d: 仅在显式 --apply 时写入，dry-run 不落盘
         if (options.Apply && toUpdate.Count > 0)
         {
-            await _state.RelationStore.BatchUpsertAsync(toUpdate, cancellationToken).ConfigureAwait(false);
+            await _state.RelationStore!.BatchUpsertAsync(toUpdate, cancellationToken).ConfigureAwait(false);
         }
 
         stats.UpdatedRelations = toUpdate.Count;
@@ -319,7 +319,7 @@ public sealed partial class ControlRoomService
         {
             var lookup = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-            var memories = await _state.MemoryStore.QueryAsync(new ContextMemoryQuery
+            var memories = await _state.MemoryStore!.QueryAsync(new ContextMemoryQuery
             {
                 WorkspaceId = _state.WorkspaceId,
                 CollectionId = collectionId.Length == 0 ? null : collectionId,
@@ -330,7 +330,7 @@ public sealed partial class ControlRoomService
                 lookup[memory.Id] = ClassifyNodeKind(memory);
             }
 
-            var contexts = await _state.ContextStore.QueryAsync(new ContextQuery
+            var contexts = await _state.ContextStore!.QueryAsync(new ContextQuery
             {
                 WorkspaceId = _state.WorkspaceId,
                 CollectionId = collectionId.Length == 0 ? null : collectionId,
@@ -457,7 +457,7 @@ public sealed partial class ControlRoomService
         int take,
         CancellationToken cancellationToken)
     {
-        return _state.RelationStore.QueryAsync(new ContextRelationQuery
+        return _state.RelationStore!.QueryAsync(new ContextRelationQuery
         {
             WorkspaceId = _state.WorkspaceId,
             CollectionId = _state.CollectionId,
@@ -469,6 +469,6 @@ public sealed partial class ControlRoomService
         string id,
         CancellationToken cancellationToken)
     {
-        return _state.RelationStore.QueryAsync(new ContextRelationQuery { WorkspaceId = _state.WorkspaceId, CollectionId = _state.CollectionId, ItemId = id, Take = int.MaxValue }, cancellationToken);
+        return _state.RelationStore!.QueryAsync(new ContextRelationQuery { WorkspaceId = _state.WorkspaceId, CollectionId = _state.CollectionId, ItemId = id, Take = int.MaxValue }, cancellationToken);
     }
 }

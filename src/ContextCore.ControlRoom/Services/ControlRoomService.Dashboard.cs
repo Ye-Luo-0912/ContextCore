@@ -35,7 +35,7 @@ public sealed partial class ControlRoomService
 
         // 仪表盘一次聚合多类数据，渲染层只负责展示，不再直接访问 Store。
         var status = await GetStatusAsync(cancellationToken).ConfigureAwait(false);
-        var globals = await _state.GlobalContextStore.QueryAsync(new ContextGlobalQuery
+        var globals = await _state.GlobalContextStore!.QueryAsync(new ContextGlobalQuery
         {
             WorkspaceId = _state.WorkspaceId,
             CollectionId = _state.CollectionId,
@@ -124,7 +124,7 @@ public sealed partial class ControlRoomService
         var stable = await QueryMemoryAsync(ContextMemoryLayer.Stable, ContextMemoryStatus.Stable, int.MaxValue, cancellationToken).ConfigureAwait(false);
         var constraints = await QueryConstraintsAsync(null, int.MaxValue, cancellationToken).ConfigureAwait(false);
         var relations = await QueryRelationsAsync(int.MaxValue, cancellationToken).ConfigureAwait(false);
-        var indexEntries = await _state.Index.SearchAsync(new IndexQuery
+        var indexEntries = await _state.Index!.SearchAsync(new IndexQuery
         {
             WorkspaceId = _state.WorkspaceId,
             CollectionId = _state.CollectionId,
@@ -302,11 +302,11 @@ public sealed partial class ControlRoomService
         var health = new List<ModelHealthResult>();
         foreach (var model in modelOptions.Models)
         {
-            health.Add(await _state.ModelHealthService.CheckAsync(model.Name, cancellationToken)
+            health.Add(await _state.ModelHealthService!.CheckAsync(model.Name, cancellationToken)
                 .ConfigureAwait(false));
         }
 
-        var usageLogs = await _state.ModelUsageLogStore.QueryRecentAsync(recentTake, cancellationToken)
+        var usageLogs = await _state.ModelUsageLogStore!.QueryRecentAsync(recentTake, cancellationToken)
             .ConfigureAwait(false);
         var apiKeyResolver = new ApiKeyResolver();
         var configuration = ModelGatewayConfigurationInspector.Inspect(modelOptions, apiKeyResolver);
@@ -329,11 +329,11 @@ public sealed partial class ControlRoomService
         var stableMemory = await QueryMemoryAsync(ContextMemoryLayer.Stable, ContextMemoryStatus.Stable, 50, cancellationToken).ConfigureAwait(false);
         var constraints = await QueryConstraintsAsync(null, 100, cancellationToken).ConfigureAwait(false);
         var relations = await QueryRelationsAsync(100, cancellationToken).ConfigureAwait(false);
-        var validation = await new CollectionValidationService(_state.ContextStore, _state.RelationStore)
+        var validation = await new CollectionValidationService(_state.ContextStore!, _state.RelationStore!)
             .ValidateAsync(_state.WorkspaceId, _state.CollectionId, cancellationToken)
             .ConfigureAwait(false);
         var failedJobs = await QueryJobsAsync(ContextJobState.Failed, 50, cancellationToken).ConfigureAwait(false);
-        var indexEntries = await _state.Index.SearchAsync(new IndexQuery
+        var indexEntries = await _state.Index!.SearchAsync(new IndexQuery
         {
             WorkspaceId = _state.WorkspaceId,
             CollectionId = _state.CollectionId,
@@ -377,11 +377,11 @@ public sealed partial class ControlRoomService
             storageDetail = "PostgreSQL Database";
 
             // 尝试通过反射进行 ping 探测
-            var prop = _state.ContextStore.GetType().GetProperty("ConnectionFactory", 
+            var prop = _state.ContextStore!.GetType().GetProperty("ConnectionFactory", 
                 System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public);
             if (prop != null)
             {
-                var factory = prop.GetValue(_state.ContextStore);
+                var factory = prop.GetValue(_state.ContextStore!);
                 if (factory != null)
                 {
                     var pingMethod = factory.GetType().GetMethod("PingAsync", new[] { typeof(CancellationToken) });
@@ -496,11 +496,11 @@ public sealed partial class ControlRoomService
 
         if (isPostgres)
         {
-            var prop = _state.ContextStore.GetType().GetProperty("ConnectionFactory", 
+            var prop = _state.ContextStore!.GetType().GetProperty("ConnectionFactory", 
                 System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public);
             if (prop != null)
             {
-                var factory = prop.GetValue(_state.ContextStore);
+                var factory = prop.GetValue(_state.ContextStore!);
                 if (factory != null)
                 {
                     var optionsProp = factory.GetType().GetProperty("Options");
@@ -677,7 +677,7 @@ public sealed partial class ControlRoomService
         int take,
         CancellationToken cancellationToken = default)
     {
-        var items = await _state.ContextStore.QueryAsync(new ContextQuery
+        var items = await _state.ContextStore!.QueryAsync(new ContextQuery
         {
             WorkspaceId = _state.WorkspaceId,
             CollectionId = _state.CollectionId,

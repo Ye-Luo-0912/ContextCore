@@ -18,7 +18,7 @@ public sealed class ContextCorePromotionReviewControlRoomTests
             "workspace-test",
             "collection-test");
         var service = new ControlRoomService(state);
-        await state.PromotionCandidateStore.SavePromotionCandidateAsync(CreateCandidate("candidate-controlroom"));
+        await state.PromotionCandidateStore!.SavePromotionCandidateAsync(CreateCandidate("candidate-controlroom"));
 
         var candidates = await service.ListPromotionCandidatesAsync(PromotionCandidateStatus.Candidate, 10);
         var candidate = await service.GetPromotionCandidateAsync("candidate-controlroom");
@@ -46,7 +46,7 @@ public sealed class ContextCorePromotionReviewControlRoomTests
             "workspace-test",
             "collection-test");
         var service = new ControlRoomService(state);
-        await state.PromotionCandidateStore.SavePromotionCandidateAsync(CreateCandidate("candidate-command"));
+        await state.PromotionCandidateStore!.SavePromotionCandidateAsync(CreateCandidate("candidate-command"));
 
         var originalOut = Console.Out;
         using var output = new StringWriter();
@@ -84,7 +84,7 @@ public sealed class ContextCorePromotionReviewControlRoomTests
             "collection-test");
         var service = new ControlRoomService(state);
         // 候选来源为 context（非 memory），accept 应写入工作记忆
-        await state.PromotionCandidateStore.SavePromotionCandidateAsync(
+        await state.PromotionCandidateStore!.SavePromotionCandidateAsync(
             CreateCandidateWithSourceKind("candidate-ctx", "context"));
 
         var originalOut = Console.Out;
@@ -126,7 +126,7 @@ public sealed class ContextCorePromotionReviewControlRoomTests
 
         // 先写入一条记忆条目（SourceKind = "memory"，SourceId 需指向已有条目）
         const string memId = "mem:source-for-promotion";
-        await state.MemoryStore.SaveAsync(new ContextMemoryItem
+        await state.MemoryStore!.SaveAsync(new ContextMemoryItem
         {
             Id = memId,
             WorkspaceId = "workspace-test",
@@ -141,7 +141,7 @@ public sealed class ContextCorePromotionReviewControlRoomTests
         });
 
         var candidate = CreateCandidateWithSourceKind("candidate-mem", "memory", sourceId: memId);
-        await state.PromotionCandidateStore.SavePromotionCandidateAsync(candidate);
+        await state.PromotionCandidateStore!.SavePromotionCandidateAsync(candidate);
 
         var (updated, detail) = await service.ExecuteAcceptAsync(
             "candidate-mem", "tester", "记忆来源晋升测试。");

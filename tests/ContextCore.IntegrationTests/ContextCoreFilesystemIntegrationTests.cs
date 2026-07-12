@@ -517,7 +517,7 @@ public sealed class ContextCoreFilesystemIntegrationTests
             var state = CreateControlRoomState(rootPath);
             var service = new ControlRoomService(state);
 
-            await state.ContextStore.SaveAsync(new ContextItem
+            await state.ContextStore!.SaveAsync(new ContextItem
             {
                 Id = "report-raw-1",
                 WorkspaceId = state.WorkspaceId,

@@ -219,7 +219,7 @@ public static class ServiceLearningFeaturesScreen
         };
         var rows = service.State.IsServiceMode
             ? await service.State.ServiceClient!.GetLearningFeedbackAsync(query, cancellationToken).ConfigureAwait(false)
-            : await service.State.LearningFeedbackStore.QueryAsync(query, cancellationToken).ConfigureAwait(false);
+            : await service.State.LearningFeedbackStore!.QueryAsync(query, cancellationToken).ConfigureAwait(false);
         return rows.FirstOrDefault(item => string.Equals(item.FeedbackId, feedbackId.Trim(), StringComparison.OrdinalIgnoreCase));
     }
 
@@ -235,7 +235,7 @@ public static class ServiceLearningFeaturesScreen
         };
         return service.State.IsServiceMode
             ? await service.State.ServiceClient!.GetLearningFeedbackReviewsAsync(query, cancellationToken).ConfigureAwait(false)
-            : await service.State.LearningFeedbackReviewStore.QueryAsync(query, cancellationToken).ConfigureAwait(false);
+            : await service.State.LearningFeedbackReviewStore!.QueryAsync(query, cancellationToken).ConfigureAwait(false);
     }
 
     private static void PrintFeedbackDetail(LearningFeedbackEvent feedback)

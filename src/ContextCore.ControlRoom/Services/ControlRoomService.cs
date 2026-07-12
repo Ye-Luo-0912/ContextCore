@@ -260,29 +260,8 @@ public sealed partial class ControlRoomService
         }
 
         var client = new ContextCoreClient(httpClient);
-        var contextStore = new InMemoryContextStore();
-        var index = new InMemoryContextIndex();
-        var memoryStore = new InMemoryMemoryStore();
-        var constraintStore = new InMemoryConstraintStore();
-        var relationStore = new InMemoryRelationStore();
-        var vectorStore = new InMemoryVectorStore();
-        var retrievalTraceStore = new InMemoryRetrievalTraceStore();
-        var packagePolicyStore = new InMemoryContextPackagePolicyStore();
-        var learningFeedbackStore = new InMemoryLearningFeedbackStore();
-        var learningFeedbackReviewStore = new InMemoryLearningFeedbackReviewStore();
-        var globalStore = new InMemoryGlobalContextStore();
-        var jobQueue = new InMemoryJobQueue();
-        var embeddingProvider = new MockEmbeddingProvider(new EmbeddingOptions
-        {
-            ModelName = "control-room-service-mode",
-            Dimensions = 4
-        });
-        var modelOptions = ModelGatewayDefaults.CreateDefaultOptions();
-        var apiKeyResolver = new ApiKeyResolver();
-        var modelAdapters = ModelAdapterFactory.CreateAdapters(modelOptions, apiKeyResolver);
-        var modelUsageLogStore = new InMemoryModelUsageLogStore();
-        var tokenizerResolver = new DefaultContextTokenizerResolver();
 
+        // P5-4: Service Mode 不再创建本地运行时对象——所有操作通过 ServiceClient 远程调用。
         return new ControlRoomState
         {
             Mode = ControlRoomMode.Service,
@@ -292,43 +271,8 @@ public sealed partial class ControlRoomService
             RootPath = string.Empty,
             ServiceBaseUrl = normalizedBaseUrl,
             ServiceClient = client,
-            ContextStore = contextStore,
-            Index = index,
-            MemoryStore = memoryStore,
-            WorkingMemory = memoryStore,
-            ConstraintStore = constraintStore,
-            RelationStore = relationStore,
-            GlobalContextStore = globalStore,
-            JobQueue = jobQueue,
-            JobQueryStore = jobQueue,
-            PromotionService = new BasicMemoryPromotionService(memoryStore, memoryStore),
-            PromotionCandidateStore = memoryStore,
-            PackageBuilder = new BasicContextPackageBuilder(
-                contextStore,
-                constraintStore,
-                globalStore,
-                memoryStore,
-                relationStore,
-                tokenizerResolver: tokenizerResolver,
-                workingMemoryService: memoryStore),
-            TokenizerResolver = tokenizerResolver,
-            PackagePolicyStore = packagePolicyStore,
-            LearningFeedbackStore = learningFeedbackStore,
-            LearningFeedbackReviewStore = learningFeedbackReviewStore,
-            VectorStore = vectorStore,
-            EmbeddingProvider = embeddingProvider,
-            RetrievalTraceStore = retrievalTraceStore,
-            Retriever = new HybridContextRetriever(
-                contextStore,
-                memoryStore,
-                relationStore,
-                embeddingProvider,
-                vectorStore,
-                retrievalTraceStore,
-                new RuleBasedContextAttentionScorer()),
-            ModelGatewayOptions = modelOptions,
-            ModelHealthService = new ModelHealthService(modelOptions, modelAdapters, apiKeyResolver),
-            ModelUsageLogStore = modelUsageLogStore
+            TokenizerResolver = new DefaultContextTokenizerResolver(),
+            ModelGatewayOptions = ModelGatewayDefaults.CreateDefaultOptions()
         };
     }
 

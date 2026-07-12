@@ -37,7 +37,7 @@ public sealed partial class ControlRoomService
                 .ConfigureAwait(false);
         }
 
-        return await new LearningFeedbackService(_state.LearningFeedbackStore)
+        return await new LearningFeedbackService(_state.LearningFeedbackStore!)
             .SubmitAsync(request, cancellationToken)
             .ConfigureAwait(false);
     }
@@ -68,7 +68,7 @@ public sealed partial class ControlRoomService
             };
         }
 
-        var service = new LearningFeedbackReviewService(_state.LearningFeedbackStore, _state.LearningFeedbackReviewStore);
+        var service = new LearningFeedbackReviewService(_state.LearningFeedbackStore!, _state.LearningFeedbackReviewStore!);
         return status switch
         {
             FeedbackReviewStatus.ApprovedForDataset => await service.ApproveAsync(feedbackId, request, cancellationToken)
@@ -194,7 +194,7 @@ public sealed partial class ControlRoomService
 
     public async Task<ControlRoomDetail?> ShowAsync(string id, CancellationToken cancellationToken = default)
     {
-        var raw = await _state.ContextStore.GetAsync(
+        var raw = await _state.ContextStore!.GetAsync(
             _state.WorkspaceId,
             _state.CollectionId,
             id,
@@ -206,7 +206,7 @@ public sealed partial class ControlRoomService
             return DetailFromRaw(raw, relations);
         }
 
-        var memory = await _state.MemoryStore.GetAsync(
+        var memory = await _state.MemoryStore!.GetAsync(
             _state.WorkspaceId,
             _state.CollectionId,
             id,
@@ -252,7 +252,7 @@ public sealed partial class ControlRoomService
         string? policyId,
         CancellationToken cancellationToken = default)
     {
-        var result = await _state.PackageBuilder
+        var result = await _state.PackageBuilder!
             .BuildDetailedAsync(
                 await CreatePackagePreviewRequestAsync(tokenBudget, usePolicy, policyId, cancellationToken)
                     .ConfigureAwait(false),
@@ -277,7 +277,7 @@ public sealed partial class ControlRoomService
         string? policyId,
         CancellationToken cancellationToken = default)
     {
-        var result = await _state.PackageBuilder
+        var result = await _state.PackageBuilder!
             .BuildDetailedAsync(
                 await CreatePackagePreviewRequestAsync(tokenBudget, usePolicy, policyId, cancellationToken)
                     .ConfigureAwait(false),
@@ -286,7 +286,7 @@ public sealed partial class ControlRoomService
         _state.LastPackage = result.Package;
         var recentTrace = _state.RetrievalTraceStore is null
             ? null
-            : (await _state.RetrievalTraceStore.QueryRecentAsync(
+            : (await _state.RetrievalTraceStore!.QueryRecentAsync(
                     _state.WorkspaceId,
                     _state.CollectionId,
                     1,
@@ -309,7 +309,7 @@ public sealed partial class ControlRoomService
         string? queryText = null,
         CancellationToken cancellationToken = default)
     {
-        return _state.PackagePolicyStore.QueryAsync(new ContextPackagePolicyQuery
+        return _state.PackagePolicyStore!.QueryAsync(new ContextPackagePolicyQuery
         {
             WorkspaceId = _state.WorkspaceId,
             CollectionId = _state.CollectionId,
@@ -322,7 +322,7 @@ public sealed partial class ControlRoomService
         string policyId,
         CancellationToken cancellationToken = default)
     {
-        return _state.PackagePolicyStore.GetAsync(
+        return _state.PackagePolicyStore!.GetAsync(
             _state.WorkspaceId,
             _state.CollectionId,
             policyId,
@@ -353,7 +353,7 @@ public sealed partial class ControlRoomService
             Metadata = new Dictionary<string, string>(policy.Metadata)
         };
 
-        await _state.PackagePolicyStore.SaveAsync(normalized, cancellationToken).ConfigureAwait(false);
+        await _state.PackagePolicyStore!.SaveAsync(normalized, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<ContextPackageRequest> CreatePackagePreviewRequestAsync(
@@ -365,7 +365,7 @@ public sealed partial class ControlRoomService
         ContextPackagePolicy? policy = null;
         if (!string.IsNullOrWhiteSpace(policyId))
         {
-            policy = await _state.PackagePolicyStore.GetAsync(
+            policy = await _state.PackagePolicyStore!.GetAsync(
                 _state.WorkspaceId,
                 _state.CollectionId,
                 policyId,
@@ -421,7 +421,7 @@ public sealed partial class ControlRoomService
         bool includeRelationExpansion = true,
         CancellationToken cancellationToken = default)
     {
-        var result = await _state.Retriever.RetrieveAsync(new ContextRetrievalRequest
+        var result = await _state.Retriever!.RetrieveAsync(new ContextRetrievalRequest
         {
             OperationId = Guid.NewGuid().ToString("N"),
             WorkspaceId = _state.WorkspaceId,
@@ -451,7 +451,7 @@ public sealed partial class ControlRoomService
         {
             Result = result,
             Package = package,
-            RecentTraces = await _state.RetrievalTraceStore.QueryRecentAsync(
+            RecentTraces = await _state.RetrievalTraceStore!.QueryRecentAsync(
                 _state.WorkspaceId,
                 _state.CollectionId,
                 10,
@@ -501,7 +501,7 @@ public sealed partial class ControlRoomService
         int take,
         CancellationToken cancellationToken = default)
     {
-        return _state.JobQueryStore.QueryAsync(new ContextJobQuery
+        return _state.JobQueryStore!.QueryAsync(new ContextJobQuery
         {
             WorkspaceId = _state.WorkspaceId,
             CollectionId = _state.CollectionId,
@@ -514,7 +514,7 @@ public sealed partial class ControlRoomService
         string memoryId,
         CancellationToken cancellationToken = default)
     {
-        return await _state.PromotionService.PromoteAsync(
+        return await _state.PromotionService!.PromoteAsync(
             _state.WorkspaceId,
             _state.CollectionId,
             memoryId,
@@ -529,7 +529,7 @@ public sealed partial class ControlRoomService
         string memoryId,
         CancellationToken cancellationToken = default)
     {
-        return await _state.PromotionService.RejectAsync(
+        return await _state.PromotionService!.RejectAsync(
             _state.WorkspaceId,
             _state.CollectionId,
             memoryId,
@@ -544,7 +544,7 @@ public sealed partial class ControlRoomService
         string memoryId,
         CancellationToken cancellationToken = default)
     {
-        return await _state.PromotionService.DeprecateAsync(
+        return await _state.PromotionService!.DeprecateAsync(
             _state.WorkspaceId,
             _state.CollectionId,
             memoryId,
@@ -560,7 +560,7 @@ public sealed partial class ControlRoomService
         int take,
         CancellationToken cancellationToken = default)
     {
-        return _state.PromotionCandidateStore.QueryPromotionCandidatesAsync(
+        return _state.PromotionCandidateStore!.QueryPromotionCandidatesAsync(
             _state.WorkspaceId,
             _state.CollectionId,
             status,
@@ -572,7 +572,7 @@ public sealed partial class ControlRoomService
         string candidateId,
         CancellationToken cancellationToken = default)
     {
-        return _state.PromotionCandidateStore.GetPromotionCandidateAsync(
+        return _state.PromotionCandidateStore!.GetPromotionCandidateAsync(
             _state.WorkspaceId,
             _state.CollectionId,
             candidateId,
@@ -586,7 +586,7 @@ public sealed partial class ControlRoomService
         string? reason = null,
         CancellationToken cancellationToken = default)
     {
-        return _state.PromotionCandidateStore.UpdatePromotionCandidateStatusAsync(
+        return _state.PromotionCandidateStore!.UpdatePromotionCandidateStatusAsync(
             _state.WorkspaceId,
             _state.CollectionId,
             candidateId,
@@ -607,7 +607,7 @@ public sealed partial class ControlRoomService
         string? reason,
         CancellationToken cancellationToken = default)
     {
-        var candidate = await _state.PromotionCandidateStore.GetPromotionCandidateAsync(
+        var candidate = await _state.PromotionCandidateStore!.GetPromotionCandidateAsync(
             _state.WorkspaceId,
             _state.CollectionId,
             candidateId,
@@ -619,7 +619,7 @@ public sealed partial class ControlRoomService
         }
 
         // 先更新候选项状态为 Accepted
-        var updated = await _state.PromotionCandidateStore.UpdatePromotionCandidateStatusAsync(
+        var updated = await _state.PromotionCandidateStore!.UpdatePromotionCandidateStatusAsync(
             _state.WorkspaceId,
             _state.CollectionId,
             candidateId,
@@ -643,7 +643,7 @@ public sealed partial class ControlRoomService
             // 已有记忆条目：通过 PromotionService 晋升并生成审计日志
             try
             {
-                var record = await _state.PromotionService.PromoteAsync(
+                var record = await _state.PromotionService!.PromoteAsync(
                     _state.WorkspaceId,
                     _state.CollectionId,
                     candidate.SourceId,
@@ -690,7 +690,7 @@ public sealed partial class ControlRoomService
                 UpdatedAt = now,
             };
 
-            await _state.WorkingMemory.AddAsync(newItem, cancellationToken).ConfigureAwait(false);
+            await _state.WorkingMemory!.AddAsync(newItem, cancellationToken).ConfigureAwait(false);
             detail.AppendLine($"已写入工作记忆：{newItemId}");
             detail.AppendLine($"来源类型：{candidate.SourceKind}");
         }
@@ -702,7 +702,7 @@ public sealed partial class ControlRoomService
         int take,
         CancellationToken cancellationToken = default)
     {
-        return _state.WorkingMemory.GetRecentAsync(
+        return _state.WorkingMemory!.GetRecentAsync(
             _state.WorkspaceId,
             _state.CollectionId,
             take,
@@ -711,7 +711,7 @@ public sealed partial class ControlRoomService
 
     public Task ClearWorkingMemoryAsync(CancellationToken cancellationToken = default)
     {
-        return _state.WorkingMemory.ClearAsync(
+        return _state.WorkingMemory!.ClearAsync(
             _state.WorkspaceId,
             _state.CollectionId,
             cancellationToken);
@@ -720,7 +720,7 @@ public sealed partial class ControlRoomService
     public Task<WorkingMemoryActiveContext?> GetActiveContextAsync(
         CancellationToken cancellationToken = default)
     {
-        return _state.WorkingMemory.GetActiveContextAsync(
+        return _state.WorkingMemory!.GetActiveContextAsync(
             _state.WorkspaceId,
             _state.CollectionId,
             cancellationToken);
@@ -730,13 +730,13 @@ public sealed partial class ControlRoomService
         WorkingMemoryActiveContext activeContext,
         CancellationToken cancellationToken = default)
     {
-        return _state.WorkingMemory.SetActiveContextAsync(activeContext, cancellationToken);
+        return _state.WorkingMemory!.SetActiveContextAsync(activeContext, cancellationToken);
     }
 
     public Task<WorkingMemoryCurrentTask?> GetCurrentTaskAsync(
         CancellationToken cancellationToken = default)
     {
-        return _state.WorkingMemory.GetCurrentTaskAsync(
+        return _state.WorkingMemory!.GetCurrentTaskAsync(
             _state.WorkspaceId,
             _state.CollectionId,
             cancellationToken);
@@ -746,14 +746,14 @@ public sealed partial class ControlRoomService
         WorkingMemoryCurrentTask currentTask,
         CancellationToken cancellationToken = default)
     {
-        return _state.WorkingMemory.SetCurrentTaskAsync(currentTask, cancellationToken);
+        return _state.WorkingMemory!.SetCurrentTaskAsync(currentTask, cancellationToken);
     }
 
     public async Task<IReadOnlyList<IndexSearchResult>> SearchIndexAsync(
         string keyword,
         CancellationToken cancellationToken = default)
     {
-        var entries = await _state.Index.SearchAsync(new IndexQuery
+        var entries = await _state.Index!.SearchAsync(new IndexQuery
         {
             WorkspaceId = _state.WorkspaceId,
             CollectionId = _state.CollectionId,
@@ -767,7 +767,7 @@ public sealed partial class ControlRoomService
             var items = new List<ContextItem>();
             foreach (var contextRef in entry.ContextRefs)
             {
-                var item = await _state.ContextStore.GetAsync(
+                var item = await _state.ContextStore!.GetAsync(
                     _state.WorkspaceId,
                     _state.CollectionId,
                     contextRef,
@@ -787,7 +787,7 @@ public sealed partial class ControlRoomService
 
     private Task<IReadOnlyList<ContextItem>> QueryRawAsync(int take, CancellationToken cancellationToken)
     {
-        return _state.ContextStore.QueryAsync(new ContextQuery
+        return _state.ContextStore!.QueryAsync(new ContextQuery
         {
             WorkspaceId = _state.WorkspaceId,
             CollectionId = _state.CollectionId,
@@ -829,7 +829,7 @@ public sealed partial class ControlRoomService
             EstimatedTokens = _state.TokenizerResolver.Estimate(item.Content).TokenCount
         }));
 
-        var globals = await _state.GlobalContextStore.QueryAsync(new ContextGlobalQuery
+        var globals = await _state.GlobalContextStore!.QueryAsync(new ContextGlobalQuery
         {
             WorkspaceId = _state.WorkspaceId,
             CollectionId = _state.CollectionId,
@@ -853,7 +853,7 @@ public sealed partial class ControlRoomService
         int take,
         CancellationToken cancellationToken)
     {
-        return _state.MemoryStore.QueryAsync(new ContextMemoryQuery
+        return _state.MemoryStore!.QueryAsync(new ContextMemoryQuery
         {
             WorkspaceId = _state.WorkspaceId,
             CollectionId = _state.CollectionId,
@@ -868,7 +868,7 @@ public sealed partial class ControlRoomService
         int take,
         CancellationToken cancellationToken)
     {
-        return _state.ConstraintStore.QueryAsync(new ContextConstraintQuery
+        return _state.ConstraintStore!.QueryAsync(new ContextConstraintQuery
         {
             WorkspaceId = _state.WorkspaceId,
             CollectionId = _state.CollectionId,

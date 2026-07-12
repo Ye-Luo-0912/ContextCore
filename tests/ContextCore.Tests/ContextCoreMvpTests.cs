@@ -623,14 +623,14 @@ public sealed class ContextCoreMvpTests
             var state = CreateControlRoomState(rootPath);
             var service = new ControlRoomService(state);
 
-            await state.ContextStore.SaveAsync(CreateItem(
+            await state.ContextStore!.SaveAsync(CreateItem(
                 id: "large",
                 type: "note",
                 content: new string('a', 200),
                 tags: new[] { "preview" },
                 importance: 1.0));
 
-            await state.ContextStore.SaveAsync(CreateItem(
+            await state.ContextStore!.SaveAsync(CreateItem(
                 id: "small",
                 type: "note",
                 content: "small",
@@ -683,7 +683,7 @@ public sealed class ContextCoreMvpTests
                 MaxRecentItems = 5,
                 SectionOrder = ["recent_context"]
             });
-            await state.ContextStore.SaveAsync(CreateItem(
+            await state.ContextStore!.SaveAsync(CreateItem(
                 id: "policy-item",
                 type: "note",
                 content: "通过已保存 policy 构建上下文包。",
@@ -1114,7 +1114,7 @@ public sealed class ContextCoreMvpTests
             var state = CreateControlRoomState(rootPath);
             var service = new ControlRoomService(state);
 
-            await state.WorkingMemory.AddAsync(CreateWorkingMemoryItem("memory-1", DateTimeOffset.UtcNow));
+            await state.WorkingMemory!.AddAsync(CreateWorkingMemoryItem("memory-1", DateTimeOffset.UtcNow));
             await service.SetActiveContextAsync(new WorkingMemoryActiveContext
             {
                 WorkspaceId = "workspace-test",
@@ -1203,11 +1203,11 @@ public sealed class ContextCoreMvpTests
             var service = new ControlRoomService(state);
             var now = DateTimeOffset.UtcNow;
 
-            await state.MemoryStore.SaveAsync(CreateMemoryItem("candidate", ContextMemoryLayer.Working, now, ContextMemoryStatus.Candidate));
-            await state.MemoryStore.SaveAsync(CreateMemoryItem("verified", ContextMemoryLayer.Structured, now, ContextMemoryStatus.Verified));
-            await state.MemoryStore.SaveAsync(CreateMemoryItem("stable", ContextMemoryLayer.Stable, now, ContextMemoryStatus.Stable));
-            await state.MemoryStore.SaveAsync(CreateMemoryItem("deprecated", ContextMemoryLayer.Stable, now, ContextMemoryStatus.Deprecated));
-            await state.MemoryStore.SaveAsync(CreateMemoryItem("rejected", ContextMemoryLayer.Structured, now, ContextMemoryStatus.Rejected));
+            await state.MemoryStore!.SaveAsync(CreateMemoryItem("candidate", ContextMemoryLayer.Working, now, ContextMemoryStatus.Candidate));
+            await state.MemoryStore!.SaveAsync(CreateMemoryItem("verified", ContextMemoryLayer.Structured, now, ContextMemoryStatus.Verified));
+            await state.MemoryStore!.SaveAsync(CreateMemoryItem("stable", ContextMemoryLayer.Stable, now, ContextMemoryStatus.Stable));
+            await state.MemoryStore!.SaveAsync(CreateMemoryItem("deprecated", ContextMemoryLayer.Stable, now, ContextMemoryStatus.Deprecated));
+            await state.MemoryStore!.SaveAsync(CreateMemoryItem("rejected", ContextMemoryLayer.Structured, now, ContextMemoryStatus.Rejected));
 
             var summary = await service.GetMemoryStatusBreakdownAsync();
 
@@ -1237,7 +1237,7 @@ public sealed class ContextCoreMvpTests
             var state = CreateControlRoomState(rootPath);
             var service = new ControlRoomService(state);
 
-            await state.MemoryStore.SaveAsync(CreateMemoryItem(
+            await state.MemoryStore!.SaveAsync(CreateMemoryItem(
                 "memory-source",
                 ContextMemoryLayer.Stable,
                 DateTimeOffset.UtcNow,
@@ -1399,12 +1399,12 @@ public sealed class ContextCoreMvpTests
             var state = CreateControlRoomState(rootPath);
             var service = new ControlRoomService(state);
 
-            await state.MemoryStore.SaveAsync(CreateMemoryItem(
+            await state.MemoryStore!.SaveAsync(CreateMemoryItem(
                 "reject-me",
                 ContextMemoryLayer.Structured,
                 DateTimeOffset.UtcNow,
                 ContextMemoryStatus.Candidate));
-            await state.MemoryStore.SaveAsync(CreateMemoryItem(
+            await state.MemoryStore!.SaveAsync(CreateMemoryItem(
                 "deprecate-me",
                 ContextMemoryLayer.Stable,
                 DateTimeOffset.UtcNow,
@@ -1428,8 +1428,8 @@ public sealed class ContextCoreMvpTests
                 Console.SetOut(originalOut);
             }
 
-            var rejected = await state.MemoryStore.GetAsync("workspace-test", "collection-test", "reject-me");
-            var deprecated = await state.MemoryStore.GetAsync("workspace-test", "collection-test", "deprecate-me");
+            var rejected = await state.MemoryStore!.GetAsync("workspace-test", "collection-test", "reject-me");
+            var deprecated = await state.MemoryStore!.GetAsync("workspace-test", "collection-test", "deprecate-me");
 
             Assert.IsNotNull(rejected);
             Assert.AreEqual(ContextMemoryStatus.Rejected, rejected!.Status);
@@ -1561,15 +1561,15 @@ public sealed class ContextCoreMvpTests
             var state = CreateControlRoomState(rootPath);
             var service = new ControlRoomService(state);
 
-            await state.GlobalContextStore.SaveAsync(CreateGlobalItem(
+            await state.GlobalContextStore!.SaveAsync(CreateGlobalItem(
                 "workspace-global",
                 ContextScope.Workspace,
                 collectionId: null));
-            await state.GlobalContextStore.SaveAsync(CreateGlobalItem(
+            await state.GlobalContextStore!.SaveAsync(CreateGlobalItem(
                 "collection-global",
                 ContextScope.Collection,
                 collectionId: "collection-test"));
-            await state.GlobalContextStore.SaveAsync(CreateGlobalItem(
+            await state.GlobalContextStore!.SaveAsync(CreateGlobalItem(
                 "other-collection-global",
                 ContextScope.Collection,
                 collectionId: "other-collection"));
@@ -2066,7 +2066,7 @@ public sealed class ContextCoreMvpTests
             var state = CreateControlRoomState(rootPath);
             var service = new ControlRoomService(state);
 
-            await state.ContextStore.SaveAsync(CreateItem(
+            await state.ContextStore!.SaveAsync(CreateItem(
                 id: "report-item",
                 type: "note",
                 content: "Report item.",
@@ -2098,40 +2098,40 @@ public sealed class ContextCoreMvpTests
                 "workspace-test",
                 "collection-test");
             var service = new ControlRoomService(state);
-            var validationService = new CollectionValidationService(state.ContextStore, state.RelationStore);
+            var validationService = new CollectionValidationService(state.ContextStore!, state.RelationStore!);
             var now = DateTimeOffset.UtcNow;
 
-            await state.ContextStore.SaveAsync(CreateItem(
+            await state.ContextStore!.SaveAsync(CreateItem(
                 id: "raw-1",
                 type: "note",
                 content: "Raw context alpha.",
                 tags: new[] { "p1", "source" },
                 refs: new[] { "raw-2" }));
-            await state.ContextStore.SaveAsync(CreateItem(
+            await state.ContextStore!.SaveAsync(CreateItem(
                 id: "raw-2",
                 type: "note",
                 content: "Raw context beta.",
                 tags: new[] { "p1", "support" }));
-            await state.ContextStore.SaveAsync(CreateItem(
+            await state.ContextStore!.SaveAsync(CreateItem(
                 id: "summary-1",
                 type: "summary",
                 content: "Derived summary for alpha.",
                 tags: new[] { "p1", "summary" },
                 metadata: new Dictionary<string, string> { ["derivedFrom"] = "raw-1" }));
 
-            await state.WorkingMemory.AddAsync(CreateWorkingMemoryItem("work-1", now.AddMinutes(-2)));
-            await state.MemoryStore.SaveAsync(CreateMemoryItem(
+            await state.WorkingMemory!.AddAsync(CreateWorkingMemoryItem("work-1", now.AddMinutes(-2)));
+            await state.MemoryStore!.SaveAsync(CreateMemoryItem(
                 "memory-1",
                 ContextMemoryLayer.Working,
                 now.AddMinutes(-1),
                 ContextMemoryStatus.Verified));
-            await state.PromotionService.PromoteAsync(
+            await state.PromotionService!.PromoteAsync(
                 "workspace-test",
                 "collection-test",
                 "memory-1",
                 "manual",
                 "Preserve stable context");
-            await state.WorkingMemory.SetActiveContextAsync(new WorkingMemoryActiveContext
+            await state.WorkingMemory!.SetActiveContextAsync(new WorkingMemoryActiveContext
             {
                 WorkspaceId = "workspace-test",
                 CollectionId = "collection-test",
@@ -2141,7 +2141,7 @@ public sealed class ContextCoreMvpTests
                 ContextRefs = new[] { "raw-1", "summary-1" },
                 UpdatedAt = now
             });
-            await state.WorkingMemory.SetCurrentTaskAsync(new WorkingMemoryCurrentTask
+            await state.WorkingMemory!.SetCurrentTaskAsync(new WorkingMemoryCurrentTask
             {
                 TaskId = "task-1",
                 WorkspaceId = "workspace-test",
@@ -2154,32 +2154,32 @@ public sealed class ContextCoreMvpTests
                 UpdatedAt = now
             });
 
-            await state.GlobalContextStore.SaveAsync(CreateGlobalItem(
+            await state.GlobalContextStore!.SaveAsync(CreateGlobalItem(
                 "global-workspace",
                 ContextScope.Workspace,
                 collectionId: null,
                 tags: new[] { "global" }));
-            await state.GlobalContextStore.SaveAsync(CreateGlobalItem(
+            await state.GlobalContextStore!.SaveAsync(CreateGlobalItem(
                 "global-collection",
                 ContextScope.Collection,
                 collectionId: "collection-test",
                 tags: new[] { "global", "collection" }));
 
-            await state.ConstraintStore.SaveAsync(CreateConstraint(
+            await state.ConstraintStore!.SaveAsync(CreateConstraint(
                 "hard-keep-source",
                 ConstraintLevel.Hard,
                 "Keep source context available."));
-            await state.ConstraintStore.SaveAsync(CreateConstraint(
+            await state.ConstraintStore!.SaveAsync(CreateConstraint(
                 "soft-prefer-compact",
                 ConstraintLevel.Soft,
                 "Prefer compact packages."));
 
-            await state.RelationStore.SaveAsync(CreateRelation(
+            await state.RelationStore!.SaveAsync(CreateRelation(
                 "relation-raw",
                 "raw-1",
                 "raw-2",
                 ContextRelationTypes.RelatedTo));
-            await state.RelationStore.SaveAsync(new ContextRelation
+            await state.RelationStore!.SaveAsync(new ContextRelation
             {
                 Id = "generated-summary",
                 WorkspaceId = "workspace-test",
@@ -2193,7 +2193,7 @@ public sealed class ContextCoreMvpTests
                 CreatedAt = now
             });
 
-            var package = await state.PackageBuilder.BuildAsync(new ContextPackageRequest
+            var package = await state.PackageBuilder!.BuildAsync(new ContextPackageRequest
             {
                 WorkspaceId = "workspace-test",
                 CollectionId = "collection-test",
@@ -2266,7 +2266,7 @@ public sealed class ContextCoreMvpTests
             var state = CreateControlRoomState(rootPath);
             var service = new ControlRoomService(state);
 
-            await state.ConstraintStore.SaveAsync(CreateConstraint(
+            await state.ConstraintStore!.SaveAsync(CreateConstraint(
                 "constraint-detail",
                 ConstraintLevel.User,
                 "User-level constraint details.",
@@ -4169,7 +4169,7 @@ public sealed class ContextCoreMvpTests
                     PreserveSourceRefs = true
                 }
             });
-            await state.ContextStore.SaveAsync(response.GeneratedItems.Single());
+            await state.ContextStore!.SaveAsync(response.GeneratedItems.Single());
             var service = new ControlRoomService(state);
 
             var dashboard = await service.GetDashboardAsync();

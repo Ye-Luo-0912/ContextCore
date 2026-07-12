@@ -30,51 +30,53 @@ public sealed class ControlRoomState
 
     public ContextCoreClient? ServiceClient { get; init; }
 
-    public IContextStore ContextStore { get; init; } = default!;
+    // P5-4: Service Mode 不再创建本地运行时对象，这些属性在 Service Mode 下为 null。
+    // Direct Mode（InMemory/FileSystem）会完整赋值；Service Mode 通过 ServiceClient 远程调用。
+    public IContextStore? ContextStore { get; init; }
 
-    public IContextIndex Index { get; init; } = default!;
+    public IContextIndex? Index { get; init; }
 
-    public IMemoryStore MemoryStore { get; init; } = default!;
+    public IMemoryStore? MemoryStore { get; init; }
 
-    public IWorkingMemoryService WorkingMemory { get; init; } = default!;
+    public IWorkingMemoryService? WorkingMemory { get; init; }
 
-    public IConstraintStore ConstraintStore { get; init; } = default!;
+    public IConstraintStore? ConstraintStore { get; init; }
 
-    public IRelationStore RelationStore { get; init; } = default!;
+    public IRelationStore? RelationStore { get; init; }
 
-    public IGlobalContextStore GlobalContextStore { get; init; } = default!;
+    public IGlobalContextStore? GlobalContextStore { get; init; }
 
-    public IContextJobQueue JobQueue { get; init; } = default!;
+    public IContextJobQueue? JobQueue { get; init; }
 
-    public IContextJobQueryStore JobQueryStore { get; init; } = default!;
+    public IContextJobQueryStore? JobQueryStore { get; init; }
 
-    public IMemoryPromotionService PromotionService { get; init; } = default!;
+    public IMemoryPromotionService? PromotionService { get; init; }
 
-    public IPromotionCandidateStore PromotionCandidateStore { get; init; } = default!;
+    public IPromotionCandidateStore? PromotionCandidateStore { get; init; }
 
-    public IContextPackageBuilder PackageBuilder { get; init; } = default!;
+    public IContextPackageBuilder? PackageBuilder { get; init; }
 
-    public IContextPackagePolicyStore PackagePolicyStore { get; init; } = default!;
+    public IContextPackagePolicyStore? PackagePolicyStore { get; init; }
 
-    public ILearningFeedbackStore LearningFeedbackStore { get; init; } = default!;
+    public ILearningFeedbackStore? LearningFeedbackStore { get; init; }
 
-    public ILearningFeedbackReviewStore LearningFeedbackReviewStore { get; init; } = default!;
+    public ILearningFeedbackReviewStore? LearningFeedbackReviewStore { get; init; }
 
     public IContextTokenizerResolver TokenizerResolver { get; init; } = new DefaultContextTokenizerResolver();
 
-    public IVectorStore VectorStore { get; init; } = default!;
+    public IVectorStore? VectorStore { get; init; }
 
-    public IEmbeddingProvider EmbeddingProvider { get; init; } = default!;
+    public IEmbeddingProvider? EmbeddingProvider { get; init; }
 
-    public IRetrievalTraceStore RetrievalTraceStore { get; init; } = default!;
+    public IRetrievalTraceStore? RetrievalTraceStore { get; init; }
 
-    public IContextRetriever Retriever { get; init; } = default!;
+    public IContextRetriever? Retriever { get; init; }
 
     public ModelGatewayOptions ModelGatewayOptions { get; init; } = new();
 
-    public IModelHealthService ModelHealthService { get; init; } = default!;
+    public IModelHealthService? ModelHealthService { get; init; }
 
-    public IModelUsageLogStore ModelUsageLogStore { get; init; } = default!;
+    public IModelUsageLogStore? ModelUsageLogStore { get; init; }
 
     public ContextPackage? LastPackage { get; set; }
 
