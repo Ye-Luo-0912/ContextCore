@@ -1,9 +1,0 @@
-D:\Users\Ye_Luo\AppData\Local\Context\tests\ContextCore.Tests\ContextCoreRelationExpansionShadowEvalTests.cs(628,21): error CS0246: 未能找到类型或命名空间名“RelationExpansionShadowEvalRunner”(是否缺少 using 指令或程序集引用?) [D:\Users\Ye_Luo\AppData\Local\Context\tests\ContextCore.Tests\ContextCore.Tests.csproj]
-
-生成失败。
-
-D:\Users\Ye_Luo\AppData\Local\Context\tests\ContextCore.Tests\ContextCoreRelationExpansionShadowEvalTests.cs(628,21): error CS0246: 未能找到类型或命名空间名“RelationExpansionShadowEvalRunner”(是否缺少 using 指令或程序集引用?) [D:\Users\Ye_Luo\AppData\Local\Context\tests\ContextCore.Tests\ContextCore.Tests.csproj]
-    0 个警告
-    1 个错误
-
-已用时间 00:00:03.60
