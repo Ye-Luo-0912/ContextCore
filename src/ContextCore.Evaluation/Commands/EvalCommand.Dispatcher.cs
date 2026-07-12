@@ -82,7 +82,7 @@ public static partial class EvalCommand
     }
 
     /// <summary>打印 eval 用法信息。从注册表自动生成。</summary>
-    private static void PrintUsage()
+    public static void PrintUsage()
     {
         var registry = BuildSubcommandRegistry();
         Console.WriteLine("eval supports:");

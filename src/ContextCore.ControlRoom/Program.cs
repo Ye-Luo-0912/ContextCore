@@ -100,8 +100,8 @@ static async Task ExecuteCommandAsync(
             await PolicyCommand.ExecuteAsync(service, commandArgs, cancellationToken);
             break;
         case "eval":
-            await DispatchEvalCommandAsync(service, commandArgs, cancellationToken);
-            break;
+            Console.WriteLine("Evaluation is now a standalone CLI. Run 'ContextCore.Evaluation eval ...' directly.");
+            return;
         case "backup":
             await BackupCommand.ExecuteAsync(service, commandArgs, cancellationToken);
             break;
@@ -116,28 +116,6 @@ static async Task ExecuteCommandAsync(
             Environment.ExitCode = 2;
             break;
     }
-}
-
-static async Task DispatchEvalCommandAsync(
-    ControlRoomService service,
-    IReadOnlyList<string> args,
-    CancellationToken cancellationToken)
-{
-    // 通过 Assembly.Load 加载 Evaluation 程序集，查找 IEvalCommandInvoker 实现。
-    // ContextCore.Evaluation.dll 在运行时通过 ReferenceOutputAssembly=false 部署到输出目录。
-    var assembly = System.Reflection.Assembly.Load("ContextCore.Evaluation");
-    var invokerType = assembly.GetTypes()
-        .FirstOrDefault(t => typeof(ContextCore.Evaluation.Contracts.IEvalCommandInvoker).IsAssignableFrom(t)
-            && !t.IsAbstract);
-    if (invokerType is null)
-    {
-        Console.Error.WriteLine("Error: IEvalCommandInvoker 实现未找到（请确认 ContextCore.Evaluation 程序集已部署）。");
-        Environment.ExitCode = 2;
-        return;
-    }
-
-    var invoker = (ContextCore.Evaluation.Contracts.IEvalCommandInvoker)Activator.CreateInstance(invokerType)!;
-    await invoker.ExecuteAsync(service, args, cancellationToken).ConfigureAwait(false);
 }
 
 static async Task RunInteractiveAsync(
@@ -597,7 +575,7 @@ static async Task RunInteractiveAsync(
                     ShowServiceModeUnsupported("评测报告");
                     break;
                 }
-                await DispatchEvalCommandAsync(service, ["report"], cancellationToken).ConfigureAwait(false);
+                Console.WriteLine("Evaluation is now a standalone CLI. Run 'ContextCore.Evaluation eval ...' directly.");
                 if (WaitForBackOrQuit() == ControlRoomActionKind.Quit)
                 {
                     return;

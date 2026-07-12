@@ -7,7 +7,6 @@ using ContextCore.ControlRoom.Models;
 using ContextCore.Client;
 using ContextCore.Core;
 using ContextCore.Core.Services;
-using ContextCore.Evaluation.Contracts;
 using ContextCore.Runtime;
 using ContextCore.Core.Services.Attention;
 using ContextCore.Core.Services.Graph;
@@ -28,7 +27,7 @@ namespace ContextCore.ControlRoom.Services;
 /// <summary>
 /// 控制室的核心服务，负责创建应用状态、执行各类操作命令并返回格式化结果。
 /// </summary>
-public sealed partial class ControlRoomService : IEvalHost
+public sealed partial class ControlRoomService
 {
 
     private static readonly JsonSerializerOptions JsonOptions = CreateJsonOptions();
@@ -42,8 +41,6 @@ public sealed partial class ControlRoomService : IEvalHost
 
     /// <summary>直接访问底层状态（供 ControlRoom 命令使用，不对外暴露为公开 API）。</summary>
     public ControlRoomState State => _state;
-
-    IEvalStateServiceMode IEvalHost.State => _state;
 
     public static ControlRoomState CreateState(
         string storageKind,

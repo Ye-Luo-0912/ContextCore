@@ -1,7 +1,6 @@
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Client;
-using ContextCore.Evaluation.Contracts;
 using ContextCore.Core;
 using ContextCore.Storage.FileSystem;
 
@@ -15,7 +14,7 @@ public enum ControlRoomMode
 }
 
 /// <summary>控制室运行时状态对象，持有当前工作区、集合及各存储层的服务引用。</summary>
-public sealed class ControlRoomState : IEvalStateServiceMode
+public sealed class ControlRoomState
 {
     public ControlRoomMode Mode { get; init; } = ControlRoomMode.Direct;
 
