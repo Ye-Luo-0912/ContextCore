@@ -1,6 +1,7 @@
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Storage.Shared;
+using System.Collections.Concurrent;
 using System.Text;
 
 namespace ContextCore.Storage.FileSystem.Stores;
@@ -9,12 +10,22 @@ namespace ContextCore.Storage.FileSystem.Stores;
 /// <remarks>
 /// GRAPH-11：BatchUpsert 通过命名 Mutex 实现跨实例互斥，解决不同 FileRelationStore 实例并发读旧数据后覆盖新数据的问题。
 /// 进程内仍用 SemaphoreSlim 做异步门控，避免 Mutex 长时间阻塞线程池线程。
+/// P5-5：读路径无锁（原子文件替换保证一致性），写路径保留 SemaphoreSlim 串行读改写。
+/// relation adjacency cache 带文件 mtime 失效检测，避免重复全量扫描 relations.jsonl。
 /// </remarks>
 public sealed class FileRelationStore : IRelationStore
 {
-    private readonly SemaphoreSlim _gate = new(1, 1);
+    private readonly SemaphoreSlim _writeGate = new(1, 1);
     private readonly FilePathResolver _paths;
     private readonly FileJsonLineStore _jsonLines;
+
+    // P5-5: relation adjacency cache, keyed by relations.jsonl path.
+    // Invalidation: file mtime mismatch → cache miss → re-read.
+    private readonly ConcurrentDictionary<string, RelationCacheEntry> _relationCache = new(StringComparer.OrdinalIgnoreCase);
+
+    private sealed record RelationCacheEntry(
+        DateTime LastWriteUtc,
+        IReadOnlyList<ContextRelation> Relations);
 
     public FileRelationStore(FileStorageOptions options)
         : this(new FilePathResolver(options), new FileFormatSerializer())
@@ -25,6 +36,40 @@ public sealed class FileRelationStore : IRelationStore
     {
         _paths = paths;
         _jsonLines = new FileJsonLineStore(serializer);
+    }
+
+    /// <summary>P5-5: read relations with mtime-based cache, avoiding full-file re-scan on repeated queries.</summary>
+    private async Task<IReadOnlyList<ContextRelation>> ReadRelationsCachedAsync(
+        string path,
+        CancellationToken cancellationToken)
+    {
+        var lastWrite = TryGetLastWriteUtc(path);
+        if (lastWrite is not null
+            && _relationCache.TryGetValue(path, out var cached)
+            && cached.LastWriteUtc == lastWrite.Value)
+        {
+            return cached.Relations;
+        }
+
+        var relations = await _jsonLines.ReadAsync<ContextRelation>(path, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (lastWrite is not null)
+        {
+            _relationCache[path] = new RelationCacheEntry(lastWrite.Value, relations);
+        }
+
+        return relations;
+    }
+
+    private void InvalidateRelationCache(string path)
+    {
+        _relationCache.TryRemove(path, out _);
+    }
+
+    private static DateTime? TryGetLastWriteUtc(string path)
+    {
+        return File.Exists(path) ? File.GetLastWriteTimeUtc(path) : null;
     }
 
     /// <summary>GRAPH-11：SaveAsync 委托 BatchUpsertAsync，保留为单条便利方法。</summary>
@@ -40,18 +85,11 @@ public sealed class FileRelationStore : IRelationStore
     {
         var path = _paths.GetRelationsJsonlPath(workspaceId, collectionId);
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            var relations = await _jsonLines.ReadAsync<ContextRelation>(path, cancellationToken)
-                .ConfigureAwait(false);
-            return relations.FirstOrDefault(relation =>
-                string.Equals(relation.Id, relationId, StringComparison.OrdinalIgnoreCase));
-        }
-        finally
-        {
-            _gate.Release();
-        }
+        // P5-5: no read lock — use mtime-based cache
+        var relations = await ReadRelationsCachedAsync(path, cancellationToken)
+            .ConfigureAwait(false);
+        return relations.FirstOrDefault(relation =>
+            string.Equals(relation.Id, relationId, StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>删除单条边；供 provider parity/cleanup 使用，不参与默认业务流程。</summary>
@@ -63,7 +101,7 @@ public sealed class FileRelationStore : IRelationStore
     {
         var path = _paths.GetRelationsJsonlPath(workspaceId, collectionId);
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await _writeGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             var relations = await _jsonLines.ReadAsync<ContextRelation>(path, cancellationToken)
@@ -78,11 +116,12 @@ public sealed class FileRelationStore : IRelationStore
 
             Directory.CreateDirectory(Path.GetDirectoryName(path) ?? ".");
             await _jsonLines.WriteAsync(path, retained, cancellationToken).ConfigureAwait(false);
+            InvalidateRelationCache(path);
             return true;
         }
         finally
         {
-            _gate.Release();
+            _writeGate.Release();
         }
     }
 
@@ -102,7 +141,7 @@ public sealed class FileRelationStore : IRelationStore
             return;
         }
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await _writeGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             foreach (var group in normalized.GroupBy(r =>
@@ -123,11 +162,12 @@ public sealed class FileRelationStore : IRelationStore
                     .Concat(incoming);
 
                 await _jsonLines.WriteAsync(path, merged, cancellationToken).ConfigureAwait(false);
+                InvalidateRelationCache(path);
             }
         }
         finally
         {
-            _gate.Release();
+            _writeGate.Release();
         }
     }
 
@@ -152,63 +192,56 @@ public sealed class FileRelationStore : IRelationStore
             ? new HashSet<string>(query.AllowedRelationTypes, StringComparer.OrdinalIgnoreCase)
             : null;
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
+        // P5-5: no read lock — use mtime-based cache
+        var path = _paths.GetRelationsJsonlPath(query.WorkspaceId, query.CollectionId ?? string.Empty);
+        var relations = await ReadRelationsCachedAsync(path, cancellationToken)
+            .ConfigureAwait(false);
+
+        IEnumerable<ContextRelation> filtered = query.Direction switch
         {
-            var path = _paths.GetRelationsJsonlPath(query.WorkspaceId, query.CollectionId ?? string.Empty);
-            var relations = await _jsonLines.ReadAsync<ContextRelation>(path, cancellationToken)
-                .ConfigureAwait(false);
+            RelationDirection.Outgoing => relations.Where(relation =>
+                string.Equals(relation.SourceId, query.ItemId, StringComparison.OrdinalIgnoreCase)),
+            RelationDirection.Incoming => relations.Where(relation =>
+                string.Equals(relation.TargetId, query.ItemId, StringComparison.OrdinalIgnoreCase)),
+            _ => relations.Where(relation =>
+                string.Equals(relation.SourceId, query.ItemId, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(relation.TargetId, query.ItemId, StringComparison.OrdinalIgnoreCase))
+        };
 
-            IEnumerable<ContextRelation> filtered = query.Direction switch
-            {
-                RelationDirection.Outgoing => relations.Where(relation =>
-                    string.Equals(relation.SourceId, query.ItemId, StringComparison.OrdinalIgnoreCase)),
-                RelationDirection.Incoming => relations.Where(relation =>
-                    string.Equals(relation.TargetId, query.ItemId, StringComparison.OrdinalIgnoreCase)),
-                _ => relations.Where(relation =>
-                    string.Equals(relation.SourceId, query.ItemId, StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(relation.TargetId, query.ItemId, StringComparison.OrdinalIgnoreCase))
-            };
-
-            if (allowedTypes is not null)
-            {
-                filtered = filtered.Where(relation => allowedTypes.Contains(relation.RelationType));
-            }
-            else if (!string.IsNullOrWhiteSpace(query.RelationType))
-            {
-                filtered = filtered.Where(relation =>
-                    string.Equals(relation.RelationType, query.RelationType, StringComparison.OrdinalIgnoreCase));
-            }
-
-            if (query.MinConfidence > 0)
-            {
-                filtered = filtered.Where(relation => relation.Confidence >= query.MinConfidence);
-            }
-
-            if (excludedLifecycles is not null)
-            {
-                filtered = filtered.Where(relation => !excludedLifecycles.Contains(relation.Lifecycle ?? string.Empty));
-            }
-
-            if (excludedReviewStatuses is not null)
-            {
-                filtered = filtered.Where(relation => !excludedReviewStatuses.Contains(relation.ReviewStatus ?? string.Empty));
-            }
-
-            // P5-0.3: 先排序再 Take(maxScan)，避免文件后部高权重关系永远进不了结果。
-            // 文件已被完整读入内存，提前 Take 并不减少磁盘 I/O，反而丢失正确性。
-            return [.. filtered
-                .OrderByDescending(relation => relation.Weight)
-                .ThenByDescending(relation => relation.Confidence)
-                .ThenByDescending(relation => relation.CreatedAt)
-                .Take(maxScan)
-                .Skip(effectiveSkip)
-                .Take(effectiveTake)];
-        }
-        finally
+        if (allowedTypes is not null)
         {
-            _gate.Release();
+            filtered = filtered.Where(relation => allowedTypes.Contains(relation.RelationType));
         }
+        else if (!string.IsNullOrWhiteSpace(query.RelationType))
+        {
+            filtered = filtered.Where(relation =>
+                string.Equals(relation.RelationType, query.RelationType, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (query.MinConfidence > 0)
+        {
+            filtered = filtered.Where(relation => relation.Confidence >= query.MinConfidence);
+        }
+
+        if (excludedLifecycles is not null)
+        {
+            filtered = filtered.Where(relation => !excludedLifecycles.Contains(relation.Lifecycle ?? string.Empty));
+        }
+
+        if (excludedReviewStatuses is not null)
+        {
+            filtered = filtered.Where(relation => !excludedReviewStatuses.Contains(relation.ReviewStatus ?? string.Empty));
+        }
+
+        // P5-0.3: 先排序再 Take(maxScan)，避免文件后部高权重关系永远进不了结果。
+        // 文件已被完整读入内存，提前 Take 并不减少磁盘 I/O，反而丢失正确性。
+        return [.. filtered
+            .OrderByDescending(relation => relation.Weight)
+            .ThenByDescending(relation => relation.Confidence)
+            .ThenByDescending(relation => relation.CreatedAt)
+            .Take(maxScan)
+            .Skip(effectiveSkip)
+            .Take(effectiveTake)];
     }
 
     public async Task<IReadOnlyList<ContextRelation>> QueryAsync(
@@ -217,34 +250,27 @@ public sealed class FileRelationStore : IRelationStore
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
+        // P5-5: no read lock — use mtime-based cache
+        var relations = new List<ContextRelation>();
+        var collectionIds = ResolveCollectionIds(query.WorkspaceId, query.CollectionId);
+
+        foreach (var collectionId in collectionIds)
         {
-            var relations = new List<ContextRelation>();
-            var collectionIds = ResolveCollectionIds(query.WorkspaceId, query.CollectionId);
-
-            foreach (var collectionId in collectionIds)
-            {
-                var path = _paths.GetRelationsJsonlPath(query.WorkspaceId, collectionId);
-                relations.AddRange(await _jsonLines.ReadAsync<ContextRelation>(path, cancellationToken)
-                    .ConfigureAwait(false));
-            }
-
-            var take = query.Take > 0 ? query.Take : 50;
-            var skip = query.Skip > 0 ? query.Skip : 0;
-
-            return [.. relations
-                .Where(relation => Matches(relation, query))
-                .OrderByDescending(relation => relation.Weight)
-                .ThenByDescending(relation => relation.Confidence)
-                .ThenByDescending(relation => relation.CreatedAt)
-                .Skip(skip)
-                .Take(take)];
+            var path = _paths.GetRelationsJsonlPath(query.WorkspaceId, collectionId);
+            relations.AddRange(await ReadRelationsCachedAsync(path, cancellationToken)
+                .ConfigureAwait(false));
         }
-        finally
-        {
-            _gate.Release();
-        }
+
+        var take = query.Take > 0 ? query.Take : 50;
+        var skip = query.Skip > 0 ? query.Skip : 0;
+
+        return [.. relations
+            .Where(relation => Matches(relation, query))
+            .OrderByDescending(relation => relation.Weight)
+            .ThenByDescending(relation => relation.Confidence)
+            .ThenByDescending(relation => relation.CreatedAt)
+            .Skip(skip)
+            .Take(take)];
     }
 
     /// <summary>
