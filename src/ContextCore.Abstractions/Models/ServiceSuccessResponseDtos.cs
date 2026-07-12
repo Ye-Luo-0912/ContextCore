@@ -2125,93 +2125,6 @@ public sealed class ContextCoreModelRouteStatusResponse
     public ContextCoreModelSelectionResponse? Fallback { get; init; }
 }
 
-public sealed class PostgresLearningFeedbackDiagnosticsReport
-{
-    public bool ProviderEnabled { get; init; }
-
-    public bool ConnectionAvailable { get; init; }
-
-    public string SchemaVersion { get; init; } = string.Empty;
-
-    public bool FeedbackTableExists { get; init; }
-
-    public bool ReviewTableExists { get; init; }
-
-    public bool FeatureCandidateTableExists { get; init; }
-
-    public bool RequiredIndexesExist { get; init; }
-
-    public int FeedbackCount { get; init; }
-
-    public int ReviewCount { get; init; }
-
-    public int FeatureCandidateCount { get; init; }
-
-    public bool UseForRuntime { get; init; }
-
-    public string Status { get; init; } = string.Empty;
-
-    public IReadOnlyList<string> Diagnostics { get; init; } = Array.Empty<string>();
-}
-
-public sealed class PostgresLearningFeedbackParityReport
-{
-    public bool ProviderEnabled { get; init; }
-
-    public bool FeedbackParityPassed { get; init; }
-
-    public bool ReviewParityPassed { get; init; }
-
-    public bool FeatureCandidateParityPassed { get; init; }
-
-    public bool MetadataRoundtripPassed { get; init; }
-
-    public bool DuplicateFeedbackUpsertPassed { get; init; }
-
-    public bool CleanupPerformed { get; init; }
-
-    public int FeedbackCount { get; init; }
-
-    public int ReviewCount { get; init; }
-
-    public int FeatureCandidateCount { get; init; }
-
-    public IReadOnlyList<string> Mismatches { get; init; } = Array.Empty<string>();
-
-    public IReadOnlyList<string> Diagnostics { get; init; } = Array.Empty<string>();
-
-    public string Recommendation { get; init; } = string.Empty;
-}
-
-public sealed class LearningFeedbackPostgresReadinessGateReport
-{
-    public DateTimeOffset GeneratedAt { get; init; } = DateTimeOffset.UtcNow;
-
-    public bool GatePassed { get; init; }
-
-    public string StorageDiagnosticsStatus { get; init; } = string.Empty;
-
-    public string SchemaVersion { get; init; } = string.Empty;
-
-    public bool FeedbackTablesExist { get; init; }
-
-    public bool ReviewTablesExist { get; init; }
-
-    public bool FeatureCandidateTablesExist { get; init; }
-
-    public bool RequiredIndexesExist { get; init; }
-
-    public bool DiagnosticsReadyForParityEval { get; init; }
-
-    public int ParityMismatchCount { get; init; }
-
-    public bool UseForRuntime { get; init; }
-
-    public IReadOnlyList<string> FailedConditions { get; init; } = Array.Empty<string>();
-
-    public string Recommendation { get; init; } = string.Empty;
-}
-
 public sealed class LearningFeedbackDualWriteSmokeReport
 {
     public DateTimeOffset GeneratedAt { get; init; } = DateTimeOffset.UtcNow;
@@ -2272,35 +2185,6 @@ public sealed class LearningFeedbackShadowReadSmokeReport
     public IReadOnlyList<string> Mismatches { get; init; } = Array.Empty<string>();
 
     public string Recommendation { get; init; } = string.Empty;
-}
-
-public sealed class LearningFeedbackProviderQualityReport
-{
-    public DateTimeOffset GeneratedAt { get; init; } = DateTimeOffset.UtcNow;
-
-    public int TraceCount { get; init; }
-
-    public int FileSystemWriteSuccessCount { get; init; }
-
-    public int PostgresWriteSuccessCount { get; init; }
-
-    public int FileSystemReadSuccessCount { get; init; }
-
-    public int PostgresReadSuccessCount { get; init; }
-
-    public int MismatchCount { get; init; }
-
-    public int PostgresFailureCount { get; init; }
-
-    public int FallbackCount { get; init; }
-
-    public bool ExportProjectionParityPassed { get; init; }
-
-    public bool SummaryParityPassed { get; init; }
-
-    public string Recommendation { get; init; } = string.Empty;
-
-    public IReadOnlyList<string> Diagnostics { get; init; } = Array.Empty<string>();
 }
 
 public sealed class LearningFeedbackScopedServiceModeSmokeReport
@@ -2600,78 +2484,6 @@ public sealed class LearningFeedbackPostgresFreezeGateReport
     public string Recommendation { get; init; } = string.Empty;
 }
 
-public sealed class PostgresJobQueueDiagnosticsReport
-{
-    public DateTimeOffset GeneratedAt { get; init; } = DateTimeOffset.UtcNow;
-
-    public bool ProviderEnabled { get; init; }
-
-    public bool ConnectionAvailable { get; init; }
-
-    public string SchemaVersion { get; init; } = string.Empty;
-
-    public bool JobTableExists { get; init; }
-
-    public bool RequiredIndexesExist { get; init; }
-
-    public int PendingCount { get; init; }
-
-    public int RunningCount { get; init; }
-
-    public int FailedCount { get; init; }
-
-    public int DeadLetterCount { get; init; }
-
-    public int StaleLeaseCount { get; init; }
-
-    public bool UseForRuntime { get; init; }
-
-    public int JobCount { get; init; }
-
-    public IReadOnlyList<string> MissingIndexes { get; init; } = Array.Empty<string>();
-
-    public IReadOnlyList<string> Diagnostics { get; init; } = Array.Empty<string>();
-
-    public string Recommendation { get; init; } = string.Empty;
-}
-
-public sealed class PostgresJobQueueParityReport
-{
-    public DateTimeOffset GeneratedAt { get; init; } = DateTimeOffset.UtcNow;
-
-    public string WorkspaceId { get; init; } = string.Empty;
-
-    public string CollectionId { get; init; } = string.Empty;
-
-    public int JobCount { get; init; }
-
-    public int OperationCount { get; init; }
-
-    public int MismatchCount { get; init; }
-
-    public int PostgresFailureCount { get; init; }
-
-    public bool EnqueueListParityPassed { get; init; }
-
-    public bool DuplicateUpsertParityPassed { get; init; }
-
-    public bool StatusTransitionParityPassed { get; init; }
-
-    public bool RetryCountParityPassed { get; init; }
-
-    public bool CancelParityPassed { get; init; }
-
-    public bool DeadLetterParityPassed { get; init; }
-
-    public bool CleanupPerformed { get; init; }
-
-    public IReadOnlyList<string> Mismatches { get; init; } = Array.Empty<string>();
-
-    public IReadOnlyList<string> Diagnostics { get; init; } = Array.Empty<string>();
-
-    public string Recommendation { get; init; } = string.Empty;
-}
-
 public sealed class PostgresJobQueueLeaseSmokeReport
 {
     public DateTimeOffset GeneratedAt { get; init; } = DateTimeOffset.UtcNow;
@@ -2845,39 +2657,6 @@ public sealed class PostgresJobQueueShadowReadSmokeReport
     public IReadOnlyList<string> Mismatches { get; init; } = Array.Empty<string>();
 
     public IReadOnlyList<JobQueueShadowReadTrace> Traces { get; init; } = Array.Empty<JobQueueShadowReadTrace>();
-
-    public IReadOnlyList<string> Diagnostics { get; init; } = Array.Empty<string>();
-
-    public string Recommendation { get; init; } = string.Empty;
-}
-
-public sealed class PostgresJobQueueProviderQualityReport
-{
-    public DateTimeOffset GeneratedAt { get; init; } = DateTimeOffset.UtcNow;
-
-    public int TraceCount { get; init; }
-
-    public int FileSystemWriteSuccessCount { get; init; }
-
-    public int PostgresWriteSuccessCount { get; init; }
-
-    public int FileSystemReadSuccessCount { get; init; }
-
-    public int PostgresReadSuccessCount { get; init; }
-
-    public int MismatchCount { get; init; }
-
-    public int PostgresFailureCount { get; init; }
-
-    public int FallbackCount { get; init; }
-
-    public bool LeaseParityPassed { get; init; }
-
-    public bool RetryParityPassed { get; init; }
-
-    public bool DeadLetterParityPassed { get; init; }
-
-    public bool CountParityPassed { get; init; }
 
     public IReadOnlyList<string> Diagnostics { get; init; } = Array.Empty<string>();
 

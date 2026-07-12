@@ -1764,17 +1764,9 @@ public sealed class ServiceAdminRuntimeSnapshot
 
     public PostgresRelationMultiNormalScopeCanaryReport PostgresRelationMultiNormalScopeCanaryReport { get; init; } = new();
 
-    public PostgresLearningFeedbackDiagnosticsReport PostgresLearningFeedbackDiagnosticsReport { get; init; } = new();
-
-    public PostgresLearningFeedbackParityReport PostgresLearningFeedbackParityReport { get; init; } = new();
-
-    public LearningFeedbackPostgresReadinessGateReport PostgresLearningFeedbackReadinessGateReport { get; init; } = new();
-
     public LearningFeedbackDualWriteSmokeReport PostgresLearningFeedbackDualWriteSmokeReport { get; init; } = new();
 
     public LearningFeedbackShadowReadSmokeReport PostgresLearningFeedbackShadowReadSmokeReport { get; init; } = new();
-
-    public LearningFeedbackProviderQualityReport PostgresLearningFeedbackProviderQualityReport { get; init; } = new();
 
     public LearningFeedbackScopedServiceModeSmokeReport PostgresLearningFeedbackScopedServiceModeSmokeReport { get; init; } = new();
 
@@ -1788,17 +1780,11 @@ public sealed class ServiceAdminRuntimeSnapshot
 
     public LearningFeedbackPostgresFreezeGateReport PostgresLearningFeedbackFreezeGateReport { get; init; } = new();
 
-    public PostgresJobQueueDiagnosticsReport PostgresJobQueueDiagnosticsReport { get; init; } = new();
-
-    public PostgresJobQueueParityReport PostgresJobQueueParityReport { get; init; } = new();
-
     public PostgresJobQueueLeaseSmokeReport PostgresJobQueueLeaseSmokeReport { get; init; } = new();
 
     public PostgresJobQueueDualWriteSmokeReport PostgresJobQueueDualWriteSmokeReport { get; init; } = new();
 
     public PostgresJobQueueShadowReadSmokeReport PostgresJobQueueShadowReadSmokeReport { get; init; } = new();
-
-    public PostgresJobQueueProviderQualityReport PostgresJobQueueProviderQualityReport { get; init; } = new();
 
     public PostgresJobQueueScopedWorkerCanaryReport PostgresJobQueueScopedWorkerCanaryReport { get; init; } = new();
 

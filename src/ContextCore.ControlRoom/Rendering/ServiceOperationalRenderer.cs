@@ -174,24 +174,17 @@ public static class ServiceOperationalRenderer
             snapshot.PostgresRelationSelectedNormalWorkspaceCanaryReport,
             snapshot.PostgresRelationLimitedNormalScopeObservationReport,
             snapshot.PostgresRelationMultiNormalScopeCanaryReport,
-            snapshot.PostgresLearningFeedbackDiagnosticsReport,
-            snapshot.PostgresLearningFeedbackParityReport,
-            snapshot.PostgresLearningFeedbackReadinessGateReport,
             snapshot.PostgresLearningFeedbackDualWriteSmokeReport,
             snapshot.PostgresLearningFeedbackShadowReadSmokeReport,
-            snapshot.PostgresLearningFeedbackProviderQualityReport,
             snapshot.PostgresLearningFeedbackScopedServiceModeSmokeReport,
             snapshot.PostgresLearningFeedbackScopedServiceModeGateReport,
             snapshot.PostgresLearningFeedbackSelectedNormalScopeCanaryReport,
             snapshot.PostgresLearningFeedbackLimitedScopeObservationReport,
             snapshot.PostgresLearningFeedbackLimitedScopeQualityReport,
             snapshot.PostgresLearningFeedbackFreezeGateReport,
-            snapshot.PostgresJobQueueDiagnosticsReport,
-            snapshot.PostgresJobQueueParityReport,
             snapshot.PostgresJobQueueLeaseSmokeReport,
             snapshot.PostgresJobQueueDualWriteSmokeReport,
             snapshot.PostgresJobQueueShadowReadSmokeReport,
-            snapshot.PostgresJobQueueProviderQualityReport,
             snapshot.PostgresJobQueueScopedWorkerCanaryReport,
             snapshot.PostgresJobQueueScopedWorkerQualityReport,
             snapshot.PostgresJobQueueLimitedWorkerScopeObservationReport,
@@ -403,24 +396,17 @@ public static class ServiceOperationalRenderer
         PostgresRelationSelectedNormalWorkspaceCanaryReport selectedNormalCanary,
         PostgresRelationLimitedNormalScopeObservationReport limitedNormalObservation,
         PostgresRelationMultiNormalScopeCanaryReport multiNormalScopeCanary,
-        PostgresLearningFeedbackDiagnosticsReport learningFeedbackDiagnostics,
-        PostgresLearningFeedbackParityReport learningFeedbackParity,
-        LearningFeedbackPostgresReadinessGateReport learningFeedbackReadinessGate,
         LearningFeedbackDualWriteSmokeReport learningFeedbackDualWriteSmoke,
         LearningFeedbackShadowReadSmokeReport learningFeedbackShadowReadSmoke,
-        LearningFeedbackProviderQualityReport learningFeedbackProviderQuality,
         LearningFeedbackScopedServiceModeSmokeReport learningFeedbackScopedSmoke,
         LearningFeedbackScopedServiceModeGateReport learningFeedbackScopedGate,
         LearningFeedbackSelectedNormalScopeCanaryReport learningFeedbackSelectedNormalCanary,
         LearningFeedbackLimitedScopeObservationReport learningFeedbackLimitedObservation,
         LearningFeedbackLimitedScopeQualityReport learningFeedbackLimitedQuality,
         LearningFeedbackPostgresFreezeGateReport learningFeedbackFreezeGate,
-        PostgresJobQueueDiagnosticsReport jobQueueDiagnostics,
-        PostgresJobQueueParityReport jobQueueParity,
         PostgresJobQueueLeaseSmokeReport jobQueueLeaseSmoke,
         PostgresJobQueueDualWriteSmokeReport jobQueueDualWriteSmoke,
         PostgresJobQueueShadowReadSmokeReport jobQueueShadowReadSmoke,
-        PostgresJobQueueProviderQualityReport jobQueueProviderQuality,
         PostgresJobQueueScopedWorkerCanaryReport jobQueueScopedWorkerCanary,
         PostgresJobQueueScopedWorkerQualityReport jobQueueScopedWorkerQuality,
         PostgresJobQueueLimitedWorkerScopeObservationReport jobQueueLimitedWorkerObservation,
@@ -657,40 +643,13 @@ public static class ServiceOperationalRenderer
         }
 
         builder.AppendLine("Warning       : scoped mode 仅限显式 allowlist；未配置全局 default on。");
-        builder.AppendLine("Learning Feedback Provider Status");
-        builder.AppendLine("- RuntimeProvider  : FileSystem source of truth");
-        builder.AppendLine($"- ProviderEnabled  : {learningFeedbackDiagnostics.ProviderEnabled}");
-        builder.AppendLine($"- Connection       : {learningFeedbackDiagnostics.ConnectionAvailable}");
-        builder.AppendLine($"- SchemaVersion    : {learningFeedbackDiagnostics.SchemaVersion}");
-        builder.AppendLine($"- FeedbackTable    : {learningFeedbackDiagnostics.FeedbackTableExists}");
-        builder.AppendLine($"- ReviewTable      : {learningFeedbackDiagnostics.ReviewTableExists}");
-        builder.AppendLine($"- CandidateTable   : {learningFeedbackDiagnostics.FeatureCandidateTableExists}");
-        builder.AppendLine($"- RequiredIndexes  : {learningFeedbackDiagnostics.RequiredIndexesExist}");
-        builder.AppendLine($"- FeedbackCount    : {learningFeedbackDiagnostics.FeedbackCount}");
-        builder.AppendLine($"- ReviewCount      : {learningFeedbackDiagnostics.ReviewCount}");
-        builder.AppendLine($"- CandidateCount   : {learningFeedbackDiagnostics.FeatureCandidateCount}");
-        builder.AppendLine($"- UseForRuntime    : {learningFeedbackDiagnostics.UseForRuntime}");
-        builder.AppendLine($"- Status           : {learningFeedbackDiagnostics.Status}");
-        builder.AppendLine("Learning Feedback Parity");
-        builder.AppendLine($"- Recommendation   : {learningFeedbackParity.Recommendation}");
-        builder.AppendLine($"- FeedbackParity   : {learningFeedbackParity.FeedbackParityPassed}");
-        builder.AppendLine($"- ReviewParity     : {learningFeedbackParity.ReviewParityPassed}");
-        builder.AppendLine($"- CandidateParity  : {learningFeedbackParity.FeatureCandidateParityPassed}");
-        builder.AppendLine($"- MetadataRoundtrip: {learningFeedbackParity.MetadataRoundtripPassed}");
-        builder.AppendLine($"- DuplicateUpsert  : {learningFeedbackParity.DuplicateFeedbackUpsertPassed}");
-        builder.AppendLine($"- Mismatches       : {learningFeedbackParity.Mismatches.Count}");
-        builder.AppendLine($"- CleanupPerformed : {learningFeedbackParity.CleanupPerformed}");
         builder.AppendLine("Learning Feedback Readiness / Smoke");
-        builder.AppendLine($"- GatePassed       : {learningFeedbackReadinessGate.GatePassed}");
-        builder.AppendLine($"- GateRecommendation: {learningFeedbackReadinessGate.Recommendation}");
         builder.AppendLine($"- DualWriteRec     : {learningFeedbackDualWriteSmoke.Recommendation}");
         builder.AppendLine($"- DualWriteMismatch: {learningFeedbackDualWriteSmoke.MismatchCount}");
         builder.AppendLine($"- DualWriteFailures: {learningFeedbackDualWriteSmoke.PostgresFailureCount}");
         builder.AppendLine($"- ShadowReadRec    : {learningFeedbackShadowReadSmoke.Recommendation}");
         builder.AppendLine($"- ShadowMismatch   : {learningFeedbackShadowReadSmoke.MismatchCount}");
         builder.AppendLine($"- ShadowFailures   : {learningFeedbackShadowReadSmoke.PostgresFailureCount}");
-        builder.AppendLine($"- QualityTraceCount: {learningFeedbackProviderQuality.TraceCount}");
-        builder.AppendLine($"- QualityRec       : {learningFeedbackProviderQuality.Recommendation}");
         builder.AppendLine("- RuntimeProvider  : still FileSystem");
         builder.AppendLine("Learning Feedback Scoped Service Mode");
         builder.AppendLine($"- CurrentMode      : {(string.IsNullOrWhiteSpace(learningFeedbackScopedSmoke.ProviderMode) ? LearningFeedbackProviderMode.FileSystemPrimary : learningFeedbackScopedSmoke.ProviderMode)}");
@@ -754,20 +713,6 @@ public static class ServiceOperationalRenderer
         builder.AppendLine($"- Recommendation   : {learningFeedbackFreezeGate.Recommendation}");
         builder.AppendLine("Job Queue Provider Status");
         builder.AppendLine("- RuntimeProvider  : unchanged / FileSystem or InMemory source of truth");
-        builder.AppendLine($"- ProviderEnabled  : {jobQueueDiagnostics.ProviderEnabled}");
-        builder.AppendLine($"- Connection       : {jobQueueDiagnostics.ConnectionAvailable}");
-        builder.AppendLine($"- SchemaVersion    : {jobQueueDiagnostics.SchemaVersion}");
-        builder.AppendLine($"- JobTable         : {jobQueueDiagnostics.JobTableExists}");
-        builder.AppendLine($"- RequiredIndexes  : {jobQueueDiagnostics.RequiredIndexesExist}");
-        builder.AppendLine($"- PendingCount     : {jobQueueDiagnostics.PendingCount}");
-        builder.AppendLine($"- RunningCount     : {jobQueueDiagnostics.RunningCount}");
-        builder.AppendLine($"- FailedCount      : {jobQueueDiagnostics.FailedCount}");
-        builder.AppendLine($"- DeadLetterCount  : {jobQueueDiagnostics.DeadLetterCount}");
-        builder.AppendLine($"- StaleLeaseCount  : {jobQueueDiagnostics.StaleLeaseCount}");
-        builder.AppendLine($"- UseForRuntime    : {jobQueueDiagnostics.UseForRuntime}");
-        builder.AppendLine($"- DiagnosticsRec   : {jobQueueDiagnostics.Recommendation}");
-        builder.AppendLine($"- ParityRec        : {jobQueueParity.Recommendation}");
-        builder.AppendLine($"- ParityMismatch   : {jobQueueParity.MismatchCount}");
         builder.AppendLine($"- LeaseSmokeRec    : {jobQueueLeaseSmoke.Recommendation}");
         builder.AppendLine($"- LeaseAcquire     : {jobQueueLeaseSmoke.LeaseAcquireCount}");
         builder.AppendLine($"- LeaseConflict    : {jobQueueLeaseSmoke.LeaseConflictCount}");
@@ -787,12 +732,6 @@ public static class ServiceOperationalRenderer
         builder.AppendLine($"- ShadowMismatch   : {jobQueueShadowReadSmoke.MismatchCount}");
         builder.AppendLine($"- ShadowFailures   : {jobQueueShadowReadSmoke.PostgresFailureCount}");
         builder.AppendLine($"- ShadowFallback   : {jobQueueShadowReadSmoke.FallbackCount}");
-        builder.AppendLine($"- QualityRec       : {jobQueueProviderQuality.Recommendation}");
-        builder.AppendLine($"- QualityTraces    : {jobQueueProviderQuality.TraceCount}");
-        builder.AppendLine($"- LeaseParity      : {jobQueueProviderQuality.LeaseParityPassed}");
-        builder.AppendLine($"- RetryParity      : {jobQueueProviderQuality.RetryParityPassed}");
-        builder.AppendLine($"- DeadLetterParity : {jobQueueProviderQuality.DeadLetterParityPassed}");
-        builder.AppendLine($"- CountParity      : {jobQueueProviderQuality.CountParityPassed}");
         builder.AppendLine("- RuntimeWorker    : unchanged");
         builder.AppendLine("Job Queue Scoped Worker Canary");
         builder.AppendLine("- Enabled          : false by default / explicit eval only");
@@ -876,13 +815,8 @@ public static class ServiceOperationalRenderer
             .Concat(limitedNormalObservation.BlockedReasons)
             .Concat(multiNormalScopeCanary.Diagnostics)
             .Concat(multiNormalScopeCanary.BlockedReasons)
-            .Concat(learningFeedbackDiagnostics.Diagnostics)
-            .Concat(learningFeedbackParity.Diagnostics)
-            .Concat(learningFeedbackParity.Mismatches)
-            .Concat(learningFeedbackReadinessGate.FailedConditions)
             .Concat(learningFeedbackDualWriteSmoke.Mismatches)
             .Concat(learningFeedbackShadowReadSmoke.Mismatches)
-            .Concat(learningFeedbackProviderQuality.Diagnostics)
             .Concat(learningFeedbackScopedSmoke.Diagnostics)
             .Concat(learningFeedbackScopedSmoke.Mismatches)
             .Concat(learningFeedbackScopedGate.Diagnostics)
@@ -897,17 +831,12 @@ public static class ServiceOperationalRenderer
             .Concat(learningFeedbackLimitedQuality.BlockedReasons)
             .Concat(learningFeedbackFreezeGate.Diagnostics)
             .Concat(learningFeedbackFreezeGate.BlockedReasons)
-            .Concat(jobQueueDiagnostics.Diagnostics)
-            .Concat(jobQueueDiagnostics.MissingIndexes)
-            .Concat(jobQueueParity.Diagnostics)
-            .Concat(jobQueueParity.Mismatches)
             .Concat(jobQueueLeaseSmoke.Diagnostics)
             .Concat(jobQueueLeaseSmoke.Mismatches)
             .Concat(jobQueueDualWriteSmoke.Diagnostics)
             .Concat(jobQueueDualWriteSmoke.Mismatches)
             .Concat(jobQueueShadowReadSmoke.Diagnostics)
             .Concat(jobQueueShadowReadSmoke.Mismatches)
-            .Concat(jobQueueProviderQuality.Diagnostics)
             .Concat(jobQueueScopedWorkerCanary.Diagnostics)
             .Concat(jobQueueScopedWorkerCanary.Mismatches)
             .Concat(jobQueueScopedWorkerQuality.Diagnostics)

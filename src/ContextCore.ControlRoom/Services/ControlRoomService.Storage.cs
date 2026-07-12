@@ -172,18 +172,6 @@ public sealed partial class ControlRoomService
         ReadPostgresReport(rootPath, "postgres-relation-multi-normal-scope-quality-report.json",
             new PostgresRelationMultiNormalScopeCanaryReport { Diagnostics = ["RelationMultiNormalScopeCanaryReportMissing"], Recommendation = "RunEvalPostgresRelationMultiNormalScopeCanary" });
 
-    private static PostgresLearningFeedbackDiagnosticsReport BuildPostgresLearningFeedbackDiagnosticsReport(string rootPath) =>
-        ReadPostgresReport(rootPath, "postgres-learning-feedback-diagnostics.json",
-            new PostgresLearningFeedbackDiagnosticsReport { Diagnostics = ["PostgresLearningFeedbackDiagnosticsReportMissing"], Status = "RunEvalPostgresLearningFeedbackDiagnostics" });
-
-    private static PostgresLearningFeedbackParityReport BuildPostgresLearningFeedbackParityReport(string rootPath) =>
-        ReadPostgresReport(rootPath, "postgres-learning-feedback-parity-report.json",
-            new PostgresLearningFeedbackParityReport { Diagnostics = ["PostgresLearningFeedbackParityReportMissing"], Recommendation = "RunEvalPostgresLearningFeedbackParity" });
-
-    private static LearningFeedbackPostgresReadinessGateReport BuildPostgresLearningFeedbackReadinessGateReport(string rootPath) =>
-        ReadPostgresReport(rootPath, "postgres-learning-feedback-readiness-gate.json",
-            new LearningFeedbackPostgresReadinessGateReport { FailedConditions = ["PostgresLearningFeedbackReadinessGateMissing"], Recommendation = "RunEvalPostgresLearningFeedbackReadinessGate" });
-
     private static LearningFeedbackDualWriteSmokeReport BuildPostgresLearningFeedbackDualWriteSmokeReport(string rootPath) =>
         ReadPostgresReport(rootPath, "postgres-learning-feedback-dual-write-smoke-report.json",
             new LearningFeedbackDualWriteSmokeReport { Mismatches = ["PostgresLearningFeedbackDualWriteSmokeReportMissing"], Recommendation = "RunEvalPostgresLearningFeedbackDualWriteSmoke" });
@@ -191,10 +179,6 @@ public sealed partial class ControlRoomService
     private static LearningFeedbackShadowReadSmokeReport BuildPostgresLearningFeedbackShadowReadSmokeReport(string rootPath) =>
         ReadPostgresReport(rootPath, "postgres-learning-feedback-shadow-read-smoke-report.json",
             new LearningFeedbackShadowReadSmokeReport { Mismatches = ["PostgresLearningFeedbackShadowReadSmokeReportMissing"], Recommendation = "RunEvalPostgresLearningFeedbackShadowReadSmoke" });
-
-    private static LearningFeedbackProviderQualityReport BuildPostgresLearningFeedbackProviderQualityReport(string rootPath) =>
-        ReadPostgresReport(rootPath, "postgres-learning-feedback-provider-quality-report.json",
-            new LearningFeedbackProviderQualityReport { Diagnostics = ["PostgresLearningFeedbackProviderQualityReportMissing"], Recommendation = "RunEvalPostgresLearningFeedbackProviderQuality" });
 
     private static LearningFeedbackSelectedNormalScopeCanaryReport BuildPostgresLearningFeedbackSelectedNormalScopeCanaryReport(string rootPath) =>
         ReadPostgresReport(rootPath, "postgres-learning-feedback-selected-normal-scope-canary-report.json",
@@ -212,14 +196,6 @@ public sealed partial class ControlRoomService
         ReadPostgresReport(rootPath, "postgres-learning-feedback-freeze-gate.json",
             new LearningFeedbackPostgresFreezeGateReport { BlockedReasons = ["PostgresLearningFeedbackFreezeGateMissing"], Recommendation = "RunEvalPostgresLearningFeedbackFreezeGate" });
 
-    private static PostgresJobQueueDiagnosticsReport BuildPostgresJobQueueDiagnosticsReport(string rootPath) =>
-        ReadPostgresReport(rootPath, "postgres-job-queue-diagnostics.json",
-            new PostgresJobQueueDiagnosticsReport { Diagnostics = ["PostgresJobQueueDiagnosticsMissing"], Recommendation = "RunEvalPostgresJobQueueDiagnostics" });
-
-    private static PostgresJobQueueParityReport BuildPostgresJobQueueParityReport(string rootPath) =>
-        ReadPostgresReport(rootPath, "postgres-job-queue-parity-report.json",
-            new PostgresJobQueueParityReport { Diagnostics = ["PostgresJobQueueParityMissing"], Recommendation = "RunEvalPostgresJobQueueParity" });
-
     private static PostgresJobQueueLeaseSmokeReport BuildPostgresJobQueueLeaseSmokeReport(string rootPath) =>
         ReadPostgresReport(rootPath, "postgres-job-queue-lease-smoke-report.json",
             new PostgresJobQueueLeaseSmokeReport { Diagnostics = ["PostgresJobQueueLeaseSmokeMissing"], Recommendation = "RunEvalPostgresJobQueueLeaseSmoke" });
@@ -231,10 +207,6 @@ public sealed partial class ControlRoomService
     private static PostgresJobQueueShadowReadSmokeReport BuildPostgresJobQueueShadowReadSmokeReport(string rootPath) =>
         ReadPostgresReport(rootPath, "postgres-job-queue-shadow-read-smoke-report.json",
             new PostgresJobQueueShadowReadSmokeReport { Diagnostics = ["PostgresJobQueueShadowReadSmokeMissing"], Recommendation = "RunEvalPostgresJobQueueShadowReadSmoke" });
-
-    private static PostgresJobQueueProviderQualityReport BuildPostgresJobQueueProviderQualityReport(string rootPath) =>
-        ReadPostgresReport(rootPath, "postgres-job-queue-provider-quality-report.json",
-            new PostgresJobQueueProviderQualityReport { Diagnostics = ["PostgresJobQueueProviderQualityMissing"], Recommendation = "RunEvalPostgresJobQueueProviderQuality" });
 
     private static PostgresJobQueueScopedWorkerCanaryReport BuildPostgresJobQueueScopedWorkerCanaryReport(string rootPath) =>
         ReadPostgresReport(rootPath, "postgres-job-queue-scoped-worker-canary-report.json",
