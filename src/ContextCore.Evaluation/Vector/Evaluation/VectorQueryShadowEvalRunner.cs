@@ -1,6 +1,7 @@
 using System.Text;
 using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services;
+using ContextCore.Evaluation.Models;
 
 namespace ContextCore.Evaluation.Vector;
 

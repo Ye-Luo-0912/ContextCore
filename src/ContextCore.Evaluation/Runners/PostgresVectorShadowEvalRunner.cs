@@ -8,6 +8,7 @@ using ContextCore.Storage.Postgres;
 using ContextCore.Storage.Postgres.Infrastructure;
 using ContextCore.Storage.Postgres.Stores;
 using ContextCore.Evaluation.Vector;
+using ContextCore.Evaluation.Models;
 
 namespace ContextCore.Evaluation.Runners;
 

@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
+using ContextCore.Evaluation.Models;
 
 namespace ContextCore.Evaluation.Learning;
 

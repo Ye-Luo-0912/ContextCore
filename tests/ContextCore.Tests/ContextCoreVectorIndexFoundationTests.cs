@@ -8,6 +8,7 @@ using ContextCore.ControlRoom.Rendering;
 using ContextCore.ControlRoom.Screens;
 using ContextCore.ControlRoom.Services;
 using ContextCore.Evaluation.Runners;
+using ContextCore.Evaluation.Models;
 using ContextCore.Core.Services;
 using ContextCore.Embedding;
 using ContextCore.Embedding.Providers;

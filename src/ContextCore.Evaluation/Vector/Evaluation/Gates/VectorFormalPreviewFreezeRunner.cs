@@ -1,5 +1,6 @@
 using System.Text;
 using ContextCore.Abstractions.Models;
+using ContextCore.Evaluation.Models;
 
 namespace ContextCore.Evaluation.Vector.Gates;
 
