@@ -230,7 +230,9 @@ internal static class CoreExtensions
 		services.AddSingleton<IContextRuntimeService>(sp =>
 			sp.GetRequiredService<ContextRuntimeService>());
 		services.AddSingleton<ContextDecisionAuditRunner>(sp => new ContextDecisionAuditRunner(
-			sp.GetRequiredService<IDecisionTraceStore>()));
+			sp.GetRequiredService<IDecisionTraceStore>(),
+			sp.GetService<IDecisionEvidenceProvider>()));
+		services.AddSingleton<IDecisionEvidenceProvider, NullDecisionEvidenceProvider>();
 		services.AddSingleton<ShortTermMaintenanceRuntimeState>(sp =>
 		{
 			var state = new ShortTermMaintenanceRuntimeState();

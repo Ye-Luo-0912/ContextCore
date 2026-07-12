@@ -7,17 +7,25 @@ namespace ContextCore.Core.Services;
 
 /// <summary>
 /// 读取 decision trace 并生成审计报告（V17.0）。
-/// 校验非激活契约（所有 Risk 标志位恒为 false）和投影 ID 保留性。
+/// 校验非激活契约（所有 Risk 标志位恒为 false）、投影 ID 保留性，以及证据完整性（当接入证据提供者时）。
 /// 报告输出为 JSON 和 Markdown 双格式。
 /// </summary>
 public sealed class ContextDecisionAuditRunner
 {
     private readonly IDecisionTraceStore _store;
+    private readonly IDecisionEvidenceProvider? _evidenceProvider;
 
     public ContextDecisionAuditRunner(IDecisionTraceStore store)
+        : this(store, evidenceProvider: null)
+    {
+    }
+
+    /// <param name="evidenceProvider">证据提供者；为 null 时跳过证据完整性审计。</param>
+    public ContextDecisionAuditRunner(IDecisionTraceStore store, IDecisionEvidenceProvider? evidenceProvider)
     {
         ArgumentNullException.ThrowIfNull(store);
         _store = store;
+        _evidenceProvider = evidenceProvider;
     }
 
     /// <summary>执行审计并返回报告对象。</summary>
@@ -32,16 +40,46 @@ public sealed class ContextDecisionAuditRunner
 
         var samples = new List<ContextDecisionAuditSample>();
         var violations = new List<string>();
+        var evidenceIncompleteIds = new List<string>();
         var totalSelected = 0;
         var totalDropped = 0;
+        var totalEvidenceResolved = 0;
+        var totalEvidenceMissing = 0;
         var packageCount = 0;
         var retrievalCount = 0;
         var allPreserveIds = true;
+        var allEvidenceComplete = _evidenceProvider is not null;
 
         foreach (var record in records)
         {
             var recordViolations = AuditNonActivationContract(record.Risk);
             var preserveIds = AuditIdPreservation(record);
+
+            var evidenceResolved = 0;
+            var evidenceMissing = 0;
+            var evidenceComplete = false;
+
+            if (_evidenceProvider is not null)
+            {
+                var evidenceResult = await _evidenceProvider.ResolveEvidenceAsync(record, cancellationToken)
+                    .ConfigureAwait(false);
+                evidenceResolved = evidenceResult.Evidence.Count;
+                evidenceMissing = evidenceResult.MissingItemIds.Count;
+                evidenceComplete = evidenceResult.IsComplete;
+
+                if (!evidenceComplete)
+                {
+                    allEvidenceComplete = false;
+                    evidenceIncompleteIds.Add(record.DecisionId);
+                }
+
+                totalEvidenceResolved += evidenceResolved;
+                totalEvidenceMissing += evidenceMissing;
+            }
+            else
+            {
+                allEvidenceComplete = false;
+            }
 
             samples.Add(new ContextDecisionAuditSample
             {
@@ -53,7 +91,10 @@ public sealed class ContextDecisionAuditRunner
                 DroppedCount = record.Outcome.DroppedCount,
                 EstimatedTokens = record.Outcome.EstimatedTokens,
                 NonActivationContractHolds = recordViolations.Count == 0,
-                ContractViolations = recordViolations
+                ContractViolations = recordViolations,
+                EvidenceComplete = evidenceComplete,
+                EvidenceResolvedCount = evidenceResolved,
+                EvidenceMissingCount = evidenceMissing
             });
 
             violations.AddRange(recordViolations);
@@ -80,6 +121,10 @@ public sealed class ContextDecisionAuditRunner
             NonActivationContractHolds = contractHolds,
             ContractViolations = violations.Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
             ProjectionPreservesIds = allPreserveIds,
+            EvidenceComplete = allEvidenceComplete,
+            EvidenceIncompleteDecisionIds = evidenceIncompleteIds.Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
+            EvidenceResolvedCount = totalEvidenceResolved,
+            EvidenceMissingCount = totalEvidenceMissing,
             Samples = samples,
             PolicyVersion = ContextDecisionPolicyVersions.V17_0
         };
@@ -177,13 +222,27 @@ public sealed class ContextDecisionAuditRunner
         }
         sb.AppendLine($"- **ProjectionPreservesIds**: `{report.ProjectionPreservesIds}`");
         sb.AppendLine();
+        sb.AppendLine("## Evidence Completeness");
+        sb.AppendLine();
+        sb.AppendLine($"- **EvidenceComplete**: `{report.EvidenceComplete}`");
+        sb.AppendLine($"- **EvidenceResolvedCount**: {report.EvidenceResolvedCount}");
+        sb.AppendLine($"- **EvidenceMissingCount**: {report.EvidenceMissingCount}");
+        if (report.EvidenceIncompleteDecisionIds.Count > 0)
+        {
+            sb.AppendLine($"- **EvidenceIncompleteDecisionIds**: {string.Join(", ", report.EvidenceIncompleteDecisionIds.Take(20))}");
+        }
+        else
+        {
+            sb.AppendLine("- **EvidenceIncompleteDecisionIds**: (none)");
+        }
+        sb.AppendLine();
         sb.AppendLine("## Samples");
         sb.AppendLine();
-        sb.AppendLine("| DecisionId | Source | Selected | Dropped | Tokens | ContractHolds |");
-        sb.AppendLine("|---|---|---|---|---|---|");
+        sb.AppendLine("| DecisionId | Source | Selected | Dropped | Tokens | ContractHolds | EvidenceComplete | EvidenceResolved | EvidenceMissing |");
+        sb.AppendLine("|---|---|---|---|---|---|---|---|---|");
         foreach (var sample in report.Samples)
         {
-            sb.AppendLine($"| {sample.DecisionId[..Math.Min(12, sample.DecisionId.Length)]} | {sample.Source} | {sample.SelectedCount} | {sample.DroppedCount} | {sample.EstimatedTokens} | {sample.NonActivationContractHolds} |");
+            sb.AppendLine($"| {sample.DecisionId[..Math.Min(12, sample.DecisionId.Length)]} | {sample.Source} | {sample.SelectedCount} | {sample.DroppedCount} | {sample.EstimatedTokens} | {sample.NonActivationContractHolds} | {sample.EvidenceComplete} | {sample.EvidenceResolvedCount} | {sample.EvidenceMissingCount} |");
         }
 
         return sb.ToString();

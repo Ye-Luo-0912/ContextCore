@@ -301,6 +301,166 @@ public sealed class ContextCoreDecisionTraceTests
         }
     }
 
+    [TestMethod]
+    public async Task DecisionAudit_WithoutEvidenceProvider_ReportsEvidenceNotComplete()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var store = new InMemoryContextStore();
+        await store.SaveAsync(MakeItem("ev-none-1", "无证据提供者测试", ["evidence"], now));
+
+        var decisionStore = new InMemoryDecisionTraceStore();
+        var builder = new BasicContextPackageBuilder(
+            store, null, null, null, null, null, null, null, null, null, decisionStore);
+
+        await builder.BuildDetailedAsync(new ContextPackageRequest
+        {
+            WorkspaceId = WorkspaceId,
+            CollectionId = CollectionId,
+            QueryText = "无证据",
+            TokenBudget = 500
+        });
+
+        // 无证据提供者：EvidenceComplete=false（NotAudited 语义）
+        var runner = new ContextDecisionAuditRunner(decisionStore);
+        var report = await runner.RunAsync(WorkspaceId, CollectionId, 10);
+
+        Assert.IsFalse(report.EvidenceComplete);
+        Assert.AreEqual(0, report.EvidenceResolvedCount);
+        Assert.AreEqual(0, report.EvidenceMissingCount);
+        Assert.AreEqual(0, report.EvidenceIncompleteDecisionIds.Count);
+    }
+
+    [TestMethod]
+    public async Task DecisionAudit_WithNullEvidenceProvider_ReportsIncompleteWithMissing()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var store = new InMemoryContextStore();
+        await store.SaveAsync(MakeItem("ev-null-1", "null 证据提供者测试", ["evidence"], now));
+
+        var decisionStore = new InMemoryDecisionTraceStore();
+        var builder = new BasicContextPackageBuilder(
+            store, null, null, null, null, null, null, null, null, null, decisionStore);
+
+        await builder.BuildDetailedAsync(new ContextPackageRequest
+        {
+            WorkspaceId = WorkspaceId,
+            CollectionId = CollectionId,
+            QueryText = "null 证据",
+            TokenBudget = 500
+        });
+
+        // NullDecisionEvidenceProvider：标记所有候选为 missing
+        var runner = new ContextDecisionAuditRunner(decisionStore, new NullDecisionEvidenceProvider());
+        var report = await runner.RunAsync(WorkspaceId, CollectionId, 10);
+
+        Assert.IsFalse(report.EvidenceComplete);
+        Assert.AreEqual(0, report.EvidenceResolvedCount);
+        Assert.IsTrue(report.EvidenceMissingCount > 0);
+        Assert.AreEqual(1, report.EvidenceIncompleteDecisionIds.Count);
+    }
+
+    [TestMethod]
+    public async Task DecisionAudit_WithCompleteEvidenceProvider_ReportsComplete()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var store = new InMemoryContextStore();
+        await store.SaveAsync(MakeItem("ev-complete-1", "完整证据测试", ["evidence"], now));
+
+        var decisionStore = new InMemoryDecisionTraceStore();
+        var builder = new BasicContextPackageBuilder(
+            store, null, null, null, null, null, null, null, null, null, decisionStore);
+
+        await builder.BuildDetailedAsync(new ContextPackageRequest
+        {
+            WorkspaceId = WorkspaceId,
+            CollectionId = CollectionId,
+            QueryText = "完整证据",
+            TokenBudget = 500
+        });
+
+        // FakeEvidenceProvider：为所有候选返回完整证据
+        var runner = new ContextDecisionAuditRunner(decisionStore, new FakeCompleteEvidenceProvider());
+        var report = await runner.RunAsync(WorkspaceId, CollectionId, 10);
+
+        Assert.IsTrue(report.EvidenceComplete);
+        Assert.IsTrue(report.EvidenceResolvedCount > 0);
+        Assert.AreEqual(0, report.EvidenceMissingCount);
+        Assert.AreEqual(0, report.EvidenceIncompleteDecisionIds.Count);
+    }
+
+    [TestMethod]
+    public async Task DecisionAudit_WithCompleteEvidenceProvider_IncludesEvidenceInMarkdown()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var store = new InMemoryContextStore();
+        await store.SaveAsync(MakeItem("ev-md-1", "证据 markdown 测试", ["evidence"], now));
+
+        var decisionStore = new InMemoryDecisionTraceStore();
+        var builder = new BasicContextPackageBuilder(
+            store, null, null, null, null, null, null, null, null, null, decisionStore);
+
+        await builder.BuildDetailedAsync(new ContextPackageRequest
+        {
+            WorkspaceId = WorkspaceId,
+            CollectionId = CollectionId,
+            QueryText = "markdown 证据",
+            TokenBudget = 500
+        });
+
+        var tempDir = Path.Combine(Path.GetTempPath(), "contextcore-decision-evidence-" + Guid.NewGuid().ToString("N")[..8]);
+        try
+        {
+            var runner = new ContextDecisionAuditRunner(decisionStore, new FakeCompleteEvidenceProvider());
+            var report = await runner.RunAndWriteAsync(WorkspaceId, CollectionId, tempDir, 10);
+
+            var mdPath = Directory.GetFiles(tempDir).First(f => f.EndsWith(".md"));
+            var markdown = await File.ReadAllTextAsync(mdPath);
+
+            StringAssert.Contains(markdown, "## Evidence Completeness");
+            StringAssert.Contains(markdown, "EvidenceComplete");
+            StringAssert.Contains(markdown, "EvidenceResolvedCount");
+            StringAssert.Contains(markdown, "EvidenceMissingCount");
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Fake 证据提供者：为所有候选返回完整证据（IsComplete=true）。
+    /// </summary>
+    private sealed class FakeCompleteEvidenceProvider : IDecisionEvidenceProvider
+    {
+        public Task<DecisionEvidenceResult> ResolveEvidenceAsync(
+            ContextDecisionRecord record,
+            CancellationToken cancellationToken = default)
+        {
+            var evidence = record.Candidates
+                .Where(c => !string.IsNullOrWhiteSpace(c.ItemId))
+                .Select(c => new DecisionEvidence
+                {
+                    ItemId = c.ItemId,
+                    PrimaryRationale = c.Reason.Length > 0 ? c.Reason : "fake-rationale",
+                    Confidence = 1.0,
+                    Provenance = "fake-complete-provider"
+                })
+                .ToList();
+
+            return Task.FromResult(new DecisionEvidenceResult
+            {
+                DecisionId = record.DecisionId,
+                Evidence = evidence,
+                IsComplete = true,
+                MissingItemIds = Array.Empty<string>(),
+                ResolvedAt = DateTimeOffset.UtcNow
+            });
+        }
+    }
+
     private static ContextItem MakeItem(
         string id,
         string content,

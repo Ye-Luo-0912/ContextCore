@@ -144,6 +144,18 @@ public sealed class ContextDecisionAuditReport
     /// <summary>投影保留性校验：selected/dropped 的 ItemId 是否完整保留。</summary>
     public bool ProjectionPreservesIds { get; init; }
 
+    /// <summary>证据完整性校验：所有 trace 的证据都完整时为 true。未接入证据提供者时为 false（NotAudited）。</summary>
+    public bool EvidenceComplete { get; init; }
+
+    /// <summary>证据未完整的 decision ID 列表（EvidenceComplete=false 时非空）。</summary>
+    public IReadOnlyList<string> EvidenceIncompleteDecisionIds { get; init; } = Array.Empty<string>();
+
+    /// <summary>已解析证据的候选总数。</summary>
+    public int EvidenceResolvedCount { get; init; }
+
+    /// <summary>缺少证据的候选总数。</summary>
+    public int EvidenceMissingCount { get; init; }
+
     public IReadOnlyList<ContextDecisionAuditSample> Samples { get; init; } = Array.Empty<ContextDecisionAuditSample>();
 
     public string PolicyVersion { get; init; } = ContextDecisionPolicyVersions.V17_0;
@@ -169,4 +181,74 @@ public sealed class ContextDecisionAuditSample
     public bool NonActivationContractHolds { get; init; }
 
     public IReadOnlyList<string> ContractViolations { get; init; } = Array.Empty<string>();
+
+    /// <summary>该 trace 的证据是否完整。未接入证据提供者时为 false。</summary>
+    public bool EvidenceComplete { get; init; }
+
+    /// <summary>该 trace 已解析证据的候选数。</summary>
+    public int EvidenceResolvedCount { get; init; }
+
+    /// <summary>该 trace 缺少证据的候选数。</summary>
+    public int EvidenceMissingCount { get; init; }
+}
+
+/// <summary>
+/// 决策证据：为单个候选提供结构化的选择/丢弃依据。
+/// 补充 <see cref="ContextDecisionCandidate.Reason"/>（自由文本）和 <see cref="ContextDecisionCandidate.Score"/>（标量），
+/// 增加备选方案、置信度和证据引用链。
+/// </summary>
+public sealed class DecisionEvidence
+{
+    /// <summary>关联的候选条目 ID（与 <see cref="ContextDecisionCandidate.ItemId"/> 对应）。</summary>
+    public string ItemId { get; init; } = string.Empty;
+
+    /// <summary>主要决策依据（如 "token-budget-exceeded"、"score-below-threshold"、"section-cap-reached"）。</summary>
+    public string PrimaryRationale { get; init; } = string.Empty;
+
+    /// <summary>次要决策依据列表。</summary>
+    public IReadOnlyList<string> SecondaryRationales { get; init; } = Array.Empty<string>();
+
+    /// <summary>本次决策中考虑过但未选中的备选方案。</summary>
+    public IReadOnlyList<DecisionAlternative> AlternativesConsidered { get; init; } = Array.Empty<DecisionAlternative>();
+
+    /// <summary>决策置信度 [0,1]。1.0 = 完全确定，0.0 = 无依据。</summary>
+    public double Confidence { get; init; }
+
+    /// <summary>证据引用链（trace ID、source path、build ID 等），用于溯源。</summary>
+    public IReadOnlyList<string> EvidenceRefs { get; init; } = Array.Empty<string>();
+
+    /// <summary>证据来源类型（如 "retrieval-trace"、"package-build-trace"、"scoring-breakdown"）。</summary>
+    public string Provenance { get; init; } = string.Empty;
+}
+
+/// <summary>决策备选方案：被考虑但未选中的候选。</summary>
+public sealed class DecisionAlternative
+{
+    /// <summary>备选条目 ID。</summary>
+    public string ItemId { get; init; } = string.Empty;
+
+    /// <summary>未选中的原因。</summary>
+    public string Reason { get; init; } = string.Empty;
+
+    /// <summary>备选项的分数。</summary>
+    public double Score { get; init; }
+}
+
+/// <summary>决策证据解析结果。</summary>
+public sealed class DecisionEvidenceResult
+{
+    /// <summary>关联的决策记录 ID。</summary>
+    public string DecisionId { get; init; } = string.Empty;
+
+    /// <summary>解析出的证据列表（按 ItemId 对应候选）。</summary>
+    public IReadOnlyList<DecisionEvidence> Evidence { get; init; } = Array.Empty<DecisionEvidence>();
+
+    /// <summary>是否为完整证据（所有候选都有对应证据）。</summary>
+    public bool IsComplete { get; init; }
+
+    /// <summary>缺少证据的候选 ItemId 列表（IsComplete=false 时非空）。</summary>
+    public IReadOnlyList<string> MissingItemIds { get; init; } = Array.Empty<string>();
+
+    /// <summary>证据解析时间。</summary>
+    public DateTimeOffset ResolvedAt { get; init; }
 }
