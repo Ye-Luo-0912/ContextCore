@@ -1324,7 +1324,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
             constraints.AddRange(storedConstraints);
         }
 
-        constraints.AddRange(CreateRequestConstraints(request, collectionId));
+        constraints.AddRange(RequestTaskResolver.CreateRequestConstraints(request, collectionId));
         return constraints;
     }
 
@@ -1333,13 +1333,13 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         string collectionId,
         CancellationToken cancellationToken)
     {
-        var hasMetadataTask = HasRequestCurrentTaskMetadata(request);
+        var hasMetadataTask = RequestTaskResolver.HasRequestCurrentTaskMetadata(request);
         var metadataTask = hasMetadataTask
-            ? CreateRequestCurrentTask(request, collectionId)
+            ? RequestTaskResolver.CreateRequestCurrentTask(request, collectionId)
             : null;
         if (_workingMemoryService is null)
         {
-            return metadataTask ?? CreateRequestCurrentTask(request, collectionId);
+            return metadataTask ?? RequestTaskResolver.CreateRequestCurrentTask(request, collectionId);
         }
 
         var storedTask = await _workingMemoryService.GetCurrentTaskAsync(
@@ -1350,140 +1350,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         // 当前输入优先级高于已保存任务；调用方显式传入 currentTask* metadata 时使用请求侧描述。
         return hasMetadataTask
             ? metadataTask ?? storedTask
-            : storedTask ?? CreateRequestCurrentTask(request, collectionId);
-    }
-
-    private static bool HasRequestCurrentTaskMetadata(ContextPackageRequest request)
-    {
-        return PackageUncertaintyBuilder.TryReadMetadata(
-            request.Metadata,
-            out _,
-            "currentTaskId",
-            "taskId",
-            "current_task.id",
-            "currentTaskTitle",
-            "taskTitle",
-            "current_task.title",
-            "currentTaskDescription",
-            "taskDescription",
-            "current_task.description",
-            "currentTaskStatus",
-            "taskStatus",
-            "current_task.status");
-    }
-
-    private static WorkingMemoryCurrentTask? CreateRequestCurrentTask(
-        ContextPackageRequest request,
-        string collectionId)
-    {
-        var taskId = ReadRequestMetadata(request, "currentTaskId", "taskId", "current_task.id");
-        var title = ReadRequestMetadata(request, "currentTaskTitle", "taskTitle", "current_task.title");
-        var description = ReadRequestMetadata(
-            request,
-            "currentTaskDescription",
-            "taskDescription",
-            "current_task.description");
-        var status = ReadRequestMetadata(request, "currentTaskStatus", "taskStatus", "current_task.status");
-
-        if (string.IsNullOrWhiteSpace(taskId)
-            && string.IsNullOrWhiteSpace(title)
-            && string.IsNullOrWhiteSpace(description)
-            && string.IsNullOrWhiteSpace(status)
-            && string.IsNullOrWhiteSpace(request.QueryText))
-        {
-            return null;
-        }
-
-        var now = DateTimeOffset.UtcNow;
-        return new WorkingMemoryCurrentTask
-        {
-            TaskId = string.IsNullOrWhiteSpace(taskId) ? "request-current-task" : taskId,
-            WorkspaceId = request.WorkspaceId,
-            CollectionId = collectionId,
-            Title = string.IsNullOrWhiteSpace(title) ? request.QueryText ?? "当前任务" : title,
-            Description = string.IsNullOrWhiteSpace(description) ? request.QueryText ?? string.Empty : description,
-            Status = string.IsNullOrWhiteSpace(status) ? "active" : status,
-            Tags = request.RequiredTags.ToArray(),
-            Metadata = new Dictionary<string, string>(request.Metadata),
-            CreatedAt = now,
-            UpdatedAt = now
-        };
-    }
-
-    private static string? ReadRequestMetadata(
-        ContextPackageRequest request,
-        params string[] keys)
-    {
-        return PackageUncertaintyBuilder.TryReadMetadata(request.Metadata, out var value, keys)
-            ? value
-            : null;
-    }
-
-    private static IReadOnlyList<ContextConstraint> CreateRequestConstraints(
-        ContextPackageRequest request,
-        string collectionId)
-    {
-        var values = ReadRequestConstraintValues(request.Metadata)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-        if (values.Length == 0)
-        {
-            return Array.Empty<ContextConstraint>();
-        }
-
-        var now = DateTimeOffset.UtcNow;
-        return values
-            .Select((value, index) => new ContextConstraint
-            {
-                Id = $"request-constraint-{index + 1}",
-                WorkspaceId = request.WorkspaceId,
-                CollectionId = collectionId,
-                Scope = ContextScope.Task,
-                Level = ConstraintLevel.Runtime,
-                Content = value,
-                SourceRefs = ["request:metadata"],
-                Status = ContextMemoryStatus.Verified,
-                Confidence = 1.0,
-                Metadata = new Dictionary<string, string>
-                {
-                    ["origin"] = "request-metadata",
-                    ["scope"] = "current-input",
-                    ["priorityScope"] = "current-input"
-                },
-                CreatedAt = now,
-                UpdatedAt = now
-            })
-            .ToArray();
-    }
-
-    private static IEnumerable<string> ReadRequestConstraintValues(
-        IReadOnlyDictionary<string, string> metadata)
-    {
-        foreach (var key in new[]
-        {
-            "currentConstraint",
-            "currentConstraints",
-            "requestConstraint",
-            "requestConstraints",
-            "runtimeConstraint",
-            "runtimeConstraints"
-        })
-        {
-            if (!PackageUncertaintyBuilder.TryReadMetadata(metadata, out var value, key))
-            {
-                continue;
-            }
-
-            foreach (var part in value.Split(
-                ['\r', '\n', ';', '；'],
-                StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-            {
-                if (!string.IsNullOrWhiteSpace(part))
-                {
-                    yield return part;
-                }
-            }
-        }
+            : storedTask ?? RequestTaskResolver.CreateRequestCurrentTask(request, collectionId);
     }
 
     private SectionPackingResult AddSection(
