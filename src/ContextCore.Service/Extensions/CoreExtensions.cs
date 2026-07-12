@@ -112,10 +112,12 @@ internal static class CoreExtensions
 		services.AddSingleton<LearningFeedbackFeatureCandidateBuilder>();
 		services.AddSingleton<LearningDatasetQualityReportBuilder>();
 		services.AddSingleton<RouterIntentShadowReportBuilder>();
+		services.AddSingleton<IRouterIntentDatasetProvider, FileRouterIntentDatasetProvider>();
 		services.AddSingleton(sp => new RouterIntentShadowService(
 			sp.GetRequiredService<RouterShadowOptions>(),
 			sp.GetService<IRouterIntentShadowTraceStore>(),
-			sp.GetRequiredService<PlanningIntentDetector>()));
+			sp.GetRequiredService<PlanningIntentDetector>(),
+			sp.GetService<IRouterIntentDatasetProvider>()));
 		services.AddSingleton<LifecycleAwareRankerShadowScorer>();
 		services.AddSingleton<LifecycleAwareRankerTraceBuilder>();
 		services.AddSingleton<LifecycleAwareRankerDebugService>();

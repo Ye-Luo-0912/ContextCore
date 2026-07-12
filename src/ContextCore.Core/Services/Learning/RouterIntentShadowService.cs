@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Text.Json;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services.Planning;
@@ -35,26 +34,28 @@ public sealed class RouterIntentShadowService
     public const string PolicyVersion = "router-intent-shadow-r2/v1";
     private const double LowConfidenceThreshold = 0.35;
 
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
-    {
-        PropertyNameCaseInsensitive = true
-    };
-
     private readonly RouterShadowOptions _options;
     private readonly IRouterIntentShadowTraceStore? _store;
     private readonly PlanningIntentDetector _detector;
+    private readonly IRouterIntentDatasetProvider _datasetProvider;
     private readonly object _classifierGate = new();
     private RouterIntentClassifier? _classifier;
     private bool _classifierInitialized;
+    private RouterIntentDatasetLoadResult? _datasetInfo;
+
+    /// <summary>最近一次数据集加载结果；未加载时为 null。</summary>
+    public RouterIntentDatasetLoadResult? DatasetInfo => _datasetInfo;
 
     public RouterIntentShadowService(
         RouterShadowOptions options,
         IRouterIntentShadowTraceStore? store,
-        PlanningIntentDetector detector)
+        PlanningIntentDetector detector,
+        IRouterIntentDatasetProvider? datasetProvider = null)
     {
         _options = options;
         _store = store;
         _detector = detector;
+        _datasetProvider = datasetProvider ?? new FileRouterIntentDatasetProvider();
     }
 
     public async Task<RouterIntentShadowTrace?> RecordAsync(
@@ -148,7 +149,9 @@ public sealed class RouterIntentShadowService
             }
 
             _classifier = CreateClassifier();
-            _classifier.Fit(ReadTrainingExamples());
+            var datasetResult = _datasetProvider.Load();
+            _datasetInfo = datasetResult;
+            _classifier.Fit(datasetResult.Examples);
             _classifierInitialized = true;
             return _classifier;
         }
@@ -162,40 +165,6 @@ public sealed class RouterIntentShadowService
             StringComparison.OrdinalIgnoreCase)
             ? new ExistingRuleBasedRouterBaseline()
             : new TokenCentroidRouterBaseline();
-    }
-
-    private static IReadOnlyList<ContextPolicyFeatureExample> ReadTrainingExamples()
-    {
-        var path = Path.Combine(
-            LearningDatasetQualityReportBuilder.DefaultFeatureDirectory,
-            LearningDatasetQualityReportBuilder.RouterIntentExamplesFileName);
-        if (!File.Exists(path))
-        {
-            return Array.Empty<ContextPolicyFeatureExample>();
-        }
-
-        var examples = new List<ContextPolicyFeatureExample>();
-        foreach (var line in File.ReadLines(path))
-        {
-            if (string.IsNullOrWhiteSpace(line))
-            {
-                continue;
-            }
-
-            try
-            {
-                var example = JsonSerializer.Deserialize<ContextPolicyFeatureExample>(line, JsonOptions);
-                if (example is not null)
-                {
-                    examples.Add(example);
-                }
-            }
-            catch (JsonException)
-            {
-            }
-        }
-
-        return examples;
     }
 
     private static ContextPolicyFeatureExample BuildExample(RouterIntentShadowRecordRequest request)
