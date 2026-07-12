@@ -1,4 +1,8 @@
-﻿# ContextCore Mainline Gap Map
+# ContextCore Mainline Gap Map
+
+> 历史快照（Historical Snapshot）— Mainline Gap Map。
+> 文中 `FoundationFrozen_FormalRetrievalPlanOnly` 状态与 Gap 列表反映 Foundation 阶段，已被后续 P3/P4/P5 架构治理取代。
+> 当前路线图请见根目录 `TODO.md`。本文档仅供回溯，不作为设计依据。
 
 - CurrentOverallStatus: `FoundationFrozen_FormalRetrievalPlanOnly`
 - Recommendation: `ReadyForMainlineGapRepairPlanning`

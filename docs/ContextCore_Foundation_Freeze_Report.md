@@ -1,5 +1,9 @@
 # ContextCore Foundation Freeze Report
 
+> 历史快照（Historical Snapshot）— Foundation 阶段冻结报告。
+> 文中冻结边界与 Capability 状态反映 Foundation 阶段，已被后续 P3/P4/P5 架构治理取代。
+> 当前路线图请见根目录 `TODO.md`。本文档仅供回溯，不作为设计依据。
+
 ## Freeze Scope
 
 本报告记录 ContextCore foundation release candidate 的全局冻结边界。该阶段只汇总既有 storage、vector、runtime-change 与 P15 gate 结果，不接 formal retrieval，不切 runtime，不绑定正式 `IVectorIndexStore`，不写正式 package，不改变 retrieval / planning / scoring / `PackingPolicy` / package output。

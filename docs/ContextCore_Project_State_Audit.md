@@ -1,4 +1,8 @@
-﻿# ContextCore Project State Audit
+# ContextCore Project State Audit
+
+> 历史快照（Historical Snapshot）— Project State Audit。
+> 文中 `FoundationFrozen_FormalRetrievalPlanOnly` 状态与 Ready Capabilities 列表均反映 Foundation 阶段，已被后续 P3/P4/P5 架构治理取代。
+> 当前路线图请见根目录 `TODO.md`。本文档仅供回溯，不作为设计依据。
 
 - CurrentOverallStatus: `FoundationFrozen_FormalRetrievalPlanOnly`
 - Recommendation: `ReadyForMainlineGapRepairPlanning`

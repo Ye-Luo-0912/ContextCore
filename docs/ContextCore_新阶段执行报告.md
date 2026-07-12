@@ -1,5 +1,9 @@
 # ContextCore 新阶段执行报告
 
+> 历史快照（Historical Snapshot）— 更新于 2026-06-10。
+> 文中记录 V3.9 Query Intent Expansion Shadow Baseline 阶段执行情况，已被后续 P3/P4/P5 架构治理取代。
+> 当前路线图请见根目录 `TODO.md`。本文档仅供回溯，不作为设计依据。
+
 更新时间：2026-06-10
 
 ## 当前结论

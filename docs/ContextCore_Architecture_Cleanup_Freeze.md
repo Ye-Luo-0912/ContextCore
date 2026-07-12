@@ -1,4 +1,8 @@
-﻿# ContextCore Architecture Cleanup Freeze
+# ContextCore Architecture Cleanup Freeze
+
+> 历史快照（Historical Snapshot）— 生成于 2026-06-24。
+> 文中 `NextAllowedPhase: None`、Runner 分布、DTO 分布、EvalCommand 行数（15912）等指标均已过时（P3/P4/P5 已推进，EvalCommand.cs 现 10,338 行）。
+> 当前路线图请见根目录 `TODO.md`。本文档仅供回溯，不作为设计依据。
 
 **生成:** `2026-06-24T12:22:18.7683441+00:00`
 

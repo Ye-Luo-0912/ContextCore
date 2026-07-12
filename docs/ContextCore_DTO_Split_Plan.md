@@ -1,4 +1,8 @@
-﻿# ContextCore DTO Split Plan
+# ContextCore DTO Split Plan
+
+> 历史快照（Historical Snapshot）— 生成于 2026-06。
+> 文中 DTO 分类与拆分建议已由 P3-05（eval-only DTO 迁移）与 P5-1（Evaluation 代码删除）落地或取代。
+> 当前路线图请见根目录 `TODO.md`。本文档仅供回溯，不作为设计依据。
 
 PlanGenerated: `True`
 Source: `src/ContextCore.Abstractions/Models/VectorIndexDtos.cs`

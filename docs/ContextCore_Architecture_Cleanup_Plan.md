@@ -1,4 +1,8 @@
-﻿# Architecture Cleanup Plan
+# Architecture Cleanup Plan
+
+> 历史快照（Historical Snapshot）— 生成于 2026-06-23。
+> 文中 EvalCommand 24413 行、ControlRoomService 12430 行等指标均已过时（P5 已大幅精简，EvalCommand.cs 现 10,338 行）。
+> 当前路线图请见根目录 `TODO.md`。本文档仅供回溯，不作为设计依据。
 
 生成: `2026-06-23T03:47:33.4126037+00:00`
 
