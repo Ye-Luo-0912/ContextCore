@@ -1,6 +1,7 @@
 using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services;
-using ContextCore.Evaluation.Contracts;
+using ContextCore.Evaluation.Hosting;
+using ContextCore.Evaluation.Models;
 
 namespace ContextCore.Evaluation.Hosting;
 

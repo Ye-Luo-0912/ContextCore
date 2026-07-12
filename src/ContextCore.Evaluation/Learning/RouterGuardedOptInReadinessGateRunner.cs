@@ -3,8 +3,9 @@ using System.Text;
 using System.Text.Json;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
+using ContextCore.Core.Services;
 
-namespace ContextCore.Core.Services;
+namespace ContextCore.Evaluation.Learning;
 
 /// <summary>Router guarded opt-in 冻结门禁；只读评估，不替换 runtime router。</summary>
 public sealed class RouterGuardedOptInReadinessGateRunner

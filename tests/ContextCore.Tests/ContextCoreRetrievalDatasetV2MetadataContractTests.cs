@@ -1,8 +1,12 @@
 using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services;
-using ContextCore.Evaluation.Contracts;
+using ContextCore.Evaluation.Models;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using ContextCore.Evaluation.Learning;
+using ContextCore.Evaluation.Vector.Dataset;
+using ContextCore.Evaluation.Vector;
+using ContextCore.Evaluation.Vector.Gates;
 
 namespace ContextCore.Tests;
 

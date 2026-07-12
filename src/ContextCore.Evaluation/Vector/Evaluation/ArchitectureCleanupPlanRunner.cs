@@ -1,9 +1,9 @@
 using System.Text;
-using ContextCore.Evaluation.Contracts;
+using ContextCore.Evaluation.Models;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 
-namespace ContextCore.Core.Services;
+namespace ContextCore.Evaluation.Vector;
 
 /// <summary>
 /// 架构清理计划。动态扫描真实源码结构，输出拆分建议。

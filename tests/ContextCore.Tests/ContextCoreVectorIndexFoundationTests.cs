@@ -15,6 +15,7 @@ using ContextCore.Storage.FileSystem;
 using ContextCore.Storage.FileSystem.Stores;
 using ContextCore.Storage.InMemory;
 using ContextCore.Storage.InMemory.Stores;
+using ContextCore.Evaluation.Vector;
 
 namespace ContextCore.Tests;
 

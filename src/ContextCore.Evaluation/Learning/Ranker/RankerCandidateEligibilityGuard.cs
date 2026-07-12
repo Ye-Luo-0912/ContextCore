@@ -1,7 +1,7 @@
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 
-namespace ContextCore.Core.Services;
+namespace ContextCore.Evaluation.Learning.Ranker;
 
 /// <summary>Candidate reranker shadow 前置 eligibility guard；只用于离线 shadow，不改变正式排序。</summary>
 public sealed class RankerCandidateEligibilityGuard

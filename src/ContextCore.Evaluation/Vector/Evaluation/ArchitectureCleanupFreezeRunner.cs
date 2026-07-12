@@ -3,7 +3,7 @@ using System.Text.Json;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 
-namespace ContextCore.Core.Services;
+namespace ContextCore.Evaluation.Vector;
 
 public sealed class ArchitectureCleanupFreezeRunner
 {

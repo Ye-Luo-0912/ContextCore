@@ -1,7 +1,7 @@
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 
-namespace ContextCore.Core.Services;
+namespace ContextCore.Evaluation.Learning.Ranker;
 
 /// <summary>把 lifecycle-aware ranker trace 投影为 candidate reranker shadow 视图。</summary>
 public static class CandidateRerankerShadowTraceFactory

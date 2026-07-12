@@ -1,7 +1,7 @@
 using System.Text;
 using ContextCore.Abstractions.Models;
 
-namespace ContextCore.Core.Services;
+namespace ContextCore.Evaluation.Vector.Gates;
 
 /// <summary>
 /// Formal preview freeze；只冻结 preview-only 许可，不改变正式检索或 package 输出。

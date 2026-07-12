@@ -1,8 +1,8 @@
 using System.Text;
-using ContextCore.Evaluation.Contracts;
+using ContextCore.Evaluation.Models;
 using ContextCore.Abstractions.Models;
 
-namespace ContextCore.Core.Services;
+namespace ContextCore.Evaluation.Vector.Gates;
 
 /// <summary>
 /// 正式检索集成冻结与空操作绑定计划。读取 V5 主线各 gate 产物，确认 guardrail

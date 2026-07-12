@@ -3,7 +3,7 @@ using System.Text;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 
-namespace ContextCore.Core.Services;
+namespace ContextCore.Evaluation.Learning.Ranker;
 
 /// <summary>Formal priority feature alignment 离线审计；只做 shadow 对照，不改变正式排序。</summary>
 public sealed class CandidateRerankerFormalPriorityAlignmentRunner

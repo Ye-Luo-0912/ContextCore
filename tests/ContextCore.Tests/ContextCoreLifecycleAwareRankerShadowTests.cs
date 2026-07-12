@@ -6,6 +6,7 @@ using ContextCore.ControlRoom.Services;
 using ContextCore.Evaluation.Runners;
 using ContextCore.Core.Services;
 using ContextCore.Storage.InMemory;
+using ContextCore.Evaluation.Learning.Ranker;
 
 namespace ContextCore.Tests;
 

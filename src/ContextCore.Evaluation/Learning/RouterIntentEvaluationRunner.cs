@@ -5,8 +5,9 @@ using System.Text.Json;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services.Planning;
+using ContextCore.Core.Services;
 
-namespace ContextCore.Core.Services;
+namespace ContextCore.Evaluation.Learning;
 
 public sealed class RouterIntentEvaluationRunner
 {

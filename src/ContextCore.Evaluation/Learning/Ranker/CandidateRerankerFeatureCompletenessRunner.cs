@@ -3,7 +3,7 @@ using System.Text;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 
-namespace ContextCore.Core.Services;
+namespace ContextCore.Evaluation.Learning.Ranker;
 
 /// <summary>Candidate reranker 特征完整性离线报告；只读分析，不改变正式输出。</summary>
 public sealed class CandidateRerankerFeatureCompletenessRunner

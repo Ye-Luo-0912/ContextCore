@@ -3,7 +3,7 @@ using System.Text;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 
-namespace ContextCore.Core.Services;
+namespace ContextCore.Evaluation.Learning;
 
 /// <summary>构建 runtime feedback 质量报告；只做离线聚合，不改变训练或运行时策略。</summary>
 public sealed class LearningFeedbackQualityReportBuilder

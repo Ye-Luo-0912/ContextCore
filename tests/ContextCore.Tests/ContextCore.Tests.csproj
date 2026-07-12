@@ -23,7 +23,6 @@
     <ProjectReference Include="..\..\src\ContextCore.Abstractions\ContextCore.Abstractions.csproj" />
     <ProjectReference Include="..\..\src\ContextCore.ControlRoom\ContextCore.ControlRoom.csproj" />
     <ProjectReference Include="..\..\src\ContextCore.Core\ContextCore.Core.csproj" />
-    <ProjectReference Include="..\..\src\ContextCore.Evaluation.Contracts\ContextCore.Evaluation.Contracts.csproj" />
     <ProjectReference Include="..\..\src\ContextCore.Evaluation\ContextCore.Evaluation.csproj" />
     <ProjectReference Include="..\..\src\ContextCore.Embedding\ContextCore.Embedding.csproj" />
     <ProjectReference Include="..\..\src\ContextCore.ModelGateway\ContextCore.ModelGateway.csproj" />

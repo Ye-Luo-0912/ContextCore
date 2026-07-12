@@ -1,6 +1,7 @@
 using System.Text.Json;
+using ContextCore.Core.Services.Learning.V14_0;
 
-namespace ContextCore.Core.Services.Learning.V14_0;
+namespace ContextCore.Evaluation.Learning.V14_0;
 
 public sealed class RuntimeCandidateTraceContractValidator
 {

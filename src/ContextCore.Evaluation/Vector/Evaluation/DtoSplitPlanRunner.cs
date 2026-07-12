@@ -1,8 +1,8 @@
 using System.Text;
-using ContextCore.Evaluation.Contracts;
+using ContextCore.Evaluation.Models;
 using System.Text.RegularExpressions;
 
-namespace ContextCore.Core.Services;
+namespace ContextCore.Evaluation.Vector;
 
 /// <summary>
 /// DTO 拆分计划：扫描 VectorIndexDtos.cs，识别每个 report/contract/DTO 类别，

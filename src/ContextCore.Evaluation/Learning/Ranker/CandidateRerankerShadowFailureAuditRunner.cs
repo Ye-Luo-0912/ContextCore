@@ -3,7 +3,7 @@ using System.Text;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 
-namespace ContextCore.Core.Services;
+namespace ContextCore.Evaluation.Learning.Ranker;
 
 /// <summary>Candidate reranker shadow 回归审计；只读解释失败，不改变正式检索或打包结果。</summary>
 public sealed class CandidateRerankerShadowFailureAuditRunner

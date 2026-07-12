@@ -1,7 +1,7 @@
 using System.Text;
 using ContextCore.Abstractions.Models;
 
-namespace ContextCore.Core.Services;
+namespace ContextCore.Evaluation.Vector.Dataset;
 
 /// <summary>
 /// Retrieval Dataset V2 的 dense / hybrid / eligibility shadow eval。只读取 Dataset V2 artifact，不接正式检索。

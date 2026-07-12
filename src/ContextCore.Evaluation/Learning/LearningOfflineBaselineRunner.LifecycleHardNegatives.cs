@@ -7,7 +7,7 @@ using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services.Planning;
 
-namespace ContextCore.Core.Services;
+namespace ContextCore.Evaluation.Learning;
 
 public sealed partial class LearningOfflineBaselineRunner
 {

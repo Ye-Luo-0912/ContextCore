@@ -3,7 +3,7 @@ using System.Text;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 
-namespace ContextCore.Core.Services;
+namespace ContextCore.Evaluation.Learning;
 
 /// <summary>已审核反馈数据集门禁；只做离线检查，不触发训练或运行时变更。</summary>
 public sealed class LearningApprovedFeedbackDatasetGateBuilder

@@ -2,7 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using ContextCore.Abstractions.Models;
 
-namespace ContextCore.Core.Services;
+namespace ContextCore.Evaluation.Vector;
 
 /// <summary>
 /// Hybrid union scoring repair preview；只评估离线 Dataset V2 stress artifact，不接正式检索路径。

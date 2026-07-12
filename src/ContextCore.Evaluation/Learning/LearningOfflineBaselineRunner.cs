@@ -6,7 +6,7 @@ using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services.Planning;
 
-namespace ContextCore.Core.Services;
+namespace ContextCore.Evaluation.Learning;
 
 /// <summary>Runs offline baselines over exported learning feature JSONL files.</summary>
 public sealed partial class LearningOfflineBaselineRunner

@@ -19,6 +19,7 @@ using ContextCore.Storage.InMemory;
 using ContextCore.Storage.Postgres;
 using ContextCore.Storage.Postgres.Infrastructure;
 using ContextCore.Storage.Postgres.Stores;
+using ContextCore.Evaluation.Vector.Dataset;
 
 namespace ContextCore.Evaluation.Commands;
 

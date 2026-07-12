@@ -1,7 +1,7 @@
 using ContextCore.Abstractions.Models;
-using ContextCore.Evaluation.Contracts;
+using ContextCore.Evaluation.Models;
 
-namespace ContextCore.Core.Services;
+namespace ContextCore.Evaluation.Learning;
 
 /// <summary>
 /// 静态能力注册表。列出所有受审计的能力及其期望状态、gate artifact 路径。

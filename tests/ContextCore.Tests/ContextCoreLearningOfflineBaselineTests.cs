@@ -4,6 +4,7 @@ using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services;
 using ContextCore.Core.Services.Planning;
 using ContextCore.Storage.InMemory;
+using ContextCore.Evaluation.Learning;
 
 namespace ContextCore.Tests;
 

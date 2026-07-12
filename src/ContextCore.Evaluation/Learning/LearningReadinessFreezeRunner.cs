@@ -1,10 +1,10 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 
-namespace ContextCore.Core.Services;
+namespace ContextCore.Evaluation.Learning;
 
 /// <summary>统一学习 shadow readiness 冻结 runner；只读取报告，不修改 runtime 行为。</summary>
 public sealed class LearningReadinessFreezeRunner

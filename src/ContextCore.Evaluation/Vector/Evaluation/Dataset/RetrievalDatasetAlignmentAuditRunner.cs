@@ -1,7 +1,8 @@
 using System.Text;
 using ContextCore.Abstractions.Models;
+using ContextCore.Core.Services;
 
-namespace ContextCore.Core.Services;
+namespace ContextCore.Evaluation.Vector.Dataset;
 
 /// <summary>
 /// Retrieval dataset / query-corpus alignment audit；只读检查 eval 样本、当前 indexed corpus 与 provider scope 的对齐情况。

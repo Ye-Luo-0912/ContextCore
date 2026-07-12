@@ -2,7 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using ContextCore.Abstractions.Models;
 
-namespace ContextCore.Core.Services;
+namespace ContextCore.Evaluation.Vector.Dataset;
 
 /// <summary>
 /// Retrieval Dataset V2 stress / holdout / leakage audit runner；只产生离线 artifact，不接正式检索路径。

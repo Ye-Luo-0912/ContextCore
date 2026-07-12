@@ -2,7 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using ContextCore.Abstractions.Models;
 
-namespace ContextCore.Core.Services;
+namespace ContextCore.Evaluation.Vector.Dataset;
 
 /// <summary>
 /// Retrieval Dataset V2 物化与不可变性 gate。只校验 artifact，不参与正式检索。

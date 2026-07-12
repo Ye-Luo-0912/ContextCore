@@ -2,7 +2,7 @@ using System.Text;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 
-namespace ContextCore.Core.Services;
+namespace ContextCore.Evaluation.Learning.Ranker;
 
 /// <summary>从 runtime ranker shadow trace 构建 candidate reranker 质量报告。</summary>
 public sealed class CandidateRerankerShadowTraceQualityReportBuilder

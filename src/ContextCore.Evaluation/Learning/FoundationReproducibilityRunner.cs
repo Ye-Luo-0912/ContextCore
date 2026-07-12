@@ -2,8 +2,9 @@ using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using ContextCore.Abstractions.Models;
+using ContextCore.Core.Services;
 
-namespace ContextCore.Core.Services;
+namespace ContextCore.Evaluation.Learning;
 
 /// <summary>
 /// RC0 可复现性检查器；只读取报告和 git 状态，不执行构建或改变 runtime。

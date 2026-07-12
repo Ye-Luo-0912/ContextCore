@@ -13,6 +13,7 @@ using ContextCore.Storage.Postgres.Infrastructure;
 using ContextCore.Storage.Postgres.Stores;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
+using ContextCore.Evaluation.Learning;
 
 namespace ContextCore.Tests;
 

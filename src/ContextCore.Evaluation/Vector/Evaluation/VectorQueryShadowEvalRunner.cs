@@ -1,7 +1,8 @@
 using System.Text;
 using ContextCore.Abstractions.Models;
+using ContextCore.Core.Services;
 
-namespace ContextCore.Core.Services;
+namespace ContextCore.Evaluation.Vector;
 
 /// <summary>Vector query preview 的 eval shadow runner；只读评估，不改变正式 retrieval/package。</summary>
 public sealed class VectorQueryShadowEvalRunner

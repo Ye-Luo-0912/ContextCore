@@ -1,7 +1,7 @@
 using System.Text;
 using ContextCore.Abstractions.Models;
 
-namespace ContextCore.Core.Services;
+namespace ContextCore.Evaluation.Vector.Dataset;
 
 /// <summary>
 /// Dataset V2 stress freeze gate；只汇总离线报告，不把 preview profile 接入正式检索。

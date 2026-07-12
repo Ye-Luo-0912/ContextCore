@@ -1,7 +1,7 @@
 using System.Text;
 using ContextCore.Abstractions.Models;
 
-namespace ContextCore.Core.Services;
+namespace ContextCore.Evaluation.Vector.Gates;
 
 /// <summary>
 /// hybrid retrieval readiness gate；对 shadow eval 结果套用硬规则。

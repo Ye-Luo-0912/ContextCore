@@ -1,7 +1,7 @@
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 
-namespace ContextCore.Core.Services;
+namespace ContextCore.Evaluation.Learning.Ranker;
 
 /// <summary>根据运行时候选元数据构建 ranker 特征包络；不读取 eval label、sampleId 或 itemId 内容。</summary>
 public sealed class CandidateFeatureEnvelopeBuilder

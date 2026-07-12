@@ -1,7 +1,7 @@
 using System.Text;
 using ContextCore.Abstractions.Models;
 
-namespace ContextCore.Core.Services;
+namespace ContextCore.Evaluation.Vector.Gates;
 
 /// <summary>
 /// hybrid retrieval preview freeze gate；只冻结 preview 结论，不改变正式 retrieval / scoring / PackingPolicy / package output。

@@ -1,8 +1,8 @@
 using System.Text;
-using ContextCore.Evaluation.Contracts;
+using ContextCore.Evaluation.Models;
 using ContextCore.Abstractions.Models;
 
-namespace ContextCore.Core.Services;
+namespace ContextCore.Evaluation.Vector.Gates;
 
 /// <summary>
 /// V5.15 output token / priority policy shadow gate。

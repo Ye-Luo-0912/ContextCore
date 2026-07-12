@@ -2,7 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using ContextCore.Abstractions.Models;
 
-namespace ContextCore.Core.Services;
+namespace ContextCore.Evaluation.Vector.Dataset;
 
 /// <summary>
 /// Dataset V2 stress recall failure triage；只解释 stress shadow eval 失败，不接正式检索。

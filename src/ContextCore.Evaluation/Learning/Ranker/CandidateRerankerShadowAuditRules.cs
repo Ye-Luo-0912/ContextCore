@@ -1,7 +1,7 @@
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 
-namespace ContextCore.Core.Services;
+namespace ContextCore.Evaluation.Learning.Ranker;
 
 /// <summary>Candidate reranker shadow 的离线审计规则；只用于报告，不参与正式排序。</summary>
 public static class CandidateRerankerShadowAuditRules

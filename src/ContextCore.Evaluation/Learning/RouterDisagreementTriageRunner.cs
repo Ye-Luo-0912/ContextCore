@@ -5,8 +5,9 @@ using System.Text.Json;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services.Planning;
+using ContextCore.Core.Services;
 
-namespace ContextCore.Core.Services;
+namespace ContextCore.Evaluation.Learning;
 
 /// <summary>Router disagreement 离线分诊与 hard negative 导出；不参与 runtime router 决策。</summary>
 public sealed class RouterDisagreementTriageRunner

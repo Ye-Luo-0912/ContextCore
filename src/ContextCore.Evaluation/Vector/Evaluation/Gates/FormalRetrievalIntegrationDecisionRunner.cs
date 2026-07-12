@@ -1,8 +1,8 @@
 using System.Text;
-using ContextCore.Evaluation.Contracts;
+using ContextCore.Evaluation.Models;
 using ContextCore.Abstractions.Models;
 
-namespace ContextCore.Core.Services;
+namespace ContextCore.Evaluation.Vector.Gates;
 
 /// <summary>
 /// V5 mainline decision gate：汇总 V5.0-V5.16，只决定是否进入 formal retrieval integration freeze

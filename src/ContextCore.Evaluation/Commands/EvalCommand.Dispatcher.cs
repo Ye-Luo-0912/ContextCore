@@ -1,4 +1,5 @@
-using ContextCore.Evaluation.Contracts;
+using ContextCore.Evaluation.Hosting;
+using ContextCore.Evaluation.Models;
 using ContextCore.Evaluation.Runners;
 
 namespace ContextCore.Evaluation.Commands;

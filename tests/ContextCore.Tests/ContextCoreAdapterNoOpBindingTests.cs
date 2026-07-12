@@ -1,7 +1,7 @@
 using ContextCore.Abstractions;
 using ContextCore.Core.Infrastructure;
 using ContextCore.Core.Services;
-using ContextCore.Evaluation.Contracts;
+using ContextCore.Evaluation.Models;
 using ContextCore.Abstractions.Models;
 
 namespace ContextCore.Tests;

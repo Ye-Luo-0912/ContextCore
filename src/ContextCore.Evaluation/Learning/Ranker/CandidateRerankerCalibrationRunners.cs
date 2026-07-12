@@ -3,7 +3,7 @@ using System.Text;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 
-namespace ContextCore.Core.Services;
+namespace ContextCore.Evaluation.Learning.Ranker;
 
 /// <summary>Candidate reranker score 分布审计；只读取 shadow eval，不改变正式排序。</summary>
 public sealed class CandidateRerankerScoreDistributionRunner

@@ -1,7 +1,7 @@
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 
-namespace ContextCore.Core.Services;
+namespace ContextCore.Evaluation.Learning.Ranker;
 
 /// <summary>提取 formal ranking 隐含优先级的 shadow-only 特征；不读取 eval label、sampleId 或 itemId 内容。</summary>
 public sealed class FormalPriorityFeatureExtractor

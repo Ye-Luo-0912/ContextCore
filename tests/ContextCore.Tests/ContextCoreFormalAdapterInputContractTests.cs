@@ -1,7 +1,7 @@
 using System.Reflection;
 using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services;
-using ContextCore.Evaluation.Contracts;
+using ContextCore.Evaluation.Models;
 
 namespace ContextCore.Tests;
 

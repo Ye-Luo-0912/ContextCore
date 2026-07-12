@@ -7,7 +7,8 @@ using ContextCore.Abstractions.Models;
 using ContextCore.Client;
 using ContextCore.Core;
 using ContextCore.Core.Services;
-using ContextCore.Evaluation.Contracts;
+using ContextCore.Evaluation.Hosting;
+using ContextCore.Evaluation.Models;
 using ContextCore.Evaluation.Runners;
 using ContextCore.Core.Services.Graph;
 using ContextCore.Core.Services.Planning;
@@ -20,6 +21,8 @@ using ContextCore.Storage.InMemory;
 using ContextCore.Storage.Postgres;
 using ContextCore.Storage.Postgres.Infrastructure;
 using ContextCore.Storage.Postgres.Stores;
+using ContextCore.Evaluation.Vector;
+using ContextCore.Evaluation.Vector.Dataset;
 
 namespace ContextCore.Evaluation.Commands;
 

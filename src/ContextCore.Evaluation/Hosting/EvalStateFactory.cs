@@ -1,7 +1,8 @@
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Client;
-using ContextCore.Evaluation.Contracts;
+using ContextCore.Evaluation.Hosting;
+using ContextCore.Evaluation.Models;
 using ContextCore.Core;
 using ContextCore.Core.Services;
 using ContextCore.Core.Services.Attention;

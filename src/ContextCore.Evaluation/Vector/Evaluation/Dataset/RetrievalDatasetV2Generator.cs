@@ -2,7 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using ContextCore.Abstractions.Models;
 
-namespace ContextCore.Core.Services;
+namespace ContextCore.Evaluation.Vector.Dataset;
 
 /// <summary>
 /// Retrieval Dataset V2 离线生成器。当前实现为确定性模板生成，可作为 LLM 输出落盘前后的 contract 验证基线。

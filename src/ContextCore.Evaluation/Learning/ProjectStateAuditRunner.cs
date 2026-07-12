@@ -1,9 +1,9 @@
 using System.Text;
-using ContextCore.Evaluation.Contracts;
+using ContextCore.Evaluation.Models;
 using System.Text.Json;
 using ContextCore.Abstractions.Models;
 
-namespace ContextCore.Core.Services;
+namespace ContextCore.Evaluation.Learning;
 
 /// <summary>
 /// 项目主线状态审计：通过 <see cref="CapabilityRegistry"/> 驱动能力矩阵，读取既有 gate 报告并输出汇总。

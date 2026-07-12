@@ -1,7 +1,7 @@
 using System.Text;
 using ContextCore.Abstractions.Models;
 
-namespace ContextCore.Core.Services;
+namespace ContextCore.Evaluation.Vector.Gates;
 
 /// <summary>
 /// 运行时特征推导失败冻结报告：汇总 V5.7/V5.8 结果，锁定失败状态与后续路线。

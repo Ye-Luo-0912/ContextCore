@@ -2,8 +2,9 @@ using System.Globalization;
 using System.Text;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
+using ContextCore.Core.Services;
 
-namespace ContextCore.Core.Services;
+namespace ContextCore.Evaluation.Learning.Ranker;
 
 /// <summary>Candidate reranker shadow 离线评估；只读分析，不改变正式检索输出。</summary>
 public sealed class CandidateRerankerShadowEvalRunner

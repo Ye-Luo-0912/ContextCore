@@ -1,8 +1,9 @@
 using System.Text;
 using System.Text.Json;
 using ContextCore.Abstractions.Models;
+using ContextCore.Core.Services;
 
-namespace ContextCore.Core.Services;
+namespace ContextCore.Evaluation.Learning;
 
 /// <summary>
 /// 全局 foundation freeze 汇总器；只读取既有报告，不改变任何 runtime/provider/package 行为。
