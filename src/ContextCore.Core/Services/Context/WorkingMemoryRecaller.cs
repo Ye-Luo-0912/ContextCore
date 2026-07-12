@@ -34,7 +34,7 @@ internal static class WorkingMemoryRecaller
             if (isRejected) return false;
             if (isDeprecated) return allowDeprecated || isAuditMode;
 
-            return BasicContextPackageBuilder.IsActive(item);
+            return LegacyPackageScorer.IsActive(item);
         });
 
         if (tokenBudget > 0 && tokenBudget <= 200)
@@ -103,7 +103,7 @@ internal static class WorkingMemoryRecaller
             if (isRejected) return false;
             if (isDeprecated) return allowDeprecated || isAuditMode;
 
-            return BasicContextPackageBuilder.IsActive(item);
+            return LegacyPackageScorer.IsActive(item);
         });
 
         if (tokenBudget > 0 && tokenBudget <= 200)
@@ -183,7 +183,7 @@ internal static class WorkingMemoryRecaller
                                string.Equals(processState, "superseded", StringComparison.OrdinalIgnoreCase);
             var isRejected = item.Status == ContextMemoryStatus.Rejected ||
                              string.Equals(processState, "rejected", StringComparison.OrdinalIgnoreCase);
-            if (isRejected || (isDeprecated && !allowDeprecated && !isAuditMode) || !BasicContextPackageBuilder.IsActive(item))
+            if (isRejected || (isDeprecated && !allowDeprecated && !isAuditMode) || !LegacyPackageScorer.IsActive(item))
             {
                 continue;
             }

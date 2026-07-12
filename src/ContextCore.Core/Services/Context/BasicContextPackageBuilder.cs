@@ -34,7 +34,6 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
     private int _decisionTraceWriteFailures;
     private DateTimeOffset _decisionTraceLastFailureAt;
     private string? _decisionTraceLastFailureCategory;
-    private static readonly PackagePriorityProfile PriorityProfile = PackagePriorityProfile.CreateDefault();
 
     /// <summary>decision trace 写入失败次数（fail-open，不影响正式 package 输出）。</summary>
     public int DecisionTraceWriteFailures => _decisionTraceWriteFailures;
@@ -226,7 +225,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         var orderedItems = items
             .OrderByDescending(item => item.Importance)
             .ThenByDescending(item => request.IncludeRecent ? item.UpdatedAt : DateTimeOffset.MinValue)
-            .ThenByDescending(item => CountMatchingTags(item, requiredTags))
+            .ThenByDescending(item => LegacyPackageScorer.CountMatchingTags(item, requiredTags))
             .ToArray();
 
         var tokenBudget = request.TokenBudget > 0 ? request.TokenBudget : int.MaxValue;
@@ -242,7 +241,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
             cancellationToken.ThrowIfCancellationRequested();
             var sectionName = string.IsNullOrWhiteSpace(item.Title) ? item.Id : item.Title!;
             var itemTokens = EstimatePackageTokens(item.Content, tokenContext);
-            var score = CalculateLegacyScore(item, requiredTags, request.IncludeRecent);
+            var score = LegacyPackageScorer.CalculateLegacyScore(item, requiredTags, request.IncludeRecent);
 
             // AddSection 内部负责预算裁剪；调用方只按优先级提供候选内容。
             var sectionResult = AddSection(
@@ -412,13 +411,13 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                 },
                 cancellationToken).ConfigureAwait(false);
 
-            var activeHardConstraints = hardConstraints.Where(IsActive).ToArray();
+            var activeHardConstraints = hardConstraints.Where(LegacyPackageScorer.IsActive).ToArray();
             foreach (var item in activeHardConstraints)
             {
                 addedConstraintIds.Add(item.Id);
             }
             droppedItems.AddRange(hardConstraints
-                .Where(item => !IsActive(item))
+                .Where(item => !LegacyPackageScorer.IsActive(item))
                 .Select(item => {
                     var c = PackageTraceCandidate.FromConstraint(item, "hard_constraint", 100, EstimatePackageTokens(item.Content, tokenContext));
                     _traceRecorder.WriteTraceRow(c, "hard_constraints", false, "constraint is deprecated or rejected", selectedByScoring: false);
@@ -770,13 +769,13 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                 },
                 cancellationToken).ConfigureAwait(false);
 
-            var activeSoftConstraints = softConstraints.Where(IsActive).ToArray();
+            var activeSoftConstraints = softConstraints.Where(LegacyPackageScorer.IsActive).ToArray();
             foreach (var item in activeSoftConstraints)
             {
                 addedConstraintIds.Add(item.Id);
             }
             droppedItems.AddRange(softConstraints
-                .Where(item => !IsActive(item))
+                .Where(item => !LegacyPackageScorer.IsActive(item))
                 .Select(item => {
                     var c = PackageTraceCandidate.FromConstraint(item, "soft_constraint", 15.0, EstimatePackageTokens(item.Content, tokenContext));
                     _traceRecorder.WriteTraceRow(c, "soft_constraints", false, "constraint is deprecated or rejected", selectedByScoring: false);
@@ -823,7 +822,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                 policy,
                 collectionId ?? string.Empty,
                 cancellationToken).ConfigureAwait(false);
-            var orderedMergedConstraints = OrderMergedConstraints(mergedConstraints.Where(IsActive).Where(c => !addedConstraintIds.Contains(c.Id)));
+            var orderedMergedConstraints = LegacyPackageScorer.OrderMergedConstraints(mergedConstraints.Where(LegacyPackageScorer.IsActive).Where(c => !addedConstraintIds.Contains(c.Id)));
             var activeMergedConstraints = orderedMergedConstraints
                 .Select(item => item.Constraint)
                 .ToArray();
@@ -1670,7 +1669,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         int droppedItemCount,
         int uncertaintyCount)
     {
-        var normalizedBudget = NormalizeTokenBudget(tokenBudget);
+        var normalizedBudget = LegacyPackageScorer.NormalizeTokenBudget(tokenBudget);
         metadata["diagnostics.droppedItems"] = droppedItemCount.ToString();
         metadata["diagnostics.uncertainties"] = uncertaintyCount.ToString();
         metadata["budget.tokenBudget"] = normalizedBudget.ToString();
@@ -1825,158 +1824,6 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
             Plan = plan,
             CreatedAt = package.CreatedAt
         };
-    }
-
-    private static int NormalizeTokenBudget(int tokenBudget)
-    {
-        return tokenBudget == int.MaxValue || tokenBudget <= 0 ? 0 : tokenBudget;
-    }
-
-    private static int CountMatchingTags(ContextItem item, HashSet<string> requiredTags)
-    {
-        if (requiredTags.Count == 0)
-        {
-            return 0;
-        }
-
-        return item.Tags.Count(requiredTags.Contains);
-    }
-
-    private static double CalculateLegacyScore(
-        ContextItem item,
-        HashSet<string> requiredTags,
-        bool includeRecent)
-    {
-        var score = item.Importance * 100;
-        score += CountMatchingTags(item, requiredTags) * 10;
-
-        if (includeRecent && item.UpdatedAt != default)
-        {
-            var ageDays = Math.Max(0, (DateTimeOffset.UtcNow - item.UpdatedAt).TotalDays);
-            score += Math.Max(0, 10 - Math.Min(10, ageDays));
-        }
-
-        return score;
-    }
-
-    private static double ScoreContextItem(ContextItem item, int basePriority)
-    {
-        return basePriority + item.Importance * 10;
-    }
-
-    private static double ScoreMemory(ContextMemoryItem item, int basePriority)
-    {
-        return basePriority + item.Importance * 10 + item.Confidence * 5;
-    }
-
-    private static double ScoreGlobal(ContextGlobalItem item, int basePriority)
-    {
-        return basePriority + item.Importance * 10;
-    }
-
-    private static IReadOnlyList<MergedContextConstraint> OrderMergedConstraints(
-        IEnumerable<ContextConstraint> constraints)
-    {
-        return constraints
-            .Select((constraint, index) =>
-            {
-                var priority = ResolveConstraintMergePriority(constraint);
-                return new MergedContextConstraint(
-                    constraint,
-                    priority.Label,
-                    priority.Rank,
-                    index);
-            })
-            .OrderByDescending(item => item.PriorityRank)
-            .ThenByDescending(item => item.Constraint.Confidence)
-            .ThenByDescending(item => item.Constraint.UpdatedAt)
-            .ThenBy(item => item.Index)
-            .ToArray();
-    }
-
-    private static (string Label, int Rank) ResolveConstraintMergePriority(
-        ContextConstraint constraint)
-    {
-        if (constraint.Level == ConstraintLevel.System
-            || ContainsConstraintSignal(constraint, "system", "safety", "系统", "安全"))
-        {
-            return ("系统/安全", PriorityProfile.ConstraintMergeRankSystem);
-        }
-
-        if (ContainsConstraintSignal(constraint, "current", "input", "request", "当前", "输入"))
-        {
-            return ("当前输入", PriorityProfile.ConstraintMergeRankCurrent);
-        }
-
-        if (constraint.Level == ConstraintLevel.Runtime
-            || ContainsConstraintSignal(constraint, "runtime", "运行时"))
-        {
-            return ("运行时", PriorityProfile.ConstraintMergeRankRuntime);
-        }
-
-        if (ContainsConstraintSignal(constraint, "mode", "模式"))
-        {
-            return ("模式", PriorityProfile.ConstraintMergeRankMode);
-        }
-
-        if (ContainsConstraintSignal(constraint, "project", "项目"))
-        {
-            return ("项目", PriorityProfile.ConstraintMergeRankProject);
-        }
-
-        if (constraint.Level == ConstraintLevel.Hard)
-        {
-            return ("硬约束", PriorityProfile.ConstraintMergeRankHard);
-        }
-
-        if (constraint.Level == ConstraintLevel.User
-            || ContainsConstraintSignal(constraint, "user", "stable", "用户", "稳定"))
-        {
-            return ("用户稳定", PriorityProfile.ConstraintMergeRankUser);
-        }
-
-        if (constraint.Level == ConstraintLevel.Domain
-            || ContainsConstraintSignal(constraint, "domain", "领域"))
-        {
-            return ("领域软约束", PriorityProfile.ConstraintMergeRankDomain);
-        }
-
-        return constraint.Level == ConstraintLevel.Soft
-            ? ("软约束", PriorityProfile.ConstraintMergeRankSoft)
-            : ("未分类约束", PriorityProfile.ConstraintMergeRankUnclassified);
-    }
-
-    private static bool ContainsConstraintSignal(
-        ContextConstraint constraint,
-        params string[] signals)
-    {
-        foreach (var (key, value) in constraint.Metadata)
-        {
-            if (ContainsAnySignal(key, signals) || ContainsAnySignal(value, signals))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private static bool ContainsAnySignal(string value, IReadOnlyList<string> signals)
-    {
-        return !string.IsNullOrWhiteSpace(value)
-            && signals.Any(signal => value.Contains(signal, StringComparison.OrdinalIgnoreCase));
-    }
-
-    private static bool IsActive(ContextConstraint constraint)
-    {
-        return constraint.Status is not ContextMemoryStatus.Deprecated
-            and not ContextMemoryStatus.Rejected;
-    }
-
-    internal static bool IsActive(ContextMemoryItem item)
-    {
-        return item.Status is not ContextMemoryStatus.Deprecated
-            and not ContextMemoryStatus.Rejected;
     }
 
     private sealed record TokenEstimationContext(string? ModelName, string Source, bool IsFallback);
