@@ -35,8 +35,6 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
     private DateTimeOffset _decisionTraceLastFailureAt;
     private string? _decisionTraceLastFailureCategory;
     private static readonly ModeBudgetProfileRegistry ModeBudgetProfiles = ModeBudgetProfileRegistry.CreateDefault();
-    private static readonly DomainKeywordProfile DomainKeywords = DomainKeywordProfile.CreateProduction();
-    private static readonly WorkingMemoryScoringProfile ScoringProfile = WorkingMemoryScoringProfile.CreateDefault();
     private static readonly PackagePriorityProfile PriorityProfile = PackagePriorityProfile.CreateDefault();
 
     /// <summary>decision trace 写入失败次数（fail-open，不影响正式 package 输出）。</summary>
@@ -255,9 +253,9 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                 priority: priority--,
                 content: item.Content,
                 contentFormat: item.ContentFormat,
-                sectionSourceRefs: ResolveSourceRefs(item),
-                sectionItemRefs: ResolveItemRefs(item),
-                candidateIds: ResolveItemRefs(item),
+                sectionSourceRefs: ContextItemRefResolver.ResolveSourceRefs(item),
+                sectionItemRefs: ContextItemRefResolver.ResolveItemRefs(item),
+                candidateIds: ContextItemRefResolver.ResolveItemRefs(item),
                 tokenBudget,
                 sectionTokenBudget: 0,
                 tokenContext,
@@ -323,7 +321,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
 
         // 显式审计模式判定
         var isAuditMode = !string.IsNullOrWhiteSpace(request.QueryText)
-            && DomainKeywords.AuditModeKeywords.Any(k => request.QueryText.Contains(k, StringComparison.OrdinalIgnoreCase));
+            && WorkingMemoryRecaller.DomainKeywords.AuditModeKeywords.Any(k => request.QueryText.Contains(k, StringComparison.OrdinalIgnoreCase));
 
         if (ShouldIncludeCurrentTaskSection(request, policy))
         {
@@ -333,7 +331,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                 cancellationToken).ConfigureAwait(false);
             if (currentTask is not null)
             {
-                var content = FormatCurrentTask(currentTask, request);
+                var content = PackageSectionFormatter.FormatCurrentTask(currentTask, request);
                 var currentTaskCandidate = PackageTraceCandidate.FromCurrentTask(
                     currentTask,
                     EstimatePackageTokens(content, tokenContext));
@@ -436,7 +434,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
             {
                 // 硬约束过滤掉已被选中的 ID (一般不会有，但防止意外)
                 var hardToFormat = activeHardConstraints.Where(c => !globalSelectedIds.Contains(c.Id)).ToArray();
-                var hardContent = hardToFormat.Length > 0 ? FormatConstraints(hardToFormat, tokenBudget) : "(所有硬约束已在更优 Section 中包含)";
+                var hardContent = hardToFormat.Length > 0 ? PackageSectionFormatter.FormatConstraints(hardToFormat, tokenBudget) : "(所有硬约束已在更优 Section 中包含)";
 
                 sectionResult = AddSection(
                     sections,
@@ -445,9 +443,9 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                     GetPriority(policy, "hard_constraints", 100),
                     hardContent,
                     ContextContentFormat.Markdown,
-                    ResolveSourceRefs(activeHardConstraints),
-                    ResolveItemRefs(activeHardConstraints),
-                    ResolveItemRefs(activeHardConstraints),
+                    ContextItemRefResolver.ResolveSourceRefs(activeHardConstraints),
+                    ContextItemRefResolver.ResolveItemRefs(activeHardConstraints),
+                    ContextItemRefResolver.ResolveItemRefs(activeHardConstraints),
                     tokenBudget,
                     ResolveSectionTokenBudget(policy, modeBudgetProfile, "hard_constraints", tokenBudget),
                     tokenContext,
@@ -482,7 +480,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                 cancellationToken).ConfigureAwait(false);
 
             // 使用带 breakdown 的召回函数，以便展示 13 个子分维度
-            var workingWithBreakdowns = RecallWorkingMemoryWithBreakdowns(
+            var workingWithBreakdowns = WorkingMemoryRecaller.RecallWorkingMemoryWithBreakdowns(
                 workingCandidatesRaw,
                 anchors,
                 policy.MaxRecentItems > 0 ? policy.MaxRecentItems : 20,
@@ -492,7 +490,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                 packageModeName,
                 packageMustHitIds,
                 policy.EnableStrictRelevanceFilter);
-            workingWithBreakdowns = EnsureReservedWorkingMemoryCandidates(
+            workingWithBreakdowns = WorkingMemoryRecaller.EnsureReservedWorkingMemoryCandidates(
                 workingCandidatesRaw,
                 workingWithBreakdowns,
                 anchors,
@@ -505,8 +503,8 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
             workingMemory = workingWithBreakdowns.Select(x => x.Item).ToArray();
 
             // 分流活跃与废弃/被替代记忆
-            var activeWorkingPairs   = workingWithBreakdowns.Where(x => x.Item.Status != ContextMemoryStatus.Deprecated && !string.Equals(ResolveMemoryProcessState(x.Item), "superseded", StringComparison.OrdinalIgnoreCase)).ToArray();
-            var deprecatedWorkingPairs = workingWithBreakdowns.Where(x => x.Item.Status == ContextMemoryStatus.Deprecated || string.Equals(ResolveMemoryProcessState(x.Item), "superseded", StringComparison.OrdinalIgnoreCase)).ToArray();
+            var activeWorkingPairs   = workingWithBreakdowns.Where(x => x.Item.Status != ContextMemoryStatus.Deprecated && !string.Equals(WorkingMemoryRecaller.ResolveMemoryProcessState(x.Item), "superseded", StringComparison.OrdinalIgnoreCase)).ToArray();
+            var deprecatedWorkingPairs = workingWithBreakdowns.Where(x => x.Item.Status == ContextMemoryStatus.Deprecated || string.Equals(WorkingMemoryRecaller.ResolveMemoryProcessState(x.Item), "superseded", StringComparison.OrdinalIgnoreCase)).ToArray();
             var activeWorking   = activeWorkingPairs.Select(x => x.Item).ToArray();
             var deprecatedWorking = deprecatedWorkingPairs.Select(x => x.Item).ToArray();
 
@@ -523,7 +521,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                     .ToArray();
 
                 var workingToFormat = activeWorking.Where(item => !globalSelectedIds.Contains(item.Id)).ToArray();
-                var workingContent = workingToFormat.Length > 0 ? FormatMemoryItems(workingToFormat, tokenBudget) : "(所有活跃工作区记忆已在此前去重包含)";
+                var workingContent = workingToFormat.Length > 0 ? PackageSectionFormatter.FormatMemoryItems(workingToFormat, tokenBudget) : "(所有活跃工作区记忆已在此前去重包含)";
 
                 sectionResult = AddSection(
                     sections,
@@ -532,9 +530,9 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                     GetPriority(policy, "working_memory", 90),
                     workingContent,
                     ContextContentFormat.Markdown,
-                    ResolveSourceRefs(activeWorking),
-                    ResolveItemRefs(activeWorking),
-                    ResolveItemRefs(activeWorking),
+                    ContextItemRefResolver.ResolveSourceRefs(activeWorking),
+                    ContextItemRefResolver.ResolveItemRefs(activeWorking),
+                    ContextItemRefResolver.ResolveItemRefs(activeWorking),
                     tokenBudget,
                     ResolveSectionTokenBudget(policy, modeBudgetProfile, "working_memory", tokenBudget),
                     tokenContext,
@@ -565,7 +563,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                 if (isAuditMode)
                 {
                     var historicalToFormat = deprecatedWorking.Where(item => !globalSelectedIds.Contains(item.Id)).ToArray();
-                    var historicalContent = historicalToFormat.Length > 0 ? FormatMemoryItems(historicalToFormat, tokenBudget) : "(所有历史审计记忆已在此前去重包含)";
+                    var historicalContent = historicalToFormat.Length > 0 ? PackageSectionFormatter.FormatMemoryItems(historicalToFormat, tokenBudget) : "(所有历史审计记忆已在此前去重包含)";
 
                     sectionResult = AddSection(
                         sections,
@@ -574,9 +572,9 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                         GetPriority(policy, "historical_context", 15),
                         historicalContent,
                         ContextContentFormat.Markdown,
-                        ResolveSourceRefs(deprecatedWorking),
-                        ResolveItemRefs(deprecatedWorking),
-                        ResolveItemRefs(deprecatedWorking),
+                        ContextItemRefResolver.ResolveSourceRefs(deprecatedWorking),
+                        ContextItemRefResolver.ResolveItemRefs(deprecatedWorking),
+                        ContextItemRefResolver.ResolveItemRefs(deprecatedWorking),
                         tokenBudget,
                         ResolveHistoricalSectionTokenBudget(policy, modeBudgetProfile, "historical_context", tokenBudget),
                         tokenContext,
@@ -619,7 +617,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                 .ToArray();
 
             var globalToFormat = globalItems.Where(item => !globalSelectedIds.Contains(item.Id)).ToArray();
-            var globalContent = globalToFormat.Length > 0 ? FormatGlobalItems(globalToFormat) : "(所有全局上下文已在此前去重包含)";
+            var globalContent = globalToFormat.Length > 0 ? PackageSectionFormatter.FormatGlobalItems(globalToFormat) : "(所有全局上下文已在此前去重包含)";
 
             sectionResult = AddSection(
                 sections,
@@ -628,9 +626,9 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                 GetPriority(policy, "global_context", 80),
                 globalContent,
                 ContextContentFormat.Markdown,
-                ResolveSourceRefs(globalItems),
-                ResolveItemRefs(globalItems),
-                ResolveItemRefs(globalItems),
+                ContextItemRefResolver.ResolveSourceRefs(globalItems),
+                ContextItemRefResolver.ResolveItemRefs(globalItems),
+                ContextItemRefResolver.ResolveItemRefs(globalItems),
                 tokenBudget,
                 ResolveSectionTokenBudget(policy, modeBudgetProfile, "global_context", tokenBudget),
                 tokenContext,
@@ -666,7 +664,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                 .ToArray();
 
             var recentToFormat = includedRecent.Where(item => !globalSelectedIds.Contains(item.SourceItemId)).ToArray();
-            var recentContent = recentToFormat.Length > 0 ? FormatRecentContextItems(recentToFormat, tokenBudget) : "(所有近期短期上下文已在此前去重包含)";
+            var recentContent = recentToFormat.Length > 0 ? PackageSectionFormatter.FormatRecentContextItems(recentToFormat, tokenBudget) : "(所有近期短期上下文已在此前去重包含)";
 
             sectionResult = AddSection(
                 sections,
@@ -675,9 +673,9 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                 GetPriority(policy, "recent_context", 70),
                 recentContent,
                 ContextContentFormat.Markdown,
-                ResolveSourceRefs(includedRecent),
-                ResolveItemRefs(includedRecent),
-                ResolveItemRefs(includedRecent),
+                ContextItemRefResolver.ResolveSourceRefs(includedRecent),
+                ContextItemRefResolver.ResolveItemRefs(includedRecent),
+                ContextItemRefResolver.ResolveItemRefs(includedRecent),
                 tokenBudget,
                 ResolveSectionTokenBudget(policy, modeBudgetProfile, "recent_context", tokenBudget),
                 tokenContext,
@@ -709,7 +707,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                     Take = stableCandidateTake
                 },
                 cancellationToken).ConfigureAwait(false);
-            stableMemory = RecallStableMemory(
+            stableMemory = WorkingMemoryRecaller.RecallStableMemory(
                 stableCandidatesRaw,
                 anchors,
                 workingMemory,
@@ -725,7 +723,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
             var workingSignals = ContextRecallSignalPolicy.CreateWorkingMemorySignals(workingMemory);
             var stableCandidates = stableMemory
                 .Select(item => {
-                    var searchText = CreateMemorySearchText(item);
+                    var searchText = WorkingMemoryRecaller.CreateMemorySearchText(item);
                     var scoreResult = ContextRecallSignalPolicy.ScoreStableMemoryForInjection(item, anchors, workingSignals, searchText);
                     var finalScore = scoreResult.Score;
                     return PackageTraceCandidate.FromMemory(item, "stable_memory", finalScore, EstimatePackageTokens(item.Content, tokenContext));
@@ -733,7 +731,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                 .ToArray();
 
             var stableToFormat = stableMemory.Where(item => !globalSelectedIds.Contains(item.Id)).ToArray();
-            var stableContent = stableToFormat.Length > 0 ? FormatMemoryItems(stableToFormat, tokenBudget) : "(所有稳定背景记忆已在此前去重包含)";
+            var stableContent = stableToFormat.Length > 0 ? PackageSectionFormatter.FormatMemoryItems(stableToFormat, tokenBudget) : "(所有稳定背景记忆已在此前去重包含)";
 
             sectionResult = AddSection(
                 sections,
@@ -742,9 +740,9 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                 GetPriority(policy, "stable_memory", 60),
                 stableContent,
                 ContextContentFormat.Markdown,
-                ResolveSourceRefs(stableMemory),
-                ResolveItemRefs(stableMemory),
-                ResolveItemRefs(stableMemory),
+                ContextItemRefResolver.ResolveSourceRefs(stableMemory),
+                ContextItemRefResolver.ResolveItemRefs(stableMemory),
+                ContextItemRefResolver.ResolveItemRefs(stableMemory),
                 tokenBudget,
                 ResolveSectionTokenBudget(policy, modeBudgetProfile, "stable_memory", tokenBudget),
                 tokenContext,
@@ -791,7 +789,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                 .ToArray();
 
             var softToFormat = activeSoftConstraints.Where(c => !globalSelectedIds.Contains(c.Id)).ToArray();
-            var softContent = softToFormat.Length > 0 ? FormatConstraints(softToFormat, tokenBudget) : "(所有软约束已在此前去重包含)";
+            var softContent = softToFormat.Length > 0 ? PackageSectionFormatter.FormatConstraints(softToFormat, tokenBudget) : "(所有软约束已在此前去重包含)";
 
             sectionResult = AddSection(
                 sections,
@@ -800,9 +798,9 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                 GetPriority(policy, "soft_constraints", 50),
                 softContent,
                 ContextContentFormat.Markdown,
-                ResolveSourceRefs(activeSoftConstraints),
-                ResolveItemRefs(activeSoftConstraints),
-                ResolveItemRefs(activeSoftConstraints),
+                ContextItemRefResolver.ResolveSourceRefs(activeSoftConstraints),
+                ContextItemRefResolver.ResolveItemRefs(activeSoftConstraints),
+                ContextItemRefResolver.ResolveItemRefs(activeSoftConstraints),
                 tokenBudget,
                 ResolveSectionTokenBudget(policy, modeBudgetProfile, "soft_constraints", tokenBudget),
                 tokenContext,
@@ -840,7 +838,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                 .ToArray();
 
             var mergedToFormat = orderedMergedConstraints.Where(item => !globalSelectedIds.Contains(item.Constraint.Id)).ToArray();
-            var mergedContent = mergedToFormat.Length > 0 ? FormatMergedConstraints(mergedToFormat, tokenBudget) : "(所有合并约束已在此前去重包含)";
+            var mergedContent = mergedToFormat.Length > 0 ? PackageSectionFormatter.FormatMergedConstraints(mergedToFormat, tokenBudget) : "(所有合并约束已在此前去重包含)";
 
             sectionResult = AddSection(
                 sections,
@@ -849,9 +847,9 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                 GetPriority(policy, "constraints", 95),
                 mergedContent,
                 ContextContentFormat.Markdown,
-                ResolveSourceRefs(activeMergedConstraints),
-                ResolveItemRefs(activeMergedConstraints),
-                ResolveItemRefs(activeMergedConstraints),
+                ContextItemRefResolver.ResolveSourceRefs(activeMergedConstraints),
+                ContextItemRefResolver.ResolveItemRefs(activeMergedConstraints),
+                ContextItemRefResolver.ResolveItemRefs(activeMergedConstraints),
                 tokenBudget,
                 ResolveSectionTokenBudget(policy, modeBudgetProfile, "constraints", tokenBudget),
                 tokenContext,
@@ -899,7 +897,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                     .ToArray();
 
                 var relatedToFormat = relatedItems.Where(item => !globalSelectedIds.Contains(item.Id)).ToArray();
-                var relatedContent = relatedToFormat.Length > 0 ? FormatContextItems(relatedToFormat) : "(所有关联图谱扩展上下文已在此前去重包含)";
+                var relatedContent = relatedToFormat.Length > 0 ? PackageSectionFormatter.FormatContextItems(relatedToFormat) : "(所有关联图谱扩展上下文已在此前去重包含)";
 
                 sectionResult = AddSection(
                     sections,
@@ -908,9 +906,9 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                     GetPriority(policy, "related_context", 40),
                     relatedContent,
                     ContextContentFormat.Markdown,
-                    ResolveSourceRefs(relatedItems),
-                    ResolveItemRefs(relatedItems),
-                    ResolveItemRefs(relatedItems),
+                    ContextItemRefResolver.ResolveSourceRefs(relatedItems),
+                    ContextItemRefResolver.ResolveItemRefs(relatedItems),
+                    ContextItemRefResolver.ResolveItemRefs(relatedItems),
                     tokenBudget,
                     ResolveSectionTokenBudget(policy, modeBudgetProfile, "related_context", tokenBudget),
                     tokenContext,
@@ -930,13 +928,13 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
 
         if (ShouldIncludeEvidenceSection(request, policy, selectedItems.Count > 0))
         {
-            var evidenceItems = BuildEvidenceEntries(sections, selectedItems);
+            var evidenceItems = PackageSectionFormatter.BuildEvidenceEntries(sections, selectedItems);
             AddSection(
                 sections,
                 sourceRefs,
                 "evidence",
                 GetPriority(policy, "evidence", 25),
-                FormatEvidenceEntries(evidenceItems),
+                PackageSectionFormatter.FormatEvidenceEntries(evidenceItems),
                 ContextContentFormat.Markdown,
                 evidenceItems.SelectMany(item => item.SourceRefs).ToArray(),
                 evidenceItems.Select(item => item.ItemId).ToArray(),
@@ -961,7 +959,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                 sourceRefs,
                 "excluded",
                 GetPriority(policy, "excluded", 20),
-                FormatDroppedItems(droppedItems),
+                PackageSectionFormatter.FormatDroppedItems(droppedItems),
                 ContextContentFormat.Markdown,
                 Array.Empty<string>(),
                 droppedItems.Select(item => item.ItemId).ToArray(),
@@ -979,7 +977,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                 sourceRefs,
                 "uncertainties",
                 GetPriority(policy, "uncertainties", 10),
-                FormatUncertainties(uncertainties),
+                PackageSectionFormatter.FormatUncertainties(uncertainties),
                 ContextContentFormat.Markdown,
                 Array.Empty<string>(),
                 uncertainties.SelectMany(item => item.ItemRefs).ToArray(),
@@ -1007,7 +1005,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         {
             metadata["policyId"] = policy.Id;
         }
-        AddAnchorMetadata(metadata, anchors);
+        ContextItemRefResolver.AddAnchorMetadata(metadata, anchors);
         AddModeBudgetMetadata(metadata, modeBudgetProfile);
         AddDiagnosticMetadata(metadata, tokenBudget, estimatedTokens, droppedItems.Count, uncertainties.Count);
         AddGraphExpansionMetadata(metadata, graphExpansionContribution);
@@ -1113,602 +1111,6 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         }
     }
 
-    private static IReadOnlyList<ContextMemoryItem> RecallWorkingMemory(
-        IReadOnlyList<ContextMemoryItem> candidates,
-        IReadOnlyList<ContextAnchor> anchors,
-        int take,
-        bool isAuditMode,
-        bool allowDeprecated = false,
-        int tokenBudget = 0)
-    {
-        var maxTake = take > 0 ? take : 20;
-        var filteredCandidates = candidates.Where(item =>
-        {
-            var processState = ResolveMemoryProcessState(item);
-            var isDeprecated = item.Status == ContextMemoryStatus.Deprecated ||
-                               string.Equals(processState, "deprecated", StringComparison.OrdinalIgnoreCase) ||
-                               string.Equals(processState, "superseded", StringComparison.OrdinalIgnoreCase);
-            var isRejected = item.Status == ContextMemoryStatus.Rejected ||
-                             string.Equals(processState, "rejected", StringComparison.OrdinalIgnoreCase);
-
-            if (isRejected) return false;
-            if (isDeprecated) return allowDeprecated || isAuditMode;
-            
-            return IsActive(item);
-        });
-
-        if (tokenBudget > 0 && tokenBudget <= 200)
-        {
-            filteredCandidates = filteredCandidates.Where(item =>
-            {
-                if (item.Importance >= 0.8)
-                {
-                    return true;
-                }
-                var searchText = CreateMemorySearchText(item);
-                var hasAnchorMatch = anchors.Any(anchor => searchText.Contains(anchor.Name, StringComparison.OrdinalIgnoreCase));
-                return hasAnchorMatch;
-            });
-        }
-
-        return filteredCandidates
-            .Select(item =>
-            {
-                var bd = ScoreWorkingMemoryForAnchors(item, anchors, isAuditMode, allowDeprecated || isAuditMode);
-                return new
-                {
-                    Item = item,
-                    Score = bd.FinalScore,
-                    Breakdown = bd
-                };
-            })
-            .Where(item =>
-            {
-                if (tokenBudget > 0 && tokenBudget <= 200 && item.Score <= 1.0)
-                {
-                    return false;
-                }
-                return item.Score > 0 || anchors.Count == 0;
-            })
-            .OrderByDescending(item => item.Score)
-            .ThenByDescending(item => item.Item.Importance)
-            .ThenByDescending(item => item.Item.Confidence)
-            .ThenByDescending(item => item.Item.UpdatedAt)
-            .Take(maxTake)
-            .Select(item => item.Item)
-            .ToArray();
-    }
-
-    private static IReadOnlyList<(ContextMemoryItem Item, ItemScoreBreakdown Breakdown)> RecallWorkingMemoryWithBreakdowns(
-        IReadOnlyList<ContextMemoryItem> candidates,
-        IReadOnlyList<ContextAnchor> anchors,
-        int take,
-        bool isAuditMode,
-        bool allowDeprecated = false,
-        int tokenBudget = 0,
-        string modeName = "",
-        IReadOnlySet<string>? reserveIds = null,
-        bool enableStrictRelevanceFilter = false)
-    {
-        var maxTake = take > 0 ? take : 20;
-        var filteredCandidates = candidates.Where(item =>
-        {
-            var processState = ResolveMemoryProcessState(item);
-            var isDeprecated = item.Status == ContextMemoryStatus.Deprecated ||
-                               string.Equals(processState, "deprecated", StringComparison.OrdinalIgnoreCase) ||
-                               string.Equals(processState, "superseded", StringComparison.OrdinalIgnoreCase);
-            var isRejected = item.Status == ContextMemoryStatus.Rejected ||
-                             string.Equals(processState, "rejected", StringComparison.OrdinalIgnoreCase);
-
-            if (isRejected) return false;
-            if (isDeprecated) return allowDeprecated || isAuditMode;
-
-            return IsActive(item);
-        });
-
-        if (tokenBudget > 0 && tokenBudget <= 200)
-        {
-            filteredCandidates = filteredCandidates.Where(item =>
-            {
-                if (reserveIds is not null && reserveIds.Contains(item.Id))
-                {
-                    return true;
-                }
-
-                if (item.Importance >= 0.8)
-                {
-                    return true;
-                }
-                var searchText = CreateMemorySearchText(item);
-                var hasAnchorMatch = anchors.Any(anchor => searchText.Contains(anchor.Name, StringComparison.OrdinalIgnoreCase));
-                return hasAnchorMatch;
-            });
-        }
-
-        return filteredCandidates
-            .Select(item =>
-            {
-                var bd = ScoreWorkingMemoryForAnchors(item, anchors, isAuditMode, allowDeprecated || isAuditMode, enableStrictRelevanceFilter);
-                var reserveScore = ResolveWorkingMemoryReserveScore(item, modeName, reserveIds);
-                return (Item: item, Breakdown: bd, ReserveScore: reserveScore);
-            })
-            .Where(x =>
-            {
-                if (tokenBudget > 0 && tokenBudget <= 200 && x.ReserveScore > 0)
-                    return true;
-                if (tokenBudget > 0 && tokenBudget <= 200 && x.Breakdown.FinalScore <= 1.0)
-                    return false;
-                return x.Breakdown.FinalScore > 0 || anchors.Count == 0;
-            })
-            .OrderByDescending(x => x.ReserveScore)
-            .ThenByDescending(x => x.Breakdown.FinalScore)
-            .ThenByDescending(x => x.Item.Importance)
-            .ThenByDescending(x => x.Item.Confidence)
-            .ThenByDescending(x => x.Item.UpdatedAt)
-            .Take(maxTake)
-            .Select(x => (x.Item, x.Breakdown))
-            .ToArray();
-    }
-
-    private static IReadOnlyList<(ContextMemoryItem Item, ItemScoreBreakdown Breakdown)> EnsureReservedWorkingMemoryCandidates(
-        IReadOnlyList<ContextMemoryItem> rawCandidates,
-        IReadOnlyList<(ContextMemoryItem Item, ItemScoreBreakdown Breakdown)> selectedCandidates,
-        IReadOnlyList<ContextAnchor> anchors,
-        bool isAuditMode,
-        bool allowDeprecated,
-        string modeName,
-        IReadOnlySet<string> reserveIds,
-        bool enableStrictRelevanceFilter = false)
-    {
-        if (reserveIds.Count == 0)
-        {
-            return selectedCandidates;
-        }
-
-        var selectedIds = selectedCandidates
-            .Select(item => item.Item.Id)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var result = selectedCandidates.ToList();
-
-        foreach (var item in rawCandidates.Where(item => reserveIds.Contains(item.Id)))
-        {
-            if (selectedIds.Contains(item.Id))
-            {
-                continue;
-            }
-
-            var processState = ResolveMemoryProcessState(item);
-            var isDeprecated = item.Status == ContextMemoryStatus.Deprecated ||
-                               string.Equals(processState, "deprecated", StringComparison.OrdinalIgnoreCase) ||
-                               string.Equals(processState, "superseded", StringComparison.OrdinalIgnoreCase);
-            var isRejected = item.Status == ContextMemoryStatus.Rejected ||
-                             string.Equals(processState, "rejected", StringComparison.OrdinalIgnoreCase);
-            if (isRejected || (isDeprecated && !allowDeprecated && !isAuditMode) || !IsActive(item))
-            {
-                continue;
-            }
-
-            result.Add((item, ScoreWorkingMemoryForAnchors(item, anchors, isAuditMode, allowDeprecated || isAuditMode, enableStrictRelevanceFilter)));
-            selectedIds.Add(item.Id);
-        }
-
-        return result
-            .OrderByDescending(item => reserveIds.Contains(item.Item.Id))
-            .ThenByDescending(item => ResolveWorkingMemoryReserveScore(item.Item, modeName, reserveIds))
-            .ThenByDescending(item => item.Breakdown.FinalScore)
-            .ThenByDescending(item => item.Item.Importance)
-            .ThenByDescending(item => item.Item.Confidence)
-            .ThenByDescending(item => item.Item.UpdatedAt)
-            .ToArray();
-    }
-
-    /// <summary>
-    /// 工作记忆/稳定记忆 Bounded Additive 评分引擎。
-    /// 各维度相互独立、可解释，通过有界加法组合，拒绝乘法惩罚导致的无限衰减。
-    /// </summary>
-    private static ItemScoreBreakdown ScoreWorkingMemoryForAnchors(
-
-        ContextMemoryItem item,
-        IReadOnlyList<ContextAnchor> anchors,
-        bool isAuditMode,
-        bool allowDeprecated = false,
-        bool enableStrictRelevanceFilter = false)
-    {
-        var memoryState = ResolveMemoryProcessState(item);
-        var isDeprecated = item.Status == ContextMemoryStatus.Deprecated ||
-                           string.Equals(memoryState, "deprecated", StringComparison.OrdinalIgnoreCase) ||
-                           string.Equals(memoryState, "superseded", StringComparison.OrdinalIgnoreCase);
-        var isRejected = item.Status == ContextMemoryStatus.Rejected ||
-                         string.Equals(memoryState, "rejected", StringComparison.OrdinalIgnoreCase);
-        var isCurrentlyActive = item.Status == ContextMemoryStatus.Active ||
-                                string.Equals(memoryState, "active", StringComparison.OrdinalIgnoreCase);
-
-        // A. 垃圾废案/强噪音直接强力拦截 (硬规则，不参与评分)
-        var content = item.Content ?? "";
-        if (isDeprecated)
-        {
-            // 极端否定词：任何场景都绝对强力排除
-            if (DomainKeywords.DeprecatedContentHardRejectionKeywords.Any(k => content.Contains(k, StringComparison.OrdinalIgnoreCase)))
-            {
-                return ZeroBreakdown();
-            }
-            // 柔性废弃词：仅在普通场景下过滤
-            if (!isAuditMode && DomainKeywords.DeprecatedContentSoftRejectionKeywords.Any(k => content.Contains(k, StringComparison.OrdinalIgnoreCase)))
-            {
-                return ZeroBreakdown();
-            }
-        }
-
-        // 审计场景：如果有 anchors 提取，无任何 anchor 命中的项一律拦截
-        var searchText = CreateMemorySearchText(item);
-        var hasSpecificAnchors = anchors.Any(ContextRecallSignalPolicy.IsSpecificRecallAnchor);
-        if (isAuditMode && hasSpecificAnchors)
-        {
-            var anyAnchorMatch = anchors.Any(a => ContextRecallSignalPolicy.IsSpecificRecallAnchor(a)
-                && searchText.Contains(a.Name, StringComparison.OrdinalIgnoreCase));
-            if (!anyAnchorMatch)
-            {
-                return ZeroBreakdown();
-            }
-        }
-
-        // 严格相关性过滤（早期锚点零匹配拦截）：当请求存在具体锚点但当前项无任何锚点匹配时，
-        // 直接降为零分。生产路径默认关闭；仅由评测运行器或显式调试请求通过 policy.EnableStrictRelevanceFilter 开启。
-        // 高重要度（>= StrictRelevanceImportanceThreshold）核心信息豁免，避免误杀关键记忆。
-        if (enableStrictRelevanceFilter && hasSpecificAnchors && item.Importance < ScoringProfile.StrictRelevanceImportanceThreshold)
-        {
-            var anyAnchorMatch = anchors.Any(a => ContextRecallSignalPolicy.IsSpecificRecallAnchor(a)
-                && searchText.Contains(a.Name, StringComparison.OrdinalIgnoreCase));
-            if (!anyAnchorMatch)
-            {
-                return ZeroBreakdown();
-            }
-        }
-
-        // ── 维度 1: BaseScore (bounded 0~Cap) ────────────────────────────────
-        var baseScore = Math.Min(ScoringProfile.BaseScoreCap, item.Importance * ScoringProfile.BaseScoreImportanceMultiplier + item.Confidence * ScoringProfile.BaseScoreConfidenceMultiplier);
-
-        // ── 维度 2: LayerScore ───────────────────────────────────────────────
-        var layerScore = item.Layer switch
-        {
-            ContextMemoryLayer.Working => ScoringProfile.LayerScoreWorking,
-            ContextMemoryLayer.Stable  => ScoringProfile.LayerScoreStable,
-            _                          => ScoringProfile.LayerScoreDefault
-        };
-
-        // ── 维度 3: StatusScore (additive, can be negative) ──────────────────
-        double statusScore;
-        if (isRejected)
-        {
-            statusScore = ScoringProfile.StatusScoreRejected;
-        }
-        else if (isDeprecated)
-        {
-            statusScore = (isAuditMode || allowDeprecated) ? ScoringProfile.StatusScoreDeprecatedAudit : ScoringProfile.StatusScoreDeprecatedNormal;
-        }
-        else if (isCurrentlyActive)
-        {
-            statusScore = isAuditMode ? ScoringProfile.StatusScoreActiveAudit : ScoringProfile.StatusScoreActiveNormal;
-        }
-        else
-        {
-            statusScore = 0.0;
-        }
-
-        // stress-test 类型：固定低分占位，不参与主竞争
-        if (string.Equals(item.Type, "stress-test", StringComparison.OrdinalIgnoreCase)
-            || item.Tags.Any(tag =>
-                string.Equals(tag, "stress", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(tag, "budget", StringComparison.OrdinalIgnoreCase)))
-        {
-            return new ItemScoreBreakdown
-            {
-                BaseScore   = ScoringProfile.StressTestPlaceholderScore,
-                LayerScore  = 0,
-                StatusScore = 0,
-                FinalScore  = ScoringProfile.StressTestPlaceholderScore  // 固定占位分，不参与主竞争
-            };
-        }
-
-        // ── 维度 4 & 5: SemanticAnchorScore + RawTokenMatchScore ─────────────
-        double semanticAnchorScore = 0.0;
-        double rawTokenMatchScore  = 0.0;
-        int    semanticMatchCount  = 0;
-        int    rawMatchCount       = 0;
-
-        if (anchors.Count > 0)
-        {
-            foreach (var anchor in anchors)
-            {
-                if (!ContextRecallSignalPolicy.IsSpecificRecallAnchor(anchor))
-                    continue;
-
-                if (!searchText.Contains(anchor.Name, StringComparison.OrdinalIgnoreCase))
-                    continue;
-
-                var isRawToken = string.Equals(anchor.Source, "request.query", StringComparison.OrdinalIgnoreCase);
-                if (isRawToken)
-                {
-                    var rawBonus = isCurrentlyActive ? anchor.Weight * ScoringProfile.AnchorRawTokenActiveMultiplier :
-                                  isDeprecated && (isAuditMode || allowDeprecated) ? anchor.Weight * ScoringProfile.AnchorRawTokenDeprecatedMultiplier : 0.0;
-                    rawTokenMatchScore += rawBonus;
-                    if (anchor.Type is AnchorType.Topic or AnchorType.Entity or AnchorType.Constraint or AnchorType.Task)
-                        rawMatchCount++;
-                }
-                else
-                {
-                    var semBonus = isCurrentlyActive ? anchor.Weight * ScoringProfile.AnchorSemanticActiveMultiplier :
-                                  isDeprecated && (isAuditMode || allowDeprecated) ? anchor.Weight * ScoringProfile.AnchorSemanticDeprecatedMultiplier : 0.0;
-                    semanticAnchorScore += semBonus;
-                    if (anchor.Type is AnchorType.Topic or AnchorType.Entity or AnchorType.Constraint or AnchorType.Task)
-                        semanticMatchCount++;
-                }
-            }
-        }
-
-        // 双轨命中奖励：同时有语义锚点和词项命中，额外奖励
-        double anchorMatchBonus = 0.0;
-        if (semanticAnchorScore > 0 && rawTokenMatchScore > 0)
-            anchorMatchBonus = isAuditMode ? ScoringProfile.AnchorMatchBonusBothAudit : ScoringProfile.AnchorMatchBonusBoth;
-        else if (semanticAnchorScore > 0)
-            anchorMatchBonus = ScoringProfile.AnchorMatchBonusSemanticOnly;
-        else if (rawTokenMatchScore > 0)
-            anchorMatchBonus = ScoringProfile.AnchorMatchBonusRawOnly;
-
-        // 审计场景下，非废弃项需要有足够的 anchor 命中才能通过
-        if (isAuditMode && !isDeprecated && hasSpecificAnchors)
-        {
-            var totalMatchCount = semanticMatchCount + rawMatchCount;
-            var requiredMatches = Math.Min(2, anchors.Count(a =>
-                ContextRecallSignalPolicy.IsSpecificRecallAnchor(a) &&
-                a.Type is AnchorType.Topic or AnchorType.Entity or AnchorType.Constraint or AnchorType.Task));
-            if (totalMatchCount < Math.Max(1, requiredMatches))
-            {
-                return ZeroBreakdown();
-            }
-        }
-
-        // ── 维度 6: ModeMatchScore ───────────────────────────────────────────
-        double modeMatchScore = 0.0;
-        var modeAnchor = anchors.FirstOrDefault(a => a.Type == AnchorType.Mode);
-        if (modeAnchor is not null && searchText.Contains(modeAnchor.Name, StringComparison.OrdinalIgnoreCase))
-            modeMatchScore = ScoringProfile.ModeMatchScore;
-
-        // ── 维度 7: TaskIntentScore ──────────────────────────────────────────
-        // 提取 query 词中含义词（长度>=2的中文词或英文词）匹配 content
-        double taskIntentScore = 0.0;
-        var rawQueryAnchor = anchors.Where(a =>
-            ContextRecallSignalPolicy.IsSpecificRecallAnchor(a) &&
-            string.Equals(a.Source, "request.query", StringComparison.OrdinalIgnoreCase) &&
-            a.Name.Length >= 2).Take(ScoringProfile.TaskIntentMaxAnchors).ToArray();
-        if (rawQueryAnchor.Length > 0 && content.Length > 0)
-        {
-            var intentHits = rawQueryAnchor.Count(a =>
-                content.Contains(a.Name, StringComparison.OrdinalIgnoreCase));
-            taskIntentScore = Math.Min(ScoringProfile.TaskIntentScoreCap, intentHits * ScoringProfile.TaskIntentScorePerHit);
-        }
-
-        // ── 维度 7.5: RelevanceFilter ────────────────────────────────────────
-        // 严格相关性过滤：当请求存在具体锚点但当前项锚点分数与任务意图分数均为零时，
-        // 将低重要度条目降为零分以避免噪音污染召回结果。
-        // 生产路径默认关闭；仅由评测运行器或显式调试请求通过 policy.EnableStrictRelevanceFilter 开启。
-        var totalAnchorScore = semanticAnchorScore + rawTokenMatchScore;
-        if (enableStrictRelevanceFilter
-            && hasSpecificAnchors
-            && totalAnchorScore <= 0.0
-            && taskIntentScore <= 0.0
-            && item.Importance < ScoringProfile.StrictRelevanceImportanceThreshold)
-        {
-            return ZeroBreakdown();
-        }
-
-        // ── 维度 8: RecencyScore ─────────────────────────────────────────────
-        double recencyScore = 0.0;
-        var ageHours = (DateTimeOffset.UtcNow - item.UpdatedAt).TotalHours;
-        if (ageHours <= 24)
-            recencyScore = ScoringProfile.RecencyScore24Hours;
-        else if (ageHours <= 24 * 7)
-            recencyScore = ScoringProfile.RecencyScore7Days;
-        else if (ageHours <= 24 * 30)
-            recencyScore = ScoringProfile.RecencyScore30Days;
-
-        // ── 维度 9: RelationScore (预留，当前为 0) ───────────────────────────
-        double relationScore = 0.0;
-
-        // ── 维度 10: LifecyclePenalty (有界加性负分，不用乘法) ───────────────
-        // 对 active 但无任何 anchor 匹配 of 项施加有界负分惩罚
-        double lifecyclePenalty = 0.0;
-        if (isCurrentlyActive && hasSpecificAnchors && totalAnchorScore <= 0.0)
-        {
-            // 有界惩罚：最多减去 (BaseScore + LayerScore + StatusScore) 的 LifecyclePenaltyRatio，不超过 -LifecyclePenaltyCap
-            var positiveSum = baseScore + layerScore + statusScore;
-            lifecyclePenalty = -Math.Min(ScoringProfile.LifecyclePenaltyCap, Math.Max(0.0, positiveSum * ScoringProfile.LifecyclePenaltyRatio));
-        }
-
-        // ── 维度 11: RedundancyPenalty (预留) ────────────────────────────────
-        double redundancyPenalty = 0.0;
-
-        // ── FinalScore 组装 ──────────────────────────────────────────────────
-        var rawFinal = baseScore + layerScore + statusScore
-                     + semanticAnchorScore + rawTokenMatchScore + anchorMatchBonus
-                     + modeMatchScore + taskIntentScore + recencyScore + relationScore
-                     + lifecyclePenalty + redundancyPenalty;
-
-        var finalScore = Math.Max(0.0, rawFinal);
-
-        return new ItemScoreBreakdown
-        {
-            BaseScore          = baseScore,
-            LayerScore         = layerScore,
-            StatusScore        = statusScore,
-            SemanticAnchorScore = semanticAnchorScore,
-            RawTokenMatchScore = rawTokenMatchScore,
-            AnchorMatchBonus   = anchorMatchBonus,
-            ModeMatchScore     = modeMatchScore,
-            TaskIntentScore    = taskIntentScore,
-            RecencyScore       = recencyScore,
-            RelationScore      = relationScore,
-            LifecyclePenalty   = lifecyclePenalty,
-            RedundancyPenalty  = redundancyPenalty,
-            FinalScore         = finalScore
-        };
-    }
-
-    private static ItemScoreBreakdown ZeroBreakdown() =>
-        new() { FinalScore = 0.0 };
-
-    private static string ResolveMemoryProcessState(ContextMemoryItem item)
-    {
-        foreach (var key in new[] { "state", "status", "taskState", "processState" })
-        {
-            if (item.Metadata.TryGetValue(key, out var value)
-                && !string.IsNullOrWhiteSpace(value))
-            {
-                return value.Trim().ToLowerInvariant();
-            }
-        }
-
-        return string.Empty;
-    }
-
-    private static string CreateMemorySearchText(ContextMemoryItem item)
-    {
-        var metadata = string.Join(' ', item.Metadata.Select(pair => $"{pair.Key} {pair.Value}"));
-        return string.Join(
-            ' ',
-            item.Id,
-            item.Type,
-            string.Join(' ', item.Tags),
-            string.Join(' ', item.SourceRefs),
-            metadata,
-            item.Content.Length <= 1200 ? item.Content : item.Content[..1200]);
-    }
-
-    private static IReadOnlyList<ContextMemoryItem> RecallStableMemory(
-        IReadOnlyList<ContextMemoryItem> candidates,
-        IReadOnlyList<ContextAnchor> anchors,
-        IReadOnlyList<ContextMemoryItem> workingMemory,
-        int take,
-        string modeName = "",
-        IReadOnlySet<string>? reserveIds = null)
-    {
-        var maxTake = take > 0 ? take : 20;
-        var workingSignals = ContextRecallSignalPolicy.CreateWorkingMemorySignals(workingMemory);
-        var scored = candidates
-            .Where(item => item.Layer == ContextMemoryLayer.Stable && item.Status == ContextMemoryStatus.Stable)
-            .Select(item =>
-            {
-                var searchText = CreateMemorySearchText(item);
-                var score = ContextRecallSignalPolicy.ScoreStableMemoryForInjection(item, anchors, workingSignals, searchText);
-                return new
-                {
-                    Item = item,
-                    score.Score,
-                    score.HasCurrentSignal,
-                    IsLongTermCategory = ContextRecallSignalPolicy.IsLongTermMemoryCategory(searchText),
-                    ReserveScore = ResolveStableMemoryReserveScore(item, modeName, reserveIds)
-                };
-            })
-            .OrderByDescending(item => item.ReserveScore)
-            .ThenByDescending(item => item.Score)
-            .ThenByDescending(item => item.Item.Importance)
-            .ThenByDescending(item => item.Item.Confidence)
-            .ThenByDescending(item => item.Item.UpdatedAt)
-            .ToArray();
-
-        var matched = scored
-            .Where(item => (item.HasCurrentSignal && item.IsLongTermCategory)
-                || (anchors.Count == 0 && workingSignals.Count == 0))
-            .Take(maxTake)
-            .Select(item => item.Item)
-            .ToArray();
-        if (matched.Length > 0)
-        {
-            return matched;
-        }
-
-        // 兼容旧调用方：当稳定层完全没有命中当前任务信号时，只回退少量高可信稳定记忆，避免长期层大范围注入。
-        return scored
-            .Take(Math.Min(maxTake, 3))
-            .Select(item => item.Item)
-            .ToArray();
-    }
-
-    private static double ResolveWorkingMemoryReserveScore(
-        ContextMemoryItem item,
-        string modeName,
-        IReadOnlySet<string>? reserveIds)
-    {
-        var searchText = CreateMemorySearchText(item);
-        var score = reserveIds is not null && reserveIds.Contains(item.Id) ? 10_000.0 : 0.0;
-        if (IsMode(modeName, "AutomationMode", "Automation"))
-        {
-            if (ContainsAny(searchText, DomainKeywords.AutomationModeWorkingMemoryReserveKeywords.ToArray()))
-            {
-                score += 900.0;
-            }
-        }
-        else if (IsMode(modeName, "NovelMode", "Novel"))
-        {
-            if (ContainsAny(searchText, DomainKeywords.NovelModeWorkingMemoryReserveKeywords.ToArray()))
-            {
-                score += 900.0;
-            }
-        }
-        else if (IsMode(modeName, "ChatMode", "Chat"))
-        {
-            if (ContainsAny(searchText, DomainKeywords.ChatModeBoostKeywords.ToArray()))
-            {
-                score += 900.0;
-            }
-        }
-
-        if (ContainsAny(searchText, DomainKeywords.FixturePenaltyKeywords.ToArray()))
-        {
-            score -= 500.0;
-        }
-
-        return score;
-    }
-
-    private static double ResolveStableMemoryReserveScore(
-        ContextMemoryItem item,
-        string modeName,
-        IReadOnlySet<string>? reserveIds)
-    {
-        var searchText = CreateMemorySearchText(item);
-        var score = reserveIds is not null && reserveIds.Contains(item.Id) ? 10_000.0 : 0.0;
-        if (IsMode(modeName, "ChatMode", "Chat") &&
-            ContainsAny(searchText, DomainKeywords.ChatModeStableMemoryReserveKeywords.ToArray()))
-        {
-            score += 900.0;
-        }
-
-        if (IsMode(modeName, "NovelMode", "Novel") &&
-            ContainsAny(searchText, DomainKeywords.NovelModeStableMemoryReserveKeywords.ToArray()))
-        {
-            score += 600.0;
-        }
-
-        if (IsMode(modeName, "AutomationMode", "Automation") &&
-            ContainsAny(searchText, DomainKeywords.AutomationModeStableMemoryReserveKeywords.ToArray()))
-        {
-            score += 600.0;
-        }
-
-        return score;
-    }
-
-    private static bool IsMode(string modeName, params string[] expected)
-    {
-        var normalized = NormalizeModeName(modeName);
-        return expected.Any(item =>
-            string.Equals(normalized, NormalizeModeName(item), StringComparison.OrdinalIgnoreCase));
-    }
-
-    private static bool ContainsAny(string text, params string[] values) =>
-        values.Any(value => text.Contains(value, StringComparison.OrdinalIgnoreCase));
-
     private async Task<IReadOnlyList<string>> ResolveGraphSeedIdsFromWorkingMemoryAsync(
         string workspaceId,
         string collectionId,
@@ -1724,8 +1126,8 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         }
 
         var maxSeeds = ResolveIntSetting(request, policy, "graphSeedMaxNodes", 12, min: 1, max: 50);
-        var candidates = ExtractGraphSeedCandidates(workingMemory, anchors)
-            .Select(NormalizeGraphSeedCandidate)
+        var candidates = GraphSeedResolver.ExtractGraphSeedCandidates(workingMemory, anchors)
+            .Select(GraphSeedResolver.NormalizeGraphSeedCandidate)
             .Where(value => !string.IsNullOrWhiteSpace(value))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Take(maxSeeds * 4)
@@ -1778,160 +1180,6 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         }
 
         return resolved;
-    }
-
-    private static IEnumerable<string> ExtractGraphSeedCandidates(
-        IReadOnlyList<ContextMemoryItem> workingMemory,
-        IReadOnlyList<ContextAnchor> anchors)
-    {
-        foreach (var memory in workingMemory.Take(8))
-        {
-            foreach (var sourceRef in memory.SourceRefs.Take(16))
-            {
-                yield return sourceRef;
-            }
-
-            foreach (var value in ExtractGraphMetadataValues(memory.Metadata).Take(24))
-            {
-                yield return value;
-            }
-
-            foreach (var marker in ExtractPrefixedGraphSeeds(memory.Content).Take(24))
-            {
-                yield return marker;
-            }
-        }
-
-        foreach (var anchor in anchors
-            .Where(anchor => anchor.Type is AnchorType.Entity or AnchorType.Project or AnchorType.Topic)
-            .Take(12))
-        {
-            yield return anchor.Name;
-            foreach (var alias in anchor.Aliases.Take(4))
-            {
-                yield return alias;
-            }
-        }
-    }
-
-    private static IEnumerable<string> ExtractGraphMetadataValues(IReadOnlyDictionary<string, string> metadata)
-    {
-        foreach (var (key, value) in metadata)
-        {
-            if (!IsGraphSeedMetadataKey(key) || string.IsNullOrWhiteSpace(value))
-            {
-                continue;
-            }
-
-            foreach (var part in SplitGraphSeedList(value))
-            {
-                yield return part;
-            }
-        }
-    }
-
-    private static bool IsGraphSeedMetadataKey(string key)
-    {
-        return key.Contains("entity", StringComparison.OrdinalIgnoreCase)
-            || key.Contains("node", StringComparison.OrdinalIgnoreCase)
-            || key.Contains("context", StringComparison.OrdinalIgnoreCase)
-            || key.Contains("ref", StringComparison.OrdinalIgnoreCase)
-            || key.Contains("source", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static IEnumerable<string> SplitGraphSeedList(string value)
-    {
-        return value.Split(
-                [',', '，', ';', '；', '|', '\r', '\n', '\t', ' '],
-                StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Where(part => !string.IsNullOrWhiteSpace(part));
-    }
-
-    private static IEnumerable<string> ExtractPrefixedGraphSeeds(string? content)
-    {
-        if (string.IsNullOrWhiteSpace(content))
-        {
-            yield break;
-        }
-
-        foreach (var token in content.Split(
-            [' ', '\t', '\r', '\n', ',', '，', ';', '；', '(', ')', '（', '）', '[', ']', '【', '】', '"', '\''],
-            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            if (HasGraphSeedPrefix(token))
-            {
-                yield return token;
-            }
-        }
-    }
-
-    private static string? NormalizeGraphSeedCandidate(string? candidate)
-    {
-        if (string.IsNullOrWhiteSpace(candidate))
-        {
-            return null;
-        }
-
-        var value = candidate.Trim().Trim('.', '。', ':', '：', ',', '，', ';', '；');
-        while (TryStripGraphSeedPrefix(value, out var stripped))
-        {
-            value = stripped;
-        }
-
-        if (value.Length is < 2 or > 128
-            || value.Contains("://", StringComparison.Ordinal)
-            || value.Any(char.IsWhiteSpace)
-            || IsGenericGraphSeed(value))
-        {
-            return null;
-        }
-
-        return value.All(IsGraphSeedChar) ? value : null;
-    }
-
-    private static bool HasGraphSeedPrefix(string value)
-    {
-        return TryStripGraphSeedPrefix(value, out _);
-    }
-
-    private static bool TryStripGraphSeedPrefix(string value, out string stripped)
-    {
-        foreach (var prefix in new[]
-        {
-            "context:",
-            "ctx:",
-            "item:",
-            "node:",
-            "entity:",
-            "source:",
-            "ref:"
-        })
-        {
-            if (value.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-            {
-                stripped = value[prefix.Length..].Trim();
-                return true;
-            }
-        }
-
-        stripped = value;
-        return false;
-    }
-
-    private static bool IsGraphSeedChar(char ch)
-    {
-        return char.IsLetterOrDigit(ch)
-            || ch is '-' or '_' or '.';
-    }
-
-    private static bool IsGenericGraphSeed(string value)
-    {
-        return value.Equals("memory", StringComparison.OrdinalIgnoreCase)
-            || value.Equals("task", StringComparison.OrdinalIgnoreCase)
-            || value.Equals("state", StringComparison.OrdinalIgnoreCase)
-            || value.Equals("active", StringComparison.OrdinalIgnoreCase)
-            || value.Equals("current", StringComparison.OrdinalIgnoreCase)
-            || value.Equals("package", StringComparison.OrdinalIgnoreCase);
     }
 
     private async Task<IReadOnlyList<ContextItem>> ResolveRelatedContextAsync(
@@ -2193,22 +1441,8 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
             "packageMode",
             "contextMode",
             "taskMode");
-        var normalizedMode = NormalizeModeName(mode);
+        var normalizedMode = WorkingMemoryRecaller.NormalizeModeName(mode);
         return ModeBudgetProfiles.Resolve(normalizedMode);
-    }
-
-    private static string NormalizeModeName(string? mode)
-    {
-        if (string.IsNullOrWhiteSpace(mode))
-        {
-            return string.Empty;
-        }
-
-        return mode.Trim()
-            .Replace("_", string.Empty, StringComparison.Ordinal)
-            .Replace("-", string.Empty, StringComparison.Ordinal)
-            .Replace(" ", string.Empty, StringComparison.Ordinal)
-            .ToLowerInvariant();
     }
 
     private static string? ReadFirstSetting(
@@ -3337,25 +2571,25 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
 
         var metadata = string.Join(' ', item.Metadata.Select(pair => $"{pair.Key} {pair.Value}"));
         var searchText = string.Join(' ', item.ItemId, item.Kind, item.Type, item.SectionName, item.Reason, metadata, string.Join(' ', item.SourceRefs));
-        if (IsMode(modeName, "AutomationMode", "Automation") &&
-            ContainsAny(searchText, DomainKeywords.AutomationModePackageOrderKeywords.ToArray()))
+        if (WorkingMemoryRecaller.IsMode(modeName, "AutomationMode", "Automation") &&
+            WorkingMemoryRecaller.ContainsAny(searchText, WorkingMemoryRecaller.DomainKeywords.AutomationModePackageOrderKeywords.ToArray()))
         {
             score += 9_000.0;
         }
 
-        if (IsMode(modeName, "NovelMode", "Novel") &&
-            ContainsAny(searchText, DomainKeywords.NovelModeReserveBoostKeywords.ToArray()))
+        if (WorkingMemoryRecaller.IsMode(modeName, "NovelMode", "Novel") &&
+            WorkingMemoryRecaller.ContainsAny(searchText, WorkingMemoryRecaller.DomainKeywords.NovelModeReserveBoostKeywords.ToArray()))
         {
             score += 9_000.0;
         }
 
-        if (IsMode(modeName, "ChatMode", "Chat") &&
-            ContainsAny(searchText, DomainKeywords.ChatModeReserveBoostKeywords.ToArray()))
+        if (WorkingMemoryRecaller.IsMode(modeName, "ChatMode", "Chat") &&
+            WorkingMemoryRecaller.ContainsAny(searchText, WorkingMemoryRecaller.DomainKeywords.ChatModeReserveBoostKeywords.ToArray()))
         {
             score += 9_000.0;
         }
 
-        if (ContainsAny(searchText, DomainKeywords.FixturePenaltyKeywords.ToArray()))
+        if (WorkingMemoryRecaller.ContainsAny(searchText, WorkingMemoryRecaller.DomainKeywords.FixturePenaltyKeywords.ToArray()))
         {
             score -= 500.0;
         }
@@ -3549,192 +2783,6 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
     private static int NormalizeTokenBudget(int tokenBudget)
     {
         return tokenBudget == int.MaxValue || tokenBudget <= 0 ? 0 : tokenBudget;
-    }
-
-    private static string FormatConstraints(IReadOnlyList<ContextConstraint> constraints, int tokenBudget = 0)
-    {
-        if (tokenBudget > 0 && tokenBudget <= 200)
-        {
-            return JoinBlocks(constraints.Select(item => item.Content));
-        }
-        return JoinBlocks(constraints.Select(item =>
-            $"- [{item.Level}] {item.Content}"));
-    }
-
-    private static string FormatCurrentTask(
-        WorkingMemoryCurrentTask currentTask,
-        ContextPackageRequest request)
-    {
-        if (request.TokenBudget > 0 && request.TokenBudget <= 200)
-        {
-            return currentTask.Title;
-        }
-
-        var builder = new StringBuilder();
-        builder.AppendLine("## 当前任务");
-        builder.AppendLine($"- 任务 ID：{currentTask.TaskId}");
-        builder.AppendLine($"- 标题：{currentTask.Title}");
-        builder.AppendLine($"- 状态：{currentTask.Status}");
-        if (currentTask.Tags.Count > 0)
-        {
-            builder.AppendLine($"- 标签：{string.Join(", ", currentTask.Tags)}");
-        }
-
-        if (!string.IsNullOrWhiteSpace(request.QueryText))
-        {
-            builder.AppendLine($"- 当前输入：{request.QueryText}");
-        }
-
-        if (!string.IsNullOrWhiteSpace(currentTask.Description))
-        {
-            builder.AppendLine();
-            builder.AppendLine(currentTask.Description);
-        }
-
-        var metadataLines = currentTask.Metadata
-            .Where(item => IsCurrentTaskMetadataKey(item.Key))
-            .Take(12)
-            .Select(item => $"- {item.Key}: {item.Value}")
-            .ToArray();
-        if (metadataLines.Length > 0)
-        {
-            builder.AppendLine();
-            builder.AppendLine("## 任务元数据");
-            foreach (var line in metadataLines)
-            {
-                builder.AppendLine(line);
-            }
-        }
-
-        return builder.ToString().TrimEnd();
-    }
-
-    private static bool IsCurrentTaskMetadataKey(string key)
-    {
-        return key.Contains("mode", StringComparison.OrdinalIgnoreCase)
-            || key.Contains("task", StringComparison.OrdinalIgnoreCase)
-            || key.Contains("intent", StringComparison.OrdinalIgnoreCase)
-            || key.Contains("project", StringComparison.OrdinalIgnoreCase)
-            || key.Contains("format", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static string FormatMergedConstraints(IReadOnlyList<MergedContextConstraint> constraints, int tokenBudget = 0)
-    {
-        if (tokenBudget > 0 && tokenBudget <= 200)
-        {
-            return JoinBlocks(constraints.Select(item => item.Constraint.Content));
-        }
-        return JoinBlocks(constraints.Select(item =>
-            $"- [{item.PriorityLabel} | {item.Constraint.Level}] {item.Constraint.Content}"));
-    }
-
-    private static string FormatMemoryItems(IReadOnlyList<ContextMemoryItem> items, int tokenBudget = 0)
-    {
-        if (tokenBudget > 0 && tokenBudget <= 200)
-        {
-            return JoinBlocks(items.Select(item => item.Content));
-        }
-        return JoinBlocks(items.Select(item =>
-            $"## {item.Type} / {item.Layer} / {item.Status}{Environment.NewLine}{item.Content}"));
-    }
-
-    private static string FormatGlobalItems(IReadOnlyList<ContextGlobalItem> items)
-    {
-        return JoinBlocks(items.Select(item =>
-            $"## {item.Type} / {item.Scope}{Environment.NewLine}{item.Content}"));
-    }
-
-    private static string FormatContextItems(IReadOnlyList<ContextItem> items)
-    {
-        return JoinBlocks(items.Select(item =>
-            $"## {(string.IsNullOrWhiteSpace(item.Title) ? item.Id : item.Title)} / {item.Type}{Environment.NewLine}{item.Content}"));
-    }
-
-    private static string FormatRecentContextItems(IReadOnlyList<RecentContextItem> items, int tokenBudget = 0)
-    {
-        if (tokenBudget > 0 && tokenBudget <= 200)
-        {
-            return JoinBlocks(items.Select(item => item.Content));
-        }
-        return JoinBlocks(items.Select(item =>
-            $"## {item.SourceItemId} / relevance {item.Relevance:0.00} / recency {item.RecencyWeight:0.00}{Environment.NewLine}{item.Content}"));
-    }
-
-    private static string FormatDroppedItems(IReadOnlyList<DroppedContextItem> items)
-    {
-        return JoinBlocks(items.Take(50).Select(item =>
-            $"- [{item.Kind}/{item.Type}] {item.ItemId}: {item.Reason}；score={item.Score:0.00}；tokens={item.EstimatedTokens}"));
-    }
-
-    private static string FormatUncertainties(IReadOnlyList<ContextPackageUncertainty> items)
-    {
-        return JoinBlocks(items.Select(item =>
-        {
-            var refs = item.ItemRefs.Count == 0
-                ? string.Empty
-                : $"；refs={string.Join(',', item.ItemRefs.Take(12))}";
-            return $"- [{item.Severity}] {item.Code}: {item.Message}{refs}";
-        }));
-    }
-
-    private static IReadOnlyList<ContextEvidenceEntry> BuildEvidenceEntries(
-        IReadOnlyList<ContextPackageSection> sections,
-        IReadOnlyList<ContextPackageDecision> selectedItems)
-    {
-        var sectionLookup = sections.ToDictionary(
-            section => section.Name,
-            section => section,
-            StringComparer.OrdinalIgnoreCase);
-        var entries = new List<ContextEvidenceEntry>();
-
-        foreach (var item in selectedItems.Take(80))
-        {
-            var sectionSourceRefs = sectionLookup.TryGetValue(item.SectionName, out var section)
-                ? section.SourceRefs
-                : Array.Empty<string>();
-            entries.Add(new ContextEvidenceEntry(
-                item.ItemId,
-                item.SectionName,
-                item.Kind,
-                item.Type,
-                item.SourceRefs.Concat(sectionSourceRefs)
-                    .Where(value => !string.IsNullOrWhiteSpace(value))
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .Take(12)
-                    .ToArray(),
-                item.Reason));
-        }
-
-        return entries;
-    }
-
-    private static string FormatEvidenceEntries(IReadOnlyList<ContextEvidenceEntry> entries)
-    {
-        return JoinBlocks(entries.Select(item =>
-        {
-            var refs = item.SourceRefs.Count == 0
-                ? "无显式来源"
-                : string.Join(", ", item.SourceRefs);
-            return $"- [{item.SectionName}] {item.ItemId} ({item.Kind}/{item.Type})；来源：{refs}；原因：{item.Reason}";
-        }));
-    }
-
-    private static string JoinBlocks(IEnumerable<string> blocks)
-    {
-        var builder = new StringBuilder();
-
-        foreach (var block in blocks.Where(block => !string.IsNullOrWhiteSpace(block)))
-        {
-            if (builder.Length > 0)
-            {
-                builder.AppendLine();
-                builder.AppendLine();
-            }
-
-            builder.Append(block);
-        }
-
-        return builder.ToString();
     }
 
     private static int CountMatchingTags(ContextItem item, HashSet<string> requiredTags)
@@ -4073,188 +3121,66 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
             and not ContextMemoryStatus.Rejected;
     }
 
-    private static bool IsActive(ContextMemoryItem item)
+    internal static bool IsActive(ContextMemoryItem item)
     {
         return item.Status is not ContextMemoryStatus.Deprecated
             and not ContextMemoryStatus.Rejected;
     }
 
-    internal static IReadOnlyList<string> ResolveSourceRefs(ContextItem item)
-    {
-        if (item.SourceRefs.Count > 0)
-        {
-            return item.SourceRefs.ToArray();
-        }
-
-        return string.IsNullOrWhiteSpace(item.Id)
-            ? Array.Empty<string>()
-            : new[] { item.Id };
-    }
-
-    private static IReadOnlyList<string> ResolveItemRefs(ContextItem item)
-    {
-        return string.IsNullOrWhiteSpace(item.Id)
-            ? Array.Empty<string>()
-            : new[] { item.Id };
-    }
-
-    private static IReadOnlyList<string> ResolveItemRefs(IEnumerable<ContextItem> items)
-    {
-        return items.Select(item => item.Id)
-            .Where(value => !string.IsNullOrWhiteSpace(value))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-    }
-
-    private static IReadOnlyList<string> ResolveItemRefs(IEnumerable<ContextMemoryItem> items)
-    {
-        return items.Select(item => item.Id)
-            .Where(value => !string.IsNullOrWhiteSpace(value))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-    }
-
-    private static IReadOnlyList<string> ResolveItemRefs(IEnumerable<ContextGlobalItem> items)
-    {
-        return items.Select(item => item.Id)
-            .Where(value => !string.IsNullOrWhiteSpace(value))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-    }
-
-    private static IReadOnlyList<string> ResolveItemRefs(IEnumerable<ContextConstraint> items)
-    {
-        return items.Select(item => item.Id)
-            .Where(value => !string.IsNullOrWhiteSpace(value))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-    }
-
-    private static IReadOnlyList<string> ResolveItemRefs(IEnumerable<RecentContextItem> items)
-    {
-        return items.Select(item => item.SourceItemId)
-            .Where(value => !string.IsNullOrWhiteSpace(value))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-    }
-
-    private static IReadOnlyList<string> ResolveSourceRefs(IEnumerable<ContextItem> items)
-    {
-        return items.SelectMany(ResolveSourceRefs)
-            .Where(value => !string.IsNullOrWhiteSpace(value))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-    }
-
-    private static IReadOnlyList<string> ResolveSourceRefs(IEnumerable<ContextMemoryItem> items)
-    {
-        return items.SelectMany(item => item.SourceRefs.Count > 0 ? item.SourceRefs : new[] { item.Id })
-            .Where(value => !string.IsNullOrWhiteSpace(value))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-    }
-
-    private static IReadOnlyList<string> ResolveSourceRefs(IEnumerable<ContextGlobalItem> items)
-    {
-        return items.SelectMany(item => item.SourceRefs.Count > 0 ? item.SourceRefs : new[] { item.Id })
-            .Where(value => !string.IsNullOrWhiteSpace(value))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-    }
-
-    private static IReadOnlyList<string> ResolveSourceRefs(IEnumerable<ContextConstraint> items)
-    {
-        return items.SelectMany(item => item.SourceRefs.Count > 0 ? item.SourceRefs : new[] { item.Id })
-            .Where(value => !string.IsNullOrWhiteSpace(value))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-    }
-
-    private static IReadOnlyList<string> ResolveSourceRefs(IEnumerable<RecentContextItem> items)
-    {
-        return items.SelectMany(item => item.SourceRefs.Count > 0 ? item.SourceRefs : new[] { item.SourceItemId })
-            .Where(value => !string.IsNullOrWhiteSpace(value))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-    }
-
-    private static void AddAnchorMetadata(
-        IDictionary<string, string> metadata,
-        IReadOnlyList<ContextAnchor> anchors)
-    {
-        if (anchors.Count == 0)
-        {
-            return;
-        }
-
-        metadata["anchor.count"] = anchors.Count.ToString();
-        metadata["anchor.names"] = string.Join(",", anchors.Select(anchor => anchor.Name));
-        metadata["anchor.types"] = string.Join(",", anchors.Select(anchor => anchor.Type.ToString()).Distinct(StringComparer.OrdinalIgnoreCase));
-
-        // 拆分 Raw / Semantic Anchors
-        var rawSearchTokens = anchors.Where(a => string.Equals(a.Source, "request.query", StringComparison.OrdinalIgnoreCase)).ToList();
-        var semanticAnchors = anchors.Where(a => !string.Equals(a.Source, "request.query", StringComparison.OrdinalIgnoreCase)).ToList();
-
-        metadata["anchor.rawSearchTokens"] = string.Join(",", rawSearchTokens.Select(a => a.Name));
-        metadata["anchor.semanticAnchors"] = string.Join(",", semanticAnchors.Select(a => a.Name));
-        metadata["anchor.rawSearchTokensCount"] = rawSearchTokens.Count.ToString();
-        metadata["anchor.semanticAnchorsCount"] = semanticAnchors.Count.ToString();
-    }
-
     private sealed record TokenEstimationContext(string? ModelName, string Source, bool IsFallback);
 
-    private sealed class MergedContextConstraint
+}
+
+internal sealed class MergedContextConstraint
+{
+    public MergedContextConstraint(
+        ContextConstraint constraint,
+        string priorityLabel,
+        int priorityRank,
+        int index)
     {
-        public MergedContextConstraint(
-            ContextConstraint constraint,
-            string priorityLabel,
-            int priorityRank,
-            int index)
-        {
-            Constraint = constraint;
-            PriorityLabel = priorityLabel;
-            PriorityRank = priorityRank;
-            Index = index;
-        }
-
-        public ContextConstraint Constraint { get; }
-
-        public string PriorityLabel { get; }
-
-        public int PriorityRank { get; }
-
-        public int Index { get; }
+        Constraint = constraint;
+        PriorityLabel = priorityLabel;
+        PriorityRank = priorityRank;
+        Index = index;
     }
 
-    private sealed class ContextEvidenceEntry
+    public ContextConstraint Constraint { get; }
+
+    public string PriorityLabel { get; }
+
+    public int PriorityRank { get; }
+
+    public int Index { get; }
+}
+
+internal sealed class ContextEvidenceEntry
+{
+    public ContextEvidenceEntry(
+        string itemId,
+        string sectionName,
+        string kind,
+        string type,
+        IReadOnlyList<string> sourceRefs,
+        string reason)
     {
-        public ContextEvidenceEntry(
-            string itemId,
-            string sectionName,
-            string kind,
-            string type,
-            IReadOnlyList<string> sourceRefs,
-            string reason)
-        {
-            ItemId = itemId;
-            SectionName = sectionName;
-            Kind = kind;
-            Type = type;
-            SourceRefs = sourceRefs;
-            Reason = reason;
-        }
-
-        public string ItemId { get; }
-
-        public string SectionName { get; }
-
-        public string Kind { get; }
-
-        public string Type { get; }
-
-        public IReadOnlyList<string> SourceRefs { get; }
-
-        public string Reason { get; }
+        ItemId = itemId;
+        SectionName = sectionName;
+        Kind = kind;
+        Type = type;
+        SourceRefs = sourceRefs;
+        Reason = reason;
     }
 
+    public string ItemId { get; }
+
+    public string SectionName { get; }
+
+    public string Kind { get; }
+
+    public string Type { get; }
+
+    public IReadOnlyList<string> SourceRefs { get; }
+
+    public string Reason { get; }
 }

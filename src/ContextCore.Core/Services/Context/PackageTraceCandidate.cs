@@ -50,7 +50,7 @@ public sealed class PackageTraceCandidate
             item.Type,
             score,
             estimatedTokens ?? BasicContextPackageBuilder.EstimateTokens(item.Content),
-            BasicContextPackageBuilder.ResolveSourceRefs(item),
+            ContextItemRefResolver.ResolveSourceRefs(item),
             item.Content,
             item.Metadata);
     }
