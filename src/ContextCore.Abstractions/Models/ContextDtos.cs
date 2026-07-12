@@ -197,6 +197,13 @@ public sealed class ContextPackageBuildResult
 
     public IReadOnlyList<ContextPackageDecision> SelectedItems { get; init; } = Array.Empty<ContextPackageDecision>();
 
+    /// <summary>
+    /// 被多个 section 引用的候选项关系（section-level attribution）。
+    /// 与 <see cref="SelectedItems"/> 不同，此列表不表示"被选入上下文包"，
+    /// 仅记录"被某 section 额外引用"的辅助关系，避免 SelectedItems 出现重复项。
+    /// </summary>
+    public IReadOnlyList<ContextPackageItemReference> ItemReferences { get; init; } = Array.Empty<ContextPackageItemReference>();
+
     public IReadOnlyList<DroppedContextItem> DroppedItems { get; init; } = Array.Empty<DroppedContextItem>();
 
     /// <summary>本次打包识别出的不确定性，用于解释风险、预算压力和证据缺口。</summary>
@@ -329,6 +336,26 @@ public sealed class ContextPackageDecision
 
     /// <summary>详细评分明细（13 个子分维度），可用于 PackageBuildTrace 可观测输出。Working Memory 项会填充此字段。</summary>
     public ItemScoreBreakdown? ScoreBreakdown { get; init; }
+}
+
+/// <summary>
+/// 记录一个候选项被多个 section 引用的关系（section-level attribution）。
+/// 与 <see cref="ContextPackageDecision"/> 不同，此类型不表示"被选入上下文包"，
+/// 仅记录"被某 section 额外引用"的辅助关系，避免 SelectedItems 出现重复项。
+/// </summary>
+public sealed class ContextPackageItemReference
+{
+    /// <summary>被引用的候选项 ID。</summary>
+    public string ItemId { get; init; } = string.Empty;
+
+    /// <summary>候选项首次被选入的 section 名称（primary decision 所在 section）。</summary>
+    public string PrimarySectionName { get; init; } = string.Empty;
+
+    /// <summary>额外引用该候选项的 section 名称。</summary>
+    public string ReferencingSectionName { get; init; } = string.Empty;
+
+    /// <summary>引用原因。</summary>
+    public string Reason { get; init; } = string.Empty;
 }
 
 /// <summary>记录一个候选项未被选入上下文包的原因。</summary>

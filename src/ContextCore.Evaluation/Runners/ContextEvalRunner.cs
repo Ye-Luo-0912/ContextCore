@@ -878,8 +878,11 @@ public sealed class ContextEvalRunner
         traceSb.AppendLine("Selected Items:");
         foreach (var item in packageResult.SelectedItems)
         {
-            var duplicateSuffix = item.Metadata.TryGetValue("alsoReferencedBy", out var alsoRef)
-                ? $" (also: {alsoRef})"
+            var alsoSections = packageResult.ItemReferences
+                .Where(r => string.Equals(r.ItemId, item.ItemId, StringComparison.OrdinalIgnoreCase))
+                .Select(r => r.ReferencingSectionName);
+            var duplicateSuffix = alsoSections.Any()
+                ? $" (also: {string.Join(",", alsoSections)})"
                 : string.Empty;
             var isMustHit = ContainsEvalId(sample.MustHit, item.ItemId) ? " [MustHit]✓" : string.Empty;
             traceSb.AppendLine($"  - [{item.SectionName}] {item.ItemId} ({item.Kind}/{item.Type}) | Score: {item.Score:F2} | Tokens: {item.EstimatedTokens} | SourceRefs: {string.Join(", ", item.SourceRefs)}{isMustHit}{duplicateSuffix}");

@@ -31,10 +31,30 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
     private readonly RecentContextFilter _recentContextFilter = new();
     private readonly ContextAnchorExtractor _anchorExtractor = new();
     private readonly RetrievalPlanner _planner = new();
+    private int _decisionTraceWriteFailures;
+    private DateTimeOffset _decisionTraceLastFailureAt;
+    private string? _decisionTraceLastFailureCategory;
     private static readonly ModeBudgetProfileRegistry ModeBudgetProfiles = ModeBudgetProfileRegistry.CreateDefault();
     private static readonly DomainKeywordProfile DomainKeywords = DomainKeywordProfile.CreateProduction();
     private static readonly WorkingMemoryScoringProfile ScoringProfile = WorkingMemoryScoringProfile.CreateDefault();
     private static readonly PackagePriorityProfile PriorityProfile = PackagePriorityProfile.CreateDefault();
+
+    /// <summary>decision trace 写入失败次数（fail-open，不影响正式 package 输出）。</summary>
+    public int DecisionTraceWriteFailures => _decisionTraceWriteFailures;
+
+    /// <summary>decision trace 最近一次写入失败时间；无失败则为 null。</summary>
+    public DateTimeOffset? DecisionTraceLastFailureAt =>
+        _decisionTraceWriteFailures > 0 ? _decisionTraceLastFailureAt : null;
+
+    /// <summary>decision trace 最近一次写入失败的异常类别（Type.Name）；无失败则为 null。</summary>
+    public string? DecisionTraceLastFailureCategory => _decisionTraceLastFailureCategory;
+
+    /// <summary>decision trace sink 类型名（用于诊断报告）；未配置则为 null。</summary>
+    public string? DecisionTraceSinkType => _decisionTraceStore?.GetType().FullName;
+
+    /// <summary>observability 是否处于降级状态（任一 trace 路径存在写入失败）。</summary>
+    public bool IsObservabilityDegraded =>
+        _decisionTraceWriteFailures > 0 || _traceRecorder.TraceWriteFailures > 0;
 
     public BasicContextPackageBuilder(IContextStore store)
         : this(store, null, null, null, null, null, null)
@@ -140,9 +160,12 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
             {
                 throw;
             }
-            catch
+            catch (Exception ex)
             {
-                // decision trace 写入失败不得影响正式 package 输出。
+                // decision trace 写入失败不得影响正式 package 输出，但需记录降级指标。
+                Interlocked.Increment(ref _decisionTraceWriteFailures);
+                _decisionTraceLastFailureAt = DateTimeOffset.UtcNow;
+                _decisionTraceLastFailureCategory = ex.GetType().Name;
             }
         }
 
@@ -234,6 +257,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                 contentFormat: item.ContentFormat,
                 sectionSourceRefs: ResolveSourceRefs(item),
                 sectionItemRefs: ResolveItemRefs(item),
+                candidateIds: ResolveItemRefs(item),
                 tokenBudget,
                 sectionTokenBudget: 0,
                 tokenContext,
@@ -290,11 +314,12 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         var anchors = _anchorExtractor.Extract(request, Array.Empty<RecentContextItem>());
         var includedRecent = Array.Empty<RecentContextItem>();
         var excludedRecent = Array.Empty<RecentContextItem>();
-        SectionBuildResult sectionResult;
+        SectionPackingResult sectionResult;
 
         // 全局去重拦截与引用记录
         var globalSelectedIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var primaryDecisions = new Dictionary<string, ContextPackageDecision>(StringComparer.OrdinalIgnoreCase);
+        var itemReferences = new List<ContextPackageItemReference>();
 
         // 显式审计模式判定
         var isAuditMode = !string.IsNullOrWhiteSpace(request.QueryText)
@@ -321,6 +346,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                     ContextContentFormat.Markdown,
                     currentTaskCandidate.SourceRefs,
                     [currentTask.TaskId],
+                    [currentTask.TaskId],
                     tokenBudget,
                     ResolveSectionTokenBudget(policy, modeBudgetProfile, "current_task", tokenBudget),
                     tokenContext,
@@ -334,7 +360,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                     sectionResult,
                     globalSelectedIds,
                     primaryDecisions,
-                    sections.LastOrDefault()?.Content ?? "");
+                    itemReferences);
             }
         }
 
@@ -421,6 +447,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                     ContextContentFormat.Markdown,
                     ResolveSourceRefs(activeHardConstraints),
                     ResolveItemRefs(activeHardConstraints),
+                    ResolveItemRefs(activeHardConstraints),
                     tokenBudget,
                     ResolveSectionTokenBudget(policy, modeBudgetProfile, "hard_constraints", tokenBudget),
                     tokenContext,
@@ -434,7 +461,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                     sectionResult,
                     globalSelectedIds,
                     primaryDecisions,
-                    sections.LastOrDefault()?.Content ?? "");
+                    itemReferences);
             }
         }
 
@@ -507,6 +534,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                     ContextContentFormat.Markdown,
                     ResolveSourceRefs(activeWorking),
                     ResolveItemRefs(activeWorking),
+                    ResolveItemRefs(activeWorking),
                     tokenBudget,
                     ResolveSectionTokenBudget(policy, modeBudgetProfile, "working_memory", tokenBudget),
                     tokenContext,
@@ -520,7 +548,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                     sectionResult,
                     globalSelectedIds,
                     primaryDecisions,
-                    sections.LastOrDefault()?.Content ?? "");
+                    itemReferences);
             }
 
             // 2. 审计废案/历史记忆分流处理 (仅在 isAuditMode 时会被召回)
@@ -548,6 +576,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                         ContextContentFormat.Markdown,
                         ResolveSourceRefs(deprecatedWorking),
                         ResolveItemRefs(deprecatedWorking),
+                        ResolveItemRefs(deprecatedWorking),
                         tokenBudget,
                         ResolveHistoricalSectionTokenBudget(policy, modeBudgetProfile, "historical_context", tokenBudget),
                         tokenContext,
@@ -561,7 +590,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                         sectionResult,
                         globalSelectedIds,
                         primaryDecisions,
-                        sections.LastOrDefault()?.Content ?? "");
+                        itemReferences);
                 }
                 else
                 {
@@ -601,6 +630,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                 ContextContentFormat.Markdown,
                 ResolveSourceRefs(globalItems),
                 ResolveItemRefs(globalItems),
+                ResolveItemRefs(globalItems),
                 tokenBudget,
                 ResolveSectionTokenBudget(policy, modeBudgetProfile, "global_context", tokenBudget),
                 tokenContext,
@@ -614,7 +644,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                 sectionResult,
                 globalSelectedIds,
                 primaryDecisions,
-                sections.LastOrDefault()?.Content ?? "");
+            itemReferences);
         }
 
         if (policy.IncludeRecentRawContext)
@@ -647,6 +677,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                 ContextContentFormat.Markdown,
                 ResolveSourceRefs(includedRecent),
                 ResolveItemRefs(includedRecent),
+                ResolveItemRefs(includedRecent),
                 tokenBudget,
                 ResolveSectionTokenBudget(policy, modeBudgetProfile, "recent_context", tokenBudget),
                 tokenContext,
@@ -660,7 +691,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                 sectionResult,
                 globalSelectedIds,
                 primaryDecisions,
-                sections.LastOrDefault()?.Content ?? "");
+            itemReferences);
         }
 
         IReadOnlyList<ContextMemoryItem> stableMemory = Array.Empty<ContextMemoryItem>();
@@ -713,6 +744,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                 ContextContentFormat.Markdown,
                 ResolveSourceRefs(stableMemory),
                 ResolveItemRefs(stableMemory),
+                ResolveItemRefs(stableMemory),
                 tokenBudget,
                 ResolveSectionTokenBudget(policy, modeBudgetProfile, "stable_memory", tokenBudget),
                 tokenContext,
@@ -726,7 +758,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                 sectionResult,
                 globalSelectedIds,
                 primaryDecisions,
-                sections.LastOrDefault()?.Content ?? "");
+            itemReferences);
         }
 
         if (policy.IncludeSoftConstraints && _constraintStore is not null)
@@ -770,6 +802,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                 ContextContentFormat.Markdown,
                 ResolveSourceRefs(activeSoftConstraints),
                 ResolveItemRefs(activeSoftConstraints),
+                ResolveItemRefs(activeSoftConstraints),
                 tokenBudget,
                 ResolveSectionTokenBudget(policy, modeBudgetProfile, "soft_constraints", tokenBudget),
                 tokenContext,
@@ -783,7 +816,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                 sectionResult,
                 globalSelectedIds,
                 primaryDecisions,
-                sections.LastOrDefault()?.Content ?? "");
+            itemReferences);
         }
 
         if (ShouldIncludeMergedConstraintsSection(request, policy))
@@ -818,6 +851,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                 ContextContentFormat.Markdown,
                 ResolveSourceRefs(activeMergedConstraints),
                 ResolveItemRefs(activeMergedConstraints),
+                ResolveItemRefs(activeMergedConstraints),
                 tokenBudget,
                 ResolveSectionTokenBudget(policy, modeBudgetProfile, "constraints", tokenBudget),
                 tokenContext,
@@ -831,7 +865,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                 sectionResult,
                 globalSelectedIds,
                 primaryDecisions,
-                sections.LastOrDefault()?.Content ?? "");
+            itemReferences);
         }
 
         if (_relationStore is not null && selectedSourceIds.Count > 0)
@@ -876,6 +910,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                     ContextContentFormat.Markdown,
                     ResolveSourceRefs(relatedItems),
                     ResolveItemRefs(relatedItems),
+                    ResolveItemRefs(relatedItems),
                     tokenBudget,
                     ResolveSectionTokenBudget(policy, modeBudgetProfile, "related_context", tokenBudget),
                     tokenContext,
@@ -889,7 +924,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                     sectionResult,
                     globalSelectedIds,
                     primaryDecisions,
-                    sections.LastOrDefault()?.Content ?? "");
+                    itemReferences);
             }
         }
 
@@ -905,6 +940,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                 ContextContentFormat.Markdown,
                 evidenceItems.SelectMany(item => item.SourceRefs).ToArray(),
                 evidenceItems.Select(item => item.ItemId).ToArray(),
+                Array.Empty<string>(),
                 tokenBudget,
                 ResolveSectionTokenBudget(policy, modeBudgetProfile, "evidence", tokenBudget),
                 tokenContext,
@@ -929,6 +965,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                 ContextContentFormat.Markdown,
                 Array.Empty<string>(),
                 droppedItems.Select(item => item.ItemId).ToArray(),
+                Array.Empty<string>(),
                 tokenBudget,
                 ResolveDiagnosticsSectionTokenBudget(policy, modeBudgetProfile, "excluded", tokenBudget),
                 tokenContext,
@@ -946,6 +983,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                 ContextContentFormat.Markdown,
                 Array.Empty<string>(),
                 uncertainties.SelectMany(item => item.ItemRefs).ToArray(),
+                Array.Empty<string>(),
                 tokenBudget,
                 ResolveDiagnosticsSectionTokenBudget(policy, modeBudgetProfile, "uncertainties", tokenBudget),
                 tokenContext,
@@ -996,7 +1034,8 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
             droppedItems,
             uncertainties,
             retrievalPlan,
-            traceRecorder: _traceRecorder);
+            traceRecorder: _traceRecorder,
+            itemReferences: itemReferences);
     }
 
     private async Task<GraphExpansionSectionContribution> BuildGraphExpansionContributionAsync(
@@ -2479,7 +2518,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         }
     }
 
-    private SectionBuildResult AddSection(
+    private SectionPackingResult AddSection(
         ICollection<ContextPackageSection> sections,
         ISet<string> packageSourceRefs,
         string name,
@@ -2488,6 +2527,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         ContextContentFormat contentFormat,
         IReadOnlyList<string> sectionSourceRefs,
         IReadOnlyList<string> sectionItemRefs,
+        IReadOnlyList<string> candidateIds,
         int tokenBudget,
         int sectionTokenBudget,
         TokenEstimationContext tokenContext,
@@ -2495,13 +2535,13 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
     {
         if (string.IsNullOrWhiteSpace(content))
         {
-            return SectionBuildResult.Dropped("content is empty");
+            return SectionPackingResult.Dropped("content is empty");
         }
 
         var remainingBudget = tokenBudget - estimatedTokens;
         if (remainingBudget <= 0)
         {
-            return SectionBuildResult.Dropped("token budget exhausted");
+            return SectionPackingResult.Dropped("token budget exhausted");
         }
 
         if (sectionTokenBudget > 0)
@@ -2517,13 +2557,13 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
             sectionContent = TrimToTokenBudget(sectionContent, remainingBudget, tokenContext);
             if (string.IsNullOrWhiteSpace(sectionContent))
             {
-                return SectionBuildResult.Dropped("token budget exhausted");
+                return SectionPackingResult.Dropped("token budget exhausted");
             }
 
             sectionTokens = EstimatePackageTokens(sectionContent, tokenContext);
             if (sectionTokens > remainingBudget)
             {
-                return SectionBuildResult.Dropped("token budget exhausted");
+                return SectionPackingResult.Dropped("token budget exhausted");
             }
 
             truncated = true;
@@ -2549,9 +2589,27 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         });
 
         estimatedTokens += sectionTokens;
-        return SectionBuildResult.Selected(
+
+        // 精确候选接受/拒绝判定：
+        // - Section 被加入 package 时，所有候选均标记为 accepted。
+        //   Truncated 标志指示内容是否因 token 预算被裁剪。
+        //   裁剪时的精确归属由 AddSectionDecisionsWithDedup 根据 Truncated 标志处理
+        //   （仅保留首个新候选，避免低价值候选取代 MustHit 项）。
+        // - Section 未被加入时，所有候选均标记为 rejected。
+        // 这取代了旧的字符串前缀猜测（7.2），并提供精确的候选 ID 列表（6.2）。
+        var validCandidateIds = candidateIds
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        IReadOnlyList<string> acceptedIds = validCandidateIds;
+        IReadOnlyList<string> rejectedIds = Array.Empty<string>();
+
+        return SectionPackingResult.Selected(
             truncated ? "selected and truncated to fit token budget" : "selected for package section",
-            sectionTokens);
+            sectionTokens,
+            truncated,
+            acceptedIds,
+            rejectedIds);
     }
 
     private string TrimToTokenBudget(
@@ -2748,7 +2806,8 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         IReadOnlyList<DroppedContextItem> droppedItems,
         IReadOnlyList<ContextPackageUncertainty>? uncertainties = null,
         RetrievalPlan? plan = null,
-        PackageTraceRecorder? traceRecorder = null)
+        PackageTraceRecorder? traceRecorder = null,
+        IReadOnlyList<ContextPackageItemReference>? itemReferences = null)
     {
         var metadata = new Dictionary<string, string>(package.Metadata);
         if (!string.IsNullOrWhiteSpace(request.Policy?.Id))
@@ -2786,6 +2845,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
             BuildId = package.PackageId,
             Package = package,
             SelectedItems = sortedSelected,
+            ItemReferences = itemReferences ?? Array.Empty<ContextPackageItemReference>(),
             DroppedItems = droppedItems,
             Uncertainties = resolvedUncertainties,
             Budget = budget,
@@ -4142,32 +4202,6 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
     }
 
     private sealed record TokenEstimationContext(string? ModelName, string Source, bool IsFallback);
-
-    internal sealed class SectionBuildResult
-    {
-        private SectionBuildResult(bool added, string reason, int actualTokens)
-        {
-            Added = added;
-            Reason = reason;
-            ActualTokens = actualTokens;
-        }
-
-        public bool Added { get; }
-
-        public string Reason { get; }
-
-        public int ActualTokens { get; }
-
-        public static SectionBuildResult Selected(string reason, int actualTokens)
-        {
-            return new SectionBuildResult(true, reason, actualTokens);
-        }
-
-        public static SectionBuildResult Dropped(string reason)
-        {
-            return new SectionBuildResult(false, reason, 0);
-        }
-    }
 
     private sealed class MergedContextConstraint
     {

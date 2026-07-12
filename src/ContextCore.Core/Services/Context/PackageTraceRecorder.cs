@@ -10,10 +10,22 @@ internal sealed class PackageTraceRecorder
     private readonly Func<string?> _getRequestId;
     private int _traceMapFailures;
     private int _traceSinkWriteFailures;
+    private DateTimeOffset _lastFailureAt;
+    private string? _lastFailureCategory;
 
     public int TraceMapFailures => _traceMapFailures;
     public int TraceSinkWriteFailures => _traceSinkWriteFailures;
     public int TraceWriteFailures => _traceMapFailures + _traceSinkWriteFailures;
+
+    /// <summary>最近一次 trace 写入失败时间；无失败则为 null。</summary>
+    public DateTimeOffset? LastFailureAt =>
+        (_traceMapFailures + _traceSinkWriteFailures) > 0 ? _lastFailureAt : null;
+
+    /// <summary>最近一次 trace 写入失败的异常类别（Type.Name）；无失败则为 null。</summary>
+    public string? LastFailureCategory => _lastFailureCategory;
+
+    /// <summary>trace sink 类型名（用于诊断报告）。</summary>
+    public string? SinkType => _traceSink?.GetType().FullName;
 
     public PackageTraceRecorder(
         IRuntimeCandidateTraceSink traceSink,
@@ -30,10 +42,10 @@ internal sealed class PackageTraceRecorder
         ICollection<DroppedContextItem> droppedItems,
         IReadOnlyList<PackageTraceCandidate> candidates,
         string sectionName,
-        BasicContextPackageBuilder.SectionBuildResult sectionResult,
+        SectionPackingResult sectionResult,
         HashSet<string> globalSelectedIds,
         Dictionary<string, ContextPackageDecision> primaryDecisions,
-        string sectionContent = "")
+        ICollection<ContextPackageItemReference> itemReferences)
     {
         if (candidates.Count == 0)
         {
@@ -42,48 +54,49 @@ internal sealed class PackageTraceRecorder
 
         if (sectionResult.Added)
         {
+            // 使用 SectionPackingResult.AcceptedCandidateIds 精确判断候选是否被保留，
+            // 替代基于字符串前缀的猜测（7.2）。
+            var acceptedIds = new HashSet<string>(
+                sectionResult.AcceptedCandidateIds,
+                StringComparer.OrdinalIgnoreCase);
+
+            // 裁剪时仅保留首个新候选（避免低价值候选取代 MustHit 项），
+            // 其余新候选标记为因裁剪被丢弃。比字符串前缀猜测更可靠且确定性。
             var isFirstNewCandidate = true;
+
             for (int i = 0; i < candidates.Count; i++)
             {
                 var candidate = candidates[i];
                 if (globalSelectedIds.Contains(candidate.Id))
                 {
+                    // 候选已被其他 section 选入：记录 section-level attribution 到独立集合，
+                    // 不再添加第二条 selected decision，也不再污染 primary decision.Metadata（7.1）。
                     if (primaryDecisions.TryGetValue(candidate.Id, out var primaryDecision))
                     {
-                        var refsList = new List<string>();
-                        if (primaryDecision.Metadata.TryGetValue("alsoReferencedBy", out var existingRefs))
+                        itemReferences.Add(new ContextPackageItemReference
                         {
-                            refsList.AddRange(existingRefs.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
-                        }
-                        if (!refsList.Contains(sectionName, StringComparer.OrdinalIgnoreCase))
-                        {
-                            refsList.Add(sectionName);
-                            primaryDecision.Metadata["alsoReferencedBy"] = string.Join(",", refsList);
-                        }
+                            ItemId = candidate.Id,
+                            PrimarySectionName = primaryDecision.SectionName,
+                            ReferencingSectionName = sectionName,
+                            Reason = "referenced by duplicate section"
+                        });
                     }
 
                     WriteTraceRow(candidate, sectionName, false, "referenced by duplicate section", selectedByScoring: true);
                     continue;
                 }
 
-                var isKept = isFirstNewCandidate;
-                if (!isKept && !string.IsNullOrEmpty(sectionContent) && !string.IsNullOrEmpty(candidate.Content))
+                if (acceptedIds.Contains(candidate.Id))
                 {
-                    if (candidate.Content.Length >= 10)
+                    if (sectionResult.Truncated && !isFirstNewCandidate)
                     {
-                        var testLength = Math.Min(candidate.Content.Length, 50);
-                        var testStr = candidate.Content[..testLength];
-                        isKept = sectionContent.Contains(testStr, StringComparison.OrdinalIgnoreCase);
-                        if (!isKept && !string.IsNullOrEmpty(candidate.Id))
-                        {
-                            isKept = sectionContent.Contains(candidate.Id, StringComparison.OrdinalIgnoreCase);
-                        }
+                        var dropReason = "candidate not retained after token budget truncation";
+                        droppedItems.Add(CreateDropped(candidate, dropReason));
+                        WriteTraceRow(candidate, sectionName, false, dropReason, selectedByScoring: true);
+                        continue;
                     }
-                }
-                isFirstNewCandidate = false;
 
-                if (isKept)
-                {
+                    isFirstNewCandidate = false;
                     var decision = CreateDecision(
                         candidate,
                         sectionName,
@@ -142,10 +155,12 @@ internal sealed class PackageTraceRecorder
                 Section = section
             };
         }
-        catch (Exception)
+        catch (Exception ex)
         {
             /* field mapping failure must not affect main flow */
             Interlocked.Increment(ref _traceMapFailures);
+            _lastFailureAt = DateTimeOffset.UtcNow;
+            _lastFailureCategory = ex.GetType().Name;
             return;
         }
 
@@ -153,10 +168,12 @@ internal sealed class PackageTraceRecorder
         {
             _traceSink.Write(row);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
             /* sink write failure must not affect main flow */
             Interlocked.Increment(ref _traceSinkWriteFailures);
+            _lastFailureAt = DateTimeOffset.UtcNow;
+            _lastFailureCategory = ex.GetType().Name;
         }
     }
 
@@ -214,62 +231,6 @@ internal sealed class PackageTraceRecorder
             _ => (byte)2
         };
         return (sourceType, authority, strategyType, retrievalChannel);
-    }
-
-    internal static void AddSectionDecisions(
-        ICollection<ContextPackageDecision> selectedItems,
-        ICollection<DroppedContextItem> droppedItems,
-        IReadOnlyList<PackageTraceCandidate> candidates,
-        string sectionName,
-        BasicContextPackageBuilder.SectionBuildResult sectionResult,
-        string sectionContent = "")
-    {
-        if (candidates.Count == 0)
-        {
-            return;
-        }
-
-        if (sectionResult.Added)
-        {
-            for (int i = 0; i < candidates.Count; i++)
-            {
-                var candidate = candidates[i];
-                var isKept = (i == 0);
-                if (!isKept && !string.IsNullOrEmpty(sectionContent) && !string.IsNullOrEmpty(candidate.Content))
-                {
-                    if (candidate.Content.Length >= 10)
-                    {
-                        var testLength = Math.Min(candidate.Content.Length, 50);
-                        var testStr = candidate.Content[..testLength];
-                        isKept = sectionContent.Contains(testStr, StringComparison.OrdinalIgnoreCase);
-                        if (!isKept && !string.IsNullOrEmpty(candidate.Id))
-                        {
-                            isKept = sectionContent.Contains(candidate.Id, StringComparison.OrdinalIgnoreCase);
-                        }
-                    }
-                }
-
-                if (isKept)
-                {
-                    selectedItems.Add(CreateDecision(
-                        candidate,
-                        sectionName,
-                        sectionResult.Reason,
-                        candidate.EstimatedTokens));
-                }
-                else
-                {
-                    droppedItems.Add(CreateDropped(candidate, "content not retained in section output"));
-                }
-            }
-        }
-        else
-        {
-            foreach (var candidate in candidates)
-            {
-                droppedItems.Add(CreateDropped(candidate, sectionResult.Reason));
-            }
-        }
     }
 
     internal static ContextPackageDecision CreateDecision(
