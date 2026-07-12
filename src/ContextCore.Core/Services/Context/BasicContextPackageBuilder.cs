@@ -276,7 +276,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                 }
         }
 
-        var package = CreatePackage(request, request.CollectionId, sections, sourceRefs, estimatedTokens, tokenContext);
+        var package = PackageMetadataBuilder.CreatePackage(request, request.CollectionId, sections, sourceRefs, estimatedTokens, tokenContext);
         return CreateBuildResult(
             request,
             package,
@@ -998,15 +998,15 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
             tokenContext,
             ref estimatedTokens);
 
-        var metadata = CreatePackageMetadata(request, tokenContext);
+        var metadata = PackageMetadataBuilder.CreatePackageMetadata(request, tokenContext);
         if (!string.IsNullOrWhiteSpace(policy.Id))
         {
             metadata["policyId"] = policy.Id;
         }
         ContextItemRefResolver.AddAnchorMetadata(metadata, anchors);
-        AddModeBudgetMetadata(metadata, modeBudgetProfile);
-        AddDiagnosticMetadata(metadata, tokenBudget, estimatedTokens, droppedItems.Count, uncertainties.Count);
-        AddGraphExpansionMetadata(metadata, graphExpansionContribution);
+        PackageMetadataBuilder.AddModeBudgetMetadata(metadata, modeBudgetProfile);
+        PackageMetadataBuilder.AddDiagnosticMetadata(metadata, tokenBudget, estimatedTokens, droppedItems.Count, uncertainties.Count);
+        PackageMetadataBuilder.AddGraphExpansionMetadata(metadata, graphExpansionContribution);
 
         var orderedSections = PackageSectionBudgetResolver.OrderSections(sections, policy);
 
@@ -1076,7 +1076,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
 
         foreach (var group in contribution.AddedItems
             .GroupBy(item => item.TargetSection, StringComparer.OrdinalIgnoreCase)
-            .OrderBy(group => ResolveGraphExpansionSectionPriority(group.Key))
+            .OrderBy(group => PackageMetadataBuilder.ResolveGraphExpansionSectionPriority(group.Key))
             .ThenBy(group => group.Key, StringComparer.OrdinalIgnoreCase))
         {
             var sectionSourceRefs = group
@@ -1094,7 +1094,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
             sections.Add(new ContextPackageSection
             {
                 Name = group.Key,
-                Priority = ResolveGraphExpansionSectionPriority(group.Key),
+                Priority = PackageMetadataBuilder.ResolveGraphExpansionSectionPriority(group.Key),
                 Content = content,
                 ContentFormat = ContextContentFormat.Markdown,
                 SourceRefs = sectionSourceRefs,
@@ -1626,145 +1626,6 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
 
         return char.IsHighSurrogate(content[length - 1]) ? length - 1 : length;
     }
-    private static ContextPackage CreatePackage(
-        ContextPackageRequest request,
-        string collectionId,
-        IReadOnlyList<ContextPackageSection> sections,
-        IEnumerable<string> sourceRefs,
-        int estimatedTokens,
-        TokenEstimationContext tokenContext)
-    {
-        var workspaceId = PackagePolicyResolver.NormalizeRequiredValue(request.WorkspaceId);
-        return new ContextPackage
-        {
-            PackageId = Guid.NewGuid().ToString("N"),
-            WorkspaceId = workspaceId,
-            CollectionId = collectionId,
-            Sections = sections,
-            EstimatedTokens = estimatedTokens,
-            SourceRefs = sourceRefs.ToArray(),
-            Metadata = CreatePackageMetadata(request, tokenContext),
-            CreatedAt = DateTimeOffset.UtcNow
-        };
-    }
-
-    private static Dictionary<string, string> CreatePackageMetadata(
-        ContextPackageRequest request,
-        TokenEstimationContext tokenContext)
-    {
-        var metadata = new Dictionary<string, string>(request.Metadata)
-        {
-            [ContextTokenizationMetadataKeys.Source] = tokenContext.Source,
-            [ContextTokenizationMetadataKeys.Model] = tokenContext.ModelName ?? string.Empty,
-            [ContextTokenizationMetadataKeys.IsFallback] = tokenContext.IsFallback ? "true" : "false"
-        };
-
-        return metadata;
-    }
-
-    private static void AddDiagnosticMetadata(
-        IDictionary<string, string> metadata,
-        int tokenBudget,
-        int estimatedTokens,
-        int droppedItemCount,
-        int uncertaintyCount)
-    {
-        var normalizedBudget = LegacyPackageScorer.NormalizeTokenBudget(tokenBudget);
-        metadata["diagnostics.droppedItems"] = droppedItemCount.ToString();
-        metadata["diagnostics.uncertainties"] = uncertaintyCount.ToString();
-        metadata["budget.tokenBudget"] = normalizedBudget.ToString();
-        metadata["budget.usedTokens"] = estimatedTokens.ToString();
-        metadata["budget.remainingTokens"] = normalizedBudget > 0
-            ? Math.Max(0, normalizedBudget - estimatedTokens).ToString()
-            : "0";
-        metadata["budget.usageRatio"] = normalizedBudget > 0
-            ? Math.Clamp((double)estimatedTokens / normalizedBudget, 0, 1).ToString("0.###")
-            : "0";
-    }
-
-    private static void AddTraceHealthMetadata(
-        IDictionary<string, string> metadata,
-        PackageTraceRecorder traceRecorder)
-    {
-        metadata["traceWriteFailures"] = traceRecorder.TraceWriteFailures.ToString();
-        metadata["traceMapFailures"] = traceRecorder.TraceMapFailures.ToString();
-        metadata["traceSinkWriteFailures"] = traceRecorder.TraceSinkWriteFailures.ToString();
-    }
-
-    private static void AddGraphExpansionMetadata(
-        IDictionary<string, string> metadata,
-        GraphExpansionSectionContribution contribution)
-    {
-        metadata["graphExpansionMode"] = contribution.Mode;
-        metadata["graphExpansionApplied"] = contribution.Applied ? "true" : "false";
-        metadata["graphExpansionProfiles"] = string.Join(",", contribution.Profiles);
-        metadata["graphExpansionAddedItems"] = string.Join(",", contribution.AddedItems
-            .Select(item => item.ItemId)
-            .Distinct(StringComparer.OrdinalIgnoreCase));
-        metadata["graphExpansionTargetSections"] = string.Join(",", contribution.TargetSections
-            .Where(value => !string.IsNullOrWhiteSpace(value))
-            .Distinct(StringComparer.OrdinalIgnoreCase));
-        metadata["graphExpansionFallbackUsed"] = contribution.FallbackUsed ? "true" : "false";
-        metadata["graphExpansionFallbackReason"] = contribution.FallbackReason;
-        metadata["graphExpansionRiskChecks"] =
-            $"riskAfterRouting={contribution.RiskChecks.RiskAfterRoutingCount};" +
-            $"wrongSection={contribution.RiskChecks.WrongSectionRiskCount};" +
-            $"mustNotHit={contribution.RiskChecks.MustNotHitRiskCount};" +
-            $"lifecycle={contribution.RiskChecks.LifecycleRiskCount};" +
-            $"missingEvidence={contribution.RiskChecks.MissingEvidenceCount}";
-        metadata["graphExpansionSource"] = contribution.Applied
-            ? GraphExpansionApplyPolicy.SourceMarker
-            : string.Empty;
-        metadata["graphExpansionAddedItemCount"] = contribution.AddedItems.Count.ToString();
-        metadata["graphExpansionAddedAuditContextItems"] = contribution.AddedItems
-            .Count(item => string.Equals(item.TargetSection, GraphExpansionTargetSection.AuditContext, StringComparison.OrdinalIgnoreCase))
-            .ToString();
-        metadata["graphExpansionAddedConflictEvidenceItems"] = contribution.AddedItems
-            .Count(item => string.Equals(item.TargetSection, GraphExpansionTargetSection.ConflictEvidence, StringComparison.OrdinalIgnoreCase))
-            .ToString();
-        metadata["graphExpansionExpectedGraphSectionDelta"] = contribution.Applied
-            && !contribution.RiskChecks.HasRisk
-            && contribution.AddedItems.All(item => IsExpectedGraphExpansionSection(item.TargetSection))
-            ? contribution.AddedItems.Count.ToString()
-            : "0";
-        metadata["graphExpansionUnexpectedWarningDelta"] = contribution.FallbackUsed || contribution.RiskChecks.HasRisk
-            ? "1"
-            : "0";
-        metadata["graphExpansionWarnings"] = string.Join("|", contribution.Warnings);
-    }
-
-    private static bool IsExpectedGraphExpansionSection(string section)
-    {
-        return string.Equals(section, GraphExpansionTargetSection.AuditContext, StringComparison.OrdinalIgnoreCase)
-            || string.Equals(section, GraphExpansionTargetSection.ConflictEvidence, StringComparison.OrdinalIgnoreCase)
-            || string.Equals(section, GraphExpansionTargetSection.HistoricalContext, StringComparison.OrdinalIgnoreCase)
-            || string.Equals(section, GraphExpansionTargetSection.DiagnosticsOnly, StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static int ResolveGraphExpansionSectionPriority(string sectionName)
-    {
-        return sectionName switch
-        {
-            GraphExpansionTargetSection.AuditContext => 18,
-            GraphExpansionTargetSection.ConflictEvidence => 18,
-            GraphExpansionTargetSection.HistoricalContext => 16,
-            GraphExpansionTargetSection.DiagnosticsOnly => 8,
-            _ => 5
-        };
-    }
-
-    private static void AddModeBudgetMetadata(
-        IDictionary<string, string> metadata,
-        ModeBudgetProfile? modeBudgetProfile)
-    {
-        if (modeBudgetProfile is null)
-        {
-            return;
-        }
-
-        metadata["budget.mode"] = modeBudgetProfile.ModeName;
-        metadata["budget.modeDefaultTokenBudget"] = modeBudgetProfile.DefaultTokenBudget.ToString();
-    }
 
     private static ContextPackageBuildResult CreateBuildResult(
         ContextPackageRequest request,
@@ -1802,10 +1663,10 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
             package.EstimatedTokens);
         var budget = PackageBudgetProjector.BuildBudgetReport(package, tokenBudget, request);
         var output = PackageBudgetProjector.BuildStandardOutput(package, droppedItems, resolvedUncertainties, budget);
-        AddDiagnosticMetadata(metadata, tokenBudget, package.EstimatedTokens, droppedItems.Count, resolvedUncertainties.Count);
+        PackageMetadataBuilder.AddDiagnosticMetadata(metadata, tokenBudget, package.EstimatedTokens, droppedItems.Count, resolvedUncertainties.Count);
         if (traceRecorder is not null)
         {
-            AddTraceHealthMetadata(metadata, traceRecorder);
+            PackageMetadataBuilder.AddTraceHealthMetadata(metadata, traceRecorder);
         }
 
         return new ContextPackageBuildResult
@@ -1825,10 +1686,9 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
             CreatedAt = package.CreatedAt
         };
     }
-
-    private sealed record TokenEstimationContext(string? ModelName, string Source, bool IsFallback);
-
 }
+
+internal sealed record TokenEstimationContext(string? ModelName, string Source, bool IsFallback);
 
 internal sealed class MergedContextConstraint
 {
