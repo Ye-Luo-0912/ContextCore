@@ -1271,23 +1271,23 @@ public sealed partial class ControlRoomService
                     FormalRetrievalIntegrationPlanIntegrationPoints = formalRetrievalIntegrationPlan?.Report.IntegrationPoints ?? Array.Empty<string>(),
                     FormalRetrievalIntegrationPlanBlockedReasons = formalRetrievalIntegrationPlan?.Report.BlockedReasons ?? Array.Empty<string>(),
                     FormalRetrievalIntegrationDecisionSourcePath = formalRetrievalIntegrationDecision?.SourcePath ?? string.Empty,
-                    FormalRetrievalIntegrationDecisionPassed = formalRetrievalIntegrationDecision?.Report.DecisionPassed ?? false,
-                    FormalRetrievalIntegrationDecisionGatePassed = formalRetrievalIntegrationDecision?.Report.GatePassed ?? false,
-                    FormalRetrievalIntegrationDecisionRecommendation = formalRetrievalIntegrationDecision?.Report.Recommendation ?? string.Empty,
-                    FormalRetrievalIntegrationDecisionValue = formalRetrievalIntegrationDecision?.Report.IntegrationDecision ?? string.Empty,
-                    FormalRetrievalIntegrationDecisionNextAllowedPhase = formalRetrievalIntegrationDecision?.Report.NextAllowedPhase ?? string.Empty,
-                    FormalRetrievalIntegrationDecisionReadyForFreeze = formalRetrievalIntegrationDecision?.Report.ReadyForFormalRetrievalIntegrationFreeze ?? false,
-                    FormalRetrievalIntegrationDecisionReadyForNoOpBindingPlan = formalRetrievalIntegrationDecision?.Report.ReadyForAdapterNoOpBindingPlan ?? false,
-                    FormalRetrievalIntegrationDecisionFormalRetrievalAllowed = formalRetrievalIntegrationDecision?.Report.FormalRetrievalAllowed ?? false,
-                    FormalRetrievalIntegrationDecisionRuntimeSwitchAllowed = formalRetrievalIntegrationDecision?.Report.RuntimeSwitchAllowed ?? false,
-                    FormalRetrievalIntegrationDecisionReadyForRuntimeSwitch = formalRetrievalIntegrationDecision?.Report.ReadyForRuntimeSwitch ?? false,
-                    FormalRetrievalIntegrationDecisionRiskAfterPolicy = formalRetrievalIntegrationDecision?.Report.RiskAfterPolicy ?? 0,
-                    FormalRetrievalIntegrationDecisionFormalOutputChanged = formalRetrievalIntegrationDecision?.Report.FormalOutputChanged ?? 0,
-                    FormalRetrievalIntegrationDecisionPackageOutputChanged = formalRetrievalIntegrationDecision?.Report.PackageOutputChanged ?? false,
-                    FormalRetrievalIntegrationDecisionPackingPolicyChanged = formalRetrievalIntegrationDecision?.Report.PackingPolicyChanged ?? false,
-                    FormalRetrievalIntegrationDecisionRuntimeMutated = formalRetrievalIntegrationDecision?.Report.RuntimeMutated ?? false,
-                    FormalRetrievalIntegrationDecisionVectorStoreBindingChanged = formalRetrievalIntegrationDecision?.Report.VectorStoreBindingChanged ?? false,
-                    FormalRetrievalIntegrationDecisionBlockedReasons = formalRetrievalIntegrationDecision?.Report.BlockedReasons ?? Array.Empty<string>(),
+                    FormalRetrievalIntegrationDecisionPassed = formalRetrievalIntegrationDecision?.Snapshot.DecisionPassed ?? false,
+                    FormalRetrievalIntegrationDecisionGatePassed = formalRetrievalIntegrationDecision?.Snapshot.GatePassed ?? false,
+                    FormalRetrievalIntegrationDecisionRecommendation = formalRetrievalIntegrationDecision?.Snapshot.Recommendation ?? string.Empty,
+                    FormalRetrievalIntegrationDecisionValue = formalRetrievalIntegrationDecision?.Snapshot.IntegrationDecision ?? string.Empty,
+                    FormalRetrievalIntegrationDecisionNextAllowedPhase = formalRetrievalIntegrationDecision?.Snapshot.NextAllowedPhase ?? string.Empty,
+                    FormalRetrievalIntegrationDecisionReadyForFreeze = formalRetrievalIntegrationDecision?.Snapshot.ReadyForFormalRetrievalIntegrationFreeze ?? false,
+                    FormalRetrievalIntegrationDecisionReadyForNoOpBindingPlan = formalRetrievalIntegrationDecision?.Snapshot.ReadyForAdapterNoOpBindingPlan ?? false,
+                    FormalRetrievalIntegrationDecisionFormalRetrievalAllowed = formalRetrievalIntegrationDecision?.Snapshot.FormalRetrievalAllowed ?? false,
+                    FormalRetrievalIntegrationDecisionRuntimeSwitchAllowed = formalRetrievalIntegrationDecision?.Snapshot.RuntimeSwitchAllowed ?? false,
+                    FormalRetrievalIntegrationDecisionReadyForRuntimeSwitch = formalRetrievalIntegrationDecision?.Snapshot.ReadyForRuntimeSwitch ?? false,
+                    FormalRetrievalIntegrationDecisionRiskAfterPolicy = formalRetrievalIntegrationDecision?.Snapshot.RiskAfterPolicy ?? 0,
+                    FormalRetrievalIntegrationDecisionFormalOutputChanged = formalRetrievalIntegrationDecision?.Snapshot.FormalOutputChanged ?? 0,
+                    FormalRetrievalIntegrationDecisionPackageOutputChanged = formalRetrievalIntegrationDecision?.Snapshot.PackageOutputChanged ?? false,
+                    FormalRetrievalIntegrationDecisionPackingPolicyChanged = formalRetrievalIntegrationDecision?.Snapshot.PackingPolicyChanged ?? false,
+                    FormalRetrievalIntegrationDecisionRuntimeMutated = formalRetrievalIntegrationDecision?.Snapshot.RuntimeMutated ?? false,
+                    FormalRetrievalIntegrationDecisionVectorStoreBindingChanged = formalRetrievalIntegrationDecision?.Snapshot.VectorStoreBindingChanged ?? false,
+                    FormalRetrievalIntegrationDecisionBlockedReasons = formalRetrievalIntegrationDecision?.Snapshot.BlockedReasons ?? Array.Empty<string>(),
                     ShadowFormalRetrievalAdapterPlanSourcePath = shadowFormalRetrievalAdapterPlan?.SourcePath ?? string.Empty,
                     ShadowFormalRetrievalAdapterPlanPassed = shadowFormalRetrievalAdapterPlan?.Report.PlanPassed ?? false,
                     ShadowFormalRetrievalAdapterPlanRecommendation = shadowFormalRetrievalAdapterPlan?.Report.Recommendation ?? string.Empty,
@@ -1481,103 +1481,103 @@ public sealed partial class ControlRoomService
                     RuntimeRetrievalFeatureDerivationRepairVectorStoreBindingChanged = runtimeRetrievalFeatureDerivationRepair?.Report.VectorStoreBindingChanged ?? false,
                     RuntimeRetrievalFeatureDerivationRepairBlockedReasons = runtimeRetrievalFeatureDerivationRepair?.Report.BlockedReasons ?? Array.Empty<string>(),
                     InputMetadataEnrichmentSourcePath = inputMetadataEnrichment?.SourcePath ?? string.Empty,
-                    InputMetadataEnrichmentPreviewPassed = inputMetadataEnrichment?.Report.PreviewPassed ?? false,
-                    InputMetadataEnrichmentGatePassed = inputMetadataEnrichment?.Report.GatePassed ?? false,
-                    InputMetadataEnrichmentRecommendation = inputMetadataEnrichment?.Report.Recommendation ?? string.Empty,
-                    InputMetadataEnrichmentCoverageDelta = inputMetadataEnrichment?.Report.MetadataCoverageDelta ?? 0,
-                    InputMetadataEnrichmentBeforeRecall = inputMetadataEnrichment?.Report.BeforeRecall ?? 0,
-                    InputMetadataEnrichmentAfterRecall = inputMetadataEnrichment?.Report.AfterRecall ?? 0,
-                    InputMetadataEnrichmentIndependentNonDenseSourceCount = inputMetadataEnrichment?.Report.IndependentNonDenseSourceCount ?? 0,
-                    InputMetadataEnrichmentRiskAfterPolicy = inputMetadataEnrichment?.Report.RiskAfterPolicy ?? 0,
-                    InputMetadataEnrichmentMustNotHitRiskAfterPolicy = inputMetadataEnrichment?.Report.MustNotHitRiskAfterPolicy ?? 0,
-                    InputMetadataEnrichmentLifecycleRiskAfterPolicy = inputMetadataEnrichment?.Report.LifecycleRiskAfterPolicy ?? 0,
-                    InputMetadataEnrichmentPackageOutputChanged = inputMetadataEnrichment?.Report.PackageOutputChanged ?? false,
-                    InputMetadataEnrichmentPackingPolicyChanged = inputMetadataEnrichment?.Report.PackingPolicyChanged ?? false,
-                    InputMetadataEnrichmentRuntimeMutated = inputMetadataEnrichment?.Report.RuntimeMutated ?? false,
-                    InputMetadataEnrichmentVectorStoreBindingChanged = inputMetadataEnrichment?.Report.VectorStoreBindingChanged ?? false,
-                    InputMetadataEnrichmentBlockedReasons = inputMetadataEnrichment?.Report.BlockedReasons ?? Array.Empty<string>(),
+                    InputMetadataEnrichmentPreviewPassed = inputMetadataEnrichment?.Snapshot.PreviewPassed ?? false,
+                    InputMetadataEnrichmentGatePassed = inputMetadataEnrichment?.Snapshot.GatePassed ?? false,
+                    InputMetadataEnrichmentRecommendation = inputMetadataEnrichment?.Snapshot.Recommendation ?? string.Empty,
+                    InputMetadataEnrichmentCoverageDelta = inputMetadataEnrichment?.Snapshot.MetadataCoverageDelta ?? 0,
+                    InputMetadataEnrichmentBeforeRecall = inputMetadataEnrichment?.Snapshot.BeforeRecall ?? 0,
+                    InputMetadataEnrichmentAfterRecall = inputMetadataEnrichment?.Snapshot.AfterRecall ?? 0,
+                    InputMetadataEnrichmentIndependentNonDenseSourceCount = inputMetadataEnrichment?.Snapshot.IndependentNonDenseSourceCount ?? 0,
+                    InputMetadataEnrichmentRiskAfterPolicy = inputMetadataEnrichment?.Snapshot.RiskAfterPolicy ?? 0,
+                    InputMetadataEnrichmentMustNotHitRiskAfterPolicy = inputMetadataEnrichment?.Snapshot.MustNotHitRiskAfterPolicy ?? 0,
+                    InputMetadataEnrichmentLifecycleRiskAfterPolicy = inputMetadataEnrichment?.Snapshot.LifecycleRiskAfterPolicy ?? 0,
+                    InputMetadataEnrichmentPackageOutputChanged = inputMetadataEnrichment?.Snapshot.PackageOutputChanged ?? false,
+                    InputMetadataEnrichmentPackingPolicyChanged = inputMetadataEnrichment?.Snapshot.PackingPolicyChanged ?? false,
+                    InputMetadataEnrichmentRuntimeMutated = inputMetadataEnrichment?.Snapshot.RuntimeMutated ?? false,
+                    InputMetadataEnrichmentVectorStoreBindingChanged = inputMetadataEnrichment?.Snapshot.VectorStoreBindingChanged ?? false,
+                    InputMetadataEnrichmentBlockedReasons = inputMetadataEnrichment?.Snapshot.BlockedReasons ?? Array.Empty<string>(),
                     EnrichedCandidateSourceRepairRecheckSourcePath = enrichedCandidateSourceRepairRecheck?.SourcePath ?? string.Empty,
-                    EnrichedCandidateSourceRepairRecheckPassed = enrichedCandidateSourceRepairRecheck?.Report.RecheckPassed ?? false,
-                    EnrichedCandidateSourceRepairRecheckGatePassed = enrichedCandidateSourceRepairRecheck?.Report.GatePassed ?? false,
-                    EnrichedCandidateSourceRepairRecheckRecommendation = enrichedCandidateSourceRepairRecheck?.Report.Recommendation ?? string.Empty,
-                    EnrichedCandidateSourceRepairQualityImproved = enrichedCandidateSourceRepairRecheck?.Report.QualityImproved ?? false,
-                    EnrichedCandidateSourceRepairTrainRecallDelta = enrichedCandidateSourceRepairRecheck?.Report.TrainDerivedRecallDelta ?? 0,
-                    EnrichedCandidateSourceRepairHoldoutRecallDelta = enrichedCandidateSourceRepairRecheck?.Report.HoldoutDerivedRecallDelta ?? 0,
-                    EnrichedCandidateSourceRepairMustHitBelowTopKDelta = enrichedCandidateSourceRepairRecheck?.Report.MustHitBelowTopKDelta ?? 0,
-                    EnrichedCandidateSourceRepairRiskAfterPolicy = enrichedCandidateSourceRepairRecheck?.Report.RiskAfterPolicy ?? 0,
-                    EnrichedCandidateSourceRepairPackageOutputChanged = enrichedCandidateSourceRepairRecheck?.Report.PackageOutputChanged ?? false,
-                    EnrichedCandidateSourceRepairPackingPolicyChanged = enrichedCandidateSourceRepairRecheck?.Report.PackingPolicyChanged ?? false,
-                    EnrichedCandidateSourceRepairRuntimeMutated = enrichedCandidateSourceRepairRecheck?.Report.RuntimeMutated ?? false,
-                    EnrichedCandidateSourceRepairVectorStoreBindingChanged = enrichedCandidateSourceRepairRecheck?.Report.VectorStoreBindingChanged ?? false,
-                    EnrichedCandidateSourceRepairBlockedReasons = enrichedCandidateSourceRepairRecheck?.Report.BlockedReasons ?? Array.Empty<string>(),
-                    EnrichedCandidateSourceRepairQualityBlockedReasons = enrichedCandidateSourceRepairRecheck?.Report.QualityBlockedReasons ?? Array.Empty<string>(),
+                    EnrichedCandidateSourceRepairRecheckPassed = enrichedCandidateSourceRepairRecheck?.Snapshot.RecheckPassed ?? false,
+                    EnrichedCandidateSourceRepairRecheckGatePassed = enrichedCandidateSourceRepairRecheck?.Snapshot.GatePassed ?? false,
+                    EnrichedCandidateSourceRepairRecheckRecommendation = enrichedCandidateSourceRepairRecheck?.Snapshot.Recommendation ?? string.Empty,
+                    EnrichedCandidateSourceRepairQualityImproved = enrichedCandidateSourceRepairRecheck?.Snapshot.QualityImproved ?? false,
+                    EnrichedCandidateSourceRepairTrainRecallDelta = enrichedCandidateSourceRepairRecheck?.Snapshot.TrainDerivedRecallDelta ?? 0,
+                    EnrichedCandidateSourceRepairHoldoutRecallDelta = enrichedCandidateSourceRepairRecheck?.Snapshot.HoldoutDerivedRecallDelta ?? 0,
+                    EnrichedCandidateSourceRepairMustHitBelowTopKDelta = enrichedCandidateSourceRepairRecheck?.Snapshot.MustHitBelowTopKDelta ?? 0,
+                    EnrichedCandidateSourceRepairRiskAfterPolicy = enrichedCandidateSourceRepairRecheck?.Snapshot.RiskAfterPolicy ?? 0,
+                    EnrichedCandidateSourceRepairPackageOutputChanged = enrichedCandidateSourceRepairRecheck?.Snapshot.PackageOutputChanged ?? false,
+                    EnrichedCandidateSourceRepairPackingPolicyChanged = enrichedCandidateSourceRepairRecheck?.Snapshot.PackingPolicyChanged ?? false,
+                    EnrichedCandidateSourceRepairRuntimeMutated = enrichedCandidateSourceRepairRecheck?.Snapshot.RuntimeMutated ?? false,
+                    EnrichedCandidateSourceRepairVectorStoreBindingChanged = enrichedCandidateSourceRepairRecheck?.Snapshot.VectorStoreBindingChanged ?? false,
+                    EnrichedCandidateSourceRepairBlockedReasons = enrichedCandidateSourceRepairRecheck?.Snapshot.BlockedReasons ?? Array.Empty<string>(),
+                    EnrichedCandidateSourceRepairQualityBlockedReasons = enrichedCandidateSourceRepairRecheck?.Snapshot.QualityBlockedReasons ?? Array.Empty<string>(),
                     SourceAwareRankingRepairSourcePath = sourceAwareRankingRepair?.SourcePath ?? string.Empty,
-                    SourceAwareRankingRepairPassed = sourceAwareRankingRepair?.Report.ReportPassed ?? false,
-                    SourceAwareRankingRepairGatePassed = sourceAwareRankingRepair?.Report.GatePassed ?? false,
-                    SourceAwareRankingRepairRecommendation = sourceAwareRankingRepair?.Report.Recommendation ?? string.Empty,
-                    SourceAwareRankingRepairSelectedProfileId = sourceAwareRankingRepair?.Report.SelectedProfileId ?? string.Empty,
-                    SourceAwareRankingRepairTrainDevRecallDelta = sourceAwareRankingRepair?.Report.TrainDevRecallDelta ?? 0,
-                    SourceAwareRankingRepairTestRecallDelta = sourceAwareRankingRepair?.Report.TestRecallDelta ?? 0,
-                    SourceAwareRankingRepairHoldoutRecallDelta = sourceAwareRankingRepair?.Report.HoldoutRecallDelta ?? 0,
-                    SourceAwareRankingRepairBlindHoldoutRecallDelta = sourceAwareRankingRepair?.Report.BlindHoldoutRecallDelta ?? 0,
-                    SourceAwareRankingRepairDenseWinnerLostCount = sourceAwareRankingRepair?.Report.DenseWinnerLostCount ?? 0,
-                    SourceAwareRankingRepairUniqueSourceRecoveryCount = sourceAwareRankingRepair?.Report.UniqueSourceRecoveryCount ?? 0,
-                    SourceAwareRankingRepairSourceNoiseCount = sourceAwareRankingRepair?.Report.SourceNoiseCount ?? 0,
-                    SourceAwareRankingRepairFallbackRate = sourceAwareRankingRepair?.Report.FallbackRate ?? 0,
-                    SourceAwareRankingRepairRiskAfterPolicy = sourceAwareRankingRepair?.Report.RiskAfterPolicy ?? 0,
-                    SourceAwareRankingRepairPackageOutputChanged = sourceAwareRankingRepair?.Report.PackageOutputChanged ?? false,
-                    SourceAwareRankingRepairPackingPolicyChanged = sourceAwareRankingRepair?.Report.PackingPolicyChanged ?? false,
-                    SourceAwareRankingRepairRuntimeMutated = sourceAwareRankingRepair?.Report.RuntimeMutated ?? false,
-                    SourceAwareRankingRepairVectorStoreBindingChanged = sourceAwareRankingRepair?.Report.VectorStoreBindingChanged ?? false,
-                    SourceAwareRankingRepairBlockedReasons = sourceAwareRankingRepair?.Report.BlockedReasons ?? Array.Empty<string>(),
+                    SourceAwareRankingRepairPassed = sourceAwareRankingRepair?.Snapshot.ReportPassed ?? false,
+                    SourceAwareRankingRepairGatePassed = sourceAwareRankingRepair?.Snapshot.GatePassed ?? false,
+                    SourceAwareRankingRepairRecommendation = sourceAwareRankingRepair?.Snapshot.Recommendation ?? string.Empty,
+                    SourceAwareRankingRepairSelectedProfileId = sourceAwareRankingRepair?.Snapshot.SelectedProfileId ?? string.Empty,
+                    SourceAwareRankingRepairTrainDevRecallDelta = sourceAwareRankingRepair?.Snapshot.TrainDevRecallDelta ?? 0,
+                    SourceAwareRankingRepairTestRecallDelta = sourceAwareRankingRepair?.Snapshot.TestRecallDelta ?? 0,
+                    SourceAwareRankingRepairHoldoutRecallDelta = sourceAwareRankingRepair?.Snapshot.HoldoutRecallDelta ?? 0,
+                    SourceAwareRankingRepairBlindHoldoutRecallDelta = sourceAwareRankingRepair?.Snapshot.BlindHoldoutRecallDelta ?? 0,
+                    SourceAwareRankingRepairDenseWinnerLostCount = sourceAwareRankingRepair?.Snapshot.DenseWinnerLostCount ?? 0,
+                    SourceAwareRankingRepairUniqueSourceRecoveryCount = sourceAwareRankingRepair?.Snapshot.UniqueSourceRecoveryCount ?? 0,
+                    SourceAwareRankingRepairSourceNoiseCount = sourceAwareRankingRepair?.Snapshot.SourceNoiseCount ?? 0,
+                    SourceAwareRankingRepairFallbackRate = sourceAwareRankingRepair?.Snapshot.FallbackRate ?? 0,
+                    SourceAwareRankingRepairRiskAfterPolicy = sourceAwareRankingRepair?.Snapshot.RiskAfterPolicy ?? 0,
+                    SourceAwareRankingRepairPackageOutputChanged = sourceAwareRankingRepair?.Snapshot.PackageOutputChanged ?? false,
+                    SourceAwareRankingRepairPackingPolicyChanged = sourceAwareRankingRepair?.Snapshot.PackingPolicyChanged ?? false,
+                    SourceAwareRankingRepairRuntimeMutated = sourceAwareRankingRepair?.Snapshot.RuntimeMutated ?? false,
+                    SourceAwareRankingRepairVectorStoreBindingChanged = sourceAwareRankingRepair?.Snapshot.VectorStoreBindingChanged ?? false,
+                    SourceAwareRankingRepairBlockedReasons = sourceAwareRankingRepair?.Snapshot.BlockedReasons ?? Array.Empty<string>(),
                     OutputTokenPriorityShadowSourcePath = outputTokenPriorityShadow?.SourcePath ?? string.Empty,
-                    OutputTokenPriorityShadowPassed = outputTokenPriorityShadow?.Report.ShadowPassed ?? false,
-                    OutputTokenPriorityShadowGatePassed = outputTokenPriorityShadow?.Report.GatePassed ?? false,
-                    OutputTokenPriorityShadowRecommendation = outputTokenPriorityShadow?.Report.Recommendation ?? string.Empty,
-                    OutputTokenPriorityShadowProfileName = outputTokenPriorityShadow?.Report.ProfileName ?? string.Empty,
-                    OutputTokenPriorityShadowTokenDeltaTotal = outputTokenPriorityShadow?.Report.TokenDeltaTotal ?? 0,
-                    OutputTokenPriorityShadowTokenDeltaMax = outputTokenPriorityShadow?.Report.TokenDeltaMax ?? 0,
-                    OutputTokenPriorityShadowTokenDeltaP95 = outputTokenPriorityShadow?.Report.TokenDeltaP95 ?? 0,
-                    OutputTokenPriorityShadowTokenBudgetExceededCount = outputTokenPriorityShadow?.Report.TokenBudgetExceededCount ?? 0,
-                    OutputTokenPriorityShadowPriorityInversionCount = outputTokenPriorityShadow?.Report.PriorityInversionCount ?? 0,
-                    OutputTokenPriorityShadowDroppedRequiredCandidateCount = outputTokenPriorityShadow?.Report.DroppedRequiredCandidateCount ?? 0,
-                    OutputTokenPriorityShadowSectionMismatchCount = outputTokenPriorityShadow?.Report.SectionMismatchCount ?? 0,
-                    OutputTokenPriorityShadowRiskAfterPolicy = outputTokenPriorityShadow?.Report.RiskAfterPolicy ?? 0,
-                    OutputTokenPriorityShadowFormalSelectedSetChanged = outputTokenPriorityShadow?.Report.FormalSelectedSetChanged ?? false,
-                    OutputTokenPriorityShadowPackageOutputChanged = outputTokenPriorityShadow?.Report.PackageOutputChanged ?? false,
-                    OutputTokenPriorityShadowPackingPolicyChanged = outputTokenPriorityShadow?.Report.PackingPolicyChanged ?? false,
-                    OutputTokenPriorityShadowRuntimeMutated = outputTokenPriorityShadow?.Report.RuntimeMutated ?? false,
-                    OutputTokenPriorityShadowVectorStoreBindingChanged = outputTokenPriorityShadow?.Report.VectorStoreBindingChanged ?? false,
-                    OutputTokenPriorityShadowBlockedReasons = outputTokenPriorityShadow?.Report.BlockedReasons ?? Array.Empty<string>(),
+                    OutputTokenPriorityShadowPassed = outputTokenPriorityShadow?.Snapshot.ShadowPassed ?? false,
+                    OutputTokenPriorityShadowGatePassed = outputTokenPriorityShadow?.Snapshot.GatePassed ?? false,
+                    OutputTokenPriorityShadowRecommendation = outputTokenPriorityShadow?.Snapshot.Recommendation ?? string.Empty,
+                    OutputTokenPriorityShadowProfileName = outputTokenPriorityShadow?.Snapshot.ProfileName ?? string.Empty,
+                    OutputTokenPriorityShadowTokenDeltaTotal = outputTokenPriorityShadow?.Snapshot.TokenDeltaTotal ?? 0,
+                    OutputTokenPriorityShadowTokenDeltaMax = outputTokenPriorityShadow?.Snapshot.TokenDeltaMax ?? 0,
+                    OutputTokenPriorityShadowTokenDeltaP95 = outputTokenPriorityShadow?.Snapshot.TokenDeltaP95 ?? 0,
+                    OutputTokenPriorityShadowTokenBudgetExceededCount = outputTokenPriorityShadow?.Snapshot.TokenBudgetExceededCount ?? 0,
+                    OutputTokenPriorityShadowPriorityInversionCount = outputTokenPriorityShadow?.Snapshot.PriorityInversionCount ?? 0,
+                    OutputTokenPriorityShadowDroppedRequiredCandidateCount = outputTokenPriorityShadow?.Snapshot.DroppedRequiredCandidateCount ?? 0,
+                    OutputTokenPriorityShadowSectionMismatchCount = outputTokenPriorityShadow?.Snapshot.SectionMismatchCount ?? 0,
+                    OutputTokenPriorityShadowRiskAfterPolicy = outputTokenPriorityShadow?.Snapshot.RiskAfterPolicy ?? 0,
+                    OutputTokenPriorityShadowFormalSelectedSetChanged = outputTokenPriorityShadow?.Snapshot.FormalSelectedSetChanged ?? false,
+                    OutputTokenPriorityShadowPackageOutputChanged = outputTokenPriorityShadow?.Snapshot.PackageOutputChanged ?? false,
+                    OutputTokenPriorityShadowPackingPolicyChanged = outputTokenPriorityShadow?.Snapshot.PackingPolicyChanged ?? false,
+                    OutputTokenPriorityShadowRuntimeMutated = outputTokenPriorityShadow?.Snapshot.RuntimeMutated ?? false,
+                    OutputTokenPriorityShadowVectorStoreBindingChanged = outputTokenPriorityShadow?.Snapshot.VectorStoreBindingChanged ?? false,
+                    OutputTokenPriorityShadowBlockedReasons = outputTokenPriorityShadow?.Snapshot.BlockedReasons ?? Array.Empty<string>(),
                     FormalAdapterInputContractSourcePath = formalAdapterInputContract?.SourcePath ?? string.Empty,
-                    FormalAdapterInputContractPassed = formalAdapterInputContract?.Report.ContractPassed ?? false,
-                    FormalAdapterInputContractGatePassed = formalAdapterInputContract?.Report.GatePassed ?? false,
-                    FormalAdapterInputContractRecommendation = formalAdapterInputContract?.Report.Recommendation ?? string.Empty,
-                    FormalAdapterInputContractVersion = formalAdapterInputContract?.Report.ContractVersion ?? string.Empty,
-                    FormalAdapterInputContractRuntimeInputFieldCount = formalAdapterInputContract?.Report.RuntimeInputFieldCount ?? 0,
-                    FormalAdapterInputContractDeniedFieldCount = formalAdapterInputContract?.Report.DeniedFieldCount ?? 0,
-                    FormalAdapterInputContractForbiddenPropertyCount = formalAdapterInputContract?.Report.ContractForbiddenPropertyCount ?? 0,
-                    FormalAdapterInputContractFormalSourceForbiddenReadCount = formalAdapterInputContract?.Report.FormalSourceForbiddenReadCount ?? 0,
-                    FormalAdapterInputContractEvalOnlyForbiddenReadCount = formalAdapterInputContract?.Report.EvalOnlyForbiddenReadCount ?? 0,
-                    FormalAdapterInputContractDatasetEvalFieldsBlocked = formalAdapterInputContract?.Report.DatasetEvalFieldsBlocked ?? false,
-                    FormalAdapterInputContractGoldLabelsBlocked = formalAdapterInputContract?.Report.GoldLabelsBlocked ?? false,
-                    FormalAdapterInputContractSampleMetadataBlocked = formalAdapterInputContract?.Report.SampleMetadataBlocked ?? false,
-                    FormalAdapterInputContractShadowArtifactFieldsBlocked = formalAdapterInputContract?.Report.ShadowArtifactFieldsBlocked ?? false,
-                    FormalAdapterInputContractFormalRetrievalAllowed = formalAdapterInputContract?.Report.FormalRetrievalAllowed ?? false,
-                    FormalAdapterInputContractRuntimeSwitchAllowed = formalAdapterInputContract?.Report.RuntimeSwitchAllowed ?? false,
-                    FormalAdapterInputContractRuntimeMutated = formalAdapterInputContract?.Report.RuntimeMutated ?? false,
-                    FormalAdapterInputContractPackageOutputChanged = formalAdapterInputContract?.Report.PackageOutputChanged ?? false,
-                    FormalAdapterInputContractPackingPolicyChanged = formalAdapterInputContract?.Report.PackingPolicyChanged ?? false,
-                    FormalAdapterInputContractVectorStoreBindingChanged = formalAdapterInputContract?.Report.VectorStoreBindingChanged ?? false,
-                    FormalAdapterInputContractBlockedReasons = formalAdapterInputContract?.Report.BlockedReasons ?? Array.Empty<string>(),
+                    FormalAdapterInputContractPassed = formalAdapterInputContract?.Snapshot.ContractPassed ?? false,
+                    FormalAdapterInputContractGatePassed = formalAdapterInputContract?.Snapshot.GatePassed ?? false,
+                    FormalAdapterInputContractRecommendation = formalAdapterInputContract?.Snapshot.Recommendation ?? string.Empty,
+                    FormalAdapterInputContractVersion = formalAdapterInputContract?.Snapshot.ContractVersion ?? string.Empty,
+                    FormalAdapterInputContractRuntimeInputFieldCount = formalAdapterInputContract?.Snapshot.RuntimeInputFieldCount ?? 0,
+                    FormalAdapterInputContractDeniedFieldCount = formalAdapterInputContract?.Snapshot.DeniedFieldCount ?? 0,
+                    FormalAdapterInputContractForbiddenPropertyCount = formalAdapterInputContract?.Snapshot.ContractForbiddenPropertyCount ?? 0,
+                    FormalAdapterInputContractFormalSourceForbiddenReadCount = formalAdapterInputContract?.Snapshot.FormalSourceForbiddenReadCount ?? 0,
+                    FormalAdapterInputContractEvalOnlyForbiddenReadCount = formalAdapterInputContract?.Snapshot.EvalOnlyForbiddenReadCount ?? 0,
+                    FormalAdapterInputContractDatasetEvalFieldsBlocked = formalAdapterInputContract?.Snapshot.DatasetEvalFieldsBlocked ?? false,
+                    FormalAdapterInputContractGoldLabelsBlocked = formalAdapterInputContract?.Snapshot.GoldLabelsBlocked ?? false,
+                    FormalAdapterInputContractSampleMetadataBlocked = formalAdapterInputContract?.Snapshot.SampleMetadataBlocked ?? false,
+                    FormalAdapterInputContractShadowArtifactFieldsBlocked = formalAdapterInputContract?.Snapshot.ShadowArtifactFieldsBlocked ?? false,
+                    FormalAdapterInputContractFormalRetrievalAllowed = formalAdapterInputContract?.Snapshot.FormalRetrievalAllowed ?? false,
+                    FormalAdapterInputContractRuntimeSwitchAllowed = formalAdapterInputContract?.Snapshot.RuntimeSwitchAllowed ?? false,
+                    FormalAdapterInputContractRuntimeMutated = formalAdapterInputContract?.Snapshot.RuntimeMutated ?? false,
+                    FormalAdapterInputContractPackageOutputChanged = formalAdapterInputContract?.Snapshot.PackageOutputChanged ?? false,
+                    FormalAdapterInputContractPackingPolicyChanged = formalAdapterInputContract?.Snapshot.PackingPolicyChanged ?? false,
+                    FormalAdapterInputContractVectorStoreBindingChanged = formalAdapterInputContract?.Snapshot.VectorStoreBindingChanged ?? false,
+                    FormalAdapterInputContractBlockedReasons = formalAdapterInputContract?.Snapshot.BlockedReasons ?? Array.Empty<string>(),
                     RetrievalEvalProtocolGateSourcePath = retrievalEvalProtocol?.GateSourcePath ?? string.Empty,
                     RetrievalEvalProtocolSourceAuditPath = retrievalEvalProtocol?.SourceAuditPath ?? string.Empty,
                     RetrievalEvalProtocolGatePassed = retrievalEvalProtocol?.Gate?.GatePassed ?? false,
                     RetrievalEvalProtocolRecommendation = retrievalEvalProtocol?.Gate?.Recommendation ?? string.Empty,
-                    RetrievalEvalProtocolVersion = retrievalEvalProtocol?.Gate?.Protocol.ProtocolVersion ?? string.Empty,
-                    RetrievalEvalProtocolVectorTopK = retrievalEvalProtocol?.Gate?.Protocol.VectorTopK ?? 0,
-                    RetrievalEvalProtocolMergedTopK = retrievalEvalProtocol?.Gate?.Protocol.MergedTopK ?? 0,
-                    RetrievalEvalProtocolFinalTopK = retrievalEvalProtocol?.Gate?.Protocol.FinalTopK ?? 0,
+                    RetrievalEvalProtocolVersion = retrievalEvalProtocol?.Gate?.ProtocolVersion ?? string.Empty,
+                    RetrievalEvalProtocolVectorTopK = retrievalEvalProtocol?.Gate?.VectorTopK ?? 0,
+                    RetrievalEvalProtocolMergedTopK = retrievalEvalProtocol?.Gate?.MergedTopK ?? 0,
+                    RetrievalEvalProtocolFinalTopK = retrievalEvalProtocol?.Gate?.FinalTopK ?? 0,
                     RetrievalEvalProtocolHashOrderSensitivityCount = retrievalEvalProtocol?.Gate?.HashOrderSensitivityCount ?? 0,
                     RetrievalEvalProtocolTieBreakDeterministic = retrievalEvalProtocol?.Gate?.TieBreakDeterministic ?? false,
                     RetrievalEvalProtocolSourceNonDiscriminativeDetected = retrievalEvalProtocol?.Gate?.SourceNonDiscriminativeDetected ?? false,
@@ -1592,10 +1592,10 @@ public sealed partial class ControlRoomService
                     RetrievalEvalProtocolMergedRecall = retrievalEvalProtocol?.SourceAudit?.MergedRecall ?? 0,
                     RetrievalEvalProtocolBlockedReasons = retrievalEvalProtocol?.Gate?.BlockedReasons ?? Array.Empty<string>(),
                     FormalRetrievalIntegrationFreezeSourcePath = formalRetrievalIntegrationFreeze?.SourcePath ?? string.Empty,
-                    FormalRetrievalIntegrationFreezePassed = formalRetrievalIntegrationFreeze?.Report.FreezePassed ?? false,
-                    FormalRetrievalIntegrationFreezeRecommendation = formalRetrievalIntegrationFreeze?.Report.Recommendation ?? string.Empty,
-                    FormalRetrievalIntegrationFreezeSelectedProfile = formalRetrievalIntegrationFreeze?.Report.SelectedProfile ?? string.Empty,
-                    FormalRetrievalIntegrationFreezeFrozenArtifactCount = formalRetrievalIntegrationFreeze?.Report.FrozenArtifactPaths.Count ?? 0,
+                    FormalRetrievalIntegrationFreezePassed = formalRetrievalIntegrationFreeze?.Snapshot.FreezePassed ?? false,
+                    FormalRetrievalIntegrationFreezeRecommendation = formalRetrievalIntegrationFreeze?.Snapshot.Recommendation ?? string.Empty,
+                    FormalRetrievalIntegrationFreezeSelectedProfile = formalRetrievalIntegrationFreeze?.Snapshot.SelectedProfile ?? string.Empty,
+                    FormalRetrievalIntegrationFreezeFrozenArtifactCount = formalRetrievalIntegrationFreeze?.Snapshot.FrozenArtifactCount ?? 0,
                     V4GateSatisfied = readinessGate?.Report.Passed ?? IsVectorV4GateSatisfied(recallLoss.A3, recallLoss.Extended)
                 };
             }
@@ -1983,23 +1983,23 @@ public sealed partial class ControlRoomService
                 FormalRetrievalIntegrationPlanIntegrationPoints = formalRetrievalIntegrationPlan?.Report.IntegrationPoints ?? Array.Empty<string>(),
                 FormalRetrievalIntegrationPlanBlockedReasons = formalRetrievalIntegrationPlan?.Report.BlockedReasons ?? Array.Empty<string>(),
                 FormalRetrievalIntegrationDecisionSourcePath = formalRetrievalIntegrationDecision?.SourcePath ?? string.Empty,
-                FormalRetrievalIntegrationDecisionPassed = formalRetrievalIntegrationDecision?.Report.DecisionPassed ?? false,
-                FormalRetrievalIntegrationDecisionGatePassed = formalRetrievalIntegrationDecision?.Report.GatePassed ?? false,
-                FormalRetrievalIntegrationDecisionRecommendation = formalRetrievalIntegrationDecision?.Report.Recommendation ?? string.Empty,
-                FormalRetrievalIntegrationDecisionValue = formalRetrievalIntegrationDecision?.Report.IntegrationDecision ?? string.Empty,
-                FormalRetrievalIntegrationDecisionNextAllowedPhase = formalRetrievalIntegrationDecision?.Report.NextAllowedPhase ?? string.Empty,
-                FormalRetrievalIntegrationDecisionReadyForFreeze = formalRetrievalIntegrationDecision?.Report.ReadyForFormalRetrievalIntegrationFreeze ?? false,
-                FormalRetrievalIntegrationDecisionReadyForNoOpBindingPlan = formalRetrievalIntegrationDecision?.Report.ReadyForAdapterNoOpBindingPlan ?? false,
-                FormalRetrievalIntegrationDecisionFormalRetrievalAllowed = formalRetrievalIntegrationDecision?.Report.FormalRetrievalAllowed ?? false,
-                FormalRetrievalIntegrationDecisionRuntimeSwitchAllowed = formalRetrievalIntegrationDecision?.Report.RuntimeSwitchAllowed ?? false,
-                FormalRetrievalIntegrationDecisionReadyForRuntimeSwitch = formalRetrievalIntegrationDecision?.Report.ReadyForRuntimeSwitch ?? false,
-                FormalRetrievalIntegrationDecisionRiskAfterPolicy = formalRetrievalIntegrationDecision?.Report.RiskAfterPolicy ?? 0,
-                FormalRetrievalIntegrationDecisionFormalOutputChanged = formalRetrievalIntegrationDecision?.Report.FormalOutputChanged ?? 0,
-                FormalRetrievalIntegrationDecisionPackageOutputChanged = formalRetrievalIntegrationDecision?.Report.PackageOutputChanged ?? false,
-                FormalRetrievalIntegrationDecisionPackingPolicyChanged = formalRetrievalIntegrationDecision?.Report.PackingPolicyChanged ?? false,
-                FormalRetrievalIntegrationDecisionRuntimeMutated = formalRetrievalIntegrationDecision?.Report.RuntimeMutated ?? false,
-                FormalRetrievalIntegrationDecisionVectorStoreBindingChanged = formalRetrievalIntegrationDecision?.Report.VectorStoreBindingChanged ?? false,
-                FormalRetrievalIntegrationDecisionBlockedReasons = formalRetrievalIntegrationDecision?.Report.BlockedReasons ?? Array.Empty<string>(),
+                FormalRetrievalIntegrationDecisionPassed = formalRetrievalIntegrationDecision?.Snapshot.DecisionPassed ?? false,
+                FormalRetrievalIntegrationDecisionGatePassed = formalRetrievalIntegrationDecision?.Snapshot.GatePassed ?? false,
+                FormalRetrievalIntegrationDecisionRecommendation = formalRetrievalIntegrationDecision?.Snapshot.Recommendation ?? string.Empty,
+                FormalRetrievalIntegrationDecisionValue = formalRetrievalIntegrationDecision?.Snapshot.IntegrationDecision ?? string.Empty,
+                FormalRetrievalIntegrationDecisionNextAllowedPhase = formalRetrievalIntegrationDecision?.Snapshot.NextAllowedPhase ?? string.Empty,
+                FormalRetrievalIntegrationDecisionReadyForFreeze = formalRetrievalIntegrationDecision?.Snapshot.ReadyForFormalRetrievalIntegrationFreeze ?? false,
+                FormalRetrievalIntegrationDecisionReadyForNoOpBindingPlan = formalRetrievalIntegrationDecision?.Snapshot.ReadyForAdapterNoOpBindingPlan ?? false,
+                FormalRetrievalIntegrationDecisionFormalRetrievalAllowed = formalRetrievalIntegrationDecision?.Snapshot.FormalRetrievalAllowed ?? false,
+                FormalRetrievalIntegrationDecisionRuntimeSwitchAllowed = formalRetrievalIntegrationDecision?.Snapshot.RuntimeSwitchAllowed ?? false,
+                FormalRetrievalIntegrationDecisionReadyForRuntimeSwitch = formalRetrievalIntegrationDecision?.Snapshot.ReadyForRuntimeSwitch ?? false,
+                FormalRetrievalIntegrationDecisionRiskAfterPolicy = formalRetrievalIntegrationDecision?.Snapshot.RiskAfterPolicy ?? 0,
+                FormalRetrievalIntegrationDecisionFormalOutputChanged = formalRetrievalIntegrationDecision?.Snapshot.FormalOutputChanged ?? 0,
+                FormalRetrievalIntegrationDecisionPackageOutputChanged = formalRetrievalIntegrationDecision?.Snapshot.PackageOutputChanged ?? false,
+                FormalRetrievalIntegrationDecisionPackingPolicyChanged = formalRetrievalIntegrationDecision?.Snapshot.PackingPolicyChanged ?? false,
+                FormalRetrievalIntegrationDecisionRuntimeMutated = formalRetrievalIntegrationDecision?.Snapshot.RuntimeMutated ?? false,
+                FormalRetrievalIntegrationDecisionVectorStoreBindingChanged = formalRetrievalIntegrationDecision?.Snapshot.VectorStoreBindingChanged ?? false,
+                FormalRetrievalIntegrationDecisionBlockedReasons = formalRetrievalIntegrationDecision?.Snapshot.BlockedReasons ?? Array.Empty<string>(),
                 ShadowFormalRetrievalAdapterPlanSourcePath = shadowFormalRetrievalAdapterPlan?.SourcePath ?? string.Empty,
                 ShadowFormalRetrievalAdapterPlanPassed = shadowFormalRetrievalAdapterPlan?.Report.PlanPassed ?? false,
                 ShadowFormalRetrievalAdapterPlanRecommendation = shadowFormalRetrievalAdapterPlan?.Report.Recommendation ?? string.Empty,
@@ -2210,103 +2210,103 @@ public sealed partial class ControlRoomService
                 GraphHubNoiseControlHubCtrlRecall = graphHubNoiseControl?.Report.HubControlled.Recall ?? 0,
                 GraphHubNoiseControlRecallDelta = graphHubNoiseControl?.Report.HubControlledRecallDelta ?? 0,
                 InputMetadataEnrichmentSourcePath = inputMetadataEnrichment?.SourcePath ?? string.Empty,
-                InputMetadataEnrichmentPreviewPassed = inputMetadataEnrichment?.Report.PreviewPassed ?? false,
-                InputMetadataEnrichmentGatePassed = inputMetadataEnrichment?.Report.GatePassed ?? false,
-                InputMetadataEnrichmentRecommendation = inputMetadataEnrichment?.Report.Recommendation ?? string.Empty,
-                InputMetadataEnrichmentCoverageDelta = inputMetadataEnrichment?.Report.MetadataCoverageDelta ?? 0,
-                InputMetadataEnrichmentBeforeRecall = inputMetadataEnrichment?.Report.BeforeRecall ?? 0,
-                InputMetadataEnrichmentAfterRecall = inputMetadataEnrichment?.Report.AfterRecall ?? 0,
-                InputMetadataEnrichmentIndependentNonDenseSourceCount = inputMetadataEnrichment?.Report.IndependentNonDenseSourceCount ?? 0,
-                InputMetadataEnrichmentRiskAfterPolicy = inputMetadataEnrichment?.Report.RiskAfterPolicy ?? 0,
-                InputMetadataEnrichmentMustNotHitRiskAfterPolicy = inputMetadataEnrichment?.Report.MustNotHitRiskAfterPolicy ?? 0,
-                InputMetadataEnrichmentLifecycleRiskAfterPolicy = inputMetadataEnrichment?.Report.LifecycleRiskAfterPolicy ?? 0,
-                InputMetadataEnrichmentPackageOutputChanged = inputMetadataEnrichment?.Report.PackageOutputChanged ?? false,
-                InputMetadataEnrichmentPackingPolicyChanged = inputMetadataEnrichment?.Report.PackingPolicyChanged ?? false,
-                InputMetadataEnrichmentRuntimeMutated = inputMetadataEnrichment?.Report.RuntimeMutated ?? false,
-                InputMetadataEnrichmentVectorStoreBindingChanged = inputMetadataEnrichment?.Report.VectorStoreBindingChanged ?? false,
-                InputMetadataEnrichmentBlockedReasons = inputMetadataEnrichment?.Report.BlockedReasons ?? Array.Empty<string>(),
+                InputMetadataEnrichmentPreviewPassed = inputMetadataEnrichment?.Snapshot.PreviewPassed ?? false,
+                InputMetadataEnrichmentGatePassed = inputMetadataEnrichment?.Snapshot.GatePassed ?? false,
+                InputMetadataEnrichmentRecommendation = inputMetadataEnrichment?.Snapshot.Recommendation ?? string.Empty,
+                InputMetadataEnrichmentCoverageDelta = inputMetadataEnrichment?.Snapshot.MetadataCoverageDelta ?? 0,
+                InputMetadataEnrichmentBeforeRecall = inputMetadataEnrichment?.Snapshot.BeforeRecall ?? 0,
+                InputMetadataEnrichmentAfterRecall = inputMetadataEnrichment?.Snapshot.AfterRecall ?? 0,
+                InputMetadataEnrichmentIndependentNonDenseSourceCount = inputMetadataEnrichment?.Snapshot.IndependentNonDenseSourceCount ?? 0,
+                InputMetadataEnrichmentRiskAfterPolicy = inputMetadataEnrichment?.Snapshot.RiskAfterPolicy ?? 0,
+                InputMetadataEnrichmentMustNotHitRiskAfterPolicy = inputMetadataEnrichment?.Snapshot.MustNotHitRiskAfterPolicy ?? 0,
+                InputMetadataEnrichmentLifecycleRiskAfterPolicy = inputMetadataEnrichment?.Snapshot.LifecycleRiskAfterPolicy ?? 0,
+                InputMetadataEnrichmentPackageOutputChanged = inputMetadataEnrichment?.Snapshot.PackageOutputChanged ?? false,
+                InputMetadataEnrichmentPackingPolicyChanged = inputMetadataEnrichment?.Snapshot.PackingPolicyChanged ?? false,
+                InputMetadataEnrichmentRuntimeMutated = inputMetadataEnrichment?.Snapshot.RuntimeMutated ?? false,
+                InputMetadataEnrichmentVectorStoreBindingChanged = inputMetadataEnrichment?.Snapshot.VectorStoreBindingChanged ?? false,
+                InputMetadataEnrichmentBlockedReasons = inputMetadataEnrichment?.Snapshot.BlockedReasons ?? Array.Empty<string>(),
                 EnrichedCandidateSourceRepairRecheckSourcePath = enrichedCandidateSourceRepairRecheck?.SourcePath ?? string.Empty,
-                EnrichedCandidateSourceRepairRecheckPassed = enrichedCandidateSourceRepairRecheck?.Report.RecheckPassed ?? false,
-                EnrichedCandidateSourceRepairRecheckGatePassed = enrichedCandidateSourceRepairRecheck?.Report.GatePassed ?? false,
-                EnrichedCandidateSourceRepairRecheckRecommendation = enrichedCandidateSourceRepairRecheck?.Report.Recommendation ?? string.Empty,
-                EnrichedCandidateSourceRepairQualityImproved = enrichedCandidateSourceRepairRecheck?.Report.QualityImproved ?? false,
-                EnrichedCandidateSourceRepairTrainRecallDelta = enrichedCandidateSourceRepairRecheck?.Report.TrainDerivedRecallDelta ?? 0,
-                EnrichedCandidateSourceRepairHoldoutRecallDelta = enrichedCandidateSourceRepairRecheck?.Report.HoldoutDerivedRecallDelta ?? 0,
-                EnrichedCandidateSourceRepairMustHitBelowTopKDelta = enrichedCandidateSourceRepairRecheck?.Report.MustHitBelowTopKDelta ?? 0,
-                EnrichedCandidateSourceRepairRiskAfterPolicy = enrichedCandidateSourceRepairRecheck?.Report.RiskAfterPolicy ?? 0,
-                EnrichedCandidateSourceRepairPackageOutputChanged = enrichedCandidateSourceRepairRecheck?.Report.PackageOutputChanged ?? false,
-                EnrichedCandidateSourceRepairPackingPolicyChanged = enrichedCandidateSourceRepairRecheck?.Report.PackingPolicyChanged ?? false,
-                EnrichedCandidateSourceRepairRuntimeMutated = enrichedCandidateSourceRepairRecheck?.Report.RuntimeMutated ?? false,
-                EnrichedCandidateSourceRepairVectorStoreBindingChanged = enrichedCandidateSourceRepairRecheck?.Report.VectorStoreBindingChanged ?? false,
-                EnrichedCandidateSourceRepairBlockedReasons = enrichedCandidateSourceRepairRecheck?.Report.BlockedReasons ?? Array.Empty<string>(),
-                EnrichedCandidateSourceRepairQualityBlockedReasons = enrichedCandidateSourceRepairRecheck?.Report.QualityBlockedReasons ?? Array.Empty<string>(),
+                EnrichedCandidateSourceRepairRecheckPassed = enrichedCandidateSourceRepairRecheck?.Snapshot.RecheckPassed ?? false,
+                EnrichedCandidateSourceRepairRecheckGatePassed = enrichedCandidateSourceRepairRecheck?.Snapshot.GatePassed ?? false,
+                EnrichedCandidateSourceRepairRecheckRecommendation = enrichedCandidateSourceRepairRecheck?.Snapshot.Recommendation ?? string.Empty,
+                EnrichedCandidateSourceRepairQualityImproved = enrichedCandidateSourceRepairRecheck?.Snapshot.QualityImproved ?? false,
+                EnrichedCandidateSourceRepairTrainRecallDelta = enrichedCandidateSourceRepairRecheck?.Snapshot.TrainDerivedRecallDelta ?? 0,
+                EnrichedCandidateSourceRepairHoldoutRecallDelta = enrichedCandidateSourceRepairRecheck?.Snapshot.HoldoutDerivedRecallDelta ?? 0,
+                EnrichedCandidateSourceRepairMustHitBelowTopKDelta = enrichedCandidateSourceRepairRecheck?.Snapshot.MustHitBelowTopKDelta ?? 0,
+                EnrichedCandidateSourceRepairRiskAfterPolicy = enrichedCandidateSourceRepairRecheck?.Snapshot.RiskAfterPolicy ?? 0,
+                EnrichedCandidateSourceRepairPackageOutputChanged = enrichedCandidateSourceRepairRecheck?.Snapshot.PackageOutputChanged ?? false,
+                EnrichedCandidateSourceRepairPackingPolicyChanged = enrichedCandidateSourceRepairRecheck?.Snapshot.PackingPolicyChanged ?? false,
+                EnrichedCandidateSourceRepairRuntimeMutated = enrichedCandidateSourceRepairRecheck?.Snapshot.RuntimeMutated ?? false,
+                EnrichedCandidateSourceRepairVectorStoreBindingChanged = enrichedCandidateSourceRepairRecheck?.Snapshot.VectorStoreBindingChanged ?? false,
+                EnrichedCandidateSourceRepairBlockedReasons = enrichedCandidateSourceRepairRecheck?.Snapshot.BlockedReasons ?? Array.Empty<string>(),
+                EnrichedCandidateSourceRepairQualityBlockedReasons = enrichedCandidateSourceRepairRecheck?.Snapshot.QualityBlockedReasons ?? Array.Empty<string>(),
                 SourceAwareRankingRepairSourcePath = sourceAwareRankingRepair?.SourcePath ?? string.Empty,
-                SourceAwareRankingRepairPassed = sourceAwareRankingRepair?.Report.ReportPassed ?? false,
-                SourceAwareRankingRepairGatePassed = sourceAwareRankingRepair?.Report.GatePassed ?? false,
-                SourceAwareRankingRepairRecommendation = sourceAwareRankingRepair?.Report.Recommendation ?? string.Empty,
-                SourceAwareRankingRepairSelectedProfileId = sourceAwareRankingRepair?.Report.SelectedProfileId ?? string.Empty,
-                SourceAwareRankingRepairTrainDevRecallDelta = sourceAwareRankingRepair?.Report.TrainDevRecallDelta ?? 0,
-                SourceAwareRankingRepairTestRecallDelta = sourceAwareRankingRepair?.Report.TestRecallDelta ?? 0,
-                SourceAwareRankingRepairHoldoutRecallDelta = sourceAwareRankingRepair?.Report.HoldoutRecallDelta ?? 0,
-                SourceAwareRankingRepairBlindHoldoutRecallDelta = sourceAwareRankingRepair?.Report.BlindHoldoutRecallDelta ?? 0,
-                SourceAwareRankingRepairDenseWinnerLostCount = sourceAwareRankingRepair?.Report.DenseWinnerLostCount ?? 0,
-                SourceAwareRankingRepairUniqueSourceRecoveryCount = sourceAwareRankingRepair?.Report.UniqueSourceRecoveryCount ?? 0,
-                SourceAwareRankingRepairSourceNoiseCount = sourceAwareRankingRepair?.Report.SourceNoiseCount ?? 0,
-                SourceAwareRankingRepairFallbackRate = sourceAwareRankingRepair?.Report.FallbackRate ?? 0,
-                SourceAwareRankingRepairRiskAfterPolicy = sourceAwareRankingRepair?.Report.RiskAfterPolicy ?? 0,
-                SourceAwareRankingRepairPackageOutputChanged = sourceAwareRankingRepair?.Report.PackageOutputChanged ?? false,
-                SourceAwareRankingRepairPackingPolicyChanged = sourceAwareRankingRepair?.Report.PackingPolicyChanged ?? false,
-                SourceAwareRankingRepairRuntimeMutated = sourceAwareRankingRepair?.Report.RuntimeMutated ?? false,
-                SourceAwareRankingRepairVectorStoreBindingChanged = sourceAwareRankingRepair?.Report.VectorStoreBindingChanged ?? false,
-                SourceAwareRankingRepairBlockedReasons = sourceAwareRankingRepair?.Report.BlockedReasons ?? Array.Empty<string>(),
+                SourceAwareRankingRepairPassed = sourceAwareRankingRepair?.Snapshot.ReportPassed ?? false,
+                SourceAwareRankingRepairGatePassed = sourceAwareRankingRepair?.Snapshot.GatePassed ?? false,
+                SourceAwareRankingRepairRecommendation = sourceAwareRankingRepair?.Snapshot.Recommendation ?? string.Empty,
+                SourceAwareRankingRepairSelectedProfileId = sourceAwareRankingRepair?.Snapshot.SelectedProfileId ?? string.Empty,
+                SourceAwareRankingRepairTrainDevRecallDelta = sourceAwareRankingRepair?.Snapshot.TrainDevRecallDelta ?? 0,
+                SourceAwareRankingRepairTestRecallDelta = sourceAwareRankingRepair?.Snapshot.TestRecallDelta ?? 0,
+                SourceAwareRankingRepairHoldoutRecallDelta = sourceAwareRankingRepair?.Snapshot.HoldoutRecallDelta ?? 0,
+                SourceAwareRankingRepairBlindHoldoutRecallDelta = sourceAwareRankingRepair?.Snapshot.BlindHoldoutRecallDelta ?? 0,
+                SourceAwareRankingRepairDenseWinnerLostCount = sourceAwareRankingRepair?.Snapshot.DenseWinnerLostCount ?? 0,
+                SourceAwareRankingRepairUniqueSourceRecoveryCount = sourceAwareRankingRepair?.Snapshot.UniqueSourceRecoveryCount ?? 0,
+                SourceAwareRankingRepairSourceNoiseCount = sourceAwareRankingRepair?.Snapshot.SourceNoiseCount ?? 0,
+                SourceAwareRankingRepairFallbackRate = sourceAwareRankingRepair?.Snapshot.FallbackRate ?? 0,
+                SourceAwareRankingRepairRiskAfterPolicy = sourceAwareRankingRepair?.Snapshot.RiskAfterPolicy ?? 0,
+                SourceAwareRankingRepairPackageOutputChanged = sourceAwareRankingRepair?.Snapshot.PackageOutputChanged ?? false,
+                SourceAwareRankingRepairPackingPolicyChanged = sourceAwareRankingRepair?.Snapshot.PackingPolicyChanged ?? false,
+                SourceAwareRankingRepairRuntimeMutated = sourceAwareRankingRepair?.Snapshot.RuntimeMutated ?? false,
+                SourceAwareRankingRepairVectorStoreBindingChanged = sourceAwareRankingRepair?.Snapshot.VectorStoreBindingChanged ?? false,
+                SourceAwareRankingRepairBlockedReasons = sourceAwareRankingRepair?.Snapshot.BlockedReasons ?? Array.Empty<string>(),
                 OutputTokenPriorityShadowSourcePath = outputTokenPriorityShadow?.SourcePath ?? string.Empty,
-                OutputTokenPriorityShadowPassed = outputTokenPriorityShadow?.Report.ShadowPassed ?? false,
-                OutputTokenPriorityShadowGatePassed = outputTokenPriorityShadow?.Report.GatePassed ?? false,
-                OutputTokenPriorityShadowRecommendation = outputTokenPriorityShadow?.Report.Recommendation ?? string.Empty,
-                OutputTokenPriorityShadowProfileName = outputTokenPriorityShadow?.Report.ProfileName ?? string.Empty,
-                OutputTokenPriorityShadowTokenDeltaTotal = outputTokenPriorityShadow?.Report.TokenDeltaTotal ?? 0,
-                OutputTokenPriorityShadowTokenDeltaMax = outputTokenPriorityShadow?.Report.TokenDeltaMax ?? 0,
-                OutputTokenPriorityShadowTokenDeltaP95 = outputTokenPriorityShadow?.Report.TokenDeltaP95 ?? 0,
-                OutputTokenPriorityShadowTokenBudgetExceededCount = outputTokenPriorityShadow?.Report.TokenBudgetExceededCount ?? 0,
-                OutputTokenPriorityShadowPriorityInversionCount = outputTokenPriorityShadow?.Report.PriorityInversionCount ?? 0,
-                OutputTokenPriorityShadowDroppedRequiredCandidateCount = outputTokenPriorityShadow?.Report.DroppedRequiredCandidateCount ?? 0,
-                OutputTokenPriorityShadowSectionMismatchCount = outputTokenPriorityShadow?.Report.SectionMismatchCount ?? 0,
-                OutputTokenPriorityShadowRiskAfterPolicy = outputTokenPriorityShadow?.Report.RiskAfterPolicy ?? 0,
-                OutputTokenPriorityShadowFormalSelectedSetChanged = outputTokenPriorityShadow?.Report.FormalSelectedSetChanged ?? false,
-                OutputTokenPriorityShadowPackageOutputChanged = outputTokenPriorityShadow?.Report.PackageOutputChanged ?? false,
-                OutputTokenPriorityShadowPackingPolicyChanged = outputTokenPriorityShadow?.Report.PackingPolicyChanged ?? false,
-                OutputTokenPriorityShadowRuntimeMutated = outputTokenPriorityShadow?.Report.RuntimeMutated ?? false,
-                OutputTokenPriorityShadowVectorStoreBindingChanged = outputTokenPriorityShadow?.Report.VectorStoreBindingChanged ?? false,
-                OutputTokenPriorityShadowBlockedReasons = outputTokenPriorityShadow?.Report.BlockedReasons ?? Array.Empty<string>(),
+                OutputTokenPriorityShadowPassed = outputTokenPriorityShadow?.Snapshot.ShadowPassed ?? false,
+                OutputTokenPriorityShadowGatePassed = outputTokenPriorityShadow?.Snapshot.GatePassed ?? false,
+                OutputTokenPriorityShadowRecommendation = outputTokenPriorityShadow?.Snapshot.Recommendation ?? string.Empty,
+                OutputTokenPriorityShadowProfileName = outputTokenPriorityShadow?.Snapshot.ProfileName ?? string.Empty,
+                OutputTokenPriorityShadowTokenDeltaTotal = outputTokenPriorityShadow?.Snapshot.TokenDeltaTotal ?? 0,
+                OutputTokenPriorityShadowTokenDeltaMax = outputTokenPriorityShadow?.Snapshot.TokenDeltaMax ?? 0,
+                OutputTokenPriorityShadowTokenDeltaP95 = outputTokenPriorityShadow?.Snapshot.TokenDeltaP95 ?? 0,
+                OutputTokenPriorityShadowTokenBudgetExceededCount = outputTokenPriorityShadow?.Snapshot.TokenBudgetExceededCount ?? 0,
+                OutputTokenPriorityShadowPriorityInversionCount = outputTokenPriorityShadow?.Snapshot.PriorityInversionCount ?? 0,
+                OutputTokenPriorityShadowDroppedRequiredCandidateCount = outputTokenPriorityShadow?.Snapshot.DroppedRequiredCandidateCount ?? 0,
+                OutputTokenPriorityShadowSectionMismatchCount = outputTokenPriorityShadow?.Snapshot.SectionMismatchCount ?? 0,
+                OutputTokenPriorityShadowRiskAfterPolicy = outputTokenPriorityShadow?.Snapshot.RiskAfterPolicy ?? 0,
+                OutputTokenPriorityShadowFormalSelectedSetChanged = outputTokenPriorityShadow?.Snapshot.FormalSelectedSetChanged ?? false,
+                OutputTokenPriorityShadowPackageOutputChanged = outputTokenPriorityShadow?.Snapshot.PackageOutputChanged ?? false,
+                OutputTokenPriorityShadowPackingPolicyChanged = outputTokenPriorityShadow?.Snapshot.PackingPolicyChanged ?? false,
+                OutputTokenPriorityShadowRuntimeMutated = outputTokenPriorityShadow?.Snapshot.RuntimeMutated ?? false,
+                OutputTokenPriorityShadowVectorStoreBindingChanged = outputTokenPriorityShadow?.Snapshot.VectorStoreBindingChanged ?? false,
+                OutputTokenPriorityShadowBlockedReasons = outputTokenPriorityShadow?.Snapshot.BlockedReasons ?? Array.Empty<string>(),
                 FormalAdapterInputContractSourcePath = formalAdapterInputContract?.SourcePath ?? string.Empty,
-                FormalAdapterInputContractPassed = formalAdapterInputContract?.Report.ContractPassed ?? false,
-                FormalAdapterInputContractGatePassed = formalAdapterInputContract?.Report.GatePassed ?? false,
-                FormalAdapterInputContractRecommendation = formalAdapterInputContract?.Report.Recommendation ?? string.Empty,
-                FormalAdapterInputContractVersion = formalAdapterInputContract?.Report.ContractVersion ?? string.Empty,
-                FormalAdapterInputContractRuntimeInputFieldCount = formalAdapterInputContract?.Report.RuntimeInputFieldCount ?? 0,
-                FormalAdapterInputContractDeniedFieldCount = formalAdapterInputContract?.Report.DeniedFieldCount ?? 0,
-                FormalAdapterInputContractForbiddenPropertyCount = formalAdapterInputContract?.Report.ContractForbiddenPropertyCount ?? 0,
-                FormalAdapterInputContractFormalSourceForbiddenReadCount = formalAdapterInputContract?.Report.FormalSourceForbiddenReadCount ?? 0,
-                FormalAdapterInputContractEvalOnlyForbiddenReadCount = formalAdapterInputContract?.Report.EvalOnlyForbiddenReadCount ?? 0,
-                FormalAdapterInputContractDatasetEvalFieldsBlocked = formalAdapterInputContract?.Report.DatasetEvalFieldsBlocked ?? false,
-                FormalAdapterInputContractGoldLabelsBlocked = formalAdapterInputContract?.Report.GoldLabelsBlocked ?? false,
-                FormalAdapterInputContractSampleMetadataBlocked = formalAdapterInputContract?.Report.SampleMetadataBlocked ?? false,
-                FormalAdapterInputContractShadowArtifactFieldsBlocked = formalAdapterInputContract?.Report.ShadowArtifactFieldsBlocked ?? false,
-                FormalAdapterInputContractFormalRetrievalAllowed = formalAdapterInputContract?.Report.FormalRetrievalAllowed ?? false,
-                FormalAdapterInputContractRuntimeSwitchAllowed = formalAdapterInputContract?.Report.RuntimeSwitchAllowed ?? false,
-                FormalAdapterInputContractRuntimeMutated = formalAdapterInputContract?.Report.RuntimeMutated ?? false,
-                FormalAdapterInputContractPackageOutputChanged = formalAdapterInputContract?.Report.PackageOutputChanged ?? false,
-                FormalAdapterInputContractPackingPolicyChanged = formalAdapterInputContract?.Report.PackingPolicyChanged ?? false,
-                FormalAdapterInputContractVectorStoreBindingChanged = formalAdapterInputContract?.Report.VectorStoreBindingChanged ?? false,
-                FormalAdapterInputContractBlockedReasons = formalAdapterInputContract?.Report.BlockedReasons ?? Array.Empty<string>(),
+                FormalAdapterInputContractPassed = formalAdapterInputContract?.Snapshot.ContractPassed ?? false,
+                FormalAdapterInputContractGatePassed = formalAdapterInputContract?.Snapshot.GatePassed ?? false,
+                FormalAdapterInputContractRecommendation = formalAdapterInputContract?.Snapshot.Recommendation ?? string.Empty,
+                FormalAdapterInputContractVersion = formalAdapterInputContract?.Snapshot.ContractVersion ?? string.Empty,
+                FormalAdapterInputContractRuntimeInputFieldCount = formalAdapterInputContract?.Snapshot.RuntimeInputFieldCount ?? 0,
+                FormalAdapterInputContractDeniedFieldCount = formalAdapterInputContract?.Snapshot.DeniedFieldCount ?? 0,
+                FormalAdapterInputContractForbiddenPropertyCount = formalAdapterInputContract?.Snapshot.ContractForbiddenPropertyCount ?? 0,
+                FormalAdapterInputContractFormalSourceForbiddenReadCount = formalAdapterInputContract?.Snapshot.FormalSourceForbiddenReadCount ?? 0,
+                FormalAdapterInputContractEvalOnlyForbiddenReadCount = formalAdapterInputContract?.Snapshot.EvalOnlyForbiddenReadCount ?? 0,
+                FormalAdapterInputContractDatasetEvalFieldsBlocked = formalAdapterInputContract?.Snapshot.DatasetEvalFieldsBlocked ?? false,
+                FormalAdapterInputContractGoldLabelsBlocked = formalAdapterInputContract?.Snapshot.GoldLabelsBlocked ?? false,
+                FormalAdapterInputContractSampleMetadataBlocked = formalAdapterInputContract?.Snapshot.SampleMetadataBlocked ?? false,
+                FormalAdapterInputContractShadowArtifactFieldsBlocked = formalAdapterInputContract?.Snapshot.ShadowArtifactFieldsBlocked ?? false,
+                FormalAdapterInputContractFormalRetrievalAllowed = formalAdapterInputContract?.Snapshot.FormalRetrievalAllowed ?? false,
+                FormalAdapterInputContractRuntimeSwitchAllowed = formalAdapterInputContract?.Snapshot.RuntimeSwitchAllowed ?? false,
+                FormalAdapterInputContractRuntimeMutated = formalAdapterInputContract?.Snapshot.RuntimeMutated ?? false,
+                FormalAdapterInputContractPackageOutputChanged = formalAdapterInputContract?.Snapshot.PackageOutputChanged ?? false,
+                FormalAdapterInputContractPackingPolicyChanged = formalAdapterInputContract?.Snapshot.PackingPolicyChanged ?? false,
+                FormalAdapterInputContractVectorStoreBindingChanged = formalAdapterInputContract?.Snapshot.VectorStoreBindingChanged ?? false,
+                FormalAdapterInputContractBlockedReasons = formalAdapterInputContract?.Snapshot.BlockedReasons ?? Array.Empty<string>(),
                 RetrievalEvalProtocolGateSourcePath = retrievalEvalProtocol?.GateSourcePath ?? string.Empty,
                 RetrievalEvalProtocolSourceAuditPath = retrievalEvalProtocol?.SourceAuditPath ?? string.Empty,
                 RetrievalEvalProtocolGatePassed = retrievalEvalProtocol?.Gate?.GatePassed ?? false,
                 RetrievalEvalProtocolRecommendation = retrievalEvalProtocol?.Gate?.Recommendation ?? string.Empty,
-                RetrievalEvalProtocolVersion = retrievalEvalProtocol?.Gate?.Protocol.ProtocolVersion ?? string.Empty,
-                RetrievalEvalProtocolVectorTopK = retrievalEvalProtocol?.Gate?.Protocol.VectorTopK ?? 0,
-                RetrievalEvalProtocolMergedTopK = retrievalEvalProtocol?.Gate?.Protocol.MergedTopK ?? 0,
-                RetrievalEvalProtocolFinalTopK = retrievalEvalProtocol?.Gate?.Protocol.FinalTopK ?? 0,
+                RetrievalEvalProtocolVersion = retrievalEvalProtocol?.Gate?.ProtocolVersion ?? string.Empty,
+                RetrievalEvalProtocolVectorTopK = retrievalEvalProtocol?.Gate?.VectorTopK ?? 0,
+                RetrievalEvalProtocolMergedTopK = retrievalEvalProtocol?.Gate?.MergedTopK ?? 0,
+                RetrievalEvalProtocolFinalTopK = retrievalEvalProtocol?.Gate?.FinalTopK ?? 0,
                 RetrievalEvalProtocolHashOrderSensitivityCount = retrievalEvalProtocol?.Gate?.HashOrderSensitivityCount ?? 0,
                 RetrievalEvalProtocolTieBreakDeterministic = retrievalEvalProtocol?.Gate?.TieBreakDeterministic ?? false,
                 RetrievalEvalProtocolSourceNonDiscriminativeDetected = retrievalEvalProtocol?.Gate?.SourceNonDiscriminativeDetected ?? false,
@@ -2321,10 +2321,10 @@ public sealed partial class ControlRoomService
                 RetrievalEvalProtocolMergedRecall = retrievalEvalProtocol?.SourceAudit?.MergedRecall ?? 0,
                 RetrievalEvalProtocolBlockedReasons = retrievalEvalProtocol?.Gate?.BlockedReasons ?? Array.Empty<string>(),
                 FormalRetrievalIntegrationFreezeSourcePath = formalRetrievalIntegrationFreeze?.SourcePath ?? string.Empty,
-                FormalRetrievalIntegrationFreezePassed = formalRetrievalIntegrationFreeze?.Report.FreezePassed ?? false,
-                FormalRetrievalIntegrationFreezeRecommendation = formalRetrievalIntegrationFreeze?.Report.Recommendation ?? string.Empty,
-                FormalRetrievalIntegrationFreezeSelectedProfile = formalRetrievalIntegrationFreeze?.Report.SelectedProfile ?? string.Empty,
-                FormalRetrievalIntegrationFreezeFrozenArtifactCount = formalRetrievalIntegrationFreeze?.Report.FrozenArtifactPaths.Count ?? 0,
+                FormalRetrievalIntegrationFreezePassed = formalRetrievalIntegrationFreeze?.Snapshot.FreezePassed ?? false,
+                FormalRetrievalIntegrationFreezeRecommendation = formalRetrievalIntegrationFreeze?.Snapshot.Recommendation ?? string.Empty,
+                FormalRetrievalIntegrationFreezeSelectedProfile = formalRetrievalIntegrationFreeze?.Snapshot.SelectedProfile ?? string.Empty,
+                FormalRetrievalIntegrationFreezeFrozenArtifactCount = formalRetrievalIntegrationFreeze?.Snapshot.FrozenArtifactCount ?? 0,
                 V4GateSatisfied = readinessGate?.Report.Passed ?? IsVectorV4GateSatisfied(recallLoss.A3, recallLoss.Extended)
             };
         }
@@ -3049,7 +3049,7 @@ public sealed partial class ControlRoomService
         return null;
     }
 
-    private static (FormalRetrievalIntegrationDecisionReport Report, string SourcePath)? TryLoadFormalRetrievalIntegrationDecisionSummary()
+    private static (FormalRetrievalIntegrationDecisionSnapshot Snapshot, string SourcePath)? TryLoadFormalRetrievalIntegrationDecisionSummary()
     {
         var candidates = new[]
         {
@@ -3058,11 +3058,33 @@ public sealed partial class ControlRoomService
         };
         foreach (var path in candidates)
         {
-            var report = TryReadJson<FormalRetrievalIntegrationDecisionReport>(path);
-            if (report is not null)
+            if (!File.Exists(path)) continue;
+            try
             {
-                return (report, path);
+                using var doc = JsonDocument.Parse(File.ReadAllText(path));
+                var root = doc.RootElement;
+                return (new FormalRetrievalIntegrationDecisionSnapshot
+                {
+                    DecisionPassed = VectorShadowQualitySnapshotReader.GetBool(root, "DecisionPassed"),
+                    GatePassed = VectorShadowQualitySnapshotReader.GetBool(root, "GatePassed"),
+                    ReadyForFormalRetrievalIntegrationFreeze = VectorShadowQualitySnapshotReader.GetBool(root, "ReadyForFormalRetrievalIntegrationFreeze"),
+                    ReadyForAdapterNoOpBindingPlan = VectorShadowQualitySnapshotReader.GetBool(root, "ReadyForAdapterNoOpBindingPlan"),
+                    FormalRetrievalAllowed = VectorShadowQualitySnapshotReader.GetBool(root, "FormalRetrievalAllowed"),
+                    RuntimeSwitchAllowed = VectorShadowQualitySnapshotReader.GetBool(root, "RuntimeSwitchAllowed"),
+                    ReadyForRuntimeSwitch = VectorShadowQualitySnapshotReader.GetBool(root, "ReadyForRuntimeSwitch"),
+                    PackageOutputChanged = VectorShadowQualitySnapshotReader.GetBool(root, "PackageOutputChanged"),
+                    PackingPolicyChanged = VectorShadowQualitySnapshotReader.GetBool(root, "PackingPolicyChanged"),
+                    RuntimeMutated = VectorShadowQualitySnapshotReader.GetBool(root, "RuntimeMutated"),
+                    VectorStoreBindingChanged = VectorShadowQualitySnapshotReader.GetBool(root, "VectorStoreBindingChanged"),
+                    Recommendation = VectorShadowQualitySnapshotReader.GetString(root, "Recommendation"),
+                    IntegrationDecision = VectorShadowQualitySnapshotReader.GetString(root, "IntegrationDecision"),
+                    NextAllowedPhase = VectorShadowQualitySnapshotReader.GetString(root, "NextAllowedPhase"),
+                    RiskAfterPolicy = VectorShadowQualitySnapshotReader.GetInt32(root, "RiskAfterPolicy"),
+                    FormalOutputChanged = VectorShadowQualitySnapshotReader.GetInt32(root, "FormalOutputChanged"),
+                    BlockedReasons = VectorShadowQualitySnapshotReader.GetStringArray(root, "BlockedReasons")
+                }, path);
             }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) { continue; }
         }
 
         return null;
@@ -3221,53 +3243,287 @@ public sealed partial class ControlRoomService
         return null;
     }
 
-    private static (RetrievalEvalProtocolGateReport? Gate, CandidateSourceDiscriminabilityAuditReport? SourceAudit, string GateSourcePath, string SourceAuditPath)? TryLoadRetrievalEvalProtocolSummary()
+    private static (RetrievalEvalProtocolGateSnapshot? Gate, CandidateSourceDiscriminabilityAuditSnapshot? SourceAudit, string GateSourcePath, string SourceAuditPath)? TryLoadRetrievalEvalProtocolSummary()
     {
-        return TryLoadSummaryPair<RetrievalEvalProtocolGateReport, CandidateSourceDiscriminabilityAuditReport>(
-            VectorReportPath("v5", "retrieval-eval-protocol-gate.json"),
-            VectorReportPath("v5", "candidate-source-discriminability-audit.json"));
+        var gatePath = VectorReportPath("v5", "retrieval-eval-protocol-gate.json");
+        var auditPath = VectorReportPath("v5", "candidate-source-discriminability-audit.json");
+        RetrievalEvalProtocolGateSnapshot? gate = null;
+        CandidateSourceDiscriminabilityAuditSnapshot? audit = null;
+        if (File.Exists(gatePath))
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(File.ReadAllText(gatePath));
+                var root = doc.RootElement;
+                gate = new RetrievalEvalProtocolGateSnapshot
+                {
+                    GatePassed = VectorShadowQualitySnapshotReader.GetBool(root, "GatePassed"),
+                    TieBreakDeterministic = VectorShadowQualitySnapshotReader.GetBool(root, "TieBreakDeterministic"),
+                    SourceNonDiscriminativeDetected = VectorShadowQualitySnapshotReader.GetBool(root, "SourceNonDiscriminativeDetected"),
+                    TemplateHomogeneityDetected = VectorShadowQualitySnapshotReader.GetBool(root, "TemplateHomogeneityDetected"),
+                    RuntimeChangeGatePassed = VectorShadowQualitySnapshotReader.GetBool(root, "RuntimeChangeGatePassed"),
+                    Recommendation = VectorShadowQualitySnapshotReader.GetString(root, "Recommendation"),
+                    ProtocolVersion = VectorShadowQualitySnapshotReader.GetNestedString(root, "Protocol", "ProtocolVersion"),
+                    VectorTopK = VectorShadowQualitySnapshotReader.GetNestedInt32(root, "Protocol", "VectorTopK"),
+                    MergedTopK = VectorShadowQualitySnapshotReader.GetNestedInt32(root, "Protocol", "MergedTopK"),
+                    FinalTopK = VectorShadowQualitySnapshotReader.GetNestedInt32(root, "Protocol", "FinalTopK"),
+                    HashOrderSensitivityCount = VectorShadowQualitySnapshotReader.GetInt32(root, "HashOrderSensitivityCount"),
+                    RiskAfterPolicy = VectorShadowQualitySnapshotReader.GetInt32(root, "RiskAfterPolicy"),
+                    MustNotHitRiskAfterPolicy = VectorShadowQualitySnapshotReader.GetInt32(root, "MustNotHitRiskAfterPolicy"),
+                    LifecycleRiskAfterPolicy = VectorShadowQualitySnapshotReader.GetInt32(root, "LifecycleRiskAfterPolicy"),
+                    BlockedReasons = VectorShadowQualitySnapshotReader.GetStringArray(root, "BlockedReasons")
+                };
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) { }
+        }
+        if (File.Exists(auditPath))
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(File.ReadAllText(auditPath));
+                var root = doc.RootElement;
+                audit = new CandidateSourceDiscriminabilityAuditSnapshot
+                {
+                    NonDiscriminativeSourceCount = VectorShadowQualitySnapshotReader.GetInt32(root, "NonDiscriminativeSourceCount"),
+                    TemplateHomogeneityScore = VectorShadowQualitySnapshotReader.GetDouble(root, "TemplateHomogeneityScore"),
+                    BaselineRecall = VectorShadowQualitySnapshotReader.GetDouble(root, "BaselineRecall"),
+                    MergedRecall = VectorShadowQualitySnapshotReader.GetDouble(root, "MergedRecall")
+                };
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) { }
+        }
+        if (gate is null && audit is null)
+        {
+            return null;
+        }
+        return (gate, audit, gate is null ? string.Empty : gatePath, audit is null ? string.Empty : auditPath);
     }
 
-    private static (InputMetadataEnrichmentPreviewReport Report, string SourcePath)? TryLoadInputMetadataEnrichmentSummary()
+    private static (InputMetadataEnrichmentPreviewSnapshot Snapshot, string SourcePath)? TryLoadInputMetadataEnrichmentSummary()
     {
-        return TryLoadSummaryReport<InputMetadataEnrichmentPreviewReport>(
+        var candidates = new[]
+        {
             VectorReportPath("v5", "input-metadata-enrichment-gate.json"),
-            VectorReportPath("v5", "input-metadata-enrichment-preview.json"));
+            VectorReportPath("v5", "input-metadata-enrichment-preview.json")
+        };
+        foreach (var path in candidates)
+        {
+            if (!File.Exists(path)) continue;
+            try
+            {
+                using var doc = JsonDocument.Parse(File.ReadAllText(path));
+                var root = doc.RootElement;
+                return (new InputMetadataEnrichmentPreviewSnapshot
+                {
+                    PreviewPassed = VectorShadowQualitySnapshotReader.GetBool(root, "PreviewPassed"),
+                    GatePassed = VectorShadowQualitySnapshotReader.GetBool(root, "GatePassed"),
+                    PackageOutputChanged = VectorShadowQualitySnapshotReader.GetBool(root, "PackageOutputChanged"),
+                    PackingPolicyChanged = VectorShadowQualitySnapshotReader.GetBool(root, "PackingPolicyChanged"),
+                    RuntimeMutated = VectorShadowQualitySnapshotReader.GetBool(root, "RuntimeMutated"),
+                    VectorStoreBindingChanged = VectorShadowQualitySnapshotReader.GetBool(root, "VectorStoreBindingChanged"),
+                    Recommendation = VectorShadowQualitySnapshotReader.GetString(root, "Recommendation"),
+                    MetadataCoverageDelta = VectorShadowQualitySnapshotReader.GetInt32(root, "MetadataCoverageDelta"),
+                    IndependentNonDenseSourceCount = VectorShadowQualitySnapshotReader.GetInt32(root, "IndependentNonDenseSourceCount"),
+                    RiskAfterPolicy = VectorShadowQualitySnapshotReader.GetInt32(root, "RiskAfterPolicy"),
+                    MustNotHitRiskAfterPolicy = VectorShadowQualitySnapshotReader.GetInt32(root, "MustNotHitRiskAfterPolicy"),
+                    LifecycleRiskAfterPolicy = VectorShadowQualitySnapshotReader.GetInt32(root, "LifecycleRiskAfterPolicy"),
+                    BeforeRecall = VectorShadowQualitySnapshotReader.GetDouble(root, "BeforeRecall"),
+                    AfterRecall = VectorShadowQualitySnapshotReader.GetDouble(root, "AfterRecall"),
+                    BlockedReasons = VectorShadowQualitySnapshotReader.GetStringArray(root, "BlockedReasons")
+                }, path);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) { continue; }
+        }
+        return null;
     }
 
-    private static (EnrichedCandidateSourceRepairRecheckReport Report, string SourcePath)? TryLoadEnrichedCandidateSourceRepairRecheckSummary()
+    private static (EnrichedCandidateSourceRepairRecheckSnapshot Snapshot, string SourcePath)? TryLoadEnrichedCandidateSourceRepairRecheckSummary()
     {
-        return TryLoadSummaryReport<EnrichedCandidateSourceRepairRecheckReport>(
+        var candidates = new[]
+        {
             VectorReportPath("v5", "enriched-candidate-source-repair-recheck-gate.json"),
-            VectorReportPath("v5", "enriched-candidate-source-repair-recheck.json"));
+            VectorReportPath("v5", "enriched-candidate-source-repair-recheck.json")
+        };
+        foreach (var path in candidates)
+        {
+            if (!File.Exists(path)) continue;
+            try
+            {
+                using var doc = JsonDocument.Parse(File.ReadAllText(path));
+                var root = doc.RootElement;
+                return (new EnrichedCandidateSourceRepairRecheckSnapshot
+                {
+                    RecheckPassed = VectorShadowQualitySnapshotReader.GetBool(root, "RecheckPassed"),
+                    GatePassed = VectorShadowQualitySnapshotReader.GetBool(root, "GatePassed"),
+                    QualityImproved = VectorShadowQualitySnapshotReader.GetBool(root, "QualityImproved"),
+                    PackageOutputChanged = VectorShadowQualitySnapshotReader.GetBool(root, "PackageOutputChanged"),
+                    PackingPolicyChanged = VectorShadowQualitySnapshotReader.GetBool(root, "PackingPolicyChanged"),
+                    RuntimeMutated = VectorShadowQualitySnapshotReader.GetBool(root, "RuntimeMutated"),
+                    VectorStoreBindingChanged = VectorShadowQualitySnapshotReader.GetBool(root, "VectorStoreBindingChanged"),
+                    Recommendation = VectorShadowQualitySnapshotReader.GetString(root, "Recommendation"),
+                    MustHitBelowTopKDelta = VectorShadowQualitySnapshotReader.GetInt32(root, "MustHitBelowTopKDelta"),
+                    RiskAfterPolicy = VectorShadowQualitySnapshotReader.GetInt32(root, "RiskAfterPolicy"),
+                    TrainDerivedRecallDelta = VectorShadowQualitySnapshotReader.GetDouble(root, "TrainDerivedRecallDelta"),
+                    HoldoutDerivedRecallDelta = VectorShadowQualitySnapshotReader.GetDouble(root, "HoldoutDerivedRecallDelta"),
+                    BlockedReasons = VectorShadowQualitySnapshotReader.GetStringArray(root, "BlockedReasons"),
+                    QualityBlockedReasons = VectorShadowQualitySnapshotReader.GetStringArray(root, "QualityBlockedReasons")
+                }, path);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) { continue; }
+        }
+        return null;
     }
 
-    private static (SourceAwareRankingRepairReport Report, string SourcePath)? TryLoadSourceAwareRankingRepairSummary()
+    private static (SourceAwareRankingRepairSnapshot Snapshot, string SourcePath)? TryLoadSourceAwareRankingRepairSummary()
     {
-        return TryLoadSummaryReport<SourceAwareRankingRepairReport>(
+        var candidates = new[]
+        {
             VectorReportPath("v5", "source-aware-ranking-repair-gate.json"),
-            VectorReportPath("v5", "source-aware-ranking-repair.json"));
+            VectorReportPath("v5", "source-aware-ranking-repair.json")
+        };
+        foreach (var path in candidates)
+        {
+            if (!File.Exists(path)) continue;
+            try
+            {
+                using var doc = JsonDocument.Parse(File.ReadAllText(path));
+                var root = doc.RootElement;
+                return (new SourceAwareRankingRepairSnapshot
+                {
+                    ReportPassed = VectorShadowQualitySnapshotReader.GetBool(root, "ReportPassed"),
+                    GatePassed = VectorShadowQualitySnapshotReader.GetBool(root, "GatePassed"),
+                    PackageOutputChanged = VectorShadowQualitySnapshotReader.GetBool(root, "PackageOutputChanged"),
+                    PackingPolicyChanged = VectorShadowQualitySnapshotReader.GetBool(root, "PackingPolicyChanged"),
+                    RuntimeMutated = VectorShadowQualitySnapshotReader.GetBool(root, "RuntimeMutated"),
+                    VectorStoreBindingChanged = VectorShadowQualitySnapshotReader.GetBool(root, "VectorStoreBindingChanged"),
+                    Recommendation = VectorShadowQualitySnapshotReader.GetString(root, "Recommendation"),
+                    SelectedProfileId = VectorShadowQualitySnapshotReader.GetString(root, "SelectedProfileId"),
+                    DenseWinnerLostCount = VectorShadowQualitySnapshotReader.GetInt32(root, "DenseWinnerLostCount"),
+                    UniqueSourceRecoveryCount = VectorShadowQualitySnapshotReader.GetInt32(root, "UniqueSourceRecoveryCount"),
+                    SourceNoiseCount = VectorShadowQualitySnapshotReader.GetInt32(root, "SourceNoiseCount"),
+                    RiskAfterPolicy = VectorShadowQualitySnapshotReader.GetInt32(root, "RiskAfterPolicy"),
+                    TrainDevRecallDelta = VectorShadowQualitySnapshotReader.GetDouble(root, "TrainDevRecallDelta"),
+                    TestRecallDelta = VectorShadowQualitySnapshotReader.GetDouble(root, "TestRecallDelta"),
+                    HoldoutRecallDelta = VectorShadowQualitySnapshotReader.GetDouble(root, "HoldoutRecallDelta"),
+                    BlindHoldoutRecallDelta = VectorShadowQualitySnapshotReader.GetDouble(root, "BlindHoldoutRecallDelta"),
+                    FallbackRate = VectorShadowQualitySnapshotReader.GetDouble(root, "FallbackRate"),
+                    BlockedReasons = VectorShadowQualitySnapshotReader.GetStringArray(root, "BlockedReasons")
+                }, path);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) { continue; }
+        }
+        return null;
     }
 
-    private static (OutputTokenPriorityShadowGateReport Report, string SourcePath)? TryLoadOutputTokenPriorityShadowSummary()
+    private static (OutputTokenPriorityShadowSnapshot Snapshot, string SourcePath)? TryLoadOutputTokenPriorityShadowSummary()
     {
-        return TryLoadSummaryReport<OutputTokenPriorityShadowGateReport>(
+        var candidates = new[]
+        {
             VectorReportPath("v5", "output-token-priority-shadow-gate.json"),
-            VectorReportPath("v5", "output-token-priority-shadow.json"));
+            VectorReportPath("v5", "output-token-priority-shadow.json")
+        };
+        foreach (var path in candidates)
+        {
+            if (!File.Exists(path)) continue;
+            try
+            {
+                using var doc = JsonDocument.Parse(File.ReadAllText(path));
+                var root = doc.RootElement;
+                return (new OutputTokenPriorityShadowSnapshot
+                {
+                    ShadowPassed = VectorShadowQualitySnapshotReader.GetBool(root, "ShadowPassed"),
+                    GatePassed = VectorShadowQualitySnapshotReader.GetBool(root, "GatePassed"),
+                    FormalSelectedSetChanged = VectorShadowQualitySnapshotReader.GetBool(root, "FormalSelectedSetChanged"),
+                    PackageOutputChanged = VectorShadowQualitySnapshotReader.GetBool(root, "PackageOutputChanged"),
+                    PackingPolicyChanged = VectorShadowQualitySnapshotReader.GetBool(root, "PackingPolicyChanged"),
+                    RuntimeMutated = VectorShadowQualitySnapshotReader.GetBool(root, "RuntimeMutated"),
+                    VectorStoreBindingChanged = VectorShadowQualitySnapshotReader.GetBool(root, "VectorStoreBindingChanged"),
+                    Recommendation = VectorShadowQualitySnapshotReader.GetString(root, "Recommendation"),
+                    ProfileName = VectorShadowQualitySnapshotReader.GetString(root, "ProfileName"),
+                    TokenDeltaTotal = VectorShadowQualitySnapshotReader.GetInt32(root, "TokenDeltaTotal"),
+                    TokenDeltaMax = VectorShadowQualitySnapshotReader.GetInt32(root, "TokenDeltaMax"),
+                    TokenDeltaP95 = VectorShadowQualitySnapshotReader.GetInt32(root, "TokenDeltaP95"),
+                    TokenBudgetExceededCount = VectorShadowQualitySnapshotReader.GetInt32(root, "TokenBudgetExceededCount"),
+                    PriorityInversionCount = VectorShadowQualitySnapshotReader.GetInt32(root, "PriorityInversionCount"),
+                    DroppedRequiredCandidateCount = VectorShadowQualitySnapshotReader.GetInt32(root, "DroppedRequiredCandidateCount"),
+                    SectionMismatchCount = VectorShadowQualitySnapshotReader.GetInt32(root, "SectionMismatchCount"),
+                    RiskAfterPolicy = VectorShadowQualitySnapshotReader.GetInt32(root, "RiskAfterPolicy"),
+                    BlockedReasons = VectorShadowQualitySnapshotReader.GetStringArray(root, "BlockedReasons")
+                }, path);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) { continue; }
+        }
+        return null;
     }
 
-    private static (FormalAdapterInputContractReport Report, string SourcePath)? TryLoadFormalAdapterInputContractSummary()
+    private static (FormalAdapterInputContractSnapshot Snapshot, string SourcePath)? TryLoadFormalAdapterInputContractSummary()
     {
-        return TryLoadSummaryReport<FormalAdapterInputContractReport>(
+        var candidates = new[]
+        {
             VectorReportPath("v5", "formal-adapter-input-contract-gate.json"),
-            VectorReportPath("v5", "formal-adapter-input-contract.json"));
+            VectorReportPath("v5", "formal-adapter-input-contract.json")
+        };
+        foreach (var path in candidates)
+        {
+            if (!File.Exists(path)) continue;
+            try
+            {
+                using var doc = JsonDocument.Parse(File.ReadAllText(path));
+                var root = doc.RootElement;
+                return (new FormalAdapterInputContractSnapshot
+                {
+                    ContractPassed = VectorShadowQualitySnapshotReader.GetBool(root, "ContractPassed"),
+                    GatePassed = VectorShadowQualitySnapshotReader.GetBool(root, "GatePassed"),
+                    DatasetEvalFieldsBlocked = VectorShadowQualitySnapshotReader.GetBool(root, "DatasetEvalFieldsBlocked"),
+                    GoldLabelsBlocked = VectorShadowQualitySnapshotReader.GetBool(root, "GoldLabelsBlocked"),
+                    SampleMetadataBlocked = VectorShadowQualitySnapshotReader.GetBool(root, "SampleMetadataBlocked"),
+                    ShadowArtifactFieldsBlocked = VectorShadowQualitySnapshotReader.GetBool(root, "ShadowArtifactFieldsBlocked"),
+                    FormalRetrievalAllowed = VectorShadowQualitySnapshotReader.GetBool(root, "FormalRetrievalAllowed"),
+                    RuntimeSwitchAllowed = VectorShadowQualitySnapshotReader.GetBool(root, "RuntimeSwitchAllowed"),
+                    RuntimeMutated = VectorShadowQualitySnapshotReader.GetBool(root, "RuntimeMutated"),
+                    PackageOutputChanged = VectorShadowQualitySnapshotReader.GetBool(root, "PackageOutputChanged"),
+                    PackingPolicyChanged = VectorShadowQualitySnapshotReader.GetBool(root, "PackingPolicyChanged"),
+                    VectorStoreBindingChanged = VectorShadowQualitySnapshotReader.GetBool(root, "VectorStoreBindingChanged"),
+                    Recommendation = VectorShadowQualitySnapshotReader.GetString(root, "Recommendation"),
+                    ContractVersion = VectorShadowQualitySnapshotReader.GetString(root, "ContractVersion"),
+                    RuntimeInputFieldCount = VectorShadowQualitySnapshotReader.GetInt32(root, "RuntimeInputFieldCount"),
+                    DeniedFieldCount = VectorShadowQualitySnapshotReader.GetInt32(root, "DeniedFieldCount"),
+                    ContractForbiddenPropertyCount = VectorShadowQualitySnapshotReader.GetInt32(root, "ContractForbiddenPropertyCount"),
+                    FormalSourceForbiddenReadCount = VectorShadowQualitySnapshotReader.GetInt32(root, "FormalSourceForbiddenReadCount"),
+                    EvalOnlyForbiddenReadCount = VectorShadowQualitySnapshotReader.GetInt32(root, "EvalOnlyForbiddenReadCount"),
+                    BlockedReasons = VectorShadowQualitySnapshotReader.GetStringArray(root, "BlockedReasons")
+                }, path);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) { continue; }
+        }
+        return null;
     }
 
-    private static (FormalRetrievalIntegrationFreezeReport Report, string SourcePath)? TryLoadFormalRetrievalIntegrationFreezeSummary()
+    private static (FormalRetrievalIntegrationFreezeSnapshot Snapshot, string SourcePath)? TryLoadFormalRetrievalIntegrationFreezeSummary()
     {
-        return TryLoadSummaryReport<FormalRetrievalIntegrationFreezeReport>(
+        var candidates = new[]
+        {
             VectorReportPath("v5", "formal-retrieval-integration-freeze-gate.json"),
-            VectorReportPath("v5", "formal-retrieval-integration-freeze.json"));
+            VectorReportPath("v5", "formal-retrieval-integration-freeze.json")
+        };
+        foreach (var path in candidates)
+        {
+            if (!File.Exists(path)) continue;
+            try
+            {
+                using var doc = JsonDocument.Parse(File.ReadAllText(path));
+                var root = doc.RootElement;
+                return (new FormalRetrievalIntegrationFreezeSnapshot
+                {
+                    FreezePassed = VectorShadowQualitySnapshotReader.GetBool(root, "FreezePassed"),
+                    Recommendation = VectorShadowQualitySnapshotReader.GetString(root, "Recommendation"),
+                    SelectedProfile = VectorShadowQualitySnapshotReader.GetString(root, "SelectedProfile"),
+                    FrozenArtifactCount = VectorShadowQualitySnapshotReader.GetArrayLength(root, "FrozenArtifactPaths")
+                }, path);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) { continue; }
+        }
+        return null;
     }
 
     private static (ArchitectureCleanupFreezeReport Report, string SourcePath)? TryLoadArchitectureCleanupFreezeSummary()
