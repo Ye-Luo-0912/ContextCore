@@ -97,18 +97,9 @@ internal static class CoreExtensions
 			sp.GetService<IRelationReviewStore>(),
 			sp.GetRequiredService<RelationTypeRegistry>(),
 			sp.GetRequiredService<RelationGraphValidationService>()));
-		services.AddSingleton(sp => new PolicyFeedbackDatasetService(
-			sp.GetService<IShortTermPromotionCandidateStore>(),
-			sp.GetService<IStableReviewCandidateStore>(),
-			sp.GetService<IConstraintGapCandidateStore>(),
-			sp.GetService<ICandidateConstraintReviewStore>(),
-			sp.GetService<IConstraintStore>()));
-		services.AddSingleton(sp => new LearningFeatureDatasetService(
-			sp.GetRequiredService<PolicyFeedbackDatasetService>()));
 		services.AddSingleton<LearningFeedbackService>();
 		services.AddSingleton<LearningFeedbackReviewService>();
 		services.AddSingleton<LearningFeedbackFeatureCandidateBuilder>();
-		services.AddSingleton<LearningDatasetQualityReportBuilder>();
 	// Embedding provider 注册由 AddEmbeddingProviders 扩展方法在 Program.cs 中显式调用，
 	// 根据 EmbeddingProviderOptions.ProviderType 条件注册 IEmbeddingGenerator / IEmbeddingProvider。
 	// - DeterministicHash: 仅注册 IEmbeddingGenerator（基础设施测试/预览），不注册 IEmbeddingProvider，IsSemanticRetrieval=false

@@ -3,12 +3,10 @@ using System.Text;
 using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services.Planning;
 
-namespace ContextCore.Core.Services;
+namespace ContextCore.Evaluation.Learning;
 
 /// <summary>
-/// P3-01：路由意图分类器基类与实现。
-/// 从 RouterIntentEvaluationRunner 提取到 Core，因为 RouterIntentShadowService（运行时）依赖这些类型。
-/// RouterIntentEvaluationRunner 保留在 Evaluation 项目中。
+/// 路由意图分类器基类与实现（离线训练/评估）。
 /// </summary>
 public abstract class RouterIntentClassifier
 {
@@ -341,8 +339,7 @@ public sealed class TokenCentroidRouterBaseline : RouterIntentClassifier
 }
 
 /// <summary>
-/// P3-01：意图标签解析器。从 RouterIntentEvaluationRunner.GetIntentLabel 提取到 Core，
-/// 供 TokenCentroidRouterBaseline 使用。RouterIntentEvaluationRunner 保留在 Evaluation 中。
+/// 意图标签解析器，供 TokenCentroidRouterBaseline 使用。
 /// </summary>
 public static class RouterIntentClassifierLabelResolver
 {

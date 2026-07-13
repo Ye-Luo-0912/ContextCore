@@ -237,30 +237,6 @@ public static class ServiceDashboardScreen
             }
 
             if (action.Kind == ControlRoomActionKind.Value
-                && string.Equals(action.Value?.Trim(), "32", StringComparison.OrdinalIgnoreCase))
-            {
-                var result = await ServicePolicyFeedbackScreen.ShowAsync(service, cancellationToken).ConfigureAwait(false);
-                if (result == ControlRoomActionKind.Quit)
-                {
-                    return result;
-                }
-
-                continue;
-            }
-
-            if (action.Kind == ControlRoomActionKind.Value
-                && string.Equals(action.Value?.Trim(), "33", StringComparison.OrdinalIgnoreCase))
-            {
-                var result = await ServiceLearningFeaturesScreen.ShowAsync(service, cancellationToken).ConfigureAwait(false);
-                if (result == ControlRoomActionKind.Quit)
-                {
-                    return result;
-                }
-
-                continue;
-            }
-
-            if (action.Kind == ControlRoomActionKind.Value
                 && string.Equals(action.Value?.Trim(), "35", StringComparison.OrdinalIgnoreCase))
             {
                 var result = await ServiceCandidateMemoryScreen.ShowAsync(service, cancellationToken).ConfigureAwait(false);

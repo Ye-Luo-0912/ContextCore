@@ -4,7 +4,7 @@ using System.Text.Json;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 
-namespace ContextCore.Core.Services;
+namespace ContextCore.Evaluation.Learning;
 
 /// <summary>从既有人工 review history 聚合只读策略反馈数据集。</summary>
 public sealed class PolicyFeedbackDatasetService

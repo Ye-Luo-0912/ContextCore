@@ -3,7 +3,7 @@ using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.ControlRoom.Rendering;
 using ContextCore.ControlRoom.Services;
-using ContextCore.Core.Services;
+using ContextCore.Evaluation.Learning;
 using ContextCore.Storage.InMemory;
 using ContextCore.Storage.InMemory.Stores;
 
@@ -117,61 +117,6 @@ public sealed class ContextCorePolicyFeedbackDatasetTests
         Assert.IsNotNull(record);
         Assert.AreEqual(PolicyFeedbackLabels.Positive, record!.Label);
         Assert.AreEqual("PromotionCandidateReviewRecord", record.SourceType);
-    }
-
-    [TestMethod]
-    public void ControlRoom_ShouldRenderDatasetSummary()
-    {
-        var snapshot = new ServicePolicyFeedbackDatasetSnapshot
-        {
-            CurrentTime = DateTimeOffset.Parse("2026-06-06T12:00:00Z"),
-            BaseUrl = "http://localhost:5079/",
-            Limit = 50,
-            Offset = 0,
-            Dataset = new PolicyFeedbackDataset
-            {
-                DatasetId = "dataset-test",
-                Name = "Policy Feedback Dataset",
-                Scope = $"workspace:{WorkspaceId}/collection:{CollectionId}",
-                PositiveCount = 1,
-                NegativeCount = 1,
-                NeutralCount = 0,
-                PolicyVersion = "policy-feedback-dataset/v1",
-                EvalBaselineRef = "docs/eval-baseline-p15.md",
-                SourceTypes = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
-                {
-                    ["PromotionCandidateReviewRecord"] = 1,
-                    ["CandidateConstraintReviewRecord"] = 1
-                },
-                Records =
-                [
-                    new PolicyFeedbackRecord
-                    {
-                        FeedbackRecordId = "policy-feedback-1",
-                        WorkspaceId = WorkspaceId,
-                        CollectionId = CollectionId,
-                        SourceType = "PromotionCandidateReviewRecord",
-                        SourceId = "promotion-review-1",
-                        Action = "accept",
-                        Label = PolicyFeedbackLabels.Positive,
-                        Reason = "accepted",
-                        PositiveRefs = ["evidence-1"],
-                        EvidenceRefs = ["evidence-1"],
-                        TargetLayer = "CandidateMemory",
-                        CreatedAt = DateTimeOffset.Parse("2026-06-06T12:00:00Z"),
-                        Reviewer = "reviewer-a",
-                        PolicyVersion = "policy-feedback-dataset/v1"
-                    }
-                ]
-            }
-        };
-
-        var output = ServiceOperationalRenderer.RenderPolicyFeedbackDataset(snapshot);
-
-        StringAssert.Contains(output, "Service Policy Feedback Dataset");
-        StringAssert.Contains(output, "positive=1 negative=1 neutral=0");
-        StringAssert.Contains(output, "PromotionCandidateReviewRecord: 1");
-        StringAssert.Contains(output, "policy-feedback-1");
     }
 
     private static PolicyFeedbackRecord AssertSingleRecord(PolicyFeedbackDataset dataset, string sourceType)

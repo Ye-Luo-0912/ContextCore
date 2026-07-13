@@ -3,7 +3,7 @@ using System.Text;
 using System.Text.Json;
 using ContextCore.Abstractions.Models;
 
-namespace ContextCore.Core.Services;
+namespace ContextCore.Evaluation.Learning;
 
 /// <summary>路由意图数据集的加载状态。</summary>
 public enum RouterIntentDatasetStatus

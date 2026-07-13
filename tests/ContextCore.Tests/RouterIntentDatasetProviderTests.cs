@@ -1,6 +1,6 @@
 using System.Text.Json;
 using ContextCore.Abstractions.Models;
-using ContextCore.Core.Services;
+using ContextCore.Evaluation.Learning;
 using ContextCore.Storage.InMemory;
 
 namespace ContextCore.Tests;

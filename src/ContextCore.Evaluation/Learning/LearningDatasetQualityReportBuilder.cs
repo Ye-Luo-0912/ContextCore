@@ -4,7 +4,7 @@ using System.Text.Json;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 
-namespace ContextCore.Core.Services;
+namespace ContextCore.Evaluation.Learning;
 
 /// <summary>Builds an offline learning dataset quality report from exported JSONL features.</summary>
 public sealed class LearningDatasetQualityReportBuilder

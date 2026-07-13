@@ -1531,10 +1531,6 @@ public sealed class ServiceApiIntegrationTests
             var negativeRecords = await client.GetFromJsonAsync<ContextLearningRecord[]>("/api/learning/records?workspaceId=workspace-review&collectionId=collection-review&signal=Negative&limit=10&offset=0");
             var cases = await client.GetFromJsonAsync<ContextLearningCase[]>("/api/learning/cases?workspaceId=workspace-review&collectionId=collection-review&limit=10&offset=0");
             var falsePositiveCases = await client.GetFromJsonAsync<ContextLearningCase[]>("/api/learning/cases?workspaceId=workspace-review&collectionId=collection-review&failureType=PromotionFalsePositive&limit=10&offset=0");
-            var policyFeedback = await client.GetFromJsonAsync<PolicyFeedbackDataset>("/api/learning/policy-feedback?workspaceId=workspace-review&collectionId=collection-review&limit=10&offset=0");
-            var policyFeedbackExport = await client.GetStringAsync("/api/learning/policy-feedback/export?workspaceId=workspace-review&collectionId=collection-review&limit=10&offset=0");
-            var learningFeatures = await client.GetFromJsonAsync<LearningFeatureDataset>("/api/learning/features?workspaceId=workspace-review&collectionId=collection-review&limit=10&offset=0");
-            var learningFeatureQuality = await client.GetFromJsonAsync<LearningDatasetQualityReport>("/api/learning/features/quality");
 
             Assert.IsNotNull(feedback);
             Assert.AreEqual(2, feedback!.Length);
@@ -1551,24 +1547,6 @@ public sealed class ServiceApiIntegrationTests
             Assert.IsTrue(records.All(record => record.Metadata.ContainsKey("sourceWorkingItemId")));
             Assert.IsNotNull(negativeRecords);
             Assert.AreEqual(1, negativeRecords!.Length);
-            Assert.IsNotNull(policyFeedback);
-            Assert.AreEqual(1, policyFeedback!.PositiveCount);
-            Assert.AreEqual(1, policyFeedback.NegativeCount);
-            Assert.AreEqual(1, policyFeedback.NeutralCount);
-            Assert.AreEqual(3, policyFeedback.SourceTypes["PromotionCandidateReviewRecord"]);
-            Assert.IsTrue(policyFeedback.Records.Any(record => record.Label == PolicyFeedbackLabels.Positive));
-            Assert.IsTrue(policyFeedback.Records.Any(record => record.Label == PolicyFeedbackLabels.Negative));
-            Assert.IsTrue(policyFeedbackExport.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries).Length >= 3);
-            Assert.IsNotNull(learningFeatures);
-            Assert.AreEqual(3, learningFeatures!.FeatureCount);
-            Assert.IsTrue(learningFeatures.RankingPairCount >= 0);
-            Assert.IsTrue(learningFeatures.RouterIntentExampleCount >= 0);
-            Assert.AreEqual(PolicyFeedbackLabels.Positive, learningFeatures.FeatureExamples.First(item => item.Accepted).Label);
-            Assert.IsTrue(learningFeatures.LabelDistribution.ContainsKey(PolicyFeedbackLabels.Positive));
-            Assert.IsTrue(learningFeatures.SourceTypeDistribution.ContainsKey("PromotionCandidateReviewRecord"));
-            Assert.IsNotNull(learningFeatureQuality);
-            Assert.IsTrue(learningFeatureQuality!.PolicyFeedbackFeatureCount >= 0);
-            Assert.IsTrue(learningFeatureQuality.TaskReadiness.ContainsKey(LearningDatasetTaskNames.RouterIntentClassifier));
 
             Assert.IsNotNull(cases);
             Assert.AreEqual(3, cases!.Length);

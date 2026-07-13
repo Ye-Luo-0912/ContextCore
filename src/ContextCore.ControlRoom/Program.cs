@@ -413,28 +413,6 @@ static async Task RunInteractiveAsync(
                     return;
                 }
                 break;
-            case ControlRoomActionKind.OpenServicePolicyFeedback:
-                if (!service.State.IsServiceMode)
-                {
-                    ShowServiceModeUnsupported("Service Policy Feedback 仅在 Service 模式可用");
-                    break;
-                }
-                if (await ServicePolicyFeedbackScreen.ShowAsync(service, cancellationToken).ConfigureAwait(false) == ControlRoomActionKind.Quit)
-                {
-                    return;
-                }
-                break;
-            case ControlRoomActionKind.OpenServiceLearningFeatures:
-                if (!service.State.IsServiceMode)
-                {
-                    ShowServiceModeUnsupported("Service Learning Features 仅在 Service 模式可用");
-                    break;
-                }
-                if (await ServiceLearningFeaturesScreen.ShowAsync(service, cancellationToken).ConfigureAwait(false) == ControlRoomActionKind.Quit)
-                {
-                    return;
-                }
-                break;
             case ControlRoomActionKind.OpenServiceConstraintGaps:
                 if (!service.State.IsServiceMode)
                 {

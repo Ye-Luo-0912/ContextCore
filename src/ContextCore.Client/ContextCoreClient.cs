@@ -1304,19 +1304,6 @@ public sealed class ContextCoreClient
             cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<PolicyFeedbackDataset> GetPolicyFeedbackAsync(
-        string workspaceId,
-        string? collectionId = null,
-        string? sessionId = null,
-        int limit = 200,
-        int offset = 0,
-        CancellationToken cancellationToken = default)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
-        var path = $"api/learning/policy-feedback?{BuildPolicyFeedbackQueryString(workspaceId, collectionId, sessionId, limit, offset)}";
-        return await GetRequiredAsync<PolicyFeedbackDataset>(path, cancellationToken).ConfigureAwait(false);
-    }
-
     private async Task<LearningFeedbackReviewResult> ReviewLearningFeedbackAsync(
         string feedbackId,
         string action,
@@ -1329,54 +1316,6 @@ public sealed class ContextCoreClient
             $"api/learning/feedback/{Escape(feedbackId)}/review/{action}",
             request,
             cancellationToken).ConfigureAwait(false);
-    }
-
-    public async Task<string> ExportPolicyFeedbackAsync(
-        string workspaceId,
-        string? collectionId = null,
-        string? sessionId = null,
-        int limit = 1000,
-        int offset = 0,
-        CancellationToken cancellationToken = default)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
-        var path = $"api/learning/policy-feedback/export?{BuildPolicyFeedbackQueryString(workspaceId, collectionId, sessionId, limit, offset)}";
-        return await GetRequiredStringAsync(path, cancellationToken).ConfigureAwait(false);
-    }
-
-    public async Task<LearningFeatureDataset> GetLearningFeaturesAsync(
-        string workspaceId,
-        string? collectionId = null,
-        string? sessionId = null,
-        int limit = 500,
-        int offset = 0,
-        CancellationToken cancellationToken = default)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
-        var path = $"api/learning/features?{BuildPolicyFeedbackQueryString(workspaceId, collectionId, sessionId, limit, offset)}";
-        return await GetRequiredAsync<LearningFeatureDataset>(path, cancellationToken).ConfigureAwait(false);
-    }
-
-    public async Task<LearningFeatureExportResult> ExportLearningFeaturesAsync(
-        string workspaceId,
-        string? collectionId = null,
-        string? sessionId = null,
-        string? outputDirectory = null,
-        CancellationToken cancellationToken = default)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
-        var path = $"api/learning/features/export?{BuildLearningFeatureExportQueryString(workspaceId, collectionId, sessionId, outputDirectory)}";
-        return await GetRequiredAsync<LearningFeatureExportResult>(path, cancellationToken).ConfigureAwait(false);
-    }
-
-    public async Task<LearningDatasetQualityReport> GetLearningDatasetQualityAsync(
-        string? featureDirectory = null,
-        CancellationToken cancellationToken = default)
-    {
-        var path = string.IsNullOrWhiteSpace(featureDirectory)
-            ? "api/learning/features/quality"
-            : $"api/learning/features/quality?featureDirectory={Escape(featureDirectory)}";
-        return await GetRequiredAsync<LearningDatasetQualityReport>(path, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<ContextLearningRecord> GetLearningRecordAsync(
@@ -2268,40 +2207,6 @@ public sealed class ContextCoreClient
             CreatedAt = feedbackEvent.CreatedAt,
             Metadata = feedbackEvent.Metadata
         };
-    }
-
-    private static string BuildPolicyFeedbackQueryString(
-        string workspaceId,
-        string? collectionId,
-        string? sessionId,
-        int limit,
-        int offset)
-    {
-        var parts = new List<string>
-        {
-            $"workspaceId={Escape(workspaceId)}",
-            $"limit={limit}",
-            $"offset={offset}"
-        };
-        if (!string.IsNullOrWhiteSpace(collectionId)) parts.Add($"collectionId={Escape(collectionId)}");
-        if (!string.IsNullOrWhiteSpace(sessionId)) parts.Add($"sessionId={Escape(sessionId)}");
-        return string.Join('&', parts);
-    }
-
-    private static string BuildLearningFeatureExportQueryString(
-        string workspaceId,
-        string? collectionId,
-        string? sessionId,
-        string? outputDirectory)
-    {
-        var parts = new List<string>
-        {
-            $"workspaceId={Escape(workspaceId)}"
-        };
-        if (!string.IsNullOrWhiteSpace(collectionId)) parts.Add($"collectionId={Escape(collectionId)}");
-        if (!string.IsNullOrWhiteSpace(sessionId)) parts.Add($"sessionId={Escape(sessionId)}");
-        if (!string.IsNullOrWhiteSpace(outputDirectory)) parts.Add($"outputDirectory={Escape(outputDirectory)}");
-        return string.Join('&', parts);
     }
 
     private static string BuildStableReviewCandidateQueryString(StableReviewCandidateQuery query)

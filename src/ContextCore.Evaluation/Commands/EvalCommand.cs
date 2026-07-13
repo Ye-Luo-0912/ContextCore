@@ -8,6 +8,7 @@ using ContextCore.Client;
 using ContextCore.Core;
 using ContextCore.Core.Services;
 using ContextCore.Evaluation.Hosting;
+using ContextCore.Evaluation.Learning;
 using ContextCore.Evaluation.Models;
 using ContextCore.Evaluation.Runners;
 using ContextCore.Evaluation.Services;
