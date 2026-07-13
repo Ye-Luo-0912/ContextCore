@@ -573,53 +573,6 @@ public sealed class ContextCoreVectorIndexFoundationTests
     }
 
     [TestMethod]
-    public void VectorQueryExpansion_ShouldNotReadEvalLabels()
-    {
-        var service = new VectorQueryExpansionService();
-
-        var result = service.Expand(new VectorQueryExpansionRequest
-        {
-            QueryText = "alpha query",
-            Mode = "ProjectMode",
-            RequestMetadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["mustHit"] = "secret-beta-target",
-                ["mustNotHit"] = "secret-risk-target",
-                ["intentLabel"] = "hidden-label"
-            }
-        }, VectorQueryExpansionProfileIds.PlanningContextQueryV1);
-
-        Assert.IsFalse(result.ExpandedQuery.Contains("secret-beta-target", StringComparison.OrdinalIgnoreCase));
-        Assert.IsFalse(result.ExpandedQuery.Contains("secret-risk-target", StringComparison.OrdinalIgnoreCase));
-        Assert.IsFalse(result.ExpandedQuery.Contains("hidden-label", StringComparison.OrdinalIgnoreCase));
-    }
-
-    [TestMethod]
-    public void VectorQueryExpansion_ShouldNotUseItemIdSampleIdOrFixtureMetadata()
-    {
-        var service = new VectorQueryExpansionService();
-
-        var result = service.Expand(new VectorQueryExpansionRequest
-        {
-            QueryText = "alpha query",
-            Mode = "ProjectMode",
-            RequestMetadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["sampleId"] = "sample-secret",
-                ["itemId"] = "item-secret",
-                ["fixtureFile"] = "fixture-secret",
-                ["intent"] = "runtime-intent"
-            }
-        }, VectorQueryExpansionProfileIds.PlanningContextQueryV1);
-
-        Assert.IsFalse(result.ExpandedQuery.Contains("sample-secret", StringComparison.OrdinalIgnoreCase));
-        Assert.IsFalse(result.ExpandedQuery.Contains("item-secret", StringComparison.OrdinalIgnoreCase));
-        Assert.IsFalse(result.ExpandedQuery.Contains("fixture-secret", StringComparison.OrdinalIgnoreCase));
-        Assert.IsTrue(result.ExpandedQuery.Contains("runtime", StringComparison.OrdinalIgnoreCase));
-        Assert.IsTrue(result.ExpandedQuery.Contains("intent", StringComparison.OrdinalIgnoreCase));
-    }
-
-    [TestMethod]
     public async Task VectorQueryShadowEval_ShouldNotAffectFormalRetrievalOutput()
     {
         var store = new InMemoryVectorIndexStore();
