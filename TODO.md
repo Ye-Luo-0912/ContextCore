@@ -1,6 +1,6 @@
 # ContextCore 项目路线图
 
-> 最近更新：R7-0 删除虚假 Graph gate 和 Attention 零值证据 + R7-1 DTO-R6 级联收口删除 Shadow 零值证据（2026-07-14）
+> 最近更新：R7-0/R7-1/R7-2 三阶段 Shadow 证据清除与机械不可达删除（2026-07-14）
 
 > 本文件是 ContextCore 的**唯一当前路线图**。docs/ 下的 freeze / report / audit / plan 类文档均为历史快照，仅供回溯，不作为设计依据。
 
@@ -36,11 +36,31 @@
 | EvalCommand.cs 单文件行数 | 7,987 | P1-5 已完成 |
 | FoundationStatusService.cs 行数 | 606 | P4 已完成 |
 | 构建 | 0 警告 / 0 错误 | 0 / 0 |
-| 测试 | 933 通过 / 0 失败 | 0 失败 |
+| 测试 | 926 通过 / 0 失败 | 0 失败 |
 
 ---
 
 ## 已完成工作
+
+### R7-2：机械不可达删除（commit `5886c70`）
+
+删除 9 个无生产消费者源文件 + 1 个仅测试引用的整文件测试 + 清理 2 个测试文件，12 文件变更，-1,471 行。
+
+**已删除源文件（9 个）**：
+- Core/Services/Vector：RuntimeRelationIntentDeriver、HybridCandidateUnionPolicy、VectorLifecycleSidecarResolver、QueryAnchorExtractor、AnchorCandidateProvider、CanonicalRuntimeAnchorResolver
+- Core/Infrastructure：AsyncTraceStores、NoOpContextRetrievalAdapter、UnavailableContextCompressor
+
+**保留**：
+- Core/Services/Learning/RouterIntentDatasetProvider.cs（FileRouterIntentDatasetProvider 生产实现，含 SHA-256 hash、error count、version observability，受硬约束保护）
+
+**测试清理**：
+- 删除 ContextCoreAdapterNoOpBindingTests.cs（整文件仅测试已删 NoOp 适配器）
+- AsyncTraceWriterTests.cs 移除 4 个 decorator 测试 + 2 个失去引用的 fake store（保留 AsyncTraceWriter<T> 自身测试）
+- ContextCorePhase0Tests.cs 移除 UnavailableContextCompressor 测试方法
+
+**引用验证**：检查 public API、反射（Type.GetType/Activator）、序列化（JsonDerivedType）、DI 注册，确认 9 个删除文件均无生产消费者。
+
+验证：构建 0 警告 0 错误，测试 926 通过 0 失败。
 
 ### R7-1：DTO-R6 级联收口删除 Shadow 零值证据（commit `12660ac`）
 
@@ -280,12 +300,9 @@ R7-0 阻塞项：移除基于错误报告继续决策的虚假 gate 和零值证
 
 删除 LifecycleAwareRankerShadow 系列（7 DTO + 2 属性）、Router Shadow 零值 DTO（6 个，保留 3 个被 trace store/生产使用的）、Artifact Shadow trace counters（3 字段）。+1/-567 行。保留 LifecycleAwareFeatureSet（生产使用）。
 
-### R7-2：机械不可达删除（待执行）
+### R7-2：机械不可达删除（已完成 commit `5886c70`）
 
-静态扫描发现约 1,284 行候选：
-- 6 个无生产消费者文件（约 950 行）：RuntimeRelationIntentDeriver、HybridCandidateUnionPolicy、VectorLifecycleSidecarResolver、QueryAnchorExtractor、AnchorCandidateProvider、CanonicalRuntimeAnchorResolver、RouterIntentDatasetProvider、AsyncTraceStores、NoOpContextRetrievalAdapter、UnavailableContextCompressor
-- 4 个仅测试消费者文件（约 334 行）
-- 需先检查 public API、反射和序列化后再删
+删除 9 个无生产消费者源文件 + 1 个仅测试引用的整文件测试 + 清理 2 个测试文件。-1,471 行。保留 RouterIntentDatasetProvider（FileRouterIntentDatasetProvider 生产实现，受硬约束保护）。
 
 ### DTO-R4 剩余部分（暂缓，高风险）
 
