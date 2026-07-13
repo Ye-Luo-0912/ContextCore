@@ -1,6 +1,6 @@
 # ContextCore 项目路线图
 
-> 最近更新：R7-0/R7-1/R7-2 三阶段 Shadow 证据清除与机械不可达删除（2026-07-14）
+> 最近更新：R7-0/R7-1/R7-2/R7-3 四阶段 Shadow 证据清除、机械不可达删除、Learning 离线能力迁移（2026-07-14）
 
 > 本文件是 ContextCore 的**唯一当前路线图**。docs/ 下的 freeze / report / audit / plan 类文档均为历史快照，仅供回溯，不作为设计依据。
 
@@ -36,11 +36,47 @@
 | EvalCommand.cs 单文件行数 | 7,987 | P1-5 已完成 |
 | FoundationStatusService.cs 行数 | 606 | P4 已完成 |
 | 构建 | 0 警告 / 0 错误 | 0 / 0 |
-| 测试 | 926 通过 / 0 失败 | 0 失败 |
+| 测试 | 923 通过 / 0 失败 | 0 失败 |
 
 ---
 
 ## 已完成工作
+
+### R7-3：把 Learning Plane 离线能力迁回 Evaluation（commit `9e96ae7`）
+
+将 Learning Plane 的离线能力从 Core/Service 迁回 Evaluation，彻底分离离线实验与运行时。22 文件变更，+10/-2496 行（净减 2,486 行）。
+
+**A. 迁移离线服务（5 个，Core/Services/Learning → Evaluation/Learning）**：
+- PolicyFeedbackDatasetService
+- LearningFeatureDatasetService
+- LearningDatasetQualityReportBuilder
+- RouterIntentClassifier
+- RouterIntentDatasetProvider（FileRouterIntentDatasetProvider，保留 SHA-256 hash、error count、version observability 机制）
+- 命名空间从 ContextCore.Core.Services 改为 ContextCore.Evaluation.Learning
+
+**B. 删除离线 API 和 Client 方法**：
+- LearningEndpoints.cs 删除 5 个离线端点（features/export 等）
+- ContextCoreClient.cs 删除 5 个离线 Client 方法
+- 保留运行时 feedback ingest API
+
+**C. 删除 ControlRoom 实验页面（2 文件）**：
+- ServiceLearningFeaturesScreen.cs、ServicePolicyFeedbackScreen.cs
+- 级联清理 Program/Renderer/DashboardScreen/Interaction/ServiceAdmin/Storage
+
+**D. 级联清理死代码**：
+- ControlRoomService.Storage.cs 删除 16 个 dead Read*ReportAsync 方法
+- ControlRoomService.ServiceAdmin.cs 删除 5 个 dead Read 方法
+- CoreExtensions.cs 移除 3 个离线服务 DI 注册
+
+**保留在 Core 的运行时能力**：
+- LearningFeedbackService、LearningFeedbackReviewService（feedback ingest/review）
+- LearningFeedbackFeatureCandidateBuilder
+- ContextLearningCaseGenerator、V14_0 trace sink
+- PlanningIntentDetector（被 Runtime 生产代码使用，无法迁移）
+
+**说明**：PlanningIntentDetector 的生产依赖未消除——它是 Runtime 生产代码（ContextRuntimeBuilder、RuntimeServices）的依赖，不是离线专属，无法随 Learning 迁移移除。
+
+验证：构建 0 警告 0 错误，测试 923 通过 0 失败。
 
 ### R7-2：机械不可达删除（commit `5886c70`）
 
