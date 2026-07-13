@@ -1,6 +1,6 @@
 # ContextCore 项目路线图
 
-> 最近更新：P1 ControlRoom 历史 Postgres 报告矩阵删除 + P2 Evaluation/Core 不可达切片删除 + P3 DTO-R5 孤立类型收口 + P4 FoundationStatusService 收口 + P3-deferred eval-only DTO 迁移 + 新任务1 低风险不可达代码删除（2026-07-13）
+> 最近更新：P1 ControlRoom 历史 Postgres 报告矩阵删除 + P2 Evaluation/Core 不可达切片删除 + P3 DTO-R5 孤立类型收口 + P4 FoundationStatusService 收口 + P3-deferred eval-only DTO 迁移 + 新任务1 不可达代码删除 + 新任务2 Planning 功能退回空壳（2026-07-13）
 
 > 本文件是 ContextCore 的**唯一当前路线图**。docs/ 下的 freeze / report / audit / plan 类文档均为历史快照，仅供回溯，不作为设计依据。
 
@@ -28,18 +28,38 @@
 
 | 指标 | 当前值 | 目标 |
 |------|--------|------|
-| 生产代码总行数 | ~140,638 | < 220k |
-| Evaluation 代码行数 | ~29,500 | < 70k |
+| 生产代码总行数 | ~135,680 | < 220k |
+| Evaluation 代码行数 | ~28,201 | < 70k |
 | Abstractions 代码行数 | ~14,731 | 跨层契约 |
-| ControlRoom 代码行数 | ~17,500 | < 20k |
+| ControlRoom 代码行数 | ~17,212 | < 20k |
+| Core 代码行数 | ~38,889 | - |
 | EvalCommand.cs 单文件行数 | 7,987 | P1-5 已完成 |
 | FoundationStatusService.cs 行数 | 606 | P4 已完成 |
 | 构建 | 0 警告 / 0 错误 | 0 / 0 |
-| 测试 | 1114 通过 / 0 失败 | 0 失败 |
+| 测试 | 1027 通过 / 0 失败 | 0 失败 |
 
 ---
 
 ## 已完成工作
+
+### 新任务2：Planning 功能退回空壳（commit `d31035f` + `4e16750`）
+
+将 Planning 功能退回空壳，只保留基础检索管线：
+- **阶段 1**：删除 12 个 Planning 源文件 + 2 个整文件测试 + 清理 11 个测试文件（-7,857 行）
+  - 删除 PlanningIntentDetector/SnapshotService/ShadowDiffTriageReportBuilder
+  - 删除 RetrievalPlanProposalService/Validator/ShadowRetrievalPlanExecutor/ComparisonReportBuilder
+  - 删除 PlanningShadowEvalRunner、ControlRoom Planning screens
+  - 删除 ContextPlanningDtos.cs、RetrievalPlanShadowDtos.cs
+- **阶段 2**：修改 27 个文件删除 Planning 引用（-1,178 行）
+  - HybridContextRetriever 移除 Planning 参数、ApplyPlanningAsync 方法
+  - Runtime composition 移除 Planning 服务（保留 PlanningIntentDetector 空壳）
+  - Service 删除 Planning endpoints 和 DI 注册
+  - Client 删除 Planning 方法
+  - ControlRoom 合并为静态占位入口
+  - Evaluation 删除 planning-shadow 命令
+- 保留：RetrievalPlanner、RetrievalPlan、RetrievalPlanExecutionPolicy（Data Plane）
+- 保留：PlanningIntentDetector 最小化空壳（被 11 个文件引用，无法完全删除）
+- 总计 -9,035 行，0 警告 0 错误，1027 测试通过
 
 ### 新任务1：低风险不可达代码删除（commit `65d3fae`）
 
