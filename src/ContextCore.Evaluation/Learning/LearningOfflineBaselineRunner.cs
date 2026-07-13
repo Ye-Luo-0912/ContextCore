@@ -5,6 +5,7 @@ using System.Text.Json;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services.Planning;
+using ContextCore.Evaluation.Models;
 
 namespace ContextCore.Evaluation.Learning;
 

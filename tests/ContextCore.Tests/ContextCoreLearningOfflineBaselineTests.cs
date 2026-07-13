@@ -5,6 +5,7 @@ using ContextCore.Core.Services;
 using ContextCore.Core.Services.Planning;
 using ContextCore.Storage.InMemory;
 using ContextCore.Evaluation.Learning;
+using ContextCore.Evaluation.Models;
 
 namespace ContextCore.Tests;
 

@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
+using ContextCore.Evaluation.Models;
 
 namespace ContextCore.Evaluation.Learning;
 
