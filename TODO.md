@@ -1,6 +1,6 @@
 # ContextCore 项目路线图
 
-> 最近更新：P1 ControlRoom 历史 Postgres 报告矩阵删除 + P2 Evaluation/Core 不可达切片删除 + P3 DTO-R5 孤立类型收口 + P4 FoundationStatusService 收口 + P3-deferred eval-only DTO 迁移 + 新任务1 不可达代码删除 + 新任务2 Planning 功能退回空壳（2026-07-13）
+> 最近更新：P1 ControlRoom 历史 Postgres 报告矩阵删除 + P2 Evaluation/Core 不可达切片删除 + P3 DTO-R5 孤立类型收口 + P4 FoundationStatusService 收口 + P3-deferred eval-only DTO 迁移 + 新任务1 不可达代码删除 + 新任务2 Planning 功能退回空壳 + 新任务3 撤出 Runtime Shadow/Experiment 能力（2026-07-13）
 
 > 本文件是 ContextCore 的**唯一当前路线图**。docs/ 下的 freeze / report / audit / plan 类文档均为历史快照，仅供回溯，不作为设计依据。
 
@@ -28,19 +28,40 @@
 
 | 指标 | 当前值 | 目标 |
 |------|--------|------|
-| 生产代码总行数 | ~135,680 | < 220k |
-| Evaluation 代码行数 | ~28,201 | < 70k |
+| 生产代码总行数 | ~123,307 | < 220k |
+| Evaluation 代码行数 | ~23,226 | < 70k |
 | Abstractions 代码行数 | ~14,731 | 跨层契约 |
-| ControlRoom 代码行数 | ~17,212 | < 20k |
-| Core 代码行数 | ~38,889 | - |
+| ControlRoom 代码行数 | ~16,683 | < 20k |
+| Core 代码行数 | ~32,629 | - |
 | EvalCommand.cs 单文件行数 | 7,987 | P1-5 已完成 |
 | FoundationStatusService.cs 行数 | 606 | P4 已完成 |
 | 构建 | 0 警告 / 0 错误 | 0 / 0 |
-| 测试 | 1027 通过 / 0 失败 | 0 失败 |
+| 测试 | 949 通过 / 0 失败 | 0 失败 |
 
 ---
 
 ## 已完成工作
+
+### 新任务3：撤出 Runtime 中 Shadow/Experiment 能力（commit `28f9d75` + `142dca5` + `f9e1115`）
+
+撤出生产 Runtime 中的全部 Shadow/Freeze/Gate/Experiment 能力，5 个阶段共删除约 11,078 行：
+- **阶段 1**：撤出 Runtime 热路径（-5,704 行）
+  - HybridContextRetriever 移除 7 处 Shadow 调用，effectivePacked = packed
+  - 删除 Attention 全链（ContextAttentionScorer/ScoringPolicy/ShadowReportBuilder/ExperimentRunner/GuardedRerankPolicy）
+  - 删除 Ranker Shadow（LifecycleAwareRankerShadowScorer/TraceBuilder/DebugService）
+  - 删除 Graph Shadow（GraphExpansionShadowTraceBuilder/ApplyPolicy）
+- **阶段 2+3**：撤出 Service 和 ControlRoom（-4,210 行）
+  - 删除 Router Shadow 服务（RouterIntentShadowService/ReportBuilder）
+  - 删除 Ranker/Graph Shadow Export 服务
+  - 删除 ControlRoom Shadow 读取和渲染
+  - 删除 Storage 实现（InMemory/FileSystem RouterIntentShadowTraceStore）
+- **阶段 4+5**：迁移 Evaluation 引用和清理测试（-1,164 行）
+  - 迁移 RelationExpansionProfileShadowReportBuilder 到 Evaluation
+  - 删除 ShadowFormalRetrievalAdapter
+  - 清理测试残留
+- 保留：Graph 稳定主干（关系查询、遍历、写入边界）
+- 保留：Evaluation 中有效的 benchmark/gate（LearningReadinessFreezeRunner、ContextCoreFoundationFreezeRunner、EvalGateReportDtos）
+- 总计 -11,078 行，0 警告 0 错误，949 测试通过
 
 ### 新任务2：Planning 功能退回空壳（commit `d31035f` + `4e16750`）
 
