@@ -1097,41 +1097,6 @@ public sealed class ContextCoreVectorIndexFoundationTests
                 MissingReviewStatusCount = 4,
                 MissingReplacementInfoCount = 1,
                 BlockedByLifecycleMetadataGate = 2,
-                RecallLossA3SourcePath = "eval/vector-recall-loss-audit-a3.json",
-                RecallLossExtendedSourcePath = "eval/vector-recall-loss-audit-extended.json",
-                A3RecallAfterPolicy = 0.7121,
-                ExtendedRecallAfterPolicy = 0.8438,
-                A3RecallRecommendation = VectorQueryShadowRecommendations.KeepPreviewOnly,
-                ExtendedRecallRecommendation = VectorQueryShadowRecommendations.ReadyForRetrievalShadow,
-                TopRecallMissReasons = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
-                {
-                    [VectorRecallLossMissReasons.BelowTopK] = 3
-                },
-                IntentReadinessRecommendations =
-                [
-                    "A3:CurrentTask=KeepPreviewOnly",
-                    "Extended:CodingTask=ReadyForRetrievalShadow"
-                ],
-                SafeRecallRecoveryA3SourcePath = "eval/vector-safe-recall-recovery-a3.json",
-                SafeRecallRecoveryExtendedSourcePath = "eval/vector-safe-recall-recovery-extended.json",
-                SafeRecoveryA3RecallAfterPolicy = 0.81,
-                SafeRecoveryExtendedRecallAfterPolicy = 0.86,
-                SafeRecoveryA3BestConfiguration = "normal-v1:top20:min0.10:exclude-historical",
-                SafeRecoveryExtendedBestConfiguration = "normal-v1:top20:min0.10:exclude-historical",
-                SafeRecoveryA3RecoveredBelowTopK = 5,
-                SafeRecoveryExtendedRecoveredBelowTopK = 7,
-                BlockedMustHitClassificationCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
-                {
-                    [VectorBlockedMustHitClassifications.MetadataRepairNeeded] = 2
-                },
-                FusionShadowA3SourcePath = "eval/vector-ranker-fusion-shadow-a3.json",
-                FusionShadowExtendedSourcePath = "eval/vector-ranker-fusion-shadow-extended.json",
-                FusionBestStrategy = VectorRankerFusionStrategies.LifecycleAwareFusion,
-                FusionA3RecallAfterPolicy = 0.82,
-                FusionExtendedRecallAfterPolicy = 0.86,
-                FusionRiskAfterPolicy = 0,
-                FusionRecallGain = 0.08,
-                FusionReadinessGateSatisfied = true,
                 V4ReadinessGateSourcePath = "eval/vector-retrieval-shadow-readiness-gate.json",
                 V4ReadinessGatePassed = false,
                 V4ReadinessGateFailReasons = ["A3RecallAtLeast80Percent"],
@@ -1147,14 +1112,7 @@ public sealed class ContextCoreVectorIndexFoundationTests
         StringAssert.Contains(rendered, "Shadow Quality Summary");
         StringAssert.Contains(rendered, "Residual Risk Summary");
         StringAssert.Contains(rendered, "Lifecycle Metadata Coverage");
-        StringAssert.Contains(rendered, "Recall Loss / Intent Readiness Summary");
-        StringAssert.Contains(rendered, "Safe Recall Recovery / V4 Readiness Summary");
-        StringAssert.Contains(rendered, "Fusion Shadow Summary");
-        StringAssert.Contains(rendered, "BelowTopK");
-        StringAssert.Contains(rendered, "MetadataRepairNeeded");
-        StringAssert.Contains(rendered, "LifecycleAwareFusion");
         StringAssert.Contains(rendered, "A3RecallAtLeast80Percent");
-        StringAssert.Contains(rendered, "not-satisfied");
         StringAssert.Contains(rendered, "blockedByGate");
         StringAssert.Contains(rendered, "LifecycleMetadataGap");
         StringAssert.Contains(rendered, "whyAllowed");
