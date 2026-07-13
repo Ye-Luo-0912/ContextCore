@@ -1,6 +1,6 @@
 # ContextCore 项目路线图
 
-> 最近更新：删除 tests-only Postgres runner + ControlRoom 历史报告链折叠 + DTO-R1~R4 报告 DTO 治理 + P1-5 EvalCommand 分发重构 + P0 并发锁修复 + P2 治理文档清理（2026-07-13）
+> 最近更新：P1 ControlRoom 历史 Postgres 报告矩阵删除 + P2 Evaluation/Core 不可达切片删除 + P3 DTO-R5 孤立类型收口 + P4-partial FoundationStatusService 孤立方法删除（2026-07-13）
 
 > 本文件是 ContextCore 的**唯一当前路线图**。docs/ 下的 freeze / report / audit / plan 类文档均为历史快照，仅供回溯，不作为设计依据。
 
@@ -8,7 +8,7 @@
 
 ## 当前阶段
 
-**DTO 治理与架构收口完成期** — P5（P5-0 ~ P5-6）全量推进、P0 并发正确性修复、P1 边界收尾、P1-5 分发重构、DTO-R1~R4 报告 DTO 治理均已完成。剩余 Domain/Api/Ports 重新划分和进一步合并模式属高风险大型架构重构，暂缓。
+**架构收口与不可达代码清除期** — P5（P5-0 ~ P5-6）、P0 并发锁修复、P1-5 分发重构、DTO-R1~R5 报告 DTO 治理、P1 ControlRoom 历史报告矩阵删除、P2 Evaluation/Core 不可达切片删除、P4-partial FoundationStatusService 孤立方法删除均已完成。剩余 P4 跨项目迁移（实时健康入 Service、历史解析入 Evaluation、别名链删除）需单独评估；Domain/Api/Ports 全量重排与 Service DI 大改暂缓。
 
 ---
 
@@ -28,16 +28,53 @@
 
 | 指标 | 当前值 | 目标 |
 |------|--------|------|
-| 生产代码总行数 | ~163,000 | < 220k |
-| Evaluation 代码行数 | ~45,000 | < 70k |
-| ControlRoom 代码行数 | ~18,000 | < 20k |
+| 生产代码总行数 | ~144,000 | < 220k |
+| Evaluation 代码行数 | ~28,000 | < 70k |
+| ControlRoom 代码行数 | ~17,500 | < 20k |
 | EvalCommand.cs 单文件行数 | 7,987 | P1-5 已完成 |
+| FoundationStatusService.cs 行数 | 2,053 | P4 进行中 |
 | 构建 | 0 警告 / 0 错误 | 0 / 0 |
-| 测试 | 1294 通过 / 0 失败 | 0 失败 |
+| 测试 | 1155 通过 / 0 失败 | 0 失败 |
 
 ---
 
 ## 已完成工作
+
+### P1：ControlRoom 历史 Postgres 报告矩阵删除
+
+删除 `ServiceAdminRuntimeSnapshot` 中 50 个历史 Postgres 报告字段及其构造/读取/渲染链：
+- `ControlRoomService.cs` — `ServiceAdminRuntimeSnapshot` 50 个历史字段删除（保留 11 个实时字段）
+- `ControlRoomService.ServiceAdmin.cs` — 50 个字段赋值 + 4 个孤立 Build 方法删除
+- `ControlRoomService.Storage.cs` — `BuildPostgresRelationStoreDiagnostics` + 23 个 ReadPostgresReport 包装 + `ReadPostgresReport<T>` helper 删除
+- `ServiceOperationalRenderer.cs` — `AppendPostgresRelationStoreStatus`（~480 行）+ `AppendPostgresVectorIndexStatus`（~100 行）删除
+- 0 警告 0 错误
+
+### P2：Evaluation/Core 不可达切片删除
+
+删除 54 个无生产引用的源文件 + 10 个测试文件清理：
+- 18 个完全无引用文件（~5,230 行）：9 个 `RelationGovernance*Runner`、6 个 ArchitectureCleanup/DtoSplitPlan/HybridRetrieval/FormalRetrievalIntegration Runner、1 个 `RuntimeCandidateTraceContractValidator`、1 个 `Core/BasicWorkingMemoryService`
+- 36 个仅测试引用文件（~14,718 行）：11 个 `Runners/*`、7 个 `Vector/Evaluation/*`、17 个 `Learning/*`、1 个 `Core/PlanningShadowQualityReportBuilder`
+- 6 个测试文件外科手术式清理 + 4 个整文件删除
+- 0 警告 0 错误，1155 测试通过
+
+### P3：DTO-R5 孤立类型收口
+
+删除 4 个 `*Dtos.cs` 文件中 83 个完全孤立的 DTO 类型：
+- `ServiceSuccessResponseDtos.cs` — 27 个孤立类型（-926 行）
+- `VectorEvalSharedReportDtos.cs` — 30 个孤立类型（-1,321 行）
+- `ContextLearningDtos.cs` — 18 个孤立类型（-390 行）
+- `VectorGateReportDtos.cs` — 8 个孤立类型（-280 行）
+- 保留 17 个被同文件存活类型引用的孤立类型
+- 0 警告 0 错误
+
+### P4-partial：FoundationStatusService 孤立方法删除
+
+删除 8 个完全无调用方的静态 Markdown 构建器：
+- `BuildSmokeMarkdown`、`BuildSecurityDiagnosticsMarkdown`、`BuildReportNavigationSmokeMarkdown`
+- `BuildOpenApiContractMarkdown`、`BuildHostedServiceSmokeMarkdown`
+- `BuildAuthDiagnosticsMarkdown`、`BuildAuthEnforcementSmokeMarkdown`、`BuildDeploymentProfileGateMarkdown`
+- `FoundationStatusService.cs` 从 2,510 行减到 2,053 行（-457 行）
+- 0 警告 0 错误
 
 ### 删除 tests-only Postgres runner（commit `9fa2b48`）
 
@@ -128,8 +165,9 @@
 ### 延迟项
 
 - **Service DI 收敛到 ContextRuntimeBuilder** — Service ASP.NET DI 仍由 CoreExtensions.AddContextCore 自行注册 80+ 服务。风险较高（生产路径），需单独评估。
-- **IEvalState 上帝接口拆分** — 当前暴露 32 个成员，Evaluation 实际只用 ~8-10 个。可拆为 `IEvalStateCore` / `IEvalStateServiceMode`（DTO-R3 已迁移到 Evaluation.Hosting）。
-- **eval-only DTO 迁移** — P5-1 遗留，部分 eval-only DTO 仍在非 Evaluation 项目中。
+- ~~**IEvalState 上帝接口拆分**~~ — 已完成：已拆分为 `IEvalStateCore` / `IEvalStateServiceMode`（DTO-R3 已迁移到 Evaluation.Hosting）。
+- **eval-only DTO 迁移** — P5-1 遗留，部分 eval-only DTO 仍在非 Evaluation 项目中。P3 已删除 83 个孤立 DTO 类型，剩余 eval-only 模型迁回 ContextCore.Evaluation/Models 待后续处理。
+- **P4 FoundationStatusService 跨项目迁移** — 实时健康入 Service、历史解析入 Evaluation、删除 release/reproducibility/runtime-change/vector-freeze 别名链。涉及跨项目改动，需单独评估。
 
 ---
 
