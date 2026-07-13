@@ -2264,56 +2264,6 @@ public sealed class ContextCoreClient
             cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<FoundationServiceStatusResponse> GetFoundationReleaseCandidateStatusAsync(CancellationToken cancellationToken = default)
-    {
-        return await GetFoundationEnvelopeDataAsync<FoundationServiceStatusResponse>(
-            "api/admin/foundation/release-candidate",
-            cancellationToken).ConfigureAwait(false);
-    }
-
-    public async Task<FoundationServiceStatusResponse> GetFoundationReleaseCandidateAsync(CancellationToken cancellationToken = default)
-        => await GetFoundationReleaseCandidateStatusAsync(cancellationToken).ConfigureAwait(false);
-
-    public async Task<FoundationServiceStatusResponse> GetFoundationReproducibilityStatusAsync(CancellationToken cancellationToken = default)
-    {
-        return await GetFoundationEnvelopeDataAsync<FoundationServiceStatusResponse>(
-            "api/admin/foundation/reproducibility",
-            cancellationToken).ConfigureAwait(false);
-    }
-
-    public async Task<FoundationServiceStatusResponse> GetFoundationReproducibilityAsync(CancellationToken cancellationToken = default)
-        => await GetFoundationReproducibilityStatusAsync(cancellationToken).ConfigureAwait(false);
-
-    public async Task<FoundationServiceStatusResponse> GetFoundationRuntimeChangeGateStatusAsync(CancellationToken cancellationToken = default)
-    {
-        return await GetFoundationEnvelopeDataAsync<FoundationServiceStatusResponse>(
-            "api/admin/foundation/runtime-change-gate",
-            cancellationToken).ConfigureAwait(false);
-    }
-
-    public async Task<FoundationServiceStatusResponse> GetRuntimeChangeGateAsync(CancellationToken cancellationToken = default)
-        => await GetFoundationRuntimeChangeGateStatusAsync(cancellationToken).ConfigureAwait(false);
-
-    public async Task<FoundationServiceStatusResponse> GetFoundationVectorFormalPreviewStatusAsync(CancellationToken cancellationToken = default)
-    {
-        return await GetFoundationEnvelopeDataAsync<FoundationServiceStatusResponse>(
-            "api/admin/foundation/vector-formal-preview",
-            cancellationToken).ConfigureAwait(false);
-    }
-
-    public async Task<FoundationServiceStatusResponse> GetVectorFormalPreviewStatusAsync(CancellationToken cancellationToken = default)
-        => await GetFoundationVectorFormalPreviewStatusAsync(cancellationToken).ConfigureAwait(false);
-
-    public async Task<FoundationServiceStatusResponse> GetFoundationPostgresFreezeStatusAsync(CancellationToken cancellationToken = default)
-    {
-        return await GetFoundationEnvelopeDataAsync<FoundationServiceStatusResponse>(
-            "api/admin/foundation/postgres-freeze-status",
-            cancellationToken).ConfigureAwait(false);
-    }
-
-    public async Task<FoundationServiceStatusResponse> GetPostgresFreezeStatusAsync(CancellationToken cancellationToken = default)
-        => await GetFoundationPostgresFreezeStatusAsync(cancellationToken).ConfigureAwait(false);
-
     public async Task<FoundationReportNavigationResponse> GetFoundationReportsAsync(CancellationToken cancellationToken = default)
     {
         return await GetFoundationEnvelopeDataAsync<FoundationReportNavigationResponse>(

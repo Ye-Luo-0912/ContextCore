@@ -74,11 +74,6 @@ public sealed class FoundationStatusService
     private static readonly IReadOnlyList<FoundationApiEndpointContract> EndpointContracts =
     [
         new() { Method = "GET", Route = "/api/admin/foundation/status", CapabilityId = "foundation.readonly.status", ResponseType = "FoundationServiceStatusResponse" },
-        new() { Method = "GET", Route = "/api/admin/foundation/release-candidate", CapabilityId = "foundation.readonly.status", ResponseType = "FoundationServiceStatusResponse" },
-        new() { Method = "GET", Route = "/api/admin/foundation/reproducibility", CapabilityId = "foundation.readonly.status", ResponseType = "FoundationServiceStatusResponse" },
-        new() { Method = "GET", Route = "/api/admin/foundation/runtime-change-gate", CapabilityId = "foundation.readonly.status", ResponseType = "FoundationServiceStatusResponse" },
-        new() { Method = "GET", Route = "/api/admin/foundation/vector-formal-preview", CapabilityId = "foundation.readonly.status", ResponseType = "FoundationServiceStatusResponse" },
-        new() { Method = "GET", Route = "/api/admin/foundation/postgres-freeze-status", CapabilityId = "foundation.readonly.status", ResponseType = "FoundationServiceStatusResponse" },
         new() { Method = "GET", Route = "/api/admin/foundation/reports", CapabilityId = "foundation.report.navigation", ResponseType = "FoundationReportNavigationResponse" },
         new() { Method = "GET", Route = "/api/admin/foundation/reports/{reportId}", CapabilityId = "foundation.report.navigation", ResponseType = "FoundationReportNavigationEntry" }
     ];
@@ -86,22 +81,12 @@ public sealed class FoundationStatusService
     private static readonly IReadOnlyList<FoundationApiClientMethodContract> ClientMethodContracts =
     [
         new() { MethodName = "GetFoundationStatusAsync", Route = "/api/admin/foundation/status", ResponseType = "FoundationServiceStatusResponse" },
-        new() { MethodName = "GetFoundationReleaseCandidateAsync", Route = "/api/admin/foundation/release-candidate", ResponseType = "FoundationServiceStatusResponse" },
-        new() { MethodName = "GetFoundationReproducibilityAsync", Route = "/api/admin/foundation/reproducibility", ResponseType = "FoundationServiceStatusResponse" },
-        new() { MethodName = "GetRuntimeChangeGateAsync", Route = "/api/admin/foundation/runtime-change-gate", ResponseType = "FoundationServiceStatusResponse" },
-        new() { MethodName = "GetVectorFormalPreviewStatusAsync", Route = "/api/admin/foundation/vector-formal-preview", ResponseType = "FoundationServiceStatusResponse" },
-        new() { MethodName = "GetPostgresFreezeStatusAsync", Route = "/api/admin/foundation/postgres-freeze-status", ResponseType = "FoundationServiceStatusResponse" },
         new() { MethodName = "GetFoundationReportsAsync", Route = "/api/admin/foundation/reports", ResponseType = "FoundationReportNavigationResponse" },
         new() { MethodName = "GetFoundationReportAsync", Route = "/api/admin/foundation/reports/{reportId}", ResponseType = "FoundationReportNavigationEntry" }
     ];
 
     private static readonly IReadOnlyList<FoundationApiClientMethodContract> ClientAliasMethodContracts =
     [
-        new() { MethodName = "GetFoundationReleaseCandidateStatusAsync", Route = "/api/admin/foundation/release-candidate", ResponseType = "FoundationServiceStatusResponse" },
-        new() { MethodName = "GetFoundationReproducibilityStatusAsync", Route = "/api/admin/foundation/reproducibility", ResponseType = "FoundationServiceStatusResponse" },
-        new() { MethodName = "GetFoundationRuntimeChangeGateStatusAsync", Route = "/api/admin/foundation/runtime-change-gate", ResponseType = "FoundationServiceStatusResponse" },
-        new() { MethodName = "GetFoundationVectorFormalPreviewStatusAsync", Route = "/api/admin/foundation/vector-formal-preview", ResponseType = "FoundationServiceStatusResponse" },
-        new() { MethodName = "GetFoundationPostgresFreezeStatusAsync", Route = "/api/admin/foundation/postgres-freeze-status", ResponseType = "FoundationServiceStatusResponse" }
     ];
 
     private static readonly IReadOnlyList<string> CapabilityStatusSchemaFields =
@@ -605,9 +590,9 @@ public sealed class FoundationStatusService
             && string.Equals(missingReportProbe.Recommendation, "RegenerateReport", StringComparison.OrdinalIgnoreCase)
             && missingReportProbe.Diagnostics.TryGetValue("MissingReportIds", out var missing)
             && missing.Count > 0;
-        var endpointContractStable = EndpointContracts.Count == 8
+        var endpointContractStable = EndpointContracts.Count == 3
             && EndpointContracts.All(static endpoint => endpoint.ReadOnly && endpoint.UsesEnvelope);
-        var clientContractStable = ClientMethodContracts.Count == 8
+        var clientContractStable = ClientMethodContracts.Count == 3
             && ClientMethodContracts.All(static method => method.DeserializesEnvelope);
         var envelopeSchemaStable = EnvelopeSchemaFields.SequenceEqual(
             [
@@ -1286,7 +1271,7 @@ public sealed class FoundationStatusService
             GeneratedAt = DateTimeOffset.UtcNow,
             SmokePassed = passed,
             Recommendation = passed ? "ReadyForReadOnlyServiceStatus" : "BlockedByReadOnlyStatusMismatch",
-            EndpointCount = 6,
+            EndpointCount = 1,
             CapabilityCount = status.Capabilities.Count,
             FoundationStatusPassed = status.FoundationGateStatus == "Passed",
             ReleaseCandidatePassed = releaseCandidate.FoundationGateStatus == "Passed",

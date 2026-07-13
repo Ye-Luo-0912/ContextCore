@@ -1047,8 +1047,8 @@ public class ContextCoreRetrievalDatasetV2MetadataContractTests
         Assert.IsTrue(report.FreezePassed);
         Assert.AreEqual("ReadyForServiceApiContractFreeze", report.Recommendation);
         Assert.AreEqual("DevelopmentOnly", report.AuthMode);
-        Assert.AreEqual(8, report.EndpointCount);
-        Assert.AreEqual(8, report.ClientMethodCount);
+        Assert.AreEqual(3, report.EndpointCount);
+        Assert.AreEqual(3, report.ClientMethodCount);
         Assert.AreEqual("foundation-api-envelope-v1", report.EnvelopeSchemaVersion);
         Assert.IsTrue(report.DegradedBehaviorStable);
         Assert.IsTrue(report.ForbiddenActionsExposed);
@@ -1264,7 +1264,7 @@ public class ContextCoreRetrievalDatasetV2MetadataContractTests
         var clientSnapshot = service.BuildClientContractSnapshot();
         var report = service.BuildOpenApiContractReport(openApi, apiSnapshot, clientSnapshot);
 
-        Assert.AreEqual(8, report.EndpointCount);
+        Assert.AreEqual(3, report.EndpointCount);
         Assert.AreEqual("foundation-api-envelope-v1", report.EnvelopeSchemaVersion);
         Assert.AreEqual("ApiKeyAuth", report.AuthScheme);
         Assert.IsFalse(report.BreakingChangeDetected);
@@ -1277,15 +1277,14 @@ public class ContextCoreRetrievalDatasetV2MetadataContractTests
     }
 
     [TestMethod]
-    public void FoundationClientContractSnapshot_ContainsPrimaryAndAliasMethods()
+    public void FoundationClientContractSnapshot_ContainsPrimaryMethods()
     {
         var service = new FoundationStatusService(Directory.GetCurrentDirectory());
         var snapshot = service.BuildClientContractSnapshot();
 
         CollectionAssert.Contains(snapshot.Methods.Select(static item => item.MethodName).ToList(), "GetFoundationStatusAsync");
         CollectionAssert.Contains(snapshot.Methods.Select(static item => item.MethodName).ToList(), "GetFoundationReportAsync");
-        CollectionAssert.Contains(snapshot.AliasMethods.Select(static item => item.MethodName).ToList(), "GetFoundationReleaseCandidateStatusAsync");
-        CollectionAssert.Contains(snapshot.AliasMethods.Select(static item => item.MethodName).ToList(), "GetFoundationRuntimeChangeGateStatusAsync");
+        Assert.AreEqual(0, snapshot.AliasMethods.Count, "Alias methods should be empty after statusKind alias chain removal");
         Assert.IsTrue(snapshot.Methods.All(static item => item.DeserializesEnvelope));
         Assert.IsTrue(snapshot.ReadOnly);
     }
@@ -1430,7 +1429,7 @@ public class ContextCoreRetrievalDatasetV2MetadataContractTests
 
         Assert.IsTrue(report.SmokePassed);
         Assert.AreEqual("ReadyForHostedReadOnlyService", report.Recommendation);
-        Assert.AreEqual(8, report.SuccessfulEndpointCount);
+        Assert.AreEqual(3, report.SuccessfulEndpointCount);
         Assert.IsFalse(report.FormalRetrievalAllowed);
         Assert.IsFalse(report.RuntimeSwitchAllowed);
         Assert.IsFalse(report.RuntimeMutated);

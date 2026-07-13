@@ -422,56 +422,6 @@ internal static class AdminEndpoints
         .WithName("AdminFoundationStatus")
         .WithSummary("返回 frozen foundation 只读状态汇总");
 
-        group.MapGet("/foundation/release-candidate", async (
-            FoundationStatusService foundationStatus,
-            CancellationToken ct) =>
-        {
-            return Results.Ok(await foundationStatus.GetStatusEnvelopeAsync("foundation/release-candidate", ct)
-                .ConfigureAwait(false));
-        })
-        .WithName("AdminFoundationReleaseCandidateStatus")
-        .WithSummary("返回 release candidate gate 只读状态");
-
-        group.MapGet("/foundation/reproducibility", async (
-            FoundationStatusService foundationStatus,
-            CancellationToken ct) =>
-        {
-            return Results.Ok(await foundationStatus.GetStatusEnvelopeAsync("foundation/reproducibility", ct)
-                .ConfigureAwait(false));
-        })
-        .WithName("AdminFoundationReproducibilityStatus")
-        .WithSummary("返回 RC0 reproducibility check 只读状态");
-
-        group.MapGet("/foundation/runtime-change-gate", async (
-            FoundationStatusService foundationStatus,
-            CancellationToken ct) =>
-        {
-            return Results.Ok(await foundationStatus.GetStatusEnvelopeAsync("foundation/runtime-change-gate", ct)
-                .ConfigureAwait(false));
-        })
-        .WithName("AdminFoundationRuntimeChangeGateStatus")
-        .WithSummary("返回 runtime-change gate 只读状态");
-
-        group.MapGet("/foundation/vector-formal-preview", async (
-            FoundationStatusService foundationStatus,
-            CancellationToken ct) =>
-        {
-            return Results.Ok(await foundationStatus.GetStatusEnvelopeAsync("foundation/vector-formal-preview", ct)
-                .ConfigureAwait(false));
-        })
-        .WithName("AdminFoundationVectorFormalPreviewStatus")
-        .WithSummary("返回 vector formal preview freeze 只读状态");
-
-        group.MapGet("/foundation/postgres-freeze-status", async (
-            FoundationStatusService foundationStatus,
-            CancellationToken ct) =>
-        {
-            return Results.Ok(await foundationStatus.GetStatusEnvelopeAsync("foundation/postgres-freeze-status", ct)
-                .ConfigureAwait(false));
-        })
-        .WithName("AdminFoundationPostgresFreezeStatus")
-        .WithSummary("返回 Postgres frozen providers 只读状态");
-
         group.MapGet("/foundation/reports", async (
             FoundationStatusService foundationStatus,
             CancellationToken ct) =>

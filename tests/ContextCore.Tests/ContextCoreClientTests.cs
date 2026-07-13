@@ -3249,11 +3249,6 @@ public sealed class ContextCoreClientTests
         var paths = new[]
         {
             "/api/admin/foundation/status",
-            "/api/admin/foundation/release-candidate",
-            "/api/admin/foundation/reproducibility",
-            "/api/admin/foundation/runtime-change-gate",
-            "/api/admin/foundation/vector-formal-preview",
-            "/api/admin/foundation/postgres-freeze-status",
             "/api/admin/foundation/reports",
             "/api/admin/foundation/reports/foundation-release-candidate-gate"
         };
@@ -3340,20 +3335,10 @@ public sealed class ContextCoreClientTests
         var client = new ContextCoreClient(http);
 
         var status = await client.GetFoundationStatusAsync();
-        var release = await client.GetFoundationReleaseCandidateStatusAsync();
-        var reproducibility = await client.GetFoundationReproducibilityStatusAsync();
-        var runtime = await client.GetFoundationRuntimeChangeGateStatusAsync();
-        var vector = await client.GetFoundationVectorFormalPreviewStatusAsync();
-        var postgres = await client.GetFoundationPostgresFreezeStatusAsync();
         var reports = await client.GetFoundationReportsAsync();
         var report = await client.GetFoundationReportAsync("foundation-release-candidate-gate");
 
         Assert.AreEqual("Passed", status.FoundationGateStatus);
-        Assert.AreEqual("Passed", release.FoundationGateStatus);
-        Assert.AreEqual("Passed", reproducibility.ReproducibilityStatus);
-        Assert.AreEqual("Passed", runtime.RuntimeChangeGateStatus);
-        Assert.AreEqual("Passed", vector.VectorFormalPreviewStatus);
-        Assert.AreEqual("Passed", postgres.PostgresFreezeStatus);
         Assert.AreEqual(1, reports.ReportCount);
         Assert.AreEqual("foundation-release-candidate-gate", report.ReportId);
         Assert.AreEqual(0, handlers.Count);
@@ -3380,52 +3365,6 @@ public sealed class ContextCoreClientTests
 
         Assert.AreEqual(HttpStatusCode.ServiceUnavailable, ex.StatusCode);
         Assert.AreEqual(ContextCoreErrorCodes.StorageUnavailable, ex.ErrorResponse.ErrorCode);
-    }
-
-    [TestMethod]
-    public async Task ClientAliasMethods_ShouldCallFrozenFoundationReadOnlyRoutes()
-    {
-        var handlers = new Queue<Func<HttpRequestMessage, HttpResponseMessage>>();
-        var paths = new[]
-        {
-            "/api/admin/foundation/release-candidate",
-            "/api/admin/foundation/reproducibility",
-            "/api/admin/foundation/runtime-change-gate",
-            "/api/admin/foundation/vector-formal-preview",
-            "/api/admin/foundation/postgres-freeze-status"
-        };
-        foreach (var path in paths)
-        {
-            handlers.Enqueue(request =>
-            {
-                Assert.AreEqual(HttpMethod.Get, request.Method);
-                Assert.AreEqual(path, request.RequestUri?.AbsolutePath);
-                return Json(new FoundationApiResponseEnvelope<FoundationServiceStatusResponse>
-                {
-                    CapabilityId = "foundation.readonly.status",
-                    Status = "Ready",
-                    Recommendation = "ReadOnlyStatusAvailable",
-                    Data = new FoundationServiceStatusResponse
-                    {
-                        FoundationGateStatus = "Passed",
-                        RuntimeChangeGateStatus = "Passed",
-                        ReproducibilityStatus = "Passed",
-                        VectorFormalPreviewStatus = "Passed",
-                        PostgresFreezeStatus = "Passed"
-                    }
-                });
-            });
-        }
-
-        using var http = CreateHttpClient(request => handlers.Dequeue().Invoke(request));
-        var client = new ContextCoreClient(http);
-
-        Assert.AreEqual("Passed", (await client.GetFoundationReleaseCandidateAsync()).FoundationGateStatus);
-        Assert.AreEqual("Passed", (await client.GetFoundationReproducibilityAsync()).ReproducibilityStatus);
-        Assert.AreEqual("Passed", (await client.GetRuntimeChangeGateAsync()).RuntimeChangeGateStatus);
-        Assert.AreEqual("Passed", (await client.GetVectorFormalPreviewStatusAsync()).VectorFormalPreviewStatus);
-        Assert.AreEqual("Passed", (await client.GetPostgresFreezeStatusAsync()).PostgresFreezeStatus);
-        Assert.AreEqual(0, handlers.Count);
     }
 
     private static HttpClient CreateHttpClient(Func<HttpRequestMessage, HttpResponseMessage> handler)

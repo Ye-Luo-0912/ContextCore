@@ -809,12 +809,7 @@ public sealed class ServiceApiIntegrationTests
 
             var endpoints = new[]
             {
-                "/api/admin/foundation/status",
-                "/api/admin/foundation/release-candidate",
-                "/api/admin/foundation/reproducibility",
-                "/api/admin/foundation/runtime-change-gate",
-                "/api/admin/foundation/vector-formal-preview",
-                "/api/admin/foundation/postgres-freeze-status"
+                "/api/admin/foundation/status"
             };
 
             foreach (var endpoint in endpoints)
