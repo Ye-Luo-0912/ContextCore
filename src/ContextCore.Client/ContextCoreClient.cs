@@ -116,23 +116,6 @@ public sealed class ContextCoreClient
         };
     }
 
-    public async Task<ContextPlanningSnapshot> GetPlanningSnapshotAsync(
-        string workspaceId,
-        string? collectionId = null,
-        string? sessionId = null,
-        CancellationToken cancellationToken = default)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
-
-        var parts = new List<string> { $"workspaceId={Escape(workspaceId)}" };
-        if (!string.IsNullOrWhiteSpace(collectionId)) parts.Add($"collectionId={Escape(collectionId)}");
-        if (!string.IsNullOrWhiteSpace(sessionId)) parts.Add($"sessionId={Escape(sessionId)}");
-
-        return await GetRequiredAsync<ContextPlanningSnapshot>(
-            $"api/context/planning/snapshot?{string.Join('&', parts)}",
-            cancellationToken).ConfigureAwait(false);
-    }
-
     public async Task<VectorIndexStatusResponse> GetVectorStatusAsync(
         string workspaceId,
         string collectionId,
@@ -367,39 +350,6 @@ public sealed class ContextCoreClient
             $"api/vector/lifecycle-metadata/review-candidates/{Escape(candidateId)}/{route}",
             request,
             cancellationToken).ConfigureAwait(false);
-    }
-
-    public async Task<RetrievalPlanProposal> ProposeRetrievalPlanAsync(
-        ContextPlanningProposalRequest request,
-        CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(request);
-        ArgumentException.ThrowIfNullOrWhiteSpace(request.WorkspaceId);
-
-        return await PostRequiredAsync<ContextPlanningProposalRequest, RetrievalPlanProposal>(
-            "api/context/planning/propose",
-            request,
-            cancellationToken).ConfigureAwait(false);
-    }
-
-    public Task<RetrievalPlanProposal> ProposeRetrievalPlanAsync(
-        string workspaceId,
-        string? collectionId,
-        string? sessionId,
-        string currentInput,
-        string? mode = null,
-        CancellationToken cancellationToken = default)
-    {
-        return ProposeRetrievalPlanAsync(
-            new ContextPlanningProposalRequest
-            {
-                WorkspaceId = workspaceId,
-                CollectionId = collectionId,
-                SessionId = sessionId,
-                CurrentInput = currentInput,
-                Mode = mode
-            },
-            cancellationToken);
     }
 
     public async Task<LifecycleAwareRankerShadowDebugResponse> DebugLifecycleAwareRankerAsync(

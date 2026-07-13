@@ -30,7 +30,6 @@ internal static class EvalStateFactory
         string workspaceId,
         string collectionId,
         RetrievalAttentionRerankOptions? attentionRerankOptions = null,
-        RetrievalPlanningOptions? retrievalPlanningOptions = null,
         GraphExpansionApplyOptions? graphExpansionApplyOptions = null)
     {
         var resolvedRootPath = FileStorageOptions.ResolveRootPath("eval");
@@ -75,8 +74,7 @@ internal static class EvalStateFactory
             ShortTermMemoryStore = new InMemoryShortTermMemoryStore(new ShortTermMemoryPolicy()),
             LearningStore = new InMemoryContextLearningStore(),
             GraphExpansionApplyOptions = graphExpansionApplyOptions,
-            AttentionRerankOptions = attentionRerankOptions,
-            RetrievalPlanningOptions = retrievalPlanningOptions
+            AttentionRerankOptions = attentionRerankOptions
         });
 
         return new EvalState

@@ -38,9 +38,6 @@ var securityOptions = builder.Configuration
 var retrievalAttentionRerankOptions = builder.Configuration
 	.GetSection("Retrieval:AttentionRerank")
 	.Get<RetrievalAttentionRerankOptions>() ?? new RetrievalAttentionRerankOptions();
-var retrievalPlanningOptions = builder.Configuration
-	.GetSection("Retrieval:Planning")
-	.Get<RetrievalPlanningOptions>() ?? new RetrievalPlanningOptions();
 var learningRankerShadowOptions = builder.Configuration
 	.GetSection("Learning:RankerShadow")
 	.Get<LearningRankerShadowOptions>() ?? new LearningRankerShadowOptions();
@@ -137,7 +134,6 @@ builder.Services.AddSingleton(storageOptions);
 builder.Services.AddSingleton(compressionOptions);
 builder.Services.AddSingleton(securityOptions);
 builder.Services.AddSingleton(retrievalAttentionRerankOptions);
-builder.Services.AddSingleton(retrievalPlanningOptions);
 builder.Services.AddSingleton(learningRankerShadowOptions);
 builder.Services.AddSingleton(learningRouterShadowOptions);
 builder.Services.AddSingleton(routerShadowOptions);

@@ -22,12 +22,7 @@ public sealed class RuntimeServices
 
     // --- 规划子链中间服务 ---
 
-    public required PlanningSnapshotService PlanningSnapshotService { get; init; }
     public required PlanningIntentDetector PlanningIntentDetector { get; init; }
-    public required RetrievalPlanSafetyProfile SafetyProfile { get; init; }
-    public required RetrievalPlanProposalService PlanningProposalService { get; init; }
-    public required RetrievalPlanProposalValidator PlanningValidator { get; init; }
-    public required ShadowRetrievalPlanExecutor PlanningShadowExecutor { get; init; }
 
     // --- 关系扩展子链中间服务 ---
 

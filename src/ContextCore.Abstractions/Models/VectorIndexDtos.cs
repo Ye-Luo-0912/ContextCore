@@ -452,8 +452,6 @@ public sealed class VectorQueryExpansionRequest
 
     public string TaskKind { get; init; } = string.Empty;
 
-    public ContextPlanningSnapshot? PlanningSnapshot { get; init; }
-
     public IReadOnlyList<string> QueryAnchors { get; init; } = Array.Empty<string>();
 
     public IReadOnlyList<string> WorkingMemoryAnchors { get; init; } = Array.Empty<string>();

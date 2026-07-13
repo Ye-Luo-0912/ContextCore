@@ -1736,51 +1736,6 @@ public sealed partial class ControlRoomService
         };
     }
 
-    public async Task<ServicePlanningSnapshot> GetServicePlanningSnapshotAsync(
-        string? sessionId = null,
-        CancellationToken cancellationToken = default)
-    {
-        var snapshot = await GetServiceClient()
-            .GetPlanningSnapshotAsync(
-                _state.WorkspaceId,
-                _state.CollectionId,
-                sessionId,
-                cancellationToken)
-            .ConfigureAwait(false);
-
-        return new ServicePlanningSnapshot
-        {
-            CurrentTime = DateTimeOffset.Now,
-            BaseUrl = _state.ServiceBaseUrl ?? string.Empty,
-            Snapshot = snapshot
-        };
-    }
-
-    public async Task<ServicePlanningProposalSnapshot> ProposeServiceRetrievalPlanAsync(
-        string currentInput,
-        string? sessionId = null,
-        string? mode = null,
-        CancellationToken cancellationToken = default)
-    {
-        var proposal = await GetServiceClient()
-            .ProposeRetrievalPlanAsync(
-                _state.WorkspaceId,
-                _state.CollectionId,
-                sessionId,
-                currentInput,
-                mode,
-                cancellationToken)
-            .ConfigureAwait(false);
-
-        return new ServicePlanningProposalSnapshot
-        {
-            CurrentTime = DateTimeOffset.Now,
-            BaseUrl = _state.ServiceBaseUrl ?? string.Empty,
-            CurrentInput = currentInput,
-            Proposal = proposal
-        };
-    }
-
     public async Task<ServiceRankerShadowDebugSnapshot> DebugServiceLifecycleAwareRankerAsync(
         string query,
         string? mode = null,

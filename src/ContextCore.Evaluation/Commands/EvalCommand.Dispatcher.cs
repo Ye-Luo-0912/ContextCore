@@ -37,17 +37,14 @@ public static partial class EvalCommand
         // === retrieval ===
         Reg("retrieval", "  eval retrieval [--out <path.json>]", ExecuteRetrievalDispatchAsync);
 
-        // === attention / planning ===
+        // === attention ===
         Reg("attention-profile-selection",
             "  eval attention-profile-selection [--baseline <path>] [--extended <path>] [--out <path.json>] [--md-out <path.md>]",
             (service, args, sub, ct) => ExecuteAttentionProfileSelectionAsync(args, ct));
-        Reg("planning-shadow",
-            "  eval planning-shadow [--category <name>] [--include-batches] [--out <path.json>] [--triage-out <path.json>]",
-            (service, args, sub, ct) => ExecutePlanningShadowAsync(args, ct));
 
         // === learning ===
         Reg("export-learning-features",
-            "  eval export-learning-features [--out-dir <dir>] [--workspace <id>] [--collection <id>] [--eval-reports <csv>] [--planning-shadow-reports <csv>]",
+            "  eval export-learning-features [--out-dir <dir>] [--workspace <id>] [--collection <id>] [--eval-reports <csv>]",
             (service, args, sub, ct) => ExecuteExportLearningFeaturesAsync(service, args, ct));
         Reg("learning-baseline",
             "  eval learning-baseline --task router|ranker [--features-dir <dir>] [--out-dir <dir>]",

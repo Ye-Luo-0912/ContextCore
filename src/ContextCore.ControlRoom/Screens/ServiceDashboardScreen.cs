@@ -261,30 +261,6 @@ public static class ServiceDashboardScreen
             }
 
             if (action.Kind == ControlRoomActionKind.Value
-                && string.Equals(action.Value?.Trim(), "x", StringComparison.OrdinalIgnoreCase))
-            {
-                var result = await ServicePlanningSnapshotScreen.ShowAsync(service, cancellationToken).ConfigureAwait(false);
-                if (result == ControlRoomActionKind.Quit)
-                {
-                    return result;
-                }
-
-                continue;
-            }
-
-            if (action.Kind == ControlRoomActionKind.Value
-                && string.Equals(action.Value?.Trim(), "f", StringComparison.OrdinalIgnoreCase))
-            {
-                var result = await ServicePlanningProposalScreen.ShowAsync(service, cancellationToken).ConfigureAwait(false);
-                if (result == ControlRoomActionKind.Quit)
-                {
-                    return result;
-                }
-
-                continue;
-            }
-
-            if (action.Kind == ControlRoomActionKind.Value
                 && string.Equals(action.Value?.Trim(), "34", StringComparison.OrdinalIgnoreCase))
             {
                 var result = await ServiceRankerShadowDebugScreen.ShowAsync(service, cancellationToken).ConfigureAwait(false);

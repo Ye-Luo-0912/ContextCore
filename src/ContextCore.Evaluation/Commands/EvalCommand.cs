@@ -402,40 +402,6 @@ public static partial class EvalCommand
         Console.WriteLine($"[Eval] RecommendedProfile={report.RecommendedProfile}; mode={report.RecommendedMode}; risk={report.RiskLevel}; blocking={string.Join(",", report.BlockingIssues)}");
     }
 
-    private static async Task ExecutePlanningShadowAsync(
-        IReadOnlyList<string> args,
-        CancellationToken cancellationToken)
-    {
-        var current = Directory.GetCurrentDirectory();
-        var contextsRoot = ResolveContextsRoot();
-        var categoryFilter = CommandHelpers.GetOption(args, "--category") ?? CommandHelpers.GetOption(args, "-c");
-        var includeSeedBatches = args.Contains("--include-batches", StringComparer.OrdinalIgnoreCase)
-            || args.Contains("--all-seeds", StringComparer.OrdinalIgnoreCase);
-        var defaultFileName = includeSeedBatches
-            ? "planning-shadow-comparison-extended.json"
-            : "planning-shadow-comparison-a3.json";
-        var outputPath = CommandHelpers.GetOption(args, "--out") ?? CommandHelpers.GetOption(args, "-o")
-            ?? Path.Combine(current, "eval", defaultFileName);
-        var triageDefaultFileName = includeSeedBatches
-            ? "planning-shadow-diff-triage-extended.json"
-            : "planning-shadow-diff-triage-a3.json";
-        var triageOutputPath = CommandHelpers.GetOption(args, "--triage-out")
-            ?? Path.Combine(current, "eval", triageDefaultFileName);
-
-        var runner = new PlanningShadowEvalRunner();
-        var report = await runner
-            .RunAsync(contextsRoot, categoryFilter, includeSeedBatches, cancellationToken)
-            .ConfigureAwait(false);
-        var triageReport = PlanningShadowDiffTriageReportBuilder.Build(report);
-
-        await WriteJsonAsync(report, outputPath, cancellationToken).ConfigureAwait(false);
-        await WriteJsonAsync(triageReport, triageOutputPath, cancellationToken).ConfigureAwait(false);
-        Console.WriteLine($"[Eval] Planning shadow comparison report: {Path.GetFullPath(outputPath)}");
-        Console.WriteLine($"[Eval] Planning shadow diff triage report: {Path.GetFullPath(triageOutputPath)}");
-        Console.WriteLine($"[Eval] Samples={report.TotalSamples}; selectedSetDiffSamples={report.SelectedSetDiffCount}; added/dropped={report.AddedItemCount}/{report.DroppedItemCount}; mustNotHitViolations={report.MustNotHitViolationCount}; lifecycleViolations={report.LifecycleViolationCount}");
-        Console.WriteLine($"[Eval] Plans native/repaired/fallback={report.NativeValidPlanCount}/{report.RepairedPlanCount}/{report.FallbackPlanCount}; nativeRate={report.NativeValidRate:P1}; finalTopKClamp={report.FinalTopKClampCount}; vectorDisabled={report.VectorDisabledCount}; deprecatedBlocked={report.DeprecatedBlockedCount}");
-    }
-
     private static async Task ExportExtendedFailureTriageAsync(
         ContextEvalReport evalReport,
         string outputPath,
@@ -467,17 +433,15 @@ public static partial class EvalCommand
             ?? service.State.CollectionId;
         var sessionId = CommandHelpers.GetOption(args, "--session");
         var evalReports = ParseCsvOption(CommandHelpers.GetOption(args, "--eval-reports"));
-        var planningShadowReports = ParseCsvOption(CommandHelpers.GetOption(args, "--planning-shadow-reports"));
 
         var policyFeedbackService = CreatePolicyFeedbackDatasetServiceForEval(service);
-        var featureService = new LearningFeatureDatasetService(policyFeedbackService, new PlanningIntentDetector());
+        var featureService = new LearningFeatureDatasetService(policyFeedbackService);
         var result = await featureService.ExportAsync(
             workspaceId,
             collectionId,
             sessionId,
             outputDirectory,
             evalReports.Count == 0 ? null : evalReports,
-            planningShadowReports.Count == 0 ? null : planningShadowReports,
             cancellationToken).ConfigureAwait(false);
 
         Console.WriteLine($"[Eval] Learning feature dataset exported: {result.OutputDirectory}");
@@ -3686,92 +3650,7 @@ public static partial class EvalCommand
     }
 
     private static async Task WriteJsonAsync(
-        ShadowRetrievalComparisonReport report,
-        string path,
-        CancellationToken cancellationToken)
-    {
-        var fullPath = Path.GetFullPath(path);
-        var dir = Path.GetDirectoryName(fullPath);
-        if (!string.IsNullOrWhiteSpace(dir))
-        {
-            Directory.CreateDirectory(dir);
-        }
-
-        var json = JsonSerializer.Serialize(report, JsonOptions);
-        await File.WriteAllTextAsync(fullPath, json, Encoding.UTF8, cancellationToken).ConfigureAwait(false);
-        await MirrorReportArtifactAsync(path, json, cancellationToken).ConfigureAwait(false);
-    }
-
-    private static async Task WriteJsonAsync(
-        PlanningShadowDiffTriageReport report,
-        string path,
-        CancellationToken cancellationToken)
-    {
-        var fullPath = Path.GetFullPath(path);
-        var dir = Path.GetDirectoryName(fullPath);
-        if (!string.IsNullOrWhiteSpace(dir))
-        {
-            Directory.CreateDirectory(dir);
-        }
-
-        var json = JsonSerializer.Serialize(report, JsonOptions);
-        await File.WriteAllTextAsync(fullPath, json, Encoding.UTF8, cancellationToken).ConfigureAwait(false);
-        await MirrorReportArtifactAsync(path, json, cancellationToken).ConfigureAwait(false);
-    }
-
-    private static async Task WriteJsonAsync(
         PlanningShadowQualityReport report,
-        string path,
-        CancellationToken cancellationToken)
-    {
-        var fullPath = Path.GetFullPath(path);
-        var dir = Path.GetDirectoryName(fullPath);
-        if (!string.IsNullOrWhiteSpace(dir))
-        {
-            Directory.CreateDirectory(dir);
-        }
-
-        var json = JsonSerializer.Serialize(report, JsonOptions);
-        await File.WriteAllTextAsync(fullPath, json, Encoding.UTF8, cancellationToken).ConfigureAwait(false);
-        await MirrorReportArtifactAsync(path, json, cancellationToken).ConfigureAwait(false);
-    }
-
-    private static async Task WriteJsonAsync(
-        PlanningShadowRecallLossReport report,
-        string path,
-        CancellationToken cancellationToken)
-    {
-        var fullPath = Path.GetFullPath(path);
-        var dir = Path.GetDirectoryName(fullPath);
-        if (!string.IsNullOrWhiteSpace(dir))
-        {
-            Directory.CreateDirectory(dir);
-        }
-
-        var json = JsonSerializer.Serialize(report, JsonOptions);
-        await File.WriteAllTextAsync(fullPath, json, Encoding.UTF8, cancellationToken).ConfigureAwait(false);
-        await MirrorReportArtifactAsync(path, json, cancellationToken).ConfigureAwait(false);
-    }
-
-    private static async Task WriteJsonAsync(
-        PlanningOptInFallbackAnalysisReport report,
-        string path,
-        CancellationToken cancellationToken)
-    {
-        var fullPath = Path.GetFullPath(path);
-        var dir = Path.GetDirectoryName(fullPath);
-        if (!string.IsNullOrWhiteSpace(dir))
-        {
-            Directory.CreateDirectory(dir);
-        }
-
-        var json = JsonSerializer.Serialize(report, JsonOptions);
-        await File.WriteAllTextAsync(fullPath, json, Encoding.UTF8, cancellationToken).ConfigureAwait(false);
-        await MirrorReportArtifactAsync(path, json, cancellationToken).ConfigureAwait(false);
-    }
-
-    private static async Task WriteJsonAsync(
-        PlanningOptInConstraintSafetyReport report,
         string path,
         CancellationToken cancellationToken)
     {

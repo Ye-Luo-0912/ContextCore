@@ -24,21 +24,14 @@ public sealed class LearningFeatureDatasetService
         "eval/eval-report-p15-extended.json"
     ];
 
-    private static readonly string[] DefaultPlanningShadowReportPaths =
-    [
-        "eval/planning-shadow-comparison-a3.json",
-        "eval/planning-shadow-comparison-extended.json"
-    ];
-
     private readonly PolicyFeedbackDatasetService? _policyFeedbackDatasetService;
     private readonly PlanningIntentDetector _intentDetector;
 
     public LearningFeatureDatasetService(
-        PolicyFeedbackDatasetService? policyFeedbackDatasetService = null,
-        PlanningIntentDetector? intentDetector = null)
+        PolicyFeedbackDatasetService? policyFeedbackDatasetService = null)
     {
         _policyFeedbackDatasetService = policyFeedbackDatasetService;
-        _intentDetector = intentDetector ?? new PlanningIntentDetector();
+        _intentDetector = new PlanningIntentDetector();
     }
 
     public async Task<LearningFeatureDataset> BuildAsync(
@@ -48,7 +41,6 @@ public sealed class LearningFeatureDatasetService
         int limit = 500,
         int offset = 0,
         IReadOnlyList<string>? evalReportPaths = null,
-        IReadOnlyList<string>? planningShadowReportPaths = null,
         string? latestExportPath = null,
         CancellationToken cancellationToken = default)
     {
@@ -62,14 +54,10 @@ public sealed class LearningFeatureDatasetService
 
         var evalReports = await LoadEvalReportsAsync(evalReportPaths ?? DefaultEvalReportPaths, cancellationToken)
             .ConfigureAwait(false);
-        var planningReports = await LoadPlanningShadowReportsAsync(
-            planningShadowReportPaths ?? DefaultPlanningShadowReportPaths,
-            cancellationToken).ConfigureAwait(false);
 
         return Build(
             policyFeedback,
             evalReports,
-            planningReports,
             latestExportPath ?? ResolveLatestExportPath("learning/features"),
             limit,
             offset);
@@ -78,7 +66,6 @@ public sealed class LearningFeatureDatasetService
     public LearningFeatureDataset Build(
         PolicyFeedbackDataset policyFeedback,
         IReadOnlyList<ContextEvalReport>? evalReports = null,
-        IReadOnlyList<ShadowRetrievalComparisonReport>? planningShadowReports = null,
         string? latestExportPath = null,
         int limit = 500,
         int offset = 0)
@@ -89,9 +76,7 @@ public sealed class LearningFeatureDatasetService
         var rankingPairs = (evalReports ?? Array.Empty<ContextEvalReport>())
             .SelectMany(GenerateRankingPairsFromEvalReport)
             .ToArray();
-        var routerExamples = (planningShadowReports ?? Array.Empty<ShadowRetrievalComparisonReport>())
-            .SelectMany(GenerateRouterIntentExamples)
-            .ToArray();
+        var routerExamples = Array.Empty<ContextPolicyFeatureExample>();
 
         var pagedPolicyExamples = policyExamples
             .Skip(Math.Max(0, offset))
@@ -177,16 +162,6 @@ public sealed class LearningFeatureDatasetService
             .ToArray();
     }
 
-    public IReadOnlyList<ContextPolicyFeatureExample> GenerateRouterIntentExamples(
-        ShadowRetrievalComparisonReport report)
-    {
-        ArgumentNullException.ThrowIfNull(report);
-        return report.Samples
-            .Select(sample => BuildRouterIntentExample(report, sample))
-            .OrderBy(example => example.SourceId, StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-    }
-
     public async Task<LearningFeatureExportResult> ExportAsync(
         LearningFeatureDataset dataset,
         string outputDirectory,
@@ -226,7 +201,6 @@ public sealed class LearningFeatureDatasetService
         string? sessionId = null,
         string outputDirectory = "learning/features",
         IReadOnlyList<string>? evalReportPaths = null,
-        IReadOnlyList<string>? planningShadowReportPaths = null,
         CancellationToken cancellationToken = default)
     {
         var dataset = await BuildAsync(
@@ -236,7 +210,6 @@ public sealed class LearningFeatureDatasetService
             int.MaxValue,
             0,
             evalReportPaths,
-            planningShadowReportPaths,
             outputDirectory,
             cancellationToken).ConfigureAwait(false);
         return await ExportAsync(dataset, outputDirectory, cancellationToken).ConfigureAwait(false);
@@ -299,70 +272,6 @@ public sealed class LearningFeatureDatasetService
         };
     }
 
-    private ContextPolicyFeatureExample BuildRouterIntentExample(
-        ShadowRetrievalComparisonReport report,
-        ShadowRetrievalComparisonItem sample)
-    {
-        var intent = ResolveIntent(sample);
-        var channelSources = sample.ShadowChannelSources.Keys
-            .Concat(sample.LegacyChannelSources.Keys)
-            .Where(static key => !string.IsNullOrWhiteSpace(key))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(static key => key, StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-        var metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["reportId"] = report.ReportId,
-            ["sampleSet"] = report.SampleSet,
-            ["proposalSummary"] = sample.ProposalSummary,
-            ["legacyOperationId"] = sample.LegacyOperationId,
-            ["shadowOperationId"] = sample.ShadowOperationId,
-            ["validPlan"] = sample.ValidPlan.ToString(CultureInfo.InvariantCulture),
-            ["nativeValidPlan"] = sample.NativeValidPlan.ToString(CultureInfo.InvariantCulture),
-            ["repairedPlan"] = sample.RepairedPlan.ToString(CultureInfo.InvariantCulture),
-            ["fallbackToLegacySafePlan"] = sample.FallbackToLegacySafePlan.ToString(CultureInfo.InvariantCulture),
-            ["mustHitDelta"] = sample.MustHitDelta.ToString(CultureInfo.InvariantCulture),
-            ["constraintDelta"] = sample.ConstraintDelta.ToString(CultureInfo.InvariantCulture),
-            ["entityDelta"] = sample.EntityDelta.ToString(CultureInfo.InvariantCulture),
-            ["uncertaintyDelta"] = sample.UncertaintyDelta.ToString(CultureInfo.InvariantCulture)
-        };
-
-        return new ContextPolicyFeatureExample
-        {
-            ExampleId = BuildId("router", $"{report.ReportId}\u001f{sample.SampleId}\u001f{intent}"),
-            WorkspaceId = string.Empty,
-            CollectionId = string.Empty,
-            SourceType = "PlanningShadowComparison",
-            SourceId = sample.SampleId,
-            TaskKind = "RouterIntent",
-            Mode = sample.Mode,
-            Intent = intent,
-            Label = intent,
-            InputSummary = sample.ProposalSummary,
-            CandidateId = sample.ProposalId,
-            CandidateKind = "RetrievalPlanProposal",
-            CandidateLayer = "Planning",
-            CandidateStatus = sample.FallbackToLegacySafePlan ? "Fallback" : sample.RepairedPlan ? "Repaired" : "NativeValid",
-            CandidateImportance = Math.Max(sample.ShadowRecall10, sample.LegacyRecall10),
-            CandidateRecency = CalculateRecency(report.GeneratedAt),
-            ChannelSources = channelSources,
-            RelationPathCount = CountChannelSources(sample.ShadowChannelSources, "relation"),
-            KeywordMatchScore = CountChannelSources(sample.ShadowChannelSources, "keyword"),
-            SemanticAnchorMatchScore = sample.ShadowMrr,
-            ShortTermMatchScore = CountChannelSources(sample.ShadowChannelSources, "short"),
-            StableMatchScore = CountChannelSources(sample.ShadowChannelSources, "stable"),
-            ConstraintMatchScore = sample.ShadowConstraintHitRate,
-            LifecycleRisk = sample.LifecycleViolation ? 1 : 0,
-            Selected = sample.ValidPlan && !sample.FallbackToLegacySafePlan,
-            Accepted = sample.ValidPlan && !sample.FallbackToLegacySafePlan,
-            Rejected = sample.FallbackToLegacySafePlan || sample.LifecycleViolation || sample.MustNotHitViolation,
-            EvidenceRefs = sample.ShadowSelectedMustHit.Concat(sample.MustHitGained).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
-            PolicyVersion = PolicyVersion,
-            CreatedAt = report.GeneratedAt == default ? DateTimeOffset.UtcNow : report.GeneratedAt,
-            Metadata = metadata
-        };
-    }
-
     private Dictionary<string, string> BuildRankingFeatureSnapshot(
         ContextEvalResult result,
         string positive,
@@ -414,25 +323,6 @@ public sealed class LearningFeatureDatasetService
         return reports;
     }
 
-    private async Task<IReadOnlyList<ShadowRetrievalComparisonReport>> LoadPlanningShadowReportsAsync(
-        IReadOnlyList<string> paths,
-        CancellationToken cancellationToken)
-    {
-        var reports = new List<ShadowRetrievalComparisonReport>();
-        foreach (var path in paths.Select(ResolvePath).Where(File.Exists))
-        {
-            await using var stream = File.OpenRead(path);
-            var report = await JsonSerializer.DeserializeAsync<ShadowRetrievalComparisonReport>(stream, JsonOptions, cancellationToken)
-                .ConfigureAwait(false);
-            if (report is not null)
-            {
-                reports.Add(report);
-            }
-        }
-
-        return reports;
-    }
-
     private static async Task WriteJsonLinesAsync<T>(
         string path,
         IReadOnlyList<T> records,
@@ -445,10 +335,7 @@ public sealed class LearningFeatureDatasetService
 
     private string DetectIntent(string query, string mode)
     {
-        var detection = _intentDetector.Detect(
-            new ContextPlanningSnapshot(),
-            query,
-            mode);
+        var detection = _intentDetector.Detect(query, mode);
         return detection.Intent;
     }
 
@@ -476,21 +363,6 @@ public sealed class LearningFeatureDatasetService
             .Concat(result.DroppedItemDiagnostics)
             .FirstOrDefault(item => MatchesId(item.ItemId, id)
                 || item.SourceRefs.Any(source => MatchesId(source, id)));
-    }
-
-    private static string ResolveIntent(ShadowRetrievalComparisonItem sample)
-    {
-        if (!string.IsNullOrWhiteSpace(sample.ProposalSummary))
-        {
-            var separator = sample.ProposalSummary.IndexOf('/');
-            return separator > 0
-                ? sample.ProposalSummary[..separator]
-                : sample.ProposalSummary;
-        }
-
-        return sample.Diagnostics.TryGetValue("intent", out var intent) && !string.IsNullOrWhiteSpace(intent)
-            ? intent
-            : PlanningIntentDetector.FuzzyQuestion;
     }
 
     private static int CountChannelSources(

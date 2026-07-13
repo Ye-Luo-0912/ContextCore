@@ -10,7 +10,6 @@ using ContextCore.Core.Services;
 using ContextCore.Runtime;
 using ContextCore.Core.Services.Attention;
 using ContextCore.Core.Services.Graph;
-using ContextCore.Core.Services.Planning;
 using ContextCore.Core.Services.Retrieval;
 using ContextCore.Core.Services.Storage;
 using ContextCore.Embedding;
@@ -51,7 +50,6 @@ public sealed partial class ControlRoomService
         string? serviceBaseUrl = null,
         HttpClient? serviceHttpClient = null,
         RetrievalAttentionRerankOptions? attentionRerankOptions = null,
-        RetrievalPlanningOptions? retrievalPlanningOptions = null,
         GraphExpansionApplyOptions? graphExpansionApplyOptions = null,
         string? apiKey = null,
         string? apiKeyHeaderName = null)
@@ -106,8 +104,7 @@ public sealed partial class ControlRoomService
                 ShortTermMemoryStore = new InMemoryShortTermMemoryStore(new ShortTermMemoryPolicy()),
                 LearningStore = new InMemoryContextLearningStore(),
                 GraphExpansionApplyOptions = graphExpansionApplyOptions,
-                AttentionRerankOptions = attentionRerankOptions,
-                RetrievalPlanningOptions = retrievalPlanningOptions
+                AttentionRerankOptions = attentionRerankOptions
             });
 
             return new ControlRoomState
@@ -189,8 +186,7 @@ public sealed partial class ControlRoomService
             ShortTermMemoryStore = new InMemoryShortTermMemoryStore(new ShortTermMemoryPolicy()),
             LearningStore = new InMemoryContextLearningStore(),
             GraphExpansionApplyOptions = graphExpansionApplyOptions,
-            AttentionRerankOptions = attentionRerankOptions,
-            RetrievalPlanningOptions = retrievalPlanningOptions
+            AttentionRerankOptions = attentionRerankOptions
         });
 
         return new ControlRoomState
@@ -886,26 +882,6 @@ public sealed class ServiceVectorShadowQualitySummary
     public bool HybridV4RecheckAllowed { get; init; }
     public IReadOnlyList<string> HybridFreezeBlockedReasons { get; init; } = Array.Empty<string>();
 
-}
-
-public sealed class ServicePlanningSnapshot
-{
-    public DateTimeOffset CurrentTime { get; init; }
-
-    public string BaseUrl { get; init; } = string.Empty;
-
-    public ContextPlanningSnapshot Snapshot { get; init; } = new();
-}
-
-public sealed class ServicePlanningProposalSnapshot
-{
-    public DateTimeOffset CurrentTime { get; init; }
-
-    public string BaseUrl { get; init; } = string.Empty;
-
-    public string CurrentInput { get; init; } = string.Empty;
-
-    public RetrievalPlanProposal Proposal { get; init; } = new();
 }
 
 public sealed class ServiceRankerShadowDebugSnapshot

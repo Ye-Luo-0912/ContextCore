@@ -435,28 +435,6 @@ static async Task RunInteractiveAsync(
                     return;
                 }
                 break;
-            case ControlRoomActionKind.OpenServicePlanningSnapshot:
-                if (!service.State.IsServiceMode)
-                {
-                    ShowServiceModeUnsupported("Service Planning Snapshot 仅在 Service 模式可用");
-                    break;
-                }
-                if (await ServicePlanningSnapshotScreen.ShowAsync(service, cancellationToken).ConfigureAwait(false) == ControlRoomActionKind.Quit)
-                {
-                    return;
-                }
-                break;
-            case ControlRoomActionKind.OpenServicePlanningProposal:
-                if (!service.State.IsServiceMode)
-                {
-                    ShowServiceModeUnsupported("Service Planning Proposal 仅在 Service 模式可用");
-                    break;
-                }
-                if (await ServicePlanningProposalScreen.ShowAsync(service, cancellationToken).ConfigureAwait(false) == ControlRoomActionKind.Quit)
-                {
-                    return;
-                }
-                break;
             case ControlRoomActionKind.OpenServiceConstraintGaps:
                 if (!service.State.IsServiceMode)
                 {
@@ -601,7 +579,6 @@ static ControlRoomState CreateState(Cli parsed, WorkspaceSelection selection)
         parsed.ServiceBaseUrl,
         serviceHttpClient: null,
         attentionRerankOptions: null,
-        retrievalPlanningOptions: null,
         graphExpansionApplyOptions: null,
         apiKey: parsed.ApiKey,
         apiKeyHeaderName: parsed.ApiKeyHeaderName);

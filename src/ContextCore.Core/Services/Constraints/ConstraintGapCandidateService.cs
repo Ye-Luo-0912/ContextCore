@@ -8,7 +8,6 @@ namespace ContextCore.Core.Services;
 /// <summary>从 eval/report 只读生成约束语料缺口候选项，不写入 ConstraintStore。</summary>
 public sealed class ConstraintGapCandidateService
 {
-    private const string PlanningConstraintReportSource = "planning-optin-constraint-safety-report";
     private const string ExtendedFailureTriageSource = "extended-failure-triage-report";
     private const string PolicyVersion = "constraint-gap-review-policy/v1";
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
@@ -270,28 +269,6 @@ public sealed class ConstraintGapCandidateService
         CancellationToken cancellationToken)
     {
         var sources = new List<GapSourceItem>();
-        if (request.IncludePlanningConstraintReport)
-        {
-            var path = ResolveReportPath(
-                request.PlanningConstraintReportPath,
-                "eval",
-                "planning-optin-constraint-safety-report-extended.json");
-            if (File.Exists(path))
-            {
-                var report = await ReadJsonAsync<PlanningOptInConstraintSafetyReport>(path, cancellationToken).ConfigureAwait(false);
-                if (report is not null)
-                {
-                    sources.AddRange(report.Samples
-                        .Where(sample => sample.MissingConstraints.Count > 0)
-                        .SelectMany(sample => sample.MissingConstraints.Select(expected => FromPlanningSample(report, sample, expected))));
-                }
-            }
-            else
-            {
-                warnings.Add($"report_missing:{path}");
-            }
-        }
-
         if (request.IncludeExtendedFailureTriageReport)
         {
             var path = ResolveReportPath(
@@ -336,36 +313,6 @@ public sealed class ConstraintGapCandidateService
         }
 
         return Path.GetFullPath(Path.Combine(defaultSegments));
-    }
-
-    private static GapSourceItem FromPlanningSample(
-        PlanningOptInConstraintSafetyReport report,
-        PlanningOptInConstraintSafetySample sample,
-        string expected)
-    {
-        return new GapSourceItem(
-            PlanningConstraintReportSource,
-            sample.SampleId,
-            report.ReportId,
-            expected,
-            sample.FallbackUsed || string.Equals(sample.ConstraintRepairStatus, "ConstraintRepairFailed", StringComparison.OrdinalIgnoreCase)
-                ? ConstraintGapSeverity.High
-                : ConstraintGapSeverity.Medium,
-            "Expected hard constraint was not covered by proposal constraint repair and no matching hard constraint exists in ConstraintStore.",
-            [$"eval:{PlanningConstraintReportSource}:{sample.SampleId}"],
-            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["mode"] = sample.Mode,
-                ["intent"] = sample.Intent,
-                ["optInMatched"] = sample.OptInMatched.ToString(),
-                ["applied"] = sample.Applied.ToString(),
-                ["fallbackUsed"] = sample.FallbackUsed.ToString(),
-                ["constraintSource"] = sample.ConstraintSource,
-                ["lostAtStage"] = sample.LostAtStage,
-                ["constraintRepairStatus"] = sample.ConstraintRepairStatus,
-                ["suggestedFix"] = sample.SuggestedFix,
-                ["sourceReport"] = PlanningConstraintReportSource
-            });
     }
 
     private static GapSourceItem FromExtendedSample(

@@ -27,25 +27,8 @@ public static class ContextRuntimeBuilder
     {
         ArgumentNullException.ThrowIfNull(options);
 
-        // 规划主链
-        var planningSnapshotService = new PlanningSnapshotService(
-            options.ShortTermMemoryStore,
-            options.MemoryStore,
-            options.ConstraintStore,
-            options.LearningStore);
-        var planningSafetyProfile = RetrievalPlanSafetyProfile.CreateDefault();
+        // 规则型意图检测（保留：被 Learning 子系统引用）
         var planningIntentDetector = new PlanningIntentDetector();
-        var planningProposalService = new RetrievalPlanProposalService(
-            planningSnapshotService,
-            planningIntentDetector,
-            planningSafetyProfile);
-        var planningValidator = new RetrievalPlanProposalValidator(planningSafetyProfile);
-        var planningShadowExecutor = new ShadowRetrievalPlanExecutor(
-            options.ContextStore,
-            options.MemoryStore,
-            options.RelationStore,
-            planningValidator,
-            options.ConstraintStore);
 
         // 关系扩展主链
         var relationTypeRegistry = new RelationTypeRegistry();
@@ -100,9 +83,6 @@ public static class ContextRuntimeBuilder
             attentionProfileExperiments: options.AttentionProfileExperiments,
             attentionLearningStore: options.AttentionLearningStore,
             attentionRerankOptions: options.AttentionRerankOptions,
-            planningOptions: options.RetrievalPlanningOptions,
-            planningProposalService: planningProposalService,
-            planningShadowExecutor: planningShadowExecutor,
             rankerShadowOptions: options.LifecycleAwareRankerShadowOptions,
             rankerShadowTraceBuilder: options.LifecycleAwareRankerTraceBuilder,
             graphExpansionShadowOptions: options.GraphExpansionShadowOptions,
@@ -114,12 +94,7 @@ public static class ContextRuntimeBuilder
             PackageBuilder = packageBuilder,
             Retriever = retriever,
             PromotionService = promotionService,
-            PlanningSnapshotService = planningSnapshotService,
             PlanningIntentDetector = planningIntentDetector,
-            SafetyProfile = planningSafetyProfile,
-            PlanningProposalService = planningProposalService,
-            PlanningValidator = planningValidator,
-            PlanningShadowExecutor = planningShadowExecutor,
             RelationExpansionProfileRegistry = relationExpansionProfileRegistry,
             RelationExpansionPolicyValidator = relationExpansionValidator,
             RelationTraversalEngine = relationTraversalEngine,

@@ -31,13 +31,7 @@ public sealed class ExistingRuleBasedRouterBaseline : RouterIntentClassifier
     {
         ArgumentNullException.ThrowIfNull(example);
 
-        var snapshot = new ContextPlanningSnapshot
-        {
-            WorkspaceId = example.WorkspaceId,
-            CollectionId = example.CollectionId,
-            SessionId = example.Metadata.TryGetValue("sessionId", out var sessionId) ? sessionId : string.Empty
-        };
-        var detection = _detector.Detect(snapshot, BuildInputText(example), example.Mode);
+        var detection = _detector.Detect(BuildInputText(example), example.Mode);
         return new RouterIntentClassifierPrediction
         {
             Intent = detection.Intent,

@@ -445,12 +445,7 @@ public sealed class RelationExpansionShadowEvalRunner
             return intent;
         }
 
-        var snapshot = new ContextPlanningSnapshot
-        {
-            WorkspaceId = "eval",
-            CollectionId = "test"
-        };
-        return _intentDetector.Detect(snapshot, sample.Query, sample.Mode).Intent;
+        return _intentDetector.Detect(sample.Query, sample.Mode).Intent;
     }
 
     private static async Task<IReadOnlyList<ContextEvalSample>> LoadCategorySamplesAsync(

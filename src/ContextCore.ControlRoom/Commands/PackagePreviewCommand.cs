@@ -64,20 +64,6 @@ public static class PackagePreviewCommand
             ]);
 
         TableRenderer.Render(
-            "Planning Execution Status",
-            ["Mode", "Intent", "Status", "OptIn", "FallbackUsed", "FallbackReason"],
-            [
-                [
-                    preview.PlanningMetadata.GetValueOrDefault("planningMode", "Off"),
-                    preview.PlanningMetadata.GetValueOrDefault("planningIntent", ""),
-                    preview.PlanningMetadata.GetValueOrDefault("planningExecutionStatus", "Legacy"),
-                    preview.PlanningMetadata.GetValueOrDefault("planningOptInMatched", "false"),
-                    preview.PlanningMetadata.GetValueOrDefault("planningFallbackUsed", "false"),
-                    preview.PlanningMetadata.GetValueOrDefault("planningFallbackReason", "")
-                ]
-            ]);
-
-        TableRenderer.Render(
             "Selected Items",
             ["Id", "Kind", "Type", "Section", "Score", "Tokens", "Reason"],
             [.. preview.SelectedItems.Select(item => new[]

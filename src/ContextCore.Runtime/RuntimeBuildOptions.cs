@@ -37,7 +37,6 @@ public sealed class RuntimeBuildOptions
 
     public GraphExpansionApplyOptions? GraphExpansionApplyOptions { get; init; }
     public RetrievalAttentionRerankOptions? AttentionRerankOptions { get; init; }
-    public RetrievalPlanningOptions? RetrievalPlanningOptions { get; init; }
 
     // --- optional: Full profile shadow/trace sinks（Service 生产路径）---
 

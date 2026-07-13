@@ -105,8 +105,7 @@ internal static class CoreExtensions
 			sp.GetService<ICandidateConstraintReviewStore>(),
 			sp.GetService<IConstraintStore>()));
 		services.AddSingleton(sp => new LearningFeatureDatasetService(
-			sp.GetRequiredService<PolicyFeedbackDatasetService>(),
-			sp.GetRequiredService<PlanningIntentDetector>()));
+			sp.GetRequiredService<PolicyFeedbackDatasetService>()));
 		services.AddSingleton<LearningFeedbackService>();
 		services.AddSingleton<LearningFeedbackReviewService>();
 		services.AddSingleton<LearningFeedbackFeatureCandidateBuilder>();
@@ -266,7 +265,6 @@ internal static class CoreExtensions
 			LearningStore = sp.GetRequiredService<IContextLearningStore>(),
 			GraphExpansionApplyOptions = sp.GetService<GraphExpansionApplyOptions>(),
 			AttentionRerankOptions = sp.GetService<RetrievalAttentionRerankOptions>(),
-			RetrievalPlanningOptions = sp.GetService<RetrievalPlanningOptions>(),
 			PackageBuildTraceStore = sp.GetService<IContextPackageBuildTraceStore>(),
 			DecisionTraceStore = sp.GetService<IDecisionTraceStore>(),
 			RuntimeCandidateTraceSink = sp.GetService<IRuntimeCandidateTraceSink>(),
@@ -279,12 +277,7 @@ internal static class CoreExtensions
 		}));
 
 		// 主链服务从 RuntimeServices 获取（保证对象图一致性）
-		services.AddSingleton(sp => sp.GetRequiredService<RuntimeServices>().PlanningSnapshotService);
 		services.AddSingleton(sp => sp.GetRequiredService<RuntimeServices>().PlanningIntentDetector);
-		services.AddSingleton(sp => sp.GetRequiredService<RuntimeServices>().SafetyProfile);
-		services.AddSingleton(sp => sp.GetRequiredService<RuntimeServices>().PlanningProposalService);
-		services.AddSingleton(sp => sp.GetRequiredService<RuntimeServices>().PlanningValidator);
-		services.AddSingleton(sp => sp.GetRequiredService<RuntimeServices>().PlanningShadowExecutor);
 		services.AddSingleton(sp => sp.GetRequiredService<RuntimeServices>().RelationExpansionProfileRegistry);
 		services.AddSingleton(sp => sp.GetRequiredService<RuntimeServices>().RelationExpansionPolicyValidator);
 		services.AddSingleton(sp => sp.GetRequiredService<RuntimeServices>().RelationTraversalEngine);

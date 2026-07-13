@@ -125,12 +125,7 @@ public sealed class RouterIntentShadowService
             return NormalizeIntent(request.RuntimeIntent);
         }
 
-        var detection = _detector.Detect(new ContextPlanningSnapshot
-        {
-            WorkspaceId = request.WorkspaceId,
-            CollectionId = request.CollectionId,
-            SessionId = request.SessionId
-        }, request.QueryText, request.Mode);
+        var detection = _detector.Detect(request.QueryText, request.Mode);
         return NormalizeIntent(detection.Intent);
     }
 
