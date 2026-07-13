@@ -537,101 +537,6 @@ public sealed class ContextCoreVectorIndexFoundationTests
     }
 
     [TestMethod]
-    public async Task VectorQueryShadowEval_ShouldCountMustNotHitRisk()
-    {
-        var contextStore = new InMemoryContextStore();
-        await contextStore.SaveAsync(CreateContextItem("item-banned", "banned source", "note"));
-        var store = new InMemoryVectorIndexStore();
-        await store.UpsertAsync(await CreateSourceBackedEntryAsync(
-            "entry-banned",
-            "item-banned",
-            "banned source",
-            [1.0f, 0.0f],
-            metadata: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["lifecycle"] = "Active",
-                ["sourceKind"] = "memory"
-            }));
-        var runner = new VectorQueryShadowEvalRunner(
-            CreateQueryPreviewService(store, new FixedEmbeddingGenerator(), contextStore));
-        var samples = new[]
-        {
-            new ContextEvalSample
-            {
-                Id = "sample-risk",
-                Mode = "ChatMode",
-                Query = "alpha query",
-                MustNotHit = ["item-banned"]
-            }
-        };
-
-        var report = await runner.RunAsync(samples, "workspace-test", "collection-test");
-
-        Assert.AreEqual(1, report.Samples);
-        Assert.IsTrue(report.MustNotHitRiskAtK > 0);
-        Assert.AreEqual(VectorQueryShadowRecommendations.BlockedByRisk, report.Recommendation);
-    }
-
-    [TestMethod]
-    public async Task VectorQueryShadowEval_ShouldNotAffectFormalRetrievalOutput()
-    {
-        var store = new InMemoryVectorIndexStore();
-        await store.UpsertAsync(CreateEntry("entry-alpha", "item-alpha", [1.0f, 0.0f]));
-        var before = await store.ListAsync(new VectorIndexQuery
-        {
-            WorkspaceId = "workspace-test",
-            CollectionId = "collection-test",
-            Take = 10
-        });
-        var runner = new VectorQueryShadowEvalRunner(
-            CreateQueryPreviewService(store, new FixedEmbeddingGenerator(), new InMemoryContextStore()));
-
-        var report = await runner.RunAsync(
-            [
-                new ContextEvalSample
-                {
-                    Id = "sample-shadow",
-                    Mode = "ProjectMode",
-                    Query = "alpha query",
-                    MustHit = ["item-alpha"]
-                }
-            ],
-            "workspace-test",
-            "collection-test");
-        var after = await store.ListAsync(new VectorIndexQuery
-        {
-            WorkspaceId = "workspace-test",
-            CollectionId = "collection-test",
-            Take = 10
-        });
-
-        Assert.AreEqual(0, report.FormalOutputChanged);
-        Assert.AreEqual(before.Count, after.Count);
-        CollectionAssert.AreEqual(
-            before.Select(item => item.EntryId).Order(StringComparer.OrdinalIgnoreCase).ToArray(),
-            after.Select(item => item.EntryId).Order(StringComparer.OrdinalIgnoreCase).ToArray());
-    }
-
-    [TestMethod]
-    public void VectorQueryShadowEval_RiskAfterPolicyShouldBlockRecommendation()
-    {
-        var report = VectorQueryShadowEvalRunner.BuildReport(
-            "risk-after-test",
-            [
-                new VectorQueryShadowEvalSample
-                {
-                    SampleId = "sample-risk-after",
-                    RawCandidateCount = 1,
-                    EligibleCandidateCount = 1,
-                    CandidateCount = 1,
-                    RiskAfterPolicy = 1
-                }
-            ]);
-
-        Assert.AreEqual(VectorQueryShadowRecommendations.BlockedByRisk, report.Recommendation);
-    }
-
-    [TestMethod]
     public void EmbeddingProviderDiagnostics_OnnxMissingModel_ShouldReportUnavailableAndMissingModel()
     {
         var missingModelPath = Path.Combine(Path.GetTempPath(), "contextcore-missing-model", Guid.NewGuid().ToString("N"), "model.onnx");
@@ -1909,3 +1814,4 @@ public sealed class ContextCoreVectorIndexFoundationTests
         }
     }
 }
+

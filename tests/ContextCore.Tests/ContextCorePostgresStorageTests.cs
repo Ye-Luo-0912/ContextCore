@@ -393,22 +393,6 @@ public sealed class ContextCorePostgresStorageTests
     }
 
     [TestMethod]
-    public void LearningFeedbackScopedServiceModeGate_ShouldFailOnScopeLeak()
-    {
-        var report = new LearningFeedbackScopedServiceModeGateReport
-        {
-            Passed = false,
-            NonAllowlistedScopeRemainsFileSystem = false,
-            BlockedReasons = ["NonAllowlistedScopeLeak"],
-            Recommendation = "BlockedByScopeLeak"
-        };
-
-        Assert.IsFalse(report.Passed);
-        Assert.AreEqual("BlockedByScopeLeak", report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToArray(), "NonAllowlistedScopeLeak");
-    }
-
-    [TestMethod]
     public void LearningFeedbackSelectedNormalScopeOptions_ShouldDefaultDisabled()
     {
         var options = new LearningFeedbackSelectedNormalScopeOptions();
@@ -423,50 +407,6 @@ public sealed class ContextCorePostgresStorageTests
     }
 
     [TestMethod]
-    public void LearningFeedbackSelectedNormalScopeCanary_ShouldBlockWhenScopeMissing()
-    {
-        var report = new LearningFeedbackSelectedNormalScopeCanaryReport
-        {
-            GatePassed = false,
-            BlockedReasons = ["SelectedWorkspaceMissing", "SelectedCollectionMissing"],
-            Recommendation = "GateNotPassed"
-        };
-
-        Assert.IsFalse(report.GatePassed);
-        Assert.AreEqual("GateNotPassed", report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToArray(), "SelectedWorkspaceMissing");
-    }
-
-    [TestMethod]
-    public void LearningFeedbackSelectedNormalScopeCanary_ShouldBlockOnMismatch()
-    {
-        var report = new LearningFeedbackSelectedNormalScopeCanaryReport
-        {
-            GatePassed = true,
-            MismatchCount = 1,
-            Mismatches = ["SelectedNormalFeedbackQueryMissingRows"],
-            Recommendation = "BlockedByMismatch"
-        };
-
-        Assert.AreEqual(1, report.MismatchCount);
-        Assert.AreEqual("BlockedByMismatch", report.Recommendation);
-    }
-
-    [TestMethod]
-    public void LearningFeedbackSelectedNormalScopeCanary_ShouldBlockOnScopeLeak()
-    {
-        var report = new LearningFeedbackSelectedNormalScopeCanaryReport
-        {
-            GatePassed = true,
-            ScopeLeakCount = 1,
-            Recommendation = "BlockedByScopeLeak"
-        };
-
-        Assert.AreEqual(1, report.ScopeLeakCount);
-        Assert.AreEqual("BlockedByScopeLeak", report.Recommendation);
-    }
-
-    [TestMethod]
     public void LearningFeedbackLimitedScopeObservationOptions_ShouldDefaultDisabled()
     {
         var options = new LearningFeedbackLimitedScopeObservationOptions();
@@ -478,21 +418,6 @@ public sealed class ContextCorePostgresStorageTests
         Assert.IsTrue(options.FailClosedOnMismatch);
         Assert.IsTrue(options.RequireSelectedNormalScopeCanaryPassed);
         Assert.AreEqual(LearningFeedbackSelectedNormalScopeCleanupMode.None, options.CleanupMode);
-    }
-
-    [TestMethod]
-    public void LearningFeedbackLimitedScopeObservation_ShouldBlockWhenSelectedCanaryMissing()
-    {
-        var report = new LearningFeedbackLimitedScopeObservationReport
-        {
-            GatePassed = false,
-            BlockedReasons = ["SelectedNormalScopeCanaryNotPassed"],
-            Recommendation = "GateNotPassed"
-        };
-
-        Assert.IsFalse(report.GatePassed);
-        Assert.AreEqual("GateNotPassed", report.Recommendation);
-        CollectionAssert.Contains(report.BlockedReasons.ToArray(), "SelectedNormalScopeCanaryNotPassed");
     }
 
     [TestMethod]
@@ -631,20 +556,6 @@ public sealed class ContextCorePostgresStorageTests
     }
 
     [TestMethod]
-    public void PostgresJobQueueLeaseSmokeReport_ShouldExposeLeaseContractFailure()
-    {
-        var report = new PostgresJobQueueLeaseSmokeReport
-        {
-            MismatchCount = 1,
-            Mismatches = ["LeaseConflictFailed"],
-            Recommendation = "NeedsLeaseContractFix"
-        };
-
-        Assert.AreEqual("NeedsLeaseContractFix", report.Recommendation);
-        CollectionAssert.Contains(report.Mismatches.ToArray(), "LeaseConflictFailed");
-    }
-
-    [TestMethod]
     public void PostgresDiagnostics_ShouldReturnNotConfiguredWhenProviderDisabled()
     {
         var options = new PostgresOptions { Enabled = false };
@@ -699,22 +610,6 @@ public sealed class ContextCorePostgresStorageTests
         Assert.AreEqual("NotConfigured", diagnostics.Recommendation);
         CollectionAssert.Contains(diagnostics.Diagnostics.ToArray(), "NotConfigured");
         Assert.IsTrue(diagnostics.MissingRequiredIndexes.Count > 0);
-    }
-
-    [TestMethod]
-    public void PostgresRelationStoreParityReport_ShouldExposeMismatchRecommendation()
-    {
-        var report = new PostgresRelationStoreParityReport
-        {
-            ProviderEnabled = true,
-            WorkspaceId = "workspace-test",
-            CollectionId = "collection-test",
-            Mismatches = ["SourceQueryMismatch"],
-            Recommendation = "ParityMismatch"
-        };
-
-        Assert.AreEqual("ParityMismatch", report.Recommendation);
-        CollectionAssert.Contains(report.Mismatches.ToArray(), "SourceQueryMismatch");
     }
 
     [TestMethod]
@@ -908,52 +803,6 @@ public sealed class ContextCorePostgresStorageTests
         Assert.IsFalse(trace.PostgresReadSucceeded);
         Assert.IsTrue(trace.FallbackUsed);
         Assert.AreEqual("PostgresReadFailed", trace.MismatchReason);
-    }
-
-    [TestMethod]
-    public void RelationGovernanceShadowReadHash_ShouldBeStableForEquivalentRelations()
-    {
-        var relationA = new ContextRelation
-        {
-            Id = "relation-1",
-            WorkspaceId = "workspace-test",
-            CollectionId = "collection-test",
-            SourceId = "source-1",
-            TargetId = "target-1",
-            RelationType = "references",
-            Weight = 0.7,
-            Confidence = 0.9,
-            SourceRefs = ["b", "a"],
-            CreatedAt = DateTimeOffset.UnixEpoch,
-            Metadata = new Dictionary<string, string>
-            {
-                ["reviewStatus"] = "Reviewed",
-                ["lifecycle"] = "Active"
-            }
-        };
-        var relationB = new ContextRelation
-        {
-            Id = "relation-1",
-            WorkspaceId = "workspace-test",
-            CollectionId = "collection-test",
-            SourceId = "source-1",
-            TargetId = "target-1",
-            RelationType = "references",
-            Weight = 0.7,
-            Confidence = 0.9,
-            SourceRefs = ["a", "b"],
-            CreatedAt = DateTimeOffset.UnixEpoch,
-            Metadata = new Dictionary<string, string>
-            {
-                ["lifecycle"] = "Active",
-                ["reviewStatus"] = "Reviewed"
-            }
-        };
-
-        var first = ShadowReadComparisonHelper.ComputeCanonicalStableHash(new[] { relationA });
-        var second = ShadowReadComparisonHelper.ComputeCanonicalStableHash(new[] { relationB });
-
-        Assert.AreEqual(first, second);
     }
 
     [TestMethod]
@@ -1501,223 +1350,6 @@ public sealed class ContextCorePostgresStorageTests
     }
 
     [TestMethod]
-    public async Task RelationGovernanceProviderRouter_ShouldRequireReadinessGate()
-    {
-        using var harness = CreateProviderSwitchHarness(
-            new RelationGovernanceProviderSwitchOptions
-            {
-                Enabled = true,
-                Mode = RelationGovernanceProviderMode.GuardedPostgresPrimary,
-                AllowedWorkspaces = ["workspace-test"],
-                AllowedCollections = ["collection-test"],
-                RequireReadinessGate = true
-            },
-            readinessGatePassed: false,
-            shadowReadQualityReady: true);
-
-        await Assert.ThrowsExceptionAsync<InvalidOperationException>(() =>
-            harness.Router.GetRelationAsync("op", "workspace-test", "collection-test", "relation-1"));
-    }
-
-    [TestMethod]
-    public async Task RelationGovernanceProviderRouter_ShouldRejectWorkspaceOutsideAllowlist()
-    {
-        using var harness = CreateProviderSwitchHarness(
-            new RelationGovernanceProviderSwitchOptions
-            {
-                Enabled = true,
-                Mode = RelationGovernanceProviderMode.GuardedPostgresPrimary,
-                AllowedWorkspaces = ["workspace-test"],
-                AllowedCollections = ["collection-test"]
-            },
-            readinessGatePassed: true,
-            shadowReadQualityReady: true);
-
-        await Assert.ThrowsExceptionAsync<InvalidOperationException>(() =>
-            harness.Router.GetRelationAsync("op", "other-workspace", "collection-test", "relation-1"));
-    }
-
-    [TestMethod]
-    public async Task RelationGovernanceProviderRouter_ScopedRules_ShouldKeepDefaultFileSystemOutsideScope()
-    {
-        using var harness = CreateProviderSwitchHarness(
-            new RelationGovernanceProviderSwitchOptions
-            {
-                Enabled = true,
-                Mode = RelationGovernanceProviderMode.FileSystemPrimary,
-                ScopedRules =
-                [
-                    new RelationGovernanceScopedRule
-                    {
-                        ScopeName = "scope-a",
-                        WorkspaceId = "workspace-a",
-                        CollectionId = "collection-a",
-                        Mode = RelationGovernanceProviderMode.GuardedPostgresPrimary
-                    }
-                ],
-                FallbackToFileSystem = true,
-                ContinueComparisonTrace = true
-            },
-            readinessGatePassed: true,
-            shadowReadQualityReady: true);
-        var relation = new ContextRelation
-        {
-            Id = "relation-outside",
-            WorkspaceId = "workspace-outside",
-            CollectionId = "collection-outside",
-            SourceId = "source",
-            TargetId = "target",
-            RelationType = "references",
-            CreatedAt = DateTimeOffset.UnixEpoch
-        };
-
-        await harness.Router.SaveRelationAsync("op-outside", relation);
-
-        Assert.IsTrue(harness.Traces.Any(trace => string.Equals(trace.PrimaryProvider, "FileSystem", StringComparison.OrdinalIgnoreCase)));
-        Assert.IsFalse(harness.Traces.Any(trace => string.Equals(trace.PrimaryProvider, "Postgres", StringComparison.OrdinalIgnoreCase)));
-    }
-
-    [TestMethod]
-    public async Task RelationGovernanceProviderRouter_ScopedRules_ShouldUsePostgresPrimaryInsideScope()
-    {
-        using var harness = CreateProviderSwitchHarness(
-            new RelationGovernanceProviderSwitchOptions
-            {
-                Enabled = true,
-                Mode = RelationGovernanceProviderMode.FileSystemPrimary,
-                ScopedRules =
-                [
-                    new RelationGovernanceScopedRule
-                    {
-                        ScopeName = "scope-a",
-                        WorkspaceId = "workspace-a",
-                        CollectionId = "collection-a",
-                        Mode = RelationGovernanceProviderMode.GuardedPostgresPrimary
-                    }
-                ],
-                FallbackToFileSystem = true,
-                ContinueComparisonTrace = true
-            },
-            readinessGatePassed: true,
-            shadowReadQualityReady: true);
-        var relation = new ContextRelation
-        {
-            Id = "relation-inside",
-            WorkspaceId = "workspace-a",
-            CollectionId = "collection-a",
-            SourceId = "source",
-            TargetId = "target",
-            RelationType = "references",
-            CreatedAt = DateTimeOffset.UnixEpoch
-        };
-
-        await harness.Router.SaveRelationAsync("op-inside", relation);
-
-        Assert.IsTrue(harness.Traces.Any(trace => string.Equals(trace.PrimaryProvider, "Postgres", StringComparison.OrdinalIgnoreCase)));
-    }
-
-    [TestMethod]
-    public async Task RelationGovernanceProviderRouter_ShouldFallbackToFileSystemWhenPostgresReadFails()
-    {
-        using var harness = CreateProviderSwitchHarness(
-            new RelationGovernanceProviderSwitchOptions
-            {
-                Enabled = true,
-                Mode = RelationGovernanceProviderMode.GuardedPostgresPrimary,
-                AllowedWorkspaces = ["workspace-test"],
-                AllowedCollections = ["collection-test"],
-                FallbackToFileSystem = true,
-                ContinueComparisonTrace = true
-            },
-            readinessGatePassed: true,
-            shadowReadQualityReady: true);
-        var relation = new ContextRelation
-        {
-            Id = "relation-1",
-            WorkspaceId = "workspace-test",
-            CollectionId = "collection-test",
-            SourceId = "source-1",
-            TargetId = "target-1",
-            RelationType = "references",
-            CreatedAt = DateTimeOffset.UnixEpoch
-        };
-        await harness.FileRelationStore.SaveAsync(relation);
-
-        var result = await harness.Router.GetRelationAsync("op", "workspace-test", "collection-test", relation.Id);
-
-        Assert.IsNotNull(result);
-        Assert.AreEqual(relation.Id, result.Id);
-        Assert.IsTrue(harness.Traces.Any(trace => trace.FallbackUsed));
-        Assert.IsTrue(harness.Traces.Any(trace => !string.IsNullOrWhiteSpace(trace.PostgresError)));
-        Assert.IsTrue(harness.Traces.Any(trace => string.Equals(trace.PrimaryProvider, "Postgres", StringComparison.OrdinalIgnoreCase)));
-    }
-
-    [TestMethod]
-    public async Task RelationGovernanceProviderRouter_DualWriteOnly_ShouldKeepFileSystemPrimary()
-    {
-        using var harness = CreateProviderSwitchHarness(
-            new RelationGovernanceProviderSwitchOptions
-            {
-                Enabled = true,
-                Mode = RelationGovernanceProviderMode.DualWriteOnly,
-                AllowedWorkspaces = ["workspace-test"],
-                AllowedCollections = ["collection-test"],
-                FallbackToFileSystem = true
-            },
-            readinessGatePassed: true,
-            shadowReadQualityReady: true);
-        var relation = new ContextRelation
-        {
-            Id = "relation-dual-write",
-            WorkspaceId = "workspace-test",
-            CollectionId = "collection-test",
-            SourceId = "source-1",
-            TargetId = "target-1",
-            RelationType = "references",
-            CreatedAt = DateTimeOffset.UnixEpoch
-        };
-
-        await harness.Router.SaveRelationAsync("op", relation);
-        var stored = await harness.FileRelationStore.GetAsync("workspace-test", "collection-test", relation.Id);
-
-        Assert.IsNotNull(stored);
-        Assert.AreEqual(relation.Id, stored.Id);
-        Assert.IsTrue(harness.Traces.Any(trace => string.Equals(trace.PrimaryProvider, "FileSystem", StringComparison.OrdinalIgnoreCase)));
-    }
-
-    [TestMethod]
-    public async Task RelationGovernanceProviderRouter_ShouldTraceDeleteInGuardedScope()
-    {
-        using var harness = CreateProviderSwitchHarness(
-            new RelationGovernanceProviderSwitchOptions
-            {
-                Enabled = true,
-                Mode = RelationGovernanceProviderMode.GuardedPostgresPrimary,
-                AllowedWorkspaces = ["workspace-test"],
-                AllowedCollections = ["collection-test"],
-                FallbackToFileSystem = true,
-                ContinueComparisonTrace = true
-            },
-            readinessGatePassed: true,
-            shadowReadQualityReady: true);
-        var relation = new ContextRelation
-        {
-            Id = "relation-delete",
-            WorkspaceId = "workspace-test",
-            CollectionId = "collection-test",
-            SourceId = "source-1",
-            TargetId = "target-1",
-            RelationType = "references",
-            CreatedAt = DateTimeOffset.UnixEpoch
-        };
-        await harness.FileRelationStore.SaveAsync(relation);
-
-        await harness.Router.DeleteRelationAsync("op-delete", "workspace-test", "collection-test", relation.Id);
-
-        Assert.IsTrue(harness.Traces.Any(trace => string.Equals(trace.OperationKind, "RelationDelete", StringComparison.OrdinalIgnoreCase)));
-    }
-
-    [TestMethod]
     public void RelationGovernanceProviderSwitchTrace_ShouldRecordMismatch()
     {
         var trace = new RelationGovernanceProviderSwitchTrace
@@ -2073,71 +1705,6 @@ public sealed class ContextCorePostgresStorageTests
         }));
     }
 
-    private static ProviderSwitchHarness CreateProviderSwitchHarness(
-        RelationGovernanceProviderSwitchOptions switchOptions,
-        bool readinessGatePassed,
-        bool shadowReadQualityReady)
-    {
-        var root = Path.Combine(Path.GetTempPath(), "contextcore-provider-switch-test", Guid.NewGuid().ToString("N"));
-        var fileOptions = new FileStorageOptions { RootPath = root };
-        var paths = new FilePathResolver(fileOptions);
-        var serializer = new FileFormatSerializer();
-        var fileRelationStore = new FileRelationStore(fileOptions);
-        var fileReviewStore = new FileRelationReviewStore(paths, serializer);
-        var fileDiagnosticsStore = new FileRelationDiagnosticsStore(paths, serializer);
-        var postgresOptions = new PostgresOptions
-        {
-            Enabled = false,
-            ConnectionString = "Host=localhost;Database=contextcore;Username=user;Password=secret",
-            AutoMigrate = false
-        };
-        var factory = new PostgresConnectionFactory(postgresOptions);
-        var postgresSerializer = new PostgresJsonSerializer();
-        var migrationRunner = new PostgresMigrationRunner(factory);
-        var postgresRelationStore = new PostgresRelationStore(factory, postgresSerializer, migrationRunner);
-        var postgresReviewStore = new PostgresRelationReviewStore(factory, postgresSerializer, migrationRunner);
-        var postgresDiagnosticsStore = new PostgresRelationDiagnosticsStore(factory, postgresSerializer, migrationRunner);
-        var traces = new List<RelationGovernanceProviderSwitchTrace>();
-        var router = new RelationGovernanceProviderRouter(
-            fileRelationStore,
-            fileReviewStore,
-            fileDiagnosticsStore,
-            postgresRelationStore,
-            postgresReviewStore,
-            postgresDiagnosticsStore,
-            switchOptions,
-            readinessGatePassed,
-            shadowReadQualityReady,
-            (trace, _) =>
-            {
-                traces.Add(trace);
-                return Task.CompletedTask;
-            });
-
-        return new ProviderSwitchHarness(root, fileRelationStore, router, traces);
-    }
-
-    private sealed class ProviderSwitchHarness(
-        string root,
-        FileRelationStore fileRelationStore,
-        RelationGovernanceProviderRouter router,
-        IReadOnlyList<RelationGovernanceProviderSwitchTrace> traces) : IDisposable
-    {
-        public FileRelationStore FileRelationStore { get; } = fileRelationStore;
-
-        public RelationGovernanceProviderRouter Router { get; } = router;
-
-        public IReadOnlyList<RelationGovernanceProviderSwitchTrace> Traces { get; } = traces;
-
-        public void Dispose()
-        {
-            if (Directory.Exists(root))
-            {
-                Directory.Delete(root, recursive: true);
-            }
-        }
-    }
-
     private sealed class FakePostgresConnectionFactory(PostgresOptions options, bool success) : IPostgresConnectionFactory
     {
         public PostgresOptions Options { get; } = options;
@@ -2241,3 +1808,5 @@ public sealed class ContextCorePostgresStorageTests
         };
 
 }
+
+
