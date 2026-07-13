@@ -57,38 +57,6 @@ public sealed class ContextCoreLearningOfflineBaselineTests
     }
 
     [TestMethod]
-    public async Task RouterIntentClassifierR1_ShouldGenerateReports()
-    {
-        var tempRoot = Path.Combine(Path.GetTempPath(), $"contextcore-router-r1-{Guid.NewGuid():N}");
-        try
-        {
-            var inputPath = Path.Combine(tempRoot, "features", LearningDatasetQualityReportBuilder.RouterIntentExamplesFileName);
-            var outputDir = Path.Combine(tempRoot, "router");
-            Directory.CreateDirectory(Path.GetDirectoryName(inputPath)!);
-            await WriteJsonLinesAsync(inputPath, CreateRouterTrainingExamples().ToArray());
-
-            var report = await new RouterIntentEvaluationRunner().RunAsync(inputPath, outputDir);
-
-            Assert.IsTrue(report.Ready);
-            Assert.AreEqual(32, report.SampleCount);
-            Assert.IsTrue(File.Exists(Path.Combine(outputDir, RouterIntentEvaluationRunner.ReportFileName)));
-            Assert.IsTrue(File.Exists(Path.Combine(outputDir, RouterIntentEvaluationRunner.MarkdownReportFileName)));
-            Assert.IsTrue(File.Exists(Path.Combine(outputDir, RouterIntentEvaluationRunner.ConfusionMatrixFileName)));
-            Assert.AreEqual(2, report.Baselines.Count);
-            Assert.IsTrue(report.Baselines.Any(item => item.BaselineName == RouterIntentClassifierBaselineNames.ExistingRuleBasedRouterBaseline));
-            Assert.IsTrue(report.Baselines.Any(item => item.BaselineName == RouterIntentClassifierBaselineNames.TokenCentroidRouterBaseline));
-            Assert.IsFalse(string.IsNullOrWhiteSpace(report.Recommendation));
-        }
-        finally
-        {
-            if (Directory.Exists(tempRoot))
-            {
-                Directory.Delete(tempRoot, recursive: true);
-            }
-        }
-    }
-
-    [TestMethod]
     public void TokenCentroidRouterBaseline_ShouldNotUseIdsForPrediction()
     {
         var training = CreateRouterTrainingExamples().ToArray();
@@ -240,52 +208,6 @@ public sealed class ContextCoreLearningOfflineBaselineTests
     }
 
     [TestMethod]
-    public void RouterDisagreementTriage_ShouldClassifyShadowFixesAndBreaks()
-    {
-        var examples = CreateRouterTriageExamples().ToArray();
-
-        var report = new RouterDisagreementTriageRunner().BuildReport(examples, "A3", "router-intent-examples.jsonl");
-
-        Assert.IsTrue(report.DisagreementCount >= 2);
-        Assert.IsTrue(report.Disagreements.Any(item => item.TriageCategory == RouterDisagreementTriageCategories.ShadowFixesRuntime));
-        Assert.IsTrue(report.Disagreements.Any(item => item.TriageCategory == RouterDisagreementTriageCategories.ShadowBreaksRuntime));
-        Assert.IsTrue(report.ShadowFixesRuntime > 0);
-        Assert.IsTrue(report.ShadowBreaksRuntime > 0);
-    }
-
-    [TestMethod]
-    public async Task RouterDisagreementTriage_ShouldGenerateStableHardNegativeJsonl()
-    {
-        var tempRoot = Path.Combine(Path.GetTempPath(), $"contextcore-router-triage-{Guid.NewGuid():N}");
-        try
-        {
-            var inputPath = Path.Combine(tempRoot, "features", LearningDatasetQualityReportBuilder.RouterIntentExamplesFileName);
-            var outputDir = Path.Combine(tempRoot, "router");
-            Directory.CreateDirectory(Path.GetDirectoryName(inputPath)!);
-            await WriteJsonLinesAsync(inputPath, CreateRouterTriageExamples().ToArray());
-
-            var (a3, extended) = await new RouterDisagreementTriageRunner().RunAsync(inputPath, outputDir);
-            var hardNegativePath = Path.Combine(outputDir, RouterDisagreementTriageRunner.HardNegativesFileName);
-            var hardNegativeLines = await File.ReadAllLinesAsync(hardNegativePath);
-
-            Assert.IsTrue(File.Exists(Path.Combine(outputDir, RouterDisagreementTriageRunner.A3ReportFileName)));
-            Assert.IsTrue(File.Exists(Path.Combine(outputDir, RouterDisagreementTriageRunner.ExtendedReportFileName)));
-            Assert.IsTrue(File.Exists(Path.Combine(outputDir, RouterDisagreementTriageRunner.MarkdownReportFileName)));
-            Assert.IsTrue(hardNegativeLines.Length > 0);
-            Assert.AreEqual(hardNegativeLines.Distinct(StringComparer.OrdinalIgnoreCase).Count(), hardNegativeLines.Length);
-            Assert.IsTrue(a3.HardNegativeCount > 0);
-            Assert.AreEqual(a3.DisagreementCount, extended.DisagreementCount);
-        }
-        finally
-        {
-            if (Directory.Exists(tempRoot))
-            {
-                Directory.Delete(tempRoot, recursive: true);
-            }
-        }
-    }
-
-    [TestMethod]
     public void RouterIntentBoundaryMarkdown_ShouldContainDefinitions()
     {
         var path = FindRepoFile("docs", "router-intent-boundaries.md");
@@ -318,89 +240,6 @@ public sealed class ContextCoreLearningOfflineBaselineTests
         var secondPrediction = classifier.Predict(second);
 
         Assert.AreEqual(firstPrediction.Intent, secondPrediction.Intent);
-    }
-
-    [TestMethod]
-    public void RouterGuardedOptInGate_ShouldFailWhenBreaksExceedFixes()
-    {
-        var report = new RouterGuardedOptInReadinessGateRunner().BuildReport(
-            [
-                CreateRouterShadowEvalReport(
-                    sampleCount: 10,
-                    agreementRate: 0.9,
-                    fixes: 1,
-                    breaks: 3,
-                    regressionCount: 3)
-            ],
-            [
-                CreateRouterTriageReport(fixes: 1, breaks: 3)
-            ],
-            p15GatePassed: true);
-
-        Assert.IsFalse(report.Passed);
-        CollectionAssert.Contains(
-            report.FailureReasons.ToArray(),
-            RouterGuardedOptInGateFailureReasons.ShadowBreaksRuntimeGreaterThanFixes);
-        Assert.AreEqual(RouterGuardedOptInGateRecommendations.KeepRuleBased, report.Recommendation);
-    }
-
-    [TestMethod]
-    public void RouterGuardedOptInGate_ShouldPassWhenFixesPositiveAndNoRegression()
-    {
-        var report = new RouterGuardedOptInReadinessGateRunner().BuildReport(
-            [
-                CreateRouterShadowEvalReport(
-                    sampleCount: 10,
-                    agreementRate: 0.95,
-                    fixes: 2,
-                    breaks: 0,
-                    regressionCount: 0)
-            ],
-            [
-                CreateRouterTriageReport(fixes: 2, breaks: 0)
-            ],
-            p15GatePassed: true);
-
-        Assert.IsTrue(report.Passed);
-        Assert.AreEqual(2, report.ShadowFixesRuntime);
-        Assert.AreEqual(0, report.ShadowBreaksRuntime);
-        Assert.AreEqual(RouterGuardedOptInGateRecommendations.ReadyForGuardedOptIn, report.Recommendation);
-    }
-
-    [TestMethod]
-    public void RouterGuardedOptInGate_ShouldNotUseSampleIdForDecision()
-    {
-        var first = new RouterGuardedOptInReadinessGateRunner().BuildReport(
-            [
-                CreateRouterShadowEvalReport(
-                    sampleCount: 12,
-                    agreementRate: 0.92,
-                    fixes: 1,
-                    breaks: 0,
-                    regressionCount: 0,
-                    operationId: "gate-report-a")
-            ],
-            [
-                CreateRouterTriageReport(fixes: 1, breaks: 0, operationId: "triage-report-a")
-            ],
-            p15GatePassed: true);
-        var second = new RouterGuardedOptInReadinessGateRunner().BuildReport(
-            [
-                CreateRouterShadowEvalReport(
-                    sampleCount: 12,
-                    agreementRate: 0.92,
-                    fixes: 1,
-                    breaks: 0,
-                    regressionCount: 0,
-                    operationId: "gate-report-b")
-            ],
-            [
-                CreateRouterTriageReport(fixes: 1, breaks: 0, operationId: "triage-report-b")
-            ],
-            p15GatePassed: true);
-
-        Assert.AreEqual(first.Passed, second.Passed);
-        CollectionAssert.AreEqual(first.FailureReasons.ToArray(), second.FailureReasons.ToArray());
     }
 
     [TestMethod]
@@ -1133,81 +972,6 @@ public sealed class ContextCoreLearningOfflineBaselineTests
                 inputSummary: $"retry recovery failure checkpoint {index}");
         }
     }
-
-    private static IEnumerable<ContextPolicyFeatureExample> CreateRouterTriageExamples()
-    {
-        for (var index = 0; index < 18; index++)
-        {
-            yield return CreateRouterExample(
-                $"triage-train-current-{index}",
-                "ChatMode",
-                PlanningIntentDetector.CurrentTask,
-                inputSummary: $"focus marker active task route {index}");
-            yield return CreateRouterExample(
-                $"triage-train-fuzzy-{index}",
-                "ChatMode",
-                PlanningIntentDetector.FuzzyQuestion,
-                inputSummary: $"plain marker general question route {index}");
-            yield return CreateRouterExample(
-                $"triage-train-coding-{index}",
-                "CodingMode",
-                PlanningIntentDetector.CodingTask,
-                inputSummary: $"compile module verification route {index}");
-        }
-
-        yield return CreateRouterExample(
-            "triage-fix-0",
-            "ChatMode",
-            PlanningIntentDetector.CurrentTask,
-            inputSummary: "focus marker active route");
-        yield return CreateRouterExample(
-            "triage-break-1",
-            "CodingMode",
-            PlanningIntentDetector.CodingTask,
-            inputSummary: "plain marker general route");
-    }
-
-    private static RouterIntentShadowEvalReport CreateRouterShadowEvalReport(
-        int sampleCount,
-        double agreementRate,
-        int fixes,
-        int breaks,
-        int regressionCount,
-        string operationId = "router-shadow-eval-test")
-        => new()
-        {
-            OperationId = operationId,
-            DatasetName = "test",
-            SampleCount = sampleCount,
-            AgreementRate = agreementRate,
-            LowConfidenceCount = 0,
-            ShadowFixesRuntime = fixes,
-            ShadowBreaksRuntime = breaks,
-            NetGain = fixes - breaks,
-            PerIntentRegression = regressionCount == 0
-                ? new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
-                : new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
-                {
-                    [PlanningIntentDetector.CodingTask] = regressionCount
-                }
-        };
-
-    private static RouterDisagreementTriageReport CreateRouterTriageReport(
-        int fixes,
-        int breaks,
-        string operationId = "router-triage-test")
-        => new()
-        {
-            OperationId = operationId,
-            DatasetName = "test",
-            SampleCount = fixes + breaks,
-            DisagreementCount = fixes + breaks,
-            ShadowFixesRuntime = fixes,
-            ShadowBreaksRuntime = breaks,
-            Recommendation = fixes > breaks
-                ? RouterDisagreementTriageRecommendations.NeedsHardNegativeDataset
-                : RouterDisagreementTriageRecommendations.KeepRuleBased
-        };
 
     private static string FindRepoFile(params string[] segments)
     {

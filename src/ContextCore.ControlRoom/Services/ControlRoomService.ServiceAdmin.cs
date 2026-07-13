@@ -103,77 +103,8 @@ public sealed partial class ControlRoomService
             ReportLayoutDiagnostics = BuildReportLayoutDiagnostics(layoutRoot),
             StorageBoundaryReport = BuildStorageBoundaryReport(),
             PostgresOperationalStoreDiagnostics = postgresDiagnostics,
-            PostgresRelationStoreDiagnostics = BuildPostgresRelationStoreDiagnostics(layoutRoot),
-            PostgresRelationReviewProviderDiagnostics = BuildPostgresRelationReviewProviderDiagnostics(layoutRoot),
-            PostgresRelationReviewParityReport = BuildPostgresRelationReviewParityReport(layoutRoot),
-            PostgresRelationGovernanceParityReport = BuildPostgresRelationGovernanceParityReport(layoutRoot),
-            PostgresRelationGovernanceReadinessGateReport = BuildPostgresRelationGovernanceReadinessGateReport(layoutRoot),
-            PostgresRelationDualWriteQualityReport = BuildPostgresRelationDualWriteQualityReport(layoutRoot),
-            PostgresRelationShadowReadQualityReport = BuildPostgresRelationShadowReadQualityReport(layoutRoot),
-            PostgresRelationProviderSwitchSmokeReport = BuildPostgresRelationProviderSwitchSmokeReport(layoutRoot),
-            PostgresRelationProviderSwitchGateReport = BuildPostgresRelationProviderSwitchGateReport(layoutRoot),
-            PostgresRelationRuntimeCanaryReport = BuildPostgresRelationRuntimeCanaryReport(layoutRoot),
-            PostgresRelationScopedServiceModeSmokeReport = BuildPostgresRelationScopedServiceModeSmokeReport(layoutRoot),
-            PostgresRelationScopedServiceModeGateReport = BuildPostgresRelationScopedServiceModeGateReport(layoutRoot),
-            PostgresRelationScopedExtendedCanaryReport = BuildPostgresRelationScopedExtendedCanaryReport(layoutRoot),
-            PostgresRelationSelectedWorkspaceCanaryReport = BuildPostgresRelationSelectedWorkspaceCanaryReport(layoutRoot),
-            PostgresRelationScopedExpansionReport = BuildPostgresRelationScopedExpansionReport(layoutRoot),
-            PostgresRelationScopedObservationReport = BuildPostgresRelationScopedObservationReport(layoutRoot),
-            PostgresRelationSelectedNormalWorkspaceCanaryReport = BuildPostgresRelationSelectedNormalWorkspaceCanaryReport(layoutRoot),
-            PostgresRelationLimitedNormalScopeObservationReport = BuildPostgresRelationLimitedNormalScopeObservationReport(layoutRoot),
-            PostgresRelationMultiNormalScopeCanaryReport = BuildPostgresRelationMultiNormalScopeCanaryReport(layoutRoot),
-            PostgresLearningFeedbackDualWriteSmokeReport = BuildPostgresLearningFeedbackDualWriteSmokeReport(layoutRoot),
-            PostgresLearningFeedbackShadowReadSmokeReport = BuildPostgresLearningFeedbackShadowReadSmokeReport(layoutRoot),
-            PostgresLearningFeedbackScopedServiceModeSmokeReport = BuildPostgresLearningFeedbackScopedServiceModeSmokeReport(layoutRoot),
-            PostgresLearningFeedbackScopedServiceModeGateReport = BuildPostgresLearningFeedbackScopedServiceModeGateReport(layoutRoot),
-            PostgresLearningFeedbackSelectedNormalScopeCanaryReport = BuildPostgresLearningFeedbackSelectedNormalScopeCanaryReport(layoutRoot),
-            PostgresLearningFeedbackLimitedScopeObservationReport = BuildPostgresLearningFeedbackLimitedScopeObservationReport(layoutRoot),
-            PostgresLearningFeedbackLimitedScopeQualityReport = BuildPostgresLearningFeedbackLimitedScopeQualityReport(layoutRoot),
-            PostgresLearningFeedbackFreezeGateReport = BuildPostgresLearningFeedbackFreezeGateReport(layoutRoot),
-            PostgresJobQueueLeaseSmokeReport = BuildPostgresJobQueueLeaseSmokeReport(layoutRoot),
-            PostgresJobQueueDualWriteSmokeReport = BuildPostgresJobQueueDualWriteSmokeReport(layoutRoot),
-            PostgresJobQueueShadowReadSmokeReport = BuildPostgresJobQueueShadowReadSmokeReport(layoutRoot),
-            PostgresJobQueueScopedWorkerCanaryReport = BuildPostgresJobQueueScopedWorkerCanaryReport(layoutRoot),
-            PostgresJobQueueScopedWorkerQualityReport = BuildPostgresJobQueueScopedWorkerQualityReport(layoutRoot),
-            PostgresJobQueueLimitedWorkerScopeObservationReport = BuildPostgresJobQueueLimitedWorkerScopeObservationReport(layoutRoot),
-            PostgresJobQueueLimitedWorkerScopeQualityReport = BuildPostgresJobQueueLimitedWorkerScopeQualityReport(layoutRoot),
-            PostgresJobQueueFreezeGateReport = BuildPostgresJobQueueFreezeGateReport(layoutRoot),
-            PostgresVectorDiagnosticsReport = BuildPostgresVectorDiagnosticsReport(layoutRoot),
-            PostgresVectorCompatibilityReport = BuildPostgresVectorCompatibilityReport(layoutRoot),
-            PostgresVectorProviderSmokeReport = BuildPostgresVectorProviderSmokeReport(layoutRoot),
-            PostgresVectorIndexParityReport = BuildPostgresVectorIndexParityReport(layoutRoot),
-            PostgresVectorProviderScopedReindexPlan = BuildPostgresVectorProviderScopedReindexPlan(layoutRoot),
-            PostgresVectorProviderScopedReindexResult = BuildPostgresVectorProviderScopedReindexResult(layoutRoot),
-            PostgresVectorProviderScopedReindexReport = BuildPostgresVectorProviderScopedReindexReport(layoutRoot),
-            PostgresVectorQueryPreviewReport = BuildPostgresVectorQueryPreviewReport(layoutRoot),
-            PostgresVectorShadowEvalA3Report = BuildPostgresVectorShadowEvalReport(
-                layoutRoot,
-                "postgres-vector-shadow-eval-a3.json",
-                "A3"),
-            PostgresVectorShadowEvalExtendedReport = BuildPostgresVectorShadowEvalReport(
-                layoutRoot,
-                "postgres-vector-shadow-eval-extended.json",
-                "Extended"),
-            PostgresVectorShadowEvalSummaryReport = BuildPostgresVectorShadowEvalSummaryReport(layoutRoot),
-            PostgresVectorFreezeGateReport = BuildPostgresVectorFreezeGateReport(layoutRoot)
         };
     }
-
-    private static PostgresRelationScopedServiceModeSmokeReport BuildPostgresRelationScopedServiceModeSmokeReport(string rootPath) =>
-        ReadPostgresReport(rootPath, "postgres-relation-scoped-service-mode-smoke-report.json",
-            new PostgresRelationScopedServiceModeSmokeReport { Diagnostics = ["RelationScopedServiceModeSmokeReportMissing"], Recommendation = "RunEvalPostgresRelationScopedServiceModeSmoke" });
-
-    private static PostgresRelationScopedServiceModeGateReport BuildPostgresRelationScopedServiceModeGateReport(string rootPath) =>
-        ReadPostgresReport(rootPath, "postgres-relation-scoped-service-mode-gate.json",
-            new PostgresRelationScopedServiceModeGateReport { BlockedReasons = ["RelationScopedServiceModeGateReportMissing"], Recommendation = "RunEvalPostgresRelationScopedServiceModeGate" });
-
-    private static LearningFeedbackScopedServiceModeSmokeReport BuildPostgresLearningFeedbackScopedServiceModeSmokeReport(string rootPath) =>
-        ReadPostgresReport(rootPath, "postgres-learning-feedback-scoped-service-mode-smoke-report.json",
-            new LearningFeedbackScopedServiceModeSmokeReport { Diagnostics = ["PostgresLearningFeedbackScopedServiceModeSmokeReportMissing"], Recommendation = "RunEvalPostgresLearningFeedbackScopedServiceModeSmoke" });
-
-    private static LearningFeedbackScopedServiceModeGateReport BuildPostgresLearningFeedbackScopedServiceModeGateReport(string rootPath) =>
-        ReadPostgresReport(rootPath, "postgres-learning-feedback-scoped-service-mode-gate.json",
-            new LearningFeedbackScopedServiceModeGateReport { BlockedReasons = ["PostgresLearningFeedbackScopedServiceModeGateMissing"], Recommendation = "RunEvalPostgresLearningFeedbackScopedServiceModeGate" });
 
     public Task<ContextInputIngestionResult> IngestServiceAsync(
         ContextInputCommand command,

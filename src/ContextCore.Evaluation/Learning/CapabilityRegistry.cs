@@ -5,7 +5,6 @@ namespace ContextCore.Evaluation.Learning;
 
 /// <summary>
 /// 静态能力注册表。列出所有受审计的能力及其期望状态、gate artifact 路径。
-/// ProjectStateAuditRunner 通过此注册表驱动 Capability Readiness Matrix。
 /// </summary>
 internal static class CapabilityRegistry
 {

@@ -264,58 +264,6 @@ public sealed class LearningFeedbackSummaryReport
     public IReadOnlyList<string> Warnings { get; init; } = Array.Empty<string>();
 }
 
-/// <summary>运行时反馈 smoke flow 报告。</summary>
-public sealed class LearningFeedbackSmokeReport
-{
-    public DateTimeOffset GeneratedAt { get; init; }
-
-    public string WorkspaceId { get; init; } = string.Empty;
-
-    public string CollectionId { get; init; } = string.Empty;
-
-    public string FeedbackId { get; init; } = string.Empty;
-
-    public bool SubmitWorks { get; init; }
-
-    public bool DuplicateFeedbackIdUpsertWorks { get; init; }
-
-    public bool MetadataOnlyWorks { get; init; }
-
-    public bool RedactionModePreserved { get; init; }
-
-    public bool TrainingUseDisabledUntilReview { get; init; }
-
-    public bool SummaryCountUpdated { get; init; }
-
-    public bool ExportJsonlContainsFeedback { get; init; }
-
-    public bool NeedsRedactionReviewWorks { get; init; }
-
-    public bool RejectReviewWorks { get; init; }
-
-    public bool ApproveMetadataSafeFeedbackWorks { get; init; }
-
-    public bool FeatureCandidateBuilt { get; init; }
-
-    public bool FeatureCandidateExported { get; init; }
-
-    public bool QualityReportRefreshed { get; init; }
-
-    public bool SmokeRecordExcludedFromTraining { get; init; }
-
-    public int SummaryCountBefore { get; init; }
-
-    public int SummaryCountAfter { get; init; }
-
-    public int FeatureCandidateCount { get; init; }
-
-    public int TrainableCandidateCount { get; init; }
-
-    public string Recommendation { get; init; } = string.Empty;
-
-    public IReadOnlyList<string> FailedChecks { get; init; } = Array.Empty<string>();
-}
-
 /// <summary>运行时反馈进入数据集前的人工审核状态。</summary>
 public enum FeedbackReviewStatus
 {
@@ -502,72 +450,6 @@ public sealed class LearningFeedbackShadowReadOptions
     public bool FailOnMismatch { get; init; }
 }
 
-/// <summary>Learning feedback dual-write trace；只记录旁路写入质量，不驱动运行时策略。</summary>
-public sealed class LearningFeedbackDualWriteTrace
-{
-    public string OperationId { get; init; } = string.Empty;
-
-    public string WorkspaceId { get; init; } = string.Empty;
-
-    public string CollectionId { get; init; } = string.Empty;
-
-    public string TargetKind { get; init; } = string.Empty;
-
-    public string TargetId { get; init; } = string.Empty;
-
-    public bool FileSystemWriteSucceeded { get; init; }
-
-    public bool PostgresWriteSucceeded { get; init; }
-
-    public bool MismatchDetected { get; init; }
-
-    public string MismatchReason { get; init; } = string.Empty;
-
-    public string PostgresError { get; init; } = string.Empty;
-
-    public bool FallbackUsed { get; init; }
-
-    public double DurationMs { get; init; }
-
-    public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
-}
-
-/// <summary>Learning feedback shadow-read trace；正式结果仍来自 FileSystem。</summary>
-public sealed class LearningFeedbackShadowReadTrace
-{
-    public string OperationId { get; init; } = string.Empty;
-
-    public string WorkspaceId { get; init; } = string.Empty;
-
-    public string CollectionId { get; init; } = string.Empty;
-
-    public string ReadKind { get; init; } = string.Empty;
-
-    public string TargetId { get; init; } = string.Empty;
-
-    public bool FileSystemReadSucceeded { get; init; }
-
-    public bool PostgresReadSucceeded { get; init; }
-
-    public string FileSystemResultHash { get; init; } = string.Empty;
-
-    public string PostgresResultHash { get; init; } = string.Empty;
-
-    public bool MismatchDetected { get; init; }
-
-    public string MismatchReason { get; init; } = string.Empty;
-
-    public string PostgresError { get; init; } = string.Empty;
-
-    public bool FallbackUsed { get; init; }
-
-    public double FileSystemDurationMs { get; init; }
-
-    public double PostgresDurationMs { get; init; }
-
-    public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
-}
-
 public enum LearningFeedbackProviderMode
 {
     FileSystemPrimary,
@@ -615,36 +497,6 @@ public sealed class LearningFeedbackProviderSwitchOptions
     public bool RequireProviderQualityReady { get; init; } = true;
 
     public string ProviderId { get; init; } = "postgres-learning-feedback-v1";
-}
-
-/// <summary>Learning feedback provider switch trace；用于 scoped smoke/gate，不驱动训练或正式策略。</summary>
-public sealed class LearningFeedbackProviderSwitchTrace
-{
-    public string OperationId { get; init; } = string.Empty;
-
-    public string WorkspaceId { get; init; } = string.Empty;
-
-    public string CollectionId { get; init; } = string.Empty;
-
-    public string Mode { get; init; } = string.Empty;
-
-    public string OperationKind { get; init; } = string.Empty;
-
-    public string TargetType { get; init; } = string.Empty;
-
-    public string TargetId { get; init; } = string.Empty;
-
-    public string PrimaryProvider { get; init; } = string.Empty;
-
-    public bool FallbackUsed { get; init; }
-
-    public bool MismatchDetected { get; init; }
-
-    public string PostgresError { get; init; } = string.Empty;
-
-    public double DurationMs { get; init; }
-
-    public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
 }
 
 public enum LearningFeedbackSelectedNormalScopeCleanupMode
@@ -933,18 +785,6 @@ public sealed class LearningApprovedFeedbackDatasetGateReport
     public string Recommendation { get; init; } = string.Empty;
 }
 
-public static class LearningApprovedFeedbackDatasetGateFailureReasons
-{
-    public const string NoApprovedFeedback = nameof(NoApprovedFeedback);
-    public const string NeedsReviewedFeedback = nameof(NeedsReviewedFeedback);
-    public const string RedactionCoverageIncomplete = nameof(RedactionCoverageIncomplete);
-    public const string NoFeatureCandidates = nameof(NoFeatureCandidates);
-    public const string NoTrainableCandidates = nameof(NoTrainableCandidates);
-    public const string DisabledTrainingUsePresent = nameof(DisabledTrainingUsePresent);
-    public const string SmokeRecordsInTrainableDataset = nameof(SmokeRecordsInTrainableDataset);
-    public const string CapabilityLabelCoverageTooLow = nameof(CapabilityLabelCoverageTooLow);
-}
-
 /// <summary>单个 capability 的 feedback dataset readiness。</summary>
 public sealed class LearningFeedbackDatasetReadiness
 {
@@ -965,30 +805,6 @@ public sealed class LearningFeedbackDatasetReadiness
     public string Status { get; init; } = string.Empty;
 
     public IReadOnlyList<string> BlockedReasons { get; init; } = Array.Empty<string>();
-}
-
-public static class LearningFeedbackQualityBlockedReasons
-{
-    public const string NoFeedback = nameof(NoFeedback);
-    public const string NoApprovedFeedback = nameof(NoApprovedFeedback);
-    public const string NeedsReview = nameof(NeedsReview);
-    public const string NeedsRedaction = nameof(NeedsRedaction);
-    public const string MissingNegativeSamples = nameof(MissingNegativeSamples);
-    public const string MissingPositiveSamples = nameof(MissingPositiveSamples);
-    public const string MetadataOnlyInsufficient = nameof(MetadataOnlyInsufficient);
-    public const string NeedsMoreEvidence = nameof(NeedsMoreEvidence);
-    public const string LabelCoverageTooLow = nameof(LabelCoverageTooLow);
-}
-
-public static class LearningFeedbackQualityRecommendations
-{
-    public const string NeedsReviewedFeedback = nameof(NeedsReviewedFeedback);
-    public const string NeedsMoreFeedback = nameof(NeedsMoreFeedback);
-    public const string NeedsRedactionReview = nameof(NeedsRedactionReview);
-    public const string NeedsLabelCoverage = nameof(NeedsLabelCoverage);
-    public const string ReadyForDatasetExport = nameof(ReadyForDatasetExport);
-    public const string ReadyForOfflineBaseline = nameof(ReadyForOfflineBaseline);
-    public const string NotReady = nameof(NotReady);
 }
 
 /// <summary>由人工审核或运行反馈生成的学习记录。</summary>
@@ -1587,16 +1403,6 @@ public static class RouterIntentClassifierBaselineNames
     public const string TokenCentroidRouterBaseline = "TokenCentroidRouterBaseline";
 }
 
-public static class RouterIntentClassifierRecommendations
-{
-    public const string KeepRuleBased = "KeepRuleBased";
-    public const string ReadyForRouterShadow = "ReadyForRouterShadow";
-    public const string NeedsMoreExamples = "NeedsMoreExamples";
-    public const string NeedsNegativeSamples = "NeedsNegativeSamples";
-    public const string NeedsIntentBoundaryClarification = "NeedsIntentBoundaryClarification";
-    public const string BlockedByLowRecall = "BlockedByLowRecall";
-}
-
 /// <summary>Router intent classifier 的离线预测结果；只用于报告，不替换 runtime router。</summary>
 public sealed class RouterIntentClassifierPrediction
 {
@@ -1671,20 +1477,6 @@ public sealed class RouterIntentClassifierBaselineResult
     public double AutomationRecoveryRecall { get; init; }
 
     public string Recommendation { get; init; } = string.Empty;
-}
-
-public sealed class RouterIntentConfusionMatrixReport
-{
-    public DateTimeOffset GeneratedAt { get; init; }
-
-    public string InputPath { get; init; } = string.Empty;
-
-    public string BaselineName { get; init; } = string.Empty;
-
-    public IReadOnlyList<string> Intents { get; init; } = Array.Empty<string>();
-
-    public IReadOnlyDictionary<string, IReadOnlyDictionary<string, int>> ConfusionMatrix { get; init; } =
-        new Dictionary<string, IReadOnlyDictionary<string, int>>(StringComparer.OrdinalIgnoreCase);
 }
 
 /// <summary>Router shadow trace 采集开关；默认关闭，不能改变正式 router 输出。</summary>
@@ -1904,29 +1696,6 @@ public sealed class RouterIntentShadowEvalSample
     public string DisagreementType { get; init; } = string.Empty;
 }
 
-public static class RouterDisagreementTriageCategories
-{
-    public const string ShadowFixesRuntime = "ShadowFixesRuntime";
-    public const string ShadowBreaksRuntime = "ShadowBreaksRuntime";
-    public const string BothWrong = "BothWrong";
-    public const string BothPlausible = "BothPlausible";
-    public const string IntentBoundaryAmbiguous = "IntentBoundaryAmbiguous";
-    public const string LowConfidenceCentroid = "LowConfidenceCentroid";
-    public const string SparseIntentExamples = "SparseIntentExamples";
-    public const string NeedsHardNegative = "NeedsHardNegative";
-    public const string NeedsIntentDefinition = "NeedsIntentDefinition";
-    public const string KeepRuleBased = "KeepRuleBased";
-}
-
-public static class RouterDisagreementRecommendedActions
-{
-    public const string ReviewRuntimeBoundary = "ReviewRuntimeBoundary";
-    public const string AddHardNegative = "AddHardNegative";
-    public const string ClarifyIntentDefinition = "ClarifyIntentDefinition";
-    public const string CollectMoreExamples = "CollectMoreExamples";
-    public const string KeepRuleBased = "KeepRuleBased";
-}
-
 public static class RouterDisagreementTriageRecommendations
 {
     public const string KeepRuleBased = "KeepRuleBased";
@@ -2006,30 +1775,6 @@ public sealed class RouterDisagreementTriageDetail
     public string TriageCategory { get; init; } = string.Empty;
 
     public string RecommendedAction { get; init; } = string.Empty;
-}
-
-public sealed class RouterHardNegativeExample
-{
-    public string QueryText { get; init; } = string.Empty;
-
-    public string PositiveIntent { get; init; } = string.Empty;
-
-    public string NegativeIntent { get; init; } = string.Empty;
-
-    public string Mode { get; init; } = string.Empty;
-
-    public string Reason { get; init; } = string.Empty;
-
-    public string SourceSampleId { get; init; } = string.Empty;
-
-    public double Confidence { get; init; }
-}
-
-public sealed class RouterGuardedOptInReadinessGateOptions
-{
-    public double AgreementRateThreshold { get; init; } = 0.85;
-
-    public int LowConfidenceMaxCount { get; init; }
 }
 
 public static class RouterGuardedOptInGateFailureReasons
@@ -3601,139 +3346,4 @@ public static class ProjectStateAuditStatuses
     public const string PlanOnly = nameof(PlanOnly);
     public const string Blocked = nameof(Blocked);
     public const string Unknown = nameof(Unknown);
-}
-
-public static class ProjectStateAuditRecommendations
-{
-    public const string ReadyForMainlineGapRepairPlanning = nameof(ReadyForMainlineGapRepairPlanning);
-    public const string NeedsMissingReportRegeneration = nameof(NeedsMissingReportRegeneration);
-    public const string KeepPreviewOnly = nameof(KeepPreviewOnly);
-}
-
-public sealed class CapabilityReadinessMatrixEntry
-{
-    public string CapabilityId { get; init; } = string.Empty;
-
-    public string Area { get; init; } = string.Empty;
-
-    public string Status { get; init; } = ProjectStateAuditStatuses.Unknown;
-
-    public string Recommendation { get; init; } = string.Empty;
-
-    public string SourceReportPath { get; init; } = string.Empty;
-
-    public bool SourceReportExists { get; init; }
-
-    public bool ReadyForRuntime { get; init; }
-
-    public bool FormalRetrievalAllowed { get; init; }
-
-    public bool RuntimeSwitchAllowed { get; init; }
-
-    public IReadOnlyList<string> BlockedReasons { get; init; } = Array.Empty<string>();
-}
-
-public sealed class MainlineGapEntry
-{
-    public string GapId { get; init; } = string.Empty;
-
-    public string Area { get; init; } = string.Empty;
-
-    public string Severity { get; init; } = string.Empty;
-
-    public string Summary { get; init; } = string.Empty;
-
-    public string Evidence { get; init; } = string.Empty;
-
-    public string RecommendedAction { get; init; } = string.Empty;
-
-    public string Bucket { get; init; } = string.Empty;
-}
-
-public sealed class ProjectStateAuditReport
-{
-    public string OperationId { get; init; } = string.Empty;
-
-    public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
-
-    public string CurrentOverallStatus { get; init; } = string.Empty;
-
-    public string Recommendation { get; init; } = ProjectStateAuditRecommendations.KeepPreviewOnly;
-
-    public IReadOnlyList<string> ReadyCapabilities { get; init; } = Array.Empty<string>();
-
-    public IReadOnlyList<string> PreviewOnlyCapabilities { get; init; } = Array.Empty<string>();
-
-    public IReadOnlyList<string> BlockedCapabilities { get; init; } = Array.Empty<string>();
-
-    public IReadOnlyList<CapabilityReadinessMatrixEntry> CapabilityReadinessMatrix { get; init; } =
-        Array.Empty<CapabilityReadinessMatrixEntry>();
-
-    public IReadOnlyList<string> MainlineRisks { get; init; } = Array.Empty<string>();
-
-    public IReadOnlyList<string> QualityGaps { get; init; } = Array.Empty<string>();
-
-    public IReadOnlyList<string> PerformanceGaps { get; init; } = Array.Empty<string>();
-
-    public IReadOnlyList<string> RecommendedNextPhases { get; init; } = Array.Empty<string>();
-
-    public IReadOnlyDictionary<string, string> SourceReports { get; init; } =
-        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-
-    public bool FormalRetrievalAllowed { get; init; }
-
-    public bool RuntimeSwitchAllowed { get; init; }
-
-    public bool ReadyForRuntimeSwitch { get; init; }
-
-    public bool PackingPolicyChanged { get; init; }
-
-    public bool PackageOutputChanged { get; init; }
-
-    public IReadOnlyList<string> BlockedReasons { get; init; } = Array.Empty<string>();
-}
-
-public sealed class MainlineGapMapReport
-{
-    public string OperationId { get; init; } = string.Empty;
-
-    public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
-
-    public string CurrentOverallStatus { get; init; } = string.Empty;
-
-    public string Recommendation { get; init; } = ProjectStateAuditRecommendations.KeepPreviewOnly;
-
-    public IReadOnlyList<string> ReadyCapabilities { get; init; } = Array.Empty<string>();
-
-    public IReadOnlyList<string> PreviewOnlyCapabilities { get; init; } = Array.Empty<string>();
-
-    public IReadOnlyList<string> BlockedCapabilities { get; init; } = Array.Empty<string>();
-
-    public IReadOnlyList<MainlineGapEntry> MainlineGaps { get; init; } = Array.Empty<MainlineGapEntry>();
-
-    public IReadOnlyList<string> MainlineRisks { get; init; } = Array.Empty<string>();
-
-    public IReadOnlyList<string> QualityGaps { get; init; } = Array.Empty<string>();
-
-    public IReadOnlyList<string> PerformanceGaps { get; init; } = Array.Empty<string>();
-
-    public IReadOnlyList<string> MustDoBeforeFormalRetrieval { get; init; } = Array.Empty<string>();
-
-    public IReadOnlyList<string> CanDefer { get; init; } = Array.Empty<string>();
-
-    public IReadOnlyList<string> OptimizationLater { get; init; } = Array.Empty<string>();
-
-    public IReadOnlyList<string> SideBranchCleanupLater { get; init; } = Array.Empty<string>();
-
-    public IReadOnlyList<string> RecommendedNextPhases { get; init; } = Array.Empty<string>();
-
-    public bool FormalRetrievalAllowed { get; init; }
-
-    public bool RuntimeSwitchAllowed { get; init; }
-
-    public bool ReadyForRuntimeSwitch { get; init; }
-
-    public bool PackingPolicyChanged { get; init; }
-
-    public bool PackageOutputChanged { get; init; }
 }
