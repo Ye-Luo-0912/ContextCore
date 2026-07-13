@@ -1,6 +1,6 @@
 # ContextCore 项目路线图
 
-> 最近更新：R7-0 删除虚假 Graph gate 和 Attention 零值证据（-5,034 行）（2026-07-14）
+> 最近更新：R7-0 删除虚假 Graph gate 和 Attention 零值证据 + R7-1 DTO-R6 级联收口删除 Shadow 零值证据（2026-07-14）
 
 > 本文件是 ContextCore 的**唯一当前路线图**。docs/ 下的 freeze / report / audit / plan 类文档均为历史快照，仅供回溯，不作为设计依据。
 
@@ -36,11 +36,32 @@
 | EvalCommand.cs 单文件行数 | 7,987 | P1-5 已完成 |
 | FoundationStatusService.cs 行数 | 606 | P4 已完成 |
 | 构建 | 0 警告 / 0 错误 | 0 / 0 |
-| 测试 | 934 通过 / 0 失败 | 0 失败 |
+| 测试 | 933 通过 / 0 失败 | 0 失败 |
 
 ---
 
 ## 已完成工作
+
+### R7-1：DTO-R6 级联收口删除 Shadow 零值证据（commit `12660ac`）
+
+删除 Runtime scorer 已撤出后残留的 Shadow 零值证据 DTO 及级联引用，13 文件变更，+1/-567 行。
+
+**A. LifecycleAwareRankerShadow 系列（7 DTO + 2 属性）**：
+- RetrievalDtos.cs：DebugRequest/DebugResponse
+- EvalDtos.cs：Options/CandidateScore/Trace
+- EvalGateReportDtos.cs：Sample/Report
+- Client/Service：DebugLifecycleAwareRankerAsync 方法 + DI 注册 + 配置类
+- 保留 LifecycleAwareFeatureSet（被 LearningOfflineBaselineRunner 生产使用）
+
+**B. Router Shadow 系列（6 DTO 删除，3 保留）**：
+- 删除：RouterShadowOptions/DisagreementTypes/Recommendations/TraceQualityReport/EvalReport/EvalSample
+- 保留：RouterIntentShadowTopPrediction（被 RouterIntentClassifier 生产使用）、RouterIntentShadowTrace/TraceQuery（被 IRouterIntentShadowTraceStore 接口使用，R7-0 明确保留 trace store 读取）
+
+**C. Artifact Shadow trace counters（3 字段）**：
+- TraceLayoutDiagnostics：RankerShadowTraceCount/GraphShadowTraceCount/VectorShadowTraceCount
+- 级联清理 ServiceOperationalRenderer 和 ContextCoreDataLayout
+
+验证：构建 0 警告 0 错误，测试 933 通过 0 失败。
 
 ### R7-0：删除虚假 Graph gate 和 Attention 零值证据（commit `5e97f01`）
 
@@ -255,17 +276,9 @@ R7-0 阻塞项：移除基于错误报告继续决策的虚假 gate 和零值证
 
 ## 下一阶段任务
 
-### R7-1：DTO-R6 级联收口（待执行）
+### R7-1：DTO-R6 级联收口（已完成 commit `12660ac`）
 
-当前 Abstractions 仍有 30 个 DTO 文件、约 14,350 行、743 个 public 类型。初筛 112 个只被 Evaluation/ControlRoom 使用，另有 197 个缺少外部直接消费者需逐类型复核。
-
-优先删除：
-- `ContextAttentionDtos.cs`（R7-0 已完成）
-- `RetrievalDtos.cs` 中 Ranker/Graph/Attention Shadow 区块（R7-0 已部分完成，剩 LifecycleAwareRankerShadow 系列）
-- `ContextLearningDtos.cs` 中 Router Shadow 区块
-- `RelationGraphDtos.cs` 中 Graph Shadow/Apply 区块（R7-0 已部分完成）
-- `EvalDtos.cs` 中已失效的 lifecycle shadow 类型（R7-0 已部分完成，剩 LifecycleAwareRankerShadow 系列）
-- `ArtifactDtos.cs` 中 Shadow trace counters（TraceLayoutDiagnostics 的 RankerShadowTraceCount/GraphShadowTraceCount/VectorShadowTraceCount）
+删除 LifecycleAwareRankerShadow 系列（7 DTO + 2 属性）、Router Shadow 零值 DTO（6 个，保留 3 个被 trace store/生产使用的）、Artifact Shadow trace counters（3 字段）。+1/-567 行。保留 LifecycleAwareFeatureSet（生产使用）。
 
 ### R7-2：机械不可达删除（待执行）
 
