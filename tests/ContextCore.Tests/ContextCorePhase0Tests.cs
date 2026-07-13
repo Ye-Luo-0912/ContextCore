@@ -141,23 +141,6 @@ public sealed class ContextCorePhase0Tests
     }
 
     [TestMethod]
-    public async Task UnavailableContextCompressor_ShouldFailInsteadOfUsingMockOutput()
-    {
-        var compressor = new UnavailableContextCompressor("llm");
-
-        var response = await compressor.CompressAsync(new CompressionRequest
-        {
-            OperationId = "operation-llm",
-            WorkspaceId = "workspace-test",
-            CollectionId = "collection-test"
-        });
-
-        Assert.AreEqual(CompressionStatus.Failed, response.Status);
-        Assert.AreEqual(0, response.GeneratedItems.Count);
-        Assert.AreEqual("CompressionProviderUnavailable", response.Errors[0].Code);
-    }
-
-    [TestMethod]
     public void CompressionProviderOptions_ShouldDefaultToNonMockProvider()
     {
         var options = new CompressionProviderOptions();

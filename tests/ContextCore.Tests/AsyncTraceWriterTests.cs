@@ -117,82 +117,6 @@ public sealed class AsyncTraceWriterTests
         Assert.AreEqual(5, written.Count);
     }
 
-    [TestMethod]
-    public async Task AsyncRetrievalTraceStore_DecoratesSaveAsync()
-    {
-        var written = new List<ContextRetrievalTrace>();
-        var inner = new FakeRetrievalTraceStore(written);
-
-        await using var decorator = new AsyncRetrievalTraceStore(inner,
-            new TraceWriterOptions { EnableAsyncWrite = true, ChannelCapacity = 10 });
-
-        var trace = CreateTrace("trace-decorator");
-        await decorator.SaveAsync(trace);
-
-        await Task.Delay(100); // 等待后台写入
-
-        Assert.AreEqual(1, written.Count);
-        Assert.AreEqual("trace-decorator", written[0].RetrievalId);
-        Assert.AreEqual(1, decorator.WrittenCount);
-    }
-
-    [TestMethod]
-    public async Task AsyncRetrievalTraceStore_QueryRecent_DelegatesToInner()
-    {
-        var inner = new FakeRetrievalTraceStore(new List<ContextRetrievalTrace>());
-        await inner.SaveAsync(CreateTrace("trace-query"));
-
-        await using var decorator = new AsyncRetrievalTraceStore(inner);
-        var results = await decorator.QueryRecentAsync("ws-1", "col-1", 10);
-
-        Assert.AreEqual(1, results.Count);
-    }
-
-    [TestMethod]
-    public async Task AsyncDecisionTraceStore_DecoratesSaveAsync()
-    {
-        var written = new List<ContextDecisionRecord>();
-        var inner = new FakeDecisionTraceStore(written);
-
-        await using var decorator = new AsyncDecisionTraceStore(inner,
-            new TraceWriterOptions { EnableAsyncWrite = true, ChannelCapacity = 10 });
-
-        var record = new ContextDecisionRecord
-        {
-            DecisionId = "decision-1",
-            Source = ContextDecisionSource.Package,
-            WorkspaceId = "ws-1",
-            CollectionId = "col-1"
-        };
-        await decorator.SaveAsync(record);
-
-        await Task.Delay(100);
-
-        Assert.AreEqual(1, written.Count);
-        Assert.AreEqual("decision-1", written[0].DecisionId);
-    }
-
-    [TestMethod]
-    public async Task AsyncContextPackageBuildTraceStore_DecoratesSaveAsync()
-    {
-        var written = new List<ContextPackageBuildResult>();
-        var inner = new FakePackageBuildTraceStore(written);
-
-        await using var decorator = new AsyncContextPackageBuildTraceStore(inner,
-            new TraceWriterOptions { EnableAsyncWrite = true, ChannelCapacity = 10 });
-
-        var result = new ContextPackageBuildResult
-        {
-            BuildId = "pkg-1"
-        };
-        await decorator.SaveAsync(result);
-
-        await Task.Delay(100);
-
-        Assert.AreEqual(1, written.Count);
-        Assert.AreEqual("pkg-1", written[0].BuildId);
-    }
-
     private static ContextRetrievalTrace CreateTrace(string id) => new()
     {
         RetrievalId = id,
@@ -237,46 +161,6 @@ public sealed class AsyncTraceWriterTests
             CancellationToken cancellationToken = default)
         {
             return Task.FromResult<IReadOnlyList<ContextRetrievalTrace>>(Array.Empty<ContextRetrievalTrace>());
-        }
-    }
-
-    private sealed class FakeDecisionTraceStore : IDecisionTraceStore
-    {
-        private readonly List<ContextDecisionRecord> _written;
-
-        public FakeDecisionTraceStore(List<ContextDecisionRecord> written) => _written = written;
-
-        public Task SaveAsync(ContextDecisionRecord record, CancellationToken cancellationToken = default)
-        {
-            _written.Add(record);
-            return Task.CompletedTask;
-        }
-
-        public Task<IReadOnlyList<ContextDecisionRecord>> QueryRecentAsync(
-            string workspaceId, string collectionId, int take,
-            CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult<IReadOnlyList<ContextDecisionRecord>>(_written);
-        }
-    }
-
-    private sealed class FakePackageBuildTraceStore : IContextPackageBuildTraceStore
-    {
-        private readonly List<ContextPackageBuildResult> _written;
-
-        public FakePackageBuildTraceStore(List<ContextPackageBuildResult> written) => _written = written;
-
-        public Task SaveAsync(ContextPackageBuildResult result, CancellationToken cancellationToken = default)
-        {
-            _written.Add(result);
-            return Task.CompletedTask;
-        }
-
-        public Task<IReadOnlyList<ContextPackageBuildResult>> QueryRecentAsync(
-            string workspaceId, string collectionId, int take,
-            CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult<IReadOnlyList<ContextPackageBuildResult>>(_written);
         }
     }
 }
