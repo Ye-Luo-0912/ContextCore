@@ -76,7 +76,6 @@ internal static class StorageExtensions
 		services.AddSingleton<ICandidateMemoryReviewStore>(_ => new UnsupportedCandidateMemoryReviewStore("postgres"));
 		services.AddSingleton<IStableReviewCandidateStore>(_ => new UnsupportedStableReviewCandidateStore("postgres"));
 		services.AddSingleton<IContextLearningStore>(_ => new UnsupportedContextLearningStore("postgres"));
-		services.AddSingleton<IRouterIntentShadowTraceStore>(_ => new UnsupportedRouterIntentShadowTraceStore("postgres"));
 		services.AddSingleton<IVectorReindexReportStore>(_ => new UnsupportedVectorReindexReportStore("postgres"));
 		services.AddSingleton<IVectorLifecycleMetadataReviewCandidateStore>(_ => new UnsupportedVectorLifecycleMetadataReviewCandidateStore("postgres"));
 		services.AddSingleton<IVectorLifecycleMetadataReviewStore>(_ => new UnsupportedVectorLifecycleMetadataReviewStore("postgres"));
@@ -207,11 +206,6 @@ internal static class StorageExtensions
 				sp.GetRequiredService<FilePathResolver>(),
 				sp.GetRequiredService<FileFormatSerializer>()));
 		services.AddSingleton<ILearningFeedbackReviewStore>(sp => sp.GetRequiredService<FileLearningFeedbackReviewStore>());
-		services.AddSingleton<FileRouterIntentShadowTraceStore>(sp =>
-			new FileRouterIntentShadowTraceStore(
-				sp.GetRequiredService<FilePathResolver>(),
-				sp.GetRequiredService<FileFormatSerializer>()));
-		services.AddSingleton<IRouterIntentShadowTraceStore>(sp => sp.GetRequiredService<FileRouterIntentShadowTraceStore>());
         services.AddSingleton<FileStableReviewCandidateStore>(sp =>
             new FileStableReviewCandidateStore(
                 sp.GetRequiredService<FilePathResolver>(),
@@ -359,8 +353,6 @@ internal static class StorageExtensions
         services.AddSingleton<ILearningFeedbackStore>(sp => sp.GetRequiredService<InMemoryLearningFeedbackStore>());
         services.AddSingleton<InMemoryLearningFeedbackReviewStore>();
         services.AddSingleton<ILearningFeedbackReviewStore>(sp => sp.GetRequiredService<InMemoryLearningFeedbackReviewStore>());
-        services.AddSingleton<InMemoryRouterIntentShadowTraceStore>();
-        services.AddSingleton<IRouterIntentShadowTraceStore>(sp => sp.GetRequiredService<InMemoryRouterIntentShadowTraceStore>());
         services.AddSingleton<InMemoryStableReviewCandidateStore>();
         services.AddSingleton<IStableReviewCandidateStore>(sp => sp.GetRequiredService<InMemoryStableReviewCandidateStore>());
         services.AddSingleton<InMemoryConstraintGapCandidateStore>();

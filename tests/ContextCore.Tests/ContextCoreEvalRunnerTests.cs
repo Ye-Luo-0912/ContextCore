@@ -43,18 +43,6 @@ public sealed class ContextCoreEvalRunnerTests
         Assert.AreEqual(0.0, report.AvgRetrievalNoiseViolationRatio, "NoiseViolationRatio must be 0");
         Assert.IsTrue(report.AvgRetrievalMrrAnyMustHit >= 0.42, $"MRRAnyMustHit ({report.AvgRetrievalMrrAnyMustHit:F4}) must be >= 0.42");
         Assert.IsTrue(report.AvgRetrievalRecall3 >= 0.72, $"Recall@3 ({report.AvgRetrievalRecall3:P2}) must be >= 0.72");
-        Assert.IsTrue(report.AvgAttentionMrr > 0, "Attention shadow MRR should be recorded");
-        Assert.IsTrue(report.AvgAttentionRecall5 >= 0, "Attention shadow Recall@5 should be recorded");
-        Assert.IsTrue(report.SelectedSetChangeRatio >= 0, "Attention selected-set change ratio should be recorded");
-        var expectedProfileCount = ContextCore.Abstractions.ContextAttentionProfile.CreateShadowExperimentProfiles().Count;
-        Assert.AreEqual(expectedProfileCount, report.AttentionProfileSummaries.Count, "All attention profile experiment summaries should be recorded.");
-        CollectionAssert.Contains(
-            report.AttentionProfileSummaries.Select(summary => summary.ProfileId).ToArray(),
-            "conservative-v1");
-        CollectionAssert.Contains(
-            report.AttentionProfileSummaries.Select(summary => summary.ProfileId).ToArray(),
-            "guarded-shadow-v1");
-        Assert.IsTrue(report.Results.Where(result => result.Succeeded).All(result => result.AttentionProfiles.Count == expectedProfileCount));
         Assert.IsTrue(missingUnc <= 6, $"Missing Expected Uncertainties ({missingUnc}) must be <= 6");
         Assert.IsTrue(mrrLow <= 5, $"MRRLow warnings ({mrrLow}) must be <= 5");
 

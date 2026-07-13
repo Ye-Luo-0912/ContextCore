@@ -1174,8 +1174,6 @@ public static class ServiceOperationalRenderer
         }
 
         AppendRelationDiagnostics(builder, "Global Relation Diagnostics", snapshot.Diagnostics);
-        AppendGraphExpansionShadowTraceQualitySummary(builder, snapshot.GraphShadowTraceQualitySummary);
-        AppendRecentGraphExpansionShadowTraces(builder, snapshot.RecentGraphShadowTraces);
 
         if (!string.IsNullOrWhiteSpace(snapshot.ItemId))
         {
@@ -1201,40 +1199,6 @@ public static class ServiceOperationalRenderer
         }
 
         return builder.ToString();
-    }
-
-    private static void AppendGraphExpansionShadowTraceQualitySummary(
-        StringBuilder builder,
-        GraphExpansionShadowTraceQualityReport report)
-    {
-        builder.AppendLine();
-        builder.AppendLine("Graph Shadow Trace Quality Summary");
-        builder.AppendLine("----------------------------------");
-        builder.AppendLine($"- traces={report.TraceCount} accepted={report.AcceptedRelationCount} blocked={report.BlockedRelationCount} audit={report.AuditContextCount} conflict={report.ConflictEvidenceCount}");
-        builder.AppendLine($"- risks afterRouting={report.RiskAfterRoutingCount} wrongSection={report.WrongSectionRiskCount} mustNotHit={report.MustNotHitRiskCount} lifecycle={report.LifecycleRiskCount} missingEvidence={report.MissingEvidenceCount}");
-        builder.AppendLine($"- next={BlankDash(report.Recommendation)}");
-    }
-
-    private static void AppendRecentGraphExpansionShadowTraces(
-        StringBuilder builder,
-        IReadOnlyList<GraphExpansionShadowTraceRecord> traces)
-    {
-        builder.AppendLine();
-        builder.AppendLine("Recent Graph Shadow Traces");
-        builder.AppendLine("--------------------------");
-        if (traces.Count == 0)
-        {
-            builder.AppendLine("- (empty)");
-            return;
-        }
-
-        foreach (var trace in traces.Take(5))
-        {
-            builder.AppendLine($"- {trace.RetrievalId} {trace.CreatedAt:yyyy-MM-dd HH:mm:ss} profiles={string.Join(",", trace.Profiles.DefaultIfEmpty("-"))} accepted={trace.AcceptedRelations.Count} blocked={trace.BlockedRelations.Count}");
-            builder.AppendLine($"  sections: {FormatTargetSections(trace.TargetSections)}");
-            builder.AppendLine($"  risks: normal={trace.RiskIfNormal} afterRouting={trace.RiskAfterRouting} wrongSection={trace.WrongSectionRisk}");
-            builder.AppendLine($"  query: {Compact(trace.Query, 140)}");
-        }
     }
 
     private static string FormatTargetSections(IReadOnlyDictionary<string, int> sections)
@@ -2519,32 +2483,6 @@ public static class ServiceOperationalRenderer
         }
 
         builder.AppendLine();
-        builder.AppendLine("Router Shadow Summary");
-        var routerShadow = snapshot.RouterShadowTraceQualityReport;
-        if (routerShadow is null)
-        {
-            builder.AppendLine("- status : not generated");
-            builder.AppendLine($"- path   : {Path.Combine(EvalReportPaths.RouterOutputDirectory, EvalReportPaths.RouterShadowTraceQualityReportFileName)}");
-            builder.AppendLine("- action : run eval router-shadow-trace-quality");
-        }
-        else
-        {
-            builder.AppendLine($"- traces : {routerShadow.TraceCount}");
-            builder.AppendLine($"- agree  : {routerShadow.AgreementRate:P2}");
-            builder.AppendLine($"- disagree: {routerShadow.DisagreementRate:P2}");
-            builder.AppendLine($"- lowConf: {routerShadow.LowConfidenceCount}");
-            builder.AppendLine($"- abstain: {routerShadow.AbstainCount}");
-            builder.AppendLine($"- rec    : {routerShadow.Recommendation}");
-            foreach (var pair in routerShadow.TopConfusionPairs
-                         .OrderByDescending(item => item.Value)
-                         .ThenBy(item => item.Key, StringComparer.OrdinalIgnoreCase)
-                         .Take(5))
-            {
-                builder.AppendLine($"- confusion: {pair.Key} = {pair.Value}");
-            }
-        }
-
-        builder.AppendLine();
         builder.AppendLine("Router Disagreement Triage Summary");
         var routerTriageA3 = snapshot.RouterDisagreementTriageA3Report;
         var routerTriageExtended = snapshot.RouterDisagreementTriageExtendedReport;
@@ -2620,76 +2558,6 @@ public static class ServiceOperationalRenderer
             if (featureExtended is not null)
             {
                 builder.AppendLine($"- Ext    : completeness={featureExtended.FeatureCompletenessRate:P2} missing={featureExtended.MissingFeatureMetadataCount} blockedBeforeRerank={featureExtended.RiskCandidateBlockedBeforeRerank} guard={featureExtended.EligibilityGuardStatus} rec={featureExtended.Recommendation}");
-            }
-        }
-
-        builder.AppendLine();
-        builder.AppendLine("Candidate Reranker Shadow Summary");
-        var rerankerA3 = snapshot.CandidateRerankerShadowEvalA3Report;
-        var rerankerExtended = snapshot.CandidateRerankerShadowEvalExtendedReport;
-        var rerankerTraceQuality = snapshot.CandidateRerankerShadowTraceQualityReport;
-        if (rerankerA3 is null && rerankerExtended is null && rerankerTraceQuality is null)
-        {
-            builder.AppendLine("- status : not generated");
-            builder.AppendLine($"- eval   : {Path.Combine(EvalReportPaths.RankerOutputDirectory, EvalReportPaths.RankerShadowEvalA3ReportFileName)}");
-            builder.AppendLine($"- traces : {Path.Combine(EvalReportPaths.RankerOutputDirectory, EvalReportPaths.RankerShadowTraceQualityReportFileName)}");
-            builder.AppendLine("- action : run eval candidate-reranker-shadow-eval and eval candidate-reranker-shadow-trace-quality");
-        }
-        else
-        {
-            if (rerankerTraceQuality is not null)
-            {
-                builder.AppendLine($"- traces : {rerankerTraceQuality.TraceCount}");
-                builder.AppendLine($"- traceRec: {rerankerTraceQuality.Recommendation}");
-            }
-
-            if (rerankerA3 is not null)
-            {
-                var risk = rerankerA3.LifecycleRiskCount + rerankerA3.DeprecatedRiskCount + rerankerA3.MustNotRiskCount;
-                builder.AppendLine($"- A3     : netGain={rerankerA3.NetGain} improve={rerankerA3.WouldImproveCount} regress={rerankerA3.WouldRegressCount} risk={risk} rec={rerankerA3.Recommendation}");
-            }
-
-            if (rerankerExtended is not null)
-            {
-                var risk = rerankerExtended.LifecycleRiskCount + rerankerExtended.DeprecatedRiskCount + rerankerExtended.MustNotRiskCount;
-                builder.AppendLine($"- Ext    : netGain={rerankerExtended.NetGain} improve={rerankerExtended.WouldImproveCount} regress={rerankerExtended.WouldRegressCount} risk={risk} rec={rerankerExtended.Recommendation}");
-            }
-        }
-
-        builder.AppendLine();
-        builder.AppendLine("Candidate Reranker Failure Audit Summary");
-        var rerankerAuditA3 = snapshot.CandidateRerankerShadowFailureAuditA3Report;
-        var rerankerAuditExtended = snapshot.CandidateRerankerShadowFailureAuditExtendedReport;
-        if (rerankerAuditA3 is null && rerankerAuditExtended is null)
-        {
-            builder.AppendLine("- status : not generated");
-            builder.AppendLine($"- path   : {Path.Combine(EvalReportPaths.RankerOutputDirectory, EvalReportPaths.RankerShadowFailureAuditA3ReportFileName)}");
-            builder.AppendLine("- action : run eval candidate-reranker-shadow-failure-audit");
-        }
-        else
-        {
-            if (rerankerAuditA3 is not null)
-            {
-                builder.AppendLine($"- A3     : regressions={rerankerAuditA3.RegressionCount} scoreContract={rerankerAuditA3.ScoreContractStatus} riskTopK={rerankerAuditA3.RiskCandidateInShadowTopK}");
-                builder.AppendLine($"  next   : {rerankerAuditA3.RecommendedNextAction}");
-            }
-
-            if (rerankerAuditExtended is not null)
-            {
-                builder.AppendLine($"- Ext    : regressions={rerankerAuditExtended.RegressionCount} scoreContract={rerankerAuditExtended.ScoreContractStatus} riskTopK={rerankerAuditExtended.RiskCandidateInShadowTopK}");
-                builder.AppendLine($"  next   : {rerankerAuditExtended.RecommendedNextAction}");
-            }
-
-            var reasonSummary = (rerankerAuditA3?.RegressionReasonSummary ?? new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase))
-                .Concat(rerankerAuditExtended?.RegressionReasonSummary ?? new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase))
-                .GroupBy(static item => item.Key, StringComparer.OrdinalIgnoreCase)
-                .Select(static group => new KeyValuePair<string, int>(group.Key, group.Sum(static item => item.Value)))
-                .OrderByDescending(static item => item.Value)
-                .ThenBy(static item => item.Key, StringComparer.OrdinalIgnoreCase)
-                .Take(5);
-            foreach (var pair in reasonSummary)
-            {
-                builder.AppendLine($"- reason : {pair.Key} = {pair.Value}");
             }
         }
 
@@ -3287,117 +3155,9 @@ public static class ServiceOperationalRenderer
         return builder.ToString();
     }
 
-    public static string RenderRankerShadowDebug(ServiceRankerShadowDebugSnapshot snapshot)
-    {
-        var response = snapshot.Response;
-        var builder = new StringBuilder();
-        builder.AppendLine("Service Ranker Shadow Debug");
-        builder.AppendLine("===========================");
-        builder.AppendLine($"时间       : {snapshot.CurrentTime:yyyy-MM-dd HH:mm:ss}");
-        builder.AppendLine($"服务       : {snapshot.BaseUrl}");
-        builder.AppendLine($"Query      : {Compact(response.Query, 180)}");
-        builder.AppendLine($"Operation  : {response.OperationId}");
-        builder.AppendLine($"Retrieval  : {response.RetrievalOperationId}");
-        builder.AppendLine($"Workspace  : {response.WorkspaceId}");
-        builder.AppendLine($"Collection : {response.CollectionId}");
-        builder.AppendLine($"Mode       : {response.Mode}");
-        builder.AppendLine($"Profile    : {response.RankerShadowProfile}");
-        builder.AppendLine($"DebugOnly  : {response.Metadata.GetValueOrDefault("debugOnly", "true")}");
-        builder.AppendLine($"FormalChanged : {response.FormalOutputChanged}");
-        builder.AppendLine($"SelectedChanged: {response.SelectedSetChanged}");
-        builder.AppendLine($"Selected   : {string.Join(", ", response.LegacySelectedIds.Take(12))}");
-        builder.AppendLine();
-        builder.AppendLine("Candidate Score Comparison");
-        builder.AppendLine("--------------------------");
-        if (response.CandidateScores.Count == 0)
-        {
-            builder.AppendLine("- (empty)");
-        }
-        else
-        {
-            foreach (var item in response.CandidateScores
-                .OrderBy(static item => item.LegacyRank)
-                .ThenBy(static item => item.CandidateId, StringComparer.OrdinalIgnoreCase)
-                .Take(30))
-            {
-                builder.AppendLine(
-                    $"- {item.CandidateId} selected={item.Selected} rank={item.LegacyRank}->{item.ShadowRank} legacy={item.LegacyScore:0.00} lifecycle={item.LifecycleAwareScore:0.00} delta={item.ScoreDelta:+0.00;-0.00;0.00}");
-                builder.AppendLine($"  kind={item.Kind}/{item.Type} section={item.SectionName} reason={item.Reason}");
-                var features = item.LifecycleFeatures;
-                if (features.IsDeprecated || features.IsSuperseded || features.IsHistorical || features.IsRejected || features.IsCurrentVersion)
-                {
-                    builder.AppendLine($"  lifecycle deprecated={features.IsDeprecated} superseded={features.IsSuperseded} historical={features.IsHistorical} rejected={features.IsRejected} current={features.IsCurrentVersion} confidence={features.LifecycleConfidence:0.00}");
-                }
-            }
-        }
-
-        AppendShadowScoreList(builder, "Deprecated / Historical Demotions", response.DeprecatedDemotions.Concat(response.HistoricalDemotions).DistinctBy(static item => item.CandidateId).ToArray());
-        AppendShadowScoreList(builder, "Current / Active Promotions", response.CurrentActivePromotions);
-        AppendShadowScoreList(builder, "Version Conflict Fixes", response.VersionConflictFixes);
-        AppendShadowScoreList(builder, "Must-hit Demotions", response.MustHitDemotions);
-        AppendShadowScoreList(builder, "Must-not-hit Promotions", response.MustNotHitPromotions);
-        AppendRankerShadowTraceQualitySummary(builder, snapshot.TraceQualitySummary);
-        AppendRecentRankerShadowTraces(builder, snapshot.RecentShadowTraces);
-
-        return builder.ToString();
-    }
-
     public static string RenderError(ContextCoreApiException exception)
     {
         return ServiceOperationRenderer.RenderError(exception);
-    }
-
-    private static void AppendShadowScoreList(
-        StringBuilder builder,
-        string title,
-        IReadOnlyList<LifecycleAwareRankerShadowCandidateScore> items)
-    {
-        builder.AppendLine();
-        builder.AppendLine(title);
-        builder.AppendLine(new string('-', title.Length));
-        if (items.Count == 0)
-        {
-            builder.AppendLine("- (empty)");
-            return;
-        }
-
-        foreach (var item in items.Take(12))
-        {
-            builder.AppendLine($"- {item.CandidateId} delta={item.ScoreDelta:+0.00;-0.00;0.00} rank={item.LegacyRank}->{item.ShadowRank} reason={item.Reason}");
-        }
-    }
-
-    private static void AppendRankerShadowTraceQualitySummary(
-        StringBuilder builder,
-        RankerShadowTraceQualityReport report)
-    {
-        builder.AppendLine();
-        builder.AppendLine("Trace Quality Summary");
-        builder.AppendLine("---------------------");
-        builder.AppendLine($"- traces={report.TraceCount} candidates={report.CandidateScoreCount} deprecated={report.DeprecatedDemotionCount} historical={report.HistoricalDemotionCount} versionFixes={report.VersionConflictFixCount}");
-        builder.AppendLine($"- currentPromotions={report.CurrentVersionPromotionCount} avgDelta={report.AverageScoreDelta:0.00} maxPositive={report.MaxPositiveDelta:0.00} maxNegative={report.MaxNegativeDelta:0.00}");
-        builder.AppendLine($"- risks mustHitDemoted={report.MustHitDemotedCount} mustNotHitPromoted={report.MustNotHitPromotedCount}");
-        builder.AppendLine($"- next={report.RecommendedNextStep}");
-    }
-
-    private static void AppendRecentRankerShadowTraces(
-        StringBuilder builder,
-        IReadOnlyList<LifecycleAwareRankerShadowTraceRecord> traces)
-    {
-        builder.AppendLine();
-        builder.AppendLine("Recent Shadow Traces");
-        builder.AppendLine("--------------------");
-        if (traces.Count == 0)
-        {
-            builder.AppendLine("- (empty)");
-            return;
-        }
-
-        foreach (var trace in traces.Take(5))
-        {
-            builder.AppendLine($"- {trace.RetrievalId} {trace.CreatedAt:yyyy-MM-dd HH:mm:ss} profile={trace.Profile} candidates={trace.CandidateScores.Count} demotions={trace.DeprecatedDemotions.Count}");
-            builder.AppendLine($"  query: {Compact(trace.Query, 140)}");
-        }
     }
 
     private static void AppendStringList(StringBuilder builder, string title, IReadOnlyList<string> values)

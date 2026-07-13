@@ -461,17 +461,6 @@ public sealed partial class ControlRoomService
         }, cancellationToken);
     }
 
-    public Task<IReadOnlyList<GraphExpansionShadowTraceRecord>> GetServiceGraphExpansionShadowTracesAsync(
-        int take = 50,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().GetGraphExpansionShadowTracesAsync(
-            _state.WorkspaceId,
-            _state.CollectionId,
-            take,
-            cancellationToken);
-    }
-
     public Task<RelationGraphDiagnosticsReport> GetServiceRelationDiagnosticsAsync(
         CancellationToken cancellationToken = default)
     {
@@ -758,10 +747,6 @@ public sealed partial class ControlRoomService
             relations = await QueryServiceRelationsAsync(itemId, cancellationToken).ConfigureAwait(false);
             itemDiagnostics = await GetServiceItemRelationDiagnosticsAsync(itemId, cancellationToken).ConfigureAwait(false);
         }
-        var graphShadowTraces = await GetServiceGraphExpansionShadowTracesAsync(50, cancellationToken).ConfigureAwait(false);
-        var graphShadowQuality = new GraphExpansionShadowTraceQualityReportBuilder()
-            .Build(graphShadowTraces, _state.WorkspaceId, _state.CollectionId);
-
         return new ServiceRelationsSnapshot
         {
             CurrentTime = DateTimeOffset.Now,
@@ -770,9 +755,7 @@ public sealed partial class ControlRoomService
             Relations = relations,
             RelationTypes = types,
             Diagnostics = diagnostics,
-            ItemDiagnostics = itemDiagnostics,
-            GraphShadowTraceQualitySummary = graphShadowQuality,
-            RecentGraphShadowTraces = graphShadowTraces.Take(5).ToArray()
+            ItemDiagnostics = itemDiagnostics
         };
     }
 
@@ -1369,8 +1352,6 @@ public sealed partial class ControlRoomService
                 .ConfigureAwait(false),
             RouterIntentBaselineReport = await ReadRouterIntentBaselineReportAsync(cancellationToken)
                 .ConfigureAwait(false),
-            RouterShadowTraceQualityReport = await ReadRouterShadowTraceQualityReportAsync(cancellationToken)
-                .ConfigureAwait(false),
             RouterDisagreementTriageA3Report = await ReadRouterDisagreementTriageReportAsync(
                     EvalReportPaths.RouterDisagreementTriageA3ReportFileName,
                     cancellationToken)
@@ -1389,22 +1370,6 @@ public sealed partial class ControlRoomService
                 .ConfigureAwait(false),
             CandidateRerankerFeatureCompletenessExtendedReport = await ReadCandidateRerankerFeatureCompletenessReportAsync(
                     EvalReportPaths.RankerFeatureCompletenessExtendedReportFileName,
-                    cancellationToken)
-                .ConfigureAwait(false),
-            CandidateRerankerShadowEvalA3Report = await ReadCandidateRerankerShadowEvalReportAsync(
-                    EvalReportPaths.RankerShadowEvalA3ReportFileName,
-                    cancellationToken)
-                .ConfigureAwait(false),
-            CandidateRerankerShadowEvalExtendedReport = await ReadCandidateRerankerShadowEvalReportAsync(
-                    EvalReportPaths.RankerShadowEvalExtendedReportFileName,
-                    cancellationToken)
-                .ConfigureAwait(false),
-            CandidateRerankerShadowFailureAuditA3Report = await ReadCandidateRerankerShadowFailureAuditReportAsync(
-                    EvalReportPaths.RankerShadowFailureAuditA3ReportFileName,
-                    cancellationToken)
-                .ConfigureAwait(false),
-            CandidateRerankerShadowFailureAuditExtendedReport = await ReadCandidateRerankerShadowFailureAuditReportAsync(
-                    EvalReportPaths.RankerShadowFailureAuditExtendedReportFileName,
                     cancellationToken)
                 .ConfigureAwait(false),
             CandidateRerankerScoreDistributionA3Report = await ReadCandidateRerankerScoreDistributionReportAsync(
@@ -1430,8 +1395,6 @@ public sealed partial class ControlRoomService
             CandidateRerankerFormalPriorityAlignmentExtendedReport = await ReadCandidateRerankerFormalPriorityAlignmentReportAsync(
                     EvalReportPaths.RankerFormalPriorityAlignmentExtendedReportFileName,
                     cancellationToken)
-                .ConfigureAwait(false),
-            CandidateRerankerShadowTraceQualityReport = await ReadCandidateRerankerShadowTraceQualityReportAsync(cancellationToken)
                 .ConfigureAwait(false),
             LearningReadinessRegistry = await ReadLearningReadinessRegistryAsync(cancellationToken)
                 .ConfigureAwait(false),
@@ -1732,44 +1695,6 @@ public sealed partial class ControlRoomService
             IncludeContextItems = request.IncludeContextItems,
             IncludeMemoryItems = request.IncludeMemoryItems,
             Metadata = request.Metadata
-        };
-    }
-
-    public async Task<ServiceRankerShadowDebugSnapshot> DebugServiceLifecycleAwareRankerAsync(
-        string query,
-        string? mode = null,
-        IReadOnlyList<string>? candidateIds = null,
-        bool includeLifecycleDetails = true,
-        CancellationToken cancellationToken = default)
-    {
-        var client = GetServiceClient();
-        var response = await client
-            .DebugLifecycleAwareRankerAsync(
-                _state.WorkspaceId,
-                _state.CollectionId,
-                query,
-                mode,
-                candidateIds,
-                includeLifecycleDetails,
-                cancellationToken)
-            .ConfigureAwait(false);
-        var recentTraces = await client
-            .GetRankerShadowTracesAsync(
-                _state.WorkspaceId,
-                _state.CollectionId,
-                take: 50,
-                cancellationToken)
-            .ConfigureAwait(false);
-        var qualitySummary = new RankerShadowTraceQualityReportBuilder()
-            .Build(recentTraces, _state.WorkspaceId, _state.CollectionId);
-
-        return new ServiceRankerShadowDebugSnapshot
-        {
-            CurrentTime = DateTimeOffset.Now,
-            BaseUrl = _state.ServiceBaseUrl ?? string.Empty,
-            Response = response,
-            TraceQualitySummary = qualitySummary,
-            RecentShadowTraces = recentTraces.Take(5).ToArray()
         };
     }
 

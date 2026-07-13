@@ -457,17 +457,6 @@ static async Task RunInteractiveAsync(
                     return;
                 }
                 break;
-            case ControlRoomActionKind.OpenServiceRankerShadowDebug:
-                if (!service.State.IsServiceMode)
-                {
-                    ShowServiceModeUnsupported("Service Ranker Shadow Debug 仅在 Service 模式可用");
-                    break;
-                }
-                if (await ServiceRankerShadowDebugScreen.ShowAsync(service, cancellationToken).ConfigureAwait(false) == ControlRoomActionKind.Quit)
-                {
-                    return;
-                }
-                break;
             case ControlRoomActionKind.OpenServiceCandidateMemory:
                 if (!service.State.IsServiceMode)
                 {

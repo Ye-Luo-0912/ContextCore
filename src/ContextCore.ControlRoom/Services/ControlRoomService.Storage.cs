@@ -249,33 +249,6 @@ public sealed partial class ControlRoomService
         }
     }
 
-    private static async Task<RouterShadowTraceQualityReport?> ReadRouterShadowTraceQualityReportAsync(
-        CancellationToken cancellationToken)
-    {
-        var path = Path.Combine(
-            Directory.GetCurrentDirectory(),
-            EvalReportPaths.RouterOutputDirectory,
-            EvalReportPaths.RouterShadowTraceQualityReportFileName);
-        if (!File.Exists(path))
-        {
-            return null;
-        }
-
-        try
-        {
-            var json = await File.ReadAllTextAsync(path, cancellationToken).ConfigureAwait(false);
-            return JsonSerializer.Deserialize<RouterShadowTraceQualityReport>(json, JsonOptions);
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
-        catch (IOException)
-        {
-            return null;
-        }
-    }
-
     private static async Task<RouterDisagreementTriageReport?> ReadRouterDisagreementTriageReportAsync(
         string fileName,
         CancellationToken cancellationToken)
@@ -361,34 +334,6 @@ public sealed partial class ControlRoomService
         }
     }
 
-    private static async Task<CandidateRerankerShadowEvalReport?> ReadCandidateRerankerShadowEvalReportAsync(
-        string fileName,
-        CancellationToken cancellationToken)
-    {
-        var path = Path.Combine(
-            Directory.GetCurrentDirectory(),
-            EvalReportPaths.RankerOutputDirectory,
-            fileName);
-        if (!File.Exists(path))
-        {
-            return null;
-        }
-
-        try
-        {
-            var json = await File.ReadAllTextAsync(path, cancellationToken).ConfigureAwait(false);
-            return JsonSerializer.Deserialize<CandidateRerankerShadowEvalReport>(json, JsonOptions);
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
-        catch (IOException)
-        {
-            return null;
-        }
-    }
-
     private static async Task<CandidateRerankerFeatureCompletenessReport?> ReadCandidateRerankerFeatureCompletenessReportAsync(
         string fileName,
         CancellationToken cancellationToken)
@@ -406,34 +351,6 @@ public sealed partial class ControlRoomService
         {
             var json = await File.ReadAllTextAsync(path, cancellationToken).ConfigureAwait(false);
             return JsonSerializer.Deserialize<CandidateRerankerFeatureCompletenessReport>(json, JsonOptions);
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
-        catch (IOException)
-        {
-            return null;
-        }
-    }
-
-    private static async Task<CandidateRerankerShadowFailureAuditReport?> ReadCandidateRerankerShadowFailureAuditReportAsync(
-        string fileName,
-        CancellationToken cancellationToken)
-    {
-        var path = Path.Combine(
-            Directory.GetCurrentDirectory(),
-            EvalReportPaths.RankerOutputDirectory,
-            fileName);
-        if (!File.Exists(path))
-        {
-            return null;
-        }
-
-        try
-        {
-            var json = await File.ReadAllTextAsync(path, cancellationToken).ConfigureAwait(false);
-            return JsonSerializer.Deserialize<CandidateRerankerShadowFailureAuditReport>(json, JsonOptions);
         }
         catch (JsonException)
         {
@@ -520,33 +437,6 @@ public sealed partial class ControlRoomService
             return JsonSerializer.Deserialize<CandidateRerankerFormalPriorityAlignmentReport>(json, JsonOptions);
         }
         catch
-        {
-            return null;
-        }
-    }
-
-    private static async Task<CandidateRerankerShadowTraceQualityReport?> ReadCandidateRerankerShadowTraceQualityReportAsync(
-        CancellationToken cancellationToken)
-    {
-        var path = Path.Combine(
-            Directory.GetCurrentDirectory(),
-            EvalReportPaths.RankerOutputDirectory,
-            EvalReportPaths.RankerShadowTraceQualityReportFileName);
-        if (!File.Exists(path))
-        {
-            return null;
-        }
-
-        try
-        {
-            var json = await File.ReadAllTextAsync(path, cancellationToken).ConfigureAwait(false);
-            return JsonSerializer.Deserialize<CandidateRerankerShadowTraceQualityReport>(json, JsonOptions);
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
-        catch (IOException)
         {
             return null;
         }
@@ -1149,6 +1039,35 @@ public sealed partial class ControlRoomService
         return Path.Combine("vector", phase, fileName);
     }
 
+    private static bool ReadReportBool(JsonElement root, string name)
+        => root.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.True && v.GetBoolean();
+
+    private static string ReadReportString(JsonElement root, string name)
+        => root.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() ?? string.Empty : string.Empty;
+
+    private static IReadOnlyList<string> ReadReportStringArray(JsonElement root, string name)
+    {
+        if (!root.TryGetProperty(name, out var v) || v.ValueKind != JsonValueKind.Array)
+        {
+            return Array.Empty<string>();
+        }
+
+        var list = new List<string>();
+        foreach (var item in v.EnumerateArray())
+        {
+            if (item.ValueKind == JsonValueKind.String)
+            {
+                var s = item.GetString();
+                if (!string.IsNullOrEmpty(s))
+                {
+                    list.Add(s);
+                }
+            }
+        }
+
+        return list;
+    }
+
     private static OperationalReportSnapshot TryLoadOperationalReport(
         string reportKey, string title, params string[] candidatePaths)
     {
@@ -1169,22 +1088,22 @@ public sealed partial class ControlRoomService
                     DisplayTitle = title,
                     SourcePath = path,
                     Available = true,
-                    Passed = VectorShadowQualitySnapshotReader.GetBool(root, "Passed")
-                             || VectorShadowQualitySnapshotReader.GetBool(root, "GatePassed")
-                             || VectorShadowQualitySnapshotReader.GetBool(root, "FreezePassed")
-                             || VectorShadowQualitySnapshotReader.GetBool(root, "AuditPassed")
-                             || VectorShadowQualitySnapshotReader.GetBool(root, "PreviewPassed")
-                             || VectorShadowQualitySnapshotReader.GetBool(root, "RecheckPassed")
-                             || VectorShadowQualitySnapshotReader.GetBool(root, "ReportPassed")
-                             || VectorShadowQualitySnapshotReader.GetBool(root, "ShadowPassed")
-                             || VectorShadowQualitySnapshotReader.GetBool(root, "ContractPassed")
-                             || VectorShadowQualitySnapshotReader.GetBool(root, "DecisionPassed")
-                             || VectorShadowQualitySnapshotReader.GetBool(root, "PlanPassed")
-                             || VectorShadowQualitySnapshotReader.GetBool(root, "AdapterPassed")
-                             || VectorShadowQualitySnapshotReader.GetBool(root, "ComparisonPassed"),
-                    GatePassed = VectorShadowQualitySnapshotReader.GetBool(root, "GatePassed"),
-                    Recommendation = VectorShadowQualitySnapshotReader.GetString(root, "Recommendation"),
-                    BlockedReasons = VectorShadowQualitySnapshotReader.GetStringArray(root, "BlockedReasons"),
+                    Passed = ReadReportBool(root, "Passed")
+                             || ReadReportBool(root, "GatePassed")
+                             || ReadReportBool(root, "FreezePassed")
+                             || ReadReportBool(root, "AuditPassed")
+                             || ReadReportBool(root, "PreviewPassed")
+                             || ReadReportBool(root, "RecheckPassed")
+                             || ReadReportBool(root, "ReportPassed")
+                             || ReadReportBool(root, "ShadowPassed")
+                             || ReadReportBool(root, "ContractPassed")
+                             || ReadReportBool(root, "DecisionPassed")
+                             || ReadReportBool(root, "PlanPassed")
+                             || ReadReportBool(root, "AdapterPassed")
+                             || ReadReportBool(root, "ComparisonPassed"),
+                    GatePassed = ReadReportBool(root, "GatePassed"),
+                    Recommendation = ReadReportString(root, "Recommendation"),
+                    BlockedReasons = ReadReportStringArray(root, "BlockedReasons"),
                     KeyMetrics = ExtractKeyMetrics(root)
                 };
             }

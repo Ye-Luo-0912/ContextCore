@@ -40,7 +40,6 @@ public sealed class StorageProviderRegistrationTests
         typeof(IContextLearningStore),
         typeof(ILearningFeedbackStore),
         typeof(ILearningFeedbackReviewStore),
-        typeof(IRouterIntentShadowTraceStore),
         typeof(IStableReviewCandidateStore),
         typeof(IConstraintGapCandidateStore),
         typeof(ICandidateConstraintReviewStore),

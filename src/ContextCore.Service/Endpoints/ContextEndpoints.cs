@@ -1,5 +1,4 @@
 using ContextCore.Abstractions;
-using ContextCore.Core.Services;
 using ContextCore.Service.Infrastructure;
 using System.Text.Json;
 using ContextCore.Abstractions.Models;
@@ -99,22 +98,9 @@ internal static class ContextEndpoints
 		group.MapPost("/query", async Task<IResult> (
 			ContextQuery query,
 			IContextStore store,
-			IServiceProvider services,
 			CancellationToken ct) =>
 		{
 			var items = await store.QueryAsync(query, ct);
-			await RecordRouterShadowAsync(
-					services,
-					new RouterIntentShadowRecordRequest
-					{
-						RequestId = $"context-query-{Guid.NewGuid():N}",
-						WorkspaceId = query.WorkspaceId,
-						CollectionId = query.CollectionId,
-						EntryPoint = "query",
-						QueryText = query.QueryText ?? string.Empty
-					},
-					ct)
-				.ConfigureAwait(false);
 			return Results.Ok(items);
 		})
 		.WithName("QueryContextItems")
@@ -185,20 +171,6 @@ internal static class ContextEndpoints
 		.WithSummary("执行混合检索，可通过 Plan 字段接受来自 /api/package/build-detailed 的 RetrievalPlan 以实现 plan passthrough");
 
 		return app;
-	}
-
-	private static async Task RecordRouterShadowAsync(
-		IServiceProvider services,
-		RouterIntentShadowRecordRequest request,
-		CancellationToken cancellationToken)
-	{
-		var shadow = services.GetService<RouterIntentShadowService>();
-		if (shadow is null)
-		{
-			return;
-		}
-
-		await shadow.RecordAsync(request, cancellationToken).ConfigureAwait(false);
 	}
 
 	private static bool LooksLikeInputCommand(JsonElement body)

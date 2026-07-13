@@ -553,11 +553,6 @@ public sealed class ServiceRelationsSnapshot
     public RelationGraphDiagnosticsReport Diagnostics { get; init; } = new();
 
     public RelationGraphDiagnosticsReport? ItemDiagnostics { get; init; }
-
-    public GraphExpansionShadowTraceQualityReport GraphShadowTraceQualitySummary { get; init; } = new();
-
-    public IReadOnlyList<GraphExpansionShadowTraceRecord> RecentGraphShadowTraces { get; init; } =
-        Array.Empty<GraphExpansionShadowTraceRecord>();
 }
 
 public sealed class ServicePolicySnapshot
@@ -703,8 +698,6 @@ public sealed class ServiceLearningFeaturesSnapshot
 
     public RouterIntentClassifierBaselineReport? RouterIntentBaselineReport { get; init; }
 
-    public RouterShadowTraceQualityReport? RouterShadowTraceQualityReport { get; init; }
-
     public RouterDisagreementTriageReport? RouterDisagreementTriageA3Report { get; init; }
 
     public RouterDisagreementTriageReport? RouterDisagreementTriageExtendedReport { get; init; }
@@ -717,14 +710,6 @@ public sealed class ServiceLearningFeaturesSnapshot
 
     public CandidateRerankerFeatureCompletenessReport? CandidateRerankerFeatureCompletenessExtendedReport { get; init; }
 
-    public CandidateRerankerShadowEvalReport? CandidateRerankerShadowEvalA3Report { get; init; }
-
-    public CandidateRerankerShadowEvalReport? CandidateRerankerShadowEvalExtendedReport { get; init; }
-
-    public CandidateRerankerShadowFailureAuditReport? CandidateRerankerShadowFailureAuditA3Report { get; init; }
-
-    public CandidateRerankerShadowFailureAuditReport? CandidateRerankerShadowFailureAuditExtendedReport { get; init; }
-
     public CandidateRerankerScoreDistributionReport? CandidateRerankerScoreDistributionA3Report { get; init; }
 
     public CandidateRerankerScoreDistributionReport? CandidateRerankerScoreDistributionExtendedReport { get; init; }
@@ -736,8 +721,6 @@ public sealed class ServiceLearningFeaturesSnapshot
     public CandidateRerankerFormalPriorityAlignmentReport? CandidateRerankerFormalPriorityAlignmentA3Report { get; init; }
 
     public CandidateRerankerFormalPriorityAlignmentReport? CandidateRerankerFormalPriorityAlignmentExtendedReport { get; init; }
-
-    public CandidateRerankerShadowTraceQualityReport? CandidateRerankerShadowTraceQualityReport { get; init; }
 
     public LearningReadinessRegistry? LearningReadinessRegistry { get; init; }
 
@@ -877,20 +860,6 @@ public sealed class ServiceVectorShadowQualitySummary
     public bool HybridV4RecheckAllowed { get; init; }
     public IReadOnlyList<string> HybridFreezeBlockedReasons { get; init; } = Array.Empty<string>();
 
-}
-
-public sealed class ServiceRankerShadowDebugSnapshot
-{
-    public DateTimeOffset CurrentTime { get; init; }
-
-    public string BaseUrl { get; init; } = string.Empty;
-
-    public LifecycleAwareRankerShadowDebugResponse Response { get; init; } = new();
-
-    public RankerShadowTraceQualityReport TraceQualitySummary { get; init; } = new();
-
-    public IReadOnlyList<LifecycleAwareRankerShadowTraceRecord> RecentShadowTraces { get; init; } =
-        Array.Empty<LifecycleAwareRankerShadowTraceRecord>();
 }
 
 /// <summary>Service 模式下的运行时仪表盘快照。</summary>

@@ -695,58 +695,6 @@ public sealed class ContextCoreRelationGraphValidationTests
     }
 
     [TestMethod]
-    public void ControlRoom_ShouldRenderGraphExpansionShadowTraceSummary()
-    {
-        var rendered = ServiceOperationalRenderer.RenderRelations(new ServiceRelationsSnapshot
-        {
-            CurrentTime = DateTimeOffset.UtcNow,
-            BaseUrl = "http://localhost",
-            RelationTypes = new RelationExpansionProfileRegistry().GetAll()
-                .Select(profile => new RelationTypeDefinition { Type = profile.ProfileId })
-                .ToArray(),
-            Diagnostics = new RelationGraphDiagnosticsReport(),
-            GraphShadowTraceQualitySummary = new GraphExpansionShadowTraceQualityReport
-            {
-                TraceCount = 1,
-                AcceptedRelationCount = 1,
-                BlockedRelationCount = 0,
-                AuditContextCount = 1,
-                ConflictEvidenceCount = 0,
-                RiskAfterRoutingCount = 0,
-                WrongSectionRiskCount = 0,
-                Recommendation = GraphExpansionShadowTraceRecommendations.ReadyForAuditShadowOnly
-            },
-            RecentGraphShadowTraces =
-            [
-                new GraphExpansionShadowTraceRecord
-                {
-                    RetrievalId = "retrieval-graph-shadow-1",
-                    Query = "audit trace",
-                    Profiles = ["audit-v1"],
-                    CreatedAt = DateTimeOffset.UtcNow,
-                    AcceptedRelations =
-                    [
-                        new RelationExpansionPreviewRelation
-                        {
-                            RelationId = "rel-audit",
-                            TargetSection = GraphExpansionTargetSection.AuditContext
-                        }
-                    ],
-                    TargetSections = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
-                    {
-                        [GraphExpansionTargetSection.AuditContext] = 1
-                    }
-                }
-            ]
-        });
-
-        StringAssert.Contains(rendered, "Graph Shadow Trace Quality Summary");
-        StringAssert.Contains(rendered, "Recent Graph Shadow Traces");
-        StringAssert.Contains(rendered, "ReadyForAuditShadowOnly");
-        StringAssert.Contains(rendered, "audit_context=1");
-    }
-
-    [TestMethod]
     [TestCategory("GraphContract")]
     public void GraphNodeKind_ShouldIncludePackageAndOperation()
     {

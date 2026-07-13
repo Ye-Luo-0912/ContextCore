@@ -1053,11 +1053,6 @@ public sealed class ContextCoreControlRoomServiceModeTests
         });
         handlers.Enqueue(request =>
         {
-            Assert.AreEqual("/api/learning/graph-expansion-shadow/traces", request.RequestUri?.AbsolutePath);
-            return Json<IReadOnlyList<GraphExpansionShadowTraceRecord>>([]);
-        });
-        handlers.Enqueue(request =>
-        {
             Assert.AreEqual("/api/relations/rel-1/explain", request.RequestUri?.AbsolutePath);
             return Json(new RelationExplainResponse
             {
@@ -2011,160 +2006,6 @@ public sealed class ContextCoreControlRoomServiceModeTests
     }
 
     [TestMethod]
-    public void ServiceRankerShadowDebugRenderer_ShouldRenderScoreComparison()
-    {
-        var snapshot = new ServiceRankerShadowDebugSnapshot
-        {
-            CurrentTime = DateTimeOffset.UtcNow,
-            BaseUrl = "http://localhost:5079/",
-            Response = new LifecycleAwareRankerShadowDebugResponse
-            {
-                OperationId = "ranker-debug-1",
-                RetrievalOperationId = "retrieval-1",
-                WorkspaceId = "workspace-test",
-                CollectionId = "collection-test",
-                Query = "current rule",
-                Mode = "ChatMode",
-                RankerShadowEnabled = true,
-                DebugEndpointEnabled = true,
-                RankerShadowProfile = "lifecycle-aware-v1",
-                FormalOutputChanged = false,
-                SelectedSetChanged = false,
-                LegacySelectedIds = ["memory:active-rule-v2"],
-                FinalSelectedIds = ["memory:active-rule-v2"],
-                CandidateScores =
-                [
-                    new LifecycleAwareRankerShadowCandidateScore
-                    {
-                        CandidateId = "memory:active-rule-v2",
-                        Kind = "Stable",
-                        Type = "memory",
-                        SectionName = "Stable",
-                        Selected = true,
-                        LegacyRank = 1,
-                        ShadowRank = 1,
-                        LegacyScore = 10,
-                        LifecycleAwareScore = 22,
-                        ScoreDelta = 12,
-                        Reason = "current_version_boost",
-                        LifecycleFeatures = new LifecycleAwareFeatureSet
-                        {
-                            IsCurrentVersion = true,
-                            LifecycleConfidence = 0.7
-                        }
-                    },
-                    new LifecycleAwareRankerShadowCandidateScore
-                    {
-                        CandidateId = "memory:deprecated-rule-v1",
-                        Kind = "historical_context",
-                        Type = "memory",
-                        SectionName = "historical_context",
-                        Selected = false,
-                        LegacyRank = 2,
-                        ShadowRank = 2,
-                        LegacyScore = 20,
-                        LifecycleAwareScore = -18,
-                        ScoreDelta = -38,
-                        Reason = "deprecated_demotion;historical_demotion",
-                        LifecycleFeatures = new LifecycleAwareFeatureSet
-                        {
-                            IsDeprecated = true,
-                            IsHistorical = true,
-                            LifecycleConfidence = 0.69
-                        }
-                    }
-                ],
-                DeprecatedDemotions =
-                [
-                    new LifecycleAwareRankerShadowCandidateScore
-                    {
-                        CandidateId = "memory:deprecated-rule-v1",
-                        ScoreDelta = -38,
-                        Reason = "deprecated_demotion;historical_demotion"
-                    }
-                ],
-                HistoricalDemotions =
-                [
-                    new LifecycleAwareRankerShadowCandidateScore
-                    {
-                        CandidateId = "memory:deprecated-rule-v1",
-                        ScoreDelta = -38,
-                        Reason = "deprecated_demotion;historical_demotion"
-                    }
-                ],
-                CurrentActivePromotions =
-                [
-                    new LifecycleAwareRankerShadowCandidateScore
-                    {
-                        CandidateId = "memory:active-rule-v2",
-                        ScoreDelta = 12,
-                        Reason = "current_version_boost"
-                    }
-                ]
-            },
-            TraceQualitySummary = new RankerShadowTraceQualityReport
-            {
-                TraceCount = 1,
-                CandidateScoreCount = 1,
-                DeprecatedDemotionCount = 1,
-                HistoricalDemotionCount = 0,
-                VersionConflictFixCount = 0,
-                CurrentVersionPromotionCount = 0,
-                MustHitDemotedCount = 0,
-                MustNotHitPromotedCount = 0,
-                AverageScoreDelta = -38,
-                MaxPositiveDelta = 0,
-                MaxNegativeDelta = -38,
-                RecommendedNextStep = RankerShadowTraceRecommendedNextSteps.KeepShadowOnly
-            },
-            RecentShadowTraces =
-            [
-                new LifecycleAwareRankerShadowTraceRecord
-                {
-                    RetrievalId = "retrieval-shadow-1",
-                    WorkspaceId = "workspace-test",
-                    CollectionId = "collection-test",
-                    Query = "current rule",
-                    Profile = "lifecycle-aware-v1",
-                    CreatedAt = DateTimeOffset.UtcNow,
-                    CandidateScores =
-                    [
-                        new LifecycleAwareRankerShadowCandidateScore
-                        {
-                            CandidateId = "memory:deprecated-rule-v1",
-                            ScoreDelta = -38,
-                            Reason = "deprecated_demotion"
-                        }
-                    ],
-                    DeprecatedDemotions =
-                    [
-                        new LifecycleAwareRankerShadowCandidateScore
-                        {
-                            CandidateId = "memory:deprecated-rule-v1",
-                            ScoreDelta = -38,
-                            Reason = "deprecated_demotion"
-                        }
-                    ]
-                }
-            ]
-        };
-
-        var rendered = ServiceOperationalRenderer.RenderRankerShadowDebug(snapshot);
-
-        StringAssert.Contains(rendered, "Service Ranker Shadow Debug");
-        StringAssert.Contains(rendered, "Candidate Score Comparison");
-        StringAssert.Contains(rendered, "memory:deprecated-rule-v1");
-        StringAssert.Contains(rendered, "deprecated_demotion");
-        StringAssert.Contains(rendered, "current_version_boost");
-        StringAssert.Contains(rendered, "FormalChanged : False");
-        StringAssert.Contains(rendered, "SelectedChanged: False");
-        StringAssert.Contains(rendered, "Trace Quality Summary");
-        StringAssert.Contains(rendered, "next=KeepShadowOnly");
-        StringAssert.Contains(rendered, "Recent Shadow Traces");
-        StringAssert.Contains(rendered, "retrieval-shadow-1");
-    }
-
-    [TestMethod]
     public void ServiceLearningRenderer_ShouldRenderRecordsCasesAndFailureSummary()
     {
         var snapshot = new ServiceLearningSnapshot
@@ -2342,14 +2183,6 @@ public sealed class ContextCoreControlRoomServiceModeTests
         var actionByNumber = ControlRoomInteraction.InterpretDashboardInput("31");
 
         Assert.AreEqual(ControlRoomActionKind.OpenServiceCandidateConstraints, actionByNumber.Kind);
-    }
-
-    [TestMethod]
-    public void ServiceDashboardInput_ShouldExposeServiceRankerShadowDebugEntry()
-    {
-        var actionByNumber = ControlRoomInteraction.InterpretDashboardInput("34");
-
-        Assert.AreEqual(ControlRoomActionKind.OpenServiceRankerShadowDebug, actionByNumber.Kind);
     }
 
     [TestMethod]

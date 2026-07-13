@@ -98,11 +98,6 @@ public sealed class ContextCoreControlRoomRetrievalTests
         Assert.IsTrue(details.Result.Trace.Stages.Any(stage => stage.Name == "关键词召回"));
         Assert.IsTrue(details.Result.Trace.Stages.Any(stage => stage.Name == "向量召回"));
         Assert.IsTrue(details.Result.Trace.Stages.Any(stage => stage.Name == "关系扩展"));
-        Assert.IsTrue(details.Result.Trace.AttentionScores.Any(item => item.SourceId == "raw-memory"));
-        Assert.AreEqual(RetrievalAttentionRerankOptions.OffMode, details.Result.Trace.AttentionRerankComparison.AttentionRerankMode);
-        Assert.AreEqual("old-score-anchored-v1-strong", details.Result.Trace.AttentionRerankComparison.AttentionProfile);
-        Assert.IsFalse(details.Result.Trace.AttentionRerankComparison.AttentionApplied);
-        Assert.IsTrue(details.Result.Trace.AttentionRerankComparison.SelectedSetPreserved);
         Assert.AreEqual(details.Result.SelectedItems.Count, details.Package.Sections.Count);
         Assert.AreEqual(details.Result.OperationId, details.RecentTraces.Single().RetrievalId);
 
@@ -120,19 +115,6 @@ public sealed class ContextCoreControlRoomRetrievalTests
             Console.SetOut(originalOut);
         }
 
-        var rendered = output.ToString();
-        StringAssert.Contains(rendered, "Attention Shadow Trace");
-        StringAssert.Contains(rendered, "Attention Shadow Diff");
-        StringAssert.Contains(rendered, "Attention Shadow Summary");
-        StringAssert.Contains(rendered, "Attention Rerank Status");
-        StringAssert.Contains(rendered, "Legacy");
-        StringAssert.Contains(rendered, "old-score-anchored-v1-strong");
-        StringAssert.Contains(rendered, "Attention Profile Comparison");
-        StringAssert.Contains(rendered, "Attention Profile Rank Details");
-        StringAssert.Contains(rendered, "conservative-v1");
-        StringAssert.Contains(rendered, "learning=");
-        StringAssert.Contains(rendered, "noise=");
-
         using var packageOutput = new StringWriter();
         try
         {
@@ -147,9 +129,6 @@ public sealed class ContextCoreControlRoomRetrievalTests
             Console.SetOut(originalOut);
         }
 
-        var packageRendered = packageOutput.ToString();
-        StringAssert.Contains(packageRendered, "Attention Rerank Status");
-        StringAssert.Contains(packageRendered, "old-score-anchored-v1-strong");
     }
 
     [TestMethod]
