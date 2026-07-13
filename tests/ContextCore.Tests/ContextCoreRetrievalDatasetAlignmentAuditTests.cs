@@ -1,5 +1,6 @@
 using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services;
+using ContextCore.Evaluation.Models;
 using ContextCore.Evaluation.Vector.Dataset;
 
 namespace ContextCore.Tests;

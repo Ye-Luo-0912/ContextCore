@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using ContextCore.Abstractions.Models;
+using ContextCore.Evaluation.Models;
 
 namespace ContextCore.Evaluation.Vector;
 
