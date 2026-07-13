@@ -1,6 +1,6 @@
 # ContextCore 项目路线图
 
-> 最近更新：R7-0/R7-1/R7-2/R7-3 四阶段 Shadow 证据清除、机械不可达删除、Learning 离线能力迁移（2026-07-14）
+> 最近更新：R7-0~R7-3 + R8-0 补齐残留删除（PlanningIntentDetector 循环依赖、Router Shadow 404 接口、失效菜单、无消费者类型、领域关键词）（2026-07-14）
 
 > 本文件是 ContextCore 的**唯一当前路线图**。docs/ 下的 freeze / report / audit / plan 类文档均为历史快照，仅供回溯，不作为设计依据。
 
@@ -36,11 +36,50 @@
 | EvalCommand.cs 单文件行数 | 7,987 | P1-5 已完成 |
 | FoundationStatusService.cs 行数 | 606 | P4 已完成 |
 | 构建 | 0 警告 / 0 错误 | 0 / 0 |
-| 测试 | 923 通过 / 0 失败 | 0 失败 |
+| 测试 | 911 通过 / 0 失败 | 0 失败 |
 
 ---
 
 ## 已完成工作
+
+### R8-0：补齐残留删除（commit `9795195`）
+
+5 个子任务完成，消除 R7 系列遗留的循环依赖、404 接口、失效菜单和硬编码词表。46 文件变更，+56/-2163 行（净减 2,107 行）。
+
+**子任务 1：移除 PlanningIntentDetector 循环依赖链**：
+- 删除 Core/Services/Planning/PlanningIntentDetector.cs
+- 从 ContextRuntimeBuilder/RuntimeServices/CoreExtensions 移除创建和注册
+- 新建 Evaluation/Learning/RouterIntentLabels.cs（标签常量留 Evaluation）
+- Evaluation 消费者改为显式 Intent 或 Unknown，不依赖关键词自动制造标签
+- 清理 15+ 文件的 using ContextCore.Core.Services.Planning
+- **纠正 R7-3 错误结论**：PlanningIntentDetector 是循环依赖（Runtime 创建暴露，消费者全在 Evaluation），不是真正的生产依赖
+
+**子任务 2：移除 Router Shadow 404 接口链**：
+- 删除 Client GetRouterShadowTracesAsync/ExportRouterShadowTracesAsync
+- 删除 IRouterIntentShadowTraceStore 接口和 UnsupportedStore
+- 删除 RouterIntentShadowTrace/TraceQuery DTO
+- 删除 ArtifactKind.TraceRouterShadow 和 RouterShadowTraceCount 字段
+- 清理 FilePathResolver/ContextCoreDataLayout/StorageResponsibilityRegistry 路径
+- 保留 RouterIntentShadowTopPrediction（被 RouterIntentClassifier 生产使用）
+
+**子任务 3：清理失效菜单、脚本、Runbook**：
+- ServiceDashboardRenderer 删除 [32]PolicyFeedback/[33]LearningFeatures/[F]Proposal/[34]RankerDebug
+- 保留 [X]Planning 静态空壳
+- 删除 collect-ranker-shadow-traces.ps1 和 collect-graph-expansion-shadow-traces.ps1
+- 删除 ContextCoreRunbookTests.cs（保护 404 接口的测试）
+- 删除 2 个孤立 runbook 文档
+
+**子任务 4：删除无消费者类型**：
+- RouterIntentDatasetProvider（仅测试引用）
+- AsyncTraceWriter<T>（仅测试引用）
+- LexicalCandidateProvider（无消费者）
+- 同步删除对应测试文件
+
+**子任务 5：删除生产领域关键词**：
+- RetrievalPolicyProfiles 删除特定领域词「断剑」
+- BasicContextPackageBuilder 审计模式推断保留（深度耦合 ~15 处评分决策和 5+ 测试文件，建议后续向 ContextPackagePolicy 新增 IsAuditMode 字段渐进改造）
+
+验证：构建 0 警告 0 错误，测试 911 通过 0 失败。
 
 ### R7-3：把 Learning Plane 离线能力迁回 Evaluation（commit `9e96ae7`）
 
@@ -72,9 +111,8 @@
 - LearningFeedbackService、LearningFeedbackReviewService（feedback ingest/review）
 - LearningFeedbackFeatureCandidateBuilder
 - ContextLearningCaseGenerator、V14_0 trace sink
-- PlanningIntentDetector（被 Runtime 生产代码使用，无法迁移）
 
-**说明**：PlanningIntentDetector 的生产依赖未消除——它是 Runtime 生产代码（ContextRuntimeBuilder、RuntimeServices）的依赖，不是离线专属，无法随 Learning 迁移移除。
+**说明**：PlanningIntentDetector 当时判断为"Runtime 生产依赖"有误，实际是循环依赖，已在 R8-0 中彻底删除。
 
 验证：构建 0 警告 0 错误，测试 923 通过 0 失败。
 
