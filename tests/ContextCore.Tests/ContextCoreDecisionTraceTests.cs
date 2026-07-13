@@ -32,7 +32,7 @@ public sealed class ContextCoreDecisionTraceTests
         // 有 decision trace store 的构建器
         var decisionStore = new InMemoryDecisionTraceStore();
         var builderWithTrace = new BasicContextPackageBuilder(
-            store, null, null, null, null, null, null, null, null, null, decisionStore);
+            store, null, null, null, null, null, null, null, decisionStore);
 
         var request = new ContextPackageRequest
         {
@@ -73,7 +73,7 @@ public sealed class ContextCoreDecisionTraceTests
 
         var decisionStore = new InMemoryDecisionTraceStore();
         var builder = new BasicContextPackageBuilder(
-            store, null, null, null, null, null, null, null, null, null, decisionStore);
+            store, null, null, null, null, null, null, null, decisionStore);
 
         var request = new ContextPackageRequest
         {
@@ -180,7 +180,7 @@ public sealed class ContextCoreDecisionTraceTests
         };
 
         var builder = new BasicContextPackageBuilder(
-            store, null, null, null, null, null, null, null, null, null, decisionStore);
+            store, null, null, null, null, null, null, null, decisionStore);
 
         var request = new ContextPackageRequest
         {
@@ -210,7 +210,7 @@ public sealed class ContextCoreDecisionTraceTests
 
         var decisionStore = new InMemoryDecisionTraceStore();
         var builder = new BasicContextPackageBuilder(
-            store, null, null, null, null, null, null, null, null, null, decisionStore);
+            store, null, null, null, null, null, null, null, decisionStore);
 
         var result = await builder.BuildDetailedAsync(new ContextPackageRequest
         {
@@ -240,7 +240,7 @@ public sealed class ContextCoreDecisionTraceTests
 
         var decisionStore = new InMemoryDecisionTraceStore();
         var builder = new BasicContextPackageBuilder(
-            store, null, null, null, null, null, null, null, null, null, decisionStore);
+            store, null, null, null, null, null, null, null, decisionStore);
 
         await builder.BuildDetailedAsync(new ContextPackageRequest
         {
@@ -270,7 +270,7 @@ public sealed class ContextCoreDecisionTraceTests
 
         var decisionStore = new InMemoryDecisionTraceStore();
         var builder = new BasicContextPackageBuilder(
-            store, null, null, null, null, null, null, null, null, null, decisionStore);
+            store, null, null, null, null, null, null, null, decisionStore);
 
         await builder.BuildDetailedAsync(new ContextPackageRequest
         {
@@ -310,7 +310,7 @@ public sealed class ContextCoreDecisionTraceTests
 
         var decisionStore = new InMemoryDecisionTraceStore();
         var builder = new BasicContextPackageBuilder(
-            store, null, null, null, null, null, null, null, null, null, decisionStore);
+            store, null, null, null, null, null, null, null, decisionStore);
 
         await builder.BuildDetailedAsync(new ContextPackageRequest
         {
@@ -339,7 +339,7 @@ public sealed class ContextCoreDecisionTraceTests
 
         var decisionStore = new InMemoryDecisionTraceStore();
         var builder = new BasicContextPackageBuilder(
-            store, null, null, null, null, null, null, null, null, null, decisionStore);
+            store, null, null, null, null, null, null, null, decisionStore);
 
         await builder.BuildDetailedAsync(new ContextPackageRequest
         {
@@ -368,7 +368,7 @@ public sealed class ContextCoreDecisionTraceTests
 
         var decisionStore = new InMemoryDecisionTraceStore();
         var builder = new BasicContextPackageBuilder(
-            store, null, null, null, null, null, null, null, null, null, decisionStore);
+            store, null, null, null, null, null, null, null, decisionStore);
 
         await builder.BuildDetailedAsync(new ContextPackageRequest
         {
@@ -397,7 +397,7 @@ public sealed class ContextCoreDecisionTraceTests
 
         var decisionStore = new InMemoryDecisionTraceStore();
         var builder = new BasicContextPackageBuilder(
-            store, null, null, null, null, null, null, null, null, null, decisionStore);
+            store, null, null, null, null, null, null, null, decisionStore);
 
         await builder.BuildDetailedAsync(new ContextPackageRequest
         {

@@ -320,19 +320,13 @@ public sealed class ContextCoreRelationExpansionShadowEvalTests
             await relationStore.SaveAsync(relation);
         }
 
-        var profileRegistry = new RelationExpansionProfileRegistry();
-        var validator = new RelationExpansionPolicyValidator(new RelationTypeRegistry());
-        var preview = new RelationExpansionPreviewService(new RelationTraversalEngine(relationStore), profileRegistry, validator);
-        var applyPolicy = new GraphExpansionApplyPolicy(preview, contextStore);
         var builder = new BasicContextPackageBuilder(
             contextStore,
             null,
             null,
             null,
             relationStore,
-            tokenizerResolver: new DefaultContextTokenizerResolver(),
-            graphExpansionApplyOptions: options,
-            graphExpansionApplyPolicy: applyPolicy);
+            tokenizerResolver: new DefaultContextTokenizerResolver());
         return (builder, contextStore);
     }
 

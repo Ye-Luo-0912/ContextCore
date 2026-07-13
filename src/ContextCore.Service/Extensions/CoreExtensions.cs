@@ -3,11 +3,10 @@ using ContextCore.Abstractions.Models;
 using ContextCore.Core;
 using ContextCore.Core.Jobs;
 using ContextCore.Core.Services;
-using ContextCore.Core.Services.Attention;
-using ContextCore.Core.Services.Graph;
-using ContextCore.Core.Services.Learning.V14_0;
 using ContextCore.Core.Services.Planning;
 using ContextCore.Core.Services.Promotion;
+using ContextCore.Core.Services.Graph;
+using ContextCore.Core.Services.Learning.V14_0;
 using ContextCore.Core.Services.Retrieval;
 using ContextCore.ModelGateway;
 using ContextCore.ModelGateway.Infrastructure;
@@ -117,14 +116,6 @@ internal static class CoreExtensions
 			sp.GetService<IRouterIntentShadowTraceStore>(),
 			sp.GetRequiredService<PlanningIntentDetector>(),
 			sp.GetService<IRouterIntentDatasetProvider>()));
-		services.AddSingleton<LifecycleAwareRankerShadowScorer>();
-		services.AddSingleton<LifecycleAwareRankerTraceBuilder>();
-		services.AddSingleton<LifecycleAwareRankerDebugService>();
-		services.AddSingleton(sp => new RankerShadowTraceExportService(
-			sp.GetService<IRetrievalTraceStore>()));
-		services.AddSingleton(sp => new GraphExpansionShadowTraceExportService(
-			sp.GetService<IRetrievalTraceStore>()));
-		services.AddSingleton<GraphExpansionShadowTraceQualityReportBuilder>();
 	// Embedding provider 注册由 AddEmbeddingProviders 扩展方法在 Program.cs 中显式调用，
 	// 根据 EmbeddingProviderOptions.ProviderType 条件注册 IEmbeddingGenerator / IEmbeddingProvider。
 	// - DeterministicHash: 仅注册 IEmbeddingGenerator（基础设施测试/预览），不注册 IEmbeddingProvider，IsSemanticRetrieval=false
@@ -198,7 +189,6 @@ internal static class CoreExtensions
 
 		services.AddSingleton<IPromotionPolicyEvaluator, BasicPromotionPolicyEvaluator>();
 		services.AddSingleton<IPromotionCandidateFactory, BasicPromotionCandidateFactory>();
-		services.AddSingleton(ContextAttentionProfile.CreateDefaultShadowV1());
 
 		services.AddSingleton<LoggingContextEventSink>();
 		services.AddSingleton<IContextEventSink>(sp =>
@@ -247,7 +237,7 @@ internal static class CoreExtensions
 		services.AddSingleton<ContextJobDispatcher>();
 		services.AddSingleton<IContextJobDispatcher>(sp => sp.GetRequiredService<ContextJobDispatcher>());
 
-		// --- 统一主链组装（Full profile：传入生产 shadow/trace sinks）---
+		// --- 统一主链组装（Full profile：传入生产 trace sinks）---
 		services.AddSingleton(sp => ContextRuntimeBuilder.Build(new RuntimeBuildOptions
 		{
 			ContextStore = sp.GetRequiredService<IContextStore>(),
@@ -263,17 +253,9 @@ internal static class CoreExtensions
 			WorkingMemoryService = sp.GetRequiredService<IWorkingMemoryService>(),
 			ShortTermMemoryStore = sp.GetRequiredService<IShortTermMemoryStore>(),
 			LearningStore = sp.GetRequiredService<IContextLearningStore>(),
-			GraphExpansionApplyOptions = sp.GetService<GraphExpansionApplyOptions>(),
-			AttentionRerankOptions = sp.GetService<RetrievalAttentionRerankOptions>(),
 			PackageBuildTraceStore = sp.GetService<IContextPackageBuildTraceStore>(),
 			DecisionTraceStore = sp.GetService<IDecisionTraceStore>(),
-			RuntimeCandidateTraceSink = sp.GetService<IRuntimeCandidateTraceSink>(),
-			AttentionProfileExperiments = ContextAttentionProfile.CreateShadowExperimentProfiles(),
-			AttentionLearningStore = sp.GetService<IContextLearningStore>(),
-			AttentionProfile = sp.GetService<ContextAttentionProfile>(),
-			LifecycleAwareRankerShadowOptions = sp.GetService<LifecycleAwareRankerShadowOptions>(),
-			LifecycleAwareRankerTraceBuilder = sp.GetService<LifecycleAwareRankerTraceBuilder>(),
-			GraphExpansionShadowOptions = sp.GetService<GraphExpansionShadowOptions>()
+			RuntimeCandidateTraceSink = sp.GetService<IRuntimeCandidateTraceSink>()
 		}));
 
 		// 主链服务从 RuntimeServices 获取（保证对象图一致性）
@@ -282,16 +264,12 @@ internal static class CoreExtensions
 		services.AddSingleton(sp => sp.GetRequiredService<RuntimeServices>().RelationExpansionPolicyValidator);
 		services.AddSingleton(sp => sp.GetRequiredService<RuntimeServices>().RelationTraversalEngine);
 		services.AddSingleton(sp => sp.GetRequiredService<RuntimeServices>().RelationExpansionPreviewService);
-		services.AddSingleton(sp => sp.GetRequiredService<RuntimeServices>().GraphExpansionApplyPolicy);
 		services.AddSingleton(sp => sp.GetRequiredService<RuntimeServices>().PromotionService);
 		services.AddSingleton<IMemoryPromotionService>(sp => sp.GetRequiredService<RuntimeServices>().PromotionService);
 		services.AddSingleton(sp => sp.GetRequiredService<RuntimeServices>().PackageBuilder);
 		services.AddSingleton<IContextPackageBuilder>(sp => sp.GetRequiredService<RuntimeServices>().PackageBuilder);
 		services.AddSingleton(sp => sp.GetRequiredService<RuntimeServices>().Retriever);
 		services.AddSingleton<IContextRetriever>(sp => sp.GetRequiredService<RuntimeServices>().Retriever);
-		services.AddSingleton<IContextAttentionScorer>(sp => sp.GetRequiredService<RuntimeServices>().AttentionScorer);
-		// GraphExpansionShadowTraceBuilder 依赖主链中间服务，由 ContextRuntimeBuilder 内部构造后转发
-		services.AddSingleton(sp => sp.GetRequiredService<RuntimeServices>().GraphExpansionShadowTraceBuilder);
 
 		return services;
 	}

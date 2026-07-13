@@ -744,9 +744,6 @@ public sealed class ContextCoreInputPipelineTests
             ],
             [selectedCandidate],
             packing,
-            Array.Empty<ContextAttentionScore>(),
-            new AttentionShadowReport(),
-            new AttentionProfileExperimentReport(),
             metadata);
         var result = new RetrievalResultAssembler().Assemble(
             "retrieval-1",

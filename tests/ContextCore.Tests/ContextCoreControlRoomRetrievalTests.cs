@@ -5,7 +5,6 @@ using ContextCore.ControlRoom.Rendering;
 using ContextCore.ControlRoom.Services;
 using ContextCore.Core;
 using ContextCore.Core.Services;
-using ContextCore.Core.Services.Attention;
 using ContextCore.Core.Services.Retrieval;
 using ContextCore.Embedding;
 using ContextCore.Embedding.Providers;
@@ -40,8 +39,7 @@ public sealed class ContextCoreControlRoomRetrievalTests
             relationStore,
             embeddingProvider,
             vectorStore,
-            traceStore,
-            new RuleBasedContextAttentionScorer());
+            traceStore);
         var state = CreateState(
             contextStore,
             memoryStore,

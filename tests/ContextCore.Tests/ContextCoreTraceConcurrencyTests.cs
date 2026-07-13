@@ -57,7 +57,7 @@ public sealed class ContextCoreTraceConcurrencyTests
         var sink = new CapturingTraceSink();
         // 使用共享的 builder（Singleton 模拟），验证 AsyncLocal 隔离
         var builder = new BasicContextPackageBuilder(
-            store, null, null, null, null, null, null, null, null, null, null, sink);
+            store, null, null, null, null, null, null, null, null, sink);
 
         const int requestCount = 80;
         var operationIds = new string[requestCount];

@@ -6,7 +6,7 @@ namespace ContextCore.Core;
 
 /// <summary>
 /// 协调图谱扩展（graph expansion）相关的种子解析、关系遍历、section 追加和 contribution 构建。
-/// 持有 store / relationStore / traversalEngine / applyOptions / applyPolicy / tokenizer 依赖，
+/// 持有 store / relationStore / traversalEngine / tokenizer 依赖，
 /// 使 <see cref="BasicContextPackageBuilder"/> 不再直接持有图谱扩展状态。
 /// </summary>
 internal sealed class GraphExpansionCoordinator
@@ -14,8 +14,6 @@ internal sealed class GraphExpansionCoordinator
     private readonly IContextStore _store;
     private readonly IRelationStore? _relationStore;
     private readonly RelationTraversalEngine? _traversalEngine;
-    private readonly GraphExpansionApplyOptions _applyOptions;
-    private readonly GraphExpansionApplyPolicy? _applyPolicy;
     private readonly IContextTokenizerResolver _tokenizerResolver;
 
     /// <summary>
@@ -27,44 +25,20 @@ internal sealed class GraphExpansionCoordinator
         IContextStore store,
         IRelationStore? relationStore,
         RelationTraversalEngine? traversalEngine,
-        GraphExpansionApplyOptions applyOptions,
-        GraphExpansionApplyPolicy? applyPolicy,
         IContextTokenizerResolver tokenizerResolver)
     {
         _store = store;
         _relationStore = relationStore;
         _traversalEngine = traversalEngine;
-        _applyOptions = applyOptions;
-        _applyPolicy = applyPolicy;
         _tokenizerResolver = tokenizerResolver;
     }
 
-    internal async Task<GraphExpansionSectionContribution> BuildGraphExpansionContributionAsync(
+    internal Task<GraphExpansionSectionContribution> BuildGraphExpansionContributionAsync(
         ContextPackageRequest request,
         IReadOnlyList<ContextPackageDecision> selectedItems,
         CancellationToken cancellationToken)
     {
-        if (_applyPolicy is null)
-        {
-            return new GraphExpansionSectionContribution
-            {
-                Mode = _applyOptions.Mode,
-                FallbackUsed = string.Equals(
-                    _applyOptions.Mode,
-                    GraphExpansionApplyOptions.ApplyGuardedMode,
-                    StringComparison.OrdinalIgnoreCase),
-                FallbackReason = string.Equals(
-                    _applyOptions.Mode,
-                    GraphExpansionApplyOptions.ApplyGuardedMode,
-                    StringComparison.OrdinalIgnoreCase)
-                    ? "graph_expansion_apply_policy_not_registered"
-                    : string.Empty
-            };
-        }
-
-        return await _applyPolicy
-            .BuildContributionAsync(request, selectedItems, _applyOptions, cancellationToken)
-            .ConfigureAwait(false);
+        return Task.FromResult(new GraphExpansionSectionContribution());
     }
 
     internal void AppendGraphExpansionSections(
@@ -209,7 +183,7 @@ internal sealed class GraphExpansionCoordinator
         var maxRelations = PackagePolicyResolver.ResolveIntSetting(request, policy, "relationMaxRelations", 60, min: 1, max: 300);
         var minConfidence = PackagePolicyResolver.ResolveDoubleSetting(request, policy, "relationMinConfidence", 0.35, min: 0, max: 1);
 
-        // 通过统一遍历引擎执行双向 BFS；engine 不过滤置信度（MinConfidence=0），由 caller 做置信度过滤和 low-confidence 收集。
+        // 通过统一遍历引擎执行双向 bfs；engine 不过滤置信度（MinConfidence=0），由 caller 做置信度过滤和 low-confidence 收集。
         var profile = new RelationExpansionProfile
         {
             ProfileId = "package-builder",

@@ -7,7 +7,6 @@ using ContextCore.ControlRoom.Models;
 using ContextCore.Client;
 using ContextCore.Core;
 using ContextCore.Core.Services;
-using ContextCore.Core.Services.Attention;
 using ContextCore.Core.Services.Graph;
 using ContextCore.Core.Services.Planning;
 using ContextCore.Core.Services.Retrieval;

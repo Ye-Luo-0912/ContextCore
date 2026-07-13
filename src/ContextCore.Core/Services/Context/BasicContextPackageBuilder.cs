@@ -63,8 +63,6 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         IContextPackageBuildTraceStore? traceStore = null,
         IContextTokenizerResolver? tokenizerResolver = null,
         IWorkingMemoryService? workingMemoryService = null,
-        GraphExpansionApplyOptions? graphExpansionApplyOptions = null,
-        GraphExpansionApplyPolicy? graphExpansionApplyPolicy = null,
         IDecisionTraceStore? decisionTraceStore = null,
         IRuntimeCandidateTraceSink? runtimeCandidateTraceSink = null,
         RelationTraversalEngine? traversalEngine = null)
@@ -80,8 +78,6 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
             store,
             relationStore,
             traversalEngine,
-            graphExpansionApplyOptions ?? new GraphExpansionApplyOptions(),
-            graphExpansionApplyPolicy,
             _tokenizerResolver);
         _decisionTraceStore = decisionTraceStore;
         _runtimeCandidateTraceSink = runtimeCandidateTraceSink ?? new NullRuntimeCandidateTraceSink();

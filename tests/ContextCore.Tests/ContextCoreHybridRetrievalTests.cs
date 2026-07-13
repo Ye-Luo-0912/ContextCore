@@ -1,7 +1,6 @@
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services;
-using ContextCore.Core.Services.Attention;
 using ContextCore.Core.Services.Graph;
 using ContextCore.Core.Services.Retrieval;
 using ContextCore.Storage.FileSystem;
@@ -250,14 +249,7 @@ public sealed class ContextCoreHybridRetrievalTests
             traceStore: null);
         var shadow = new HybridContextRetriever(
             shadowContextStore,
-            traceStore: traceStore,
-            rankerShadowOptions: new LifecycleAwareRankerShadowOptions
-            {
-                TraceCollectionEnabled = true,
-                Profile = "lifecycle-aware-v1",
-                MaxCandidatesPerTrace = 50
-            },
-            rankerShadowTraceBuilder: new LifecycleAwareRankerTraceBuilder(new LifecycleAwareRankerShadowScorer()));
+            traceStore: traceStore);
         var request = new ContextRetrievalRequest
         {
             WorkspaceId = "workspace-test",
@@ -353,15 +345,7 @@ public sealed class ContextCoreHybridRetrievalTests
         var shadow = new HybridContextRetriever(
             shadowContextStore,
             relationStore: relationStore,
-            traceStore: traceStore,
-            graphExpansionShadowOptions: new GraphExpansionShadowOptions
-            {
-                Enabled = true,
-                TraceCollectionEnabled = true,
-                Profiles = ["audit-v1", "conflict-v1"],
-                MaxRelationsPerTrace = 50
-            },
-            graphExpansionShadowTraceBuilder: CreateGraphExpansionShadowTraceBuilder(relationStore));
+            traceStore: traceStore);
         var request = new ContextRetrievalRequest
         {
             WorkspaceId = "workspace-test",
@@ -414,15 +398,7 @@ public sealed class ContextCoreHybridRetrievalTests
         var retriever = new HybridContextRetriever(
             contextStore,
             relationStore: relationStore,
-            traceStore: traceStore,
-            graphExpansionShadowOptions: new GraphExpansionShadowOptions
-            {
-                Enabled = true,
-                TraceCollectionEnabled = true,
-                Profiles = ["audit-v1", "conflict-v1"],
-                MaxRelationsPerTrace = 50
-            },
-            graphExpansionShadowTraceBuilder: CreateGraphExpansionShadowTraceBuilder(relationStore));
+            traceStore: traceStore);
         var firstRequest = new ContextRetrievalRequest
         {
             OperationId = "graph-shadow-dedupe-first",
@@ -623,8 +599,7 @@ public sealed class ContextCoreHybridRetrievalTests
             relationStore: null,
             embeddingProvider: null,
             vectorStore: null,
-            traceStore: shadowTraceStore,
-            attentionScorer: new RuleBasedContextAttentionScorer());
+            traceStore: shadowTraceStore);
         var request = new ContextRetrievalRequest
         {
             WorkspaceId = "workspace-test",
@@ -716,8 +691,7 @@ public sealed class ContextCoreHybridRetrievalTests
             relationStore,
             embeddingProvider: null,
             vectorStore: vectorStore,
-            traceStore: shadowTraceStore,
-            attentionScorer: new RuleBasedContextAttentionScorer());
+            traceStore: shadowTraceStore);
         var shadowResult = await shadowRetriever.RetrieveAsync(request);
 
         CollectionAssert.AreEqual(
@@ -794,49 +768,21 @@ public sealed class ContextCoreHybridRetrievalTests
             relationStore: null,
             embeddingProvider: null,
             vectorStore: null,
-            traceStore: null,
-            attentionScorer: new StaticAttentionScorer(new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["ContextItem:rerank-current-top"] = 2,
-                ["ContextItem:rerank-attention-top"] = 1,
-                ["ContextItem:rerank-dropped"] = 3
-            }));
+            traceStore: null);
         var enabledRetriever = new HybridContextRetriever(
             contextStore,
             memoryStore: null,
             relationStore: null,
             embeddingProvider: null,
             vectorStore: null,
-            traceStore: null,
-            attentionScorer: new StaticAttentionScorer(new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["ContextItem:rerank-current-top"] = 2,
-                ["ContextItem:rerank-attention-top"] = 1,
-                ["ContextItem:rerank-dropped"] = 3
-            }),
-            attentionRerankOptions: new RetrievalAttentionRerankOptions
-            {
-                Mode = RetrievalAttentionRerankOptions.ApplyGuardedMode,
-                Profile = "static-test"
-            });
+            traceStore: null);
         var shadowRerankRetriever = new HybridContextRetriever(
             contextStore,
             memoryStore: null,
             relationStore: null,
             embeddingProvider: null,
             vectorStore: null,
-            traceStore: null,
-            attentionScorer: new StaticAttentionScorer(new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["ContextItem:rerank-current-top"] = 2,
-                ["ContextItem:rerank-attention-top"] = 1,
-                ["ContextItem:rerank-dropped"] = 3
-            }),
-            attentionRerankOptions: new RetrievalAttentionRerankOptions
-            {
-                Mode = RetrievalAttentionRerankOptions.ShadowMode,
-                Profile = "static-test"
-            });
+            traceStore: null);
         var request = new ContextRetrievalRequest
         {
             WorkspaceId = "workspace-test",
@@ -933,17 +879,7 @@ public sealed class ContextCoreHybridRetrievalTests
             relationStore: null,
             embeddingProvider: null,
             vectorStore: null,
-            traceStore: null,
-            attentionScorer: new StaticAttentionScorer(new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["ContextItem:rerank-safe"] = 2,
-                ["ContextItem:rerank-noise"] = 1
-            }),
-            attentionRerankOptions: new RetrievalAttentionRerankOptions
-            {
-                Mode = RetrievalAttentionRerankOptions.ApplyGuardedMode,
-                Profile = "static-test"
-            });
+            traceStore: null);
 
         var result = await retriever.RetrieveAsync(new ContextRetrievalRequest
         {
@@ -1576,13 +1512,6 @@ public sealed class ContextCoreHybridRetrievalTests
         };
     }
 
-    private static GraphExpansionShadowTraceBuilder CreateGraphExpansionShadowTraceBuilder(IRelationStore relationStore)
-    {
-        var profileRegistry = new RelationExpansionProfileRegistry();
-        var validator = new RelationExpansionPolicyValidator(new RelationTypeRegistry());
-        var previewService = new RelationExpansionPreviewService(new RelationTraversalEngine(relationStore), profileRegistry, validator);
-        return new GraphExpansionShadowTraceBuilder(previewService);
-    }
 
     private static ContextMemoryItem Memory(
         string id,
@@ -1651,41 +1580,4 @@ public sealed class ContextCoreHybridRetrievalTests
         });
     }
 
-    private sealed class StaticAttentionScorer : IContextAttentionScorer
-    {
-        private readonly IReadOnlyDictionary<string, int> _attentionRanks;
-
-        public StaticAttentionScorer(IReadOnlyDictionary<string, int> attentionRanks)
-        {
-            _attentionRanks = attentionRanks;
-        }
-
-        public Task<IReadOnlyList<ContextAttentionScore>> ScoreAsync(
-            ContextRetrievalRequest request,
-            IReadOnlyList<ContextRetrievalCandidate> rankedCandidates,
-            CancellationToken cancellationToken = default)
-        {
-            var scores = rankedCandidates
-                .Select((candidate, index) =>
-                {
-                    var attentionRank = _attentionRanks.GetValueOrDefault(candidate.CandidateId, index + 1);
-                    return new ContextAttentionScore
-                    {
-                        CandidateId = candidate.CandidateId,
-                        SourceId = candidate.SourceId,
-                        CandidateKind = candidate.Kind,
-                        CurrentRank = index + 1,
-                        AttentionRank = attentionRank,
-                        FinalAttentionScore = Math.Max(0d, 1d - attentionRank / 10d),
-                        QueryMatchScore = 1d,
-                        Reasons = ["static_test_attention_rank"],
-                        ProfileId = "static-test",
-                        PolicyVersion = "test/static-test"
-                    };
-                })
-                .ToArray();
-
-            return Task.FromResult<IReadOnlyList<ContextAttentionScore>>(scores);
-        }
-    }
 }

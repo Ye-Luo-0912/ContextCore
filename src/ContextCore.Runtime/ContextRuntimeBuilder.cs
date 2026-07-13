@@ -2,7 +2,6 @@ using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Core;
 using ContextCore.Core.Services;
-using ContextCore.Core.Services.Attention;
 using ContextCore.Core.Services.Graph;
 using ContextCore.Core.Services.Planning;
 using ContextCore.Core.Services.Retrieval;
@@ -14,14 +13,14 @@ namespace ContextCore.Runtime;
 /// 各宿主通过 <see cref="Build"/> 获取主链服务对象图，
 /// 自身只负责提供 store provider、配置与 observability sinks，不再自行 new 主链服务。
 /// Standard profile（ControlRoom / Evaluation）仅填充 required 项；
-/// Full profile（Service）额外填充 shadow/trace sinks 以启用生产可观测性。
+/// Full profile（Service）额外填充 trace sinks 以启用生产可观测性。
 /// </summary>
 public static class ContextRuntimeBuilder
 {
     /// <summary>
     /// 从存储依赖组装运行时主链（规划/关系扩展/包构建/检索器/晋升）。
     /// IShortTermMemoryStore 和 IContextLearningStore 由调用方通过 options 传入，确保与宿主 DI 容器实例一致。
-    /// Full profile sinks（trace stores / shadow builders）在 options 中提供时传入构造函数，否则保持 null。
+    /// Full profile sinks（trace stores）在 options 中提供时传入构造函数，否则保持 null。
     /// </summary>
     public static RuntimeServices Build(RuntimeBuildOptions options)
     {
@@ -39,19 +38,9 @@ public static class ContextRuntimeBuilder
             relationTraversalEngine,
             relationExpansionProfileRegistry,
             relationExpansionValidator);
-        var graphExpansionApplyPolicy = new GraphExpansionApplyPolicy(
-            relationExpansionPreviewService,
-            options.ContextStore,
-            options.MemoryStore,
-            options.ConstraintStore);
 
-        // 晋升/注意力
+        // 晋升
         var promotionService = new BasicMemoryPromotionService(options.MemoryStore, options.PromotionRecordStore);
-        var attentionScorer = options.AttentionProfile is null && options.AttentionLearningStore is null
-            ? new RuleBasedContextAttentionScorer()
-            : new RuleBasedContextAttentionScorer(
-                options.AttentionProfile ?? ContextAttentionProfile.CreateDefaultShadowV1(),
-                options.AttentionLearningStore);
 
         // 包构建（Full profile 传入 trace stores / traversal engine）
         var packageBuilder = new BasicContextPackageBuilder(
@@ -63,15 +52,11 @@ public static class ContextRuntimeBuilder
             traceStore: options.PackageBuildTraceStore,
             tokenizerResolver: options.TokenizerResolver,
             workingMemoryService: options.WorkingMemoryService,
-            graphExpansionApplyOptions: options.GraphExpansionApplyOptions,
-            graphExpansionApplyPolicy: graphExpansionApplyPolicy,
             decisionTraceStore: options.DecisionTraceStore,
             runtimeCandidateTraceSink: options.RuntimeCandidateTraceSink,
             traversalEngine: relationTraversalEngine);
 
-        // 检索器（Full profile 传入 shadow experiments / ranker / graph shadow / decision trace）
-        // GraphExpansionShadowTraceBuilder 依赖 RelationExpansionPreviewService，在此内部构造避免 DI 循环。
-        var graphExpansionShadowTraceBuilder = new GraphExpansionShadowTraceBuilder(relationExpansionPreviewService);
+        // 检索器（Full profile 传入 trace stores / decision trace）
         var retriever = new HybridContextRetriever(
             options.ContextStore,
             options.MemoryStore,
@@ -79,14 +64,6 @@ public static class ContextRuntimeBuilder
             options.EmbeddingProvider,
             options.VectorStore,
             options.RetrievalTraceStore,
-            attentionScorer,
-            attentionProfileExperiments: options.AttentionProfileExperiments,
-            attentionLearningStore: options.AttentionLearningStore,
-            attentionRerankOptions: options.AttentionRerankOptions,
-            rankerShadowOptions: options.LifecycleAwareRankerShadowOptions,
-            rankerShadowTraceBuilder: options.LifecycleAwareRankerTraceBuilder,
-            graphExpansionShadowOptions: options.GraphExpansionShadowOptions,
-            graphExpansionShadowTraceBuilder: graphExpansionShadowTraceBuilder,
             decisionTraceStore: options.DecisionTraceStore);
 
         return new RuntimeServices
@@ -98,10 +75,7 @@ public static class ContextRuntimeBuilder
             RelationExpansionProfileRegistry = relationExpansionProfileRegistry,
             RelationExpansionPolicyValidator = relationExpansionValidator,
             RelationTraversalEngine = relationTraversalEngine,
-            RelationExpansionPreviewService = relationExpansionPreviewService,
-            GraphExpansionApplyPolicy = graphExpansionApplyPolicy,
-            AttentionScorer = attentionScorer,
-            GraphExpansionShadowTraceBuilder = graphExpansionShadowTraceBuilder
+            RelationExpansionPreviewService = relationExpansionPreviewService
         };
     }
 }

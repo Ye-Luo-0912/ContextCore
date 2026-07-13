@@ -7,8 +7,6 @@ using ContextCore.ControlRoom.Models;
 using ContextCore.Client;
 using ContextCore.Core;
 using ContextCore.Core.Services;
-using ContextCore.Runtime;
-using ContextCore.Core.Services.Attention;
 using ContextCore.Core.Services.Graph;
 using ContextCore.Core.Services.Retrieval;
 using ContextCore.Core.Services.Storage;
@@ -16,6 +14,7 @@ using ContextCore.Embedding;
 using ContextCore.Embedding.Providers;
 using ContextCore.ModelGateway;
 using ContextCore.ModelGateway.Infrastructure;
+using ContextCore.Runtime;
 using ContextCore.Storage.FileSystem;
 using ContextCore.Storage.FileSystem.Stores;
 using ContextCore.Storage.InMemory;
@@ -102,9 +101,7 @@ public sealed partial class ControlRoomService
                 PromotionRecordStore = memoryStore,
                 WorkingMemoryService = memoryStore,
                 ShortTermMemoryStore = new InMemoryShortTermMemoryStore(new ShortTermMemoryPolicy()),
-                LearningStore = new InMemoryContextLearningStore(),
-                GraphExpansionApplyOptions = graphExpansionApplyOptions,
-                AttentionRerankOptions = attentionRerankOptions
+                LearningStore = new InMemoryContextLearningStore()
             });
 
             return new ControlRoomState
@@ -184,9 +181,7 @@ public sealed partial class ControlRoomService
             PromotionRecordStore = fileMemoryStore,
             WorkingMemoryService = fileMemoryStore,
             ShortTermMemoryStore = new InMemoryShortTermMemoryStore(new ShortTermMemoryPolicy()),
-            LearningStore = new InMemoryContextLearningStore(),
-            GraphExpansionApplyOptions = graphExpansionApplyOptions,
-            AttentionRerankOptions = attentionRerankOptions
+            LearningStore = new InMemoryContextLearningStore()
         });
 
         return new ControlRoomState

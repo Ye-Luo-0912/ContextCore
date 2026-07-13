@@ -1,6 +1,5 @@
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
-using ContextCore.Core.Services.Graph;
 
 namespace ContextCore.Core;
 
@@ -97,7 +96,7 @@ internal static class PackageMetadataBuilder
             $"lifecycle={contribution.RiskChecks.LifecycleRiskCount};" +
             $"missingEvidence={contribution.RiskChecks.MissingEvidenceCount}";
         metadata["graphExpansionSource"] = contribution.Applied
-            ? GraphExpansionApplyPolicy.SourceMarker
+            ? "graph-expansion-apply"
             : string.Empty;
         metadata["graphExpansionAddedItemCount"] = contribution.AddedItems.Count.ToString();
         metadata["graphExpansionAddedAuditContextItems"] = contribution.AddedItems

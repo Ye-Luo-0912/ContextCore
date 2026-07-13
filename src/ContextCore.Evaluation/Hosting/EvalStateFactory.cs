@@ -5,7 +5,6 @@ using ContextCore.Evaluation.Hosting;
 using ContextCore.Evaluation.Models;
 using ContextCore.Core;
 using ContextCore.Core.Services;
-using ContextCore.Core.Services.Attention;
 using ContextCore.Core.Services.Graph;
 using ContextCore.Core.Services.Planning;
 using ContextCore.Core.Services.Retrieval;
@@ -72,9 +71,7 @@ internal static class EvalStateFactory
             PromotionRecordStore = memoryStore,
             WorkingMemoryService = memoryStore,
             ShortTermMemoryStore = new InMemoryShortTermMemoryStore(new ShortTermMemoryPolicy()),
-            LearningStore = new InMemoryContextLearningStore(),
-            GraphExpansionApplyOptions = graphExpansionApplyOptions,
-            AttentionRerankOptions = attentionRerankOptions
+            LearningStore = new InMemoryContextLearningStore()
         });
 
         return new EvalState

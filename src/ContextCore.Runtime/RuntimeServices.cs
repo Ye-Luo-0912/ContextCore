@@ -1,7 +1,5 @@
-using ContextCore.Abstractions.Models;
 using ContextCore.Core;
 using ContextCore.Core.Services;
-using ContextCore.Core.Services.Attention;
 using ContextCore.Core.Services.Graph;
 using ContextCore.Core.Services.Planning;
 using ContextCore.Core.Services.Retrieval;
@@ -30,13 +28,4 @@ public sealed class RuntimeServices
     public required RelationExpansionPolicyValidator RelationExpansionPolicyValidator { get; init; }
     public required RelationTraversalEngine RelationTraversalEngine { get; init; }
     public required RelationExpansionPreviewService RelationExpansionPreviewService { get; init; }
-    public required GraphExpansionApplyPolicy GraphExpansionApplyPolicy { get; init; }
-
-    // --- 注意力 ---
-
-    public required RuleBasedContextAttentionScorer AttentionScorer { get; init; }
-
-    // --- shadow trace builders（依赖主链中间服务，由 builder 内部构造）---
-
-    public required GraphExpansionShadowTraceBuilder GraphExpansionShadowTraceBuilder { get; init; }
 }
