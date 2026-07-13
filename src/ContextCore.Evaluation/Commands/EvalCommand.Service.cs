@@ -8,6 +8,7 @@ using ContextCore.Client;
 using ContextCore.Core;
 using ContextCore.Core.Services;
 using ContextCore.Evaluation.Runners;
+using ContextCore.Evaluation.Services;
 using ContextCore.Core.Services.Graph;
 using ContextCore.Core.Services.Planning;
 using ContextCore.Core.Services.Storage;
@@ -34,12 +35,13 @@ public static partial class EvalCommand
         Directory.CreateDirectory(outputDirectory);
 
         var service = new FoundationStatusService(Directory.GetCurrentDirectory());
+        var reportBuilder = new FoundationReportBuilder(service, Directory.GetCurrentDirectory());
         var security = ReadServiceSecurityConfigurationSnapshot();
         var statusEnvelope = await service.GetStatusEnvelopeAsync("foundation/status", cancellationToken)
             .ConfigureAwait(false);
         var reportsEnvelope = await service.GetReportNavigationEnvelopeAsync(cancellationToken)
             .ConfigureAwait(false);
-        var securityDiagnostics = service.BuildSecurityDiagnostics(
+        var securityDiagnostics = FoundationReportBuilder.BuildSecurityDiagnostics(
             security.RequireApiKey,
             security.ApiKeyConfigured,
             security.DevelopmentMode,
@@ -49,7 +51,7 @@ public static partial class EvalCommand
             ],
             security.SecretProbe);
         var productionMode = CommandHelpers.HasFlag(args, "--production");
-        var report = await service.BuildContractReportAsync(securityDiagnostics, productionMode, cancellationToken)
+        var report = await reportBuilder.BuildContractReportAsync(securityDiagnostics, productionMode, cancellationToken)
             .ConfigureAwait(false);
 
         var fileName = string.Equals(subcommand, "service-api-contract-freeze-gate", StringComparison.OrdinalIgnoreCase)
@@ -59,7 +61,7 @@ public static partial class EvalCommand
         var markdownPath = Path.Combine(outputDirectory, $"{fileName}.md");
         await WriteTextAsync(JsonSerializer.Serialize(report, JsonOptions), jsonPath, cancellationToken)
             .ConfigureAwait(false);
-        await WriteTextAsync(FoundationStatusService.BuildContractMarkdown(report), markdownPath, cancellationToken)
+        await WriteTextAsync(FoundationReportMarkdownRenderer.BuildContractMarkdown(report), markdownPath, cancellationToken)
             .ConfigureAwait(false);
 
         Console.WriteLine($"[Eval] Service API contract written: {jsonPath}");
@@ -73,14 +75,15 @@ public static partial class EvalCommand
         Directory.CreateDirectory(outputDirectory);
 
         var service = new FoundationStatusService(Directory.GetCurrentDirectory());
-        var report = await service.BuildServiceFoundationFreezeReportAsync(cancellationToken)
+        var reportBuilder = new FoundationReportBuilder(service, Directory.GetCurrentDirectory());
+        var report = await reportBuilder.BuildServiceFoundationFreezeReportAsync(cancellationToken)
             .ConfigureAwait(false);
 
         var jsonPath = Path.Combine(outputDirectory, "service-foundation-freeze-gate.json");
         var markdownPath = Path.Combine(outputDirectory, "service-foundation-freeze-gate.md");
         await WriteTextAsync(JsonSerializer.Serialize(report, JsonOptions), jsonPath, cancellationToken)
             .ConfigureAwait(false);
-        await WriteTextAsync(FoundationStatusService.BuildServiceFoundationFreezeMarkdown(report), markdownPath, cancellationToken)
+        await WriteTextAsync(FoundationReportMarkdownRenderer.BuildServiceFoundationFreezeMarkdown(report), markdownPath, cancellationToken)
             .ConfigureAwait(false);
 
         Console.WriteLine($"[Eval] Service foundation freeze gate written: {jsonPath}");

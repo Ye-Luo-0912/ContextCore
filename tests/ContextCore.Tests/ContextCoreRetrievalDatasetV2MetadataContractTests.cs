@@ -1,6 +1,7 @@
 using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services;
 using ContextCore.Evaluation.Models;
+using ContextCore.Evaluation.Services;
 using System.Text.Json;
 using ContextCore.Evaluation.Learning;
 using ContextCore.Evaluation.Vector.Dataset;
@@ -930,9 +931,7 @@ public class ContextCoreRetrievalDatasetV2MetadataContractTests
     [TestMethod]
     public void FoundationApiSecurityDiagnostics_ShouldDetectSecretAndAbsolutePathLeaks()
     {
-        var service = new FoundationStatusService(Directory.GetCurrentDirectory());
-
-        var report = service.BuildSecurityDiagnostics(
+        var report = FoundationReportBuilder.BuildSecurityDiagnostics(
             requireApiKey: true,
             apiKeyConfigured: true,
             developmentMode: false,
