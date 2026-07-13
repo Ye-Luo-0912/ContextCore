@@ -1,6 +1,6 @@
 # ContextCore 项目路线图
 
-> 最近更新：P1 ControlRoom 历史 Postgres 报告矩阵删除 + P2 Evaluation/Core 不可达切片删除 + P3 DTO-R5 孤立类型收口 + P4 FoundationStatusService 收口 + P3-deferred eval-only DTO 迁移 + 新任务1 不可达代码删除 + 新任务2 Planning 功能退回空壳 + 新任务3 撤出 Runtime Shadow/Experiment 能力（2026-07-13）
+> 最近更新：R7-0 删除虚假 Graph gate 和 Attention 零值证据（-5,034 行）（2026-07-14）
 
 > 本文件是 ContextCore 的**唯一当前路线图**。docs/ 下的 freeze / report / audit / plan 类文档均为历史快照，仅供回溯，不作为设计依据。
 
@@ -24,11 +24,11 @@
 
 ---
 
-## 当前验收指标（2026-07-13）
+## 当前验收指标（2026-07-14）
 
 | 指标 | 当前值 | 目标 |
 |------|--------|------|
-| 生产代码总行数 | ~123,307 | < 220k |
+| 生产代码总行数 | ~118,273 | < 220k |
 | Evaluation 代码行数 | ~23,226 | < 70k |
 | Abstractions 代码行数 | ~14,731 | 跨层契约 |
 | ControlRoom 代码行数 | ~16,683 | < 20k |
@@ -36,11 +36,36 @@
 | EvalCommand.cs 单文件行数 | 7,987 | P1-5 已完成 |
 | FoundationStatusService.cs 行数 | 606 | P4 已完成 |
 | 构建 | 0 警告 / 0 错误 | 0 / 0 |
-| 测试 | 949 通过 / 0 失败 | 0 失败 |
+| 测试 | 934 通过 / 0 失败 | 0 失败 |
 
 ---
 
 ## 已完成工作
+
+### R7-0：删除虚假 Graph gate 和 Attention 零值证据（commit `5e97f01`）
+
+R7-0 阻塞项：移除基于错误报告继续决策的虚假 gate 和零值证据，30 文件变更，+20/-5054 行（净减 5,034 行）。
+
+**Graph gate 链清理**：
+- 删除 `GraphExpansionOptInComparisonRunner`（572 行虚假 Graph gate 实现）
+- 删除 `RelationGraphDtos.cs` 中 11 个 Graph gate 类型（GraphExpansionShadowOptions/ApplyOptions/ApplyRiskChecks 等）
+- 删除 Core 项目中 GraphExpansionSectionContribution 引用链（GraphExpansionCoordinator/PackageMetadataBuilder/BasicContextPackageBuilder 的 stub 方法和死字段）
+
+**Attention 零值证据清理**：
+- 删除 `ContextAttentionDtos.cs`（722 行）
+- 删除 `AttentionProfileSelectionRunner`/`AttentionProfileSelectionDtos`/`GuardedAttentionEvalDtos`
+- 删除 `RetrievalDtos.cs` 中 `ContextRetrievalTrace` 的 6 个零值字段（AttentionScores/AttentionShadowReport/AttentionProfileComparison/AttentionRerankComparison/RankerShadowTrace/GraphExpansionShadowTrace）+ 5 个死类型
+- 删除 `EvalDtos.cs` 中 Attention 类（6 个）和 ContextEvalResult/Report/ModeSummary 中的 Attention 字段块
+- 清理 PostgresRetrievalTraceStore、ControlRoomService、ContextEvalRunner、Service Program.cs、EvalCommand 中的零值赋值
+- 清理 Client 中 RankerShadow/GraphExpansionShadow 客户端方法
+
+**测试清理**：
+- 删除 `ContextCoreAttentionProfileSelectionTests`（整个文件）
+- 精简 `ContextCoreRelationExpansionShadowEvalTests`（424→107 行，保留 3 个有效测试）
+- 删除 `ContextCoreEvalRunnerTests` 中 Attention 诊断测试
+- 删除 `ContextCoreClientTests` 中 RankerShadow/GraphExpansionShadow 客户端测试
+
+验证：构建 0 警告 0 错误，测试 934 通过 0 失败。
 
 ### 新任务3：撤出 Runtime 中 Shadow/Experiment 能力（commit `28f9d75` + `142dca5` + `f9e1115`）
 
@@ -229,6 +254,25 @@
 ---
 
 ## 下一阶段任务
+
+### R7-1：DTO-R6 级联收口（待执行）
+
+当前 Abstractions 仍有 30 个 DTO 文件、约 14,350 行、743 个 public 类型。初筛 112 个只被 Evaluation/ControlRoom 使用，另有 197 个缺少外部直接消费者需逐类型复核。
+
+优先删除：
+- `ContextAttentionDtos.cs`（R7-0 已完成）
+- `RetrievalDtos.cs` 中 Ranker/Graph/Attention Shadow 区块（R7-0 已部分完成，剩 LifecycleAwareRankerShadow 系列）
+- `ContextLearningDtos.cs` 中 Router Shadow 区块
+- `RelationGraphDtos.cs` 中 Graph Shadow/Apply 区块（R7-0 已部分完成）
+- `EvalDtos.cs` 中已失效的 lifecycle shadow 类型（R7-0 已部分完成，剩 LifecycleAwareRankerShadow 系列）
+- `ArtifactDtos.cs` 中 Shadow trace counters（TraceLayoutDiagnostics 的 RankerShadowTraceCount/GraphShadowTraceCount/VectorShadowTraceCount）
+
+### R7-2：机械不可达删除（待执行）
+
+静态扫描发现约 1,284 行候选：
+- 6 个无生产消费者文件（约 950 行）：RuntimeRelationIntentDeriver、HybridCandidateUnionPolicy、VectorLifecycleSidecarResolver、QueryAnchorExtractor、AnchorCandidateProvider、CanonicalRuntimeAnchorResolver、RouterIntentDatasetProvider、AsyncTraceStores、NoOpContextRetrievalAdapter、UnavailableContextCompressor
+- 4 个仅测试消费者文件（约 334 行）
+- 需先检查 public API、反射和序列化后再删
 
 ### DTO-R4 剩余部分（暂缓，高风险）
 
