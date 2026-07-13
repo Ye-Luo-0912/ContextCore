@@ -1,6 +1,6 @@
 # ContextCore 项目路线图
 
-> 最近更新：P1 ControlRoom 历史 Postgres 报告矩阵删除 + P2 Evaluation/Core 不可达切片删除 + P3 DTO-R5 孤立类型收口 + P4 FoundationStatusService 孤立方法删除 + 别名链删除 + 仅测试调用方法删除（2026-07-13）
+> 最近更新：P1 ControlRoom 历史 Postgres 报告矩阵删除 + P2 Evaluation/Core 不可达切片删除 + P3 DTO-R5 孤立类型收口 + P4 FoundationStatusService 孤立方法删除 + 别名链删除 + 仅测试调用方法删除 + 跨项目迁移（2026-07-13）
 
 > 本文件是 ContextCore 的**唯一当前路线图**。docs/ 下的 freeze / report / audit / plan 类文档均为历史快照，仅供回溯，不作为设计依据。
 
@@ -28,11 +28,11 @@
 
 | 指标 | 当前值 | 目标 |
 |------|--------|------|
-| 生产代码总行数 | ~143,200 | < 220k |
-| Evaluation 代码行数 | ~28,000 | < 70k |
+| 生产代码总行数 | ~143,300 | < 220k |
+| Evaluation 代码行数 | ~28,900 | < 70k |
 | ControlRoom 代码行数 | ~17,500 | < 20k |
 | EvalCommand.cs 单文件行数 | 7,987 | P1-5 已完成 |
-| FoundationStatusService.cs 行数 | 1,245 | P4 进行中 |
+| FoundationStatusService.cs 行数 | 606 | P4 已完成 |
 | 构建 | 0 警告 / 0 错误 | 0 / 0 |
 | 测试 | 1130 通过 / 0 失败 | 0 失败 |
 
@@ -91,6 +91,13 @@
 - `BuildContractReport` 和 `BuildServiceFoundationFreezeReport` 降级为 private（仅被 Async 版本内部调用）
 - 删除 24 个引用已删除方法的测试方法 + 13 个孤立测试辅助方法
 - `FoundationStatusService.cs` 从 2,038 行减到 1,245 行（-793 行）
+- 0 警告 0 错误，1130 测试通过
+
+**跨项目迁移**：将 5 个历史产物解析方法从 ContextCore.Core 迁移到 ContextCore.Evaluation：
+- 新建 `src/ContextCore.Evaluation/Services/FoundationReportMarkdownRenderer.cs` — 迁移 `BuildContractMarkdown`、`BuildServiceFoundationFreezeMarkdown`、`AppendList`
+- 新建 `src/ContextCore.Evaluation/Services/FoundationReportBuilder.cs` — 迁移 `BuildSecurityDiagnostics`、`BuildContractReportAsync`+`BuildContractReport`、`BuildServiceFoundationFreezeReportAsync`+`BuildServiceFoundationFreezeReport` 及相关私有辅助方法
+- `FoundationStatusService.cs` 仅保留实时健康方法（GetStatusEnvelopeAsync、GetStatusAsync、报告导航等），从 1,245 行减到 606 行（-639 行）
+- 修改 `EvalCommand.Service.cs` 和测试文件调用方
 - 0 警告 0 错误，1130 测试通过
 
 ### 删除 tests-only Postgres runner（commit `9fa2b48`）
@@ -184,7 +191,7 @@
 - **Service DI 收敛到 ContextRuntimeBuilder** — Service ASP.NET DI 仍由 CoreExtensions.AddContextCore 自行注册 80+ 服务。风险较高（生产路径），需单独评估。
 - ~~**IEvalState 上帝接口拆分**~~ — 已完成：已拆分为 `IEvalStateCore` / `IEvalStateServiceMode`（DTO-R3 已迁移到 Evaluation.Hosting）。
 - **eval-only DTO 迁移** — P5-1 遗留，部分 eval-only DTO 仍在非 Evaluation 项目中。P3 已删除 83 个孤立 DTO 类型，剩余 eval-only 模型迁回 ContextCore.Evaluation/Models 待后续处理。
-- **P4 FoundationStatusService 跨项目迁移** — 别名链已删除 + 11 个仅测试调用方法已删除 + 8 个孤立私有方法已删除。剩余：实时健康入 Service、历史解析入 Evaluation。涉及跨项目改动，需单独评估。
+- ~~**P4 FoundationStatusService 跨项目迁移**~~ — 已完成：别名链删除 + 11 个仅测试调用方法删除 + 8 个孤立私有方法删除 + 5 个历史产物解析方法迁移到 Evaluation。FoundationStatusService 从 2,510 行减到 606 行（-76%）。
 
 ---
 
