@@ -1,5 +1,6 @@
 using System.Text.Json;
 using ContextCore.Abstractions.Models;
+using ContextCore.Evaluation.Models;
 using ContextCore.Core.Services;
 
 namespace ContextCore.Evaluation.Services;

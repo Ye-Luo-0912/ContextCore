@@ -1,5 +1,6 @@
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
+using ContextCore.Evaluation.Models;
 using ContextCore.Core.Services;
 using ContextCore.Evaluation;
 using ContextCore.Evaluation.Runners;

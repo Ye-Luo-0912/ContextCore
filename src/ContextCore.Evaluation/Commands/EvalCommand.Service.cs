@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
+using ContextCore.Evaluation.Models;
 using ContextCore.Client;
 using ContextCore.Core;
 using ContextCore.Core.Services;
