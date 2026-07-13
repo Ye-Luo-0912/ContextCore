@@ -1,7 +1,8 @@
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
+using ContextCore.Core.Services.Graph;
 
-namespace ContextCore.Core.Services.Graph;
+namespace ContextCore.Evaluation.Services;
 
 /// <summary>根据 preview 结果构建 relation expansion profile shadow 报告。</summary>
 public sealed class RelationExpansionProfileShadowReportBuilder

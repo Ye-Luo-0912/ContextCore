@@ -6,8 +6,7 @@ using ContextCore.Storage.InMemory;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// 验证 FileRouterIntentDatasetProvider 的加载、错误处理和可观测性，
-/// 以及 RouterIntentShadowService 的数据集信息暴露。
+/// 验证 FileRouterIntentDatasetProvider 的加载、错误处理和可观测性。
 /// </summary>
 [TestClass]
 [TestCategory("Learning")]
