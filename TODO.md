@@ -1,6 +1,6 @@
 # ContextCore 项目路线图
 
-> 最近更新：DTO-R1~R4 报告 DTO 治理 + P1-5 EvalCommand 分发重构 + P0 并发锁修复 + P2 治理文档清理（2026-07-13）
+> 最近更新：删除 tests-only Postgres runner + ControlRoom 历史报告链折叠 + DTO-R1~R4 报告 DTO 治理 + P1-5 EvalCommand 分发重构 + P0 并发锁修复 + P2 治理文档清理（2026-07-13）
 
 > 本文件是 ContextCore 的**唯一当前路线图**。docs/ 下的 freeze / report / audit / plan 类文档均为历史快照，仅供回溯，不作为设计依据。
 
@@ -28,16 +28,36 @@
 
 | 指标 | 当前值 | 目标 |
 |------|--------|------|
-| 生产代码总行数 | ~175,000 | < 220k |
-| Evaluation 代码行数 | ~52,000 | < 70k |
-| ControlRoom 代码行数 | ~22,000 | < 20k（接近） |
+| 生产代码总行数 | ~163,000 | < 220k |
+| Evaluation 代码行数 | ~45,000 | < 70k |
+| ControlRoom 代码行数 | ~18,000 | < 20k |
 | EvalCommand.cs 单文件行数 | 7,987 | P1-5 已完成 |
 | 构建 | 0 警告 / 0 错误 | 0 / 0 |
-| 测试 | 1323 通过 / 0 失败 | 0 失败 |
+| 测试 | 1294 通过 / 0 失败 | 0 失败 |
 
 ---
 
 ## 已完成工作
+
+### 删除 tests-only Postgres runner（commit `9fa2b48`）
+
+删除两个已从 CLI 退役的 Postgres eval runner 及其级联依赖：
+- `PostgresJobQueueProviderEvalRunner.cs`（2740 行）+ `PostgresLearningFeedbackProviderEvalRunner.cs`（2605 行）
+- 3 个伴生辅助文件（LearningFeedbackProviderRouter / Coordinators / DiagnosticsBuilder）
+- 7 个 eval-only DTO（保留 2 个 FreezeGate DTO 被 FoundationStatusService 生产消费）
+- ControlRoom 4 文件清理（snapshot 属性 / Build 方法 / wiring / renderer 参数）
+- 29 个 runner-only 测试方法
+- 总计 -7497 行，0 警告 0 错误，1294 测试通过
+
+### ControlRoom 历史报告链折叠（commit `c825eda`）
+
+引入 `OperationalReportSnapshot` 紧凑模型，将约 43 个 V4/V5 历史 sweep/freeze/repair/audit 报告折叠为统一列表：
+- `ServiceVectorShadowQualitySummary` 属性从 ~400 减到 ~60 + OperationalReports 列表
+- `LoadVectorShadowQualitySummary` 从 1465 行减到 ~400 行
+- `TryLoad*` 方法从 59 个减到 ~12 个
+- `RenderVectorIndex` 从 1173 行减到 ~400 行
+- 保留约 13 个当前运维能力渲染分支（index diagnostics / coverage / sweep 核心 / residual risk / lifecycle coverage / provider / readiness / hybrid preview/freeze/audit / reindex / actions）
+- 总计 -4057 行，0 警告 0 错误，1294 测试通过
 
 ### DTO 报告治理（DTO-R1 ~ DTO-R4）
 
