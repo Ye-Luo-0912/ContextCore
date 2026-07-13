@@ -37,11 +37,6 @@ public static partial class EvalCommand
         // === retrieval ===
         Reg("retrieval", "  eval retrieval [--out <path.json>]", ExecuteRetrievalDispatchAsync);
 
-        // === attention ===
-        Reg("attention-profile-selection",
-            "  eval attention-profile-selection [--baseline <path>] [--extended <path>] [--out <path.json>] [--md-out <path.md>]",
-            (service, args, sub, ct) => ExecuteAttentionProfileSelectionAsync(args, ct));
-
         // === learning ===
         Reg("export-learning-features",
             "  eval export-learning-features [--out-dir <dir>] [--workspace <id>] [--collection <id>] [--eval-reports <csv>]",
@@ -54,12 +49,6 @@ public static partial class EvalCommand
             (service, args, sub, ct) => ExecuteLearningRankerAnalysisAsync(sub, args, ct));
 
         // === graph / relation ===
-        Reg("graph-expansion-optin-comparison",
-            "  eval graph-expansion-optin-comparison [--category <name>] [--out-a3 <path.json>] [--out-extended <path.json>] [--md-out <path.md>]",
-            (service, args, sub, ct) => ExecuteGraphExpansionOptInComparisonAsync(args, ct));
-        Reg("graph-expansion-guarded-optin-gate",
-            "  eval graph-expansion-guarded-optin-gate [--category <name>] [--out-a3 <path.json>] [--out-extended <path.json>] [--md-out <path.md>] [--gate-out <path.json>] [--gate-md-out <path.md>]",
-            (service, args, sub, ct) => ExecuteGraphExpansionGuardedOptInGateAsync(args, ct));
         Reg("relation-expansion-profile-shadow",
             "  eval relation-expansion-profile-shadow [--out <path.json>] [--md-out <path.md>]",
             (service, args, sub, ct) => ExecuteRelationExpansionProfileShadowAsync(args, ct));

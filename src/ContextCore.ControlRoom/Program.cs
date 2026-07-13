@@ -567,8 +567,6 @@ static ControlRoomState CreateState(Cli parsed, WorkspaceSelection selection)
         parsed.Mode,
         parsed.ServiceBaseUrl,
         serviceHttpClient: null,
-        attentionRerankOptions: null,
-        graphExpansionApplyOptions: null,
         apiKey: parsed.ApiKey,
         apiKeyHeaderName: parsed.ApiKeyHeaderName);
 }

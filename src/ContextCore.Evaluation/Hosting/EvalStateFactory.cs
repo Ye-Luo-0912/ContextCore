@@ -27,9 +27,7 @@ internal static class EvalStateFactory
 {
     public static IEvalStateServiceMode CreateInMemoryState(
         string workspaceId,
-        string collectionId,
-        RetrievalAttentionRerankOptions? attentionRerankOptions = null,
-        GraphExpansionApplyOptions? graphExpansionApplyOptions = null)
+        string collectionId)
     {
         var resolvedRootPath = FileStorageOptions.ResolveRootPath("eval");
 

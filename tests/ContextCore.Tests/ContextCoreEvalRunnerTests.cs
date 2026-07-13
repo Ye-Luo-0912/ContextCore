@@ -55,7 +55,6 @@ public sealed class ContextCoreEvalRunnerTests
             Assert.AreEqual(modeResults.Length, summary.TotalSamples);
             Assert.AreEqual(modeResults.Count(result => result.Succeeded) / (double)modeResults.Length, summary.PassRate, 0.0001);
             Assert.AreEqual(modeResults.Average(result => result.RetrievalRecall10), summary.AvgRetrievalRecall10, 0.0001);
-            Assert.AreEqual(modeResults.Average(result => result.AttentionMrr), summary.AvgAttentionMrr, 0.0001);
             Assert.AreEqual(modeResults.Average(result => result.PackageTokenWasteRatio), summary.AvgPackageWasteRatio, 0.0001);
         }
 
@@ -158,71 +157,6 @@ public sealed class ContextCoreEvalRunnerTests
                 Directory.Delete(root, recursive: true);
             }
         }
-    }
-
-    [TestMethod]
-    public void ContextEvalRunner_ShouldAggregateAttentionProfileDiagnostics()
-    {
-        var report = BuildReportForDiagnostics([
-            new ContextEvalResult
-            {
-                SampleId = "diagnostic-001",
-                Mode = "ChatMode",
-                Succeeded = true,
-                Status = "Passed",
-                AttentionProfiles =
-                [
-                    new ContextEvalAttentionProfileResult
-                    {
-                        ProfileId = "conservative-v1",
-                        PolicyVersion = "context-attention-shadow-policy/conservative-v1",
-                        CurrentMrr = 0.5,
-                        AttentionMrr = 0.25,
-                        AttentionRecall3 = 0,
-                        AttentionRecall5 = 1,
-                        Regressed = true,
-                        WouldChangeSelectedSet = true,
-                        MustHitDemotedCount = 1,
-                        MustNotHitPromotedCount = 2,
-                        MustNotHitWouldBeSelectedCount = 1,
-                        SelectedSetChangeRatio = 0.5
-                    }
-                ]
-            },
-            new ContextEvalResult
-            {
-                SampleId = "diagnostic-002",
-                Mode = "ProjectMode",
-                Succeeded = true,
-                Status = "Passed",
-                AttentionProfiles =
-                [
-                    new ContextEvalAttentionProfileResult
-                    {
-                        ProfileId = "conservative-v1",
-                        PolicyVersion = "context-attention-shadow-policy/conservative-v1",
-                        CurrentMrr = 0.25,
-                        AttentionMrr = 0.5,
-                        AttentionRecall3 = 1,
-                        AttentionRecall5 = 1,
-                        Improved = true,
-                        SelectedSetChangeRatio = 0
-                    }
-                ]
-            }
-        ]);
-
-        var summary = report.AttentionProfileSummaries.Single();
-        Assert.AreEqual("conservative-v1", summary.ProfileId);
-        Assert.AreEqual(2, summary.SampleCount);
-        Assert.AreEqual(1, summary.ImprovedSamples);
-        Assert.AreEqual(1, summary.RegressedSamples);
-        Assert.AreEqual(2, summary.MustNotHitPromotedCount);
-        Assert.AreEqual(2, summary.CategoryBreakdown.Count);
-        Assert.AreEqual(1, report.AttentionDiagnostics.TopRegressedSamples.Count);
-        Assert.AreEqual(1, report.AttentionDiagnostics.MustHitDemotedSamples.Count);
-        Assert.AreEqual(1, report.AttentionDiagnostics.MustNotHitPromotedSamples.Count);
-        Assert.AreEqual(1, report.AttentionDiagnostics.SelectedSetChangedSamples.Count);
     }
 
     [TestMethod]
@@ -477,15 +411,6 @@ public sealed class ContextCoreEvalRunnerTests
         var summary = report.ModeSummaries.FirstOrDefault(item => item.Mode == mode);
         Assert.IsNotNull(summary, $"缺少 {mode} 的模式汇总。");
         Assert.IsTrue(summary.TotalSamples >= minimum, $"{mode} 样本数不足，当前 {summary.TotalSamples}，最低要求 {minimum}。");
-    }
-
-    private static ContextEvalReport BuildReportForDiagnostics(IReadOnlyList<ContextEvalResult> results)
-    {
-        var method = typeof(ContextEvalRunner).GetMethod(
-            "BuildReport",
-            System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic);
-        Assert.IsNotNull(method);
-        return (ContextEvalReport)method.Invoke(null, [results])!;
     }
 
     private static readonly JsonSerializerOptions EvalJsonOptions = new(JsonSerializerDefaults.Web)

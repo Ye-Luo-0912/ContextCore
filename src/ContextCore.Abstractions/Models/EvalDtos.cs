@@ -81,19 +81,6 @@ public sealed class ContextEvalResult
     public int MustNotHitCount { get; init; }
     public int MustNotHitRecalledCount { get; init; }
 
-    // Attention Shadow Metrics
-    public double AttentionMrr { get; init; }
-    public double AttentionRecall3 { get; init; }
-    public double AttentionRecall5 { get; init; }
-    public bool AttentionImproved { get; init; }
-    public bool AttentionRegressed { get; init; }
-    public bool AttentionWouldChangeSelectedSet { get; init; }
-    public int MustNotHitPromotedCount { get; init; }
-    public double AttentionSelectedSetChangeRatio { get; init; }
-    public IReadOnlyList<ContextEvalAttentionProfileResult> AttentionProfiles { get; init; } = Array.Empty<ContextEvalAttentionProfileResult>();
-
-    public AttentionRerankComparisonReport AttentionRerankComparison { get; init; } = new();
-
     // Package Metrics
     public double PackageTokenWasteRatio { get; init; }
     public double UnusedBudgetRatio { get; init; }
@@ -288,14 +275,6 @@ public sealed class ContextEvalReport
 
     public double AvgRetrievalNoiseViolationRatio { get; init; }
 
-    public double AvgAttentionMrr { get; init; }
-    public double AvgAttentionRecall3 { get; init; }
-    public double AvgAttentionRecall5 { get; init; }
-    public int AttentionImprovedSamples { get; init; }
-    public int AttentionRegressedSamples { get; init; }
-    public int MustNotHitPromotedCount { get; init; }
-    public double SelectedSetChangeRatio { get; init; }
-
     public double AvgPackageWasteRatio { get; init; }
     public double AvgUnusedBudgetRatio { get; init; }
     public double AvgMustHitTokenShare { get; init; }
@@ -315,10 +294,6 @@ public sealed class ContextEvalReport
 
     /// <summary>按 Chat/Project/Novel/Automation/Coding 等场景聚合的质量指标。</summary>
     public IReadOnlyList<ContextEvalModeSummary> ModeSummaries { get; init; } = Array.Empty<ContextEvalModeSummary>();
-
-    public IReadOnlyList<ContextEvalAttentionProfileSummary> AttentionProfileSummaries { get; init; } = Array.Empty<ContextEvalAttentionProfileSummary>();
-
-    public ContextEvalAttentionDiagnostics AttentionDiagnostics { get; init; } = new();
 
     public IReadOnlyList<ContextEvalResult> Results { get; init; } = Array.Empty<ContextEvalResult>();
 }
@@ -446,13 +421,6 @@ public sealed class ContextEvalModeSummary
     public double AvgRetrievalMrr => AvgRetrievalMrrAnyMustHit;
 
     public double AvgRetrievalNoiseViolationRatio { get; init; }
-    public double AvgAttentionMrr { get; init; }
-    public double AvgAttentionRecall3 { get; init; }
-    public double AvgAttentionRecall5 { get; init; }
-    public int AttentionImprovedSamples { get; init; }
-    public int AttentionRegressedSamples { get; init; }
-    public int MustNotHitPromotedCount { get; init; }
-    public double SelectedSetChangeRatio { get; init; }
     public double AvgPackageWasteRatio { get; init; }
     public double AvgUnusedBudgetRatio { get; init; }
     public double AvgMustHitTokenShare { get; init; }
@@ -465,165 +433,5 @@ public sealed class ContextEvalModeSummary
 
     /// <summary>该模式下的警告来源统计。</summary>
     public Dictionary<string, int> WarningSources { get; init; } = new();
-}
-
-/// <summary>单条样本在某个 attention profile 下的 shadow 指标。</summary>
-public sealed class ContextEvalAttentionProfileResult
-{
-    public string ProfileId { get; init; } = string.Empty;
-
-    public string PolicyVersion { get; init; } = string.Empty;
-
-    public double CurrentMrr { get; init; }
-
-    public double AttentionMrr { get; init; }
-
-    public double AttentionRecall3 { get; init; }
-
-    public double AttentionRecall5 { get; init; }
-
-    public bool Improved { get; init; }
-
-    public bool Regressed { get; init; }
-
-    public bool WouldChangeSelectedSet { get; init; }
-
-    public int MustHitDemotedCount { get; init; }
-
-    public int MustNotHitPromotedCount { get; init; }
-
-    public int MustNotHitWouldBeSelectedCount { get; init; }
-
-    public double SelectedSetChangeRatio { get; init; }
-
-    public IReadOnlyList<ContextEvalAttentionCandidateDiagnostic> CandidateDiagnostics { get; init; } = Array.Empty<ContextEvalAttentionCandidateDiagnostic>();
-}
-
-/// <summary>某个 attention profile 的评测汇总。</summary>
-public sealed class ContextEvalAttentionProfileSummary
-{
-    public string ProfileId { get; init; } = string.Empty;
-
-    public string PolicyVersion { get; init; } = string.Empty;
-
-    public int SampleCount { get; init; }
-
-    public double AvgAttentionMrr { get; init; }
-
-    public double AvgAttentionRecall3 { get; init; }
-
-    public double AvgAttentionRecall5 { get; init; }
-
-    public int ImprovedSamples { get; init; }
-
-    public int RegressedSamples { get; init; }
-
-    public int CurrentMrrOneRegressionCount { get; init; }
-
-    public int MustNotHitPromotedCount { get; init; }
-
-    public double SelectedSetChangeRatio { get; init; }
-
-    public IReadOnlyList<ContextEvalAttentionProfileCategorySummary> CategoryBreakdown { get; init; } = Array.Empty<ContextEvalAttentionProfileCategorySummary>();
-}
-
-/// <summary>某个 profile 在单个评测 mode/category 下的 shadow 汇总。</summary>
-public sealed class ContextEvalAttentionProfileCategorySummary
-{
-    public string Category { get; init; } = string.Empty;
-
-    public int SampleCount { get; init; }
-
-    public double AvgAttentionMrr { get; init; }
-
-    public double AvgAttentionRecall3 { get; init; }
-
-    public double AvgAttentionRecall5 { get; init; }
-
-    public int ImprovedSamples { get; init; }
-
-    public int RegressedSamples { get; init; }
-
-    public int CurrentMrrOneRegressionCount { get; init; }
-
-    public int MustNotHitPromotedCount { get; init; }
-
-    public double SelectedSetChangeRatio { get; init; }
-}
-
-/// <summary>Attention profile 回归与风险诊断摘要。</summary>
-public sealed class ContextEvalAttentionDiagnostics
-{
-    public IReadOnlyList<ContextEvalAttentionDiagnosticSample> TopRegressedSamples { get; init; } = Array.Empty<ContextEvalAttentionDiagnosticSample>();
-
-    public IReadOnlyList<ContextEvalAttentionDiagnosticSample> MustHitDemotedSamples { get; init; } = Array.Empty<ContextEvalAttentionDiagnosticSample>();
-
-    public IReadOnlyList<ContextEvalAttentionDiagnosticSample> MustNotHitPromotedSamples { get; init; } = Array.Empty<ContextEvalAttentionDiagnosticSample>();
-
-    public IReadOnlyList<ContextEvalAttentionDiagnosticSample> SelectedSetChangedSamples { get; init; } = Array.Empty<ContextEvalAttentionDiagnosticSample>();
-}
-
-/// <summary>Attention profile 诊断中的单条样本记录。</summary>
-public sealed class ContextEvalAttentionDiagnosticSample
-{
-    public string ProfileId { get; init; } = string.Empty;
-
-    public string SampleId { get; init; } = string.Empty;
-
-    public string Mode { get; init; } = string.Empty;
-
-    public double CurrentMrr { get; init; }
-
-    public double AttentionMrr { get; init; }
-
-    public double MrrDelta { get; init; }
-
-    public int MustHitDemotedCount { get; init; }
-
-    public int MustNotHitPromotedCount { get; init; }
-
-    public double SelectedSetChangeRatio { get; init; }
-
-    public string Reason { get; init; } = string.Empty;
-
-    public IReadOnlyList<ContextEvalAttentionCandidateDiagnostic> CandidateBreakdown { get; init; } = Array.Empty<ContextEvalAttentionCandidateDiagnostic>();
-}
-
-/// <summary>Attention diagnostics 的候选级 breakdown。</summary>
-public sealed class ContextEvalAttentionCandidateDiagnostic
-{
-    public string CandidateId { get; init; } = string.Empty;
-
-    public string SourceId { get; init; } = string.Empty;
-
-    public int CurrentRank { get; init; }
-
-    public int AttentionRank { get; init; }
-
-    public int RankDelta { get; init; }
-
-    public double CurrentScore { get; init; }
-
-    public double AttentionScore { get; init; }
-
-    public bool SelectedByCurrentPolicy { get; init; }
-
-    public bool WouldBeSelectedByAttention { get; init; }
-
-    public bool IsMustHit { get; init; }
-
-    public bool IsMustNotHit { get; init; }
-
-    public string Lifecycle { get; init; } = string.Empty;
-
-    public IReadOnlyList<string> ChannelSources { get; init; } = Array.Empty<string>();
-
-    public IReadOnlyList<string> RelationPaths { get; init; } = Array.Empty<string>();
-
-    public string ScoreBreakdown { get; init; } = string.Empty;
-
-    public Dictionary<string, double> AttentionScoreBreakdown { get; init; } = new(StringComparer.OrdinalIgnoreCase);
-
-    public IReadOnlyList<string> Reasons { get; init; } = Array.Empty<string>();
 }
 

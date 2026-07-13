@@ -278,131 +278,6 @@ public static partial class EvalCommand
         Console.WriteLine($"[Eval] Extended samples={extendedReport.TotalEvalSamples}; rows={extendedReport.SampleCount}; formalChanged={extendedReport.FormalOutputChanged}; selectedSetChanged={extendedReport.SelectedSetChanged}");
     }
 
-    private static async Task ExecuteGraphExpansionOptInComparisonAsync(
-        IReadOnlyList<string> args,
-        CancellationToken cancellationToken)
-    {
-        var current = Directory.GetCurrentDirectory();
-        var contextsRoot = ResolveContextsRoot();
-        var categoryFilter = CommandHelpers.GetOption(args, "--category")
-            ?? CommandHelpers.GetOption(args, "-c");
-        var a3OutputPath = CommandHelpers.GetOption(args, "--out-a3")
-            ?? Path.Combine(current, "eval", "graph-expansion-optin-comparison-a3.json");
-        var extendedOutputPath = CommandHelpers.GetOption(args, "--out-extended")
-            ?? Path.Combine(current, "eval", "graph-expansion-optin-comparison-extended.json");
-        var markdownPath = CommandHelpers.GetOption(args, "--md-out")
-            ?? Path.Combine(current, "eval", "graph-expansion-optin-comparison.md");
-
-        var runner = new GraphExpansionOptInComparisonRunner();
-        var a3Report = await runner
-            .RunAsync(contextsRoot, categoryFilter, includeSeedBatches: false, cancellationToken)
-            .ConfigureAwait(false);
-        var extendedReport = await runner
-            .RunAsync(contextsRoot, categoryFilter, includeSeedBatches: true, cancellationToken)
-            .ConfigureAwait(false);
-
-        await WriteTextAsync(JsonSerializer.Serialize(a3Report, JsonOptions), a3OutputPath, cancellationToken)
-            .ConfigureAwait(false);
-        await WriteTextAsync(JsonSerializer.Serialize(extendedReport, JsonOptions), extendedOutputPath, cancellationToken)
-            .ConfigureAwait(false);
-        await WriteTextAsync(
-                GraphExpansionOptInComparisonRunner.BuildMarkdownReport(a3Report, extendedReport),
-                markdownPath,
-                cancellationToken)
-            .ConfigureAwait(false);
-
-        Console.WriteLine($"[Eval] Graph expansion opt-in comparison A3 report: {Path.GetFullPath(a3OutputPath)}");
-        Console.WriteLine($"[Eval] Graph expansion opt-in comparison Extended report: {Path.GetFullPath(extendedOutputPath)}");
-        Console.WriteLine($"[Eval] Graph expansion opt-in comparison markdown: {Path.GetFullPath(markdownPath)}");
-        Console.WriteLine($"[Eval] A3 normalChanged={a3Report.NormalSelectedSetChanged}; applied={a3Report.GraphExpansionAppliedCount}; fallback={a3Report.FallbackCount}; riskAfter={a3Report.RiskAfterRoutingCount}");
-        Console.WriteLine($"[Eval] Extended normalChanged={extendedReport.NormalSelectedSetChanged}; applied={extendedReport.GraphExpansionAppliedCount}; fallback={extendedReport.FallbackCount}; riskAfter={extendedReport.RiskAfterRoutingCount}");
-    }
-
-    private static async Task ExecuteGraphExpansionGuardedOptInGateAsync(
-        IReadOnlyList<string> args,
-        CancellationToken cancellationToken)
-    {
-        var current = Directory.GetCurrentDirectory();
-        var contextsRoot = ResolveContextsRoot();
-        var categoryFilter = CommandHelpers.GetOption(args, "--category")
-            ?? CommandHelpers.GetOption(args, "-c");
-        var a3OutputPath = CommandHelpers.GetOption(args, "--out-a3")
-            ?? Path.Combine(current, "eval", "graph-expansion-optin-comparison-a3.json");
-        var extendedOutputPath = CommandHelpers.GetOption(args, "--out-extended")
-            ?? Path.Combine(current, "eval", "graph-expansion-optin-comparison-extended.json");
-        var markdownPath = CommandHelpers.GetOption(args, "--md-out")
-            ?? Path.Combine(current, "eval", "graph-expansion-optin-comparison.md");
-        var gateOutputPath = CommandHelpers.GetOption(args, "--gate-out")
-            ?? Path.Combine(current, "eval", "graph-expansion-guarded-optin-gate.json");
-        var gateMarkdownPath = CommandHelpers.GetOption(args, "--gate-md-out")
-            ?? Path.Combine(current, "eval", "graph-expansion-guarded-optin-gate.md");
-
-        var runner = new GraphExpansionOptInComparisonRunner();
-        var a3Report = await runner
-            .RunAsync(contextsRoot, categoryFilter, includeSeedBatches: false, cancellationToken)
-            .ConfigureAwait(false);
-        var extendedReport = await runner
-            .RunAsync(contextsRoot, categoryFilter, includeSeedBatches: true, cancellationToken)
-            .ConfigureAwait(false);
-        var gateReport = GraphExpansionOptInComparisonRunner.BuildGateReport(a3Report, extendedReport);
-
-        await WriteTextAsync(JsonSerializer.Serialize(a3Report, JsonOptions), a3OutputPath, cancellationToken)
-            .ConfigureAwait(false);
-        await WriteTextAsync(JsonSerializer.Serialize(extendedReport, JsonOptions), extendedOutputPath, cancellationToken)
-            .ConfigureAwait(false);
-        await WriteTextAsync(
-                GraphExpansionOptInComparisonRunner.BuildMarkdownReport(a3Report, extendedReport),
-                markdownPath,
-                cancellationToken)
-            .ConfigureAwait(false);
-        await WriteTextAsync(JsonSerializer.Serialize(gateReport, JsonOptions), gateOutputPath, cancellationToken)
-            .ConfigureAwait(false);
-        await WriteTextAsync(
-                GraphExpansionOptInComparisonRunner.BuildGateMarkdownReport(gateReport),
-                gateMarkdownPath,
-                cancellationToken)
-            .ConfigureAwait(false);
-
-        Console.WriteLine($"[Eval] Graph expansion guarded opt-in gate: {Path.GetFullPath(gateOutputPath)}");
-        Console.WriteLine($"[Eval] Graph expansion guarded opt-in gate markdown: {Path.GetFullPath(gateMarkdownPath)}");
-        foreach (var scope in gateReport.Scopes)
-        {
-            Console.WriteLine($"[Eval] {scope.Scope} gate={scope.Passed}; normalChanged={scope.NormalSelectedSetChanged}; unexpectedWarning={scope.UnexpectedWarningDelta}; wrongSection={scope.WrongSectionRiskCount}; riskAfter={scope.RiskAfterRoutingCount}");
-        }
-
-        if (!gateReport.Passed)
-        {
-            throw new InvalidOperationException(
-                $"Graph expansion guarded opt-in gate failed: {string.Join("; ", gateReport.FailedConditions)}");
-        }
-    }
-
-    private static async Task ExecuteAttentionProfileSelectionAsync(
-        IReadOnlyList<string> args,
-        CancellationToken cancellationToken)
-    {
-        var current = Directory.GetCurrentDirectory();
-        var baselinePath = CommandHelpers.GetOption(args, "--baseline")
-            ?? Path.Combine(current, "eval", "eval-report-attention-phase3-baseline.json");
-        var extendedPath = CommandHelpers.GetOption(args, "--extended")
-            ?? Path.Combine(current, "eval", "eval-report-attention-phase3-extended.json");
-        var outputPath = CommandHelpers.GetOption(args, "--out") ?? CommandHelpers.GetOption(args, "-o")
-            ?? Path.Combine(current, "eval", "attention-profile-selection-report.json");
-        var markdownPath = CommandHelpers.GetOption(args, "--md-out")
-            ?? Path.Combine(current, "docs", "attention-profile-selection-report.md");
-
-        var runner = new AttentionProfileSelectionRunner();
-        var report = await runner.GenerateAsync(baselinePath, extendedPath, cancellationToken).ConfigureAwait(false);
-
-        await WriteJsonAsync(report, outputPath, cancellationToken).ConfigureAwait(false);
-        await WriteTextAsync(AttentionProfileSelectionRunner.BuildMarkdownReport(report), markdownPath, cancellationToken)
-            .ConfigureAwait(false);
-
-        Console.WriteLine($"[Eval] Attention profile selection report: {Path.GetFullPath(outputPath)}");
-        Console.WriteLine($"[Eval] Attention profile selection markdown: {Path.GetFullPath(markdownPath)}");
-        Console.WriteLine($"[Eval] RecommendedProfile={report.RecommendedProfile}; mode={report.RecommendedMode}; risk={report.RiskLevel}; blocking={string.Join(",", report.BlockingIssues)}");
-    }
-
     private static async Task ExportExtendedFailureTriageAsync(
         ContextEvalReport evalReport,
         string outputPath,
@@ -2571,74 +2446,6 @@ public static partial class EvalCommand
     }
 
     private static async Task WriteJsonAsync(
-        AttentionProfileSelectionReport report,
-        string path,
-        CancellationToken cancellationToken)
-    {
-        var fullPath = Path.GetFullPath(path);
-        var dir = Path.GetDirectoryName(fullPath);
-        if (!string.IsNullOrWhiteSpace(dir))
-        {
-            Directory.CreateDirectory(dir);
-        }
-
-        var json = JsonSerializer.Serialize(report, JsonOptions);
-        await File.WriteAllTextAsync(fullPath, json, Encoding.UTF8, cancellationToken).ConfigureAwait(false);
-        await MirrorReportArtifactAsync(path, json, cancellationToken).ConfigureAwait(false);
-    }
-
-    private static async Task WriteJsonAsync(
-        GuardedAttentionRerankEvalReport report,
-        string path,
-        CancellationToken cancellationToken)
-    {
-        var fullPath = Path.GetFullPath(path);
-        var dir = Path.GetDirectoryName(fullPath);
-        if (!string.IsNullOrWhiteSpace(dir))
-        {
-            Directory.CreateDirectory(dir);
-        }
-
-        var json = JsonSerializer.Serialize(report, JsonOptions);
-        await File.WriteAllTextAsync(fullPath, json, Encoding.UTF8, cancellationToken).ConfigureAwait(false);
-        await MirrorReportArtifactAsync(path, json, cancellationToken).ConfigureAwait(false);
-    }
-
-    private static async Task WriteJsonAsync(
-        GuardedAttentionOrderQualityReport report,
-        string path,
-        CancellationToken cancellationToken)
-    {
-        var fullPath = Path.GetFullPath(path);
-        var dir = Path.GetDirectoryName(fullPath);
-        if (!string.IsNullOrWhiteSpace(dir))
-        {
-            Directory.CreateDirectory(dir);
-        }
-
-        var json = JsonSerializer.Serialize(report, JsonOptions);
-        await File.WriteAllTextAsync(fullPath, json, Encoding.UTF8, cancellationToken).ConfigureAwait(false);
-        await MirrorReportArtifactAsync(path, json, cancellationToken).ConfigureAwait(false);
-    }
-
-    private static async Task WriteJsonAsync(
-        GuardedAttentionProfileSweepReport report,
-        string path,
-        CancellationToken cancellationToken)
-    {
-        var fullPath = Path.GetFullPath(path);
-        var dir = Path.GetDirectoryName(fullPath);
-        if (!string.IsNullOrWhiteSpace(dir))
-        {
-            Directory.CreateDirectory(dir);
-        }
-
-        var json = JsonSerializer.Serialize(report, JsonOptions);
-        await File.WriteAllTextAsync(fullPath, json, Encoding.UTF8, cancellationToken).ConfigureAwait(false);
-        await MirrorReportArtifactAsync(path, json, cancellationToken).ConfigureAwait(false);
-    }
-
-    private static async Task WriteJsonAsync(
         ExtendedFailureTriageReport report,
         string path,
         CancellationToken cancellationToken)
@@ -2775,7 +2582,6 @@ public static partial class EvalCommand
         Console.WriteLine("========================================================================================================================");
         Console.WriteLine($"总样本数: {report.TotalSamples,-5} | ✅ Passed: {report.PassedSamples,-5} | ⚠️ Warnings: {report.PassedWithWarningsSamples,-5} | ❌ Failed: {report.FailedSamples,-5} | 🚫 Invalid: {report.InvalidSamples,-5} | 综合通过率: {report.PassRate:P2}");
         Console.WriteLine($"平均 Recall@3: {report.AvgRetrievalRecall3:P2} | 平均 Recall@5: {report.AvgRetrievalRecall5:P2} | 平均 Recall@10: {report.AvgRetrievalRecall10:P2} | 平均 MRR: {report.AvgRetrievalMrr:F4}");
-        Console.WriteLine($"Attention Shadow | MRR: {report.AvgAttentionMrr:F4} | Recall@3: {report.AvgAttentionRecall3:P2} | Recall@5: {report.AvgAttentionRecall5:P2} | Improved: {report.AttentionImprovedSamples} | Regressed: {report.AttentionRegressedSamples} | MustNotHitPromoted: {report.MustNotHitPromotedCount} | ChangeRatio: {report.SelectedSetChangeRatio:P2}");
         Console.WriteLine($"平均噪声违规率: {report.AvgRetrievalNoiseViolationRatio:P2} | 平均未用预算比: {report.AvgUnusedBudgetRatio:P2} | 黄金 Token 占比: {report.AvgMustHitTokenShare:P2}");
         Console.WriteLine($"约束符合率: {report.PackageConstraintHitRate:P2} | 实体符合率: {report.PackageEntityHitRate:P2} | 不确定性检测率: {report.PackageUncertaintyHitRate:P2}");
         Console.WriteLine($"平均指标计数 | 检索词数: {report.AvgRawSearchTokensCount:F1} | 语义锚点数: {report.AvgSemanticAnchorsCount:F1} | 候选数: {report.AvgCandidatesCount:F1} | 选中数: {report.AvgSelectedCount:F1} | 排除数: {report.AvgExcludedCount:F1}");
@@ -2784,30 +2590,16 @@ public static partial class EvalCommand
         // 使用报告中已固化的模式汇总；老 JSON 报告缺少该字段时从 Results 回退计算。
         var modeSummaries = GetModeSummaries(report);
         Console.WriteLine("\n[场景分组摘要]");
-        Console.WriteLine("| 评测场景/模式 | 样本总数 | Passed | Warnings | Failed | 通过率 | Recall@3 | Recall@10 | MRR | AttnMRR | AttnR@5 | AttnChange | Noise | Waste | 黄金Token比 | 约束率 | 实体率 | 选中数 |");
-        Console.WriteLine("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|");
+        Console.WriteLine("| 评测场景/模式 | 样本总数 | Passed | Warnings | Failed | 通过率 | Recall@3 | Recall@10 | MRR | Noise | Waste | 黄金Token比 | 约束率 | 实体率 | 选中数 |");
+        Console.WriteLine("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|");
         foreach (var summary in modeSummaries)
         {
-            Console.WriteLine($"| {summary.Mode,-13} | {summary.TotalSamples,8} | {summary.PassedSamples,6} | {summary.PassedWithWarningsSamples,8} | {summary.FailedSamples,6} | {summary.PassRate:P1} | {summary.AvgRetrievalRecall3:P1} | {summary.AvgRetrievalRecall10:P1} | {summary.AvgRetrievalMrr:F3} | {summary.AvgAttentionMrr:F3} | {summary.AvgAttentionRecall5:P1} | {summary.SelectedSetChangeRatio:P1} | {summary.AvgRetrievalNoiseViolationRatio:P1} | {summary.AvgPackageWasteRatio:P1} | {summary.AvgMustHitTokenShare:P1} | {summary.PackageConstraintHitRate:P1} | {summary.PackageEntityHitRate:P1} | {summary.AvgSelectedCount,6:F1} |");
-        }
-
-        var profileSummaries = GetAttentionProfileSummaries(report);
-        if (profileSummaries.Count > 0)
-        {
-            Console.WriteLine("\n[Attention Profile Shadow Comparison]");
-            Console.WriteLine("| Profile | Samples | AttnMRR | Recall@3 | Recall@5 | Improved | Regressed | MustNotHitPromoted | ChangeRatio |");
-            Console.WriteLine("|---|---:|---:|---:|---:|---:|---:|---:|---:|");
-            foreach (var summary in profileSummaries)
-            {
-                Console.WriteLine($"| {summary.ProfileId} | {summary.SampleCount} | {summary.AvgAttentionMrr:F4} | {summary.AvgAttentionRecall3:P1} | {summary.AvgAttentionRecall5:P1} | {summary.ImprovedSamples} | {summary.RegressedSamples} | {summary.MustNotHitPromotedCount} | {summary.SelectedSetChangeRatio:P1} |");
-            }
-
-            RenderAttentionDiagnostics(report.AttentionDiagnostics);
+            Console.WriteLine($"| {summary.Mode,-13} | {summary.TotalSamples,8} | {summary.PassedSamples,6} | {summary.PassedWithWarningsSamples,8} | {summary.FailedSamples,6} | {summary.PassRate:P1} | {summary.AvgRetrievalRecall3:P1} | {summary.AvgRetrievalRecall10:P1} | {summary.AvgRetrievalMrr:F3} | {summary.AvgRetrievalNoiseViolationRatio:P1} | {summary.AvgPackageWasteRatio:P1} | {summary.AvgMustHitTokenShare:P1} | {summary.PackageConstraintHitRate:P1} | {summary.PackageEntityHitRate:P1} | {summary.AvgSelectedCount,6:F1} |");
         }
 
         Console.WriteLine("\n[详细评测结果]");
-        Console.WriteLine("| 样本 ID | 评测场景/模式 | 精准状态 | Recall@3 | Recall@10 | MRR | AttnMRR | AttnR@5 | AttnChange | 黄金Token比 | 约束契合 | 实体契合 | 选中数 | 黄金金标备注 |");
-        Console.WriteLine("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|");
+        Console.WriteLine("| 样本 ID | 评测场景/模式 | 精准状态 | Recall@3 | Recall@10 | MRR | 黄金Token比 | 约束契合 | 实体契合 | 选中数 | 黄金金标备注 |");
+        Console.WriteLine("|---|---|---|---|---|---|---|---|---|---|---|");
         foreach (var res in report.Results)
         {
             var stateStr = res.Status switch
@@ -2819,7 +2611,7 @@ public static partial class EvalCommand
                 _ => res.Status
             };
             var note = res.GoldenNotes.Length > 20 ? res.GoldenNotes[..17] + "..." : res.GoldenNotes;
-            Console.WriteLine($"| {res.SampleId,-15} | {res.Mode,-13} | {stateStr,-10} | {res.RetrievalRecall3:P1} | {res.RetrievalRecall10:P1} | {res.RetrievalMrr:F3} | {res.AttentionMrr:F3} | {res.AttentionRecall5:P1} | {res.AttentionSelectedSetChangeRatio:P1} | {res.MustHitTokenShare:P1} | {(res.PackageHasAllConstraints ? "是" : "否"),-4} | {(res.PackageHasAllEntities ? "是" : "否"),-4} | {res.SelectedCount,6} | {note} |");
+            Console.WriteLine($"| {res.SampleId,-15} | {res.Mode,-13} | {stateStr,-10} | {res.RetrievalRecall3:P1} | {res.RetrievalRecall10:P1} | {res.RetrievalMrr:F3} | {res.MustHitTokenShare:P1} | {(res.PackageHasAllConstraints ? "是" : "否"),-4} | {(res.PackageHasAllEntities ? "是" : "否"),-4} | {res.SelectedCount,6} | {note} |");
         }
 
         Console.WriteLine("\n[⚠️ 全局警告来源明细统计]");
@@ -2921,13 +2713,6 @@ public static partial class EvalCommand
         sb.AppendLine($"| 平均 Recall@5 | {report.AvgRetrievalRecall5:P2} |");
         sb.AppendLine($"| 平均 Recall@10 | {report.AvgRetrievalRecall10:P2} |");
         sb.AppendLine($"| 平均 MRR | {report.AvgRetrievalMrr:F4} |");
-        sb.AppendLine($"| Attention 平均 MRR | {report.AvgAttentionMrr:F4} |");
-        sb.AppendLine($"| Attention 平均 Recall@3 | {report.AvgAttentionRecall3:P2} |");
-        sb.AppendLine($"| Attention 平均 Recall@5 | {report.AvgAttentionRecall5:P2} |");
-        sb.AppendLine($"| Attention 改善样本数 | {report.AttentionImprovedSamples} |");
-        sb.AppendLine($"| Attention 回退样本数 | {report.AttentionRegressedSamples} |");
-        sb.AppendLine($"| MustNotHit 上推次数 | {report.MustNotHitPromotedCount} |");
-        sb.AppendLine($"| Attention Selected Set Change Ratio | {report.SelectedSetChangeRatio:P2} |");
         sb.AppendLine($"| 平均噪声违规率 | {report.AvgRetrievalNoiseViolationRatio:P2} |");
         sb.AppendLine($"| 平均未用预算比 (Unused Budget) | {report.AvgUnusedBudgetRatio:P2} |");
         sb.AppendLine($"| 平均黄金 Token 占比 (MustHit Share) | {report.AvgMustHitTokenShare:P2} |");
@@ -2942,46 +2727,18 @@ public static partial class EvalCommand
         sb.AppendLine();
         sb.AppendLine("## 2. 评测场景/模式统计");
         sb.AppendLine();
-        sb.AppendLine("| 评测场景/模式 | 样本总数 | Passed | Warnings | Failed | 通过率 | 平均 Recall@3 | 平均 Recall@10 | 平均 MRR | AttnMRR | AttnR@5 | AttnChange | 噪声违规率 | Token 浪费率 | 黄金 Token 比 | 约束符合率 | 实体符合率 | 平均选中数 |");
-        sb.AppendLine("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|");
+        sb.AppendLine("| 评测场景/模式 | 样本总数 | Passed | Warnings | Failed | 通过率 | 平均 Recall@3 | 平均 Recall@10 | 平均 MRR | 噪声违规率 | Token 浪费率 | 黄金 Token 比 | 约束符合率 | 实体符合率 | 平均选中数 |");
+        sb.AppendLine("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|");
         foreach (var summary in GetModeSummaries(report))
         {
-            sb.AppendLine($"| {summary.Mode} | {summary.TotalSamples} | {summary.PassedSamples} | {summary.PassedWithWarningsSamples} | {summary.FailedSamples} | {summary.PassRate:P1} | {summary.AvgRetrievalRecall3:P1} | {summary.AvgRetrievalRecall10:P1} | {summary.AvgRetrievalMrr:F4} | {summary.AvgAttentionMrr:F4} | {summary.AvgAttentionRecall5:P1} | {summary.SelectedSetChangeRatio:P1} | {summary.AvgRetrievalNoiseViolationRatio:P1} | {summary.AvgPackageWasteRatio:P1} | {summary.AvgMustHitTokenShare:P1} | {summary.PackageConstraintHitRate:P1} | {summary.PackageEntityHitRate:P1} | {summary.AvgSelectedCount:F1} |");
+            sb.AppendLine($"| {summary.Mode} | {summary.TotalSamples} | {summary.PassedSamples} | {summary.PassedWithWarningsSamples} | {summary.FailedSamples} | {summary.PassRate:P1} | {summary.AvgRetrievalRecall3:P1} | {summary.AvgRetrievalRecall10:P1} | {summary.AvgRetrievalMrr:F4} | {summary.AvgRetrievalNoiseViolationRatio:P1} | {summary.AvgPackageWasteRatio:P1} | {summary.AvgMustHitTokenShare:P1} | {summary.PackageConstraintHitRate:P1} | {summary.PackageEntityHitRate:P1} | {summary.AvgSelectedCount:F1} |");
         }
         sb.AppendLine();
-        var profileSummaries = GetAttentionProfileSummaries(report);
-        if (profileSummaries.Count > 0)
-        {
-            sb.AppendLine("## 3. Attention Profile Shadow Comparison");
-            sb.AppendLine();
-            sb.AppendLine("| Profile | Samples | AttnMRR | Recall@3 | Recall@5 | Improved | Regressed | MustNotHitPromoted | ChangeRatio |");
-            sb.AppendLine("|---|---:|---:|---:|---:|---:|---:|---:|---:|");
-            foreach (var summary in profileSummaries)
-            {
-                sb.AppendLine($"| {summary.ProfileId} | {summary.SampleCount} | {summary.AvgAttentionMrr:F4} | {summary.AvgAttentionRecall3:P1} | {summary.AvgAttentionRecall5:P1} | {summary.ImprovedSamples} | {summary.RegressedSamples} | {summary.MustNotHitPromotedCount} | {summary.SelectedSetChangeRatio:P1} |");
-            }
-
-            sb.AppendLine();
-            sb.AppendLine("### Category Breakdown");
-            sb.AppendLine();
-            sb.AppendLine("| Profile | Category | Samples | AttnMRR | Recall@5 | Improved | Regressed | MustNotHitPromoted | ChangeRatio |");
-            sb.AppendLine("|---|---|---:|---:|---:|---:|---:|---:|---:|");
-            foreach (var summary in profileSummaries)
-            {
-                foreach (var category in summary.CategoryBreakdown)
-                {
-                    sb.AppendLine($"| {summary.ProfileId} | {category.Category} | {category.SampleCount} | {category.AvgAttentionMrr:F4} | {category.AvgAttentionRecall5:P1} | {category.ImprovedSamples} | {category.RegressedSamples} | {category.MustNotHitPromotedCount} | {category.SelectedSetChangeRatio:P1} |");
-                }
-            }
-
-            AppendAttentionDiagnostics(sb, report.AttentionDiagnostics);
-            sb.AppendLine();
-        }
 
         sb.AppendLine("## 3. 详细测试清单");
         sb.AppendLine();
-        sb.AppendLine("| 样本 ID | 场景模式 | 精准状态 | Recall@3 | Recall@10 | MRR | AttnMRR | AttnR@5 | AttnChange | 黄金 Token 比 | 约束率 | 实体率 | 选中数 | 黄金金标备注 |");
-        sb.AppendLine("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|");
+        sb.AppendLine("| 样本 ID | 场景模式 | 精准状态 | Recall@3 | Recall@10 | MRR | 黄金 Token 比 | 约束率 | 实体率 | 选中数 | 黄金金标备注 |");
+        sb.AppendLine("|---|---|---|---|---|---|---|---|---|---|---|");
         foreach (var res in report.Results)
         {
             var stateStr = res.Status switch
@@ -2992,7 +2749,7 @@ public static partial class EvalCommand
                 "InvalidSample" => "🚫 INVALID",
                 _ => res.Status
             };
-            sb.AppendLine($"| {res.SampleId} | {res.Mode} | {stateStr} | {res.RetrievalRecall3:P1} | {res.RetrievalRecall10:P1} | {res.RetrievalMrr:F4} | {res.AttentionMrr:F4} | {res.AttentionRecall5:P1} | {res.AttentionSelectedSetChangeRatio:P1} | {res.MustHitTokenShare:P1} | {(res.PackageHasAllConstraints ? "是" : "否")} | {(res.PackageHasAllEntities ? "是" : "否")} | {res.SelectedCount} | {res.GoldenNotes} |");
+            sb.AppendLine($"| {res.SampleId} | {res.Mode} | {stateStr} | {res.RetrievalRecall3:P1} | {res.RetrievalRecall10:P1} | {res.RetrievalMrr:F4} | {res.MustHitTokenShare:P1} | {(res.PackageHasAllConstraints ? "是" : "否")} | {(res.PackageHasAllEntities ? "是" : "否")} | {res.SelectedCount} | {res.GoldenNotes} |");
         }
         sb.AppendLine();
         sb.AppendLine("## 3. 全局警告来源汇总统计 (Warning Sources Summary)");
@@ -3079,118 +2836,6 @@ public static partial class EvalCommand
             .ToArray();
     }
 
-    private static IReadOnlyList<ContextEvalAttentionProfileSummary> GetAttentionProfileSummaries(ContextEvalReport report)
-    {
-        if (report.AttentionProfileSummaries.Count > 0)
-        {
-            return report.AttentionProfileSummaries
-                .OrderBy(summary => summary.ProfileId, StringComparer.OrdinalIgnoreCase)
-                .ToArray();
-        }
-
-        var rows = report.Results
-            .SelectMany(result => result.AttentionProfiles.Select(profile => new { Result = result, Profile = profile }))
-            .ToArray();
-        if (rows.Length == 0)
-        {
-            return Array.Empty<ContextEvalAttentionProfileSummary>();
-        }
-
-        return rows
-            .GroupBy(row => (row.Profile.ProfileId, row.Profile.PolicyVersion))
-            .OrderBy(group => group.Key.ProfileId, StringComparer.OrdinalIgnoreCase)
-            .Select(group =>
-            {
-                var items = group.ToArray();
-                return new ContextEvalAttentionProfileSummary
-                {
-                    ProfileId = group.Key.ProfileId,
-                    PolicyVersion = group.Key.PolicyVersion,
-                    SampleCount = items.Length,
-                    AvgAttentionMrr = items.Average(item => item.Profile.AttentionMrr),
-                    AvgAttentionRecall3 = items.Average(item => item.Profile.AttentionRecall3),
-                    AvgAttentionRecall5 = items.Average(item => item.Profile.AttentionRecall5),
-                    ImprovedSamples = items.Count(item => item.Profile.Improved),
-                    RegressedSamples = items.Count(item => item.Profile.Regressed),
-                    MustNotHitPromotedCount = items.Sum(item => item.Profile.MustNotHitPromotedCount),
-                    SelectedSetChangeRatio = items.Average(item => item.Profile.SelectedSetChangeRatio),
-                    CategoryBreakdown = items
-                        .GroupBy(item => item.Result.Mode, StringComparer.OrdinalIgnoreCase)
-                        .OrderBy(category => category.Key, StringComparer.OrdinalIgnoreCase)
-                        .Select(category =>
-                        {
-                            var categoryItems = category.ToArray();
-                            return new ContextEvalAttentionProfileCategorySummary
-                            {
-                                Category = category.Key,
-                                SampleCount = categoryItems.Length,
-                                AvgAttentionMrr = categoryItems.Average(item => item.Profile.AttentionMrr),
-                                AvgAttentionRecall3 = categoryItems.Average(item => item.Profile.AttentionRecall3),
-                                AvgAttentionRecall5 = categoryItems.Average(item => item.Profile.AttentionRecall5),
-                                ImprovedSamples = categoryItems.Count(item => item.Profile.Improved),
-                                RegressedSamples = categoryItems.Count(item => item.Profile.Regressed),
-                                MustNotHitPromotedCount = categoryItems.Sum(item => item.Profile.MustNotHitPromotedCount),
-                                SelectedSetChangeRatio = categoryItems.Average(item => item.Profile.SelectedSetChangeRatio)
-                            };
-                        })
-                        .ToArray()
-                };
-            })
-            .ToArray();
-    }
-
-    private static void RenderAttentionDiagnostics(ContextEvalAttentionDiagnostics diagnostics)
-    {
-        if (diagnostics.TopRegressedSamples.Count == 0
-            && diagnostics.MustHitDemotedSamples.Count == 0
-            && diagnostics.MustNotHitPromotedSamples.Count == 0
-            && diagnostics.SelectedSetChangedSamples.Count == 0)
-        {
-            return;
-        }
-
-        Console.WriteLine("\n[Attention Regression Diagnostics]");
-        Console.WriteLine($"TopRegressed={diagnostics.TopRegressedSamples.Count}, MustHitDemoted={diagnostics.MustHitDemotedSamples.Count}, MustNotHitPromoted={diagnostics.MustNotHitPromotedSamples.Count}, SelectedSetChanged={diagnostics.SelectedSetChangedSamples.Count}");
-        foreach (var sample in diagnostics.TopRegressedSamples.Take(5))
-        {
-            Console.WriteLine($"- {sample.ProfileId}/{sample.SampleId}: delta={sample.MrrDelta:F4}, reason={sample.Reason}");
-        }
-    }
-
-    private static void AppendAttentionDiagnostics(StringBuilder sb, ContextEvalAttentionDiagnostics diagnostics)
-    {
-        sb.AppendLine("### Regression Diagnostics");
-        sb.AppendLine();
-        AppendDiagnosticTable(sb, "Top Regressed Samples", diagnostics.TopRegressedSamples);
-        AppendDiagnosticTable(sb, "MustHit Demoted Samples", diagnostics.MustHitDemotedSamples);
-        AppendDiagnosticTable(sb, "MustNotHit Promoted Samples", diagnostics.MustNotHitPromotedSamples);
-        AppendDiagnosticTable(sb, "Selected Set Changed Samples", diagnostics.SelectedSetChangedSamples);
-    }
-
-    private static void AppendDiagnosticTable(
-        StringBuilder sb,
-        string title,
-        IReadOnlyList<ContextEvalAttentionDiagnosticSample> samples)
-    {
-        sb.AppendLine($"#### {title}");
-        sb.AppendLine();
-        if (samples.Count == 0)
-        {
-            sb.AppendLine("None.");
-            sb.AppendLine();
-            return;
-        }
-
-        sb.AppendLine("| Profile | Sample | Mode | CurrentMRR | AttnMRR | Delta | MustHitDemoted | MustNotHitPromoted | ChangeRatio | Reason |");
-        sb.AppendLine("|---|---|---|---:|---:|---:|---:|---:|---:|---|");
-        foreach (var sample in samples)
-        {
-            sb.AppendLine($"| {sample.ProfileId} | {sample.SampleId} | {sample.Mode} | {sample.CurrentMrr:F4} | {sample.AttentionMrr:F4} | {sample.MrrDelta:F4} | {sample.MustHitDemotedCount} | {sample.MustNotHitPromotedCount} | {sample.SelectedSetChangeRatio:P1} | {sample.Reason} |");
-        }
-
-        sb.AppendLine();
-    }
-
     private static ContextEvalModeSummary BuildModeSummaryFromResults(IGrouping<string, ContextEvalResult> group)
     {
         var items = group.ToArray();
@@ -3219,13 +2864,6 @@ public static partial class EvalCommand
             AvgRetrievalMrrAnyMustHit = items.Average(result => result.RetrievalMrrAnyMustHit),
             AvgPrimaryMustHitMrr = items.Average(result => result.PrimaryMustHitMrr),
             AvgRetrievalNoiseViolationRatio = items.Average(result => result.RetrievalNoiseViolationRatio),
-            AvgAttentionMrr = items.Average(result => result.AttentionMrr),
-            AvgAttentionRecall3 = items.Average(result => result.AttentionRecall3),
-            AvgAttentionRecall5 = items.Average(result => result.AttentionRecall5),
-            AttentionImprovedSamples = items.Count(result => result.AttentionImproved),
-            AttentionRegressedSamples = items.Count(result => result.AttentionRegressed),
-            MustNotHitPromotedCount = items.Sum(result => result.MustNotHitPromotedCount),
-            SelectedSetChangeRatio = items.Average(result => result.AttentionSelectedSetChangeRatio),
             AvgPackageWasteRatio = items.Average(result => result.PackageTokenWasteRatio),
             AvgUnusedBudgetRatio = items.Average(result => result.UnusedBudgetRatio),
             AvgMustHitTokenShare = items.Average(result => result.MustHitTokenShare),
@@ -3242,18 +2880,12 @@ public static partial class EvalCommand
     private static string BuildCsvReport(ContextEvalReport report)
     {
         var sb = new StringBuilder();
-        sb.AppendLine("SampleId,Mode,Succeeded,RetrievalRecall5,RetrievalRecall10,RetrievalMrr,AttentionMrr,AttentionRecall3,AttentionRecall5,AttentionImproved,AttentionRegressed,AttentionWouldChangeSelectedSet,MustNotHitPromotedCount,AttentionSelectedSetChangeRatio,AttentionProfiles,RetrievalNoiseViolationRatio,PackageTokenWasteRatio,PackageHasAllConstraints,PackageHasAllEntities,PackageHasAllUncertainties,AnchorsCount,CandidatesCount,SelectedCount,ExcludedCount,PackageBuildTrace,ErrorMessage,GoldenNotes");
+        sb.AppendLine("SampleId,Mode,Succeeded,RetrievalRecall5,RetrievalRecall10,RetrievalMrr,RetrievalNoiseViolationRatio,PackageTokenWasteRatio,PackageHasAllConstraints,PackageHasAllEntities,PackageHasAllUncertainties,AnchorsCount,CandidatesCount,SelectedCount,ExcludedCount,PackageBuildTrace,ErrorMessage,GoldenNotes");
         foreach (var res in report.Results)
         {
-            sb.AppendLine($"{EscapeCsv(res.SampleId)},{EscapeCsv(res.Mode)},{res.Succeeded},{res.RetrievalRecall5},{res.RetrievalRecall10},{res.RetrievalMrr},{res.AttentionMrr},{res.AttentionRecall3},{res.AttentionRecall5},{res.AttentionImproved},{res.AttentionRegressed},{res.AttentionWouldChangeSelectedSet},{res.MustNotHitPromotedCount},{res.AttentionSelectedSetChangeRatio},{EscapeCsv(FormatAttentionProfilesForCsv(res.AttentionProfiles))},{res.RetrievalNoiseViolationRatio},{res.PackageTokenWasteRatio},{res.PackageHasAllConstraints},{res.PackageHasAllEntities},{res.PackageHasAllUncertainties},{res.AnchorsCount},{res.CandidatesCount},{res.SelectedCount},{res.ExcludedCount},{EscapeCsv(res.PackageBuildTrace)},{EscapeCsv(res.ErrorMessage)},{EscapeCsv(res.GoldenNotes)}");
+            sb.AppendLine($"{EscapeCsv(res.SampleId)},{EscapeCsv(res.Mode)},{res.Succeeded},{res.RetrievalRecall5},{res.RetrievalRecall10},{res.RetrievalMrr},{res.RetrievalNoiseViolationRatio},{res.PackageTokenWasteRatio},{res.PackageHasAllConstraints},{res.PackageHasAllEntities},{res.PackageHasAllUncertainties},{res.AnchorsCount},{res.CandidatesCount},{res.SelectedCount},{res.ExcludedCount},{EscapeCsv(res.PackageBuildTrace)},{EscapeCsv(res.ErrorMessage)},{EscapeCsv(res.GoldenNotes)}");
         }
         return sb.ToString();
-    }
-
-    private static string FormatAttentionProfilesForCsv(IReadOnlyList<ContextEvalAttentionProfileResult> profiles)
-    {
-        return string.Join("; ", profiles.Select(profile =>
-            $"{profile.ProfileId}:mrr={profile.AttentionMrr:F4},r3={profile.AttentionRecall3:F4},r5={profile.AttentionRecall5:F4},change={profile.SelectedSetChangeRatio:F4},mnh={profile.MustNotHitPromotedCount}"));
     }
 
     private static string EscapeCsv(string? value)

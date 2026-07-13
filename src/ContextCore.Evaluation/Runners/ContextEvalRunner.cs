@@ -25,15 +25,8 @@ public sealed class ContextEvalRunner
         Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() }
     };
 
-    private readonly RetrievalAttentionRerankOptions? _attentionRerankOptions;
-    private readonly GraphExpansionApplyOptions? _graphExpansionApplyOptions;
-
-    public ContextEvalRunner(
-        RetrievalAttentionRerankOptions? attentionRerankOptions = null,
-        GraphExpansionApplyOptions? graphExpansionApplyOptions = null)
+    public ContextEvalRunner()
     {
-        _attentionRerankOptions = attentionRerankOptions;
-        _graphExpansionApplyOptions = graphExpansionApplyOptions;
     }
 
     /// <summary>
@@ -76,9 +69,7 @@ public sealed class ContextEvalRunner
             var collectionId = "test";
             var state = EvalStateFactory.CreateInMemoryState(
                 workspaceId,
-                collectionId,
-                attentionRerankOptions: _attentionRerankOptions,
-                graphExpansionApplyOptions: _graphExpansionApplyOptions);
+                collectionId);
 
             // 3. 灌入语料数据
             if (corpus is not null)
@@ -547,20 +538,6 @@ public sealed class ContextEvalRunner
         }
 
         var retrievalResult = await state.Retriever.RetrieveAsync(retrievalRequest).ConfigureAwait(false);
-        var attentionProfileMetrics = CalculateAttentionProfileMetrics(
-            retrievalResult.Trace.AttentionProfileComparison,
-            retrievalResult.Trace.AttentionShadowReport,
-            sample);
-        var attentionMetrics = attentionProfileMetrics.FirstOrDefault(item =>
-                string.Equals(item.ProfileId, "default-shadow-v1", StringComparison.OrdinalIgnoreCase))
-            ?? attentionProfileMetrics.FirstOrDefault()
-            ?? ToAttentionProfileResult(
-                "default-shadow-v1",
-                "context-attention-shadow-policy/v1",
-                CalculateAttentionMetrics(retrievalResult.Trace.AttentionShadowReport, sample),
-                sample,
-                retrievalResult.Trace.AttentionShadowReport,
-                retrievalResult.Trace.AttentionScores);
 
         // B. 打包测试 (Package Eval)
         var packageRequest = new ContextPackageRequest
@@ -846,11 +823,6 @@ public sealed class ContextEvalRunner
         var traceSb = new StringBuilder();
         traceSb.AppendLine($"Build ID: {packageResult.BuildId}");
         traceSb.AppendLine($"MRRAnyMustHit: {mrrAnyMustHit:F4} | PrimaryMustHitMRR: {primaryMustHitMrr:F4}");
-        traceSb.AppendLine($"Attention Shadow: MRR={attentionMetrics.AttentionMrr:F4} | Recall@3={attentionMetrics.AttentionRecall3:P2} | Recall@5={attentionMetrics.AttentionRecall5:P2} | ChangeRatio={attentionMetrics.SelectedSetChangeRatio:P2}");
-        if (attentionProfileMetrics.Count > 0)
-        {
-            traceSb.AppendLine("Attention Profiles: " + string.Join("; ", attentionProfileMetrics.Select(item => $"{item.ProfileId}=MRR:{item.AttentionMrr:F4}/R5:{item.AttentionRecall5:P2}/Change:{item.SelectedSetChangeRatio:P2}")));
-        }
         traceSb.AppendLine($"Token Budget: {packageResult.Budget.TokenBudget} | Used: {packageResult.Budget.UsedTokens} | Remaining: {packageResult.Budget.RemainingTokens} | Unused Ratio: {unusedBudgetRatio:P2}");
         traceSb.AppendLine($"MustHit Token Share: {mustHitTokenShare:P2} | Waste Ratio: {packageResult.Budget.WasteRatio:P2}");
         traceSb.AppendLine("BudgetPressureBreakdown: " +
@@ -941,16 +913,6 @@ public sealed class ContextEvalRunner
             MustHitRecalledCount = mustHitRecalled10,
             MustNotHitCount = mustNotHitCount,
             MustNotHitRecalledCount = mustNotHitRecalled,
-            AttentionMrr = attentionMetrics.AttentionMrr,
-            AttentionRecall3 = attentionMetrics.AttentionRecall3,
-            AttentionRecall5 = attentionMetrics.AttentionRecall5,
-            AttentionImproved = attentionMetrics.Improved,
-            AttentionRegressed = attentionMetrics.Regressed,
-            AttentionWouldChangeSelectedSet = attentionMetrics.WouldChangeSelectedSet,
-            MustNotHitPromotedCount = attentionMetrics.MustNotHitPromotedCount,
-            AttentionSelectedSetChangeRatio = attentionMetrics.SelectedSetChangeRatio,
-            AttentionProfiles = attentionProfileMetrics,
-            AttentionRerankComparison = retrievalResult.Trace.AttentionRerankComparison,
             PackageTokenWasteRatio = packageResult.Budget.WasteRatio,
             UnusedBudgetRatio = unusedBudgetRatio,
             MustHitTokenShare = mustHitTokenShare,
@@ -1192,230 +1154,6 @@ public sealed class ContextEvalRunner
         !string.IsNullOrWhiteSpace(value) &&
         value.Contains(expected, StringComparison.OrdinalIgnoreCase);
 
-    private static AttentionEvalMetrics CalculateAttentionMetrics(
-        AttentionShadowReport report,
-        ContextEvalSample sample)
-    {
-        if (report.Ranks.Count == 0)
-        {
-            return new AttentionEvalMetrics(
-                Mrr: 0d,
-                Recall3: sample.MustHit.Count == 0 ? 1d : 0d,
-                Recall5: sample.MustHit.Count == 0 ? 1d : 0d,
-                CurrentMrr: 0d,
-                Improved: false,
-                Regressed: false,
-                WouldChangeSelectedSet: false,
-                MustHitDemotedCount: 0,
-                MustNotHitPromotedCount: 0,
-                MustNotHitWouldBeSelectedCount: 0,
-                SelectedSetChangeRatio: 0d);
-        }
-
-        var mustHitCurrentRanks = ResolveBestRanks(sample.MustHit, report.Ranks, useAttentionRank: false);
-        var mustHitAttentionRanks = ResolveBestRanks(sample.MustHit, report.Ranks, useAttentionRank: true);
-        var currentMrr = ResolveMrr(mustHitCurrentRanks);
-        var attentionMrr = ResolveMrr(mustHitAttentionRanks);
-        var recall3 = ResolveRecall(sample.MustHit.Count, mustHitAttentionRanks, topK: 3);
-        var recall5 = ResolveRecall(sample.MustHit.Count, mustHitAttentionRanks, topK: 5);
-
-        return new AttentionEvalMetrics(
-            Mrr: attentionMrr,
-            Recall3: recall3,
-            Recall5: recall5,
-            CurrentMrr: currentMrr,
-            Improved: attentionMrr > currentMrr + 0.0001,
-            Regressed: attentionMrr + 0.0001 < currentMrr,
-            WouldChangeSelectedSet: report.WouldChangeSelectedSet,
-            MustHitDemotedCount: report.Ranks.Count(rank =>
-                rank.IsMustHit
-                && (rank.RankDelta < 0 || (rank.SelectedByCurrentPolicy && !rank.WouldBeSelectedByAttention))),
-            MustNotHitPromotedCount: report.MustNotHitPromotedCount,
-            MustNotHitWouldBeSelectedCount: report.Ranks.Count(rank => rank.IsMustNotHit && rank.WouldBeSelectedByAttention),
-            SelectedSetChangeRatio: report.SelectedSetChangeRatio);
-    }
-
-    private static IReadOnlyList<ContextEvalAttentionProfileResult> CalculateAttentionProfileMetrics(
-        AttentionProfileExperimentReport comparison,
-        AttentionShadowReport fallbackReport,
-        ContextEvalSample sample)
-    {
-        if (comparison.Profiles.Count == 0)
-        {
-            return
-            [
-                ToAttentionProfileResult(
-                    "default-shadow-v1",
-                    "context-attention-shadow-policy/v1",
-                    CalculateAttentionMetrics(fallbackReport, sample),
-                    sample,
-                    fallbackReport,
-                    Array.Empty<ContextAttentionScore>())
-            ];
-        }
-
-        return comparison.Profiles
-            .Select(profile => ToAttentionProfileResult(
-                profile.ProfileId,
-                profile.PolicyVersion,
-                CalculateAttentionMetrics(profile.ShadowReport, sample),
-                sample,
-                profile.ShadowReport,
-                profile.AttentionScores))
-            .ToArray();
-    }
-
-    private static ContextEvalAttentionProfileResult ToAttentionProfileResult(
-        string profileId,
-        string policyVersion,
-        AttentionEvalMetrics metrics,
-        ContextEvalSample sample,
-        AttentionShadowReport report,
-        IReadOnlyList<ContextAttentionScore> scores)
-    {
-        return new ContextEvalAttentionProfileResult
-        {
-            ProfileId = profileId,
-            PolicyVersion = policyVersion,
-            CurrentMrr = metrics.CurrentMrr,
-            AttentionMrr = metrics.Mrr,
-            AttentionRecall3 = metrics.Recall3,
-            AttentionRecall5 = metrics.Recall5,
-            Improved = metrics.Improved,
-            Regressed = metrics.Regressed,
-            WouldChangeSelectedSet = metrics.WouldChangeSelectedSet,
-            MustHitDemotedCount = metrics.MustHitDemotedCount,
-            MustNotHitPromotedCount = metrics.MustNotHitPromotedCount,
-            MustNotHitWouldBeSelectedCount = metrics.MustNotHitWouldBeSelectedCount,
-            SelectedSetChangeRatio = metrics.SelectedSetChangeRatio,
-            CandidateDiagnostics = ShouldWriteCandidateDiagnostics(sample, metrics)
-                ? BuildCandidateDiagnostics(report, scores)
-                : Array.Empty<ContextEvalAttentionCandidateDiagnostic>()
-        };
-    }
-
-    private static bool ShouldWriteCandidateDiagnostics(
-        ContextEvalSample sample,
-        AttentionEvalMetrics metrics)
-    {
-        if (metrics.Regressed
-            || metrics.MustHitDemotedCount > 0
-            || metrics.MustNotHitPromotedCount > 0
-            || metrics.MustNotHitWouldBeSelectedCount > 0)
-        {
-            return true;
-        }
-
-        return string.Equals(sample.Id, "project-sample-009", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(sample.Id, "coding-sample-009", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(sample.Id, "novel-sample-002", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static IReadOnlyList<ContextEvalAttentionCandidateDiagnostic> BuildCandidateDiagnostics(
-        AttentionShadowReport report,
-        IReadOnlyList<ContextAttentionScore> scores)
-    {
-        var scoresById = scores
-            .GroupBy(score => score.CandidateId, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
-
-        return report.Ranks
-            .Where(rank =>
-                rank.IsMustHit
-                || rank.IsMustNotHit
-                || rank.SelectedByCurrentPolicy != rank.WouldBeSelectedByAttention
-                || rank.RankDelta != 0
-                || rank.CurrentRank <= 5
-                || rank.AttentionRank <= 5)
-            .OrderByDescending(rank => rank.IsMustHit || rank.IsMustNotHit)
-            .ThenByDescending(rank => Math.Abs(rank.RankDelta))
-            .ThenBy(rank => rank.AttentionRank)
-            .Take(25)
-            .Select(rank =>
-            {
-                scoresById.TryGetValue(rank.CandidateId, out var score);
-                return new ContextEvalAttentionCandidateDiagnostic
-                {
-                    CandidateId = rank.CandidateId,
-                    SourceId = rank.SourceId,
-                    CurrentRank = rank.CurrentRank,
-                    AttentionRank = rank.AttentionRank,
-                    RankDelta = rank.RankDelta,
-                    CurrentScore = rank.CurrentScore,
-                    AttentionScore = rank.AttentionScore,
-                    SelectedByCurrentPolicy = rank.SelectedByCurrentPolicy,
-                    WouldBeSelectedByAttention = rank.WouldBeSelectedByAttention,
-                    IsMustHit = rank.IsMustHit,
-                    IsMustNotHit = rank.IsMustNotHit,
-                    Lifecycle = rank.Lifecycle,
-                    ChannelSources = rank.ChannelSources,
-                    RelationPaths = rank.RelationPaths,
-                    ScoreBreakdown = rank.ScoreBreakdown,
-                    AttentionScoreBreakdown = score is null
-                        ? new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase)
-                        : BuildAttentionScoreBreakdown(score),
-                    Reasons = rank.Reasons
-                };
-            })
-            .ToArray();
-    }
-
-    private static Dictionary<string, double> BuildAttentionScoreBreakdown(ContextAttentionScore score)
-    {
-        return new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["queryMatch"] = score.QueryMatchScore,
-            ["shortTermMatch"] = score.ShortTermMatchScore,
-            ["relation"] = score.RelationScore,
-            ["recency"] = score.RecencyScore,
-            ["importance"] = score.ImportanceScore,
-            ["channel"] = score.ChannelScore,
-            ["learningFeedback"] = score.LearningFeedbackScore,
-            ["lifecyclePenalty"] = score.LifecyclePenalty,
-            ["scopePenalty"] = score.ScopePenalty,
-            ["noiseRisk"] = score.NoiseRiskScore,
-            ["final"] = score.FinalAttentionScore
-        };
-    }
-
-    private static IReadOnlyList<int> ResolveBestRanks(
-        IReadOnlyList<string> expectedIds,
-        IReadOnlyList<AttentionShadowRank> ranks,
-        bool useAttentionRank)
-    {
-        var result = new List<int>();
-        foreach (var expectedId in expectedIds.Where(id => !string.IsNullOrWhiteSpace(id)))
-        {
-            var best = ranks
-                .Where(rank => MatchesEvalId(rank, expectedId))
-                .Select(rank => useAttentionRank ? rank.AttentionRank : rank.CurrentRank)
-                .DefaultIfEmpty(int.MaxValue)
-                .Min();
-            result.Add(best);
-        }
-
-        return result;
-    }
-
-    private static bool MatchesEvalId(AttentionShadowRank rank, string expectedId)
-    {
-        return string.Equals(rank.SourceId, expectedId, StringComparison.OrdinalIgnoreCase)
-            || string.Equals(rank.CandidateId, expectedId, StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static double ResolveMrr(IReadOnlyList<int> ranks)
-    {
-        var best = ranks.Count == 0 ? int.MaxValue : ranks.Min();
-        return best == int.MaxValue ? 0d : 1d / best;
-    }
-
-    private static double ResolveRecall(int mustHitCount, IReadOnlyList<int> ranks, int topK)
-    {
-        return mustHitCount == 0
-            ? 1d
-            : (double)ranks.Count(rank => rank <= topK) / mustHitCount;
-    }
-
     private static ContextEvalReport BuildReport(IReadOnlyList<ContextEvalResult> results)
     {
         var total = results.Count;
@@ -1454,13 +1192,6 @@ public sealed class ContextEvalRunner
             AvgRetrievalMrrAnyMustHit = results.Average(r => r.RetrievalMrrAnyMustHit),
             AvgPrimaryMustHitMrr = results.Average(r => r.PrimaryMustHitMrr),
             AvgRetrievalNoiseViolationRatio = results.Average(r => r.RetrievalNoiseViolationRatio),
-            AvgAttentionMrr = results.Average(r => r.AttentionMrr),
-            AvgAttentionRecall3 = results.Average(r => r.AttentionRecall3),
-            AvgAttentionRecall5 = results.Average(r => r.AttentionRecall5),
-            AttentionImprovedSamples = results.Count(r => r.AttentionImproved),
-            AttentionRegressedSamples = results.Count(r => r.AttentionRegressed),
-            MustNotHitPromotedCount = results.Sum(r => r.MustNotHitPromotedCount),
-            SelectedSetChangeRatio = results.Average(r => r.AttentionSelectedSetChangeRatio),
 
             AvgPackageWasteRatio = results.Average(r => r.PackageTokenWasteRatio),
             AvgUnusedBudgetRatio = results.Average(r => r.UnusedBudgetRatio),
@@ -1481,123 +1212,7 @@ public sealed class ContextEvalRunner
                 .OrderBy(group => group.Key, StringComparer.OrdinalIgnoreCase)
                 .Select(BuildModeSummary)
                 .ToArray(),
-            AttentionProfileSummaries = BuildAttentionProfileSummaries(results),
-            AttentionDiagnostics = BuildAttentionDiagnostics(results),
             Results = results
-        };
-    }
-
-    private static IReadOnlyList<ContextEvalAttentionProfileSummary> BuildAttentionProfileSummaries(
-        IReadOnlyList<ContextEvalResult> results)
-    {
-        var rows = results
-            .SelectMany(result => result.AttentionProfiles.Select(profile => new { Result = result, Profile = profile }))
-            .ToArray();
-
-        return rows
-            .GroupBy(row => (row.Profile.ProfileId, row.Profile.PolicyVersion))
-            .OrderBy(group => group.Key.ProfileId, StringComparer.OrdinalIgnoreCase)
-            .Select(group =>
-            {
-                var items = group.ToArray();
-                return new ContextEvalAttentionProfileSummary
-                {
-                    ProfileId = group.Key.ProfileId,
-                    PolicyVersion = group.Key.PolicyVersion,
-                    SampleCount = items.Length,
-                    AvgAttentionMrr = items.Average(item => item.Profile.AttentionMrr),
-                    AvgAttentionRecall3 = items.Average(item => item.Profile.AttentionRecall3),
-                    AvgAttentionRecall5 = items.Average(item => item.Profile.AttentionRecall5),
-                    ImprovedSamples = items.Count(item => item.Profile.Improved),
-                    RegressedSamples = items.Count(item => item.Profile.Regressed),
-                    CurrentMrrOneRegressionCount = items.Count(item =>
-                        item.Profile.Regressed && item.Profile.CurrentMrr >= 0.9999),
-                    MustNotHitPromotedCount = items.Sum(item => item.Profile.MustNotHitPromotedCount),
-                    SelectedSetChangeRatio = items.Average(item => item.Profile.SelectedSetChangeRatio),
-                    CategoryBreakdown = items
-                        .GroupBy(item => item.Result.Mode, StringComparer.OrdinalIgnoreCase)
-                        .OrderBy(category => category.Key, StringComparer.OrdinalIgnoreCase)
-                        .Select(category =>
-                        {
-                            var categoryItems = category.ToArray();
-                            return new ContextEvalAttentionProfileCategorySummary
-                            {
-                                Category = category.Key,
-                                SampleCount = categoryItems.Length,
-                                AvgAttentionMrr = categoryItems.Average(item => item.Profile.AttentionMrr),
-                                AvgAttentionRecall3 = categoryItems.Average(item => item.Profile.AttentionRecall3),
-                                AvgAttentionRecall5 = categoryItems.Average(item => item.Profile.AttentionRecall5),
-                                ImprovedSamples = categoryItems.Count(item => item.Profile.Improved),
-                                RegressedSamples = categoryItems.Count(item => item.Profile.Regressed),
-                                CurrentMrrOneRegressionCount = categoryItems.Count(item =>
-                                    item.Profile.Regressed && item.Profile.CurrentMrr >= 0.9999),
-                                MustNotHitPromotedCount = categoryItems.Sum(item => item.Profile.MustNotHitPromotedCount),
-                                SelectedSetChangeRatio = categoryItems.Average(item => item.Profile.SelectedSetChangeRatio)
-                            };
-                        })
-                        .ToArray()
-                };
-            })
-            .ToArray();
-    }
-
-    private static ContextEvalAttentionDiagnostics BuildAttentionDiagnostics(IReadOnlyList<ContextEvalResult> results)
-    {
-        var rows = results
-            .SelectMany(result => result.AttentionProfiles.Select(profile => new { Result = result, Profile = profile }))
-            .ToArray();
-
-        return new ContextEvalAttentionDiagnostics
-        {
-            TopRegressedSamples = rows
-                .Where(row => row.Profile.Regressed)
-                .OrderByDescending(row => row.Profile.CurrentMrr - row.Profile.AttentionMrr)
-                .ThenBy(row => row.Result.SampleId, StringComparer.OrdinalIgnoreCase)
-                .Take(10)
-                .Select(row => ToAttentionDiagnosticSample(row.Result, row.Profile, "attention_mrr_regressed"))
-                .ToArray(),
-            MustHitDemotedSamples = rows
-                .Where(row => row.Profile.MustHitDemotedCount > 0)
-                .OrderByDescending(row => row.Profile.MustHitDemotedCount)
-                .ThenBy(row => row.Profile.AttentionMrr - row.Profile.CurrentMrr)
-                .Take(10)
-                .Select(row => ToAttentionDiagnosticSample(row.Result, row.Profile, "must_hit_demoted"))
-                .ToArray(),
-            MustNotHitPromotedSamples = rows
-                .Where(row => row.Profile.MustNotHitPromotedCount > 0 || row.Profile.MustNotHitWouldBeSelectedCount > 0)
-                .OrderByDescending(row => row.Profile.MustNotHitPromotedCount + row.Profile.MustNotHitWouldBeSelectedCount)
-                .ThenByDescending(row => row.Profile.SelectedSetChangeRatio)
-                .Take(10)
-                .Select(row => ToAttentionDiagnosticSample(row.Result, row.Profile, "must_not_hit_promoted"))
-                .ToArray(),
-            SelectedSetChangedSamples = rows
-                .Where(row => row.Profile.WouldChangeSelectedSet)
-                .OrderByDescending(row => row.Profile.SelectedSetChangeRatio)
-                .ThenBy(row => row.Result.SampleId, StringComparer.OrdinalIgnoreCase)
-                .Take(10)
-                .Select(row => ToAttentionDiagnosticSample(row.Result, row.Profile, "selected_set_changed"))
-                .ToArray()
-        };
-    }
-
-    private static ContextEvalAttentionDiagnosticSample ToAttentionDiagnosticSample(
-        ContextEvalResult result,
-        ContextEvalAttentionProfileResult profile,
-        string reason)
-    {
-        return new ContextEvalAttentionDiagnosticSample
-        {
-            ProfileId = profile.ProfileId,
-            SampleId = result.SampleId,
-            Mode = result.Mode,
-            CurrentMrr = profile.CurrentMrr,
-            AttentionMrr = profile.AttentionMrr,
-            MrrDelta = profile.AttentionMrr - profile.CurrentMrr,
-            MustHitDemotedCount = profile.MustHitDemotedCount,
-            MustNotHitPromotedCount = profile.MustNotHitPromotedCount,
-            SelectedSetChangeRatio = profile.SelectedSetChangeRatio,
-            Reason = reason,
-            CandidateBreakdown = profile.CandidateDiagnostics
         };
     }
 
@@ -1635,13 +1250,6 @@ public sealed class ContextEvalRunner
             AvgRetrievalMrrAnyMustHit = items.Average(r => r.RetrievalMrrAnyMustHit),
             AvgPrimaryMustHitMrr = items.Average(r => r.PrimaryMustHitMrr),
             AvgRetrievalNoiseViolationRatio = items.Average(r => r.RetrievalNoiseViolationRatio),
-            AvgAttentionMrr = items.Average(r => r.AttentionMrr),
-            AvgAttentionRecall3 = items.Average(r => r.AttentionRecall3),
-            AvgAttentionRecall5 = items.Average(r => r.AttentionRecall5),
-            AttentionImprovedSamples = items.Count(r => r.AttentionImproved),
-            AttentionRegressedSamples = items.Count(r => r.AttentionRegressed),
-            MustNotHitPromotedCount = items.Sum(r => r.MustNotHitPromotedCount),
-            SelectedSetChangeRatio = items.Average(r => r.AttentionSelectedSetChangeRatio),
             AvgPackageWasteRatio = items.Average(r => r.PackageTokenWasteRatio),
             AvgUnusedBudgetRatio = items.Average(r => r.UnusedBudgetRatio),
             AvgMustHitTokenShare = items.Average(r => r.MustHitTokenShare),
@@ -1889,17 +1497,4 @@ public sealed class ContextEvalRunner
         token is "需要" or "必须" or "不得" or "不能" or "不要" or "已经" or "进行"
             or "应当" or "应该"
             or "the" or "and" or "with";
-
-    private sealed record AttentionEvalMetrics(
-        double Mrr,
-        double Recall3,
-        double Recall5,
-        double CurrentMrr,
-        bool Improved,
-        bool Regressed,
-        bool WouldChangeSelectedSet,
-        int MustHitDemotedCount,
-        int MustNotHitPromotedCount,
-        int MustNotHitWouldBeSelectedCount,
-        double SelectedSetChangeRatio);
 }

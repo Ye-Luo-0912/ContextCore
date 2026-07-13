@@ -77,12 +77,6 @@ LIMIT @take;
             Candidates = [.. trace.Candidates],
             SelectedItems = [.. trace.SelectedItems],
             DroppedItems = [.. trace.DroppedItems],
-            AttentionScores = [.. trace.AttentionScores],
-            AttentionShadowReport = trace.AttentionShadowReport,
-            AttentionProfileComparison = trace.AttentionProfileComparison,
-            AttentionRerankComparison = trace.AttentionRerankComparison,
-            RankerShadowTrace = trace.RankerShadowTrace,
-            GraphExpansionShadowTrace = trace.GraphExpansionShadowTrace,
             Metadata = new Dictionary<string, string>(trace.Metadata),
             CreatedAt = trace.CreatedAt == default ? DateTimeOffset.UtcNow : trace.CreatedAt
         };

@@ -389,60 +389,6 @@ public sealed class ContextCoreClient
             cancellationToken);
     }
 
-    public async Task<IReadOnlyList<LifecycleAwareRankerShadowTraceRecord>> GetRankerShadowTracesAsync(
-        string workspaceId,
-        string collectionId,
-        int take = 10,
-        CancellationToken cancellationToken = default)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
-        ArgumentException.ThrowIfNullOrWhiteSpace(collectionId);
-
-        var path = $"api/learning/ranker-shadow/traces?workspaceId={Escape(workspaceId)}&collectionId={Escape(collectionId)}&take={take}";
-        return await GetRequiredAsync<IReadOnlyList<LifecycleAwareRankerShadowTraceRecord>>(path, cancellationToken)
-            .ConfigureAwait(false);
-    }
-
-    public async Task<string> ExportRankerShadowTracesAsync(
-        string workspaceId,
-        string collectionId,
-        int take = 100,
-        CancellationToken cancellationToken = default)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
-        ArgumentException.ThrowIfNullOrWhiteSpace(collectionId);
-
-        var path = $"api/learning/ranker-shadow/traces?workspaceId={Escape(workspaceId)}&collectionId={Escape(collectionId)}&take={take}&format=jsonl";
-        return await GetRequiredStringAsync(path, cancellationToken).ConfigureAwait(false);
-    }
-
-    public async Task<IReadOnlyList<GraphExpansionShadowTraceRecord>> GetGraphExpansionShadowTracesAsync(
-        string workspaceId,
-        string collectionId,
-        int take = 10,
-        CancellationToken cancellationToken = default)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
-        ArgumentException.ThrowIfNullOrWhiteSpace(collectionId);
-
-        var path = $"api/learning/graph-expansion-shadow/traces?workspaceId={Escape(workspaceId)}&collectionId={Escape(collectionId)}&take={take}";
-        return await GetRequiredAsync<IReadOnlyList<GraphExpansionShadowTraceRecord>>(path, cancellationToken)
-            .ConfigureAwait(false);
-    }
-
-    public async Task<string> ExportGraphExpansionShadowTracesAsync(
-        string workspaceId,
-        string collectionId,
-        int take = 100,
-        CancellationToken cancellationToken = default)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
-        ArgumentException.ThrowIfNullOrWhiteSpace(collectionId);
-
-        var path = $"api/learning/graph-expansion-shadow/traces?workspaceId={Escape(workspaceId)}&collectionId={Escape(collectionId)}&take={take}&format=jsonl";
-        return await GetRequiredStringAsync(path, cancellationToken).ConfigureAwait(false);
-    }
-
     public async Task<IReadOnlyList<RouterIntentShadowTrace>> GetRouterShadowTracesAsync(
         string workspaceId,
         string collectionId,

@@ -48,8 +48,6 @@ public sealed partial class ControlRoomService
         ControlRoomMode mode = ControlRoomMode.Direct,
         string? serviceBaseUrl = null,
         HttpClient? serviceHttpClient = null,
-        RetrievalAttentionRerankOptions? attentionRerankOptions = null,
-        GraphExpansionApplyOptions? graphExpansionApplyOptions = null,
         string? apiKey = null,
         string? apiKeyHeaderName = null)
     {
@@ -1140,8 +1138,6 @@ public sealed class PackagePreviewDetails
     public IReadOnlyList<ContextPackageUncertainty> Uncertainties { get; init; } = Array.Empty<ContextPackageUncertainty>();
 
     public ContextPackageBudgetReport Budget { get; init; } = new();
-
-    public AttentionRerankComparisonReport AttentionRerankComparison { get; init; } = new();
 
     public IReadOnlyDictionary<string, string> PlanningMetadata { get; init; } = new Dictionary<string, string>();
 }

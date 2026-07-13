@@ -50,20 +50,6 @@ public static class PackagePreviewCommand
         }
 
         TableRenderer.Render(
-            "Attention Rerank Status",
-            ["Mode", "Profile", "Applied", "SelectedSet", "OrderChanges", "GuardViolation"],
-            [
-                [
-                    preview.AttentionRerankComparison.AttentionRerankMode,
-                    preview.AttentionRerankComparison.AttentionProfile,
-                    FormatBool(preview.AttentionRerankComparison.AttentionApplied),
-                    FormatBool(preview.AttentionRerankComparison.SelectedSetPreserved),
-                    preview.AttentionRerankComparison.OrderChangedCount.ToString(),
-                    preview.AttentionRerankComparison.GuardViolation
-                ]
-            ]);
-
-        TableRenderer.Render(
             "Selected Items",
             ["Id", "Kind", "Type", "Section", "Score", "Tokens", "Reason"],
             [.. preview.SelectedItems.Select(item => new[]

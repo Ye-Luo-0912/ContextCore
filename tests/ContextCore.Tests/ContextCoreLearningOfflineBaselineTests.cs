@@ -481,13 +481,6 @@ public sealed class ContextCoreLearningOfflineBaselineTests
             Directory.CreateDirectory(Path.Combine(tempRoot, "learning", "router"));
             Directory.CreateDirectory(Path.Combine(tempRoot, "learning", "ranker"));
             await WriteJsonAsync(
-                Path.Combine(tempRoot, "eval", "graph-expansion-guarded-optin-gate.json"),
-                new GraphExpansionGuardedOptInGateReport
-                {
-                    CreatedAt = DateTimeOffset.Parse("2026-06-12T00:00:00Z"),
-                    Passed = true
-                });
-            await WriteJsonAsync(
                 Path.Combine(tempRoot, "eval", "vector-retrieval-shadow-readiness-gate.json"),
                 new VectorRetrievalShadowReadinessGateReport
                 {
@@ -530,16 +523,10 @@ public sealed class ContextCoreLearningOfflineBaselineTests
             Directory.SetCurrentDirectory(tempRoot);
             var registry = await new LearningReadinessFreezeRunner().BuildRegistryFromCurrentFilesAsync();
 
-            var graph = registry.Capabilities.Single(item => item.CapabilityId == ShadowCapabilityIds.GraphExpansion);
             var vector = registry.Capabilities.Single(item => item.CapabilityId == ShadowCapabilityIds.VectorRetrieval);
             var router = registry.Capabilities.Single(item => item.CapabilityId == ShadowCapabilityIds.RouterIntentClassifier);
             var ranker = registry.Capabilities.Single(item => item.CapabilityId == ShadowCapabilityIds.CandidateReranker);
 
-            Assert.IsTrue(graph.GatePassed);
-            CollectionAssert.Contains(graph.AllowedRuntimeModes.ToArray(), "ApplyGuarded:audit-v1");
-            CollectionAssert.Contains(graph.AllowedRuntimeModes.ToArray(), "ApplyGuarded:conflict-v1");
-            CollectionAssert.Contains(graph.ForbiddenRuntimeModes.ToArray(), "ApplyGuarded:normal-v1");
-            CollectionAssert.Contains(graph.ForbiddenRuntimeModes.ToArray(), "ApplyGuarded:current-task-v1");
             Assert.IsFalse(vector.GatePassed);
             Assert.AreEqual("BlockedByRecall", vector.Recommendation);
             CollectionAssert.Contains(vector.BlockedReasons.ToArray(), "A3RecallAtLeast80Percent");

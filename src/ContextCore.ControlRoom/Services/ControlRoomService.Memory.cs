@@ -299,7 +299,6 @@ public sealed partial class ControlRoomService
             DroppedItems = result.DroppedItems.Select(PackageCandidateItem.FromDropped).ToArray(),
             Uncertainties = result.Uncertainties,
             Budget = result.Budget,
-            AttentionRerankComparison = recentTrace?.AttentionRerankComparison ?? new AttentionRerankComparisonReport(),
             PlanningMetadata = recentTrace?.Metadata ?? new Dictionary<string, string>()
         };
     }

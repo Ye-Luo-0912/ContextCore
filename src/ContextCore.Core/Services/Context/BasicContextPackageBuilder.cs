@@ -77,8 +77,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         _graphExpansionCoordinator = new GraphExpansionCoordinator(
             store,
             relationStore,
-            traversalEngine,
-            _tokenizerResolver);
+            traversalEngine);
         _decisionTraceStore = decisionTraceStore;
         _runtimeCandidateTraceSink = runtimeCandidateTraceSink ?? new NullRuntimeCandidateTraceSink();
         _traceRecorder = new PackageTraceRecorder(
@@ -993,18 +992,6 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                 ref estimatedTokens);
         }
 
-        var graphExpansionContribution = await _graphExpansionCoordinator.BuildGraphExpansionContributionAsync(
-                request,
-                selectedItems,
-                cancellationToken)
-            .ConfigureAwait(false);
-        _graphExpansionCoordinator.AppendGraphExpansionSections(
-            graphExpansionContribution,
-            sections,
-            sourceRefs,
-            tokenContext,
-            ref estimatedTokens);
-
         var metadata = PackageMetadataBuilder.CreatePackageMetadata(request, tokenContext);
         if (!string.IsNullOrWhiteSpace(policy.Id))
         {
@@ -1013,7 +1000,6 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         ContextItemRefResolver.AddAnchorMetadata(metadata, anchors);
         PackageMetadataBuilder.AddModeBudgetMetadata(metadata, modeBudgetProfile);
         PackageMetadataBuilder.AddDiagnosticMetadata(metadata, tokenBudget, estimatedTokens, droppedItems.Count, uncertainties.Count);
-        PackageMetadataBuilder.AddGraphExpansionMetadata(metadata, graphExpansionContribution);
 
         var orderedSections = PackageSectionBudgetResolver.OrderSections(sections, policy);
 

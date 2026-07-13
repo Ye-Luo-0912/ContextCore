@@ -87,40 +87,6 @@ public static class RetrievalCommand
             })]);
 
         TableRenderer.Render(
-            "Attention Shadow Trace",
-            ["Id", "当前", "Attention", "分数", "Breakdown", "原因"],
-            [.. result.Trace.AttentionScores.Select(score => new[]
-            {
-                score.SourceId,
-                score.CurrentRank.ToString(),
-                score.AttentionRank.ToString(),
-                score.FinalAttentionScore.ToString("0.000"),
-                FormatAttentionBreakdown(score),
-                string.Join(" | ", score.Reasons)
-            })]);
-
-        Console.WriteLine(
-            $"Attention Shadow Summary: candidates={result.Trace.AttentionShadowReport.CandidateCount}, selected={result.Trace.AttentionShadowReport.SelectedCount}, wouldChange={FormatBool(result.Trace.AttentionShadowReport.WouldChangeSelectedSet)}, changeRatio={result.Trace.AttentionShadowReport.SelectedSetChangeRatio:P1}, mustNotHitPromoted={result.Trace.AttentionShadowReport.MustNotHitPromotedCount}");
-        if (result.Trace.AttentionShadowReport.Warnings.Count > 0)
-        {
-            Console.WriteLine($"Attention Shadow Warnings: {string.Join(", ", result.Trace.AttentionShadowReport.Warnings)}");
-        }
-
-        TableRenderer.Render(
-            "Attention Rerank Status",
-            ["Mode", "Profile", "Applied", "SelectedSet", "OrderChanges", "GuardViolation"],
-            [
-                [
-                    result.Trace.AttentionRerankComparison.AttentionRerankMode,
-                    result.Trace.AttentionRerankComparison.AttentionProfile,
-                    FormatBool(result.Trace.AttentionRerankComparison.AttentionApplied),
-                    FormatBool(result.Trace.AttentionRerankComparison.SelectedSetPreserved),
-                    result.Trace.AttentionRerankComparison.OrderChangedCount.ToString(),
-                    result.Trace.AttentionRerankComparison.GuardViolation
-                ]
-            ]);
-
-        TableRenderer.Render(
             "Planning Execution Status",
             ["Mode", "Intent", "Status", "OptIn", "FallbackUsed", "FallbackReason"],
             [
@@ -154,72 +120,6 @@ public static class RetrievalCommand
                     graphMetadata.GetValueOrDefault("graphExpansionRiskChecks", result.Trace.Metadata.GetValueOrDefault("graphExpansionRiskChecks", ""))
                 ]
             ]);
-
-        TableRenderer.Render(
-            "Attention Shadow Diff",
-            ["Id", "当前", "Attention", "Delta", "选中", "Would", "原分", "Attn分", "标签", "原因"],
-            [.. result.Trace.AttentionShadowReport.Ranks
-                .OrderBy(rank => rank.AttentionRank)
-                .Take(20)
-                .Select(rank => new[]
-                {
-                    rank.SourceId,
-                    rank.CurrentRank.ToString(),
-                    rank.AttentionRank.ToString(),
-                    rank.RankDelta.ToString("+0;-0;0"),
-                    FormatBool(rank.SelectedByCurrentPolicy),
-                    FormatBool(rank.WouldBeSelectedByAttention),
-                    rank.CurrentScore.ToString("0.00"),
-                    rank.AttentionScore.ToString("0.000"),
-                    FormatAttentionLabels(rank),
-                    string.Join(" | ", rank.Reasons)
-                })]);
-
-        if (result.Trace.AttentionProfileComparison.Profiles.Count > 0)
-        {
-            TableRenderer.Render(
-                "Attention Profile Comparison",
-                ["Profile", "Candidates", "WouldChange", "ChangeRatio", "MustNotHitPromoted", "Top Promoted", "Top Demoted"],
-                [.. result.Trace.AttentionProfileComparison.Profiles.Select(profile => new[]
-                {
-                    profile.ProfileId,
-                    profile.ShadowReport.CandidateCount.ToString(),
-                    FormatBool(profile.ShadowReport.WouldChangeSelectedSet),
-                    profile.ShadowReport.SelectedSetChangeRatio.ToString("P1"),
-                    profile.ShadowReport.MustNotHitPromotedCount.ToString(),
-                    FormatProfileTop(profile.ShadowReport.TopPromotedCandidates),
-                    FormatProfileTop(profile.ShadowReport.TopDemotedCandidates)
-                })]);
-
-            TableRenderer.Render(
-                "Attention Profile Rank Details",
-                ["Profile", "Id", "当前", "Attention", "Delta", "选中", "Would", "Breakdown", "原因"],
-                [.. result.Trace.AttentionProfileComparison.Profiles
-                    .SelectMany(profile =>
-                    {
-                        var scoresById = profile.AttentionScores
-                            .GroupBy(score => score.CandidateId, StringComparer.OrdinalIgnoreCase)
-                            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
-
-                        return profile.ShadowReport.Ranks
-                            .Where(rank => rank.RankDelta != 0 || rank.WouldBeSelectedByAttention != rank.SelectedByCurrentPolicy)
-                            .OrderByDescending(rank => Math.Abs(rank.RankDelta))
-                            .ThenBy(rank => rank.AttentionRank)
-                            .Take(5)
-                            .Select(rank => new[]
-                            {
-                                profile.ProfileId,
-                                rank.SourceId,
-                                rank.CurrentRank.ToString(),
-                                rank.AttentionRank.ToString(),
-                                rank.RankDelta.ToString("+0;-0;0"),
-                                FormatBool(rank.SelectedByCurrentPolicy),
-                                FormatBool(rank.WouldBeSelectedByAttention),
-                                scoresById.TryGetValue(rank.CandidateId, out var score) ? FormatAttentionBreakdown(score) : string.Empty,
-                                string.Join(" | ", rank.Reasons)
-                            });
-                    })]);
-        }
 
         TableRenderer.Render(
             "选中项",
@@ -303,45 +203,7 @@ public static class RetrievalCommand
         };
     }
 
-    private static string FormatAttentionBreakdown(ContextAttentionScore score)
-    {
-        return string.Join("; ",
-        [
-            $"query={score.QueryMatchScore:0.00}",
-            $"learning={score.LearningFeedbackScore:0.00}",
-            $"noise={score.NoiseRiskScore:0.00}",
-            $"short={score.ShortTermMatchScore:0.00}",
-            $"relation={score.RelationScore:0.00}",
-            $"recency={score.RecencyScore:0.00}",
-            $"importance={score.ImportanceScore:0.00}",
-            $"channel={score.ChannelScore:0.00}",
-            $"lifecyclePenalty={score.LifecyclePenalty:0.00}",
-            $"scopePenalty={score.ScopePenalty:0.00}"
-        ]);
-    }
-
     private static string FormatBool(bool value) => value ? "是" : "否";
-
-    private static string FormatAttentionLabels(AttentionShadowRank rank)
-    {
-        if (rank.IsMustHit && rank.IsMustNotHit)
-        {
-            return "MustHit,MustNotHit";
-        }
-
-        if (rank.IsMustHit)
-        {
-            return "MustHit";
-        }
-
-        return rank.IsMustNotHit ? "MustNotHit" : string.Empty;
-    }
-
-    private static string FormatProfileTop(IReadOnlyList<AttentionShadowRank> ranks)
-    {
-        return string.Join("; ", ranks.Take(3).Select(rank =>
-            $"{rank.SourceId}({rank.RankDelta:+0;-0;0})"));
-    }
 
     private static IReadOnlyList<float>? ParseVector(string? value)
     {

@@ -14,7 +14,6 @@ internal sealed class GraphExpansionCoordinator
     private readonly IContextStore _store;
     private readonly IRelationStore? _relationStore;
     private readonly RelationTraversalEngine? _traversalEngine;
-    private readonly IContextTokenizerResolver _tokenizerResolver;
 
     /// <summary>
     /// 是否配置了关系存储（仅当 relationStore 非空时才启用图谱种子解析和关系扩展）。
@@ -24,68 +23,11 @@ internal sealed class GraphExpansionCoordinator
     internal GraphExpansionCoordinator(
         IContextStore store,
         IRelationStore? relationStore,
-        RelationTraversalEngine? traversalEngine,
-        IContextTokenizerResolver tokenizerResolver)
+        RelationTraversalEngine? traversalEngine)
     {
         _store = store;
         _relationStore = relationStore;
         _traversalEngine = traversalEngine;
-        _tokenizerResolver = tokenizerResolver;
-    }
-
-    internal Task<GraphExpansionSectionContribution> BuildGraphExpansionContributionAsync(
-        ContextPackageRequest request,
-        IReadOnlyList<ContextPackageDecision> selectedItems,
-        CancellationToken cancellationToken)
-    {
-        return Task.FromResult(new GraphExpansionSectionContribution());
-    }
-
-    internal void AppendGraphExpansionSections(
-        GraphExpansionSectionContribution contribution,
-        ICollection<ContextPackageSection> sections,
-        ISet<string> sourceRefs,
-        TokenEstimationContext tokenContext,
-        ref int estimatedTokens)
-    {
-        if (!contribution.Applied || contribution.AddedItems.Count == 0)
-        {
-            return;
-        }
-
-        foreach (var group in contribution.AddedItems
-            .GroupBy(item => item.TargetSection, StringComparer.OrdinalIgnoreCase)
-            .OrderBy(group => PackageMetadataBuilder.ResolveGraphExpansionSectionPriority(group.Key))
-            .ThenBy(group => group.Key, StringComparer.OrdinalIgnoreCase))
-        {
-            var sectionSourceRefs = group
-                .SelectMany(item => item.SourceRefs)
-                .Where(value => !string.IsNullOrWhiteSpace(value))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToArray();
-            foreach (var sourceRef in sectionSourceRefs)
-            {
-                sourceRefs.Add(sourceRef);
-            }
-
-            var content = string.Join("\n\n", group.Select(item => item.Content));
-            var tokens = EstimatePackageTokens(content, tokenContext);
-            sections.Add(new ContextPackageSection
-            {
-                Name = group.Key,
-                Priority = PackageMetadataBuilder.ResolveGraphExpansionSectionPriority(group.Key),
-                Content = content,
-                ContentFormat = ContextContentFormat.Markdown,
-                SourceRefs = sectionSourceRefs,
-                ItemRefs = group
-                    .SelectMany(item => item.ItemRefs)
-                    .Where(value => !string.IsNullOrWhiteSpace(value))
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .ToArray(),
-                EstimatedTokens = tokens
-            });
-            estimatedTokens += tokens;
-        }
     }
 
     internal async Task<IReadOnlyList<string>> ResolveGraphSeedIdsFromWorkingMemoryAsync(
@@ -278,10 +220,5 @@ internal sealed class GraphExpansionCoordinator
             .OrderByDescending(item => item.Importance)
             .ThenByDescending(item => item.UpdatedAt)
             .ToArray();
-    }
-
-    private int EstimatePackageTokens(string? content, TokenEstimationContext tokenContext)
-    {
-        return _tokenizerResolver.Estimate(content, tokenContext.ModelName).TokenCount;
     }
 }

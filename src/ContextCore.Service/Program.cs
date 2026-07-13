@@ -35,25 +35,12 @@ var compressionOptions = builder.Configuration
 var securityOptions = builder.Configuration
 	.GetSection("Security")
 	.Get<SecurityOptions>() ?? new SecurityOptions();
-var retrievalAttentionRerankOptions = builder.Configuration
-	.GetSection("Retrieval:AttentionRerank")
-	.Get<RetrievalAttentionRerankOptions>() ?? new RetrievalAttentionRerankOptions();
 var learningRankerShadowOptions = builder.Configuration
 	.GetSection("Learning:RankerShadow")
 	.Get<LearningRankerShadowOptions>() ?? new LearningRankerShadowOptions();
 var learningRouterShadowOptions = builder.Configuration
 	.GetSection("Learning:RouterShadow")
 	.Get<LearningRouterShadowOptions>() ?? new LearningRouterShadowOptions();
-var graphExpansionShadowSection = builder.Configuration.GetSection("Graph:ExpansionShadow");
-var learningGraphExpansionShadowOptions = graphExpansionShadowSection.Exists()
-	? graphExpansionShadowSection.Get<LearningGraphExpansionShadowOptions>() ?? new LearningGraphExpansionShadowOptions()
-	: builder.Configuration.GetSection("Learning:GraphExpansionShadow").Get<LearningGraphExpansionShadowOptions>()
-		?? new LearningGraphExpansionShadowOptions();
-var graphExpansionApplySection = builder.Configuration.GetSection("Graph:ExpansionApply");
-var graphExpansionApplyServiceOptions = graphExpansionApplySection.Exists()
-	? graphExpansionApplySection.Get<GraphExpansionApplyServiceOptions>() ?? new GraphExpansionApplyServiceOptions()
-	: builder.Configuration.GetSection("Learning:GraphExpansionApply").Get<GraphExpansionApplyServiceOptions>()
-		?? new GraphExpansionApplyServiceOptions();
 var lifecycleAwareRankerShadowOptions = new LifecycleAwareRankerShadowOptions
 {
 	Enabled = learningRankerShadowOptions.Enabled,
@@ -63,54 +50,6 @@ var lifecycleAwareRankerShadowOptions = new LifecycleAwareRankerShadowOptions
 	Profile = string.IsNullOrWhiteSpace(learningRankerShadowOptions.Profile)
 		? "lifecycle-aware-v1"
 		: learningRankerShadowOptions.Profile
-};
-var graphExpansionShadowOptions = new GraphExpansionShadowOptions
-{
-	Enabled = learningGraphExpansionShadowOptions.Enabled,
-	TraceCollectionEnabled = learningGraphExpansionShadowOptions.TraceCollectionEnabled,
-	Profiles = learningGraphExpansionShadowOptions.Profiles.Count == 0
-		? ["audit-v1", "conflict-v1"]
-		: learningGraphExpansionShadowOptions.Profiles
-			.Where(static item => !string.IsNullOrWhiteSpace(item))
-			.Select(static item => item.Trim())
-			.Distinct(StringComparer.OrdinalIgnoreCase)
-			.ToArray(),
-	MaxRelationsPerTrace = learningGraphExpansionShadowOptions.MaxRelationsPerTrace > 0
-		? learningGraphExpansionShadowOptions.MaxRelationsPerTrace
-		: 50
-};
-var graphExpansionApplyOptions = new GraphExpansionApplyOptions
-{
-	Mode = string.IsNullOrWhiteSpace(graphExpansionApplyServiceOptions.Mode)
-		? GraphExpansionApplyOptions.OffMode
-		: graphExpansionApplyServiceOptions.Mode,
-	ApplyMode = string.IsNullOrWhiteSpace(graphExpansionApplyServiceOptions.ApplyMode)
-		? GraphExpansionApplyOptions.ProfileScopedApplyMode
-		: graphExpansionApplyServiceOptions.ApplyMode,
-	OptInProfiles = graphExpansionApplyServiceOptions.OptInProfiles
-		.Where(static item => !string.IsNullOrWhiteSpace(item))
-		.Select(static item => item.Trim())
-		.Distinct(StringComparer.OrdinalIgnoreCase)
-		.ToArray(),
-	AllowedTargetSections = graphExpansionApplyServiceOptions.AllowedTargetSections.Count == 0
-		?
-		[
-			GraphExpansionTargetSection.AuditContext,
-			GraphExpansionTargetSection.ConflictEvidence,
-			GraphExpansionTargetSection.HistoricalContext,
-			GraphExpansionTargetSection.DiagnosticsOnly
-		]
-		: graphExpansionApplyServiceOptions.AllowedTargetSections
-			.Where(static item => !string.IsNullOrWhiteSpace(item))
-			.Select(static item => item.Trim())
-			.Distinct(StringComparer.OrdinalIgnoreCase)
-			.ToArray(),
-	DisallowNormalContextInjection = graphExpansionApplyServiceOptions.DisallowNormalContextInjection,
-	FallbackOnRisk = graphExpansionApplyServiceOptions.FallbackOnRisk,
-	MaxAddedItemsPerPackage = graphExpansionApplyServiceOptions.MaxAddedItemsPerPackage > 0
-		? graphExpansionApplyServiceOptions.MaxAddedItemsPerPackage
-		: 20,
-	EmitComparisonTrace = graphExpansionApplyServiceOptions.EmitComparisonTrace
 };
 var relationGovernanceProviderSwitchSection = builder.Configuration.GetSection("Storage:RelationGovernanceProviderSwitch");
 var relationGovernanceProviderSwitchOptions = relationGovernanceProviderSwitchSection.Exists()
@@ -133,15 +72,10 @@ var routerShadowOptions = new RouterShadowOptions
 builder.Services.AddSingleton(storageOptions);
 builder.Services.AddSingleton(compressionOptions);
 builder.Services.AddSingleton(securityOptions);
-builder.Services.AddSingleton(retrievalAttentionRerankOptions);
 builder.Services.AddSingleton(learningRankerShadowOptions);
 builder.Services.AddSingleton(learningRouterShadowOptions);
 builder.Services.AddSingleton(routerShadowOptions);
 builder.Services.AddSingleton(lifecycleAwareRankerShadowOptions);
-builder.Services.AddSingleton(learningGraphExpansionShadowOptions);
-builder.Services.AddSingleton(graphExpansionShadowOptions);
-builder.Services.AddSingleton(graphExpansionApplyServiceOptions);
-builder.Services.AddSingleton(graphExpansionApplyOptions);
 builder.Services.AddSingleton(relationGovernanceProviderSwitchOptions);
 builder.Services.AddSingleton(embeddingProviderOptions);
 builder.Services.AddSingleton(Microsoft.Extensions.Options.Options.Create(embeddingProviderOptions));

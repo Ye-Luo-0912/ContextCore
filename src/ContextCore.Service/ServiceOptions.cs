@@ -116,40 +116,4 @@ public sealed class LearningRouterShadowOptions
 	public bool RecordDisagreements { get; set; } = true;
 }
 
-/// <summary>图扩展 shadow trace 采集配置；只写 trace，不影响正式检索或 package 输出。</summary>
-public sealed class LearningGraphExpansionShadowOptions
-{
-	public bool Enabled { get; set; }
 
-	public bool TraceCollectionEnabled { get; set; }
-
-	public List<string> Profiles { get; set; } = ["audit-v1", "conflict-v1"];
-
-	public int MaxRelationsPerTrace { get; set; } = 50;
-}
-
-/// <summary>图扩展 guarded apply 配置；默认关闭，只允许显式 profile opt-in。</summary>
-public sealed class GraphExpansionApplyServiceOptions
-{
-	public string Mode { get; set; } = "Off";
-
-	public string ApplyMode { get; set; } = "ProfileScoped";
-
-	public List<string> OptInProfiles { get; set; } = [];
-
-	public List<string> AllowedTargetSections { get; set; } =
-	[
-		"audit_context",
-		"conflict_evidence",
-		"historical_context",
-		"diagnostics_only"
-	];
-
-	public bool DisallowNormalContextInjection { get; set; } = true;
-
-	public bool FallbackOnRisk { get; set; } = true;
-
-	public int MaxAddedItemsPerPackage { get; set; } = 20;
-
-	public bool EmitComparisonTrace { get; set; } = true;
-}

@@ -104,7 +104,6 @@ public sealed class LearningReadinessFreezeRunner
             await BuildVectorPostgresProviderAsync(current, cancellationToken).ConfigureAwait(false),
             await BuildQwen3EmbeddingProviderAsync(current, cancellationToken).ConfigureAwait(false),
             await BuildCurrentEmbeddingProviderAsync(current, cancellationToken).ConfigureAwait(false),
-            await BuildGraphExpansionAsync(current, cancellationToken).ConfigureAwait(false),
             await BuildVectorRetrievalAsync(current, cancellationToken).ConfigureAwait(false),
             await BuildHybridRetrievalPreviewAsync(current, cancellationToken).ConfigureAwait(false),
             await BuildDatasetV2StressAsync(current, cancellationToken).ConfigureAwait(false),
@@ -1100,48 +1099,6 @@ public sealed class LearningReadinessFreezeRunner
         }
 
         return builder.ToString();
-    }
-
-    private static async Task<ShadowCapabilityReadiness> BuildGraphExpansionAsync(
-        string current,
-        CancellationToken cancellationToken)
-    {
-        var path = Path.Combine(current, "eval", "graph-expansion-guarded-optin-gate.json");
-        var report = await ReadJsonAsync<GraphExpansionGuardedOptInGateReport>(path, cancellationToken)
-            .ConfigureAwait(false);
-        if (report is null)
-        {
-            return Missing(
-                ShadowCapabilityIds.GraphExpansion,
-                "G7.1",
-                path,
-                ["MissingGraphExpansionGateReport"],
-                forbidden: [ShadowRuntimeModes.ApplyGuarded, ShadowRuntimeModes.RuntimeShadow, ShadowRuntimeModes.DefaultOn]);
-        }
-
-        return new ShadowCapabilityReadiness
-        {
-            CapabilityId = ShadowCapabilityIds.GraphExpansion,
-            CurrentPhase = "G7.1",
-            Status = report.Passed
-                ? ShadowCapabilityReadinessStatuses.ReadyForGuardedOptIn
-                : ShadowCapabilityReadinessStatuses.PreviewOnly,
-            Recommendation = report.Passed ? "ReadyForGuardedOptIn:audit-v1,conflict-v1" : "KeepPreviewOnly",
-            GatePassed = report.Passed,
-            BlockedReasons = report.FailedConditions,
-            AllowedRuntimeModes = report.Passed
-                ? [ShadowRuntimeModes.Off, ShadowRuntimeModes.Shadow, "ApplyGuarded:audit-v1", "ApplyGuarded:conflict-v1"]
-                : [ShadowRuntimeModes.Off, ShadowRuntimeModes.PreviewOnly],
-            ForbiddenRuntimeModes =
-            [
-                ShadowRuntimeModes.DefaultOn,
-                "ApplyGuarded:normal-v1",
-                "ApplyGuarded:current-task-v1",
-                "NormalContextInjection"
-            ],
-            LastEvalReportPath = PathHygiene.ToRepoRelativePath(path),
-            LastUpdatedAt = report.CreatedAt
-        };
     }
 
     private static async Task<ShadowCapabilityReadiness> BuildVectorRetrievalAsync(
