@@ -88,32 +88,3 @@ public sealed class ShortTermMaintenanceOptions
 	public int IntervalSeconds { get; set; } = 300;
 }
 
-/// <summary>Lifecycle-aware ranker shadow 配置。Enabled 控制运行时 shadow，DebugEndpointEnabled 仅控制只读 debug endpoint。</summary>
-public sealed class LearningRankerShadowOptions
-{
-	public bool Enabled { get; set; }
-
-	public bool DebugEndpointEnabled { get; set; } = true;
-
-	public bool TraceCollectionEnabled { get; set; }
-
-	public int MaxCandidatesPerTrace { get; set; } = 50;
-
-	public string Profile { get; set; } = "lifecycle-aware-v1";
-}
-
-/// <summary>Router intent shadow trace 采集配置；默认关闭，只做旁路观测。</summary>
-public sealed class LearningRouterShadowOptions
-{
-	public bool Enabled { get; set; }
-
-	public bool TraceCollectionEnabled { get; set; }
-
-	public string ShadowClassifier { get; set; } = "TokenCentroidRouterBaseline";
-
-	public bool RecordAgreements { get; set; } = true;
-
-	public bool RecordDisagreements { get; set; } = true;
-}
-
-

@@ -35,22 +35,6 @@ var compressionOptions = builder.Configuration
 var securityOptions = builder.Configuration
 	.GetSection("Security")
 	.Get<SecurityOptions>() ?? new SecurityOptions();
-var learningRankerShadowOptions = builder.Configuration
-	.GetSection("Learning:RankerShadow")
-	.Get<LearningRankerShadowOptions>() ?? new LearningRankerShadowOptions();
-var learningRouterShadowOptions = builder.Configuration
-	.GetSection("Learning:RouterShadow")
-	.Get<LearningRouterShadowOptions>() ?? new LearningRouterShadowOptions();
-var lifecycleAwareRankerShadowOptions = new LifecycleAwareRankerShadowOptions
-{
-	Enabled = learningRankerShadowOptions.Enabled,
-	DebugEndpointEnabled = learningRankerShadowOptions.DebugEndpointEnabled,
-	TraceCollectionEnabled = learningRankerShadowOptions.TraceCollectionEnabled,
-	MaxCandidatesPerTrace = learningRankerShadowOptions.MaxCandidatesPerTrace,
-	Profile = string.IsNullOrWhiteSpace(learningRankerShadowOptions.Profile)
-		? "lifecycle-aware-v1"
-		: learningRankerShadowOptions.Profile
-};
 var relationGovernanceProviderSwitchSection = builder.Configuration.GetSection("Storage:RelationGovernanceProviderSwitch");
 var relationGovernanceProviderSwitchOptions = relationGovernanceProviderSwitchSection.Exists()
 	? relationGovernanceProviderSwitchSection.Get<RelationGovernanceProviderSwitchOptions>() ?? new RelationGovernanceProviderSwitchOptions()
@@ -59,23 +43,9 @@ var relationGovernanceProviderSwitchOptions = relationGovernanceProviderSwitchSe
 var embeddingProviderOptions = builder.Configuration
 	.GetSection("EmbeddingProvider")
 	.Get<EmbeddingProviderOptions>() ?? new EmbeddingProviderOptions();
-var routerShadowOptions = new RouterShadowOptions
-{
-	Enabled = learningRouterShadowOptions.Enabled,
-	TraceCollectionEnabled = learningRouterShadowOptions.TraceCollectionEnabled,
-	ShadowClassifier = string.IsNullOrWhiteSpace(learningRouterShadowOptions.ShadowClassifier)
-		? RouterIntentClassifierBaselineNames.TokenCentroidRouterBaseline
-		: learningRouterShadowOptions.ShadowClassifier,
-	RecordAgreements = learningRouterShadowOptions.RecordAgreements,
-	RecordDisagreements = learningRouterShadowOptions.RecordDisagreements
-};
 builder.Services.AddSingleton(storageOptions);
 builder.Services.AddSingleton(compressionOptions);
 builder.Services.AddSingleton(securityOptions);
-builder.Services.AddSingleton(learningRankerShadowOptions);
-builder.Services.AddSingleton(learningRouterShadowOptions);
-builder.Services.AddSingleton(routerShadowOptions);
-builder.Services.AddSingleton(lifecycleAwareRankerShadowOptions);
 builder.Services.AddSingleton(relationGovernanceProviderSwitchOptions);
 builder.Services.AddSingleton(embeddingProviderOptions);
 builder.Services.AddSingleton(Microsoft.Extensions.Options.Options.Create(embeddingProviderOptions));

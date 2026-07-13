@@ -96,81 +96,6 @@ namespace ContextCore.Abstractions.Models
         public DateTimeOffset CreatedAt { get; init; }
     }
 
-    /// <summary>Lifecycle-aware ranker shadow debug request. It is diagnostic-only and does not opt in runtime scoring.</summary>
-    public sealed class LifecycleAwareRankerShadowDebugRequest
-    {
-        public string Query { get; init; } = string.Empty;
-
-        public string WorkspaceId { get; init; } = string.Empty;
-
-        public string CollectionId { get; init; } = string.Empty;
-
-        public string Mode { get; init; } = "ChatMode";
-
-        public IReadOnlyList<string> CandidateIds { get; init; } = Array.Empty<string>();
-
-        public bool IncludeLifecycleDetails { get; init; } = true;
-
-        public int TopK { get; init; } = 10;
-
-        public int CandidateTake { get; init; } = 50;
-
-        public int TokenBudget { get; init; } = 4000;
-    }
-
-    /// <summary>Lifecycle-aware ranker shadow debug response. Formal retrieval output is reported but never mutated.</summary>
-    public sealed class LifecycleAwareRankerShadowDebugResponse
-    {
-        public string OperationId { get; init; } = string.Empty;
-
-        public string RetrievalOperationId { get; init; } = string.Empty;
-
-        public string WorkspaceId { get; init; } = string.Empty;
-
-        public string CollectionId { get; init; } = string.Empty;
-
-        public string Query { get; init; } = string.Empty;
-
-        public string Mode { get; init; } = string.Empty;
-
-        public bool RankerShadowEnabled { get; init; }
-
-        public bool DebugEndpointEnabled { get; init; }
-
-        public string RankerShadowProfile { get; init; } = string.Empty;
-
-        public bool FormalOutputChanged { get; init; }
-
-        public bool SelectedSetChanged { get; init; }
-
-        public IReadOnlyList<string> LegacySelectedIds { get; init; } = Array.Empty<string>();
-
-        public IReadOnlyList<string> FinalSelectedIds { get; init; } = Array.Empty<string>();
-
-        public IReadOnlyList<LifecycleAwareRankerShadowCandidateScore> CandidateScores { get; init; } =
-            Array.Empty<LifecycleAwareRankerShadowCandidateScore>();
-
-        public IReadOnlyList<LifecycleAwareRankerShadowCandidateScore> DeprecatedDemotions { get; init; } =
-            [];
-
-        public IReadOnlyList<LifecycleAwareRankerShadowCandidateScore> HistoricalDemotions { get; init; } =
-            [];
-
-        public IReadOnlyList<LifecycleAwareRankerShadowCandidateScore> CurrentActivePromotions { get; init; } =
-            [];
-
-        public IReadOnlyList<LifecycleAwareRankerShadowCandidateScore> VersionConflictFixes { get; init; } =
-            [];
-
-        public IReadOnlyList<LifecycleAwareRankerShadowCandidateScore> MustHitDemotions { get; init; } =
-            [];
-
-        public IReadOnlyList<LifecycleAwareRankerShadowCandidateScore> MustNotHitPromotions { get; init; } =
-            [];
-
-        public Dictionary<string, string> Metadata { get; init; } = new(StringComparer.OrdinalIgnoreCase);
-    }
-
     /// <summary>检索候选项，统一承载原始上下文和记忆条目。</summary>
     public sealed class ContextRetrievalCandidate
     {
@@ -434,9 +359,6 @@ namespace ContextCore.Abstractions.Models
         public int DeprecatedCandidateCount { get; init; }
 
         public int MustNotRiskCount { get; init; }
-
-        public IReadOnlyList<LifecycleAwareRankerShadowCandidateScore> ScoreBreakdown { get; init; } =
-            [];
 
         public IReadOnlyList<RankerCandidateEligibilityDecision> EligibilityDecisions { get; init; } =
             [];
@@ -861,9 +783,6 @@ namespace ContextCore.Abstractions.Models
         public int RiskCandidatesInShadowTopK { get; init; }
 
         public string ScoreDirection { get; init; } = string.Empty;
-
-        public IReadOnlyList<LifecycleAwareRankerShadowCandidateScore> ScoreBreakdown { get; init; } =
-            [];
 
         public bool LifecycleMetadataPresent { get; init; }
 

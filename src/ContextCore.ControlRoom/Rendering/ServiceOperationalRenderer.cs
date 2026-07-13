@@ -196,9 +196,6 @@ public static class ServiceOperationalRenderer
         builder.AppendLine($"TraceRoot     : {diagnostics.TraceRoot}");
         builder.AppendLine($"Retrieval     : {diagnostics.RetrievalTraceCount}");
         builder.AppendLine($"RouterShadow  : {diagnostics.RouterShadowTraceCount}");
-        builder.AppendLine($"RankerShadow  : {diagnostics.RankerShadowTraceCount}");
-        builder.AppendLine($"GraphShadow   : {diagnostics.GraphShadowTraceCount}");
-        builder.AppendLine($"VectorShadow  : {diagnostics.VectorShadowTraceCount}");
         builder.AppendLine($"ToolCallReady : {diagnostics.ToolCallPlaceholderReady}");
         builder.AppendLine($"LegacyFallback: {diagnostics.LegacyFallbackCount}");
         foreach (var path in diagnostics.TraceCategoryPaths.Take(6))

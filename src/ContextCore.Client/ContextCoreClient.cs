@@ -352,43 +352,6 @@ public sealed class ContextCoreClient
             cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<LifecycleAwareRankerShadowDebugResponse> DebugLifecycleAwareRankerAsync(
-        LifecycleAwareRankerShadowDebugRequest request,
-        CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(request);
-        ArgumentException.ThrowIfNullOrWhiteSpace(request.WorkspaceId);
-        ArgumentException.ThrowIfNullOrWhiteSpace(request.CollectionId);
-        ArgumentException.ThrowIfNullOrWhiteSpace(request.Query);
-
-        return await PostRequiredAsync<LifecycleAwareRankerShadowDebugRequest, LifecycleAwareRankerShadowDebugResponse>(
-            "api/retrieval/ranker-shadow/debug",
-            request,
-            cancellationToken).ConfigureAwait(false);
-    }
-
-    public Task<LifecycleAwareRankerShadowDebugResponse> DebugLifecycleAwareRankerAsync(
-        string workspaceId,
-        string collectionId,
-        string query,
-        string? mode = null,
-        IReadOnlyList<string>? candidateIds = null,
-        bool includeLifecycleDetails = true,
-        CancellationToken cancellationToken = default)
-    {
-        return DebugLifecycleAwareRankerAsync(
-            new LifecycleAwareRankerShadowDebugRequest
-            {
-                WorkspaceId = workspaceId,
-                CollectionId = collectionId,
-                Query = query,
-                Mode = string.IsNullOrWhiteSpace(mode) ? "ChatMode" : mode,
-                CandidateIds = candidateIds ?? Array.Empty<string>(),
-                IncludeLifecycleDetails = includeLifecycleDetails
-            },
-            cancellationToken);
-    }
-
     public async Task<IReadOnlyList<RouterIntentShadowTrace>> GetRouterShadowTracesAsync(
         string workspaceId,
         string collectionId,

@@ -267,12 +267,6 @@ public sealed record TraceLayoutDiagnostics
 
     public int RouterShadowTraceCount { get; init; }
 
-    public int RankerShadowTraceCount { get; init; }
-
-    public int GraphShadowTraceCount { get; init; }
-
-    public int VectorShadowTraceCount { get; init; }
-
     public bool ToolCallPlaceholderReady { get; init; }
 
     public int LegacyFallbackCount { get; init; }

@@ -9,7 +9,6 @@ public static class EvalReportPaths
     // Router output directory (shared by all router runners)
     public const string RouterOutputDirectory = "learning/router";
     public const string RouterIntentBaselineReportFileName = "router-intent-baseline-report.json";
-    public const string RouterShadowTraceQualityReportFileName = "router-shadow-trace-quality-report.json";
     public const string RouterDisagreementTriageA3ReportFileName = "router-disagreement-triage-a3.json";
     public const string RouterDisagreementTriageExtendedReportFileName = "router-disagreement-triage-extended.json";
     public const string RouterHardNegativesFileName = "router-hard-negatives.jsonl";
