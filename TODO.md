@@ -1,6 +1,6 @@
 # ContextCore 项目路线图
 
-> 最近更新：P1 ControlRoom 历史 Postgres 报告矩阵删除 + P2 Evaluation/Core 不可达切片删除 + P3 DTO-R5 孤立类型收口 + P4 FoundationStatusService 孤立方法删除 + 别名链删除 + 仅测试调用方法删除 + 跨项目迁移（2026-07-13）
+> 最近更新：P1 ControlRoom 历史 Postgres 报告矩阵删除 + P2 Evaluation/Core 不可达切片删除 + P3 DTO-R5 孤立类型收口 + P4 FoundationStatusService 孤立方法删除 + 别名链删除 + 仅测试调用方法删除 + 跨项目迁移 + P3-deferred eval-only DTO 迁移回 Evaluation（2026-07-13）
 
 > 本文件是 ContextCore 的**唯一当前路线图**。docs/ 下的 freeze / report / audit / plan 类文档均为历史快照，仅供回溯，不作为设计依据。
 
@@ -8,7 +8,7 @@
 
 ## 当前阶段
 
-**架构收口与不可达代码清除期** — P5（P5-0 ~ P5-6）、P0 并发锁修复、P1-5 分发重构、DTO-R1~R5 报告 DTO 治理、P1 ControlRoom 历史报告矩阵删除、P2 Evaluation/Core 不可达切片删除、P4-partial FoundationStatusService 孤立方法删除均已完成。剩余 P4 跨项目迁移（实时健康入 Service、历史解析入 Evaluation、别名链删除）需单独评估；Domain/Api/Ports 全量重排与 Service DI 大改暂缓。
+**架构收口与不可达代码清除期** — P5（P5-0 ~ P5-6）、P0 并发锁修复、P1-5 分发重构、DTO-R1~R5 报告 DTO 治理、P1 ControlRoom 历史报告矩阵删除、P2 Evaluation/Core 不可达切片删除、P4 FoundationStatusService 收口（孤立方法删除 + 别名链删除 + 仅测试调用方法删除 + 跨项目迁移）、P3-deferred eval-only DTO 迁移回 Evaluation 均已完成。剩余 Domain/Api/Ports 全量重排与 Service DI 大改暂缓。
 
 ---
 
@@ -28,8 +28,9 @@
 
 | 指标 | 当前值 | 目标 |
 |------|--------|------|
-| 生产代码总行数 | ~143,300 | < 220k |
-| Evaluation 代码行数 | ~28,900 | < 70k |
+| 生产代码总行数 | ~143,365 | < 220k |
+| Evaluation 代码行数 | ~30,340 | < 70k |
+| Abstractions 代码行数 | ~14,731 | 跨层契约 |
 | ControlRoom 代码行数 | ~17,500 | < 20k |
 | EvalCommand.cs 单文件行数 | 7,987 | P1-5 已完成 |
 | FoundationStatusService.cs 行数 | 606 | P4 已完成 |
@@ -190,7 +191,7 @@
 
 - **Service DI 收敛到 ContextRuntimeBuilder** — Service ASP.NET DI 仍由 CoreExtensions.AddContextCore 自行注册 80+ 服务。风险较高（生产路径），需单独评估。
 - ~~**IEvalState 上帝接口拆分**~~ — 已完成：已拆分为 `IEvalStateCore` / `IEvalStateServiceMode`（DTO-R3 已迁移到 Evaluation.Hosting）。
-- **eval-only DTO 迁移** — P5-1 遗留，部分 eval-only DTO 仍在非 Evaluation 项目中。P3 已删除 83 个孤立 DTO 类型，剩余 eval-only 模型迁回 ContextCore.Evaluation/Models 待后续处理。
+- ~~**eval-only DTO 迁移**~~ — 已完成：4 批次共迁移 80 个 eval-only DTO 类型从 Abstractions 到 Evaluation/Models（批次1: 12 类型、批次2: 22 类型、批次3: 9 类型、批次4: 37 类型）。Abstractions 从 ~15,600 行减到 14,731 行。
 - ~~**P4 FoundationStatusService 跨项目迁移**~~ — 已完成：别名链删除 + 11 个仅测试调用方法删除 + 8 个孤立私有方法删除 + 5 个历史产物解析方法迁移到 Evaluation。FoundationStatusService 从 2,510 行减到 606 行（-76%）。
 
 ---
