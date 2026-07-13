@@ -4,7 +4,6 @@ using System.Text.Json;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Client;
-using ContextCore.Core.Services.Planning;
 
 namespace ContextCore.Tests;
 
@@ -268,132 +267,6 @@ public sealed class ContextCoreClientTests
         Assert.IsNotNull(deep.ShortTermMaintenance);
         Assert.AreEqual("run-1", deep.ShortTermMaintenance!.LastRun!.RunId);
         Assert.AreEqual(0, handlers.Count);
-    }
-
-    [TestMethod]
-    public async Task GetPlanningSnapshotAsync_ShouldCallExpectedRoute()
-    {
-        using var http = CreateHttpClient(request =>
-        {
-            Assert.AreEqual(HttpMethod.Get, request.Method);
-            Assert.AreEqual("/api/context/planning/snapshot", request.RequestUri?.AbsolutePath);
-            var query = request.RequestUri?.Query ?? string.Empty;
-            StringAssert.Contains(query, "workspaceId=workspace-1");
-            StringAssert.Contains(query, "collectionId=collection-1");
-            StringAssert.Contains(query, "sessionId=session-1");
-            return Json(new ContextPlanningSnapshot
-            {
-                WorkspaceId = "workspace-1",
-                CollectionId = "collection-1",
-                SessionId = "session-1",
-                ActiveTasks =
-                [
-                    new ShortTermWorkingItem
-                    {
-                        ItemId = "task-1",
-                        WorkspaceId = "workspace-1",
-                        CollectionId = "collection-1",
-                        Kind = "ActiveTask",
-                        Status = "active"
-                    }
-                ],
-                StableConstraints =
-                [
-                    new ContextConstraint
-                    {
-                        Id = "constraint-1",
-                        WorkspaceId = "workspace-1",
-                        CollectionId = "collection-1",
-                        Status = ContextMemoryStatus.Stable
-                    }
-                ],
-                DecisionRecords =
-                [
-                    new ContextMemoryItem
-                    {
-                        Id = "decision-1",
-                        WorkspaceId = "workspace-1",
-                        CollectionId = "collection-1",
-                        Layer = ContextMemoryLayer.Stable,
-                        Status = ContextMemoryStatus.Stable,
-                        Type = "decision"
-                    }
-                ],
-                LearningSignalsSummary = new ContextLearningSummary
-                {
-                    WorkspaceId = "workspace-1",
-                    CollectionId = "collection-1",
-                    RecordCount = 1
-                },
-                PolicyVersion = "context-planning-snapshot-policy/v1",
-                CreatedAt = DateTimeOffset.UtcNow
-            });
-        });
-        var client = new ContextCoreClient(http);
-
-        var snapshot = await client.GetPlanningSnapshotAsync("workspace-1", "collection-1", "session-1");
-
-        Assert.AreEqual("workspace-1", snapshot.WorkspaceId);
-        Assert.AreEqual("task-1", snapshot.ActiveTasks.Single().ItemId);
-        Assert.AreEqual("constraint-1", snapshot.StableConstraints.Single().Id);
-        Assert.AreEqual("decision-1", snapshot.DecisionRecords.Single().Id);
-        Assert.AreEqual(1, snapshot.LearningSignalsSummary.RecordCount);
-    }
-
-    [TestMethod]
-    public async Task ProposeRetrievalPlanAsync_ShouldCallExpectedRoute()
-    {
-        using var http = CreateHttpClient(request =>
-        {
-            Assert.AreEqual(HttpMethod.Post, request.Method);
-            Assert.AreEqual("/api/context/planning/propose", request.RequestUri?.AbsolutePath);
-            var payload = JsonSerializer.Deserialize<ContextPlanningProposalRequest>(
-                request.Content!.ReadAsStringAsync().GetAwaiter().GetResult(),
-                JsonOptions);
-            Assert.IsNotNull(payload);
-            Assert.AreEqual("workspace-1", payload!.WorkspaceId);
-            Assert.AreEqual("collection-1", payload.CollectionId);
-            Assert.AreEqual("session-1", payload.SessionId);
-            Assert.AreEqual("当前任务下一步", payload.CurrentInput);
-            Assert.AreEqual("Chat", payload.Mode);
-
-            return Json(new RetrievalPlanProposal
-            {
-                OperationId = "proposal-op-1",
-                WorkspaceId = "workspace-1",
-                CollectionId = "collection-1",
-                Intent = "CurrentTask",
-                Mode = "Chat",
-                UseExact = true,
-                UseKeyword = true,
-                UseShortTermMemory = true,
-                UseWorkingMemory = true,
-                UseStableMemory = true,
-                UseRelations = false,
-                UseVector = false,
-                KeywordTopK = 18,
-                MemoryTopK = 22,
-                RelationTopK = 0,
-                VectorTopK = 0,
-                FinalTopK = 20,
-                Confidence = 0.8,
-                Reasons = ["matched current-task terms"],
-                Warnings = ["previewOnly: proposal does not execute retrieval or mutate retrieval output"]
-            });
-        });
-        var client = new ContextCoreClient(http);
-
-        var proposal = await client.ProposeRetrievalPlanAsync(
-            "workspace-1",
-            "collection-1",
-            "session-1",
-            "当前任务下一步",
-            "Chat");
-
-        Assert.AreEqual("proposal-op-1", proposal.OperationId);
-        Assert.AreEqual("CurrentTask", proposal.Intent);
-        Assert.IsFalse(proposal.UseVector);
-        Assert.AreEqual(20, proposal.FinalTopK);
     }
 
     [TestMethod]
@@ -3188,57 +3061,6 @@ public sealed class ContextCoreClientTests
 
         Assert.AreEqual("retrieval-graph-shadow-1", records[0].RetrievalId);
         StringAssert.Contains(jsonl, "retrieval-graph-shadow-1");
-        Assert.AreEqual(0, handlers.Count);
-    }
-
-    [TestMethod]
-    public async Task RouterShadowTraceClientMethods_ShouldCallExpectedRoutes()
-    {
-        var handlers = new Queue<Func<HttpRequestMessage, HttpResponseMessage>>();
-        handlers.Enqueue(request =>
-        {
-            Assert.AreEqual(HttpMethod.Get, request.Method);
-            Assert.AreEqual("/api/learning/router-shadow/traces", request.RequestUri?.AbsolutePath);
-            StringAssert.Contains(request.RequestUri?.Query ?? string.Empty, "workspaceId=workspace-1");
-            StringAssert.Contains(request.RequestUri?.Query ?? string.Empty, "collectionId=collection-1");
-            StringAssert.Contains(request.RequestUri?.Query ?? string.Empty, "take=5");
-            return Json(new[]
-            {
-                new RouterIntentShadowTrace
-                {
-                    RequestId = "router-shadow-1",
-                    WorkspaceId = "workspace-1",
-                    CollectionId = "collection-1",
-                    RuntimeIntent = PlanningIntentDetector.CodingTask,
-                    ShadowIntent = PlanningIntentDetector.FuzzyQuestion,
-                    Agreement = false,
-                    FormalOutputChanged = false
-                }
-            });
-        });
-        handlers.Enqueue(request =>
-        {
-            Assert.AreEqual(HttpMethod.Get, request.Method);
-            Assert.AreEqual("/api/learning/router-shadow/traces", request.RequestUri?.AbsolutePath);
-            StringAssert.Contains(request.RequestUri?.Query ?? string.Empty, "format=jsonl");
-            return new HttpResponseMessage(HttpStatusCode.OK)
-            {
-                Content = new StringContent(
-                    "{\"requestId\":\"router-shadow-1\",\"formalOutputChanged\":false}",
-                    Encoding.UTF8,
-                    "application/x-ndjson")
-            };
-        });
-
-        using var http = CreateHttpClient(request => handlers.Dequeue().Invoke(request));
-        var client = new ContextCoreClient(http);
-
-        var records = await client.GetRouterShadowTracesAsync("workspace-1", "collection-1", take: 5);
-        var jsonl = await client.ExportRouterShadowTracesAsync("workspace-1", "collection-1", take: 5);
-
-        Assert.AreEqual("router-shadow-1", records[0].RequestId);
-        Assert.IsFalse(records[0].FormalOutputChanged);
-        StringAssert.Contains(jsonl, "router-shadow-1");
         Assert.AreEqual(0, handlers.Count);
     }
 

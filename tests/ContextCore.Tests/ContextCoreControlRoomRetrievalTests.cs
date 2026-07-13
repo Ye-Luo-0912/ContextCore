@@ -127,7 +127,6 @@ public sealed class ContextCoreControlRoomRetrievalTests
         StringAssert.Contains(rendered, "Attention Shadow Diff");
         StringAssert.Contains(rendered, "Attention Shadow Summary");
         StringAssert.Contains(rendered, "Attention Rerank Status");
-        StringAssert.Contains(rendered, "Planning Execution Status");
         StringAssert.Contains(rendered, "Legacy");
         StringAssert.Contains(rendered, "old-score-anchored-v1-strong");
         StringAssert.Contains(rendered, "Attention Profile Comparison");
@@ -152,7 +151,6 @@ public sealed class ContextCoreControlRoomRetrievalTests
 
         var packageRendered = packageOutput.ToString();
         StringAssert.Contains(packageRendered, "Attention Rerank Status");
-        StringAssert.Contains(packageRendered, "Planning Execution Status");
         StringAssert.Contains(packageRendered, "old-score-anchored-v1-strong");
     }
 

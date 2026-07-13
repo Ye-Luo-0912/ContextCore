@@ -429,7 +429,6 @@ public sealed class ContextCoreLifecycleAwareRankerShadowTests
             Metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
                 ["rankerShadowQueryMode"] = "ChatMode",
-                ["planningIntent"] = "CurrentTask",
                 ["rankerShadowFormalOutputChanged"] = "false"
             }
         };

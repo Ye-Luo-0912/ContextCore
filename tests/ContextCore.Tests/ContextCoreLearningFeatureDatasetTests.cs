@@ -568,56 +568,6 @@ public sealed class ContextCoreLearningFeatureDatasetTests
     }
 
     [TestMethod]
-    public void PlanningShadowReport_ShouldGenerateRouterIntentExample()
-    {
-        var report = new ShadowRetrievalComparisonReport
-        {
-            ReportId = "planning-shadow-report-test",
-            SampleSet = "a3",
-            GeneratedAt = DateTimeOffset.UtcNow,
-            Samples =
-            [
-                new ShadowRetrievalComparisonItem
-                {
-                    SampleId = "sample-router-1",
-                    Mode = "CodingMode",
-                    ProposalId = "proposal-1",
-                    ProposalSummary = "CodingTask/CodingMode keyword=8 memory=8 relation=4 final=10",
-                    LegacyOperationId = "legacy-1",
-                    ShadowOperationId = "shadow-1",
-                    ValidPlan = true,
-                    NativeValidPlan = true,
-                    ShadowRecall10 = 1,
-                    LegacyRecall10 = 1,
-                    ShadowMrr = 1,
-                    ShadowConstraintHitRate = 1,
-                    ShadowSelectedMustHit = ["must-hit-router"],
-                    ShadowChannelSources = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
-                    {
-                        ["keyword"] = ["must-hit-router"],
-                        ["relations"] = ["relation-evidence"]
-                    },
-                    LegacyChannelSources = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
-                    {
-                        ["working"] = ["working-item"]
-                    }
-                }
-            ]
-        };
-
-        var example = new LearningFeatureDatasetService()
-            .GenerateRouterIntentExamples(report)
-            .Single();
-
-        Assert.AreEqual("RouterIntent", example.TaskKind);
-        Assert.AreEqual("CodingTask", example.Intent);
-        Assert.AreEqual("CodingTask", example.Label);
-        Assert.AreEqual("RetrievalPlanProposal", example.CandidateKind);
-        Assert.IsTrue(example.ChannelSources.Contains("keyword"));
-        Assert.IsTrue(example.ChannelSources.Contains("relations"));
-    }
-
-    [TestMethod]
     public async Task EmptyPolicyFeedbackFile_ShouldTriggerNoPolicyFeedback()
     {
         var outputDirectory = Path.Combine(Path.GetTempPath(), $"contextcore-learning-quality-empty-policy-{Guid.NewGuid():N}");

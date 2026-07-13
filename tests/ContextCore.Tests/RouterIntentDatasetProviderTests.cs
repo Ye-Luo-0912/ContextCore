@@ -1,7 +1,6 @@
 using System.Text.Json;
 using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services;
-using ContextCore.Core.Services.Planning;
 using ContextCore.Storage.InMemory;
 
 namespace ContextCore.Tests;
@@ -152,86 +151,4 @@ public sealed class RouterIntentDatasetProviderTests
         }
     }
 
-    [TestMethod]
-    public async Task RouterIntentShadowService_ExposesDatasetInfoAfterClassifierInit()
-    {
-        var path = CreateTempDataset(
-            CreateExample("shadow-ex-1", "Coding"),
-            CreateExample("shadow-ex-2", "NovelGeneration"));
-
-        try
-        {
-            var provider = new FileRouterIntentDatasetProvider(path);
-            var service = new RouterIntentShadowService(
-                new RouterShadowOptions
-                {
-                    Enabled = true,
-                    TraceCollectionEnabled = true,
-                    RecordAgreements = true,
-                    RecordDisagreements = true
-                },
-                new InMemoryRouterIntentShadowTraceStore(),
-                new PlanningIntentDetector(),
-                provider);
-
-            // DatasetInfo should be null before classifier is initialized
-            Assert.IsNull(service.DatasetInfo);
-
-            // Trigger classifier initialization by recording a trace
-            await service.RecordAsync(new RouterIntentShadowRecordRequest
-            {
-                RequestId = "dataset-info-test",
-                WorkspaceId = "ws-test",
-                CollectionId = "col-test",
-                EntryPoint = "planning",
-                QueryText = "build verification task",
-                RuntimeIntent = PlanningIntentDetector.CodingTask
-            });
-
-            // DatasetInfo should now be populated
-            Assert.IsNotNull(service.DatasetInfo);
-            Assert.AreEqual(RouterIntentDatasetStatus.Loaded, service.DatasetInfo.Status);
-            Assert.AreEqual(2, service.DatasetInfo.ValidLines);
-            Assert.IsNotNull(service.DatasetInfo.ContentHash);
-            Assert.IsNotNull(service.DatasetInfo.Version);
-        }
-        finally
-        {
-            File.Delete(path);
-        }
-    }
-
-    [TestMethod]
-    public async Task RouterIntentShadowService_MissingDataset_ReportsNotFoundInDatasetInfo()
-    {
-        var provider = new FileRouterIntentDatasetProvider("/nonexistent/path/router-intent-examples.jsonl");
-        var service = new RouterIntentShadowService(
-            new RouterShadowOptions
-            {
-                Enabled = true,
-                TraceCollectionEnabled = true,
-                RecordAgreements = true,
-                RecordDisagreements = true
-            },
-            new InMemoryRouterIntentShadowTraceStore(),
-            new PlanningIntentDetector(),
-            provider);
-
-        Assert.IsNull(service.DatasetInfo);
-
-        await service.RecordAsync(new RouterIntentShadowRecordRequest
-        {
-            RequestId = "missing-dataset-test",
-            WorkspaceId = "ws-test",
-            CollectionId = "col-test",
-            EntryPoint = "planning",
-            QueryText = "test query",
-            RuntimeIntent = PlanningIntentDetector.CodingTask
-        });
-
-        Assert.IsNotNull(service.DatasetInfo);
-        Assert.AreEqual(RouterIntentDatasetStatus.NotFound, service.DatasetInfo.Status);
-        Assert.IsTrue(service.DatasetInfo.IsDegraded);
-        Assert.AreEqual(0, service.DatasetInfo.ValidLines);
-    }
 }

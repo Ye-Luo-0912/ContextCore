@@ -2,7 +2,6 @@ using System.Text.Json;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services;
-using ContextCore.Core.Services.Planning;
 using ContextCore.Storage.InMemory;
 using ContextCore.Evaluation.Learning;
 using ContextCore.Evaluation.Models;
@@ -32,183 +31,6 @@ public sealed class ContextCoreLearningOfflineBaselineTests
     }
 
     [TestMethod]
-    public void RouterReport_ShouldComputeMetrics()
-    {
-        var examples = Enumerable.Range(0, 30)
-            .Select(index => index % 3 == 0
-                ? CreateRouterExample($"router-auto-{index}", "AutomationMode", PlanningIntentDetector.AutomationRecovery)
-                : index % 3 == 1
-                    ? CreateRouterExample($"router-code-{index}", "CodingMode", PlanningIntentDetector.CodingTask)
-                    : CreateRouterExample($"router-novel-{index}", "NovelMode", PlanningIntentDetector.NovelGeneration))
-            .ToArray();
-
-        var report = new LearningOfflineBaselineRunner().BuildRouterReport(examples, "router-intent-examples.jsonl");
-
-        Assert.IsTrue(report.Ready);
-        Assert.AreEqual(30, report.SampleCount);
-        Assert.AreEqual("DeterministicGroupHash80_20", report.Split.Strategy);
-        Assert.IsTrue(report.Split.TestExampleCount > 0);
-        Assert.AreEqual(2, report.Baselines.Count);
-        var rule = report.Baselines.Single(item => item.BaselineName == LearningOfflineBaselineRunner.RuleBasedBaseline);
-        Assert.IsTrue(rule.Accuracy > 0);
-        Assert.IsTrue(rule.MacroF1 > 0);
-        Assert.IsTrue(rule.PerIntentPrecision.ContainsKey(PlanningIntentDetector.AutomationRecovery));
-        Assert.IsTrue(rule.PerIntentRecall.ContainsKey(PlanningIntentDetector.CodingTask));
-        Assert.IsTrue(rule.ConfusionMatrix.ContainsKey(PlanningIntentDetector.NovelGeneration));
-    }
-
-    [TestMethod]
-    public void TokenCentroidRouterBaseline_ShouldNotUseIdsForPrediction()
-    {
-        var training = CreateRouterTrainingExamples().ToArray();
-        var classifier = new TokenCentroidRouterBaseline();
-        classifier.Fit(training);
-        var first = CreateRouterExample(
-            "router-id-a",
-            "CodingMode",
-            PlanningIntentDetector.CodingTask,
-            inputSummary: "compile module verification build");
-        var second = CreateRouterExample(
-            "router-id-b",
-            "ChatMode",
-            PlanningIntentDetector.FuzzyQuestion,
-            inputSummary: "compile module verification build");
-
-        var firstPrediction = classifier.Predict(first);
-        var secondPrediction = classifier.Predict(second);
-
-        Assert.AreEqual(firstPrediction.Intent, secondPrediction.Intent);
-    }
-
-    [TestMethod]
-    public async Task RouterShadow_ShouldBeDisabledByDefault()
-    {
-        var store = new InMemoryRouterIntentShadowTraceStore();
-        var service = new RouterIntentShadowService(
-            new RouterShadowOptions(),
-            store,
-            new PlanningIntentDetector());
-
-        var trace = await service.RecordAsync(new RouterIntentShadowRecordRequest
-        {
-            RequestId = "router-shadow-disabled",
-            WorkspaceId = "workspace-1",
-            CollectionId = "collection-1",
-            EntryPoint = "planning",
-            QueryText = "build verification task",
-            RuntimeIntent = PlanningIntentDetector.CodingTask
-        });
-        var records = await store.QueryAsync(new RouterIntentShadowTraceQuery
-        {
-            WorkspaceId = "workspace-1",
-            CollectionId = "collection-1"
-        });
-
-        Assert.IsNull(trace);
-        Assert.AreEqual(0, records.Count);
-    }
-
-    [TestMethod]
-    public async Task RouterShadow_ShouldRecordDisagreementWithoutChangingRuntimeIntent()
-    {
-        var store = new InMemoryRouterIntentShadowTraceStore();
-        var service = new RouterIntentShadowService(
-            new RouterShadowOptions
-            {
-                Enabled = true,
-                TraceCollectionEnabled = true
-            },
-            store,
-            new PlanningIntentDetector());
-        const string runtimeIntent = PlanningIntentDetector.CodingTask;
-
-        var trace = await service.RecordAsync(new RouterIntentShadowRecordRequest
-        {
-            RequestId = "router-shadow-disagreement",
-            WorkspaceId = "workspace-1",
-            CollectionId = "collection-1",
-            EntryPoint = "planning",
-            QueryText = "plain runtime query",
-            RuntimeIntent = runtimeIntent
-        });
-
-        Assert.IsNotNull(trace);
-        Assert.AreEqual(runtimeIntent, trace.RuntimeIntent);
-        Assert.IsFalse(trace.FormalOutputChanged);
-        Assert.IsFalse(trace.Agreement);
-        Assert.AreEqual(PlanningIntentDetector.FuzzyQuestion, trace.ShadowIntent);
-        var records = await store.QueryAsync(new RouterIntentShadowTraceQuery
-        {
-            WorkspaceId = "workspace-1",
-            CollectionId = "collection-1"
-        });
-        Assert.AreEqual(1, records.Count);
-    }
-
-    [TestMethod]
-    public void RouterShadowTraceQuality_ShouldCountLowConfidenceAndConfusion()
-    {
-        var report = new RouterIntentShadowReportBuilder().BuildTraceQualityReport(
-        [
-            new RouterIntentShadowTrace
-            {
-                RequestId = "trace-1",
-                WorkspaceId = "workspace-1",
-                CollectionId = "collection-1",
-                RuntimeIntent = PlanningIntentDetector.CodingTask,
-                ShadowIntent = PlanningIntentDetector.FuzzyQuestion,
-                Agreement = false,
-                LowConfidence = true,
-                CreatedAt = DateTimeOffset.UtcNow
-            },
-            new RouterIntentShadowTrace
-            {
-                RequestId = "trace-2",
-                WorkspaceId = "workspace-1",
-                CollectionId = "collection-1",
-                RuntimeIntent = PlanningIntentDetector.CurrentTask,
-                ShadowIntent = PlanningIntentDetector.CurrentTask,
-                Agreement = true,
-                CreatedAt = DateTimeOffset.UtcNow
-            }
-        ], "workspace-1", "collection-1");
-
-        Assert.AreEqual(2, report.TraceCount);
-        Assert.AreEqual(1, report.LowConfidenceCount);
-        Assert.IsTrue(report.TopConfusionPairs.ContainsKey($"{PlanningIntentDetector.CodingTask}->{PlanningIntentDetector.FuzzyQuestion}"));
-    }
-
-    [TestMethod]
-    public async Task RouterShadowEval_ShouldGenerateReports()
-    {
-        var tempRoot = Path.Combine(Path.GetTempPath(), $"contextcore-router-r2-{Guid.NewGuid():N}");
-        try
-        {
-            var inputPath = Path.Combine(tempRoot, "features", LearningDatasetQualityReportBuilder.RouterIntentExamplesFileName);
-            var outputDir = Path.Combine(tempRoot, "router");
-            Directory.CreateDirectory(Path.GetDirectoryName(inputPath)!);
-            await WriteJsonLinesAsync(inputPath, CreateRouterTrainingExamples().ToArray());
-
-            var (a3, extended) = await new RouterIntentShadowReportBuilder()
-                .RunShadowEvalAsync(inputPath, outputDir);
-
-            Assert.IsTrue(File.Exists(Path.Combine(outputDir, RouterIntentShadowReportBuilder.ShadowEvalA3FileName)));
-            Assert.IsTrue(File.Exists(Path.Combine(outputDir, RouterIntentShadowReportBuilder.ShadowEvalExtendedFileName)));
-            Assert.IsTrue(File.Exists(Path.Combine(outputDir, RouterIntentShadowReportBuilder.ShadowEvalMarkdownFileName)));
-            Assert.IsTrue(a3.SampleCount > 0);
-            Assert.AreEqual(a3.SampleCount, extended.SampleCount);
-            Assert.IsFalse(string.IsNullOrWhiteSpace(a3.Recommendation));
-        }
-        finally
-        {
-            if (Directory.Exists(tempRoot))
-            {
-                Directory.Delete(tempRoot, recursive: true);
-            }
-        }
-    }
-
-    [TestMethod]
     public void RouterIntentBoundaryMarkdown_ShouldContainDefinitions()
     {
         var path = FindRepoFile("docs", "router-intent-boundaries.md");
@@ -218,29 +40,6 @@ public sealed class ContextCoreLearningOfflineBaselineTests
         StringAssert.Contains(markdown, "Intent 定义");
         StringAssert.Contains(markdown, "常见混淆");
         StringAssert.Contains(markdown, "Hard Negative 使用规则");
-    }
-
-    [TestMethod]
-    public void RouterDisagreementTriage_ShouldNotUseSampleIdForPrediction()
-    {
-        var training = CreateRouterTrainingExamples().ToArray();
-        var classifier = new TokenCentroidRouterBaseline();
-        classifier.Fit(training);
-        var first = CreateRouterExample(
-            "router-triage-id-a",
-            "ChatMode",
-            PlanningIntentDetector.CurrentTask,
-            inputSummary: "active focus next step");
-        var second = CreateRouterExample(
-            "router-triage-id-b",
-            "AutomationMode",
-            PlanningIntentDetector.AutomationRecovery,
-            inputSummary: "active focus next step");
-
-        var firstPrediction = classifier.Predict(first);
-        var secondPrediction = classifier.Predict(second);
-
-        Assert.AreEqual(firstPrediction.Intent, secondPrediction.Intent);
     }
 
     [TestMethod]
@@ -265,51 +64,6 @@ public sealed class ContextCoreLearningOfflineBaselineTests
         Assert.IsTrue(rule.FalsePositiveRate >= 0);
         var weighted = report.Baselines.Single(item => item.BaselineName == LearningOfflineBaselineRunner.SimpleFeatureWeightedBaseline);
         Assert.IsTrue(weighted.PairwiseAccuracy >= rule.PairwiseAccuracy);
-    }
-
-    [TestMethod]
-    public async Task OutputFiles_ShouldBeGenerated()
-    {
-        var tempRoot = Path.Combine(Path.GetTempPath(), $"contextcore-learning-baseline-{Guid.NewGuid():N}");
-        try
-        {
-            var featureDir = Path.Combine(tempRoot, "features");
-            var outputDir = Path.Combine(tempRoot, "baselines");
-            Directory.CreateDirectory(featureDir);
-            Directory.CreateDirectory(outputDir);
-            var routerPath = Path.Combine(featureDir, LearningDatasetQualityReportBuilder.RouterIntentExamplesFileName);
-            var rankerPath = Path.Combine(featureDir, LearningDatasetQualityReportBuilder.RankingPairsFileName);
-            await WriteJsonLinesAsync(routerPath, Enumerable.Range(0, 12)
-                .Select(index => CreateRouterExample($"router-output-{index}", "CodingMode", PlanningIntentDetector.CodingTask))
-                .ToArray());
-            await WriteJsonLinesAsync(rankerPath, Enumerable.Range(0, 12)
-                .Select(index => CreateRankingPair($"sample-output-{index}", 10 + index, 1))
-                .ToArray());
-
-            var runner = new LearningOfflineBaselineRunner();
-            var routerReport = await runner.RunRouterAsync(
-                routerPath,
-                Path.Combine(outputDir, "router-intent-baseline-report.json"),
-                Path.Combine(outputDir, "router-intent-baseline-report.md"));
-            var rankerReport = await runner.RunRankerAsync(
-                rankerPath,
-                Path.Combine(outputDir, "ranker-baseline-report.json"),
-                Path.Combine(outputDir, "ranker-baseline-report.md"));
-
-            Assert.IsTrue(File.Exists(Path.Combine(outputDir, "router-intent-baseline-report.json")));
-            Assert.IsTrue(File.Exists(Path.Combine(outputDir, "router-intent-baseline-report.md")));
-            Assert.IsTrue(File.Exists(Path.Combine(outputDir, "ranker-baseline-report.json")));
-            Assert.IsTrue(File.Exists(Path.Combine(outputDir, "ranker-baseline-report.md")));
-            Assert.AreEqual(12, routerReport.SampleCount);
-            Assert.AreEqual(12, rankerReport.PairCount);
-        }
-        finally
-        {
-            if (Directory.Exists(tempRoot))
-            {
-                Directory.Delete(tempRoot, recursive: true);
-            }
-        }
     }
 
     [TestMethod]
@@ -717,21 +471,6 @@ public sealed class ContextCoreLearningOfflineBaselineTests
     }
 
     [TestMethod]
-    public void OfflineBaseline_ShouldNotMutateInputExamples()
-    {
-        var examples = new[]
-        {
-            CreateRouterExample("router-readonly-1", "CodingMode", PlanningIntentDetector.CodingTask),
-            CreateRouterExample("router-readonly-2", "AutomationMode", PlanningIntentDetector.AutomationRecovery)
-        };
-        var originalIds = examples.Select(item => item.ExampleId).ToArray();
-
-        _ = new LearningOfflineBaselineRunner().BuildRouterReport(examples, "router-intent-examples.jsonl");
-
-        CollectionAssert.AreEqual(originalIds, examples.Select(item => item.ExampleId).ToArray());
-    }
-
-    [TestMethod]
     public async Task LearningReadinessRegistry_ShouldFreezeCurrentShadowCapabilities()
     {
         var tempRoot = Path.Combine(Path.GetTempPath(), $"contextcore-learning-readiness-{Guid.NewGuid():N}");
@@ -920,60 +659,6 @@ public sealed class ContextCoreLearningOfflineBaselineTests
         Assert.IsTrue(report.Passed);
     }
 
-    private static ContextPolicyFeatureExample CreateRouterExample(
-        string id,
-        string mode,
-        string intent,
-        string? inputSummary = null)
-        => new()
-        {
-            ExampleId = id,
-            SourceType = "PlanningShadowComparison",
-            SourceId = id,
-            TaskKind = "RouterIntent",
-            Mode = mode,
-            Intent = intent,
-            Label = intent,
-            InputSummary = inputSummary ?? $"{intent}/{mode}",
-            CandidateKind = "RetrievalPlanProposal",
-            CandidateLayer = "Planning",
-            CandidateStatus = "NativeValid",
-            ChannelSources = ["keyword", "working"],
-            ShortTermMatchScore = 1,
-            Selected = true,
-            Accepted = true,
-            EvidenceRefs = [$"{id}-evidence"],
-            PolicyVersion = LearningFeatureDatasetService.PolicyVersion,
-            CreatedAt = DateTimeOffset.UtcNow
-        };
-
-    private static IEnumerable<ContextPolicyFeatureExample> CreateRouterTrainingExamples()
-    {
-        for (var index = 0; index < 8; index++)
-        {
-            yield return CreateRouterExample(
-                $"router-current-{index}",
-                "ChatMode",
-                PlanningIntentDetector.CurrentTask,
-                inputSummary: $"active focus next step task {index}");
-            yield return CreateRouterExample(
-                $"router-coding-{index}",
-                "CodingMode",
-                PlanningIntentDetector.CodingTask,
-                inputSummary: $"compile module verification build {index}");
-            yield return CreateRouterExample(
-                $"router-novel-{index}",
-                "NovelMode",
-                PlanningIntentDetector.NovelGeneration,
-                inputSummary: $"chapter scene character arc {index}");
-            yield return CreateRouterExample(
-                $"router-automation-{index}",
-                "AutomationMode",
-                PlanningIntentDetector.AutomationRecovery,
-                inputSummary: $"retry recovery failure checkpoint {index}");
-        }
-    }
-
     private static string FindRepoFile(params string[] segments)
     {
         var directory = new DirectoryInfo(Directory.GetCurrentDirectory());
@@ -1005,7 +690,7 @@ public sealed class ContextCoreLearningOfflineBaselineTests
         {
             Query = $"query {sampleId}",
             Mode = "CodingMode",
-            Intent = PlanningIntentDetector.CodingTask,
+            Intent = "CodingTask",
             PositiveCandidateId = positiveId ?? $"{sampleId}-positive",
             NegativeCandidateId = negativeId ?? $"{sampleId}-negative",
             Reason = "mustHit should rank above mustNotHit",
