@@ -4,6 +4,7 @@ using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.ControlRoom.Services;
 using ContextCore.Evaluation.Runners;
+using ContextCore.Evaluation.Models;
 
 namespace ContextCore.Tests;
 

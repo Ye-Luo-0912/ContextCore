@@ -8,6 +8,7 @@ using ContextCore.Core.Services.Retrieval;
 using ContextCore.Embedding;
 using ContextCore.Storage.InMemory;
 using ContextCore.Storage.InMemory.Stores;
+using ContextCore.Evaluation.Models;
 
 namespace ContextCore.Evaluation.Runners;
 

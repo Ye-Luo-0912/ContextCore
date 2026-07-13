@@ -1605,3 +1605,285 @@ public sealed class ShadowAdapterDeltaDiagnosticsReport
     public IReadOnlyList<string> Diagnostics { get; init; } = Array.Empty<string>();
     public IReadOnlyList<string> BlockedReasons { get; init; } = Array.Empty<string>();
 }
+
+
+/// <summary>Retrieval Dataset V2 readiness gate 报告。</summary>
+public sealed class RetrievalDatasetV2ReadinessGateReport
+{
+    public string OperationId { get; init; } = string.Empty;
+
+    public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
+
+    public string DatasetId { get; init; } = string.Empty;
+
+    public bool GatePassed { get; init; }
+
+    public double RecallThreshold { get; init; }
+
+    public double BestRecallAfterPolicy { get; init; }
+
+    public double BestMrrAfterPolicy { get; init; }
+
+    public int RiskAfterPolicy { get; init; }
+
+    public int MustNotHitRiskAfterPolicy { get; init; }
+
+    public int LifecycleRiskAfterPolicy { get; init; }
+
+    public int FormalOutputChanged { get; init; }
+
+    public bool PgVectorParityPassed { get; init; }
+
+    public bool MaterializationGatePassed { get; init; }
+
+    public int ValidationIssueCount { get; init; }
+
+    public int MissingEvidenceCount { get; init; }
+
+    public int MissingProvenanceCount { get; init; }
+
+    public bool UseForRuntime { get; init; }
+
+    public bool FormalRetrievalAllowed { get; init; }
+
+    public string Recommendation { get; init; } = RetrievalDatasetV2ShadowEvalRecommendations.KeepPreviewOnly;
+
+    public IReadOnlyList<string> BlockedReasons { get; init; } = Array.Empty<string>();
+}
+
+
+/// <summary>A3 / Extended retrieval dataset alignment audit 汇总。</summary>
+public sealed class RetrievalDatasetAlignmentAuditSummaryReport
+{
+    public string OperationId { get; init; } = string.Empty;
+
+    public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
+
+    public IReadOnlyList<RetrievalDatasetAlignmentAuditReport> Reports { get; init; } =
+        Array.Empty<RetrievalDatasetAlignmentAuditReport>();
+
+    public string Recommendation { get; init; } = RetrievalDatasetAlignmentRecommendations.KeepPreviewOnly;
+
+    public int AlignmentIssueCount { get; init; }
+
+    public IReadOnlyDictionary<string, int> IssueBreakdown { get; init; } =
+        new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+    public bool FormalRetrievalAllowed { get; init; }
+
+    public bool UseForRuntime { get; init; }
+}
+
+
+/// <summary>A3 / Extended lifecycle-filtered mustHit triage 汇总。</summary>
+public sealed class VectorEligibilityRecallLossTriageSummaryReport
+{
+    public string OperationId { get; init; } = string.Empty;
+
+    public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
+
+    public IReadOnlyList<VectorEligibilityRecallLossTriageReport> Reports { get; init; } =
+        Array.Empty<VectorEligibilityRecallLossTriageReport>();
+
+    public int TotalFilteredMustHit { get; init; }
+
+    public int CorrectlyBlockedCount { get; init; }
+
+    public int RouteToHistoricalCount { get; init; }
+
+    public int RouteToAuditCount { get; init; }
+
+    public int MetadataRepairNeededCount { get; init; }
+
+    public int EvalExpectationReviewNeededCount { get; init; }
+
+    public int UnsafeToRecoverCount { get; init; }
+
+    public int RecoverableWithoutNormalContextCount { get; init; }
+
+    public int RecoverableToNormalContextCount { get; init; }
+
+    public string Recommendation { get; init; } = VectorEligibilityRecallLossTriageRecommendations.KeepPreviewOnly;
+
+    public IReadOnlyDictionary<string, int> CategoryBreakdown { get; init; } =
+        new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+    public bool FormalRetrievalAllowed { get; init; }
+
+    public bool UseForRuntime { get; init; }
+}
+
+
+/// <summary>Retrieval Dataset V2 shadow eval 汇总报告。</summary>
+public sealed class RetrievalDatasetV2ShadowEvalSummaryReport
+{
+    public string OperationId { get; init; } = string.Empty;
+
+    public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
+
+    public string DatasetId { get; init; } = string.Empty;
+
+    public string CorpusHash { get; init; } = string.Empty;
+
+    public string SamplesHash { get; init; } = string.Empty;
+
+    public int CorpusItemCount { get; init; }
+
+    public int SampleCount { get; init; }
+
+    public string BestProfileName { get; init; } = string.Empty;
+
+    public double BestRecallAfterPolicy { get; init; }
+
+    public double BestMrrAfterPolicy { get; init; }
+
+    public int BestRiskAfterPolicy { get; init; }
+
+    public bool PgVectorParityPassed { get; init; }
+
+    public double PgVectorTopKOverlapRate { get; init; }
+
+    public int PgVectorOrderingMismatchCount { get; init; }
+
+    public double PgVectorScoreDeltaMax { get; init; }
+
+    public int PgVectorMetadataMismatchCount { get; init; }
+
+    public int PgVectorEligibilityMetadataMismatchCount { get; init; }
+
+    public int PgVectorRiskProjectionMismatchCount { get; init; }
+
+    public bool UseForRuntime { get; init; }
+
+    public bool FormalRetrievalAllowed { get; init; }
+
+    public string Recommendation { get; init; } = RetrievalDatasetV2ShadowEvalRecommendations.KeepPreviewOnly;
+
+    public IReadOnlyList<RetrievalDatasetV2ShadowEvalProfileReport> Profiles { get; init; } =
+        Array.Empty<RetrievalDatasetV2ShadowEvalProfileReport>();
+}
+
+
+/// <summary>Scoped runtime experiment approval summary；只读取 approval artifact。</summary>
+public sealed class ScopedRuntimeExperimentApprovalSummaryReport
+{
+    public string OperationId { get; init; } = string.Empty;
+
+    public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
+
+    public string ProposalId { get; init; } = string.Empty;
+
+    public int ApprovalCount { get; init; }
+
+    public bool ApprovalRecordExists { get; init; }
+
+    public string LatestApprovalId { get; init; } = string.Empty;
+
+    public string ApprovalMode { get; init; } = string.Empty;
+
+    public bool Expired { get; init; }
+
+    public bool Revoked { get; init; }
+
+    public bool RuntimeSwitchAllowed { get; init; }
+
+    public bool FormalRetrievalAllowed { get; init; }
+
+    public bool ReadyForRuntimeSwitch { get; init; }
+
+    public bool UseForRuntime { get; init; }
+
+    public string Recommendation { get; init; } = ScopedRuntimeExperimentApprovalRecommendations.NeedsManualApproval;
+
+    public IReadOnlyList<string> BlockedReasons { get; init; } = Array.Empty<string>();
+}
+
+
+/// <summary>上下文评测静态语料库数据，供 InMemory 模式一键加载。</summary>
+public sealed class ContextEvalCorpus
+{
+    public IReadOnlyList<ContextItem> Contexts { get; init; } = Array.Empty<ContextItem>();
+    public IReadOnlyList<ContextMemoryItem> Memories { get; init; } = Array.Empty<ContextMemoryItem>();
+    public IReadOnlyList<ContextRelation> Relations { get; init; } = Array.Empty<ContextRelation>();
+    public IReadOnlyList<ContextConstraint> Constraints { get; init; } = Array.Empty<ContextConstraint>();
+
+    /// <summary>
+    /// 评测专用的约束缺口激活 fixture。加载时必须经过 ConstraintGap accept 与 CandidateConstraint activate 正式链路。
+    /// </summary>
+    public IReadOnlyList<ConstraintGapCandidate> ActivatedConstraintGaps { get; init; } = Array.Empty<ConstraintGapCandidate>();
+}
+
+
+/// <summary>Sample-level lifecycle-aware ranker shadow evaluation result.</summary>
+public sealed class LifecycleAwareRankerShadowSample
+{
+    public string SampleId { get; init; } = string.Empty;
+
+    public string Mode { get; init; } = string.Empty;
+
+    public bool FormalOutputChanged { get; init; }
+
+    public bool SelectedSetChanged { get; init; }
+
+    public IReadOnlyList<string> LegacySelectedIds { get; init; } = Array.Empty<string>();
+
+    public IReadOnlyList<string> ShadowSelectedIds { get; init; } = Array.Empty<string>();
+
+    public int DeprecatedNoiseDemotedCount { get; init; }
+
+    public int VersionConflictFixedCount { get; init; }
+
+    public int MustHitDemotedCount { get; init; }
+
+    public int MustNotHitPromotedCount { get; init; }
+
+    public int LifecycleViolationCount { get; init; }
+
+    public double LegacyMRR { get; init; }
+
+    public double ShadowPotentialMRR { get; init; }
+
+    public double PotentialMRRDelta { get; init; }
+
+    public double PotentialPairwiseWinRate { get; init; }
+
+    public LifecycleAwareRankerShadowTrace Trace { get; init; } = new();
+}
+
+
+/// <summary>Lifecycle-aware ranker shadow report. Formal output and selected set must remain unchanged.</summary>
+public sealed class LifecycleAwareRankerShadowReport
+{
+    public string OperationId { get; init; } = string.Empty;
+
+    public DateTimeOffset GeneratedAt { get; init; }
+
+    public string Profile { get; init; } = string.Empty;
+
+    public int TotalSamples { get; init; }
+
+    public bool IncludeSeedBatches { get; init; }
+
+    public int FormalOutputChanged { get; init; }
+
+    public int SelectedSetChanged { get; init; }
+
+    public int DeprecatedNoiseDemotedCount { get; init; }
+
+    public int VersionConflictFixedCount { get; init; }
+
+    public int MustHitDemotedCount { get; init; }
+
+    public int MustNotHitPromotedCount { get; init; }
+
+    public int LifecycleViolationCount { get; init; }
+
+    public double PotentialMRRDelta { get; init; }
+
+    public double PotentialPairwiseWinRate { get; init; }
+
+    public IReadOnlyList<LifecycleAwareRankerShadowSample> Samples { get; init; } =
+        Array.Empty<LifecycleAwareRankerShadowSample>();
+
+    public string PolicyVersion { get; init; } = string.Empty;
+}

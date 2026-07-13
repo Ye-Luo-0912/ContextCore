@@ -50,20 +50,6 @@ public sealed class ContextEvalSampleLoadResult
     public IReadOnlyList<string> Files { get; init; } = Array.Empty<string>();
 }
 
-/// <summary>上下文评测静态语料库数据，供 InMemory 模式一键加载。</summary>
-public sealed class ContextEvalCorpus
-{
-    public IReadOnlyList<ContextItem> Contexts { get; init; } = Array.Empty<ContextItem>();
-    public IReadOnlyList<ContextMemoryItem> Memories { get; init; } = Array.Empty<ContextMemoryItem>();
-    public IReadOnlyList<ContextRelation> Relations { get; init; } = Array.Empty<ContextRelation>();
-    public IReadOnlyList<ContextConstraint> Constraints { get; init; } = Array.Empty<ContextConstraint>();
-
-    /// <summary>
-    /// 评测专用的约束缺口激活 fixture。加载时必须经过 ConstraintGap accept 与 CandidateConstraint activate 正式链路。
-    /// </summary>
-    public IReadOnlyList<ConstraintGapCandidate> ActivatedConstraintGaps { get; init; } = Array.Empty<ConstraintGapCandidate>();
-}
-
 /// <summary>单条样本的评测详细结果。</summary>
 public sealed class ContextEvalResult
 {
@@ -274,79 +260,6 @@ public sealed class LifecycleAwareRankerShadowTrace
 
     public IReadOnlyList<LifecycleAwareRankerShadowCandidateScore> MustNotHitPromotions { get; init; } =
         Array.Empty<LifecycleAwareRankerShadowCandidateScore>();
-}
-
-/// <summary>Sample-level lifecycle-aware ranker shadow evaluation result.</summary>
-public sealed class LifecycleAwareRankerShadowSample
-{
-    public string SampleId { get; init; } = string.Empty;
-
-    public string Mode { get; init; } = string.Empty;
-
-    public bool FormalOutputChanged { get; init; }
-
-    public bool SelectedSetChanged { get; init; }
-
-    public IReadOnlyList<string> LegacySelectedIds { get; init; } = Array.Empty<string>();
-
-    public IReadOnlyList<string> ShadowSelectedIds { get; init; } = Array.Empty<string>();
-
-    public int DeprecatedNoiseDemotedCount { get; init; }
-
-    public int VersionConflictFixedCount { get; init; }
-
-    public int MustHitDemotedCount { get; init; }
-
-    public int MustNotHitPromotedCount { get; init; }
-
-    public int LifecycleViolationCount { get; init; }
-
-    public double LegacyMRR { get; init; }
-
-    public double ShadowPotentialMRR { get; init; }
-
-    public double PotentialMRRDelta { get; init; }
-
-    public double PotentialPairwiseWinRate { get; init; }
-
-    public LifecycleAwareRankerShadowTrace Trace { get; init; } = new();
-}
-
-/// <summary>Lifecycle-aware ranker shadow report. Formal output and selected set must remain unchanged.</summary>
-public sealed class LifecycleAwareRankerShadowReport
-{
-    public string OperationId { get; init; } = string.Empty;
-
-    public DateTimeOffset GeneratedAt { get; init; }
-
-    public string Profile { get; init; } = string.Empty;
-
-    public int TotalSamples { get; init; }
-
-    public bool IncludeSeedBatches { get; init; }
-
-    public int FormalOutputChanged { get; init; }
-
-    public int SelectedSetChanged { get; init; }
-
-    public int DeprecatedNoiseDemotedCount { get; init; }
-
-    public int VersionConflictFixedCount { get; init; }
-
-    public int MustHitDemotedCount { get; init; }
-
-    public int MustNotHitPromotedCount { get; init; }
-
-    public int LifecycleViolationCount { get; init; }
-
-    public double PotentialMRRDelta { get; init; }
-
-    public double PotentialPairwiseWinRate { get; init; }
-
-    public IReadOnlyList<LifecycleAwareRankerShadowSample> Samples { get; init; } =
-        Array.Empty<LifecycleAwareRankerShadowSample>();
-
-    public string PolicyVersion { get; init; } = string.Empty;
 }
 
 /// <summary>上下文评测汇总报告。</summary>

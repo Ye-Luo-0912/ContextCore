@@ -10,6 +10,7 @@ using System.Text.Json;
 using ContextCore.Core.Services.Graph;
 using ContextCore.Core.Services.Planning;
 using ContextCore.Storage.InMemory.Stores;
+using ContextCore.Evaluation.Models;
 
 namespace ContextCore.Tests;
 

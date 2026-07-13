@@ -293,51 +293,6 @@ public sealed class VectorLifecycleMetadataRepairPlanSummaryReport
 }
 
 
-/// <summary>Retrieval Dataset V2 readiness gate 报告。</summary>
-public sealed class RetrievalDatasetV2ReadinessGateReport
-{
-    public string OperationId { get; init; } = string.Empty;
-
-    public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
-
-    public string DatasetId { get; init; } = string.Empty;
-
-    public bool GatePassed { get; init; }
-
-    public double RecallThreshold { get; init; }
-
-    public double BestRecallAfterPolicy { get; init; }
-
-    public double BestMrrAfterPolicy { get; init; }
-
-    public int RiskAfterPolicy { get; init; }
-
-    public int MustNotHitRiskAfterPolicy { get; init; }
-
-    public int LifecycleRiskAfterPolicy { get; init; }
-
-    public int FormalOutputChanged { get; init; }
-
-    public bool PgVectorParityPassed { get; init; }
-
-    public bool MaterializationGatePassed { get; init; }
-
-    public int ValidationIssueCount { get; init; }
-
-    public int MissingEvidenceCount { get; init; }
-
-    public int MissingProvenanceCount { get; init; }
-
-    public bool UseForRuntime { get; init; }
-
-    public bool FormalRetrievalAllowed { get; init; }
-
-    public string Recommendation { get; init; } = RetrievalDatasetV2ShadowEvalRecommendations.KeepPreviewOnly;
-
-    public IReadOnlyList<string> BlockedReasons { get; init; } = Array.Empty<string>();
-}
-
-
 /// <summary>Dataset V2 stress freeze 的输出状态。</summary>
 public static class RetrievalDatasetV2StressFreezeStatuses
 {
