@@ -1,6 +1,6 @@
 # ContextCore 项目路线图
 
-> 最近更新：P1 ControlRoom 历史 Postgres 报告矩阵删除 + P2 Evaluation/Core 不可达切片删除 + P3 DTO-R5 孤立类型收口 + P4 FoundationStatusService 孤立方法删除 + 别名链删除 + 仅测试调用方法删除 + 跨项目迁移 + P3-deferred eval-only DTO 迁移回 Evaluation（2026-07-13）
+> 最近更新：P1 ControlRoom 历史 Postgres 报告矩阵删除 + P2 Evaluation/Core 不可达切片删除 + P3 DTO-R5 孤立类型收口 + P4 FoundationStatusService 收口 + P3-deferred eval-only DTO 迁移 + 新任务1 低风险不可达代码删除（2026-07-13）
 
 > 本文件是 ContextCore 的**唯一当前路线图**。docs/ 下的 freeze / report / audit / plan 类文档均为历史快照，仅供回溯，不作为设计依据。
 
@@ -28,18 +28,26 @@
 
 | 指标 | 当前值 | 目标 |
 |------|--------|------|
-| 生产代码总行数 | ~143,365 | < 220k |
-| Evaluation 代码行数 | ~30,340 | < 70k |
+| 生产代码总行数 | ~140,638 | < 220k |
+| Evaluation 代码行数 | ~29,500 | < 70k |
 | Abstractions 代码行数 | ~14,731 | 跨层契约 |
 | ControlRoom 代码行数 | ~17,500 | < 20k |
 | EvalCommand.cs 单文件行数 | 7,987 | P1-5 已完成 |
 | FoundationStatusService.cs 行数 | 606 | P4 已完成 |
 | 构建 | 0 警告 / 0 错误 | 0 / 0 |
-| 测试 | 1130 通过 / 0 失败 | 0 失败 |
+| 测试 | 1114 通过 / 0 失败 | 0 失败 |
 
 ---
 
 ## 已完成工作
+
+### 新任务1：低风险不可达代码删除（commit `65d3fae`）
+
+删除 12 个不可达源文件（4 个孤儿 + 8 个仅测试引用）+ 2 个整文件测试 + 3 个部分测试清理：
+- 孤儿文件：VectorFormalPreviewFreezeRunner、ControlledAppliedMergeReports、CapabilityRegistry、IGateEvaluator
+- 仅测试引用：PlanningOptInFallbackAnalysisReportBuilder、PlanningShadowRecallLossReportBuilder、PlanningOptInConstraintSafetyReportBuilder、ScopedShadowRetrievalAdapter、PromotionEvalRunner、VectorQueryExpansionService、HybridUnionScoringRepairRunner、ScopedRuntimeExperimentReports
+- 清理 13 个测试方法 + 8 个孤立测试辅助方法
+- 总计 -4,171 行，0 警告 0 错误，1114 测试通过
 
 ### P1：ControlRoom 历史 Postgres 报告矩阵删除
 
