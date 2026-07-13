@@ -280,7 +280,6 @@ public sealed class ContextCoreDataLayout : IContextPathResolver
             TraceRoot = GetRelativePath(traceRoot),
             TraceCategoryPaths = paths,
             RetrievalTraceCount = CountTraceFiles(traceRoot, "retrieval"),
-            RouterShadowTraceCount = CountTraceFiles(traceRoot, "router-shadow"),
             ToolCallPlaceholderReady = Directory.Exists(Path.Combine(traceRoot, "tool-calls")),
             LegacyFallbackCount = CountLegacyTraceFiles(workspaceId, collectionId),
             ManifestCount = File.Exists(GetManifestPath()) ? File.ReadLines(GetManifestPath()).Count() : 0,
@@ -362,7 +361,6 @@ public sealed class ContextCoreDataLayout : IContextPathResolver
             ArtifactKind.TraceRetrieval => ["traces", "retrieval", SanitizeStatic(descriptor.DateShard)],
             ArtifactKind.TracePlanning => ["traces", "planning", SanitizeStatic(descriptor.DateShard)],
             ArtifactKind.TraceToolCall => ["traces", "tool-calls", SanitizeStatic(descriptor.DateShard), SanitizeStatic(descriptor.OperationId)],
-            ArtifactKind.TraceRouterShadow => ["traces", "router-shadow", SanitizeStatic(descriptor.DateShard)],
             ArtifactKind.TraceRankerShadow => ["traces", "ranker-shadow", SanitizeStatic(descriptor.DateShard)],
             ArtifactKind.TraceVectorShadow => ["traces", "vector-shadow", SanitizeStatic(descriptor.DateShard)],
             ArtifactKind.TraceGraphShadow => ["traces", "graph-shadow", SanitizeStatic(descriptor.DateShard)],
@@ -431,7 +429,6 @@ public sealed class ContextCoreDataLayout : IContextPathResolver
             or ArtifactKind.TraceRetrieval
             or ArtifactKind.TracePlanning
             or ArtifactKind.TraceToolCall
-            or ArtifactKind.TraceRouterShadow
             or ArtifactKind.TraceRankerShadow
             or ArtifactKind.TraceVectorShadow
             or ArtifactKind.TraceGraphShadow
@@ -517,7 +514,6 @@ public sealed class ContextCoreDataLayout : IContextPathResolver
         ArtifactKind.TraceRetrieval,
         ArtifactKind.TracePlanning,
         ArtifactKind.TraceToolCall,
-        ArtifactKind.TraceRouterShadow,
         ArtifactKind.TraceRankerShadow,
         ArtifactKind.TraceVectorShadow,
         ArtifactKind.TraceGraphShadow,
@@ -587,8 +583,7 @@ public sealed class ContextCoreDataLayout : IContextPathResolver
         var legacyPaths = new[]
         {
             Path.Combine(collectionRoot, "retrieval", "traces.jsonl"),
-            Path.Combine(collectionRoot, "packages", "build-traces.jsonl"),
-            Path.Combine(collectionRoot, "learning", "router-shadow-traces.jsonl")
+            Path.Combine(collectionRoot, "packages", "build-traces.jsonl")
         };
 
         return legacyPaths.Count(File.Exists);
@@ -649,7 +644,6 @@ public sealed class ContextCoreDataLayout : IContextPathResolver
             ArtifactKind.TraceRetrieval => "retrieval-traces",
             ArtifactKind.TracePlanning => "planning-traces",
             ArtifactKind.TraceToolCall => "tool-call-trace",
-            ArtifactKind.TraceRouterShadow => "router-shadow-traces",
             ArtifactKind.TraceRankerShadow => "ranker-shadow-traces",
             ArtifactKind.TraceVectorShadow => "vector-shadow-traces",
             ArtifactKind.TraceGraphShadow => "graph-shadow-traces",
@@ -669,7 +663,6 @@ public sealed class ContextCoreDataLayout : IContextPathResolver
         => kind is ArtifactKind.TraceRetrieval
             or ArtifactKind.TracePlanning
             or ArtifactKind.TraceToolCall
-            or ArtifactKind.TraceRouterShadow
             or ArtifactKind.TraceRankerShadow
             or ArtifactKind.TraceVectorShadow
             or ArtifactKind.TraceGraphShadow

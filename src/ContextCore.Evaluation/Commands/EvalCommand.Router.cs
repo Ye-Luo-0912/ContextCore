@@ -10,7 +10,6 @@ using ContextCore.Core;
 using ContextCore.Core.Services;
 using ContextCore.Evaluation.Runners;
 using ContextCore.Core.Services.Graph;
-using ContextCore.Core.Services.Planning;
 using ContextCore.Core.Services.Storage;
 using ContextCore.Embedding;
 using ContextCore.Embedding.Providers;

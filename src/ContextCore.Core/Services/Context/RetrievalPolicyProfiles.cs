@@ -337,7 +337,7 @@ public sealed class DomainKeywordProfile
         [
             "character-state", "人物状态", "foreshadow", "伏笔",
             "world", "世界观", "约束", "item-state", "物品状态",
-            "断剑", "ending", "结局"
+            "ending", "结局"
         ],
         ChatModeStableMemoryReserveKeywords =
         [

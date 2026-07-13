@@ -6,7 +6,6 @@ using ContextCore.Evaluation.Models;
 using ContextCore.Core;
 using ContextCore.Core.Services;
 using ContextCore.Core.Services.Graph;
-using ContextCore.Core.Services.Planning;
 using ContextCore.Core.Services.Retrieval;
 using ContextCore.Embedding;
 using ContextCore.Embedding.Providers;

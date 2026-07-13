@@ -57,7 +57,6 @@ public sealed class TraceArtifactDescriptorFactory
             ArtifactKind.TraceRetrieval => "retrieval",
             ArtifactKind.TracePlanning => "planning",
             ArtifactKind.TraceToolCall => "tool-calls",
-            ArtifactKind.TraceRouterShadow => "router-shadow",
             ArtifactKind.TraceRankerShadow => "ranker-shadow",
             ArtifactKind.TraceVectorShadow => "vector-shadow",
             ArtifactKind.TraceGraphShadow => "graph-shadow",
@@ -79,7 +78,6 @@ public sealed class TraceArtifactDescriptorFactory
             ArtifactKind.TraceRetrieval => "retrieval-traces",
             ArtifactKind.TracePlanning => "planning-traces",
             ArtifactKind.TraceToolCall => "tool-call-trace",
-            ArtifactKind.TraceRouterShadow => "router-shadow-traces",
             ArtifactKind.TraceRankerShadow => "ranker-shadow-traces",
             ArtifactKind.TraceVectorShadow => "vector-shadow-traces",
             ArtifactKind.TraceGraphShadow => "graph-shadow-traces",
@@ -99,7 +97,6 @@ public sealed class TraceArtifactDescriptorFactory
         => kind is ArtifactKind.TraceRetrieval
             or ArtifactKind.TracePlanning
             or ArtifactKind.TraceToolCall
-            or ArtifactKind.TraceRouterShadow
             or ArtifactKind.TraceRankerShadow
             or ArtifactKind.TraceVectorShadow
             or ArtifactKind.TraceGraphShadow

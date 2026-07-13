@@ -1,7 +1,6 @@
 using System.Globalization;
 using System.Text;
 using ContextCore.Abstractions.Models;
-using ContextCore.Core.Services.Planning;
 
 namespace ContextCore.Evaluation.Learning;
 
@@ -21,64 +20,21 @@ public abstract class RouterIntentClassifier
 
 public sealed class ExistingRuleBasedRouterBaseline : RouterIntentClassifier
 {
-    private readonly PlanningIntentDetector _detector = new();
-
     public override string ClassifierName => RouterIntentClassifierBaselineNames.ExistingRuleBasedRouterBaseline;
 
     public override RouterIntentClassifierPrediction Predict(ContextPolicyFeatureExample example)
     {
         ArgumentNullException.ThrowIfNull(example);
 
-        var detection = _detector.Detect(BuildInputText(example), example.Mode);
+        // 数据集应显式提供 Intent，缺失时使用 Unknown，不再依赖关键词自动制造标签。
+        var intent = RouterIntentClassifierLabelResolver.GetIntentLabel(example);
         return new RouterIntentClassifierPrediction
         {
-            Intent = detection.Intent,
-            Confidence = Clamp01(detection.Confidence),
-            Abstained = detection.Confidence < 0.2,
-            Reasons = detection.Reasons
+            Intent = intent,
+            Confidence = 1.0,
+            Abstained = false,
+            Reasons = ["explicit dataset label"]
         };
-    }
-
-    private static string BuildInputText(ContextPolicyFeatureExample example)
-    {
-        var builder = new StringBuilder();
-        AppendIfPresent(builder, example.InputSummary);
-        if (example.Metadata.TryGetValue("currentInput", out var currentInput))
-        {
-            AppendIfPresent(builder, currentInput);
-        }
-
-        if (example.Metadata.TryGetValue("queryText", out var queryText))
-        {
-            AppendIfPresent(builder, queryText);
-        }
-
-        return builder.Length == 0 ? example.Mode : builder.ToString();
-    }
-
-    private static void AppendIfPresent(StringBuilder builder, string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return;
-        }
-
-        if (builder.Length > 0)
-        {
-            builder.Append(' ');
-        }
-
-        builder.Append(value.Trim());
-    }
-
-    private static double Clamp01(double value)
-    {
-        if (value <= 0)
-        {
-            return 0;
-        }
-
-        return value >= 1 ? 1 : value;
     }
 }
 
@@ -135,7 +91,7 @@ public sealed class TokenCentroidRouterBaseline : RouterIntentClassifier
         {
             return new RouterIntentClassifierPrediction
             {
-                Intent = PlanningIntentDetector.FuzzyQuestion,
+                Intent = RouterIntentLabels.Unknown,
                 Confidence = 0,
                 Abstained = true,
                 Reasons = ["no token vector available"]
@@ -168,7 +124,7 @@ public sealed class TokenCentroidRouterBaseline : RouterIntentClassifier
         var confidence = Math.Clamp(Math.Max(bestScore, 0) * 0.75 + margin * 0.25, 0, 1);
         return new RouterIntentClassifierPrediction
         {
-            Intent = string.IsNullOrWhiteSpace(bestIntent) ? PlanningIntentDetector.FuzzyQuestion : bestIntent,
+            Intent = string.IsNullOrWhiteSpace(bestIntent) ? RouterIntentLabels.Unknown : bestIntent,
             Confidence = confidence,
             Abstained = confidence <= 0,
             Reasons = [$"centroidScore={bestScore.ToString("0.####", CultureInfo.InvariantCulture)}"],
@@ -351,7 +307,7 @@ public static class RouterIntentClassifierLabelResolver
         }
 
         return string.IsNullOrWhiteSpace(example.Intent)
-            ? PlanningIntentDetector.FuzzyQuestion
+            ? RouterIntentLabels.Unknown
             : example.Intent.Trim();
     }
 }

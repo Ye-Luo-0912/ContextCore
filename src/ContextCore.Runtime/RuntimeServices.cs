@@ -1,7 +1,6 @@
 using ContextCore.Core;
 using ContextCore.Core.Services;
 using ContextCore.Core.Services.Graph;
-using ContextCore.Core.Services.Planning;
 using ContextCore.Core.Services.Retrieval;
 
 namespace ContextCore.Runtime;
@@ -17,10 +16,6 @@ public sealed class RuntimeServices
     public required BasicContextPackageBuilder PackageBuilder { get; init; }
     public required HybridContextRetriever Retriever { get; init; }
     public required BasicMemoryPromotionService PromotionService { get; init; }
-
-    // --- 规划子链中间服务 ---
-
-    public required PlanningIntentDetector PlanningIntentDetector { get; init; }
 
     // --- 关系扩展子链中间服务 ---
 

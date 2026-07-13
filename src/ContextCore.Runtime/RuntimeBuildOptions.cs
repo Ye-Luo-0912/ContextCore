@@ -2,7 +2,6 @@ using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services;
 using ContextCore.Core.Services.Learning.V14_0;
-using ContextCore.Core.Services.Planning;
 using ContextCore.Core.Services.Retrieval;
 
 namespace ContextCore.Runtime;

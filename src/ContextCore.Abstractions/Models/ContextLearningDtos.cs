@@ -1446,64 +1446,6 @@ public sealed class RouterIntentShadowTopPrediction
     public string Reason { get; init; } = string.Empty;
 }
 
-/// <summary>Router intent shadow trace；只记录旁路预测，不写回正式规划、检索或打包链路。</summary>
-public sealed class RouterIntentShadowTrace
-{
-    public string RequestId { get; init; } = string.Empty;
-
-    public string WorkspaceId { get; init; } = string.Empty;
-
-    public string? CollectionId { get; init; }
-
-    public string? SessionId { get; init; }
-
-    public string EntryPoint { get; init; } = string.Empty;
-
-    public string Mode { get; init; } = string.Empty;
-
-    public string QueryText { get; init; } = string.Empty;
-
-    public string RuntimeIntent { get; init; } = string.Empty;
-
-    public string ShadowIntent { get; init; } = string.Empty;
-
-    public double ShadowConfidence { get; init; }
-
-    public bool Agreement { get; init; }
-
-    public string DisagreementType { get; init; } = string.Empty;
-
-    public IReadOnlyList<RouterIntentShadowTopPrediction> TopPredictions { get; init; } =
-        Array.Empty<RouterIntentShadowTopPrediction>();
-
-    public bool LowConfidence { get; init; }
-
-    public bool Abstained { get; init; }
-
-    public bool WouldChangePlanningProfile { get; init; }
-
-    public bool WouldChangeVectorProfile { get; init; }
-
-    public bool FormalOutputChanged { get; init; }
-
-    public DateTimeOffset CreatedAt { get; init; }
-
-    public string PolicyVersion { get; init; } = string.Empty;
-
-    public Dictionary<string, string> Metadata { get; init; } = new(StringComparer.OrdinalIgnoreCase);
-}
-
-public sealed class RouterIntentShadowTraceQuery
-{
-    public string? WorkspaceId { get; init; }
-
-    public string? CollectionId { get; init; }
-
-    public string? EntryPoint { get; init; }
-
-    public int Take { get; init; } = 50;
-}
-
 public static class RouterDisagreementTriageRecommendations
 {
     public const string KeepRuleBased = "KeepRuleBased";

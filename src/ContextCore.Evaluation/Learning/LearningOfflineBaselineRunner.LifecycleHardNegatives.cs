@@ -5,7 +5,6 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
-using ContextCore.Core.Services.Planning;
 using ContextCore.Evaluation.Models;
 
 namespace ContextCore.Evaluation.Learning;
@@ -623,7 +622,7 @@ public sealed partial class LearningOfflineBaselineRunner
 
     private static bool IsAuditLike(RankingPairExample pair)
     {
-        return string.Equals(pair.Intent, PlanningIntentDetector.AuditDeprecated, StringComparison.OrdinalIgnoreCase)
+        return string.Equals(pair.Intent, RouterIntentLabels.AuditDeprecated, StringComparison.OrdinalIgnoreCase)
             || ContainsAny(string.Join(' ', pair.Query, pair.Reason, pair.Intent), "audit", "deprecated", "historical", "history", "obsolete", "审计", "废弃", "历史");
     }
 

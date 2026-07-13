@@ -3,7 +3,6 @@ using ContextCore.Abstractions.Models;
 using ContextCore.Core;
 using ContextCore.Core.Jobs;
 using ContextCore.Core.Services;
-using ContextCore.Core.Services.Planning;
 using ContextCore.Core.Services.Promotion;
 using ContextCore.Core.Services.Graph;
 using ContextCore.Core.Services.Learning.V14_0;
@@ -242,7 +241,6 @@ internal static class CoreExtensions
 		}));
 
 		// 主链服务从 RuntimeServices 获取（保证对象图一致性）
-		services.AddSingleton(sp => sp.GetRequiredService<RuntimeServices>().PlanningIntentDetector);
 		services.AddSingleton(sp => sp.GetRequiredService<RuntimeServices>().RelationExpansionProfileRegistry);
 		services.AddSingleton(sp => sp.GetRequiredService<RuntimeServices>().RelationExpansionPolicyValidator);
 		services.AddSingleton(sp => sp.GetRequiredService<RuntimeServices>().RelationTraversalEngine);

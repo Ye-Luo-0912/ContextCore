@@ -8,7 +8,6 @@ using ContextCore.Client;
 using ContextCore.Core;
 using ContextCore.Core.Services;
 using ContextCore.Core.Services.Graph;
-using ContextCore.Core.Services.Planning;
 using ContextCore.Core.Services.Retrieval;
 using ContextCore.Core.Services.Storage;
 using ContextCore.Embedding;

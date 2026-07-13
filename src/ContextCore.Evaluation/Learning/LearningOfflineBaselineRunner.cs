@@ -4,7 +4,6 @@ using System.Text;
 using System.Text.Json;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
-using ContextCore.Core.Services.Planning;
 using ContextCore.Evaluation.Models;
 
 namespace ContextCore.Evaluation.Learning;
@@ -404,52 +403,52 @@ public sealed partial class LearningOfflineBaselineRunner
             .OrderByDescending(group => group.Count())
             .ThenBy(group => group.Key, StringComparer.OrdinalIgnoreCase)
             .Select(group => group.Key)
-            .FirstOrDefault() ?? PlanningIntentDetector.FuzzyQuestion;
+            .FirstOrDefault() ?? RouterIntentLabels.Unknown;
     }
 
     private static string PredictRuleBasedIntent(ContextPolicyFeatureExample example)
     {
         if (example.Mode.Contains("Automation", StringComparison.OrdinalIgnoreCase))
         {
-            return PlanningIntentDetector.AutomationRecovery;
+            return RouterIntentLabels.AutomationRecovery;
         }
 
         if (example.Mode.Contains("Coding", StringComparison.OrdinalIgnoreCase))
         {
-            return PlanningIntentDetector.CodingTask;
+            return RouterIntentLabels.CodingTask;
         }
 
         if (example.Mode.Contains("Novel", StringComparison.OrdinalIgnoreCase))
         {
-            return PlanningIntentDetector.NovelGeneration;
+            return RouterIntentLabels.NovelGeneration;
         }
 
         if (example.ChannelSources.Any(source => source.Contains("historical", StringComparison.OrdinalIgnoreCase)
                 || source.Contains("deprecated", StringComparison.OrdinalIgnoreCase)))
         {
-            return PlanningIntentDetector.AuditDeprecated;
+            return RouterIntentLabels.AuditDeprecated;
         }
 
         if (example.ConstraintMatchScore > 0
             || example.ChannelSources.Any(source => source.Contains("constraint", StringComparison.OrdinalIgnoreCase)))
         {
-            return PlanningIntentDetector.ConflictCheck;
+            return RouterIntentLabels.ConflictCheck;
         }
 
         if (example.StableMatchScore > example.ShortTermMatchScore
             && example.StableMatchScore > 0)
         {
-            return PlanningIntentDetector.LongTermPreference;
+            return RouterIntentLabels.LongTermPreference;
         }
 
         if (example.ShortTermMatchScore > 0
             || example.ChannelSources.Any(source => source.Contains("working", StringComparison.OrdinalIgnoreCase)
                 || source.Contains("short", StringComparison.OrdinalIgnoreCase)))
         {
-            return PlanningIntentDetector.CurrentTask;
+            return RouterIntentLabels.CurrentTask;
         }
 
-        return PlanningIntentDetector.FuzzyQuestion;
+        return RouterIntentLabels.Unknown;
     }
 
     private static CandidatePairScore ScorePairByRule(RankingPairExample pair)
@@ -630,7 +629,7 @@ public sealed partial class LearningOfflineBaselineRunner
         }
 
         return string.IsNullOrWhiteSpace(example.Intent)
-            ? PlanningIntentDetector.FuzzyQuestion
+            ? RouterIntentLabels.Unknown
             : example.Intent;
     }
 

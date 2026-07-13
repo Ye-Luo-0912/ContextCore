@@ -175,7 +175,6 @@ public static class StorageResponsibilityRegistry
         AddArtifact(entries, ArtifactKind.TraceRetrieval, StorageResponsibilityKind.TraceOnly, StorageResponsibilityKind.FileSystemPreferred, "Low", "Low", "retrieval trace artifact");
         AddArtifact(entries, ArtifactKind.TracePlanning, StorageResponsibilityKind.TraceOnly, StorageResponsibilityKind.FileSystemPreferred, "Low", "Low", "planning trace artifact");
         AddArtifact(entries, ArtifactKind.TraceToolCall, StorageResponsibilityKind.TraceOnly, StorageResponsibilityKind.FileSystemPreferred, "Low", "Low", "tool-call trace artifact");
-        AddArtifact(entries, ArtifactKind.TraceRouterShadow, StorageResponsibilityKind.TraceOnly, StorageResponsibilityKind.FileSystemPreferred, "Low", "Low", "router shadow trace artifact");
         AddArtifact(entries, ArtifactKind.TraceRankerShadow, StorageResponsibilityKind.TraceOnly, StorageResponsibilityKind.FileSystemPreferred, "Low", "Low", "ranker shadow trace artifact");
         AddArtifact(entries, ArtifactKind.TraceVectorShadow, StorageResponsibilityKind.TraceOnly, StorageResponsibilityKind.FileSystemPreferred, "Low", "Low", "vector shadow trace artifact");
         AddArtifact(entries, ArtifactKind.TraceGraphShadow, StorageResponsibilityKind.TraceOnly, StorageResponsibilityKind.FileSystemPreferred, "Low", "Low", "graph shadow trace artifact");

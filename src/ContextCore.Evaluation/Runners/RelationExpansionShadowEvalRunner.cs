@@ -4,8 +4,8 @@ using ContextCore.Abstractions.Models;
 using ContextCore.Core;
 using ContextCore.Core.Services;
 using ContextCore.Core.Services.Graph;
-using ContextCore.Core.Services.Planning;
 using ContextCore.Storage.InMemory;
+using ContextCore.Evaluation.Learning;
 using ContextCore.Evaluation.Models;
 
 namespace ContextCore.Evaluation.Runners;
@@ -25,23 +25,20 @@ public sealed class RelationExpansionShadowEvalRunner
     private readonly RelationTypeRegistry _relationTypeRegistry;
     private readonly RelationTypeNormalizer _typeNormalizer;
     private readonly RelationEvalBackfillPolicy _backfillPolicy;
-    private readonly PlanningIntentDetector _intentDetector;
 
     public RelationExpansionShadowEvalRunner()
-        : this(new RelationExpansionProfileRegistry(), new RelationTypeRegistry(), new PlanningIntentDetector())
+        : this(new RelationExpansionProfileRegistry(), new RelationTypeRegistry())
     {
     }
 
     public RelationExpansionShadowEvalRunner(
         RelationExpansionProfileRegistry profileRegistry,
         RelationTypeRegistry relationTypeRegistry,
-        PlanningIntentDetector intentDetector,
         RelationTypeNormalizer? typeNormalizer = null,
         RelationEvalBackfillPolicy? backfillPolicy = null)
     {
         _profileRegistry = profileRegistry;
         _relationTypeRegistry = relationTypeRegistry;
-        _intentDetector = intentDetector;
         _typeNormalizer = typeNormalizer ?? new RelationTypeNormalizer();
         _backfillPolicy = backfillPolicy ?? new RelationEvalBackfillPolicy();
     }
@@ -437,7 +434,7 @@ public sealed class RelationExpansionShadowEvalRunner
         };
     }
 
-    private string ResolveIntent(ContextEvalSample sample)
+    private static string ResolveIntent(ContextEvalSample sample)
     {
         if (sample.Metadata.TryGetValue("intent", out var intent)
             && !string.IsNullOrWhiteSpace(intent))
@@ -445,7 +442,8 @@ public sealed class RelationExpansionShadowEvalRunner
             return intent;
         }
 
-        return _intentDetector.Detect(sample.Query, sample.Mode).Intent;
+        // 数据集应显式提供 Intent，缺失时使用 Unknown，不再依赖关键词自动制造标签。
+        return RouterIntentLabels.Unknown;
     }
 
     private static async Task<IReadOnlyList<ContextEvalSample>> LoadCategorySamplesAsync(

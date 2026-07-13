@@ -3,7 +3,6 @@ using ContextCore.Abstractions.Models;
 using ContextCore.Core;
 using ContextCore.Core.Services;
 using ContextCore.Core.Services.Graph;
-using ContextCore.Core.Services.Planning;
 using ContextCore.Core.Services.Retrieval;
 
 namespace ContextCore.Runtime;
@@ -25,9 +24,6 @@ public static class ContextRuntimeBuilder
     public static RuntimeServices Build(RuntimeBuildOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
-
-        // 规则型意图检测（保留：被 Learning 子系统引用）
-        var planningIntentDetector = new PlanningIntentDetector();
 
         // 关系扩展主链
         var relationTypeRegistry = new RelationTypeRegistry();
@@ -71,7 +67,6 @@ public static class ContextRuntimeBuilder
             PackageBuilder = packageBuilder,
             Retriever = retriever,
             PromotionService = promotionService,
-            PlanningIntentDetector = planningIntentDetector,
             RelationExpansionProfileRegistry = relationExpansionProfileRegistry,
             RelationExpansionPolicyValidator = relationExpansionValidator,
             RelationTraversalEngine = relationTraversalEngine,

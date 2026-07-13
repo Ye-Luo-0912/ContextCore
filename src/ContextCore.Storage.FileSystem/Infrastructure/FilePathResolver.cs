@@ -389,18 +389,6 @@ public sealed class FilePathResolver
 	public string GetLearningCasesJsonlPath(string workspaceId, string collectionId)
 		=> Path.Combine(GetLearningDirectory(workspaceId, collectionId), "cases.jsonl");
 
-	/// <summary>获取 Router intent shadow trace JSONL 文件路径。</summary>
-	public string GetRouterShadowTracesJsonlPath(string workspaceId, string collectionId)
-		=> GetTraceArtifactPath(ArtifactKind.TraceRouterShadow, workspaceId, collectionId, "router-shadow-traces");
-
-	/// <summary>获取旧版 Router intent shadow trace JSONL 文件路径，用于读取迁移前的数据。</summary>
-	public string GetLegacyRouterShadowTracesJsonlPath(string workspaceId, string collectionId)
-		=> Path.Combine(GetLearningDirectory(workspaceId, collectionId), "router-shadow-traces.jsonl");
-
-	/// <summary>获取 Router intent shadow trace 标准目录，用于枚举日期分片。</summary>
-	public string GetRouterShadowTracesDirectory(string workspaceId, string collectionId)
-		=> GetTraceCategoryDirectory(workspaceId, collectionId, "router-shadow");
-
 	/// <summary>获取运行时学习反馈事件 JSONL 文件路径。</summary>
 	public string GetRuntimeLearningFeedbackJsonlPath(string workspaceId, string collectionId)
 		=> Path.Combine(GetLearningDirectory(workspaceId, collectionId), "runtime-feedback-events.jsonl");

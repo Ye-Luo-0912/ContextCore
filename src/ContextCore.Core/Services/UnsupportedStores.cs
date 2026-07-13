@@ -267,30 +267,6 @@ public sealed class UnsupportedContextLearningStore : IContextLearningStore
         => new($"Context learning store is not implemented for storage provider '{_provider}'.");
 }
 
-/// <summary>Router intent shadow trace 存储的占位实现。</summary>
-public sealed class UnsupportedRouterIntentShadowTraceStore : IRouterIntentShadowTraceStore
-{
-    private readonly string _provider;
-
-    public UnsupportedRouterIntentShadowTraceStore(string provider)
-    {
-        _provider = string.IsNullOrWhiteSpace(provider) ? "unknown" : provider;
-    }
-
-    public Task SaveAsync(
-        RouterIntentShadowTrace trace,
-        CancellationToken cancellationToken = default)
-        => throw CreateException();
-
-    public Task<IReadOnlyList<RouterIntentShadowTrace>> QueryAsync(
-        RouterIntentShadowTraceQuery query,
-        CancellationToken cancellationToken = default)
-        => throw CreateException();
-
-    private NotSupportedException CreateException()
-        => new($"Router intent shadow trace store is not implemented for storage provider '{_provider}'.");
-}
-
 /// <summary>Vector reindex 报告存储的占位实现。</summary>
 public sealed class UnsupportedVectorReindexReportStore : IVectorReindexReportStore
 {

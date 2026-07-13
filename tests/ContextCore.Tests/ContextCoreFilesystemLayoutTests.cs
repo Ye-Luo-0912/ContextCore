@@ -489,7 +489,6 @@ public sealed class ContextCoreFilesystemLayoutTests
             [ArtifactKind.TraceRetrieval] = "traces/retrieval/20260612",
             [ArtifactKind.TracePlanning] = "traces/planning/20260612",
             [ArtifactKind.TraceToolCall] = "traces/tool-calls/20260612/operation-escape",
-            [ArtifactKind.TraceRouterShadow] = "traces/router-shadow/20260612",
             [ArtifactKind.TraceRankerShadow] = "traces/ranker-shadow/20260612",
             [ArtifactKind.TraceVectorShadow] = "traces/vector-shadow/20260612",
             [ArtifactKind.TraceGraphShadow] = "traces/graph-shadow/20260612",

@@ -4,7 +4,6 @@ using System.Text;
 using System.Text.Json;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
-using ContextCore.Core.Services.Planning;
 
 namespace ContextCore.Evaluation.Learning;
 
@@ -25,13 +24,11 @@ public sealed class LearningFeatureDatasetService
     ];
 
     private readonly PolicyFeedbackDatasetService? _policyFeedbackDatasetService;
-    private readonly PlanningIntentDetector _intentDetector;
 
     public LearningFeatureDatasetService(
         PolicyFeedbackDatasetService? policyFeedbackDatasetService = null)
     {
         _policyFeedbackDatasetService = policyFeedbackDatasetService;
-        _intentDetector = new PlanningIntentDetector();
     }
 
     public async Task<LearningFeatureDataset> BuildAsync(
@@ -133,7 +130,7 @@ public sealed class LearningFeatureDatasetService
                 continue;
             }
 
-            var intent = DetectIntent(result.Query, result.Mode);
+            var intent = DetectIntent(result);
             foreach (var positive in positives)
             {
                 foreach (var negative in negatives)
@@ -333,10 +330,16 @@ public sealed class LearningFeatureDatasetService
             .ConfigureAwait(false);
     }
 
-    private string DetectIntent(string query, string mode)
+    private static string DetectIntent(ContextEvalResult result)
     {
-        var detection = _intentDetector.Detect(query, mode);
-        return detection.Intent;
+        // 数据集应显式提供 Intent，缺失时使用 Unknown，不再依赖关键词自动制造标签。
+        if (result.PackageMetadata.TryGetValue("intent", out var explicitIntent)
+            && !string.IsNullOrWhiteSpace(explicitIntent))
+        {
+            return explicitIntent.Trim();
+        }
+
+        return RouterIntentLabels.Unknown;
     }
 
     private static IEnumerable<string> ResolveMustHitCandidates(ContextEvalResult result)

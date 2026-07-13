@@ -36,7 +36,6 @@ public enum ArtifactKind
     TraceRetrieval,
     TracePlanning,
     TraceToolCall,
-    TraceRouterShadow,
     TraceRankerShadow,
     TraceVectorShadow,
     TraceGraphShadow,
@@ -264,8 +263,6 @@ public sealed record TraceLayoutDiagnostics
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
     public int RetrievalTraceCount { get; init; }
-
-    public int RouterShadowTraceCount { get; init; }
 
     public bool ToolCallPlaceholderReady { get; init; }
 

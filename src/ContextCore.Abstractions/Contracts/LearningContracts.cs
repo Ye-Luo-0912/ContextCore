@@ -2,18 +2,6 @@ using ContextCore.Abstractions.Models;
 
 namespace ContextCore.Abstractions;
 
-/// <summary>Router intent shadow trace 存储；用于旁路观测，不参与正式输出。</summary>
-public interface IRouterIntentShadowTraceStore
-{
-    Task SaveAsync(
-        RouterIntentShadowTrace trace,
-        CancellationToken cancellationToken = default);
-
-    Task<IReadOnlyList<RouterIntentShadowTrace>> QueryAsync(
-        RouterIntentShadowTraceQuery query,
-        CancellationToken cancellationToken = default);
-}
-
 /// <summary>运行时反馈事件存储；只用于收集和离线分析，不驱动正式策略。</summary>
 public interface ILearningFeedbackStore
 {
