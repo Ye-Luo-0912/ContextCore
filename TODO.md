@@ -1,6 +1,6 @@
 # ContextCore 项目路线图
 
-> 最近更新：P1 ControlRoom 历史 Postgres 报告矩阵删除 + P2 Evaluation/Core 不可达切片删除 + P3 DTO-R5 孤立类型收口 + P4 FoundationStatusService 孤立方法删除 + 别名链删除（2026-07-13）
+> 最近更新：P1 ControlRoom 历史 Postgres 报告矩阵删除 + P2 Evaluation/Core 不可达切片删除 + P3 DTO-R5 孤立类型收口 + P4 FoundationStatusService 孤立方法删除 + 别名链删除 + 仅测试调用方法删除（2026-07-13）
 
 > 本文件是 ContextCore 的**唯一当前路线图**。docs/ 下的 freeze / report / audit / plan 类文档均为历史快照，仅供回溯，不作为设计依据。
 
@@ -28,13 +28,13 @@
 
 | 指标 | 当前值 | 目标 |
 |------|--------|------|
-| 生产代码总行数 | ~144,000 | < 220k |
+| 生产代码总行数 | ~143,200 | < 220k |
 | Evaluation 代码行数 | ~28,000 | < 70k |
 | ControlRoom 代码行数 | ~17,500 | < 20k |
 | EvalCommand.cs 单文件行数 | 7,987 | P1-5 已完成 |
-| FoundationStatusService.cs 行数 | 2,038 | P4 进行中 |
+| FoundationStatusService.cs 行数 | 1,245 | P4 进行中 |
 | 构建 | 0 警告 / 0 错误 | 0 / 0 |
-| 测试 | 1154 通过 / 0 失败 | 0 失败 |
+| 测试 | 1130 通过 / 0 失败 | 0 失败 |
 
 ---
 
@@ -74,7 +74,7 @@
 - `BuildOpenApiContractMarkdown`、`BuildHostedServiceSmokeMarkdown`
 - `BuildAuthDiagnosticsMarkdown`、`BuildAuthEnforcementSmokeMarkdown`、`BuildDeploymentProfileGateMarkdown`
 
-**别名链删除**：删除 5 个重复的 statusKind 路由别名（release-candidate / reproducibility / runtime-change-gate / vector-formal-preview / postgres-freeze-status），这些别名返回与 `/foundation/status` 完全相同的数据（仅 StatusKind 标签不同）：
+**别名链删除**：删除 5 个重复的 statusKind 路由别名（release-candidate / reproducibility / runtime-change-gate / vector-formal-preview / postgres-freeze-status），这些别名返回与 `/foundation/status` 完全相同的数据（仅 StatusKind 标签字段不同）：
 - `AdminEndpoints.cs` — 删除 5 条 MapGet 路由注册
 - `FoundationStatusService.cs` — EndpointContracts 从 8 条减到 3 条、ClientMethodContracts 从 8 条减到 3 条、ClientAliasMethodContracts 清空
 - `ContextCoreClient.cs` — 删除 10 个别名客户端方法（5 个 `GetXxxStatusAsync` + 5 个 `GetXxxAsync` 快捷别名）
@@ -82,6 +82,16 @@
 - 3 个测试文件同步清理
 - `FoundationStatusService.cs` 从 2,510 行减到 2,038 行（-472 行）
 - 0 警告 0 错误，1154 测试通过
+
+**仅测试调用方法删除**：删除 11 个仅被测试调用的公开方法 + 8 个孤立私有辅助方法：
+- 删除 `BuildAuthDiagnostics`、`BuildAuthEnforcementSmokeReport`、`BuildDeploymentProfileGateReport`、`BuildReportNavigationSmokeReport`
+- 删除 `BuildOpenApiDocument`、`BuildApiContractSnapshot`、`BuildClientContractSnapshot`、`GetFoundationEndpointContracts`、`BuildOpenApiContractReport`
+- 删除 `BuildHostedServiceSmokeReport`、`BuildSmokeReport`
+- 删除孤立私有辅助方法：`BuildOpenApiSchemas`、`ToStringPropertyMap`、`ToJsonArray`、`ToOperationId`、`BuildOpenApiContractRecommendation`、`BuildHostedSmokeRecommendation`、`NormalizeHostedBaseUrlForReport`、`BuildAuthRecommendation`
+- `BuildContractReport` 和 `BuildServiceFoundationFreezeReport` 降级为 private（仅被 Async 版本内部调用）
+- 删除 24 个引用已删除方法的测试方法 + 13 个孤立测试辅助方法
+- `FoundationStatusService.cs` 从 2,038 行减到 1,245 行（-793 行）
+- 0 警告 0 错误，1130 测试通过
 
 ### 删除 tests-only Postgres runner（commit `9fa2b48`）
 
@@ -174,7 +184,7 @@
 - **Service DI 收敛到 ContextRuntimeBuilder** — Service ASP.NET DI 仍由 CoreExtensions.AddContextCore 自行注册 80+ 服务。风险较高（生产路径），需单独评估。
 - ~~**IEvalState 上帝接口拆分**~~ — 已完成：已拆分为 `IEvalStateCore` / `IEvalStateServiceMode`（DTO-R3 已迁移到 Evaluation.Hosting）。
 - **eval-only DTO 迁移** — P5-1 遗留，部分 eval-only DTO 仍在非 Evaluation 项目中。P3 已删除 83 个孤立 DTO 类型，剩余 eval-only 模型迁回 ContextCore.Evaluation/Models 待后续处理。
-- **P4 FoundationStatusService 跨项目迁移** — 别名链已删除（5 条路由 + 10 个客户端方法 + 契约表清理）。剩余：实时健康入 Service、历史解析入 Evaluation。涉及跨项目改动，需单独评估。
+- **P4 FoundationStatusService 跨项目迁移** — 别名链已删除 + 11 个仅测试调用方法已删除 + 8 个孤立私有方法已删除。剩余：实时健康入 Service、历史解析入 Evaluation。涉及跨项目改动，需单独评估。
 
 ---
 
