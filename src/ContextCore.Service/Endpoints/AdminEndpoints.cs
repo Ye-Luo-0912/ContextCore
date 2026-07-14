@@ -412,38 +412,6 @@ internal static class AdminEndpoints
         .WithName("AdminRelationProviderScopedDiagnostics")
         .WithSummary("返回 Relation governance scoped service mode 诊断");
 
-        group.MapGet("/foundation/status", async (
-            FoundationStatusService foundationStatus,
-            CancellationToken ct) =>
-        {
-            return Results.Ok(await foundationStatus.GetStatusEnvelopeAsync("foundation/status", ct)
-                .ConfigureAwait(false));
-        })
-        .WithName("AdminFoundationStatus")
-        .WithSummary("返回 frozen foundation 只读状态汇总");
-
-        group.MapGet("/foundation/reports", async (
-            FoundationStatusService foundationStatus,
-            CancellationToken ct) =>
-        {
-            return Results.Ok(await foundationStatus.GetReportNavigationEnvelopeAsync(ct)
-                .ConfigureAwait(false));
-        })
-        .WithName("AdminFoundationReports")
-        .WithSummary("返回 frozen foundation 报告导航，只暴露安全相对路径");
-
-        group.MapGet("/foundation/reports/{reportId}", async (
-            string reportId,
-            FoundationStatusService foundationStatus,
-            CancellationToken ct) =>
-        {
-            var envelope = await foundationStatus.GetReportNavigationEntryEnvelopeAsync(reportId, ct)
-                .ConfigureAwait(false);
-            return envelope.Success ? Results.Ok(envelope) : Results.NotFound(envelope);
-        })
-        .WithName("AdminFoundationReportDetail")
-        .WithSummary("返回单个 frozen foundation 报告导航详情，只暴露安全相对路径");
-
         // ── In-process metrics ─────────────────────────────────────────
         group.MapGet("/metrics", (Infrastructure.ContextCoreMetrics metrics) =>
             Results.Ok(metrics.GetSnapshot()))

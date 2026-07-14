@@ -76,10 +76,6 @@ public static partial class EvalCommand
             "  eval vector-retrieval-dataset-alignment-audit [--category <name>] [--profile <id>] [--provider deterministic-hash|onnx-local|qwen3] [--out-a3 <path.json>] [--out-extended <path.json>] [--out-summary <path.json>] [--md-out <path.md>]",
             (service, args, sub, ct) => ExecuteVectorRetrievalDatasetAlignmentAuditAsync(service, args, sub, ct));
 
-        // === service ===
-        Reg("service-api-contract-report", "  eval service-api-contract-report [--production]",
-            (service, args, sub, ct) => ExecuteServiceApiContractAsync(sub, args, ct));
-
         // === storage ===
         Reg("storage-check", "  eval storage-check",
             (service, args, sub, ct) => ExecuteStorageCheckAsync(service, ct));

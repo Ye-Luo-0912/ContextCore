@@ -54,7 +54,6 @@ builder.Services.Configure<ShortTermMaintenanceOptions>(builder.Configuration.Ge
 builder.Services.AddHostedService<ContextJobWorker>();
 builder.Services.AddHostedService<ShortTermMemoryMaintenanceWorker>();
 builder.Services.AddSingleton<ContextCoreMetrics>();
-builder.Services.AddSingleton(new FoundationStatusService(Directory.GetCurrentDirectory()));
 builder.Services.AddRequestTimeouts(options =>
 {
 	options.DefaultPolicy = new RequestTimeoutPolicy

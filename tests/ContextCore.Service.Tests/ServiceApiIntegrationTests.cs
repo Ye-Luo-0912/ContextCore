@@ -77,52 +77,6 @@ public sealed class ServiceApiIntegrationTests
     }
 
     [TestMethod]
-    public async Task FoundationReadOnlyApis_ShouldEnforceApiKeyWithoutLeakingSecret()
-    {
-        var rootPath = CreateTestRootPath();
-        const string testKey = "foundation-secret-key";
-
-        try
-        {
-            using var factory = CreateFactory(
-                rootPath,
-                jobWorkerEnabled: false,
-                pollIntervalMs: 100,
-                requireApiKey: true,
-                apiKey: testKey);
-
-            using var noKeyClient = factory.CreateClient();
-            var noKey = await noKeyClient.GetAsync("/api/admin/foundation/status");
-            Assert.AreEqual(System.Net.HttpStatusCode.Unauthorized, noKey.StatusCode);
-
-            using var wrongKeyClient = factory.CreateClient();
-            wrongKeyClient.DefaultRequestHeaders.TryAddWithoutValidation("X-ContextCore-Key", "wrong-key");
-            var wrongKey = await wrongKeyClient.GetAsync("/api/admin/foundation/status");
-            Assert.AreEqual(System.Net.HttpStatusCode.Unauthorized, wrongKey.StatusCode);
-
-            using var correctKeyClient = factory.CreateClient();
-            correctKeyClient.DefaultRequestHeaders.TryAddWithoutValidation("X-ContextCore-Key", testKey);
-            var ok = await correctKeyClient.GetStringAsync("/api/admin/foundation/status");
-            Assert.IsFalse(ok.Contains(testKey, StringComparison.Ordinal), "response must not expose API key value");
-            AssertNoLocalPathLeak(ok, "foundation status with auth");
-            var envelope = JsonSerializer.Deserialize<FoundationApiResponseEnvelope<FoundationServiceStatusResponse>>(
-                ok,
-                new JsonSerializerOptions(JsonSerializerDefaults.Web));
-
-            Assert.IsNotNull(envelope);
-            Assert.IsTrue(envelope!.Success);
-            Assert.IsNotNull(envelope.Data);
-            Assert.IsFalse(envelope.Data!.RuntimeMutated);
-            Assert.IsFalse(envelope.Data.RuntimeSwitchAllowed);
-            Assert.IsFalse(envelope.Data.FormalRetrievalAllowed);
-        }
-        finally
-        {
-            DeleteTestRoot(rootPath);
-        }
-    }
-
-    [TestMethod]
     public async Task ServiceApi_ShouldIngestQueryAndReportStatus()
     {
         var rootPath = CreateTestRootPath();
@@ -569,112 +523,6 @@ public sealed class ServiceApiIntegrationTests
             Assert.IsTrue(modelStatus!.ApiProviders.Count > 0);
             Assert.IsTrue(modelStatus.Models.Count > 0);
             Assert.IsTrue(modelStatus.Routes.Count > 0);
-        }
-        finally
-        {
-            DeleteTestRoot(rootPath);
-        }
-    }
-
-    [TestMethod]
-    public async Task FoundationReadOnlyStatusApis_ShouldReturnFrozenStatusWithoutRuntimeMutation()
-    {
-        var rootPath = CreateTestRootPath();
-        Assert.IsFalse(Directory.Exists(rootPath), "Read-only API smoke 需要从干净的 filesystem root 开始。");
-
-        try
-        {
-            using var factory = CreateFactory(rootPath, jobWorkerEnabled: false, pollIntervalMs: 100);
-            using var client = factory.CreateClient();
-
-            var endpoints = new[]
-            {
-                "/api/admin/foundation/status"
-            };
-
-            foreach (var endpoint in endpoints)
-            {
-                var raw = await client.GetStringAsync(endpoint);
-                AssertNoLocalPathLeak(raw, endpoint);
-                Assert.IsFalse(raw.Contains("test-api-key-secure", StringComparison.Ordinal), endpoint);
-                var envelope = JsonSerializer.Deserialize<FoundationApiResponseEnvelope<FoundationServiceStatusResponse>>(
-                    raw,
-                    new JsonSerializerOptions(JsonSerializerDefaults.Web));
-
-                Assert.IsNotNull(envelope, endpoint);
-                Assert.IsTrue(envelope!.Success, endpoint);
-                Assert.AreEqual("foundation-api-envelope-v1", envelope.SchemaVersion, endpoint);
-                Assert.IsTrue(envelope.Status is "Ready" or "Degraded", endpoint);
-                Assert.IsNotNull(envelope.Data, endpoint);
-                var response = envelope.Data!;
-                Assert.IsTrue(response!.ReadOnly, endpoint);
-                Assert.IsFalse(response.RuntimeMutated, endpoint);
-                Assert.IsFalse(response.FormalRetrievalAllowed, endpoint);
-                Assert.IsFalse(response.RuntimeSwitchAllowed, endpoint);
-                Assert.IsFalse(response.ReadyForRuntimeSwitch, endpoint);
-                Assert.IsFalse(response.PackingPolicyChanged, endpoint);
-                Assert.IsFalse(response.PackageOutputChanged, endpoint);
-                Assert.IsFalse(response.FormalPackageWritten, endpoint);
-                Assert.IsTrue(response.Capabilities.Count >= 6, endpoint);
-                Assert.IsTrue(response.Capabilities.All(static item => !item.RuntimeSwitchAllowed), endpoint);
-            }
-
-            var reportsRaw = await client.GetStringAsync("/api/admin/foundation/reports");
-            AssertNoLocalPathLeak(reportsRaw, "reports");
-            var reportsEnvelope = JsonSerializer.Deserialize<FoundationApiResponseEnvelope<FoundationReportNavigationResponse>>(
-                reportsRaw,
-                new JsonSerializerOptions(JsonSerializerDefaults.Web));
-            Assert.IsNotNull(reportsEnvelope);
-            Assert.IsNotNull(reportsEnvelope!.Data);
-            Assert.AreEqual("foundation-api-envelope-v1", reportsEnvelope.SchemaVersion);
-            Assert.IsTrue(reportsEnvelope.Data!.Reports.Count > 0);
-            Assert.IsTrue(reportsEnvelope.Data.Reports.All(static report => report.SafeToExpose));
-            Assert.IsTrue(reportsEnvelope.Data.Reports.All(static report => !Path.IsPathRooted(report.RelativePath)));
-
-            var firstReportId = reportsEnvelope.Data.Reports[0].ReportId;
-            var detailRaw = await client.GetStringAsync($"/api/admin/foundation/reports/{firstReportId}");
-            AssertNoLocalPathLeak(detailRaw, "report detail");
-            var detailEnvelope = JsonSerializer.Deserialize<FoundationApiResponseEnvelope<FoundationReportNavigationEntry>>(
-                detailRaw,
-                new JsonSerializerOptions(JsonSerializerDefaults.Web));
-            Assert.IsNotNull(detailEnvelope);
-            Assert.IsNotNull(detailEnvelope!.Data);
-            Assert.AreEqual(firstReportId, detailEnvelope.Data!.ReportId);
-        }
-        finally
-        {
-            DeleteTestRoot(rootPath);
-        }
-    }
-
-    [TestMethod]
-    public async Task FoundationReadOnlyStatusApis_MissingReportsShouldReturnDegradedEnvelope()
-    {
-        var rootPath = CreateTestRootPath();
-        Directory.CreateDirectory(rootPath);
-
-        try
-        {
-            using var factory = CreateFactory(
-                rootPath,
-                jobWorkerEnabled: false,
-                pollIntervalMs: 100,
-                configureServices: services =>
-                {
-                    services.RemoveAll<FoundationStatusService>();
-                    services.AddSingleton(new FoundationStatusService(rootPath));
-                });
-            using var client = factory.CreateClient();
-
-            var envelope = await client.GetFromJsonAsync<FoundationApiResponseEnvelope<FoundationServiceStatusResponse>>(
-                "/api/admin/foundation/status");
-
-            Assert.IsNotNull(envelope);
-            Assert.IsTrue(envelope!.Success);
-            Assert.AreEqual("Degraded", envelope.Status);
-            Assert.AreEqual("RegenerateReport", envelope.Recommendation);
-            Assert.IsTrue(envelope.Diagnostics.TryGetValue("MissingReportIds", out var missing));
-            Assert.IsTrue(missing!.Count > 0);
         }
         finally
         {
@@ -2379,16 +2227,6 @@ public sealed class ServiceApiIntegrationTests
         {
             Directory.Delete(rootPath, recursive: true);
         }
-    }
-
-    private static void AssertNoLocalPathLeak(string payload, string context)
-    {
-        Assert.IsFalse(payload.Contains(@":\", StringComparison.Ordinal), context);
-        Assert.IsFalse(payload.Contains(":/", StringComparison.Ordinal), context);
-        Assert.IsFalse(payload.Contains("/home/", StringComparison.OrdinalIgnoreCase), context);
-        Assert.IsFalse(payload.Contains(".contextcore", StringComparison.OrdinalIgnoreCase), context);
-        Assert.IsFalse(payload.Contains("secrets.json", StringComparison.OrdinalIgnoreCase), context);
-        Assert.IsFalse(payload.Contains(".onnx", StringComparison.OrdinalIgnoreCase), context);
     }
 
     private static string GetSystemHealthCollectionPath(string rootPath)

@@ -2028,55 +2028,9 @@ public sealed class ContextCoreClient
             cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<FoundationServiceStatusResponse> GetFoundationStatusAsync(CancellationToken cancellationToken = default)
-    {
-        return await GetFoundationEnvelopeDataAsync<FoundationServiceStatusResponse>(
-            "api/admin/foundation/status",
-            cancellationToken).ConfigureAwait(false);
-    }
-
-    public async Task<FoundationReportNavigationResponse> GetFoundationReportsAsync(CancellationToken cancellationToken = default)
-    {
-        return await GetFoundationEnvelopeDataAsync<FoundationReportNavigationResponse>(
-            "api/admin/foundation/reports",
-            cancellationToken).ConfigureAwait(false);
-    }
-
-    public async Task<FoundationReportNavigationEntry> GetFoundationReportAsync(
-        string reportId,
-        CancellationToken cancellationToken = default)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(reportId);
-
-        return await GetFoundationEnvelopeDataAsync<FoundationReportNavigationEntry>(
-            $"api/admin/foundation/reports/{Escape(reportId)}",
-            cancellationToken).ConfigureAwait(false);
-    }
-
     private static string Escape(string value)
     {
         return Uri.EscapeDataString(value);
-    }
-
-    private async Task<TResponse> GetFoundationEnvelopeDataAsync<TResponse>(
-        string path,
-        CancellationToken cancellationToken)
-    {
-        var envelope = await GetRequiredAsync<FoundationApiResponseEnvelope<TResponse>>(path, cancellationToken)
-            .ConfigureAwait(false);
-        if (envelope.Data is null)
-        {
-            throw new ContextCoreApiException(
-                new ContextCoreErrorResponse
-                {
-                    ErrorCode = ContextCoreErrorCodes.StorageUnavailable,
-                    Message = $"Foundation API returned no data for {path} (status={envelope.Status}, recommendation={envelope.Recommendation}).",
-                    Target = path
-                },
-                HttpStatusCode.ServiceUnavailable);
-        }
-
-        return envelope.Data;
     }
 
     private static string BuildLearningRecordQueryString(ContextLearningRecordQuery query)

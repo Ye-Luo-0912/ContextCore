@@ -11,7 +11,6 @@ using ContextCore.Evaluation.Hosting;
 using ContextCore.Evaluation.Learning;
 using ContextCore.Evaluation.Models;
 using ContextCore.Evaluation.Runners;
-using ContextCore.Evaluation.Services;
 using ContextCore.Core.Services.Graph;
 using ContextCore.Core.Services.Storage;
 using ContextCore.Embedding;
