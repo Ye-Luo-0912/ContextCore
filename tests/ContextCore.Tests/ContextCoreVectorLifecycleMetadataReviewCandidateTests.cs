@@ -498,19 +498,6 @@ public class ContextCoreVectorLifecycleMetadataReviewCandidateTests
             Metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         };
 
-    private static VectorLifecycleMetadataReviewBatch ReviewBatch(params VectorLifecycleMetadataReviewCandidate[] candidates)
-        => new()
-        {
-            BatchId = "batch-test",
-            WorkspaceId = candidates.FirstOrDefault()?.WorkspaceId ?? "workspace-a",
-            CollectionId = candidates.FirstOrDefault()?.CollectionId ?? "collection-a",
-            CandidateIds = candidates.Select(static item => item.CandidateId).ToArray(),
-            CandidateCount = candidates.Length,
-            Status = VectorLifecycleMetadataReviewBatchStatuses.Draft,
-            CreatedAt = DateTimeOffset.UtcNow,
-            CreatedBy = "test"
-        };
-
     private static VectorLifecycleSidecarMetadataEntry Sidecar(
         VectorLifecycleMetadataReviewCandidate candidate,
         string targetSection)
