@@ -69,27 +69,6 @@ public static partial class EvalCommand
     }
 
 
-    private static async Task ExecuteServiceFoundationFreezeGateAsync(CancellationToken cancellationToken)
-    {
-        var outputDirectory = Path.GetFullPath("service");
-        Directory.CreateDirectory(outputDirectory);
-
-        var service = new FoundationStatusService(Directory.GetCurrentDirectory());
-        var reportBuilder = new FoundationReportBuilder(service, Directory.GetCurrentDirectory());
-        var report = await reportBuilder.BuildServiceFoundationFreezeReportAsync(cancellationToken)
-            .ConfigureAwait(false);
-
-        var jsonPath = Path.Combine(outputDirectory, "service-foundation-freeze-gate.json");
-        var markdownPath = Path.Combine(outputDirectory, "service-foundation-freeze-gate.md");
-        await WriteTextAsync(JsonSerializer.Serialize(report, JsonOptions), jsonPath, cancellationToken)
-            .ConfigureAwait(false);
-        await WriteTextAsync(FoundationReportMarkdownRenderer.BuildServiceFoundationFreezeMarkdown(report), markdownPath, cancellationToken)
-            .ConfigureAwait(false);
-
-        Console.WriteLine($"[Eval] Service foundation freeze gate written: {jsonPath}");
-        Console.WriteLine($"[Eval] passed={report.FreezePassed}; recommendation={report.Recommendation}; serviceFoundation={report.ServiceFoundation}; hosted={report.Svc6HostedReadOnlySmokePassed}; runtimeMutationAllowed={report.RuntimeMutationAllowed}; formalRetrieval={report.FormalRetrievalAllowed}; runtimeSwitch={report.RuntimeSwitchAllowed}");
-    }
-
     private static HostedServiceSmokeOptions BuildHostedServiceSmokeOptions(
         ServiceSecurityConfigurationSnapshot security,
         IReadOnlyList<string> args)

@@ -1595,26 +1595,6 @@ public sealed class LifecycleAwareFeatureSet
     public bool HistoricalSectionOnly { get; init; }
 }
 
-/// <summary>学习型 shadow capability 的冻结状态标识。</summary>
-public static class ShadowCapabilityReadinessStatuses
-{
-    public const string ReadyForGuardedOptIn = nameof(ReadyForGuardedOptIn);
-
-    public const string PreviewOnly = nameof(PreviewOnly);
-
-    public const string KeepRuleBased = nameof(KeepRuleBased);
-
-    public const string KeepFormalRanking = nameof(KeepFormalRanking);
-
-    public const string ApplyGuardedOptInOnly = nameof(ApplyGuardedOptInOnly);
-
-    public const string IntentScopedOptInOnly = nameof(IntentScopedOptInOnly);
-
-    public const string MissingReport = nameof(MissingReport);
-
-    public const string KeepCurrentPreviewProvider = nameof(KeepCurrentPreviewProvider);
-}
-
 /// <summary>统一学习 readiness registry 中的 capability id。</summary>
 public static class ShadowCapabilityIds
 {
@@ -1661,51 +1641,6 @@ public static class ShadowCapabilityIds
     public const string Qwen3EmbeddingProvider = nameof(Qwen3EmbeddingProvider);
 
     public const string CurrentEmbeddingProvider = nameof(CurrentEmbeddingProvider);
-}
-
-/// <summary>单个 shadow capability 的冻结 readiness 状态。</summary>
-public sealed class ShadowCapabilityReadiness
-{
-    public string CapabilityId { get; init; } = string.Empty;
-
-    public string CurrentPhase { get; init; } = string.Empty;
-
-    public string Status { get; init; } = ShadowCapabilityReadinessStatuses.MissingReport;
-
-    public string Recommendation { get; init; } = string.Empty;
-
-    public bool GatePassed { get; init; }
-
-    public IReadOnlyList<string> BlockedReasons { get; init; } = Array.Empty<string>();
-
-    public IReadOnlyList<string> AllowedRuntimeModes { get; init; } = Array.Empty<string>();
-
-    public IReadOnlyList<string> ForbiddenRuntimeModes { get; init; } = Array.Empty<string>();
-
-    public string LastEvalReportPath { get; init; } = string.Empty;
-
-    public DateTimeOffset LastUpdatedAt { get; init; }
-}
-
-/// <summary>学习 shadow capability 的统一冻结 registry；只读报告，不修改运行时。</summary>
-public sealed class LearningReadinessRegistry
-{
-    public string OperationId { get; init; } = string.Empty;
-
-    public DateTimeOffset GeneratedAt { get; init; }
-
-    public string PolicyVersion { get; init; } = string.Empty;
-
-    public IReadOnlyList<ShadowCapabilityReadiness> Capabilities { get; init; } =
-        Array.Empty<ShadowCapabilityReadiness>();
-
-    public int ReadyCount { get; init; }
-
-    public int BlockedCount { get; init; }
-
-    public string OverallRecommendation { get; init; } = string.Empty;
-
-    public IReadOnlyList<string> Warnings { get; init; } = Array.Empty<string>();
 }
 
 /// <summary>runtime 变更 readiness gate 的单项检查结果。</summary>
@@ -2339,68 +2274,4 @@ public sealed class HostedServiceSmokeReport
 
     public IReadOnlyList<HostedServiceEndpointProbeResult> Endpoints { get; init; } =
         Array.Empty<HostedServiceEndpointProbeResult>();
-}
-
-public sealed class ServiceFoundationFreezeReport
-{
-    public string OperationId { get; init; } = string.Empty;
-
-    public DateTimeOffset GeneratedAt { get; init; } = DateTimeOffset.UtcNow;
-
-    public bool FreezePassed { get; init; }
-
-    public string Recommendation { get; init; } = string.Empty;
-
-    public string ServiceFoundation { get; init; } = "NotFrozen";
-
-    public string FoundationApi { get; init; } = string.Empty;
-
-    public string OpenApiContract { get; init; } = string.Empty;
-
-    public string AuthDeploymentProfile { get; init; } = string.Empty;
-
-    public bool RuntimeMutationAllowed { get; init; }
-
-    public bool FormalRetrievalAllowed { get; init; }
-
-    public bool RuntimeSwitchAllowed { get; init; }
-
-    public bool ReadyForRuntimeSwitch { get; init; }
-
-    public bool PackingPolicyChanged { get; init; }
-
-    public bool PackageOutputChanged { get; init; }
-
-    public bool Svc1ReadOnlyFoundationApiPassed { get; init; }
-
-    public bool Svc2ServiceHardeningPassed { get; init; }
-
-    public bool Svc3ApiContractFreezePassed { get; init; }
-
-    public bool Svc4AuthDeploymentProfilePassed { get; init; }
-
-    public bool Svc5OpenApiContractSnapshotPassed { get; init; }
-
-    public bool Svc6HostedReadOnlySmokePassed { get; init; }
-
-    public bool FoundationReleaseCandidateGatePassed { get; init; }
-
-    public bool FoundationReproducibilityCheckPassed { get; init; }
-
-    public bool RuntimeChangeGatePassed { get; init; }
-
-    public bool P15GatePassed { get; init; }
-
-    public string HostedSmokeRecommendation { get; init; } = string.Empty;
-
-    public string AuthDeploymentRecommendation { get; init; } = string.Empty;
-
-    public string ContractDriftRecommendation { get; init; } = string.Empty;
-
-    public string NextAllowedPhase { get; init; } = string.Empty;
-
-    public IReadOnlyDictionary<string, string> PhaseStatuses { get; init; } =
-        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-
-    public IReadOnlyList<string> BlockedReasons { get; init; } = Array.Empty<string>();
 }

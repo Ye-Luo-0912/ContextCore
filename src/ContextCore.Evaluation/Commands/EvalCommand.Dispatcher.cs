@@ -111,17 +111,9 @@ public static partial class EvalCommand
         Reg("retrieval-dataset-v2-shadow-eval", null,
             (service, args, sub, ct) => ExecuteRetrievalDatasetV2ShadowEvalAsync(args, sub, ct));
 
-        // === foundation ===
-        var foundationHandler = (EvalSubcommandHandler)((service, args, sub, ct) =>
-            ExecuteFoundationFreezeAsync(sub, ct));
-        Reg("foundation-freeze-report", "  eval foundation-freeze-report", foundationHandler);
-        Reg("foundation-release-candidate-gate", "  eval foundation-release-candidate-gate", foundationHandler);
-
         // === service ===
         Reg("service-api-contract-report", "  eval service-api-contract-report [--production]",
             (service, args, sub, ct) => ExecuteServiceApiContractAsync(sub, args, ct));
-        Reg("service-foundation-freeze-gate", "  eval service-foundation-freeze-gate",
-            (service, args, sub, ct) => ExecuteServiceFoundationFreezeGateAsync(ct));
 
         // === storage ===
         Reg("storage-check", "  eval storage-check",

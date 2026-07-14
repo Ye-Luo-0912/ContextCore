@@ -70,56 +70,6 @@ public static class FoundationReportMarkdownRenderer
         return builder.ToString();
     }
 
-    public static string BuildServiceFoundationFreezeMarkdown(ServiceFoundationFreezeReport report)
-    {
-        ArgumentNullException.ThrowIfNull(report);
-
-        var builder = new StringBuilder();
-        builder.AppendLine("# Service Foundation Freeze Gate");
-        builder.AppendLine();
-        builder.AppendLine($"Generated: `{report.GeneratedAt:O}`");
-        builder.AppendLine($"OperationId: `{report.OperationId}`");
-        builder.AppendLine();
-        builder.AppendLine("## Summary");
-        builder.AppendLine();
-        builder.AppendLine($"- FreezePassed: `{report.FreezePassed}`");
-        builder.AppendLine($"- Recommendation: `{report.Recommendation}`");
-        builder.AppendLine($"- ServiceFoundation: `{report.ServiceFoundation}`");
-        builder.AppendLine($"- FoundationApi: `{report.FoundationApi}`");
-        builder.AppendLine($"- OpenApiContract: `{report.OpenApiContract}`");
-        builder.AppendLine($"- AuthDeploymentProfile: `{report.AuthDeploymentProfile}`");
-        builder.AppendLine($"- NextAllowedPhase: `{report.NextAllowedPhase}`");
-        builder.AppendLine();
-        builder.AppendLine("## Phase Gates");
-        builder.AppendLine();
-        foreach (var phase in report.PhaseStatuses)
-        {
-            builder.AppendLine($"- {phase.Key}: `{phase.Value}`");
-        }
-
-        builder.AppendLine();
-        builder.AppendLine("## Boundary");
-        builder.AppendLine();
-        builder.AppendLine($"- RuntimeMutationAllowed: `{report.RuntimeMutationAllowed}`");
-        builder.AppendLine($"- FormalRetrievalAllowed: `{report.FormalRetrievalAllowed}`");
-        builder.AppendLine($"- RuntimeSwitchAllowed: `{report.RuntimeSwitchAllowed}`");
-        builder.AppendLine($"- ReadyForRuntimeSwitch: `{report.ReadyForRuntimeSwitch}`");
-        builder.AppendLine($"- PackingPolicyChanged: `{report.PackingPolicyChanged}`");
-        builder.AppendLine($"- PackageOutputChanged: `{report.PackageOutputChanged}`");
-        builder.AppendLine();
-        builder.AppendLine("## Service Signals");
-        builder.AppendLine();
-        builder.AppendLine($"- HostedSmokeRecommendation: `{report.HostedSmokeRecommendation}`");
-        builder.AppendLine($"- AuthDeploymentRecommendation: `{report.AuthDeploymentRecommendation}`");
-        builder.AppendLine($"- ContractDriftRecommendation: `{report.ContractDriftRecommendation}`");
-        builder.AppendLine();
-        builder.AppendLine("## Blocked Reasons");
-        AppendList(builder, report.BlockedReasons);
-        builder.AppendLine();
-        builder.AppendLine("Service Foundation freeze is still read-only: it does not enable formal retrieval, runtime switch, formal package write, PackingPolicy integration, or package output mutation.");
-        return builder.ToString();
-    }
-
     private static void AppendList(StringBuilder builder, IReadOnlyList<string> values)
     {
         if (values.Count == 0)
