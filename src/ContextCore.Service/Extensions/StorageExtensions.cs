@@ -1,5 +1,6 @@
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
+using ContextCore.Core;
 using ContextCore.Core.Services;
 using ContextCore.Service.Infrastructure;
 using ContextCore.Storage.FileSystem;
@@ -16,6 +17,19 @@ namespace ContextCore.Service.Extensions;
 /// <summary>存储层 DI 注册扩展，根据 <see cref="StorageOptions.Provider"/> 切换实现。</summary>
 internal static class StorageExtensions
 {
+	/// <summary>
+	/// 解析缓存失效器；若未注册（如仅调用 <c>AddContextStorage</c> 的隔离测试）则回退到空实现。
+	/// 生产路径由 <c>AddContextCore</c> 注册 <see cref="IStateCacheInvalidator"/>，此处回退保证存储层可独立解析。
+	/// </summary>
+	private static IStateCacheInvalidator GetInvalidator(IServiceProvider sp)
+		=> sp.GetService<IStateCacheInvalidator>() ?? NullStateCacheInvalidator.Instance;
+
+	/// <summary>
+	/// 解析状态版本存储；未注册时返回 null（Decorator 跳过 bump）。R10-2 P3。
+	/// </summary>
+	private static IContextStateVersionStore? GetVersionStore(IServiceProvider sp)
+		=> sp.GetService<IContextStateVersionStore>();
+
 	/// <summary>
 	/// 根据配置注册存储服务。
 	/// <list type="bullet">
@@ -84,6 +98,27 @@ internal static class StorageExtensions
 		services.AddSingleton<IStableLifecycleReviewStore>(_ => new UnsupportedStableLifecycleReviewStore("postgres"));
 		services.AddSingleton<ICandidateConstraintReviewStore>(_ => new UnsupportedCandidateConstraintReviewStore("postgres"));
 		services.AddSingleton<IConstraintGapCandidateStore>(_ => new UnsupportedConstraintGapCandidateStore("postgres"));
+
+		// R10-2：在 Postgres 实现之上叠加失效边界 Decorator（覆盖 AddContextCorePostgresStorage 的原始注册）。
+		// 失效 Decorator 位于最外层，写入成功后向 IStateCacheInvalidator 发出失效信号。
+		services.AddSingleton<IContextStore>(sp => new InvalidatingContextStoreDecorator(
+			sp.GetRequiredService<PostgresContextStore>(),
+			GetInvalidator(sp), GetVersionStore(sp)));
+		services.AddSingleton<IContextIndex>(sp => new InvalidatingContextIndexDecorator(
+			sp.GetRequiredService<PostgresContextIndex>(),
+			GetInvalidator(sp), GetVersionStore(sp)));
+		services.AddSingleton<IMemoryStore>(sp => new InvalidatingMemoryStoreDecorator(
+			sp.GetRequiredService<PostgresMemoryStore>(),
+			GetInvalidator(sp), GetVersionStore(sp)));
+		services.AddSingleton<IConstraintStore>(sp => new InvalidatingConstraintStoreDecorator(
+			sp.GetRequiredService<PostgresConstraintStore>(),
+			GetInvalidator(sp), GetVersionStore(sp)));
+		services.AddSingleton<IRelationStore>(sp => new InvalidatingRelationStoreDecorator(
+			sp.GetRequiredService<PostgresRelationStore>(),
+			GetInvalidator(sp), GetVersionStore(sp)));
+		services.AddSingleton<IGlobalContextStore>(sp => new InvalidatingGlobalContextStoreDecorator(
+			sp.GetRequiredService<PostgresGlobalContextStore>(),
+			GetInvalidator(sp), GetVersionStore(sp)));
 	}
 
 	private static void RegisterFileSystem(IServiceCollection services, StorageOptions options)
@@ -109,14 +144,18 @@ internal static class StorageExtensions
 			new FileContextStore(
 				sp.GetRequiredService<FilePathResolver>(),
 				sp.GetRequiredService<FileFormatSerializer>()));
-		services.AddSingleton<IContextStore>(sp => sp.GetRequiredService<FileContextStore>());
+		services.AddSingleton<IContextStore>(sp => new InvalidatingContextStoreDecorator(
+			sp.GetRequiredService<FileContextStore>(),
+			GetInvalidator(sp), GetVersionStore(sp)));
 		services.AddSingleton<IContextCollectionStore>(sp => sp.GetRequiredService<FileContextStore>());
 
 		services.AddSingleton<FileContextIndex>(sp =>
 			new FileContextIndex(
 				sp.GetRequiredService<FilePathResolver>(),
 				sp.GetRequiredService<FileFormatSerializer>()));
-		services.AddSingleton<IContextIndex>(sp => sp.GetRequiredService<FileContextIndex>());
+		services.AddSingleton<IContextIndex>(sp => new InvalidatingContextIndexDecorator(
+			sp.GetRequiredService<FileContextIndex>(),
+			GetInvalidator(sp), GetVersionStore(sp)));
 
 		services.AddSingleton<FileVectorStore>(sp =>
 			new FileVectorStore(
@@ -258,7 +297,9 @@ internal static class StorageExtensions
 			new FileMemoryStore(
 				sp.GetRequiredService<FilePathResolver>(),
 				sp.GetRequiredService<FileFormatSerializer>()));
-		services.AddSingleton<IMemoryStore>(sp => sp.GetRequiredService<FileMemoryStore>());
+		services.AddSingleton<IMemoryStore>(sp => new InvalidatingMemoryStoreDecorator(
+			sp.GetRequiredService<FileMemoryStore>(),
+			GetInvalidator(sp), GetVersionStore(sp)));
 		services.AddSingleton<IWorkingMemoryService>(sp => sp.GetRequiredService<FileMemoryStore>());
 		services.AddSingleton<IPromotionRecordStore>(sp => sp.GetRequiredService<FileMemoryStore>());
 		services.AddSingleton<IPromotionCandidateStore>(sp => sp.GetRequiredService<FileMemoryStore>());
@@ -267,7 +308,9 @@ internal static class StorageExtensions
 			new FileConstraintStore(
 				sp.GetRequiredService<FilePathResolver>(),
 				sp.GetRequiredService<FileFormatSerializer>()));
-		services.AddSingleton<IConstraintStore>(sp => sp.GetRequiredService<FileConstraintStore>());
+		services.AddSingleton<IConstraintStore>(sp => new InvalidatingConstraintStoreDecorator(
+			sp.GetRequiredService<FileConstraintStore>(),
+			GetInvalidator(sp), GetVersionStore(sp)));
 
 		services.AddSingleton<FileRelationStore>(sp =>
 			new FileRelationStore(
@@ -276,23 +319,25 @@ internal static class StorageExtensions
 		services.AddSingleton<IRelationStore>(sp =>
 		{
 			var switchOptions = sp.GetService<RelationGovernanceProviderSwitchOptions>() ?? new RelationGovernanceProviderSwitchOptions();
-			if (!switchOptions.Enabled)
-			{
-				return sp.GetRequiredService<FileRelationStore>();
-			}
-
-			return new ScopedRelationGovernanceStore(
-				sp.GetRequiredService<FileRelationStore>(),
-				sp.GetRequiredService<PostgresRelationStore>(),
-				switchOptions,
-				sp.GetRequiredService<RelationGovernanceScopedServiceModeStatusService>());
+			// 内层：未启用 scoped 治理时直接用 FileRelationStore；启用时用 dual-write ScopedRelationGovernanceStore。
+			IRelationStore inner = !switchOptions.Enabled
+				? sp.GetRequiredService<FileRelationStore>()
+				: new ScopedRelationGovernanceStore(
+					sp.GetRequiredService<FileRelationStore>(),
+					sp.GetRequiredService<PostgresRelationStore>(),
+					switchOptions,
+					sp.GetRequiredService<RelationGovernanceScopedServiceModeStatusService>());
+			// R10-2：失效边界 Decorator 位于最外层（在 dual-write 之上），写入成功后发出失效信号。
+			return new InvalidatingRelationStoreDecorator(inner, GetInvalidator(sp), GetVersionStore(sp));
 		});
 
 		services.AddSingleton<FileGlobalContextStore>(sp =>
 			new FileGlobalContextStore(
 				sp.GetRequiredService<FilePathResolver>(),
 				sp.GetRequiredService<FileFormatSerializer>()));
-		services.AddSingleton<IGlobalContextStore>(sp => sp.GetRequiredService<FileGlobalContextStore>());
+		services.AddSingleton<IGlobalContextStore>(sp => new InvalidatingGlobalContextStoreDecorator(
+			sp.GetRequiredService<FileGlobalContextStore>(),
+			GetInvalidator(sp), GetVersionStore(sp)));
 
 		services.AddSingleton<FileContextJobQueue>(sp =>
 			new FileContextJobQueue(
@@ -338,11 +383,15 @@ internal static class StorageExtensions
 	private static void RegisterInMemory(IServiceCollection services)
 	{
 		services.AddSingleton<InMemoryContextStore>();
-		services.AddSingleton<IContextStore>(sp => sp.GetRequiredService<InMemoryContextStore>());
+		services.AddSingleton<IContextStore>(sp => new InvalidatingContextStoreDecorator(
+			sp.GetRequiredService<InMemoryContextStore>(),
+			GetInvalidator(sp), GetVersionStore(sp)));
 		services.AddSingleton<IContextCollectionStore>(sp => sp.GetRequiredService<InMemoryContextStore>());
 
 		services.AddSingleton<InMemoryContextIndex>();
-		services.AddSingleton<IContextIndex>(sp => sp.GetRequiredService<InMemoryContextIndex>());
+		services.AddSingleton<IContextIndex>(sp => new InvalidatingContextIndexDecorator(
+			sp.GetRequiredService<InMemoryContextIndex>(),
+			GetInvalidator(sp), GetVersionStore(sp)));
         services.AddSingleton<InMemoryShortTermMemoryStore>();
         services.AddSingleton<IShortTermMemoryStore>(sp => sp.GetRequiredService<InMemoryShortTermMemoryStore>());
         services.AddSingleton<InMemoryShortTermPromotionCandidateStore>();
@@ -390,19 +439,27 @@ internal static class StorageExtensions
 		services.AddSingleton<IContextPackagePolicyStore>(sp => sp.GetRequiredService<InMemoryContextPackagePolicyStore>());
 
 		services.AddSingleton<InMemoryMemoryStore>();
-		services.AddSingleton<IMemoryStore>(sp => sp.GetRequiredService<InMemoryMemoryStore>());
+		services.AddSingleton<IMemoryStore>(sp => new InvalidatingMemoryStoreDecorator(
+			sp.GetRequiredService<InMemoryMemoryStore>(),
+			GetInvalidator(sp), GetVersionStore(sp)));
 		services.AddSingleton<IWorkingMemoryService>(sp => sp.GetRequiredService<InMemoryMemoryStore>());
 		services.AddSingleton<IPromotionRecordStore>(sp => sp.GetRequiredService<InMemoryMemoryStore>());
 		services.AddSingleton<IPromotionCandidateStore>(sp => sp.GetRequiredService<InMemoryMemoryStore>());
 
 		services.AddSingleton<InMemoryConstraintStore>();
-		services.AddSingleton<IConstraintStore>(sp => sp.GetRequiredService<InMemoryConstraintStore>());
+		services.AddSingleton<IConstraintStore>(sp => new InvalidatingConstraintStoreDecorator(
+			sp.GetRequiredService<InMemoryConstraintStore>(),
+			GetInvalidator(sp), GetVersionStore(sp)));
 
 		services.AddSingleton<InMemoryRelationStore>();
-		services.AddSingleton<IRelationStore>(sp => sp.GetRequiredService<InMemoryRelationStore>());
+		services.AddSingleton<IRelationStore>(sp => new InvalidatingRelationStoreDecorator(
+			sp.GetRequiredService<InMemoryRelationStore>(),
+			GetInvalidator(sp), GetVersionStore(sp)));
 
 		services.AddSingleton<InMemoryGlobalContextStore>();
-		services.AddSingleton<IGlobalContextStore>(sp => sp.GetRequiredService<InMemoryGlobalContextStore>());
+		services.AddSingleton<IGlobalContextStore>(sp => new InvalidatingGlobalContextStoreDecorator(
+			sp.GetRequiredService<InMemoryGlobalContextStore>(),
+			GetInvalidator(sp), GetVersionStore(sp)));
 
 		services.AddSingleton<InMemoryJobQueue>();
 		services.AddSingleton<IContextJobQueue>(sp => sp.GetRequiredService<InMemoryJobQueue>());
