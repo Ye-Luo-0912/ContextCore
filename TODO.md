@@ -1,6 +1,6 @@
 # ContextCore 项目路线图
 
-> 最近更新：R8-5 统一 Package Pipeline 删除 Legacy 路径（IsAuditMode 显式信号、BuildLegacyAsync 删除）（2026-07-14）
+> 最近更新：R9 系列完成（Foundation 旧报告链整链删除、Artifact 布局保护已删除能力、显式审计模式真正完成、DTO 最后一轮删除、Context State 失效边界架构评估）（2026-07-14）
 
 > 本文件是 ContextCore 的**唯一当前路线图**。docs/ 下的 freeze / report / audit / plan 类文档均为历史快照，仅供回溯，不作为设计依据。
 
@@ -36,11 +36,53 @@
 | EvalCommand.cs 单文件行数 | 7,987 | P1-5 已完成 |
 | FoundationStatusService.cs 行数 | 606 | P4 已完成 |
 | 构建 | 0 警告 / 0 错误 | 0 / 0 |
-| 测试 | 841 通过 / 0 失败 | 0 失败 |
+| 测试 | 792 通过 / 0 失败 | 0 失败 |
 
 ---
 
 ## 已完成工作
+
+### R9 系列：Foundation 旧报告链、Artifact 布局、显式审计、DTO 最后一轮、失效边界评估
+
+5 个任务完成，累计净减约 9,206 行（含行为改造 +27 行）。
+
+**R9-2：Foundation 旧报告链整链删除（commit `5083513`，-2,737 行）**：
+- 删除 FoundationStatusService（8 个历史报告文件无生产器）
+- 删除 3 个 Service endpoint + 4 个 Client 方法
+- 删除 EvalCommand.Service.cs（service-api-contract-report 命令）
+- 删除 FoundationReportBuilder/MarkdownRenderer/FoundationStatusDtos
+- 删除 19 个 DTO（ContextCoreFoundationFreezeReport/FoundationReproducibilityReport/FoundationApi* 等）
+- 删除 5 个测试方法
+
+**R9-3：Artifact 布局保护已删除能力清理（commit `668cfc5`，-85 行）**：
+- 删除 ArtifactKind 枚举成员：TracePlanning/TraceRankerShadow/TraceVectorShadow/TraceGraphShadow
+- 删除 EvalReportPaths.cs（已无消费者）
+- 清理 TraceArtifactDescriptorFactory/ContextCoreDataLayout/StorageResponsibilityRegistry
+
+**R9-1：显式审计模式真正完成（commit `510ebab`，+92/-65 行）**：
+- IsAuditMode 缺失时默认 false，不再读取 QueryText 关键词推断
+- 删除 DomainKeywordProfile.AuditModeKeywords（12 个审计关键词）
+- ContextEvalRunner 新增 IsAuditModeQuery() 适配 seed 数据
+- 消除 WorkingMemoryRecaller 热路径 12 处 ToArray 分配
+- ContainsAny 签名从 params string[] 改为 IReadOnlyList<string>
+- 保留词表（被快照测试锁定，建议后续独立任务改造）
+
+**R9-4：DTO 最后一轮删除（commit `5427922`，-6,411 行）**：
+- 删除 171 个无生产消费者的 DTO 类型
+- VectorIndexDtos 43 个、ServiceSuccessResponseDtos 36 个、VectorEvalSharedReportDtos 43 个
+- VectorLegacyDtos 30 个、VectorGateReportDtos 16 个、RelationGraphDtos 7 个
+- 恢复 4 个文件内/跨文件引用遗漏的类型
+- 删除 44 个引用已删类型的测试方法
+
+**R9-5：Context State 统一失效边界架构评估（无代码变更）**：
+- 确认当前无 ContextStateCache（系统处于"无缓存"状态）
+- 识别 23 个直接写入 Store 不触发 EventSink 的路径
+- 推荐方案 A：Store 边界 Decorator（技术先例已存在）
+- 推荐方案 B：Version Store / Generation Token（第二阶段）
+- 分阶段实施建议：P1 定义抽象 → P2 核心 Store decorator → P3 version store → P6 才允许引入 ContextStateCache
+- 紧急程度：中高（不阻塞当前工作，但任何缓存优化任务必须等 P2 完成）
+
+验证：构建 0 警告 0 错误，测试 792 通过 0 失败。
 
 ### R8-5：统一 Package Pipeline 删除 Legacy 路径（commit `556e459`）
 
