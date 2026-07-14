@@ -55,11 +55,7 @@ public sealed class TraceArtifactDescriptorFactory
         => kind switch
         {
             ArtifactKind.TraceRetrieval => "retrieval",
-            ArtifactKind.TracePlanning => "planning",
             ArtifactKind.TraceToolCall => "tool-calls",
-            ArtifactKind.TraceRankerShadow => "ranker-shadow",
-            ArtifactKind.TraceVectorShadow => "vector-shadow",
-            ArtifactKind.TraceGraphShadow => "graph-shadow",
             ArtifactKind.TraceRelationDualWrite => "relation-dual-write",
             ArtifactKind.TraceRelationShadowRead => "relation-shadow-read",
             ArtifactKind.TraceRelationProviderSwitch => "relation-provider-switch",
@@ -76,11 +72,7 @@ public sealed class TraceArtifactDescriptorFactory
         => kind switch
         {
             ArtifactKind.TraceRetrieval => "retrieval-traces",
-            ArtifactKind.TracePlanning => "planning-traces",
             ArtifactKind.TraceToolCall => "tool-call-trace",
-            ArtifactKind.TraceRankerShadow => "ranker-shadow-traces",
-            ArtifactKind.TraceVectorShadow => "vector-shadow-traces",
-            ArtifactKind.TraceGraphShadow => "graph-shadow-traces",
             ArtifactKind.TraceRelationDualWrite => "relation-dual-write-traces",
             ArtifactKind.TraceRelationShadowRead => "relation-shadow-read-traces",
             ArtifactKind.TraceRelationProviderSwitch => "relation-provider-switch-traces",
@@ -95,11 +87,7 @@ public sealed class TraceArtifactDescriptorFactory
 
     private static bool IsTraceKind(ArtifactKind kind)
         => kind is ArtifactKind.TraceRetrieval
-            or ArtifactKind.TracePlanning
             or ArtifactKind.TraceToolCall
-            or ArtifactKind.TraceRankerShadow
-            or ArtifactKind.TraceVectorShadow
-            or ArtifactKind.TraceGraphShadow
             or ArtifactKind.TraceRelationDualWrite
             or ArtifactKind.TraceRelationShadowRead
             or ArtifactKind.TraceRelationProviderSwitch

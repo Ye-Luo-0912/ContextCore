@@ -359,11 +359,7 @@ public sealed class ContextCoreDataLayout : IContextPathResolver
             ArtifactKind.Ranker => ["learning", "ranker"],
             ArtifactKind.Graph => ["learning", "graph"],
             ArtifactKind.TraceRetrieval => ["traces", "retrieval", SanitizeStatic(descriptor.DateShard)],
-            ArtifactKind.TracePlanning => ["traces", "planning", SanitizeStatic(descriptor.DateShard)],
             ArtifactKind.TraceToolCall => ["traces", "tool-calls", SanitizeStatic(descriptor.DateShard), SanitizeStatic(descriptor.OperationId)],
-            ArtifactKind.TraceRankerShadow => ["traces", "ranker-shadow", SanitizeStatic(descriptor.DateShard)],
-            ArtifactKind.TraceVectorShadow => ["traces", "vector-shadow", SanitizeStatic(descriptor.DateShard)],
-            ArtifactKind.TraceGraphShadow => ["traces", "graph-shadow", SanitizeStatic(descriptor.DateShard)],
             ArtifactKind.TraceRelationDualWrite => ["traces", "relation-dual-write", SanitizeStatic(descriptor.DateShard)],
             ArtifactKind.TraceRelationShadowRead => ["traces", "relation-shadow-read", SanitizeStatic(descriptor.DateShard)],
             ArtifactKind.TraceRelationProviderSwitch => ["traces", "relation-provider-switch", SanitizeStatic(descriptor.DateShard)],
@@ -427,11 +423,7 @@ public sealed class ContextCoreDataLayout : IContextPathResolver
             or ArtifactKind.Ranker
             or ArtifactKind.Graph
             or ArtifactKind.TraceRetrieval
-            or ArtifactKind.TracePlanning
             or ArtifactKind.TraceToolCall
-            or ArtifactKind.TraceRankerShadow
-            or ArtifactKind.TraceVectorShadow
-            or ArtifactKind.TraceGraphShadow
             or ArtifactKind.TraceRelationDualWrite
             or ArtifactKind.TraceRelationShadowRead
             or ArtifactKind.TraceRelationProviderSwitch
@@ -512,11 +504,7 @@ public sealed class ContextCoreDataLayout : IContextPathResolver
     private static readonly ArtifactKind[] TraceArtifactKinds =
     [
         ArtifactKind.TraceRetrieval,
-        ArtifactKind.TracePlanning,
         ArtifactKind.TraceToolCall,
-        ArtifactKind.TraceRankerShadow,
-        ArtifactKind.TraceVectorShadow,
-        ArtifactKind.TraceGraphShadow,
         ArtifactKind.TraceRelationDualWrite,
         ArtifactKind.TraceRelationShadowRead,
         ArtifactKind.TraceRelationProviderSwitch,
@@ -642,11 +630,7 @@ public sealed class ContextCoreDataLayout : IContextPathResolver
             ArtifactKind.VectorLifecycleMetadataReviewCandidate => "lifecycle-metadata-review-candidates",
             ArtifactKind.VectorLifecycleMetadataReviewCandidateReport => "lifecycle-metadata-review-candidate-report",
             ArtifactKind.TraceRetrieval => "retrieval-traces",
-            ArtifactKind.TracePlanning => "planning-traces",
             ArtifactKind.TraceToolCall => "tool-call-trace",
-            ArtifactKind.TraceRankerShadow => "ranker-shadow-traces",
-            ArtifactKind.TraceVectorShadow => "vector-shadow-traces",
-            ArtifactKind.TraceGraphShadow => "graph-shadow-traces",
             ArtifactKind.TraceRelationDualWrite => "relation-dual-write-traces",
             ArtifactKind.TraceRelationShadowRead => "relation-shadow-read-traces",
             ArtifactKind.TraceRelationProviderSwitch => "relation-provider-switch-traces",
@@ -661,11 +645,7 @@ public sealed class ContextCoreDataLayout : IContextPathResolver
 
     private static bool IsTraceKind(ArtifactKind kind)
         => kind is ArtifactKind.TraceRetrieval
-            or ArtifactKind.TracePlanning
             or ArtifactKind.TraceToolCall
-            or ArtifactKind.TraceRankerShadow
-            or ArtifactKind.TraceVectorShadow
-            or ArtifactKind.TraceGraphShadow
             or ArtifactKind.TraceRelationDualWrite
             or ArtifactKind.TraceRelationShadowRead
             or ArtifactKind.TraceRelationProviderSwitch

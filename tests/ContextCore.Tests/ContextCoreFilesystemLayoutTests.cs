@@ -487,11 +487,7 @@ public sealed class ContextCoreFilesystemLayoutTests
         var expected = new Dictionary<ArtifactKind, string>
         {
             [ArtifactKind.TraceRetrieval] = "traces/retrieval/20260612",
-            [ArtifactKind.TracePlanning] = "traces/planning/20260612",
             [ArtifactKind.TraceToolCall] = "traces/tool-calls/20260612/operation-escape",
-            [ArtifactKind.TraceRankerShadow] = "traces/ranker-shadow/20260612",
-            [ArtifactKind.TraceVectorShadow] = "traces/vector-shadow/20260612",
-            [ArtifactKind.TraceGraphShadow] = "traces/graph-shadow/20260612",
             [ArtifactKind.TraceRelationDualWrite] = "traces/relation-dual-write/20260612",
             [ArtifactKind.TraceRelationShadowRead] = "traces/relation-shadow-read/20260612",
             [ArtifactKind.TraceRelationProviderSwitch] = "traces/relation-provider-switch/20260612",
@@ -535,14 +531,14 @@ public sealed class ContextCoreFilesystemLayoutTests
         var descriptor = factory.Create(
             "workspace-a",
             "collection-a",
-            ArtifactKind.TraceGraphShadow,
+            ArtifactKind.TraceRetrieval,
             dateShard: "20260612");
 
         var first = layout.ResolveArtifactPath(descriptor);
         var second = layout.ResolveArtifactPath(descriptor);
 
         Assert.AreEqual(first, second);
-        StringAssert.Contains(first.Replace('\\', '/'), "traces/graph-shadow/20260612");
+        StringAssert.Contains(first.Replace('\\', '/'), "traces/retrieval/20260612");
     }
 
     [TestMethod]
@@ -555,20 +551,20 @@ public sealed class ContextCoreFilesystemLayoutTests
         var path = await writer.AppendTraceJsonLineAsync(
             "workspace-a",
             "collection-a",
-            ArtifactKind.TraceVectorShadow,
+            ArtifactKind.TraceRetrieval,
             new { id = "trace-1" },
             dateShard: "20260612");
         await writer.AppendTraceJsonLineAsync(
             "workspace-a",
             "collection-a",
-            ArtifactKind.TraceVectorShadow,
+            ArtifactKind.TraceRetrieval,
             new { id = "trace-2" },
             dateShard: "20260612");
-        var manifest = await store.ListAsync(ArtifactKind.TraceVectorShadow);
+        var manifest = await store.ListAsync(ArtifactKind.TraceRetrieval);
 
         Assert.AreEqual(2, File.ReadAllLines(path).Length);
         Assert.AreEqual(1, manifest.Count);
-        StringAssert.Contains(path.Replace('\\', '/'), "traces/vector-shadow/20260612");
+        StringAssert.Contains(path.Replace('\\', '/'), "traces/retrieval/20260612");
     }
 
     [TestMethod]
