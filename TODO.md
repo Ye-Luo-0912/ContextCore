@@ -1,6 +1,6 @@
 # ContextCore 项目路线图
 
-> 最近更新：R9 系列完成（Foundation 旧报告链整链删除、Artifact 布局保护已删除能力、显式审计模式真正完成、DTO 最后一轮删除、Context State 失效边界架构评估）（2026-07-14）
+> 最近更新：R10 系列完成（RetrievalPolicyProfiles 词表改造为显式权重、Context State 失效边界 P1-P3 落地）（2026-07-14）
 
 > 本文件是 ContextCore 的**唯一当前路线图**。docs/ 下的 freeze / report / audit / plan 类文档均为历史快照，仅供回溯，不作为设计依据。
 
@@ -41,6 +41,30 @@
 ---
 
 ## 已完成工作
+
+### R10 系列：RetrievalPolicyProfiles 词表改造、Context State 失效边界落地
+
+2 个任务完成。
+
+**R10-1：RetrievalPolicyProfiles 模式专属词表改造（commit `248f853`，+205/-213 行）**：
+- 删除 8 个模式专属领域词表（LongTermMemoryKeywords/ChatModeBoost/NovelModeReserve/AutomationMode 等）
+- 新增 ModeReserveWeightProfile：按 Chat/Novel/Automation 三模式显式声明三阶段权重
+- 信号来源为 Tags 与 Metadata["signal"]/["reserve-signal"]，不再依赖内容关键词匹配
+- 长期记忆判断从关键词匹配改为 Layer==Stable 或 Tags 含 long-term 或 Metadata 标记
+- 保留 DeprecatedContentHardRejectionKeywords/SoftRejectionKeywords（内容安全过滤，语义正确）
+- 更新快照测试添加显式 signal 元数据
+
+**R10-2：Context State 失效边界落地 P1-P3（commit `41498b4`，+543 行）**：
+- P1：IStateCacheInvalidator 接口 + CacheInvalidationKey 四元组 + NullStateCacheInvalidator
+- P2：6 个核心 Store Decorator（ContextStore/MemoryStore/RelationStore/ConstraintStore/ContextIndex/GlobalContextStore）
+  - 每个 Decorator 在写入成功后触发 InvalidateAsync + BumpVersionAsync
+  - Decorator 位于最外层，在 dual-write Decorator 之上
+  - StorageExtensions 三个 Register 方法全部改造
+- P3：IContextStateVersionStore 接口 + InMemoryContextStateVersionStore（ConcurrentDictionary + Interlocked.Increment）
+- 新增 5 个文件，修改 2 个文件
+- 不引入 ContextStateCache（P6 才允许），只建立失效边界
+
+验证：构建 0 警告 0 错误，测试 792 通过 0 失败。
 
 ### R9 系列：Foundation 旧报告链、Artifact 布局、显式审计、DTO 最后一轮、失效边界评估
 
