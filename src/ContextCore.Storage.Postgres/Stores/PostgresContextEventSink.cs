@@ -32,9 +32,9 @@ public sealed class PostgresContextEventSink : PostgresStoreBase, IContextEventS
         command.CommandTimeout = Options.CommandTimeoutSeconds;
         command.CommandText = $"""
             INSERT INTO {Table("context_operation_events")} (
-                event_id, workspace_id, collection_id, operation_id, operation_name, level, message, duration_ms, created_at, data)
+                event_id, workspace_id, collection_id, operation_id, operation_name, level, message, duration_ms, created_at, entity_type, entity_id, operation, data)
             VALUES (
-                @event_id, @workspace_id, @collection_id, @operation_id, @operation_name, @level, @message, @duration_ms, @created_at, @data)
+                @event_id, @workspace_id, @collection_id, @operation_id, @operation_name, @level, @message, @duration_ms, @created_at, @entity_type, @entity_id, @operation, @data)
             ON CONFLICT (workspace_id, event_id) DO NOTHING;
             """;
 
@@ -47,6 +47,9 @@ public sealed class PostgresContextEventSink : PostgresStoreBase, IContextEventS
         command.Parameters.AddWithValue("message", operationEvent.Message);
         command.Parameters.AddWithValue("duration_ms", (object?)operationEvent.Duration?.TotalMilliseconds ?? DBNull.Value);
         command.Parameters.AddWithValue("created_at", operationEvent.CreatedAt);
+        command.Parameters.AddWithValue("entity_type", (object?)operationEvent.EntityType ?? DBNull.Value);
+        command.Parameters.AddWithValue("entity_id", (object?)operationEvent.EntityId ?? DBNull.Value);
+        command.Parameters.AddWithValue("operation", (object?)operationEvent.Operation ?? DBNull.Value);
         AddJson(command, "data", operationEvent);
 
         await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);

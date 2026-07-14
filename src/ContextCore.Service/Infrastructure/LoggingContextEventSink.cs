@@ -44,6 +44,9 @@ public sealed class LoggingContextEventSink : IContextEventSink
             ["contextcore.operation_name"] = operationEvent.OperationName,
             ["contextcore.workspace_id"] = operationEvent.WorkspaceId,
             ["contextcore.collection_id"] = operationEvent.CollectionId,
+            ["contextcore.entity_type"] = operationEvent.EntityType,
+            ["contextcore.entity_id"] = operationEvent.EntityId,
+            ["contextcore.operation"] = operationEvent.Operation,
             ["contextcore.level"] = operationEvent.Level.ToString(),
             ["contextcore.duration_ms"] = operationEvent.Duration?.TotalMilliseconds,
             ["contextcore.created_at"] = operationEvent.CreatedAt

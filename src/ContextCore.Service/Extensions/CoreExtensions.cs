@@ -23,11 +23,16 @@ internal static class CoreExtensions
 	/// <summary>注册 Core 业务服务（摄取、打包、校验、晋升、工作记忆）。</summary>
 	public static IServiceCollection AddContextCore(this IServiceCollection services)
 	{
-		// R10-2：缓存失效边界。当前注册 Null 实现，P6 引入 ContextStateCache 时替换为真实失效器。
-		// Store Decorator 在写入成功后调用 InvalidateAsync，未注册真实缓存前为空操作。
-		services.AddSingleton<IStateCacheInvalidator, NullStateCacheInvalidator>();
+		// R11-P6：ContextStateCache 基础设施。InMemoryContextStateCache 同时实现
+		// IContextStateCache（读路径可选缓存）和 IStateCacheInvalidator（写入边界失效信号接收）。
+		// Store Decorator 在写入成功后调用 InvalidateAsync，移除受影响的缓存项。
+		// 读路径不自动使用缓存——仅在调用方显式注入 ContextStateCacheAccessor 时生效。
+		services.AddSingleton<InMemoryContextStateCache>();
+		services.AddSingleton<IContextStateCache>(sp => sp.GetRequiredService<InMemoryContextStateCache>());
+		services.AddSingleton<IStateCacheInvalidator>(sp => sp.GetRequiredService<InMemoryContextStateCache>());
+		services.AddSingleton<ContextStateCacheAccessor>();
 		// R10-2 P3：状态版本存储（进程内单调递增）。Decorator 在写入成功后 bump 版本，
-		// 未来 ContextStateCache 据版本号判断是否命中。多实例场景需替换为持久化实现。
+		// ContextStateCache 据版本号判断是否命中。多实例场景需替换为持久化实现。
 		services.AddSingleton<IContextStateVersionStore, InMemoryContextStateVersionStore>();
 		services.AddSingleton<BasicContextIngestionService>();
 		services.AddSingleton<ContextInputNormalizer>();

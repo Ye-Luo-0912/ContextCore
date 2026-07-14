@@ -86,7 +86,9 @@ public sealed class ContextRuntimeService : IContextRuntimeService
                 ["source"] = normalized.Source,
                 ["inputKind"] = normalized.InputKind
             },
-            operationIdOverride: operationId);
+            operationIdOverride: operationId,
+            entityType: "ContextItem",
+            operation: "Ingest");
     }
 
     private async Task<ContextItem> IngestLegacyItemAsync(
@@ -117,7 +119,10 @@ public sealed class ContextRuntimeService : IContextRuntimeService
                 ThrowIfInvalid(_validationService.ValidateMemoryItem(item));
                 return AddWorkingMemoryCoreAsync(item, cancellationToken);
             },
-            cancellationToken);
+            cancellationToken,
+            entityType: "MemoryItem",
+            entityId: item.Id,
+            operation: "Save");
     }
 
     public Task<ContextPromotionRecord> PromoteMemoryAsync(
@@ -148,7 +153,10 @@ public sealed class ContextRuntimeService : IContextRuntimeService
             {
                 ["sourceMemoryId"] = sourceMemoryId,
                 ["strategy"] = strategy
-            });
+            },
+            entityType: "MemoryItem",
+            entityId: sourceMemoryId,
+            operation: "Promote");
     }
 
     public Task<ContextPackage> BuildPackageAsync(
@@ -169,7 +177,9 @@ public sealed class ContextRuntimeService : IContextRuntimeService
             {
                 ["tokenBudget"] = request.TokenBudget.ToString(),
                 ["policyId"] = request.Policy?.Id ?? string.Empty
-            });
+            },
+            entityType: "ContextPackage",
+            operation: "Build");
     }
 
     public Task<ContextPackageBuildResult> BuildPackageDetailedAsync(
@@ -190,7 +200,9 @@ public sealed class ContextRuntimeService : IContextRuntimeService
             {
                 ["tokenBudget"] = request.TokenBudget.ToString(),
                 ["policyId"] = request.Policy?.Id ?? string.Empty
-            });
+            },
+            entityType: "ContextPackage",
+            operation: "Build");
     }
 
     private async Task<T> ExecuteAsync<T>(
@@ -200,7 +212,10 @@ public sealed class ContextRuntimeService : IContextRuntimeService
         Func<Task<T>> action,
         CancellationToken cancellationToken,
         Dictionary<string, string>? metadata = null,
-        string? operationIdOverride = null)
+        string? operationIdOverride = null,
+        string? entityType = null,
+        string? entityId = null,
+        string? operation = null)
     {
         var operationId = string.IsNullOrWhiteSpace(operationIdOverride)
             ? Guid.NewGuid().ToString("N")
@@ -222,7 +237,10 @@ public sealed class ContextRuntimeService : IContextRuntimeService
             "Operation started.",
             null,
             metadata,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken,
+            entityType,
+            entityId,
+            operation).ConfigureAwait(false);
 
         try
         {
@@ -239,7 +257,10 @@ public sealed class ContextRuntimeService : IContextRuntimeService
                 "Operation succeeded.",
                 stopwatch.Elapsed,
                 metadata,
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken,
+                entityType,
+                entityId,
+                operation).ConfigureAwait(false);
 
             return result;
         }
@@ -261,7 +282,10 @@ public sealed class ContextRuntimeService : IContextRuntimeService
                 ex.Message,
                 stopwatch.Elapsed,
                 errorMetadata,
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken,
+                entityType,
+                entityId,
+                operation).ConfigureAwait(false);
 
             throw;
         }
@@ -276,7 +300,10 @@ public sealed class ContextRuntimeService : IContextRuntimeService
         string message,
         TimeSpan? duration,
         Dictionary<string, string>? metadata,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? entityType = null,
+        string? entityId = null,
+        string? operation = null)
     {
         return _eventSink.EmitAsync(new ContextOperationEvent
         {
@@ -285,6 +312,9 @@ public sealed class ContextRuntimeService : IContextRuntimeService
             OperationName = operationName,
             WorkspaceId = workspaceId,
             CollectionId = collectionId,
+            EntityType = entityType,
+            EntityId = entityId,
+            Operation = operation,
             Level = level,
             Message = message,
             Duration = duration,

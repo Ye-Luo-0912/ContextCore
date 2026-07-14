@@ -44,6 +44,15 @@ public sealed class ContextOperationEvent
     /// <summary>所属集合 ID（可空）。</summary>
     public string? CollectionId { get; init; }
 
+    /// <summary>受影响实体的类型（如 "ContextItem"、"MemoryItem"、"Relation"）。可空，用于审计与失效路由。</summary>
+    public string? EntityType { get; init; }
+
+    /// <summary>受影响实体的 ID。可空，集合级操作时为 null。</summary>
+    public string? EntityId { get; init; }
+
+    /// <summary>对实体执行的操作（如 "Save"、"Upsert"、"Delete"、"Promote"、"Build"）。可空。</summary>
+    public string? Operation { get; init; }
+
     /// <summary>事件级别。</summary>
     public ContextEventLevel Level { get; init; } = ContextEventLevel.Information;
 

@@ -14,7 +14,7 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
     /// 当前 schema 版本标识符。每次修改 DDL（新增表/列/索引）时需递增此版本。
     /// 格式：<c>cc-schema-vN</c>，N 为单调递增整数。
     /// </summary>
-    public const string SchemaVersion = "cc-schema-v6";
+    public const string SchemaVersion = "cc-schema-v7";
 
     public const string BaselineMigrationId = "0001_operational_store_baseline";
 
@@ -201,6 +201,10 @@ CREATE TABLE IF NOT EXISTS {contextOperationEvents} (
 );
 
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "context_operation_events", "created")} ON {contextOperationEvents} (workspace_id, created_at DESC);
+
+ALTER TABLE {contextOperationEvents} ADD COLUMN IF NOT EXISTS entity_type text NULL;
+ALTER TABLE {contextOperationEvents} ADD COLUMN IF NOT EXISTS entity_id text NULL;
+ALTER TABLE {contextOperationEvents} ADD COLUMN IF NOT EXISTS operation text NULL;
 
 CREATE TABLE IF NOT EXISTS {collections} (
     workspace_id text NOT NULL,
