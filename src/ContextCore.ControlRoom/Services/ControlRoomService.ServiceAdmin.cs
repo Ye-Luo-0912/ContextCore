@@ -3,7 +3,6 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
-using ContextCore.ControlRoom.Models;
 using ContextCore.Client;
 using ContextCore.Core;
 using ContextCore.Core.Services;
@@ -1324,8 +1323,7 @@ public sealed partial class ControlRoomService
             Status = status,
             Diagnostics = diagnostics,
             ReindexPreview = preview,
-            Coverage = coverage,
-            ShadowQuality = LoadVectorShadowQualitySummary()
+            Coverage = coverage
         };
     }
 

@@ -794,35 +794,6 @@ public sealed class ContextCoreVectorIndexFoundationTests
                 {
                     ["context"] = 1
                 }
-            },
-            ShadowQuality = new ServiceVectorShadowQualitySummary
-            {
-                Available = true,
-                SourcePath = "eval/vector-query-profile-sweep-extended.json",
-                CurrentRecommendation = VectorQueryShadowRecommendations.NeedsPolicyTuning,
-                BestProfile = VectorQueryProfileIds.NormalV1,
-                BestTopK = 20,
-                BestMinSimilarity = 0.1,
-                RiskAfterPolicy = 0,
-                SimilaritySeparation = -0.01,
-                ResidualRiskSourcePath = "eval/vector-residual-risk-audit-extended.json",
-                ResidualRiskCount = 2,
-                TopResidualRiskTypes = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
-                {
-                    [VectorResidualRiskTypes.LifecycleMetadataGap] = 2
-                },
-                TopWhyPolicyAllowed = ["候选在运行时 metadata 中 lifecycle/status='missing'，未触发当前 profile 的阻断规则。"],
-                TopExpectedActions = ["补齐 lifecycle/status/reviewStatus metadata 后重建 vector index。"],
-                LifecycleMetadataCoverageSourcePath = "eval/vector-lifecycle-metadata-coverage.json",
-                LifecycleMetadataCoverageRate = 0.8,
-                UnknownLifecycleCount = 2,
-                MissingReviewStatusCount = 4,
-                MissingReplacementInfoCount = 1,
-                BlockedByLifecycleMetadataGate = 2,
-                V4ReadinessGateSourcePath = "eval/vector-retrieval-shadow-readiness-gate.json",
-                V4ReadinessGatePassed = false,
-                V4ReadinessGateFailReasons = ["A3RecallAtLeast80Percent"],
-                V4GateSatisfied = false
             }
         };
 
@@ -831,14 +802,6 @@ public sealed class ContextCoreVectorIndexFoundationTests
         StringAssert.Contains(rendered, "Service Vector Index");
         StringAssert.Contains(rendered, "deterministic-hash-v1");
         StringAssert.Contains(rendered, "Coverage Summary");
-        StringAssert.Contains(rendered, "Shadow Quality Summary");
-        StringAssert.Contains(rendered, "Residual Risk Summary");
-        StringAssert.Contains(rendered, "Lifecycle Metadata Coverage");
-        StringAssert.Contains(rendered, "A3RecallAtLeast80Percent");
-        StringAssert.Contains(rendered, "blockedByGate");
-        StringAssert.Contains(rendered, "LifecycleMetadataGap");
-        StringAssert.Contains(rendered, "whyAllowed");
-        StringAssert.Contains(rendered, "normal-v1");
         StringAssert.Contains(rendered, "BlockedByDiagnostics");
         StringAssert.Contains(rendered, "DuplicateVectorEntry");
         StringAssert.Contains(rendered, "Reindex Preview");

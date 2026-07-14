@@ -3,7 +3,6 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
-using ContextCore.ControlRoom.Models;
 using ContextCore.Client;
 using ContextCore.Core;
 using ContextCore.Core.Services;
@@ -674,98 +673,6 @@ public sealed class ServiceVectorIndexSnapshot
     public VectorReindexPreviewResponse ReindexPreview { get; init; } = new();
 
     public VectorIndexCoverageReport Coverage { get; init; } = new();
-
-    public ServiceVectorShadowQualitySummary ShadowQuality { get; init; } = new();
-}
-
-public sealed class ServiceVectorShadowQualitySummary
-{
-    public bool Available { get; init; }
-
-    public string SourcePath { get; init; } = string.Empty;
-
-    public string CurrentRecommendation { get; init; } = string.Empty;
-
-    public string BestProfile { get; init; } = string.Empty;
-
-    public int BestTopK { get; init; }
-
-    public double BestMinSimilarity { get; init; }
-
-    public int RiskAfterPolicy { get; init; }
-
-    public double SimilaritySeparation { get; init; }
-
-    public IReadOnlyList<OperationalReportSnapshot> OperationalReports { get; init; } =
-        Array.Empty<OperationalReportSnapshot>();
-
-    public string ResidualRiskSourcePath { get; init; } = string.Empty;
-
-    public int ResidualRiskCount { get; init; }
-
-    public IReadOnlyDictionary<string, int> TopResidualRiskTypes { get; init; } =
-        new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-
-    public IReadOnlyList<string> TopWhyPolicyAllowed { get; init; } = Array.Empty<string>();
-
-    public IReadOnlyList<string> TopExpectedActions { get; init; } = Array.Empty<string>();
-
-    public string LifecycleMetadataCoverageSourcePath { get; init; } = string.Empty;
-
-    public double LifecycleMetadataCoverageRate { get; init; }
-
-    public int UnknownLifecycleCount { get; init; }
-
-    public int MissingReviewStatusCount { get; init; }
-
-    public int MissingReplacementInfoCount { get; init; }
-
-    public int BlockedByLifecycleMetadataGate { get; init; }
-
-    public string V4ReadinessGateSourcePath { get; init; } = string.Empty;
-
-    public bool V4ReadinessGatePassed { get; init; }
-
-    public IReadOnlyList<string> V4ReadinessGateFailReasons { get; init; } = Array.Empty<string>();
-
-    public bool V4GateSatisfied { get; init; }
-
-    public string ProviderComparisonSourcePath { get; init; } = string.Empty;
-    public IReadOnlyList<VectorProviderComparisonV310Result> ProviderComparisonResults { get; init; } = Array.Empty<VectorProviderComparisonV310Result>();
-
-    public string Qwen3ReadinessGateSourcePath { get; init; } = string.Empty;
-    public bool Qwen3ReadinessGatePassed { get; init; }
-    public string Qwen3Recommendation { get; init; } = string.Empty;
-    public IReadOnlyList<string> Qwen3BlockedReasons { get; init; } = Array.Empty<string>();
-
-    public string ProviderComparisonFreezeSourcePath { get; init; } = string.Empty;
-    public string ProviderPromotionStatus { get; init; } = string.Empty;
-    public bool ProviderConfigurationSanityPassed { get; init; }
-    public string ProviderComparisonStatus { get; init; } = string.Empty;
-    public bool VectorV4RecheckAllowed { get; init; }
-    public IReadOnlyList<string> ProviderPromotionBlockedReasons { get; init; } = Array.Empty<string>();
-
-    public string HybridPreviewSourcePath { get; init; } = string.Empty;
-    public string HybridFullA3Recall { get; init; } = string.Empty;
-    public string HybridFullExtendedRecall { get; init; } = string.Empty;
-    public int HybridFullRiskAfterPolicy { get; init; }
-    public string HybridReadinessRecommendation { get; init; } = string.Empty;
-    public bool HybridReadinessGatePassed { get; init; }
-
-    public string HybridAuditSourcePath { get; init; } = string.Empty;
-    public bool HybridAuditPassed { get; init; }
-    public string HybridAuditRecommendation { get; init; } = string.Empty;
-    public int HybridAuditDenseDroppedCount { get; init; }
-    public int HybridAuditEligibilityMismatchCount { get; init; }
-    public int HybridAuditDedupOverwriteCount { get; init; }
-
-    public string HybridFreezeSourcePath { get; init; } = string.Empty;
-    public bool HybridFreezePassed { get; init; }
-    public string HybridFreezeStatus { get; init; } = string.Empty;
-    public string HybridFreezeRecommendation { get; init; } = string.Empty;
-    public bool HybridV4RecheckAllowed { get; init; }
-    public IReadOnlyList<string> HybridFreezeBlockedReasons { get; init; } = Array.Empty<string>();
-
 }
 
 /// <summary>Service 模式下的运行时仪表盘快照。</summary>
