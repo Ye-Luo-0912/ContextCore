@@ -1,6 +1,6 @@
 # ContextCore 项目路线图
 
-> 最近更新：R7-0~R7-3 + R8-0 补齐残留删除（PlanningIntentDetector 循环依赖、Router Shadow 404 接口、失效菜单、无消费者类型、领域关键词）（2026-07-14）
+> 最近更新：R8-5 统一 Package Pipeline 删除 Legacy 路径（IsAuditMode 显式信号、BuildLegacyAsync 删除）（2026-07-14）
 
 > 本文件是 ContextCore 的**唯一当前路线图**。docs/ 下的 freeze / report / audit / plan 类文档均为历史快照，仅供回溯，不作为设计依据。
 
@@ -36,11 +36,33 @@
 | EvalCommand.cs 单文件行数 | 7,987 | P1-5 已完成 |
 | FoundationStatusService.cs 行数 | 606 | P4 已完成 |
 | 构建 | 0 警告 / 0 错误 | 0 / 0 |
-| 测试 | 911 通过 / 0 失败 | 0 失败 |
+| 测试 | 841 通过 / 0 失败 | 0 失败 |
 
 ---
 
 ## 已完成工作
+
+### R8-5：统一 Package Pipeline 删除 Legacy 路径（commit `556e459`）
+
+将 BasicContextPackageBuilder 的 Legacy 路径转换为默认 Policy 委托，统一为单一打包流水线，并将审计模式改为显式信号。7 文件变更，+75/-152 行（净减 77 行）。
+
+**A. Legacy 路径删除**：
+- 删除 BuildLegacyAsync 方法（约 80 行）
+- BuildDetailedCoreAsync 改为 `request.Policy ?? CreateDefaultProductionPolicy(request)` 委托到 BuildWithPolicyAsync
+- 新增 CreateDefaultProductionPolicy：仅启用 IncludeRecentRawContext（与原 Legacy 行为一致），约束/记忆/全局上下文需调用方显式提供 Policy
+
+**B. 显式 IsAuditMode 信号（渐进迁移）**：
+- ContextPackageRequest/ContextPackagePolicy 各新增 `bool? IsAuditMode` 字段
+- PackagePolicyResolver.ResolveIsAuditMode：任一 true 即启用，任一 false 即关闭，均 null 回退 QueryText 关键词推断（向后兼容）
+- 兑现 R8-0 子任务 5 的后续改造建议（"建议后续向 ContextPackagePolicy 新增 IsAuditMode 字段渐进改造"）
+
+**C. 级联清理**：
+- 删除 PackageMetadataBuilder.CreatePackage（仅 Legacy 调用，22 行）
+- 删除 LegacyPackageScorer.CountMatchingTags/CalculateLegacyScore（仅 Legacy 调用，27 行）
+- 更新 ContextCoreMvpTests 2 处断言：Kind/SectionName raw/large→recent_context，Reason token budget exhausted→candidate not retained after token budget truncation
+
+BasicContextPackageBuilder.cs 从 1338 行降至 1145 行（-193 行）。
+验证：构建 0 警告 0 错误，测试 841 通过 0 失败（792+43+6）。
 
 ### R8-0：补齐残留删除（commit `9795195`）
 
