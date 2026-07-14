@@ -9,9 +9,6 @@ namespace ContextCore.Core;
 /// </summary>
 internal static class ContextRecallSignalPolicy
 {
-    private static readonly DomainKeywordProfile DefaultDomainKeywords = DomainKeywordProfile.CreateProduction();
-    private static readonly string[] LongTermMemoryKeywords = DefaultDomainKeywords.LongTermMemoryKeywords.ToArray();
-
     public static bool IsSpecificRecallAnchor(ContextAnchor anchor)
     {
         // workspace / collection 表达检索边界，不能直接作为内容相关性分数。
@@ -26,7 +23,7 @@ internal static class ContextRecallSignalPolicy
         string searchText)
     {
         var score = item.Importance * 8 + item.Confidence * 5;
-        if (IsLongTermMemoryCategory(searchText))
+        if (IsLongTermMemoryCategory(item))
         {
             score += 8;
         }
@@ -64,11 +61,45 @@ internal static class ContextRecallSignalPolicy
         return new StableMemoryInjectionScore(score, hasCurrentSignal);
     }
 
-    public static bool IsLongTermMemoryCategory(string searchText)
+    /// <summary>
+    /// 判断条目是否属于长期记忆类别。
+    /// 改造为基于结构化字段的显式判断（Layer/Tags/Metadata），不再依赖内容关键词匹配：
+    /// - <see cref="ContextMemoryLayer.Stable"/> 层条目即视为长期记忆；
+    /// - 或 Tags 含 "long-term"；
+    /// - 或 Metadata 中 lifecycle/category/memory-class 标记为 "long-term"。
+    /// </summary>
+    public static bool IsLongTermMemoryCategory(ContextMemoryItem item)
     {
-        foreach (var keyword in LongTermMemoryKeywords)
+        if (item is null)
         {
-            if (ContainsSignal(searchText, keyword))
+            return false;
+        }
+
+        if (item.Layer == ContextMemoryLayer.Stable)
+        {
+            return true;
+        }
+
+        foreach (var tag in item.Tags)
+        {
+            if (string.Equals(tag, "long-term", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(tag, "longterm", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        foreach (var (key, value) in item.Metadata)
+        {
+            if (string.IsNullOrWhiteSpace(value)
+                || !string.Equals(value.Trim(), "long-term", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (string.Equals(key, "lifecycle", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(key, "category", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(key, "memory-class", StringComparison.OrdinalIgnoreCase))
             {
                 return true;
             }

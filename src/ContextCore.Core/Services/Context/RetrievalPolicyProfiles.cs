@@ -177,43 +177,15 @@ public sealed class ModeBudgetProfileRegistry
 }
 
 /// <summary>
-/// 领域关键词配置：集中管理原先硬编码在 BasicContextPackageBuilder 和 ContextRecallSignalPolicy 中的关键词表。
+/// 领域关键词配置：仅保留内容安全过滤词表（废弃内容硬/软拒绝）与夹具惩罚词表（生产为空）。
+/// 模式专属加分已迁移到 <see cref="ModeReserveWeightProfile"/>（显式信号权重，替代领域词表）；
+/// 长期记忆判断已迁移到 <see cref="ContextRecallSignalPolicy.IsLongTermMemoryCategory(ContextMemoryItem)"/>（Layer/Tags/Metadata 结构信号）。
 /// CreateProduction() 用于生产代码（夹具惩罚关键词为空），CreateDefault() 保留夹具关键词用于迁移兼容。
 /// </summary>
 public sealed class DomainKeywordProfile
 {
-    /// <summary>长期记忆关键词（原 ContextRecallSignalPolicy 硬编码数组）。</summary>
-    public IReadOnlyList<string> LongTermMemoryKeywords { get; init; } = [];
-
     /// <summary>夹具惩罚关键词（原 BasicContextPackageBuilder 评分路径内联）。生产环境为空。</summary>
     public IReadOnlyList<string> FixturePenaltyKeywords { get; init; } = [];
-
-    /// <summary>ChatMode 工作记忆保留加分关键词（原 ResolveWorkingMemoryReserveScore 内联）。</summary>
-    public IReadOnlyList<string> ChatModeBoostKeywords { get; init; } = [];
-
-    /// <summary>ChatMode 打包排序保留加分关键词（原 ResolvePackageOrderScore 内联）。</summary>
-    public IReadOnlyList<string> ChatModeReserveBoostKeywords { get; init; } = [];
-
-    /// <summary>NovelMode 打包排序保留加分关键词（原 ResolvePackageOrderScore 内联）。</summary>
-    public IReadOnlyList<string> NovelModeReserveBoostKeywords { get; init; } = [];
-
-    /// <summary>AutomationMode 工作记忆保留加分关键词（原 ResolveWorkingMemoryReserveScore 内联）。</summary>
-    public IReadOnlyList<string> AutomationModeWorkingMemoryReserveKeywords { get; init; } = [];
-
-    /// <summary>NovelMode 工作记忆保留加分关键词（原 ResolveWorkingMemoryReserveScore 内联）。</summary>
-    public IReadOnlyList<string> NovelModeWorkingMemoryReserveKeywords { get; init; } = [];
-
-    /// <summary>ChatMode 稳定记忆保留加分关键词（原 ResolveStableMemoryReserveScore 内联）。</summary>
-    public IReadOnlyList<string> ChatModeStableMemoryReserveKeywords { get; init; } = [];
-
-    /// <summary>NovelMode 稳定记忆保留加分关键词（原 ResolveStableMemoryReserveScore 内联）。</summary>
-    public IReadOnlyList<string> NovelModeStableMemoryReserveKeywords { get; init; } = [];
-
-    /// <summary>AutomationMode 稳定记忆保留加分关键词（原 ResolveStableMemoryReserveScore 内联）。</summary>
-    public IReadOnlyList<string> AutomationModeStableMemoryReserveKeywords { get; init; } = [];
-
-    /// <summary>AutomationMode 打包排序保留加分关键词（原 ResolvePackageOrderScore 内联）。</summary>
-    public IReadOnlyList<string> AutomationModePackageOrderKeywords { get; init; } = [];
 
     /// <summary>废弃内容硬拒绝关键词：任何场景下都强力排除（原 ScoreWorkingMemoryForAnchors 内联）。</summary>
     public IReadOnlyList<string> DeprecatedContentHardRejectionKeywords { get; init; } = [];
@@ -226,119 +198,12 @@ public sealed class DomainKeywordProfile
     /// </summary>
     public static DomainKeywordProfile CreateDefault() => new()
     {
-        LongTermMemoryKeywords =
-        [
-            "preference",
-            "偏好",
-            "project",
-            "项目",
-            "background",
-            "背景",
-            "style",
-            "风格",
-            "safety",
-            "security",
-            "安全",
-            "密钥",
-            "secret",
-            "boundary",
-            "边界",
-            "principle",
-            "原则",
-            "constraint",
-            "约束",
-            "rule",
-            "规则",
-            "world",
-            "世界观",
-            "设定",
-            "performance",
-            "性能",
-            "test",
-            "测试",
-            "risk",
-            "风险"
-        ],
         FixturePenaltyKeywords =
         [
             "stress-test",
             "压力测试",
             "无用字符",
             "budget-stress"
-        ],
-        ChatModeBoostKeywords =
-        [
-            "stable preference",
-            "preference",
-            "偏好",
-            "scope",
-            "边界",
-            "作用域",
-            "active task",
-            "active",
-            "当前",
-            "计划",
-            "结论"
-        ],
-        ChatModeReserveBoostKeywords =
-        [
-            "stable:preference",
-            "preference-language",
-            "preference",
-            "scope",
-            "active-task",
-            "active task",
-            "current-task",
-            "plan",
-            "conclusion",
-            "promotion-policy",
-            "no-promote",
-            "promote",
-            "提升",
-            "临时情绪",
-            "重复解释",
-            "oneoff",
-            "一次性"
-        ],
-        NovelModeReserveBoostKeywords =
-        [
-            "character-state",
-            "foreshadow",
-            "world-rule",
-            "item-state",
-            "plot-hook",
-            "ending-plan"
-        ],
-        AutomationModeWorkingMemoryReserveKeywords =
-        [
-            "last-error", "last error", "错误", "失败",
-            "recovery", "恢复点", "retry", "重试",
-            "dead-letter", "死信队列", "worker", "stats", "统计"
-        ],
-        NovelModeWorkingMemoryReserveKeywords =
-        [
-            "character-state", "人物状态", "foreshadow", "伏笔",
-            "world", "世界观", "约束", "item-state", "物品状态",
-            "ending", "结局"
-        ],
-        ChatModeStableMemoryReserveKeywords =
-        [
-            "preference", "偏好", "language", "中文", "scope", "边界", "安全",
-            "promotion-policy", "no-promote", "promote", "提升",
-            "临时情绪", "重复解释", "oneoff", "一次性"
-        ],
-        NovelModeStableMemoryReserveKeywords =
-        [
-            "world", "世界观", "constraint", "约束", "item", "character"
-        ],
-        AutomationModeStableMemoryReserveKeywords =
-        [
-            "safety", "retry", "dead-letter", "recovery", "安全", "重试"
-        ],
-        AutomationModePackageOrderKeywords =
-        [
-            "last-error", "error-log", "recovery", "recovery-point",
-            "retry", "dead-letter", "queue-state", "worker-stats"
         ],
         DeprecatedContentHardRejectionKeywords =
         [
@@ -360,21 +225,82 @@ public sealed class DomainKeywordProfile
         var baseline = CreateDefault();
         return new DomainKeywordProfile
         {
-            LongTermMemoryKeywords = baseline.LongTermMemoryKeywords,
             // 生产环境不含夹具惩罚关键词——fixture 名称不进入生产评分路径。
             // eval 适配层如需惩罚 stress-test 项，应通过 request.Policy 或独立 eval profile 注入。
             FixturePenaltyKeywords = [],
-            ChatModeBoostKeywords = baseline.ChatModeBoostKeywords,
-            ChatModeReserveBoostKeywords = baseline.ChatModeReserveBoostKeywords,
-            NovelModeReserveBoostKeywords = baseline.NovelModeReserveBoostKeywords,
-            AutomationModeWorkingMemoryReserveKeywords = baseline.AutomationModeWorkingMemoryReserveKeywords,
-            NovelModeWorkingMemoryReserveKeywords = baseline.NovelModeWorkingMemoryReserveKeywords,
-            ChatModeStableMemoryReserveKeywords = baseline.ChatModeStableMemoryReserveKeywords,
-            NovelModeStableMemoryReserveKeywords = baseline.NovelModeStableMemoryReserveKeywords,
-            AutomationModeStableMemoryReserveKeywords = baseline.AutomationModeStableMemoryReserveKeywords,
-            AutomationModePackageOrderKeywords = baseline.AutomationModePackageOrderKeywords,
             DeprecatedContentHardRejectionKeywords = baseline.DeprecatedContentHardRejectionKeywords,
             DeprecatedContentSoftRejectionKeywords = baseline.DeprecatedContentSoftRejectionKeywords
+        };
+    }
+}
+
+/// <summary>
+/// 模式保留信号权重配置：按模式（Chat/Novel/Automation）显式声明"工作记忆保留 / 稳定记忆保留 / 打包排序保留"
+/// 三个阶段的信号→权重映射，替代原 DomainKeywordProfile 中的模式专属领域词表。
+/// 信号来源为条目的结构化字段（Tags、Metadata["signal"]/["reserve-signal"]），不再依赖内容关键词匹配。
+/// 权重值与原领域词表加分保持一致（保留 +900/+600，打包排序 +9000），仅切换判定来源。
+/// </summary>
+public sealed class ModeReserveWeightProfile
+{
+    /// <summary>各模式工作记忆保留信号权重：归一化模式名 → (信号 → 权重)。</summary>
+    public IReadOnlyDictionary<string, IReadOnlyDictionary<string, double>> WorkingMemoryReserveWeights { get; init; }
+        = new Dictionary<string, IReadOnlyDictionary<string, double>>(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>各模式稳定记忆保留信号权重：归一化模式名 → (信号 → 权重)。</summary>
+    public IReadOnlyDictionary<string, IReadOnlyDictionary<string, double>> StableMemoryReserveWeights { get; init; }
+        = new Dictionary<string, IReadOnlyDictionary<string, double>>(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>各模式打包排序保留信号权重：归一化模式名 → (信号 → 权重)。</summary>
+    public IReadOnlyDictionary<string, IReadOnlyDictionary<string, double>> PackageOrderReserveWeights { get; init; }
+        = new Dictionary<string, IReadOnlyDictionary<string, double>>(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>创建生产配置：显式信号权重，值与原领域词表加分一致。</summary>
+    public static ModeReserveWeightProfile CreateProduction()
+    {
+        var chatWorking = Weights(900, "preference", "scope", "active-task", "plan", "conclusion");
+        var novelWorking = Weights(900, "character-state", "foreshadow", "world-rule", "item-state", "plot-hook", "ending-plan");
+        var automationWorking = Weights(900, "last-error", "recovery", "retry", "dead-letter", "worker-stats");
+
+        var chatStable = Weights(900, "preference", "language", "scope", "safety", "promotion-policy", "oneoff");
+        var novelStable = Weights(600, "world-rule", "constraint", "item-state", "character-state");
+        var automationStable = Weights(600, "safety", "retry", "dead-letter", "recovery");
+
+        var chatPackage = Weights(9_000, "preference", "scope", "active-task", "plan", "conclusion", "promotion-policy", "oneoff");
+        var novelPackage = Weights(9_000, "character-state", "foreshadow", "world-rule", "item-state", "plot-hook", "ending-plan");
+        var automationPackage = Weights(9_000, "last-error", "recovery", "retry", "dead-letter", "worker-stats");
+
+        return new ModeReserveWeightProfile
+        {
+            WorkingMemoryReserveWeights = ByMode(chatWorking, novelWorking, automationWorking),
+            StableMemoryReserveWeights = ByMode(chatStable, novelStable, automationStable),
+            PackageOrderReserveWeights = ByMode(chatPackage, novelPackage, automationPackage)
+        };
+    }
+
+    private static IReadOnlyDictionary<string, double> Weights(double weight, params string[] signals)
+    {
+        var dict = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+        foreach (var signal in signals)
+        {
+            dict[signal] = weight;
+        }
+
+        return dict;
+    }
+
+    private static IReadOnlyDictionary<string, IReadOnlyDictionary<string, double>> ByMode(
+        IReadOnlyDictionary<string, double> chat,
+        IReadOnlyDictionary<string, double> novel,
+        IReadOnlyDictionary<string, double> automation)
+    {
+        return new Dictionary<string, IReadOnlyDictionary<string, double>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["chat"] = chat,
+            ["chatmode"] = chat,
+            ["novel"] = novel,
+            ["novelmode"] = novel,
+            ["automation"] = automation,
+            ["automationmode"] = automation
         };
     }
 }

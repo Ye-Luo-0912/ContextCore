@@ -12,6 +12,7 @@ internal static class WorkingMemoryRecaller
 {
     internal static readonly DomainKeywordProfile DomainKeywords = DomainKeywordProfile.CreateProduction();
     internal static readonly WorkingMemoryScoringProfile ScoringProfile = WorkingMemoryScoringProfile.CreateDefault();
+    internal static readonly ModeReserveWeightProfile ReserveWeightProfile = ModeReserveWeightProfile.CreateProduction();
 
     internal static IReadOnlyList<ContextMemoryItem> RecallWorkingMemory(
         IReadOnlyList<ContextMemoryItem> candidates,
@@ -527,7 +528,7 @@ internal static class WorkingMemoryRecaller
                     Item = item,
                     score.Score,
                     score.HasCurrentSignal,
-                    IsLongTermCategory = ContextRecallSignalPolicy.IsLongTermMemoryCategory(searchText),
+                    IsLongTermCategory = ContextRecallSignalPolicy.IsLongTermMemoryCategory(item),
                     ReserveScore = ResolveStableMemoryReserveScore(item, modeName, reserveIds)
                 };
             })
@@ -561,31 +562,20 @@ internal static class WorkingMemoryRecaller
         string modeName,
         IReadOnlySet<string>? reserveIds)
     {
-        var searchText = CreateMemorySearchText(item);
         var score = reserveIds is not null && reserveIds.Contains(item.Id) ? 10_000.0 : 0.0;
-        if (IsMode(modeName, "AutomationMode", "Automation"))
+        var modeKey = NormalizeModeName(modeName);
+        if (ReserveWeightProfile.WorkingMemoryReserveWeights.TryGetValue(modeKey, out var signalWeights))
         {
-            if (ContainsAny(searchText, DomainKeywords.AutomationModeWorkingMemoryReserveKeywords))
+            foreach (var signal in ResolveMemoryReserveSignals(item))
             {
-                score += 900.0;
-            }
-        }
-        else if (IsMode(modeName, "NovelMode", "Novel"))
-        {
-            if (ContainsAny(searchText, DomainKeywords.NovelModeWorkingMemoryReserveKeywords))
-            {
-                score += 900.0;
-            }
-        }
-        else if (IsMode(modeName, "ChatMode", "Chat"))
-        {
-            if (ContainsAny(searchText, DomainKeywords.ChatModeBoostKeywords))
-            {
-                score += 900.0;
+                if (signalWeights.TryGetValue(signal, out var weight))
+                {
+                    score += weight;
+                }
             }
         }
 
-        if (ContainsAny(searchText, DomainKeywords.FixturePenaltyKeywords))
+        if (ContainsAny(CreateMemorySearchText(item), DomainKeywords.FixturePenaltyKeywords))
         {
             score -= 500.0;
         }
@@ -598,34 +588,70 @@ internal static class WorkingMemoryRecaller
         string modeName,
         IReadOnlySet<string>? reserveIds)
     {
-        var searchText = CreateMemorySearchText(item);
         var score = reserveIds is not null && reserveIds.Contains(item.Id) ? 10_000.0 : 0.0;
-        if (IsMode(modeName, "ChatMode", "Chat") &&
-            ContainsAny(searchText, DomainKeywords.ChatModeStableMemoryReserveKeywords))
+        var modeKey = NormalizeModeName(modeName);
+        if (ReserveWeightProfile.StableMemoryReserveWeights.TryGetValue(modeKey, out var signalWeights))
         {
-            score += 900.0;
-        }
-
-        if (IsMode(modeName, "NovelMode", "Novel") &&
-            ContainsAny(searchText, DomainKeywords.NovelModeStableMemoryReserveKeywords))
-        {
-            score += 600.0;
-        }
-
-        if (IsMode(modeName, "AutomationMode", "Automation") &&
-            ContainsAny(searchText, DomainKeywords.AutomationModeStableMemoryReserveKeywords))
-        {
-            score += 600.0;
+            foreach (var signal in ResolveMemoryReserveSignals(item))
+            {
+                if (signalWeights.TryGetValue(signal, out var weight))
+                {
+                    score += weight;
+                }
+            }
         }
 
         return score;
     }
 
-    internal static bool IsMode(string modeName, params string[] expected)
+    /// <summary>
+    /// 解析记忆条目的保留信号：来自 Tags 与 Metadata["signal"]/["reserve-signal"]（逗号/分号/竖线分隔）。
+    /// 信号与 <see cref="ModeReserveWeightProfile"/> 的权重键精确匹配（大小写不敏感），不再依赖内容关键词。
+    /// </summary>
+    internal static IEnumerable<string> ResolveMemoryReserveSignals(ContextMemoryItem item)
     {
-        var normalized = NormalizeModeName(modeName);
-        return expected.Any(item =>
-            string.Equals(normalized, NormalizeModeName(item), StringComparison.OrdinalIgnoreCase));
+        foreach (var tag in item.Tags)
+        {
+            if (!string.IsNullOrWhiteSpace(tag))
+            {
+                yield return tag.Trim();
+            }
+        }
+
+        foreach (var signal in ReadSignalMetadata(item.Metadata))
+        {
+            yield return signal;
+        }
+    }
+
+    /// <summary>解析打包决策的保留信号：来自 Metadata["signal"]/["reserve-signal"]。</summary>
+    internal static IEnumerable<string> ResolveDecisionReserveSignals(ContextPackageDecision item)
+    {
+        foreach (var signal in ReadSignalMetadata(item.Metadata))
+        {
+            yield return signal;
+        }
+    }
+
+    private static IEnumerable<string> ReadSignalMetadata(IReadOnlyDictionary<string, string> metadata)
+    {
+        foreach (var (key, value) in metadata)
+        {
+            if (string.IsNullOrWhiteSpace(value)
+                || (!string.Equals(key, "signal", StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(key, "reserve-signal", StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(key, "reserveSignal", StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+
+            foreach (var part in value.Split(
+                [',', '，', ';', '；', '|', ' ', '\t', '\r', '\n'],
+                StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                yield return part;
+            }
+        }
     }
 
     internal static bool ContainsAny(string text, IReadOnlyList<string> values)

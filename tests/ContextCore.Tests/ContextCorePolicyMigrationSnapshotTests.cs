@@ -173,6 +173,9 @@ public sealed class ContextCorePolicyMigrationSnapshotTests
     [TestMethod]
     public async Task ChatModeKeywordBoostSnapshot_ShouldBoostStablePreferenceItem()
     {
+        // R10-1 改造：模式保留加分由领域词表改为显式信号权重（ModeReserveWeightProfile）。
+        // stable:preference-snapshot 通过 Metadata["signal"]="preference" 获得显式 +900 稳定记忆保留分，
+        // 不再依赖内容关键词匹配。长期记忆门禁改由 Layer==Stable 结构信号判定。
         var now = DateTimeOffset.UtcNow;
         var memoryStore = new InMemoryMemoryStore();
         var builder = new BasicContextPackageBuilder(
@@ -195,7 +198,8 @@ public sealed class ContextCorePolicyMigrationSnapshotTests
             now.AddMinutes(-10),
             importance: 0.25,
             layer: ContextMemoryLayer.Stable,
-            status: ContextMemoryStatus.Stable));
+            status: ContextMemoryStatus.Stable,
+            metadata: new Dictionary<string, string> { ["signal"] = "preference" }));
 
         var result = await builder.BuildDetailedAsync(new ContextPackageRequest
         {
@@ -270,7 +274,8 @@ public sealed class ContextCorePolicyMigrationSnapshotTests
         double importance,
         ContextMemoryLayer layer = ContextMemoryLayer.Working,
         ContextMemoryStatus status = ContextMemoryStatus.Verified,
-        string? type = null)
+        string? type = null,
+        Dictionary<string, string>? metadata = null)
     {
         return new ContextMemoryItem
         {
@@ -287,7 +292,7 @@ public sealed class ContextCorePolicyMigrationSnapshotTests
             Importance = importance,
             Confidence = 0.9,
             Version = 1,
-            Metadata = new Dictionary<string, string>(),
+            Metadata = metadata ?? new Dictionary<string, string>(),
             CreatedAt = updatedAt,
             UpdatedAt = updatedAt
         };

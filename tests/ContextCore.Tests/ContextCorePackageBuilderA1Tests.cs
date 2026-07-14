@@ -765,7 +765,11 @@ public sealed class ContextCorePackageBuilderA1Tests
             "AutomationMode recovery point：last error 后的恢复点、retry policy 和 dead-letter state 必须优先。",
             now.AddMinutes(-10),
             importance: 0.3,
-            metadata: new Dictionary<string, string> { ["mode"] = "AutomationMode" }));
+            metadata: new Dictionary<string, string>
+            {
+                ["mode"] = "AutomationMode",
+                ["signal"] = "recovery"
+            }));
 
         var result = await BuildModeReservePackageAsync(builder, "AutomationMode", includeStableMemory: false);
 
@@ -795,7 +799,11 @@ public sealed class ContextCorePackageBuilderA1Tests
             "NovelMode foreshadow 伏笔铃声：需要确认兑现方式可多选。",
             now.AddMinutes(-8),
             importance: 0.3,
-            metadata: new Dictionary<string, string> { ["mode"] = "NovelMode" }));
+            metadata: new Dictionary<string, string>
+            {
+                ["mode"] = "NovelMode",
+                ["signal"] = "foreshadow"
+            }));
         await memoryStore.SaveAsync(CreateMemory(
             "item:sword-broken",
             "NovelMode item-state 物品状态：主角的断剑仍是 broken state。",
@@ -841,7 +849,7 @@ public sealed class ContextCorePackageBuilderA1Tests
             metadata: new Dictionary<string, string>
             {
                 ["mode"] = "ChatMode",
-                ["signal"] = "preference-language"
+                ["signal"] = "preference"
             },
             layer: ContextMemoryLayer.Stable,
             status: ContextMemoryStatus.Stable));

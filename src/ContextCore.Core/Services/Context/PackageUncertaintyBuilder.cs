@@ -222,26 +222,22 @@ internal static class PackageUncertaintyBuilder
             score += 10_000.0;
         }
 
+        // 模式保留信号权重：基于决策 Metadata["signal"]/["reserve-signal"] 的显式信号匹配，
+        // 替代原领域词表的内容关键词匹配。权重来自 ModeReserveWeightProfile.PackageOrderReserveWeights。
+        var modeKey = WorkingMemoryRecaller.NormalizeModeName(modeName);
+        if (WorkingMemoryRecaller.ReserveWeightProfile.PackageOrderReserveWeights.TryGetValue(modeKey, out var signalWeights))
+        {
+            foreach (var signal in WorkingMemoryRecaller.ResolveDecisionReserveSignals(item))
+            {
+                if (signalWeights.TryGetValue(signal, out var weight))
+                {
+                    score += weight;
+                }
+            }
+        }
+
         var metadata = string.Join(' ', item.Metadata.Select(pair => $"{pair.Key} {pair.Value}"));
         var searchText = string.Join(' ', item.ItemId, item.Kind, item.Type, item.SectionName, item.Reason, metadata, string.Join(' ', item.SourceRefs));
-        if (WorkingMemoryRecaller.IsMode(modeName, "AutomationMode", "Automation") &&
-            WorkingMemoryRecaller.ContainsAny(searchText, WorkingMemoryRecaller.DomainKeywords.AutomationModePackageOrderKeywords))
-        {
-            score += 9_000.0;
-        }
-
-        if (WorkingMemoryRecaller.IsMode(modeName, "NovelMode", "Novel") &&
-            WorkingMemoryRecaller.ContainsAny(searchText, WorkingMemoryRecaller.DomainKeywords.NovelModeReserveBoostKeywords))
-        {
-            score += 9_000.0;
-        }
-
-        if (WorkingMemoryRecaller.IsMode(modeName, "ChatMode", "Chat") &&
-            WorkingMemoryRecaller.ContainsAny(searchText, WorkingMemoryRecaller.DomainKeywords.ChatModeReserveBoostKeywords))
-        {
-            score += 9_000.0;
-        }
-
         if (WorkingMemoryRecaller.ContainsAny(searchText, WorkingMemoryRecaller.DomainKeywords.FixturePenaltyKeywords))
         {
             score -= 500.0;
