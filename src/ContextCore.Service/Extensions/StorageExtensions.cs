@@ -119,6 +119,32 @@ internal static class StorageExtensions
 		services.AddSingleton<IGlobalContextStore>(sp => new InvalidatingGlobalContextStoreDecorator(
 			sp.GetRequiredService<PostgresGlobalContextStore>(),
 			GetInvalidator(sp), GetVersionStore(sp)));
+
+		// R11-P4：在 Postgres 实现之上叠加剩余 Store 的失效边界 Decorator（覆盖 AddContextCorePostgresStorage 的原始注册）。
+		services.AddSingleton<IContextCollectionStore>(sp => new InvalidatingContextCollectionStoreDecorator(
+			sp.GetRequiredService<PostgresContextStore>(),
+			GetInvalidator(sp), GetVersionStore(sp)));
+		services.AddSingleton<IWorkingMemoryService>(sp => new InvalidatingWorkingMemoryServiceDecorator(
+			sp.GetRequiredService<PostgresWorkingMemoryStore>(),
+			GetInvalidator(sp), GetVersionStore(sp)));
+		services.AddSingleton<IPromotionRecordStore>(sp => new InvalidatingPromotionRecordStoreDecorator(
+			sp.GetRequiredService<PostgresWorkingMemoryStore>(),
+			GetInvalidator(sp), GetVersionStore(sp)));
+		services.AddSingleton<IPromotionCandidateStore>(sp => new InvalidatingPromotionCandidateStoreDecorator(
+			sp.GetRequiredService<PostgresWorkingMemoryStore>(),
+			GetInvalidator(sp), GetVersionStore(sp)));
+		services.AddSingleton<IRelationReviewStore>(sp => new InvalidatingRelationReviewStoreDecorator(
+			sp.GetRequiredService<PostgresRelationReviewStore>(),
+			GetInvalidator(sp), GetVersionStore(sp)));
+		services.AddSingleton<IVectorStore>(sp => new InvalidatingVectorStoreDecorator(
+			sp.GetRequiredService<PostgresVectorStore>(),
+			GetInvalidator(sp), GetVersionStore(sp)));
+		services.AddSingleton<IContextPackageBuildTraceStore>(sp => new InvalidatingContextPackageBuildTraceStoreDecorator(
+			sp.GetRequiredService<PostgresContextPackageBuildTraceStore>(),
+			GetInvalidator(sp), GetVersionStore(sp)));
+		services.AddSingleton<IContextPackagePolicyStore>(sp => new InvalidatingContextPackagePolicyStoreDecorator(
+			sp.GetRequiredService<PostgresContextPackagePolicyStore>(),
+			GetInvalidator(sp), GetVersionStore(sp)));
 	}
 
 	private static void RegisterFileSystem(IServiceCollection services, StorageOptions options)
@@ -147,7 +173,9 @@ internal static class StorageExtensions
 		services.AddSingleton<IContextStore>(sp => new InvalidatingContextStoreDecorator(
 			sp.GetRequiredService<FileContextStore>(),
 			GetInvalidator(sp), GetVersionStore(sp)));
-		services.AddSingleton<IContextCollectionStore>(sp => sp.GetRequiredService<FileContextStore>());
+		services.AddSingleton<IContextCollectionStore>(sp => new InvalidatingContextCollectionStoreDecorator(
+			sp.GetRequiredService<FileContextStore>(),
+			GetInvalidator(sp), GetVersionStore(sp)));
 
 		services.AddSingleton<FileContextIndex>(sp =>
 			new FileContextIndex(
@@ -161,7 +189,9 @@ internal static class StorageExtensions
 			new FileVectorStore(
 				sp.GetRequiredService<FilePathResolver>(),
 				sp.GetRequiredService<FileFormatSerializer>()));
-		services.AddSingleton<IVectorStore>(sp => sp.GetRequiredService<FileVectorStore>());
+		services.AddSingleton<IVectorStore>(sp => new InvalidatingVectorStoreDecorator(
+			sp.GetRequiredService<FileVectorStore>(),
+			GetInvalidator(sp), GetVersionStore(sp)));
 
 		services.AddSingleton<FileVectorIndexStore>(sp =>
 			new FileVectorIndexStore(
@@ -172,38 +202,45 @@ internal static class StorageExtensions
 			new FileVectorReindexReportStore(
 				sp.GetRequiredService<FilePathResolver>(),
 				sp.GetRequiredService<FileFormatSerializer>()));
-		services.AddSingleton<IVectorReindexReportStore>(sp => sp.GetRequiredService<FileVectorReindexReportStore>());
+		services.AddSingleton<IVectorReindexReportStore>(sp => new InvalidatingVectorReindexReportStoreDecorator(
+			sp.GetRequiredService<FileVectorReindexReportStore>(),
+			GetInvalidator(sp), GetVersionStore(sp)));
 		services.AddSingleton<FileVectorLifecycleMetadataReviewCandidateStore>(sp =>
 			new FileVectorLifecycleMetadataReviewCandidateStore(
 				sp.GetRequiredService<FilePathResolver>(),
 				sp.GetRequiredService<FileFormatSerializer>()));
-		services.AddSingleton<IVectorLifecycleMetadataReviewCandidateStore>(sp =>
-			sp.GetRequiredService<FileVectorLifecycleMetadataReviewCandidateStore>());
+		services.AddSingleton<IVectorLifecycleMetadataReviewCandidateStore>(sp => new InvalidatingVectorLifecycleMetadataReviewCandidateStoreDecorator(
+			sp.GetRequiredService<FileVectorLifecycleMetadataReviewCandidateStore>(),
+			GetInvalidator(sp), GetVersionStore(sp)));
 		services.AddSingleton<FileVectorLifecycleMetadataReviewStore>(sp =>
 			new FileVectorLifecycleMetadataReviewStore(
 				sp.GetRequiredService<FilePathResolver>(),
 				sp.GetRequiredService<FileFormatSerializer>()));
-		services.AddSingleton<IVectorLifecycleMetadataReviewStore>(sp =>
-			sp.GetRequiredService<FileVectorLifecycleMetadataReviewStore>());
+		services.AddSingleton<IVectorLifecycleMetadataReviewStore>(sp => new InvalidatingVectorLifecycleMetadataReviewStoreDecorator(
+			sp.GetRequiredService<FileVectorLifecycleMetadataReviewStore>(),
+			GetInvalidator(sp), GetVersionStore(sp)));
 		services.AddSingleton<FileVectorLifecycleSidecarMetadataStore>(sp =>
 			new FileVectorLifecycleSidecarMetadataStore(
 				sp.GetRequiredService<FilePathResolver>(),
 				sp.GetRequiredService<FileFormatSerializer>()));
-		services.AddSingleton<IVectorLifecycleSidecarMetadataStore>(sp =>
-			sp.GetRequiredService<FileVectorLifecycleSidecarMetadataStore>());
+		services.AddSingleton<IVectorLifecycleSidecarMetadataStore>(sp => new InvalidatingVectorLifecycleSidecarMetadataStoreDecorator(
+			sp.GetRequiredService<FileVectorLifecycleSidecarMetadataStore>(),
+			GetInvalidator(sp), GetVersionStore(sp)));
 
 		services.AddSingleton<FileContextPackageBuildTraceStore>(sp =>
 			new FileContextPackageBuildTraceStore(
 				sp.GetRequiredService<FilePathResolver>(),
 				sp.GetRequiredService<FileFormatSerializer>()));
-		services.AddSingleton<IContextPackageBuildTraceStore>(sp =>
-			sp.GetRequiredService<FileContextPackageBuildTraceStore>());
+		services.AddSingleton<IContextPackageBuildTraceStore>(sp => new InvalidatingContextPackageBuildTraceStoreDecorator(
+			sp.GetRequiredService<FileContextPackageBuildTraceStore>(),
+			GetInvalidator(sp), GetVersionStore(sp)));
 		services.AddSingleton<FileContextPackagePolicyStore>(sp =>
 			new FileContextPackagePolicyStore(
 				sp.GetRequiredService<FilePathResolver>(),
 				sp.GetRequiredService<FileFormatSerializer>()));
-		services.AddSingleton<IContextPackagePolicyStore>(sp =>
-			sp.GetRequiredService<FileContextPackagePolicyStore>());
+		services.AddSingleton<IContextPackagePolicyStore>(sp => new InvalidatingContextPackagePolicyStoreDecorator(
+			sp.GetRequiredService<FileContextPackagePolicyStore>(),
+			GetInvalidator(sp), GetVersionStore(sp)));
 
 		services.AddSingleton<FileRetrievalTraceStore>(sp =>
 			new FileRetrievalTraceStore(
@@ -216,8 +253,9 @@ internal static class StorageExtensions
 			new FileDecisionTraceStore(
 				sp.GetRequiredService<FilePathResolver>(),
 				sp.GetRequiredService<FileFormatSerializer>()));
-		services.AddSingleton<IDecisionTraceStore>(sp =>
-			sp.GetRequiredService<FileDecisionTraceStore>());
+		services.AddSingleton<IDecisionTraceStore>(sp => new InvalidatingDecisionTraceStoreDecorator(
+			sp.GetRequiredService<FileDecisionTraceStore>(),
+			GetInvalidator(sp), GetVersionStore(sp)));
 
         services.AddSingleton<FileShortTermMemoryStore>(sp =>
             new FileShortTermMemoryStore(
@@ -229,7 +267,9 @@ internal static class StorageExtensions
             new FileShortTermPromotionCandidateStore(
                 sp.GetRequiredService<FilePathResolver>(),
                 sp.GetRequiredService<FileFormatSerializer>()));
-        services.AddSingleton<IShortTermPromotionCandidateStore>(sp => sp.GetRequiredService<FileShortTermPromotionCandidateStore>());
+        services.AddSingleton<IShortTermPromotionCandidateStore>(sp => new InvalidatingShortTermPromotionCandidateStoreDecorator(
+            sp.GetRequiredService<FileShortTermPromotionCandidateStore>(),
+            GetInvalidator(sp), GetVersionStore(sp)));
 		services.AddSingleton<FileContextLearningStore>(sp =>
 			new FileContextLearningStore(
 				sp.GetRequiredService<FilePathResolver>(),
@@ -239,12 +279,16 @@ internal static class StorageExtensions
 			new FileLearningFeedbackStore(
 				sp.GetRequiredService<FilePathResolver>(),
 				sp.GetRequiredService<FileFormatSerializer>()));
-		services.AddSingleton<ILearningFeedbackStore>(sp => sp.GetRequiredService<FileLearningFeedbackStore>());
+		services.AddSingleton<ILearningFeedbackStore>(sp => new InvalidatingLearningFeedbackStoreDecorator(
+			sp.GetRequiredService<FileLearningFeedbackStore>(),
+			GetInvalidator(sp), GetVersionStore(sp)));
 		services.AddSingleton<FileLearningFeedbackReviewStore>(sp =>
 			new FileLearningFeedbackReviewStore(
 				sp.GetRequiredService<FilePathResolver>(),
 				sp.GetRequiredService<FileFormatSerializer>()));
-		services.AddSingleton<ILearningFeedbackReviewStore>(sp => sp.GetRequiredService<FileLearningFeedbackReviewStore>());
+		services.AddSingleton<ILearningFeedbackReviewStore>(sp => new InvalidatingLearningFeedbackReviewStoreDecorator(
+			sp.GetRequiredService<FileLearningFeedbackReviewStore>(),
+			GetInvalidator(sp), GetVersionStore(sp)));
         services.AddSingleton<FileStableReviewCandidateStore>(sp =>
             new FileStableReviewCandidateStore(
                 sp.GetRequiredService<FilePathResolver>(),
@@ -254,12 +298,16 @@ internal static class StorageExtensions
             new FileConstraintGapCandidateStore(
                 sp.GetRequiredService<FilePathResolver>(),
                 sp.GetRequiredService<FileFormatSerializer>()));
-        services.AddSingleton<IConstraintGapCandidateStore>(sp => sp.GetRequiredService<FileConstraintGapCandidateStore>());
+        services.AddSingleton<IConstraintGapCandidateStore>(sp => new InvalidatingConstraintGapCandidateStoreDecorator(
+            sp.GetRequiredService<FileConstraintGapCandidateStore>(),
+            GetInvalidator(sp), GetVersionStore(sp)));
         services.AddSingleton<FileCandidateConstraintReviewStore>(sp =>
             new FileCandidateConstraintReviewStore(
                 sp.GetRequiredService<FilePathResolver>(),
                 sp.GetRequiredService<FileFormatSerializer>()));
-        services.AddSingleton<ICandidateConstraintReviewStore>(sp => sp.GetRequiredService<FileCandidateConstraintReviewStore>());
+        services.AddSingleton<ICandidateConstraintReviewStore>(sp => new InvalidatingCandidateConstraintReviewStoreDecorator(
+            sp.GetRequiredService<FileCandidateConstraintReviewStore>(),
+            GetInvalidator(sp), GetVersionStore(sp)));
         services.AddSingleton<FileCandidateMemoryReviewStore>(sp =>
             new FileCandidateMemoryReviewStore(
                 sp.GetRequiredService<FilePathResolver>(),
@@ -269,7 +317,9 @@ internal static class StorageExtensions
             new FileStableLifecycleReviewStore(
                 sp.GetRequiredService<FilePathResolver>(),
                 sp.GetRequiredService<FileFormatSerializer>()));
-        services.AddSingleton<IStableLifecycleReviewStore>(sp => sp.GetRequiredService<FileStableLifecycleReviewStore>());
+        services.AddSingleton<IStableLifecycleReviewStore>(sp => new InvalidatingStableLifecycleReviewStoreDecorator(
+            sp.GetRequiredService<FileStableLifecycleReviewStore>(),
+            GetInvalidator(sp), GetVersionStore(sp)));
         services.AddSingleton<FileRelationReviewStore>(sp =>
             new FileRelationReviewStore(
                 sp.GetRequiredService<FilePathResolver>(),
@@ -281,16 +331,14 @@ internal static class StorageExtensions
         services.AddSingleton<IRelationReviewStore>(sp =>
         {
             var switchOptions = sp.GetService<RelationGovernanceProviderSwitchOptions>() ?? new RelationGovernanceProviderSwitchOptions();
-            if (!switchOptions.Enabled)
-            {
-                return sp.GetRequiredService<FileRelationReviewStore>();
-            }
-
-            return new ScopedRelationGovernanceReviewStore(
-                sp.GetRequiredService<FileRelationReviewStore>(),
-                sp.GetRequiredService<PostgresRelationReviewStore>(),
-                switchOptions,
-                sp.GetRequiredService<RelationGovernanceScopedServiceModeStatusService>());
+            IRelationReviewStore inner = !switchOptions.Enabled
+                ? sp.GetRequiredService<FileRelationReviewStore>()
+                : new ScopedRelationGovernanceReviewStore(
+                    sp.GetRequiredService<FileRelationReviewStore>(),
+                    sp.GetRequiredService<PostgresRelationReviewStore>(),
+                    switchOptions,
+                    sp.GetRequiredService<RelationGovernanceScopedServiceModeStatusService>());
+            return new InvalidatingRelationReviewStoreDecorator(inner, GetInvalidator(sp), GetVersionStore(sp));
         });
 
 		services.AddSingleton<FileMemoryStore>(sp =>
@@ -300,9 +348,15 @@ internal static class StorageExtensions
 		services.AddSingleton<IMemoryStore>(sp => new InvalidatingMemoryStoreDecorator(
 			sp.GetRequiredService<FileMemoryStore>(),
 			GetInvalidator(sp), GetVersionStore(sp)));
-		services.AddSingleton<IWorkingMemoryService>(sp => sp.GetRequiredService<FileMemoryStore>());
-		services.AddSingleton<IPromotionRecordStore>(sp => sp.GetRequiredService<FileMemoryStore>());
-		services.AddSingleton<IPromotionCandidateStore>(sp => sp.GetRequiredService<FileMemoryStore>());
+		services.AddSingleton<IWorkingMemoryService>(sp => new InvalidatingWorkingMemoryServiceDecorator(
+			sp.GetRequiredService<FileMemoryStore>(),
+			GetInvalidator(sp), GetVersionStore(sp)));
+		services.AddSingleton<IPromotionRecordStore>(sp => new InvalidatingPromotionRecordStoreDecorator(
+			sp.GetRequiredService<FileMemoryStore>(),
+			GetInvalidator(sp), GetVersionStore(sp)));
+		services.AddSingleton<IPromotionCandidateStore>(sp => new InvalidatingPromotionCandidateStoreDecorator(
+			sp.GetRequiredService<FileMemoryStore>(),
+			GetInvalidator(sp), GetVersionStore(sp)));
 
 		services.AddSingleton<FileConstraintStore>(sp =>
 			new FileConstraintStore(
@@ -386,7 +440,9 @@ internal static class StorageExtensions
 		services.AddSingleton<IContextStore>(sp => new InvalidatingContextStoreDecorator(
 			sp.GetRequiredService<InMemoryContextStore>(),
 			GetInvalidator(sp), GetVersionStore(sp)));
-		services.AddSingleton<IContextCollectionStore>(sp => sp.GetRequiredService<InMemoryContextStore>());
+		services.AddSingleton<IContextCollectionStore>(sp => new InvalidatingContextCollectionStoreDecorator(
+			sp.GetRequiredService<InMemoryContextStore>(),
+			GetInvalidator(sp), GetVersionStore(sp)));
 
 		services.AddSingleton<InMemoryContextIndex>();
 		services.AddSingleton<IContextIndex>(sp => new InvalidatingContextIndexDecorator(
@@ -395,56 +451,87 @@ internal static class StorageExtensions
         services.AddSingleton<InMemoryShortTermMemoryStore>();
         services.AddSingleton<IShortTermMemoryStore>(sp => sp.GetRequiredService<InMemoryShortTermMemoryStore>());
         services.AddSingleton<InMemoryShortTermPromotionCandidateStore>();
-        services.AddSingleton<IShortTermPromotionCandidateStore>(sp => sp.GetRequiredService<InMemoryShortTermPromotionCandidateStore>());
+        services.AddSingleton<IShortTermPromotionCandidateStore>(sp => new InvalidatingShortTermPromotionCandidateStoreDecorator(
+            sp.GetRequiredService<InMemoryShortTermPromotionCandidateStore>(),
+            GetInvalidator(sp), GetVersionStore(sp)));
         services.AddSingleton<InMemoryContextLearningStore>();
         services.AddSingleton<IContextLearningStore>(sp => sp.GetRequiredService<InMemoryContextLearningStore>());
         services.AddSingleton<InMemoryLearningFeedbackStore>();
-        services.AddSingleton<ILearningFeedbackStore>(sp => sp.GetRequiredService<InMemoryLearningFeedbackStore>());
+        services.AddSingleton<ILearningFeedbackStore>(sp => new InvalidatingLearningFeedbackStoreDecorator(
+            sp.GetRequiredService<InMemoryLearningFeedbackStore>(),
+            GetInvalidator(sp), GetVersionStore(sp)));
         services.AddSingleton<InMemoryLearningFeedbackReviewStore>();
-        services.AddSingleton<ILearningFeedbackReviewStore>(sp => sp.GetRequiredService<InMemoryLearningFeedbackReviewStore>());
+        services.AddSingleton<ILearningFeedbackReviewStore>(sp => new InvalidatingLearningFeedbackReviewStoreDecorator(
+            sp.GetRequiredService<InMemoryLearningFeedbackReviewStore>(),
+            GetInvalidator(sp), GetVersionStore(sp)));
         services.AddSingleton<InMemoryStableReviewCandidateStore>();
         services.AddSingleton<IStableReviewCandidateStore>(sp => sp.GetRequiredService<InMemoryStableReviewCandidateStore>());
         services.AddSingleton<InMemoryConstraintGapCandidateStore>();
-        services.AddSingleton<IConstraintGapCandidateStore>(sp => sp.GetRequiredService<InMemoryConstraintGapCandidateStore>());
+        services.AddSingleton<IConstraintGapCandidateStore>(sp => new InvalidatingConstraintGapCandidateStoreDecorator(
+            sp.GetRequiredService<InMemoryConstraintGapCandidateStore>(),
+            GetInvalidator(sp), GetVersionStore(sp)));
         services.AddSingleton<InMemoryCandidateConstraintReviewStore>();
-        services.AddSingleton<ICandidateConstraintReviewStore>(sp => sp.GetRequiredService<InMemoryCandidateConstraintReviewStore>());
+        services.AddSingleton<ICandidateConstraintReviewStore>(sp => new InvalidatingCandidateConstraintReviewStoreDecorator(
+            sp.GetRequiredService<InMemoryCandidateConstraintReviewStore>(),
+            GetInvalidator(sp), GetVersionStore(sp)));
         services.AddSingleton<InMemoryCandidateMemoryReviewStore>();
         services.AddSingleton<ICandidateMemoryReviewStore>(sp => sp.GetRequiredService<InMemoryCandidateMemoryReviewStore>());
         services.AddSingleton<InMemoryStableLifecycleReviewStore>();
-        services.AddSingleton<IStableLifecycleReviewStore>(sp => sp.GetRequiredService<InMemoryStableLifecycleReviewStore>());
+        services.AddSingleton<IStableLifecycleReviewStore>(sp => new InvalidatingStableLifecycleReviewStoreDecorator(
+            sp.GetRequiredService<InMemoryStableLifecycleReviewStore>(),
+            GetInvalidator(sp), GetVersionStore(sp)));
         services.AddSingleton<InMemoryRelationReviewStore>();
-        services.AddSingleton<IRelationReviewStore>(sp => sp.GetRequiredService<InMemoryRelationReviewStore>());
+        services.AddSingleton<IRelationReviewStore>(sp => new InvalidatingRelationReviewStoreDecorator(
+            sp.GetRequiredService<InMemoryRelationReviewStore>(),
+            GetInvalidator(sp), GetVersionStore(sp)));
 
 		services.AddSingleton<InMemoryVectorStore>();
-		services.AddSingleton<IVectorStore>(sp => sp.GetRequiredService<InMemoryVectorStore>());
+		services.AddSingleton<IVectorStore>(sp => new InvalidatingVectorStoreDecorator(
+			sp.GetRequiredService<InMemoryVectorStore>(),
+			GetInvalidator(sp), GetVersionStore(sp)));
 		services.AddSingleton<InMemoryVectorIndexStore>();
 		services.AddSingleton<IVectorIndexStore>(sp => sp.GetRequiredService<InMemoryVectorIndexStore>());
 		services.AddSingleton<InMemoryVectorReindexReportStore>();
-		services.AddSingleton<IVectorReindexReportStore>(sp => sp.GetRequiredService<InMemoryVectorReindexReportStore>());
+		services.AddSingleton<IVectorReindexReportStore>(sp => new InvalidatingVectorReindexReportStoreDecorator(
+			sp.GetRequiredService<InMemoryVectorReindexReportStore>(),
+			GetInvalidator(sp), GetVersionStore(sp)));
 		services.AddSingleton<InMemoryVectorLifecycleMetadataReviewCandidateStore>();
-		services.AddSingleton<IVectorLifecycleMetadataReviewCandidateStore>(sp =>
-			sp.GetRequiredService<InMemoryVectorLifecycleMetadataReviewCandidateStore>());
+		services.AddSingleton<IVectorLifecycleMetadataReviewCandidateStore>(sp => new InvalidatingVectorLifecycleMetadataReviewCandidateStoreDecorator(
+			sp.GetRequiredService<InMemoryVectorLifecycleMetadataReviewCandidateStore>(),
+			GetInvalidator(sp), GetVersionStore(sp)));
 		services.AddSingleton<InMemoryVectorLifecycleMetadataReviewStore>();
-		services.AddSingleton<IVectorLifecycleMetadataReviewStore>(sp =>
-			sp.GetRequiredService<InMemoryVectorLifecycleMetadataReviewStore>());
+		services.AddSingleton<IVectorLifecycleMetadataReviewStore>(sp => new InvalidatingVectorLifecycleMetadataReviewStoreDecorator(
+			sp.GetRequiredService<InMemoryVectorLifecycleMetadataReviewStore>(),
+			GetInvalidator(sp), GetVersionStore(sp)));
 		services.AddSingleton<InMemoryVectorLifecycleSidecarMetadataStore>();
-		services.AddSingleton<IVectorLifecycleSidecarMetadataStore>(sp =>
-			sp.GetRequiredService<InMemoryVectorLifecycleSidecarMetadataStore>());
+		services.AddSingleton<IVectorLifecycleSidecarMetadataStore>(sp => new InvalidatingVectorLifecycleSidecarMetadataStoreDecorator(
+			sp.GetRequiredService<InMemoryVectorLifecycleSidecarMetadataStore>(),
+			GetInvalidator(sp), GetVersionStore(sp)));
 
 		services.AddSingleton<InMemoryRetrievalTraceStore>();
 		services.AddSingleton<IRetrievalTraceStore>(sp => sp.GetRequiredService<InMemoryRetrievalTraceStore>());
 		services.AddSingleton<InMemoryDecisionTraceStore>();
-		services.AddSingleton<IDecisionTraceStore>(sp => sp.GetRequiredService<InMemoryDecisionTraceStore>());
+		services.AddSingleton<IDecisionTraceStore>(sp => new InvalidatingDecisionTraceStoreDecorator(
+			sp.GetRequiredService<InMemoryDecisionTraceStore>(),
+			GetInvalidator(sp), GetVersionStore(sp)));
 		services.AddSingleton<InMemoryContextPackagePolicyStore>();
-		services.AddSingleton<IContextPackagePolicyStore>(sp => sp.GetRequiredService<InMemoryContextPackagePolicyStore>());
+		services.AddSingleton<IContextPackagePolicyStore>(sp => new InvalidatingContextPackagePolicyStoreDecorator(
+			sp.GetRequiredService<InMemoryContextPackagePolicyStore>(),
+			GetInvalidator(sp), GetVersionStore(sp)));
 
 		services.AddSingleton<InMemoryMemoryStore>();
 		services.AddSingleton<IMemoryStore>(sp => new InvalidatingMemoryStoreDecorator(
 			sp.GetRequiredService<InMemoryMemoryStore>(),
 			GetInvalidator(sp), GetVersionStore(sp)));
-		services.AddSingleton<IWorkingMemoryService>(sp => sp.GetRequiredService<InMemoryMemoryStore>());
-		services.AddSingleton<IPromotionRecordStore>(sp => sp.GetRequiredService<InMemoryMemoryStore>());
-		services.AddSingleton<IPromotionCandidateStore>(sp => sp.GetRequiredService<InMemoryMemoryStore>());
+		services.AddSingleton<IWorkingMemoryService>(sp => new InvalidatingWorkingMemoryServiceDecorator(
+			sp.GetRequiredService<InMemoryMemoryStore>(),
+			GetInvalidator(sp), GetVersionStore(sp)));
+		services.AddSingleton<IPromotionRecordStore>(sp => new InvalidatingPromotionRecordStoreDecorator(
+			sp.GetRequiredService<InMemoryMemoryStore>(),
+			GetInvalidator(sp), GetVersionStore(sp)));
+		services.AddSingleton<IPromotionCandidateStore>(sp => new InvalidatingPromotionCandidateStoreDecorator(
+			sp.GetRequiredService<InMemoryMemoryStore>(),
+			GetInvalidator(sp), GetVersionStore(sp)));
 
 		services.AddSingleton<InMemoryConstraintStore>();
 		services.AddSingleton<IConstraintStore>(sp => new InvalidatingConstraintStoreDecorator(
