@@ -639,54 +639,6 @@ public sealed class ContextCoreVectorIndexFoundationTests
     }
 
     [TestMethod]
-    public void VectorQwen3ReadinessGate_A3RecallBelowThreshold_ShouldBlock()
-    {
-        var report = new VectorQwen3ProviderEvalRunner().BuildReadinessGate(
-            NewSucceededQwenSmokeReport(),
-            NewShadowReport(0.79, riskAfterPolicy: 0),
-            NewShadowReport(0.85, riskAfterPolicy: 0),
-            pgVectorParityPassed: true,
-            p15GatePassed: true);
-
-        Assert.IsFalse(report.Passed);
-        Assert.AreEqual("BlockedByA3Recall", report.Recommendation);
-        Assert.IsTrue(report.BlockedReasons.Contains("A3RecallBelow80Percent"));
-        Assert.IsFalse(report.FormalRetrievalAllowed);
-    }
-
-    [TestMethod]
-    public void VectorQwen3ReadinessGate_RiskAfterPolicy_ShouldBlock()
-    {
-        var report = new VectorQwen3ProviderEvalRunner().BuildReadinessGate(
-            NewSucceededQwenSmokeReport(),
-            NewShadowReport(0.85, riskAfterPolicy: 1),
-            NewShadowReport(0.85, riskAfterPolicy: 0),
-            pgVectorParityPassed: true,
-            p15GatePassed: true);
-
-        Assert.IsFalse(report.Passed);
-        Assert.AreEqual("BlockedByRisk", report.Recommendation);
-        Assert.IsTrue(report.BlockedReasons.Contains("RiskAfterPolicyNonZero"));
-    }
-
-    [TestMethod]
-    public void VectorQwen3ReadinessGate_ProjectionMismatch_ShouldBlock()
-    {
-        var report = new VectorQwen3ProviderEvalRunner().BuildReadinessGate(
-            NewSucceededQwenSmokeReport(),
-            NewShadowReport(0.85, riskAfterPolicy: 0),
-            NewShadowReport(0.85, riskAfterPolicy: 0),
-            pgVectorParityPassed: false,
-            p15GatePassed: true,
-            projectionMismatchCount: 1);
-
-        Assert.IsFalse(report.Passed);
-        Assert.AreEqual("BlockedByProjectionMismatch", report.Recommendation);
-        Assert.IsTrue(report.BlockedReasons.Contains("ProjectionMismatchNonZero"));
-        Assert.IsTrue(report.BlockedReasons.Contains("PgVectorFileSystemParityNotPassed"));
-    }
-
-    [TestMethod]
     public async Task VectorQueryPreview_DimensionMismatch_ShouldBlockCandidateWithDiagnostics()
     {
         var store = new InMemoryVectorIndexStore();
@@ -1666,48 +1618,6 @@ public sealed class ContextCoreVectorIndexFoundationTests
         return new HttpResponseMessage(HttpStatusCode.OK)
         {
             Content = new StringContent(json, Encoding.UTF8, "application/json")
-        };
-    }
-
-    private static EmbeddingProviderSmokeReport NewSucceededQwenSmokeReport()
-    {
-        return new EmbeddingProviderSmokeReport
-        {
-            ProviderId = "qwen3-embedding-0.6b-onnx",
-            ProviderType = EmbeddingProviderTypes.OnnxLocal,
-            EmbeddingModel = "qwen3-embedding-0.6b",
-            ModelPath = "src/ContextCore.Embedding/Models/qwen3-embedding-0.6b-onnx/model_int8.onnx",
-            TokenizerPath = "src/ContextCore.Embedding/Models/qwen3-embedding-0.6b-onnx/tokenizer.json",
-            ExpectedDimension = 1024,
-            ActualDimension = 1024,
-            UseForRuntime = false,
-            ProviderEnabled = true,
-            ModelPathExists = true,
-            TokenizerPathExists = true,
-            TokenizationWorks = true,
-            OnnxInferenceWorks = true,
-            DimensionMatchesConfig = true,
-            NormalizationWorks = true,
-            BatchEmbeddingWorks = true,
-            Succeeded = true
-        };
-    }
-
-    private static VectorQueryShadowEvalReport NewShadowReport(double recall, int riskAfterPolicy)
-    {
-        return new VectorQueryShadowEvalReport
-        {
-            Samples = 10,
-            QueryCount = 10,
-            CandidateCount = 100,
-            MustHitRecallAfterPolicy = recall,
-            MustNotHitRiskAfterPolicy = 0,
-            LifecycleRiskAfterPolicy = 0,
-            RiskAfterPolicy = riskAfterPolicy,
-            FormalOutputChanged = 0,
-            Recommendation = riskAfterPolicy == 0
-                ? VectorQueryShadowRecommendations.ReadyForRetrievalShadow
-                : "BlockedByRisk"
         };
     }
 

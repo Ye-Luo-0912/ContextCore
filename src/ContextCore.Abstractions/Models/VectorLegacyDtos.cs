@@ -1,4 +1,4 @@
-﻿namespace ContextCore.Abstractions.Models;
+namespace ContextCore.Abstractions.Models;
 
 
 /// <summary>单条 vector index 诊断结果。</summary>
@@ -718,81 +718,6 @@ public sealed class VectorLifecycleMetadataEvidenceSourceSnapshot
 
     public Dictionary<string, string> Metadata { get; init; } = new(StringComparer.OrdinalIgnoreCase);
 }
-
-
-/// <summary>单条 stress recall failure detail。</summary>
-public sealed class RetrievalDatasetV2StressRecallFailureDetail
-{
-    public string SampleId { get; init; } = string.Empty;
-
-    public string Split { get; init; } = string.Empty;
-
-    public string Difficulty { get; init; } = string.Empty;
-
-    public string QueryText { get; init; } = string.Empty;
-
-    public string ExpectedTargetSection { get; init; } = string.Empty;
-
-    public IReadOnlyList<string> MustHitItemIds { get; init; } = Array.Empty<string>();
-
-    public IReadOnlyList<string> MustNotHitItemIds { get; init; } = Array.Empty<string>();
-
-    public IReadOnlyList<string> DenseTopK { get; init; } = Array.Empty<string>();
-
-    public IReadOnlyList<string> LexicalTopK { get; init; } = Array.Empty<string>();
-
-    public IReadOnlyList<string> AnchorTopK { get; init; } = Array.Empty<string>();
-
-    public IReadOnlyList<string> HybridTopK { get; init; } = Array.Empty<string>();
-
-    public bool MustHitPresentInCorpus { get; init; }
-
-    public bool MustHitPresentInCandidateSet { get; init; }
-
-    public int MustHitRank { get; init; }
-
-    public bool MustHitBlockedByEligibility { get; init; }
-
-    public bool MustHitTargetSectionMismatch { get; init; }
-
-    public string NearestWrongCandidateId { get; init; } = string.Empty;
-
-    public string NearestWrongCandidateKind { get; init; } = string.Empty;
-
-    public string FailureReason { get; init; } = RetrievalDatasetV2StressFailureReasons.Unknown;
-
-    public string RecommendedRepair { get; init; } = string.Empty;
-}
-
-
-/// <summary>Stress failure triage 的 profile 对比统计。</summary>
-public sealed class RetrievalDatasetV2StressProfileComparison
-{
-    public string ComparisonName { get; init; } = string.Empty;
-
-    public string LeftProfileName { get; init; } = string.Empty;
-
-    public string RightProfileName { get; init; } = string.Empty;
-
-    public int SampleCount { get; init; }
-
-    public int LeftHitCount { get; init; }
-
-    public int RightHitCount { get; init; }
-
-    public int LeftOnlyWinCount { get; init; }
-
-    public int RightOnlyWinCount { get; init; }
-
-    public int BothHitCount { get; init; }
-
-    public int BothMissCount { get; init; }
-
-    public double LeftRecall { get; init; }
-
-    public double RightRecall { get; init; }
-}
-
 
 /// <summary>Hybrid scoring risk regression 分类。</summary>
 public static class HybridScoringRiskRegressionReasons

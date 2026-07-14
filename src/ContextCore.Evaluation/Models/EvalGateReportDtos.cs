@@ -399,61 +399,6 @@ public sealed class SourceAwareRankingProfileReport
     public bool VectorStoreBindingChanged { get; init; }
 }
 
-public sealed class SourceAwareRankingRepairReport
-{
-    public string OperationId { get; init; } = string.Empty;
-    public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
-    public bool ReportPassed { get; init; }
-    public bool GatePassed { get; init; }
-    public string Recommendation { get; init; } = SourceAwareRankingRepairRecommendations.KeepPreviewOnly;
-    public string SelectedProfileId { get; init; } = string.Empty;
-    public RetrievalEvalProtocol Protocol { get; init; } = new();
-    public int CorpusItemCount { get; init; }
-    public int SampleCount { get; init; }
-    public SourceAwareBlindHoldoutManifest BlindHoldoutManifest { get; init; } = new();
-    public IReadOnlyList<RetrievalDatasetV2CorpusItem> BlindHoldoutCorpusItems { get; init; } = Array.Empty<RetrievalDatasetV2CorpusItem>();
-    public IReadOnlyList<RetrievalDatasetV2Sample> BlindHoldoutSamples { get; init; } = Array.Empty<RetrievalDatasetV2Sample>();
-    public SourceAwareRankingProfileReport DenseBaseline { get; init; } = new();
-    public SourceAwareRankingProfileReport SelectedProfile { get; init; } = new();
-    public IReadOnlyList<SourceAwareRankingProfileReport> Profiles { get; init; } = Array.Empty<SourceAwareRankingProfileReport>();
-    public double TrainDevRecallDelta { get; init; }
-    public double TrainDevMrrDelta { get; init; }
-    public double TrainDevPrecisionDelta { get; init; }
-    public double TestRecallDelta { get; init; }
-    public double TestMrrDelta { get; init; }
-    public double TestPrecisionDelta { get; init; }
-    public double HoldoutRecallDelta { get; init; }
-    public double HoldoutMrrDelta { get; init; }
-    public double HoldoutPrecisionDelta { get; init; }
-    public double BlindHoldoutRecallDelta { get; init; }
-    public double BlindHoldoutMrrDelta { get; init; }
-    public double BlindHoldoutPrecisionDelta { get; init; }
-    public int DenseWinnerLostCount { get; init; }
-    public int UniqueSourceRecoveryCount { get; init; }
-    public int SourceNoiseCount { get; init; }
-    public double FallbackRate { get; init; }
-    public int RiskAfterPolicy { get; init; }
-    public int MustNotHitRiskAfterPolicy { get; init; }
-    public int LifecycleRiskAfterPolicy { get; init; }
-    public bool EvalLabelScoringDetected { get; init; }
-    public bool EvalLabelCandidateGenerationDetected { get; init; }
-    public int FormalOutputChanged { get; init; }
-    public bool FormalPackageWritten { get; init; }
-    public bool PackageOutputChanged { get; init; }
-    public bool PackingPolicyChanged { get; init; }
-    public bool RuntimeMutated { get; init; }
-    public bool VectorStoreBindingChanged { get; init; }
-    public bool FormalRetrievalAllowed { get; init; }
-    public bool RuntimeSwitchAllowed { get; init; }
-    public bool ReadyForRuntimeSwitch { get; init; }
-    public bool UseForRuntime { get; init; }
-    public bool RuntimeChangeGatePassed { get; init; }
-    public bool V511ProtocolGatePassed { get; init; }
-    public bool V512EnrichmentGatePassed { get; init; }
-    public RuntimeObservableFeatureContractSourceScan SourceScan { get; init; } = new();
-    public IReadOnlyDictionary<string, string> SourceReports { get; init; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-    public IReadOnlyList<string> BlockedReasons { get; init; } = Array.Empty<string>();
-}
 
 public static class OutputTokenPriorityShadowGateRecommendations
 {
@@ -1607,51 +1552,6 @@ public sealed class ShadowAdapterDeltaDiagnosticsReport
 }
 
 
-/// <summary>Retrieval Dataset V2 readiness gate 报告。</summary>
-public sealed class RetrievalDatasetV2ReadinessGateReport
-{
-    public string OperationId { get; init; } = string.Empty;
-
-    public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
-
-    public string DatasetId { get; init; } = string.Empty;
-
-    public bool GatePassed { get; init; }
-
-    public double RecallThreshold { get; init; }
-
-    public double BestRecallAfterPolicy { get; init; }
-
-    public double BestMrrAfterPolicy { get; init; }
-
-    public int RiskAfterPolicy { get; init; }
-
-    public int MustNotHitRiskAfterPolicy { get; init; }
-
-    public int LifecycleRiskAfterPolicy { get; init; }
-
-    public int FormalOutputChanged { get; init; }
-
-    public bool PgVectorParityPassed { get; init; }
-
-    public bool MaterializationGatePassed { get; init; }
-
-    public int ValidationIssueCount { get; init; }
-
-    public int MissingEvidenceCount { get; init; }
-
-    public int MissingProvenanceCount { get; init; }
-
-    public bool UseForRuntime { get; init; }
-
-    public bool FormalRetrievalAllowed { get; init; }
-
-    public string Recommendation { get; init; } = RetrievalDatasetV2ShadowEvalRecommendations.KeepPreviewOnly;
-
-    public IReadOnlyList<string> BlockedReasons { get; init; } = Array.Empty<string>();
-}
-
-
 /// <summary>A3 / Extended retrieval dataset alignment audit 汇总。</summary>
 public sealed class RetrievalDatasetAlignmentAuditSummaryReport
 {
@@ -1672,95 +1572,6 @@ public sealed class RetrievalDatasetAlignmentAuditSummaryReport
     public bool FormalRetrievalAllowed { get; init; }
 
     public bool UseForRuntime { get; init; }
-}
-
-
-/// <summary>A3 / Extended lifecycle-filtered mustHit triage 汇总。</summary>
-public sealed class VectorEligibilityRecallLossTriageSummaryReport
-{
-    public string OperationId { get; init; } = string.Empty;
-
-    public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
-
-    public IReadOnlyList<VectorEligibilityRecallLossTriageReport> Reports { get; init; } =
-        Array.Empty<VectorEligibilityRecallLossTriageReport>();
-
-    public int TotalFilteredMustHit { get; init; }
-
-    public int CorrectlyBlockedCount { get; init; }
-
-    public int RouteToHistoricalCount { get; init; }
-
-    public int RouteToAuditCount { get; init; }
-
-    public int MetadataRepairNeededCount { get; init; }
-
-    public int EvalExpectationReviewNeededCount { get; init; }
-
-    public int UnsafeToRecoverCount { get; init; }
-
-    public int RecoverableWithoutNormalContextCount { get; init; }
-
-    public int RecoverableToNormalContextCount { get; init; }
-
-    public string Recommendation { get; init; } = VectorEligibilityRecallLossTriageRecommendations.KeepPreviewOnly;
-
-    public IReadOnlyDictionary<string, int> CategoryBreakdown { get; init; } =
-        new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-
-    public bool FormalRetrievalAllowed { get; init; }
-
-    public bool UseForRuntime { get; init; }
-}
-
-
-/// <summary>Retrieval Dataset V2 shadow eval 汇总报告。</summary>
-public sealed class RetrievalDatasetV2ShadowEvalSummaryReport
-{
-    public string OperationId { get; init; } = string.Empty;
-
-    public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
-
-    public string DatasetId { get; init; } = string.Empty;
-
-    public string CorpusHash { get; init; } = string.Empty;
-
-    public string SamplesHash { get; init; } = string.Empty;
-
-    public int CorpusItemCount { get; init; }
-
-    public int SampleCount { get; init; }
-
-    public string BestProfileName { get; init; } = string.Empty;
-
-    public double BestRecallAfterPolicy { get; init; }
-
-    public double BestMrrAfterPolicy { get; init; }
-
-    public int BestRiskAfterPolicy { get; init; }
-
-    public bool PgVectorParityPassed { get; init; }
-
-    public double PgVectorTopKOverlapRate { get; init; }
-
-    public int PgVectorOrderingMismatchCount { get; init; }
-
-    public double PgVectorScoreDeltaMax { get; init; }
-
-    public int PgVectorMetadataMismatchCount { get; init; }
-
-    public int PgVectorEligibilityMetadataMismatchCount { get; init; }
-
-    public int PgVectorRiskProjectionMismatchCount { get; init; }
-
-    public bool UseForRuntime { get; init; }
-
-    public bool FormalRetrievalAllowed { get; init; }
-
-    public string Recommendation { get; init; } = RetrievalDatasetV2ShadowEvalRecommendations.KeepPreviewOnly;
-
-    public IReadOnlyList<RetrievalDatasetV2ShadowEvalProfileReport> Profiles { get; init; } =
-        Array.Empty<RetrievalDatasetV2ShadowEvalProfileReport>();
 }
 
 

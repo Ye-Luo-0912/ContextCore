@@ -49,15 +49,9 @@ public static partial class EvalCommand
             (service, args, sub, ct) => ExecuteLearningRankerAnalysisAsync(sub, args, ct));
 
         // === graph / relation ===
-        Reg("relation-expansion-profile-shadow",
-            "  eval relation-expansion-profile-shadow [--out <path.json>] [--md-out <path.md>]",
-            (service, args, sub, ct) => ExecuteRelationExpansionProfileShadowAsync(args, ct));
         Reg("relation-corpus-hygiene",
             "  eval relation-corpus-hygiene [--out <path.json>] [--md-out <path.md>]",
             (service, args, sub, ct) => ExecuteRelationCorpusHygieneAsync(args, ct));
-        Reg("relation-expansion-shadow-eval",
-            "  eval relation-expansion-shadow-eval [--category <name>] [--out-a3 <path.json>] [--out-extended <path.json>] [--md-out <path.md>]",
-            (service, args, sub, ct) => ExecuteRelationExpansionShadowEvalAsync(args, ct));
 
         // === vector ===
         Reg("vector-reindex-plan",
@@ -78,38 +72,9 @@ public static partial class EvalCommand
         Reg("embedding-provider-smoke",
             "  eval embedding-provider-smoke [--provider deterministic-hash|onnx-local|qwen3] [--model-path <local.onnx>] [--tokenizer-path <vocab.txt|tokenizer.json>] [--dimension <n>] [--out <path.json>] [--md-out <path.md>]",
             (service, args, sub, ct) => ExecuteEmbeddingProviderSmokeAsync(args, ct));
-        Reg("vector-provider-comparison",
-            "  eval vector-provider-comparison [--providers current,qwen3] [--out <path.json>] [--md-out <path.md>]",
-            (service, args, sub, ct) => ExecuteVectorProviderComparisonV310Async(service, args, ct));
         Reg("vector-retrieval-dataset-alignment-audit",
             "  eval vector-retrieval-dataset-alignment-audit [--category <name>] [--profile <id>] [--provider deterministic-hash|onnx-local|qwen3] [--out-a3 <path.json>] [--out-extended <path.json>] [--out-summary <path.json>] [--md-out <path.md>]",
             (service, args, sub, ct) => ExecuteVectorRetrievalDatasetAlignmentAuditAsync(service, args, sub, ct));
-
-        // vector-lifecycle-metadata-review-batch-* (多别名同一 handler)
-        var lifecycleBatchHandler = (EvalSubcommandHandler)((service, args, sub, ct) =>
-            ExecuteVectorLifecycleMetadataReviewBatchAsync(service, args, sub, ct));
-        Reg("vector-lifecycle-metadata-review-batch-create",
-            "  eval vector-lifecycle-metadata-review-batch-create [--workspace <id>] [--collection <id>]", lifecycleBatchHandler);
-        Reg("vector-lifecycle-metadata-review-batch-export",
-            "  eval vector-lifecycle-metadata-review-batch-export [--workspace <id>] [--collection <id>] [--out <path.json>]", lifecycleBatchHandler);
-        Reg("vector-lifecycle-metadata-review-batch-import",
-            "  eval vector-lifecycle-metadata-review-batch-import --input <path.json> [--workspace <id>] [--collection <id>]", lifecycleBatchHandler);
-        Reg("vector-lifecycle-metadata-review-batch-validate",
-            "  eval vector-lifecycle-metadata-review-batch-validate --input <path.json>", lifecycleBatchHandler);
-        Reg("vector-lifecycle-metadata-review-batch-apply-preview",
-            "  eval vector-lifecycle-metadata-review-batch-apply-preview --input <path.json> [--workspace <id>] [--collection <id>]", lifecycleBatchHandler);
-        Reg("vector-lifecycle-metadata-review-batch-import-smoke",
-            "  eval vector-lifecycle-metadata-review-batch-import-smoke", lifecycleBatchHandler);
-
-        // === retrieval-dataset-v2 ===
-        var datasetV2GenHandler = (EvalSubcommandHandler)((service, args, sub, ct) =>
-            ExecuteRetrievalDatasetV2GenerationAsync(service, args, sub, ct));
-        Reg("retrieval-dataset-v2-generate", null, datasetV2GenHandler);
-        Reg("retrieval-dataset-v2-validate", null, datasetV2GenHandler);
-        Reg("retrieval-dataset-v2-quality", null, datasetV2GenHandler);
-        Reg("retrieval-dataset-v2-materialization-gate", null, datasetV2GenHandler);
-        Reg("retrieval-dataset-v2-shadow-eval", null,
-            (service, args, sub, ct) => ExecuteRetrievalDatasetV2ShadowEvalAsync(args, sub, ct));
 
         // === service ===
         Reg("service-api-contract-report", "  eval service-api-contract-report [--production]",
