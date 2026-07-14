@@ -376,15 +376,38 @@ internal static class WorkingMemoryRecaller
         // ── 维度 7: TaskIntentScore ──────────────────────────────────────────
         // 提取 query 词中含义词（长度>=2的中文词或英文词）匹配 content
         double taskIntentScore = 0.0;
-        var rawQueryAnchor = anchors.Where(a =>
-            ContextRecallSignalPolicy.IsSpecificRecallAnchor(a) &&
-            string.Equals(a.Source, "request.query", StringComparison.OrdinalIgnoreCase) &&
-            a.Name.Length >= 2).Take(ScoringProfile.TaskIntentMaxAnchors).ToArray();
-        if (rawQueryAnchor.Length > 0 && content.Length > 0)
+        if (content.Length > 0)
         {
-            var intentHits = rawQueryAnchor.Count(a =>
-                content.Contains(a.Name, StringComparison.OrdinalIgnoreCase));
-            taskIntentScore = Math.Min(ScoringProfile.TaskIntentScoreCap, intentHits * ScoringProfile.TaskIntentScorePerHit);
+            var intentHits = 0;
+            var queryAnchorCount = 0;
+            foreach (var anchor in anchors)
+            {
+                if (queryAnchorCount >= ScoringProfile.TaskIntentMaxAnchors)
+                {
+                    break;
+                }
+                if (!ContextRecallSignalPolicy.IsSpecificRecallAnchor(anchor))
+                {
+                    continue;
+                }
+                if (!string.Equals(anchor.Source, "request.query", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+                if (anchor.Name.Length < 2)
+                {
+                    continue;
+                }
+                queryAnchorCount++;
+                if (content.Contains(anchor.Name, StringComparison.OrdinalIgnoreCase))
+                {
+                    intentHits++;
+                }
+            }
+            if (queryAnchorCount > 0)
+            {
+                taskIntentScore = Math.Min(ScoringProfile.TaskIntentScoreCap, intentHits * ScoringProfile.TaskIntentScorePerHit);
+            }
         }
 
         // ── 维度 7.5: RelevanceFilter ────────────────────────────────────────
@@ -542,27 +565,27 @@ internal static class WorkingMemoryRecaller
         var score = reserveIds is not null && reserveIds.Contains(item.Id) ? 10_000.0 : 0.0;
         if (IsMode(modeName, "AutomationMode", "Automation"))
         {
-            if (ContainsAny(searchText, DomainKeywords.AutomationModeWorkingMemoryReserveKeywords.ToArray()))
+            if (ContainsAny(searchText, DomainKeywords.AutomationModeWorkingMemoryReserveKeywords))
             {
                 score += 900.0;
             }
         }
         else if (IsMode(modeName, "NovelMode", "Novel"))
         {
-            if (ContainsAny(searchText, DomainKeywords.NovelModeWorkingMemoryReserveKeywords.ToArray()))
+            if (ContainsAny(searchText, DomainKeywords.NovelModeWorkingMemoryReserveKeywords))
             {
                 score += 900.0;
             }
         }
         else if (IsMode(modeName, "ChatMode", "Chat"))
         {
-            if (ContainsAny(searchText, DomainKeywords.ChatModeBoostKeywords.ToArray()))
+            if (ContainsAny(searchText, DomainKeywords.ChatModeBoostKeywords))
             {
                 score += 900.0;
             }
         }
 
-        if (ContainsAny(searchText, DomainKeywords.FixturePenaltyKeywords.ToArray()))
+        if (ContainsAny(searchText, DomainKeywords.FixturePenaltyKeywords))
         {
             score -= 500.0;
         }
@@ -578,19 +601,19 @@ internal static class WorkingMemoryRecaller
         var searchText = CreateMemorySearchText(item);
         var score = reserveIds is not null && reserveIds.Contains(item.Id) ? 10_000.0 : 0.0;
         if (IsMode(modeName, "ChatMode", "Chat") &&
-            ContainsAny(searchText, DomainKeywords.ChatModeStableMemoryReserveKeywords.ToArray()))
+            ContainsAny(searchText, DomainKeywords.ChatModeStableMemoryReserveKeywords))
         {
             score += 900.0;
         }
 
         if (IsMode(modeName, "NovelMode", "Novel") &&
-            ContainsAny(searchText, DomainKeywords.NovelModeStableMemoryReserveKeywords.ToArray()))
+            ContainsAny(searchText, DomainKeywords.NovelModeStableMemoryReserveKeywords))
         {
             score += 600.0;
         }
 
         if (IsMode(modeName, "AutomationMode", "Automation") &&
-            ContainsAny(searchText, DomainKeywords.AutomationModeStableMemoryReserveKeywords.ToArray()))
+            ContainsAny(searchText, DomainKeywords.AutomationModeStableMemoryReserveKeywords))
         {
             score += 600.0;
         }
@@ -605,8 +628,18 @@ internal static class WorkingMemoryRecaller
             string.Equals(normalized, NormalizeModeName(item), StringComparison.OrdinalIgnoreCase));
     }
 
-    internal static bool ContainsAny(string text, params string[] values) =>
-        values.Any(value => text.Contains(value, StringComparison.OrdinalIgnoreCase));
+    internal static bool ContainsAny(string text, IReadOnlyList<string> values)
+    {
+        for (var i = 0; i < values.Count; i++)
+        {
+            if (text.Contains(values[i], StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     internal static string NormalizeModeName(string? mode)
     {

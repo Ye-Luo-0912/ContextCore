@@ -30,6 +30,32 @@ public sealed class ContextEvalRunner
     }
 
     /// <summary>
+    /// 评测适配层：根据 seed 样本的 Query 关键词判定是否为审计模式查询，
+    /// 将其翻译为显式 <see cref="ContextPackageRequest.IsAuditMode"/> 信号。
+    /// 生产代码不再做 QueryText 关键词推断，由评测运行器在此显式注入。
+    /// </summary>
+    private static bool IsAuditModeQuery(string? query)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            return false;
+        }
+
+        return query.Contains("废弃", StringComparison.OrdinalIgnoreCase)
+            || query.Contains("作废", StringComparison.OrdinalIgnoreCase)
+            || query.Contains("草稿", StringComparison.OrdinalIgnoreCase)
+            || query.Contains("草案", StringComparison.OrdinalIgnoreCase)
+            || query.Contains("旧版", StringComparison.OrdinalIgnoreCase)
+            || query.Contains("旧", StringComparison.OrdinalIgnoreCase)
+            || query.Contains("放弃", StringComparison.OrdinalIgnoreCase)
+            || query.Contains("舍弃", StringComparison.OrdinalIgnoreCase)
+            || query.Contains("审计", StringComparison.OrdinalIgnoreCase)
+            || query.Contains("legacy", StringComparison.OrdinalIgnoreCase)
+            || query.Contains("deprecated", StringComparison.OrdinalIgnoreCase)
+            || query.Contains("audit", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// 运行指定目录下的评测。
     /// </summary>
     /// <param name="contextsRootPath">评测 contexts 目录（例如 eval/contexts/）</param>
@@ -546,6 +572,7 @@ public sealed class ContextEvalRunner
             CollectionId = collectionId,
             QueryText = sample.Query,
             TokenBudget = tokenBudget,
+            IsAuditMode = IsAuditModeQuery(sample.Query),
             Policy = new ContextPackagePolicy
             {
                 Id = "eval-policy",
@@ -716,20 +743,7 @@ public sealed class ContextEvalRunner
             var hasDuplicate = packageResult.SelectedItems.Any(item => item.Reason == "referenced by duplicate section");
             var hasBudgetPressure = packageResult.DroppedItems.Any(item => item.Reason.Contains("token budget"));
 
-            var isAuditMode = !string.IsNullOrWhiteSpace(sample.Query) && (
-                sample.Query.Contains("废弃", StringComparison.OrdinalIgnoreCase)
-                || sample.Query.Contains("作废", StringComparison.OrdinalIgnoreCase)
-                || sample.Query.Contains("草稿", StringComparison.OrdinalIgnoreCase)
-                || sample.Query.Contains("草案", StringComparison.OrdinalIgnoreCase)
-                || sample.Query.Contains("旧版", StringComparison.OrdinalIgnoreCase)
-                || sample.Query.Contains("旧", StringComparison.OrdinalIgnoreCase)
-                || sample.Query.Contains("放弃", StringComparison.OrdinalIgnoreCase)
-                || sample.Query.Contains("舍弃", StringComparison.OrdinalIgnoreCase)
-                || sample.Query.Contains("审计", StringComparison.OrdinalIgnoreCase)
-                || sample.Query.Contains("legacy", StringComparison.OrdinalIgnoreCase)
-                || sample.Query.Contains("deprecated", StringComparison.OrdinalIgnoreCase)
-                || sample.Query.Contains("audit", StringComparison.OrdinalIgnoreCase)
-            );
+            var isAuditMode = IsAuditModeQuery(sample.Query);
 
             var isConflictQuery = !string.IsNullOrWhiteSpace(sample.Query) && (
                 sample.Query.Contains("冲突", StringComparison.OrdinalIgnoreCase)

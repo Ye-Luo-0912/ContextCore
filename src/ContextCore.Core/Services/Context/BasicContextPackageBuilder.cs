@@ -260,7 +260,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         var primaryDecisions = new Dictionary<string, ContextPackageDecision>(StringComparer.OrdinalIgnoreCase);
         var itemReferences = new List<ContextPackageItemReference>();
 
-        // 审计模式判定：优先使用 request/policy 上的显式 IsAuditMode 信号，缺失时回退到 QueryText 关键词推断。
+        // 审计模式判定：使用 request/policy 上的显式 IsAuditMode 信号，均缺失时默认 false。
         var isAuditMode = PackagePolicyResolver.ResolveIsAuditMode(request, policy);
 
         if (PackagePolicyResolver.ShouldIncludeCurrentTaskSection(request, policy))

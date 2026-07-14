@@ -10,7 +10,7 @@ namespace ContextCore.Core;
 internal static class ContextRecallSignalPolicy
 {
     private static readonly DomainKeywordProfile DefaultDomainKeywords = DomainKeywordProfile.CreateProduction();
-    private static string[] LongTermMemoryKeywords => DefaultDomainKeywords.LongTermMemoryKeywords.ToArray();
+    private static readonly string[] LongTermMemoryKeywords = DefaultDomainKeywords.LongTermMemoryKeywords.ToArray();
 
     public static bool IsSpecificRecallAnchor(ContextAnchor anchor)
     {

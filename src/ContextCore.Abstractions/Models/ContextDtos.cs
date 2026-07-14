@@ -553,7 +553,7 @@ public sealed class ContextPackageRequest
     public ContextPackagePolicy? Policy { get; init; }
 
     /// <summary>
-    /// 显式审计模式信号。非 null 时优先于关键词推断；null 时回退到 QueryText 关键词推断（向后兼容）。
+    /// 显式审计模式信号。任一为 true 即启用；任一为 false（且无 true）即关闭；均 null 时默认 false。
     /// 审计模式启用后会召回废弃/被替代记忆并归入 historical_context section。
     /// </summary>
     public bool? IsAuditMode { get; init; }

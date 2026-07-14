@@ -500,7 +500,7 @@ public sealed class ContextPackagePolicy
     public bool EnableStrictRelevanceFilter { get; init; } = false;
 
     /// <summary>
-    /// 显式审计模式信号。非 null 时优先于关键词推断；null 时回退到 QueryText 关键词推断（向后兼容）。
+    /// 显式审计模式信号。任一为 true 即启用；任一为 false（且无 true）即关闭；均 null 时默认 false。
     /// 与 <see cref="ContextPackageRequest.IsAuditMode"/> 取或关系：任一为 true 即启用审计模式。
     /// </summary>
     public bool? IsAuditMode { get; init; }

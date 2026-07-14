@@ -93,6 +93,7 @@ public sealed class ContextCorePolicyMigrationSnapshotTests
             CollectionId = "collection-snapshot",
             QueryText = "审计旧版文档",
             TokenBudget = 2_000,
+            IsAuditMode = true,
             Policy = new ContextPackagePolicy
             {
                 WorkspaceId = "workspace-snapshot",

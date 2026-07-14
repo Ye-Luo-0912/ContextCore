@@ -276,8 +276,8 @@ internal static class PackagePolicyResolver
     }
 
     /// <summary>
-    /// 解析审计模式信号：优先使用 request/policy 上的显式 <see cref="ContextPackageRequest.IsAuditMode"/>
-    /// 任一为 true 即启用；任一为 false（且无 true）即关闭；两者均 null 时回退到 QueryText 关键词推断（向后兼容）。
+    /// 解析审计模式信号：使用 request/policy 上的显式 <see cref="ContextPackageRequest.IsAuditMode"/>
+    /// 任一为 true 即启用；任一为 false（且无 true）即关闭；两者均 null 时默认 false（不再读取 QueryText 关键词推断）。
     /// </summary>
     internal static bool ResolveIsAuditMode(
         ContextPackageRequest request,
@@ -293,9 +293,7 @@ internal static class PackagePolicyResolver
             return false;
         }
 
-        // 显式信号均缺失（null）时回退到关键词推断。
-        return !string.IsNullOrWhiteSpace(request.QueryText)
-            && WorkingMemoryRecaller.DomainKeywords.AuditModeKeywords.Any(k =>
-                request.QueryText.Contains(k, StringComparison.OrdinalIgnoreCase));
+        // 显式信号均缺失（null）时默认关闭，不再回退到 QueryText 关键词推断。
+        return false;
     }
 }

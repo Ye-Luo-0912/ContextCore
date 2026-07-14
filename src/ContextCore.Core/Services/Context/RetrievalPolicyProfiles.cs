@@ -182,9 +182,6 @@ public sealed class ModeBudgetProfileRegistry
 /// </summary>
 public sealed class DomainKeywordProfile
 {
-    /// <summary>审计模式关键词（原 BasicContextPackageBuilder 内联判定）。</summary>
-    public IReadOnlyList<string> AuditModeKeywords { get; init; } = [];
-
     /// <summary>长期记忆关键词（原 ContextRecallSignalPolicy 硬编码数组）。</summary>
     public IReadOnlyList<string> LongTermMemoryKeywords { get; init; } = [];
 
@@ -229,21 +226,6 @@ public sealed class DomainKeywordProfile
     /// </summary>
     public static DomainKeywordProfile CreateDefault() => new()
     {
-        AuditModeKeywords =
-        [
-            "废弃",
-            "作废",
-            "草稿",
-            "草案",
-            "旧版",
-            "旧",
-            "放弃",
-            "舍弃",
-            "审计",
-            "legacy",
-            "deprecated",
-            "audit"
-        ],
         LongTermMemoryKeywords =
         [
             "preference",
@@ -378,7 +360,6 @@ public sealed class DomainKeywordProfile
         var baseline = CreateDefault();
         return new DomainKeywordProfile
         {
-            AuditModeKeywords = baseline.AuditModeKeywords,
             LongTermMemoryKeywords = baseline.LongTermMemoryKeywords,
             // 生产环境不含夹具惩罚关键词——fixture 名称不进入生产评分路径。
             // eval 适配层如需惩罚 stress-test 项，应通过 request.Policy 或独立 eval profile 注入。

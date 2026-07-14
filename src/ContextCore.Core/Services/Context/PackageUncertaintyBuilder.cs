@@ -225,24 +225,24 @@ internal static class PackageUncertaintyBuilder
         var metadata = string.Join(' ', item.Metadata.Select(pair => $"{pair.Key} {pair.Value}"));
         var searchText = string.Join(' ', item.ItemId, item.Kind, item.Type, item.SectionName, item.Reason, metadata, string.Join(' ', item.SourceRefs));
         if (WorkingMemoryRecaller.IsMode(modeName, "AutomationMode", "Automation") &&
-            WorkingMemoryRecaller.ContainsAny(searchText, WorkingMemoryRecaller.DomainKeywords.AutomationModePackageOrderKeywords.ToArray()))
+            WorkingMemoryRecaller.ContainsAny(searchText, WorkingMemoryRecaller.DomainKeywords.AutomationModePackageOrderKeywords))
         {
             score += 9_000.0;
         }
 
         if (WorkingMemoryRecaller.IsMode(modeName, "NovelMode", "Novel") &&
-            WorkingMemoryRecaller.ContainsAny(searchText, WorkingMemoryRecaller.DomainKeywords.NovelModeReserveBoostKeywords.ToArray()))
+            WorkingMemoryRecaller.ContainsAny(searchText, WorkingMemoryRecaller.DomainKeywords.NovelModeReserveBoostKeywords))
         {
             score += 9_000.0;
         }
 
         if (WorkingMemoryRecaller.IsMode(modeName, "ChatMode", "Chat") &&
-            WorkingMemoryRecaller.ContainsAny(searchText, WorkingMemoryRecaller.DomainKeywords.ChatModeReserveBoostKeywords.ToArray()))
+            WorkingMemoryRecaller.ContainsAny(searchText, WorkingMemoryRecaller.DomainKeywords.ChatModeReserveBoostKeywords))
         {
             score += 9_000.0;
         }
 
-        if (WorkingMemoryRecaller.ContainsAny(searchText, WorkingMemoryRecaller.DomainKeywords.FixturePenaltyKeywords.ToArray()))
+        if (WorkingMemoryRecaller.ContainsAny(searchText, WorkingMemoryRecaller.DomainKeywords.FixturePenaltyKeywords))
         {
             score -= 500.0;
         }
