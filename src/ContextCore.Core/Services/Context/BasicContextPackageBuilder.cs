@@ -121,18 +121,12 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         CancellationToken cancellationToken)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
+        // 统一打包流水线：当调用方未显式提供 Policy 时，使用默认生产 Policy 委托到唯一流水线。
+        // 原 Legacy 路径（按 item ID 拆 section、Kind="raw"）已合并到 Policy 路径的 recent_context section。
+        var policy = request.Policy ?? CreateDefaultProductionPolicy(request);
         ContextPackageBuildResult result;
-        if (request.Policy is not null)
-        {
-            // Policy 模式用于服务化后的正式打包流程，可组合约束、记忆、全局上下文和关系。
-            result = await BuildWithPolicyAsync(request, request.Policy, cancellationToken)
-                .ConfigureAwait(false);
-        }
-        else
-        {
-            // Legacy 模式保持 MVP 行为：直接从原始 ContextItem 中按重要性和时间裁剪上下文。
-            result = await BuildLegacyAsync(request, cancellationToken).ConfigureAwait(false);
-        }
+        result = await BuildWithPolicyAsync(request, policy, cancellationToken)
+            .ConfigureAwait(false);
 
         if (_traceStore is not null)
         {
@@ -180,6 +174,32 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         return LegacyCharacterTokenizer.EstimateTokenCount(content);
     }
 
+    /// <summary>
+    /// 创建默认生产 Policy，用于未显式提供 Policy 的请求。
+    /// 仅启用最近原始上下文（与原 Legacy 路径行为一致），约束/记忆/全局上下文需调用方显式提供 Policy 才会纳入。
+    /// TokenBudget 由请求或模式预算解析。
+    /// </summary>
+    private static ContextPackagePolicy CreateDefaultProductionPolicy(ContextPackageRequest request)
+    {
+        return new ContextPackagePolicy
+        {
+            Id = "default-production",
+            WorkspaceId = request.WorkspaceId,
+            CollectionId = string.IsNullOrWhiteSpace(request.CollectionId) ? null : request.CollectionId,
+            Name = "DefaultProduction",
+            Description = "默认生产策略：未显式提供 Policy 时使用，仅启用最近原始上下文（与原 Legacy 路径一致）。",
+            Mode = request.Mode,
+            IncludeGlobalContext = false,
+            IncludeHardConstraints = false,
+            IncludeSoftConstraints = false,
+            IncludeWorkingMemory = false,
+            IncludeStableMemory = false,
+            IncludeRecentRawContext = true,
+            MaxRecentItems = 20,
+            IsAuditMode = request.IsAuditMode
+        };
+    }
+
     private TokenEstimationContext CreateTokenEstimationContext(ContextPackageRequest request)
     {
         var modelName = ResolveTokenizerModel(request);
@@ -207,89 +227,6 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         }
 
         return null;
-    }
-
-    private async Task<ContextPackageBuildResult> BuildLegacyAsync(
-        ContextPackageRequest request,
-        CancellationToken cancellationToken)
-    {
-        var query = new ContextQuery
-        {
-            WorkspaceId = request.WorkspaceId,
-            CollectionId = request.CollectionId,
-            QueryText = request.QueryText,
-            Tags = request.RequiredTags,
-            Types = request.RequiredTypes,
-            Take = 500, // V13: capped from int.MaxValue — legacy package path safe bound
-            IncludeContent = true
-        };
-
-        var items = await _store.QueryAsync(query, cancellationToken).ConfigureAwait(false);
-        var tokenContext = CreateTokenEstimationContext(request);
-        var requiredTags = request.RequiredTags.ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-        var orderedItems = items
-            .OrderByDescending(item => item.Importance)
-            .ThenByDescending(item => request.IncludeRecent ? item.UpdatedAt : DateTimeOffset.MinValue)
-            .ThenByDescending(item => LegacyPackageScorer.CountMatchingTags(item, requiredTags))
-            .ToArray();
-
-        var tokenBudget = request.TokenBudget > 0 ? request.TokenBudget : int.MaxValue;
-        var sections = new List<ContextPackageSection>();
-        var sourceRefs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var selectedItems = new List<ContextPackageDecision>();
-        var droppedItems = new List<DroppedContextItem>();
-        var estimatedTokens = 0;
-        var priority = orderedItems.Length;
-
-        foreach (var item in orderedItems)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            var sectionName = string.IsNullOrWhiteSpace(item.Title) ? item.Id : item.Title!;
-            var itemTokens = EstimatePackageTokens(item.Content, tokenContext);
-            var score = LegacyPackageScorer.CalculateLegacyScore(item, requiredTags, request.IncludeRecent);
-
-            // AddSection 内部负责预算裁剪；调用方只按优先级提供候选内容。
-            var sectionResult = AddSection(
-                sections,
-                sourceRefs,
-                name: sectionName,
-                priority: priority--,
-                content: item.Content,
-                contentFormat: item.ContentFormat,
-                sectionSourceRefs: ContextItemRefResolver.ResolveSourceRefs(item),
-                sectionItemRefs: ContextItemRefResolver.ResolveItemRefs(item),
-                candidateIds: ContextItemRefResolver.ResolveItemRefs(item),
-                tokenBudget,
-                sectionTokenBudget: 0,
-                tokenContext,
-                ref estimatedTokens);
-
-            var candidate = PackageTraceCandidate.FromContextItem(item, "raw", score, itemTokens);
-            if (sectionResult.Added)
-            {
-                selectedItems.Add(PackageTraceRecorder.CreateDecision(
-                    candidate,
-                    sectionName,
-                    sectionResult.Reason,
-                    sectionResult.ActualTokens));
-                _traceRecorder.WriteTraceRow(candidate, sectionName, true, sectionResult.Reason, selectedByScoring: true);
-            }
-                else
-                {
-                    droppedItems.Add(PackageTraceRecorder.CreateDropped(candidate, "token budget exhausted"));
-                    _traceRecorder.WriteTraceRow(candidate, sectionName, false, "token budget exhausted", selectedByScoring: true);
-                }
-        }
-
-        var package = PackageMetadataBuilder.CreatePackage(request, request.CollectionId, sections, sourceRefs, estimatedTokens, tokenContext);
-        return CreateBuildResult(
-            request,
-            package,
-            tokenBudget,
-            selectedItems,
-            droppedItems,
-            traceRecorder: _traceRecorder);
     }
 
     private async Task<ContextPackageBuildResult> BuildWithPolicyAsync(
@@ -323,9 +260,8 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         var primaryDecisions = new Dictionary<string, ContextPackageDecision>(StringComparer.OrdinalIgnoreCase);
         var itemReferences = new List<ContextPackageItemReference>();
 
-        // 显式审计模式判定
-        var isAuditMode = !string.IsNullOrWhiteSpace(request.QueryText)
-            && WorkingMemoryRecaller.DomainKeywords.AuditModeKeywords.Any(k => request.QueryText.Contains(k, StringComparison.OrdinalIgnoreCase));
+        // 审计模式判定：优先使用 request/policy 上的显式 IsAuditMode 信号，缺失时回退到 QueryText 关键词推断。
+        var isAuditMode = PackagePolicyResolver.ResolveIsAuditMode(request, policy);
 
         if (PackagePolicyResolver.ShouldIncludeCurrentTaskSection(request, policy))
         {

@@ -16,33 +16,6 @@ internal static class LegacyPackageScorer
         return tokenBudget == int.MaxValue || tokenBudget <= 0 ? 0 : tokenBudget;
     }
 
-    internal static int CountMatchingTags(ContextItem item, HashSet<string> requiredTags)
-    {
-        if (requiredTags.Count == 0)
-        {
-            return 0;
-        }
-
-        return item.Tags.Count(requiredTags.Contains);
-    }
-
-    internal static double CalculateLegacyScore(
-        ContextItem item,
-        HashSet<string> requiredTags,
-        bool includeRecent)
-    {
-        var score = item.Importance * 100;
-        score += CountMatchingTags(item, requiredTags) * 10;
-
-        if (includeRecent && item.UpdatedAt != default)
-        {
-            var ageDays = Math.Max(0, (DateTimeOffset.UtcNow - item.UpdatedAt).TotalDays);
-            score += Math.Max(0, 10 - Math.Min(10, ageDays));
-        }
-
-        return score;
-    }
-
     internal static IReadOnlyList<MergedContextConstraint> OrderMergedConstraints(
         IEnumerable<ContextConstraint> constraints)
     {

@@ -9,28 +9,6 @@ namespace ContextCore.Core;
 /// </summary>
 internal static class PackageMetadataBuilder
 {
-    internal static ContextPackage CreatePackage(
-        ContextPackageRequest request,
-        string collectionId,
-        IReadOnlyList<ContextPackageSection> sections,
-        IEnumerable<string> sourceRefs,
-        int estimatedTokens,
-        TokenEstimationContext tokenContext)
-    {
-        var workspaceId = PackagePolicyResolver.NormalizeRequiredValue(request.WorkspaceId);
-        return new ContextPackage
-        {
-            PackageId = Guid.NewGuid().ToString("N"),
-            WorkspaceId = workspaceId,
-            CollectionId = collectionId,
-            Sections = sections,
-            EstimatedTokens = estimatedTokens,
-            SourceRefs = sourceRefs.ToArray(),
-            Metadata = CreatePackageMetadata(request, tokenContext),
-            CreatedAt = DateTimeOffset.UtcNow
-        };
-    }
-
     internal static Dictionary<string, string> CreatePackageMetadata(
         ContextPackageRequest request,
         TokenEstimationContext tokenContext)

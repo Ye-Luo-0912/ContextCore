@@ -552,6 +552,12 @@ public sealed class ContextPackageRequest
 
     public ContextPackagePolicy? Policy { get; init; }
 
+    /// <summary>
+    /// 显式审计模式信号。非 null 时优先于关键词推断；null 时回退到 QueryText 关键词推断（向后兼容）。
+    /// 审计模式启用后会召回废弃/被替代记忆并归入 historical_context section。
+    /// </summary>
+    public bool? IsAuditMode { get; init; }
+
     /// <summary>请求级 OperationId，用于 trace 串线。未指定时由 builder 自动生成。</summary>
     public string? OperationId { get; init; }
 

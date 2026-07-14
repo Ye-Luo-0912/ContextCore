@@ -499,6 +499,12 @@ public sealed class ContextPackagePolicy
     /// </summary>
     public bool EnableStrictRelevanceFilter { get; init; } = false;
 
+    /// <summary>
+    /// 显式审计模式信号。非 null 时优先于关键词推断；null 时回退到 QueryText 关键词推断（向后兼容）。
+    /// 与 <see cref="ContextPackageRequest.IsAuditMode"/> 取或关系：任一为 true 即启用审计模式。
+    /// </summary>
+    public bool? IsAuditMode { get; init; }
+
     /// <summary>策略附加元数据。</summary>
     public Dictionary<string, string> Metadata { get; init; } = new();
 }

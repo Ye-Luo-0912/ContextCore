@@ -546,15 +546,15 @@ public sealed class ContextCoreMvpTests
         Assert.IsTrue(result.Package.EstimatedTokens <= 10);
 
         var selected = result.SelectedItems.Single(item => item.ItemId == "large");
-        Assert.AreEqual("raw", selected.Kind);
-        Assert.AreEqual("large", selected.SectionName);
+        Assert.AreEqual("recent_context", selected.Kind);
+        Assert.AreEqual("recent_context", selected.SectionName);
         Assert.IsFalse(string.IsNullOrWhiteSpace(selected.Reason));
         Assert.IsTrue(selected.Score > 0);
         Assert.IsTrue(selected.EstimatedTokens > 0);
 
         var dropped = result.DroppedItems.Single(item => item.ItemId == "small");
-        Assert.AreEqual("raw", dropped.Kind);
-        Assert.AreEqual("token budget exhausted", dropped.Reason);
+        Assert.AreEqual("recent_context", dropped.Kind);
+        Assert.AreEqual("candidate not retained after token budget truncation", dropped.Reason);
         Assert.IsTrue(dropped.Score > 0);
         Assert.IsTrue(dropped.EstimatedTokens > 0);
     }
@@ -644,11 +644,11 @@ public sealed class ContextCoreMvpTests
             var selected = details.SelectedItems.Single(item => item.Id == "large");
             var dropped = details.DroppedItems.Single(item => item.Id == "small");
 
-            Assert.AreEqual("large", selected.SectionName);
+            Assert.AreEqual("recent_context", selected.SectionName);
             Assert.IsFalse(string.IsNullOrWhiteSpace(selected.Reason));
             Assert.IsTrue(selected.Score > 0);
             Assert.IsTrue(selected.EstimatedTokens > 0);
-            Assert.AreEqual("token budget exhausted", dropped.Reason);
+            Assert.AreEqual("candidate not retained after token budget truncation", dropped.Reason);
             Assert.IsTrue(dropped.Score > 0);
             Assert.IsTrue(dropped.EstimatedTokens > 0);
         }
