@@ -1,6 +1,6 @@
 # ContextCore 项目路线图
 
-> 最近更新：R10 系列完成（RetrievalPolicyProfiles 词表改造为显式权重、Context State 失效边界 P1-P3 落地）（2026-07-14）
+> 最近更新：R11 Context State 失效边界 P4-P6 完成（剩余 Store decorator + 扩展事件结构 + 引入 ContextStateCache）（2026-07-14）
 
 > 本文件是 ContextCore 的**唯一当前路线图**。docs/ 下的 freeze / report / audit / plan 类文档均为历史快照，仅供回溯，不作为设计依据。
 
@@ -41,6 +41,44 @@
 ---
 
 ## 已完成工作
+
+### R11 系列：Context State 失效边界 P4-P6 完成
+
+3 个任务完成，合计 25 个 Store 接口全覆盖失效边界 + 扩展事件结构 + 引入 ContextStateCache。
+
+**R11-P4：剩余 Store decorator（commit `49e5f29`，+973 行）**：
+- 新增 19 个 Decorator（合计 25 个 Store 接口全覆盖）
+- 覆盖 ContextCollectionStore/PackageBuildTraceStore/PackagePolicyStore/DecisionTraceStore
+  /StableLifecycleReviewStore/CandidateConstraintReviewStore/ConstraintGapCandidateStore
+  /PromotionRecordStore/PromotionCandidateStore/WorkingMemoryService/RelationReviewStore
+  /VectorStore/VectorReindexReportStore/VectorLifecycleMetadataReviewStore
+  /VectorLifecycleSidecarMetadataStore/VectorLifecycleMetadataReviewCandidateStore
+  /LearningFeedbackStore/LearningFeedbackReviewStore/ShortTermPromotionCandidateStore
+- 三个 Register 方法（FileSystem/InMemory/Postgres）全部改造
+- IRelationReviewStore 保留 ScopedRelationGovernanceReviewStore 内层，Decorator 套最外层
+
+**R11-P5：扩展 IContextEventSink 事件结构（commit `874ffc9`）**：
+- ContextOperationEvent 新增 EntityType/EntityId/Operation nullable 字段
+- ContextRuntimeService 各操作方法填充新字段
+- LoggingContextEventSink scope 新增三个字段
+- PostgresContextEventSink schema v6→v7（ALTER TABLE 新增三列）
+- 保持向后兼容
+
+**R11-P6：引入 ContextStateCache（commit `874ffc9`）**：
+- 新增 IContextStateCache 接口（GetAsync/SetAsync/InvalidateAsync）
+- InMemoryContextStateCache 实现（同时实现 IContextStateCache 和 IStateCacheInvalidator）
+  - ConcurrentDictionary + LinkedList LRU，上限 10000 项
+  - 版本检查：通过 IContextStateVersionStore 验证 version
+  - 按 StoreKind/WorkspaceId/CollectionId 匹配失效
+- ContextStateCacheAccessor：GetOrAddAsync 模式，读路径可选使用
+- DI 注册：InMemoryContextStateCache 替换 NullStateCacheInvalidator
+- 不自动应用到现有读路径，只提供基础设施
+
+新增文件（2 个）：
+- ContextStateCache.cs（275 行）
+- ContextStateCacheAccessor.cs（86 行）
+
+验证：构建 0 警告 0 错误，测试 792 通过 0 失败。
 
 ### R10 系列：RetrievalPolicyProfiles 词表改造、Context State 失效边界落地
 
