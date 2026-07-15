@@ -28,7 +28,6 @@ public class CacheChurnBenchmarks
     [GlobalSetup]
     public void Setup()
     {
-        _cache = new InMemoryContextStateCache(Capacity);
         _keys = new List<StateCacheKey>(WriteCount);
         _scopes = new List<DependencyScopeSet>(WriteCount);
 
@@ -49,6 +48,35 @@ public class CacheChurnBenchmarks
         }
     }
 
+    // 每次迭代前重置缓存为空，确保 WriteWithLruEviction 测量的是真正的写入+淘汰路径
+    [IterationSetup(Target = nameof(WriteWithLruEviction))]
+    public void SetupForWrite()
+    {
+        _cache = new InMemoryContextStateCache(Capacity);
+    }
+
+    // 每次迭代前重置并填满缓存，确保 InvalidateByScope 只测量失效操作
+    [IterationSetup(Target = nameof(InvalidateByScope))]
+    public void SetupForInvalidate()
+    {
+        _cache = new InMemoryContextStateCache(Capacity);
+        for (int i = 0; i < WriteCount; i++)
+        {
+            _cache.SetAsync(_keys[i], $"value-{i}", _scopes[i]).GetAwaiter().GetResult();
+        }
+    }
+
+    // 每次迭代前重置并填充一半缓存，确保 MixedReadWrite 只测量混合读写操作
+    [IterationSetup(Target = nameof(MixedReadWrite))]
+    public void SetupForMixed()
+    {
+        _cache = new InMemoryContextStateCache(Capacity);
+        for (int i = 0; i < Capacity / 2; i++)
+        {
+            _cache.SetAsync(_keys[i], $"value-{i}", _scopes[i]).GetAwaiter().GetResult();
+        }
+    }
+
     // 持续写入 + LRU 淘汰：写入 Capacity×2 个条目，后半段触发淘汰
     [Benchmark]
     public async Task WriteWithLruEviction()
@@ -60,17 +88,10 @@ public class CacheChurnBenchmarks
     }
 
     // 按 scope 失效：对已满的缓存执行 collection 级失效
-    // 测量 scope 反向索引的 O(M) 失效性能
+    // 测量 scope 反向索引的 O(M) 失效性能（填充已在 IterationSetup 完成）
     [Benchmark]
     public async Task InvalidateByScope()
     {
-        // 先填充缓存到容量
-        for (int i = 0; i < WriteCount; i++)
-        {
-            await _cache.SetAsync(_keys[i], $"value-{i}", _scopes[i]);
-        }
-
-        // 然后按 collection 失效（每个 collection 有 ~200 个 entry）
         for (int i = 0; i < 50; i++)
         {
             await _cache.InvalidateAsync(new CacheInvalidationKey("ContextStore", $"ws-{i % 100}", $"col-{i}", null));
@@ -78,16 +99,10 @@ public class CacheChurnBenchmarks
     }
 
     // 混合读写：模拟真实工作负载（80% 读，20% 写）
+    // 填充一半已在 IterationSetup 完成
     [Benchmark]
     public async Task MixedReadWrite()
     {
-        // 先填充一半
-        for (int i = 0; i < Capacity / 2; i++)
-        {
-            await _cache.SetAsync(_keys[i], $"value-{i}", _scopes[i]);
-        }
-
-        // 混合操作
         var rand = new Random(20260715);
         for (int i = 0; i < 5000; i++)
         {

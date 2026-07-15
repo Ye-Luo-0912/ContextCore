@@ -38,7 +38,7 @@ public class FileSystemPackageBuildBenchmarks
         var globalStore = new FileGlobalContextStore(storageOptions);
         var relationStore = new FileRelationStore(storageOptions);
 
-        PopulateStores(contextStore, memoryStore, constraintStore, globalStore);
+        PopulateStores(contextStore, memoryStore, constraintStore, globalStore, ItemCount);
 
         var policy = new ContextPackagePolicy
         {
@@ -113,12 +113,13 @@ public class FileSystemPackageBuildBenchmarks
         FileContextStore contextStore,
         FileMemoryStore memoryStore,
         FileConstraintStore constraintStore,
-        FileGlobalContextStore globalStore)
+        FileGlobalContextStore globalStore,
+        int itemCount)
     {
         var now = DateTimeOffset.UtcNow;
         var rand = new Random(20260715);
 
-        for (int i = 0; i < 50; i++)
+        for (int i = 0; i < itemCount; i++)
         {
             var createdAt = now.AddDays(-rand.Next(0, 90));
             contextStore.SaveAsync(new ContextItem
@@ -222,9 +223,11 @@ public class FileSystemPackageBuildBenchmarks
         }
     }
 
-    // 真实 FileSystem 冷构建：6 次磁盘读取 + filter + assembly
+    // 应用缓存 miss + OS 文件缓存 warm：首次迭代后 OS 已缓存文件，
+    // 后续迭代测量的是"应用缓存未命中但 OS 文件缓存命中"路径。
+    // 无法在非特权环境下逐次清 OS 缓存，故如实标注测量范围。
     [Benchmark(Baseline = true)]
-    public async Task FileSystem_ColdBuild()
+    public async Task FileSystem_AppCacheMiss_OsFileCacheWarm()
     {
         var result = await _builder.BuildDetailedAsync(_request, CancellationToken.None);
         _ = result.Package.Sections.Count;

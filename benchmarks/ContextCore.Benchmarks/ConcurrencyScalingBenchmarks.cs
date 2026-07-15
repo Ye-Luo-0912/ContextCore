@@ -37,7 +37,7 @@ public class ConcurrencyScalingBenchmarks
         var rawGlobalStore = new InMemoryGlobalContextStore();
         var rawRelationStore = new InMemoryRelationStore();
 
-        PopulateStores(rawContextStore, rawMemoryStore, rawConstraintStore, rawGlobalStore);
+        PopulateStores(rawContextStore, rawMemoryStore, rawConstraintStore, rawGlobalStore, ItemCount);
 
         // 用延迟装饰器包装，模拟真实存储 I/O 延迟
         IContextStore contextStore = new DelayedContextStore(rawContextStore, QueryDelayMs);
@@ -111,12 +111,13 @@ public class ConcurrencyScalingBenchmarks
         InMemoryContextStore contextStore,
         InMemoryMemoryStore memoryStore,
         InMemoryConstraintStore constraintStore,
-        InMemoryGlobalContextStore globalStore)
+        InMemoryGlobalContextStore globalStore,
+        int itemCount)
     {
         var now = DateTimeOffset.UtcNow;
         var rand = new Random(20260715);
 
-        for (int i = 0; i < 50; i++)
+        for (int i = 0; i < itemCount; i++)
         {
             var createdAt = now.AddDays(-rand.Next(0, 90));
             contextStore.SaveAsync(new ContextItem
@@ -233,7 +234,7 @@ file sealed class DelayedContextStore : IContextStore
     public Task<ContextItem?> GetAsync(string ws, string col, string id, CancellationToken ct = default) => _inner.GetAsync(ws, col, id, ct);
     public async Task<IReadOnlyList<ContextItem>> QueryAsync(ContextQuery query, CancellationToken ct = default)
     {
-        if (_delayMs > 0) await Task.Run(() => Thread.Sleep(_delayMs), ct).ConfigureAwait(false);
+        if (_delayMs > 0) await Task.Delay(_delayMs, ct).ConfigureAwait(false);
         return await _inner.QueryAsync(query, ct).ConfigureAwait(false);
     }
     public Task DeleteAsync(string ws, string col, string id, CancellationToken ct = default) => _inner.DeleteAsync(ws, col, id, ct);
@@ -249,7 +250,7 @@ file sealed class DelayedMemoryStore : IMemoryStore
     public Task<ContextMemoryItem?> GetAsync(string ws, string col, string id, CancellationToken ct = default) => _inner.GetAsync(ws, col, id, ct);
     public async Task<IReadOnlyList<ContextMemoryItem>> QueryAsync(ContextMemoryQuery query, CancellationToken ct = default)
     {
-        if (_delayMs > 0) await Task.Run(() => Thread.Sleep(_delayMs), ct).ConfigureAwait(false);
+        if (_delayMs > 0) await Task.Delay(_delayMs, ct).ConfigureAwait(false);
         return await _inner.QueryAsync(query, ct).ConfigureAwait(false);
     }
     public Task UpdateStatusAsync(string ws, string col, string id, ContextMemoryStatus status, CancellationToken ct = default) => _inner.UpdateStatusAsync(ws, col, id, status, ct);
@@ -265,7 +266,7 @@ file sealed class DelayedConstraintStore : IConstraintStore
     public Task<ContextConstraint?> GetAsync(string constraintId, CancellationToken ct = default) => _inner.GetAsync(constraintId, ct);
     public async Task<IReadOnlyList<ContextConstraint>> QueryAsync(ContextConstraintQuery query, CancellationToken ct = default)
     {
-        if (_delayMs > 0) await Task.Run(() => Thread.Sleep(_delayMs), ct).ConfigureAwait(false);
+        if (_delayMs > 0) await Task.Delay(_delayMs, ct).ConfigureAwait(false);
         return await _inner.QueryAsync(query, ct).ConfigureAwait(false);
     }
 }
@@ -279,7 +280,7 @@ file sealed class DelayedGlobalContextStore : IGlobalContextStore
     public Task SaveAsync(ContextGlobalItem item, CancellationToken ct = default) => _inner.SaveAsync(item, ct);
     public async Task<IReadOnlyList<ContextGlobalItem>> QueryAsync(ContextGlobalQuery query, CancellationToken ct = default)
     {
-        if (_delayMs > 0) await Task.Run(() => Thread.Sleep(_delayMs), ct).ConfigureAwait(false);
+        if (_delayMs > 0) await Task.Delay(_delayMs, ct).ConfigureAwait(false);
         return await _inner.QueryAsync(query, ct).ConfigureAwait(false);
     }
 }
