@@ -5,10 +5,6 @@ namespace ContextCore.Client;
 
 public sealed partial class ContextCoreClient
 {
-    // 注意：Runtime 域的响应模型包含 UntypedNode / composed type 字段（来自 OpenAPI union type），
-    // Kiota 的 JsonSerializationWriter 在序列化 null UntypedNode 时会破坏 JSON 结构。
-    // 因此这些端点保留直接 HttpClient + STJ 反序列化，不走生成客户端的 JSON round-trip。
-
     public async Task<RuntimeStatusResponse> GetStatusAsync(CancellationToken cancellationToken = default)
     {
         return await GetRequiredAsync<RuntimeStatusResponse>("api/status", cancellationToken).ConfigureAwait(false);
