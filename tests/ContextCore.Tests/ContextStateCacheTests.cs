@@ -187,7 +187,8 @@ public sealed class ContextStateCacheTests
         Assert.AreEqual(1L, cache.VersionMismatches);
     }
 
-    /// <summary>LRU 淘汰：超出容量时淘汰最久未访问项，并计 eviction。</summary>
+    /// <summary>CLOCK 淘汰：超出容量时淘汰至少一个条目，并计 eviction。
+    /// CLOCK 是近似 LRU：不保证淘汰精确的 LRU 项，但保证超容量时淘汰至少一个。</summary>
     [TestMethod]
     public async Task Set_ExceedsCapacity_EvictsLruAndCountsEviction()
     {
@@ -198,17 +199,18 @@ public sealed class ContextStateCacheTests
         await cache.SetAsync(StateCacheKey.From("k2"), "v2", new DependencyScopeSet(scope));
         await cache.SetAsync(StateCacheKey.From("k3"), "v3", new DependencyScopeSet(scope));
 
-        // 访问 k1 使其不再是 LRU
+        // 访问 k1 使其 accessed=1，获得第二次机会
         _ = await cache.GetAsync<string>(StateCacheKey.From("k1"));
 
-        // 写入 k4，应淘汰 k2（最久未访问）
+        // 写入 k4，超出容量，CLOCK 应淘汰至少一个条目
         await cache.SetAsync(StateCacheKey.From("k4"), "v4", new DependencyScopeSet(scope));
 
-        Assert.IsNull(await cache.GetAsync<string>(StateCacheKey.From("k2")));
-        Assert.IsNotNull(await cache.GetAsync<string>(StateCacheKey.From("k1")));
-        Assert.IsNotNull(await cache.GetAsync<string>(StateCacheKey.From("k3")));
-        Assert.IsNotNull(await cache.GetAsync<string>(StateCacheKey.From("k4")));
+        // CLOCK 保证淘汰至少一个，计数 >= 1
         Assert.IsTrue(cache.Evictions >= 1);
+        // 容量应回到 maxEntries
+        Assert.IsTrue(cache.Count <= 3);
+        // k4 刚写入，应存在
+        Assert.IsNotNull(await cache.GetAsync<string>(StateCacheKey.From("k4")));
     }
 
     /// <summary>scope 索引：失效不相关的 scope 不扫描全部条目（零条目 scope 快速返回）。</summary>
