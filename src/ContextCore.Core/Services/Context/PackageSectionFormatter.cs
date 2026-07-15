@@ -12,12 +12,16 @@ internal static class PackageSectionFormatter
 {
     internal static string FormatConstraints(IReadOnlyList<ContextConstraint> constraints, int tokenBudget = 0)
     {
-        if (tokenBudget > 0 && tokenBudget <= 200)
+        return JoinBlocks(FormatConstraintBlocks(constraints, tokenBudget));
+    }
+
+    internal static IEnumerable<string> FormatConstraintBlocks(IReadOnlyList<ContextConstraint> constraints, int tokenBudget = 0)
+    {
+        var compact = tokenBudget > 0 && tokenBudget <= 200;
+        foreach (var item in constraints)
         {
-            return JoinBlocks(constraints.Select(item => item.Content));
+            yield return compact ? item.Content : $"- [{item.Level}] {item.Content}";
         }
-        return JoinBlocks(constraints.Select(item =>
-            $"- [{item.Level}] {item.Content}"));
     }
 
     internal static string FormatCurrentTask(
@@ -70,44 +74,76 @@ internal static class PackageSectionFormatter
 
     internal static string FormatMergedConstraints(IReadOnlyList<MergedContextConstraint> constraints, int tokenBudget = 0)
     {
-        if (tokenBudget > 0 && tokenBudget <= 200)
+        return JoinBlocks(FormatMergedConstraintBlocks(constraints, tokenBudget));
+    }
+
+    internal static IEnumerable<string> FormatMergedConstraintBlocks(IReadOnlyList<MergedContextConstraint> constraints, int tokenBudget = 0)
+    {
+        var compact = tokenBudget > 0 && tokenBudget <= 200;
+        foreach (var item in constraints)
         {
-            return JoinBlocks(constraints.Select(item => item.Constraint.Content));
+            yield return compact
+                ? item.Constraint.Content
+                : $"- [{item.PriorityLabel} | {item.Constraint.Level}] {item.Constraint.Content}";
         }
-        return JoinBlocks(constraints.Select(item =>
-            $"- [{item.PriorityLabel} | {item.Constraint.Level}] {item.Constraint.Content}"));
     }
 
     internal static string FormatMemoryItems(IReadOnlyList<ContextMemoryItem> items, int tokenBudget = 0)
     {
-        if (tokenBudget > 0 && tokenBudget <= 200)
+        return JoinBlocks(FormatMemoryBlocks(items, tokenBudget));
+    }
+
+    internal static IEnumerable<string> FormatMemoryBlocks(IReadOnlyList<ContextMemoryItem> items, int tokenBudget = 0)
+    {
+        var compact = tokenBudget > 0 && tokenBudget <= 200;
+        foreach (var item in items)
         {
-            return JoinBlocks(items.Select(item => item.Content));
+            yield return compact
+                ? item.Content
+                : $"## {item.Type} / {item.Layer} / {item.Status}{Environment.NewLine}{item.Content}";
         }
-        return JoinBlocks(items.Select(item =>
-            $"## {item.Type} / {item.Layer} / {item.Status}{Environment.NewLine}{item.Content}"));
     }
 
     internal static string FormatGlobalItems(IReadOnlyList<ContextGlobalItem> items)
     {
-        return JoinBlocks(items.Select(item =>
-            $"## {item.Type} / {item.Scope}{Environment.NewLine}{item.Content}"));
+        return JoinBlocks(FormatGlobalBlocks(items));
+    }
+
+    internal static IEnumerable<string> FormatGlobalBlocks(IReadOnlyList<ContextGlobalItem> items)
+    {
+        foreach (var item in items)
+        {
+            yield return $"## {item.Type} / {item.Scope}{Environment.NewLine}{item.Content}";
+        }
     }
 
     internal static string FormatContextItems(IReadOnlyList<ContextItem> items)
     {
-        return JoinBlocks(items.Select(item =>
-            $"## {(string.IsNullOrWhiteSpace(item.Title) ? item.Id : item.Title)} / {item.Type}{Environment.NewLine}{item.Content}"));
+        return JoinBlocks(FormatContextItemBlocks(items));
+    }
+
+    internal static IEnumerable<string> FormatContextItemBlocks(IReadOnlyList<ContextItem> items)
+    {
+        foreach (var item in items)
+        {
+            yield return $"## {(string.IsNullOrWhiteSpace(item.Title) ? item.Id : item.Title)} / {item.Type}{Environment.NewLine}{item.Content}";
+        }
     }
 
     internal static string FormatRecentContextItems(IReadOnlyList<RecentContextItem> items, int tokenBudget = 0)
     {
-        if (tokenBudget > 0 && tokenBudget <= 200)
+        return JoinBlocks(FormatRecentContextBlocks(items, tokenBudget));
+    }
+
+    internal static IEnumerable<string> FormatRecentContextBlocks(IReadOnlyList<RecentContextItem> items, int tokenBudget = 0)
+    {
+        var compact = tokenBudget > 0 && tokenBudget <= 200;
+        foreach (var item in items)
         {
-            return JoinBlocks(items.Select(item => item.Content));
+            yield return compact
+                ? item.Content
+                : $"## {item.SourceItemId} / relevance {item.Relevance:0.00} / recency {item.RecencyWeight:0.00}{Environment.NewLine}{item.Content}";
         }
-        return JoinBlocks(items.Select(item =>
-            $"## {item.SourceItemId} / relevance {item.Relevance:0.00} / recency {item.RecencyWeight:0.00}{Environment.NewLine}{item.Content}"));
     }
 
     internal static string FormatDroppedItems(IReadOnlyList<DroppedContextItem> items)

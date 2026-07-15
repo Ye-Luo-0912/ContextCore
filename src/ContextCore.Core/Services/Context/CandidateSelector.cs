@@ -173,14 +173,16 @@ internal sealed class CandidateSelector
             {
                 // 硬约束过滤掉已被选中的 ID (一般不会有，但防止意外)
                 var hardToFormat = activeHardConstraints.Where(c => !globalSelectedIds.Contains(c.Id)).ToArray();
-                var hardContent = hardToFormat.Length > 0 ? PackageSectionFormatter.FormatConstraints(hardToFormat, tokenBudget) : "(所有硬约束已在更优 Section 中包含)";
+                IEnumerable<string> hardBlocks = hardToFormat.Length > 0
+                    ? PackageSectionFormatter.FormatConstraintBlocks(hardToFormat, tokenBudget)
+                    : new[] { "(所有硬约束已在更优 Section 中包含)" };
 
-                sectionResult = _assembler.AddSection(
+                sectionResult = _assembler.AddSectionFromBlocks(
                     sections,
                     sourceRefs,
                     "hard_constraints",
                     PackageSectionBudgetResolver.GetPriority(policy, "hard_constraints", 100),
-                    hardContent,
+                    hardBlocks,
                     ContextContentFormat.Markdown,
                     ContextItemRefResolver.ResolveSourceRefs(activeHardConstraints),
                     ContextItemRefResolver.ResolveItemRefs(activeHardConstraints),
@@ -249,14 +251,16 @@ internal sealed class CandidateSelector
                     .ToArray();
 
                 var workingToFormat = activeWorking.Where(item => !globalSelectedIds.Contains(item.Id)).ToArray();
-                var workingContent = workingToFormat.Length > 0 ? PackageSectionFormatter.FormatMemoryItems(workingToFormat, tokenBudget) : "(所有活跃工作区记忆已在此前去重包含)";
+                IEnumerable<string> workingBlocks = workingToFormat.Length > 0
+                    ? PackageSectionFormatter.FormatMemoryBlocks(workingToFormat, tokenBudget)
+                    : new[] { "(所有活跃工作区记忆已在此前去重包含)" };
 
-                sectionResult = _assembler.AddSection(
+                sectionResult = _assembler.AddSectionFromBlocks(
                     sections,
                     sourceRefs,
                     "working_memory",
                     PackageSectionBudgetResolver.GetPriority(policy, "working_memory", 90),
-                    workingContent,
+                    workingBlocks,
                     ContextContentFormat.Markdown,
                     ContextItemRefResolver.ResolveSourceRefs(activeWorking),
                     ContextItemRefResolver.ResolveItemRefs(activeWorking),
@@ -292,14 +296,16 @@ internal sealed class CandidateSelector
                         .ToArray();
 
                     var historicalToFormat = deprecatedWorking.Where(item => !globalSelectedIds.Contains(item.Id)).ToArray();
-                    var historicalContent = historicalToFormat.Length > 0 ? PackageSectionFormatter.FormatMemoryItems(historicalToFormat, tokenBudget) : "(所有历史审计记忆已在此前去重包含)";
+                    IEnumerable<string> historicalBlocks = historicalToFormat.Length > 0
+                        ? PackageSectionFormatter.FormatMemoryBlocks(historicalToFormat, tokenBudget)
+                        : new[] { "(所有历史审计记忆已在此前去重包含)" };
 
-                    sectionResult = _assembler.AddSection(
+                    sectionResult = _assembler.AddSectionFromBlocks(
                         sections,
                         sourceRefs,
                         "historical_context",
                         PackageSectionBudgetResolver.GetPriority(policy, "historical_context", 15),
-                        historicalContent,
+                        historicalBlocks,
                         ContextContentFormat.Markdown,
                         ContextItemRefResolver.ResolveSourceRefs(deprecatedWorking),
                         ContextItemRefResolver.ResolveItemRefs(deprecatedWorking),
@@ -343,14 +349,16 @@ internal sealed class CandidateSelector
                 .ToArray();
 
             var globalToFormat = globalItems.Where(item => !globalSelectedIds.Contains(item.Id)).ToArray();
-            var globalContent = globalToFormat.Length > 0 ? PackageSectionFormatter.FormatGlobalItems(globalToFormat) : "(所有全局上下文已在此前去重包含)";
+            IEnumerable<string> globalBlocks = globalToFormat.Length > 0
+                ? PackageSectionFormatter.FormatGlobalBlocks(globalToFormat)
+                : new[] { "(所有全局上下文已在此前去重包含)" };
 
-            sectionResult = _assembler.AddSection(
+            sectionResult = _assembler.AddSectionFromBlocks(
                 sections,
                 sourceRefs,
                 "global_context",
                 PackageSectionBudgetResolver.GetPriority(policy, "global_context", 80),
-                globalContent,
+                globalBlocks,
                 ContextContentFormat.Markdown,
                 ContextItemRefResolver.ResolveSourceRefs(globalItems),
                 ContextItemRefResolver.ResolveItemRefs(globalItems),
@@ -391,14 +399,16 @@ internal sealed class CandidateSelector
                 .ToArray();
 
             var recentToFormat = includedRecent.Where(item => !globalSelectedIds.Contains(item.SourceItemId)).ToArray();
-            var recentContent = recentToFormat.Length > 0 ? PackageSectionFormatter.FormatRecentContextItems(recentToFormat, tokenBudget) : "(所有近期短期上下文已在此前去重包含)";
+            IEnumerable<string> recentBlocks = recentToFormat.Length > 0
+                ? PackageSectionFormatter.FormatRecentContextBlocks(recentToFormat, tokenBudget)
+                : new[] { "(所有近期短期上下文已在此前去重包含)" };
 
-            sectionResult = _assembler.AddSection(
+            sectionResult = _assembler.AddSectionFromBlocks(
                 sections,
                 sourceRefs,
                 "recent_context",
                 PackageSectionBudgetResolver.GetPriority(policy, "recent_context", 70),
-                recentContent,
+                recentBlocks,
                 ContextContentFormat.Markdown,
                 ContextItemRefResolver.ResolveSourceRefs(includedRecent),
                 ContextItemRefResolver.ResolveItemRefs(includedRecent),
@@ -449,14 +459,16 @@ internal sealed class CandidateSelector
                 .ToArray();
 
             var stableToFormat = stableMemory.Where(item => !globalSelectedIds.Contains(item.Id)).ToArray();
-            var stableContent = stableToFormat.Length > 0 ? PackageSectionFormatter.FormatMemoryItems(stableToFormat, tokenBudget) : "(所有稳定背景记忆已在此前去重包含)";
+            IEnumerable<string> stableBlocks = stableToFormat.Length > 0
+                ? PackageSectionFormatter.FormatMemoryBlocks(stableToFormat, tokenBudget)
+                : new[] { "(所有稳定背景记忆已在此前去重包含)" };
 
-            sectionResult = _assembler.AddSection(
+            sectionResult = _assembler.AddSectionFromBlocks(
                 sections,
                 sourceRefs,
                 "stable_memory",
                 PackageSectionBudgetResolver.GetPriority(policy, "stable_memory", 60),
-                stableContent,
+                stableBlocks,
                 ContextContentFormat.Markdown,
                 ContextItemRefResolver.ResolveSourceRefs(stableMemory),
                 ContextItemRefResolver.ResolveItemRefs(stableMemory),
@@ -500,14 +512,16 @@ internal sealed class CandidateSelector
                 .ToArray();
 
             var softToFormat = activeSoftConstraints.Where(c => !globalSelectedIds.Contains(c.Id)).ToArray();
-            var softContent = softToFormat.Length > 0 ? PackageSectionFormatter.FormatConstraints(softToFormat, tokenBudget) : "(所有软约束已在此前去重包含)";
+            IEnumerable<string> softBlocks = softToFormat.Length > 0
+                ? PackageSectionFormatter.FormatConstraintBlocks(softToFormat, tokenBudget)
+                : new[] { "(所有软约束已在此前去重包含)" };
 
-            sectionResult = _assembler.AddSection(
+            sectionResult = _assembler.AddSectionFromBlocks(
                 sections,
                 sourceRefs,
                 "soft_constraints",
                 PackageSectionBudgetResolver.GetPriority(policy, "soft_constraints", 50),
-                softContent,
+                softBlocks,
                 ContextContentFormat.Markdown,
                 ContextItemRefResolver.ResolveSourceRefs(activeSoftConstraints),
                 ContextItemRefResolver.ResolveItemRefs(activeSoftConstraints),
@@ -546,14 +560,16 @@ internal sealed class CandidateSelector
                 .ToArray();
 
             var mergedToFormat = orderedMergedConstraints.Where(item => !globalSelectedIds.Contains(item.Constraint.Id)).ToArray();
-            var mergedContent = mergedToFormat.Length > 0 ? PackageSectionFormatter.FormatMergedConstraints(mergedToFormat, tokenBudget) : "(所有合并约束已在此前去重包含)";
+            IEnumerable<string> mergedBlocks = mergedToFormat.Length > 0
+                ? PackageSectionFormatter.FormatMergedConstraintBlocks(mergedToFormat, tokenBudget)
+                : new[] { "(所有合并约束已在此前去重包含)" };
 
-            sectionResult = _assembler.AddSection(
+            sectionResult = _assembler.AddSectionFromBlocks(
                 sections,
                 sourceRefs,
                 "constraints",
                 PackageSectionBudgetResolver.GetPriority(policy, "constraints", 95),
-                mergedContent,
+                mergedBlocks,
                 ContextContentFormat.Markdown,
                 ContextItemRefResolver.ResolveSourceRefs(activeMergedConstraints),
                 ContextItemRefResolver.ResolveItemRefs(activeMergedConstraints),
@@ -606,14 +622,16 @@ internal sealed class CandidateSelector
                     .ToArray();
 
                 var relatedToFormat = relatedItems.Where(item => !globalSelectedIds.Contains(item.Id)).ToArray();
-                var relatedContent = relatedToFormat.Length > 0 ? PackageSectionFormatter.FormatContextItems(relatedToFormat) : "(所有关联图谱扩展上下文已在此前去重包含)";
+                IEnumerable<string> relatedBlocks = relatedToFormat.Length > 0
+                    ? PackageSectionFormatter.FormatContextItemBlocks(relatedToFormat)
+                    : new[] { "(所有关联图谱扩展上下文已在此前去重包含)" };
 
-                sectionResult = _assembler.AddSection(
+                sectionResult = _assembler.AddSectionFromBlocks(
                     sections,
                     sourceRefs,
                     "related_context",
                     PackageSectionBudgetResolver.GetPriority(policy, "related_context", 40),
-                    relatedContent,
+                    relatedBlocks,
                     ContextContentFormat.Markdown,
                     ContextItemRefResolver.ResolveSourceRefs(relatedItems),
                     ContextItemRefResolver.ResolveItemRefs(relatedItems),

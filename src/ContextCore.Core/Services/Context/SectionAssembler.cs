@@ -1,3 +1,4 @@
+using System.Text;
 using ContextCore.Abstractions.Models;
 
 namespace ContextCore.Core;
@@ -36,6 +37,41 @@ internal sealed class SectionAssembler
             return SectionPackingResult.Dropped("content is empty");
         }
 
+        return AddSectionFromBlocks(
+            sections,
+            packageSourceRefs,
+            name,
+            priority,
+            new[] { content },
+            contentFormat,
+            sectionSourceRefs,
+            sectionItemRefs,
+            candidateIds,
+            tokenBudget,
+            sectionTokenBudget,
+            tokenContext,
+            ref estimatedTokens);
+    }
+
+    /// <summary>
+    /// 预算感知的流式 section 装配：逐项追加 block，达到预算即停止，
+    /// 只对最后一个条目做截断。避免将所有候选格式化为大字符串后再二分裁剪。
+    /// </summary>
+    internal SectionPackingResult AddSectionFromBlocks(
+        ICollection<ContextPackageSection> sections,
+        ISet<string> packageSourceRefs,
+        string name,
+        int priority,
+        IEnumerable<string> contentBlocks,
+        ContextContentFormat contentFormat,
+        IReadOnlyList<string> sectionSourceRefs,
+        IReadOnlyList<string> sectionItemRefs,
+        IReadOnlyList<string> candidateIds,
+        int tokenBudget,
+        int sectionTokenBudget,
+        TokenEstimationContext tokenContext,
+        ref int estimatedTokens)
+    {
         var remainingBudget = tokenBudget - estimatedTokens;
         if (remainingBudget <= 0)
         {
@@ -47,9 +83,64 @@ internal sealed class SectionAssembler
             remainingBudget = Math.Min(remainingBudget, sectionTokenBudget);
         }
 
-        var sectionContent = content;
-        var sectionTokens = _estimateTokens(sectionContent, tokenContext);
+        var builder = new StringBuilder();
+        var approxTokens = 0;
         var truncated = false;
+        var hasContent = false;
+        var separatorTokens = _estimateTokens("\n\n", tokenContext);
+
+        foreach (var block in contentBlocks)
+        {
+            if (string.IsNullOrWhiteSpace(block))
+            {
+                continue;
+            }
+
+            var blockTokens = _estimateTokens(block, tokenContext);
+            var withSeparator = hasContent ? separatorTokens + blockTokens : blockTokens;
+
+            if (approxTokens + withSeparator > remainingBudget)
+            {
+                // 预算不足：尝试截断当前 block 的部分内容
+                var partialBudget = remainingBudget - approxTokens - (hasContent ? separatorTokens : 0);
+                if (partialBudget > 0)
+                {
+                    var trimmed = TrimToTokenBudget(block, partialBudget, tokenContext);
+                    if (!string.IsNullOrWhiteSpace(trimmed))
+                    {
+                        if (hasContent)
+                        {
+                            builder.AppendLine();
+                            builder.AppendLine();
+                        }
+                        builder.Append(trimmed);
+                        truncated = true;
+                        hasContent = true;
+                    }
+                }
+                break;
+            }
+
+            if (hasContent)
+            {
+                builder.AppendLine();
+                builder.AppendLine();
+            }
+            builder.Append(block);
+            approxTokens += withSeparator;
+            hasContent = true;
+        }
+
+        if (!hasContent)
+        {
+            return SectionPackingResult.Dropped("content is empty");
+        }
+
+        var sectionContent = builder.ToString();
+        // 最终一次精确 token 估算（替代旧实现的两次估算 + 二分搜索）
+        var sectionTokens = _estimateTokens(sectionContent, tokenContext);
+
+        // 安全兜底：若近似值偏差导致仍超预算，对完整内容做一次裁剪
         if (sectionTokens > remainingBudget)
         {
             sectionContent = TrimToTokenBudget(sectionContent, remainingBudget, tokenContext);
@@ -57,13 +148,7 @@ internal sealed class SectionAssembler
             {
                 return SectionPackingResult.Dropped("token budget exhausted");
             }
-
             sectionTokens = _estimateTokens(sectionContent, tokenContext);
-            if (sectionTokens > remainingBudget)
-            {
-                return SectionPackingResult.Dropped("token budget exhausted");
-            }
-
             truncated = true;
         }
 
