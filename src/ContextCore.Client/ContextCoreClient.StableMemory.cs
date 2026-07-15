@@ -71,26 +71,11 @@ public sealed partial class ContextCoreClient
         ArgumentException.ThrowIfNullOrWhiteSpace(itemId);
         ArgumentNullException.ThrowIfNull(request);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.WorkspaceId);
-        var generatedRequest = await MapToGenerated(request, ContextCore.Client.Generated.Models.StableLifecycleReviewRequest.CreateFromDiscriminatorValue).ConfigureAwait(false)
-            ?? throw new ArgumentNullException(nameof(request));
-        try
-        {
-            var result = await _generated.Api.Memory.Stable[itemId].Deprecate.PostAsync(generatedRequest, config =>
-            {
-                config.QueryParameters.WorkspaceId = request.WorkspaceId;
-                if (request.CollectionId is not null) config.QueryParameters.CollectionId = request.CollectionId;
-            }, cancellationToken).ConfigureAwait(false);
-            return MapToAbstraction<StableLifecycleReviewResult>(result)
-                ?? throw new InvalidOperationException($"ContextCore returned an empty response for POST api/memory/stable/{itemId}/deprecate.");
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        var qs = new QueryBuilder()
+            .Add("collectionId", request.CollectionId)
+            .Add("workspaceId", request.WorkspaceId);
+        return await PostRequiredAsync<StableLifecycleReviewRequest, StableLifecycleReviewResult>(
+            $"api/memory/stable/{Escape(itemId)}/deprecate{qs}", request, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<StableLifecycleReviewResult> SupersedeStableMemoryAsync(
@@ -101,26 +86,11 @@ public sealed partial class ContextCoreClient
         ArgumentException.ThrowIfNullOrWhiteSpace(itemId);
         ArgumentNullException.ThrowIfNull(request);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.WorkspaceId);
-        var generatedRequest = await MapToGenerated(request, ContextCore.Client.Generated.Models.StableLifecycleReviewRequest.CreateFromDiscriminatorValue).ConfigureAwait(false)
-            ?? throw new ArgumentNullException(nameof(request));
-        try
-        {
-            var result = await _generated.Api.Memory.Stable[itemId].Supersede.PostAsync(generatedRequest, config =>
-            {
-                config.QueryParameters.WorkspaceId = request.WorkspaceId;
-                if (request.CollectionId is not null) config.QueryParameters.CollectionId = request.CollectionId;
-            }, cancellationToken).ConfigureAwait(false);
-            return MapToAbstraction<StableLifecycleReviewResult>(result)
-                ?? throw new InvalidOperationException($"ContextCore returned an empty response for POST api/memory/stable/{itemId}/supersede.");
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        var qs = new QueryBuilder()
+            .Add("collectionId", request.CollectionId)
+            .Add("workspaceId", request.WorkspaceId);
+        return await PostRequiredAsync<StableLifecycleReviewRequest, StableLifecycleReviewResult>(
+            $"api/memory/stable/{Escape(itemId)}/supersede{qs}", request, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<StableLifecycleReviewResult> RejectStableMemoryAsync(
@@ -131,26 +101,11 @@ public sealed partial class ContextCoreClient
         ArgumentException.ThrowIfNullOrWhiteSpace(itemId);
         ArgumentNullException.ThrowIfNull(request);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.WorkspaceId);
-        var generatedRequest = await MapToGenerated(request, ContextCore.Client.Generated.Models.StableLifecycleReviewRequest.CreateFromDiscriminatorValue).ConfigureAwait(false)
-            ?? throw new ArgumentNullException(nameof(request));
-        try
-        {
-            var result = await _generated.Api.Memory.Stable[itemId].Reject.PostAsync(generatedRequest, config =>
-            {
-                config.QueryParameters.WorkspaceId = request.WorkspaceId;
-                if (request.CollectionId is not null) config.QueryParameters.CollectionId = request.CollectionId;
-            }, cancellationToken).ConfigureAwait(false);
-            return MapToAbstraction<StableLifecycleReviewResult>(result)
-                ?? throw new InvalidOperationException($"ContextCore returned an empty response for POST api/memory/stable/{itemId}/reject.");
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        var qs = new QueryBuilder()
+            .Add("collectionId", request.CollectionId)
+            .Add("workspaceId", request.WorkspaceId);
+        return await PostRequiredAsync<StableLifecycleReviewRequest, StableLifecycleReviewResult>(
+            $"api/memory/stable/{Escape(itemId)}/reject{qs}", request, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<StableLifecycleReviewRecord>> GetStableMemoryReviewsAsync(

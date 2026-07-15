@@ -13,27 +13,13 @@ public sealed partial class ContextCoreClient
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
-        try
-        {
-            var result = await _generated.Api.Memory.ShortTerm.Raw.GetAsync(config =>
-            {
-                config.QueryParameters.WorkspaceId = workspaceId;
-                config.QueryParameters.Take = take.ToString();
-                config.QueryParameters.CollectionId = collectionId;
-                config.QueryParameters.SessionId = sessionId;
-            }, cancellationToken).ConfigureAwait(false);
-            var mapped = await MapStreamToAbstraction<IReadOnlyList<ShortTermRawEvent>>(result).ConfigureAwait(false);
-            return mapped
-                ?? throw new InvalidOperationException("ContextCore returned an empty response for GET api/memory/short-term/raw.");
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        var qs = new QueryBuilder()
+            .Add("workspaceId", workspaceId)
+            .Add("take", take)
+            .Add("collectionId", collectionId)
+            .Add("sessionId", sessionId);
+        return await GetRequiredAsync<IReadOnlyList<ShortTermRawEvent>>(
+            $"api/memory/short-term/raw{qs}", cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<ShortTermWorkingItem>> GetShortTermWorkingItemsAsync(
@@ -44,27 +30,13 @@ public sealed partial class ContextCoreClient
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
-        try
-        {
-            var result = await _generated.Api.Memory.ShortTerm.Working.GetAsync(config =>
-            {
-                config.QueryParameters.WorkspaceId = workspaceId;
-                config.QueryParameters.Take = take.ToString();
-                config.QueryParameters.CollectionId = collectionId;
-                config.QueryParameters.SessionId = sessionId;
-            }, cancellationToken).ConfigureAwait(false);
-            var mapped = await MapStreamToAbstraction<IReadOnlyList<ShortTermWorkingItem>>(result).ConfigureAwait(false);
-            return mapped
-                ?? throw new InvalidOperationException("ContextCore returned an empty response for GET api/memory/short-term/working.");
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        var qs = new QueryBuilder()
+            .Add("workspaceId", workspaceId)
+            .Add("take", take)
+            .Add("collectionId", collectionId)
+            .Add("sessionId", sessionId);
+        return await GetRequiredAsync<IReadOnlyList<ShortTermWorkingItem>>(
+            $"api/memory/short-term/working{qs}", cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<ShortTermMemorySummary> GetShortTermSummaryAsync(
@@ -75,27 +47,13 @@ public sealed partial class ContextCoreClient
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
-        try
-        {
-            var result = await _generated.Api.Memory.ShortTerm.Summary.GetAsync(config =>
-            {
-                config.QueryParameters.WorkspaceId = workspaceId;
-                config.QueryParameters.LatestRawTake = latestRawTake.ToString();
-                config.QueryParameters.CollectionId = collectionId;
-                config.QueryParameters.SessionId = sessionId;
-            }, cancellationToken).ConfigureAwait(false);
-            var mapped = await MapStreamToAbstraction<ShortTermMemorySummary>(result).ConfigureAwait(false);
-            return mapped
-                ?? throw new InvalidOperationException("ContextCore returned an empty response for GET api/memory/short-term/summary.");
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        var qs = new QueryBuilder()
+            .Add("workspaceId", workspaceId)
+            .Add("latestRawTake", latestRawTake)
+            .Add("collectionId", collectionId)
+            .Add("sessionId", sessionId);
+        return await GetRequiredAsync<ShortTermMemorySummary>(
+            $"api/memory/short-term/summary{qs}", cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<ShortTermMemoryCompactionResult> CompactShortTermMemoryAsync(
@@ -103,23 +61,8 @@ public sealed partial class ContextCoreClient
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
-        var generatedRequest = await MapToGenerated(request, ContextCore.Client.Generated.Models.ShortTermMemoryCompactionRequest.CreateFromDiscriminatorValue).ConfigureAwait(false)
-            ?? throw new ArgumentNullException(nameof(request));
-        try
-        {
-            var result = await _generated.Api.Memory.ShortTerm.Compact.PostAsync(generatedRequest, cancellationToken: cancellationToken).ConfigureAwait(false);
-            var mapped = await MapStreamToAbstraction<ShortTermMemoryCompactionResult>(result).ConfigureAwait(false);
-            return mapped
-                ?? throw new InvalidOperationException("ContextCore returned an empty response for POST api/memory/short-term/compact.");
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        return await PostRequiredAsync<ShortTermMemoryCompactionRequest, ShortTermMemoryCompactionResult>(
+            "api/memory/short-term/compact", request, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<ShortTermArchiveSummary> GetShortTermArchiveSummaryAsync(
@@ -129,25 +72,12 @@ public sealed partial class ContextCoreClient
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
-        try
-        {
-            var result = await _generated.Api.Memory.ShortTerm.Archive.Summary.GetAsync(config =>
-            {
-                config.QueryParameters.WorkspaceId = workspaceId;
-                config.QueryParameters.CollectionId = collectionId;
-                config.QueryParameters.SessionId = sessionId;
-            }, cancellationToken).ConfigureAwait(false);
-            return MapToAbstraction<ShortTermArchiveSummary>(result)
-                ?? throw new InvalidOperationException("ContextCore returned an empty response for GET api/memory/short-term/archive/summary.");
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        var qs = new QueryBuilder()
+            .Add("workspaceId", workspaceId)
+            .Add("collectionId", collectionId)
+            .Add("sessionId", sessionId);
+        return await GetRequiredAsync<ShortTermArchiveSummary>(
+            $"api/memory/short-term/archive/summary{qs}", cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<ShortTermArchiveItemsResponse> GetShortTermArchiveItemsAsync(
@@ -159,27 +89,14 @@ public sealed partial class ContextCoreClient
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
-        try
-        {
-            var result = await _generated.Api.Memory.ShortTerm.Archive.Items.GetAsync(config =>
-            {
-                config.QueryParameters.WorkspaceId = workspaceId;
-                config.QueryParameters.Limit = limit.ToString();
-                config.QueryParameters.CollectionId = collectionId;
-                config.QueryParameters.SessionId = sessionId;
-                config.QueryParameters.Kind = kind;
-            }, cancellationToken).ConfigureAwait(false);
-            return MapToAbstraction<ShortTermArchiveItemsResponse>(result)
-                ?? throw new InvalidOperationException("ContextCore returned an empty response for GET api/memory/short-term/archive/items.");
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        var qs = new QueryBuilder()
+            .Add("workspaceId", workspaceId)
+            .Add("collectionId", collectionId)
+            .Add("kind", kind)
+            .Add("limit", limit)
+            .Add("sessionId", sessionId);
+        return await GetRequiredAsync<ShortTermArchiveItemsResponse>(
+            $"api/memory/short-term/archive/items{qs}", cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<ShortTermCompactionRun>> GetShortTermCompactionRunsAsync(
@@ -190,28 +107,14 @@ public sealed partial class ContextCoreClient
         int take = 20,
         CancellationToken cancellationToken = default)
     {
-        try
-        {
-            var result = await _generated.Api.Memory.ShortTerm.Compact.Runs.GetAsync(config =>
-            {
-                config.QueryParameters.Take = take.ToString();
-                config.QueryParameters.WorkspaceId = workspaceId;
-                config.QueryParameters.CollectionId = collectionId;
-                config.QueryParameters.SessionId = sessionId;
-                config.QueryParameters.Trigger = trigger;
-            }, cancellationToken).ConfigureAwait(false);
-            var mapped = await MapStreamToAbstraction<IReadOnlyList<ShortTermCompactionRun>>(result).ConfigureAwait(false);
-            return mapped
-                ?? throw new InvalidOperationException("ContextCore returned an empty response for GET api/memory/short-term/compact/runs.");
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        var qs = new QueryBuilder()
+            .Add("collectionId", collectionId)
+            .Add("sessionId", sessionId)
+            .Add("take", take)
+            .Add("trigger", trigger)
+            .Add("workspaceId", workspaceId);
+        return await GetRequiredAsync<IReadOnlyList<ShortTermCompactionRun>>(
+            $"api/memory/short-term/compact/runs{qs}", cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<ShortTermCompactionRun> GetShortTermCompactionRunAsync(
@@ -219,20 +122,8 @@ public sealed partial class ContextCoreClient
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(runId);
-        try
-        {
-            var result = await _generated.Api.Memory.ShortTerm.Compact.Runs[runId].GetAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
-            return MapToAbstraction<ShortTermCompactionRun>(result)
-                ?? throw new InvalidOperationException($"ContextCore returned an empty response for GET api/memory/short-term/compact/runs/{runId}.");
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        return await GetRequiredAsync<ShortTermCompactionRun>(
+            $"api/memory/short-term/compact/runs/{Escape(runId)}", cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<ShortTermPromotionCandidate>> GenerateShortTermPromotionCandidatesAsync(
@@ -240,23 +131,8 @@ public sealed partial class ContextCoreClient
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
-        var generatedRequest = await MapToGenerated(request, ContextCore.Client.Generated.Models.ShortTermPromotionCandidateGenerationRequest.CreateFromDiscriminatorValue).ConfigureAwait(false)
-            ?? throw new ArgumentNullException(nameof(request));
-        try
-        {
-            var result = await _generated.Api.Memory.ShortTerm.Promotion.Candidates.Generate.PostAsync(generatedRequest, cancellationToken: cancellationToken).ConfigureAwait(false);
-            var mapped = await MapStreamToAbstraction<IReadOnlyList<ShortTermPromotionCandidate>>(result).ConfigureAwait(false);
-            return mapped
-                ?? throw new InvalidOperationException("ContextCore returned an empty response for POST api/memory/short-term/promotion/candidates/generate.");
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        return await PostRequiredAsync<ShortTermPromotionCandidateGenerationRequest, IReadOnlyList<ShortTermPromotionCandidate>>(
+            "api/memory/short-term/promotion/candidates/generate", request, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<ShortTermPromotionCandidate>> GetShortTermPromotionCandidatesAsync(
@@ -286,20 +162,8 @@ public sealed partial class ContextCoreClient
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(candidateId);
-        try
-        {
-            var result = await _generated.Api.Memory.ShortTerm.Promotion.Candidates[candidateId].GetAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
-            return MapToAbstraction<ShortTermPromotionCandidate>(result)
-                ?? throw new InvalidOperationException($"ContextCore returned an empty response for GET api/memory/short-term/promotion/candidates/{candidateId}.");
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        return await GetRequiredAsync<ShortTermPromotionCandidate>(
+            $"api/memory/short-term/promotion/candidates/{Escape(candidateId)}", cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<ShortTermPromotionCandidate>> QueryShortTermPromotionCandidatesAsync(
@@ -316,30 +180,18 @@ public sealed partial class ContextCoreClient
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
-        try
-        {
-            var result = await _generated.Api.Memory.ShortTerm.Promotion.Candidates.GetAsync(config =>
-            {
-                config.QueryParameters.WorkspaceId = workspaceId;
-                config.QueryParameters.Limit = limit.ToString();
-                config.QueryParameters.Offset = offset.ToString();
-                config.QueryParameters.CollectionId = collectionId;
-                config.QueryParameters.SessionId = sessionId;
-                config.QueryParameters.Status = (int?)status;
-                config.QueryParameters.Kind = kind;
-                config.QueryParameters.SuggestedTargetLayer = suggestedTargetLayer;
-                config.QueryParameters.MinConfidence = minConfidence?.ToString();
-                config.QueryParameters.MinImportance = minImportance?.ToString();
-            }, cancellationToken).ConfigureAwait(false);
-            return MapCollectionToAbstraction<ShortTermPromotionCandidate>(result);
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        var qs = new QueryBuilder()
+            .Add("workspaceId", workspaceId)
+            .Add("collectionId", collectionId)
+            .Add("kind", kind)
+            .Add("limit", limit)
+            .Add("minConfidence", minConfidence)
+            .Add("minImportance", minImportance)
+            .Add("offset", offset)
+            .Add("sessionId", sessionId)
+            .Add("status", ((int?)status)?.ToString())
+            .Add("suggestedTargetLayer", suggestedTargetLayer);
+        return await GetRequiredAsync<IReadOnlyList<ShortTermPromotionCandidate>>(
+            $"api/memory/short-term/promotion/candidates{qs}", cancellationToken).ConfigureAwait(false);
     }
 }

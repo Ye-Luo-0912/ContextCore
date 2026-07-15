@@ -31,33 +31,16 @@ public sealed partial class ContextCoreClient
         ArgumentException.ThrowIfNullOrWhiteSpace(id);
         ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
         ArgumentException.ThrowIfNullOrWhiteSpace(collectionId);
-
-        try
-        {
-            var result = await _generated.Api.Context[id].GetAsync(config =>
-            {
-                config.QueryParameters.WorkspaceId = workspaceId;
-                config.QueryParameters.CollectionId = collectionId;
-            }, cancellationToken).ConfigureAwait(false);
-            return MapToAbstraction<ContextItem>(result)
-                ?? throw new InvalidOperationException($"ContextCore returned an empty response for GET api/context/{id}.");
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        var qs = new QueryBuilder()
+            .Add("collectionId", collectionId)
+            .Add("workspaceId", workspaceId);
+        return await GetRequiredAsync<ContextItem>($"api/context/{Escape(id)}{qs}", cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<ContextQueryResponse> QueryContextAsync(
         ContextQuery query,
         CancellationToken cancellationToken = default)
     {
-        // Query 端点的生成 RequestBuilder 无 errorMapping，400 错误会丢失结构化错误体，
-        // 保留直接 HttpClient + STJ 反序列化以正确读取错误响应。
         ArgumentNullException.ThrowIfNull(query);
         var items = await PostRequiredAsync<ContextQuery, IReadOnlyList<ContextItem>>(
             "api/context/query", query, cancellationToken).ConfigureAwait(false);

@@ -42,64 +42,24 @@ public sealed partial class ContextCoreClient
         ArgumentException.ThrowIfNullOrWhiteSpace(itemId);
         ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
         ArgumentException.ThrowIfNullOrWhiteSpace(collectionId);
-        try
-        {
-            var result = await _generated.Api.Relations[workspaceId][collectionId][itemId].Subgraph.GetAsync(config =>
-            {
-                config.QueryParameters.Depth = depth.ToString();
-                config.QueryParameters.Direction = direction;
-                if (allowedTypes is { Length: > 0 })
-                {
-                    config.QueryParameters.Types = string.Join(",", allowedTypes);
-                }
-            }, cancellationToken).ConfigureAwait(false);
-            return MapToAbstraction<RelationSubgraph>(result)
-                ?? throw new InvalidOperationException($"ContextCore returned an empty response for GET api/relations/{workspaceId}/{collectionId}/{itemId}/subgraph.");
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        var qs = new QueryBuilder()
+            .Add("depth", depth)
+            .Add("direction", direction)
+            .Add("types", allowedTypes is { Length: > 0 } ? string.Join(",", allowedTypes) : null);
+        return await GetRequiredAsync<RelationSubgraph>(
+            $"api/relations/{Escape(workspaceId)}/{Escape(collectionId)}/{Escape(itemId)}/subgraph{qs}", cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<RelationTypeDefinition>> GetRelationTypesAsync(
         CancellationToken cancellationToken = default)
     {
-        try
-        {
-            var result = await _generated.Api.Relations.Types.GetAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
-            return MapCollectionToAbstraction<RelationTypeDefinition>(result);
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        return await GetRequiredAsync<IReadOnlyList<RelationTypeDefinition>>("api/relations/types", cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<RelationExpansionProfile>> GetRelationExpansionProfilesAsync(
         CancellationToken cancellationToken = default)
     {
-        try
-        {
-            var result = await _generated.Api.Relations.Expansion.Profiles.GetAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
-            return MapCollectionToAbstraction<RelationExpansionProfile>(result);
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        return await GetRequiredAsync<IReadOnlyList<RelationExpansionProfile>>("api/relations/expansion/profiles", cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<RelationExpansionPreviewResponse> PreviewRelationExpansionAsync(
@@ -107,22 +67,8 @@ public sealed partial class ContextCoreClient
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
-        var generatedRequest = await MapToGenerated(request, ContextCore.Client.Generated.Models.RelationExpansionPreviewRequest.CreateFromDiscriminatorValue).ConfigureAwait(false)
-            ?? throw new ArgumentNullException(nameof(request));
-        try
-        {
-            var result = await _generated.Api.Relations.Expansion.Preview.PostAsync(generatedRequest, cancellationToken: cancellationToken).ConfigureAwait(false);
-            return MapToAbstraction<RelationExpansionPreviewResponse>(result)
-                ?? throw new InvalidOperationException("ContextCore returned an empty response for POST api/relations/expansion/preview.");
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        return await PostRequiredAsync<RelationExpansionPreviewRequest, RelationExpansionPreviewResponse>(
+            "api/relations/expansion/preview", request, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<RelationGraphDiagnosticsReport> GetRelationDiagnosticsAsync(
@@ -131,24 +77,10 @@ public sealed partial class ContextCoreClient
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
-        try
-        {
-            var result = await _generated.Api.Relations.Diagnostics.GetAsync(config =>
-            {
-                config.QueryParameters.WorkspaceId = workspaceId;
-                config.QueryParameters.CollectionId = collectionId;
-            }, cancellationToken).ConfigureAwait(false);
-            return MapToAbstraction<RelationGraphDiagnosticsReport>(result)
-                ?? throw new InvalidOperationException("ContextCore returned an empty response for GET api/relations/diagnostics.");
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        var qs = new QueryBuilder()
+            .Add("workspaceId", workspaceId)
+            .Add("collectionId", collectionId);
+        return await GetRequiredAsync<RelationGraphDiagnosticsReport>($"api/relations/diagnostics{qs}", cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<RelationGraphDiagnosticsReport> GetItemRelationDiagnosticsAsync(
@@ -159,24 +91,10 @@ public sealed partial class ContextCoreClient
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(itemId);
         ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
-        try
-        {
-            var result = await _generated.Api.Relations.Diagnostics[itemId].GetAsync(config =>
-            {
-                config.QueryParameters.WorkspaceId = workspaceId;
-                config.QueryParameters.CollectionId = collectionId;
-            }, cancellationToken).ConfigureAwait(false);
-            return MapToAbstraction<RelationGraphDiagnosticsReport>(result)
-                ?? throw new InvalidOperationException($"ContextCore returned an empty response for GET api/relations/diagnostics/{itemId}.");
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        var qs = new QueryBuilder()
+            .Add("workspaceId", workspaceId)
+            .Add("collectionId", collectionId);
+        return await GetRequiredAsync<RelationGraphDiagnosticsReport>($"api/relations/diagnostics/{Escape(itemId)}{qs}", cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<RelationExplainResponse> ExplainRelationAsync(
@@ -185,8 +103,6 @@ public sealed partial class ContextCoreClient
         string? collectionId = null,
         CancellationToken cancellationToken = default)
     {
-        // Explain 响应包含 UntypedNode 字段，Kiota JSON 序列化器无法正确处理 null UntypedNode，
-        // 保留直接 HttpClient + STJ 反序列化。
         ArgumentException.ThrowIfNullOrWhiteSpace(relationId);
         ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
         var qb = new QueryBuilder()
@@ -203,22 +119,8 @@ public sealed partial class ContextCoreClient
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(relationId);
         ArgumentNullException.ThrowIfNull(request);
-        var generatedRequest = await MapToGenerated(request, ContextCore.Client.Generated.Models.RelationReviewRequest.CreateFromDiscriminatorValue).ConfigureAwait(false)
-            ?? throw new ArgumentNullException(nameof(request));
-        try
-        {
-            var result = await _generated.Api.Relations[relationId].Review.PostAsync(generatedRequest, cancellationToken: cancellationToken).ConfigureAwait(false);
-            return MapToAbstraction<RelationReviewResult>(result)
-                ?? throw new InvalidOperationException($"ContextCore returned an empty response for POST api/relations/{relationId}/review.");
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        return await PostRequiredAsync<RelationReviewRequest, RelationReviewResult>(
+            $"api/relations/{Escape(relationId)}/review", request, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<RelationReviewResult> RejectRelationAsync(
@@ -228,22 +130,8 @@ public sealed partial class ContextCoreClient
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(relationId);
         ArgumentNullException.ThrowIfNull(request);
-        var generatedRequest = await MapToGenerated(request, ContextCore.Client.Generated.Models.RelationReviewRequest.CreateFromDiscriminatorValue).ConfigureAwait(false)
-            ?? throw new ArgumentNullException(nameof(request));
-        try
-        {
-            var result = await _generated.Api.Relations[relationId].Reject.PostAsync(generatedRequest, cancellationToken: cancellationToken).ConfigureAwait(false);
-            return MapToAbstraction<RelationReviewResult>(result)
-                ?? throw new InvalidOperationException($"ContextCore returned an empty response for POST api/relations/{relationId}/reject.");
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        return await PostRequiredAsync<RelationReviewRequest, RelationReviewResult>(
+            $"api/relations/{Escape(relationId)}/reject", request, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<RelationReviewResult> DeprecateRelationAsync(
@@ -253,22 +141,8 @@ public sealed partial class ContextCoreClient
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(relationId);
         ArgumentNullException.ThrowIfNull(request);
-        var generatedRequest = await MapToGenerated(request, ContextCore.Client.Generated.Models.RelationReviewRequest.CreateFromDiscriminatorValue).ConfigureAwait(false)
-            ?? throw new ArgumentNullException(nameof(request));
-        try
-        {
-            var result = await _generated.Api.Relations[relationId].Deprecate.PostAsync(generatedRequest, cancellationToken: cancellationToken).ConfigureAwait(false);
-            return MapToAbstraction<RelationReviewResult>(result)
-                ?? throw new InvalidOperationException($"ContextCore returned an empty response for POST api/relations/{relationId}/deprecate.");
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        return await PostRequiredAsync<RelationReviewRequest, RelationReviewResult>(
+            $"api/relations/{Escape(relationId)}/deprecate", request, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<RelationReviewResult> MarkRelationNeedsEvidenceAsync(
@@ -278,22 +152,8 @@ public sealed partial class ContextCoreClient
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(relationId);
         ArgumentNullException.ThrowIfNull(request);
-        var generatedRequest = await MapToGenerated(request, ContextCore.Client.Generated.Models.RelationReviewRequest.CreateFromDiscriminatorValue).ConfigureAwait(false)
-            ?? throw new ArgumentNullException(nameof(request));
-        try
-        {
-            var result = await _generated.Api.Relations[relationId].NeedsEvidence.PostAsync(generatedRequest, cancellationToken: cancellationToken).ConfigureAwait(false);
-            return MapToAbstraction<RelationReviewResult>(result)
-                ?? throw new InvalidOperationException($"ContextCore returned an empty response for POST api/relations/{relationId}/needs-evidence.");
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        return await PostRequiredAsync<RelationReviewRequest, RelationReviewResult>(
+            $"api/relations/{Escape(relationId)}/needs-evidence", request, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<RelationReviewRecord>> GetRelationReviewsAsync(
@@ -301,18 +161,6 @@ public sealed partial class ContextCoreClient
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(relationId);
-        try
-        {
-            var result = await _generated.Api.Relations[relationId].Reviews.GetAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
-            return MapCollectionToAbstraction<RelationReviewRecord>(result);
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        return await GetRequiredAsync<IReadOnlyList<RelationReviewRecord>>($"api/relations/{Escape(relationId)}/reviews", cancellationToken).ConfigureAwait(false);
     }
 }

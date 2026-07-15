@@ -17,22 +17,8 @@ public sealed partial class ContextCoreClient
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(item);
-        var generatedRequest = await MapToGenerated(item, ContextCore.Client.Generated.Models.WorkingMemoryItem.CreateFromDiscriminatorValue).ConfigureAwait(false)
-            ?? throw new ArgumentNullException(nameof(item));
-        try
-        {
-            var result = await _generated.Api.Memory.Working.Add.PostAsync(generatedRequest, cancellationToken: cancellationToken).ConfigureAwait(false);
-            return MapToAbstraction<WorkingMemoryItem>(result)
-                ?? throw new InvalidOperationException("ContextCore returned an empty response for POST api/memory/working/add.");
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        return await PostRequiredAsync<WorkingMemoryItem, WorkingMemoryItem>(
+            "api/memory/working/add", item, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<WorkingMemoryItem>> GetRecentWorkingMemoryAsync(
@@ -43,24 +29,12 @@ public sealed partial class ContextCoreClient
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
         ArgumentException.ThrowIfNullOrWhiteSpace(collectionId);
-        try
-        {
-            var result = await _generated.Api.Memory.Working.Recent.GetAsync(config =>
-            {
-                config.QueryParameters.WorkspaceId = workspaceId;
-                config.QueryParameters.CollectionId = collectionId;
-                config.QueryParameters.Take = take.ToString();
-            }, cancellationToken).ConfigureAwait(false);
-            return MapCollectionToAbstraction<WorkingMemoryItem>(result);
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        var qs = new QueryBuilder()
+            .Add("collectionId", collectionId)
+            .Add("workspaceId", workspaceId)
+            .Add("take", take);
+        return await GetRequiredAsync<IReadOnlyList<WorkingMemoryItem>>(
+            $"api/memory/working/recent{qs}", cancellationToken).ConfigureAwait(false);
     }
 
     public async Task ClearWorkingMemoryAsync(
@@ -75,20 +49,8 @@ public sealed partial class ContextCoreClient
             WorkspaceId = workspaceId,
             CollectionId = collectionId
         };
-        var generatedRequest = await MapToGenerated(scopeRequest, ContextCore.Client.Generated.Models.WorkingMemoryScopeRequest.CreateFromDiscriminatorValue).ConfigureAwait(false)
-            ?? throw new InvalidOperationException("Failed to map working memory scope request.");
-        try
-        {
-            await _generated.Api.Memory.Working.Clear.PostAsync(generatedRequest, cancellationToken: cancellationToken).ConfigureAwait(false);
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        await PostNoContentAsync<ContextCoreWorkingMemoryScopeRequest>(
+            "api/memory/working/clear", scopeRequest, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<WorkingMemoryActiveContext?> GetWorkingMemoryActiveContextAsync(
@@ -98,24 +60,11 @@ public sealed partial class ContextCoreClient
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
         ArgumentException.ThrowIfNullOrWhiteSpace(collectionId);
-        try
-        {
-            var result = await _generated.Api.Memory.Working.ActiveContext.GetAsync(config =>
-            {
-                config.QueryParameters.WorkspaceId = workspaceId;
-                config.QueryParameters.CollectionId = collectionId;
-            }, cancellationToken).ConfigureAwait(false);
-            return MapToAbstraction<WorkingMemoryActiveContext>(result)
-                ?? throw new InvalidOperationException("ContextCore returned an empty response for GET api/memory/working/active-context.");
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        var qs = new QueryBuilder()
+            .Add("collectionId", collectionId)
+            .Add("workspaceId", workspaceId);
+        return await GetRequiredAsync<WorkingMemoryActiveContext>(
+            $"api/memory/working/active-context{qs}", cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<WorkingMemoryActiveContext> SetWorkingMemoryActiveContextAsync(
@@ -123,22 +72,8 @@ public sealed partial class ContextCoreClient
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(activeContext);
-        var generatedRequest = await MapToGenerated(activeContext, ContextCore.Client.Generated.Models.WorkingMemoryActiveContext.CreateFromDiscriminatorValue).ConfigureAwait(false)
-            ?? throw new ArgumentNullException(nameof(activeContext));
-        try
-        {
-            var result = await _generated.Api.Memory.Working.ActiveContext.PostAsync(generatedRequest, cancellationToken: cancellationToken).ConfigureAwait(false);
-            return MapToAbstraction<WorkingMemoryActiveContext>(result)
-                ?? throw new InvalidOperationException("ContextCore returned an empty response for POST api/memory/working/active-context.");
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        return await PostRequiredAsync<WorkingMemoryActiveContext, WorkingMemoryActiveContext>(
+            "api/memory/working/active-context", activeContext, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<WorkingMemoryCurrentTask?> GetWorkingMemoryCurrentTaskAsync(
@@ -148,24 +83,11 @@ public sealed partial class ContextCoreClient
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
         ArgumentException.ThrowIfNullOrWhiteSpace(collectionId);
-        try
-        {
-            var result = await _generated.Api.Memory.Working.CurrentTask.GetAsync(config =>
-            {
-                config.QueryParameters.WorkspaceId = workspaceId;
-                config.QueryParameters.CollectionId = collectionId;
-            }, cancellationToken).ConfigureAwait(false);
-            return MapToAbstraction<WorkingMemoryCurrentTask>(result)
-                ?? throw new InvalidOperationException("ContextCore returned an empty response for GET api/memory/working/current-task.");
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        var qs = new QueryBuilder()
+            .Add("collectionId", collectionId)
+            .Add("workspaceId", workspaceId);
+        return await GetRequiredAsync<WorkingMemoryCurrentTask>(
+            $"api/memory/working/current-task{qs}", cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<WorkingMemoryCurrentTask> SetWorkingMemoryCurrentTaskAsync(
@@ -173,22 +95,8 @@ public sealed partial class ContextCoreClient
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(currentTask);
-        var generatedRequest = await MapToGenerated(currentTask, ContextCore.Client.Generated.Models.WorkingMemoryCurrentTask.CreateFromDiscriminatorValue).ConfigureAwait(false)
-            ?? throw new ArgumentNullException(nameof(currentTask));
-        try
-        {
-            var result = await _generated.Api.Memory.Working.CurrentTask.PostAsync(generatedRequest, cancellationToken: cancellationToken).ConfigureAwait(false);
-            return MapToAbstraction<WorkingMemoryCurrentTask>(result)
-                ?? throw new InvalidOperationException("ContextCore returned an empty response for POST api/memory/working/current-task.");
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        return await PostRequiredAsync<WorkingMemoryCurrentTask, WorkingMemoryCurrentTask>(
+            "api/memory/working/current-task", currentTask, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<ContextMemoryItem>> QueryMemoryAsync(

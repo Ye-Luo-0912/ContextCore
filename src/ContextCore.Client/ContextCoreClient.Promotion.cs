@@ -10,20 +10,8 @@ public sealed partial class ContextCoreClient
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(candidateId);
-        try
-        {
-            var result = await _generated.Api.Memory.ShortTerm.Promotion.Candidates[candidateId].Explain.GetAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
-            return MapToAbstraction<ShortTermPromotionCandidateExplanation>(result)
-                ?? throw new InvalidOperationException($"ContextCore returned an empty response for GET api/memory/short-term/promotion/candidates/{candidateId}/explain.");
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        return await GetRequiredAsync<ShortTermPromotionCandidateExplanation>(
+            $"api/memory/short-term/promotion/candidates/{Escape(candidateId)}/explain", cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<ReviewPromotionCandidateResponse> AcceptShortTermPromotionCandidateAsync(
@@ -33,22 +21,8 @@ public sealed partial class ContextCoreClient
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(candidateId);
         ArgumentNullException.ThrowIfNull(request);
-        var generatedRequest = await MapToGenerated(request, ContextCore.Client.Generated.Models.PromotionCandidateReviewRequest.CreateFromDiscriminatorValue).ConfigureAwait(false)
-            ?? throw new ArgumentNullException(nameof(request));
-        try
-        {
-            var result = await _generated.Api.Memory.ShortTerm.Promotion.Candidates[candidateId].Accept.PostAsync(generatedRequest, cancellationToken: cancellationToken).ConfigureAwait(false);
-            return MapToAbstraction<ReviewPromotionCandidateResponse>(result)
-                ?? throw new InvalidOperationException($"ContextCore returned an empty response for POST api/memory/short-term/promotion/candidates/{candidateId}/accept.");
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        return await PostRequiredAsync<ReviewPromotionCandidateRequest, ReviewPromotionCandidateResponse>(
+            $"api/memory/short-term/promotion/candidates/{Escape(candidateId)}/accept", request, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<PromotionCandidateReviewResult> AcceptShortTermPromotionCandidateAsync(
@@ -58,22 +32,8 @@ public sealed partial class ContextCoreClient
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(candidateId);
         ArgumentNullException.ThrowIfNull(request);
-        var generatedRequest = await MapToGenerated(request, ContextCore.Client.Generated.Models.PromotionCandidateReviewRequest.CreateFromDiscriminatorValue).ConfigureAwait(false)
-            ?? throw new ArgumentNullException(nameof(request));
-        try
-        {
-            var result = await _generated.Api.Memory.ShortTerm.Promotion.Candidates[candidateId].Accept.PostAsync(generatedRequest, cancellationToken: cancellationToken).ConfigureAwait(false);
-            return MapToAbstraction<PromotionCandidateReviewResult>(result)
-                ?? throw new InvalidOperationException($"ContextCore returned an empty response for POST api/memory/short-term/promotion/candidates/{candidateId}/accept.");
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        return await PostRequiredAsync<PromotionCandidateReviewRequest, PromotionCandidateReviewResult>(
+            $"api/memory/short-term/promotion/candidates/{Escape(candidateId)}/accept", request, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<ReviewPromotionCandidateResponse> RejectShortTermPromotionCandidateAsync(
@@ -83,22 +43,8 @@ public sealed partial class ContextCoreClient
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(candidateId);
         ArgumentNullException.ThrowIfNull(request);
-        var generatedRequest = await MapToGenerated(request, ContextCore.Client.Generated.Models.PromotionCandidateReviewRequest.CreateFromDiscriminatorValue).ConfigureAwait(false)
-            ?? throw new ArgumentNullException(nameof(request));
-        try
-        {
-            var result = await _generated.Api.Memory.ShortTerm.Promotion.Candidates[candidateId].Reject.PostAsync(generatedRequest, cancellationToken: cancellationToken).ConfigureAwait(false);
-            return MapToAbstraction<ReviewPromotionCandidateResponse>(result)
-                ?? throw new InvalidOperationException($"ContextCore returned an empty response for POST api/memory/short-term/promotion/candidates/{candidateId}/reject.");
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        return await PostRequiredAsync<ReviewPromotionCandidateRequest, ReviewPromotionCandidateResponse>(
+            $"api/memory/short-term/promotion/candidates/{Escape(candidateId)}/reject", request, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<PromotionCandidateReviewResult> RejectShortTermPromotionCandidateAsync(
@@ -108,22 +54,8 @@ public sealed partial class ContextCoreClient
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(candidateId);
         ArgumentNullException.ThrowIfNull(request);
-        var generatedRequest = await MapToGenerated(request, ContextCore.Client.Generated.Models.PromotionCandidateReviewRequest.CreateFromDiscriminatorValue).ConfigureAwait(false)
-            ?? throw new ArgumentNullException(nameof(request));
-        try
-        {
-            var result = await _generated.Api.Memory.ShortTerm.Promotion.Candidates[candidateId].Reject.PostAsync(generatedRequest, cancellationToken: cancellationToken).ConfigureAwait(false);
-            return MapToAbstraction<PromotionCandidateReviewResult>(result)
-                ?? throw new InvalidOperationException($"ContextCore returned an empty response for POST api/memory/short-term/promotion/candidates/{candidateId}/reject.");
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        return await PostRequiredAsync<PromotionCandidateReviewRequest, PromotionCandidateReviewResult>(
+            $"api/memory/short-term/promotion/candidates/{Escape(candidateId)}/reject", request, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<ReviewPromotionCandidateResponse> ExpireShortTermPromotionCandidateAsync(
@@ -133,22 +65,8 @@ public sealed partial class ContextCoreClient
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(candidateId);
         ArgumentNullException.ThrowIfNull(request);
-        var generatedRequest = await MapToGenerated(request, ContextCore.Client.Generated.Models.ReviewPromotionCandidateRequest.CreateFromDiscriminatorValue).ConfigureAwait(false)
-            ?? throw new ArgumentNullException(nameof(request));
-        try
-        {
-            var result = await _generated.Api.Memory.ShortTerm.Promotion.Candidates[candidateId].Expire.PostAsync(generatedRequest, cancellationToken: cancellationToken).ConfigureAwait(false);
-            return MapToAbstraction<ReviewPromotionCandidateResponse>(result)
-                ?? throw new InvalidOperationException($"ContextCore returned an empty response for POST api/memory/short-term/promotion/candidates/{candidateId}/expire.");
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        return await PostRequiredAsync<ReviewPromotionCandidateRequest, ReviewPromotionCandidateResponse>(
+            $"api/memory/short-term/promotion/candidates/{Escape(candidateId)}/expire", request, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<PromotionCandidateReviewRecord>> GetShortTermPromotionCandidateReviewsAsync(
@@ -156,20 +74,8 @@ public sealed partial class ContextCoreClient
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(candidateId);
-        try
-        {
-            var stream = await _generated.Api.Memory.ShortTerm.Promotion.Candidates[candidateId].Reviews.GetAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
-            return await MapStreamToAbstraction<IReadOnlyList<PromotionCandidateReviewRecord>>(stream).ConfigureAwait(false)
-                ?? throw new InvalidOperationException($"ContextCore returned an empty response for GET api/memory/short-term/promotion/candidates/{candidateId}/reviews.");
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        return await GetRequiredAsync<IReadOnlyList<PromotionCandidateReviewRecord>>(
+            $"api/memory/short-term/promotion/candidates/{Escape(candidateId)}/reviews", cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<StableReviewCandidate>> GenerateStableReviewCandidatesAsync(

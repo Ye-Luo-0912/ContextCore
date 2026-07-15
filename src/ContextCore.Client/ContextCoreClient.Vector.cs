@@ -12,24 +12,10 @@ public sealed partial class ContextCoreClient
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
         ArgumentException.ThrowIfNullOrWhiteSpace(collectionId);
-        try
-        {
-            var result = await _generated.Api.Vector.Status.GetAsync(config =>
-            {
-                config.QueryParameters.WorkspaceId = workspaceId;
-                config.QueryParameters.CollectionId = collectionId;
-            }, cancellationToken).ConfigureAwait(false);
-            return MapToAbstraction<VectorIndexStatusResponse>(result)
-                ?? throw new InvalidOperationException("ContextCore returned an empty response for GET api/vector/status.");
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        var qs = new QueryBuilder()
+            .Add("workspaceId", workspaceId)
+            .Add("collectionId", collectionId);
+        return await GetRequiredAsync<VectorIndexStatusResponse>($"api/vector/status{qs}", cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<VectorIndexDiagnosticsReport> GetVectorDiagnosticsAsync(
@@ -39,24 +25,10 @@ public sealed partial class ContextCoreClient
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
         ArgumentException.ThrowIfNullOrWhiteSpace(collectionId);
-        try
-        {
-            var result = await _generated.Api.Vector.Diagnostics.GetAsync(config =>
-            {
-                config.QueryParameters.WorkspaceId = workspaceId;
-                config.QueryParameters.CollectionId = collectionId;
-            }, cancellationToken).ConfigureAwait(false);
-            return MapToAbstraction<VectorIndexDiagnosticsReport>(result)
-                ?? throw new InvalidOperationException("ContextCore returned an empty response for GET api/vector/diagnostics.");
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        var qs = new QueryBuilder()
+            .Add("workspaceId", workspaceId)
+            .Add("collectionId", collectionId);
+        return await GetRequiredAsync<VectorIndexDiagnosticsReport>($"api/vector/diagnostics{qs}", cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<VectorReindexPreviewResponse> PreviewVectorReindexAsync(
@@ -66,22 +38,8 @@ public sealed partial class ContextCoreClient
         ArgumentNullException.ThrowIfNull(request);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.WorkspaceId);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.CollectionId);
-        var generatedRequest = await MapToGenerated(request, ContextCore.Client.Generated.Models.VectorReindexPreviewRequest.CreateFromDiscriminatorValue).ConfigureAwait(false)
-            ?? throw new ArgumentNullException(nameof(request));
-        try
-        {
-            var result = await _generated.Api.Vector.ReindexPreview.PostAsync(generatedRequest, cancellationToken: cancellationToken).ConfigureAwait(false);
-            return MapToAbstraction<VectorReindexPreviewResponse>(result)
-                ?? throw new InvalidOperationException("ContextCore returned an empty response for POST api/vector/reindex-preview.");
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        return await PostRequiredAsync<VectorReindexPreviewRequest, VectorReindexPreviewResponse>(
+            "api/vector/reindex-preview", request, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<VectorQueryPreviewResult> PreviewVectorQueryAsync(
@@ -92,22 +50,8 @@ public sealed partial class ContextCoreClient
         ArgumentException.ThrowIfNullOrWhiteSpace(request.WorkspaceId);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.CollectionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.QueryText);
-        var generatedRequest = await MapToGenerated(request, ContextCore.Client.Generated.Models.VectorQueryPreviewRequest.CreateFromDiscriminatorValue).ConfigureAwait(false)
-            ?? throw new ArgumentNullException(nameof(request));
-        try
-        {
-            var result = await _generated.Api.Vector.QueryPreview.PostAsync(generatedRequest, cancellationToken: cancellationToken).ConfigureAwait(false);
-            return MapToAbstraction<VectorQueryPreviewResult>(result)
-                ?? throw new InvalidOperationException("ContextCore returned an empty response for POST api/vector/query-preview.");
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        return await PostRequiredAsync<VectorQueryPreviewRequest, VectorQueryPreviewResult>(
+            "api/vector/query-preview", request, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<VectorReindexPlan> CreateVectorReindexPlanAsync(
@@ -117,22 +61,8 @@ public sealed partial class ContextCoreClient
         ArgumentNullException.ThrowIfNull(request);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.WorkspaceId);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.CollectionId);
-        var generatedRequest = await MapToGenerated(request, ContextCore.Client.Generated.Models.VectorReindexRequest.CreateFromDiscriminatorValue).ConfigureAwait(false)
-            ?? throw new ArgumentNullException(nameof(request));
-        try
-        {
-            var result = await _generated.Api.Vector.ReindexPlan.PostAsync(generatedRequest, cancellationToken: cancellationToken).ConfigureAwait(false);
-            return MapToAbstraction<VectorReindexPlan>(result)
-                ?? throw new InvalidOperationException("ContextCore returned an empty response for POST api/vector/reindex-plan.");
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        return await PostRequiredAsync<VectorReindexRequest, VectorReindexPlan>(
+            "api/vector/reindex-plan", request, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<VectorReindexSubmitResponse> SubmitVectorReindexAsync(
@@ -142,22 +72,8 @@ public sealed partial class ContextCoreClient
         ArgumentNullException.ThrowIfNull(request);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.WorkspaceId);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.CollectionId);
-        var generatedRequest = await MapToGenerated(request, ContextCore.Client.Generated.Models.VectorReindexRequest.CreateFromDiscriminatorValue).ConfigureAwait(false)
-            ?? throw new ArgumentNullException(nameof(request));
-        try
-        {
-            var result = await _generated.Api.Vector.ReindexSubmit.PostAsync(generatedRequest, cancellationToken: cancellationToken).ConfigureAwait(false);
-            return MapToAbstraction<VectorReindexSubmitResponse>(result)
-                ?? throw new InvalidOperationException("ContextCore returned an empty response for POST api/vector/reindex-submit.");
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        return await PostRequiredAsync<VectorReindexRequest, VectorReindexSubmitResponse>(
+            "api/vector/reindex-submit", request, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<VectorReindexReportQueryResponse> GetVectorReindexReportsAsync(
@@ -168,25 +84,11 @@ public sealed partial class ContextCoreClient
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
         ArgumentException.ThrowIfNullOrWhiteSpace(collectionId);
-        try
-        {
-            var result = await _generated.Api.Vector.ReindexReports.GetAsync(config =>
-            {
-                config.QueryParameters.WorkspaceId = workspaceId;
-                config.QueryParameters.CollectionId = collectionId;
-                config.QueryParameters.Take = take.ToString();
-            }, cancellationToken).ConfigureAwait(false);
-            return MapToAbstraction<VectorReindexReportQueryResponse>(result)
-                ?? throw new InvalidOperationException("ContextCore returned an empty response for GET api/vector/reindex-reports.");
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        var qs = new QueryBuilder()
+            .Add("collectionId", collectionId)
+            .Add("workspaceId", workspaceId)
+            .Add("take", take);
+        return await GetRequiredAsync<VectorReindexReportQueryResponse>($"api/vector/reindex-reports{qs}", cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<VectorReindexResult> GetVectorReindexReportAsync(
@@ -194,20 +96,7 @@ public sealed partial class ContextCoreClient
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(reportId);
-        try
-        {
-            var result = await _generated.Api.Vector.ReindexReports[reportId].GetAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
-            return MapToAbstraction<VectorReindexResult>(result)
-                ?? throw new InvalidOperationException($"ContextCore returned an empty response for GET api/vector/reindex-reports/{reportId}.");
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        return await GetRequiredAsync<VectorReindexResult>($"api/vector/reindex-reports/{Escape(reportId)}", cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<VectorLifecycleMetadataReviewCandidateGenerationResult> GenerateVectorLifecycleMetadataReviewCandidatesAsync(
@@ -217,22 +106,8 @@ public sealed partial class ContextCoreClient
         ArgumentNullException.ThrowIfNull(request);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.WorkspaceId);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.CollectionId);
-        var generatedRequest = await MapToGenerated(request, ContextCore.Client.Generated.Models.VectorLifecycleMetadataReviewCandidateGenerationRequest.CreateFromDiscriminatorValue).ConfigureAwait(false)
-            ?? throw new ArgumentNullException(nameof(request));
-        try
-        {
-            var result = await _generated.Api.Vector.LifecycleMetadata.ReviewCandidates.Generate.PostAsync(generatedRequest, cancellationToken: cancellationToken).ConfigureAwait(false);
-            return MapToAbstraction<VectorLifecycleMetadataReviewCandidateGenerationResult>(result)
-                ?? throw new InvalidOperationException("ContextCore returned an empty response for POST api/vector/lifecycle-metadata/review-candidates/generate.");
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        return await PostRequiredAsync<VectorLifecycleMetadataReviewCandidateGenerationRequest, VectorLifecycleMetadataReviewCandidateGenerationResult>(
+            "api/vector/lifecycle-metadata/review-candidates/generate", request, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<VectorLifecycleMetadataReviewCandidate>> GetVectorLifecycleMetadataReviewCandidatesAsync(
@@ -248,30 +123,17 @@ public sealed partial class ContextCoreClient
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
-        try
-        {
-            var result = await _generated.Api.Vector.LifecycleMetadata.ReviewCandidates.GetAsync(config =>
-            {
-                config.QueryParameters.WorkspaceId = workspaceId;
-                config.QueryParameters.Limit = limit.ToString();
-                config.QueryParameters.Offset = offset.ToString();
-                config.QueryParameters.CollectionId = collectionId;
-                config.QueryParameters.Status = status;
-                config.QueryParameters.Layer = layer;
-                config.QueryParameters.ItemKind = itemKind;
-                config.QueryParameters.MustHitItemId = mustHitItemId;
-                config.QueryParameters.SourceEvalSet = sourceEvalSet;
-            }, cancellationToken).ConfigureAwait(false);
-            return MapCollectionToAbstraction<VectorLifecycleMetadataReviewCandidate>(result);
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        var qs = new QueryBuilder()
+            .Add("workspaceId", workspaceId)
+            .Add("collectionId", collectionId)
+            .Add("itemKind", itemKind)
+            .Add("layer", layer)
+            .Add("limit", limit)
+            .Add("mustHitItemId", mustHitItemId)
+            .Add("offset", offset)
+            .Add("sourceEvalSet", sourceEvalSet)
+            .Add("status", status);
+        return await GetRequiredAsync<IReadOnlyList<VectorLifecycleMetadataReviewCandidate>>($"api/vector/lifecycle-metadata/review-candidates{qs}", cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<VectorLifecycleMetadataReviewCandidate> GetVectorLifecycleMetadataReviewCandidateAsync(
@@ -279,20 +141,7 @@ public sealed partial class ContextCoreClient
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(candidateId);
-        try
-        {
-            var result = await _generated.Api.Vector.LifecycleMetadata.ReviewCandidates[candidateId].GetAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
-            return MapToAbstraction<VectorLifecycleMetadataReviewCandidate>(result)
-                ?? throw new InvalidOperationException($"ContextCore returned an empty response for GET api/vector/lifecycle-metadata/review-candidates/{candidateId}.");
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        return await GetRequiredAsync<VectorLifecycleMetadataReviewCandidate>($"api/vector/lifecycle-metadata/review-candidates/{Escape(candidateId)}", cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<VectorLifecycleMetadataReviewCandidateExplanation> ExplainVectorLifecycleMetadataReviewCandidateAsync(
@@ -300,20 +149,7 @@ public sealed partial class ContextCoreClient
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(candidateId);
-        try
-        {
-            var result = await _generated.Api.Vector.LifecycleMetadata.ReviewCandidates[candidateId].Explain.GetAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
-            return MapToAbstraction<VectorLifecycleMetadataReviewCandidateExplanation>(result)
-                ?? throw new InvalidOperationException($"ContextCore returned an empty response for GET api/vector/lifecycle-metadata/review-candidates/{candidateId}/explain.");
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        return await GetRequiredAsync<VectorLifecycleMetadataReviewCandidateExplanation>($"api/vector/lifecycle-metadata/review-candidates/{Escape(candidateId)}/explain", cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<VectorLifecycleMetadataReviewResult> ApproveVectorLifecycleMetadataReviewCandidateAsync(
@@ -345,19 +181,7 @@ public sealed partial class ContextCoreClient
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(candidateId);
-        try
-        {
-            var result = await _generated.Api.Vector.LifecycleMetadata.ReviewCandidates[candidateId].Reviews.GetAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
-            return MapCollectionToAbstraction<VectorLifecycleMetadataReviewRecord>(result);
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        return await GetRequiredAsync<IReadOnlyList<VectorLifecycleMetadataReviewRecord>>($"api/vector/lifecycle-metadata/review-candidates/{Escape(candidateId)}/reviews", cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<VectorLifecycleSidecarMetadataEntry>> GetVectorLifecycleMetadataSidecarAsync(
@@ -366,23 +190,10 @@ public sealed partial class ContextCoreClient
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
-        try
-        {
-            var result = await _generated.Api.Vector.LifecycleMetadata.Sidecar.GetAsync(config =>
-            {
-                config.QueryParameters.WorkspaceId = workspaceId;
-                config.QueryParameters.CollectionId = collectionId;
-            }, cancellationToken).ConfigureAwait(false);
-            return MapCollectionToAbstraction<VectorLifecycleSidecarMetadataEntry>(result);
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        var qs = new QueryBuilder()
+            .Add("workspaceId", workspaceId)
+            .Add("collectionId", collectionId);
+        return await GetRequiredAsync<IReadOnlyList<VectorLifecycleSidecarMetadataEntry>>($"api/vector/lifecycle-metadata/sidecar{qs}", cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<VectorLifecycleMetadataReviewResult> PostVectorLifecycleMetadataReviewAsync(
@@ -394,30 +205,15 @@ public sealed partial class ContextCoreClient
         ArgumentException.ThrowIfNullOrWhiteSpace(candidateId);
         ArgumentException.ThrowIfNullOrWhiteSpace(route);
         ArgumentNullException.ThrowIfNull(request);
-        var generatedRequest = await MapToGenerated(request, ContextCore.Client.Generated.Models.VectorLifecycleMetadataReviewRequest.CreateFromDiscriminatorValue).ConfigureAwait(false)
-            ?? throw new ArgumentNullException(nameof(request));
-        var item = _generated.Api.Vector.LifecycleMetadata.ReviewCandidates[candidateId];
-        try
+        var path = route switch
         {
-            Task<ContextCore.Client.Generated.Models.VectorLifecycleMetadataReviewResult?> postTask = route switch
-            {
-                "approve" => item.Approve.PostAsync(generatedRequest, cancellationToken: cancellationToken),
-                "reject" => item.Reject.PostAsync(generatedRequest, cancellationToken: cancellationToken),
-                "needs-evidence" => item.NeedsEvidence.PostAsync(generatedRequest, cancellationToken: cancellationToken),
-                "supersede" => item.Supersede.PostAsync(generatedRequest, cancellationToken: cancellationToken),
-                _ => throw new ArgumentException($"Unknown review route '{route}'.", nameof(route))
-            };
-            var result = await postTask.ConfigureAwait(false);
-            return MapToAbstraction<VectorLifecycleMetadataReviewResult>(result)
-                ?? throw new InvalidOperationException($"ContextCore returned an empty response for POST api/vector/lifecycle-metadata/review-candidates/{candidateId}/{route}.");
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+            "approve" => $"api/vector/lifecycle-metadata/review-candidates/{Escape(candidateId)}/approve",
+            "reject" => $"api/vector/lifecycle-metadata/review-candidates/{Escape(candidateId)}/reject",
+            "needs-evidence" => $"api/vector/lifecycle-metadata/review-candidates/{Escape(candidateId)}/needs-evidence",
+            "supersede" => $"api/vector/lifecycle-metadata/review-candidates/{Escape(candidateId)}/supersede",
+            _ => throw new ArgumentException($"Unknown review route '{route}'.", nameof(route))
+        };
+        return await PostRequiredAsync<VectorLifecycleMetadataReviewRequest, VectorLifecycleMetadataReviewResult>(
+            path, request, cancellationToken).ConfigureAwait(false);
     }
 }

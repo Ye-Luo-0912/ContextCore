@@ -13,25 +13,12 @@ public sealed partial class ContextCoreClient
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
-        try
-        {
-            var result = await _generated.Api.Constraints.GetAsync(config =>
-            {
-                config.QueryParameters.WorkspaceId = workspaceId;
-                config.QueryParameters.CollectionId = collectionId;
-                config.QueryParameters.Level = (int?)level;
-                config.QueryParameters.Take = take.ToString();
-            }, cancellationToken).ConfigureAwait(false);
-            return MapCollectionToAbstraction<ContextConstraint>(result);
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        var qs = new QueryBuilder()
+            .Add("workspaceId", workspaceId)
+            .Add("collectionId", collectionId)
+            .Add("level", ((int?)level)?.ToString())
+            .Add("take", take);
+        return await GetRequiredAsync<IReadOnlyList<ContextConstraint>>($"api/constraints{qs}", cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<ContextConstraint>> GetCandidateConstraintsAsync(
@@ -43,26 +30,13 @@ public sealed partial class ContextCoreClient
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
-        try
-        {
-            var result = await _generated.Api.Constraints.Candidates.GetAsync(config =>
-            {
-                config.QueryParameters.WorkspaceId = workspaceId;
-                config.QueryParameters.CollectionId = collectionId;
-                config.QueryParameters.Status = (int?)status;
-                config.QueryParameters.Limit = limit.ToString();
-                config.QueryParameters.Offset = offset.ToString();
-            }, cancellationToken).ConfigureAwait(false);
-            return MapCollectionToAbstraction<ContextConstraint>(result);
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        var qs = new QueryBuilder()
+            .Add("workspaceId", workspaceId)
+            .Add("collectionId", collectionId)
+            .Add("limit", limit)
+            .Add("offset", offset)
+            .Add("status", ((int?)status)?.ToString());
+        return await GetRequiredAsync<IReadOnlyList<ContextConstraint>>($"api/constraints/candidates{qs}", cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<ContextConstraint> GetCandidateConstraintAsync(
@@ -70,20 +44,7 @@ public sealed partial class ContextCoreClient
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(constraintId);
-        try
-        {
-            var result = await _generated.Api.Constraints.Candidates[constraintId].GetAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
-            return MapToAbstraction<ContextConstraint>(result)
-                ?? throw new InvalidOperationException($"ContextCore returned an empty response for GET api/constraints/candidates/{constraintId}.");
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        return await GetRequiredAsync<ContextConstraint>($"api/constraints/candidates/{Escape(constraintId)}", cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<CandidateConstraintReviewResult> ActivateCandidateConstraintAsync(
@@ -93,22 +54,8 @@ public sealed partial class ContextCoreClient
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(constraintId);
         ArgumentNullException.ThrowIfNull(request);
-        var generatedRequest = await MapToGenerated(request, ContextCore.Client.Generated.Models.CandidateConstraintReviewRequest.CreateFromDiscriminatorValue).ConfigureAwait(false)
-            ?? throw new ArgumentNullException(nameof(request));
-        try
-        {
-            var result = await _generated.Api.Constraints.Candidates[constraintId].Activate.PostAsync(generatedRequest, cancellationToken: cancellationToken).ConfigureAwait(false);
-            return MapToAbstraction<CandidateConstraintReviewResult>(result)
-                ?? throw new InvalidOperationException($"ContextCore returned an empty response for POST api/constraints/candidates/{constraintId}/activate.");
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        return await PostRequiredAsync<CandidateConstraintReviewRequest, CandidateConstraintReviewResult>(
+            $"api/constraints/candidates/{Escape(constraintId)}/activate", request, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<CandidateConstraintReviewResult> RejectCandidateConstraintAsync(
@@ -118,22 +65,8 @@ public sealed partial class ContextCoreClient
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(constraintId);
         ArgumentNullException.ThrowIfNull(request);
-        var generatedRequest = await MapToGenerated(request, ContextCore.Client.Generated.Models.CandidateConstraintReviewRequest.CreateFromDiscriminatorValue).ConfigureAwait(false)
-            ?? throw new ArgumentNullException(nameof(request));
-        try
-        {
-            var result = await _generated.Api.Constraints.Candidates[constraintId].Reject.PostAsync(generatedRequest, cancellationToken: cancellationToken).ConfigureAwait(false);
-            return MapToAbstraction<CandidateConstraintReviewResult>(result)
-                ?? throw new InvalidOperationException($"ContextCore returned an empty response for POST api/constraints/candidates/{constraintId}/reject.");
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        return await PostRequiredAsync<CandidateConstraintReviewRequest, CandidateConstraintReviewResult>(
+            $"api/constraints/candidates/{Escape(constraintId)}/reject", request, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<CandidateConstraintReviewRecord>> GetCandidateConstraintReviewsAsync(
@@ -141,19 +74,7 @@ public sealed partial class ContextCoreClient
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(constraintId);
-        try
-        {
-            var result = await _generated.Api.Constraints.Candidates[constraintId].Reviews.GetAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
-            return MapCollectionToAbstraction<CandidateConstraintReviewRecord>(result);
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        return await GetRequiredAsync<IReadOnlyList<CandidateConstraintReviewRecord>>($"api/constraints/candidates/{Escape(constraintId)}/reviews", cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<ConstraintGapGenerationResult> GenerateConstraintGapsAsync(
@@ -163,22 +84,8 @@ public sealed partial class ContextCoreClient
         ArgumentNullException.ThrowIfNull(request);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.WorkspaceId);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.CollectionId);
-        var generatedRequest = await MapToGenerated(request, ContextCore.Client.Generated.Models.ConstraintGapGenerationRequest.CreateFromDiscriminatorValue).ConfigureAwait(false)
-            ?? throw new ArgumentNullException(nameof(request));
-        try
-        {
-            var result = await _generated.Api.Constraints.Gaps.Generate.PostAsync(generatedRequest, cancellationToken: cancellationToken).ConfigureAwait(false);
-            return MapToAbstraction<ConstraintGapGenerationResult>(result)
-                ?? throw new InvalidOperationException("ContextCore returned an empty response for POST api/constraints/gaps/generate.");
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        return await PostRequiredAsync<ConstraintGapGenerationRequest, ConstraintGapGenerationResult>(
+            "api/constraints/gaps/generate", request, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<ConstraintGapCandidate>> GetConstraintGapsAsync(
@@ -213,30 +120,17 @@ public sealed partial class ContextCoreClient
     {
         ArgumentNullException.ThrowIfNull(query);
         ArgumentException.ThrowIfNullOrWhiteSpace(query.WorkspaceId);
-        try
-        {
-            var result = await _generated.Api.Constraints.Gaps.GetAsync(config =>
-            {
-                config.QueryParameters.WorkspaceId = query.WorkspaceId;
-                config.QueryParameters.CollectionId = query.CollectionId;
-                config.QueryParameters.SessionId = query.SessionId;
-                config.QueryParameters.Source = query.Source;
-                config.QueryParameters.SourceSampleId = query.SourceSampleId;
-                config.QueryParameters.Status = query.Status;
-                config.QueryParameters.Severity = query.Severity;
-                config.QueryParameters.Limit = query.Limit.ToString();
-                config.QueryParameters.Offset = query.Offset.ToString();
-            }, cancellationToken).ConfigureAwait(false);
-            return MapCollectionToAbstraction<ConstraintGapCandidate>(result);
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        var qs = new QueryBuilder()
+            .Add("workspaceId", query.WorkspaceId)
+            .Add("collectionId", query.CollectionId)
+            .Add("limit", query.Limit)
+            .Add("offset", query.Offset)
+            .Add("sessionId", query.SessionId)
+            .Add("severity", query.Severity)
+            .Add("source", query.Source)
+            .Add("sourceSampleId", query.SourceSampleId)
+            .Add("status", query.Status);
+        return await GetRequiredAsync<IReadOnlyList<ConstraintGapCandidate>>($"api/constraints/gaps{qs}", cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<ConstraintGapCandidate> GetConstraintGapAsync(
@@ -244,20 +138,7 @@ public sealed partial class ContextCoreClient
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(gapId);
-        try
-        {
-            var result = await _generated.Api.Constraints.Gaps[gapId].GetAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
-            return MapToAbstraction<ConstraintGapCandidate>(result)
-                ?? throw new InvalidOperationException($"ContextCore returned an empty response for GET api/constraints/gaps/{gapId}.");
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        return await GetRequiredAsync<ConstraintGapCandidate>($"api/constraints/gaps/{Escape(gapId)}", cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<ConstraintGapReviewResult> AcceptConstraintGapAsync(
@@ -267,22 +148,8 @@ public sealed partial class ContextCoreClient
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(gapId);
         ArgumentNullException.ThrowIfNull(request);
-        var generatedRequest = await MapToGenerated(request, ContextCore.Client.Generated.Models.ConstraintGapReviewRequest.CreateFromDiscriminatorValue).ConfigureAwait(false)
-            ?? throw new ArgumentNullException(nameof(request));
-        try
-        {
-            var result = await _generated.Api.Constraints.Gaps[gapId].Accept.PostAsync(generatedRequest, cancellationToken: cancellationToken).ConfigureAwait(false);
-            return MapToAbstraction<ConstraintGapReviewResult>(result)
-                ?? throw new InvalidOperationException($"ContextCore returned an empty response for POST api/constraints/gaps/{gapId}/accept.");
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        return await PostRequiredAsync<ConstraintGapReviewRequest, ConstraintGapReviewResult>(
+            $"api/constraints/gaps/{Escape(gapId)}/accept", request, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<ConstraintGapReviewResult> RejectConstraintGapAsync(
@@ -292,22 +159,8 @@ public sealed partial class ContextCoreClient
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(gapId);
         ArgumentNullException.ThrowIfNull(request);
-        var generatedRequest = await MapToGenerated(request, ContextCore.Client.Generated.Models.ConstraintGapReviewRequest.CreateFromDiscriminatorValue).ConfigureAwait(false)
-            ?? throw new ArgumentNullException(nameof(request));
-        try
-        {
-            var result = await _generated.Api.Constraints.Gaps[gapId].Reject.PostAsync(generatedRequest, cancellationToken: cancellationToken).ConfigureAwait(false);
-            return MapToAbstraction<ConstraintGapReviewResult>(result)
-                ?? throw new InvalidOperationException($"ContextCore returned an empty response for POST api/constraints/gaps/{gapId}/reject.");
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        return await PostRequiredAsync<ConstraintGapReviewRequest, ConstraintGapReviewResult>(
+            $"api/constraints/gaps/{Escape(gapId)}/reject", request, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<ConstraintGapReviewRecord>> GetConstraintGapReviewsAsync(
@@ -315,18 +168,6 @@ public sealed partial class ContextCoreClient
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(gapId);
-        try
-        {
-            var result = await _generated.Api.Constraints.Gaps[gapId].Reviews.GetAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
-            return MapCollectionToAbstraction<ConstraintGapReviewRecord>(result);
-        }
-        catch (ContextCore.Client.Generated.Models.ContextCoreErrorResponse ex)
-        {
-            throw ToApiException(ex);
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-        {
-            throw ToApiException(ex);
-        }
+        return await GetRequiredAsync<IReadOnlyList<ConstraintGapReviewRecord>>($"api/constraints/gaps/{Escape(gapId)}/reviews", cancellationToken).ConfigureAwait(false);
     }
 }

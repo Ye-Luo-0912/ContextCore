@@ -1,6 +1,0 @@
-Warning: KiotaBuilder Discriminator ContextMemoryLayer is not inherited from ContextMemoryLayer.
-Warning: KiotaBuilder Discriminator ContextScope is not inherited from ContextScope.
-Warning: KiotaBuilder Discriminator ContextFeedbackSignal is not inherited from ContextFeedbackSignal.
-Warning: KiotaBuilder Discriminator ContextFailureType is not inherited from ContextFailureType.
-Warning: KiotaBuilder Discriminator ContextMemoryStatus is not inherited from ContextMemoryStatus.
-Warning: KiotaBuilder Discriminator ConstraintLevel is not inherited from ConstraintLevel.
