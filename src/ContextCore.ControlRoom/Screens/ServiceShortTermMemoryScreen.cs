@@ -1,3 +1,4 @@
+using ContextCore.Abstractions.Models;
 using ContextCore.Client;
 using ContextCore.ControlRoom.Rendering;
 using ContextCore.ControlRoom.Services;
@@ -30,7 +31,11 @@ public static class ServiceShortTermMemoryScreen
             {
                 try
                 {
-                    var result = await service.CompactServiceShortTermMemoryAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+                    var result = await service.ServiceClient.CompactShortTermMemoryAsync(new ShortTermMemoryCompactionRequest
+                    {
+                        WorkspaceId = service.State.WorkspaceId,
+                        CollectionId = service.State.CollectionId
+                    }, cancellationToken).ConfigureAwait(false);
                     Console.WriteLine(ServiceOperationalRenderer.RenderShortTermCompactionResult(result));
                 }
                 catch (ContextCoreApiException ex)
@@ -45,8 +50,8 @@ public static class ServiceShortTermMemoryScreen
             {
                 try
                 {
-                    var summary = await service.GetServiceShortTermArchiveSummaryAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
-                    var items = await service.GetServiceShortTermArchiveItemsAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+                    var summary = await service.ServiceClient.GetShortTermArchiveSummaryAsync(service.State.WorkspaceId, service.State.CollectionId, cancellationToken: cancellationToken).ConfigureAwait(false);
+                    var items = await service.ServiceClient.GetShortTermArchiveItemsAsync(service.State.WorkspaceId, service.State.CollectionId, cancellationToken: cancellationToken).ConfigureAwait(false);
                     Console.WriteLine(ServiceOperationalRenderer.RenderShortTermArchiveSummary(summary));
                     Console.WriteLine();
                     Console.WriteLine(ServiceOperationalRenderer.RenderShortTermArchiveItems(items));

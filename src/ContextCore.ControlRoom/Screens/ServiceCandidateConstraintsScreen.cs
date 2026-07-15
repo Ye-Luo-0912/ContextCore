@@ -66,7 +66,7 @@ public static class ServiceCandidateConstraintsScreen
                 var constraintId = normalized[2..].Trim();
                 try
                 {
-                    var detail = await service.GetServiceCandidateConstraintAsync(constraintId, cancellationToken).ConfigureAwait(false);
+                    var detail = await service.ServiceClient.GetCandidateConstraintAsync(constraintId, cancellationToken).ConfigureAwait(false);
                     Console.WriteLine(ServiceOperationalRenderer.RenderCandidateConstraintDetail(detail));
                 }
                 catch (ContextCoreApiException ex)
@@ -83,7 +83,7 @@ public static class ServiceCandidateConstraintsScreen
                     service,
                     normalized[2..].Trim(),
                     "activate",
-                    (constraintId, request) => service.ActivateServiceCandidateConstraintAsync(constraintId, request, cancellationToken),
+                    (constraintId, request) => service.ServiceClient.ActivateCandidateConstraintAsync(constraintId, request, cancellationToken),
                     cancellationToken).ConfigureAwait(false);
                 continue;
             }
@@ -95,7 +95,7 @@ public static class ServiceCandidateConstraintsScreen
                     service,
                     normalized[2..].Trim(),
                     "reject",
-                    (constraintId, request) => service.RejectServiceCandidateConstraintAsync(constraintId, request, cancellationToken),
+                    (constraintId, request) => service.ServiceClient.RejectCandidateConstraintAsync(constraintId, request, cancellationToken),
                     cancellationToken).ConfigureAwait(false);
                 continue;
             }
@@ -105,7 +105,7 @@ public static class ServiceCandidateConstraintsScreen
                 var constraintId = normalized[2..].Trim();
                 try
                 {
-                    var reviews = await service.GetServiceCandidateConstraintReviewsAsync(constraintId, cancellationToken).ConfigureAwait(false);
+                    var reviews = await service.ServiceClient.GetCandidateConstraintReviewsAsync(constraintId, cancellationToken).ConfigureAwait(false);
                     Console.WriteLine(ServiceOperationalRenderer.RenderCandidateConstraintReviews(reviews));
                 }
                 catch (ContextCoreApiException ex)
@@ -131,7 +131,7 @@ public static class ServiceCandidateConstraintsScreen
 
         try
         {
-            var detail = await service.GetServiceCandidateConstraintAsync(constraintId, cancellationToken).ConfigureAwait(false);
+            var detail = await service.ServiceClient.GetCandidateConstraintAsync(constraintId, cancellationToken).ConfigureAwait(false);
             Console.WriteLine(ServiceOperationalRenderer.RenderCandidateConstraintDetail(detail));
         }
         catch (ContextCoreApiException ex)

@@ -35,7 +35,7 @@ public static class ServicePackageScreen
 
             try
             {
-                var result = await service.BuildServicePackageAsync(request, cancellationToken).ConfigureAwait(false);
+                var result = await service.ServiceClient.BuildPackageDetailedAsync(request, cancellationToken).ConfigureAwait(false);
                 Console.WriteLine(ServiceOperationRenderer.RenderPackageResult(result));
             }
             catch (ContextCoreApiException ex)

@@ -41,7 +41,7 @@ public static class ServiceStableMemoryScreen
                     var id = input[2..].Trim();
                     if (!string.IsNullOrWhiteSpace(id))
                     {
-                        var explanation = await service.ExplainServiceStableMemoryAsync(id, cancellationToken)
+                        var explanation = await service.ServiceClient.ExplainStableMemoryAsync(id, service.State.WorkspaceId, service.State.CollectionId, cancellationToken)
                             .ConfigureAwait(false);
                         Console.WriteLine(ServiceOperationalRenderer.RenderStableMemoryExplanation(explanation));
                     }
@@ -54,7 +54,7 @@ public static class ServiceStableMemoryScreen
                     var id = input[2..].Trim();
                     if (!string.IsNullOrWhiteSpace(id))
                     {
-                        var provenance = await service.GetServiceProvenanceAsync(id, cancellationToken)
+                        var provenance = await service.ServiceClient.GetProvenanceAsync(id, service.State.WorkspaceId, service.State.CollectionId, cancellationToken)
                             .ConfigureAwait(false);
                         Console.WriteLine(ServiceOperationalRenderer.RenderProvenance(provenance));
                     }
@@ -70,7 +70,7 @@ public static class ServiceStableMemoryScreen
                         : input[6..].Trim();
                     if (!string.IsNullOrWhiteSpace(id))
                     {
-                        var chain = await service.GetServiceStableReplacementChainAsync(id, cancellationToken)
+                        var chain = await service.ServiceClient.GetStableReplacementChainAsync(id, service.State.WorkspaceId, service.State.CollectionId, cancellationToken)
                             .ConfigureAwait(false);
                         Console.WriteLine(ServiceOperationalRenderer.RenderStableReplacementChain(chain));
                     }
@@ -88,7 +88,7 @@ public static class ServiceStableMemoryScreen
                         service,
                         id,
                         StableLifecycleReviewActions.Deprecate,
-                        (itemId, request) => service.DeprecateServiceStableMemoryAsync(itemId, request, cancellationToken),
+                        (itemId, request) => service.ServiceClient.DeprecateStableMemoryAsync(itemId, request, cancellationToken),
                         cancellationToken).ConfigureAwait(false);
                     continue;
                 }
@@ -103,7 +103,7 @@ public static class ServiceStableMemoryScreen
                         service,
                         id,
                         StableLifecycleReviewActions.Supersede,
-                        (itemId, request) => service.SupersedeServiceStableMemoryAsync(itemId, request, cancellationToken),
+                        (itemId, request) => service.ServiceClient.SupersedeStableMemoryAsync(itemId, request, cancellationToken),
                         cancellationToken).ConfigureAwait(false);
                     continue;
                 }
@@ -118,7 +118,7 @@ public static class ServiceStableMemoryScreen
                         service,
                         id,
                         StableLifecycleReviewActions.Reject,
-                        (itemId, request) => service.RejectServiceStableMemoryAsync(itemId, request, cancellationToken),
+                        (itemId, request) => service.ServiceClient.RejectStableMemoryAsync(itemId, request, cancellationToken),
                         cancellationToken).ConfigureAwait(false);
                     continue;
                 }
@@ -128,7 +128,7 @@ public static class ServiceStableMemoryScreen
                     var id = input[2..].Trim();
                     if (!string.IsNullOrWhiteSpace(id))
                     {
-                        var reviews = await service.GetServiceStableMemoryReviewsAsync(id, cancellationToken)
+                        var reviews = await service.ServiceClient.GetStableMemoryReviewsAsync(id, cancellationToken)
                             .ConfigureAwait(false);
                         Console.WriteLine(ServiceOperationalRenderer.RenderStableLifecycleReviews(reviews));
                     }
@@ -136,7 +136,7 @@ public static class ServiceStableMemoryScreen
                     continue;
                 }
 
-                var detail = await service.ExplainServiceStableMemoryAsync(input, cancellationToken)
+                var detail = await service.ServiceClient.ExplainStableMemoryAsync(input, service.State.WorkspaceId, service.State.CollectionId, cancellationToken)
                     .ConfigureAwait(false);
                 Console.WriteLine(ServiceOperationalRenderer.RenderStableMemoryDetail(detail.StableItem));
             }
@@ -163,7 +163,7 @@ public static class ServiceStableMemoryScreen
         StableMemoryExplanation explanation;
         try
         {
-            explanation = await service.ExplainServiceStableMemoryAsync(itemId, cancellationToken).ConfigureAwait(false);
+            explanation = await service.ServiceClient.ExplainStableMemoryAsync(itemId, service.State.WorkspaceId, service.State.CollectionId, cancellationToken).ConfigureAwait(false);
             Console.WriteLine(ServiceOperationalRenderer.RenderStableMemoryDetail(explanation.StableItem));
             Console.WriteLine(ServiceOperationalRenderer.RenderStableMemoryExplanation(explanation));
         }

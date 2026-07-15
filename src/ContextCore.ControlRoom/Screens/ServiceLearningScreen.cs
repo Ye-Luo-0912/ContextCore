@@ -35,7 +35,7 @@ public static class ServiceLearningScreen
                 var recordId = normalized[2..].Trim();
                 try
                 {
-                    var record = await service.GetServiceLearningRecordAsync(recordId, cancellationToken).ConfigureAwait(false);
+                    var record = await service.ServiceClient.GetLearningRecordAsync(recordId, cancellationToken).ConfigureAwait(false);
                     Console.WriteLine(ServiceOperationalRenderer.RenderLearning(new ServiceLearningSnapshot
                     {
                         CurrentTime = DateTimeOffset.Now,
@@ -65,7 +65,7 @@ public static class ServiceLearningScreen
                 var caseId = normalized[2..].Trim();
                 try
                 {
-                    var learningCase = await service.GetServiceLearningCaseAsync(caseId, cancellationToken).ConfigureAwait(false);
+                    var learningCase = await service.ServiceClient.GetLearningCaseAsync(caseId, cancellationToken).ConfigureAwait(false);
                     Console.WriteLine(ServiceOperationalRenderer.RenderLearning(new ServiceLearningSnapshot
                     {
                         CurrentTime = DateTimeOffset.Now,

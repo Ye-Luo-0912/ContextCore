@@ -48,7 +48,7 @@ public static class ServiceIngestScreen
 
             try
             {
-                var result = await service.IngestServiceAsync(command, cancellationToken).ConfigureAwait(false);
+                var result = await service.ServiceClient.IngestAsync(command, cancellationToken).ConfigureAwait(false);
                 Console.WriteLine(ServiceOperationRenderer.RenderIngestResult(result));
             }
             catch (ContextCoreApiException ex)

@@ -39,7 +39,7 @@ public static class ServiceConstraintGapsScreen
                         service,
                         input[2..].Trim(),
                         "accept",
-                        (gapId, request) => service.AcceptServiceConstraintGapAsync(gapId, request, cancellationToken),
+                        (gapId, request) => service.ServiceClient.AcceptConstraintGapAsync(gapId, request, cancellationToken),
                         cancellationToken).ConfigureAwait(false);
                     continue;
                 }
@@ -50,7 +50,7 @@ public static class ServiceConstraintGapsScreen
                         service,
                         input[2..].Trim(),
                         "reject",
-                        (gapId, request) => service.RejectServiceConstraintGapAsync(gapId, request, cancellationToken),
+                        (gapId, request) => service.ServiceClient.RejectConstraintGapAsync(gapId, request, cancellationToken),
                         cancellationToken).ConfigureAwait(false);
                     continue;
                 }
@@ -58,7 +58,7 @@ public static class ServiceConstraintGapsScreen
                 if (input.StartsWith("h ", StringComparison.OrdinalIgnoreCase))
                 {
                     var gapId = input[2..].Trim();
-                    var reviews = await service.GetServiceConstraintGapReviewsAsync(gapId, cancellationToken).ConfigureAwait(false);
+                    var reviews = await service.ServiceClient.GetConstraintGapReviewsAsync(gapId, cancellationToken).ConfigureAwait(false);
                     Console.WriteLine(ServiceOperationalRenderer.RenderConstraintGapReviews(reviews));
                     continue;
                 }
@@ -68,7 +68,7 @@ public static class ServiceConstraintGapsScreen
                     : input;
 
                 var detail = snapshot.Gaps.FirstOrDefault(value => string.Equals(value.GapId, detailInput, StringComparison.OrdinalIgnoreCase))
-                    ?? await service.GetServiceConstraintGapAsync(detailInput, cancellationToken).ConfigureAwait(false);
+                    ?? await service.ServiceClient.GetConstraintGapAsync(detailInput, cancellationToken).ConfigureAwait(false);
                 Console.WriteLine(ServiceOperationalRenderer.RenderConstraintGapDetail(detail));
             }
             catch (ContextCoreApiException ex)
@@ -93,7 +93,7 @@ public static class ServiceConstraintGapsScreen
 
         try
         {
-            var detail = await service.GetServiceConstraintGapAsync(gapId, cancellationToken).ConfigureAwait(false);
+            var detail = await service.ServiceClient.GetConstraintGapAsync(gapId, cancellationToken).ConfigureAwait(false);
             Console.WriteLine(ServiceOperationalRenderer.RenderConstraintGapDetail(detail));
         }
         catch (ContextCoreApiException ex)

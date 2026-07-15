@@ -39,6 +39,9 @@ public sealed partial class ControlRoomService
     /// <summary>直接访问底层状态（供 ControlRoom 命令使用，不对外暴露为公开 API）。</summary>
     public ControlRoomState State => _state;
 
+    /// <summary>Service 模式下直接访问 ContextCoreClient（供 Screen 直接调用，避免一层透传包装）。</summary>
+    public ContextCoreClient ServiceClient => GetServiceClient();
+
     public static ControlRoomState CreateState(
         string storageKind,
         string rootPath,
@@ -307,7 +310,7 @@ public sealed partial class ControlRoomService
         };
     }
 
-    private ContextCoreClient GetServiceClient()
+    internal ContextCoreClient GetServiceClient()
     {
         if (!_state.IsServiceMode || _state.ServiceClient is null)
         {

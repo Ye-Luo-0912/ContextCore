@@ -38,7 +38,7 @@ public static class ServiceQueryScreen
 
             try
             {
-                var response = await service.QueryServiceAsync(request, cancellationToken).ConfigureAwait(false);
+                var response = await service.ServiceClient.QueryContextAsync(request, cancellationToken).ConfigureAwait(false);
                 Console.WriteLine(ServiceOperationRenderer.RenderQueryResult(response));
             }
             catch (ContextCoreApiException ex)

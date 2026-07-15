@@ -45,7 +45,15 @@ public sealed partial class ControlRoomService
         int take = 50,
         CancellationToken cancellationToken = default)
     {
-        var jobs = await QueryServiceJobsAsync(state, take, cancellationToken).ConfigureAwait(false);
+        var jobs = await GetServiceClient().QueryJobsAsync(
+            new ContextJobQuery
+            {
+                WorkspaceId = _state.WorkspaceId,
+                CollectionId = _state.CollectionId,
+                State = state,
+                Take = take
+            },
+            cancellationToken).ConfigureAwait(false);
         return new ServiceJobsSnapshot
         {
             CurrentTime = DateTimeOffset.Now,
@@ -58,10 +66,10 @@ public sealed partial class ControlRoomService
         ContextCoreModelRouteResolveRequest? routeRequest = null,
         CancellationToken cancellationToken = default)
     {
-        var modelStatus = await GetServiceModelStatusAsync(cancellationToken).ConfigureAwait(false);
+        var modelStatus = await GetServiceClient().GetModelStatusAsync(cancellationToken).ConfigureAwait(false);
         var resolution = routeRequest is null
             ? null
-            : await ResolveServiceModelRouteAsync(routeRequest, cancellationToken).ConfigureAwait(false);
+            : await GetServiceClient().ResolveModelRouteAsync(routeRequest, cancellationToken).ConfigureAwait(false);
 
         return new ServiceModelSnapshot
         {
@@ -78,9 +86,11 @@ public sealed partial class ControlRoomService
         var runtime = await GetServiceClient()
             .GetRuntimeSnapshotAsync(includeDeep: false, refreshDeep: false, cancellationToken)
             .ConfigureAwait(false);
-        var adminStatus = await GetServiceAdminStatusAsync(cancellationToken).ConfigureAwait(false);
-        var backupStatus = await GetServiceBackupStatusAsync(cancellationToken).ConfigureAwait(false);
-        var backupValidate = await ValidateServiceBackupAsync(cancellationToken).ConfigureAwait(false);
+        var adminStatus = await GetServiceClient()
+            .GetAdminStatusAsync(_state.WorkspaceId, _state.CollectionId, cancellationToken)
+            .ConfigureAwait(false);
+        var backupStatus = await GetServiceClient().GetBackupStatusAsync(cancellationToken).ConfigureAwait(false);
+        var backupValidate = await GetServiceClient().ValidateBackupAsync(cancellationToken).ConfigureAwait(false);
         var postgresDiagnostics = await GetPostgresStorageDiagnosticsSafeAsync(cancellationToken).ConfigureAwait(false);
         var layoutRoot = string.IsNullOrWhiteSpace(adminStatus.Storage.RootPath)
             ? _state.RootPath
@@ -103,529 +113,24 @@ public sealed partial class ControlRoomService
         };
     }
 
-    public Task<ContextInputIngestionResult> IngestServiceAsync(
-        ContextInputCommand command,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().IngestAsync(command, cancellationToken);
-    }
-
-    public Task<ContextQueryResponse> QueryServiceAsync(
-        ContextQuery query,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().QueryContextAsync(query, cancellationToken);
-    }
-
-    public Task<IReadOnlyList<ContextMemoryItem>> QueryServiceMemoryAsync(
-        ContextMemoryQuery query,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().QueryMemoryAsync(query, cancellationToken);
-    }
-
-    public Task<CandidateMemorySnapshot> GetServiceCandidateMemorySnapshotAsync(
-        int take = 20,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().GetCandidateMemorySnapshotAsync(
-            _state.WorkspaceId,
-            _state.CollectionId,
-            take,
-            cancellationToken);
-    }
-
-    public Task<StableMemorySnapshot> GetServiceStableMemorySnapshotAsync(
-        int take = 20,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().GetStableMemorySnapshotAsync(
-            _state.WorkspaceId,
-            _state.CollectionId,
-            take,
-            cancellationToken);
-    }
-
-    public Task<StableMemoryDiagnosticsReport> GetServiceStableMemoryDiagnosticsAsync(
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().GetStableMemoryDiagnosticsAsync(
-            _state.WorkspaceId,
-            _state.CollectionId,
-            cancellationToken);
-    }
-
-    public Task<StableMemoryExplanation> ExplainServiceStableMemoryAsync(
-        string itemId,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().ExplainStableMemoryAsync(
-            itemId,
-            _state.WorkspaceId,
-            _state.CollectionId,
-            cancellationToken);
-    }
-
-    public Task<StableReplacementChainResponse> GetServiceStableReplacementChainAsync(
-        string itemId,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().GetStableReplacementChainAsync(
-            itemId,
-            _state.WorkspaceId,
-            _state.CollectionId,
-            cancellationToken);
-    }
-
-    public Task<StableLifecycleReviewResult> DeprecateServiceStableMemoryAsync(
-        string itemId,
-        StableLifecycleReviewRequest request,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().DeprecateStableMemoryAsync(itemId, request, cancellationToken);
-    }
-
-    public Task<StableLifecycleReviewResult> SupersedeServiceStableMemoryAsync(
-        string itemId,
-        StableLifecycleReviewRequest request,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().SupersedeStableMemoryAsync(itemId, request, cancellationToken);
-    }
-
-    public Task<StableLifecycleReviewResult> RejectServiceStableMemoryAsync(
-        string itemId,
-        StableLifecycleReviewRequest request,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().RejectStableMemoryAsync(itemId, request, cancellationToken);
-    }
-
-    public Task<IReadOnlyList<StableLifecycleReviewRecord>> GetServiceStableMemoryReviewsAsync(
-        string itemId,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().GetStableMemoryReviewsAsync(itemId, cancellationToken);
-    }
-
-    public Task<CandidateMemoryRecord> GetServiceCandidateMemoryAsync(
-        string candidateId,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().GetCandidateMemoryAsync(
-            candidateId,
-            _state.WorkspaceId,
-            _state.CollectionId,
-            cancellationToken);
-    }
-
-    public Task<CandidateMemoryExplanation> ExplainServiceCandidateMemoryAsync(
-        string candidateId,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().ExplainCandidateMemoryAsync(
-            candidateId,
-            _state.WorkspaceId,
-            _state.CollectionId,
-            cancellationToken);
-    }
-
-    public Task<CandidateMemoryDiagnosticsReport> GetServiceCandidateMemoryDiagnosticsAsync(
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().GetCandidateMemoryDiagnosticsAsync(
-            _state.WorkspaceId,
-            _state.CollectionId,
-            cancellationToken);
-    }
-
-    public Task<CandidateMemoryReviewResult> MarkServiceCandidateMemoryReadyForStableReviewAsync(
-        string candidateId,
-        CandidateMemoryReviewRequest request,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().MarkCandidateMemoryReadyForStableReviewAsync(candidateId, request, cancellationToken);
-    }
-
-    public Task<CandidateMemoryReviewResult> MarkServiceCandidateMemoryNeedsMoreEvidenceAsync(
-        string candidateId,
-        CandidateMemoryReviewRequest request,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().MarkCandidateMemoryNeedsMoreEvidenceAsync(candidateId, request, cancellationToken);
-    }
-
-    public Task<CandidateMemoryReviewResult> RejectServiceCandidateMemoryAsync(
-        string candidateId,
-        CandidateMemoryReviewRequest request,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().RejectCandidateMemoryAsync(candidateId, request, cancellationToken);
-    }
-
-    public Task<CandidateMemoryReviewResult> ExpireServiceCandidateMemoryAsync(
-        string candidateId,
-        CandidateMemoryReviewRequest request,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().ExpireCandidateMemoryAsync(candidateId, request, cancellationToken);
-    }
-
-    public Task<CandidateMemoryReviewResult> SupersedeServiceCandidateMemoryAsync(
-        string candidateId,
-        CandidateMemoryReviewRequest request,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().SupersedeCandidateMemoryAsync(candidateId, request, cancellationToken);
-    }
-
-    public Task<IReadOnlyList<CandidateMemoryReviewRecord>> GetServiceCandidateMemoryReviewsAsync(
-        string candidateId,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().GetCandidateMemoryReviewsAsync(candidateId, cancellationToken);
-    }
-
-    public Task<IReadOnlyList<ContextGlobalItem>> QueryServiceGlobalContextAsync(
-        ContextScope? scope = null,
-        int take = 100,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().QueryGlobalContextAsync(
-            _state.WorkspaceId,
-            _state.CollectionId,
-            scope,
-            take,
-            cancellationToken);
-    }
-
-    public Task<ContextPackageBuildResult> BuildServicePackageAsync(
-        ContextPackageRequest request,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().BuildPackageDetailedAsync(request, cancellationToken);
-    }
-
-    public Task<IReadOnlyList<ContextConstraint>> QueryServiceConstraintsAsync(
-        ConstraintLevel? level = null,
-        int take = 100,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().QueryConstraintsAsync(
-            _state.WorkspaceId,
-            _state.CollectionId,
-            level,
-            take,
-            cancellationToken);
-    }
-
-    public Task<IReadOnlyList<ContextConstraint>> QueryServiceCandidateConstraintsAsync(
-        ContextMemoryStatus? status = ContextMemoryStatus.Candidate,
-        int take = 20,
-        int offset = 0,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().GetCandidateConstraintsAsync(
-            _state.WorkspaceId,
-            _state.CollectionId,
-            status,
-            take,
-            offset,
-            cancellationToken);
-    }
-
-    public Task<ContextConstraint> GetServiceCandidateConstraintAsync(
-        string constraintId,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().GetCandidateConstraintAsync(constraintId, cancellationToken);
-    }
-
-    public Task<CandidateConstraintReviewResult> ActivateServiceCandidateConstraintAsync(
-        string constraintId,
-        CandidateConstraintReviewRequest request,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().ActivateCandidateConstraintAsync(constraintId, request, cancellationToken);
-    }
-
-    public Task<CandidateConstraintReviewResult> RejectServiceCandidateConstraintAsync(
-        string constraintId,
-        CandidateConstraintReviewRequest request,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().RejectCandidateConstraintAsync(constraintId, request, cancellationToken);
-    }
-
-    public Task<IReadOnlyList<CandidateConstraintReviewRecord>> GetServiceCandidateConstraintReviewsAsync(
-        string constraintId,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().GetCandidateConstraintReviewsAsync(constraintId, cancellationToken);
-    }
-
-    public Task<IReadOnlyList<ConstraintGapCandidate>> QueryServiceConstraintGapsAsync(
-        string? status = null,
-        string? severity = null,
-        int take = 20,
-        int offset = 0,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().GetConstraintGapsAsync(
-            _state.WorkspaceId,
-            _state.CollectionId,
-            status: status,
-            severity: severity,
-            limit: take,
-            offset: offset,
-            cancellationToken: cancellationToken);
-    }
-
-    public Task<ConstraintGapCandidate> GetServiceConstraintGapAsync(
-        string gapId,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().GetConstraintGapAsync(gapId, cancellationToken);
-    }
-
-    public Task<ConstraintGapReviewResult> AcceptServiceConstraintGapAsync(
-        string gapId,
-        ConstraintGapReviewRequest request,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().AcceptConstraintGapAsync(gapId, request, cancellationToken);
-    }
-
-    public Task<ConstraintGapReviewResult> RejectServiceConstraintGapAsync(
-        string gapId,
-        ConstraintGapReviewRequest request,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().RejectConstraintGapAsync(gapId, request, cancellationToken);
-    }
-
-    public Task<IReadOnlyList<ConstraintGapReviewRecord>> GetServiceConstraintGapReviewsAsync(
-        string gapId,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().GetConstraintGapReviewsAsync(gapId, cancellationToken);
-    }
-
-    public Task<ContextProvenanceResponse> GetServiceProvenanceAsync(
-        string itemId,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().GetProvenanceAsync(
-            itemId,
-            _state.WorkspaceId,
-            _state.CollectionId,
-            cancellationToken);
-    }
-
-    public Task<ContextCoreRelationsResponse> QueryServiceRelationsAsync(
-        string itemId,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().QueryRelationsAsync(
-            itemId,
-            _state.WorkspaceId,
-            _state.CollectionId,
-            cancellationToken);
-    }
-
-    public Task<IReadOnlyList<RelationTypeDefinition>> GetServiceRelationTypesAsync(
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().GetRelationTypesAsync(cancellationToken);
-    }
-
-    public Task<IReadOnlyList<RelationExpansionProfile>> GetServiceRelationExpansionProfilesAsync(
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().GetRelationExpansionProfilesAsync(cancellationToken);
-    }
-
-    public Task<RelationExpansionPreviewResponse> PreviewServiceRelationExpansionAsync(
-        string itemId,
-        string profileId,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().PreviewRelationExpansionAsync(new RelationExpansionPreviewRequest
-        {
-            WorkspaceId = _state.WorkspaceId,
-            CollectionId = _state.CollectionId,
-            ItemId = itemId,
-            ProfileId = profileId
-        }, cancellationToken);
-    }
-
-    public Task<RelationGraphDiagnosticsReport> GetServiceRelationDiagnosticsAsync(
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().GetRelationDiagnosticsAsync(
-            _state.WorkspaceId,
-            _state.CollectionId,
-            cancellationToken);
-    }
-
-    public Task<RelationGraphDiagnosticsReport> GetServiceItemRelationDiagnosticsAsync(
-        string itemId,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().GetItemRelationDiagnosticsAsync(
-            itemId,
-            _state.WorkspaceId,
-            _state.CollectionId,
-            cancellationToken);
-    }
-
-    public Task<RelationExplainResponse> ExplainServiceRelationAsync(
-        string relationId,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().ExplainRelationAsync(
-            relationId,
-            _state.WorkspaceId,
-            _state.CollectionId,
-            cancellationToken);
-    }
-
-    public Task<RelationReviewResult> ReviewServiceRelationAsync(
-        string relationId,
-        RelationReviewRequest request,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().ReviewRelationAsync(relationId, request, cancellationToken);
-    }
-
-    public Task<RelationReviewResult> RejectServiceRelationAsync(
-        string relationId,
-        RelationReviewRequest request,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().RejectRelationAsync(relationId, request, cancellationToken);
-    }
-
-    public Task<RelationReviewResult> DeprecateServiceRelationAsync(
-        string relationId,
-        RelationReviewRequest request,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().DeprecateRelationAsync(relationId, request, cancellationToken);
-    }
-
-    public Task<RelationReviewResult> MarkServiceRelationNeedsEvidenceAsync(
-        string relationId,
-        RelationReviewRequest request,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().MarkRelationNeedsEvidenceAsync(relationId, request, cancellationToken);
-    }
-
-    public Task<IReadOnlyList<RelationReviewRecord>> GetServiceRelationReviewsAsync(
-        string relationId,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().GetRelationReviewsAsync(relationId, cancellationToken);
-    }
-
-    public Task<IReadOnlyList<ContextJob>> QueryServiceJobsAsync(
-        ContextJobState? state = null,
-        int take = 100,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().QueryJobsAsync(new ContextJobQuery
-        {
-            WorkspaceId = _state.WorkspaceId,
-            CollectionId = _state.CollectionId,
-            State = state,
-            Take = take
-        }, cancellationToken);
-    }
-
-    public Task<ContextJob> GetServiceJobAsync(
-        string jobId,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().GetJobAsync(jobId, cancellationToken);
-    }
-
-    public Task<ContextCoreRequeueJobResponse> RequeueServiceJobAsync(
-        string jobId,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().RequeueJobAsync(jobId, cancellationToken);
-    }
-
-    public Task<ContextCoreModelStatusResponse> GetServiceModelStatusAsync(CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().GetModelStatusAsync(cancellationToken);
-    }
-
-    public Task<ContextCoreModelRouteResolveResponse> ResolveServiceModelRouteAsync(
-        ContextCoreModelRouteResolveRequest request,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().ResolveModelRouteAsync(request, cancellationToken);
-    }
-
-    public Task<ContextCoreAdminStatusResponse> GetServiceAdminStatusAsync(CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().GetAdminStatusAsync(_state.WorkspaceId, _state.CollectionId, cancellationToken);
-    }
-
-    public Task<ContextCoreBackupStatusResponse> GetServiceBackupStatusAsync(CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().GetBackupStatusAsync(cancellationToken);
-    }
-
-    public Task<ContextCoreBackupValidateResponse> ValidateServiceBackupAsync(CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().ValidateBackupAsync(cancellationToken);
-    }
-
-    public Task<IReadOnlyList<ContextPackagePolicy>> QueryServicePoliciesAsync(
-        string? queryText = null,
-        int take = 50,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().QueryPackagePoliciesAsync(
-            _state.WorkspaceId,
-            _state.CollectionId,
-            queryText,
-            take,
-            cancellationToken);
-    }
-
-    public Task<ContextPackagePolicy> GetServicePolicyAsync(
-        string policyId,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().GetPackagePolicyAsync(
-            _state.WorkspaceId,
-            _state.CollectionId,
-            policyId,
-            cancellationToken);
-    }
-
     public async Task<ServiceMemorySnapshot> GetServiceMemorySnapshotAsync(
         CancellationToken cancellationToken = default)
     {
-        var working = await QueryServiceMemoryAsync(new ContextMemoryQuery
+        var working = await GetServiceClient().QueryMemoryAsync(new ContextMemoryQuery
         {
             WorkspaceId = _state.WorkspaceId,
             CollectionId = _state.CollectionId,
             Layer = ContextMemoryLayer.Working,
             Take = 200
         }, cancellationToken).ConfigureAwait(false);
-        var candidates = await QueryServiceMemoryAsync(new ContextMemoryQuery
+        var candidates = await GetServiceClient().QueryMemoryAsync(new ContextMemoryQuery
         {
             WorkspaceId = _state.WorkspaceId,
             CollectionId = _state.CollectionId,
             Status = ContextMemoryStatus.Candidate,
             Take = 200
         }, cancellationToken).ConfigureAwait(false);
-        var stable = await QueryServiceMemoryAsync(new ContextMemoryQuery
+        var stable = await GetServiceClient().QueryMemoryAsync(new ContextMemoryQuery
         {
             WorkspaceId = _state.WorkspaceId,
             CollectionId = _state.CollectionId,
@@ -633,7 +138,11 @@ public sealed partial class ControlRoomService
             Status = ContextMemoryStatus.Stable,
             Take = 200
         }, cancellationToken).ConfigureAwait(false);
-        var globals = await QueryServiceGlobalContextAsync(take: 200, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var globals = await GetServiceClient().QueryGlobalContextAsync(
+            _state.WorkspaceId,
+            _state.CollectionId,
+            take: 200,
+            cancellationToken: cancellationToken).ConfigureAwait(false);
 
         return new ServiceMemorySnapshot
         {
@@ -651,8 +160,15 @@ public sealed partial class ControlRoomService
         int take = 20,
         CancellationToken cancellationToken = default)
     {
-        var snapshot = await GetServiceCandidateMemorySnapshotAsync(take, cancellationToken).ConfigureAwait(false);
-        var diagnostics = await GetServiceCandidateMemoryDiagnosticsAsync(cancellationToken).ConfigureAwait(false);
+        var snapshot = await GetServiceClient().GetCandidateMemorySnapshotAsync(
+            _state.WorkspaceId,
+            _state.CollectionId,
+            take,
+            cancellationToken).ConfigureAwait(false);
+        var diagnostics = await GetServiceClient().GetCandidateMemoryDiagnosticsAsync(
+            _state.WorkspaceId,
+            _state.CollectionId,
+            cancellationToken).ConfigureAwait(false);
         return new ServiceCandidateMemorySnapshot
         {
             CurrentTime = DateTimeOffset.Now,
@@ -666,8 +182,15 @@ public sealed partial class ControlRoomService
         int take = 20,
         CancellationToken cancellationToken = default)
     {
-        var snapshot = await GetServiceStableMemorySnapshotAsync(take, cancellationToken).ConfigureAwait(false);
-        var diagnostics = await GetServiceStableMemoryDiagnosticsAsync(cancellationToken).ConfigureAwait(false);
+        var snapshot = await GetServiceClient().GetStableMemorySnapshotAsync(
+            _state.WorkspaceId,
+            _state.CollectionId,
+            take,
+            cancellationToken).ConfigureAwait(false);
+        var diagnostics = await GetServiceClient().GetStableMemoryDiagnosticsAsync(
+            _state.WorkspaceId,
+            _state.CollectionId,
+            cancellationToken).ConfigureAwait(false);
         return new ServiceStableMemorySnapshot
         {
             CurrentTime = DateTimeOffset.Now,
@@ -681,7 +204,12 @@ public sealed partial class ControlRoomService
         ConstraintLevel? level = null,
         CancellationToken cancellationToken = default)
     {
-        var constraints = await QueryServiceConstraintsAsync(level, 200, cancellationToken).ConfigureAwait(false);
+        var constraints = await GetServiceClient().QueryConstraintsAsync(
+            _state.WorkspaceId,
+            _state.CollectionId,
+            level,
+            200,
+            cancellationToken).ConfigureAwait(false);
         return new ServiceConstraintsSnapshot
         {
             CurrentTime = DateTimeOffset.Now,
@@ -697,7 +225,14 @@ public sealed partial class ControlRoomService
         int offset = 0,
         CancellationToken cancellationToken = default)
     {
-        var gaps = await QueryServiceConstraintGapsAsync(status, severity, take, offset, cancellationToken).ConfigureAwait(false);
+        var gaps = await GetServiceClient().GetConstraintGapsAsync(
+            _state.WorkspaceId,
+            _state.CollectionId,
+            status: status,
+            severity: severity,
+            limit: take,
+            offset: offset,
+            cancellationToken: cancellationToken).ConfigureAwait(false);
         return new ServiceConstraintGapsSnapshot
         {
             CurrentTime = DateTimeOffset.Now,
@@ -716,7 +251,9 @@ public sealed partial class ControlRoomService
         int offset = 0,
         CancellationToken cancellationToken = default)
     {
-        var constraints = await QueryServiceCandidateConstraintsAsync(
+        var constraints = await GetServiceClient().GetCandidateConstraintsAsync(
+            _state.WorkspaceId,
+            _state.CollectionId,
             status,
             take,
             offset,
@@ -736,14 +273,25 @@ public sealed partial class ControlRoomService
         string? itemId = null,
         CancellationToken cancellationToken = default)
     {
-        var types = await GetServiceRelationTypesAsync(cancellationToken).ConfigureAwait(false);
-        var diagnostics = await GetServiceRelationDiagnosticsAsync(cancellationToken).ConfigureAwait(false);
+        var types = await GetServiceClient().GetRelationTypesAsync(cancellationToken).ConfigureAwait(false);
+        var diagnostics = await GetServiceClient().GetRelationDiagnosticsAsync(
+            _state.WorkspaceId,
+            _state.CollectionId,
+            cancellationToken).ConfigureAwait(false);
         ContextCoreRelationsResponse relations = new();
         RelationGraphDiagnosticsReport? itemDiagnostics = null;
         if (!string.IsNullOrWhiteSpace(itemId))
         {
-            relations = await QueryServiceRelationsAsync(itemId, cancellationToken).ConfigureAwait(false);
-            itemDiagnostics = await GetServiceItemRelationDiagnosticsAsync(itemId, cancellationToken).ConfigureAwait(false);
+            relations = await GetServiceClient().QueryRelationsAsync(
+                itemId,
+                _state.WorkspaceId,
+                _state.CollectionId,
+                cancellationToken).ConfigureAwait(false);
+            itemDiagnostics = await GetServiceClient().GetItemRelationDiagnosticsAsync(
+                itemId,
+                _state.WorkspaceId,
+                _state.CollectionId,
+                cancellationToken).ConfigureAwait(false);
         }
         return new ServiceRelationsSnapshot
         {
@@ -761,7 +309,10 @@ public sealed partial class ControlRoomService
         CancellationToken cancellationToken = default)
     {
         var runtime = await GetServiceClient().GetRuntimeSnapshotAsync(false, false, cancellationToken).ConfigureAwait(false);
-        var policies = await QueryServicePoliciesAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+        var policies = await GetServiceClient().QueryPackagePoliciesAsync(
+            _state.WorkspaceId,
+            _state.CollectionId,
+            cancellationToken: cancellationToken).ConfigureAwait(false);
 
         return new ServicePolicySnapshot
         {
@@ -830,148 +381,6 @@ public sealed partial class ControlRoomService
         };
     }
 
-    public Task<ShortTermMemoryCompactionResult> CompactServiceShortTermMemoryAsync(
-        string? sessionId = null,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().CompactShortTermMemoryAsync(new ShortTermMemoryCompactionRequest
-        {
-            WorkspaceId = _state.WorkspaceId,
-            CollectionId = _state.CollectionId,
-            SessionId = sessionId
-        }, cancellationToken);
-    }
-
-    public Task<ShortTermArchiveSummary> GetServiceShortTermArchiveSummaryAsync(
-        string? sessionId = null,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().GetShortTermArchiveSummaryAsync(
-            _state.WorkspaceId,
-            _state.CollectionId,
-            sessionId,
-            cancellationToken);
-    }
-
-    public Task<ShortTermArchiveItemsResponse> GetServiceShortTermArchiveItemsAsync(
-        string? sessionId = null,
-        string? kind = null,
-        int limit = 20,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().GetShortTermArchiveItemsAsync(
-            _state.WorkspaceId,
-            _state.CollectionId,
-            sessionId,
-            kind,
-            limit,
-            cancellationToken);
-    }
-
-    public Task<IReadOnlyList<ShortTermCompactionRun>> GetServiceShortTermCompactionRunsAsync(
-        string? sessionId = null,
-        string? trigger = null,
-        int take = 20,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().GetShortTermCompactionRunsAsync(
-            _state.WorkspaceId,
-            _state.CollectionId,
-            sessionId,
-            trigger,
-            take,
-            cancellationToken);
-    }
-
-    public Task<ShortTermCompactionRun> GetServiceShortTermCompactionRunAsync(
-        string runId,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().GetShortTermCompactionRunAsync(runId, cancellationToken);
-    }
-
-    public Task<IReadOnlyList<ShortTermPromotionCandidate>> GenerateServiceShortTermPromotionCandidatesAsync(
-        string? sessionId = null,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().GenerateShortTermPromotionCandidatesAsync(new ShortTermPromotionCandidateGenerationRequest
-        {
-            WorkspaceId = _state.WorkspaceId,
-            CollectionId = _state.CollectionId,
-            SessionId = sessionId
-        }, cancellationToken);
-    }
-
-    public Task<IReadOnlyList<ShortTermPromotionCandidate>> QueryServiceShortTermPromotionCandidatesAsync(
-        string? sessionId = null,
-        PromotionCandidateStatus? status = null,
-        string? kind = null,
-        string? suggestedTargetLayer = null,
-        double? minConfidence = null,
-        double? minImportance = null,
-        int take = 20,
-        int offset = 0,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().QueryShortTermPromotionCandidatesAsync(
-            _state.WorkspaceId,
-            _state.CollectionId,
-            sessionId,
-            status,
-            kind,
-            suggestedTargetLayer,
-            minConfidence,
-            minImportance,
-            take,
-            offset,
-            cancellationToken);
-    }
-
-    public Task<ShortTermPromotionCandidate> GetServiceShortTermPromotionCandidateAsync(
-        string candidateId,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().GetShortTermPromotionCandidateAsync(candidateId, cancellationToken);
-    }
-
-    public Task<ShortTermPromotionCandidateExplanation> ExplainServiceShortTermPromotionCandidateAsync(
-        string candidateId,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().ExplainShortTermPromotionCandidateAsync(candidateId, cancellationToken);
-    }
-
-    public Task<ReviewPromotionCandidateResponse> AcceptServiceShortTermPromotionCandidateAsync(
-        string candidateId,
-        ReviewPromotionCandidateRequest request,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().AcceptShortTermPromotionCandidateAsync(candidateId, request, cancellationToken);
-    }
-
-    public Task<ReviewPromotionCandidateResponse> RejectServiceShortTermPromotionCandidateAsync(
-        string candidateId,
-        ReviewPromotionCandidateRequest request,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().RejectShortTermPromotionCandidateAsync(candidateId, request, cancellationToken);
-    }
-
-    public Task<ReviewPromotionCandidateResponse> ExpireServiceShortTermPromotionCandidateAsync(
-        string candidateId,
-        ReviewPromotionCandidateRequest request,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().ExpireShortTermPromotionCandidateAsync(candidateId, request, cancellationToken);
-    }
-
-    public Task<IReadOnlyList<PromotionCandidateReviewRecord>> GetServiceShortTermPromotionCandidateReviewsAsync(
-        string candidateId,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().GetShortTermPromotionCandidateReviewsAsync(candidateId, cancellationToken);
-    }
-
     public async Task<ServicePromotionCandidatesSnapshot> GetServicePromotionCandidatesSnapshotAsync(
         string? sessionId = null,
         PromotionCandidateStatus? status = null,
@@ -983,7 +392,9 @@ public sealed partial class ControlRoomService
         int offset = 0,
         CancellationToken cancellationToken = default)
     {
-        var candidates = await QueryServiceShortTermPromotionCandidatesAsync(
+        var candidates = await GetServiceClient().QueryShortTermPromotionCandidatesAsync(
+            _state.WorkspaceId,
+            _state.CollectionId,
             sessionId,
             status,
             kind,
@@ -1008,79 +419,6 @@ public sealed partial class ControlRoomService
         };
     }
 
-    public Task<IReadOnlyList<StableReviewCandidate>> GenerateServiceStableReviewCandidatesAsync(
-        string? sessionId = null,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().GenerateStableReviewCandidatesAsync(new StableReviewCandidateGenerationRequest
-        {
-            WorkspaceId = _state.WorkspaceId,
-            CollectionId = _state.CollectionId,
-            SessionId = sessionId,
-            Limit = 100
-        }, cancellationToken);
-    }
-
-    public Task<IReadOnlyList<StableReviewCandidate>> QueryServiceStableReviewCandidatesAsync(
-        string? sessionId = null,
-        string? status = null,
-        string? validationStatus = null,
-        string? kind = null,
-        string? suggestedStableTarget = null,
-        int take = 20,
-        int offset = 0,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().GetStableReviewCandidatesAsync(
-            _state.WorkspaceId,
-            _state.CollectionId,
-            sessionId,
-            status,
-            validationStatus,
-            kind,
-            suggestedStableTarget,
-            take,
-            offset,
-            cancellationToken);
-    }
-
-    public Task<StableReviewCandidate> GetServiceStableReviewCandidateAsync(
-        string stableReviewCandidateId,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().GetStableReviewCandidateAsync(stableReviewCandidateId, cancellationToken);
-    }
-
-    public Task<StableReviewCandidateExplanation> ExplainServiceStableReviewCandidateAsync(
-        string stableReviewCandidateId,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().ExplainStableReviewCandidateAsync(stableReviewCandidateId, cancellationToken);
-    }
-
-    public Task<StableReviewDecisionResult> AcceptServiceStableReviewCandidateAsync(
-        string stableReviewCandidateId,
-        StableReviewDecisionRequest request,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().AcceptStableReviewCandidateAsync(stableReviewCandidateId, request, cancellationToken);
-    }
-
-    public Task<StableReviewDecisionResult> RejectServiceStableReviewCandidateAsync(
-        string stableReviewCandidateId,
-        StableReviewDecisionRequest request,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().RejectStableReviewCandidateAsync(stableReviewCandidateId, request, cancellationToken);
-    }
-
-    public Task<IReadOnlyList<StableReviewRecord>> GetServiceStableReviewCandidateReviewsAsync(
-        string stableReviewCandidateId,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().GetStableReviewCandidateReviewsAsync(stableReviewCandidateId, cancellationToken);
-    }
-
     public async Task<ServiceStableReviewCandidatesSnapshot> GetServiceStableReviewCandidatesSnapshotAsync(
         string? sessionId = null,
         string? status = null,
@@ -1091,7 +429,9 @@ public sealed partial class ControlRoomService
         int offset = 0,
         CancellationToken cancellationToken = default)
     {
-        var candidates = await QueryServiceStableReviewCandidatesAsync(
+        var candidates = await GetServiceClient().GetStableReviewCandidatesAsync(
+            _state.WorkspaceId,
+            _state.CollectionId,
             sessionId,
             status,
             validationStatus,
@@ -1115,148 +455,38 @@ public sealed partial class ControlRoomService
         };
     }
 
-    public Task<IReadOnlyList<ContextLearningRecord>> QueryServiceLearningRecordsAsync(
-        ContextFeedbackSignal? signal = null,
-        ContextFailureType? failureType = null,
-        int limit = 50,
-        int offset = 0,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().QueryLearningRecordsAsync(new ContextLearningRecordQuery
-        {
-            WorkspaceId = _state.WorkspaceId,
-            CollectionId = _state.CollectionId,
-            Signal = signal,
-            FailureType = failureType,
-            Limit = limit,
-            Offset = offset
-        }, cancellationToken);
-    }
-
-    public Task<IReadOnlyList<PromotionFeedbackSignal>> QueryServiceLearningFeedbackAsync(
-        string? action = null,
-        int limit = 50,
-        int offset = 0,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().GetLearningFeedbackAsync(
-            _state.WorkspaceId,
-            _state.CollectionId,
-            action: action,
-            limit: limit,
-            offset: offset,
-            cancellationToken: cancellationToken);
-    }
-
-    public Task<ContextLearningRecord> GetServiceLearningRecordAsync(
-        string recordId,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().GetLearningRecordAsync(recordId, cancellationToken);
-    }
-
-    public Task<IReadOnlyList<ContextLearningCase>> QueryServiceLearningCasesAsync(
-        ContextFeedbackSignal? signal = null,
-        ContextFailureType? failureType = null,
-        ContextLearningCaseStatus? status = null,
-        string? caseKind = null,
-        int limit = 50,
-        int offset = 0,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().QueryLearningCasesAsync(new ContextLearningCaseQuery
-        {
-            WorkspaceId = _state.WorkspaceId,
-            CollectionId = _state.CollectionId,
-            Signal = signal,
-            FailureType = failureType,
-            Status = status,
-            CaseKind = caseKind,
-            Limit = limit,
-            Offset = offset
-        }, cancellationToken);
-    }
-
-    public Task<ContextLearningCase> GetServiceLearningCaseAsync(
-        string caseId,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().GetLearningCaseAsync(caseId, cancellationToken);
-    }
-
-    public Task<ContextLearningCaseGenerationResult> GenerateServiceLearningCasesAsync(
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().GenerateLearningCasesAsync(new ContextLearningCaseGenerationRequest
-        {
-            WorkspaceId = _state.WorkspaceId,
-            CollectionId = _state.CollectionId,
-            Limit = 100
-        }, cancellationToken);
-    }
-
-    public Task<ContextLearningCaseStatusUpdateResponse> ActivateServiceLearningCaseAsync(
-        string caseId,
-        string reason,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().ActivateLearningCaseAsync(caseId, CreateLearningCaseStatusRequest(reason), cancellationToken);
-    }
-
-    public Task<ContextLearningCaseStatusUpdateResponse> ArchiveServiceLearningCaseAsync(
-        string caseId,
-        string reason,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().ArchiveLearningCaseAsync(caseId, CreateLearningCaseStatusRequest(reason), cancellationToken);
-    }
-
-    public Task<ContextLearningCaseStatusUpdateResponse> RejectServiceLearningCaseAsync(
-        string caseId,
-        string reason,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().RejectLearningCaseAsync(caseId, CreateLearningCaseStatusRequest(reason), cancellationToken);
-    }
-
-    public Task<ContextLearningSummary> GetServiceLearningSummaryAsync(
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().GetLearningSummaryAsync(_state.WorkspaceId, _state.CollectionId, cancellationToken: cancellationToken);
-    }
-
-    public Task<IReadOnlyList<ContextLearningCase>> GetServiceRegressionLearningCasesAsync(
-        int limit = 20,
-        int offset = 0,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().GetRegressionLearningCasesAsync(
-            _state.WorkspaceId,
-            _state.CollectionId,
-            limit: limit,
-            offset: offset,
-            cancellationToken: cancellationToken);
-    }
-
     public async Task<ServiceLearningSnapshot> GetServiceLearningSnapshotAsync(
         int limit = 50,
         int offset = 0,
         CancellationToken cancellationToken = default)
     {
-        var records = await QueryServiceLearningRecordsAsync(
+        var records = await GetServiceClient().QueryLearningRecordsAsync(new ContextLearningRecordQuery
+        {
+            WorkspaceId = _state.WorkspaceId,
+            CollectionId = _state.CollectionId,
+            Limit = limit,
+            Offset = offset
+        }, cancellationToken).ConfigureAwait(false);
+        var cases = await GetServiceClient().QueryLearningCasesAsync(new ContextLearningCaseQuery
+        {
+            WorkspaceId = _state.WorkspaceId,
+            CollectionId = _state.CollectionId,
+            Limit = limit,
+            Offset = offset
+        }, cancellationToken).ConfigureAwait(false);
+        var feedback = await GetServiceClient().GetLearningFeedbackAsync(
+            _state.WorkspaceId,
+            _state.CollectionId,
             limit: limit,
             offset: offset,
             cancellationToken: cancellationToken).ConfigureAwait(false);
-        var cases = await QueryServiceLearningCasesAsync(
-            limit: limit,
-            offset: offset,
+        var summary = await GetServiceClient().GetLearningSummaryAsync(
+            _state.WorkspaceId,
+            _state.CollectionId,
             cancellationToken: cancellationToken).ConfigureAwait(false);
-        var feedback = await QueryServiceLearningFeedbackAsync(
-            limit: limit,
-            offset: offset,
-            cancellationToken: cancellationToken).ConfigureAwait(false);
-        var summary = await GetServiceLearningSummaryAsync(cancellationToken).ConfigureAwait(false);
-        var regressionCases = await GetServiceRegressionLearningCasesAsync(
+        var regressionCases = await GetServiceClient().GetRegressionLearningCasesAsync(
+            _state.WorkspaceId,
+            _state.CollectionId,
             limit: 20,
             offset: 0,
             cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -1341,24 +571,6 @@ public sealed partial class ControlRoomService
     {
         request = NormalizeVectorReindexRequest(request, apply: true);
         return GetServiceClient().SubmitVectorReindexAsync(request, cancellationToken);
-    }
-
-    public Task<VectorReindexReportQueryResponse> GetServiceVectorReindexReportsAsync(
-        int take = 20,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().GetVectorReindexReportsAsync(
-            _state.WorkspaceId,
-            _state.CollectionId,
-            take,
-            cancellationToken);
-    }
-
-    public Task<VectorReindexResult> GetServiceVectorReindexReportAsync(
-        string reportId,
-        CancellationToken cancellationToken = default)
-    {
-        return GetServiceClient().GetVectorReindexReportAsync(reportId, cancellationToken);
     }
 
     public Task<VectorQueryPreviewResult> PreviewServiceVectorQueryAsync(

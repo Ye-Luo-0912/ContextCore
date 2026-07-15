@@ -118,7 +118,7 @@ public static class ServiceVectorIndexScreen
     {
         try
         {
-            var reports = await service.GetServiceVectorReindexReportsAsync(cancellationToken: cancellationToken)
+            var reports = await service.ServiceClient.GetVectorReindexReportsAsync(service.State.WorkspaceId, service.State.CollectionId, cancellationToken: cancellationToken)
                 .ConfigureAwait(false);
             Console.WriteLine(ServiceOperationalRenderer.RenderVectorReindexReports(reports));
         }

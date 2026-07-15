@@ -21,7 +21,7 @@ public static class ServiceRelationsScreen
             {
                 try
                 {
-                    var profiles = await service.GetServiceRelationExpansionProfilesAsync(cancellationToken).ConfigureAwait(false);
+                    var profiles = await service.ServiceClient.GetRelationExpansionProfilesAsync(cancellationToken).ConfigureAwait(false);
                     Console.WriteLine(ServiceOperationalRenderer.RenderRelationExpansionProfiles(profiles));
                 }
                 catch (ContextCoreApiException ex)
@@ -49,7 +49,7 @@ public static class ServiceRelationsScreen
 
                 try
                 {
-                    var explain = await service.ExplainServiceRelationAsync(relationId, cancellationToken).ConfigureAwait(false);
+                    var explain = await service.ServiceClient.ExplainRelationAsync(relationId, service.State.WorkspaceId, service.State.CollectionId, cancellationToken).ConfigureAwait(false);
                     Console.WriteLine(ServiceOperationalRenderer.RenderRelationExplain(explain));
                 }
                 catch (ContextCoreApiException ex)
@@ -66,7 +66,7 @@ public static class ServiceRelationsScreen
                     service,
                     trimmed[2..].Trim(),
                     RelationReviewActions.Review,
-                    (relationId, request) => service.ReviewServiceRelationAsync(relationId, request, cancellationToken),
+                    (relationId, request) => service.ServiceClient.ReviewRelationAsync(relationId, request, cancellationToken),
                     cancellationToken).ConfigureAwait(false);
                 continue;
             }
@@ -77,7 +77,7 @@ public static class ServiceRelationsScreen
                     service,
                     trimmed[2..].Trim(),
                     RelationReviewActions.Reject,
-                    (relationId, request) => service.RejectServiceRelationAsync(relationId, request, cancellationToken),
+                    (relationId, request) => service.ServiceClient.RejectRelationAsync(relationId, request, cancellationToken),
                     cancellationToken).ConfigureAwait(false);
                 continue;
             }
@@ -88,7 +88,7 @@ public static class ServiceRelationsScreen
                     service,
                     trimmed[2..].Trim(),
                     RelationReviewActions.Deprecate,
-                    (relationId, request) => service.DeprecateServiceRelationAsync(relationId, request, cancellationToken),
+                    (relationId, request) => service.ServiceClient.DeprecateRelationAsync(relationId, request, cancellationToken),
                     cancellationToken).ConfigureAwait(false);
                 continue;
             }
@@ -99,7 +99,7 @@ public static class ServiceRelationsScreen
                     service,
                     trimmed[2..].Trim(),
                     RelationReviewActions.MarkNeedsEvidence,
-                    (relationId, request) => service.MarkServiceRelationNeedsEvidenceAsync(relationId, request, cancellationToken),
+                    (relationId, request) => service.ServiceClient.MarkRelationNeedsEvidenceAsync(relationId, request, cancellationToken),
                     cancellationToken).ConfigureAwait(false);
                 continue;
             }
@@ -115,7 +115,7 @@ public static class ServiceRelationsScreen
 
                 try
                 {
-                    var reviews = await service.GetServiceRelationReviewsAsync(relationId, cancellationToken).ConfigureAwait(false);
+                    var reviews = await service.ServiceClient.GetRelationReviewsAsync(relationId, cancellationToken).ConfigureAwait(false);
                     Console.WriteLine(ServiceOperationalRenderer.RenderRelationReviews(reviews));
                 }
                 catch (ContextCoreApiException ex)
@@ -163,9 +163,14 @@ public static class ServiceRelationsScreen
         var profileId = NormalizeEmpty(Console.ReadLine()) ?? "normal-v1";
         try
         {
-            var preview = await service.PreviewServiceRelationExpansionAsync(
-                    itemId,
-                    profileId,
+            var preview = await service.ServiceClient.PreviewRelationExpansionAsync(
+                    new RelationExpansionPreviewRequest
+                    {
+                        WorkspaceId = service.State.WorkspaceId,
+                        CollectionId = service.State.CollectionId,
+                        ItemId = itemId,
+                        ProfileId = profileId
+                    },
                     cancellationToken)
                 .ConfigureAwait(false);
             Console.WriteLine(ServiceOperationalRenderer.RenderRelationExpansionPreview(preview));
@@ -192,7 +197,7 @@ public static class ServiceRelationsScreen
         RelationExplainResponse explain;
         try
         {
-            explain = await service.ExplainServiceRelationAsync(relationId, cancellationToken).ConfigureAwait(false);
+            explain = await service.ServiceClient.ExplainRelationAsync(relationId, service.State.WorkspaceId, service.State.CollectionId, cancellationToken).ConfigureAwait(false);
             Console.WriteLine(ServiceOperationalRenderer.RenderRelationExplain(explain));
         }
         catch (ContextCoreApiException ex)

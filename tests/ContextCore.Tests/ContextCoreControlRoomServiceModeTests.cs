@@ -176,7 +176,7 @@ public sealed class ContextCoreControlRoomServiceModeTests
             http);
         var service = new ControlRoomService(state);
 
-        var result = await service.IngestServiceAsync(new ContextInputCommand
+        var result = await service.ServiceClient.IngestAsync(new ContextInputCommand
         {
             WorkspaceId = "workspace-test",
             CollectionId = "collection-test",
@@ -221,7 +221,7 @@ public sealed class ContextCoreControlRoomServiceModeTests
                 http);
             var service = new ControlRoomService(state);
 
-            var response = await service.QueryServiceAsync(new ContextQuery
+            var response = await service.ServiceClient.QueryContextAsync(new ContextQuery
             {
                 WorkspaceId = "workspace-test",
                 CollectionId = "collection-test",
@@ -266,7 +266,7 @@ public sealed class ContextCoreControlRoomServiceModeTests
             var service = new ControlRoomService(state);
 
             var exception = await Assert.ThrowsExceptionAsync<ContextCoreApiException>(() =>
-                service.QueryServiceAsync(new ContextQuery
+                service.ServiceClient.QueryContextAsync(new ContextQuery
                 {
                     WorkspaceId = "workspace-test",
                     CollectionId = "collection-test",
@@ -341,7 +341,7 @@ public sealed class ContextCoreControlRoomServiceModeTests
             http);
         var service = new ControlRoomService(state);
 
-        var result = await service.BuildServicePackageAsync(new ContextPackageRequest
+        var result = await service.ServiceClient.BuildPackageDetailedAsync(new ContextPackageRequest
         {
             WorkspaceId = "workspace-test",
             CollectionId = "collection-test",
@@ -434,7 +434,7 @@ public sealed class ContextCoreControlRoomServiceModeTests
         var service = new ControlRoomService(state);
 
         var exception = await Assert.ThrowsExceptionAsync<ContextCoreApiException>(() =>
-            service.GetServiceJobAsync("job-missing"));
+            service.ServiceClient.GetJobAsync("job-missing"));
         var rendered = ServiceOperationalRenderer.RenderError(exception);
 
         StringAssert.Contains(rendered, "jobs.get");
@@ -475,7 +475,7 @@ public sealed class ContextCoreControlRoomServiceModeTests
             http);
         var service = new ControlRoomService(state);
 
-        var response = await service.RequeueServiceJobAsync("job-1");
+        var response = await service.ServiceClient.RequeueJobAsync("job-1");
 
         Assert.AreEqual("job-1", response.OriginalJobId);
         Assert.AreEqual("job-2", response.NewJobId);
@@ -727,7 +727,7 @@ public sealed class ContextCoreControlRoomServiceModeTests
 
         var snapshot = await service.GetServiceConstraintGapsSnapshotAsync();
         var list = ServiceOperationalRenderer.RenderConstraintGaps(snapshot);
-        var detail = ServiceOperationalRenderer.RenderConstraintGapDetail(await service.GetServiceConstraintGapAsync("gap-1"));
+        var detail = ServiceOperationalRenderer.RenderConstraintGapDetail(await service.ServiceClient.GetConstraintGapAsync("gap-1"));
 
         StringAssert.Contains(list, "Service Constraint Gaps");
         StringAssert.Contains(list, "重复解释不应提升");
@@ -1081,7 +1081,7 @@ public sealed class ContextCoreControlRoomServiceModeTests
             var service = new ControlRoomService(state);
             var snapshot = await service.GetServiceRelationsSnapshotAsync("item-1");
             var rendered = ServiceOperationalRenderer.RenderRelations(snapshot);
-            var explain = await service.ExplainServiceRelationAsync("rel-1");
+            var explain = await service.ServiceClient.ExplainRelationAsync("rel-1", service.State.WorkspaceId, service.State.CollectionId);
             var explainRendered = ServiceOperationalRenderer.RenderRelationExplain(explain);
             StringAssert.Contains(rendered, "item-1");
             StringAssert.Contains(rendered, "references");
@@ -1386,8 +1386,12 @@ public sealed class ContextCoreControlRoomServiceModeTests
             http);
         var service = new ControlRoomService(state);
 
-        var compact = await service.CompactServiceShortTermMemoryAsync();
-        var archive = await service.GetServiceShortTermArchiveSummaryAsync();
+        var compact = await service.ServiceClient.CompactShortTermMemoryAsync(new ShortTermMemoryCompactionRequest
+        {
+            WorkspaceId = service.State.WorkspaceId,
+            CollectionId = service.State.CollectionId
+        });
+        var archive = await service.ServiceClient.GetShortTermArchiveSummaryAsync(service.State.WorkspaceId, service.State.CollectionId);
         var compactRendered = ServiceOperationalRenderer.RenderShortTermCompactionResult(compact);
         var archiveRendered = ServiceOperationalRenderer.RenderShortTermArchiveSummary(archive);
 

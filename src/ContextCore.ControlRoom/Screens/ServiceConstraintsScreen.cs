@@ -35,7 +35,7 @@ public static class ServiceConstraintsScreen
                     var itemId = input[2..].Trim();
                     if (!string.IsNullOrWhiteSpace(itemId))
                     {
-                        var provenance = await service.GetServiceProvenanceAsync(itemId, cancellationToken).ConfigureAwait(false);
+                        var provenance = await service.ServiceClient.GetProvenanceAsync(itemId, service.State.WorkspaceId, service.State.CollectionId, cancellationToken).ConfigureAwait(false);
                         Console.WriteLine(ServiceOperationalRenderer.RenderProvenance(provenance));
                     }
 

@@ -40,7 +40,7 @@ public static class ServiceCandidateMemoryScreen
                     var id = input[2..].Trim();
                     if (!string.IsNullOrWhiteSpace(id))
                     {
-                        var explanation = await service.ExplainServiceCandidateMemoryAsync(id, cancellationToken)
+                        var explanation = await service.ServiceClient.ExplainCandidateMemoryAsync(id, service.State.WorkspaceId, service.State.CollectionId, cancellationToken)
                             .ConfigureAwait(false);
                         Console.WriteLine(ServiceOperationalRenderer.RenderCandidateMemoryExplanation(explanation));
                     }
@@ -54,7 +54,7 @@ public static class ServiceCandidateMemoryScreen
                         service,
                         input[6..].Trim(),
                         CandidateMemoryReviewActions.MarkReadyForStableReview,
-                        (candidateId, request) => service.MarkServiceCandidateMemoryReadyForStableReviewAsync(candidateId, request, cancellationToken),
+                        (candidateId, request) => service.ServiceClient.MarkCandidateMemoryReadyForStableReviewAsync(candidateId, request, cancellationToken),
                         cancellationToken).ConfigureAwait(false);
                     continue;
                 }
@@ -69,7 +69,7 @@ public static class ServiceCandidateMemoryScreen
                         service,
                         id,
                         CandidateMemoryReviewActions.NeedsMoreEvidence,
-                        (candidateId, request) => service.MarkServiceCandidateMemoryNeedsMoreEvidenceAsync(candidateId, request, cancellationToken),
+                        (candidateId, request) => service.ServiceClient.MarkCandidateMemoryNeedsMoreEvidenceAsync(candidateId, request, cancellationToken),
                         cancellationToken).ConfigureAwait(false);
                     continue;
                 }
@@ -80,7 +80,7 @@ public static class ServiceCandidateMemoryScreen
                         service,
                         input[7..].Trim(),
                         CandidateMemoryReviewActions.Reject,
-                        (candidateId, request) => service.RejectServiceCandidateMemoryAsync(candidateId, request, cancellationToken),
+                        (candidateId, request) => service.ServiceClient.RejectCandidateMemoryAsync(candidateId, request, cancellationToken),
                         cancellationToken).ConfigureAwait(false);
                     continue;
                 }
@@ -95,7 +95,7 @@ public static class ServiceCandidateMemoryScreen
                         service,
                         id,
                         CandidateMemoryReviewActions.Expire,
-                        (candidateId, request) => service.ExpireServiceCandidateMemoryAsync(candidateId, request, cancellationToken),
+                        (candidateId, request) => service.ServiceClient.ExpireCandidateMemoryAsync(candidateId, request, cancellationToken),
                         cancellationToken).ConfigureAwait(false);
                     continue;
                 }
@@ -110,7 +110,7 @@ public static class ServiceCandidateMemoryScreen
                         service,
                         id,
                         CandidateMemoryReviewActions.Supersede,
-                        (candidateId, request) => service.SupersedeServiceCandidateMemoryAsync(candidateId, request, cancellationToken),
+                        (candidateId, request) => service.ServiceClient.SupersedeCandidateMemoryAsync(candidateId, request, cancellationToken),
                         cancellationToken).ConfigureAwait(false);
                     continue;
                 }
@@ -120,7 +120,7 @@ public static class ServiceCandidateMemoryScreen
                     var id = input[2..].Trim();
                     if (!string.IsNullOrWhiteSpace(id))
                     {
-                        var reviews = await service.GetServiceCandidateMemoryReviewsAsync(id, cancellationToken)
+                        var reviews = await service.ServiceClient.GetCandidateMemoryReviewsAsync(id, cancellationToken)
                             .ConfigureAwait(false);
                         Console.WriteLine(ServiceOperationalRenderer.RenderCandidateMemoryReviews(reviews));
                     }
@@ -128,7 +128,7 @@ public static class ServiceCandidateMemoryScreen
                     continue;
                 }
 
-                var candidate = await service.GetServiceCandidateMemoryAsync(input, cancellationToken)
+                var candidate = await service.ServiceClient.GetCandidateMemoryAsync(input, service.State.WorkspaceId, service.State.CollectionId, cancellationToken)
                     .ConfigureAwait(false);
                 Console.WriteLine(ServiceOperationalRenderer.RenderCandidateMemoryDetail(candidate));
             }
@@ -155,9 +155,9 @@ public static class ServiceCandidateMemoryScreen
         CandidateMemoryExplanation explanation;
         try
         {
-            var detail = await service.GetServiceCandidateMemoryAsync(candidateId, cancellationToken).ConfigureAwait(false);
+            var detail = await service.ServiceClient.GetCandidateMemoryAsync(candidateId, service.State.WorkspaceId, service.State.CollectionId, cancellationToken).ConfigureAwait(false);
             Console.WriteLine(ServiceOperationalRenderer.RenderCandidateMemoryDetail(detail));
-            explanation = await service.ExplainServiceCandidateMemoryAsync(candidateId, cancellationToken).ConfigureAwait(false);
+            explanation = await service.ServiceClient.ExplainCandidateMemoryAsync(candidateId, service.State.WorkspaceId, service.State.CollectionId, cancellationToken).ConfigureAwait(false);
             Console.WriteLine(ServiceOperationalRenderer.RenderCandidateMemoryExplanation(explanation));
         }
         catch (ContextCoreApiException ex)

@@ -48,7 +48,11 @@ public static class ServicePromotionCandidatesScreen
             {
                 try
                 {
-                    var generated = await service.GenerateServiceShortTermPromotionCandidatesAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+                    var generated = await service.ServiceClient.GenerateShortTermPromotionCandidatesAsync(new ShortTermPromotionCandidateGenerationRequest
+                    {
+                        WorkspaceId = service.State.WorkspaceId,
+                        CollectionId = service.State.CollectionId
+                    }, cancellationToken).ConfigureAwait(false);
                     Console.WriteLine($"Generated candidates: {generated.Count}");
                 }
                 catch (ContextCoreApiException ex)
@@ -84,7 +88,7 @@ public static class ServicePromotionCandidatesScreen
                 var candidateId = normalized[2..].Trim();
                 try
                 {
-                    var detail = await service.GetServiceShortTermPromotionCandidateAsync(candidateId, cancellationToken).ConfigureAwait(false);
+                    var detail = await service.ServiceClient.GetShortTermPromotionCandidateAsync(candidateId, cancellationToken).ConfigureAwait(false);
                     Console.WriteLine(ServiceOperationalRenderer.RenderPromotionCandidateDetail(detail));
                 }
                 catch (ContextCoreApiException ex)
@@ -100,7 +104,7 @@ public static class ServicePromotionCandidatesScreen
                 var candidateId = normalized[2..].Trim();
                 try
                 {
-                    var explanation = await service.ExplainServiceShortTermPromotionCandidateAsync(candidateId, cancellationToken).ConfigureAwait(false);
+                    var explanation = await service.ServiceClient.ExplainShortTermPromotionCandidateAsync(candidateId, cancellationToken).ConfigureAwait(false);
                     Console.WriteLine(ServiceOperationalRenderer.RenderPromotionCandidateExplanation(explanation));
                 }
                 catch (ContextCoreApiException ex)
@@ -117,7 +121,7 @@ public static class ServicePromotionCandidatesScreen
                     service,
                     normalized[2..].Trim(),
                     "accept",
-                    (candidateId, request) => service.AcceptServiceShortTermPromotionCandidateAsync(candidateId, request, cancellationToken),
+                    (candidateId, request) => service.ServiceClient.AcceptShortTermPromotionCandidateAsync(candidateId, request, cancellationToken),
                     cancellationToken).ConfigureAwait(false);
                 continue;
             }
@@ -128,7 +132,7 @@ public static class ServicePromotionCandidatesScreen
                     service,
                     normalized[2..].Trim(),
                     "reject",
-                    (candidateId, request) => service.RejectServiceShortTermPromotionCandidateAsync(candidateId, request, cancellationToken),
+                    (candidateId, request) => service.ServiceClient.RejectShortTermPromotionCandidateAsync(candidateId, request, cancellationToken),
                     cancellationToken).ConfigureAwait(false);
                 continue;
             }
@@ -139,7 +143,7 @@ public static class ServicePromotionCandidatesScreen
                     service,
                     normalized[2..].Trim(),
                     "expire",
-                    (candidateId, request) => service.ExpireServiceShortTermPromotionCandidateAsync(candidateId, request, cancellationToken),
+                    (candidateId, request) => service.ServiceClient.ExpireShortTermPromotionCandidateAsync(candidateId, request, cancellationToken),
                     cancellationToken).ConfigureAwait(false);
                 continue;
             }
@@ -149,7 +153,7 @@ public static class ServicePromotionCandidatesScreen
                 var candidateId = normalized[2..].Trim();
                 try
                 {
-                    var reviews = await service.GetServiceShortTermPromotionCandidateReviewsAsync(candidateId, cancellationToken).ConfigureAwait(false);
+                    var reviews = await service.ServiceClient.GetShortTermPromotionCandidateReviewsAsync(candidateId, cancellationToken).ConfigureAwait(false);
                     Console.WriteLine(ServiceOperationalRenderer.RenderPromotionCandidateReviews(reviews));
                 }
                 catch (ContextCoreApiException ex)
@@ -192,10 +196,10 @@ public static class ServicePromotionCandidatesScreen
 
         try
         {
-            var detail = await service.GetServiceShortTermPromotionCandidateAsync(candidateId, cancellationToken).ConfigureAwait(false);
+            var detail = await service.ServiceClient.GetShortTermPromotionCandidateAsync(candidateId, cancellationToken).ConfigureAwait(false);
             Console.WriteLine(ServiceOperationalRenderer.RenderPromotionCandidateDetail(detail));
 
-            var explanation = await service.ExplainServiceShortTermPromotionCandidateAsync(candidateId, cancellationToken).ConfigureAwait(false);
+            var explanation = await service.ServiceClient.ExplainShortTermPromotionCandidateAsync(candidateId, cancellationToken).ConfigureAwait(false);
             Console.WriteLine(ServiceOperationalRenderer.RenderPromotionCandidateExplanation(explanation));
         }
         catch (ContextCoreApiException ex)

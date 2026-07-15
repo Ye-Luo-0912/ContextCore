@@ -47,7 +47,11 @@ public static class ServiceStableReviewCandidatesScreen
             {
                 try
                 {
-                    var generated = await service.GenerateServiceStableReviewCandidatesAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+                    var generated = await service.ServiceClient.GenerateStableReviewCandidatesAsync(new StableReviewCandidateGenerationRequest
+                    {
+                        WorkspaceId = service.State.WorkspaceId,
+                        CollectionId = service.State.CollectionId
+                    }, cancellationToken).ConfigureAwait(false);
                     Console.WriteLine($"Generated stable review candidates: {generated.Count}");
                 }
                 catch (ContextCoreApiException ex)
@@ -80,7 +84,7 @@ public static class ServiceStableReviewCandidatesScreen
                 var candidateId = normalized[2..].Trim();
                 try
                 {
-                    var detail = await service.GetServiceStableReviewCandidateAsync(candidateId, cancellationToken).ConfigureAwait(false);
+                    var detail = await service.ServiceClient.GetStableReviewCandidateAsync(candidateId, cancellationToken).ConfigureAwait(false);
                     Console.WriteLine(ServiceOperationalRenderer.RenderStableReviewCandidateDetail(detail));
                 }
                 catch (ContextCoreApiException ex)
@@ -96,7 +100,7 @@ public static class ServiceStableReviewCandidatesScreen
                 var candidateId = normalized[2..].Trim();
                 try
                 {
-                    var explanation = await service.ExplainServiceStableReviewCandidateAsync(candidateId, cancellationToken).ConfigureAwait(false);
+                    var explanation = await service.ServiceClient.ExplainStableReviewCandidateAsync(candidateId, cancellationToken).ConfigureAwait(false);
                     Console.WriteLine(ServiceOperationalRenderer.RenderStableReviewCandidateExplanation(explanation));
                 }
                 catch (ContextCoreApiException ex)
@@ -112,7 +116,7 @@ public static class ServiceStableReviewCandidatesScreen
                 var itemId = normalized[2..].Trim();
                 try
                 {
-                    var provenance = await service.GetServiceProvenanceAsync(itemId, cancellationToken).ConfigureAwait(false);
+                    var provenance = await service.ServiceClient.GetProvenanceAsync(itemId, service.State.WorkspaceId, service.State.CollectionId, cancellationToken).ConfigureAwait(false);
                     Console.WriteLine(ServiceOperationalRenderer.RenderProvenance(provenance));
                 }
                 catch (ContextCoreApiException ex)
@@ -129,7 +133,7 @@ public static class ServiceStableReviewCandidatesScreen
                     service,
                     normalized[2..].Trim(),
                     "accept",
-                    (candidateId, request) => service.AcceptServiceStableReviewCandidateAsync(candidateId, request, cancellationToken),
+                    (candidateId, request) => service.ServiceClient.AcceptStableReviewCandidateAsync(candidateId, request, cancellationToken),
                     cancellationToken).ConfigureAwait(false);
                 continue;
             }
@@ -140,7 +144,7 @@ public static class ServiceStableReviewCandidatesScreen
                     service,
                     normalized[2..].Trim(),
                     "reject",
-                    (candidateId, request) => service.RejectServiceStableReviewCandidateAsync(candidateId, request, cancellationToken),
+                    (candidateId, request) => service.ServiceClient.RejectStableReviewCandidateAsync(candidateId, request, cancellationToken),
                     cancellationToken).ConfigureAwait(false);
                 continue;
             }
@@ -150,7 +154,7 @@ public static class ServiceStableReviewCandidatesScreen
                 var candidateId = normalized[2..].Trim();
                 try
                 {
-                    var reviews = await service.GetServiceStableReviewCandidateReviewsAsync(candidateId, cancellationToken).ConfigureAwait(false);
+                    var reviews = await service.ServiceClient.GetStableReviewCandidateReviewsAsync(candidateId, cancellationToken).ConfigureAwait(false);
                     Console.WriteLine(ServiceOperationalRenderer.RenderStableReviewCandidateReviews(reviews));
                 }
                 catch (ContextCoreApiException ex)
@@ -190,10 +194,10 @@ public static class ServiceStableReviewCandidatesScreen
 
         try
         {
-            var detail = await service.GetServiceStableReviewCandidateAsync(candidateId, cancellationToken).ConfigureAwait(false);
+            var detail = await service.ServiceClient.GetStableReviewCandidateAsync(candidateId, cancellationToken).ConfigureAwait(false);
             Console.WriteLine(ServiceOperationalRenderer.RenderStableReviewCandidateDetail(detail));
 
-            var explanation = await service.ExplainServiceStableReviewCandidateAsync(candidateId, cancellationToken).ConfigureAwait(false);
+            var explanation = await service.ServiceClient.ExplainStableReviewCandidateAsync(candidateId, cancellationToken).ConfigureAwait(false);
             Console.WriteLine(ServiceOperationalRenderer.RenderStableReviewCandidateExplanation(explanation));
         }
         catch (ContextCoreApiException ex)

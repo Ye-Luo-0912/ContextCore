@@ -42,7 +42,7 @@ public static class ServiceJobsScreen
             {
                 try
                 {
-                    var requeued = await service.RequeueServiceJobAsync(parts[1], cancellationToken).ConfigureAwait(false);
+                    var requeued = await service.ServiceClient.RequeueJobAsync(parts[1], cancellationToken).ConfigureAwait(false);
                     Console.WriteLine($"Requeued: {requeued.OriginalJobId} -> {requeued.NewJobId}");
                 }
                 catch (ContextCoreApiException ex)
@@ -58,7 +58,7 @@ public static class ServiceJobsScreen
                 : input;
             try
             {
-                var job = await service.GetServiceJobAsync(jobId, cancellationToken).ConfigureAwait(false);
+                var job = await service.ServiceClient.GetJobAsync(jobId, cancellationToken).ConfigureAwait(false);
                 Console.WriteLine(ServiceOperationalRenderer.RenderJobDetail(job));
             }
             catch (ContextCoreApiException ex)
