@@ -48,7 +48,8 @@ internal static class ContextEndpoints
 			}
 		})
 		.WithName("IngestContextItem")
-		.WithSummary("推荐业务入口：支持 ContextInputCommand，旧 ContextItem 请求体兼容保留");
+		.WithSummary("推荐业务入口：支持 ContextInputCommand，旧 ContextItem 请求体兼容保留")
+		.Produces<ContextInputIngestionResult>(StatusCodes.Status200OK);
 
 		// GET /api/context/{workspaceId}/{collectionId}/{id}
 		group.MapGet("/{workspaceId}/{collectionId}/{id}", async Task<IResult> (
@@ -65,7 +66,9 @@ internal static class ContextEndpoints
 				: Results.Ok(item);
 		})
 		.WithName("GetContextItem")
-		.WithSummary("按 ID 获取上下文条目");
+		.WithSummary("按 ID 获取上下文条目")
+		.Produces<ContextItem>(StatusCodes.Status200OK)
+		.Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
 		// GET /api/context/{id}?workspaceId=...&collectionId=...
 		group.MapGet("/{id}", async Task<IResult> (
@@ -92,7 +95,10 @@ internal static class ContextEndpoints
 				: Results.Ok(item);
 		})
 		.WithName("GetContextItemById")
-		.WithSummary("按路线图短路径获取上下文条目");
+		.WithSummary("按路线图短路径获取上下文条目")
+		.Produces<ContextItem>(StatusCodes.Status200OK)
+		.Produces<ContextCoreErrorResponse>(StatusCodes.Status400BadRequest)
+		.Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
 		// POST /api/context/query
 		group.MapPost("/query", async Task<IResult> (
@@ -104,7 +110,8 @@ internal static class ContextEndpoints
 			return Results.Ok(items);
 		})
 		.WithName("QueryContextItems")
-		.WithSummary("按条件查询上下文条目列表");
+		.WithSummary("按条件查询上下文条目列表")
+		.Produces<IReadOnlyList<ContextItem>>(StatusCodes.Status200OK);
 
 		// DELETE /api/context/{workspaceId}/{collectionId}/{id}
 		group.MapDelete("/{workspaceId}/{collectionId}/{id}", async Task<IResult> (
@@ -118,7 +125,8 @@ internal static class ContextEndpoints
 			return Results.NoContent();
 		})
 		.WithName("DeleteContextItem")
-		.WithSummary("删除指定 ID 的上下文条目");
+		.WithSummary("删除指定 ID 的上下文条目")
+		.Produces(StatusCodes.Status204NoContent);
 
 		// GET /api/context/{workspaceId}/{collectionId}/collection
 		group.MapGet("/{workspaceId}/{collectionId}/collection", async Task<IResult> (
@@ -134,7 +142,9 @@ internal static class ContextEndpoints
 				: Results.Ok(collection);
 		})
 		.WithName("GetCollection")
-		.WithSummary("获取集合元数据");
+		.WithSummary("获取集合元数据")
+		.Produces<ContextCollection>(StatusCodes.Status200OK)
+		.Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
 		// POST /api/context/retrieve
 		// 接受可选的 RetrievalPlan（可从 POST /api/package/build-detailed 返回的 result.Plan 获取），
@@ -168,7 +178,9 @@ internal static class ContextEndpoints
 			}
 		})
 		.WithName("RetrieveContext")
-		.WithSummary("执行混合检索，可通过 Plan 字段接受来自 /api/package/build-detailed 的 RetrievalPlan 以实现 plan passthrough");
+		.WithSummary("执行混合检索，可通过 Plan 字段接受来自 /api/package/build-detailed 的 RetrievalPlan 以实现 plan passthrough")
+		.Produces<ContextRetrievalResult>(StatusCodes.Status200OK)
+		.Produces<ContextCoreErrorResponse>(StatusCodes.Status400BadRequest);
 
 		return app;
 	}

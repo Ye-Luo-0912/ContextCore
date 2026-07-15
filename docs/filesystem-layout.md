@@ -1,5 +1,7 @@
 # FileSystem Layout Registry
 
+> **⚠ 已过时**：本文档为历史快照，其中 router-shadow 相关接口、命令和报告均已从代码库中移除，不再有效。本文档仅供历史回溯。
+
 FS1 引入统一的 artifact routing 层，用来约束 report、trace、eval 和治理数据的文件落点。
 
 ## 目标

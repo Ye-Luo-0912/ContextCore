@@ -1,3 +1,4 @@
+using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services;
 using ContextCore.Service.Infrastructure;
 
@@ -39,7 +40,9 @@ internal static class ProvenanceEndpoints
         })
         .WithTags("Provenance")
         .WithName("GetProvenance")
-        .WithSummary("查询 stable review accept 生成对象的完整来源链与只读诊断");
+        .WithSummary("查询 stable review accept 生成对象的完整来源链与只读诊断")
+        .Produces<ContextProvenanceResponse>(StatusCodes.Status200OK)
+        .Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
         return app;
     }

@@ -48,7 +48,8 @@ internal static class AdminEndpoints
             }
         })
         .WithName("AdminIngestContextInput")
-        .WithSummary("通过 ContextInputCommand 执行标准化输入摄取，返回幂等与顺序信息");
+        .WithSummary("通过 ContextInputCommand 执行标准化输入摄取，返回幂等与顺序信息")
+        .Produces<ContextInputIngestionResult>(StatusCodes.Status200OK);
 
         // ── Admin status ───────────────────────────────────────────────
         group.MapGet("/status", (
@@ -69,7 +70,8 @@ internal static class AdminEndpoints
             });
         })
         .WithName("AdminStatus")
-        .WithSummary("返回 Admin 视角的存储与 retrieval baseline 状态摘要");
+        .WithSummary("返回 Admin 视角的存储与 retrieval baseline 状态摘要")
+        .Produces<ContextCoreAdminStatusResponse>(StatusCodes.Status200OK);
 
         // ── Backup status ──────────────────────────────────────────────
         group.MapGet("/backup/status", (StorageOptions storage, IServiceProvider sp) =>
@@ -125,7 +127,8 @@ internal static class AdminEndpoints
             });
         })
         .WithName("AdminBackupStatus")
-        .WithSummary("存储备份信息概览（FS：文件统计 + 大小；Postgres：schema 版本 + pg_dump 建议）");
+        .WithSummary("存储备份信息概览（FS：文件统计 + 大小；Postgres：schema 版本 + pg_dump 建议）")
+        .Produces<ContextCoreBackupStatusResponse>(StatusCodes.Status200OK);
 
         // ── Create filesystem ZIP backup ───────────────────────────────
         group.MapPost("/backup/create", async Task<IResult> (StorageOptions storage, HttpContext httpContext, CancellationToken ct) =>
@@ -188,7 +191,10 @@ internal static class AdminEndpoints
             }
         })
         .WithName("AdminBackupCreate")
-        .WithSummary("创建 FileSystem 数据目录 ZIP 快照（保存到 <data-root>/../_backups/）");
+        .WithSummary("创建 FileSystem 数据目录 ZIP 快照（保存到 <data-root>/../_backups/）")
+        .Produces<ContextCoreBackupCreateResponse>(StatusCodes.Status200OK)
+        .Produces<ContextCoreErrorResponse>(StatusCodes.Status400BadRequest)
+        .Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
         // ── Validate all JSONL files ───────────────────────────────────
         group.MapGet("/backup/validate", async Task<IResult> (StorageOptions storage, HttpContext httpContext, CancellationToken ct) =>
@@ -256,7 +262,10 @@ internal static class AdminEndpoints
                 });
         })
         .WithName("AdminBackupValidate")
-        .WithSummary("校验所有 JSONL 文件完整性（filesystem only），返回损坏行详情");
+        .WithSummary("校验所有 JSONL 文件完整性（filesystem only），返回损坏行详情")
+        .Produces<ContextCoreBackupValidateResponse>(StatusCodes.Status200OK)
+        .Produces<ContextCoreErrorResponse>(StatusCodes.Status400BadRequest)
+        .Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
         // ── Postgres schema version ────────────────────────────────────
         group.MapGet("/schema-version", async (StorageOptions storage, IServiceProvider sp, CancellationToken ct) =>
@@ -287,7 +296,8 @@ internal static class AdminEndpoints
             });
         })
         .WithName("AdminSchemaVersion")
-        .WithSummary("返回 Postgres schema 版本：代码版本 vs 数据库已应用版本");
+        .WithSummary("返回 Postgres schema 版本：代码版本 vs 数据库已应用版本")
+        .Produces<ContextCoreSchemaVersionResponse>(StatusCodes.Status200OK);
 
         group.MapGet("/storage/postgres/status", async (
             StorageOptions storage,
@@ -308,7 +318,8 @@ internal static class AdminEndpoints
             });
         })
         .WithName("AdminPostgresStorageStatus")
-        .WithSummary("返回 PostgreSQL operational store 状态摘要，不包含明文连接串");
+        .WithSummary("返回 PostgreSQL operational store 状态摘要，不包含明文连接串")
+        .Produces<PostgresStorageStatusResponse>(StatusCodes.Status200OK);
 
         group.MapGet("/storage/postgres/diagnostics", async (
             StorageOptions storage,
@@ -319,7 +330,8 @@ internal static class AdminEndpoints
             return Results.Ok(diagnostics);
         })
         .WithName("AdminPostgresStorageDiagnostics")
-        .WithSummary("返回 PostgreSQL operational store 诊断，不自动迁移");
+        .WithSummary("返回 PostgreSQL operational store 诊断，不自动迁移")
+        .Produces<PostgresOperationalStoreDiagnostics>(StatusCodes.Status200OK);
 
         group.MapPost("/storage/postgres/migrations/dry-run", async (
             StorageOptions storage,
@@ -348,7 +360,8 @@ internal static class AdminEndpoints
             return Results.Ok(ToPlanResponse(plan));
         })
         .WithName("AdminPostgresMigrationDryRun")
-        .WithSummary("预览 PostgreSQL baseline migrations，不写数据库");
+        .WithSummary("预览 PostgreSQL baseline migrations，不写数据库")
+        .Produces<PostgresMigrationPlanResponse>(StatusCodes.Status200OK);
 
         group.MapPost("/storage/postgres/migrations/apply", async (
             PostgresMigrationRequest request,
@@ -378,7 +391,8 @@ internal static class AdminEndpoints
             });
         })
         .WithName("AdminPostgresMigrationApply")
-        .WithSummary("显式确认后应用 PostgreSQL baseline migrations");
+        .WithSummary("显式确认后应用 PostgreSQL baseline migrations")
+        .Produces<PostgresMigrationApplyResponse>(StatusCodes.Status200OK);
 
         group.MapGet("/storage/relation-provider/status", (
             IServiceProvider sp) =>
@@ -394,7 +408,8 @@ internal static class AdminEndpoints
             return Results.Ok(status);
         })
         .WithName("AdminRelationProviderStatus")
-        .WithSummary("返回 RelationStore scoped service mode 状态，不包含明文连接串");
+        .WithSummary("返回 RelationStore scoped service mode 状态，不包含明文连接串")
+        .Produces<PostgresRelationScopedServiceModeStatusResponse>(StatusCodes.Status200OK);
 
         group.MapGet("/storage/relation-provider/scoped-diagnostics", (
             IServiceProvider sp) =>
@@ -410,13 +425,15 @@ internal static class AdminEndpoints
             return Results.Ok(status);
         })
         .WithName("AdminRelationProviderScopedDiagnostics")
-        .WithSummary("返回 Relation governance scoped service mode 诊断");
+        .WithSummary("返回 Relation governance scoped service mode 诊断")
+        .Produces<PostgresRelationScopedServiceModeStatusResponse>(StatusCodes.Status200OK);
 
         // ── In-process metrics ─────────────────────────────────────────
         group.MapGet("/metrics", (Infrastructure.ContextCoreMetrics metrics) =>
             Results.Ok(metrics.GetSnapshot()))
             .WithName("AdminMetrics")
-            .WithSummary("API 级别延迟统计（P50/P95/P99）+ 错误率，基于内存滚动窗口（最近 2000 次请求）");
+            .WithSummary("API 级别延迟统计（P50/P95/P99）+ 错误率，基于内存滚动窗口（最近 2000 次请求）")
+            .Produces<MetricsSnapshot>(StatusCodes.Status200OK);
 
         return app;
     }

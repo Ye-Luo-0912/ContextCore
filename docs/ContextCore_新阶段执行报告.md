@@ -1,5 +1,7 @@
 # ContextCore 新阶段执行报告
 
+> **⚠ 已过时**：本文档为历史快照，其中 router-shadow 相关接口、命令和报告均已从代码库中移除，不再有效。本文档仅供历史回溯。
+
 > 历史快照（Historical Snapshot）— 更新于 2026-06-10。
 > 文中记录 V3.9 Query Intent Expansion Shadow Baseline 阶段执行情况，已被后续 P3/P4/P5 架构治理取代。
 > 当前路线图请见根目录 `TODO.md`。本文档仅供回溯，不作为设计依据。

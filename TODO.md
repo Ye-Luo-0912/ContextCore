@@ -1,6 +1,6 @@
 # ContextCore 项目路线图
 
-> 最近更新：R11 Context State 失效边界 P4-P6 完成（剩余 Store decorator + 扩展事件结构 + 引入 ContextStateCache）（2026-07-14）
+> 最近更新：R12 Context State 缓存边界返工（scope 索引/single-flight/commit point 安全/并发测试）+ P1 残留删除（失效菜单/router-shadow 文档/EvalGateReportDtos 孤立 DTO）（2026-07-14）
 
 > 本文件是 ContextCore 的**唯一当前路线图**。docs/ 下的 freeze / report / audit / plan 类文档均为历史快照，仅供回溯，不作为设计依据。
 
@@ -8,7 +8,7 @@
 
 ## 当前阶段
 
-**架构收口与不可达代码清除期** — P5（P5-0 ~ P5-6）、P0 并发锁修复、P1-5 分发重构、DTO-R1~R5 报告 DTO 治理、P1 ControlRoom 历史报告矩阵删除、P2 Evaluation/Core 不可达切片删除、P4 FoundationStatusService 收口（孤立方法删除 + 别名链删除 + 仅测试调用方法删除 + 跨项目迁移）、P3-deferred eval-only DTO 迁移回 Evaluation 均已完成。剩余 Domain/Api/Ports 全量重排与 Service DI 大改暂缓。
+**架构收口与不可达代码清除期** — P5（P5-0 ~ P5-6）、P0 并发锁修复、P1-5 分发重构、DTO-R1~R5 报告 DTO 治理、P1 ControlRoom 历史报告矩阵删除、P2 Evaluation/Core 不可达切片删除、P4 FoundationStatusService 收口（孤立方法删除 + 别名链删除 + 仅测试调用方法删除 + 跨项目迁移）、P3-deferred eval-only DTO 迁移回 Evaluation 均已完成。R12 Context State 缓存边界返工（scope 索引/single-flight/commit point 安全/并发测试）与 P1 残留删除（失效菜单/router-shadow 文档/EvalGateReportDtos 孤立 DTO）均已完成。剩余 Domain/Api/Ports 全量重排与 Service DI 大改暂缓。
 
 ---
 
@@ -28,19 +28,39 @@
 
 | 指标 | 当前值 | 目标 |
 |------|--------|------|
-| 生产代码总行数 | ~118,273 | < 220k |
-| Evaluation 代码行数 | ~23,226 | < 70k |
-| Abstractions 代码行数 | ~14,731 | 跨层契约 |
-| ControlRoom 代码行数 | ~16,683 | < 20k |
-| Core 代码行数 | ~32,629 | - |
-| EvalCommand.cs 单文件行数 | 7,987 | P1-5 已完成 |
+| 生产代码总行数 | ~99,496 | < 220k |
+| Evaluation 代码行数 | ~12,624 | < 70k |
+| Abstractions 代码行数 | ~8,525 | 跨层契约 |
+| ControlRoom 代码行数 | ~13,559 | < 20k |
+| Core 代码行数 | ~29,101 | - |
+| EvalCommand*.cs 单文件行数 | 2,820 | P1-5 已完成 |
 | FoundationStatusService.cs 行数 | 606 | P4 已完成 |
 | 构建 | 0 警告 / 0 错误 | 0 / 0 |
-| 测试 | 792 通过 / 0 失败 | 0 失败 |
+| 测试 | 1882 通过 / 0 失败 | 0 失败 |
 
 ---
 
 ## 已完成工作
+
+### R12 系列：Context State 缓存边界返工 + P1 残留删除
+
+基于缓存边界评审，在缓存接入任何生产读路径之前完成全部返工；同步清理 ControlRoom 失效菜单、router-shadow 文档残留与 EvalGateReportDtos 孤立 DTO。
+
+**R12-P0：缓存边界返工（5 子任务）**：
+
+- **P0-1 Abstractions 契约重设计** — 新增 `StateCacheKey`（readonly record struct，强制非空）与 `DependencyScopeSet`（至少一个 scope，杜绝无 scope 写入无法失效的脏条目）。`IContextStateCache` 接口删除无 scope `SetAsync`，统一为 `SetAsync<T>(key, value, scopes, ct)`，写入必须声明依赖 scope 集合。
+- **P0-2 InMemoryContextStateCache 重写** — 新增 `Dictionary<ScopeIndexKey, HashSet<string>>` scope 反向索引，失效从 O(N) 全量扫描降为 O(M)（M 为该 scope 下条目数）。单条目可绑定多 scope（解决 Package Builder 跨 Context/Memory/Constraint/Global/Relation 组合依赖）。新增 4 项指标：Hits/Misses/Evictions/VersionMismatches。`ScopeMatchesInvalidation` 实现 EntityId 匹配规则（null scope 匹配任意；null 失效匹配任意；否则相等匹配）。
+- **P0-3 ContextStateCacheAccessor 改造** — 依赖 `IContextStateCache` 接口（不再依赖具体类 `InMemoryContextStateCache`，可替换为分布式实现）。删除无 scope `GetOrAddAsync` 重载。新增 per-key `SemaphoreSlim` single-flight：快速路径 → per-key 信号量 → double-check → factory → SetAsync，避免热点 miss 并发击穿。
+- **P0-4 commit point 安全** — `InvalidatingStoreDecorator` 中 74 处机械替换：`_inner.XxxAsync` 成功后的 `InvalidateAsync` 与 `BumpVersionAsync` 全部改用 `CancellationToken.None`（共 37 个 InvalidateAsync + 37 个 BumpVersionAsync）。提交后取消不再跳过失效与版本递增。
+- **P0-5 指标 + 并发测试** — 新增 `ContextStateCacheTests`（18 个测试）：覆盖 scope 索引失效、多 scope 组合依赖、版本感知、single-flight、LRU 淘汰指标、EntityId 匹配规则、commit point 安全、高并发混合操作。
+
+**R12-P1：残留删除（3 子任务）**：
+
+- **P1-1 Dashboard 失效菜单** — `DashboardRenderer` service 模式菜单删除无解析映射的 `[32]PolicyFeedback`/`[33]LearningFeatures`/`[X]Planning`/`[F]Proposal`/`[34]RankerDebug`；`[C] Gaps` → `[30] Gaps`、`[E] Candidates` → `[31] CandConstraints` 修复与 direct 模式快捷键冲突。
+- **P1-2 router-shadow 文档残留** — 4 个历史文档标题后添加弃用声明块（新阶段执行报告/controlroom-service-mode/filesystem-layout/learning-offline-baseline），标注 router-shadow 接口已从代码库移除。
+- **P1-3 EvalGateReportDtos 孤立 DTO 删除** — `EvalGateReportDtos.cs` 从 1627 行降至 41 行（-1586 行）：保留 2 个 USED 类型（`RetrievalDatasetAlignmentAuditSummaryReport`、`ContextEvalCorpus`），删除 63 个孤立类型（61 个完全无引用 + 2 个仅 JSON 合约 deny-list 字符串引用，不涉及类型加载）。
+
+验证：构建 0 警告 0 错误，测试 1882 通过 0 失败。
 
 ### R11 系列：Context State 失效边界 P4-P6 完成
 
@@ -496,13 +516,7 @@ R7-0 阻塞项：移除基于错误报告继续决策的虚假 gate 和零值证
 
 ## 下一阶段任务
 
-### R7-1：DTO-R6 级联收口（已完成 commit `12660ac`）
-
-删除 LifecycleAwareRankerShadow 系列（7 DTO + 2 属性）、Router Shadow 零值 DTO（6 个，保留 3 个被 trace store/生产使用的）、Artifact Shadow trace counters（3 字段）。+1/-567 行。保留 LifecycleAwareFeatureSet（生产使用）。
-
-### R7-2：机械不可达删除（已完成 commit `5886c70`）
-
-删除 9 个无生产消费者源文件 + 1 个仅测试引用的整文件测试 + 清理 2 个测试文件。-1,471 行。保留 RouterIntentDatasetProvider（FileRouterIntentDatasetProvider 生产实现，受硬约束保护）。
+> R7-1（DTO-R6 级联收口）与 R7-2（机械不可达删除）均已完成，详见上方"已完成工作"。以下为尚未启动或暂缓项。
 
 ### DTO-R4 剩余部分（暂缓，高风险）
 

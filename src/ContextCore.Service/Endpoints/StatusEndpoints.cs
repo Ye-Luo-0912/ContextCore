@@ -49,7 +49,8 @@ internal static class StatusEndpoints
         })
         .WithTags("Status")
         .WithName("GetStatus")
-        .WithSummary("获取轻量服务状态（只读，不执行写探针）");
+        .WithSummary("获取轻量服务状态（只读，不执行写探针）")
+        .Produces<RuntimeStatusResponse>(StatusCodes.Status200OK);
 
         app.MapGet("/api/status/deep", async Task<IResult> (
             ServiceAlphaRuntimeInspector inspector,
@@ -61,7 +62,8 @@ internal static class StatusEndpoints
         })
         .WithTags("Status")
         .WithName("GetStatusDeep")
-        .WithSummary("获取深度运行时探针结果（允许 system health scope 写探针，可用 refresh=true 强制重跑）");
+        .WithSummary("获取深度运行时探针结果（允许 system health scope 写探针，可用 refresh=true 强制重跑）")
+        .Produces<RuntimeReadinessResponse>(StatusCodes.Status200OK);
 
         return app;
     }

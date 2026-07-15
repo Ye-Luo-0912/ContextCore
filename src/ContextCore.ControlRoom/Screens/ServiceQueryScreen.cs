@@ -27,7 +27,7 @@ public static class ServiceQueryScreen
             Console.Write("IncludeContent (true/false, default true): ");
             var includeContentText = Console.ReadLine();
 
-            var request = new ContextQueryRequest
+            var request = new ContextQuery
             {
                 WorkspaceId = service.State.WorkspaceId,
                 CollectionId = service.State.CollectionId,

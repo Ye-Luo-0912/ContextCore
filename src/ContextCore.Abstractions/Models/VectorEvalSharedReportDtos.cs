@@ -289,24 +289,6 @@ public sealed class EmbeddingProviderSmokeReport
     public IReadOnlyList<string> Warnings { get; init; } = Array.Empty<string>();
 }
 
-/// <summary>Scoped runtime experiment approval/no-op harness recommendation。</summary>
-public static class ScopedRuntimeExperimentApprovalRecommendations
-{
-    public const string ReadyForActivationPreflight = nameof(ReadyForActivationPreflight);
-    public const string ReadyForScopedRuntimeExperimentDryRunHarnessFreeze = nameof(ReadyForScopedRuntimeExperimentDryRunHarnessFreeze);
-    public const string NeedsManualApproval = nameof(NeedsManualApproval);
-    public const string BlockedByMissingProposal = nameof(BlockedByMissingProposal);
-    public const string BlockedByMissingApproval = nameof(BlockedByMissingApproval);
-    public const string BlockedByExpiredApproval = nameof(BlockedByExpiredApproval);
-    public const string BlockedByRevokedApproval = nameof(BlockedByRevokedApproval);
-    public const string BlockedByUnsafeApprovalMode = nameof(BlockedByUnsafeApprovalMode);
-    public const string BlockedByWrongApprovalMode = nameof(BlockedByWrongApprovalMode);
-    public const string BlockedByMissingAcknowledgement = nameof(BlockedByMissingAcknowledgement);
-    public const string BlockedByRuntimeSwitchAttempt = nameof(BlockedByRuntimeSwitchAttempt);
-    public const string BlockedByRuntimeMutation = nameof(BlockedByRuntimeMutation);
-    public const string KeepPreviewOnly = nameof(KeepPreviewOnly);
-}
-
 /// <summary>Scoped formal preview opt-in mode。</summary>
 public static class ScopedFormalPreviewOptInModes
 {

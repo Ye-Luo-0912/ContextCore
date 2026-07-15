@@ -1,5 +1,6 @@
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
+using ContextCore.Core;
 using ContextCore.Core.Services;
 using ContextCore.Core.Services.Learning.V14_0;
 using ContextCore.Core.Services.Retrieval;
@@ -40,4 +41,10 @@ public sealed class RuntimeBuildOptions
 
     /// <summary>运行时候选 trace sink；为 null 则使用 NullRuntimeCandidateTraceSink。</summary>
     public IRuntimeCandidateTraceSink? RuntimeCandidateTraceSink { get; init; }
+
+    /// <summary>
+    /// 包构建缓存访问器；为 null 则不缓存（每次构建全量执行）。
+    /// 启用后按请求指纹缓存构建结果，任一依赖 store 写入即失效。
+    /// </summary>
+    public ContextStateCacheAccessor? CacheAccessor { get; init; }
 }

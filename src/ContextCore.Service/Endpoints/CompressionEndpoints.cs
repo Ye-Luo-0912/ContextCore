@@ -51,7 +51,8 @@ internal static class CompressionEndpoints
 		return Results.Ok(response);
 })
 		.WithName("RunCompressionSync")
-		.WithSummary("同步执行压缩并保存生成结果");
+		.WithSummary("同步执行压缩并保存生成结果")
+		.Produces<CompressionResponse>(StatusCodes.Status200OK);
 
 		return app;
 	}

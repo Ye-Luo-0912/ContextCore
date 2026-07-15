@@ -18,75 +18,103 @@ internal static class VectorEndpoints
 
         group.MapGet("/status", GetStatusAsync)
             .WithName("GetVectorStatus")
-            .WithSummary("查询 V1 vector index 状态");
+            .WithSummary("查询 V1 vector index 状态")
+            .Produces<VectorIndexStatusResponse>(StatusCodes.Status200OK);
 
         group.MapGet("/diagnostics", GetDiagnosticsAsync)
             .WithName("GetVectorDiagnostics")
-            .WithSummary("查询 V1 vector index 诊断");
+            .WithSummary("查询 V1 vector index 诊断")
+            .Produces<VectorIndexDiagnosticsReport>(StatusCodes.Status200OK);
 
         group.MapPost("/reindex-preview", PreviewReindexAsync)
             .WithName("PreviewVectorReindex")
-            .WithSummary("预览 V1 vector index reindex 动作，不写入存储");
+            .WithSummary("预览 V1 vector index reindex 动作，不写入存储")
+            .Produces<VectorReindexPreviewResponse>(StatusCodes.Status200OK);
 
         group.MapPost("/query-preview", PreviewQueryAsync)
             .WithName("PreviewVectorQuery")
-            .WithSummary("预览 V3 vector query 结果，不影响正式 retrieval/package");
+            .WithSummary("预览 V3 vector query 结果，不影响正式 retrieval/package")
+            .Produces<VectorQueryPreviewResult>(StatusCodes.Status200OK);
 
         group.MapPost("/reindex-plan", CreateReindexPlanAsync)
             .WithName("CreateVectorReindexPlan")
-            .WithSummary("创建 vector reindex 计划，不写入存储");
+            .WithSummary("创建 vector reindex 计划，不写入存储")
+            .Produces<VectorReindexPlan>(StatusCodes.Status200OK);
 
         group.MapPost("/reindex-submit", SubmitReindexAsync)
             .WithName("SubmitVectorReindex")
-            .WithSummary("提交 vector_reindex 后台作业");
+            .WithSummary("提交 vector_reindex 后台作业")
+            .Produces<VectorReindexSubmitResponse>(StatusCodes.Status202Accepted)
+            .Produces<ContextCoreErrorResponse>(StatusCodes.Status400BadRequest);
 
         group.MapGet("/reindex-reports", QueryReindexReportsAsync)
             .WithName("QueryVectorReindexReports")
-            .WithSummary("查询 vector reindex 报告");
+            .WithSummary("查询 vector reindex 报告")
+            .Produces<VectorReindexReportQueryResponse>(StatusCodes.Status200OK);
 
         group.MapGet("/reindex-reports/{id}", GetReindexReportAsync)
             .WithName("GetVectorReindexReport")
-            .WithSummary("按 ID 查询 vector reindex 报告");
+            .WithSummary("按 ID 查询 vector reindex 报告")
+            .Produces<VectorReindexResult>(StatusCodes.Status200OK)
+            .Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
         group.MapPost("/lifecycle-metadata/review-candidates/generate", GenerateLifecycleMetadataReviewCandidatesAsync)
             .WithName("GenerateVectorLifecycleMetadataReviewCandidates")
-            .WithSummary("从 lifecycle metadata repair plan 生成只读人工 review 候选项");
+            .WithSummary("从 lifecycle metadata repair plan 生成只读人工 review 候选项")
+            .Produces<VectorLifecycleMetadataReviewCandidateGenerationResult>(StatusCodes.Status200OK)
+            .Produces<ContextCoreErrorResponse>(StatusCodes.Status400BadRequest)
+            .Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
         group.MapGet("/lifecycle-metadata/review-candidates", QueryLifecycleMetadataReviewCandidatesAsync)
             .WithName("QueryVectorLifecycleMetadataReviewCandidates")
-            .WithSummary("查询 lifecycle metadata review 候选项");
+            .WithSummary("查询 lifecycle metadata review 候选项")
+            .Produces<IReadOnlyList<VectorLifecycleMetadataReviewCandidate>>(StatusCodes.Status200OK);
 
         group.MapGet("/lifecycle-metadata/review-candidates/{id}", GetLifecycleMetadataReviewCandidateAsync)
             .WithName("GetVectorLifecycleMetadataReviewCandidate")
-            .WithSummary("按 ID 查询 lifecycle metadata review 候选项");
+            .WithSummary("按 ID 查询 lifecycle metadata review 候选项")
+            .Produces<VectorLifecycleMetadataReviewCandidate>(StatusCodes.Status200OK)
+            .Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
         group.MapGet("/lifecycle-metadata/review-candidates/{id}/explain", ExplainLifecycleMetadataReviewCandidateAsync)
             .WithName("ExplainVectorLifecycleMetadataReviewCandidate")
-            .WithSummary("解释 lifecycle metadata review 候选项证据与风险");
+            .WithSummary("解释 lifecycle metadata review 候选项证据与风险")
+            .Produces<VectorLifecycleMetadataReviewCandidateExplanation>(StatusCodes.Status200OK)
+            .Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
         group.MapPost("/lifecycle-metadata/review-candidates/{id}/approve", ApproveLifecycleMetadataReviewCandidateAsync)
             .WithName("ApproveVectorLifecycleMetadataReviewCandidate")
-            .WithSummary("批准 lifecycle metadata review candidate 写入 sidecar metadata");
+            .WithSummary("批准 lifecycle metadata review candidate 写入 sidecar metadata")
+            .Produces<VectorLifecycleMetadataReviewResult>(StatusCodes.Status200OK)
+            .Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
         group.MapPost("/lifecycle-metadata/review-candidates/{id}/reject", RejectLifecycleMetadataReviewCandidateAsync)
             .WithName("RejectVectorLifecycleMetadataReviewCandidate")
-            .WithSummary("拒绝 lifecycle metadata review candidate，不写 sidecar");
+            .WithSummary("拒绝 lifecycle metadata review candidate，不写 sidecar")
+            .Produces<VectorLifecycleMetadataReviewResult>(StatusCodes.Status200OK)
+            .Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
         group.MapPost("/lifecycle-metadata/review-candidates/{id}/needs-evidence", NeedsEvidenceLifecycleMetadataReviewCandidateAsync)
             .WithName("NeedsEvidenceVectorLifecycleMetadataReviewCandidate")
-            .WithSummary("标记 lifecycle metadata review candidate 需要更多证据");
+            .WithSummary("标记 lifecycle metadata review candidate 需要更多证据")
+            .Produces<VectorLifecycleMetadataReviewResult>(StatusCodes.Status200OK)
+            .Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
         group.MapPost("/lifecycle-metadata/review-candidates/{id}/supersede", SupersedeLifecycleMetadataReviewCandidateAsync)
             .WithName("SupersedeVectorLifecycleMetadataReviewCandidate")
-            .WithSummary("标记 lifecycle metadata review candidate 已被替代");
+            .WithSummary("标记 lifecycle metadata review candidate 已被替代")
+            .Produces<VectorLifecycleMetadataReviewResult>(StatusCodes.Status200OK)
+            .Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
         group.MapGet("/lifecycle-metadata/review-candidates/{id}/reviews", ListLifecycleMetadataReviewCandidateReviewsAsync)
             .WithName("ListVectorLifecycleMetadataReviewCandidateReviews")
-            .WithSummary("查询 lifecycle metadata review candidate 决策历史");
+            .WithSummary("查询 lifecycle metadata review candidate 决策历史")
+            .Produces<IReadOnlyList<VectorLifecycleMetadataReviewRecord>>(StatusCodes.Status200OK);
 
         group.MapGet("/lifecycle-metadata/sidecar", ListLifecycleMetadataSidecarAsync)
             .WithName("ListVectorLifecycleMetadataSidecar")
-            .WithSummary("查询 lifecycle metadata sidecar preview");
+            .WithSummary("查询 lifecycle metadata sidecar preview")
+            .Produces<IReadOnlyList<VectorLifecycleSidecarMetadataEntry>>(StatusCodes.Status200OK);
 
         return app;
     }

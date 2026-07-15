@@ -26,6 +26,30 @@ public sealed class InMemoryContextStateVersionStore : IContextStateVersionStore
         return Task.FromResult(version);
     }
 
+    public Task<IReadOnlyDictionary<VersionScope, long>> GetVersionsAsync(
+        IReadOnlyCollection<VersionScope> scopes,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        ArgumentNullException.ThrowIfNull(scopes);
+
+        var result = new Dictionary<VersionScope, long>();
+        foreach (var scope in scopes)
+        {
+            if (result.ContainsKey(scope))
+            {
+                continue;
+            }
+
+            var version = _versions.TryGetValue(VersionKey(scope.WorkspaceId, scope.CollectionId, scope.StoreKind), out var box)
+                ? Interlocked.Read(ref box.Value)
+                : 0L;
+            result[scope] = version;
+        }
+
+        return Task.FromResult<IReadOnlyDictionary<VersionScope, long>>(result);
+    }
+
     public Task<long> BumpVersionAsync(
         string workspaceId,
         string collectionId,

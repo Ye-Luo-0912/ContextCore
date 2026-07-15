@@ -1,14 +1,22 @@
 using System.Collections.Concurrent;
+using System.Threading;
 using ContextCore.Abstractions;
 
 namespace ContextCore.Core;
 
 /// <summary>
 /// 基于内存的 <see cref="IContextStateCache"/> 实现，同时实现 <see cref="IStateCacheInvalidator"/>。
-/// R11-P6：使用 ConcurrentDictionary 存储，LRU 淘汰策略（默认上限 10000 项），
-/// 支持 version 检查（通过 <see cref="IContextStateVersionStore"/> 在读取时验证版本是否仍有效）。
+/// P0 返工：scope 索引实现 O(M) 失效（M 为该 scope 下的条目数，非全量 N）；
+/// 每个条目绑定 <see cref="DependencyScopeSet"/>，支持跨 Store 组合依赖；
+/// 版本感知：写入时记录所有 scope 版本快照，读取时通过批量接口一次性校验。
 /// 进程内有效，重启丢失；多实例场景需替换为分布式实现。
 /// </summary>
+/// <remarks>
+/// 并发模型：命中路径完全无锁（_entries 为 ConcurrentDictionary，LastAccessTicks 经 Interlocked 更新）；
+/// 写路径（SetCore/InvalidateAsync/Clear）在 _lock 下串行以保证 scope 索引一致性。
+/// 近似 LRU：淘汰时扫描 LastAccessTicks 找最旧项（O(N)，仅在超容量时触发，罕见），
+/// 避免命中路径的 LinkedList 节点移动与全局锁争用。
+/// </remarks>
 public sealed class InMemoryContextStateCache : IContextStateCache, IStateCacheInvalidator
 {
     /// <summary>默认最大缓存项数。</summary>
@@ -17,8 +25,15 @@ public sealed class InMemoryContextStateCache : IContextStateCache, IStateCacheI
     private readonly IContextStateVersionStore? _versionStore;
     private readonly int _maxEntries;
     private readonly ConcurrentDictionary<string, CacheEntry> _entries = new();
-    private readonly LinkedList<string> _lruList = new();
-    private readonly object _lruLock = new();
+    // scope 索引：(StoreKind, WorkspaceId, CollectionId) -> entry keys。失效时 O(M) 定位。
+    private readonly Dictionary<VersionScope, HashSet<string>> _scopeIndex = new();
+    private readonly object _lock = new();
+
+    // 指标（Interlocked 原子计数）
+    private long _hits;
+    private long _misses;
+    private long _evictions;
+    private long _versionMismatches;
 
     /// <summary>使用默认容量创建缓存实例。</summary>
     /// <param name="versionStore">可选的版本存储，用于读取时验证缓存项版本是否仍有效。</param>
@@ -44,231 +59,296 @@ public sealed class InMemoryContextStateCache : IContextStateCache, IStateCacheI
     /// <summary>当前缓存项数量（近似值，并发场景下可能略有偏差）。</summary>
     public int Count => _entries.Count;
 
+    /// <summary>缓存命中次数。</summary>
+    public long Hits => Interlocked.Read(ref _hits);
+
+    /// <summary>缓存未命中次数。</summary>
+    public long Misses => Interlocked.Read(ref _misses);
+
+    /// <summary>LRU 淘汰次数。</summary>
+    public long Evictions => Interlocked.Read(ref _evictions);
+
+    /// <summary>版本失配次数（命中条目但因版本过期被移除）。</summary>
+    public long VersionMismatches => Interlocked.Read(ref _versionMismatches);
+
     /// <inheritdoc />
-    public async Task<T?> GetAsync<T>(string key, CancellationToken ct = default) where T : class
+    public async Task<T?> GetAsync<T>(StateCacheKey key, CancellationToken ct = default) where T : class
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(key);
+        EnsureKey(key);
         ct.ThrowIfCancellationRequested();
 
-        if (!_entries.TryGetValue(key, out var entry))
+        if (!_entries.TryGetValue(key.Value, out var entry))
         {
+            Interlocked.Increment(ref _misses);
             return null;
         }
 
-        // 版本检查：若缓存项记录了版本范围，验证当前版本是否仍匹配
-        if (entry.HasVersionScope && _versionStore is not null)
+        // 版本检查：批量拉取所有 scope 的当前版本，本地逐项比对快照。
+        // 分布式版本存储下仅一次 RPC；进程内实现为单次同步遍历。
+        if (_versionStore is not null && entry.VersionSnapshots is { Count: > 0 })
         {
-            var currentVersion = await _versionStore.GetVersionAsync(
-                entry.WorkspaceId!, entry.CollectionId!, entry.StoreKind!, ct).ConfigureAwait(false);
-            if (currentVersion != entry.Version)
+            var scopes = entry.VersionSnapshots.Keys.ToArray();
+            var currentVersions = await _versionStore.GetVersionsAsync(scopes, ct).ConfigureAwait(false);
+
+            foreach (var (scopeKey, recordedVersion) in entry.VersionSnapshots)
             {
-                // 版本不匹配，移除过期项并返回 miss
-                TryRemoveEntry(key);
-                return null;
+                if (!currentVersions.TryGetValue(scopeKey, out var currentVersion) || currentVersion != recordedVersion)
+                {
+                    // 任一 scope 版本不匹配（或范围缺失），移除过期项并返回 miss
+                    Interlocked.Increment(ref _versionMismatches);
+                    TryRemoveEntry(key.Value);
+                    return null;
+                }
             }
         }
 
-        TouchLru(entry);
+        Interlocked.Increment(ref _hits);
+        // 近似 LRU：无锁更新最后访问时间戳，避免命中路径的全局锁争用。
+        Interlocked.Exchange(ref entry.LastAccessTicks, DateTimeOffset.UtcNow.Ticks);
         return entry.Value as T;
     }
 
     /// <inheritdoc />
-    public Task SetAsync<T>(string key, T value, CancellationToken ct = default) where T : class
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        ArgumentNullException.ThrowIfNull(value);
-        ct.ThrowIfCancellationRequested();
-
-        var entry = new CacheEntry
-        {
-            Value = value,
-            ValueType = typeof(T)
-        };
-
-        SetCore(key, entry);
-        return Task.CompletedTask;
-    }
-
-    /// <summary>
-    /// 写入缓存值并关联版本范围。读取时会通过 <see cref="IContextStateVersionStore"/> 验证版本是否仍有效。
-    /// 供 <see cref="ContextStateCacheAccessor"/> 等需要版本感知的调用方使用。
-    /// </summary>
-    /// <typeparam name="T">缓存值类型。</typeparam>
-    /// <param name="key">缓存键。</param>
-    /// <param name="value">缓存值。</param>
-    /// <param name="workspaceId">工作空间 ID（版本范围）。</param>
-    /// <param name="collectionId">集合 ID（版本范围）。</param>
-    /// <param name="storeKind">Store 种类（版本范围）。</param>
-    /// <param name="ct">取消令牌。</param>
     public async Task SetAsync<T>(
-        string key,
+        StateCacheKey key,
         T value,
-        string workspaceId,
-        string collectionId,
-        string storeKind,
+        DependencyScopeSet scopes,
         CancellationToken ct = default) where T : class
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(key);
+        EnsureKey(key);
         ArgumentNullException.ThrowIfNull(value);
-        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
-        ArgumentException.ThrowIfNullOrWhiteSpace(collectionId);
-        ArgumentException.ThrowIfNullOrWhiteSpace(storeKind);
+        ArgumentNullException.ThrowIfNull(scopes);
         ct.ThrowIfCancellationRequested();
 
-        long version = 0;
+        // 记录所有 scope 的版本快照（去重 by VersionScope，EntityId 不影响版本）
+        Dictionary<VersionScope, long>? versionSnapshots = null;
         if (_versionStore is not null)
         {
-            version = await _versionStore.GetVersionAsync(workspaceId, collectionId, storeKind, ct).ConfigureAwait(false);
+            versionSnapshots = new Dictionary<VersionScope, long>();
+            foreach (var scope in scopes.Scopes)
+            {
+                var indexKey = new VersionScope(scope.WorkspaceId, scope.CollectionId, scope.StoreKind);
+                if (!versionSnapshots.ContainsKey(indexKey))
+                {
+                    var v = await _versionStore.GetVersionAsync(
+                        scope.WorkspaceId, scope.CollectionId, scope.StoreKind, ct).ConfigureAwait(false);
+                    versionSnapshots[indexKey] = v;
+                }
+            }
         }
 
         var entry = new CacheEntry
         {
             Value = value,
             ValueType = typeof(T),
-            Version = version,
-            WorkspaceId = workspaceId,
-            CollectionId = collectionId,
-            StoreKind = storeKind
+            Scopes = scopes,
+            VersionSnapshots = versionSnapshots
         };
 
-        SetCore(key, entry);
+        SetCore(key.Value, entry, scopes);
     }
 
     /// <inheritdoc />
     public Task InvalidateAsync(CacheInvalidationKey key, CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
+        var indexKey = new VersionScope(key.WorkspaceId, key.CollectionId, key.StoreKind);
 
-        if (_entries.IsEmpty)
+        // 匹配与删除均在 _lock 内完成，避免与并发 SetAsync 覆盖产生误删：
+        // 若在锁外删除，期间同名 key 被新 scope 覆盖，失效线程会删掉新条目造成抖动。
+        lock (_lock)
         {
-            return Task.CompletedTask;
-        }
-
-        // 扫描并移除所有匹配失效键的缓存项。
-        // 失效匹配规则：
-        //   - StoreKind 一致
-        //   - WorkspaceId 一致
-        //   - CollectionId 一致（key.CollectionId 为空串时仅匹配空串）
-        //   - EntityId：key.EntityId 为 null 时移除整个集合范围；否则仅移除该 EntityId 对应项。
-        //     由于缓存 entry 不直接存储 EntityId（key 是任意字符串），EntityId 级别的精准失效
-        //     依赖调用方在 key 中编码 EntityId 或使用集合级失效。
-        //     为保证安全，当 key.EntityId 为 null 时移除该范围下所有 entry；
-        //     当 key.EntityId 非空时也移除该范围下所有 entry（保守策略，避免漏失效）。
-        var keysToRemove = new List<string>();
-        foreach (var kvp in _entries)
-        {
-            var entry = kvp.Value;
-            if (!entry.HasVersionScope)
+            if (!_scopeIndex.TryGetValue(indexKey, out var entryKeys) || entryKeys.Count == 0)
             {
-                // 未关联版本范围的 entry 无法按 CacheInvalidationKey 精准失效，跳过
-                continue;
+                return Task.CompletedTask;
             }
 
-            if (MatchesKey(entry, key))
+            // 先收集匹配 key（不能边遍历 entryKeys 边删除其中的条目，因为 RemoveFromScopeIndex 会改 entryKeys）
+            List<string>? keysToRemove = null;
+            foreach (var entryKey in entryKeys)
             {
-                keysToRemove.Add(kvp.Key);
-            }
-        }
+                if (!_entries.TryGetValue(entryKey, out var entry) || entry.Scopes is null)
+                {
+                    continue;
+                }
 
-        foreach (var k in keysToRemove)
-        {
-            TryRemoveEntry(k);
+                if (ScopeMatchesInvalidation(entry.Scopes, key))
+                {
+                    (keysToRemove ??= new List<string>()).Add(entryKey);
+                }
+            }
+
+            if (keysToRemove is null)
+            {
+                return Task.CompletedTask;
+            }
+
+            foreach (var k in keysToRemove)
+            {
+                if (_entries.TryRemove(k, out var removed))
+                {
+                    RemoveFromScopeIndex(k, removed.Scopes);
+                }
+            }
         }
 
         return Task.CompletedTask;
     }
 
-    /// <summary>清空所有缓存项（主要用于测试）。</summary>
+    /// <summary>清空所有缓存项（主要用于测试）。所有结构在 _lock 下一次性清空，保持一致。</summary>
     public void Clear()
     {
-        lock (_lruLock)
+        lock (_lock)
         {
-            _lruList.Clear();
+            _scopeIndex.Clear();
+            _entries.Clear();
         }
-
-        _entries.Clear();
     }
 
-    private void SetCore(string key, CacheEntry entry)
+    private static void EnsureKey(StateCacheKey key)
     {
-        lock (_lruLock)
+        // StateCacheKey 是 readonly record struct，default 与 positional 构造器可绕过 From 校验；
+        // 缓存边界必须再次校验非空，避免 null/空 Value 作为字典 key。
+        if (string.IsNullOrWhiteSpace(key.Value))
+        {
+            throw new ArgumentException("StateCacheKey.Value 不能为 null 或空白。请使用 StateCacheKey.From 构造。", nameof(key));
+        }
+    }
+
+    private void SetCore(string key, CacheEntry entry, DependencyScopeSet scopes)
+    {
+        lock (_lock)
         {
             if (_entries.TryGetValue(key, out var existing))
             {
-                // 已存在：先移除旧 LRU 节点
-                RemoveLruNode(existing);
+                // 已存在：先从旧 scope 索引移除
+                RemoveFromScopeIndex(key, existing.Scopes);
             }
 
-            var node = _lruList.AddFirst(key);
-            entry.LruNode = node;
+            entry.LastAccessTicks = DateTimeOffset.UtcNow.Ticks;
             _entries[key] = entry;
 
-            // LRU 淘汰
-            while (_lruList.Count > _maxEntries)
+            // 注册到新 scope 索引
+            AddToScopeIndex(key, scopes);
+
+            // 近似 LRU 淘汰：扫描找最久未访问项。O(N) 但仅在超容量时触发（罕见）。
+            while (_entries.Count > _maxEntries)
             {
-                var oldestKey = _lruList.Last!.Value;
-                _lruList.RemoveLast();
-                if (_entries.TryRemove(oldestKey, out var removed))
+                string? oldestKey = null;
+                var oldestTicks = long.MaxValue;
+                foreach (var (k, e) in _entries)
                 {
-                    removed.LruNode = null;
+                    if (e.LastAccessTicks < oldestTicks)
+                    {
+                        oldestTicks = e.LastAccessTicks;
+                        oldestKey = k;
+                    }
+                }
+
+                if (oldestKey is not null && _entries.TryRemove(oldestKey, out var removed))
+                {
+                    RemoveFromScopeIndex(oldestKey, removed.Scopes);
+                    Interlocked.Increment(ref _evictions);
+                }
+                else
+                {
+                    break; // 防御：若无项可淘汰则退出
                 }
             }
         }
     }
 
-    private void TouchLru(CacheEntry entry)
-    {
-        lock (_lruLock)
-        {
-            if (entry.LruNode is null)
-            {
-                return;
-            }
-
-            _lruList.Remove(entry.LruNode);
-            entry.LruNode = _lruList.AddFirst(entry.LruNode.Value);
-        }
-    }
-
     private void TryRemoveEntry(string key)
     {
-        lock (_lruLock)
+        lock (_lock)
         {
             if (_entries.TryRemove(key, out var removed))
             {
-                RemoveLruNode(removed);
+                RemoveFromScopeIndex(key, removed.Scopes);
             }
         }
     }
 
-    private void RemoveLruNode(CacheEntry entry)
+    private void AddToScopeIndex(string entryKey, DependencyScopeSet scopes)
     {
-        if (entry.LruNode is not null)
+        foreach (var scope in scopes.Scopes)
         {
-            _lruList.Remove(entry.LruNode);
-            entry.LruNode = null;
+            var indexKey = new VersionScope(scope.WorkspaceId, scope.CollectionId, scope.StoreKind);
+            if (!_scopeIndex.TryGetValue(indexKey, out var set))
+            {
+                set = new HashSet<string>();
+                _scopeIndex[indexKey] = set;
+            }
+
+            set.Add(entryKey);
         }
     }
 
-    private static bool MatchesKey(CacheEntry entry, CacheInvalidationKey key)
+    private void RemoveFromScopeIndex(string entryKey, DependencyScopeSet? scopes)
     {
-        return string.Equals(entry.StoreKind, key.StoreKind, StringComparison.Ordinal)
-            && string.Equals(entry.WorkspaceId, key.WorkspaceId, StringComparison.Ordinal)
-            && string.Equals(entry.CollectionId, key.CollectionId, StringComparison.Ordinal);
+        if (scopes is null)
+        {
+            return;
+        }
+
+        foreach (var scope in scopes.Scopes)
+        {
+            var indexKey = new VersionScope(scope.WorkspaceId, scope.CollectionId, scope.StoreKind);
+            if (_scopeIndex.TryGetValue(indexKey, out var set))
+            {
+                set.Remove(entryKey);
+                if (set.Count == 0)
+                {
+                    _scopeIndex.Remove(indexKey);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// 判断条目的依赖 scope 集合中是否有 scope 匹配失效键。
+    /// 匹配规则：StoreKind/WorkspaceId/CollectionId 一致；
+    /// EntityId：scope.EntityId 为 null（依赖全集合）时匹配任意失效；
+    /// 失效 EntityId 为 null（全集合失效）时匹配任意 scope；
+    /// 否则要求 EntityId 相等。
+    /// </summary>
+    private static bool ScopeMatchesInvalidation(DependencyScopeSet scopes, CacheInvalidationKey invalidation)
+    {
+        foreach (var scope in scopes.Scopes)
+        {
+            if (!string.Equals(scope.StoreKind, invalidation.StoreKind, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (!string.Equals(scope.WorkspaceId, invalidation.WorkspaceId, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (!string.Equals(scope.CollectionId, invalidation.CollectionId, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            // EntityId 匹配
+            if (scope.EntityId is null || invalidation.EntityId is null
+                || string.Equals(scope.EntityId, invalidation.EntityId, StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private sealed class CacheEntry
     {
         public required object Value { get; init; }
         public required Type ValueType { get; init; }
-        public long Version { get; init; }
-        public string? WorkspaceId { get; init; }
-        public string? CollectionId { get; init; }
-        public string? StoreKind { get; init; }
-        public LinkedListNode<string>? LruNode { get; set; }
-
-        public bool HasVersionScope => StoreKind is not null
-            && WorkspaceId is not null
-            && CollectionId is not null;
+        public DependencyScopeSet? Scopes { get; init; }
+        public IReadOnlyDictionary<VersionScope, long>? VersionSnapshots { get; init; }
+        // 近似 LRU：最后访问时间戳，命中时经 Interlocked.Exchange 无锁更新。
+        public long LastAccessTicks;
     }
 }

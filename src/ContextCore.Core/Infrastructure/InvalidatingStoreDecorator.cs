@@ -137,21 +137,36 @@ internal static class InvalidationKeys
 
     public static CacheInvalidationKey ForShortTermPromotionCandidateReview(PromotionCandidateReviewRecord record)
         => new(ShortTermPromotionCandidateStore, record.WorkspaceId, record.CollectionId, EntityId: null);
+}
+
+/// <summary>
+/// 失效边界 Decorator 基类：集中 commit-point 之后的失效信号 + 版本递增，
+/// 统一使用 <see cref="CancellationToken.None"/>，确保写入提交后即使原请求取消也必须完成。
+/// 派生类在 _inner 写入成功后调用 <see cref="AfterCommitAsync"/>。
+/// </summary>
+public abstract class InvalidatingStoreDecoratorBase
+{
+    private readonly IStateCacheInvalidator _invalidator;
+    private readonly IContextStateVersionStore? _versionStore;
+
+    protected InvalidatingStoreDecoratorBase(IStateCacheInvalidator invalidator, IContextStateVersionStore? versionStore)
+    {
+        _invalidator = invalidator;
+        _versionStore = versionStore;
+    }
 
     /// <summary>
-    /// 若版本存储非空，则 bump 指定范围版本号。R10-2 P3：Decorator 在失效信号后调用，
-    /// 未来 ContextStateCache 据版本号判断是否命中。版本存储未注册时为空操作。
+    /// Commit point 之后的失效协调：失效信号 + 版本递增，均使用 <see cref="CancellationToken.None"/>。
+    /// 调用方必须在 _inner 写入成功后调用此方法。
     /// </summary>
-    internal static async Task BumpVersionAsync(
-        IContextStateVersionStore? versionStore,
-        string workspaceId,
-        string collectionId,
-        string storeKind,
-        CancellationToken cancellationToken)
+    /// <param name="key">失效范围键（其 WorkspaceId/CollectionId/StoreKind 同时用于版本递增）。</param>
+    protected async Task AfterCommitAsync(CacheInvalidationKey key)
     {
-        if (versionStore is not null)
+        await _invalidator.InvalidateAsync(key, CancellationToken.None).ConfigureAwait(false);
+        if (_versionStore is not null)
         {
-            await versionStore.BumpVersionAsync(workspaceId, collectionId, storeKind, cancellationToken).ConfigureAwait(false);
+            await _versionStore.BumpVersionAsync(
+                key.WorkspaceId, key.CollectionId, key.StoreKind, CancellationToken.None).ConfigureAwait(false);
         }
     }
 }
@@ -160,27 +175,23 @@ internal static class InvalidationKeys
 /// 包装 <see cref="IContextStore"/>，在写入成功（SaveAsync/DeleteAsync）后触发缓存失效。
 /// 失效边界 Decorator：本身不缓存，仅向 <see cref="IStateCacheInvalidator"/> 发出失效信号。
 /// </summary>
-public sealed class InvalidatingContextStoreDecorator : IContextStore
+public sealed class InvalidatingContextStoreDecorator : InvalidatingStoreDecoratorBase, IContextStore
 {
     private readonly IContextStore _inner;
-    private readonly IStateCacheInvalidator _invalidator;
-    private readonly IContextStateVersionStore? _versionStore;
 
     public InvalidatingContextStoreDecorator(
         IContextStore inner,
         IStateCacheInvalidator invalidator,
         IContextStateVersionStore? versionStore = null)
+        : base(invalidator, versionStore)
     {
         _inner = inner;
-        _invalidator = invalidator;
-        _versionStore = versionStore;
     }
 
     public async Task SaveAsync(ContextItem item, CancellationToken cancellationToken = default)
     {
         await _inner.SaveAsync(item, cancellationToken).ConfigureAwait(false);
-        await _invalidator.InvalidateAsync(InvalidationKeys.ForContext(item), cancellationToken).ConfigureAwait(false);
-        await InvalidationKeys.BumpVersionAsync(_versionStore, item.WorkspaceId, item.CollectionId, InvalidationKeys.ContextStore, cancellationToken).ConfigureAwait(false);
+        await AfterCommitAsync(InvalidationKeys.ForContext(item)).ConfigureAwait(false);
     }
 
     public Task<ContextItem?> GetAsync(
@@ -202,36 +213,30 @@ public sealed class InvalidatingContextStoreDecorator : IContextStore
         CancellationToken cancellationToken = default)
     {
         await _inner.DeleteAsync(workspaceId, collectionId, id, cancellationToken).ConfigureAwait(false);
-        await _invalidator.InvalidateAsync(
-            InvalidationKeys.ForContext(workspaceId, collectionId, id), cancellationToken).ConfigureAwait(false);
-        await InvalidationKeys.BumpVersionAsync(_versionStore, workspaceId, collectionId, InvalidationKeys.ContextStore, cancellationToken).ConfigureAwait(false);
+        await AfterCommitAsync(InvalidationKeys.ForContext(workspaceId, collectionId, id)).ConfigureAwait(false);
     }
 }
 
 /// <summary>
 /// 包装 <see cref="IMemoryStore"/>，在写入成功（SaveAsync/UpdateStatusAsync）后触发缓存失效。
 /// </summary>
-public sealed class InvalidatingMemoryStoreDecorator : IMemoryStore
+public sealed class InvalidatingMemoryStoreDecorator : InvalidatingStoreDecoratorBase, IMemoryStore
 {
     private readonly IMemoryStore _inner;
-    private readonly IStateCacheInvalidator _invalidator;
-    private readonly IContextStateVersionStore? _versionStore;
 
     public InvalidatingMemoryStoreDecorator(
         IMemoryStore inner,
         IStateCacheInvalidator invalidator,
         IContextStateVersionStore? versionStore = null)
+        : base(invalidator, versionStore)
     {
         _inner = inner;
-        _invalidator = invalidator;
-        _versionStore = versionStore;
     }
 
     public async Task SaveAsync(ContextMemoryItem item, CancellationToken cancellationToken = default)
     {
         await _inner.SaveAsync(item, cancellationToken).ConfigureAwait(false);
-        await _invalidator.InvalidateAsync(InvalidationKeys.ForMemory(item), cancellationToken).ConfigureAwait(false);
-        await InvalidationKeys.BumpVersionAsync(_versionStore, item.WorkspaceId, item.CollectionId, InvalidationKeys.MemoryStore, cancellationToken).ConfigureAwait(false);
+        await AfterCommitAsync(InvalidationKeys.ForMemory(item)).ConfigureAwait(false);
     }
 
     public Task<ContextMemoryItem?> GetAsync(
@@ -254,9 +259,7 @@ public sealed class InvalidatingMemoryStoreDecorator : IMemoryStore
         CancellationToken cancellationToken = default)
     {
         await _inner.UpdateStatusAsync(workspaceId, collectionId, id, status, cancellationToken).ConfigureAwait(false);
-        await _invalidator.InvalidateAsync(
-            InvalidationKeys.ForMemory(workspaceId, collectionId, id), cancellationToken).ConfigureAwait(false);
-        await InvalidationKeys.BumpVersionAsync(_versionStore, workspaceId, collectionId, InvalidationKeys.MemoryStore, cancellationToken).ConfigureAwait(false);
+        await AfterCommitAsync(InvalidationKeys.ForMemory(workspaceId, collectionId, id)).ConfigureAwait(false);
     }
 }
 
@@ -264,27 +267,23 @@ public sealed class InvalidatingMemoryStoreDecorator : IMemoryStore
 /// 包装 <see cref="IRelationStore"/>，在写入成功（SaveAsync/DeleteAsync/BatchUpsertAsync）后触发缓存失效。
 /// 批量写入按集合范围失效（EntityId=null），避免逐条信号放大。
 /// </summary>
-public sealed class InvalidatingRelationStoreDecorator : IRelationStore
+public sealed class InvalidatingRelationStoreDecorator : InvalidatingStoreDecoratorBase, IRelationStore
 {
     private readonly IRelationStore _inner;
-    private readonly IStateCacheInvalidator _invalidator;
-    private readonly IContextStateVersionStore? _versionStore;
 
     public InvalidatingRelationStoreDecorator(
         IRelationStore inner,
         IStateCacheInvalidator invalidator,
         IContextStateVersionStore? versionStore = null)
+        : base(invalidator, versionStore)
     {
         _inner = inner;
-        _invalidator = invalidator;
-        _versionStore = versionStore;
     }
 
     public async Task SaveAsync(ContextRelation relation, CancellationToken cancellationToken = default)
     {
         await _inner.SaveAsync(relation, cancellationToken).ConfigureAwait(false);
-        await _invalidator.InvalidateAsync(InvalidationKeys.ForRelation(relation), cancellationToken).ConfigureAwait(false);
-        await InvalidationKeys.BumpVersionAsync(_versionStore, relation.WorkspaceId, relation.CollectionId, InvalidationKeys.RelationStore, cancellationToken).ConfigureAwait(false);
+        await AfterCommitAsync(InvalidationKeys.ForRelation(relation)).ConfigureAwait(false);
     }
 
     public Task<IReadOnlyList<ContextRelation>> QueryAsync(
@@ -306,9 +305,7 @@ public sealed class InvalidatingRelationStoreDecorator : IRelationStore
         CancellationToken cancellationToken = default)
     {
         var result = await _inner.DeleteAsync(workspaceId, collectionId, relationId, cancellationToken).ConfigureAwait(false);
-        await _invalidator.InvalidateAsync(
-            InvalidationKeys.ForRelation(workspaceId, collectionId, relationId), cancellationToken).ConfigureAwait(false);
-        await InvalidationKeys.BumpVersionAsync(_versionStore, workspaceId, collectionId, InvalidationKeys.RelationStore, cancellationToken).ConfigureAwait(false);
+        await AfterCommitAsync(InvalidationKeys.ForRelation(workspaceId, collectionId, relationId)).ConfigureAwait(false);
         return result;
     }
 
@@ -323,8 +320,7 @@ public sealed class InvalidatingRelationStoreDecorator : IRelationStore
         // 批量写入按集合范围失效：BatchUpsert 可能跨多实体，单集合内统一标记全集合失效更稳妥。
         foreach (var key in CollectCollectionKeys(list, InvalidationKeys.RelationStore))
         {
-            await _invalidator.InvalidateAsync(key, cancellationToken).ConfigureAwait(false);
-            await InvalidationKeys.BumpVersionAsync(_versionStore, key.WorkspaceId, key.CollectionId, InvalidationKeys.RelationStore, cancellationToken).ConfigureAwait(false);
+            await AfterCommitAsync(key).ConfigureAwait(false);
         }
     }
 
@@ -351,27 +347,23 @@ public sealed class InvalidatingRelationStoreDecorator : IRelationStore
 /// <summary>
 /// 包装 <see cref="IConstraintStore"/>，在写入成功（SaveAsync）后触发缓存失效。
 /// </summary>
-public sealed class InvalidatingConstraintStoreDecorator : IConstraintStore
+public sealed class InvalidatingConstraintStoreDecorator : InvalidatingStoreDecoratorBase, IConstraintStore
 {
     private readonly IConstraintStore _inner;
-    private readonly IStateCacheInvalidator _invalidator;
-    private readonly IContextStateVersionStore? _versionStore;
 
     public InvalidatingConstraintStoreDecorator(
         IConstraintStore inner,
         IStateCacheInvalidator invalidator,
         IContextStateVersionStore? versionStore = null)
+        : base(invalidator, versionStore)
     {
         _inner = inner;
-        _invalidator = invalidator;
-        _versionStore = versionStore;
     }
 
     public async Task SaveAsync(ContextConstraint constraint, CancellationToken cancellationToken = default)
     {
         await _inner.SaveAsync(constraint, cancellationToken).ConfigureAwait(false);
-        await _invalidator.InvalidateAsync(InvalidationKeys.ForConstraint(constraint), cancellationToken).ConfigureAwait(false);
-        await InvalidationKeys.BumpVersionAsync(_versionStore, constraint.WorkspaceId, constraint.CollectionId ?? string.Empty, InvalidationKeys.ConstraintStore, cancellationToken).ConfigureAwait(false);
+        await AfterCommitAsync(InvalidationKeys.ForConstraint(constraint)).ConfigureAwait(false);
     }
 
     public Task<ContextConstraint?> GetAsync(
@@ -388,27 +380,23 @@ public sealed class InvalidatingConstraintStoreDecorator : IConstraintStore
 /// <summary>
 /// 包装 <see cref="IContextIndex"/>，在写入成功（UpsertAsync）后触发缓存失效。
 /// </summary>
-public sealed class InvalidatingContextIndexDecorator : IContextIndex
+public sealed class InvalidatingContextIndexDecorator : InvalidatingStoreDecoratorBase, IContextIndex
 {
     private readonly IContextIndex _inner;
-    private readonly IStateCacheInvalidator _invalidator;
-    private readonly IContextStateVersionStore? _versionStore;
 
     public InvalidatingContextIndexDecorator(
         IContextIndex inner,
         IStateCacheInvalidator invalidator,
         IContextStateVersionStore? versionStore = null)
+        : base(invalidator, versionStore)
     {
         _inner = inner;
-        _invalidator = invalidator;
-        _versionStore = versionStore;
     }
 
     public async Task UpsertAsync(ContextIndexEntry entry, CancellationToken cancellationToken = default)
     {
         await _inner.UpsertAsync(entry, cancellationToken).ConfigureAwait(false);
-        await _invalidator.InvalidateAsync(InvalidationKeys.ForContextIndex(entry), cancellationToken).ConfigureAwait(false);
-        await InvalidationKeys.BumpVersionAsync(_versionStore, entry.WorkspaceId, entry.CollectionId, InvalidationKeys.ContextIndex, cancellationToken).ConfigureAwait(false);
+        await AfterCommitAsync(InvalidationKeys.ForContextIndex(entry)).ConfigureAwait(false);
     }
 
     public Task<IReadOnlyList<ContextIndexEntry>> SearchAsync(
@@ -420,27 +408,23 @@ public sealed class InvalidatingContextIndexDecorator : IContextIndex
 /// <summary>
 /// 包装 <see cref="IGlobalContextStore"/>，在写入成功（SaveAsync）后触发缓存失效。
 /// </summary>
-public sealed class InvalidatingGlobalContextStoreDecorator : IGlobalContextStore
+public sealed class InvalidatingGlobalContextStoreDecorator : InvalidatingStoreDecoratorBase, IGlobalContextStore
 {
     private readonly IGlobalContextStore _inner;
-    private readonly IStateCacheInvalidator _invalidator;
-    private readonly IContextStateVersionStore? _versionStore;
 
     public InvalidatingGlobalContextStoreDecorator(
         IGlobalContextStore inner,
         IStateCacheInvalidator invalidator,
         IContextStateVersionStore? versionStore = null)
+        : base(invalidator, versionStore)
     {
         _inner = inner;
-        _invalidator = invalidator;
-        _versionStore = versionStore;
     }
 
     public async Task SaveAsync(ContextGlobalItem item, CancellationToken cancellationToken = default)
     {
         await _inner.SaveAsync(item, cancellationToken).ConfigureAwait(false);
-        await _invalidator.InvalidateAsync(InvalidationKeys.ForGlobal(item), cancellationToken).ConfigureAwait(false);
-        await InvalidationKeys.BumpVersionAsync(_versionStore, item.WorkspaceId, item.CollectionId ?? string.Empty, InvalidationKeys.GlobalContextStore, cancellationToken).ConfigureAwait(false);
+        await AfterCommitAsync(InvalidationKeys.ForGlobal(item)).ConfigureAwait(false);
     }
 
     public Task<IReadOnlyList<ContextGlobalItem>> QueryAsync(
@@ -454,27 +438,23 @@ public sealed class InvalidatingGlobalContextStoreDecorator : IGlobalContextStor
 /// <summary>
 /// 包装 <see cref="IContextCollectionStore"/>，在写入成功（SaveCollectionAsync）后触发集合元数据失效。
 /// </summary>
-public sealed class InvalidatingContextCollectionStoreDecorator : IContextCollectionStore
+public sealed class InvalidatingContextCollectionStoreDecorator : InvalidatingStoreDecoratorBase, IContextCollectionStore
 {
     private readonly IContextCollectionStore _inner;
-    private readonly IStateCacheInvalidator _invalidator;
-    private readonly IContextStateVersionStore? _versionStore;
 
     public InvalidatingContextCollectionStoreDecorator(
         IContextCollectionStore inner,
         IStateCacheInvalidator invalidator,
         IContextStateVersionStore? versionStore = null)
+        : base(invalidator, versionStore)
     {
         _inner = inner;
-        _invalidator = invalidator;
-        _versionStore = versionStore;
     }
 
     public async Task SaveCollectionAsync(ContextCollection collection, CancellationToken cancellationToken = default)
     {
         await _inner.SaveCollectionAsync(collection, cancellationToken).ConfigureAwait(false);
-        await _invalidator.InvalidateAsync(InvalidationKeys.ForContextCollection(collection), cancellationToken).ConfigureAwait(false);
-        await InvalidationKeys.BumpVersionAsync(_versionStore, collection.WorkspaceId, collection.Id, InvalidationKeys.ContextCollectionStore, cancellationToken).ConfigureAwait(false);
+        await AfterCommitAsync(InvalidationKeys.ForContextCollection(collection)).ConfigureAwait(false);
     }
 
     public Task<ContextCollection?> GetCollectionAsync(
@@ -487,27 +467,23 @@ public sealed class InvalidatingContextCollectionStoreDecorator : IContextCollec
 /// <summary>
 /// 包装 <see cref="IContextPackageBuildTraceStore"/>，在写入成功（SaveAsync）后触发缓存失效。
 /// </summary>
-public sealed class InvalidatingContextPackageBuildTraceStoreDecorator : IContextPackageBuildTraceStore
+public sealed class InvalidatingContextPackageBuildTraceStoreDecorator : InvalidatingStoreDecoratorBase, IContextPackageBuildTraceStore
 {
     private readonly IContextPackageBuildTraceStore _inner;
-    private readonly IStateCacheInvalidator _invalidator;
-    private readonly IContextStateVersionStore? _versionStore;
 
     public InvalidatingContextPackageBuildTraceStoreDecorator(
         IContextPackageBuildTraceStore inner,
         IStateCacheInvalidator invalidator,
         IContextStateVersionStore? versionStore = null)
+        : base(invalidator, versionStore)
     {
         _inner = inner;
-        _invalidator = invalidator;
-        _versionStore = versionStore;
     }
 
     public async Task SaveAsync(ContextPackageBuildResult result, CancellationToken cancellationToken = default)
     {
         await _inner.SaveAsync(result, cancellationToken).ConfigureAwait(false);
-        await _invalidator.InvalidateAsync(InvalidationKeys.ForPackageBuildTrace(result), cancellationToken).ConfigureAwait(false);
-        await InvalidationKeys.BumpVersionAsync(_versionStore, result.Package.WorkspaceId, result.Package.CollectionId, InvalidationKeys.ContextPackageBuildTraceStore, cancellationToken).ConfigureAwait(false);
+        await AfterCommitAsync(InvalidationKeys.ForPackageBuildTrace(result)).ConfigureAwait(false);
     }
 
     public Task<IReadOnlyList<ContextPackageBuildResult>> QueryRecentAsync(
@@ -521,27 +497,23 @@ public sealed class InvalidatingContextPackageBuildTraceStoreDecorator : IContex
 /// <summary>
 /// 包装 <see cref="IContextPackagePolicyStore"/>，在写入成功（SaveAsync）后触发缓存失效。
 /// </summary>
-public sealed class InvalidatingContextPackagePolicyStoreDecorator : IContextPackagePolicyStore
+public sealed class InvalidatingContextPackagePolicyStoreDecorator : InvalidatingStoreDecoratorBase, IContextPackagePolicyStore
 {
     private readonly IContextPackagePolicyStore _inner;
-    private readonly IStateCacheInvalidator _invalidator;
-    private readonly IContextStateVersionStore? _versionStore;
 
     public InvalidatingContextPackagePolicyStoreDecorator(
         IContextPackagePolicyStore inner,
         IStateCacheInvalidator invalidator,
         IContextStateVersionStore? versionStore = null)
+        : base(invalidator, versionStore)
     {
         _inner = inner;
-        _invalidator = invalidator;
-        _versionStore = versionStore;
     }
 
     public async Task SaveAsync(ContextPackagePolicy policy, CancellationToken cancellationToken = default)
     {
         await _inner.SaveAsync(policy, cancellationToken).ConfigureAwait(false);
-        await _invalidator.InvalidateAsync(InvalidationKeys.ForPackagePolicy(policy), cancellationToken).ConfigureAwait(false);
-        await InvalidationKeys.BumpVersionAsync(_versionStore, policy.WorkspaceId, policy.CollectionId ?? string.Empty, InvalidationKeys.ContextPackagePolicyStore, cancellationToken).ConfigureAwait(false);
+        await AfterCommitAsync(InvalidationKeys.ForPackagePolicy(policy)).ConfigureAwait(false);
     }
 
     public Task<ContextPackagePolicy?> GetAsync(
@@ -560,27 +532,23 @@ public sealed class InvalidatingContextPackagePolicyStoreDecorator : IContextPac
 /// <summary>
 /// 包装 <see cref="IDecisionTraceStore"/>，在写入成功（SaveAsync）后触发缓存失效。
 /// </summary>
-public sealed class InvalidatingDecisionTraceStoreDecorator : IDecisionTraceStore
+public sealed class InvalidatingDecisionTraceStoreDecorator : InvalidatingStoreDecoratorBase, IDecisionTraceStore
 {
     private readonly IDecisionTraceStore _inner;
-    private readonly IStateCacheInvalidator _invalidator;
-    private readonly IContextStateVersionStore? _versionStore;
 
     public InvalidatingDecisionTraceStoreDecorator(
         IDecisionTraceStore inner,
         IStateCacheInvalidator invalidator,
         IContextStateVersionStore? versionStore = null)
+        : base(invalidator, versionStore)
     {
         _inner = inner;
-        _invalidator = invalidator;
-        _versionStore = versionStore;
     }
 
     public async Task SaveAsync(ContextDecisionRecord record, CancellationToken cancellationToken = default)
     {
         await _inner.SaveAsync(record, cancellationToken).ConfigureAwait(false);
-        await _invalidator.InvalidateAsync(InvalidationKeys.ForDecisionTrace(record), cancellationToken).ConfigureAwait(false);
-        await InvalidationKeys.BumpVersionAsync(_versionStore, record.WorkspaceId, record.CollectionId, InvalidationKeys.DecisionTraceStore, cancellationToken).ConfigureAwait(false);
+        await AfterCommitAsync(InvalidationKeys.ForDecisionTrace(record)).ConfigureAwait(false);
     }
 
     public Task<IReadOnlyList<ContextDecisionRecord>> QueryRecentAsync(
@@ -594,27 +562,23 @@ public sealed class InvalidatingDecisionTraceStoreDecorator : IDecisionTraceStor
 /// <summary>
 /// 包装 <see cref="IStableLifecycleReviewStore"/>，在写入成功（AppendReviewAsync）后触发集合范围失效。
 /// </summary>
-public sealed class InvalidatingStableLifecycleReviewStoreDecorator : IStableLifecycleReviewStore
+public sealed class InvalidatingStableLifecycleReviewStoreDecorator : InvalidatingStoreDecoratorBase, IStableLifecycleReviewStore
 {
     private readonly IStableLifecycleReviewStore _inner;
-    private readonly IStateCacheInvalidator _invalidator;
-    private readonly IContextStateVersionStore? _versionStore;
 
     public InvalidatingStableLifecycleReviewStoreDecorator(
         IStableLifecycleReviewStore inner,
         IStateCacheInvalidator invalidator,
         IContextStateVersionStore? versionStore = null)
+        : base(invalidator, versionStore)
     {
         _inner = inner;
-        _invalidator = invalidator;
-        _versionStore = versionStore;
     }
 
     public async Task AppendReviewAsync(StableLifecycleReviewRecord record, CancellationToken cancellationToken = default)
     {
         await _inner.AppendReviewAsync(record, cancellationToken).ConfigureAwait(false);
-        await _invalidator.InvalidateAsync(InvalidationKeys.ForStableLifecycleReview(record), cancellationToken).ConfigureAwait(false);
-        await InvalidationKeys.BumpVersionAsync(_versionStore, record.WorkspaceId, record.CollectionId ?? string.Empty, InvalidationKeys.StableLifecycleReviewStore, cancellationToken).ConfigureAwait(false);
+        await AfterCommitAsync(InvalidationKeys.ForStableLifecycleReview(record)).ConfigureAwait(false);
     }
 
     public Task<IReadOnlyList<StableLifecycleReviewRecord>> QueryReviewsAsync(
@@ -626,27 +590,23 @@ public sealed class InvalidatingStableLifecycleReviewStoreDecorator : IStableLif
 /// <summary>
 /// 包装 <see cref="ICandidateConstraintReviewStore"/>，在写入成功（AppendReviewAsync）后触发集合范围失效。
 /// </summary>
-public sealed class InvalidatingCandidateConstraintReviewStoreDecorator : ICandidateConstraintReviewStore
+public sealed class InvalidatingCandidateConstraintReviewStoreDecorator : InvalidatingStoreDecoratorBase, ICandidateConstraintReviewStore
 {
     private readonly ICandidateConstraintReviewStore _inner;
-    private readonly IStateCacheInvalidator _invalidator;
-    private readonly IContextStateVersionStore? _versionStore;
 
     public InvalidatingCandidateConstraintReviewStoreDecorator(
         ICandidateConstraintReviewStore inner,
         IStateCacheInvalidator invalidator,
         IContextStateVersionStore? versionStore = null)
+        : base(invalidator, versionStore)
     {
         _inner = inner;
-        _invalidator = invalidator;
-        _versionStore = versionStore;
     }
 
     public async Task AppendReviewAsync(CandidateConstraintReviewRecord record, CancellationToken cancellationToken = default)
     {
         await _inner.AppendReviewAsync(record, cancellationToken).ConfigureAwait(false);
-        await _invalidator.InvalidateAsync(InvalidationKeys.ForCandidateConstraintReview(record), cancellationToken).ConfigureAwait(false);
-        await InvalidationKeys.BumpVersionAsync(_versionStore, record.WorkspaceId, record.CollectionId ?? string.Empty, InvalidationKeys.CandidateConstraintReviewStore, cancellationToken).ConfigureAwait(false);
+        await AfterCommitAsync(InvalidationKeys.ForCandidateConstraintReview(record)).ConfigureAwait(false);
     }
 
     public Task<IReadOnlyList<CandidateConstraintReviewRecord>> QueryReviewsAsync(
@@ -658,27 +618,23 @@ public sealed class InvalidatingCandidateConstraintReviewStoreDecorator : ICandi
 /// <summary>
 /// 包装 <see cref="IConstraintGapCandidateStore"/>，在写入成功（SaveAsync/UpdateStatusAsync/AppendReviewAsync）后触发缓存失效。
 /// </summary>
-public sealed class InvalidatingConstraintGapCandidateStoreDecorator : IConstraintGapCandidateStore
+public sealed class InvalidatingConstraintGapCandidateStoreDecorator : InvalidatingStoreDecoratorBase, IConstraintGapCandidateStore
 {
     private readonly IConstraintGapCandidateStore _inner;
-    private readonly IStateCacheInvalidator _invalidator;
-    private readonly IContextStateVersionStore? _versionStore;
 
     public InvalidatingConstraintGapCandidateStoreDecorator(
         IConstraintGapCandidateStore inner,
         IStateCacheInvalidator invalidator,
         IContextStateVersionStore? versionStore = null)
+        : base(invalidator, versionStore)
     {
         _inner = inner;
-        _invalidator = invalidator;
-        _versionStore = versionStore;
     }
 
     public async Task<ConstraintGapCandidate> SaveAsync(ConstraintGapCandidate candidate, CancellationToken cancellationToken = default)
     {
         var result = await _inner.SaveAsync(candidate, cancellationToken).ConfigureAwait(false);
-        await _invalidator.InvalidateAsync(InvalidationKeys.ForConstraintGapCandidate(result), cancellationToken).ConfigureAwait(false);
-        await InvalidationKeys.BumpVersionAsync(_versionStore, result.WorkspaceId, result.CollectionId, InvalidationKeys.ConstraintGapCandidateStore, cancellationToken).ConfigureAwait(false);
+        await AfterCommitAsync(InvalidationKeys.ForConstraintGapCandidate(result)).ConfigureAwait(false);
         return result;
     }
 
@@ -702,8 +658,7 @@ public sealed class InvalidatingConstraintGapCandidateStoreDecorator : IConstrai
         var result = await _inner.UpdateStatusAsync(gapId, status, reviewer, reason, cancellationToken).ConfigureAwait(false);
         if (result is not null)
         {
-            await _invalidator.InvalidateAsync(InvalidationKeys.ForConstraintGapCandidate(result), cancellationToken).ConfigureAwait(false);
-            await InvalidationKeys.BumpVersionAsync(_versionStore, result.WorkspaceId, result.CollectionId, InvalidationKeys.ConstraintGapCandidateStore, cancellationToken).ConfigureAwait(false);
+            await AfterCommitAsync(InvalidationKeys.ForConstraintGapCandidate(result)).ConfigureAwait(false);
         }
         return result;
     }
@@ -711,8 +666,7 @@ public sealed class InvalidatingConstraintGapCandidateStoreDecorator : IConstrai
     public async Task AppendReviewAsync(ConstraintGapReviewRecord record, CancellationToken cancellationToken = default)
     {
         await _inner.AppendReviewAsync(record, cancellationToken).ConfigureAwait(false);
-        await _invalidator.InvalidateAsync(InvalidationKeys.ForConstraintGapReview(record), cancellationToken).ConfigureAwait(false);
-        await InvalidationKeys.BumpVersionAsync(_versionStore, record.WorkspaceId, record.CollectionId, InvalidationKeys.ConstraintGapCandidateStore, cancellationToken).ConfigureAwait(false);
+        await AfterCommitAsync(InvalidationKeys.ForConstraintGapReview(record)).ConfigureAwait(false);
     }
 
     public Task<IReadOnlyList<ConstraintGapReviewRecord>> QueryReviewsAsync(
@@ -724,27 +678,23 @@ public sealed class InvalidatingConstraintGapCandidateStoreDecorator : IConstrai
 /// <summary>
 /// 包装 <see cref="IPromotionRecordStore"/>，在写入成功（SavePromotionRecordAsync）后触发缓存失效。
 /// </summary>
-public sealed class InvalidatingPromotionRecordStoreDecorator : IPromotionRecordStore
+public sealed class InvalidatingPromotionRecordStoreDecorator : InvalidatingStoreDecoratorBase, IPromotionRecordStore
 {
     private readonly IPromotionRecordStore _inner;
-    private readonly IStateCacheInvalidator _invalidator;
-    private readonly IContextStateVersionStore? _versionStore;
 
     public InvalidatingPromotionRecordStoreDecorator(
         IPromotionRecordStore inner,
         IStateCacheInvalidator invalidator,
         IContextStateVersionStore? versionStore = null)
+        : base(invalidator, versionStore)
     {
         _inner = inner;
-        _invalidator = invalidator;
-        _versionStore = versionStore;
     }
 
     public async Task SavePromotionRecordAsync(ContextPromotionRecord record, CancellationToken cancellationToken = default)
     {
         await _inner.SavePromotionRecordAsync(record, cancellationToken).ConfigureAwait(false);
-        await _invalidator.InvalidateAsync(InvalidationKeys.ForPromotionRecord(record), cancellationToken).ConfigureAwait(false);
-        await InvalidationKeys.BumpVersionAsync(_versionStore, record.WorkspaceId, record.CollectionId, InvalidationKeys.PromotionRecordStore, cancellationToken).ConfigureAwait(false);
+        await AfterCommitAsync(InvalidationKeys.ForPromotionRecord(record)).ConfigureAwait(false);
     }
 
     public Task<IReadOnlyList<ContextPromotionRecord>> QueryPromotionRecordsAsync(
@@ -758,27 +708,23 @@ public sealed class InvalidatingPromotionRecordStoreDecorator : IPromotionRecord
 /// <summary>
 /// 包装 <see cref="IPromotionCandidateStore"/>，在写入成功（SavePromotionCandidateAsync/UpdatePromotionCandidateStatusAsync）后触发缓存失效。
 /// </summary>
-public sealed class InvalidatingPromotionCandidateStoreDecorator : IPromotionCandidateStore
+public sealed class InvalidatingPromotionCandidateStoreDecorator : InvalidatingStoreDecoratorBase, IPromotionCandidateStore
 {
     private readonly IPromotionCandidateStore _inner;
-    private readonly IStateCacheInvalidator _invalidator;
-    private readonly IContextStateVersionStore? _versionStore;
 
     public InvalidatingPromotionCandidateStoreDecorator(
         IPromotionCandidateStore inner,
         IStateCacheInvalidator invalidator,
         IContextStateVersionStore? versionStore = null)
+        : base(invalidator, versionStore)
     {
         _inner = inner;
-        _invalidator = invalidator;
-        _versionStore = versionStore;
     }
 
     public async Task SavePromotionCandidateAsync(PromotionCandidate candidate, CancellationToken cancellationToken = default)
     {
         await _inner.SavePromotionCandidateAsync(candidate, cancellationToken).ConfigureAwait(false);
-        await _invalidator.InvalidateAsync(InvalidationKeys.ForPromotionCandidate(candidate), cancellationToken).ConfigureAwait(false);
-        await InvalidationKeys.BumpVersionAsync(_versionStore, candidate.WorkspaceId, candidate.CollectionId, InvalidationKeys.PromotionCandidateStore, cancellationToken).ConfigureAwait(false);
+        await AfterCommitAsync(InvalidationKeys.ForPromotionCandidate(candidate)).ConfigureAwait(false);
     }
 
     public Task<PromotionCandidate?> GetPromotionCandidateAsync(
@@ -806,9 +752,7 @@ public sealed class InvalidatingPromotionCandidateStoreDecorator : IPromotionCan
         CancellationToken cancellationToken = default)
     {
         var result = await _inner.UpdatePromotionCandidateStatusAsync(workspaceId, collectionId, id, status, reviewer, reason, cancellationToken).ConfigureAwait(false);
-        await _invalidator.InvalidateAsync(
-            InvalidationKeys.ForPromotionCandidate(workspaceId, collectionId, id), cancellationToken).ConfigureAwait(false);
-        await InvalidationKeys.BumpVersionAsync(_versionStore, workspaceId, collectionId, InvalidationKeys.PromotionCandidateStore, cancellationToken).ConfigureAwait(false);
+        await AfterCommitAsync(InvalidationKeys.ForPromotionCandidate(workspaceId, collectionId, id)).ConfigureAwait(false);
         return result;
     }
 }
@@ -816,27 +760,23 @@ public sealed class InvalidatingPromotionCandidateStoreDecorator : IPromotionCan
 /// <summary>
 /// 包装 <see cref="IWorkingMemoryService"/>，在写入成功（AddAsync/ClearAsync/SetActiveContextAsync/SetCurrentTaskAsync）后触发缓存失效。
 /// </summary>
-public sealed class InvalidatingWorkingMemoryServiceDecorator : IWorkingMemoryService
+public sealed class InvalidatingWorkingMemoryServiceDecorator : InvalidatingStoreDecoratorBase, IWorkingMemoryService
 {
     private readonly IWorkingMemoryService _inner;
-    private readonly IStateCacheInvalidator _invalidator;
-    private readonly IContextStateVersionStore? _versionStore;
 
     public InvalidatingWorkingMemoryServiceDecorator(
         IWorkingMemoryService inner,
         IStateCacheInvalidator invalidator,
         IContextStateVersionStore? versionStore = null)
+        : base(invalidator, versionStore)
     {
         _inner = inner;
-        _invalidator = invalidator;
-        _versionStore = versionStore;
     }
 
     public async Task<WorkingMemoryItem> AddAsync(WorkingMemoryItem item, CancellationToken cancellationToken = default)
     {
         var result = await _inner.AddAsync(item, cancellationToken).ConfigureAwait(false);
-        await _invalidator.InvalidateAsync(InvalidationKeys.ForWorkingMemory(result), cancellationToken).ConfigureAwait(false);
-        await InvalidationKeys.BumpVersionAsync(_versionStore, result.WorkspaceId, result.CollectionId, InvalidationKeys.WorkingMemoryService, cancellationToken).ConfigureAwait(false);
+        await AfterCommitAsync(InvalidationKeys.ForWorkingMemory(result)).ConfigureAwait(false);
         return result;
     }
 
@@ -853,9 +793,7 @@ public sealed class InvalidatingWorkingMemoryServiceDecorator : IWorkingMemorySe
         CancellationToken cancellationToken = default)
     {
         await _inner.ClearAsync(workspaceId, collectionId, cancellationToken).ConfigureAwait(false);
-        await _invalidator.InvalidateAsync(
-            InvalidationKeys.ForWorkingMemory(workspaceId, collectionId), cancellationToken).ConfigureAwait(false);
-        await InvalidationKeys.BumpVersionAsync(_versionStore, workspaceId, collectionId, InvalidationKeys.WorkingMemoryService, cancellationToken).ConfigureAwait(false);
+        await AfterCommitAsync(InvalidationKeys.ForWorkingMemory(workspaceId, collectionId)).ConfigureAwait(false);
     }
 
     public Task<WorkingMemoryActiveContext?> GetActiveContextAsync(
@@ -869,9 +807,7 @@ public sealed class InvalidatingWorkingMemoryServiceDecorator : IWorkingMemorySe
         CancellationToken cancellationToken = default)
     {
         var result = await _inner.SetActiveContextAsync(activeContext, cancellationToken).ConfigureAwait(false);
-        await _invalidator.InvalidateAsync(
-            InvalidationKeys.ForWorkingMemory(result.WorkspaceId, result.CollectionId), cancellationToken).ConfigureAwait(false);
-        await InvalidationKeys.BumpVersionAsync(_versionStore, result.WorkspaceId, result.CollectionId, InvalidationKeys.WorkingMemoryService, cancellationToken).ConfigureAwait(false);
+        await AfterCommitAsync(InvalidationKeys.ForWorkingMemory(result.WorkspaceId, result.CollectionId)).ConfigureAwait(false);
         return result;
     }
 
@@ -886,9 +822,7 @@ public sealed class InvalidatingWorkingMemoryServiceDecorator : IWorkingMemorySe
         CancellationToken cancellationToken = default)
     {
         var result = await _inner.SetCurrentTaskAsync(currentTask, cancellationToken).ConfigureAwait(false);
-        await _invalidator.InvalidateAsync(
-            InvalidationKeys.ForWorkingMemory(result.WorkspaceId, result.CollectionId), cancellationToken).ConfigureAwait(false);
-        await InvalidationKeys.BumpVersionAsync(_versionStore, result.WorkspaceId, result.CollectionId, InvalidationKeys.WorkingMemoryService, cancellationToken).ConfigureAwait(false);
+        await AfterCommitAsync(InvalidationKeys.ForWorkingMemory(result.WorkspaceId, result.CollectionId)).ConfigureAwait(false);
         return result;
     }
 }
@@ -896,27 +830,23 @@ public sealed class InvalidatingWorkingMemoryServiceDecorator : IWorkingMemorySe
 /// <summary>
 /// 包装 <see cref="IRelationReviewStore"/>，在写入成功（AppendReviewAsync）后触发集合范围失效。
 /// </summary>
-public sealed class InvalidatingRelationReviewStoreDecorator : IRelationReviewStore
+public sealed class InvalidatingRelationReviewStoreDecorator : InvalidatingStoreDecoratorBase, IRelationReviewStore
 {
     private readonly IRelationReviewStore _inner;
-    private readonly IStateCacheInvalidator _invalidator;
-    private readonly IContextStateVersionStore? _versionStore;
 
     public InvalidatingRelationReviewStoreDecorator(
         IRelationReviewStore inner,
         IStateCacheInvalidator invalidator,
         IContextStateVersionStore? versionStore = null)
+        : base(invalidator, versionStore)
     {
         _inner = inner;
-        _invalidator = invalidator;
-        _versionStore = versionStore;
     }
 
     public async Task AppendReviewAsync(RelationReviewRecord record, CancellationToken cancellationToken = default)
     {
         await _inner.AppendReviewAsync(record, cancellationToken).ConfigureAwait(false);
-        await _invalidator.InvalidateAsync(InvalidationKeys.ForRelationReview(record), cancellationToken).ConfigureAwait(false);
-        await InvalidationKeys.BumpVersionAsync(_versionStore, record.WorkspaceId, record.CollectionId ?? string.Empty, InvalidationKeys.RelationReviewStore, cancellationToken).ConfigureAwait(false);
+        await AfterCommitAsync(InvalidationKeys.ForRelationReview(record)).ConfigureAwait(false);
     }
 
     public Task<IReadOnlyList<RelationReviewRecord>> QueryReviewsAsync(
@@ -928,27 +858,23 @@ public sealed class InvalidatingRelationReviewStoreDecorator : IRelationReviewSt
 /// <summary>
 /// 包装 <see cref="IVectorStore"/>，在写入成功（UpsertAsync/DeleteAsync）后触发缓存失效。
 /// </summary>
-public sealed class InvalidatingVectorStoreDecorator : IVectorStore
+public sealed class InvalidatingVectorStoreDecorator : InvalidatingStoreDecoratorBase, IVectorStore
 {
     private readonly IVectorStore _inner;
-    private readonly IStateCacheInvalidator _invalidator;
-    private readonly IContextStateVersionStore? _versionStore;
 
     public InvalidatingVectorStoreDecorator(
         IVectorStore inner,
         IStateCacheInvalidator invalidator,
         IContextStateVersionStore? versionStore = null)
+        : base(invalidator, versionStore)
     {
         _inner = inner;
-        _invalidator = invalidator;
-        _versionStore = versionStore;
     }
 
     public async Task UpsertAsync(VectorRecord record, CancellationToken cancellationToken = default)
     {
         await _inner.UpsertAsync(record, cancellationToken).ConfigureAwait(false);
-        await _invalidator.InvalidateAsync(InvalidationKeys.ForVector(record), cancellationToken).ConfigureAwait(false);
-        await InvalidationKeys.BumpVersionAsync(_versionStore, record.WorkspaceId, record.CollectionId ?? string.Empty, InvalidationKeys.VectorStore, cancellationToken).ConfigureAwait(false);
+        await AfterCommitAsync(InvalidationKeys.ForVector(record)).ConfigureAwait(false);
     }
 
     public Task<VectorRecord?> GetAsync(
@@ -968,36 +894,30 @@ public sealed class InvalidatingVectorStoreDecorator : IVectorStore
         CancellationToken cancellationToken = default)
     {
         await _inner.DeleteAsync(workspaceId, vectorId, cancellationToken).ConfigureAwait(false);
-        await _invalidator.InvalidateAsync(
-            InvalidationKeys.ForVector(workspaceId, vectorId), cancellationToken).ConfigureAwait(false);
-        await InvalidationKeys.BumpVersionAsync(_versionStore, workspaceId, string.Empty, InvalidationKeys.VectorStore, cancellationToken).ConfigureAwait(false);
+        await AfterCommitAsync(InvalidationKeys.ForVector(workspaceId, vectorId)).ConfigureAwait(false);
     }
 }
 
 /// <summary>
 /// 包装 <see cref="IVectorReindexReportStore"/>，在写入成功（SaveAsync）后触发缓存失效。
 /// </summary>
-public sealed class InvalidatingVectorReindexReportStoreDecorator : IVectorReindexReportStore
+public sealed class InvalidatingVectorReindexReportStoreDecorator : InvalidatingStoreDecoratorBase, IVectorReindexReportStore
 {
     private readonly IVectorReindexReportStore _inner;
-    private readonly IStateCacheInvalidator _invalidator;
-    private readonly IContextStateVersionStore? _versionStore;
 
     public InvalidatingVectorReindexReportStoreDecorator(
         IVectorReindexReportStore inner,
         IStateCacheInvalidator invalidator,
         IContextStateVersionStore? versionStore = null)
+        : base(invalidator, versionStore)
     {
         _inner = inner;
-        _invalidator = invalidator;
-        _versionStore = versionStore;
     }
 
     public async Task SaveAsync(VectorReindexResult result, CancellationToken cancellationToken = default)
     {
         await _inner.SaveAsync(result, cancellationToken).ConfigureAwait(false);
-        await _invalidator.InvalidateAsync(InvalidationKeys.ForVectorReindexReport(result), cancellationToken).ConfigureAwait(false);
-        await InvalidationKeys.BumpVersionAsync(_versionStore, result.WorkspaceId, result.CollectionId, InvalidationKeys.VectorReindexReportStore, cancellationToken).ConfigureAwait(false);
+        await AfterCommitAsync(InvalidationKeys.ForVectorReindexReport(result)).ConfigureAwait(false);
     }
 
     public Task<IReadOnlyList<VectorReindexResult>> QueryAsync(
@@ -1016,27 +936,23 @@ public sealed class InvalidatingVectorReindexReportStoreDecorator : IVectorReind
 /// <summary>
 /// 包装 <see cref="IVectorLifecycleMetadataReviewStore"/>，在写入成功（SaveAsync）后触发缓存失效。
 /// </summary>
-public sealed class InvalidatingVectorLifecycleMetadataReviewStoreDecorator : IVectorLifecycleMetadataReviewStore
+public sealed class InvalidatingVectorLifecycleMetadataReviewStoreDecorator : InvalidatingStoreDecoratorBase, IVectorLifecycleMetadataReviewStore
 {
     private readonly IVectorLifecycleMetadataReviewStore _inner;
-    private readonly IStateCacheInvalidator _invalidator;
-    private readonly IContextStateVersionStore? _versionStore;
 
     public InvalidatingVectorLifecycleMetadataReviewStoreDecorator(
         IVectorLifecycleMetadataReviewStore inner,
         IStateCacheInvalidator invalidator,
         IContextStateVersionStore? versionStore = null)
+        : base(invalidator, versionStore)
     {
         _inner = inner;
-        _invalidator = invalidator;
-        _versionStore = versionStore;
     }
 
     public async Task SaveAsync(VectorLifecycleMetadataReviewRecord record, CancellationToken cancellationToken = default)
     {
         await _inner.SaveAsync(record, cancellationToken).ConfigureAwait(false);
-        await _invalidator.InvalidateAsync(InvalidationKeys.ForVectorLifecycleMetadataReview(record), cancellationToken).ConfigureAwait(false);
-        await InvalidationKeys.BumpVersionAsync(_versionStore, record.WorkspaceId, record.CollectionId, InvalidationKeys.VectorLifecycleMetadataReviewStore, cancellationToken).ConfigureAwait(false);
+        await AfterCommitAsync(InvalidationKeys.ForVectorLifecycleMetadataReview(record)).ConfigureAwait(false);
     }
 
     public Task<IReadOnlyList<VectorLifecycleMetadataReviewRecord>> ListAsync(
@@ -1054,27 +970,23 @@ public sealed class InvalidatingVectorLifecycleMetadataReviewStoreDecorator : IV
 /// <summary>
 /// 包装 <see cref="IVectorLifecycleSidecarMetadataStore"/>，在写入成功（SaveAsync）后触发缓存失效。
 /// </summary>
-public sealed class InvalidatingVectorLifecycleSidecarMetadataStoreDecorator : IVectorLifecycleSidecarMetadataStore
+public sealed class InvalidatingVectorLifecycleSidecarMetadataStoreDecorator : InvalidatingStoreDecoratorBase, IVectorLifecycleSidecarMetadataStore
 {
     private readonly IVectorLifecycleSidecarMetadataStore _inner;
-    private readonly IStateCacheInvalidator _invalidator;
-    private readonly IContextStateVersionStore? _versionStore;
 
     public InvalidatingVectorLifecycleSidecarMetadataStoreDecorator(
         IVectorLifecycleSidecarMetadataStore inner,
         IStateCacheInvalidator invalidator,
         IContextStateVersionStore? versionStore = null)
+        : base(invalidator, versionStore)
     {
         _inner = inner;
-        _invalidator = invalidator;
-        _versionStore = versionStore;
     }
 
     public async Task SaveAsync(VectorLifecycleSidecarMetadataEntry entry, CancellationToken cancellationToken = default)
     {
         await _inner.SaveAsync(entry, cancellationToken).ConfigureAwait(false);
-        await _invalidator.InvalidateAsync(InvalidationKeys.ForVectorLifecycleSidecarMetadata(entry), cancellationToken).ConfigureAwait(false);
-        await InvalidationKeys.BumpVersionAsync(_versionStore, entry.WorkspaceId, entry.CollectionId, InvalidationKeys.VectorLifecycleSidecarMetadataStore, cancellationToken).ConfigureAwait(false);
+        await AfterCommitAsync(InvalidationKeys.ForVectorLifecycleSidecarMetadata(entry)).ConfigureAwait(false);
     }
 
     public Task<IReadOnlyList<VectorLifecycleSidecarMetadataEntry>> QueryAsync(
@@ -1087,27 +999,23 @@ public sealed class InvalidatingVectorLifecycleSidecarMetadataStoreDecorator : I
 /// <summary>
 /// 包装 <see cref="IVectorLifecycleMetadataReviewCandidateStore"/>，在写入成功（SaveAsync）后触发缓存失效。
 /// </summary>
-public sealed class InvalidatingVectorLifecycleMetadataReviewCandidateStoreDecorator : IVectorLifecycleMetadataReviewCandidateStore
+public sealed class InvalidatingVectorLifecycleMetadataReviewCandidateStoreDecorator : InvalidatingStoreDecoratorBase, IVectorLifecycleMetadataReviewCandidateStore
 {
     private readonly IVectorLifecycleMetadataReviewCandidateStore _inner;
-    private readonly IStateCacheInvalidator _invalidator;
-    private readonly IContextStateVersionStore? _versionStore;
 
     public InvalidatingVectorLifecycleMetadataReviewCandidateStoreDecorator(
         IVectorLifecycleMetadataReviewCandidateStore inner,
         IStateCacheInvalidator invalidator,
         IContextStateVersionStore? versionStore = null)
+        : base(invalidator, versionStore)
     {
         _inner = inner;
-        _invalidator = invalidator;
-        _versionStore = versionStore;
     }
 
     public async Task SaveAsync(VectorLifecycleMetadataReviewCandidate candidate, CancellationToken cancellationToken = default)
     {
         await _inner.SaveAsync(candidate, cancellationToken).ConfigureAwait(false);
-        await _invalidator.InvalidateAsync(InvalidationKeys.ForVectorLifecycleMetadataReviewCandidate(candidate), cancellationToken).ConfigureAwait(false);
-        await InvalidationKeys.BumpVersionAsync(_versionStore, candidate.WorkspaceId, candidate.CollectionId, InvalidationKeys.VectorLifecycleMetadataReviewCandidateStore, cancellationToken).ConfigureAwait(false);
+        await AfterCommitAsync(InvalidationKeys.ForVectorLifecycleMetadataReviewCandidate(candidate)).ConfigureAwait(false);
     }
 
     public Task<VectorLifecycleMetadataReviewCandidate?> GetAsync(
@@ -1124,20 +1032,17 @@ public sealed class InvalidatingVectorLifecycleMetadataReviewCandidateStoreDecor
 /// <summary>
 /// 包装 <see cref="ILearningFeedbackStore"/>，在写入成功（UpsertAsync）后触发缓存失效。
 /// </summary>
-public sealed class InvalidatingLearningFeedbackStoreDecorator : ILearningFeedbackStore
+public sealed class InvalidatingLearningFeedbackStoreDecorator : InvalidatingStoreDecoratorBase, ILearningFeedbackStore
 {
     private readonly ILearningFeedbackStore _inner;
-    private readonly IStateCacheInvalidator _invalidator;
-    private readonly IContextStateVersionStore? _versionStore;
 
     public InvalidatingLearningFeedbackStoreDecorator(
         ILearningFeedbackStore inner,
         IStateCacheInvalidator invalidator,
         IContextStateVersionStore? versionStore = null)
+        : base(invalidator, versionStore)
     {
         _inner = inner;
-        _invalidator = invalidator;
-        _versionStore = versionStore;
     }
 
     public Task<LearningFeedbackEvent?> GetAsync(
@@ -1148,8 +1053,7 @@ public sealed class InvalidatingLearningFeedbackStoreDecorator : ILearningFeedba
     public async Task UpsertAsync(LearningFeedbackEvent feedbackEvent, CancellationToken cancellationToken = default)
     {
         await _inner.UpsertAsync(feedbackEvent, cancellationToken).ConfigureAwait(false);
-        await _invalidator.InvalidateAsync(InvalidationKeys.ForLearningFeedback(feedbackEvent), cancellationToken).ConfigureAwait(false);
-        await InvalidationKeys.BumpVersionAsync(_versionStore, feedbackEvent.WorkspaceId, feedbackEvent.CollectionId, InvalidationKeys.LearningFeedbackStore, cancellationToken).ConfigureAwait(false);
+        await AfterCommitAsync(InvalidationKeys.ForLearningFeedback(feedbackEvent)).ConfigureAwait(false);
     }
 
     public Task<IReadOnlyList<LearningFeedbackEvent>> QueryAsync(
@@ -1162,27 +1066,23 @@ public sealed class InvalidatingLearningFeedbackStoreDecorator : ILearningFeedba
 /// 包装 <see cref="ILearningFeedbackReviewStore"/>，在写入成功（UpsertAsync）后触发缓存失效。
 /// 审核记录不携带 workspace/collection，按全局范围（空串）失效。
 /// </summary>
-public sealed class InvalidatingLearningFeedbackReviewStoreDecorator : ILearningFeedbackReviewStore
+public sealed class InvalidatingLearningFeedbackReviewStoreDecorator : InvalidatingStoreDecoratorBase, ILearningFeedbackReviewStore
 {
     private readonly ILearningFeedbackReviewStore _inner;
-    private readonly IStateCacheInvalidator _invalidator;
-    private readonly IContextStateVersionStore? _versionStore;
 
     public InvalidatingLearningFeedbackReviewStoreDecorator(
         ILearningFeedbackReviewStore inner,
         IStateCacheInvalidator invalidator,
         IContextStateVersionStore? versionStore = null)
+        : base(invalidator, versionStore)
     {
         _inner = inner;
-        _invalidator = invalidator;
-        _versionStore = versionStore;
     }
 
     public async Task UpsertAsync(LearningFeedbackReviewRecord review, CancellationToken cancellationToken = default)
     {
         await _inner.UpsertAsync(review, cancellationToken).ConfigureAwait(false);
-        await _invalidator.InvalidateAsync(InvalidationKeys.ForLearningFeedbackReview(review), cancellationToken).ConfigureAwait(false);
-        await InvalidationKeys.BumpVersionAsync(_versionStore, string.Empty, string.Empty, InvalidationKeys.LearningFeedbackReviewStore, cancellationToken).ConfigureAwait(false);
+        await AfterCommitAsync(InvalidationKeys.ForLearningFeedbackReview(review)).ConfigureAwait(false);
     }
 
     public Task<IReadOnlyList<LearningFeedbackReviewRecord>> QueryAsync(
@@ -1194,27 +1094,23 @@ public sealed class InvalidatingLearningFeedbackReviewStoreDecorator : ILearning
 /// <summary>
 /// 包装 <see cref="IShortTermPromotionCandidateStore"/>，在写入成功（SaveAsync/AppendReviewAsync）后触发缓存失效。
 /// </summary>
-public sealed class InvalidatingShortTermPromotionCandidateStoreDecorator : IShortTermPromotionCandidateStore
+public sealed class InvalidatingShortTermPromotionCandidateStoreDecorator : InvalidatingStoreDecoratorBase, IShortTermPromotionCandidateStore
 {
     private readonly IShortTermPromotionCandidateStore _inner;
-    private readonly IStateCacheInvalidator _invalidator;
-    private readonly IContextStateVersionStore? _versionStore;
 
     public InvalidatingShortTermPromotionCandidateStoreDecorator(
         IShortTermPromotionCandidateStore inner,
         IStateCacheInvalidator invalidator,
         IContextStateVersionStore? versionStore = null)
+        : base(invalidator, versionStore)
     {
         _inner = inner;
-        _invalidator = invalidator;
-        _versionStore = versionStore;
     }
 
     public async Task SaveAsync(ShortTermPromotionCandidate candidate, CancellationToken cancellationToken = default)
     {
         await _inner.SaveAsync(candidate, cancellationToken).ConfigureAwait(false);
-        await _invalidator.InvalidateAsync(InvalidationKeys.ForShortTermPromotionCandidate(candidate), cancellationToken).ConfigureAwait(false);
-        await InvalidationKeys.BumpVersionAsync(_versionStore, candidate.WorkspaceId, candidate.CollectionId, InvalidationKeys.ShortTermPromotionCandidateStore, cancellationToken).ConfigureAwait(false);
+        await AfterCommitAsync(InvalidationKeys.ForShortTermPromotionCandidate(candidate)).ConfigureAwait(false);
     }
 
     public Task<ShortTermPromotionCandidate?> GetAsync(
@@ -1230,8 +1126,7 @@ public sealed class InvalidatingShortTermPromotionCandidateStoreDecorator : ISho
     public async Task AppendReviewAsync(PromotionCandidateReviewRecord record, CancellationToken cancellationToken = default)
     {
         await _inner.AppendReviewAsync(record, cancellationToken).ConfigureAwait(false);
-        await _invalidator.InvalidateAsync(InvalidationKeys.ForShortTermPromotionCandidateReview(record), cancellationToken).ConfigureAwait(false);
-        await InvalidationKeys.BumpVersionAsync(_versionStore, record.WorkspaceId, record.CollectionId, InvalidationKeys.ShortTermPromotionCandidateStore, cancellationToken).ConfigureAwait(false);
+        await AfterCommitAsync(InvalidationKeys.ForShortTermPromotionCandidateReview(record)).ConfigureAwait(false);
     }
 
     public Task<IReadOnlyList<PromotionCandidateReviewRecord>> QueryReviewsAsync(

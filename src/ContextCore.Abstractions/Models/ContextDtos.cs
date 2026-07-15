@@ -113,53 +113,6 @@ public sealed class ContextQuery
     public bool IncludeDerived { get; init; } = true;
 }
 
-/// <summary>Service / Client 使用的稳定查询请求 DTO，保持与 <see cref="ContextQuery"/> 字段对齐。</summary>
-public sealed class ContextQueryRequest
-{
-    public string WorkspaceId { get; init; } = string.Empty;
-
-    public string? CollectionId { get; init; }
-
-    public string? QueryText { get; init; }
-
-    public IReadOnlyList<string> Tags { get; init; } = Array.Empty<string>();
-
-    public IReadOnlyList<string> Types { get; init; } = Array.Empty<string>();
-
-    public IReadOnlyList<string> ExcludedTypes { get; init; } = Array.Empty<string>();
-
-    public IReadOnlyList<string> ExcludedIds { get; init; } = Array.Empty<string>();
-
-    public IReadOnlyList<string> Refs { get; init; } = Array.Empty<string>();
-
-    public int Skip { get; init; }
-
-    public int Take { get; init; } = 50;
-
-    public bool IncludeContent { get; init; } = true;
-
-    public bool IncludeDerived { get; init; } = true;
-
-    public ContextQuery ToContextQuery()
-    {
-        return new ContextQuery
-        {
-            WorkspaceId = WorkspaceId,
-            CollectionId = CollectionId,
-            QueryText = QueryText,
-            Tags = Tags,
-            Types = Types,
-            ExcludedTypes = ExcludedTypes,
-            ExcludedIds = ExcludedIds,
-            Refs = Refs,
-            Skip = Skip,
-            Take = Take,
-            IncludeContent = IncludeContent,
-            IncludeDerived = IncludeDerived
-        };
-    }
-}
-
 /// <summary>稳定查询响应 DTO，封装上下文条目列表。</summary>
 public sealed class ContextQueryResponse
 {
@@ -183,7 +136,7 @@ public sealed class ContextPackage
 
     public IReadOnlyList<string> SourceRefs { get; init; } = Array.Empty<string>();
 
-    public Dictionary<string, string> Metadata { get; init; } = new();
+    public IReadOnlyDictionary<string, string> Metadata { get; init; } = new Dictionary<string, string>();
 
     public DateTimeOffset CreatedAt { get; init; }
 }
@@ -219,7 +172,7 @@ public sealed class ContextPackageBuildResult
 
     public int EstimatedTokens { get; init; }
 
-    public Dictionary<string, string> Metadata { get; init; } = new();
+    public IReadOnlyDictionary<string, string> Metadata { get; init; } = new Dictionary<string, string>();
 
     /// <summary>本次打包构建的短期锚定召回计划，用于 trace 可视化和后续 HybridContextRetriever 调用。</summary>
     public RetrievalPlan? Plan { get; init; }

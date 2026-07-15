@@ -44,20 +44,6 @@ public sealed class RouterIntentBaselineResult
         new Dictionary<string, IReadOnlyDictionary<string, int>>(StringComparer.OrdinalIgnoreCase);
 }
 
-public static class RouterGuardedOptInGateFailureReasons
-{
-    public const string MissingShadowEvalReport = "MissingShadowEvalReport";
-    public const string MissingTriageReport = "MissingTriageReport";
-    public const string ShadowBreaksRuntimeGreaterThanFixes = "ShadowBreaksRuntimeGreaterThanFixes";
-    public const string ShadowBreaksRuntimeNonZero = "ShadowBreaksRuntimeNonZero";
-    public const string ShadowFixesRuntimeNotPositive = "ShadowFixesRuntimeNotPositive";
-    public const string NetGainNotPositive = "NetGainNotPositive";
-    public const string PerIntentRegressionNonZero = "PerIntentRegressionNonZero";
-    public const string AgreementRateBelowThreshold = "AgreementRateBelowThreshold";
-    public const string LowConfidenceCountAboveThreshold = "LowConfidenceCountAboveThreshold";
-    public const string P15GateNotPassing = "P15GateNotPassing";
-}
-
 public sealed class RankerBaselineReport
 {
     public DateTimeOffset GeneratedAt { get; init; }

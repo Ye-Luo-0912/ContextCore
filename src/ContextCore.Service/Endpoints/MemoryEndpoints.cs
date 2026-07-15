@@ -25,7 +25,8 @@ internal static class MemoryEndpoints
 			return Results.Ok(result);
 		})
 		.WithName("AddWorkingMemory")
-		.WithSummary("添加工作记忆条目");
+		.WithSummary("添加工作记忆条目")
+		.Produces<ContextMemoryItem>(StatusCodes.Status200OK);
 
 		// POST /api/memory/working/add
 		group.MapPost("/working/add", async Task<IResult> (
@@ -37,7 +38,8 @@ internal static class MemoryEndpoints
 			return Results.Ok(result);
 		})
 		.WithName("AddWorkingMemoryItem")
-		.WithSummary("添加工作记忆条目（WorkingMemoryItem）");
+		.WithSummary("添加工作记忆条目（WorkingMemoryItem）")
+		.Produces<WorkingMemoryItem>(StatusCodes.Status200OK);
 
 		// GET /api/memory/working/recent
 		group.MapGet("/working/recent", async Task<IResult> (
@@ -55,7 +57,8 @@ internal static class MemoryEndpoints
 			return Results.Ok(items);
 		})
 		.WithName("GetRecentWorkingMemory")
-		.WithSummary("获取最近工作记忆条目");
+		.WithSummary("获取最近工作记忆条目")
+		.Produces<IReadOnlyList<WorkingMemoryItem>>(StatusCodes.Status200OK);
 
 		// POST /api/memory/working/clear
 		group.MapPost("/working/clear", async Task<IResult> (
@@ -67,7 +70,8 @@ internal static class MemoryEndpoints
 			return Results.NoContent();
 		})
 		.WithName("ClearWorkingMemory")
-		.WithSummary("清空工作记忆和活跃上下文");
+		.WithSummary("清空工作记忆和活跃上下文")
+		.Produces(StatusCodes.Status204NoContent);
 
 		// GET /api/memory/working/active-context
 		group.MapGet("/working/active-context", async Task<IResult> (
@@ -83,7 +87,9 @@ internal static class MemoryEndpoints
 				: Results.Ok(activeContext);
 		})
 		.WithName("GetWorkingMemoryActiveContext")
-		.WithSummary("获取工作记忆活跃上下文");
+		.WithSummary("获取工作记忆活跃上下文")
+		.Produces<WorkingMemoryActiveContext>(StatusCodes.Status200OK)
+		.Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
 		// POST /api/memory/working/active-context
 		group.MapPost("/working/active-context", async Task<IResult> (
@@ -95,7 +101,8 @@ internal static class MemoryEndpoints
 			return Results.Ok(result);
 		})
 		.WithName("SetWorkingMemoryActiveContext")
-		.WithSummary("设置工作记忆活跃上下文");
+		.WithSummary("设置工作记忆活跃上下文")
+		.Produces<WorkingMemoryActiveContext>(StatusCodes.Status200OK);
 
 		// GET /api/memory/working/current-task
 		group.MapGet("/working/current-task", async Task<IResult> (
@@ -111,7 +118,9 @@ internal static class MemoryEndpoints
 				: Results.Ok(currentTask);
 		})
 		.WithName("GetWorkingMemoryCurrentTask")
-		.WithSummary("获取当前任务");
+		.WithSummary("获取当前任务")
+		.Produces<WorkingMemoryCurrentTask>(StatusCodes.Status200OK)
+		.Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
 		// POST /api/memory/working/current-task
 		group.MapPost("/working/current-task", async Task<IResult> (
@@ -123,7 +132,8 @@ internal static class MemoryEndpoints
 			return Results.Ok(result);
 		})
 		.WithName("SetWorkingMemoryCurrentTask")
-		.WithSummary("设置当前任务");
+		.WithSummary("设置当前任务")
+		.Produces<WorkingMemoryCurrentTask>(StatusCodes.Status200OK);
 
 		// POST /api/memory/query
 		group.MapPost("/query", async Task<IResult> (
@@ -135,7 +145,8 @@ internal static class MemoryEndpoints
 			return Results.Ok(items);
 		})
 		.WithName("QueryMemory")
-		.WithSummary("按条件查询记忆条目");
+		.WithSummary("按条件查询记忆条目")
+		.Produces<IReadOnlyList<ContextMemoryItem>>(StatusCodes.Status200OK);
 
 		// GET /api/memory/global
 		group.MapGet("/global", async Task<IResult> (
@@ -156,7 +167,8 @@ internal static class MemoryEndpoints
 			return Results.Ok(items);
 		})
 		.WithName("QueryGlobalContext")
-		.WithSummary("按条件查询全局上下文条目");
+		.WithSummary("按条件查询全局上下文条目")
+		.Produces<IReadOnlyList<ContextGlobalItem>>(StatusCodes.Status200OK);
 
 		// GET /api/memory/stable/snapshot
 		group.MapGet("/stable/snapshot", async Task<IResult> (
@@ -182,7 +194,8 @@ internal static class MemoryEndpoints
 			}
 		})
 		.WithName("GetStableMemorySnapshot")
-		.WithSummary("查询 Stable Memory 治理快照");
+		.WithSummary("查询 Stable Memory 治理快照")
+		.Produces<StableMemorySnapshot>(StatusCodes.Status200OK);
 
 		// GET /api/memory/stable/diagnostics
 		group.MapGet("/stable/diagnostics", async Task<IResult> (
@@ -203,7 +216,8 @@ internal static class MemoryEndpoints
 			}
 		})
 		.WithName("GetStableMemoryDiagnostics")
-		.WithSummary("查询 Stable Memory 诊断报告");
+		.WithSummary("查询 Stable Memory 诊断报告")
+		.Produces<StableMemoryDiagnosticsReport>(StatusCodes.Status200OK);
 
 		// GET /api/memory/stable/{id}/explain
 		group.MapGet("/stable/{id}/explain", async Task<IResult> (
@@ -227,7 +241,9 @@ internal static class MemoryEndpoints
 			}
 		})
 		.WithName("ExplainStableMemory")
-		.WithSummary("解释 Stable Memory 来源链和诊断");
+		.WithSummary("解释 Stable Memory 来源链和诊断")
+		.Produces<StableMemoryExplanation>(StatusCodes.Status200OK)
+		.Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
 		// GET /api/memory/stable/{id}/replacement-chain
 		group.MapGet("/stable/{id}/replacement-chain", async Task<IResult> (
@@ -251,7 +267,9 @@ internal static class MemoryEndpoints
 			}
 		})
 		.WithName("GetStableReplacementChain")
-		.WithSummary("查询 Stable Memory supersede / replacement chain");
+		.WithSummary("查询 Stable Memory supersede / replacement chain")
+		.Produces<StableReplacementChainResponse>(StatusCodes.Status200OK)
+		.Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
 		// POST /api/memory/stable/{id}/deprecate
 		group.MapPost("/stable/{id}/deprecate", async Task<IResult> (
@@ -283,7 +301,9 @@ internal static class MemoryEndpoints
 			}
 		})
 		.WithName("DeprecateStableMemory")
-		.WithSummary("人工废弃 Stable Memory 并记录生命周期 review");
+		.WithSummary("人工废弃 Stable Memory 并记录生命周期 review")
+		.Produces<StableLifecycleReviewResult>(StatusCodes.Status200OK)
+		.Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
 		// POST /api/memory/stable/{id}/supersede
 		group.MapPost("/stable/{id}/supersede", async Task<IResult> (
@@ -315,7 +335,9 @@ internal static class MemoryEndpoints
 			}
 		})
 		.WithName("SupersedeStableMemory")
-		.WithSummary("人工 supersede Stable Memory 并记录生命周期 review");
+		.WithSummary("人工 supersede Stable Memory 并记录生命周期 review")
+		.Produces<StableLifecycleReviewResult>(StatusCodes.Status200OK)
+		.Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
 		// POST /api/memory/stable/{id}/reject
 		group.MapPost("/stable/{id}/reject", async Task<IResult> (
@@ -347,7 +369,9 @@ internal static class MemoryEndpoints
 			}
 		})
 		.WithName("RejectStableMemory")
-		.WithSummary("人工拒绝 Stable Memory 并记录生命周期 review");
+		.WithSummary("人工拒绝 Stable Memory 并记录生命周期 review")
+		.Produces<StableLifecycleReviewResult>(StatusCodes.Status200OK)
+		.Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
 		// GET /api/memory/stable/{id}/reviews
 		group.MapGet("/stable/{id}/reviews", async Task<IResult> (
@@ -373,7 +397,8 @@ internal static class MemoryEndpoints
 			}
 		})
 		.WithName("GetStableMemoryReviews")
-		.WithSummary("查询 Stable Memory 生命周期 review history");
+		.WithSummary("查询 Stable Memory 生命周期 review history")
+		.Produces<IReadOnlyList<StableLifecycleReviewRecord>>(StatusCodes.Status200OK);
 
 		// GET /api/memory/candidates/snapshot
 		group.MapGet("/candidates/snapshot", async Task<IResult> (
@@ -399,7 +424,8 @@ internal static class MemoryEndpoints
 			}
 		})
 		.WithName("GetCandidateMemorySnapshot")
-		.WithSummary("查询中期 Candidate Memory 治理快照");
+		.WithSummary("查询中期 Candidate Memory 治理快照")
+		.Produces<CandidateMemorySnapshot>(StatusCodes.Status200OK);
 
 		// GET /api/memory/candidates/diagnostics
 		group.MapGet("/candidates/diagnostics", async Task<IResult> (
@@ -420,7 +446,8 @@ internal static class MemoryEndpoints
 			}
 		})
 		.WithName("GetCandidateMemoryDiagnostics")
-		.WithSummary("查询 Candidate Memory 诊断报告");
+		.WithSummary("查询 Candidate Memory 诊断报告")
+		.Produces<CandidateMemoryDiagnosticsReport>(StatusCodes.Status200OK);
 
 		// GET /api/memory/candidates/{id}
 		group.MapGet("/candidates/{id}", async Task<IResult> (
@@ -444,7 +471,9 @@ internal static class MemoryEndpoints
 			}
 		})
 		.WithName("GetCandidateMemory")
-		.WithSummary("按 ID 查询 Candidate Memory 记录");
+		.WithSummary("按 ID 查询 Candidate Memory 记录")
+		.Produces<CandidateMemoryRecord>(StatusCodes.Status200OK)
+		.Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
 		// GET /api/memory/candidates/{id}/explain
 		group.MapGet("/candidates/{id}/explain", async Task<IResult> (
@@ -468,7 +497,9 @@ internal static class MemoryEndpoints
 			}
 		})
 		.WithName("ExplainCandidateMemory")
-		.WithSummary("解释 Candidate Memory 来源链和风险");
+		.WithSummary("解释 Candidate Memory 来源链和风险")
+		.Produces<CandidateMemoryExplanation>(StatusCodes.Status200OK)
+		.Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
 		// POST /api/memory/candidates/{id}/ready-for-stable-review
 		group.MapPost("/candidates/{id}/ready-for-stable-review", async Task<IResult> (
@@ -500,7 +531,9 @@ internal static class MemoryEndpoints
 			}
 		})
 		.WithName("MarkCandidateMemoryReadyForStableReview")
-		.WithSummary("将 CandidateMemory 标记为 ready for stable review");
+		.WithSummary("将 CandidateMemory 标记为 ready for stable review")
+		.Produces<CandidateMemoryReviewResult>(StatusCodes.Status200OK)
+		.Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
 		// POST /api/memory/candidates/{id}/needs-more-evidence
 		group.MapPost("/candidates/{id}/needs-more-evidence", async Task<IResult> (
@@ -532,7 +565,9 @@ internal static class MemoryEndpoints
 			}
 		})
 		.WithName("MarkCandidateMemoryNeedsMoreEvidence")
-		.WithSummary("将 CandidateMemory 标记为需要更多证据");
+		.WithSummary("将 CandidateMemory 标记为需要更多证据")
+		.Produces<CandidateMemoryReviewResult>(StatusCodes.Status200OK)
+		.Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
 		// POST /api/memory/candidates/{id}/reject
 		group.MapPost("/candidates/{id}/reject", async Task<IResult> (
@@ -564,7 +599,9 @@ internal static class MemoryEndpoints
 			}
 		})
 		.WithName("RejectCandidateMemory")
-		.WithSummary("拒绝 CandidateMemory 并记录 review");
+		.WithSummary("拒绝 CandidateMemory 并记录 review")
+		.Produces<CandidateMemoryReviewResult>(StatusCodes.Status200OK)
+		.Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
 		// POST /api/memory/candidates/{id}/expire
 		group.MapPost("/candidates/{id}/expire", async Task<IResult> (
@@ -596,7 +633,9 @@ internal static class MemoryEndpoints
 			}
 		})
 		.WithName("ExpireCandidateMemory")
-		.WithSummary("过期 CandidateMemory 并记录 review");
+		.WithSummary("过期 CandidateMemory 并记录 review")
+		.Produces<CandidateMemoryReviewResult>(StatusCodes.Status200OK)
+		.Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
 		// POST /api/memory/candidates/{id}/supersede
 		group.MapPost("/candidates/{id}/supersede", async Task<IResult> (
@@ -628,7 +667,9 @@ internal static class MemoryEndpoints
 			}
 		})
 		.WithName("SupersedeCandidateMemory")
-		.WithSummary("将 CandidateMemory 标记为被另一个 candidate supersede");
+		.WithSummary("将 CandidateMemory 标记为被另一个 candidate supersede")
+		.Produces<CandidateMemoryReviewResult>(StatusCodes.Status200OK)
+		.Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
 		// GET /api/memory/candidates/{id}/reviews
 		group.MapGet("/candidates/{id}/reviews", async Task<IResult> (
@@ -654,7 +695,8 @@ internal static class MemoryEndpoints
 			}
 		})
 		.WithName("GetCandidateMemoryReviews")
-		.WithSummary("查询 CandidateMemory review history");
+		.WithSummary("查询 CandidateMemory review history")
+		.Produces<IReadOnlyList<CandidateMemoryReviewRecord>>(StatusCodes.Status200OK);
 
 		// GET /api/memory/short-term/raw
 		group.MapGet("/short-term/raw", async Task<IResult> (
@@ -797,7 +839,8 @@ internal static class MemoryEndpoints
 			}
 		})
 		.WithName("GetShortTermArchiveSummary")
-		.WithSummary("查询短期记忆归档摘要");
+		.WithSummary("查询短期记忆归档摘要")
+		.Produces<ShortTermArchiveSummary>(StatusCodes.Status200OK);
 
 		// GET /api/memory/short-term/archive/items
 		group.MapGet("/short-term/archive/items", async Task<IResult> (
@@ -834,7 +877,8 @@ internal static class MemoryEndpoints
 			}
 		})
 		.WithName("GetShortTermArchiveItems")
-		.WithSummary("查询短期记忆归档明细");
+		.WithSummary("查询短期记忆归档明细")
+		.Produces<ShortTermArchiveItemsResponse>(StatusCodes.Status200OK);
 
 		// GET /api/memory/short-term/compact/runs
 		group.MapGet("/short-term/compact/runs", async Task<IResult> (
@@ -899,7 +943,9 @@ internal static class MemoryEndpoints
 			}
 		})
 		.WithName("GetShortTermCompactionRun")
-		.WithSummary("按 RunId 查询短期记忆压缩运行记录");
+		.WithSummary("按 RunId 查询短期记忆压缩运行记录")
+		.Produces<ShortTermCompactionRun>(StatusCodes.Status200OK)
+		.Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
 		// POST /api/memory/short-term/promotion/candidates/generate
 		group.MapPost("/short-term/promotion/candidates/generate", async Task<IResult> (
@@ -973,7 +1019,8 @@ internal static class MemoryEndpoints
 			}
 		})
 		.WithName("GetShortTermPromotionCandidates")
-		.WithSummary("查询短期记忆晋升候选项");
+		.WithSummary("查询短期记忆晋升候选项")
+		.Produces<IReadOnlyList<ShortTermPromotionCandidate>>(StatusCodes.Status200OK);
 
 		// GET /api/memory/short-term/promotion/candidates/{id}/explain
 		group.MapGet("/short-term/promotion/candidates/{id}/explain", async Task<IResult> (
@@ -1001,7 +1048,9 @@ internal static class MemoryEndpoints
 			}
 		})
 		.WithName("ExplainShortTermPromotionCandidate")
-		.WithSummary("解释短期记忆晋升候选项的来源与规则信息");
+		.WithSummary("解释短期记忆晋升候选项的来源与规则信息")
+		.Produces<ShortTermPromotionCandidateExplanation>(StatusCodes.Status200OK)
+		.Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
 		// POST /api/memory/short-term/promotion/candidates/{id}/accept
 		group.MapPost("/short-term/promotion/candidates/{id}/accept", async Task<IResult> (
@@ -1030,7 +1079,9 @@ internal static class MemoryEndpoints
 			}
 		})
 		.WithName("AcceptShortTermPromotionCandidate")
-		.WithSummary("接受短期晋升候选项并写入候选目标层");
+		.WithSummary("接受短期晋升候选项并写入候选目标层")
+		.Produces<PromotionCandidateReviewResult>(StatusCodes.Status200OK)
+		.Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
 		// POST /api/memory/short-term/promotion/candidates/{id}/reject
 		group.MapPost("/short-term/promotion/candidates/{id}/reject", async Task<IResult> (
@@ -1059,7 +1110,9 @@ internal static class MemoryEndpoints
 			}
 		})
 		.WithName("RejectShortTermPromotionCandidate")
-		.WithSummary("拒绝短期晋升候选项并记录审核历史");
+		.WithSummary("拒绝短期晋升候选项并记录审核历史")
+		.Produces<PromotionCandidateReviewResult>(StatusCodes.Status200OK)
+		.Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
 		// POST /api/memory/short-term/promotion/candidates/{id}/expire
 		group.MapPost("/short-term/promotion/candidates/{id}/expire", async Task<IResult> (
@@ -1088,7 +1141,9 @@ internal static class MemoryEndpoints
 			}
 		})
 		.WithName("ExpireShortTermPromotionCandidate")
-		.WithSummary("将短期晋升候选项标记为过期并记录审核历史");
+		.WithSummary("将短期晋升候选项标记为过期并记录审核历史")
+		.Produces<ReviewPromotionCandidateResponse>(StatusCodes.Status200OK)
+		.Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
 		// GET /api/memory/short-term/promotion/candidates/{id}/reviews
 		group.MapGet("/short-term/promotion/candidates/{id}/reviews", async Task<IResult> (
@@ -1148,7 +1203,9 @@ internal static class MemoryEndpoints
 			}
 		})
 		.WithName("GetShortTermPromotionCandidate")
-		.WithSummary("按 ID 查询短期记忆晋升候选项");
+		.WithSummary("按 ID 查询短期记忆晋升候选项")
+		.Produces<ShortTermPromotionCandidate>(StatusCodes.Status200OK)
+		.Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
 		// POST /api/memory/stable-review/candidates/generate
 		group.MapPost("/stable-review/candidates/generate", async Task<IResult> (
@@ -1174,7 +1231,8 @@ internal static class MemoryEndpoints
 			}
 		})
 		.WithName("GenerateStableReviewCandidates")
-		.WithSummary("从已接受短期晋升候选项生成 Stable Review 候选项");
+		.WithSummary("从已接受短期晋升候选项生成 Stable Review 候选项")
+		.Produces<IReadOnlyList<StableReviewCandidate>>(StatusCodes.Status200OK);
 
 		// GET /api/memory/stable-review/candidates
 		group.MapGet("/stable-review/candidates", async Task<IResult> (
@@ -1249,7 +1307,9 @@ internal static class MemoryEndpoints
 			}
 		})
 		.WithName("AcceptStableReviewCandidate")
-		.WithSummary("接受 Stable Review 候选项并写入稳定目标层");
+		.WithSummary("接受 Stable Review 候选项并写入稳定目标层")
+		.Produces<StableReviewDecisionResult>(StatusCodes.Status200OK)
+		.Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
 		// POST /api/memory/stable-review/candidates/{id}/reject
 		group.MapPost("/stable-review/candidates/{id}/reject", async Task<IResult> (
@@ -1310,7 +1370,9 @@ internal static class MemoryEndpoints
 			}
 		})
 		.WithName("GetStableReviewCandidateReviews")
-		.WithSummary("查询 Stable Review 候选项审核历史");
+		.WithSummary("查询 Stable Review 候选项审核历史")
+		.Produces<IReadOnlyList<StableReviewRecord>>(StatusCodes.Status200OK)
+		.Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
 		// GET /api/memory/stable-review/candidates/{id}/explain
 		group.MapGet("/stable-review/candidates/{id}/explain", async Task<IResult> (
@@ -1338,7 +1400,9 @@ internal static class MemoryEndpoints
 			}
 		})
 		.WithName("ExplainStableReviewCandidate")
-		.WithSummary("解释 Stable Review 候选项来源、学习案例和校验状态");
+		.WithSummary("解释 Stable Review 候选项来源、学习案例和校验状态")
+		.Produces<StableReviewCandidateExplanation>(StatusCodes.Status200OK)
+		.Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
 		// GET /api/memory/stable-review/candidates/{id}
 		group.MapGet("/stable-review/candidates/{id}", async Task<IResult> (
@@ -1366,7 +1430,9 @@ internal static class MemoryEndpoints
 			}
 		})
 		.WithName("GetStableReviewCandidate")
-		.WithSummary("按 ID 查询 Stable Review 候选项");
+		.WithSummary("按 ID 查询 Stable Review 候选项")
+		.Produces<StableReviewCandidate>(StatusCodes.Status200OK)
+		.Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
 		// POST /api/memory/promote
 		group.MapPost("/promote", async Task<IResult> (
@@ -1386,7 +1452,8 @@ internal static class MemoryEndpoints
 			return Results.Ok(record);
 		})
 		.WithName("PromoteMemory")
-		.WithSummary("将工作记忆晋升为稳定记忆");
+		.WithSummary("将工作记忆晋升为稳定记忆")
+		.Produces<ContextPromotionRecord>(StatusCodes.Status200OK);
 
 		// POST /api/memory/reject
 		group.MapPost("/reject", async Task<IResult> (
@@ -1406,7 +1473,8 @@ internal static class MemoryEndpoints
 			return Results.Ok(record);
 		})
 		.WithName("RejectMemory")
-		.WithSummary("将记忆条目标记为拒绝");
+		.WithSummary("将记忆条目标记为拒绝")
+		.Produces<ContextPromotionRecord>(StatusCodes.Status200OK);
 
 		// POST /api/memory/deprecate
 		group.MapPost("/deprecate", async Task<IResult> (
@@ -1426,7 +1494,8 @@ internal static class MemoryEndpoints
 			return Results.Ok(record);
 		})
 		.WithName("DeprecateMemory")
-		.WithSummary("将记忆条目标记为废弃");
+		.WithSummary("将记忆条目标记为废弃")
+		.Produces<ContextPromotionRecord>(StatusCodes.Status200OK);
 
 		return app;
 	}

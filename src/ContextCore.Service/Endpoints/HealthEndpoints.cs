@@ -22,7 +22,8 @@ internal static class HealthEndpoints
         }))
         .WithTags("Health")
         .WithName("HealthLive")
-        .WithSummary("存活探针（进程在线即 200，不检查依赖）");
+        .WithSummary("存活探针（进程在线即 200，不检查依赖）")
+        .Produces<ContextCoreHealthLiveResponse>(StatusCodes.Status200OK);
 
         app.MapGet("/api/health/ready", async Task<IResult> (
             ServiceAlphaRuntimeInspector inspector,
@@ -44,7 +45,8 @@ internal static class HealthEndpoints
         })
         .WithTags("Health")
         .WithName("HealthReady")
-        .WithSummary("Service Alpha 就绪探针（检查存储、事件、作业、模型和 retrieval baseline）");
+        .WithSummary("Service Alpha 就绪探针（检查存储、事件、作业、模型和 retrieval baseline）")
+        .Produces<RuntimeReadinessResponse>(StatusCodes.Status200OK);
 
         return app;
     }

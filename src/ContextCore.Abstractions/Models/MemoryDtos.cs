@@ -419,25 +419,6 @@ public sealed class ContextPromotionRecord
     public DateTimeOffset CreatedAt { get; init; }
 }
 
-/// <summary>描述记忆固化策略的配置模型。</summary>
-public sealed class PromotionStrategy
-{
-    /// <summary>策略唯一标识符。</summary>
-    public string Id { get; init; } = "manual";
-
-    /// <summary>策略显示名称。</summary>
-    public string Name { get; init; } = "Manual";
-
-    /// <summary>策略描述。</summary>
-    public string Description { get; init; } = string.Empty;
-
-    /// <summary>默认置信度，范围 0～1。</summary>
-    public double DefaultConfidence { get; init; } = 1.0;
-
-    /// <summary>附加元数据。</summary>
-    public Dictionary<string, string> Metadata { get; init; } = new();
-}
-
 /// <summary>上下文打包策略，控制打包时各部分内容的包含规则与 Token 预算。</summary>
 public sealed class ContextPackagePolicy
 {

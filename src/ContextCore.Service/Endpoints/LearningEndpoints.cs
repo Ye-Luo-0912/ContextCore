@@ -15,7 +15,9 @@ internal static class LearningEndpoints
 
         group.MapPost("/feedback", SubmitRuntimeLearningFeedbackAsync)
             .WithName("SubmitRuntimeLearningFeedback")
-            .WithSummary("提交运行时学习反馈事件；仅采集，不改变正式策略");
+            .WithSummary("提交运行时学习反馈事件；仅采集，不改变正式策略")
+            .Produces<LearningFeedbackSubmitResult>(StatusCodes.Status200OK)
+            .Produces<ContextCoreErrorResponse>(StatusCodes.Status400BadRequest);
 
         group.MapGet("/feedback", async Task<IResult> (
             string? workspaceId,
@@ -91,15 +93,18 @@ internal static class LearningEndpoints
             }
         })
         .WithName("QueryLearningFeedback")
-        .WithSummary("查询晋升反馈信号");
+        .WithSummary("查询晋升反馈信号")
+        .Produces<IReadOnlyList<PromotionFeedbackSignal>>(StatusCodes.Status200OK);
 
         group.MapGet("/feedback/summary", GetRuntimeLearningFeedbackSummaryAsync)
             .WithName("GetRuntimeLearningFeedbackSummary")
-            .WithSummary("查询运行时学习反馈汇总；不改变正式策略");
+            .WithSummary("查询运行时学习反馈汇总；不改变正式策略")
+            .Produces<LearningFeedbackSummaryReport>(StatusCodes.Status200OK);
 
         group.MapGet("/feedback/export", ExportRuntimeLearningFeedbackAsync)
             .WithName("ExportRuntimeLearningFeedback")
-            .WithSummary("导出运行时学习反馈 JSONL；不改变正式策略");
+            .WithSummary("导出运行时学习反馈 JSONL；不改变正式策略")
+            .Produces<string>(StatusCodes.Status200OK);
 
         group.MapPost("/feedback/{feedbackId}/review/approve", (
             string feedbackId,
@@ -115,7 +120,9 @@ internal static class LearningEndpoints
                 httpContext,
                 ct))
             .WithName("ApproveRuntimeLearningFeedback")
-            .WithSummary("批准运行时反馈进入离线数据集候选；不改变正式策略");
+            .WithSummary("批准运行时反馈进入离线数据集候选；不改变正式策略")
+            .Produces<LearningFeedbackReviewResult>(StatusCodes.Status200OK)
+            .Produces<ContextCoreErrorResponse>(StatusCodes.Status400BadRequest);
 
         group.MapPost("/feedback/{feedbackId}/review/reject", (
             string feedbackId,
@@ -131,7 +138,9 @@ internal static class LearningEndpoints
                 httpContext,
                 ct))
             .WithName("RejectRuntimeLearningFeedback")
-            .WithSummary("拒绝运行时反馈进入离线数据集候选；不改变正式策略");
+            .WithSummary("拒绝运行时反馈进入离线数据集候选；不改变正式策略")
+            .Produces<LearningFeedbackReviewResult>(StatusCodes.Status200OK)
+            .Produces<ContextCoreErrorResponse>(StatusCodes.Status400BadRequest);
 
         group.MapPost("/feedback/{feedbackId}/review/needs-redaction", (
             string feedbackId,
@@ -147,7 +156,9 @@ internal static class LearningEndpoints
                 httpContext,
                 ct))
             .WithName("MarkRuntimeLearningFeedbackNeedsRedaction")
-            .WithSummary("标记运行时反馈需要脱敏后再进入离线数据集候选");
+            .WithSummary("标记运行时反馈需要脱敏后再进入离线数据集候选")
+            .Produces<LearningFeedbackReviewResult>(StatusCodes.Status200OK)
+            .Produces<ContextCoreErrorResponse>(StatusCodes.Status400BadRequest);
 
         group.MapPost("/feedback/{feedbackId}/review/needs-evidence", (
             string feedbackId,
@@ -163,15 +174,19 @@ internal static class LearningEndpoints
                 httpContext,
                 ct))
             .WithName("MarkRuntimeLearningFeedbackNeedsEvidence")
-            .WithSummary("标记运行时反馈需要更多证据后再进入离线数据集候选");
+            .WithSummary("标记运行时反馈需要更多证据后再进入离线数据集候选")
+            .Produces<LearningFeedbackReviewResult>(StatusCodes.Status200OK)
+            .Produces<ContextCoreErrorResponse>(StatusCodes.Status400BadRequest);
 
         group.MapGet("/feedback/reviews", GetRuntimeLearningFeedbackReviewsAsync)
             .WithName("GetRuntimeLearningFeedbackReviews")
-            .WithSummary("查询运行时反馈审核记录；不改变正式策略");
+            .WithSummary("查询运行时反馈审核记录；不改变正式策略")
+            .Produces<IReadOnlyList<LearningFeedbackReviewRecord>>(StatusCodes.Status200OK);
 
         group.MapGet("/feedback/reviews/summary", GetRuntimeLearningFeedbackReviewSummaryAsync)
             .WithName("GetRuntimeLearningFeedbackReviewSummary")
-            .WithSummary("查询运行时反馈审核摘要；不改变正式策略");
+            .WithSummary("查询运行时反馈审核摘要；不改变正式策略")
+            .Produces<LearningFeedbackReviewSummaryReport>(StatusCodes.Status200OK);
 
         group.MapGet("/records", async Task<IResult> (
             string? workspaceId,
@@ -219,7 +234,8 @@ internal static class LearningEndpoints
             }
         })
         .WithName("QueryLearningRecords")
-        .WithSummary("查询上下文学习记录");
+        .WithSummary("查询上下文学习记录")
+        .Produces<IReadOnlyList<ContextLearningRecord>>(StatusCodes.Status200OK);
 
         group.MapGet("/records/{id}", async Task<IResult> (
             string id,
@@ -250,7 +266,9 @@ internal static class LearningEndpoints
             }
         })
         .WithName("GetLearningRecord")
-        .WithSummary("按 ID 查询上下文学习记录");
+        .WithSummary("按 ID 查询上下文学习记录")
+        .Produces<ContextLearningRecord>(StatusCodes.Status200OK)
+        .Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
         group.MapGet("/cases", async Task<IResult> (
             string? workspaceId,
@@ -300,11 +318,13 @@ internal static class LearningEndpoints
             }
         })
         .WithName("QueryLearningCases")
-        .WithSummary("查询上下文学习案例");
+        .WithSummary("查询上下文学习案例")
+        .Produces<IReadOnlyList<ContextLearningCase>>(StatusCodes.Status200OK);
 
         group.MapPost("/cases/generate", GenerateLearningCasesAsync)
             .WithName("GenerateLearningCases")
-            .WithSummary("从学习记录生成规则型学习案例");
+            .WithSummary("从学习记录生成规则型学习案例")
+            .Produces<ContextLearningCaseGenerationResult>(StatusCodes.Status200OK);
 
         group.MapPost("/cases/{id}/activate", (
             string id,
@@ -320,7 +340,9 @@ internal static class LearningEndpoints
                 httpContext,
                 ct))
             .WithName("ActivateLearningCase")
-            .WithSummary("将学习案例激活为回归案例");
+            .WithSummary("将学习案例激活为回归案例")
+            .Produces<ContextLearningCaseStatusUpdateResponse>(StatusCodes.Status200OK)
+            .Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
         group.MapPost("/cases/{id}/archive", (
             string id,
@@ -336,7 +358,9 @@ internal static class LearningEndpoints
                 httpContext,
                 ct))
             .WithName("ArchiveLearningCase")
-            .WithSummary("归档学习案例");
+            .WithSummary("归档学习案例")
+            .Produces<ContextLearningCaseStatusUpdateResponse>(StatusCodes.Status200OK)
+            .Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
         group.MapPost("/cases/{id}/reject", (
             string id,
@@ -352,11 +376,14 @@ internal static class LearningEndpoints
                 httpContext,
                 ct))
             .WithName("RejectLearningCase")
-            .WithSummary("拒绝学习案例");
+            .WithSummary("拒绝学习案例")
+            .Produces<ContextLearningCaseStatusUpdateResponse>(StatusCodes.Status200OK)
+            .Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
         group.MapGet("/summary", GetLearningSummaryAsync)
             .WithName("GetLearningSummary")
-            .WithSummary("查询上下文学习摘要");
+            .WithSummary("查询上下文学习摘要")
+            .Produces<ContextLearningSummary>(StatusCodes.Status200OK);
 
         group.MapGet("/regression/cases", async Task<IResult> (
             string? workspaceId,
@@ -397,7 +424,8 @@ internal static class LearningEndpoints
             }
         })
         .WithName("GetRegressionLearningCases")
-        .WithSummary("查询已激活的学习回归案例");
+        .WithSummary("查询已激活的学习回归案例")
+        .Produces<IReadOnlyList<ContextLearningCase>>(StatusCodes.Status200OK);
 
         group.MapGet("/cases/{id}", async Task<IResult> (
             string id,
@@ -428,7 +456,9 @@ internal static class LearningEndpoints
             }
         })
         .WithName("GetLearningCase")
-        .WithSummary("按 ID 查询上下文学习案例");
+        .WithSummary("按 ID 查询上下文学习案例")
+        .Produces<ContextLearningCase>(StatusCodes.Status200OK)
+        .Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
         group.MapPost("/cases", async Task<IResult> (
             ContextLearningCase learningCase,
@@ -468,7 +498,9 @@ internal static class LearningEndpoints
             }
         })
         .WithName("CreateLearningCase")
-        .WithSummary("创建上下文学习案例");
+        .WithSummary("创建上下文学习案例")
+        .Produces<ContextLearningCase>(StatusCodes.Status200OK)
+        .Produces<ContextCoreErrorResponse>(StatusCodes.Status400BadRequest);
 
         return app;
     }

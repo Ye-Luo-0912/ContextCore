@@ -221,7 +221,7 @@ public sealed class ContextCoreControlRoomServiceModeTests
                 http);
             var service = new ControlRoomService(state);
 
-            var response = await service.QueryServiceAsync(new ContextQueryRequest
+            var response = await service.QueryServiceAsync(new ContextQuery
             {
                 WorkspaceId = "workspace-test",
                 CollectionId = "collection-test",
@@ -266,7 +266,7 @@ public sealed class ContextCoreControlRoomServiceModeTests
             var service = new ControlRoomService(state);
 
             var exception = await Assert.ThrowsExceptionAsync<ContextCoreApiException>(() =>
-                service.QueryServiceAsync(new ContextQueryRequest
+                service.QueryServiceAsync(new ContextQuery
                 {
                     WorkspaceId = "workspace-test",
                     CollectionId = "collection-test",

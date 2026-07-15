@@ -452,86 +452,6 @@ public sealed class LearningFeedbackFeatureCandidateReport
     public IReadOnlyList<string> Warnings { get; init; } = Array.Empty<string>();
 }
 
-/// <summary>运行时反馈到离线数据集的质量与 readiness 报告。</summary>
-public sealed class LearningFeedbackQualityReport
-{
-    public DateTimeOffset GeneratedAt { get; init; }
-
-    public int FeedbackCount { get; init; }
-
-    public int PendingReviewCount { get; init; }
-
-    public int ApprovedCount { get; init; }
-
-    public int RejectedCount { get; init; }
-
-    public int NeedsRedactionCount { get; init; }
-
-    public int NeedsEvidenceCount { get; init; }
-
-    public int MetadataOnlyCount { get; init; }
-
-    public int TrainingDisabledCount { get; init; }
-
-    public int FeatureCandidateCount { get; init; }
-
-    public IReadOnlyDictionary<string, int> CandidateCountByCapability { get; init; } =
-        new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-
-    public IReadOnlyDictionary<string, int> CandidateCountByLabelKind { get; init; } =
-        new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-
-    public double RedactionCoverageRate { get; init; }
-
-    public double ReviewCoverageRate { get; init; }
-
-    public IReadOnlyList<LearningFeedbackDatasetReadiness> ApprovedDatasetReadiness { get; init; } =
-        Array.Empty<LearningFeedbackDatasetReadiness>();
-
-    public int ExistingPolicyFeatureCount { get; init; }
-
-    public int ExistingRankingPairCount { get; init; }
-
-    public int ExistingRouterIntentExampleCount { get; init; }
-
-    public string Recommendation { get; init; } = string.Empty;
-
-    public IReadOnlyList<string> Warnings { get; init; } = Array.Empty<string>();
-}
-
-/// <summary>已审核反馈数据集准入门禁报告；只判断离线候选是否可进入训练集。</summary>
-public sealed class LearningApprovedFeedbackDatasetGateReport
-{
-    public DateTimeOffset GeneratedAt { get; init; }
-
-    public bool Passed { get; init; }
-
-    public int ApprovedCount { get; init; }
-
-    public double RedactionCoverageRate { get; init; }
-
-    public int FeatureCandidateCount { get; init; }
-
-    public int TrainableCandidateCount { get; init; }
-
-    public int SmokeExcludedCount { get; init; }
-
-    public int DisabledTrainingUseCount { get; init; }
-
-    public IReadOnlyDictionary<string, int> CandidateCountByCapability { get; init; } =
-        new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-
-    public IReadOnlyDictionary<string, int> PositiveLabelCountByCapability { get; init; } =
-        new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-
-    public IReadOnlyDictionary<string, int> NegativeLabelCountByCapability { get; init; } =
-        new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-
-    public IReadOnlyList<string> FailureReasons { get; init; } = Array.Empty<string>();
-
-    public string Recommendation { get; init; } = string.Empty;
-}
-
 /// <summary>单个 capability 的 feedback dataset readiness。</summary>
 public sealed class LearningFeedbackDatasetReadiness
 {
@@ -1201,38 +1121,5 @@ public static class ShadowCapabilityIds
     public const string Qwen3EmbeddingProvider = nameof(Qwen3EmbeddingProvider);
 
     public const string CurrentEmbeddingProvider = nameof(CurrentEmbeddingProvider);
-}
-
-/// <summary>runtime 变更 readiness gate 的单项检查结果。</summary>
-public sealed class LearningRuntimeChangeReadinessGateCheck
-{
-    public string CapabilityId { get; init; } = string.Empty;
-
-    public string Condition { get; init; } = string.Empty;
-
-    public bool Passed { get; init; }
-
-    public string Reason { get; init; } = string.Empty;
-}
-
-/// <summary>统一学习 runtime 变更闸门；只验证冻结状态，不启用任何 capability。</summary>
-public sealed class LearningRuntimeChangeReadinessGateReport
-{
-    public string OperationId { get; init; } = string.Empty;
-
-    public DateTimeOffset GeneratedAt { get; init; }
-
-    public bool Passed { get; init; }
-
-    public string RegistryReportPath { get; init; } = string.Empty;
-
-    public IReadOnlyList<LearningRuntimeChangeReadinessGateCheck> Checks { get; init; } =
-        Array.Empty<LearningRuntimeChangeReadinessGateCheck>();
-
-    public IReadOnlyList<string> FailedConditions { get; init; } = Array.Empty<string>();
-
-    public string Recommendation { get; init; } = string.Empty;
-
-    public string PolicyVersion { get; init; } = string.Empty;
 }
 

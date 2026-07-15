@@ -35,7 +35,9 @@ internal static class PackageEndpoints
 			}
 		})
 		.WithName("BuildPackage")
-		.WithSummary("按请求构建上下文包，返回供 LLM 使用的 ContextPackage");
+		.WithSummary("按请求构建上下文包，返回供 LLM 使用的 ContextPackage")
+		.Produces<ContextPackage>(StatusCodes.Status200OK)
+		.Produces<ContextCoreErrorResponse>(StatusCodes.Status400BadRequest);
 
 		// POST /api/package/build-detailed
 		// 返回完整的 ContextPackageBuildResult，含 selected/dropped 决策日志和 RetrievalPlan。
@@ -61,7 +63,9 @@ internal static class PackageEndpoints
 			}
 		})
 		.WithName("BuildPackageDetailed")
-		.WithSummary("构建上下文包并返回完整决策日志（含 RetrievalPlan），用于 plan passthrough 场景");
+		.WithSummary("构建上下文包并返回完整决策日志（含 RetrievalPlan），用于 plan passthrough 场景")
+		.Produces<ContextPackageBuildResult>(StatusCodes.Status200OK)
+		.Produces<ContextCoreErrorResponse>(StatusCodes.Status400BadRequest);
 
 		// POST /api/package/preview
 		group.MapPost("/preview", async Task<IResult> (
@@ -85,7 +89,9 @@ internal static class PackageEndpoints
 			}
 		})
 		.WithName("PreviewPackage")
-		.WithSummary("预览上下文包构建结果，不引入新的持久化语义");
+		.WithSummary("预览上下文包构建结果，不引入新的持久化语义")
+		.Produces<ContextPackage>(StatusCodes.Status200OK)
+		.Produces<ContextCoreErrorResponse>(StatusCodes.Status400BadRequest);
 
 		// POST /api/package/index/upsert
 		group.MapPost("/index/upsert", async Task<IResult> (
@@ -97,7 +103,8 @@ internal static class PackageEndpoints
 			return Results.NoContent();
 		})
 		.WithName("UpsertIndexEntry")
-		.WithSummary("插入或更新一条索引条目");
+		.WithSummary("插入或更新一条索引条目")
+		.Produces(StatusCodes.Status204NoContent);
 
 		// POST /api/package/index/search
 		group.MapPost("/index/search", async Task<IResult> (
@@ -109,7 +116,8 @@ internal static class PackageEndpoints
 			return Results.Ok(entries);
 		})
 		.WithName("SearchIndex")
-		.WithSummary("搜索索引条目");
+		.WithSummary("搜索索引条目")
+		.Produces<IReadOnlyList<ContextIndexEntry>>(StatusCodes.Status200OK);
 
 		// GET /api/package/policies
 		group.MapGet("/policies", async Task<IResult> (
@@ -130,7 +138,8 @@ internal static class PackageEndpoints
 			return Results.Ok(items);
 		})
 		.WithName("QueryPackagePolicies")
-		.WithSummary("查询上下文包策略");
+		.WithSummary("查询上下文包策略")
+		.Produces<IReadOnlyList<ContextPackagePolicy>>(StatusCodes.Status200OK);
 
 		// GET /api/package/policies/{id}
 		group.MapGet("/policies/{id}", async Task<IResult> (
@@ -147,7 +156,9 @@ internal static class PackageEndpoints
 				: Results.Ok(policy);
 		})
 		.WithName("GetPackagePolicy")
-		.WithSummary("获取指定上下文包策略");
+		.WithSummary("获取指定上下文包策略")
+		.Produces<ContextPackagePolicy>(StatusCodes.Status200OK)
+		.Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
 		return app;
 	}

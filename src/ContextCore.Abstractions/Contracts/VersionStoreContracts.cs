@@ -13,6 +13,16 @@ public interface IContextStateVersionStore
         string storeKind,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// 批量获取多个范围的当前版本号。缓存命中路径用此接口一次性校验所有依赖 scope 的版本，
+    /// 避免分布式实现下每次命中 N 次网络调用。未包含的范围不在返回字典中。
+    /// </summary>
+    /// <param name="scopes">需要查询的范围集合（去重由实现负责）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    Task<IReadOnlyDictionary<VersionScope, long>> GetVersionsAsync(
+        IReadOnlyCollection<VersionScope> scopes,
+        CancellationToken cancellationToken = default);
+
     /// <summary>将指定范围的版本号自增并返回新版本号。</summary>
     Task<long> BumpVersionAsync(
         string workspaceId,
@@ -20,3 +30,6 @@ public interface IContextStateVersionStore
         string storeKind,
         CancellationToken cancellationToken = default);
 }
+
+/// <summary>版本范围三元组：(workspaceId, collectionId, storeKind)。EntityId 不影响版本。</summary>
+public readonly record struct VersionScope(string WorkspaceId, string CollectionId, string StoreKind);

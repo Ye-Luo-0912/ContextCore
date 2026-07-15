@@ -97,7 +97,8 @@ internal static class ModelEndpoints
 		})
 		.WithTags("Model")
 		.WithName("GetModelStatus")
-		.WithSummary("获取模型健康状态");
+		.WithSummary("获取模型健康状态")
+		.Produces<ContextCoreModelStatusResponse>(StatusCodes.Status200OK);
 
 		app.MapPost("/api/model/route/resolve", (ModelRouteResolveRequest request, ModelGatewayOptions options, HttpContext httpContext) =>
 		{
@@ -117,7 +118,9 @@ internal static class ModelEndpoints
 		})
 		.WithTags("Model")
 		.WithName("ResolveModelRoute")
-		.WithSummary("预览一次模型路由解析结果");
+		.WithSummary("预览一次模型路由解析结果")
+		.Produces<ContextCoreModelRouteResolveResponse>(StatusCodes.Status200OK)
+		.Produces<ContextCoreErrorResponse>(StatusCodes.Status400BadRequest);
 
 		return app;
 	}

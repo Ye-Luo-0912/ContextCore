@@ -29,7 +29,8 @@ internal static class ConstraintEndpoints
 		})
 		.WithTags("Constraints")
 		.WithName("QueryConstraints")
-		.WithSummary("查询约束条目");
+		.WithSummary("查询约束条目")
+		.Produces<IReadOnlyList<ContextConstraint>>(StatusCodes.Status200OK);
 
 		app.MapGet("/api/constraints/candidates", async Task<IResult> (
 			string workspaceId,
@@ -67,7 +68,8 @@ internal static class ConstraintEndpoints
 		})
 		.WithTags("Constraints")
 		.WithName("GetCandidateConstraints")
-		.WithSummary("查询 CandidateConstraint");
+		.WithSummary("查询 CandidateConstraint")
+		.Produces<IReadOnlyList<ContextConstraint>>(StatusCodes.Status200OK);
 
 		app.MapGet("/api/constraints/candidates/{id}", async Task<IResult> (
 			string id,
@@ -95,7 +97,9 @@ internal static class ConstraintEndpoints
 		})
 		.WithTags("Constraints")
 		.WithName("GetCandidateConstraint")
-		.WithSummary("按 ID 查询 CandidateConstraint");
+		.WithSummary("按 ID 查询 CandidateConstraint")
+		.Produces<ContextConstraint>(StatusCodes.Status200OK)
+		.Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
 		app.MapPost("/api/constraints/candidates/{id}/activate", async Task<IResult> (
 			string id,
@@ -124,7 +128,9 @@ internal static class ConstraintEndpoints
 		})
 		.WithTags("Constraints")
 		.WithName("ActivateCandidateConstraint")
-		.WithSummary("激活 CandidateConstraint 为 Active hard constraint");
+		.WithSummary("激活 CandidateConstraint 为 Active hard constraint")
+		.Produces<CandidateConstraintReviewResult>(StatusCodes.Status200OK)
+		.Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
 		app.MapPost("/api/constraints/candidates/{id}/reject", async Task<IResult> (
 			string id,
@@ -153,7 +159,9 @@ internal static class ConstraintEndpoints
 		})
 		.WithTags("Constraints")
 		.WithName("RejectCandidateConstraint")
-		.WithSummary("拒绝 CandidateConstraint 并记录审核历史");
+		.WithSummary("拒绝 CandidateConstraint 并记录审核历史")
+		.Produces<CandidateConstraintReviewResult>(StatusCodes.Status200OK)
+		.Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
 		app.MapGet("/api/constraints/candidates/{id}/reviews", async Task<IResult> (
 			string id,
@@ -185,7 +193,9 @@ internal static class ConstraintEndpoints
 		})
 		.WithTags("Constraints")
 		.WithName("GetCandidateConstraintReviews")
-		.WithSummary("查询 CandidateConstraint 审核历史");
+		.WithSummary("查询 CandidateConstraint 审核历史")
+		.Produces<IReadOnlyList<CandidateConstraintReviewRecord>>(StatusCodes.Status200OK)
+		.Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
 		app.MapPost("/api/constraints/gaps/generate", async Task<IResult> (
 			ConstraintGapGenerationRequest request,
@@ -211,7 +221,8 @@ internal static class ConstraintEndpoints
 		})
 		.WithTags("Constraints")
 		.WithName("GenerateConstraintGaps")
-		.WithSummary("从 eval/report 输入生成约束缺口候选项，不写入 ConstraintStore");
+		.WithSummary("从 eval/report 输入生成约束缺口候选项，不写入 ConstraintStore")
+		.Produces<ConstraintGapGenerationResult>(StatusCodes.Status200OK);
 
 		app.MapGet("/api/constraints/gaps", async Task<IResult> (
 			string workspaceId,
@@ -257,7 +268,8 @@ internal static class ConstraintEndpoints
 		})
 		.WithTags("Constraints")
 		.WithName("GetConstraintGaps")
-		.WithSummary("查询约束缺口候选项");
+		.WithSummary("查询约束缺口候选项")
+		.Produces<IReadOnlyList<ConstraintGapCandidate>>(StatusCodes.Status200OK);
 
 		app.MapGet("/api/constraints/gaps/{id}", async Task<IResult> (
 			string id,
@@ -285,7 +297,9 @@ internal static class ConstraintEndpoints
 		})
 		.WithTags("Constraints")
 		.WithName("GetConstraintGap")
-		.WithSummary("按 ID 查询约束缺口候选项");
+		.WithSummary("按 ID 查询约束缺口候选项")
+		.Produces<ConstraintGapCandidate>(StatusCodes.Status200OK)
+		.Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
 		app.MapPost("/api/constraints/gaps/{id}/accept", async Task<IResult> (
 			string id,
@@ -314,7 +328,9 @@ internal static class ConstraintEndpoints
 		})
 		.WithTags("Constraints")
 		.WithName("AcceptConstraintGap")
-		.WithSummary("接受约束缺口候选项并创建 CandidateConstraint");
+		.WithSummary("接受约束缺口候选项并创建 CandidateConstraint")
+		.Produces<ConstraintGapReviewResult>(StatusCodes.Status200OK)
+		.Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
 		app.MapPost("/api/constraints/gaps/{id}/reject", async Task<IResult> (
 			string id,
@@ -343,7 +359,9 @@ internal static class ConstraintEndpoints
 		})
 		.WithTags("Constraints")
 		.WithName("RejectConstraintGap")
-		.WithSummary("拒绝约束缺口候选项并记录审核历史");
+		.WithSummary("拒绝约束缺口候选项并记录审核历史")
+		.Produces<ConstraintGapReviewResult>(StatusCodes.Status200OK)
+		.Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
 		app.MapGet("/api/constraints/gaps/{id}/reviews", async Task<IResult> (
 			string id,
@@ -375,7 +393,9 @@ internal static class ConstraintEndpoints
 		})
 		.WithTags("Constraints")
 		.WithName("GetConstraintGapReviews")
-		.WithSummary("查询约束缺口候选项审核历史");
+		.WithSummary("查询约束缺口候选项审核历史")
+		.Produces<IReadOnlyList<ConstraintGapReviewRecord>>(StatusCodes.Status200OK)
+		.Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
 		return app;
 	}

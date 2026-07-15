@@ -50,7 +50,8 @@ public static class ContextRuntimeBuilder
             workingMemoryService: options.WorkingMemoryService,
             decisionTraceStore: options.DecisionTraceStore,
             runtimeCandidateTraceSink: options.RuntimeCandidateTraceSink,
-            traversalEngine: relationTraversalEngine);
+            traversalEngine: relationTraversalEngine,
+            cacheAccessor: options.CacheAccessor);
 
         // 检索器（Full profile 传入 trace stores / decision trace）
         var retriever = new HybridContextRetriever(

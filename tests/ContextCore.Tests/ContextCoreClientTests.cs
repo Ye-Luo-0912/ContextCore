@@ -330,7 +330,7 @@ public sealed class ContextCoreClientTests
         {
             Assert.AreEqual(HttpMethod.Get, request.Method);
             Assert.AreEqual("/api/vector/reindex-reports", request.RequestUri?.AbsolutePath);
-            Assert.AreEqual("?workspaceId=workspace-1&collectionId=collection-1&take=5", request.RequestUri?.Query);
+            Assert.AreEqual("?collectionId=collection-1&workspaceId=workspace-1&take=5", request.RequestUri?.Query);
             return Json(new VectorReindexReportQueryResponse
             {
                 Count = 1,
@@ -452,7 +452,7 @@ public sealed class ContextCoreClientTests
         {
             Assert.AreEqual(HttpMethod.Get, request.Method);
             Assert.AreEqual("/api/vector/lifecycle-metadata/review-candidates", request.RequestUri?.AbsolutePath);
-            Assert.AreEqual("?workspaceId=workspace-1&limit=5&offset=1&collectionId=collection-1&status=PendingReview&layer=context&itemKind=note&mustHitItemId=item-1&sourceEvalSet=A3", request.RequestUri?.Query);
+            Assert.AreEqual("?workspaceId=workspace-1&collectionId=collection-1&itemKind=note&layer=context&limit=5&mustHitItemId=item-1&offset=1&sourceEvalSet=A3&status=PendingReview", request.RequestUri?.Query);
             return Json(new[] { CreateVectorLifecycleMetadataReviewCandidate("candidate-1") });
         });
         handlers.Enqueue(request =>
@@ -635,7 +635,7 @@ public sealed class ContextCoreClientTests
         {
             Assert.AreEqual(HttpMethod.Get, request.Method);
             Assert.AreEqual("/api/constraints/gaps", request.RequestUri?.AbsolutePath);
-            Assert.AreEqual("?workspaceId=workspace-1&limit=5&offset=1&collectionId=collection-1&sessionId=session-1&source=planning&sourceSampleId=sample-1&status=Pending&severity=High", request.RequestUri?.Query);
+            Assert.AreEqual("?workspaceId=workspace-1&collectionId=collection-1&limit=5&offset=1&sessionId=session-1&severity=High&source=planning&sourceSampleId=sample-1&status=Pending", request.RequestUri?.Query);
             return Json(new[] { CreateConstraintGap("gap-1") });
         });
         handlers.Enqueue(request =>
@@ -718,7 +718,7 @@ public sealed class ContextCoreClientTests
         {
             Assert.AreEqual(HttpMethod.Get, request.Method);
             Assert.AreEqual("/api/constraints/candidates", request.RequestUri?.AbsolutePath);
-            Assert.AreEqual("?workspaceId=workspace-1&limit=5&offset=1&collectionId=collection-1&status=Candidate", request.RequestUri?.Query);
+            Assert.AreEqual("?workspaceId=workspace-1&collectionId=collection-1&limit=5&offset=1&status=0", request.RequestUri?.Query);
             return Json(new[] { CreateCandidateConstraint("candidate-constraint-1") });
         });
         handlers.Enqueue(request =>
@@ -791,7 +791,7 @@ public sealed class ContextCoreClientTests
         {
             Assert.AreEqual(HttpMethod.Get, request.Method);
             Assert.AreEqual("/api/memory/candidates/snapshot", request.RequestUri?.AbsolutePath);
-            Assert.AreEqual("?workspaceId=workspace-1&take=5&collectionId=collection-1", request.RequestUri?.Query);
+            Assert.AreEqual("?workspaceId=workspace-1&collectionId=collection-1&take=5", request.RequestUri?.Query);
             return Json(new CandidateMemorySnapshot
             {
                 WorkspaceId = "workspace-1",
@@ -923,7 +923,7 @@ public sealed class ContextCoreClientTests
         {
             Assert.AreEqual(HttpMethod.Get, request.Method);
             Assert.AreEqual("/api/memory/stable/snapshot", request.RequestUri?.AbsolutePath);
-            Assert.AreEqual("?workspaceId=workspace-1&take=5&collectionId=collection-1", request.RequestUri?.Query);
+            Assert.AreEqual("?workspaceId=workspace-1&collectionId=collection-1&take=5", request.RequestUri?.Query);
             return Json(new StableMemorySnapshot
             {
                 WorkspaceId = "workspace-1",
@@ -1037,7 +1037,7 @@ public sealed class ContextCoreClientTests
         {
             Assert.AreEqual(HttpMethod.Post, request.Method);
             Assert.AreEqual("/api/memory/stable/stable-memory-1/deprecate", request.RequestUri?.AbsolutePath);
-            Assert.AreEqual("?workspaceId=workspace-1&collectionId=collection-1", request.RequestUri?.Query);
+            Assert.AreEqual("?collectionId=collection-1&workspaceId=workspace-1", request.RequestUri?.Query);
             return Json(CreateStableLifecycleReviewResult(
                 "stable-memory-1",
                 StableLifecycleReviewActions.Deprecate,
@@ -1105,7 +1105,7 @@ public sealed class ContextCoreClientTests
         {
             Assert.AreEqual(HttpMethod.Get, request.Method);
             Assert.AreEqual("/api/memory/short-term/archive/items", request.RequestUri?.AbsolutePath);
-            Assert.AreEqual("?workspaceId=workspace-1&limit=5&collectionId=collection-1&sessionId=session-1&kind=KnownIssue", request.RequestUri?.Query);
+            Assert.AreEqual("?workspaceId=workspace-1&collectionId=collection-1&kind=KnownIssue&limit=5&sessionId=session-1", request.RequestUri?.Query);
             return Json(new ShortTermArchiveItemsResponse
             {
                 WorkspaceId = "workspace-1",
@@ -1141,7 +1141,7 @@ public sealed class ContextCoreClientTests
         {
             Assert.AreEqual(HttpMethod.Get, request.Method);
             Assert.AreEqual("/api/memory/short-term/compact/runs", request.RequestUri?.AbsolutePath);
-            Assert.AreEqual("?take=5&workspaceId=workspace-1&collectionId=collection-1&sessionId=session-1&trigger=Manual", request.RequestUri?.Query);
+            Assert.AreEqual("?collectionId=collection-1&sessionId=session-1&take=5&trigger=Manual&workspaceId=workspace-1", request.RequestUri?.Query);
             return Json(new[]
             {
                 new ShortTermCompactionRun
@@ -1196,7 +1196,7 @@ public sealed class ContextCoreClientTests
         {
             Assert.AreEqual(HttpMethod.Get, request.Method);
             Assert.AreEqual("/api/memory/short-term/promotion/candidates", request.RequestUri?.AbsolutePath);
-            Assert.AreEqual("?workspaceId=workspace-1&limit=5&offset=1&collectionId=collection-1&sessionId=session-1&status=Candidate&kind=KnownIssue&suggestedTargetLayer=CandidateMemory&minConfidence=0.8&minImportance=0.7", request.RequestUri?.Query);
+            Assert.AreEqual("?workspaceId=workspace-1&collectionId=collection-1&kind=KnownIssue&limit=5&minConfidence=0.8&minImportance=0.7&offset=1&sessionId=session-1&status=0&suggestedTargetLayer=CandidateMemory", request.RequestUri?.Query);
             return Json(new[]
             {
                 new ShortTermPromotionCandidate
@@ -1517,7 +1517,7 @@ public sealed class ContextCoreClientTests
         {
             Assert.AreEqual(HttpMethod.Get, request.Method);
             Assert.AreEqual("/api/memory/stable-review/candidates", request.RequestUri?.AbsolutePath);
-            Assert.AreEqual("?workspaceId=workspace-1&limit=5&offset=1&collectionId=collection-1&sessionId=session-1&status=Candidate&validationStatus=ReadyForReview&kind=RecentDecision&suggestedStableTarget=StableMemory", request.RequestUri?.Query);
+            Assert.AreEqual("?workspaceId=workspace-1&collectionId=collection-1&kind=RecentDecision&limit=5&offset=1&sessionId=session-1&status=Candidate&suggestedStableTarget=StableMemory&validationStatus=ReadyForReview", request.RequestUri?.Query);
             return Json(new[] { CreateStableReviewCandidate("src-1") });
         });
         handlers.Enqueue(request =>
@@ -1858,7 +1858,7 @@ public sealed class ContextCoreClientTests
         {
             Assert.AreEqual(HttpMethod.Get, request.Method);
             Assert.AreEqual("/api/relations/item-1", request.RequestUri?.AbsolutePath);
-            Assert.AreEqual("?workspaceId=workspace-1&collectionId=collection-1", request.RequestUri?.Query);
+            Assert.AreEqual("?collectionId=collection-1&workspaceId=workspace-1", request.RequestUri?.Query);
 
             return Json(new
             {
@@ -1960,7 +1960,7 @@ public sealed class ContextCoreClientTests
         {
             Assert.AreEqual(HttpMethod.Get, request.Method);
             Assert.AreEqual("/api/relations/rel-1/explain", request.RequestUri?.AbsolutePath);
-            Assert.AreEqual("?workspaceId=workspace-1&collectionId=collection-1", request.RequestUri?.Query);
+            Assert.AreEqual("?collectionId=collection-1&workspaceId=workspace-1", request.RequestUri?.Query);
             return Json(new RelationExplainResponse
             {
                 RelationId = "rel-1",
@@ -2137,7 +2137,7 @@ public sealed class ContextCoreClientTests
         {
             Assert.AreEqual(HttpMethod.Get, request.Method);
             Assert.AreEqual("/api/context/item%201", request.RequestUri?.AbsolutePath);
-            Assert.AreEqual("?workspaceId=workspace%201&collectionId=collection%2F1", request.RequestUri?.Query);
+            Assert.AreEqual("?collectionId=collection%2F1&workspaceId=workspace%201", request.RequestUri?.Query);
 
             return Json(new ContextItem
             {
@@ -2162,7 +2162,9 @@ public sealed class ContextCoreClientTests
         {
             Assert.AreEqual(HttpMethod.Get, request.Method);
             Assert.AreEqual("/api/jobs", request.RequestUri?.AbsolutePath);
-            Assert.AreEqual("?workspaceId=workspace-1&collectionId=collection-1&state=Queued&take=10", request.RequestUri?.Query);
+            // 生成客户端使用 RFC 6570 URL 模板展开（字母序参数）和 int 枚举表示，
+            // 服务端 ASP.NET Core 对 enum 查询参数同时接受 int 和 string，语义等价。
+            Assert.AreEqual("?collectionId=collection-1&state=0&take=10&workspaceId=workspace-1", request.RequestUri?.Query);
 
             return Json(new[]
             {
@@ -2238,7 +2240,7 @@ public sealed class ContextCoreClientTests
         {
             Assert.AreEqual(HttpMethod.Get, request.Method);
             Assert.AreEqual("/api/memory/working/recent", request.RequestUri?.AbsolutePath);
-            Assert.AreEqual("?workspaceId=workspace%201&collectionId=collection%2F1&take=5", request.RequestUri?.Query);
+            Assert.AreEqual("?collectionId=collection%2F1&workspaceId=workspace%201&take=5", request.RequestUri?.Query);
 
             return Json(new[]
             {
@@ -2269,7 +2271,7 @@ public sealed class ContextCoreClientTests
         {
             Assert.AreEqual(HttpMethod.Get, request.Method);
             Assert.AreEqual("/api/memory/working/active-context", request.RequestUri?.AbsolutePath);
-            Assert.AreEqual("?workspaceId=workspace%201&collectionId=collection%2F1", request.RequestUri?.Query);
+            Assert.AreEqual("?collectionId=collection%2F1&workspaceId=workspace%201", request.RequestUri?.Query);
 
             return Json(new WorkingMemoryActiveContext
             {
@@ -2297,7 +2299,7 @@ public sealed class ContextCoreClientTests
         {
             Assert.AreEqual(HttpMethod.Get, request.Method);
             Assert.AreEqual("/api/memory/working/current-task", request.RequestUri?.AbsolutePath);
-            Assert.AreEqual("?workspaceId=workspace%201&collectionId=collection%2F1", request.RequestUri?.Query);
+            Assert.AreEqual("?collectionId=collection%2F1&workspaceId=workspace%201", request.RequestUri?.Query);
 
             return Json(new WorkingMemoryCurrentTask
             {
@@ -2391,7 +2393,7 @@ public sealed class ContextCoreClientTests
             Assert.AreEqual(HttpMethod.Get, request.Method);
             Assert.AreEqual("/api/learning/records", request.RequestUri?.AbsolutePath);
             StringAssert.Contains(request.RequestUri?.Query ?? string.Empty, "workspaceId=workspace-1");
-            StringAssert.Contains(request.RequestUri?.Query ?? string.Empty, "signal=Positive");
+            StringAssert.Contains(request.RequestUri?.Query ?? string.Empty, "signal=0");
             return Json(new[]
             {
                 CreateLearningRecord("record-1", ContextFeedbackSignal.Positive, ContextFailureType.None)
@@ -2436,7 +2438,7 @@ public sealed class ContextCoreClientTests
             Assert.AreEqual(HttpMethod.Get, request.Method);
             Assert.AreEqual("/api/learning/cases", request.RequestUri?.AbsolutePath);
             StringAssert.Contains(request.RequestUri?.Query ?? string.Empty, "caseKind=PromotionFalsePositive");
-            StringAssert.Contains(request.RequestUri?.Query ?? string.Empty, "status=Draft");
+            StringAssert.Contains(request.RequestUri?.Query ?? string.Empty, "status=0");
             return Json(new[]
             {
                 CreateLearningCase("case-1", "PromotionFalsePositive", ContextFeedbackSignal.Negative, ContextFailureType.PromotionFalsePositive)

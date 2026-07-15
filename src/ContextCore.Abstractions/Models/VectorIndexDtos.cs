@@ -658,22 +658,6 @@ public static class HybridUnionScoringRepairProfiles
     public const string CombinedSafeV1 = "combined-safe-v1";
 }
 
-/// <summary>runner-side source scan summary; populated by EvalCommand at run time.</summary>
-public sealed class RuntimeObservableFeatureContractSourceScan
-{
-    public bool ScanPerformed { get; init; }
-
-    public int ScannedFileCount { get; init; }
-
-    public int FixtureTokenHitCount { get; init; }
-
-    public IReadOnlyList<string> ScannedFiles { get; init; } = Array.Empty<string>();
-
-    public IReadOnlyList<string> FlaggedFiles { get; init; } = Array.Empty<string>();
-
-    public IReadOnlyList<string> FlaggedTokens { get; init; } = Array.Empty<string>();
-}
-
 /// <summary>提交 lifecycle metadata review 决策的请求。</summary>
 public sealed class VectorLifecycleMetadataReviewRequest
 {

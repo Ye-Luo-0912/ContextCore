@@ -111,10 +111,10 @@ public sealed partial class ControlRoomService
     }
 
     public Task<ContextQueryResponse> QueryServiceAsync(
-        ContextQueryRequest request,
+        ContextQuery query,
         CancellationToken cancellationToken = default)
     {
-        return GetServiceClient().QueryContextAsync(request, cancellationToken);
+        return GetServiceClient().QueryContextAsync(query, cancellationToken);
     }
 
     public Task<IReadOnlyList<ContextMemoryItem>> QueryServiceMemoryAsync(

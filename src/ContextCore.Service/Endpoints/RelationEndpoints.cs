@@ -18,7 +18,8 @@ internal static class RelationEndpoints
 		})
 		.WithTags("Relations")
 		.WithName("GetRelationTypes")
-		.WithSummary("获取 relation type taxonomy");
+		.WithSummary("获取 relation type taxonomy")
+		.Produces<IReadOnlyList<RelationTypeDefinition>>(StatusCodes.Status200OK);
 
 		app.MapGet("/api/relations/expansion/profiles", (
 			RelationExpansionProfileRegistry registry) =>
@@ -27,7 +28,8 @@ internal static class RelationEndpoints
 		})
 		.WithTags("Relations")
 		.WithName("GetRelationExpansionProfiles")
-		.WithSummary("获取 relation expansion governance profiles");
+		.WithSummary("获取 relation expansion governance profiles")
+		.Produces<IReadOnlyList<RelationExpansionProfile>>(StatusCodes.Status200OK);
 
 		app.MapPost("/api/relations/expansion/preview", async Task<IResult> (
 			RelationExpansionPreviewRequest request,
@@ -77,7 +79,9 @@ internal static class RelationEndpoints
 		})
 		.WithTags("Relations")
 		.WithName("PreviewRelationExpansion")
-		.WithSummary("只读预览 relation expansion profile 对关系边的 accepted / blocked 结果");
+		.WithSummary("只读预览 relation expansion profile 对关系边的 accepted / blocked 结果")
+		.Produces<RelationExpansionPreviewResponse>(StatusCodes.Status200OK)
+		.Produces<ContextCoreErrorResponse>(StatusCodes.Status400BadRequest);
 
 		app.MapGet("/api/relations/diagnostics", async Task<IResult> (
 			string workspaceId,
@@ -98,7 +102,8 @@ internal static class RelationEndpoints
 		})
 		.WithTags("Relations")
 		.WithName("GetRelationDiagnostics")
-		.WithSummary("获取 relation graph 全局诊断");
+		.WithSummary("获取 relation graph 全局诊断")
+		.Produces<RelationGraphDiagnosticsReport>(StatusCodes.Status200OK);
 
 		app.MapGet("/api/relations/diagnostics/{itemId}", async Task<IResult> (
 			string itemId,
@@ -120,7 +125,8 @@ internal static class RelationEndpoints
 		})
 		.WithTags("Relations")
 		.WithName("GetItemRelationDiagnostics")
-		.WithSummary("获取指定 item 的 relation graph 诊断");
+		.WithSummary("获取指定 item 的 relation graph 诊断")
+		.Produces<RelationGraphDiagnosticsReport>(StatusCodes.Status200OK);
 
 		app.MapGet("/api/relations/{relationId}/explain", async Task<IResult> (
 			string relationId,
@@ -154,7 +160,10 @@ internal static class RelationEndpoints
 		})
 		.WithTags("Relations")
 		.WithName("ExplainRelation")
-		.WithSummary("获取单条 relation 的证据、置信度、生命周期和诊断解释");
+		.WithSummary("获取单条 relation 的证据、置信度、生命周期和诊断解释")
+		.Produces<RelationExplainResponse>(StatusCodes.Status200OK)
+		.Produces<ContextCoreErrorResponse>(StatusCodes.Status400BadRequest)
+		.Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
 		app.MapPost("/api/relations/{relationId}/review", async Task<IResult> (
 			string relationId,
@@ -186,7 +195,9 @@ internal static class RelationEndpoints
 		})
 		.WithTags("Relations")
 		.WithName("ReviewRelation")
-		.WithSummary("人工 review relation 并记录审核历史");
+		.WithSummary("人工 review relation 并记录审核历史")
+		.Produces<RelationReviewResult>(StatusCodes.Status200OK)
+		.Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
 		app.MapPost("/api/relations/{relationId}/reject", async Task<IResult> (
 			string relationId,
@@ -218,7 +229,9 @@ internal static class RelationEndpoints
 		})
 		.WithTags("Relations")
 		.WithName("RejectRelation")
-		.WithSummary("人工 reject relation 并记录审核历史");
+		.WithSummary("人工 reject relation 并记录审核历史")
+		.Produces<RelationReviewResult>(StatusCodes.Status200OK)
+		.Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
 		app.MapPost("/api/relations/{relationId}/deprecate", async Task<IResult> (
 			string relationId,
@@ -250,7 +263,9 @@ internal static class RelationEndpoints
 		})
 		.WithTags("Relations")
 		.WithName("DeprecateRelation")
-		.WithSummary("人工 deprecate relation 并记录审核历史");
+		.WithSummary("人工 deprecate relation 并记录审核历史")
+		.Produces<RelationReviewResult>(StatusCodes.Status200OK)
+		.Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
 		app.MapPost("/api/relations/{relationId}/needs-evidence", async Task<IResult> (
 			string relationId,
@@ -282,7 +297,9 @@ internal static class RelationEndpoints
 		})
 		.WithTags("Relations")
 		.WithName("MarkRelationNeedsEvidence")
-		.WithSummary("人工标记 relation 需要更多证据并记录审核历史");
+		.WithSummary("人工标记 relation 需要更多证据并记录审核历史")
+		.Produces<RelationReviewResult>(StatusCodes.Status200OK)
+		.Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
 		app.MapGet("/api/relations/{relationId}/reviews", async Task<IResult> (
 			string relationId,
@@ -308,7 +325,8 @@ internal static class RelationEndpoints
 		})
 		.WithTags("Relations")
 		.WithName("GetRelationReviews")
-		.WithSummary("查询 relation review history");
+		.WithSummary("查询 relation review history")
+		.Produces<IReadOnlyList<RelationReviewRecord>>(StatusCodes.Status200OK);
 
 		app.MapGet("/api/relations/{workspaceId}/{collectionId}/{itemId}", async Task<IResult> (
 			string workspaceId,
@@ -328,7 +346,8 @@ internal static class RelationEndpoints
 		})
 		.WithTags("Relations")
 		.WithName("GetRelations")
-		.WithSummary("获取条目的出入关系");
+		.WithSummary("获取条目的出入关系")
+		.Produces<ContextCoreRelationLookupResponse>(StatusCodes.Status200OK);
 
 		app.MapGet("/api/relations/{itemId}", async Task<IResult> (
 		string itemId,
@@ -359,7 +378,9 @@ internal static class RelationEndpoints
 		})
 		.WithTags("Relations")
 		.WithName("GetRelationsByItemId")
-		.WithSummary("按路线图短路径获取条目的出入关系");
+		.WithSummary("按路线图短路径获取条目的出入关系")
+		.Produces<ContextCoreRelationLookupResponse>(StatusCodes.Status200OK)
+		.Produces<ContextCoreErrorResponse>(StatusCodes.Status400BadRequest);
 
 		app.MapGet("/api/relations/{workspaceId}/{collectionId}/{itemId}/subgraph", async Task<IResult> (
 			string workspaceId,
@@ -446,7 +467,9 @@ internal static class RelationEndpoints
 			})
 			.WithTags("Relations")
 			.WithName("GetRelationSubgraph")
-			.WithSummary("以指定条目为根构建关系子图，返回去重后的节点和边快照");
+			.WithSummary("以指定条目为根构建关系子图，返回去重后的节点和边快照")
+			.Produces<RelationSubgraph>(StatusCodes.Status200OK)
+			.Produces<ContextCoreErrorResponse>(StatusCodes.Status400BadRequest);
 
 	return app;
 }

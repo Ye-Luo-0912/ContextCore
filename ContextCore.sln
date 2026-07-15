@@ -1,4 +1,4 @@
-
+﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
@@ -38,6 +38,10 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ContextCore.Storage.Shared", "src\ContextCore.Storage.Shared\ContextCore.Storage.Shared.csproj", "{D4F5E6A7-B8C9-4D0E-9F1A-2B3C4D5E6F70}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ContextCore.Runtime", "src\ContextCore.Runtime\ContextCore.Runtime.csproj", "{57BD4ED7-58D7-44C3-B6F7-18EA0540AC66}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "benchmarks", "benchmarks", "{66320409-64EC-F7C5-3DEF-65E7510DAAD1}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ContextCore.Benchmarks", "benchmarks\ContextCore.Benchmarks\ContextCore.Benchmarks.csproj", "{1C0DC2BE-3AEA-4BED-9044-23D55D1D1503}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -241,6 +245,18 @@ Global
 		{57BD4ED7-58D7-44C3-B6F7-18EA0540AC66}.Release|x64.Build.0 = Release|Any CPU
 		{57BD4ED7-58D7-44C3-B6F7-18EA0540AC66}.Release|x86.ActiveCfg = Release|Any CPU
 		{57BD4ED7-58D7-44C3-B6F7-18EA0540AC66}.Release|x86.Build.0 = Release|Any CPU
+		{1C0DC2BE-3AEA-4BED-9044-23D55D1D1503}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1C0DC2BE-3AEA-4BED-9044-23D55D1D1503}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1C0DC2BE-3AEA-4BED-9044-23D55D1D1503}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{1C0DC2BE-3AEA-4BED-9044-23D55D1D1503}.Debug|x64.Build.0 = Debug|Any CPU
+		{1C0DC2BE-3AEA-4BED-9044-23D55D1D1503}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{1C0DC2BE-3AEA-4BED-9044-23D55D1D1503}.Debug|x86.Build.0 = Debug|Any CPU
+		{1C0DC2BE-3AEA-4BED-9044-23D55D1D1503}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1C0DC2BE-3AEA-4BED-9044-23D55D1D1503}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1C0DC2BE-3AEA-4BED-9044-23D55D1D1503}.Release|x64.ActiveCfg = Release|Any CPU
+		{1C0DC2BE-3AEA-4BED-9044-23D55D1D1503}.Release|x64.Build.0 = Release|Any CPU
+		{1C0DC2BE-3AEA-4BED-9044-23D55D1D1503}.Release|x86.ActiveCfg = Release|Any CPU
+		{1C0DC2BE-3AEA-4BED-9044-23D55D1D1503}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -262,5 +278,6 @@ Global
 		{F646D1EC-118A-4059-A521-529439CFD6C3} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{D4F5E6A7-B8C9-4D0E-9F1A-2B3C4D5E6F70} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{57BD4ED7-58D7-44C3-B6F7-18EA0540AC66} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+		{1C0DC2BE-3AEA-4BED-9044-23D55D1D1503} = {66320409-64EC-F7C5-3DEF-65E7510DAAD1}
 	EndGlobalSection
 EndGlobal

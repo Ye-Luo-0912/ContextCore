@@ -40,7 +40,9 @@ internal static class JobEndpoints
 			return Results.Accepted($"/api/jobs/{job.JobId}", job);
 		})
 		.WithName("EnqueueCompressionJob")
-		.WithSummary("创建压缩后台作业");
+		.WithSummary("创建压缩后台作业")
+		.Produces<ContextJob>(StatusCodes.Status202Accepted)
+		.Produces<ContextCoreErrorResponse>(StatusCodes.Status400BadRequest);
 
 		group.MapGet("", async Task<IResult> (
 			string? workspaceId,
@@ -60,7 +62,8 @@ internal static class JobEndpoints
 			return Results.Ok(results);
 		})
 		.WithName("QueryJobs")
-		.WithSummary("查询后台作业");
+		.WithSummary("查询后台作业")
+		.Produces<IReadOnlyList<ContextJob>>(StatusCodes.Status200OK);
 
 		group.MapGet("/", async Task<IResult> (
 			string? workspaceId,
@@ -80,7 +83,8 @@ internal static class JobEndpoints
 			return Results.Ok(results);
 		})
 		.WithName("QueryJobsWithTrailingSlash")
-		.WithSummary("查询后台作业");
+		.WithSummary("查询后台作业")
+		.Produces<IReadOnlyList<ContextJob>>(StatusCodes.Status200OK);
 
 		group.MapGet("/{id}", async Task<IResult> (
 			string id,
@@ -95,7 +99,9 @@ internal static class JobEndpoints
 				: Results.Ok(job);
 		})
 		.WithName("GetJob")
-		.WithSummary("按 ID 获取后台作业");
+		.WithSummary("按 ID 获取后台作业")
+		.Produces<ContextJob>(StatusCodes.Status200OK)
+		.Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound);
 
 		// ── Worker 可观测性 ──────────────────────────────────────────────
 
@@ -154,7 +160,8 @@ internal static class JobEndpoints
 			});
 		})
 		.WithName("GetWorkerStats")
-		.WithSummary("Worker 可观测性统计（pending/running/failed/avgDuration/lastError）");
+		.WithSummary("Worker 可观测性统计（pending/running/failed/avgDuration/lastError）")
+		.Produces<ContextCoreJobStatsResponse>(StatusCodes.Status200OK);
 
 		group.MapGet("/dead-letter", async Task<IResult> (
 			string? workspaceId,
@@ -177,7 +184,8 @@ internal static class JobEndpoints
 			});
 		})
 		.WithName("GetDeadLetterJobs")
-		.WithSummary("死信队列：查询 Failed 状态（已超过最大重试次数）的作业");
+		.WithSummary("死信队列：查询 Failed 状态（已超过最大重试次数）的作业")
+		.Produces<ContextCoreDeadLetterJobsResponse>(StatusCodes.Status200OK);
 
 		group.MapPost("/{id}/requeue", async Task<IResult> (
 			string id,
@@ -223,7 +231,10 @@ internal static class JobEndpoints
 			});
 		})
 		.WithName("RequeueJob")
-		.WithSummary("将 Failed / Cancelled 作业重新入队（生成新作业 ID，重置重试计数）");
+		.WithSummary("将 Failed / Cancelled 作业重新入队（生成新作业 ID，重置重试计数）")
+		.Produces<ContextCoreRequeueJobResponse>(StatusCodes.Status202Accepted)
+		.Produces<ContextCoreErrorResponse>(StatusCodes.Status404NotFound)
+		.Produces<ContextCoreErrorResponse>(StatusCodes.Status409Conflict);
 
 		return app;
 	}
