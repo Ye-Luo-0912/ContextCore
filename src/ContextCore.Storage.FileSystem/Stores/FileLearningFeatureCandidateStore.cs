@@ -6,7 +6,6 @@ namespace ContextCore.Storage.FileSystem.Stores;
 /// <summary>文件系统版反馈特征候选存储；按 candidateId upsert，避免重复导出噪声。</summary>
 public sealed class FileLearningFeatureCandidateStore : ILearningFeatureCandidateStore
 {
-    private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly FileJsonLineStore _jsonLines;
     private readonly FilePathResolver _paths;
 
@@ -35,20 +34,12 @@ public sealed class FileLearningFeatureCandidateStore : ILearningFeatureCandidat
         var collectionId = ResolveMetadata(candidate, "collectionId", "test");
         var path = GetCandidatesPath(workspaceId, collectionId);
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            await _jsonLines.UpsertAsync(
-                    path,
-                    candidate,
-                    static item => item.CandidateId,
-                    cancellationToken)
-                .ConfigureAwait(false);
-        }
-        finally
-        {
-            _gate.Release();
-        }
+        await _jsonLines.UpsertAsync(
+                path,
+                candidate,
+                static item => item.CandidateId,
+                cancellationToken)
+            .ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<FeedbackFeatureCandidate>> QueryAsync(
@@ -56,33 +47,26 @@ public sealed class FileLearningFeatureCandidateStore : ILearningFeatureCandidat
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(query);
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            var limit = query.Limit > 0 ? query.Limit : 100;
-            var offset = Math.Max(0, query.Offset);
-            var rows = new List<FeedbackFeatureCandidate>();
-            foreach (var path in EnumerateCandidatePaths())
-            {
-                rows.AddRange(await _jsonLines.ReadAsync<FeedbackFeatureCandidate>(path, cancellationToken)
-                    .ConfigureAwait(false));
-            }
 
-            return [.. rows
-                .Where(item => Matches(query.CandidateId, item.CandidateId))
-                .Where(item => Matches(query.SourceFeedbackId, item.SourceFeedbackId))
-                .Where(item => Matches(query.CapabilityId, item.CapabilityId))
-                .Where(item => Matches(query.TargetType, item.TargetType))
-                .Where(item => Matches(query.LabelKind, item.LabelKind))
-                .Where(item => Matches(query.TrainingUse, item.TrainingUse))
-                .OrderBy(static item => item.CandidateId, StringComparer.OrdinalIgnoreCase)
-                .Skip(offset)
-                .Take(limit)];
-        }
-        finally
+        var limit = query.Limit > 0 ? query.Limit : 100;
+        var offset = Math.Max(0, query.Offset);
+        var rows = new List<FeedbackFeatureCandidate>();
+        foreach (var path in EnumerateCandidatePaths())
         {
-            _gate.Release();
+            rows.AddRange(await _jsonLines.ReadAsync<FeedbackFeatureCandidate>(path, cancellationToken)
+                .ConfigureAwait(false));
         }
+
+        return [.. rows
+            .Where(item => Matches(query.CandidateId, item.CandidateId))
+            .Where(item => Matches(query.SourceFeedbackId, item.SourceFeedbackId))
+            .Where(item => Matches(query.CapabilityId, item.CapabilityId))
+            .Where(item => Matches(query.TargetType, item.TargetType))
+            .Where(item => Matches(query.LabelKind, item.LabelKind))
+            .Where(item => Matches(query.TrainingUse, item.TrainingUse))
+            .OrderBy(static item => item.CandidateId, StringComparer.OrdinalIgnoreCase)
+            .Skip(offset)
+            .Take(limit)];
     }
 
     private IEnumerable<string> EnumerateCandidatePaths()

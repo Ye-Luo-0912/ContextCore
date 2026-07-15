@@ -6,7 +6,6 @@ namespace ContextCore.Storage.FileSystem.Stores;
 /// <summary>基于文件系统的短期晋升候选项存储。</summary>
 public sealed class FileShortTermPromotionCandidateStore : IShortTermPromotionCandidateStore
 {
-    private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly FilePathResolver _paths;
     private readonly FileJsonLineStore _jsonLines;
 
@@ -21,48 +20,33 @@ public sealed class FileShortTermPromotionCandidateStore : IShortTermPromotionCa
         ArgumentNullException.ThrowIfNull(candidate);
         var normalized = Normalize(candidate);
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            var path = _paths.GetShortTermPromotionCandidatesJsonlPath(normalized.WorkspaceId, normalized.CollectionId);
-            var existing = await _jsonLines.ReadAsync<ShortTermPromotionCandidate>(path, cancellationToken).ConfigureAwait(false);
-            var updated = existing
+        var path = _paths.GetShortTermPromotionCandidatesJsonlPath(normalized.WorkspaceId, normalized.CollectionId);
+        await _jsonLines.UpdateAsync<ShortTermPromotionCandidate>(
+            path,
+            existing => existing
                 .Where(item => !string.Equals(item.CandidateId, normalized.CandidateId, StringComparison.OrdinalIgnoreCase))
                 .Append(normalized)
                 .OrderByDescending(item => item.CreatedAt)
-                .ToArray();
-            await _jsonLines.WriteAsync(path, updated, cancellationToken).ConfigureAwait(false);
-        }
-        finally
-        {
-            _gate.Release();
-        }
+                .ToArray(),
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<ShortTermPromotionCandidate?> GetAsync(string candidateId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(candidateId);
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
+        foreach (var scope in EnumerateScopes())
         {
-            foreach (var scope in EnumerateScopes())
+            var path = _paths.GetShortTermPromotionCandidatesJsonlPath(scope.WorkspaceId, scope.CollectionId);
+            var items = await _jsonLines.ReadAsync<ShortTermPromotionCandidate>(path, cancellationToken).ConfigureAwait(false);
+            var match = items.FirstOrDefault(item => string.Equals(item.CandidateId, candidateId, StringComparison.OrdinalIgnoreCase));
+            if (match is not null)
             {
-                var path = _paths.GetShortTermPromotionCandidatesJsonlPath(scope.WorkspaceId, scope.CollectionId);
-                var items = await _jsonLines.ReadAsync<ShortTermPromotionCandidate>(path, cancellationToken).ConfigureAwait(false);
-                var match = items.FirstOrDefault(item => string.Equals(item.CandidateId, candidateId, StringComparison.OrdinalIgnoreCase));
-                if (match is not null)
-                {
-                    return Clone(match);
-                }
+                return Clone(match);
             }
+        }
 
-            return null;
-        }
-        finally
-        {
-            _gate.Release();
-        }
+        return null;
     }
 
     public async Task<IReadOnlyList<ShortTermPromotionCandidate>> QueryAsync(
@@ -71,33 +55,25 @@ public sealed class FileShortTermPromotionCandidateStore : IShortTermPromotionCa
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
+        var scopes = ResolveScopes(query.WorkspaceId, query.CollectionId);
+        var results = new List<ShortTermPromotionCandidate>();
+        foreach (var scope in scopes)
         {
-            var scopes = ResolveScopes(query.WorkspaceId, query.CollectionId);
-            var results = new List<ShortTermPromotionCandidate>();
-            foreach (var scope in scopes)
-            {
-                var path = _paths.GetShortTermPromotionCandidatesJsonlPath(scope.WorkspaceId, scope.CollectionId);
-                var items = await _jsonLines.ReadAsync<ShortTermPromotionCandidate>(path, cancellationToken).ConfigureAwait(false);
-                results.AddRange(items.Where(item => Matches(item, query)));
-            }
+            var path = _paths.GetShortTermPromotionCandidatesJsonlPath(scope.WorkspaceId, scope.CollectionId);
+            var items = await _jsonLines.ReadAsync<ShortTermPromotionCandidate>(path, cancellationToken).ConfigureAwait(false);
+            results.AddRange(items.Where(item => Matches(item, query)));
+        }
 
-            return results
-                .Where(item => string.IsNullOrWhiteSpace(query.Kind) || string.Equals(item.Kind, query.Kind, StringComparison.OrdinalIgnoreCase))
-                .Where(item => string.IsNullOrWhiteSpace(query.SuggestedTargetLayer) || string.Equals(item.SuggestedTargetLayer, query.SuggestedTargetLayer, StringComparison.OrdinalIgnoreCase))
-                .Where(item => query.MinConfidence is null || item.Confidence >= query.MinConfidence.Value)
-                .Where(item => query.MinImportance is null || item.Importance >= query.MinImportance.Value)
-                .OrderByDescending(item => item.CreatedAt)
-                .Skip(Math.Max(0, query.Offset))
-                .Take(query.Limit > 0 ? query.Limit : 20)
-                .Select(Clone)
-                .ToArray();
-        }
-        finally
-        {
-            _gate.Release();
-        }
+        return results
+            .Where(item => string.IsNullOrWhiteSpace(query.Kind) || string.Equals(item.Kind, query.Kind, StringComparison.OrdinalIgnoreCase))
+            .Where(item => string.IsNullOrWhiteSpace(query.SuggestedTargetLayer) || string.Equals(item.SuggestedTargetLayer, query.SuggestedTargetLayer, StringComparison.OrdinalIgnoreCase))
+            .Where(item => query.MinConfidence is null || item.Confidence >= query.MinConfidence.Value)
+            .Where(item => query.MinImportance is null || item.Importance >= query.MinImportance.Value)
+            .OrderByDescending(item => item.CreatedAt)
+            .Skip(Math.Max(0, query.Offset))
+            .Take(query.Limit > 0 ? query.Limit : 20)
+            .Select(Clone)
+            .ToArray();
     }
 
     public async Task AppendReviewAsync(
@@ -107,22 +83,15 @@ public sealed class FileShortTermPromotionCandidateStore : IShortTermPromotionCa
         ArgumentNullException.ThrowIfNull(record);
         var normalized = Normalize(record);
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            var path = _paths.GetShortTermPromotionCandidateReviewsJsonlPath(normalized.WorkspaceId, normalized.CollectionId);
-            var existing = await _jsonLines.ReadAsync<PromotionCandidateReviewRecord>(path, cancellationToken).ConfigureAwait(false);
-            var updated = existing
+        var path = _paths.GetShortTermPromotionCandidateReviewsJsonlPath(normalized.WorkspaceId, normalized.CollectionId);
+        await _jsonLines.UpdateAsync<PromotionCandidateReviewRecord>(
+            path,
+            existing => existing
                 .Where(item => !string.Equals(item.ReviewId, normalized.ReviewId, StringComparison.OrdinalIgnoreCase))
                 .Append(normalized)
                 .OrderByDescending(item => item.CreatedAt)
-                .ToArray();
-            await _jsonLines.WriteAsync(path, updated, cancellationToken).ConfigureAwait(false);
-        }
-        finally
-        {
-            _gate.Release();
-        }
+                .ToArray(),
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<PromotionCandidateReviewRecord>> QueryReviewsAsync(
@@ -131,26 +100,18 @@ public sealed class FileShortTermPromotionCandidateStore : IShortTermPromotionCa
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(candidateId);
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
+        var results = new List<PromotionCandidateReviewRecord>();
+        foreach (var scope in EnumerateScopes())
         {
-            var results = new List<PromotionCandidateReviewRecord>();
-            foreach (var scope in EnumerateScopes())
-            {
-                var path = _paths.GetShortTermPromotionCandidateReviewsJsonlPath(scope.WorkspaceId, scope.CollectionId);
-                var items = await _jsonLines.ReadAsync<PromotionCandidateReviewRecord>(path, cancellationToken).ConfigureAwait(false);
-                results.AddRange(items.Where(item => string.Equals(item.CandidateId, candidateId, StringComparison.OrdinalIgnoreCase)));
-            }
+            var path = _paths.GetShortTermPromotionCandidateReviewsJsonlPath(scope.WorkspaceId, scope.CollectionId);
+            var items = await _jsonLines.ReadAsync<PromotionCandidateReviewRecord>(path, cancellationToken).ConfigureAwait(false);
+            results.AddRange(items.Where(item => string.Equals(item.CandidateId, candidateId, StringComparison.OrdinalIgnoreCase)));
+        }
 
-            return results
-                .OrderByDescending(item => item.CreatedAt)
-                .Select(Clone)
-                .ToArray();
-        }
-        finally
-        {
-            _gate.Release();
-        }
+        return results
+            .OrderByDescending(item => item.CreatedAt)
+            .Select(Clone)
+            .ToArray();
     }
 
     private IReadOnlyList<ShortTermMemoryScope> EnumerateScopes()

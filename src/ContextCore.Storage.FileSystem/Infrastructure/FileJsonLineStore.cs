@@ -111,6 +111,29 @@ public sealed class FileJsonLineStore
             cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// 在单个写锁内对 JSONL 文件中的记录执行读改写事务。
+    /// 反序列化现有行 → 调用 <paramref name="update"/> 得到新集合 → 原子写回。
+    /// 用于替代 Store 中手写的 ReadAsync → 修改 → WriteAsync 模式，保证单路径原子性。
+    /// </summary>
+    public async Task UpdateAsync<T>(
+        string path,
+        Func<IReadOnlyList<T>, IReadOnlyList<T>> update,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(update);
+
+        await _writer.UpdateLinesAsync(
+            path,
+            lines =>
+            {
+                var existing = DeserializeLines<T>(lines);
+                var updated = update(existing);
+                return updated.Select(_serializer.Serialize).ToArray();
+            },
+            cancellationToken).ConfigureAwait(false);
+    }
+
     private IReadOnlyList<T> DeserializeLines<T>(IReadOnlyList<string> lines)
     {
         var items = new List<T>();

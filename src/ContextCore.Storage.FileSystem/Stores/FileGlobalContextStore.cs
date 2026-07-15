@@ -6,7 +6,6 @@ namespace ContextCore.Storage.FileSystem.Stores;
 /// <summary>基于文件系统的 <see cref="IGlobalContextStore"/> 实现，全局上下文条目持久化为 JSONL 文件。</summary>
 public sealed class FileGlobalContextStore : IGlobalContextStore
 {
-    private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly FilePathResolver _paths;
     private readonly FileJsonLineStore _jsonLines;
 
@@ -28,16 +27,8 @@ public sealed class FileGlobalContextStore : IGlobalContextStore
         var normalized = Normalize(item);
         var path = _paths.GetGlobalContextJsonlPath(normalized.WorkspaceId);
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            await _jsonLines.UpsertAsync(path, normalized, value => value.Id, cancellationToken)
-                .ConfigureAwait(false);
-        }
-        finally
-        {
-            _gate.Release();
-        }
+        await _jsonLines.UpsertAsync(path, normalized, value => value.Id, cancellationToken)
+            .ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<ContextGlobalItem>> QueryAsync(
@@ -46,28 +37,20 @@ public sealed class FileGlobalContextStore : IGlobalContextStore
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            var items = await _jsonLines.ReadAsync<ContextGlobalItem>(
-                _paths.GetGlobalContextJsonlPath(query.WorkspaceId),
-                cancellationToken).ConfigureAwait(false);
+        var items = await _jsonLines.ReadAsync<ContextGlobalItem>(
+            _paths.GetGlobalContextJsonlPath(query.WorkspaceId),
+            cancellationToken).ConfigureAwait(false);
 
-            var take = query.Take > 0 ? query.Take : 50;
+        var take = query.Take > 0 ? query.Take : 50;
 
-            return
-            [
-                .. items
-                    .Where(item => Matches(item, query))
-                    .OrderByDescending(item => item.Importance)
-                    .ThenByDescending(item => item.UpdatedAt)
-                    .Take(take)
-            ];
-        }
-        finally
-        {
-            _gate.Release();
-        }
+        return
+        [
+            .. items
+                .Where(item => Matches(item, query))
+                .OrderByDescending(item => item.Importance)
+                .ThenByDescending(item => item.UpdatedAt)
+                .Take(take)
+        ];
     }
 
     private static bool Matches(ContextGlobalItem item, ContextGlobalQuery query)

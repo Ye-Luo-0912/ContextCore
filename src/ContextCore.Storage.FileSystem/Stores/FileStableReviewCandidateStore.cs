@@ -6,7 +6,6 @@ namespace ContextCore.Storage.FileSystem.Stores;
 /// <summary>基于文件系统的 Stable review 候选项存储。</summary>
 public sealed class FileStableReviewCandidateStore : IStableReviewCandidateStore
 {
-    private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly FilePathResolver _paths;
     private readonly FileJsonLineStore _jsonLines;
 
@@ -26,22 +25,15 @@ public sealed class FileStableReviewCandidateStore : IStableReviewCandidateStore
         ArgumentNullException.ThrowIfNull(candidate);
         var normalized = Normalize(candidate);
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            var path = _paths.GetStableReviewCandidatesJsonlPath(normalized.WorkspaceId, normalized.CollectionId);
-            var existing = await _jsonLines.ReadAsync<StableReviewCandidate>(path, cancellationToken).ConfigureAwait(false);
-            var updated = existing
+        var path = _paths.GetStableReviewCandidatesJsonlPath(normalized.WorkspaceId, normalized.CollectionId);
+        await _jsonLines.UpdateAsync<StableReviewCandidate>(
+            path,
+            existing => existing
                 .Where(item => !string.Equals(item.StableReviewCandidateId, normalized.StableReviewCandidateId, StringComparison.OrdinalIgnoreCase))
                 .Append(normalized)
                 .OrderByDescending(static item => item.CreatedAt)
-                .ToArray();
-            await _jsonLines.WriteAsync(path, updated, cancellationToken).ConfigureAwait(false);
-        }
-        finally
-        {
-            _gate.Release();
-        }
+                .ToArray(),
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<StableReviewCandidate?> GetAsync(
@@ -50,26 +42,18 @@ public sealed class FileStableReviewCandidateStore : IStableReviewCandidateStore
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(stableReviewCandidateId);
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
+        foreach (var scope in EnumerateScopes())
         {
-            foreach (var scope in EnumerateScopes())
+            var path = _paths.GetStableReviewCandidatesJsonlPath(scope.WorkspaceId, scope.CollectionId);
+            var candidates = await _jsonLines.ReadAsync<StableReviewCandidate>(path, cancellationToken).ConfigureAwait(false);
+            var match = candidates.FirstOrDefault(item => string.Equals(item.StableReviewCandidateId, stableReviewCandidateId, StringComparison.OrdinalIgnoreCase));
+            if (match is not null)
             {
-                var path = _paths.GetStableReviewCandidatesJsonlPath(scope.WorkspaceId, scope.CollectionId);
-                var candidates = await _jsonLines.ReadAsync<StableReviewCandidate>(path, cancellationToken).ConfigureAwait(false);
-                var match = candidates.FirstOrDefault(item => string.Equals(item.StableReviewCandidateId, stableReviewCandidateId, StringComparison.OrdinalIgnoreCase));
-                if (match is not null)
-                {
-                    return Clone(match);
-                }
+                return Clone(match);
             }
+        }
 
-            return null;
-        }
-        finally
-        {
-            _gate.Release();
-        }
+        return null;
     }
 
     public async Task<IReadOnlyList<StableReviewCandidate>> QueryAsync(
@@ -78,30 +62,22 @@ public sealed class FileStableReviewCandidateStore : IStableReviewCandidateStore
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
+        var results = new List<StableReviewCandidate>();
+        foreach (var scope in ResolveScopes(query.WorkspaceId, query.CollectionId))
         {
-            var results = new List<StableReviewCandidate>();
-            foreach (var scope in ResolveScopes(query.WorkspaceId, query.CollectionId))
-            {
-                var path = _paths.GetStableReviewCandidatesJsonlPath(scope.WorkspaceId, scope.CollectionId);
-                var candidates = await _jsonLines.ReadAsync<StableReviewCandidate>(path, cancellationToken).ConfigureAwait(false);
-                results.AddRange(candidates.Where(candidate => Matches(candidate, query)));
-            }
+            var path = _paths.GetStableReviewCandidatesJsonlPath(scope.WorkspaceId, scope.CollectionId);
+            var candidates = await _jsonLines.ReadAsync<StableReviewCandidate>(path, cancellationToken).ConfigureAwait(false);
+            results.AddRange(candidates.Where(candidate => Matches(candidate, query)));
+        }
 
-            return
-            [
-                .. results
-                    .OrderByDescending(static item => item.CreatedAt)
-                    .Skip(Math.Max(0, query.Offset))
-                    .Take(query.Limit > 0 ? query.Limit : 20)
-                    .Select(Clone)
-            ];
-        }
-        finally
-        {
-            _gate.Release();
-        }
+        return
+        [
+            .. results
+                .OrderByDescending(static item => item.CreatedAt)
+                .Skip(Math.Max(0, query.Offset))
+                .Take(query.Limit > 0 ? query.Limit : 20)
+                .Select(Clone)
+        ];
     }
 
     public async Task AppendReviewAsync(
@@ -111,22 +87,15 @@ public sealed class FileStableReviewCandidateStore : IStableReviewCandidateStore
         ArgumentNullException.ThrowIfNull(record);
         var normalized = Normalize(record);
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            var path = _paths.GetStableReviewCandidateReviewsJsonlPath(normalized.WorkspaceId, normalized.CollectionId);
-            var existing = await _jsonLines.ReadAsync<StableReviewRecord>(path, cancellationToken).ConfigureAwait(false);
-            var updated = existing
+        var path = _paths.GetStableReviewCandidateReviewsJsonlPath(normalized.WorkspaceId, normalized.CollectionId);
+        await _jsonLines.UpdateAsync<StableReviewRecord>(
+            path,
+            existing => existing
                 .Where(item => !string.Equals(item.ReviewId, normalized.ReviewId, StringComparison.OrdinalIgnoreCase))
                 .Append(normalized)
                 .OrderByDescending(static item => item.CreatedAt)
-                .ToArray();
-            await _jsonLines.WriteAsync(path, updated, cancellationToken).ConfigureAwait(false);
-        }
-        finally
-        {
-            _gate.Release();
-        }
+                .ToArray(),
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<StableReviewRecord>> QueryReviewsAsync(
@@ -135,28 +104,20 @@ public sealed class FileStableReviewCandidateStore : IStableReviewCandidateStore
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(stableReviewCandidateId);
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
+        var results = new List<StableReviewRecord>();
+        foreach (var scope in EnumerateReviewScopes())
         {
-            var results = new List<StableReviewRecord>();
-            foreach (var scope in EnumerateReviewScopes())
-            {
-                var path = _paths.GetStableReviewCandidateReviewsJsonlPath(scope.WorkspaceId, scope.CollectionId);
-                var items = await _jsonLines.ReadAsync<StableReviewRecord>(path, cancellationToken).ConfigureAwait(false);
-                results.AddRange(items.Where(item => string.Equals(item.StableReviewCandidateId, stableReviewCandidateId, StringComparison.OrdinalIgnoreCase)));
-            }
+            var path = _paths.GetStableReviewCandidateReviewsJsonlPath(scope.WorkspaceId, scope.CollectionId);
+            var items = await _jsonLines.ReadAsync<StableReviewRecord>(path, cancellationToken).ConfigureAwait(false);
+            results.AddRange(items.Where(item => string.Equals(item.StableReviewCandidateId, stableReviewCandidateId, StringComparison.OrdinalIgnoreCase)));
+        }
 
-            return
-            [
-                .. results
-                    .OrderByDescending(static item => item.CreatedAt)
-                    .Select(Clone)
-            ];
-        }
-        finally
-        {
-            _gate.Release();
-        }
+        return
+        [
+            .. results
+                .OrderByDescending(static item => item.CreatedAt)
+                .Select(Clone)
+        ];
     }
 
     private IReadOnlyList<ShortTermMemoryScope> ResolveScopes(string workspaceId, string? collectionId)

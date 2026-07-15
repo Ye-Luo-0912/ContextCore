@@ -26,18 +26,10 @@ public sealed class FileShortTermMemoryStore : IShortTermMemoryStore
         ArgumentNullException.ThrowIfNull(rawEvent);
         var normalized = Normalize(rawEvent);
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            var path = _paths.GetShortTermRawEventsJsonlPath(normalized.WorkspaceId, normalized.CollectionId);
-            // 真正 append：不再读取全量重写，直接追加单行。
-            // legacy 文件中的旧数据由 ReadJsonLinesWithLegacyAsync 在读取时自动合并，无需在此迁移。
-            await _jsonLines.AppendAsync(path, normalized, cancellationToken).ConfigureAwait(false);
-        }
-        finally
-        {
-            _gate.Release();
-        }
+        var path = _paths.GetShortTermRawEventsJsonlPath(normalized.WorkspaceId, normalized.CollectionId);
+        // 真正 append：不再读取全量重写，直接追加单行。
+        // legacy 文件中的旧数据由 ReadJsonLinesWithLegacyAsync 在读取时自动合并，无需在此迁移。
+        await _jsonLines.AppendAsync(path, normalized, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task SaveWorkingItemAsync(ShortTermWorkingItem item, CancellationToken cancellationToken = default)
@@ -77,16 +69,8 @@ public sealed class FileShortTermMemoryStore : IShortTermMemoryStore
         ArgumentException.ThrowIfNullOrWhiteSpace(collectionId);
         ArgumentNullException.ThrowIfNull(items);
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            var path = _paths.GetShortTermRawEventsJsonlPath(workspaceId, collectionId);
-            await _jsonLines.WriteAsync(path, items.Select(Normalize), cancellationToken).ConfigureAwait(false);
-        }
-        finally
-        {
-            _gate.Release();
-        }
+        var path = _paths.GetShortTermRawEventsJsonlPath(workspaceId, collectionId);
+        await _jsonLines.WriteAsync(path, items.Select(Normalize), cancellationToken).ConfigureAwait(false);
     }
 
     public async Task ReplaceWorkingItemsAsync(
@@ -99,16 +83,8 @@ public sealed class FileShortTermMemoryStore : IShortTermMemoryStore
         ArgumentException.ThrowIfNullOrWhiteSpace(collectionId);
         ArgumentNullException.ThrowIfNull(items);
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            var path = _paths.GetShortTermWorkingItemsJsonlPath(workspaceId, collectionId);
-            await _jsonLines.WriteAsync(path, items.Select(Normalize), cancellationToken).ConfigureAwait(false);
-        }
-        finally
-        {
-            _gate.Release();
-        }
+        var path = _paths.GetShortTermWorkingItemsJsonlPath(workspaceId, collectionId);
+        await _jsonLines.WriteAsync(path, items.Select(Normalize), cancellationToken).ConfigureAwait(false);
     }
 
     public async Task AppendArchivedRawEventsAsync(
@@ -121,17 +97,9 @@ public sealed class FileShortTermMemoryStore : IShortTermMemoryStore
         ArgumentException.ThrowIfNullOrWhiteSpace(collectionId);
         ArgumentNullException.ThrowIfNull(items);
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            var path = _paths.GetShortTermArchivedRawEventsJsonlPath(workspaceId, collectionId);
-            // 真正 append：批量追加归档项，不再读取全量重写。
-            await _jsonLines.AppendRangeAsync(path, items.Select(Normalize), cancellationToken).ConfigureAwait(false);
-        }
-        finally
-        {
-            _gate.Release();
-        }
+        var path = _paths.GetShortTermArchivedRawEventsJsonlPath(workspaceId, collectionId);
+        // 真正 append：批量追加归档项，不再读取全量重写。
+        await _jsonLines.AppendRangeAsync(path, items.Select(Normalize), cancellationToken).ConfigureAwait(false);
     }
 
     public async Task AppendArchivedWorkingItemsAsync(
@@ -144,17 +112,9 @@ public sealed class FileShortTermMemoryStore : IShortTermMemoryStore
         ArgumentException.ThrowIfNullOrWhiteSpace(collectionId);
         ArgumentNullException.ThrowIfNull(items);
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            var path = _paths.GetShortTermArchivedWorkingItemsJsonlPath(workspaceId, collectionId);
-            // 真正 append：批量追加归档项，不再读取全量重写。
-            await _jsonLines.AppendRangeAsync(path, items.Select(Normalize), cancellationToken).ConfigureAwait(false);
-        }
-        finally
-        {
-            _gate.Release();
-        }
+        var path = _paths.GetShortTermArchivedWorkingItemsJsonlPath(workspaceId, collectionId);
+        // 真正 append：批量追加归档项，不再读取全量重写。
+        await _jsonLines.AppendRangeAsync(path, items.Select(Normalize), cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<ShortTermWorkingItem?> GetWorkingItemAsync(
@@ -176,30 +136,14 @@ public sealed class FileShortTermMemoryStore : IShortTermMemoryStore
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            return await QueryRawEventsUnlockedAsync(query, archived: false, cancellationToken).ConfigureAwait(false);
-        }
-        finally
-        {
-            _gate.Release();
-        }
+        return await QueryRawEventsUnlockedAsync(query, archived: false, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<ShortTermWorkingItem>> QueryWorkingItemsAsync(ShortTermWorkingItemQuery query, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            return await QueryWorkingItemsUnlockedAsync(query, archived: false, cancellationToken).ConfigureAwait(false);
-        }
-        finally
-        {
-            _gate.Release();
-        }
+        return await QueryWorkingItemsUnlockedAsync(query, archived: false, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<ShortTermRawEvent>> QueryArchivedRawEventsAsync(
@@ -208,15 +152,7 @@ public sealed class FileShortTermMemoryStore : IShortTermMemoryStore
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            return await QueryRawEventsUnlockedAsync(query, archived: true, cancellationToken).ConfigureAwait(false);
-        }
-        finally
-        {
-            _gate.Release();
-        }
+        return await QueryRawEventsUnlockedAsync(query, archived: true, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<ShortTermWorkingItem>> QueryArchivedWorkingItemsAsync(
@@ -225,28 +161,12 @@ public sealed class FileShortTermMemoryStore : IShortTermMemoryStore
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            return await QueryWorkingItemsUnlockedAsync(query, archived: true, cancellationToken).ConfigureAwait(false);
-        }
-        finally
-        {
-            _gate.Release();
-        }
+        return await QueryWorkingItemsUnlockedAsync(query, archived: true, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<ShortTermMemoryScope>> QueryScopesAsync(CancellationToken cancellationToken = default)
     {
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            return EnumerateScopes();
-        }
-        finally
-        {
-            _gate.Release();
-        }
+        return EnumerateScopes();
     }
 
     public async Task<ShortTermMemorySummary> GetSummaryAsync(ShortTermSummaryQuery query, CancellationToken cancellationToken = default)
@@ -304,17 +224,9 @@ public sealed class FileShortTermMemoryStore : IShortTermMemoryStore
     {
         ArgumentNullException.ThrowIfNull(run);
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            var path = _paths.GetShortTermCompactionRunsJsonlPath(run.WorkspaceId, run.CollectionId);
-            // 真正 append：直接追加单行，不再读取全量重写。
-            await _jsonLines.AppendAsync(path, Normalize(run), cancellationToken).ConfigureAwait(false);
-        }
-        finally
-        {
-            _gate.Release();
-        }
+        var path = _paths.GetShortTermCompactionRunsJsonlPath(run.WorkspaceId, run.CollectionId);
+        // 真正 append：直接追加单行，不再读取全量重写。
+        await _jsonLines.AppendAsync(path, Normalize(run), cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<ShortTermCompactionRun>> QueryCompactionRunsAsync(
@@ -323,61 +235,45 @@ public sealed class FileShortTermMemoryStore : IShortTermMemoryStore
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
+        var scopes = ResolveScopes(query.WorkspaceId, query.CollectionId);
+        var results = new List<ShortTermCompactionRun>();
+        foreach (var scope in scopes)
         {
-            var scopes = ResolveScopes(query.WorkspaceId, query.CollectionId);
-            var results = new List<ShortTermCompactionRun>();
-            foreach (var scope in scopes)
-            {
-                var path = _paths.GetShortTermCompactionRunsJsonlPath(scope.WorkspaceId, scope.CollectionId);
-                var items = await ReadJsonLinesWithLegacyAsync<ShortTermCompactionRun>(
-                    path,
-                    _paths.GetLegacyShortTermCompactionRunsJsonlPath(scope.WorkspaceId, scope.CollectionId),
-                    static item => item.RunId,
-                    cancellationToken).ConfigureAwait(false);
-                results.AddRange(items.Where(item => Matches(item, query)));
-            }
+            var path = _paths.GetShortTermCompactionRunsJsonlPath(scope.WorkspaceId, scope.CollectionId);
+            var items = await ReadJsonLinesWithLegacyAsync<ShortTermCompactionRun>(
+                path,
+                _paths.GetLegacyShortTermCompactionRunsJsonlPath(scope.WorkspaceId, scope.CollectionId),
+                static item => item.RunId,
+                cancellationToken).ConfigureAwait(false);
+            results.AddRange(items.Where(item => Matches(item, query)));
+        }
 
-            return results
-                .OrderByDescending(item => item.StartedAt)
-                .Take(query.Take > 0 ? query.Take : 20)
-                .ToArray();
-        }
-        finally
-        {
-            _gate.Release();
-        }
+        return results
+            .OrderByDescending(item => item.StartedAt)
+            .Take(query.Take > 0 ? query.Take : 20)
+            .ToArray();
     }
 
     public async Task<ShortTermCompactionRun?> GetCompactionRunAsync(string runId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(runId);
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
+        foreach (var scope in EnumerateScopes())
         {
-            foreach (var scope in EnumerateScopes())
+            var path = _paths.GetShortTermCompactionRunsJsonlPath(scope.WorkspaceId, scope.CollectionId);
+            var items = await ReadJsonLinesWithLegacyAsync<ShortTermCompactionRun>(
+                path,
+                _paths.GetLegacyShortTermCompactionRunsJsonlPath(scope.WorkspaceId, scope.CollectionId),
+                static item => item.RunId,
+                cancellationToken).ConfigureAwait(false);
+            var run = items.FirstOrDefault(item => string.Equals(item.RunId, runId, StringComparison.OrdinalIgnoreCase));
+            if (run is not null)
             {
-                var path = _paths.GetShortTermCompactionRunsJsonlPath(scope.WorkspaceId, scope.CollectionId);
-                var items = await ReadJsonLinesWithLegacyAsync<ShortTermCompactionRun>(
-                    path,
-                    _paths.GetLegacyShortTermCompactionRunsJsonlPath(scope.WorkspaceId, scope.CollectionId),
-                    static item => item.RunId,
-                    cancellationToken).ConfigureAwait(false);
-                var run = items.FirstOrDefault(item => string.Equals(item.RunId, runId, StringComparison.OrdinalIgnoreCase));
-                if (run is not null)
-                {
-                    return run;
-                }
+                return run;
             }
+        }
 
-            return null;
-        }
-        finally
-        {
-            _gate.Release();
-        }
+        return null;
     }
 
     private async Task<IReadOnlyList<ShortTermRawEvent>> QueryRawEventsUnlockedAsync(

@@ -5,7 +5,6 @@ namespace ContextCore.Storage.FileSystem.Stores;
 /// <summary>基于文件系统的 relation diagnostics 投影存储；用于报告/parity，不参与 runtime 决策。</summary>
 public sealed class FileRelationDiagnosticsStore
 {
-    private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly FilePathResolver _paths;
     private readonly FileJsonLineStore _jsonLines;
 
@@ -27,16 +26,8 @@ public sealed class FileRelationDiagnosticsStore
         }
 
         var path = GetPath(normalized.WorkspaceId, normalized.CollectionId!);
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            await _jsonLines.UpsertAsync(path, normalized, static item => item.DiagnosticId, cancellationToken)
-                .ConfigureAwait(false);
-        }
-        finally
-        {
-            _gate.Release();
-        }
+        await _jsonLines.UpsertAsync(path, normalized, static item => item.DiagnosticId, cancellationToken)
+            .ConfigureAwait(false);
     }
 
     public Task<IReadOnlyList<RelationDiagnosticsSnapshot>> QueryByScopeAsync(
@@ -106,23 +97,15 @@ public sealed class FileRelationDiagnosticsStore
         CancellationToken cancellationToken)
     {
         var path = GetPath(workspaceId, collectionId);
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            var snapshots = await _jsonLines.ReadAsync<RelationDiagnosticsSnapshot>(path, cancellationToken)
-                .ConfigureAwait(false);
-            return
-            [
-                .. snapshots
-                    .Where(predicate)
-                    .OrderByDescending(static item => item.CreatedAt)
-                    .Select(Normalize)
-            ];
-        }
-        finally
-        {
-            _gate.Release();
-        }
+        var snapshots = await _jsonLines.ReadAsync<RelationDiagnosticsSnapshot>(path, cancellationToken)
+            .ConfigureAwait(false);
+        return
+        [
+            .. snapshots
+                .Where(predicate)
+                .OrderByDescending(static item => item.CreatedAt)
+                .Select(Normalize)
+        ];
     }
 
     private string GetPath(string workspaceId, string collectionId)

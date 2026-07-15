@@ -6,7 +6,6 @@ namespace ContextCore.Storage.FileSystem.Stores;
 /// <summary>文件系统版 vector lifecycle metadata review candidate 存储；仅保存人工 review 队列。</summary>
 public sealed class FileVectorLifecycleMetadataReviewCandidateStore : IVectorLifecycleMetadataReviewCandidateStore
 {
-    private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly FilePathResolver _paths;
     private readonly FileJsonLineStore _jsonLines;
 
@@ -27,24 +26,13 @@ public sealed class FileVectorLifecycleMetadataReviewCandidateStore : IVectorLif
     {
         ArgumentNullException.ThrowIfNull(candidate);
         var normalized = Normalize(candidate);
+        var path = _paths.GetVectorLifecycleMetadataReviewCandidatesJsonlPath(normalized.WorkspaceId, normalized.CollectionId);
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            var path = _paths.GetVectorLifecycleMetadataReviewCandidatesJsonlPath(normalized.WorkspaceId, normalized.CollectionId);
-            var existing = await _jsonLines.ReadAsync<VectorLifecycleMetadataReviewCandidate>(path, cancellationToken)
-                .ConfigureAwait(false);
-            var updated = existing
-                .Where(item => !string.Equals(item.CandidateId, normalized.CandidateId, StringComparison.OrdinalIgnoreCase))
-                .Append(normalized)
-                .OrderByDescending(static item => item.CreatedAt)
-                .ToArray();
-            await _jsonLines.WriteAsync(path, updated, cancellationToken).ConfigureAwait(false);
-        }
-        finally
-        {
-            _gate.Release();
-        }
+        await _jsonLines.UpsertAsync(
+            path,
+            normalized,
+            item => item.CandidateId,
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<VectorLifecycleMetadataReviewCandidate?> GetAsync(
@@ -53,27 +41,19 @@ public sealed class FileVectorLifecycleMetadataReviewCandidateStore : IVectorLif
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(candidateId);
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
+        foreach (var scope in EnumerateScopes())
         {
-            foreach (var scope in EnumerateScopes())
+            var path = _paths.GetVectorLifecycleMetadataReviewCandidatesJsonlPath(scope.WorkspaceId, scope.CollectionId);
+            var candidates = await _jsonLines.ReadAsync<VectorLifecycleMetadataReviewCandidate>(path, cancellationToken)
+                .ConfigureAwait(false);
+            var match = candidates.FirstOrDefault(item => string.Equals(item.CandidateId, candidateId, StringComparison.OrdinalIgnoreCase));
+            if (match is not null)
             {
-                var path = _paths.GetVectorLifecycleMetadataReviewCandidatesJsonlPath(scope.WorkspaceId, scope.CollectionId);
-                var candidates = await _jsonLines.ReadAsync<VectorLifecycleMetadataReviewCandidate>(path, cancellationToken)
-                    .ConfigureAwait(false);
-                var match = candidates.FirstOrDefault(item => string.Equals(item.CandidateId, candidateId, StringComparison.OrdinalIgnoreCase));
-                if (match is not null)
-                {
-                    return Clone(match);
-                }
+                return Clone(match);
             }
+        }
 
-            return null;
-        }
-        finally
-        {
-            _gate.Release();
-        }
+        return null;
     }
 
     public async Task<IReadOnlyList<VectorLifecycleMetadataReviewCandidate>> QueryAsync(
@@ -82,31 +62,23 @@ public sealed class FileVectorLifecycleMetadataReviewCandidateStore : IVectorLif
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
+        var results = new List<VectorLifecycleMetadataReviewCandidate>();
+        foreach (var scope in ResolveScopes(query.WorkspaceId, query.CollectionId))
         {
-            var results = new List<VectorLifecycleMetadataReviewCandidate>();
-            foreach (var scope in ResolveScopes(query.WorkspaceId, query.CollectionId))
-            {
-                var path = _paths.GetVectorLifecycleMetadataReviewCandidatesJsonlPath(scope.WorkspaceId, scope.CollectionId);
-                var candidates = await _jsonLines.ReadAsync<VectorLifecycleMetadataReviewCandidate>(path, cancellationToken)
-                    .ConfigureAwait(false);
-                results.AddRange(candidates.Where(candidate => Matches(candidate, query)));
-            }
+            var path = _paths.GetVectorLifecycleMetadataReviewCandidatesJsonlPath(scope.WorkspaceId, scope.CollectionId);
+            var candidates = await _jsonLines.ReadAsync<VectorLifecycleMetadataReviewCandidate>(path, cancellationToken)
+                .ConfigureAwait(false);
+            results.AddRange(candidates.Where(candidate => Matches(candidate, query)));
+        }
 
-            return
-            [
-                .. results
-                    .OrderByDescending(static item => item.CreatedAt)
-                    .Skip(Math.Max(0, query.Offset))
-                    .Take(query.Limit > 0 ? query.Limit : 50)
-                    .Select(Clone)
-            ];
-        }
-        finally
-        {
-            _gate.Release();
-        }
+        return
+        [
+            .. results
+                .OrderByDescending(static item => item.CreatedAt)
+                .Skip(Math.Max(0, query.Offset))
+                .Take(query.Limit > 0 ? query.Limit : 50)
+                .Select(Clone)
+        ];
     }
 
     private IReadOnlyList<ShortTermMemoryScope> ResolveScopes(string workspaceId, string? collectionId)

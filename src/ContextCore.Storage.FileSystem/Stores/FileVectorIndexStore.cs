@@ -6,7 +6,6 @@ namespace ContextCore.Storage.FileSystem.Stores;
 /// <summary>V1 vector index 的文件系统实现，使用独立 JSONL 文件避免污染旧向量存储。</summary>
 public sealed class FileVectorIndexStore : IVectorIndexStore
 {
-    private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly FileJsonLineStore _jsonLines;
     private readonly FilePathResolver _paths;
 
@@ -27,16 +26,8 @@ public sealed class FileVectorIndexStore : IVectorIndexStore
         var normalized = Normalize(entry);
         var path = _paths.GetVectorIndexJsonlPath(normalized.WorkspaceId, normalized.CollectionId);
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            await _jsonLines.UpsertAsync(path, normalized, item => item.EntryId, cancellationToken)
-                .ConfigureAwait(false);
-        }
-        finally
-        {
-            _gate.Release();
-        }
+        await _jsonLines.UpsertAsync(path, normalized, item => item.EntryId, cancellationToken)
+            .ConfigureAwait(false);
     }
 
     public async Task DeleteAsync(
@@ -46,23 +37,13 @@ public sealed class FileVectorIndexStore : IVectorIndexStore
         CancellationToken cancellationToken = default)
     {
         var path = _paths.GetVectorIndexJsonlPath(workspaceId, collectionId);
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            var entries = await _jsonLines.ReadAsync<VectorIndexEntry>(path, cancellationToken)
-                .ConfigureAwait(false);
-            var updated = entries
+
+        await _jsonLines.UpdateAsync<VectorIndexEntry>(
+            path,
+            existing => existing
                 .Where(entry => !string.Equals(entry.EntryId, entryId, StringComparison.OrdinalIgnoreCase))
-                .ToArray();
-            if (updated.Length != entries.Count)
-            {
-                await _jsonLines.WriteAsync(path, updated, cancellationToken).ConfigureAwait(false);
-            }
-        }
-        finally
-        {
-            _gate.Release();
-        }
+                .ToArray(),
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<VectorIndexEntry>> GetByItemIdAsync(
@@ -162,26 +143,18 @@ public sealed class FileVectorIndexStore : IVectorIndexStore
         string? collectionId,
         CancellationToken cancellationToken)
     {
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
+        var entries = new List<VectorIndexEntry>();
+        foreach (var path in ResolveVectorIndexPaths(workspaceId, collectionId))
         {
-            var entries = new List<VectorIndexEntry>();
-            foreach (var path in ResolveVectorIndexPaths(workspaceId, collectionId))
-            {
-                entries.AddRange(await _jsonLines.ReadAsync<VectorIndexEntry>(path, cancellationToken)
-                    .ConfigureAwait(false));
-            }
+            entries.AddRange(await _jsonLines.ReadAsync<VectorIndexEntry>(path, cancellationToken)
+                .ConfigureAwait(false));
+        }
 
-            return entries
-                .Where(entry => string.Equals(entry.WorkspaceId, workspaceId, StringComparison.OrdinalIgnoreCase))
-                .Where(entry => string.IsNullOrWhiteSpace(collectionId)
-                    || string.Equals(entry.CollectionId, collectionId, StringComparison.OrdinalIgnoreCase))
-                .ToArray();
-        }
-        finally
-        {
-            _gate.Release();
-        }
+        return entries
+            .Where(entry => string.Equals(entry.WorkspaceId, workspaceId, StringComparison.OrdinalIgnoreCase))
+            .Where(entry => string.IsNullOrWhiteSpace(collectionId)
+                || string.Equals(entry.CollectionId, collectionId, StringComparison.OrdinalIgnoreCase))
+            .ToArray();
     }
 
     private IEnumerable<string> ResolveVectorIndexPaths(string workspaceId, string? collectionId)

@@ -7,7 +7,6 @@ namespace ContextCore.Storage.FileSystem.Stores;
 /// <summary>基于文件系统的 <see cref="IConstraintStore"/> 实现，约束数据持久化为 JSONL 文件。</summary>
 public sealed class FileConstraintStore : IConstraintStore
 {
-    private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly FilePathResolver _paths;
     private readonly FileJsonLineStore _jsonLines;
 
@@ -29,16 +28,8 @@ public sealed class FileConstraintStore : IConstraintStore
         var normalized = CompositeContextNormalizer.Normalize(constraint);
         var path = GetPath(normalized.WorkspaceId, normalized.CollectionId);
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            await _jsonLines.UpsertAsync(path, normalized, item => item.Id, cancellationToken)
-                .ConfigureAwait(false);
-        }
-        finally
-        {
-            _gate.Release();
-        }
+        await _jsonLines.UpsertAsync(path, normalized, item => item.Id, cancellationToken)
+            .ConfigureAwait(false);
     }
 
     public async Task<ContextConstraint?> GetAsync(
@@ -47,41 +38,33 @@ public sealed class FileConstraintStore : IConstraintStore
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(constraintId);
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
+        foreach (var workspaceId in ResolveWorkspaceIds())
         {
-            foreach (var workspaceId in ResolveWorkspaceIds())
+            var globalItems = await _jsonLines.ReadAsync<ContextConstraint>(
+                _paths.GetGlobalConstraintsJsonlPath(workspaceId),
+                cancellationToken).ConfigureAwait(false);
+            var globalMatch = globalItems.FirstOrDefault(item =>
+                string.Equals(item.Id, constraintId, StringComparison.OrdinalIgnoreCase));
+            if (globalMatch is not null)
             {
-                var globalItems = await _jsonLines.ReadAsync<ContextConstraint>(
-                    _paths.GetGlobalConstraintsJsonlPath(workspaceId),
-                    cancellationToken).ConfigureAwait(false);
-                var globalMatch = globalItems.FirstOrDefault(item =>
-                    string.Equals(item.Id, constraintId, StringComparison.OrdinalIgnoreCase));
-                if (globalMatch is not null)
-                {
-                    return CompositeContextNormalizer.Normalize(globalMatch);
-                }
-
-                foreach (var collectionId in ResolveCollectionIds(workspaceId))
-                {
-                    var items = await _jsonLines.ReadAsync<ContextConstraint>(
-                        _paths.GetConstraintsJsonlPath(workspaceId, collectionId),
-                        cancellationToken).ConfigureAwait(false);
-                    var match = items.FirstOrDefault(item =>
-                        string.Equals(item.Id, constraintId, StringComparison.OrdinalIgnoreCase));
-                    if (match is not null)
-                    {
-                        return CompositeContextNormalizer.Normalize(match);
-                    }
-                }
+                return CompositeContextNormalizer.Normalize(globalMatch);
             }
 
-            return null;
+            foreach (var collectionId in ResolveCollectionIds(workspaceId))
+            {
+                var items = await _jsonLines.ReadAsync<ContextConstraint>(
+                    _paths.GetConstraintsJsonlPath(workspaceId, collectionId),
+                    cancellationToken).ConfigureAwait(false);
+                var match = items.FirstOrDefault(item =>
+                    string.Equals(item.Id, constraintId, StringComparison.OrdinalIgnoreCase));
+                if (match is not null)
+                {
+                    return CompositeContextNormalizer.Normalize(match);
+                }
+            }
         }
-        finally
-        {
-            _gate.Release();
-        }
+
+        return null;
     }
 
     public async Task<IReadOnlyList<ContextConstraint>> QueryAsync(
@@ -90,43 +73,35 @@ public sealed class FileConstraintStore : IConstraintStore
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            var constraints = new List<ContextConstraint>();
-            constraints.AddRange(await _jsonLines.ReadAsync<ContextConstraint>(
-                _paths.GetGlobalConstraintsJsonlPath(query.WorkspaceId),
-                cancellationToken).ConfigureAwait(false));
+        var constraints = new List<ContextConstraint>();
+        constraints.AddRange(await _jsonLines.ReadAsync<ContextConstraint>(
+            _paths.GetGlobalConstraintsJsonlPath(query.WorkspaceId),
+            cancellationToken).ConfigureAwait(false));
 
-            if (!string.IsNullOrWhiteSpace(query.CollectionId))
+        if (!string.IsNullOrWhiteSpace(query.CollectionId))
+        {
+            constraints.AddRange(await _jsonLines.ReadAsync<ContextConstraint>(
+                _paths.GetConstraintsJsonlPath(query.WorkspaceId, query.CollectionId),
+                cancellationToken).ConfigureAwait(false));
+        }
+        else
+        {
+            foreach (var collectionId in ResolveCollectionIds(query.WorkspaceId))
             {
                 constraints.AddRange(await _jsonLines.ReadAsync<ContextConstraint>(
-                    _paths.GetConstraintsJsonlPath(query.WorkspaceId, query.CollectionId),
+                    _paths.GetConstraintsJsonlPath(query.WorkspaceId, collectionId),
                     cancellationToken).ConfigureAwait(false));
             }
-            else
-            {
-                foreach (var collectionId in ResolveCollectionIds(query.WorkspaceId))
-                {
-                    constraints.AddRange(await _jsonLines.ReadAsync<ContextConstraint>(
-                        _paths.GetConstraintsJsonlPath(query.WorkspaceId, collectionId),
-                        cancellationToken).ConfigureAwait(false));
-                }
-            }
-
-            var take = query.Take > 0 ? query.Take : 50;
-
-            return [.. constraints
-                .Where(item => Matches(item, query))
-                .OrderByDescending(item => item.Level == ConstraintLevel.Hard)
-                .ThenByDescending(item => item.Confidence)
-                .ThenByDescending(item => item.UpdatedAt)
-                .Take(take)];
         }
-        finally
-        {
-            _gate.Release();
-        }
+
+        var take = query.Take > 0 ? query.Take : 50;
+
+        return [.. constraints
+            .Where(item => Matches(item, query))
+            .OrderByDescending(item => item.Level == ConstraintLevel.Hard)
+            .ThenByDescending(item => item.Confidence)
+            .ThenByDescending(item => item.UpdatedAt)
+            .Take(take)];
     }
 
     private string GetPath(string workspaceId, string? collectionId)

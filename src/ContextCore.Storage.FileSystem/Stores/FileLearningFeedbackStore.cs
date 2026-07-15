@@ -6,7 +6,6 @@ namespace ContextCore.Storage.FileSystem.Stores;
 /// <summary>文件系统版运行时反馈事件存储；按 feedbackId upsert，避免重复采集噪声。</summary>
 public sealed class FileLearningFeedbackStore : ILearningFeedbackStore
 {
-    private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly FileJsonLineStore _jsonLines;
     private readonly FilePathResolver _paths;
 
@@ -56,20 +55,12 @@ public sealed class FileLearningFeedbackStore : ILearningFeedbackStore
             feedbackEvent.WorkspaceId,
             feedbackEvent.CollectionId);
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            await _jsonLines.UpsertAsync(
-                    path,
-                    feedbackEvent,
-                    static item => item.FeedbackId,
-                    cancellationToken)
-                .ConfigureAwait(false);
-        }
-        finally
-        {
-            _gate.Release();
-        }
+        await _jsonLines.UpsertAsync(
+                path,
+                feedbackEvent,
+                static item => item.FeedbackId,
+                cancellationToken)
+            .ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<LearningFeedbackEvent>> QueryAsync(
@@ -77,30 +68,23 @@ public sealed class FileLearningFeedbackStore : ILearningFeedbackStore
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(query);
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            var limit = query.Limit > 0 ? query.Limit : 100;
-            var offset = Math.Max(0, query.Offset);
-            var rows = await ReadRowsUnsafeAsync(query.WorkspaceId, query.CollectionId, cancellationToken)
-                .ConfigureAwait(false);
-            return [.. rows
-                .Where(item => Matches(query.WorkspaceId, item.WorkspaceId))
-                .Where(item => Matches(query.CollectionId, item.CollectionId))
-                .Where(item => Matches(query.Source, item.Source))
-                .Where(item => Matches(query.SourceOperationId, item.SourceOperationId))
-                .Where(item => Matches(query.CapabilityId, item.CapabilityId))
-                .Where(item => Matches(query.TargetId, item.TargetId))
-                .Where(item => Matches(query.TargetType, item.TargetType))
-                .Where(item => Matches(query.FeedbackKind, item.FeedbackKind))
-                .OrderByDescending(item => item.CreatedAt)
-                .Skip(offset)
-                .Take(limit)];
-        }
-        finally
-        {
-            _gate.Release();
-        }
+
+        var limit = query.Limit > 0 ? query.Limit : 100;
+        var offset = Math.Max(0, query.Offset);
+        var rows = await ReadRowsUnsafeAsync(query.WorkspaceId, query.CollectionId, cancellationToken)
+            .ConfigureAwait(false);
+        return [.. rows
+            .Where(item => Matches(query.WorkspaceId, item.WorkspaceId))
+            .Where(item => Matches(query.CollectionId, item.CollectionId))
+            .Where(item => Matches(query.Source, item.Source))
+            .Where(item => Matches(query.SourceOperationId, item.SourceOperationId))
+            .Where(item => Matches(query.CapabilityId, item.CapabilityId))
+            .Where(item => Matches(query.TargetId, item.TargetId))
+            .Where(item => Matches(query.TargetType, item.TargetType))
+            .Where(item => Matches(query.FeedbackKind, item.FeedbackKind))
+            .OrderByDescending(item => item.CreatedAt)
+            .Skip(offset)
+            .Take(limit)];
     }
 
     private async Task<IReadOnlyList<LearningFeedbackEvent>> ReadRowsAsync(
@@ -108,16 +92,8 @@ public sealed class FileLearningFeedbackStore : ILearningFeedbackStore
         string? collectionId,
         CancellationToken cancellationToken)
     {
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            return await ReadRowsUnsafeAsync(workspaceId, collectionId, cancellationToken)
-                .ConfigureAwait(false);
-        }
-        finally
-        {
-            _gate.Release();
-        }
+        return await ReadRowsUnsafeAsync(workspaceId, collectionId, cancellationToken)
+            .ConfigureAwait(false);
     }
 
     private async Task<IReadOnlyList<LearningFeedbackEvent>> ReadRowsUnsafeAsync(

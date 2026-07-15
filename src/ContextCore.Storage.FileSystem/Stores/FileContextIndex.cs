@@ -6,11 +6,10 @@ namespace ContextCore.Storage.FileSystem.Stores;
 /// <summary>基于文件系统的 <see cref="IContextIndex"/> 实现，索引条目持久化为 JSONL 文件。</summary>
 public sealed class FileContextIndex : IContextIndex
 {
-    private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly FilePathResolver _paths;
     private readonly FileFormatSerializer _serializer;
     private readonly FileSystemReader _reader;
-    private readonly FileSystemWriter _writer;
+    private readonly FileJsonLineStore _jsonLines;
 
     public FileContextIndex(FileStorageOptions options)
         : this(new FilePathResolver(options), new FileFormatSerializer())
@@ -22,7 +21,7 @@ public sealed class FileContextIndex : IContextIndex
         _paths = paths;
         _serializer = serializer;
         _reader = new FileSystemReader();
-        _writer = new FileSystemWriter();
+        _jsonLines = new FileJsonLineStore(serializer);
     }
 
     public async Task UpsertAsync(ContextIndexEntry entry, CancellationToken cancellationToken = default)
@@ -34,32 +33,17 @@ public sealed class FileContextIndex : IContextIndex
             throw new ArgumentException("WorkspaceId and CollectionId are required.", nameof(entry));
         }
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            Directory.CreateDirectory(_paths.GetIndexDirectory(entry.WorkspaceId, entry.CollectionId));
+        Directory.CreateDirectory(_paths.GetIndexDirectory(entry.WorkspaceId, entry.CollectionId));
 
-            var existingEntries = await ReadEntriesAsync(
-                entry.WorkspaceId,
-                entry.CollectionId,
-                cancellationToken).ConfigureAwait(false);
-
-            var updatedEntries = existingEntries
-                .Where(existing => existing.Id != entry.Id)
+        var path = _paths.GetIndexJsonlPath(entry.WorkspaceId, entry.CollectionId);
+        await _jsonLines.UpdateAsync<ContextIndexEntry>(
+            path,
+            existing => existing
+                .Where(e => e.Id != entry.Id)
                 .Append(entry)
-                .OrderBy(existing => existing.Id, StringComparer.OrdinalIgnoreCase)
-                .ToArray();
-
-            await WriteEntriesAsync(
-                entry.WorkspaceId,
-                entry.CollectionId,
-                updatedEntries,
-                cancellationToken).ConfigureAwait(false);
-        }
-        finally
-        {
-            _gate.Release();
-        }
+                .OrderBy(e => e.Id, StringComparer.OrdinalIgnoreCase)
+                .ToArray(),
+            cancellationToken).ConfigureAwait(false);
     }
 
     // TODO-DEMO [P0-3]：当前仅支持关键词 Contains 匹配，不支持语义向量搜索。
@@ -75,31 +59,23 @@ public sealed class FileContextIndex : IContextIndex
             throw new ArgumentException("WorkspaceId is required.", nameof(query));
         }
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
+        var collectionIds = ResolveCollectionIds(query.WorkspaceId, query.CollectionId);
+        var results = new List<ContextIndexEntry>();
+
+        foreach (var collectionId in collectionIds)
         {
-            var collectionIds = ResolveCollectionIds(query.WorkspaceId, query.CollectionId);
-            var results = new List<ContextIndexEntry>();
+            var entries = await ReadEntriesAsync(query.WorkspaceId, collectionId, cancellationToken)
+                .ConfigureAwait(false);
 
-            foreach (var collectionId in collectionIds)
-            {
-                var entries = await ReadEntriesAsync(query.WorkspaceId, collectionId, cancellationToken)
-                    .ConfigureAwait(false);
-
-                results.AddRange(entries.Where(entry => Matches(entry, query)));
-            }
-
-            var take = query.Take > 0 ? query.Take : 50;
-
-            return [.. results
-                .OrderByDescending(entry => entry.Weight)
-                .ThenByDescending(entry => entry.CreatedAt)
-                .Take(take)];
+            results.AddRange(entries.Where(entry => Matches(entry, query)));
         }
-        finally
-        {
-            _gate.Release();
-        }
+
+        var take = query.Take > 0 ? query.Take : 50;
+
+        return [.. results
+            .OrderByDescending(entry => entry.Weight)
+            .ThenByDescending(entry => entry.CreatedAt)
+            .Take(take)];
     }
 
     private async Task<IReadOnlyList<ContextIndexEntry>> ReadEntriesAsync(
@@ -117,19 +93,6 @@ public sealed class FileContextIndex : IContextIndex
             .Select(line => _serializer.DeserializeIndexEntry(line))
             .Where(entry => entry is not null)
             .Cast<ContextIndexEntry>()];
-    }
-
-    private async Task WriteEntriesAsync(
-        string workspaceId,
-        string collectionId,
-        IReadOnlyList<ContextIndexEntry> entries,
-        CancellationToken cancellationToken)
-    {
-        var path = _paths.GetIndexJsonlPath(workspaceId, collectionId);
-        var lines = entries.Select(_serializer.SerializeIndexEntry).ToArray();
-
-        await _writer.WriteAllLinesAtomicAsync(path, lines, cancellationToken)
-            .ConfigureAwait(false);
     }
 
     private IReadOnlyList<string> ResolveCollectionIds(string workspaceId, string? collectionId)

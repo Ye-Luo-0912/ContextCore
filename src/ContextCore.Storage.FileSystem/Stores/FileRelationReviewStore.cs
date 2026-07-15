@@ -6,7 +6,6 @@ namespace ContextCore.Storage.FileSystem.Stores;
 /// <summary>基于文件系统的 Relation review / lifecycle 审核历史存储。</summary>
 public sealed class FileRelationReviewStore : IRelationReviewStore
 {
-    private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly FilePathResolver _paths;
     private readonly FileJsonLineStore _jsonLines;
 
@@ -27,22 +26,15 @@ public sealed class FileRelationReviewStore : IRelationReviewStore
             throw new ArgumentException("Relation review 必须包含 collectionId。", nameof(record));
         }
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            var path = _paths.GetRelationReviewsJsonlPath(normalized.WorkspaceId, normalized.CollectionId);
-            var existing = await _jsonLines.ReadAsync<RelationReviewRecord>(path, cancellationToken).ConfigureAwait(false);
-            var updated = existing
+        var path = _paths.GetRelationReviewsJsonlPath(normalized.WorkspaceId, normalized.CollectionId);
+        await _jsonLines.UpdateAsync<RelationReviewRecord>(
+            path,
+            existing => existing
                 .Where(item => !string.Equals(item.ReviewId, normalized.ReviewId, StringComparison.OrdinalIgnoreCase))
                 .Append(normalized)
                 .OrderByDescending(static item => item.CreatedAt)
-                .ToArray();
-            await _jsonLines.WriteAsync(path, updated, cancellationToken).ConfigureAwait(false);
-        }
-        finally
-        {
-            _gate.Release();
-        }
+                .ToArray(),
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<RelationReviewRecord>> QueryReviewsAsync(
@@ -51,28 +43,20 @@ public sealed class FileRelationReviewStore : IRelationReviewStore
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(relationId);
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
+        var results = new List<RelationReviewRecord>();
+        foreach (var scope in EnumerateScopes())
         {
-            var results = new List<RelationReviewRecord>();
-            foreach (var scope in EnumerateScopes())
-            {
-                var path = _paths.GetRelationReviewsJsonlPath(scope.WorkspaceId, scope.CollectionId);
-                var items = await _jsonLines.ReadAsync<RelationReviewRecord>(path, cancellationToken).ConfigureAwait(false);
-                results.AddRange(items.Where(item => string.Equals(item.RelationId, relationId, StringComparison.OrdinalIgnoreCase)));
-            }
+            var path = _paths.GetRelationReviewsJsonlPath(scope.WorkspaceId, scope.CollectionId);
+            var items = await _jsonLines.ReadAsync<RelationReviewRecord>(path, cancellationToken).ConfigureAwait(false);
+            results.AddRange(items.Where(item => string.Equals(item.RelationId, relationId, StringComparison.OrdinalIgnoreCase)));
+        }
 
-            return
-            [
-                .. results
-                    .OrderByDescending(static item => item.CreatedAt)
-                    .Select(Clone)
-            ];
-        }
-        finally
-        {
-            _gate.Release();
-        }
+        return
+        [
+            .. results
+                .OrderByDescending(static item => item.CreatedAt)
+                .Select(Clone)
+        ];
     }
 
     public async Task<IReadOnlyList<RelationReviewRecord>> QueryByScopeAsync(
@@ -141,23 +125,15 @@ public sealed class FileRelationReviewStore : IRelationReviewStore
         Func<RelationReviewRecord, bool> predicate,
         CancellationToken cancellationToken)
     {
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            var path = _paths.GetRelationReviewsJsonlPath(workspaceId, collectionId);
-            var items = await _jsonLines.ReadAsync<RelationReviewRecord>(path, cancellationToken).ConfigureAwait(false);
-            return
-            [
-                .. items
-                    .Where(predicate)
-                    .OrderByDescending(static item => item.CreatedAt)
-                    .Select(Clone)
-            ];
-        }
-        finally
-        {
-            _gate.Release();
-        }
+        var path = _paths.GetRelationReviewsJsonlPath(workspaceId, collectionId);
+        var items = await _jsonLines.ReadAsync<RelationReviewRecord>(path, cancellationToken).ConfigureAwait(false);
+        return
+        [
+            .. items
+                .Where(predicate)
+                .OrderByDescending(static item => item.CreatedAt)
+                .Select(Clone)
+        ];
     }
 
     private IReadOnlyList<ShortTermMemoryScope> EnumerateScopes()

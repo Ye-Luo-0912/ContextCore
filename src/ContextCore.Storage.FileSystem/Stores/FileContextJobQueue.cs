@@ -39,15 +39,9 @@ public sealed class FileContextJobQueue : IContextJobQueue, IContextJobQueryStor
             clearCompletedAt: true,
             clearErrorMessage: true);
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            await UpsertAsync(normalized, cancellationToken).ConfigureAwait(false);
-        }
-        finally
-        {
-            _gate.Release();
-        }
+        var path = GetJobsPath(normalized.WorkspaceId, normalized.CollectionId);
+        await _jsonLines.UpsertAsync(path, normalized, item => item.JobId, cancellationToken)
+            .ConfigureAwait(false);
     }
 
     public async Task<ContextJob?> DequeueAsync(CancellationToken cancellationToken = default)
@@ -115,27 +109,19 @@ public sealed class FileContextJobQueue : IContextJobQueue, IContextJobQueryStor
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            var take = query.Take > 0 ? query.Take : 100;
-            var jobs = await ReadAllJobsAsync(cancellationToken).ConfigureAwait(false);
+        var take = query.Take > 0 ? query.Take : 100;
+        var jobs = await ReadAllJobsAsync(cancellationToken).ConfigureAwait(false);
 
-            return [.. jobs
-                .Where(job => string.IsNullOrWhiteSpace(query.WorkspaceId)
-                    || string.Equals(job.WorkspaceId, query.WorkspaceId, StringComparison.OrdinalIgnoreCase))
-                .Where(job => string.IsNullOrWhiteSpace(query.CollectionId)
-                    || string.Equals(job.CollectionId, query.CollectionId, StringComparison.OrdinalIgnoreCase))
-                .Where(job => query.State is null || job.State == query.State)
-                .Where(job => query.Kind is null || job.Kind == query.Kind)
-                .OrderByDescending(job => job.Priority)
-                .ThenByDescending(job => job.CreatedAt)
-                .Take(take)];
-        }
-        finally
-        {
-            _gate.Release();
-        }
+        return [.. jobs
+            .Where(job => string.IsNullOrWhiteSpace(query.WorkspaceId)
+                || string.Equals(job.WorkspaceId, query.WorkspaceId, StringComparison.OrdinalIgnoreCase))
+            .Where(job => string.IsNullOrWhiteSpace(query.CollectionId)
+                || string.Equals(job.CollectionId, query.CollectionId, StringComparison.OrdinalIgnoreCase))
+            .Where(job => query.State is null || job.State == query.State)
+            .Where(job => query.Kind is null || job.Kind == query.Kind)
+            .OrderByDescending(job => job.Priority)
+            .ThenByDescending(job => job.CreatedAt)
+            .Take(take)];
     }
 
     /// <summary>

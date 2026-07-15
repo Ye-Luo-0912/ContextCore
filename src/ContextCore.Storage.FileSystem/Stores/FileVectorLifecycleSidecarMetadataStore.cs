@@ -6,7 +6,6 @@ namespace ContextCore.Storage.FileSystem.Stores;
 /// <summary>文件系统版 lifecycle sidecar metadata 存储；只保存旁路 override。</summary>
 public sealed class FileVectorLifecycleSidecarMetadataStore : IVectorLifecycleSidecarMetadataStore
 {
-    private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly FilePathResolver _paths;
     private readonly FileJsonLineStore _jsonLines;
 
@@ -27,25 +26,17 @@ public sealed class FileVectorLifecycleSidecarMetadataStore : IVectorLifecycleSi
     {
         ArgumentNullException.ThrowIfNull(entry);
         var normalized = Normalize(entry);
+        var path = _paths.GetVectorLifecycleSidecarMetadataJsonlPath(normalized.WorkspaceId, normalized.CollectionId);
+        var key = BuildKey(normalized);
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            var path = _paths.GetVectorLifecycleSidecarMetadataJsonlPath(normalized.WorkspaceId, normalized.CollectionId);
-            var existing = await _jsonLines.ReadAsync<VectorLifecycleSidecarMetadataEntry>(path, cancellationToken)
-                .ConfigureAwait(false);
-            var key = BuildKey(normalized);
-            var updated = existing
+        await _jsonLines.UpdateAsync<VectorLifecycleSidecarMetadataEntry>(
+            path,
+            existing => existing
                 .Where(item => !string.Equals(BuildKey(item), key, StringComparison.OrdinalIgnoreCase))
                 .Append(normalized)
                 .OrderByDescending(static item => item.CreatedAt)
-                .ToArray();
-            await _jsonLines.WriteAsync(path, updated, cancellationToken).ConfigureAwait(false);
-        }
-        finally
-        {
-            _gate.Release();
-        }
+                .ToArray(),
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<VectorLifecycleSidecarMetadataEntry>> QueryAsync(
@@ -55,29 +46,21 @@ public sealed class FileVectorLifecycleSidecarMetadataStore : IVectorLifecycleSi
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
+        var results = new List<VectorLifecycleSidecarMetadataEntry>();
+        foreach (var scope in ResolveScopes(workspaceId, collectionId))
         {
-            var results = new List<VectorLifecycleSidecarMetadataEntry>();
-            foreach (var scope in ResolveScopes(workspaceId, collectionId))
-            {
-                var path = _paths.GetVectorLifecycleSidecarMetadataJsonlPath(scope.WorkspaceId, scope.CollectionId);
-                var entries = await _jsonLines.ReadAsync<VectorLifecycleSidecarMetadataEntry>(path, cancellationToken)
-                    .ConfigureAwait(false);
-                results.AddRange(entries);
-            }
+            var path = _paths.GetVectorLifecycleSidecarMetadataJsonlPath(scope.WorkspaceId, scope.CollectionId);
+            var entries = await _jsonLines.ReadAsync<VectorLifecycleSidecarMetadataEntry>(path, cancellationToken)
+                .ConfigureAwait(false);
+            results.AddRange(entries);
+        }
 
-            return
-            [
-                .. results
-                    .OrderByDescending(static item => item.CreatedAt)
-                    .Select(Clone)
-            ];
-        }
-        finally
-        {
-            _gate.Release();
-        }
+        return
+        [
+            .. results
+                .OrderByDescending(static item => item.CreatedAt)
+                .Select(Clone)
+        ];
     }
 
     private IReadOnlyList<ShortTermMemoryScope> ResolveScopes(string workspaceId, string? collectionId)

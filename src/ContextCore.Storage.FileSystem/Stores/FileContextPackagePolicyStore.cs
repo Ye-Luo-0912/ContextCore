@@ -6,7 +6,6 @@ namespace ContextCore.Storage.FileSystem.Stores;
 /// <summary>将上下文包策略持久化为集合目录下的 JSONL 文件。</summary>
 public sealed class FileContextPackagePolicyStore : IContextPackagePolicyStore
 {
-    private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly FileJsonLineStore _jsonLines;
     private readonly FilePathResolver _paths;
 
@@ -32,19 +31,11 @@ public sealed class FileContextPackagePolicyStore : IContextPackagePolicyStore
 
         var path = _paths.GetPackagePoliciesJsonlPath(policy.WorkspaceId, policy.CollectionId!);
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            await _jsonLines.UpsertAsync(
-                path,
-                Clone(policy),
-                item => item.Id,
-                cancellationToken).ConfigureAwait(false);
-        }
-        finally
-        {
-            _gate.Release();
-        }
+        await _jsonLines.UpsertAsync(
+            path,
+            Clone(policy),
+            item => item.Id,
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<ContextPackagePolicy?> GetAsync(
@@ -78,24 +69,16 @@ public sealed class FileContextPackagePolicyStore : IContextPackagePolicyStore
 
         var path = _paths.GetPackagePoliciesJsonlPath(query.WorkspaceId, query.CollectionId);
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            var policies = await _jsonLines.ReadAsync<ContextPackagePolicy>(path, cancellationToken)
-                .ConfigureAwait(false);
-            var take = query.Take > 0 ? query.Take : 50;
+        var policies = await _jsonLines.ReadAsync<ContextPackagePolicy>(path, cancellationToken)
+            .ConfigureAwait(false);
+        var take = query.Take > 0 ? query.Take : 50;
 
-            return [.. policies
-                .Where(item => MatchesQuery(item, query.QueryText))
-                .OrderBy(item => item.Name, StringComparer.OrdinalIgnoreCase)
-                .ThenBy(item => item.Id, StringComparer.OrdinalIgnoreCase)
-                .Take(take)
-                .Select(Clone)];
-        }
-        finally
-        {
-            _gate.Release();
-        }
+        return [.. policies
+            .Where(item => MatchesQuery(item, query.QueryText))
+            .OrderBy(item => item.Name, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(item => item.Id, StringComparer.OrdinalIgnoreCase)
+            .Take(take)
+            .Select(Clone)];
     }
 
     private static bool MatchesQuery(ContextPackagePolicy policy, string? queryText)

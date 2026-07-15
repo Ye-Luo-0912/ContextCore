@@ -29,30 +29,28 @@ public sealed class FileConstraintGapCandidateStore : IConstraintGapCandidateSto
     {
         ArgumentNullException.ThrowIfNull(candidate);
         var normalized = Normalize(candidate);
+        var path = _paths.GetConstraintGapCandidatesJsonlPath(normalized.WorkspaceId, normalized.CollectionId);
+        ConstraintGapCandidate? duplicate = null;
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            var path = _paths.GetConstraintGapCandidatesJsonlPath(normalized.WorkspaceId, normalized.CollectionId);
-            var existing = await _jsonLines.ReadAsync<ConstraintGapCandidate>(path, cancellationToken).ConfigureAwait(false);
-            var duplicate = existing.FirstOrDefault(item => HasSameDedupeKey(item, normalized));
-            if (duplicate is not null)
+        await _jsonLines.UpdateAsync<ConstraintGapCandidate>(
+            path,
+            existing =>
             {
-                return Clone(duplicate);
-            }
+                duplicate = existing.FirstOrDefault(item => HasSameDedupeKey(item, normalized));
+                if (duplicate is not null)
+                {
+                    return existing;
+                }
 
-            var updated = existing
-                .Where(item => !string.Equals(item.GapId, normalized.GapId, StringComparison.OrdinalIgnoreCase))
-                .Append(normalized)
-                .OrderByDescending(static item => item.CreatedAt)
-                .ToArray();
-            await _jsonLines.WriteAsync(path, updated, cancellationToken).ConfigureAwait(false);
-            return Clone(normalized);
-        }
-        finally
-        {
-            _gate.Release();
-        }
+                return existing
+                    .Where(item => !string.Equals(item.GapId, normalized.GapId, StringComparison.OrdinalIgnoreCase))
+                    .Append(normalized)
+                    .OrderByDescending(static item => item.CreatedAt)
+                    .ToArray();
+            },
+            cancellationToken).ConfigureAwait(false);
+
+        return duplicate is not null ? Clone(duplicate) : Clone(normalized);
     }
 
     public async Task<ConstraintGapCandidate?> GetAsync(
@@ -61,26 +59,18 @@ public sealed class FileConstraintGapCandidateStore : IConstraintGapCandidateSto
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(gapId);
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
+        foreach (var scope in EnumerateScopes())
         {
-            foreach (var scope in EnumerateScopes())
+            var path = _paths.GetConstraintGapCandidatesJsonlPath(scope.WorkspaceId, scope.CollectionId);
+            var items = await _jsonLines.ReadAsync<ConstraintGapCandidate>(path, cancellationToken).ConfigureAwait(false);
+            var match = items.FirstOrDefault(item => string.Equals(item.GapId, gapId, StringComparison.OrdinalIgnoreCase));
+            if (match is not null)
             {
-                var path = _paths.GetConstraintGapCandidatesJsonlPath(scope.WorkspaceId, scope.CollectionId);
-                var items = await _jsonLines.ReadAsync<ConstraintGapCandidate>(path, cancellationToken).ConfigureAwait(false);
-                var match = items.FirstOrDefault(item => string.Equals(item.GapId, gapId, StringComparison.OrdinalIgnoreCase));
-                if (match is not null)
-                {
-                    return Clone(match);
-                }
+                return Clone(match);
             }
+        }
 
-            return null;
-        }
-        finally
-        {
-            _gate.Release();
-        }
+        return null;
     }
 
     public async Task<IReadOnlyList<ConstraintGapCandidate>> QueryAsync(
@@ -89,28 +79,20 @@ public sealed class FileConstraintGapCandidateStore : IConstraintGapCandidateSto
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
+        var results = new List<ConstraintGapCandidate>();
+        foreach (var scope in ResolveScopes(query.WorkspaceId, query.CollectionId))
         {
-            var results = new List<ConstraintGapCandidate>();
-            foreach (var scope in ResolveScopes(query.WorkspaceId, query.CollectionId))
-            {
-                var path = _paths.GetConstraintGapCandidatesJsonlPath(scope.WorkspaceId, scope.CollectionId);
-                var items = await _jsonLines.ReadAsync<ConstraintGapCandidate>(path, cancellationToken).ConfigureAwait(false);
-                results.AddRange(items.Where(item => Matches(item, query)));
-            }
+            var path = _paths.GetConstraintGapCandidatesJsonlPath(scope.WorkspaceId, scope.CollectionId);
+            var items = await _jsonLines.ReadAsync<ConstraintGapCandidate>(path, cancellationToken).ConfigureAwait(false);
+            results.AddRange(items.Where(item => Matches(item, query)));
+        }
 
-            return results
-                .OrderByDescending(static item => item.CreatedAt)
-                .Skip(Math.Max(0, query.Offset))
-                .Take(query.Limit > 0 ? query.Limit : 20)
-                .Select(Clone)
-                .ToArray();
-        }
-        finally
-        {
-            _gate.Release();
-        }
+        return results
+            .OrderByDescending(static item => item.CreatedAt)
+            .Skip(Math.Max(0, query.Offset))
+            .Take(query.Limit > 0 ? query.Limit : 20)
+            .Select(Clone)
+            .ToArray();
     }
 
     public async Task<ConstraintGapCandidate?> UpdateStatusAsync(
@@ -195,23 +177,16 @@ public sealed class FileConstraintGapCandidateStore : IConstraintGapCandidateSto
     {
         ArgumentNullException.ThrowIfNull(record);
         var normalized = Normalize(record);
+        var path = _paths.GetConstraintGapReviewsJsonlPath(normalized.WorkspaceId, normalized.CollectionId);
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            var path = _paths.GetConstraintGapReviewsJsonlPath(normalized.WorkspaceId, normalized.CollectionId);
-            var existing = await _jsonLines.ReadAsync<ConstraintGapReviewRecord>(path, cancellationToken).ConfigureAwait(false);
-            var updated = existing
+        await _jsonLines.UpdateAsync<ConstraintGapReviewRecord>(
+            path,
+            existing => existing
                 .Where(item => !string.Equals(item.ReviewId, normalized.ReviewId, StringComparison.OrdinalIgnoreCase))
                 .Append(normalized)
                 .OrderByDescending(static item => item.CreatedAt)
-                .ToArray();
-            await _jsonLines.WriteAsync(path, updated, cancellationToken).ConfigureAwait(false);
-        }
-        finally
-        {
-            _gate.Release();
-        }
+                .ToArray(),
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<ConstraintGapReviewRecord>> QueryReviewsAsync(
@@ -220,26 +195,18 @@ public sealed class FileConstraintGapCandidateStore : IConstraintGapCandidateSto
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(gapId);
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
+        var results = new List<ConstraintGapReviewRecord>();
+        foreach (var scope in EnumerateScopes())
         {
-            var results = new List<ConstraintGapReviewRecord>();
-            foreach (var scope in EnumerateScopes())
-            {
-                var path = _paths.GetConstraintGapReviewsJsonlPath(scope.WorkspaceId, scope.CollectionId);
-                var items = await _jsonLines.ReadAsync<ConstraintGapReviewRecord>(path, cancellationToken).ConfigureAwait(false);
-                results.AddRange(items.Where(item => string.Equals(item.GapId, gapId, StringComparison.OrdinalIgnoreCase)));
-            }
+            var path = _paths.GetConstraintGapReviewsJsonlPath(scope.WorkspaceId, scope.CollectionId);
+            var items = await _jsonLines.ReadAsync<ConstraintGapReviewRecord>(path, cancellationToken).ConfigureAwait(false);
+            results.AddRange(items.Where(item => string.Equals(item.GapId, gapId, StringComparison.OrdinalIgnoreCase)));
+        }
 
-            return results
-                .OrderByDescending(static item => item.CreatedAt)
-                .Select(Clone)
-                .ToArray();
-        }
-        finally
-        {
-            _gate.Release();
-        }
+        return results
+            .OrderByDescending(static item => item.CreatedAt)
+            .Select(Clone)
+            .ToArray();
     }
 
     private IReadOnlyList<ShortTermMemoryScope> ResolveScopes(string workspaceId, string? collectionId)

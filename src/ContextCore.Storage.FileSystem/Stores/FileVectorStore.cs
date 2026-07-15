@@ -29,16 +29,8 @@ public sealed class FileVectorStore : IVectorStore
             normalized.WorkspaceId,
             normalized.CollectionId ?? string.Empty);
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            await _jsonLines.UpsertAsync(path, normalized, item => item.Id, cancellationToken)
-                .ConfigureAwait(false);
-        }
-        finally
-        {
-            _gate.Release();
-        }
+        await _jsonLines.UpsertAsync(path, normalized, item => item.Id, cancellationToken)
+            .ConfigureAwait(false);
     }
 
     public async Task<VectorRecord?> GetAsync(
@@ -46,26 +38,18 @@ public sealed class FileVectorStore : IVectorStore
         string vectorId,
         CancellationToken cancellationToken = default)
     {
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
+        foreach (var path in ResolveVectorPaths(workspaceId, null))
         {
-            foreach (var path in ResolveVectorPaths(workspaceId, null))
+            var records = await _jsonLines.ReadAsync<VectorRecord>(path, cancellationToken)
+                .ConfigureAwait(false);
+            var record = records.FirstOrDefault(item => string.Equals(item.Id, vectorId, StringComparison.OrdinalIgnoreCase));
+            if (record is not null)
             {
-                var records = await _jsonLines.ReadAsync<VectorRecord>(path, cancellationToken)
-                    .ConfigureAwait(false);
-                var record = records.FirstOrDefault(item => string.Equals(item.Id, vectorId, StringComparison.OrdinalIgnoreCase));
-                if (record is not null)
-                {
-                    return Clone(record);
-                }
+                return Clone(record);
             }
+        }
 
-            return null;
-        }
-        finally
-        {
-            _gate.Release();
-        }
+        return null;
     }
 
     public async Task<IReadOnlyList<VectorSearchResult>> SearchAsync(
@@ -74,46 +58,38 @@ public sealed class FileVectorStore : IVectorStore
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
+        var records = new List<VectorRecord>();
+        foreach (var path in ResolveVectorPaths(query.WorkspaceId, query.CollectionId))
         {
-            var records = new List<VectorRecord>();
-            foreach (var path in ResolveVectorPaths(query.WorkspaceId, query.CollectionId))
+            records.AddRange(await _jsonLines.ReadAsync<VectorRecord>(path, cancellationToken)
+                .ConfigureAwait(false));
+        }
+
+        var tags = query.Tags.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var sourceKinds = query.SourceKinds.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var topK = query.TopK > 0 ? query.TopK : 10;
+
+        return [.. records
+            .Where(record => string.Equals(record.WorkspaceId, query.WorkspaceId, StringComparison.OrdinalIgnoreCase))
+            .Where(record => string.IsNullOrWhiteSpace(query.CollectionId)
+                || string.Equals(record.CollectionId, query.CollectionId, StringComparison.OrdinalIgnoreCase))
+            .Where(record => sourceKinds.Count == 0 || sourceKinds.Contains(record.SourceKind))
+            .Where(record => tags.Count == 0 || tags.All(record.Tags.Contains))
+            .Select(record => new
             {
-                records.AddRange(await _jsonLines.ReadAsync<VectorRecord>(path, cancellationToken)
-                    .ConfigureAwait(false));
-            }
-
-            var tags = query.Tags.ToHashSet(StringComparer.OrdinalIgnoreCase);
-            var sourceKinds = query.SourceKinds.ToHashSet(StringComparer.OrdinalIgnoreCase);
-            var topK = query.TopK > 0 ? query.TopK : 10;
-
-            return [.. records
-                .Where(record => string.Equals(record.WorkspaceId, query.WorkspaceId, StringComparison.OrdinalIgnoreCase))
-                .Where(record => string.IsNullOrWhiteSpace(query.CollectionId)
-                    || string.Equals(record.CollectionId, query.CollectionId, StringComparison.OrdinalIgnoreCase))
-                .Where(record => sourceKinds.Count == 0 || sourceKinds.Contains(record.SourceKind))
-                .Where(record => tags.Count == 0 || tags.All(record.Tags.Contains))
-                .Select(record => new
-                {
-                    Record = record,
-                    Score = Cosine(query.Vector, record.Vector)
-                })
-                .Where(item => query.MinScore is null || item.Score >= query.MinScore.Value)
-                .OrderByDescending(item => item.Score)
-                .ThenByDescending(item => item.Record.UpdatedAt)
-                .Take(topK)
-                .Select((item, index) => new VectorSearchResult
-                {
-                    Record = Clone(item.Record, includeVector: query.IncludeVector),
-                    Score = item.Score,
-                    Rank = index + 1
-                })];
-        }
-        finally
-        {
-            _gate.Release();
-        }
+                Record = record,
+                Score = Cosine(query.Vector, record.Vector)
+            })
+            .Where(item => query.MinScore is null || item.Score >= query.MinScore.Value)
+            .OrderByDescending(item => item.Score)
+            .ThenByDescending(item => item.Record.UpdatedAt)
+            .Take(topK)
+            .Select((item, index) => new VectorSearchResult
+            {
+                Record = Clone(item.Record, includeVector: query.IncludeVector),
+                Score = item.Score,
+                Rank = index + 1
+            })];
     }
 
     public async Task DeleteAsync(

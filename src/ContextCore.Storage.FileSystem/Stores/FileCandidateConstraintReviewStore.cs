@@ -6,7 +6,6 @@ namespace ContextCore.Storage.FileSystem.Stores;
 /// <summary>基于文件系统的 CandidateConstraint 审核记录存储。</summary>
 public sealed class FileCandidateConstraintReviewStore : ICandidateConstraintReviewStore
 {
-    private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly FilePathResolver _paths;
     private readonly FileJsonLineStore _jsonLines;
 
@@ -27,22 +26,15 @@ public sealed class FileCandidateConstraintReviewStore : ICandidateConstraintRev
             throw new ArgumentException("CandidateConstraint review 必须包含 collectionId。", nameof(record));
         }
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            var path = _paths.GetCandidateConstraintReviewsJsonlPath(normalized.WorkspaceId, normalized.CollectionId);
-            var existing = await _jsonLines.ReadAsync<CandidateConstraintReviewRecord>(path, cancellationToken).ConfigureAwait(false);
-            var updated = existing
+        var path = _paths.GetCandidateConstraintReviewsJsonlPath(normalized.WorkspaceId, normalized.CollectionId);
+        await _jsonLines.UpdateAsync<CandidateConstraintReviewRecord>(
+            path,
+            existing => existing
                 .Where(item => !string.Equals(item.ReviewId, normalized.ReviewId, StringComparison.OrdinalIgnoreCase))
                 .Append(normalized)
                 .OrderByDescending(static item => item.CreatedAt)
-                .ToArray();
-            await _jsonLines.WriteAsync(path, updated, cancellationToken).ConfigureAwait(false);
-        }
-        finally
-        {
-            _gate.Release();
-        }
+                .ToArray(),
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<CandidateConstraintReviewRecord>> QueryReviewsAsync(
@@ -51,26 +43,18 @@ public sealed class FileCandidateConstraintReviewStore : ICandidateConstraintRev
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(constraintId);
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
+        var results = new List<CandidateConstraintReviewRecord>();
+        foreach (var scope in EnumerateScopes())
         {
-            var results = new List<CandidateConstraintReviewRecord>();
-            foreach (var scope in EnumerateScopes())
-            {
-                var path = _paths.GetCandidateConstraintReviewsJsonlPath(scope.WorkspaceId, scope.CollectionId);
-                var items = await _jsonLines.ReadAsync<CandidateConstraintReviewRecord>(path, cancellationToken).ConfigureAwait(false);
-                results.AddRange(items.Where(item => string.Equals(item.ConstraintId, constraintId, StringComparison.OrdinalIgnoreCase)));
-            }
+            var path = _paths.GetCandidateConstraintReviewsJsonlPath(scope.WorkspaceId, scope.CollectionId);
+            var items = await _jsonLines.ReadAsync<CandidateConstraintReviewRecord>(path, cancellationToken).ConfigureAwait(false);
+            results.AddRange(items.Where(item => string.Equals(item.ConstraintId, constraintId, StringComparison.OrdinalIgnoreCase)));
+        }
 
-            return results
-                .OrderByDescending(static item => item.CreatedAt)
-                .Select(Clone)
-                .ToArray();
-        }
-        finally
-        {
-            _gate.Release();
-        }
+        return results
+            .OrderByDescending(static item => item.CreatedAt)
+            .Select(Clone)
+            .ToArray();
     }
 
     private IReadOnlyList<ShortTermMemoryScope> EnumerateScopes()

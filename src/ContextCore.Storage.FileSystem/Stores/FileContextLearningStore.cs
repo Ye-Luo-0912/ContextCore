@@ -6,7 +6,6 @@ namespace ContextCore.Storage.FileSystem.Stores;
 /// <summary>基于文件系统的学习记录与案例存储。</summary>
 public sealed class FileContextLearningStore : IContextLearningStore
 {
-    private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly FilePathResolver _paths;
     private readonly FileJsonLineStore _jsonLines;
 
@@ -26,22 +25,15 @@ public sealed class FileContextLearningStore : IContextLearningStore
         ArgumentNullException.ThrowIfNull(feedback);
         var normalized = Normalize(feedback);
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            var path = _paths.GetLearningFeedbackJsonlPath(normalized.WorkspaceId, normalized.CollectionId);
-            var existing = await _jsonLines.ReadAsync<PromotionFeedbackSignal>(path, cancellationToken).ConfigureAwait(false);
-            var updated = existing
+        var path = _paths.GetLearningFeedbackJsonlPath(normalized.WorkspaceId, normalized.CollectionId);
+        await _jsonLines.UpdateAsync<PromotionFeedbackSignal>(
+            path,
+            existing => existing
                 .Where(item => !string.Equals(item.FeedbackId, normalized.FeedbackId, StringComparison.OrdinalIgnoreCase))
                 .Append(normalized)
                 .OrderByDescending(item => item.CreatedAt)
-                .ToArray();
-            await _jsonLines.WriteAsync(path, updated, cancellationToken).ConfigureAwait(false);
-        }
-        finally
-        {
-            _gate.Release();
-        }
+                .ToArray(),
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<PromotionFeedbackSignal>> QueryFeedbackAsync(
@@ -50,28 +42,20 @@ public sealed class FileContextLearningStore : IContextLearningStore
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
+        var results = new List<PromotionFeedbackSignal>();
+        foreach (var scope in ResolveScopes(query.WorkspaceId, query.CollectionId, LearningScopeKind.Feedback))
         {
-            var results = new List<PromotionFeedbackSignal>();
-            foreach (var scope in ResolveScopes(query.WorkspaceId, query.CollectionId, LearningScopeKind.Feedback))
-            {
-                var path = _paths.GetLearningFeedbackJsonlPath(scope.WorkspaceId, scope.CollectionId);
-                var feedback = await _jsonLines.ReadAsync<PromotionFeedbackSignal>(path, cancellationToken).ConfigureAwait(false);
-                results.AddRange(feedback.Where(item => Matches(item, query)));
-            }
+            var path = _paths.GetLearningFeedbackJsonlPath(scope.WorkspaceId, scope.CollectionId);
+            var feedback = await _jsonLines.ReadAsync<PromotionFeedbackSignal>(path, cancellationToken).ConfigureAwait(false);
+            results.AddRange(feedback.Where(item => Matches(item, query)));
+        }
 
-            return results
-                .OrderByDescending(item => item.CreatedAt)
-                .Skip(Math.Max(0, query.Offset))
-                .Take(query.Limit > 0 ? query.Limit : 20)
-                .Select(Clone)
-                .ToArray();
-        }
-        finally
-        {
-            _gate.Release();
-        }
+        return results
+            .OrderByDescending(item => item.CreatedAt)
+            .Skip(Math.Max(0, query.Offset))
+            .Take(query.Limit > 0 ? query.Limit : 20)
+            .Select(Clone)
+            .ToArray();
     }
 
     public async Task AddRecordAsync(ContextLearningRecord record, CancellationToken cancellationToken = default)
@@ -79,48 +63,33 @@ public sealed class FileContextLearningStore : IContextLearningStore
         ArgumentNullException.ThrowIfNull(record);
         var normalized = Normalize(record);
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            var path = _paths.GetLearningRecordsJsonlPath(normalized.WorkspaceId, normalized.CollectionId);
-            var existing = await _jsonLines.ReadAsync<ContextLearningRecord>(path, cancellationToken).ConfigureAwait(false);
-            var updated = existing
+        var path = _paths.GetLearningRecordsJsonlPath(normalized.WorkspaceId, normalized.CollectionId);
+        await _jsonLines.UpdateAsync<ContextLearningRecord>(
+            path,
+            existing => existing
                 .Where(item => !string.Equals(item.RecordId, normalized.RecordId, StringComparison.OrdinalIgnoreCase))
                 .Append(normalized)
                 .OrderByDescending(item => item.CreatedAt)
-                .ToArray();
-            await _jsonLines.WriteAsync(path, updated, cancellationToken).ConfigureAwait(false);
-        }
-        finally
-        {
-            _gate.Release();
-        }
+                .ToArray(),
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<ContextLearningRecord?> GetRecordAsync(string recordId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(recordId);
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
+        foreach (var scope in EnumerateLearningScopes(LearningScopeKind.Record))
         {
-            foreach (var scope in EnumerateLearningScopes(LearningScopeKind.Record))
+            var path = _paths.GetLearningRecordsJsonlPath(scope.WorkspaceId, scope.CollectionId);
+            var records = await _jsonLines.ReadAsync<ContextLearningRecord>(path, cancellationToken).ConfigureAwait(false);
+            var match = records.FirstOrDefault(item => string.Equals(item.RecordId, recordId, StringComparison.OrdinalIgnoreCase));
+            if (match is not null)
             {
-                var path = _paths.GetLearningRecordsJsonlPath(scope.WorkspaceId, scope.CollectionId);
-                var records = await _jsonLines.ReadAsync<ContextLearningRecord>(path, cancellationToken).ConfigureAwait(false);
-                var match = records.FirstOrDefault(item => string.Equals(item.RecordId, recordId, StringComparison.OrdinalIgnoreCase));
-                if (match is not null)
-                {
-                    return Clone(match);
-                }
+                return Clone(match);
             }
+        }
 
-            return null;
-        }
-        finally
-        {
-            _gate.Release();
-        }
+        return null;
     }
 
     public async Task<IReadOnlyList<ContextLearningRecord>> QueryRecordsAsync(
@@ -129,28 +98,20 @@ public sealed class FileContextLearningStore : IContextLearningStore
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
+        var results = new List<ContextLearningRecord>();
+        foreach (var scope in ResolveScopes(query.WorkspaceId, query.CollectionId, LearningScopeKind.Record))
         {
-            var results = new List<ContextLearningRecord>();
-            foreach (var scope in ResolveScopes(query.WorkspaceId, query.CollectionId, LearningScopeKind.Record))
-            {
-                var path = _paths.GetLearningRecordsJsonlPath(scope.WorkspaceId, scope.CollectionId);
-                var records = await _jsonLines.ReadAsync<ContextLearningRecord>(path, cancellationToken).ConfigureAwait(false);
-                results.AddRange(records.Where(record => Matches(record, query)));
-            }
+            var path = _paths.GetLearningRecordsJsonlPath(scope.WorkspaceId, scope.CollectionId);
+            var records = await _jsonLines.ReadAsync<ContextLearningRecord>(path, cancellationToken).ConfigureAwait(false);
+            results.AddRange(records.Where(record => Matches(record, query)));
+        }
 
-            return results
-                .OrderByDescending(record => record.CreatedAt)
-                .Skip(Math.Max(0, query.Offset))
-                .Take(query.Limit > 0 ? query.Limit : 20)
-                .Select(Clone)
-                .ToArray();
-        }
-        finally
-        {
-            _gate.Release();
-        }
+        return results
+            .OrderByDescending(record => record.CreatedAt)
+            .Skip(Math.Max(0, query.Offset))
+            .Take(query.Limit > 0 ? query.Limit : 20)
+            .Select(Clone)
+            .ToArray();
     }
 
     public async Task<ContextLearningCase> AddCaseAsync(
@@ -160,49 +121,34 @@ public sealed class FileContextLearningStore : IContextLearningStore
         ArgumentNullException.ThrowIfNull(learningCase);
         var normalized = Normalize(learningCase);
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            var path = _paths.GetLearningCasesJsonlPath(normalized.WorkspaceId, normalized.CollectionId);
-            var existing = await _jsonLines.ReadAsync<ContextLearningCase>(path, cancellationToken).ConfigureAwait(false);
-            var updated = existing
+        var path = _paths.GetLearningCasesJsonlPath(normalized.WorkspaceId, normalized.CollectionId);
+        await _jsonLines.UpdateAsync<ContextLearningCase>(
+            path,
+            existing => existing
                 .Where(item => !string.Equals(item.CaseId, normalized.CaseId, StringComparison.OrdinalIgnoreCase))
                 .Append(normalized)
                 .OrderByDescending(item => item.CreatedAt)
-                .ToArray();
-            await _jsonLines.WriteAsync(path, updated, cancellationToken).ConfigureAwait(false);
-            return Clone(normalized);
-        }
-        finally
-        {
-            _gate.Release();
-        }
+                .ToArray(),
+            cancellationToken).ConfigureAwait(false);
+        return Clone(normalized);
     }
 
     public async Task<ContextLearningCase?> GetCaseAsync(string caseId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(caseId);
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
+        foreach (var scope in EnumerateLearningScopes(LearningScopeKind.Case))
         {
-            foreach (var scope in EnumerateLearningScopes(LearningScopeKind.Case))
+            var path = _paths.GetLearningCasesJsonlPath(scope.WorkspaceId, scope.CollectionId);
+            var cases = await _jsonLines.ReadAsync<ContextLearningCase>(path, cancellationToken).ConfigureAwait(false);
+            var match = cases.FirstOrDefault(item => string.Equals(item.CaseId, caseId, StringComparison.OrdinalIgnoreCase));
+            if (match is not null)
             {
-                var path = _paths.GetLearningCasesJsonlPath(scope.WorkspaceId, scope.CollectionId);
-                var cases = await _jsonLines.ReadAsync<ContextLearningCase>(path, cancellationToken).ConfigureAwait(false);
-                var match = cases.FirstOrDefault(item => string.Equals(item.CaseId, caseId, StringComparison.OrdinalIgnoreCase));
-                if (match is not null)
-                {
-                    return Clone(match);
-                }
+                return Clone(match);
             }
+        }
 
-            return null;
-        }
-        finally
-        {
-            _gate.Release();
-        }
+        return null;
     }
 
     public async Task<IReadOnlyList<ContextLearningCase>> QueryCasesAsync(
@@ -211,28 +157,20 @@ public sealed class FileContextLearningStore : IContextLearningStore
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
+        var results = new List<ContextLearningCase>();
+        foreach (var scope in ResolveScopes(query.WorkspaceId, query.CollectionId, LearningScopeKind.Case))
         {
-            var results = new List<ContextLearningCase>();
-            foreach (var scope in ResolveScopes(query.WorkspaceId, query.CollectionId, LearningScopeKind.Case))
-            {
-                var path = _paths.GetLearningCasesJsonlPath(scope.WorkspaceId, scope.CollectionId);
-                var cases = await _jsonLines.ReadAsync<ContextLearningCase>(path, cancellationToken).ConfigureAwait(false);
-                results.AddRange(cases.Where(learningCase => Matches(learningCase, query)));
-            }
+            var path = _paths.GetLearningCasesJsonlPath(scope.WorkspaceId, scope.CollectionId);
+            var cases = await _jsonLines.ReadAsync<ContextLearningCase>(path, cancellationToken).ConfigureAwait(false);
+            results.AddRange(cases.Where(learningCase => Matches(learningCase, query)));
+        }
 
-            return results
-                .OrderByDescending(learningCase => learningCase.CreatedAt)
-                .Skip(Math.Max(0, query.Offset))
-                .Take(query.Limit > 0 ? query.Limit : 20)
-                .Select(Clone)
-                .ToArray();
-        }
-        finally
-        {
-            _gate.Release();
-        }
+        return results
+            .OrderByDescending(learningCase => learningCase.CreatedAt)
+            .Skip(Math.Max(0, query.Offset))
+            .Take(query.Limit > 0 ? query.Limit : 20)
+            .Select(Clone)
+            .ToArray();
     }
 
     private IReadOnlyList<ShortTermMemoryScope> ResolveScopes(string? workspaceId, string? collectionId, LearningScopeKind scopeKind)
