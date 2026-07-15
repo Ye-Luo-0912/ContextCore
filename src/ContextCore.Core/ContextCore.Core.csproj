@@ -1,7 +1,14 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
     <ProjectReference Include="..\ContextCore.Abstractions\ContextCore.Abstractions.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 源生成器：编译期生成 Unsupported 存储和失效装饰器的基础结构 -->
+    <ProjectReference Include="..\ContextCore.Generators\ContextCore.Generators.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
   </ItemGroup>
 
   <PropertyGroup>
