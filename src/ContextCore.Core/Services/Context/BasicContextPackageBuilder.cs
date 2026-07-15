@@ -146,41 +146,44 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         // 原 Legacy 路径（按 item ID 拆 section、Kind="raw"）已合并到 Policy 路径的 recent_context section。
         var policy = request.Policy ?? CreateDefaultProductionPolicy(request);
 
-        // 热点读路径缓存：按请求指纹缓存构建结果，任一依赖 store 写入即失效。
-        // 命中时跳过 BuildWithPolicyAsync 与 trace 写入（trace 为 fail-open 可观测性，缓存命中无需重复记录）。
-        // 工厂内执行 build + trace，仅在 miss 时触发；single-flight 合并并发 miss。
+        // 入口一次解析所有构建选项，集中 PackagePolicyResolver 调用
+        var tokenContext = CreateTokenEstimationContext(request);
+        var options = ResolvedPackageOptions.Resolve(request, policy, tokenContext);
+
+        // 热点读路径缓存：按请求指纹缓存 PackageTemplate（不可变），命中时投影为新的 ContextPackageBuildResult。
+        // PackageId/BuildId/CreatedAt/响应 metadata 在每次投影时重新生成，缓存前后请求身份完全隔离。
+        // trace 写入仅在缓存 miss 时触发（factory 内部），缓存命中无需重复记录。
         if (_cacheAccessor is not null)
         {
-            var workspaceId = PackagePolicyResolver.NormalizeRequiredValue(request.WorkspaceId);
-            var collectionId = PackagePolicyResolver.NormalizeRequiredValue(policy.CollectionId, request.CollectionId);
-            var cacheKey = StateCacheKey.From($"pkg:{workspaceId}:{collectionId}:{BuildRequestFingerprint(request, policy)}");
-            var scopes = BuildPackageDependencyScopes(workspaceId, collectionId);
-            var cached = await _cacheAccessor.GetOrAddAsync(
+            var cacheKey = StateCacheKey.From($"pkg:{options.WorkspaceId}:{options.CollectionId}:{BuildRequestFingerprint(request, policy)}");
+            var scopes = BuildPackageDependencyScopes(options.WorkspaceId, options.CollectionId ?? string.Empty);
+            var template = await _cacheAccessor.GetOrAddAsync<PackageTemplate>(
                 cacheKey, scopes,
-                ct => BuildAndTraceAsync(request, policy, ct),
+                ct => BuildAndTraceTemplateAsync(options, ct),
                 cancellationToken).ConfigureAwait(false);
             CoreMetrics.PackageBuildDuration.Record(sw.Elapsed.TotalMilliseconds);
-            // 缓存命中时返回深拷贝，避免调用方修改缓存对象（PackageId/BuildId/CreatedAt 复用、集合可变性）
-            return CloneBuildResult(cached);
+            // 缓存命中/未命中均通过投影生成独立结果对象（新 PackageId/BuildId/CreatedAt/metadata）
+            return _resultProjector.ProjectResult(template, options);
         }
 
-        // 无缓存路径：原有逻辑
-        ContextPackageBuildResult result = await BuildWithPolicyAsync(request, policy, cancellationToken)
-            .ConfigureAwait(false);
+        // 无缓存路径：构建模板 → 投影 → 写入 trace
+        PackageTemplate tmpl = await BuildTemplateAsync(options, cancellationToken).ConfigureAwait(false);
+        var result = _resultProjector.ProjectResult(tmpl, options);
         await WriteTracesAsync(result, cancellationToken).ConfigureAwait(false);
         CoreMetrics.PackageBuildDuration.Record(sw.Elapsed.TotalMilliseconds);
         return result;
     }
 
-    /// <summary>执行构建并写入 trace（package trace + decision trace，fail-open）。</summary>
-    private async Task<ContextPackageBuildResult> BuildAndTraceAsync(
-        ContextPackageRequest request,
-        ContextPackagePolicy policy,
+    /// <summary>执行构建并写入 trace（package trace + decision trace，fail-open）。返回 PackageTemplate。</summary>
+    private async Task<PackageTemplate> BuildAndTraceTemplateAsync(
+        ResolvedPackageOptions options,
         CancellationToken cancellationToken)
     {
-        var result = await BuildWithPolicyAsync(request, policy, cancellationToken).ConfigureAwait(false);
-        await WriteTracesAsync(result, cancellationToken).ConfigureAwait(false);
-        return result;
+        var template = await BuildTemplateAsync(options, cancellationToken).ConfigureAwait(false);
+        // trace 需要完整的 ContextPackageBuildResult，投影一次用于 trace 写入
+        var traceResult = _resultProjector.ProjectResult(template, options);
+        await WriteTracesAsync(traceResult, cancellationToken).ConfigureAwait(false);
+        return template;
     }
 
     /// <summary>写入 package trace 与 decision trace。两者均为 fail-open：写入失败不影响正式 package 输出。</summary>
@@ -222,39 +225,6 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                 _decisionTraceLastFailureCategory = ex.GetType().Name;
             }
         }
-    }
-
-    /// <summary>
-    /// 深拷贝缓存命中的构建结果，确保每次返回独立对象实例。
-    /// 避免调用方修改缓存对象导致后续命中返回被污染的数据。
-    /// </summary>
-    private static ContextPackageBuildResult CloneBuildResult(ContextPackageBuildResult source)
-    {
-        return new ContextPackageBuildResult
-        {
-            BuildId = source.BuildId,
-            Package = new ContextPackage
-            {
-                PackageId = source.Package.PackageId,
-                WorkspaceId = source.Package.WorkspaceId,
-                CollectionId = source.Package.CollectionId,
-                EstimatedTokens = source.Package.EstimatedTokens,
-                CreatedAt = source.Package.CreatedAt,
-                Sections = source.Package.Sections.ToArray(),
-                Metadata = new Dictionary<string, string>(source.Package.Metadata)
-            },
-            SelectedItems = source.SelectedItems.ToArray(),
-            ItemReferences = source.ItemReferences.ToArray(),
-            DroppedItems = source.DroppedItems.ToArray(),
-            Uncertainties = source.Uncertainties.ToArray(),
-            Budget = source.Budget,
-            Output = source.Output,
-            TokenBudget = source.TokenBudget,
-            EstimatedTokens = source.EstimatedTokens,
-            Metadata = new Dictionary<string, string>(source.Metadata),
-            Plan = source.Plan,
-            CreatedAt = source.CreatedAt
-        };
     }
 
     /// <summary>
@@ -484,21 +454,17 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
 
     /// <summary>
     /// 统一构建流水线入口：委托到四阶段（PackageInputLoader -> CandidateSelector/SectionAssembler -> ResultProjector）。
-    /// 原单体逻辑已按数据流边界拆分到独立 stage 类，保持字节级确定性输出不变。
-    /// 缓存路径（BuildDetailedCoreAsync）与 trace 写入（WriteTracesAsync）仍保留在本类。
+    /// 返回不可变 PackageTemplate，由调用方投影为 ContextPackageBuildResult。
     /// </summary>
-    private async Task<ContextPackageBuildResult> BuildWithPolicyAsync(
-        ContextPackageRequest request,
-        ContextPackagePolicy policy,
+    private async Task<PackageTemplate> BuildTemplateAsync(
+        ResolvedPackageOptions options,
         CancellationToken cancellationToken)
     {
-        var tokenContext = CreateTokenEstimationContext(request);
-
-        // 四阶段流水线：加载 -> 选择(装配) -> 投影。各阶段保持原 BuildWithPolicyAsync 的变异顺序。
-        var inputs = await _inputLoader.LoadAsync(request, policy, cancellationToken).ConfigureAwait(false);
+        // 四阶段流水线：加载 -> 选择(装配) -> 模板投影。各阶段保持原 BuildWithPolicyAsync 的变异顺序。
+        var inputs = await _inputLoader.LoadAsync(options, cancellationToken).ConfigureAwait(false);
         var selection = await _candidateSelector.SelectCandidatesAsync(
-            inputs, request, policy, tokenContext, cancellationToken).ConfigureAwait(false);
-        return _resultProjector.ProjectResult(selection, request, policy, tokenContext);
+            inputs, options, cancellationToken).ConfigureAwait(false);
+        return _resultProjector.ProjectTemplate(selection, options);
     }
 }
 

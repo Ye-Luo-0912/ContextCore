@@ -38,30 +38,31 @@ internal sealed class CandidateSelector
     /// </summary>
     internal async Task<SelectionResult> SelectCandidatesAsync(
         PackageInputs inputs,
-        ContextPackageRequest request,
-        ContextPackagePolicy policy,
-        TokenEstimationContext tokenContext,
+        ResolvedPackageOptions options,
         CancellationToken cancellationToken)
     {
-        var workspaceId = PackagePolicyResolver.NormalizeRequiredValue(request.WorkspaceId);
-        var collectionId = PackagePolicyResolver.NormalizeRequiredValue(policy.CollectionId, request.CollectionId);
-        var modeBudgetProfile = PackagePolicyResolver.ResolveModeBudgetProfile(request, policy);
-        var tokenBudget = PackagePolicyResolver.ResolveTokenBudget(request, policy, modeBudgetProfile);
-        var packageModeName = PackagePolicyResolver.ResolvePackageModeName(request, policy, modeBudgetProfile);
-        var packageMustHitIds = PackagePolicyResolver.ResolvePackageMustHitIds(request);
-        var isAuditMode = PackagePolicyResolver.ResolveIsAuditMode(request, policy);
-        var maxRecentItems = policy.MaxRecentItems > 0 ? policy.MaxRecentItems : 20;
+        var request = options.Request;
+        var policy = options.Policy;
+        var workspaceId = options.WorkspaceId;
+        var collectionId = options.CollectionId;
+        var tokenBudget = options.TokenBudget;
+        var tokenContext = options.TokenContext;
+        var modeBudgetProfile = options.ModeBudgetProfile;
+        var packageModeName = options.PackageModeName;
+        var packageMustHitIds = options.PackageMustHitIds;
+        var isAuditMode = options.IsAuditMode;
+        var maxRecentItems = options.MaxRecentItems;
 
         var state = new SelectionState();
         // 仅在不包含 recent context 时提前提取 anchors（避免空数组提取被 recent 路径覆盖的浪费）
-        var anchors = policy.IncludeRecentRawContext
+        var anchors = options.IncludeRecentRawContext
             ? Array.Empty<ContextAnchor>()
             : _anchorExtractor.Extract(request, Array.Empty<RecentContextItem>());
         var includedRecent = Array.Empty<RecentContextItem>();
         var excludedRecent = Array.Empty<RecentContextItem>();
 
         // current_task section（第一个装配，此时 accumulators 为空，与原实现一致）
-        if (PackagePolicyResolver.ShouldIncludeCurrentTaskSection(request, policy))
+        if (options.IncludeCurrentTaskSection)
         {
             var currentTask = inputs.CurrentTask;
             if (currentTask is not null)
@@ -70,7 +71,7 @@ internal sealed class CandidateSelector
                 var currentTaskCandidate = PackageTraceCandidate.FromCurrentTask(
                     currentTask,
                     _estimateTokens(content, tokenContext));
-                CommitSection(state, policy, modeBudgetProfile, tokenBudget, tokenContext, new SectionDraft
+                CommitSection(state, options, new SectionDraft
                 {
                     Name = "current_task",
                     DefaultPriority = 110,
@@ -84,7 +85,7 @@ internal sealed class CandidateSelector
         }
 
         // recent filter + anchors + retrievalPlan
-        if (policy.IncludeRecentRawContext)
+        if (options.IncludeRecentRawContext)
         {
             var recentItems = inputs.RecentItems!;
 
@@ -149,7 +150,7 @@ internal sealed class CandidateSelector
                     ? PackageSectionFormatter.FormatConstraintBlocks(hardToFormat, tokenBudget)
                     : new[] { "(所有硬约束已在更优 Section 中包含)" };
 
-                CommitSection(state, policy, modeBudgetProfile, tokenBudget, tokenContext, new SectionDraft
+                CommitSection(state, options, new SectionDraft
                 {
                     Name = "hard_constraints",
                     DefaultPriority = 100,
@@ -171,13 +172,13 @@ internal sealed class CandidateSelector
             var workingWithBreakdowns = WorkingMemoryRecaller.RecallWorkingMemoryWithBreakdowns(
                 workingCandidatesRaw,
                 anchors,
-                policy.MaxRecentItems > 0 ? policy.MaxRecentItems : 20,
+                maxRecentItems,
                 isAuditMode,
                 true,
                 tokenBudget,
                 packageModeName,
                 packageMustHitIds,
-                policy.EnableStrictRelevanceFilter);
+                options.EnableStrictRelevanceFilter);
             workingWithBreakdowns = WorkingMemoryRecaller.EnsureReservedWorkingMemoryCandidates(
                 workingCandidatesRaw,
                 workingWithBreakdowns,
@@ -186,7 +187,7 @@ internal sealed class CandidateSelector
                 true,
                 packageModeName,
                 packageMustHitIds,
-                policy.EnableStrictRelevanceFilter);
+                options.EnableStrictRelevanceFilter);
 
             workingMemory = workingWithBreakdowns.Select(x => x.Item).ToArray();
 
@@ -213,7 +214,7 @@ internal sealed class CandidateSelector
                     ? PackageSectionFormatter.FormatMemoryBlocks(workingToFormat, tokenBudget)
                     : new[] { "(所有活跃工作区记忆已在此前去重包含)" };
 
-                CommitSection(state, policy, modeBudgetProfile, tokenBudget, tokenContext, new SectionDraft
+                CommitSection(state, options, new SectionDraft
                 {
                     Name = "working_memory",
                     DefaultPriority = 90,
@@ -244,7 +245,7 @@ internal sealed class CandidateSelector
                         ? PackageSectionFormatter.FormatMemoryBlocks(historicalToFormat, tokenBudget)
                         : new[] { "(所有历史审计记忆已在此前去重包含)" };
 
-                    CommitSection(state, policy, modeBudgetProfile, tokenBudget, tokenContext, new SectionDraft
+                    CommitSection(state, options, new SectionDraft
                     {
                         Name = "historical_context",
                         DefaultPriority = 15,
@@ -284,7 +285,7 @@ internal sealed class CandidateSelector
                 ? PackageSectionFormatter.FormatGlobalBlocks(globalToFormat)
                 : new[] { "(所有全局上下文已在此前去重包含)" };
 
-            CommitSection(state, policy, modeBudgetProfile, tokenBudget, tokenContext, new SectionDraft
+            CommitSection(state, options, new SectionDraft
             {
                 Name = "global_context",
                 DefaultPriority = 80,
@@ -297,7 +298,7 @@ internal sealed class CandidateSelector
         }
 
         // recent_context
-        if (policy.IncludeRecentRawContext)
+        if (options.IncludeRecentRawContext)
         {
             foreach (var item in includedRecent)
             {
@@ -320,7 +321,7 @@ internal sealed class CandidateSelector
                 ? PackageSectionFormatter.FormatRecentContextBlocks(recentToFormat, tokenBudget)
                 : new[] { "(所有近期短期上下文已在此前去重包含)" };
 
-            CommitSection(state, policy, modeBudgetProfile, tokenBudget, tokenContext, new SectionDraft
+            CommitSection(state, options, new SectionDraft
             {
                 Name = "recent_context",
                 DefaultPriority = 70,
@@ -336,13 +337,12 @@ internal sealed class CandidateSelector
         IReadOnlyList<ContextMemoryItem> stableMemory = Array.Empty<ContextMemoryItem>();
         if (inputs.StableCandidatesRaw is not null)
         {
-            var maxStableItems = policy.MaxRecentItems > 0 ? policy.MaxRecentItems : 20;
             var stableCandidatesRaw = inputs.StableCandidatesRaw;
             stableMemory = WorkingMemoryRecaller.RecallStableMemory(
                 stableCandidatesRaw,
                 anchors,
                 workingMemory,
-                maxStableItems,
+                maxRecentItems,
                 packageModeName,
                 packageMustHitIds);
 
@@ -366,7 +366,7 @@ internal sealed class CandidateSelector
                 ? PackageSectionFormatter.FormatMemoryBlocks(stableToFormat, tokenBudget)
                 : new[] { "(所有稳定背景记忆已在此前去重包含)" };
 
-            CommitSection(state, policy, modeBudgetProfile, tokenBudget, tokenContext, new SectionDraft
+            CommitSection(state, options, new SectionDraft
             {
                 Name = "stable_memory",
                 DefaultPriority = 60,
@@ -407,7 +407,7 @@ internal sealed class CandidateSelector
                     ? PackageSectionFormatter.FormatConstraintBlocks(softToFormat, tokenBudget)
                     : new[] { "(所有软约束已在此前去重包含)" };
 
-                CommitSection(state, policy, modeBudgetProfile, tokenBudget, tokenContext, new SectionDraft
+                CommitSection(state, options, new SectionDraft
                 {
                     Name = "soft_constraints",
                     DefaultPriority = 50,
@@ -421,7 +421,7 @@ internal sealed class CandidateSelector
         }
 
         // merged constraints (constraints section)
-        if (PackagePolicyResolver.ShouldIncludeMergedConstraintsSection(request, policy))
+        if (options.IncludeMergedConstraintsSection)
         {
             var mergedConstraints = inputs.MergedConstraints!;
             var orderedMergedConstraints = LegacyPackageScorer.OrderMergedConstraints(mergedConstraints.Where(LegacyPackageScorer.IsActive).Where(c => !state.AddedConstraintIds.Contains(c.Id)));
@@ -442,7 +442,7 @@ internal sealed class CandidateSelector
                 ? PackageSectionFormatter.FormatMergedConstraintBlocks(mergedToFormat, tokenBudget)
                 : new[] { "(所有合并约束已在此前去重包含)" };
 
-            CommitSection(state, policy, modeBudgetProfile, tokenBudget, tokenContext, new SectionDraft
+            CommitSection(state, options, new SectionDraft
             {
                 Name = "constraints",
                 DefaultPriority = 95,
@@ -490,7 +490,7 @@ internal sealed class CandidateSelector
                     ? PackageSectionFormatter.FormatContextItemBlocks(relatedToFormat)
                     : new[] { "(所有关联图谱扩展上下文已在此前去重包含)" };
 
-                CommitSection(state, policy, modeBudgetProfile, tokenBudget, tokenContext, new SectionDraft
+                CommitSection(state, options, new SectionDraft
                 {
                     Name = "related_context",
                     DefaultPriority = 40,
@@ -504,7 +504,7 @@ internal sealed class CandidateSelector
         }
 
         // evidence section
-        if (PackagePolicyResolver.ShouldIncludeEvidenceSection(request, policy, state.SelectedItems.Count > 0))
+        if (options.ShouldIncludeEvidenceSection(state.SelectedItems.Count > 0))
         {
             var evidenceItems = PackageSectionFormatter.BuildEvidenceEntries(state.Sections, state.SelectedItems);
             _assembler.AddSection(
@@ -531,7 +531,7 @@ internal sealed class CandidateSelector
             state.LowConfidenceRelations,
             tokenBudget,
             state.EstimatedTokens);
-        if (PackagePolicyResolver.ShouldIncludeDiagnosticsSection(request, policy, "excluded", state.DroppedItems.Count > 0))
+        if (options.ShouldIncludeDiagnosticsSection("excluded", state.DroppedItems.Count > 0))
         {
             _assembler.AddSection(
                 state.Sections,
@@ -549,7 +549,7 @@ internal sealed class CandidateSelector
                 ref state.EstimatedTokens);
         }
 
-        if (PackagePolicyResolver.ShouldIncludeDiagnosticsSection(request, policy, "uncertainties", uncertainties.Count > 0))
+        if (options.ShouldIncludeDiagnosticsSection("uncertainties", uncertainties.Count > 0))
         {
             _assembler.AddSection(
                 state.Sections,
@@ -585,12 +585,14 @@ internal sealed class CandidateSelector
     /// </summary>
     private void CommitSection(
         SelectionState state,
-        ContextPackagePolicy policy,
-        ModeBudgetProfile? modeBudgetProfile,
-        int tokenBudget,
-        TokenEstimationContext tokenContext,
+        ResolvedPackageOptions options,
         SectionDraft draft)
     {
+        var policy = options.Policy;
+        var modeBudgetProfile = options.ModeBudgetProfile;
+        var tokenBudget = options.TokenBudget;
+        var tokenContext = options.TokenContext;
+
         var sectionBudget = draft.BudgetKind switch
         {
             SectionBudgetKind.Historical => PackageSectionBudgetResolver.ResolveHistoricalSectionTokenBudget(policy, modeBudgetProfile, draft.Name, tokenBudget),

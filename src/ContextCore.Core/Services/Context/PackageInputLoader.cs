@@ -31,21 +31,21 @@ internal sealed class PackageInputLoader
     }
 
     /// <summary>
-    /// 加载阶段：按 policy/request 决定需要预取的数据源，并行查询后返回 <see cref="PackageInputs"/>。
+    /// 加载阶段：按 ResolvedPackageOptions 决定需要预取的数据源，并行查询后返回 <see cref="PackageInputs"/>。
     /// 顺序保持与原实现一致：先解析 current_task，再并行预取 6 源，最后解析 merged constraints。
     /// </summary>
     internal async Task<PackageInputs> LoadAsync(
-        ContextPackageRequest request,
-        ContextPackagePolicy policy,
+        ResolvedPackageOptions options,
         CancellationToken cancellationToken)
     {
-        var workspaceId = PackagePolicyResolver.NormalizeRequiredValue(request.WorkspaceId);
-        var collectionId = PackagePolicyResolver.NormalizeRequiredValue(policy.CollectionId, request.CollectionId);
-        var maxRecentItems = policy.MaxRecentItems > 0 ? policy.MaxRecentItems : 20;
+        var request = options.Request;
+        var workspaceId = options.WorkspaceId;
+        var collectionId = options.CollectionId;
+        var maxRecentItems = options.MaxRecentItems;
 
         // current_task 解析（与原实现顺序一致：先于 6 源预取）。
         WorkingMemoryCurrentTask? currentTask = null;
-        if (PackagePolicyResolver.ShouldIncludeCurrentTaskSection(request, policy))
+        if (options.IncludeCurrentTaskSection)
         {
             currentTask = await ResolveCurrentTaskAsync(
                 request,
@@ -56,7 +56,7 @@ internal sealed class PackageInputLoader
         // P1 性能：recent/hard/working/global/stable/soft 六个独立数据源查询仅依赖
         // workspaceId/collectionId/policy，彼此无依赖。先并行预取原始结果，再按原顺序
         // 处理（filter/anchors/section assembly 仍串行），保证字节级确定性输出不变。
-        Task<IReadOnlyList<ContextItem>>? recentItemsTask = policy.IncludeRecentRawContext
+        Task<IReadOnlyList<ContextItem>>? recentItemsTask = options.IncludeRecentRawContext
             ? _store.QueryAsync(new ContextQuery
                 {
                     WorkspaceId = workspaceId,
@@ -70,7 +70,7 @@ internal sealed class PackageInputLoader
             : null;
 
         Task<IReadOnlyList<ContextConstraint>>? hardConstraintsTask =
-            ((policy.IncludeHardConstraints || !PackagePolicyResolver.ShouldIncludeMergedConstraintsSection(request, policy)) && _constraintStore is not null)
+            ((options.IncludeHardConstraints || !options.IncludeMergedConstraintsSection) && _constraintStore is not null)
             ? _constraintStore.QueryAsync(new ContextConstraintQuery
                 {
                     WorkspaceId = workspaceId,
@@ -81,7 +81,7 @@ internal sealed class PackageInputLoader
             : null;
 
         Task<IReadOnlyList<ContextMemoryItem>>? workingCandidatesRawTask =
-            (policy.IncludeWorkingMemory && _memoryStore is not null)
+            (options.IncludeWorkingMemory && _memoryStore is not null)
             ? _memoryStore.QueryAsync(new ContextMemoryQuery
                 {
                     WorkspaceId = workspaceId,
@@ -92,7 +92,7 @@ internal sealed class PackageInputLoader
             : null;
 
         Task<IReadOnlyList<ContextGlobalItem>>? globalItemsTask =
-            (policy.IncludeGlobalContext && _globalContextStore is not null)
+            (options.IncludeGlobalContext && _globalContextStore is not null)
             ? _globalContextStore.QueryAsync(new ContextGlobalQuery
                 {
                     WorkspaceId = workspaceId,
@@ -102,7 +102,7 @@ internal sealed class PackageInputLoader
             : null;
 
         Task<IReadOnlyList<ContextMemoryItem>>? stableCandidatesRawTask =
-            (policy.IncludeStableMemory && _memoryStore is not null)
+            (options.IncludeStableMemory && _memoryStore is not null)
             ? _memoryStore.QueryAsync(new ContextMemoryQuery
                 {
                     WorkspaceId = workspaceId,
@@ -114,7 +114,7 @@ internal sealed class PackageInputLoader
             : null;
 
         Task<IReadOnlyList<ContextConstraint>>? softConstraintsTask =
-            (policy.IncludeSoftConstraints && _constraintStore is not null)
+            (options.IncludeSoftConstraints && _constraintStore is not null)
             ? _constraintStore.QueryAsync(new ContextConstraintQuery
                 {
                     WorkspaceId = workspaceId,
@@ -138,11 +138,10 @@ internal sealed class PackageInputLoader
 
         // merged constraints 解析（仅在对应 section 启用时）。
         IReadOnlyList<ContextConstraint>? mergedConstraints = null;
-        if (PackagePolicyResolver.ShouldIncludeMergedConstraintsSection(request, policy))
+        if (options.IncludeMergedConstraintsSection)
         {
             mergedConstraints = await ResolveMergedConstraintsAsync(
-                request,
-                policy,
+                options,
                 collectionId ?? string.Empty,
                 cancellationToken).ConfigureAwait(false);
         }
@@ -159,21 +158,19 @@ internal sealed class PackageInputLoader
     }
 
     private async Task<IReadOnlyList<ContextConstraint>> ResolveMergedConstraintsAsync(
-        ContextPackageRequest request,
-        ContextPackagePolicy policy,
+        ResolvedPackageOptions options,
         string collectionId,
         CancellationToken cancellationToken)
     {
-        var workspaceId = PackagePolicyResolver.NormalizeRequiredValue(request.WorkspaceId);
         var constraints = new List<ContextConstraint>();
         if (_constraintStore is not null)
         {
             // 合并约束只在显式开启时查询，并设置上限，避免为了可选 section 触发无界扫描。
-            var take = PackagePolicyResolver.ResolveIntSetting(request, policy, "constraintMergeMaxItems", 100, 1, 500);
+            var take = options.ConstraintMergeMaxItems;
             var storedConstraints = await _constraintStore.QueryAsync(
                 new ContextConstraintQuery
                 {
-                    WorkspaceId = workspaceId,
+                    WorkspaceId = options.WorkspaceId,
                     CollectionId = collectionId,
                     Take = take
                 },
@@ -181,7 +178,7 @@ internal sealed class PackageInputLoader
             constraints.AddRange(storedConstraints);
         }
 
-        constraints.AddRange(RequestTaskResolver.CreateRequestConstraints(request, collectionId));
+        constraints.AddRange(RequestTaskResolver.CreateRequestConstraints(options.Request, collectionId));
         return constraints;
     }
 
