@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
+using ContextCore.Storage.Shared;
 
 namespace ContextCore.Storage.InMemory;
 
@@ -17,7 +18,7 @@ public sealed class InMemoryVectorLifecycleSidecarMetadataStore : IVectorLifecyc
         ArgumentNullException.ThrowIfNull(entry);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var normalized = Normalize(entry);
+        var normalized = CandidateRecordNormalizer.Normalize(entry);
         _items[BuildKey(normalized)] = normalized;
         return Task.CompletedTask;
     }
@@ -37,35 +38,10 @@ public sealed class InMemoryVectorLifecycleSidecarMetadataStore : IVectorLifecyc
                 .Where(item => string.IsNullOrWhiteSpace(collectionId)
                     || string.Equals(item.CollectionId, collectionId, StringComparison.OrdinalIgnoreCase))
                 .OrderByDescending(static item => item.CreatedAt)
-                .Select(Clone)
+                .Select(CandidateRecordNormalizer.Clone)
         ]);
     }
 
     private static string BuildKey(VectorLifecycleSidecarMetadataEntry entry)
         => string.Join('\u001f', entry.WorkspaceId, entry.CollectionId, entry.SourceReviewId, entry.ItemId);
-
-    private static VectorLifecycleSidecarMetadataEntry Normalize(VectorLifecycleSidecarMetadataEntry entry)
-        => new()
-        {
-            ItemId = entry.ItemId,
-            WorkspaceId = entry.WorkspaceId,
-            CollectionId = entry.CollectionId,
-            LifecycleOverride = entry.LifecycleOverride,
-            ReviewStatusOverride = entry.ReviewStatusOverride,
-            TargetSectionOverride = entry.TargetSectionOverride,
-            SourceReviewId = entry.SourceReviewId,
-            SourceCandidateId = entry.SourceCandidateId,
-            Reviewer = entry.Reviewer,
-            Reason = entry.Reason,
-            EvidenceRefs = [.. entry.EvidenceRefs],
-            SourceRefs = [.. entry.SourceRefs],
-            CreatedAt = entry.CreatedAt == default ? DateTimeOffset.UtcNow : entry.CreatedAt,
-            PolicyVersion = string.IsNullOrWhiteSpace(entry.PolicyVersion)
-                ? "vector-lifecycle-sidecar/v1"
-                : entry.PolicyVersion,
-            Metadata = new Dictionary<string, string>(entry.Metadata, StringComparer.OrdinalIgnoreCase)
-        };
-
-    private static VectorLifecycleSidecarMetadataEntry Clone(VectorLifecycleSidecarMetadataEntry entry)
-        => Normalize(entry);
 }

@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
+using ContextCore.Storage.Shared;
 
 namespace ContextCore.Storage.InMemory.Stores;
 
@@ -19,15 +20,15 @@ public sealed class InMemoryConstraintGapCandidateStore : IConstraintGapCandidat
         ArgumentNullException.ThrowIfNull(candidate);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var normalized = Normalize(candidate);
+        var normalized = CandidateRecordNormalizer.Normalize(candidate);
         var duplicate = _gaps.Values.FirstOrDefault(item => HasSameDedupeKey(item, normalized));
         if (duplicate is not null)
         {
-            return Task.FromResult(Clone(duplicate));
+            return Task.FromResult(CandidateRecordNormalizer.Clone(duplicate));
         }
 
         _gaps[normalized.GapId] = normalized;
-        return Task.FromResult(Clone(normalized));
+        return Task.FromResult(CandidateRecordNormalizer.Clone(normalized));
     }
 
     public Task<ConstraintGapCandidate?> GetAsync(
@@ -39,7 +40,7 @@ public sealed class InMemoryConstraintGapCandidateStore : IConstraintGapCandidat
 
         return Task.FromResult(
             _gaps.TryGetValue(gapId, out var gap)
-                ? Clone(gap)
+                ? CandidateRecordNormalizer.Clone(gap)
                 : null);
     }
 
@@ -55,7 +56,7 @@ public sealed class InMemoryConstraintGapCandidateStore : IConstraintGapCandidat
             .OrderByDescending(static item => item.CreatedAt)
             .Skip(Math.Max(0, query.Offset))
             .Take(query.Limit > 0 ? query.Limit : 20)
-            .Select(Clone)
+            .Select(CandidateRecordNormalizer.Clone)
             .ToArray();
 
         return Task.FromResult<IReadOnlyList<ConstraintGapCandidate>>(results);
@@ -92,7 +93,7 @@ public sealed class InMemoryConstraintGapCandidateStore : IConstraintGapCandidat
             metadata["lastReviewReason"] = reason.Trim();
         }
 
-        var updated = Normalize(new ConstraintGapCandidate
+        var updated = CandidateRecordNormalizer.Normalize(new ConstraintGapCandidate
         {
             GapId = existing.GapId,
             WorkspaceId = existing.WorkspaceId,
@@ -114,7 +115,7 @@ public sealed class InMemoryConstraintGapCandidateStore : IConstraintGapCandidat
             Metadata = metadata
         });
         _gaps[updated.GapId] = updated;
-        return Task.FromResult<ConstraintGapCandidate?>(Clone(updated));
+        return Task.FromResult<ConstraintGapCandidate?>(CandidateRecordNormalizer.Clone(updated));
     }
 
     public Task AppendReviewAsync(
@@ -124,7 +125,7 @@ public sealed class InMemoryConstraintGapCandidateStore : IConstraintGapCandidat
         ArgumentNullException.ThrowIfNull(record);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var normalized = Normalize(record);
+        var normalized = ReviewRecordNormalizer.Normalize(record);
         _reviews[normalized.ReviewId] = normalized;
         return Task.CompletedTask;
     }
@@ -139,7 +140,7 @@ public sealed class InMemoryConstraintGapCandidateStore : IConstraintGapCandidat
         var results = _reviews.Values
             .Where(item => string.Equals(item.GapId, gapId, StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(static item => item.CreatedAt)
-            .Select(Clone)
+            .Select(ReviewRecordNormalizer.Clone)
             .ToArray();
 
         return Task.FromResult<IReadOnlyList<ConstraintGapReviewRecord>>(results);
@@ -155,73 +156,6 @@ public sealed class InMemoryConstraintGapCandidateStore : IConstraintGapCandidat
             && (string.IsNullOrWhiteSpace(query.Status) || string.Equals(item.Status, query.Status, StringComparison.OrdinalIgnoreCase))
             && (string.IsNullOrWhiteSpace(query.Severity) || string.Equals(item.Severity, query.Severity, StringComparison.OrdinalIgnoreCase));
     }
-
-    private static ConstraintGapCandidate Normalize(ConstraintGapCandidate candidate)
-    {
-        var createdAt = candidate.CreatedAt == default ? DateTimeOffset.UtcNow : candidate.CreatedAt;
-        var expectedText = candidate.ExpectedConstraintText.Trim();
-        return new ConstraintGapCandidate
-        {
-            GapId = string.IsNullOrWhiteSpace(candidate.GapId)
-                ? BuildGapId(candidate.WorkspaceId, candidate.CollectionId, expectedText, candidate.SourceSampleId)
-                : candidate.GapId.Trim(),
-            WorkspaceId = candidate.WorkspaceId,
-            CollectionId = candidate.CollectionId,
-            SessionId = candidate.SessionId,
-            Source = candidate.Source,
-            SourceSampleId = candidate.SourceSampleId,
-            SourceOperationId = candidate.SourceOperationId,
-            ExpectedConstraintText = expectedText,
-            MatchedConstraintIds = candidate.MatchedConstraintIds.ToArray(),
-            SuggestedConstraintTitle = candidate.SuggestedConstraintTitle,
-            SuggestedConstraintScope = string.IsNullOrWhiteSpace(candidate.SuggestedConstraintScope)
-                ? "Collection"
-                : candidate.SuggestedConstraintScope,
-            SuggestedConstraintType = string.IsNullOrWhiteSpace(candidate.SuggestedConstraintType)
-                ? "Hard"
-                : candidate.SuggestedConstraintType,
-            Severity = string.IsNullOrWhiteSpace(candidate.Severity) ? ConstraintGapSeverity.High : candidate.Severity,
-            Reason = candidate.Reason,
-            EvidenceRefs = candidate.EvidenceRefs.ToArray(),
-            Status = string.IsNullOrWhiteSpace(candidate.Status) ? ConstraintGapStatus.Pending : candidate.Status,
-            CreatedAt = createdAt,
-            Metadata = new Dictionary<string, string>(candidate.Metadata, StringComparer.OrdinalIgnoreCase)
-        };
-    }
-
-    private static ConstraintGapCandidate Clone(ConstraintGapCandidate candidate) => Normalize(candidate);
-
-    private static ConstraintGapReviewRecord Normalize(ConstraintGapReviewRecord record)
-    {
-        var createdAt = record.CreatedAt == default ? DateTimeOffset.UtcNow : record.CreatedAt;
-        return new ConstraintGapReviewRecord
-        {
-            ReviewId = string.IsNullOrWhiteSpace(record.ReviewId) ? Guid.NewGuid().ToString("N") : record.ReviewId,
-            GapId = record.GapId,
-            WorkspaceId = record.WorkspaceId,
-            CollectionId = record.CollectionId,
-            SessionId = record.SessionId,
-            Action = record.Action,
-            FromStatus = string.IsNullOrWhiteSpace(record.FromStatus) ? ConstraintGapStatus.Pending : record.FromStatus,
-            ToStatus = string.IsNullOrWhiteSpace(record.ToStatus) ? ConstraintGapStatus.Pending : record.ToStatus,
-            Reviewer = record.Reviewer,
-            Reason = record.Reason,
-            CreatedConstraintId = record.CreatedConstraintId,
-            TargetItemKind = record.TargetItemKind,
-            TargetLayer = record.TargetLayer,
-            SourceSampleId = record.SourceSampleId,
-            SourceOperationId = record.SourceOperationId,
-            ExpectedConstraintText = record.ExpectedConstraintText,
-            EvidenceRefs = record.EvidenceRefs.ToArray(),
-            CreatedAt = createdAt,
-            ReviewedAt = record.ReviewedAt == default ? createdAt : record.ReviewedAt,
-            Metadata = new Dictionary<string, string>(record.Metadata, StringComparer.OrdinalIgnoreCase),
-            Warnings = record.Warnings.ToArray(),
-            Errors = record.Errors.ToArray()
-        };
-    }
-
-    private static ConstraintGapReviewRecord Clone(ConstraintGapReviewRecord record) => Normalize(record);
 
     private static bool HasSameDedupeKey(ConstraintGapCandidate left, ConstraintGapCandidate right)
     {

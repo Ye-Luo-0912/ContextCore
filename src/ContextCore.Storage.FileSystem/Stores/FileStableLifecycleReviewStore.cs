@@ -1,5 +1,6 @@
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
+using ContextCore.Storage.Shared;
 
 namespace ContextCore.Storage.FileSystem.Stores;
 
@@ -9,11 +10,13 @@ public sealed class FileStableLifecycleReviewStore : IStableLifecycleReviewStore
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly FilePathResolver _paths;
     private readonly FileJsonLineStore _jsonLines;
+    private readonly FileScopeCatalog _scopeCatalog;
 
     public FileStableLifecycleReviewStore(FilePathResolver paths, FileFormatSerializer serializer)
     {
         _paths = paths;
         _jsonLines = new FileJsonLineStore(serializer);
+        _scopeCatalog = new FileScopeCatalog(paths);
     }
 
     public async Task AppendReviewAsync(
@@ -21,7 +24,7 @@ public sealed class FileStableLifecycleReviewStore : IStableLifecycleReviewStore
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(record);
-        var normalized = Normalize(record);
+        var normalized = ReviewRecordNormalizer.Normalize(record);
         if (string.IsNullOrWhiteSpace(normalized.CollectionId))
         {
             throw new ArgumentException("Stable lifecycle review 必须包含 collectionId。", nameof(record));
@@ -56,7 +59,7 @@ public sealed class FileStableLifecycleReviewStore : IStableLifecycleReviewStore
         try
         {
             var results = new List<StableLifecycleReviewRecord>();
-            foreach (var scope in EnumerateScopes())
+            foreach (var scope in _scopeCatalog.EnumerateScopes(_paths.GetStableLifecycleReviewsJsonlPath, _paths.GetLegacyStableLifecycleReviewsJsonlPath))
             {
                 var items = await ReadReviewsWithLegacyAsync(scope.WorkspaceId, scope.CollectionId, cancellationToken)
                     .ConfigureAwait(false);
@@ -67,59 +70,13 @@ public sealed class FileStableLifecycleReviewStore : IStableLifecycleReviewStore
             [
                 .. results
                     .OrderByDescending(static item => item.CreatedAt)
-                    .Select(Clone)
+                    .Select(ReviewRecordNormalizer.Clone)
             ];
         }
         finally
         {
             _gate.Release();
         }
-    }
-
-    private IReadOnlyList<ShortTermMemoryScope> EnumerateScopes()
-    {
-        var workspacesRoot = Path.Combine(_paths.RootPath, "workspaces");
-        if (!Directory.Exists(workspacesRoot))
-        {
-            return [];
-        }
-
-        return
-        [
-            .. Directory.EnumerateDirectories(workspacesRoot)
-                .SelectMany(workspaceDirectory =>
-                {
-                    var workspaceId = Path.GetFileName(workspaceDirectory);
-                    if (string.IsNullOrWhiteSpace(workspaceId))
-                    {
-                        return [];
-                    }
-
-                    var collectionsRoot = Path.Combine(workspaceDirectory, "collections");
-                    if (!Directory.Exists(collectionsRoot))
-                    {
-                        return [];
-                    }
-
-                    return Directory.EnumerateDirectories(collectionsRoot)
-                        .Select(collectionDirectory => new
-                        {
-                            WorkspaceId = workspaceId!,
-                            CollectionId = Path.GetFileName(collectionDirectory)
-                        })
-                        .Where(item => !string.IsNullOrWhiteSpace(item.CollectionId))
-                        .Where(item =>
-                            File.Exists(_paths.GetStableLifecycleReviewsJsonlPath(item.WorkspaceId, item.CollectionId!))
-                            || File.Exists(_paths.GetLegacyStableLifecycleReviewsJsonlPath(item.WorkspaceId, item.CollectionId!)))
-                        .Select(item => new ShortTermMemoryScope
-                        {
-                            WorkspaceId = item.WorkspaceId,
-                            CollectionId = item.CollectionId!
-                        })
-                        .ToArray();
-                })
-                .DistinctBy(scope => $"{scope.WorkspaceId}\u001f{scope.CollectionId}", StringComparer.OrdinalIgnoreCase)
-        ];
     }
 
     private async Task<IReadOnlyList<StableLifecycleReviewRecord>> ReadReviewsWithLegacyAsync(
@@ -153,34 +110,4 @@ public sealed class FileStableLifecycleReviewStore : IStableLifecycleReviewStore
             .. legacy.Where(item => string.IsNullOrWhiteSpace(item.ReviewId) || keys.Add(item.ReviewId))
         ];
     }
-
-    private static StableLifecycleReviewRecord Normalize(StableLifecycleReviewRecord record)
-    {
-        var createdAt = record.CreatedAt == default ? DateTimeOffset.UtcNow : record.CreatedAt;
-        return new StableLifecycleReviewRecord
-        {
-            ReviewId = string.IsNullOrWhiteSpace(record.ReviewId) ? Guid.NewGuid().ToString("N") : record.ReviewId,
-            StableItemId = record.StableItemId,
-            StableKind = record.StableKind,
-            WorkspaceId = record.WorkspaceId,
-            CollectionId = record.CollectionId,
-            Action = record.Action,
-            FromStatus = record.FromStatus,
-            ToStatus = record.ToStatus,
-            FromLifecycle = record.FromLifecycle,
-            ToLifecycle = record.ToLifecycle,
-            Reviewer = record.Reviewer,
-            Reason = record.Reason,
-            ReplacementItemId = record.ReplacementItemId,
-            EvidenceRefs = record.EvidenceRefs.ToArray(),
-            SourceRefs = record.SourceRefs.ToArray(),
-            CreatedAt = createdAt,
-            ReviewedAt = record.ReviewedAt == default ? createdAt : record.ReviewedAt,
-            Metadata = new Dictionary<string, string>(record.Metadata, StringComparer.OrdinalIgnoreCase),
-            Warnings = record.Warnings.ToArray(),
-            Errors = record.Errors.ToArray()
-        };
-    }
-
-    private static StableLifecycleReviewRecord Clone(StableLifecycleReviewRecord record) => Normalize(record);
 }

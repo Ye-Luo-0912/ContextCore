@@ -1,4 +1,5 @@
 using ContextCore.Abstractions.Models;
+using ContextCore.Storage.Shared;
 
 namespace ContextCore.Storage.FileSystem.Stores;
 
@@ -19,7 +20,7 @@ public sealed class FileRelationDiagnosticsStore
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
-        var normalized = Normalize(snapshot);
+        var normalized = SnapshotRecordNormalizer.Normalize(snapshot);
         if (string.IsNullOrWhiteSpace(normalized.CollectionId))
         {
             throw new ArgumentException("Relation diagnostics 必须包含 collectionId。", nameof(snapshot));
@@ -104,7 +105,7 @@ public sealed class FileRelationDiagnosticsStore
             .. snapshots
                 .Where(predicate)
                 .OrderByDescending(static item => item.CreatedAt)
-                .Select(Normalize)
+                .Select(SnapshotRecordNormalizer.Normalize)
         ];
     }
 
@@ -114,22 +115,5 @@ public sealed class FileRelationDiagnosticsStore
             _paths.GetCollectionDirectory(workspaceId, collectionId),
             "relations",
             "diagnostics.jsonl");
-    }
-
-    private static RelationDiagnosticsSnapshot Normalize(RelationDiagnosticsSnapshot snapshot)
-    {
-        return new RelationDiagnosticsSnapshot
-        {
-            DiagnosticId = string.IsNullOrWhiteSpace(snapshot.DiagnosticId) ? Guid.NewGuid().ToString("N") : snapshot.DiagnosticId,
-            WorkspaceId = snapshot.WorkspaceId,
-            CollectionId = snapshot.CollectionId,
-            RelationId = snapshot.RelationId,
-            ItemId = snapshot.ItemId,
-            DiagnosticKind = snapshot.DiagnosticKind,
-            Severity = snapshot.Severity,
-            Message = snapshot.Message,
-            CreatedAt = snapshot.CreatedAt == default ? DateTimeOffset.UtcNow : snapshot.CreatedAt,
-            Metadata = new Dictionary<string, string>(snapshot.Metadata, StringComparer.OrdinalIgnoreCase)
-        };
     }
 }

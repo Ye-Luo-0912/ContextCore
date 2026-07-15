@@ -1,5 +1,6 @@
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
+using ContextCore.Storage.Shared;
 
 namespace ContextCore.Storage.FileSystem.Stores;
 
@@ -24,7 +25,7 @@ public sealed class FileGlobalContextStore : IGlobalContextStore
     {
         ArgumentNullException.ThrowIfNull(item);
 
-        var normalized = Normalize(item);
+        var normalized = SnapshotRecordNormalizer.Normalize(item);
         var path = _paths.GetGlobalContextJsonlPath(normalized.WorkspaceId);
 
         await _jsonLines.UpsertAsync(path, normalized, value => value.Id, cancellationToken)
@@ -83,28 +84,5 @@ public sealed class FileGlobalContextStore : IGlobalContextStore
         }
 
         return true;
-    }
-
-    private static ContextGlobalItem Normalize(ContextGlobalItem item)
-    {
-        var now = DateTimeOffset.UtcNow;
-
-        return new ContextGlobalItem
-        {
-            Id = string.IsNullOrWhiteSpace(item.Id) ? Guid.NewGuid().ToString("N") : item.Id,
-            WorkspaceId = item.WorkspaceId,
-            CollectionId = item.CollectionId,
-            Scope = item.Scope,
-            Type = item.Type,
-            Content = item.Content,
-            ContentFormat = item.ContentFormat,
-            Tags = item.Tags.ToArray(),
-            SourceRefs = item.SourceRefs.ToArray(),
-            Importance = item.Importance,
-            Version = item.Version <= 0 ? 1 : item.Version,
-            Metadata = new Dictionary<string, string>(item.Metadata),
-            CreatedAt = item.CreatedAt == default ? now : item.CreatedAt,
-            UpdatedAt = item.UpdatedAt == default ? now : item.UpdatedAt
-        };
     }
 }

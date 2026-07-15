@@ -1,5 +1,6 @@
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
+using ContextCore.Storage.Shared;
 
 namespace ContextCore.Storage.FileSystem.Stores;
 
@@ -8,11 +9,13 @@ public sealed class FileCandidateConstraintReviewStore : ICandidateConstraintRev
 {
     private readonly FilePathResolver _paths;
     private readonly FileJsonLineStore _jsonLines;
+    private readonly FileScopeCatalog _scopeCatalog;
 
     public FileCandidateConstraintReviewStore(FilePathResolver paths, FileFormatSerializer serializer)
     {
         _paths = paths;
         _jsonLines = new FileJsonLineStore(serializer);
+        _scopeCatalog = new FileScopeCatalog(paths);
     }
 
     public async Task AppendReviewAsync(
@@ -20,7 +23,7 @@ public sealed class FileCandidateConstraintReviewStore : ICandidateConstraintRev
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(record);
-        var normalized = Normalize(record);
+        var normalized = ReviewRecordNormalizer.Normalize(record);
         if (string.IsNullOrWhiteSpace(normalized.CollectionId))
         {
             throw new ArgumentException("CandidateConstraint review 必须包含 collectionId。", nameof(record));
@@ -44,7 +47,7 @@ public sealed class FileCandidateConstraintReviewStore : ICandidateConstraintRev
         ArgumentException.ThrowIfNullOrWhiteSpace(constraintId);
 
         var results = new List<CandidateConstraintReviewRecord>();
-        foreach (var scope in EnumerateScopes())
+        foreach (var scope in _scopeCatalog.EnumerateScopes(_paths.GetCandidateConstraintReviewsJsonlPath))
         {
             var path = _paths.GetCandidateConstraintReviewsJsonlPath(scope.WorkspaceId, scope.CollectionId);
             var items = await _jsonLines.ReadAsync<CandidateConstraintReviewRecord>(path, cancellationToken).ConfigureAwait(false);
@@ -53,84 +56,7 @@ public sealed class FileCandidateConstraintReviewStore : ICandidateConstraintRev
 
         return results
             .OrderByDescending(static item => item.CreatedAt)
-            .Select(Clone)
+            .Select(ReviewRecordNormalizer.Clone)
             .ToArray();
     }
-
-    private IReadOnlyList<ShortTermMemoryScope> EnumerateScopes()
-    {
-        var workspacesRoot = Path.Combine(_paths.RootPath, "workspaces");
-        if (!Directory.Exists(workspacesRoot))
-        {
-            return Array.Empty<ShortTermMemoryScope>();
-        }
-
-        return
-        [
-            .. Directory.EnumerateDirectories(workspacesRoot)
-                .SelectMany(workspaceDirectory =>
-                {
-                    var workspaceId = Path.GetFileName(workspaceDirectory);
-                    if (string.IsNullOrWhiteSpace(workspaceId))
-                    {
-                        return Array.Empty<ShortTermMemoryScope>();
-                    }
-
-                    var collectionsRoot = Path.Combine(workspaceDirectory, "collections");
-                    if (!Directory.Exists(collectionsRoot))
-                    {
-                        return [];
-                    }
-
-                    return
-                    [
-                        .. Directory.EnumerateDirectories(collectionsRoot)
-                            .Select(collectionDirectory => new
-                            {
-                                WorkspaceId = workspaceId,
-                                CollectionId = Path.GetFileName(collectionDirectory)
-                            })
-                            .Where(item => !string.IsNullOrWhiteSpace(item.CollectionId))
-                            .Where(item =>
-                                File.Exists(
-                                    _paths.GetCandidateConstraintReviewsJsonlPath(item.WorkspaceId, item.CollectionId)))
-                            .Select(item => new ShortTermMemoryScope
-                            {
-                                WorkspaceId = item.WorkspaceId,
-                                CollectionId = item.CollectionId
-                            })
-                    ];
-                })
-                .DistinctBy(scope => $"{scope.WorkspaceId}\u001f{scope.CollectionId}", StringComparer.OrdinalIgnoreCase)
-        ];
-    }
-
-    private static CandidateConstraintReviewRecord Normalize(CandidateConstraintReviewRecord record)
-    {
-        var createdAt = record.CreatedAt == default ? DateTimeOffset.UtcNow : record.CreatedAt;
-        return new CandidateConstraintReviewRecord
-        {
-            ReviewId = string.IsNullOrWhiteSpace(record.ReviewId) ? Guid.NewGuid().ToString("N") : record.ReviewId,
-            ConstraintId = record.ConstraintId,
-            WorkspaceId = record.WorkspaceId,
-            CollectionId = record.CollectionId,
-            Action = record.Action,
-            FromStatus = record.FromStatus,
-            ToStatus = record.ToStatus,
-            Reviewer = record.Reviewer,
-            Reason = record.Reason,
-            ActivatedConstraintId = record.ActivatedConstraintId,
-            SourceConstraintGapId = record.SourceConstraintGapId,
-            SourceSampleId = record.SourceSampleId,
-            SourceOperationId = record.SourceOperationId,
-            EvidenceRefs = record.EvidenceRefs.ToArray(),
-            CreatedAt = createdAt,
-            ReviewedAt = record.ReviewedAt == default ? createdAt : record.ReviewedAt,
-            Metadata = new Dictionary<string, string>(record.Metadata, StringComparer.OrdinalIgnoreCase),
-            Warnings = record.Warnings.ToArray(),
-            Errors = record.Errors.ToArray()
-        };
-    }
-
-    private static CandidateConstraintReviewRecord Clone(CandidateConstraintReviewRecord record) => Normalize(record);
 }

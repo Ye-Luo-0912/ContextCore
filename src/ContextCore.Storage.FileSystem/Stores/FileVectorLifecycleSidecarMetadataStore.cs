@@ -1,5 +1,6 @@
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
+using ContextCore.Storage.Shared;
 
 namespace ContextCore.Storage.FileSystem.Stores;
 
@@ -8,6 +9,7 @@ public sealed class FileVectorLifecycleSidecarMetadataStore : IVectorLifecycleSi
 {
     private readonly FilePathResolver _paths;
     private readonly FileJsonLineStore _jsonLines;
+    private readonly FileScopeCatalog _scopeCatalog;
 
     public FileVectorLifecycleSidecarMetadataStore(FileStorageOptions options)
         : this(new FilePathResolver(options), new FileFormatSerializer())
@@ -18,6 +20,7 @@ public sealed class FileVectorLifecycleSidecarMetadataStore : IVectorLifecycleSi
     {
         _paths = paths;
         _jsonLines = new FileJsonLineStore(serializer);
+        _scopeCatalog = new FileScopeCatalog(paths);
     }
 
     public async Task SaveAsync(
@@ -25,7 +28,7 @@ public sealed class FileVectorLifecycleSidecarMetadataStore : IVectorLifecycleSi
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(entry);
-        var normalized = Normalize(entry);
+        var normalized = CandidateRecordNormalizer.Normalize(entry);
         var path = _paths.GetVectorLifecycleSidecarMetadataJsonlPath(normalized.WorkspaceId, normalized.CollectionId);
         var key = BuildKey(normalized);
 
@@ -47,7 +50,7 @@ public sealed class FileVectorLifecycleSidecarMetadataStore : IVectorLifecycleSi
         ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
 
         var results = new List<VectorLifecycleSidecarMetadataEntry>();
-        foreach (var scope in ResolveScopes(workspaceId, collectionId))
+        foreach (var scope in _scopeCatalog.ResolveScopes(workspaceId, collectionId, _paths.GetVectorLifecycleSidecarMetadataJsonlPath))
         {
             var path = _paths.GetVectorLifecycleSidecarMetadataJsonlPath(scope.WorkspaceId, scope.CollectionId);
             var entries = await _jsonLines.ReadAsync<VectorLifecycleSidecarMetadataEntry>(path, cancellationToken)
@@ -59,90 +62,10 @@ public sealed class FileVectorLifecycleSidecarMetadataStore : IVectorLifecycleSi
         [
             .. results
                 .OrderByDescending(static item => item.CreatedAt)
-                .Select(Clone)
-        ];
-    }
-
-    private IReadOnlyList<ShortTermMemoryScope> ResolveScopes(string workspaceId, string? collectionId)
-    {
-        if (!string.IsNullOrWhiteSpace(collectionId))
-        {
-            return [new ShortTermMemoryScope { WorkspaceId = workspaceId, CollectionId = collectionId }];
-        }
-
-        return
-        [
-            .. EnumerateScopes()
-                .Where(scope => string.Equals(scope.WorkspaceId, workspaceId, StringComparison.OrdinalIgnoreCase))
-        ];
-    }
-
-    private IReadOnlyList<ShortTermMemoryScope> EnumerateScopes()
-    {
-        var workspacesRoot = Path.Combine(_paths.RootPath, "workspaces");
-        if (!Directory.Exists(workspacesRoot))
-        {
-            return Array.Empty<ShortTermMemoryScope>();
-        }
-
-        return
-        [
-            .. Directory.EnumerateDirectories(workspacesRoot)
-                .SelectMany(workspaceDirectory =>
-                {
-                    var workspaceId = Path.GetFileName(workspaceDirectory);
-                    var collectionsRoot = Path.Combine(workspaceDirectory, "collections");
-                    if (string.IsNullOrWhiteSpace(workspaceId) || !Directory.Exists(collectionsRoot))
-                    {
-                        return Array.Empty<ShortTermMemoryScope>();
-                    }
-
-                    return
-                    [
-                        .. Directory.EnumerateDirectories(collectionsRoot)
-                            .Select(collectionDirectory => new
-                            {
-                                WorkspaceId = workspaceId,
-                                CollectionId = Path.GetFileName(collectionDirectory)
-                            })
-                            .Where(item => !string.IsNullOrWhiteSpace(item.CollectionId))
-                            .Where(item => File.Exists(_paths.GetVectorLifecycleSidecarMetadataJsonlPath(item.WorkspaceId, item.CollectionId!)))
-                            .Select(item => new ShortTermMemoryScope
-                            {
-                                WorkspaceId = item.WorkspaceId,
-                                CollectionId = item.CollectionId
-                            })
-                    ];
-                })
-                .DistinctBy(scope => $"{scope.WorkspaceId}\u001f{scope.CollectionId}", StringComparer.OrdinalIgnoreCase)
+                .Select(CandidateRecordNormalizer.Clone)
         ];
     }
 
     private static string BuildKey(VectorLifecycleSidecarMetadataEntry entry)
         => string.Join('\u001f', entry.WorkspaceId, entry.CollectionId, entry.SourceReviewId, entry.ItemId);
-
-    private static VectorLifecycleSidecarMetadataEntry Normalize(VectorLifecycleSidecarMetadataEntry entry)
-        => new()
-        {
-            ItemId = entry.ItemId,
-            WorkspaceId = entry.WorkspaceId,
-            CollectionId = entry.CollectionId,
-            LifecycleOverride = entry.LifecycleOverride,
-            ReviewStatusOverride = entry.ReviewStatusOverride,
-            TargetSectionOverride = entry.TargetSectionOverride,
-            SourceReviewId = entry.SourceReviewId,
-            SourceCandidateId = entry.SourceCandidateId,
-            Reviewer = entry.Reviewer,
-            Reason = entry.Reason,
-            EvidenceRefs = [.. entry.EvidenceRefs],
-            SourceRefs = [.. entry.SourceRefs],
-            CreatedAt = entry.CreatedAt == default ? DateTimeOffset.UtcNow : entry.CreatedAt,
-            PolicyVersion = string.IsNullOrWhiteSpace(entry.PolicyVersion)
-                ? "vector-lifecycle-sidecar/v1"
-                : entry.PolicyVersion,
-            Metadata = new Dictionary<string, string>(entry.Metadata, StringComparer.OrdinalIgnoreCase)
-        };
-
-    private static VectorLifecycleSidecarMetadataEntry Clone(VectorLifecycleSidecarMetadataEntry entry)
-        => Normalize(entry);
 }

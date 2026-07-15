@@ -1,7 +1,7 @@
-using System.Security.Cryptography;
 using System.Text;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
+using ContextCore.Storage.Shared;
 
 namespace ContextCore.Storage.FileSystem.Stores;
 
@@ -11,6 +11,7 @@ public sealed class FileConstraintGapCandidateStore : IConstraintGapCandidateSto
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly FilePathResolver _paths;
     private readonly FileJsonLineStore _jsonLines;
+    private readonly FileScopeCatalog _scopeCatalog;
 
     public FileConstraintGapCandidateStore(FileStorageOptions options)
         : this(new FilePathResolver(options), new FileFormatSerializer())
@@ -21,6 +22,7 @@ public sealed class FileConstraintGapCandidateStore : IConstraintGapCandidateSto
     {
         _paths = paths;
         _jsonLines = new FileJsonLineStore(serializer);
+        _scopeCatalog = new FileScopeCatalog(paths);
     }
 
     public async Task<ConstraintGapCandidate> SaveAsync(
@@ -28,7 +30,7 @@ public sealed class FileConstraintGapCandidateStore : IConstraintGapCandidateSto
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(candidate);
-        var normalized = Normalize(candidate);
+        var normalized = CandidateRecordNormalizer.Normalize(candidate);
         var path = _paths.GetConstraintGapCandidatesJsonlPath(normalized.WorkspaceId, normalized.CollectionId);
         ConstraintGapCandidate? duplicate = null;
 
@@ -50,7 +52,7 @@ public sealed class FileConstraintGapCandidateStore : IConstraintGapCandidateSto
             },
             cancellationToken).ConfigureAwait(false);
 
-        return duplicate is not null ? Clone(duplicate) : Clone(normalized);
+        return duplicate is not null ? CandidateRecordNormalizer.Clone(duplicate) : CandidateRecordNormalizer.Clone(normalized);
     }
 
     public async Task<ConstraintGapCandidate?> GetAsync(
@@ -59,14 +61,14 @@ public sealed class FileConstraintGapCandidateStore : IConstraintGapCandidateSto
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(gapId);
 
-        foreach (var scope in EnumerateScopes())
+        foreach (var scope in _scopeCatalog.EnumerateScopes(_paths.GetConstraintGapCandidatesJsonlPath))
         {
             var path = _paths.GetConstraintGapCandidatesJsonlPath(scope.WorkspaceId, scope.CollectionId);
             var items = await _jsonLines.ReadAsync<ConstraintGapCandidate>(path, cancellationToken).ConfigureAwait(false);
             var match = items.FirstOrDefault(item => string.Equals(item.GapId, gapId, StringComparison.OrdinalIgnoreCase));
             if (match is not null)
             {
-                return Clone(match);
+                return CandidateRecordNormalizer.Clone(match);
             }
         }
 
@@ -80,7 +82,7 @@ public sealed class FileConstraintGapCandidateStore : IConstraintGapCandidateSto
         ArgumentNullException.ThrowIfNull(query);
 
         var results = new List<ConstraintGapCandidate>();
-        foreach (var scope in ResolveScopes(query.WorkspaceId, query.CollectionId))
+        foreach (var scope in _scopeCatalog.ResolveScopes(query.WorkspaceId, query.CollectionId, _paths.GetConstraintGapCandidatesJsonlPath))
         {
             var path = _paths.GetConstraintGapCandidatesJsonlPath(scope.WorkspaceId, scope.CollectionId);
             var items = await _jsonLines.ReadAsync<ConstraintGapCandidate>(path, cancellationToken).ConfigureAwait(false);
@@ -91,7 +93,7 @@ public sealed class FileConstraintGapCandidateStore : IConstraintGapCandidateSto
             .OrderByDescending(static item => item.CreatedAt)
             .Skip(Math.Max(0, query.Offset))
             .Take(query.Limit > 0 ? query.Limit : 20)
-            .Select(Clone)
+            .Select(CandidateRecordNormalizer.Clone)
             .ToArray();
     }
 
@@ -108,7 +110,7 @@ public sealed class FileConstraintGapCandidateStore : IConstraintGapCandidateSto
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            foreach (var scope in EnumerateScopes())
+            foreach (var scope in _scopeCatalog.EnumerateScopes(_paths.GetConstraintGapCandidatesJsonlPath))
             {
                 var path = _paths.GetConstraintGapCandidatesJsonlPath(scope.WorkspaceId, scope.CollectionId);
                 var items = await _jsonLines.ReadAsync<ConstraintGapCandidate>(path, cancellationToken).ConfigureAwait(false);
@@ -133,7 +135,7 @@ public sealed class FileConstraintGapCandidateStore : IConstraintGapCandidateSto
                     metadata["lastReviewReason"] = reason.Trim();
                 }
 
-                var updatedGap = Normalize(new ConstraintGapCandidate
+                var updatedGap = CandidateRecordNormalizer.Normalize(new ConstraintGapCandidate
                 {
                     GapId = existing.GapId,
                     WorkspaceId = existing.WorkspaceId,
@@ -160,7 +162,7 @@ public sealed class FileConstraintGapCandidateStore : IConstraintGapCandidateSto
                     .OrderByDescending(static item => item.CreatedAt)
                     .ToArray();
                 await _jsonLines.WriteAsync(path, updatedItems, cancellationToken).ConfigureAwait(false);
-                return Clone(updatedGap);
+                return CandidateRecordNormalizer.Clone(updatedGap);
             }
 
             return null;
@@ -176,7 +178,7 @@ public sealed class FileConstraintGapCandidateStore : IConstraintGapCandidateSto
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(record);
-        var normalized = Normalize(record);
+        var normalized = ReviewRecordNormalizer.Normalize(record);
         var path = _paths.GetConstraintGapReviewsJsonlPath(normalized.WorkspaceId, normalized.CollectionId);
 
         await _jsonLines.UpdateAsync<ConstraintGapReviewRecord>(
@@ -196,7 +198,7 @@ public sealed class FileConstraintGapCandidateStore : IConstraintGapCandidateSto
         ArgumentException.ThrowIfNullOrWhiteSpace(gapId);
 
         var results = new List<ConstraintGapReviewRecord>();
-        foreach (var scope in EnumerateScopes())
+        foreach (var scope in _scopeCatalog.EnumerateScopes(_paths.GetConstraintGapCandidatesJsonlPath))
         {
             var path = _paths.GetConstraintGapReviewsJsonlPath(scope.WorkspaceId, scope.CollectionId);
             var items = await _jsonLines.ReadAsync<ConstraintGapReviewRecord>(path, cancellationToken).ConfigureAwait(false);
@@ -205,61 +207,7 @@ public sealed class FileConstraintGapCandidateStore : IConstraintGapCandidateSto
 
         return results
             .OrderByDescending(static item => item.CreatedAt)
-            .Select(Clone)
-            .ToArray();
-    }
-
-    private IReadOnlyList<ShortTermMemoryScope> ResolveScopes(string workspaceId, string? collectionId)
-    {
-        if (!string.IsNullOrWhiteSpace(collectionId))
-        {
-            return [new ShortTermMemoryScope { WorkspaceId = workspaceId, CollectionId = collectionId }];
-        }
-
-        return EnumerateScopes()
-            .Where(scope => string.Equals(scope.WorkspaceId, workspaceId, StringComparison.OrdinalIgnoreCase))
-            .ToArray();
-    }
-
-    private IReadOnlyList<ShortTermMemoryScope> EnumerateScopes()
-    {
-        var workspacesRoot = Path.Combine(_paths.RootPath, "workspaces");
-        if (!Directory.Exists(workspacesRoot))
-        {
-            return Array.Empty<ShortTermMemoryScope>();
-        }
-
-        return Directory.EnumerateDirectories(workspacesRoot)
-            .SelectMany(workspaceDirectory =>
-            {
-                var workspaceId = Path.GetFileName(workspaceDirectory);
-                if (string.IsNullOrWhiteSpace(workspaceId))
-                {
-                    return [];
-                }
-
-                var collectionsRoot = Path.Combine(workspaceDirectory, "collections");
-                if (!Directory.Exists(collectionsRoot))
-                {
-                    return [];
-                }
-
-                return Directory.EnumerateDirectories(collectionsRoot)
-                    .Select(collectionDirectory => new
-                    {
-                        WorkspaceId = workspaceId!,
-                        CollectionId = Path.GetFileName(collectionDirectory)
-                    })
-                    .Where(item => !string.IsNullOrWhiteSpace(item.CollectionId))
-                    .Where(item => File.Exists(_paths.GetConstraintGapCandidatesJsonlPath(item.WorkspaceId, item.CollectionId!)))
-                    .Select(item => new ShortTermMemoryScope
-                    {
-                        WorkspaceId = item.WorkspaceId,
-                        CollectionId = item.CollectionId!
-                    })
-                    .ToArray();
-            })
-            .DistinctBy(scope => $"{scope.WorkspaceId}\u001f{scope.CollectionId}", StringComparer.OrdinalIgnoreCase)
+            .Select(ReviewRecordNormalizer.Clone)
             .ToArray();
     }
 
@@ -274,89 +222,12 @@ public sealed class FileConstraintGapCandidateStore : IConstraintGapCandidateSto
             && (string.IsNullOrWhiteSpace(query.Severity) || string.Equals(item.Severity, query.Severity, StringComparison.OrdinalIgnoreCase));
     }
 
-    private static ConstraintGapCandidate Normalize(ConstraintGapCandidate candidate)
-    {
-        var expectedText = candidate.ExpectedConstraintText.Trim();
-        return new ConstraintGapCandidate
-        {
-            GapId = string.IsNullOrWhiteSpace(candidate.GapId)
-                ? BuildGapId(candidate.WorkspaceId, candidate.CollectionId, expectedText, candidate.SourceSampleId)
-                : candidate.GapId.Trim(),
-            WorkspaceId = candidate.WorkspaceId,
-            CollectionId = candidate.CollectionId,
-            SessionId = candidate.SessionId,
-            Source = candidate.Source,
-            SourceSampleId = candidate.SourceSampleId,
-            SourceOperationId = candidate.SourceOperationId,
-            ExpectedConstraintText = expectedText,
-            MatchedConstraintIds = candidate.MatchedConstraintIds.ToArray(),
-            SuggestedConstraintTitle = candidate.SuggestedConstraintTitle,
-            SuggestedConstraintScope = string.IsNullOrWhiteSpace(candidate.SuggestedConstraintScope)
-                ? "Collection"
-                : candidate.SuggestedConstraintScope,
-            SuggestedConstraintType = string.IsNullOrWhiteSpace(candidate.SuggestedConstraintType)
-                ? "Hard"
-                : candidate.SuggestedConstraintType,
-            Severity = string.IsNullOrWhiteSpace(candidate.Severity) ? ConstraintGapSeverity.High : candidate.Severity,
-            Reason = candidate.Reason,
-            EvidenceRefs = candidate.EvidenceRefs.ToArray(),
-            Status = string.IsNullOrWhiteSpace(candidate.Status) ? ConstraintGapStatus.Pending : candidate.Status,
-            CreatedAt = candidate.CreatedAt == default ? DateTimeOffset.UtcNow : candidate.CreatedAt,
-            Metadata = new Dictionary<string, string>(candidate.Metadata, StringComparer.OrdinalIgnoreCase)
-        };
-    }
-
-    private static ConstraintGapCandidate Clone(ConstraintGapCandidate candidate) => Normalize(candidate);
-
-    private static ConstraintGapReviewRecord Normalize(ConstraintGapReviewRecord record)
-    {
-        var createdAt = record.CreatedAt == default ? DateTimeOffset.UtcNow : record.CreatedAt;
-        return new ConstraintGapReviewRecord
-        {
-            ReviewId = string.IsNullOrWhiteSpace(record.ReviewId) ? Guid.NewGuid().ToString("N") : record.ReviewId,
-            GapId = record.GapId,
-            WorkspaceId = record.WorkspaceId,
-            CollectionId = record.CollectionId,
-            SessionId = record.SessionId,
-            Action = record.Action,
-            FromStatus = string.IsNullOrWhiteSpace(record.FromStatus) ? ConstraintGapStatus.Pending : record.FromStatus,
-            ToStatus = string.IsNullOrWhiteSpace(record.ToStatus) ? ConstraintGapStatus.Pending : record.ToStatus,
-            Reviewer = record.Reviewer,
-            Reason = record.Reason,
-            CreatedConstraintId = record.CreatedConstraintId,
-            TargetItemKind = record.TargetItemKind,
-            TargetLayer = record.TargetLayer,
-            SourceSampleId = record.SourceSampleId,
-            SourceOperationId = record.SourceOperationId,
-            ExpectedConstraintText = record.ExpectedConstraintText,
-            EvidenceRefs = record.EvidenceRefs.ToArray(),
-            CreatedAt = createdAt,
-            ReviewedAt = record.ReviewedAt == default ? createdAt : record.ReviewedAt,
-            Metadata = new Dictionary<string, string>(record.Metadata, StringComparer.OrdinalIgnoreCase),
-            Warnings = record.Warnings.ToArray(),
-            Errors = record.Errors.ToArray()
-        };
-    }
-
-    private static ConstraintGapReviewRecord Clone(ConstraintGapReviewRecord record) => Normalize(record);
-
     private static bool HasSameDedupeKey(ConstraintGapCandidate left, ConstraintGapCandidate right)
     {
         return string.Equals(left.WorkspaceId, right.WorkspaceId, StringComparison.OrdinalIgnoreCase)
             && string.Equals(left.CollectionId, right.CollectionId, StringComparison.OrdinalIgnoreCase)
             && string.Equals(left.SourceSampleId, right.SourceSampleId, StringComparison.OrdinalIgnoreCase)
             && string.Equals(NormalizeText(left.ExpectedConstraintText), NormalizeText(right.ExpectedConstraintText), StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static string BuildGapId(
-        string workspaceId,
-        string collectionId,
-        string expectedConstraintText,
-        string sourceSampleId)
-    {
-        var key = string.Join('\u001f', workspaceId, collectionId, NormalizeText(expectedConstraintText), sourceSampleId);
-        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(key));
-        return $"constraint-gap-{Convert.ToHexString(hash)[..20].ToLowerInvariant()}";
     }
 
     private static string NormalizeText(string value)

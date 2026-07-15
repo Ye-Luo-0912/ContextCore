@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
+using ContextCore.Storage.Shared;
 
 namespace ContextCore.Storage.InMemory;
 
@@ -17,7 +18,7 @@ public sealed class InMemoryVectorLifecycleMetadataReviewCandidateStore : IVecto
         ArgumentNullException.ThrowIfNull(candidate);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var normalized = Normalize(candidate);
+        var normalized = CandidateRecordNormalizer.Normalize(candidate);
         _items[normalized.CandidateId] = normalized;
         return Task.CompletedTask;
     }
@@ -31,7 +32,7 @@ public sealed class InMemoryVectorLifecycleMetadataReviewCandidateStore : IVecto
 
         return Task.FromResult(
             _items.TryGetValue(candidateId, out var candidate)
-                ? Clone(candidate)
+                ? CandidateRecordNormalizer.Clone(candidate)
                 : null);
     }
 
@@ -47,7 +48,7 @@ public sealed class InMemoryVectorLifecycleMetadataReviewCandidateStore : IVecto
             .OrderByDescending(static candidate => candidate.CreatedAt)
             .Skip(Math.Max(0, query.Offset))
             .Take(query.Limit > 0 ? query.Limit : 50)
-            .Select(Clone)
+            .Select(CandidateRecordNormalizer.Clone)
             .ToArray();
 
         return Task.FromResult<IReadOnlyList<VectorLifecycleMetadataReviewCandidate>>(results);
@@ -65,42 +66,4 @@ public sealed class InMemoryVectorLifecycleMetadataReviewCandidateStore : IVecto
             && (string.IsNullOrWhiteSpace(query.MustHitItemId) || string.Equals(candidate.MustHitItemId, query.MustHitItemId, StringComparison.OrdinalIgnoreCase))
             && (string.IsNullOrWhiteSpace(query.SourceEvalSet) || string.Equals(candidate.SourceEvalSet, query.SourceEvalSet, StringComparison.OrdinalIgnoreCase));
     }
-
-    private static VectorLifecycleMetadataReviewCandidate Normalize(VectorLifecycleMetadataReviewCandidate candidate)
-    {
-        return new VectorLifecycleMetadataReviewCandidate
-        {
-            CandidateId = string.IsNullOrWhiteSpace(candidate.CandidateId) ? Guid.NewGuid().ToString("N") : candidate.CandidateId,
-            WorkspaceId = candidate.WorkspaceId,
-            CollectionId = candidate.CollectionId,
-            SourceSampleId = candidate.SourceSampleId,
-            SourceEvalSet = candidate.SourceEvalSet,
-            MustHitItemId = candidate.MustHitItemId,
-            ItemKind = candidate.ItemKind,
-            Layer = candidate.Layer,
-            CurrentLifecycle = candidate.CurrentLifecycle,
-            CurrentReviewStatus = candidate.CurrentReviewStatus,
-            CurrentTargetSection = candidate.CurrentTargetSection,
-            ProposedLifecycle = candidate.ProposedLifecycle,
-            ProposedReviewStatus = candidate.ProposedReviewStatus,
-            ProposedTargetSection = candidate.ProposedTargetSection,
-            RepairReason = candidate.RepairReason,
-            EvidenceRefs = candidate.EvidenceRefs.ToArray(),
-            SourceRefs = candidate.SourceRefs.ToArray(),
-            ProvenanceAvailable = candidate.ProvenanceAvailable,
-            RelationEvidenceAvailable = candidate.RelationEvidenceAvailable,
-            ReviewEvidenceAvailable = candidate.ReviewEvidenceAvailable,
-            RiskIfApproved = candidate.RiskIfApproved.ToArray(),
-            RiskIfRejected = candidate.RiskIfRejected.ToArray(),
-            RequiresHumanReview = candidate.RequiresHumanReview,
-            Status = string.IsNullOrWhiteSpace(candidate.Status)
-                ? VectorLifecycleMetadataReviewCandidateStatuses.PendingReview
-                : candidate.Status,
-            CreatedAt = candidate.CreatedAt == default ? DateTimeOffset.UtcNow : candidate.CreatedAt,
-            Metadata = new Dictionary<string, string>(candidate.Metadata, StringComparer.OrdinalIgnoreCase)
-        };
-    }
-
-    private static VectorLifecycleMetadataReviewCandidate Clone(VectorLifecycleMetadataReviewCandidate candidate)
-        => Normalize(candidate);
 }

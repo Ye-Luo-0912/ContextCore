@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
+using ContextCore.Storage.Shared;
 
 namespace ContextCore.Storage.InMemory;
 
@@ -17,7 +18,7 @@ public sealed class InMemoryVectorLifecycleMetadataReviewStore : IVectorLifecycl
         ArgumentNullException.ThrowIfNull(record);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var normalized = Normalize(record);
+        var normalized = ReviewRecordNormalizer.Normalize(record);
         _items[normalized.ReviewId] = normalized;
         return Task.CompletedTask;
     }
@@ -34,7 +35,7 @@ public sealed class InMemoryVectorLifecycleMetadataReviewStore : IVectorLifecycl
             .. _items.Values
                 .Where(item => string.Equals(item.CandidateId, candidateId, StringComparison.OrdinalIgnoreCase))
                 .OrderByDescending(static item => item.ReviewedAt)
-                .Select(Clone)
+                .Select(ReviewRecordNormalizer.Clone)
         ]);
     }
 
@@ -53,34 +54,7 @@ public sealed class InMemoryVectorLifecycleMetadataReviewStore : IVectorLifecycl
                 .Where(item => string.IsNullOrWhiteSpace(collectionId)
                     || string.Equals(item.CollectionId, collectionId, StringComparison.OrdinalIgnoreCase))
                 .OrderByDescending(static item => item.ReviewedAt)
-                .Select(Clone)
+                .Select(ReviewRecordNormalizer.Clone)
         ]);
     }
-
-    private static VectorLifecycleMetadataReviewRecord Normalize(VectorLifecycleMetadataReviewRecord record)
-        => new()
-        {
-            ReviewId = string.IsNullOrWhiteSpace(record.ReviewId) ? Guid.NewGuid().ToString("N") : record.ReviewId,
-            CandidateId = record.CandidateId,
-            WorkspaceId = record.WorkspaceId,
-            CollectionId = record.CollectionId,
-            MustHitItemId = record.MustHitItemId,
-            Decision = record.Decision,
-            ResultStatus = record.ResultStatus,
-            Reviewer = record.Reviewer,
-            Reason = record.Reason,
-            ProposedLifecycle = record.ProposedLifecycle,
-            ProposedReviewStatus = record.ProposedReviewStatus,
-            ProposedTargetSection = record.ProposedTargetSection,
-            EvidenceRefs = [.. record.EvidenceRefs],
-            SourceRefs = [.. record.SourceRefs],
-            SidecarWritten = record.SidecarWritten,
-            UnsafeApprovalBlocked = record.UnsafeApprovalBlocked,
-            BlockedReason = record.BlockedReason,
-            ReviewedAt = record.ReviewedAt == default ? DateTimeOffset.UtcNow : record.ReviewedAt,
-            Metadata = new Dictionary<string, string>(record.Metadata, StringComparer.OrdinalIgnoreCase)
-        };
-
-    private static VectorLifecycleMetadataReviewRecord Clone(VectorLifecycleMetadataReviewRecord record)
-        => Normalize(record);
 }

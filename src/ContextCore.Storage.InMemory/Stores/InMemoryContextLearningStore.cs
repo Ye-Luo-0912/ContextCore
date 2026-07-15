@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
+using ContextCore.Storage.Shared;
 
 namespace ContextCore.Storage.InMemory.Stores;
 
@@ -16,7 +17,7 @@ public sealed class InMemoryContextLearningStore : IContextLearningStore
         ArgumentNullException.ThrowIfNull(feedback);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var normalized = Normalize(feedback);
+        var normalized = LearningRecordNormalizer.Normalize(feedback);
         _feedback[normalized.FeedbackId] = normalized;
         return Task.CompletedTask;
     }
@@ -33,7 +34,7 @@ public sealed class InMemoryContextLearningStore : IContextLearningStore
             .OrderByDescending(static feedback => feedback.CreatedAt)
             .Skip(Math.Max(0, query.Offset))
             .Take(query.Limit > 0 ? query.Limit : 20)
-            .Select(Clone)
+            .Select(LearningRecordNormalizer.Clone)
             .ToArray();
 
         return Task.FromResult<IReadOnlyList<PromotionFeedbackSignal>>(results);
@@ -44,7 +45,7 @@ public sealed class InMemoryContextLearningStore : IContextLearningStore
         ArgumentNullException.ThrowIfNull(record);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var normalized = Normalize(record);
+        var normalized = LearningRecordNormalizer.Normalize(record);
         _records[normalized.RecordId] = normalized;
         return Task.CompletedTask;
     }
@@ -54,7 +55,7 @@ public sealed class InMemoryContextLearningStore : IContextLearningStore
         ArgumentException.ThrowIfNullOrWhiteSpace(recordId);
         cancellationToken.ThrowIfCancellationRequested();
 
-        return Task.FromResult(_records.TryGetValue(recordId, out var record) ? Clone(record) : null);
+        return Task.FromResult(_records.TryGetValue(recordId, out var record) ? LearningRecordNormalizer.Clone(record) : null);
     }
 
     public Task<IReadOnlyList<ContextLearningRecord>> QueryRecordsAsync(
@@ -69,7 +70,7 @@ public sealed class InMemoryContextLearningStore : IContextLearningStore
             .OrderByDescending(static record => record.CreatedAt)
             .Skip(Math.Max(0, query.Offset))
             .Take(query.Limit > 0 ? query.Limit : 20)
-            .Select(Clone)
+            .Select(LearningRecordNormalizer.Clone)
             .ToArray();
 
         return Task.FromResult<IReadOnlyList<ContextLearningRecord>>(results);
@@ -82,9 +83,9 @@ public sealed class InMemoryContextLearningStore : IContextLearningStore
         ArgumentNullException.ThrowIfNull(learningCase);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var normalized = Normalize(learningCase);
+        var normalized = LearningRecordNormalizer.Normalize(learningCase);
         _cases[normalized.CaseId] = normalized;
-        return Task.FromResult(Clone(normalized));
+        return Task.FromResult(LearningRecordNormalizer.Clone(normalized));
     }
 
     public Task<ContextLearningCase?> GetCaseAsync(string caseId, CancellationToken cancellationToken = default)
@@ -92,7 +93,7 @@ public sealed class InMemoryContextLearningStore : IContextLearningStore
         ArgumentException.ThrowIfNullOrWhiteSpace(caseId);
         cancellationToken.ThrowIfCancellationRequested();
 
-        return Task.FromResult(_cases.TryGetValue(caseId, out var learningCase) ? Clone(learningCase) : null);
+        return Task.FromResult(_cases.TryGetValue(caseId, out var learningCase) ? LearningRecordNormalizer.Clone(learningCase) : null);
     }
 
     public Task<IReadOnlyList<ContextLearningCase>> QueryCasesAsync(
@@ -107,7 +108,7 @@ public sealed class InMemoryContextLearningStore : IContextLearningStore
             .OrderByDescending(static learningCase => learningCase.CreatedAt)
             .Skip(Math.Max(0, query.Offset))
             .Take(query.Limit > 0 ? query.Limit : 20)
-            .Select(Clone)
+            .Select(LearningRecordNormalizer.Clone)
             .ToArray();
 
         return Task.FromResult<IReadOnlyList<ContextLearningCase>>(results);
@@ -144,87 +145,4 @@ public sealed class InMemoryContextLearningStore : IContextLearningStore
             && (string.IsNullOrWhiteSpace(query.CaseKind) || string.Equals(learningCase.CaseKind, query.CaseKind, StringComparison.OrdinalIgnoreCase))
             && (string.IsNullOrWhiteSpace(query.SourceRecordId) || string.Equals(learningCase.SourceRecordId, query.SourceRecordId, StringComparison.OrdinalIgnoreCase));
     }
-
-    private static ContextLearningRecord Normalize(ContextLearningRecord record)
-    {
-        return new ContextLearningRecord
-        {
-            RecordId = string.IsNullOrWhiteSpace(record.RecordId) ? Guid.NewGuid().ToString("N") : record.RecordId,
-            WorkspaceId = record.WorkspaceId,
-            CollectionId = record.CollectionId,
-            SessionId = record.SessionId,
-            SourceKind = record.SourceKind,
-            SourceId = record.SourceId,
-            CandidateId = record.CandidateId,
-            ReviewId = record.ReviewId,
-            EventKind = record.EventKind,
-            Signal = record.Signal,
-            FailureType = record.FailureType,
-            Reason = record.Reason,
-            Confidence = record.Confidence,
-            Importance = record.Importance,
-            EvidenceRefs = record.EvidenceRefs.ToArray(),
-            CreatedAt = record.CreatedAt == default ? DateTimeOffset.UtcNow : record.CreatedAt,
-            Metadata = new Dictionary<string, string>(record.Metadata, StringComparer.OrdinalIgnoreCase)
-        };
-    }
-
-    private static PromotionFeedbackSignal Normalize(PromotionFeedbackSignal feedback)
-    {
-        return new PromotionFeedbackSignal
-        {
-            FeedbackId = string.IsNullOrWhiteSpace(feedback.FeedbackId) ? Guid.NewGuid().ToString("N") : feedback.FeedbackId,
-            CandidateId = feedback.CandidateId,
-            WorkspaceId = feedback.WorkspaceId,
-            CollectionId = feedback.CollectionId,
-            SessionId = feedback.SessionId,
-            Action = feedback.Action,
-            Reviewer = feedback.Reviewer,
-            Reason = feedback.Reason,
-            SourceWorkingItemId = feedback.SourceWorkingItemId,
-            CreatedTargetItemId = feedback.CreatedTargetItemId,
-            SuggestedTargetLayer = feedback.SuggestedTargetLayer,
-            ActualTargetLayer = feedback.ActualTargetLayer,
-            Confidence = feedback.Confidence,
-            Importance = feedback.Importance,
-            EvidenceRefs = feedback.EvidenceRefs.ToArray(),
-            CreatedAt = feedback.CreatedAt == default ? DateTimeOffset.UtcNow : feedback.CreatedAt,
-            Metadata = new Dictionary<string, string>(feedback.Metadata, StringComparer.OrdinalIgnoreCase)
-        };
-    }
-
-    private static ContextLearningCase Normalize(ContextLearningCase learningCase)
-    {
-        return new ContextLearningCase
-        {
-            CaseId = string.IsNullOrWhiteSpace(learningCase.CaseId) ? Guid.NewGuid().ToString("N") : learningCase.CaseId,
-            SourceType = learningCase.SourceType,
-            WorkspaceId = learningCase.WorkspaceId,
-            CollectionId = learningCase.CollectionId,
-            SessionId = learningCase.SessionId,
-            SourceRecordId = learningCase.SourceRecordId,
-            SourceKind = learningCase.SourceKind,
-            SourceId = learningCase.SourceId,
-            CaseKind = learningCase.CaseKind,
-            Title = learningCase.Title,
-            Summary = learningCase.Summary,
-            InputSummary = learningCase.InputSummary,
-            ExpectedBehavior = learningCase.ExpectedBehavior,
-            Signal = learningCase.Signal,
-            FailureType = learningCase.FailureType,
-            CorrectionReason = learningCase.CorrectionReason,
-            Status = learningCase.Status,
-            EvidenceRefs = learningCase.EvidenceRefs.ToArray(),
-            PositiveRefs = learningCase.PositiveRefs.ToArray(),
-            NegativeRefs = learningCase.NegativeRefs.ToArray(),
-            CreatedAt = learningCase.CreatedAt == default ? DateTimeOffset.UtcNow : learningCase.CreatedAt,
-            Metadata = new Dictionary<string, string>(learningCase.Metadata, StringComparer.OrdinalIgnoreCase)
-        };
-    }
-
-    private static PromotionFeedbackSignal Clone(PromotionFeedbackSignal feedback) => Normalize(feedback);
-
-    private static ContextLearningRecord Clone(ContextLearningRecord record) => Normalize(record);
-
-    private static ContextLearningCase Clone(ContextLearningCase learningCase) => Normalize(learningCase);
 }

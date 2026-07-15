@@ -1,5 +1,6 @@
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
+using ContextCore.Storage.Shared;
 
 namespace ContextCore.Storage.FileSystem.Stores;
 
@@ -8,6 +9,7 @@ public sealed class FileVectorLifecycleMetadataReviewStore : IVectorLifecycleMet
 {
     private readonly FilePathResolver _paths;
     private readonly FileJsonLineStore _jsonLines;
+    private readonly FileScopeCatalog _scopeCatalog;
 
     public FileVectorLifecycleMetadataReviewStore(FileStorageOptions options)
         : this(new FilePathResolver(options), new FileFormatSerializer())
@@ -18,6 +20,7 @@ public sealed class FileVectorLifecycleMetadataReviewStore : IVectorLifecycleMet
     {
         _paths = paths;
         _jsonLines = new FileJsonLineStore(serializer);
+        _scopeCatalog = new FileScopeCatalog(paths);
     }
 
     public async Task SaveAsync(
@@ -25,7 +28,7 @@ public sealed class FileVectorLifecycleMetadataReviewStore : IVectorLifecycleMet
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(record);
-        var normalized = Normalize(record);
+        var normalized = ReviewRecordNormalizer.Normalize(record);
         var path = _paths.GetVectorLifecycleMetadataReviewsJsonlPath(normalized.WorkspaceId, normalized.CollectionId);
 
         await _jsonLines.UpdateAsync<VectorLifecycleMetadataReviewRecord>(
@@ -45,7 +48,7 @@ public sealed class FileVectorLifecycleMetadataReviewStore : IVectorLifecycleMet
         ArgumentException.ThrowIfNullOrWhiteSpace(candidateId);
 
         var results = new List<VectorLifecycleMetadataReviewRecord>();
-        foreach (var scope in EnumerateScopes())
+        foreach (var scope in _scopeCatalog.EnumerateScopes(_paths.GetVectorLifecycleMetadataReviewsJsonlPath))
         {
             var path = _paths.GetVectorLifecycleMetadataReviewsJsonlPath(scope.WorkspaceId, scope.CollectionId);
             var records = await _jsonLines.ReadAsync<VectorLifecycleMetadataReviewRecord>(path, cancellationToken)
@@ -57,7 +60,7 @@ public sealed class FileVectorLifecycleMetadataReviewStore : IVectorLifecycleMet
         [
             .. results
                 .OrderByDescending(static item => item.ReviewedAt)
-                .Select(Clone)
+                .Select(ReviewRecordNormalizer.Clone)
         ];
     }
 
@@ -69,7 +72,7 @@ public sealed class FileVectorLifecycleMetadataReviewStore : IVectorLifecycleMet
         ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
 
         var results = new List<VectorLifecycleMetadataReviewRecord>();
-        foreach (var scope in ResolveScopes(workspaceId, collectionId))
+        foreach (var scope in _scopeCatalog.ResolveScopes(workspaceId, collectionId, _paths.GetVectorLifecycleMetadataReviewsJsonlPath))
         {
             var path = _paths.GetVectorLifecycleMetadataReviewsJsonlPath(scope.WorkspaceId, scope.CollectionId);
             var records = await _jsonLines.ReadAsync<VectorLifecycleMetadataReviewRecord>(path, cancellationToken)
@@ -81,89 +84,7 @@ public sealed class FileVectorLifecycleMetadataReviewStore : IVectorLifecycleMet
         [
             .. results
                 .OrderByDescending(static item => item.ReviewedAt)
-                .Select(Clone)
+                .Select(ReviewRecordNormalizer.Clone)
         ];
     }
-
-    private IReadOnlyList<ShortTermMemoryScope> ResolveScopes(string workspaceId, string? collectionId)
-    {
-        if (!string.IsNullOrWhiteSpace(collectionId))
-        {
-            return [new ShortTermMemoryScope { WorkspaceId = workspaceId, CollectionId = collectionId }];
-        }
-
-        return
-        [
-            .. EnumerateScopes()
-                .Where(scope => string.Equals(scope.WorkspaceId, workspaceId, StringComparison.OrdinalIgnoreCase))
-        ];
-    }
-
-    private IReadOnlyList<ShortTermMemoryScope> EnumerateScopes()
-    {
-        var workspacesRoot = Path.Combine(_paths.RootPath, "workspaces");
-        if (!Directory.Exists(workspacesRoot))
-        {
-            return Array.Empty<ShortTermMemoryScope>();
-        }
-
-        return
-        [
-            .. Directory.EnumerateDirectories(workspacesRoot)
-                .SelectMany(workspaceDirectory =>
-                {
-                    var workspaceId = Path.GetFileName(workspaceDirectory);
-                    var collectionsRoot = Path.Combine(workspaceDirectory, "collections");
-                    if (string.IsNullOrWhiteSpace(workspaceId) || !Directory.Exists(collectionsRoot))
-                    {
-                        return Array.Empty<ShortTermMemoryScope>();
-                    }
-
-                    return
-                    [
-                        .. Directory.EnumerateDirectories(collectionsRoot)
-                            .Select(collectionDirectory => new
-                            {
-                                WorkspaceId = workspaceId,
-                                CollectionId = Path.GetFileName(collectionDirectory)
-                            })
-                            .Where(item => !string.IsNullOrWhiteSpace(item.CollectionId))
-                            .Where(item => File.Exists(_paths.GetVectorLifecycleMetadataReviewsJsonlPath(item.WorkspaceId, item.CollectionId!)))
-                            .Select(item => new ShortTermMemoryScope
-                            {
-                                WorkspaceId = item.WorkspaceId,
-                                CollectionId = item.CollectionId
-                            })
-                    ];
-                })
-                .DistinctBy(scope => $"{scope.WorkspaceId}\u001f{scope.CollectionId}", StringComparer.OrdinalIgnoreCase)
-        ];
-    }
-
-    private static VectorLifecycleMetadataReviewRecord Normalize(VectorLifecycleMetadataReviewRecord record)
-        => new()
-        {
-            ReviewId = string.IsNullOrWhiteSpace(record.ReviewId) ? Guid.NewGuid().ToString("N") : record.ReviewId,
-            CandidateId = record.CandidateId,
-            WorkspaceId = record.WorkspaceId,
-            CollectionId = record.CollectionId,
-            MustHitItemId = record.MustHitItemId,
-            Decision = record.Decision,
-            ResultStatus = record.ResultStatus,
-            Reviewer = record.Reviewer,
-            Reason = record.Reason,
-            ProposedLifecycle = record.ProposedLifecycle,
-            ProposedReviewStatus = record.ProposedReviewStatus,
-            ProposedTargetSection = record.ProposedTargetSection,
-            EvidenceRefs = [.. record.EvidenceRefs],
-            SourceRefs = [.. record.SourceRefs],
-            SidecarWritten = record.SidecarWritten,
-            UnsafeApprovalBlocked = record.UnsafeApprovalBlocked,
-            BlockedReason = record.BlockedReason,
-            ReviewedAt = record.ReviewedAt == default ? DateTimeOffset.UtcNow : record.ReviewedAt,
-            Metadata = new Dictionary<string, string>(record.Metadata, StringComparer.OrdinalIgnoreCase)
-        };
-
-    private static VectorLifecycleMetadataReviewRecord Clone(VectorLifecycleMetadataReviewRecord record)
-        => Normalize(record);
 }

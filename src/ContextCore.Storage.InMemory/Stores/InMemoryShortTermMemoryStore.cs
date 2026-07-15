@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
+using ContextCore.Storage.Shared;
 
 namespace ContextCore.Storage.InMemory;
 
@@ -23,7 +24,7 @@ public sealed class InMemoryShortTermMemoryStore : IShortTermMemoryStore
     public Task AppendRawEventAsync(ShortTermRawEvent rawEvent, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var normalized = Normalize(rawEvent);
+        var normalized = ShortTermMemoryRecordNormalizer.Normalize(rawEvent);
         lock (_gate)
         {
             var key = Key(normalized.WorkspaceId, normalized.CollectionId);
@@ -37,7 +38,7 @@ public sealed class InMemoryShortTermMemoryStore : IShortTermMemoryStore
     public Task SaveWorkingItemAsync(ShortTermWorkingItem item, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var normalized = Normalize(item);
+        var normalized = ShortTermMemoryRecordNormalizer.Normalize(item);
         lock (_gate)
         {
             var key = Key(normalized.WorkspaceId, normalized.CollectionId);
@@ -59,7 +60,7 @@ public sealed class InMemoryShortTermMemoryStore : IShortTermMemoryStore
         cancellationToken.ThrowIfCancellationRequested();
         lock (_gate)
         {
-            _rawEvents[Key(workspaceId, collectionId)] = items.Select(Normalize).OrderBy(item => item.CreatedAt).ToList();
+            _rawEvents[Key(workspaceId, collectionId)] = items.Select(ShortTermMemoryRecordNormalizer.Normalize).OrderBy(item => item.CreatedAt).ToList();
         }
 
         return Task.CompletedTask;
@@ -74,7 +75,7 @@ public sealed class InMemoryShortTermMemoryStore : IShortTermMemoryStore
         cancellationToken.ThrowIfCancellationRequested();
         lock (_gate)
         {
-            _workingItems[Key(workspaceId, collectionId)] = items.Select(Normalize).OrderBy(item => item.UpdatedAt).ToList();
+            _workingItems[Key(workspaceId, collectionId)] = items.Select(ShortTermMemoryRecordNormalizer.Normalize).OrderBy(item => item.UpdatedAt).ToList();
         }
 
         return Task.CompletedTask;
@@ -91,7 +92,7 @@ public sealed class InMemoryShortTermMemoryStore : IShortTermMemoryStore
         {
             var key = Key(workspaceId, collectionId);
             var existing = _archivedRawEvents.GetOrAdd(key, _ => new List<ShortTermRawEvent>());
-            existing.AddRange(items.Select(Normalize));
+            existing.AddRange(items.Select(ShortTermMemoryRecordNormalizer.Normalize));
         }
 
         return Task.CompletedTask;
@@ -108,7 +109,7 @@ public sealed class InMemoryShortTermMemoryStore : IShortTermMemoryStore
         {
             var key = Key(workspaceId, collectionId);
             var existing = _archivedWorkingItems.GetOrAdd(key, _ => new List<ShortTermWorkingItem>());
-            existing.AddRange(items.Select(Normalize));
+            existing.AddRange(items.Select(ShortTermMemoryRecordNormalizer.Normalize));
         }
 
         return Task.CompletedTask;
@@ -263,7 +264,7 @@ public sealed class InMemoryShortTermMemoryStore : IShortTermMemoryStore
     public Task AppendCompactionRunAsync(ShortTermCompactionRun run, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var normalized = Normalize(run);
+        var normalized = ShortTermMemoryRecordNormalizer.Normalize(run);
         lock (_gate)
         {
             var key = Key(normalized.WorkspaceId, normalized.CollectionId);
@@ -289,7 +290,7 @@ public sealed class InMemoryShortTermMemoryStore : IShortTermMemoryStore
                 .Where(item => string.IsNullOrWhiteSpace(query.Trigger) || string.Equals(item.Trigger, query.Trigger, StringComparison.OrdinalIgnoreCase))
                 .OrderByDescending(item => item.StartedAt)
                 .Take(query.Take > 0 ? query.Take : 20)
-                .Select(Clone)
+                .Select(ShortTermMemoryRecordNormalizer.Clone)
                 .ToArray();
             return Task.FromResult<IReadOnlyList<ShortTermCompactionRun>>(results);
         }
@@ -303,7 +304,7 @@ public sealed class InMemoryShortTermMemoryStore : IShortTermMemoryStore
             var run = _compactionRuns.Values
                 .SelectMany(static value => value)
                 .FirstOrDefault(item => string.Equals(item.RunId, runId, StringComparison.OrdinalIgnoreCase));
-            return Task.FromResult(run is null ? null : Clone(run));
+            return Task.FromResult(run is null ? null : ShortTermMemoryRecordNormalizer.Clone(run));
         }
     }
 
@@ -320,7 +321,7 @@ public sealed class InMemoryShortTermMemoryStore : IShortTermMemoryStore
             .Where(item => string.IsNullOrWhiteSpace(query.EventKind) || string.Equals(item.EventKind, query.EventKind, StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(item => item.CreatedAt)
             .Take(query.Take > 0 ? query.Take : 100)
-            .Select(Clone);
+            .Select(ShortTermMemoryRecordNormalizer.Clone);
     }
 
     private IEnumerable<ShortTermWorkingItem> QueryWorkingItemsInternal(ShortTermWorkingItemQuery query, bool archived)
@@ -336,7 +337,7 @@ public sealed class InMemoryShortTermMemoryStore : IShortTermMemoryStore
             .Where(item => string.IsNullOrWhiteSpace(query.Status) || string.Equals(item.Status, query.Status, StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(item => item.UpdatedAt)
             .Take(query.Take > 0 ? query.Take : 100)
-            .Select(Clone);
+            .Select(ShortTermMemoryRecordNormalizer.Clone);
     }
 
     private IEnumerable<ShortTermRawEvent> QueryArchivedRawEventsInternal(ShortTermArchiveSummaryQuery query)
@@ -380,79 +381,6 @@ public sealed class InMemoryShortTermMemoryStore : IShortTermMemoryStore
 
     private static string Key(string workspaceId, string? collectionId)
         => collectionId is null ? workspaceId : $"{workspaceId}\u001f{collectionId}";
-
-    private static ShortTermRawEvent Normalize(ShortTermRawEvent item)
-    {
-        return new ShortTermRawEvent
-        {
-            EventId = string.IsNullOrWhiteSpace(item.EventId) ? Guid.NewGuid().ToString("N") : item.EventId,
-            OperationId = item.OperationId,
-            WorkspaceId = item.WorkspaceId,
-            CollectionId = item.CollectionId,
-            SessionId = item.SessionId,
-            Source = item.Source,
-            EventKind = item.EventKind,
-            Content = item.Content,
-            ContentFormat = item.ContentFormat,
-            CreatedAt = item.CreatedAt == default ? DateTimeOffset.UtcNow : item.CreatedAt,
-            SequenceId = item.SequenceId,
-            Tags = item.Tags.ToArray(),
-            Metadata = new Dictionary<string, string>(item.Metadata, StringComparer.OrdinalIgnoreCase)
-        };
-    }
-
-    private static ShortTermWorkingItem Normalize(ShortTermWorkingItem item)
-    {
-        var now = DateTimeOffset.UtcNow;
-        return new ShortTermWorkingItem
-        {
-            ItemId = string.IsNullOrWhiteSpace(item.ItemId) ? Guid.NewGuid().ToString("N") : item.ItemId,
-            WorkspaceId = item.WorkspaceId,
-            CollectionId = item.CollectionId,
-            SessionId = item.SessionId,
-            Kind = item.Kind,
-            Title = item.Title,
-            Summary = item.Summary,
-            Status = item.Status,
-            Lifecycle = item.Lifecycle,
-            Importance = item.Importance,
-            Tags = item.Tags.ToArray(),
-            Refs = item.Refs.ToArray(),
-            SourceRefs = item.SourceRefs.ToArray(),
-            CreatedAt = item.CreatedAt == default ? now : item.CreatedAt,
-            UpdatedAt = item.UpdatedAt == default ? now : item.UpdatedAt,
-            ExpiresAt = item.ExpiresAt,
-            Metadata = new Dictionary<string, string>(item.Metadata, StringComparer.OrdinalIgnoreCase)
-        };
-    }
-
-    private static ShortTermCompactionRun Normalize(ShortTermCompactionRun item)
-    {
-        return new ShortTermCompactionRun
-        {
-            RunId = string.IsNullOrWhiteSpace(item.RunId) ? Guid.NewGuid().ToString("N") : item.RunId,
-            WorkspaceId = item.WorkspaceId,
-            CollectionId = item.CollectionId,
-            SessionId = item.SessionId,
-            Trigger = item.Trigger,
-            StartedAt = item.StartedAt == default ? DateTimeOffset.UtcNow : item.StartedAt,
-            CompletedAt = item.CompletedAt == default ? DateTimeOffset.UtcNow : item.CompletedAt,
-            DurationMs = item.DurationMs,
-            CompactedRawEvents = item.CompactedRawEvents,
-            CompactedWorkingItems = item.CompactedWorkingItems,
-            ArchivedRawEvents = item.ArchivedRawEvents,
-            ArchivedWorkingItems = item.ArchivedWorkingItems,
-            RemovedDuplicates = item.RemovedDuplicates,
-            Warnings = item.Warnings.ToArray(),
-            Errors = item.Errors.ToArray()
-        };
-    }
-
-    private static ShortTermRawEvent Clone(ShortTermRawEvent item) => Normalize(item);
-
-    private static ShortTermWorkingItem Clone(ShortTermWorkingItem item) => Normalize(item);
-
-    private static ShortTermCompactionRun Clone(ShortTermCompactionRun item) => Normalize(item);
 
     private static bool IsWorkingKind(ShortTermWorkingItem item, string canonicalKind, string legacyToken)
     {

@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
+using ContextCore.Storage.Shared;
 
 namespace ContextCore.Storage.InMemory;
 
@@ -14,7 +15,7 @@ public sealed class InMemoryShortTermPromotionCandidateStore : IShortTermPromoti
     {
         ArgumentNullException.ThrowIfNull(candidate);
         cancellationToken.ThrowIfCancellationRequested();
-        var normalized = Normalize(candidate);
+        var normalized = CandidateRecordNormalizer.Normalize(candidate);
         _candidates[normalized.CandidateId] = normalized;
         return Task.CompletedTask;
     }
@@ -25,7 +26,7 @@ public sealed class InMemoryShortTermPromotionCandidateStore : IShortTermPromoti
         cancellationToken.ThrowIfCancellationRequested();
         return Task.FromResult(
             _candidates.TryGetValue(candidateId, out var candidate)
-                ? Clone(candidate)
+                ? CandidateRecordNormalizer.Clone(candidate)
                 : null);
     }
 
@@ -48,7 +49,7 @@ public sealed class InMemoryShortTermPromotionCandidateStore : IShortTermPromoti
             .OrderByDescending(item => item.CreatedAt)
             .Skip(Math.Max(0, query.Offset))
             .Take(query.Limit > 0 ? query.Limit : 20)
-            .Select(Clone)
+            .Select(CandidateRecordNormalizer.Clone)
             .ToArray();
 
         return Task.FromResult<IReadOnlyList<ShortTermPromotionCandidate>>(results);
@@ -61,7 +62,7 @@ public sealed class InMemoryShortTermPromotionCandidateStore : IShortTermPromoti
         ArgumentNullException.ThrowIfNull(record);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var normalized = Normalize(record);
+        var normalized = ReviewRecordNormalizer.Normalize(record);
         _reviews[normalized.ReviewId] = normalized;
         return Task.CompletedTask;
     }
@@ -76,70 +77,9 @@ public sealed class InMemoryShortTermPromotionCandidateStore : IShortTermPromoti
         var results = _reviews.Values
             .Where(item => string.Equals(item.CandidateId, candidateId, StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(item => item.CreatedAt)
-            .Select(Clone)
+            .Select(ReviewRecordNormalizer.Clone)
             .ToArray();
 
         return Task.FromResult<IReadOnlyList<PromotionCandidateReviewRecord>>(results);
     }
-
-    private static ShortTermPromotionCandidate Normalize(ShortTermPromotionCandidate item)
-    {
-        return new ShortTermPromotionCandidate
-        {
-            CandidateId = string.IsNullOrWhiteSpace(item.CandidateId) ? Guid.NewGuid().ToString("N") : item.CandidateId,
-            WorkspaceId = item.WorkspaceId,
-            CollectionId = item.CollectionId,
-            SessionId = item.SessionId,
-            SourceWorkingItemId = item.SourceWorkingItemId,
-            Kind = item.Kind,
-            Title = item.Title,
-            Summary = item.Summary,
-            SuggestedTargetLayer = item.SuggestedTargetLayer,
-            Reason = item.Reason,
-            Confidence = item.Confidence,
-            Importance = item.Importance,
-            EvidenceRefs = item.EvidenceRefs.ToArray(),
-            Tags = item.Tags.ToArray(),
-            CreatedAt = item.CreatedAt == default ? DateTimeOffset.UtcNow : item.CreatedAt,
-            Status = item.Status,
-            DedupeKey = item.DedupeKey,
-            SourceFingerprint = item.SourceFingerprint,
-            GeneratedBy = item.GeneratedBy,
-            PolicyVersion = item.PolicyVersion,
-            RuleName = item.RuleName,
-            RuleVersion = item.RuleVersion,
-            Metadata = new Dictionary<string, string>(item.Metadata, StringComparer.OrdinalIgnoreCase)
-        };
-    }
-
-    private static ShortTermPromotionCandidate Clone(ShortTermPromotionCandidate item) => Normalize(item);
-
-    private static PromotionCandidateReviewRecord Normalize(PromotionCandidateReviewRecord item)
-    {
-        var createdAt = item.CreatedAt == default ? DateTimeOffset.UtcNow : item.CreatedAt;
-        return new PromotionCandidateReviewRecord
-        {
-            ReviewId = string.IsNullOrWhiteSpace(item.ReviewId) ? Guid.NewGuid().ToString("N") : item.ReviewId,
-            CandidateId = item.CandidateId,
-            WorkspaceId = item.WorkspaceId,
-            CollectionId = item.CollectionId,
-            SessionId = item.SessionId,
-            Action = item.Action,
-            FromStatus = item.FromStatus,
-            ToStatus = item.ToStatus,
-            Reviewer = item.Reviewer,
-            Reason = item.Reason,
-            TargetItemId = item.TargetItemId,
-            TargetItemKind = item.TargetItemKind,
-            TargetLayer = item.TargetLayer,
-            EvidenceRefs = item.EvidenceRefs.ToArray(),
-            CreatedAt = createdAt,
-            ReviewedAt = item.ReviewedAt == default ? createdAt : item.ReviewedAt,
-            Metadata = new Dictionary<string, string>(item.Metadata, StringComparer.OrdinalIgnoreCase),
-            Warnings = item.Warnings.ToArray(),
-            Errors = item.Errors.ToArray()
-        };
-    }
-
-    private static PromotionCandidateReviewRecord Clone(PromotionCandidateReviewRecord item) => Normalize(item);
 }

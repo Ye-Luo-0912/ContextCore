@@ -1,5 +1,6 @@
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
+using ContextCore.Storage.Shared;
 
 namespace ContextCore.Storage.FileSystem.Stores;
 
@@ -8,11 +9,13 @@ public sealed class FileRelationReviewStore : IRelationReviewStore
 {
     private readonly FilePathResolver _paths;
     private readonly FileJsonLineStore _jsonLines;
+    private readonly FileScopeCatalog _scopeCatalog;
 
     public FileRelationReviewStore(FilePathResolver paths, FileFormatSerializer serializer)
     {
         _paths = paths;
         _jsonLines = new FileJsonLineStore(serializer);
+        _scopeCatalog = new FileScopeCatalog(paths);
     }
 
     public async Task AppendReviewAsync(
@@ -20,7 +23,7 @@ public sealed class FileRelationReviewStore : IRelationReviewStore
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(record);
-        var normalized = Normalize(record);
+        var normalized = ReviewRecordNormalizer.Normalize(record);
         if (string.IsNullOrWhiteSpace(normalized.CollectionId))
         {
             throw new ArgumentException("Relation review 必须包含 collectionId。", nameof(record));
@@ -44,7 +47,7 @@ public sealed class FileRelationReviewStore : IRelationReviewStore
         ArgumentException.ThrowIfNullOrWhiteSpace(relationId);
 
         var results = new List<RelationReviewRecord>();
-        foreach (var scope in EnumerateScopes())
+        foreach (var scope in _scopeCatalog.EnumerateScopes(_paths.GetRelationReviewsJsonlPath))
         {
             var path = _paths.GetRelationReviewsJsonlPath(scope.WorkspaceId, scope.CollectionId);
             var items = await _jsonLines.ReadAsync<RelationReviewRecord>(path, cancellationToken).ConfigureAwait(false);
@@ -55,7 +58,7 @@ public sealed class FileRelationReviewStore : IRelationReviewStore
         [
             .. results
                 .OrderByDescending(static item => item.CreatedAt)
-                .Select(Clone)
+                .Select(ReviewRecordNormalizer.Clone)
         ];
     }
 
@@ -132,87 +135,9 @@ public sealed class FileRelationReviewStore : IRelationReviewStore
             .. items
                 .Where(predicate)
                 .OrderByDescending(static item => item.CreatedAt)
-                .Select(Clone)
+                .Select(ReviewRecordNormalizer.Clone)
         ];
     }
-
-    private IReadOnlyList<ShortTermMemoryScope> EnumerateScopes()
-    {
-        var workspacesRoot = Path.Combine(_paths.RootPath, "workspaces");
-        if (!Directory.Exists(workspacesRoot))
-        {
-            return Array.Empty<ShortTermMemoryScope>();
-        }
-
-        return
-        [
-            .. Directory.EnumerateDirectories(workspacesRoot)
-                .SelectMany(workspaceDirectory =>
-                {
-                    var workspaceId = Path.GetFileName(workspaceDirectory);
-                    if (string.IsNullOrWhiteSpace(workspaceId))
-                    {
-                        return Array.Empty<ShortTermMemoryScope>();
-                    }
-
-                    var collectionsRoot = Path.Combine(workspaceDirectory, "collections");
-                    if (!Directory.Exists(collectionsRoot))
-                    {
-                        return Array.Empty<ShortTermMemoryScope>();
-                    }
-
-                    return
-                    [
-                        .. Directory.EnumerateDirectories(collectionsRoot)
-                            .Select(collectionDirectory => new
-                            {
-                                WorkspaceId = workspaceId!,
-                                CollectionId = Path.GetFileName(collectionDirectory)
-                            })
-                            .Where(item => !string.IsNullOrWhiteSpace(item.CollectionId))
-                            .Where(item =>
-                                File.Exists(_paths.GetRelationReviewsJsonlPath(item.WorkspaceId, item.CollectionId!)))
-                            .Select(item => new ShortTermMemoryScope
-                            {
-                                WorkspaceId = item.WorkspaceId,
-                                CollectionId = item.CollectionId!
-                            })
-                    ];
-                })
-                .DistinctBy(scope => $"{scope.WorkspaceId}\u001f{scope.CollectionId}", StringComparer.OrdinalIgnoreCase)
-        ];
-    }
-
-    private static RelationReviewRecord Normalize(RelationReviewRecord record)
-    {
-        var createdAt = record.CreatedAt == default ? DateTimeOffset.UtcNow : record.CreatedAt;
-        return new RelationReviewRecord
-        {
-            ReviewId = string.IsNullOrWhiteSpace(record.ReviewId) ? Guid.NewGuid().ToString("N") : record.ReviewId,
-            RelationId = record.RelationId,
-            WorkspaceId = record.WorkspaceId,
-            CollectionId = record.CollectionId,
-            Action = record.Action,
-            FromLifecycle = record.FromLifecycle,
-            ToLifecycle = record.ToLifecycle,
-            FromReviewStatus = record.FromReviewStatus,
-            ToReviewStatus = record.ToReviewStatus,
-            Reviewer = record.Reviewer,
-            Reason = record.Reason,
-            RelationType = record.RelationType,
-            SourceId = record.SourceId,
-            TargetId = record.TargetId,
-            EvidenceRefs = [.. record.EvidenceRefs],
-            SourceRefs = [.. record.SourceRefs],
-            CreatedAt = createdAt,
-            ReviewedAt = record.ReviewedAt == default ? createdAt : record.ReviewedAt,
-            Metadata = new Dictionary<string, string>(record.Metadata, StringComparer.OrdinalIgnoreCase),
-            Warnings = [.. record.Warnings],
-            Errors = [.. record.Errors]
-        };
-    }
-
-    private static RelationReviewRecord Clone(RelationReviewRecord record) => Normalize(record);
 
     private static string ResolveReviewStatus(RelationReviewRecord record)
     {

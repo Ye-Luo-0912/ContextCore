@@ -1,5 +1,6 @@
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
+using ContextCore.Storage.Shared;
 
 namespace ContextCore.Storage.FileSystem.Stores;
 
@@ -8,6 +9,7 @@ public sealed class FileContextLearningStore : IContextLearningStore
 {
     private readonly FilePathResolver _paths;
     private readonly FileJsonLineStore _jsonLines;
+    private readonly FileScopeCatalog _scopeCatalog;
 
     public FileContextLearningStore(FileStorageOptions options)
         : this(new FilePathResolver(options), new FileFormatSerializer())
@@ -18,12 +20,13 @@ public sealed class FileContextLearningStore : IContextLearningStore
     {
         _paths = paths;
         _jsonLines = new FileJsonLineStore(serializer);
+        _scopeCatalog = new FileScopeCatalog(paths);
     }
 
     public async Task AddFeedbackAsync(PromotionFeedbackSignal feedback, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(feedback);
-        var normalized = Normalize(feedback);
+        var normalized = LearningRecordNormalizer.Normalize(feedback);
 
         var path = _paths.GetLearningFeedbackJsonlPath(normalized.WorkspaceId, normalized.CollectionId);
         await _jsonLines.UpdateAsync<PromotionFeedbackSignal>(
@@ -43,7 +46,7 @@ public sealed class FileContextLearningStore : IContextLearningStore
         ArgumentNullException.ThrowIfNull(query);
 
         var results = new List<PromotionFeedbackSignal>();
-        foreach (var scope in ResolveScopes(query.WorkspaceId, query.CollectionId, LearningScopeKind.Feedback))
+        foreach (var scope in ResolveScopes(query.WorkspaceId, query.CollectionId, _paths.GetLearningFeedbackJsonlPath))
         {
             var path = _paths.GetLearningFeedbackJsonlPath(scope.WorkspaceId, scope.CollectionId);
             var feedback = await _jsonLines.ReadAsync<PromotionFeedbackSignal>(path, cancellationToken).ConfigureAwait(false);
@@ -54,14 +57,14 @@ public sealed class FileContextLearningStore : IContextLearningStore
             .OrderByDescending(item => item.CreatedAt)
             .Skip(Math.Max(0, query.Offset))
             .Take(query.Limit > 0 ? query.Limit : 20)
-            .Select(Clone)
+            .Select(LearningRecordNormalizer.Clone)
             .ToArray();
     }
 
     public async Task AddRecordAsync(ContextLearningRecord record, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(record);
-        var normalized = Normalize(record);
+        var normalized = LearningRecordNormalizer.Normalize(record);
 
         var path = _paths.GetLearningRecordsJsonlPath(normalized.WorkspaceId, normalized.CollectionId);
         await _jsonLines.UpdateAsync<ContextLearningRecord>(
@@ -78,14 +81,14 @@ public sealed class FileContextLearningStore : IContextLearningStore
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(recordId);
 
-        foreach (var scope in EnumerateLearningScopes(LearningScopeKind.Record))
+        foreach (var scope in _scopeCatalog.EnumerateScopes(_paths.GetLearningRecordsJsonlPath))
         {
             var path = _paths.GetLearningRecordsJsonlPath(scope.WorkspaceId, scope.CollectionId);
             var records = await _jsonLines.ReadAsync<ContextLearningRecord>(path, cancellationToken).ConfigureAwait(false);
             var match = records.FirstOrDefault(item => string.Equals(item.RecordId, recordId, StringComparison.OrdinalIgnoreCase));
             if (match is not null)
             {
-                return Clone(match);
+                return LearningRecordNormalizer.Clone(match);
             }
         }
 
@@ -99,7 +102,7 @@ public sealed class FileContextLearningStore : IContextLearningStore
         ArgumentNullException.ThrowIfNull(query);
 
         var results = new List<ContextLearningRecord>();
-        foreach (var scope in ResolveScopes(query.WorkspaceId, query.CollectionId, LearningScopeKind.Record))
+        foreach (var scope in ResolveScopes(query.WorkspaceId, query.CollectionId, _paths.GetLearningRecordsJsonlPath))
         {
             var path = _paths.GetLearningRecordsJsonlPath(scope.WorkspaceId, scope.CollectionId);
             var records = await _jsonLines.ReadAsync<ContextLearningRecord>(path, cancellationToken).ConfigureAwait(false);
@@ -110,7 +113,7 @@ public sealed class FileContextLearningStore : IContextLearningStore
             .OrderByDescending(record => record.CreatedAt)
             .Skip(Math.Max(0, query.Offset))
             .Take(query.Limit > 0 ? query.Limit : 20)
-            .Select(Clone)
+            .Select(LearningRecordNormalizer.Clone)
             .ToArray();
     }
 
@@ -119,7 +122,7 @@ public sealed class FileContextLearningStore : IContextLearningStore
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(learningCase);
-        var normalized = Normalize(learningCase);
+        var normalized = LearningRecordNormalizer.Normalize(learningCase);
 
         var path = _paths.GetLearningCasesJsonlPath(normalized.WorkspaceId, normalized.CollectionId);
         await _jsonLines.UpdateAsync<ContextLearningCase>(
@@ -130,21 +133,21 @@ public sealed class FileContextLearningStore : IContextLearningStore
                 .OrderByDescending(item => item.CreatedAt)
                 .ToArray(),
             cancellationToken).ConfigureAwait(false);
-        return Clone(normalized);
+        return LearningRecordNormalizer.Clone(normalized);
     }
 
     public async Task<ContextLearningCase?> GetCaseAsync(string caseId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(caseId);
 
-        foreach (var scope in EnumerateLearningScopes(LearningScopeKind.Case))
+        foreach (var scope in _scopeCatalog.EnumerateScopes(_paths.GetLearningCasesJsonlPath))
         {
             var path = _paths.GetLearningCasesJsonlPath(scope.WorkspaceId, scope.CollectionId);
             var cases = await _jsonLines.ReadAsync<ContextLearningCase>(path, cancellationToken).ConfigureAwait(false);
             var match = cases.FirstOrDefault(item => string.Equals(item.CaseId, caseId, StringComparison.OrdinalIgnoreCase));
             if (match is not null)
             {
-                return Clone(match);
+                return LearningRecordNormalizer.Clone(match);
             }
         }
 
@@ -158,7 +161,7 @@ public sealed class FileContextLearningStore : IContextLearningStore
         ArgumentNullException.ThrowIfNull(query);
 
         var results = new List<ContextLearningCase>();
-        foreach (var scope in ResolveScopes(query.WorkspaceId, query.CollectionId, LearningScopeKind.Case))
+        foreach (var scope in ResolveScopes(query.WorkspaceId, query.CollectionId, _paths.GetLearningCasesJsonlPath))
         {
             var path = _paths.GetLearningCasesJsonlPath(scope.WorkspaceId, scope.CollectionId);
             var cases = await _jsonLines.ReadAsync<ContextLearningCase>(path, cancellationToken).ConfigureAwait(false);
@@ -169,77 +172,21 @@ public sealed class FileContextLearningStore : IContextLearningStore
             .OrderByDescending(learningCase => learningCase.CreatedAt)
             .Skip(Math.Max(0, query.Offset))
             .Take(query.Limit > 0 ? query.Limit : 20)
-            .Select(Clone)
+            .Select(LearningRecordNormalizer.Clone)
             .ToArray();
     }
 
-    private IReadOnlyList<ShortTermMemoryScope> ResolveScopes(string? workspaceId, string? collectionId, LearningScopeKind scopeKind)
+    private IReadOnlyList<ShortTermMemoryScope> ResolveScopes(string? workspaceId, string? collectionId, Func<string, string, string> pathSelector)
     {
         if (!string.IsNullOrWhiteSpace(workspaceId) && !string.IsNullOrWhiteSpace(collectionId))
         {
             return [new ShortTermMemoryScope { WorkspaceId = workspaceId, CollectionId = collectionId }];
         }
 
-        return EnumerateLearningScopes(scopeKind)
+        return _scopeCatalog.EnumerateScopes(pathSelector)
             .Where(scope => string.IsNullOrWhiteSpace(workspaceId) || string.Equals(scope.WorkspaceId, workspaceId, StringComparison.OrdinalIgnoreCase))
             .Where(scope => string.IsNullOrWhiteSpace(collectionId) || string.Equals(scope.CollectionId, collectionId, StringComparison.OrdinalIgnoreCase))
             .ToArray();
-    }
-
-    private IReadOnlyList<ShortTermMemoryScope> EnumerateLearningScopes(LearningScopeKind scopeKind)
-    {
-        var workspacesRoot = Path.Combine(_paths.RootPath, "workspaces");
-        if (!Directory.Exists(workspacesRoot))
-        {
-            return Array.Empty<ShortTermMemoryScope>();
-        }
-
-        return
-        [
-            .. Directory.EnumerateDirectories(workspacesRoot)
-                .SelectMany(workspaceDirectory =>
-                {
-                    var workspaceId = Path.GetFileName(workspaceDirectory);
-                    if (string.IsNullOrWhiteSpace(workspaceId))
-                    {
-                        return Array.Empty<ShortTermMemoryScope>();
-                    }
-
-                    var collectionsRoot = Path.Combine(workspaceDirectory, "collections");
-                    if (!Directory.Exists(collectionsRoot))
-                    {
-                        return Array.Empty<ShortTermMemoryScope>();
-                    }
-
-                    return
-                    [
-                        .. Directory.EnumerateDirectories(collectionsRoot)
-                            .Select(collectionDirectory => new
-                            {
-                                WorkspaceId = workspaceId,
-                                CollectionId = Path.GetFileName(collectionDirectory)
-                            })
-                            .Where(item => !string.IsNullOrWhiteSpace(item.CollectionId))
-                            .Where(item => File.Exists(ResolvePath(item.WorkspaceId, item.CollectionId, scopeKind)))
-                            .Select(item => new ShortTermMemoryScope
-                            {
-                                WorkspaceId = item.WorkspaceId,
-                                CollectionId = item.CollectionId
-                            })
-                    ];
-                })
-                .DistinctBy(scope => $"{scope.WorkspaceId}\u001f{scope.CollectionId}", StringComparer.OrdinalIgnoreCase)
-        ];
-    }
-
-    private string ResolvePath(string workspaceId, string collectionId, LearningScopeKind scopeKind)
-    {
-        return scopeKind switch
-        {
-            LearningScopeKind.Feedback => _paths.GetLearningFeedbackJsonlPath(workspaceId, collectionId),
-            LearningScopeKind.Record => _paths.GetLearningRecordsJsonlPath(workspaceId, collectionId),
-            _ => _paths.GetLearningCasesJsonlPath(workspaceId, collectionId)
-        };
     }
 
     private static bool Matches(ContextLearningRecord record, ContextLearningRecordQuery query)
@@ -272,95 +219,5 @@ public sealed class FileContextLearningStore : IContextLearningStore
             && (query.Status is null || learningCase.Status == query.Status.Value)
             && (string.IsNullOrWhiteSpace(query.CaseKind) || string.Equals(learningCase.CaseKind, query.CaseKind, StringComparison.OrdinalIgnoreCase))
             && (string.IsNullOrWhiteSpace(query.SourceRecordId) || string.Equals(learningCase.SourceRecordId, query.SourceRecordId, StringComparison.OrdinalIgnoreCase));
-    }
-
-    private static ContextLearningRecord Normalize(ContextLearningRecord record)
-    {
-        return new ContextLearningRecord
-        {
-            RecordId = string.IsNullOrWhiteSpace(record.RecordId) ? Guid.NewGuid().ToString("N") : record.RecordId,
-            WorkspaceId = record.WorkspaceId,
-            CollectionId = record.CollectionId,
-            SessionId = record.SessionId,
-            SourceKind = record.SourceKind,
-            SourceId = record.SourceId,
-            CandidateId = record.CandidateId,
-            ReviewId = record.ReviewId,
-            EventKind = record.EventKind,
-            Signal = record.Signal,
-            FailureType = record.FailureType,
-            Reason = record.Reason,
-            Confidence = record.Confidence,
-            Importance = record.Importance,
-            EvidenceRefs = record.EvidenceRefs.ToArray(),
-            CreatedAt = record.CreatedAt == default ? DateTimeOffset.UtcNow : record.CreatedAt,
-            Metadata = new Dictionary<string, string>(record.Metadata, StringComparer.OrdinalIgnoreCase)
-        };
-    }
-
-    private static PromotionFeedbackSignal Normalize(PromotionFeedbackSignal feedback)
-    {
-        return new PromotionFeedbackSignal
-        {
-            FeedbackId = string.IsNullOrWhiteSpace(feedback.FeedbackId) ? Guid.NewGuid().ToString("N") : feedback.FeedbackId,
-            CandidateId = feedback.CandidateId,
-            WorkspaceId = feedback.WorkspaceId,
-            CollectionId = feedback.CollectionId,
-            SessionId = feedback.SessionId,
-            Action = feedback.Action,
-            Reviewer = feedback.Reviewer,
-            Reason = feedback.Reason,
-            SourceWorkingItemId = feedback.SourceWorkingItemId,
-            CreatedTargetItemId = feedback.CreatedTargetItemId,
-            SuggestedTargetLayer = feedback.SuggestedTargetLayer,
-            ActualTargetLayer = feedback.ActualTargetLayer,
-            Confidence = feedback.Confidence,
-            Importance = feedback.Importance,
-            EvidenceRefs = feedback.EvidenceRefs.ToArray(),
-            CreatedAt = feedback.CreatedAt == default ? DateTimeOffset.UtcNow : feedback.CreatedAt,
-            Metadata = new Dictionary<string, string>(feedback.Metadata, StringComparer.OrdinalIgnoreCase)
-        };
-    }
-
-    private static ContextLearningCase Normalize(ContextLearningCase learningCase)
-    {
-        return new ContextLearningCase
-        {
-            CaseId = string.IsNullOrWhiteSpace(learningCase.CaseId) ? Guid.NewGuid().ToString("N") : learningCase.CaseId,
-            SourceType = learningCase.SourceType,
-            WorkspaceId = learningCase.WorkspaceId,
-            CollectionId = learningCase.CollectionId,
-            SessionId = learningCase.SessionId,
-            SourceRecordId = learningCase.SourceRecordId,
-            SourceKind = learningCase.SourceKind,
-            SourceId = learningCase.SourceId,
-            CaseKind = learningCase.CaseKind,
-            Title = learningCase.Title,
-            Summary = learningCase.Summary,
-            InputSummary = learningCase.InputSummary,
-            ExpectedBehavior = learningCase.ExpectedBehavior,
-            Signal = learningCase.Signal,
-            FailureType = learningCase.FailureType,
-            CorrectionReason = learningCase.CorrectionReason,
-            Status = learningCase.Status,
-            EvidenceRefs = learningCase.EvidenceRefs.ToArray(),
-            PositiveRefs = learningCase.PositiveRefs.ToArray(),
-            NegativeRefs = learningCase.NegativeRefs.ToArray(),
-            CreatedAt = learningCase.CreatedAt == default ? DateTimeOffset.UtcNow : learningCase.CreatedAt,
-            Metadata = new Dictionary<string, string>(learningCase.Metadata, StringComparer.OrdinalIgnoreCase)
-        };
-    }
-
-    private static PromotionFeedbackSignal Clone(PromotionFeedbackSignal feedback) => Normalize(feedback);
-
-    private static ContextLearningRecord Clone(ContextLearningRecord record) => Normalize(record);
-
-    private static ContextLearningCase Clone(ContextLearningCase learningCase) => Normalize(learningCase);
-
-    private enum LearningScopeKind
-    {
-        Feedback,
-        Record,
-        Case
     }
 }

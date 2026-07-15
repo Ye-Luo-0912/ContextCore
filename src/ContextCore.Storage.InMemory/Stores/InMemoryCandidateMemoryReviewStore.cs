@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
+using ContextCore.Storage.Shared;
 
 namespace ContextCore.Storage.InMemory.Stores;
 
@@ -16,7 +17,7 @@ public sealed class InMemoryCandidateMemoryReviewStore : ICandidateMemoryReviewS
         ArgumentNullException.ThrowIfNull(record);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var normalized = Normalize(record);
+        var normalized = ReviewRecordNormalizer.Normalize(record);
         _reviews[normalized.ReviewId] = normalized;
         return Task.CompletedTask;
     }
@@ -31,36 +32,8 @@ public sealed class InMemoryCandidateMemoryReviewStore : ICandidateMemoryReviewS
         var results = _reviews.Values
             .Where(item => string.Equals(item.CandidateId, candidateId, StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(item => item.CreatedAt)
-            .Select(Clone)
+            .Select(ReviewRecordNormalizer.Clone)
             .ToArray();
         return Task.FromResult<IReadOnlyList<CandidateMemoryReviewRecord>>(results);
     }
-
-    private static CandidateMemoryReviewRecord Normalize(CandidateMemoryReviewRecord record)
-    {
-        var createdAt = record.CreatedAt == default ? DateTimeOffset.UtcNow : record.CreatedAt;
-        return new CandidateMemoryReviewRecord
-        {
-            ReviewId = string.IsNullOrWhiteSpace(record.ReviewId) ? Guid.NewGuid().ToString("N") : record.ReviewId,
-            CandidateId = record.CandidateId,
-            CandidateKind = record.CandidateKind,
-            WorkspaceId = record.WorkspaceId,
-            CollectionId = record.CollectionId,
-            Action = record.Action,
-            FromStatus = record.FromStatus,
-            ToStatus = record.ToStatus,
-            Reviewer = record.Reviewer,
-            Reason = record.Reason,
-            SupersedeTargetCandidateId = record.SupersedeTargetCandidateId,
-            EvidenceRefs = record.EvidenceRefs.ToArray(),
-            SourceRefs = record.SourceRefs.ToArray(),
-            CreatedAt = createdAt,
-            ReviewedAt = record.ReviewedAt == default ? createdAt : record.ReviewedAt,
-            Metadata = new Dictionary<string, string>(record.Metadata, StringComparer.OrdinalIgnoreCase),
-            Warnings = record.Warnings.ToArray(),
-            Errors = record.Errors.ToArray()
-        };
-    }
-
-    private static CandidateMemoryReviewRecord Clone(CandidateMemoryReviewRecord record) => Normalize(record);
 }

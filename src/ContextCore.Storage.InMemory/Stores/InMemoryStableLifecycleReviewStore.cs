@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
+using ContextCore.Storage.Shared;
 
 namespace ContextCore.Storage.InMemory;
 
@@ -16,7 +17,7 @@ public sealed class InMemoryStableLifecycleReviewStore : IStableLifecycleReviewS
         ArgumentNullException.ThrowIfNull(record);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var normalized = Normalize(record);
+        var normalized = ReviewRecordNormalizer.Normalize(record);
         _reviews[normalized.ReviewId] = normalized;
         return Task.CompletedTask;
     }
@@ -31,38 +32,8 @@ public sealed class InMemoryStableLifecycleReviewStore : IStableLifecycleReviewS
         var results = _reviews.Values
             .Where(item => string.Equals(item.StableItemId, stableItemId, StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(item => item.CreatedAt)
-            .Select(Clone)
+            .Select(ReviewRecordNormalizer.Clone)
             .ToArray();
         return Task.FromResult<IReadOnlyList<StableLifecycleReviewRecord>>(results);
     }
-
-    private static StableLifecycleReviewRecord Normalize(StableLifecycleReviewRecord record)
-    {
-        var createdAt = record.CreatedAt == default ? DateTimeOffset.UtcNow : record.CreatedAt;
-        return new StableLifecycleReviewRecord
-        {
-            ReviewId = string.IsNullOrWhiteSpace(record.ReviewId) ? Guid.NewGuid().ToString("N") : record.ReviewId,
-            StableItemId = record.StableItemId,
-            StableKind = record.StableKind,
-            WorkspaceId = record.WorkspaceId,
-            CollectionId = record.CollectionId,
-            Action = record.Action,
-            FromStatus = record.FromStatus,
-            ToStatus = record.ToStatus,
-            FromLifecycle = record.FromLifecycle,
-            ToLifecycle = record.ToLifecycle,
-            Reviewer = record.Reviewer,
-            Reason = record.Reason,
-            ReplacementItemId = record.ReplacementItemId,
-            EvidenceRefs = record.EvidenceRefs.ToArray(),
-            SourceRefs = record.SourceRefs.ToArray(),
-            CreatedAt = createdAt,
-            ReviewedAt = record.ReviewedAt == default ? createdAt : record.ReviewedAt,
-            Metadata = new Dictionary<string, string>(record.Metadata, StringComparer.OrdinalIgnoreCase),
-            Warnings = record.Warnings.ToArray(),
-            Errors = record.Errors.ToArray()
-        };
-    }
-
-    private static StableLifecycleReviewRecord Clone(StableLifecycleReviewRecord record) => Normalize(record);
 }
