@@ -177,13 +177,8 @@ internal sealed class SectionAssembler
 
         estimatedTokens += sectionTokens;
 
-        // 精确候选接受/拒绝判定：
-        // - Section 被加入 package 时，所有候选均标记为 accepted。
-        //   Truncated 标志指示内容是否因 token 预算被裁剪。
-        //   裁剪时的精确归属由 AddSectionDecisionsWithDedup 根据 Truncated 标志处理
-        //   （仅保留首个新候选，避免低价值候选取代 MustHit 项）。
-        // - Section 未被加入时，所有候选均标记为 rejected。
-        // 这取代了旧的字符串前缀猜测（7.2），并提供精确的候选 ID 列表（6.2）。
+        // 诊断 section（evidence/excluded/uncertainties）不携带候选 ID，
+        // 此处返回空候选列表；候选级精确归属由 AddSectionFromSegments 处理。
         var validCandidateIds = candidateIds
             .Where(id => !string.IsNullOrWhiteSpace(id))
             .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -197,6 +192,183 @@ internal sealed class SectionAssembler
             truncated,
             acceptedIds,
             rejectedIds);
+    }
+
+    /// <summary>
+    /// 预算感知的 segment 粒度 section 装配：逐段追加，达到预算即停止。
+    /// 按 segment 边界截断，直接得到精确的 AcceptedCandidateIds /
+    /// PartiallyAcceptedCandidateId / RejectedCandidateIds，无需 AddSectionDecisionsWithDedup 中的启发式猜测。
+    /// 当 segments 为空时使用 fallbackContent（如"所有X已在此前去重包含"），此时无候选级归属。
+    /// </summary>
+    internal SectionPackingResult AddSectionFromSegments(
+        ICollection<ContextPackageSection> sections,
+        ISet<string> packageSourceRefs,
+        string name,
+        int priority,
+        IReadOnlyList<CandidateSegment> segments,
+        string? fallbackContent,
+        ContextContentFormat contentFormat,
+        IReadOnlyList<string> sectionSourceRefs,
+        IReadOnlyList<string> sectionItemRefs,
+        int tokenBudget,
+        int sectionTokenBudget,
+        TokenEstimationContext tokenContext,
+        ref int estimatedTokens)
+    {
+        var remainingBudget = tokenBudget - estimatedTokens;
+        if (remainingBudget <= 0)
+        {
+            return SectionPackingResult.Dropped("token budget exhausted");
+        }
+
+        if (sectionTokenBudget > 0)
+        {
+            remainingBudget = Math.Min(remainingBudget, sectionTokenBudget);
+        }
+
+        var builder = new StringBuilder();
+        var approxTokens = 0;
+        var truncated = false;
+        var hasContent = false;
+        var separatorTokens = _estimateTokens("\n\n", tokenContext);
+
+        var acceptedIds = new List<string>();
+        var rejectedIds = new List<string>();
+        string? partiallyAcceptedId = null;
+
+        if (segments.Count == 0)
+        {
+            // 无新候选需要格式化：使用 fallback 内容（如"所有X已在此前去重包含"）
+            if (!string.IsNullOrWhiteSpace(fallbackContent))
+            {
+                var fallbackTokens = _estimateTokens(fallbackContent, tokenContext);
+                if (fallbackTokens <= remainingBudget)
+                {
+                    builder.Append(fallbackContent);
+                    approxTokens = fallbackTokens;
+                    hasContent = true;
+                }
+                else
+                {
+                    var trimmed = TrimToTokenBudget(fallbackContent, remainingBudget, tokenContext);
+                    if (!string.IsNullOrWhiteSpace(trimmed))
+                    {
+                        builder.Append(trimmed);
+                        approxTokens = _estimateTokens(trimmed, tokenContext);
+                        truncated = true;
+                        hasContent = true;
+                    }
+                }
+            }
+        }
+        else
+        {
+            for (int i = 0; i < segments.Count; i++)
+            {
+                var segment = segments[i];
+                if (string.IsNullOrWhiteSpace(segment.FormattedText))
+                {
+                    continue;
+                }
+
+                var blockTokens = _estimateTokens(segment.FormattedText, tokenContext);
+                var withSeparator = hasContent ? separatorTokens + blockTokens : blockTokens;
+
+                if (approxTokens + withSeparator <= remainingBudget)
+                {
+                    // 完整保留此 segment
+                    if (hasContent)
+                    {
+                        builder.AppendLine();
+                        builder.AppendLine();
+                    }
+                    builder.Append(segment.FormattedText);
+                    approxTokens += withSeparator;
+                    hasContent = true;
+                    acceptedIds.Add(segment.CandidateId);
+                }
+                else
+                {
+                    // 预算不足：尝试截断当前 segment 的部分内容
+                    var partialBudget = remainingBudget - approxTokens - (hasContent ? separatorTokens : 0);
+                    if (partialBudget > 0)
+                    {
+                        var trimmed = TrimToTokenBudget(segment.FormattedText, partialBudget, tokenContext);
+                        if (!string.IsNullOrWhiteSpace(trimmed))
+                        {
+                            if (hasContent)
+                            {
+                                builder.AppendLine();
+                                builder.AppendLine();
+                            }
+                            builder.Append(trimmed);
+                            truncated = true;
+                            hasContent = true;
+                            partiallyAcceptedId = segment.CandidateId;
+                        }
+                    }
+
+                    // 当前及后续 segment 全部拒绝
+                    for (int j = i; j < segments.Count; j++)
+                    {
+                        if (segments[j].CandidateId != partiallyAcceptedId)
+                        {
+                            rejectedIds.Add(segments[j].CandidateId);
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+
+        if (!hasContent)
+        {
+            return SectionPackingResult.Dropped("content is empty");
+        }
+
+        var sectionContent = builder.ToString();
+        var sectionTokens = _estimateTokens(sectionContent, tokenContext);
+
+        // 安全兜底：若近似值偏差导致仍超预算，对完整内容做一次裁剪
+        if (sectionTokens > remainingBudget)
+        {
+            sectionContent = TrimToTokenBudget(sectionContent, remainingBudget, tokenContext);
+            if (string.IsNullOrWhiteSpace(sectionContent))
+            {
+                return SectionPackingResult.Dropped("token budget exhausted");
+            }
+            sectionTokens = _estimateTokens(sectionContent, tokenContext);
+            truncated = true;
+        }
+
+        foreach (var sourceRef in sectionSourceRefs)
+        {
+            packageSourceRefs.Add(sourceRef);
+        }
+
+        sections.Add(new ContextPackageSection
+        {
+            Name = name,
+            Priority = priority,
+            Content = sectionContent,
+            ContentFormat = contentFormat,
+            SourceRefs = sectionSourceRefs,
+            ItemRefs = sectionItemRefs
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray(),
+            EstimatedTokens = sectionTokens
+        });
+
+        estimatedTokens += sectionTokens;
+
+        return SectionPackingResult.Selected(
+            truncated ? "selected and truncated to fit token budget" : "selected for package section",
+            sectionTokens,
+            truncated,
+            acceptedIds,
+            rejectedIds,
+            partiallyAcceptedId);
     }
 
     /// <summary>

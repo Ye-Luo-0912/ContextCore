@@ -75,11 +75,10 @@ internal sealed class CandidateSelector
                 {
                     Name = "current_task",
                     DefaultPriority = 110,
-                    ContentBlocks = new[] { content },
+                    Segments = new[] { new CandidateSegment(currentTask.TaskId, content) },
                     Candidates = new[] { currentTaskCandidate },
                     SourceRefs = currentTaskCandidate.SourceRefs,
                     ItemRefs = new[] { currentTask.TaskId },
-                    CandidateIds = new[] { currentTask.TaskId },
                 });
             }
         }
@@ -146,19 +145,16 @@ internal sealed class CandidateSelector
                     .ToArray();
 
                 var hardToFormat = activeHardConstraints.Where(c => !state.GlobalSelectedIds.Contains(c.Id)).ToArray();
-                IEnumerable<string> hardBlocks = hardToFormat.Length > 0
-                    ? PackageSectionFormatter.FormatConstraintBlocks(hardToFormat, tokenBudget)
-                    : new[] { "(所有硬约束已在更优 Section 中包含)" };
 
                 CommitSection(state, options, new SectionDraft
                 {
                     Name = "hard_constraints",
                     DefaultPriority = 100,
-                    ContentBlocks = hardBlocks,
+                    Segments = PackageSectionFormatter.FormatConstraintSegments(hardToFormat, tokenBudget),
+                    FallbackContent = "(所有硬约束已在更优 Section 中包含)",
                     Candidates = hardCandidates,
                     SourceRefs = ContextItemRefResolver.ResolveSourceRefs(activeHardConstraints),
                     ItemRefs = ContextItemRefResolver.ResolveItemRefs(activeHardConstraints),
-                    CandidateIds = ContextItemRefResolver.ResolveItemRefs(activeHardConstraints),
                 });
             }
         }
@@ -210,19 +206,16 @@ internal sealed class CandidateSelector
                     .ToArray();
 
                 var workingToFormat = activeWorking.Where(item => !state.GlobalSelectedIds.Contains(item.Id)).ToArray();
-                IEnumerable<string> workingBlocks = workingToFormat.Length > 0
-                    ? PackageSectionFormatter.FormatMemoryBlocks(workingToFormat, tokenBudget)
-                    : new[] { "(所有活跃工作区记忆已在此前去重包含)" };
 
                 CommitSection(state, options, new SectionDraft
                 {
                     Name = "working_memory",
                     DefaultPriority = 90,
-                    ContentBlocks = workingBlocks,
+                    Segments = PackageSectionFormatter.FormatMemorySegments(workingToFormat, tokenBudget),
+                    FallbackContent = "(所有活跃工作区记忆已在此前去重包含)",
                     Candidates = workingCandidates,
                     SourceRefs = ContextItemRefResolver.ResolveSourceRefs(activeWorking),
                     ItemRefs = ContextItemRefResolver.ResolveItemRefs(activeWorking),
-                    CandidateIds = ContextItemRefResolver.ResolveItemRefs(activeWorking),
                 });
             }
 
@@ -241,20 +234,17 @@ internal sealed class CandidateSelector
                         .ToArray();
 
                     var historicalToFormat = deprecatedWorking.Where(item => !state.GlobalSelectedIds.Contains(item.Id)).ToArray();
-                    IEnumerable<string> historicalBlocks = historicalToFormat.Length > 0
-                        ? PackageSectionFormatter.FormatMemoryBlocks(historicalToFormat, tokenBudget)
-                        : new[] { "(所有历史审计记忆已在此前去重包含)" };
 
                     CommitSection(state, options, new SectionDraft
                     {
                         Name = "historical_context",
                         DefaultPriority = 15,
                         BudgetKind = SectionBudgetKind.Historical,
-                        ContentBlocks = historicalBlocks,
+                        Segments = PackageSectionFormatter.FormatMemorySegments(historicalToFormat, tokenBudget),
+                        FallbackContent = "(所有历史审计记忆已在此前去重包含)",
                         Candidates = historicalCandidates,
                         SourceRefs = ContextItemRefResolver.ResolveSourceRefs(deprecatedWorking),
                         ItemRefs = ContextItemRefResolver.ResolveItemRefs(deprecatedWorking),
-                        CandidateIds = ContextItemRefResolver.ResolveItemRefs(deprecatedWorking),
                     });
                 }
                 else
@@ -281,19 +271,16 @@ internal sealed class CandidateSelector
                 .ToArray();
 
             var globalToFormat = globalItems.Where(item => !state.GlobalSelectedIds.Contains(item.Id)).ToArray();
-            IEnumerable<string> globalBlocks = globalToFormat.Length > 0
-                ? PackageSectionFormatter.FormatGlobalBlocks(globalToFormat)
-                : new[] { "(所有全局上下文已在此前去重包含)" };
 
             CommitSection(state, options, new SectionDraft
             {
                 Name = "global_context",
                 DefaultPriority = 80,
-                ContentBlocks = globalBlocks,
+                Segments = PackageSectionFormatter.FormatGlobalSegments(globalToFormat),
+                FallbackContent = "(所有全局上下文已在此前去重包含)",
                 Candidates = globalCandidates,
                 SourceRefs = ContextItemRefResolver.ResolveSourceRefs(globalItems),
                 ItemRefs = ContextItemRefResolver.ResolveItemRefs(globalItems),
-                CandidateIds = ContextItemRefResolver.ResolveItemRefs(globalItems),
             });
         }
 
@@ -317,19 +304,16 @@ internal sealed class CandidateSelector
                 .ToArray();
 
             var recentToFormat = includedRecent.Where(item => !state.GlobalSelectedIds.Contains(item.SourceItemId)).ToArray();
-            IEnumerable<string> recentBlocks = recentToFormat.Length > 0
-                ? PackageSectionFormatter.FormatRecentContextBlocks(recentToFormat, tokenBudget)
-                : new[] { "(所有近期短期上下文已在此前去重包含)" };
 
             CommitSection(state, options, new SectionDraft
             {
                 Name = "recent_context",
                 DefaultPriority = 70,
-                ContentBlocks = recentBlocks,
+                Segments = PackageSectionFormatter.FormatRecentContextSegments(recentToFormat, tokenBudget),
+                FallbackContent = "(所有近期短期上下文已在此前去重包含)",
                 Candidates = recentCandidates,
                 SourceRefs = ContextItemRefResolver.ResolveSourceRefs(includedRecent),
                 ItemRefs = ContextItemRefResolver.ResolveItemRefs(includedRecent),
-                CandidateIds = ContextItemRefResolver.ResolveItemRefs(includedRecent),
             });
         }
 
@@ -362,19 +346,16 @@ internal sealed class CandidateSelector
                 .ToArray();
 
             var stableToFormat = stableMemory.Where(item => !state.GlobalSelectedIds.Contains(item.Id)).ToArray();
-            IEnumerable<string> stableBlocks = stableToFormat.Length > 0
-                ? PackageSectionFormatter.FormatMemoryBlocks(stableToFormat, tokenBudget)
-                : new[] { "(所有稳定背景记忆已在此前去重包含)" };
 
             CommitSection(state, options, new SectionDraft
             {
                 Name = "stable_memory",
                 DefaultPriority = 60,
-                ContentBlocks = stableBlocks,
+                Segments = PackageSectionFormatter.FormatMemorySegments(stableToFormat, tokenBudget),
+                FallbackContent = "(所有稳定背景记忆已在此前去重包含)",
                 Candidates = stableCandidates,
                 SourceRefs = ContextItemRefResolver.ResolveSourceRefs(stableMemory),
                 ItemRefs = ContextItemRefResolver.ResolveItemRefs(stableMemory),
-                CandidateIds = ContextItemRefResolver.ResolveItemRefs(stableMemory),
             });
         }
 
@@ -403,19 +384,16 @@ internal sealed class CandidateSelector
                     .ToArray();
 
                 var softToFormat = activeSoftConstraints.Where(c => !state.GlobalSelectedIds.Contains(c.Id)).ToArray();
-                IEnumerable<string> softBlocks = softToFormat.Length > 0
-                    ? PackageSectionFormatter.FormatConstraintBlocks(softToFormat, tokenBudget)
-                    : new[] { "(所有软约束已在此前去重包含)" };
 
                 CommitSection(state, options, new SectionDraft
                 {
                     Name = "soft_constraints",
                     DefaultPriority = 50,
-                    ContentBlocks = softBlocks,
+                    Segments = PackageSectionFormatter.FormatConstraintSegments(softToFormat, tokenBudget),
+                    FallbackContent = "(所有软约束已在此前去重包含)",
                     Candidates = softCandidates,
                     SourceRefs = ContextItemRefResolver.ResolveSourceRefs(activeSoftConstraints),
                     ItemRefs = ContextItemRefResolver.ResolveItemRefs(activeSoftConstraints),
-                    CandidateIds = ContextItemRefResolver.ResolveItemRefs(activeSoftConstraints),
                 });
             }
         }
@@ -438,19 +416,16 @@ internal sealed class CandidateSelector
                 .ToArray();
 
             var mergedToFormat = orderedMergedConstraints.Where(item => !state.GlobalSelectedIds.Contains(item.Constraint.Id)).ToArray();
-            IEnumerable<string> mergedBlocks = mergedToFormat.Length > 0
-                ? PackageSectionFormatter.FormatMergedConstraintBlocks(mergedToFormat, tokenBudget)
-                : new[] { "(所有合并约束已在此前去重包含)" };
 
             CommitSection(state, options, new SectionDraft
             {
                 Name = "constraints",
                 DefaultPriority = 95,
-                ContentBlocks = mergedBlocks,
+                Segments = PackageSectionFormatter.FormatMergedConstraintSegments(mergedToFormat, tokenBudget),
+                FallbackContent = "(所有合并约束已在此前去重包含)",
                 Candidates = mergedCandidates,
                 SourceRefs = ContextItemRefResolver.ResolveSourceRefs(activeMergedConstraints),
                 ItemRefs = ContextItemRefResolver.ResolveItemRefs(activeMergedConstraints),
-                CandidateIds = ContextItemRefResolver.ResolveItemRefs(activeMergedConstraints),
             });
         }
 
@@ -486,19 +461,16 @@ internal sealed class CandidateSelector
                     .ToArray();
 
                 var relatedToFormat = relatedItems.Where(item => !state.GlobalSelectedIds.Contains(item.Id)).ToArray();
-                IEnumerable<string> relatedBlocks = relatedToFormat.Length > 0
-                    ? PackageSectionFormatter.FormatContextItemBlocks(relatedToFormat)
-                    : new[] { "(所有关联图谱扩展上下文已在此前去重包含)" };
 
                 CommitSection(state, options, new SectionDraft
                 {
                     Name = "related_context",
                     DefaultPriority = 40,
-                    ContentBlocks = relatedBlocks,
+                    Segments = PackageSectionFormatter.FormatContextItemSegments(relatedToFormat),
+                    FallbackContent = "(所有关联图谱扩展上下文已在此前去重包含)",
                     Candidates = relatedCandidates,
                     SourceRefs = ContextItemRefResolver.ResolveSourceRefs(relatedItems),
                     ItemRefs = ContextItemRefResolver.ResolveItemRefs(relatedItems),
-                    CandidateIds = ContextItemRefResolver.ResolveItemRefs(relatedItems),
                 });
             }
         }
@@ -580,7 +552,7 @@ internal sealed class CandidateSelector
     }
 
     /// <summary>
-    /// 装配一个 section 并同步记录 trace 决策。封装 AddSectionFromBlocks +
+    /// 装配一个 section 并同步记录 trace 决策。封装 AddSectionFromSegments +
     /// AddSectionDecisionsWithDedup 的重复调用序列，保持各 section 处理顺序一致。
     /// </summary>
     private void CommitSection(
@@ -600,16 +572,16 @@ internal sealed class CandidateSelector
             _ => PackageSectionBudgetResolver.ResolveSectionTokenBudget(policy, modeBudgetProfile, draft.Name, tokenBudget),
         };
 
-        var sectionResult = _assembler.AddSectionFromBlocks(
+        var sectionResult = _assembler.AddSectionFromSegments(
             state.Sections,
             state.SourceRefs,
             draft.Name,
             PackageSectionBudgetResolver.GetPriority(policy, draft.Name, draft.DefaultPriority),
-            draft.ContentBlocks,
+            draft.Segments,
+            draft.FallbackContent,
             ContextContentFormat.Markdown,
             draft.SourceRefs,
             draft.ItemRefs,
-            draft.CandidateIds,
             tokenBudget,
             sectionBudget,
             tokenContext,
@@ -647,18 +619,20 @@ internal sealed class SelectionState
 }
 
 /// <summary>
-/// 轻量 section 草稿：描述单个 section 装配所需的全部输入（名称、优先级、内容块、
+/// 轻量 section 草稿：描述单个 section 装配所需的全部输入（名称、优先级、segment 列表、
 /// 候选列表、引用、预算类别），由 <see cref="CandidateSelector.CommitSection"/> 消费。
+/// Segments 携带候选 ID 与格式化文本，Packer 按 segment 粒度截断并精确归属。
+/// 当所有候选已被前序 section 选入时，Segments 为空，使用 FallbackContent 展示提示信息。
 /// </summary>
 internal sealed class SectionDraft
 {
     internal required string Name { get; init; }
     internal int DefaultPriority { get; init; }
-    internal IEnumerable<string> ContentBlocks { get; init; } = Array.Empty<string>();
+    internal IReadOnlyList<CandidateSegment> Segments { get; init; } = Array.Empty<CandidateSegment>();
+    internal string? FallbackContent { get; init; }
     internal IReadOnlyList<PackageTraceCandidate> Candidates { get; init; } = Array.Empty<PackageTraceCandidate>();
     internal IReadOnlyList<string> SourceRefs { get; init; } = Array.Empty<string>();
     internal IReadOnlyList<string> ItemRefs { get; init; } = Array.Empty<string>();
-    internal IReadOnlyList<string> CandidateIds { get; init; } = Array.Empty<string>();
     internal SectionBudgetKind BudgetKind { get; init; } = SectionBudgetKind.Normal;
 }
 

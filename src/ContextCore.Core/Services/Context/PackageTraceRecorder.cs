@@ -54,15 +54,15 @@ internal sealed class PackageTraceRecorder
 
         if (sectionResult.Added)
         {
-            // 使用 SectionPackingResult.AcceptedCandidateIds 精确判断候选是否被保留，
-            // 替代基于字符串前缀的猜测（7.2）。
-            var acceptedIds = new HashSet<string>(
+            // 使用 SectionPackingResult 的精确候选归属：
+            // - AcceptedCandidateIds：完整保留进 section 输出的候选
+            // - PartiallyAcceptedCandidateId：因 token 预算截断仅部分保留的候选
+            // - 其余候选：未保留，按 Truncated 标志选择 drop reason
+            // 替代旧的"只保留首个新候选"启发式与基于字符串前缀的猜测。
+            var fullyAcceptedIds = new HashSet<string>(
                 sectionResult.AcceptedCandidateIds,
                 StringComparer.OrdinalIgnoreCase);
-
-            // 裁剪时仅保留首个新候选（避免低价值候选取代 MustHit 项），
-            // 其余新候选标记为因裁剪被丢弃。比字符串前缀猜测更可靠且确定性。
-            var isFirstNewCandidate = true;
+            var partiallyAcceptedId = sectionResult.PartiallyAcceptedCandidateId;
 
             for (int i = 0; i < candidates.Count; i++)
             {
@@ -86,17 +86,12 @@ internal sealed class PackageTraceRecorder
                     continue;
                 }
 
-                if (acceptedIds.Contains(candidate.Id))
-                {
-                    if (sectionResult.Truncated && !isFirstNewCandidate)
-                    {
-                        var dropReason = "candidate not retained after token budget truncation";
-                        droppedItems.Add(CreateDropped(candidate, dropReason));
-                        WriteTraceRow(candidate, sectionName, false, dropReason, selectedByScoring: true);
-                        continue;
-                    }
+                var isFullyAccepted = fullyAcceptedIds.Contains(candidate.Id);
+                var isPartiallyAccepted = partiallyAcceptedId is not null
+                    && string.Equals(candidate.Id, partiallyAcceptedId, StringComparison.OrdinalIgnoreCase);
 
-                    isFirstNewCandidate = false;
+                if (isFullyAccepted || isPartiallyAccepted)
+                {
                     var decision = CreateDecision(
                         candidate,
                         sectionName,
@@ -109,7 +104,9 @@ internal sealed class PackageTraceRecorder
                 }
                 else
                 {
-                    var dropReason = "content not retained in section output";
+                    var dropReason = sectionResult.Truncated
+                        ? "candidate not retained after token budget truncation"
+                        : "content not retained in section output";
                     droppedItems.Add(CreateDropped(candidate, dropReason));
                     WriteTraceRow(candidate, sectionName, false, dropReason, selectedByScoring: true);
                 }

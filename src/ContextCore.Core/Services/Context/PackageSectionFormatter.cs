@@ -24,6 +24,20 @@ internal static class PackageSectionFormatter
         }
     }
 
+    internal static IReadOnlyList<CandidateSegment> FormatConstraintSegments(
+        IReadOnlyList<ContextConstraint> constraints, int tokenBudget = 0)
+    {
+        var compact = tokenBudget > 0 && tokenBudget <= 200;
+        var segments = new List<CandidateSegment>(constraints.Count);
+        foreach (var item in constraints)
+        {
+            segments.Add(new CandidateSegment(
+                item.Id,
+                compact ? item.Content : $"- [{item.Level}] {item.Content}"));
+        }
+        return segments;
+    }
+
     internal static string FormatCurrentTask(
         WorkingMemoryCurrentTask currentTask,
         ContextPackageRequest request)
@@ -88,6 +102,20 @@ internal static class PackageSectionFormatter
         }
     }
 
+    internal static IReadOnlyList<CandidateSegment> FormatMergedConstraintSegments(
+        IReadOnlyList<MergedContextConstraint> constraints, int tokenBudget = 0)
+    {
+        var compact = tokenBudget > 0 && tokenBudget <= 200;
+        var segments = new List<CandidateSegment>(constraints.Count);
+        foreach (var item in constraints)
+        {
+            segments.Add(new CandidateSegment(
+                item.Constraint.Id,
+                compact ? item.Constraint.Content : $"- [{item.PriorityLabel} | {item.Constraint.Level}] {item.Constraint.Content}"));
+        }
+        return segments;
+    }
+
     internal static string FormatMemoryItems(IReadOnlyList<ContextMemoryItem> items, int tokenBudget = 0)
     {
         return JoinBlocks(FormatMemoryBlocks(items, tokenBudget));
@@ -104,6 +132,20 @@ internal static class PackageSectionFormatter
         }
     }
 
+    internal static IReadOnlyList<CandidateSegment> FormatMemorySegments(
+        IReadOnlyList<ContextMemoryItem> items, int tokenBudget = 0)
+    {
+        var compact = tokenBudget > 0 && tokenBudget <= 200;
+        var segments = new List<CandidateSegment>(items.Count);
+        foreach (var item in items)
+        {
+            segments.Add(new CandidateSegment(
+                item.Id,
+                compact ? item.Content : $"## {item.Type} / {item.Layer} / {item.Status}{Environment.NewLine}{item.Content}"));
+        }
+        return segments;
+    }
+
     internal static string FormatGlobalItems(IReadOnlyList<ContextGlobalItem> items)
     {
         return JoinBlocks(FormatGlobalBlocks(items));
@@ -117,6 +159,18 @@ internal static class PackageSectionFormatter
         }
     }
 
+    internal static IReadOnlyList<CandidateSegment> FormatGlobalSegments(IReadOnlyList<ContextGlobalItem> items)
+    {
+        var segments = new List<CandidateSegment>(items.Count);
+        foreach (var item in items)
+        {
+            segments.Add(new CandidateSegment(
+                item.Id,
+                $"## {item.Type} / {item.Scope}{Environment.NewLine}{item.Content}"));
+        }
+        return segments;
+    }
+
     internal static string FormatContextItems(IReadOnlyList<ContextItem> items)
     {
         return JoinBlocks(FormatContextItemBlocks(items));
@@ -128,6 +182,18 @@ internal static class PackageSectionFormatter
         {
             yield return $"## {(string.IsNullOrWhiteSpace(item.Title) ? item.Id : item.Title)} / {item.Type}{Environment.NewLine}{item.Content}";
         }
+    }
+
+    internal static IReadOnlyList<CandidateSegment> FormatContextItemSegments(IReadOnlyList<ContextItem> items)
+    {
+        var segments = new List<CandidateSegment>(items.Count);
+        foreach (var item in items)
+        {
+            segments.Add(new CandidateSegment(
+                item.Id,
+                $"## {(string.IsNullOrWhiteSpace(item.Title) ? item.Id : item.Title)} / {item.Type}{Environment.NewLine}{item.Content}"));
+        }
+        return segments;
     }
 
     internal static string FormatRecentContextItems(IReadOnlyList<RecentContextItem> items, int tokenBudget = 0)
@@ -144,6 +210,20 @@ internal static class PackageSectionFormatter
                 ? item.Content
                 : $"## {item.SourceItemId} / relevance {item.Relevance:0.00} / recency {item.RecencyWeight:0.00}{Environment.NewLine}{item.Content}";
         }
+    }
+
+    internal static IReadOnlyList<CandidateSegment> FormatRecentContextSegments(
+        IReadOnlyList<RecentContextItem> items, int tokenBudget = 0)
+    {
+        var compact = tokenBudget > 0 && tokenBudget <= 200;
+        var segments = new List<CandidateSegment>(items.Count);
+        foreach (var item in items)
+        {
+            segments.Add(new CandidateSegment(
+                item.SourceItemId,
+                compact ? item.Content : $"## {item.SourceItemId} / relevance {item.Relevance:0.00} / recency {item.RecencyWeight:0.00}{Environment.NewLine}{item.Content}"));
+        }
+        return segments;
     }
 
     internal static string FormatDroppedItems(IReadOnlyList<DroppedContextItem> items)

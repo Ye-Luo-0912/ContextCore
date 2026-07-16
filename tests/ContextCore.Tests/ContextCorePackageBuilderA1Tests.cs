@@ -605,11 +605,16 @@ public sealed class ContextCorePackageBuilderA1Tests
             }
         });
 
+        // 精确 candidate attribution：MustHit 完整保留并排在 working_memory 首位。
+        // 低价值大文本项在 MustHit 之后被部分截断保留（PartiallyAccepted），
+        // 不取代 MustHit，但也不被错误地标记为 dropped（旧启发式行为）。
         Assert.IsTrue(result.SelectedItems.Any(item => item.ItemId == "memory:chat-active-plan"));
-        Assert.IsFalse(result.SelectedItems.Any(item => item.ItemId == "memory:low-value-noise"));
         Assert.AreEqual(
             "memory:chat-active-plan",
             result.SelectedItems.First(item => item.SectionName == "working_memory").ItemId);
+        // MustHit 内容完整保留在 section 输出中
+        var workingMemorySection = result.Package.Sections.First(s => s.Name == "working_memory");
+        Assert.IsTrue(workingMemorySection.Content.Contains("active plan", StringComparison.OrdinalIgnoreCase));
     }
 
     [TestMethod]
