@@ -4,8 +4,9 @@ using ContextCore.Abstractions.Models;
 namespace ContextCore.Core;
 
 /// <summary>
-/// R10-2 缓存失效边界辅助：从 Store 实体或写入参数构建 <see cref="CacheInvalidationKey"/>。
+/// 缓存失效边界辅助：从 Store 实体或写入参数构建 <see cref="CacheInvalidationKey"/>。
 /// 仅供 <c>InvalidatingXxxStoreDecorator</c> 使用，统一失效键的 StoreKind 与字段映射。
+/// 仅保留 Data Plane Store（读路径可能被缓存的 Store）的失效键。
 /// </summary>
 internal static class InvalidationKeys
 {
@@ -15,27 +16,8 @@ internal static class InvalidationKeys
     public const string ConstraintStore = "ConstraintStore";
     public const string ContextIndex = "ContextIndex";
     public const string GlobalContextStore = "GlobalContextStore";
-
-    // R11-P4：剩余 Store 的 StoreKind 常量。
-    public const string ContextCollectionStore = "ContextCollectionStore";
-    public const string ContextPackageBuildTraceStore = "ContextPackageBuildTraceStore";
-    public const string ContextPackagePolicyStore = "ContextPackagePolicyStore";
-    public const string DecisionTraceStore = "DecisionTraceStore";
-    public const string StableLifecycleReviewStore = "StableLifecycleReviewStore";
-    public const string CandidateConstraintReviewStore = "CandidateConstraintReviewStore";
-    public const string ConstraintGapCandidateStore = "ConstraintGapCandidateStore";
-    public const string PromotionRecordStore = "PromotionRecordStore";
-    public const string PromotionCandidateStore = "PromotionCandidateStore";
     public const string WorkingMemoryService = "WorkingMemoryService";
-    public const string RelationReviewStore = "RelationReviewStore";
     public const string VectorStore = "VectorStore";
-    public const string VectorReindexReportStore = "VectorReindexReportStore";
-    public const string VectorLifecycleMetadataReviewStore = "VectorLifecycleMetadataReviewStore";
-    public const string VectorLifecycleSidecarMetadataStore = "VectorLifecycleSidecarMetadataStore";
-    public const string VectorLifecycleMetadataReviewCandidateStore = "VectorLifecycleMetadataReviewCandidateStore";
-    public const string LearningFeedbackStore = "LearningFeedbackStore";
-    public const string LearningFeedbackReviewStore = "LearningFeedbackReviewStore";
-    public const string ShortTermPromotionCandidateStore = "ShortTermPromotionCandidateStore";
 
     public static CacheInvalidationKey ForContext(ContextItem item)
         => new(ContextStore, item.WorkspaceId, item.CollectionId, item.Id);
@@ -64,79 +46,17 @@ internal static class InvalidationKeys
     public static CacheInvalidationKey ForGlobal(ContextGlobalItem item)
         => new(GlobalContextStore, item.WorkspaceId, item.CollectionId ?? string.Empty, item.Id);
 
-    // R11-P4：剩余 Store 的失效键工厂方法。集合范围失效（EntityId=null）用于 AppendReviewAsync 等批量影响读取的方法。
-
-    public static CacheInvalidationKey ForContextCollection(ContextCollection collection)
-        => new(ContextCollectionStore, collection.WorkspaceId, collection.Id, EntityId: null);
-
-    public static CacheInvalidationKey ForPackageBuildTrace(ContextPackageBuildResult result)
-        => new(ContextPackageBuildTraceStore, result.Package.WorkspaceId, result.Package.CollectionId, result.BuildId);
-
-    public static CacheInvalidationKey ForPackagePolicy(ContextPackagePolicy policy)
-        => new(ContextPackagePolicyStore, policy.WorkspaceId, policy.CollectionId ?? string.Empty, policy.Id);
-
-    public static CacheInvalidationKey ForDecisionTrace(ContextDecisionRecord record)
-        => new(DecisionTraceStore, record.WorkspaceId, record.CollectionId, record.DecisionId);
-
-    public static CacheInvalidationKey ForStableLifecycleReview(StableLifecycleReviewRecord record)
-        => new(StableLifecycleReviewStore, record.WorkspaceId, record.CollectionId ?? string.Empty, EntityId: null);
-
-    public static CacheInvalidationKey ForCandidateConstraintReview(CandidateConstraintReviewRecord record)
-        => new(CandidateConstraintReviewStore, record.WorkspaceId, record.CollectionId ?? string.Empty, EntityId: null);
-
-    public static CacheInvalidationKey ForConstraintGapCandidate(ConstraintGapCandidate candidate)
-        => new(ConstraintGapCandidateStore, candidate.WorkspaceId, candidate.CollectionId, candidate.GapId);
-
-    public static CacheInvalidationKey ForConstraintGapReview(ConstraintGapReviewRecord record)
-        => new(ConstraintGapCandidateStore, record.WorkspaceId, record.CollectionId, EntityId: null);
-
-    public static CacheInvalidationKey ForPromotionRecord(ContextPromotionRecord record)
-        => new(PromotionRecordStore, record.WorkspaceId, record.CollectionId, record.Id);
-
-    public static CacheInvalidationKey ForPromotionCandidate(PromotionCandidate candidate)
-        => new(PromotionCandidateStore, candidate.WorkspaceId, candidate.CollectionId, candidate.Id);
-
-    public static CacheInvalidationKey ForPromotionCandidate(string workspaceId, string collectionId, string entityId)
-        => new(PromotionCandidateStore, workspaceId, collectionId, entityId);
-
     public static CacheInvalidationKey ForWorkingMemory(WorkingMemoryItem item)
         => new(WorkingMemoryService, item.WorkspaceId, item.CollectionId, item.Id);
 
     public static CacheInvalidationKey ForWorkingMemory(string workspaceId, string collectionId)
         => new(WorkingMemoryService, workspaceId, collectionId, EntityId: null);
 
-    public static CacheInvalidationKey ForRelationReview(RelationReviewRecord record)
-        => new(RelationReviewStore, record.WorkspaceId, record.CollectionId ?? string.Empty, EntityId: null);
-
     public static CacheInvalidationKey ForVector(VectorRecord record)
         => new(VectorStore, record.WorkspaceId, record.CollectionId ?? string.Empty, record.Id);
 
     public static CacheInvalidationKey ForVector(string workspaceId, string vectorId)
         => new(VectorStore, workspaceId, string.Empty, vectorId);
-
-    public static CacheInvalidationKey ForVectorReindexReport(VectorReindexResult result)
-        => new(VectorReindexReportStore, result.WorkspaceId, result.CollectionId, result.ReportId);
-
-    public static CacheInvalidationKey ForVectorLifecycleMetadataReview(VectorLifecycleMetadataReviewRecord record)
-        => new(VectorLifecycleMetadataReviewStore, record.WorkspaceId, record.CollectionId, record.CandidateId);
-
-    public static CacheInvalidationKey ForVectorLifecycleSidecarMetadata(VectorLifecycleSidecarMetadataEntry entry)
-        => new(VectorLifecycleSidecarMetadataStore, entry.WorkspaceId, entry.CollectionId, entry.ItemId);
-
-    public static CacheInvalidationKey ForVectorLifecycleMetadataReviewCandidate(VectorLifecycleMetadataReviewCandidate candidate)
-        => new(VectorLifecycleMetadataReviewCandidateStore, candidate.WorkspaceId, candidate.CollectionId, candidate.CandidateId);
-
-    public static CacheInvalidationKey ForLearningFeedback(LearningFeedbackEvent feedbackEvent)
-        => new(LearningFeedbackStore, feedbackEvent.WorkspaceId, feedbackEvent.CollectionId, feedbackEvent.FeedbackId);
-
-    public static CacheInvalidationKey ForLearningFeedbackReview(LearningFeedbackReviewRecord review)
-        => new(LearningFeedbackReviewStore, string.Empty, string.Empty, review.FeedbackId);
-
-    public static CacheInvalidationKey ForShortTermPromotionCandidate(ShortTermPromotionCandidate candidate)
-        => new(ShortTermPromotionCandidateStore, candidate.WorkspaceId, candidate.CollectionId, candidate.CandidateId);
-
-    public static CacheInvalidationKey ForShortTermPromotionCandidateReview(PromotionCandidateReviewRecord record)
-        => new(ShortTermPromotionCandidateStore, record.WorkspaceId, record.CollectionId, EntityId: null);
 }
 
 /// <summary>
@@ -324,179 +244,6 @@ public sealed partial class InvalidatingGlobalContextStoreDecorator
     }
 }
 
-// R11-P4：剩余 Store 的失效边界 Decorator。
-
-/// <summary>
-/// 包装 <see cref="IContextCollectionStore"/>，在写入成功（SaveCollectionAsync）后触发集合元数据失效。
-/// </summary>
-[GenerateInvalidatingDecorator(typeof(IContextCollectionStore))]
-public sealed partial class InvalidatingContextCollectionStoreDecorator;
-
-public sealed partial class InvalidatingContextCollectionStoreDecorator
-{
-    public async Task SaveCollectionAsync(ContextCollection collection, CancellationToken cancellationToken = default)
-    {
-        await _inner.SaveCollectionAsync(collection, cancellationToken).ConfigureAwait(false);
-        await AfterCommitAsync(InvalidationKeys.ForContextCollection(collection)).ConfigureAwait(false);
-    }
-}
-
-/// <summary>
-/// 包装 <see cref="IContextPackageBuildTraceStore"/>，在写入成功（SaveAsync）后触发缓存失效。
-/// </summary>
-[GenerateInvalidatingDecorator(typeof(IContextPackageBuildTraceStore))]
-public sealed partial class InvalidatingContextPackageBuildTraceStoreDecorator;
-
-public sealed partial class InvalidatingContextPackageBuildTraceStoreDecorator
-{
-    public async Task SaveAsync(ContextPackageBuildResult result, CancellationToken cancellationToken = default)
-    {
-        await _inner.SaveAsync(result, cancellationToken).ConfigureAwait(false);
-        await AfterCommitAsync(InvalidationKeys.ForPackageBuildTrace(result)).ConfigureAwait(false);
-    }
-}
-
-/// <summary>
-/// 包装 <see cref="IContextPackagePolicyStore"/>，在写入成功（SaveAsync）后触发缓存失效。
-/// </summary>
-[GenerateInvalidatingDecorator(typeof(IContextPackagePolicyStore))]
-public sealed partial class InvalidatingContextPackagePolicyStoreDecorator;
-
-public sealed partial class InvalidatingContextPackagePolicyStoreDecorator
-{
-    public async Task SaveAsync(ContextPackagePolicy policy, CancellationToken cancellationToken = default)
-    {
-        await _inner.SaveAsync(policy, cancellationToken).ConfigureAwait(false);
-        await AfterCommitAsync(InvalidationKeys.ForPackagePolicy(policy)).ConfigureAwait(false);
-    }
-}
-
-/// <summary>
-/// 包装 <see cref="IDecisionTraceStore"/>，在写入成功（SaveAsync）后触发缓存失效。
-/// </summary>
-[GenerateInvalidatingDecorator(typeof(IDecisionTraceStore))]
-public sealed partial class InvalidatingDecisionTraceStoreDecorator;
-
-public sealed partial class InvalidatingDecisionTraceStoreDecorator
-{
-    public async Task SaveAsync(ContextDecisionRecord record, CancellationToken cancellationToken = default)
-    {
-        await _inner.SaveAsync(record, cancellationToken).ConfigureAwait(false);
-        await AfterCommitAsync(InvalidationKeys.ForDecisionTrace(record)).ConfigureAwait(false);
-    }
-}
-
-/// <summary>
-/// 包装 <see cref="IStableLifecycleReviewStore"/>，在写入成功（AppendReviewAsync）后触发集合范围失效。
-/// </summary>
-[GenerateInvalidatingDecorator(typeof(IStableLifecycleReviewStore))]
-public sealed partial class InvalidatingStableLifecycleReviewStoreDecorator;
-
-public sealed partial class InvalidatingStableLifecycleReviewStoreDecorator
-{
-    public async Task AppendReviewAsync(StableLifecycleReviewRecord record, CancellationToken cancellationToken = default)
-    {
-        await _inner.AppendReviewAsync(record, cancellationToken).ConfigureAwait(false);
-        await AfterCommitAsync(InvalidationKeys.ForStableLifecycleReview(record)).ConfigureAwait(false);
-    }
-}
-
-/// <summary>
-/// 包装 <see cref="ICandidateConstraintReviewStore"/>，在写入成功（AppendReviewAsync）后触发集合范围失效。
-/// </summary>
-[GenerateInvalidatingDecorator(typeof(ICandidateConstraintReviewStore))]
-public sealed partial class InvalidatingCandidateConstraintReviewStoreDecorator;
-
-public sealed partial class InvalidatingCandidateConstraintReviewStoreDecorator
-{
-    public async Task AppendReviewAsync(CandidateConstraintReviewRecord record, CancellationToken cancellationToken = default)
-    {
-        await _inner.AppendReviewAsync(record, cancellationToken).ConfigureAwait(false);
-        await AfterCommitAsync(InvalidationKeys.ForCandidateConstraintReview(record)).ConfigureAwait(false);
-    }
-}
-
-/// <summary>
-/// 包装 <see cref="IConstraintGapCandidateStore"/>，在写入成功（SaveAsync/UpdateStatusAsync/AppendReviewAsync）后触发缓存失效。
-/// </summary>
-[GenerateInvalidatingDecorator(typeof(IConstraintGapCandidateStore))]
-public sealed partial class InvalidatingConstraintGapCandidateStoreDecorator;
-
-public sealed partial class InvalidatingConstraintGapCandidateStoreDecorator
-{
-    public async Task<ConstraintGapCandidate> SaveAsync(ConstraintGapCandidate candidate, CancellationToken cancellationToken = default)
-    {
-        var result = await _inner.SaveAsync(candidate, cancellationToken).ConfigureAwait(false);
-        await AfterCommitAsync(InvalidationKeys.ForConstraintGapCandidate(result)).ConfigureAwait(false);
-        return result;
-    }
-
-    public async Task<ConstraintGapCandidate?> UpdateStatusAsync(
-        string gapId,
-        string status,
-        string? reviewer = null,
-        string? reason = null,
-        CancellationToken cancellationToken = default)
-    {
-        var result = await _inner.UpdateStatusAsync(gapId, status, reviewer, reason, cancellationToken).ConfigureAwait(false);
-        if (result is not null)
-        {
-            await AfterCommitAsync(InvalidationKeys.ForConstraintGapCandidate(result)).ConfigureAwait(false);
-        }
-        return result;
-    }
-
-    public async Task AppendReviewAsync(ConstraintGapReviewRecord record, CancellationToken cancellationToken = default)
-    {
-        await _inner.AppendReviewAsync(record, cancellationToken).ConfigureAwait(false);
-        await AfterCommitAsync(InvalidationKeys.ForConstraintGapReview(record)).ConfigureAwait(false);
-    }
-}
-
-/// <summary>
-/// 包装 <see cref="IPromotionRecordStore"/>，在写入成功（SavePromotionRecordAsync）后触发缓存失效。
-/// </summary>
-[GenerateInvalidatingDecorator(typeof(IPromotionRecordStore))]
-public sealed partial class InvalidatingPromotionRecordStoreDecorator;
-
-public sealed partial class InvalidatingPromotionRecordStoreDecorator
-{
-    public async Task SavePromotionRecordAsync(ContextPromotionRecord record, CancellationToken cancellationToken = default)
-    {
-        await _inner.SavePromotionRecordAsync(record, cancellationToken).ConfigureAwait(false);
-        await AfterCommitAsync(InvalidationKeys.ForPromotionRecord(record)).ConfigureAwait(false);
-    }
-}
-
-/// <summary>
-/// 包装 <see cref="IPromotionCandidateStore"/>，在写入成功（SavePromotionCandidateAsync/UpdatePromotionCandidateStatusAsync）后触发缓存失效。
-/// </summary>
-[GenerateInvalidatingDecorator(typeof(IPromotionCandidateStore))]
-public sealed partial class InvalidatingPromotionCandidateStoreDecorator;
-
-public sealed partial class InvalidatingPromotionCandidateStoreDecorator
-{
-    public async Task SavePromotionCandidateAsync(PromotionCandidate candidate, CancellationToken cancellationToken = default)
-    {
-        await _inner.SavePromotionCandidateAsync(candidate, cancellationToken).ConfigureAwait(false);
-        await AfterCommitAsync(InvalidationKeys.ForPromotionCandidate(candidate)).ConfigureAwait(false);
-    }
-
-    public async Task<PromotionCandidate?> UpdatePromotionCandidateStatusAsync(
-        string workspaceId,
-        string collectionId,
-        string id,
-        PromotionCandidateStatus status,
-        string? reviewer = null,
-        string? reason = null,
-        CancellationToken cancellationToken = default)
-    {
-        var result = await _inner.UpdatePromotionCandidateStatusAsync(workspaceId, collectionId, id, status, reviewer, reason, cancellationToken).ConfigureAwait(false);
-        await AfterCommitAsync(InvalidationKeys.ForPromotionCandidate(workspaceId, collectionId, id)).ConfigureAwait(false);
-        return result;
-    }
-}
-
 /// <summary>
 /// 包装 <see cref="IWorkingMemoryService"/>，在写入成功（AddAsync/ClearAsync/SetActiveContextAsync/SetCurrentTaskAsync）后触发缓存失效。
 /// </summary>
@@ -541,21 +288,6 @@ public sealed partial class InvalidatingWorkingMemoryServiceDecorator
 }
 
 /// <summary>
-/// 包装 <see cref="IRelationReviewStore"/>，在写入成功（AppendReviewAsync）后触发集合范围失效。
-/// </summary>
-[GenerateInvalidatingDecorator(typeof(IRelationReviewStore))]
-public sealed partial class InvalidatingRelationReviewStoreDecorator;
-
-public sealed partial class InvalidatingRelationReviewStoreDecorator
-{
-    public async Task AppendReviewAsync(RelationReviewRecord record, CancellationToken cancellationToken = default)
-    {
-        await _inner.AppendReviewAsync(record, cancellationToken).ConfigureAwait(false);
-        await AfterCommitAsync(InvalidationKeys.ForRelationReview(record)).ConfigureAwait(false);
-    }
-}
-
-/// <summary>
 /// 包装 <see cref="IVectorStore"/>，在写入成功（UpsertAsync/DeleteAsync）后触发缓存失效。
 /// </summary>
 [GenerateInvalidatingDecorator(typeof(IVectorStore))]
@@ -576,117 +308,5 @@ public sealed partial class InvalidatingVectorStoreDecorator
     {
         await _inner.DeleteAsync(workspaceId, vectorId, cancellationToken).ConfigureAwait(false);
         await AfterCommitAsync(InvalidationKeys.ForVector(workspaceId, vectorId)).ConfigureAwait(false);
-    }
-}
-
-/// <summary>
-/// 包装 <see cref="IVectorReindexReportStore"/>，在写入成功（SaveAsync）后触发缓存失效。
-/// </summary>
-[GenerateInvalidatingDecorator(typeof(IVectorReindexReportStore))]
-public sealed partial class InvalidatingVectorReindexReportStoreDecorator;
-
-public sealed partial class InvalidatingVectorReindexReportStoreDecorator
-{
-    public async Task SaveAsync(VectorReindexResult result, CancellationToken cancellationToken = default)
-    {
-        await _inner.SaveAsync(result, cancellationToken).ConfigureAwait(false);
-        await AfterCommitAsync(InvalidationKeys.ForVectorReindexReport(result)).ConfigureAwait(false);
-    }
-}
-
-/// <summary>
-/// 包装 <see cref="IVectorLifecycleMetadataReviewStore"/>，在写入成功（SaveAsync）后触发缓存失效。
-/// </summary>
-[GenerateInvalidatingDecorator(typeof(IVectorLifecycleMetadataReviewStore))]
-public sealed partial class InvalidatingVectorLifecycleMetadataReviewStoreDecorator;
-
-public sealed partial class InvalidatingVectorLifecycleMetadataReviewStoreDecorator
-{
-    public async Task SaveAsync(VectorLifecycleMetadataReviewRecord record, CancellationToken cancellationToken = default)
-    {
-        await _inner.SaveAsync(record, cancellationToken).ConfigureAwait(false);
-        await AfterCommitAsync(InvalidationKeys.ForVectorLifecycleMetadataReview(record)).ConfigureAwait(false);
-    }
-}
-
-/// <summary>
-/// 包装 <see cref="IVectorLifecycleSidecarMetadataStore"/>，在写入成功（SaveAsync）后触发缓存失效。
-/// </summary>
-[GenerateInvalidatingDecorator(typeof(IVectorLifecycleSidecarMetadataStore))]
-public sealed partial class InvalidatingVectorLifecycleSidecarMetadataStoreDecorator;
-
-public sealed partial class InvalidatingVectorLifecycleSidecarMetadataStoreDecorator
-{
-    public async Task SaveAsync(VectorLifecycleSidecarMetadataEntry entry, CancellationToken cancellationToken = default)
-    {
-        await _inner.SaveAsync(entry, cancellationToken).ConfigureAwait(false);
-        await AfterCommitAsync(InvalidationKeys.ForVectorLifecycleSidecarMetadata(entry)).ConfigureAwait(false);
-    }
-}
-
-/// <summary>
-/// 包装 <see cref="IVectorLifecycleMetadataReviewCandidateStore"/>，在写入成功（SaveAsync）后触发缓存失效。
-/// </summary>
-[GenerateInvalidatingDecorator(typeof(IVectorLifecycleMetadataReviewCandidateStore))]
-public sealed partial class InvalidatingVectorLifecycleMetadataReviewCandidateStoreDecorator;
-
-public sealed partial class InvalidatingVectorLifecycleMetadataReviewCandidateStoreDecorator
-{
-    public async Task SaveAsync(VectorLifecycleMetadataReviewCandidate candidate, CancellationToken cancellationToken = default)
-    {
-        await _inner.SaveAsync(candidate, cancellationToken).ConfigureAwait(false);
-        await AfterCommitAsync(InvalidationKeys.ForVectorLifecycleMetadataReviewCandidate(candidate)).ConfigureAwait(false);
-    }
-}
-
-/// <summary>
-/// 包装 <see cref="ILearningFeedbackStore"/>，在写入成功（UpsertAsync）后触发缓存失效。
-/// </summary>
-[GenerateInvalidatingDecorator(typeof(ILearningFeedbackStore))]
-public sealed partial class InvalidatingLearningFeedbackStoreDecorator;
-
-public sealed partial class InvalidatingLearningFeedbackStoreDecorator
-{
-    public async Task UpsertAsync(LearningFeedbackEvent feedbackEvent, CancellationToken cancellationToken = default)
-    {
-        await _inner.UpsertAsync(feedbackEvent, cancellationToken).ConfigureAwait(false);
-        await AfterCommitAsync(InvalidationKeys.ForLearningFeedback(feedbackEvent)).ConfigureAwait(false);
-    }
-}
-
-/// <summary>
-/// 包装 <see cref="ILearningFeedbackReviewStore"/>，在写入成功（UpsertAsync）后触发缓存失效。
-/// 审核记录不携带 workspace/collection，按全局范围（空串）失效。
-/// </summary>
-[GenerateInvalidatingDecorator(typeof(ILearningFeedbackReviewStore))]
-public sealed partial class InvalidatingLearningFeedbackReviewStoreDecorator;
-
-public sealed partial class InvalidatingLearningFeedbackReviewStoreDecorator
-{
-    public async Task UpsertAsync(LearningFeedbackReviewRecord review, CancellationToken cancellationToken = default)
-    {
-        await _inner.UpsertAsync(review, cancellationToken).ConfigureAwait(false);
-        await AfterCommitAsync(InvalidationKeys.ForLearningFeedbackReview(review)).ConfigureAwait(false);
-    }
-}
-
-/// <summary>
-/// 包装 <see cref="IShortTermPromotionCandidateStore"/>，在写入成功（SaveAsync/AppendReviewAsync）后触发缓存失效。
-/// </summary>
-[GenerateInvalidatingDecorator(typeof(IShortTermPromotionCandidateStore))]
-public sealed partial class InvalidatingShortTermPromotionCandidateStoreDecorator;
-
-public sealed partial class InvalidatingShortTermPromotionCandidateStoreDecorator
-{
-    public async Task SaveAsync(ShortTermPromotionCandidate candidate, CancellationToken cancellationToken = default)
-    {
-        await _inner.SaveAsync(candidate, cancellationToken).ConfigureAwait(false);
-        await AfterCommitAsync(InvalidationKeys.ForShortTermPromotionCandidate(candidate)).ConfigureAwait(false);
-    }
-
-    public async Task AppendReviewAsync(PromotionCandidateReviewRecord record, CancellationToken cancellationToken = default)
-    {
-        await _inner.AppendReviewAsync(record, cancellationToken).ConfigureAwait(false);
-        await AfterCommitAsync(InvalidationKeys.ForShortTermPromotionCandidateReview(record)).ConfigureAwait(false);
     }
 }
