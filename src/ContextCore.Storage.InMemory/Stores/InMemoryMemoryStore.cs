@@ -13,7 +13,7 @@ namespace ContextCore.Storage.InMemory;
 /// TODO-DEMO [P2-3]：内存存储仅用于测试，进程重启后数据全部丢失。
 /// ControlRoom 的 <c>--storage memory</c> 选项应向用户显示明确警告。参见：TODO.md → P2-3
 /// </remarks>
-public sealed class InMemoryMemoryStore : IMemoryStore, IWorkingMemoryService, IPromotionRecordStore, IPromotionCandidateStore
+public sealed class InMemoryMemoryStore : IMemoryStore, IWorkingMemoryService, IPromotionRecordStore, IPromotionCandidateStore, IMemoryStoreBatchLookup
 {
     private readonly ConcurrentDictionary<string, ContextMemoryItem> _items = new();
     private readonly ConcurrentDictionary<string, PromotionCandidate> _promotionCandidates = new();
@@ -44,6 +44,37 @@ public sealed class InMemoryMemoryStore : IMemoryStore, IWorkingMemoryService, I
             _items.TryGetValue(ItemKey(workspaceId, collectionId, id), out var item)
                 ? Clone(item)
                 : null);
+    }
+
+    public Task<IReadOnlyList<ContextMemoryItem>> BatchGetAsync(
+        string workspaceId,
+        string collectionId,
+        IReadOnlyList<string> ids,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(ids);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (ids.Count == 0)
+        {
+            return Task.FromResult<IReadOnlyList<ContextMemoryItem>>(Array.Empty<ContextMemoryItem>());
+        }
+
+        var results = new List<ContextMemoryItem>(ids.Count);
+        foreach (var id in ids)
+        {
+            if (string.IsNullOrWhiteSpace(id))
+            {
+                continue;
+            }
+
+            if (_items.TryGetValue(ItemKey(workspaceId, collectionId, id), out var item))
+            {
+                results.Add(Clone(item));
+            }
+        }
+
+        return Task.FromResult<IReadOnlyList<ContextMemoryItem>>(results);
     }
 
     public Task<IReadOnlyList<ContextMemoryItem>> QueryAsync(

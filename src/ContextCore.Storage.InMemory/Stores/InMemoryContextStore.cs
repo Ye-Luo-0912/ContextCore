@@ -8,7 +8,7 @@ namespace ContextCore.Storage.InMemory.Stores;
 /// 基于内存的 <see cref="IContextStore"/> 与 <see cref="IContextCollectionStore"/> 实现，
 /// 适用于测试和短生命周期场景。
 /// </summary>
-public sealed class InMemoryContextStore : IContextStore, IContextCollectionStore
+public sealed class InMemoryContextStore : IContextStore, IContextCollectionStore, IContextStoreBatchLookup
 {
     private readonly ConcurrentDictionary<string, ContextCollection> _collections = new();
     private readonly ConcurrentDictionary<string, ContextItem> _items = new();
@@ -35,6 +35,37 @@ public sealed class InMemoryContextStore : IContextStore, IContextCollectionStor
             _items.TryGetValue(ItemKey(workspaceId, collectionId, id), out var item)
                 ? Clone(item)
                 : null);
+    }
+
+    public Task<IReadOnlyList<ContextItem>> BatchGetAsync(
+        string workspaceId,
+        string collectionId,
+        IReadOnlyList<string> ids,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(ids);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (ids.Count == 0)
+        {
+            return Task.FromResult<IReadOnlyList<ContextItem>>(Array.Empty<ContextItem>());
+        }
+
+        var results = new List<ContextItem>(ids.Count);
+        foreach (var id in ids)
+        {
+            if (string.IsNullOrWhiteSpace(id))
+            {
+                continue;
+            }
+
+            if (_items.TryGetValue(ItemKey(workspaceId, collectionId, id), out var item))
+            {
+                results.Add(Clone(item));
+            }
+        }
+
+        return Task.FromResult<IReadOnlyList<ContextItem>>(results);
     }
 
     public Task<IReadOnlyList<ContextItem>> QueryAsync(

@@ -13,7 +13,7 @@ namespace ContextCore.Storage.FileSystem.Stores;
 /// 原子替换只保证单文件完整，不保证 content+metadata 组成同一快照。
 /// collection 级 metadata cache 带 mtime 双重校验和容量上限。
 /// </remarks>
-public sealed class FileContextStore : IContextStore, IContextCollectionStore
+public sealed class FileContextStore : IContextStore, IContextCollectionStore, IContextStoreBatchLookup
 {
     private const int MaxCacheEntries = 256;
 
@@ -125,6 +125,55 @@ public sealed class FileContextStore : IContextStore, IContextCollectionStore
             return match is null
                 ? null
                 : await MaterializeAsync(match, includeContent: true, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <summary>
+    /// 批量按 ID 获取上下文条目。在单次 _gate 锁内读取 metadata 并 materialize 所有匹配项，
+    /// 避免 N 次单条 GetAsync 各自获取锁导致的串行退化。
+    /// </summary>
+    public async Task<IReadOnlyList<ContextItem>> BatchGetAsync(
+        string workspaceId,
+        string collectionId,
+        IReadOnlyList<string> ids,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(ids);
+        ValidateRequiredIds(workspaceId, collectionId);
+
+        if (ids.Count == 0)
+        {
+            return Array.Empty<ContextItem>();
+        }
+
+        var idSet = new HashSet<string>(ids.Where(id => !string.IsNullOrWhiteSpace(id)), StringComparer.OrdinalIgnoreCase);
+        if (idSet.Count == 0)
+        {
+            return Array.Empty<ContextItem>();
+        }
+
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var metadata = await ReadItemMetadataLockedAsync(workspaceId, collectionId, cancellationToken)
+                .ConfigureAwait(false);
+
+            var results = new List<ContextItem>(idSet.Count);
+            foreach (var entry in metadata)
+            {
+                if (idSet.Contains(entry.Id))
+                {
+                    var item = await MaterializeAsync(entry, includeContent: true, cancellationToken)
+                        .ConfigureAwait(false);
+                    results.Add(item);
+                }
+            }
+
+            return results;
         }
         finally
         {

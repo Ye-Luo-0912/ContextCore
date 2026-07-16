@@ -9,7 +9,7 @@ namespace ContextCore.Storage.FileSystem.Stores;
 /// <see cref="IWorkingMemoryService"/>、<see cref="IPromotionRecordStore"/> 和 <see cref="IPromotionCandidateStore"/>。
 /// 工作记忆、稳定记忆及晋升记录均持久化为 JSON/JSONL 文件。
 /// </summary>
-public sealed class FileMemoryStore : IMemoryStore, IWorkingMemoryService, IPromotionRecordStore, IPromotionCandidateStore
+public sealed class FileMemoryStore : IMemoryStore, IWorkingMemoryService, IPromotionRecordStore, IPromotionCandidateStore, IMemoryStoreBatchLookup
 {
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly FilePathResolver _paths;
@@ -102,6 +102,63 @@ public sealed class FileMemoryStore : IMemoryStore, IWorkingMemoryService, IProm
             }
 
             return null;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <summary>
+    /// 批量按 ID 获取记忆条目。在单次 _gate 锁内遍历所有 memory 文件并按 ID 集合过滤，
+    /// 避免 N 次单条 GetAsync 各自获取锁导致的串行退化。
+    /// </summary>
+    public async Task<IReadOnlyList<ContextMemoryItem>> BatchGetAsync(
+        string workspaceId,
+        string collectionId,
+        IReadOnlyList<string> ids,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(ids);
+
+        if (ids.Count == 0)
+        {
+            return Array.Empty<ContextMemoryItem>();
+        }
+
+        var idSet = new HashSet<string>(ids.Where(id => !string.IsNullOrWhiteSpace(id)), StringComparer.OrdinalIgnoreCase);
+        if (idSet.Count == 0)
+        {
+            return Array.Empty<ContextMemoryItem>();
+        }
+
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var results = new List<ContextMemoryItem>(idSet.Count);
+            var foundIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var path in GetMemoryPaths(workspaceId, collectionId))
+            {
+                var items = await _jsonLines.ReadAsync<ContextMemoryItem>(path, cancellationToken)
+                    .ConfigureAwait(false);
+
+                foreach (var item in items)
+                {
+                    if (idSet.Contains(item.Id) && !foundIds.Contains(item.Id))
+                    {
+                        results.Add(CompositeContextNormalizer.Clone(item));
+                        foundIds.Add(item.Id);
+                    }
+                }
+
+                if (foundIds.Count == idSet.Count)
+                {
+                    break;
+                }
+            }
+
+            return results;
         }
         finally
         {

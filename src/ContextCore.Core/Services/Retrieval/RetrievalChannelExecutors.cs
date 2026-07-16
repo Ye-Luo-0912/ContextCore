@@ -40,8 +40,15 @@ internal sealed class MandatoryRecallChannelExecutor : IRetrievalChannelExecutor
             return new RetrievalChannelResult(StageName, 0, Array.Empty<RetrievalChannelCandidate>());
         }
 
-        // 并行解析所有 RequiredId，消除 N+1 串行 await。
-        // 每个 id 内部仍按 ContextStore → MemoryStore 顺序，但不同 id 之间并行。
+        // 批量查询路径：provider 实现 IContextStoreBatchLookup 时优先使用单次批量查询，
+        // 避免 N 次单条 GetAsync 并行导致的锁竞争（FileSystem）或连接池击穿（Postgres）。
+        if (_contextStore is IContextStoreBatchLookup batchContextStore)
+        {
+            return await ResolveMandatoryWithBatchLookupAsync(
+                context, requiredIds, batchContextStore, cancellationToken).ConfigureAwait(false);
+        }
+
+        // 回退路径：并行单条查询（R17-C 消除 N+1 串行 await 的成果）。
         var resolved = await Task.WhenAll(
             requiredIds.Select(async id =>
             {
@@ -89,6 +96,85 @@ internal sealed class MandatoryRecallChannelExecutor : IRetrievalChannelExecutor
             if (entry.Candidate is not null)
             {
                 channelCandidates.Add(entry.Candidate);
+            }
+        }
+
+        return new RetrievalChannelResult(StageName, channelCandidates.Count, channelCandidates);
+    }
+
+    /// <summary>
+    /// 批量查询路径：先批量查 ContextStore，对 miss 的 id 再批量查 MemoryStore（若支持）或并行单条查。
+    /// </summary>
+    private async Task<RetrievalChannelResult> ResolveMandatoryWithBatchLookupAsync(
+        RetrievalChannelContext context,
+        string[] requiredIds,
+        IContextStoreBatchLookup batchContextStore,
+        CancellationToken cancellationToken)
+    {
+        var channelCandidates = new List<RetrievalChannelCandidate>(requiredIds.Length);
+        var foundIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        var items = await batchContextStore.BatchGetAsync(
+            context.Request.WorkspaceId,
+            context.Request.CollectionId,
+            requiredIds,
+            cancellationToken).ConfigureAwait(false);
+
+        foreach (var item in items)
+        {
+            foundIds.Add(item.Id);
+            channelCandidates.Add(RetrievalChannelCandidate.FromContextItem(
+                channelSource: "mandatory",
+                item,
+                score: 1000,
+                reason: "强制注入",
+                mandatory: true,
+                scoreBreakdown: new Dictionary<string, double> { ["mandatory"] = 1000 }));
+        }
+
+        // 对 ContextStore miss 的 id 查 MemoryStore
+        var missedIds = requiredIds.Where(id => !foundIds.Contains(id)).ToArray();
+        if (missedIds.Length > 0 && _memoryStore is not null)
+        {
+            if (_memoryStore is IMemoryStoreBatchLookup batchMemoryStore)
+            {
+                var memories = await batchMemoryStore.BatchGetAsync(
+                    context.Request.WorkspaceId,
+                    context.Request.CollectionId,
+                    missedIds,
+                    cancellationToken).ConfigureAwait(false);
+
+                foreach (var memory in memories)
+                {
+                    channelCandidates.Add(RetrievalChannelCandidate.FromMemoryItem(
+                        channelSource: "mandatory",
+                        memory,
+                        score: 1000,
+                        reason: "强制注入",
+                        mandatory: true,
+                        scoreBreakdown: new Dictionary<string, double> { ["mandatory"] = 1000 }));
+                }
+            }
+            else
+            {
+                // MemoryStore 不支持批量，回退到并行单条查询
+                var memories = await Task.WhenAll(
+                    missedIds.Select(id => _memoryStore.GetAsync(
+                        context.Request.WorkspaceId,
+                        context.Request.CollectionId,
+                        id,
+                        cancellationToken))).ConfigureAwait(false);
+
+                foreach (var memory in memories.Where(m => m is not null))
+                {
+                    channelCandidates.Add(RetrievalChannelCandidate.FromMemoryItem(
+                        channelSource: "mandatory",
+                        memory!,
+                        score: 1000,
+                        reason: "强制注入",
+                        mandatory: true,
+                        scoreBreakdown: new Dictionary<string, double> { ["mandatory"] = 1000 }));
+                }
             }
         }
 
@@ -325,17 +411,9 @@ internal sealed class VectorRecallChannelExecutor : IRetrievalChannelExecutor
             IncludeVector = false
         }, cancellationToken).ConfigureAwait(false);
 
-        // 并行 hydration 所有 hit，消除 N+1 串行 await。
-        var candidates = await Task.WhenAll(
-            hits.Select(hit => CreateVectorHitCandidateAsync(context, hit, cancellationToken))).ConfigureAwait(false);
-        var channelCandidates = new List<RetrievalChannelCandidate>();
-        foreach (var candidate in candidates)
-        {
-            if (candidate is not null)
-            {
-                channelCandidates.Add(candidate);
-            }
-        }
+        // 批量 hydration：按 SourceKind 分组，对支持 BatchGetAsync 的 store 批量查询，
+        // 避免 N 次单条 GetAsync 并行导致的锁竞争（FileSystem）或连接池击穿（Postgres）。
+        var channelCandidates = await HydrateVectorHitsAsync(context, hits, cancellationToken).ConfigureAwait(false);
 
         return new RetrievalChannelResult(
             StageName,
@@ -393,6 +471,169 @@ internal sealed class VectorRecallChannelExecutor : IRetrievalChannelExecutor
         return embedding.Succeeded && embedding.Vectors.Count > 0
             ? embedding.Vectors[0].Values
             : Array.Empty<float>();
+    }
+
+    /// <summary>
+    /// 批量 hydration vector hits：按 SourceKind 分组，对支持 BatchGetAsync 的 store 批量查询，
+    /// 对不支持的 store 回退到并行单条查询。混合模式支持（ContextStore 支持批量但 MemoryStore 不支持）。
+    /// </summary>
+    private async Task<List<RetrievalChannelCandidate>> HydrateVectorHitsAsync(
+        RetrievalChannelContext context,
+        IReadOnlyList<VectorSearchResult> hits,
+        CancellationToken cancellationToken)
+    {
+        var batchContextStore = _contextStore as IContextStoreBatchLookup;
+        var batchMemoryStore = _memoryStore as IMemoryStoreBatchLookup;
+
+        // 若两个 store 都不支持批量，回退到并行单条查询
+        if (batchContextStore is null && batchMemoryStore is null)
+        {
+            var parallelCandidates = await Task.WhenAll(
+                hits.Select(hit => CreateVectorHitCandidateAsync(context, hit, cancellationToken))).ConfigureAwait(false);
+            var fallback = new List<RetrievalChannelCandidate>();
+            foreach (var c in parallelCandidates)
+            {
+                if (c is not null) fallback.Add(c);
+            }
+            return fallback;
+        }
+
+        // 按 SourceKind 分组
+        var contextHits = new List<VectorSearchResult>();
+        var memoryHits = new List<VectorSearchResult>();
+        foreach (var hit in hits)
+        {
+            if (IsContextSourceKind(hit.Record.SourceKind))
+            {
+                contextHits.Add(hit);
+            }
+            else if (_memoryStore is not null && IsMemorySourceKind(hit.Record.SourceKind))
+            {
+                memoryHits.Add(hit);
+            }
+        }
+
+        var results = new List<RetrievalChannelCandidate>(hits.Count);
+
+        // Context hits
+        if (contextHits.Count > 0)
+        {
+            if (batchContextStore is not null)
+            {
+                await HydrateContextHitsBatchAsync(
+                    context, contextHits, batchContextStore, results, cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                var cs = await Task.WhenAll(
+                    contextHits.Select(h => CreateVectorHitCandidateAsync(context, h, cancellationToken))).ConfigureAwait(false);
+                foreach (var c in cs)
+                {
+                    if (c is not null) results.Add(c);
+                }
+            }
+        }
+
+        // Memory hits
+        if (memoryHits.Count > 0)
+        {
+            if (batchMemoryStore is not null)
+            {
+                await HydrateMemoryHitsBatchAsync(
+                    context, memoryHits, batchMemoryStore, results, cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                var ms = await Task.WhenAll(
+                    memoryHits.Select(h => CreateVectorHitCandidateAsync(context, h, cancellationToken))).ConfigureAwait(false);
+                foreach (var c in ms)
+                {
+                    if (c is not null) results.Add(c);
+                }
+            }
+        }
+
+        return results;
+    }
+
+    /// <summary>按 CollectionId 分组批量查询 ContextStore，构造 vector 候选。</summary>
+    private async Task HydrateContextHitsBatchAsync(
+        RetrievalChannelContext context,
+        List<VectorSearchResult> hits,
+        IContextStoreBatchLookup batchStore,
+        List<RetrievalChannelCandidate> results,
+        CancellationToken cancellationToken)
+    {
+        // 按 effective CollectionId 分组
+        var groups = hits.GroupBy(h => h.Record.CollectionId ?? context.Request.CollectionId);
+        foreach (var group in groups)
+        {
+            var collectionId = group.Key;
+            var sourceIds = group.Select(h => h.Record.SourceId).ToArray();
+            var items = await batchStore.BatchGetAsync(
+                context.Request.WorkspaceId,
+                collectionId,
+                sourceIds,
+                cancellationToken).ConfigureAwait(false);
+
+            // 按 Id 索引命中结果
+            var itemDict = items.ToDictionary(i => i.Id, StringComparer.OrdinalIgnoreCase);
+            foreach (var hit in group)
+            {
+                if (!itemDict.TryGetValue(hit.Record.SourceId, out var item)
+                    || !RetrievalCandidatePolicy.CanUseContextItem(item, context.Plan))
+                {
+                    continue;
+                }
+
+                var score = RetrievalCandidatePolicy.ScoreVectorHit(hit.Score);
+                results.Add(RetrievalChannelCandidate.FromContextItem(
+                    channelSource: "vector",
+                    item,
+                    score,
+                    reason: $"向量召回 score={hit.Score:0.000}",
+                    scoreBreakdown: new Dictionary<string, double> { ["vector"] = score }));
+            }
+        }
+    }
+
+    /// <summary>按 CollectionId 分组批量查询 MemoryStore，构造 vector 候选。</summary>
+    private async Task HydrateMemoryHitsBatchAsync(
+        RetrievalChannelContext context,
+        List<VectorSearchResult> hits,
+        IMemoryStoreBatchLookup batchStore,
+        List<RetrievalChannelCandidate> results,
+        CancellationToken cancellationToken)
+    {
+        var groups = hits.GroupBy(h => h.Record.CollectionId ?? context.Request.CollectionId);
+        foreach (var group in groups)
+        {
+            var collectionId = group.Key;
+            var sourceIds = group.Select(h => h.Record.SourceId).ToArray();
+            var memories = await batchStore.BatchGetAsync(
+                context.Request.WorkspaceId,
+                collectionId,
+                sourceIds,
+                cancellationToken).ConfigureAwait(false);
+
+            var memDict = memories.ToDictionary(m => m.Id, StringComparer.OrdinalIgnoreCase);
+            foreach (var hit in group)
+            {
+                if (!memDict.TryGetValue(hit.Record.SourceId, out var memory)
+                    || !RetrievalCandidatePolicy.CanUseMemoryItem(memory, context.Plan))
+                {
+                    continue;
+                }
+
+                var score = RetrievalCandidatePolicy.ScoreVectorHit(hit.Score);
+                results.Add(RetrievalChannelCandidate.FromMemoryItem(
+                    channelSource: "vector",
+                    memory,
+                    score,
+                    reason: $"向量召回 score={hit.Score:0.000}",
+                    scoreBreakdown: new Dictionary<string, double> { ["vector"] = score }));
+            }
+        }
     }
 
     private async Task<RetrievalChannelCandidate?> CreateVectorHitCandidateAsync(
