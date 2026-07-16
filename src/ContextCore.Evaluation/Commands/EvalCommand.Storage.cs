@@ -35,7 +35,7 @@ private static async Task ExecuteStorageBoundaryReportAsync(
             ?? Path.Combine("storage", "storage-boundary-report.md");
         var report = StorageResponsibilityRegistry.BuildReport();
 
-        await WriteTextAsync(JsonSerializer.Serialize(report, JsonOptions), outputPath, cancellationToken)
+        await WriteJsonAsync(report, outputPath, cancellationToken)
             .ConfigureAwait(false);
         await WriteTextAsync(StorageResponsibilityRegistry.BuildMarkdownReport(report), markdownPath, cancellationToken)
             .ConfigureAwait(false);

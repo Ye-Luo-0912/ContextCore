@@ -100,7 +100,7 @@ public static partial class EvalCommand
         var builder = new RelationCorpusHygieneReportBuilder();
         var report = await builder.BuildAsync(contextsRoot, cancellationToken).ConfigureAwait(false);
 
-        await WriteTextAsync(JsonSerializer.Serialize(report, JsonOptions), outputPath, cancellationToken)
+        await WriteJsonAsync(report, outputPath, cancellationToken)
             .ConfigureAwait(false);
         await WriteTextAsync(
                 RelationCorpusHygieneReportBuilder.BuildMarkdownReport(report),
@@ -188,7 +188,7 @@ public static partial class EvalCommand
                 .ConfigureAwait(false);
         }
 
-        await WriteTextAsync(JsonSerializer.Serialize(result, JsonOptions), outputPath, cancellationToken)
+        await WriteJsonAsync(result, outputPath, cancellationToken)
             .ConfigureAwait(false);
         await WriteTextAsync(VectorReindexReportRenderer.ToMarkdown(result), markdownPath, cancellationToken)
             .ConfigureAwait(false);
@@ -218,7 +218,7 @@ public static partial class EvalCommand
         {
             var response = await service.SubmitServiceVectorReindexAsync(request, cancellationToken)
                 .ConfigureAwait(false);
-            await WriteTextAsync(JsonSerializer.Serialize(response, JsonOptions), outputPath, cancellationToken)
+            await WriteJsonAsync(response, outputPath, cancellationToken)
                 .ConfigureAwait(false);
             await WriteTextAsync(EvalVectorRenderer.RenderVectorReindexSubmit(response), markdownPath, cancellationToken)
                 .ConfigureAwait(false);
@@ -231,7 +231,7 @@ public static partial class EvalCommand
         if (providerDiagnostics.Any(item => item.Severity.Equals("Error", StringComparison.OrdinalIgnoreCase)))
         {
             var blockedResult = NewVectorReindexProviderBlockedResult(request, providerDiagnostics);
-            await WriteTextAsync(JsonSerializer.Serialize(blockedResult, JsonOptions), outputPath, cancellationToken)
+            await WriteJsonAsync(blockedResult, outputPath, cancellationToken)
                 .ConfigureAwait(false);
             await WriteTextAsync(VectorReindexReportRenderer.ToMarkdown(blockedResult), markdownPath, cancellationToken)
                 .ConfigureAwait(false);
@@ -243,7 +243,7 @@ public static partial class EvalCommand
         var infrastructure = CreateVectorReindexInfrastructure(service, saveReports: true, request.SourceItems, providerOptions);
         var result = await infrastructure.Executor.ExecuteAsync(request, cancellationToken: cancellationToken)
             .ConfigureAwait(false);
-        await WriteTextAsync(JsonSerializer.Serialize(result, JsonOptions), outputPath, cancellationToken)
+        await WriteJsonAsync(result, outputPath, cancellationToken)
             .ConfigureAwait(false);
         await WriteTextAsync(VectorReindexReportRenderer.ToMarkdown(result), markdownPath, cancellationToken)
             .ConfigureAwait(false);
@@ -283,7 +283,7 @@ public static partial class EvalCommand
                 cancellationToken).ConfigureAwait(false);
         }
 
-        await WriteTextAsync(JsonSerializer.Serialize(report, JsonOptions), outputPath, cancellationToken)
+        await WriteJsonAsync(report, outputPath, cancellationToken)
             .ConfigureAwait(false);
         await WriteTextAsync(BuildVectorIndexDiagnosticsMarkdown(report), markdownPath, cancellationToken)
             .ConfigureAwait(false);
@@ -335,7 +335,7 @@ public static partial class EvalCommand
         }
 
         var report = VectorIndexCoverageReportBuilder.Build(plan, diagnostics, status);
-        await WriteTextAsync(JsonSerializer.Serialize(report, JsonOptions), outputPath, cancellationToken)
+        await WriteJsonAsync(report, outputPath, cancellationToken)
             .ConfigureAwait(false);
         await WriteTextAsync(VectorIndexCoverageReportBuilder.ToMarkdown(report), markdownPath, cancellationToken)
             .ConfigureAwait(false);
@@ -386,7 +386,7 @@ public static partial class EvalCommand
             }
         }
 
-        await WriteTextAsync(JsonSerializer.Serialize(result, JsonOptions), outputPath, cancellationToken)
+        await WriteJsonAsync(result, outputPath, cancellationToken)
             .ConfigureAwait(false);
         await WriteTextAsync(EvalVectorRenderer.RenderVectorQueryPreview(result), markdownPath, cancellationToken)
             .ConfigureAwait(false);
@@ -410,7 +410,7 @@ public static partial class EvalCommand
 
         var tester = new EmbeddingProviderSmokeTester();
         var report = await tester.RunAsync(providerOptions, cancellationToken).ConfigureAwait(false);
-        await WriteTextAsync(JsonSerializer.Serialize(report, JsonOptions), outputPath, cancellationToken)
+        await WriteJsonAsync(report, outputPath, cancellationToken)
             .ConfigureAwait(false);
         await WriteTextAsync(EmbeddingProviderSmokeTester.ToMarkdown(report), markdownPath, cancellationToken)
             .ConfigureAwait(false);
@@ -493,7 +493,7 @@ public static partial class EvalCommand
                 profileId,
                 warnings);
             reports.Add(a3Report);
-            await WriteTextAsync(JsonSerializer.Serialize(a3Report, JsonOptions), a3OutputPath, cancellationToken)
+            await WriteJsonAsync(a3Report, a3OutputPath, cancellationToken)
                 .ConfigureAwait(false);
             if (!runExtended)
             {
@@ -513,7 +513,7 @@ public static partial class EvalCommand
                 profileId,
                 warnings);
             reports.Add(extendedReport);
-            await WriteTextAsync(JsonSerializer.Serialize(extendedReport, JsonOptions), extendedOutputPath, cancellationToken)
+            await WriteJsonAsync(extendedReport, extendedOutputPath, cancellationToken)
                 .ConfigureAwait(false);
             if (!runA3)
             {
@@ -525,7 +525,7 @@ public static partial class EvalCommand
         var summary = RetrievalDatasetAlignmentAuditRunner.BuildSummary(reports);
         if (runA3 && runExtended)
         {
-            await WriteTextAsync(JsonSerializer.Serialize(summary, JsonOptions), summaryOutputPath, cancellationToken)
+            await WriteJsonAsync(summary, summaryOutputPath, cancellationToken)
                 .ConfigureAwait(false);
             await WriteTextAsync(RetrievalDatasetAlignmentAuditRunner.BuildMarkdownSummary(summary), markdownPath, cancellationToken)
                 .ConfigureAwait(false);
@@ -1313,25 +1313,8 @@ public static partial class EvalCommand
             : null;
     }
 
-    private static async Task WriteJsonAsync(
-        ExtendedFailureTriageReport report,
-        string path,
-        CancellationToken cancellationToken)
-    {
-        var fullPath = Path.GetFullPath(path);
-        var dir = Path.GetDirectoryName(fullPath);
-        if (!string.IsNullOrWhiteSpace(dir))
-        {
-            Directory.CreateDirectory(dir);
-        }
-
-        var json = JsonSerializer.Serialize(report, JsonOptions);
-        await File.WriteAllTextAsync(fullPath, json, Encoding.UTF8, cancellationToken).ConfigureAwait(false);
-        await MirrorReportArtifactAsync(path, json, cancellationToken).ConfigureAwait(false);
-    }
-
-    private static async Task WriteJsonAsync(
-        PlanningShadowQualityReport report,
+    private static async Task WriteJsonAsync<T>(
+        T report,
         string path,
         CancellationToken cancellationToken)
     {
