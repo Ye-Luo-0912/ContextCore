@@ -57,32 +57,28 @@ public sealed class UnsupportedStoreGenerator : IIncrementalGenerator
         sb.AppendLine($"public sealed partial class {spec.ClassName} : {spec.InterfaceType.ToDisplayString(CodeGenerationHelpers.TypeFormat)}");
         sb.AppendLine("{");
         sb.AppendLine("    private readonly string _provider;");
+        sb.AppendLine($"    private const string _displayName = \"{spec.DisplayName}\";");
         sb.AppendLine();
         sb.AppendLine($"    public {spec.ClassName}(string provider)");
         sb.AppendLine("    {");
-        sb.AppendLine("        _provider = string.IsNullOrWhiteSpace(provider) ? \"unknown\" : provider;");
+        sb.AppendLine("        _provider = provider;");
         sb.AppendLine("    }");
         sb.AppendLine();
-
-        var displayNameLower = char.ToLowerInvariant(spec.DisplayName[0]) + spec.DisplayName.Substring(1);
 
         foreach (var method in CodeGenerationHelpers.EnumerateInterfaceMethods(spec.InterfaceType))
         {
             var signature = CodeGenerationHelpers.FormatMethodSignature(method);
-            var args = CodeGenerationHelpers.FormatCallArguments(method.Parameters);
 
             // 对于泛型方法，约束需要从接口复制
             var constraints = FormatTypeParameterConstraints(method);
 
             sb.AppendLine($"    public {signature}{constraints}");
             sb.AppendLine("    {");
-            sb.AppendLine($"        throw CreateException();");
+            sb.AppendLine($"        throw UnsupportedStoreExceptionFactory.Create(_provider, _displayName);");
             sb.AppendLine("    }");
             sb.AppendLine();
         }
 
-        sb.AppendLine("    private System.NotSupportedException CreateException()");
-        sb.AppendLine($"        => new($\"{displayNameLower} is not implemented for storage provider '{{_provider}}'.\");");
         sb.AppendLine("}");
 
         return sb.ToString();
