@@ -78,14 +78,14 @@ public sealed class DefaultContextObjectResolver : IContextObjectResolver
         IReadOnlyList<string> ids,
         CancellationToken cancellationToken = default)
     {
-        var results = new List<ContextObjectResolution>(ids.Count);
-        foreach (var id in ids)
+        if (ids.Count == 0)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            results.Add(await ResolveAsync(workspaceId, collectionId, id, cancellationToken).ConfigureAwait(false));
+            return Array.Empty<ContextObjectResolution>();
         }
 
-        return results;
+        // 并行解析所有 id，消除 N+1 串行 await。
+        return await Task.WhenAll(
+            ids.Select(id => ResolveAsync(workspaceId, collectionId, id, cancellationToken))).ConfigureAwait(false);
     }
 }
 

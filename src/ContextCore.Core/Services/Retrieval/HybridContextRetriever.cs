@@ -64,29 +64,75 @@ public sealed class HybridContextRetriever : IContextRetriever
         // 短期锚定召回计划：外部传入则直接使用，否则从请求元数据自动派生（plan 始终非 null）
         var effectivePlan = request.Plan ?? AutoPlanner.Plan(request);
 
-        var mandatoryContext = RetrievalChannelContext.Create(request, effectivePlan, metadata);
-        var mandatoryResult = await _mandatoryRecallChannelExecutor.ExecuteAsync(mandatoryContext, cancellationToken).ConfigureAwait(false);
-        candidates.AddOrMerge(mandatoryResult);
-        stages.Add(CreateStageTrace(mandatoryResult));
+        // Phase 1：独立 Channel 并行执行（mandatory / keyword / memory / vector）。
+        // 每个 Channel 持有独立的 metadata 字典，消除共享可变状态的数据竞争。
+        var mandatoryMetadata = new Dictionary<string, string>();
+        var mandatoryContext = RetrievalChannelContext.Create(request, effectivePlan, mandatoryMetadata);
+        var mandatoryChannelTask = _mandatoryRecallChannelExecutor.ExecuteAsync(mandatoryContext, cancellationToken);
+
+        Dictionary<string, string>? keywordMetadata = null;
+        Dictionary<string, string>? memoryMetadata = null;
+        Task<RetrievalChannelResult>? keywordChannelTask = null;
+        Task<RetrievalChannelResult>? memoryChannelTask = null;
         if (request.IncludeKeywordRecall)
         {
-            var keywordContext = RetrievalChannelContext.Create(request, effectivePlan, metadata);
-            var keywordResult = await _contextRecallChannelExecutor.ExecuteAsync(keywordContext, cancellationToken).ConfigureAwait(false);
-            candidates.AddOrMerge(keywordResult);
-            stages.Add(CreateStageTrace(keywordResult));
-
-            var memoryContext = RetrievalChannelContext.Create(request, effectivePlan, metadata);
-            var memoryResult = await _memoryRecallChannelExecutor.ExecuteAsync(memoryContext, cancellationToken).ConfigureAwait(false);
-            candidates.AddOrMerge(memoryResult);
-            stages.Add(CreateStageTrace(memoryResult));
+            keywordMetadata = new Dictionary<string, string>();
+            keywordChannelTask = _contextRecallChannelExecutor.ExecuteAsync(
+                RetrievalChannelContext.Create(request, effectivePlan, keywordMetadata),
+                cancellationToken);
+            memoryMetadata = new Dictionary<string, string>();
+            memoryChannelTask = _memoryRecallChannelExecutor.ExecuteAsync(
+                RetrievalChannelContext.Create(request, effectivePlan, memoryMetadata),
+                cancellationToken);
         }
 
+        Dictionary<string, string>? vectorMetadata = null;
+        Task<RetrievalChannelResult>? vectorChannelTask = null;
         if (request.IncludeVectorRecall)
         {
-            var vectorContext = RetrievalChannelContext.Create(request, effectivePlan, metadata);
-            var vectorResult = await _vectorRecallChannelExecutor.ExecuteAsync(vectorContext, cancellationToken).ConfigureAwait(false);
+            vectorMetadata = new Dictionary<string, string>();
+            vectorChannelTask = _vectorRecallChannelExecutor.ExecuteAsync(
+                RetrievalChannelContext.Create(request, effectivePlan, vectorMetadata),
+                cancellationToken);
+        }
+
+        // 等待所有独立 Channel 完成
+        var independentTasks = new List<Task<RetrievalChannelResult>> { mandatoryChannelTask };
+        if (keywordChannelTask is not null) independentTasks.Add(keywordChannelTask);
+        if (memoryChannelTask is not null) independentTasks.Add(memoryChannelTask);
+        if (vectorChannelTask is not null) independentTasks.Add(vectorChannelTask);
+
+        await Task.WhenAll(independentTasks).ConfigureAwait(false);
+
+        // 按确定性顺序收集结果并合并 metadata（含 Channel 内部写入的 context.Metadata）
+        var mandatoryResult = mandatoryChannelTask.Result;
+        candidates.AddOrMerge(mandatoryResult);
+        stages.Add(CreateStageTrace(mandatoryResult));
+        MergeMetadata(metadata, mandatoryMetadata);
+        MergeMetadata(metadata, mandatoryResult.Metadata);
+
+        if (keywordChannelTask is not null)
+        {
+            var keywordResult = keywordChannelTask.Result;
+            candidates.AddOrMerge(keywordResult);
+            stages.Add(CreateStageTrace(keywordResult));
+            MergeMetadata(metadata, keywordMetadata!);
+            MergeMetadata(metadata, keywordResult.Metadata);
+
+            var memoryResult = memoryChannelTask!.Result;
+            candidates.AddOrMerge(memoryResult);
+            stages.Add(CreateStageTrace(memoryResult));
+            MergeMetadata(metadata, memoryMetadata!);
+            MergeMetadata(metadata, memoryResult.Metadata);
+        }
+
+        if (vectorChannelTask is not null)
+        {
+            var vectorResult = vectorChannelTask.Result;
             candidates.AddOrMerge(vectorResult);
             stages.Add(CreateStageTrace(vectorResult));
+            MergeMetadata(metadata, vectorMetadata!);
+            MergeMetadata(metadata, vectorResult.Metadata);
         }
 
         if (request.IncludeRelationExpansion && request.RelationExpansionDepth > 0)
@@ -177,5 +223,15 @@ public sealed class HybridContextRetriever : IContextRetriever
             CandidateCount = result.StageCandidateCount,
             Metadata = result.Metadata
         };
+    }
+
+    // 合并 Channel 独立 metadata 字典到全局 metadata。
+    // 后写入的 key 覆盖先写入的（Channel 内部 metadata 优先于 Result.Metadata）。
+    private static void MergeMetadata(Dictionary<string, string> target, Dictionary<string, string> source)
+    {
+        foreach (var kvp in source)
+        {
+            target[kvp.Key] = kvp.Value;
+        }
     }
 }

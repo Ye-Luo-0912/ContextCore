@@ -32,50 +32,67 @@ internal sealed class MandatoryRecallChannelExecutor : IRetrievalChannelExecutor
         RetrievalChannelContext context,
         CancellationToken cancellationToken = default)
     {
-        var channelCandidates = new List<RetrievalChannelCandidate>();
-        var added = 0;
-        foreach (var requiredId in context.Request.RequiredIds.Where(id => !string.IsNullOrWhiteSpace(id)))
+        var requiredIds = context.Request.RequiredIds
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .ToArray();
+        if (requiredIds.Length == 0)
         {
-            var item = await _contextStore.GetAsync(
-                context.Request.WorkspaceId,
-                context.Request.CollectionId,
-                requiredId,
-                cancellationToken).ConfigureAwait(false);
-            if (item is not null)
-            {
-                channelCandidates.Add(RetrievalChannelCandidate.FromContextItem(
-                    channelSource: "mandatory",
-                    item,
-                    score: 1000,
-                    reason: "强制注入",
-                    mandatory: true,
-                    scoreBreakdown: new Dictionary<string, double> { ["mandatory"] = 1000 }));
-                added++;
-                continue;
-            }
+            return new RetrievalChannelResult(StageName, 0, Array.Empty<RetrievalChannelCandidate>());
+        }
 
-            if (_memoryStore is not null)
+        // 并行解析所有 RequiredId，消除 N+1 串行 await。
+        // 每个 id 内部仍按 ContextStore → MemoryStore 顺序，但不同 id 之间并行。
+        var resolved = await Task.WhenAll(
+            requiredIds.Select(async id =>
             {
-                var memory = await _memoryStore.GetAsync(
+                var item = await _contextStore.GetAsync(
                     context.Request.WorkspaceId,
                     context.Request.CollectionId,
-                    requiredId,
+                    id,
                     cancellationToken).ConfigureAwait(false);
-                if (memory is not null)
+                if (item is not null)
                 {
-                    channelCandidates.Add(RetrievalChannelCandidate.FromMemoryItem(
+                    return (Id: id, Candidate: RetrievalChannelCandidate.FromContextItem(
                         channelSource: "mandatory",
-                        memory,
+                        item,
                         score: 1000,
                         reason: "强制注入",
                         mandatory: true,
                         scoreBreakdown: new Dictionary<string, double> { ["mandatory"] = 1000 }));
-                    added++;
                 }
+
+                if (_memoryStore is not null)
+                {
+                    var memory = await _memoryStore.GetAsync(
+                        context.Request.WorkspaceId,
+                        context.Request.CollectionId,
+                        id,
+                        cancellationToken).ConfigureAwait(false);
+                    if (memory is not null)
+                    {
+                        return (Id: id, Candidate: RetrievalChannelCandidate.FromMemoryItem(
+                            channelSource: "mandatory",
+                            memory,
+                            score: 1000,
+                            reason: "强制注入",
+                            mandatory: true,
+                            scoreBreakdown: new Dictionary<string, double> { ["mandatory"] = 1000 }));
+                    }
+                }
+
+                return (Id: id, Candidate: (RetrievalChannelCandidate?)null);
+            })).ConfigureAwait(false);
+
+        var channelCandidates = new List<RetrievalChannelCandidate>();
+        foreach (var entry in resolved)
+        {
+            if (entry.Candidate is not null)
+            {
+                channelCandidates.Add(entry.Candidate);
             }
         }
 
-        return new RetrievalChannelResult(StageName, added, channelCandidates);
+        return new RetrievalChannelResult(StageName, channelCandidates.Count, channelCandidates);
     }
 }
 
@@ -201,10 +218,9 @@ internal sealed class MemoryRecallChannelExecutor : IRetrievalChannelExecutor
             return Array.Empty<ContextMemoryItem>();
         }
 
-        var results = new List<ContextMemoryItem>();
-        if (context.Request.IncludeWorkingMemory)
-        {
-            results.AddRange(await _memoryStore.QueryAsync(new ContextMemoryQuery
+        // 并行执行 Working 和 Stable 查询，消除串行 await。
+        var workingTask = context.Request.IncludeWorkingMemory
+            ? _memoryStore.QueryAsync(new ContextMemoryQuery
             {
                 WorkspaceId = context.Request.WorkspaceId,
                 CollectionId = context.Request.CollectionId,
@@ -213,12 +229,11 @@ internal sealed class MemoryRecallChannelExecutor : IRetrievalChannelExecutor
                 Types = context.Request.RequiredTypes,
                 SourceRefs = context.Request.Refs,
                 Take = context.CandidateTake
-            }, cancellationToken).ConfigureAwait(false));
-        }
+            }, cancellationToken)
+            : Task.FromResult<IReadOnlyList<ContextMemoryItem>>(Array.Empty<ContextMemoryItem>());
 
-        if (context.Request.IncludeStableMemory && !RetrievalPlanExecutionPolicy.SuppressStableMemory(context.Plan))
-        {
-            results.AddRange(await _memoryStore.QueryAsync(new ContextMemoryQuery
+        var stableTask = context.Request.IncludeStableMemory && !RetrievalPlanExecutionPolicy.SuppressStableMemory(context.Plan)
+            ? _memoryStore.QueryAsync(new ContextMemoryQuery
             {
                 WorkspaceId = context.Request.WorkspaceId,
                 CollectionId = context.Request.CollectionId,
@@ -228,8 +243,13 @@ internal sealed class MemoryRecallChannelExecutor : IRetrievalChannelExecutor
                 Types = context.Request.RequiredTypes,
                 SourceRefs = context.Request.Refs,
                 Take = context.CandidateTake
-            }, cancellationToken).ConfigureAwait(false));
-        }
+            }, cancellationToken)
+            : Task.FromResult<IReadOnlyList<ContextMemoryItem>>(Array.Empty<ContextMemoryItem>());
+
+        await Task.WhenAll(workingTask, stableTask).ConfigureAwait(false);
+        var results = new List<ContextMemoryItem>();
+        results.AddRange(workingTask.Result);
+        results.AddRange(stableTask.Result);
 
         var allowDeprecated = RetrievalPlanExecutionPolicy.AllowDeprecated(context.Plan);
         return results
@@ -305,10 +325,12 @@ internal sealed class VectorRecallChannelExecutor : IRetrievalChannelExecutor
             IncludeVector = false
         }, cancellationToken).ConfigureAwait(false);
 
+        // 并行 hydration 所有 hit，消除 N+1 串行 await。
+        var candidates = await Task.WhenAll(
+            hits.Select(hit => CreateVectorHitCandidateAsync(context, hit, cancellationToken))).ConfigureAwait(false);
         var channelCandidates = new List<RetrievalChannelCandidate>();
-        foreach (var hit in hits)
+        foreach (var candidate in candidates)
         {
-            var candidate = await CreateVectorHitCandidateAsync(context, hit, cancellationToken).ConfigureAwait(false);
             if (candidate is not null)
             {
                 channelCandidates.Add(candidate);
