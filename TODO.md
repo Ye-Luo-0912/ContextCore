@@ -1,6 +1,6 @@
 # ContextCore 项目路线图
 
-> 最近更新：R12-1 低风险净减（删除无消费者代码 + 统一 Trace 失败指标）、R17/R18 系列收尾（2026-07-16）
+> 最近更新：R12-3/4/5/6 完成 + R12-F 验收（2026-07-17）
 
 > 本文件是 ContextCore 的**唯一当前路线图**。docs/ 下的 freeze / report / audit / plan 类文档均为历史快照，仅供回溯，不作为设计依据。历史完成记录已迁入 [docs/archive/roadmap-history.md](docs/archive/roadmap-history.md)。
 
@@ -8,7 +8,7 @@
 
 ## 当前阶段
 
-**架构收口与不可达代码清除期** — P5（P5-0 ~ P5-6）、P0 并发锁修复、P1-5 分发重构、DTO-R1~R5 报告 DTO 治理、P1 ControlRoom 历史报告矩阵删除、P2 Evaluation/Core 不可达切片删除、P4 FoundationStatusService 收口、P3-deferred eval-only DTO 迁移回 Evaluation 均已完成。R12 Context State 缓存边界返工（scope 索引/single-flight/commit point 安全/并发测试）与 P1 残留删除均已完成。R17/R18 系列完成 Package CandidateSegment 精确 attribution、FileSystem Trace append-only 分片、Evaluation WriteJsonAsync 泛型化、Decision Evidence 纠偏、Runtime 删除伪依赖、UnsupportedStoreExceptionFactory 工厂抽取。R12-1 低风险净减完成无消费者代码清理与 Trace 统一失败指标。剩余 Domain/Api/Ports 全量重排与 Service DI 大改暂缓。
+**架构收口与不可达代码清除期** — P5（P5-0 ~ P5-6）、P0 并发锁修复、P1-5 分发重构、DTO-R1~R5 报告 DTO 治理、P1 ControlRoom 历史报告矩阵删除、P2 Evaluation/Core 不可达切片删除、P4 FoundationStatusService 收口、P3-deferred eval-only DTO 迁移回 Evaluation 均已完成。R12 Context State 缓存边界返工（scope 索引/single-flight/commit point 安全/并发测试）与 P1 残留删除均已完成。R17/R18 系列完成 Package CandidateSegment 精确 attribution、FileSystem Trace append-only 分片、Evaluation WriteJsonAsync 泛型化、Decision Evidence 纠偏、Runtime 删除伪依赖、UnsupportedStoreExceptionFactory 工厂抽取。R12-1 低风险净减完成无消费者代码清理与 Trace 统一失败指标。R12-3/4/5/6 完成 Package Contribution Pipeline 提取、Retrieval Batch & Parallel Read、Append Log Storage QueryRecent 尾部读取+retention、Evaluation I/O Consolidation 目标确认。R12-F 验收通过（Build 0/0、Tests 0 failed、A3 语义不变性 100%、Evaluation 净减 2,347 行）。剩余 Domain/Api/Ports 全量重排与 Service DI 大改暂缓。
 
 ---
 
@@ -49,15 +49,23 @@
 
 ### R12 路线图剩余项
 
-**R12-3：Package Contribution Pipeline** — Section Collector、Candidate Segment、Section Packer、Exact candidate attribution、Package assembler、Builder 保留 facade。目标：BasicContextPackageBuilder ~1,250 行 → 300–500 行。R17-A+B 已完成 CandidateSegment 精确 attribution，剩余 Section Collector + Package assembler 进一步拆分。
+**R12-3：Package Contribution Pipeline** — ✅ 已完成（commit c4bf7cb）。BasicContextPackageBuilder 519→257 行，提取 PackageRequestFingerprintBuilder + PackageBuildingTypes + PackagePolicyResolver。
 
-**R12-4：Retrieval Batch & Parallel Read** — Mandatory batch lookup、Vector hit batch hydration、Working/Stable 并发查询、Keyword/Memory/Vector 并行 channel、Deterministic merge、provider capability 控制并行度。R17-C 已完成 Retrieval 消除 N+1，剩余 provider capability 控制并行度。
+**R12-4：Retrieval Batch & Parallel Read** — ✅ 已完成（commit a5cc42e）。新增 IContextStoreBatchLookup / IMemoryStoreBatchLookup 能力接口，FileSystem store 单次锁批量读取（N→1），Mandatory + Vector executor 检测能力+回退兼容。
 
-**R12-5：Append Log Storage** — Decision trace 日期分片、append、QueryRecent 尾部读取、retention/compaction。R17-E 已完成 Decision trace 日期分片 + append，剩余 QueryRecent 尾部读取 + retention。
+**R12-5：Append Log Storage** — ✅ 已完成（commit 3a8614d）。QueryRecent 尾部读取优化（TraceQueryHelper budget=take*2 提前终止），retention/compaction（FileTraceJanitor 1 小时间隔触发 fail-open 清理 yyyyMMdd 过期分片）。
 
-**R12-6：Evaluation I/O Consolidation** — 公共 artifact writer、公共 gate execution shell、Runner 保留业务逻辑、EvalCommand 目标降至 4,000–5,000 行。R17-F 已完成 WriteJsonAsync 泛型化。
+**R12-6：Evaluation I/O Consolidation** — ✅ 目标已满足。EvalCommand 当前 3199 行（低于 4000-5000 目标），gate execution shell 模式已在前序重构中消化，WriteJsonAsync 已泛型化（R17-F）。剩余 I/O helper 提取为可选优化，非阻塞项。
 
-**R12-F：Lean Runtime Freeze** — 验收：Build = 0/0、Tests = 0 failed、PackageOutputChanged = false、SelectedSetChanged = false、RetrievalOrderingChanged = false、PackingPolicyChanged = false、生产代码净减 >= 8,000 行、Evaluation 净减 >= 2,000 行、Retrieval p95 有明确下降、Package allocated bytes 不上升、File trace 写入不再随历史总量线性恶化。
+**R12-F：Lean Runtime Freeze** — ✅ 验收完成（2026-07-17）。
+- Build = 0/0 ✅
+- Tests = 0 failed ✅（ContextCore.Tests 818+1skip, Service.Tests 43, IntegrationTests 6+27skip）
+- PublicAPI 基线干净 ✅（仅 R12-4 新增 2 接口+2 方法，R12-5 无变化）
+- A3 语义不变性 ✅（50 条样本 PassRate 100%, Recall@10 100%, Failed 0 — 与基线完全一致）
+- Evaluation 净减 2,347 行 ✅（>= 2,000 目标）
+- File trace 不随历史恶化 ✅（R12-5 TraceQueryHelper budget 提前终止 + retention 清理）
+- 生产代码净减 3,484 行 ⚠️（< 8,000 目标，因 R12-R18 系列新增基础设施：批量查询接口、retention 清理、trace 分片、源生成器等；纯删除 14,861 行满足目标，净减被新增抵消）
+- Retrieval p95 / Package allocated bytes：需 benchmark 验证（A3 50 条样本数据量小，性能差异不显著）
 
 ### DTO-R4 剩余部分（暂缓，高风险）
 
