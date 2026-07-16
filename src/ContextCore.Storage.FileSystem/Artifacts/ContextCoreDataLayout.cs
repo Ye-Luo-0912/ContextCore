@@ -373,6 +373,7 @@ public sealed class ContextCoreDataLayout : IContextPathResolver
             ArtifactKind.TracePackageBuild => ["traces", "package-build", SanitizeStatic(descriptor.DateShard)],
             ArtifactKind.TraceModelCall => ["traces", "model-calls", SanitizeStatic(descriptor.DateShard)],
             ArtifactKind.TraceError => ["traces", "errors", SanitizeStatic(descriptor.DateShard)],
+            ArtifactKind.TraceDecision => ["traces", "decision", SanitizeStatic(descriptor.DateShard)],
             ArtifactKind.Eval => ["eval", capability],
             ArtifactKind.Trace => ["traces", capability],
             ArtifactKind.Job => ["jobs", capability],
@@ -436,7 +437,8 @@ public sealed class ContextCoreDataLayout : IContextPathResolver
             or ArtifactKind.TraceJobQueueLimitedWorkerScopeObservation
             or ArtifactKind.TracePackageBuild
             or ArtifactKind.TraceModelCall
-            or ArtifactKind.TraceError;
+            or ArtifactKind.TraceError
+            or ArtifactKind.TraceDecision;
 
     private static ArtifactKind ResolveKindFromLegacySegments(IReadOnlyList<string> segments)
     {
@@ -517,7 +519,8 @@ public sealed class ContextCoreDataLayout : IContextPathResolver
         ArtifactKind.TraceJobQueueLimitedWorkerScopeObservation,
         ArtifactKind.TracePackageBuild,
         ArtifactKind.TraceModelCall,
-        ArtifactKind.TraceError
+        ArtifactKind.TraceError,
+        ArtifactKind.TraceDecision
     ];
 
     private int CountFiles(IReadOnlyDictionary<string, string> paths, string keyPrefix)
@@ -640,6 +643,7 @@ public sealed class ContextCoreDataLayout : IContextPathResolver
             ArtifactKind.TracePackageBuild => "package-build-traces",
             ArtifactKind.TraceModelCall => "model-call-traces",
             ArtifactKind.TraceError => "error-traces",
+            ArtifactKind.TraceDecision => "decision-traces",
             _ => kind.ToString()
         };
 
@@ -654,7 +658,8 @@ public sealed class ContextCoreDataLayout : IContextPathResolver
             or ArtifactKind.TraceLearningFeedbackProviderSwitch
             or ArtifactKind.TracePackageBuild
             or ArtifactKind.TraceModelCall
-            or ArtifactKind.TraceError;
+            or ArtifactKind.TraceError
+            or ArtifactKind.TraceDecision;
 
     private static string ResolveCapabilityFromLegacySegments(IReadOnlyList<string> segments)
     {

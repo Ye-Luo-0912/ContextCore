@@ -3,7 +3,11 @@ using ContextCore.Abstractions.Models;
 
 namespace ContextCore.Storage.FileSystem.Stores;
 
-/// <summary>将混合检索 trace 持久化为集合目录下的 JSONL 文件。</summary>
+/// <summary>
+/// 将混合检索 trace 持久化为按日期分片的 JSONL 文件。
+/// 写入使用 append-only 语义（检索 trace 是事件流，每次 Save 都是新记录），
+/// 避免旧 Upsert 实现的"读全部→反序列化→重新序列化→原子重写整个文件"开销。
+/// </summary>
 public sealed class FileRetrievalTraceStore : IRetrievalTraceStore
 {
     private readonly FileJsonLineStore _jsonLines;
@@ -27,11 +31,7 @@ public sealed class FileRetrievalTraceStore : IRetrievalTraceStore
         ArgumentNullException.ThrowIfNull(trace);
         var path = _paths.GetRetrievalTraceJsonlPath(trace.WorkspaceId, trace.CollectionId);
 
-        await _jsonLines.UpsertAsync(
-            path,
-            trace,
-            item => string.IsNullOrWhiteSpace(item.RetrievalId) ? Guid.NewGuid().ToString("N") : item.RetrievalId,
-            cancellationToken).ConfigureAwait(false);
+        await _jsonLines.AppendAsync(path, trace, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<ContextRetrievalTrace>> QueryRecentAsync(

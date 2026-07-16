@@ -70,6 +70,7 @@ F:ContextCore.Abstractions.Models.ArtifactKind.Relation
 F:ContextCore.Abstractions.Models.ArtifactKind.Report
 F:ContextCore.Abstractions.Models.ArtifactKind.Router
 F:ContextCore.Abstractions.Models.ArtifactKind.Trace
+F:ContextCore.Abstractions.Models.ArtifactKind.TraceDecision
 F:ContextCore.Abstractions.Models.ArtifactKind.TraceError
 F:ContextCore.Abstractions.Models.ArtifactKind.TraceJobQueueDualWrite
 F:ContextCore.Abstractions.Models.ArtifactKind.TraceJobQueueLimitedWorkerScopeObservation

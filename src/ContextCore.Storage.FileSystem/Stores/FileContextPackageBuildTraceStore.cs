@@ -3,7 +3,11 @@ using ContextCore.Abstractions.Models;
 
 namespace ContextCore.Storage.FileSystem.Stores;
 
-/// <summary>将上下文包构建 trace 持久化为集合目录下的 JSONL 文件。</summary>
+/// <summary>
+/// 将上下文包构建 trace 持久化为按日期分片的 JSONL 文件。
+/// 写入使用 append-only 语义（构建 trace 是事件流，每次 Save 都是新记录），
+/// 避免旧 Upsert 实现的"读全部→反序列化→重新序列化→原子重写整个文件"开销。
+/// </summary>
 public sealed class FileContextPackageBuildTraceStore : IContextPackageBuildTraceStore
 {
     private readonly FilePathResolver _paths;
@@ -28,11 +32,7 @@ public sealed class FileContextPackageBuildTraceStore : IContextPackageBuildTrac
 
         var path = _paths.GetPackageBuildTraceJsonlPath(result.Package.WorkspaceId, result.Package.CollectionId);
 
-        await _jsonLines.UpsertAsync(
-            path,
-            result,
-            item => string.IsNullOrWhiteSpace(item.BuildId) ? item.Package.PackageId : item.BuildId,
-            cancellationToken).ConfigureAwait(false);
+        await _jsonLines.AppendAsync(path, result, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<ContextPackageBuildResult>> QueryRecentAsync(

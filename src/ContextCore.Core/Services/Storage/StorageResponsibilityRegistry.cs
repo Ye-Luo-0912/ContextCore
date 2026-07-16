@@ -187,6 +187,7 @@ public static class StorageResponsibilityRegistry
         AddArtifact(entries, ArtifactKind.TracePackageBuild, StorageResponsibilityKind.TraceOnly, StorageResponsibilityKind.FileSystemPreferred, "Low", "Low", "package build trace artifact");
         AddArtifact(entries, ArtifactKind.TraceModelCall, StorageResponsibilityKind.TraceOnly, StorageResponsibilityKind.FileSystemPreferred, "Low", "Low", "model-call trace artifact");
         AddArtifact(entries, ArtifactKind.TraceError, StorageResponsibilityKind.TraceOnly, StorageResponsibilityKind.FileSystemPreferred, "Low", "Low", "error trace artifact");
+        AddArtifact(entries, ArtifactKind.TraceDecision, StorageResponsibilityKind.TraceOnly, StorageResponsibilityKind.FileSystemPreferred, "Low", "Low", "decision trace artifact");
         AddArtifact(entries, ArtifactKind.Job, StorageResponsibilityKind.OperationalState, StorageResponsibilityKind.DatabaseRecommended, "High", "Medium", "job record operational state");
         AddArtifact(entries, ArtifactKind.Report, StorageResponsibilityKind.ArtifactOnly, StorageResponsibilityKind.FileSystemPreferred, "Low", "Low", "report artifact");
 

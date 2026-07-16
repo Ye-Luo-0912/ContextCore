@@ -203,13 +203,17 @@ public sealed class FilePathResolver
 
 	// ── Decision Traces (V17.0) ─────────────────────────────────────────────
 
-	/// <summary>获取统一决策记录 trace JSONL 文件路径。</summary>
+	/// <summary>获取统一决策记录 trace JSONL 文件路径（按日期分片）。</summary>
 	public string GetDecisionTraceJsonlPath(string workspaceId, string collectionId)
+		=> GetTraceArtifactPath(ArtifactKind.TraceDecision, workspaceId, collectionId, "decision-traces");
+
+	/// <summary>获取旧版统一决策记录 trace JSONL 文件路径，用于读取迁移前的数据。</summary>
+	public string GetLegacyDecisionTraceJsonlPath(string workspaceId, string collectionId)
 		=> Path.Combine(GetCollectionDirectory(workspaceId, collectionId), "decision", "traces.jsonl");
 
-	/// <summary>获取统一决策记录 trace 目录。</summary>
+	/// <summary>获取统一决策记录 trace 标准目录，用于枚举日期分片。</summary>
 	public string GetDecisionTraceDirectory(string workspaceId, string collectionId)
-		=> Path.Combine(GetCollectionDirectory(workspaceId, collectionId), "decision");
+		=> GetTraceCategoryDirectory(workspaceId, collectionId, "decision");
 
 	/// <summary>获取上下文包策略 JSONL 文件路径。</summary>
 	public string GetPackagePoliciesJsonlPath(string workspaceId, string collectionId)

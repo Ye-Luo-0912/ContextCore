@@ -48,6 +48,7 @@ public enum ArtifactKind
     TracePackageBuild,
     TraceModelCall,
     TraceError,
+    TraceDecision,
     Job,
     Report
 }
