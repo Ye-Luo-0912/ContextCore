@@ -52,6 +52,20 @@ internal static class PackageMetadataBuilder
         metadata["traceSinkWriteFailures"] = traceRecorder.TraceSinkWriteFailures.ToString();
     }
 
+    /// <summary>
+    /// 写入 package/decision trace store 的写入失败计数（累积值，fail-open）。
+    /// 与 <see cref="AddTraceHealthMetadata"/> 互补：后者记录 runtime candidate trace sink 失败，
+    /// 本方法记录持久化 trace store 的写入失败。
+    /// </summary>
+    internal static void AddTraceStoreHealthMetadata(
+        IDictionary<string, string> metadata,
+        int packageTraceWriteFailures,
+        int decisionTraceWriteFailures)
+    {
+        metadata["packageTraceWriteFailures"] = packageTraceWriteFailures.ToString();
+        metadata["decisionTraceWriteFailures"] = decisionTraceWriteFailures.ToString();
+    }
+
     internal static void AddModeBudgetMetadata(
         IDictionary<string, string> metadata,
         ModeBudgetProfile? modeBudgetProfile)

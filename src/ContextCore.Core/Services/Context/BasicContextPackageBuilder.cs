@@ -32,26 +32,8 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
     private readonly SectionAssembler _sectionAssembler;
     private readonly CandidateSelector _candidateSelector;
     private readonly ResultProjector _resultProjector;
+    private int _packageTraceWriteFailures;
     private int _decisionTraceWriteFailures;
-    private DateTimeOffset _decisionTraceLastFailureAt;
-    private string? _decisionTraceLastFailureCategory;
-
-    /// <summary>decision trace 写入失败次数（fail-open，不影响正式 package 输出）。</summary>
-    public int DecisionTraceWriteFailures => _decisionTraceWriteFailures;
-
-    /// <summary>decision trace 最近一次写入失败时间；无失败则为 null。</summary>
-    public DateTimeOffset? DecisionTraceLastFailureAt =>
-        _decisionTraceWriteFailures > 0 ? _decisionTraceLastFailureAt : null;
-
-    /// <summary>decision trace 最近一次写入失败的异常类别（Type.Name）；无失败则为 null。</summary>
-    public string? DecisionTraceLastFailureCategory => _decisionTraceLastFailureCategory;
-
-    /// <summary>decision trace sink 类型名（用于诊断报告）；未配置则为 null。</summary>
-    public string? DecisionTraceSinkType => _decisionTraceStore?.GetType().FullName;
-
-    /// <summary>observability 是否处于降级状态（任一 trace 路径存在写入失败）。</summary>
-    public bool IsObservabilityDegraded =>
-        _decisionTraceWriteFailures > 0 || _traceRecorder.TraceWriteFailures > 0;
 
     public BasicContextPackageBuilder(IContextStore store)
         : this(store, null, null, null, null, null, null)
@@ -163,7 +145,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                 cancellationToken).ConfigureAwait(false);
             CoreMetrics.PackageBuildDuration.Record(sw.Elapsed.TotalMilliseconds);
             // 缓存命中/未命中均通过投影生成独立结果对象（新 PackageId/BuildId/CreatedAt/metadata）
-            return _resultProjector.ProjectResult(template, options);
+            return _resultProjector.ProjectResult(template, options, _packageTraceWriteFailures, _decisionTraceWriteFailures);
         }
 
         // 无缓存路径：构建模板 → 投影 → 写入 trace
@@ -181,7 +163,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
     {
         var template = await BuildTemplateAsync(options, cancellationToken).ConfigureAwait(false);
         // trace 需要完整的 ContextPackageBuildResult，投影一次用于 trace 写入
-        var traceResult = _resultProjector.ProjectResult(template, options);
+        var traceResult = _resultProjector.ProjectResult(template, options, _packageTraceWriteFailures, _decisionTraceWriteFailures);
         await WriteTracesAsync(traceResult, cancellationToken).ConfigureAwait(false);
         return template;
     }
@@ -199,9 +181,10 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
             {
                 throw;
             }
-            catch
+            catch (Exception)
             {
-                // P5-0.4: package trace 写入失败不得影响正式 package 构建。
+                // P5-0.4: package trace 写入失败不得影响正式 package 构建，但需记录降级指标。
+                Interlocked.Increment(ref _packageTraceWriteFailures);
             }
         }
 
@@ -217,12 +200,10 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
             {
                 throw;
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 // decision trace 写入失败不得影响正式 package 输出，但需记录降级指标。
                 Interlocked.Increment(ref _decisionTraceWriteFailures);
-                _decisionTraceLastFailureAt = DateTimeOffset.UtcNow;
-                _decisionTraceLastFailureCategory = ex.GetType().Name;
             }
         }
     }

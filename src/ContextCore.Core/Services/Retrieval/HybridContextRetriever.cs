@@ -16,6 +16,8 @@ public sealed class HybridContextRetriever : IContextRetriever
     private readonly IDecisionTraceStore? _decisionTraceStore;
     private readonly RetrievalTraceAssembler _traceAssembler;
     private readonly IRetrievalChannelExecutor _vectorRecallChannelExecutor;
+    private int _retrievalTraceWriteFailures;
+    private int _decisionTraceWriteFailures;
 
     // 自动计划器（无状态，可安全静态共享）
     private static readonly RetrievalPlanner AutoPlanner = new();
@@ -167,6 +169,10 @@ public sealed class HybridContextRetriever : IContextRetriever
         var packed = RetrievalPackingPolicy.Pack(request, ranked);
         var effectivePacked = packed;
 
+        // 累积失败指标（prior calls）：写入 metadata 供 trace 与 result 消费。
+        metadata["retrievalTraceWriteFailures"] = _retrievalTraceWriteFailures.ToString();
+        metadata["decisionTraceWriteFailures"] = _decisionTraceWriteFailures.ToString();
+
         var trace = _traceAssembler.Assemble(
             operationId,
             request,
@@ -185,9 +191,10 @@ public sealed class HybridContextRetriever : IContextRetriever
             {
                 throw;
             }
-            catch
+            catch (Exception)
             {
-                // P5-0.4: retrieval trace 写入失败不得影响正式检索输出。
+                // P5-0.4: retrieval trace 写入失败不得影响正式检索输出，但需记录降级指标。
+                Interlocked.Increment(ref _retrievalTraceWriteFailures);
             }
         }
 
@@ -206,9 +213,10 @@ public sealed class HybridContextRetriever : IContextRetriever
             {
                 throw;
             }
-            catch
+            catch (Exception)
             {
-                // decision trace 写入失败不得影响正式检索输出。
+                // decision trace 写入失败不得影响正式检索输出，但需记录降级指标。
+                Interlocked.Increment(ref _decisionTraceWriteFailures);
             }
         }
 

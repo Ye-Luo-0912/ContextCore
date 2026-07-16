@@ -74,9 +74,13 @@ internal sealed class ResultProjector
     /// 每次调用生成新的 PackageId / BuildId / CreatedAt / 响应 metadata，
     /// 缓存命中时安全复用模板数据。
     /// </summary>
+    /// <param name="packageTraceWriteFailures">package trace store 累积写入失败次数（fail-open 指标）。</param>
+    /// <param name="decisionTraceWriteFailures">decision trace store 累积写入失败次数（fail-open 指标）。</param>
     internal ContextPackageBuildResult ProjectResult(
         PackageTemplate template,
-        ResolvedPackageOptions options)
+        ResolvedPackageOptions options,
+        int packageTraceWriteFailures = 0,
+        int decisionTraceWriteFailures = 0)
     {
         var request = options.Request;
         var policy = options.Policy;
@@ -115,6 +119,7 @@ internal sealed class ResultProjector
             resultMetadata["policyId"] = request.Policy.Id;
         }
         PackageMetadataBuilder.AddTraceHealthMetadata(resultMetadata, _traceRecorder);
+        PackageMetadataBuilder.AddTraceStoreHealthMetadata(resultMetadata, packageTraceWriteFailures, decisionTraceWriteFailures);
 
         return new ContextPackageBuildResult
         {
