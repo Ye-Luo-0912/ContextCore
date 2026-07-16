@@ -120,15 +120,4 @@ public interface IContextStateCache
     /// <param name="key">失效范围键。</param>
     /// <param name="ct">取消令牌。</param>
     Task InvalidateAsync(CacheInvalidationKey key, CancellationToken ct = default);
-
-    /// <summary>
-    /// 条件删除：仅当 key 对应的缓存条目与 <paramref name="expectedEntryReference"/> 一致时删除。
-    /// 用于版本失配删除场景，避免删除并发 SetAsync 写入的新条目。
-    /// 实现通过引用相等（ReferenceEquals）比较，未匹配则不删除。
-    /// </summary>
-    /// <param name="key">缓存键。</param>
-    /// <param name="expectedEntryReference">期望的缓存值引用（由 GetAsync 返回的对象）。</param>
-    /// <param name="ct">取消令牌。</param>
-    /// <returns>是否成功删除（true=已删除，false=引用不匹配或 key 不存在）。</returns>
-    Task<bool> RemoveConditionalAsync(StateCacheKey key, object expectedEntryReference, CancellationToken ct = default);
 }

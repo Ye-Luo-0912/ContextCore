@@ -204,17 +204,6 @@ public sealed class InMemoryContextStateCache : IContextStateCache, IStateCacheI
         return Task.CompletedTask;
     }
 
-    /// <inheritdoc />
-    public Task<bool> RemoveConditionalAsync(StateCacheKey key, object expectedEntryReference, CancellationToken ct = default)
-    {
-        EnsureKey(key);
-        ArgumentNullException.ThrowIfNull(expectedEntryReference);
-        ct.ThrowIfCancellationRequested();
-
-        var removed = RemoveConditional(key.Value, expectedEntryReference);
-        return Task.FromResult(removed);
-    }
-
     /// <summary>清空所有缓存项（主要用于测试）。所有结构在 _lock 下一次性清空，保持一致。</summary>
     public void Clear()
     {

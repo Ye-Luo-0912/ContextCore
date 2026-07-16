@@ -723,7 +723,6 @@ M:ContextCore.Abstractions.IContextRuntimeService.IngestAsync(ContextCore.Abstra
 M:ContextCore.Abstractions.IContextRuntimeService.PromoteMemoryAsync(System.String, System.String, System.String, System.String, System.String, System.Double, System.Threading.CancellationToken, System.String)
 M:ContextCore.Abstractions.IContextStateCache.GetAsync``1(ContextCore.Abstractions.StateCacheKey, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IContextStateCache.InvalidateAsync(ContextCore.Abstractions.CacheInvalidationKey, System.Threading.CancellationToken)
-M:ContextCore.Abstractions.IContextStateCache.RemoveConditionalAsync(ContextCore.Abstractions.StateCacheKey, System.Object, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IContextStateCache.SetAsync``1(ContextCore.Abstractions.StateCacheKey, ContextCore.Abstractions.IContextStateCache+!!0, ContextCore.Abstractions.DependencyScopeSet, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IContextStateVersionStore.BumpVersionAsync(System.String, System.String, System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IContextStateVersionStore.GetVersionAsync(System.String, System.String, System.String, System.Threading.CancellationToken)
