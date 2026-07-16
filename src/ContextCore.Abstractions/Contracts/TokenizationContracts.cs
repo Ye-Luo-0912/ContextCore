@@ -16,6 +16,19 @@ public sealed class ContextTokenEstimate
     public bool IsFallback { get; init; }
 }
 
+/// <summary>按 Token 预算截断文本的结果。</summary>
+public sealed class TokenTruncationResult
+{
+    /// <summary>截断后的文本（已 TrimEnd）。</summary>
+    public string TruncatedContent { get; init; } = string.Empty;
+
+    /// <summary>截断后文本的实际 Token 数量。</summary>
+    public int TokenCount { get; init; }
+
+    /// <summary>是否发生了截断。</summary>
+    public bool WasTruncated { get; init; }
+}
+
 /// <summary>上下文 Tokenizer，负责按模型或兼容模型族估算文本 Token 数。</summary>
 public interface IContextTokenizer
 {
@@ -27,6 +40,12 @@ public interface IContextTokenizer
 
     /// <summary>估算文本 Token 数量。</summary>
     ContextTokenEstimate Estimate(string? content, string? modelName = null);
+
+    /// <summary>
+    /// 一次扫描截断文本到 Token 预算内，避免二分查找中重复 tokenize。
+    /// 返回不超过 <paramref name="tokenBudget"/> token 的最大前缀。
+    /// </summary>
+    TokenTruncationResult TruncateForTokenBudget(string content, int tokenBudget, string? modelName = null);
 }
 
 /// <summary>根据模型名称选择具体 tokenizer，并在失败时回退到粗略估算。</summary>
@@ -37,6 +56,11 @@ public interface IContextTokenizerResolver
 
     /// <summary>估算文本 Token 数量。</summary>
     ContextTokenEstimate Estimate(string? content, string? modelName = null);
+
+    /// <summary>
+    /// 一次扫描截断文本到 Token 预算内，委托到具体 tokenizer 实现。
+    /// </summary>
+    TokenTruncationResult TruncateForTokenBudget(string content, int tokenBudget, string? modelName = null);
 }
 
 /// <summary>上下文包中记录 Token 估算来源的元数据键名。</summary>

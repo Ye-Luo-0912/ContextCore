@@ -26,6 +26,45 @@ public sealed class LegacyCharacterTokenizer : IContextTokenizer
         };
     }
 
+    /// <summary>
+    /// 字符估算下 token = (length+1)/2，直接反推最大字符长度，O(1) 截断。
+    /// </summary>
+    public TokenTruncationResult TruncateForTokenBudget(string content, int tokenBudget, string? modelName = null)
+    {
+        if (tokenBudget <= 0 || string.IsNullOrEmpty(content))
+        {
+            return new TokenTruncationResult { TruncatedContent = string.Empty, TokenCount = 0, WasTruncated = false };
+        }
+
+        var totalTokens = EstimateTokenCount(content);
+        if (totalTokens <= tokenBudget)
+        {
+            return new TokenTruncationResult { TruncatedContent = content, TokenCount = totalTokens, WasTruncated = false };
+        }
+
+        // token = Math.Max(1, (length+1)/2) → max_length = tokenBudget * 2 - 1
+        var maxLength = tokenBudget * 2 - 1;
+        if (maxLength <= 0)
+        {
+            return new TokenTruncationResult { TruncatedContent = string.Empty, TokenCount = 0, WasTruncated = true };
+        }
+
+        // 修正 UTF-16 高代理项边界
+        if (maxLength < content.Length && char.IsHighSurrogate(content[maxLength - 1]))
+        {
+            maxLength--;
+        }
+
+        if (maxLength <= 0)
+        {
+            return new TokenTruncationResult { TruncatedContent = string.Empty, TokenCount = 0, WasTruncated = true };
+        }
+
+        var truncated = content[..maxLength].TrimEnd();
+        var truncatedTokens = EstimateTokenCount(truncated);
+        return new TokenTruncationResult { TruncatedContent = truncated, TokenCount = truncatedTokens, WasTruncated = true };
+    }
+
     public static int EstimateTokenCount(string? content)
     {
         if (string.IsNullOrEmpty(content))
@@ -77,6 +116,130 @@ public sealed class UnicodeAwareContextTokenizer : IContextTokenizer
             ModelName = modelName,
             IsFallback = false
         };
+    }
+
+    /// <summary>
+    /// 一次 rune 遍历增量计算 token，超过预算即停。O(n) 截断，消除二分重算。
+    /// Latin run 按 4 字符批量计 token，超预算时反推可保留字符数。
+    /// </summary>
+    public TokenTruncationResult TruncateForTokenBudget(string content, int tokenBudget, string? modelName = null)
+    {
+        if (tokenBudget <= 0 || string.IsNullOrEmpty(content))
+        {
+            return new TokenTruncationResult { TruncatedContent = string.Empty, TokenCount = 0, WasTruncated = false };
+        }
+
+        var count = 0;
+        var latinRunLength = 0;
+        var latinRunStart = 0; // latin run 起始的 UTF-16 index
+        var safeLength = 0; // 最后一个 token 数 <= budget 的 UTF-16 长度
+        var charIndex = 0;
+
+        foreach (var rune in content.EnumerateRunes())
+        {
+            var runeLen = rune.Utf16SequenceLength;
+
+            if (Rune.IsWhiteSpace(rune))
+            {
+                if (latinRunLength > 0)
+                {
+                    if (!TryFlushLatin(ref count, ref latinRunLength, tokenBudget))
+                    {
+                        safeLength = TruncateLatinRun(content, latinRunStart, latinRunLength, count, tokenBudget, out var partialTokens);
+                        count = partialTokens;
+                        goto done;
+                    }
+                    latinRunLength = 0;
+                }
+                safeLength = charIndex + runeLen;
+                charIndex += runeLen;
+                continue;
+            }
+
+            if (IsAsciiWordRune(rune))
+            {
+                if (latinRunLength == 0) latinRunStart = charIndex;
+                latinRunLength++;
+                charIndex += runeLen;
+                continue;
+            }
+
+            // 非 ASCII rune：先 flush latin run
+            if (latinRunLength > 0)
+            {
+                if (!TryFlushLatin(ref count, ref latinRunLength, tokenBudget))
+                {
+                    safeLength = TruncateLatinRun(content, latinRunStart, latinRunLength, count, tokenBudget, out var partialTokens);
+                    count = partialTokens;
+                    goto done;
+                }
+                latinRunLength = 0;
+            }
+
+            if (count + 1 > tokenBudget) goto done;
+            count += 1;
+            safeLength = charIndex + runeLen;
+            charIndex += runeLen;
+        }
+
+        // flush 末尾 latin run
+        if (latinRunLength > 0)
+        {
+            if (!TryFlushLatin(ref count, ref latinRunLength, tokenBudget))
+            {
+                safeLength = TruncateLatinRun(content, latinRunStart, latinRunLength, count, tokenBudget, out var partialTokens);
+                count = partialTokens;
+                goto done;
+            }
+            safeLength = content.Length;
+        }
+
+        return new TokenTruncationResult
+        {
+            TruncatedContent = content,
+            TokenCount = Math.Max(1, count),
+            WasTruncated = false
+        };
+
+    done:
+        if (safeLength <= 0)
+        {
+            return new TokenTruncationResult { TruncatedContent = string.Empty, TokenCount = 0, WasTruncated = true };
+        }
+        var truncated = content[..safeLength].TrimEnd();
+        var truncatedTokens = string.IsNullOrEmpty(truncated) ? 0 : Math.Max(1, count);
+        return new TokenTruncationResult { TruncatedContent = truncated, TokenCount = truncatedTokens, WasTruncated = true };
+    }
+
+    /// <summary>尝试 flush latin run 的 token，返回是否在预算内。成功时 count 已更新、latinRunLength 清零。</summary>
+    private static bool TryFlushLatin(ref int count, ref int latinRunLength, int tokenBudget)
+    {
+        var add = Math.Max(1, (latinRunLength + 3) / 4);
+        if (count + add > tokenBudget) return false;
+        count += add;
+        latinRunLength = 0;
+        return true;
+    }
+
+    /// <summary>Latin run 超预算时，反推可保留的最大字符数，返回截断后的 UTF-16 长度。</summary>
+    private static int TruncateLatinRun(string content, int runStart, int runLength, int currentCount, int tokenBudget, out int partialTokens)
+    {
+        var remaining = tokenBudget - currentCount;
+        if (remaining <= 0)
+        {
+            partialTokens = currentCount;
+            return runStart; // 不保留任何 latin 字符
+        }
+        // (n + 3) / 4 <= remaining → n <= remaining * 4 - 3
+        var maxLatin = remaining * 4 - 3;
+        if (maxLatin <= 0)
+        {
+            partialTokens = currentCount;
+            return runStart;
+        }
+        var kept = Math.Min(runLength, maxLatin);
+        partialTokens = currentCount + Math.Max(1, (kept + 3) / 4);
+        return runStart + kept;
     }
 
     private static int EstimateTokenCount(string? content)
@@ -190,6 +353,18 @@ public sealed class DefaultContextTokenizerResolver : IContextTokenizerResolver
         catch (Exception)
         {
             return _fallback.Estimate(content, modelName);
+        }
+    }
+
+    public TokenTruncationResult TruncateForTokenBudget(string content, int tokenBudget, string? modelName = null)
+    {
+        try
+        {
+            return Resolve(modelName).TruncateForTokenBudget(content, tokenBudget, modelName);
+        }
+        catch (Exception)
+        {
+            return _fallback.TruncateForTokenBudget(content, tokenBudget, modelName);
         }
     }
 }

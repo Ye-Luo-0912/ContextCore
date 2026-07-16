@@ -11,10 +11,14 @@ namespace ContextCore.Core;
 internal sealed class SectionAssembler
 {
     private readonly Func<string?, TokenEstimationContext, int> _estimateTokens;
+    private readonly Func<string, int, TokenEstimationContext, string> _truncateForTokenBudget;
 
-    internal SectionAssembler(Func<string?, TokenEstimationContext, int> estimateTokens)
+    internal SectionAssembler(
+        Func<string?, TokenEstimationContext, int> estimateTokens,
+        Func<string, int, TokenEstimationContext, string> truncateForTokenBudget)
     {
         _estimateTokens = estimateTokens;
+        _truncateForTokenBudget = truncateForTokenBudget;
     }
 
     internal SectionPackingResult AddSection(
@@ -195,6 +199,10 @@ internal sealed class SectionAssembler
             rejectedIds);
     }
 
+    /// <summary>
+    /// 一次 tokenize 截断到 token 预算内，委托到 tokenizer 的 TruncateForTokenBudget。
+    /// 消除旧实现的二分查找中每步重新 tokenize 的 O(L·log L) 开销。
+    /// </summary>
     internal string TrimToTokenBudget(
         string content,
         int tokenBudget,
@@ -210,35 +218,6 @@ internal sealed class SectionAssembler
             return content;
         }
 
-        var low = 0;
-        var high = content.Length;
-        var best = 0;
-        while (low <= high)
-        {
-            var middle = AlignToScalarBoundary(content, (low + high) / 2);
-            var candidate = middle <= 0 ? string.Empty : content[..middle];
-            var candidateTokens = _estimateTokens(candidate, tokenContext);
-            if (candidateTokens <= tokenBudget)
-            {
-                best = middle;
-                low = middle + 1;
-            }
-            else
-            {
-                high = middle - 1;
-            }
-        }
-
-        return best <= 0 ? string.Empty : content[..best].TrimEnd();
-    }
-
-    private static int AlignToScalarBoundary(string content, int length)
-    {
-        if (length <= 0 || length >= content.Length)
-        {
-            return Math.Clamp(length, 0, content.Length);
-        }
-
-        return char.IsHighSurrogate(content[length - 1]) ? length - 1 : length;
+        return _truncateForTokenBudget(content, tokenBudget, tokenContext);
     }
 }

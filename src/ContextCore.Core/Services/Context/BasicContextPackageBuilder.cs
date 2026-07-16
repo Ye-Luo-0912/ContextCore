@@ -92,7 +92,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         _cacheAccessor = cacheAccessor;
         // 初始化四阶段流水线：SectionAssembler/CandidateSelector 共享同一 EstimatePackageTokens 委托，
         // 保证 token 估算与原内联实现完全一致。
-        _sectionAssembler = new SectionAssembler(EstimatePackageTokens);
+        _sectionAssembler = new SectionAssembler(EstimatePackageTokens, TruncatePackageTokens);
         _inputLoader = new PackageInputLoader(
             _store,
             _constraintStore,
@@ -436,6 +436,19 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
     private int EstimatePackageTokens(string? content, TokenEstimationContext tokenContext)
     {
         return _tokenizerResolver.Estimate(content, tokenContext.ModelName).TokenCount;
+    }
+
+    /// <summary>
+    /// 一次 tokenize 截断到 token 预算内，委托到 tokenizer 的 TruncateForTokenBudget。
+    /// 消除 SectionAssembler.TrimToTokenBudget 中的二分重算。
+    /// </summary>
+    private string TruncatePackageTokens(string content, int tokenBudget, TokenEstimationContext tokenContext)
+    {
+        if (tokenBudget <= 0 || string.IsNullOrEmpty(content))
+        {
+            return string.Empty;
+        }
+        return _tokenizerResolver.TruncateForTokenBudget(content, tokenBudget, tokenContext.ModelName).TruncatedContent;
     }
 
     private static string? ResolveTokenizerModel(ContextPackageRequest request)
