@@ -80,6 +80,25 @@ public enum ContextDecisionCandidateOutcome
     Dropped = 1
 }
 
+/// <summary>
+/// 证据审计状态，区分"未接入证据提供者"与"接入但证据不完整"。
+/// 替代旧的 EvidenceComplete 布尔值二态语义。
+/// </summary>
+public enum EvidenceAuditStatus
+{
+    /// <summary>未注册 IDecisionEvidenceProvider，审计未执行证据解析。</summary>
+    NotConfigured = 0,
+
+    /// <summary>接入证据提供者但部分候选缺少证据。</summary>
+    Incomplete = 1,
+
+    /// <summary>所有候选都有对应证据。</summary>
+    Complete = 2,
+
+    /// <summary>证据提供者抛出异常，解析失败。</summary>
+    Failed = 3
+}
+
 /// <summary>本次决策的整体产出摘要。</summary>
 public sealed class ContextDecisionOutcome
 {
@@ -144,8 +163,11 @@ public sealed class ContextDecisionAuditReport
     /// <summary>投影保留性校验：selected/dropped 的 ItemId 是否完整保留。</summary>
     public bool ProjectionPreservesIds { get; init; }
 
-    /// <summary>证据完整性校验：所有 trace 的证据都完整时为 true。未接入证据提供者时为 false（NotAudited）。</summary>
+    /// <summary>证据完整性校验：所有 trace 的证据都完整时为 true。未接入证据提供者时为 false（NotConfigured）。</summary>
     public bool EvidenceComplete { get; init; }
+
+    /// <summary>证据审计状态：NotConfigured / Incomplete / Complete / Failed。</summary>
+    public EvidenceAuditStatus EvidenceStatus { get; init; }
 
     /// <summary>证据未完整的 decision ID 列表（EvidenceComplete=false 时非空）。</summary>
     public IReadOnlyList<string> EvidenceIncompleteDecisionIds { get; init; } = Array.Empty<string>();
@@ -184,6 +206,9 @@ public sealed class ContextDecisionAuditSample
 
     /// <summary>该 trace 的证据是否完整。未接入证据提供者时为 false。</summary>
     public bool EvidenceComplete { get; init; }
+
+    /// <summary>该 trace 的证据审计状态。</summary>
+    public EvidenceAuditStatus EvidenceStatus { get; init; }
 
     /// <summary>该 trace 已解析证据的候选数。</summary>
     public int EvidenceResolvedCount { get; init; }

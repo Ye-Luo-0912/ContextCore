@@ -1,85 +1,16 @@
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
-using ContextCore.Core.Services;
 
 namespace ContextCore.Tests;
 
 /// <summary>
-/// Decision Evidence Contract 单元测试：验证 NullDecisionEvidenceProvider 默认行为和证据 DTO 结构。
+/// Decision Evidence Contract 单元测试：验证证据 DTO 结构和 EvidenceAuditStatus enum 语义。
+/// NullDecisionEvidenceProvider 已删除（R18-十），未接入 provider 时审计报告标记 NotConfigured。
 /// </summary>
 [TestClass]
 [TestCategory("Decision")]
 public sealed class DecisionEvidenceContractTests
 {
-    [TestMethod]
-    public async Task NullProvider_ReturnsEmptyEvidence_AndMarksAllMissing()
-    {
-        var provider = new NullDecisionEvidenceProvider();
-        var record = CreateRecord(candidates: new[]
-        {
-            new ContextDecisionCandidate { ItemId = "item-1", Outcome = ContextDecisionCandidateOutcome.Selected },
-            new ContextDecisionCandidate { ItemId = "item-2", Outcome = ContextDecisionCandidateOutcome.Dropped }
-        });
-
-        var result = await provider.ResolveEvidenceAsync(record);
-
-        Assert.AreEqual(record.DecisionId, result.DecisionId);
-        Assert.AreEqual(0, result.Evidence.Count);
-        Assert.IsFalse(result.IsComplete);
-        CollectionAssert.AreEquivalent(new[] { "item-1", "item-2" }, result.MissingItemIds.ToList());
-    }
-
-    [TestMethod]
-    public async Task NullProvider_NoCandidates_ReturnsComplete()
-    {
-        var provider = new NullDecisionEvidenceProvider();
-        var record = CreateRecord(candidates: Array.Empty<ContextDecisionCandidate>());
-
-        var result = await provider.ResolveEvidenceAsync(record);
-
-        Assert.IsTrue(result.IsComplete);
-        Assert.AreEqual(0, result.MissingItemIds.Count);
-    }
-
-    [TestMethod]
-    public async Task NullProvider_BlankItemIds_ExcludedFromMissing()
-    {
-        var provider = new NullDecisionEvidenceProvider();
-        var record = CreateRecord(candidates: new[]
-        {
-            new ContextDecisionCandidate { ItemId = "", Outcome = ContextDecisionCandidateOutcome.Selected },
-            new ContextDecisionCandidate { ItemId = "   ", Outcome = ContextDecisionCandidateOutcome.Dropped },
-            new ContextDecisionCandidate { ItemId = "real-1", Outcome = ContextDecisionCandidateOutcome.Selected }
-        });
-
-        var result = await provider.ResolveEvidenceAsync(record);
-
-        CollectionAssert.AreEquivalent(new[] { "real-1" }, result.MissingItemIds.ToList());
-    }
-
-    [TestMethod]
-    public async Task NullProvider_DuplicateItemIds_DeduplicatedInMissing()
-    {
-        var provider = new NullDecisionEvidenceProvider();
-        var record = CreateRecord(candidates: new[]
-        {
-            new ContextDecisionCandidate { ItemId = "dup-1", Outcome = ContextDecisionCandidateOutcome.Selected },
-            new ContextDecisionCandidate { ItemId = "DUP-1", Outcome = ContextDecisionCandidateOutcome.Dropped }
-        });
-
-        var result = await provider.ResolveEvidenceAsync(record);
-
-        Assert.AreEqual(1, result.MissingItemIds.Count);
-    }
-
-    [TestMethod]
-    public async Task NullProvider_NullRecord_Throws()
-    {
-        var provider = new NullDecisionEvidenceProvider();
-        await Assert.ThrowsExceptionAsync<ArgumentNullException>(() =>
-            provider.ResolveEvidenceAsync(null!));
-    }
-
     [TestMethod]
     public void DecisionEvidence_Dto_HasExpectedFields()
     {
@@ -117,21 +48,32 @@ public sealed class DecisionEvidenceContractTests
         Assert.AreEqual(0, result.MissingItemIds.Count);
     }
 
-    private static ContextDecisionRecord CreateRecord(IReadOnlyList<ContextDecisionCandidate> candidates)
+    [TestMethod]
+    public void EvidenceAuditStatus_HasExpectedValues()
     {
-        return new ContextDecisionRecord
-        {
-            DecisionId = "decision-test-001",
-            Source = ContextDecisionSource.Package,
-            WorkspaceId = "ws-1",
-            CollectionId = "col-1",
-            Candidates = candidates,
-            Outcome = new ContextDecisionOutcome
-            {
-                SelectedCount = candidates.Count(c => c.Outcome == ContextDecisionCandidateOutcome.Selected),
-                DroppedCount = candidates.Count(c => c.Outcome == ContextDecisionCandidateOutcome.Dropped)
-            },
-            CreatedAt = DateTimeOffset.UtcNow
-        };
+        // 验证 enum 值顺序与语义：NotConfigured < Incomplete < Complete < Failed
+        Assert.AreEqual(0, (int)EvidenceAuditStatus.NotConfigured);
+        Assert.AreEqual(1, (int)EvidenceAuditStatus.Incomplete);
+        Assert.AreEqual(2, (int)EvidenceAuditStatus.Complete);
+        Assert.AreEqual(3, (int)EvidenceAuditStatus.Failed);
+    }
+
+    [TestMethod]
+    public void ContextDecisionAuditReport_HasEvidenceStatusField()
+    {
+        var report = new ContextDecisionAuditReport();
+
+        // 默认值应为 NotConfigured（enum 默认值 0）
+        Assert.AreEqual(EvidenceAuditStatus.NotConfigured, report.EvidenceStatus);
+        Assert.IsFalse(report.EvidenceComplete);
+    }
+
+    [TestMethod]
+    public void ContextDecisionAuditSample_HasEvidenceStatusField()
+    {
+        var sample = new ContextDecisionAuditSample();
+
+        Assert.AreEqual(EvidenceAuditStatus.NotConfigured, sample.EvidenceStatus);
+        Assert.IsFalse(sample.EvidenceComplete);
     }
 }

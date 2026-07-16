@@ -242,6 +242,10 @@ F:ContextCore.Abstractions.Models.EmbeddingJobState.Succeeded
 F:ContextCore.Abstractions.Models.EmbeddingProviderTypes.DeterministicHash
 F:ContextCore.Abstractions.Models.EmbeddingProviderTypes.Disabled
 F:ContextCore.Abstractions.Models.EmbeddingProviderTypes.OnnxLocal
+F:ContextCore.Abstractions.Models.EvidenceAuditStatus.Complete
+F:ContextCore.Abstractions.Models.EvidenceAuditStatus.Failed
+F:ContextCore.Abstractions.Models.EvidenceAuditStatus.Incomplete
+F:ContextCore.Abstractions.Models.EvidenceAuditStatus.NotConfigured
 F:ContextCore.Abstractions.Models.FeedbackReviewStatus.ApprovedForDataset
 F:ContextCore.Abstractions.Models.FeedbackReviewStatus.NeedsMoreEvidence
 F:ContextCore.Abstractions.Models.FeedbackReviewStatus.NeedsRedaction
@@ -3555,6 +3559,7 @@ P:ContextCore.Abstractions.Models.ContextDecisionAuditReport.EvidenceComplete (g
 P:ContextCore.Abstractions.Models.ContextDecisionAuditReport.EvidenceIncompleteDecisionIds (get|init)
 P:ContextCore.Abstractions.Models.ContextDecisionAuditReport.EvidenceMissingCount (get|init)
 P:ContextCore.Abstractions.Models.ContextDecisionAuditReport.EvidenceResolvedCount (get|init)
+P:ContextCore.Abstractions.Models.ContextDecisionAuditReport.EvidenceStatus (get|init)
 P:ContextCore.Abstractions.Models.ContextDecisionAuditReport.GeneratedAt (get|init)
 P:ContextCore.Abstractions.Models.ContextDecisionAuditReport.NonActivationContractHolds (get|init)
 P:ContextCore.Abstractions.Models.ContextDecisionAuditReport.OperationId (get|init)
@@ -3574,6 +3579,7 @@ P:ContextCore.Abstractions.Models.ContextDecisionAuditSample.EstimatedTokens (ge
 P:ContextCore.Abstractions.Models.ContextDecisionAuditSample.EvidenceComplete (get|init)
 P:ContextCore.Abstractions.Models.ContextDecisionAuditSample.EvidenceMissingCount (get|init)
 P:ContextCore.Abstractions.Models.ContextDecisionAuditSample.EvidenceResolvedCount (get|init)
+P:ContextCore.Abstractions.Models.ContextDecisionAuditSample.EvidenceStatus (get|init)
 P:ContextCore.Abstractions.Models.ContextDecisionAuditSample.NonActivationContractHolds (get|init)
 P:ContextCore.Abstractions.Models.ContextDecisionAuditSample.SelectedCount (get|init)
 P:ContextCore.Abstractions.Models.ContextDecisionAuditSample.Source (get|init)
@@ -6847,6 +6853,7 @@ T:ContextCore.Abstractions.Models.EmbeddingRequest
 T:ContextCore.Abstractions.Models.EmbeddingResult
 T:ContextCore.Abstractions.Models.EmbeddingTokenizationResult
 T:ContextCore.Abstractions.Models.EmbeddingVector
+T:ContextCore.Abstractions.Models.EvidenceAuditStatus (Enum)
 T:ContextCore.Abstractions.Models.ExtendedFailureExpectationStatus
 T:ContextCore.Abstractions.Models.ExtendedFailureFixPlanItem
 T:ContextCore.Abstractions.Models.ExtendedFailureMustHitStatus

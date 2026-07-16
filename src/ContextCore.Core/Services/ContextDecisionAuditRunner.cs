@@ -48,7 +48,11 @@ public sealed class ContextDecisionAuditRunner
         var packageCount = 0;
         var retrievalCount = 0;
         var allPreserveIds = true;
-        var allEvidenceComplete = _evidenceProvider is not null;
+        // 聚合状态：无 provider → NotConfigured；任一 trace Failed → Failed；
+        // 任一 trace Incomplete → Incomplete；全部 Complete → Complete。
+        var aggregateStatus = _evidenceProvider is null
+            ? EvidenceAuditStatus.NotConfigured
+            : EvidenceAuditStatus.Complete;
 
         foreach (var record in records)
         {
@@ -58,28 +62,37 @@ public sealed class ContextDecisionAuditRunner
             var evidenceResolved = 0;
             var evidenceMissing = 0;
             var evidenceComplete = false;
+            var sampleStatus = EvidenceAuditStatus.NotConfigured;
 
             if (_evidenceProvider is not null)
             {
-                var evidenceResult = await _evidenceProvider.ResolveEvidenceAsync(record, cancellationToken)
-                    .ConfigureAwait(false);
-                evidenceResolved = evidenceResult.Evidence.Count;
-                evidenceMissing = evidenceResult.MissingItemIds.Count;
-                evidenceComplete = evidenceResult.IsComplete;
-
-                if (!evidenceComplete)
+                sampleStatus = EvidenceAuditStatus.Complete;
+                try
                 {
-                    allEvidenceComplete = false;
-                    evidenceIncompleteIds.Add(record.DecisionId);
-                }
+                    var evidenceResult = await _evidenceProvider.ResolveEvidenceAsync(record, cancellationToken)
+                        .ConfigureAwait(false);
+                    evidenceResolved = evidenceResult.Evidence.Count;
+                    evidenceMissing = evidenceResult.MissingItemIds.Count;
+                    evidenceComplete = evidenceResult.IsComplete;
 
-                totalEvidenceResolved += evidenceResolved;
-                totalEvidenceMissing += evidenceMissing;
+                    if (!evidenceComplete)
+                    {
+                        sampleStatus = EvidenceAuditStatus.Incomplete;
+                        evidenceIncompleteIds.Add(record.DecisionId);
+                    }
+
+                    totalEvidenceResolved += evidenceResolved;
+                    totalEvidenceMissing += evidenceMissing;
+                }
+                catch (Exception)
+                {
+                    sampleStatus = EvidenceAuditStatus.Failed;
+                    evidenceComplete = false;
+                }
             }
-            else
-            {
-                allEvidenceComplete = false;
-            }
+
+            // 聚合状态收敛：Failed 优先于 Incomplete 优先于 Complete
+            aggregateStatus = CombineStatus(aggregateStatus, sampleStatus);
 
             samples.Add(new ContextDecisionAuditSample
             {
@@ -93,6 +106,7 @@ public sealed class ContextDecisionAuditRunner
                 NonActivationContractHolds = recordViolations.Count == 0,
                 ContractViolations = recordViolations,
                 EvidenceComplete = evidenceComplete,
+                EvidenceStatus = sampleStatus,
                 EvidenceResolvedCount = evidenceResolved,
                 EvidenceMissingCount = evidenceMissing
             });
@@ -121,12 +135,27 @@ public sealed class ContextDecisionAuditRunner
             NonActivationContractHolds = contractHolds,
             ContractViolations = violations.Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
             ProjectionPreservesIds = allPreserveIds,
-            EvidenceComplete = allEvidenceComplete,
+            EvidenceComplete = aggregateStatus == EvidenceAuditStatus.Complete,
+            EvidenceStatus = aggregateStatus,
             EvidenceIncompleteDecisionIds = evidenceIncompleteIds.Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
             EvidenceResolvedCount = totalEvidenceResolved,
             EvidenceMissingCount = totalEvidenceMissing,
             Samples = samples,
             PolicyVersion = ContextDecisionPolicyVersions.V17_0
+        };
+    }
+
+    /// <summary>聚合状态收敛：Failed &gt; Incomplete &gt; NotConfigured &gt; Complete。</summary>
+    private static EvidenceAuditStatus CombineStatus(EvidenceAuditStatus current, EvidenceAuditStatus sample)
+    {
+        return (current, sample) switch
+        {
+            (_, EvidenceAuditStatus.Failed) => EvidenceAuditStatus.Failed,
+            (EvidenceAuditStatus.Failed, _) => EvidenceAuditStatus.Failed,
+            (_, EvidenceAuditStatus.Incomplete) => EvidenceAuditStatus.Incomplete,
+            (EvidenceAuditStatus.Incomplete, _) => EvidenceAuditStatus.Incomplete,
+            (_, EvidenceAuditStatus.NotConfigured) when current == EvidenceAuditStatus.Complete => EvidenceAuditStatus.NotConfigured,
+            _ => current
         };
     }
 
@@ -225,6 +254,7 @@ public sealed class ContextDecisionAuditRunner
         sb.AppendLine("## Evidence Completeness");
         sb.AppendLine();
         sb.AppendLine($"- **EvidenceComplete**: `{report.EvidenceComplete}`");
+        sb.AppendLine($"- **EvidenceStatus**: `{report.EvidenceStatus}`");
         sb.AppendLine($"- **EvidenceResolvedCount**: {report.EvidenceResolvedCount}");
         sb.AppendLine($"- **EvidenceMissingCount**: {report.EvidenceMissingCount}");
         if (report.EvidenceIncompleteDecisionIds.Count > 0)
