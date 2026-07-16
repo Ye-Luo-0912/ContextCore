@@ -18,7 +18,6 @@ public static class ContextRuntimeBuilder
 {
     /// <summary>
     /// 从存储依赖组装运行时主链（规划/关系扩展/包构建/检索器/晋升）。
-    /// IShortTermMemoryStore 和 IContextLearningStore 由调用方通过 options 传入，确保与宿主 DI 容器实例一致。
     /// Full profile sinks（trace stores）在 options 中提供时传入构造函数，否则保持 null。
     /// </summary>
     public static RuntimeServices Build(RuntimeBuildOptions options)

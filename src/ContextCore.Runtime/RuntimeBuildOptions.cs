@@ -28,8 +28,6 @@ public sealed class RuntimeBuildOptions
     public required IContextTokenizerResolver TokenizerResolver { get; init; }
     public required IPromotionRecordStore PromotionRecordStore { get; init; }
     public required IWorkingMemoryService WorkingMemoryService { get; init; }
-    public required IShortTermMemoryStore ShortTermMemoryStore { get; init; }
-    public required IContextLearningStore LearningStore { get; init; }
 
     // --- optional: Full profile trace sinks（Service 生产路径）---
 

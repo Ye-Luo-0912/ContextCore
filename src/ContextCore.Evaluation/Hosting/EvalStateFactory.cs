@@ -67,8 +67,6 @@ internal static class EvalStateFactory
             TokenizerResolver = tokenizerResolver,
             PromotionRecordStore = memoryStore,
             WorkingMemoryService = memoryStore,
-            ShortTermMemoryStore = new InMemoryShortTermMemoryStore(new ShortTermMemoryPolicy()),
-            LearningStore = new InMemoryContextLearningStore()
         });
 
         return new EvalState

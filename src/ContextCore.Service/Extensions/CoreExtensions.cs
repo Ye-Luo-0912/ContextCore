@@ -244,8 +244,6 @@ internal static class CoreExtensions
 			TokenizerResolver = sp.GetRequiredService<IContextTokenizerResolver>(),
 			PromotionRecordStore = sp.GetRequiredService<IPromotionRecordStore>(),
 			WorkingMemoryService = sp.GetRequiredService<IWorkingMemoryService>(),
-			ShortTermMemoryStore = sp.GetRequiredService<IShortTermMemoryStore>(),
-			LearningStore = sp.GetRequiredService<IContextLearningStore>(),
 			PackageBuildTraceStore = sp.GetService<IContextPackageBuildTraceStore>(),
 			DecisionTraceStore = sp.GetService<IDecisionTraceStore>(),
 			RuntimeCandidateTraceSink = sp.GetService<IRuntimeCandidateTraceSink>(),

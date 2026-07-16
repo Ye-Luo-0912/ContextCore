@@ -100,8 +100,6 @@ public sealed partial class ControlRoomService
                 TokenizerResolver = tokenizerResolver,
                 PromotionRecordStore = memoryStore,
                 WorkingMemoryService = memoryStore,
-                ShortTermMemoryStore = new InMemoryShortTermMemoryStore(new ShortTermMemoryPolicy()),
-                LearningStore = new InMemoryContextLearningStore()
             });
 
             return new ControlRoomState
@@ -180,8 +178,6 @@ public sealed partial class ControlRoomService
             TokenizerResolver = fileTokenizerResolver,
             PromotionRecordStore = fileMemoryStore,
             WorkingMemoryService = fileMemoryStore,
-            ShortTermMemoryStore = new InMemoryShortTermMemoryStore(new ShortTermMemoryPolicy()),
-            LearningStore = new InMemoryContextLearningStore()
         });
 
         return new ControlRoomState
