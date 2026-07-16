@@ -1,4 +1,3 @@
-using System.Text;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services;
@@ -126,7 +125,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         var sw = System.Diagnostics.Stopwatch.StartNew();
         // 统一打包流水线：当调用方未显式提供 Policy 时，使用默认生产 Policy 委托到唯一流水线。
         // 原 Legacy 路径（按 item ID 拆 section、Kind="raw"）已合并到 Policy 路径的 recent_context section。
-        var policy = request.Policy ?? CreateDefaultProductionPolicy(request);
+        var policy = request.Policy ?? PackagePolicyResolver.CreateDefaultProductionPolicy(request);
 
         // 入口一次解析所有构建选项，集中 PackagePolicyResolver 调用
         var tokenContext = CreateTokenEstimationContext(request);
@@ -137,8 +136,8 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         // trace 写入仅在缓存 miss 时触发（factory 内部），缓存命中无需重复记录。
         if (_cacheAccessor is not null)
         {
-            var cacheKey = StateCacheKey.From($"pkg:{options.WorkspaceId}:{options.CollectionId}:{BuildRequestFingerprint(request, policy)}");
-            var scopes = BuildPackageDependencyScopes(options.WorkspaceId, options.CollectionId ?? string.Empty);
+            var cacheKey = StateCacheKey.From($"pkg:{options.WorkspaceId}:{options.CollectionId}:{PackageRequestFingerprintBuilder.Build(request, policy)}");
+            var scopes = PackageRequestFingerprintBuilder.BuildDependencyScopes(options.WorkspaceId, options.CollectionId ?? string.Empty);
             var template = await _cacheAccessor.GetOrAddAsync<PackageTemplate>(
                 cacheKey, scopes,
                 ct => BuildAndTraceTemplateAsync(options, ct),
@@ -208,205 +207,14 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         }
     }
 
-    /// <summary>
-    /// 构建请求指纹：仅包含影响构建输出的字段，排除 OperationId/RequestId（per-call GUID）。
-    /// 相同指纹的请求产生相同 package（在依赖 scope 未变更的前提下）。
-    /// 使用长度前缀编码防止分隔符碰撞（输入值中包含 | 或 : 不会导致不同输入产生相同指纹）。
-    /// </summary>
-    internal static string BuildRequestFingerprint(ContextPackageRequest request, ContextPackagePolicy policy)
-    {
-        var sb = new StringBuilder();
-        AppendField(sb, request.WorkspaceId);
-        AppendField(sb, request.CollectionId);
-        AppendField(sb, request.QueryText);
-        AppendSorted(sb, request.RequiredTags);
-        AppendSorted(sb, request.RequiredTypes);
-        AppendField(sb, request.TokenBudget.ToString());
-        AppendField(sb, ((int)request.Mode).ToString());
-        AppendField(sb, request.IncludeRecent.ToString());
-        AppendField(sb, request.IsAuditMode?.ToString() ?? "null");
-        AppendField(sb, ResolveTokenizerModel(request));
-        // mustHit IDs 影响候选排序与选取
-        AppendSorted(sb, PackagePolicyResolver.ResolvePackageMustHitIds(request));
-        // currentTask 元数据影响 current_task section 内容
-        AppendField(sb, RequestTaskResolver.HasRequestCurrentTaskMetadata(request).ToString());
-        if (RequestTaskResolver.HasRequestCurrentTaskMetadata(request))
-        {
-            AppendField(sb, RequestTaskResolver.ReadRequestMetadata(request, "currentTaskId", "taskId", "current_task.id"));
-            AppendField(sb, RequestTaskResolver.ReadRequestMetadata(request, "currentTaskTitle", "taskTitle", "current_task.title"));
-            AppendField(sb, RequestTaskResolver.ReadRequestMetadata(request, "currentTaskDescription", "taskDescription", "current_task.description"));
-            AppendField(sb, RequestTaskResolver.ReadRequestMetadata(request, "currentTaskStatus", "taskStatus", "current_task.status"));
-        }
-        // policy 指纹
-        AppendField(sb, policy.Id);
-        AppendField(sb, ((int)policy.Mode).ToString());
-        AppendField(sb, policy.TokenBudget.ToString());
-        AppendField(sb, policy.IncludeGlobalContext.ToString());
-        AppendField(sb, policy.IncludeHardConstraints.ToString());
-        AppendField(sb, policy.IncludeSoftConstraints.ToString());
-        AppendField(sb, policy.IncludeWorkingMemory.ToString());
-        AppendField(sb, policy.IncludeStableMemory.ToString());
-        AppendField(sb, policy.IncludeRecentRawContext.ToString());
-        AppendField(sb, policy.MaxRecentItems.ToString());
-        AppendField(sb, policy.EnableStrictRelevanceFilter.ToString());
-        AppendField(sb, policy.IsAuditMode?.ToString() ?? "null");
-        // SectionOrder 必须保持声明顺序（影响最终 section 排列），不能排序
-        AppendOrdered(sb, policy.SectionOrder);
-        AppendSortedKeyValuePairs(sb, policy.SectionPriorities);
-        AppendSortedKeyValuePairs(sb, policy.SectionTokenBudgets);
-        AppendSortedStringDictionary(sb, policy.Metadata);
-        // request.Metadata 会被完整复制到响应，必须纳入指纹以区分不同 metadata 的请求
-        AppendSortedStringDictionary(sb, request.Metadata);
-        return sb.ToString();
-    }
-
-    /// <summary>长度前缀编码：len:value| 格式，防止值中包含分隔符导致碰撞。</summary>
-    private static void AppendField(StringBuilder sb, string? value)
-    {
-        var v = value ?? string.Empty;
-        sb.Append(v.Length).Append(':').Append(v).Append('|');
-    }
-
-    private static void AppendSorted(StringBuilder sb, IEnumerable<string>? values)
-    {
-        if (values is null)
-        {
-            sb.Append("-|");
-            return;
-        }
-        // 避免在空集合上分配数组
-        if (values is ICollection<string> { Count: 0 })
-        {
-            sb.Append("0:|");
-            return;
-        }
-        var sorted = values.OrderBy(v => v, StringComparer.Ordinal).ToArray();
-        sb.Append(sorted.Length).Append(':');
-        foreach (var v in sorted)
-        {
-            sb.Append(v.Length).Append(':').Append(v).Append(',');
-        }
-        sb.Append('|');
-    }
-
-    /// <summary>保持声明顺序写入（用于 SectionOrder 等顺序敏感字段）。</summary>
-    private static void AppendOrdered(StringBuilder sb, IEnumerable<string>? values)
-    {
-        if (values is null)
-        {
-            sb.Append("-|");
-            return;
-        }
-        if (values is ICollection<string> { Count: 0 })
-        {
-            sb.Append("0:|");
-            return;
-        }
-        var arr = values.ToArray();
-        sb.Append(arr.Length).Append(':');
-        foreach (var v in arr)
-        {
-            sb.Append(v.Length).Append(':').Append(v).Append(',');
-        }
-        sb.Append('|');
-    }
-
-    /// <summary>对 string 字典排序后写入指纹（key=value 格式）。</summary>
-    private static void AppendSortedStringDictionary(StringBuilder sb, IReadOnlyDictionary<string, string>? dict)
-    {
-        if (dict is null || dict.Count == 0)
-        {
-            sb.Append("-|");
-            return;
-        }
-        var keys = dict.Keys.ToArray();
-        Array.Sort(keys, StringComparer.Ordinal);
-        sb.Append(keys.Length).Append(':');
-        foreach (var key in keys)
-        {
-            var entry = key + "=" + dict[key];
-            sb.Append(entry.Length).Append(':').Append(entry).Append(',');
-        }
-        sb.Append('|');
-    }
-
-    /// <summary>
-    /// 对键值对集合排序后写入指纹，避免 LINQ Select 分配中间字符串数组和 ToArray。
-    /// 直接在 StringBuilder 上拼接 "key:value" 格式。
-    /// </summary>
-    private static void AppendSortedKeyValuePairs(StringBuilder sb, IReadOnlyDictionary<string, int>? pairs)
-    {
-        if (pairs is null || pairs.Count == 0)
-        {
-            sb.Append("-|");
-            return;
-        }
-        // 复用 pairs.Keys 排序，避免分配 KeyValuePair 数组
-        var keys = pairs.Keys.ToArray();
-        Array.Sort(keys, StringComparer.Ordinal);
-        sb.Append(keys.Length).Append(':');
-        foreach (var key in keys)
-        {
-            var entry = key + ":" + pairs[key].ToString();
-            sb.Append(entry.Length).Append(':').Append(entry).Append(',');
-        }
-        sb.Append('|');
-    }
-
-    /// <summary>
-    /// 构建包依赖的 scope 集合。任一 store 在相关 workspace+collection 上写入即失效缓存。
-    /// 包含 WorkingMemoryService 以覆盖 SetCurrentTaskAsync 等操作导致的 current_task section 变更。
-    /// GlobalContextStore 同时订阅 collection-level 和 workspace-level scope，
-    /// 因为全局数据写入时 CollectionId 可能为空（workspace 级），decorator 会用 string.Empty 作为 CollectionId。
-    /// </summary>
-    private static DependencyScopeSet BuildPackageDependencyScopes(string workspaceId, string collectionId)
-    {
-        return new DependencyScopeSet(
-            new CacheInvalidationKey("ContextStore", workspaceId, collectionId, null),
-            new CacheInvalidationKey("MemoryStore", workspaceId, collectionId, null),
-            new CacheInvalidationKey("ConstraintStore", workspaceId, collectionId, null),
-            // collection 级全局数据
-            new CacheInvalidationKey("GlobalContextStore", workspaceId, collectionId, null),
-            // workspace 级全局数据（CollectionId=null 的全局条目写入时 decorator 用 string.Empty）
-            new CacheInvalidationKey("GlobalContextStore", workspaceId, string.Empty, null),
-            new CacheInvalidationKey("RelationStore", workspaceId, collectionId, null),
-            new CacheInvalidationKey("WorkingMemoryService", workspaceId, collectionId, null));
-    }
-
     public static int EstimateTokens(string? content)
     {
         return LegacyCharacterTokenizer.EstimateTokenCount(content);
     }
 
-    /// <summary>
-    /// 创建默认生产 Policy，用于未显式提供 Policy 的请求。
-    /// 仅启用最近原始上下文（与原 Legacy 路径行为一致），约束/记忆/全局上下文需调用方显式提供 Policy 才会纳入。
-    /// TokenBudget 由请求或模式预算解析。
-    /// </summary>
-    private static ContextPackagePolicy CreateDefaultProductionPolicy(ContextPackageRequest request)
-    {
-        return new ContextPackagePolicy
-        {
-            Id = "default-production",
-            WorkspaceId = request.WorkspaceId,
-            CollectionId = string.IsNullOrWhiteSpace(request.CollectionId) ? null : request.CollectionId,
-            Name = "DefaultProduction",
-            Description = "默认生产策略：未显式提供 Policy 时使用，仅启用最近原始上下文（与原 Legacy 路径一致）。",
-            Mode = request.Mode,
-            IncludeGlobalContext = false,
-            IncludeHardConstraints = false,
-            IncludeSoftConstraints = false,
-            IncludeWorkingMemory = false,
-            IncludeStableMemory = false,
-            IncludeRecentRawContext = true,
-            MaxRecentItems = 20,
-            IsAuditMode = request.IsAuditMode
-        };
-    }
-
     private TokenEstimationContext CreateTokenEstimationContext(ContextPackageRequest request)
     {
-        var modelName = ResolveTokenizerModel(request);
+        var modelName = PackagePolicyResolver.ResolveTokenizerModel(request);
         var estimate = _tokenizerResolver.Estimate(string.Empty, modelName);
         return new TokenEstimationContext(
             estimate.ModelName,
@@ -432,20 +240,6 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         return _tokenizerResolver.TruncateForTokenBudget(content, tokenBudget, tokenContext.ModelName).TruncatedContent;
     }
 
-    private static string? ResolveTokenizerModel(ContextPackageRequest request)
-    {
-        foreach (var key in new[] { "tokenizerModel", "modelName", "model", "llm.model", "route.model" })
-        {
-            if (request.Metadata.TryGetValue(key, out var value)
-                && !string.IsNullOrWhiteSpace(value))
-            {
-                return value;
-            }
-        }
-
-        return null;
-    }
-
     /// <summary>
     /// 统一构建流水线入口：委托到四阶段（PackageInputLoader -> CandidateSelector/SectionAssembler -> ResultProjector）。
     /// 返回不可变 PackageTemplate，由调用方投影为 ContextPackageBuildResult。
@@ -460,60 +254,4 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
             inputs, options, cancellationToken).ConfigureAwait(false);
         return _resultProjector.ProjectTemplate(selection, options);
     }
-}
-
-internal sealed record TokenEstimationContext(string? ModelName, string Source, bool IsFallback);
-
-internal sealed class MergedContextConstraint
-{
-    public MergedContextConstraint(
-        ContextConstraint constraint,
-        string priorityLabel,
-        int priorityRank,
-        int index)
-    {
-        Constraint = constraint;
-        PriorityLabel = priorityLabel;
-        PriorityRank = priorityRank;
-        Index = index;
-    }
-
-    public ContextConstraint Constraint { get; }
-
-    public string PriorityLabel { get; }
-
-    public int PriorityRank { get; }
-
-    public int Index { get; }
-}
-
-internal sealed class ContextEvidenceEntry
-{
-    public ContextEvidenceEntry(
-        string itemId,
-        string sectionName,
-        string kind,
-        string type,
-        IReadOnlyList<string> sourceRefs,
-        string reason)
-    {
-        ItemId = itemId;
-        SectionName = sectionName;
-        Kind = kind;
-        Type = type;
-        SourceRefs = sourceRefs;
-        Reason = reason;
-    }
-
-    public string ItemId { get; }
-
-    public string SectionName { get; }
-
-    public string Kind { get; }
-
-    public string Type { get; }
-
-    public IReadOnlyList<string> SourceRefs { get; }
-
-    public string Reason { get; }
 }

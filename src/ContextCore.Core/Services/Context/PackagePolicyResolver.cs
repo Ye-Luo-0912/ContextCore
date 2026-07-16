@@ -296,4 +296,47 @@ internal static class PackagePolicyResolver
         // 显式信号均缺失（null）时默认关闭，不再回退到 QueryText 关键词推断。
         return false;
     }
+
+    /// <summary>
+    /// 解析请求 metadata 中的 tokenizer 模型名。按优先级尝试常见键名。
+    /// </summary>
+    internal static string? ResolveTokenizerModel(ContextPackageRequest request)
+    {
+        foreach (var key in new[] { "tokenizerModel", "modelName", "model", "llm.model", "route.model" })
+        {
+            if (request.Metadata.TryGetValue(key, out var value)
+                && !string.IsNullOrWhiteSpace(value))
+            {
+                return value;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// 创建默认生产 Policy，用于未显式提供 Policy 的请求。
+    /// 仅启用最近原始上下文（与原 Legacy 路径行为一致），约束/记忆/全局上下文需调用方显式提供 Policy 才会纳入。
+    /// TokenBudget 由请求或模式预算解析。
+    /// </summary>
+    internal static ContextPackagePolicy CreateDefaultProductionPolicy(ContextPackageRequest request)
+    {
+        return new ContextPackagePolicy
+        {
+            Id = "default-production",
+            WorkspaceId = request.WorkspaceId,
+            CollectionId = string.IsNullOrWhiteSpace(request.CollectionId) ? null : request.CollectionId,
+            Name = "DefaultProduction",
+            Description = "默认生产策略：未显式提供 Policy 时使用，仅启用最近原始上下文（与原 Legacy 路径一致）。",
+            Mode = request.Mode,
+            IncludeGlobalContext = false,
+            IncludeHardConstraints = false,
+            IncludeSoftConstraints = false,
+            IncludeWorkingMemory = false,
+            IncludeStableMemory = false,
+            IncludeRecentRawContext = true,
+            MaxRecentItems = 20,
+            IsAuditMode = request.IsAuditMode
+        };
+    }
 }

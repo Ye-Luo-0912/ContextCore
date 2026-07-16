@@ -586,8 +586,8 @@ public sealed class ContextStateCacheTests
         var req1 = new ContextPackageRequest { WorkspaceId = "a|b", CollectionId = "c", TokenBudget = 1000 };
         var req2 = new ContextPackageRequest { WorkspaceId = "a", CollectionId = "b|c", TokenBudget = 1000 };
 
-        var fp1 = BasicContextPackageBuilder.BuildRequestFingerprint(req1, policy);
-        var fp2 = BasicContextPackageBuilder.BuildRequestFingerprint(req2, policy);
+        var fp1 = PackageRequestFingerprintBuilder.Build(req1, policy);
+        var fp2 = PackageRequestFingerprintBuilder.Build(req2, policy);
 
         Assert.AreNotEqual(fp1, fp2, "包含分隔符的输入不得产生相同指纹");
 
@@ -595,8 +595,8 @@ public sealed class ContextStateCacheTests
         var req3 = new ContextPackageRequest { WorkspaceId = "a:b", CollectionId = "c", TokenBudget = 1000 };
         var req4 = new ContextPackageRequest { WorkspaceId = "a", CollectionId = "b:c", TokenBudget = 1000 };
 
-        var fp3 = BasicContextPackageBuilder.BuildRequestFingerprint(req3, policy);
-        var fp4 = BasicContextPackageBuilder.BuildRequestFingerprint(req4, policy);
+        var fp3 = PackageRequestFingerprintBuilder.Build(req3, policy);
+        var fp4 = PackageRequestFingerprintBuilder.Build(req4, policy);
 
         Assert.AreNotEqual(fp3, fp4, "包含冒号的输入不得产生相同指纹");
     }
@@ -626,8 +626,8 @@ public sealed class ContextStateCacheTests
             Metadata = new Dictionary<string, string> { ["mustHit"] = "item-b" }
         };
 
-        var fp1 = BasicContextPackageBuilder.BuildRequestFingerprint(req1, policy);
-        var fp2 = BasicContextPackageBuilder.BuildRequestFingerprint(req2, policy);
+        var fp1 = PackageRequestFingerprintBuilder.Build(req1, policy);
+        var fp2 = PackageRequestFingerprintBuilder.Build(req2, policy);
         Assert.AreNotEqual(fp1, fp2, "不同 mustHit ID 必须产生不同指纹");
 
         var req3 = new ContextPackageRequest
@@ -645,8 +645,8 @@ public sealed class ContextStateCacheTests
             Metadata = new Dictionary<string, string> { ["currentTaskId"] = "task-2" }
         };
 
-        var fp3 = BasicContextPackageBuilder.BuildRequestFingerprint(req3, policy);
-        var fp4 = BasicContextPackageBuilder.BuildRequestFingerprint(req4, policy);
+        var fp3 = PackageRequestFingerprintBuilder.Build(req3, policy);
+        var fp4 = PackageRequestFingerprintBuilder.Build(req4, policy);
         Assert.AreNotEqual(fp3, fp4, "不同 currentTaskId 必须产生不同指纹");
     }
 
