@@ -12,16 +12,23 @@ public sealed class FileDecisionTraceStore : IDecisionTraceStore
 {
     private readonly FileJsonLineStore _jsonLines;
     private readonly FilePathResolver _paths;
+    private readonly FileTraceJanitor _janitor;
 
     public FileDecisionTraceStore(FileStorageOptions options)
-        : this(new FilePathResolver(options), new FileFormatSerializer())
+        : this(new FilePathResolver(options), new FileFormatSerializer(), options)
     {
     }
 
     public FileDecisionTraceStore(FilePathResolver paths, FileFormatSerializer serializer)
+        : this(paths, serializer, new FileStorageOptions())
+    {
+    }
+
+    internal FileDecisionTraceStore(FilePathResolver paths, FileFormatSerializer serializer, FileStorageOptions options)
     {
         _paths = paths;
         _jsonLines = new FileJsonLineStore(serializer);
+        _janitor = new FileTraceJanitor(options);
     }
 
     public async Task SaveAsync(
@@ -32,6 +39,8 @@ public sealed class FileDecisionTraceStore : IDecisionTraceStore
         var path = _paths.GetDecisionTraceJsonlPath(record.WorkspaceId, record.CollectionId);
 
         await _jsonLines.AppendAsync(path, record, cancellationToken).ConfigureAwait(false);
+
+        _janitor.MaybePurge(_paths.GetDecisionTraceDirectory(record.WorkspaceId, record.CollectionId), cancellationToken);
     }
 
     public async Task<IReadOnlyList<ContextDecisionRecord>> QueryRecentAsync(
@@ -40,43 +49,18 @@ public sealed class FileDecisionTraceStore : IDecisionTraceStore
         int take,
         CancellationToken cancellationToken = default)
     {
-        var records = await ReadTraceFilesAsync(workspaceId, collectionId, cancellationToken).ConfigureAwait(false);
+        var paths = EnumerateTraceFiles(workspaceId, collectionId);
+        var records = await TraceQueryHelper.ReadRecentAsync<ContextDecisionRecord>(
+            paths,
+            take,
+            _jsonLines,
+            r => r.DecisionId ?? string.Empty,
+            r => string.Equals(r.WorkspaceId, workspaceId, StringComparison.OrdinalIgnoreCase) &&
+                 string.Equals(r.CollectionId, collectionId, StringComparison.OrdinalIgnoreCase),
+            cancellationToken).ConfigureAwait(false);
+
         var count = take > 0 ? take : 50;
-
-        return [.. records
-            .OrderByDescending(item => item.CreatedAt)
-            .Take(count)];
-    }
-
-    private async Task<IReadOnlyList<ContextDecisionRecord>> ReadTraceFilesAsync(
-        string workspaceId,
-        string collectionId,
-        CancellationToken cancellationToken)
-    {
-        var results = new List<ContextDecisionRecord>();
-        var keys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var path in EnumerateTraceFiles(workspaceId, collectionId))
-        {
-            var records = await _jsonLines.ReadAsync<ContextDecisionRecord>(path, cancellationToken)
-                .ConfigureAwait(false);
-            foreach (var record in records)
-            {
-                // legacy 单文件路径可能混入其他 ws/col 的记录，需要运行时过滤
-                if (!string.Equals(record.WorkspaceId, workspaceId, StringComparison.OrdinalIgnoreCase) ||
-                    !string.Equals(record.CollectionId, collectionId, StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                var key = string.IsNullOrWhiteSpace(record.DecisionId) ? Guid.NewGuid().ToString("N") : record.DecisionId;
-                if (keys.Add(key))
-                {
-                    results.Add(record);
-                }
-            }
-        }
-
-        return results;
+        return [.. records.OrderByDescending(item => item.CreatedAt).Take(count)];
     }
 
     private IReadOnlyList<string> EnumerateTraceFiles(string workspaceId, string collectionId)

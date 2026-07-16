@@ -12,16 +12,23 @@ public sealed class FileRetrievalTraceStore : IRetrievalTraceStore
 {
     private readonly FileJsonLineStore _jsonLines;
     private readonly FilePathResolver _paths;
+    private readonly FileTraceJanitor _janitor;
 
     public FileRetrievalTraceStore(FileStorageOptions options)
-        : this(new FilePathResolver(options), new FileFormatSerializer())
+        : this(new FilePathResolver(options), new FileFormatSerializer(), options)
     {
     }
 
     public FileRetrievalTraceStore(FilePathResolver paths, FileFormatSerializer serializer)
+        : this(paths, serializer, new FileStorageOptions())
+    {
+    }
+
+    internal FileRetrievalTraceStore(FilePathResolver paths, FileFormatSerializer serializer, FileStorageOptions options)
     {
         _paths = paths;
         _jsonLines = new FileJsonLineStore(serializer);
+        _janitor = new FileTraceJanitor(options);
     }
 
     public async Task SaveAsync(
@@ -32,6 +39,8 @@ public sealed class FileRetrievalTraceStore : IRetrievalTraceStore
         var path = _paths.GetRetrievalTraceJsonlPath(trace.WorkspaceId, trace.CollectionId);
 
         await _jsonLines.AppendAsync(path, trace, cancellationToken).ConfigureAwait(false);
+
+        _janitor.MaybePurge(_paths.GetRetrievalTraceDirectory(trace.WorkspaceId, trace.CollectionId), cancellationToken);
     }
 
     public async Task<IReadOnlyList<ContextRetrievalTrace>> QueryRecentAsync(
@@ -40,37 +49,17 @@ public sealed class FileRetrievalTraceStore : IRetrievalTraceStore
         int take,
         CancellationToken cancellationToken = default)
     {
-        var traces = await ReadTraceFilesAsync(workspaceId, collectionId, cancellationToken).ConfigureAwait(false);
-        var count = take > 0 ? take : 50;
-
-        return [.. traces
-            .OrderByDescending(item => item.CreatedAt)
-            .Take(count)];
-    }
-
-    private async Task<IReadOnlyList<ContextRetrievalTrace>> ReadTraceFilesAsync(
-        string workspaceId,
-        string collectionId,
-        CancellationToken cancellationToken)
-    {
         var paths = EnumerateTraceFiles(workspaceId, collectionId);
-        var results = new List<ContextRetrievalTrace>();
-        var keys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var path in paths)
-        {
-            var traces = await _jsonLines.ReadAsync<ContextRetrievalTrace>(path, cancellationToken)
-                .ConfigureAwait(false);
-            foreach (var trace in traces)
-            {
-                var key = trace.RetrievalId;
-                if (string.IsNullOrWhiteSpace(key) || keys.Add(key))
-                {
-                    results.Add(trace);
-                }
-            }
-        }
+        var traces = await TraceQueryHelper.ReadRecentAsync<ContextRetrievalTrace>(
+            paths,
+            take,
+            _jsonLines,
+            t => t.RetrievalId ?? string.Empty,
+            filter: null,
+            cancellationToken).ConfigureAwait(false);
 
-        return results;
+        var count = take > 0 ? take : 50;
+        return [.. traces.OrderByDescending(item => item.CreatedAt).Take(count)];
     }
 
     private IReadOnlyList<string> EnumerateTraceFiles(string workspaceId, string collectionId)

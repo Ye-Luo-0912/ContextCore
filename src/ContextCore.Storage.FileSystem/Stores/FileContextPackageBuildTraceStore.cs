@@ -12,16 +12,23 @@ public sealed class FileContextPackageBuildTraceStore : IContextPackageBuildTrac
 {
     private readonly FilePathResolver _paths;
     private readonly FileJsonLineStore _jsonLines;
+    private readonly FileTraceJanitor _janitor;
 
     public FileContextPackageBuildTraceStore(FileStorageOptions options)
-        : this(new FilePathResolver(options), new FileFormatSerializer())
+        : this(new FilePathResolver(options), new FileFormatSerializer(), options)
     {
     }
 
     public FileContextPackageBuildTraceStore(FilePathResolver paths, FileFormatSerializer serializer)
+        : this(paths, serializer, new FileStorageOptions())
+    {
+    }
+
+    internal FileContextPackageBuildTraceStore(FilePathResolver paths, FileFormatSerializer serializer, FileStorageOptions options)
     {
         _paths = paths;
         _jsonLines = new FileJsonLineStore(serializer);
+        _janitor = new FileTraceJanitor(options);
     }
 
     public async Task SaveAsync(
@@ -33,6 +40,8 @@ public sealed class FileContextPackageBuildTraceStore : IContextPackageBuildTrac
         var path = _paths.GetPackageBuildTraceJsonlPath(result.Package.WorkspaceId, result.Package.CollectionId);
 
         await _jsonLines.AppendAsync(path, result, cancellationToken).ConfigureAwait(false);
+
+        _janitor.MaybePurge(_paths.GetPackageBuildTraceDirectory(result.Package.WorkspaceId, result.Package.CollectionId), cancellationToken);
     }
 
     public async Task<IReadOnlyList<ContextPackageBuildResult>> QueryRecentAsync(
@@ -41,36 +50,17 @@ public sealed class FileContextPackageBuildTraceStore : IContextPackageBuildTrac
         int take,
         CancellationToken cancellationToken = default)
     {
-        var traces = await ReadTraceFilesAsync(workspaceId, collectionId, cancellationToken).ConfigureAwait(false);
+        var paths = EnumerateTraceFiles(workspaceId, collectionId);
+        var traces = await TraceQueryHelper.ReadRecentAsync<ContextPackageBuildResult>(
+            paths,
+            take,
+            _jsonLines,
+            t => string.IsNullOrWhiteSpace(t.BuildId) ? (t.Package.PackageId ?? string.Empty) : t.BuildId,
+            filter: null,
+            cancellationToken).ConfigureAwait(false);
+
         var count = take > 0 ? take : 50;
-
-        return [.. traces
-            .OrderByDescending(item => item.CreatedAt)
-            .Take(count)];
-    }
-
-    private async Task<IReadOnlyList<ContextPackageBuildResult>> ReadTraceFilesAsync(
-        string workspaceId,
-        string collectionId,
-        CancellationToken cancellationToken)
-    {
-        var results = new List<ContextPackageBuildResult>();
-        var keys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var path in EnumerateTraceFiles(workspaceId, collectionId))
-        {
-            var traces = await _jsonLines.ReadAsync<ContextPackageBuildResult>(path, cancellationToken)
-                .ConfigureAwait(false);
-            foreach (var trace in traces)
-            {
-                var key = string.IsNullOrWhiteSpace(trace.BuildId) ? trace.Package.PackageId : trace.BuildId;
-                if (string.IsNullOrWhiteSpace(key) || keys.Add(key))
-                {
-                    results.Add(trace);
-                }
-            }
-        }
-
-        return results;
+        return [.. traces.OrderByDescending(item => item.CreatedAt).Take(count)];
     }
 
     private IReadOnlyList<string> EnumerateTraceFiles(string workspaceId, string collectionId)

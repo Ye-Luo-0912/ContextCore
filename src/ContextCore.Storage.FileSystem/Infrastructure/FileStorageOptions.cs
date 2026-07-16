@@ -25,6 +25,12 @@ public sealed class FileStorageOptions
 	public string RootPath { get; set; } = DefaultRootPath;
 
 	/// <summary>
+	/// Trace 日期分片保留天数。超过此天数的 yyyyMMdd 分片目录会在写入时被后台清理。
+	/// 设为 0 禁用 retention（永久保留）。默认 30 天。
+	/// </summary>
+	public int TraceRetentionDays { get; set; } = 30;
+
+	/// <summary>
 	/// 获取经过环境变量展开和绝对化处理后的存储根目录路径。
 	/// </summary>
 	public string ResolvedRootPath => ResolveRootPath(RootPath);
