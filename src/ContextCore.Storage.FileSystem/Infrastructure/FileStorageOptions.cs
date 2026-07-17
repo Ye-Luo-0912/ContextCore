@@ -5,9 +5,12 @@ namespace ContextCore.Storage.FileSystem;
 /// </summary>
 /// <remarks>
 /// P0-9.4：FileSystem 后端定位为 Alpha / 本地开发后端。
-/// 跨文件一致性（raw content + metadata 双文件）依赖进程内串行写入，无跨进程事务保证；
+/// 并发边界（R13.1 #6）：单文件写入经 <see cref="FileLockProvider"/> 跨进程原子（Enqueue/Dequeue/Ack/Nack/Upsert/Update），
+/// 读取经 FileShare.ReadWrite；但跨文件一致性（raw content + metadata 双文件）无事务原子性，
 /// 进程崩溃可能留下 orphan raw 或 metadata 指向不存在的 raw。
-/// 正式多实例 / 生产部署应使用 Postgres 后端（<c>ContextCore.Storage.Postgres</c>）。
+/// 进程内优化（JobId→路径索引、Janitor 节流、ContextStateCache）在多进程下命中率下降但正确性不变（回退扫描/文件锁）。
+/// 启动时调用 <see cref="FileSystemInstanceGuard.GetOrCreate"/>(<see cref="ResolvedRootPath"/>)
+/// 可检测同一 root 是否已被他进程占用（advisory，不阻断）。正式多实例 / 生产部署应使用 Postgres 后端（<c>ContextCore.Storage.Postgres</c>）。
 /// </remarks>
 public sealed class FileStorageOptions
 {
