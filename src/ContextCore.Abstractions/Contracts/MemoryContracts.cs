@@ -22,14 +22,17 @@ public enum RelationDirection
 public interface IRelationStore
 {
     /// <summary>保存或更新一条关系。等价于 BatchUpsertAsync([relation])，保留为单条便利方法。</summary>
+    [StoreOperation(StoreOperationKind.Write)]
     Task SaveAsync(ContextRelation relation, CancellationToken cancellationToken = default);
 
     /// <summary>按条件查询关系。SourceId/TargetId/ItemId/RelationType 均通过 ContextRelationQuery 过滤，取代旧 QueryBy* 方法。</summary>
+    [StoreOperation(StoreOperationKind.Read)]
     Task<IReadOnlyList<ContextRelation>> QueryAsync(
         ContextRelationQuery query,
         CancellationToken cancellationToken = default);
 
     /// <summary>按 ID 获取单条关系。不存在时返回 null。</summary>
+    [StoreOperation(StoreOperationKind.Read)]
     Task<ContextRelation?> GetAsync(
         string workspaceId,
         string collectionId,
@@ -37,6 +40,7 @@ public interface IRelationStore
         CancellationToken cancellationToken = default);
 
     /// <summary>按 ID 删除单条关系。返回是否删除成功。</summary>
+    [StoreOperation(StoreOperationKind.Write)]
     Task<bool> DeleteAsync(
         string workspaceId,
         string collectionId,
@@ -44,6 +48,7 @@ public interface IRelationStore
         CancellationToken cancellationToken = default);
 
     /// <summary>批量 upsert，实现应在单连接单事务中完成（Postgres）或原子写入（FileSystem）。</summary>
+    [StoreOperation(StoreOperationKind.Write)]
     Task BatchUpsertAsync(
         IEnumerable<ContextRelation> relations,
         CancellationToken cancellationToken = default);
@@ -52,6 +57,7 @@ public interface IRelationStore
     /// GRAPH-10：统一邻居查询。携带方向、类型、置信度、生命周期、分页和扫描上限。
     /// Postgres 在 SQL 中过滤和 Limit；File/InMemory 在内存中过滤。
     /// </summary>
+    [StoreOperation(StoreOperationKind.Read)]
     Task<IReadOnlyList<ContextRelation>> QueryNeighborsAsync(
         RelationNeighborQuery query,
         CancellationToken cancellationToken = default);
@@ -125,12 +131,15 @@ public interface IRelationReviewStore
 /// <summary>存储和查询上下文约束规则。</summary>
 public interface IConstraintStore
 {
+    [StoreOperation(StoreOperationKind.Write)]
     Task SaveAsync(ContextConstraint constraint, CancellationToken cancellationToken = default);
 
+    [StoreOperation(StoreOperationKind.Read)]
     Task<ContextConstraint?> GetAsync(
         string constraintId,
         CancellationToken cancellationToken = default);
 
+    [StoreOperation(StoreOperationKind.Read)]
     Task<IReadOnlyList<ContextConstraint>> QueryAsync(
         ContextConstraintQuery query,
         CancellationToken cancellationToken = default);
@@ -194,18 +203,22 @@ public interface IConstraintGapCandidateStore
 /// <summary>存储和查询工作记忆、稳定记忆等分层记忆条目。</summary>
 public interface IMemoryStore
 {
+    [StoreOperation(StoreOperationKind.Write)]
     Task SaveAsync(ContextMemoryItem item, CancellationToken cancellationToken = default);
 
+    [StoreOperation(StoreOperationKind.Read)]
     Task<ContextMemoryItem?> GetAsync(
         string workspaceId,
         string collectionId,
         string id,
         CancellationToken cancellationToken = default);
 
+    [StoreOperation(StoreOperationKind.Read)]
     Task<IReadOnlyList<ContextMemoryItem>> QueryAsync(
         ContextMemoryQuery query,
         CancellationToken cancellationToken = default);
 
+    [StoreOperation(StoreOperationKind.Write)]
     Task UpdateStatusAsync(
         string workspaceId,
         string collectionId,
@@ -217,8 +230,10 @@ public interface IMemoryStore
 /// <summary>存储跨集合或跨工作区复用的全局上下文。</summary>
 public interface IGlobalContextStore
 {
+    [StoreOperation(StoreOperationKind.Write)]
     Task SaveAsync(ContextGlobalItem item, CancellationToken cancellationToken = default);
 
+    [StoreOperation(StoreOperationKind.Read)]
     Task<IReadOnlyList<ContextGlobalItem>> QueryAsync(
         ContextGlobalQuery query,
         CancellationToken cancellationToken = default);
@@ -327,35 +342,42 @@ public interface IPromotionCandidateFactory
 /// <summary>管理短期工作记忆，供当前上下文打包和运行时决策使用。</summary>
 public interface IWorkingMemoryService
 {
+    [StoreOperation(StoreOperationKind.Write)]
     Task<WorkingMemoryItem> AddAsync(
         WorkingMemoryItem item,
         CancellationToken cancellationToken = default);
 
+    [StoreOperation(StoreOperationKind.Read)]
     Task<IReadOnlyList<WorkingMemoryItem>> GetRecentAsync(
         string workspaceId,
         string collectionId,
         int take,
         CancellationToken cancellationToken = default);
 
+    [StoreOperation(StoreOperationKind.Write)]
     Task ClearAsync(
         string workspaceId,
         string collectionId,
         CancellationToken cancellationToken = default);
 
+    [StoreOperation(StoreOperationKind.Read)]
     Task<WorkingMemoryActiveContext?> GetActiveContextAsync(
         string workspaceId,
         string collectionId,
         CancellationToken cancellationToken = default);
 
+    [StoreOperation(StoreOperationKind.Write)]
     Task<WorkingMemoryActiveContext> SetActiveContextAsync(
         WorkingMemoryActiveContext activeContext,
         CancellationToken cancellationToken = default);
 
+    [StoreOperation(StoreOperationKind.Read)]
     Task<WorkingMemoryCurrentTask?> GetCurrentTaskAsync(
         string workspaceId,
         string collectionId,
         CancellationToken cancellationToken = default);
 
+    [StoreOperation(StoreOperationKind.Write)]
     Task<WorkingMemoryCurrentTask> SetCurrentTaskAsync(
         WorkingMemoryCurrentTask currentTask,
         CancellationToken cancellationToken = default);

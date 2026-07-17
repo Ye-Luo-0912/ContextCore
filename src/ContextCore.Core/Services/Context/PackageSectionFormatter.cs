@@ -18,9 +18,13 @@ internal static class PackageSectionFormatter
         var segments = new List<CandidateSegment>(constraints.Count);
         foreach (var item in constraints)
         {
+            // P0-6.2: 携带候选级 SourceRefs/ItemRefs，供 Section refs 按接受状态聚合
+            var sourceRefs = item.SourceRefs.Count > 0 ? item.SourceRefs.ToArray() : new[] { item.Id };
             segments.Add(new CandidateSegment(
                 item.Id,
-                compact ? item.Content : $"- [{item.Level}] {item.Content}"));
+                compact ? item.Content : $"- [{item.Level}] {item.Content}",
+                sourceRefs,
+                new[] { item.Id }));
         }
         return segments;
     }
@@ -80,9 +84,15 @@ internal static class PackageSectionFormatter
         var segments = new List<CandidateSegment>(constraints.Count);
         foreach (var item in constraints)
         {
+            // P0-6.2: 携带候选级 SourceRefs/ItemRefs
+            var sourceRefs = item.Constraint.SourceRefs.Count > 0
+                ? item.Constraint.SourceRefs.ToArray()
+                : new[] { item.Constraint.Id };
             segments.Add(new CandidateSegment(
                 item.Constraint.Id,
-                compact ? item.Constraint.Content : $"- [{item.PriorityLabel} | {item.Constraint.Level}] {item.Constraint.Content}"));
+                compact ? item.Constraint.Content : $"- [{item.PriorityLabel} | {item.Constraint.Level}] {item.Constraint.Content}",
+                sourceRefs,
+                new[] { item.Constraint.Id }));
         }
         return segments;
     }
@@ -94,9 +104,13 @@ internal static class PackageSectionFormatter
         var segments = new List<CandidateSegment>(items.Count);
         foreach (var item in items)
         {
+            // P0-6.2: 携带候选级 SourceRefs/ItemRefs
+            var sourceRefs = item.SourceRefs.Count > 0 ? item.SourceRefs.ToArray() : new[] { item.Id };
             segments.Add(new CandidateSegment(
                 item.Id,
-                compact ? item.Content : $"## {item.Type} / {item.Layer} / {item.Status}{Environment.NewLine}{item.Content}"));
+                compact ? item.Content : $"## {item.Type} / {item.Layer} / {item.Status}{Environment.NewLine}{item.Content}",
+                sourceRefs,
+                new[] { item.Id }));
         }
         return segments;
     }
@@ -106,9 +120,13 @@ internal static class PackageSectionFormatter
         var segments = new List<CandidateSegment>(items.Count);
         foreach (var item in items)
         {
+            // P0-6.2: 携带候选级 SourceRefs/ItemRefs
+            var sourceRefs = item.SourceRefs.Count > 0 ? item.SourceRefs.ToArray() : new[] { item.Id };
             segments.Add(new CandidateSegment(
                 item.Id,
-                $"## {item.Type} / {item.Scope}{Environment.NewLine}{item.Content}"));
+                $"## {item.Type} / {item.Scope}{Environment.NewLine}{item.Content}",
+                sourceRefs,
+                new[] { item.Id }));
         }
         return segments;
     }
@@ -118,9 +136,12 @@ internal static class PackageSectionFormatter
         var segments = new List<CandidateSegment>(items.Count);
         foreach (var item in items)
         {
+            // P0-6.2: 携带候选级 SourceRefs/ItemRefs
             segments.Add(new CandidateSegment(
                 item.Id,
-                $"## {(string.IsNullOrWhiteSpace(item.Title) ? item.Id : item.Title)} / {item.Type}{Environment.NewLine}{item.Content}"));
+                $"## {(string.IsNullOrWhiteSpace(item.Title) ? item.Id : item.Title)} / {item.Type}{Environment.NewLine}{item.Content}",
+                ContextItemRefResolver.ResolveSourceRefs(item),
+                ContextItemRefResolver.ResolveItemRefs(item)));
         }
         return segments;
     }
@@ -132,9 +153,13 @@ internal static class PackageSectionFormatter
         var segments = new List<CandidateSegment>(items.Count);
         foreach (var item in items)
         {
+            // P0-6.2: 携带候选级 SourceRefs/ItemRefs
+            var sourceRefs = item.SourceRefs.Count > 0 ? item.SourceRefs.ToArray() : new[] { item.SourceItemId };
             segments.Add(new CandidateSegment(
                 item.SourceItemId,
-                compact ? item.Content : $"## {item.SourceItemId} / relevance {item.Relevance:0.00} / recency {item.RecencyWeight:0.00}{Environment.NewLine}{item.Content}"));
+                compact ? item.Content : $"## {item.SourceItemId} / relevance {item.Relevance:0.00} / recency {item.RecencyWeight:0.00}{Environment.NewLine}{item.Content}",
+                sourceRefs,
+                new[] { item.SourceItemId }));
         }
         return segments;
     }

@@ -3,6 +3,12 @@ namespace ContextCore.Storage.FileSystem;
 /// <summary>
 /// 文件系统存储的配置选项。
 /// </summary>
+/// <remarks>
+/// P0-9.4：FileSystem 后端定位为 Alpha / 本地开发后端。
+/// 跨文件一致性（raw content + metadata 双文件）依赖进程内串行写入，无跨进程事务保证；
+/// 进程崩溃可能留下 orphan raw 或 metadata 指向不存在的 raw。
+/// 正式多实例 / 生产部署应使用 Postgres 后端（<c>ContextCore.Storage.Postgres</c>）。
+/// </remarks>
 public sealed class FileStorageOptions
 {
 	/// <summary>配置系统中统一的存储根目录键名。</summary>

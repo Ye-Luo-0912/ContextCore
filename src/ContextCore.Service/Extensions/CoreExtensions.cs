@@ -243,6 +243,9 @@ internal static class CoreExtensions
 			TokenizerResolver = sp.GetRequiredService<IContextTokenizerResolver>(),
 			PromotionRecordStore = sp.GetRequiredService<IPromotionRecordStore>(),
 			WorkingMemoryService = sp.GetRequiredService<IWorkingMemoryService>(),
+			// P0-10.4: 注入 DI singleton RelationTypeRegistry，保证 Runtime 主链与
+			// RelationReviewService / RelationGraphValidationService 共用同一份 taxonomy。
+			RelationTypeRegistry = sp.GetRequiredService<RelationTypeRegistry>(),
 			PackageBuildTraceStore = sp.GetService<IContextPackageBuildTraceStore>(),
 			DecisionTraceStore = sp.GetService<IDecisionTraceStore>(),
 			RuntimeCandidateTraceSink = sp.GetService<IRuntimeCandidateTraceSink>(),

@@ -42,8 +42,9 @@ public sealed class LegacyCharacterTokenizer : IContextTokenizer
             return new TokenTruncationResult { TruncatedContent = content, TokenCount = totalTokens, WasTruncated = false };
         }
 
-        // token = Math.Max(1, (length+1)/2) → max_length = tokenBudget * 2 - 1
-        var maxLength = tokenBudget * 2 - 1;
+        // token = Math.Max(1, (length+1)/2) → max_length = tokenBudget * 2
+        // (floor((length+1)/2) <= B ⟺ length <= 2B；2B 仍在预算内，原 *2-1 系统性少保留 1 字符)
+        var maxLength = tokenBudget * 2;
         if (maxLength <= 0)
         {
             return new TokenTruncationResult { TruncatedContent = string.Empty, TokenCount = 0, WasTruncated = true };
@@ -174,6 +175,10 @@ public sealed class UnicodeAwareContextTokenizer : IContextTokenizer
                     goto done;
                 }
                 latinRunLength = 0;
+                // R12.4A #3: latin run 已成功 flush 并计入 count，safeLength 必须推进到 latin run 末尾。
+                // 否则若后续非 ASCII rune 超预算 goto done，truncated 内容会遗漏已计 token 的 latin run，
+                // 导致本应保留的 Latin 文本被系统性丢弃（如 "abc世" budget=1 应保留 "abc" 而非返回空串）。
+                safeLength = charIndex;
             }
 
             if (count + 1 > tokenBudget) goto done;
@@ -230,8 +235,9 @@ public sealed class UnicodeAwareContextTokenizer : IContextTokenizer
             partialTokens = currentCount;
             return runStart; // 不保留任何 latin 字符
         }
-        // (n + 3) / 4 <= remaining → n <= remaining * 4 - 3
-        var maxLatin = remaining * 4 - 3;
+        // (n + 3) / 4 <= remaining → n <= remaining * 4
+        // (floor((n+3)/4) <= remaining ⟺ n <= 4*remaining；原 *4-3 每个 Latin run 系统性少保留 3 字符)
+        var maxLatin = remaining * 4;
         if (maxLatin <= 0)
         {
             partialTokens = currentCount;

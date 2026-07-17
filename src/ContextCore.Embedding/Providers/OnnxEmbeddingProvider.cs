@@ -47,11 +47,12 @@ public sealed class OnnxEmbeddingProvider : IEmbeddingProvider, IAsyncDisposable
             ? _options.ModelName
             : request.ModelName!;
 
-        // Query 输入：当配置了 QueryInstruction 时，将指令前缀拼接到每个查询文本
-        var instruction = request.InputKind == EmbeddingInputKind.Query
+        // P0-7.6: instruction 拼接由 EmbeddingTextComposer 统一负责，避免 Retrieval 层与 Provider 双重拼接。
+        // 优先级：per-input Instruction（调用方传入）> options.QueryInstruction（Provider 自身配置）。
+        // 非_query 输入不附加 options.QueryInstruction（保持旧行为），但仍尊重 per-input Instruction。
+        var fallbackInstruction = request.InputKind == EmbeddingInputKind.Query
             ? _options.QueryInstruction
             : string.Empty;
-        var hasInstruction = !string.IsNullOrEmpty(instruction);
 
         var vectors = new List<EmbeddingVector>(request.Inputs.Count);
         var misses = new List<(EmbeddingInput Original, string EffectiveText)>();
@@ -73,10 +74,13 @@ public sealed class OnnxEmbeddingProvider : IEmbeddingProvider, IAsyncDisposable
         {
             foreach (var input in request.Inputs)
             {
-                var effectiveText = hasInstruction ? instruction + input.Text : input.Text;
+                // P0-7.6: per-input Instruction 优先，缺省回退到 options.QueryInstruction
+                var instruction = !string.IsNullOrEmpty(input.Instruction)
+                    ? input.Instruction
+                    : fallbackInstruction;
+                var effectiveText = EmbeddingTextComposer.Compose(instruction, input.Text);
                 // contentHash 包含 effectiveText（含 instruction），确保缓存与实际 embedding 一致
-                var hashText = hasInstruction ? effectiveText : input.Text;
-                var contentHash = EmbeddingContentHasher.HashText(hashText, request.InputKind, modelName);
+                var contentHash = EmbeddingContentHasher.HashText(effectiveText, request.InputKind, modelName);
                 if (_options.EnableContentHashCache
                     && _cache.TryGet(modelName, contentHash, out var cached))
                 {

@@ -154,13 +154,43 @@ public sealed class FileSystemWriter
         IReadOnlyList<string> lines,
         CancellationToken cancellationToken)
     {
-        var text = string.Join(Environment.NewLine, lines);
-        if (lines.Count > 0)
-        {
-            text += Environment.NewLine;
-        }
+        // P0-9.2: 流式逐行写入临时文件，避免 string.Join 产生的大字符串分配。
+        // 旧实现使用 string.Join(Environment.NewLine, lines) 拼接全量文本后再 WriteAllTextAsync，
+        // 大文件写入时同时持有行数组、拼接后的完整字符串和 UTF-8 编码缓冲。
+        // 新实现直接打开临时文件逐行写入，然后 atomic replace。
+        EnsureDirectory(path);
+        CleanupStaleTempFiles(path);
 
-        await WriteAllTextAtomicUnlockedAsync(path, text, cancellationToken).ConfigureAwait(false);
+        var tempPath = CreateTempPath(path);
+        try
+        {
+            await using (var stream = new FileStream(
+                tempPath,
+                FileMode.Create,
+                FileAccess.Write,
+                FileShare.None,
+                bufferSize: 4096,
+                FileOptions.Asynchronous))
+            await using (var writer = new StreamWriter(stream, Utf8NoBom))
+            {
+                foreach (var line in lines)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    await writer.WriteLineAsync(line.AsMemory(), cancellationToken).ConfigureAwait(false);
+                }
+
+                await writer.FlushAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            ReplaceWithTemp(path, tempPath);
+        }
+        finally
+        {
+            if (File.Exists(tempPath))
+            {
+                File.Delete(tempPath);
+            }
+        }
     }
 
     private static async Task WriteAllTextAtomicUnlockedAsync(

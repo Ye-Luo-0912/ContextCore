@@ -235,7 +235,8 @@ public sealed class ContextPackageUncertainty
 
     public IReadOnlyList<string> ItemRefs { get; init; } = Array.Empty<string>();
 
-    public Dictionary<string, string> Metadata { get; init; } = new();
+    // P0-5.4: Metadata 改为 IReadOnlyDictionary，编译期阻止调用方通过索引器修改（缓存模板隔离）。
+    public IReadOnlyDictionary<string, string> Metadata { get; init; } = new Dictionary<string, string>();
 }
 
 /// <summary>上下文包的整体预算报告。</summary>
@@ -285,7 +286,8 @@ public sealed class ContextPackageDecision
 
     public IReadOnlyList<string> SourceRefs { get; init; } = Array.Empty<string>();
 
-    public Dictionary<string, string> Metadata { get; init; } = new();
+    // P0-5.4: Metadata 改为 IReadOnlyDictionary，编译期阻止调用方通过索引器修改（缓存模板隔离）。
+    public IReadOnlyDictionary<string, string> Metadata { get; init; } = new Dictionary<string, string>();
 
     /// <summary>详细评分明细（13 个子分维度），可用于 PackageBuildTrace 可观测输出。Working Memory 项会填充此字段。</summary>
     public ItemScoreBreakdown? ScoreBreakdown { get; init; }
@@ -328,7 +330,8 @@ public sealed class DroppedContextItem
 
     public IReadOnlyList<string> SourceRefs { get; init; } = Array.Empty<string>();
 
-    public Dictionary<string, string> Metadata { get; init; } = new();
+    // P0-5.4: Metadata 改为 IReadOnlyDictionary，编译期阻止调用方通过索引器修改（缓存模板隔离）。
+    public IReadOnlyDictionary<string, string> Metadata { get; init; } = new Dictionary<string, string>();
 }
 
 /// <summary>上下文包中的一个有序内容段。</summary>

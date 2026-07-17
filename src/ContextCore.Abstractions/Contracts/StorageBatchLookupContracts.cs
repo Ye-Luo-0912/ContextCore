@@ -10,6 +10,7 @@ namespace ContextCore.Abstractions;
 public interface IContextStoreBatchLookup
 {
     /// <summary>按 ID 批量获取上下文条目。只返回找到的条目。</summary>
+    [StoreOperation(StoreOperationKind.Read)]
     Task<IReadOnlyList<ContextItem>> BatchGetAsync(
         string workspaceId,
         string collectionId,
@@ -25,6 +26,7 @@ public interface IContextStoreBatchLookup
 public interface IMemoryStoreBatchLookup
 {
     /// <summary>按 ID 批量获取记忆条目。只返回找到的条目。</summary>
+    [StoreOperation(StoreOperationKind.Read)]
     Task<IReadOnlyList<ContextMemoryItem>> BatchGetAsync(
         string workspaceId,
         string collectionId,

@@ -14,6 +14,8 @@ F:ContextCore.Abstractions.ContextEventLevel.Error
 F:ContextCore.Abstractions.ContextEventLevel.Information
 F:ContextCore.Abstractions.ContextEventLevel.Trace
 F:ContextCore.Abstractions.ContextEventLevel.Warning
+F:ContextCore.Abstractions.ContextEventSinkKind.BestEffort
+F:ContextCore.Abstractions.ContextEventSinkKind.Required
 F:ContextCore.Abstractions.ContextJobKind.Compression
 F:ContextCore.Abstractions.ContextJobKind.Custom
 F:ContextCore.Abstractions.ContextJobKind.Embedding
@@ -606,6 +608,8 @@ F:ContextCore.Abstractions.Models.VectorQueryTargetSections.WorkingContext
 F:ContextCore.Abstractions.RelationDirection.Both
 F:ContextCore.Abstractions.RelationDirection.Incoming
 F:ContextCore.Abstractions.RelationDirection.Outgoing
+F:ContextCore.Abstractions.StoreOperationKind.Read
+F:ContextCore.Abstractions.StoreOperationKind.Write
 M:ContextCore.Abstractions.CacheInvalidationKey.#ctor(System.String, System.String, System.String, System.String)
 M:ContextCore.Abstractions.CacheInvalidationKey.Deconstruct(out System.String, out System.String, out System.String, out System.String)
 M:ContextCore.Abstractions.CacheInvalidationKey.Equals(ContextCore.Abstractions.CacheInvalidationKey)
@@ -2876,6 +2880,13 @@ M:ContextCore.Abstractions.StateCacheKey.GetHashCode()
 M:ContextCore.Abstractions.StateCacheKey.GetType()
 M:ContextCore.Abstractions.StateCacheKey.ToString()
 M:ContextCore.Abstractions.StateCacheKey.static From(System.String)
+M:ContextCore.Abstractions.StoreOperationAttribute.#ctor(ContextCore.Abstractions.StoreOperationKind)
+M:ContextCore.Abstractions.StoreOperationAttribute.Equals(System.Object)
+M:ContextCore.Abstractions.StoreOperationAttribute.GetHashCode()
+M:ContextCore.Abstractions.StoreOperationAttribute.GetType()
+M:ContextCore.Abstractions.StoreOperationAttribute.IsDefaultAttribute()
+M:ContextCore.Abstractions.StoreOperationAttribute.Match(System.Object)
+M:ContextCore.Abstractions.StoreOperationAttribute.ToString()
 M:ContextCore.Abstractions.TokenTruncationResult.#ctor()
 M:ContextCore.Abstractions.TokenTruncationResult.Equals(System.Object)
 M:ContextCore.Abstractions.TokenTruncationResult.GetHashCode()
@@ -2935,6 +2946,7 @@ P:ContextCore.Abstractions.ContextValidationResult.Issues (get|init)
 P:ContextCore.Abstractions.ContextValidationResult.Succeeded (get|init)
 P:ContextCore.Abstractions.DependencyScopeSet.Count (get)
 P:ContextCore.Abstractions.DependencyScopeSet.Scopes (get)
+P:ContextCore.Abstractions.IContextEventSink.Kind (get)
 P:ContextCore.Abstractions.IContextJobProcessor.Kind (get)
 P:ContextCore.Abstractions.IContextPathResolver.RootPath (get)
 P:ContextCore.Abstractions.IContextRetrievalAdapter.Name (get)
@@ -4270,6 +4282,7 @@ P:ContextCore.Abstractions.Models.EmbeddingGeneratorResult.EmbeddingProvider (ge
 P:ContextCore.Abstractions.Models.EmbeddingGeneratorResult.Entries (get|init)
 P:ContextCore.Abstractions.Models.EmbeddingGeneratorResult.OperationId (get|init)
 P:ContextCore.Abstractions.Models.EmbeddingInput.Id (get|init)
+P:ContextCore.Abstractions.Models.EmbeddingInput.Instruction (get|init)
 P:ContextCore.Abstractions.Models.EmbeddingInput.Metadata (get|init)
 P:ContextCore.Abstractions.Models.EmbeddingInput.SourceRef (get|init)
 P:ContextCore.Abstractions.Models.EmbeddingInput.Tags (get|init)
@@ -6603,6 +6616,8 @@ P:ContextCore.Abstractions.RetrievalAdapterResult.Applied (get|init)
 P:ContextCore.Abstractions.RetrievalAdapterResult.RemovedCandidateIds (get|init)
 P:ContextCore.Abstractions.RetrievalAdapterResult.TracePath (get|init)
 P:ContextCore.Abstractions.StateCacheKey.Value (get|init)
+P:ContextCore.Abstractions.StoreOperationAttribute.Kind (get)
+P:ContextCore.Abstractions.StoreOperationAttribute.TypeId (get)
 P:ContextCore.Abstractions.TokenTruncationResult.TokenCount (get|init)
 P:ContextCore.Abstractions.TokenTruncationResult.TruncatedContent (get|init)
 P:ContextCore.Abstractions.TokenTruncationResult.WasTruncated (get|init)
@@ -6612,6 +6627,7 @@ P:ContextCore.Abstractions.VersionScope.WorkspaceId (get|init)
 T:ContextCore.Abstractions.CacheInvalidationKey (Struct)
 T:ContextCore.Abstractions.ContextCoreDiagnostics
 T:ContextCore.Abstractions.ContextEventLevel (Enum)
+T:ContextCore.Abstractions.ContextEventSinkKind (Enum)
 T:ContextCore.Abstractions.ContextJob
 T:ContextCore.Abstractions.ContextJobKind (Enum)
 T:ContextCore.Abstractions.ContextJobQuery
@@ -7128,5 +7144,7 @@ T:ContextCore.Abstractions.RelationDirection (Enum)
 T:ContextCore.Abstractions.RetrievalAdapterRequest
 T:ContextCore.Abstractions.RetrievalAdapterResult
 T:ContextCore.Abstractions.StateCacheKey (Struct)
+T:ContextCore.Abstractions.StoreOperationAttribute
+T:ContextCore.Abstractions.StoreOperationKind (Enum)
 T:ContextCore.Abstractions.TokenTruncationResult
 T:ContextCore.Abstractions.VersionScope (Struct)

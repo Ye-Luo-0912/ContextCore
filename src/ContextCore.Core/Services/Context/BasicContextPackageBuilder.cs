@@ -136,7 +136,8 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         // trace 写入仅在缓存 miss 时触发（factory 内部），缓存命中无需重复记录。
         if (_cacheAccessor is not null)
         {
-            var cacheKey = StateCacheKey.From($"pkg:{options.WorkspaceId}:{options.CollectionId}:{PackageRequestFingerprintBuilder.Build(request, policy)}");
+            // P0-5.6: 使用 SHA-256 哈希指纹作为缓存 key（固定 64 字符），避免明文查询/metadata 驻留与超长 key。
+            var cacheKey = StateCacheKey.From($"pkg:{options.WorkspaceId}:{options.CollectionId}:{PackageRequestFingerprintBuilder.BuildHashed(request, policy)}");
             var scopes = PackageRequestFingerprintBuilder.BuildDependencyScopes(options.WorkspaceId, options.CollectionId ?? string.Empty);
             var template = await _cacheAccessor.GetOrAddAsync<PackageTemplate>(
                 cacheKey, scopes,

@@ -224,14 +224,6 @@ public sealed partial class ContextCoreClient
         return await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<TResponse?> GetOptionalAsync<TResponse>(string path, CancellationToken cancellationToken)
-    {
-        using var response = await _http.GetAsync(path, cancellationToken).ConfigureAwait(false);
-        await EnsureSuccessOrThrowAsync(response, cancellationToken).ConfigureAwait(false);
-        var result = await response.Content.ReadFromJsonAsync<TResponse>(cancellationToken).ConfigureAwait(false);
-        return result ?? throw new InvalidOperationException($"ContextCore returned an empty response for GET {path}.");
-    }
-
     private async Task<TResponse> PostRequiredAsync<TRequest, TResponse>(string path, TRequest request, CancellationToken cancellationToken)
     {
         using var response = await _http.PostAsJsonAsync(path, request, cancellationToken).ConfigureAwait(false);

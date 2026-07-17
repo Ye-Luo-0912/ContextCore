@@ -10,6 +10,15 @@ namespace ContextCore.Core;
 /// </summary>
 internal sealed class SectionAssembler
 {
+    /// <summary>
+    /// R12.4A #4: section 内 block/segment 之间的固定分隔符。
+    /// 必须与 <see cref="_estimateTokens"/> 调用使用的字符串完全一致，
+    /// 否则 <c>separatorTokens</c> 估算与实际追加的字符数不匹配，
+    /// 导致 Windows 上 <c>AppendLine()</c> 追加 "\r\n\r\n"（4 字符）而估算仍按 "\n\n"（2 字符），
+    /// 进而触发非预期安全兜底截断并破坏 attribution 字符边界（跨平台不确定）。
+    /// </summary>
+    private const string SectionSeparator = "\n\n";
+
     private readonly Func<string?, TokenEstimationContext, int> _estimateTokens;
     private readonly Func<string, int, TokenEstimationContext, string> _truncateForTokenBudget;
 
@@ -91,7 +100,7 @@ internal sealed class SectionAssembler
         var approxTokens = 0;
         var truncated = false;
         var hasContent = false;
-        var separatorTokens = _estimateTokens("\n\n", tokenContext);
+        var separatorTokens = _estimateTokens(SectionSeparator, tokenContext);
 
         foreach (var block in contentBlocks)
         {
@@ -114,8 +123,7 @@ internal sealed class SectionAssembler
                     {
                         if (hasContent)
                         {
-                            builder.AppendLine();
-                            builder.AppendLine();
+                            builder.Append(SectionSeparator);
                         }
                         builder.Append(trimmed);
                         truncated = true;
@@ -127,8 +135,7 @@ internal sealed class SectionAssembler
 
             if (hasContent)
             {
-                builder.AppendLine();
-                builder.AppendLine();
+                builder.Append(SectionSeparator);
             }
             builder.Append(block);
             approxTokens += withSeparator;
@@ -199,6 +206,9 @@ internal sealed class SectionAssembler
     /// 按 segment 边界截断，直接得到精确的 AcceptedCandidateIds /
     /// PartiallyAcceptedCandidateId / RejectedCandidateIds，无需 AddSectionDecisionsWithDedup 中的启发式猜测。
     /// 当 segments 为空时使用 fallbackContent（如"所有X已在此前去重包含"），此时无候选级归属。
+    /// P0-6.1: 安全兜底截断后根据实际字符串边界重新计算 accepted/partial/rejected attribution。
+    /// P0-6.2: Section SourceRefs/ItemRefs 只从 accepted + partially accepted segments 聚合，
+    /// 被拒绝候选的 refs 不再写入 section。
     /// </summary>
     internal SectionPackingResult AddSectionFromSegments(
         ICollection<ContextPackageSection> sections,
@@ -230,11 +240,13 @@ internal sealed class SectionAssembler
         var approxTokens = 0;
         var truncated = false;
         var hasContent = false;
-        var separatorTokens = _estimateTokens("\n\n", tokenContext);
+        var separatorTokens = _estimateTokens(SectionSeparator, tokenContext);
 
         var acceptedIds = new List<string>();
         var rejectedIds = new List<string>();
         string? partiallyAcceptedId = null;
+        // P0-6.1: 跟踪已接受 segment 的字符边界，供安全兜底截断后重算 attribution
+        var acceptedSegments = new List<(CandidateSegment Segment, int Start, int End)>();
 
         if (segments.Count == 0)
         {
@@ -279,13 +291,15 @@ internal sealed class SectionAssembler
                     // 完整保留此 segment
                     if (hasContent)
                     {
-                        builder.AppendLine();
-                        builder.AppendLine();
+                        builder.Append(SectionSeparator);
                     }
+                    var start = builder.Length;
                     builder.Append(segment.FormattedText);
+                    var end = builder.Length;
                     approxTokens += withSeparator;
                     hasContent = true;
                     acceptedIds.Add(segment.CandidateId);
+                    acceptedSegments.Add((segment, start, end));
                 }
                 else
                 {
@@ -298,13 +312,15 @@ internal sealed class SectionAssembler
                         {
                             if (hasContent)
                             {
-                                builder.AppendLine();
-                                builder.AppendLine();
+                                builder.Append(SectionSeparator);
                             }
+                            var start = builder.Length;
                             builder.Append(trimmed);
+                            var end = builder.Length;
                             truncated = true;
                             hasContent = true;
                             partiallyAcceptedId = segment.CandidateId;
+                            acceptedSegments.Add((segment, start, end));
                         }
                     }
 
@@ -330,6 +346,7 @@ internal sealed class SectionAssembler
         var sectionTokens = _estimateTokens(sectionContent, tokenContext);
 
         // 安全兜底：若近似值偏差导致仍超预算，对完整内容做一次裁剪
+        var safetyTrimOccurred = false;
         if (sectionTokens > remainingBudget)
         {
             sectionContent = TrimToTokenBudget(sectionContent, remainingBudget, tokenContext);
@@ -339,9 +356,94 @@ internal sealed class SectionAssembler
             }
             sectionTokens = _estimateTokens(sectionContent, tokenContext);
             truncated = true;
+            safetyTrimOccurred = true;
         }
 
-        foreach (var sourceRef in sectionSourceRefs)
+        // P0-6.1: 安全兜底截断后根据实际字符串边界重新计算 attribution。
+        // 安全截断可能切掉已接受 segment 的尾部，需将其降级为 partially accepted，
+        // 其后的已接受 segment 移入 rejected。
+        if (safetyTrimOccurred && acceptedSegments.Count > 0)
+        {
+            var contentLength = sectionContent.Length;
+            var newAcceptedIds = new List<string>();
+            var newAcceptedSegments = new List<(CandidateSegment Segment, int Start, int End)>();
+            string? newPartialId = null;
+            var buildPhasePartialId = partiallyAcceptedId;
+
+            for (int idx = 0; idx < acceptedSegments.Count; idx++)
+            {
+                var (seg, start, end) = acceptedSegments[idx];
+                var wasBuildPhasePartial = string.Equals(seg.CandidateId, buildPhasePartialId, StringComparison.Ordinal);
+
+                if (end <= contentLength)
+                {
+                    if (wasBuildPhasePartial)
+                    {
+                        // 构建阶段 partial 完整保留：仍是 partial（其文本在构建阶段已被截断）
+                        newPartialId = seg.CandidateId;
+                        newAcceptedSegments.Add((seg, start, end));
+                    }
+                    else
+                    {
+                        // 常规 accepted 完整保留
+                        newAcceptedIds.Add(seg.CandidateId);
+                        newAcceptedSegments.Add((seg, start, end));
+                    }
+                }
+                else if (start < contentLength)
+                {
+                    // 部分保留：尾部被安全截断切掉，降级为 partial
+                    newPartialId = seg.CandidateId;
+                    newAcceptedSegments.Add((seg, start, end));
+                    // 后续 segment 全部拒绝
+                    for (int j = idx + 1; j < acceptedSegments.Count; j++)
+                    {
+                        rejectedIds.Add(acceptedSegments[j].Segment.CandidateId);
+                    }
+                    break;
+                }
+                else
+                {
+                    // 完全被切掉：移入 rejected
+                    rejectedIds.Add(seg.CandidateId);
+                }
+            }
+
+            // 确保新的 partial 不在 rejected 列表中
+            if (newPartialId is not null)
+            {
+                rejectedIds.RemoveAll(id => string.Equals(id, newPartialId, StringComparison.Ordinal));
+            }
+
+            acceptedIds = newAcceptedIds;
+            acceptedSegments = newAcceptedSegments;
+            partiallyAcceptedId = newPartialId;
+        }
+
+        // P0-6.2: Section SourceRefs/ItemRefs 只从 accepted + partially accepted segments 聚合。
+        // 当 segments 为空（fallback 内容）时，使用传入的 section 级 refs。
+        IReadOnlyList<string> effectiveSourceRefs;
+        IReadOnlyList<string> effectiveItemRefs;
+        if (segments.Count > 0 && acceptedSegments.Count > 0)
+        {
+            effectiveSourceRefs = acceptedSegments
+                .SelectMany(s => s.Segment.SourceRefs)
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            effectiveItemRefs = acceptedSegments
+                .SelectMany(s => s.Segment.ItemRefs)
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
+        else
+        {
+            effectiveSourceRefs = sectionSourceRefs;
+            effectiveItemRefs = sectionItemRefs;
+        }
+
+        foreach (var sourceRef in effectiveSourceRefs)
         {
             packageSourceRefs.Add(sourceRef);
         }
@@ -352,8 +454,8 @@ internal sealed class SectionAssembler
             Priority = priority,
             Content = sectionContent,
             ContentFormat = contentFormat,
-            SourceRefs = sectionSourceRefs,
-            ItemRefs = sectionItemRefs
+            SourceRefs = effectiveSourceRefs,
+            ItemRefs = effectiveItemRefs
                 .Where(value => !string.IsNullOrWhiteSpace(value))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToArray(),
@@ -362,13 +464,40 @@ internal sealed class SectionAssembler
 
         estimatedTokens += sectionTokens;
 
+        // P0-6.3: 计算 PartiallyAccepted 候选实际保留进 section 输出的 token 数。
+        // 使用最终（安全截断后）的 sectionContent 与 acceptedSegments 的字符边界：
+        // retainedLength = min(end, contentLength) - start，对保留子串重新估算 token。
+        // Accepted 候选 IncludedTokens = 其 OriginalTokens（由 PackageTraceRecorder 处理），
+        // 此处只关心 PartiallyAccepted 的精确保留量。
+        var partiallyAcceptedIncludedTokens = 0;
+        if (!string.IsNullOrEmpty(partiallyAcceptedId) && acceptedSegments.Count > 0)
+        {
+            var finalContentLength = sectionContent.Length;
+            for (int i = 0; i < acceptedSegments.Count; i++)
+            {
+                var (seg, start, end) = acceptedSegments[i];
+                if (!string.Equals(seg.CandidateId, partiallyAcceptedId, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+                var retainedLength = Math.Max(0, Math.Min(end, finalContentLength) - start);
+                if (retainedLength > 0)
+                {
+                    var retainedSubstring = sectionContent.Substring(start, retainedLength);
+                    partiallyAcceptedIncludedTokens = _estimateTokens(retainedSubstring, tokenContext);
+                }
+                break;
+            }
+        }
+
         return SectionPackingResult.Selected(
             truncated ? "selected and truncated to fit token budget" : "selected for package section",
             sectionTokens,
             truncated,
             acceptedIds,
             rejectedIds,
-            partiallyAcceptedId);
+            partiallyAcceptedId,
+            partiallyAcceptedIncludedTokens);
     }
 
     /// <summary>

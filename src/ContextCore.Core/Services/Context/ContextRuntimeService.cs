@@ -19,7 +19,6 @@ public sealed class ContextRuntimeService : IContextRuntimeService
     private readonly IContextValidationService _validationService;
 
     public ContextRuntimeService(
-        IContextStore contextStore,
         IMemoryStore memoryStore,
         IMemoryPromotionService promotionService,
         IContextPackageBuilder packageBuilder,
@@ -27,6 +26,7 @@ public sealed class ContextRuntimeService : IContextRuntimeService
         IContextValidationService? validationService = null,
         IContextEventSink? eventSink = null)
     {
+        // P0-10.3: 移除未使用的 IContextStore contextStore 参数（旧组合遗留，无字段保存也无引用）。
         _inputIngestionService = inputIngestionService;
         _memoryStore = memoryStore;
         _promotionService = promotionService;
@@ -228,7 +228,9 @@ public sealed class ContextRuntimeService : IContextRuntimeService
             collectionId);
 
         // 运行时统一包裹业务操作，确保成功/失败都能落一条结构化事件供 ControlRoom 和日志查看。
-        await EmitAsync(
+        // 三类生命周期事件（started/succeeded/failed）本质属于运行遥测，按 fail-open 处理：
+        // sink 失败不应阻断正式业务，也不应遮蔽业务原始异常。
+        await EmitBestEffortAsync(
             operationId,
             operationName,
             workspaceId,
@@ -248,7 +250,7 @@ public sealed class ContextRuntimeService : IContextRuntimeService
             stopwatch.Stop();
 
             ContextCoreDiagnostics.SetStatus(activity, succeeded: true);
-            await EmitAsync(
+            await EmitBestEffortAsync(
                 operationId,
                 operationName,
                 workspaceId,
@@ -273,7 +275,9 @@ public sealed class ContextRuntimeService : IContextRuntimeService
             errorMetadata["exception"] = ex.GetType().Name;
 
             ContextCoreDiagnostics.SetStatus(activity, succeeded: false, ex.Message);
-            await EmitAsync(
+            // 错误事件使用 CancellationToken.None：原始请求可能已被取消，但仍需尽量落一条失败审计。
+            // 同时吞掉 sink 异常，避免遮蔽业务原始异常；此处已是错误路径，不应再衍生新异常。
+            await EmitBestEffortAsync(
                 operationId,
                 operationName,
                 workspaceId,
@@ -282,12 +286,53 @@ public sealed class ContextRuntimeService : IContextRuntimeService
                 ex.Message,
                 stopwatch.Elapsed,
                 errorMetadata,
-                cancellationToken,
+                CancellationToken.None,
                 entityType,
                 entityId,
                 operation).ConfigureAwait(false);
 
             throw;
+        }
+    }
+
+    /// <summary>
+    /// 以 fail-open 语义发送生命周期事件：吞掉 sink 抛出的任何异常（包括 Required sink 的 AggregateException）。
+    /// 生命周期事件（started/succeeded/failed）是运行遥测，不应阻断业务或遮蔽业务异常。
+    /// 需要 fail-closed 的审计操作应直接 await sink.EmitAsync，而非走此路径。
+    /// </summary>
+    private async Task EmitBestEffortAsync(
+        string operationId,
+        string operationName,
+        string workspaceId,
+        string? collectionId,
+        ContextEventLevel level,
+        string message,
+        TimeSpan? duration,
+        Dictionary<string, string>? metadata,
+        CancellationToken cancellationToken,
+        string? entityType = null,
+        string? entityId = null,
+        string? operation = null)
+    {
+        try
+        {
+            await EmitAsync(
+                operationId,
+                operationName,
+                workspaceId,
+                collectionId,
+                level,
+                message,
+                duration,
+                metadata,
+                cancellationToken,
+                entityType,
+                entityId,
+                operation).ConfigureAwait(false);
+        }
+        catch
+        {
+            // fail-open：运行遥测 sink 失败不应影响业务结果或业务异常传播。
         }
     }
 

@@ -75,11 +75,21 @@ public sealed class FileContextJobQueue : IContextJobQueue, IContextJobQueryStor
 
     public async Task AckAsync(string jobId, CancellationToken cancellationToken = default)
     {
-        await UpdateAsync(jobId, job => Copy(
-            job,
-            state: ContextJobState.Succeeded,
-            completedAt: DateTimeOffset.UtcNow,
-            clearErrorMessage: true), cancellationToken).ConfigureAwait(false);
+        await UpdateAsync(jobId, job =>
+        {
+            // R12.4A #6: CAS — 仅当 job 处于 Running 时才转换为 Succeeded。
+            // 过期的 Ack（job 已被前一次执行 Nack 为 WaitingRetry/Failed，或已被 Ack 为 Succeeded）是 no-op，
+            // 防止终态被还原或进行中的执行被干扰。
+            if (job.State != ContextJobState.Running)
+            {
+                return job;
+            }
+            return Copy(
+                job,
+                state: ContextJobState.Succeeded,
+                completedAt: DateTimeOffset.UtcNow,
+                clearErrorMessage: true);
+        }, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task NackAsync(
@@ -89,6 +99,13 @@ public sealed class FileContextJobQueue : IContextJobQueue, IContextJobQueryStor
     {
         await UpdateAsync(jobId, job =>
         {
+            // R12.4A #6: CAS — 仅当 job 处于 Running 时才转换为 WaitingRetry/Failed。
+            // 过期的 Nack（job 已被 Ack 为 Succeeded，或已被 Nack 为 WaitingRetry/Failed）是 no-op，
+            // 防止已成功的作业被还原为重试/失败状态。
+            if (job.State != ContextJobState.Running)
+            {
+                return job;
+            }
             var retryCount = job.RetryCount + 1;
             var state = retryCount <= job.MaxRetryCount
                 ? ContextJobState.WaitingRetry
@@ -172,16 +189,38 @@ public sealed class FileContextJobQueue : IContextJobQueue, IContextJobQueryStor
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var jobs = await ReadAllJobsAsync(cancellationToken).ConfigureAwait(false);
-            var match = jobs.FirstOrDefault(job =>
-                string.Equals(job.JobId, jobId, StringComparison.OrdinalIgnoreCase));
-
-            if (match is null)
+            // 定位阶段：扫描所有 jobs.jsonl 找到包含目标 jobId 的文件路径。
+            // 这是只读扫描，不需要持锁；即使定位期间文件被其他进程修改，
+            // 后续的 _jsonLines.UpdateAsync 会在单文件锁内重新读取最新状态。
+            var path = await LocateJobFileAsync(jobId, cancellationToken).ConfigureAwait(false);
+            if (path is null)
             {
                 return;
             }
 
-            await UpsertAsync(update(match), cancellationToken).ConfigureAwait(false);
+            // 原子更新阶段：在单个 FileLock lease 内完成完整 Read/Modify/Write。
+            // 即使另一个进程/线程同时在修改同一文件，文件锁会串行化，
+            // 第二次进入时会看到第一次的写入结果，不会互相覆盖。
+            await _jsonLines.UpdateAsync<ContextJob>(
+                path,
+                jobs =>
+                {
+                    var match = jobs.FirstOrDefault(job =>
+                        string.Equals(job.JobId, jobId, StringComparison.OrdinalIgnoreCase));
+                    if (match is null)
+                    {
+                        // 作业在此文件中不存在（可能已被其他进程移走或删除），原样返回不修改。
+                        return jobs;
+                    }
+
+                    var updated = update(match);
+                    return jobs
+                        .Where(job => !string.Equals(job.JobId, jobId, StringComparison.OrdinalIgnoreCase))
+                        .Append(updated)
+                        .OrderBy(job => job.JobId, StringComparer.OrdinalIgnoreCase)
+                        .ToArray();
+                },
+                cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -189,18 +228,29 @@ public sealed class FileContextJobQueue : IContextJobQueue, IContextJobQueryStor
         }
     }
 
-    private async Task UpsertAsync(ContextJob job, CancellationToken cancellationToken)
+    /// <summary>
+    /// 扫描所有 workspace 的 jobs.jsonl，返回包含指定 jobId 的文件路径。
+    /// 仅用于定位，不持锁；后续的原子更新由 _jsonLines.UpdateAsync 在单文件锁内完成。
+    /// </summary>
+    private async Task<string?> LocateJobFileAsync(string jobId, CancellationToken cancellationToken)
     {
-        var path = GetJobsPath(job.WorkspaceId, job.CollectionId);
-        var existing = await _jsonLines.ReadAsync<ContextJob>(path, cancellationToken)
-            .ConfigureAwait(false);
-        var updated = existing
-            .Where(value => !string.Equals(value.JobId, job.JobId, StringComparison.OrdinalIgnoreCase))
-            .Append(job)
-            .OrderBy(value => value.JobId, StringComparer.OrdinalIgnoreCase)
-            .ToArray();
+        var workspacesDirectory = Path.Combine(_paths.RootPath, "workspaces");
+        if (!Directory.Exists(workspacesDirectory))
+        {
+            return null;
+        }
 
-        await _jsonLines.WriteAsync(path, updated, cancellationToken).ConfigureAwait(false);
+        foreach (var jobFile in Directory.EnumerateFiles(workspacesDirectory, "jobs.jsonl", SearchOption.AllDirectories))
+        {
+            var jobs = await _jsonLines.ReadAsync<ContextJob>(jobFile, cancellationToken)
+                .ConfigureAwait(false);
+            if (jobs.Any(job => string.Equals(job.JobId, jobId, StringComparison.OrdinalIgnoreCase)))
+            {
+                return jobFile;
+            }
+        }
+
+        return null;
     }
 
     private async Task<IReadOnlyList<ContextJob>> ReadAllJobsAsync(CancellationToken cancellationToken)

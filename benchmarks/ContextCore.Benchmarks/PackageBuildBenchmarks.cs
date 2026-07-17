@@ -258,20 +258,16 @@ public class PackageBuildBenchmarks
         _ = result.Package.Sections.Count;
     }
 
-    // 并发变体：在同一个 builder 实例上模拟并发读，用于评估锁/争用开销（缓存前）。
+    // P0-11：并发变体直接使用 Task.WhenAll(Enumerable.Range(...).Select(...))，
+    // 避免 Task.Run 将 ThreadPool 调度成本混入业务测量。
     [Benchmark]
     public async Task BuildDetailed_Concurrent8()
     {
-        var tasks = new Task[8];
-        for (int i = 0; i < 8; i++)
+        await Task.WhenAll(Enumerable.Range(0, 8).Select(async _ =>
         {
-            tasks[i] = Task.Run(async () =>
-            {
-                var result = await _builder.BuildDetailedAsync(_request, CancellationToken.None);
-                _ = result.Package.Sections.Count;
-            });
-        }
-        await Task.WhenAll(tasks);
+            var result = await _builder.BuildDetailedAsync(_request, CancellationToken.None);
+            _ = result.Package.Sections.Count;
+        }));
     }
 
     // 缓存命中：GlobalSetup 已预热，基准体测量纯命中路径
@@ -283,25 +279,21 @@ public class PackageBuildBenchmarks
         _ = result.Package.Sections.Count;
     }
 
-    // 并发命中：8 路并发读同一热 key，全部命中缓存。用于暴露全局 LRU 锁争用。
+    // P0-11：并发命中直接使用 Task.WhenAll(Enumerable.Range(...).Select(...))，
+    // 避免 Task.Run 将 ThreadPool 调度成本混入业务测量。
     [Benchmark]
     public async Task BuildDetailed_CacheHit_Concurrent8()
     {
-        var tasks = new Task[8];
-        for (int i = 0; i < 8; i++)
+        await Task.WhenAll(Enumerable.Range(0, 8).Select(async _ =>
         {
-            tasks[i] = Task.Run(async () =>
-            {
-                var result = await _cachedBuilder.BuildDetailedAsync(_request, CancellationToken.None);
-                _ = result.Package.Sections.Count;
-            });
-        }
-        await Task.WhenAll(tasks);
+            var result = await _cachedBuilder.BuildDetailedAsync(_request, CancellationToken.None);
+            _ = result.Package.Sections.Count;
+        }));
     }
 }
 
 public class Program
 {
     public static void Main(string[] args)
-        => BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(args);
+        => BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(args, new BenchmarkOutputConfig());
 }

@@ -1286,6 +1286,76 @@ public sealed class ContextCorePackageBuilderA1Tests
             && item.Kind == "merged_constraint"));
     }
 
+    // R12.4A #2：Package 合并查询保持 per-level 配额。
+    // 旧实现用 Level=null + Take=N 单一查询：InMemoryConstraintStore 按 Hard 优先排序，
+    // 当 Hard 数量 >= Take 时 Soft 完全缺席 merged section。
+    // 新实现并行查询 Hard + Soft + All，各自独立 Take 预算，合并后按 ID 去重。
+    [TestMethod]
+    public async Task PackageBuilder_MergedConstraints_PreservesPerLevelQuotaWhenHardSaturates()
+    {
+        var constraintStore = new InMemoryConstraintStore();
+        var builder = new BasicContextPackageBuilder(
+            new InMemoryContextStore(),
+            constraintStore,
+            globalContextStore: null,
+            memoryStore: null,
+            relationStore: null);
+
+        // 12 个 Hard 约束（超过 constraintMergeMaxItems=10，旧实现会让 Soft 完全缺席）
+        for (var i = 0; i < 12; i++)
+        {
+            await constraintStore.SaveAsync(CreateConstraint(
+                $"hard-{i}",
+                ConstraintLevel.Hard,
+                $"硬约束 #{i}：项目级强制规则。"));
+        }
+
+        // 3 个 Soft 约束（在旧实现的 Level=null+Take=10 查询中会被 Hard 饱和压掉）
+        for (var i = 0; i < 3; i++)
+        {
+            await constraintStore.SaveAsync(CreateConstraint(
+                $"soft-{i}",
+                ConstraintLevel.Soft,
+                $"软约束 #{i}：风格与简洁性偏好。"));
+        }
+
+        var result = await builder.BuildDetailedAsync(new ContextPackageRequest
+        {
+            WorkspaceId = "workspace-test",
+            CollectionId = "collection-test",
+            TokenBudget = 4_000,
+            Policy = new ContextPackagePolicy
+            {
+                WorkspaceId = "workspace-test",
+                CollectionId = "collection-test",
+                TokenBudget = 4_000,
+                IncludeGlobalContext = false,
+                IncludeHardConstraints = false,
+                IncludeSoftConstraints = false,
+                IncludeWorkingMemory = false,
+                IncludeStableMemory = false,
+                IncludeRecentRawContext = false,
+                Metadata = new Dictionary<string, string>
+                {
+                    ["includeMergedConstraintsSection"] = "true",
+                    ["constraintMergeMaxItems"] = "10"
+                }
+            }
+        });
+
+        var section = result.Package.Sections.Single(s => s.Name == "constraints");
+
+        // 关键断言：Soft 约束必须出现在 merged section 中（旧实现会被 Hard 饱和压掉）。
+        StringAssert.Contains(section.Content, "软约束 #0", "Soft 约束应出现在 merged section（per-level 配额保护）");
+        StringAssert.Contains(section.Content, "软约束 #1", "Soft 约束应出现在 merged section（per-level 配额保护）");
+        StringAssert.Contains(section.Content, "软约束 #2", "Soft 约束应出现在 merged section（per-level 配额保护）");
+        // Hard 约束也应出现（per-level 独立查询，Hard Take=10 返回 10 个，All 查询去重后保留同样的 10 个）。
+        // 12 个 Hard 中有 2 个因 Take=10 被丢弃，但 Soft 不受 Hard 饱和影响——这正是 per-level 配额修复的核心。
+        var hardLineCount = System.Text.RegularExpressions.Regex.Count(section.Content, @"\[硬约束 \| Hard\]");
+        Assert.IsTrue(hardLineCount >= 10,
+            $"Hard 约束应出现在 merged section（至少 10 个，实际 {hardLineCount} 个）");
+    }
+
     [TestMethod]
     public async Task PackageBuilderPolicy_ShouldNotPersistOrVectorizeShortTermContextByDefault()
     {

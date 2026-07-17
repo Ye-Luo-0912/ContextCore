@@ -105,9 +105,10 @@ internal sealed class ResultProjector
             PackageId = Guid.NewGuid().ToString("N"),
             WorkspaceId = workspaceId,
             CollectionId = collectionId ?? string.Empty,
-            Sections = template.OrderedSections,
+            // P0-5.4: 防御性数组拷贝，避免调用方修改结果数组元素污染缓存的 PackageTemplate。
+            Sections = template.OrderedSections.ToArray(),
             EstimatedTokens = template.EstimatedTokens,
-            SourceRefs = template.SourceRefs,
+            SourceRefs = template.SourceRefs.ToArray(),
             Metadata = metadata,
             CreatedAt = now
         };
@@ -125,10 +126,11 @@ internal sealed class ResultProjector
         {
             BuildId = package.PackageId,
             Package = package,
-            SelectedItems = template.SortedSelectedItems,
-            ItemReferences = template.ItemReferences,
-            DroppedItems = template.DroppedItems,
-            Uncertainties = template.Uncertainties,
+            // P0-5.4: 防御性数组拷贝，避免调用方修改结果数组元素污染缓存的 PackageTemplate。
+            SelectedItems = template.SortedSelectedItems.ToArray(),
+            ItemReferences = template.ItemReferences.ToArray(),
+            DroppedItems = template.DroppedItems.ToArray(),
+            Uncertainties = template.Uncertainties.ToArray(),
             Budget = template.Budget,
             Output = template.Output,
             TokenBudget = tokenBudget == int.MaxValue ? 0 : tokenBudget,

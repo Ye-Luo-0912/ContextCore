@@ -2,9 +2,14 @@ namespace ContextCore.Storage.FileSystem;
 
 /// <summary>
 /// Trace store 共享的 QueryRecent 尾部读取辅助。
-/// 按文件 mtime 降序枚举，累积到 budget = take*2 条记录后停止读更多文件，
-/// 避免随历史分片总量线性恶化。最终排序由调用方完成。
+/// 按文件 mtime 降序枚举，从每个文件尾部反序列化（append-only 下最新记录在末尾），
+/// 累积到 budget = take*2 条记录后停止读更多文件，避免随历史分片总量线性恶化。
+/// 最终排序由调用方完成。
 /// </summary>
+/// <remarks>
+/// P0-9.1：旧实现调用 ReadAsync 全量反序列化每个分片文件，大历史文件开销随行数线性增长。
+/// 新实现调用 ReadTailAsync，每个文件只反序列化尾部剩余预算行数的记录，收集够后立即停止。
+/// </remarks>
 internal static class TraceQueryHelper
 {
     public static async Task<IReadOnlyList<T>> ReadRecentAsync<T>(
@@ -33,8 +38,13 @@ internal static class TraceQueryHelper
                 break;
             }
 
-            var records = await jsonLines.ReadAsync<T>(path, cancellationToken)
+            // P0-9.1：只反序列化文件尾部剩余预算行数的记录，不再全量反序列化。
+            // append-only 下最新记录在文件末尾，从尾部读取可在收集够后早停。
+            var remaining = budget - results.Count;
+            var records = await jsonLines.ReadTailAsync<T>(path, remaining, cancellationToken)
                 .ConfigureAwait(false);
+
+            // ReadTailAsync 返回最新在前（文件末尾 → 头部），直接追加保持 newest-first 顺序。
             foreach (var record in records)
             {
                 if (filter is not null && !filter(record))

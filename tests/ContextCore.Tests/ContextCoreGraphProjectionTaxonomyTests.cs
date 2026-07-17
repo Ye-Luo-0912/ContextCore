@@ -226,7 +226,8 @@ public sealed class ContextCoreGraphProjectionTaxonomyTests
         var contextStore = new InMemoryContextStore();
         var relationStore = new InMemoryRelationStore();
         var projector = new RelationProjector();
-        var service = new BasicContextIngestionService(contextStore, projector, relationStore);
+        // R12.4A #10: ingest 路径需要 writer 才会写入 relation（fallback 已删除）。
+        var service = new BasicContextIngestionService(contextStore, projector, relationStore, new RelationProjectionWriter(relationStore, Validator));
 
         // 第一次 ingest：refs = [B, C]
         await service.IngestAsync(CreateContextItem("item-a", refs: ["item-b", "item-c"]));
@@ -253,7 +254,8 @@ public sealed class ContextCoreGraphProjectionTaxonomyTests
         var contextStore = new InMemoryContextStore();
         var relationStore = new InMemoryRelationStore();
         var projector = new RelationProjector();
-        var service = new BasicContextIngestionService(contextStore, projector, relationStore);
+        // R12.4A #10: ingest 路径需要 writer 才会写入 relation（fallback 已删除）。
+        var service = new BasicContextIngestionService(contextStore, projector, relationStore, new RelationProjectionWriter(relationStore, Validator));
 
         await service.IngestAsync(CreateContextItem("item-x", refs: ["item-y", "item-z"]));
         Assert.AreEqual(2, (await relationStore.QueryAsync(new ContextRelationQuery { WorkspaceId = "workspace-test", CollectionId = "collection-test", SourceId = "item-x", Take = int.MaxValue })).Count);
@@ -272,7 +274,8 @@ public sealed class ContextCoreGraphProjectionTaxonomyTests
         var contextStore = new InMemoryContextStore();
         var relationStore = new InMemoryRelationStore();
         var projector = new RelationProjector();
-        var service = new BasicContextIngestionService(contextStore, projector, relationStore);
+        // R12.4A #10: ingest 路径需要 writer 才会写入 relation（fallback 已删除）。
+        var service = new BasicContextIngestionService(contextStore, projector, relationStore, new RelationProjectionWriter(relationStore, Validator));
 
         // 先 ingest 建立 related_to 边
         await service.IngestAsync(CreateContextItem("item-a", refs: ["item-b"]));
@@ -320,6 +323,41 @@ public sealed class ContextCoreGraphProjectionTaxonomyTests
             Take = int.MaxValue
         });
         Assert.AreEqual(1, derivedFrom.Count, "derived_from edge should not be affected by ingest reconcile");
+    }
+
+    // R12.4A #10: 验证 ingest 路径通过 IRelationProjectionWriter 写入 relation（验证被应用）。
+    /// <summary>
+    /// 注入 writer 后，ingest 写入的 related_to 边应携带 Provenance="ingest"，
+    /// 证明 relation 走的是 writer 边界（writer 负责填充 Provenance 并应用 validator）。
+    /// </summary>
+    [TestMethod]
+    public async Task Ingest_WithProjectionWriter_WritesValidatedRelations()
+    {
+        var contextStore = new InMemoryContextStore();
+        var relationStore = new InMemoryRelationStore();
+        var projector = new RelationProjector();
+        var service = new BasicContextIngestionService(
+            contextStore,
+            projector,
+            relationStore,
+            new RelationProjectionWriter(relationStore, Validator));
+
+        await service.IngestAsync(CreateContextItem("item-writer-1", refs: ["item-writer-2", "item-writer-3"]));
+
+        var relations = await relationStore.QueryAsync(new ContextRelationQuery
+        {
+            WorkspaceId = "workspace-test",
+            CollectionId = "collection-test",
+            SourceId = "item-writer-1",
+            RelationType = ContextRelationTypes.RelatedTo,
+            Take = int.MaxValue
+        });
+
+        Assert.AreEqual(2, relations.Count, "writer 应写入 2 条 related_to 边");
+        Assert.IsTrue(relations.All(r => string.Equals(r.Provenance, "ingest", StringComparison.OrdinalIgnoreCase)),
+            "writer 应为所有 relation 填充 Provenance=ingest");
+        Assert.IsTrue(relations.All(r => r.SourceNodeKind == nameof(GraphNodeKind.ContextItem)),
+            "writer 写入的 relation 应通过 validator 校验 SourceNodeKind");
     }
 
     // ──────────────────────────────────────────────────────────

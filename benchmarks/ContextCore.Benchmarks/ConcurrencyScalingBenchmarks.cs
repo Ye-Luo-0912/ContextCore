@@ -94,16 +94,13 @@ public class ConcurrencyScalingBenchmarks
         }
         else
         {
-            var tasks = new Task[ConcurrencyLevel];
-            for (int i = 0; i < ConcurrencyLevel; i++)
+            // P0-11：直接使用 Task.WhenAll(Enumerable.Range(...).Select(...))，
+            // 避免 Task.Run 将 ThreadPool 调度成本混入业务测量。
+            await Task.WhenAll(Enumerable.Range(0, ConcurrencyLevel).Select(async _ =>
             {
-                tasks[i] = Task.Run(async () =>
-                {
-                    var result = await _builder.BuildDetailedAsync(_request, CancellationToken.None);
-                    _ = result.Package.Sections.Count;
-                });
-            }
-            await Task.WhenAll(tasks);
+                var result = await _builder.BuildDetailedAsync(_request, CancellationToken.None);
+                _ = result.Package.Sections.Count;
+            }));
         }
     }
 

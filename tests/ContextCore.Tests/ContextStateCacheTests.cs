@@ -1,6 +1,7 @@
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Core;
+using ContextCore.Core.Services.Learning.V14_0;
 
 namespace ContextCore.Tests;
 
@@ -211,6 +212,25 @@ public sealed class ContextStateCacheTests
         Assert.IsTrue(cache.Count <= 3);
         // k4 刚写入，应存在
         Assert.IsNotNull(await cache.GetAsync<string>(StateCacheKey.From("k4")));
+    }
+
+    /// <summary>
+    /// P0-5.3: CLOCK 采样淘汰在大容量下收敛：写入远超 EvictionSampleSize 的条目，
+    /// 缓存应淘汰至容量上限。验证 enumerator 采样路径不依赖 O(N) Keys.ToArray()。
+    /// </summary>
+    [TestMethod]
+    public async Task Set_ExceedsCapacityWithManyEntries_EvictsUsingFixedSample_ConvergesToCapacity()
+    {
+        var cache = new InMemoryContextStateCache(maxEntries: 100);
+        var scope = new CacheInvalidationKey("ContextStore", "ws1", "col1", null);
+
+        for (var i = 0; i < 300; i++)
+        {
+            await cache.SetAsync(StateCacheKey.From($"k{i}"), $"v{i}", new DependencyScopeSet(scope));
+        }
+
+        Assert.IsTrue(cache.Count <= 100, "超容量后应淘汰至容量上限");
+        Assert.IsTrue(cache.Evictions >= 200, "应至少淘汰 200 个条目（300 写入 - 100 容量）");
     }
 
     /// <summary>scope 索引：失效不相关的 scope 不扫描全部条目（零条目 scope 快速返回）。</summary>
@@ -513,6 +533,151 @@ public sealed class ContextStateCacheTests
         Assert.IsTrue(results.All(r => Equals(r, "v")));
     }
 
+    // ── P0-5.1 poisoned key 修复：factory 抛异常后 key 不应永久驻留 ─────────
+
+    /// <summary>
+    /// P0-5.1: factory 抛异常后，in-flight entry 必须被移除（ContinueWith 清理），
+    /// 后续相同 key 的调用应重新执行 factory，而非复用失败的 Lazy（poisoned key）。
+    /// </summary>
+    [TestMethod]
+    public async Task SingleFlight_FactoryThrows_KeyNotPoisoned_SubsequentRetrySucceeds()
+    {
+        var cache = new InMemoryContextStateCache();
+        var accessor = new ContextStateCacheAccessor(cache);
+        var key = StateCacheKey.From("ctx:ws:col:poison-recovery");
+        var scopes = new DependencyScopeSet(new CacheInvalidationKey("ContextStore", "ws", "col", null));
+
+        var attempt = 0;
+
+        async Task<string> Factory(CancellationToken ct)
+        {
+            var current = Interlocked.Increment(ref attempt);
+            if (current == 1)
+            {
+                throw new InvalidOperationException("首次失败");
+            }
+            await Task.Yield();
+            return "recovered";
+        }
+
+        // 首次调用：factory 抛异常
+        await Assert.ThrowsExceptionAsync<InvalidOperationException>(() =>
+            accessor.GetOrAddAsync(key, scopes, Factory, default));
+
+        // 首次失败后，key 不应被 poison：第二次调用应重新执行 factory
+        var result = await accessor.GetOrAddAsync(key, scopes, Factory, default);
+        Assert.AreEqual("recovered", result);
+        Assert.AreEqual(2, attempt, "第二次调用应重新执行 factory，而非复用失败的 task");
+    }
+
+    /// <summary>
+    /// P0-5.1: factory 抛异常时，所有并发等待者都应看到异常；task 完成后 entry 被回收，
+    /// 后续调用应执行新的 factory（不返回缓存的失败 task）。
+    /// </summary>
+    [TestMethod]
+    public async Task SingleFlight_FactoryThrows_AllWaitersSeeError_KeyReclaimedForRetry()
+    {
+        var cache = new InMemoryContextStateCache();
+        var accessor = new ContextStateCacheAccessor(cache);
+        var key = StateCacheKey.From("ctx:ws:col:concurrent-fault");
+        var scopes = new DependencyScopeSet(new CacheInvalidationKey("ContextStore", "ws", "col", null));
+
+        var factoryStarted = new TaskCompletionSource<bool>();
+        var factoryGate = new SemaphoreSlim(0);
+        var factoryCallCount = 0;
+
+        async Task<string> Factory(CancellationToken ct)
+        {
+            Interlocked.Increment(ref factoryCallCount);
+            factoryStarted.TrySetResult(true);
+            await factoryGate.WaitAsync();
+            throw new InvalidOperationException("factory 永远失败");
+        }
+
+        // 4 个并发调用方
+        var callers = Enumerable.Range(0, 4).Select(_ => Task.Run(async () =>
+        {
+            try { return await accessor.GetOrAddAsync(key, scopes, Factory, default); }
+            catch (InvalidOperationException) { return (string?)"FAULT"; }
+        })).ToArray();
+
+        // 等 factory 启动并阻塞
+        await factoryStarted.Task;
+        // 放行让 factory 失败
+        factoryGate.Release();
+
+        var results = await Task.WhenAll(callers);
+
+        // 所有调用方都应看到异常（返回 "FAULT"）
+        Assert.IsTrue(results.All(r => r == "FAULT"), "所有等待者都应看到 factory 的异常");
+        Assert.AreEqual(1, factoryCallCount, "factory 应仅调用一次（single-flight）");
+
+        // key 应已回收：后续调用应执行新的 factory（不返回缓存的失败 task）
+        var retryAttempt = 0;
+        var result = await accessor.GetOrAddAsync(key, scopes, ct =>
+        {
+            Interlocked.Increment(ref retryAttempt);
+            return Task.FromResult("recovered");
+        });
+        Assert.AreEqual("recovered", result, "key 回收后应能成功重试");
+        Assert.AreEqual(1, retryAttempt, "重试时应执行新的 factory");
+    }
+
+    // ── P0-5.2 调用方取消隔离：取消只放弃等待，不取消共享计算 ───────────────
+
+    /// <summary>
+    /// P0-5.2: 第一个调用方取消后，共享 factory 计算应继续执行（使用 CancellationToken.None），
+    /// 第二个调用方应能复用同一 in-flight task 并拿到结果，而非触发新的 factory 调用。
+    /// </summary>
+    [TestMethod]
+    public async Task SingleFlight_FirstCallerCancels_SharedTaskContinues_SecondCallerGetsResult()
+    {
+        var cache = new InMemoryContextStateCache();
+        var accessor = new ContextStateCacheAccessor(cache);
+        var key = StateCacheKey.From("ctx:ws:col:cancel-isolation");
+        var scopes = new DependencyScopeSet(new CacheInvalidationKey("ContextStore", "ws", "col", null));
+
+        var factoryStarted = new TaskCompletionSource<bool>();
+        var factoryGate = new SemaphoreSlim(0);
+        var factoryCallCount = 0;
+
+        async Task<string> Factory(CancellationToken ct)
+        {
+            Interlocked.Increment(ref factoryCallCount);
+            factoryStarted.TrySetResult(true);
+            // factory 使用 CancellationToken.None（由 accessor 传入），不受调用方取消影响
+            await factoryGate.WaitAsync();
+            return "computed";
+        }
+
+        // 第一个调用方：会取消
+        using var cts1 = new CancellationTokenSource();
+        var caller1 = Task.Run(async () =>
+        {
+            try { return await accessor.GetOrAddAsync(key, scopes, Factory, cts1.Token); }
+            catch (OperationCanceledException) { return (string?)"CANCELLED"; }
+        });
+
+        // 等 factory 启动并进入 WaitAsync 等待
+        await factoryStarted.Task;
+        await Task.Delay(50);
+
+        // 取消第一个调用方 — 只放弃 caller1 的等待，不取消共享 factory
+        cts1.Cancel();
+        var r1 = await caller1;
+        Assert.AreEqual("CANCELLED", r1, "第一个调用方取消后应收到 OperationCanceledException");
+
+        // 第二个调用方：复用同一 in-flight task（entry 仍在，共享 task 未完成）
+        var caller2 = Task.Run(() => accessor.GetOrAddAsync(key, scopes, Factory, CancellationToken.None));
+
+        // 放行 factory — 共享计算完成
+        factoryGate.Release();
+        var r2 = await caller2;
+
+        Assert.AreEqual("computed", r2, "第二个调用方应能拿到结果（共享计算未被 caller1 取消）");
+        Assert.AreEqual(1, factoryCallCount, "factory 应仅调用一次（共享计算未被取消）");
+    }
+
     /// <summary>
     /// P2-2 批量版本校验：条目依赖多 scope，任一 scope 版本被 bump 后命中应检测到失配并移除。
     /// 验证 GetVersionsAsync 批量路径正确工作。
@@ -651,6 +816,94 @@ public sealed class ContextStateCacheTests
     }
 
     /// <summary>
+    /// P0-5.5: 指纹纳入时间桶（5 分钟窗口）。同一请求在短时间内（同桶）指纹一致，
+    /// 跨越 5 分钟边界后指纹必须变化，确保时间依赖评分（24h/7d/30d）跨边界后缓存自动失效。
+    /// </summary>
+    [TestMethod]
+    [TestCategory("CacheCorrectness")]
+    public void Fingerprint_IncludesTimeBucket_ChangesAcrossBoundary()
+    {
+        var policy = new ContextPackagePolicy { TokenBudget = 1000 };
+        var req = new ContextPackageRequest
+        {
+            WorkspaceId = "ws1",
+            CollectionId = "col1",
+            QueryText = "test",
+            TokenBudget = 1000
+        };
+
+        // 同一时间桶内多次构建应产生相同指纹
+        var fp1 = PackageRequestFingerprintBuilder.Build(req, policy);
+        var fp2 = PackageRequestFingerprintBuilder.Build(req, policy);
+        Assert.AreEqual(fp1, fp2, "同一时间桶内指纹必须一致");
+
+        // 验证时间桶存在于指纹中：通过人工构造跨桶场景验证
+        // 取当前桶号，构造一个 6 分钟前（必然跨桶）的时间戳对应的桶号
+        var nowSeconds = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var currentBucket = nowSeconds / 300;
+        var pastBucket = (nowSeconds - 360) / 300; // 6 分钟前，必然跨桶
+        Assert.AreNotEqual(currentBucket, pastBucket, "测试前置：6 分钟前应跨越 5 分钟桶边界");
+
+        // 验证指纹包含时间桶字段：通过修改系统时间不可行，改为直接验证 Build 输出包含桶号
+        // 这里通过验证 fp1 末尾包含 currentBucket 的字符串表示来确认
+        Assert.IsTrue(fp1.Contains(currentBucket.ToString(), StringComparison.Ordinal),
+            "指纹必须包含当前时间桶号，确保跨边界后指纹变化");
+    }
+
+    /// <summary>
+    /// P0-5.6: BuildHashed 输出固定长度 SHA-256 哈希（64 字符 hex），避免明文查询/metadata 驻留。
+    /// 相同请求产生相同哈希；不同请求产生不同哈希；哈希长度固定。
+    /// </summary>
+    [TestMethod]
+    [TestCategory("CacheCorrectness")]
+    public void Fingerprint_BuildHashed_ProducesFixedLengthSha256Hex()
+    {
+        var policy = new ContextPackagePolicy { TokenBudget = 1000 };
+        var req = new ContextPackageRequest
+        {
+            WorkspaceId = "ws1",
+            CollectionId = "col1",
+            QueryText = "包含敏感信息的查询内容",
+            TokenBudget = 1000,
+            Metadata = new Dictionary<string, string> { ["user"] = "alice", ["internal"] = "secret-value" }
+        };
+
+        var hash1 = PackageRequestFingerprintBuilder.BuildHashed(req, policy);
+        var hash2 = PackageRequestFingerprintBuilder.BuildHashed(req, policy);
+
+        // 固定长度：SHA-256 = 32 字节 = 64 hex 字符
+        Assert.AreEqual(64, hash1.Length, "SHA-256 哈希必须为 64 字符 hex");
+        Assert.AreEqual(64, hash2.Length, "SHA-256 哈希必须为 64 字符 hex");
+
+        // 相同输入产生相同哈希
+        Assert.AreEqual(hash1, hash2, "相同请求必须产生相同哈希");
+
+        // 哈希中不包含明文敏感信息
+        Assert.IsFalse(hash1.Contains("secret-value", StringComparison.Ordinal), "哈希不得包含明文 metadata 值");
+        Assert.IsFalse(hash1.Contains("alice", StringComparison.Ordinal), "哈希不得包含明文 metadata key/value");
+        Assert.IsFalse(hash1.Contains("包含敏感信息的查询内容", StringComparison.Ordinal), "哈希不得包含明文查询文本");
+
+        // 不同请求产生不同哈希
+        var req2 = new ContextPackageRequest
+        {
+            WorkspaceId = "ws1",
+            CollectionId = "col1",
+            QueryText = "不同的查询内容",
+            TokenBudget = 1000
+        };
+        var hash3 = PackageRequestFingerprintBuilder.BuildHashed(req2, policy);
+        Assert.AreNotEqual(hash1, hash3, "不同请求必须产生不同哈希");
+
+        // 验证全为有效 hex 字符
+        foreach (var c in hash1)
+        {
+            Assert.IsTrue(
+                (c >= '0' && c <= '9') || (c >= 'A' && c <= 'F'),
+                $"哈希必须为有效 hex 字符，发现: {c}");
+        }
+    }
+
+    /// <summary>
     /// 全局数据失效测试：GlobalContextStore 写入应失效 package 缓存条目。
     /// Package 依赖 scope 包含 GlobalContextStore，全局上下文变更后缓存应被清除。
     /// </summary>
@@ -743,6 +996,95 @@ public sealed class ContextStateCacheTests
         // 验证缓存值正确读取
         Assert.AreEqual("buildValue", retrieved.Metadata["buildKey"]);
         Assert.AreEqual("value1", retrieved.Package.Metadata["key1"]);
+    }
+
+    /// <summary>
+    /// P0-5.4: ResultProjector.ProjectResult 对模板的数组字段做防御性拷贝，
+    /// 调用方修改结果数组不应污染缓存的 PackageTemplate。模拟缓存命中复用同一模板场景。
+    /// </summary>
+    [TestMethod]
+    [TestCategory("CacheCorrectness")]
+    public void ResultProjector_ProjectResult_DefensiveArrayCopy_TemplateNotPolluted()
+    {
+        // 构造可控的源数组（模板内部持有的引用）
+        var section = new ContextPackageSection { Name = "working_memory", Content = "memory-1" };
+        var sections = new[] { section };
+        var sourceRefs = new[] { "src-1", "src-2" };
+        var selected = new[] { new ContextPackageDecision { ItemId = "item-1", SectionName = "working_memory" } };
+        var dropped = new[] { new DroppedContextItem { ItemId = "dropped-1" } };
+        var uncertainties = new[] { new ContextPackageUncertainty { Code = "OverBudget" } };
+        var itemRefs = new[] { new ContextPackageItemReference { ItemId = "item-1", PrimarySectionName = "working_memory" } };
+
+        var template = new PackageTemplate(
+            OrderedSections: sections,
+            SourceRefs: sourceRefs,
+            EstimatedTokens: 100,
+            TokenBudget: 1000,
+            SortedSelectedItems: selected,
+            DroppedItems: dropped,
+            Uncertainties: uncertainties,
+            ItemReferences: itemRefs,
+            Anchors: Array.Empty<ContextAnchor>(),
+            RetrievalPlan: null,
+            Budget: new ContextPackageBudgetReport(),
+            Output: new ContextPackageStandardOutput(),
+            ModeBudgetProfile: null);
+
+        var projector = new ResultProjector(new PackageTraceRecorder(
+            new NullRuntimeCandidateTraceSink(),
+            () => "op-iso",
+            () => "req-iso"));
+
+        var options = ResolvedPackageOptions.Resolve(
+            new ContextPackageRequest
+            {
+                WorkspaceId = "ws-iso",
+                CollectionId = "col-iso",
+                QueryText = "isolation test",
+                TokenBudget = 1000,
+                Policy = new ContextPackagePolicy
+                {
+                    WorkspaceId = "ws-iso",
+                    CollectionId = "col-iso",
+                    TokenBudget = 1000
+                }
+            },
+            new ContextPackagePolicy
+            {
+                WorkspaceId = "ws-iso",
+                CollectionId = "col-iso",
+                TokenBudget = 1000
+            },
+            new TokenEstimationContext("test-model", "test", false));
+
+        // 第一次投影（模拟首次缓存命中）
+        var result1 = projector.ProjectResult(template, options);
+
+        // 验证结果正确读取
+        Assert.AreEqual(1, result1.SelectedItems.Count);
+        Assert.AreEqual("item-1", result1.SelectedItems[0].ItemId);
+        Assert.AreEqual(1, result1.Package.Sections.Count);
+        Assert.AreEqual("working_memory", result1.Package.Sections[0].Name);
+        Assert.AreEqual(2, result1.Package.SourceRefs.Count);
+        Assert.AreEqual("src-1", result1.Package.SourceRefs[0]);
+
+        // 模拟调用方误用：直接修改结果数组元素
+        ((ContextPackageDecision[])result1.SelectedItems)[0] = new ContextPackageDecision { ItemId = "POLLUTED" };
+        ((ContextPackageSection[])result1.Package.Sections)[0] = new ContextPackageSection { Name = "POLLUTED" };
+        ((string[])result1.Package.SourceRefs)[0] = "POLLUTED";
+
+        // 第二次投影（模拟缓存命中复用同一模板）
+        var result2 = projector.ProjectResult(template, options);
+
+        // 验证第二次结果未被第一次的修改污染
+        Assert.AreEqual("item-1", result2.SelectedItems[0].ItemId, "SelectedItems 不应被第一次结果污染");
+        Assert.AreEqual("working_memory", result2.Package.Sections[0].Name, "Sections 不应被第一次结果污染");
+        Assert.AreEqual("src-1", result2.Package.SourceRefs[0], "SourceRefs 不应被第一次结果污染");
+
+        // 验证原始源数组也未被污染（防御性拷贝应保护源数组）
+        Assert.AreEqual("item-1", selected[0].ItemId);
+        Assert.AreEqual("working_memory", sections[0].Name);
+        Assert.AreEqual("src-1", sourceRefs[0]);
     }
 
     private sealed class RecordingInvalidator : IStateCacheInvalidator

@@ -8,7 +8,7 @@ namespace ContextCore.Storage.Postgres.Stores;
 /// PostgreSQL 上下文条目与集合元数据存储。
 /// 完整 DTO 保存在 jsonb 中，同时抽取常用筛选列以便查询和索引。
 /// </summary>
-public sealed class PostgresContextStore : PostgresStoreBase, IContextStore, IContextCollectionStore
+public sealed class PostgresContextStore : PostgresStoreBase, IContextStore, IContextCollectionStore, IContextStoreBatchLookup
 {
     public PostgresContextStore(PostgresConnectionFactory connectionFactory, PostgresJsonSerializer serializer, PostgresMigrationRunner migrationRunner)
         : base(connectionFactory, serializer, migrationRunner)
@@ -71,6 +71,45 @@ ON CONFLICT (workspace_id, collection_id, id) DO UPDATE SET
 
         var json = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false) as string;
         return string.IsNullOrWhiteSpace(json) ? null : Serializer.Deserialize<ContextItem>(json);
+    }
+
+    /// <summary>
+    /// P0-7.1: 批量查询上下文条目。使用 WHERE id = ANY(@ids) 单次 SQL 替代 N 次 GetAsync 并行，
+    /// 命中主键 B-tree 索引 (workspace_id, collection_id, id)。
+    /// 返回列表只包含命中的条目，顺序不保证；未命中条目静默丢弃。
+    /// 语义与 FileContextStore.BatchGetAsync / InMemoryContextStore.BatchGetAsync 保持一致。
+    /// </summary>
+    public async Task<IReadOnlyList<ContextItem>> BatchGetAsync(
+        string workspaceId,
+        string collectionId,
+        IReadOnlyList<string> ids,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(ids);
+        if (ids.Count == 0)
+        {
+            return Array.Empty<ContextItem>();
+        }
+
+        // 过滤空白 id；Postgres 对 ANY() 中的重复值会自然去重，无需在客户端去重
+        var normalizedIds = ids.Where(id => !string.IsNullOrWhiteSpace(id)).ToArray();
+        if (normalizedIds.Length == 0)
+        {
+            return Array.Empty<ContextItem>();
+        }
+
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+        command.CommandText =
+            $"SELECT data FROM {Table("context_items")} " +
+            "WHERE workspace_id = @workspace_id AND collection_id = @collection_id AND id = ANY(@ids)";
+        command.Parameters.AddWithValue("workspace_id", workspaceId);
+        command.Parameters.AddWithValue("collection_id", collectionId);
+        AddTextArray(command, "ids", normalizedIds);
+
+        return await ExecuteReaderJsonAsync<ContextItem>(command, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<ContextItem>> QueryAsync(ContextQuery query, CancellationToken cancellationToken = default)

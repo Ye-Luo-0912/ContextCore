@@ -6,9 +6,11 @@ namespace ContextCore.Abstractions;
 public interface IContextStore
 {
     /// <summary>保存或更新一个上下文条目。</summary>
+    [StoreOperation(StoreOperationKind.Write)]
     Task SaveAsync(ContextItem item, CancellationToken cancellationToken = default);
 
     /// <summary>按 ID 获取一个上下文条目。</summary>
+    [StoreOperation(StoreOperationKind.Read)]
     Task<ContextItem?> GetAsync(
         string workspaceId,
         string collectionId,
@@ -16,11 +18,13 @@ public interface IContextStore
         CancellationToken cancellationToken = default);
 
     /// <summary>按条件查询上下文条目列表。</summary>
+    [StoreOperation(StoreOperationKind.Read)]
     Task<IReadOnlyList<ContextItem>> QueryAsync(
         ContextQuery query,
         CancellationToken cancellationToken = default);
 
     /// <summary>删除指定 ID 的上下文条目。</summary>
+    [StoreOperation(StoreOperationKind.Write)]
     Task DeleteAsync(
         string workspaceId,
         string collectionId,
@@ -47,9 +51,11 @@ public interface IContextCollectionStore
 public interface IContextIndex
 {
     /// <summary>插入或更新一条索引条目。</summary>
+    [StoreOperation(StoreOperationKind.Write)]
     Task UpsertAsync(ContextIndexEntry entry, CancellationToken cancellationToken = default);
 
     /// <summary>按条件搜索索引条目。</summary>
+    [StoreOperation(StoreOperationKind.Read)]
     Task<IReadOnlyList<ContextIndexEntry>> SearchAsync(
         IndexQuery query,
         CancellationToken cancellationToken = default);

@@ -14,8 +14,9 @@ namespace ContextCore.Core;
 /// <remarks>
 /// 并发模型：命中路径完全无锁（_entries 为 ConcurrentDictionary，accessed bit 经 Interlocked 更新）；
 /// 写路径（SetCore/InvalidateAsync/Clear）在 _lock 下串行以保证 scope 索引一致性。
-/// CLOCK 淘汰：超容量时扫描少量候选（默认 8 个），淘汰第一个 accessed=false 的条目，
-/// 扫描过的条目清除 accessed bit。比 O(N) 全量扫描更快，比精确 LRU 更轻量。
+/// CLOCK 淘汰：超容量时通过 enumerator 采样 <see cref="EvictionSampleSize"/> 个候选（默认 8 个），
+/// 淘汰第一个 accessed=false 的条目，扫描过的条目清除 accessed bit（给予第二次机会）。
+/// 全部采样 accessed=true 时强制淘汰首个采样，保证每次调用至少淘汰一个。O(1) 采样，非 O(N) 全量复制。
 /// 版本失配删除使用条件删除（RemoveConditionalAsync），避免删除并发写入的新条目。
 /// </remarks>
 public sealed class InMemoryContextStateCache : IContextStateCache, IStateCacheInvalidator
@@ -32,8 +33,6 @@ public sealed class InMemoryContextStateCache : IContextStateCache, IStateCacheI
     // scope 索引：(StoreKind, WorkspaceId, CollectionId) -> entry keys。失效时 O(M) 定位。
     private readonly Dictionary<VersionScope, HashSet<string>> _scopeIndex = new();
     private readonly object _lock = new();
-    // CLOCK 指针：淘汰时从当前位置开始扫描，避免每次从头开始
-    private int _clockHand;
 
     // 指标（Interlocked 原子计数）
     private long _hits;
@@ -211,7 +210,6 @@ public sealed class InMemoryContextStateCache : IContextStateCache, IStateCacheI
         {
             _scopeIndex.Clear();
             _entries.Clear();
-            _clockHand = 0;
         }
     }
 
@@ -253,8 +251,10 @@ public sealed class InMemoryContextStateCache : IContextStateCache, IStateCacheI
     }
 
     /// <summary>
-    /// CLOCK 淘汰一轮：从 _clockHand 位置开始扫描 EvictionSampleSize 个候选，
+    /// CLOCK 淘汰一轮：通过 enumerator 采样 <see cref="EvictionSampleSize"/> 个候选，
     /// 淘汰第一个 accessed=0 的条目；扫描过的 accessed=1 条目清除 bit（给予第二次机会）。
+    /// 若全部采样 accessed=1（已清除 bit），强制淘汰首个采样条目，保证每次调用至少淘汰一个。
+    /// P0-5.3: 不再 _entries.Keys.ToArray() 全量复制（O(N) 分配），改用 enumerator 采样固定数量。
     /// </summary>
     private bool TryEvictOne()
     {
@@ -264,51 +264,52 @@ public sealed class InMemoryContextStateCache : IContextStateCache, IStateCacheI
             return false;
         }
 
-        var keys = _entries.Keys.ToArray();
-        if (keys.Length == 0)
+        // P0-5.3: 通过 enumerator 采样 EvictionSampleSize 个候选，避免 O(N) Keys.ToArray() 分配
+        var sampleCount = Math.Min(EvictionSampleSize, _entries.Count);
+        if (sampleCount == 0)
         {
             return false;
         }
 
-        var scanned = 0;
-        var startIndex = _clockHand % keys.Length;
-
-        while (scanned < keys.Length * 2)  // 最多两轮：第一轮清除 bit，第二轮淘汰
+        var sampled = new List<KeyValuePair<string, CacheEntry>>(sampleCount);
+        using var enumerator = _entries.GetEnumerator();
+        for (var i = 0; i < sampleCount; i++)
         {
-            var idx = (startIndex + scanned) % keys.Length;
-            var k = keys[idx];
-            scanned++;
-
-            if (!_entries.TryGetValue(k, out var entry))
+            if (!enumerator.MoveNext())
             {
-                continue;
+                break;
             }
-
-            // 原子读取并清除 accessed bit
-            if (Interlocked.CompareExchange(ref entry.Accessed, 0, 1) == 1)
-            {
-                // accessed=1，给予第二次机会，继续扫描
-                continue;
-            }
-
-            // accessed=0，淘汰此条目
-            if (_entries.TryRemove(k, out var removed))
-            {
-                RemoveFromScopeIndex(k, removed.Scopes);
-                Interlocked.Increment(ref _evictions);
-                _clockHand = idx + 1;  // 下次从下一个位置开始
-                return true;
-            }
+            sampled.Add(enumerator.Current);
         }
 
-        // 所有条目都被访问过，强制淘汰 CLOCK 指针位置的条目
-        var forceIdx = startIndex;
-        var forceKey = keys[forceIdx];
+        if (sampled.Count == 0)
+        {
+            return false;
+        }
+
+        // 第一轮：扫描采样，淘汰首个 accessed=0 的条目；清除 accessed=1 的 bit（给予第二次机会）
+        foreach (var (k, entry) in sampled)
+        {
+            // 原子读取并清除 accessed bit
+            if (Interlocked.CompareExchange(ref entry.Accessed, 0, 1) == 0)
+            {
+                // accessed=0，淘汰此条目
+                if (_entries.TryRemove(k, out var removed))
+                {
+                    RemoveFromScopeIndex(k, removed.Scopes);
+                    Interlocked.Increment(ref _evictions);
+                    return true;
+                }
+            }
+            // accessed=1：bit 已清除（第二次机会），继续扫描
+        }
+
+        // 所有采样条目都被访问过（bit 已清除）：强制淘汰首个采样条目，保证收敛到容量
+        var forceKey = sampled[0].Key;
         if (_entries.TryRemove(forceKey, out var forceRemoved))
         {
             RemoveFromScopeIndex(forceKey, forceRemoved.Scopes);
             Interlocked.Increment(ref _evictions);
-            _clockHand = forceIdx + 1;
             return true;
         }
 
@@ -319,32 +320,6 @@ public sealed class InMemoryContextStateCache : IContextStateCache, IStateCacheI
     /// 条件删除：仅当 entry 引用与 expectedEntry 一致时删除。
     /// 避免删除并发 SetAsync 写入的新条目（引用不同则不删除）。
     /// </summary>
-    private bool RemoveConditional(string key, object expectedEntry)
-    {
-        lock (_lock)
-        {
-            if (!_entries.TryGetValue(key, out var current))
-            {
-                return false;
-            }
-
-            // 引用相等检查：确保我们删除的是读取时看到的同一个条目
-            if (!ReferenceEquals(current, expectedEntry))
-            {
-                return false;
-            }
-
-            if (_entries.TryRemove(key, out var removed))
-            {
-                RemoveFromScopeIndex(key, removed.Scopes);
-                return true;
-            }
-
-            return false;
-        }
-    }
-
-    /// <summary>重载：使用 CacheEntry 引用进行条件删除（内部调用路径）。</summary>
     private bool RemoveConditional(string key, CacheEntry expectedEntry)
     {
         lock (_lock)

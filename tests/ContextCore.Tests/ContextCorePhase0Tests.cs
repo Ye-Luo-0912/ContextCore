@@ -30,7 +30,8 @@ public sealed class ContextCorePhase0Tests
             index,
             new MockContextCompressor(),
             relationStore,
-            new RelationProjector());
+            new RelationProjector(),
+            new RelationProjectionWriter(relationStore, new RelationProjectorOutputValidator(new RelationTypeRegistry(), new RelationTypeNormalizer())));
 
         await contextStore.SaveAsync(new ContextItem
         {
@@ -194,6 +195,125 @@ public sealed class ContextCorePhase0Tests
         Assert.AreEqual(2, failed[0].RetryCount);
         Assert.AreEqual("final failure", failed[0].ErrorMessage);
         Assert.IsNotNull(failed[0].CompletedAt);
+    }
+
+    /// <summary>
+    /// R12.4A #6: Ack/Nack 原子化（CAS）— 仅当 job 处于 Running 时才转换状态。
+    /// 验证过期的 Ack/Nack 不会还原终态或干扰进行中的执行。
+    /// </summary>
+    [TestMethod]
+    public async Task JobQueue_AckNack_Cas_OnlyTransitionsFromRunning()
+    {
+        var queue = new InMemoryJobQueue();
+        var queryStore = (IContextJobQueryStore)queue;
+
+        await queue.EnqueueAsync(new ContextJob
+        {
+            JobId = "job-cas",
+            WorkspaceId = "ws",
+            CollectionId = "col",
+            Kind = ContextJobKind.Custom,
+            PayloadJson = "{}",
+            MaxRetryCount = 3,
+            CreatedAt = DateTimeOffset.UtcNow
+        });
+
+        // 1. Ack on Queued job (not Running) → no-op
+        await queue.AckAsync("job-cas");
+        var queuedJobs = await queryStore.QueryAsync(new ContextJobQuery { Take = 10 });
+        Assert.AreEqual(ContextJobState.Queued, queuedJobs.Single(j => j.JobId == "job-cas").State,
+            "Ack on Queued job 应为 no-op，状态不变");
+
+        // 2. Nack on Queued job (not Running) → no-op
+        await queue.NackAsync("job-cas", "stale nack before dequeue");
+        queuedJobs = await queryStore.QueryAsync(new ContextJobQuery { Take = 10 });
+        Assert.AreEqual(ContextJobState.Queued, queuedJobs.Single(j => j.JobId == "job-cas").State,
+            "Nack on Queued job 应为 no-op，状态不变");
+        Assert.AreEqual(0, queuedJobs.Single(j => j.JobId == "job-cas").RetryCount,
+            "Nack on Queued job 不应增加 RetryCount");
+
+        // 3. Dequeue → Running → Ack → Succeeded
+        var dequeued = await queue.DequeueAsync();
+        Assert.AreEqual(ContextJobState.Running, dequeued!.State);
+        await queue.AckAsync("job-cas");
+        var succeededJobs = await queryStore.QueryAsync(new ContextJobQuery { Take = 10 });
+        Assert.AreEqual(ContextJobState.Succeeded, succeededJobs.Single(j => j.JobId == "job-cas").State);
+
+        // 4. Nack on Succeeded job (not Running) → no-op（过期 Nack 不还原终态）
+        await queue.NackAsync("job-cas", "stale nack after success");
+        succeededJobs = await queryStore.QueryAsync(new ContextJobQuery { Take = 10 });
+        Assert.AreEqual(ContextJobState.Succeeded, succeededJobs.Single(j => j.JobId == "job-cas").State,
+            "Nack on Succeeded job 应为 no-op，不应还原终态");
+        Assert.AreEqual(0, succeededJobs.Single(j => j.JobId == "job-cas").RetryCount,
+            "Nack on Succeeded job 不应增加 RetryCount");
+    }
+
+    /// <summary>
+    /// R12.4A #6: Double-Ack 幂等 — 第二次 Ack 不改变状态（job 已不是 Running）。
+    /// </summary>
+    [TestMethod]
+    public async Task JobQueue_DoubleAck_IsNoOp()
+    {
+        var queue = new InMemoryJobQueue();
+        var queryStore = (IContextJobQueryStore)queue;
+
+        await queue.EnqueueAsync(new ContextJob
+        {
+            JobId = "job-double-ack",
+            WorkspaceId = "ws",
+            CollectionId = "col",
+            Kind = ContextJobKind.Custom,
+            PayloadJson = "{}",
+            MaxRetryCount = 3,
+            CreatedAt = DateTimeOffset.UtcNow
+        });
+
+        var dequeued = await queue.DequeueAsync();
+        Assert.AreEqual(ContextJobState.Running, dequeued!.State);
+
+        await queue.AckAsync("job-double-ack");
+        await queue.AckAsync("job-double-ack"); // stale second Ack
+
+        var jobs = await queryStore.QueryAsync(new ContextJobQuery { Take = 10 });
+        Assert.AreEqual(ContextJobState.Succeeded, jobs.Single(j => j.JobId == "job-double-ack").State,
+            "Double-Ack 应幂等，第二次 Ack 为 no-op");
+    }
+
+    /// <summary>
+    /// R12.4A #6: Double-Nack（未重新 dequeue）— 第二次 Nack 不改变状态（job 已不是 Running）。
+    /// </summary>
+    [TestMethod]
+    public async Task JobQueue_DoubleNack_WithoutRedequeue_IsNoOp()
+    {
+        var queue = new InMemoryJobQueue();
+        var queryStore = (IContextJobQueryStore)queue;
+
+        await queue.EnqueueAsync(new ContextJob
+        {
+            JobId = "job-double-nack",
+            WorkspaceId = "ws",
+            CollectionId = "col",
+            Kind = ContextJobKind.Custom,
+            PayloadJson = "{}",
+            MaxRetryCount = 3,
+            CreatedAt = DateTimeOffset.UtcNow
+        });
+
+        var dequeued = await queue.DequeueAsync();
+        Assert.AreEqual(ContextJobState.Running, dequeued!.State);
+
+        await queue.NackAsync("job-double-nack", "first failure");
+        var jobs = await queryStore.QueryAsync(new ContextJobQuery { Take = 10 });
+        Assert.AreEqual(ContextJobState.WaitingRetry, jobs.Single(j => j.JobId == "job-double-nack").State);
+        Assert.AreEqual(1, jobs.Single(j => j.JobId == "job-double-nack").RetryCount);
+
+        // Stale second Nack without re-dequeue: job is now WaitingRetry, not Running → no-op
+        await queue.NackAsync("job-double-nack", "stale second nack");
+        jobs = await queryStore.QueryAsync(new ContextJobQuery { Take = 10 });
+        Assert.AreEqual(ContextJobState.WaitingRetry, jobs.Single(j => j.JobId == "job-double-nack").State,
+            "Double-Nack 未重新 dequeue 时应为 no-op，状态不变");
+        Assert.AreEqual(1, jobs.Single(j => j.JobId == "job-double-nack").RetryCount,
+            "Double-Nack 未重新 dequeue 时不应增加 RetryCount");
     }
 
     private sealed class RecordingJobProcessor : IContextJobProcessor

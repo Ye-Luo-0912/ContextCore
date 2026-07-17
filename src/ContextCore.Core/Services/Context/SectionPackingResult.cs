@@ -1,9 +1,23 @@
 namespace ContextCore.Core;
 
 /// <summary>
-/// 单个候选的格式化文本段，携带候选 ID 与对应文本，供 Packer 按 segment 粒度截断并精确归属。
+/// 单个候选的格式化文本段，携带候选 ID、对应文本以及该候选的 SourceRefs/ItemRefs，
+/// 供 Packer 按 segment 粒度截断并精确归属。
+/// P0-6.2: 携带 SourceRefs/ItemRefs，使 Section refs 只从 accepted + partially accepted segments 聚合，
+/// 避免被拒绝候选的 refs 仍写入 section。
 /// </summary>
-internal sealed record CandidateSegment(string CandidateId, string FormattedText);
+internal sealed record CandidateSegment(
+    string CandidateId,
+    string FormattedText,
+    IReadOnlyList<string> SourceRefs,
+    IReadOnlyList<string> ItemRefs)
+{
+    /// <summary>兼容旧调用：无 SourceRefs/ItemRefs 时构造空列表。</summary>
+    internal CandidateSegment(string CandidateId, string FormattedText)
+        : this(CandidateId, FormattedText, Array.Empty<string>(), Array.Empty<string>())
+    {
+    }
+}
 
 /// <summary>
 /// Section 装配的结构化结果，记录精确的候选接受/拒绝状态。
@@ -19,7 +33,8 @@ internal sealed class SectionPackingResult
         bool truncated,
         IReadOnlyList<string> acceptedCandidateIds,
         IReadOnlyList<string> rejectedCandidateIds,
-        string? partiallyAcceptedCandidateId)
+        string? partiallyAcceptedCandidateId,
+        int partiallyAcceptedIncludedTokens)
     {
         Added = added;
         Reason = reason;
@@ -28,6 +43,7 @@ internal sealed class SectionPackingResult
         AcceptedCandidateIds = acceptedCandidateIds;
         RejectedCandidateIds = rejectedCandidateIds;
         PartiallyAcceptedCandidateId = partiallyAcceptedCandidateId;
+        PartiallyAcceptedIncludedTokens = partiallyAcceptedIncludedTokens;
     }
 
     /// <summary>Section 是否被加入 package。</summary>
@@ -59,6 +75,13 @@ internal sealed class SectionPackingResult
     /// </summary>
     public IReadOnlyList<string> RejectedCandidateIds { get; }
 
+    /// <summary>
+    /// P0-6.3: PartiallyAcceptedCandidateId 实际保留进 section 输出的 token 数（截断后）。
+    /// 无 partially accepted 候选时为 0。供 PackageTraceRecorder 写入 trace row 的 IncludedTokens 字段，
+    /// 使下游诊断能观察到部分截断候选的精确保留量（而不仅是"被截断"布尔标志）。
+    /// </summary>
+    public int PartiallyAcceptedIncludedTokens { get; }
+
     /// <summary>创建已加入的 SectionPackingResult。</summary>
     public static SectionPackingResult Selected(
         string reason,
@@ -66,7 +89,8 @@ internal sealed class SectionPackingResult
         bool truncated,
         IReadOnlyList<string> acceptedCandidateIds,
         IReadOnlyList<string> rejectedCandidateIds,
-        string? partiallyAcceptedCandidateId = null)
+        string? partiallyAcceptedCandidateId = null,
+        int partiallyAcceptedIncludedTokens = 0)
     {
         return new SectionPackingResult(
             added: true,
@@ -75,7 +99,8 @@ internal sealed class SectionPackingResult
             truncated,
             acceptedCandidateIds,
             rejectedCandidateIds,
-            partiallyAcceptedCandidateId);
+            partiallyAcceptedCandidateId,
+            partiallyAcceptedIncludedTokens);
     }
 
     /// <summary>创建未加入的 SectionPackingResult（候选全部拒绝）。</summary>
@@ -88,6 +113,7 @@ internal sealed class SectionPackingResult
             truncated: false,
             acceptedCandidateIds: Array.Empty<string>(),
             rejectedCandidateIds: Array.Empty<string>(),
-            partiallyAcceptedCandidateId: null);
+            partiallyAcceptedCandidateId: null,
+            partiallyAcceptedIncludedTokens: 0);
     }
 }

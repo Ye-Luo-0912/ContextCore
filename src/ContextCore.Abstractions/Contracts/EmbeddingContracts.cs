@@ -15,22 +15,26 @@ public interface IEmbeddingProvider
 public interface IVectorStore
 {
     /// <summary>插入或更新一条向量记录。</summary>
+    [StoreOperation(StoreOperationKind.Write)]
     Task UpsertAsync(
         VectorRecord record,
         CancellationToken cancellationToken = default);
 
     /// <summary>按 ID 获取向量记录。</summary>
+    [StoreOperation(StoreOperationKind.Read)]
     Task<VectorRecord?> GetAsync(
         string workspaceId,
         string vectorId,
         CancellationToken cancellationToken = default);
 
     /// <summary>执行向量相似度检索。</summary>
+    [StoreOperation(StoreOperationKind.Read)]
     Task<IReadOnlyList<VectorSearchResult>> SearchAsync(
         VectorQuery query,
         CancellationToken cancellationToken = default);
 
     /// <summary>删除指定向量记录。</summary>
+    [StoreOperation(StoreOperationKind.Write)]
     Task DeleteAsync(
         string workspaceId,
         string vectorId,

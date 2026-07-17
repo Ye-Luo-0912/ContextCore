@@ -528,13 +528,14 @@ public sealed class StableLifecycleReviewService
             return Task.CompletedTask;
         }
 
-        // 4.4：通过 IRelationProjectionWriter 统一写入边界；若未注入则回退到 BatchUpsertAsync。
+        // R12.4A #10: Graph Writer fallback 最终删除——production 中 writer 无条件注册。
+        // 若未注入 writer，跳过写入（不回退到 BatchUpsertAsync，避免跳过验证）。
         if (_projectionWriter is not null)
         {
             return _projectionWriter.WriteAsync(relations, "lifecycle-review", cancellationToken);
         }
 
-        return _relationStore.BatchUpsertAsync(relations, cancellationToken);
+        return Task.CompletedTask;
     }
 
     private static Dictionary<string, string> CreateReviewMetadata(

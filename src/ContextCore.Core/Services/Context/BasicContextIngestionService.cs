@@ -98,17 +98,12 @@ public sealed class BasicContextIngestionService
         IReadOnlyList<ContextRelation> newRelations,
         CancellationToken cancellationToken)
     {
-        if (newRelations.Count > 0)
+        if (newRelations.Count > 0 && _projectionWriter is not null)
         {
-            // 4.4：通过 IRelationProjectionWriter 统一写入边界；若未注入则回退到 BatchUpsertAsync。
-            if (_projectionWriter is not null)
-            {
-                await _projectionWriter.WriteAsync(newRelations, "ingest", cancellationToken).ConfigureAwait(false);
-            }
-            else
-            {
-                await _relationStore!.BatchUpsertAsync(newRelations, cancellationToken).ConfigureAwait(false);
-            }
+            // R12.4A #10: Graph Writer fallback 最终删除——production 中 writer 无条件注册，
+            // 此处不再回退到 BatchUpsertAsync（会跳过 RelationProjectorOutputValidator 验证）。
+            // 测试若需写入 relation，必须显式注入 writer。
+            await _projectionWriter.WriteAsync(newRelations, "ingest", cancellationToken).ConfigureAwait(false);
         }
 
         // 查询该条目现有的所有 related_to 出边

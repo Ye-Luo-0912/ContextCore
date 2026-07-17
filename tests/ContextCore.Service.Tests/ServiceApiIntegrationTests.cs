@@ -2079,6 +2079,85 @@ public sealed class ServiceApiIntegrationTests
         }
     }
 
+    // R12.4A #9: Event Sink fail-open——作业成功后 sink 发射失败不得导致作业被 Nack 或标记为失败。
+    // 之前 success-path EmitAsync 抛出会落入外层 catch，触发 NackAsync（CAS 下为 no-op）和误导性的 Error 事件。
+    [TestMethod]
+    public async Task JobWorker_EventSinkThrowsOnSuccess_JobStillSucceeds()
+    {
+        var rootPath = CreateTestRootPath();
+
+        try
+        {
+            using var factory = CreateFactory(
+                rootPath,
+                jobWorkerEnabled: true,
+                pollIntervalMs: 100,
+                configureServices: services =>
+                {
+                    services.RemoveAll<IContextEventSink>();
+                    services.AddSingleton<IContextEventSink>(new ThrowingEventSink());
+                });
+            using var client = factory.CreateClient();
+
+            var input = new ContextItem
+            {
+                Id = "job-input-failopen",
+                WorkspaceId = "workspace-test",
+                CollectionId = "collection-test",
+                Type = "note",
+                Content = "Event sink fail-open 测试内容。",
+                Tags = ["job", "compression"],
+                SourceRefs = ["source:job-input-failopen"],
+                Importance = 0.8,
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow
+            };
+
+            (await client.PostAsJsonAsync("/api/context/ingest", input)).EnsureSuccessStatusCode();
+
+            var enqueueResponse = await client.PostAsJsonAsync("/api/jobs/compression", new CompressionRequest
+            {
+                OperationId = "job-operation-failopen",
+                WorkspaceId = input.WorkspaceId,
+                CollectionId = input.CollectionId,
+                TaskKind = CompressionTaskKind.Summarize,
+                Options = new CompressionOptions
+                {
+                    GenerateIndexHints = true,
+                    PreserveSourceRefs = true
+                }
+            });
+            enqueueResponse.EnsureSuccessStatusCode();
+
+            var queuedJob = await enqueueResponse.Content.ReadFromJsonAsync<ContextJob>();
+            Assert.IsNotNull(queuedJob);
+
+            var completedJob = await WaitForJobAsync(client, queuedJob!.JobId, TimeSpan.FromSeconds(8));
+            Assert.IsNotNull(completedJob);
+            // 关键断言：sink 发射失败不得导致作业失败——作业应保持 Succeeded 状态。
+            Assert.AreEqual(ContextJobState.Succeeded, completedJob!.State,
+                $"作业应在 sink 抛出异常的情况下仍然成功，实际状态 {completedJob.State}。");
+        }
+        finally
+        {
+            DeleteTestRoot(rootPath);
+        }
+    }
+
+    /// <summary>
+    /// R12.4A #9: 测试用 Event Sink——所有 EmitAsync 调用均抛出 InvalidOperationException。
+    /// 用于验证 JobWorker 的 fail-open 行为。
+    /// </summary>
+    private sealed class ThrowingEventSink : IContextEventSink
+    {
+        public ContextEventSinkKind Kind => ContextEventSinkKind.BestEffort;
+
+        public Task EmitAsync(ContextOperationEvent operationEvent, CancellationToken cancellationToken = default)
+        {
+            throw new InvalidOperationException("Test sink: simulated event sink failure.");
+        }
+    }
+
     [TestMethod]
     public void Service_ShouldFailFastWhenPostgresProviderIsConfigured()
     {

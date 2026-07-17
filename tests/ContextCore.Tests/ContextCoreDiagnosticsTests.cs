@@ -81,7 +81,6 @@ public sealed class ContextCoreDiagnosticsTests
             memoryStore,
             relationStore);
         var runtime = new ContextRuntimeService(
-            contextStore,
             memoryStore,
             new BasicMemoryPromotionService(memoryStore, memoryStore),
             packageBuilder,
@@ -167,6 +166,129 @@ public sealed class ContextCoreDiagnosticsTests
         Assert.AreEqual("mock-model", ReadTag(attemptActivity, "contextcore.model.provider_model"));
         Assert.AreEqual("none", ReadTag(attemptActivity, "contextcore.model.failure_reason"));
         Assert.AreEqual(true, attemptActivity.Tags["contextcore.model.succeeded"]);
+    }
+
+    [TestMethod]
+    public async Task CompositeContextEventSink_BestEffortSinkThrows_DoesNotBlockSubsequentSinks()
+    {
+        var throwing = new ThrowingContextEventSink(ContextEventSinkKind.BestEffort);
+        var recording = new RecordingContextEventSink();
+        var composite = new CompositeContextEventSink(new IContextEventSink[] { throwing, recording });
+
+        var operationEvent = new ContextOperationEvent { EventId = "e1", OperationName = "test" };
+
+        // BestEffort sink 失败应被吞掉（fail-open），不阻断后续 sink，也不向上抛出。
+        await composite.EmitAsync(operationEvent, CancellationToken.None);
+
+        Assert.AreEqual(1, recording.Events.Count);
+        Assert.AreEqual("e1", recording.Events[0].EventId);
+    }
+
+    [TestMethod]
+    public async Task CompositeContextEventSink_RequiredSinkThrows_AggregatesAndStillRunsSubsequentSinks()
+    {
+        var throwing = new ThrowingContextEventSink(ContextEventSinkKind.Required);
+        var recording = new RecordingContextEventSink();
+        var composite = new CompositeContextEventSink(new IContextEventSink[] { throwing, recording });
+
+        var operationEvent = new ContextOperationEvent { EventId = "e2", OperationName = "test" };
+
+        // Required sink 失败应聚合成 AggregateException 抛出（fail-closed），但遍历不中断。
+        var ex = await Assert.ThrowsExceptionAsync<AggregateException>(
+            () => composite.EmitAsync(operationEvent, CancellationToken.None));
+        Assert.IsTrue(ex.InnerExceptions.Count >= 1);
+        Assert.AreEqual(1, recording.Events.Count);
+        Assert.AreEqual("e2", recording.Events[0].EventId);
+    }
+
+    [TestMethod]
+    public async Task ContextRuntimeService_SinkThrowsOnOperationStarted_BusinessStillExecutes()
+    {
+        // sink 在每次 Emit 都抛异常：验证 "Operation started." 失败不会阻断正式业务。
+        var throwing = new ThrowingContextEventSink(ContextEventSinkKind.BestEffort);
+        var runtime = BuildRuntimeWithSink(throwing);
+
+        var item = await runtime.IngestAsync(new ContextItem
+        {
+            WorkspaceId = "ws-failopen",
+            CollectionId = "col-failopen",
+            Type = "note",
+            Content = "sink 抛异常时业务仍应执行。",
+            ContentFormat = ContextContentFormat.PlainText
+        });
+
+        Assert.IsNotNull(item);
+        Assert.IsFalse(string.IsNullOrEmpty(item.Id));
+    }
+
+    [TestMethod]
+    public async Task ContextRuntimeService_SinkThrowsOnErrorEvent_OriginalExceptionPreserved()
+    {
+        // 仅在 Error 级别事件抛异常的 sink：验证错误事件失败不会遮蔽业务原始异常。
+        var errorThrowing = new ErrorThrowingContextEventSink();
+        var runtime = BuildRuntimeWithSink(errorThrowing);
+
+        // 触发业务异常：空 WorkspaceId 校验失败 → ThrowIfInvalid 抛 ArgumentException。
+        await Assert.ThrowsExceptionAsync<ArgumentException>(
+            () => runtime.BuildPackageAsync(new ContextPackageRequest
+            {
+                WorkspaceId = "",
+                CollectionId = "col",
+                TokenBudget = 100
+            }));
+    }
+
+    [TestMethod]
+    public async Task ContextRuntimeService_PreCancelledToken_ErrorEventStillRecordedViaNone()
+    {
+        // InMemoryContextEventSink 在 token 已取消时 ThrowIfCancellationRequested：
+        // - "Operation started." 使用已取消 token → 抛出 → 被 EmitBestEffortAsync 吞掉 → 不记录
+        // - 业务 action 抛 ArgumentException（空 WorkspaceId 校验失败）
+        // - 错误事件使用 CancellationToken.None → 不抛出 → 被记录
+        // 若错误事件未切换到 None，则 Events.Count == 0；切换后 Events.Count == 1（仅 Error 级别）。
+        var recording = new InMemoryContextEventSink();
+        var runtime = BuildRuntimeWithSink(recording);
+
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsExceptionAsync<ArgumentException>(
+            () => runtime.BuildPackageAsync(new ContextPackageRequest
+            {
+                WorkspaceId = "",
+                CollectionId = "col",
+                TokenBudget = 100
+            }, cts.Token));
+
+        Assert.AreEqual(1, recording.Events.Count);
+        Assert.AreEqual(ContextEventLevel.Error, recording.Events[0].Level);
+    }
+
+    private static ContextRuntimeService BuildRuntimeWithSink(IContextEventSink eventSink)
+    {
+        var contextStore = new InMemoryContextStore();
+        var memoryStore = new InMemoryMemoryStore();
+        var relationStore = new InMemoryRelationStore();
+        var constraintStore = new InMemoryConstraintStore();
+        var globalStore = new InMemoryGlobalContextStore();
+        var packageBuilder = new BasicContextPackageBuilder(
+            contextStore,
+            constraintStore,
+            globalStore,
+            memoryStore,
+            relationStore);
+        return new ContextRuntimeService(
+            memoryStore,
+            new BasicMemoryPromotionService(memoryStore, memoryStore),
+            packageBuilder,
+            new ContextInputIngestionService(
+                contextStore,
+                new ContextInputNormalizer(),
+                new ContextInputValidator(),
+                new ContextInputHasher(),
+                new ContextInputSequencer()),
+            new ContextValidationService(),
+            eventSink);
     }
 
     private static string? ReadTag(CapturedActivity activity, string key)
@@ -311,4 +433,63 @@ public sealed class ContextCoreDiagnosticsTests
         string Message,
         Exception? Exception,
         IReadOnlyList<object?> Scopes);
+
+    /// <summary>每次 Emit 都抛 InvalidOperationException 的 sink，可配置 Kind。</summary>
+    private sealed class ThrowingContextEventSink : IContextEventSink
+    {
+        private readonly ContextEventSinkKind _kind;
+
+        public ThrowingContextEventSink(ContextEventSinkKind kind)
+        {
+            _kind = kind;
+        }
+
+        public ContextEventSinkKind Kind => _kind;
+
+        public Task EmitAsync(ContextOperationEvent operationEvent, CancellationToken cancellationToken = default)
+        {
+            throw new InvalidOperationException("throwing-sink-test");
+        }
+    }
+
+    /// <summary>仅在 Error 级别事件抛异常的 sink，用于验证错误事件失败不遮蔽原始业务异常。</summary>
+    private sealed class ErrorThrowingContextEventSink : IContextEventSink
+    {
+        public Task EmitAsync(ContextOperationEvent operationEvent, CancellationToken cancellationToken = default)
+        {
+            if (operationEvent.Level == ContextEventLevel.Error)
+            {
+                throw new InvalidOperationException("error-sink-test");
+            }
+            return Task.CompletedTask;
+        }
+    }
+
+    /// <summary>记录所有已发送事件的 sink，用于断言复合接收器的遍历行为。</summary>
+    private sealed class RecordingContextEventSink : IContextEventSink
+    {
+        private readonly object _gate = new();
+        private readonly List<ContextOperationEvent> _events = new();
+
+        public IReadOnlyList<ContextOperationEvent> Events
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return _events.ToArray();
+                }
+            }
+        }
+
+        public Task EmitAsync(ContextOperationEvent operationEvent, CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(operationEvent);
+            lock (_gate)
+            {
+                _events.Add(operationEvent);
+            }
+            return Task.CompletedTask;
+        }
+    }
 }

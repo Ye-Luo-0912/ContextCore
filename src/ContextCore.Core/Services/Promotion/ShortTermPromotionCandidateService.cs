@@ -707,22 +707,15 @@ public sealed class ShortTermPromotionCandidateService
         }
 
         var relations = _relationProjector.ProjectForPromotion(candidate, targetItemId, targetKind, now);
-        if (relations.Count > 0)
+        if (relations.Count > 0 && _projectionWriter is not null)
         {
-            // 4.4：通过 IRelationProjectionWriter 统一写入边界；若未注入则回退到 BatchUpsertAsync。
-            if (_projectionWriter is not null)
+            // R12.4A #10: Graph Writer fallback 最终删除——production 中 writer 无条件注册。
+            var writeResult = await _projectionWriter
+                .WriteAsync(relations, "promotion", cancellationToken)
+                .ConfigureAwait(false);
+            if (writeResult.SkippedCount > 0)
             {
-                var writeResult = await _projectionWriter
-                    .WriteAsync(relations, "promotion", cancellationToken)
-                    .ConfigureAwait(false);
-                if (writeResult.SkippedCount > 0)
-                {
-                    warnings.Add($"promotion projector 跳过 {writeResult.SkippedCount} 条 High 级诊断 relation。");
-                }
-            }
-            else
-            {
-                await _relationStore.BatchUpsertAsync(relations, cancellationToken).ConfigureAwait(false);
+                warnings.Add($"promotion projector 跳过 {writeResult.SkippedCount} 条 High 级诊断 relation。");
             }
         }
     }

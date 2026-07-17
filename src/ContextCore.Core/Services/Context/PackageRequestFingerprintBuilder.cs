@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
@@ -9,11 +10,17 @@ namespace ContextCore.Core;
 /// 指纹仅包含影响构建输出的字段，排除 OperationId/RequestId（per-call GUID）。
 /// 相同指纹的请求产生相同 package（在依赖 scope 未变更的前提下）。
 /// 使用长度前缀编码防止分隔符碰撞（输入值中包含 | 或 : 不会导致不同输入产生相同指纹）。
+/// P0-5.5: 纳入时间桶（5 分钟窗口），确保 Working Memory 评分依赖的时间边界（24h/7d/30d）
+/// 跨越后缓存自动失效。P0-5.6: <see cref="BuildHashed"/> 输出 SHA-256 固定长度哈希，避免明文驻留。
 /// </summary>
 internal static class PackageRequestFingerprintBuilder
 {
+    /// <summary>时间桶大小（秒）。5 分钟窗口平衡 staleness 与命中率。</summary>
+    private const long TimeBucketSeconds = 300;
+
     /// <summary>
     /// 构建请求指纹：仅包含影响构建输出的字段，排除 OperationId/RequestId（per-call GUID）。
+    /// P0-5.5: 末尾追加时间桶，确保时间依赖评分跨越边界后缓存自动失效。
     /// </summary>
     internal static string Build(ContextPackageRequest request, ContextPackagePolicy policy)
     {
@@ -59,7 +66,23 @@ internal static class PackageRequestFingerprintBuilder
         AppendSortedStringDictionary(sb, policy.Metadata);
         // request.Metadata 会被完整复制到响应，必须纳入指纹以区分不同 metadata 的请求
         AppendSortedStringDictionary(sb, request.Metadata);
+        // P0-5.5: 时间桶 — Working Memory 评分依赖当前时间（24h/7d/30d 边界），
+        // 将 UtcNow 按 5 分钟取整纳入指纹，确保跨时间边界后缓存自动失效。
+        var timeBucket = DateTimeOffset.UtcNow.ToUnixTimeSeconds() / TimeBucketSeconds;
+        AppendField(sb, timeBucket.ToString());
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// 构建固定长度的哈希指纹（SHA-256，64 字符 hex）。
+    /// P0-5.6: 用于缓存 key，避免明文查询/metadata 驻留与超长 dictionary key。
+    /// 相同输入产生相同哈希；不同输入碰撞概率可忽略（2^-128）。
+    /// </summary>
+    internal static string BuildHashed(ContextPackageRequest request, ContextPackagePolicy policy)
+    {
+        var canonical = Build(request, policy);
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(canonical));
+        return Convert.ToHexString(bytes);
     }
 
     /// <summary>

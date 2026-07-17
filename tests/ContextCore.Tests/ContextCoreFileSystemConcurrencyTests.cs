@@ -339,6 +339,144 @@ public sealed class ContextCoreFileSystemConcurrencyTests
         }
     }
 
+    // ── FS-04: 并发 Ack/Nack 单文件原子更新 ────────────────────────────────
+
+    [TestMethod]
+    public async Task FileContextJobQueue_ConcurrentAckAndNack_ShouldPreserveAllStateTransitions()
+    {
+        var rootPath = CreateTestRootPath();
+        try
+        {
+            var options = new FileStorageOptions { RootPath = rootPath };
+            var queue = new FileContextJobQueue(options);
+
+            // 入队 12 个作业到同一文件（同 workspace/collection）
+            for (var i = 0; i < 12; i++)
+            {
+                await queue.EnqueueAsync(new ContextJob
+                {
+                    JobId = $"job-{i:000}",
+                    WorkspaceId = "ws-ack",
+                    CollectionId = "col-ack",
+                    Kind = ContextJobKind.Custom,
+                    PayloadJson = "{}",
+                    MaxRetryCount = 3
+                });
+            }
+
+            // Dequeue 全部 12 个（状态变为 Running）
+            var dequeued = new List<ContextJob>();
+            for (var i = 0; i < 12; i++)
+            {
+                var job = await queue.DequeueAsync();
+                Assert.IsNotNull(job);
+                dequeued.Add(job!);
+            }
+
+            // 并发 Ack 前 6 个 + Nack 后 6 个：验证单文件原子更新不互相覆盖
+            var ackTasks = dequeued.Take(6).Select(j => queue.AckAsync(j.JobId));
+            var nackTasks = dequeued.Skip(6).Select(j => queue.NackAsync(j.JobId, "并发重试"));
+            await Task.WhenAll(ackTasks.Concat(nackTasks));
+
+            // 查询所有作业，验证状态转换全部保留
+            var allJobs = await queue.QueryAsync(new ContextJobQuery { Take = 100 });
+            Assert.AreEqual(12, allJobs.Count, "所有 12 个作业都应保留，不应被并发更新覆盖丢失");
+
+            var succeeded = allJobs.Where(j => j.State == ContextJobState.Succeeded).ToArray();
+            var waitingRetry = allJobs.Where(j => j.State == ContextJobState.WaitingRetry).ToArray();
+            Assert.AreEqual(6, succeeded.Length, "前 6 个 Ack 的作业应全部为 Succeeded");
+            Assert.AreEqual(6, waitingRetry.Length, "后 6 个 Nack 的作业应全部为 WaitingRetry");
+            Assert.IsTrue(waitingRetry.All(j => j.RetryCount == 1), "Nack 作业的 RetryCount 应为 1");
+            Assert.IsTrue(waitingRetry.All(j => j.ErrorMessage == "并发重试"), "Nack 作业的 ErrorMessage 应保留");
+        }
+        finally
+        {
+            DeleteTestRoot(rootPath);
+        }
+    }
+
+    [TestMethod]
+    public async Task FileContextJobQueue_AckOnNonExistentJob_ShouldBeNoOp()
+    {
+        var rootPath = CreateTestRootPath();
+        try
+        {
+            var options = new FileStorageOptions { RootPath = rootPath };
+            var queue = new FileContextJobQueue(options);
+
+            // 对不存在的 jobId 执行 Ack/Nack：应静默返回，不抛异常，不创建文件
+            await queue.AckAsync("non-existent-job");
+            await queue.NackAsync("non-existent-job", "test");
+
+            var allJobs = await queue.QueryAsync(new ContextJobQuery { Take = 100 });
+            Assert.AreEqual(0, allJobs.Count, "不存在的 job Ack/Nack 不应产生任何副作用");
+        }
+        finally
+        {
+            DeleteTestRoot(rootPath);
+        }
+    }
+
+    /// <summary>
+    /// R12.4A #6: FileContextJobQueue Ack/Nack 原子化（CAS）— 仅当 job 处于 Running 时才转换状态。
+    /// 验证文件系统队列下过期 Ack/Nack 不还原终态、不增加 RetryCount。
+    /// </summary>
+    [TestMethod]
+    public async Task FileContextJobQueue_AckNack_Cas_OnlyTransitionsFromRunning()
+    {
+        var rootPath = CreateTestRootPath();
+        try
+        {
+            var options = new FileStorageOptions { RootPath = rootPath };
+            var queue = new FileContextJobQueue(options);
+            var queryStore = (IContextJobQueryStore)queue;
+
+            await queue.EnqueueAsync(new ContextJob
+            {
+                JobId = "fs-job-cas",
+                WorkspaceId = "ws",
+                CollectionId = "col",
+                Kind = ContextJobKind.Custom,
+                PayloadJson = "{}",
+                MaxRetryCount = 3,
+                CreatedAt = DateTimeOffset.UtcNow
+            });
+
+            // Ack on Queued (not Running) → no-op
+            await queue.AckAsync("fs-job-cas");
+            var jobs = await queryStore.QueryAsync(new ContextJobQuery { Take = 10 });
+            Assert.AreEqual(ContextJobState.Queued, jobs.Single(j => j.JobId == "fs-job-cas").State,
+                "Ack on Queued job 应为 no-op");
+
+            // Nack on Queued (not Running) → no-op, RetryCount 不变
+            await queue.NackAsync("fs-job-cas", "stale nack");
+            jobs = await queryStore.QueryAsync(new ContextJobQuery { Take = 10 });
+            Assert.AreEqual(ContextJobState.Queued, jobs.Single(j => j.JobId == "fs-job-cas").State,
+                "Nack on Queued job 应为 no-op");
+            Assert.AreEqual(0, jobs.Single(j => j.JobId == "fs-job-cas").RetryCount,
+                "Nack on Queued job 不应增加 RetryCount");
+
+            // Dequeue → Running → Ack → Succeeded
+            var dequeued = await queue.DequeueAsync();
+            Assert.AreEqual(ContextJobState.Running, dequeued!.State);
+            await queue.AckAsync("fs-job-cas");
+            jobs = await queryStore.QueryAsync(new ContextJobQuery { Take = 10 });
+            Assert.AreEqual(ContextJobState.Succeeded, jobs.Single(j => j.JobId == "fs-job-cas").State);
+
+            // Stale Nack on Succeeded (not Running) → no-op, 不还原终态
+            await queue.NackAsync("fs-job-cas", "stale nack after success");
+            jobs = await queryStore.QueryAsync(new ContextJobQuery { Take = 10 });
+            Assert.AreEqual(ContextJobState.Succeeded, jobs.Single(j => j.JobId == "fs-job-cas").State,
+                "Nack on Succeeded job 应为 no-op，不应还原终态");
+            Assert.AreEqual(0, jobs.Single(j => j.JobId == "fs-job-cas").RetryCount,
+                "Nack on Succeeded job 不应增加 RetryCount");
+        }
+        finally
+        {
+            DeleteTestRoot(rootPath);
+        }
+    }
+
     public sealed class JsonLineTestRecord
     {
         public string Id { get; init; } = string.Empty;

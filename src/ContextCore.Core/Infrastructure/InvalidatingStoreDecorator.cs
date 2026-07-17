@@ -94,8 +94,9 @@ public abstract class InvalidatingStoreDecoratorBase
 /// <summary>
 /// 包装 <see cref="IContextStore"/>，在写入成功（SaveAsync/DeleteAsync）后触发缓存失效。
 /// 失效边界 Decorator：本身不缓存，仅向 <see cref="IStateCacheInvalidator"/> 发出失效信号。
+/// 同时透传 <see cref="IContextStoreBatchLookup"/> 能力接口，确保 Retrieval 通道能走批量查询路径。
 /// </summary>
-[GenerateInvalidatingDecorator(typeof(IContextStore))]
+[GenerateInvalidatingDecorator(typeof(IContextStore), typeof(IContextStoreBatchLookup))]
 public sealed partial class InvalidatingContextStoreDecorator;
 
 public sealed partial class InvalidatingContextStoreDecorator
@@ -119,8 +120,9 @@ public sealed partial class InvalidatingContextStoreDecorator
 
 /// <summary>
 /// 包装 <see cref="IMemoryStore"/>，在写入成功（SaveAsync/UpdateStatusAsync）后触发缓存失效。
+/// 同时透传 <see cref="IMemoryStoreBatchLookup"/> 能力接口，确保 Retrieval 通道能走批量查询路径。
 /// </summary>
-[GenerateInvalidatingDecorator(typeof(IMemoryStore))]
+[GenerateInvalidatingDecorator(typeof(IMemoryStore), typeof(IMemoryStoreBatchLookup))]
 public sealed partial class InvalidatingMemoryStoreDecorator;
 
 public sealed partial class InvalidatingMemoryStoreDecorator

@@ -88,6 +88,9 @@ public sealed class InMemoryVectorIndexStore : IVectorIndexStore
             .Where(item => query.MinScore is null || item.Score >= query.MinScore.Value)
             .OrderByDescending(item => item.Score)
             .ThenByDescending(item => item.Entry.UpdatedAt)
+            // R12.4A #7: 确定性 tie-break — 同 Score/UpdatedAt 的命中按 ItemId 升序，
+            // 避免 topK 截断时依赖字典枚举顺序导致向量索引检索结果不稳定。
+            .ThenBy(item => item.Entry.ItemId, StringComparer.OrdinalIgnoreCase)
             .Take(topK)
             .Select((item, index) => new VectorIndexSearchResult
             {

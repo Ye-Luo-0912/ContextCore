@@ -131,6 +131,9 @@ public sealed class RelationTraversalEngine
                     .OrderByDescending(r => ResolveWeight(r, profile))
                     .ThenByDescending(r => r.Confidence)
                     .ThenByDescending(r => r.CreatedAt)
+                    // R12.4A #7: 确定性 tie-break — 同 Weight/Confidence/CreatedAt 的 relation 按 Id 升序，
+                    // 避免 maxFanout 截断时依赖 store 返回顺序导致遍历 frontier 不稳定。
+                    .ThenBy(r => r.Id, StringComparer.OrdinalIgnoreCase)
                     .Take(maxFanout)
                     .ToArray();
 
@@ -168,6 +171,9 @@ public sealed class RelationTraversalEngine
 
             currentFrontier = nextFrontier
                 .OrderByDescending(n => n.Score)
+                // R12.4A #7: 确定性 tie-break — 同 Score 的 traversal node 按 ItemId 升序，
+                // 避免 maxFanout 截断时依赖 nextFrontier 追加顺序导致 BFS frontier 不稳定。
+                .ThenBy(n => n.ItemId, StringComparer.OrdinalIgnoreCase)
                 .Take(maxFanout)
                 .ToArray();
         }

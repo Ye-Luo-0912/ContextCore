@@ -25,7 +25,9 @@ public static class ContextRuntimeBuilder
         ArgumentNullException.ThrowIfNull(options);
 
         // 关系扩展主链
-        var relationTypeRegistry = new RelationTypeRegistry();
+        // P0-10.4: 优先使用 options 注入的 RelationTypeRegistry（Service DI singleton），
+        // 缺省时回退到本地 new，保持 ControlRoom / Evaluation 路径无需显式提供。
+        var relationTypeRegistry = options.RelationTypeRegistry ?? new RelationTypeRegistry();
         var relationExpansionProfileRegistry = new RelationExpansionProfileRegistry();
         var relationExpansionValidator = new RelationExpansionPolicyValidator(relationTypeRegistry);
         var relationTraversalEngine = new RelationTraversalEngine(options.RelationStore);

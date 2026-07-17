@@ -2324,7 +2324,6 @@ public sealed class ContextCoreMvpTests
             relationStore);
         var promotionService = new BasicMemoryPromotionService(memoryStore, memoryStore);
         var runtime = new ContextRuntimeService(
-            contextStore,
             memoryStore,
             promotionService,
             packageBuilder,
@@ -2368,7 +2367,6 @@ public sealed class ContextCoreMvpTests
             memoryStore,
             relationStore);
         var runtime = new ContextRuntimeService(
-            contextStore,
             memoryStore,
             new BasicMemoryPromotionService(memoryStore, memoryStore),
             packageBuilder,

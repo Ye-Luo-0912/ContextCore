@@ -1,6 +1,7 @@
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services.Graph;
+using ContextCore.Core.Services.Retrieval;
 
 namespace ContextCore.Core.Services;
 
@@ -17,13 +18,17 @@ internal sealed class MandatoryRecallChannelExecutor : IRetrievalChannelExecutor
 {
     private readonly IContextStore _contextStore;
     private readonly IMemoryStore? _memoryStore;
+    // P0-7.2: 回退路径（非 batch store）的并发上限
+    private readonly int _maxReadFanout;
 
     public MandatoryRecallChannelExecutor(
         IContextStore contextStore,
-        IMemoryStore? memoryStore)
+        IMemoryStore? memoryStore,
+        RetrievalFanoutOptions fanout)
     {
         _contextStore = contextStore;
         _memoryStore = memoryStore;
+        _maxReadFanout = fanout.MaxReadFanout;
     }
 
     public string StageName => "强制注入";
@@ -49,14 +54,17 @@ internal sealed class MandatoryRecallChannelExecutor : IRetrievalChannelExecutor
         }
 
         // 回退路径：并行单条查询（R17-C 消除 N+1 串行 await 的成果）。
-        var resolved = await Task.WhenAll(
-            requiredIds.Select(async id =>
+        // P0-7.2: 在 Batch API 落地前，用 BoundedFanout 施加 SemaphoreSlim 上限，
+        // 避免 VectorTopK=100 / RequiredIds 很多时 Postgres 连接池击穿或 FileSystem 锁竞争加剧。
+        var resolved = await BoundedFanout.WhenAllAsync(
+            requiredIds,
+            async (id, ct) =>
             {
                 var item = await _contextStore.GetAsync(
                     context.Request.WorkspaceId,
                     context.Request.CollectionId,
                     id,
-                    cancellationToken).ConfigureAwait(false);
+                    ct).ConfigureAwait(false);
                 if (item is not null)
                 {
                     return (Id: id, Candidate: RetrievalChannelCandidate.FromContextItem(
@@ -74,7 +82,7 @@ internal sealed class MandatoryRecallChannelExecutor : IRetrievalChannelExecutor
                         context.Request.WorkspaceId,
                         context.Request.CollectionId,
                         id,
-                        cancellationToken).ConfigureAwait(false);
+                        ct).ConfigureAwait(false);
                     if (memory is not null)
                     {
                         return (Id: id, Candidate: RetrievalChannelCandidate.FromMemoryItem(
@@ -88,7 +96,9 @@ internal sealed class MandatoryRecallChannelExecutor : IRetrievalChannelExecutor
                 }
 
                 return (Id: id, Candidate: (RetrievalChannelCandidate?)null);
-            })).ConfigureAwait(false);
+            },
+            _maxReadFanout,
+            cancellationToken).ConfigureAwait(false);
 
         var channelCandidates = new List<RetrievalChannelCandidate>();
         foreach (var entry in resolved)
@@ -157,13 +167,16 @@ internal sealed class MandatoryRecallChannelExecutor : IRetrievalChannelExecutor
             }
             else
             {
-                // MemoryStore 不支持批量，回退到并行单条查询
-                var memories = await Task.WhenAll(
-                    missedIds.Select(id => _memoryStore.GetAsync(
+                // P0-7.2: MemoryStore 不支持批量，回退到带节流的并行单条查询
+                var memories = await BoundedFanout.WhenAllAsync(
+                    missedIds,
+                    (id, ct) => _memoryStore.GetAsync(
                         context.Request.WorkspaceId,
                         context.Request.CollectionId,
                         id,
-                        cancellationToken))).ConfigureAwait(false);
+                        ct),
+                    _maxReadFanout,
+                    cancellationToken).ConfigureAwait(false);
 
                 foreach (var memory in memories.Where(m => m is not null))
                 {
@@ -264,9 +277,14 @@ internal sealed class MemoryRecallChannelExecutor : IRetrievalChannelExecutor
         if (_memoryStore is not null && (context.Request.IncludeWorkingMemory || context.Request.IncludeStableMemory))
         {
             var memoryItems = await QueryMemoryCandidatesAsync(context, cancellationToken).ConfigureAwait(false);
-            foreach (var memory in memoryItems.Where(item => RetrievalCandidatePolicy.MatchesMemoryQuery(item, context.QueryText)))
+            // R12.4A #1：Memory Recall 与 Keyword Recall 解耦。
+            // 不再用 MatchesMemoryQuery 作为硬过滤——记忆条目只要通过 lifecycle 过滤（CanUseMemoryItem）
+            // 即可参与评分。查询文本命中只作为加分项（ScoreMemoryCandidate 内部 CalculateTextScore），
+            // 不命中时仍保留 base + importance + confidence + anchor bonus。
+            // 这与 Package Build 路径（WorkingMemoryRecaller）的 anchor-based 评分语义一致。
+            foreach (var memory in memoryItems)
             {
-                var score = RetrievalCandidatePolicy.ScoreKeywordMemory(context.QueryText, memory, context.Plan);
+                var score = RetrievalCandidatePolicy.ScoreMemoryCandidate(context.QueryText, memory, context.Plan);
                 channelCandidates.Add(RetrievalChannelCandidate.FromMemoryItem(
                     channelSource: "memory",
                     memory,
@@ -333,15 +351,42 @@ internal sealed class MemoryRecallChannelExecutor : IRetrievalChannelExecutor
             : Task.FromResult<IReadOnlyList<ContextMemoryItem>>(Array.Empty<ContextMemoryItem>());
 
         await Task.WhenAll(workingTask, stableTask).ConfigureAwait(false);
-        var results = new List<ContextMemoryItem>();
-        results.AddRange(workingTask.Result);
-        results.AddRange(stableTask.Result);
 
         var allowDeprecated = RetrievalPlanExecutionPolicy.AllowDeprecated(context.Plan);
-        return results
-            .DistinctBy(item => item.Id, StringComparer.OrdinalIgnoreCase)
+        var workingItems = workingTask.Result
             .Where(item => RetrievalCandidatePolicy.CanUseMemoryItem(item, allowDeprecated))
-            .Take(context.CandidateTake)
+            .ToArray();
+        var stableItems = stableTask.Result
+            .Where(item => RetrievalCandidatePolicy.CanUseMemoryItem(item, allowDeprecated))
+            .ToArray();
+
+        // P0-7.3: per-layer quota prevents Working Memory from saturating the candidate budget.
+        // 旧实现按 Working → Stable → Distinct → Take(candidateTake) 顺序追加并截取，
+        // 当 Working 返回数 >= candidateTake 时 Stable 会被全部截掉，违反两层共存的语义。
+        // 新策略：Working 与 Stable 各保留至少一半配额，未填满层的剩余配额滚动给另一层，
+        // 合并后再按 Id 去重（Working 优先）。
+        var workingQuota = Math.Max(1, context.CandidateTake / 2);
+        var stableQuota = context.CandidateTake - workingQuota;
+
+        var takenWorking = workingItems.Take(workingQuota).ToArray();
+        var takenStable = stableItems.Take(stableQuota).ToArray();
+
+        // Rollover：若 Working 未填满自身配额，把剩余 slot 给 Stable；反之亦然。
+        // 注意：只在另一层未被先满足时才滚动，避免双向 rollover 死循环。
+        if (takenWorking.Length < workingQuota)
+        {
+            var rollover = workingQuota - takenWorking.Length;
+            takenStable = stableItems.Take(stableQuota + rollover).ToArray();
+        }
+        else if (takenStable.Length < stableQuota)
+        {
+            var rollover = stableQuota - takenStable.Length;
+            takenWorking = workingItems.Take(workingQuota + rollover).ToArray();
+        }
+
+        return takenWorking
+            .Concat(takenStable)
+            .DistinctBy(item => item.Id, StringComparer.OrdinalIgnoreCase)
             .ToArray();
     }
 }
@@ -352,17 +397,21 @@ internal sealed class VectorRecallChannelExecutor : IRetrievalChannelExecutor
     private readonly IEmbeddingProvider? _embeddingProvider;
     private readonly IMemoryStore? _memoryStore;
     private readonly IVectorStore? _vectorStore;
+    // P0-7.2: hydration 回退路径的并发上限
+    private readonly int _maxReadFanout;
 
     public VectorRecallChannelExecutor(
         IContextStore contextStore,
         IMemoryStore? memoryStore,
         IEmbeddingProvider? embeddingProvider,
-        IVectorStore? vectorStore)
+        IVectorStore? vectorStore,
+        RetrievalFanoutOptions fanout)
     {
         _contextStore = contextStore;
         _memoryStore = memoryStore;
         _embeddingProvider = embeddingProvider;
         _vectorStore = vectorStore;
+        _maxReadFanout = fanout.MaxReadFanout;
     }
 
     public string StageName => "向量召回";
@@ -441,9 +490,8 @@ internal sealed class VectorRecallChannelExecutor : IRetrievalChannelExecutor
             return Array.Empty<float>();
         }
 
-        var embeddingText = string.IsNullOrWhiteSpace(context.Request.QueryInstruction)
-            ? context.QueryText
-            : context.Request.QueryInstruction + context.QueryText;
+        // P0-7.6: 不再在此处拼接 QueryInstruction，改为通过 EmbeddingInput.Instruction 传递给 Provider，
+        // 由 EmbeddingTextComposer 统一负责拼接格式，避免双重 instruction 风险。
         var embedding = await _embeddingProvider.EmbedAsync(new EmbeddingRequest
         {
             OperationId = context.Request.OperationId,
@@ -456,7 +504,8 @@ internal sealed class VectorRecallChannelExecutor : IRetrievalChannelExecutor
                 new EmbeddingInput
                 {
                     Id = "query",
-                    Text = embeddingText,
+                    Text = context.QueryText,
+                    Instruction = context.Request.QueryInstruction,
                     SourceRef = "query"
                 }
             ],
@@ -488,8 +537,12 @@ internal sealed class VectorRecallChannelExecutor : IRetrievalChannelExecutor
         // 若两个 store 都不支持批量，回退到并行单条查询
         if (batchContextStore is null && batchMemoryStore is null)
         {
-            var parallelCandidates = await Task.WhenAll(
-                hits.Select(hit => CreateVectorHitCandidateAsync(context, hit, cancellationToken))).ConfigureAwait(false);
+            // P0-7.2: 对回退路径施加 SemaphoreSlim 上限
+            var parallelCandidates = await BoundedFanout.WhenAllAsync(
+                hits,
+                (hit, ct) => CreateVectorHitCandidateAsync(context, hit, ct),
+                _maxReadFanout,
+                cancellationToken).ConfigureAwait(false);
             var fallback = new List<RetrievalChannelCandidate>();
             foreach (var c in parallelCandidates)
             {
@@ -525,8 +578,12 @@ internal sealed class VectorRecallChannelExecutor : IRetrievalChannelExecutor
             }
             else
             {
-                var cs = await Task.WhenAll(
-                    contextHits.Select(h => CreateVectorHitCandidateAsync(context, h, cancellationToken))).ConfigureAwait(false);
+                // P0-7.2: batchContextStore is null — 带节流的并行回退
+                var cs = await BoundedFanout.WhenAllAsync(
+                    contextHits,
+                    (h, ct) => CreateVectorHitCandidateAsync(context, h, ct),
+                    _maxReadFanout,
+                    cancellationToken).ConfigureAwait(false);
                 foreach (var c in cs)
                 {
                     if (c is not null) results.Add(c);
@@ -544,8 +601,12 @@ internal sealed class VectorRecallChannelExecutor : IRetrievalChannelExecutor
             }
             else
             {
-                var ms = await Task.WhenAll(
-                    memoryHits.Select(h => CreateVectorHitCandidateAsync(context, h, cancellationToken))).ConfigureAwait(false);
+                // P0-7.2: batchMemoryStore is null — 带节流的并行回退
+                var ms = await BoundedFanout.WhenAllAsync(
+                    memoryHits,
+                    (h, ct) => CreateVectorHitCandidateAsync(context, h, ct),
+                    _maxReadFanout,
+                    cancellationToken).ConfigureAwait(false);
                 foreach (var c in ms)
                 {
                     if (c is not null) results.Add(c);

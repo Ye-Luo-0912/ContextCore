@@ -198,13 +198,49 @@ internal static class CodeGenerationHelpers
         }));
     }
 
-    /// <summary>判断方法是否为只读方法（按名称前缀约定：Get/Query/List/Search）。</summary>
+    /// <summary>
+    /// 判断方法是否为只读方法（按 [StoreOperation(Read)] attribute）。
+    /// P0-8：取代基于方法名前缀（Get/Query/List/Search/BatchGet）的脆弱推断；只认可显式标注的 Read 操作。
+    /// 未标注方法的诊断由 InvalidatingDecoratorGenerator 负责。
+    /// </summary>
     public static bool IsReadMethod(IMethodSymbol method)
+        => GetStoreOperationKind(method) == StoreOperationKindValue.Read;
+
+    private const string StoreOperationAttributeFullyQualifiedName = "ContextCore.Abstractions.StoreOperationAttribute";
+
+    /// <summary>
+    /// 读取方法上的 [StoreOperation] attribute，返回操作语义值。未标注返回 null。
+    /// P0-8：源生成器不引用 Abstractions 程序集（避免运行时依赖），
+    /// 通过符号 API 读取 attribute 构造参数的 int 值。
+    /// </summary>
+    public static StoreOperationKindValue? GetStoreOperationKind(IMethodSymbol method)
     {
-        var name = method.Name;
-        return name.StartsWith("Get", StringComparison.Ordinal)
-            || name.StartsWith("Query", StringComparison.Ordinal)
-            || name.StartsWith("List", StringComparison.Ordinal)
-            || name.StartsWith("Search", StringComparison.Ordinal);
+        foreach (var attr in method.GetAttributes())
+        {
+            if (attr.AttributeClass is null) continue;
+            var fullName = attr.AttributeClass.ToDisplayString();
+            if (!fullName.Equals(StoreOperationAttributeFullyQualifiedName, StringComparison.Ordinal)) continue;
+            if (attr.ConstructorArguments.Length > 0
+                && attr.ConstructorArguments[0].Value is int kindValue
+                && kindValue >= 0 && kindValue <= 1)
+            {
+                return (StoreOperationKindValue)kindValue;
+            }
+        }
+        return null;
     }
+}
+
+/// <summary>
+/// P0-8：本地镜像 ContextCore.Abstractions.StoreOperationKind 枚举值。
+/// 源生成器不引用 Abstractions 程序集（避免运行时依赖），通过符号 API 读取 attribute 构造参数的 int 值。
+/// 如果 Abstractions 的枚举值变化，需要同步更新这里。
+/// </summary>
+internal enum StoreOperationKindValue
+{
+    /// <summary>读取操作（对应 StoreOperationKind.Read = 0）。</summary>
+    Read = 0,
+
+    /// <summary>写入操作（对应 StoreOperationKind.Write = 1）。</summary>
+    Write = 1
 }

@@ -224,20 +224,16 @@ public class ParallelPrefetchBenchmarks
         _ = result.Package.Sections.Count;
     }
 
-    // 并发场景：4 路并发构建，每路内部 6 路并行预取，验证高并发下是否放大存储压力
+    // P0-11：并发场景直接使用 Task.WhenAll(Enumerable.Range(...).Select(...))，
+    // 避免 Task.Run 将 ThreadPool 调度成本混入业务测量。
     [Benchmark]
     public async Task WithDelay_Concurrent4_ParallelPrefetch()
     {
-        var tasks = new Task[4];
-        for (int i = 0; i < 4; i++)
+        await Task.WhenAll(Enumerable.Range(0, 4).Select(async _ =>
         {
-            tasks[i] = Task.Run(async () =>
-            {
-                var result = await _delayedBuilder.BuildDetailedAsync(_request, CancellationToken.None);
-                _ = result.Package.Sections.Count;
-            });
-        }
-        await Task.WhenAll(tasks);
+            var result = await _delayedBuilder.BuildDetailedAsync(_request, CancellationToken.None);
+            _ = result.Package.Sections.Count;
+        }));
     }
 }
 

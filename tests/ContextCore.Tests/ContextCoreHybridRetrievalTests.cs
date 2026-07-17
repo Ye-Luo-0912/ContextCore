@@ -79,6 +79,356 @@ public sealed class ContextCoreHybridRetrievalTests
         CollectionAssert.Contains(result.Candidates[0].MatchedAnchors.ToArray(), "中文输出");
     }
 
+    // R12.4A #1：Memory Recall 与 Keyword Recall 解耦。
+    // 记忆条目不含查询关键词时仍应被召回（基于 importance/confidence/lifecycle），不被 MatchesMemoryQuery 硬过滤丢弃。
+    // 这与 Package Build 路径（WorkingMemoryRecaller）的 anchor-based 评分语义一致。
+    [TestMethod]
+    public async Task MemoryRecallChannelExecutor_DoesNotDropMemoryOnKeywordMiss()
+    {
+        var memoryStore = new InMemoryMemoryStore();
+        var executor = new MemoryRecallChannelExecutor(memoryStore);
+        var now = DateTimeOffset.UtcNow;
+
+        // 记忆内容与查询文本完全无关键词重叠——长期稳定事实不依赖查询词命中。
+        await memoryStore.SaveAsync(Memory(
+            "mem-stable-no-keyword-match",
+            "项目使用 NET 10 框架与 Postgres 后端，所有数据层依赖强一致事务。",
+            ContextMemoryStatus.Active,
+            now,
+            tags: ["architecture", "infrastructure"]));
+
+        var result = await executor.ExecuteAsync(RetrievalChannelContext.Create(
+            new ContextRetrievalRequest
+            {
+                WorkspaceId = "workspace-test",
+                CollectionId = "collection-test",
+                QueryText = "性能优化基准测试",
+                IncludeWorkingMemory = true,
+                IncludeStableMemory = false,
+                CandidateTake = 10
+            },
+            new RetrievalPlan(),
+            new Dictionary<string, string>()));
+
+        Assert.AreEqual("记忆召回", result.StageName);
+        // 关键断言：即使查询文本不含记忆内容关键词，记忆仍应被召回（未被 MatchesMemoryQuery 丢弃）。
+        Assert.AreEqual(1, result.Candidates.Count,
+            $"记忆条目应被召回（lifecycle valid + 解耦后无关键词硬过滤），实际候选数 {result.Candidates.Count}");
+        Assert.AreEqual("mem-stable-no-keyword-match", result.Candidates[0].SourceId);
+        // 查询未命中关键词，matchedTokens 应为空（trace 观察正确），但候选仍保留。
+        Assert.AreEqual(0, result.Candidates[0].MatchedTokens.Count,
+            "查询文本未命中记忆内容，matchedTokens 应为空");
+    }
+
+    // P0 4.1 矩阵测试：Memory Recall 必须独立于 Keyword Recall。
+    // 当 IncludeKeywordRecall=false 时，Memory Channel 仍应按 IncludeWorkingMemory/IncludeStableMemory 执行。
+    [TestMethod]
+    public async Task MemoryRecall_KeywordDisabled_WorkingOnly_RecallsWorkingLayer()
+    {
+        var (retriever, workingId, stableId) = await BuildMemoryMatrixRetrieverAsync();
+        var result = await retriever.RetrieveAsync(MatrixRequest(
+            includeKeywordRecall: false, includeWorkingMemory: true, includeStableMemory: false));
+
+        var ids = result.SelectedItems.Select(c => c.SourceId).ToArray();
+        CollectionAssert.Contains(ids, workingId);
+        CollectionAssert.DoesNotContain(ids, stableId);
+    }
+
+    [TestMethod]
+    public async Task MemoryRecall_KeywordDisabled_StableOnly_RecallsStableLayer()
+    {
+        var (retriever, workingId, stableId) = await BuildMemoryMatrixRetrieverAsync();
+        var result = await retriever.RetrieveAsync(MatrixRequest(
+            includeKeywordRecall: false, includeWorkingMemory: false, includeStableMemory: true));
+
+        var ids = result.SelectedItems.Select(c => c.SourceId).ToArray();
+        CollectionAssert.DoesNotContain(ids, workingId);
+        CollectionAssert.Contains(ids, stableId);
+    }
+
+    [TestMethod]
+    public async Task MemoryRecall_KeywordDisabled_BothLayers_RecallsBothLayers()
+    {
+        var (retriever, workingId, stableId) = await BuildMemoryMatrixRetrieverAsync();
+        var result = await retriever.RetrieveAsync(MatrixRequest(
+            includeKeywordRecall: false, includeWorkingMemory: true, includeStableMemory: true));
+
+        var ids = result.SelectedItems.Select(c => c.SourceId).ToArray();
+        CollectionAssert.Contains(ids, workingId);
+        CollectionAssert.Contains(ids, stableId);
+    }
+
+    [TestMethod]
+    public async Task MemoryRecall_KeywordDisabled_NoMemoryFlags_DoesNotRecallMemory()
+    {
+        var (retriever, workingId, stableId) = await BuildMemoryMatrixRetrieverAsync();
+        var result = await retriever.RetrieveAsync(MatrixRequest(
+            includeKeywordRecall: false, includeWorkingMemory: false, includeStableMemory: false));
+
+        var ids = result.SelectedItems.Select(c => c.SourceId).ToArray();
+        CollectionAssert.DoesNotContain(ids, workingId);
+        CollectionAssert.DoesNotContain(ids, stableId);
+    }
+
+    // P0-7.3 回归测试：per-layer quota 防止 Working Memory 饱和后压掉 Stable Memory。
+    // 旧实现按 Working → Stable → Distinct → Take(candidateTake) 顺序追加截取，
+    // 当 Working 返回数 >= candidateTake 时 Stable 会被全部截掉。
+    // 新实现使用 per-layer quota + rollover，确保两层共存。
+
+    [TestMethod]
+    public async Task MemoryRecall_PerLayerQuota_PreservesStableWhenWorkingSaturates()
+    {
+        var memoryStore = new InMemoryMemoryStore();
+        var executor = new MemoryRecallChannelExecutor(memoryStore);
+        var now = DateTimeOffset.UtcNow;
+
+        // 填充 8 个 Working 项（远超 candidateTake=4，旧实现会把 Stable 全部截掉）。
+        for (var i = 0; i < 8; i++)
+        {
+            await memoryStore.SaveAsync(MakeLayeredMemory(
+                $"mem-working-{i}",
+                $"矩阵测试 Working 候选 {i}",
+                ContextMemoryLayer.Working,
+                ContextMemoryStatus.Active,
+                now));
+        }
+
+        // 填充 4 个 Stable 项。
+        for (var i = 0; i < 4; i++)
+        {
+            await memoryStore.SaveAsync(MakeLayeredMemory(
+                $"mem-stable-{i}",
+                $"矩阵测试 Stable 候选 {i}",
+                ContextMemoryLayer.Stable,
+                ContextMemoryStatus.Stable,
+                now));
+        }
+
+        var result = await executor.ExecuteAsync(RetrievalChannelContext.Create(
+            new ContextRetrievalRequest
+            {
+                WorkspaceId = "workspace-test",
+                CollectionId = "collection-test",
+                QueryText = "矩阵测试",
+                IncludeWorkingMemory = true,
+                IncludeStableMemory = true,
+                CandidateTake = 4,
+                TopK = 10,
+                TokenBudget = 1000
+            },
+            new RetrievalPlan { NeedsStableMemory = true },
+            new Dictionary<string, string>()));
+
+        var ids = result.Candidates.Select(c => c.SourceId).ToArray();
+
+        // 关键断言：Stable 项必须出现在结果中（旧实现会被全部截掉）。
+        var workingCount = ids.Count(id => id.StartsWith("mem-working-", StringComparison.Ordinal));
+        var stableCount = ids.Count(id => id.StartsWith("mem-stable-", StringComparison.Ordinal));
+        Assert.AreEqual(2, workingCount,
+            $"Working 配额应为 2（candidateTake/2），实际 {workingCount}，全部 ids: {string.Join(", ", ids)}");
+        Assert.AreEqual(2, stableCount,
+            $"Stable 配额应为 2，实际 {stableCount}，全部 ids: {string.Join(", ", ids)}");
+        Assert.AreEqual(4, ids.Length,
+            $"结果总数应等于 candidateTake=4，实际 {ids.Length}");
+    }
+
+    [TestMethod]
+    public async Task MemoryRecall_PerLayerQuota_RollsOverUnusedWorkingSlotsToStable()
+    {
+        var memoryStore = new InMemoryMemoryStore();
+        var executor = new MemoryRecallChannelExecutor(memoryStore);
+        var now = DateTimeOffset.UtcNow;
+
+        // Working 只有 1 项（远少于 workingQuota=5）。
+        await memoryStore.SaveAsync(MakeLayeredMemory(
+            "mem-working-solo",
+            "矩阵测试 Working 单项",
+            ContextMemoryLayer.Working,
+            ContextMemoryStatus.Active,
+            now));
+
+        // Stable 有 10 项（足够吸收 rollover）。
+        for (var i = 0; i < 10; i++)
+        {
+            await memoryStore.SaveAsync(MakeLayeredMemory(
+                $"mem-stable-{i}",
+                $"矩阵测试 Stable 候选 {i}",
+                ContextMemoryLayer.Stable,
+                ContextMemoryStatus.Stable,
+                now));
+        }
+
+        var result = await executor.ExecuteAsync(RetrievalChannelContext.Create(
+            new ContextRetrievalRequest
+            {
+                WorkspaceId = "workspace-test",
+                CollectionId = "collection-test",
+                QueryText = "矩阵测试",
+                IncludeWorkingMemory = true,
+                IncludeStableMemory = true,
+                CandidateTake = 10,
+                TopK = 10,
+                TokenBudget = 1000
+            },
+            new RetrievalPlan { NeedsStableMemory = true },
+            new Dictionary<string, string>()));
+
+        var ids = result.Candidates.Select(c => c.SourceId).ToArray();
+
+        // workingQuota=5, stableQuota=5；takenWorking=1 (< 5)，rollover=4 → takenStable=Take(5+4)=9。
+        var workingCount = ids.Count(id => id.StartsWith("mem-working-", StringComparison.Ordinal));
+        var stableCount = ids.Count(id => id.StartsWith("mem-stable-", StringComparison.Ordinal));
+        Assert.AreEqual(1, workingCount,
+            $"Working 应保持原数量 1，实际 {workingCount}，全部 ids: {string.Join(", ", ids)}");
+        Assert.AreEqual(9, stableCount,
+            $"Stable 应吸收 Working 未用配额达到 9 项，实际 {stableCount}，全部 ids: {string.Join(", ", ids)}");
+    }
+
+    [TestMethod]
+    public async Task MemoryRecall_PerLayerQuota_RollsOverUnusedStableSlotsToWorking()
+    {
+        var memoryStore = new InMemoryMemoryStore();
+        var executor = new MemoryRecallChannelExecutor(memoryStore);
+        var now = DateTimeOffset.UtcNow;
+
+        // Working 有 10 项。
+        for (var i = 0; i < 10; i++)
+        {
+            await memoryStore.SaveAsync(MakeLayeredMemory(
+                $"mem-working-{i}",
+                $"矩阵测试 Working 候选 {i}",
+                ContextMemoryLayer.Working,
+                ContextMemoryStatus.Active,
+                now));
+        }
+
+        // Stable 只有 1 项。
+        await memoryStore.SaveAsync(MakeLayeredMemory(
+            "mem-stable-solo",
+            "矩阵测试 Stable 单项",
+            ContextMemoryLayer.Stable,
+            ContextMemoryStatus.Stable,
+            now));
+
+        var result = await executor.ExecuteAsync(RetrievalChannelContext.Create(
+            new ContextRetrievalRequest
+            {
+                WorkspaceId = "workspace-test",
+                CollectionId = "collection-test",
+                QueryText = "矩阵测试",
+                IncludeWorkingMemory = true,
+                IncludeStableMemory = true,
+                CandidateTake = 10,
+                TopK = 10,
+                TokenBudget = 1000
+            },
+            new RetrievalPlan { NeedsStableMemory = true },
+            new Dictionary<string, string>()));
+
+        var ids = result.Candidates.Select(c => c.SourceId).ToArray();
+
+        // workingQuota=5, stableQuota=5；takenWorking=5, takenStable=1 (< 5)，rollover=4 → takenWorking=Take(5+4)=9。
+        var workingCount = ids.Count(id => id.StartsWith("mem-working-", StringComparison.Ordinal));
+        var stableCount = ids.Count(id => id.StartsWith("mem-stable-", StringComparison.Ordinal));
+        Assert.AreEqual(9, workingCount,
+            $"Working 应吸收 Stable 未用配额达到 9 项，实际 {workingCount}，全部 ids: {string.Join(", ", ids)}");
+        Assert.AreEqual(1, stableCount,
+            $"Stable 应保持原数量 1，实际 {stableCount}，全部 ids: {string.Join(", ", ids)}");
+    }
+
+    private static ContextMemoryItem MakeLayeredMemory(
+        string id, string content, ContextMemoryLayer layer, ContextMemoryStatus status, DateTimeOffset now)
+    {
+        return new ContextMemoryItem
+        {
+            Id = id,
+            WorkspaceId = "workspace-test",
+            CollectionId = "collection-test",
+            Layer = layer,
+            Status = status,
+            Type = "task",
+            Content = content,
+            ContentFormat = ContextContentFormat.PlainText,
+            Tags = ["矩阵"],
+            SourceRefs = [$"source:{id}"],
+            Importance = 0.8,
+            Confidence = 0.9,
+            CreatedAt = now,
+            UpdatedAt = now
+        };
+    }
+
+    private static async Task<(HybridContextRetriever retriever, string workingId, string stableId)> BuildMemoryMatrixRetrieverAsync()
+    {
+        var contextStore = new InMemoryContextStore();
+        var memoryStore = new InMemoryMemoryStore();
+        var retriever = new HybridContextRetriever(
+            contextStore,
+            memoryStore,
+            relationStore: null,
+            embeddingProvider: null,
+            vectorStore: null,
+            traceStore: null);
+        var now = DateTimeOffset.UtcNow;
+
+        const string workingId = "mem-matrix-working";
+        const string stableId = "mem-matrix-stable";
+        await memoryStore.SaveAsync(new ContextMemoryItem
+        {
+            Id = workingId,
+            WorkspaceId = "workspace-test",
+            CollectionId = "collection-test",
+            Layer = ContextMemoryLayer.Working,
+            Status = ContextMemoryStatus.Active,
+            Type = "task",
+            Content = "矩阵测试工作层候选内容",
+            ContentFormat = ContextContentFormat.PlainText,
+            Tags = ["matrix"],
+            SourceRefs = [$"source:{workingId}"],
+            Importance = 0.8,
+            Confidence = 0.9,
+            CreatedAt = now,
+            UpdatedAt = now
+        });
+        await memoryStore.SaveAsync(new ContextMemoryItem
+        {
+            Id = stableId,
+            WorkspaceId = "workspace-test",
+            CollectionId = "collection-test",
+            Layer = ContextMemoryLayer.Stable,
+            Status = ContextMemoryStatus.Stable,
+            Type = "task",
+            Content = "矩阵测试稳定层候选内容",
+            ContentFormat = ContextContentFormat.PlainText,
+            Tags = ["matrix"],
+            SourceRefs = [$"source:{stableId}"],
+            Importance = 0.8,
+            Confidence = 0.9,
+            CreatedAt = now,
+            UpdatedAt = now
+        });
+        return (retriever, workingId, stableId);
+    }
+
+    private static ContextRetrievalRequest MatrixRequest(
+        bool includeKeywordRecall, bool includeWorkingMemory, bool includeStableMemory)
+    {
+        return new ContextRetrievalRequest
+        {
+            WorkspaceId = "workspace-test",
+            CollectionId = "collection-test",
+            QueryText = "矩阵测试",
+            IncludeKeywordRecall = includeKeywordRecall,
+            IncludeVectorRecall = false,
+            IncludeWorkingMemory = includeWorkingMemory,
+            IncludeStableMemory = includeStableMemory,
+            IncludeRelationExpansion = false,
+            TopK = 10,
+            CandidateTake = 10,
+            TokenBudget = 1000
+        };
+    }
+
     [TestMethod]
     public async Task VectorRecallChannelExecutor_ShouldReturnEmptyWhenDisabledAndDiagnosticWhenUnavailable()
     {
@@ -86,7 +436,8 @@ public sealed class ContextCoreHybridRetrievalTests
             new InMemoryContextStore(),
             memoryStore: null,
             embeddingProvider: null,
-            vectorStore: null);
+            vectorStore: null,
+            fanout: RetrievalFanoutOptions.Default);
 
         var disabled = await executor.ExecuteAsync(RetrievalChannelContext.Create(
             new ContextRetrievalRequest
@@ -849,6 +1200,276 @@ public sealed class ContextCoreHybridRetrievalTests
             CreatedAt = now,
             UpdatedAt = now
         };
+    }
+
+    /// <summary>
+    /// R12.4A #7: Retrieval deterministic CandidateId tie-break —
+    /// 同 Score + 同 EstimatedTokens 的候选按 CandidateId 升序稳定排序，
+    /// 避免依赖输入枚举顺序导致跨 Provider/并发 Channel 结果不稳定。
+    /// </summary>
+    [TestMethod]
+    public async Task Retrieval_TieBreak_SameScore_DeterministicByCandidateId()
+    {
+        var contextStore = new InMemoryContextStore();
+        var retriever = new HybridContextRetriever(contextStore);
+        var now = DateTimeOffset.UtcNow;
+
+        // 3 个相同 Score 的候选（通过相同关键词命中数构造），仅 CandidateId 不同
+        await contextStore.SaveAsync(Item("zebra", "alpha beta gamma delta", ["tag"], now));
+        await contextStore.SaveAsync(Item("alpha", "alpha beta gamma delta", ["tag"], now));
+        await contextStore.SaveAsync(Item("mango", "alpha beta gamma delta", ["tag"], now));
+
+        var result = await RetrieveForQueryAsync(retriever, "alpha beta gamma delta");
+
+        // 3 个候选都应返回，Score 相同，按 CandidateId 升序排列
+        Assert.IsTrue(result.SelectedItems.Count >= 3,
+            $"至少应返回 3 个候选，实际 {result.SelectedItems.Count}");
+
+        var sortedById = result.SelectedItems
+            .Take(3)
+            .Select(c => c.CandidateId)
+            .ToArray();
+        var expected = sortedById.OrderBy(id => id, StringComparer.OrdinalIgnoreCase).ToArray();
+        CollectionAssert.AreEqual(expected, sortedById,
+            $"同 Score 候选应按 CandidateId 升序排列，实际 {string.Join(", ", sortedById)}");
+    }
+
+    /// <summary>
+    /// R12.4A #8: Relation quota 语义修正——Pack 阶段为 relation-only 候选预留 TopK 名额。
+    /// 当 main 候选分数高于 relation-only 候选时，仍应保留部分 TopK 槽位给 relation-only 候选，
+    /// 而不是让高分 main 候选全部挤掉 relation-only 候选（之前的 cap-only 语义缺陷）。
+    /// </summary>
+    [TestMethod]
+    public void Pack_RelationQuota_PreservesSlotsForRelationOnlyCandidates()
+    {
+        var request = new ContextRetrievalRequest
+        {
+            WorkspaceId = "workspace-test",
+            CollectionId = "collection-test",
+            TopK = 6,
+            TokenBudget = 1000
+        };
+
+        // 6 个 main 候选（高分，若无 reservation 会全部占据 TopK）
+        var mainCandidates = Enumerable.Range(0, 6)
+            .Select(i => new ContextRetrievalCandidate
+            {
+                CandidateId = $"main-{i}",
+                SourceId = $"main-{i}",
+                Score = 0.9 - i * 0.01,
+                EstimatedTokens = 10,
+                Metadata = new Dictionary<string, string>()
+            })
+            .ToArray();
+
+        // 4 个 relation-only 候选（低分，cap 后 2 个进入排序）
+        var relationOnlyCandidates = Enumerable.Range(0, 4)
+            .Select(i => new ContextRetrievalCandidate
+            {
+                CandidateId = $"rel-{i}",
+                SourceId = $"rel-{i}",
+                Score = 0.5 - i * 0.01,
+                EstimatedTokens = 10,
+                Metadata = new Dictionary<string, string>()
+            })
+            .ToArray();
+
+        var relationOnlyIds = relationOnlyCandidates
+            .Select(c => c.CandidateId)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var ranked = RetrievalPackingPolicy.BuildRankedCandidates(
+            request,
+            mainCandidates,
+            relationOnlyCandidates);
+
+        var result = RetrievalPackingPolicy.Pack(request, ranked, relationOnlyIds);
+
+        var selectedIds = result.SelectedCandidates.Select(c => c.CandidateId).ToArray();
+        var relationSelected = selectedIds.Count(id => id.StartsWith("rel-", StringComparison.Ordinal));
+        var mainSelected = selectedIds.Count(id => id.StartsWith("main-", StringComparison.Ordinal));
+
+        // topK = 6, topK/3 = 2, max(2, 2) = 2, topK/2 = 3, reservedSlots = min(min(2, 2), 3) = 2
+        // （注意：BuildRankedCandidates 的 cap 也是 2，所以 ranked 中只有 2 个 relation-only 候选）
+        // mainSlots = 6 - 2 = 4
+        // 预期：4 main + 2 relation-only
+        Assert.AreEqual(2, relationSelected,
+            $"reservation 应保留 2 个 relation-only 槽位，实际 {relationSelected}，全部 ids: {string.Join(", ", selectedIds)}");
+        Assert.AreEqual(4, mainSelected,
+            $"main 应占 4 个槽位，实际 {mainSelected}，全部 ids: {string.Join(", ", selectedIds)}");
+        Assert.AreEqual(6, selectedIds.Length,
+            $"TopK=6 应返回 6 个候选，实际 {selectedIds.Length}");
+    }
+
+    /// <summary>
+    /// R12.4A #8: 当 relation-only 候选不足预留量时，未填满的槽位 rollover 给 main 候选。
+    /// </summary>
+    [TestMethod]
+    public void Pack_RelationQuota_RollsOverUnusedSlotsToMain()
+    {
+        var request = new ContextRetrievalRequest
+        {
+            WorkspaceId = "workspace-test",
+            CollectionId = "collection-test",
+            TopK = 6,
+            TokenBudget = 1000
+        };
+
+        // 6 个 main 候选（高分）
+        var mainCandidates = Enumerable.Range(0, 6)
+            .Select(i => new ContextRetrievalCandidate
+            {
+                CandidateId = $"main-{i}",
+                SourceId = $"main-{i}",
+                Score = 0.9 - i * 0.01,
+                EstimatedTokens = 10,
+                Metadata = new Dictionary<string, string>()
+            })
+            .ToArray();
+
+        // 1 个 relation-only 候选（少于 reservedSlots=2，剩余 1 槽位应 rollover 给 main）
+        var relationOnlyCandidates = new[]
+        {
+            new ContextRetrievalCandidate
+            {
+                CandidateId = "rel-0",
+                SourceId = "rel-0",
+                Score = 0.5,
+                EstimatedTokens = 10,
+                Metadata = new Dictionary<string, string>()
+            }
+        };
+
+        var relationOnlyIds = relationOnlyCandidates
+            .Select(c => c.CandidateId)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var ranked = RetrievalPackingPolicy.BuildRankedCandidates(
+            request,
+            mainCandidates,
+            relationOnlyCandidates);
+
+        var result = RetrievalPackingPolicy.Pack(request, ranked, relationOnlyIds);
+
+        var selectedIds = result.SelectedCandidates.Select(c => c.CandidateId).ToArray();
+        var relationSelected = selectedIds.Count(id => id.StartsWith("rel-", StringComparison.Ordinal));
+        var mainSelected = selectedIds.Count(id => id.StartsWith("main-", StringComparison.Ordinal));
+
+        // relationOnlyInRanked = 1, reservedSlots = min(min(1, 2), 3) = 1, mainSlots = 5
+        // 阶段1: 5 main + 1 relation-only = 6 (满)
+        // 预期：5 main + 1 relation-only
+        Assert.AreEqual(1, relationSelected,
+            $"relation-only 应占 1 个槽位（reservedSlots=1），实际 {relationSelected}");
+        Assert.AreEqual(5, mainSelected,
+            $"main 应占 5 个槽位（含 rollover），实际 {mainSelected}");
+        Assert.AreEqual(6, selectedIds.Length,
+            $"TopK=6 应返回 6 个候选，实际 {selectedIds.Length}");
+    }
+
+    /// <summary>
+    /// R12.4A #8: 当 main 候选不足 mainSlots 时，未填满的槽位 rollover 给 relation-only 候选。
+    /// </summary>
+    [TestMethod]
+    public void Pack_RelationQuota_RollsOverUnusedMainSlotsToRelationOnly()
+    {
+        var request = new ContextRetrievalRequest
+        {
+            WorkspaceId = "workspace-test",
+            CollectionId = "collection-test",
+            TopK = 6,
+            TokenBudget = 1000
+        };
+
+        // 2 个 main 候选（少于 mainSlots=4，剩余 2 槽位应 rollover 给 relation-only）
+        var mainCandidates = Enumerable.Range(0, 2)
+            .Select(i => new ContextRetrievalCandidate
+            {
+                CandidateId = $"main-{i}",
+                SourceId = $"main-{i}",
+                Score = 0.9 - i * 0.01,
+                EstimatedTokens = 10,
+                Metadata = new Dictionary<string, string>()
+            })
+            .ToArray();
+
+        // 4 个 relation-only 候选（cap 后 2 个进入排序，但 rollover 后 2 个槽位也用完）
+        var relationOnlyCandidates = Enumerable.Range(0, 4)
+            .Select(i => new ContextRetrievalCandidate
+            {
+                CandidateId = $"rel-{i}",
+                SourceId = $"rel-{i}",
+                Score = 0.5 - i * 0.01,
+                EstimatedTokens = 10,
+                Metadata = new Dictionary<string, string>()
+            })
+            .ToArray();
+
+        var relationOnlyIds = relationOnlyCandidates
+            .Select(c => c.CandidateId)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var ranked = RetrievalPackingPolicy.BuildRankedCandidates(
+            request,
+            mainCandidates,
+            relationOnlyCandidates);
+
+        var result = RetrievalPackingPolicy.Pack(request, ranked, relationOnlyIds);
+
+        var selectedIds = result.SelectedCandidates.Select(c => c.CandidateId).ToArray();
+        var relationSelected = selectedIds.Count(id => id.StartsWith("rel-", StringComparison.Ordinal));
+        var mainSelected = selectedIds.Count(id => id.StartsWith("main-", StringComparison.Ordinal));
+
+        // relationOnlyInRanked = 2 (cap=2), reservedSlots = min(min(2, 2), 3) = 2, mainSlots = 4
+        // 阶段1: 2 main + 2 relation-only = 4 (< 6)
+        // 阶段2 rollover: 剩余 2 槽位，但 dropped 中无候选（cap 已限制为 2 个 relation-only）
+        // 预期：2 main + 2 relation-only = 4（无更多候选可填充）
+        Assert.AreEqual(2, relationSelected,
+            $"relation-only 应占 2 个槽位（reservedSlots=2），实际 {relationSelected}");
+        Assert.AreEqual(2, mainSelected,
+            $"main 应占 2 个槽位，实际 {mainSelected}");
+        Assert.AreEqual(4, selectedIds.Length,
+            $"无更多候选可填充，应返回 4 个，实际 {selectedIds.Length}");
+    }
+
+    /// <summary>
+    /// R12.4A #8: 无 relation-only 候选时，reservation 不生效，行为与之前一致。
+    /// </summary>
+    [TestMethod]
+    public void Pack_RelationQuota_NoRelationOnly_BehavesUnchanged()
+    {
+        var request = new ContextRetrievalRequest
+        {
+            WorkspaceId = "workspace-test",
+            CollectionId = "collection-test",
+            TopK = 4,
+            TokenBudget = 1000
+        };
+
+        var mainCandidates = Enumerable.Range(0, 6)
+            .Select(i => new ContextRetrievalCandidate
+            {
+                CandidateId = $"main-{i}",
+                SourceId = $"main-{i}",
+                Score = 0.9 - i * 0.01,
+                EstimatedTokens = 10,
+                Metadata = new Dictionary<string, string>()
+            })
+            .ToArray();
+
+        var ranked = RetrievalPackingPolicy.BuildRankedCandidates(
+            request,
+            mainCandidates,
+            Array.Empty<ContextRetrievalCandidate>());
+
+        // relationOnlyCandidateIds = null
+        var result = RetrievalPackingPolicy.Pack(request, ranked, relationOnlyCandidateIds: null);
+
+        Assert.AreEqual(4, result.SelectedCandidates.Count,
+            "无 relation-only 候选时，应按 TopK=4 选前 4 个 main 候选");
+        Assert.AreEqual("main-0", result.SelectedCandidates[0].CandidateId);
+        Assert.AreEqual("main-1", result.SelectedCandidates[1].CandidateId);
+        Assert.AreEqual("main-2", result.SelectedCandidates[2].CandidateId);
+        Assert.AreEqual("main-3", result.SelectedCandidates[3].CandidateId);
     }
 
     private static ContextItem Item(

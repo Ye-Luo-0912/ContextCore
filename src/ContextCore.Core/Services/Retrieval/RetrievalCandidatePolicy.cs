@@ -41,8 +41,14 @@ internal static class RetrievalCandidatePolicy
             + Clamp01(item.Importance);
     }
 
-    /// <summary>关键词召回中 memory 条目的基础分，包含计划主锚点奖励。</summary>
-    public static double ScoreKeywordMemory(string? queryText, ContextMemoryItem item, RetrievalPlan plan)
+    /// <summary>
+    /// R12.4A #1：记忆召回候选评分（与 Keyword Recall 解耦）。
+    /// 不再用关键词命中作为硬过滤——记忆条目只要通过 lifecycle 过滤（CanUseMemoryItem）即可参与评分。
+    /// 查询文本命中只作为加分项（CalculateTextScore），不命中时仍保留 base + importance + confidence + anchor bonus。
+    /// 这与 Package Build 路径（WorkingMemoryRecaller.ScoreWorkingMemoryForAnchors）的 anchor-based 评分语义一致：
+    /// 长期稳定记忆即使不含查询词，也应基于重要性/置信度/锚点信号召回。
+    /// </summary>
+    public static double ScoreMemoryCandidate(string? queryText, ContextMemoryItem item, RetrievalPlan plan)
     {
         return 1.8
             + CalculateTextScore(queryText, null, item.Content, item.Type, item.Tags)
@@ -71,30 +77,6 @@ internal static class RetrievalCandidatePolicy
         }
 
         return score;
-    }
-
-    /// <summary>判断记忆条目是否匹配查询文本，中文场景下使用轻量 bigram 扩展。</summary>
-    public static bool MatchesMemoryQuery(ContextMemoryItem item, string? queryText)
-    {
-        if (string.IsNullOrWhiteSpace(queryText))
-        {
-            return true;
-        }
-
-        var terms = SplitQueryTerms(queryText);
-        if (terms.Length > 0)
-        {
-            return terms.Any(term =>
-                Contains(item.Type, term)
-                || Contains(item.Content, term)
-                || item.Tags.Any(tag => Contains(tag, term))
-                || item.SourceRefs.Any(sourceRef => Contains(sourceRef, term)));
-        }
-
-        return Contains(item.Type, queryText)
-            || Contains(item.Content, queryText)
-            || item.Tags.Any(tag => Contains(tag, queryText))
-            || item.SourceRefs.Any(sourceRef => Contains(sourceRef, queryText));
     }
 
     /// <summary>提取当前查询实际命中的轻量词元，供候选 trace 使用，不参与额外打分。</summary>

@@ -98,17 +98,10 @@ public sealed class CompressionJobProcessor : IContextJobProcessor
         }
 
         var compressionRelations = _relationProjector.ProjectForCompression(response);
-        if (compressionRelations.Count > 0)
+        if (compressionRelations.Count > 0 && _projectionWriter is not null)
         {
-            // 4.4：通过 IRelationProjectionWriter 统一写入边界；若未注入则回退到 BatchUpsertAsync。
-            if (_projectionWriter is not null)
-            {
-                await _projectionWriter.WriteAsync(compressionRelations, "compression", cancellationToken).ConfigureAwait(false);
-            }
-            else
-            {
-                await _relationStore.BatchUpsertAsync(compressionRelations, cancellationToken).ConfigureAwait(false);
-            }
+            // R12.4A #10: Graph Writer fallback 最终删除——production 中 writer 无条件注册。
+            await _projectionWriter.WriteAsync(compressionRelations, "compression", cancellationToken).ConfigureAwait(false);
         }
     }
 

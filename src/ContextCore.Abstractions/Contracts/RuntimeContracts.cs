@@ -15,6 +15,23 @@ public enum ContextEventLevel
     Error
 }
 
+/// <summary>
+/// 上下文事件接收器的故障语义，用于在复合事件接收器中决定失败处理方式。
+/// </summary>
+public enum ContextEventSinkKind
+{
+    /// <summary>
+    /// 尽力而为（fail-open）：sink 失败不应阻断业务或后续 sink。
+    /// 适用于日志、指标、运行事件等可降级的遥测。
+    /// </summary>
+    BestEffort,
+    /// <summary>
+    /// 必须成功（fail-closed）：sink 失败需要向调用方抛出聚合异常。
+    /// 仅用于明确要求审计落盘成功的安全操作。
+    /// </summary>
+    Required
+}
+
 /// <summary>上下文验证问题的严重程度。</summary>
 public enum ContextValidationSeverity
 {
@@ -100,6 +117,12 @@ public interface IContextEventSink
 {
     /// <summary>异步发送一条操作事件。</summary>
     Task EmitAsync(ContextOperationEvent operationEvent, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// sink 的故障语义。默认 <see cref="ContextEventSinkKind.BestEffort"/>，即 sink 失败时不应阻断业务或后续 sink。
+    /// 仅审计/安全相关 sink 需重写为 <see cref="ContextEventSinkKind.Required"/>，使其失败时由复合接收器聚合并向上抛出。
+    /// </summary>
+    ContextEventSinkKind Kind => ContextEventSinkKind.BestEffort;
 }
 
 /// <summary>提供对上下文条目、记忆条目及打包请求的合法性验证。</summary>

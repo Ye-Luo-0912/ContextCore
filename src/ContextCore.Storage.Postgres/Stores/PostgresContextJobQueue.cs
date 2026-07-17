@@ -385,6 +385,8 @@ WHERE job_id = @job_id;
         await using var command = connection.CreateCommand();
         command.CommandTimeout = Options.CommandTimeoutSeconds;
         var tbl1 = Table("context_jobs");
+        // R12.4A #6: CAS — 仅当 state = 'Running' 时才转换为 Succeeded。
+        // 过期的 Ack（job 已被 Nack 为 WaitingRetry/Failed，或已被 Ack 为 Succeeded）匹配 0 行，为 no-op。
         command.CommandText = $@"UPDATE {tbl1}
 SET state = 'Succeeded',
     lease_owner = NULL,
@@ -392,7 +394,8 @@ SET state = 'Succeeded',
     last_heartbeat_at = NULL,
     updated_at = now(),
     data = jsonb_set(jsonb_set(data, '{{State}}', '""Succeeded""'), '{{CompletedAt}}', to_jsonb(now()))
-WHERE job_id = @job_id;";
+WHERE job_id = @job_id
+  AND state = 'Running';";
         command.Parameters.AddWithValue("job_id", jobId);
         await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
@@ -408,6 +411,8 @@ WHERE job_id = @job_id;";
 
         // 读当前 retry_count，超过 max_retry_count 则 Failed，否则 WaitingRetry
         var tbl2 = Table("context_jobs");
+        // R12.4A #6: CAS — 仅当 state = 'Running' 时才转换为 WaitingRetry/Failed。
+        // 过期的 Nack（job 已被 Ack 为 Succeeded，或已被 Nack 为 WaitingRetry/Failed）匹配 0 行，为 no-op。
         command.CommandText = $@"UPDATE {tbl2}
 SET retry_count = retry_count + 1,
     state = CASE WHEN retry_count + 1 > max_retry_count THEN 'Failed' ELSE 'WaitingRetry' END,
@@ -421,7 +426,8 @@ SET retry_count = retry_count + 1,
             '{{State}}',
             CASE WHEN retry_count + 1 > max_retry_count THEN '""Failed""' ELSE '""WaitingRetry""' END::jsonb),
         '{{ErrorMessage}}', to_jsonb(@reason::text))
-WHERE job_id = @job_id;";
+WHERE job_id = @job_id
+  AND state = 'Running';";
         command.Parameters.AddWithValue("job_id", jobId);
         command.Parameters.AddWithValue("reason", reason);
         await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);

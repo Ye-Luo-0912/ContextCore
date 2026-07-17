@@ -280,7 +280,6 @@ public sealed class ContextCoreInputPipelineTests
             memoryStore,
             relationStore);
         var runtime = new ContextRuntimeService(
-            contextStore,
             memoryStore,
             new BasicMemoryPromotionService(memoryStore, memoryStore),
             packageBuilder,
@@ -318,7 +317,6 @@ public sealed class ContextCoreInputPipelineTests
             memoryStore,
             relationStore);
         var runtime = new ContextRuntimeService(
-            contextStore,
             memoryStore,
             new BasicMemoryPromotionService(memoryStore, memoryStore),
             packageBuilder,

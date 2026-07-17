@@ -426,7 +426,8 @@ public sealed class ContextCoreShortTermPromotionCandidateTests
             relationStore,
             null,
             null,
-            new RelationProjector());
+            new RelationProjector(),
+            new RelationProjectionWriter(relationStore, new RelationProjectorOutputValidator(new RelationTypeRegistry(), new RelationTypeNormalizer())));
     }
 
     private static ShortTermPromotionCandidateService CreateServiceWithLearning(

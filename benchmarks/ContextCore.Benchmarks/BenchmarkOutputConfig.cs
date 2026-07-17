@@ -1,0 +1,48 @@
+using BenchmarkDotNet.Columns;
+using BenchmarkDotNet.Configs;
+using BenchmarkDotNet.Exporters;
+using BenchmarkDotNet.Exporters.Csv;
+using BenchmarkDotNet.Exporters.Json;
+using BenchmarkDotNet.Loggers;
+
+namespace ContextCore.Benchmarks;
+
+/// <summary>
+/// P0-11：统一基准输出配置。
+/// 固定 artifacts 路径到 <c>benchmarks/results/</c>，确保每次运行产生 JSON + Markdown 报告，
+/// 便于建立 baseline/current 对比工作流：
+/// <list type="bullet">
+///   <item>变更前运行 → 复制 JSON 报告为 <c>benchmarks/results/baseline.json</c></item>
+///   <item>变更后运行 → 复制 JSON 报告为 <c>benchmarks/results/current.json</c></item>
+///   <item>使用 BenchmarkDotNet 的 <c>--diff baseline.json</c> 生成对比</item>
+/// </list>
+/// </summary>
+/// <remarks>
+/// 已采集指标（BenchmarkDotNet 内置）：
+/// Mean / Median / StdDev / StdErr、p50 / p95（Percentile 列）、
+/// Allocated bytes（[MemoryDiagnoser]）、Gen0 / Gen1 / Gen2 collections。
+///
+/// 待补充域指标（需自定义 EventCounter 或手动埋点）：
+/// File I/O bytes、DB query count、Cache hit/miss、trace write amplification。
+/// </remarks>
+public sealed class BenchmarkOutputConfig : ManualConfig
+{
+    public BenchmarkOutputConfig()
+    {
+        // 固定输出路径：benchmarks/results/
+        // 从 bin/Debug/net10.0/ 向上四级到 benchmarks/，再进入 results/
+        var resultsPath = System.IO.Path.GetFullPath(System.IO.Path.Combine(
+            System.AppContext.BaseDirectory, "..", "..", "..", "..", "results"));
+        ArtifactsPath = resultsPath;
+
+        // JSON 全量导出（含所有统计指标），用于 baseline/current 对比
+        AddExporter(JsonExporter.Full);
+        // Markdown GitHub 格式导出，便于 review
+        AddExporter(MarkdownExporter.GitHub);
+        // CSV 导出，便于脚本处理
+        AddExporter(CsvExporter.Default);
+
+        AddLogger(ConsoleLogger.Default);
+        AddColumnProvider(DefaultColumnProviders.Instance);
+    }
+}

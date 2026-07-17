@@ -366,7 +366,7 @@ public static class UncertaintyMatchResolver
         item.Reason.Contains("拒绝", StringComparison.OrdinalIgnoreCase) ||
         item.Reason.Contains("遗留", StringComparison.OrdinalIgnoreCase);
 
-    private static string JoinRiskMetadata(Dictionary<string, string> metadata)
+    private static string JoinRiskMetadata(IReadOnlyDictionary<string, string> metadata)
     {
         var riskFields = metadata
             .Where(item =>

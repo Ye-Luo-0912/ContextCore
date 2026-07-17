@@ -28,6 +28,9 @@ public sealed class RelationFrontierBuilder
             .Where(IsSupportedSeedKind)
             .Where(candidate => CanUseAsSeed(candidate, allowDeprecated))
             .OrderByDescending(candidate => candidate.Score)
+            // R12.4A #7: 确定性 tie-break — 同 Score 的 seed 按 SourceId 升序，
+            // 避免 maxFanout 截断时依赖输入枚举顺序导致关系扩展 frontier 不稳定。
+            .ThenBy(candidate => candidate.SourceId, StringComparer.OrdinalIgnoreCase)
             .Take(maxFanout)
             .Select(candidate => new RelationFrontierSeed(
                 candidate.SourceId,

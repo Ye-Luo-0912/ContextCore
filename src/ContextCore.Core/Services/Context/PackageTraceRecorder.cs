@@ -82,7 +82,9 @@ internal sealed class PackageTraceRecorder
                         });
                     }
 
-                    WriteTraceRow(candidate, sectionName, false, "referenced by duplicate section", selectedByScoring: true);
+                    WriteTraceRow(candidate, sectionName, RuntimeCandidateOutcome.Rejected,
+                        includedTokens: 0, originalTokens: candidate.EstimatedTokens,
+                        reason: "referenced by duplicate section", selectedByScoring: true);
                     continue;
                 }
 
@@ -97,7 +99,23 @@ internal sealed class PackageTraceRecorder
                         sectionName,
                         sectionResult.Reason,
                         candidate.EstimatedTokens);
-                    WriteTraceRow(candidate, sectionName, true, sectionResult.Reason);
+                    // P0-6.3: 精确区分 Accepted/PartiallyAccepted 并填充 IncludedTokens/OriginalTokens/TruncationRatio。
+                    // - Accepted: IncludedTokens = OriginalTokens = candidate.EstimatedTokens（无截断，ratio=1.0）
+                    // - PartiallyAccepted: IncludedTokens = sectionResult.PartiallyAcceptedIncludedTokens（截断后保留量）
+                    if (isPartiallyAccepted)
+                    {
+                        WriteTraceRow(candidate, sectionName, RuntimeCandidateOutcome.PartiallyAccepted,
+                            includedTokens: sectionResult.PartiallyAcceptedIncludedTokens,
+                            originalTokens: candidate.EstimatedTokens,
+                            reason: sectionResult.Reason);
+                    }
+                    else
+                    {
+                        WriteTraceRow(candidate, sectionName, RuntimeCandidateOutcome.Accepted,
+                            includedTokens: candidate.EstimatedTokens,
+                            originalTokens: candidate.EstimatedTokens,
+                            reason: sectionResult.Reason);
+                    }
                     selectedItems.Add(decision);
                     globalSelectedIds.Add(candidate.Id);
                     primaryDecisions[candidate.Id] = decision;
@@ -108,7 +126,9 @@ internal sealed class PackageTraceRecorder
                         ? "candidate not retained after token budget truncation"
                         : "content not retained in section output";
                     droppedItems.Add(CreateDropped(candidate, dropReason));
-                    WriteTraceRow(candidate, sectionName, false, dropReason, selectedByScoring: true);
+                    WriteTraceRow(candidate, sectionName, RuntimeCandidateOutcome.Rejected,
+                        includedTokens: 0, originalTokens: candidate.EstimatedTokens,
+                        reason: dropReason, selectedByScoring: true);
                 }
             }
         }
@@ -117,12 +137,31 @@ internal sealed class PackageTraceRecorder
             foreach (var candidate in candidates)
             {
                 droppedItems.Add(CreateDropped(candidate, sectionResult.Reason));
-                WriteTraceRow(candidate, sectionName, false, sectionResult.Reason, selectedByScoring: false);
+                WriteTraceRow(candidate, sectionName, RuntimeCandidateOutcome.Dropped,
+                    includedTokens: 0, originalTokens: candidate.EstimatedTokens,
+                    reason: sectionResult.Reason, selectedByScoring: false);
             }
         }
     }
 
-    internal void WriteTraceRow(PackageTraceCandidate c, string section, bool included, string reason,
+    /// <summary>
+    /// 写入单条候选 trace 行。P0-6.3: 以 RuntimeCandidateOutcome + IncludedTokens/OriginalTokens 替代 bool included，
+    /// 使下游诊断能区分 Accepted/PartiallyAccepted/Rejected/Dropped 并观察截断比率。
+    /// </summary>
+    /// <param name="c">候选。</param>
+    /// <param name="section">section 名。</param>
+    /// <param name="outcome">候选归属结果（Accepted/PartiallyAccepted/Rejected/Dropped）。</param>
+    /// <param name="includedTokens">候选实际保留进 section 输出的 token 数（截断后）。</param>
+    /// <param name="originalTokens">候选原始估算 token 数（截断前）。</param>
+    /// <param name="reason">drop reason（included 时忽略）。</param>
+    /// <param name="selectedByScoring">是否经评分选择。</param>
+    internal void WriteTraceRow(
+        PackageTraceCandidate c,
+        string section,
+        RuntimeCandidateOutcome outcome,
+        int includedTokens,
+        int originalTokens,
+        string reason,
         bool selectedByScoring = true)
     {
         if (!_traceSink.Enabled) return;
@@ -131,6 +170,11 @@ internal sealed class PackageTraceRecorder
         {
             var kind = c.Kind;
             var (srcType, auth, stratType, chan) = MapTraceFields(kind, section, c);
+            var included = outcome == RuntimeCandidateOutcome.Accepted
+                || outcome == RuntimeCandidateOutcome.PartiallyAccepted;
+            var ratio = originalTokens > 0
+                ? includedTokens / (double)originalTokens
+                : 0.0;
             row = new RuntimeCandidateTraceRow
             {
                 OperationId = _getOperationId() ?? "unknown",
@@ -149,7 +193,11 @@ internal sealed class PackageTraceRecorder
                 IncludedInPackage = included,
                 DroppedReason = included ? "" : reason,
                 TokenCost = c.EstimatedTokens,
-                Section = section
+                Section = section,
+                Outcome = outcome,
+                OriginalTokens = originalTokens,
+                IncludedTokens = includedTokens,
+                TruncationRatio = ratio
             };
         }
         catch (Exception ex)

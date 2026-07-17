@@ -2,6 +2,7 @@ using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Core;
 using ContextCore.Core.Services;
+using ContextCore.Core.Services.Graph;
 using ContextCore.Core.Services.Learning.V14_0;
 using ContextCore.Core.Services.Retrieval;
 
@@ -28,6 +29,13 @@ public sealed class RuntimeBuildOptions
     public required IContextTokenizerResolver TokenizerResolver { get; init; }
     public required IPromotionRecordStore PromotionRecordStore { get; init; }
     public required IWorkingMemoryService WorkingMemoryService { get; init; }
+
+    /// <summary>
+    /// 关系类型注册表；为 null 时由 <see cref="ContextRuntimeBuilder"/> 内部 new 一个默认实例。
+    /// Service DI 路径应注入同一个 singleton 实例，避免 Runtime 主链与 RelationReviewService /
+    /// RelationGraphValidationService 各自持有一份导致未来 taxonomy 配置分裂。
+    /// </summary>
+    public RelationTypeRegistry? RelationTypeRegistry { get; init; }
 
     // --- optional: Full profile trace sinks（Service 生产路径）---
 

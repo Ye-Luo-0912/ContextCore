@@ -9,7 +9,7 @@ namespace ContextCore.Storage.Postgres.Stores;
 /// PostgreSQL 分层记忆存储。
 /// 第一版聚焦 <see cref="IMemoryStore"/>：保存、按层/状态/标签查询，以及更新记忆状态。
 /// </summary>
-public sealed class PostgresMemoryStore : PostgresStoreBase, IMemoryStore
+public sealed class PostgresMemoryStore : PostgresStoreBase, IMemoryStore, IMemoryStoreBatchLookup
 {
     public PostgresMemoryStore(PostgresConnectionFactory connectionFactory, PostgresJsonSerializer serializer, PostgresMigrationRunner migrationRunner)
         : base(connectionFactory, serializer, migrationRunner)
@@ -74,6 +74,45 @@ ON CONFLICT (workspace_id, collection_id, id) DO UPDATE SET
         command.Parameters.AddWithValue("id", id);
         var json = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false) as string;
         return string.IsNullOrWhiteSpace(json) ? null : Serializer.Deserialize<ContextMemoryItem>(json);
+    }
+
+    /// <summary>
+    /// P0-7.1: 批量查询记忆条目。使用 WHERE id = ANY(@ids) 单次 SQL 替代 N 次 GetAsync 并行，
+    /// 命中主键 B-tree 索引 (workspace_id, collection_id, id)。
+    /// 返回列表只包含命中的条目，顺序不保证；未命中条目静默丢弃。
+    /// 语义与 FileMemoryStore.BatchGetAsync / InMemoryMemoryStore.BatchGetAsync 保持一致。
+    /// </summary>
+    public async Task<IReadOnlyList<ContextMemoryItem>> BatchGetAsync(
+        string workspaceId,
+        string collectionId,
+        IReadOnlyList<string> ids,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(ids);
+        if (ids.Count == 0)
+        {
+            return Array.Empty<ContextMemoryItem>();
+        }
+
+        // 过滤空白 id；Postgres 对 ANY() 中的重复值会自然去重，无需在客户端去重
+        var normalizedIds = ids.Where(id => !string.IsNullOrWhiteSpace(id)).ToArray();
+        if (normalizedIds.Length == 0)
+        {
+            return Array.Empty<ContextMemoryItem>();
+        }
+
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+        command.CommandText =
+            $"SELECT data FROM {Table("memory_items")} " +
+            "WHERE workspace_id = @workspace_id AND collection_id = @collection_id AND id = ANY(@ids)";
+        command.Parameters.AddWithValue("workspace_id", workspaceId);
+        command.Parameters.AddWithValue("collection_id", collectionId);
+        AddTextArray(command, "ids", normalizedIds);
+
+        return await ExecuteReaderJsonAsync<ContextMemoryItem>(command, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<ContextMemoryItem>> QueryAsync(ContextMemoryQuery query, CancellationToken cancellationToken = default)

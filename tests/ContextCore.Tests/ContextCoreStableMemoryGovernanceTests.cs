@@ -554,7 +554,8 @@ public sealed class ContextCoreStableMemoryGovernanceTests
             reviewStore,
             relationStore,
             service,
-            new RelationProjector());
+            new RelationProjector(),
+            new RelationProjectionWriter(relationStore, new RelationProjectorOutputValidator(new RelationTypeRegistry(), new RelationTypeNormalizer())));
         return new StableMemoryFixture(memoryStore, constraintStore, globalStore, relationStore, stableReviewStore, reviewStore, service, reviewService);
     }
 

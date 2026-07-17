@@ -42,6 +42,59 @@ public sealed class FileJsonLineStore
     }
 
     /// <summary>
+    /// P0-9.1：从 JSONL 文件尾部读取最近的 <paramref name="maxCount"/> 条记录。
+    /// append-only 文件中最新记录在文件末尾，从尾部反序列化可在收集够后立即停止，
+    /// 避免对大历史文件逐行反序列化。返回顺序为最新在前（文件末尾 → 文件头部）。
+    /// </summary>
+    /// <remarks>
+    /// 读取阶段仍读取全部行（I/O 顺序读，开销低），但只反序列化尾部 maxCount 行。
+    /// 损坏行跳过，不计入 maxCount。maxCount <= 0 时返回空列表。
+    /// </remarks>
+    public async Task<IReadOnlyList<T>> ReadTailAsync<T>(
+        string path,
+        int maxCount,
+        CancellationToken cancellationToken = default)
+    {
+        if (maxCount <= 0)
+        {
+            return Array.Empty<T>();
+        }
+
+        var lines = await _reader.ReadAllLinesAsync(path, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (lines.Count == 0)
+        {
+            return Array.Empty<T>();
+        }
+
+        var result = new List<T>(Math.Min(maxCount, lines.Count));
+        // 从末尾向前迭代：append-only 文件最新记录在最后，尾部读取可早停。
+        for (var i = lines.Count - 1; i >= 0 && result.Count < maxCount; i--)
+        {
+            var line = lines[i];
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                continue;
+            }
+
+            try
+            {
+                var item = _serializer.Deserialize<T>(line);
+                if (item is not null)
+                {
+                    result.Add(item);
+                }
+            }
+            catch (System.Text.Json.JsonException)
+            {
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
     /// 将记录集合完整写入 JSONL 文件（覆盖原有内容）。
     /// </summary>
     public async Task WriteAsync<T>(

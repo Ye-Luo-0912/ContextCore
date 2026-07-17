@@ -80,52 +80,33 @@ internal sealed class PackageInputLoader
                 }, cancellationToken)
             : null;
 
-        // P1 优化：FileMemoryStore 使用单个 SemaphoreSlim 串行化所有查询，
-        // working 和 stable 两次查询会排队等待。改为单次查询所有层后在内存分区。
-        // 仅当同时需要 working 和 stable 时使用批量查询路径。
-        Task<IReadOnlyList<ContextMemoryItem>>? workingCandidatesRawTask = null;
-        Task<IReadOnlyList<ContextMemoryItem>>? stableCandidatesRawTask = null;
-        bool useBatchedMemoryQuery = options.IncludeWorkingMemory
-            && options.IncludeStableMemory
-            && _memoryStore is not null;
-
-        Task<IReadOnlyList<ContextMemoryItem>>? allMemoryTask = null;
-        if (useBatchedMemoryQuery)
-        {
-            // 单次查询 working + stable 层，后续按 Layer 分区
-            allMemoryTask = _memoryStore!.QueryAsync(new ContextMemoryQuery
+        // 每层独立查询：Working 与 Stable 各自拥有独立的 Take 预算与 store 层过滤。
+        // 不使用"全局 Take 后分区"——那会让多数层占满共享预算，少数层可能拿到 0 候选，
+        // 从而改变 Package selected set（参见 P0 修复 4.2）。
+        // FileMemoryStore 内部 SemaphoreSlim 串行化两次查询的代价可接受；若需进一步优化，
+        // 应由 provider 内部复用同一文件快照，而非在 loader 层做全局 Take。
+        Task<IReadOnlyList<ContextMemoryItem>>? workingCandidatesRawTask =
+            (options.IncludeWorkingMemory && _memoryStore is not null)
+            ? _memoryStore.QueryAsync(new ContextMemoryQuery
                 {
                     WorkspaceId = workspaceId,
                     CollectionId = collectionId,
-                    // Layer = null 查询所有层
-                    Take = Math.Min(Math.Max(maxRecentItems * 6, 40), 120)
-                }, cancellationToken);
-        }
-        else
-        {
-            workingCandidatesRawTask =
-                (options.IncludeWorkingMemory && _memoryStore is not null)
-                ? _memoryStore.QueryAsync(new ContextMemoryQuery
-                    {
-                        WorkspaceId = workspaceId,
-                        CollectionId = collectionId,
-                        Layer = ContextMemoryLayer.Working,
-                        Take = Math.Min(Math.Max(maxRecentItems * 3, 20), 60)
-                    }, cancellationToken)
-                : null;
+                    Layer = ContextMemoryLayer.Working,
+                    Take = Math.Min(Math.Max(maxRecentItems * 3, 20), 60)
+                }, cancellationToken)
+            : null;
 
-            stableCandidatesRawTask =
-                (options.IncludeStableMemory && _memoryStore is not null)
-                ? _memoryStore.QueryAsync(new ContextMemoryQuery
-                    {
-                        WorkspaceId = workspaceId,
-                        CollectionId = collectionId,
-                        Layer = ContextMemoryLayer.Stable,
-                        Status = ContextMemoryStatus.Stable,
-                        Take = Math.Min(Math.Max(maxRecentItems * 3, 20), 60)
-                    }, cancellationToken)
-                : null;
-        }
+        Task<IReadOnlyList<ContextMemoryItem>>? stableCandidatesRawTask =
+            (options.IncludeStableMemory && _memoryStore is not null)
+            ? _memoryStore.QueryAsync(new ContextMemoryQuery
+                {
+                    WorkspaceId = workspaceId,
+                    CollectionId = collectionId,
+                    Layer = ContextMemoryLayer.Stable,
+                    Status = ContextMemoryStatus.Stable,
+                    Take = Math.Min(Math.Max(maxRecentItems * 3, 20), 60)
+                }, cancellationToken)
+            : null;
 
         Task<IReadOnlyList<ContextGlobalItem>>? globalItemsTask =
             (options.IncludeGlobalContext && _globalContextStore is not null)
@@ -137,49 +118,25 @@ internal sealed class PackageInputLoader
                 }, cancellationToken)
             : null;
 
-        // P1 优化：FileConstraintStore 同样使用单个 SemaphoreSlim。
-        // hard 和 soft 两次查询会排队。改为单次查询所有 level 后在内存分区。
-        Task<IReadOnlyList<ContextConstraint>>? softConstraintsTask = null;
-        Task<IReadOnlyList<ContextConstraint>>? allConstraintsTask = null;
-        bool useBatchedConstraintQuery = options.IncludeHardConstraints
-            && options.IncludeSoftConstraints
-            && _constraintStore is not null;
-
-        if (useBatchedConstraintQuery)
-        {
-            // 单次查询 hard + soft，后续按 Level 分区
-            allConstraintsTask = _constraintStore!.QueryAsync(new ContextConstraintQuery
+        // Hard 与 Soft 各自独立查询，保证独立的 Take 预算与 store 层 Level 过滤。
+        // 理由同上：全局 Take 后分区会让某一级独占预算，改变 selected set（P0 4.2）。
+        Task<IReadOnlyList<ContextConstraint>>? softConstraintsTask =
+            (options.IncludeSoftConstraints && _constraintStore is not null)
+            ? _constraintStore.QueryAsync(new ContextConstraintQuery
                 {
                     WorkspaceId = workspaceId,
                     CollectionId = collectionId,
-                    // Level = null 查询所有级别
-                    Take = 200
-                }, cancellationToken);
-            // hardConstraintsTask 不再需要单独查询，从 allConstraintsTask 分区
-            hardConstraintsTask = null;
-        }
-        else
-        {
-            softConstraintsTask =
-                (options.IncludeSoftConstraints && _constraintStore is not null)
-                ? _constraintStore.QueryAsync(new ContextConstraintQuery
-                    {
-                        WorkspaceId = workspaceId,
-                        CollectionId = collectionId,
-                        Level = ConstraintLevel.Soft,
-                        Take = 100
-                    }, cancellationToken)
-                : null;
-        }
+                    Level = ConstraintLevel.Soft,
+                    Take = 100
+                }, cancellationToken)
+            : null;
 
         var prefetchTasks = new List<Task>();
         if (recentItemsTask is not null) prefetchTasks.Add(recentItemsTask);
         if (hardConstraintsTask is not null) prefetchTasks.Add(hardConstraintsTask);
         if (workingCandidatesRawTask is not null) prefetchTasks.Add(workingCandidatesRawTask);
-        if (allMemoryTask is not null) prefetchTasks.Add(allMemoryTask);
         if (globalItemsTask is not null) prefetchTasks.Add(globalItemsTask);
         if (stableCandidatesRawTask is not null) prefetchTasks.Add(stableCandidatesRawTask);
-        if (allConstraintsTask is not null) prefetchTasks.Add(allConstraintsTask);
         if (softConstraintsTask is not null) prefetchTasks.Add(softConstraintsTask);
         if (prefetchTasks.Count > 0)
         {
@@ -196,43 +153,11 @@ internal sealed class PackageInputLoader
                 cancellationToken).ConfigureAwait(false);
         }
 
-        // 批量查询分区：从单次查询结果按 Layer/Level 分区
-        IReadOnlyList<ContextMemoryItem>? workingMemory = null;
-        IReadOnlyList<ContextMemoryItem>? stableMemory = null;
-        if (useBatchedMemoryQuery && allMemoryTask is not null)
-        {
-            var allMemory = await allMemoryTask.ConfigureAwait(false);
-            workingMemory = allMemory
-                .Where(m => m.Layer == ContextMemoryLayer.Working)
-                .ToArray();
-            stableMemory = allMemory
-                .Where(m => m.Layer == ContextMemoryLayer.Stable && m.Status == ContextMemoryStatus.Stable)
-                .ToArray();
-        }
-        else
-        {
-            workingMemory = workingCandidatesRawTask is null ? null : await workingCandidatesRawTask.ConfigureAwait(false);
-            stableMemory = stableCandidatesRawTask is null ? null : await stableCandidatesRawTask.ConfigureAwait(false);
-        }
-
-        // 批量约束分区
-        IReadOnlyList<ContextConstraint>? hardConstraints = null;
-        IReadOnlyList<ContextConstraint>? softConstraints = null;
-        if (useBatchedConstraintQuery && allConstraintsTask is not null)
-        {
-            var allConstraints = await allConstraintsTask.ConfigureAwait(false);
-            hardConstraints = allConstraints
-                .Where(c => c.Level == ConstraintLevel.Hard)
-                .ToArray();
-            softConstraints = allConstraints
-                .Where(c => c.Level == ConstraintLevel.Soft)
-                .ToArray();
-        }
-        else
-        {
-            hardConstraints = hardConstraintsTask is null ? null : await hardConstraintsTask.ConfigureAwait(false);
-            softConstraints = softConstraintsTask is null ? null : await softConstraintsTask.ConfigureAwait(false);
-        }
+        // 每层/级已独立查询，store 层已应用 Layer/Level/Status 过滤与各自 Take，直接 await 即可。
+        var workingMemory = workingCandidatesRawTask is null ? null : await workingCandidatesRawTask.ConfigureAwait(false);
+        var stableMemory = stableCandidatesRawTask is null ? null : await stableCandidatesRawTask.ConfigureAwait(false);
+        var hardConstraints = hardConstraintsTask is null ? null : await hardConstraintsTask.ConfigureAwait(false);
+        var softConstraints = softConstraintsTask is null ? null : await softConstraintsTask.ConfigureAwait(false);
 
         return new PackageInputs(
             RecentItems: recentItemsTask is null ? null : await recentItemsTask.ConfigureAwait(false),
@@ -250,20 +175,57 @@ internal sealed class PackageInputLoader
         string collectionId,
         CancellationToken cancellationToken)
     {
-        var constraints = new List<ContextConstraint>();
-        if (_constraintStore is not null)
+        if (_constraintStore is null)
         {
-            // 合并约束只在显式开启时查询，并设置上限，避免为了可选 section 触发无界扫描。
-            var take = options.ConstraintMergeMaxItems;
-            var storedConstraints = await _constraintStore.QueryAsync(
-                new ContextConstraintQuery
-                {
-                    WorkspaceId = options.WorkspaceId,
-                    CollectionId = collectionId,
-                    Take = take
-                },
-                cancellationToken).ConfigureAwait(false);
-            constraints.AddRange(storedConstraints);
+            return RequestTaskResolver.CreateRequestConstraints(options.Request, collectionId);
+        }
+
+        var take = options.ConstraintMergeMaxItems;
+
+        // R12.4A #2：Per-level quota — Hard 与 Soft 各自独立查询，防止某一级独占共享 Take 预算。
+        // 旧实现用 Level=null + Take=N 单一查询：若 store 有 N 个 Hard + 少量 Soft，
+        // Hard 会填满 Take 预算导致 Soft 完全缺席 merged section。
+        // 新实现并行查询 Hard + Soft + All（Level=null），各自拥有独立 Take 预算：
+        //   - Hard 查询确保 Hard 约束被召回（至多 take 条）
+        //   - Soft 查询确保 Soft 约束被召回（至多 take 条）
+        //   - All 查询捕获 Runtime/System/User/Domain 等次要级别
+        // 合并后按 ID 去重（Hard/Soft 优先加入，All 查询的重复项被跳过）。
+        // 三路查询并行执行，延迟与原单查询相当。
+        var hardTask = _constraintStore.QueryAsync(new ContextConstraintQuery
+        {
+            WorkspaceId = options.WorkspaceId,
+            CollectionId = collectionId,
+            Level = ConstraintLevel.Hard,
+            Take = take
+        }, cancellationToken);
+
+        var softTask = _constraintStore.QueryAsync(new ContextConstraintQuery
+        {
+            WorkspaceId = options.WorkspaceId,
+            CollectionId = collectionId,
+            Level = ConstraintLevel.Soft,
+            Take = take
+        }, cancellationToken);
+
+        var allLevelsTask = _constraintStore.QueryAsync(new ContextConstraintQuery
+        {
+            WorkspaceId = options.WorkspaceId,
+            CollectionId = collectionId,
+            Take = take
+        }, cancellationToken);
+
+        await Task.WhenAll(hardTask, softTask, allLevelsTask).ConfigureAwait(false);
+
+        // 合并顺序：Hard → Soft → All（次要级别）。OrderMergedConstraints 后续按 PriorityRank
+        // 重排，此处顺序仅影响同分 tie-break 的 Index。
+        var seenIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var constraints = new List<ContextConstraint>();
+        foreach (var item in hardTask.Result.Concat(softTask.Result).Concat(allLevelsTask.Result))
+        {
+            if (seenIds.Add(item.Id))
+            {
+                constraints.Add(item);
+            }
         }
 
         constraints.AddRange(RequestTaskResolver.CreateRequestConstraints(options.Request, collectionId));

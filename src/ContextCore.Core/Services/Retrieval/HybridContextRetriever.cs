@@ -29,7 +29,9 @@ public sealed class HybridContextRetriever : IContextRetriever
         IEmbeddingProvider? embeddingProvider = null,
         IVectorStore? vectorStore = null,
         IRetrievalTraceStore? traceStore = null,
-        IDecisionTraceStore? decisionTraceStore = null)
+        IDecisionTraceStore? decisionTraceStore = null,
+        // P0-7.2: 显式覆盖 fanout 上限；为 null 时按 store 类型自动解析
+        RetrievalFanoutOptions? fanoutOptions = null)
     {
         _traceStore = traceStore;
         _decisionTraceStore = decisionTraceStore;
@@ -38,10 +40,12 @@ public sealed class HybridContextRetriever : IContextRetriever
         var relationExpansionService = relationStore is null
             ? null
             : new RelationExpansionService(new RelationTraversalEngine(relationStore), contextObjectResolver);
-        _mandatoryRecallChannelExecutor = new MandatoryRecallChannelExecutor(contextStore, memoryStore);
+        // P0-7.2: 未显式传入时按 store namespace 自动推断（FileSystem=2 / InMemory=16 / Postgres=8 / 其他=4）
+        var fanout = fanoutOptions ?? RetrievalFanoutOptions.Resolve(contextStore, memoryStore);
+        _mandatoryRecallChannelExecutor = new MandatoryRecallChannelExecutor(contextStore, memoryStore, fanout);
         _contextRecallChannelExecutor = new ContextRecallChannelExecutor(contextStore);
         _memoryRecallChannelExecutor = new MemoryRecallChannelExecutor(memoryStore);
-        _vectorRecallChannelExecutor = new VectorRecallChannelExecutor(contextStore, memoryStore, embeddingProvider, vectorStore);
+        _vectorRecallChannelExecutor = new VectorRecallChannelExecutor(contextStore, memoryStore, embeddingProvider, vectorStore, fanout);
         _relationRecallChannelExecutor = new RelationRecallChannelExecutor(relationFrontierBuilder, relationExpansionService);
         _traceAssembler = new RetrievalTraceAssembler();
         _resultAssembler = new RetrievalResultAssembler();
@@ -73,15 +77,21 @@ public sealed class HybridContextRetriever : IContextRetriever
         var mandatoryChannelTask = _mandatoryRecallChannelExecutor.ExecuteAsync(mandatoryContext, cancellationToken);
 
         Dictionary<string, string>? keywordMetadata = null;
-        Dictionary<string, string>? memoryMetadata = null;
         Task<RetrievalChannelResult>? keywordChannelTask = null;
-        Task<RetrievalChannelResult>? memoryChannelTask = null;
         if (request.IncludeKeywordRecall)
         {
             keywordMetadata = new Dictionary<string, string>();
             keywordChannelTask = _contextRecallChannelExecutor.ExecuteAsync(
                 RetrievalChannelContext.Create(request, effectivePlan, keywordMetadata),
                 cancellationToken);
+        }
+
+        // Memory Channel 独立判断：不依赖 IncludeKeywordRecall（P0 4.1）。
+        // MemoryRecallChannelExecutor 内部会按 IncludeWorkingMemory || IncludeStableMemory 守卫实际召回。
+        Dictionary<string, string>? memoryMetadata = null;
+        Task<RetrievalChannelResult>? memoryChannelTask = null;
+        if (request.IncludeWorkingMemory || request.IncludeStableMemory)
+        {
             memoryMetadata = new Dictionary<string, string>();
             memoryChannelTask = _memoryRecallChannelExecutor.ExecuteAsync(
                 RetrievalChannelContext.Create(request, effectivePlan, memoryMetadata),
@@ -120,8 +130,11 @@ public sealed class HybridContextRetriever : IContextRetriever
             stages.Add(CreateStageTrace(keywordResult));
             MergeMetadata(metadata, keywordMetadata!);
             MergeMetadata(metadata, keywordResult.Metadata);
+        }
 
-            var memoryResult = memoryChannelTask!.Result;
+        if (memoryChannelTask is not null)
+        {
+            var memoryResult = memoryChannelTask.Result;
             candidates.AddOrMerge(memoryResult);
             stages.Add(CreateStageTrace(memoryResult));
             MergeMetadata(metadata, memoryMetadata!);
@@ -160,13 +173,19 @@ public sealed class HybridContextRetriever : IContextRetriever
             stages.Add(CreateStageTrace(relationResult));
         }
 
-        // 合并主通道与关系扩展通道：为关系独有条目预留保证槽位后，全量按分数排序
+        // R12.4A #8: 合并主通道与关系扩展通道——BuildRankedCandidates 做去重 + cap 噪声过滤，
+        // Pack 阶段为 relation-only 候选显式预留 TopK 名额（传入选中的 relation-only ID 集合）。
+        var relationOnlyCandidatesView = relOnlyCandidates.ToCandidates(request.IncludeContent);
+        var relationOnlyIds = relationOnlyCandidatesView
+            .Select(c => c.CandidateId)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
         var ranked = RetrievalPackingPolicy.BuildRankedCandidates(
             request,
             candidates.ToCandidates(request.IncludeContent),
-            relOnlyCandidates.ToCandidates(request.IncludeContent));
+            relationOnlyCandidatesView);
 
-        var packed = RetrievalPackingPolicy.Pack(request, ranked);
+        var packed = RetrievalPackingPolicy.Pack(request, ranked, relationOnlyIds);
         var effectivePacked = packed;
 
         // 累积失败指标（prior calls）：写入 metadata 供 trace 与 result 消费。

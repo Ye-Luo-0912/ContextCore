@@ -227,4 +227,92 @@ public sealed class StorageProviderBehaviorContractTests
         Assert.ThrowsException<NotSupportedException>(() =>
             store.AppendRawEventAsync(new ShortTermRawEvent(), default).GetAwaiter().GetResult());
     }
+
+    /// <summary>
+    /// P0-7.1: 三套 provider 的 IContextStore 实例都应同时实现 IContextStoreBatchLookup，
+    /// 让 Retrieval Mandatory 通道走单次 BatchGetAsync 而非 N 次并行 GetAsync。
+    /// 通过 is 运算符验证 cast 路径与 RetrievalChannelExecutors 的运行时检测一致。
+    /// </summary>
+    [DataTestMethod]
+    [DataRow("filesystem", DisplayName = "FileSystem")]
+    [DataRow("memory", DisplayName = "InMemory")]
+    [DataRow("postgres", DisplayName = "Postgres")]
+    public async Task ContextStore_AllProvidersImplementBatchLookup(string provider)
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton(new ShortTermMemoryPolicy());
+        services.AddSingleton(new RelationGovernanceProviderSwitchOptions());
+
+        if (provider == "filesystem")
+        {
+            var rootPath = Path.Combine(Path.GetTempPath(), "ctx-bc-batch-" + Guid.NewGuid().ToString("N"));
+            services.AddContextStorage(new StorageOptions { Provider = provider, RootPath = rootPath });
+        }
+        else if (provider == "memory")
+        {
+            services.AddContextStorage(new StorageOptions { Provider = provider });
+        }
+        else
+        {
+            services.AddContextStorage(new StorageOptions
+            {
+                Provider = provider,
+                PostgresConnectionString = "Host=localhost;Database=fake;Username=fake;Password=fake",
+            });
+        }
+
+        // PostgresConnectionFactory 实现 IAsyncDisposable，必须使用 await using 才能正确释放。
+        await using var sp = services.BuildServiceProvider();
+        var contextStore = sp.GetRequiredService<IContextStore>();
+        Assert.IsNotNull(contextStore);
+        Assert.IsFalse(IsUnsupportedPlaceholder(contextStore), $"{provider} IContextStore 不应是 Unsupported 占位");
+
+        // P0-7.1: 关键断言 — IContextStore 实例必须同时实现 IContextStoreBatchLookup
+        Assert.IsTrue(contextStore is IContextStoreBatchLookup,
+            $"{provider} IContextStore 应实现 IContextStoreBatchLookup 以启用 Retrieval 批量查询路径");
+    }
+
+    /// <summary>
+    /// P0-7.1: 三套 provider 的 IMemoryStore 实例都应同时实现 IMemoryStoreBatchLookup。
+    /// </summary>
+    [DataTestMethod]
+    [DataRow("filesystem", DisplayName = "FileSystem")]
+    [DataRow("memory", DisplayName = "InMemory")]
+    [DataRow("postgres", DisplayName = "Postgres")]
+    public async Task MemoryStore_AllProvidersImplementBatchLookup(string provider)
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton(new ShortTermMemoryPolicy());
+        services.AddSingleton(new RelationGovernanceProviderSwitchOptions());
+
+        if (provider == "filesystem")
+        {
+            var rootPath = Path.Combine(Path.GetTempPath(), "ctx-bc-batch-mem-" + Guid.NewGuid().ToString("N"));
+            services.AddContextStorage(new StorageOptions { Provider = provider, RootPath = rootPath });
+        }
+        else if (provider == "memory")
+        {
+            services.AddContextStorage(new StorageOptions { Provider = provider });
+        }
+        else
+        {
+            services.AddContextStorage(new StorageOptions
+            {
+                Provider = provider,
+                PostgresConnectionString = "Host=localhost;Database=fake;Username=fake;Password=fake",
+            });
+        }
+
+        // PostgresConnectionFactory 实现 IAsyncDisposable，必须使用 await using 才能正确释放。
+        await using var sp = services.BuildServiceProvider();
+        var memoryStore = sp.GetRequiredService<IMemoryStore>();
+        Assert.IsNotNull(memoryStore);
+        Assert.IsFalse(IsUnsupportedPlaceholder(memoryStore), $"{provider} IMemoryStore 不应是 Unsupported 占位");
+
+        // P0-7.1: 关键断言 — IMemoryStore 实例必须同时实现 IMemoryStoreBatchLookup
+        Assert.IsTrue(memoryStore is IMemoryStoreBatchLookup,
+            $"{provider} IMemoryStore 应实现 IMemoryStoreBatchLookup 以启用 Retrieval 批量查询路径");
+    }
 }
