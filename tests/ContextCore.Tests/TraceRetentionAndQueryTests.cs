@@ -245,6 +245,154 @@ public sealed class TraceRetentionAndQueryTests
         }
     }
 
+    // ── R13.1 #3：retention 自然日（UTC 日历日）边界语义 ────────────────
+
+    /// <summary>
+    /// R13.1 #3：恰好 retentionDays 天前的分片应保留（不严格早于 cutoff）。
+    /// 旧滑动窗口实现（cutoff = now - N 带时分秒）会在午夜后将此边界分片误删；
+    /// 自然日语义下 cutoff 对齐到今日 UTC 午夜 - N，边界分片（today - N）等于 cutoff 而非早于，故保留。
+    /// </summary>
+    [TestMethod]
+    public async Task Retention_NaturalDayBoundary_ShardExactlyRetentionDaysOld_IsKept()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var options = new FileStorageOptions { RootPath = root, TraceRetentionDays = 7 };
+            var paths = new FilePathResolver(options);
+            var serializer = new FileFormatSerializer();
+            var store = new FileRetrievalTraceStore(options);
+
+            var traceDir = paths.GetRetrievalTraceDirectory(WorkspaceId, CollectionId);
+            var today = DateTimeOffset.UtcNow.Date;
+
+            // 边界分片：恰好 7 天前（today - 7）
+            var boundaryDir = Path.Combine(traceDir, today.AddDays(-7).ToString("yyyyMMdd"));
+            Directory.CreateDirectory(boundaryDir);
+            await File.WriteAllTextAsync(
+                Path.Combine(boundaryDir, "retrieval-traces.jsonl"),
+                serializer.Serialize(new ContextRetrievalTrace
+                {
+                    RetrievalId = "boundary", WorkspaceId = WorkspaceId, CollectionId = CollectionId,
+                    CreatedAt = today.AddDays(-7)
+                }));
+
+            // SaveAsync 触发 MaybePurge（_lastPurgeTicks=0 立即执行）
+            await store.SaveAsync(new ContextRetrievalTrace
+            {
+                RetrievalId = "current", WorkspaceId = WorkspaceId, CollectionId = CollectionId,
+                QueryText = "current", CreatedAt = DateTimeOffset.UtcNow
+            });
+
+            Assert.IsTrue(Directory.Exists(boundaryDir),
+                "自然日语义：恰好 retentionDays 天前的分片应保留（不严格早于 cutoff），不应被误删");
+        }
+        finally
+        {
+            DeleteTempRoot(root);
+        }
+    }
+
+    /// <summary>
+    /// R13.1 #3：超过 retentionDays 边界 1 天的分片应被清理。
+    /// </summary>
+    [TestMethod]
+    public async Task Retention_NaturalDayBoundary_ShardOlderThanRetentionDays_IsPurged()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var options = new FileStorageOptions { RootPath = root, TraceRetentionDays = 7 };
+            var paths = new FilePathResolver(options);
+            var serializer = new FileFormatSerializer();
+            var store = new FileRetrievalTraceStore(options);
+
+            var traceDir = paths.GetRetrievalTraceDirectory(WorkspaceId, CollectionId);
+            var today = DateTimeOffset.UtcNow.Date;
+
+            // 超过边界 1 天：today - 8，应被清理
+            var expiredDir = Path.Combine(traceDir, today.AddDays(-8).ToString("yyyyMMdd"));
+            Directory.CreateDirectory(expiredDir);
+            await File.WriteAllTextAsync(
+                Path.Combine(expiredDir, "retrieval-traces.jsonl"),
+                serializer.Serialize(new ContextRetrievalTrace
+                {
+                    RetrievalId = "expired", WorkspaceId = WorkspaceId, CollectionId = CollectionId,
+                    CreatedAt = today.AddDays(-8)
+                }));
+
+            await store.SaveAsync(new ContextRetrievalTrace
+            {
+                RetrievalId = "current", WorkspaceId = WorkspaceId, CollectionId = CollectionId,
+                QueryText = "current", CreatedAt = DateTimeOffset.UtcNow
+            });
+
+            Assert.IsFalse(Directory.Exists(expiredDir),
+                "超过 retentionDays 边界的分片应被清理");
+        }
+        finally
+        {
+            DeleteTempRoot(root);
+        }
+    }
+
+    /// <summary>
+    /// R13.1 #3：自然日语义下保留今日与前 N 个完整自然日（共 N+1 天）。
+    /// 创建 today-8 .. today 共 9 个分片，N=7 时应保留 today-7..today（8 天），清理 today-8。
+    /// </summary>
+    [TestMethod]
+    public async Task Retention_NaturalDay_KeepsTodayAndPreviousRetentionDays()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var options = new FileStorageOptions { RootPath = root, TraceRetentionDays = 7 };
+            var paths = new FilePathResolver(options);
+            var serializer = new FileFormatSerializer();
+            var store = new FileRetrievalTraceStore(options);
+
+            var traceDir = paths.GetRetrievalTraceDirectory(WorkspaceId, CollectionId);
+            var today = DateTimeOffset.UtcNow.Date;
+
+            var keptDirs = new List<string>();
+            var purgedDirs = new List<string>();
+            for (var offset = 0; offset <= 8; offset++)
+            {
+                var dir = Path.Combine(traceDir, today.AddDays(-offset).ToString("yyyyMMdd"));
+                Directory.CreateDirectory(dir);
+                await File.WriteAllTextAsync(
+                    Path.Combine(dir, "retrieval-traces.jsonl"),
+                    serializer.Serialize(new ContextRetrievalTrace
+                    {
+                        RetrievalId = $"shard-{offset}", WorkspaceId = WorkspaceId, CollectionId = CollectionId,
+                        CreatedAt = today.AddDays(-offset)
+                    }));
+                (offset <= 7 ? keptDirs : purgedDirs).Add(dir);
+            }
+
+            await store.SaveAsync(new ContextRetrievalTrace
+            {
+                RetrievalId = "current", WorkspaceId = WorkspaceId, CollectionId = CollectionId,
+                QueryText = "current", CreatedAt = DateTimeOffset.UtcNow
+            });
+
+            foreach (var dir in keptDirs)
+            {
+                Assert.IsTrue(Directory.Exists(dir),
+                    $"应保留的分片被误删：{Path.GetFileName(dir)}");
+            }
+            foreach (var dir in purgedDirs)
+            {
+                Assert.IsFalse(Directory.Exists(dir),
+                    $"应清理的分片仍存在：{Path.GetFileName(dir)}");
+            }
+        }
+        finally
+        {
+            DeleteTempRoot(root);
+        }
+    }
+
     private static string CreateTempRoot()
     {
         var root = Path.Combine(Path.GetTempPath(), "contextcore-trace-tests", Guid.NewGuid().ToString("N"));

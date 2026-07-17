@@ -31,7 +31,8 @@ public sealed class FileStorageOptions
 	public string RootPath { get; set; } = DefaultRootPath;
 
 	/// <summary>
-	/// Trace 日期分片保留天数。超过此天数的 yyyyMMdd 分片目录会在写入时被后台清理。
+	/// Trace 日期分片保留天数（按 UTC 自然日判定）。
+	/// 保留今日与前 N 个完整自然日（共 N+1 天），第 N+1 天前的 yyyyMMdd 分片目录会在写入时被后台清理。
 	/// 设为 0 禁用 retention（永久保留）。默认 30 天。
 	/// </summary>
 	public int TraceRetentionDays { get; set; } = 30;

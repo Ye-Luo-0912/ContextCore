@@ -7,6 +7,12 @@ namespace ContextCore.Storage.FileSystem;
 /// 在 SaveAsync 中按时间间隔（1 小时）触发，删除超过 <see cref="FileStorageOptions.TraceRetentionDays"/> 的 yyyyMMdd 分片目录。
 /// 线程安全（CAS 占用清理槽位），fail-open（清理失败不影响写入）。
 /// </summary>
+/// <remarks>
+/// R13.1 #3：retention 按自然日（UTC 日历日）边界判定。cutoff 对齐到今日 UTC 午夜再减
+/// <see cref="FileStorageOptions.TraceRetentionDays"/>，分片日期（yyyyMMdd 解析为当日 00:00 UTC）
+/// 严格早于 cutoff 才删除。这保证清理决策在一天内任意时刻一致，不再随时分秒漂移：
+/// 保留今日与前 N 个完整自然日（共 N+1 天），第 N+1 天前的分片被清理。
+/// </remarks>
 internal sealed class FileTraceJanitor
 {
     private static readonly long PurgeIntervalTicks = TimeSpan.FromHours(1).Ticks;
@@ -59,7 +65,12 @@ internal sealed class FileTraceJanitor
             return;
         }
 
-        var cutoff = DateTimeOffset.UtcNow.AddDays(-_retentionDays);
+        // R13.1 #3：自然日语义——cutoff 对齐到今日 UTC 午夜再减 retentionDays，
+        // 与分片日期（yyyyMMdd 解析为当日 00:00 UTC）按日历日边界比较，
+        // 不再随时分秒漂移。保留今日与前 N 个完整自然日（共 N+1 天）。
+        var cutoff = new DateTimeOffset(
+            DateTimeOffset.UtcNow.Date.AddDays(-_retentionDays),
+            TimeSpan.Zero);
 
         foreach (var dir in Directory.EnumerateDirectories(traceDirectory, "*", SearchOption.TopDirectoryOnly))
         {
