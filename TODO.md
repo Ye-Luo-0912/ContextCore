@@ -1,6 +1,6 @@
 # ContextCore 项目路线图
 
-> 最近更新：R12-3/4/5/6 完成 + R12-F 验收（2026-07-17）
+> 最近更新：R12.4A 正确性闭环 + R12-F.1 Current-HEAD Rebaseline（2026-07-17）
 
 > 本文件是 ContextCore 的**唯一当前路线图**。docs/ 下的 freeze / report / audit / plan 类文档均为历史快照，仅供回溯，不作为设计依据。历史完成记录已迁入 [docs/archive/roadmap-history.md](docs/archive/roadmap-history.md)。
 
@@ -8,7 +8,7 @@
 
 ## 当前阶段
 
-**架构收口与不可达代码清除期** — P5（P5-0 ~ P5-6）、P0 并发锁修复、P1-5 分发重构、DTO-R1~R5 报告 DTO 治理、P1 ControlRoom 历史报告矩阵删除、P2 Evaluation/Core 不可达切片删除、P4 FoundationStatusService 收口、P3-deferred eval-only DTO 迁移回 Evaluation 均已完成。R12 Context State 缓存边界返工（scope 索引/single-flight/commit point 安全/并发测试）与 P1 残留删除均已完成。R17/R18 系列完成 Package CandidateSegment 精确 attribution、FileSystem Trace append-only 分片、Evaluation WriteJsonAsync 泛型化、Decision Evidence 纠偏、Runtime 删除伪依赖、UnsupportedStoreExceptionFactory 工厂抽取。R12-1 低风险净减完成无消费者代码清理与 Trace 统一失败指标。R12-3/4/5/6 完成 Package Contribution Pipeline 提取、Retrieval Batch & Parallel Read、Append Log Storage QueryRecent 尾部读取+retention、Evaluation I/O Consolidation 目标确认。R12-F 验收通过（Build 0/0、Tests 0 failed、A3 语义不变性 100%、Evaluation 净减 2,347 行）。剩余 Domain/Api/Ports 全量重排与 Service DI 大改暂缓。
+**R13 Cache Correctness Gate 启动期** — R12.4A Post-Refactor Correctness Closure（10 项行为正确性修复）已全部完成并提交（commit dbf963f）。R12-F.1 Current-HEAD Rebaseline 已完成：A3 语义不变性 100%、Retrieval golden ranking 30 样本全通过、GRAPH-09 图不变性 12 测试全通过、BenchmarkDotNet 37 个 benchmark 基线已采集（Package Cold 2.85ms / CacheHit 7.5μs / Allocation 924.54KB @ ItemCount=50）。下一阶段为 R13.0 Cache Correctness Gate。剩余 Domain/Api/Ports 全量重排与 Service DI 大改暂缓。
 
 ---
 
@@ -24,7 +24,7 @@
 
 ---
 
-## 当前验收指标（2026-07-16）
+## 当前验收指标（2026-07-17）
 
 | 指标 | 当前值 | 目标 |
 |------|--------|------|
@@ -35,7 +35,14 @@
 | EvalCommand*.cs 单文件行数 | 2,820 | P1-5 已完成 |
 | FoundationStatusService.cs 行数 | 606 | P4 已完成 |
 | 构建 | 0 警告 / 0 错误 | 0 / 0 |
-| 测试 | 809+43+6 通过 / 0 失败 | 0 失败 |
+| 测试 | 899+1skip / 44 / 6+27skip 通过 / 0 失败 | 0 失败 |
+| A3 语义不变性 | PassRate 100%, Recall@10 100% | 与冻结基线一致 |
+| Retrieval golden ranking | 30 样本全通过, Recall@10 100% | 与冻结基线一致 |
+| GRAPH-09 图不变性 | 12 测试全通过 | 0 失败 |
+| Package Build p95 (Cold, ItemCount=50) | 2.85ms (mean), Allocation 924.54KB | 基线已采集 |
+| Package Build p95 (CacheHit, ItemCount=50) | 7.5μs (mean), Allocation 12.38KB | 基线已采集 |
+| FileSystem Package Build (Cold, ItemCount=50) | 19.0ms (mean), Allocation 1538.63KB | 基线已采集 |
+| CacheChurn WriteWithLruEviction (Capacity=10000) | 408ms (mean), Allocation 12470KB | 基线已采集 |
 
 ---
 
@@ -57,15 +64,81 @@
 
 **R12-6：Evaluation I/O Consolidation** — ✅ 目标已满足。EvalCommand 当前 3199 行（低于 4000-5000 目标），gate execution shell 模式已在前序重构中消化，WriteJsonAsync 已泛型化（R17-F）。剩余 I/O helper 提取为可选优化，非阻塞项。
 
+**R12.4A：Post-Refactor Correctness Closure** — ✅ 已完成（commit dbf963f，2026-07-17）。10 项行为正确性修复：
+1. Memory Recall 与 Keyword Recall 解耦
+2. Package 合并查询保持 per-layer/per-level 配额
+3. Tokenizer 截断公式
+4. Section 最终兜底截断后重新计算 attribution
+5. Section refs 只引用真正进入输出的 segment
+6. File Job Queue Ack/Nack 原子化
+7. Retrieval deterministic CandidateId tie-break
+8. Relation quota 语义修正（Pack 阶段显式预留 + rollover）
+9. Event Sink fail-open（success-path emit 独立 try-catch）
+10. Graph Writer fallback 最终删除（移除 4 处死分支）
+- Build = 0/0 ✅；Tests = 899+1skip / 44 / 6+27skip ✅
+
+**R12-F.1：Current-HEAD Rebaseline** — ✅ 已完成（2026-07-17）。
+- A3 语义不变性 ✅（50 样本 PassRate 100%, Recall@10 100%, MustNotHit=0, HardConstraintMissing=0 — 与冻结基线完全不变）
+- Retrieval golden ranking ✅（30 样本全通过, Recall@10 100%, 覆盖 vector/keyword/deprecated-filter/relation-expansion/cross-layer 5 维度）
+- GRAPH-09 图不变性 ✅（12 测试全通过）
+- BenchmarkDotNet 基线 ✅（37 个 benchmark, 详见 `benchmarks/results/README.md`）
+
 **R12-F：Lean Runtime Freeze** — ✅ 验收完成（2026-07-17）。
 - Build = 0/0 ✅
-- Tests = 0 failed ✅（ContextCore.Tests 818+1skip, Service.Tests 43, IntegrationTests 6+27skip）
+- Tests = 0 failed ✅（ContextCore.Tests 899+1skip, Service.Tests 44, IntegrationTests 6+27skip）
 - PublicAPI 基线干净 ✅（仅 R12-4 新增 2 接口+2 方法，R12-5 无变化）
 - A3 语义不变性 ✅（50 条样本 PassRate 100%, Recall@10 100%, Failed 0 — 与基线完全一致）
 - Evaluation 净减 2,347 行 ✅（>= 2,000 目标）
 - File trace 不随历史恶化 ✅（R12-5 TraceQueryHelper budget 提前终止 + retention 清理）
 - 生产代码净减 3,484 行 ⚠️（< 8,000 目标，因 R12-R18 系列新增基础设施：批量查询接口、retention 清理、trace 分片、源生成器等；纯删除 14,861 行满足目标，净减被新增抵消）
-- Retrieval p95 / Package allocated bytes：需 benchmark 验证（A3 50 条样本数据量小，性能差异不显著）
+- Retrieval p95 / Package allocated bytes ✅（R12-F.1 基线已采集，见上方验收指标表）
+
+### R13 路线图
+
+**R13.0：Cache Correctness Gate** — Cache 保持生产关闭，先建立正确性闸门。
+- factory 前后版本向量比较
+- stale computation 丢弃或单次重试
+- PackageTemplate 强不可变
+- factory shutdown token 与 timeout
+- version bump 先于 physical eviction
+- Cache TTL
+- semantic metadata fingerprint
+- mutable result isolation tests
+- write-during-build race tests
+- Cache 继续保持生产关闭
+
+**R13.1：FileSystem Concurrency Closure** — 修复并发边界。
+- FileLockProvider retired-entry 竞态
+- 真正 reverse tail
+- retention 自然日语义
+- Janitor 移出 Save 热路径
+- JobId 到文件路径索引
+- FileSystem 单实例与多进程支持边界
+
+**R13.2：Package Read Plan** — 消除重复查询。
+- merged constraint 重复查询
+- Provider 内按 Level/Layer 复用快照
+- current task 与其他读取并行
+- 查询计划记录 Store call count
+- Package cold path p95 与 allocation gate
+
+**R13.3：Store Capability Model** — 替代 namespace 字符串检测。
+- IStoreRuntimeCapabilities / StorageExecutionProfile
+- batch size / max concurrency / parallel read safety / consistency / transaction support
+
+**R13.4：Runtime Observability Pipeline** — 统一 Trace 与 Event retention。
+- BestEffort Sink 有界 Channel / File/Postgres 批量写入 / Required audit 同步
+- queue/error/drop metrics
+
+**R13-F：Cache Canary Freeze** — 仅单实例 + InMemory version store + 指定 workspace + 配置开关下启用 Package Template Cache。
+验收：Cold 与 Hit 输出完全相同 / 写入期间不得缓存旧结果 / 调用方修改不得污染后续结果 / factory fault 不得 poisoned key / shutdown 不得留下无限任务 / Cache p95 明确优于 Cold / allocation 明确下降。
+
+### 后续功能路线（R14-R17）
+
+- **R14 — Decision Evidence V2**：建立可靠的决策证据和质量审计。
+- **R15 — Incremental Context Package**：Previous Template + Context Delta → Selective Reload → Incremental Candidate Update → Incremental Repack。最接近外部 KV Cache 的 ContextOS 能力。
+- **R16 — Context Evolution Agent V1**：仅开放 Observe / Diagnose / Form Hypothesis / Run Benchmark / Generate Proposal。不允许自动修改正式 Policy。
+- **R17 — Guarded Optimization**：Offline Experiment → Shadow → Scoped Canary → Automatic Rollback。
 
 ### DTO-R4 剩余部分（暂缓，高风险）
 
