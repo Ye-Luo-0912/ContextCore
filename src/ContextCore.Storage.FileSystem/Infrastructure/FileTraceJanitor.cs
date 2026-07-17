@@ -28,37 +28,49 @@ internal sealed class FileTraceJanitor
     /// <summary>
     /// 检查是否到达清理间隔，是则删除过期分片。fail-open，不抛异常。
     /// </summary>
-    public void MaybePurge(string traceDirectory, CancellationToken cancellationToken)
+    /// <remarks>
+    /// R13.1 #4：retention 不再在 Save 热路径上同步执行。节流检查（Interlocked CAS）仍同步
+    /// 且开销极小（O(1)），但命中清理槽位后，实际的目录枚举 + 删除 fire-and-forget 到线程池，
+    /// 不阻塞写入线程。返回的 Task 可被调用方（或测试）观察以等待清理完成；未到期或禁用时
+    /// 返回 <see cref="Task.CompletedTask"/>。
+    /// purge 是 post-commit housekeeping，独立于请求生命周期——不接收请求的 CancellationToken，
+    /// 即使原写入请求被取消也应完成（与缓存失效的 CancellationToken.None 约定一致）。
+    /// </remarks>
+    public Task MaybePurge(string traceDirectory)
     {
         if (_retentionDays <= 0 || string.IsNullOrEmpty(traceDirectory))
         {
-            return;
+            return Task.CompletedTask;
         }
 
         var nowTicks = DateTimeOffset.UtcNow.UtcTicks;
         var lastTicks = Interlocked.Read(ref _lastPurgeTicks);
         if (nowTicks - lastTicks < PurgeIntervalTicks)
         {
-            return;
+            return Task.CompletedTask;
         }
 
         // CAS 占用清理槽位，避免多线程并发重复清理
         if (Interlocked.CompareExchange(ref _lastPurgeTicks, nowTicks, lastTicks) != lastTicks)
         {
-            return;
+            return Task.CompletedTask;
         }
 
-        try
+        // R13.1 #4：命中槽位后将昂贵的目录 I/O 移出 Save 热路径，fire-and-forget 到线程池。
+        return Task.Run(() =>
         {
-            PurgeExpiredShards(traceDirectory, cancellationToken);
-        }
-        catch
-        {
-            // fail-open: retention 失败不影响写入路径
-        }
+            try
+            {
+                PurgeExpiredShards(traceDirectory);
+            }
+            catch
+            {
+                // fail-open: retention 失败不影响写入路径
+            }
+        });
     }
 
-    private void PurgeExpiredShards(string traceDirectory, CancellationToken cancellationToken)
+    private void PurgeExpiredShards(string traceDirectory)
     {
         if (!Directory.Exists(traceDirectory))
         {
@@ -74,7 +86,6 @@ internal sealed class FileTraceJanitor
 
         foreach (var dir in Directory.EnumerateDirectories(traceDirectory, "*", SearchOption.TopDirectoryOnly))
         {
-            cancellationToken.ThrowIfCancellationRequested();
             var name = Path.GetFileName(dir);
             if (TryParseDateShard(name, out var shardDate) && shardDate < cutoff)
             {

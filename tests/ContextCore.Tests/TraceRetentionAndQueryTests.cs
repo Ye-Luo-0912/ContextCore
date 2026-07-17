@@ -156,6 +156,8 @@ public sealed class TraceRetentionAndQueryTests
                 RetrievalId = "current", WorkspaceId = WorkspaceId, CollectionId = CollectionId,
                 QueryText = "current", CreatedAt = DateTimeOffset.UtcNow
             });
+            // R13.1 #4：retention 现为 fire-and-forget，需等待清理 Task 完成后再断言目录状态。
+            await AwaitPurgeAsync(store);
 
             Assert.IsFalse(
                 Directory.Exists(expiredDir),
@@ -197,6 +199,7 @@ public sealed class TraceRetentionAndQueryTests
                 RetrievalId = "current", WorkspaceId = WorkspaceId, CollectionId = CollectionId,
                 CreatedAt = DateTimeOffset.UtcNow
             });
+            await AwaitPurgeAsync(store);
 
             Assert.IsTrue(
                 Directory.Exists(expiredDir),
@@ -235,6 +238,7 @@ public sealed class TraceRetentionAndQueryTests
                 RetrievalId = "current", WorkspaceId = WorkspaceId, CollectionId = CollectionId,
                 CreatedAt = DateTimeOffset.UtcNow
             });
+            await AwaitPurgeAsync(store);
 
             Assert.IsFalse(Directory.Exists(expiredDir), "过期日期分片应被清理");
             Assert.IsTrue(Directory.Exists(nonDateDir), "非日期格式目录不应被清理");
@@ -283,6 +287,7 @@ public sealed class TraceRetentionAndQueryTests
                 RetrievalId = "current", WorkspaceId = WorkspaceId, CollectionId = CollectionId,
                 QueryText = "current", CreatedAt = DateTimeOffset.UtcNow
             });
+            await AwaitPurgeAsync(store);
 
             Assert.IsTrue(Directory.Exists(boundaryDir),
                 "自然日语义：恰好 retentionDays 天前的分片应保留（不严格早于 cutoff），不应被误删");
@@ -326,6 +331,7 @@ public sealed class TraceRetentionAndQueryTests
                 RetrievalId = "current", WorkspaceId = WorkspaceId, CollectionId = CollectionId,
                 QueryText = "current", CreatedAt = DateTimeOffset.UtcNow
             });
+            await AwaitPurgeAsync(store);
 
             Assert.IsFalse(Directory.Exists(expiredDir),
                 "超过 retentionDays 边界的分片应被清理");
@@ -375,6 +381,7 @@ public sealed class TraceRetentionAndQueryTests
                 RetrievalId = "current", WorkspaceId = WorkspaceId, CollectionId = CollectionId,
                 QueryText = "current", CreatedAt = DateTimeOffset.UtcNow
             });
+            await AwaitPurgeAsync(store);
 
             foreach (var dir in keptDirs)
             {
@@ -390,6 +397,15 @@ public sealed class TraceRetentionAndQueryTests
         finally
         {
             DeleteTempRoot(root);
+        }
+    }
+
+    // R13.1 #4：retention 现为 fire-and-forget，测试需显式等待清理 Task 完成后再断言。
+    private static async Task AwaitPurgeAsync(FileRetrievalTraceStore store)
+    {
+        if (store.PendingPurge is { } purge)
+        {
+            await purge.ConfigureAwait(false);
         }
     }
 

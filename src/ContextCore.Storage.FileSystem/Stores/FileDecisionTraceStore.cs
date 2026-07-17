@@ -13,6 +13,10 @@ public sealed class FileDecisionTraceStore : IDecisionTraceStore
     private readonly FileJsonLineStore _jsonLines;
     private readonly FilePathResolver _paths;
     private readonly FileTraceJanitor _janitor;
+    private Task? _pendingPurge;
+
+    /// <summary>最近一次 MaybePurge 派发的清理 Task。供测试等待清理完成。</summary>
+    internal Task? PendingPurge => _pendingPurge;
 
     public FileDecisionTraceStore(FileStorageOptions options)
         : this(new FilePathResolver(options), new FileFormatSerializer(), options)
@@ -40,7 +44,8 @@ public sealed class FileDecisionTraceStore : IDecisionTraceStore
 
         await _jsonLines.AppendAsync(path, record, cancellationToken).ConfigureAwait(false);
 
-        _janitor.MaybePurge(_paths.GetDecisionTraceDirectory(record.WorkspaceId, record.CollectionId), cancellationToken);
+        // R13.1 #4：retention 移出 Save 热路径——fire-and-forget，不阻塞写入返回。
+        _pendingPurge = _janitor.MaybePurge(_paths.GetDecisionTraceDirectory(record.WorkspaceId, record.CollectionId));
     }
 
     public async Task<IReadOnlyList<ContextDecisionRecord>> QueryRecentAsync(

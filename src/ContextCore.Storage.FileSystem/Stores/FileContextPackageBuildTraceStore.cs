@@ -13,6 +13,10 @@ public sealed class FileContextPackageBuildTraceStore : IContextPackageBuildTrac
     private readonly FilePathResolver _paths;
     private readonly FileJsonLineStore _jsonLines;
     private readonly FileTraceJanitor _janitor;
+    private Task? _pendingPurge;
+
+    /// <summary>最近一次 MaybePurge 派发的清理 Task。供测试等待清理完成。</summary>
+    internal Task? PendingPurge => _pendingPurge;
 
     public FileContextPackageBuildTraceStore(FileStorageOptions options)
         : this(new FilePathResolver(options), new FileFormatSerializer(), options)
@@ -41,7 +45,8 @@ public sealed class FileContextPackageBuildTraceStore : IContextPackageBuildTrac
 
         await _jsonLines.AppendAsync(path, result, cancellationToken).ConfigureAwait(false);
 
-        _janitor.MaybePurge(_paths.GetPackageBuildTraceDirectory(result.Package.WorkspaceId, result.Package.CollectionId), cancellationToken);
+        // R13.1 #4：retention 移出 Save 热路径——fire-and-forget，不阻塞写入返回。
+        _pendingPurge = _janitor.MaybePurge(_paths.GetPackageBuildTraceDirectory(result.Package.WorkspaceId, result.Package.CollectionId));
     }
 
     public async Task<IReadOnlyList<ContextPackageBuildResult>> QueryRecentAsync(
