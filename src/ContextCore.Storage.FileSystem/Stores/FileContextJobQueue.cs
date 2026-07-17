@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 
@@ -8,6 +9,13 @@ namespace ContextCore.Storage.FileSystem.Stores;
 /// 作业状态持久化为 JSONL 文件，支持入队、出队、确认与重试操作。
 /// Dequeue 在跨进程文件锁内完成读-找-改-写的原子状态转换，避免 TOCTOU 竞态。
 /// </summary>
+/// <remarks>
+/// R13.1 #5：维护进程内 JobId → jobs.jsonl 路径索引（<see cref="_jobPathIndex"/>），
+/// 让 Ack/Nack 在 Enqueue 已记录路径时跳过全量扫描。索引为纯优化：
+/// 未命中时回退到目录扫描，扫描命中后再回填缓存。jobs 不在文件间移动、不删除，
+/// 故映射在 job 生命周期内稳定；缓存指向已删除文件时由 <see cref="File.Exists"/> 守卫回退到扫描。
+/// 多进程场景下他进程 Enqueue 的 job 不在本进程缓存中，首次 Ack 走扫描并回填。
+/// </remarks>
 public sealed class FileContextJobQueue : IContextJobQueue, IContextJobQueryStore
 {
     private readonly SemaphoreSlim _gate = new(1, 1);
@@ -15,6 +23,8 @@ public sealed class FileContextJobQueue : IContextJobQueue, IContextJobQueryStor
     private readonly FileJsonLineStore _jsonLines;
     private readonly FileSystemWriter _writer;
     private readonly FileFormatSerializer _serializer;
+    // R13.1 #5：JobId → jobs.jsonl 路径的进程内索引，Ack/Nack 定位用。ConcurrentDictionary 保证无锁读写在 _gate 之外也安全。
+    private readonly ConcurrentDictionary<string, string> _jobPathIndex = new(StringComparer.OrdinalIgnoreCase);
 
     public FileContextJobQueue(FileStorageOptions options)
         : this(new FilePathResolver(options), new FileFormatSerializer())
@@ -29,6 +39,9 @@ public sealed class FileContextJobQueue : IContextJobQueue, IContextJobQueryStor
         _writer = new FileSystemWriter();
     }
 
+    /// <summary>R13.1 #5：进程内 JobId→路径索引的条目数，供测试观察索引是否被 Enqueue 命中。</summary>
+    internal int JobPathIndexCount => _jobPathIndex.Count;
+
     public async Task EnqueueAsync(ContextJob job, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(job);
@@ -42,6 +55,9 @@ public sealed class FileContextJobQueue : IContextJobQueue, IContextJobQueryStor
         var path = GetJobsPath(normalized.WorkspaceId, normalized.CollectionId);
         await _jsonLines.UpsertAsync(path, normalized, item => item.JobId, cancellationToken)
             .ConfigureAwait(false);
+
+        // R13.1 #5：Enqueue 已知 job 落地的文件，记录到索引，后续 Ack/Nack 直接 O(1) 定位无需扫描。
+        _jobPathIndex[normalized.JobId] = path;
     }
 
     public async Task<ContextJob?> DequeueAsync(CancellationToken cancellationToken = default)
@@ -229,11 +245,19 @@ public sealed class FileContextJobQueue : IContextJobQueue, IContextJobQueryStor
     }
 
     /// <summary>
-    /// 扫描所有 workspace 的 jobs.jsonl，返回包含指定 jobId 的文件路径。
-    /// 仅用于定位，不持锁；后续的原子更新由 _jsonLines.UpdateAsync 在单文件锁内完成。
+    /// 定位包含指定 jobId 的 jobs.jsonl 文件路径。
+    /// R13.1 #5：优先查进程内 JobId→路径索引（O(1)）；未命中或缓存指向已删除文件时
+    /// 回退到全量扫描，扫描命中后回填索引。仅用于定位，不持锁；
+    /// 后续的原子更新由 _jsonLines.UpdateAsync 在单文件锁内完成。
     /// </summary>
     private async Task<string?> LocateJobFileAsync(string jobId, CancellationToken cancellationToken)
     {
+        // R13.1 #5：索引命中且文件仍存在时直接返回，跳过全量扫描。
+        if (_jobPathIndex.TryGetValue(jobId, out var cached) && File.Exists(cached))
+        {
+            return cached;
+        }
+
         var workspacesDirectory = Path.Combine(_paths.RootPath, "workspaces");
         if (!Directory.Exists(workspacesDirectory))
         {
@@ -246,6 +270,8 @@ public sealed class FileContextJobQueue : IContextJobQueue, IContextJobQueryStor
                 .ConfigureAwait(false);
             if (jobs.Any(job => string.Equals(job.JobId, jobId, StringComparison.OrdinalIgnoreCase)))
             {
+                // 扫描命中后回填索引，后续 Ack/Nack 直接命中缓存。
+                _jobPathIndex[jobId] = jobFile;
                 return jobFile;
             }
         }

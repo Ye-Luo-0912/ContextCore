@@ -477,6 +477,162 @@ public sealed class ContextCoreFileSystemConcurrencyTests
         }
     }
 
+    // ── R13.1 #5：JobId → 文件路径索引 ────────────────────────────────
+
+    /// <summary>
+    /// R13.1 #5：Enqueue 应将 jobId→路径写入进程内索引，后续 Ack 命中索引跳过扫描。
+    /// 验证索引条目数在 Enqueue 后正确增长，且 Ack 后保持稳定（Ack 不新增索引条目）。
+    /// </summary>
+    [TestMethod]
+    public async Task FileContextJobQueue_Enqueue_PopulatesJobPathIndex()
+    {
+        var rootPath = CreateTestRootPath();
+        try
+        {
+            var options = new FileStorageOptions { RootPath = rootPath };
+            var queue = new FileContextJobQueue(options);
+
+            Assert.AreEqual(0, queue.JobPathIndexCount, "初始索引应为空");
+
+            await queue.EnqueueAsync(new ContextJob
+            {
+                JobId = "idx-job-1",
+                WorkspaceId = "ws-idx",
+                CollectionId = "col-idx",
+                Kind = ContextJobKind.Custom,
+                PayloadJson = "{}",
+                MaxRetryCount = 3,
+                CreatedAt = DateTimeOffset.UtcNow
+            });
+            Assert.AreEqual(1, queue.JobPathIndexCount, "Enqueue 后索引应有 1 条");
+
+            await queue.EnqueueAsync(new ContextJob
+            {
+                JobId = "idx-job-2",
+                WorkspaceId = "ws-idx",
+                CollectionId = "col-idx",
+                Kind = ContextJobKind.Custom,
+                PayloadJson = "{}",
+                MaxRetryCount = 3,
+                CreatedAt = DateTimeOffset.UtcNow
+            });
+            Assert.AreEqual(2, queue.JobPathIndexCount, "第二个 Enqueue 后索引应有 2 条");
+
+            // Dequeue → Running → Ack：Ack 应命中索引（不新增条目），状态正确转换。
+            var dequeued = await queue.DequeueAsync();
+            Assert.IsNotNull(dequeued);
+            await queue.AckAsync(dequeued!.JobId);
+            Assert.AreEqual(2, queue.JobPathIndexCount, "Ack 走索引定位，不应新增索引条目");
+
+            var queryStore = (IContextJobQueryStore)queue;
+            var jobs = await queryStore.QueryAsync(new ContextJobQuery { Take = 10 });
+            Assert.AreEqual(ContextJobState.Succeeded, jobs.Single(j => j.JobId == dequeued.JobId).State,
+                "索引命中后 Ack 应正确转换状态");
+        }
+        finally
+        {
+            DeleteTestRoot(rootPath);
+        }
+    }
+
+    /// <summary>
+    /// R13.1 #5：跨 workspace/collection 的多个 jobs.jsonl 文件下，Ack 应通过索引或扫描
+    /// 正确解析目标 job 所在的文件，不误操作其他文件的 job。
+    /// </summary>
+    [TestMethod]
+    public async Task FileContextJobQueue_AckAcrossMultipleWorkspaceFiles_ResolvesCorrectFile()
+    {
+        var rootPath = CreateTestRootPath();
+        try
+        {
+            var options = new FileStorageOptions { RootPath = rootPath };
+            var queue = new FileContextJobQueue(options);
+
+            // 两个 workspace/collection 各入队一个 job（落在不同 jobs.jsonl）
+            await queue.EnqueueAsync(new ContextJob
+            {
+                JobId = "multi-ws-a",
+                WorkspaceId = "ws-a", CollectionId = "col-a",
+                Kind = ContextJobKind.Custom, PayloadJson = "{}",
+                MaxRetryCount = 3, CreatedAt = DateTimeOffset.UtcNow
+            });
+            await queue.EnqueueAsync(new ContextJob
+            {
+                JobId = "multi-ws-b",
+                WorkspaceId = "ws-b", CollectionId = "col-b",
+                Kind = ContextJobKind.Custom, PayloadJson = "{}",
+                MaxRetryCount = 3, CreatedAt = DateTimeOffset.UtcNow
+            });
+            Assert.AreEqual(2, queue.JobPathIndexCount, "两个 Enqueue 应记录 2 条索引");
+
+            // Dequeue 出第一个可运行 job，Ack 它，再 Dequeue+Ack 第二个
+            var first = await queue.DequeueAsync();
+            Assert.IsNotNull(first);
+            await queue.AckAsync(first!.JobId);
+
+            var second = await queue.DequeueAsync();
+            Assert.IsNotNull(second);
+            await queue.AckAsync(second!.JobId);
+
+            // 两个 job 都应进入 Succeeded，且不互相干扰
+            var queryStore = (IContextJobQueryStore)queue;
+            var jobs = await queryStore.QueryAsync(new ContextJobQuery { Take = 10 });
+            Assert.AreEqual(ContextJobState.Succeeded, jobs.Single(j => j.JobId == "multi-ws-a").State);
+            Assert.AreEqual(ContextJobState.Succeeded, jobs.Single(j => j.JobId == "multi-ws-b").State);
+        }
+        finally
+        {
+            DeleteTestRoot(rootPath);
+        }
+    }
+
+    /// <summary>
+    /// R13.1 #5：对未经本队列 Enqueue 直接写入文件的外部 job，Ack 应回退到扫描定位，
+    /// 定位后回填索引，后续 Ack 命中索引。验证扫描回退与回填闭环。
+    /// </summary>
+    [TestMethod]
+    public async Task FileContextJobQueue_AckOnExternalJob_FallsBackToScanAndBackfillsIndex()
+    {
+        var rootPath = CreateTestRootPath();
+        try
+        {
+            var options = new FileStorageOptions { RootPath = rootPath };
+            var queue = new FileContextJobQueue(options);
+            var paths = new FilePathResolver(options);
+            var serializer = new FileFormatSerializer();
+
+            // 直接写一个 jobs.jsonl，绕过 Enqueue（模拟他进程写入）
+            var externalPath = Path.Combine(paths.GetCollectionDirectory("ws-ext", "col-ext"), "jobs", "jobs.jsonl");
+            Directory.CreateDirectory(Path.GetDirectoryName(externalPath)!);
+            var externalJob = new ContextJob
+            {
+                JobId = "ext-job",
+                WorkspaceId = "ws-ext", CollectionId = "col-ext",
+                Kind = ContextJobKind.Custom, PayloadJson = "{}",
+                State = ContextJobState.Running, // 已 Running，Ack 才会生效
+                MaxRetryCount = 3,
+                CreatedAt = DateTimeOffset.UtcNow,
+                StartedAt = DateTimeOffset.UtcNow
+            };
+            await File.WriteAllTextAsync(externalPath, serializer.Serialize(externalJob) + "\n");
+
+            Assert.AreEqual(0, queue.JobPathIndexCount, "外部写入不应进入本队列索引");
+
+            // Ack 应通过扫描找到外部 job 并转换状态
+            await queue.AckAsync("ext-job");
+            Assert.AreEqual(1, queue.JobPathIndexCount, "扫描命中后应回填索引");
+
+            var queryStore = (IContextJobQueryStore)queue;
+            var jobs = await queryStore.QueryAsync(new ContextJobQuery { Take = 10 });
+            Assert.AreEqual(ContextJobState.Succeeded, jobs.Single(j => j.JobId == "ext-job").State,
+                "扫描回退应正确定位并 Ack 外部 job");
+        }
+        finally
+        {
+            DeleteTestRoot(rootPath);
+        }
+    }
+
     public sealed class JsonLineTestRecord
     {
         public string Id { get; init; } = string.Empty;
