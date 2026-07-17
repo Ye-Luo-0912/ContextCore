@@ -42,13 +42,15 @@ public sealed class FileJsonLineStore
     }
 
     /// <summary>
-    /// P0-9.1：从 JSONL 文件尾部读取最近的 <paramref name="maxCount"/> 条记录。
+    /// R13.1 #2：从 JSONL 文件尾部读取最近的 <paramref name="maxCount"/> 条记录。
     /// append-only 文件中最新记录在文件末尾，从尾部反序列化可在收集够后立即停止，
     /// 避免对大历史文件逐行反序列化。返回顺序为最新在前（文件末尾 → 文件头部）。
     /// </summary>
     /// <remarks>
-    /// 读取阶段仍读取全部行（I/O 顺序读，开销低），但只反序列化尾部 maxCount 行。
-    /// 损坏行跳过，不计入 maxCount。maxCount <= 0 时返回空列表。
+    /// 读取使用 <see cref="FileSystemReader.ReadLinesReverseAsync"/>：从文件尾部按块反向 I/O，
+    /// 仅读取产出 maxCount 条非空白行所需的尾部字节，不再全量读取整个文件。
+    /// 空白行在读取阶段即被跳过；损坏行（反序列化失败）跳过且不计入 maxCount。
+    /// maxCount &lt;= 0 时返回空列表。
     /// </remarks>
     public async Task<IReadOnlyList<T>> ReadTailAsync<T>(
         string path,
@@ -60,7 +62,8 @@ public sealed class FileJsonLineStore
             return Array.Empty<T>();
         }
 
-        var lines = await _reader.ReadAllLinesAsync(path, cancellationToken)
+        // R13.1 #2：反向 I/O 读取——仅读取尾部所需字节，newest-first，空白行已跳过。
+        var lines = await _reader.ReadLinesReverseAsync(path, maxCount, cancellationToken)
             .ConfigureAwait(false);
 
         if (lines.Count == 0)
@@ -68,16 +71,9 @@ public sealed class FileJsonLineStore
             return Array.Empty<T>();
         }
 
-        var result = new List<T>(Math.Min(maxCount, lines.Count));
-        // 从末尾向前迭代：append-only 文件最新记录在最后，尾部读取可早停。
-        for (var i = lines.Count - 1; i >= 0 && result.Count < maxCount; i--)
+        var result = new List<T>(lines.Count);
+        foreach (var line in lines)
         {
-            var line = lines[i];
-            if (string.IsNullOrWhiteSpace(line))
-            {
-                continue;
-            }
-
             try
             {
                 var item = _serializer.Deserialize<T>(line);
