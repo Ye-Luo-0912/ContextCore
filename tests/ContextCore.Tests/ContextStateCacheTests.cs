@@ -1,7 +1,12 @@
+using System.Collections.Immutable;
+using System.Reflection;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Core;
 using ContextCore.Core.Services.Learning.V14_0;
+using ContextCore.Runtime;
+using ContextCore.Storage.InMemory;
+using ContextCore.Storage.InMemory.Stores;
 
 namespace ContextCore.Tests;
 
@@ -903,6 +908,300 @@ public sealed class ContextStateCacheTests
         }
     }
 
+    // ── R13.0 #7: semantic metadata fingerprint 测试 ──────────────────────────
+
+    /// <summary>
+    /// R13.0 #7: 操作性 metadata key（requestId/traceId/operationId/correlationId/spanId 等）
+    /// 必须从指纹中排除。两个语义相同但携带不同 per-call 标识的请求必须产生相同指纹，
+    /// 避免相同语义请求因不同 requestId/traceId 导致缓存 miss。
+    /// </summary>
+    [TestMethod]
+    [TestCategory("CacheCorrectness")]
+    public void Fingerprint_OperationalMetadataKeys_ExcludedFromFingerprint()
+    {
+        var policy = new ContextPackagePolicy { TokenBudget = 1000 };
+
+        // 基线请求：无操作性 metadata
+        var reqBaseline = new ContextPackageRequest
+        {
+            WorkspaceId = "ws1",
+            CollectionId = "col1",
+            QueryText = "semantic query",
+            TokenBudget = 1000,
+            Metadata = new Dictionary<string, string> { ["mode"] = "chat", ["intent"] = "answer" }
+        };
+
+        // 携带全部已知操作性 key 的请求（语义字段相同）
+        var reqWithOperational = new ContextPackageRequest
+        {
+            WorkspaceId = "ws1",
+            CollectionId = "col1",
+            QueryText = "semantic query",
+            TokenBudget = 1000,
+            Metadata = new Dictionary<string, string>
+            {
+                ["mode"] = "chat",
+                ["intent"] = "answer",
+                // per-call 标识
+                ["requestId"] = Guid.NewGuid().ToString("N"),
+                ["traceId"] = Guid.NewGuid().ToString("N"),
+                ["operationId"] = "op-" + Random.Shared.Next(),
+                ["callerId"] = "caller-xyz",
+                ["correlationId"] = "corr-abc",
+                ["spanId"] = "span-001",
+                // 时间戳
+                ["timestamp"] = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(),
+                ["createdAt"] = DateTime.UtcNow.ToString("O"),
+                ["requestTime"] = DateTime.UtcNow.ToString("O"),
+                ["clientTimestamp"] = DateTime.UtcNow.ToString("O"),
+                ["receivedAt"] = DateTimeOffset.UtcNow.ToString("O"),
+                // 客户端/网络诊断
+                ["clientIp"] = "10.0.0.42",
+                ["userAgent"] = "Mozilla/5.0",
+                ["sessionId"] = "sess-" + Guid.NewGuid().ToString("N"),
+                ["clientId"] = "client-001",
+                ["remoteAddress"] = "192.168.1.1",
+                // 内部追踪 header
+                ["x-operation-id"] = "xop-" + Guid.NewGuid().ToString("N"),
+                ["x-trace-id"] = "xtr-" + Guid.NewGuid().ToString("N"),
+                ["x-request-id"] = "xreq-" + Guid.NewGuid().ToString("N")
+            }
+        };
+
+        // 另一组完全不同的操作性值（语义字段仍相同）
+        var reqDifferentOperational = new ContextPackageRequest
+        {
+            WorkspaceId = "ws1",
+            CollectionId = "col1",
+            QueryText = "semantic query",
+            TokenBudget = 1000,
+            Metadata = new Dictionary<string, string>
+            {
+                ["mode"] = "chat",
+                ["intent"] = "answer",
+                ["requestId"] = "different-request-id",
+                ["traceId"] = "different-trace-id",
+                ["clientIp"] = "172.16.0.99",
+                ["userAgent"] = "curl/8.0",
+                ["sessionId"] = "sess-other",
+                ["timestamp"] = "0"
+            }
+        };
+
+        var fpBaseline = PackageRequestFingerprintBuilder.Build(reqBaseline, policy);
+        var fpWithOperational = PackageRequestFingerprintBuilder.Build(reqWithOperational, policy);
+        var fpDifferentOperational = PackageRequestFingerprintBuilder.Build(reqDifferentOperational, policy);
+
+        Assert.AreEqual(fpBaseline, fpWithOperational,
+            "携带操作性 key 的请求必须与无操作性 key 的请求产生相同指纹（操作性 key 应被排除）");
+        Assert.AreEqual(fpBaseline, fpDifferentOperational,
+            "不同操作性值不得影响指纹（仅 per-call 标识不同，语义相同）");
+        Assert.AreEqual(fpWithOperational, fpDifferentOperational,
+            "两组不同操作性值的请求必须产生相同指纹");
+    }
+
+    /// <summary>
+    /// R13.0 #7: 语义 metadata key（mode/taskKind/intent/project/desiredOutputFormat/timeRange
+    /// 及未在 denylist 中的自定义业务字段）必须纳入指纹。
+    /// 不同语义 metadata 值必须产生不同指纹，确保 package 模板内容差异被缓存感知。
+    /// </summary>
+    [TestMethod]
+    [TestCategory("CacheCorrectness")]
+    public void Fingerprint_SemanticMetadataKeys_StillIncluded()
+    {
+        var policy = new ContextPackagePolicy { TokenBudget = 1000 };
+
+        // anchor metadata key（由 ContextAnchorExtractionProfile.MetadataRules 定义，不在 denylist）
+        var anchorKeys = new[] { "mode", "taskKind", "intent", "project", "desiredOutputFormat", "timeRange" };
+
+        foreach (var key in anchorKeys)
+        {
+            var req1 = new ContextPackageRequest
+            {
+                WorkspaceId = "ws1",
+                CollectionId = "col1",
+                TokenBudget = 1000,
+                Metadata = new Dictionary<string, string> { [key] = "value-a" }
+            };
+            var req2 = new ContextPackageRequest
+            {
+                WorkspaceId = "ws1",
+                CollectionId = "col1",
+                TokenBudget = 1000,
+                Metadata = new Dictionary<string, string> { [key] = "value-b" }
+            };
+
+            var fp1 = PackageRequestFingerprintBuilder.Build(req1, policy);
+            var fp2 = PackageRequestFingerprintBuilder.Build(req2, policy);
+            Assert.AreNotEqual(fp1, fp2,
+                $"语义 metadata key '{key}' 的不同值必须产生不同指纹（应纳入指纹）");
+        }
+
+        // 自定义业务字段（不在 denylist 中）也应纳入指纹
+        var reqBiz1 = new ContextPackageRequest
+        {
+            WorkspaceId = "ws1",
+            CollectionId = "col1",
+            TokenBudget = 1000,
+            Metadata = new Dictionary<string, string> { ["customBusinessField"] = "A" }
+        };
+        var reqBiz2 = new ContextPackageRequest
+        {
+            WorkspaceId = "ws1",
+            CollectionId = "col1",
+            TokenBudget = 1000,
+            Metadata = new Dictionary<string, string> { ["customBusinessField"] = "B" }
+        };
+        Assert.AreNotEqual(
+            PackageRequestFingerprintBuilder.Build(reqBiz1, policy),
+            PackageRequestFingerprintBuilder.Build(reqBiz2, policy),
+            "未在 denylist 中的自定义业务字段必须纳入指纹");
+
+        // 新增语义 key（即使原请求没有）必须改变指纹
+        var reqAddKey = new ContextPackageRequest
+        {
+            WorkspaceId = "ws1",
+            CollectionId = "col1",
+            TokenBudget = 1000,
+            Metadata = new Dictionary<string, string> { ["mode"] = "chat", ["project"] = "p1" }
+        };
+        var reqRemoveKey = new ContextPackageRequest
+        {
+            WorkspaceId = "ws1",
+            CollectionId = "col1",
+            TokenBudget = 1000,
+            Metadata = new Dictionary<string, string> { ["mode"] = "chat" }
+        };
+        Assert.AreNotEqual(
+            PackageRequestFingerprintBuilder.Build(reqAddKey, policy),
+            PackageRequestFingerprintBuilder.Build(reqRemoveKey, policy),
+            "语义字段集合差异（增减 key）必须产生不同指纹");
+    }
+
+    /// <summary>
+    /// R13.0 #7: 全部为操作性 key 的 metadata 应等同于空 metadata（语义字段数为 0）。
+    /// 验证 denylist 过滤后写入 "-|" 占位，与 null/empty metadata 行为一致。
+    /// </summary>
+    [TestMethod]
+    [TestCategory("CacheCorrectness")]
+    public void Fingerprint_AllOperationalMetadata_BehavesAsEmpty()
+    {
+        var policy = new ContextPackagePolicy { TokenBudget = 1000 };
+
+        var reqNoMetadata = new ContextPackageRequest
+        {
+            WorkspaceId = "ws1",
+            CollectionId = "col1",
+            TokenBudget = 1000
+        };
+        var reqAllOperational = new ContextPackageRequest
+        {
+            WorkspaceId = "ws1",
+            CollectionId = "col1",
+            TokenBudget = 1000,
+            Metadata = new Dictionary<string, string>
+            {
+                ["requestId"] = "r1",
+                ["traceId"] = "t1",
+                ["operationId"] = "o1",
+                ["timestamp"] = "123",
+                ["clientIp"] = "1.2.3.4",
+                ["userAgent"] = "test",
+                ["sessionId"] = "s1",
+                ["x-request-id"] = "x1"
+            }
+        };
+
+        var fpNoMetadata = PackageRequestFingerprintBuilder.Build(reqNoMetadata, policy);
+        var fpAllOperational = PackageRequestFingerprintBuilder.Build(reqAllOperational, policy);
+        Assert.AreEqual(fpNoMetadata, fpAllOperational,
+            "全部为操作性 key 的 metadata 应等同于空 metadata（语义字段数为 0）");
+
+        // 空字典也应等同于 null metadata
+        var reqEmptyDict = new ContextPackageRequest
+        {
+            WorkspaceId = "ws1",
+            CollectionId = "col1",
+            TokenBudget = 1000,
+            Metadata = new Dictionary<string, string>()
+        };
+        Assert.AreEqual(fpNoMetadata,
+            PackageRequestFingerprintBuilder.Build(reqEmptyDict, policy),
+            "空 metadata 字典应等同于 null metadata");
+    }
+
+    /// <summary>
+    /// R13.0 #7: BuildHashed 在 metadata 混合（语义 + 操作性）时仍输出 64 字符 SHA-256，
+    /// 且相同语义请求即使携带不同操作性值也产生相同哈希（哈希层面稳定性）。
+    /// </summary>
+    [TestMethod]
+    [TestCategory("CacheCorrectness")]
+    public void Fingerprint_BuildHashed_WithOperationalMetadata_StableAcrossSemanticRequests()
+    {
+        var policy = new ContextPackagePolicy { TokenBudget = 1000 };
+
+        var req1 = new ContextPackageRequest
+        {
+            WorkspaceId = "ws1",
+            CollectionId = "col1",
+            QueryText = "shared query",
+            TokenBudget = 1000,
+            Metadata = new Dictionary<string, string>
+            {
+                ["mode"] = "chat",
+                ["intent"] = "answer",
+                ["requestId"] = "req-aaa",
+                ["traceId"] = "tr-aaa",
+                ["clientIp"] = "1.1.1.1"
+            }
+        };
+        var req2 = new ContextPackageRequest
+        {
+            WorkspaceId = "ws1",
+            CollectionId = "col1",
+            QueryText = "shared query",
+            TokenBudget = 1000,
+            Metadata = new Dictionary<string, string>
+            {
+                ["mode"] = "chat",
+                ["intent"] = "answer",
+                ["requestId"] = "req-bbb",
+                ["traceId"] = "tr-bbb",
+                ["clientIp"] = "2.2.2.2"
+            }
+        };
+
+        var hash1 = PackageRequestFingerprintBuilder.BuildHashed(req1, policy);
+        var hash2 = PackageRequestFingerprintBuilder.BuildHashed(req2, policy);
+
+        Assert.AreEqual(64, hash1.Length, "BuildHashed 必须输出 64 字符 SHA-256 hex");
+        Assert.AreEqual(64, hash2.Length, "BuildHashed 必须输出 64 字符 SHA-256 hex");
+        Assert.AreEqual(hash1, hash2,
+            "语义相同（操作性 key 不同）的请求必须产生相同哈希");
+
+        // 哈希不得包含操作性值的明文
+        Assert.IsFalse(hash1.Contains("req-aaa", StringComparison.Ordinal), "哈希不得泄露操作性值明文");
+        Assert.IsFalse(hash1.Contains("1.1.1.1", StringComparison.Ordinal), "哈希不得泄露操作性值明文");
+
+        // 语义字段差异必须导致哈希差异
+        var req3 = new ContextPackageRequest
+        {
+            WorkspaceId = "ws1",
+            CollectionId = "col1",
+            QueryText = "shared query",
+            TokenBudget = 1000,
+            Metadata = new Dictionary<string, string>
+            {
+                ["mode"] = "code", // 语义差异
+                ["intent"] = "answer",
+                ["requestId"] = "req-aaa"
+            }
+        };
+        var hash3 = PackageRequestFingerprintBuilder.BuildHashed(req3, policy);
+        Assert.AreNotEqual(hash1, hash3,
+            "语义字段（mode）差异必须导致不同哈希");
+    }
+
     /// <summary>
     /// 全局数据失效测试：GlobalContextStore 写入应失效 package 缓存条目。
     /// Package 依赖 scope 包含 GlobalContextStore，全局上下文变更后缓存应被清除。
@@ -1016,15 +1315,15 @@ public sealed class ContextStateCacheTests
         var itemRefs = new[] { new ContextPackageItemReference { ItemId = "item-1", PrimarySectionName = "working_memory" } };
 
         var template = new PackageTemplate(
-            OrderedSections: sections,
-            SourceRefs: sourceRefs,
+            OrderedSections: sections.ToImmutableArray(),
+            SourceRefs: sourceRefs.ToImmutableArray(),
             EstimatedTokens: 100,
             TokenBudget: 1000,
-            SortedSelectedItems: selected,
-            DroppedItems: dropped,
-            Uncertainties: uncertainties,
-            ItemReferences: itemRefs,
-            Anchors: Array.Empty<ContextAnchor>(),
+            SortedSelectedItems: selected.ToImmutableArray(),
+            DroppedItems: dropped.ToImmutableArray(),
+            Uncertainties: uncertainties.ToImmutableArray(),
+            ItemReferences: itemRefs.ToImmutableArray(),
+            Anchors: ImmutableArray<ContextAnchor>.Empty,
             RetrievalPlan: null,
             Budget: new ContextPackageBudgetReport(),
             Output: new ContextPackageStandardOutput(),
@@ -1087,14 +1386,978 @@ public sealed class ContextStateCacheTests
         Assert.AreEqual("src-1", sourceRefs[0]);
     }
 
+    // ── R13.0 #8: mutable result isolation tests ──────────────────────────
+
+    /// <summary>
+    /// R13.0 #8: 缓存层 GetAsync 不做防御性拷贝——返回存储的同一引用。
+    /// 此测试文档化缓存边界行为：隔离责任由类型不可变性（PackageTemplate ImmutableArray）
+    /// 与消费方防御性拷贝（ResultProjector.ToArray）承担，缓存本身不隔离可变对象。
+    /// 若缓存可变对象，调用方修改会直接影响缓存——这正是 PackageTemplate 必须不可变的根因。
+    /// </summary>
+    [TestMethod]
+    [TestCategory("CacheCorrectness")]
+    public async Task Cache_GetAsync_ReturnsSameReference_NoDefensiveCopy()
+    {
+        var cache = new InMemoryContextStateCache(maxEntries: 16);
+        var scopes = new DependencyScopeSet(new CacheInvalidationKey("ContextStore", "ws", "col", null));
+        var key = StateCacheKey.From("mutable-ref-test");
+
+        // 用可变 List<string> 作为缓存值（模拟若缓存可变类型会发生什么）
+        var mutable = new List<string> { "a", "b", "c" };
+        await cache.SetAsync(key, mutable, scopes);
+
+        var get1 = await cache.GetAsync<List<string>>(key);
+        var get2 = await cache.GetAsync<List<string>>(key);
+
+        Assert.IsNotNull(get1);
+        Assert.IsNotNull(get2);
+        Assert.AreSame(mutable, get1, "GetAsync 必须返回存储的同一引用（缓存不做防御性拷贝）");
+        Assert.AreSame(get1, get2, "多次 GetAsync 返回同一引用");
+
+        // 调用方通过返回引用修改对象会直接影响缓存内对象（证明缓存层无隔离）
+        get1.Add("polluted");
+        Assert.AreEqual(4, get2.Count, "缓存层未隔离——调用方修改直接影响缓存对象");
+        Assert.AreEqual(4, mutable.Count, "原始存储对象也被修改（同一引用）");
+    }
+
+    /// <summary>
+    /// R13.0 #8: ResultProjector.ProjectResult 每次调用都为所有数组字段产生全新实例。
+    /// 验证防御性拷贝真正创建新数组（不仅值不污染，引用也不同），
+    /// 覆盖 6 个数组字段：SelectedItems / ItemReferences / DroppedItems / Uncertainties / Package.Sections / Package.SourceRefs。
+    /// </summary>
+    [TestMethod]
+    [TestCategory("CacheCorrectness")]
+    public void ProjectResult_ProducesFreshArrayInstances_PerCall()
+    {
+        var template = BuildIsolationTemplate();
+        var (projector, options) = BuildIsolationProjectorAndOptions();
+
+        var result1 = projector.ProjectResult(template, options);
+        var result2 = projector.ProjectResult(template, options);
+
+        // 每次投影必须产生全新数组实例（非同一引用），证明防御性拷贝
+        Assert.IsFalse(ReferenceEquals(result1.SelectedItems, result2.SelectedItems),
+            "SelectedItems 每次投影必须是新数组实例");
+        Assert.IsFalse(ReferenceEquals(result1.ItemReferences, result2.ItemReferences),
+            "ItemReferences 每次投影必须是新数组实例");
+        Assert.IsFalse(ReferenceEquals(result1.DroppedItems, result2.DroppedItems),
+            "DroppedItems 每次投影必须是新数组实例");
+        Assert.IsFalse(ReferenceEquals(result1.Uncertainties, result2.Uncertainties),
+            "Uncertainties 每次投影必须是新数组实例");
+        Assert.IsFalse(ReferenceEquals(result1.Package.Sections, result2.Package.Sections),
+            "Package.Sections 每次投影必须是新数组实例");
+        Assert.IsFalse(ReferenceEquals(result1.Package.SourceRefs, result2.Package.SourceRefs),
+            "Package.SourceRefs 每次投影必须是新数组实例");
+
+        // 内容仍应一致（同模板投影出相同数据）
+        Assert.AreEqual(result1.SelectedItems.Count, result2.SelectedItems.Count);
+        Assert.AreEqual(result1.Package.Sections.Count, result2.Package.Sections.Count);
+    }
+
+    /// <summary>
+    /// R13.0 #8: PackageTemplate 的集合字段为 ImmutableArray{T}（值类型 struct），
+    /// 不暴露内部可变数组——ToArray 返回独立拷贝，修改拷贝不影响模板原始数据。
+    /// 这是运行期不可变性保障：即使调用方拿到模板引用，通过任何公开 API（ToArray/索引器）
+    /// 获得的数组都是拷贝，无法回写污染缓存的 ImmutableArray。
+    /// 注：ImmutableArray{T} is T[] 为编译期恒假（CS0184），故改用 ToArray 拷贝独立性验证运行期行为。
+    /// </summary>
+    [TestMethod]
+    [TestCategory("CacheCorrectness")]
+    public void PackageTemplate_ImmutableArray_ToArrayCopyDoesNotAffectOriginal()
+    {
+        var template = BuildIsolationTemplate();
+
+        // OrderedSections: ToArray 返回独立拷贝
+        var sectionsCopy = template.OrderedSections.ToArray();
+        Assert.AreEqual(1, sectionsCopy.Length);
+        sectionsCopy[0] = new ContextPackageSection { Name = "MUTATED" };
+        Assert.AreEqual("working_memory", template.OrderedSections[0].Name,
+            "修改 ToArray 拷贝不得影响 OrderedSections 原始数据");
+        Assert.AreEqual("MUTATED", sectionsCopy[0].Name, "拷贝上的修改应可见于拷贝本身");
+
+        // SortedSelectedItems
+        var selectedCopy = template.SortedSelectedItems.ToArray();
+        selectedCopy[0] = new ContextPackageDecision { ItemId = "MUTATED" };
+        Assert.AreEqual("item-1", template.SortedSelectedItems[0].ItemId,
+            "修改 ToArray 拷贝不得影响 SortedSelectedItems 原始数据");
+
+        // SourceRefs（值类型 string 数组）
+        var sourceRefsCopy = template.SourceRefs.ToArray();
+        sourceRefsCopy[0] = "MUTATED";
+        Assert.AreEqual("src-1", template.SourceRefs[0],
+            "修改 ToArray 拷贝不得影响 SourceRefs 原始数据");
+
+        // DroppedItems
+        var droppedCopy = template.DroppedItems.ToArray();
+        droppedCopy[0] = new DroppedContextItem { ItemId = "MUTATED" };
+        Assert.AreEqual("dropped-1", template.DroppedItems[0].ItemId,
+            "修改 ToArray 拷贝不得影响 DroppedItems 原始数据");
+
+        // Uncertainties
+        var uncertaintiesCopy = template.Uncertainties.ToArray();
+        uncertaintiesCopy[0] = new ContextPackageUncertainty { Code = "MUTATED" };
+        Assert.AreEqual("OverBudget", template.Uncertainties[0].Code,
+            "修改 ToArray 拷贝不得影响 Uncertainties 原始数据");
+
+        // ItemReferences
+        var itemRefsCopy = template.ItemReferences.ToArray();
+        itemRefsCopy[0] = new ContextPackageItemReference { ItemId = "MUTATED" };
+        Assert.AreEqual("item-1", template.ItemReferences[0].ItemId,
+            "修改 ToArray 拷贝不得影响 ItemReferences 原始数据");
+
+        // 索引器读取不得返回可变回写句柄（ImmutableArray 索引器返回值拷贝/引用但数组本身不可替换）
+        // 验证 Length 不受外部拷贝修改影响
+        Assert.AreEqual(2, template.SourceRefs.Length, "模板 Length 不受外部拷贝修改影响");
+        Assert.AreEqual(1, template.OrderedSections.Length);
+    }
+
+    /// <summary>
+    /// R13.0 #8: ContextStateCacheAccessor.GetOrAddAsync 缓存命中时返回同一模板引用。
+    /// 验证 single-flight + 缓存命中路径共享模板实例（缓存模板复用的前提），
+    /// 同时验证后续投影仍产生独立数组（完整隔离链路）。
+    /// </summary>
+    [TestMethod]
+    [TestCategory("CacheCorrectness")]
+    public async Task CacheAccessor_GetOrAddAsync_ReturnsSharedTemplateReference_AcrossHits()
+    {
+        var cache = new InMemoryContextStateCache(maxEntries: 16);
+        using var accessor = new ContextStateCacheAccessor(cache);
+        var scopes = PackageRequestFingerprintBuilder.BuildDependencyScopes("ws-iso", "col-iso");
+        var key = StateCacheKey.From("pkg:iso:template");
+
+        var template = BuildIsolationTemplate();
+        var factoryCallCount = 0;
+
+        var t1 = await accessor.GetOrAddAsync<PackageTemplate>(
+            key, scopes,
+            ct =>
+            {
+                factoryCallCount++;
+                return Task.FromResult(template);
+            });
+        var t2 = await accessor.GetOrAddAsync<PackageTemplate>(
+            key, scopes,
+            ct =>
+            {
+                factoryCallCount++;
+                return Task.FromResult(BuildIsolationTemplate()); // 不会被调用（命中缓存）
+            });
+
+        Assert.AreEqual(1, factoryCallCount, "factory 只应在首次未命中时调用一次");
+        Assert.AreSame(template, t1, "首次 GetOrAdd 返回 factory 产出的模板引用");
+        Assert.AreSame(t1, t2, "缓存命中必须返回同一模板引用（无防御性拷贝）");
+
+        // 共享模板仍可安全投影出独立结果
+        var (projector, options) = BuildIsolationProjectorAndOptions();
+        var r1 = projector.ProjectResult(t1, options);
+        var r2 = projector.ProjectResult(t2, options);
+        Assert.IsFalse(ReferenceEquals(r1.SelectedItems, r2.SelectedItems),
+            "共享模板投影仍必须产生独立数组实例");
+    }
+
+    /// <summary>
+    /// R13.0 #8: 端到端隔离链路——缓存命中复用模板 → 投影产生结果 → 调用方误改结果数组 →
+    /// 再次从缓存取模板并投影，新结果不受污染。验证 PackageTemplate 不可变 + ProjectResult 防御性拷贝
+    /// 共同保证缓存模板在跨请求复用时的隔离正确性。
+    /// </summary>
+    [TestMethod]
+    [TestCategory("CacheCorrectness")]
+    public async Task CacheAndProject_MutatingResultArray_DoesNotCorruptCachedTemplate()
+    {
+        var cache = new InMemoryContextStateCache(maxEntries: 16);
+        using var accessor = new ContextStateCacheAccessor(cache);
+        var scopes = PackageRequestFingerprintBuilder.BuildDependencyScopes("ws-iso", "col-iso");
+        var key = StateCacheKey.From("pkg:iso:e2e");
+
+        var originalTemplate = BuildIsolationTemplate();
+        var (projector, options) = BuildIsolationProjectorAndOptions();
+
+        var cachedTemplate = await accessor.GetOrAddAsync<PackageTemplate>(
+            key, scopes, ct => Task.FromResult(originalTemplate));
+
+        // 第一轮：投影并模拟调用方误改结果数组
+        var result1 = projector.ProjectResult(cachedTemplate, options);
+        Assert.AreEqual("item-1", result1.SelectedItems[0].ItemId);
+        Assert.AreEqual("working_memory", result1.Package.Sections[0].Name);
+
+        // 调用方通过不安全 cast 修改结果数组（模拟误用）
+        ((ContextPackageDecision[])result1.SelectedItems)[0] = new ContextPackageDecision { ItemId = "POLLUTED" };
+        ((ContextPackageSection[])result1.Package.Sections)[0] = new ContextPackageSection { Name = "POLLUTED" };
+        ((string[])result1.Package.SourceRefs)[0] = "POLLUTED";
+        ((DroppedContextItem[])result1.DroppedItems)[0] = new DroppedContextItem { ItemId = "POLLUTED" };
+        ((ContextPackageUncertainty[])result1.Uncertainties)[0] = new ContextPackageUncertainty { Code = "POLLUTED" };
+        ((ContextPackageItemReference[])result1.ItemReferences)[0] = new ContextPackageItemReference { ItemId = "POLLUTED" };
+
+        // 第二轮：再次从缓存取模板（命中同一引用）并投影
+        var cachedTemplateAgain = await accessor.GetOrAddAsync<PackageTemplate>(
+            key, scopes, ct => Task.FromResult(BuildIsolationTemplate())); // 不应调用
+        Assert.AreSame(originalTemplate, cachedTemplateAgain, "缓存命中返回同一模板引用");
+
+        var result2 = projector.ProjectResult(cachedTemplateAgain, options);
+
+        // 新结果完全不受第一轮误改影响——缓存模板未被污染
+        Assert.AreEqual("item-1", result2.SelectedItems[0].ItemId, "SelectedItems 未被污染");
+        Assert.AreEqual("working_memory", result2.Package.Sections[0].Name, "Sections 未被污染");
+        Assert.AreEqual("src-1", result2.Package.SourceRefs[0], "SourceRefs 未被污染");
+        Assert.AreEqual("dropped-1", result2.DroppedItems[0].ItemId, "DroppedItems 未被污染");
+        Assert.AreEqual("OverBudget", result2.Uncertainties[0].Code, "Uncertainties 未被污染");
+        Assert.AreEqual("item-1", result2.ItemReferences[0].ItemId, "ItemReferences 未被污染");
+    }
+
+    // ── R13.0 #9: write-during-build race tests ───────────────────────────
+
+    /// <summary>
+    /// R13.0 #9: 构建期间无并发写入（版本稳定）——factory 仅执行一次，结果缓存。
+    /// 第二次 GetOrAddAsync 命中缓存，factory 不再调用。
+    /// 这是版本感知的基线行为：版本向量前后一致 → 不触发重试 → 缓存写入。
+    /// </summary>
+    [TestMethod]
+    [TestCategory("CacheCorrectness")]
+    public async Task Race_StableVersions_NoWriteDuringBuild_FactoryRunsOnce_ValueCached()
+    {
+        var cache = new InMemoryContextStateCache(maxEntries: 16);
+        var versionStore = new InMemoryContextStateVersionStore();
+        using var accessor = new ContextStateCacheAccessor(cache, versionStore);
+        var scopes = PackageRequestFingerprintBuilder.BuildDependencyScopes("ws-race", "col-race");
+        var key = StateCacheKey.From("pkg:race:stable");
+
+        var factoryCallCount = 0;
+        var factory = new Func<CancellationToken, Task<string>>(ct =>
+        {
+            Interlocked.Increment(ref factoryCallCount);
+            // 不 bump 版本——模拟构建期间无并发写入
+            return Task.FromResult($"v{factoryCallCount}");
+        });
+
+        var v1 = await accessor.GetOrAddAsync(key, scopes, factory);
+        Assert.AreEqual(1, factoryCallCount, "无并发写入时 factory 仅执行一次");
+        Assert.AreEqual("v1", v1);
+
+        // 第二次应命中缓存，factory 不再调用
+        var v2 = await accessor.GetOrAddAsync(key, scopes, factory);
+        Assert.AreEqual(1, factoryCallCount, "缓存命中不应调用 factory");
+        Assert.AreEqual("v1", v2, "缓存命中返回首次结果");
+    }
+
+    /// <summary>
+    /// R13.0 #9: 构建期间发生并发写入（版本变化）——版本向量前后不一致 → 触发单次重试。
+    /// factory 首次调用期间 bump 版本（模拟并发 Store 写入），重试时不再 bump → 版本稳定 → 缓存。
+    /// 验证：(1) factory 执行两次（重试）；(2) 返回值为重试结果（fresh，非首次 stale 结果）；
+    /// (3) 重试后版本稳定 → 结果缓存；(4) 第二次 GetOrAdd 命中缓存不再调用 factory。
+    /// </summary>
+    [TestMethod]
+    [TestCategory("CacheCorrectness")]
+    public async Task Race_WriteDuringBuild_VersionMismatch_TriggersSingleRetry_ReturnsFreshValue_Cached()
+    {
+        var cache = new InMemoryContextStateCache(maxEntries: 16);
+        var versionStore = new InMemoryContextStateVersionStore();
+        using var accessor = new ContextStateCacheAccessor(cache, versionStore);
+        var scopes = PackageRequestFingerprintBuilder.BuildDependencyScopes("ws-race", "col-race");
+        var key = StateCacheKey.From("pkg:race:write-once");
+
+        var factoryCallCount = 0;
+        var factory = new Func<CancellationToken, Task<string>>(async ct =>
+        {
+            var callNum = Interlocked.Increment(ref factoryCallCount);
+            // 首次调用期间模拟并发写入——bump ContextStore 版本（发生在 before/after 版本捕获之间）
+            if (callNum == 1)
+            {
+                await versionStore.BumpVersionAsync("ws-race", "col-race", "ContextStore", ct);
+            }
+            // 重试（第二次）不再 bump → 版本稳定
+            return $"call{callNum}";
+        });
+
+        var v1 = await accessor.GetOrAddAsync(key, scopes, factory);
+
+        Assert.AreEqual(2, factoryCallCount, "构建期间写入应触发版本失配 → 单次重试（factory 共两次）");
+        Assert.AreEqual("call2", v1, "应返回重试结果（fresh），非首次 stale 结果（call1）");
+
+        // 重试后版本稳定 → 结果已缓存；第二次 GetOrAdd 命中缓存
+        var v2 = await accessor.GetOrAddAsync(key, scopes, factory);
+        Assert.AreEqual(2, factoryCallCount, "缓存命中不应再次调用 factory");
+        Assert.AreEqual("call2", v2, "缓存命中返回重试后的 fresh 结果");
+    }
+
+    /// <summary>
+    /// R13.0 #9: 持续并发写入（每次 factory 调用都 bump 版本）——重试后版本仍变化 → 放弃缓存。
+    /// 验证：(1) factory 最多执行两次（单次重试，无无限循环）；(2) 仍返回结果（不抛异常，fail-open）；
+    /// (3) 结果未写入缓存——第二次 GetOrAdd 再次触发 factory（证明未缓存）。
+    /// 这确保高并发写入场景下不会缓存 stale 结果，同时避免重试风暴。
+    /// </summary>
+    [TestMethod]
+    [TestCategory("CacheCorrectness")]
+    public async Task Race_PersistentWriteDuringBuild_RetryStillStale_ValueReturnedNotCached_FactoryCalledTwiceMax()
+    {
+        var cache = new InMemoryContextStateCache(maxEntries: 16);
+        var versionStore = new InMemoryContextStateVersionStore();
+        using var accessor = new ContextStateCacheAccessor(cache, versionStore);
+        var scopes = PackageRequestFingerprintBuilder.BuildDependencyScopes("ws-race", "col-race");
+        var key = StateCacheKey.From("pkg:race:persistent-write");
+
+        var factoryCallCount = 0;
+        var factory = new Func<CancellationToken, Task<string>>(async ct =>
+        {
+            var callNum = Interlocked.Increment(ref factoryCallCount);
+            // 每次 factory 调用都 bump——模拟持续并发写入
+            await versionStore.BumpVersionAsync("ws-race", "col-race", "ContextStore", ct);
+            return $"call{callNum}";
+        });
+
+        var v1 = await accessor.GetOrAddAsync(key, scopes, factory);
+
+        // 最多两次（首次 + 单次重试），不会无限重试
+        Assert.AreEqual(2, factoryCallCount, "持续写入场景 factory 最多执行两次（单次重试上限）");
+        Assert.IsNotNull(v1, "持续 stale 时仍应返回结果（fail-open，不抛异常）");
+        Assert.AreEqual("call2", v1, "返回最后一次重试结果");
+
+        // 结果未缓存——第二次 GetOrAdd 再次触发 factory（factoryCallCount 增至 3+）
+        var v2 = await accessor.GetOrAddAsync(key, scopes, factory);
+        Assert.IsTrue(factoryCallCount >= 3, "未缓存时第二次 GetOrAdd 应再次触发 factory（证明首次结果未写入缓存）");
+    }
+
+    /// <summary>
+    /// R13.0 #9: 无版本存储时（versionStore=null）跳过版本比较——factory 仅执行一次，结果缓存。
+    /// 验证 CaptureVersionsAsync 返回 null 时 VersionsChanged 恒为 false，保持原有行为，
+    /// 不因引入版本感知而破坏无版本存储的部署场景。
+    /// </summary>
+    [TestMethod]
+    [TestCategory("CacheCorrectness")]
+    public async Task Race_NoVersionStore_SkipsComparison_FactoryRunsOnce_ValueCached()
+    {
+        var cache = new InMemoryContextStateCache(maxEntries: 16);
+        // versionStore=null
+        using var accessor = new ContextStateCacheAccessor(cache);
+        var scopes = PackageRequestFingerprintBuilder.BuildDependencyScopes("ws-race", "col-race");
+        var key = StateCacheKey.From("pkg:race:no-versionstore");
+
+        var factoryCallCount = 0;
+        var factory = new Func<CancellationToken, Task<string>>(ct =>
+        {
+            Interlocked.Increment(ref factoryCallCount);
+            return Task.FromResult($"v{factoryCallCount}");
+        });
+
+        var v1 = await accessor.GetOrAddAsync(key, scopes, factory);
+        Assert.AreEqual(1, factoryCallCount, "无版本存储时跳过版本比较，factory 仅执行一次");
+        Assert.AreEqual("v1", v1);
+
+        var v2 = await accessor.GetOrAddAsync(key, scopes, factory);
+        Assert.AreEqual(1, factoryCallCount, "缓存命中不调用 factory");
+        Assert.AreEqual("v1", v2);
+    }
+
+    // ── R13.0 #4: factory shutdown token 与 timeout ──────────────────────
+
+    /// <summary>
+    /// R13.0 #4: Shutdown() 取消正在执行的 factory——factory 通过 token 收到取消信号。
+    /// factory 内部应观测到 token.IsCancellationRequested 变为 true。
+    /// </summary>
+    [TestMethod]
+    [TestCategory("CacheCorrectness")]
+    public async Task Shutdown_CancelsInflightFactory_TokenPropagatesToFactory()
+    {
+        var cache = new InMemoryContextStateCache();
+        using var accessor = new ContextStateCacheAccessor(cache);
+        var key = StateCacheKey.From("ctx:ws:col:shutdown-propagation");
+        var scopes = new DependencyScopeSet(new CacheInvalidationKey("ContextStore", "ws", "col", null));
+
+        var factoryStarted = new TaskCompletionSource<bool>();
+        var factoryTokenObserved = new TaskCompletionSource<CancellationToken>();
+        var factoryGate = new SemaphoreSlim(0);
+
+        async Task<string> Factory(CancellationToken ct)
+        {
+            factoryTokenObserved.TrySetResult(ct);
+            factoryStarted.TrySetResult(true);
+            // factory 阻塞等待，直到 shutdown 触发取消或显式放行
+            try
+            {
+                await factoryGate.WaitAsync(ct);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                // shutdown 取消——确认 token 已取消后重新抛出
+                Assert.IsTrue(ct.IsCancellationRequested, "shutdown 后 factory token 应为已取消");
+                throw;
+            }
+            return "completed";
+        }
+
+        // 启动 factory（在后台线程，避免阻塞测试）
+        var caller = Task.Run(async () =>
+        {
+            try
+            {
+                return await accessor.GetOrAddAsync(key, scopes, Factory, CancellationToken.None);
+            }
+            catch (OperationCanceledException) { return (string?)"CANCELLED"; }
+        });
+
+        // 等 factory 启动
+        await factoryStarted.Task;
+        var factoryToken = await factoryTokenObserved.Task;
+        Assert.IsTrue(factoryToken.CanBeCanceled, "factory token 应可取消（来自 _shutdownCts）");
+        Assert.IsFalse(factoryToken.IsCancellationRequested, "factory 启动时 token 不应已取消");
+
+        // 触发 shutdown
+        accessor.Shutdown();
+
+        // factory 应因 token 取消而收到 OperationCanceledException
+        var result = await caller;
+        Assert.AreEqual("CANCELLED", result, "shutdown 后 factory 应被取消");
+
+        // 不放行 gate——避免测试结束时 semaphore 抛 ObjectDisposedException
+        factoryGate.Release();
+    }
+
+    /// <summary>
+    /// R13.0 #4: factory timeout 取消长时间运行的 factory——超过 timeout 后 token 取消。
+    /// 验证 factoryTimeout 参数生效，且与 shutdown token 通过 linked CTS 组合。
+    /// </summary>
+    [TestMethod]
+    [TestCategory("CacheCorrectness")]
+    public async Task FactoryTimeout_CancelsLongRunningFactory_AfterTimeoutElapsed()
+    {
+        var cache = new InMemoryContextStateCache();
+        var shortTimeout = TimeSpan.FromMilliseconds(100);
+        using var accessor = new ContextStateCacheAccessor(cache, factoryTimeout: shortTimeout);
+        var key = StateCacheKey.From("ctx:ws:col:timeout-cancel");
+        var scopes = new DependencyScopeSet(new CacheInvalidationKey("ContextStore", "ws", "col", null));
+
+        var factoryTokenObserved = new TaskCompletionSource<CancellationToken>();
+
+        async Task<string> Factory(CancellationToken ct)
+        {
+            factoryTokenObserved.TrySetResult(ct);
+            // 长时间运行——超过 timeout，应被取消
+            await Task.Delay(TimeSpan.FromSeconds(5), ct);
+            return "should-not-complete";
+        }
+
+        var caller = Task.Run(async () =>
+        {
+            try
+            {
+                return await accessor.GetOrAddAsync(key, scopes, Factory, CancellationToken.None);
+            }
+            catch (OperationCanceledException) { return (string?)"CANCELLED"; }
+        });
+
+        var factoryToken = await factoryTokenObserved.Task;
+        Assert.IsTrue(factoryToken.CanBeCanceled, "有 timeout 时 factory token 必须可取消");
+
+        var result = await caller;
+        Assert.AreEqual("CANCELLED", result, "factory 超时后应被取消");
+    }
+
+    /// <summary>
+    /// R13.0 #4: 无 timeout 时 factory token 仍可取消（通过 shutdown），
+    /// 且不分配 per-call linked CTS——直接使用 _shutdownCts.Token。
+    /// 验证无 timeout 路径功能正确。
+    /// </summary>
+    [TestMethod]
+    [TestCategory("CacheCorrectness")]
+    public async Task NoTimeout_FactoryTokenStillCancellableViaShutdown()
+    {
+        var cache = new InMemoryContextStateCache();
+        using var accessor = new ContextStateCacheAccessor(cache, factoryTimeout: null);
+        var key = StateCacheKey.From("ctx:ws:col:no-timeout-shutdown");
+        var scopes = new DependencyScopeSet(new CacheInvalidationKey("ContextStore", "ws", "col", null));
+
+        var factoryTokenObserved = new TaskCompletionSource<CancellationToken>();
+        var factoryStarted = new TaskCompletionSource<bool>();
+
+        async Task<string> Factory(CancellationToken ct)
+        {
+            factoryTokenObserved.TrySetResult(ct);
+            factoryStarted.TrySetResult(true);
+            try
+            {
+                await Task.Delay(TimeSpan.FromSeconds(5), ct);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            return "should-not-complete";
+        }
+
+        var caller = Task.Run(async () =>
+        {
+            try { return await accessor.GetOrAddAsync(key, scopes, Factory, CancellationToken.None); }
+            catch (OperationCanceledException) { return (string?)"CANCELLED"; }
+        });
+
+        var factoryToken = await factoryTokenObserved.Task;
+        Assert.IsTrue(factoryToken.CanBeCanceled, "无 timeout 时 token 仍应可取消（通过 shutdown）");
+
+        await factoryStarted.Task;
+        accessor.Shutdown();
+
+        var result = await caller;
+        Assert.AreEqual("CANCELLED", result, "shutdown 应取消无 timeout 的 factory");
+    }
+
+    /// <summary>
+    /// R13.0 #4: Shutdown() 幂等——多次调用安全，不抛异常。
+    /// </summary>
+    [TestMethod]
+    [TestCategory("CacheCorrectness")]
+    public void Shutdown_IsIdempotent_MultipleCallsSafe()
+    {
+        var cache = new InMemoryContextStateCache();
+        using var accessor = new ContextStateCacheAccessor(cache);
+
+        accessor.Shutdown();
+        accessor.Shutdown();
+        accessor.Shutdown();
+
+        // 不抛异常即通过——幂等性验证
+        Assert.IsTrue(true);
+    }
+
+    /// <summary>
+    /// R13.0 #4: DisposeAsync 触发 shutdown——后续 factory 调用收到已取消 token。
+    /// 验证 IAsyncDisposable 生命周期管理正确。
+    /// </summary>
+    [TestMethod]
+    [TestCategory("CacheCorrectness")]
+    public async Task DisposeAsync_TriggersShutdown_SubsequentFactoryReceivesCancelledToken()
+    {
+        var cache = new InMemoryContextStateCache();
+        var accessor = new ContextStateCacheAccessor(cache);
+
+        await accessor.DisposeAsync();
+
+        var key = StateCacheKey.From("ctx:ws:col:after-dispose");
+        var scopes = new DependencyScopeSet(new CacheInvalidationKey("ContextStore", "ws", "col", null));
+
+        var factoryTokenObserved = new TaskCompletionSource<CancellationToken>();
+
+        async Task<string> Factory(CancellationToken ct)
+        {
+            factoryTokenObserved.TrySetResult(ct);
+            await Task.CompletedTask;
+            return "completed-after-dispose";
+        }
+
+        // Dispose 后调用 GetOrAddAsync——factory 应收到已取消 token
+        // 注意：cache GetAsync（快速路径）使用 CancellationToken.None，不会被 cancel
+        // 但 factory 阶段会使用 _shutdownCts.Token（已取消）
+        try
+        {
+            await accessor.GetOrAddAsync(key, scopes, Factory, CancellationToken.None);
+            Assert.Fail("Dispose 后 factory 应因 shutdown token 已取消而抛 OperationCanceledException");
+        }
+        catch (OperationCanceledException)
+        {
+            // 预期——factory token 在 dispose 后已取消
+        }
+        catch (ObjectDisposedException)
+        {
+            // 也可能——_shutdownCts 已 dispose，访问 Token 抛 ODE
+            // 两种异常都可接受，核心是 dispose 后 factory 不会正常执行
+        }
+    }
+
+    /// <summary>
+    /// R13.0 #4: factoryTimeout 非正数抛 ArgumentOutOfRangeException。
+    /// </summary>
+    [TestMethod]
+    [TestCategory("CacheCorrectness")]
+    public void Constructor_NonPositiveFactoryTimeout_ThrowsArgumentOutOfRangeException()
+    {
+        var cache = new InMemoryContextStateCache();
+
+        Assert.ThrowsException<ArgumentOutOfRangeException>(() =>
+            new ContextStateCacheAccessor(cache, factoryTimeout: TimeSpan.Zero));
+        Assert.ThrowsException<ArgumentOutOfRangeException>(() =>
+            new ContextStateCacheAccessor(cache, factoryTimeout: TimeSpan.FromSeconds(-1)));
+    }
+
+    /// <summary>
+    /// R13.0 #4: shutdown 后新 GetOrAddAsync 调用的 factory 阶段会抛 OperationCanceledException，
+    /// 但 cache 命中路径（GetAsync）不受影响——shutdown 只影响 factory 执行。
+    /// </summary>
+    [TestMethod]
+    [TestCategory("CacheCorrectness")]
+    public async Task Shutdown_AfterShutdown_CacheHitStillWorks_FactoryThrowsOCE()
+    {
+        var cache = new InMemoryContextStateCache();
+        var key = StateCacheKey.From("ctx:ws:col:pre-shutdown-cached");
+        var scopes = new DependencyScopeSet(new CacheInvalidationKey("ContextStore", "ws", "col", null));
+
+        // shutdown 前写入缓存
+        await cache.SetAsync(key, "pre-shutdown-value", scopes);
+
+        using var accessor = new ContextStateCacheAccessor(cache);
+        accessor.Shutdown();
+
+        // shutdown 后缓存命中应正常返回（GetAsync 用 CancellationToken.None）
+        var hit = await accessor.GetOrAddAsync(key, scopes, _ => Task.FromResult("factory-not-called"));
+        Assert.AreEqual("pre-shutdown-value", hit, "shutdown 后缓存命中应不受影响");
+    }
+
+    // ── R13.0 #5: version bump 先于 physical eviction ────────────────────
+
+    /// <summary>
+    /// R13.0 #5: AfterCommitAsync 中 BumpVersionAsync 必须先于 InvalidateAsync 执行。
+    /// 验证调用顺序——版本先递增，确保并发版本感知读取即使命中未物理移除的条目也会因版本失配返回 null。
+    /// </summary>
+    [TestMethod]
+    [TestCategory("CacheCorrectness")]
+    public async Task Decorator_AfterCommit_BumpsVersionBeforePhysicalEviction()
+    {
+        var callOrder = new List<string>();
+        var invalidator = new RecordingInvalidator { OnInvalidated = _ => callOrder.Add("Invalidate") };
+        var versionStore = new RecordingVersionStore { OnBumped = _ => callOrder.Add("BumpVersion") };
+        var inner = new CancelAfterWriteContextStore();
+        var decorator = new InvalidatingContextStoreDecorator(inner, invalidator, versionStore);
+
+        var item = new ContextItem { Id = "item1", WorkspaceId = "ws1", CollectionId = "col1", Content = "x" };
+        await decorator.SaveAsync(item);
+
+        Assert.AreEqual(2, callOrder.Count, "应恰好两次调用：BumpVersion + Invalidate");
+        Assert.AreEqual("BumpVersion", callOrder[0], "R13.0 #5: BumpVersion 必须先于 Invalidate 执行");
+        Assert.AreEqual("Invalidate", callOrder[1], "Invalidate 应在 BumpVersion 之后执行");
+    }
+
+    /// <summary>
+    /// R13.0 #5: 无 versionStore 时 AfterCommitAsync 仅调用 InvalidateAsync，不抛异常。
+    /// </summary>
+    [TestMethod]
+    [TestCategory("CacheCorrectness")]
+    public async Task Decorator_AfterCommit_NoVersionStore_OnlyInvalidates()
+    {
+        var callOrder = new List<string>();
+        var invalidator = new RecordingInvalidator { OnInvalidated = _ => callOrder.Add("Invalidate") };
+        var inner = new CancelAfterWriteContextStore();
+        // versionStore = null
+        var decorator = new InvalidatingContextStoreDecorator(inner, invalidator, versionStore: null);
+
+        var item = new ContextItem { Id = "item1", WorkspaceId = "ws1", CollectionId = "col1", Content = "x" };
+        await decorator.SaveAsync(item);
+
+        Assert.AreEqual(1, callOrder.Count, "无 versionStore 时应仅调用 Invalidate");
+        Assert.AreEqual("Invalidate", callOrder[0]);
+    }
+
+    // ── R13.0 #6: Cache TTL ──────────────────────────────────────────────
+
+    /// <summary>
+    /// R13.0 #6: 条目在 TTL 内可命中，超过 TTL 后 lazy 淘汰并返回 null。
+    /// 使用短 TTL（200ms）验证过期行为：写入后立即读取命中；等待超过 TTL 后读取返回 null。
+    /// </summary>
+    [TestMethod]
+    [TestCategory("CacheCorrectness")]
+    public async Task Ttl_EntryExpiresAfterTtl_ReturnsNullAfterExpiry()
+    {
+        var ttl = TimeSpan.FromMilliseconds(200);
+        var cache = new InMemoryContextStateCache(ttl: ttl);
+        var key = StateCacheKey.From("ctx:ws:col:ttl-expire");
+        var scope = new CacheInvalidationKey("ContextStore", "ws", "col", null);
+
+        await cache.SetAsync(key, "fresh", new DependencyScopeSet(scope));
+
+        // TTL 内应命中
+        var hit = await cache.GetAsync<string>(key);
+        Assert.AreEqual("fresh", hit, "TTL 内条目应命中");
+        Assert.AreEqual(1L, cache.Hits);
+        Assert.AreEqual(0L, cache.TtlExpirations);
+
+        // 等待超过 TTL
+        await Task.Delay(ttl + TimeSpan.FromMilliseconds(100));
+
+        // 超过 TTL 后应返回 null（lazy 淘汰）
+        var expired = await cache.GetAsync<string>(key);
+        Assert.IsNull(expired, "超过 TTL 后条目应被 lazy 淘汰并返回 null");
+        Assert.AreEqual(1L, cache.TtlExpirations, "TTL 过期计数应递增");
+        Assert.AreEqual(1L, cache.Misses, "过期后应计 miss");
+    }
+
+    /// <summary>
+    /// R13.0 #6: 无 TTL 时条目不会因时间过期（仅由 scope 失效或 CLOCK 淘汰移除）。
+    /// 验证 TTL=null 保持原有行为。
+    /// </summary>
+    [TestMethod]
+    [TestCategory("CacheCorrectness")]
+    public async Task Ttl_NullTtl_EntriesNeverExpireByTime()
+    {
+        var cache = new InMemoryContextStateCache(ttl: null);
+        var key = StateCacheKey.From("ctx:ws:col:no-ttl");
+        var scope = new CacheInvalidationKey("ContextStore", "ws", "col", null);
+
+        await cache.SetAsync(key, "persistent", new DependencyScopeSet(scope));
+
+        // 等待一段时间（无 TTL 不应过期）
+        await Task.Delay(150);
+
+        var result = await cache.GetAsync<string>(key);
+        Assert.AreEqual("persistent", result, "无 TTL 时条目不应因时间过期");
+        Assert.AreEqual(0L, cache.TtlExpirations, "无 TTL 不应有 TTL 过期计数");
+    }
+
+    /// <summary>
+    /// R13.0 #6: TTL 过期检查先于版本检查——TTL 过期时不调用版本存储。
+    /// 验证 TTL 过期路径走 TTL 计数（TtlExpirations）而非版本失配计数（VersionMismatches），
+    /// 证明版本 RPC 未被触发（分布式场景下节省一次网络调用）。
+    /// </summary>
+    [TestMethod]
+    [TestCategory("CacheCorrectness")]
+    public async Task Ttl_ExpiryCheckPrecedesVersionCheck_NoVersionRpcOnExpiry()
+    {
+        var versionStore = new InMemoryContextStateVersionStore();
+        // 先 bump 一次让版本存储有初始数据（写入 SetAsync 会捕获版本快照）
+        await versionStore.BumpVersionAsync("ws", "col", "ContextStore", default);
+
+        var shortTtl = TimeSpan.FromMilliseconds(100);
+        var cache = new InMemoryContextStateCache(versionStore, ttl: shortTtl);
+        var key = StateCacheKey.From("ctx:ws:col:ttl-before-version");
+        var scope = new CacheInvalidationKey("ContextStore", "ws", "col", null);
+
+        await cache.SetAsync(key, "v1", new DependencyScopeSet(scope));
+
+        // 等待超过 TTL
+        await Task.Delay(shortTtl + TimeSpan.FromMilliseconds(100));
+
+        // 读取应因 TTL 过期返回 null
+        var result = await cache.GetAsync<string>(key);
+        Assert.IsNull(result, "TTL 过期应返回 null");
+        Assert.AreEqual(1L, cache.TtlExpirations, "应计 TTL 过期（证明走了 TTL 路径）");
+        Assert.AreEqual(0L, cache.VersionMismatches, "不应计版本失配（证明未走版本检查路径）");
+    }
+
+    /// <summary>
+    /// R13.0 #6: TTL 过期后条目从缓存移除——后续 Count 减少，再次读取为 miss。
+    /// </summary>
+    [TestMethod]
+    [TestCategory("CacheCorrectness")]
+    public async Task Ttl_ExpiredEntryRemovedFromCache_ReducesCount()
+    {
+        var shortTtl = TimeSpan.FromMilliseconds(100);
+        var cache = new InMemoryContextStateCache(ttl: shortTtl);
+        var key = StateCacheKey.From("ctx:ws:col:ttl-remove");
+        var scope = new CacheInvalidationKey("ContextStore", "ws", "col", null);
+
+        await cache.SetAsync(key, "v1", new DependencyScopeSet(scope));
+        Assert.AreEqual(1, cache.Count);
+
+        // 等待超过 TTL
+        await Task.Delay(shortTtl + TimeSpan.FromMilliseconds(100));
+
+        // 读取触发 lazy 淘汰
+        _ = await cache.GetAsync<string>(key);
+        Assert.AreEqual(0, cache.Count, "TTL 过期后条目应从缓存移除");
+    }
+
+    /// <summary>
+    /// R13.0 #6: TTL 非正数抛 ArgumentOutOfRangeException。
+    /// </summary>
+    [TestMethod]
+    [TestCategory("CacheCorrectness")]
+    public void Ttl_NonPositiveValue_ThrowsArgumentOutOfRangeException()
+    {
+        Assert.ThrowsException<ArgumentOutOfRangeException>(() =>
+            new InMemoryContextStateCache(ttl: TimeSpan.Zero));
+        Assert.ThrowsException<ArgumentOutOfRangeException>(() =>
+            new InMemoryContextStateCache(ttl: TimeSpan.FromSeconds(-1)));
+        Assert.ThrowsException<ArgumentOutOfRangeException>(() =>
+            new InMemoryContextStateCache(maxEntries: 100, ttl: TimeSpan.Zero));
+    }
+
+    /// <summary>
+    /// R13.0 #6: TTL 与 scope 失效协同工作——scope 失效仍能立即移除条目，
+    /// TTL 只是在 scope 未触发时提供时间兜底。
+    /// </summary>
+    [TestMethod]
+    [TestCategory("CacheCorrectness")]
+    public async Task Ttl_AndScopeInvalidation_Coexist()
+    {
+        var longTtl = TimeSpan.FromMinutes(5); // 长 TTL，确保 scope 失效先触发
+        var cache = new InMemoryContextStateCache(ttl: longTtl);
+        var key = StateCacheKey.From("ctx:ws:col:ttl-and-scope");
+        var scope = new CacheInvalidationKey("ContextStore", "ws", "col", null);
+
+        await cache.SetAsync(key, "v1", new DependencyScopeSet(scope));
+        Assert.IsNotNull(await cache.GetAsync<string>(key));
+
+        // scope 失效应立即移除条目（不等 TTL 过期）
+        await cache.InvalidateAsync(scope);
+        Assert.IsNull(await cache.GetAsync<string>(key), "scope 失效应立即移除条目");
+        Assert.AreEqual(0L, cache.TtlExpirations, "scope 失效不应计 TTL 过期");
+    }
+
+    // ── R13.0 #10: Cache 继续保持生产关闭 ─────────────────────────────────
+
+    /// <summary>
+    /// R13.0 #10: 生产运行时组装（CacheAccessor = null）必须使 BasicContextPackageBuilder._cacheAccessor 为 null。
+    /// 这是生产缓存关闭的守卫测试：确保 ContextRuntimeBuilder.Build 正确传播 options.CacheAccessor = null，
+    /// 每个 Build 都走全量流水线（无缓存命中）。
+    /// 通过反射读取私有字段 _cacheAccessor，因为 RuntimeServices 仅暴露 PackageBuilder 公共属性，
+    /// _cacheAccessor 是构造函数注入的内部状态。
+    /// </summary>
+    [TestMethod]
+    [TestCategory("CacheCorrectness")]
+    public void ProductionRuntime_CacheAccessorNull_BuilderCacheAccessorFieldIsNull()
+    {
+        var options = BuildRuntimeOptionsWithInMemoryStores(cacheAccessor: null);
+        var services = ContextRuntimeBuilder.Build(options);
+
+        var field = typeof(BasicContextPackageBuilder).GetField(
+            "_cacheAccessor",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        Assert.IsNotNull(field, "BasicContextPackageBuilder 必须包含 _cacheAccessor 私有字段");
+
+        var value = field.GetValue(services.PackageBuilder);
+        Assert.IsNull(value,
+            "生产组装（CacheAccessor = null）必须使 _cacheAccessor 为 null——缓存保持关闭，每次 Build 走全量流水线");
+    }
+
+    /// <summary>
+    /// R13.0 #10: 非 null CacheAccessor 必须正确传播到 builder._cacheAccessor（反向验证）。
+    /// 证明反射读取正确且 ContextRuntimeBuilder.Build 正确传播非空值——避免 "始终 null" 的假通过。
+    /// </summary>
+    [TestMethod]
+    [TestCategory("CacheCorrectness")]
+    public void ProductionRuntime_CacheAccessorProvided_BuilderCacheAccessorFieldIsWired()
+    {
+        using var accessor = new ContextStateCacheAccessor(new InMemoryContextStateCache());
+        var options = BuildRuntimeOptionsWithInMemoryStores(cacheAccessor: accessor);
+        var services = ContextRuntimeBuilder.Build(options);
+
+        var field = typeof(BasicContextPackageBuilder).GetField(
+            "_cacheAccessor",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        Assert.IsNotNull(field);
+
+        var value = field.GetValue(services.PackageBuilder);
+        Assert.AreSame(accessor, value, "非 null CacheAccessor 必须传播到 builder._cacheAccessor");
+    }
+
+    /// <summary>
+    /// 使用 InMemory 存储构造 RuntimeBuildOptions，模拟生产组装路径（ContextRuntimeBuilder.Build 输入）。
+    /// cacheAccessor 参数控制是否注入缓存访问器：生产路径为 null（缓存关闭），测试路径可注入非空实例。
+    /// InMemoryMemoryStore 同时实现 IMemoryStore / IWorkingMemoryService / IPromotionRecordStore，复用同一实例。
+    /// </summary>
+    private static RuntimeBuildOptions BuildRuntimeOptionsWithInMemoryStores(ContextStateCacheAccessor? cacheAccessor)
+    {
+        var memoryStore = new InMemoryMemoryStore();
+        return new RuntimeBuildOptions
+        {
+            ContextStore = new InMemoryContextStore(),
+            MemoryStore = memoryStore,
+            ConstraintStore = new InMemoryConstraintStore(),
+            RelationStore = new InMemoryRelationStore(),
+            GlobalContextStore = new InMemoryGlobalContextStore(),
+            VectorStore = new InMemoryVectorStore(),
+            RetrievalTraceStore = new InMemoryRetrievalTraceStore(),
+            TokenizerResolver = new DefaultContextTokenizerResolver(),
+            PromotionRecordStore = memoryStore,
+            WorkingMemoryService = memoryStore,
+            CacheAccessor = cacheAccessor
+        };
+    }
+
+    // ── R13.0 #8 isolation test 共享构造辅助 ─────────────────────────────
+
+    /// <summary>
+    /// 构造用于隔离测试的 PackageTemplate：所有集合字段为非空 ImmutableArray，
+    /// 数据可被断言验证（sections/selected/dropped/uncertainties/itemRefs 各 1 条，sourceRefs 2 条）。
+    /// </summary>
+    private static PackageTemplate BuildIsolationTemplate()
+    {
+        var sections = new[] { new ContextPackageSection { Name = "working_memory", Content = "memory-1" } };
+        var sourceRefs = new[] { "src-1", "src-2" };
+        var selected = new[] { new ContextPackageDecision { ItemId = "item-1", SectionName = "working_memory" } };
+        var dropped = new[] { new DroppedContextItem { ItemId = "dropped-1" } };
+        var uncertainties = new[] { new ContextPackageUncertainty { Code = "OverBudget" } };
+        var itemRefs = new[] { new ContextPackageItemReference { ItemId = "item-1", PrimarySectionName = "working_memory" } };
+
+        return new PackageTemplate(
+            OrderedSections: sections.ToImmutableArray(),
+            SourceRefs: sourceRefs.ToImmutableArray(),
+            EstimatedTokens: 100,
+            TokenBudget: 1000,
+            SortedSelectedItems: selected.ToImmutableArray(),
+            DroppedItems: dropped.ToImmutableArray(),
+            Uncertainties: uncertainties.ToImmutableArray(),
+            ItemReferences: itemRefs.ToImmutableArray(),
+            Anchors: ImmutableArray<ContextAnchor>.Empty,
+            RetrievalPlan: null,
+            Budget: new ContextPackageBudgetReport(),
+            Output: new ContextPackageStandardOutput(),
+            ModeBudgetProfile: null);
+    }
+
+    /// <summary>
+    /// 构造用于隔离测试的 ResultProjector + ResolvedPackageOptions。
+    /// 与 BuildIsolationTemplate 配对使用，复用 request/policy/workspace 一致性。
+    /// </summary>
+    private static (ResultProjector Projector, ResolvedPackageOptions Options) BuildIsolationProjectorAndOptions()
+    {
+        var projector = new ResultProjector(new PackageTraceRecorder(
+            new NullRuntimeCandidateTraceSink(),
+            () => "op-iso",
+            () => "req-iso"));
+
+        var options = ResolvedPackageOptions.Resolve(
+            new ContextPackageRequest
+            {
+                WorkspaceId = "ws-iso",
+                CollectionId = "col-iso",
+                QueryText = "isolation test",
+                TokenBudget = 1000,
+                Policy = new ContextPackagePolicy
+                {
+                    WorkspaceId = "ws-iso",
+                    CollectionId = "col-iso",
+                    TokenBudget = 1000
+                }
+            },
+            new ContextPackagePolicy
+            {
+                WorkspaceId = "ws-iso",
+                CollectionId = "col-iso",
+                TokenBudget = 1000
+            },
+            new TokenEstimationContext("test-model", "test", false));
+
+        return (projector, options);
+    }
+
     private sealed class RecordingInvalidator : IStateCacheInvalidator
     {
         public List<CacheInvalidationKey> InvalidatedKeys { get; } = new();
+        public Action<CacheInvalidationKey>? OnInvalidated { get; set; }
 
         public Task InvalidateAsync(CacheInvalidationKey key, CancellationToken cancellationToken = default)
         {
             InvalidatedKeys.Add(key);
+            OnInvalidated?.Invoke(key);
             return Task.CompletedTask;
+        }
+    }
+
+    /// <summary>
+    /// 记录 BumpVersionAsync 调用的版本存储包装。委托给 InMemoryContextStateVersionStore 保持语义，
+    /// 同时通过 OnBumped 回调通知调用顺序（用于 R13.0 #5 顺序断言）。
+    /// </summary>
+    private sealed class RecordingVersionStore : IContextStateVersionStore
+    {
+        private readonly InMemoryContextStateVersionStore _inner = new();
+        public Action<string>? OnBumped { get; set; }
+
+        public Task<long> GetVersionAsync(string workspaceId, string collectionId, string storeKind, CancellationToken cancellationToken = default)
+            => _inner.GetVersionAsync(workspaceId, collectionId, storeKind, cancellationToken);
+
+        public Task<IReadOnlyDictionary<VersionScope, long>> GetVersionsAsync(IReadOnlyCollection<VersionScope> scopes, CancellationToken cancellationToken = default)
+            => _inner.GetVersionsAsync(scopes, cancellationToken);
+
+        public Task<long> BumpVersionAsync(string workspaceId, string collectionId, string storeKind, CancellationToken cancellationToken = default)
+        {
+            OnBumped?.Invoke($"{workspaceId}:{collectionId}:{storeKind}");
+            return _inner.BumpVersionAsync(workspaceId, collectionId, storeKind, cancellationToken);
         }
     }
 

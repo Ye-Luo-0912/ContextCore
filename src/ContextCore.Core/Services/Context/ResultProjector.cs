@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using ContextCore.Abstractions.Models;
 
 namespace ContextCore.Core;
@@ -39,7 +40,7 @@ internal sealed class ResultProjector
             .OrderByDescending(item => PackageUncertaintyBuilder.ResolvePackageOrderScore(item, packageModeName, packageMustHitIds))
             .ThenByDescending(item => item.Score)
             .ThenBy(item => item.ItemId, StringComparer.OrdinalIgnoreCase)
-            .ToArray();
+            .ToImmutableArray();
 
         var resolvedUncertainties = selection.Uncertainties;
 
@@ -53,16 +54,18 @@ internal sealed class ResultProjector
         var budget = PackageBudgetProjector.BuildBudgetReport(tempPackage, tokenBudget, request);
         var output = PackageBudgetProjector.BuildStandardOutput(tempPackage, selection.DroppedItems, resolvedUncertainties, budget);
 
+        // R13.0 #3: 所有集合字段转为 ImmutableArray，确保运行期不可变（无法 cast 回可变数组）。
+        // 投影阶段读取时仍做防御性 ToArray 拷贝，保证返回结果对象的独立性。
         return new PackageTemplate(
-            OrderedSections: orderedSections,
-            SourceRefs: selection.SourceRefs.ToArray(),
+            OrderedSections: orderedSections.ToImmutableArray(),
+            SourceRefs: selection.SourceRefs.ToImmutableArray(),
             EstimatedTokens: selection.EstimatedTokens,
             TokenBudget: tokenBudget,
             SortedSelectedItems: sortedSelected,
-            DroppedItems: selection.DroppedItems,
-            Uncertainties: resolvedUncertainties,
-            ItemReferences: selection.ItemReferences,
-            Anchors: selection.Anchors,
+            DroppedItems: selection.DroppedItems.ToImmutableArray(),
+            Uncertainties: resolvedUncertainties.ToImmutableArray(),
+            ItemReferences: selection.ItemReferences.ToImmutableArray(),
+            Anchors: selection.Anchors.ToImmutableArray(),
             RetrievalPlan: selection.RetrievalPlan,
             Budget: budget,
             Output: output,
@@ -97,7 +100,7 @@ internal sealed class ResultProjector
         }
         ContextItemRefResolver.AddAnchorMetadata(metadata, template.Anchors);
         PackageMetadataBuilder.AddModeBudgetMetadata(metadata, modeBudgetProfile);
-        PackageMetadataBuilder.AddDiagnosticMetadata(metadata, tokenBudget, template.EstimatedTokens, template.DroppedItems.Count, template.Uncertainties.Count);
+        PackageMetadataBuilder.AddDiagnosticMetadata(metadata, tokenBudget, template.EstimatedTokens, template.DroppedItems.Length, template.Uncertainties.Length);
 
         var now = DateTimeOffset.UtcNow;
         var package = new ContextPackage

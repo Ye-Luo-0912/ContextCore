@@ -60,10 +60,18 @@ internal static class InvalidationKeys
 }
 
 /// <summary>
-/// 失效边界 Decorator 基类：集中 commit-point 之后的失效信号 + 版本递增，
+/// 失效边界 Decorator 基类：集中 commit-point 之后的版本递增 + 失效信号，
 /// 统一使用 <see cref="CancellationToken.None"/>，确保写入提交后即使原请求取消也必须完成。
 /// 派生类在 _inner 写入成功后调用 <see cref="AfterCommitAsync"/>。
 /// </summary>
+/// <remarks>
+/// R13.0 #5: version bump 先于 physical eviction。
+/// 版本递增先执行——版本号是版本感知读路径的"真相源"。bump 完成后，任何并发缓存读取
+/// 即使尚未被 InvalidateAsync 物理移除，也会因版本失配而被视为 stale（GetAsync 返回 null
+/// 并计 VersionMismatch）。InvalidateAsync 作为 best-effort 物理清理，回收已被版本判定为 stale 的条目，
+/// 避免条目驻留至下次读取才淘汰。此顺序消除"eviction 与 bump 之间窗口"——
+/// 该窗口内并发 miss 重新计算并以旧版本快照写入缓存，造成单次 stale 命中。
+/// </remarks>
 public abstract class InvalidatingStoreDecoratorBase
 {
     private readonly IStateCacheInvalidator _invalidator;
@@ -76,18 +84,21 @@ public abstract class InvalidatingStoreDecoratorBase
     }
 
     /// <summary>
-    /// Commit point 之后的失效协调：失效信号 + 版本递增，均使用 <see cref="CancellationToken.None"/>。
+    /// Commit point 之后的失效协调：版本递增 + 失效信号，均使用 <see cref="CancellationToken.None"/>。
     /// 调用方必须在 _inner 写入成功后调用此方法。
     /// </summary>
     /// <param name="key">失效范围键（其 WorkspaceId/CollectionId/StoreKind 同时用于版本递增）。</param>
     protected async Task AfterCommitAsync(CacheInvalidationKey key)
     {
-        await _invalidator.InvalidateAsync(key, CancellationToken.None).ConfigureAwait(false);
+        // R13.0 #5: 版本先于物理失效——版本是版本感知读路径的真相源，
+        // bump 完成后并发读取即使命中未物理移除的条目也会因版本失配返回 null。
         if (_versionStore is not null)
         {
             await _versionStore.BumpVersionAsync(
                 key.WorkspaceId, key.CollectionId, key.StoreKind, CancellationToken.None).ConfigureAwait(false);
         }
+        // 物理失效：best-effort 清理已被版本判定为 stale 的条目，避免驻留至下次读取。
+        await _invalidator.InvalidateAsync(key, CancellationToken.None).ConfigureAwait(false);
     }
 }
 
