@@ -1828,6 +1828,11 @@ M:ContextCore.Abstractions.Models.ModelUsageLog.Equals(System.Object)
 M:ContextCore.Abstractions.Models.ModelUsageLog.GetHashCode()
 M:ContextCore.Abstractions.Models.ModelUsageLog.GetType()
 M:ContextCore.Abstractions.Models.ModelUsageLog.ToString()
+M:ContextCore.Abstractions.Models.PackageReadPlan.#ctor()
+M:ContextCore.Abstractions.Models.PackageReadPlan.Equals(System.Object)
+M:ContextCore.Abstractions.Models.PackageReadPlan.GetHashCode()
+M:ContextCore.Abstractions.Models.PackageReadPlan.GetType()
+M:ContextCore.Abstractions.Models.PackageReadPlan.ToString()
 M:ContextCore.Abstractions.Models.PolicyFeedbackDataset.#ctor()
 M:ContextCore.Abstractions.Models.PolicyFeedbackDataset.Equals(System.Object)
 M:ContextCore.Abstractions.Models.PolicyFeedbackDataset.GetHashCode()
@@ -3976,6 +3981,7 @@ P:ContextCore.Abstractions.Models.ContextPackageBuildResult.Metadata (get|init)
 P:ContextCore.Abstractions.Models.ContextPackageBuildResult.Output (get|init)
 P:ContextCore.Abstractions.Models.ContextPackageBuildResult.Package (get|init)
 P:ContextCore.Abstractions.Models.ContextPackageBuildResult.Plan (get|init)
+P:ContextCore.Abstractions.Models.ContextPackageBuildResult.ReadPlan (get|init)
 P:ContextCore.Abstractions.Models.ContextPackageBuildResult.SelectedItems (get|init)
 P:ContextCore.Abstractions.Models.ContextPackageBuildResult.TokenBudget (get|init)
 P:ContextCore.Abstractions.Models.ContextPackageBuildResult.Uncertainties (get|init)
@@ -4718,6 +4724,9 @@ P:ContextCore.Abstractions.Models.ModelUsageLog.OutputTokens (get|init)
 P:ContextCore.Abstractions.Models.ModelUsageLog.Provider (get|init)
 P:ContextCore.Abstractions.Models.ModelUsageLog.Role (get|init)
 P:ContextCore.Abstractions.Models.ModelUsageLog.Succeeded (get|init)
+P:ContextCore.Abstractions.Models.PackageReadPlan.DedupHits (get|init)
+P:ContextCore.Abstractions.Models.PackageReadPlan.StoreCallCounts (get|init)
+P:ContextCore.Abstractions.Models.PackageReadPlan.TotalStoreCalls (get)
 P:ContextCore.Abstractions.Models.PolicyFeedbackDataset.CreatedAt (get|init)
 P:ContextCore.Abstractions.Models.PolicyFeedbackDataset.DatasetId (get|init)
 P:ContextCore.Abstractions.Models.PolicyFeedbackDataset.EvalBaselineRef (get|init)
@@ -6929,6 +6938,7 @@ T:ContextCore.Abstractions.Models.ModelResponse
 T:ContextCore.Abstractions.Models.ModelRole (Enum)
 T:ContextCore.Abstractions.Models.ModelRoleRoute
 T:ContextCore.Abstractions.Models.ModelUsageLog
+T:ContextCore.Abstractions.Models.PackageReadPlan
 T:ContextCore.Abstractions.Models.PolicyFeedbackDataset
 T:ContextCore.Abstractions.Models.PolicyFeedbackLabels
 T:ContextCore.Abstractions.Models.PolicyFeedbackRecord

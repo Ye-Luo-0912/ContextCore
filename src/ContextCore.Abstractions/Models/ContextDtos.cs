@@ -177,6 +177,12 @@ public sealed class ContextPackageBuildResult
     /// <summary>本次打包构建的短期锚定召回计划，用于 trace 可视化和后续 HybridContextRetriever 调用。</summary>
     public RetrievalPlan? Plan { get; init; }
 
+    /// <summary>
+    /// R13.2 #4：本次构建的读路径查询计划，记录各 store 调用次数与去重命中。
+    /// null 表示构建未走 PackageInputLoader 路径（如缓存命中或测试桩）。
+    /// </summary>
+    public PackageReadPlan? ReadPlan { get; init; }
+
     public DateTimeOffset CreatedAt { get; init; }
 }
 

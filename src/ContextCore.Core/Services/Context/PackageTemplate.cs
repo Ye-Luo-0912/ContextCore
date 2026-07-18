@@ -23,4 +23,5 @@ internal sealed record PackageTemplate(
     RetrievalPlan? RetrievalPlan,
     ContextPackageBudgetReport Budget,
     ContextPackageStandardOutput Output,
-    ModeBudgetProfile? ModeBudgetProfile);
+    ModeBudgetProfile? ModeBudgetProfile,
+    PackageReadPlan? ReadPlan = null);

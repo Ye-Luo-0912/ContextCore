@@ -4,10 +4,23 @@ using ContextCore.Abstractions.Models;
 namespace ContextCore.Core;
 
 /// <summary>
-/// 包构建输入加载阶段：并行预取 6 个数据源（recent/hard/working/global/stable/soft）、
-/// 当前任务（current_task）以及合并约束（merged constraints），返回 <see cref="PackageInputs"/>。
-/// 从 <see cref="BasicContextPackageBuilder.BuildWithPolicyAsync"/> 提取，保证字节级确定性输出不变。
+/// 包构建输入加载阶段：并行预取所有独立数据源（recent/hard/working/global/stable/soft/current_task/merged constraints），
+/// 返回 <see cref="PackageInputs"/>。从 <see cref="BasicContextPackageBuilder.BuildWithPolicyAsync"/> 提取，
+/// 保证字节级确定性输出不变。
 /// </summary>
+/// <remarks>
+/// R13.2 优化：
+/// <list type="bullet">
+/// <item><b>R13.2 #1 merged constraint 去重</b>：当 hard_constraints/soft_constraints section 与
+/// merged constraints section 同时启用时，Hard/Soft 查询只发一次（Take = max(100, ConstraintMergeMaxItems)），
+/// 结果按需切片复用给两个 section。store 排序为 Level→Confidence→UpdatedAt 的稳定序，
+/// 故 Take 大值查询的前 N 条等于 Take=N 查询的结果，去重不改变 selected set。</item>
+/// <item><b>R13.2 #3 current_task 并行化</b>：current_task 解析仅依赖 request + WorkingMemoryService，
+/// 与 6 源预取无依赖，并入 prefetchTasks 集合一次 Task.WhenAll，消除串行 I/O 延迟。</item>
+/// <item><b>R13.2 #4 Store call count</b>：<see cref="PackageReadPlanBuilder"/> 记录每次 store 调用，
+/// 去重命中计数 DedupHits，最终通过 <see cref="PackageInputs.ReadPlan"/> 暴露到结果。</item>
+/// </list>
+/// </remarks>
 internal sealed class PackageInputLoader
 {
     private readonly IContextStore _store;
@@ -32,7 +45,8 @@ internal sealed class PackageInputLoader
 
     /// <summary>
     /// 加载阶段：按 ResolvedPackageOptions 决定需要预取的数据源，并行查询后返回 <see cref="PackageInputs"/>。
-    /// 顺序保持与原实现一致：先解析 current_task，再并行预取 6 源，最后解析 merged constraints。
+    /// R13.2 #3：current_task 与 6 源预取 + merged constraints 并行执行（无依赖时）。
+    /// R13.2 #1：Hard/Soft 在 section 与 merged 之间去重，单次查询结果按 Take 切片复用。
     /// </summary>
     internal async Task<PackageInputs> LoadAsync(
         ResolvedPackageOptions options,
@@ -42,20 +56,48 @@ internal sealed class PackageInputLoader
         var workspaceId = options.WorkspaceId;
         var collectionId = options.CollectionId;
         var maxRecentItems = options.MaxRecentItems;
+        var planBuilder = new PackageReadPlanBuilder();
 
-        // current_task 解析（与原实现顺序一致：先于 6 源预取）。
-        WorkingMemoryCurrentTask? currentTask = null;
-        if (options.IncludeCurrentTaskSection)
+        // R13.2 #1：决定 Hard/Soft 查询的需求来源与 Take 预算。
+        // - hardForSection: hard_constraints section 需要 Hard（IncludeHardConstraints || merged 关闭时默认查 Hard）
+        // - hardForMerged: merged section 需要 Hard 分区（仅 merged 启用时）
+        // 去重：两者皆需时只发一次，Take = max(100, ConstraintMergeMaxItems)，结果切片复用。
+        var hardForSection = (options.IncludeHardConstraints || !options.IncludeMergedConstraintsSection);
+        var hardForMerged = options.IncludeMergedConstraintsSection;
+        var softForSection = options.IncludeSoftConstraints;
+        var softForMerged = options.IncludeMergedConstraintsSection;
+        var mergedNeedsAll = options.IncludeMergedConstraintsSection; // All-level 查询（Runtime/System/User/Domain 等）
+
+        // Take 选择：两者皆需取 max；仅 section 需取 100；仅 merged 需取 ConstraintMergeMaxItems。
+        var hardTake = hardForSection && hardForMerged
+            ? Math.Max(100, options.ConstraintMergeMaxItems)
+            : hardForSection
+                ? 100
+                : options.ConstraintMergeMaxItems;
+        var softTake = softForSection && softForMerged
+            ? Math.Max(100, options.ConstraintMergeMaxItems)
+            : softForSection
+                ? 100
+                : options.ConstraintMergeMaxItems;
+        var hardQueryNeeded = (hardForSection || hardForMerged) && _constraintStore is not null;
+        var softQueryNeeded = (softForSection || softForMerged) && _constraintStore is not null;
+
+        // 跟踪去重命中：section 与 merged 同时需要 Hard/Soft 时，跳过了第二次查询。
+        if (hardForSection && hardForMerged)
         {
-            currentTask = await ResolveCurrentTaskAsync(
-                request,
-                collectionId ?? string.Empty,
-                cancellationToken).ConfigureAwait(false);
+            planBuilder.RecordDedupHit();
+        }
+        if (softForSection && softForMerged)
+        {
+            planBuilder.RecordDedupHit();
         }
 
-        // P1 性能：recent/hard/working/global/stable/soft 六个独立数据源查询仅依赖
-        // workspaceId/collectionId/policy，彼此无依赖。先并行预取原始结果，再按原顺序
-        // 处理（filter/anchors/section assembly 仍串行），保证字节级确定性输出不变。
+        // ── current_task（R13.2 #3：与 6 源预取并行）─────────────────────────
+        Task<WorkingMemoryCurrentTask?>? currentTaskTask = options.IncludeCurrentTaskSection
+            ? ResolveCurrentTaskAsync(request, collectionId ?? string.Empty, planBuilder, cancellationToken)
+            : null;
+
+        // ── 6 源并行预取 ───────────────────────────────────────────────────────
         Task<IReadOnlyList<ContextItem>>? recentItemsTask = options.IncludeRecentRawContext
             ? _store.QueryAsync(new ContextQuery
                 {
@@ -68,17 +110,25 @@ internal sealed class PackageInputLoader
                     IncludeContent = true
                 }, cancellationToken)
             : null;
+        if (recentItemsTask is not null)
+        {
+            planBuilder.RecordCall("ContextStore.Query");
+        }
 
-        Task<IReadOnlyList<ContextConstraint>>? hardConstraintsTask =
-            ((options.IncludeHardConstraints || !options.IncludeMergedConstraintsSection) && _constraintStore is not null)
-            ? _constraintStore.QueryAsync(new ContextConstraintQuery
+        // R13.2 #1：Hard 单次查询，Take = max(100, ConstraintMergeMaxItems)，section 与 merged 共享结果。
+        Task<IReadOnlyList<ContextConstraint>>? hardConstraintsTask = hardQueryNeeded
+            ? _constraintStore!.QueryAsync(new ContextConstraintQuery
                 {
                     WorkspaceId = workspaceId,
                     CollectionId = collectionId,
                     Level = ConstraintLevel.Hard,
-                    Take = 100
+                    Take = hardTake
                 }, cancellationToken)
             : null;
+        if (hardConstraintsTask is not null)
+        {
+            planBuilder.RecordCall("ConstraintStore.Query(Hard)");
+        }
 
         // 每层独立查询：Working 与 Stable 各自拥有独立的 Take 预算与 store 层过滤。
         // 不使用"全局 Take 后分区"——那会让多数层占满共享预算，少数层可能拿到 0 候选，
@@ -95,6 +145,10 @@ internal sealed class PackageInputLoader
                     Take = Math.Min(Math.Max(maxRecentItems * 3, 20), 60)
                 }, cancellationToken)
             : null;
+        if (workingCandidatesRawTask is not null)
+        {
+            planBuilder.RecordCall("MemoryStore.Query(Working)");
+        }
 
         Task<IReadOnlyList<ContextMemoryItem>>? stableCandidatesRawTask =
             (options.IncludeStableMemory && _memoryStore is not null)
@@ -107,6 +161,10 @@ internal sealed class PackageInputLoader
                     Take = Math.Min(Math.Max(maxRecentItems * 3, 20), 60)
                 }, cancellationToken)
             : null;
+        if (stableCandidatesRawTask is not null)
+        {
+            planBuilder.RecordCall("MemoryStore.Query(Stable)");
+        }
 
         Task<IReadOnlyList<ContextGlobalItem>>? globalItemsTask =
             (options.IncludeGlobalContext && _globalContextStore is not null)
@@ -117,47 +175,83 @@ internal sealed class PackageInputLoader
                     Take = maxRecentItems
                 }, cancellationToken)
             : null;
+        if (globalItemsTask is not null)
+        {
+            planBuilder.RecordCall("GlobalContextStore.Query");
+        }
 
-        // Hard 与 Soft 各自独立查询，保证独立的 Take 预算与 store 层 Level 过滤。
-        // 理由同上：全局 Take 后分区会让某一级独占预算，改变 selected set（P0 4.2）。
-        Task<IReadOnlyList<ContextConstraint>>? softConstraintsTask =
-            (options.IncludeSoftConstraints && _constraintStore is not null)
-            ? _constraintStore.QueryAsync(new ContextConstraintQuery
+        // R13.2 #1：Soft 单次查询，section 与 merged 共享结果。
+        Task<IReadOnlyList<ContextConstraint>>? softConstraintsTask = softQueryNeeded
+            ? _constraintStore!.QueryAsync(new ContextConstraintQuery
                 {
                     WorkspaceId = workspaceId,
                     CollectionId = collectionId,
                     Level = ConstraintLevel.Soft,
-                    Take = 100
+                    Take = softTake
                 }, cancellationToken)
             : null;
+        if (softConstraintsTask is not null)
+        {
+            planBuilder.RecordCall("ConstraintStore.Query(Soft)");
+        }
 
+        // merged All-level 查询（Runtime/System/User/Domain 等次要级别）。
+        // R13.2 #1：此查询独立于 Hard/Soft，捕获它们覆盖不到的级别，无法与 section 共享。
+        Task<IReadOnlyList<ContextConstraint>>? allLevelsTask =
+            (mergedNeedsAll && _constraintStore is not null)
+            ? _constraintStore.QueryAsync(new ContextConstraintQuery
+                {
+                    WorkspaceId = workspaceId,
+                    CollectionId = collectionId,
+                    Take = options.ConstraintMergeMaxItems
+                }, cancellationToken)
+            : null;
+        if (allLevelsTask is not null)
+        {
+            planBuilder.RecordCall("ConstraintStore.Query(All)");
+        }
+
+        // R13.2 #3：current_task + 6 源 + merged All 一起并行（彼此无依赖）。
         var prefetchTasks = new List<Task>();
+        if (currentTaskTask is not null) prefetchTasks.Add(currentTaskTask);
         if (recentItemsTask is not null) prefetchTasks.Add(recentItemsTask);
         if (hardConstraintsTask is not null) prefetchTasks.Add(hardConstraintsTask);
         if (workingCandidatesRawTask is not null) prefetchTasks.Add(workingCandidatesRawTask);
         if (globalItemsTask is not null) prefetchTasks.Add(globalItemsTask);
         if (stableCandidatesRawTask is not null) prefetchTasks.Add(stableCandidatesRawTask);
         if (softConstraintsTask is not null) prefetchTasks.Add(softConstraintsTask);
+        if (allLevelsTask is not null) prefetchTasks.Add(allLevelsTask);
         if (prefetchTasks.Count > 0)
         {
             await Task.WhenAll(prefetchTasks).ConfigureAwait(false);
         }
 
-        // merged constraints 解析（仅在对应 section 启用时）。
+        // 每层/级已独立查询，store 层已应用 Layer/Level/Status 过滤与各自 Take，直接 await 即可。
+        var workingMemory = workingCandidatesRawTask is null ? null : await workingCandidatesRawTask.ConfigureAwait(false);
+        var stableMemory = stableCandidatesRawTask is null ? null : await stableCandidatesRawTask.ConfigureAwait(false);
+
+        // R13.2 #1：section 用 Take=100 切片；仅当 section 启用时赋值，否则保持 null（merged 独占结果）。
+        // store 排序稳定（Hard-first, Confidence-desc, UpdatedAt-desc），切片结果与原独立查询完全一致。
+        IReadOnlyList<ContextConstraint>? hardConstraints =
+            (hardConstraintsTask is not null && hardForSection)
+            ? SliceConstraints(hardConstraintsTask.Result, 100)
+            : null;
+        IReadOnlyList<ContextConstraint>? softConstraints =
+            (softConstraintsTask is not null && softForSection)
+            ? SliceConstraints(softConstraintsTask.Result, 100)
+            : null;
+
         IReadOnlyList<ContextConstraint>? mergedConstraints = null;
         if (options.IncludeMergedConstraintsSection)
         {
             mergedConstraints = await ResolveMergedConstraintsAsync(
                 options,
                 collectionId ?? string.Empty,
+                hardConstraintsTask?.Result,
+                softConstraintsTask?.Result,
+                allLevelsTask?.Result,
                 cancellationToken).ConfigureAwait(false);
         }
-
-        // 每层/级已独立查询，store 层已应用 Layer/Level/Status 过滤与各自 Take，直接 await 即可。
-        var workingMemory = workingCandidatesRawTask is null ? null : await workingCandidatesRawTask.ConfigureAwait(false);
-        var stableMemory = stableCandidatesRawTask is null ? null : await stableCandidatesRawTask.ConfigureAwait(false);
-        var hardConstraints = hardConstraintsTask is null ? null : await hardConstraintsTask.ConfigureAwait(false);
-        var softConstraints = softConstraintsTask is null ? null : await softConstraintsTask.ConfigureAwait(false);
 
         return new PackageInputs(
             RecentItems: recentItemsTask is null ? null : await recentItemsTask.ConfigureAwait(false),
@@ -166,13 +260,40 @@ internal sealed class PackageInputLoader
             GlobalItems: globalItemsTask is null ? null : await globalItemsTask.ConfigureAwait(false),
             StableCandidatesRaw: stableMemory,
             SoftConstraints: softConstraints,
-            CurrentTask: currentTask,
-            MergedConstraints: mergedConstraints);
+            CurrentTask: currentTaskTask is null ? null : await currentTaskTask.ConfigureAwait(false),
+            MergedConstraints: mergedConstraints,
+            ReadPlan: planBuilder.Build());
     }
 
+    /// <summary>
+    /// R13.2 #1：按 Take 切片约束列表。store 已按稳定序返回，前 N 条与 Take=N 独立查询结果一致。
+    /// </summary>
+    private static IReadOnlyList<ContextConstraint> SliceConstraints(
+        IReadOnlyList<ContextConstraint> source,
+        int take)
+    {
+        if (source.Count <= take)
+        {
+            return source;
+        }
+        var sliced = new ContextConstraint[take];
+        for (var i = 0; i < take; i++)
+        {
+            sliced[i] = source[i];
+        }
+        return sliced;
+    }
+
+    /// <summary>
+    /// R13.2 #1：merged constraints 合并。Hard/Soft 结果来自 section 共享查询（已去重），
+    /// All-level 查询独立捕获次要级别。按 Hard → Soft → All 顺序合并去重后追加 request-derived constraints。
+    /// </summary>
     private async Task<IReadOnlyList<ContextConstraint>> ResolveMergedConstraintsAsync(
         ResolvedPackageOptions options,
         string collectionId,
+        IReadOnlyList<ContextConstraint>? hardResult,
+        IReadOnlyList<ContextConstraint>? softResult,
+        IReadOnlyList<ContextConstraint>? allLevelsResult,
         CancellationToken cancellationToken)
     {
         if (_constraintStore is null)
@@ -180,47 +301,20 @@ internal sealed class PackageInputLoader
             return RequestTaskResolver.CreateRequestConstraints(options.Request, collectionId);
         }
 
-        var take = options.ConstraintMergeMaxItems;
-
-        // R12.4A #2：Per-level quota — Hard 与 Soft 各自独立查询，防止某一级独占共享 Take 预算。
-        // 旧实现用 Level=null + Take=N 单一查询：若 store 有 N 个 Hard + 少量 Soft，
-        // Hard 会填满 Take 预算导致 Soft 完全缺席 merged section。
-        // 新实现并行查询 Hard + Soft + All（Level=null），各自拥有独立 Take 预算：
-        //   - Hard 查询确保 Hard 约束被召回（至多 take 条）
-        //   - Soft 查询确保 Soft 约束被召回（至多 take 条）
-        //   - All 查询捕获 Runtime/System/User/Domain 等次要级别
-        // 合并后按 ID 去重（Hard/Soft 优先加入，All 查询的重复项被跳过）。
-        // 三路查询并行执行，延迟与原单查询相当。
-        var hardTask = _constraintStore.QueryAsync(new ContextConstraintQuery
-        {
-            WorkspaceId = options.WorkspaceId,
-            CollectionId = collectionId,
-            Level = ConstraintLevel.Hard,
-            Take = take
-        }, cancellationToken);
-
-        var softTask = _constraintStore.QueryAsync(new ContextConstraintQuery
-        {
-            WorkspaceId = options.WorkspaceId,
-            CollectionId = collectionId,
-            Level = ConstraintLevel.Soft,
-            Take = take
-        }, cancellationToken);
-
-        var allLevelsTask = _constraintStore.QueryAsync(new ContextConstraintQuery
-        {
-            WorkspaceId = options.WorkspaceId,
-            CollectionId = collectionId,
-            Take = take
-        }, cancellationToken);
-
-        await Task.WhenAll(hardTask, softTask, allLevelsTask).ConfigureAwait(false);
+        // R13.2 #1：Hard/Soft 已由 LoadAsync 顶层查询得到，merged 复用切片结果（Take = ConstraintMergeMaxItems）。
+        var mergedHard = hardResult is null
+            ? Array.Empty<ContextConstraint>()
+            : SliceConstraints(hardResult, options.ConstraintMergeMaxItems);
+        var mergedSoft = softResult is null
+            ? Array.Empty<ContextConstraint>()
+            : SliceConstraints(softResult, options.ConstraintMergeMaxItems);
+        var mergedAll = allLevelsResult ?? Array.Empty<ContextConstraint>();
 
         // 合并顺序：Hard → Soft → All（次要级别）。OrderMergedConstraints 后续按 PriorityRank
         // 重排，此处顺序仅影响同分 tie-break 的 Index。
         var seenIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var constraints = new List<ContextConstraint>();
-        foreach (var item in hardTask.Result.Concat(softTask.Result).Concat(allLevelsTask.Result))
+        foreach (var item in mergedHard.Concat(mergedSoft).Concat(mergedAll))
         {
             if (seenIds.Add(item.Id))
             {
@@ -229,14 +323,17 @@ internal sealed class PackageInputLoader
         }
 
         constraints.AddRange(RequestTaskResolver.CreateRequestConstraints(options.Request, collectionId));
+        await Task.CompletedTask.ConfigureAwait(false);
         return constraints;
     }
 
     private async Task<WorkingMemoryCurrentTask?> ResolveCurrentTaskAsync(
         ContextPackageRequest request,
         string collectionId,
+        PackageReadPlanBuilder planBuilder,
         CancellationToken cancellationToken)
     {
+        planBuilder.RecordCall("WorkingMemoryService.GetCurrentTask");
         var hasMetadataTask = RequestTaskResolver.HasRequestCurrentTaskMetadata(request);
         var metadataTask = hasMetadataTask
             ? RequestTaskResolver.CreateRequestCurrentTask(request, collectionId)
@@ -259,7 +356,36 @@ internal sealed class PackageInputLoader
 }
 
 /// <summary>
-/// 加载阶段产出：所有已预取的 store 数据 + current task + merged constraints。
+/// R13.2 #4：读路径调用计数器。记录每个 store kind + 用途的查询次数与去重命中。
+/// </summary>
+internal sealed class PackageReadPlanBuilder
+{
+    private readonly Dictionary<string, int> _counts = new(StringComparer.Ordinal);
+    private int _dedupHits;
+
+    public void RecordCall(string key)
+    {
+        _counts.TryGetValue(key, out var current);
+        _counts[key] = current + 1;
+    }
+
+    public void RecordDedupHit()
+    {
+        _dedupHits++;
+    }
+
+    public PackageReadPlan Build()
+    {
+        return new PackageReadPlan
+        {
+            StoreCallCounts = _counts,
+            DedupHits = _dedupHits
+        };
+    }
+}
+
+/// <summary>
+/// 加载阶段产出：所有已预取的 store 数据 + current task + merged constraints + read plan。
 /// 字段为 null 表示对应数据源未启用（policy 关闭或 store 未配置），与原实现中 null Task 语义一致。
 /// </summary>
 internal sealed record PackageInputs(
@@ -270,4 +396,5 @@ internal sealed record PackageInputs(
     IReadOnlyList<ContextMemoryItem>? StableCandidatesRaw,
     IReadOnlyList<ContextConstraint>? SoftConstraints,
     WorkingMemoryCurrentTask? CurrentTask,
-    IReadOnlyList<ContextConstraint>? MergedConstraints);
+    IReadOnlyList<ContextConstraint>? MergedConstraints,
+    PackageReadPlan ReadPlan);

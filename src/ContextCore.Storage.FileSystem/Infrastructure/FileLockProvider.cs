@@ -138,6 +138,13 @@ public sealed class FileLockProvider
             {
                 await Task.Delay(25, cancellationToken).ConfigureAwait(false);
             }
+            // Windows 在另一线程/进程以 FileShare.None 持有锁文件时，
+            // 偶尔会抛 UnauthorizedAccessException（access denied）而非 IOException。
+            // 同样视作"锁被占用"，退避重试。
+            catch (UnauthorizedAccessException)
+            {
+                await Task.Delay(25, cancellationToken).ConfigureAwait(false);
+            }
         }
     }
 }

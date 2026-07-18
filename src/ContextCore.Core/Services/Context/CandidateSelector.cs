@@ -58,7 +58,8 @@ internal sealed class CandidateSelector
             Anchors: ctx.Anchors,
             RetrievalPlan: ctx.RetrievalPlan,
             ItemReferences: state.ItemReferences,
-            Uncertainties: uncertainties);
+            Uncertainties: uncertainties,
+            ReadPlan: inputs.ReadPlan);
     }
 }
 
@@ -119,4 +120,5 @@ internal sealed record SelectionResult(
     IReadOnlyList<ContextAnchor> Anchors,
     RetrievalPlan? RetrievalPlan,
     List<ContextPackageItemReference> ItemReferences,
-    IReadOnlyList<ContextPackageUncertainty> Uncertainties);
+    IReadOnlyList<ContextPackageUncertainty> Uncertainties,
+    PackageReadPlan? ReadPlan);

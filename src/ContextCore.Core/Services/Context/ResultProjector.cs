@@ -69,7 +69,8 @@ internal sealed class ResultProjector
             RetrievalPlan: selection.RetrievalPlan,
             Budget: budget,
             Output: output,
-            ModeBudgetProfile: modeBudgetProfile);
+            ModeBudgetProfile: modeBudgetProfile,
+            ReadPlan: selection.ReadPlan);
     }
 
     /// <summary>
@@ -140,6 +141,7 @@ internal sealed class ResultProjector
             EstimatedTokens = template.EstimatedTokens,
             Metadata = resultMetadata,
             Plan = template.RetrievalPlan,
+            ReadPlan = template.ReadPlan,
             CreatedAt = now
         };
     }
