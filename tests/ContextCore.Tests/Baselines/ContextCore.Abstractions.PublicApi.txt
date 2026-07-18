@@ -608,6 +608,10 @@ F:ContextCore.Abstractions.Models.VectorQueryTargetSections.WorkingContext
 F:ContextCore.Abstractions.RelationDirection.Both
 F:ContextCore.Abstractions.RelationDirection.Incoming
 F:ContextCore.Abstractions.RelationDirection.Outgoing
+F:ContextCore.Abstractions.StorageProviderKind.FileSystem
+F:ContextCore.Abstractions.StorageProviderKind.InMemory
+F:ContextCore.Abstractions.StorageProviderKind.Postgres
+F:ContextCore.Abstractions.StorageProviderKind.Unknown
 F:ContextCore.Abstractions.StoreOperationKind.Read
 F:ContextCore.Abstractions.StoreOperationKind.Write
 M:ContextCore.Abstractions.CacheInvalidationKey.#ctor(System.String, System.String, System.String, System.String)
@@ -2885,6 +2889,11 @@ M:ContextCore.Abstractions.StateCacheKey.GetHashCode()
 M:ContextCore.Abstractions.StateCacheKey.GetType()
 M:ContextCore.Abstractions.StateCacheKey.ToString()
 M:ContextCore.Abstractions.StateCacheKey.static From(System.String)
+M:ContextCore.Abstractions.StorageExecutionProfile.#ctor()
+M:ContextCore.Abstractions.StorageExecutionProfile.Equals(System.Object)
+M:ContextCore.Abstractions.StorageExecutionProfile.GetHashCode()
+M:ContextCore.Abstractions.StorageExecutionProfile.GetType()
+M:ContextCore.Abstractions.StorageExecutionProfile.ToString()
 M:ContextCore.Abstractions.StoreOperationAttribute.#ctor(ContextCore.Abstractions.StoreOperationKind)
 M:ContextCore.Abstractions.StoreOperationAttribute.Equals(System.Object)
 M:ContextCore.Abstractions.StoreOperationAttribute.GetHashCode()
@@ -2962,6 +2971,7 @@ P:ContextCore.Abstractions.IEmbeddingGenerator.Provider (get)
 P:ContextCore.Abstractions.IEmbeddingGeneratorDescriptor.Normalize (get)
 P:ContextCore.Abstractions.IEmbeddingGeneratorDescriptor.PoolingStrategy (get)
 P:ContextCore.Abstractions.IEmbeddingGeneratorDescriptor.ProviderType (get)
+P:ContextCore.Abstractions.IStoreRuntimeCapabilities.Profile (get)
 P:ContextCore.Abstractions.Models.ArtifactDescriptor.CapabilityId (get|init)
 P:ContextCore.Abstractions.Models.ArtifactDescriptor.CollectionId (get|init)
 P:ContextCore.Abstractions.Models.ArtifactDescriptor.DateShard (get|init)
@@ -6625,6 +6635,18 @@ P:ContextCore.Abstractions.RetrievalAdapterResult.Applied (get|init)
 P:ContextCore.Abstractions.RetrievalAdapterResult.RemovedCandidateIds (get|init)
 P:ContextCore.Abstractions.RetrievalAdapterResult.TracePath (get|init)
 P:ContextCore.Abstractions.StateCacheKey.Value (get|init)
+P:ContextCore.Abstractions.StorageExecutionProfile.FileSystem (get)
+P:ContextCore.Abstractions.StorageExecutionProfile.InMemory (get)
+P:ContextCore.Abstractions.StorageExecutionProfile.IsPersistent (get|init)
+P:ContextCore.Abstractions.StorageExecutionProfile.MaxRecommendedConcurrency (get|init)
+P:ContextCore.Abstractions.StorageExecutionProfile.Postgres (get)
+P:ContextCore.Abstractions.StorageExecutionProfile.ProviderKind (get|init)
+P:ContextCore.Abstractions.StorageExecutionProfile.SupportsBatchWrites (get|init)
+P:ContextCore.Abstractions.StorageExecutionProfile.SupportsCrossProcessSafety (get|init)
+P:ContextCore.Abstractions.StorageExecutionProfile.SupportsParallelReads (get|init)
+P:ContextCore.Abstractions.StorageExecutionProfile.SupportsParallelWrites (get|init)
+P:ContextCore.Abstractions.StorageExecutionProfile.SupportsSnapshotReuse (get|init)
+P:ContextCore.Abstractions.StorageExecutionProfile.SupportsTransactions (get|init)
 P:ContextCore.Abstractions.StoreOperationAttribute.Kind (get)
 P:ContextCore.Abstractions.StoreOperationAttribute.TypeId (get)
 P:ContextCore.Abstractions.TokenTruncationResult.TokenCount (get|init)
@@ -6706,6 +6728,7 @@ T:ContextCore.Abstractions.IShortTermPromotionCandidateStore (Interface)
 T:ContextCore.Abstractions.IStableLifecycleReviewStore (Interface)
 T:ContextCore.Abstractions.IStableReviewCandidateStore (Interface)
 T:ContextCore.Abstractions.IStateCacheInvalidator (Interface)
+T:ContextCore.Abstractions.IStoreRuntimeCapabilities (Interface)
 T:ContextCore.Abstractions.IVectorIndexStore (Interface)
 T:ContextCore.Abstractions.IVectorLifecycleMetadataReviewCandidateStore (Interface)
 T:ContextCore.Abstractions.IVectorLifecycleMetadataReviewStore (Interface)
@@ -7154,6 +7177,8 @@ T:ContextCore.Abstractions.RelationDirection (Enum)
 T:ContextCore.Abstractions.RetrievalAdapterRequest
 T:ContextCore.Abstractions.RetrievalAdapterResult
 T:ContextCore.Abstractions.StateCacheKey (Struct)
+T:ContextCore.Abstractions.StorageExecutionProfile
+T:ContextCore.Abstractions.StorageProviderKind (Enum)
 T:ContextCore.Abstractions.StoreOperationAttribute
 T:ContextCore.Abstractions.StoreOperationKind (Enum)
 T:ContextCore.Abstractions.TokenTruncationResult

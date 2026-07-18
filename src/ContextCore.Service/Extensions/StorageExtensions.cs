@@ -118,14 +118,17 @@ internal static class StorageExtensions
 		if (options.IsFileSystem)
 		{
 			RegisterFileSystem(services, options);
+			RegisterCapabilities(services, StorageProviderKind.FileSystem);
 		}
 		else if (options.IsMemory)
 		{
 			RegisterInMemory(services);
+			RegisterCapabilities(services, StorageProviderKind.InMemory);
 		}
 		else if (options.IsPostgres)
 		{
 			RegisterPostgres(services, options);
+			RegisterCapabilities(services, StorageProviderKind.Postgres);
 		}
 		else
 		{
@@ -134,6 +137,15 @@ internal static class StorageExtensions
 		}
 
 		return services;
+	}
+
+	/// <summary>
+	/// R13.3 #1：注册 IStoreRuntimeCapabilities 单例，按当前 provider 提供能力描述。
+	/// 替代各处对 "filesystem"/"postgres"/"memory" 字符串的判断，调用方一次 DI 注入即可查询能力。
+	/// </summary>
+	private static void RegisterCapabilities(IServiceCollection services, StorageProviderKind providerKind)
+	{
+		services.AddSingleton<IStoreRuntimeCapabilities>(_ => new StoreRuntimeCapabilities(providerKind));
 	}
 
 	private static void RegisterPostgres(IServiceCollection services, StorageOptions options)
