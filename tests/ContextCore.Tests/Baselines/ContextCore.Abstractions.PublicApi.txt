@@ -694,6 +694,7 @@ M:ContextCore.Abstractions.IConstraintStore.SaveAsync(ContextCore.Abstractions.M
 M:ContextCore.Abstractions.IContextCollectionStore.GetCollectionAsync(System.String, System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IContextCollectionStore.SaveCollectionAsync(ContextCore.Abstractions.Models.ContextCollection, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IContextEventSink.EmitAsync(ContextCore.Abstractions.ContextOperationEvent, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IContextEventSink.EmitBatchAsync(System.Collections.Generic.IReadOnlyList<ContextCore.Abstractions.ContextOperationEvent>, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IContextIndex.SearchAsync(ContextCore.Abstractions.Models.IndexQuery, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IContextIndex.UpsertAsync(ContextCore.Abstractions.Models.ContextIndexEntry, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IContextJobDispatcher.DispatchAsync(ContextCore.Abstractions.ContextJob, System.Threading.CancellationToken)

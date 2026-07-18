@@ -205,7 +205,11 @@ internal static class CoreExtensions
 				sinks.Add(postgresSink);
 			}
 
-			return new CompositeContextEventSink(sinks);
+			// R13.4 #1：BestEffort 路径经有界 Channel 装饰，启用批量写入与背压丢弃语义；
+			// Required 路径在装饰器内被检测并直接同步调用，保证审计事件落盘。
+			// CompositeContextEventSink.Kind 为 BestEffort，故走通道 + 后台批量消费路径。
+			var composite = new CompositeContextEventSink(sinks);
+			return new BoundedChannelContextEventSink(composite);
 		});
 
 		services.AddSingleton<ContextRuntimeService>();

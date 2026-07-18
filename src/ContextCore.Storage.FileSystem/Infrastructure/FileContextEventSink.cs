@@ -45,6 +45,39 @@ public sealed class FileContextEventSink : IContextEventSink
             .ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// R13.4 #1：批量写入路径。按工作空间分组后，每组一次性调用 <see cref="FileSystemWriter.AppendLinesAsync"/>
+    /// 在单个写锁内追加所有行，避免逐行获取锁的开销。
+    /// </summary>
+    public async Task EmitBatchAsync(
+        IReadOnlyList<ContextOperationEvent> events,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(events);
+        if (events.Count == 0)
+        {
+            return;
+        }
+
+        // 按工作空间分组：不同 workspace 落入不同文件，无法共享一次锁
+        var groupedByWorkspace = events
+            .GroupBy(evt => evt.WorkspaceId)
+            .ToArray();
+
+        foreach (var group in groupedByWorkspace)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var logPath = GetLogPath(group.Key);
+            var lines = new List<string>(group.Count());
+            foreach (var evt in group)
+            {
+                lines.Add(_serializer.Serialize(evt));
+            }
+            await _writer.AppendLinesAsync(logPath, lines, cancellationToken)
+                .ConfigureAwait(false);
+        }
+    }
+
     private string GetLogPath(string workspaceId)
     {
         var date = DateTimeOffset.UtcNow.ToString("yyyy-MM-dd");

@@ -119,6 +119,24 @@ public interface IContextEventSink
     Task EmitAsync(ContextOperationEvent operationEvent, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// R13.4 #1：批量写入路径。实现应覆盖以利用 File/Postgres 的批量 I/O（单次锁、单次 round-trip）。
+    /// 默认实现为逐条调用 <see cref="EmitAsync"/>，适用于不支持批量写入的 sink。
+    /// </summary>
+    /// <param name="events">要批量写入的事件列表。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    async Task EmitBatchAsync(
+        IReadOnlyList<ContextOperationEvent> events,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(events);
+        foreach (var evt in events)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            await EmitAsync(evt, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
     /// sink 的故障语义。默认 <see cref="ContextEventSinkKind.BestEffort"/>，即 sink 失败时不应阻断业务或后续 sink。
     /// 仅审计/安全相关 sink 需重写为 <see cref="ContextEventSinkKind.Required"/>，使其失败时由复合接收器聚合并向上抛出。
     /// </summary>

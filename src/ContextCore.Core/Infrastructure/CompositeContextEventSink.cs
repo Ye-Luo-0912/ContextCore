@@ -55,4 +55,44 @@ public sealed class CompositeContextEventSink : IContextEventSink
                 requiredErrors);
         }
     }
+
+    /// <summary>
+    /// R13.4 #1：批量写入转发。每个子 sink 独立 try/catch，与 <see cref="EmitAsync"/> 保持
+    /// 相同的 fail-open（BestEffort）/ fail-closed（Required）语义。
+    /// 调用本方法的子 sink 如果支持批量 I/O（File / Postgres），可在单次锁/单次 round-trip 内完成写入。
+    /// </summary>
+    public async Task EmitBatchAsync(
+        IReadOnlyList<ContextOperationEvent> events,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(events);
+        if (events.Count == 0)
+        {
+            return;
+        }
+
+        List<Exception>? requiredErrors = null;
+
+        foreach (var sink in _sinks)
+        {
+            try
+            {
+                await sink.EmitBatchAsync(events, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                if (sink.Kind == ContextEventSinkKind.Required)
+                {
+                    (requiredErrors ??= new List<Exception>()).Add(ex);
+                }
+            }
+        }
+
+        if (requiredErrors is not null)
+        {
+            throw new AggregateException(
+                "Required context event sink(s) failed; see inner exceptions.",
+                requiredErrors);
+        }
+    }
 }
