@@ -1,3 +1,4 @@
+using System.Diagnostics.Metrics;
 using ContextCore.Abstractions;
 using ContextCore.Core;
 using ContextCore.Storage.FileSystem;
@@ -334,6 +335,103 @@ public sealed class BoundedChannelContextEventSinkTests
 
         Assert.AreEqual(5, bestEffortInner.Events.Count);
         Assert.AreEqual(5, requiredInner.Events.Count);
+    }
+
+    /// <summary>
+    /// R13.4 #2：验证 BoundedChannelContextEventSink 的 drop/error/batch_emit 计数
+    /// 通过 CoreMetrics 的 OTel Counter 发布，可用 MeterListener 捕获。
+    /// queue 深度（PendingCount）作为实例属性保留供进程内观察（与 InMemoryContextStateCache 一致）。
+    /// </summary>
+    [TestMethod]
+    public async Task BoundedChannel_RecordsOtelCounters_ForDropErrorBatchEmit()
+    {
+        // 捕获 EventSink 三个计数器的累加值
+        var droppedSum = 0L;
+        var errorSum = 0L;
+        var batchEmitSum = 0L;
+
+        using var listener = new MeterListener();
+        listener.InstrumentPublished = (instrument, l) =>
+        {
+            if (instrument.Meter.Name != "ContextCore.Core") return;
+            if (instrument.Name is "contextcore.eventsink.dropped"
+                or "contextcore.eventsink.errors"
+                or "contextcore.eventsink.batch_emits")
+            {
+                l.EnableMeasurementEvents(instrument, state: null);
+            }
+        };
+        listener.SetMeasurementEventCallback<long>((instrument, value, _, _) =>
+        {
+            switch (instrument.Name)
+            {
+                case "contextcore.eventsink.dropped": Interlocked.Add(ref droppedSum, value); break;
+                case "contextcore.eventsink.errors": Interlocked.Add(ref errorSum, value); break;
+                case "contextcore.eventsink.batch_emits": Interlocked.Add(ref batchEmitSum, value); break;
+            }
+        });
+        listener.Start();
+
+        try
+        {
+            // 场景 1：成功批量写入 → batch_emits 计数
+            var successInner = new InMemoryContextEventSink();
+            await using var successSink = new BoundedChannelContextEventSink(successInner, capacity: 100, batchSize: 8);
+
+            for (var i = 0; i < 16; i++)
+            {
+                await successSink.EmitAsync(CreateEvent("ws-otel-success", $"evt-{i}"));
+            }
+
+            await WaitForAsync(() => successInner.Events.Count == 16, TimeSpan.FromSeconds(2));
+            await successSink.DisposeAsync();
+
+            // 场景 2：通道满丢弃 → dropped 计数
+            var blockInner = new SignalOnFirstCallSink();
+            var dropSink = new BoundedChannelContextEventSink(blockInner, capacity: 4, batchSize: 100);
+            try
+            {
+                await dropSink.EmitAsync(CreateEvent("ws-otel-drop", "evt-0"));
+                await blockInner.WaitForFirstCallAsync;
+
+                // 填满通道（4 条）+ 3 条应被丢弃
+                for (var i = 1; i <= 7; i++)
+                {
+                    await dropSink.EmitAsync(CreateEvent("ws-otel-drop", $"evt-{i}"));
+                }
+
+                Assert.AreEqual(3, dropSink.DroppedCount);
+            }
+            finally
+            {
+                await blockInner.UnblockAsync();
+                await dropSink.DisposeAsync();
+            }
+
+            // 场景 3：批量写入失败 → errors 计数
+            var throwingSink = new ThrowingSink();
+            await using var errorSink = new BoundedChannelContextEventSink(throwingSink, capacity: 100, batchSize: 4);
+
+            for (var i = 0; i < 5; i++)
+            {
+                await errorSink.EmitAsync(CreateEvent("ws-otel-error", $"evt-{i}"));
+            }
+
+            await WaitForAsync(() => errorSink.ErrorCount > 0, TimeSpan.FromSeconds(2));
+
+            // 等待一小段时间确保所有计数器回调都已执行（回调在记录线程同步执行，
+            // 但消费者可能在多次记录间存在调度延迟）
+            await Task.Delay(100);
+
+            // 验证 OTel 计数器捕获到对应计数
+            Assert.IsTrue(batchEmitSum >= 1, $"OTel batch_emits 计数应 >= 1，实际 {batchEmitSum}");
+            Assert.IsTrue(droppedSum >= 3, $"OTel dropped 计数应 >= 3，实际 {droppedSum}");
+            Assert.IsTrue(errorSum >= 1, $"OTel errors 计数应 >= 1，实际 {errorSum}");
+        }
+        finally
+        {
+            listener.Dispose();
+        }
     }
 
     private static ContextOperationEvent CreateEvent(string workspaceId, string eventId) => new()

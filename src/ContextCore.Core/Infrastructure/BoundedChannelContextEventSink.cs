@@ -108,6 +108,7 @@ public sealed class BoundedChannelContextEventSink : IContextEventSink, IAsyncDi
         }
 
         Interlocked.Increment(ref _droppedCount);
+        CoreMetrics.EventSinkDropped.Add(1);
         return Task.CompletedTask;
     }
 
@@ -134,6 +135,7 @@ public sealed class BoundedChannelContextEventSink : IContextEventSink, IAsyncDi
             if (!_channel!.Writer.TryWrite(evt))
             {
                 Interlocked.Increment(ref _droppedCount);
+                CoreMetrics.EventSinkDropped.Add(1);
             }
         }
     }
@@ -200,10 +202,12 @@ public sealed class BoundedChannelContextEventSink : IContextEventSink, IAsyncDi
         {
             await _inner.EmitBatchAsync(batch, cancellationToken).ConfigureAwait(false);
             Interlocked.Increment(ref _batchEmitCount);
+            CoreMetrics.EventSinkBatchEmits.Add(1);
         }
         catch
         {
             Interlocked.Increment(ref _errorCount);
+            CoreMetrics.EventSinkErrors.Add(1);
             // BestEffort 路径：吞掉异常，事件已丢失
         }
     }

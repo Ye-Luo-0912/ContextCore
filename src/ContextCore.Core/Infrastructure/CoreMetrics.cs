@@ -37,4 +37,29 @@ public static class CoreMetrics
             "contextcore.compression.tokens",
             unit: "{tokens}",
             description: "LLM 压缩消耗的 Token 总数（inputTokens + outputTokens）");
+
+    // ── R13.4 #2：Event Sink 观测管线指标 ─────────────────────────────────
+    // 以下计数器由 BoundedChannelContextEventSink 记录，反映 BestEffort 事件通道的背压与健康度。
+    // Required sink 不走通道，不参与这些计数器。
+
+    /// <summary>因通道满而被丢弃的事件数（仅 BestEffort 路径）。</summary>
+    public static readonly Counter<long> EventSinkDropped =
+        _meter.CreateCounter<long>(
+            "contextcore.eventsink.dropped",
+            unit: "{events}",
+            description: "BoundedChannelContextEventSink 因通道满而丢弃的事件数");
+
+    /// <summary>批量写入失败的次数（仅 BestEffort 路径，fail-open 吞掉异常）。</summary>
+    public static readonly Counter<long> EventSinkErrors =
+        _meter.CreateCounter<long>(
+            "contextcore.eventsink.errors",
+            unit: "{batches}",
+            description: "BoundedChannelContextEventSink 批量写入失败的次数");
+
+    /// <summary>已成功提交的批量写入次数（仅 BestEffort 路径）。</summary>
+    public static readonly Counter<long> EventSinkBatchEmits =
+        _meter.CreateCounter<long>(
+            "contextcore.eventsink.batch_emits",
+            unit: "{batches}",
+            description: "BoundedChannelContextEventSink 已成功提交的批量写入次数");
 }
