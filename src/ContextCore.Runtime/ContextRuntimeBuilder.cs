@@ -55,6 +55,12 @@ public static class ContextRuntimeBuilder
             cacheAccessor: options.CacheAccessor);
 
         // 检索器（Full profile 传入 trace stores / decision trace）
+        // R13.3 #2：优先使用 capabilities 派生 fanout；为 null 时由 HybridContextRetriever 回退到 namespace 推断
+        RetrievalFanoutOptions? fanoutOptions = null;
+        if (options.Capabilities is { } capabilities)
+        {
+            fanoutOptions = RetrievalFanoutOptions.FromProfile(capabilities.Profile);
+        }
         var retriever = new HybridContextRetriever(
             options.ContextStore,
             options.MemoryStore,
@@ -62,7 +68,8 @@ public static class ContextRuntimeBuilder
             options.EmbeddingProvider,
             options.VectorStore,
             options.RetrievalTraceStore,
-            decisionTraceStore: options.DecisionTraceStore);
+            decisionTraceStore: options.DecisionTraceStore,
+            fanoutOptions: fanoutOptions);
 
         return new RuntimeServices
         {

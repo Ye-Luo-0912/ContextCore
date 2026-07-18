@@ -1,12 +1,13 @@
 using ContextCore.Abstractions;
 
-namespace ContextCore.Service.Infrastructure;
+namespace ContextCore.Runtime;
 
 /// <summary>
-/// R13.3 #1：IStoreRuntimeCapabilities 实现——按 StorageProviderKind 返回对应的 StorageExecutionProfile。
-/// 通过 DI 注入到需要查询存储能力的组件，替代各处对 "filesystem"/"postgres"/"memory" 字符串的判断。
+/// R13.3 #1/#2：IStoreRuntimeCapabilities 默认实现——按 StorageProviderKind 返回对应的 StorageExecutionProfile。
+/// 由各宿主（Service DI / ControlRoom 直构 / Eval）注入到 RuntimeBuildOptions，
+/// 替代各处对 "filesystem"/"postgres"/"memory" 字符串的判断。
 /// </summary>
-internal sealed class StoreRuntimeCapabilities : IStoreRuntimeCapabilities
+public sealed class StoreRuntimeCapabilities : IStoreRuntimeCapabilities
 {
     public StoreRuntimeCapabilities(StorageProviderKind providerKind)
     {

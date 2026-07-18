@@ -168,6 +168,7 @@ public sealed class BoundedFanoutTests
 
 /// <summary>
 /// P0-7.2: 验证 RetrievalFanoutOptions.Resolve 按 store namespace 自动推断 fanout 上限。
+/// R13.3 #2：扩展为优先消费 IStoreRuntimeCapabilities，namespace 推断退化为回退路径。
 /// </summary>
 [TestClass]
 [TestCategory("Infrastructure")]
@@ -242,6 +243,154 @@ public sealed class RetrievalFanoutOptionsTests
         Assert.AreEqual(16, options.MaxReadFanout, "memoryStore 为 null 时应按 contextStore 推断");
     }
 
+    // --- R13.3 #2：能力驱动路径（FromProfile）---
+
+    /// <summary>
+    /// FromProfile：InMemory 预设的 RecommendedReadFanout=16，应被原样采用。
+    /// </summary>
+    [TestMethod]
+    public void FromProfile_InMemory_UsesRecommendedReadFanout()
+    {
+        var options = RetrievalFanoutOptions.FromProfile(StorageExecutionProfile.InMemory);
+
+        Assert.AreEqual(16, options.MaxReadFanout);
+    }
+
+    /// <summary>
+    /// FromProfile：FileSystem 预设的 RecommendedReadFanout=2，应被原样采用。
+    /// </summary>
+    [TestMethod]
+    public void FromProfile_FileSystem_UsesRecommendedReadFanout()
+    {
+        var options = RetrievalFanoutOptions.FromProfile(StorageExecutionProfile.FileSystem);
+
+        Assert.AreEqual(2, options.MaxReadFanout);
+    }
+
+    /// <summary>
+    /// FromProfile：Postgres 预设的 RecommendedReadFanout=8，应被原样采用。
+    /// </summary>
+    [TestMethod]
+    public void FromProfile_Postgres_UsesRecommendedReadFanout()
+    {
+        var options = RetrievalFanoutOptions.FromProfile(StorageExecutionProfile.Postgres);
+
+        Assert.AreEqual(8, options.MaxReadFanout);
+    }
+
+    /// <summary>
+    /// FromProfile：SupportsParallelReads=false 时强制 fanout=1（串行），
+    /// 即便 RecommendedReadFanout 是更大的值。
+    /// </summary>
+    [TestMethod]
+    public void FromProfile_NotSupportsParallelReads_ForcesSerial()
+    {
+        var serialProfile = new StorageExecutionProfile
+        {
+            ProviderKind = StorageProviderKind.Unknown,
+            SupportsParallelReads = false,
+            RecommendedReadFanout = 16
+        };
+
+        var options = RetrievalFanoutOptions.FromProfile(serialProfile);
+
+        Assert.AreEqual(1, options.MaxReadFanout,
+            "SupportsParallelReads=false 时强制走串行路径，MaxReadFanout=1");
+    }
+
+    /// <summary>
+    /// FromProfile：RecommendedReadFanout <= 0 时被 Math.Max(1, ...) 兜底为 1，
+    /// 避免 SemaphoreSlim(0) 抛异常。
+    /// </summary>
+    [TestMethod]
+    public void FromProfile_ZeroOrNegativeFanout_ClampedToOne()
+    {
+        var profile = new StorageExecutionProfile
+        {
+            ProviderKind = StorageProviderKind.Unknown,
+            SupportsParallelReads = true,
+            RecommendedReadFanout = 0
+        };
+
+        var options = RetrievalFanoutOptions.FromProfile(profile);
+
+        Assert.AreEqual(1, options.MaxReadFanout);
+    }
+
+    /// <summary>
+    /// FromProfile：null profile 抛 ArgumentNullException。
+    /// </summary>
+    [TestMethod]
+    public void FromProfile_NullProfile_Throws()
+    {
+        Assert.ThrowsException<ArgumentNullException>(() =>
+            RetrievalFanoutOptions.FromProfile(null!));
+    }
+
+    // --- R13.3 #2：IStoreRuntimeCapabilities 路径优先 ---
+
+    /// <summary>
+    /// Resolve：store 实现 IStoreRuntimeCapabilities 时，使用 Profile.RecommendedReadFanout。
+    /// </summary>
+    [TestMethod]
+    public void Resolve_StoreImplementsCapabilities_UsesProfileFanout()
+    {
+        var contextStore = new CapableContextStore(StorageExecutionProfile.FileSystem);
+        var memoryStore = new CapableMemoryStore(StorageExecutionProfile.FileSystem);
+
+        var options = RetrievalFanoutOptions.Resolve(contextStore, memoryStore);
+
+        Assert.AreEqual(2, options.MaxReadFanout,
+            "FileSystem profile.RecommendedReadFanout = 2");
+    }
+
+    /// <summary>
+    /// Resolve：store 实现 IStoreRuntimeCapabilities 且 SupportsParallelReads=false 时强制 fanout=1。
+    /// </summary>
+    [TestMethod]
+    public void Resolve_CapableStoreNotSupportingParallelReads_ForcesSerial()
+    {
+        var serialProfile = new StorageExecutionProfile
+        {
+            ProviderKind = StorageProviderKind.Unknown,
+            SupportsParallelReads = false,
+            RecommendedReadFanout = 16
+        };
+        var contextStore = new CapableContextStore(serialProfile);
+
+        var options = RetrievalFanoutOptions.Resolve(contextStore, null);
+
+        Assert.AreEqual(1, options.MaxReadFanout);
+    }
+
+    /// <summary>
+    /// Resolve：一个 store 实现能力契约、另一个为 null 时，按非 null 一方推断。
+    /// </summary>
+    [TestMethod]
+    public void Resolve_OneCapableStoreOneNull_UsesCapableStoreProfile()
+    {
+        var contextStore = new CapableContextStore(StorageExecutionProfile.Postgres);
+
+        var options = RetrievalFanoutOptions.Resolve(contextStore, null);
+
+        Assert.AreEqual(8, options.MaxReadFanout);
+    }
+
+    /// <summary>
+    /// Resolve：两个 store 都实现能力契约时取 min。
+    /// 例如 InMemory(16) + FileSystem(2) → 2。
+    /// </summary>
+    [TestMethod]
+    public void Resolve_TwoCapableStores_TakesMin()
+    {
+        var contextStore = new CapableContextStore(StorageExecutionProfile.FileSystem);
+        var memoryStore = new CapableMemoryStore(StorageExecutionProfile.InMemory);
+
+        var options = RetrievalFanoutOptions.Resolve(contextStore, memoryStore);
+
+        Assert.AreEqual(2, options.MaxReadFanout, "min(2, 16) = 2");
+    }
+
     private sealed class FakeUnknownNamespaceStore : IContextStore
     {
         public Task SaveAsync(ContextItem item, CancellationToken cancellationToken = default)
@@ -255,5 +404,60 @@ public sealed class RetrievalFanoutOptionsTests
 
         public Task DeleteAsync(string workspaceId, string collectionId, string id, CancellationToken cancellationToken = default)
             => throw new NotImplementedException();
+    }
+
+    /// <summary>
+    /// 包装 IContextStore，附加 IStoreRuntimeCapabilities 实现，用于测试能力驱动路径。
+    /// 所有 IContextStore 方法转发给内部 InMemoryContextStore，避免重写存储语义。
+    /// </summary>
+    private sealed class CapableContextStore : IContextStore, IStoreRuntimeCapabilities
+    {
+        private readonly ContextCore.Storage.InMemory.Stores.InMemoryContextStore _inner = new();
+
+        public CapableContextStore(StorageExecutionProfile profile)
+        {
+            Profile = profile;
+        }
+
+        public StorageExecutionProfile Profile { get; }
+
+        public Task SaveAsync(ContextItem item, CancellationToken cancellationToken = default)
+            => _inner.SaveAsync(item, cancellationToken);
+
+        public Task<ContextItem?> GetAsync(string workspaceId, string collectionId, string id, CancellationToken cancellationToken = default)
+            => _inner.GetAsync(workspaceId, collectionId, id, cancellationToken);
+
+        public Task<IReadOnlyList<ContextItem>> QueryAsync(ContextQuery query, CancellationToken cancellationToken = default)
+            => _inner.QueryAsync(query, cancellationToken);
+
+        public Task DeleteAsync(string workspaceId, string collectionId, string id, CancellationToken cancellationToken = default)
+            => _inner.DeleteAsync(workspaceId, collectionId, id, cancellationToken);
+    }
+
+    /// <summary>
+    /// 包装 IMemoryStore，附加 IStoreRuntimeCapabilities 实现，用于测试能力驱动路径。
+    /// </summary>
+    private sealed class CapableMemoryStore : IMemoryStore, IStoreRuntimeCapabilities
+    {
+        private readonly ContextCore.Storage.InMemory.InMemoryMemoryStore _inner = new();
+
+        public CapableMemoryStore(StorageExecutionProfile profile)
+        {
+            Profile = profile;
+        }
+
+        public StorageExecutionProfile Profile { get; }
+
+        public Task SaveAsync(ContextMemoryItem item, CancellationToken cancellationToken = default)
+            => _inner.SaveAsync(item, cancellationToken);
+
+        public Task<ContextMemoryItem?> GetAsync(string workspaceId, string collectionId, string id, CancellationToken cancellationToken = default)
+            => _inner.GetAsync(workspaceId, collectionId, id, cancellationToken);
+
+        public Task<IReadOnlyList<ContextMemoryItem>> QueryAsync(ContextMemoryQuery query, CancellationToken cancellationToken = default)
+            => _inner.QueryAsync(query, cancellationToken);
+
+        public Task UpdateStatusAsync(string workspaceId, string collectionId, string id, ContextMemoryStatus status, CancellationToken cancellationToken = default)
+            => _inner.UpdateStatusAsync(workspaceId, collectionId, id, status, cancellationToken);
     }
 }

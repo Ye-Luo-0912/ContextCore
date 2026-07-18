@@ -52,7 +52,9 @@ public sealed class StorageExecutionProfile
         SupportsCrossProcessSafety = false,    // 进程内数据，跨进程不共享
         SupportsSnapshotReuse = true,          // 进程内读取廉价，本就等价于快照
         IsPersistent = false,                  // 进程退出即丢失
-        MaxRecommendedConcurrency = 64         // ConcurrentDictionary 可承受较高并发
+        MaxRecommendedConcurrency = 64,        // ConcurrentDictionary 可承受较高并发
+        RecommendedReadFanout = 16,            // CPU-only，无明显 I/O 竞争
+        RecommendedBatchSize = 64              // 进程内集合切片，无需节流
     };
 
     /// <summary>
@@ -68,7 +70,9 @@ public sealed class StorageExecutionProfile
         SupportsCrossProcessSafety = false,    // advisory 锁仅标记多进程，不阻断
         SupportsSnapshotReuse = true,          // R13.2 #2：按 last-write-time 复用快照
         IsPersistent = true,
-        MaxRecommendedConcurrency = 8          // 磁盘 I/O 串行化，过高并发收益递减
+        MaxRecommendedConcurrency = 8,         // 磁盘 I/O 串行化，过高并发收益递减
+        RecommendedReadFanout = 2,             // store 自身 _gate(1,1) 串行化写，外层 fanout 不应再加压
+        RecommendedBatchSize = 32             // 单次 AppendRange 行数上限，避免长锁持有
     };
 
     /// <summary>
@@ -84,7 +88,9 @@ public sealed class StorageExecutionProfile
         SupportsCrossProcessSafety = true,     // 通过连接池 + ACID 保证
         SupportsSnapshotReuse = false,         // 数据库已自有缓存，应用层快照易 stale
         IsPersistent = true,
-        MaxRecommendedConcurrency = 32         // 连接池默认上限附近
+        MaxRecommendedConcurrency = 32,        // 连接池默认上限附近
+        RecommendedReadFanout = 8,             // 连接池典型 100，留充足余量
+        RecommendedBatchSize = 128             // COPY 批量大小，单次 round-trip 效率高
     };
 
     /// <summary>Provider 类型枚举，替代字符串判断的唯一入口。</summary>
@@ -123,4 +129,20 @@ public sealed class StorageExecutionProfile
     /// 仅作建议，非硬限制。
     /// </summary>
     public int MaxRecommendedConcurrency { get; init; }
+
+    /// <summary>
+    /// 推荐的单次 Task.WhenAll 读取 fanout 上限。
+    /// 调用方（如 RetrievalFanoutOptions.Resolve）应按此值初始化 SemaphoreSlim，
+    /// 避免在 VectorTopK 较大时击穿 Postgres 连接池或加剧 FileSystem 锁竞争。
+    /// 当 <see cref="SupportsParallelReads"/> 为 false 时，调用方应强制使用 1（串行）。
+    /// </summary>
+    public int RecommendedReadFanout { get; init; }
+
+    /// <summary>
+    /// 推荐的批量写入单次切片大小。
+    /// 调用方在向支持 <see cref="SupportsBatchWrites"/> 的 Provider 提交大量记录时，
+    /// 应按此值分片，避免单次 round-trip 过大或长锁持有。
+    /// 不支持批量写的 Provider 应忽略此值。
+    /// </summary>
+    public int RecommendedBatchSize { get; init; }
 }

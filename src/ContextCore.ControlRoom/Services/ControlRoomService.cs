@@ -100,6 +100,8 @@ public sealed partial class ControlRoomService
                 TokenizerResolver = tokenizerResolver,
                 PromotionRecordStore = memoryStore,
                 WorkingMemoryService = memoryStore,
+                // R13.3 #2：注入 InMemory 能力契约，驱动 Retrieval fanout
+                Capabilities = new StoreRuntimeCapabilities(StorageProviderKind.InMemory),
             });
 
             return new ControlRoomState
@@ -178,6 +180,8 @@ public sealed partial class ControlRoomService
             TokenizerResolver = fileTokenizerResolver,
             PromotionRecordStore = fileMemoryStore,
             WorkingMemoryService = fileMemoryStore,
+            // R13.3 #2：注入 FileSystem 能力契约，驱动 Retrieval fanout
+            Capabilities = new StoreRuntimeCapabilities(StorageProviderKind.FileSystem),
         });
 
         return new ControlRoomState

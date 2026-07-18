@@ -251,7 +251,9 @@ internal static class CoreExtensions
 			RuntimeCandidateTraceSink = sp.GetService<IRuntimeCandidateTraceSink>(),
 			// 暂时关闭生产 Package 结果缓存：待缓存正确性收口后重新启用。
 			// 已知缺口：指纹缺失 mustHit/currentTask 字段、WorkingMemoryService 失效范围遗漏、对象隔离不足。
-			CacheAccessor = null
+			CacheAccessor = null,
+			// R13.3 #2：注入 IStoreRuntimeCapabilities 以驱动 Retrieval fanout（替代 namespace 字符串推断）
+			Capabilities = sp.GetService<IStoreRuntimeCapabilities>()
 		}));
 
 		// 主链服务从 RuntimeServices 获取（保证对象图一致性）

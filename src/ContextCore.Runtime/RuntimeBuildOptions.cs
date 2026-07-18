@@ -53,4 +53,11 @@ public sealed class RuntimeBuildOptions
     /// 启用后按请求指纹缓存构建结果，任一依赖 store 写入即失效。
     /// </summary>
     public ContextStateCacheAccessor? CacheAccessor { get; init; }
+
+    /// <summary>
+    /// R13.3 #2：存储 Provider 运行时能力契约。
+    /// 为 null 时回退到 namespace 字符串推断 fanout（兼容测试替身）；
+    /// 非 null 时使用 Profile.RecommendedReadFanout 驱动 Retrieval 通道节流。
+    /// </summary>
+    public IStoreRuntimeCapabilities? Capabilities { get; init; }
 }

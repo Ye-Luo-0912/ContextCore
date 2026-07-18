@@ -22,13 +22,26 @@ public sealed class RetrievalFanoutOptions
     public static RetrievalFanoutOptions Default { get; } = new();
 
     /// <summary>
-    /// 根据 ContextStore/MemoryStore 实际类型推断合适的 fanout 上限。
-    /// 通过 namespace 字符串匹配避免引入对 storage 实现层的编译期依赖。
+    /// R13.3 #2：从 <see cref="StorageExecutionProfile"/> 派生 fanout 选项。
+    /// 当 <paramref name="profile"/> 不支持并发读时强制为 1（串行）；
+    /// 否则使用 <see cref="StorageExecutionProfile.RecommendedReadFanout"/>。
+    /// </summary>
+    public static RetrievalFanoutOptions FromProfile(StorageExecutionProfile profile)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+        var fanout = profile.SupportsParallelReads
+            ? Math.Max(1, profile.RecommendedReadFanout)
+            : 1;
+        return new RetrievalFanoutOptions { MaxReadFanout = fanout };
+    }
+
+    /// <summary>
+    /// 根据 store 实际类型推断合适的 fanout 上限。
+    /// R13.3 #2：优先消费 <see cref="IStoreRuntimeCapabilities"/>，将字符串/namespace 推断降级为回退路径。
     /// <list type="bullet">
-    ///   <item>FileSystem: 2（store 自身 _gate(1,1) 已串行化，外层 fanout 不应再加压）</item>
-    ///   <item>InMemory:   16（CPU-only，无明显 I/O 竞争）</item>
-    ///   <item>Postgres:    8（典型连接池大小 100，留充足余量）</item>
-    ///   <item>其他/Remote: 4（保守默认，远程 provider 风险更高）</item>
+    ///   <item>当 store 实现 IStoreRuntimeCapabilities 时：使用 Profile.RecommendedReadFanout；
+    ///         若 SupportsParallelReads 为 false，强制为 1（串行）。</item>
+    ///   <item>否则回退到 namespace 字符串匹配（FileSystem=2 / InMemory=16 / Postgres=8 / 其他=4）。</item>
     /// </list>
     /// 不同 store 类型混合时取 min，保证最弱的一方不被压垮。
     /// 任一 store 为 null 时按另一方推断；两者都为 null 时回退到 Default。
@@ -54,6 +67,19 @@ public sealed class RetrievalFanoutOptions
             return int.MaxValue;
         }
 
+        // R13.3 #2：优先消费 IStoreRuntimeCapabilities（能力驱动，替代 namespace 字符串检测）
+        if (store is IStoreRuntimeCapabilities capable)
+        {
+            var profile = capable.Profile;
+            if (!profile.SupportsParallelReads)
+            {
+                // Provider 不支持并发读：强制串行
+                return 1;
+            }
+            return profile.RecommendedReadFanout;
+        }
+
+        // 回退：namespace 字符串匹配（用于测试替身或未接入能力契约的 Provider）
         var ns = store.GetType().Namespace ?? string.Empty;
         if (ns.Contains("FileSystem", StringComparison.Ordinal))
         {
