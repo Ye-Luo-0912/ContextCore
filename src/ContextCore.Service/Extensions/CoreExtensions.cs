@@ -27,10 +27,36 @@ internal static class CoreExtensions
 		// IContextStateCache（读路径可选缓存）和 IStateCacheInvalidator（写入边界失效信号接收）。
 		// Store Decorator 在写入成功后调用 InvalidateAsync，移除受影响的缓存项。
 		// 读路径不自动使用缓存——仅在调用方显式注入 ContextStateCacheAccessor 时生效。
-		services.AddSingleton<InMemoryContextStateCache>();
+		// R13-F：Cache 容量与 TTL 由 PackageTemplateCacheOptions 配置（默认值与 R11-P6 一致）。
+		// canary 关闭时仍注册此 singleton——store decorators 需要 IStateCacheInvalidator 实例（即使为空操作）。
+		services.AddSingleton(sp =>
+		{
+			var opts = sp.GetService<IOptions<PackageTemplateCacheOptions>>()?.Value;
+			var versionStore = sp.GetService<IContextStateVersionStore>();
+			// canary 关闭时使用默认容量/TTL；canary 启用时使用配置值（MaxEntries<=0 回退默认）
+			var maxEntries = opts is { Enabled: true, MaxEntries: > 0 } ? opts.MaxEntries : InMemoryContextStateCache.DefaultMaxEntries;
+			var ttl = opts is { Enabled: true } ? opts?.Ttl : null;
+			return new InMemoryContextStateCache(maxEntries, versionStore, ttl);
+		});
 		services.AddSingleton<IContextStateCache>(sp => sp.GetRequiredService<InMemoryContextStateCache>());
 		services.AddSingleton<IStateCacheInvalidator>(sp => sp.GetRequiredService<InMemoryContextStateCache>());
-		services.AddSingleton<ContextStateCacheAccessor>();
+		// R13-F：ContextStateCacheAccessor 注册为 canary-aware。
+		// canary 关闭（Enabled=false）或 AllowedWorkspaces 为空时 gate 返回 false——所有请求绕过缓存。
+		// canary 启用时 gate 仅对 AllowedWorkspaces 列出的工作空间返回 true——其余工作空间仍走全量流水线。
+		// 此 singleton 仅由 RuntimeBuildOptions.CacheAccessor 路径使用；测试代码直接 new ContextStateCacheAccessor。
+		services.AddSingleton(sp =>
+		{
+			var cache = sp.GetRequiredService<InMemoryContextStateCache>();
+			var versionStore = sp.GetService<IContextStateVersionStore>();
+			var opts = sp.GetService<IOptions<PackageTemplateCacheOptions>>()?.Value ?? new PackageTemplateCacheOptions();
+			var allowed = opts.Enabled && opts.AllowedWorkspaces.Count > 0
+				? new HashSet<string>(opts.AllowedWorkspaces, StringComparer.Ordinal)
+				: null;
+			Func<DependencyScopeSet, bool>? canaryGate = allowed is null
+				? null  // canary 关闭或未配置允许列表——gate 为 null 时 GetOrAddAsync 走原缓存路径（但因 Enabled=false 此 accessor 不会被注入）
+				: scopes => CacheCanaryGateWorkspaceAllowed(scopes, allowed);
+			return new ContextStateCacheAccessor(cache, versionStore, opts.FactoryTimeout, canaryGate);
+		});
 		// R10-2 P3：状态版本存储（进程内单调递增）。Decorator 在写入成功后 bump 版本，
 		// ContextStateCache 据版本号判断是否命中。多实例场景需替换为持久化实现。
 		services.AddSingleton<IContextStateVersionStore, InMemoryContextStateVersionStore>();
@@ -253,9 +279,13 @@ internal static class CoreExtensions
 			PackageBuildTraceStore = sp.GetService<IContextPackageBuildTraceStore>(),
 			DecisionTraceStore = sp.GetService<IDecisionTraceStore>(),
 			RuntimeCandidateTraceSink = sp.GetService<IRuntimeCandidateTraceSink>(),
-			// 暂时关闭生产 Package 结果缓存：待缓存正确性收口后重新启用。
-			// 已知缺口：指纹缺失 mustHit/currentTask 字段、WorkingMemoryService 失效范围遗漏、对象隔离不足。
-			CacheAccessor = null,
+			// R13-F：Cache Canary Freeze。生产默认关闭（PackageTemplateCacheOptions.Enabled=false → null）。
+			// 启用前置条件：Enabled=true + AllowedWorkspaces 非空 + 单实例（FileSystem provider 时检测
+			// FileSystemInstanceGuard.IsMultiProcessDetected；RequireSingleInstance=false 可绕过）。
+			// 启用后 ContextStateCacheAccessor.canaryGate 仅对 AllowedWorkspaces 列出的工作空间走缓存路径，
+			// 其余工作空间仍走全量流水线。R13.0 正确性测试（ContextStateCacheTests）覆盖 Cold 与 Hit 等价性、
+			// 版本失效、对象隔离、poisoned key、shutdown 行为——canary 启用时不需重新验证。
+			CacheAccessor = BuildPackageTemplateCacheAccessorOrNull(sp),
 			// R13.3 #2：注入 IStoreRuntimeCapabilities 以驱动 Retrieval fanout（替代 namespace 字符串推断）
 			Capabilities = sp.GetService<IStoreRuntimeCapabilities>()
 		}));
@@ -273,6 +303,59 @@ internal static class CoreExtensions
 		services.AddSingleton<IContextRetriever>(sp => sp.GetRequiredService<RuntimeServices>().Retriever);
 
 		return services;
+	}
+
+	/// <summary>
+	/// R13-F：根据 PackageTemplateCacheOptions 构建可空的生产 Package Template 缓存访问器。
+	/// 返回 null 表示生产缓存关闭——BasicContextPackageBuilder 走全量流水线（无缓存命中）。
+	/// 返回非 null 表示 canary 启用——ContextStateCacheAccessor.canaryGate 控制按工作空间粒度缓存。
+	/// 启用前置条件全部满足时才返回非 null：
+	/// 1. options.Enabled = true
+	/// 2. options.AllowedWorkspaces 非空（否则 canary 形同关闭）
+	/// 3. 单实例检查通过（RequireSingleInstance=true 时检测 FileSystemInstanceGuard.IsMultiProcessDetected；
+	///    非 FileSystem provider 不检查——operator 需自行确保单实例）
+	/// </summary>
+	private static ContextStateCacheAccessor? BuildPackageTemplateCacheAccessorOrNull(IServiceProvider sp)
+	{
+		var opts = sp.GetService<IOptions<PackageTemplateCacheOptions>>()?.Value;
+		if (opts is not { Enabled: true } || opts.AllowedWorkspaces.Count == 0)
+		{
+			return null;
+		}
+
+		// 单实例检查：仅 FileSystem provider 检测多进程（advisory，不阻断——失败回退 null）。
+		// 多进程下启用 canary 会导致 InMemory version store 跨进程不一致——返回 null 关闭缓存。
+		if (opts.RequireSingleInstance)
+		{
+			var storageOpts = sp.GetService<StorageOptions>();
+			if (storageOpts is { IsFileSystem: true } fsOpts)
+			{
+				// FileSystemInstanceGuard.GetOrCreate 已在 FileStorage 注册时被调用过；
+				// 此处再次调用返回缓存的进程内单例（不会重复尝试获取 sentinel 锁）。
+				var guard = FileSystemInstanceGuard.GetOrCreate(fsOpts.ResolvedRootPath);
+				if (guard.IsMultiProcessDetected)
+				{
+					return null;
+				}
+			}
+		}
+
+		// canary-aware ContextStateCacheAccessor 已注册为 singleton——返回该实例。
+		return sp.GetRequiredService<ContextStateCacheAccessor>();
+	}
+
+	/// <summary>
+	/// R13-F：canary gate 谓词——检查请求的依赖 scope 集合对应的工作空间是否在 allowlist 中。
+	/// 所有 scope 共享同一 WorkspaceId（由 PackageRequestFingerprintBuilder.BuildDependencyScopes 保证）。
+	/// 取首个 scope 的 WorkspaceId 进行判断；空 scope 集合（不应发生）保守返回 false。
+	/// </summary>
+	private static bool CacheCanaryGateWorkspaceAllowed(DependencyScopeSet scopes, IReadOnlySet<string> allowedWorkspaces)
+	{
+		foreach (var scope in scopes.Scopes)
+		{
+			return allowedWorkspaces.Contains(scope.WorkspaceId);
+		}
+		return false;
 	}
 
 	/// <summary>注册模型网关，绑定 <c>ModelGateway</c> 配置节。</summary>

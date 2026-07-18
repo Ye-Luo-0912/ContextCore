@@ -2188,7 +2188,14 @@ public sealed class ContextStateCacheTests
         Assert.AreEqual(0L, cache.TtlExpirations, "scope 失效不应计 TTL 过期");
     }
 
-    // ── R13.0 #10: Cache 继续保持生产关闭 ─────────────────────────────────
+    // ── R13.0 #10: Cache 默认生产关闭 / R13-F：Cache Canary 可选启用 ─────────
+    //
+    // 生产默认行为：PackageTemplateCacheOptions.Enabled=false → CacheAccessor=null
+    // → BasicContextPackageBuilder._cacheAccessor 为 null → 每个 Build 走全量流水线。
+    //
+    // R13-F canary 启用行为：Enabled=true + AllowedWorkspaces 非空 + 单实例检查通过
+    // → CacheAccessor 非 null → ContextStateCacheAccessor.canaryGate 按工作空间粒度控制缓存路径。
+    // canary 工作空间走缓存（命中/未命中/写入）；非 canary 工作空间绕过缓存（直接 factory）。
 
     /// <summary>
     /// R13.0 #10: 生产运行时组装（CacheAccessor = null）必须使 BasicContextPackageBuilder._cacheAccessor 为 null。
@@ -2196,6 +2203,7 @@ public sealed class ContextStateCacheTests
     /// 每个 Build 都走全量流水线（无缓存命中）。
     /// 通过反射读取私有字段 _cacheAccessor，因为 RuntimeServices 仅暴露 PackageBuilder 公共属性，
     /// _cacheAccessor 是构造函数注入的内部状态。
+    /// R13-F：此测试仍验证生产默认路径（Enabled=false → CacheAccessor=null）。
     /// </summary>
     [TestMethod]
     [TestCategory("CacheCorrectness")]
@@ -2233,6 +2241,165 @@ public sealed class ContextStateCacheTests
 
         var value = field.GetValue(services.PackageBuilder);
         Assert.AreSame(accessor, value, "非 null CacheAccessor 必须传播到 builder._cacheAccessor");
+    }
+
+    // ── R13-F: Cache Canary Gate 测试 ─────────────────────────────────────
+    //
+    // 验证 ContextStateCacheAccessor.canaryGate 谓词按工作空间粒度控制缓存路径：
+    // - gate 返回 true → 走缓存路径（命中/未命中/写入缓存）
+    // - gate 返回 false → 绕过缓存路径（直接调用 factory，不查询缓存也不写入缓存）
+    // - gate 为 null → 所有请求都走缓存路径（R13.0 之前的原有行为）
+
+    /// <summary>
+    /// R13-F：canary gate 返回 true 时走缓存路径——重复请求只调用一次 factory（命中缓存）。
+    /// </summary>
+    [TestMethod]
+    [TestCategory("CacheCorrectness")]
+    public async Task CanaryGate_AllowedWorkspace_UsesCachePath_FactoryCalledOnce()
+    {
+        var cache = new InMemoryContextStateCache();
+        var allowed = new HashSet<string> { "ws-canary" };
+        using var accessor = new ContextStateCacheAccessor(
+            cache,
+            canaryGate: scopes => ScopeWorkspaceAllowed(scopes, allowed));
+
+        var key = StateCacheKey.From("pkg:ws-canary:col1:hash1");
+        var scopes = new DependencyScopeSet(new CacheInvalidationKey("ContextStore", "ws-canary", "col1", null));
+        var factoryCallCount = 0;
+
+        var result1 = await accessor.GetOrAddAsync<string>(key, scopes,
+            ct => { factoryCallCount++; return Task.FromResult("v1"); });
+        var result2 = await accessor.GetOrAddAsync<string>(key, scopes,
+            ct => { factoryCallCount++; return Task.FromResult("v1"); });
+
+        Assert.AreEqual("v1", result1);
+        Assert.AreEqual("v1", result2);
+        Assert.AreEqual(1, factoryCallCount, "第二次请求应命中缓存，factory 不应再次调用");
+        Assert.AreEqual(1L, cache.Hits, "第二次请求应计缓存命中");
+        // Misses=2：fast-path miss（GetOrAddAsync 入口查询）+ single-flight double-check miss（CreateInflightTask 内重新检查）
+        Assert.AreEqual(2L, cache.Misses, "首次请求包含 fast-path 与 single-flight double-check 两次 miss");
+    }
+
+    /// <summary>
+    /// R13-F：canary gate 返回 false 时绕过缓存路径——每次请求都调用 factory，缓存保持空。
+    /// 验证 bypass 路径不查询缓存（无 miss 计数）也不写入缓存（无条目残留）。
+    /// </summary>
+    [TestMethod]
+    [TestCategory("CacheCorrectness")]
+    public async Task CanaryGate_DisallowedWorkspace_BypassesCache_FactoryCalledEveryTime()
+    {
+        var cache = new InMemoryContextStateCache();
+        var allowed = new HashSet<string> { "ws-canary" };  // 仅允许 ws-canary
+        using var accessor = new ContextStateCacheAccessor(
+            cache,
+            canaryGate: scopes => ScopeWorkspaceAllowed(scopes, allowed));
+
+        var key = StateCacheKey.From("pkg:ws-other:col1:hash1");
+        var scopes = new DependencyScopeSet(new CacheInvalidationKey("ContextStore", "ws-other", "col1", null));
+        var factoryCallCount = 0;
+
+        var result1 = await accessor.GetOrAddAsync<string>(key, scopes,
+            ct => { factoryCallCount++; return Task.FromResult("v1"); });
+        var result2 = await accessor.GetOrAddAsync<string>(key, scopes,
+            ct => { factoryCallCount++; return Task.FromResult("v1"); });
+
+        Assert.AreEqual("v1", result1);
+        Assert.AreEqual("v1", result2);
+        Assert.AreEqual(2, factoryCallCount, "绕过缓存路径——每次请求都调用 factory");
+        Assert.AreEqual(0L, cache.Hits, "绕过缓存路径——不应有命中");
+        Assert.AreEqual(0L, cache.Misses, "绕过缓存路径——不应查询缓存（无 miss 计数）");
+        Assert.AreEqual(0, cache.Count, "绕过缓存路径——缓存应保持空");
+    }
+
+    /// <summary>
+    /// R13-F：canary gate 为 null（R13.0 之前的原有行为）时所有请求都走缓存路径。
+    /// 验证 canaryGate=null 时行为不变——保证 R13.0 测试与 R13-F canary 关闭场景语义一致。
+    /// </summary>
+    [TestMethod]
+    [TestCategory("CacheCorrectness")]
+    public async Task CanaryGate_NullGate_AllWorkspacesUseCachePath()
+    {
+        var cache = new InMemoryContextStateCache();
+        using var accessor = new ContextStateCacheAccessor(cache, canaryGate: null);
+
+        var key1 = StateCacheKey.From("pkg:ws-a:col1:hash1");
+        var key2 = StateCacheKey.From("pkg:ws-b:col1:hash1");
+        var scopes1 = new DependencyScopeSet(new CacheInvalidationKey("ContextStore", "ws-a", "col1", null));
+        var scopes2 = new DependencyScopeSet(new CacheInvalidationKey("ContextStore", "ws-b", "col1", null));
+
+        await accessor.GetOrAddAsync<string>(key1, scopes1, _ => Task.FromResult("v1"));
+        await accessor.GetOrAddAsync<string>(key2, scopes2, _ => Task.FromResult("v2"));
+
+        Assert.AreEqual(2, cache.Count, "两个不同工作空间的请求都应写入缓存");
+    }
+
+    /// <summary>
+    /// R13-F：绕过缓存的请求不应污染缓存——后续 canary 工作空间请求看到干净的缓存状态。
+    /// 验证 bypass 路径不调用 SetAsync，避免非 canary 数据驻留缓存。
+    /// </summary>
+    [TestMethod]
+    [TestCategory("CacheCorrectness")]
+    public async Task CanaryGate_DisallowedWorkspace_DoesNotPolluteCache()
+    {
+        var cache = new InMemoryContextStateCache();
+        var allowed = new HashSet<string> { "ws-canary" };
+        using var accessor = new ContextStateCacheAccessor(
+            cache,
+            canaryGate: scopes => ScopeWorkspaceAllowed(scopes, allowed));
+
+        // 非 canary 工作空间请求——应绕过缓存
+        var nonCanaryKey = StateCacheKey.From("pkg:ws-other:col1:hash1");
+        var nonCanaryScopes = new DependencyScopeSet(new CacheInvalidationKey("ContextStore", "ws-other", "col1", null));
+        await accessor.GetOrAddAsync<string>(nonCanaryKey, nonCanaryScopes, _ => Task.FromResult("non-canary-value"));
+
+        Assert.AreEqual(0, cache.Count, "非 canary 请求不应写入缓存");
+
+        // canary 工作空间请求——应走缓存路径
+        var canaryKey = StateCacheKey.From("pkg:ws-canary:col1:hash1");
+        var canaryScopes = new DependencyScopeSet(new CacheInvalidationKey("ContextStore", "ws-canary", "col1", null));
+        var result = await accessor.GetOrAddAsync<string>(canaryKey, canaryScopes, _ => Task.FromResult("canary-value"));
+
+        Assert.AreEqual("canary-value", result);
+        Assert.AreEqual(1, cache.Count, "仅 canary 请求应写入缓存");
+        // Misses=2：fast-path miss（GetOrAddAsync 入口查询）+ single-flight double-check miss（CreateInflightTask 内重新检查）
+        Assert.AreEqual(2L, cache.Misses, "canary 首次请求包含 fast-path 与 single-flight double-check 两次 miss");
+    }
+
+    /// <summary>
+    /// R13-F：canary gate 不影响 factory 异常传播——gate 返回 false 时 factory 抛异常应向上传播。
+    /// 验证 bypass 路径不吞异常（与缓存路径一致），保证调用方能感知 factory 失败。
+    /// </summary>
+    [TestMethod]
+    [TestCategory("CacheCorrectness")]
+    public async Task CanaryGate_DisallowedWorkspace_FactoryThrows_PropagatesToCaller()
+    {
+        var cache = new InMemoryContextStateCache();
+        var allowed = new HashSet<string> { "ws-canary" };
+        using var accessor = new ContextStateCacheAccessor(
+            cache,
+            canaryGate: scopes => ScopeWorkspaceAllowed(scopes, allowed));
+
+        var key = StateCacheKey.From("pkg:ws-other:col1:hash1");
+        var scopes = new DependencyScopeSet(new CacheInvalidationKey("ContextStore", "ws-other", "col1", null));
+
+        await Assert.ThrowsExceptionAsync<InvalidOperationException>(async () =>
+            await accessor.GetOrAddAsync<string>(key, scopes,
+                ct => throw new InvalidOperationException("factory failure")));
+
+        Assert.AreEqual(0, cache.Count, "factory 抛异常时缓存应保持空（bypass 路径无写入）");
+    }
+
+    /// <summary>
+    /// 共享辅助：从 DependencyScopeSet 提取首个 scope 的 WorkspaceId 并检查是否在 allowlist 中。
+    /// 与 CoreExtensions.CacheCanaryGateWorkspaceAllowed 同语义——测试侧独立实现避免依赖内部方法。
+    /// </summary>
+    private static bool ScopeWorkspaceAllowed(DependencyScopeSet scopes, IReadOnlySet<string> allowed)
+    {
+        foreach (var scope in scopes.Scopes)
+        {
+            return allowed.Contains(scope.WorkspaceId);
+        }
+        return false;
     }
 
     /// <summary>

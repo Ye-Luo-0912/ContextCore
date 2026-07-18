@@ -1,3 +1,4 @@
+using ContextCore.Core;
 using ContextCore.Storage.FileSystem;
 
 namespace ContextCore.Service;
@@ -86,5 +87,54 @@ public sealed class ShortTermMaintenanceOptions
 	public bool RunOnStartup { get; set; }
 
 	public int IntervalSeconds { get; set; } = 300;
+}
+
+/// <summary>
+/// R13-F：Package Template Cache Canary 配置。控制是否启用 Package Template 缓存的 canary 试点。
+/// 默认关闭（<see cref="Enabled"/>=false）；启用时仅缓存 <see cref="AllowedWorkspaces"/> 列出的工作空间。
+/// 启用前置条件：单实例（<see cref="RequireSingleInstance"/>）+ InMemory version store（生产已具备）。
+/// </summary>
+/// <remarks>
+/// 启用流程：
+/// 1. 在 appsettings.json 中将 <c>PackageTemplateCache:Enabled</c> 设为 <c>true</c>；
+/// 2. 在 <c>AllowedWorkspaces</c> 中显式列出允许缓存的工作空间 ID（空列表 = 不缓存任何工作空间）；
+/// 3. 重启 Service。
+/// 多进程检测命中（<see cref="FileSystemInstanceGuard.IsMultiProcessDetected"/>）时即使 Enabled=true 也不会启用缓存，
+/// 以保证 InMemory version store 与进程内缓存的一致性边界（advisory，不抛异常）。
+/// </remarks>
+public sealed class PackageTemplateCacheOptions
+{
+	/// <summary>是否启用 Package Template Cache canary。默认 false（生产关闭）。</summary>
+	public bool Enabled { get; set; }
+
+	/// <summary>
+	/// 允许缓存的工作空间 ID 集合。空集合 = 不缓存任何工作空间（即使 <see cref="Enabled"/>=true）。
+	/// 非空集合中未列出的工作空间请求仍走全量流水线，缓存路径仅对列表内工作空间生效。
+	/// </summary>
+	public List<string> AllowedWorkspaces { get; set; } = new();
+
+	/// <summary>
+	/// 缓存最大条目数。超过后按 CLOCK 策略淘汰。默认与 <see cref="InMemoryContextStateCache.DefaultMaxEntries"/> 一致。
+	/// </summary>
+	public int MaxEntries { get; set; } = 10_000;
+
+	/// <summary>
+	/// 缓存条目生存期（TTL）。null 表示无 TTL（仅由 scope 失效或 CLOCK 淘汰移除）。
+	/// canary 阶段建议设置 TTL（如 00:10:00）以兜底防止版本失配漏网。
+	/// </summary>
+	public TimeSpan? Ttl { get; set; }
+
+	/// <summary>
+	/// factory 执行超时。null 表示仅依赖 shutdown 取消。
+	/// canary 阶段建议设置超时（如 00:00:30）以防止 factory 长时间挂起阻塞 single-flight 等待者。
+	/// </summary>
+	public TimeSpan? FactoryTimeout { get; set; }
+
+	/// <summary>
+	/// 是否要求单实例才启用缓存。默认 true。
+	/// 检测到多进程时（<see cref="FileSystemInstanceGuard.IsMultiProcessDetected"/>）即使 <see cref="Enabled"/>=true 也不会启用缓存。
+	/// 设为 false 可在多进程下强制启用（不推荐——InMemory version store 多进程下命中率与正确性均会退化）。
+	/// </summary>
+	public bool RequireSingleInstance { get; set; } = true;
 }
 

@@ -51,6 +51,9 @@ builder.Services.AddSingleton(embeddingProviderOptions);
 builder.Services.AddSingleton(Microsoft.Extensions.Options.Options.Create(embeddingProviderOptions));
 builder.Services.Configure<JobWorkerOptions>(builder.Configuration.GetSection("JobWorker"));
 builder.Services.Configure<ShortTermMaintenanceOptions>(builder.Configuration.GetSection("ShortTermMaintenance"));
+// R13-F：Package Template Cache Canary 配置。默认关闭（Enabled=false）；
+// 启用时仅缓存 AllowedWorkspaces 列出的工作空间，并通过 ContextStateCacheAccessor.canaryGate 控制按工作空间粒度缓存。
+builder.Services.Configure<PackageTemplateCacheOptions>(builder.Configuration.GetSection("PackageTemplateCache"));
 builder.Services.AddHostedService<ContextJobWorker>();
 builder.Services.AddHostedService<ShortTermMemoryMaintenanceWorker>();
 builder.Services.AddSingleton<ContextCoreMetrics>();

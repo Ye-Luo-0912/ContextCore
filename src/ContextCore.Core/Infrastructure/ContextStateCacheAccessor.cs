@@ -45,16 +45,26 @@ public sealed class ContextStateCacheAccessor : IAsyncDisposable, IDisposable
     private readonly CancellationTokenSource _shutdownCts = new();
     // single-flight：per-key 共享 in-flight task（Lazy 包装确保只初始化一次）
     private readonly ConcurrentDictionary<string, Lazy<Task<object?>>> _inflightTasks = new();
+    // R13-F：可选的 canary gate。返回 false 时跳过缓存路径（直接调用 factory，不写缓存），
+    // 用于按工作空间粒度控制缓存启用范围。null 表示所有请求都走缓存路径。
+    private readonly Func<DependencyScopeSet, bool>? _canaryGate;
     private int _disposed;
 
     /// <summary>使用指定的缓存接口创建访问器。</summary>
     /// <param name="cache">缓存接口实例（可为进程内或分布式实现）。</param>
     /// <param name="versionStore">可选的版本存储，用于 factory 前后版本向量比较（R13.0 #1/#2）。</param>
     /// <param name="factoryTimeout">可选的 factory 执行超时（per-call）。null 表示仅依赖 shutdown 取消。</param>
+    /// <param name="canaryGate">
+    /// R13-F：可选的 canary gate 谓词。返回 true 时该请求走缓存路径（命中/未命中/写入缓存）；
+    /// 返回 false 时跳过缓存——直接调用 factory 并返回结果，不查询缓存也不写入缓存。
+    /// 用于按工作空间粒度控制缓存启用范围（仅缓存 canary 工作空间，其余仍走全量流水线）。
+    /// null 表示所有请求都走缓存路径（R13.0 之前的原有行为）。
+    /// </param>
     public ContextStateCacheAccessor(
         IContextStateCache cache,
         IContextStateVersionStore? versionStore = null,
-        TimeSpan? factoryTimeout = null)
+        TimeSpan? factoryTimeout = null,
+        Func<DependencyScopeSet, bool>? canaryGate = null)
     {
         ArgumentNullException.ThrowIfNull(cache);
         if (factoryTimeout is { } timeout && timeout <= TimeSpan.Zero)
@@ -64,6 +74,7 @@ public sealed class ContextStateCacheAccessor : IAsyncDisposable, IDisposable
         _cache = cache;
         _versionStore = versionStore;
         _factoryTimeout = factoryTimeout;
+        _canaryGate = canaryGate;
     }
 
     /// <summary>
@@ -103,6 +114,14 @@ public sealed class ContextStateCacheAccessor : IAsyncDisposable, IDisposable
 
         ArgumentNullException.ThrowIfNull(scopes);
         ArgumentNullException.ThrowIfNull(factory);
+
+        // R13-F：canary gate——返回 false 时跳过缓存路径，直接执行 factory。
+        // 用于按工作空间粒度控制缓存启用范围：canary 工作空间走缓存，其余走全量流水线。
+        // factory 使用与缓存路径相同的 shutdown token（+ 可选 timeout），保证取消语义一致。
+        if (_canaryGate is not null && !_canaryGate(scopes))
+        {
+            return await InvokeFactoryAsync(factory).ConfigureAwait(false);
+        }
 
         // 快速路径：缓存命中
         var cached = await _cache.GetAsync<T>(key, ct).ConfigureAwait(false);
