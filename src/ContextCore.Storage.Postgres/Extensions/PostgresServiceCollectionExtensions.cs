@@ -1,4 +1,5 @@
 using ContextCore.Abstractions;
+using ContextCore.Storage.Postgres.Backup;
 using ContextCore.Storage.Postgres.Infrastructure;
 using ContextCore.Storage.Postgres.Stores;
 using Microsoft.Extensions.DependencyInjection;
@@ -156,6 +157,12 @@ public static class PostgresServiceCollectionExtensions
         // PostgresContextEventSink
         services.AddSingleton<PostgresContextEventSink>();
         services.AddSingleton<IContextEventSink>(sp => sp.GetRequiredService<PostgresContextEventSink>());
+
+        // R14-PG-10：Postgres 备份/恢复 + PITR 执行器。
+        // 注册为 Transient 因为它们持有 PostgresConnectionFactory（内含 NpgsqlDataSource），
+        // 需要随调用方释放；CLI 与 AdminEndpoints 通过 IAsyncDisposable 模式使用。
+        services.AddTransient<PostgresBackupRunner>();
+        services.AddTransient<PostgresPitrRunner>();
 
         return services;
     }

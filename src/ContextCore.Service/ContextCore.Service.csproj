@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\ContextCore.Abstractions\ContextCore.Abstractions.csproj" />
+    <ProjectReference Include="..\ContextCore.ControlRoom\ContextCore.ControlRoom.csproj" />
     <ProjectReference Include="..\ContextCore.Core\ContextCore.Core.csproj" />
     <ProjectReference Include="..\ContextCore.Embedding\ContextCore.Embedding.csproj" />
     <ProjectReference Include="..\ContextCore.ModelGateway\ContextCore.ModelGateway.csproj" />

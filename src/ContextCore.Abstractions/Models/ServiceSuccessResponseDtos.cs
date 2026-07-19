@@ -131,6 +131,15 @@ public sealed class ContextCoreBackupStatusResponse
     public string? SchemaVersion { get; init; }
 
     public string? Note { get; init; }
+
+    /// <summary>R14-PG-10：最近一次 Postgres 转储文件路径（若备份目录中存在）。</summary>
+    public string? LastDumpPath { get; init; }
+
+    /// <summary>R14-PG-10：最近一次 Postgres 转储文件字节数。</summary>
+    public long? LastDumpSizeBytes { get; init; }
+
+    /// <summary>R14-PG-10：最近一次 Postgres 转储文件 SHA-256（hex 小写）；计算成本较高，仅当 runner 已注册时返回。</summary>
+    public string? LastDumpHash { get; init; }
 }
 
 public sealed class ContextCoreBackupCreateResponse
@@ -293,6 +302,16 @@ public sealed class PostgresStorageStatusResponse
 
 public sealed class PostgresMigrationRequest
 {
+    public bool Confirm { get; init; }
+}
+
+/// <summary>R14-PG-10：POST /api/admin/backup/pg-restore 请求体。</summary>
+public sealed class PostgresBackupRestoreRequest
+{
+    /// <summary>.dump 文件路径（绝对路径）。</summary>
+    public string DumpPath { get; init; } = string.Empty;
+
+    /// <summary>必须为 true 才能执行恢复（破坏性：pg_restore --clean --if-exists）。</summary>
     public bool Confirm { get; init; }
 }
 

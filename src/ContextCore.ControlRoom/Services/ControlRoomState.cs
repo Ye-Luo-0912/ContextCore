@@ -3,6 +3,7 @@ using ContextCore.Abstractions.Models;
 using ContextCore.Client;
 using ContextCore.Core;
 using ContextCore.Storage.FileSystem;
+using ContextCore.Storage.Postgres.Infrastructure;
 
 namespace ContextCore.ControlRoom.Services;
 
@@ -23,6 +24,13 @@ public sealed class ControlRoomState
     public string CollectionId { get; init; } = "test";
 
     public string StorageKind { get; init; } = "filesystem";
+
+    /// <summary>
+    /// R14-PG-10：Postgres 存储配置（仅在 StorageKind = "postgres" 时填充）。
+    /// 当 ControlRoom 直接以 Postgres 模式启动时由 CreateState 设置；
+    /// 由 BackupCommand pg-* 子命令消费，用于在不重复 CLI 注入连接串的情况下复用配置。
+    /// </summary>
+    public PostgresOptions? PostgresOptions { get; init; }
 
     public string RootPath { get; init; } = FileStorageOptions.DefaultRootPath;
 

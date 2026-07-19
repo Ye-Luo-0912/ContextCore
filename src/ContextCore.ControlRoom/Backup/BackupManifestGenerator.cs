@@ -1,7 +1,9 @@
 using System.IO.Compression;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using ContextCore.Abstractions.Models;
+using ContextCore.Storage.Postgres.Backup;
 using ContextCore.Storage.Shared;
 
 namespace ContextCore.ControlRoom.Backup;
@@ -156,6 +158,105 @@ public static class BackupManifestGenerator
             SourceKind = BackupStorageKind.FileSystem,
             Entries = entries
         };
+    }
+
+    /// <summary>
+    /// 为 PostgreSQL 转储文件（pg_dump -Fc）生成清单。
+    /// 清单中包含转储文件本身（作为归档）与每个表的元数据条目。
+    /// </summary>
+    /// <param name="dumpPath">.dump 文件路径。</param>
+    /// <param name="connectionStringDescription">连接描述（不含凭据）；若传入原始连接字符串，将自动调用 <see cref="StripCredentialsFromConnectionString"/> 去除密码。</param>
+    /// <param name="dumpResult">已完成的 <see cref="PostgresDumpResult"/>（含表清单与文件哈希）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>对应 PostgreSQL 转储的备份清单。</returns>
+    public static async Task<BackupManifest> ForPostgresDumpAsync(
+        string dumpPath,
+        string connectionStringDescription,
+        PostgresDumpResult dumpResult,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(dumpPath);
+        ArgumentNullException.ThrowIfNull(dumpResult);
+        if (!File.Exists(dumpPath))
+        {
+            throw new FileNotFoundException("PostgreSQL 转储文件不存在。", dumpPath);
+        }
+
+        var archiveInfo = new FileInfo(dumpPath);
+        var archiveHash = await Task.Run(() => Sha256Utility.HashFile(dumpPath), cancellationToken).ConfigureAwait(false);
+        var createdUtc = DateTimeOffset.UtcNow;
+        var safeDescription = StripCredentialsFromConnectionString(connectionStringDescription);
+
+        var entries = new List<BackupManifestEntry>
+        {
+            new()
+            {
+                RelativePath = $"postgres://dump/{Path.GetFileName(dumpPath)}",
+                SizeBytes = archiveInfo.Length,
+                ContentHash = archiveHash,
+                StorageKind = BackupStorageKind.Postgres,
+                LastModifiedUtc = archiveInfo.LastWriteTimeUtc,
+                Category = "postgres.dump"
+            }
+        };
+
+        foreach (var table in dumpResult.Tables)
+        {
+            entries.Add(new BackupManifestEntry
+            {
+                RelativePath = $"postgres://{table.Schema}.{table.Name}",
+                SizeBytes = table.ApproximateBytes,
+                ContentHash = string.Empty, // 表级哈希由 dump 文件统一覆盖；保留空以与 ForZip 行为对齐
+                StorageKind = BackupStorageKind.Postgres,
+                LastModifiedUtc = createdUtc,
+                Category = "postgres.table"
+            });
+        }
+
+        return new BackupManifest
+        {
+            SchemaVersion = "v1",
+            ArchiveName = Path.GetFileName(dumpPath),
+            ArchiveSizeBytes = archiveInfo.Length,
+            ArchiveHash = archiveHash,
+            CreatedAtUtc = createdUtc,
+            SourceDescription = safeDescription,
+            SourceKind = BackupStorageKind.Postgres,
+            Entries = entries
+        };
+    }
+
+    /// <summary>
+    /// 从连接字符串中剥离密码等敏感字段，仅保留 host/port/database/user 等元数据。
+    /// 用于清单中安全记录备份来源。
+    /// </summary>
+    /// <remarks>
+    /// 实现方式：用正则匹配 key=value 对，过滤掉 Password / Pwd / SSL Password 等键。
+    /// 不依赖 NpgsqlConnectionStringBuilder 以避免在清单生成路径上引入对 Npgsql 的强耦合。
+    /// 标记为 public 以便 Service 项目的 AdminEndpoints 在 pg-create 响应中复用同一脱敏逻辑。
+    /// </remarks>
+    public static string StripCredentialsFromConnectionString(string connStr)
+    {
+        if (string.IsNullOrWhiteSpace(connStr)) return string.Empty;
+
+        // 匹配 key=value 对（支持引号值与转义）
+        var pattern = new Regex(
+            @"(?<key>[^=;\s]+)\s*=\s*(?<value>(?:'[^']*'|""[^""]*""|[^;\s]*))",
+            RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+        var sensitiveKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "Password", "Pwd", "Passfile", "SslPassword", "SSL Password"
+        };
+
+        var kept = new List<string>();
+        foreach (Match m in pattern.Matches(connStr))
+        {
+            var key = m.Groups["key"].Value;
+            if (sensitiveKeys.Contains(key)) continue;
+            kept.Add($"{key}={m.Groups["value"].Value}");
+        }
+        return string.Join("; ", kept);
     }
 
     /// <summary>

@@ -1952,6 +1952,11 @@ M:ContextCore.Abstractions.Models.PolicyFeedbackRecord.Equals(System.Object)
 M:ContextCore.Abstractions.Models.PolicyFeedbackRecord.GetHashCode()
 M:ContextCore.Abstractions.Models.PolicyFeedbackRecord.GetType()
 M:ContextCore.Abstractions.Models.PolicyFeedbackRecord.ToString()
+M:ContextCore.Abstractions.Models.PostgresBackupRestoreRequest.#ctor()
+M:ContextCore.Abstractions.Models.PostgresBackupRestoreRequest.Equals(System.Object)
+M:ContextCore.Abstractions.Models.PostgresBackupRestoreRequest.GetHashCode()
+M:ContextCore.Abstractions.Models.PostgresBackupRestoreRequest.GetType()
+M:ContextCore.Abstractions.Models.PostgresBackupRestoreRequest.ToString()
 M:ContextCore.Abstractions.Models.PostgresMigrationApplyResponse.#ctor()
 M:ContextCore.Abstractions.Models.PostgresMigrationApplyResponse.Equals(System.Object)
 M:ContextCore.Abstractions.Models.PostgresMigrationApplyResponse.GetHashCode()
@@ -3558,6 +3563,9 @@ P:ContextCore.Abstractions.Models.ContextCoreBackupCreateResponse.SourceRoot (ge
 P:ContextCore.Abstractions.Models.ContextCoreBackupStatusResponse.Exists (get|init)
 P:ContextCore.Abstractions.Models.ContextCoreBackupStatusResponse.FileCount (get|init)
 P:ContextCore.Abstractions.Models.ContextCoreBackupStatusResponse.JsonlFileCount (get|init)
+P:ContextCore.Abstractions.Models.ContextCoreBackupStatusResponse.LastDumpHash (get|init)
+P:ContextCore.Abstractions.Models.ContextCoreBackupStatusResponse.LastDumpPath (get|init)
+P:ContextCore.Abstractions.Models.ContextCoreBackupStatusResponse.LastDumpSizeBytes (get|init)
 P:ContextCore.Abstractions.Models.ContextCoreBackupStatusResponse.Note (get|init)
 P:ContextCore.Abstractions.Models.ContextCoreBackupStatusResponse.Provider (get|init)
 P:ContextCore.Abstractions.Models.ContextCoreBackupStatusResponse.Root (get|init)
@@ -4975,6 +4983,8 @@ P:ContextCore.Abstractions.Models.PolicyFeedbackRecord.SourceId (get|init)
 P:ContextCore.Abstractions.Models.PolicyFeedbackRecord.SourceType (get|init)
 P:ContextCore.Abstractions.Models.PolicyFeedbackRecord.TargetLayer (get|init)
 P:ContextCore.Abstractions.Models.PolicyFeedbackRecord.WorkspaceId (get|init)
+P:ContextCore.Abstractions.Models.PostgresBackupRestoreRequest.Confirm (get|init)
+P:ContextCore.Abstractions.Models.PostgresBackupRestoreRequest.DumpPath (get|init)
 P:ContextCore.Abstractions.Models.PostgresMigrationApplyResponse.Applied (get|init)
 P:ContextCore.Abstractions.Models.PostgresMigrationApplyResponse.AppliedMigrations (get|init)
 P:ContextCore.Abstractions.Models.PostgresMigrationApplyResponse.ConfirmRequired (get|init)
@@ -7232,6 +7242,7 @@ T:ContextCore.Abstractions.Models.PackageReadPlan
 T:ContextCore.Abstractions.Models.PolicyFeedbackDataset
 T:ContextCore.Abstractions.Models.PolicyFeedbackLabels
 T:ContextCore.Abstractions.Models.PolicyFeedbackRecord
+T:ContextCore.Abstractions.Models.PostgresBackupRestoreRequest
 T:ContextCore.Abstractions.Models.PostgresMigrationApplyResponse
 T:ContextCore.Abstractions.Models.PostgresMigrationPlanResponse
 T:ContextCore.Abstractions.Models.PostgresMigrationRequest
