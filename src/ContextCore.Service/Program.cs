@@ -264,10 +264,11 @@ app.Lifetime.ApplicationStarted.Register(() =>
 	}
 });
 
-// ── PostgreSQL 启动连接与 schema version 验证（fail-fast）────────────
-// 在 app.Run() 前先执行 SELECT 1 确认 Postgres 可达，再校验 schema version 是否与当前代码期望一致；
+// ── PostgreSQL 启动连接、schema bootstrap 与 version 验证（fail-fast）────────────
+// 在 app.Run() 前先执行 SELECT 1 确认 Postgres 可达；然后（若 AutoBootstrap=true）应用幂等 baseline migration
+// 打破“缺 schema → 服务退出 → 无法访问迁移 HTTP 接口”自锁；最后校验 schema version 是否与代码期望一致。
 // 任一环节失败则 LogCritical 并中止进程。这是 B1 §9.2 fail-fast 保护，避免数据库不可达或 schema 过期时
-// 服务静默启动但存储全部报错。超时设为 30 秒（schema 校验比 SELECT 1 慢）。
+// 服务静默启动但存储全部报错。超时设为 30 秒（schema 校验与迁移比 SELECT 1 慢）。
 if (storageOptions.IsPostgres)
 {
 	try
@@ -285,8 +286,21 @@ if (storageOptions.IsPostgres)
 			return;
 		}
 
-		// 连接可达后，进一步校验 schema version，确保表结构与代码期望一致
 		var migrationRunner = app.Services.GetRequiredService<PostgresMigrationRunner>();
+
+		// P0-6：AutoBootstrap=true（默认）时先应用幂等 baseline migration。
+		// 新数据库 schema 缺失会被自动创建，打破缺 schema → 服务退出 → 无法访问迁移接口的自锁。
+		// 已存在 schema 的数据库上 MigrateAsync 是 no-op（CREATE TABLE IF NOT EXISTS / ADD COLUMN IF NOT EXISTS）。
+		// 设 AutoBootstrap=false 回退到原 fail-fast 行为，DBA 严格管控 schema 时使用。
+		if (storageOptions.AutoBootstrap)
+		{
+			logger.LogInformation(
+				"AutoBootstrap 启用，开始应用 PostgreSQL baseline migration（幂等：已存在 schema 视为 no-op）。");
+			await migrationRunner.MigrateAsync(startupCts.Token);
+			logger.LogInformation("PostgreSQL baseline migration 应用完成。");
+		}
+
+		// 连接可达 + bootstrap 完成后，进一步校验 schema version，确保表结构与代码期望一致
 		var schemaReport = await migrationRunner.VerifySchemaAsync(startupCts.Token);
 		var schemaOutOfDate = schemaReport.MissingRequiredTableCount > 0
 			|| schemaReport.MissingIndexCount > 0
@@ -299,13 +313,17 @@ if (storageOptions.IsPostgres)
 				"缺失必需表数量：{MissingTableCount}，缺失索引数量：{MissingIndexCount}。" +
 				"缺失必需表：{MissingTables}。" +
 				"诊断信息：{Diagnostics}。" +
-				"请通过 POST /api/admin/storage/postgres/migrations/apply 执行迁移后再启动服务。",
+				"AutoBootstrap={AutoBootstrap} 时已尝试应用 baseline migration 但 schema 仍不匹配——" +
+				"可能为代码版本与已存在 schema 不兼容（如降级运行），或 AutoBootstrap=false 且 schema 未手工初始化。" +
+				"处理建议：1) 升级到与已存在 schema 兼容的代码版本；2) 确认 Storage:AutoBootstrap=true（默认）；" +
+				"3) 通过独立工具或容器入口脚本执行 schema 迁移后再启动服务。",
 				schemaReport.CurrentSchemaVersion,
 				PostgresMigrationRunner.SchemaVersion,
 				schemaReport.MissingRequiredTableCount,
 				schemaReport.MissingIndexCount,
 				string.Join(", ", schemaReport.MissingRequiredTables),
-				string.Join(", ", schemaReport.Diagnostics));
+				string.Join(", ", schemaReport.Diagnostics),
+				storageOptions.AutoBootstrap);
 			await app.StopAsync();
 			return;
 		}

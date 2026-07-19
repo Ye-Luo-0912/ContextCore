@@ -195,7 +195,13 @@ public sealed class ContextCoreSchemaVersionResponse
 
     public bool? UpToDate { get; init; }
 
+    /// <summary>已弃用——历史遗留字段，恒为 true。新代码应使用 <see cref="AutoBootstrap"/>。</summary>
     public bool? AutoMigrate { get; init; }
+
+    /// <summary>
+    /// P0-6：服务启动时是否自动应用 baseline migration。反映 <c>Storage:AutoBootstrap</c> 配置（默认 true）。
+    /// </summary>
+    public bool? AutoBootstrap { get; init; }
 }
 
 public sealed class PostgresOperationalStoreDiagnostics

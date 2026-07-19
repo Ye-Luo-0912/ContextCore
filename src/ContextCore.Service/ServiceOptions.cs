@@ -22,6 +22,18 @@ public sealed class StorageOptions
 	public bool AllowExperimentalPostgres { get; set; }
 
 	/// <summary>
+	/// P0-6：服务启动时是否自动执行 PostgreSQL schema bootstrap migration。
+	/// 默认 <c>true</c>——服务启动时若 schema 缺失，自动调用
+	/// <see cref="ContextCore.Storage.Postgres.Infrastructure.PostgresMigrationRunner.MigrateAsync"/>
+	/// 应用幂等 baseline（CREATE TABLE IF NOT EXISTS / ALTER TABLE ADD COLUMN IF NOT EXISTS），
+	/// 然后再做 schema version 校验。新数据库无需手工迁移即可启动，打破“缺 schema → 服务退出 → 无法访问迁移 HTTP 接口”自锁。
+	/// 设为 <c>false</c> 时回退到原 fail-fast 行为——schema 不匹配即拒绝启动，
+	/// 适用于 DBA 严格管控 schema 的生产场景；此时需通过独立迁移工具或 admin HTTP 接口（服务已能启动时）应用迁移。
+	/// 仅当 <see cref="IsPostgres"/> 为 true 时生效。
+	/// </summary>
+	public bool AutoBootstrap { get; set; } = true;
+
+	/// <summary>
 	/// 文件系统存储的根目录路径（仅 Provider 为 <c>filesystem</c> 时生效）。
 	/// 空字符串或未配置时自动回退到 <see cref="FileStorageOptions.DefaultRootPath"/>
 	/// （即仓库根目录下的 <c>context-core-data</c> 专用目录）。

@@ -292,7 +292,9 @@ internal static class AdminEndpoints
                 CodeVersion = PostgresMigrationRunner.SchemaVersion,
                 AppliedVersion = appliedVersion,
                 UpToDate = appliedVersion == PostgresMigrationRunner.SchemaVersion,
-                AutoMigrate = true
+                // P0-6：暴露真实 AutoBootstrap 配置值（默认 true）；保留 AutoMigrate=true 仅为向后兼容。
+                AutoMigrate = true,
+                AutoBootstrap = storage.AutoBootstrap
             });
         })
         .WithName("AdminSchemaVersion")
