@@ -156,7 +156,10 @@ public sealed class ContextInputIngestionService
         ContextInputSequencer sequencer,
         IShortTermMemoryStore? shortTermMemoryStore = null,
         IShortTermWorkingItemExtractor? workingItemExtractor = null,
-        ShortTermMemoryPolicy? shortTermPolicy = null)
+        ShortTermMemoryPolicy? shortTermPolicy = null,
+        IRelationProjector? relationProjector = null,
+        IRelationStore? relationStore = null,
+        IRelationProjectionWriter? projectionWriter = null)
     {
         _contextStore = contextStore;
         _normalizer = normalizer;
@@ -166,7 +169,10 @@ public sealed class ContextInputIngestionService
         _shortTermMemoryStore = shortTermMemoryStore;
         _workingItemExtractor = workingItemExtractor;
         _shortTermPolicy = shortTermPolicy ?? new ShortTermMemoryPolicy();
-        _ingestionService = new BasicContextIngestionService(contextStore);
+        // P0-1：传入 relation 投影器/存储/写入器。生产 DI 注入后，摄取时同步生成 related_to 边。
+        // 缺省（null）保持向后兼容——测试场景如不注入则跳过关系写入。
+        _ingestionService = new BasicContextIngestionService(
+            contextStore, relationProjector, relationStore, projectionWriter);
     }
 
     public async Task<ContextItem> IngestAsync(

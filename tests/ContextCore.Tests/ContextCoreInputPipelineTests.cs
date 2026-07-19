@@ -2,6 +2,7 @@ using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Core;
 using ContextCore.Core.Services;
+using ContextCore.Core.Services.Graph;
 using ContextCore.Storage.InMemory;
 using ContextCore.Storage.InMemory.Stores;
 
@@ -764,6 +765,112 @@ public sealed class ContextCoreInputPipelineTests
         Assert.AreEqual("seed -[related_to]-> item-1", result.SelectedItems.Single().Metadata["relationPaths"]);
         Assert.AreEqual("kept", result.Metadata["diagnostic"]);
         Assert.AreEqual("stage-kept", result.Trace.Stages.Single().Metadata["diagnostic"]);
+    }
+
+    /// <summary>
+    /// P0-1：ContextInputIngestionService 注入 RelationProjector/Writer 后，
+    /// 摄取带 refs 的 ContextItem 应同步生成 related_to 边。
+    /// 此前 line 169 直接 new BasicContextIngestionService(contextStore)，
+    /// 导致生产 HTTP 摄取路径静默跳过关系投影。
+    /// </summary>
+    [TestMethod]
+    [TestCategory("Unit")]
+    public async Task IngestAsync_WithRelationDeps_ProducesRelatedToEdges()
+    {
+        var contextStore = new InMemoryContextStore();
+        var relationStore = new InMemoryRelationStore();
+        var projector = new RelationProjector();
+        var validator = new RelationProjectorOutputValidator();
+        var writer = new RelationProjectionWriter(relationStore, validator);
+
+        // 预置被引用的 item-b 以满足 validator 的存在性检查（如适用）。
+        await contextStore.SaveAsync(new ContextItem
+        {
+            Id = "item-b",
+            WorkspaceId = "workspace-test",
+            CollectionId = "collection-test",
+            Type = "note",
+            Content = "target item",
+            UpdatedAt = DateTimeOffset.UtcNow
+        });
+
+        var service = new ContextInputIngestionService(
+            contextStore,
+            new ContextInputNormalizer(),
+            new ContextInputValidator(),
+            new ContextInputHasher(),
+            new ContextInputSequencer(),
+            relationProjector: projector,
+            relationStore: relationStore,
+            projectionWriter: writer);
+
+        var command = new ContextInputCommand
+        {
+            OperationId = "op-1",
+            WorkspaceId = "workspace-test",
+            CollectionId = "collection-test",
+            Source = "test",
+            InputKind = "note",
+            ContentFormat = ContextContentFormat.PlainText,
+            Content = "ingest with refs",
+            Refs = ["item-b"]
+        };
+
+        var item = await service.IngestAsync(command);
+
+        var edges = await relationStore.QueryAsync(new ContextRelationQuery
+        {
+            WorkspaceId = "workspace-test",
+            CollectionId = "collection-test",
+            SourceId = item.Id,
+            Take = int.MaxValue
+        });
+
+        Assert.IsTrue(edges.Any(e => string.Equals(e.TargetId, "item-b", StringComparison.OrdinalIgnoreCase)),
+            "P0-1：摄取路径应生成 related_to 边——此前因 ContextInputPipeline.cs:169 未注入 projector 而静默跳过。");
+    }
+
+    /// <summary>
+    /// P0-1 反向用例：未注入 relation deps 时（旧默认行为），摄取不生成 related_to 边。
+    /// 验证向后兼容——测试场景仍可省略 relation 依赖。
+    /// </summary>
+    [TestMethod]
+    [TestCategory("Unit")]
+    public async Task IngestAsync_WithoutRelationDeps_SkipsRelationProjectionSilently()
+    {
+        var contextStore = new InMemoryContextStore();
+        var relationStore = new InMemoryRelationStore();
+
+        var service = new ContextInputIngestionService(
+            contextStore,
+            new ContextInputNormalizer(),
+            new ContextInputValidator(),
+            new ContextInputHasher(),
+            new ContextInputSequencer());
+
+        var command = new ContextInputCommand
+        {
+            OperationId = "op-2",
+            WorkspaceId = "workspace-test",
+            CollectionId = "collection-test",
+            Source = "test",
+            InputKind = "note",
+            ContentFormat = ContextContentFormat.PlainText,
+            Content = "ingest without relation deps",
+            Refs = ["item-b"]
+        };
+
+        var item = await service.IngestAsync(command);
+
+        var edges = await relationStore.QueryAsync(new ContextRelationQuery
+        {
+            WorkspaceId = "workspace-test",
+            CollectionId = "collection-test",
+            SourceId = item.Id,
+            Take = int.MaxValue
+        });
+
+        Assert.AreEqual(0, edges.Count, "未注入 relation deps 时不应生成边——保持向后兼容。");
     }
 
     private static ContextInputIngestionService CreateInputIngestionService(
