@@ -343,4 +343,131 @@ public abstract class RelationStoreContractBase
             await DisposeStoreAsync(store, CancellationToken.None);
         }
     }
+
+    /// <summary>
+    /// P0-2 回归：验证 weight 排序为数值降序，而非字符串排序。
+    /// 旧实现 ORDER BY data ->> 'Weight' 在 PostgreSQL 中是字符串比较，
+    /// "10" 会排在 "9" 之前。此测试用 weight=9.0 和 weight=10.0 验证数值排序正确。
+    /// </summary>
+    [TestMethod]
+    public async Task QueryNeighbors_WeightOrdering_UsesNumericSort_NotStringSort()
+    {
+        // 4 条边权重为 1.0 / 2.0 / 9.0 / 10.0
+        // 字符串排序：1, 10, 2, 9 → 错误顺序
+        // 数值排序：10, 9, 2, 1 → 正确顺序
+        var store = await PrepareAsync(
+            MakeRelation("r-w1", "center", "n1", "related_to", weight: 1.0),
+            MakeRelation("r-w2", "center", "n2", "related_to", weight: 2.0),
+            MakeRelation("r-w9", "center", "n3", "related_to", weight: 9.0),
+            MakeRelation("r-w10", "center", "n4", "related_to", weight: 10.0));
+        try
+        {
+            var result = await store.QueryNeighborsAsync(new RelationNeighborQuery
+            {
+                WorkspaceId = WorkspaceId,
+                CollectionId = "col",
+                ItemId = "center",
+                Direction = RelationDirection.Outgoing,
+                Take = 100
+            }, CancellationToken.None);
+
+            Assert.AreEqual(4, result.Count, "应返回全部 4 条边");
+            Assert.AreEqual("r-w10", result[0].Id, "weight=10.0 应排首位（数值降序）");
+            Assert.AreEqual("r-w9", result[1].Id, "weight=9.0 应排第二");
+            Assert.AreEqual("r-w2", result[2].Id, "weight=2.0 应排第三");
+            Assert.AreEqual("r-w1", result[3].Id, "weight=1.0 应排末位");
+        }
+        finally
+        {
+            await DisposeStoreAsync(store, CancellationToken.None);
+        }
+    }
+
+    /// <summary>
+    /// P0-2 回归：验证内层 LIMIT（max_scan）发生在 ORDER BY 之后，
+    /// 不会在排序前截断未排序集合导致漏掉高权重边。
+    /// 旧实现：内层 SELECT ... LIMIT @max_scan 无 ORDER BY → 截断未排序集合 →
+    /// 高权重边可能被丢弃，外层 ORDER BY 后取不到它们。
+    /// 新实现：内层 SELECT ... ORDER BY weight DESC LIMIT @max_scan → 取 top N 后再分页。
+    /// </summary>
+    [TestMethod]
+    public async Task QueryNeighbors_MaxScan_PreservesHighWeightResults()
+    {
+        // 10 条边权重 1.0-10.0，max_scan=5 后取 top 3
+        // 旧实现：内层 LIMIT 5 随机取 5 条，外层 ORDER BY 后取 top 3 —— 可能漏掉 weight=10
+        // 新实现：内层 ORDER BY weight DESC LIMIT 5 取 weight 10,9,8,7,6 → 外层取 top 3 = 10,9,8
+        var seeds = Enumerable.Range(1, 10)
+            .Select(i => MakeRelation($"r-w{i}", "center", $"n{i}", "related_to", weight: (double)i))
+            .ToArray();
+        var store = await PrepareAsync(seeds);
+        try
+        {
+            var result = await store.QueryNeighborsAsync(new RelationNeighborQuery
+            {
+                WorkspaceId = WorkspaceId,
+                CollectionId = "col",
+                ItemId = "center",
+                Direction = RelationDirection.Outgoing,
+                MaxScan = 5,
+                Take = 3
+            }, CancellationToken.None);
+
+            Assert.AreEqual(3, result.Count, "应返回 top 3");
+            Assert.AreEqual("r-w10", result[0].Id, "max_scan 后 weight=10 仍应在结果中（首位）");
+            Assert.AreEqual("r-w9", result[1].Id, "weight=9 应在第二位");
+            Assert.AreEqual("r-w8", result[2].Id, "weight=8 应在第三位");
+        }
+        finally
+        {
+            await DisposeStoreAsync(store, CancellationToken.None);
+        }
+    }
+
+    /// <summary>
+    /// P0-2 回归：验证 Skip+Take 分页在数值排序基础上正确翻页。
+    /// </summary>
+    [TestMethod]
+    public async Task QueryNeighbors_SkipTake_PaginatesByWeightDesc()
+    {
+        var seeds = Enumerable.Range(1, 5)
+            .Select(i => MakeRelation($"r-w{i}", "center", $"n{i}", "related_to", weight: (double)i))
+            .ToArray();
+        var store = await PrepareAsync(seeds);
+        try
+        {
+            // 第一页：top 2 = weight 5, 4
+            var page1 = await store.QueryNeighborsAsync(new RelationNeighborQuery
+            {
+                WorkspaceId = WorkspaceId,
+                CollectionId = "col",
+                ItemId = "center",
+                Direction = RelationDirection.Outgoing,
+                Take = 2,
+                Skip = 0
+            }, CancellationToken.None);
+
+            Assert.AreEqual(2, page1.Count);
+            Assert.AreEqual("r-w5", page1[0].Id);
+            Assert.AreEqual("r-w4", page1[1].Id);
+
+            // 第二页：next 2 = weight 3, 2
+            var page2 = await store.QueryNeighborsAsync(new RelationNeighborQuery
+            {
+                WorkspaceId = WorkspaceId,
+                CollectionId = "col",
+                ItemId = "center",
+                Direction = RelationDirection.Outgoing,
+                Take = 2,
+                Skip = 2
+            }, CancellationToken.None);
+
+            Assert.AreEqual(2, page2.Count);
+            Assert.AreEqual("r-w3", page2[0].Id);
+            Assert.AreEqual("r-w2", page2[1].Id);
+        }
+        finally
+        {
+            await DisposeStoreAsync(store, CancellationToken.None);
+        }
+    }
 }

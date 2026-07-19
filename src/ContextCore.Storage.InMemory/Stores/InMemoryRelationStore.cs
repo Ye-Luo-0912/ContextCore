@@ -118,11 +118,13 @@ public sealed class InMemoryRelationStore : IRelationStore
             filtered = filtered.Where(item => !excludedReviewStatuses.Contains(item.ReviewStatus ?? string.Empty));
         }
 
+        // P0-2：先排序再 Take(maxScan)，避免高权重关系因未排序集合被截断而漏掉。
+        // 与 FileRelationStore 一致；Postgres 端通过 SQL ORDER BY ... LIMIT @max_scan 实现。
         var results = filtered
-            .Take(maxScan)
             .OrderByDescending(item => item.Weight)
             .ThenByDescending(item => item.Confidence)
             .ThenByDescending(item => item.CreatedAt)
+            .Take(maxScan)
             .Skip(effectiveSkip)
             .Take(effectiveTake)
             .Select(item => CompositeContextNormalizer.Clone(item))

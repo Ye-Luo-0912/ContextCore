@@ -780,7 +780,9 @@ public sealed class ContextCoreInputPipelineTests
         var contextStore = new InMemoryContextStore();
         var relationStore = new InMemoryRelationStore();
         var projector = new RelationProjector();
-        var validator = new RelationProjectorOutputValidator();
+        var registry = new RelationTypeRegistry();
+        var normalizer = new RelationTypeNormalizer();
+        var validator = new RelationProjectorOutputValidator(registry, normalizer);
         var writer = new RelationProjectionWriter(relationStore, validator);
 
         // 预置被引用的 item-b 以满足 validator 的存在性检查（如适用）。
@@ -813,7 +815,12 @@ public sealed class ContextCoreInputPipelineTests
             InputKind = "note",
             ContentFormat = ContextContentFormat.PlainText,
             Content = "ingest with refs",
-            Refs = ["item-b"]
+            // ContextInputCommand 没有 Refs 字段——refs 通过 legacy.refs 元数据键传入（CSV）。
+            // 见 ContextInputPipeline.cs LegacyRefsKey + ParseCsv。
+            Metadata = new Dictionary<string, string>
+            {
+                ["legacy.refs"] = "item-b"
+            }
         };
 
         var item = await service.IngestAsync(command);
@@ -857,7 +864,10 @@ public sealed class ContextCoreInputPipelineTests
             InputKind = "note",
             ContentFormat = ContextContentFormat.PlainText,
             Content = "ingest without relation deps",
-            Refs = ["item-b"]
+            Metadata = new Dictionary<string, string>
+            {
+                ["legacy.refs"] = "item-b"
+            }
         };
 
         var item = await service.IngestAsync(command);
