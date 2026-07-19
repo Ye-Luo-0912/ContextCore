@@ -93,6 +93,22 @@ F:ContextCore.Abstractions.Models.ArtifactKind.VectorLifecycleMetadataReviewCand
 F:ContextCore.Abstractions.Models.ArtifactKind.VectorLifecycleMetadataReviewCandidateReport
 F:ContextCore.Abstractions.Models.BackupStorageKind.FileSystem
 F:ContextCore.Abstractions.Models.BackupStorageKind.Postgres
+F:ContextCore.Abstractions.Models.CandidateDecisionReasonCode.DeprecatedBlocked
+F:ContextCore.Abstractions.Models.CandidateDecisionReasonCode.DeprecatedUsedByActiveChain
+F:ContextCore.Abstractions.Models.CandidateDecisionReasonCode.DuplicateSectionReference
+F:ContextCore.Abstractions.Models.CandidateDecisionReasonCode.DuplicateSuppressed
+F:ContextCore.Abstractions.Models.CandidateDecisionReasonCode.EvidenceMissing
+F:ContextCore.Abstractions.Models.CandidateDecisionReasonCode.LifecycleBlocked
+F:ContextCore.Abstractions.Models.CandidateDecisionReasonCode.PartiallyAcceptedDueToTruncation
+F:ContextCore.Abstractions.Models.CandidateDecisionReasonCode.RequiredTagMismatch
+F:ContextCore.Abstractions.Models.CandidateDecisionReasonCode.ScoreBelowThreshold
+F:ContextCore.Abstractions.Models.CandidateDecisionReasonCode.SectionQuotaExceeded
+F:ContextCore.Abstractions.Models.CandidateDecisionReasonCode.SelectedHighestUtility
+F:ContextCore.Abstractions.Models.CandidateDecisionReasonCode.SelectedMandatory
+F:ContextCore.Abstractions.Models.CandidateDecisionReasonCode.SelectedRelationReserve
+F:ContextCore.Abstractions.Models.CandidateDecisionReasonCode.SupersededByCurrentVersion
+F:ContextCore.Abstractions.Models.CandidateDecisionReasonCode.TokenBudgetExceeded
+F:ContextCore.Abstractions.Models.CandidateDecisionReasonCode.Unknown
 F:ContextCore.Abstractions.Models.CandidateMemoryDiagnosticTypes.CandidateWithRejectedSource
 F:ContextCore.Abstractions.Models.CandidateMemoryDiagnosticTypes.CandidateWithoutEvidence
 F:ContextCore.Abstractions.Models.CandidateMemoryDiagnosticTypes.DuplicateCandidate
@@ -165,6 +181,7 @@ F:ContextCore.Abstractions.Models.ContextCoreErrorCodes.ValidationFailed
 F:ContextCore.Abstractions.Models.ContextDecisionCandidateOutcome.Dropped
 F:ContextCore.Abstractions.Models.ContextDecisionCandidateOutcome.Selected
 F:ContextCore.Abstractions.Models.ContextDecisionPolicyVersions.V17_0
+F:ContextCore.Abstractions.Models.ContextDecisionPolicyVersions.V18_0
 F:ContextCore.Abstractions.Models.ContextDecisionSource.Package
 F:ContextCore.Abstractions.Models.ContextDecisionSource.Retrieval
 F:ContextCore.Abstractions.Models.ContextFailureType.None
@@ -949,6 +966,11 @@ M:ContextCore.Abstractions.Models.CandidateConstraintReviewResult.Equals(System.
 M:ContextCore.Abstractions.Models.CandidateConstraintReviewResult.GetHashCode()
 M:ContextCore.Abstractions.Models.CandidateConstraintReviewResult.GetType()
 M:ContextCore.Abstractions.Models.CandidateConstraintReviewResult.ToString()
+M:ContextCore.Abstractions.Models.CandidateDecisionReason.#ctor()
+M:ContextCore.Abstractions.Models.CandidateDecisionReason.Equals(System.Object)
+M:ContextCore.Abstractions.Models.CandidateDecisionReason.GetHashCode()
+M:ContextCore.Abstractions.Models.CandidateDecisionReason.GetType()
+M:ContextCore.Abstractions.Models.CandidateDecisionReason.ToString()
 M:ContextCore.Abstractions.Models.CandidateMemoryDiagnostic.#ctor()
 M:ContextCore.Abstractions.Models.CandidateMemoryDiagnostic.Equals(System.Object)
 M:ContextCore.Abstractions.Models.CandidateMemoryDiagnostic.GetHashCode()
@@ -1275,6 +1297,8 @@ M:ContextCore.Abstractions.Models.ContextDecisionAuditSample.GetHashCode()
 M:ContextCore.Abstractions.Models.ContextDecisionAuditSample.GetType()
 M:ContextCore.Abstractions.Models.ContextDecisionAuditSample.ToString()
 M:ContextCore.Abstractions.Models.ContextDecisionCandidate.#ctor()
+M:ContextCore.Abstractions.Models.ContextDecisionCandidate.<Clone>$()
+M:ContextCore.Abstractions.Models.ContextDecisionCandidate.Equals(ContextCore.Abstractions.Models.ContextDecisionCandidate)
 M:ContextCore.Abstractions.Models.ContextDecisionCandidate.Equals(System.Object)
 M:ContextCore.Abstractions.Models.ContextDecisionCandidate.GetHashCode()
 M:ContextCore.Abstractions.Models.ContextDecisionCandidate.GetType()
@@ -1587,6 +1611,16 @@ M:ContextCore.Abstractions.Models.DecisionEvidenceResult.Equals(System.Object)
 M:ContextCore.Abstractions.Models.DecisionEvidenceResult.GetHashCode()
 M:ContextCore.Abstractions.Models.DecisionEvidenceResult.GetType()
 M:ContextCore.Abstractions.Models.DecisionEvidenceResult.ToString()
+M:ContextCore.Abstractions.Models.DecisionEvidenceV2.#ctor()
+M:ContextCore.Abstractions.Models.DecisionEvidenceV2.Equals(System.Object)
+M:ContextCore.Abstractions.Models.DecisionEvidenceV2.GetHashCode()
+M:ContextCore.Abstractions.Models.DecisionEvidenceV2.GetType()
+M:ContextCore.Abstractions.Models.DecisionEvidenceV2.ToString()
+M:ContextCore.Abstractions.Models.DecisionEvidenceV2Result.#ctor()
+M:ContextCore.Abstractions.Models.DecisionEvidenceV2Result.Equals(System.Object)
+M:ContextCore.Abstractions.Models.DecisionEvidenceV2Result.GetHashCode()
+M:ContextCore.Abstractions.Models.DecisionEvidenceV2Result.GetType()
+M:ContextCore.Abstractions.Models.DecisionEvidenceV2Result.ToString()
 M:ContextCore.Abstractions.Models.DocumentRepresentationProfiles.Equals(System.Object)
 M:ContextCore.Abstractions.Models.DocumentRepresentationProfiles.GetHashCode()
 M:ContextCore.Abstractions.Models.DocumentRepresentationProfiles.GetType()
@@ -3156,6 +3190,9 @@ P:ContextCore.Abstractions.Models.CandidateConstraintReviewResult.Reviewer (get|
 P:ContextCore.Abstractions.Models.CandidateConstraintReviewResult.Status (get|init)
 P:ContextCore.Abstractions.Models.CandidateConstraintReviewResult.TargetLayer (get|init)
 P:ContextCore.Abstractions.Models.CandidateConstraintReviewResult.Warnings (get|init)
+P:ContextCore.Abstractions.Models.CandidateDecisionReason.PrimaryReasonCode (get|init)
+P:ContextCore.Abstractions.Models.CandidateDecisionReason.ReasonDetail (get|init)
+P:ContextCore.Abstractions.Models.CandidateDecisionReason.SecondaryReasonCodes (get|init)
 P:ContextCore.Abstractions.Models.CandidateMemoryDiagnostic.CandidateId (get|init)
 P:ContextCore.Abstractions.Models.CandidateMemoryDiagnostic.DiagnosticId (get|init)
 P:ContextCore.Abstractions.Models.CandidateMemoryDiagnostic.DiagnosticType (get|init)
@@ -3723,14 +3760,25 @@ P:ContextCore.Abstractions.Models.ContextDecisionAuditSample.NonActivationContra
 P:ContextCore.Abstractions.Models.ContextDecisionAuditSample.SelectedCount (get|init)
 P:ContextCore.Abstractions.Models.ContextDecisionAuditSample.Source (get|init)
 P:ContextCore.Abstractions.Models.ContextDecisionAuditSample.WorkspaceId (get|init)
+P:ContextCore.Abstractions.Models.ContextDecisionCandidate.ChannelSources (get|init)
 P:ContextCore.Abstractions.Models.ContextDecisionCandidate.EstimatedTokens (get|init)
 P:ContextCore.Abstractions.Models.ContextDecisionCandidate.ItemId (get|init)
 P:ContextCore.Abstractions.Models.ContextDecisionCandidate.Kind (get|init)
+P:ContextCore.Abstractions.Models.ContextDecisionCandidate.LifecycleState (get|init)
+P:ContextCore.Abstractions.Models.ContextDecisionCandidate.MatchedAnchors (get|init)
 P:ContextCore.Abstractions.Models.ContextDecisionCandidate.Outcome (get|init)
+P:ContextCore.Abstractions.Models.ContextDecisionCandidate.RankAfter (get|init)
+P:ContextCore.Abstractions.Models.ContextDecisionCandidate.RankBefore (get|init)
 P:ContextCore.Abstractions.Models.ContextDecisionCandidate.Reason (get|init)
+P:ContextCore.Abstractions.Models.ContextDecisionCandidate.ReasonCode (get|init)
+P:ContextCore.Abstractions.Models.ContextDecisionCandidate.RelationPaths (get|init)
 P:ContextCore.Abstractions.Models.ContextDecisionCandidate.Score (get|init)
+P:ContextCore.Abstractions.Models.ContextDecisionCandidate.ScoreBreakdown (get|init)
+P:ContextCore.Abstractions.Models.ContextDecisionCandidate.SecondaryReasonCodes (get|init)
 P:ContextCore.Abstractions.Models.ContextDecisionCandidate.SectionName (get|init)
 P:ContextCore.Abstractions.Models.ContextDecisionCandidate.SourceRefs (get|init)
+P:ContextCore.Abstractions.Models.ContextDecisionCandidate.TokenBudgetAfter (get|init)
+P:ContextCore.Abstractions.Models.ContextDecisionCandidate.TokenBudgetBefore (get|init)
 P:ContextCore.Abstractions.Models.ContextDecisionCandidate.Type (get|init)
 P:ContextCore.Abstractions.Models.ContextDecisionOutcome.DroppedCount (get|init)
 P:ContextCore.Abstractions.Models.ContextDecisionOutcome.EstimatedTokens (get|init)
@@ -4386,6 +4434,30 @@ P:ContextCore.Abstractions.Models.DecisionEvidenceResult.Evidence (get|init)
 P:ContextCore.Abstractions.Models.DecisionEvidenceResult.IsComplete (get|init)
 P:ContextCore.Abstractions.Models.DecisionEvidenceResult.MissingItemIds (get|init)
 P:ContextCore.Abstractions.Models.DecisionEvidenceResult.ResolvedAt (get|init)
+P:ContextCore.Abstractions.Models.DecisionEvidenceV2.AlternativesConsidered (get|init)
+P:ContextCore.Abstractions.Models.DecisionEvidenceV2.ChannelSources (get|init)
+P:ContextCore.Abstractions.Models.DecisionEvidenceV2.Confidence (get|init)
+P:ContextCore.Abstractions.Models.DecisionEvidenceV2.EvidenceRefs (get|init)
+P:ContextCore.Abstractions.Models.DecisionEvidenceV2.FinalScore (get|init)
+P:ContextCore.Abstractions.Models.DecisionEvidenceV2.InputFingerprint (get|init)
+P:ContextCore.Abstractions.Models.DecisionEvidenceV2.ItemId (get|init)
+P:ContextCore.Abstractions.Models.DecisionEvidenceV2.LifecycleState (get|init)
+P:ContextCore.Abstractions.Models.DecisionEvidenceV2.MatchedAnchors (get|init)
+P:ContextCore.Abstractions.Models.DecisionEvidenceV2.PolicyVersion (get|init)
+P:ContextCore.Abstractions.Models.DecisionEvidenceV2.Provenance (get|init)
+P:ContextCore.Abstractions.Models.DecisionEvidenceV2.RankAfter (get|init)
+P:ContextCore.Abstractions.Models.DecisionEvidenceV2.RankBefore (get|init)
+P:ContextCore.Abstractions.Models.DecisionEvidenceV2.Reason (get|init)
+P:ContextCore.Abstractions.Models.DecisionEvidenceV2.RelationPaths (get|init)
+P:ContextCore.Abstractions.Models.DecisionEvidenceV2.ScoreBreakdown (get|init)
+P:ContextCore.Abstractions.Models.DecisionEvidenceV2.TokenBudgetAfter (get|init)
+P:ContextCore.Abstractions.Models.DecisionEvidenceV2.TokenBudgetBefore (get|init)
+P:ContextCore.Abstractions.Models.DecisionEvidenceV2Result.DecisionId (get|init)
+P:ContextCore.Abstractions.Models.DecisionEvidenceV2Result.Evidence (get|init)
+P:ContextCore.Abstractions.Models.DecisionEvidenceV2Result.IsComplete (get|init)
+P:ContextCore.Abstractions.Models.DecisionEvidenceV2Result.MissingItemIds (get|init)
+P:ContextCore.Abstractions.Models.DecisionEvidenceV2Result.PolicyVersion (get|init)
+P:ContextCore.Abstractions.Models.DecisionEvidenceV2Result.ResolvedAt (get|init)
 P:ContextCore.Abstractions.Models.DroppedContextItem.EstimatedTokens (get|init)
 P:ContextCore.Abstractions.Models.DroppedContextItem.ItemId (get|init)
 P:ContextCore.Abstractions.Models.DroppedContextItem.Kind (get|init)
@@ -6906,6 +6978,8 @@ T:ContextCore.Abstractions.Models.CandidateConstraintQuery
 T:ContextCore.Abstractions.Models.CandidateConstraintReviewRecord
 T:ContextCore.Abstractions.Models.CandidateConstraintReviewRequest
 T:ContextCore.Abstractions.Models.CandidateConstraintReviewResult
+T:ContextCore.Abstractions.Models.CandidateDecisionReason
+T:ContextCore.Abstractions.Models.CandidateDecisionReasonCode (Enum)
 T:ContextCore.Abstractions.Models.CandidateMemoryDiagnostic
 T:ContextCore.Abstractions.Models.CandidateMemoryDiagnosticTypes
 T:ContextCore.Abstractions.Models.CandidateMemoryDiagnosticsReport
@@ -7050,6 +7124,8 @@ T:ContextCore.Abstractions.Models.ContextWarning
 T:ContextCore.Abstractions.Models.DecisionAlternative
 T:ContextCore.Abstractions.Models.DecisionEvidence
 T:ContextCore.Abstractions.Models.DecisionEvidenceResult
+T:ContextCore.Abstractions.Models.DecisionEvidenceV2
+T:ContextCore.Abstractions.Models.DecisionEvidenceV2Result
 T:ContextCore.Abstractions.Models.DocumentRepresentationProfiles
 T:ContextCore.Abstractions.Models.DroppedContextItem
 T:ContextCore.Abstractions.Models.EmbeddingGeneratorInput

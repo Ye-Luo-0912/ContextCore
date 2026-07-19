@@ -46,7 +46,7 @@ public enum ContextDecisionSource
 }
 
 /// <summary>单个候选的选中/丢弃决策投影。</summary>
-public sealed class ContextDecisionCandidate
+public sealed record ContextDecisionCandidate
 {
     /// <summary>候选条目 ID（package 侧为 itemId，retrieval 侧为 candidateId 或 sourceId）。</summary>
     public string ItemId { get; init; } = string.Empty;
@@ -63,8 +63,57 @@ public sealed class ContextDecisionCandidate
     /// <summary>归属的 section 名称（package 场景）。</summary>
     public string SectionName { get; init; } = string.Empty;
 
-    /// <summary>选中或丢弃原因。</summary>
+    /// <summary>选中或丢弃原因（V17.0 自由文本，保留向后兼容）。</summary>
     public string Reason { get; init; } = string.Empty;
+
+    /// <summary>
+    /// R14-1：主决策原因码。替代 <see cref="Reason"/> 自由文本的机器可解析版本。
+    /// V17.0 历史 trace 升级路径设为 <see cref="CandidateDecisionReasonCode.Unknown"/>。
+    /// </summary>
+    public CandidateDecisionReasonCode ReasonCode { get; init; } = CandidateDecisionReasonCode.Unknown;
+
+    /// <summary>
+    /// R14-1：次要决策原因码列表。同一候选可能命中多个原因。
+    /// </summary>
+    public IReadOnlyList<CandidateDecisionReasonCode> SecondaryReasonCodes { get; init; } = Array.Empty<CandidateDecisionReasonCode>();
+
+    /// <summary>
+    /// R14-1：候选来源 channel 列表（如 "recent_context"、"working_memory"）。
+    /// 默认为空列表；由 V2 证据提供者填充。
+    /// </summary>
+    public IReadOnlyList<string> ChannelSources { get; init; } = Array.Empty<string>();
+
+    /// <summary>
+    /// R14-1：候选评分细分（key = 评分维度名）。默认为空字典。
+    /// </summary>
+    public IReadOnlyDictionary<string, double> ScoreBreakdown { get; init; } = new Dictionary<string, double>(StringComparer.Ordinal);
+
+    /// <summary>
+    /// R14-1：候选命中的 anchor 列表。默认为空列表。
+    /// </summary>
+    public IReadOnlyList<string> MatchedAnchors { get; init; } = Array.Empty<string>();
+
+    /// <summary>
+    /// R14-1：候选参与的关系路径列表。默认为空列表。
+    /// </summary>
+    public IReadOnlyList<string> RelationPaths { get; init; } = Array.Empty<string>();
+
+    /// <summary>
+    /// R14-1：候选 lifecycle 状态（如 "active" / "deprecated" / "superseded"）。默认 "active"。
+    /// </summary>
+    public string LifecycleState { get; init; } = "active";
+
+    /// <summary>R14-1：候选在排序前的位置（0-based）；-1 表示未提供。</summary>
+    public int RankBefore { get; init; } = -1;
+
+    /// <summary>R14-1：候选在排序后的位置（0-based）；-1 表示未提供。</summary>
+    public int RankAfter { get; init; } = -1;
+
+    /// <summary>R14-1：决策前剩余 token 预算；-1 表示未提供。</summary>
+    public int TokenBudgetBefore { get; init; } = -1;
+
+    /// <summary>R14-1：决策后剩余 token 预算；-1 表示未提供。</summary>
+    public int TokenBudgetAfter { get; init; } = -1;
 
     public double Score { get; init; }
 
@@ -135,6 +184,12 @@ public sealed class ContextDecisionRisk
 public static class ContextDecisionPolicyVersions
 {
     public const string V17_0 = "context-decision-foundation/v17.0";
+
+    /// <summary>
+    /// R14-1：Decision Evidence V2 策略版本。引入 <see cref="CandidateDecisionReasonCode"/> 枚举
+    /// 与 <see cref="DecisionEvidenceV2"/> 结构化字段，替代 V17.0 自由文本 reason。
+    /// </summary>
+    public const string V18_0 = "context-decision-evidence/v18.0";
 }
 
 /// <summary>decision-audit 审计报告。</summary>
