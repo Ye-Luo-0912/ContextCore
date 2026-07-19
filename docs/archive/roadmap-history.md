@@ -6,6 +6,113 @@
 
 ## 已完成工作
 
+### R14 系列：Decision Evidence V2 + Package Quality
+
+将 ContextDecisionRecord 从自由文本 Reason 升级为强类型枚举 + 结构化证据，并引入 Package Quality 8 指标，作为后续 Agent / Router / Reranker / 学习闭环可依赖的数据基础。保持非激活投影契约：所有 Risk 标志位恒为 false，不触发运行时变更。
+
+**R14-1：CandidateDecisionReasonCode + Decision Evidence V2（commit `38efc0d`）**：
+
+- 新增 `CandidateDecisionReasonCode` 枚举（12 值）：SelectedMandatory / SelectedHighestUtility / SelectedRelationReserve / LifecycleBlocked / DeprecatedBlocked / RequiredTagMismatch / DuplicateSuppressed / SectionQuotaExceeded / TokenBudgetExceeded / ScoreBelowThreshold / SupersededByCurrentVersion / EvidenceMissing
+- 新增 `DecisionEvidenceV2` DTO：Candidate identity / Input fingerprint / Policy version（V18_0）/ Channel sources / Score breakdown / Matched anchors/tokens / Relation paths / Lifecycle state / Rank before/after / Decision reason code / Token budget before/after / Alternatives considered / Evidence refs
+- `ContextDecisionCandidate` 由 class 改为 sealed record，支持 `with` 表达式幂等 enrichment
+- 新增 `CandidateDecisionReasonCodeMapper`：将 V17.0 自由文本 Reason 映射到 ReasonCode 枚举，保持向后兼容
+- `ContextDecisionProjector` 在 ProjectPackage / ProjectRetrieval 中填充 V2 字段
+- PublicApi baseline 同步更新
+
+**R14-2：Package Quality 8 指标（commit `1d0c2a6`）**：
+
+- 新增 `PackageQualityReport` + `PackageQualityMetric` DTO（Abstractions）
+- 新增 `PackageQualityCalculator`（Core，internal static）：在 ProjectPackage 投影过程中一次性计算 8 个确定性指标
+  - AnchorCoverage：metadata 中 anchor.names / anchor.semanticAnchors / anchor.rawSearchTokens 是否出现在 section content
+  - HardConstraintSatisfaction：通过 `Kind == "hard_constraint"` 或 `SectionName == "hard_constraints"` 识别 selected vs dropped
+  - RequiredItemCoverage：从 metadata 重新解析 mustHit IDs，与 selectedItems 比对
+  - Redundancy：通过 dropped items 中 DuplicateSuppressed / DuplicateSectionReference 比例
+  - ProvenanceCompleteness：SourceRefs.Count > 0 的 selected items 比例
+  - LifecycleRisk：优先读 Metadata["lifecycleStatus"]，回退到 ReasonCode
+  - TokenEfficiency：UsedTokens / TokenBudget，超支记 0
+  - SectionBalance：基于各 section UsageRatio 的标准差，Score = 1 - stddev
+- 权重设计：HardConstraintSatisfaction=0.20；AnchorCoverage/RequiredItemCoverage/LifecycleRisk=0.15；Redundancy/ProvenanceCompleteness/TokenEfficiency=0.10；SectionBalance=0.05
+- `ContextDecisionRecord.Quality` 字段：仅 Source=Package 时填充，Source=Retrieval 时为 null
+- 分母为 0 时返回中性分数 1.0（避免惩罚无约束场景）
+- 新增 27 个单元测试（PackageQualityReportTests）：覆盖 Projector 集成 + 各指标边界条件
+- 修复 P1-7 遗留 OpenAPI snapshot 漂移：新增 `OpenApi_RegenerateSnapshot` 辅助测试方法（与 `PublicApi_RegenerateBaselineFile` 一致的 `[Ignore]` 模式），重新生成 `service-api.openapi.json`
+- PublicApi baseline +29 entries（PackageQualityMetric 5 属性 + PackageQualityReport 10 属性 + 2 类型）
+
+验证：构建 0 警告 0 错误，ContextCore.Tests 1134 + 1 skip 通过 / 0 失败，ContextCore.Service.Tests 61 + 1 skip 通过 / 0 失败。
+
+### R13 系列：状态与基线收口 + FileSystem Correctness Boundary + Store Capability Model + Package Read Plan + Runtime Observability + Cache Canary
+
+R13 系列共 6 个子阶段 + 状态收口提交，覆盖 FileSystem 正确性边界、Store 能力模型、Package 读取计划、运行时可观测性管道、Cache Canary 冻结。
+
+**R13.0-C：状态与基线收口（commit `6cc60e8`）**：
+
+- 更新 TODO.md：R12.4A、R13.0~R13-F、P0-1~P0-8、P1-1~P1-8 全部完成
+- 清理已失效的 Cache known-gap 注释（无残留）
+- 15 份历史 freeze/report/plan 文档统一添加"历史快照"声明：
+  - Vector: vector-preview-shadow-freeze / vector-hybrid-retrieval-freeze / vector-embedding-provider-comparison-freeze / vector-postgres-provider-freeze
+  - Router: router-intent-shadow-freeze
+  - JobQueue: job-queue-postgres-freeze
+  - Relation: relation-governance-postgres-freeze
+  - Report: extended-eval-triage-report / planning-shadow-quality-report / attention-order-quality-report / attention-profile-selection-report
+  - Plan: retrieval-plan-shadow-execution / retrieval-plan-proposal / planning-optin-fallback-analysis / planning-context-snapshot
+- 生成新的 architecture baseline：PublicApi 7351 行
+
+**R13.1：FileSystem Correctness Boundary（6 子任务）**：
+
+- ✅ #1 FileLockProvider retired-entry 竞态修复（commit `46fef1c`）：用 `lock(LocalLocks)` 全局锁包裹 `GetOrAdd + RefCount++`，消除双 entry 窗口
+- ✅ #2 真正 reverse tail（commit `2094c4e`）：反向 I/O 块读取，仅读取尾部所需字节，newest-first
+- ✅ #3 retention 自然日语义（commit `dd898bc`）：cutoff 对齐今日 UTC 午夜再减 retentionDays，分片按 yyyyMMdd 边界比较
+- ✅ #4 Janitor 移出 Save 热路径（commit `990c72a`）：MaybePurge 命中槽位后 fire-and-forget 到线程池
+- ✅ #5 JobId 到文件路径索引（commit `7079cd6`）：ConcurrentDictionary<JobId, FilePath>，未命中回退扫描
+- ✅ #6 FileSystem 单实例与多进程支持边界（commit `0021ee5`）：advisory sentinel lock，独占失败仅标记多进程，不阻断操作
+
+**R13.3：Store Capability Model（2 子任务）**：
+
+- ✅ #1 StoreRuntimeCapabilities（commit `39988c2`）：替代 namespace 字符串检测
+- ✅ #2 能力驱动 fanout（commit `8762f82`）：基于 SupportsParallelReads / SupportsTransactions / RecommendedReadFanout 调整并发度
+
+**R13.2：Package Read Plan（3 子任务）**：
+
+- ✅ #1+#3+#4 merged constraint 去重 + current_task 并行 + ReadPlan 跟踪（commit `d45ce7a`）
+- ✅ #2 Provider 内按 Level/Layer 复用快照（commit `e4f854b`）：FileConstraintStore 文件内容快照缓存
+- ✅ #5 Package cold path p95 与 allocation gate（commit `0a1523a`）
+
+**R13.4：Runtime Observability Pipeline（2 子任务）**：
+
+- ✅ #1 BestEffort Sink 有界 Channel / File/Postgres 批量写入 / Required audit 同步（commit `7d81313`）
+- ✅ #2 queue/error/drop metrics via OTel Counter（commit `0b2bf15`）
+
+**R13-F：Cache Canary Freeze（1 子任务）**：
+
+- ✅ 配置开关 + 工作空间 allowlist + 单实例检查下启用 Package Template Cache（commit `7b1f721`）
+- 默认关闭；启用前置条件：单 Service 实例 + InMemory version store + 显式 AllowedWorkspaces + 指定 workspace + 明确 kill switch
+
+### P0/P1 系列：8 项正确性修复 + 8 项数据完整性增强
+
+**P0-1~P0-8（正确性修复）**：
+
+- P0-1 ingest pipeline 跨 store 一致性
+- P0-2 Postgres SQL bug
+- P0-3 Transactional UoW（ContextStore + RelationProjectionWriter + RelationStore 同一 Postgres 事务内提交，commit `75b8d84`）
+- P0-4 worker lease
+- P0-5 baseline migration（启动时自动应用 PostgreSQL baseline migration，commit `6936524`）
+- P0-6 Postgres Unsupported Store 行为契约测试（16 个测试，commit `6936524`）
+- P0-7 TraceBackedDecisionEvidenceProvider（commit `0d282c1`）
+- P0-8 审计事件绕过通道
+
+**P1-1~P1-8（数据完整性增强）**：
+
+- P1-1 FileSystem 8 Store 完整读改写在跨进程锁内执行，消除 lost update 风险（commit `0807655`）
+- P1-2 备份清单 / SHA-256 / PITR / 恢复演练（commit `35784f9`）：Sha256Utility + BackupDtos + BackupManifestGenerator + BackupVerifier + BackupDrillRunner + PostgresBackupRunner + 22 单元测试 + PublicApi +68 entries
+- P1-3 ingest 死代码与 reconcile 误删现有边修复（commit `571ef38`）
+- P1-4 高基数邻居查询 Truncated 信号（commit `3672cc4`）：从存储层传播到 BFS 引擎
+- P1-5 图写入 outbox + 定期 RelationReconciliationWorker（commit `d28df99`）
+- P1-6 批量邻居查询 API（commit `5221db2`）：消除 BFS 逐节点往返
+- P1-7 流式图诊断（commit `3a0e816`）：避免整张关系图载入内存
+- P1-8 relation weight/confidence/路径衰减传播到多跳评分（commit `ce4770a`）
+
+验证：构建 0 警告 0 错误，ContextCore.Tests 1074 + 1 skip 通过 / 0 失败，PublicApi baseline 7351 行。
+
 ### R12 系列：Context State 缓存边界返工 + P1 残留删除
 
 基于缓存边界评审，在缓存接入任何生产读路径之前完成全部返工；同步清理 ControlRoom 失效菜单、router-shadow 文档残留与 EvalGateReportDtos 孤立 DTO。
