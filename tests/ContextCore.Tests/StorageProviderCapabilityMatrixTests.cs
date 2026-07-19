@@ -55,11 +55,10 @@ public sealed class StorageProviderCapabilityMatrixTests
         typeof(IArtifactStore),
     };
 
-    // Postgres provider 显式注册为 Unsupported 占位的 16 个接口
+    // Postgres provider 显式注册为 Unsupported 占位的 14 个接口
+    // R14-PG-1：ILearningFeedbackStore / ILearningFeedbackReviewStore 已正式绑定 Postgres 实现，移出此集合
     private static readonly HashSet<Type> PostgresDeclaredUnsupported = new()
     {
-        typeof(ILearningFeedbackStore),
-        typeof(ILearningFeedbackReviewStore),
         typeof(IDecisionTraceStore),
         typeof(IShortTermMemoryStore),
         typeof(IShortTermPromotionCandidateStore),

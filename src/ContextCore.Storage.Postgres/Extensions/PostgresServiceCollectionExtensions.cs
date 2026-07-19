@@ -63,9 +63,14 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<PostgresRelationOutboxStore>();
         services.AddSingleton<IRelationOutboxStore>(sp => sp.GetRequiredService<PostgresRelationOutboxStore>());
 
-        // Learning feedback provider 仅注册 concrete 类型；默认运行时仍由 FileSystem provider 作为 source of truth。
+        // R14-PG-1：Learning feedback / review 接口正式绑定 Postgres 实现。
+        // 此前 Service 层在 RegisterPostgres 中用 Unsupported*Store 覆盖了接口绑定，
+        // 导致运行时即便 Postgres provider 已就绪也走 Unsupported 路径。现在移除覆盖，
+        // 让 PostgresLearningFeedbackStore / PostgresLearningFeedbackReviewStore 成为 source of truth。
         services.AddSingleton<PostgresLearningFeedbackStore>();
+        services.AddSingleton<ILearningFeedbackStore>(sp => sp.GetRequiredService<PostgresLearningFeedbackStore>());
         services.AddSingleton<PostgresLearningFeedbackReviewStore>();
+        services.AddSingleton<ILearningFeedbackReviewStore>(sp => sp.GetRequiredService<PostgresLearningFeedbackReviewStore>());
         services.AddSingleton<PostgresLearningFeatureCandidateStore>();
 
         // ConstraintStore
