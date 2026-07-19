@@ -436,6 +436,177 @@ LIMIT @take OFFSET @skip;
         return await ReadRelationsAsync(command, cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// P1-6：批量邻居查询。单条 SQL 用 = ANY(@item_ids) 一次性获取所有种子邻居，
+    /// 在 C# 端按种子分桶并应用 per-seed 排序 + MaxScan + Skip + Take。
+    /// </summary>
+    public async Task<IReadOnlyList<RelationNeighborBatchResult>> QueryNeighborsBatchAsync(
+        RelationNeighborBatchQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        // 去重种子 ID（保留原序）
+        var seedSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var seeds = new List<string>(query.ItemIds.Count);
+        foreach (var id in query.ItemIds)
+        {
+            if (!string.IsNullOrWhiteSpace(id) && seedSet.Add(id))
+            {
+                seeds.Add(id);
+            }
+        }
+        if (seeds.Count == 0)
+        {
+            return Array.Empty<RelationNeighborBatchResult>();
+        }
+
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+
+        var filters = new List<string> { "workspace_id = @workspace_id" };
+        command.Parameters.AddWithValue("workspace_id", query.WorkspaceId);
+
+        if (!string.IsNullOrWhiteSpace(query.CollectionId))
+        {
+            filters.Add("collection_id = @collection_id");
+            command.Parameters.AddWithValue("collection_id", query.CollectionId);
+        }
+
+        // P1-6: 用 = ANY(@item_ids) 单次过滤；Both 方向取并集，C# 端再分桶去重。
+        var itemIdsParam = seeds.ToArray();
+        switch (query.Direction)
+        {
+            case RelationDirection.Outgoing:
+                filters.Add("source_id = ANY(@item_ids)");
+                break;
+            case RelationDirection.Incoming:
+                filters.Add("target_id = ANY(@item_ids)");
+                break;
+            default:
+                filters.Add("(source_id = ANY(@item_ids) OR target_id = ANY(@item_ids))");
+                break;
+        }
+        command.Parameters.AddWithValue("item_ids", itemIdsParam);
+
+        if (!string.IsNullOrWhiteSpace(query.RelationType))
+        {
+            filters.Add("relation_type = @relation_type");
+            command.Parameters.AddWithValue("relation_type", query.RelationType);
+        }
+
+        if (query.AllowedRelationTypes.Count > 0)
+        {
+            var paramNames = new List<string>();
+            for (var i = 0; i < query.AllowedRelationTypes.Count; i++)
+            {
+                var paramName = $"allowed_rt_{i}";
+                paramNames.Add($"@{paramName}");
+                command.Parameters.AddWithValue(paramName, query.AllowedRelationTypes[i]);
+            }
+            filters.Add($"relation_type IN ({string.Join(", ", paramNames)})");
+        }
+
+        if (query.MinConfidence > 0)
+        {
+            filters.Add("confidence >= @min_confidence");
+            command.Parameters.AddWithValue("min_confidence", query.MinConfidence);
+        }
+
+        if (query.ExcludedLifecycles.Count > 0)
+        {
+            var paramNames = new List<string>();
+            for (var i = 0; i < query.ExcludedLifecycles.Count; i++)
+            {
+                var paramName = $"ex_lc_{i}";
+                paramNames.Add($"@{paramName}");
+                command.Parameters.AddWithValue(paramName, query.ExcludedLifecycles[i]);
+            }
+            filters.Add($"(data ->> 'Lifecycle' IS NULL OR data ->> 'Lifecycle' NOT IN ({string.Join(", ", paramNames)}))");
+        }
+
+        if (query.ExcludedReviewStatuses.Count > 0)
+        {
+            var paramNames = new List<string>();
+            for (var i = 0; i < query.ExcludedReviewStatuses.Count; i++)
+            {
+                var paramName = $"ex_rs_{i}";
+                paramNames.Add($"@{paramName}");
+                command.Parameters.AddWithValue(paramName, query.ExcludedReviewStatuses[i]);
+            }
+            filters.Add($"(data ->> 'ReviewStatus' IS NULL OR data ->> 'ReviewStatus' NOT IN ({string.Join(", ", paramNames)}))");
+        }
+
+        // P1-6: 不在 SQL 内做 per-seed LIMIT（LATERAL JOIN 复杂且收益有限）；
+        // 单条 SQL 一次性取回所有匹配行（受 max_scan × seeds 数量隐式约束），C# 端分桶 + per-seed 排序 + Skip/Take。
+        // 全局 LIMIT 设为 max_scan × seeds.Count（per-seed 上限 × 种子数），并加 10K 安全上限防止极端输入。
+        var maxScan = query.MaxScan > 0 ? query.MaxScan : 1000;
+        var globalLimit = Math.Min((long)maxScan * seeds.Count, 100_000);
+        command.Parameters.AddWithValue("global_limit", globalLimit);
+
+        command.CommandText = $"""
+SELECT data
+FROM {Table("relations")}
+WHERE {string.Join(" AND ", filters)}
+ORDER BY weight DESC, confidence DESC, created_at DESC
+LIMIT @global_limit;
+""";
+
+        var allRelations = await ReadRelationsAsync(command, cancellationToken).ConfigureAwait(false);
+
+        // C# 端分桶
+        var effectiveTake = query.Take > 0 ? query.Take : 100;
+        var effectiveSkip = query.Skip > 0 ? query.Skip : 0;
+        var buckets = new Dictionary<string, List<ContextRelation>>(seeds.Count, StringComparer.OrdinalIgnoreCase);
+        foreach (var seed in seeds)
+        {
+            buckets[seed] = new List<ContextRelation>();
+        }
+
+        // allRelations 已按 Weight DESC, Confidence DESC, CreatedAt DESC 排序，分桶时保持顺序
+        foreach (var relation in allRelations)
+        {
+            var sourceIsSeed = seedSet.Contains(relation.SourceId);
+            var targetIsSeed = seedSet.Contains(relation.TargetId);
+            switch (query.Direction)
+            {
+                case RelationDirection.Outgoing:
+                    if (sourceIsSeed) { buckets[relation.SourceId].Add(relation); }
+                    break;
+                case RelationDirection.Incoming:
+                    if (targetIsSeed) { buckets[relation.TargetId].Add(relation); }
+                    break;
+                default:
+                    if (sourceIsSeed) { buckets[relation.SourceId].Add(relation); }
+                    if (targetIsSeed
+                        && !string.Equals(relation.SourceId, relation.TargetId, StringComparison.OrdinalIgnoreCase))
+                    {
+                        buckets[relation.TargetId].Add(relation);
+                    }
+                    break;
+            }
+        }
+
+        var results = new List<RelationNeighborBatchResult>(seeds.Count);
+        foreach (var seed in seeds)
+        {
+            // 桶内已排序，直接 Take(MaxScan) + Skip + Take
+            var seedRelations = buckets[seed]
+                .Take(maxScan)
+                .Skip(effectiveSkip)
+                .Take(effectiveTake)
+                .ToArray();
+            if (seedRelations.Length > 0)
+            {
+                results.Add(new RelationNeighborBatchResult { ItemId = seed, Relations = seedRelations });
+            }
+        }
+
+        return results;
+    }
+
     /// <summary>按 lifecycle 查询；GRAPH-08 起优先查正式字段，兼容旧 Metadata 数据。</summary>
     public async Task<IReadOnlyList<ContextRelation>> QueryByLifecycleAsync(
         string workspaceId,

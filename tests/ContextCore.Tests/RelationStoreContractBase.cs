@@ -8,6 +8,7 @@ namespace ContextCore.Tests;
 /// 同一套断言在 InMemory / FileSystem / Postgres 三个 provider 上运行，验证核心契约一致：
 /// Get/Delete/BatchUpsert 行为，以及 QueryNeighborsAsync(RelationNeighborQuery) 的方向、类型、
 /// 置信度、生命周期、ReviewStatus 过滤和 Take 分页语义。
+/// P1-6：新增 QueryNeighborsBatchAsync(RelationNeighborBatchQuery) 批量邻居查询契约。
 /// </summary>
 /// <remarks>
 /// 派生类必须实现 <see cref="CreateStoreAsync"/> 返回一个干净的 store 实例。
@@ -464,6 +465,294 @@ public abstract class RelationStoreContractBase
             Assert.AreEqual(2, page2.Count);
             Assert.AreEqual("r-w3", page2[0].Id);
             Assert.AreEqual("r-w2", page2[1].Id);
+        }
+        finally
+        {
+            await DisposeStoreAsync(store, CancellationToken.None);
+        }
+    }
+
+    // ── P1-6：QueryNeighborsBatchAsync 契约 ────────────────────────────
+
+    [TestMethod]
+    public async Task QueryNeighborsBatch_ReturnsEachSeedWithItsNeighbors()
+    {
+        var store = await PrepareAsync(
+            MakeRelation("r-a-out", "seedA", "neighbor-a1", "related_to"),
+            MakeRelation("r-a-in", "neighbor-a2", "seedA", "related_to"),
+            MakeRelation("r-b-out", "seedB", "neighbor-b1", "related_to"));
+        try
+        {
+            var results = await store.QueryNeighborsBatchAsync(new RelationNeighborBatchQuery
+            {
+                WorkspaceId = WorkspaceId,
+                CollectionId = "col",
+                ItemIds = ["seedA", "seedB"],
+                Direction = RelationDirection.Both,
+                Take = 100
+            }, CancellationToken.None);
+
+            var bySeed = results.ToDictionary(r => r.ItemId, StringComparer.OrdinalIgnoreCase);
+            Assert.IsTrue(bySeed.ContainsKey("seedA"), "应包含 seedA 的结果");
+            Assert.IsTrue(bySeed.ContainsKey("seedB"), "应包含 seedB 的结果");
+            Assert.AreEqual(2, bySeed["seedA"].Relations.Count, "seedA 应有 2 个邻居（出+入）");
+            Assert.AreEqual(1, bySeed["seedB"].Relations.Count, "seedB 应有 1 个邻居");
+            Assert.IsTrue(bySeed["seedA"].Relations.Any(r => r.Id == "r-a-out"));
+            Assert.IsTrue(bySeed["seedA"].Relations.Any(r => r.Id == "r-a-in"));
+            Assert.AreEqual("r-b-out", bySeed["seedB"].Relations[0].Id);
+        }
+        finally
+        {
+            await DisposeStoreAsync(store, CancellationToken.None);
+        }
+    }
+
+    [TestMethod]
+    public async Task QueryNeighborsBatch_BothDirection_SharedEdgeAppearsInBothSeeds()
+    {
+        // seedA 和 seedB 之间有一条边 A→B。Both 方向下，这条边应同时出现在 seedA 和 seedB 的结果中。
+        var store = await PrepareAsync(
+            MakeRelation("r-shared", "seedA", "seedB", "related_to"));
+        try
+        {
+            var results = await store.QueryNeighborsBatchAsync(new RelationNeighborBatchQuery
+            {
+                WorkspaceId = WorkspaceId,
+                CollectionId = "col",
+                ItemIds = ["seedA", "seedB"],
+                Direction = RelationDirection.Both,
+                Take = 100
+            }, CancellationToken.None);
+
+            var bySeed = results.ToDictionary(r => r.ItemId, StringComparer.OrdinalIgnoreCase);
+            Assert.AreEqual(1, bySeed["seedA"].Relations.Count, "seedA 视角：出边到 seedB");
+            Assert.AreEqual("r-shared", bySeed["seedA"].Relations[0].Id);
+            Assert.AreEqual(1, bySeed["seedB"].Relations.Count, "seedB 视角：入边来自 seedA");
+            Assert.AreEqual("r-shared", bySeed["seedB"].Relations[0].Id);
+        }
+        finally
+        {
+            await DisposeStoreAsync(store, CancellationToken.None);
+        }
+    }
+
+    [TestMethod]
+    public async Task QueryNeighborsBatch_Direction_FiltersCorrectly()
+    {
+        var store = await PrepareAsync(
+            MakeRelation("r-out", "seedA", "neighbor1", "related_to"),
+            MakeRelation("r-in", "neighbor2", "seedA", "related_to"));
+        try
+        {
+            var outgoing = await store.QueryNeighborsBatchAsync(new RelationNeighborBatchQuery
+            {
+                WorkspaceId = WorkspaceId,
+                CollectionId = "col",
+                ItemIds = ["seedA"],
+                Direction = RelationDirection.Outgoing,
+                Take = 100
+            }, CancellationToken.None);
+            Assert.AreEqual(1, outgoing.Count);
+            Assert.AreEqual(1, outgoing[0].Relations.Count);
+            Assert.AreEqual("r-out", outgoing[0].Relations[0].Id);
+
+            var incoming = await store.QueryNeighborsBatchAsync(new RelationNeighborBatchQuery
+            {
+                WorkspaceId = WorkspaceId,
+                CollectionId = "col",
+                ItemIds = ["seedA"],
+                Direction = RelationDirection.Incoming,
+                Take = 100
+            }, CancellationToken.None);
+            Assert.AreEqual(1, incoming.Count);
+            Assert.AreEqual(1, incoming[0].Relations.Count);
+            Assert.AreEqual("r-in", incoming[0].Relations[0].Id);
+        }
+        finally
+        {
+            await DisposeStoreAsync(store, CancellationToken.None);
+        }
+    }
+
+    [TestMethod]
+    public async Task QueryNeighborsBatch_RelationType_FiltersPerSeed()
+    {
+        var store = await PrepareAsync(
+            MakeRelation("r-a-related", "seedA", "n1", "related_to"),
+            MakeRelation("r-a-depends", "seedA", "n2", "depends_on"),
+            MakeRelation("r-b-related", "seedB", "n3", "related_to"),
+            MakeRelation("r-b-depends", "seedB", "n4", "depends_on"));
+        try
+        {
+            var results = await store.QueryNeighborsBatchAsync(new RelationNeighborBatchQuery
+            {
+                WorkspaceId = WorkspaceId,
+                CollectionId = "col",
+                ItemIds = ["seedA", "seedB"],
+                Direction = RelationDirection.Outgoing,
+                RelationType = "depends_on",
+                Take = 100
+            }, CancellationToken.None);
+
+            Assert.AreEqual(2, results.Count);
+            foreach (var result in results)
+            {
+                Assert.AreEqual(1, result.Relations.Count, $"{result.ItemId} 应只返回 depends_on 类型");
+                Assert.AreEqual("depends_on", result.Relations[0].RelationType);
+            }
+        }
+        finally
+        {
+            await DisposeStoreAsync(store, CancellationToken.None);
+        }
+    }
+
+    [TestMethod]
+    public async Task QueryNeighborsBatch_PerSeedTake_LimitsEachSeed()
+    {
+        // seedA 和 seedB 各有 5 条出边，权重 1-5；Take=2 应只返回 top 2（weight 5 和 4）
+        var seedRelations = Enumerable.Range(1, 5)
+            .Select(i => MakeRelation($"r-a-{i}", "seedA", $"na{i}", "related_to", weight: (double)i))
+            .Concat(Enumerable.Range(1, 5)
+                .Select(i => MakeRelation($"r-b-{i}", "seedB", $"nb{i}", "related_to", weight: (double)i)))
+            .ToArray();
+        var store = await PrepareAsync(seedRelations);
+        try
+        {
+            var results = await store.QueryNeighborsBatchAsync(new RelationNeighborBatchQuery
+            {
+                WorkspaceId = WorkspaceId,
+                CollectionId = "col",
+                ItemIds = ["seedA", "seedB"],
+                Direction = RelationDirection.Outgoing,
+                Take = 2
+            }, CancellationToken.None);
+
+            Assert.AreEqual(2, results.Count);
+            foreach (var result in results)
+            {
+                Assert.AreEqual(2, result.Relations.Count, $"{result.ItemId} 应被 Take=2 限制");
+                Assert.AreEqual(5.0, result.Relations[0].Weight, "top 1 应是 weight=5");
+                Assert.AreEqual(4.0, result.Relations[1].Weight, "top 2 应是 weight=4");
+            }
+        }
+        finally
+        {
+            await DisposeStoreAsync(store, CancellationToken.None);
+        }
+    }
+
+    [TestMethod]
+    public async Task QueryNeighborsBatch_EmptyItemIds_ReturnsEmpty()
+    {
+        var store = await PrepareAsync(MakeRelation("r1", "a", "b", "related_to"));
+        try
+        {
+            var results = await store.QueryNeighborsBatchAsync(new RelationNeighborBatchQuery
+            {
+                WorkspaceId = WorkspaceId,
+                CollectionId = "col",
+                ItemIds = []
+            }, CancellationToken.None);
+
+            Assert.AreEqual(0, results.Count);
+        }
+        finally
+        {
+            await DisposeStoreAsync(store, CancellationToken.None);
+        }
+    }
+
+    [TestMethod]
+    public async Task QueryNeighborsBatch_NoMatches_ReturnsEmpty()
+    {
+        var store = await PrepareAsync(MakeRelation("r1", "a", "b", "related_to"));
+        try
+        {
+            var results = await store.QueryNeighborsBatchAsync(new RelationNeighborBatchQuery
+            {
+                WorkspaceId = WorkspaceId,
+                CollectionId = "col",
+                ItemIds = ["nonexistent-seed"],
+                Direction = RelationDirection.Both,
+                Take = 100
+            }, CancellationToken.None);
+
+            Assert.AreEqual(0, results.Count, "无邻居的种子不应出现在结果中（contract: 调用者容忍缺失）");
+        }
+        finally
+        {
+            await DisposeStoreAsync(store, CancellationToken.None);
+        }
+    }
+
+    [TestMethod]
+    public async Task QueryNeighborsBatch_DuplicateSeedIds_Deduped()
+    {
+        var store = await PrepareAsync(
+            MakeRelation("r1", "seedA", "n1", "related_to"),
+            MakeRelation("r2", "seedA", "n2", "related_to"));
+        try
+        {
+            var results = await store.QueryNeighborsBatchAsync(new RelationNeighborBatchQuery
+            {
+                WorkspaceId = WorkspaceId,
+                CollectionId = "col",
+                ItemIds = ["seedA", "seedA", "seedA"],
+                Direction = RelationDirection.Outgoing,
+                Take = 100
+            }, CancellationToken.None);
+
+            Assert.AreEqual(1, results.Count, "重复的 seedA 应去重");
+            Assert.AreEqual(2, results[0].Relations.Count);
+            Assert.AreEqual("seedA", results[0].ItemId);
+        }
+        finally
+        {
+            await DisposeStoreAsync(store, CancellationToken.None);
+        }
+    }
+
+    /// <summary>
+    /// P1-6 关键契约：单个种子的 batch 结果应与 single-seed QueryNeighborsAsync 一致
+    /// （方向、过滤、排序、Take/MaxScan 语义都应一致）。
+    /// </summary>
+    [TestMethod]
+    public async Task QueryNeighborsBatch_SingleSeed_MatchesSingleQuery()
+    {
+        var store = await PrepareAsync(
+            MakeRelation("r-w1", "center", "n1", "related_to", weight: 1.0),
+            MakeRelation("r-w2", "center", "n2", "related_to", weight: 2.0),
+            MakeRelation("r-w9", "center", "n3", "related_to", weight: 9.0),
+            MakeRelation("r-w10", "center", "n4", "related_to", weight: 10.0));
+        try
+        {
+            var single = await store.QueryNeighborsAsync(new RelationNeighborQuery
+            {
+                WorkspaceId = WorkspaceId,
+                CollectionId = "col",
+                ItemId = "center",
+                Direction = RelationDirection.Outgoing,
+                Take = 100
+            }, CancellationToken.None);
+
+            var batch = await store.QueryNeighborsBatchAsync(new RelationNeighborBatchQuery
+            {
+                WorkspaceId = WorkspaceId,
+                CollectionId = "col",
+                ItemIds = ["center"],
+                Direction = RelationDirection.Outgoing,
+                Take = 100
+            }, CancellationToken.None);
+
+            Assert.AreEqual(1, batch.Count);
+            Assert.AreEqual("center", batch[0].ItemId);
+            Assert.AreEqual(single.Count, batch[0].Relations.Count, "batch 应返回与单查询相同数量的邻居");
+            for (var i = 0; i < single.Count; i++)
+            {
+                Assert.AreEqual(single[i].Id, batch[0].Relations[i].Id, $"第 {i} 个邻居 ID 应一致");
+                Assert.AreEqual(single[i].Weight, batch[0].Relations[i].Weight, 0.001, $"第 {i} 个邻居 weight 应一致");
+            }
         }
         finally
         {

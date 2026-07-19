@@ -312,6 +312,17 @@ public sealed class ScopedRelationGovernanceStore : IRelationStore
             token => _postgresStore.QueryNeighborsAsync(query, token),
             cancellationToken);
 
+    /// <summary>P1-6：批量邻居查询委托。</summary>
+    public Task<IReadOnlyList<RelationNeighborBatchResult>> QueryNeighborsBatchAsync(RelationNeighborBatchQuery query, CancellationToken cancellationToken = default)
+        => ExecuteReadAsync(
+            "service-relation-neighbors-batch",
+            query.WorkspaceId,
+            query.CollectionId ?? string.Empty,
+            "RelationNeighborsBatchQuery",
+            token => _fileStore.QueryNeighborsBatchAsync(query, token),
+            token => _postgresStore.QueryNeighborsBatchAsync(query, token),
+            cancellationToken);
+
     private async Task ExecuteWriteAsync(
         string operationId,
         string workspaceId,

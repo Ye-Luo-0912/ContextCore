@@ -18,6 +18,7 @@ public enum RelationDirection
 /// GRAPH-11：接口精简为 5 个核心方法 + SaveAsync 薄包装。
 /// 核心：Get/Delete/BatchUpsert/Query/QueryNeighbors(RelationNeighborQuery)。
 /// SaveAsync 保留为单条便利方法，实现委托 BatchUpsertAsync；旧 SaveMany/QueryForItem/QueryBySource/QueryByTarget/QueryByType 已移除，统一走 Query。
+/// P1-6：新增 QueryNeighborsBatchAsync 批量邻居查询，BFS 引擎用单次调用替代逐节点往返；Take/Skip/MaxScan 仍为 per-seed 语义。
 /// </remarks>
 public interface IRelationStore
 {
@@ -60,6 +61,18 @@ public interface IRelationStore
     [StoreOperation(StoreOperationKind.Read)]
     Task<IReadOnlyList<ContextRelation>> QueryNeighborsAsync(
         RelationNeighborQuery query,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// P1-6：批量邻居查询。一次返回多个种子节点各自的邻居列表，消除 BFS 逐节点往返。
+    /// 实现应在单次存储访问内完成（Postgres 单条 SQL；File/InMemory 单次内存扫描）。
+    /// Take/Skip/MaxScan 仍为 per-seed 语义；<see cref="RelationDirection.Both"/> 方向下，
+    /// 同时连接两个种子的边会出现在两者各自的结果集中（由调用者去重）。
+    /// 返回结果可只包含有邻居的种子；调用者应容忍某种子未出现在结果中（视为空邻居）。
+    /// </summary>
+    [StoreOperation(StoreOperationKind.Read)]
+    Task<IReadOnlyList<RelationNeighborBatchResult>> QueryNeighborsBatchAsync(
+        RelationNeighborBatchQuery query,
         CancellationToken cancellationToken = default);
 }
 

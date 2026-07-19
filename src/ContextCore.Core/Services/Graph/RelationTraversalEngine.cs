@@ -99,6 +99,27 @@ public sealed class RelationTraversalEngine
                 break;
             }
 
+            // P1-6: 整个 frontier 一次性批量查询，消除逐节点往返。
+            var batchQuery = BuildBatchQuery(
+                request,
+                profile,
+                minConfidence,
+                excludedLifecycles,
+                excludedReviewStatuses,
+                maxFanout,
+                currentFrontier);
+
+            var batchResults = await _relationStore.QueryNeighborsBatchAsync(
+                batchQuery, cancellationToken).ConfigureAwait(false);
+
+            // 按 ItemId 索引结果（缺失视为空邻居）
+            var bySeed = new Dictionary<string, IReadOnlyList<ContextRelation>>(
+                batchResults.Count, StringComparer.OrdinalIgnoreCase);
+            foreach (var result in batchResults)
+            {
+                bySeed[result.ItemId] = result.Relations;
+            }
+
             var nextFrontier = new List<TraversalNode>(capacity: Math.Min(maxFanout, currentFrontier.Length * 2));
 
             foreach (var node in currentFrontier)
@@ -110,18 +131,10 @@ public sealed class RelationTraversalEngine
                     break;
                 }
 
-                // GRAPH-10：使用统一 RelationNeighborQuery 替代 QueryBySource + QueryByTarget 双查询
-                var relations = await QueryRelationsAsync(
-                    request.WorkspaceId,
-                    request.CollectionId,
-                    node.ItemId,
-                    request.Direction,
-                    profile,
-                    minConfidence,
-                    excludedLifecycles,
-                    excludedReviewStatuses,
-                    maxFanout,
-                    cancellationToken).ConfigureAwait(false);
+                if (!bySeed.TryGetValue(node.ItemId, out var relations))
+                {
+                    continue;
+                }
 
                 var filtered = relations
                     .Where(r => IsAllowedType(r, profile))
@@ -188,20 +201,17 @@ public sealed class RelationTraversalEngine
     }
 
     /// <summary>
-    /// GRAPH-10：使用统一 RelationNeighborQuery 查询邻居，将方向/类型/置信度/生命周期过滤下推到存储层。
-    /// Both 方向只需一次查询（而非原来的 QueryBySource + QueryByTarget 两次）。
+    /// P1-6：为整个 frontier 构建 RelationNeighborBatchQuery。
+    /// 字段语义与原 per-node RelationNeighborQuery 一致，区别仅在 ItemIds（多个种子）。
     /// </summary>
-    private async Task<IReadOnlyList<ContextRelation>> QueryRelationsAsync(
-        string workspaceId,
-        string? collectionId,
-        string itemId,
-        RelationDirection direction,
+    private static RelationNeighborBatchQuery BuildBatchQuery(
+        RelationTraversalRequest request,
         RelationExpansionProfile profile,
         double minConfidence,
         IReadOnlyList<string> excludedLifecycles,
         IReadOnlyList<string> excludedReviewStatuses,
         int maxFanout,
-        CancellationToken cancellationToken)
+        TraversalNode[] frontier)
     {
         // P3-02：多类型下推到存储层，避免高权重非允许边在 Take 窗口外丢失合法边
         string? relationType = null;
@@ -215,12 +225,12 @@ public sealed class RelationTraversalEngine
             allowedTypes = profile.AllowedRelationTypes;
         }
 
-        var query = new RelationNeighborQuery
+        return new RelationNeighborBatchQuery
         {
-            WorkspaceId = workspaceId,
-            CollectionId = collectionId,
-            ItemId = itemId,
-            Direction = direction,
+            WorkspaceId = request.WorkspaceId,
+            CollectionId = request.CollectionId,
+            ItemIds = frontier.Select(n => n.ItemId).ToArray(),
+            Direction = request.Direction,
             RelationType = relationType,
             AllowedRelationTypes = allowedTypes,
             MinConfidence = minConfidence,
@@ -230,8 +240,6 @@ public sealed class RelationTraversalEngine
             Skip = 0,
             MaxScan = Math.Max(maxFanout * 10, 500)
         };
-
-        return await _relationStore!.QueryNeighborsAsync(query, cancellationToken).ConfigureAwait(false);
     }
 
     private static string ResolveNeighborId(ContextRelation relation, string currentNodeId)

@@ -800,6 +800,7 @@ M:ContextCore.Abstractions.IRelationStore.DeleteAsync(System.String, System.Stri
 M:ContextCore.Abstractions.IRelationStore.GetAsync(System.String, System.String, System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IRelationStore.QueryAsync(ContextCore.Abstractions.Models.ContextRelationQuery, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IRelationStore.QueryNeighborsAsync(ContextCore.Abstractions.Models.RelationNeighborQuery, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IRelationStore.QueryNeighborsBatchAsync(ContextCore.Abstractions.Models.RelationNeighborBatchQuery, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IRelationStore.SaveAsync(ContextCore.Abstractions.Models.ContextRelation, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IRetrievalTraceStore.QueryRecentAsync(System.String, System.String, System.Int32, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IRetrievalTraceStore.SaveAsync(ContextCore.Abstractions.Models.ContextRetrievalTrace, System.Threading.CancellationToken)
@@ -2114,6 +2115,16 @@ M:ContextCore.Abstractions.Models.RelationMigrationReport.Equals(System.Object)
 M:ContextCore.Abstractions.Models.RelationMigrationReport.GetHashCode()
 M:ContextCore.Abstractions.Models.RelationMigrationReport.GetType()
 M:ContextCore.Abstractions.Models.RelationMigrationReport.ToString()
+M:ContextCore.Abstractions.Models.RelationNeighborBatchQuery.#ctor()
+M:ContextCore.Abstractions.Models.RelationNeighborBatchQuery.Equals(System.Object)
+M:ContextCore.Abstractions.Models.RelationNeighborBatchQuery.GetHashCode()
+M:ContextCore.Abstractions.Models.RelationNeighborBatchQuery.GetType()
+M:ContextCore.Abstractions.Models.RelationNeighborBatchQuery.ToString()
+M:ContextCore.Abstractions.Models.RelationNeighborBatchResult.#ctor()
+M:ContextCore.Abstractions.Models.RelationNeighborBatchResult.Equals(System.Object)
+M:ContextCore.Abstractions.Models.RelationNeighborBatchResult.GetHashCode()
+M:ContextCore.Abstractions.Models.RelationNeighborBatchResult.GetType()
+M:ContextCore.Abstractions.Models.RelationNeighborBatchResult.ToString()
 M:ContextCore.Abstractions.Models.RelationNeighborQuery.#ctor()
 M:ContextCore.Abstractions.Models.RelationNeighborQuery.Equals(System.Object)
 M:ContextCore.Abstractions.Models.RelationNeighborQuery.GetHashCode()
@@ -5272,6 +5283,20 @@ P:ContextCore.Abstractions.Models.RelationMigrationReport.ReviewStatusBackfilled
 P:ContextCore.Abstractions.Models.RelationMigrationReport.SkippedRelations (get|set)
 P:ContextCore.Abstractions.Models.RelationMigrationReport.TotalRelations (get|init)
 P:ContextCore.Abstractions.Models.RelationMigrationReport.UpdatedRelations (get|set)
+P:ContextCore.Abstractions.Models.RelationNeighborBatchQuery.AllowedRelationTypes (get|init)
+P:ContextCore.Abstractions.Models.RelationNeighborBatchQuery.CollectionId (get|init)
+P:ContextCore.Abstractions.Models.RelationNeighborBatchQuery.Direction (get|init)
+P:ContextCore.Abstractions.Models.RelationNeighborBatchQuery.ExcludedLifecycles (get|init)
+P:ContextCore.Abstractions.Models.RelationNeighborBatchQuery.ExcludedReviewStatuses (get|init)
+P:ContextCore.Abstractions.Models.RelationNeighborBatchQuery.ItemIds (get|init)
+P:ContextCore.Abstractions.Models.RelationNeighborBatchQuery.MaxScan (get|init)
+P:ContextCore.Abstractions.Models.RelationNeighborBatchQuery.MinConfidence (get|init)
+P:ContextCore.Abstractions.Models.RelationNeighborBatchQuery.RelationType (get|init)
+P:ContextCore.Abstractions.Models.RelationNeighborBatchQuery.Skip (get|init)
+P:ContextCore.Abstractions.Models.RelationNeighborBatchQuery.Take (get|init)
+P:ContextCore.Abstractions.Models.RelationNeighborBatchQuery.WorkspaceId (get|init)
+P:ContextCore.Abstractions.Models.RelationNeighborBatchResult.ItemId (get|init)
+P:ContextCore.Abstractions.Models.RelationNeighborBatchResult.Relations (get|init)
 P:ContextCore.Abstractions.Models.RelationNeighborQuery.AllowedRelationTypes (get|init)
 P:ContextCore.Abstractions.Models.RelationNeighborQuery.CollectionId (get|init)
 P:ContextCore.Abstractions.Models.RelationNeighborQuery.Direction (get|init)
@@ -7040,6 +7065,8 @@ T:ContextCore.Abstractions.Models.RelationItemReference
 T:ContextCore.Abstractions.Models.RelationLifecycles
 T:ContextCore.Abstractions.Models.RelationMigrationOptions
 T:ContextCore.Abstractions.Models.RelationMigrationReport
+T:ContextCore.Abstractions.Models.RelationNeighborBatchQuery
+T:ContextCore.Abstractions.Models.RelationNeighborBatchResult
 T:ContextCore.Abstractions.Models.RelationNeighborQuery
 T:ContextCore.Abstractions.Models.RelationProjectionWriteResult
 T:ContextCore.Abstractions.Models.RelationProjectorOutputDiagnostic

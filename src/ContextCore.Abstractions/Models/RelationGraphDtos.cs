@@ -893,6 +893,64 @@ public sealed class RelationNeighborQuery
     public int MaxScan { get; init; } = 1000;
 }
 
+/// <summary>
+/// P1-6：批量邻居查询 DTO。一次查询多个种子节点的邻居，消除 BFS 逐节点往返。
+/// 字段语义与 <see cref="RelationNeighborQuery"/> 一致，区别仅在于 <see cref="ItemIds"/>（多个种子）。
+/// Take/Skip/MaxScan 仍为 per-seed 语义：每个种子独立排序、独立扫描上限、独立分页。
+/// </summary>
+public sealed class RelationNeighborBatchQuery
+{
+    /// <summary>所属工作空间 ID（必填）。</summary>
+    public required string WorkspaceId { get; init; }
+
+    /// <summary>筛选指定集合（可选）。</summary>
+    public string? CollectionId { get; init; }
+
+    /// <summary>查询邻居的种子条目 ID 列表（必填，至少 1 个）。重复 ID 在存储层去重。</summary>
+    public required IReadOnlyList<string> ItemIds { get; init; }
+
+    /// <summary>方向过滤：出边、入边或双向（默认 Both）。
+    /// Both 方向下，一条同时连接两个种子的边会出现在两个种子的结果集中。</summary>
+    public RelationDirection Direction { get; init; } = RelationDirection.Both;
+
+    /// <summary>筛选指定关系类型（可选）。为空时允许所有类型。</summary>
+    public string? RelationType { get; init; }
+
+    /// <summary>筛选多个关系类型（可选）。非空时优先于 <see cref="RelationType"/>。</summary>
+    public IReadOnlyList<string> AllowedRelationTypes { get; init; } = Array.Empty<string>();
+
+    /// <summary>最低置信度阈值（可选）。默认 0，不过滤。</summary>
+    public double MinConfidence { get; init; }
+
+    /// <summary>排除的生命周期值列表（可选）。</summary>
+    public IReadOnlyList<string> ExcludedLifecycles { get; init; } = Array.Empty<string>();
+
+    /// <summary>排除的 ReviewStatus 值列表（可选）。</summary>
+    public IReadOnlyList<string> ExcludedReviewStatuses { get; init; } = Array.Empty<string>();
+
+    /// <summary>per-seed 返回记录数上限（分页 Take）。默认 100。</summary>
+    public int Take { get; init; } = 100;
+
+    /// <summary>per-seed 跳过的记录数（分页 Skip）。默认 0。</summary>
+    public int Skip { get; init; }
+
+    /// <summary>per-seed 扫描上限：从数据源读取的最大行数。默认 1000。</summary>
+    public int MaxScan { get; init; } = 1000;
+}
+
+/// <summary>
+/// P1-6：单个种子的批量邻居查询结果。
+/// 引擎按 <see cref="ItemId"/> 索引结果以扩展 BFS frontier。
+/// </summary>
+public sealed class RelationNeighborBatchResult
+{
+    /// <summary>对应的种子条目 ID（来自查询的 ItemIds）。</summary>
+    public required string ItemId { get; init; }
+
+    /// <summary>该种子的邻居关系列表（已按 Weight/Confidence/CreatedAt 排序并应用 Skip/Take）。</summary>
+    public required IReadOnlyList<ContextRelation> Relations { get; init; }
+}
+
 /// <summary>P3-03：关系旧数据迁移报告。</summary>
 public sealed class RelationMigrationReport
 {

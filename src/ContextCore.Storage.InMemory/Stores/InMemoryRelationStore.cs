@@ -166,6 +166,133 @@ public sealed class InMemoryRelationStore : IRelationStore
         return Task.FromResult<IReadOnlyList<ContextRelation>>(results);
     }
 
+    /// <summary>
+    /// P1-6：批量邻居查询。单次扫描 _relations.Values，按种子 ID 分桶；
+    /// per-seed 排序 + MaxScan + Skip + Take。
+    /// </summary>
+    public Task<IReadOnlyList<RelationNeighborBatchResult>> QueryNeighborsBatchAsync(
+        RelationNeighborBatchQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        // 去重种子 ID（保留原序以便结果稳定）
+        var seedSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var seeds = new List<string>(query.ItemIds.Count);
+        foreach (var id in query.ItemIds)
+        {
+            if (!string.IsNullOrWhiteSpace(id) && seedSet.Add(id))
+            {
+                seeds.Add(id);
+            }
+        }
+        if (seeds.Count == 0)
+        {
+            return Task.FromResult<IReadOnlyList<RelationNeighborBatchResult>>(Array.Empty<RelationNeighborBatchResult>());
+        }
+
+        var effectiveTake = query.Take > 0 ? query.Take : 100;
+        var effectiveSkip = query.Skip > 0 ? query.Skip : 0;
+        var maxScan = query.MaxScan > 0 ? query.MaxScan : 1000;
+        var excludedLifecycles = query.ExcludedLifecycles.Count > 0
+            ? new HashSet<string>(query.ExcludedLifecycles, StringComparer.OrdinalIgnoreCase)
+            : null;
+        var excludedReviewStatuses = query.ExcludedReviewStatuses.Count > 0
+            ? new HashSet<string>(query.ExcludedReviewStatuses, StringComparer.OrdinalIgnoreCase)
+            : null;
+        var allowedTypes = query.AllowedRelationTypes.Count > 0
+            ? new HashSet<string>(query.AllowedRelationTypes, StringComparer.OrdinalIgnoreCase)
+            : null;
+
+        // 每个种子一个独立的 bucket，Both 方向下一条边可同时入两桶。
+        var buckets = new Dictionary<string, List<ContextRelation>>(seeds.Count, StringComparer.OrdinalIgnoreCase);
+        foreach (var seed in seeds)
+        {
+            buckets[seed] = new List<ContextRelation>();
+        }
+
+        foreach (var item in _relations.Values)
+        {
+            if (!string.Equals(item.WorkspaceId, query.WorkspaceId, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+            if (!string.IsNullOrWhiteSpace(query.CollectionId)
+                && !string.Equals(item.CollectionId, query.CollectionId, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+            if (allowedTypes is not null)
+            {
+                if (!allowedTypes.Contains(item.RelationType))
+                {
+                    continue;
+                }
+            }
+            else if (!string.IsNullOrWhiteSpace(query.RelationType)
+                && !string.Equals(item.RelationType, query.RelationType, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+            if (query.MinConfidence > 0 && item.Confidence < query.MinConfidence)
+            {
+                continue;
+            }
+            if (excludedLifecycles is not null && excludedLifecycles.Contains(item.Lifecycle ?? string.Empty))
+            {
+                continue;
+            }
+            if (excludedReviewStatuses is not null && excludedReviewStatuses.Contains(item.ReviewStatus ?? string.Empty))
+            {
+                continue;
+            }
+
+            // 方向匹配 + 桶分配
+            // Both 方向：source 是种子入 source 桶；target 是种子入 target 桶；
+            //           self-loop（source==target 且是种子）只入一次（source 桶）。
+            var sourceIsSeed = seedSet.Contains(item.SourceId);
+            var targetIsSeed = seedSet.Contains(item.TargetId);
+            switch (query.Direction)
+            {
+                case RelationDirection.Outgoing:
+                    if (sourceIsSeed) { buckets[item.SourceId].Add(item); }
+                    break;
+                case RelationDirection.Incoming:
+                    if (targetIsSeed) { buckets[item.TargetId].Add(item); }
+                    break;
+                default:
+                    if (sourceIsSeed) { buckets[item.SourceId].Add(item); }
+                    if (targetIsSeed
+                        && !string.Equals(item.SourceId, item.TargetId, StringComparison.OrdinalIgnoreCase))
+                    {
+                        buckets[item.TargetId].Add(item);
+                    }
+                    break;
+            }
+        }
+
+        var results = new List<RelationNeighborBatchResult>(seeds.Count);
+        foreach (var seed in seeds)
+        {
+            var relations = buckets[seed]
+                .OrderByDescending(item => item.Weight)
+                .ThenByDescending(item => item.Confidence)
+                .ThenByDescending(item => item.CreatedAt)
+                .Take(maxScan)
+                .Skip(effectiveSkip)
+                .Take(effectiveTake)
+                .Select(item => CompositeContextNormalizer.Clone(item))
+                .ToArray();
+            if (relations.Length > 0)
+            {
+                results.Add(new RelationNeighborBatchResult { ItemId = seed, Relations = relations });
+            }
+        }
+
+        return Task.FromResult<IReadOnlyList<RelationNeighborBatchResult>>(results);
+    }
+
     private static string Key(string workspaceId, string collectionId, string id)
     {
         return $"{workspaceId}\u001f{collectionId}\u001f{id}";
