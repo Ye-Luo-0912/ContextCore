@@ -95,6 +95,17 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<PostgresDecisionTraceStore>();
         services.AddSingleton<IDecisionTraceStore>(sp => sp.GetRequiredService<PostgresDecisionTraceStore>());
 
+        // R14-PG-3：Short-term memory / promotion / candidate review stores。
+        // 替代 Unsupported 占位，让 HA 场景下短期记忆与晋升审核可持久化。
+        services.AddSingleton<PostgresShortTermMemoryStore>();
+        services.AddSingleton<IShortTermMemoryStore>(sp => sp.GetRequiredService<PostgresShortTermMemoryStore>());
+        services.AddSingleton<PostgresShortTermPromotionCandidateStore>();
+        services.AddSingleton<IShortTermPromotionCandidateStore>(sp => sp.GetRequiredService<PostgresShortTermPromotionCandidateStore>());
+        services.AddSingleton<PostgresCandidateMemoryReviewStore>();
+        services.AddSingleton<ICandidateMemoryReviewStore>(sp => sp.GetRequiredService<PostgresCandidateMemoryReviewStore>());
+        services.AddSingleton<PostgresStableReviewCandidateStore>();
+        services.AddSingleton<IStableReviewCandidateStore>(sp => sp.GetRequiredService<PostgresStableReviewCandidateStore>());
+
         // PackageBuildTraceStore
         services.AddSingleton<PostgresContextPackageBuildTraceStore>();
         services.AddSingleton<IContextPackageBuildTraceStore>(sp =>

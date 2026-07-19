@@ -122,6 +122,15 @@ public sealed class ContextCorePostgresStorageTests
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(IRetrievalTraceStore)));
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(PostgresDecisionTraceStore)));
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(IDecisionTraceStore)));
+        // R14-PG-3：4 个新 Postgres store 与对应接口注册
+        Assert.IsTrue(services.Any(item => item.ServiceType == typeof(PostgresShortTermMemoryStore)));
+        Assert.IsTrue(services.Any(item => item.ServiceType == typeof(IShortTermMemoryStore)));
+        Assert.IsTrue(services.Any(item => item.ServiceType == typeof(PostgresShortTermPromotionCandidateStore)));
+        Assert.IsTrue(services.Any(item => item.ServiceType == typeof(IShortTermPromotionCandidateStore)));
+        Assert.IsTrue(services.Any(item => item.ServiceType == typeof(PostgresCandidateMemoryReviewStore)));
+        Assert.IsTrue(services.Any(item => item.ServiceType == typeof(ICandidateMemoryReviewStore)));
+        Assert.IsTrue(services.Any(item => item.ServiceType == typeof(PostgresStableReviewCandidateStore)));
+        Assert.IsTrue(services.Any(item => item.ServiceType == typeof(IStableReviewCandidateStore)));
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(PostgresLearningFeedbackStore)));
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(ILearningFeedbackStore)));
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(PostgresLearningFeedbackReviewStore)));
@@ -503,7 +512,7 @@ public sealed class ContextCorePostgresStorageTests
         var sql = PostgresMigrationRunner.BuildMigrationSql(options);
         var requiredIndexes = PostgresMigrationRunner.GetRequiredIndexNames(options);
 
-        Assert.AreEqual("cc-schema-v9", PostgresMigrationRunner.SchemaVersion);
+        Assert.AreEqual("cc-schema-v10", PostgresMigrationRunner.SchemaVersion);
         StringAssert.Contains(sql, "CREATE EXTENSION IF NOT EXISTS vector");
         StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_vector_index_entries");
         StringAssert.Contains(sql, "source_id text NOT NULL DEFAULT ''");
@@ -521,6 +530,17 @@ public sealed class ContextCorePostgresStorageTests
         StringAssert.Contains(sql, "source text NOT NULL DEFAULT ''");
         StringAssert.Contains(sql, "ix_cc_decision_traces_created");
         CollectionAssert.Contains(requiredIndexes.ToArray(), "ix_cc_decision_traces_created");
+        // R14-PG-3：short-term memory / promotion / candidate review 表
+        StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_short_term_raw_events");
+        StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_short_term_working_items");
+        StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_short_term_archived_raw_events");
+        StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_short_term_archived_working_items");
+        StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_short_term_compaction_runs");
+        StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_short_term_promotion_candidates");
+        StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_short_term_promotion_candidate_reviews");
+        StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_candidate_memory_reviews");
+        StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_stable_review_candidates");
+        StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_stable_review_records");
     }
 
     [TestMethod]

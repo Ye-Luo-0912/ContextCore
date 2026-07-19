@@ -170,11 +170,8 @@ internal static class StorageExtensions
 		// R14-PG-1：ILearningFeedbackStore / ILearningFeedbackReviewStore 已由 PostgresServiceCollectionExtensions
 		// 正式绑定 Postgres 实现，不再需要 Unsupported 覆盖。其余尚未实现的接口保持 Unsupported。
 		// R14-PG-2：IDecisionTraceStore 已由 PostgresServiceCollectionExtensions 正式绑定 PostgresDecisionTraceStore。
+		// R14-PG-3：IShortTermMemoryStore / IShortTermPromotionCandidateStore / ICandidateMemoryReviewStore / IStableReviewCandidateStore 已由 PostgresServiceCollectionExtensions 正式绑定 Postgres 实现。
 		// Postgres 尚未实现的存储契约，显式注册为 Unsupported，避免运行时静默丢弃数据
-		services.AddSingleton<IShortTermMemoryStore>(_ => new UnsupportedShortTermMemoryStore("postgres"));
-		services.AddSingleton<IShortTermPromotionCandidateStore>(_ => new UnsupportedShortTermPromotionCandidateStore("postgres"));
-		services.AddSingleton<ICandidateMemoryReviewStore>(_ => new UnsupportedCandidateMemoryReviewStore("postgres"));
-		services.AddSingleton<IStableReviewCandidateStore>(_ => new UnsupportedStableReviewCandidateStore("postgres"));
 		services.AddSingleton<IContextLearningStore>(_ => new UnsupportedContextLearningStore("postgres"));
 		services.AddSingleton<IVectorReindexReportStore>(_ => new UnsupportedVectorReindexReportStore("postgres"));
 		services.AddSingleton<IVectorLifecycleMetadataReviewCandidateStore>(_ => new UnsupportedVectorLifecycleMetadataReviewCandidateStore("postgres"));

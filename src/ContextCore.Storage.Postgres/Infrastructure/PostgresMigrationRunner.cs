@@ -15,8 +15,9 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
     /// 格式：<c>cc-schema-vN</c>，N 为单调递增整数。
     /// P1-5：v7 → v8，新增 relation_outbox 表与索引。
     /// R14-PG-2：v8 → v9，新增 decision_traces 表与索引。
+    /// R14-PG-3：v9 → v10，新增 short-term memory / promotion / candidate review 表与索引。
     /// </summary>
-    public const string SchemaVersion = "cc-schema-v9";
+    public const string SchemaVersion = "cc-schema-v10";
 
     public const string BaselineMigrationId = "0001_operational_store_baseline";
 
@@ -45,6 +46,16 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         "vector_index_entries",
         "vector_index_manifests",
         "decision_traces",
+        "short_term_raw_events",
+        "short_term_working_items",
+        "short_term_archived_raw_events",
+        "short_term_archived_working_items",
+        "short_term_compaction_runs",
+        "short_term_promotion_candidates",
+        "short_term_promotion_candidate_reviews",
+        "candidate_memory_reviews",
+        "stable_review_candidates",
+        "stable_review_records",
         "context_schema_migrations"
     ];
 
@@ -107,7 +118,23 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         ("vector_index_entries", "provider_model_dimension"),
         ("vector_index_entries", "source"),
         ("vector_index_manifests", "updated"),
-        ("decision_traces", "created")
+        ("decision_traces", "created"),
+        ("short_term_raw_events", "created"),
+        ("short_term_working_items", "updated"),
+        ("short_term_working_items", "expires"),
+        ("short_term_archived_raw_events", "archived"),
+        ("short_term_archived_working_items", "archived"),
+        ("short_term_compaction_runs", "started"),
+        ("short_term_promotion_candidates", "created"),
+        ("short_term_promotion_candidates", "status"),
+        ("short_term_promotion_candidate_reviews", "candidate"),
+        ("short_term_promotion_candidate_reviews", "reviewed"),
+        ("candidate_memory_reviews", "candidate"),
+        ("candidate_memory_reviews", "reviewed"),
+        ("stable_review_candidates", "created"),
+        ("stable_review_candidates", "status"),
+        ("stable_review_records", "candidate"),
+        ("stable_review_records", "reviewed")
     ];
 
     private readonly PostgresConnectionFactory _connectionFactory;
@@ -130,6 +157,16 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         var vectors = Infrastructure.PostgresNames.Table(options, "vectors");
         var retrievalTraces = Infrastructure.PostgresNames.Table(options, "retrieval_traces");
         var decisionTraces = Infrastructure.PostgresNames.Table(options, "decision_traces");
+        var shortTermRawEvents = Infrastructure.PostgresNames.Table(options, "short_term_raw_events");
+        var shortTermWorkingItems = Infrastructure.PostgresNames.Table(options, "short_term_working_items");
+        var shortTermArchivedRawEvents = Infrastructure.PostgresNames.Table(options, "short_term_archived_raw_events");
+        var shortTermArchivedWorkingItems = Infrastructure.PostgresNames.Table(options, "short_term_archived_working_items");
+        var shortTermCompactionRuns = Infrastructure.PostgresNames.Table(options, "short_term_compaction_runs");
+        var shortTermPromotionCandidates = Infrastructure.PostgresNames.Table(options, "short_term_promotion_candidates");
+        var shortTermPromotionCandidateReviews = Infrastructure.PostgresNames.Table(options, "short_term_promotion_candidate_reviews");
+        var candidateMemoryReviews = Infrastructure.PostgresNames.Table(options, "candidate_memory_reviews");
+        var stableReviewCandidates = Infrastructure.PostgresNames.Table(options, "stable_review_candidates");
+        var stableReviewRecords = Infrastructure.PostgresNames.Table(options, "stable_review_records");
         var contextIndex = Infrastructure.PostgresNames.Table(options, "context_index");
         var constraints = Infrastructure.PostgresNames.Table(options, "constraints");
         var globalContextItems = Infrastructure.PostgresNames.Table(options, "global_context_items");
@@ -332,6 +369,138 @@ CREATE TABLE IF NOT EXISTS {decisionTraces} (
 );
 
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "decision_traces", "created")} ON {decisionTraces} (workspace_id, collection_id, created_at DESC);
+
+-- R14-PG-3：short-term memory / promotion / candidate review 表与索引
+CREATE TABLE IF NOT EXISTS {shortTermRawEvents} (
+    workspace_id text NOT NULL,
+    collection_id text NOT NULL,
+    event_id text NOT NULL,
+    kind text NOT NULL DEFAULT '',
+    created_at timestamptz NOT NULL,
+    data jsonb NOT NULL,
+    PRIMARY KEY (workspace_id, collection_id, event_id)
+);
+
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "short_term_raw_events", "created")} ON {shortTermRawEvents} (workspace_id, collection_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS {shortTermWorkingItems} (
+    workspace_id text NOT NULL,
+    collection_id text NOT NULL,
+    item_id text NOT NULL,
+    kind text NOT NULL DEFAULT '',
+    created_at timestamptz NOT NULL,
+    updated_at timestamptz NOT NULL,
+    expires_at timestamptz NULL,
+    data jsonb NOT NULL,
+    PRIMARY KEY (workspace_id, collection_id, item_id)
+);
+
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "short_term_working_items", "updated")} ON {shortTermWorkingItems} (workspace_id, collection_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "short_term_working_items", "expires")} ON {shortTermWorkingItems} (workspace_id, collection_id, expires_at);
+
+CREATE TABLE IF NOT EXISTS {shortTermArchivedRawEvents} (
+    workspace_id text NOT NULL,
+    collection_id text NOT NULL,
+    event_id text NOT NULL,
+    archived_at timestamptz NOT NULL,
+    data jsonb NOT NULL,
+    PRIMARY KEY (workspace_id, collection_id, event_id, archived_at)
+);
+
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "short_term_archived_raw_events", "archived")} ON {shortTermArchivedRawEvents} (workspace_id, collection_id, archived_at DESC);
+
+CREATE TABLE IF NOT EXISTS {shortTermArchivedWorkingItems} (
+    workspace_id text NOT NULL,
+    collection_id text NOT NULL,
+    item_id text NOT NULL,
+    archived_at timestamptz NOT NULL,
+    data jsonb NOT NULL,
+    PRIMARY KEY (workspace_id, collection_id, item_id, archived_at)
+);
+
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "short_term_archived_working_items", "archived")} ON {shortTermArchivedWorkingItems} (workspace_id, collection_id, archived_at DESC);
+
+CREATE TABLE IF NOT EXISTS {shortTermCompactionRuns} (
+    workspace_id text NOT NULL,
+    collection_id text NOT NULL,
+    run_id text NOT NULL,
+    started_at timestamptz NOT NULL,
+    completed_at timestamptz NULL,
+    data jsonb NOT NULL,
+    PRIMARY KEY (workspace_id, collection_id, run_id)
+);
+
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "short_term_compaction_runs", "started")} ON {shortTermCompactionRuns} (workspace_id, collection_id, started_at DESC);
+
+CREATE TABLE IF NOT EXISTS {shortTermPromotionCandidates} (
+    workspace_id text NOT NULL,
+    collection_id text NOT NULL,
+    candidate_id text NOT NULL,
+    kind text NOT NULL DEFAULT '',
+    status text NOT NULL DEFAULT '',
+    created_at timestamptz NOT NULL,
+    data jsonb NOT NULL,
+    PRIMARY KEY (workspace_id, collection_id, candidate_id)
+);
+
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "short_term_promotion_candidates", "created")} ON {shortTermPromotionCandidates} (workspace_id, collection_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "short_term_promotion_candidates", "status")} ON {shortTermPromotionCandidates} (workspace_id, collection_id, status);
+
+CREATE TABLE IF NOT EXISTS {shortTermPromotionCandidateReviews} (
+    workspace_id text NOT NULL,
+    collection_id text NOT NULL,
+    review_id text NOT NULL,
+    candidate_id text NOT NULL,
+    reviewed_at timestamptz NOT NULL,
+    created_at timestamptz NOT NULL,
+    data jsonb NOT NULL,
+    PRIMARY KEY (workspace_id, collection_id, review_id)
+);
+
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "short_term_promotion_candidate_reviews", "candidate")} ON {shortTermPromotionCandidateReviews} (workspace_id, collection_id, candidate_id, reviewed_at DESC);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "short_term_promotion_candidate_reviews", "reviewed")} ON {shortTermPromotionCandidateReviews} (workspace_id, collection_id, reviewed_at DESC);
+
+CREATE TABLE IF NOT EXISTS {candidateMemoryReviews} (
+    workspace_id text NOT NULL,
+    collection_id text NOT NULL DEFAULT '',
+    review_id text NOT NULL,
+    candidate_id text NOT NULL,
+    reviewed_at timestamptz NOT NULL,
+    created_at timestamptz NOT NULL,
+    data jsonb NOT NULL,
+    PRIMARY KEY (workspace_id, collection_id, review_id)
+);
+
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "candidate_memory_reviews", "candidate")} ON {candidateMemoryReviews} (workspace_id, candidate_id, reviewed_at DESC);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "candidate_memory_reviews", "reviewed")} ON {candidateMemoryReviews} (workspace_id, reviewed_at DESC);
+
+CREATE TABLE IF NOT EXISTS {stableReviewCandidates} (
+    workspace_id text NOT NULL,
+    collection_id text NOT NULL,
+    stable_review_candidate_id text NOT NULL,
+    kind text NOT NULL DEFAULT '',
+    status text NOT NULL DEFAULT '',
+    created_at timestamptz NOT NULL,
+    data jsonb NOT NULL,
+    PRIMARY KEY (workspace_id, collection_id, stable_review_candidate_id)
+);
+
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "stable_review_candidates", "created")} ON {stableReviewCandidates} (workspace_id, collection_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "stable_review_candidates", "status")} ON {stableReviewCandidates} (workspace_id, collection_id, status);
+
+CREATE TABLE IF NOT EXISTS {stableReviewRecords} (
+    workspace_id text NOT NULL,
+    collection_id text NOT NULL,
+    review_id text NOT NULL,
+    stable_review_candidate_id text NOT NULL,
+    reviewed_at timestamptz NOT NULL,
+    created_at timestamptz NOT NULL,
+    data jsonb NOT NULL,
+    PRIMARY KEY (workspace_id, collection_id, review_id)
+);
+
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "stable_review_records", "candidate")} ON {stableReviewRecords} (workspace_id, collection_id, stable_review_candidate_id, reviewed_at DESC);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "stable_review_records", "reviewed")} ON {stableReviewRecords} (workspace_id, collection_id, reviewed_at DESC);
 
 CREATE TABLE IF NOT EXISTS {contextIndex} (
     workspace_id text NOT NULL,
