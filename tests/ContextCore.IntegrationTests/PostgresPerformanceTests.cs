@@ -31,20 +31,23 @@ public sealed class PostgresPerformanceTests
     [ClassInitialize]
     public static async Task ClassInitialize(TestContext _)
     {
-        if (!await PostgresIntegrationTests.IsDockerAvailableAsync())
+        // R14-PG 收口：直接尝试启动容器（与 PostgresHATests 一致），避免 IsDockerAvailableAsync 误判。
+        try
         {
-            Console.WriteLine("[PostgresPerformanceTests] Docker 不可用，所有测试将标记为 Inconclusive。");
-            return;
+            _container = new PostgreSqlBuilder(PgVectorImage)
+                .WithDatabase("cctest")
+                .WithUsername("cctest")
+                .WithPassword("cctest")
+                .Build();
+
+            await _container.StartAsync();
+            _connectionString = _container.GetConnectionString();
         }
-
-        _container = new PostgreSqlBuilder(PgVectorImage)
-            .WithDatabase("cctest")
-            .WithUsername("cctest")
-            .WithPassword("cctest")
-            .Build();
-
-        await _container.StartAsync();
-        _connectionString = _container.GetConnectionString();
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[PostgresPerformanceTests] Docker 不可用：{ex.GetType().Name}: {ex.Message}");
+            _connectionString = null;
+        }
     }
 
     [ClassCleanup(ClassCleanupBehavior.EndOfClass)]

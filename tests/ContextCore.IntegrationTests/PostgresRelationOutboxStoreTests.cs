@@ -34,20 +34,25 @@ public sealed class PostgresRelationOutboxStoreTests
     [ClassInitialize]
     public static async Task ClassInitialize(TestContext _)
     {
-        if (!await PostgresIntegrationTests.IsDockerAvailableAsync())
+        // R14-PG 收口：直接尝试启动容器——失败时设 _connectionString=null 让测试 Inconclusive。
+        // 不复用 PostgresIntegrationTests.IsDockerAvailableAsync，因其内部 3 秒 CancellationToken
+        // 在 pgvector 镜像首次拉取/启动时可能误判 Docker 不可用（与 PostgresHATests 一致）。
+        try
         {
-            Console.WriteLine("[PostgresRelationOutboxStoreTests] Docker 不可用，所有测试将标记为 Inconclusive。");
-            return;
+            _container = new PostgreSqlBuilder(PgVectorImage)
+                .WithDatabase("p15obtest")
+                .WithUsername("p15obtest")
+                .WithPassword("p15obtest")
+                .Build();
+
+            await _container.StartAsync();
+            _connectionString = _container.GetConnectionString();
         }
-
-        _container = new PostgreSqlBuilder(PgVectorImage)
-            .WithDatabase("p15obtest")
-            .WithUsername("p15obtest")
-            .WithPassword("p15obtest")
-            .Build();
-
-        await _container.StartAsync();
-        _connectionString = _container.GetConnectionString();
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[PostgresRelationOutboxStoreTests] Docker 不可用：{ex.GetType().Name}: {ex.Message}");
+            _connectionString = null;
+        }
     }
 
     [ClassCleanup(ClassCleanupBehavior.EndOfClass)]
@@ -216,13 +221,13 @@ public sealed class PostgresRelationOutboxStoreTests
         var record = CreateRecord("rel-stale");
         await outbox.EnqueueAsync(record, scope: null);
 
-        // 第一次 acquire：用很短的租约
-        var acquired1 = await outbox.AcquirePendingAsync(limit: 10, owner: "worker-1", leaseDuration: TimeSpan.FromMilliseconds(1));
+        // 第一次 acquire：用较短但不过短的租约（避免立即过期影响断言）
+        var acquired1 = await outbox.AcquirePendingAsync(limit: 10, owner: "worker-1", leaseDuration: TimeSpan.FromMilliseconds(50));
         Assert.AreEqual(1, acquired1.Count);
         Assert.AreEqual("worker-1", acquired1[0].LeaseOwner);
 
         // 等待 lease 过期
-        await Task.Delay(100);
+        await Task.Delay(150);
 
         // 第二次 acquire：worker-2 应能抢占
         var acquired2 = await outbox.AcquirePendingAsync(limit: 10, owner: "worker-2", leaseDuration: TimeSpan.FromMinutes(1));
@@ -311,14 +316,15 @@ public sealed class PostgresRelationOutboxStoreTests
         var record = CreateRecord("rel-stale-count");
         await outbox.EnqueueAsync(record, scope: null);
 
-        // acquire 并使用极短租约
-        await outbox.AcquirePendingAsync(limit: 1, owner: "w1", leaseDuration: TimeSpan.FromMilliseconds(1));
+        // acquire 并使用较短但不过短的租约（避免立即过期导致 initialCount 已为 1）
+        await outbox.AcquirePendingAsync(limit: 1, owner: "w1", leaseDuration: TimeSpan.FromMilliseconds(50));
 
-        // 立即检查——可能仍为 0（lease_expires_at 略大于 now）
+        // 立即检查——lease_expires_at 仍在未来，应返回 0
         var initialCount = await outbox.CountStaleLeasesAsync();
+        Assert.AreEqual(0, initialCount, "lease 未过期时 stale lease 计数应为 0");
 
         // 等待 lease 过期
-        await Task.Delay(100);
+        await Task.Delay(150);
 
         var staleCount = await outbox.CountStaleLeasesAsync();
         Assert.IsTrue(staleCount > initialCount, "等待后过期租约数应增加");

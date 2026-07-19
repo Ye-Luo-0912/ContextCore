@@ -1,6 +1,6 @@
 # ContextCore 项目路线图
 
-> 最近更新：R14-PG 收口，下一阶段进入 R15（2026-07-20）
+> 最近更新：P0 冻结完成，下一阶段进入 R15（2026-07-20）
 
 > 本文件是 ContextCore 的**唯一当前路线图**。docs/ 下的 `*_Freeze*.md`、`*_Report*.md`、`*_Audit*.md`、`*_Plan*.md`、`*_Gap_Map*.md`、`新阶段*` 类文档均已标注"历史快照"声明，仅供回溯，不作为 current-head 决策依据。历史完成记录已迁入 [docs/archive/roadmap-history.md](docs/archive/roadmap-history.md)。
 
@@ -8,7 +8,7 @@
 
 ## 当前阶段
 
-**R14-PG：Postgres Runtime Parity & HA Gate 已完成** — 10 个子任务全部完成并提交（HEAD `540a6fc`）。
+**R14-PG：Postgres Runtime Parity & HA Gate 已完成** — 10 个子任务全部完成并提交（HEAD `540a6fc`）。P0 冻结在 R14-PG 收口（`3dbc1db`）基础上完成代码修复与基线重测，所有性能指标指向同一 commit（`git log --grep="fix(P0): freeze"`）。
 
 - R14-PG-1 移除 LearningFeedback/Review 的 Unsupported 覆盖，正式绑定 Postgres 实现（commit `28b7c49`）
 - R14-PG-2 PostgresDecisionTraceStore + decision_traces 表（commit `72d8f20`）
@@ -20,6 +20,29 @@
 - R14-PG-8 Migration version/rollback 框架（commit `aba4455`）
 - R14-PG-9 HA 测试套件 failover/pool exhaustion/slow query/tx retry（commit `570e38b`）
 - R14-PG-10 backup/restore runbook + PITR + CLI 接入 PostgresBackupRunner（commit `540a6fc`）
+
+### P0 冻结（2026-07-20）
+
+R14-PG 收口后重新冻结 Current HEAD，确保所有性能指标指向同一 commit SHA：
+
+- **Build**：0 warnings / 0 errors
+- **Tests**：ContextCore.Tests 1171/1171 通过；ContextCore.IntegrationTests 75/75 通过（1 skip pg_dump）；ContextCore.Service.Tests 61/61 通过（1 skip manual OpenApi_RegenerateSnapshot）
+- **A3 / golden / graph 不回退**：197 个 graph/eval/retrieval 测试全通过
+- **Package cold/cache benchmark**：37 个 BenchmarkDotNet 基准运行完成（8m14s），结果记录在 `benchmarks/results/README.md`
+- **FileSystem vs PostgreSQL 性能**：PostgresPerformanceTests 3/3 通过；PackageColdPathPerformanceGateTests 4/4 通过；跨 provider 直接对比基准列为后续补充
+- **Cache hit / stale retry / version mismatch**：95 个 cache/trace 测试全通过
+- **Trace queue drop / flush latency**：14 个 bounded channel 测试全通过（drop/batch/OTel counters）；flush latency 时间门列为后续补充
+
+**P0 修复内容**：
+
+1. `PostgresMigrationRunner.MigrateAsync` 增加 `GetAppliedVersionAsync` 版本短路：版本已匹配时跳过完整 DDL 批次（150+ CREATE TABLE IF NOT EXISTS），解决 Docker Desktop/WSL2 上幂等重跑触发 socket read timeout 的问题
+2. `PostgresWriteTransactionScopeTests` 迁移从 per-test GUID 前缀改为 ClassInitialize 单次迁移：原实现 10 个测试 × 50+ 表 = 500+ DDL，持续超时
+3. `PostgresRelationOutboxStore.AcquirePendingAsync` RETURNING `data` JSONB 同步：UPDATE 列状态后用嵌套 `jsonb_set()` 同步 JSONB 内 State/LeaseOwner/LeaseExpiresAt/LastHeartbeatAt/DispatchedAt
+4. `PostgresRelationOutboxStore.MarkFailedAsync` retry 比较修正：`retry_count + 1 >= max_retry_count`（原 `>` 导致最后一次 retry 未标记 Failed）
+5. `PostgresRelationStore` per-seed Truncated 信号修正：`bucket.Count >= maxScan`（原 `> 0` 误标记低基数为截断）
+6. `PostgresContextLearningStore` 3 处 CS8604 nullable 参数修复
+7. `ContextCore.Generators.csproj` RS2008 release tracking warning 抑制
+8. OpenAPI snapshot 再生（R14-PG-10 新增 backup/pg-* 端点）
 
 **验收达成**：
 
@@ -48,19 +71,28 @@
 
 ---
 
-## 当前验收指标（2026-07-20）
+## 当前验收指标（2026-07-20 P0 冻结）
 
 | 指标 | 当前值 | 目标 |
 |------|--------|------|
-| 当前 HEAD | `540a6fc` | - |
-| PublicApi baseline 行数 | 7467（+11 vs R14-2） | 单一事实源 |
+| 当前 HEAD | P0 冻结 commit（`fix(P0): freeze`，见 `git log --grep`） | - |
+| PublicApi baseline 行数 | 7467 | 单一事实源 |
 | 构建 | 0 警告 / 0 错误 | 0 / 0 |
-| 测试 | ContextCore.Tests 全通过 / 0 失败 | 0 失败 |
-| A3 语义不变性 | PassRate 100%, Recall@10 100% | 与冻结基线一致 |
-| Retrieval golden ranking | 30 样本全通过, Recall@10 100% | 与冻结基线一致 |
-| GRAPH-09 图不变性 | 12 测试全通过 | 0 失败 |
-| FileSystem Package Build (Cold, ItemCount=50) | ~19ms / 1538KB | ≤ 当前值 70% |
-| Package Build p95 (CacheHit, ItemCount=50) | ~7.5μs / 12.38KB | 优于 Cold |
+| 测试 | ContextCore.Tests 1171/1171；IntegrationTests 75/75（1 skip）；Service.Tests 61/61（1 skip） | 0 失败 |
+| A3 / golden / graph 不回退 | 197 个 graph/eval/retrieval 测试全通过 | 不回退 |
+| Package Build Cold (InMemory, ItemCount=50) | 2,329 μs / 819 KB | ≤ 当前值 70% |
+| Package Build CacheHit (InMemory, ItemCount=50) | 6.6 μs / 12.56 KB | 优于 Cold |
+| FileSystem Package Build Cold (ItemCount=50) | 20,507 μs / 1385.58 KB | ≤ 当前值 70% |
+| FileSystem Package Build CacheHit (ItemCount=50) | 6.0 μs / 12.19 KB | 优于 Cold |
+| ConcurrencyScaling (1→64, 1ms/query) | 186.2→189.0 ms | 持平 |
+| Postgres ColdBuild (Testcontainers) | 323 ms | ≤ 2,000 ms |
+| Postgres ConcurrentBuild_16Way | 561 ms | ≤ 20,000 ms |
+| ColdPath InMemory allocation (50 items) | ≤ 2 MB gate | 通过 |
+| ColdPath FileSystem allocation (50 items) | ≤ 3 MB gate | 通过 |
+| Cache hit / stale retry / version mismatch | 95 测试全通过 | 已达成 |
+| Trace queue drop / batch / OTel | 14 测试全通过 | 已达成 |
+| CacheChurn WriteWithLruEviction (cap=1000) | 33,444 μs / 1434.23 KB | 基线 |
+| CacheChurn InvalidateByScope (cap=10000) | 2,938 μs / 711.46 KB | 基线 |
 | Constraint logical calls | 1 个 snapshot call | 已达成 |
 | PackageReadPlan.TotalStoreCalls | 可观测 | 已达成 |
 | BoundedChannelContextEventSink metrics | queue/error/drop | 已达成 |
@@ -72,7 +104,7 @@
 | Postgres schema 版本 | v13（自 R14-PG-6 起稳定） | 稳定 |
 | Postgres Unsupported stores 残留 | 0（R14-PG-5 完成时清零） | 0 |
 | Postgres 多实例 cache invalidation | PostgresContextStateVersionStore + Decorator 文档化 | 已达成（R14-PG-6/7） |
-| Postgres migration 框架 | registry + history + rollback | 已达成（R14-PG-8） |
+| Postgres migration 框架 | registry + history + rollback + 版本短路 | 已达成（R14-PG-8 + P0 冻结） |
 | Postgres HA 测试 | failover/pool/slow/tx retry | 已达成（R14-PG-9） |
 | Postgres backup/restore runbook | docs/runbooks/postgres-backup-restore.md | 已达成（R14-PG-10） |
 

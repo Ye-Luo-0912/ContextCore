@@ -179,25 +179,34 @@ ON CONFLICT (outbox_id) DO UPDATE SET
         selectCmd.Parameters.AddWithValue("last_heartbeat_at", now);
         selectCmd.Parameters.AddWithValue("updated_at", now);
         selectCmd.Parameters.AddWithValue("limit", limit);
-        selectCmd.CommandText = $"""
+        selectCmd.CommandText = $$"""
 WITH pending AS (
-    SELECT outbox_id FROM {Table("relation_outbox")}
+    SELECT outbox_id FROM {{Table("relation_outbox")}}
     WHERE state = 'Pending'
        OR (state = 'Dispatched' AND lease_expires_at IS NOT NULL AND lease_expires_at <= @now)
     ORDER BY created_at ASC
     LIMIT @limit
     FOR UPDATE SKIP LOCKED
 )
-UPDATE {Table("relation_outbox")}
+UPDATE {{Table("relation_outbox")}}
 SET state = 'Dispatched',
     lease_owner = @lease_owner,
     lease_expires_at = @lease_expires_at,
     last_heartbeat_at = @last_heartbeat_at,
     updated_at = @updated_at,
-    dispatched_at = @last_heartbeat_at
+    dispatched_at = @last_heartbeat_at,
+    data = jsonb_set(
+        jsonb_set(
+            jsonb_set(
+                jsonb_set(
+                    jsonb_set(data, '{State}', '"Dispatched"'),
+                    '{LeaseOwner}', to_jsonb(@lease_owner)),
+                '{LeaseExpiresAt}', to_jsonb(@lease_expires_at)),
+            '{LastHeartbeatAt}', to_jsonb(@last_heartbeat_at)),
+        '{DispatchedAt}', to_jsonb(@last_heartbeat_at))
 FROM pending
-WHERE {Table("relation_outbox")}.outbox_id = pending.outbox_id
-RETURNING {Table("relation_outbox")}.data;
+WHERE {{Table("relation_outbox")}}.outbox_id = pending.outbox_id
+RETURNING {{Table("relation_outbox")}}.data;
 """;
 
         var results = new List<RelationOutboxRecord>();
@@ -258,11 +267,12 @@ WHERE outbox_id = @outbox_id
         await using var command = connection.CreateCommand();
         command.CommandTimeout = Options.CommandTimeoutSeconds;
         var now = DateTimeOffset.UtcNow;
-        // CAS：仅当 state=Dispatched 时才转换为 Failed 或 Pending（取决于是否超过 max_retry_count）。
+        // CAS：仅当 state=Dispatched 时才转换为 Failed 或 Pending（取决于是否达到 max_retry_count）。
+        // 达到 max 时转 Failed（retry_count + 1 >= max_retry_count），未达到则回退 Pending 等待重试。
         command.CommandText = $@"
 UPDATE {Table("relation_outbox")}
 SET retry_count = retry_count + 1,
-    state = CASE WHEN retry_count + 1 > max_retry_count THEN 'Failed' ELSE 'Pending' END,
+    state = CASE WHEN retry_count + 1 >= max_retry_count THEN 'Failed' ELSE 'Pending' END,
     lease_owner = NULL,
     lease_expires_at = NULL,
     last_heartbeat_at = NULL,
@@ -271,7 +281,7 @@ SET retry_count = retry_count + 1,
     data = jsonb_set(
         jsonb_set(data, '{{RetryCount}}', to_jsonb(retry_count + 1)),
         '{{State}}',
-        CASE WHEN retry_count + 1 > max_retry_count THEN '""Failed""' ELSE '""Pending""' END::jsonb)
+        CASE WHEN retry_count + 1 >= max_retry_count THEN '""Failed""' ELSE '""Pending""' END::jsonb)
 WHERE outbox_id = @outbox_id
   AND state = 'Dispatched';";
         command.Parameters.AddWithValue("outbox_id", outboxId);

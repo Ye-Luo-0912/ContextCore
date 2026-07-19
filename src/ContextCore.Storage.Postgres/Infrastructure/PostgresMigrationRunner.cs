@@ -1212,6 +1212,15 @@ CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "vector_
     /// <summary>执行建表迁移。该方法幂等，可在服务启动或首次访问存储时调用。</summary>
     public async Task MigrateAsync(CancellationToken cancellationToken = default)
     {
+        // P0 冻结：版本已匹配时跳过完整 DDL 批次，避免重复执行 150+ CREATE TABLE IF NOT EXISTS。
+        // Docker Desktop / WSL2 上即使幂等重跑也需要 3+ 分钟，会触发 socket read timeout。
+        // 首次迁移成功后 schema_versions 表会记录 SchemaVersion，后续调用直接 short-circuit 返回。
+        var appliedVersion = await GetAppliedVersionAsync(cancellationToken).ConfigureAwait(false);
+        if (appliedVersion == SchemaVersion)
+        {
+            return;
+        }
+
         await using var connection = await _connectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandText = BuildMigrationSql(_connectionFactory.Options);

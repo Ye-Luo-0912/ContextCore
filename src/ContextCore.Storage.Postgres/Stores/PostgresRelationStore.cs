@@ -602,7 +602,11 @@ LIMIT @global_limit_probe;
         {
             var bucket = buckets[seed];
             // P1-4：per-seed MaxScan 截断 + SQL 全局 LIMIT 截断（保守）
-            var truncated = bucket.Count > maxScan || (sqlGloballyTruncated && bucket.Count > 0);
+            // - bucket.Count > maxScan：per-seed 截断
+            // - bucket.Count == maxScan && sqlGloballyTruncated：保守标记，可能有更多低权重行被 SQL 全局截断
+            // - bucket.Count < maxScan：数据已读全（按 Weight DESC 排序，SQL 截断的总是低权重，bucket 内前 maxScan 条已完整），不截断
+            var truncated = bucket.Count > maxScan
+                || (sqlGloballyTruncated && bucket.Count >= maxScan);
             // 桶内已排序，直接 Take(MaxScan) + Skip + Take
             var seedRelations = bucket
                 .Take(maxScan)

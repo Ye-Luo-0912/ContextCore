@@ -8,6 +8,8 @@
     <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <!-- RS2008：Roslyn analyzer release tracking 是可选版本控制最佳实践；CCGEN001 是内部规则，无外部消费者需要跟踪发布历史 -->
+    <NoWarn>RS2008</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

@@ -48,6 +48,7 @@ ON CONFLICT (workspace_id, collection_id, feedback_id) DO UPDATE SET
     public async Task<IReadOnlyList<PromotionFeedbackSignal>> QueryFeedbackAsync(PromotionFeedbackSignalQuery query, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(query);
+        ArgumentNullException.ThrowIfNull(query.WorkspaceId);
 
         await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
         await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
@@ -55,7 +56,7 @@ ON CONFLICT (workspace_id, collection_id, feedback_id) DO UPDATE SET
         command.CommandTimeout = Options.CommandTimeoutSeconds;
 
         var where = new StringBuilder("WHERE workspace_id = @workspace_id");
-        command.Parameters.AddWithValue("workspace_id", query.WorkspaceId);
+        command.Parameters.AddWithValue("workspace_id", query.WorkspaceId!);
 
         if (!string.IsNullOrWhiteSpace(query.CollectionId))
         {
@@ -139,6 +140,7 @@ LIMIT 1;
     public async Task<IReadOnlyList<ContextLearningRecord>> QueryRecordsAsync(ContextLearningRecordQuery query, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(query);
+        ArgumentNullException.ThrowIfNull(query.WorkspaceId);
 
         await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
         await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
@@ -146,7 +148,7 @@ LIMIT 1;
         command.CommandTimeout = Options.CommandTimeoutSeconds;
 
         var where = new StringBuilder("WHERE workspace_id = @workspace_id");
-        command.Parameters.AddWithValue("workspace_id", query.WorkspaceId);
+        command.Parameters.AddWithValue("workspace_id", query.WorkspaceId!);
 
         if (!string.IsNullOrWhiteSpace(query.CollectionId))
         {
@@ -242,6 +244,7 @@ LIMIT 1;
     public async Task<IReadOnlyList<ContextLearningCase>> QueryCasesAsync(ContextLearningCaseQuery query, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(query);
+        ArgumentNullException.ThrowIfNull(query.WorkspaceId);
 
         await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
         await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
@@ -249,7 +252,7 @@ LIMIT 1;
         command.CommandTimeout = Options.CommandTimeoutSeconds;
 
         var where = new StringBuilder("WHERE workspace_id = @workspace_id");
-        command.Parameters.AddWithValue("workspace_id", query.WorkspaceId);
+        command.Parameters.AddWithValue("workspace_id", query.WorkspaceId!);
 
         if (!string.IsNullOrWhiteSpace(query.CollectionId))
         {

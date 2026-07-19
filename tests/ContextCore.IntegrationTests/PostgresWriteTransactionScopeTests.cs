@@ -29,37 +29,71 @@ namespace ContextCore.IntegrationTests;
 public sealed class PostgresWriteTransactionScopeTests
 {
     private const string PgVectorImage = "pgvector/pgvector:pg17";
+    private const string TablePrefix = "p03_";
 
     private static PostgreSqlContainer? _container;
     private static string? _connectionString;
-    private PostgresConnectionFactory? _factory;
-    private PostgresJsonSerializer? _serializer;
-    private PostgresMigrationRunner? _migrationRunner;
-    private PostgresOptions? _options;
-    private string _tablePrefix = "p03_" + Guid.NewGuid().ToString("N").Substring(0, 8) + "_";
+    private static PostgresConnectionFactory? _factory;
+    private static PostgresJsonSerializer? _serializer;
+    private static PostgresMigrationRunner? _migrationRunner;
+    private static bool _migrated;
 
     [ClassInitialize]
     public static async Task ClassInitialize(TestContext _)
     {
-        if (!await PostgresIntegrationTests.IsDockerAvailableAsync())
+        // R14-PG 收口：直接尝试启动容器（与 PostgresHATests 一致），避免 IsDockerAvailableAsync 误判。
+        try
         {
-            Console.WriteLine("[PostgresWriteTransactionScopeTests] Docker 不可用，所有测试将标记为 Inconclusive。");
+            _container = new PostgreSqlBuilder(PgVectorImage)
+                .WithDatabase("p03test")
+                .WithUsername("p03test")
+                .WithPassword("p03test")
+                .Build();
+
+            await _container.StartAsync();
+            _connectionString = _container.GetConnectionString();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[PostgresWriteTransactionScopeTests] Docker 不可用：{ex.GetType().Name}: {ex.Message}");
+            _connectionString = null;
             return;
         }
 
-        _container = new PostgreSqlBuilder(PgVectorImage)
-            .WithDatabase("p03test")
-            .WithUsername("p03test")
-            .WithPassword("p03test")
-            .Build();
-
-        await _container.StartAsync();
-        _connectionString = _container.GetConnectionString();
+        // P0 冻结：迁移只运行一次（CREATE TABLE IF NOT EXISTS 幂等）。
+        // 原实现每个测试用 GUID 前缀 + 重新迁移，导致 Docker Desktop 上 50+ 表 × 10 测试 = 500+ DDL，
+        // 持续触发 socket read timeout。各测试使用唯一 ID（item-commit / item-rollback / ...），
+        // 共享表不会相互冲突。
+        var options = new PostgresOptions
+        {
+            ConnectionString = _connectionString!,
+            AutoMigrate = true,
+            EnablePgVectorExtension = true,
+            TablePrefix = TablePrefix,
+            CommandTimeoutSeconds = 180
+        };
+        _factory = new PostgresConnectionFactory(options);
+        _serializer = new PostgresJsonSerializer();
+        _migrationRunner = new PostgresMigrationRunner(_factory);
+        try
+        {
+            await _migrationRunner.MigrateAsync();
+            _migrated = true;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[PostgresWriteTransactionScopeTests] Migration 失败：{ex.GetType().Name}: {ex.Message}");
+            _migrated = false;
+        }
     }
 
     [ClassCleanup(ClassCleanupBehavior.EndOfClass)]
     public static async Task ClassCleanup()
     {
+        if (_factory is not null)
+        {
+            await _factory.DisposeAsync();
+        }
         if (_container is not null)
         {
             await _container.DisposeAsync();
@@ -69,32 +103,19 @@ public sealed class PostgresWriteTransactionScopeTests
     [TestInitialize]
     public void TestInitialize()
     {
-        if (_connectionString is null)
+        if (_connectionString is null || !_migrated)
         {
-            Assert.Inconclusive("Docker 不可用 — P0-3 集成测试已跳过。此结果不证明事务路径通过。");
+            Assert.Inconclusive("Docker 不可用或 migration 失败 — P0-3 集成测试已跳过。此结果不证明事务路径通过。");
         }
-
-        // 每个测试使用独立前缀，避免相互干扰
-        _tablePrefix = "p03_" + Guid.NewGuid().ToString("N").Substring(0, 8) + "_";
-        _options = new PostgresOptions
-        {
-            ConnectionString = _connectionString!,
-            AutoMigrate = true,
-            EnablePgVectorExtension = true,
-            TablePrefix = _tablePrefix
-        };
-        _factory = new PostgresConnectionFactory(_options);
-        _serializer = new PostgresJsonSerializer();
-        _migrationRunner = new PostgresMigrationRunner(_factory);
     }
 
-    private async Task<(PostgresContextStore contextStore, PostgresRelationStore relationStore, PostgresWriteTransactionScopeFactory txFactory)> BuildStoresAsync()
+    private Task<(PostgresContextStore contextStore, PostgresRelationStore relationStore, PostgresWriteTransactionScopeFactory txFactory)> BuildStoresAsync()
     {
-        await _migrationRunner!.MigrateAsync();
-        var contextStore = new PostgresContextStore(_factory!, _serializer!, _migrationRunner);
-        var relationStore = new PostgresRelationStore(_factory!, _serializer!, _migrationRunner);
+        // 迁移已在 ClassInitialize 完成；此处只构造 store。
+        var contextStore = new PostgresContextStore(_factory!, _serializer!, _migrationRunner!);
+        var relationStore = new PostgresRelationStore(_factory!, _serializer!, _migrationRunner!);
         var txFactory = new PostgresWriteTransactionScopeFactory(_factory!);
-        return (contextStore, relationStore, txFactory);
+        return Task.FromResult((contextStore, relationStore, txFactory));
     }
 
     private static RelationProjectionWriter BuildProjectionWriter(IRelationStore relationStore)

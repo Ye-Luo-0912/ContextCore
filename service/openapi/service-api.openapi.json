@@ -1717,7 +1717,7 @@
         "tags": [
           "Admin"
         ],
-        "summary": "存储备份信息概览（FS：文件统计 + 大小；Postgres：schema 版本 + pg_dump 建议）",
+        "summary": "存储备份信息概览（FS：文件统计 + 大小；Postgres：schema 版本 + 最近 dump 文件信息）",
         "operationId": "AdminBackupStatus",
         "responses": {
           "200": {
@@ -1763,6 +1763,76 @@
           },
           "404": {
             "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/backup/pg-create": {
+      "post": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "通过 pg_dump 创建 PostgreSQL 转储（.dump）并生成清单（admin-gated）",
+        "operationId": "AdminBackupPgCreate",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreBackupCreateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextCoreErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/backup/pg-restore": {
+      "post": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "通过 pg_restore 将 .dump 恢复到目标 PostgreSQL 数据库（破坏性，需 confirm=true；admin-gated）",
+        "operationId": "AdminBackupPgRestore",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PostgresBackupRestoreRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
             "content": {
               "application/json": {
                 "schema": {
@@ -9504,6 +9574,27 @@
               "null",
               "string"
             ]
+          },
+          "lastDumpPath": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "lastDumpSizeBytes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "lastDumpHash": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -13838,6 +13929,17 @@
               "string"
             ],
             "format": "int32"
+          }
+        }
+      },
+      "PostgresBackupRestoreRequest": {
+        "type": "object",
+        "properties": {
+          "dumpPath": {
+            "type": "string"
+          },
+          "confirm": {
+            "type": "boolean"
           }
         }
       },
