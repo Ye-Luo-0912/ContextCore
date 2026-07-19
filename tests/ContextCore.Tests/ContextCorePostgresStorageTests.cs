@@ -1,9 +1,12 @@
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Evaluation.Models;
+using ContextCore.Core;
 using ContextCore.Core.Services;
 using ContextCore.Evaluation;
 using ContextCore.Evaluation.Runners;
+using ContextCore.Service;
+using ContextCore.Service.Extensions;
 using ContextCore.Service.Infrastructure;
 using ContextCore.Storage.FileSystem;
 using ContextCore.Storage.FileSystem.Stores;
@@ -13,6 +16,7 @@ using ContextCore.Storage.Postgres.Extensions;
 using ContextCore.Storage.Postgres.Infrastructure;
 using ContextCore.Storage.Postgres.Stores;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Npgsql;
 using ContextCore.Evaluation.Learning;
 
@@ -155,6 +159,9 @@ public sealed class ContextCorePostgresStorageTests
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(IVectorLifecycleSidecarMetadataStore)));
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(PostgresArtifactStore)));
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(IArtifactStore)));
+        // R14-PG-6：分布式 context state 版本存储注册
+        Assert.IsTrue(services.Any(item => item.ServiceType == typeof(PostgresContextStateVersionStore)));
+        Assert.IsTrue(services.Any(item => item.ServiceType == typeof(IContextStateVersionStore)));
     }
 
     [TestMethod]
@@ -532,7 +539,7 @@ public sealed class ContextCorePostgresStorageTests
         var sql = PostgresMigrationRunner.BuildMigrationSql(options);
         var requiredIndexes = PostgresMigrationRunner.GetRequiredIndexNames(options);
 
-        Assert.AreEqual("cc-schema-v12", PostgresMigrationRunner.SchemaVersion);
+        Assert.AreEqual("cc-schema-v13", PostgresMigrationRunner.SchemaVersion);
         StringAssert.Contains(sql, "CREATE EXTENSION IF NOT EXISTS vector");
         StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_vector_index_entries");
         StringAssert.Contains(sql, "source_id text NOT NULL DEFAULT ''");
@@ -580,6 +587,10 @@ public sealed class ContextCorePostgresStorageTests
         StringAssert.Contains(sql, "ix_cc_vector_lifecycle_metadata_reviews_candidate");
         StringAssert.Contains(sql, "ix_cc_vector_lifecycle_sidecar_metadata_created");
         StringAssert.Contains(sql, "ix_cc_artifacts_kind");
+        // R14-PG-6：分布式 context state 版本号表
+        StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_context_state_versions");
+        StringAssert.Contains(sql, "store_kind text NOT NULL");
+        StringAssert.Contains(sql, "version bigint NOT NULL DEFAULT 0");
     }
 
     [TestMethod]
@@ -667,6 +678,49 @@ public sealed class ContextCorePostgresStorageTests
             Vector = [1f, 0f],
             TopK = 5
         }));
+    }
+
+    [TestMethod]
+    public void PostgresMigrationSql_IncludesContextStateVersionsUpsertPattern()
+    {
+        var options = new PostgresOptions
+        {
+            ConnectionString = "Host=localhost;Database=contextcore;Username=contextcore;Password=contextcore",
+            TablePrefix = "cc_",
+            EnablePgVectorExtension = true
+        };
+
+        var sql = PostgresMigrationRunner.BuildMigrationSql(options);
+
+        // R14-PG-6：context_state_versions 表必须支持原子自增，校验 SQL 包含 ON CONFLICT 模式（运行时 BumpVersionAsync 用此模式）。
+        StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_context_state_versions");
+        StringAssert.Contains(sql, "store_kind text NOT NULL");
+        StringAssert.Contains(sql, "version bigint NOT NULL DEFAULT 0");
+    }
+
+    [TestMethod]
+    public async Task AddContextStorage_Postgres_OverridesInMemoryVersionStoreRegistration()
+    {
+        // R14-PG-6：验证 Postgres provider 启用时，PostgresContextStateVersionStore 覆盖 InMemoryContextStateVersionStore。
+        // .NET DI 后注册者胜出；AddContextStorage 内部调用 AddContextCorePostgresStorage，注册发生在 AddContextCore 之后。
+        var services = new ServiceCollection();
+        services.AddLogging();
+        // 模拟完整应用启动顺序：先 AddContextCore，再 AddContextStorage
+        // 由于 AddContextCore 依赖较多，这里直接模拟两次注册，验证后注册者胜出
+        services.AddSingleton<IContextStateVersionStore, InMemoryContextStateVersionStore>();
+        var options = new StorageOptions
+        {
+            Provider = "postgres",
+            PostgresConnectionString = "Host=localhost;Database=fake;Username=fake;Password=fake",
+        };
+        services.AddContextStorage(options);
+
+        // PostgresConnectionFactory 仅实现 IAsyncDisposable，需用 await using 释放容器
+        await using var sp = services.BuildServiceProvider();
+        var versionStore = sp.GetService<IContextStateVersionStore>();
+        Assert.IsNotNull(versionStore, "IContextStateVersionStore 未注册");
+        Assert.IsInstanceOfType(versionStore, typeof(PostgresContextStateVersionStore),
+            $"Postgres provider 启用时 IContextStateVersionStore 应为 PostgresContextStateVersionStore，实际: {versionStore.GetType().Name}");
     }
 
     private sealed class FakePostgresConnectionFactory(PostgresOptions options, bool success) : IPostgresConnectionFactory

@@ -130,6 +130,11 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<PostgresArtifactStore>();
         services.AddSingleton<IArtifactStore>(sp => sp.GetRequiredService<PostgresArtifactStore>());
 
+        // R14-PG-6：分布式 context state 版本存储。覆盖 CoreExtensions 的 InMemory 默认注册。
+        // 多实例 Worker 通过 Postgres 行级锁共享单调递增的版本号，支持跨实例 cache invalidation。
+        services.AddSingleton<PostgresContextStateVersionStore>();
+        services.AddSingleton<IContextStateVersionStore>(sp => sp.GetRequiredService<PostgresContextStateVersionStore>());
+
         // PackageBuildTraceStore
         services.AddSingleton<PostgresContextPackageBuildTraceStore>();
         services.AddSingleton<IContextPackageBuildTraceStore>(sp =>

@@ -18,8 +18,9 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
     /// R14-PG-3：v9 → v10，新增 short-term memory / promotion / candidate review 表与索引。
     /// R14-PG-4：v10 → v11，新增 context learning / governance review 表与索引。
     /// R14-PG-5：v11 → v12，新增 vector lifecycle + artifact 表与索引。
+    /// R14-PG-6：v12 → v13，新增 context_state_versions 表用于分布式版本号。
     /// </summary>
-    public const string SchemaVersion = "cc-schema-v12";
+    public const string SchemaVersion = "cc-schema-v13";
 
     public const string BaselineMigrationId = "0001_operational_store_baseline";
 
@@ -71,6 +72,8 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         "vector_lifecycle_metadata_reviews",
         "vector_lifecycle_sidecar_metadata",
         "vector_reindex_reports",
+        // R14-PG-6：分布式 context state 版本号表（不同于 schema_versions 用于 schema migration 跟踪）
+        "context_state_versions",
         "context_schema_migrations"
     ];
 
@@ -248,6 +251,8 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         var vectorLifecycleMetadataReviews = Infrastructure.PostgresNames.Table(options, "vector_lifecycle_metadata_reviews");
         var vectorLifecycleSidecarMetadata = Infrastructure.PostgresNames.Table(options, "vector_lifecycle_sidecar_metadata");
         var artifacts = Infrastructure.PostgresNames.Table(options, "artifacts");
+        // R14-PG-6：分布式 context state 版本号表
+        var contextStateVersions = Infrastructure.PostgresNames.Table(options, "context_state_versions");
         var extensionSql = options.EnablePgVectorExtension
             ? "CREATE EXTENSION IF NOT EXISTS vector;"
             : string.Empty;
@@ -713,6 +718,16 @@ CREATE TABLE IF NOT EXISTS {artifacts} (
 );
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "artifacts", "kind")} ON {artifacts} (workspace_id, artifact_kind);
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "artifacts", "updated")} ON {artifacts} (workspace_id, collection_id, updated_at DESC);
+
+-- R14-PG-6：分布式 context state 版本号表（不同于 schema_versions 用于 schema migration 跟踪）
+CREATE TABLE IF NOT EXISTS {contextStateVersions} (
+    workspace_id text NOT NULL,
+    collection_id text NOT NULL,
+    store_kind text NOT NULL,
+    version bigint NOT NULL DEFAULT 0,
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (workspace_id, collection_id, store_kind)
+);
 
 CREATE TABLE IF NOT EXISTS {contextIndex} (
     workspace_id text NOT NULL,
