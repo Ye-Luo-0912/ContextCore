@@ -11,17 +11,27 @@ namespace ContextCore.Core;
 public sealed class CompositeContextEventSink : IContextEventSink
 {
     private readonly IReadOnlyList<IContextEventSink> _sinks;
+    private readonly ContextEventSinkKind _kind;
 
     public CompositeContextEventSink(IEnumerable<IContextEventSink> sinks)
     {
         _sinks = sinks.Where(sink => sink is not null).ToArray();
+        // P0-8：复合接收器的 Kind 取所有子 sink 的最严格值——只要有一个子 sink 为 Required，
+        // 复合接收器就声明为 Required。这样外层装饰器（如 BoundedChannelContextEventSink）
+        // 会绕过有界通道、同步转发事件，确保审计事件不会被通道满时丢弃。
+        _kind = _sinks.Any(sink => sink.Kind == ContextEventSinkKind.Required)
+            ? ContextEventSinkKind.Required
+            : ContextEventSinkKind.BestEffort;
     }
 
     /// <summary>
-    /// 复合接收器自身声明为 BestEffort：其内部已按 sink 的 <see cref="IContextEventSink.Kind"/> 分别处理失败，
-    /// 不希望外层再把整次 EmitAsync 当作必须成功的审计操作。
+    /// P0-8：取所有子 sink 的最严格 Kind。只要有一个子 sink 为 Required，复合接收器即为 Required。
+    /// 这样外层 <see cref="BoundedChannelContextEventSink"/> 会绕过通道、同步转发事件，
+    /// 确保审计事件（FileContextEventSink / PostgresContextEventSink）不会被通道满时丢弃。
+    /// 复合接收器内部仍按子 sink 的 Kind 分别处理失败：
+    /// BestEffort 子 sink 失败被吞掉（fail-open），Required 子 sink 失败聚合成 <see cref="AggregateException"/> 抛出（fail-closed）。
     /// </summary>
-    public ContextEventSinkKind Kind => ContextEventSinkKind.BestEffort;
+    public ContextEventSinkKind Kind => _kind;
 
     public async Task EmitAsync(
         ContextOperationEvent operationEvent,

@@ -18,6 +18,14 @@ public sealed class PostgresContextEventSink : PostgresStoreBase, IContextEventS
     {
     }
 
+    /// <summary>
+    /// P0-8：审计事件必须落盘。PostgresContextEventSink 声明为 <see cref="ContextEventSinkKind.Required"/>，
+    /// 使 <see cref="CompositeContextEventSink"/> 的 Kind 升级为 Required，
+    /// 外层 <see cref="BoundedChannelContextEventSink"/> 绕过有界通道、直接同步写入 PostgreSQL。
+    /// 审计事件不会因通道满而丢失。
+    /// </summary>
+    public ContextEventSinkKind Kind => ContextEventSinkKind.Required;
+
     /// <summary>将操作事件序列化并保存到 PostgreSQL 中。</summary>
     public async Task EmitAsync(
         ContextOperationEvent operationEvent,

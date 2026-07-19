@@ -231,9 +231,12 @@ internal static class CoreExtensions
 				sinks.Add(postgresSink);
 			}
 
-			// R13.4 #1：BestEffort 路径经有界 Channel 装饰，启用批量写入与背压丢弃语义；
-			// Required 路径在装饰器内被检测并直接同步调用，保证审计事件落盘。
-			// CompositeContextEventSink.Kind 为 BestEffort，故走通道 + 后台批量消费路径。
+			// P0-8 + R13.4 #1：CompositeContextEventSink.Kind 取最严格值——
+			// 当 FileContextEventSink / PostgresContextEventSink（审计 sink，Kind=Required）存在时，
+			// Composite.Kind = Required，外层 BoundedChannelContextEventSink 绕过通道、直接同步调用，
+			// 审计事件不被通道满丢弃。
+			// 当无 Required 子 sink（仅 InMemory + Logging 测试场景）时，Composite.Kind = BestEffort，
+			// 走有界通道 + 后台批量消费路径，启用批量 I/O 与背压丢弃。
 			var composite = new CompositeContextEventSink(sinks);
 			return new BoundedChannelContextEventSink(composite);
 		});

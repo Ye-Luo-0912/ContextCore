@@ -310,8 +310,11 @@ public sealed class BoundedChannelContextEventSinkTests
 
     /// <summary>
     /// 复合场景：Composite 包含 BestEffort + Required 子 sink，
-    /// 外层 BoundedChannelContextEventSink 装饰时 Composite 整体走通道（因 Kind == BestEffort）。
-    /// Composite.EmitBatchAsync 内部按子 sink 的 Kind 分别处理，确保 Required 子 sink 仍接收全部事件。
+    /// P0-8：Composite.Kind 取最严格值——只要有一个子 sink 为 Required，Composite.Kind = Required。
+    /// 外层 BoundedChannelContextEventSink 检测到 Required 后绕过通道、同步转发事件，
+    /// 确保审计事件（Required 子 sink）在通道压力下也不被丢弃。
+    /// Composite.EmitAsync 内部仍按子 sink 的 Kind 分别处理失败：
+    /// BestEffort 子 sink 失败 fail-open，Required 子 sink 失败聚合成 AggregateException 抛出。
     /// </summary>
     [TestMethod]
     public async Task BoundedChannel_WrappingComposite_StillRespectsInnerRequiredSemantics()
@@ -320,21 +323,75 @@ public sealed class BoundedChannelContextEventSinkTests
         var requiredInner = new RequiredInMemorySink();
         var composite = new CompositeContextEventSink(new IContextEventSink[] { bestEffortInner, requiredInner });
 
-        // Composite.Kind == BestEffort，故外层装饰器对整个 Composite 走通道
+        // P0-8：Composite 包含 Required 子 sink → Composite.Kind = Required → 外层装饰器绕过通道
         await using var sink = new BoundedChannelContextEventSink(composite, capacity: 100, batchSize: 8);
+        Assert.AreEqual(ContextEventSinkKind.Required, sink.Kind, "Composite 含 Required 子 sink 时 Kind 应升级为 Required");
 
         for (var i = 0; i < 5; i++)
         {
             await sink.EmitAsync(CreateEvent("ws-composite-req", $"evt-{i}"));
         }
 
-        // 等待两个子 sink 都收到全部事件（Composite.EmitBatchAsync 同步转发两个子 sink）
-        await WaitForAsync(
-            () => bestEffortInner.Events.Count == 5 && requiredInner.Events.Count == 5,
-            TimeSpan.FromSeconds(2));
-
+        // 同步路径：两个子 sink 立即收到全部事件，无需 WaitForAsync
         Assert.AreEqual(5, bestEffortInner.Events.Count);
         Assert.AreEqual(5, requiredInner.Events.Count);
+        Assert.AreEqual(0, sink.PendingCount, "Required 路径不应使用通道");
+        Assert.AreEqual(0, sink.DroppedCount, "Required 路径不应丢弃事件");
+        Assert.AreEqual(0, sink.BatchEmitCount, "Required 路径不通过消费者批处理");
+    }
+
+    /// <summary>
+    /// P0-8 生产场景模拟：Composite 包含 Required 审计 sink（如 FileContextEventSink），
+    /// 外层 BoundedChannelContextEventSink 应绕过通道，审计事件在通道压力下也不丢失。
+    /// 使用低容量通道 + 高吞吐事件验证：若走通道必然丢弃，走 Required 路径则全部落盘。
+    /// </summary>
+    [TestMethod]
+    public async Task BoundedChannel_WithRequiredAuditSink_NeverDropsAuditEventsUnderPressure()
+    {
+        var auditSink = new RequiredInMemorySink();
+        var bestEffortSink = new InMemoryContextEventSink();
+        var composite = new CompositeContextEventSink(new IContextEventSink[] { bestEffortSink, auditSink });
+
+        // 模拟生产场景：低容量通道（capacity=4）+ 高吞吐事件（100 条）
+        await using var sink = new BoundedChannelContextEventSink(composite, capacity: 4, batchSize: 8);
+        Assert.AreEqual(ContextEventSinkKind.Required, sink.Kind, "Composite 含 Required 审计 sink 时 Kind 应为 Required");
+
+        for (var i = 0; i < 100; i++)
+        {
+            await sink.EmitAsync(CreateEvent("ws-audit-pressure", $"evt-{i:000}"));
+        }
+
+        // 若走通道，capacity=4 必然丢弃大量事件；走 Required 路径则全部落盘
+        Assert.AreEqual(100, auditSink.Events.Count, "审计事件必须全部落盘，不得丢弃");
+        Assert.AreEqual(100, bestEffortSink.Events.Count, "BestEffort 子 sink 仍接收全部事件");
+        Assert.AreEqual(0, sink.DroppedCount, "Required 路径不应触发丢弃");
+        Assert.AreEqual(0, sink.PendingCount, "Required 路径不应使用通道");
+    }
+
+    /// <summary>
+    /// P0-8 反向验证：当 Composite 仅含 BestEffort 子 sink 时，Composite.Kind = BestEffort，
+    /// 外层 BoundedChannelContextEventSink 走通道 + 后台批量消费路径（保留 R13.4 #1 的批量 I/O 优化）。
+    /// </summary>
+    [TestMethod]
+    public async Task BoundedChannel_WithOnlyBestEffortSinks_StillUsesChannelForBatching()
+    {
+        var inner = new InMemoryContextEventSink();
+        var composite = new CompositeContextEventSink(new IContextEventSink[] { inner });
+
+        await using var sink = new BoundedChannelContextEventSink(composite, capacity: 100, batchSize: 8);
+        Assert.AreEqual(ContextEventSinkKind.BestEffort, sink.Kind, "Composite 仅含 BestEffort 子 sink 时 Kind 应为 BestEffort");
+
+        for (var i = 0; i < 16; i++)
+        {
+            await sink.EmitAsync(CreateEvent("ws-besteffort-only", $"evt-{i}"));
+        }
+
+        // 等待消费者处理完成
+        await WaitForAsync(() => inner.Events.Count == 16, TimeSpan.FromSeconds(2));
+
+        Assert.AreEqual(16, inner.Events.Count);
+        Assert.IsTrue(sink.BatchEmitCount >= 2, $"BestEffort 路径应通过消费者批处理，预期至少 2 批，实际 {sink.BatchEmitCount}");
+        Assert.AreEqual(0, sink.DroppedCount);
     }
 
     /// <summary>

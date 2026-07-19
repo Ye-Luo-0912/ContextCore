@@ -29,6 +29,14 @@ public sealed class FileContextEventSink : IContextEventSink
     }
 
     /// <summary>
+    /// P0-8：审计事件必须落盘。FileContextEventSink 声明为 <see cref="ContextEventSinkKind.Required"/>，
+    /// 使 <see cref="CompositeContextEventSink"/> 的 Kind 升级为 Required，
+    /// 外层 <see cref="BoundedChannelContextEventSink"/> 绕过有界通道、直接同步写入文件。
+    /// 审计事件不会因通道满而丢失。
+    /// </summary>
+    public ContextEventSinkKind Kind => ContextEventSinkKind.Required;
+
+    /// <summary>
     /// 将事件序列化后追加写入对应工作空间的日志文件。
     /// </summary>
     /// <param name="operationEvent">要记录的操作事件。</param>
