@@ -85,10 +85,13 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<IContextPackagePolicyStore>(sp =>
             sp.GetRequiredService<PostgresContextPackagePolicyStore>());
 
-        // JobQueue + JobQueryStore
+        // JobQueue + JobQueryStore + LeasedJobQueue (P0-4)
         services.AddSingleton<PostgresContextJobQueue>();
         services.AddSingleton<IContextJobQueue>(sp => sp.GetRequiredService<PostgresContextJobQueue>());
         services.AddSingleton<IContextJobQueryStore>(sp => sp.GetRequiredService<PostgresContextJobQueue>());
+        // P0-4：注册 ILeasedJobQueue 让 worker 检测到此队列支持租约语义。
+        // worker 通过 `queue is ILeasedJobQueue` 判断；InMemory/File 队列不实现此接口故走 Dequeue 路径。
+        services.AddSingleton<ILeasedJobQueue>(sp => sp.GetRequiredService<PostgresContextJobQueue>());
 
         // PostgresContextEventSink
         services.AddSingleton<PostgresContextEventSink>();

@@ -6,10 +6,14 @@ using Npgsql;
 namespace ContextCore.Storage.Postgres.Stores;
 
 /// <summary>
-/// PostgreSQL 作业队列，同时实现 <see cref="IContextJobQueue"/> 和 <see cref="IContextJobQueryStore"/>。
-/// 使用 SELECT FOR UPDATE SKIP LOCKED 实现并发安全的出队。
+/// PostgreSQL 作业队列，同时实现 <see cref="IContextJobQueue"/>、<see cref="IContextJobQueryStore"/>
+/// 和 <see cref="ILeasedJobQueue"/>。
+/// 使用 SELECT FOR UPDATE SKIP LOCKED 实现并发安全的出队与租约获取。
+/// P0-4：worker 通过 <see cref="ILeasedJobQueue.AcquireLeaseAsync"/> 获取带租约的作业，
+/// 处理过程中周期性调用 <see cref="ILeasedJobQueue.RenewHeartbeatAsync"/> 续约；
+/// 进程崩溃后过期租约被其他 worker 抢占恢复，避免 Running 任务永久滞留。
 /// </summary>
-public sealed class PostgresContextJobQueue : PostgresStoreBase, IContextJobQueue, IContextJobQueryStore
+public sealed class PostgresContextJobQueue : PostgresStoreBase, IContextJobQueue, IContextJobQueryStore, ILeasedJobQueue
 {
     public PostgresContextJobQueue(
         PostgresConnectionFactory connectionFactory,

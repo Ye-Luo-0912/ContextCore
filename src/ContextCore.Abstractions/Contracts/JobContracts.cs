@@ -117,6 +117,60 @@ public interface IContextJobQueue
         CancellationToken cancellationToken = default);
 }
 
+/// <summary>
+/// P0-4：支持租约（lease）的作业队列扩展契约。
+/// 实现此接口的队列（如 Postgres）提供带租约的获取与心跳续约，
+/// 使 worker 进程崩溃后过期租约可被其他 worker 通过 <see cref="AcquireLeaseAsync"/> 抢占恢复。
+/// </summary>
+/// <remarks>
+/// 语义：
+/// <list type="bullet">
+/// <item><see cref="AcquireLeaseAsync"/>：原子地获取一个 Queued/WaitingRetry 或过期 Running 的作业，
+/// 设置 state=Running、lease_owner、lease_expires_at、last_heartbeat_at。返回 null 表示无可消费作业。</item>
+/// <item><see cref="RenewHeartbeatAsync"/>：续约租约。返回 true 表示续约成功；
+/// 返回 false 表示租约已丢失（被其他 worker 抢占或状态已改变）——调用方应中止处理。</item>
+/// <item>Ack/Nack 复用 <see cref="IContextJobQueue"/> 上的方法，CAS WHERE state='Running' 已防止重复 Ack/Nack。</item>
+/// </list>
+/// 未实现此接口的队列（如 InMemory/File）仍走 <see cref="IContextJobQueue.DequeueAsync"/> 路径，
+/// worker 检测到 <c>queue is ILeasedJobQueue</c> 时切换到租约路径。
+/// </remarks>
+public interface ILeasedJobQueue
+{
+    /// <summary>
+    /// 原子地获取一个作业并设置租约。
+    /// 选择条件：state 为 Queued/WaitingRetry，或 state=Running 且 lease_expires_at 已过期。
+    /// 使用 SELECT FOR UPDATE SKIP LOCKED 确保多 worker / 多实例无重复消费。
+    /// </summary>
+    /// <param name="owner">租约持有者标识（worker 实例唯一）。同一 owner 可重新获取自己过期租约的作业。</param>
+    /// <param name="leaseDuration">租约有效期。过期后其他 worker 可通过本方法抢占。</param>
+    /// <param name="kind">可选：仅获取指定类型的作业。</param>
+    /// <param name="workspaceId">可选：仅获取指定工作空间的作业。</param>
+    /// <param name="collectionId">可选：仅获取指定集合的作业。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>获取到的作业（state=Running），或 null 表示队列无可消费作业。</returns>
+    Task<ContextJob?> AcquireLeaseAsync(
+        string owner,
+        TimeSpan leaseDuration,
+        ContextJobKind? kind = null,
+        string? workspaceId = null,
+        string? collectionId = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 续约租约。应在 <paramref name="leaseDuration"/> 过期前周期性调用。
+    /// </summary>
+    /// <param name="jobId">作业 ID。</param>
+    /// <param name="owner">租约持有者标识（必须与 <see cref="AcquireLeaseAsync"/> 一致）。</param>
+    /// <param name="leaseDuration">续约后的新有效期。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>true 表示续约成功；false 表示租约已丢失（lease_owner 不匹配或 state 非 Running），调用方应中止处理。</returns>
+    Task<bool> RenewHeartbeatAsync(
+        string jobId,
+        string owner,
+        TimeSpan leaseDuration,
+        CancellationToken cancellationToken = default);
+}
+
 /// <summary>提供作业的查询功能。</summary>
 public interface IContextJobQueryStore
 {

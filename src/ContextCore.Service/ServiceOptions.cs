@@ -77,6 +77,21 @@ public sealed class JobWorkerOptions
 	/// 设为大于 1 时 worker 将同时从队列取出并并发执行多个作业。
 	/// PostgreSQL 队列已使用 SELECT FOR UPDATE SKIP LOCKED 确保无重复消费。</summary>
 	public int Concurrency { get; set; } = 1;
+
+	/// <summary>
+	/// P0-4：作业租约有效期。仅当队列实现 <see cref="ContextCore.Abstractions.ILeasedJobQueue"/> 时生效。
+	/// worker 在处理过程中周期性调用 <c>RenewHeartbeatAsync</c> 续约；超过此时长未续约则租约过期，
+	/// 其他 worker 可通过 <c>AcquireLeaseAsync</c> 抢占（state=Running AND lease_expires_at &lt;= now）。
+	/// 默认 1 分钟——建议远大于 <see cref="HeartbeatInterval"/>（如 4 倍以上）以容忍单次续约失败。
+	/// </summary>
+	public TimeSpan LeaseDuration { get; set; } = TimeSpan.FromMinutes(1);
+
+	/// <summary>
+	/// P0-4：心跳续约间隔。仅当队列实现 <see cref="ContextCore.Abstractions.ILeasedJobQueue"/> 时生效。
+	/// worker 在作业处理过程中每隔此间隔调用 <c>RenewHeartbeatAsync</c>；续约失败（返回 false）则中止处理。
+	/// 默认 15 秒——必须显著小于 <see cref="LeaseDuration"/> 以保证租约不会因单次延迟而过期。
+	/// </summary>
+	public TimeSpan HeartbeatInterval { get; set; } = TimeSpan.FromSeconds(15);
 }
 
 /// <summary>短期记忆维护 worker 的启停与周期配置。</summary>
