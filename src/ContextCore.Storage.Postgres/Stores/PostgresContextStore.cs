@@ -1,6 +1,7 @@
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Storage.Postgres.Infrastructure;
+using Npgsql;
 
 namespace ContextCore.Storage.Postgres.Stores;
 
@@ -8,7 +9,7 @@ namespace ContextCore.Storage.Postgres.Stores;
 /// PostgreSQL 上下文条目与集合元数据存储。
 /// 完整 DTO 保存在 jsonb 中，同时抽取常用筛选列以便查询和索引。
 /// </summary>
-public sealed class PostgresContextStore : PostgresStoreBase, IContextStore, IContextCollectionStore, IContextStoreBatchLookup
+public sealed class PostgresContextStore : PostgresStoreBase, IContextStore, IContextCollectionStore, IContextStoreBatchLookup, ITransactionalContextStore
 {
     public PostgresContextStore(PostgresConnectionFactory connectionFactory, PostgresJsonSerializer serializer, PostgresMigrationRunner migrationRunner)
         : base(connectionFactory, serializer, migrationRunner)
@@ -23,7 +24,42 @@ public sealed class PostgresContextStore : PostgresStoreBase, IContextStore, ICo
 
         await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
+        await ExecuteSaveAsync(command, normalized, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// P0-3：在指定事务作用域内保存条目。复用 scope 持有的连接与事务，不开启新连接。
+    /// scope 必须是 <see cref="PostgresWriteTransactionScope"/>。
+    /// </summary>
+    public async Task SaveAsync(ContextItem item, IWriteTransactionScope scope, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        ArgumentNullException.ThrowIfNull(scope);
+        if (scope is not PostgresWriteTransactionScope pgScope)
+        {
+            throw new InvalidOperationException(
+                "PostgresContextStore 仅支持 PostgresWriteTransactionScope；请通过 PostgresWriteTransactionScopeFactory 创建事务作用域。");
+        }
+        if (!scope.IsActive)
+        {
+            throw new InvalidOperationException("事务作用域已结束（Commit/Rollback），无法继续写入。");
+        }
+
+        var normalized = Normalize(item);
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+
+        using var command = pgScope.Connection.CreateCommand();
+        if (pgScope.Transaction is not null)
+        {
+            command.Transaction = pgScope.Transaction;
+        }
         command.CommandTimeout = Options.CommandTimeoutSeconds;
+        await ExecuteSaveAsync(command, normalized, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>共享的 INSERT/ON CONFLICT 逻辑，由无事务与事务重载复用。</summary>
+    private async Task ExecuteSaveAsync(NpgsqlCommand command, ContextItem normalized, CancellationToken cancellationToken)
+    {
         command.CommandText = $"""
 INSERT INTO {Table("context_items")} (
     workspace_id, collection_id, id, type, title, tags, refs, source_refs,

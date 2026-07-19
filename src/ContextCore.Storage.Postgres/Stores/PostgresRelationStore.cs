@@ -8,7 +8,7 @@ using NpgsqlTypes;
 namespace ContextCore.Storage.Postgres.Stores;
 
 /// <summary>PostgreSQL 关系存储，使用结构化列加 jsonb 原文保存关系边。</summary>
-public sealed class PostgresRelationStore : PostgresStoreBase, IRelationStore
+public sealed class PostgresRelationStore : PostgresStoreBase, IRelationStore, ITransactionalRelationStore
 {
     public PostgresRelationStore(PostgresConnectionFactory connectionFactory, PostgresJsonSerializer serializer, PostgresMigrationRunner migrationRunner)
         : base(connectionFactory, serializer, migrationRunner)
@@ -57,17 +57,57 @@ LIMIT 1;
         await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandTimeout = Options.CommandTimeoutSeconds;
+        ApplyDeleteCommandText(command);
+        command.Parameters.AddWithValue("workspace_id", workspaceId);
+        command.Parameters.AddWithValue("collection_id", collectionId);
+        command.Parameters.AddWithValue("id", relationId);
+
+        return await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) > 0;
+    }
+
+    /// <summary>
+    /// P0-3：在指定事务作用域内删除单条边。复用 scope 持有的连接与事务，不开启新连接。
+    /// scope 必须是 <see cref="PostgresWriteTransactionScope"/>。提交由调用方通过 scope.CommitAsync 完成。
+    /// </summary>
+    public async Task<bool> DeleteAsync(
+        string workspaceId,
+        string collectionId,
+        string relationId,
+        IWriteTransactionScope scope,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(scope);
+        var pgScope = scope as PostgresWriteTransactionScope
+            ?? throw new InvalidOperationException(
+                "PostgresRelationStore 仅支持 PostgresWriteTransactionScope；请通过 PostgresWriteTransactionScopeFactory 创建事务作用域。");
+        if (!scope.IsActive)
+        {
+            throw new InvalidOperationException("事务作用域已结束（Commit/Rollback），无法继续写入。");
+        }
+
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+        using var command = pgScope.Connection.CreateCommand();
+        if (pgScope.Transaction is not null)
+        {
+            command.Transaction = pgScope.Transaction;
+        }
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+        ApplyDeleteCommandText(command);
+        command.Parameters.AddWithValue("workspace_id", workspaceId);
+        command.Parameters.AddWithValue("collection_id", collectionId);
+        command.Parameters.AddWithValue("id", relationId);
+
+        return await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) > 0;
+    }
+
+    private void ApplyDeleteCommandText(NpgsqlCommand command)
+    {
         command.CommandText = $"""
 DELETE FROM {Table("relations")}
 WHERE workspace_id = @workspace_id
   AND collection_id = @collection_id
   AND id = @id;
 """;
-        command.Parameters.AddWithValue("workspace_id", workspaceId);
-        command.Parameters.AddWithValue("collection_id", collectionId);
-        command.Parameters.AddWithValue("id", relationId);
-
-        return await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) > 0;
     }
 
     /// <summary>清理显式 smoke/canary scope；只供受控验证流程调用。</summary>
@@ -105,17 +145,61 @@ WHERE workspace_id = @workspace_id
 
         try
         {
-            // GRAPH-11：NpgsqlBatch 单次往返提交全部 upsert 语句
-            using var batch = new NpgsqlBatch(connection as NpgsqlConnection, transaction as NpgsqlTransaction);
-            batch.Timeout = Options.CommandTimeoutSeconds;
+            using var batch = BuildBatch(connection, transaction, list, cancellationToken);
+            await batch.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+            throw;
+        }
+    }
 
-            foreach (var relation in list)
+    /// <summary>
+    /// P0-3：在指定事务作用域内批量 upsert 关系。复用 scope 持有的连接与事务。
+    /// 提交由调用方通过 scope.CommitAsync 完成；此方法只执行 batch，不自行提交或回滚。
+    /// </summary>
+    public async Task BatchUpsertAsync(
+        IEnumerable<ContextRelation> relations,
+        IWriteTransactionScope scope,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(relations);
+        ArgumentNullException.ThrowIfNull(scope);
+        var pgScope = scope as PostgresWriteTransactionScope
+            ?? throw new InvalidOperationException(
+                "PostgresRelationStore 仅支持 PostgresWriteTransactionScope；请通过 PostgresWriteTransactionScopeFactory 创建事务作用域。");
+        if (!scope.IsActive)
+        {
+            throw new InvalidOperationException("事务作用域已结束（Commit/Rollback），无法继续写入。");
+        }
+
+        var list = relations.ToList();
+        if (list.Count == 0) return;
+
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+        using var batch = BuildBatch(pgScope.Connection, pgScope.Transaction, list, cancellationToken);
+        await batch.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private NpgsqlBatch BuildBatch(
+        NpgsqlConnection connection,
+        NpgsqlTransaction? transaction,
+        List<ContextRelation> list,
+        CancellationToken cancellationToken)
+    {
+        // GRAPH-11：NpgsqlBatch 单次往返提交全部 upsert 语句
+        var batch = new NpgsqlBatch(connection, transaction);
+        batch.Timeout = Options.CommandTimeoutSeconds;
+
+        foreach (var relation in list)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var normalized = CompositeContextNormalizer.Normalize(relation);
+            var batchCommand = new NpgsqlBatchCommand
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                var normalized = CompositeContextNormalizer.Normalize(relation);
-                var batchCommand = new NpgsqlBatchCommand
-                {
-                    CommandText = $"""
+                CommandText = $"""
 INSERT INTO {Table("relations")} (
     workspace_id, collection_id, id, source_id, target_id, relation_type,
     weight, confidence, created_at, data)
@@ -131,29 +215,22 @@ ON CONFLICT (workspace_id, collection_id, id) DO UPDATE SET
     created_at = EXCLUDED.created_at,
     data = EXCLUDED.data;
 """
-                };
-                batchCommand.Parameters.AddWithValue("workspace_id", normalized.WorkspaceId);
-                batchCommand.Parameters.AddWithValue("collection_id", normalized.CollectionId);
-                batchCommand.Parameters.AddWithValue("id", normalized.Id);
-                batchCommand.Parameters.AddWithValue("source_id", normalized.SourceId);
-                batchCommand.Parameters.AddWithValue("target_id", normalized.TargetId);
-                batchCommand.Parameters.AddWithValue("relation_type", normalized.RelationType);
-                batchCommand.Parameters.AddWithValue("weight", normalized.Weight);
-                batchCommand.Parameters.AddWithValue("confidence", normalized.Confidence);
-                batchCommand.Parameters.AddWithValue("created_at", normalized.CreatedAt);
-                var dataParam = batchCommand.Parameters.Add("data", NpgsqlDbType.Jsonb);
-                dataParam.Value = Serializer.Serialize(normalized);
-                batch.BatchCommands.Add(batchCommand);
-            }
+            };
+            batchCommand.Parameters.AddWithValue("workspace_id", normalized.WorkspaceId);
+            batchCommand.Parameters.AddWithValue("collection_id", normalized.CollectionId);
+            batchCommand.Parameters.AddWithValue("id", normalized.Id);
+            batchCommand.Parameters.AddWithValue("source_id", normalized.SourceId);
+            batchCommand.Parameters.AddWithValue("target_id", normalized.TargetId);
+            batchCommand.Parameters.AddWithValue("relation_type", normalized.RelationType);
+            batchCommand.Parameters.AddWithValue("weight", normalized.Weight);
+            batchCommand.Parameters.AddWithValue("confidence", normalized.Confidence);
+            batchCommand.Parameters.AddWithValue("created_at", normalized.CreatedAt);
+            var dataParam = batchCommand.Parameters.Add("data", NpgsqlDbType.Jsonb);
+            dataParam.Value = Serializer.Serialize(normalized);
+            batch.BatchCommands.Add(batchCommand);
+        }
 
-            await batch.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
-        }
-        catch
-        {
-            await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
-            throw;
-        }
+        return batch;
     }
 
     public async Task<IReadOnlyList<ContextRelation>> QueryAsync(ContextRelationQuery query, CancellationToken cancellationToken = default)
@@ -163,7 +240,43 @@ ON CONFLICT (workspace_id, collection_id, id) DO UPDATE SET
         await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandTimeout = Options.CommandTimeoutSeconds;
+        ApplyQueryCommandText(command, query);
 
+        return await ReadRelationsAsync(command, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// P0-3：在指定事务作用域内查询关系。读共享同一事务视图，避免读到其他事务未提交的数据。
+    /// </summary>
+    public async Task<IReadOnlyList<ContextRelation>> QueryAsync(
+        ContextRelationQuery query,
+        IWriteTransactionScope scope,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        ArgumentNullException.ThrowIfNull(scope);
+        var pgScope = scope as PostgresWriteTransactionScope
+            ?? throw new InvalidOperationException(
+                "PostgresRelationStore 仅支持 PostgresWriteTransactionScope；请通过 PostgresWriteTransactionScopeFactory 创建事务作用域。");
+        if (!scope.IsActive)
+        {
+            throw new InvalidOperationException("事务作用域已结束（Commit/Rollback），无法继续读取。");
+        }
+
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+        using var command = pgScope.Connection.CreateCommand();
+        if (pgScope.Transaction is not null)
+        {
+            command.Transaction = pgScope.Transaction;
+        }
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+        ApplyQueryCommandText(command, query);
+
+        return await ReadRelationsAsync(command, cancellationToken).ConfigureAwait(false);
+    }
+
+    private void ApplyQueryCommandText(NpgsqlCommand command, ContextRelationQuery query)
+    {
         var filters = new List<string> { "workspace_id = @workspace_id" };
         command.Parameters.AddWithValue("workspace_id", query.WorkspaceId);
         if (!string.IsNullOrWhiteSpace(query.CollectionId))
@@ -206,15 +319,6 @@ WHERE {string.Join(" AND ", filters)}
 ORDER BY weight DESC, confidence DESC, created_at DESC
 LIMIT @take OFFSET @skip;
 """;
-
-        var results = new List<ContextRelation>();
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
-        {
-            results.Add(Serializer.Deserialize<ContextRelation>(reader.GetString(0)));
-        }
-
-        return results;
     }
 
     /// <summary>GRAPH-10：统一邻居查询，在 SQL 中过滤和 Limit。</summary>

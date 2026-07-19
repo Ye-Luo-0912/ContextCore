@@ -106,8 +106,9 @@ public abstract class InvalidatingStoreDecoratorBase
 /// 包装 <see cref="IContextStore"/>，在写入成功（SaveAsync/DeleteAsync）后触发缓存失效。
 /// 失效边界 Decorator：本身不缓存，仅向 <see cref="IStateCacheInvalidator"/> 发出失效信号。
 /// 同时透传 <see cref="IContextStoreBatchLookup"/> 能力接口，确保 Retrieval 通道能走批量查询路径。
+/// P0-3：透传 <see cref="ITransactionalContextStore"/> 能力接口，让事务路径在 Decorator 包装下仍可被检测到。
 /// </summary>
-[GenerateInvalidatingDecorator(typeof(IContextStore), typeof(IContextStoreBatchLookup))]
+[GenerateInvalidatingDecorator(typeof(IContextStore), typeof(IContextStoreBatchLookup), typeof(ITransactionalContextStore))]
 public sealed partial class InvalidatingContextStoreDecorator;
 
 public sealed partial class InvalidatingContextStoreDecorator
@@ -126,6 +127,26 @@ public sealed partial class InvalidatingContextStoreDecorator
     {
         await _inner.DeleteAsync(workspaceId, collectionId, id, cancellationToken).ConfigureAwait(false);
         await AfterCommitAsync(InvalidationKeys.ForContext(workspaceId, collectionId, id)).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// P0-3：事务作用域内保存条目。委托给底层 store 的事务重载，<b>不触发缓存失效</b>——
+    /// 事务尚未 Commit，数据未真正落库；失效应在外层 scope.CommitAsync 成功后由调用方触发。
+    /// 当前实现依赖版本失配（<see cref="InMemoryContextStateCache"/> 的 VersionMismatch 路径）
+    /// 与 TTL 兜底；未来可扩展 <see cref="IWriteTransactionScope"/> 暴露 commit 回调以触发精确失效。
+    /// </summary>
+    /// <exception cref="InvalidOperationException">底层 store 未实现 <see cref="ITransactionalContextStore"/>。</exception>
+    public async Task SaveAsync(ContextItem item, IWriteTransactionScope scope, CancellationToken cancellationToken = default)
+    {
+        if (_inner is not ITransactionalContextStore txStore)
+        {
+            throw new InvalidOperationException(
+                $"底层 IContextStore '{_inner.GetType().FullName}' 未实现 ITransactionalContextStore，无法走事务路径。" +
+                "请确保 Postgres provider 已正确注册，或回退到无事务路径（不注册 IWriteTransactionScopeFactory）。");
+        }
+
+        await txStore.SaveAsync(item, scope, cancellationToken).ConfigureAwait(false);
+        // 故意不调用 AfterCommitAsync——事务未提交，缓存失效应等待 Commit 成功后触发。
     }
 }
 
@@ -159,8 +180,9 @@ public sealed partial class InvalidatingMemoryStoreDecorator
 /// <summary>
 /// 包装 <see cref="IRelationStore"/>，在写入成功（SaveAsync/DeleteAsync/BatchUpsertAsync）后触发缓存失效。
 /// 批量写入按集合范围失效（EntityId=null），避免逐条信号放大。
+/// P0-3：透传 <see cref="ITransactionalRelationStore"/> 能力接口，让事务路径在 Decorator 包装下仍可被检测到。
 /// </summary>
-[GenerateInvalidatingDecorator(typeof(IRelationStore))]
+[GenerateInvalidatingDecorator(typeof(IRelationStore), typeof(ITransactionalRelationStore))]
 public sealed partial class InvalidatingRelationStoreDecorator;
 
 public sealed partial class InvalidatingRelationStoreDecorator
@@ -195,6 +217,52 @@ public sealed partial class InvalidatingRelationStoreDecorator
         {
             await AfterCommitAsync(key).ConfigureAwait(false);
         }
+    }
+
+    /// <summary>
+    /// P0-3：事务作用域内批量 upsert。委托给底层 store 的事务重载，<b>不触发缓存失效</b>——
+    /// 事务尚未 Commit。失效应在外层 scope.CommitAsync 成功后由调用方触发。
+    /// </summary>
+    public async Task BatchUpsertAsync(
+        IEnumerable<ContextRelation> relations,
+        IWriteTransactionScope scope,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(relations);
+        if (_inner is not ITransactionalRelationStore txStore)
+        {
+            throw new InvalidOperationException(
+                $"底层 IRelationStore '{_inner.GetType().FullName}' 未实现 ITransactionalRelationStore，无法走事务路径。" +
+                "请确保 Postgres provider 已正确注册，或回退到无事务路径（不注册 IWriteTransactionScopeFactory）。");
+        }
+
+        // 物化一次，保证 inner 与潜在后续失效信号使用同一份列表。
+        var list = relations as IReadOnlyCollection<ContextRelation> ?? relations.ToList();
+        await txStore.BatchUpsertAsync(list, scope, cancellationToken).ConfigureAwait(false);
+        // 故意不调用 AfterCommitAsync——事务未提交。
+    }
+
+    /// <summary>
+    /// P0-3：事务作用域内删除单条关系。委托给底层 store 的事务重载，<b>不触发缓存失效</b>——
+    /// 事务尚未 Commit。失效应在外层 scope.CommitAsync 成功后由调用方触发。
+    /// </summary>
+    public async Task<bool> DeleteAsync(
+        string workspaceId,
+        string collectionId,
+        string relationId,
+        IWriteTransactionScope scope,
+        CancellationToken cancellationToken = default)
+    {
+        if (_inner is not ITransactionalRelationStore txStore)
+        {
+            throw new InvalidOperationException(
+                $"底层 IRelationStore '{_inner.GetType().FullName}' 未实现 ITransactionalRelationStore，无法走事务路径。" +
+                "请确保 Postgres provider 已正确注册，或回退到无事务路径（不注册 IWriteTransactionScopeFactory）。");
+        }
+
+        var result = await txStore.DeleteAsync(workspaceId, collectionId, relationId, scope, cancellationToken).ConfigureAwait(false);
+        // 故意不调用 AfterCommitAsync——事务未提交。
+        return result;
     }
 
     internal static IEnumerable<CacheInvalidationKey> CollectCollectionKeys(

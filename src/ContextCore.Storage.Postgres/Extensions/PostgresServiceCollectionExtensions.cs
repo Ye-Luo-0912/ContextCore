@@ -26,6 +26,12 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<PostgresMigrationRunner>();
         services.AddSingleton<IStoreMigrationRunner>(sp => sp.GetRequiredService<PostgresMigrationRunner>());
 
+        // P0-3：注册 PostgreSQL 跨 store 写入事务作用域工厂。
+        // BasicContextIngestionService 通过 IWriteTransactionScopeFactory? 注入检测是否启用事务路径。
+        // 仅 Postgres provider 注册——File/InMemory 不注册，CanUseTransactionPath 返回 false 走原有无事务路径。
+        services.AddSingleton<PostgresWriteTransactionScopeFactory>();
+        services.AddSingleton<IWriteTransactionScopeFactory>(sp => sp.GetRequiredService<PostgresWriteTransactionScopeFactory>());
+
         // ContextStore + CollectionStore
         services.AddSingleton<PostgresContextStore>();
         services.AddSingleton<IContextStore>(sp => sp.GetRequiredService<PostgresContextStore>());

@@ -8,23 +8,35 @@ namespace ContextCore.Core;
 /// <summary>
 /// 负责对 <see cref="ContextItem"/> 进行规范化并持久化到 <see cref="IContextStore"/> 的基础摄入服务。
 /// </summary>
+/// <remarks>
+/// P0-3：当注入的 <see cref="IContextStore"/> 实现 <see cref="ITransactionalContextStore"/>、
+/// <see cref="IRelationStore"/> 实现 <see cref="ITransactionalRelationStore"/>、
+/// <see cref="IRelationProjectionWriter"/> 实现 <see cref="ITransactionalRelationProjectionWriter"/>、
+/// 且注入了 <see cref="IWriteTransactionScopeFactory"/> 时，IngestAsync 自动走事务路径——
+/// 将 ContextStore 写入、RelationProjectionWriter 写入、RelationStore 查询与删除全部包裹在单个事务作用域中，
+/// 任一步失败则整体回滚，避免出现"item 已写入但 related_to 边未写入/未删除"的脏数据。
+/// 不满足任一条件时回退到原有无事务路径（行为不变）。
+/// </remarks>
 public sealed class BasicContextIngestionService
 {
     private readonly IContextStore _store;
     private readonly IRelationProjector? _relationProjector;
     private readonly IRelationStore? _relationStore;
     private readonly IRelationProjectionWriter? _projectionWriter;
+    private readonly IWriteTransactionScopeFactory? _transactionScopeFactory;
 
     public BasicContextIngestionService(
         IContextStore store,
         IRelationProjector? relationProjector = null,
         IRelationStore? relationStore = null,
-        IRelationProjectionWriter? projectionWriter = null)
+        IRelationProjectionWriter? projectionWriter = null,
+        IWriteTransactionScopeFactory? transactionScopeFactory = null)
     {
         _store = store;
         _relationProjector = relationProjector;
         _relationStore = relationStore;
         _projectionWriter = projectionWriter;
+        _transactionScopeFactory = transactionScopeFactory;
     }
 
     /// <summary>规范化并保存一个上下文条目，若未提供 ID 则自动生成。</summary>
@@ -67,14 +79,22 @@ public sealed class BasicContextIngestionService
             UpdatedAt = item.UpdatedAt == default ? now : item.UpdatedAt
         };
 
-        await _store.SaveAsync(normalized, cancellationToken).ConfigureAwait(false);
-
-        if (_relationProjector is not null && _relationStore is not null)
+        // P0-3：若所有参与 store 都实现事务能力接口且工厂可用，走事务路径；否则走原有无事务路径。
+        if (CanUseTransactionPath())
         {
-            var ingestRelations = _relationProjector.ProjectForIngest(normalized);
-            // GRAPH-09：Ingest reconcile — 新增需要的边，删除已经移除的 refs 边。
-            // 4.4：通过 IRelationProjectionWriter 写入，若未注入则回退到 BatchUpsertAsync。
-            await ReconcileIngestRelationsAsync(normalized, ingestRelations, cancellationToken).ConfigureAwait(false);
+            await IngestWithTransactionAsync(normalized, cancellationToken).ConfigureAwait(false);
+        }
+        else
+        {
+            await _store.SaveAsync(normalized, cancellationToken).ConfigureAwait(false);
+
+            if (_relationProjector is not null && _relationStore is not null)
+            {
+                var ingestRelations = _relationProjector.ProjectForIngest(normalized);
+                // GRAPH-09：Ingest reconcile — 新增需要的边，删除已经移除的 refs 边。
+                // 4.4：通过 IRelationProjectionWriter 写入，若未注入则回退到 BatchUpsertAsync。
+                await ReconcileIngestRelationsAsync(normalized, ingestRelations, cancellationToken).ConfigureAwait(false);
+            }
         }
 
         return normalized;
@@ -87,6 +107,83 @@ public sealed class BasicContextIngestionService
         var hash = SHA256.HashData(bytes);
 
         return Convert.ToHexString(hash).ToLowerInvariant();
+    }
+
+    /// <summary>
+    /// P0-3：检测注入的 store 是否全部支持事务能力，且事务作用域工厂可用。
+    /// 任一 store 未实现对应可选接口时返回 false，回退到原有无事务路径。
+    /// </summary>
+    private bool CanUseTransactionPath()
+    {
+        if (_transactionScopeFactory is null) return false;
+        if (_store is not ITransactionalContextStore) return false;
+        if (_relationProjector is null || _relationStore is null) return false;
+        // 需要 ITransactionalRelationStore 来执行事务内的 QueryAsync 与 DeleteAsync。
+        // ITransactionalRelationProjectionWriter 仅在 ProjectionWriter 注入时才需要。
+        if (_relationStore is not ITransactionalRelationStore) return false;
+        if (_projectionWriter is not null && _projectionWriter is not ITransactionalRelationProjectionWriter) return false;
+        return true;
+    }
+
+    /// <summary>
+    /// P0-3：在事务作用域内执行 Ingest。任一步失败则整体回滚；
+    /// 全部成功则提交事务。事务作用域通过 await using 确保异常路径也会 Dispose（触发 Rollback）。
+    /// </summary>
+    private async Task IngestWithTransactionAsync(ContextItem normalized, CancellationToken cancellationToken)
+    {
+        var txStore = (ITransactionalContextStore)_store;
+        var txRelationStore = (ITransactionalRelationStore)_relationStore!;
+        var ingestRelations = _relationProjector!.ProjectForIngest(normalized);
+
+        await using var scope = await _transactionScopeFactory!.BeginAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await txStore.SaveAsync(normalized, scope, cancellationToken).ConfigureAwait(false);
+
+            if (ingestRelations.Count > 0 && _projectionWriter is not null)
+            {
+                var txProjectionWriter = (ITransactionalRelationProjectionWriter)_projectionWriter;
+                await txProjectionWriter.WriteAsync(ingestRelations, "ingest", scope, cancellationToken).ConfigureAwait(false);
+            }
+
+            // 查询该条目现有的所有 related_to 出边——共享事务视图，避免读到其他事务未提交数据
+            var existingRelations = await txRelationStore.QueryAsync(new ContextRelationQuery
+            {
+                WorkspaceId = normalized.WorkspaceId,
+                CollectionId = normalized.CollectionId,
+                SourceId = normalized.Id,
+                RelationType = ContextRelationTypes.RelatedTo,
+                Take = int.MaxValue
+            }, scope, cancellationToken).ConfigureAwait(false);
+
+            var newTargetIds = ingestRelations
+                .Select(static r => r.TargetId)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            // P3-01：只删除由 ingest 投影器生产的边（Provenance="ingest"），保留其他 projector 产生的边。
+            foreach (var existing in existingRelations)
+            {
+                if (!newTargetIds.Contains(existing.TargetId)
+                    && string.Equals(existing.Provenance, "ingest", StringComparison.OrdinalIgnoreCase))
+                {
+                    await txRelationStore.DeleteAsync(
+                        normalized.WorkspaceId,
+                        normalized.CollectionId,
+                        existing.Id,
+                        scope,
+                        cancellationToken).ConfigureAwait(false);
+                }
+            }
+
+            await scope.CommitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            // 显式 Rollback 以确保异常路径下立即释放连接；DisposeAsync 也会再次保险地 Rollback（幂等）。
+            try { await scope.RollbackAsync(CancellationToken.None).ConfigureAwait(false); }
+            catch { /* 不掩盖原始异常 */ }
+            throw;
+        }
     }
 
     /// <summary>
