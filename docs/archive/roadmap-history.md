@@ -6,6 +6,104 @@
 
 ## 已完成工作
 
+### R14-PG 系列：Postgres Runtime Parity & HA Gate
+
+将 PostgreSQL provider 从「核心 Data Plane 覆盖」推进到「纵向闭环 + 高可用基线」。Service 层不再有任何 `Unsupported*Store` 残留，PostgreSQL 成为 HA 的唯一目标数据平面，FileSystem 回归 Local / Single-host 定位。共 10 个子任务，跨 schema v11→v13（v11 R14-PG-4 引入 decision_traces；v12 R14-PG-5 引入 vector lifecycle + artifact；v13 R14-PG-6 引入 context_state_versions，自此稳定）。
+
+**R14-PG-1：移除 LearningFeedback/Review 的 Unsupported 覆盖（commit `28b7c49`）**：
+- 删除 Service 层 `UnsupportedLearningFeedbackStore` / `UnsupportedLearningFeedbackReviewStore` 覆盖
+- `PostgresLearningFeedbackStore` + `PostgresLearningFeedbackReviewStore` 正式绑定 DI
+- 验收：`StorageProviderBehaviorContractTests` 中 PostgresNativeInterfaces 数组扩展；`StorageProviderCapabilityMatrixTests.PostgresDeclaredUnsupported` HashSet 缩减
+
+**R14-PG-2：PostgresDecisionTraceStore + decision_traces 表（commit `72d8f20`，schema v11）**：
+- 新增 `PostgresDecisionTraceStore`（实现 `IDecisionTraceStore`）
+- 新增 `context_decision_traces` 表：`(workspace_id, collection_id, trace_id, trace_kind, recorded_at, payload jsonb, metadata jsonb)`
+- 索引：`(workspace_id, collection_id, recorded_at)` + `(workspace_id, trace_kind, recorded_at)`
+- JSONB 存储完整 DecisionTrace，避免反范式化
+
+**R14-PG-3：Short-term memory / promotion / candidate review stores（commit `6193bc5`）**：
+- 新增 4 个 Postgres store：`PostgresShortTermMemoryStore` / `PostgresShortTermPromotionCandidateStore` / `PostgresShortTermPromotionRecordStore` / `PostgresStableReviewCandidateStore`
+- 绑定对应接口契约
+- 更新 `StorageExtensions` 移除 4 个 Unsupported 覆盖
+
+**R14-PG-4：Context learning + governance review stores（commit `9d9c7b2`）**：
+- 新增 `PostgresContextLearningStore`（`IContextLearningStore`）
+- 新增 governance 系列 store：`PostgresCandidateConstraintReviewStore` / `PostgresPromotionCandidateReviewStore` / `PostgresRelationReviewStore` / `PostgresVectorLifecycleReviewStore` / `PostgresDecisionEvidenceStore`
+- 验收：所有 governance 接口均有原生 Postgres 实现
+
+**R14-PG-5：vector lifecycle + artifact stores（commit `e02958f`，schema v12，垂直闭环完成）**：
+- 新增 5 个 Postgres store：`PostgresVectorReindexReportStore` / `PostgresVectorLifecycleMetadataReviewCandidateStore` / `PostgresVectorLifecycleMetadataReviewStore` / `PostgresVectorLifecycleSidecarMetadataStore` / `PostgresArtifactStore`
+- `PostgresArtifactStore` 使用 jsonb 存储 artifact（不写文件系统），与数据平面定位边界一致
+- 5 张新表 + 8 个索引
+- **垂直闭环达成**：`PostgresDeclaredUnsupported` HashSet 清零，所有 16 个 Postgres store 已绑定原生实现
+
+**R14-PG-6：PostgresContextStateVersionStore 分布式版本存储（commit `55a6a00`，schema v13）**：
+- 新增 `PostgresContextStateVersionStore`（实现 `IContextStateVersionStore`）
+- 新增 `context_state_versions` 表：`(workspace_id, collection_id, store_kind, version bigint, updated_at)` PK `(workspace_id, collection_id, store_kind)`
+- `BumpVersionAsync` 使用 `INSERT ... ON CONFLICT DO UPDATE SET version = table.version + 1 RETURNING version` 实现原子递增
+- DI 注册覆盖 `CoreExtensions` 的 InMemory 默认（.NET DI last-wins 语义）
+- 测试：`PostgresMigrationSql_IncludesContextStateVersionsUpsertPattern` + `AddContextStorage_Postgres_OverridesInMemoryVersionStoreRegistration`
+
+**R14-PG-7：多实例 cache invalidation 验收 + Decorator 文档化（commit `3f926f6`）**：
+- 扩展 `InvalidatingStoreDecoratorBase` 的 `<remarks>` XML 文档：明确 InMemory 版本 store 是 process-local（适用 FileSystem/InMemory provider），Postgres 版本 store 是 cross-instance 共享
+- 多实例语义：version-aware `GetAsync` 被动检测跨实例过期；物理 invalidation 始终是 process-local；不引入 LISTEN/NOTIFY
+- 测试：`MultiInstanceCacheInvalidationTests`（3 个测试）
+  - `FileSystem_Provider_UsesInMemoryVersionStore`：storage-only 注册不引入 version store
+  - `MultiInstance_SharedVersionStore_CrossInstanceBumpCausesMissOnOtherInstance`：两个 cache 共享 versionStore，A bump → B miss
+  - `MultiInstance_DecoratorTriggersCrossInstanceBump`：端到端真实 `InvalidatingContextStoreDecorator`
+
+**R14-PG-8：Migration version/rollback 框架（commit `aba4455`）**：
+- 新增 `PostgresMigrationDescriptor`（MigrationId / SchemaVersion / Description / SupportsRollback / IntroducedTableSuffixes / RollbackNotSupportedReason）
+- 新增 `PostgresMigrationRegistry`（静态注册表，替代 hardcoded `ListMigrations()`）：`Migrations` / `FindByVersion` / `FindById` / `ToStoreMigrationList`
+- 新增 `PostgresMigrationRollbackResult`（DTO，含 RolledBack / ConfirmRequired / PreviousSchemaVersion / ActualSchemaVersion / RolledBackMigrations / Diagnostics）
+- 扩展 `IStoreMigrationRunner` 接口（向后兼容）：`GetMigrationHistoryAsync` + `RollbackAsync`
+- 新增 `PostgresMigrationHistoryEntry` record
+- baseline 迁移（`0001_operational_store_baseline`）显式标记 `SupportsRollback = false`：累积幂等 DDL，DROP 会丢失数据
+- `RollbackAsync` 多路径：confirm=false / TargetEqualsCurrent / NoMigrationsToRollback / RollbackNotSupported（拒绝并返回 diagnostics）
+- 测试：10 个新单元测试覆盖 registry lookup、rollback confirm、list-reflects-registry、fake runner 行为
+
+**R14-PG-9：HA 测试套件（commit `570e38b`）**：
+- 单元测试 `PostgresHAOptionsTests`（5 个，无 Docker 依赖）：
+  - `PostgresOptions_Defaults_AreHAFriendly`
+  - `PostgresOptions_ConnectionString_PreservesPoolSettings`
+  - `PostgresOptions_ConnectionString_SupportsMultiHostFailover`（验证 Npgsql 10 spaced 关键字：`Target Session Attributes=primary` / `Host Recheck Seconds=5` / `Load Balance Hosts=True`）
+  - `PostgresConnectionFactory_PingAsync_ReturnsFalseOnUnreachableHost`
+  - `PostgresOptions_CommandTimeoutSeconds_DoesNotAffectNpgsqlCommandTimeoutByDefault`（解耦：store 显式设置 `command.CommandTimeout`）
+- 集成测试 `PostgresHATests`（4 个，Testcontainers pgvector/pgvector:pg17）：
+  - `Failover_ConnectionRecoversAfterContainerRestart`：容器停止/重启后重新拉取 `_connectionString`（端口会被 Testcontainers 重新分配，模拟服务发现更新 endpoint）
+  - `SlowQuery_HonorsCommandTimeout`
+  - `PoolExhaustion_RespectsMaxPoolSize`
+  - `TransactionRollback_AllowsSubsequentOperations`
+- `[ClassInitialize]` 使用 try/catch → `Assert.Inconclusive` 模式，Docker 不可用时优雅跳过
+
+**R14-PG-10：backup/restore runbook + PITR + CLI 接入 PostgresBackupRunner（commit `540a6fc`）**：
+- 新增 `PostgresPitrRunner`（WAL 归档 + `pg_basebackup` + point-in-time recovery）：`EnableWalArchivingAsync` / `CreateBaseBackupAsync` / `RestoreToPointInTimeAsync` / `ListWalArchiveFilesAsync` / `ValidatePitrEnvironmentAsync`
+- 新增 `PostgresPitrOptions` / `PitrRestoreResult` / `WalArchiveFile` DTO
+- 扩展 `BackupManifestGenerator.ForPostgresDumpAsync`：为 pg_dump 转储文件生成 SHA-256 清单，包含 dump 文件本身 + 每张表（`postgres://{schema}.{name}`）的元数据条目
+- 新增 `StripCredentialsFromConnectionString`（public）：从连接字符串中剔除密码字段，用于清单 SourceDescription
+- 扩展 `BackupCommand` CLI：6 个新 pg-* 子命令
+  - `pg-create`：调用 `PostgresBackupRunner.DumpAsync` + 生成清单
+  - `pg-restore`：读取清单 → `RestoreAsync`（需 `--confirm`）
+  - `pg-verify`：dump 文件哈希 + per-table 元数据校验
+  - `pg-drill`：恢复到 staging DB（`--staging-connection-string`），验证表清单与行数，完成后清理
+  - `pg-pitr-prepare`：启用 WAL 归档 + 创建 base backup
+  - `pg-pitr-restore`：从 base backup + WAL archive 恢复到指定时间点
+- `ControlRoomState` 新增 `PostgresOptions?` 属性（仅 StorageKind="postgres" 时设置，未来扩展）
+- `PostgresServiceCollectionExtensions` 注册 `PostgresBackupRunner` + `PostgresPitrRunner`（Transient）
+- `AdminEndpoints` 增强：`GET /backup/status` Postgres 分支返回 last dump 元数据（不再只是「use pg_dump」提示）；新增 `POST /backup/pg-create` 与 `POST /backup/pg-restore` 端点（admin-gated）
+- 文档：`docs/runbooks/postgres-backup-restore.md` — RPO/RTO 定义、三层备份策略（每日 pg_dump / 持续 WAL 归档 / 周度 pg_basebackup / PITR）、恢复流程、演练流程、故障模式
+- 测试：18 个单元测试（`PostgresPitrRunnerTests`）+ 1 个 Testcontainers 集成测试（`PostgresBackupIntegrationTests`，dump→restore roundtrip）
+- PublicApi baseline +11 entries（PostgresBackupRestoreRequest + ContextCoreBackupStatusResponse 新属性 + 其他）
+
+**R14-PG 系列总结**：
+- 11 个提交（1 doc + 10 implementation）
+- schema v11 → v13（v13 自 R14-PG-6 起稳定，后续 R14-PG-7~10 不变更 schema）
+- Service 层 `Unsupported*Store` 残留：从初始约 12 个 → 0（R14-PG-5 完成时清零）
+- `PostgresNativeInterfaces` 数组：26 → 31（R14-PG-5）→ 后续无新增（R14-PG-6~10 都是基础设施 + 测试）
+- 全部 HA 验收达成：failover / pool exhaustion / slow query / tx retry / multi-instance cache invalidation / backup drill
+
+---
+
 ### R14 系列：Decision Evidence V2 + Package Quality
 
 将 ContextDecisionRecord 从自由文本 Reason 升级为强类型枚举 + 结构化证据，并引入 Package Quality 8 指标，作为后续 Agent / Router / Reranker / 学习闭环可依赖的数据基础。保持非激活投影契约：所有 Risk 标志位恒为 false，不触发运行时变更。

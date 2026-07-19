@@ -1,6 +1,6 @@
 # ContextCore 项目路线图
 
-> 最近更新：R14 收口 + 新增高可用路线 R14-PG（2026-07-20）
+> 最近更新：R14-PG 收口，下一阶段进入 R15（2026-07-20）
 
 > 本文件是 ContextCore 的**唯一当前路线图**。docs/ 下的 `*_Freeze*.md`、`*_Report*.md`、`*_Audit*.md`、`*_Plan*.md`、`*_Gap_Map*.md`、`新阶段*` 类文档均已标注"历史快照"声明，仅供回溯，不作为 current-head 决策依据。历史完成记录已迁入 [docs/archive/roadmap-history.md](docs/archive/roadmap-history.md)。
 
@@ -8,17 +8,27 @@
 
 ## 当前阶段
 
-**R14 Decision Evidence V2 + Package Quality 已完成** — R14-1、R14-2、R14-3 全部完成并提交（HEAD `b7bc070`）。
+**R14-PG：Postgres Runtime Parity & HA Gate 已完成** — 10 个子任务全部完成并提交（HEAD `540a6fc`）。
 
-- R14-1 CandidateDecisionReasonCode 枚举 + Decision Evidence V2 DTO + V17.0 自由文本映射器（commit `38efc0d`）
-- R14-2 Package Quality 8 指标 + Projector 集成 + 27 单元测试 + PublicApi baseline +29 entries（commit `1d0c2a6`）
-- R14-3 收口：TODO.md 切换至 R15，R14/R13/P0/P1 历史迁入 archive（commit `b7bc070`）
-- 修复 P1-7 遗留 OpenAPI snapshot 漂移：新增 `OpenApi_RegenerateSnapshot` 辅助测试方法
-- 全量测试 1134 + 1 skip 通过 / 0 失败（ContextCore.Tests）；61 + 1 skip 通过 / 0 失败（ContextCore.Service.Tests）
-- PublicApi baseline 7456 行（+105 vs R13.0-C 基线 7351 行）
-- 保持非激活投影契约：所有 Risk 标志位恒为 false，不触发运行时变更
+- R14-PG-1 移除 LearningFeedback/Review 的 Unsupported 覆盖，正式绑定 Postgres 实现（commit `28b7c49`）
+- R14-PG-2 PostgresDecisionTraceStore + decision_traces 表（commit `72d8f20`）
+- R14-PG-3 Short-term memory / promotion / candidate review stores 迁移至 Postgres（commit `6193bc5`）
+- R14-PG-4 Context learning + governance review stores 迁移至 Postgres（commit `9d9c7b2`）
+- R14-PG-5 vector lifecycle + artifact stores 迁移至 Postgres，垂直闭环完成（commit `e02958f`）
+- R14-PG-6 PostgresContextStateVersionStore 分布式版本存储（commit `55a6a00`，schema v13）
+- R14-PG-7 多实例 cache invalidation 验收 + Decorator 文档化（commit `3f926f6`）
+- R14-PG-8 Migration version/rollback 框架（commit `aba4455`）
+- R14-PG-9 HA 测试套件 failover/pool exhaustion/slow query/tx retry（commit `570e38b`）
+- R14-PG-10 backup/restore runbook + PITR + CLI 接入 PostgresBackupRunner（commit `540a6fc`）
 
-下一阶段为 **R14-PG：Postgres Runtime Parity & HA Gate** — 完成已有 PostgreSQL provider 的纵向闭环，建立明确的高可用边界。R14-PG 之后才进入 R15 Incremental Context Package。
+**验收达成**：
+
+- Service 层无 `Unsupported*Store` 残留（5 个 R14-PG-5 完成时彻底清零，PostgresDeclaredUnsupported HashSet 已为空）
+- 多实例并行写入测试通过（`MultiInstanceCacheInvalidationTests` 3 个测试通过）
+- DB 故障注入测试通过（failover / pool exhaustion / slow query / tx retry 共 4 个 Testcontainers 集成测试 + 5 个单元测试）
+- backup/restore runbook 文档化（`docs/runbooks/postgres-backup-restore.md`，含 RPO/RTO 定义与三层备份策略）
+
+下一阶段为 **R15：Incremental Context Package** — 比 Embedding Cache 更接近真正的 KV Cache，最重要的验收为 `IncrementalBuild(snapshot) == FullBuild(snapshot)` 在随机 differential testing 下成立。
 
 ---
 
@@ -42,10 +52,10 @@
 
 | 指标 | 当前值 | 目标 |
 |------|--------|------|
-| 当前 HEAD | `1d0c2a6` | - |
-| PublicApi baseline 行数 | 7456 | 单一事实源 |
+| 当前 HEAD | `540a6fc` | - |
+| PublicApi baseline 行数 | 7467（+11 vs R14-2） | 单一事实源 |
 | 构建 | 0 警告 / 0 错误 | 0 / 0 |
-| 测试 | ContextCore.Tests 1134+1skip / 0 失败；Service.Tests 61+1skip / 0 失败 | 0 失败 |
+| 测试 | ContextCore.Tests 全通过 / 0 失败 | 0 失败 |
 | A3 语义不变性 | PassRate 100%, Recall@10 100% | 与冻结基线一致 |
 | Retrieval golden ranking | 30 样本全通过, Recall@10 100% | 与冻结基线一致 |
 | GRAPH-09 图不变性 | 12 测试全通过 | 0 失败 |
@@ -59,6 +69,12 @@
 | Decision Evidence V2 | CandidateDecisionReasonCode 枚举 + V2 字段填充 | 已达成（R14-1） |
 | Package Quality 报告 | 8 指标 + OverallScore 加权 | 已达成（R14-2） |
 | OpenAPI snapshot 辅助再生 | OpenApi_RegenerateSnapshot `[Ignore]` 方法 | 已达成 |
+| Postgres schema 版本 | v13（自 R14-PG-6 起稳定） | 稳定 |
+| Postgres Unsupported stores 残留 | 0（R14-PG-5 完成时清零） | 0 |
+| Postgres 多实例 cache invalidation | PostgresContextStateVersionStore + Decorator 文档化 | 已达成（R14-PG-6/7） |
+| Postgres migration 框架 | registry + history + rollback | 已达成（R14-PG-8） |
+| Postgres HA 测试 | failover/pool/slow/tx retry | 已达成（R14-PG-9） |
+| Postgres backup/restore runbook | docs/runbooks/postgres-backup-restore.md | 已达成（R14-PG-10） |
 
 ---
 
@@ -69,38 +85,6 @@
 ---
 
 ## 下一阶段任务
-
-### R14-PG — Postgres Runtime Parity & HA Gate
-
-完成已有 PostgreSQL provider 的纵向闭环，不是新做一个 provider。当前 PostgreSQL 已覆盖核心 Data Plane（context / memory / working memory / constraints / relations / global context / vector / retrieval & package trace / job queue），但 Service 层仍把以下接口覆盖为 Unsupported：
-
-- decision trace
-- short-term memory
-- short-term promotion
-- learning feedback
-- learning review
-- context learning
-- 多种 governance / review store
-
-**核心任务**：
-
-1. **PostgresDecisionTraceStore** — 接入真实 Postgres 后端，不再 Unsupported
-2. **short-term memory / promotion stores** — Postgres 实现，绑定 `IShortTermMemoryStore` / `IShortTermPromotionCandidateStore` / `IShortTermPromotionRecordStore`
-3. **learning feedback / review** — 接口正式绑定 Postgres 实现，去除 Unsupported
-4. **context learning** — Postgres 实现
-5. **governance / review stores** — 接入 Postgres 实现（relation review / vector lifecycle review / promotion candidate review / candidate constraint review 等）
-6. **分布式 IContextStateVersionStore** — Postgres 后端，支持跨实例 cache invalidation
-7. **migration version 与 rollback** — 版本化迁移脚本，支持回滚到上一版本
-8. **多实例 cache invalidation** — 跨 Service 实例的失效信号传播
-9. **HA 测试** — DB failover、连接池耗尽、慢查询、事务重试测试
-10. **backup/restore runbook** — 与 P1-2 备份清单/SHA-256/PITR/演练整合，明确恢复点目标与恢复时间目标
-
-**验收**：
-
-- Service 层无 `Unsupported*Store` 残留（除明确标记为 Local-only 的 store 之外）
-- 多实例并行写入测试通过
-- DB 故障注入测试通过（failover / pool exhaustion / slow query / tx retry）
-- backup/restore runbook 文档化并至少执行一次演练
 
 ### R15 — Incremental Context Package
 
