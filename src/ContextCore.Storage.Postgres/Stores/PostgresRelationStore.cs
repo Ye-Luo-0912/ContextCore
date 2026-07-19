@@ -542,19 +542,26 @@ LIMIT @take OFFSET @skip;
         // P1-6: 不在 SQL 内做 per-seed LIMIT（LATERAL JOIN 复杂且收益有限）；
         // 单条 SQL 一次性取回所有匹配行（受 max_scan × seeds 数量隐式约束），C# 端分桶 + per-seed 排序 + Skip/Take。
         // 全局 LIMIT 设为 max_scan × seeds.Count（per-seed 上限 × 种子数），并加 10K 安全上限防止极端输入。
+        // P1-4：LIMIT 用 global_limit + 1 探测，避免"恰好等于上限"时的假阳性截断信号。
         var maxScan = query.MaxScan > 0 ? query.MaxScan : 1000;
         var globalLimit = Math.Min((long)maxScan * seeds.Count, 100_000);
-        command.Parameters.AddWithValue("global_limit", globalLimit);
+        var globalLimitProbe = globalLimit + 1;
+        command.Parameters.AddWithValue("global_limit_probe", globalLimitProbe);
 
         command.CommandText = $"""
 SELECT data
 FROM {Table("relations")}
 WHERE {string.Join(" AND ", filters)}
 ORDER BY weight DESC, confidence DESC, created_at DESC
-LIMIT @global_limit;
+LIMIT @global_limit_probe;
 """;
 
         var allRelations = await ReadRelationsAsync(command, cancellationToken).ConfigureAwait(false);
+
+        // P1-4：检测 SQL 全局 LIMIT 是否命中。若 allRelations.Count > globalLimit，
+        // 说明 SQL 还有更多匹配行未读（保守标记所有非空桶为 Truncated）；
+        // 若 <= globalLimit，SQL 已读完全部匹配，per-seed Truncated 完全由 bucket.Count > maxScan 决定。
+        var sqlGloballyTruncated = allRelations.Count > globalLimit;
 
         // C# 端分桶
         var effectiveTake = query.Take > 0 ? query.Take : 100;
@@ -592,15 +599,23 @@ LIMIT @global_limit;
         var results = new List<RelationNeighborBatchResult>(seeds.Count);
         foreach (var seed in seeds)
         {
+            var bucket = buckets[seed];
+            // P1-4：per-seed MaxScan 截断 + SQL 全局 LIMIT 截断（保守）
+            var truncated = bucket.Count > maxScan || (sqlGloballyTruncated && bucket.Count > 0);
             // 桶内已排序，直接 Take(MaxScan) + Skip + Take
-            var seedRelations = buckets[seed]
+            var seedRelations = bucket
                 .Take(maxScan)
                 .Skip(effectiveSkip)
                 .Take(effectiveTake)
                 .ToArray();
             if (seedRelations.Length > 0)
             {
-                results.Add(new RelationNeighborBatchResult { ItemId = seed, Relations = seedRelations });
+                results.Add(new RelationNeighborBatchResult
+                {
+                    ItemId = seed,
+                    Relations = seedRelations,
+                    Truncated = truncated
+                });
             }
         }
 

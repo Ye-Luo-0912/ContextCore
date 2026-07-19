@@ -759,4 +759,152 @@ public abstract class RelationStoreContractBase
             await DisposeStoreAsync(store, CancellationToken.None);
         }
     }
+
+    // ── P1-4：高基数邻居查询语义 + Truncated 信号 ─────────────────────────
+
+    /// <summary>
+    /// P1-4：种子邻居数超过 MaxScan 时，结果应标记 Truncated=true。
+    /// 三个 provider 应一致：InMemory/FileSystem 全量扫描后判定；
+    /// Postgres 用 LIMIT global_limit+1 探测，命中时 Truncated=true。
+    /// </summary>
+    [TestMethod]
+    public async Task QueryNeighborsBatch_HighCardinality_SetsTruncatedTrue()
+    {
+        // 10 条边，MaxScan=5 → 必然截断
+        var seeds = Enumerable.Range(0, 10)
+            .Select(i => MakeRelation($"r-{i}", "center", $"n{i}", "related_to", weight: i + 1, createdOffsetSeconds: i))
+            .ToArray();
+        var store = await PrepareAsync(seeds);
+        try
+        {
+            var batch = await store.QueryNeighborsBatchAsync(new RelationNeighborBatchQuery
+            {
+                WorkspaceId = WorkspaceId,
+                CollectionId = "col",
+                ItemIds = ["center"],
+                Direction = RelationDirection.Outgoing,
+                MaxScan = 5,
+                Take = 100
+            }, CancellationToken.None);
+
+            Assert.AreEqual(1, batch.Count, "应返回一个种子的结果");
+            Assert.IsTrue(batch[0].Truncated, "10 条候选超过 MaxScan=5，应标记 Truncated=true");
+            Assert.IsTrue(batch[0].Relations.Count <= 5, "返回结果不应超过 MaxScan 上限");
+        }
+        finally
+        {
+            await DisposeStoreAsync(store, CancellationToken.None);
+        }
+    }
+
+    /// <summary>
+    /// P1-4：种子邻居数远低于 MaxScan 时，结果应标记 Truncated=false。
+    /// </summary>
+    [TestMethod]
+    public async Task QueryNeighborsBatch_LowCardinality_SetsTruncatedFalse()
+    {
+        // 3 条边，MaxScan=5 → 不会截断
+        var store = await PrepareAsync(
+            MakeRelation("r-1", "center", "n1", "related_to", weight: 1.0),
+            MakeRelation("r-2", "center", "n2", "related_to", weight: 2.0),
+            MakeRelation("r-3", "center", "n3", "related_to", weight: 3.0));
+        try
+        {
+            var batch = await store.QueryNeighborsBatchAsync(new RelationNeighborBatchQuery
+            {
+                WorkspaceId = WorkspaceId,
+                CollectionId = "col",
+                ItemIds = ["center"],
+                Direction = RelationDirection.Outgoing,
+                MaxScan = 5,
+                Take = 100
+            }, CancellationToken.None);
+
+            Assert.AreEqual(1, batch.Count);
+            Assert.IsFalse(batch[0].Truncated, "3 条候选 < MaxScan=5，不应截断");
+            Assert.AreEqual(3, batch[0].Relations.Count);
+        }
+        finally
+        {
+            await DisposeStoreAsync(store, CancellationToken.None);
+        }
+    }
+
+    /// <summary>
+    /// P1-4：种子邻居数恰好等于 MaxScan 时，Truncated 应为 false（边界，不算截断）。
+    /// Postgres 用 +1 探测保证此边界正确，不发生假阳性。
+    /// </summary>
+    [TestMethod]
+    public async Task QueryNeighborsBatch_AtMaxScanBoundary_SetsTruncatedFalse()
+    {
+        // 5 条边，MaxScan=5 → 恰好不截断
+        var store = await PrepareAsync(
+            MakeRelation("r-1", "center", "n1", "related_to", weight: 1.0),
+            MakeRelation("r-2", "center", "n2", "related_to", weight: 2.0),
+            MakeRelation("r-3", "center", "n3", "related_to", weight: 3.0),
+            MakeRelation("r-4", "center", "n4", "related_to", weight: 4.0),
+            MakeRelation("r-5", "center", "n5", "related_to", weight: 5.0));
+        try
+        {
+            var batch = await store.QueryNeighborsBatchAsync(new RelationNeighborBatchQuery
+            {
+                WorkspaceId = WorkspaceId,
+                CollectionId = "col",
+                ItemIds = ["center"],
+                Direction = RelationDirection.Outgoing,
+                MaxScan = 5,
+                Take = 100
+            }, CancellationToken.None);
+
+            Assert.AreEqual(1, batch.Count);
+            Assert.IsFalse(batch[0].Truncated, "候选数 == MaxScan 不应截断（边界）");
+            Assert.AreEqual(5, batch[0].Relations.Count);
+        }
+        finally
+        {
+            await DisposeStoreAsync(store, CancellationToken.None);
+        }
+    }
+
+    /// <summary>
+    /// P1-4：批量查询中，per-seed Truncated 应独立标记。
+    /// 一个高基数种子 + 一个低基数种子，分别得到 Truncated=true 和 Truncated=false。
+    /// </summary>
+    [TestMethod]
+    public async Task QueryNeighborsBatch_MixedCardinality_PerSeedTruncatedSignal()
+    {
+        // hub-high 有 8 条出边（>MaxScan=5），hub-low 有 3 条出边（<MaxScan=5）
+        var relations = new List<ContextRelation>();
+        for (var i = 0; i < 8; i++)
+        {
+            relations.Add(MakeRelation($"r-high-{i}", "hub-high", $"n-high-{i}", "related_to", weight: i + 1, createdOffsetSeconds: i));
+        }
+        for (var i = 0; i < 3; i++)
+        {
+            relations.Add(MakeRelation($"r-low-{i}", "hub-low", $"n-low-{i}", "related_to", weight: i + 1, createdOffsetSeconds: i));
+        }
+        var store = await PrepareAsync(relations.ToArray());
+        try
+        {
+            var batch = await store.QueryNeighborsBatchAsync(new RelationNeighborBatchQuery
+            {
+                WorkspaceId = WorkspaceId,
+                CollectionId = "col",
+                ItemIds = ["hub-high", "hub-low"],
+                Direction = RelationDirection.Outgoing,
+                MaxScan = 5,
+                Take = 100
+            }, CancellationToken.None);
+
+            var bySeed = batch.ToDictionary(b => b.ItemId, b => b, StringComparer.OrdinalIgnoreCase);
+            Assert.IsTrue(bySeed.ContainsKey("hub-high"), "应包含 hub-high");
+            Assert.IsTrue(bySeed.ContainsKey("hub-low"), "应包含 hub-low");
+            Assert.IsTrue(bySeed["hub-high"].Truncated, "hub-high 有 8 条候选 > MaxScan=5，应截断");
+            Assert.IsFalse(bySeed["hub-low"].Truncated, "hub-low 有 3 条候选 < MaxScan=5，不应截断");
+        }
+        finally
+        {
+            await DisposeStoreAsync(store, CancellationToken.None);
+        }
+    }
 }

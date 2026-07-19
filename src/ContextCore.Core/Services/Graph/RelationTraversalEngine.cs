@@ -115,9 +115,23 @@ public sealed class RelationTraversalEngine
             // 按 ItemId 索引结果（缺失视为空邻居）
             var bySeed = new Dictionary<string, IReadOnlyList<ContextRelation>>(
                 batchResults.Count, StringComparer.OrdinalIgnoreCase);
+            // P1-4：收集触发存储层截断的种子，向遍历结果传播 Truncated 信号 + 告警
+            var storageTruncatedSeeds = new List<string>();
             foreach (var result in batchResults)
             {
                 bySeed[result.ItemId] = result.Relations;
+                if (result.Truncated)
+                {
+                    storageTruncatedSeeds.Add(result.ItemId);
+                }
+            }
+            if (storageTruncatedSeeds.Count > 0)
+            {
+                truncated = true;
+                warnings.Add(
+                    $"邻居查询在 seed(s) {string.Join(", ", storageTruncatedSeeds)} 上触发 MaxScan 截断，" +
+                    "遍历结果可能不完整。可调高 RelationExpansionProfile.MaxFanout（间接抬高 MaxScan）" +
+                    "或缩减单次 frontier 规模。");
             }
 
             var nextFrontier = new List<TraversalNode>(capacity: Math.Min(maxFanout, currentFrontier.Length * 2));

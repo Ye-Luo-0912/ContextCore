@@ -941,6 +941,9 @@ public sealed class RelationNeighborBatchQuery
 /// <summary>
 /// P1-6：单个种子的批量邻居查询结果。
 /// 引擎按 <see cref="ItemId"/> 索引结果以扩展 BFS frontier。
+/// P1-4：新增 <see cref="Truncated"/> 信号，标记存储层是否因 <c>MaxScan</c>（或 Postgres 全局 LIMIT）
+/// 截断了该种子的候选集。true 表示返回的 <see cref="Relations"/> 可能不完整，
+/// 调用方（如 BFS 引擎）应据此设置自身的 Truncated 标记并向用户告警。
 /// </summary>
 public sealed class RelationNeighborBatchResult
 {
@@ -949,6 +952,17 @@ public sealed class RelationNeighborBatchResult
 
     /// <summary>该种子的邻居关系列表（已按 Weight/Confidence/CreatedAt 排序并应用 Skip/Take）。</summary>
     public required IReadOnlyList<ContextRelation> Relations { get; init; }
+
+    /// <summary>
+    /// P1-4：true 表示存储层对该种子的候选集进行了截断，<see cref="Relations"/> 可能不完整。
+    /// 触发条件（任一即置 true）：
+    /// <list type="bullet">
+    /// <item>InMemory/FileSystem：该种子过滤后的候选数大于 <c>MaxScan</c>。</item>
+    /// <item>Postgres：该种子的桶大小大于 <c>MaxScan</c>，或 SQL 全局 LIMIT 命中（保守标记所有非空桶）。</item>
+    /// </list>
+    /// 默认 false（未截断）。
+    /// </summary>
+    public bool Truncated { get; init; }
 }
 
 /// <summary>P3-03：关系旧数据迁移报告。</summary>

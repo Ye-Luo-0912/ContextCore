@@ -380,17 +380,26 @@ public sealed class FileRelationStore : IRelationStore
         var results = new List<RelationNeighborBatchResult>(seeds.Count);
         foreach (var seed in seeds)
         {
-            var seedRelations = buckets[seed]
+            // P1-4：先排序并物化，便于检测 MaxScan 截断。
+            var sorted = buckets[seed]
                 .OrderByDescending(r => r.Weight)
                 .ThenByDescending(r => r.Confidence)
                 .ThenByDescending(r => r.CreatedAt)
+                .ToArray();
+            var truncated = sorted.Length > maxScan;
+            var seedRelations = sorted
                 .Take(maxScan)
                 .Skip(effectiveSkip)
                 .Take(effectiveTake)
                 .ToArray();
             if (seedRelations.Length > 0)
             {
-                results.Add(new RelationNeighborBatchResult { ItemId = seed, Relations = seedRelations });
+                results.Add(new RelationNeighborBatchResult
+                {
+                    ItemId = seed,
+                    Relations = seedRelations,
+                    Truncated = truncated
+                });
             }
         }
 

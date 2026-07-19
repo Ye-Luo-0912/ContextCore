@@ -218,8 +218,11 @@ public class ContextCoreGraphTraversalSafetyTests
             $"Traversal of 100k edges took {stopwatch.Elapsed.TotalSeconds:F2}s, expected < 5s");
         Assert.AreEqual(50, result.Edges.Count,
             $"Fanout=50 should return exactly 50 edges, got {result.Edges.Count}");
-        Assert.IsFalse(result.Truncated,
-            "Single-layer fanout-capped traversal should not set Truncated");
+        // P1-4: 100K 边远超 MaxScan=500（maxFanout=50 × 10），存储层会截断并传播 Truncated=true。
+        Assert.IsTrue(result.Truncated,
+            "100K edges with MaxScan=500 should propagate storage-side truncation");
+        Assert.IsTrue(result.Warnings.Count > 0,
+            "Truncated=true should be accompanied by a warning explaining the storage-side cause");
     }
 
     /// <summary>7. 双向遍历安全测试：Direction=Both 不应重复同一条边，且应包含出边和入边。</summary>

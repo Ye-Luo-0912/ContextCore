@@ -275,10 +275,14 @@ public sealed class InMemoryRelationStore : IRelationStore
         var results = new List<RelationNeighborBatchResult>(seeds.Count);
         foreach (var seed in seeds)
         {
-            var relations = buckets[seed]
+            // P1-4：先排序并物化，便于检测 MaxScan 截断。
+            var sorted = buckets[seed]
                 .OrderByDescending(item => item.Weight)
                 .ThenByDescending(item => item.Confidence)
                 .ThenByDescending(item => item.CreatedAt)
+                .ToArray();
+            var truncated = sorted.Length > maxScan;
+            var relations = sorted
                 .Take(maxScan)
                 .Skip(effectiveSkip)
                 .Take(effectiveTake)
@@ -286,7 +290,12 @@ public sealed class InMemoryRelationStore : IRelationStore
                 .ToArray();
             if (relations.Length > 0)
             {
-                results.Add(new RelationNeighborBatchResult { ItemId = seed, Relations = relations });
+                results.Add(new RelationNeighborBatchResult
+                {
+                    ItemId = seed,
+                    Relations = relations,
+                    Truncated = truncated
+                });
             }
         }
 
