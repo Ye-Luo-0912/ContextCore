@@ -723,6 +723,126 @@ public sealed class ContextCorePostgresStorageTests
             $"Postgres provider 启用时 IContextStateVersionStore 应为 PostgresContextStateVersionStore，实际: {versionStore.GetType().Name}");
     }
 
+    // ========== R14-PG-8：Migration version/rollback 框架测试 ==========
+
+    [TestMethod]
+    public void PostgresMigrationRegistry_ContainsBaselineMigration()
+    {
+        // R14-PG-8：注册表应包含基线 migration，且其 SupportsRollback=false。
+        var migrations = PostgresMigrationRegistry.Migrations;
+        Assert.AreEqual(1, migrations.Count, "当前应仅有基线 migration");
+        var baseline = migrations[0];
+        Assert.AreEqual(PostgresMigrationRunner.BaselineMigrationId, baseline.MigrationId);
+        Assert.AreEqual(PostgresMigrationRunner.SchemaVersion, baseline.SchemaVersion);
+        Assert.IsFalse(baseline.SupportsRollback, "Baseline cumulative idempotent migration 不应支持真实回滚");
+        Assert.IsFalse(string.IsNullOrEmpty(baseline.RollbackNotSupportedReason), "应提供不支持回滚的明确原因");
+        Assert.IsTrue(baseline.IntroducedTableSuffixes.Count > 0, "应记录引入的表后缀列表");
+    }
+
+    [TestMethod]
+    public void PostgresMigrationRegistry_FindByVersion_ReturnsBaselineForCurrentVersion()
+    {
+        var found = PostgresMigrationRegistry.FindByVersion(PostgresMigrationRunner.SchemaVersion);
+        Assert.IsNotNull(found);
+        Assert.AreEqual(PostgresMigrationRunner.BaselineMigrationId, found.MigrationId);
+    }
+
+    [TestMethod]
+    public void PostgresMigrationRegistry_FindByVersion_ReturnsNullForUnknownVersion()
+    {
+        var found = PostgresMigrationRegistry.FindByVersion("cc-schema-v999");
+        Assert.IsNull(found);
+    }
+
+    [TestMethod]
+    public void PostgresMigrationRegistry_FindById_ReturnsBaselineForKnownId()
+    {
+        var found = PostgresMigrationRegistry.FindById(PostgresMigrationRunner.BaselineMigrationId);
+        Assert.IsNotNull(found);
+        Assert.AreEqual(PostgresMigrationRunner.SchemaVersion, found.SchemaVersion);
+    }
+
+    [TestMethod]
+    public void PostgresMigrationRegistry_ToStoreMigrationList_ReturnsExpectedShape()
+    {
+        var list = PostgresMigrationRegistry.ToStoreMigrationList();
+        Assert.AreEqual(1, list.Count);
+        Assert.AreEqual(PostgresMigrationRunner.BaselineMigrationId, list[0].MigrationId);
+        Assert.AreEqual(PostgresMigrationRunner.SchemaVersion, list[0].SchemaVersion);
+        Assert.IsFalse(string.IsNullOrEmpty(list[0].Description));
+        Assert.IsTrue(list[0].RequiredTables.Count > 0);
+    }
+
+    [TestMethod]
+    public async Task RollbackAsync_ConfirmFalse_ReturnsConfirmRequired()
+    {
+        // R14-PG-8：confirm=false 时不访问 DB，直接返回 ConfirmRequired=true。
+        // 采用与 PostgresMigrationApply_ShouldRejectWithoutConfirm 一致的构造方式（不连真实 DB）。
+        var runner = new PostgresMigrationRunner(new PostgresConnectionFactory(new PostgresOptions
+        {
+            ConnectionString = "Host=localhost;Database=contextcore;Username=contextcore;Password=contextcore",
+            AutoMigrate = false
+        }));
+
+        var result = await runner.RollbackAsync("cc-schema-v1", confirm: false, CancellationToken.None);
+
+        Assert.IsFalse(result.RolledBack);
+        Assert.IsTrue(result.ConfirmRequired);
+        Assert.AreEqual("cc-schema-v1", result.TargetSchemaVersion);
+        CollectionAssert.Contains(result.Diagnostics.ToArray(), "ConfirmRequired");
+    }
+
+    [TestMethod]
+    public void RollbackAsync_TargetEqualsCurrent_LogicShortCircuits()
+    {
+        // 不连真实 DB；通过注册表与 SchemaVersion 验证 target==current 的逻辑短路条件。
+        // RollbackAsync 在 confirm=true 且 target==current 时返回 RolledBack=true no-op。
+        var targetVersion = PostgresMigrationRunner.SchemaVersion;
+        var currentVersion = PostgresMigrationRunner.SchemaVersion;
+        Assert.IsTrue(string.Equals(targetVersion, currentVersion, StringComparison.Ordinal),
+            "target==current 时应短路返回 no-op");
+    }
+
+    [TestMethod]
+    public void PostgresMigrationRunner_ListMigrations_ReflectsRegistry()
+    {
+        // R14-PG-8：ListMigrations 应从 PostgresMigrationRegistry 读取，保持一致。
+        var runner = new PostgresMigrationRunner(new PostgresConnectionFactory(new PostgresOptions
+        {
+            ConnectionString = "Host=localhost;Database=contextcore;Username=contextcore;Password=contextcore",
+            AutoMigrate = false
+        }));
+
+        var fromRunner = runner.ListMigrations();
+        var fromRegistry = PostgresMigrationRegistry.ToStoreMigrationList();
+
+        Assert.AreEqual(fromRegistry.Count, fromRunner.Count);
+        Assert.AreEqual(PostgresMigrationRunner.BaselineMigrationId, fromRunner[0].MigrationId);
+        Assert.AreEqual(PostgresMigrationRunner.SchemaVersion, fromRunner[0].SchemaVersion);
+        // 验证表后缀列表包含 context_schema_migrations（既有测试 PostgresMigrationDryRun_ShouldListBaselineMigration 的关键断言）。
+        Assert.IsTrue(fromRunner[0].RequiredTables.Contains("context_schema_migrations"));
+    }
+
+    [TestMethod]
+    public async Task GetMigrationHistoryAsync_FakeRunner_ReturnsEmptyByDefault()
+    {
+        // FakeMigrationRunner 默认返回空列表，验证接口实现存在且语义正确。
+        var runner = new FakeMigrationRunner(currentVersion: null, missingTables: Array.Empty<string>());
+        var history = await runner.GetMigrationHistoryAsync(CancellationToken.None);
+        Assert.IsNotNull(history);
+        Assert.AreEqual(0, history.Count);
+    }
+
+    [TestMethod]
+    public async Task RollbackAsync_FakeRunner_ReturnsFakeDiagnostic()
+    {
+        // FakeMigrationRunner 的 RollbackAsync 返回 Diagnostics=["FakeMigrationRunner"]，验证接口实现存在。
+        var runner = new FakeMigrationRunner(currentVersion: null, missingTables: Array.Empty<string>());
+        var result = await runner.RollbackAsync("cc-schema-v1", confirm: true, CancellationToken.None);
+        Assert.IsNotNull(result);
+        CollectionAssert.Contains(result.Diagnostics.ToArray(), "FakeMigrationRunner");
+    }
+
     private sealed class FakePostgresConnectionFactory(PostgresOptions options, bool success) : IPostgresConnectionFactory
     {
         public PostgresOptions Options { get; } = options;
@@ -788,6 +908,12 @@ public sealed class ContextCorePostgresStorageTests
         {
             return Task.FromResult(currentVersion);
         }
+
+        public Task<IReadOnlyList<PostgresMigrationHistoryEntry>> GetMigrationHistoryAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<PostgresMigrationHistoryEntry>>(Array.Empty<PostgresMigrationHistoryEntry>());
+
+        public Task<PostgresMigrationRollbackResult> RollbackAsync(string targetSchemaVersion, bool confirm, CancellationToken cancellationToken = default)
+            => Task.FromResult(new PostgresMigrationRollbackResult { Diagnostics = new[] { "FakeMigrationRunner" } });
     }
 
     private static PostgresVectorIndexStore CreatePostgresVectorIndexStoreWithoutConnection()

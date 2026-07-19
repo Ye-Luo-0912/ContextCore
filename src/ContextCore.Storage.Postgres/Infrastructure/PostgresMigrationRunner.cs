@@ -1158,16 +1158,8 @@ CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "vector_
 
     public IReadOnlyList<PostgresStoreMigration> ListMigrations()
     {
-        return
-        [
-            new PostgresStoreMigration
-            {
-                MigrationId = BaselineMigrationId,
-                Description = "DB1 operational store baseline schema",
-                SchemaVersion = SchemaVersion,
-                RequiredTables = RequiredOperationalTableSuffixes
-            }
-        ];
+        // R14-PG-8：从版本化注册表读取，避免重复维护。
+        return PostgresMigrationRegistry.ToStoreMigrationList();
     }
 
     public async Task<PostgresMigrationPlan> PreviewMigrationsAsync(CancellationToken cancellationToken = default)
@@ -1505,5 +1497,134 @@ CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "vector_
         {
             return 0;
         }
+    }
+
+    /// <summary>
+    /// R14-PG-8：查询 context_schema_migrations 表中已应用的 migration 历史，按 applied_at 升序。
+    /// 表不存在时返回空列表（数据库尚未迁移）。
+    /// </summary>
+    public async Task<IReadOnlyList<PostgresMigrationHistoryEntry>> GetMigrationHistoryAsync(CancellationToken cancellationToken = default)
+    {
+        await using var connection = await _connectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandTimeout = _connectionFactory.Options.CommandTimeoutSeconds;
+        var migrationsTable = Infrastructure.PostgresNames.Table(_connectionFactory.Options, "context_schema_migrations");
+        command.CommandText = $"""
+SELECT migration_id, schema_version, applied_at, checksum
+FROM {migrationsTable}
+ORDER BY applied_at ASC;
+""";
+        try
+        {
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            var entries = new List<PostgresMigrationHistoryEntry>();
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                entries.Add(new PostgresMigrationHistoryEntry
+                {
+                    MigrationId = reader.GetString(reader.GetOrdinal("migration_id")),
+                    SchemaVersion = reader.GetString(reader.GetOrdinal("schema_version")),
+                    AppliedAt = reader.GetFieldValue<DateTimeOffset>(reader.GetOrdinal("applied_at")),
+                    Checksum = reader.IsDBNull(reader.GetOrdinal("checksum")) ? null : reader.GetString(reader.GetOrdinal("checksum"))
+                });
+            }
+            return entries;
+        }
+        catch (NpgsqlException)
+        {
+            // context_schema_migrations 表尚不存在时返回空列表。
+            return Array.Empty<PostgresMigrationHistoryEntry>();
+        }
+    }
+
+    /// <summary>
+    /// R14-PG-8：回滚到指定 schema 版本。
+    /// 当前 baseline migration 不支持真实回滚（cumulative idempotent DDL），调用会返回 RolledBack=false
+    /// 并在 Diagnostics 中说明原因。未来按版本切分的 SupportsRollback=true 的 migration 实现后，
+    /// 此方法将调用其 DownAsync 并更新 context_schema_migrations。
+    /// </summary>
+    public async Task<PostgresMigrationRollbackResult> RollbackAsync(
+        string targetSchemaVersion,
+        bool confirm,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(targetSchemaVersion);
+
+        if (!confirm)
+        {
+            return new PostgresMigrationRollbackResult
+            {
+                RolledBack = false,
+                ConfirmRequired = true,
+                TargetSchemaVersion = targetSchemaVersion,
+                Diagnostics = new[] { "ConfirmRequired" }
+            };
+        }
+
+        var previousVersion = await GetAppliedVersionAsync(cancellationToken).ConfigureAwait(false);
+
+        // target == current：no-op
+        if (previousVersion is not null && string.Equals(previousVersion, targetSchemaVersion, StringComparison.Ordinal))
+        {
+            return new PostgresMigrationRollbackResult
+            {
+                RolledBack = true,
+                ConfirmRequired = false,
+                PreviousSchemaVersion = previousVersion,
+                TargetSchemaVersion = targetSchemaVersion,
+                ActualSchemaVersion = previousVersion,
+                RolledBackMigrations = Array.Empty<string>(),
+                Diagnostics = new[] { "TargetEqualsCurrent" }
+            };
+        }
+
+        // 找出 target 与 current 之间需要回滚的 migration（SchemaVersion > target 的所有 migration，按版本降序）。
+        var migrationsToRollback = PostgresMigrationRegistry.Migrations
+            .Where(m => string.Compare(m.SchemaVersion, targetSchemaVersion, StringComparison.Ordinal) > 0)
+            .OrderByDescending(m => m.SchemaVersion)
+            .ToList();
+
+        if (migrationsToRollback.Count == 0)
+        {
+            return new PostgresMigrationRollbackResult
+            {
+                RolledBack = false,
+                ConfirmRequired = false,
+                PreviousSchemaVersion = previousVersion,
+                TargetSchemaVersion = targetSchemaVersion,
+                Diagnostics = new[] { "NoMigrationsToRollback", "TargetVersionNewerOrEqualCurrent" }
+            };
+        }
+
+        // 检查所有相关 migration 是否支持 rollback。
+        var notSupported = migrationsToRollback.Where(m => !m.SupportsRollback).ToList();
+        if (notSupported.Count > 0)
+        {
+            var diagnostics = new List<string> { "RollbackNotSupported" };
+            foreach (var m in notSupported)
+            {
+                diagnostics.Add($"{m.MigrationId}: {m.RollbackNotSupportedReason}");
+            }
+            return new PostgresMigrationRollbackResult
+            {
+                RolledBack = false,
+                ConfirmRequired = false,
+                PreviousSchemaVersion = previousVersion,
+                TargetSchemaVersion = targetSchemaVersion,
+                Diagnostics = diagnostics
+            };
+        }
+
+        // 当前所有 migration 都不支持真实 rollback，这里实际上不会执行到。
+        // 未来 SupportsRollback=true 的 migration 实现后，这里调用其 DownAsync 并更新 context_schema_migrations。
+        // 当前实现以"安全拒绝"为主，避免破坏数据。
+        return new PostgresMigrationRollbackResult
+        {
+            RolledBack = false,
+            ConfirmRequired = false,
+            PreviousSchemaVersion = previousVersion,
+            TargetSchemaVersion = targetSchemaVersion,
+            Diagnostics = new[] { "RollbackExecutionNotImplementedForCurrentMigrations" }
+        };
     }
 }

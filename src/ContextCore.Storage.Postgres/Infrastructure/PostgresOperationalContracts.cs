@@ -20,6 +20,31 @@ public interface IStoreMigrationRunner
     Task<PostgresMigrationApplyResult> ApplyMigrationsAsync(bool confirm, CancellationToken cancellationToken = default);
 
     Task<string?> GetAppliedVersionAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>R14-PG-8：查询已应用的 migration 历史，按 applied_at 升序。</summary>
+    Task<IReadOnlyList<PostgresMigrationHistoryEntry>> GetMigrationHistoryAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// R14-PG-8：回滚到指定 schema 版本。
+    /// 当前 baseline migration 不支持真实回滚（cumulative idempotent DDL），调用会返回 RolledBack=false
+    /// 并在 Diagnostics 中说明原因。未来按版本切分的 migration 可支持真实 down DDL。
+    /// </summary>
+    Task<PostgresMigrationRollbackResult> RollbackAsync(
+        string targetSchemaVersion,
+        bool confirm,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>R14-PG-8：已应用的 migration 历史记录。</summary>
+public sealed record PostgresMigrationHistoryEntry
+{
+    public string MigrationId { get; init; } = string.Empty;
+
+    public string SchemaVersion { get; init; } = string.Empty;
+
+    public DateTimeOffset AppliedAt { get; init; }
+
+    public string? Checksum { get; init; }
 }
 
 public sealed record PostgresStoreMigration
