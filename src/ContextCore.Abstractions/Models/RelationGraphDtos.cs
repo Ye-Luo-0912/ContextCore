@@ -333,6 +333,20 @@ public sealed class RelationExpansionProfile
 
     public Dictionary<string, double> WeightByRelationType { get; init; } = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// P1-8：每跳衰减因子（0, 1]。默认 1.0 = 不衰减。
+    /// childScore = parentScore * DecayFactor * weightFactor * confidenceFactor。
+    /// 设为 0.7 时，2 跳路径的分数为 seed.Score * 0.7^2 * weight * confidence。
+    /// </summary>
+    public double DecayFactor { get; init; } = 1.0;
+
+    /// <summary>
+    /// P1-8：是否启用 weight/confidence 传播到 child score。默认 true。
+    /// false 时 childScore = parentScore * DecayFactor（仅路径衰减，无边质量传播），
+    /// 保持与旧版完全等价的排序语义。
+    /// </summary>
+    public bool EnableScorePropagation { get; init; } = true;
+
     public string LifecyclePolicy { get; init; } = string.Empty;
 
     public IReadOnlyList<RelationTraversalPolicy> TraversalPolicies { get; init; } = Array.Empty<RelationTraversalPolicy>();
@@ -787,7 +801,8 @@ public sealed record RelationTraversalEdge(
     int Depth,
     double SourceScore,
     string Path,
-    string NeighborId);
+    string NeighborId,
+    double TargetScore);
 
 /// <summary>关系子图 DTO，包含节点和边的快照，用于可视化与分析。</summary>
 public sealed class RelationSubgraph

@@ -185,13 +185,21 @@ public sealed class RelationTraversalEngine
                         ? $"{node.Path} -[{relation.RelationType}]-> {neighborId}"
                         : $"{node.Path} <-[{relation.RelationType}]- {neighborId}";
                     maxDepthReached = Math.Max(maxDepthReached, depth);
-                    edges.Add(new RelationTraversalEdge(relation, depth, node.Score, path, neighborId));
+
+                    // P1-8：传播 relation weight/confidence/路径衰减到 child score。
+                    // childScore = parentScore * DecayFactor * weightFactor * confidenceFactor
+                    // 其中 weightFactor = min(effectiveWeight, 1.0) 防止分数无界增长，
+                    // confidenceFactor = clamp(confidence, 0, 1)。
+                    // 默认 DecayFactor=1.0, weight=1.0, confidence=1.0 → childScore = parentScore（向后兼容）。
+                    var childScore = ComputePropagatedScore(node.Score, relation, profile);
+
+                    edges.Add(new RelationTraversalEdge(relation, depth, node.Score, path, neighborId, childScore));
 
                     // GRAPH-10：移除 per-node nextFrontier.Count < maxFanout 限制，统一在层末截断
                     if (visitedNodes.Add(neighborId))
                     {
                         discoveredCount++;
-                        nextFrontier.Add(new TraversalNode(neighborId, depth, node.Score, path));
+                        nextFrontier.Add(new TraversalNode(neighborId, depth, childScore, path));
                     }
                 }
             }
@@ -327,6 +335,32 @@ public sealed class RelationTraversalEngine
             return weighted * relation.Weight;
         }
         return relation.Weight;
+    }
+
+    /// <summary>
+    /// P1-8：将 relation weight、confidence、路径衰减因子传播到 child score。
+    /// 公式：childScore = parentScore * DecayFactor * weightFactor * confidenceFactor
+    ///   - DecayFactor：每跳衰减，默认 1.0（不衰减）
+    ///   - weightFactor = min(ResolveWeight(relation), 1.0)：cap 在 1.0 防止分数无界增长
+    ///   - confidenceFactor = clamp(relation.Confidence, 0, 1)
+    /// 当 EnableScorePropagation=false 时仅应用 DecayFactor（保持旧版等价语义）。
+    /// 默认参数（DecayFactor=1.0, weight=1.0, confidence=1.0）→ childScore = parentScore。
+    /// </summary>
+    private static double ComputePropagatedScore(
+        double parentScore,
+        ContextRelation relation,
+        RelationExpansionProfile profile)
+    {
+        var decay = profile.DecayFactor > 0 ? profile.DecayFactor : 1.0;
+        if (!profile.EnableScorePropagation)
+        {
+            return parentScore * decay;
+        }
+
+        var effectiveWeight = ResolveWeight(relation, profile);
+        var weightFactor = Math.Min(effectiveWeight, 1.0);
+        var confidenceFactor = Math.Clamp(relation.Confidence, 0.0, 1.0);
+        return parentScore * decay * weightFactor * confidenceFactor;
     }
 
     private sealed record TraversalNode(string ItemId, int Depth, double Score, string Path);

@@ -43,7 +43,9 @@ public class ContextCoreGraphTraversalSafetyTests
 
     private static RelationExpansionProfile CreateProfile(
         int maxDepth = 2, int maxFanout = 10,
-        string[]? allowedTypes = null) => new()
+        string[]? allowedTypes = null,
+        double decayFactor = 1.0,
+        bool enableScorePropagation = true) => new()
     {
         ProfileId = "test",
         Mode = "Normal",
@@ -54,7 +56,9 @@ public class ContextCoreGraphTraversalSafetyTests
         AllowDeprecatedRelations = true,
         AllowCandidateRelations = true,
         AllowRejectedRelations = true,
-        RequireEvidence = false
+        RequireEvidence = false,
+        DecayFactor = decayFactor,
+        EnableScorePropagation = enableScorePropagation
     };
 
     private static RelationTraversalRequest CreateRequest(
@@ -274,5 +278,246 @@ public class ContextCoreGraphTraversalSafetyTests
             $"Expected 2 edges (A->B, B->C) at MaxDepth=2, got {result.Edges.Count}");
         Assert.AreEqual(2, result.MaxDepthReached,
             "MaxDepthReached should be 2");
+    }
+
+    // ── P1-8：relation weight/confidence/路径衰减传播到多跳评分 ─────────────
+
+    /// <summary>
+    /// P1-8：默认参数（DecayFactor=1.0, weight=1.0, confidence=1.0）下，
+    /// childScore 应等于 parentScore，保持向后兼容。
+    /// </summary>
+    [TestMethod]
+    public async Task P1_8_DefaultProfile_ChildScoreEqualsParentScore()
+    {
+        var store = CreateStore();
+        var engine = new RelationTraversalEngine(store);
+
+        // seed (score=1.0) -> A (depth=1) -> B (depth=2)
+        await store.SaveAsync(CreateRelation("seed", "A", weight: 1.0, confidence: 1.0));
+        await store.SaveAsync(CreateRelation("A", "B", weight: 1.0, confidence: 1.0));
+
+        var profile = CreateProfile(maxDepth: 2, maxFanout: 10);
+        var request = new RelationTraversalRequest
+        {
+            WorkspaceId = "ws-test",
+            CollectionId = "col-test",
+            Seeds = [new RelationTraversalSeed("seed", Score: 1.0)],
+            Profile = profile,
+            Direction = RelationDirection.Outgoing
+        };
+
+        var result = await engine.TraverseAsync(request);
+
+        Assert.AreEqual(2, result.Edges.Count, "应遍历到 2 条边");
+        var edge1 = result.Edges.Single(e => e.Depth == 1);
+        var edge2 = result.Edges.Single(e => e.Depth == 2);
+        Assert.AreEqual(1.0, edge1.SourceScore, 0.001, "depth=1 的 SourceScore 应为 seed score");
+        Assert.AreEqual(1.0, edge1.TargetScore, 0.001, "默认参数下 childScore 应等于 parentScore");
+        Assert.AreEqual(1.0, edge2.SourceScore, 0.001, "depth=2 的 SourceScore 应为 depth=1 的 childScore");
+        Assert.AreEqual(1.0, edge2.TargetScore, 0.001, "默认参数下 childScore 应等于 parentScore");
+    }
+
+    /// <summary>
+    /// P1-8：DecayFactor=0.5 时，每跳 childScore 衰减为 parentScore * 0.5。
+    /// </summary>
+    [TestMethod]
+    public async Task P1_8_DecayFactor_PropagatesExponentiallyAcrossHops()
+    {
+        var store = CreateStore();
+        var engine = new RelationTraversalEngine(store);
+
+        await store.SaveAsync(CreateRelation("seed", "A", weight: 1.0, confidence: 1.0));
+        await store.SaveAsync(CreateRelation("A", "B", weight: 1.0, confidence: 1.0));
+        await store.SaveAsync(CreateRelation("B", "C", weight: 1.0, confidence: 1.0));
+
+        var profile = CreateProfile(maxDepth: 3, maxFanout: 10, decayFactor: 0.5);
+        var request = new RelationTraversalRequest
+        {
+            WorkspaceId = "ws-test",
+            CollectionId = "col-test",
+            Seeds = [new RelationTraversalSeed("seed", Score: 1.0)],
+            Profile = profile,
+            Direction = RelationDirection.Outgoing
+        };
+
+        var result = await engine.TraverseAsync(request);
+
+        Assert.AreEqual(3, result.Edges.Count, "应遍历到 3 条边");
+        var edge1 = result.Edges.Single(e => e.Depth == 1);
+        var edge2 = result.Edges.Single(e => e.Depth == 2);
+        var edge3 = result.Edges.Single(e => e.Depth == 3);
+        Assert.AreEqual(1.0, edge1.SourceScore, 0.001);
+        Assert.AreEqual(0.5, edge1.TargetScore, 0.001, "depth=1 childScore = 1.0 * 0.5");
+        Assert.AreEqual(0.5, edge2.SourceScore, 0.001);
+        Assert.AreEqual(0.25, edge2.TargetScore, 0.001, "depth=2 childScore = 0.5 * 0.5 = 0.25");
+        Assert.AreEqual(0.25, edge3.SourceScore, 0.001);
+        Assert.AreEqual(0.125, edge3.TargetScore, 0.001, "depth=3 childScore = 0.25 * 0.5 = 0.125");
+    }
+
+    /// <summary>
+    /// P1-8：低 weight 边应降低 childScore（weight=0.5 → childScore 减半）。
+    /// </summary>
+    [TestMethod]
+    public async Task P1_8_LowWeight_ReducesChildScore()
+    {
+        var store = CreateStore();
+        var engine = new RelationTraversalEngine(store);
+
+        // 两条平行边：high-weight=1.0 vs low-weight=0.5
+        await store.SaveAsync(CreateRelation("seed", "high", weight: 1.0, confidence: 1.0));
+        await store.SaveAsync(CreateRelation("seed", "low", weight: 0.5, confidence: 1.0));
+
+        var profile = CreateProfile(maxDepth: 1, maxFanout: 10);
+        var request = new RelationTraversalRequest
+        {
+            WorkspaceId = "ws-test",
+            CollectionId = "col-test",
+            Seeds = [new RelationTraversalSeed("seed", Score: 1.0)],
+            Profile = profile,
+            Direction = RelationDirection.Outgoing
+        };
+
+        var result = await engine.TraverseAsync(request);
+
+        Assert.AreEqual(2, result.Edges.Count, "应遍历到 2 条边");
+        var highEdge = result.Edges.Single(e => e.NeighborId == "high");
+        var lowEdge = result.Edges.Single(e => e.NeighborId == "low");
+        Assert.AreEqual(1.0, highEdge.TargetScore, 0.001, "weight=1.0 → childScore = 1.0");
+        Assert.AreEqual(0.5, lowEdge.TargetScore, 0.001, "weight=0.5 → childScore = 0.5");
+    }
+
+    /// <summary>
+    /// P1-8：低 confidence 边应降低 childScore（confidence=0.4 → childScore = parentScore * 0.4）。
+    /// </summary>
+    [TestMethod]
+    public async Task P1_8_LowConfidence_ReducesChildScore()
+    {
+        var store = CreateStore();
+        var engine = new RelationTraversalEngine(store);
+
+        await store.SaveAsync(CreateRelation("seed", "high-conf", weight: 1.0, confidence: 1.0));
+        await store.SaveAsync(CreateRelation("seed", "low-conf", weight: 1.0, confidence: 0.4));
+
+        var profile = CreateProfile(maxDepth: 1, maxFanout: 10);
+        var request = new RelationTraversalRequest
+        {
+            WorkspaceId = "ws-test",
+            CollectionId = "col-test",
+            Seeds = [new RelationTraversalSeed("seed", Score: 1.0)],
+            Profile = profile,
+            Direction = RelationDirection.Outgoing
+        };
+
+        var result = await engine.TraverseAsync(request);
+
+        Assert.AreEqual(2, result.Edges.Count, "应遍历到 2 条边");
+        var highEdge = result.Edges.Single(e => e.NeighborId == "high-conf");
+        var lowEdge = result.Edges.Single(e => e.NeighborId == "low-conf");
+        Assert.AreEqual(1.0, highEdge.TargetScore, 0.001, "confidence=1.0 → childScore = 1.0");
+        Assert.AreEqual(0.4, lowEdge.TargetScore, 0.001, "confidence=0.4 → childScore = 0.4");
+    }
+
+    /// <summary>
+    /// P1-8：weight > 1.0 被 cap 到 1.0，防止分数无界增长。
+    /// </summary>
+    [TestMethod]
+    public async Task P1_8_HighWeight_CappedToOneToPreventScoreGrowth()
+    {
+        var store = CreateStore();
+        var engine = new RelationTraversalEngine(store);
+
+        await store.SaveAsync(CreateRelation("seed", "high-weight", weight: 10.0, confidence: 1.0));
+
+        var profile = CreateProfile(maxDepth: 1, maxFanout: 10);
+        var request = new RelationTraversalRequest
+        {
+            WorkspaceId = "ws-test",
+            CollectionId = "col-test",
+            Seeds = [new RelationTraversalSeed("seed", Score: 1.0)],
+            Profile = profile,
+            Direction = RelationDirection.Outgoing
+        };
+
+        var result = await engine.TraverseAsync(request);
+
+        Assert.AreEqual(1, result.Edges.Count);
+        var edge = result.Edges[0];
+        Assert.AreEqual(1.0, edge.TargetScore, 0.001,
+            "weight=10.0 应被 cap 到 1.0，childScore = 1.0 * 1.0 * 1.0 * 1.0 = 1.0");
+    }
+
+    /// <summary>
+    /// P1-8：高 score 路径应在 frontier 排序中优先于低 score 路径，
+    /// 即 BFS 会优先扩展通过高质量边到达的节点。
+    /// </summary>
+    [TestMethod]
+    public async Task P1_8_FrontierOrdering_PrefersHighQualityPaths()
+    {
+        var store = CreateStore();
+        var engine = new RelationTraversalEngine(store);
+
+        // seed 有两条出边：
+        //  - 到 hub-A (weight=1.0, confidence=1.0) → childScore=1.0
+        //  - 到 hub-B (weight=0.1, confidence=0.1) → childScore=0.01
+        // hub-A 又有一条出边到 deep-A
+        // 当 maxFanout=1 时，depth=2 只能扩展 1 个节点，应优先扩展 hub-A（score 更高）
+        await store.SaveAsync(CreateRelation("seed", "hub-A", weight: 1.0, confidence: 1.0));
+        await store.SaveAsync(CreateRelation("seed", "hub-B", weight: 0.1, confidence: 0.1));
+        await store.SaveAsync(CreateRelation("hub-A", "deep-A", weight: 1.0, confidence: 1.0));
+
+        var profile = CreateProfile(maxDepth: 2, maxFanout: 1);
+        var request = new RelationTraversalRequest
+        {
+            WorkspaceId = "ws-test",
+            CollectionId = "col-test",
+            Seeds = [new RelationTraversalSeed("seed", Score: 1.0)],
+            Profile = profile,
+            Direction = RelationDirection.Outgoing
+        };
+
+        var result = await engine.TraverseAsync(request);
+
+        // depth=1 应有 1 条边（maxFanout=1，选 weight 更高的 hub-A）
+        var depth1Edges = result.Edges.Where(e => e.Depth == 1).ToArray();
+        Assert.AreEqual(1, depth1Edges.Length, "depth=1 应只保留 1 条边（maxFanout=1）");
+        Assert.AreEqual("hub-A", depth1Edges[0].NeighborId,
+            "depth=1 应优先选择 hub-A（weight=1.0 > hub-B 的 0.1）");
+
+        // depth=2 应扩展 hub-A → deep-A（因 hub-A 的 childScore=1.0 > hub-B 的 0.01）
+        var depth2Edges = result.Edges.Where(e => e.Depth == 2).ToArray();
+        Assert.AreEqual(1, depth2Edges.Length, "depth=2 应只保留 1 条边");
+        Assert.AreEqual("deep-A", depth2Edges[0].NeighborId,
+            "depth=2 应优先扩展通过高质量路径到达的 hub-A → deep-A");
+    }
+
+    /// <summary>
+    /// P1-8：EnableScorePropagation=false 时仅应用 DecayFactor，不传播 weight/confidence。
+    /// 保持与旧版（pre-P1-8）完全等价的语义。
+    /// </summary>
+    [TestMethod]
+    public async Task P1_8_DisableScorePropagation_OnlyAppliesDecayFactor()
+    {
+        var store = CreateStore();
+        var engine = new RelationTraversalEngine(store);
+
+        await store.SaveAsync(CreateRelation("seed", "low-weight", weight: 0.1, confidence: 0.1));
+
+        var profile = CreateProfile(maxDepth: 1, maxFanout: 10, decayFactor: 0.5, enableScorePropagation: false);
+        var request = new RelationTraversalRequest
+        {
+            WorkspaceId = "ws-test",
+            CollectionId = "col-test",
+            Seeds = [new RelationTraversalSeed("seed", Score: 1.0)],
+            Profile = profile,
+            Direction = RelationDirection.Outgoing
+        };
+
+        var result = await engine.TraverseAsync(request);
+
+        Assert.AreEqual(1, result.Edges.Count);
+        var edge = result.Edges[0];
+        Assert.AreEqual(0.5, edge.TargetScore, 0.001,
+            "EnableScorePropagation=false 时 childScore = parentScore * DecayFactor = 1.0 * 0.5 = 0.5，" +
+            "weight=0.1 和 confidence=0.1 不参与计算");
     }
 }
