@@ -94,8 +94,9 @@ public sealed class StorageProviderBehaviorContractTests
         typeof(IContextJobQueryStore),
     };
 
-    // Postgres 原生注册的接口（不含 14 个 Unsupported 占位）
+    // Postgres 原生注册的接口（不含 13 个 Unsupported 占位）
     // R14-PG-1：新增 ILearningFeedbackStore / ILearningFeedbackReviewStore
+    // R14-PG-2：新增 IDecisionTraceStore
     private static readonly Type[] PostgresNativeInterfaces = new[]
     {
         typeof(IContextStore),
@@ -112,6 +113,7 @@ public sealed class StorageProviderBehaviorContractTests
         typeof(IVectorStore),
         typeof(IVectorIndexStore),
         typeof(IRetrievalTraceStore),
+        typeof(IDecisionTraceStore),
         typeof(IContextPackageBuildTraceStore),
         typeof(IContextPackagePolicyStore),
         typeof(IContextJobQueue),
@@ -233,19 +235,19 @@ public sealed class StorageProviderBehaviorContractTests
     }
 
     /// <summary>
-    /// P0-5：验证 Postgres provider 显式注册为 Unsupported 占位的全部 14 个 store 都会抛出 NotSupportedException。
+    /// P0-5：验证 Postgres provider 显式注册为 Unsupported 占位的全部 13 个 store 都会抛出 NotSupportedException。
     /// 现有 <see cref="Postgres_UnsupportedStore_ThrowsNotSupportedExceptionOnUse"/> 仅验证 IShortTermMemoryStore；
     /// 若源生成器对其中任何一个 store 退化为静默 no-op（例如生成空方法体），现有测试无法发现。
     /// 本测试通过反射枚举每个 Unsupported store 的第一个公共方法并以默认参数调用，断言 NotSupportedException。
     /// R14-PG-1：ILearningFeedbackStore / ILearningFeedbackReviewStore 已绑定 Postgres 实现，从本测试集合中移除。
+    /// R14-PG-2：IDecisionTraceStore 已绑定 Postgres 实现（PostgresDecisionTraceStore），从本测试集合中移除。
     /// </summary>
     [TestMethod]
-    public async Task Postgres_All14UnsupportedStores_ThrowNotSupportedException()
+    public async Task Postgres_All13UnsupportedStores_ThrowNotSupportedException()
     {
-        // 与 StorageProviderCapabilityMatrixTests.PostgresDeclaredUnsupported 保持一致（14 个接口）。
+        // 与 StorageProviderCapabilityMatrixTests.PostgresDeclaredUnsupported 保持一致（13 个接口）。
         var unsupportedInterfaces = new[]
         {
-            typeof(IDecisionTraceStore),
             typeof(IShortTermMemoryStore),
             typeof(IShortTermPromotionCandidateStore),
             typeof(ICandidateMemoryReviewStore),

@@ -14,8 +14,9 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
     /// 当前 schema 版本标识符。每次修改 DDL（新增表/列/索引）时需递增此版本。
     /// 格式：<c>cc-schema-vN</c>，N 为单调递增整数。
     /// P1-5：v7 → v8，新增 relation_outbox 表与索引。
+    /// R14-PG-2：v8 → v9，新增 decision_traces 表与索引。
     /// </summary>
-    public const string SchemaVersion = "cc-schema-v8";
+    public const string SchemaVersion = "cc-schema-v9";
 
     public const string BaselineMigrationId = "0001_operational_store_baseline";
 
@@ -43,6 +44,7 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         "context_job_events",
         "vector_index_entries",
         "vector_index_manifests",
+        "decision_traces",
         "context_schema_migrations"
     ];
 
@@ -104,7 +106,8 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         ("vector_index_entries", "scope"),
         ("vector_index_entries", "provider_model_dimension"),
         ("vector_index_entries", "source"),
-        ("vector_index_manifests", "updated")
+        ("vector_index_manifests", "updated"),
+        ("decision_traces", "created")
     ];
 
     private readonly PostgresConnectionFactory _connectionFactory;
@@ -126,6 +129,7 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         var relations = Infrastructure.PostgresNames.Table(options, "relations");
         var vectors = Infrastructure.PostgresNames.Table(options, "vectors");
         var retrievalTraces = Infrastructure.PostgresNames.Table(options, "retrieval_traces");
+        var decisionTraces = Infrastructure.PostgresNames.Table(options, "decision_traces");
         var contextIndex = Infrastructure.PostgresNames.Table(options, "context_index");
         var constraints = Infrastructure.PostgresNames.Table(options, "constraints");
         var globalContextItems = Infrastructure.PostgresNames.Table(options, "global_context_items");
@@ -315,6 +319,19 @@ CREATE TABLE IF NOT EXISTS {retrievalTraces} (
 );
 
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "retrieval_traces", "created")} ON {retrievalTraces} (workspace_id, collection_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS {decisionTraces} (
+    workspace_id text NOT NULL,
+    collection_id text NOT NULL,
+    decision_id text NOT NULL,
+    source text NOT NULL DEFAULT '',
+    query_text text NULL,
+    created_at timestamptz NOT NULL,
+    data jsonb NOT NULL,
+    PRIMARY KEY (workspace_id, collection_id, decision_id)
+);
+
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "decision_traces", "created")} ON {decisionTraces} (workspace_id, collection_id, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS {contextIndex} (
     workspace_id text NOT NULL,

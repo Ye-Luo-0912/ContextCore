@@ -120,6 +120,8 @@ public sealed class ContextCorePostgresStorageTests
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(PostgresVectorIndexStore)));
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(IVectorIndexStore)));
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(IRetrievalTraceStore)));
+        Assert.IsTrue(services.Any(item => item.ServiceType == typeof(PostgresDecisionTraceStore)));
+        Assert.IsTrue(services.Any(item => item.ServiceType == typeof(IDecisionTraceStore)));
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(PostgresLearningFeedbackStore)));
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(ILearningFeedbackStore)));
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(PostgresLearningFeedbackReviewStore)));
@@ -501,7 +503,7 @@ public sealed class ContextCorePostgresStorageTests
         var sql = PostgresMigrationRunner.BuildMigrationSql(options);
         var requiredIndexes = PostgresMigrationRunner.GetRequiredIndexNames(options);
 
-        Assert.AreEqual("cc-schema-v8", PostgresMigrationRunner.SchemaVersion);
+        Assert.AreEqual("cc-schema-v9", PostgresMigrationRunner.SchemaVersion);
         StringAssert.Contains(sql, "CREATE EXTENSION IF NOT EXISTS vector");
         StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_vector_index_entries");
         StringAssert.Contains(sql, "source_id text NOT NULL DEFAULT ''");
@@ -513,6 +515,12 @@ public sealed class ContextCorePostgresStorageTests
         CollectionAssert.Contains(requiredIndexes.ToArray(), "ix_cc_vector_index_entries_scope");
         CollectionAssert.Contains(requiredIndexes.ToArray(), "ix_cc_vector_index_entries_provider_model_dimension");
         CollectionAssert.Contains(requiredIndexes.ToArray(), "ix_cc_vector_index_entries_source");
+        // R14-PG-2：decision_traces 表与索引
+        StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_decision_traces");
+        StringAssert.Contains(sql, "decision_id text NOT NULL");
+        StringAssert.Contains(sql, "source text NOT NULL DEFAULT ''");
+        StringAssert.Contains(sql, "ix_cc_decision_traces_created");
+        CollectionAssert.Contains(requiredIndexes.ToArray(), "ix_cc_decision_traces_created");
     }
 
     [TestMethod]

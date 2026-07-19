@@ -91,6 +91,10 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<PostgresRetrievalTraceStore>();
         services.AddSingleton<IRetrievalTraceStore>(sp => sp.GetRequiredService<PostgresRetrievalTraceStore>());
 
+        // R14-PG-2：DecisionTraceStore。替代 Unsupported 占位，让 HA 场景下决策审计可持久化。
+        services.AddSingleton<PostgresDecisionTraceStore>();
+        services.AddSingleton<IDecisionTraceStore>(sp => sp.GetRequiredService<PostgresDecisionTraceStore>());
+
         // PackageBuildTraceStore
         services.AddSingleton<PostgresContextPackageBuildTraceStore>();
         services.AddSingleton<IContextPackageBuildTraceStore>(sp =>
