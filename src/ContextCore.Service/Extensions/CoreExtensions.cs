@@ -65,7 +65,21 @@ internal static class CoreExtensions
 		services.AddSingleton<ContextInputValidator>();
 		services.AddSingleton<ContextInputHasher>();
 		services.AddSingleton<ContextInputSequencer>();
-		services.AddSingleton<ContextInputIngestionService>();
+		// P1-3：使用工厂委托让 DI 解析 IWriteTransactionScopeFactory（Postgres provider 注册时非空，
+		// InMemory/FileSystem 不注册时为 null）。null 时 BasicContextIngestionService 自动回退到非事务路径。
+		services.AddSingleton<ContextInputIngestionService>(sp => new ContextInputIngestionService(
+			sp.GetRequiredService<IContextStore>(),
+			sp.GetRequiredService<ContextInputNormalizer>(),
+			sp.GetRequiredService<ContextInputValidator>(),
+			sp.GetRequiredService<ContextInputHasher>(),
+			sp.GetRequiredService<ContextInputSequencer>(),
+			sp.GetService<IShortTermMemoryStore>(),
+			sp.GetService<IShortTermWorkingItemExtractor>(),
+			sp.GetService<ShortTermMemoryPolicy>(),
+			sp.GetService<IRelationProjector>(),
+			sp.GetService<IRelationStore>(),
+			sp.GetService<IRelationProjectionWriter>(),
+			sp.GetService<IWriteTransactionScopeFactory>()));
 		services.AddSingleton<ShortTermMemoryPolicy>();
 		services.AddSingleton<ShortTermMemoryCompactionPolicy>();
 		services.AddSingleton<IShortTermWorkingItemExtractor, RuleBasedShortTermWorkingItemExtractor>();

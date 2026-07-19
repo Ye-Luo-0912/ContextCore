@@ -360,6 +360,58 @@ public sealed class ContextCoreGraphProjectionTaxonomyTests
             "writer 写入的 relation 应通过 validator 校验 SourceNodeKind");
     }
 
+    /// <summary>
+    /// P1-3：未注入 writer 时，ingest reconcile 不应删除现有 ingest-provenance 边。
+    /// 旧实现仅在写入条件里跳过写入，但后续删除循环仍按未写入的 newRelations 计算删除目标，
+    /// 会把现有 ingest-provenance 边误删——造成"item 已保存但图被破坏"的静默数据损坏。
+    /// </summary>
+    [TestMethod]
+    public async Task IngestReconcile_WithoutProjectionWriter_PreservesExistingIngestEdges()
+    {
+        var contextStore = new InMemoryContextStore();
+        var relationStore = new InMemoryRelationStore();
+        var projector = new RelationProjector();
+
+        // 先用 writer 写入初始边（模拟历史 ingest）
+        var withWriter = new BasicContextIngestionService(
+            contextStore, projector, relationStore, new RelationProjectionWriter(relationStore, Validator));
+        await withWriter.IngestAsync(CreateContextItem("item-p1", refs: ["item-old-1", "item-old-2"]));
+
+        var initialEdges = await relationStore.QueryAsync(new ContextRelationQuery
+        {
+            WorkspaceId = "workspace-test",
+            CollectionId = "collection-test",
+            SourceId = "item-p1",
+            RelationType = ContextRelationTypes.RelatedTo,
+            Take = int.MaxValue
+        });
+        Assert.AreEqual(2, initialEdges.Count, "前置：应已有 2 条 ingest-provenance 边");
+
+        // 重新 ingest，但不注入 writer（模拟配置错误）
+        // Refs 变为 [item-new-1]，按旧实现会删除 item-old-1/item-old-2 边（误删）
+        var withoutWriter = new BasicContextIngestionService(contextStore, projector, relationStore, projectionWriter: null);
+        await withoutWriter.IngestAsync(CreateContextItem("item-p1", refs: ["item-new-1"]));
+
+        var afterReingest = await relationStore.QueryAsync(new ContextRelationQuery
+        {
+            WorkspaceId = "workspace-test",
+            CollectionId = "collection-test",
+            SourceId = "item-p1",
+            RelationType = ContextRelationTypes.RelatedTo,
+            Take = int.MaxValue
+        });
+        var afterTargetIds = afterReingest.Select(r => r.TargetId).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        // 旧边必须保留——未写入新边的情况下不能删除现有边
+        Assert.IsTrue(afterTargetIds.Contains("item-old-1"),
+            "无 writer 时 ingest reconcile 不应删除现有 item-old-1 边");
+        Assert.IsTrue(afterTargetIds.Contains("item-old-2"),
+            "无 writer 时 ingest reconcile 不应删除现有 item-old-2 边");
+        // 新边不应被写入（无 writer）
+        Assert.IsFalse(afterTargetIds.Contains("item-new-1"),
+            "无 writer 时 ingest 不应写入新边");
+    }
+
     // ──────────────────────────────────────────────────────────
     // Helpers
     // ──────────────────────────────────────────────────────────

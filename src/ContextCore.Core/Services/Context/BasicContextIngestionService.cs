@@ -140,10 +140,18 @@ public sealed class BasicContextIngestionService
         {
             await txStore.SaveAsync(normalized, scope, cancellationToken).ConfigureAwait(false);
 
+            // P1-3：与 ReconcileIngestRelationsAsync 保持一致——无 writer 时跳过整段关系 reconcile，
+            // 不删除现有 ingest-provenance 边。CanUseTransactionPath 已保证 _projectionWriter 非空时
+            // 必为 ITransactionalRelationProjectionWriter，因此 _projectionWriter 非空即可安全转型。
             if (ingestRelations.Count > 0 && _projectionWriter is not null)
             {
                 var txProjectionWriter = (ITransactionalRelationProjectionWriter)_projectionWriter;
                 await txProjectionWriter.WriteAsync(ingestRelations, "ingest", scope, cancellationToken).ConfigureAwait(false);
+            }
+            else if (_projectionWriter is null)
+            {
+                await scope.CommitAsync(cancellationToken).ConfigureAwait(false);
+                return;
             }
 
             // 查询该条目现有的所有 related_to 出边——共享事务视图，避免读到其他事务未提交数据
@@ -195,11 +203,19 @@ public sealed class BasicContextIngestionService
         IReadOnlyList<ContextRelation> newRelations,
         CancellationToken cancellationToken)
     {
-        if (newRelations.Count > 0 && _projectionWriter is not null)
+        // P1-3：无 writer 时整段跳过——既不写入新边，也不删除旧边。
+        // 旧实现仅在写入条件里跳过写入，但后续删除循环仍按未写入的 newRelations 计算删除目标，
+        // 会把现有 ingest-provenance 边误删，造成"item 已保存但图被破坏"的静默数据损坏。
+        // newRelations 非空而 writer 为 null 属于配置错误，应在 DI 层面而非数据层面报警。
+        if (_projectionWriter is null)
+        {
+            return;
+        }
+
+        if (newRelations.Count > 0)
         {
             // R12.4A #10: Graph Writer fallback 最终删除——production 中 writer 无条件注册，
             // 此处不再回退到 BatchUpsertAsync（会跳过 RelationProjectorOutputValidator 验证）。
-            // 测试若需写入 relation，必须显式注入 writer。
             await _projectionWriter.WriteAsync(newRelations, "ingest", cancellationToken).ConfigureAwait(false);
         }
 
