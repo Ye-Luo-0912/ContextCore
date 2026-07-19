@@ -17,8 +17,9 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
     /// R14-PG-2：v8 → v9，新增 decision_traces 表与索引。
     /// R14-PG-3：v9 → v10，新增 short-term memory / promotion / candidate review 表与索引。
     /// R14-PG-4：v10 → v11，新增 context learning / governance review 表与索引。
+    /// R14-PG-5：v11 → v12，新增 vector lifecycle + artifact 表与索引。
     /// </summary>
-    public const string SchemaVersion = "cc-schema-v11";
+    public const string SchemaVersion = "cc-schema-v12";
 
     public const string BaselineMigrationId = "0001_operational_store_baseline";
 
@@ -64,6 +65,12 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         "candidate_constraint_reviews",
         "constraint_gap_candidates",
         "constraint_gap_reviews",
+        // R14-PG-5：vector lifecycle + artifact 表
+        "artifacts",
+        "vector_lifecycle_metadata_review_candidates",
+        "vector_lifecycle_metadata_reviews",
+        "vector_lifecycle_sidecar_metadata",
+        "vector_reindex_reports",
         "context_schema_migrations"
     ];
 
@@ -156,7 +163,16 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         ("constraint_gap_candidates", "created"),
         ("constraint_gap_candidates", "status"),
         ("constraint_gap_reviews", "gap"),
-        ("constraint_gap_reviews", "reviewed")
+        ("constraint_gap_reviews", "reviewed"),
+        // R14-PG-5：vector lifecycle + artifact 索引
+        ("artifacts", "kind"),
+        ("artifacts", "updated"),
+        ("vector_lifecycle_metadata_review_candidates", "created"),
+        ("vector_lifecycle_metadata_review_candidates", "status"),
+        ("vector_lifecycle_metadata_reviews", "candidate"),
+        ("vector_lifecycle_metadata_reviews", "reviewed"),
+        ("vector_lifecycle_sidecar_metadata", "created"),
+        ("vector_reindex_reports", "created")
     ];
 
     private readonly PostgresConnectionFactory _connectionFactory;
@@ -226,6 +242,12 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         var contextJobEvents = Infrastructure.PostgresNames.Table(options, "context_job_events");
         var vectorIndexEntries = Infrastructure.PostgresNames.Table(options, "vector_index_entries");
         var vectorIndexManifests = Infrastructure.PostgresNames.Table(options, "vector_index_manifests");
+        // R14-PG-5：vector lifecycle + artifact 表
+        var vectorReindexReports = Infrastructure.PostgresNames.Table(options, "vector_reindex_reports");
+        var vectorLifecycleMetadataReviewCandidates = Infrastructure.PostgresNames.Table(options, "vector_lifecycle_metadata_review_candidates");
+        var vectorLifecycleMetadataReviews = Infrastructure.PostgresNames.Table(options, "vector_lifecycle_metadata_reviews");
+        var vectorLifecycleSidecarMetadata = Infrastructure.PostgresNames.Table(options, "vector_lifecycle_sidecar_metadata");
+        var artifacts = Infrastructure.PostgresNames.Table(options, "artifacts");
         var extensionSql = options.EnablePgVectorExtension
             ? "CREATE EXTENSION IF NOT EXISTS vector;"
             : string.Empty;
@@ -620,6 +642,77 @@ CREATE TABLE IF NOT EXISTS {constraintGapReviews} (
 );
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "constraint_gap_reviews", "gap")} ON {constraintGapReviews} (workspace_id, collection_id, gap_id, reviewed_at DESC);
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "constraint_gap_reviews", "reviewed")} ON {constraintGapReviews} (workspace_id, collection_id, reviewed_at DESC);
+
+-- R14-PG-5：vector lifecycle + artifact 表与索引
+CREATE TABLE IF NOT EXISTS {vectorReindexReports} (
+    workspace_id text NOT NULL,
+    collection_id text NOT NULL,
+    report_id text NOT NULL,
+    started_at timestamptz NOT NULL,
+    completed_at timestamptz NULL,
+    data jsonb NOT NULL,
+    PRIMARY KEY (workspace_id, collection_id, report_id)
+);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "vector_reindex_reports", "created")} ON {vectorReindexReports} (workspace_id, collection_id, completed_at DESC);
+
+CREATE TABLE IF NOT EXISTS {vectorLifecycleMetadataReviewCandidates} (
+    workspace_id text NOT NULL,
+    collection_id text NOT NULL,
+    candidate_id text NOT NULL,
+    status text NOT NULL DEFAULT '',
+    layer text NOT NULL DEFAULT '',
+    item_kind text NOT NULL DEFAULT '',
+    must_hit_item_id text NOT NULL DEFAULT '',
+    source_eval_set text NOT NULL DEFAULT '',
+    created_at timestamptz NOT NULL,
+    data jsonb NOT NULL,
+    PRIMARY KEY (workspace_id, collection_id, candidate_id)
+);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "vector_lifecycle_metadata_review_candidates", "created")} ON {vectorLifecycleMetadataReviewCandidates} (workspace_id, collection_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "vector_lifecycle_metadata_review_candidates", "status")} ON {vectorLifecycleMetadataReviewCandidates} (workspace_id, collection_id, status);
+
+CREATE TABLE IF NOT EXISTS {vectorLifecycleMetadataReviews} (
+    workspace_id text NOT NULL,
+    collection_id text NOT NULL,
+    review_id text NOT NULL,
+    candidate_id text NOT NULL,
+    reviewed_at timestamptz NOT NULL,
+    created_at timestamptz NOT NULL,
+    data jsonb NOT NULL,
+    PRIMARY KEY (workspace_id, collection_id, review_id)
+);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "vector_lifecycle_metadata_reviews", "candidate")} ON {vectorLifecycleMetadataReviews} (workspace_id, collection_id, candidate_id, reviewed_at DESC);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "vector_lifecycle_metadata_reviews", "reviewed")} ON {vectorLifecycleMetadataReviews} (workspace_id, collection_id, reviewed_at DESC);
+
+CREATE TABLE IF NOT EXISTS {vectorLifecycleSidecarMetadata} (
+    workspace_id text NOT NULL,
+    collection_id text NOT NULL,
+    item_id text NOT NULL,
+    source_review_id text NOT NULL DEFAULT '',
+    source_candidate_id text NOT NULL DEFAULT '',
+    created_at timestamptz NOT NULL,
+    data jsonb NOT NULL,
+    PRIMARY KEY (workspace_id, collection_id, item_id)
+);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "vector_lifecycle_sidecar_metadata", "created")} ON {vectorLifecycleSidecarMetadata} (workspace_id, collection_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS {artifacts} (
+    workspace_id text NOT NULL DEFAULT '',
+    collection_id text NOT NULL DEFAULT '',
+    artifact_id text NOT NULL,
+    artifact_kind text NOT NULL,
+    relative_path text NOT NULL DEFAULT '',
+    content_type text NOT NULL DEFAULT 'application/octet-stream',
+    extension text NOT NULL DEFAULT '.json',
+    created_at timestamptz NOT NULL,
+    updated_at timestamptz NOT NULL,
+    size_bytes bigint NOT NULL DEFAULT 0,
+    content_hash text NOT NULL DEFAULT '',
+    data jsonb NOT NULL,
+    PRIMARY KEY (workspace_id, collection_id, artifact_id)
+);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "artifacts", "kind")} ON {artifacts} (workspace_id, artifact_kind);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "artifacts", "updated")} ON {artifacts} (workspace_id, collection_id, updated_at DESC);
 
 CREATE TABLE IF NOT EXISTS {contextIndex} (
     workspace_id text NOT NULL,

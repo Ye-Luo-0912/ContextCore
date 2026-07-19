@@ -144,6 +144,17 @@ public sealed class ContextCorePostgresStorageTests
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(ICandidateConstraintReviewStore)));
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(PostgresConstraintGapCandidateStore)));
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(IConstraintGapCandidateStore)));
+        // R14-PG-5：vector lifecycle + artifact stores 注册
+        Assert.IsTrue(services.Any(item => item.ServiceType == typeof(PostgresVectorReindexReportStore)));
+        Assert.IsTrue(services.Any(item => item.ServiceType == typeof(IVectorReindexReportStore)));
+        Assert.IsTrue(services.Any(item => item.ServiceType == typeof(PostgresVectorLifecycleMetadataReviewCandidateStore)));
+        Assert.IsTrue(services.Any(item => item.ServiceType == typeof(IVectorLifecycleMetadataReviewCandidateStore)));
+        Assert.IsTrue(services.Any(item => item.ServiceType == typeof(PostgresVectorLifecycleMetadataReviewStore)));
+        Assert.IsTrue(services.Any(item => item.ServiceType == typeof(IVectorLifecycleMetadataReviewStore)));
+        Assert.IsTrue(services.Any(item => item.ServiceType == typeof(PostgresVectorLifecycleSidecarMetadataStore)));
+        Assert.IsTrue(services.Any(item => item.ServiceType == typeof(IVectorLifecycleSidecarMetadataStore)));
+        Assert.IsTrue(services.Any(item => item.ServiceType == typeof(PostgresArtifactStore)));
+        Assert.IsTrue(services.Any(item => item.ServiceType == typeof(IArtifactStore)));
     }
 
     [TestMethod]
@@ -521,7 +532,7 @@ public sealed class ContextCorePostgresStorageTests
         var sql = PostgresMigrationRunner.BuildMigrationSql(options);
         var requiredIndexes = PostgresMigrationRunner.GetRequiredIndexNames(options);
 
-        Assert.AreEqual("cc-schema-v11", PostgresMigrationRunner.SchemaVersion);
+        Assert.AreEqual("cc-schema-v12", PostgresMigrationRunner.SchemaVersion);
         StringAssert.Contains(sql, "CREATE EXTENSION IF NOT EXISTS vector");
         StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_vector_index_entries");
         StringAssert.Contains(sql, "source_id text NOT NULL DEFAULT ''");
@@ -558,6 +569,17 @@ public sealed class ContextCorePostgresStorageTests
         StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_candidate_constraint_reviews");
         StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_constraint_gap_candidates");
         StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_constraint_gap_reviews");
+        // R14-PG-5：vector lifecycle + artifact 表与索引
+        StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_vector_reindex_reports");
+        StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_vector_lifecycle_metadata_review_candidates");
+        StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_vector_lifecycle_metadata_reviews");
+        StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_vector_lifecycle_sidecar_metadata");
+        StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_artifacts");
+        StringAssert.Contains(sql, "ix_cc_vector_reindex_reports_created");
+        StringAssert.Contains(sql, "ix_cc_vector_lifecycle_metadata_review_candidates_created");
+        StringAssert.Contains(sql, "ix_cc_vector_lifecycle_metadata_reviews_candidate");
+        StringAssert.Contains(sql, "ix_cc_vector_lifecycle_sidecar_metadata_created");
+        StringAssert.Contains(sql, "ix_cc_artifacts_kind");
     }
 
     [TestMethod]

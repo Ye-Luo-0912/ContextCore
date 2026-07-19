@@ -55,19 +55,14 @@ public sealed class StorageProviderCapabilityMatrixTests
         typeof(IArtifactStore),
     };
 
-    // Postgres provider 显式注册为 Unsupported 占位的 5 个接口
+    // Postgres provider 显式注册为 Unsupported 占位的接口集合
     // R14-PG-1：ILearningFeedbackStore / ILearningFeedbackReviewStore 已正式绑定 Postgres 实现，移出此集合
     // R14-PG-2：IDecisionTraceStore 已正式绑定 Postgres 实现（PostgresDecisionTraceStore），移出此集合
     // R14-PG-3：上述 4 个接口已正式绑定 Postgres 实现，移出此集合
     // R14-PG-4：IContextLearningStore / IStableLifecycleReviewStore / ICandidateConstraintReviewStore / IConstraintGapCandidateStore 已正式绑定 Postgres 实现，移出此集合
-    private static readonly HashSet<Type> PostgresDeclaredUnsupported = new()
-    {
-        typeof(IVectorReindexReportStore),
-        typeof(IVectorLifecycleMetadataReviewCandidateStore),
-        typeof(IVectorLifecycleMetadataReviewStore),
-        typeof(IVectorLifecycleSidecarMetadataStore),
-        typeof(IArtifactStore),
-    };
+    // R14-PG-5：上述 5 个接口（IVectorReindexReportStore / IVectorLifecycleMetadataReviewCandidateStore / IVectorLifecycleMetadataReviewStore / IVectorLifecycleSidecarMetadataStore / IArtifactStore）已正式绑定 Postgres 实现，移出此集合。
+    // 至此 R14-PG 阶段一（垂直闭环）完成，无 Unsupported 占位。
+    private static readonly HashSet<Type> PostgresDeclaredUnsupported = new();
 
     // FileSystem 和 InMemory 不应注册任何 Unsupported 占位
     // InMemory 的 IArtifactStore 由测试显式补充为 Unsupported，不计入 provider 自身声明

@@ -117,6 +117,19 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<PostgresConstraintGapCandidateStore>();
         services.AddSingleton<IConstraintGapCandidateStore>(sp => sp.GetRequiredService<PostgresConstraintGapCandidateStore>());
 
+        // R14-PG-5：vector lifecycle + artifact stores。
+        // 替代 Unsupported 占位，完成 R14-PG 阶段一垂直闭环，Postgres 无 Unsupported store。
+        services.AddSingleton<PostgresVectorReindexReportStore>();
+        services.AddSingleton<IVectorReindexReportStore>(sp => sp.GetRequiredService<PostgresVectorReindexReportStore>());
+        services.AddSingleton<PostgresVectorLifecycleMetadataReviewCandidateStore>();
+        services.AddSingleton<IVectorLifecycleMetadataReviewCandidateStore>(sp => sp.GetRequiredService<PostgresVectorLifecycleMetadataReviewCandidateStore>());
+        services.AddSingleton<PostgresVectorLifecycleMetadataReviewStore>();
+        services.AddSingleton<IVectorLifecycleMetadataReviewStore>(sp => sp.GetRequiredService<PostgresVectorLifecycleMetadataReviewStore>());
+        services.AddSingleton<PostgresVectorLifecycleSidecarMetadataStore>();
+        services.AddSingleton<IVectorLifecycleSidecarMetadataStore>(sp => sp.GetRequiredService<PostgresVectorLifecycleSidecarMetadataStore>());
+        services.AddSingleton<PostgresArtifactStore>();
+        services.AddSingleton<IArtifactStore>(sp => sp.GetRequiredService<PostgresArtifactStore>());
+
         // PackageBuildTraceStore
         services.AddSingleton<PostgresContextPackageBuildTraceStore>();
         services.AddSingleton<IContextPackageBuildTraceStore>(sp =>
