@@ -171,16 +171,13 @@ internal static class StorageExtensions
 		// 正式绑定 Postgres 实现，不再需要 Unsupported 覆盖。其余尚未实现的接口保持 Unsupported。
 		// R14-PG-2：IDecisionTraceStore 已由 PostgresServiceCollectionExtensions 正式绑定 PostgresDecisionTraceStore。
 		// R14-PG-3：IShortTermMemoryStore / IShortTermPromotionCandidateStore / ICandidateMemoryReviewStore / IStableReviewCandidateStore 已由 PostgresServiceCollectionExtensions 正式绑定 Postgres 实现。
+		// R14-PG-4：IContextLearningStore / IStableLifecycleReviewStore / ICandidateConstraintReviewStore / IConstraintGapCandidateStore 已由 PostgresServiceCollectionExtensions 正式绑定 Postgres 实现。
 		// Postgres 尚未实现的存储契约，显式注册为 Unsupported，避免运行时静默丢弃数据
-		services.AddSingleton<IContextLearningStore>(_ => new UnsupportedContextLearningStore("postgres"));
 		services.AddSingleton<IVectorReindexReportStore>(_ => new UnsupportedVectorReindexReportStore("postgres"));
 		services.AddSingleton<IVectorLifecycleMetadataReviewCandidateStore>(_ => new UnsupportedVectorLifecycleMetadataReviewCandidateStore("postgres"));
 		services.AddSingleton<IVectorLifecycleMetadataReviewStore>(_ => new UnsupportedVectorLifecycleMetadataReviewStore("postgres"));
 		services.AddSingleton<IVectorLifecycleSidecarMetadataStore>(_ => new UnsupportedVectorLifecycleSidecarMetadataStore("postgres"));
 		services.AddSingleton<IArtifactStore>(_ => new UnsupportedArtifactStore("postgres"));
-		services.AddSingleton<IStableLifecycleReviewStore>(_ => new UnsupportedStableLifecycleReviewStore("postgres"));
-		services.AddSingleton<ICandidateConstraintReviewStore>(_ => new UnsupportedCandidateConstraintReviewStore("postgres"));
-		services.AddSingleton<IConstraintGapCandidateStore>(_ => new UnsupportedConstraintGapCandidateStore("postgres"));
 
 		// R10-2：在 Postgres 实现之上叠加失效边界 Decorator（覆盖 AddContextCorePostgresStorage 的原始注册）。
 	// 失效 Decorator 位于最外层，写入成功后向 IStateCacheInvalidator 发出失效信号。

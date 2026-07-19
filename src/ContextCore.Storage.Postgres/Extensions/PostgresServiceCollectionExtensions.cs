@@ -106,6 +106,17 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<PostgresStableReviewCandidateStore>();
         services.AddSingleton<IStableReviewCandidateStore>(sp => sp.GetRequiredService<PostgresStableReviewCandidateStore>());
 
+        // R14-PG-4：Context learning / governance review stores。
+        // 替代 Unsupported 占位，让 HA 场景下学习记录与生命周期审核可持久化。
+        services.AddSingleton<PostgresContextLearningStore>();
+        services.AddSingleton<IContextLearningStore>(sp => sp.GetRequiredService<PostgresContextLearningStore>());
+        services.AddSingleton<PostgresStableLifecycleReviewStore>();
+        services.AddSingleton<IStableLifecycleReviewStore>(sp => sp.GetRequiredService<PostgresStableLifecycleReviewStore>());
+        services.AddSingleton<PostgresCandidateConstraintReviewStore>();
+        services.AddSingleton<ICandidateConstraintReviewStore>(sp => sp.GetRequiredService<PostgresCandidateConstraintReviewStore>());
+        services.AddSingleton<PostgresConstraintGapCandidateStore>();
+        services.AddSingleton<IConstraintGapCandidateStore>(sp => sp.GetRequiredService<PostgresConstraintGapCandidateStore>());
+
         // PackageBuildTraceStore
         services.AddSingleton<PostgresContextPackageBuildTraceStore>();
         services.AddSingleton<IContextPackageBuildTraceStore>(sp =>

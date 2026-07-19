@@ -135,6 +135,15 @@ public sealed class ContextCorePostgresStorageTests
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(ILearningFeedbackStore)));
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(PostgresLearningFeedbackReviewStore)));
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(ILearningFeedbackReviewStore)));
+        // R14-PG-4：context learning / governance review stores 注册
+        Assert.IsTrue(services.Any(item => item.ServiceType == typeof(PostgresContextLearningStore)));
+        Assert.IsTrue(services.Any(item => item.ServiceType == typeof(IContextLearningStore)));
+        Assert.IsTrue(services.Any(item => item.ServiceType == typeof(PostgresStableLifecycleReviewStore)));
+        Assert.IsTrue(services.Any(item => item.ServiceType == typeof(IStableLifecycleReviewStore)));
+        Assert.IsTrue(services.Any(item => item.ServiceType == typeof(PostgresCandidateConstraintReviewStore)));
+        Assert.IsTrue(services.Any(item => item.ServiceType == typeof(ICandidateConstraintReviewStore)));
+        Assert.IsTrue(services.Any(item => item.ServiceType == typeof(PostgresConstraintGapCandidateStore)));
+        Assert.IsTrue(services.Any(item => item.ServiceType == typeof(IConstraintGapCandidateStore)));
     }
 
     [TestMethod]
@@ -512,7 +521,7 @@ public sealed class ContextCorePostgresStorageTests
         var sql = PostgresMigrationRunner.BuildMigrationSql(options);
         var requiredIndexes = PostgresMigrationRunner.GetRequiredIndexNames(options);
 
-        Assert.AreEqual("cc-schema-v10", PostgresMigrationRunner.SchemaVersion);
+        Assert.AreEqual("cc-schema-v11", PostgresMigrationRunner.SchemaVersion);
         StringAssert.Contains(sql, "CREATE EXTENSION IF NOT EXISTS vector");
         StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_vector_index_entries");
         StringAssert.Contains(sql, "source_id text NOT NULL DEFAULT ''");
@@ -541,6 +550,14 @@ public sealed class ContextCorePostgresStorageTests
         StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_candidate_memory_reviews");
         StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_stable_review_candidates");
         StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_stable_review_records");
+        // R14-PG-4：context learning / governance review 表
+        StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_context_learning_feedback");
+        StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_context_learning_records");
+        StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_context_learning_cases");
+        StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_stable_lifecycle_reviews");
+        StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_candidate_constraint_reviews");
+        StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_constraint_gap_candidates");
+        StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_constraint_gap_reviews");
     }
 
     [TestMethod]

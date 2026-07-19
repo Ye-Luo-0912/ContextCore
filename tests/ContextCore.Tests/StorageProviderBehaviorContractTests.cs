@@ -94,10 +94,11 @@ public sealed class StorageProviderBehaviorContractTests
         typeof(IContextJobQueryStore),
     };
 
-    // Postgres 原生注册的接口（不含 9 个 Unsupported 占位）
+    // Postgres 原生注册的接口（不含 5 个 Unsupported 占位）
     // R14-PG-1：新增 ILearningFeedbackStore / ILearningFeedbackReviewStore
     // R14-PG-2：新增 IDecisionTraceStore
     // R14-PG-3：新增 IShortTermMemoryStore / IShortTermPromotionCandidateStore / ICandidateMemoryReviewStore / IStableReviewCandidateStore
+    // R14-PG-4：新增 IContextLearningStore / IStableLifecycleReviewStore / ICandidateConstraintReviewStore / IConstraintGapCandidateStore
     private static readonly Type[] PostgresNativeInterfaces = new[]
     {
         typeof(IContextStore),
@@ -126,6 +127,10 @@ public sealed class StorageProviderBehaviorContractTests
         typeof(IShortTermPromotionCandidateStore),
         typeof(ICandidateMemoryReviewStore),
         typeof(IStableReviewCandidateStore),
+        typeof(IContextLearningStore),
+        typeof(IStableLifecycleReviewStore),
+        typeof(ICandidateConstraintReviewStore),
+        typeof(IConstraintGapCandidateStore),
     };
 
     private static bool IsUnsupportedPlaceholder(object instance)
@@ -232,38 +237,35 @@ public sealed class StorageProviderBehaviorContractTests
         services.AddContextStorage(options);
 
         await using var sp = services.BuildServiceProvider();
-        // R14-PG-3：IShortTermMemoryStore 已绑定 Postgres 实现，改用仍为 Unsupported 的 IContextLearningStore 验证抛出行为。
-        var store = sp.GetRequiredService<IContextLearningStore>();
-        Assert.IsTrue(IsUnsupportedPlaceholder(store), "IContextLearningStore 应为 Unsupported 占位");
+        // R14-PG-4：IContextLearningStore 已绑定 Postgres 实现，改用仍为 Unsupported 的 IVectorReindexReportStore 验证抛出行为。
+        var store = sp.GetRequiredService<IVectorReindexReportStore>();
+        Assert.IsTrue(IsUnsupportedPlaceholder(store), "IVectorReindexReportStore 应为 Unsupported 占位");
 
         Assert.ThrowsException<NotSupportedException>(() =>
-            store.GetRecordAsync("test", default).GetAwaiter().GetResult());
+            store.SaveAsync(new VectorReindexResult(), default).GetAwaiter().GetResult());
     }
 
     /// <summary>
-    /// P0-5：验证 Postgres provider 显式注册为 Unsupported 占位的全部 9 个 store 都会抛出 NotSupportedException。
-    /// 现有 <see cref="Postgres_UnsupportedStore_ThrowsNotSupportedExceptionOnUse"/> 仅验证 IContextLearningStore；
+    /// P0-5：验证 Postgres provider 显式注册为 Unsupported 占位的全部 5 个 store 都会抛出 NotSupportedException。
+    /// 现有 <see cref="Postgres_UnsupportedStore_ThrowsNotSupportedExceptionOnUse"/> 仅验证 IVectorReindexReportStore；
     /// 若源生成器对其中任何一个 store 退化为静默 no-op（例如生成空方法体），现有测试无法发现。
     /// 本测试通过反射枚举每个 Unsupported store 的第一个公共方法并以默认参数调用，断言 NotSupportedException。
     /// R14-PG-1：ILearningFeedbackStore / ILearningFeedbackReviewStore 已绑定 Postgres 实现，从本测试集合中移除。
     /// R14-PG-2：IDecisionTraceStore 已绑定 Postgres 实现（PostgresDecisionTraceStore），从本测试集合中移除。
     /// R14-PG-3：IShortTermMemoryStore / IShortTermPromotionCandidateStore / ICandidateMemoryReviewStore / IStableReviewCandidateStore 已绑定 Postgres 实现，从本测试集合中移除。
+    /// R14-PG-4：IContextLearningStore / IStableLifecycleReviewStore / ICandidateConstraintReviewStore / IConstraintGapCandidateStore 已绑定 Postgres 实现，从本测试集合中移除。
     /// </summary>
     [TestMethod]
-    public async Task Postgres_All9UnsupportedStores_ThrowNotSupportedException()
+    public async Task Postgres_All5UnsupportedStores_ThrowNotSupportedException()
     {
-        // 与 StorageProviderCapabilityMatrixTests.PostgresDeclaredUnsupported 保持一致（9 个接口）。
+        // 与 StorageProviderCapabilityMatrixTests.PostgresDeclaredUnsupported 保持一致（5 个接口）。
         var unsupportedInterfaces = new[]
         {
-            typeof(IContextLearningStore),
             typeof(IVectorReindexReportStore),
             typeof(IVectorLifecycleMetadataReviewCandidateStore),
             typeof(IVectorLifecycleMetadataReviewStore),
             typeof(IVectorLifecycleSidecarMetadataStore),
             typeof(IArtifactStore),
-            typeof(IStableLifecycleReviewStore),
-            typeof(ICandidateConstraintReviewStore),
-            typeof(IConstraintGapCandidateStore),
         };
 
         var services = new ServiceCollection();

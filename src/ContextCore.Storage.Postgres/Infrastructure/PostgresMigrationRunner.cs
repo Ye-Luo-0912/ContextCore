@@ -16,8 +16,9 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
     /// P1-5：v7 → v8，新增 relation_outbox 表与索引。
     /// R14-PG-2：v8 → v9，新增 decision_traces 表与索引。
     /// R14-PG-3：v9 → v10，新增 short-term memory / promotion / candidate review 表与索引。
+    /// R14-PG-4：v10 → v11，新增 context learning / governance review 表与索引。
     /// </summary>
-    public const string SchemaVersion = "cc-schema-v10";
+    public const string SchemaVersion = "cc-schema-v11";
 
     public const string BaselineMigrationId = "0001_operational_store_baseline";
 
@@ -56,6 +57,13 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         "candidate_memory_reviews",
         "stable_review_candidates",
         "stable_review_records",
+        "context_learning_feedback",
+        "context_learning_records",
+        "context_learning_cases",
+        "stable_lifecycle_reviews",
+        "candidate_constraint_reviews",
+        "constraint_gap_candidates",
+        "constraint_gap_reviews",
         "context_schema_migrations"
     ];
 
@@ -134,7 +142,21 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         ("stable_review_candidates", "created"),
         ("stable_review_candidates", "status"),
         ("stable_review_records", "candidate"),
-        ("stable_review_records", "reviewed")
+        ("stable_review_records", "reviewed"),
+        ("context_learning_feedback", "candidate"),
+        ("context_learning_feedback", "created"),
+        ("context_learning_records", "workspace"),
+        ("context_learning_records", "created"),
+        ("context_learning_cases", "workspace"),
+        ("context_learning_cases", "created"),
+        ("stable_lifecycle_reviews", "item"),
+        ("stable_lifecycle_reviews", "reviewed"),
+        ("candidate_constraint_reviews", "constraint"),
+        ("candidate_constraint_reviews", "reviewed"),
+        ("constraint_gap_candidates", "created"),
+        ("constraint_gap_candidates", "status"),
+        ("constraint_gap_reviews", "gap"),
+        ("constraint_gap_reviews", "reviewed")
     ];
 
     private readonly PostgresConnectionFactory _connectionFactory;
@@ -167,6 +189,13 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         var candidateMemoryReviews = Infrastructure.PostgresNames.Table(options, "candidate_memory_reviews");
         var stableReviewCandidates = Infrastructure.PostgresNames.Table(options, "stable_review_candidates");
         var stableReviewRecords = Infrastructure.PostgresNames.Table(options, "stable_review_records");
+        var contextLearningFeedback = Infrastructure.PostgresNames.Table(options, "context_learning_feedback");
+        var contextLearningRecords = Infrastructure.PostgresNames.Table(options, "context_learning_records");
+        var contextLearningCases = Infrastructure.PostgresNames.Table(options, "context_learning_cases");
+        var stableLifecycleReviews = Infrastructure.PostgresNames.Table(options, "stable_lifecycle_reviews");
+        var candidateConstraintReviews = Infrastructure.PostgresNames.Table(options, "candidate_constraint_reviews");
+        var constraintGapCandidates = Infrastructure.PostgresNames.Table(options, "constraint_gap_candidates");
+        var constraintGapReviews = Infrastructure.PostgresNames.Table(options, "constraint_gap_reviews");
         var contextIndex = Infrastructure.PostgresNames.Table(options, "context_index");
         var constraints = Infrastructure.PostgresNames.Table(options, "constraints");
         var globalContextItems = Infrastructure.PostgresNames.Table(options, "global_context_items");
@@ -501,6 +530,96 @@ CREATE TABLE IF NOT EXISTS {stableReviewRecords} (
 
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "stable_review_records", "candidate")} ON {stableReviewRecords} (workspace_id, collection_id, stable_review_candidate_id, reviewed_at DESC);
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "stable_review_records", "reviewed")} ON {stableReviewRecords} (workspace_id, collection_id, reviewed_at DESC);
+
+-- R14-PG-4：context learning / governance review 表与索引
+CREATE TABLE IF NOT EXISTS {contextLearningFeedback} (
+    workspace_id text NOT NULL,
+    collection_id text NOT NULL,
+    feedback_id text NOT NULL,
+    candidate_id text NOT NULL,
+    capability_id text NOT NULL DEFAULT '',
+    created_at timestamptz NOT NULL,
+    data jsonb NOT NULL,
+    PRIMARY KEY (workspace_id, collection_id, feedback_id)
+);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "context_learning_feedback", "candidate")} ON {contextLearningFeedback} (workspace_id, collection_id, candidate_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "context_learning_feedback", "created")} ON {contextLearningFeedback} (workspace_id, collection_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS {contextLearningRecords} (
+    workspace_id text NOT NULL,
+    collection_id text NOT NULL,
+    record_id text NOT NULL,
+    source_id text NOT NULL DEFAULT '',
+    created_at timestamptz NOT NULL,
+    data jsonb NOT NULL,
+    PRIMARY KEY (workspace_id, collection_id, record_id)
+);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "context_learning_records", "workspace")} ON {contextLearningRecords} (workspace_id, collection_id);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "context_learning_records", "created")} ON {contextLearningRecords} (workspace_id, collection_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS {contextLearningCases} (
+    workspace_id text NOT NULL,
+    collection_id text NOT NULL,
+    case_id text NOT NULL,
+    source_record_id text NOT NULL DEFAULT '',
+    created_at timestamptz NOT NULL,
+    data jsonb NOT NULL,
+    PRIMARY KEY (workspace_id, collection_id, case_id)
+);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "context_learning_cases", "workspace")} ON {contextLearningCases} (workspace_id, collection_id);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "context_learning_cases", "created")} ON {contextLearningCases} (workspace_id, collection_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS {stableLifecycleReviews} (
+    workspace_id text NOT NULL,
+    collection_id text NOT NULL DEFAULT '',
+    review_id text NOT NULL,
+    stable_item_id text NOT NULL,
+    reviewed_at timestamptz NOT NULL,
+    created_at timestamptz NOT NULL,
+    data jsonb NOT NULL,
+    PRIMARY KEY (workspace_id, collection_id, review_id)
+);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "stable_lifecycle_reviews", "item")} ON {stableLifecycleReviews} (workspace_id, stable_item_id, reviewed_at DESC);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "stable_lifecycle_reviews", "reviewed")} ON {stableLifecycleReviews} (workspace_id, reviewed_at DESC);
+
+CREATE TABLE IF NOT EXISTS {candidateConstraintReviews} (
+    workspace_id text NOT NULL,
+    collection_id text NOT NULL DEFAULT '',
+    review_id text NOT NULL,
+    constraint_id text NOT NULL,
+    reviewed_at timestamptz NOT NULL,
+    created_at timestamptz NOT NULL,
+    data jsonb NOT NULL,
+    PRIMARY KEY (workspace_id, collection_id, review_id)
+);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "candidate_constraint_reviews", "constraint")} ON {candidateConstraintReviews} (workspace_id, constraint_id, reviewed_at DESC);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "candidate_constraint_reviews", "reviewed")} ON {candidateConstraintReviews} (workspace_id, reviewed_at DESC);
+
+CREATE TABLE IF NOT EXISTS {constraintGapCandidates} (
+    workspace_id text NOT NULL,
+    collection_id text NOT NULL,
+    gap_id text NOT NULL,
+    status text NOT NULL DEFAULT '',
+    created_at timestamptz NOT NULL,
+    updated_at timestamptz NOT NULL,
+    data jsonb NOT NULL,
+    PRIMARY KEY (workspace_id, collection_id, gap_id)
+);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "constraint_gap_candidates", "created")} ON {constraintGapCandidates} (workspace_id, collection_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "constraint_gap_candidates", "status")} ON {constraintGapCandidates} (workspace_id, collection_id, status);
+
+CREATE TABLE IF NOT EXISTS {constraintGapReviews} (
+    workspace_id text NOT NULL,
+    collection_id text NOT NULL,
+    review_id text NOT NULL,
+    gap_id text NOT NULL,
+    reviewed_at timestamptz NOT NULL,
+    created_at timestamptz NOT NULL,
+    data jsonb NOT NULL,
+    PRIMARY KEY (workspace_id, collection_id, review_id)
+);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "constraint_gap_reviews", "gap")} ON {constraintGapReviews} (workspace_id, collection_id, gap_id, reviewed_at DESC);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "constraint_gap_reviews", "reviewed")} ON {constraintGapReviews} (workspace_id, collection_id, reviewed_at DESC);
 
 CREATE TABLE IF NOT EXISTS {contextIndex} (
     workspace_id text NOT NULL,
