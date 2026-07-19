@@ -1,5 +1,9 @@
 # Job Queue Postgres Freeze
 
+> 历史快照（Historical Snapshot）— Job Queue Postgres Provider 阶段冻结报告。
+> 文中冻结的 scoped worker 结论反映冻结时点状态，已被后续 P0-4 / P0-7 worker 演进取代。
+> 当前路线图请见根目录 `TODO.md`。本文档仅供回溯，不作为 current-head 决策依据。
+
 Generated: 2026-06-14
 
 ## Scope

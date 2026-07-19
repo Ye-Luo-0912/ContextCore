@@ -1,5 +1,9 @@
 # ContextCore 项目待办清单 / Roadmap
 
+> 历史快照（Historical Snapshot）— v0.2 早期项目结构规划文档。
+> 本文件已被根目录 `TODO.md` 完全取代，不再作为路线图使用。
+> 当前路线图请见根目录 `TODO.md`。本文档仅供回溯，不作为 current-head 决策依据。
+
 > 版本：v0.2  
 > 定位：ContextCore 是一个独立运行的上下文管理基础设施，不隶属于小说生成工具、Agent 或 ChatApp。  
 > 当前状态：基础项目结构、文件存储、Mock 压缩、ControlRoom 控制台面板、派生上下文隔离已初步完成。  

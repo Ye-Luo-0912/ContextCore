@@ -1,5 +1,9 @@
 # Hybrid Retrieval Preview Freeze
 
+> 历史快照（Historical Snapshot）— Hybrid Retrieval Preview 阶段冻结报告。
+> 文中冻结的 preview 结论反映冻结时点状态，未接 formal retrieval，不绑定正式 IVectorIndexStore。
+> 当前路线图请见根目录 `TODO.md`。本文档仅供回溯，不作为 current-head 决策依据。
+
 更新时间：2026-06-15
 
 ## 结论

@@ -1,5 +1,9 @@
 # Planning Context Snapshot
 
+> 历史快照（Historical Snapshot）— Planning Context Snapshot 阶段报告。
+> 文中 DTO 与 P1-P3 阶段实现反映冻结时点状态，已被后续 R10+ retrieval 改造与 R12.4A 正确性闭环取代。
+> 当前路线图请见根目录 `TODO.md`。本文档仅供回溯，不作为 current-head 决策依据。
+
 更新时间：2026-06-05
 
 ## 目标

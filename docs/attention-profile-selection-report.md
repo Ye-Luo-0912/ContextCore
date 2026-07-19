@@ -1,4 +1,8 @@
-﻿# Attention Profile Selection Report
+# Attention Profile Selection Report
+
+> 历史快照（Historical Snapshot）— Attention Profile Selection 阶段报告。
+> 文中推荐的 profile 选型反映冻结时点状态，已被后续 R10-1 RetrievalPolicyProfiles 改造取代。
+> 当前路线图请见根目录 `TODO.md`。本文档仅供回溯，不作为 current-head 决策依据。
 
 Generated: 2026-06-04
 

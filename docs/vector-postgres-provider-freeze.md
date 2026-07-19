@@ -1,5 +1,9 @@
 # Vector Postgres Provider Freeze
 
+> 历史快照（Historical Snapshot）— Vector Postgres Provider 阶段冻结报告。
+> 文中冻结的 pgvector provider 结论为 preview/shadow/eval-only，未绑定为正式 IVectorIndexStore。
+> 当前路线图请见根目录 `TODO.md`。本文档仅供回溯，不作为 current-head 决策依据。
+
 Generated: 2026-06-14
 
 ## Scope

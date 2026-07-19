@@ -1,5 +1,9 @@
 # Retrieval Plan Shadow Execution
 
+> 历史快照（Historical Snapshot）— Retrieval Plan Shadow Execution 阶段报告。
+> 文中 shadow 执行结论反映冻结时点状态，已被后续 retrieval baseline 与 R12.4A 正确性闭环取代。
+> 当前路线图请见根目录 `TODO.md`。本文档仅供回溯，不作为 current-head 决策依据。
+
 更新时间：2026-06-05
 
 ## 目标

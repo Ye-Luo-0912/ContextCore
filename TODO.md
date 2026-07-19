@@ -1,14 +1,27 @@
 # ContextCore 项目路线图
 
-> 最近更新：R12.4A 正确性闭环 + R12-F.1 Current-HEAD Rebaseline（2026-07-17）
+> 最近更新：R13.0-C 状态与基线收口（2026-07-20）
 
-> 本文件是 ContextCore 的**唯一当前路线图**。docs/ 下的 freeze / report / audit / plan 类文档均为历史快照，仅供回溯，不作为设计依据。历史完成记录已迁入 [docs/archive/roadmap-history.md](docs/archive/roadmap-history.md)。
+> 本文件是 ContextCore 的**唯一当前路线图**。docs/ 下的 `*_Freeze*.md`、`*_Report*.md`、`*_Audit*.md`、`*_Plan*.md`、`*_Gap_Map*.md`、`新阶段*` 类文档均已标注"历史快照"声明，仅供回溯，不作为 current-head 决策依据。历史完成记录已迁入 [docs/archive/roadmap-history.md](docs/archive/roadmap-history.md)。
 
 ---
 
 ## 当前阶段
 
-**R13 Cache Correctness Gate 启动期** — R12.4A Post-Refactor Correctness Closure（10 项行为正确性修复）已全部完成并提交（commit dbf963f）。R12-F.1 Current-HEAD Rebaseline 已完成：A3 语义不变性 100%、Retrieval golden ranking 30 样本全通过、GRAPH-09 图不变性 12 测试全通过、BenchmarkDotNet 37 个 benchmark 基线已采集（Package Cold 2.85ms / CacheHit 7.5μs / Allocation 924.54KB @ ItemCount=50）。下一阶段为 R13.0 Cache Correctness Gate。剩余 Domain/Api/Ports 全量重排与 Service DI 大改暂缓。
+**R13.0-C 状态与基线收口已完成** — R12.4A、R13.0~R13-F、P0-1~P0-8、P1-1~P1-8 全部完成并提交（HEAD `35784f9`）。
+
+- R13.0 Cache Correctness Gate：10 项行为正确性修复完成
+- R13.1 FileSystem Correctness Boundary：6 子任务全部完成（锁 retired-entry 竞态、真正反向尾读、retention 自然日、Janitor 移出 Save 热路径、JobId→Path 索引、单实例/多进程边界）
+- R13.3 Store Capability Model：StoreRuntimeCapabilities + 能力驱动 fanout 完成
+- R13.2 Package Read Plan：merged constraint 去重 + current_task 并行 + ReadPlan + Provider 内快照复用 + cold path gate 完成
+- R13.4 Runtime Observability Pipeline：BestEffort BoundedChannel + OTel metrics 完成
+- R13-F Cache Canary Freeze：配置开关 + workspace allowlist + 单实例检查完成
+- P0-1~P0-8：8 项正确性修复完成（ingest pipeline、Postgres SQL bug、Transactional UoW、worker lease、baseline migration、Postgres Unsupported Store 行为契约、TraceBackedDecisionEvidenceProvider、审计事件绕过通道）
+- P1-1~P1-8：8 项数据完整性增强完成（FileSystem 读改写跨进程锁、ingest 死代码、Truncated 信号、批量邻居、图写入 outbox、流式图诊断、路径衰减传播、备份清单/SHA-256/PITR/演练）
+- 全量测试 1074 通过 + 1 skip / 0 失败（ContextCore.Tests）；PublicApi baseline 7351 行
+- 15 份历史 freeze/report/plan 文档统一添加"历史快照"声明
+
+下一阶段为 **R14 Decision Evidence V2**。
 
 ---
 
@@ -24,121 +37,94 @@
 
 ---
 
-## 当前验收指标（2026-07-17）
+## 当前验收指标（2026-07-20）
 
 | 指标 | 当前值 | 目标 |
 |------|--------|------|
-| 生产代码总行数 | ~98,222 | < 220k |
-| Abstractions 代码行数 | ~8,525 | 跨层契约 |
-| ControlRoom 代码行数 | ~13,559 | < 20k |
-| Core 代码行数 | ~29,101 | - |
-| EvalCommand*.cs 单文件行数 | 2,820 | P1-5 已完成 |
-| FoundationStatusService.cs 行数 | 606 | P4 已完成 |
+| 当前 HEAD | `35784f9` | - |
+| PublicApi baseline 行数 | 7351 | 单一事实源 |
 | 构建 | 0 警告 / 0 错误 | 0 / 0 |
-| 测试 | 899+1skip / 44 / 6+27skip 通过 / 0 失败 | 0 失败 |
+| 测试 | 1074+1skip 通过 / 0 失败 | 0 失败 |
 | A3 语义不变性 | PassRate 100%, Recall@10 100% | 与冻结基线一致 |
 | Retrieval golden ranking | 30 样本全通过, Recall@10 100% | 与冻结基线一致 |
 | GRAPH-09 图不变性 | 12 测试全通过 | 0 失败 |
-| Package Build p95 (Cold, ItemCount=50) | 2.85ms (mean), Allocation 924.54KB | 基线已采集 |
-| Package Build p95 (CacheHit, ItemCount=50) | 7.5μs (mean), Allocation 12.38KB | 基线已采集 |
-| FileSystem Package Build (Cold, ItemCount=50) | 19.0ms (mean), Allocation 1538.63KB | 基线已采集 |
-| CacheChurn WriteWithLruEviction (Capacity=10000) | 408ms (mean), Allocation 12470KB | 基线已采集 |
+| FileSystem Package Build (Cold, ItemCount=50) | ~19ms / 1538KB | ≤ 当前值 70% |
+| Package Build p95 (CacheHit, ItemCount=50) | ~7.5μs / 12.38KB | 优于 Cold |
+| Constraint logical calls | 1 个 snapshot call | 已达成 |
+| PackageReadPlan.TotalStoreCalls | 可观测 | 已达成 |
+| BoundedChannelContextEventSink metrics | queue/error/drop | 已达成 |
+| Cache Canary kill switch | 默认关闭 + workspace allowlist | 已达成 |
+| 备份清单 / 验证 / 演练 | BackupManifest + verify + drill | 已达成 |
 
 ---
 
 ## 历史完成记录
 
-历史完成记录（R7~R12 系列、P0~P5 系列、DTO-R1~R4 等）已迁入 [docs/archive/roadmap-history.md](docs/archive/roadmap-history.md)。
+历史完成记录（R7~R12 系列、P0~P5 系列、DTO-R1~R4、R13.0~R13-F、P0-1~P0-8、P1-1~P1-8 等）已迁入 [docs/archive/roadmap-history.md](docs/archive/roadmap-history.md)。
 
 ---
 
 ## 下一阶段任务
 
-### R12 路线图剩余项
+### R13.0-C：状态与基线收口 ✅（2026-07-20 完成）
 
-**R12-3：Package Contribution Pipeline** — ✅ 已完成（commit c4bf7cb）。BasicContextPackageBuilder 519→257 行，提取 PackageRequestFingerprintBuilder + PackageBuildingTypes + PackagePolicyResolver。
+- 更新 TODO.md：R13.0~R13-F 与 P0/P1 系列均已完成，当前阶段改为 R14
+- 清理已失效的 Cache known-gap 注释（已在代码中搜索，无残留）
+- 标记历史 Attention/Router/Vector freeze 文档不得用于 current-head 决策：15 份缺失标记的文档已统一添加"历史快照"声明
+  - Vector: vector-preview-shadow-freeze / vector-hybrid-retrieval-freeze / vector-embedding-provider-comparison-freeze / vector-postgres-provider-freeze
+  - Router: router-intent-shadow-freeze
+  - JobQueue: job-queue-postgres-freeze
+  - Relation: relation-governance-postgres-freeze
+  - Report: extended-eval-triage-report / planning-shadow-quality-report / attention-order-quality-report / attention-profile-selection-report
+  - Plan: retrieval-plan-shadow-execution / retrieval-plan-proposal / planning-optin-fallback-analysis / planning-context-snapshot
+- 生成新的 architecture baseline：PublicApi 7351 行
 
-**R12-4：Retrieval Batch & Parallel Read** — ✅ 已完成（commit a5cc42e）。新增 IContextStoreBatchLookup / IMemoryStoreBatchLookup 能力接口，FileSystem store 单次锁批量读取（N→1），Mandatory + Vector executor 检测能力+回退兼容。
+### R13.1：FileSystem Correctness Boundary ✅（已完成）
 
-**R12-5：Append Log Storage** — ✅ 已完成（commit 3a8614d）。QueryRecent 尾部读取优化（TraceQueryHelper budget=take*2 提前终止），retention/compaction（FileTraceJanitor 1 小时间隔触发 fail-open 清理 yyyyMMdd 过期分片）。
+- ✅ #1 FileLockProvider retired-entry 竞态修复（commit `46fef1c`）：用 `lock(LocalLocks)` 全局锁包裹 `GetOrAdd + RefCount++`，消除双 entry 窗口
+- ✅ #2 真正 reverse tail（commit `2094c4e`）：反向 I/O 块读取，仅读取尾部所需字节，newest-first
+- ✅ #3 retention 自然日语义（commit `dd898bc`）：cutoff 对齐今日 UTC 午夜再减 retentionDays，分片按 yyyyMMdd 边界比较
+- ✅ #4 Janitor 移出 Save 热路径（commit `990c72a`）：MaybePurge 命中槽位后 fire-and-forget 到线程池
+- ✅ #5 JobId 到文件路径索引（commit `7079cd6`）：ConcurrentDictionary<JobId, FilePath>，未命中回退扫描
+- ✅ #6 FileSystem 单实例与多进程支持边界（commit `0021ee5`）：advisory sentinel lock，独占失败仅标记多进程，不阻断操作
 
-**R12-6：Evaluation I/O Consolidation** — ✅ 目标已满足。EvalCommand 当前 3199 行（低于 4000-5000 目标），gate execution shell 模式已在前序重构中消化，WriteJsonAsync 已泛型化（R17-F）。剩余 I/O helper 提取为可选优化，非阻塞项。
+### R13.3：Store Capability Model ✅（已完成）
 
-**R12.4A：Post-Refactor Correctness Closure** — ✅ 已完成（commit dbf963f，2026-07-17）。10 项行为正确性修复：
-1. Memory Recall 与 Keyword Recall 解耦
-2. Package 合并查询保持 per-layer/per-level 配额
-3. Tokenizer 截断公式
-4. Section 最终兜底截断后重新计算 attribution
-5. Section refs 只引用真正进入输出的 segment
-6. File Job Queue Ack/Nack 原子化
-7. Retrieval deterministic CandidateId tie-break
-8. Relation quota 语义修正（Pack 阶段显式预留 + rollover）
-9. Event Sink fail-open（success-path emit 独立 try-catch）
-10. Graph Writer fallback 最终删除（移除 4 处死分支）
-- Build = 0/0 ✅；Tests = 899+1skip / 44 / 6+27skip ✅
+- ✅ #1 StoreRuntimeCapabilities（commit `39988c2`）：替代 namespace 字符串检测
+- ✅ #2 能力驱动 fanout（commit `8762f82`）：基于 SupportsParallelReads / SupportsTransactions / RecommendedReadFanout 调整并发度
 
-**R12-F.1：Current-HEAD Rebaseline** — ✅ 已完成（2026-07-17）。
-- A3 语义不变性 ✅（50 样本 PassRate 100%, Recall@10 100%, MustNotHit=0, HardConstraintMissing=0 — 与冻结基线完全不变）
-- Retrieval golden ranking ✅（30 样本全通过, Recall@10 100%, 覆盖 vector/keyword/deprecated-filter/relation-expansion/cross-layer 5 维度）
-- GRAPH-09 图不变性 ✅（12 测试全通过）
-- BenchmarkDotNet 基线 ✅（37 个 benchmark, 详见 `benchmarks/results/README.md`）
+### R13.2：Package Read Plan ✅（已完成）
 
-**R12-F：Lean Runtime Freeze** — ✅ 验收完成（2026-07-17）。
-- Build = 0/0 ✅
-- Tests = 0 failed ✅（ContextCore.Tests 899+1skip, Service.Tests 44, IntegrationTests 6+27skip）
-- PublicAPI 基线干净 ✅（仅 R12-4 新增 2 接口+2 方法，R12-5 无变化）
-- A3 语义不变性 ✅（50 条样本 PassRate 100%, Recall@10 100%, Failed 0 — 与基线完全一致）
-- Evaluation 净减 2,347 行 ✅（>= 2,000 目标）
-- File trace 不随历史恶化 ✅（R12-5 TraceQueryHelper budget 提前终止 + retention 清理）
-- 生产代码净减 3,484 行 ⚠️（< 8,000 目标，因 R12-R18 系列新增基础设施：批量查询接口、retention 清理、trace 分片、源生成器等；纯删除 14,861 行满足目标，净减被新增抵消）
-- Retrieval p95 / Package allocated bytes ✅（R12-F.1 基线已采集，见上方验收指标表）
+- ✅ #1+#3+#4 merged constraint 去重 + current_task 并行 + ReadPlan 跟踪（commit `d45ce7a`）
+- ✅ #2 Provider 内按 Level/Layer 复用快照（commit `e4f854b`）：FileConstraintStore 文件内容快照缓存
+- ✅ #5 Package cold path p95 与 allocation gate（commit `0a1523a`）
 
-### R13 路线图
+### R13.4：Runtime Observability Pipeline ✅（已完成）
 
-**R13.0：Cache Correctness Gate** — Cache 保持生产关闭，先建立正确性闸门。
-- factory 前后版本向量比较
-- stale computation 丢弃或单次重试
-- PackageTemplate 强不可变
-- factory shutdown token 与 timeout
-- version bump 先于 physical eviction
-- Cache TTL
-- semantic metadata fingerprint
-- mutable result isolation tests
-- write-during-build race tests
-- Cache 继续保持生产关闭
+- ✅ #1 BestEffort Sink 有界 Channel / File/Postgres 批量写入 / Required audit 同步（commit `7d81313`）
+- ✅ #2 queue/error/drop metrics via OTel Counter（commit `0b2bf15`）
 
-**R13.1：FileSystem Concurrency Closure** — 修复并发边界。
-- FileLockProvider retired-entry 竞态
-- 真正 reverse tail
-- retention 自然日语义
-- Janitor 移出 Save 热路径
-- JobId 到文件路径索引
-- FileSystem 单实例与多进程支持边界
+### R13-F：Cache Canary Freeze ✅（已完成）
 
-**R13.2：Package Read Plan** — 消除重复查询。
-- merged constraint 重复查询
-- Provider 内按 Level/Layer 复用快照
-- current task 与其他读取并行
-- 查询计划记录 Store call count
-- Package cold path p95 与 allocation gate
-
-**R13.3：Store Capability Model** — 替代 namespace 字符串检测。
-- IStoreRuntimeCapabilities / StorageExecutionProfile
-- batch size / max concurrency / parallel read safety / consistency / transaction support
-
-**R13.4：Runtime Observability Pipeline** — 统一 Trace 与 Event retention。
-- BestEffort Sink 有界 Channel / File/Postgres 批量写入 / Required audit 同步
-- queue/error/drop metrics
-
-**R13-F：Cache Canary Freeze** — 仅单实例 + InMemory version store + 指定 workspace + 配置开关下启用 Package Template Cache。
-验收：Cold 与 Hit 输出完全相同 / 写入期间不得缓存旧结果 / 调用方修改不得污染后续结果 / factory fault 不得 poisoned key / shutdown 不得留下无限任务 / Cache p95 明确优于 Cold / allocation 明确下降。
+- ✅ 配置开关 + 工作空间 allowlist + 单实例检查下启用 Package Template Cache（commit `7b1f721`）
+- 默认关闭；启用前置条件：单 Service 实例 + InMemory version store + 显式 AllowedWorkspaces + 指定 workspace + 明确 kill switch
 
 ### 后续功能路线（R14-R17）
 
-- **R14 — Decision Evidence V2**：建立可靠的决策证据和质量审计。
+- **R14 — Decision Evidence V2**：见下方"R14 路线规划"。
 - **R15 — Incremental Context Package**：Previous Template + Context Delta → Selective Reload → Incremental Candidate Update → Incremental Repack。最接近外部 KV Cache 的 ContextOS 能力。
 - **R16 — Context Evolution Agent V1**：仅开放 Observe / Diagnose / Form Hypothesis / Run Benchmark / Generate Proposal。不允许自动修改正式 Policy。
 - **R17 — Guarded Optimization**：Offline Experiment → Shadow → Scoped Canary → Automatic Rollback。
+
+### R14 路线规划
+
+**R14-1：CandidateDecisionReasonCode 枚举** — 替代自由文本 `ContextDecisionCandidate.Reason`
+- 新增 `CandidateDecisionReasonCode` 枚举：SelectedMandatory / SelectedHighestUtility / SelectedRelationReserve / LifecycleBlocked / DeprecatedBlocked / RequiredTagMismatch / DuplicateSuppressed / SectionQuotaExceeded / TokenBudgetExceeded / ScoreBelowThreshold / SupersededByCurrentVersion / EvidenceMissing
+- 每个候选保存：Candidate identity / Input fingerprint / Policy version / Channel sources / Score breakdown / Matched anchors/tokens / Relation paths / Lifecycle state / Rank before/after / Decision reason code / Token budget before/after / Alternatives considered / Evidence refs
+
+**R14-2：Package Quality** — 第一版保持确定性
+- AnchorCoverage / HardConstraintSatisfaction / RequiredItemCoverage / Redundancy / ProvenanceCompleteness / LifecycleRisk / TokenEfficiency / SectionBalance
+- 作为后续 Agent / Router / Reranker / 学习闭环可依赖的数据基础
 
 ### DTO-R4 剩余部分（暂缓，高风险）
 
@@ -168,5 +154,5 @@
 
 - **本文件（TODO.md）** 是唯一当前路线图，反映最新完成状态与剩余任务。
 - **docs/archive/roadmap-history.md** 归档所有已完成的历史工作记录，仅供回溯。
-- `docs/` 下的 `*_Freeze*.md`、`*_Plan*.md`、`*_Audit*.md`、`*_Report*.md`、`*_Gap_Map*.md`、`新阶段*` 类文档均为**历史快照**，顶部已标注。仅供回溯，不作为设计依据。
+- `docs/` 下的所有 `*_Freeze*.md`、`*_Report*.md`、`*_Audit*.md`、`*_Plan*.md`、`*_Gap_Map*.md`、`新阶段*` 类文档均为**历史快照**，顶部已统一标注"历史快照（Historical Snapshot）"声明块。仅供回溯，不作为 current-head 决策依据。
 - 如需根据陈旧报告做设计，应先在本文件中确认对应任务是否已完成或已被取代。

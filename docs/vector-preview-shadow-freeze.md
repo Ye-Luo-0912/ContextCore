@@ -1,5 +1,9 @@
 # Vector Preview / Shadow Freeze
 
+> 历史快照（Historical Snapshot）— Vector Foundation 阶段 preview/shadow 冻结报告。
+> 文中冻结的 preview / shadow / eval 结论反映冻结时点状态，已被后续 vector provider / hybrid retrieval 决策取代。
+> 当前路线图请见根目录 `TODO.md`。本文档仅供回溯，不作为 current-head 决策依据。
+
 更新时间：2026-06-11
 
 ## 结论

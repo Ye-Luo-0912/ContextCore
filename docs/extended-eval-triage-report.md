@@ -1,5 +1,9 @@
 # Extended Eval Triage Report
 
+> 历史快照（Historical Snapshot）— Extended Eval Triage 阶段报告。
+> 文中 triage 结论反映冻结时点状态，已被后续 eval 基线重测与 P0~P1 系列修复取代。
+> 当前路线图请见根目录 `TODO.md`。本文档仅供回溯，不作为 current-head 决策依据。
+
 更新时间：2026-06-05
 
 ## 范围

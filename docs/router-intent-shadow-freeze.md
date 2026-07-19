@@ -1,5 +1,9 @@
 # Router Intent Shadow Freeze
 
+> 历史快照（Historical Snapshot）— Router Intent Shadow 阶段冻结报告。
+> 文中冻结的 R1-R2.1 shadow 结论与 R3 guarded opt-in 阻断状态反映冻结时点状态，不替换 runtime router。
+> 当前路线图请见根目录 `TODO.md`。本文档仅供回溯，不作为 current-head 决策依据。
+
 本文冻结 Learning Loop R1 - R2.1 的 router intent shadow 结论，并定义 R3 guarded opt-in 的阻断状态。该冻结不替换 runtime router，不改变 retrieval、planning、PackingPolicy 或 package output。
 
 ## Frozen Results

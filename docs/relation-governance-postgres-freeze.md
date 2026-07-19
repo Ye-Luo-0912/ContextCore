@@ -1,5 +1,9 @@
 # Relation Governance Postgres Freeze
 
+> 历史快照（Historical Snapshot）— Relation Governance Postgres Provider 阶段冻结报告。
+> 文中冻结的 provider rollout 结论反映冻结时点状态，已被后续 P0-2 / P0-3 / P1-7 关系治理演进取代。
+> 当前路线图请见根目录 `TODO.md`。本文档仅供回溯，不作为 current-head 决策依据。
+
 Generated: 2026-06-13
 
 ## Scope

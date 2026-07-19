@@ -1,5 +1,9 @@
 # Attention Order Quality Report
 
+> 历史快照（Historical Snapshot）— Guarded Attention Rerank Phase 5-6 阶段报告。
+> 文中 attention 顺序质量结论反映冻结时点 guarded 状态，已被后续 R10-1 RetrievalPolicyProfiles 改造取代。
+> 当前路线图请见根目录 `TODO.md`。本文档仅供回溯，不作为 current-head 决策依据。
+
 Generated: 2026-06-04
 
 ## Scope
