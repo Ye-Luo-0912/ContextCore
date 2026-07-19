@@ -51,11 +51,17 @@ builder.Services.AddSingleton(embeddingProviderOptions);
 builder.Services.AddSingleton(Microsoft.Extensions.Options.Options.Create(embeddingProviderOptions));
 builder.Services.Configure<JobWorkerOptions>(builder.Configuration.GetSection("JobWorker"));
 builder.Services.Configure<ShortTermMaintenanceOptions>(builder.Configuration.GetSection("ShortTermMaintenance"));
+// P1-5：RelationReconciliation worker 配置。默认 Enabled=false；启用前需确认 Storage:Provider=postgres
+// （IRelationOutboxStore 仅 Postgres provider 注册；其他 provider 时 worker 启动后即退出 no-op）。
+builder.Services.Configure<RelationReconciliationOptions>(builder.Configuration.GetSection("RelationReconciliation"));
 // R13-F：Package Template Cache Canary 配置。默认关闭（Enabled=false）；
 // 启用时仅缓存 AllowedWorkspaces 列出的工作空间，并通过 ContextStateCacheAccessor.canaryGate 控制按工作空间粒度缓存。
 builder.Services.Configure<PackageTemplateCacheOptions>(builder.Configuration.GetSection("PackageTemplateCache"));
 builder.Services.AddHostedService<ContextJobWorker>();
 builder.Services.AddHostedService<ShortTermMemoryMaintenanceWorker>();
+// P1-5：RelationReconciliation worker。默认 Enabled=false；启用时周期性调度 outbox pending 记录。
+// FileSystem/InMemory provider 时 worker 内部检测 IRelationOutboxStore=null 后立即退出（no-op）。
+builder.Services.AddHostedService<RelationReconciliationWorker>();
 builder.Services.AddSingleton<ContextCoreMetrics>();
 builder.Services.AddRequestTimeouts(options =>
 {

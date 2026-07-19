@@ -608,6 +608,12 @@ F:ContextCore.Abstractions.Models.VectorQueryTargetSections.WorkingContext
 F:ContextCore.Abstractions.RelationDirection.Both
 F:ContextCore.Abstractions.RelationDirection.Incoming
 F:ContextCore.Abstractions.RelationDirection.Outgoing
+F:ContextCore.Abstractions.RelationOutboxOperationKind.Delete
+F:ContextCore.Abstractions.RelationOutboxOperationKind.Upsert
+F:ContextCore.Abstractions.RelationOutboxStates.Applied
+F:ContextCore.Abstractions.RelationOutboxStates.Dispatched
+F:ContextCore.Abstractions.RelationOutboxStates.Failed
+F:ContextCore.Abstractions.RelationOutboxStates.Pending
 F:ContextCore.Abstractions.StorageProviderKind.FileSystem
 F:ContextCore.Abstractions.StorageProviderKind.InMemory
 F:ContextCore.Abstractions.StorageProviderKind.Postgres
@@ -788,6 +794,14 @@ M:ContextCore.Abstractions.IPromotionRecordStore.QueryPromotionRecordsAsync(Syst
 M:ContextCore.Abstractions.IPromotionRecordStore.SavePromotionRecordAsync(ContextCore.Abstractions.Models.ContextPromotionRecord, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IRelationBackfillPolicy.CanBackfillDeterministicEvidence(ContextCore.Abstractions.Models.ContextRelation)
 M:ContextCore.Abstractions.IRelationBackfillPolicy.NormalizeAndBackfillFixtureRelation(ContextCore.Abstractions.Models.ContextRelation, System.String)
+M:ContextCore.Abstractions.IRelationOutboxStore.AcquirePendingAsync(System.Int32, System.String, System.TimeSpan, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IRelationOutboxStore.CountByStateAsync(System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IRelationOutboxStore.CountStaleLeasesAsync(System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IRelationOutboxStore.EnqueueAsync(ContextCore.Abstractions.RelationOutboxRecord, ContextCore.Abstractions.IWriteTransactionScope, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IRelationOutboxStore.EnqueueBatchAsync(System.Collections.Generic.IReadOnlyList<ContextCore.Abstractions.RelationOutboxRecord>, ContextCore.Abstractions.IWriteTransactionScope, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IRelationOutboxStore.MarkAppliedAsync(System.String, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IRelationOutboxStore.MarkFailedAsync(System.String, System.String, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IRelationOutboxStore.RenewHeartbeatAsync(System.String, System.String, System.TimeSpan, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IRelationProjectionWriter.WriteAsync(System.Collections.Generic.IReadOnlyList<ContextCore.Abstractions.Models.ContextRelation>, System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IRelationProjector.ProjectForCompression(ContextCore.Abstractions.Models.CompressionResponse)
 M:ContextCore.Abstractions.IRelationProjector.ProjectForIngest(ContextCore.Abstractions.Models.ContextItem)
@@ -2893,6 +2907,15 @@ M:ContextCore.Abstractions.PathHygieneScanReport.Equals(System.Object)
 M:ContextCore.Abstractions.PathHygieneScanReport.GetHashCode()
 M:ContextCore.Abstractions.PathHygieneScanReport.GetType()
 M:ContextCore.Abstractions.PathHygieneScanReport.ToString()
+M:ContextCore.Abstractions.RelationOutboxRecord.#ctor()
+M:ContextCore.Abstractions.RelationOutboxRecord.Equals(System.Object)
+M:ContextCore.Abstractions.RelationOutboxRecord.GetHashCode()
+M:ContextCore.Abstractions.RelationOutboxRecord.GetType()
+M:ContextCore.Abstractions.RelationOutboxRecord.ToString()
+M:ContextCore.Abstractions.RelationOutboxStates.Equals(System.Object)
+M:ContextCore.Abstractions.RelationOutboxStates.GetHashCode()
+M:ContextCore.Abstractions.RelationOutboxStates.GetType()
+M:ContextCore.Abstractions.RelationOutboxStates.ToString()
 M:ContextCore.Abstractions.RetrievalAdapterRequest.#ctor()
 M:ContextCore.Abstractions.RetrievalAdapterRequest.Equals(System.Object)
 M:ContextCore.Abstractions.RetrievalAdapterRequest.GetHashCode()
@@ -6667,6 +6690,24 @@ P:ContextCore.Abstractions.PathHygieneScanReport.Recommendation (get)
 P:ContextCore.Abstractions.PathHygieneScanReport.RemediationHints (get|init)
 P:ContextCore.Abstractions.PathHygieneScanReport.ScanRoot (get|init)
 P:ContextCore.Abstractions.PathHygieneScanReport.TotalFiles (get|init)
+P:ContextCore.Abstractions.RelationOutboxRecord.AppliedAt (get|init)
+P:ContextCore.Abstractions.RelationOutboxRecord.CollectionId (get|init)
+P:ContextCore.Abstractions.RelationOutboxRecord.CreatedAt (get|init)
+P:ContextCore.Abstractions.RelationOutboxRecord.DispatchedAt (get|init)
+P:ContextCore.Abstractions.RelationOutboxRecord.LastErrorMessage (get|init)
+P:ContextCore.Abstractions.RelationOutboxRecord.LastHeartbeatAt (get|init)
+P:ContextCore.Abstractions.RelationOutboxRecord.LeaseExpiresAt (get|init)
+P:ContextCore.Abstractions.RelationOutboxRecord.LeaseOwner (get|init)
+P:ContextCore.Abstractions.RelationOutboxRecord.MaxRetryCount (get|init)
+P:ContextCore.Abstractions.RelationOutboxRecord.OperationKind (get|init)
+P:ContextCore.Abstractions.RelationOutboxRecord.OutboxId (get|init)
+P:ContextCore.Abstractions.RelationOutboxRecord.Payload (get|init)
+P:ContextCore.Abstractions.RelationOutboxRecord.Provenance (get|init)
+P:ContextCore.Abstractions.RelationOutboxRecord.RelationId (get|init)
+P:ContextCore.Abstractions.RelationOutboxRecord.RetryCount (get|init)
+P:ContextCore.Abstractions.RelationOutboxRecord.State (get|init)
+P:ContextCore.Abstractions.RelationOutboxRecord.UpdatedAt (get|init)
+P:ContextCore.Abstractions.RelationOutboxRecord.WorkspaceId (get|init)
 P:ContextCore.Abstractions.RetrievalAdapterRequest.BaselineCandidateIds (get|init)
 P:ContextCore.Abstractions.RetrievalAdapterRequest.CollectionId (get|init)
 P:ContextCore.Abstractions.RetrievalAdapterRequest.OperationId (get|init)
@@ -6762,6 +6803,7 @@ T:ContextCore.Abstractions.IPromotionCandidateStore (Interface)
 T:ContextCore.Abstractions.IPromotionPolicyEvaluator (Interface)
 T:ContextCore.Abstractions.IPromotionRecordStore (Interface)
 T:ContextCore.Abstractions.IRelationBackfillPolicy (Interface)
+T:ContextCore.Abstractions.IRelationOutboxStore (Interface)
 T:ContextCore.Abstractions.IRelationProjectionWriter (Interface)
 T:ContextCore.Abstractions.IRelationProjector (Interface)
 T:ContextCore.Abstractions.IRelationReviewStore (Interface)
@@ -7226,6 +7268,9 @@ T:ContextCore.Abstractions.PathHygieneGateReport
 T:ContextCore.Abstractions.PathHygieneScanEntry
 T:ContextCore.Abstractions.PathHygieneScanReport
 T:ContextCore.Abstractions.RelationDirection (Enum)
+T:ContextCore.Abstractions.RelationOutboxOperationKind (Enum)
+T:ContextCore.Abstractions.RelationOutboxRecord
+T:ContextCore.Abstractions.RelationOutboxStates
 T:ContextCore.Abstractions.RetrievalAdapterRequest
 T:ContextCore.Abstractions.RetrievalAdapterResult
 T:ContextCore.Abstractions.StateCacheKey (Struct)

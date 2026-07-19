@@ -57,6 +57,11 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<PostgresRelationReviewStore>();
         services.AddSingleton<IRelationReviewStore>(sp => sp.GetRequiredService<PostgresRelationReviewStore>());
         services.AddSingleton<PostgresRelationDiagnosticsStore>();
+        // P1-5：关系写入 outbox 存储。仅 Postgres provider 注册——
+        // FileSystem/InMemory 不注册，OutboxAwareRelationProjectionWriter 与 RelationReconciliationWorker
+        // 检测到 null 时回退到无 outbox 路径（仅走 stale-edge 周期扫描）。
+        services.AddSingleton<PostgresRelationOutboxStore>();
+        services.AddSingleton<IRelationOutboxStore>(sp => sp.GetRequiredService<PostgresRelationOutboxStore>());
 
         // Learning feedback provider 仅注册 concrete 类型；默认运行时仍由 FileSystem provider 作为 source of truth。
         services.AddSingleton<PostgresLearningFeedbackStore>();

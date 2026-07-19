@@ -13,8 +13,9 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
     /// <summary>
     /// 当前 schema 版本标识符。每次修改 DDL（新增表/列/索引）时需递增此版本。
     /// 格式：<c>cc-schema-vN</c>，N 为单调递增整数。
+    /// P1-5：v7 → v8，新增 relation_outbox 表与索引。
     /// </summary>
-    public const string SchemaVersion = "cc-schema-v7";
+    public const string SchemaVersion = "cc-schema-v8";
 
     public const string BaselineMigrationId = "0001_operational_store_baseline";
 
@@ -31,6 +32,7 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         "relations",
         "relation_reviews",
         "relation_diagnostics",
+        "relation_outbox",
         "constraints_active",
         "constraints_candidate",
         "constraint_gaps",
@@ -88,6 +90,9 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         ("relation_diagnostics", "item"),
         ("relation_diagnostics", "kind"),
         ("relation_diagnostics", "severity"),
+        ("relation_outbox", "state"),
+        ("relation_outbox", "lease"),
+        ("relation_outbox", "relation"),
         ("constraints_active", "scope"),
         ("constraints_candidate", "status"),
         ("constraint_gaps", "status"),
@@ -141,6 +146,7 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         var memoryReviews = Infrastructure.PostgresNames.Table(options, "memory_reviews");
         var relationReviews = Infrastructure.PostgresNames.Table(options, "relation_reviews");
         var relationDiagnostics = Infrastructure.PostgresNames.Table(options, "relation_diagnostics");
+        var relationOutbox = Infrastructure.PostgresNames.Table(options, "relation_outbox");
         var constraintsActive = Infrastructure.PostgresNames.Table(options, "constraints_active");
         var constraintsCandidate = Infrastructure.PostgresNames.Table(options, "constraints_candidate");
         var constraintGaps = Infrastructure.PostgresNames.Table(options, "constraint_gaps");
@@ -559,6 +565,34 @@ CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "relatio
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "relation_diagnostics", "item")} ON {relationDiagnostics} (workspace_id, collection_id, item_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "relation_diagnostics", "kind")} ON {relationDiagnostics} (workspace_id, collection_id, diagnostic_kind, created_at DESC);
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "relation_diagnostics", "severity")} ON {relationDiagnostics} (workspace_id, collection_id, severity, created_at DESC);
+
+-- P1-5：关系写入 outbox 表。表结构与 context_jobs 对齐（lease/retry/state + relation payload）。
+CREATE TABLE IF NOT EXISTS {relationOutbox} (
+    outbox_id text NOT NULL,
+    workspace_id text NOT NULL,
+    collection_id text NOT NULL,
+    relation_id text NOT NULL,
+    operation_kind text NOT NULL,
+    provenance text NOT NULL DEFAULT '',
+    payload jsonb NULL,
+    state text NOT NULL DEFAULT 'Pending',
+    retry_count integer NOT NULL DEFAULT 0,
+    max_retry_count integer NOT NULL DEFAULT 3,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    dispatched_at timestamptz NULL,
+    applied_at timestamptz NULL,
+    lease_owner text NULL,
+    lease_expires_at timestamptz NULL,
+    last_heartbeat_at timestamptz NULL,
+    last_error_message text NULL,
+    data jsonb NOT NULL DEFAULT jsonb_build_object(),
+    PRIMARY KEY (outbox_id)
+);
+
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "relation_outbox", "state")} ON {relationOutbox} (state, created_at ASC);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "relation_outbox", "lease")} ON {relationOutbox} (state, lease_expires_at);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "relation_outbox", "relation")} ON {relationOutbox} (workspace_id, collection_id, relation_id);
 
 CREATE TABLE IF NOT EXISTS {constraintsActive} (
     workspace_id text NOT NULL,

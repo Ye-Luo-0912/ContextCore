@@ -196,7 +196,20 @@ internal static class CoreExtensions
 		// 使用 Scoped 会产生 captive dependency。
 		services.AddSingleton<RelationTypeNormalizer>();
 		services.AddSingleton<RelationProjectorOutputValidator>();
-		services.AddSingleton<IRelationProjectionWriter, RelationProjectionWriter>();
+		// P1-5：注册 RelationProjectionWriter 具体类型作为 inner writer。
+		// IRelationProjectionWriter 通过工厂委托返回：当 IRelationOutboxStore 可用（Postgres provider）时
+		// 包装为 OutboxAwareRelationProjectionWriter；否则返回裸 RelationProjectionWriter。
+		// 两者均同时实现 IRelationProjectionWriter + ITransactionalRelationProjectionWriter，
+		// BasicContextIngestionService 通过 (ITransactionalRelationProjectionWriter)_projectionWriter 转型可正常工作。
+		services.AddSingleton<RelationProjectionWriter>();
+		services.AddSingleton<IRelationProjectionWriter>(sp =>
+		{
+			var inner = sp.GetRequiredService<RelationProjectionWriter>();
+			var outboxStore = sp.GetService<IRelationOutboxStore>();
+			return outboxStore is null
+				? inner
+				: new OutboxAwareRelationProjectionWriter(inner, outboxStore);
+		});
 		// P3-04：生产 Service 不注入 IRelationBackfillPolicy（eval 特判只在 ControlRoom 使用）。
 		// RelationGraphValidationService 接受 null，CanBackfillDeterministicEvidence 返回 false。
 		services.AddSingleton(sp => new RelationGraphValidationService(

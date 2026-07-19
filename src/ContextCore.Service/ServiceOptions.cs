@@ -117,6 +117,53 @@ public sealed class ShortTermMaintenanceOptions
 }
 
 /// <summary>
+/// P1-5：关系写入 outbox 调度与 reconciliation worker 的启停与周期配置。
+/// 仅当 Postgres provider 注册了 <see cref="ContextCore.Abstractions.IRelationOutboxStore"/> 时生效；
+/// FileSystem / InMemory 不注册 outbox store，worker 启动后直接退出（no-op）。
+/// </summary>
+/// <remarks>
+/// 默认关闭（<see cref="Enabled"/>=false）——需在 appsettings.json 显式启用。
+/// 启用前请确认：
+/// <list type="bullet">
+/// <item>Storage:Provider=postgres（否则 IRelationOutboxStore 未注册，worker 空跑）。</item>
+/// <item>已应用 schema v8 baseline（relation_outbox 表已创建）——AutoBootstrap=true 时自动完成。</item>
+/// </list>
+/// </remarks>
+public sealed class RelationReconciliationOptions
+{
+	/// <summary>是否启用 worker。默认 false——生产需显式启用。</summary>
+	public bool Enabled { get; set; }
+
+	/// <summary>是否在服务启动时立即执行一次 reconciliation，而非等待首个间隔。默认 false。</summary>
+	public bool RunOnStartup { get; set; }
+
+	/// <summary>worker 调度间隔（秒）。默认 300（5 分钟）——建议与 ShortTermMaintenanceOptions.IntervalSeconds 对齐。</summary>
+	public int IntervalSeconds { get; set; } = 300;
+
+	/// <summary>单次调度最多处理的 outbox 记录数。默认 100。</summary>
+	public int BatchSize { get; set; } = 100;
+
+	/// <summary>
+	/// Outbox 调度租约有效期。worker 从 AcquirePendingAsync 取出记录后须在此时间内完成 reconciliation
+	/// （通过 RenewHeartbeatAsync 续约或调用 MarkApplied/MarkFailed 释放）。
+	/// 默认 5 分钟——建议显著大于预期单批处理时长。
+	/// </summary>
+	public TimeSpan LeaseDuration { get; set; } = TimeSpan.FromMinutes(5);
+
+	/// <summary>
+	/// 心跳续约间隔。处理较长批次时 worker 周期性调用 RenewHeartbeatAsync 防止租约过期。
+	/// 默认 30 秒——必须显著小于 <see cref="LeaseDuration"/>。
+	/// </summary>
+	public TimeSpan HeartbeatInterval { get; set; } = TimeSpan.FromSeconds(30);
+
+	/// <summary>
+	/// worker 实例标识（用于 outbox 记录的 lease_owner 字段）。
+	/// 留空时使用主机名 + PID 自动生成。多实例场景建议显式配置以区分租约持有者。
+	/// </summary>
+	public string OwnerId { get; set; } = string.Empty;
+}
+
+/// <summary>
 /// R13-F：Package Template Cache Canary 配置。控制是否启用 Package Template 缓存的 canary 试点。
 /// 默认关闭（<see cref="Enabled"/>=false）；启用时仅缓存 <see cref="AllowedWorkspaces"/> 列出的工作空间。
 /// 启用前置条件：单实例（<see cref="RequireSingleInstance"/>）+ InMemory version store（生产已具备）。
