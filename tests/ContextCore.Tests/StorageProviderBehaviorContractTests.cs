@@ -5,6 +5,7 @@ using ContextCore.Service;
 using ContextCore.Service.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using System.Reflection;
 
 namespace ContextCore.Tests;
 
@@ -93,7 +94,7 @@ public sealed class StorageProviderBehaviorContractTests
         typeof(IContextJobQueryStore),
     };
 
-    // Postgres 原生注册的接口（不含 17 个 Unsupported 占位）
+    // Postgres 原生注册的接口（不含 16 个 Unsupported 占位）
     private static readonly Type[] PostgresNativeInterfaces = new[]
     {
         typeof(IContextStore),
@@ -226,6 +227,99 @@ public sealed class StorageProviderBehaviorContractTests
 
         Assert.ThrowsException<NotSupportedException>(() =>
             store.AppendRawEventAsync(new ShortTermRawEvent(), default).GetAwaiter().GetResult());
+    }
+
+    /// <summary>
+    /// P0-5：验证 Postgres provider 显式注册为 Unsupported 占位的全部 16 个 store 都会抛出 NotSupportedException。
+    /// 现有 <see cref="Postgres_UnsupportedStore_ThrowsNotSupportedExceptionOnUse"/> 仅验证 IShortTermMemoryStore；
+    /// 若源生成器对其中任何一个 store 退化为静默 no-op（例如生成空方法体），现有测试无法发现。
+    /// 本测试通过反射枚举每个 Unsupported store 的第一个公共方法并以默认参数调用，断言 NotSupportedException。
+    /// </summary>
+    [TestMethod]
+    public async Task Postgres_All16UnsupportedStores_ThrowNotSupportedException()
+    {
+        // 与 StorageProviderCapabilityMatrixTests.PostgresDeclaredUnsupported 保持一致（16 个接口）。
+        var unsupportedInterfaces = new[]
+        {
+            typeof(ILearningFeedbackStore),
+            typeof(ILearningFeedbackReviewStore),
+            typeof(IDecisionTraceStore),
+            typeof(IShortTermMemoryStore),
+            typeof(IShortTermPromotionCandidateStore),
+            typeof(ICandidateMemoryReviewStore),
+            typeof(IStableReviewCandidateStore),
+            typeof(IContextLearningStore),
+            typeof(IVectorReindexReportStore),
+            typeof(IVectorLifecycleMetadataReviewCandidateStore),
+            typeof(IVectorLifecycleMetadataReviewStore),
+            typeof(IVectorLifecycleSidecarMetadataStore),
+            typeof(IArtifactStore),
+            typeof(IStableLifecycleReviewStore),
+            typeof(ICandidateConstraintReviewStore),
+            typeof(IConstraintGapCandidateStore),
+        };
+
+        var services = new ServiceCollection();
+        services.AddLogging();
+        var options = new StorageOptions
+        {
+            Provider = "postgres",
+            PostgresConnectionString = "Host=localhost;Database=fake;Username=fake;Password=fake",
+        };
+        services.AddContextStorage(options);
+
+        await using var sp = services.BuildServiceProvider();
+        var failures = new List<string>();
+
+        foreach (var iface in unsupportedInterfaces)
+        {
+            var store = sp.GetService(iface);
+            Assert.IsNotNull(store, $"Postgres 未注册 Unsupported 占位接口: {iface.Name}");
+            Assert.IsTrue(IsUnsupportedPlaceholder(store),
+                $"Postgres 接口 {iface.Name} 应为 Unsupported 占位，实际类型: {store.GetType().Name}");
+
+            // 通过反射找到 store 实例上第一个公共方法（接口方法实现），构造默认参数调用。
+            // 源生成器为所有接口方法生成 throw UnsupportedStoreExceptionFactory.Create(...)，
+            // 任意方法被调用都应抛出 NotSupportedException。
+            // 跳过泛型方法（无法在不知道类型参数的情况下晚期绑定）与带 out 参数的方法。
+            var method = store.GetType().GetMethods(BindingFlags.Public | BindingFlags.Instance)
+                .FirstOrDefault(m => m.DeclaringType == store.GetType()
+                    && !m.IsSpecialName
+                    && !m.IsGenericMethod
+                    && m.GetParameters().All(p => !p.IsOut));
+            Assert.IsNotNull(method,
+                $"Postgres Unsupported 占位 {iface.Name} ({store.GetType().Name}) 未找到可调用的公共方法");
+
+            var args = method.GetParameters()
+                .Select(p => p.ParameterType.IsValueType ? Activator.CreateInstance(p.ParameterType) : null)
+                .ToArray();
+
+            try
+            {
+                // 同步等待异步方法结果（测试同步上下文）。
+                var result = method.Invoke(store, args);
+                if (result is Task task)
+                {
+                    task.GetAwaiter().GetResult();
+                }
+                failures.Add($"{iface.Name} ({store.GetType().Name}.{method.Name}) 未抛出 NotSupportedException");
+            }
+            catch (TargetInvocationException tie) when (tie.InnerException is NotSupportedException nse)
+            {
+                // 验证异常消息包含 provider 名称 'postgres'，确保 UnsupportedStoreExceptionFactory 正确归一化。
+                if (!nse.Message.Contains("postgres", StringComparison.Ordinal))
+                {
+                    failures.Add($"{iface.Name} ({store.GetType().Name}.{method.Name}) 抛出 NotSupportedException 但消息不含 'postgres': {nse.Message}");
+                }
+            }
+            catch (TargetInvocationException tie)
+            {
+                failures.Add($"{iface.Name} ({store.GetType().Name}.{method.Name}) 抛出非 NotSupportedException 异常: {tie.InnerException?.GetType().Name} - {tie.InnerException?.Message}");
+            }
+        }
+
+        Assert.AreEqual(0, failures.Count,
+            $"Postgres Unsupported 占位行为验证失败 ({failures.Count} 项):\n" + string.Join("\n", failures));
     }
 
     /// <summary>
