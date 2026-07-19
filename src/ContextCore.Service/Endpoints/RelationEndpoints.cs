@@ -84,49 +84,96 @@ internal static class RelationEndpoints
 		.Produces<ContextCoreErrorResponse>(StatusCodes.Status400BadRequest);
 
 		app.MapGet("/api/relations/diagnostics", async Task<IResult> (
-			string workspaceId,
-			string? collectionId,
-			RelationGraphValidationService service,
-			HttpContext httpContext,
-			CancellationToken ct) =>
+		string workspaceId,
+		string? collectionId,
+		RelationGraphValidationService service,
+		HttpContext httpContext,
+		CancellationToken ct) =>
+	{
+		try
 		{
-			try
-			{
-				var report = await service.ValidateAsync(workspaceId, collectionId, null, ct).ConfigureAwait(false);
-				return Results.Ok(report);
-			}
-			catch (Exception ex)
-			{
-				return ContextCoreHttpResultMapper.Error(httpContext, ex, string.Empty, "relations.diagnostics");
-			}
-		})
-		.WithTags("Relations")
-		.WithName("GetRelationDiagnostics")
-		.WithSummary("获取 relation graph 全局诊断")
-		.Produces<RelationGraphDiagnosticsReport>(StatusCodes.Status200OK);
+			var report = await service.ValidateAsync(workspaceId, collectionId, null, ct).ConfigureAwait(false);
+			return Results.Ok(report);
+		}
+		catch (Exception ex)
+		{
+			return ContextCoreHttpResultMapper.Error(httpContext, ex, string.Empty, "relations.diagnostics");
+		}
+	})
+	.WithTags("Relations")
+	.WithName("GetRelationDiagnostics")
+	.WithSummary("获取 relation graph 全局诊断")
+	.Produces<RelationGraphDiagnosticsReport>(StatusCodes.Status200OK);
 
-		app.MapGet("/api/relations/diagnostics/{itemId}", async Task<IResult> (
-			string itemId,
-			string workspaceId,
-			string? collectionId,
-			RelationGraphValidationService service,
-			HttpContext httpContext,
-			CancellationToken ct) =>
+	// P1-7：流式诊断端点（NDJSON）。必须注册在 {itemId} 参数路由之前，否则 "stream" 会被当成 itemId。
+	// 每行一个 RelationGraphDiagnostic JSON 对象，避免一次性将整张关系图载入内存。
+	app.MapGet("/api/relations/diagnostics/stream", async Task<IResult> (
+		string workspaceId,
+		string? collectionId,
+		RelationGraphValidationService service,
+		HttpContext httpContext,
+		CancellationToken ct) =>
+	{
+		if (string.IsNullOrWhiteSpace(workspaceId))
 		{
-			try
+			return ContextCoreHttpResultMapper.InvalidRequest(
+				httpContext,
+				string.Empty,
+				"relations.diagnostics.stream",
+				"workspaceId 为必填参数。",
+				field: "workspaceId");
+		}
+
+		httpContext.Response.ContentType = "application/x-ndjson; charset=utf-8";
+
+		try
+		{
+			await foreach (var diagnostic in service.ValidateStreamAsync(workspaceId, collectionId, null, ct)
+				.ConfigureAwait(false))
 			{
-				var report = await service.ValidateAsync(workspaceId, collectionId, itemId, ct).ConfigureAwait(false);
-				return Results.Ok(report);
+				var json = System.Text.Json.JsonSerializer.Serialize(diagnostic);
+				await httpContext.Response.WriteAsync(json + "\n", ct).ConfigureAwait(false);
+				await httpContext.Response.Body.FlushAsync(ct).ConfigureAwait(false);
 			}
-			catch (Exception ex)
-			{
-				return ContextCoreHttpResultMapper.Error(httpContext, ex, string.Empty, "relations.diagnostics.item");
-			}
-		})
-		.WithTags("Relations")
-		.WithName("GetItemRelationDiagnostics")
-		.WithSummary("获取指定 item 的 relation graph 诊断")
-		.Produces<RelationGraphDiagnosticsReport>(StatusCodes.Status200OK);
+			await httpContext.Response.CompleteAsync().ConfigureAwait(false);
+			return Results.Empty;
+		}
+		catch (OperationCanceledException) when (ct.IsCancellationRequested)
+		{
+			return Results.Empty;
+		}
+		catch (Exception ex)
+		{
+			return ContextCoreHttpResultMapper.Error(httpContext, ex, string.Empty, "relations.diagnostics.stream");
+		}
+	})
+	.WithTags("Relations")
+	.WithName("StreamRelationDiagnostics")
+	.WithSummary("流式获取 relation graph 诊断（NDJSON），避免全图载入内存")
+	.Produces(StatusCodes.Status200OK);
+
+	app.MapGet("/api/relations/diagnostics/{itemId}", async Task<IResult> (
+		string itemId,
+		string workspaceId,
+		string? collectionId,
+		RelationGraphValidationService service,
+		HttpContext httpContext,
+		CancellationToken ct) =>
+	{
+		try
+		{
+			var report = await service.ValidateAsync(workspaceId, collectionId, itemId, ct).ConfigureAwait(false);
+			return Results.Ok(report);
+		}
+		catch (Exception ex)
+		{
+			return ContextCoreHttpResultMapper.Error(httpContext, ex, string.Empty, "relations.diagnostics.item");
+		}
+	})
+	.WithTags("Relations")
+	.WithName("GetItemRelationDiagnostics")
+	.WithSummary("获取指定 item 的 relation graph 诊断")
+	.Produces<RelationGraphDiagnosticsReport>(StatusCodes.Status200OK);
 
 		app.MapGet("/api/relations/{relationId}/explain", async Task<IResult> (
 			string relationId,

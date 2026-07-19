@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Text;
 
 namespace ContextCore.Storage.FileSystem;
@@ -39,6 +40,38 @@ public sealed class FileSystemReader
         }
 
         return lines;
+    }
+
+    /// <summary>
+    /// P1-7：流式逐行读取 JSONL 文件，避免一次性将所有行载入 List。
+    /// 文件不存在时返回空枚举（不抛异常）。空白行在产出前跳过。
+    /// </summary>
+    public async IAsyncEnumerable<string> ReadLinesStreamAsync(
+        string path,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        if (!File.Exists(path))
+        {
+            yield break;
+        }
+
+        await using var stream = OpenReadStream(path);
+        using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var line = await reader.ReadLineAsync(cancellationToken).ConfigureAwait(false);
+            if (line is null)
+            {
+                break;
+            }
+
+            if (!string.IsNullOrWhiteSpace(line))
+            {
+                yield return line;
+            }
+        }
     }
 
     public async Task<string?> ReadAllTextAsync(

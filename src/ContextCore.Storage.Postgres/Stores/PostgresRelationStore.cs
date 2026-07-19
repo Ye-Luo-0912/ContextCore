@@ -4,11 +4,12 @@ using ContextCore.Storage.Shared;
 using ContextCore.Storage.Postgres.Infrastructure;
 using Npgsql;
 using NpgsqlTypes;
+using System.Runtime.CompilerServices;
 
 namespace ContextCore.Storage.Postgres.Stores;
 
 /// <summary>PostgreSQL 关系存储，使用结构化列加 jsonb 原文保存关系边。</summary>
-public sealed class PostgresRelationStore : PostgresStoreBase, IRelationStore, ITransactionalRelationStore
+public sealed class PostgresRelationStore : PostgresStoreBase, IRelationStore, ITransactionalRelationStore, IRelationStreamStore
 {
     public PostgresRelationStore(PostgresConnectionFactory connectionFactory, PostgresJsonSerializer serializer, PostgresMigrationRunner migrationRunner)
         : base(connectionFactory, serializer, migrationRunner)
@@ -772,5 +773,56 @@ ORDER BY weight DESC, confidence DESC, created_at DESC;
         }
 
         return results;
+    }
+
+    /// <summary>
+    /// P1-7：流式枚举关系，使用 NpgsqlDataReader.ReadAsync 逐行读取，避免一次性将全部结果缓冲到 List。
+    /// 不应用 LIMIT/OFFSET——返回完整候选集，由消费方按需裁剪。
+    /// 排序与 QueryAsync 一致（weight/confidence/createdAt desc）。
+    /// </summary>
+    public async IAsyncEnumerable<ContextRelation> StreamRelationsAsync(
+        string workspaceId,
+        string? collectionId = null,
+        string? itemId = null,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+
+        // 构造流式 SQL：与 ApplyQueryCommandText 一致的过滤条件，但不应用 LIMIT/OFFSET。
+        var filters = new List<string> { "workspace_id = @workspace_id" };
+        command.Parameters.AddWithValue("workspace_id", workspaceId);
+        if (!string.IsNullOrWhiteSpace(collectionId))
+        {
+            filters.Add("collection_id = @collection_id");
+            command.Parameters.AddWithValue("collection_id", collectionId);
+        }
+        if (!string.IsNullOrWhiteSpace(itemId))
+        {
+            filters.Add("(source_id = @item_id OR target_id = @item_id)");
+            command.Parameters.AddWithValue("item_id", itemId);
+        }
+
+        command.CommandText = $"""
+SELECT data
+FROM {Table("relations")}
+WHERE {string.Join(" AND ", filters)}
+ORDER BY weight DESC, confidence DESC, created_at DESC;
+""";
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            var json = reader.GetString(0);
+            var relation = Serializer.Deserialize<ContextRelation>(json);
+            if (relation is not null)
+            {
+                yield return relation;
+            }
+        }
     }
 }

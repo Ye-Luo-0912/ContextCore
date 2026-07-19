@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+
 namespace ContextCore.Storage.FileSystem;
 
 /// <summary>
@@ -39,6 +41,32 @@ public sealed class FileJsonLineStore
             .ConfigureAwait(false);
 
         return DeserializeLines<T>(lines);
+    }
+
+    /// <summary>
+    /// P1-7：流式逐行读取并反序列化 JSONL 文件，避免一次性将所有记录载入 List。
+    /// 文件不存在时返回空枚举；损坏行（反序列化失败）跳过且不产出。
+    /// </summary>
+    public async IAsyncEnumerable<T> StreamAsync<T>(
+        string path,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        await foreach (var line in _reader.ReadLinesStreamAsync(path, cancellationToken).ConfigureAwait(false))
+        {
+            T? item;
+            try
+            {
+                item = _serializer.Deserialize<T>(line);
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                continue;
+            }
+            if (item is not null)
+            {
+                yield return item;
+            }
+        }
     }
 
     /// <summary>

@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Runtime.CompilerServices;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Storage.Shared;
@@ -6,7 +7,7 @@ using ContextCore.Storage.Shared;
 namespace ContextCore.Storage.InMemory;
 
 /// <summary>基于内存的 <see cref="IRelationStore"/> 实现，适用于测试和短生命周期场景。</summary>
-public sealed class InMemoryRelationStore : IRelationStore
+public sealed class InMemoryRelationStore : IRelationStore, IRelationStreamStore
 {
     private readonly ConcurrentDictionary<string, ContextRelation> _relations = new();
 
@@ -305,5 +306,42 @@ public sealed class InMemoryRelationStore : IRelationStore
     private static string Key(string workspaceId, string collectionId, string id)
     {
         return $"{workspaceId}\u001f{collectionId}\u001f{id}";
+    }
+
+    /// <summary>
+    /// P1-7：流式枚举关系，避免一次性将全部关系载入 List。
+    /// 排序与 QueryAsync 一致（weight/confidence/createdAt desc），但不应用 Skip/Take。
+    /// </summary>
+    public async IAsyncEnumerable<ContextRelation> StreamRelationsAsync(
+        string workspaceId,
+        string? collectionId = null,
+        string? itemId = null,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        // 排序需要全量物化后才能稳定；InMemory 场景数据量小，先排序再 yield。
+        // 对真正大图请使用 Postgres provider 的流式实现（NpgsqlDataReader.ReadAsync）。
+        var sorted = _relations.Values
+            .Where(item => string.Equals(item.WorkspaceId, workspaceId, StringComparison.OrdinalIgnoreCase))
+            .Where(item => string.IsNullOrWhiteSpace(collectionId)
+                || string.Equals(item.CollectionId, collectionId, StringComparison.OrdinalIgnoreCase))
+            .Where(item => string.IsNullOrWhiteSpace(itemId)
+                || string.Equals(item.SourceId, itemId, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(item.TargetId, itemId, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(item => item.Weight)
+            .ThenByDescending(item => item.Confidence)
+            .ThenByDescending(item => item.CreatedAt)
+            .Select(item => CompositeContextNormalizer.Clone(item))
+            .ToArray();
+
+        foreach (var relation in sorted)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            yield return relation;
+        }
+
+        await Task.CompletedTask.ConfigureAwait(false);
     }
 }

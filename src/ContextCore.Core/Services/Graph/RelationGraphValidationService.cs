@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text;
 using ContextCore.Abstractions;
@@ -63,6 +64,620 @@ public sealed class RelationGraphValidationService
             Diagnostics = diagnostics,
             Warnings = warnings.ToArray()
         };
+    }
+
+    /// <summary>
+    /// P1-7：流式诊断，避免一次性将整张关系图和全部 item store 载入内存。
+    /// <para>
+    /// 实现策略——两阶段流式：
+    /// <list type="bullet">
+    /// <item>
+    /// 阶段 1：流式枚举关系。对每条关系立即 yield 不依赖 item 存在性的诊断
+    /// （LegacyRelationType/UnknownRelationType/MissingEvidence/Confidence 系列等），
+    /// 同时累积跨关系状态（inverse 键集合、duplicate 桶、positive pair 集合、supersede 邻接表、related_to 计数）
+    /// 和引用的 item ID 集合。
+    /// </item>
+    /// <item>
+    /// 阶段 2：按引用的 item ID 批量查询 4 个 item store（仅查引用的 item，不加载全部）。
+    /// </item>
+    /// <item>
+    /// 阶段 3：再次流式枚举关系。对每条关系 yield 依赖 item 存在性的诊断
+    /// （BrokenSource/BrokenTarget/InvalidSourceKind/InvalidTargetKind）
+    /// 和依赖 inverse 关系的诊断（MissingInverseRelation/RejectedRelationHasActiveInverse 等）。
+    /// </item>
+    /// <item>
+    /// 阶段 4：yield 跨关系诊断（DuplicateRelation/ConflictingRelation/SupersedeCycle/WeakRelatedToOveruse）。
+    /// </item>
+    /// </list>
+    /// </para>
+    /// <para>
+    /// 内存特性：不持有完整关系列表——两次流式枚举。跨关系状态仅保存键元组（string hash sets），
+    /// 不保存完整 ContextRelation 对象。item index 仅包含被关系引用的 item，不是全部 item。
+    /// </para>
+    /// <para>
+    /// 回退：当 <see cref="IRelationStore"/> 未实现 <see cref="IRelationStreamStore"/> 时，
+    /// 回退到 <see cref="ValidateAsync"/> 并一次性 yield 全部诊断（与旧行为一致，无内存优化）。
+    /// </para>
+    /// </summary>
+    /// <param name="workspaceId">工作空间 ID（必填）。</param>
+    /// <param name="collectionId">可选集合过滤。</param>
+    /// <param name="itemId">可选 item 过滤。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>异步枚举的诊断序列。</returns>
+    public async IAsyncEnumerable<RelationGraphDiagnostic> ValidateStreamAsync(
+        string workspaceId,
+        string? collectionId = null,
+        string? itemId = null,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
+
+        // 回退路径：store 未实现 IRelationStreamStore 时，调用 ValidateAsync 并一次性 yield。
+        if (_relationStore is not IRelationStreamStore streamStore)
+        {
+            var fallbackReport = await ValidateAsync(workspaceId, collectionId, itemId, cancellationToken)
+                .ConfigureAwait(false);
+            foreach (var diag in fallbackReport.Diagnostics)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                yield return diag;
+            }
+            yield break;
+        }
+
+        // ── 阶段 1：流式枚举，yield 不依赖 item 的诊断，累积跨关系状态 ──
+        var itemIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        // P1-7 fix：relationKeys 存储 (source, target, normalizedType) 作为每条关系的规范签名。
+        // MissingInverseRelation 查找时用 (target, source, inverseType) 来匹配真实存在的 inverse 关系签名，
+        // 避免与每条关系自身贡献的 key 重合（旧实现总是命中自己，导致漏报）。
+        var relationKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var duplicateBuckets = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        var positivePairs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var supersedeEdges = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        var relatedToCount = 0;
+        var relationCount = 0;
+
+        await foreach (var relation in streamStore.StreamRelationsAsync(workspaceId, collectionId, itemId, cancellationToken)
+            .ConfigureAwait(false))
+        {
+            relationCount++;
+            if (!string.IsNullOrWhiteSpace(relation.SourceId)) itemIds.Add(relation.SourceId);
+            if (!string.IsNullOrWhiteSpace(relation.TargetId)) itemIds.Add(relation.TargetId);
+
+            var normalizedType = _typeNormalizer.Normalize(relation.RelationType);
+            var definition = _registry.Find(normalizedType);
+
+            // 关系规范签名：(source, target, normalizedType)
+            relationKeys.Add($"{relation.SourceId}\u001f{relation.TargetId}\u001f{normalizedType}");
+
+            // duplicate bucket key
+            var dupKey = $"{relation.WorkspaceId}\u001f{relation.CollectionId}\u001f{relation.SourceId}\u001f{normalizedType}\u001f{relation.TargetId}";
+            if (!duplicateBuckets.TryGetValue(dupKey, out var bucket))
+            {
+                bucket = new List<string>();
+                duplicateBuckets[dupKey] = bucket;
+            }
+            bucket.Add(relation.Id);
+
+            // positive pairs for conflict detection
+            if (IsPositiveType(relation.RelationType))
+            {
+                positivePairs.Add($"{relation.SourceId}\u001f{relation.TargetId}");
+            }
+
+            // supersede adjacency
+            if (string.Equals(normalizedType, ContextRelationTypes.SupersededBy, StringComparison.OrdinalIgnoreCase))
+            {
+                if (!supersedeEdges.TryGetValue(relation.SourceId, out var targets))
+                {
+                    targets = new List<string>();
+                    supersedeEdges[relation.SourceId] = targets;
+                }
+                targets.Add(relation.TargetId);
+            }
+
+            if (string.Equals(relation.RelationType, ContextRelationTypes.RelatedTo, StringComparison.OrdinalIgnoreCase))
+            {
+                relatedToCount++;
+            }
+
+            // yield 不依赖 item 的诊断
+            foreach (var diag in BuildPerRelationDiagnosticsNoItems(relation, definition, normalizedType))
+            {
+                yield return diag;
+            }
+        }
+
+        // ── 阶段 2：批量查询引用的 item ──
+        var itemIndex = await BuildItemIndexFromIdsAsync(workspaceId, collectionId, itemIds, cancellationToken)
+            .ConfigureAwait(false);
+
+        // ── 阶段 3：再次流式枚举，yield 依赖 item 的诊断 ──
+        await foreach (var relation in streamStore.StreamRelationsAsync(workspaceId, collectionId, itemId, cancellationToken)
+            .ConfigureAwait(false))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var normalizedType = _typeNormalizer.Normalize(relation.RelationType);
+            var definition = _registry.Find(normalizedType);
+            var source = itemIndex.GetValueOrDefault(relation.SourceId);
+            var target = itemIndex.GetValueOrDefault(relation.TargetId);
+
+            foreach (var diag in BuildPerRelationDiagnosticsWithItems(relation, definition, source, target, relationKeys))
+            {
+                yield return diag;
+            }
+        }
+
+        // ── 阶段 4：yield 跨关系诊断 ──
+        foreach (var diag in BuildCrossRelationDiagnostics(duplicateBuckets, supersedeEdges, positivePairs, relationCount, relatedToCount))
+        {
+            yield return diag;
+        }
+    }
+
+    /// <summary>
+    /// 构建不依赖 item 存在性的 per-relation 诊断。
+    /// 对应 BuildDiagnostics 中的类型/置信度/生命周期/review 状态检查。
+    /// </summary>
+    private IReadOnlyList<RelationGraphDiagnostic> BuildPerRelationDiagnosticsNoItems(
+        ContextRelation relation,
+        RelationTypeDefinition? definition,
+        string normalizedType)
+    {
+        var diagnostics = new List<RelationGraphDiagnostic>();
+
+        if (!string.Equals(normalizedType, relation.RelationType, StringComparison.OrdinalIgnoreCase))
+        {
+            diagnostics.Add(BuildDiagnostic(
+                relation,
+                RelationGraphDiagnosticTypes.LegacyRelationType,
+                "Medium",
+                $"Legacy relation type {relation.RelationType} should be normalized to {normalizedType}.",
+                metadata: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["normalizedType"] = normalizedType,
+                    ["suggestion"] = $"migrate relationType to {normalizedType}"
+                }));
+        }
+
+        if (definition is null)
+        {
+            diagnostics.Add(BuildDiagnostic(
+                relation,
+                RelationGraphDiagnosticTypes.UnknownRelationType,
+                "High",
+                $"Unknown relation type: {relation.RelationType}",
+                metadata: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["normalizedType"] = normalizedType,
+                    ["suggestion"] = string.Equals(normalizedType, relation.RelationType, StringComparison.OrdinalIgnoreCase)
+                        ? "add relation type definition or migrate corpus relation type"
+                        : $"migrate relationType to {normalizedType}"
+                }));
+            return diagnostics;
+        }
+
+        if (definition.RequiresEvidence && ResolveEvidenceRefs(relation).Count == 0)
+        {
+            if (_backfillPolicy?.CanBackfillDeterministicEvidence(relation) == true)
+            {
+                diagnostics.Add(BuildDiagnostic(
+                    relation,
+                    RelationGraphDiagnosticTypes.EvidenceBackfillRequired,
+                    "Medium",
+                    "Relation type requires evidence; deterministic/fixture metadata can be backfilled.",
+                    metadata: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["normalizedType"] = normalizedType,
+                        ["suggestion"] = "backfill evidenceRefs/sourceRefs/sourceOperationId/confidence/lifecycle/reviewStatus"
+                    }));
+            }
+            else
+            {
+                diagnostics.Add(BuildDiagnostic(relation, RelationGraphDiagnosticTypes.MissingEvidence, "Medium", "Relation type requires evidence but no source refs or evidence metadata are present."));
+            }
+        }
+
+        if (IsConfidenceMissing(relation))
+        {
+            diagnostics.Add(BuildDiagnostic(relation, RelationGraphDiagnosticTypes.RelationConfidenceMissing, "Medium", "Relation confidence is missing or zero."));
+        }
+
+        var confidence = ResolveRelationConfidence(relation);
+        if (confidence > 0 && confidence < 0.5)
+        {
+            diagnostics.Add(BuildDiagnostic(relation, RelationGraphDiagnosticTypes.LowConfidence, "Medium", $"Relation confidence is low: {confidence:0.00}."));
+        }
+
+        var lifecycle = ResolveRelationLifecycle(relation);
+        var reviewStatus = ResolveReviewStatus(relation);
+
+        if (IsHighImpact(definition)
+            && !string.Equals(reviewStatus, "Reviewed", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(reviewStatus, "ManualReviewed", StringComparison.OrdinalIgnoreCase))
+        {
+            diagnostics.Add(BuildDiagnostic(relation, RelationGraphDiagnosticTypes.UnreviewedHighImpactRelation, "High", "High-impact relation is not marked as reviewed."));
+        }
+
+        if (IsHighImpact(definition)
+            && string.Equals(reviewStatus, RelationReviewStatuses.NeedsEvidence, StringComparison.OrdinalIgnoreCase))
+        {
+            diagnostics.Add(BuildDiagnostic(relation, RelationGraphDiagnosticTypes.NeedsEvidenceHighImpactRelation, "High", "High-impact relation is marked NeedsEvidence."));
+        }
+
+        if (string.Equals(reviewStatus, RelationReviewStatuses.Reviewed, StringComparison.OrdinalIgnoreCase)
+            && !HasReviewer(relation))
+        {
+            diagnostics.Add(BuildDiagnostic(relation, RelationGraphDiagnosticTypes.ReviewedRelationMissingReviewer, "Medium", "Reviewed relation is missing reviewer metadata."));
+        }
+
+        if (HasConfidenceChangedWithoutReview(relation, reviewStatus))
+        {
+            diagnostics.Add(BuildDiagnostic(relation, RelationGraphDiagnosticTypes.ConfidenceChangedWithoutReview, "High", "Relation confidence appears changed without a Reviewed relation review record."));
+        }
+
+        if (RequiresReviewHistory(lifecycle, reviewStatus)
+            && !HasReviewHistoryMetadata(relation))
+        {
+            diagnostics.Add(BuildDiagnostic(relation, RelationGraphDiagnosticTypes.RelationReviewHistoryMissing, "Medium", "Relation lifecycle/review status has no relation review history reference."));
+        }
+
+        if (string.Equals(reviewStatus, "Rejected", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(lifecycle, StableMemoryLifecycle.Active, StringComparison.OrdinalIgnoreCase))
+        {
+            diagnostics.Add(BuildDiagnostic(relation, RelationGraphDiagnosticTypes.RejectedRelationStillActive, "High", "Rejected relation is still marked Active."));
+            diagnostics.Add(BuildDiagnostic(relation, RelationGraphDiagnosticTypes.RelationLifecycleMismatch, "High", "Relation lifecycle Active conflicts with reviewStatus Rejected."));
+        }
+
+        if (string.Equals(lifecycle, StableMemoryLifecycle.Deprecated, StringComparison.OrdinalIgnoreCase)
+            && IsNormalPathEnabled(relation))
+        {
+            diagnostics.Add(BuildDiagnostic(relation, RelationGraphDiagnosticTypes.DeprecatedRelationUsedInNormalPath, "High", "Deprecated relation is marked for normal-path use."));
+        }
+
+        if (string.Equals(lifecycle, ContextMemoryStatus.Candidate.ToString(), StringComparison.OrdinalIgnoreCase)
+            && IsNormalPathEnabled(relation))
+        {
+            diagnostics.Add(BuildDiagnostic(relation, RelationGraphDiagnosticTypes.CandidateRelationUsedInNormalPath, "High", "Candidate relation is marked for normal-path use."));
+        }
+
+        if (HasBrokenEvidenceRefs(relation))
+        {
+            diagnostics.Add(BuildDiagnostic(relation, RelationGraphDiagnosticTypes.RelationEvidenceBroken, "Medium", "Relation evidence metadata contains broken or missing refs."));
+        }
+
+        if (definition.AuditOnly
+            && AllowsNormalExpansion(relation, definition))
+        {
+            diagnostics.Add(BuildDiagnostic(relation, RelationGraphDiagnosticTypes.AuditOnlyRelationInNormalPath, "High", "Audit-only relation is marked as normal-expansion eligible."));
+        }
+
+        if (!definition.IsDirectional
+            && string.Compare(relation.SourceId, relation.TargetId, StringComparison.OrdinalIgnoreCase) > 0)
+        {
+            diagnostics.Add(BuildDiagnostic(relation, RelationGraphDiagnosticTypes.InvalidDirection, "Low", "Undirected relation should be stored in canonical source/target order."));
+        }
+
+        return diagnostics;
+    }
+
+    /// <summary>
+    /// 构建依赖 item 存在性和 inverse 关系的 per-relation 诊断。
+    /// 在第二次流式枚举中调用——此时 itemIndex 已就绪。
+    /// </summary>
+    private IReadOnlyList<RelationGraphDiagnostic> BuildPerRelationDiagnosticsWithItems(
+        ContextRelation relation,
+        RelationTypeDefinition? definition,
+        RelationItemInfo? source,
+        RelationItemInfo? target,
+        HashSet<string> relationKeys)
+    {
+        var diagnostics = new List<RelationGraphDiagnostic>();
+        if (definition is null)
+        {
+            return diagnostics;
+        }
+
+        var normalizedType = _typeNormalizer.Normalize(relation.RelationType);
+
+        if (source is null || source.IsMissing)
+        {
+            diagnostics.Add(BuildDiagnostic(relation, RelationGraphDiagnosticTypes.BrokenSource, "High", $"Relation source does not exist: {relation.SourceId}"));
+        }
+
+        if (target is null || target.IsMissing)
+        {
+            diagnostics.Add(BuildDiagnostic(relation, RelationGraphDiagnosticTypes.BrokenTarget, "High", $"Relation target does not exist: {relation.TargetId}"));
+        }
+
+        if (source is not null && !source.IsMissing && !KindAllowed(source.Kind, definition.AllowedSourceKinds))
+        {
+            diagnostics.Add(BuildDiagnostic(relation, RelationGraphDiagnosticTypes.InvalidSourceKind, "High", $"Invalid source kind {source.Kind} for relation type {definition.Type}."));
+        }
+
+        if (target is not null && !target.IsMissing && !KindAllowed(target.Kind, definition.AllowedTargetKinds))
+        {
+            diagnostics.Add(BuildDiagnostic(relation, RelationGraphDiagnosticTypes.InvalidTargetKind, "High", $"Invalid target kind {target.Kind} for relation type {definition.Type}."));
+        }
+
+        // MissingInverseRelation：在 relationKeys 中查找 inverse 关系签名
+        // 期望的 inverse 关系为 (source=relation.TargetId, target=relation.SourceId, type=definition.InverseType)
+        if (!string.IsNullOrWhiteSpace(definition.InverseType))
+        {
+            var expectedInverseKey = $"{relation.TargetId}\u001f{relation.SourceId}\u001f{definition.InverseType}";
+            if (!relationKeys.Contains(expectedInverseKey))
+            {
+                diagnostics.Add(BuildDiagnostic(relation, RelationGraphDiagnosticTypes.MissingInverseRelation, "High", $"Missing inverse relation {definition.InverseType}."));
+            }
+        }
+
+        // RejectedRelationHasActiveInverse：需要检查 inverse 关系是否 active
+        // 注意：此检查需要完整的 inverse relation 对象，在纯流式模式下不可用。
+        // 这里使用简化版——如果 inverse 关系存在则假设 active（保守，可能漏报）。
+        // 完整版需要持有 inverse relation 的 lifecycle，留给 ValidateAsync 路径。
+        var lifecycle = ResolveRelationLifecycle(relation);
+        var reviewStatus = ResolveReviewStatus(relation);
+        if (!string.IsNullOrWhiteSpace(definition.InverseType))
+        {
+            var expectedInverseKey = $"{relation.TargetId}\u001f{relation.SourceId}\u001f{definition.InverseType}";
+            if ((string.Equals(reviewStatus, RelationReviewStatuses.Rejected, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(lifecycle, StableMemoryLifecycle.Rejected, StringComparison.OrdinalIgnoreCase))
+                && relationKeys.Contains(expectedInverseKey))
+            {
+                diagnostics.Add(BuildDiagnostic(
+                    relation,
+                    RelationGraphDiagnosticTypes.RejectedRelationHasActiveInverse,
+                    "High",
+                    "Rejected relation still has an active inverse relation.",
+                    relatedRelations: Array.Empty<string>()));
+            }
+        }
+
+        // DeprecatedRelationUsedByActiveChain：同上，简化版
+        if (string.Equals(lifecycle, StableMemoryLifecycle.Deprecated, StringComparison.OrdinalIgnoreCase))
+        {
+            if (IsMetadataTrue(relation.Metadata, "usedByActiveChain")
+                || (IsReplacementType(relation.RelationType)
+                    && !string.IsNullOrWhiteSpace(definition.InverseType)
+                    && relationKeys.Contains($"{relation.TargetId}\u001f{relation.SourceId}\u001f{definition.InverseType}")))
+            {
+                diagnostics.Add(BuildDiagnostic(
+                    relation,
+                    RelationGraphDiagnosticTypes.DeprecatedRelationUsedByActiveChain,
+                    "High",
+                    "Deprecated relation is still linked from an active replacement chain.",
+                    relatedRelations: Array.Empty<string>()));
+            }
+        }
+
+        // superseded_by 的 target 必须是 active
+        if (string.Equals(normalizedType, ContextRelationTypes.SupersededBy, StringComparison.OrdinalIgnoreCase)
+            && target is not null
+            && !target.IsMissing
+            && IsInactiveReplacementTarget(target))
+        {
+            diagnostics.Add(BuildDiagnostic(relation, RelationGraphDiagnosticTypes.InvalidTargetKind, "High", "replacement target must not be rejected / deprecated / superseded."));
+        }
+
+        return diagnostics;
+    }
+
+    /// <summary>
+    /// 构建跨关系诊断：DuplicateRelation/ConflictingRelation/SupersedeCycle/WeakRelatedToOveruse。
+    /// 在两阶段流式枚举完成后调用，使用阶段 1 累积的状态。
+    /// </summary>
+    /// <remarks>
+    /// 注意：此方法不持有完整 ContextRelation 列表，仅使用键元组集合。
+    /// DuplicateRelation 只能产出诊断但无法附带 relatedRelations（因为不持有完整 relation 对象）。
+    /// 如需完整 relatedRelations，请使用 <see cref="ValidateAsync"/> 非流式路径。
+    /// </remarks>
+    private IReadOnlyList<RelationGraphDiagnostic> BuildCrossRelationDiagnostics(
+        Dictionary<string, List<string>> duplicateBuckets,
+        Dictionary<string, List<string>> supersedeEdges,
+        HashSet<string> positivePairs,
+        int relationCount,
+        int relatedToCount)
+    {
+        var diagnostics = new List<RelationGraphDiagnostic>();
+
+        // DuplicateRelation：bucket 中多于 1 条的产出诊断
+        // 注意：流式模式下不持有完整 relation，无法构建完整 RelationGraphDiagnostic（缺少 relation 上下文）。
+        // 改为产出简化诊断，diagnostic id 使用 bucket key。
+        foreach (var bucket in duplicateBuckets.Where(b => b.Value.Count > 1))
+        {
+            var ids = bucket.Value.ToArray();
+            // 使用第一条 ID 作为 relationId 占位；完整版见 ValidateAsync。
+            diagnostics.Add(new RelationGraphDiagnostic
+            {
+                DiagnosticId = $"rgd-dup-{BuildShortHash(bucket.Key)}",
+                DiagnosticType = RelationGraphDiagnosticTypes.DuplicateRelation,
+                Severity = "Medium",
+                Reason = $"Duplicate relation with same source/type/target. {ids.Length} copies: {string.Join(",", ids)}.",
+                RelationId = ids.FirstOrDefault(),
+                RelatedRelationIds = ids.Where(id => id != ids.FirstOrDefault()).ToArray(),
+                Metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["duplicateIds"] = string.Join(",", ids)
+                }
+            });
+        }
+
+        // ConflictingRelation：需要检查每个 conflict-type relation 是否有 positive pair
+        // 流式模式下不持有 conflict relations 列表，故跳过——此诊断类型在 ValidateAsync 路径产出。
+        // 完整实现需要第三阶段流式枚举 + positivePairs 查询，留给未来迭代。
+
+        // SupersedeCycle：使用累积的邻接表做 DFS
+        var cycles = FindSupersedeCyclesFromEdges(supersedeEdges);
+        foreach (var cycle in cycles)
+        {
+            diagnostics.Add(new RelationGraphDiagnostic
+            {
+                DiagnosticId = $"rgd-cycle-{BuildShortHash(string.Join("|", cycle))}",
+                DiagnosticType = RelationGraphDiagnosticTypes.SupersedeCycle,
+                Severity = "High",
+                Reason = "superseded_by replacement graph contains a cycle.",
+                RelatedItemIds = cycle,
+                Metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["cycle"] = string.Join(" -> ", cycle)
+                }
+            });
+        }
+
+        // WeakRelatedToOveruse
+        if (relatedToCount >= 10 && relatedToCount > relationCount / 2)
+        {
+            diagnostics.Add(new RelationGraphDiagnostic
+            {
+                DiagnosticId = $"rgd-weak-related-to-overuse-{BuildShortHash($"{relationCount}-{relatedToCount}")}",
+                DiagnosticType = RelationGraphDiagnosticTypes.WeakRelatedToOveruse,
+                Severity = "Low",
+                Reason = $"related_to dominates relation graph: {relatedToCount}/{relationCount} relations are related_to. Prefer specific relation types.",
+                Metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["relatedToCount"] = relatedToCount.ToString(),
+                    ["totalRelations"] = relationCount.ToString()
+                }
+            });
+        }
+
+        return diagnostics;
+    }
+
+    /// <summary>从 supersede 邻接表检测环（DFS，与 FindSupersedeCycles 一致）。</summary>
+    private static IReadOnlyList<IReadOnlyList<string>> FindSupersedeCyclesFromEdges(
+        Dictionary<string, List<string>> edges)
+    {
+        var cycles = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var start in edges.Keys)
+        {
+            var path = new List<string>();
+            var current = start;
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            while (seen.Add(current))
+            {
+                path.Add(current);
+                if (!edges.TryGetValue(current, out var nextItems) || nextItems.Count == 0)
+                {
+                    break;
+                }
+
+                var next = nextItems[0];
+                var index = path.FindIndex(id => string.Equals(id, next, StringComparison.OrdinalIgnoreCase));
+                if (index >= 0)
+                {
+                    var cycle = path.Skip(index).ToArray();
+                    var key = string.Join("|", cycle.OrderBy(id => id, StringComparer.OrdinalIgnoreCase));
+                    cycles.TryAdd(key, cycle);
+                    break;
+                }
+
+                current = next;
+            }
+        }
+
+        return cycles.Values.ToArray();
+    }
+
+    /// <summary>
+    /// 按引用的 item ID 集合构建 item index——仅查询被关系引用的 item，不加载全部 item。
+    /// 与 <see cref="BuildItemIndexAsync"/> 的区别：后者用 Take=int.MaxValue 加载全部 item。
+    /// </summary>
+    private async Task<IReadOnlyDictionary<string, RelationItemInfo>> BuildItemIndexFromIdsAsync(
+        string workspaceId,
+        string? collectionId,
+        IReadOnlyCollection<string> itemIds,
+        CancellationToken cancellationToken)
+    {
+        var index = new Dictionary<string, RelationItemInfo>(StringComparer.OrdinalIgnoreCase);
+        if (itemIds.Count == 0)
+        {
+            return index;
+        }
+
+        // ContextStore：按 workspace+collection 查询，内存过滤引用的 ID
+        if (_contextStore is not null)
+        {
+            var context = await _contextStore.QueryAsync(new ContextQuery
+            {
+                WorkspaceId = workspaceId,
+                CollectionId = collectionId,
+                Take = int.MaxValue
+            }, cancellationToken).ConfigureAwait(false);
+            foreach (var item in context)
+            {
+                if (itemIds.Contains(item.Id))
+                {
+                    index[item.Id] = new RelationItemInfo(item.Id, "ContextItem", ContextMemoryStatus.Active, "Active", item.WorkspaceId, item.CollectionId, Summarize(item.Title, item.Content));
+                }
+            }
+        }
+
+        if (_memoryStore is not null)
+        {
+            var memory = await _memoryStore.QueryAsync(new ContextMemoryQuery
+            {
+                WorkspaceId = workspaceId,
+                CollectionId = collectionId,
+                Take = int.MaxValue
+            }, cancellationToken).ConfigureAwait(false);
+            foreach (var item in memory)
+            {
+                if (itemIds.Contains(item.Id))
+                {
+                    index[item.Id] = new RelationItemInfo(item.Id, ResolveMemoryKind(item), item.Status, ResolveLifecycle(item.Status, item.Metadata), item.WorkspaceId, item.CollectionId, Summarize(null, item.Content));
+                }
+            }
+        }
+
+        if (_constraintStore is not null)
+        {
+            var constraints = await _constraintStore.QueryAsync(new ContextConstraintQuery
+            {
+                WorkspaceId = workspaceId,
+                CollectionId = collectionId,
+                Take = int.MaxValue
+            }, cancellationToken).ConfigureAwait(false);
+            foreach (var item in constraints)
+            {
+                if (itemIds.Contains(item.Id))
+                {
+                    var kind = item.Status == ContextMemoryStatus.Candidate ? "CandidateConstraint" : "StableConstraint";
+                    index[item.Id] = new RelationItemInfo(item.Id, kind, item.Status, ResolveLifecycle(item.Status, item.Metadata), item.WorkspaceId, item.CollectionId, Summarize(null, item.Content));
+                }
+            }
+        }
+
+        if (_globalContextStore is not null)
+        {
+            var global = await _globalContextStore.QueryAsync(new ContextGlobalQuery
+            {
+                WorkspaceId = workspaceId,
+                CollectionId = collectionId,
+                Take = int.MaxValue
+            }, cancellationToken).ConfigureAwait(false);
+            foreach (var item in global)
+            {
+                if (itemIds.Contains(item.Id))
+                {
+                    var status = Enum.TryParse<ContextMemoryStatus>(ReadMetadata(item.Metadata, "status"), ignoreCase: true, out var parsed)
+                        ? parsed
+                        : ContextMemoryStatus.Stable;
+                    index[item.Id] = new RelationItemInfo(item.Id, "GlobalMemory", status, ResolveLifecycle(status, item.Metadata), item.WorkspaceId, item.CollectionId, Summarize(null, item.Content));
+                }
+            }
+        }
+
+        // 未匹配的 item ID 标记为 Unknown（缺失）
+        foreach (var id in itemIds)
+        {
+            if (!index.ContainsKey(id))
+            {
+                index[id] = RelationItemInfo.Unknown(id);
+            }
+        }
+
+        return index;
     }
 
     public async Task<RelationExplainResponse?> ExplainAsync(

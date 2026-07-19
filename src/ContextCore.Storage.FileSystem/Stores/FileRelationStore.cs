@@ -2,6 +2,7 @@ using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Storage.Shared;
 using System.Collections.Concurrent;
+using System.Runtime.CompilerServices;
 
 namespace ContextCore.Storage.FileSystem.Stores;
 
@@ -14,7 +15,7 @@ namespace ContextCore.Storage.FileSystem.Stores;
 /// 跨进程 RMW 互斥完全交给 FileLockProvider。
 /// metadata cache 带 mtime 双重校验。
 /// </remarks>
-public sealed class FileRelationStore : IRelationStore
+public sealed class FileRelationStore : IRelationStore, IRelationStreamStore
 {
     private const int MaxCacheEntries = 256;
 
@@ -483,5 +484,40 @@ public sealed class FileRelationStore : IRelationStore
 
         return string.IsNullOrWhiteSpace(query.RelationType)
                || string.Equals(relation.RelationType, query.RelationType, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// P1-7：流式枚举关系，逐行读取 JSONL 而非全量载入 List。
+    /// 跨集合枚举时不保持全局排序——每个集合内部按文件顺序产出。
+    /// 调用方（如 ValidateStreamAsync）按需在消费端累积排序状态。
+    /// </summary>
+    public async IAsyncEnumerable<ContextRelation> StreamRelationsAsync(
+        string workspaceId,
+        string? collectionId = null,
+        string? itemId = null,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var collectionIds = ResolveCollectionIds(workspaceId, collectionId);
+        foreach (var cid in collectionIds)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var path = _paths.GetRelationsJsonlPath(workspaceId, cid);
+            await foreach (var relation in _jsonLines.StreamAsync<ContextRelation>(path, cancellationToken).ConfigureAwait(false))
+            {
+                // item 过滤在产出前应用，避免无效 yield。
+                if (!string.IsNullOrWhiteSpace(itemId)
+                    && !string.Equals(relation.SourceId, itemId, StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(relation.TargetId, itemId, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+                yield return CompositeContextNormalizer.Clone(relation);
+            }
+        }
+
+        await Task.CompletedTask.ConfigureAwait(false);
     }
 }
