@@ -56,51 +56,82 @@ public sealed class FileContextStore : IContextStore, IContextCollectionStore, I
             Directory.CreateDirectory(_paths.GetRawDirectory(item.WorkspaceId, item.CollectionId));
             await EnsureCollectionFileAsync(item.WorkspaceId, item.CollectionId, cancellationToken).ConfigureAwait(false);
 
-            var existingMetadata = await ReadItemMetadataLockedAsync(
-                item.WorkspaceId,
-                item.CollectionId,
+            var itemsPath = _paths.GetItemsJsonlPath(item.WorkspaceId, item.CollectionId);
+            var ctx = new SaveContext();
+
+            // P1-1: 在跨进程写锁内执行完整 RMW——读取既有 metadata、计算更新、原子替换 metadata 文件、
+            // 最后写入 raw content 副作用文件。锁路径即 items.jsonl 本身，
+            // 确保两个进程不会各自读到旧 metadata 后互相覆盖（lost update）。
+            await _writer.UpdateWithSideEffectsAsync(
+                itemsPath,
+                read: async ct =>
+                {
+                    ctx.ExistingMetadata = await ReadItemMetadataLockedAsync(
+                        item.WorkspaceId, item.CollectionId, ct).ConfigureAwait(false);
+                    return ctx;
+                },
+                modify: (c, ct) =>
+                {
+                    var previous = c.ExistingMetadata.FirstOrDefault(metadata => metadata.Id == item.Id);
+                    if (previous is not null && previous.ContentFormat != item.ContentFormat)
+                    {
+                        c.PreviousRawPathToDelete = _paths.GetRawContentPath(
+                            previous.WorkspaceId,
+                            previous.CollectionId,
+                            previous.Id,
+                            previous.ContentFormat);
+                    }
+
+                    c.NewRawPath = _paths.GetRawContentPath(
+                        item.WorkspaceId,
+                        item.CollectionId,
+                        item.Id,
+                        item.ContentFormat);
+                    c.NewRawContent = item.Content;
+
+                    var updatedLines = c.ExistingMetadata
+                        .Where(metadata => metadata.Id != item.Id)
+                        .Append(ContextItemMetadata.FromItem(item))
+                        .OrderBy(metadata => metadata.Id, StringComparer.OrdinalIgnoreCase)
+                        .Select(_serializer.SerializeItemMetadata)
+                        .ToArray();
+
+                    return Task.FromResult<IReadOnlyList<string>>(updatedLines);
+                },
+                write: async (c, ct) =>
+                {
+                    if (c.NewRawPath is not null && c.NewRawContent is not null)
+                    {
+                        await _writer.WriteAllTextAtomicAsync(c.NewRawPath, c.NewRawContent, ct)
+                            .ConfigureAwait(false);
+                    }
+
+                    if (c.PreviousRawPathToDelete is not null)
+                    {
+                        await _writer.DeleteIfExistsAsync(c.PreviousRawPathToDelete, ct)
+                            .ConfigureAwait(false);
+                    }
+
+                    InvalidateMetadataCache(item.WorkspaceId, item.CollectionId);
+                },
                 cancellationToken).ConfigureAwait(false);
-
-            var previous = existingMetadata.FirstOrDefault(metadata => metadata.Id == item.Id);
-            if (previous is not null && previous.ContentFormat != item.ContentFormat)
-            {
-                var previousRawPath = _paths.GetRawContentPath(
-                    previous.WorkspaceId,
-                    previous.CollectionId,
-                    previous.Id,
-                    previous.ContentFormat);
-
-                await _writer.DeleteIfExistsAsync(previousRawPath, cancellationToken)
-                    .ConfigureAwait(false);
-            }
-
-            var rawPath = _paths.GetRawContentPath(
-                item.WorkspaceId,
-                item.CollectionId,
-                item.Id,
-                item.ContentFormat);
-
-            await _writer.WriteAllTextAtomicAsync(rawPath, item.Content, cancellationToken)
-                .ConfigureAwait(false);
-
-            var updatedMetadata = existingMetadata
-                .Where(metadata => metadata.Id != item.Id)
-                .Append(ContextItemMetadata.FromItem(item))
-                .OrderBy(metadata => metadata.Id, StringComparer.OrdinalIgnoreCase)
-                .ToArray();
-
-            await WriteItemMetadataAsync(
-                item.WorkspaceId,
-                item.CollectionId,
-                updatedMetadata,
-                cancellationToken).ConfigureAwait(false);
-
-            InvalidateMetadataCache(item.WorkspaceId, item.CollectionId);
         }
         finally
         {
             _gate.Release();
         }
+    }
+
+    /// <summary>
+    /// P1-1: SaveAsync 的 RMW 上下文。ExistingMetadata 在 read 阶段填充，
+    /// 其余字段在 modify 阶段填充、write 阶段消费（跨进程锁内原子完成）。
+    /// </summary>
+    private sealed class SaveContext
+    {
+        public IReadOnlyList<ContextItemMetadata> ExistingMetadata = Array.Empty<ContextItemMetadata>();
+        public string? PreviousRawPathToDelete;
+        public string? NewRawPath;
+        public string? NewRawContent;
     }
 
     /// <summary>
@@ -282,33 +313,60 @@ public sealed class FileContextStore : IContextStore, IContextCollectionStore, I
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var metadataEntries = await ReadItemMetadataLockedAsync(workspaceId, collectionId, cancellationToken)
-                .ConfigureAwait(false);
+            var itemsPath = _paths.GetItemsJsonlPath(workspaceId, collectionId);
+            var ctx = new DeleteContext();
 
-            var match = metadataEntries.FirstOrDefault(metadata => metadata.Id == id);
-            if (match is not null)
-            {
-                var rawPath = _paths.GetRawContentPath(workspaceId, collectionId, id, match.ContentFormat);
-                await _writer.DeleteIfExistsAsync(rawPath, cancellationToken)
-                    .ConfigureAwait(false);
-            }
+            // P1-1: 跨进程锁内完整 RMW——读取 metadata 以决定 raw 删除路径、原子替换 metadata、删除 raw。
+            await _writer.UpdateWithSideEffectsAsync(
+                itemsPath,
+                read: async ct =>
+                {
+                    ctx.ExistingMetadata = await ReadItemMetadataLockedAsync(
+                        workspaceId, collectionId, ct).ConfigureAwait(false);
+                    return ctx;
+                },
+                modify: (c, ct) =>
+                {
+                    var match = c.ExistingMetadata.FirstOrDefault(metadata => metadata.Id == id);
+                    if (match is not null)
+                    {
+                        c.RawPathToDelete = _paths.GetRawContentPath(
+                            workspaceId, collectionId, id, match.ContentFormat);
+                    }
 
-            var updatedMetadata = metadataEntries
-                .Where(metadata => metadata.Id != id)
-                .ToArray();
+                    var updatedLines = c.ExistingMetadata
+                        .Where(metadata => metadata.Id != id)
+                        .Select(_serializer.SerializeItemMetadata)
+                        .ToArray();
 
-            await WriteItemMetadataAsync(
-                workspaceId,
-                collectionId,
-                updatedMetadata,
+                    return Task.FromResult<IReadOnlyList<string>>(updatedLines);
+                },
+                write: async (c, ct) =>
+                {
+                    if (c.RawPathToDelete is not null)
+                    {
+                        await _writer.DeleteIfExistsAsync(c.RawPathToDelete, ct)
+                            .ConfigureAwait(false);
+                    }
+
+                    InvalidateMetadataCache(workspaceId, collectionId);
+                },
                 cancellationToken).ConfigureAwait(false);
-
-            InvalidateMetadataCache(workspaceId, collectionId);
         }
         finally
         {
             _gate.Release();
         }
+    }
+
+    /// <summary>
+    /// P1-1: DeleteAsync 的 RMW 上下文。ExistingMetadata 在 read 阶段填充，
+    /// RawPathToDelete 在 modify 阶段填充、write 阶段消费。
+    /// </summary>
+    private sealed class DeleteContext
+    {
+        public IReadOnlyList<ContextItemMetadata> ExistingMetadata = Array.Empty<ContextItemMetadata>();
+        public string? RawPathToDelete;
     }
 
     public async Task SaveCollectionAsync(

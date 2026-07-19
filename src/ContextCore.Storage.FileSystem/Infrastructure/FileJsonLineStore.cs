@@ -183,6 +183,29 @@ public sealed class FileJsonLineStore
             cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// P1-1：在单个写锁内对 JSONL 文件执行读改写；回调返回 null 时跳过写入，
+    /// 用于 delete-by-id 等"无修改即不写"语义——文件不存在或未匹配目标时不会创建空文件。
+    /// </summary>
+    /// <returns>true 表示已写入；false 表示回调跳过（未发生磁盘写入）。</returns>
+    public async Task<bool> TryUpdateAsync<T>(
+        string path,
+        Func<IReadOnlyList<T>, IReadOnlyList<T>?> update,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(update);
+
+        return await _writer.TryUpdateLinesAsync(
+            path,
+            (lines, ct) =>
+            {
+                var existing = DeserializeLines<T>(lines);
+                var updated = update(existing);
+                return updated is null ? null : updated.Select(_serializer.Serialize).ToArray();
+            },
+            cancellationToken).ConfigureAwait(false);
+    }
+
     private IReadOnlyList<T> DeserializeLines<T>(IReadOnlyList<string> lines)
     {
         var items = new List<T>();

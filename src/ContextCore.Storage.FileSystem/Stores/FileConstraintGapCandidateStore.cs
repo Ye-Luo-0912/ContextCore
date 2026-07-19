@@ -113,56 +113,68 @@ public sealed class FileConstraintGapCandidateStore : IConstraintGapCandidateSto
             foreach (var scope in _scopeCatalog.EnumerateScopes(_paths.GetConstraintGapCandidatesJsonlPath))
             {
                 var path = _paths.GetConstraintGapCandidatesJsonlPath(scope.WorkspaceId, scope.CollectionId);
-                var items = await _jsonLines.ReadAsync<ConstraintGapCandidate>(path, cancellationToken).ConfigureAwait(false);
-                var existing = items.FirstOrDefault(item => string.Equals(item.GapId, gapId, StringComparison.OrdinalIgnoreCase));
-                if (existing is null)
-                {
-                    continue;
-                }
+                ConstraintGapCandidate? updatedGap = null;
 
-                var metadata = new Dictionary<string, string>(existing.Metadata, StringComparer.OrdinalIgnoreCase)
-                {
-                    ["lastReviewStatus"] = status,
-                    ["lastReviewedAt"] = DateTimeOffset.UtcNow.ToString("O")
-                };
-                if (!string.IsNullOrWhiteSpace(reviewer))
-                {
-                    metadata["lastReviewer"] = reviewer.Trim();
-                }
+                // P1-1: TryUpdateAsync 在跨进程锁内 RMW——未匹配到 gapId 时返回 null 跳过写入，
+                // 避免对未创建/未变更的 candidates.jsonl 创建空文件。
+                var written = await _jsonLines.TryUpdateAsync<ConstraintGapCandidate>(
+                    path,
+                    existing =>
+                    {
+                        var match = existing.FirstOrDefault(item => string.Equals(item.GapId, gapId, StringComparison.OrdinalIgnoreCase));
+                        if (match is null)
+                        {
+                            return null;
+                        }
 
-                if (!string.IsNullOrWhiteSpace(reason))
-                {
-                    metadata["lastReviewReason"] = reason.Trim();
-                }
+                        var metadata = new Dictionary<string, string>(match.Metadata, StringComparer.OrdinalIgnoreCase)
+                        {
+                            ["lastReviewStatus"] = status,
+                            ["lastReviewedAt"] = DateTimeOffset.UtcNow.ToString("O")
+                        };
+                        if (!string.IsNullOrWhiteSpace(reviewer))
+                        {
+                            metadata["lastReviewer"] = reviewer.Trim();
+                        }
 
-                var updatedGap = CandidateRecordNormalizer.Normalize(new ConstraintGapCandidate
+                        if (!string.IsNullOrWhiteSpace(reason))
+                        {
+                            metadata["lastReviewReason"] = reason.Trim();
+                        }
+
+                        updatedGap = CandidateRecordNormalizer.Normalize(new ConstraintGapCandidate
+                        {
+                            GapId = match.GapId,
+                            WorkspaceId = match.WorkspaceId,
+                            CollectionId = match.CollectionId,
+                            SessionId = match.SessionId,
+                            Source = match.Source,
+                            SourceSampleId = match.SourceSampleId,
+                            SourceOperationId = match.SourceOperationId,
+                            ExpectedConstraintText = match.ExpectedConstraintText,
+                            MatchedConstraintIds = match.MatchedConstraintIds.ToArray(),
+                            SuggestedConstraintTitle = match.SuggestedConstraintTitle,
+                            SuggestedConstraintScope = match.SuggestedConstraintScope,
+                            SuggestedConstraintType = match.SuggestedConstraintType,
+                            Severity = match.Severity,
+                            Reason = match.Reason,
+                            EvidenceRefs = match.EvidenceRefs.ToArray(),
+                            Status = status.Trim(),
+                            CreatedAt = match.CreatedAt,
+                            Metadata = metadata
+                        });
+                        return existing
+                            .Where(item => !string.Equals(item.GapId, gapId, StringComparison.OrdinalIgnoreCase))
+                            .Append(updatedGap)
+                            .OrderByDescending(static item => item.CreatedAt)
+                            .ToArray();
+                    },
+                    cancellationToken).ConfigureAwait(false);
+
+                if (written && updatedGap is not null)
                 {
-                    GapId = existing.GapId,
-                    WorkspaceId = existing.WorkspaceId,
-                    CollectionId = existing.CollectionId,
-                    SessionId = existing.SessionId,
-                    Source = existing.Source,
-                    SourceSampleId = existing.SourceSampleId,
-                    SourceOperationId = existing.SourceOperationId,
-                    ExpectedConstraintText = existing.ExpectedConstraintText,
-                    MatchedConstraintIds = existing.MatchedConstraintIds.ToArray(),
-                    SuggestedConstraintTitle = existing.SuggestedConstraintTitle,
-                    SuggestedConstraintScope = existing.SuggestedConstraintScope,
-                    SuggestedConstraintType = existing.SuggestedConstraintType,
-                    Severity = existing.Severity,
-                    Reason = existing.Reason,
-                    EvidenceRefs = existing.EvidenceRefs.ToArray(),
-                    Status = status.Trim(),
-                    CreatedAt = existing.CreatedAt,
-                    Metadata = metadata
-                });
-                var updatedItems = items
-                    .Where(item => !string.Equals(item.GapId, gapId, StringComparison.OrdinalIgnoreCase))
-                    .Append(updatedGap)
-                    .OrderByDescending(static item => item.CreatedAt)
-                    .ToArray();
-                await _jsonLines.WriteAsync(path, updatedItems, cancellationToken).ConfigureAwait(false);
-                return CandidateRecordNormalizer.Clone(updatedGap);
+                    return CandidateRecordNormalizer.Clone(updatedGap);
+                }
             }
 
             return null;

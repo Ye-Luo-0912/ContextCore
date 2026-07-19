@@ -41,29 +41,27 @@ public sealed class FileMemoryStore : IMemoryStore, IWorkingMemoryService, IProm
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            // P1-1: 跨进程锁内 RMW——从所有可写 layer 移除同 ID 项，避免跨 layer 重复。
             foreach (var path in GetWritableMemoryPaths(normalized.WorkspaceId, normalized.CollectionId))
             {
-                var existing = await _jsonLines.ReadAsync<ContextMemoryItem>(path, cancellationToken)
-                    .ConfigureAwait(false);
-
-                var updated = existing
-                    .Where(value => !string.Equals(value.Id, normalized.Id, StringComparison.OrdinalIgnoreCase))
-                    .ToArray();
-
-                await _jsonLines.WriteAsync(path, updated, cancellationToken).ConfigureAwait(false);
+                await _jsonLines.UpdateAsync<ContextMemoryItem>(
+                    path,
+                    existing => existing
+                        .Where(value => !string.Equals(value.Id, normalized.Id, StringComparison.OrdinalIgnoreCase))
+                        .ToArray(),
+                    cancellationToken).ConfigureAwait(false);
             }
 
+            // P1-1: 目标 layer 走同样的跨进程锁 RMW——过滤同 ID 后追加新值并按 UpdatedAt 排序。
             var targetPath = GetMemoryPath(normalized.WorkspaceId, normalized.CollectionId, normalized.Layer);
-            var target = await _jsonLines.ReadAsync<ContextMemoryItem>(targetPath, cancellationToken)
-                .ConfigureAwait(false);
-
-            var targetUpdated = target
-                .Where(value => !string.Equals(value.Id, normalized.Id, StringComparison.OrdinalIgnoreCase))
-                .Append(normalized)
-                .OrderByDescending(value => value.UpdatedAt)
-                .ToArray();
-
-            await _jsonLines.WriteAsync(targetPath, targetUpdated, cancellationToken).ConfigureAwait(false);
+            await _jsonLines.UpdateAsync<ContextMemoryItem>(
+                targetPath,
+                existing => existing
+                    .Where(value => !string.Equals(value.Id, normalized.Id, StringComparison.OrdinalIgnoreCase))
+                    .Append(normalized)
+                    .OrderByDescending(value => value.UpdatedAt)
+                    .ToArray(),
+                cancellationToken).ConfigureAwait(false);
 
             if (normalized.Layer == ContextMemoryLayer.Working)
             {
@@ -456,11 +454,9 @@ public sealed class FileMemoryStore : IMemoryStore, IWorkingMemoryService, IProm
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var existing = await _jsonLines.ReadAsync<ContextPromotionRecord>(path, cancellationToken)
-                .ConfigureAwait(false);
-            var updated = existing.Append(record).ToArray();
-
-            await _jsonLines.WriteAsync(path, updated, cancellationToken).ConfigureAwait(false);
+            // P1-1: append-only 文件——AppendAsync 内部走 FileLockProvider 跨进程锁，
+            // 原子追加一行，避免 read+rewrite 在多进程下互相覆盖。
+            await _jsonLines.AppendAsync(path, record, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -511,15 +507,15 @@ public sealed class FileMemoryStore : IMemoryStore, IWorkingMemoryService, IProm
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var existing = await _jsonLines.ReadAsync<PromotionCandidate>(path, cancellationToken)
-                .ConfigureAwait(false);
-            var updated = existing
-                .Where(item => !string.Equals(item.Id, normalized.Id, StringComparison.OrdinalIgnoreCase))
-                .Append(normalized)
-                .OrderByDescending(item => item.UpdatedAt)
-                .ToArray();
-
-            await _jsonLines.WriteAsync(path, updated, cancellationToken).ConfigureAwait(false);
+            // P1-1: 跨进程锁内 upsert——过滤同 ID 后追加新值并排序。
+            await _jsonLines.UpdateAsync<PromotionCandidate>(
+                path,
+                existing => existing
+                    .Where(item => !string.Equals(item.Id, normalized.Id, StringComparison.OrdinalIgnoreCase))
+                    .Append(normalized)
+                    .OrderByDescending(item => item.UpdatedAt)
+                    .ToArray(),
+                cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -593,30 +589,35 @@ public sealed class FileMemoryStore : IMemoryStore, IWorkingMemoryService, IProm
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var existing = await _jsonLines.ReadAsync<PromotionCandidate>(path, cancellationToken)
-                .ConfigureAwait(false);
-            var current = existing.FirstOrDefault(item =>
-                string.Equals(item.Id, id, StringComparison.OrdinalIgnoreCase));
-            if (current is null)
-            {
-                return null;
-            }
+            // P1-1: TryUpdateAsync 在跨进程锁内 RMW——未匹配到 id 时返回 null 跳过写入，
+            // 文件不存在或候选不存在时不创建空文件。
+            PromotionCandidate? updatedCandidate = null;
+            await _jsonLines.TryUpdateAsync<PromotionCandidate>(
+                path,
+                existing =>
+                {
+                    var current = existing.FirstOrDefault(item =>
+                        string.Equals(item.Id, id, StringComparison.OrdinalIgnoreCase));
+                    if (current is null)
+                    {
+                        return null;
+                    }
 
-            var updatedCandidate = CompositeContextNormalizer.Clone(
-                current,
-                status: status,
-                reviewer: reviewer,
-                reason: reason,
-                updatedAt: DateTimeOffset.UtcNow);
-            var updated = existing
-                .Where(item => !string.Equals(item.Id, id, StringComparison.OrdinalIgnoreCase))
-                .Append(updatedCandidate)
-                .OrderByDescending(item => item.UpdatedAt)
-                .ToArray();
+                    updatedCandidate = CompositeContextNormalizer.Clone(
+                        current,
+                        status: status,
+                        reviewer: reviewer,
+                        reason: reason,
+                        updatedAt: DateTimeOffset.UtcNow);
+                    return existing
+                        .Where(item => !string.Equals(item.Id, id, StringComparison.OrdinalIgnoreCase))
+                        .Append(updatedCandidate)
+                        .OrderByDescending(item => item.UpdatedAt)
+                        .ToArray();
+                },
+                cancellationToken).ConfigureAwait(false);
 
-            await _jsonLines.WriteAsync(path, updated, cancellationToken).ConfigureAwait(false);
-
-            return CompositeContextNormalizer.Clone(updatedCandidate);
+            return updatedCandidate is null ? null : CompositeContextNormalizer.Clone(updatedCandidate);
         }
         finally
         {

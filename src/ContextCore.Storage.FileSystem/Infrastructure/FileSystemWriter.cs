@@ -104,6 +104,77 @@ public sealed class FileSystemWriter
         await WriteAllLinesAtomicUnlockedAsync(path, updated, cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// P1-1：在跨进程写锁内执行读-改-写事务，并允许在锁内执行副作用（如写入相邻的 raw content 文件）。
+    /// 锁定对象是 <paramref name="lockPath"/> 对应的 .lock 哨兵文件——同路径的 RMW 会序列化，
+    /// 消除"读后写前另一进程覆盖"的 lost update。
+    /// </summary>
+    /// <typeparam name="T">读阶段返回的上下文类型，传递给 <paramref name="modify"/> 与 <paramref name="write"/>。</typeparam>
+    /// <param name="lockPath">作为锁对象的文件路径（通常是主 metadata 文件，如 items.jsonl）。</param>
+    /// <param name="read">在锁内执行的读阶段，返回上下文。</param>
+    /// <param name="modify">在锁内执行的修改阶段，接收上下文，返回要写入的行列表。</param>
+    /// <param name="write">在锁内执行的最终写入阶段（在 metadata 原子替换之后调用，便于清理 cache 或写入 sidecar）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    public async Task UpdateWithSideEffectsAsync<T>(
+        string lockPath,
+        Func<CancellationToken, Task<T>> read,
+        Func<T, CancellationToken, Task<IReadOnlyList<string>>> modify,
+        Func<T, CancellationToken, Task> write,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(read);
+        ArgumentNullException.ThrowIfNull(modify);
+        ArgumentNullException.ThrowIfNull(write);
+
+        await using var lease = await _locks.AcquireWriteLockAsync(lockPath, cancellationToken).ConfigureAwait(false);
+        var context = await read(cancellationToken).ConfigureAwait(false);
+        var updated = await modify(context, cancellationToken).ConfigureAwait(false);
+        await WriteAllLinesAtomicUnlockedAsync(lockPath, updated, cancellationToken).ConfigureAwait(false);
+        await write(context, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// P1-1：在跨进程写锁内执行读-改-写事务，使用同步修改函数（无额外副作用文件）。
+    /// 与 <see cref="UpdateLinesAsync(string, Func{IReadOnlyList{string}, IReadOnlyList{string}}, CancellationToken)"/>
+    /// 的区别：本方法暴露读阶段的 CancellationToken，便于读阶段也响应取消。
+    /// </summary>
+    public async Task UpdateLinesAsync(
+        string path,
+        Func<IReadOnlyList<string>, CancellationToken, IReadOnlyList<string>> update,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(update);
+
+        await using var lease = await _locks.AcquireWriteLockAsync(path, cancellationToken).ConfigureAwait(false);
+        var existing = await ReadAllLinesUnlockedAsync(path, cancellationToken).ConfigureAwait(false);
+        var updated = update(existing, cancellationToken);
+        await WriteAllLinesAtomicUnlockedAsync(path, updated, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// P1-1：在跨进程写锁内执行读-改-写事务；回调返回 null 时跳过写入，避免在文件不存在或
+    /// "未找到目标" 场景下创建空文件。用于 delete-by-id 等"无修改即不写"语义的 RMW。
+    /// </summary>
+    /// <returns>true 表示已写入；false 表示回调跳过（未发生磁盘写入）。</returns>
+    public async Task<bool> TryUpdateLinesAsync(
+        string path,
+        Func<IReadOnlyList<string>, CancellationToken, IReadOnlyList<string>?> update,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(update);
+
+        await using var lease = await _locks.AcquireWriteLockAsync(path, cancellationToken).ConfigureAwait(false);
+        var existing = await ReadAllLinesUnlockedAsync(path, cancellationToken).ConfigureAwait(false);
+        var updated = update(existing, cancellationToken);
+        if (updated is null)
+        {
+            return false;
+        }
+
+        await WriteAllLinesAtomicUnlockedAsync(path, updated, cancellationToken).ConfigureAwait(false);
+        return true;
+    }
+
     public async Task DeleteIfExistsAsync(
         string path,
         CancellationToken cancellationToken = default)

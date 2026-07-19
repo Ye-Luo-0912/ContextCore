@@ -34,19 +34,52 @@ public sealed class FileCandidateMemoryReviewStore : ICandidateMemoryReviewStore
         try
         {
             var path = _paths.GetCandidateMemoryReviewsJsonlPath(normalized.WorkspaceId, normalized.CollectionId);
-            var existing = await ReadReviewsWithLegacyAsync(normalized.WorkspaceId, normalized.CollectionId, cancellationToken)
+            var legacyPath = _paths.GetLegacyCandidateMemoryReviewsJsonlPath(normalized.WorkspaceId, normalized.CollectionId);
+            // P1-1: legacy 是只读迁移源，锁外预读即可。
+            var legacy = await _jsonLines.ReadAsync<CandidateMemoryReviewRecord>(legacyPath, cancellationToken)
                 .ConfigureAwait(false);
-            var updated = existing
-                .Where(item => !string.Equals(item.ReviewId, normalized.ReviewId, StringComparison.OrdinalIgnoreCase))
-                .Append(normalized)
-                .OrderByDescending(static item => item.CreatedAt)
-                .ToArray();
-            await _jsonLines.WriteAsync(path, updated, cancellationToken).ConfigureAwait(false);
+
+            // P1-1: 跨进程锁内 RMW primary 路径——读 primary + 合并 legacy + 过滤+追加+排序 + 原子写回。
+            await _jsonLines.UpdateAsync<CandidateMemoryReviewRecord>(
+                path,
+                primaryExisting =>
+                {
+                    var merged = MergeLegacyReviews(primaryExisting, legacy);
+                    return merged
+                        .Where(item => !string.Equals(item.ReviewId, normalized.ReviewId, StringComparison.OrdinalIgnoreCase))
+                        .Append(normalized)
+                        .OrderByDescending(static item => item.CreatedAt)
+                        .ToArray();
+                },
+                cancellationToken).ConfigureAwait(false);
         }
         finally
         {
             _gate.Release();
         }
+    }
+
+    /// <summary>
+    /// P1-1: 将 legacy review 合并到 primary 集合，按 ReviewId 去重——primary 优先。
+    /// </summary>
+    private static IReadOnlyList<CandidateMemoryReviewRecord> MergeLegacyReviews(
+        IReadOnlyList<CandidateMemoryReviewRecord> primary,
+        IReadOnlyList<CandidateMemoryReviewRecord> legacy)
+    {
+        if (legacy.Count == 0)
+        {
+            return primary;
+        }
+
+        var keys = primary
+            .Where(item => !string.IsNullOrWhiteSpace(item.ReviewId))
+            .Select(item => item.ReviewId)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return
+        [
+            .. primary,
+            .. legacy.Where(item => string.IsNullOrWhiteSpace(item.ReviewId) || keys.Add(item.ReviewId))
+        ];
     }
 
     public async Task<IReadOnlyList<CandidateMemoryReviewRecord>> QueryReviewsAsync(

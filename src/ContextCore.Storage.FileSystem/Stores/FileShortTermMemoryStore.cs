@@ -41,22 +41,67 @@ public sealed class FileShortTermMemoryStore : IShortTermMemoryStore
         try
         {
             var path = _paths.GetShortTermWorkingItemsJsonlPath(normalized.WorkspaceId, normalized.CollectionId);
-            var items = await ReadJsonLinesWithLegacyAsync<ShortTermWorkingItem>(
+            var legacyPath = _paths.GetLegacyShortTermWorkingItemsJsonlPath(normalized.WorkspaceId, normalized.CollectionId);
+            // P1-1: legacy 是只读迁移源，锁外预读即可（其内容只在迁移完成前存在，且本路径不写入 legacy）。
+            var legacy = await _jsonLines.ReadAsync<ShortTermWorkingItem>(legacyPath, cancellationToken)
+                .ConfigureAwait(false);
+
+            // P1-1: 跨进程锁内 RMW primary 路径——读 primary + 合并 legacy + 过滤+追加+排序 + 原子写回。
+            await _jsonLines.UpdateAsync<ShortTermWorkingItem>(
                 path,
-                _paths.GetLegacyShortTermWorkingItemsJsonlPath(normalized.WorkspaceId, normalized.CollectionId),
-                static item => item.ItemId,
+                primaryExisting =>
+                {
+                    var merged = MergeWithLegacy(primaryExisting, legacy, static item => item.ItemId);
+                    return merged
+                        .Where(existing => !string.Equals(existing.ItemId, normalized.ItemId, StringComparison.OrdinalIgnoreCase))
+                        .Append(normalized)
+                        .OrderBy(itemValue => itemValue.UpdatedAt)
+                        .ToArray();
+                },
                 cancellationToken).ConfigureAwait(false);
-            var updated = items
-                .Where(existing => !string.Equals(existing.ItemId, normalized.ItemId, StringComparison.OrdinalIgnoreCase))
-                .Append(normalized)
-                .OrderBy(itemValue => itemValue.UpdatedAt)
-                .ToArray();
-            await _jsonLines.WriteAsync(path, updated, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
             _gate.Release();
         }
+    }
+
+    /// <summary>
+    /// P1-1: 将 legacy 数据合并到 primary 集合，按 keySelector 去重——primary 优先，legacy 仅补充缺失项。
+    /// 提取自 ReadJsonLinesWithLegacyAsync 以便在 RMW 回调内复用。
+    /// </summary>
+    private static IReadOnlyList<T> MergeWithLegacy<T>(
+        IReadOnlyList<T> primary,
+        IReadOnlyList<T> legacy,
+        Func<T, string?> keySelector)
+    {
+        if (legacy.Count == 0)
+        {
+            return primary;
+        }
+
+        var keys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var merged = new List<T>(primary.Count + legacy.Count);
+        foreach (var item in primary)
+        {
+            merged.Add(item);
+            var key = keySelector(item);
+            if (!string.IsNullOrWhiteSpace(key))
+            {
+                keys.Add(key);
+            }
+        }
+
+        foreach (var item in legacy)
+        {
+            var key = keySelector(item);
+            if (string.IsNullOrWhiteSpace(key) || keys.Add(key))
+            {
+                merged.Add(item);
+            }
+        }
+
+        return merged;
     }
 
     public async Task ReplaceRawEventsAsync(

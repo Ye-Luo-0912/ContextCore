@@ -7,19 +7,16 @@ namespace ContextCore.Storage.FileSystem.Stores;
 
 /// <summary>基于文件系统的 <see cref="IRelationStore"/> 实现，关系数据持久化为 JSONL 文件。</summary>
 /// <remarks>
-/// GRAPH-11 + P0-fix: 跨实例互斥通过进程级 SemaphoreSlim 字典实现，按文件路径共享。
-/// 原先用命名 Mutex，但 Mutex 是线程亲和的——async await 后线程可能切换，
-/// 导致 ReleaseMutex 在非持有线程上调用并静默失败（锁泄漏）。
-/// SemaphoreSlim 不是线程亲和的，Release 可在任意线程调用，适配 async 模式。
-/// 读路径保留 SemaphoreSlim 保证缓存与文件一致性；metadata cache 带 mtime 双重校验。
+/// P1-1: RMW 完整流程在跨进程锁内执行——通过 <see cref="FileJsonLineStore.UpdateAsync{T}"/>
+/// / <see cref="FileSystemWriter.UpdateLinesAsync"/> 包装读+改+写，FileLockProvider 在路径上加
+/// 进程内 SemaphoreSlim + 跨进程 FileShare.None 哨兵文件，两进程不会各自读旧数据后互相覆盖。
+/// <see cref="SemaphoreSlim"/> _gate 仅用于进程内读路径与写路径的串行化（保证 cache 一致性），
+/// 跨进程 RMW 互斥完全交给 FileLockProvider。
+/// metadata cache 带 mtime 双重校验。
 /// </remarks>
 public sealed class FileRelationStore : IRelationStore
 {
     private const int MaxCacheEntries = 256;
-
-    // P0-fix: 进程级锁注册表，按文件路径共享。
-    // 同一进程内不同 FileRelationStore 实例指向同一文件时，通过此字典获取同一 SemaphoreSlim。
-    private static readonly ConcurrentDictionary<string, SemaphoreSlim> s_processLocks = new(StringComparer.OrdinalIgnoreCase);
 
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly FilePathResolver _paths;
@@ -33,32 +30,6 @@ public sealed class FileRelationStore : IRelationStore
     private sealed record RelationCacheEntry(
         DateTime LastWriteUtc,
         IReadOnlyList<ContextRelation> Relations);
-
-    /// <summary>
-    /// P0-fix: 进程级锁租约。SemaphoreSlim 不是线程亲和的，Release 可在任意线程调用。
-    /// 修复原先 Mutex 在 async 代码中因线程切换导致 ReleaseMutex 静默失败的问题。
-    /// </summary>
-    private sealed class ProcessLockLease : IDisposable
-    {
-        private SemaphoreSlim? _gate;
-        private bool _disposed;
-
-        internal ProcessLockLease(SemaphoreSlim gate)
-        {
-            _gate = gate;
-        }
-
-        public void Dispose()
-        {
-            if (_disposed)
-            {
-                return;
-            }
-            _disposed = true;
-            _gate?.Release();
-            _gate = null;
-        }
-    }
 
     public FileRelationStore(FileStorageOptions options)
         : this(new FilePathResolver(options), new FileFormatSerializer())
@@ -157,7 +128,7 @@ public sealed class FileRelationStore : IRelationStore
     }
 
     /// <summary>
-    /// 删除单条边。P0-fix: 现在走与 BatchUpsertAsync 相同的跨实例锁，避免丢失更新。
+    /// 删除单条边。P1-1: 走与 BatchUpsertAsync 相同的跨进程锁 RMW，避免丢失更新。
     /// </summary>
     public async Task<bool> DeleteAsync(
         string workspaceId,
@@ -170,22 +141,24 @@ public sealed class FileRelationStore : IRelationStore
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            // P0-fix: 进程级跨实例锁，与 BatchUpsertAsync 统一
-            using var fileLock = await AcquireProcessLockAsync(path, cancellationToken);
-            var relations = await _jsonLines.ReadAsync<ContextRelation>(path, cancellationToken)
-                .ConfigureAwait(false);
-            var retained = relations
-                .Where(relation => !string.Equals(relation.Id, relationId, StringComparison.OrdinalIgnoreCase))
-                .ToArray();
-            if (retained.Length == relations.Count)
-            {
-                return false;
-            }
+            // P1-1: TryUpdateAsync 在 FileLockProvider 跨进程锁内完成读+改+写；
+            // 未匹配到 relationId 时返回 null 跳过写入，文件不存在或无变更时不创建空文件。
+            var deleted = await _jsonLines.TryUpdateAsync<ContextRelation>(
+                path,
+                existing =>
+                {
+                    var retained = existing
+                        .Where(relation => !string.Equals(relation.Id, relationId, StringComparison.OrdinalIgnoreCase))
+                        .ToArray();
+                    return retained.Length == existing.Count ? null : retained;
+                },
+                cancellationToken).ConfigureAwait(false);
 
-            Directory.CreateDirectory(Path.GetDirectoryName(path) ?? ".");
-            await _jsonLines.WriteAsync(path, retained, cancellationToken).ConfigureAwait(false);
-            InvalidateRelationCache(path);
-            return true;
+            if (deleted)
+            {
+                InvalidateRelationCache(path);
+            }
+            return deleted;
         }
         finally
         {
@@ -194,9 +167,8 @@ public sealed class FileRelationStore : IRelationStore
     }
 
     /// <summary>
-    /// 批量 upsert：按 (workspaceId, collectionId) 分组，每组在跨实例互斥锁内完成读改写并原子替换文件。
-    /// GRAPH-11 + P0-fix: 使用命名 Mutex 解决不同 store 实例并发读旧数据后覆盖新数据的问题。
-    /// Mutex 通过 CrossInstanceLockLease 在 Dispose 中正确调用 ReleaseMutex。
+    /// 批量 upsert：按 (workspaceId, collectionId) 分组，每组在跨进程锁内完成读改写并原子替换文件。
+    /// P1-1: 走 <see cref="FileJsonLineStore.UpdateAsync{T}"/>，FileLockProvider 保证跨进程 RMW 原子性。
     /// </summary>
     public async Task BatchUpsertAsync(
         IEnumerable<ContextRelation> relations,
@@ -217,20 +189,19 @@ public sealed class FileRelationStore : IRelationStore
                 _paths.GetRelationsJsonlPath(r.WorkspaceId, r.CollectionId)))
             {
                 var path = group.Key;
-                // GRAPH-11 + P0-fix: 进程级跨实例互斥，通过 lease 正确释放
-                using var fileLock = await AcquireProcessLockAsync(path, cancellationToken);
                 var incoming = group.ToArray();
                 var incomingIds = new HashSet<string>(
                     incoming.Select(r => r.Id),
                     StringComparer.OrdinalIgnoreCase);
 
-                var existing = await _jsonLines.ReadAsync<ContextRelation>(path, cancellationToken)
-                    .ConfigureAwait(false);
-                var merged = existing
-                    .Where(r => !incomingIds.Contains(r.Id))
-                    .Concat(incoming);
+                await _jsonLines.UpdateAsync<ContextRelation>(
+                    path,
+                    existing => existing
+                        .Where(r => !incomingIds.Contains(r.Id))
+                        .Concat(incoming)
+                        .ToArray(),
+                    cancellationToken).ConfigureAwait(false);
 
-                await _jsonLines.WriteAsync(path, merged, cancellationToken).ConfigureAwait(false);
                 InvalidateRelationCache(path);
             }
         }
@@ -340,20 +311,6 @@ public sealed class FileRelationStore : IRelationStore
             .ThenByDescending(relation => relation.CreatedAt)
             .Skip(skip)
             .Take(take)];
-    }
-
-    /// <summary>
-    /// P0-fix: 获取进程级跨实例锁。按文件路径共享 SemaphoreSlim。
-    /// SemaphoreSlim 不是线程亲和的，Release 可在 async await 后的任意线程调用。
-    /// 支持取消，避免无限阻塞。
-    /// </summary>
-    private static async Task<ProcessLockLease> AcquireProcessLockAsync(
-        string path,
-        CancellationToken cancellationToken)
-    {
-        var gate = s_processLocks.GetOrAdd(path, _ => new SemaphoreSlim(1, 1));
-        await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        return new ProcessLockLease(gate);
     }
 
     private IReadOnlyList<string> ResolveCollectionIds(string workspaceId, string? collectionId)

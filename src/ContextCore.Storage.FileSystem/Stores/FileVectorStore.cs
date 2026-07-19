@@ -105,15 +105,18 @@ public sealed class FileVectorStore : IVectorStore
         {
             foreach (var path in ResolveVectorPaths(workspaceId, null))
             {
-                var records = await _jsonLines.ReadAsync<VectorRecord>(path, cancellationToken)
-                    .ConfigureAwait(false);
-                var updated = records
-                    .Where(item => !string.Equals(item.Id, vectorId, StringComparison.OrdinalIgnoreCase))
-                    .ToArray();
-                if (updated.Length != records.Count)
-                {
-                    await _jsonLines.WriteAsync(path, updated, cancellationToken).ConfigureAwait(false);
-                }
+                // P1-1: TryUpdateAsync 在跨进程锁内读改写；未匹配到目标时返回 null 跳过写入，
+                // 避免对未创建/未变更的 vectors.jsonl 创建空文件。
+                await _jsonLines.TryUpdateAsync<VectorRecord>(
+                    path,
+                    existing =>
+                    {
+                        var updated = existing
+                            .Where(item => !string.Equals(item.Id, vectorId, StringComparison.OrdinalIgnoreCase))
+                            .ToArray();
+                        return updated.Length == existing.Count ? null : updated;
+                    },
+                    cancellationToken).ConfigureAwait(false);
             }
         }
         finally
