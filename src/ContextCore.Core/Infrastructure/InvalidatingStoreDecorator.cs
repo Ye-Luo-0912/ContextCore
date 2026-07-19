@@ -71,6 +71,17 @@ internal static class InvalidationKeys
 /// 并计 VersionMismatch）。InvalidateAsync 作为 best-effort 物理清理，回收已被版本判定为 stale 的条目，
 /// 避免条目驻留至下次读取才淘汰。此顺序消除"eviction 与 bump 之间窗口"——
 /// 该窗口内并发 miss 重新计算并以旧版本快照写入缓存，造成单次 stale 命中。
+///
+/// R14-PG-7: 多实例 cache invalidation 语义。
+/// bump 通过 <see cref="IContextStateVersionStore"/> 完成，其实现决定跨实例可见性：
+/// - InMemoryContextStateVersionStore（FileSystem/InMemory provider 默认）：进程内可见，
+///   仅本实例 cache 感知到 bump；多实例场景下其他实例 cache 不会失配，但 FileSystem/InMemory
+///   本就是单机 provider，不存在多实例需求。
+/// - PostgresContextStateVersionStore（Postgres provider，R14-PG-6）：版本号持久化到 Postgres，
+///   多实例共享同一行级锁原子自增的版本号；Instance A bump 后，Instance B 的 cache.GetAsync
+///   通过 GetVersionsAsync 读到新版本号，触发 VersionMismatch，重新从 store 读取。
+/// 物理失效（InvalidateAsync）始终进程内，跨实例 cache 仅靠版本感知 GetAsync 被动失效——
+/// 不实现 LISTEN/NOTIFY 主动通知，避免引入额外复杂度。
 /// </remarks>
 public abstract class InvalidatingStoreDecoratorBase
 {
