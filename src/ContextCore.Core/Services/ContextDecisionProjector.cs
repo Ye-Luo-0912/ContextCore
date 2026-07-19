@@ -68,6 +68,7 @@ public static class ContextDecisionProjector
                 Sections = sections
             },
             Risk = new ContextDecisionRisk(),
+            Quality = PackageQualityCalculator.Compute(result),
             Metadata = new Dictionary<string, string>(result.Metadata, StringComparer.OrdinalIgnoreCase)
             {
                 ["hasPlan"] = result.Plan is not null ? "true" : "false"

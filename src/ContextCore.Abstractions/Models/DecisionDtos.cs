@@ -30,6 +30,12 @@ public sealed class ContextDecisionRecord
     /// <summary>非激活契约：所有标志位恒为 false，仅用于审计断言。</summary>
     public ContextDecisionRisk Risk { get; init; } = new();
 
+    /// <summary>
+    /// R14-2：Package Quality 指标集合。仅 Source=Package 时填充；Source=Retrieval 时为 null。
+    /// 第一版保持确定性，由 Projector 在投影过程中基于已有数据一次性计算，不触发任何运行时变更。
+    /// </summary>
+    public PackageQualityReport? Quality { get; init; }
+
     /// <summary>策略版本，用于 trace 兼容性识别。</summary>
     public string PolicyVersion { get; init; } = ContextDecisionPolicyVersions.V17_0;
 

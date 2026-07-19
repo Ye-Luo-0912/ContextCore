@@ -1,8 +1,8 @@
-{
+﻿{
   "openapi": "3.1.1",
   "info": {
     "title": "ContextCore Service API",
-    "description": "\u4E0A\u4E0B\u6587\u7BA1\u7406\u670D\u52A1\uFF1A\u6444\u53D6\u3001\u8BB0\u5FC6\u3001\u6253\u5305\u4E0E\u7D22\u5F15\u3002",
+    "description": "上下文管理服务：摄取、记忆、打包与索引。",
     "version": "v1"
   },
   "servers": [
@@ -16,7 +16,7 @@
         "tags": [
           "Health"
         ],
-        "summary": "\u5B58\u6D3B\u63A2\u9488\uFF08\u8FDB\u7A0B\u5728\u7EBF\u5373 200\uFF0C\u4E0D\u68C0\u67E5\u4F9D\u8D56\uFF09",
+        "summary": "存活探针（进程在线即 200，不检查依赖）",
         "operationId": "HealthLive",
         "responses": {
           "200": {
@@ -37,7 +37,7 @@
         "tags": [
           "Health"
         ],
-        "summary": "Service Alpha \u5C31\u7EEA\u63A2\u9488\uFF08\u68C0\u67E5\u5B58\u50A8\u3001\u4E8B\u4EF6\u3001\u4F5C\u4E1A\u3001\u6A21\u578B\u548C retrieval baseline\uFF09",
+        "summary": "Service Alpha 就绪探针（检查存储、事件、作业、模型和 retrieval baseline）",
         "operationId": "HealthReady",
         "responses": {
           "200": {
@@ -58,7 +58,7 @@
         "tags": [
           "Status"
         ],
-        "summary": "\u83B7\u53D6\u8F7B\u91CF\u670D\u52A1\u72B6\u6001\uFF08\u53EA\u8BFB\uFF0C\u4E0D\u6267\u884C\u5199\u63A2\u9488\uFF09",
+        "summary": "获取轻量服务状态（只读，不执行写探针）",
         "operationId": "GetStatus",
         "responses": {
           "200": {
@@ -79,7 +79,7 @@
         "tags": [
           "Status"
         ],
-        "summary": "\u83B7\u53D6\u6DF1\u5EA6\u8FD0\u884C\u65F6\u63A2\u9488\u7ED3\u679C\uFF08\u5141\u8BB8 system health scope \u5199\u63A2\u9488\uFF0C\u53EF\u7528 refresh=true \u5F3A\u5236\u91CD\u8DD1\uFF09",
+        "summary": "获取深度运行时探针结果（允许 system health scope 写探针，可用 refresh=true 强制重跑）",
         "operationId": "GetStatusDeep",
         "parameters": [
           {
@@ -109,7 +109,7 @@
         "tags": [
           "Relations"
         ],
-        "summary": "\u83B7\u53D6 relation type taxonomy",
+        "summary": "获取 relation type taxonomy",
         "operationId": "GetRelationTypes",
         "responses": {
           "200": {
@@ -133,7 +133,7 @@
         "tags": [
           "Relations"
         ],
-        "summary": "\u83B7\u53D6 relation expansion governance profiles",
+        "summary": "获取 relation expansion governance profiles",
         "operationId": "GetRelationExpansionProfiles",
         "responses": {
           "200": {
@@ -157,7 +157,7 @@
         "tags": [
           "Relations"
         ],
-        "summary": "\u53EA\u8BFB\u9884\u89C8 relation expansion profile \u5BF9\u5173\u7CFB\u8FB9\u7684 accepted / blocked \u7ED3\u679C",
+        "summary": "只读预览 relation expansion profile 对关系边的 accepted / blocked 结果",
         "operationId": "PreviewRelationExpansion",
         "requestBody": {
           "content": {
@@ -198,7 +198,7 @@
         "tags": [
           "Relations"
         ],
-        "summary": "\u83B7\u53D6 relation graph \u5168\u5C40\u8BCA\u65AD",
+        "summary": "获取 relation graph 全局诊断",
         "operationId": "GetRelationDiagnostics",
         "parameters": [
           {
@@ -231,12 +231,43 @@
         }
       }
     },
+    "/api/relations/diagnostics/stream": {
+      "get": {
+        "tags": [
+          "Relations"
+        ],
+        "summary": "流式获取 relation graph 诊断（NDJSON），避免全图载入内存",
+        "operationId": "StreamRelationDiagnostics",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "collectionId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
     "/api/relations/diagnostics/{itemId}": {
       "get": {
         "tags": [
           "Relations"
         ],
-        "summary": "\u83B7\u53D6\u6307\u5B9A item \u7684 relation graph \u8BCA\u65AD",
+        "summary": "获取指定 item 的 relation graph 诊断",
         "operationId": "GetItemRelationDiagnostics",
         "parameters": [
           {
@@ -282,7 +313,7 @@
         "tags": [
           "Relations"
         ],
-        "summary": "\u83B7\u53D6\u5355\u6761 relation \u7684\u8BC1\u636E\u3001\u7F6E\u4FE1\u5EA6\u3001\u751F\u547D\u5468\u671F\u548C\u8BCA\u65AD\u89E3\u91CA",
+        "summary": "获取单条 relation 的证据、置信度、生命周期和诊断解释",
         "operationId": "ExplainRelation",
         "parameters": [
           {
@@ -347,7 +378,7 @@
         "tags": [
           "Relations"
         ],
-        "summary": "\u4EBA\u5DE5 review relation \u5E76\u8BB0\u5F55\u5BA1\u6838\u5386\u53F2",
+        "summary": "人工 review relation 并记录审核历史",
         "operationId": "ReviewRelation",
         "parameters": [
           {
@@ -412,7 +443,7 @@
         "tags": [
           "Relations"
         ],
-        "summary": "\u4EBA\u5DE5 reject relation \u5E76\u8BB0\u5F55\u5BA1\u6838\u5386\u53F2",
+        "summary": "人工 reject relation 并记录审核历史",
         "operationId": "RejectRelation",
         "parameters": [
           {
@@ -477,7 +508,7 @@
         "tags": [
           "Relations"
         ],
-        "summary": "\u4EBA\u5DE5 deprecate relation \u5E76\u8BB0\u5F55\u5BA1\u6838\u5386\u53F2",
+        "summary": "人工 deprecate relation 并记录审核历史",
         "operationId": "DeprecateRelation",
         "parameters": [
           {
@@ -542,7 +573,7 @@
         "tags": [
           "Relations"
         ],
-        "summary": "\u4EBA\u5DE5\u6807\u8BB0 relation \u9700\u8981\u66F4\u591A\u8BC1\u636E\u5E76\u8BB0\u5F55\u5BA1\u6838\u5386\u53F2",
+        "summary": "人工标记 relation 需要更多证据并记录审核历史",
         "operationId": "MarkRelationNeedsEvidence",
         "parameters": [
           {
@@ -607,7 +638,7 @@
         "tags": [
           "Relations"
         ],
-        "summary": "\u67E5\u8BE2 relation review history",
+        "summary": "查询 relation review history",
         "operationId": "GetRelationReviews",
         "parameters": [
           {
@@ -641,7 +672,7 @@
         "tags": [
           "Relations"
         ],
-        "summary": "\u83B7\u53D6\u6761\u76EE\u7684\u51FA\u5165\u5173\u7CFB",
+        "summary": "获取条目的出入关系",
         "operationId": "GetRelations",
         "parameters": [
           {
@@ -688,7 +719,7 @@
         "tags": [
           "Relations"
         ],
-        "summary": "\u6309\u8DEF\u7EBF\u56FE\u77ED\u8DEF\u5F84\u83B7\u53D6\u6761\u76EE\u7684\u51FA\u5165\u5173\u7CFB",
+        "summary": "按路线图短路径获取条目的出入关系",
         "operationId": "GetRelationsByItemId",
         "parameters": [
           {
@@ -743,7 +774,7 @@
         "tags": [
           "Relations"
         ],
-        "summary": "\u4EE5\u6307\u5B9A\u6761\u76EE\u4E3A\u6839\u6784\u5EFA\u5173\u7CFB\u5B50\u56FE\uFF0C\u8FD4\u56DE\u53BB\u91CD\u540E\u7684\u8282\u70B9\u548C\u8FB9\u5FEB\u7167",
+        "summary": "以指定条目为根构建关系子图，返回去重后的节点和边快照",
         "operationId": "GetRelationSubgraph",
         "parameters": [
           {
@@ -826,7 +857,7 @@
         "tags": [
           "Constraints"
         ],
-        "summary": "\u67E5\u8BE2\u7EA6\u675F\u6761\u76EE",
+        "summary": "查询约束条目",
         "operationId": "QueryConstraints",
         "parameters": [
           {
@@ -886,7 +917,7 @@
         "tags": [
           "Constraints"
         ],
-        "summary": "\u67E5\u8BE2 CandidateConstraint",
+        "summary": "查询 CandidateConstraint",
         "operationId": "GetCandidateConstraints",
         "parameters": [
           {
@@ -970,7 +1001,7 @@
         "tags": [
           "Constraints"
         ],
-        "summary": "\u6309 ID \u67E5\u8BE2 CandidateConstraint",
+        "summary": "按 ID 查询 CandidateConstraint",
         "operationId": "GetCandidateConstraint",
         "parameters": [
           {
@@ -1011,7 +1042,7 @@
         "tags": [
           "Constraints"
         ],
-        "summary": "\u6FC0\u6D3B CandidateConstraint \u4E3A Active hard constraint",
+        "summary": "激活 CandidateConstraint 为 Active hard constraint",
         "operationId": "ActivateCandidateConstraint",
         "parameters": [
           {
@@ -1062,7 +1093,7 @@
         "tags": [
           "Constraints"
         ],
-        "summary": "\u62D2\u7EDD CandidateConstraint \u5E76\u8BB0\u5F55\u5BA1\u6838\u5386\u53F2",
+        "summary": "拒绝 CandidateConstraint 并记录审核历史",
         "operationId": "RejectCandidateConstraint",
         "parameters": [
           {
@@ -1113,7 +1144,7 @@
         "tags": [
           "Constraints"
         ],
-        "summary": "\u67E5\u8BE2 CandidateConstraint \u5BA1\u6838\u5386\u53F2",
+        "summary": "查询 CandidateConstraint 审核历史",
         "operationId": "GetCandidateConstraintReviews",
         "parameters": [
           {
@@ -1157,7 +1188,7 @@
         "tags": [
           "Constraints"
         ],
-        "summary": "\u4ECE eval/report \u8F93\u5165\u751F\u6210\u7EA6\u675F\u7F3A\u53E3\u5019\u9009\u9879\uFF0C\u4E0D\u5199\u5165 ConstraintStore",
+        "summary": "从 eval/report 输入生成约束缺口候选项，不写入 ConstraintStore",
         "operationId": "GenerateConstraintGaps",
         "requestBody": {
           "content": {
@@ -1188,7 +1219,7 @@
         "tags": [
           "Constraints"
         ],
-        "summary": "\u67E5\u8BE2\u7EA6\u675F\u7F3A\u53E3\u5019\u9009\u9879",
+        "summary": "查询约束缺口候选项",
         "operationId": "GetConstraintGaps",
         "parameters": [
           {
@@ -1300,7 +1331,7 @@
         "tags": [
           "Constraints"
         ],
-        "summary": "\u6309 ID \u67E5\u8BE2\u7EA6\u675F\u7F3A\u53E3\u5019\u9009\u9879",
+        "summary": "按 ID 查询约束缺口候选项",
         "operationId": "GetConstraintGap",
         "parameters": [
           {
@@ -1341,7 +1372,7 @@
         "tags": [
           "Constraints"
         ],
-        "summary": "\u63A5\u53D7\u7EA6\u675F\u7F3A\u53E3\u5019\u9009\u9879\u5E76\u521B\u5EFA CandidateConstraint",
+        "summary": "接受约束缺口候选项并创建 CandidateConstraint",
         "operationId": "AcceptConstraintGap",
         "parameters": [
           {
@@ -1392,7 +1423,7 @@
         "tags": [
           "Constraints"
         ],
-        "summary": "\u62D2\u7EDD\u7EA6\u675F\u7F3A\u53E3\u5019\u9009\u9879\u5E76\u8BB0\u5F55\u5BA1\u6838\u5386\u53F2",
+        "summary": "拒绝约束缺口候选项并记录审核历史",
         "operationId": "RejectConstraintGap",
         "parameters": [
           {
@@ -1443,7 +1474,7 @@
         "tags": [
           "Constraints"
         ],
-        "summary": "\u67E5\u8BE2\u7EA6\u675F\u7F3A\u53E3\u5019\u9009\u9879\u5BA1\u6838\u5386\u53F2",
+        "summary": "查询约束缺口候选项审核历史",
         "operationId": "GetConstraintGapReviews",
         "parameters": [
           {
@@ -1487,7 +1518,7 @@
         "tags": [
           "Provenance"
         ],
-        "summary": "\u67E5\u8BE2 stable review accept \u751F\u6210\u5BF9\u8C61\u7684\u5B8C\u6574\u6765\u6E90\u94FE\u4E0E\u53EA\u8BFB\u8BCA\u65AD",
+        "summary": "查询 stable review accept 生成对象的完整来源链与只读诊断",
         "operationId": "GetProvenance",
         "parameters": [
           {
@@ -1542,7 +1573,7 @@
         "tags": [
           "Model"
         ],
-        "summary": "\u83B7\u53D6\u6A21\u578B\u5065\u5EB7\u72B6\u6001",
+        "summary": "获取模型健康状态",
         "operationId": "GetModelStatus",
         "responses": {
           "200": {
@@ -1563,7 +1594,7 @@
         "tags": [
           "Model"
         ],
-        "summary": "\u9884\u89C8\u4E00\u6B21\u6A21\u578B\u8DEF\u7531\u89E3\u6790\u7ED3\u679C",
+        "summary": "预览一次模型路由解析结果",
         "operationId": "ResolveModelRoute",
         "requestBody": {
           "content": {
@@ -1604,7 +1635,7 @@
         "tags": [
           "Health"
         ],
-        "summary": "\u670D\u52A1\u5065\u5EB7\u68C0\u67E5\uFF08\u5DF2\u5C0F\u6210\u672C\u4FDD\u7559\uFF0C\u63A8\u8350\u4F7F\u7528 /api/health/live\uFF09",
+        "summary": "服务健康检查（已小成本保留，推荐使用 /api/health/live）",
         "operationId": "HealthCheck",
         "responses": {
           "200": {
@@ -1618,7 +1649,7 @@
         "tags": [
           "Admin"
         ],
-        "summary": "\u901A\u8FC7 ContextInputCommand \u6267\u884C\u6807\u51C6\u5316\u8F93\u5165\u6444\u53D6\uFF0C\u8FD4\u56DE\u5E42\u7B49\u4E0E\u987A\u5E8F\u4FE1\u606F",
+        "summary": "通过 ContextInputCommand 执行标准化输入摄取，返回幂等与顺序信息",
         "operationId": "AdminIngestContextInput",
         "requestBody": {
           "content": {
@@ -1649,7 +1680,7 @@
         "tags": [
           "Admin"
         ],
-        "summary": "\u8FD4\u56DE Admin \u89C6\u89D2\u7684\u5B58\u50A8\u4E0E retrieval baseline \u72B6\u6001\u6458\u8981",
+        "summary": "返回 Admin 视角的存储与 retrieval baseline 状态摘要",
         "operationId": "AdminStatus",
         "parameters": [
           {
@@ -1686,7 +1717,7 @@
         "tags": [
           "Admin"
         ],
-        "summary": "\u5B58\u50A8\u5907\u4EFD\u4FE1\u606F\u6982\u89C8\uFF08FS\uFF1A\u6587\u4EF6\u7EDF\u8BA1 \u002B \u5927\u5C0F\uFF1BPostgres\uFF1Aschema \u7248\u672C \u002B pg_dump \u5EFA\u8BAE\uFF09",
+        "summary": "存储备份信息概览（FS：文件统计 + 大小；Postgres：schema 版本 + pg_dump 建议）",
         "operationId": "AdminBackupStatus",
         "responses": {
           "200": {
@@ -1707,7 +1738,7 @@
         "tags": [
           "Admin"
         ],
-        "summary": "\u521B\u5EFA FileSystem \u6570\u636E\u76EE\u5F55 ZIP \u5FEB\u7167\uFF08\u4FDD\u5B58\u5230 \u003Cdata-root\u003E/../_backups/\uFF09",
+        "summary": "创建 FileSystem 数据目录 ZIP 快照（保存到 <data-root>/../_backups/）",
         "operationId": "AdminBackupCreate",
         "responses": {
           "200": {
@@ -1748,7 +1779,7 @@
         "tags": [
           "Admin"
         ],
-        "summary": "\u6821\u9A8C\u6240\u6709 JSONL \u6587\u4EF6\u5B8C\u6574\u6027\uFF08filesystem only\uFF09\uFF0C\u8FD4\u56DE\u635F\u574F\u884C\u8BE6\u60C5",
+        "summary": "校验所有 JSONL 文件完整性（filesystem only），返回损坏行详情",
         "operationId": "AdminBackupValidate",
         "responses": {
           "200": {
@@ -1789,7 +1820,7 @@
         "tags": [
           "Admin"
         ],
-        "summary": "\u8FD4\u56DE Postgres schema \u7248\u672C\uFF1A\u4EE3\u7801\u7248\u672C vs \u6570\u636E\u5E93\u5DF2\u5E94\u7528\u7248\u672C",
+        "summary": "返回 Postgres schema 版本：代码版本 vs 数据库已应用版本",
         "operationId": "AdminSchemaVersion",
         "responses": {
           "200": {
@@ -1810,7 +1841,7 @@
         "tags": [
           "Admin"
         ],
-        "summary": "\u8FD4\u56DE PostgreSQL operational store \u72B6\u6001\u6458\u8981\uFF0C\u4E0D\u5305\u542B\u660E\u6587\u8FDE\u63A5\u4E32",
+        "summary": "返回 PostgreSQL operational store 状态摘要，不包含明文连接串",
         "operationId": "AdminPostgresStorageStatus",
         "responses": {
           "200": {
@@ -1831,7 +1862,7 @@
         "tags": [
           "Admin"
         ],
-        "summary": "\u8FD4\u56DE PostgreSQL operational store \u8BCA\u65AD\uFF0C\u4E0D\u81EA\u52A8\u8FC1\u79FB",
+        "summary": "返回 PostgreSQL operational store 诊断，不自动迁移",
         "operationId": "AdminPostgresStorageDiagnostics",
         "responses": {
           "200": {
@@ -1852,7 +1883,7 @@
         "tags": [
           "Admin"
         ],
-        "summary": "\u9884\u89C8 PostgreSQL baseline migrations\uFF0C\u4E0D\u5199\u6570\u636E\u5E93",
+        "summary": "预览 PostgreSQL baseline migrations，不写数据库",
         "operationId": "AdminPostgresMigrationDryRun",
         "responses": {
           "200": {
@@ -1873,7 +1904,7 @@
         "tags": [
           "Admin"
         ],
-        "summary": "\u663E\u5F0F\u786E\u8BA4\u540E\u5E94\u7528 PostgreSQL baseline migrations",
+        "summary": "显式确认后应用 PostgreSQL baseline migrations",
         "operationId": "AdminPostgresMigrationApply",
         "requestBody": {
           "content": {
@@ -1904,7 +1935,7 @@
         "tags": [
           "Admin"
         ],
-        "summary": "\u8FD4\u56DE RelationStore scoped service mode \u72B6\u6001\uFF0C\u4E0D\u5305\u542B\u660E\u6587\u8FDE\u63A5\u4E32",
+        "summary": "返回 RelationStore scoped service mode 状态，不包含明文连接串",
         "operationId": "AdminRelationProviderStatus",
         "responses": {
           "200": {
@@ -1925,7 +1956,7 @@
         "tags": [
           "Admin"
         ],
-        "summary": "\u8FD4\u56DE Relation governance scoped service mode \u8BCA\u65AD",
+        "summary": "返回 Relation governance scoped service mode 诊断",
         "operationId": "AdminRelationProviderScopedDiagnostics",
         "responses": {
           "200": {
@@ -1946,7 +1977,7 @@
         "tags": [
           "Admin"
         ],
-        "summary": "API \u7EA7\u522B\u5EF6\u8FDF\u7EDF\u8BA1\uFF08P50/P95/P99\uFF09\u002B \u9519\u8BEF\u7387\uFF0C\u57FA\u4E8E\u5185\u5B58\u6EDA\u52A8\u7A97\u53E3\uFF08\u6700\u8FD1 2000 \u6B21\u8BF7\u6C42\uFF09",
+        "summary": "API 级别延迟统计（P50/P95/P99）+ 错误率，基于内存滚动窗口（最近 2000 次请求）",
         "operationId": "AdminMetrics",
         "responses": {
           "200": {
@@ -1967,7 +1998,7 @@
         "tags": [
           "Context"
         ],
-        "summary": "\u63A8\u8350\u4E1A\u52A1\u5165\u53E3\uFF1A\u652F\u6301 ContextInputCommand\uFF0C\u65E7 ContextItem \u8BF7\u6C42\u4F53\u517C\u5BB9\u4FDD\u7559",
+        "summary": "推荐业务入口：支持 ContextInputCommand，旧 ContextItem 请求体兼容保留",
         "operationId": "IngestContextItem",
         "requestBody": {
           "content": {
@@ -1998,7 +2029,7 @@
         "tags": [
           "Context"
         ],
-        "summary": "\u6309 ID \u83B7\u53D6\u4E0A\u4E0B\u6587\u6761\u76EE",
+        "summary": "按 ID 获取上下文条目",
         "operationId": "GetContextItem",
         "parameters": [
           {
@@ -2053,7 +2084,7 @@
         "tags": [
           "Context"
         ],
-        "summary": "\u5220\u9664\u6307\u5B9A ID \u7684\u4E0A\u4E0B\u6587\u6761\u76EE",
+        "summary": "删除指定 ID 的上下文条目",
         "operationId": "DeleteContextItem",
         "parameters": [
           {
@@ -2093,7 +2124,7 @@
         "tags": [
           "Context"
         ],
-        "summary": "\u6309\u8DEF\u7EBF\u56FE\u77ED\u8DEF\u5F84\u83B7\u53D6\u4E0A\u4E0B\u6587\u6761\u76EE",
+        "summary": "按路线图短路径获取上下文条目",
         "operationId": "GetContextItemById",
         "parameters": [
           {
@@ -2158,7 +2189,7 @@
         "tags": [
           "Context"
         ],
-        "summary": "\u6309\u6761\u4EF6\u67E5\u8BE2\u4E0A\u4E0B\u6587\u6761\u76EE\u5217\u8868",
+        "summary": "按条件查询上下文条目列表",
         "operationId": "QueryContextItems",
         "requestBody": {
           "content": {
@@ -2192,7 +2223,7 @@
         "tags": [
           "Context"
         ],
-        "summary": "\u83B7\u53D6\u96C6\u5408\u5143\u6570\u636E",
+        "summary": "获取集合元数据",
         "operationId": "GetCollection",
         "parameters": [
           {
@@ -2241,7 +2272,7 @@
         "tags": [
           "Context"
         ],
-        "summary": "\u6267\u884C\u6DF7\u5408\u68C0\u7D22\uFF0C\u53EF\u901A\u8FC7 Plan \u5B57\u6BB5\u63A5\u53D7\u6765\u81EA /api/package/build-detailed \u7684 RetrievalPlan \u4EE5\u5B9E\u73B0 plan passthrough",
+        "summary": "执行混合检索，可通过 Plan 字段接受来自 /api/package/build-detailed 的 RetrievalPlan 以实现 plan passthrough",
         "operationId": "RetrieveContext",
         "requestBody": {
           "content": {
@@ -2282,7 +2313,7 @@
         "tags": [
           "Memory"
         ],
-        "summary": "\u6DFB\u52A0\u5DE5\u4F5C\u8BB0\u5FC6\u6761\u76EE",
+        "summary": "添加工作记忆条目",
         "operationId": "AddWorkingMemory",
         "requestBody": {
           "content": {
@@ -2313,7 +2344,7 @@
         "tags": [
           "Memory"
         ],
-        "summary": "\u6DFB\u52A0\u5DE5\u4F5C\u8BB0\u5FC6\u6761\u76EE\uFF08WorkingMemoryItem\uFF09",
+        "summary": "添加工作记忆条目（WorkingMemoryItem）",
         "operationId": "AddWorkingMemoryItem",
         "requestBody": {
           "content": {
@@ -2344,7 +2375,7 @@
         "tags": [
           "Memory"
         ],
-        "summary": "\u83B7\u53D6\u6700\u8FD1\u5DE5\u4F5C\u8BB0\u5FC6\u6761\u76EE",
+        "summary": "获取最近工作记忆条目",
         "operationId": "GetRecentWorkingMemory",
         "parameters": [
           {
@@ -2398,7 +2429,7 @@
         "tags": [
           "Memory"
         ],
-        "summary": "\u6E05\u7A7A\u5DE5\u4F5C\u8BB0\u5FC6\u548C\u6D3B\u8DC3\u4E0A\u4E0B\u6587",
+        "summary": "清空工作记忆和活跃上下文",
         "operationId": "ClearWorkingMemory",
         "requestBody": {
           "content": {
@@ -2422,7 +2453,7 @@
         "tags": [
           "Memory"
         ],
-        "summary": "\u83B7\u53D6\u5DE5\u4F5C\u8BB0\u5FC6\u6D3B\u8DC3\u4E0A\u4E0B\u6587",
+        "summary": "获取工作记忆活跃上下文",
         "operationId": "GetWorkingMemoryActiveContext",
         "parameters": [
           {
@@ -2469,7 +2500,7 @@
         "tags": [
           "Memory"
         ],
-        "summary": "\u8BBE\u7F6E\u5DE5\u4F5C\u8BB0\u5FC6\u6D3B\u8DC3\u4E0A\u4E0B\u6587",
+        "summary": "设置工作记忆活跃上下文",
         "operationId": "SetWorkingMemoryActiveContext",
         "requestBody": {
           "content": {
@@ -2500,7 +2531,7 @@
         "tags": [
           "Memory"
         ],
-        "summary": "\u83B7\u53D6\u5F53\u524D\u4EFB\u52A1",
+        "summary": "获取当前任务",
         "operationId": "GetWorkingMemoryCurrentTask",
         "parameters": [
           {
@@ -2547,7 +2578,7 @@
         "tags": [
           "Memory"
         ],
-        "summary": "\u8BBE\u7F6E\u5F53\u524D\u4EFB\u52A1",
+        "summary": "设置当前任务",
         "operationId": "SetWorkingMemoryCurrentTask",
         "requestBody": {
           "content": {
@@ -2578,7 +2609,7 @@
         "tags": [
           "Memory"
         ],
-        "summary": "\u6309\u6761\u4EF6\u67E5\u8BE2\u8BB0\u5FC6\u6761\u76EE",
+        "summary": "按条件查询记忆条目",
         "operationId": "QueryMemory",
         "requestBody": {
           "content": {
@@ -2612,7 +2643,7 @@
         "tags": [
           "Memory"
         ],
-        "summary": "\u6309\u6761\u4EF6\u67E5\u8BE2\u5168\u5C40\u4E0A\u4E0B\u6587\u6761\u76EE",
+        "summary": "按条件查询全局上下文条目",
         "operationId": "QueryGlobalContext",
         "parameters": [
           {
@@ -2672,7 +2703,7 @@
         "tags": [
           "Memory"
         ],
-        "summary": "\u67E5\u8BE2 Stable Memory \u6CBB\u7406\u5FEB\u7167",
+        "summary": "查询 Stable Memory 治理快照",
         "operationId": "GetStableMemorySnapshot",
         "parameters": [
           {
@@ -2722,7 +2753,7 @@
         "tags": [
           "Memory"
         ],
-        "summary": "\u67E5\u8BE2 Stable Memory \u8BCA\u65AD\u62A5\u544A",
+        "summary": "查询 Stable Memory 诊断报告",
         "operationId": "GetStableMemoryDiagnostics",
         "parameters": [
           {
@@ -2760,7 +2791,7 @@
         "tags": [
           "Memory"
         ],
-        "summary": "\u89E3\u91CA Stable Memory \u6765\u6E90\u94FE\u548C\u8BCA\u65AD",
+        "summary": "解释 Stable Memory 来源链和诊断",
         "operationId": "ExplainStableMemory",
         "parameters": [
           {
@@ -2816,7 +2847,7 @@
         "tags": [
           "Memory"
         ],
-        "summary": "\u67E5\u8BE2 Stable Memory supersede / replacement chain",
+        "summary": "查询 Stable Memory supersede / replacement chain",
         "operationId": "GetStableReplacementChain",
         "parameters": [
           {
@@ -2872,7 +2903,7 @@
         "tags": [
           "Memory"
         ],
-        "summary": "\u4EBA\u5DE5\u5E9F\u5F03 Stable Memory \u5E76\u8BB0\u5F55\u751F\u547D\u5468\u671F review",
+        "summary": "人工废弃 Stable Memory 并记录生命周期 review",
         "operationId": "DeprecateStableMemory",
         "parameters": [
           {
@@ -2937,7 +2968,7 @@
         "tags": [
           "Memory"
         ],
-        "summary": "\u4EBA\u5DE5 supersede Stable Memory \u5E76\u8BB0\u5F55\u751F\u547D\u5468\u671F review",
+        "summary": "人工 supersede Stable Memory 并记录生命周期 review",
         "operationId": "SupersedeStableMemory",
         "parameters": [
           {
@@ -3002,7 +3033,7 @@
         "tags": [
           "Memory"
         ],
-        "summary": "\u4EBA\u5DE5\u62D2\u7EDD Stable Memory \u5E76\u8BB0\u5F55\u751F\u547D\u5468\u671F review",
+        "summary": "人工拒绝 Stable Memory 并记录生命周期 review",
         "operationId": "RejectStableMemory",
         "parameters": [
           {
@@ -3067,7 +3098,7 @@
         "tags": [
           "Memory"
         ],
-        "summary": "\u67E5\u8BE2 Stable Memory \u751F\u547D\u5468\u671F review history",
+        "summary": "查询 Stable Memory 生命周期 review history",
         "operationId": "GetStableMemoryReviews",
         "parameters": [
           {
@@ -3101,7 +3132,7 @@
         "tags": [
           "Memory"
         ],
-        "summary": "\u67E5\u8BE2\u4E2D\u671F Candidate Memory \u6CBB\u7406\u5FEB\u7167",
+        "summary": "查询中期 Candidate Memory 治理快照",
         "operationId": "GetCandidateMemorySnapshot",
         "parameters": [
           {
@@ -3151,7 +3182,7 @@
         "tags": [
           "Memory"
         ],
-        "summary": "\u67E5\u8BE2 Candidate Memory \u8BCA\u65AD\u62A5\u544A",
+        "summary": "查询 Candidate Memory 诊断报告",
         "operationId": "GetCandidateMemoryDiagnostics",
         "parameters": [
           {
@@ -3189,7 +3220,7 @@
         "tags": [
           "Memory"
         ],
-        "summary": "\u6309 ID \u67E5\u8BE2 Candidate Memory \u8BB0\u5F55",
+        "summary": "按 ID 查询 Candidate Memory 记录",
         "operationId": "GetCandidateMemory",
         "parameters": [
           {
@@ -3245,7 +3276,7 @@
         "tags": [
           "Memory"
         ],
-        "summary": "\u89E3\u91CA Candidate Memory \u6765\u6E90\u94FE\u548C\u98CE\u9669",
+        "summary": "解释 Candidate Memory 来源链和风险",
         "operationId": "ExplainCandidateMemory",
         "parameters": [
           {
@@ -3301,7 +3332,7 @@
         "tags": [
           "Memory"
         ],
-        "summary": "\u5C06 CandidateMemory \u6807\u8BB0\u4E3A ready for stable review",
+        "summary": "将 CandidateMemory 标记为 ready for stable review",
         "operationId": "MarkCandidateMemoryReadyForStableReview",
         "parameters": [
           {
@@ -3366,7 +3397,7 @@
         "tags": [
           "Memory"
         ],
-        "summary": "\u5C06 CandidateMemory \u6807\u8BB0\u4E3A\u9700\u8981\u66F4\u591A\u8BC1\u636E",
+        "summary": "将 CandidateMemory 标记为需要更多证据",
         "operationId": "MarkCandidateMemoryNeedsMoreEvidence",
         "parameters": [
           {
@@ -3431,7 +3462,7 @@
         "tags": [
           "Memory"
         ],
-        "summary": "\u62D2\u7EDD CandidateMemory \u5E76\u8BB0\u5F55 review",
+        "summary": "拒绝 CandidateMemory 并记录 review",
         "operationId": "RejectCandidateMemory",
         "parameters": [
           {
@@ -3496,7 +3527,7 @@
         "tags": [
           "Memory"
         ],
-        "summary": "\u8FC7\u671F CandidateMemory \u5E76\u8BB0\u5F55 review",
+        "summary": "过期 CandidateMemory 并记录 review",
         "operationId": "ExpireCandidateMemory",
         "parameters": [
           {
@@ -3561,7 +3592,7 @@
         "tags": [
           "Memory"
         ],
-        "summary": "\u5C06 CandidateMemory \u6807\u8BB0\u4E3A\u88AB\u53E6\u4E00\u4E2A candidate supersede",
+        "summary": "将 CandidateMemory 标记为被另一个 candidate supersede",
         "operationId": "SupersedeCandidateMemory",
         "parameters": [
           {
@@ -3626,7 +3657,7 @@
         "tags": [
           "Memory"
         ],
-        "summary": "\u67E5\u8BE2 CandidateMemory review history",
+        "summary": "查询 CandidateMemory review history",
         "operationId": "GetCandidateMemoryReviews",
         "parameters": [
           {
@@ -3660,7 +3691,7 @@
         "tags": [
           "Memory"
         ],
-        "summary": "\u67E5\u8BE2\u77ED\u671F\u539F\u59CB\u4E8B\u4EF6",
+        "summary": "查询短期原始事件",
         "operationId": "GetShortTermRawEvents",
         "parameters": [
           {
@@ -3710,7 +3741,7 @@
         "tags": [
           "Memory"
         ],
-        "summary": "\u67E5\u8BE2\u77ED\u671F\u5DE5\u4F5C\u9879",
+        "summary": "查询短期工作项",
         "operationId": "GetShortTermWorkingItems",
         "parameters": [
           {
@@ -3760,7 +3791,7 @@
         "tags": [
           "Memory"
         ],
-        "summary": "\u67E5\u8BE2\u77ED\u671F\u8BB0\u5FC6\u6458\u8981",
+        "summary": "查询短期记忆摘要",
         "operationId": "GetShortTermMemorySummary",
         "parameters": [
           {
@@ -3810,7 +3841,7 @@
         "tags": [
           "Memory"
         ],
-        "summary": "\u6267\u884C\u77ED\u671F\u8BB0\u5FC6\u538B\u7F29\u4E0E\u5F52\u6863",
+        "summary": "执行短期记忆压缩与归档",
         "operationId": "CompactShortTermMemory",
         "requestBody": {
           "content": {
@@ -3834,7 +3865,7 @@
         "tags": [
           "Memory"
         ],
-        "summary": "\u67E5\u8BE2\u77ED\u671F\u8BB0\u5FC6\u5F52\u6863\u6458\u8981",
+        "summary": "查询短期记忆归档摘要",
         "operationId": "GetShortTermArchiveSummary",
         "parameters": [
           {
@@ -3879,7 +3910,7 @@
         "tags": [
           "Memory"
         ],
-        "summary": "\u67E5\u8BE2\u77ED\u671F\u8BB0\u5FC6\u5F52\u6863\u660E\u7EC6",
+        "summary": "查询短期记忆归档明细",
         "operationId": "GetShortTermArchiveItems",
         "parameters": [
           {
@@ -3943,7 +3974,7 @@
         "tags": [
           "Memory"
         ],
-        "summary": "\u67E5\u8BE2\u77ED\u671F\u8BB0\u5FC6\u538B\u7F29\u8FD0\u884C\u5386\u53F2",
+        "summary": "查询短期记忆压缩运行历史",
         "operationId": "GetShortTermCompactionRuns",
         "parameters": [
           {
@@ -3999,7 +4030,7 @@
         "tags": [
           "Memory"
         ],
-        "summary": "\u6309 RunId \u67E5\u8BE2\u77ED\u671F\u8BB0\u5FC6\u538B\u7F29\u8FD0\u884C\u8BB0\u5F55",
+        "summary": "按 RunId 查询短期记忆压缩运行记录",
         "operationId": "GetShortTermCompactionRun",
         "parameters": [
           {
@@ -4040,7 +4071,7 @@
         "tags": [
           "Memory"
         ],
-        "summary": "\u751F\u6210\u77ED\u671F\u8BB0\u5FC6\u664B\u5347\u5019\u9009\u9879",
+        "summary": "生成短期记忆晋升候选项",
         "operationId": "GenerateShortTermPromotionCandidates",
         "requestBody": {
           "content": {
@@ -4064,7 +4095,7 @@
         "tags": [
           "Memory"
         ],
-        "summary": "\u67E5\u8BE2\u77ED\u671F\u8BB0\u5FC6\u664B\u5347\u5019\u9009\u9879",
+        "summary": "查询短期记忆晋升候选项",
         "operationId": "GetShortTermPromotionCandidates",
         "parameters": [
           {
@@ -4114,7 +4145,7 @@
             "name": "minConfidence",
             "in": "query",
             "schema": {
-              "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+              "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
               "type": [
                 "number",
                 "string"
@@ -4126,7 +4157,7 @@
             "name": "minImportance",
             "in": "query",
             "schema": {
-              "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+              "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
               "type": [
                 "number",
                 "string"
@@ -4193,7 +4224,7 @@
         "tags": [
           "Memory"
         ],
-        "summary": "\u89E3\u91CA\u77ED\u671F\u8BB0\u5FC6\u664B\u5347\u5019\u9009\u9879\u7684\u6765\u6E90\u4E0E\u89C4\u5219\u4FE1\u606F",
+        "summary": "解释短期记忆晋升候选项的来源与规则信息",
         "operationId": "ExplainShortTermPromotionCandidate",
         "parameters": [
           {
@@ -4234,7 +4265,7 @@
         "tags": [
           "Memory"
         ],
-        "summary": "\u63A5\u53D7\u77ED\u671F\u664B\u5347\u5019\u9009\u9879\u5E76\u5199\u5165\u5019\u9009\u76EE\u6807\u5C42",
+        "summary": "接受短期晋升候选项并写入候选目标层",
         "operationId": "AcceptShortTermPromotionCandidate",
         "parameters": [
           {
@@ -4285,7 +4316,7 @@
         "tags": [
           "Memory"
         ],
-        "summary": "\u62D2\u7EDD\u77ED\u671F\u664B\u5347\u5019\u9009\u9879\u5E76\u8BB0\u5F55\u5BA1\u6838\u5386\u53F2",
+        "summary": "拒绝短期晋升候选项并记录审核历史",
         "operationId": "RejectShortTermPromotionCandidate",
         "parameters": [
           {
@@ -4336,7 +4367,7 @@
         "tags": [
           "Memory"
         ],
-        "summary": "\u5C06\u77ED\u671F\u664B\u5347\u5019\u9009\u9879\u6807\u8BB0\u4E3A\u8FC7\u671F\u5E76\u8BB0\u5F55\u5BA1\u6838\u5386\u53F2",
+        "summary": "将短期晋升候选项标记为过期并记录审核历史",
         "operationId": "ExpireShortTermPromotionCandidate",
         "parameters": [
           {
@@ -4387,7 +4418,7 @@
         "tags": [
           "Memory"
         ],
-        "summary": "\u67E5\u8BE2\u77ED\u671F\u664B\u5347\u5019\u9009\u9879\u5BA1\u6838\u5386\u53F2",
+        "summary": "查询短期晋升候选项审核历史",
         "operationId": "GetShortTermPromotionCandidateReviews",
         "parameters": [
           {
@@ -4411,7 +4442,7 @@
         "tags": [
           "Memory"
         ],
-        "summary": "\u6309 ID \u67E5\u8BE2\u77ED\u671F\u8BB0\u5FC6\u664B\u5347\u5019\u9009\u9879",
+        "summary": "按 ID 查询短期记忆晋升候选项",
         "operationId": "GetShortTermPromotionCandidate",
         "parameters": [
           {
@@ -4452,7 +4483,7 @@
         "tags": [
           "Memory"
         ],
-        "summary": "\u4ECE\u5DF2\u63A5\u53D7\u77ED\u671F\u664B\u5347\u5019\u9009\u9879\u751F\u6210 Stable Review \u5019\u9009\u9879",
+        "summary": "从已接受短期晋升候选项生成 Stable Review 候选项",
         "operationId": "GenerateStableReviewCandidates",
         "requestBody": {
           "content": {
@@ -4486,7 +4517,7 @@
         "tags": [
           "Memory"
         ],
-        "summary": "\u67E5\u8BE2 Stable Review \u5019\u9009\u9879",
+        "summary": "查询 Stable Review 候选项",
         "operationId": "GetStableReviewCandidates",
         "parameters": [
           {
@@ -4588,7 +4619,7 @@
         "tags": [
           "Memory"
         ],
-        "summary": "\u63A5\u53D7 Stable Review \u5019\u9009\u9879\u5E76\u5199\u5165\u7A33\u5B9A\u76EE\u6807\u5C42",
+        "summary": "接受 Stable Review 候选项并写入稳定目标层",
         "operationId": "AcceptStableReviewCandidate",
         "parameters": [
           {
@@ -4639,7 +4670,7 @@
         "tags": [
           "Memory"
         ],
-        "summary": "\u62D2\u7EDD Stable Review \u5019\u9009\u9879\u5E76\u8BB0\u5F55\u5BA1\u6838\u5386\u53F2",
+        "summary": "拒绝 Stable Review 候选项并记录审核历史",
         "operationId": "RejectStableReviewCandidate",
         "parameters": [
           {
@@ -4673,7 +4704,7 @@
         "tags": [
           "Memory"
         ],
-        "summary": "\u67E5\u8BE2 Stable Review \u5019\u9009\u9879\u5BA1\u6838\u5386\u53F2",
+        "summary": "查询 Stable Review 候选项审核历史",
         "operationId": "GetStableReviewCandidateReviews",
         "parameters": [
           {
@@ -4717,7 +4748,7 @@
         "tags": [
           "Memory"
         ],
-        "summary": "\u89E3\u91CA Stable Review \u5019\u9009\u9879\u6765\u6E90\u3001\u5B66\u4E60\u6848\u4F8B\u548C\u6821\u9A8C\u72B6\u6001",
+        "summary": "解释 Stable Review 候选项来源、学习案例和校验状态",
         "operationId": "ExplainStableReviewCandidate",
         "parameters": [
           {
@@ -4758,7 +4789,7 @@
         "tags": [
           "Memory"
         ],
-        "summary": "\u6309 ID \u67E5\u8BE2 Stable Review \u5019\u9009\u9879",
+        "summary": "按 ID 查询 Stable Review 候选项",
         "operationId": "GetStableReviewCandidate",
         "parameters": [
           {
@@ -4799,7 +4830,7 @@
         "tags": [
           "Memory"
         ],
-        "summary": "\u5C06\u5DE5\u4F5C\u8BB0\u5FC6\u664B\u5347\u4E3A\u7A33\u5B9A\u8BB0\u5FC6",
+        "summary": "将工作记忆晋升为稳定记忆",
         "operationId": "PromoteMemory",
         "requestBody": {
           "content": {
@@ -4830,7 +4861,7 @@
         "tags": [
           "Memory"
         ],
-        "summary": "\u5C06\u8BB0\u5FC6\u6761\u76EE\u6807\u8BB0\u4E3A\u62D2\u7EDD",
+        "summary": "将记忆条目标记为拒绝",
         "operationId": "RejectMemory",
         "requestBody": {
           "content": {
@@ -4861,7 +4892,7 @@
         "tags": [
           "Memory"
         ],
-        "summary": "\u5C06\u8BB0\u5FC6\u6761\u76EE\u6807\u8BB0\u4E3A\u5E9F\u5F03",
+        "summary": "将记忆条目标记为废弃",
         "operationId": "DeprecateMemory",
         "requestBody": {
           "content": {
@@ -4892,7 +4923,7 @@
         "tags": [
           "Package"
         ],
-        "summary": "\u6309\u8BF7\u6C42\u6784\u5EFA\u4E0A\u4E0B\u6587\u5305\uFF0C\u8FD4\u56DE\u4F9B LLM \u4F7F\u7528\u7684 ContextPackage",
+        "summary": "按请求构建上下文包，返回供 LLM 使用的 ContextPackage",
         "operationId": "BuildPackage",
         "requestBody": {
           "content": {
@@ -4933,7 +4964,7 @@
         "tags": [
           "Package"
         ],
-        "summary": "\u6784\u5EFA\u4E0A\u4E0B\u6587\u5305\u5E76\u8FD4\u56DE\u5B8C\u6574\u51B3\u7B56\u65E5\u5FD7\uFF08\u542B RetrievalPlan\uFF09\uFF0C\u7528\u4E8E plan passthrough \u573A\u666F",
+        "summary": "构建上下文包并返回完整决策日志（含 RetrievalPlan），用于 plan passthrough 场景",
         "operationId": "BuildPackageDetailed",
         "requestBody": {
           "content": {
@@ -4974,7 +5005,7 @@
         "tags": [
           "Package"
         ],
-        "summary": "\u9884\u89C8\u4E0A\u4E0B\u6587\u5305\u6784\u5EFA\u7ED3\u679C\uFF0C\u4E0D\u5F15\u5165\u65B0\u7684\u6301\u4E45\u5316\u8BED\u4E49",
+        "summary": "预览上下文包构建结果，不引入新的持久化语义",
         "operationId": "PreviewPackage",
         "requestBody": {
           "content": {
@@ -5015,7 +5046,7 @@
         "tags": [
           "Package"
         ],
-        "summary": "\u63D2\u5165\u6216\u66F4\u65B0\u4E00\u6761\u7D22\u5F15\u6761\u76EE",
+        "summary": "插入或更新一条索引条目",
         "operationId": "UpsertIndexEntry",
         "requestBody": {
           "content": {
@@ -5039,7 +5070,7 @@
         "tags": [
           "Package"
         ],
-        "summary": "\u641C\u7D22\u7D22\u5F15\u6761\u76EE",
+        "summary": "搜索索引条目",
         "operationId": "SearchIndex",
         "requestBody": {
           "content": {
@@ -5073,7 +5104,7 @@
         "tags": [
           "Package"
         ],
-        "summary": "\u67E5\u8BE2\u4E0A\u4E0B\u6587\u5305\u7B56\u7565",
+        "summary": "查询上下文包策略",
         "operationId": "QueryPackagePolicies",
         "parameters": [
           {
@@ -5134,7 +5165,7 @@
         "tags": [
           "Package"
         ],
-        "summary": "\u83B7\u53D6\u6307\u5B9A\u4E0A\u4E0B\u6587\u5305\u7B56\u7565",
+        "summary": "获取指定上下文包策略",
         "operationId": "GetPackagePolicy",
         "parameters": [
           {
@@ -5191,7 +5222,7 @@
         "tags": [
           "Compression"
         ],
-        "summary": "\u540C\u6B65\u6267\u884C\u538B\u7F29\u5E76\u4FDD\u5B58\u751F\u6210\u7ED3\u679C",
+        "summary": "同步执行压缩并保存生成结果",
         "operationId": "RunCompressionSync",
         "requestBody": {
           "content": {
@@ -5222,7 +5253,7 @@
         "tags": [
           "Jobs"
         ],
-        "summary": "\u521B\u5EFA\u538B\u7F29\u540E\u53F0\u4F5C\u4E1A",
+        "summary": "创建压缩后台作业",
         "operationId": "EnqueueCompressionJob",
         "requestBody": {
           "content": {
@@ -5263,7 +5294,7 @@
         "tags": [
           "Jobs"
         ],
-        "summary": "\u67E5\u8BE2\u540E\u53F0\u4F5C\u4E1A",
+        "summary": "查询后台作业",
         "operationId": "QueryJobsWithTrailingSlash",
         "parameters": [
           {
@@ -5322,7 +5353,7 @@
         "tags": [
           "Jobs"
         ],
-        "summary": "\u6309 ID \u83B7\u53D6\u540E\u53F0\u4F5C\u4E1A",
+        "summary": "按 ID 获取后台作业",
         "operationId": "GetJob",
         "parameters": [
           {
@@ -5363,7 +5394,7 @@
         "tags": [
           "Jobs"
         ],
-        "summary": "Worker \u53EF\u89C2\u6D4B\u6027\u7EDF\u8BA1\uFF08pending/running/failed/avgDuration/lastError\uFF09",
+        "summary": "Worker 可观测性统计（pending/running/failed/avgDuration/lastError）",
         "operationId": "GetWorkerStats",
         "parameters": [
           {
@@ -5393,7 +5424,7 @@
         "tags": [
           "Jobs"
         ],
-        "summary": "\u6B7B\u4FE1\u961F\u5217\uFF1A\u67E5\u8BE2 Failed \u72B6\u6001\uFF08\u5DF2\u8D85\u8FC7\u6700\u5927\u91CD\u8BD5\u6B21\u6570\uFF09\u7684\u4F5C\u4E1A",
+        "summary": "死信队列：查询 Failed 状态（已超过最大重试次数）的作业",
         "operationId": "GetDeadLetterJobs",
         "parameters": [
           {
@@ -5435,7 +5466,7 @@
         "tags": [
           "Jobs"
         ],
-        "summary": "\u5C06 Failed / Cancelled \u4F5C\u4E1A\u91CD\u65B0\u5165\u961F\uFF08\u751F\u6210\u65B0\u4F5C\u4E1A ID\uFF0C\u91CD\u7F6E\u91CD\u8BD5\u8BA1\u6570\uFF09",
+        "summary": "将 Failed / Cancelled 作业重新入队（生成新作业 ID，重置重试计数）",
         "operationId": "RequeueJob",
         "parameters": [
           {
@@ -5486,7 +5517,7 @@
         "tags": [
           "Learning"
         ],
-        "summary": "\u63D0\u4EA4\u8FD0\u884C\u65F6\u5B66\u4E60\u53CD\u9988\u4E8B\u4EF6\uFF1B\u4EC5\u91C7\u96C6\uFF0C\u4E0D\u6539\u53D8\u6B63\u5F0F\u7B56\u7565",
+        "summary": "提交运行时学习反馈事件；仅采集，不改变正式策略",
         "operationId": "SubmitRuntimeLearningFeedback",
         "requestBody": {
           "content": {
@@ -5525,7 +5556,7 @@
         "tags": [
           "Learning"
         ],
-        "summary": "\u67E5\u8BE2\u664B\u5347\u53CD\u9988\u4FE1\u53F7",
+        "summary": "查询晋升反馈信号",
         "operationId": "QueryLearningFeedback",
         "parameters": [
           {
@@ -5659,7 +5690,7 @@
         "tags": [
           "Learning"
         ],
-        "summary": "\u67E5\u8BE2\u8FD0\u884C\u65F6\u5B66\u4E60\u53CD\u9988\u6C47\u603B\uFF1B\u4E0D\u6539\u53D8\u6B63\u5F0F\u7B56\u7565",
+        "summary": "查询运行时学习反馈汇总；不改变正式策略",
         "operationId": "GetRuntimeLearningFeedbackSummary",
         "parameters": [
           {
@@ -5762,7 +5793,7 @@
         "tags": [
           "Learning"
         ],
-        "summary": "\u5BFC\u51FA\u8FD0\u884C\u65F6\u5B66\u4E60\u53CD\u9988 JSONL\uFF1B\u4E0D\u6539\u53D8\u6B63\u5F0F\u7B56\u7565",
+        "summary": "导出运行时学习反馈 JSONL；不改变正式策略",
         "operationId": "ExportRuntimeLearningFeedback",
         "parameters": [
           {
@@ -5865,7 +5896,7 @@
         "tags": [
           "Learning"
         ],
-        "summary": "\u6279\u51C6\u8FD0\u884C\u65F6\u53CD\u9988\u8FDB\u5165\u79BB\u7EBF\u6570\u636E\u96C6\u5019\u9009\uFF1B\u4E0D\u6539\u53D8\u6B63\u5F0F\u7B56\u7565",
+        "summary": "批准运行时反馈进入离线数据集候选；不改变正式策略",
         "operationId": "ApproveRuntimeLearningFeedback",
         "parameters": [
           {
@@ -5916,7 +5947,7 @@
         "tags": [
           "Learning"
         ],
-        "summary": "\u62D2\u7EDD\u8FD0\u884C\u65F6\u53CD\u9988\u8FDB\u5165\u79BB\u7EBF\u6570\u636E\u96C6\u5019\u9009\uFF1B\u4E0D\u6539\u53D8\u6B63\u5F0F\u7B56\u7565",
+        "summary": "拒绝运行时反馈进入离线数据集候选；不改变正式策略",
         "operationId": "RejectRuntimeLearningFeedback",
         "parameters": [
           {
@@ -5967,7 +5998,7 @@
         "tags": [
           "Learning"
         ],
-        "summary": "\u6807\u8BB0\u8FD0\u884C\u65F6\u53CD\u9988\u9700\u8981\u8131\u654F\u540E\u518D\u8FDB\u5165\u79BB\u7EBF\u6570\u636E\u96C6\u5019\u9009",
+        "summary": "标记运行时反馈需要脱敏后再进入离线数据集候选",
         "operationId": "MarkRuntimeLearningFeedbackNeedsRedaction",
         "parameters": [
           {
@@ -6018,7 +6049,7 @@
         "tags": [
           "Learning"
         ],
-        "summary": "\u6807\u8BB0\u8FD0\u884C\u65F6\u53CD\u9988\u9700\u8981\u66F4\u591A\u8BC1\u636E\u540E\u518D\u8FDB\u5165\u79BB\u7EBF\u6570\u636E\u96C6\u5019\u9009",
+        "summary": "标记运行时反馈需要更多证据后再进入离线数据集候选",
         "operationId": "MarkRuntimeLearningFeedbackNeedsEvidence",
         "parameters": [
           {
@@ -6069,7 +6100,7 @@
         "tags": [
           "Learning"
         ],
-        "summary": "\u67E5\u8BE2\u8FD0\u884C\u65F6\u53CD\u9988\u5BA1\u6838\u8BB0\u5F55\uFF1B\u4E0D\u6539\u53D8\u6B63\u5F0F\u7B56\u7565",
+        "summary": "查询运行时反馈审核记录；不改变正式策略",
         "operationId": "GetRuntimeLearningFeedbackReviews",
         "parameters": [
           {
@@ -6140,7 +6171,7 @@
         "tags": [
           "Learning"
         ],
-        "summary": "\u67E5\u8BE2\u8FD0\u884C\u65F6\u53CD\u9988\u5BA1\u6838\u6458\u8981\uFF1B\u4E0D\u6539\u53D8\u6B63\u5F0F\u7B56\u7565",
+        "summary": "查询运行时反馈审核摘要；不改变正式策略",
         "operationId": "GetRuntimeLearningFeedbackReviewSummary",
         "parameters": [
           {
@@ -6208,7 +6239,7 @@
         "tags": [
           "Learning"
         ],
-        "summary": "\u67E5\u8BE2\u4E0A\u4E0B\u6587\u5B66\u4E60\u8BB0\u5F55",
+        "summary": "查询上下文学习记录",
         "operationId": "QueryLearningRecords",
         "parameters": [
           {
@@ -6307,7 +6338,7 @@
         "tags": [
           "Learning"
         ],
-        "summary": "\u6309 ID \u67E5\u8BE2\u4E0A\u4E0B\u6587\u5B66\u4E60\u8BB0\u5F55",
+        "summary": "按 ID 查询上下文学习记录",
         "operationId": "GetLearningRecord",
         "parameters": [
           {
@@ -6348,7 +6379,7 @@
         "tags": [
           "Learning"
         ],
-        "summary": "\u67E5\u8BE2\u4E0A\u4E0B\u6587\u5B66\u4E60\u6848\u4F8B",
+        "summary": "查询上下文学习案例",
         "operationId": "QueryLearningCases",
         "parameters": [
           {
@@ -6452,7 +6483,7 @@
         "tags": [
           "Learning"
         ],
-        "summary": "\u521B\u5EFA\u4E0A\u4E0B\u6587\u5B66\u4E60\u6848\u4F8B",
+        "summary": "创建上下文学习案例",
         "operationId": "CreateLearningCase",
         "requestBody": {
           "content": {
@@ -6493,7 +6524,7 @@
         "tags": [
           "Learning"
         ],
-        "summary": "\u4ECE\u5B66\u4E60\u8BB0\u5F55\u751F\u6210\u89C4\u5219\u578B\u5B66\u4E60\u6848\u4F8B",
+        "summary": "从学习记录生成规则型学习案例",
         "operationId": "GenerateLearningCases",
         "requestBody": {
           "content": {
@@ -6524,7 +6555,7 @@
         "tags": [
           "Learning"
         ],
-        "summary": "\u5C06\u5B66\u4E60\u6848\u4F8B\u6FC0\u6D3B\u4E3A\u56DE\u5F52\u6848\u4F8B",
+        "summary": "将学习案例激活为回归案例",
         "operationId": "ActivateLearningCase",
         "parameters": [
           {
@@ -6575,7 +6606,7 @@
         "tags": [
           "Learning"
         ],
-        "summary": "\u5F52\u6863\u5B66\u4E60\u6848\u4F8B",
+        "summary": "归档学习案例",
         "operationId": "ArchiveLearningCase",
         "parameters": [
           {
@@ -6626,7 +6657,7 @@
         "tags": [
           "Learning"
         ],
-        "summary": "\u62D2\u7EDD\u5B66\u4E60\u6848\u4F8B",
+        "summary": "拒绝学习案例",
         "operationId": "RejectLearningCase",
         "parameters": [
           {
@@ -6677,7 +6708,7 @@
         "tags": [
           "Learning"
         ],
-        "summary": "\u67E5\u8BE2\u4E0A\u4E0B\u6587\u5B66\u4E60\u6458\u8981",
+        "summary": "查询上下文学习摘要",
         "operationId": "GetLearningSummary",
         "parameters": [
           {
@@ -6721,7 +6752,7 @@
         "tags": [
           "Learning"
         ],
-        "summary": "\u67E5\u8BE2\u5DF2\u6FC0\u6D3B\u7684\u5B66\u4E60\u56DE\u5F52\u6848\u4F8B",
+        "summary": "查询已激活的学习回归案例",
         "operationId": "GetRegressionLearningCases",
         "parameters": [
           {
@@ -6792,7 +6823,7 @@
         "tags": [
           "Learning"
         ],
-        "summary": "\u6309 ID \u67E5\u8BE2\u4E0A\u4E0B\u6587\u5B66\u4E60\u6848\u4F8B",
+        "summary": "按 ID 查询上下文学习案例",
         "operationId": "GetLearningCase",
         "parameters": [
           {
@@ -6833,7 +6864,7 @@
         "tags": [
           "Vector"
         ],
-        "summary": "\u67E5\u8BE2 V1 vector index \u72B6\u6001",
+        "summary": "查询 V1 vector index 状态",
         "operationId": "GetVectorStatus",
         "parameters": [
           {
@@ -6872,7 +6903,7 @@
         "tags": [
           "Vector"
         ],
-        "summary": "\u67E5\u8BE2 V1 vector index \u8BCA\u65AD",
+        "summary": "查询 V1 vector index 诊断",
         "operationId": "GetVectorDiagnostics",
         "parameters": [
           {
@@ -6911,7 +6942,7 @@
         "tags": [
           "Vector"
         ],
-        "summary": "\u9884\u89C8 V1 vector index reindex \u52A8\u4F5C\uFF0C\u4E0D\u5199\u5165\u5B58\u50A8",
+        "summary": "预览 V1 vector index reindex 动作，不写入存储",
         "operationId": "PreviewVectorReindex",
         "requestBody": {
           "content": {
@@ -6942,7 +6973,7 @@
         "tags": [
           "Vector"
         ],
-        "summary": "\u9884\u89C8 V3 vector query \u7ED3\u679C\uFF0C\u4E0D\u5F71\u54CD\u6B63\u5F0F retrieval/package",
+        "summary": "预览 V3 vector query 结果，不影响正式 retrieval/package",
         "operationId": "PreviewVectorQuery",
         "requestBody": {
           "content": {
@@ -6973,7 +7004,7 @@
         "tags": [
           "Vector"
         ],
-        "summary": "\u521B\u5EFA vector reindex \u8BA1\u5212\uFF0C\u4E0D\u5199\u5165\u5B58\u50A8",
+        "summary": "创建 vector reindex 计划，不写入存储",
         "operationId": "CreateVectorReindexPlan",
         "requestBody": {
           "content": {
@@ -7004,7 +7035,7 @@
         "tags": [
           "Vector"
         ],
-        "summary": "\u63D0\u4EA4 vector_reindex \u540E\u53F0\u4F5C\u4E1A",
+        "summary": "提交 vector_reindex 后台作业",
         "operationId": "SubmitVectorReindex",
         "requestBody": {
           "content": {
@@ -7045,7 +7076,7 @@
         "tags": [
           "Vector"
         ],
-        "summary": "\u67E5\u8BE2 vector reindex \u62A5\u544A",
+        "summary": "查询 vector reindex 报告",
         "operationId": "QueryVectorReindexReports",
         "parameters": [
           {
@@ -7096,7 +7127,7 @@
         "tags": [
           "Vector"
         ],
-        "summary": "\u6309 ID \u67E5\u8BE2 vector reindex \u62A5\u544A",
+        "summary": "按 ID 查询 vector reindex 报告",
         "operationId": "GetVectorReindexReport",
         "parameters": [
           {
@@ -7137,7 +7168,7 @@
         "tags": [
           "Vector"
         ],
-        "summary": "\u4ECE lifecycle metadata repair plan \u751F\u6210\u53EA\u8BFB\u4EBA\u5DE5 review \u5019\u9009\u9879",
+        "summary": "从 lifecycle metadata repair plan 生成只读人工 review 候选项",
         "operationId": "GenerateVectorLifecycleMetadataReviewCandidates",
         "requestBody": {
           "content": {
@@ -7188,7 +7219,7 @@
         "tags": [
           "Vector"
         ],
-        "summary": "\u67E5\u8BE2 lifecycle metadata review \u5019\u9009\u9879",
+        "summary": "查询 lifecycle metadata review 候选项",
         "operationId": "QueryVectorLifecycleMetadataReviewCandidates",
         "parameters": [
           {
@@ -7288,7 +7319,7 @@
         "tags": [
           "Vector"
         ],
-        "summary": "\u6309 ID \u67E5\u8BE2 lifecycle metadata review \u5019\u9009\u9879",
+        "summary": "按 ID 查询 lifecycle metadata review 候选项",
         "operationId": "GetVectorLifecycleMetadataReviewCandidate",
         "parameters": [
           {
@@ -7329,7 +7360,7 @@
         "tags": [
           "Vector"
         ],
-        "summary": "\u89E3\u91CA lifecycle metadata review \u5019\u9009\u9879\u8BC1\u636E\u4E0E\u98CE\u9669",
+        "summary": "解释 lifecycle metadata review 候选项证据与风险",
         "operationId": "ExplainVectorLifecycleMetadataReviewCandidate",
         "parameters": [
           {
@@ -7370,7 +7401,7 @@
         "tags": [
           "Vector"
         ],
-        "summary": "\u6279\u51C6 lifecycle metadata review candidate \u5199\u5165 sidecar metadata",
+        "summary": "批准 lifecycle metadata review candidate 写入 sidecar metadata",
         "operationId": "ApproveVectorLifecycleMetadataReviewCandidate",
         "parameters": [
           {
@@ -7421,7 +7452,7 @@
         "tags": [
           "Vector"
         ],
-        "summary": "\u62D2\u7EDD lifecycle metadata review candidate\uFF0C\u4E0D\u5199 sidecar",
+        "summary": "拒绝 lifecycle metadata review candidate，不写 sidecar",
         "operationId": "RejectVectorLifecycleMetadataReviewCandidate",
         "parameters": [
           {
@@ -7472,7 +7503,7 @@
         "tags": [
           "Vector"
         ],
-        "summary": "\u6807\u8BB0 lifecycle metadata review candidate \u9700\u8981\u66F4\u591A\u8BC1\u636E",
+        "summary": "标记 lifecycle metadata review candidate 需要更多证据",
         "operationId": "NeedsEvidenceVectorLifecycleMetadataReviewCandidate",
         "parameters": [
           {
@@ -7523,7 +7554,7 @@
         "tags": [
           "Vector"
         ],
-        "summary": "\u6807\u8BB0 lifecycle metadata review candidate \u5DF2\u88AB\u66FF\u4EE3",
+        "summary": "标记 lifecycle metadata review candidate 已被替代",
         "operationId": "SupersedeVectorLifecycleMetadataReviewCandidate",
         "parameters": [
           {
@@ -7574,7 +7605,7 @@
         "tags": [
           "Vector"
         ],
-        "summary": "\u67E5\u8BE2 lifecycle metadata review candidate \u51B3\u7B56\u5386\u53F2",
+        "summary": "查询 lifecycle metadata review candidate 决策历史",
         "operationId": "ListVectorLifecycleMetadataReviewCandidateReviews",
         "parameters": [
           {
@@ -7608,7 +7639,7 @@
         "tags": [
           "Vector"
         ],
-        "summary": "\u67E5\u8BE2 lifecycle metadata sidecar preview",
+        "summary": "查询 lifecycle metadata sidecar preview",
         "operationId": "ListVectorLifecycleMetadataSidecar",
         "parameters": [
           {
@@ -8099,7 +8130,7 @@
             "type": "string"
           },
           "importance": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -8107,7 +8138,7 @@
             "format": "double"
           },
           "confidence": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -8482,7 +8513,7 @@
             "type": "string"
           },
           "confidence": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -8542,7 +8573,7 @@
             "type": "string"
           },
           "completenessScore": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -8550,7 +8581,7 @@
             "format": "double"
           },
           "consistencyScore": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -8558,7 +8589,7 @@
             "format": "double"
           },
           "usabilityScore": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -8566,7 +8597,7 @@
             "format": "double"
           },
           "compressionRatio": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -8574,7 +8605,7 @@
             "format": "double"
           },
           "riskScore": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -8789,7 +8820,7 @@
             "type": "boolean"
           },
           "qualityScore": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -8811,7 +8842,7 @@
             "type": "boolean"
           },
           "estimatedCost": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -9236,7 +9267,7 @@
             "$ref": "#/components/schemas/AnchorType"
           },
           "weight": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -9328,7 +9359,7 @@
             "$ref": "#/components/schemas/ContextMemoryStatus"
           },
           "confidence": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -9392,7 +9423,7 @@
             "format": "int64"
           },
           "backupSizeMb": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -9454,7 +9485,7 @@
             "format": "int64"
           },
           "totalSizeMb": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "null",
               "number",
@@ -9734,7 +9765,7 @@
             "format": "int64"
           },
           "avgDurationMs": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "null",
               "number",
@@ -9785,7 +9816,7 @@
             "type": "boolean"
           },
           "timeoutSeconds": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -9975,7 +10006,7 @@
             ]
           },
           "timeoutSeconds": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "null",
               "number",
@@ -10269,7 +10300,7 @@
             }
           },
           "score": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -10360,7 +10391,7 @@
             "type": "boolean"
           },
           "score": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -10485,6 +10516,12 @@
               "null",
               "boolean"
             ]
+          },
+          "autoBootstrap": {
+            "type": [
+              "null",
+              "boolean"
+            ]
           }
         }
       },
@@ -10586,7 +10623,7 @@
             }
           },
           "importance": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -10642,7 +10679,7 @@
             }
           },
           "weight": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -10791,7 +10828,7 @@
             }
           },
           "importance": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -11175,7 +11212,7 @@
             "type": "string"
           },
           "confidence": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -11183,7 +11220,7 @@
             "format": "double"
           },
           "importance": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -11373,7 +11410,7 @@
             }
           },
           "importance": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -11381,7 +11418,7 @@
             "format": "double"
           },
           "confidence": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -11514,7 +11551,7 @@
             "format": "int32"
           },
           "estimatedCost": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -11595,7 +11632,7 @@
             "format": "int32"
           },
           "usageRatio": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -11603,7 +11640,7 @@
             "format": "double"
           },
           "wasteRatio": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -11724,7 +11761,7 @@
             "type": "string"
           },
           "score": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -12062,7 +12099,7 @@
             "format": "int32"
           },
           "usageRatio": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -12197,7 +12234,7 @@
             ]
           },
           "confidence": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -12264,7 +12301,7 @@
             ]
           },
           "confidence": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -12488,7 +12525,7 @@
             "type": "string"
           },
           "weight": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -12496,7 +12533,7 @@
             "format": "double"
           },
           "confidence": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -12583,7 +12620,7 @@
             }
           },
           "score": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -12634,7 +12671,7 @@
             "type": "string"
           },
           "score": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -12708,7 +12745,7 @@
           "queryVector": {
             "type": "array",
             "items": {
-              "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+              "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
               "type": [
                 "number",
                 "string"
@@ -12750,7 +12787,7 @@
             "format": "int32"
           },
           "minVectorScore": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "null",
               "number",
@@ -12981,7 +13018,7 @@
             "type": "string"
           },
           "score": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -13057,7 +13094,7 @@
         "type": "object",
         "properties": {
           "baseScore": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -13065,7 +13102,7 @@
             "format": "double"
           },
           "layerScore": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -13073,7 +13110,7 @@
             "format": "double"
           },
           "statusScore": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -13081,7 +13118,7 @@
             "format": "double"
           },
           "semanticAnchorScore": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -13089,7 +13126,7 @@
             "format": "double"
           },
           "rawTokenMatchScore": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -13097,7 +13134,7 @@
             "format": "double"
           },
           "anchorMatchBonus": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -13105,7 +13142,7 @@
             "format": "double"
           },
           "modeMatchScore": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -13113,7 +13150,7 @@
             "format": "double"
           },
           "taskIntentScore": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -13121,7 +13158,7 @@
             "format": "double"
           },
           "recencyScore": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -13129,7 +13166,7 @@
             "format": "double"
           },
           "relationScore": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -13137,7 +13174,7 @@
             "format": "double"
           },
           "lifecyclePenalty": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -13145,7 +13182,7 @@
             "format": "double"
           },
           "redundancyPenalty": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -13153,7 +13190,7 @@
             "format": "double"
           },
           "finalScore": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -13162,7 +13199,7 @@
           }
         }
       },
-      "JsonElement": {},
+      "JsonElement": { },
       "LatencyStats": {
         "required": [
           "p50",
@@ -13175,7 +13212,7 @@
         "type": "object",
         "properties": {
           "p50": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -13183,7 +13220,7 @@
             "format": "double"
           },
           "p95": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -13191,7 +13228,7 @@
             "format": "double"
           },
           "p99": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -13199,7 +13236,7 @@
             "format": "double"
           },
           "min": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -13207,7 +13244,7 @@
             "format": "double"
           },
           "max": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -13255,7 +13292,7 @@
             "type": "string"
           },
           "feedbackValue": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -13278,7 +13315,7 @@
             "type": "string"
           },
           "confidence": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -13496,7 +13533,7 @@
             "type": "string"
           },
           "feedbackValue": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -13519,7 +13556,7 @@
             "type": "string"
           },
           "confidence": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -13702,7 +13739,7 @@
             "format": "int64"
           },
           "errorRate": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -14201,7 +14238,7 @@
             ]
           },
           "confidence": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -14448,7 +14485,7 @@
             ]
           },
           "confidence": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -14456,7 +14493,7 @@
             "format": "double"
           },
           "importance": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -14517,7 +14554,7 @@
             ]
           },
           "relevance": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -14525,7 +14562,7 @@
             "format": "double"
           },
           "recencyWeight": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -14627,7 +14664,7 @@
             "format": "int32"
           },
           "confidence": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -14635,7 +14672,7 @@
             "format": "double"
           },
           "weight": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -14811,7 +14848,7 @@
             }
           },
           "minConfidence": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -14839,13 +14876,24 @@
           "weightByRelationType": {
             "type": "object",
             "additionalProperties": {
-              "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+              "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
               "type": [
                 "number",
                 "string"
               ],
               "format": "double"
             }
+          },
+          "decayFactor": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "enableScorePropagation": {
+            "type": "boolean"
           },
           "lifecyclePolicy": {
             "type": "string"
@@ -14933,7 +14981,7 @@
             }
           },
           "confidence": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -15330,7 +15378,7 @@
             "type": "string"
           },
           "weight": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -15338,7 +15386,7 @@
             "format": "double"
           },
           "confidence": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -15464,7 +15512,7 @@
             ]
           },
           "defaultWeight": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -15517,7 +15565,7 @@
             "$ref": "#/components/schemas/RetrievalAnchorRole"
           },
           "weight": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -15725,7 +15773,7 @@
             "type": "boolean"
           },
           "durationMs": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -16017,7 +16065,7 @@
             "format": "date-time"
           },
           "durationMs": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -16170,7 +16218,7 @@
             "type": "string"
           },
           "confidence": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -16178,7 +16226,7 @@
             "format": "double"
           },
           "importance": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -16267,7 +16315,7 @@
             "type": "string"
           },
           "confidence": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -16275,7 +16323,7 @@
             "format": "double"
           },
           "importance": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -16445,7 +16493,7 @@
             "type": "string"
           },
           "importance": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -17010,7 +17058,7 @@
             "type": "string"
           },
           "importance": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -17018,7 +17066,7 @@
             "format": "double"
           },
           "confidence": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -17330,7 +17378,7 @@
             "type": "string"
           },
           "confidence": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -17338,7 +17386,7 @@
             "format": "double"
           },
           "importance": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -18408,7 +18456,7 @@
             "format": "int32"
           },
           "similarity": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -18591,7 +18639,7 @@
             ]
           },
           "minSimilarity": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "null",
               "number",
@@ -18649,7 +18697,7 @@
             ]
           },
           "minSimilarity": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "null",
               "number",
@@ -19358,7 +19406,7 @@
             }
           },
           "importance": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"
@@ -19366,7 +19414,7 @@
             "format": "double"
           },
           "confidence": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
               "string"

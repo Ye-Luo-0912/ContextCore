@@ -153,6 +153,37 @@ public sealed class OpenApiSnapshotDriftTests
         }
     }
 
+    /// <summary>
+    /// 辅助测试：将当前服务生成的 OpenAPI 文档写到 snapshot 文件，方便人工对比后签入。
+    /// 默认 [Ignore]，仅在主动调用时执行。
+    /// </summary>
+    [TestMethod]
+    [Ignore("Manual trigger: rewrite OpenAPI snapshot file from current service output.")]
+    public async Task OpenApi_RegenerateSnapshot()
+    {
+        var rootPath = Path.Combine(
+            Directory.GetCurrentDirectory(),
+            "openapi-regen-data",
+            Guid.NewGuid().ToString("N"));
+        try
+        {
+            using var factory = new OpenApiDriftFactory(rootPath);
+            using var client = factory.CreateClient();
+            using var response = await client.GetAsync("/openapi/v1.json");
+            response.EnsureSuccessStatusCode();
+            var json = await response.Content.ReadAsStringAsync();
+            Directory.CreateDirectory(Path.GetDirectoryName(SnapshotFullPath)!);
+            await File.WriteAllTextAsync(SnapshotFullPath, json, Encoding.UTF8);
+        }
+        finally
+        {
+            if (Directory.Exists(rootPath))
+            {
+                try { Directory.Delete(rootPath, recursive: true); } catch { /* ignore */ }
+            }
+        }
+    }
+
     private static (HashSet<string> Paths, HashSet<string> OperationIds, HashSet<string> Schemas) LoadSignedSnapshot()
     {
         if (!File.Exists(SnapshotFullPath))
