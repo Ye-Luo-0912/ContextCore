@@ -244,6 +244,12 @@ internal static class CoreExtensions
 		services.AddSingleton<ContextRuntimeService>();
 		services.AddSingleton<IContextRuntimeService>(sp =>
 			sp.GetRequiredService<ContextRuntimeService>());
+		// P0-7：注册 TraceBackedDecisionEvidenceProvider 作为生产 IDecisionEvidenceProvider 实现。
+		// 仅当 trace store 实际可用时才会完成证据解析（IsComplete=true），否则返回 Incomplete。
+		// 未注册 IDecisionEvidenceProvider 时审计报告标记 NotConfigured（保留 null-safe 语义）。
+		services.AddSingleton<IDecisionEvidenceProvider>(sp => new TraceBackedDecisionEvidenceProvider(
+			sp.GetService<IRetrievalTraceStore>(),
+			sp.GetService<IContextPackageBuildTraceStore>()));
 		services.AddSingleton<ContextDecisionAuditRunner>(sp => new ContextDecisionAuditRunner(
 			sp.GetRequiredService<IDecisionTraceStore>(),
 			sp.GetService<IDecisionEvidenceProvider>()));
