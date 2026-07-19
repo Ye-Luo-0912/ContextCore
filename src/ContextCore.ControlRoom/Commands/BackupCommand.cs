@@ -1,4 +1,6 @@
 using System.IO.Compression;
+using ContextCore.Abstractions.Models;
+using ContextCore.ControlRoom.Backup;
 using ContextCore.ControlRoom.Rendering;
 using ContextCore.ControlRoom.Services;
 using ContextCore.Storage.FileSystem;
@@ -8,8 +10,10 @@ namespace ContextCore.ControlRoom.Commands;
 /// <summary>
 /// 备份与恢复命令（仅支持 filesystem 存储）。
 /// <list type="bullet">
-///   <item><c>backup create [--output &lt;dir&gt;]</c>：将数据根目录打包为 ZIP 快照。</item>
+///   <item><c>backup create [--output &lt;dir&gt;]</c>：将数据根目录打包为 ZIP 快照，同时生成 SHA-256 清单。</item>
 ///   <item><c>backup validate [--isolate]</c>：校验所有 JSONL 文件；<c>--isolate</c> 将损坏文件重命名并创建净版本。</item>
+///   <item><c>backup verify &lt;manifest&gt; [--archive &lt;zip&gt;]</c>：根据清单重新哈希归档，输出完整性报告。</item>
+///   <item><c>backup drill &lt;archive&gt; [--manifest &lt;path&gt;]</c>：将归档恢复到隔离 staging 目录并校验，完成后清理。</item>
 ///   <item><c>backup restore &lt;file&gt; [--confirm]</c>：从 ZIP 快照恢复（需 --confirm 确认，破坏性操作）。</item>
 /// </list>
 /// </summary>
@@ -30,6 +34,12 @@ public static class BackupCommand
                 break;
             case "validate":
                 await ValidateAsync(service, subArgs, cancellationToken).ConfigureAwait(false);
+                break;
+            case "verify":
+                await VerifyAsync(service, subArgs, cancellationToken).ConfigureAwait(false);
+                break;
+            case "drill":
+                await DrillAsync(service, subArgs, cancellationToken).ConfigureAwait(false);
                 break;
             case "restore":
                 await RestoreAsync(service, subArgs, cancellationToken).ConfigureAwait(false);
@@ -60,6 +70,7 @@ public static class BackupCommand
 
         var timestamp = DateTimeOffset.UtcNow.ToString("yyyyMMdd_HHmmss");
         var zipPath = Path.Combine(outputDir, $"contextcore_backup_{timestamp}.zip");
+        var manifestPath = zipPath + ".manifest.json";
 
         Console.WriteLine($"[backup] 创建快照中...");
         Console.WriteLine($"  源目录：{root}");
@@ -72,13 +83,25 @@ public static class BackupCommand
                 .ConfigureAwait(false);
 
             var size = new FileInfo(zipPath).Length;
+            Console.WriteLine($"[backup] 生成 SHA-256 清单...");
+            var manifest = await BackupManifestGenerator.ForZipAsync(
+                zipPath, root, BackupStorageKind.FileSystem, ct).ConfigureAwait(false);
+            await BackupManifestGenerator.WriteAsync(manifest, manifestPath, ct).ConfigureAwait(false);
+
+            Console.ForegroundColor = ConsoleColor.Green;
             Console.WriteLine($"[backup] 完成。大小：{size / 1024.0:F1} KB → {zipPath}");
+            Console.WriteLine($"[backup] 清单：{manifest.EntryCount} 条目，{manifest.TotalEntryBytes / 1024.0:F1} KB 内容 → {manifestPath}");
+            Console.ResetColor();
         }
         catch (Exception ex)
         {
             if (File.Exists(zipPath))
             {
                 try { File.Delete(zipPath); } catch { /* ignore */ }
+            }
+            if (File.Exists(manifestPath))
+            {
+                try { File.Delete(manifestPath); } catch { /* ignore */ }
             }
             Console.Error.WriteLine($"[backup] 创建失败：{ex.Message}");
             Environment.ExitCode = 1;
@@ -172,6 +195,198 @@ public static class BackupCommand
         Console.WriteLine($"    → 已隔离：损坏原文件 → {Path.GetFileName(corruptPath)}，有效行保存至 {Path.GetFileName(filePath)}");
     }
 
+    private static async Task VerifyAsync(
+        ControlRoomService service,
+        IReadOnlyList<string> args,
+        CancellationToken ct)
+    {
+        var manifestPath = args.FirstOrDefault(a => !a.StartsWith("--", StringComparison.Ordinal));
+        if (string.IsNullOrWhiteSpace(manifestPath))
+        {
+            Console.Error.WriteLine("[verify] 用法：backup verify <manifest.json> [--archive <zip>]");
+            Environment.ExitCode = 1;
+            return;
+        }
+
+        if (!File.Exists(manifestPath))
+        {
+            Console.Error.WriteLine($"[verify] 清单文件不存在：{manifestPath}");
+            Environment.ExitCode = 1;
+            return;
+        }
+
+        var archivePath = CommandHelpers.GetOption(args, "--archive");
+        if (string.IsNullOrWhiteSpace(archivePath))
+        {
+            // 默认：与清单同目录、去掉 .manifest.json 后缀
+            archivePath = StripManifestExtension(manifestPath);
+            if (!File.Exists(archivePath))
+            {
+                Console.Error.WriteLine($"[verify] 未找到归档文件：{archivePath}（可用 --archive 指定）");
+                Environment.ExitCode = 1;
+                return;
+            }
+        }
+
+        if (!File.Exists(archivePath))
+        {
+            Console.Error.WriteLine($"[verify] 归档文件不存在：{archivePath}");
+            Environment.ExitCode = 1;
+            return;
+        }
+
+        Console.WriteLine($"[verify] 校验中...");
+        Console.WriteLine($"  清单：{manifestPath}");
+        Console.WriteLine($"  归档：{archivePath}");
+
+        try
+        {
+            var manifest = await BackupManifestGenerator.ReadAsync(manifestPath, ct).ConfigureAwait(false);
+            var result = await BackupVerifier.VerifyZipAsync(manifest, archivePath, ct).ConfigureAwait(false);
+            result = result with { ManifestPath = manifestPath };
+
+            Console.WriteLine($"  期望条目数：{result.ExpectedEntryCount}");
+            Console.WriteLine($"  已校验条目：{result.VerifiedEntryCount}");
+            Console.WriteLine($"  归档哈希匹配：{(result.ArchiveHashMatched ? "是" : "否")}");
+
+            if (result.HashMismatchedPaths.Any())
+            {
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                Console.WriteLine($"  哈希不匹配 ({result.HashMismatchedPaths.Count}):");
+                foreach (var p in result.HashMismatchedPaths.Take(10))
+                    Console.WriteLine($"    - {p}");
+                Console.ResetColor();
+            }
+
+            if (result.MissingPaths.Any())
+            {
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                Console.WriteLine($"  缺失条目 ({result.MissingPaths.Count}):");
+                foreach (var p in result.MissingPaths.Take(10))
+                    Console.WriteLine($"    - {p}");
+                Console.ResetColor();
+            }
+
+            if (result.OrphanPaths.Any())
+            {
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                Console.WriteLine($"  孤儿条目 ({result.OrphanPaths.Count}):");
+                foreach (var p in result.OrphanPaths.Take(10))
+                    Console.WriteLine($"    - {p}");
+                Console.ResetColor();
+            }
+
+            Console.WriteLine($"  耗时：{result.Elapsed.TotalSeconds:F2}s");
+            if (result.IsHealthy)
+            {
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.WriteLine($"[verify] ✓ 通过：归档与清单完全一致。");
+                Console.ResetColor();
+            }
+            else
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($"[verify] ✗ 未通过：归档与清单存在差异。");
+                Console.ResetColor();
+                Environment.ExitCode = 1;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[verify] 失败：{ex.Message}");
+            Environment.ExitCode = 1;
+        }
+    }
+
+    private static async Task DrillAsync(
+        ControlRoomService service,
+        IReadOnlyList<string> args,
+        CancellationToken ct)
+    {
+        var archivePath = args.FirstOrDefault(a => !a.StartsWith("--", StringComparison.Ordinal));
+        if (string.IsNullOrWhiteSpace(archivePath))
+        {
+            Console.Error.WriteLine("[drill] 用法：backup drill <archive.zip> [--manifest <path>]");
+            Environment.ExitCode = 1;
+            return;
+        }
+
+        if (!File.Exists(archivePath))
+        {
+            Console.Error.WriteLine($"[drill] 归档文件不存在：{archivePath}");
+            Environment.ExitCode = 1;
+            return;
+        }
+
+        var manifestPath = CommandHelpers.GetOption(args, "--manifest");
+        var stagingRoot = CommandHelpers.GetOption(args, "--staging-root");
+        BackupManifest? manifest = null;
+        if (!string.IsNullOrWhiteSpace(manifestPath))
+        {
+            if (!File.Exists(manifestPath))
+            {
+                Console.Error.WriteLine($"[drill] 清单文件不存在：{manifestPath}");
+                Environment.ExitCode = 1;
+                return;
+            }
+            manifest = await BackupManifestGenerator.ReadAsync(manifestPath, ct).ConfigureAwait(false);
+            Console.WriteLine($"[drill] 使用清单：{manifestPath}（{manifest.EntryCount} 条目）");
+        }
+        else
+        {
+            // 尝试在归档同目录查找默认清单
+            var defaultManifest = archivePath + ".manifest.json";
+            if (File.Exists(defaultManifest))
+            {
+                manifest = await BackupManifestGenerator.ReadAsync(defaultManifest, ct).ConfigureAwait(false);
+                Console.WriteLine($"[drill] 使用默认清单：{defaultManifest}（{manifest.EntryCount} 条目）");
+            }
+            else
+            {
+                Console.WriteLine($"[drill] 未指定清单；仅校验可解压性。");
+            }
+        }
+
+        Console.WriteLine($"[drill] 恢复演练中...");
+        Console.WriteLine($"  归档：{archivePath}");
+
+        try
+        {
+            var result = await BackupDrillRunner.RunZipDrillAsync(
+                manifest, archivePath, stagingRoot, ct).ConfigureAwait(false);
+
+            Console.WriteLine($"  恢复条目数：{result.RestoredEntryCount}");
+            Console.WriteLine($"  哈希匹配数：{result.HashMatchedEntryCount}");
+            if (result.PostgresDrillSkipped)
+            {
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                Console.WriteLine($"  Postgres 转储条目已跳过（需独立数据库恢复演练）。");
+                Console.ResetColor();
+            }
+            Console.WriteLine($"  Staging 路径：{result.StagingPath}（已自动清理）");
+            Console.WriteLine($"  耗时：{result.Elapsed.TotalSeconds:F2}s");
+
+            if (result.IsHealthy)
+            {
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.WriteLine($"[drill] ✓ 通过：归档可恢复且所有条目哈希匹配。");
+                Console.ResetColor();
+            }
+            else
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($"[drill] ✗ 未通过：恢复条目数或哈希不匹配。");
+                Console.ResetColor();
+                Environment.ExitCode = 1;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[drill] 失败：{ex.Message}");
+            Environment.ExitCode = 1;
+        }
+    }
+
     private static async Task RestoreAsync(
         ControlRoomService service,
         IReadOnlyList<string> args,
@@ -243,13 +458,26 @@ public static class BackupCommand
         }
     }
 
+    private static string StripManifestExtension(string manifestPath)
+    {
+        // 移除末尾 ".manifest.json"（如有），返回归档候选路径
+        var suffix = ".manifest.json";
+        if (manifestPath.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+        {
+            return manifestPath[..^suffix.Length];
+        }
+        return manifestPath;
+    }
+
     private static void PrintHelp()
     {
         Console.WriteLine("用法：controlroom backup <子命令> [选项]");
         Console.WriteLine();
         Console.WriteLine("子命令：");
-        Console.WriteLine("  create   [--output <dir>]   创建 ZIP 快照（默认输出至 <data-root>/../_backups/）");
-        Console.WriteLine("  validate [--isolate]        校验所有 JSONL；--isolate 自动隔离损坏文件");
-        Console.WriteLine("  restore  <file> [--confirm] 从 ZIP 快照恢复（破坏性，需 --confirm）");
+        Console.WriteLine("  create   [--output <dir>]            创建 ZIP 快照（默认输出至 <data-root>/../_backups/），同时生成 SHA-256 清单");
+        Console.WriteLine("  validate [--isolate]                  校验所有 JSONL；--isolate 自动隔离损坏文件");
+        Console.WriteLine("  verify   <manifest> [--archive <zip>] 根据清单重新哈希归档，输出完整性报告");
+        Console.WriteLine("  drill    <archive> [--manifest <p>]  将归档恢复到隔离 staging 目录并校验，完成后清理");
+        Console.WriteLine("  restore  <file> [--confirm]           从 ZIP 快照恢复（破坏性，需 --confirm）");
     }
 }

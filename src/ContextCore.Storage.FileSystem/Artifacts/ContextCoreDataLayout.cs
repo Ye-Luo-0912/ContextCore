@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
+using ContextCore.Storage.Shared;
 
 namespace ContextCore.Storage.FileSystem;
 
@@ -755,10 +756,7 @@ public sealed class ContextCoreDataLayout : IContextPathResolver
         };
 
     private static string ComputeContentHash(string path)
-    {
-        using var stream = File.OpenRead(path);
-        return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
-    }
+        => Sha256Utility.HashFile(path);
 
     private static string SanitizeStatic(string? value)
     {
