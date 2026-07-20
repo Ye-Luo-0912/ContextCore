@@ -720,6 +720,28 @@ F:ContextCore.Abstractions.RelationOutboxStates.Applied
 F:ContextCore.Abstractions.RelationOutboxStates.Dispatched
 F:ContextCore.Abstractions.RelationOutboxStates.Failed
 F:ContextCore.Abstractions.RelationOutboxStates.Pending
+F:ContextCore.Abstractions.RetrievalExpert.Constraint
+F:ContextCore.Abstractions.RetrievalExpert.Graph
+F:ContextCore.Abstractions.RetrievalExpert.Lexical
+F:ContextCore.Abstractions.RetrievalExpert.Mandatory
+F:ContextCore.Abstractions.RetrievalExpert.Recency
+F:ContextCore.Abstractions.RetrievalExpert.Semantic
+F:ContextCore.Abstractions.RetrievalExpert.StableMemory
+F:ContextCore.Abstractions.RetrievalExpert.Unknown
+F:ContextCore.Abstractions.RetrievalExpert.WorkingMemory
+F:ContextCore.Abstractions.RetrievalExpertChannels.ContextRecallChannel
+F:ContextCore.Abstractions.RetrievalExpertChannels.MandatoryRecallChannel
+F:ContextCore.Abstractions.RetrievalExpertChannels.MemoryRecallChannel
+F:ContextCore.Abstractions.RetrievalExpertChannels.RelationRecallChannel
+F:ContextCore.Abstractions.RetrievalExpertChannels.VectorRecallChannel
+F:ContextCore.Abstractions.RetrievalExpertMask.ConstraintBit
+F:ContextCore.Abstractions.RetrievalExpertMask.GraphBit
+F:ContextCore.Abstractions.RetrievalExpertMask.LexicalBit
+F:ContextCore.Abstractions.RetrievalExpertMask.MandatoryBit
+F:ContextCore.Abstractions.RetrievalExpertMask.RecencyBit
+F:ContextCore.Abstractions.RetrievalExpertMask.SemanticBit
+F:ContextCore.Abstractions.RetrievalExpertMask.StableMemoryBit
+F:ContextCore.Abstractions.RetrievalExpertMask.WorkingMemoryBit
 F:ContextCore.Abstractions.RiskSeverity.Critical
 F:ContextCore.Abstractions.RiskSeverity.High
 F:ContextCore.Abstractions.RiskSeverity.Low
@@ -927,6 +949,22 @@ M:ContextCore.Abstractions.ExperimentEvidence.Equals(System.Object)
 M:ContextCore.Abstractions.ExperimentEvidence.GetHashCode()
 M:ContextCore.Abstractions.ExperimentEvidence.GetType()
 M:ContextCore.Abstractions.ExperimentEvidence.ToString()
+M:ContextCore.Abstractions.ExpertRoutingDecision.#ctor()
+M:ContextCore.Abstractions.ExpertRoutingDecision.<Clone>$()
+M:ContextCore.Abstractions.ExpertRoutingDecision.Equals(ContextCore.Abstractions.ExpertRoutingDecision)
+M:ContextCore.Abstractions.ExpertRoutingDecision.Equals(System.Object)
+M:ContextCore.Abstractions.ExpertRoutingDecision.GetHashCode()
+M:ContextCore.Abstractions.ExpertRoutingDecision.GetType()
+M:ContextCore.Abstractions.ExpertRoutingDecision.ToString()
+M:ContextCore.Abstractions.ExpertRoutingDecisionSet.#ctor()
+M:ContextCore.Abstractions.ExpertRoutingDecisionSet.<Clone>$()
+M:ContextCore.Abstractions.ExpertRoutingDecisionSet.Equals(ContextCore.Abstractions.ExpertRoutingDecisionSet)
+M:ContextCore.Abstractions.ExpertRoutingDecisionSet.Equals(System.Object)
+M:ContextCore.Abstractions.ExpertRoutingDecisionSet.GetDecision(ContextCore.Abstractions.RetrievalExpert)
+M:ContextCore.Abstractions.ExpertRoutingDecisionSet.GetHashCode()
+M:ContextCore.Abstractions.ExpertRoutingDecisionSet.GetType()
+M:ContextCore.Abstractions.ExpertRoutingDecisionSet.IsExpertEnabled(ContextCore.Abstractions.RetrievalExpert)
+M:ContextCore.Abstractions.ExpertRoutingDecisionSet.ToString()
 M:ContextCore.Abstractions.FeatureSchemaVersion.#ctor(System.Int32, System.Int32)
 M:ContextCore.Abstractions.FeatureSchemaVersion.<Clone>$()
 M:ContextCore.Abstractions.FeatureSchemaVersion.BumpMajor()
@@ -3370,6 +3408,21 @@ M:ContextCore.Abstractions.RetrievalAdapterResult.Equals(System.Object)
 M:ContextCore.Abstractions.RetrievalAdapterResult.GetHashCode()
 M:ContextCore.Abstractions.RetrievalAdapterResult.GetType()
 M:ContextCore.Abstractions.RetrievalAdapterResult.ToString()
+M:ContextCore.Abstractions.RetrievalExpertChannels.Equals(System.Object)
+M:ContextCore.Abstractions.RetrievalExpertChannels.GetHashCode()
+M:ContextCore.Abstractions.RetrievalExpertChannels.GetType()
+M:ContextCore.Abstractions.RetrievalExpertChannels.ToString()
+M:ContextCore.Abstractions.RetrievalExpertChannels.static HasDedicatedChannel(ContextCore.Abstractions.RetrievalExpert)
+M:ContextCore.Abstractions.RetrievalExpertChannels.static ShouldExecuteChannel(System.String, ContextCore.Abstractions.RetrievalExpertMask)
+M:ContextCore.Abstractions.RetrievalExpertMask.#ctor(System.Int32)
+M:ContextCore.Abstractions.RetrievalExpertMask.Equals(ContextCore.Abstractions.RetrievalExpertMask)
+M:ContextCore.Abstractions.RetrievalExpertMask.Equals(System.Object)
+M:ContextCore.Abstractions.RetrievalExpertMask.GetEnabledExperts()
+M:ContextCore.Abstractions.RetrievalExpertMask.GetHashCode()
+M:ContextCore.Abstractions.RetrievalExpertMask.GetType()
+M:ContextCore.Abstractions.RetrievalExpertMask.IsEnabled(ContextCore.Abstractions.RetrievalExpert)
+M:ContextCore.Abstractions.RetrievalExpertMask.ToString()
+M:ContextCore.Abstractions.RetrievalExpertMask.With(ContextCore.Abstractions.RetrievalExpert, System.Boolean)
 M:ContextCore.Abstractions.RiskAssessment.#ctor(System.String, System.String, ContextCore.Abstractions.RiskSeverity, System.Collections.Generic.IReadOnlyList<System.String>, System.Collections.Generic.IReadOnlyList<System.String>)
 M:ContextCore.Abstractions.RiskAssessment.Equals(System.Object)
 M:ContextCore.Abstractions.RiskAssessment.GetHashCode()
@@ -3670,6 +3723,19 @@ P:ContextCore.Abstractions.ExperimentEvidence.MetricName (get)
 P:ContextCore.Abstractions.ExperimentEvidence.Notes (get)
 P:ContextCore.Abstractions.ExperimentEvidence.SampleCount (get)
 P:ContextCore.Abstractions.ExperimentEvidence.Source (get)
+P:ContextCore.Abstractions.ExpertRoutingDecision.DisabledReason (get|init)
+P:ContextCore.Abstractions.ExpertRoutingDecision.Enabled (get|init)
+P:ContextCore.Abstractions.ExpertRoutingDecision.Expert (get|init)
+P:ContextCore.Abstractions.ExpertRoutingDecision.Metadata (get|init)
+P:ContextCore.Abstractions.ExpertRoutingDecision.ReasonCode (get|init)
+P:ContextCore.Abstractions.ExpertRoutingDecision.TokenBudget (get|init)
+P:ContextCore.Abstractions.ExpertRoutingDecision.TopK (get|init)
+P:ContextCore.Abstractions.ExpertRoutingDecision.Weight (get|init)
+P:ContextCore.Abstractions.ExpertRoutingDecisionSet.DecidedAt (get|init)
+P:ContextCore.Abstractions.ExpertRoutingDecisionSet.Decisions (get|init)
+P:ContextCore.Abstractions.ExpertRoutingDecisionSet.RouterId (get|init)
+P:ContextCore.Abstractions.ExpertRoutingDecisionSet.RouterVersion (get|init)
+P:ContextCore.Abstractions.ExpertRoutingDecisionSet.TotalTokenBudget (get|init)
 P:ContextCore.Abstractions.FeatureSchemaVersion.Initial (get)
 P:ContextCore.Abstractions.FeatureSchemaVersion.Major (get|init)
 P:ContextCore.Abstractions.FeatureSchemaVersion.Minor (get|init)
@@ -7560,6 +7626,13 @@ P:ContextCore.Abstractions.RetrievalAdapterResult.AddedCandidateIds (get|init)
 P:ContextCore.Abstractions.RetrievalAdapterResult.Applied (get|init)
 P:ContextCore.Abstractions.RetrievalAdapterResult.RemovedCandidateIds (get|init)
 P:ContextCore.Abstractions.RetrievalAdapterResult.TracePath (get|init)
+P:ContextCore.Abstractions.RetrievalExpertChannels.AllChannels (get)
+P:ContextCore.Abstractions.RetrievalExpertChannels.ChannelToExperts (get)
+P:ContextCore.Abstractions.RetrievalExpertChannels.ExpertToChannels (get)
+P:ContextCore.Abstractions.RetrievalExpertMask.AllEnabled (get)
+P:ContextCore.Abstractions.RetrievalExpertMask.EnabledCount (get)
+P:ContextCore.Abstractions.RetrievalExpertMask.MandatoryOnly (get)
+P:ContextCore.Abstractions.RetrievalExpertMask.Mask (get|init)
 P:ContextCore.Abstractions.RiskAssessment.Description (get)
 P:ContextCore.Abstractions.RiskAssessment.Mitigations (get)
 P:ContextCore.Abstractions.RiskAssessment.RiskId (get)
@@ -7672,6 +7745,8 @@ T:ContextCore.Abstractions.DependencyScopeSet
 T:ContextCore.Abstractions.EvidenceRef
 T:ContextCore.Abstractions.ExpectedGain
 T:ContextCore.Abstractions.ExperimentEvidence
+T:ContextCore.Abstractions.ExpertRoutingDecision
+T:ContextCore.Abstractions.ExpertRoutingDecisionSet
 T:ContextCore.Abstractions.FeatureSchemaVersion
 T:ContextCore.Abstractions.IAgentObservationSource (Interface)
 T:ContextCore.Abstractions.IArtifactStore (Interface)
@@ -8238,6 +8313,9 @@ T:ContextCore.Abstractions.RelationOutboxStates
 T:ContextCore.Abstractions.RequestSemanticFingerprint
 T:ContextCore.Abstractions.RetrievalAdapterRequest
 T:ContextCore.Abstractions.RetrievalAdapterResult
+T:ContextCore.Abstractions.RetrievalExpert (Enum)
+T:ContextCore.Abstractions.RetrievalExpertChannels
+T:ContextCore.Abstractions.RetrievalExpertMask (Struct)
 T:ContextCore.Abstractions.RiskAssessment
 T:ContextCore.Abstractions.RiskSeverity (Enum)
 T:ContextCore.Abstractions.RollbackCondition
