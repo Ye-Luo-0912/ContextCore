@@ -323,6 +323,163 @@ Agent 只负责离线控制面，不触碰正式 Policy 生产路径。
 
 ---
 
+## R18-R21 路线图（统一决策内核 → Policy Bundle → Multi-Expert → Memory Evolution）
+
+### 诊断（基于代码核实）
+
+当前存在两套独立的选择系统（已用代码验证 6 项分裂证据）：
+
+| 维度 | Retrieval 路径 | Package 路径 |
+|------|----------------|--------------|
+| 入口 | `HybridContextRetriever.RetrieveAsync` | `BasicContextPackageBuilder.BuildDetailedAsync` |
+| Channel 编排 | 自行编排 5 个 `IRetrievalChannelExecutor`（Mandatory/Context/Memory/Vector/Relation） | 通过 `PackageInputLoader` 间接调用 store |
+| Ranking | `RetrievalPackingPolicy.OrderCandidates`（mandatory + score + tokens + ID） | `ResultProjector.ProjectTemplate` + `PackageUncertaintyBuilder`（uncertainty + score + ID） |
+| 候选类型 | `ContextRetrievalCandidate` / `RetrievalChannelCandidate` | `PackageTraceCandidate` / `ContextPackageDecision` |
+| Drop reason | 5 个自由文本字符串（"强制选中"/"超过 token 预算"/...） | 16 个 `CandidateDecisionReasonCode` 枚举值 |
+| Drop reason 翻译 | 需要 `CandidateDecisionReasonCodeMapper` 反向翻译 | 原生枚举 |
+| TokenBudget | 全局候选级累计硬上限 | section 级分层比例分配 + 部分截断接受 |
+| 已有可复用资产 | `DecisionEvidenceV2`（含 ChannelSources/ScoreBreakdown/FinalScore，仅 trace 投影） | 同上 |
+
+**关键发现**：`DecisionEvidenceV2` 已实现提案中 `CandidateFeatureVector` + `CandidateUtilityScore` 的核心字段，但**目前仅作为 trace 投影**，未驱动运行时决策。R18 的本质工作是把这份 trace-only 契约"提升"为运行时 envelope。
+
+### R18 — 统一决策内核（4 子阶段）
+
+**目标**：建立 `IContextDecisionEngine` + `ContextCandidateEnvelope`，让 Retrieval 与 Package 共享候选身份、特征、safety gate、utility score、reason code、token cost、policy/model version、decision evidence。**不**强行合并输出格式 — 通过不同 Projector 输出。
+
+**接口契约**：
+```csharp
+public interface IContextDecisionEngine
+{
+    Task<ContextDecisionResult> DecideAsync(
+        ContextDecisionRequest request,
+        CancellationToken cancellationToken = default);
+}
+```
+
+**统一中间模型**（不与现有 `ContextRetrievalCandidate` / `ContextPackageDecision` 冲突）：
+```csharp
+public sealed record ContextCandidateEnvelope
+{
+    public required string CandidateId { get; init; }
+    public required ContextCandidateSource Source { get; init; }
+    public CandidateFeatureVector Features { get; init; }
+    public CandidateSafetyState Safety { get; init; }
+    public CandidateUtilityScore Utility { get; init; }
+    public int EstimatedTokens { get; init; }
+    public IReadOnlyList<EvidenceRef> ProvenanceRefs { get; init; } = [];
+}
+```
+
+**子阶段**：
+- **R18-1 契约设计**（当前阶段）：定义 `EvidenceRef` + `ContextCandidateEnvelope` + `CandidateFeatureVector` + `CandidateSafetyState` + `CandidateUtilityScore` 5 个契约，基于 `DecisionEvidenceV2` 提升。**不**改 `HybridContextRetriever` / `BasicContextPackageBuilder`。单元测试验证可实施性。
+- **R18-2 Engine 接口 + Planner**：定义 `IContextDecisionEngine` + `ContextDecisionPlanner` + `RetrievalResultProjector` + `PackageResultProjector`，在 `ContextDecisionProjector` 内部增加 envelope-to-decision 投影路径。**不**替换两条主链。
+- **R18-3 Retrieval adapter**：在 Retrieval 路径增加 envelope adapter（`ContextRetrievalCandidate` → `ContextCandidateEnvelope`），验证 golden baseline 不变。
+- **R18-4 Package adapter**：在 Package 路径增加 envelope adapter，验证 golden baseline 不变。
+- **R18 V2**（后续）：真正统一执行链（Candidate Collectors → Feature Pipeline → Safety Gate → Utility Scorer → Budget Allocator），两条路径共享。
+
+**验收标准**：
+1. Retrieval 与 Package 使用同一个 Candidate ID 和 feature schema
+2. 正式规则关闭模型时，输出与当前 golden baseline 完全一致
+3. 同一评分逻辑不再分别存在于 Retrieval 和 Package
+4. 不新增存储 I/O
+5. p95 和 allocation 不允许明显回退
+6. Model failure 时可精确回退到 deterministic policy
+
+### R19 — Policy Bundle 与 Model Runtime（3 子阶段）
+
+**目标**：建立版本化策略包 `ContextPolicyBundle`，让规则权重、relation profile、budget、router、模型和 rollout 状态集中管理。
+
+**契约**：
+```csharp
+public sealed record ContextPolicyBundle
+{
+    public required string PolicyId { get; init; }
+    public required string Version { get; init; }
+    public required string FeatureSchemaVersion { get; init; }
+    public required RetrievalPolicyProfile Retrieval { get; init; }
+    public required BudgetPolicyProfile Budget { get; init; }
+    public required SafetyPolicyProfile Safety { get; init; }
+    public ModelArtifactReference? RouterModel { get; init; }
+    public ModelArtifactReference? RankerModel { get; init; }
+    public required RolloutPolicy Rollout { get; init; }
+    public required string ContentHash { get; init; }
+}
+```
+
+**必须支持**：deterministic fallback / model load failure fallback / workspace-scoped rollout / immutable version / atomic activation / previous-version rollback / feature schema compatibility / policy hash + model hash / 禁止运行中修改已激活 bundle
+
+**子阶段**：
+- **R19-1 契约 + Registry**：定义 `ContextPolicyBundle` + 3 个 Profile + `RolloutPolicy` + `ModelArtifactReference`，内嵌 `ContextDecisionPolicyVersions`（复用 OPT-4 解耦的 5 个能力版本）。实现 `PolicyRegistry` + immutable snapshot 加载 + `ContentHash` 验证。
+- **R19-2 PolicyBundle Provider 适配**：所有现有 policy source（`RetrievalPolicyProfiles` / `ModeBudgetProfile` / `ContextPackagePolicy`）适配为 PolicyBundle provider。
+- **R19-3 Pipeline 集成**：接入 R17 GuardedOptimizationPipeline — bundle 切换走 shadow/canary，不绕过 rollback。
+
+### R20 — Budget-Aware Multi-Expert Selection（2 子阶段）
+
+**专家划分**：Mandatory / Lexical / Semantic / WorkingMemory / StableMemory / Graph / Recency / Constraint（8 个）
+
+**Router 输出**：
+```csharp
+public sealed record ExpertRoutingDecision
+{
+    public RetrievalExpertMask EnabledExperts { get; init; }
+    public IReadOnlyDictionary<RetrievalExpert, int> CandidateBudgets { get; init; }
+    public IReadOnlyDictionary<RetrievalExpert, int> TokenBudgets { get; init; }
+    public float Confidence { get; init; }
+    public string ReasonCode { get; init; } = "";
+}
+```
+
+**关键约束**：
+- Mandatory 和 Hard Constraint expert 永远不能关闭
+- Router 低置信度时执行完整安全路径
+- Router 只能减少可选检索成本，不能绕过 lifecycle gate
+- 先 shadow 运行完整专家集，再模拟不同 mask
+- 训练标签来自 counterfactual contribution，而不是当前 router 自己的决定
+
+**子阶段**：
+- **R20-1 Expert 概念对齐**：定义 `RetrievalExpert` 枚举（8 值）+ `ExpertRoutingDecision` + `RetrievalExpertMask`。把现有 5 个 `IRetrievalChannelExecutor` 重命名/拆分对齐到 expert 概念。**不**改变运行时行为。
+- **R20-2 Router 实现**：实现 `IRouter` 接口，输入 envelope + PolicyBundle，输出 `ExpertRoutingDecision`。Router 模型未加载时 fallback 到 deterministic policy（"启用所有 expert"）。
+
+**优化目标**：Quality - λ1×Latency - λ2×Allocation - λ3×TokenCost - λ4×Risk（不是单一最高质量配置，而是质量—成本 Pareto frontier）
+
+### R21 — Memory Evolution Engine（3 子阶段）
+
+**目标**：让记忆系统具备长期演化能力（不只是 Promotion）。
+
+**新能力**：
+1. **Consolidation** — 多个 task update → evidence merge → 新版本 working memory → 旧版本 superseded
+2. **Forgetting 与降权** — 7 状态机：Fresh / Active / Cooling / Dormant / Archived / Superseded / Rejected；降权因素：长期未命中/已有新版本/evidence 失效/任务已完成/与当前状态冲突/多次被选择但未产生有效贡献
+3. **Conflict Resolution** — ConflictSet + evidence comparison + resolution status + chosen authority
+4. **Memory Utility Ledger** — Recall/Selected/Useful/Correction/Conflict/TokenCost/Anchor/LastUsefulTime
+
+**子阶段**：
+- **R21-1 Superseded 状态 + Consolidation**：扩展 `ContextMemoryStatus` 增加 `Superseded` 一个状态（避免一次性迁移 7 状态）。实现 Consolidation ETL（多 task update → 新版本 working memory + 旧版本 superseded）。
+- **R21-2 Utility Ledger + ConflictSet 契约**：定义 `MemoryUtilityLedger` record + `IConflictSet` 契约。Ledger 由 trace 被动填充，不主动查询。模型可建议 promotion/demotion/merge/archive，但正式写入仍经 R17 Pipeline。
+- **R21-3 完整状态机**：扩展状态机增加 Cooling/Dormant/Archived。Ledger 驱动状态转换，但状态写入仍受规则和审查边界约束。
+
+### R18-R21 跨阶段澄清（8 项）
+
+| 问题 | 决定 |
+|------|------|
+| Envelope Evidence | 共享 `EvidenceRef` 类型；Envelope 使用 `ProvenanceRefs`，V2 在其上追加决策引用 |
+| PolicyBundle scope | Bundle 全局不可变；Activation 按 workspace/collection；暂不增加 tenant |
+| Request Policy | 改为受限 override，不允许替换安全边界和正式模型 |
+| Utility Ledger | 新增独立 Store，但由 Trace/Event 异步批量物化（不影响热路径） |
+| Router 标签 | Expert-level ablation 为主，不做全量 candidate LOO |
+| Expert 重叠 | 删除该 Expert 的特征贡献；只有无其他来源时才删除 Candidate |
+| Budget 标签 | 模拟各 Expert 的 Top-K 质量—成本曲线 |
+| 交互归因 | 普通样本 LOO，困难样本 pair ablation，少量样本近似 Shapley |
+
+### R18-R21 实施顺序
+
+R18-1 → R18-2 → R18-3 → R18-4 → R19-1 → R19-2 → R19-3 → R20-1 → R20-2 → R21-1 → R21-2 → R21-3
+
+**严格顺序**：R19 PolicyBundle 需要 R18 envelope；R20 Router 需要 R19 PolicyBundle；R21 Ledger 复用 R17 Pipeline + R18 envelope trace 投影。不并行推进以避免 PR 巨大且契约间依赖混乱。
+
+###
+
+---
+
 ## 被冻结的功能开发
 
 以下功能在架构治理完成前不启动：

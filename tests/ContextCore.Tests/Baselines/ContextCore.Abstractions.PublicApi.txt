@@ -17,6 +17,17 @@ F:ContextCore.Abstractions.ComparisonOperator.GreaterThan
 F:ContextCore.Abstractions.ComparisonOperator.GreaterThanOrEqual
 F:ContextCore.Abstractions.ComparisonOperator.LessThan
 F:ContextCore.Abstractions.ComparisonOperator.LessThanOrEqual
+F:ContextCore.Abstractions.ContextCandidateSource.Constraint
+F:ContextCore.Abstractions.ContextCandidateSource.GlobalContext
+F:ContextCore.Abstractions.ContextCandidateSource.Graph
+F:ContextCore.Abstractions.ContextCandidateSource.Lexical
+F:ContextCore.Abstractions.ContextCandidateSource.Mandatory
+F:ContextCore.Abstractions.ContextCandidateSource.Recency
+F:ContextCore.Abstractions.ContextCandidateSource.RelatedContext
+F:ContextCore.Abstractions.ContextCandidateSource.Semantic
+F:ContextCore.Abstractions.ContextCandidateSource.StableMemory
+F:ContextCore.Abstractions.ContextCandidateSource.Unknown
+F:ContextCore.Abstractions.ContextCandidateSource.WorkingMemory
 F:ContextCore.Abstractions.ContextCoreDiagnostics.ActivitySource
 F:ContextCore.Abstractions.ContextCoreDiagnostics.ActivitySourceName
 F:ContextCore.Abstractions.ContextEventLevel.Error
@@ -750,6 +761,34 @@ M:ContextCore.Abstractions.CanaryAssignment.Equals(System.Object)
 M:ContextCore.Abstractions.CanaryAssignment.GetHashCode()
 M:ContextCore.Abstractions.CanaryAssignment.GetType()
 M:ContextCore.Abstractions.CanaryAssignment.ToString()
+M:ContextCore.Abstractions.CandidateFeatureVector.#ctor()
+M:ContextCore.Abstractions.CandidateFeatureVector.<Clone>$()
+M:ContextCore.Abstractions.CandidateFeatureVector.Equals(ContextCore.Abstractions.CandidateFeatureVector)
+M:ContextCore.Abstractions.CandidateFeatureVector.Equals(System.Object)
+M:ContextCore.Abstractions.CandidateFeatureVector.GetHashCode()
+M:ContextCore.Abstractions.CandidateFeatureVector.GetType()
+M:ContextCore.Abstractions.CandidateFeatureVector.ToString()
+M:ContextCore.Abstractions.CandidateSafetyState.#ctor()
+M:ContextCore.Abstractions.CandidateSafetyState.<Clone>$()
+M:ContextCore.Abstractions.CandidateSafetyState.Equals(ContextCore.Abstractions.CandidateSafetyState)
+M:ContextCore.Abstractions.CandidateSafetyState.Equals(System.Object)
+M:ContextCore.Abstractions.CandidateSafetyState.GetHashCode()
+M:ContextCore.Abstractions.CandidateSafetyState.GetType()
+M:ContextCore.Abstractions.CandidateSafetyState.ToString()
+M:ContextCore.Abstractions.CandidateUtilityScore.#ctor()
+M:ContextCore.Abstractions.CandidateUtilityScore.<Clone>$()
+M:ContextCore.Abstractions.CandidateUtilityScore.Equals(ContextCore.Abstractions.CandidateUtilityScore)
+M:ContextCore.Abstractions.CandidateUtilityScore.Equals(System.Object)
+M:ContextCore.Abstractions.CandidateUtilityScore.GetHashCode()
+M:ContextCore.Abstractions.CandidateUtilityScore.GetType()
+M:ContextCore.Abstractions.CandidateUtilityScore.ToString()
+M:ContextCore.Abstractions.ContextCandidateEnvelope.#ctor()
+M:ContextCore.Abstractions.ContextCandidateEnvelope.<Clone>$()
+M:ContextCore.Abstractions.ContextCandidateEnvelope.Equals(ContextCore.Abstractions.ContextCandidateEnvelope)
+M:ContextCore.Abstractions.ContextCandidateEnvelope.Equals(System.Object)
+M:ContextCore.Abstractions.ContextCandidateEnvelope.GetHashCode()
+M:ContextCore.Abstractions.ContextCandidateEnvelope.GetType()
+M:ContextCore.Abstractions.ContextCandidateEnvelope.ToString()
 M:ContextCore.Abstractions.ContextCoreDiagnostics.Equals(System.Object)
 M:ContextCore.Abstractions.ContextCoreDiagnostics.GetHashCode()
 M:ContextCore.Abstractions.ContextCoreDiagnostics.GetType()
@@ -822,6 +861,13 @@ M:ContextCore.Abstractions.DependencyScopeSet.Equals(System.Object)
 M:ContextCore.Abstractions.DependencyScopeSet.GetHashCode()
 M:ContextCore.Abstractions.DependencyScopeSet.GetType()
 M:ContextCore.Abstractions.DependencyScopeSet.ToString()
+M:ContextCore.Abstractions.EvidenceRef.#ctor()
+M:ContextCore.Abstractions.EvidenceRef.<Clone>$()
+M:ContextCore.Abstractions.EvidenceRef.Equals(ContextCore.Abstractions.EvidenceRef)
+M:ContextCore.Abstractions.EvidenceRef.Equals(System.Object)
+M:ContextCore.Abstractions.EvidenceRef.GetHashCode()
+M:ContextCore.Abstractions.EvidenceRef.GetType()
+M:ContextCore.Abstractions.EvidenceRef.ToString()
 M:ContextCore.Abstractions.ExpectedGain.#ctor(System.String, System.Double, System.Double, System.Collections.Generic.IReadOnlyList<System.String>)
 M:ContextCore.Abstractions.ExpectedGain.Equals(System.Object)
 M:ContextCore.Abstractions.ExpectedGain.GetHashCode()
@@ -3350,6 +3396,44 @@ P:ContextCore.Abstractions.CanaryAssignment.RunId (get)
 P:ContextCore.Abstractions.CanaryAssignment.Strategy (get)
 P:ContextCore.Abstractions.CanaryAssignment.StrategyConfigJson (get|init)
 P:ContextCore.Abstractions.CanaryAssignment.WhitelistHash (get|init)
+P:ContextCore.Abstractions.CandidateFeatureVector.ChannelSources (get|init)
+P:ContextCore.Abstractions.CandidateFeatureVector.FeatureSchemaVersion (get|init)
+P:ContextCore.Abstractions.CandidateFeatureVector.LexicalScore (get|init)
+P:ContextCore.Abstractions.CandidateFeatureVector.MandatoryWeight (get|init)
+P:ContextCore.Abstractions.CandidateFeatureVector.MatchedAnchors (get|init)
+P:ContextCore.Abstractions.CandidateFeatureVector.RecencyScore (get|init)
+P:ContextCore.Abstractions.CandidateFeatureVector.RelationBoost (get|init)
+P:ContextCore.Abstractions.CandidateFeatureVector.RelationPaths (get|init)
+P:ContextCore.Abstractions.CandidateFeatureVector.ScoreBreakdown (get|init)
+P:ContextCore.Abstractions.CandidateFeatureVector.SemanticScore (get|init)
+P:ContextCore.Abstractions.CandidateSafetyState.BlockReasonCode (get|init)
+P:ContextCore.Abstractions.CandidateSafetyState.BlockReasonDetail (get|init)
+P:ContextCore.Abstractions.CandidateSafetyState.IsDeprecatedUsedByActiveChain (get|init)
+P:ContextCore.Abstractions.CandidateSafetyState.IsDuplicate (get|init)
+P:ContextCore.Abstractions.CandidateSafetyState.IsHardConstraint (get|init)
+P:ContextCore.Abstractions.CandidateSafetyState.IsMandatory (get|init)
+P:ContextCore.Abstractions.CandidateSafetyState.IsRequiredTagMismatch (get|init)
+P:ContextCore.Abstractions.CandidateSafetyState.IsSuperseded (get|init)
+P:ContextCore.Abstractions.CandidateSafetyState.LifecycleState (get|init)
+P:ContextCore.Abstractions.CandidateSafetyState.PassesSafetyGate (get|init)
+P:ContextCore.Abstractions.CandidateUtilityScore.DeterministicScore (get|init)
+P:ContextCore.Abstractions.CandidateUtilityScore.FinalScore (get|init)
+P:ContextCore.Abstractions.CandidateUtilityScore.ModelArtifactRef (get|init)
+P:ContextCore.Abstractions.CandidateUtilityScore.ModelConfidence (get|init)
+P:ContextCore.Abstractions.CandidateUtilityScore.ModelScore (get|init)
+P:ContextCore.Abstractions.CandidateUtilityScore.ReasonCode (get|init)
+P:ContextCore.Abstractions.ContextCandidateEnvelope.CandidateId (get|init)
+P:ContextCore.Abstractions.ContextCandidateEnvelope.CollectionId (get|init)
+P:ContextCore.Abstractions.ContextCandidateEnvelope.EstimatedTokens (get|init)
+P:ContextCore.Abstractions.ContextCandidateEnvelope.Features (get|init)
+P:ContextCore.Abstractions.ContextCandidateEnvelope.ModelVersion (get|init)
+P:ContextCore.Abstractions.ContextCandidateEnvelope.PolicyVersion (get|init)
+P:ContextCore.Abstractions.ContextCandidateEnvelope.ProvenanceRefs (get|init)
+P:ContextCore.Abstractions.ContextCandidateEnvelope.Safety (get|init)
+P:ContextCore.Abstractions.ContextCandidateEnvelope.Source (get|init)
+P:ContextCore.Abstractions.ContextCandidateEnvelope.Type (get|init)
+P:ContextCore.Abstractions.ContextCandidateEnvelope.Utility (get|init)
+P:ContextCore.Abstractions.ContextCandidateEnvelope.WorkspaceId (get|init)
 P:ContextCore.Abstractions.ContextJob.CollectionId (get|init)
 P:ContextCore.Abstractions.ContextJob.CompletedAt (get|init)
 P:ContextCore.Abstractions.ContextJob.CreatedAt (get|init)
@@ -3423,6 +3507,12 @@ P:ContextCore.Abstractions.DatasetVersion.Major (get|init)
 P:ContextCore.Abstractions.DatasetVersion.Minor (get|init)
 P:ContextCore.Abstractions.DependencyScopeSet.Count (get)
 P:ContextCore.Abstractions.DependencyScopeSet.Scopes (get)
+P:ContextCore.Abstractions.EvidenceRef.CollectionId (get|init)
+P:ContextCore.Abstractions.EvidenceRef.ContentFingerprint (get|init)
+P:ContextCore.Abstractions.EvidenceRef.GeneratedAt (get|init)
+P:ContextCore.Abstractions.EvidenceRef.RefId (get|init)
+P:ContextCore.Abstractions.EvidenceRef.RefType (get|init)
+P:ContextCore.Abstractions.EvidenceRef.WorkspaceId (get|init)
 P:ContextCore.Abstractions.ExpectedGain.Confidence (get)
 P:ContextCore.Abstractions.ExpectedGain.EstimatedDelta (get)
 P:ContextCore.Abstractions.ExpectedGain.MetricName (get)
@@ -7368,7 +7458,12 @@ T:ContextCore.Abstractions.BaselineComparison
 T:ContextCore.Abstractions.CacheInvalidationKey (Struct)
 T:ContextCore.Abstractions.CanaryAssignment
 T:ContextCore.Abstractions.CanaryAssignmentStrategy (Enum)
+T:ContextCore.Abstractions.CandidateFeatureVector
+T:ContextCore.Abstractions.CandidateSafetyState
+T:ContextCore.Abstractions.CandidateUtilityScore
 T:ContextCore.Abstractions.ComparisonOperator (Enum)
+T:ContextCore.Abstractions.ContextCandidateEnvelope
+T:ContextCore.Abstractions.ContextCandidateSource (Enum)
 T:ContextCore.Abstractions.ContextCoreDiagnostics
 T:ContextCore.Abstractions.ContextEventLevel (Enum)
 T:ContextCore.Abstractions.ContextEventSinkKind (Enum)
@@ -7389,6 +7484,7 @@ T:ContextCore.Abstractions.DatasetSplitStrategy (Enum)
 T:ContextCore.Abstractions.DatasetStatistics
 T:ContextCore.Abstractions.DatasetVersion
 T:ContextCore.Abstractions.DependencyScopeSet
+T:ContextCore.Abstractions.EvidenceRef
 T:ContextCore.Abstractions.ExpectedGain
 T:ContextCore.Abstractions.ExperimentEvidence
 T:ContextCore.Abstractions.FeatureSchemaVersion
