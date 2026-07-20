@@ -111,7 +111,7 @@ public sealed class DecisionEvidenceV2
     /// <summary>候选输入指纹（hash of request + section + candidate identity），用于版本对比与去重。</summary>
     public string InputFingerprint { get; init; } = string.Empty;
 
-    /// <summary>策略版本（如 "package-policy/v17.0"、"retrieval-policy/v3.11"），用于 trace 兼容性识别。</summary>
+    /// <summary>策略版本（如 <see cref="ContextDecisionPolicyVersions.PackagePolicyV3_1"/>、<see cref="ContextDecisionPolicyVersions.RetrievalPolicyV4_0"/>），用于 trace 兼容性识别。</summary>
     public string PolicyVersion { get; init; } = string.Empty;
 
     /// <summary>
@@ -193,6 +193,6 @@ public sealed class DecisionEvidenceV2Result
     /// <summary>证据解析时间。</summary>
     public DateTimeOffset ResolvedAt { get; init; }
 
-    /// <summary>R14-1：策略版本，标识 V2 证据结构。</summary>
-    public string PolicyVersion { get; init; } = ContextDecisionPolicyVersions.V18_0;
+    /// <summary>策略版本，标识 V2 证据结构（OPT-4: QualityContractV1_0 = "quality-contract/1.0"）。</summary>
+    public string PolicyVersion { get; init; } = ContextDecisionPolicyVersions.QualityContractV1_0;
 }

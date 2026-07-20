@@ -211,6 +211,11 @@ F:ContextCore.Abstractions.Models.ContextCoreErrorCodes.StoreWriteFailed
 F:ContextCore.Abstractions.Models.ContextCoreErrorCodes.ValidationFailed
 F:ContextCore.Abstractions.Models.ContextDecisionCandidateOutcome.Dropped
 F:ContextCore.Abstractions.Models.ContextDecisionCandidateOutcome.Selected
+F:ContextCore.Abstractions.Models.ContextDecisionPolicyVersions.DecisionSchemaV2_0
+F:ContextCore.Abstractions.Models.ContextDecisionPolicyVersions.PackagePolicyV3_1
+F:ContextCore.Abstractions.Models.ContextDecisionPolicyVersions.QualityContractV1_0
+F:ContextCore.Abstractions.Models.ContextDecisionPolicyVersions.RelationProfileV2_0
+F:ContextCore.Abstractions.Models.ContextDecisionPolicyVersions.RetrievalPolicyV4_0
 F:ContextCore.Abstractions.Models.ContextDecisionPolicyVersions.V17_0
 F:ContextCore.Abstractions.Models.ContextDecisionPolicyVersions.V18_0
 F:ContextCore.Abstractions.Models.ContextDecisionSource.Package

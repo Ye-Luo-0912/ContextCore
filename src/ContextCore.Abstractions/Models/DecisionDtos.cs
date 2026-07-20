@@ -36,8 +36,8 @@ public sealed class ContextDecisionRecord
     /// </summary>
     public PackageQualityReport? Quality { get; init; }
 
-    /// <summary>策略版本，用于 trace 兼容性识别。</summary>
-    public string PolicyVersion { get; init; } = ContextDecisionPolicyVersions.V17_0;
+    /// <summary>策略版本，用于 trace 兼容性识别（OPT-4: DecisionSchemaV2_0 = "decision-schema/2.0"，按能力独立演进）。</summary>
+    public string PolicyVersion { get; init; } = ContextDecisionPolicyVersions.DecisionSchemaV2_0;
 
     public Dictionary<string, string> Metadata { get; init; } = new();
 
@@ -186,16 +186,54 @@ public sealed class ContextDecisionRisk
     public bool ModelTrainingStarted { get; init; }
 }
 
-/// <summary>decision trace 策略版本常量。</summary>
+/// <summary>
+/// OPT-4: decision trace 策略版本常量。按能力（capability）独立演进，
+/// 不再绑定全项目阶段编号（如 R14/R17）。新增能力时在此追加常量，
+/// 旧名 V17_0/V18_0 保留为 alias 供历史消费者平滑迁移。
+/// </summary>
 public static class ContextDecisionPolicyVersions
 {
-    public const string V17_0 = "context-decision-foundation/v17.0";
+    // ---- 5 个能力作用域的版本常量（OPT-4 引入）----
 
     /// <summary>
-    /// R14-1：Decision Evidence V2 策略版本。引入 <see cref="CandidateDecisionReasonCode"/> 枚举
-    /// 与 <see cref="DecisionEvidenceV2"/> 结构化字段，替代 V17.0 自由文本 reason。
+    /// 决策 schema 版本：ContextDecisionRecord + ContextDecisionAuditReport 使用的策略版本。
+    /// 替代历史 V17_0 = "context-decision-foundation/v17.0"。
     /// </summary>
-    public const string V18_0 = "context-decision-evidence/v18.0";
+    public const string DecisionSchemaV2_0 = "decision-schema/2.0";
+
+    /// <summary>
+    /// 打包策略版本：预留给 PackagePolicy 能力作用域（未来 PackagePolicy 字段将引用此常量）。
+    /// </summary>
+    public const string PackagePolicyV3_1 = "package-policy/3.1";
+
+    /// <summary>
+    /// 检索策略版本：预留给 RetrievalPolicy 能力作用域（未来 CostAwareRetrievalRouter / CandidateUtilityReranker 字段将引用此常量）。
+    /// </summary>
+    public const string RetrievalPolicyV4_0 = "retrieval-policy/4.0";
+
+    /// <summary>
+    /// 关系画像版本：预留给 RelationProfile 能力作用域（未来关系投影字段将引用此常量）。
+    /// </summary>
+    public const string RelationProfileV2_0 = "relation-profile/2.0";
+
+    /// <summary>
+    /// 质量契约版本：PackageQualityReport + DecisionEvidenceV2 使用的策略版本。
+    /// 替代历史 V18_0 = "context-decision-evidence/v18.0"。
+    /// </summary>
+    public const string QualityContractV1_0 = "quality-contract/1.0";
+
+    // ---- 历史别名（向后兼容；新代码应使用上面的能力名常量）----
+
+    /// <summary>
+    /// 历史别名：等价于 <see cref="DecisionSchemaV2_0"/>。新代码请使用 <see cref="DecisionSchemaV2_0"/>。
+    /// </summary>
+    public const string V17_0 = DecisionSchemaV2_0;
+
+    /// <summary>
+    /// 历史别名：等价于 <see cref="QualityContractV1_0"/>。新代码请使用 <see cref="QualityContractV1_0"/>。
+    /// 引入 <see cref="CandidateDecisionReasonCode"/> 枚举与 <see cref="DecisionEvidenceV2"/> 结构化字段，替代 V17.0 自由文本 reason。
+    /// </summary>
+    public const string V18_0 = QualityContractV1_0;
 }
 
 /// <summary>decision-audit 审计报告。</summary>
@@ -241,7 +279,7 @@ public sealed class ContextDecisionAuditReport
 
     public IReadOnlyList<ContextDecisionAuditSample> Samples { get; init; } = Array.Empty<ContextDecisionAuditSample>();
 
-    public string PolicyVersion { get; init; } = ContextDecisionPolicyVersions.V17_0;
+    public string PolicyVersion { get; init; } = ContextDecisionPolicyVersions.DecisionSchemaV2_0;
 }
 
 /// <summary>单条 decision trace 的审计摘要。</summary>

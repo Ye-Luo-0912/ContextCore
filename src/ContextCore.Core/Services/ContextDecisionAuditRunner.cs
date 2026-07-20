@@ -141,7 +141,7 @@ public sealed class ContextDecisionAuditRunner
             EvidenceResolvedCount = totalEvidenceResolved,
             EvidenceMissingCount = totalEvidenceMissing,
             Samples = samples,
-            PolicyVersion = ContextDecisionPolicyVersions.V17_0
+            PolicyVersion = ContextDecisionPolicyVersions.DecisionSchemaV2_0
         };
     }
 
