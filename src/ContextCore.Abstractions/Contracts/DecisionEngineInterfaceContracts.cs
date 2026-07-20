@@ -94,6 +94,19 @@ public sealed class ContextDecisionRequest
     /// 此字段不影响安全边界，仅影响 utility scorer 是否调用模型。
     /// </remarks>
     public bool EnableModel { get; init; } = true;
+
+    /// <summary>
+    /// R19-3：per-request 受限策略 override。
+    /// </summary>
+    /// <remarks>
+    /// 设计澄清（用户澄清 #3）：
+    ///   - 仅允许调整 BudgetProfile 部分字段（DefaultTokenBudget / DefaultTopK / SectionRatios）。
+    ///   - 仅允许调整 RoutingProfile.EnableModelScoring（不能替换 ModelArtifactId / weights）。
+    ///   - <b>不允许</b> 替换 SafetyProfile（安全边界由 bundle 全局决定）。
+    ///   - <b>不允许</b> 替换 ModelArtifactReference（正式模型由 bundle 全局决定）。
+    /// null = 使用当前激活 bundle 的 profile（无 override）。
+    /// </remarks>
+    public ContextPolicyOverride? PolicyOverride { get; init; }
 }
 
 /// <summary>
