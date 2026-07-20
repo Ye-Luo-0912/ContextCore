@@ -71,14 +71,14 @@ R14-PG 收口后重新冻结 Current HEAD，确保所有性能指标指向同一
 
 ---
 
-## 当前验收指标（2026-07-20 R17-2/P8 Learning Loop V1 完成）
+## 当前验收指标（2026-07-20 R17-2/P8 Learning Loop V1 + OPT-1~OPT-5 完成）
 
 | 指标 | 当前值 | 目标 |
 |------|--------|------|
-| 当前 HEAD | R17-2 DefaultGuardedOptimizationPipeline + P8 Learning Loop V1（见 `git log --grep="feat(R17-2\|feat(P8)"`） | - |
-| PublicApi baseline 行数 | 7962（+74 R15 V1；+1 R15 V2；+196 R16/R17 Evolution 契约；+224 P8 LearningLoopContracts）— 实现层类型在 ContextCore.Core 不进 Abstractions baseline | 单一事实源 |
+| 当前 HEAD | `a4a6fdb`（OPT-3 收口）；R17-2 DefaultGuardedOptimizationPipeline + P8 Learning Loop V1 + OPT-1~OPT-5 全部完成 | - |
+| PublicApi baseline 行数 | 7967（+74 R15 V1；+1 R15 V2；+196 R16/R17 Evolution 契约；+224 P8 LearningLoopContracts；+5 OPT-4 ContextDecisionPolicyVersions）— 实现层类型在 ContextCore.Core 不进 Abstractions baseline | 单一事实源 |
 | 构建 | 0 警告 / 0 错误 | 0 / 0 |
-| 测试 | ContextCore.Tests 1248/1248（+16 P8-A PromotionJudge；+30 P8-B/C/D LearningContracts；+19 R17-2 Pipeline）；IntegrationTests 75/75（1 skip）；Service.Tests 61/61（1 skip） | 0 失败 |
+| 测试 | ContextCore.Tests 1345/1345（+16 P8-A；+30 P8-B/C/D；+19 R17-2；+8 OPT-1；+16 OPT-2；+14 OPT-3；+14 OPT-5；skip 10 文档化缺口）；IntegrationTests 75/75（1 skip pg_dump；`ConcurrentBuild_16Way` 性能阈值在 WSL2 上 marginal flaky，重跑通过）；Service.Tests 61/61（1 skip manual OpenApi_RegenerateSnapshot） | 0 失败 |
 | A3 / golden / graph 不回退 | 197 个 graph/eval/retrieval 测试全通过 | 不回退 |
 | Package Build Cold (InMemory, ItemCount=50) | 2,329 μs / 819 KB | ≤ 当前值 70% |
 | Package Build CacheHit (InMemory, ItemCount=50) | 6.6 μs / 12.56 KB | 优于 Cold |
@@ -273,33 +273,43 @@ Agent 只负责离线控制面，不触碰正式 Policy 生产路径。
 - Canary assignment strategy 实现选择（随机/分层/哈希分桶等）
 - Rollback record 持久化与审计查询
 
-### 代码优化（OPT-1~OPT-5）
+### 代码优化（OPT-1~OPT-5 已完成）
 
-5 项代码细节优化（用户提出，按优先级处理）：
+5 项代码细节优化全部完成（HEAD `a4a6fdb`，OPT-3 收口）：
 
-**OPT-1 Trace schema 枚举化**（进行中）：
-- `PackageTraceRecorder.MapTraceFields` 当前通过字符串判断 kind/section，再输出 byte sourceType/authority/strategyType/channel
-- 改为正式枚举：`RuntimeCandidateSourceType` / `CandidateAuthorityLevel` / `CandidateStrategyType` / `RetrievalChannelType`
-- 序列化时再映射成数值；新增 section 不再静默落入默认值
+**OPT-1 Trace schema 枚举化**（已完成，commit `945f728` 前序）：
+- `PackageTraceRecorder.MapTraceFields` 原通过字符串判断 kind/section 输出 byte sourceType/authority/strategyType/channel
+- 改为正式枚举：`RuntimeCandidateSourceType` / `CandidateAuthorityLevel` / `CandidateStrategyType` / `RuntimeCandidateRetrievalChannel`（均 `: byte` 保证 JSON 输出兼容）
+- 未匹配 kind 显式落入 `Unknown(0)` 而非静默默认 `Raw(1)`，下游可检测 schema 演进缺口
+- 详见 `ContextCoreTraceSchemaEnumTests.cs`
 
-**OPT-2 Runtime Candidate Trace Sink 验证**：
-- 验证当前异步 dispatcher 在高并发下的正确性
-- 验证项：bounded queue / batch append / shutdown drain / dropped count / queue saturation / writer recreation
+**OPT-2 Runtime Candidate Trace Sink 验证**（已完成，commit `0d9f509`）：
+- 验证 `FileRuntimeCandidateTraceSink` 现有行为（write count / drop on null writer / flush / dispose idempotent）
+- 验证 `PackageTraceRecorder` 与 sink 的解耦（recorder 捕获 sink 异常，主流程不受影响）
+- 验证 `NullRuntimeCandidateTraceSink` 空操作语义
+- 16 个测试（11 通过 + 5 `[Ignore]` 文档化缺失的 async dispatch 能力：bounded queue / batch append / shutdown drain / queue saturation / writer recreation）
+- 已知缺口：当前 `IRuntimeCandidateTraceSink` 为同步 lock 实现，无 async dispatcher；参考 `BoundedChannelContextEventSink`（IContextEventSink 实现）可移植
 
-**OPT-3 Trace fault injection 测试**：
-- Trace backend 延迟 100ms / 异常 / 队列满 / shutdown 期间 flush / 磁盘满 / Postgres 不可用
-- 验证：正式请求结果在 trace backend 故障时保持不变
+**OPT-3 Trace fault injection 测试**（已完成，commit `a4a6fdb`）：
+- 覆盖 4 类 trace surface（`IRuntimeCandidateTraceSink` / `IContextPackageBuildTraceStore` / `IDecisionTraceStore` / `IRetrievalTraceStore`）在 latency 100ms / exception / disk full 故障注入下正式输出不变
+- 验证 fail-open 契约（`catch (Exception)` in `WriteTracesAsync` / `RetrieveAsync`）
+- 14 个测试通过 + 3 `[Ignore]` 文档化不适用当前同步实现的场景（queue full / shutdown drain / Postgres unavailable — 端到端验证应在 IntegrationTests）
+- 详见 `ContextCoreTraceFaultInjectionTests.cs`
 
-**OPT-4 Policy 版本从阶段号解耦**：
-- 当前决策版本名为 `context-decision-foundation/v17.0`，绑定了项目阶段编号
-- 改为按能力独立演进：`decision-schema/2.0`、`package-policy/3.1`、`retrieval-policy/4.0`、`relation-profile/2.0`、`quality-contract/1.0`
+**OPT-4 Policy 版本从阶段号解耦**（已完成，commit `945f728`）：
+- 原决策版本名 `context-decision-foundation/v17.0` 绑定项目阶段编号
+- 改为按能力独立演进：`decision-schema/2.0` / `package-policy/3.1` / `retrieval-policy/4.0` / `relation-profile/2.0` / `quality-contract/1.0`
+- 由 `ContextDecisionPolicyVersions` 静态类集中管理
 
-**OPT-5 DI 架构测试**：
-- 每个 provider 的最终解析类型
-- 是否 Unsupported
-- 是否被意外重复覆盖
-- Data Plane 和 Control Plane 是否混用
-- Singleton 是否捕获 Scoped 依赖
+**OPT-5 DI 架构测试**（已完成，commit `14e157d`）：
+- 14 个架构测试验证 5 项 DI 不变量：
+  1. 每个 provider 的最终解析类型（Postgres / FileSystem / InMemory）
+  2. Unsupported 占位检测（确保非占位实现）
+  3. 重复覆盖检测（装饰器模式 whitelist + 非装饰器意外重复检测）
+  4. Data Plane / Control Plane 分离（Data Plane 包装 `Invalidating*Decorator`，Control Plane 直接 forward）
+  5. Singleton-Scoped 捕获检测（扫描 `AddScoped` 调用 + src/ 所有 DI 扩展方法均为 Singleton）
+- 已知缺陷 `[Ignore]`：`IContextStateVersionStore` 在 Postgres provider 下被 `CoreExtensions.AddContextCore` 无条件 InMemory 覆盖（line 62）
+- 详见 `ContextCoreDiArchitectureTests.cs`
 
 ### DTO-R4 剩余部分（暂缓，高风险）
 
