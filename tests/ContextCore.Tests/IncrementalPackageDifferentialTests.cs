@@ -151,6 +151,117 @@ public sealed class IncrementalPackageDifferentialTests
         Assert.IsTrue(withSnapshot.Snapshot.SectionDependencies.Count > 0, "section 依赖映射应非空");
     }
 
+    /// <summary>
+    /// R15 V2 大规模 differential testing：100 步随机 mutation 序列。
+    /// 验证长期运行下 IncrementalBuild == FullBuild 在每一步均成立。
+    /// </summary>
+    [TestMethod]
+    public async Task Differential_LargeScale_100Steps_IncrementalEqualsFull()
+    {
+        const int seed = 2026;
+        const int steps = 100;
+        await RunDifferentialSequenceAsync(seed, steps);
+    }
+
+    /// <summary>
+    /// R15 V2 多种子大规模 differential testing：3 个种子 × 50 步。
+    /// </summary>
+    [TestMethod]
+    public async Task Differential_LargeScale_MultipleSeeds_50Steps_IncrementalEqualsFull()
+    {
+        foreach (var seed in new[] { 7777, 88888, 999999 })
+        {
+            await RunDifferentialSequenceAsync(seed, steps: 50);
+        }
+    }
+
+    /// <summary>
+    /// R15 V2 NoChange 路径真正复用 PackageTemplate：
+    /// 使用 CallTrackingBuilder 包装，验证 NoChange delta 时 RebuildFromSnapshotAsync 被调用，
+    /// BuildDetailedAsync 未被调用。其他 delta kind 时反之。
+    /// </summary>
+    [TestMethod]
+    public async Task NoChange_PathCallsRebuildFromSnapshot_NotBuildDetailed()
+    {
+        var fixture = await SetupFixtureAsync(seedInitialItems: 3);
+        var tracker = new CallTrackingBuilder(fixture.SnapshotBuilder);
+        var incrementalBuilder = new PackageIncrementalBuilder(
+            tracker, new PackageDeltaPlanner(), fixture.VersionStore);
+
+        // 第一步：捕获快照
+        var withSnapshot = await fixture.SnapshotBuilder.BuildDetailedWithSnapshotAsync(fixture.CurrentRequest);
+        var snapshot = withSnapshot.Snapshot;
+
+        // NoChange 路径：相同请求 + 无 store 变化
+        tracker.Reset();
+        await incrementalBuilder.IncrementalBuildAsync(snapshot, fixture.CurrentRequest);
+        Assert.AreEqual(1, tracker.RebuildFromSnapshotCalls, "NoChange 应调用 RebuildFromSnapshotAsync 一次");
+        Assert.AreEqual(0, tracker.BuildDetailedCalls, "NoChange 不应调用 BuildDetailedAsync");
+
+        // 触发 store 变化 → PartialSectionChange 或 FullRebuildRequired
+        await fixture.ContextStore.SaveAsync(CreateContextItem("trigger-change", "新内容", DateTimeOffset.UtcNow));
+        await fixture.BumpVersionAsync("ContextStore");
+
+        tracker.Reset();
+        await incrementalBuilder.IncrementalBuildAsync(snapshot, fixture.CurrentRequest);
+        Assert.AreEqual(0, tracker.RebuildFromSnapshotCalls, "非 NoChange 不应调用 RebuildFromSnapshotAsync");
+        Assert.AreEqual(1, tracker.BuildDetailedCalls, "非 NoChange 应调用 BuildDetailedAsync 一次");
+    }
+
+    /// <summary>
+    /// R15 V2 NoChange 路径连续多次复用同一快照：
+    /// 验证 5 次连续 NoChange 增量构建均等价于全量构建。
+    /// </summary>
+    [TestMethod]
+    public async Task NoChange_RepeatedReusesSameSnapshot_IncrementalEqualsFull()
+    {
+        var fixture = await SetupFixtureAsync(seedInitialItems: 5);
+
+        // 捕获初始快照
+        var withSnapshot = await fixture.SnapshotBuilder.BuildDetailedWithSnapshotAsync(fixture.CurrentRequest);
+        var snapshot = withSnapshot.Snapshot;
+
+        // 连续 5 次 NoChange 增量构建（相同请求 + 无 store 变化）
+        for (var i = 0; i < 5; i++)
+        {
+            await AssertIncrementalEqualsFullWithSnapshotAsync(fixture, snapshot);
+        }
+    }
+
+    /// <summary>
+    /// R15 V2 混合序列：NoChange 与 store 变化交替，验证快照在变化后必须重新捕获。
+    /// </summary>
+    [TestMethod]
+    public async Task Differential_MixedNoChangeAndMutations_IncrementalEqualsFull()
+    {
+        var rng = new Random(314);
+        var fixture = await SetupFixtureAsync(seedInitialItems: 5);
+
+        PackageStateSnapshot? currentSnapshot = null;
+        for (var step = 0; step < 20; step++)
+        {
+            // 50% 概率触发 store 变化，50% 概率保持 NoChange
+            if (rng.Next(2) == 0)
+            {
+                ApplyContextStoreMutation(fixture, rng, step);
+                await fixture.BumpVersionAsync("ContextStore");
+            }
+
+            // 重新捕获快照（每次都捕获，确保快照反映当前状态）
+            var withSnapshot = await fixture.SnapshotBuilder.BuildDetailedWithSnapshotAsync(fixture.CurrentRequest);
+
+            // NoChange 路径：使用刚捕获的快照（与当前状态一致）
+            var incrementalResult = await fixture.IncrementalBuilder.IncrementalBuildAsync(
+                withSnapshot.Snapshot, fixture.CurrentRequest);
+            var fullResult = await fixture.SnapshotBuilder.BuildDetailedAsync(fixture.CurrentRequest);
+
+            AssertResultsEquivalent(incrementalResult, fullResult, $"step-{step}");
+            currentSnapshot = withSnapshot.Snapshot;
+        }
+
+        Assert.IsNotNull(currentSnapshot, "最终快照应非空");
+    }
+
     // ===== Private helpers =====
 
     private async Task RunDifferentialSequenceAsync(int seed, int steps)
@@ -270,6 +381,20 @@ public sealed class IncrementalPackageDifferentialTests
 
         // 4. 比较两个结果在 6 个维度完全等价
         AssertResultsEquivalent(incrementalResult, fullResult, fixture.CurrentRequest.QueryText ?? "");
+    }
+
+    /// <summary>
+    /// R15 V2：使用预先捕获的快照执行 IncrementalBuild，验证与 FullBuild 等价。
+    /// 用于 NoChange 路径连续复用同一快照的场景。
+    /// </summary>
+    private static async Task AssertIncrementalEqualsFullWithSnapshotAsync(
+        IncrementalFixture fixture,
+        PackageStateSnapshot snapshot)
+    {
+        var incrementalResult = await fixture.IncrementalBuilder.IncrementalBuildAsync(
+            snapshot, fixture.CurrentRequest);
+        var fullResult = await fixture.SnapshotBuilder.BuildDetailedAsync(fixture.CurrentRequest);
+        AssertResultsEquivalent(incrementalResult, fullResult, "NoChange-reuse");
     }
 
     private static void AssertResultsEquivalent(
@@ -535,5 +660,48 @@ internal sealed class InMemoryContextStateVersionStore : IContextStateVersionSto
         var newVersion = (_versions.TryGetValue(scope, out var current) ? current : 0L) + 1;
         _versions[scope] = newVersion;
         return Task.FromResult(newVersion);
+    }
+}
+
+/// <summary>
+/// R15 V2 测试夹具：包装 ISnapshotCapablePackageBuilder，统计 RebuildFromSnapshotAsync
+/// 与 BuildDetailedAsync 的调用次数，用于验证 NoChange 路径真的走了快照复用。
+/// </summary>
+internal sealed class CallTrackingBuilder : ISnapshotCapablePackageBuilder
+{
+    private readonly ISnapshotCapablePackageBuilder _inner;
+    public int RebuildFromSnapshotCalls;
+    public int BuildDetailedCalls;
+
+    public CallTrackingBuilder(ISnapshotCapablePackageBuilder inner)
+    {
+        _inner = inner;
+    }
+
+    public void Reset()
+    {
+        RebuildFromSnapshotCalls = 0;
+        BuildDetailedCalls = 0;
+    }
+
+    public Task<ContextPackage> BuildAsync(ContextPackageRequest request, CancellationToken cancellationToken = default)
+        => _inner.BuildAsync(request, cancellationToken);
+
+    public Task<ContextPackageBuildResult> BuildDetailedAsync(ContextPackageRequest request, CancellationToken cancellationToken = default)
+    {
+        Interlocked.Increment(ref BuildDetailedCalls);
+        return _inner.BuildDetailedAsync(request, cancellationToken);
+    }
+
+    public Task<PackageBuildWithSnapshot> BuildDetailedWithSnapshotAsync(ContextPackageRequest request, CancellationToken cancellationToken = default)
+        => _inner.BuildDetailedWithSnapshotAsync(request, cancellationToken);
+
+    public Task<ContextPackageBuildResult> RebuildFromSnapshotAsync(
+        PackageStateSnapshot snapshot,
+        ContextPackageRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        Interlocked.Increment(ref RebuildFromSnapshotCalls);
+        return _inner.RebuildFromSnapshotAsync(snapshot, request, cancellationToken);
     }
 }

@@ -285,6 +285,9 @@ public interface IPackageIncrementalBuilder
 /// <remarks>
 /// 此接口的存在使快照捕获成为 build pipeline 的一部分，
 /// 避免调用方需要重新执行 build 流水线来获取 internal PackageTemplate。
+/// R15 V2 新增 <see cref="RebuildFromSnapshotAsync"/>：在 NoChange delta 路径上
+/// 直接复用快照中的 PackageTemplate，跳过 build pipeline，仅重新投影为
+/// 新的 <see cref="ContextPackageBuildResult"/>（重新生成 PackageId/BuildId/CreatedAt/metadata）。
 /// </remarks>
 public interface ISnapshotCapablePackageBuilder : IContextPackageBuilder
 {
@@ -293,6 +296,27 @@ public interface ISnapshotCapablePackageBuilder : IContextPackageBuilder
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>构建结果与状态快照。</returns>
     Task<PackageBuildWithSnapshot> BuildDetailedWithSnapshotAsync(
+        ContextPackageRequest request,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// R15 V2：从既有快照复用 PackageTemplate，重新投影为新的 <see cref="ContextPackageBuildResult"/>。
+    /// 仅用于 <see cref="PackageDeltaKind.NoChange"/> 路径：请求指纹 + store 版本均未变化，
+    /// 因此快照中的 PackageTemplate 仍有效，可跳过 build pipeline。
+    /// </summary>
+    /// <remarks>
+    /// 调用方必须确保 <paramref name="snapshot"/> 的请求指纹与 <paramref name="request"/> 一致
+    /// 且 store 版本未变化（即 delta plan 为 NoChange）。
+    /// 实现端从 <see cref="PackageStateSnapshot.Template"/>（object）cast 回 internal PackageTemplate，
+    /// 调用 ResultProjector 生成新的 PackageId/BuildId/CreatedAt/metadata。
+    /// 此方法不写 trace（trace 在 build pipeline 内部，复用 template 时已无新候选决策可记录）。
+    /// </remarks>
+    /// <param name="snapshot">前一个状态快照（非空，Template 字段需为 internal PackageTemplate 实例）。</param>
+    /// <param name="request">当前请求（非空，需与快照的请求指纹一致）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>与全量构建等价的构建结果（仅身份字段不同）。</returns>
+    Task<ContextPackageBuildResult> RebuildFromSnapshotAsync(
+        PackageStateSnapshot snapshot,
         ContextPackageRequest request,
         CancellationToken cancellationToken = default);
 }

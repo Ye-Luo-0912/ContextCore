@@ -154,6 +154,60 @@ public sealed class BasicContextPackageBuilder : ISnapshotCapablePackageBuilder
         }
     }
 
+    /// <summary>
+    /// R15 V2：从既有快照复用 PackageTemplate，重新投影为新的 ContextPackageBuildResult。
+    /// 仅用于 NoChange delta 路径：请求指纹 + store 版本均未变化，
+    /// 因此快照中的 PackageTemplate 仍有效，可跳过 build pipeline。
+    /// </summary>
+    /// <remarks>
+    /// 实现策略：
+    /// <list type="bullet">
+    /// <item>从 snapshot.Template cast 回 internal PackageTemplate（类型不匹配 → 回退到 BuildDetailedAsync）</item>
+    /// <item>解析 ResolvedPackageOptions（与全量构建一致，保证 metadata/budget/output 一致）</item>
+    /// <item>调用 _resultProjector.ProjectResult(template, options) 重新生成 PackageId/BuildId/CreatedAt/metadata</item>
+    /// <item>不写 trace：复用 template 时已无新候选决策可记录，trace 仅在 build pipeline 内部触发</item>
+    /// </list>
+    /// 等价性保证：ProjectResult 是纯函数，相同 (template, options) → 相同 section 内容/selected IDs/dropped IDs/
+    /// reason code/token attribution/source refs，仅身份字段（PackageId/BuildId/CreatedAt/metadata）不同。
+    /// </remarks>
+    public async Task<ContextPackageBuildResult> RebuildFromSnapshotAsync(
+        PackageStateSnapshot snapshot,
+        ContextPackageRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        ArgumentNullException.ThrowIfNull(request);
+
+        // cast object → PackageTemplate；类型不匹配回退到全量构建（防御性，不应发生）
+        if (snapshot.Template is not PackageTemplate template)
+        {
+            return await BuildDetailedAsync(request, cancellationToken).ConfigureAwait(false);
+        }
+
+        // 复用 BuildDetailedAsync 的 trace 上下文设置（保证 _traceRecorder 可观测性一致）
+        var prevOpId = _currentOperationId.Value;
+        var prevReqId = _currentRequestId.Value;
+        _currentOperationId.Value = request.OperationId ?? Guid.NewGuid().ToString("N");
+        _currentRequestId.Value = request.RequestId ?? Guid.NewGuid().ToString("N");
+        try
+        {
+            // 解析构建选项（与 BuildDetailedWithTemplateAsync 一致）
+            var tokenContext = CreateTokenEstimationContext(request);
+            var options = ResolvedPackageOptions.Resolve(request, request.Policy ?? PackagePolicyResolver.CreateDefaultProductionPolicy(request), tokenContext);
+
+            // 直接投影：复用 template，跳过 BuildTemplateAsync（PackageInputLoader + CandidateSelector）
+            // ProjectResult 是纯函数，保证与全量构建投影阶段输出完全一致
+            var result = _resultProjector.ProjectResult(
+                template, options, _packageTraceWriteFailures, _decisionTraceWriteFailures);
+            return result;
+        }
+        finally
+        {
+            _currentOperationId.Value = prevOpId;
+            _currentRequestId.Value = prevReqId;
+        }
+    }
+
     /// <summary>内部构建方法，返回 (result, template)，由 BuildDetailedAsync 与 BuildDetailedWithSnapshotAsync 共享。</summary>
     private async Task<(ContextPackageBuildResult result, PackageTemplate template)> BuildDetailedWithTemplateAsync(
         ContextPackageRequest request,

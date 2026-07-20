@@ -12,29 +12,34 @@ namespace ContextCore.Core;
 /// 对当前状态执行全量构建（<see cref="IContextPackageBuilder.BuildDetailedAsync"/>）的输出
 /// 在以下维度完全等价：section 内容、selected IDs、dropped IDs、reason code、token attribution、source refs。
 ///
-/// <b>R15 V1 实现策略</b>：所有 delta kind 都委托到 <see cref="IContextPackageBuilder.BuildDetailedAsync"/>。
-/// 这种保守策略保证等价性 — 实际的缓存命中/失效由 inner builder 的既有 cache 机制处理
-/// （基于 SHA-256 指纹 + DependencyScopeSet + 版本向量快照）。
-/// <see cref="IPackageDeltaPlanner"/> 的输出仅用于可观测性（记录 delta kind 与受影响 section）。
-///
-/// <b>R15 V2 后续</b>：在 <see cref="PackageDeltaKind.NoChange"/> 分支直接复用快照中的 PackageTemplate，
-/// 在 <see cref="PackageDeltaKind.PartialSectionChange"/> 分支实现真正的选择性重载。
-/// API 契约保持不变，调用方无需修改。
+/// <b>R15 V2 实现策略</b>：
+/// <list type="bullet">
+/// <item><see cref="PackageDeltaKind.NoChange"/>：调用 <see cref="ISnapshotCapablePackageBuilder.RebuildFromSnapshotAsync"/>
+///   直接复用快照中的 PackageTemplate，跳过 build pipeline（PackageInputLoader + CandidateSelector），
+///   仅重新投影生成新的 PackageId/BuildId/CreatedAt/metadata。性能提升来自跳过 store 查询与候选选择。</item>
+/// <item><see cref="PackageDeltaKind.RequestOnlyChange"/>/<see cref="PackageDeltaKind.PartialSectionChange"/>/
+///   <see cref="PackageDeltaKind.FullRebuildRequired"/>：委托到 <see cref="IContextPackageBuilder.BuildDetailedAsync"/>
+///   执行全量构建。PartialSectionChange 的选择性重载留待 V3，V2 保守策略保证等价性。</item>
+/// </list>
+/// 等价性保证：NoChange 路径的 <see cref="ISnapshotCapablePackageBuilder.RebuildFromSnapshotAsync"/>
+/// 调用 <see cref="ResultProjector"/>.ProjectResult(template, options)，是纯函数；
+/// 全量构建路径也调用同一 ProjectResult 方法，因此两条路径在相同 (template, options) 下输出完全一致。
+/// <see cref="IPackageDeltaPlanner"/> 的输出仅用于决定走哪条路径，不影响路径内部的等价性。
 /// </remarks>
 public sealed class PackageIncrementalBuilder : IPackageIncrementalBuilder
 {
-    private readonly IContextPackageBuilder _innerBuilder;
+    private readonly ISnapshotCapablePackageBuilder _innerBuilder;
     private readonly IPackageDeltaPlanner _deltaPlanner;
     private readonly IContextStateVersionStore? _versionStore;
     private readonly Action<PackageDeltaPlan>? _onDeltaPlanned;
 
     /// <summary>构造增量构建器。</summary>
-    /// <param name="innerBuilder">内部全量构建器（非空）。</param>
+    /// <param name="innerBuilder">内部支持快照的全量构建器（非空，需实现 ISnapshotCapablePackageBuilder）。</param>
     /// <param name="deltaPlanner">delta 规划器（非空）。</param>
     /// <param name="versionStore">版本存储（可为 null，无版本追踪时所有变化都视为 FullRebuild）。</param>
     /// <param name="onDeltaPlanned">delta 规划完成后的回调（用于可观测性，可为 null）。</param>
     public PackageIncrementalBuilder(
-        IContextPackageBuilder innerBuilder,
+        ISnapshotCapablePackageBuilder innerBuilder,
         IPackageDeltaPlanner deltaPlanner,
         IContextStateVersionStore? versionStore = null,
         Action<PackageDeltaPlan>? onDeltaPlanned = null)
@@ -61,13 +66,19 @@ public sealed class PackageIncrementalBuilder : IPackageIncrementalBuilder
         var currentFingerprint = CaptureCurrentFingerprint(currentRequest, policy);
         var currentStoreVersions = await CaptureCurrentStoreVersionsAsync(currentRequest, cancellationToken);
 
-        // 2. 规划 delta（仅用于可观测性，V1 不影响实际构建路径）
+        // 2. 规划 delta，决定走 NoChange 快速路径还是全量构建路径
         var deltaPlan = _deltaPlanner.Plan(previousSnapshot, currentFingerprint, currentStoreVersions);
         _onDeltaPlanned?.Invoke(deltaPlan);
 
-        // 3. 委托到内部全量构建器
-        // R15 V1: 所有 delta kind 都走全量构建，等价性由 inner builder 的确定性保证
-        // R15 V2: NoChange 路径将直接复用快照中的 PackageTemplate
+        // 3. 根据 delta kind 选择路径
+        // R15 V2: NoChange 路径直接复用快照中的 PackageTemplate，跳过 build pipeline
+        if (deltaPlan.Kind == PackageDeltaKind.NoChange)
+        {
+            return await _innerBuilder.RebuildFromSnapshotAsync(
+                previousSnapshot, currentRequest, cancellationToken).ConfigureAwait(false);
+        }
+
+        // R15 V2: 其他 delta kind 委托到全量构建（PartialSectionChange 选择性重载留待 V3）
         return await _innerBuilder.BuildDetailedAsync(currentRequest, cancellationToken).ConfigureAwait(false);
     }
 
