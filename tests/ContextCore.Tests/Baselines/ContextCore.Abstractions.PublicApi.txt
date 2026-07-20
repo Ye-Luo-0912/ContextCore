@@ -8,6 +8,11 @@
 #   E:<FullTypeName>.<EventName>
 # Entries are sorted alphabetically; re-running the test will produce identical output.
 
+F:ContextCore.Abstractions.ComparisonOperator.Equals
+F:ContextCore.Abstractions.ComparisonOperator.GreaterThan
+F:ContextCore.Abstractions.ComparisonOperator.GreaterThanOrEqual
+F:ContextCore.Abstractions.ComparisonOperator.LessThan
+F:ContextCore.Abstractions.ComparisonOperator.LessThanOrEqual
 F:ContextCore.Abstractions.ContextCoreDiagnostics.ActivitySource
 F:ContextCore.Abstractions.ContextCoreDiagnostics.ActivitySourceName
 F:ContextCore.Abstractions.ContextEventLevel.Error
@@ -624,10 +629,41 @@ F:ContextCore.Abstractions.Models.VectorQueryTargetSections.HistoricalContext
 F:ContextCore.Abstractions.Models.VectorQueryTargetSections.NormalContext
 F:ContextCore.Abstractions.Models.VectorQueryTargetSections.StableContext
 F:ContextCore.Abstractions.Models.VectorQueryTargetSections.WorkingContext
+F:ContextCore.Abstractions.OptimizationProposalStatus.Draft
+F:ContextCore.Abstractions.OptimizationProposalStatus.ExperimentReady
+F:ContextCore.Abstractions.OptimizationProposalStatus.Promoted
+F:ContextCore.Abstractions.OptimizationProposalStatus.Rejected
+F:ContextCore.Abstractions.OptimizationProposalStatus.RolledBack
+F:ContextCore.Abstractions.OptimizationProposalStatus.ScopedCanary
+F:ContextCore.Abstractions.OptimizationProposalStatus.Shadow
+F:ContextCore.Abstractions.OptimizationProposalStatus.Validated
+F:ContextCore.Abstractions.OptimizationStage.AutomaticRollback
+F:ContextCore.Abstractions.OptimizationStage.OfflineExperiment
+F:ContextCore.Abstractions.OptimizationStage.Promotion
+F:ContextCore.Abstractions.OptimizationStage.ScopedCanary
+F:ContextCore.Abstractions.OptimizationStage.Shadow
+F:ContextCore.Abstractions.OptimizationTargetComponent.CachePolicy
+F:ContextCore.Abstractions.OptimizationTargetComponent.CandidateUtilityReranker
+F:ContextCore.Abstractions.OptimizationTargetComponent.CostAwareRetrievalRouter
+F:ContextCore.Abstractions.OptimizationTargetComponent.PackagePolicy
+F:ContextCore.Abstractions.OptimizationTargetComponent.SectionAssembly
+F:ContextCore.Abstractions.OptimizationTargetComponent.TokenizerSelection
 F:ContextCore.Abstractions.PackageDeltaKind.FullRebuildRequired
 F:ContextCore.Abstractions.PackageDeltaKind.NoChange
 F:ContextCore.Abstractions.PackageDeltaKind.PartialSectionChange
 F:ContextCore.Abstractions.PackageDeltaKind.RequestOnlyChange
+F:ContextCore.Abstractions.PipelineRunStatus.Cancelled
+F:ContextCore.Abstractions.PipelineRunStatus.Failed
+F:ContextCore.Abstractions.PipelineRunStatus.Promoted
+F:ContextCore.Abstractions.PipelineRunStatus.Rejected
+F:ContextCore.Abstractions.PipelineRunStatus.RolledBack
+F:ContextCore.Abstractions.PipelineRunStatus.Running
+F:ContextCore.Abstractions.PipelineRunStatus.StageCompleted
+F:ContextCore.Abstractions.PromotionDecision.Advance
+F:ContextCore.Abstractions.PromotionDecision.Hold
+F:ContextCore.Abstractions.PromotionDecision.Promote
+F:ContextCore.Abstractions.PromotionDecision.Reject
+F:ContextCore.Abstractions.PromotionDecision.Rollback
 F:ContextCore.Abstractions.RelationDirection.Both
 F:ContextCore.Abstractions.RelationDirection.Incoming
 F:ContextCore.Abstractions.RelationDirection.Outgoing
@@ -637,12 +673,26 @@ F:ContextCore.Abstractions.RelationOutboxStates.Applied
 F:ContextCore.Abstractions.RelationOutboxStates.Dispatched
 F:ContextCore.Abstractions.RelationOutboxStates.Failed
 F:ContextCore.Abstractions.RelationOutboxStates.Pending
+F:ContextCore.Abstractions.RiskSeverity.Critical
+F:ContextCore.Abstractions.RiskSeverity.High
+F:ContextCore.Abstractions.RiskSeverity.Low
+F:ContextCore.Abstractions.RiskSeverity.Medium
 F:ContextCore.Abstractions.StorageProviderKind.FileSystem
 F:ContextCore.Abstractions.StorageProviderKind.InMemory
 F:ContextCore.Abstractions.StorageProviderKind.Postgres
 F:ContextCore.Abstractions.StorageProviderKind.Unknown
 F:ContextCore.Abstractions.StoreOperationKind.Read
 F:ContextCore.Abstractions.StoreOperationKind.Write
+M:ContextCore.Abstractions.AgentDiagnosticRequest.#ctor(System.String, System.String, ContextCore.Abstractions.OptimizationTargetComponent, System.Collections.Generic.IReadOnlyDictionary<System.String, System.String>)
+M:ContextCore.Abstractions.AgentDiagnosticRequest.Equals(System.Object)
+M:ContextCore.Abstractions.AgentDiagnosticRequest.GetHashCode()
+M:ContextCore.Abstractions.AgentDiagnosticRequest.GetType()
+M:ContextCore.Abstractions.AgentDiagnosticRequest.ToString()
+M:ContextCore.Abstractions.AgentDiagnosticResult.#ctor(ContextCore.Abstractions.OptimizationProposal, System.String, System.Collections.Generic.IReadOnlyList<System.String>, System.Collections.Generic.IReadOnlyList<System.String>)
+M:ContextCore.Abstractions.AgentDiagnosticResult.Equals(System.Object)
+M:ContextCore.Abstractions.AgentDiagnosticResult.GetHashCode()
+M:ContextCore.Abstractions.AgentDiagnosticResult.GetType()
+M:ContextCore.Abstractions.AgentDiagnosticResult.ToString()
 M:ContextCore.Abstractions.CacheInvalidationKey.#ctor(System.String, System.String, System.String, System.String)
 M:ContextCore.Abstractions.CacheInvalidationKey.Deconstruct(out System.String, out System.String, out System.String, out System.String)
 M:ContextCore.Abstractions.CacheInvalidationKey.Equals(ContextCore.Abstractions.CacheInvalidationKey)
@@ -698,6 +748,17 @@ M:ContextCore.Abstractions.DependencyScopeSet.Equals(System.Object)
 M:ContextCore.Abstractions.DependencyScopeSet.GetHashCode()
 M:ContextCore.Abstractions.DependencyScopeSet.GetType()
 M:ContextCore.Abstractions.DependencyScopeSet.ToString()
+M:ContextCore.Abstractions.ExpectedGain.#ctor(System.String, System.Double, System.Double, System.Collections.Generic.IReadOnlyList<System.String>)
+M:ContextCore.Abstractions.ExpectedGain.Equals(System.Object)
+M:ContextCore.Abstractions.ExpectedGain.GetHashCode()
+M:ContextCore.Abstractions.ExpectedGain.GetType()
+M:ContextCore.Abstractions.ExpectedGain.ToString()
+M:ContextCore.Abstractions.ExperimentEvidence.#ctor(System.String, System.String, System.Double, System.Double, System.Int32, System.DateTimeOffset, System.String)
+M:ContextCore.Abstractions.ExperimentEvidence.Equals(System.Object)
+M:ContextCore.Abstractions.ExperimentEvidence.GetHashCode()
+M:ContextCore.Abstractions.ExperimentEvidence.GetType()
+M:ContextCore.Abstractions.ExperimentEvidence.ToString()
+M:ContextCore.Abstractions.IAgentObservationSource.ObserveAsync(System.String, System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IArtifactStore.AppendJsonLineAsync``1(ContextCore.Abstractions.Models.ArtifactDescriptor, ContextCore.Abstractions.IArtifactStore+!!0, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IArtifactStore.ListAsync(System.Nullable<ContextCore.Abstractions.Models.ArtifactKind>, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IArtifactStore.ReadJsonAsync``1(ContextCore.Abstractions.Models.ArtifactDescriptor, System.Threading.CancellationToken)
@@ -724,6 +785,8 @@ M:ContextCore.Abstractions.IContextCollectionStore.GetCollectionAsync(System.Str
 M:ContextCore.Abstractions.IContextCollectionStore.SaveCollectionAsync(ContextCore.Abstractions.Models.ContextCollection, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IContextEventSink.EmitAsync(ContextCore.Abstractions.ContextOperationEvent, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IContextEventSink.EmitBatchAsync(System.Collections.Generic.IReadOnlyList<ContextCore.Abstractions.ContextOperationEvent>, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IContextEvolutionAgent.DiagnoseAsync(ContextCore.Abstractions.AgentDiagnosticRequest, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IContextEvolutionAgent.RefineProposalAsync(ContextCore.Abstractions.OptimizationProposal, System.Collections.Generic.IReadOnlyList<ContextCore.Abstractions.ExperimentEvidence>, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IContextIndex.SearchAsync(ContextCore.Abstractions.Models.IndexQuery, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IContextIndex.UpsertAsync(ContextCore.Abstractions.Models.ContextIndexEntry, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IContextJobDispatcher.DispatchAsync(ContextCore.Abstractions.ContextJob, System.Threading.CancellationToken)
@@ -790,6 +853,9 @@ M:ContextCore.Abstractions.IEmbeddingProvider.EmbedAsync(ContextCore.Abstraction
 M:ContextCore.Abstractions.IEmbeddingTokenizer.Tokenize(System.Collections.Generic.IReadOnlyList<System.String>, System.Int32)
 M:ContextCore.Abstractions.IGlobalContextStore.QueryAsync(ContextCore.Abstractions.Models.ContextGlobalQuery, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IGlobalContextStore.SaveAsync(ContextCore.Abstractions.Models.ContextGlobalItem, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IGuardedOptimizationPipeline.AdvanceAsync(System.String, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IGuardedOptimizationPipeline.GetStatusAsync(System.String, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IGuardedOptimizationPipeline.StartAsync(ContextCore.Abstractions.OptimizationProposal, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.ILearningFeatureCandidateStore.QueryAsync(ContextCore.Abstractions.Models.LearningFeatureCandidateQuery, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.ILearningFeatureCandidateStore.UpsertAsync(ContextCore.Abstractions.Models.FeedbackFeatureCandidate, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.ILearningFeedbackReviewStore.QueryAsync(ContextCore.Abstractions.Models.LearningFeedbackReviewQuery, System.Threading.CancellationToken)
@@ -814,6 +880,7 @@ M:ContextCore.Abstractions.IPromotionCandidateStore.GetPromotionCandidateAsync(S
 M:ContextCore.Abstractions.IPromotionCandidateStore.QueryPromotionCandidatesAsync(System.String, System.String, System.Nullable<ContextCore.Abstractions.Models.PromotionCandidateStatus>, System.Int32, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IPromotionCandidateStore.SavePromotionCandidateAsync(ContextCore.Abstractions.Models.PromotionCandidate, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IPromotionCandidateStore.UpdatePromotionCandidateStatusAsync(System.String, System.String, System.String, ContextCore.Abstractions.Models.PromotionCandidateStatus, System.String, System.String, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IPromotionJudge.JudgeAsync(ContextCore.Abstractions.PromotionJudgeRequest, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IPromotionPolicyEvaluator.Evaluate(ContextCore.Abstractions.Models.PromotionEvaluationRequest)
 M:ContextCore.Abstractions.IPromotionRecordStore.QueryPromotionRecordsAsync(System.String, System.String, System.Int32, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IPromotionRecordStore.SavePromotionRecordAsync(ContextCore.Abstractions.Models.ContextPromotionRecord, System.Threading.CancellationToken)
@@ -2967,6 +3034,23 @@ M:ContextCore.Abstractions.Models.WorkingMemoryItem.Equals(System.Object)
 M:ContextCore.Abstractions.Models.WorkingMemoryItem.GetHashCode()
 M:ContextCore.Abstractions.Models.WorkingMemoryItem.GetType()
 M:ContextCore.Abstractions.Models.WorkingMemoryItem.ToString()
+M:ContextCore.Abstractions.OptimizationProposal.#ctor()
+M:ContextCore.Abstractions.OptimizationProposal.<Clone>$()
+M:ContextCore.Abstractions.OptimizationProposal.Equals(ContextCore.Abstractions.OptimizationProposal)
+M:ContextCore.Abstractions.OptimizationProposal.Equals(System.Object)
+M:ContextCore.Abstractions.OptimizationProposal.GetHashCode()
+M:ContextCore.Abstractions.OptimizationProposal.GetType()
+M:ContextCore.Abstractions.OptimizationProposal.ToString()
+M:ContextCore.Abstractions.OptimizationProposalVersion.#ctor(System.Int32, System.Int32)
+M:ContextCore.Abstractions.OptimizationProposalVersion.<Clone>$()
+M:ContextCore.Abstractions.OptimizationProposalVersion.BumpMajor()
+M:ContextCore.Abstractions.OptimizationProposalVersion.BumpMinor()
+M:ContextCore.Abstractions.OptimizationProposalVersion.Deconstruct(out System.Int32, out System.Int32)
+M:ContextCore.Abstractions.OptimizationProposalVersion.Equals(ContextCore.Abstractions.OptimizationProposalVersion)
+M:ContextCore.Abstractions.OptimizationProposalVersion.Equals(System.Object)
+M:ContextCore.Abstractions.OptimizationProposalVersion.GetHashCode()
+M:ContextCore.Abstractions.OptimizationProposalVersion.GetType()
+M:ContextCore.Abstractions.OptimizationProposalVersion.ToString()
 M:ContextCore.Abstractions.PackageBuildWithSnapshot.#ctor(ContextCore.Abstractions.Models.ContextPackageBuildResult, ContextCore.Abstractions.PackageStateSnapshot)
 M:ContextCore.Abstractions.PackageBuildWithSnapshot.<Clone>$()
 M:ContextCore.Abstractions.PackageBuildWithSnapshot.Deconstruct(out ContextCore.Abstractions.Models.ContextPackageBuildResult, out ContextCore.Abstractions.PackageStateSnapshot)
@@ -3018,6 +3102,21 @@ M:ContextCore.Abstractions.PathHygieneScanReport.Equals(System.Object)
 M:ContextCore.Abstractions.PathHygieneScanReport.GetHashCode()
 M:ContextCore.Abstractions.PathHygieneScanReport.GetType()
 M:ContextCore.Abstractions.PathHygieneScanReport.ToString()
+M:ContextCore.Abstractions.PipelineRunResult.#ctor(System.String, System.String, ContextCore.Abstractions.OptimizationProposalVersion, ContextCore.Abstractions.OptimizationStage, ContextCore.Abstractions.PipelineRunStatus, System.Collections.Generic.IReadOnlyDictionary<System.String, System.Double>, System.String, System.Nullable<System.DateTimeOffset>)
+M:ContextCore.Abstractions.PipelineRunResult.Equals(System.Object)
+M:ContextCore.Abstractions.PipelineRunResult.GetHashCode()
+M:ContextCore.Abstractions.PipelineRunResult.GetType()
+M:ContextCore.Abstractions.PipelineRunResult.ToString()
+M:ContextCore.Abstractions.PromotionJudgeRequest.#ctor(ContextCore.Abstractions.OptimizationProposal, ContextCore.Abstractions.OptimizationStage, System.Collections.Generic.IReadOnlyDictionary<System.String, System.Double>, System.Collections.Generic.IReadOnlyDictionary<System.String, System.Double>, System.Collections.Generic.IReadOnlyDictionary<System.String, System.Double>)
+M:ContextCore.Abstractions.PromotionJudgeRequest.Equals(System.Object)
+M:ContextCore.Abstractions.PromotionJudgeRequest.GetHashCode()
+M:ContextCore.Abstractions.PromotionJudgeRequest.GetType()
+M:ContextCore.Abstractions.PromotionJudgeRequest.ToString()
+M:ContextCore.Abstractions.PromotionJudgeResult.#ctor(ContextCore.Abstractions.PromotionDecision, System.String, System.Nullable<ContextCore.Abstractions.OptimizationStage>, System.Collections.Generic.IReadOnlyList<System.String>)
+M:ContextCore.Abstractions.PromotionJudgeResult.Equals(System.Object)
+M:ContextCore.Abstractions.PromotionJudgeResult.GetHashCode()
+M:ContextCore.Abstractions.PromotionJudgeResult.GetType()
+M:ContextCore.Abstractions.PromotionJudgeResult.ToString()
 M:ContextCore.Abstractions.RelationOutboxRecord.#ctor()
 M:ContextCore.Abstractions.RelationOutboxRecord.Equals(System.Object)
 M:ContextCore.Abstractions.RelationOutboxRecord.GetHashCode()
@@ -3043,6 +3142,17 @@ M:ContextCore.Abstractions.RetrievalAdapterResult.Equals(System.Object)
 M:ContextCore.Abstractions.RetrievalAdapterResult.GetHashCode()
 M:ContextCore.Abstractions.RetrievalAdapterResult.GetType()
 M:ContextCore.Abstractions.RetrievalAdapterResult.ToString()
+M:ContextCore.Abstractions.RiskAssessment.#ctor(System.String, System.String, ContextCore.Abstractions.RiskSeverity, System.Collections.Generic.IReadOnlyList<System.String>, System.Collections.Generic.IReadOnlyList<System.String>)
+M:ContextCore.Abstractions.RiskAssessment.Equals(System.Object)
+M:ContextCore.Abstractions.RiskAssessment.GetHashCode()
+M:ContextCore.Abstractions.RiskAssessment.GetType()
+M:ContextCore.Abstractions.RiskAssessment.ToString()
+M:ContextCore.Abstractions.RollbackCondition.#ctor(System.String, ContextCore.Abstractions.ComparisonOperator, System.Double, System.String)
+M:ContextCore.Abstractions.RollbackCondition.Equals(System.Object)
+M:ContextCore.Abstractions.RollbackCondition.GetHashCode()
+M:ContextCore.Abstractions.RollbackCondition.GetType()
+M:ContextCore.Abstractions.RollbackCondition.IsTriggered(System.Double)
+M:ContextCore.Abstractions.RollbackCondition.ToString()
 M:ContextCore.Abstractions.SectionDependencySet.#ctor(System.String, System.Collections.Generic.IReadOnlyList<ContextCore.Abstractions.VersionScope>)
 M:ContextCore.Abstractions.SectionDependencySet.Equals(System.Object)
 M:ContextCore.Abstractions.SectionDependencySet.GetHashCode()
@@ -3086,6 +3196,14 @@ M:ContextCore.Abstractions.VersionScope.Equals(System.Object)
 M:ContextCore.Abstractions.VersionScope.GetHashCode()
 M:ContextCore.Abstractions.VersionScope.GetType()
 M:ContextCore.Abstractions.VersionScope.ToString()
+P:ContextCore.Abstractions.AgentDiagnosticRequest.CollectionId (get)
+P:ContextCore.Abstractions.AgentDiagnosticRequest.Hints (get)
+P:ContextCore.Abstractions.AgentDiagnosticRequest.TargetComponent (get)
+P:ContextCore.Abstractions.AgentDiagnosticRequest.WorkspaceId (get)
+P:ContextCore.Abstractions.AgentDiagnosticResult.HypothesisTrail (get)
+P:ContextCore.Abstractions.AgentDiagnosticResult.Observations (get)
+P:ContextCore.Abstractions.AgentDiagnosticResult.Proposal (get)
+P:ContextCore.Abstractions.AgentDiagnosticResult.Summary (get)
 P:ContextCore.Abstractions.CacheInvalidationKey.CollectionId (get|init)
 P:ContextCore.Abstractions.CacheInvalidationKey.EntityId (get|init)
 P:ContextCore.Abstractions.CacheInvalidationKey.StoreKind (get|init)
@@ -3133,6 +3251,19 @@ P:ContextCore.Abstractions.ContextValidationResult.Issues (get|init)
 P:ContextCore.Abstractions.ContextValidationResult.Succeeded (get|init)
 P:ContextCore.Abstractions.DependencyScopeSet.Count (get)
 P:ContextCore.Abstractions.DependencyScopeSet.Scopes (get)
+P:ContextCore.Abstractions.ExpectedGain.Confidence (get)
+P:ContextCore.Abstractions.ExpectedGain.EstimatedDelta (get)
+P:ContextCore.Abstractions.ExpectedGain.MetricName (get)
+P:ContextCore.Abstractions.ExpectedGain.Preconditions (get)
+P:ContextCore.Abstractions.ExperimentEvidence.BaselineValue (get)
+P:ContextCore.Abstractions.ExperimentEvidence.CapturedAt (get)
+P:ContextCore.Abstractions.ExperimentEvidence.Delta (get)
+P:ContextCore.Abstractions.ExperimentEvidence.ExperimentValue (get)
+P:ContextCore.Abstractions.ExperimentEvidence.MetricName (get)
+P:ContextCore.Abstractions.ExperimentEvidence.Notes (get)
+P:ContextCore.Abstractions.ExperimentEvidence.SampleCount (get)
+P:ContextCore.Abstractions.ExperimentEvidence.Source (get)
+P:ContextCore.Abstractions.IAgentObservationSource.SourceId (get)
 P:ContextCore.Abstractions.IContextEventSink.Kind (get)
 P:ContextCore.Abstractions.IContextJobProcessor.Kind (get)
 P:ContextCore.Abstractions.IContextPathResolver.RootPath (get)
@@ -6892,6 +7023,23 @@ P:ContextCore.Abstractions.Models.WorkingMemoryItem.Tags (get|init)
 P:ContextCore.Abstractions.Models.WorkingMemoryItem.Type (get|init)
 P:ContextCore.Abstractions.Models.WorkingMemoryItem.UpdatedAt (get|init)
 P:ContextCore.Abstractions.Models.WorkingMemoryItem.WorkspaceId (get|init)
+P:ContextCore.Abstractions.OptimizationProposal.AgentIdentifier (get|init)
+P:ContextCore.Abstractions.OptimizationProposal.Evidence (get|init)
+P:ContextCore.Abstractions.OptimizationProposal.ExpectedGains (get|init)
+P:ContextCore.Abstractions.OptimizationProposal.ExperimentConfigJson (get|init)
+P:ContextCore.Abstractions.OptimizationProposal.GeneratedAt (get|init)
+P:ContextCore.Abstractions.OptimizationProposal.Hypothesis (get|init)
+P:ContextCore.Abstractions.OptimizationProposal.ProposalId (get|init)
+P:ContextCore.Abstractions.OptimizationProposal.Risks (get|init)
+P:ContextCore.Abstractions.OptimizationProposal.RollbackConditions (get|init)
+P:ContextCore.Abstractions.OptimizationProposal.RollbackPlan (get|init)
+P:ContextCore.Abstractions.OptimizationProposal.Status (get|init)
+P:ContextCore.Abstractions.OptimizationProposal.TargetComponent (get|init)
+P:ContextCore.Abstractions.OptimizationProposal.Title (get|init)
+P:ContextCore.Abstractions.OptimizationProposal.Version (get|init)
+P:ContextCore.Abstractions.OptimizationProposalVersion.Initial (get)
+P:ContextCore.Abstractions.OptimizationProposalVersion.Major (get|init)
+P:ContextCore.Abstractions.OptimizationProposalVersion.Minor (get|init)
 P:ContextCore.Abstractions.PackageBuildWithSnapshot.Result (get|init)
 P:ContextCore.Abstractions.PackageBuildWithSnapshot.Snapshot (get|init)
 P:ContextCore.Abstractions.PackageDeltaPlan.AffectedSectionNames (get|init)
@@ -6921,6 +7069,23 @@ P:ContextCore.Abstractions.PathHygieneScanReport.Recommendation (get)
 P:ContextCore.Abstractions.PathHygieneScanReport.RemediationHints (get|init)
 P:ContextCore.Abstractions.PathHygieneScanReport.ScanRoot (get|init)
 P:ContextCore.Abstractions.PathHygieneScanReport.TotalFiles (get|init)
+P:ContextCore.Abstractions.PipelineRunResult.CompletedAt (get)
+P:ContextCore.Abstractions.PipelineRunResult.ProposalId (get)
+P:ContextCore.Abstractions.PipelineRunResult.ProposalVersion (get)
+P:ContextCore.Abstractions.PipelineRunResult.RollbackReason (get)
+P:ContextCore.Abstractions.PipelineRunResult.RunId (get)
+P:ContextCore.Abstractions.PipelineRunResult.Stage (get)
+P:ContextCore.Abstractions.PipelineRunResult.StageMetrics (get)
+P:ContextCore.Abstractions.PipelineRunResult.Status (get)
+P:ContextCore.Abstractions.PromotionJudgeRequest.BaselineMetrics (get)
+P:ContextCore.Abstractions.PromotionJudgeRequest.CurrentStage (get)
+P:ContextCore.Abstractions.PromotionJudgeRequest.ExperimentMetrics (get)
+P:ContextCore.Abstractions.PromotionJudgeRequest.Proposal (get)
+P:ContextCore.Abstractions.PromotionJudgeRequest.StageMetrics (get)
+P:ContextCore.Abstractions.PromotionJudgeResult.Conditions (get)
+P:ContextCore.Abstractions.PromotionJudgeResult.Decision (get)
+P:ContextCore.Abstractions.PromotionJudgeResult.NextStage (get)
+P:ContextCore.Abstractions.PromotionJudgeResult.Rationale (get)
 P:ContextCore.Abstractions.RelationOutboxRecord.AppliedAt (get|init)
 P:ContextCore.Abstractions.RelationOutboxRecord.CollectionId (get|init)
 P:ContextCore.Abstractions.RelationOutboxRecord.CreatedAt (get|init)
@@ -6950,6 +7115,15 @@ P:ContextCore.Abstractions.RetrievalAdapterResult.AddedCandidateIds (get|init)
 P:ContextCore.Abstractions.RetrievalAdapterResult.Applied (get|init)
 P:ContextCore.Abstractions.RetrievalAdapterResult.RemovedCandidateIds (get|init)
 P:ContextCore.Abstractions.RetrievalAdapterResult.TracePath (get|init)
+P:ContextCore.Abstractions.RiskAssessment.Description (get)
+P:ContextCore.Abstractions.RiskAssessment.Mitigations (get)
+P:ContextCore.Abstractions.RiskAssessment.RiskId (get)
+P:ContextCore.Abstractions.RiskAssessment.Severity (get)
+P:ContextCore.Abstractions.RiskAssessment.TriggerConditions (get)
+P:ContextCore.Abstractions.RollbackCondition.Description (get)
+P:ContextCore.Abstractions.RollbackCondition.MetricName (get)
+P:ContextCore.Abstractions.RollbackCondition.Operator (get)
+P:ContextCore.Abstractions.RollbackCondition.Threshold (get)
 P:ContextCore.Abstractions.SectionDependencySet.DependencyScopes (get)
 P:ContextCore.Abstractions.SectionDependencySet.SectionName (get)
 P:ContextCore.Abstractions.StateCacheKey.Value (get|init)
@@ -6978,7 +7152,10 @@ P:ContextCore.Abstractions.TokenTruncationResult.WasTruncated (get|init)
 P:ContextCore.Abstractions.VersionScope.CollectionId (get|init)
 P:ContextCore.Abstractions.VersionScope.StoreKind (get|init)
 P:ContextCore.Abstractions.VersionScope.WorkspaceId (get|init)
+T:ContextCore.Abstractions.AgentDiagnosticRequest
+T:ContextCore.Abstractions.AgentDiagnosticResult
 T:ContextCore.Abstractions.CacheInvalidationKey (Struct)
+T:ContextCore.Abstractions.ComparisonOperator (Enum)
 T:ContextCore.Abstractions.ContextCoreDiagnostics
 T:ContextCore.Abstractions.ContextEventLevel (Enum)
 T:ContextCore.Abstractions.ContextEventSinkKind (Enum)
@@ -6993,6 +7170,9 @@ T:ContextCore.Abstractions.ContextValidationIssue
 T:ContextCore.Abstractions.ContextValidationResult
 T:ContextCore.Abstractions.ContextValidationSeverity (Enum)
 T:ContextCore.Abstractions.DependencyScopeSet
+T:ContextCore.Abstractions.ExpectedGain
+T:ContextCore.Abstractions.ExperimentEvidence
+T:ContextCore.Abstractions.IAgentObservationSource (Interface)
 T:ContextCore.Abstractions.IArtifactStore (Interface)
 T:ContextCore.Abstractions.ICandidateConstraintReviewStore (Interface)
 T:ContextCore.Abstractions.ICandidateMemoryReviewStore (Interface)
@@ -7001,6 +7181,7 @@ T:ContextCore.Abstractions.IConstraintGapCandidateStore (Interface)
 T:ContextCore.Abstractions.IConstraintStore (Interface)
 T:ContextCore.Abstractions.IContextCollectionStore (Interface)
 T:ContextCore.Abstractions.IContextEventSink (Interface)
+T:ContextCore.Abstractions.IContextEvolutionAgent (Interface)
 T:ContextCore.Abstractions.IContextIndex (Interface)
 T:ContextCore.Abstractions.IContextJobDispatcher (Interface)
 T:ContextCore.Abstractions.IContextJobProcessor (Interface)
@@ -7029,6 +7210,7 @@ T:ContextCore.Abstractions.IEmbeddingJobService (Interface)
 T:ContextCore.Abstractions.IEmbeddingProvider (Interface)
 T:ContextCore.Abstractions.IEmbeddingTokenizer (Interface)
 T:ContextCore.Abstractions.IGlobalContextStore (Interface)
+T:ContextCore.Abstractions.IGuardedOptimizationPipeline (Interface)
 T:ContextCore.Abstractions.ILearningFeatureCandidateStore (Interface)
 T:ContextCore.Abstractions.ILearningFeedbackReviewStore (Interface)
 T:ContextCore.Abstractions.ILearningFeedbackStore (Interface)
@@ -7040,6 +7222,7 @@ T:ContextCore.Abstractions.IPackageDeltaPlanner (Interface)
 T:ContextCore.Abstractions.IPackageIncrementalBuilder (Interface)
 T:ContextCore.Abstractions.IPromotionCandidateFactory (Interface)
 T:ContextCore.Abstractions.IPromotionCandidateStore (Interface)
+T:ContextCore.Abstractions.IPromotionJudge (Interface)
 T:ContextCore.Abstractions.IPromotionPolicyEvaluator (Interface)
 T:ContextCore.Abstractions.IPromotionRecordStore (Interface)
 T:ContextCore.Abstractions.IRelationBackfillPolicy (Interface)
@@ -7517,6 +7700,11 @@ T:ContextCore.Abstractions.Models.VectorSearchResult
 T:ContextCore.Abstractions.Models.WorkingMemoryActiveContext
 T:ContextCore.Abstractions.Models.WorkingMemoryCurrentTask
 T:ContextCore.Abstractions.Models.WorkingMemoryItem
+T:ContextCore.Abstractions.OptimizationProposal
+T:ContextCore.Abstractions.OptimizationProposalStatus (Enum)
+T:ContextCore.Abstractions.OptimizationProposalVersion
+T:ContextCore.Abstractions.OptimizationStage (Enum)
+T:ContextCore.Abstractions.OptimizationTargetComponent (Enum)
 T:ContextCore.Abstractions.PackageBuildWithSnapshot
 T:ContextCore.Abstractions.PackageDeltaKind (Enum)
 T:ContextCore.Abstractions.PackageDeltaPlan
@@ -7525,6 +7713,11 @@ T:ContextCore.Abstractions.PathHygiene
 T:ContextCore.Abstractions.PathHygieneGateReport
 T:ContextCore.Abstractions.PathHygieneScanEntry
 T:ContextCore.Abstractions.PathHygieneScanReport
+T:ContextCore.Abstractions.PipelineRunResult
+T:ContextCore.Abstractions.PipelineRunStatus (Enum)
+T:ContextCore.Abstractions.PromotionDecision (Enum)
+T:ContextCore.Abstractions.PromotionJudgeRequest
+T:ContextCore.Abstractions.PromotionJudgeResult
 T:ContextCore.Abstractions.RelationDirection (Enum)
 T:ContextCore.Abstractions.RelationOutboxOperationKind (Enum)
 T:ContextCore.Abstractions.RelationOutboxRecord
@@ -7532,6 +7725,9 @@ T:ContextCore.Abstractions.RelationOutboxStates
 T:ContextCore.Abstractions.RequestSemanticFingerprint
 T:ContextCore.Abstractions.RetrievalAdapterRequest
 T:ContextCore.Abstractions.RetrievalAdapterResult
+T:ContextCore.Abstractions.RiskAssessment
+T:ContextCore.Abstractions.RiskSeverity (Enum)
+T:ContextCore.Abstractions.RollbackCondition
 T:ContextCore.Abstractions.SectionDependencySet
 T:ContextCore.Abstractions.StateCacheKey (Struct)
 T:ContextCore.Abstractions.StorageExecutionProfile

@@ -71,14 +71,14 @@ R14-PG 收口后重新冻结 Current HEAD，确保所有性能指标指向同一
 
 ---
 
-## 当前验收指标（2026-07-20 R15-1 完成）
+## 当前验收指标（2026-07-20 R15-2/R16-1/R17-1 完成）
 
 | 指标 | 当前值 | 目标 |
 |------|--------|------|
-| 当前 HEAD | R15-1 增量上下文包 V1 commit（见 `git log --grep="feat(R15-1)"`） | - |
-| PublicApi baseline 行数 | 7541（+74：R15 增量包契约） | 单一事实源 |
+| 当前 HEAD | R15-2/R16-1/R17-1 增量包 V2 + Evolution Agent 契约（见 `git log --grep="feat(R15-2\|feat(R16-1\|feat(R17-1"`） | - |
+| PublicApi baseline 行数 | 7738（+74 R15 V1；+1 R15 V2 RebuildFromSnapshotAsync；+196 R16/R17 Evolution 契约） | 单一事实源 |
 | 构建 | 0 警告 / 0 错误 | 0 / 0 |
-| 测试 | ContextCore.Tests 1180/1180；IntegrationTests 75/75（1 skip）；Service.Tests 61/61（1 skip） | 0 失败 |
+| 测试 | ContextCore.Tests 1206/1206（+26 自 R15-1）；IntegrationTests 75/75（1 skip）；Service.Tests 61/61（1 skip） | 0 失败 |
 | A3 / golden / graph 不回退 | 197 个 graph/eval/retrieval 测试全通过 | 不回退 |
 | Package Build Cold (InMemory, ItemCount=50) | 2,329 μs / 819 KB | ≤ 当前值 70% |
 | Package Build CacheHit (InMemory, ItemCount=50) | 6.6 μs / 12.56 KB | 优于 Cold |
@@ -107,6 +107,11 @@ R14-PG 收口后重新冻结 Current HEAD，确保所有性能指标指向同一
 | Postgres migration 框架 | registry + history + rollback + 版本短路 | 已达成（R14-PG-8 + P0 冻结） |
 | Postgres HA 测试 | failover/pool/slow/tx retry | 已达成（R14-PG-9） |
 | Postgres backup/restore runbook | docs/runbooks/postgres-backup-restore.md | 已达成（R14-PG-10） |
+| R15 IncrementalBuild == FullBuild | 13 个 differential 测试（含 100 步大规模） | 已达成（R15-1 + R15-2） |
+| R15 NoChange 路径复用 PackageTemplate | RebuildFromSnapshotAsync + CallTrackingBuilder 验证 | 已达成（R15-2） |
+| R16 OptimizationProposal 契约 | 10 个公共类型 + 4 个接口 | 已达成（R16-1） |
+| R17 Guarded Optimization Pipeline 契约 | 3 个枚举 + 3 个 DTO + 2 个接口 | 已达成（R17-1） |
+| Evolution Contracts 单元测试 | 22 个测试全通过 | 已达成（R16/R17） |
 
 ---
 
@@ -118,7 +123,7 @@ R14-PG 收口后重新冻结 Current HEAD，确保所有性能指标指向同一
 
 ## 下一阶段任务
 
-### R15 — Incremental Context Package（V1 已完成）
+### R15 — Incremental Context Package（V1/V2 已完成）
 
 比 Embedding Cache 更接近真正的 KV Cache。最重要的验收不是速度，而是**幂等性**：
 
@@ -128,61 +133,92 @@ IncrementalBuild(snapshot) == FullBuild(snapshot)
 
 R15 V1 已完成（commit 见 `git log --grep="feat(R15-1)"`）：
 - **Abstractions 层契约**：`StoreVersionVector`、`RequestSemanticFingerprint`、`SectionDependencySet`、`PackageStateSnapshot`、`PackageDeltaKind`、`PackageDeltaPlan`、`IPackageDeltaPlanner`、`IPackageIncrementalBuilder`、`ISnapshotCapablePackageBuilder`、`PackageBuildWithSnapshot`
-- **Core 层实现**：`PackageDeltaPlanner`（纯函数，比较请求指纹+版本向量）、`PackageIncrementalBuilder`（委托到 inner builder，保证等价性）、`PackageStateSnapshotCapture`（snapshot 捕获）、`SectionDependencyMapper`（section→scope 依赖映射）
+- **Core 层实现**：`PackageDeltaPlanner`（纯函数，比较请求指纹+版本向量）、`PackageIncrementalBuilder`（V1 委托策略）、`PackageStateSnapshotCapture`（snapshot 捕获）、`SectionDependencyMapper`（section→scope 依赖映射）
 - **BasicContextPackageBuilder** 实现 `ISnapshotCapablePackageBuilder`，新增 `BuildDetailedWithSnapshotAsync` 方法
-- **Differential testing**：`IncrementalPackageDifferentialTests`，8 个测试覆盖固定种子/多种子/ContextStore/MemoryStore/ConstraintStore/请求变化/NoChange/Snapshot 捕获
-- **R15 V1 策略**：所有 delta kind 都委托到全量构建，等价性由 inner builder 的确定性保证。`IPackageDeltaPlanner` 输出仅用于可观测性。实际缓存命中/失效由 inner builder 既有 cache 机制处理（SHA-256 指纹 + DependencyScopeSet + 版本向量快照）
+- **Differential testing**：8 个测试覆盖固定种子/多种子/ContextStore/MemoryStore/ConstraintStore/请求变化/NoChange/Snapshot 捕获
+- **R15 V1 策略**：所有 delta kind 都委托到全量构建，等价性由 inner builder 的确定性保证
+
+R15 V2 已完成（commit 见 `git log --grep="feat(R15-2)"`）：
+- **ISnapshotCapablePackageBuilder** 新增 `RebuildFromSnapshotAsync` 方法（Abstractions 层不暴露 internal PackageTemplate，通过 `PackageStateSnapshot.Template` 间接传递）
+- **BasicContextPackageBuilder.RebuildFromSnapshotAsync**：cast snapshot.Template → PackageTemplate，调用 `ResultProjector.ProjectResult` 重新投影（纯函数，保证与全量构建投影阶段输出完全一致）
+- **PackageIncrementalBuilder** 构造函数 innerBuilder 类型改为 `ISnapshotCapablePackageBuilder`；NoChange 分支调用 `RebuildFromSnapshotAsync`，其他 delta kind 仍委托到 `BuildDetailedAsync`
+- **Differential testing 扩展**：13 个测试（+5 自 V1），含 100 步大规模/多种子大规模/NoChange 路径调用追踪/NoChange 重复复用/混合序列
+- **NoChange 路径调用追踪**：`CallTrackingBuilder` 验证 NoChange 路径调用 `RebuildFromSnapshotAsync` 一次、不调用 `BuildDetailedAsync`；非 NoChange 路径反之
 
 **验收达成**：
-- `IncrementalBuild(snapshot) == FullBuild(snapshot)` 在随机 differential testing 下成立（8 个测试，多种子覆盖）
+- `IncrementalBuild(snapshot) == FullBuild(snapshot)` 在 13 个 differential testing 下成立（含 100 步大规模序列）
 - 比较维度：section 内容、selected IDs、dropped IDs、reason code、token attribution、source refs (ItemReferences)
-- Build 0/0，ContextCore.Tests 1180/1180，IntegrationTests 75/75，Service.Tests 61/61
+- Build 0/0，ContextCore.Tests 1206/1206，IntegrationTests 75/75，Service.Tests 61/61
 
-**R15 V2 待办**（性能优化，不影响 API 契约）：
-- 在 `PackageDeltaKind.NoChange` 分支直接复用快照中的 PackageTemplate，跳过 inner builder 调用
+**R15 V3 待办**（性能优化，不影响 API 契约）：
 - 在 `PackageDeltaKind.PartialSectionChange` 分支实现真正的选择性重载：复用未变 section 的候选列表，仅重载受影响 section，最后全局重新打包
-- 加入更大规模的随机 differential testing（100+ 步状态序列）
+- 增加性能基准：对比 NoChange 路径与全量构建的 latency 差异
 
-### R16 — Context Evolution Agent V1
+### R16 — Context Evolution Agent V1（契约已完成）
 
 Agent 只负责离线控制面，不触碰正式 Policy 生产路径。
 
-**允许的操作**：
+**允许的操作**（接口约束）：
 
-- Observe（采集运行时指标与决策证据）
-- Cluster failures（聚类失败模式）
-- Diagnose（根因分析）
-- Form hypothesis（形成假设）
-- Generate experiment（设计实验）
-- Run benchmark/eval（执行 benchmark 或 eval）
-- Compare baseline（与基线对比）
-- Generate proposal（生成版本化 OptimizationProposal）
+- Observe（采集运行时指标与决策证据）→ `IAgentObservationSource.ObserveAsync`
+- Diagnose（根因分析 + 形成假设 + 生成实验 + 运行 benchmark/eval + 与基线对比 + 生成 proposal）→ `IContextEvolutionAgent.DiagnoseAsync`
+- Refine（基于新证据修订既有 proposal）→ `IContextEvolutionAgent.RefineProposalAsync`
 
-**明确禁止**：
+**明确禁止**（接口不暴露以下能力）：
 
-- 自动改正式 Policy
-- 自动提交生产配置
-- 自动启用模型
-- 绕过 shadow / canary
+- 自动改正式 Policy（无 Policy 修改接口）
+- 自动提交生产配置（无配置修改接口）
+- 自动启用模型（无模型启用接口）
+- 绕过 shadow / canary（Agent 输出只能到 `OptimizationProposalStatus.ExperimentReady`，后续由 R17 pipeline 推进）
 
-**Agent 输出格式**：版本化 `OptimizationProposal`，包含证据、预期收益、风险、实验结果和回滚条件。
+**Agent 输出格式**：版本化 `OptimizationProposal`，包含证据（`ExperimentEvidence`）、预期收益（`ExpectedGain`）、风险评估（`RiskAssessment`）、回滚条件（`RollbackCondition`）。
 
-### R17 — Guarded Optimization
+**R16-1 已完成**（commit 见 `git log --grep="feat(R16-1)"`）：
+- `OptimizationProposalStatus` 枚举（8 个值：Draft/Validated/ExperimentReady/Shadow/ScopedCanary/Promoted/RolledBack/Rejected）
+- `OptimizationProposalVersion` record（Major.Minor，含 BumpMinor/BumpMajor）
+- `ExperimentEvidence` / `ExpectedGain` / `RiskAssessment` / `RollbackCondition` 类（含完整字段验证）
+- `RiskSeverity` / `ComparisonOperator` / `OptimizationTargetComponent` 枚举
+- `OptimizationProposal` record（不可变，含 Evidence/ExpectedGains/Risks/RollbackConditions）
+- `IAgentObservationSource` / `IContextEvolutionAgent` 接口
+- `AgentDiagnosticRequest` / `AgentDiagnosticResult` 类
+- 22 个 EvolutionContractsTests 验证契约可实施性
+
+**R16 V2 待办**（实现层）：
+- `DefaultContextEvolutionAgent` 实现：连接 `IAgentObservationSource` + benchmark runner + eval host
+- 采集运行时指标并生成 proposal 的完整流程
+- Proposal 持久化（存储到 PostgresContextLearningStore 或新 store）
+
+### R17 — Guarded Optimization（契约已完成）
 
 引入完整的优化闭环：
 
-1. **Offline experiment** — 离线实验
-2. **Shadow** — 影子模式运行
-3. **Scoped canary** — 范围受控的 canary
-4. **Automatic rollback** — 自动回滚（命中风险条件时）
-5. **Manual / default promotion** — 手动或默认晋升
+1. **Offline experiment** — 离线实验 → `OptimizationStage.OfflineExperiment`
+2. **Shadow** — 影子模式运行 → `OptimizationStage.Shadow`
+3. **Scoped canary** — 范围受控的 canary → `OptimizationStage.ScopedCanary`
+4. **Automatic rollback** — 自动回滚（命中风险条件时）→ `OptimizationStage.AutomaticRollback`
+5. **Manual / default promotion** — 手动或默认晋升 → `OptimizationStage.Promotion`
 
 **第一项端到端学习闭环**：建议先用 `PromotionJudge` 验证训练和部署基础设施，因为作用域最小、风险容易隔离。
 
 **第一项真正作用于核心运行时的 learned component**：建议从以下二选一：
 
-- Cost-aware Retrieval Router（成本感知检索路由）
-- Candidate Utility Reranker（候选效用重排序器）
+- Cost-aware Retrieval Router（成本感知检索路由）→ `OptimizationTargetComponent.CostAwareRetrievalRouter`
+- Candidate Utility Reranker（候选效用重排序器）→ `OptimizationTargetComponent.CandidateUtilityReranker`
+
+**R17-1 已完成**（commit 见 `git log --grep="feat(R17-1)"`）：
+- `OptimizationStage` 枚举（5 个阶段，严格顺序推进）
+- `PipelineRunStatus` 枚举（7 个状态：Running/StageCompleted/RolledBack/Promoted/Rejected/Cancelled/Failed）
+- `PipelineRunResult` 类（含 stageMetrics/rollbackReason/completedAt）
+- `PromotionJudgeRequest` / `PromotionJudgeResult` 类
+- `PromotionDecision` 枚举（5 个值：Advance/Hold/Rollback/Promote/Reject）
+- `IPromotionJudge` 接口（最小端到端学习闭环裁决器）
+- `IGuardedOptimizationPipeline` 接口（StartAsync/AdvanceAsync/GetStatusAsync）
+
+**R17 V2 待办**（实现层）：
+- `DefaultPromotionJudge` 实现：基于规则引擎（指标对比 + 风险评估 + 回滚条件触发）
+- `DefaultGuardedOptimizationPipeline` 实现：阶段顺序推进 + 自动回滚 + 持久化
+- Pipeline run 持久化（存储到 PostgresContextLearningStore 或新 store）
+- 第一项端到端集成：`PromotionJudge` + 简单 `OptimizationProposal` 流程验证
 
 ### DTO-R4 剩余部分（暂缓，高风险）
 
