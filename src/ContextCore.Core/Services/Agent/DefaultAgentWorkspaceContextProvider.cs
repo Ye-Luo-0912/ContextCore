@@ -45,16 +45,16 @@ public sealed class DefaultAgentWorkspaceContextProvider : IAgentWorkspaceContex
         Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
     };
 
-    private readonly GenericToolAgentAdapter _adapter;
+    private readonly AgentRuntimeBase _adapter;
     private readonly TimeProvider _timeProvider;
     private readonly ConcurrentDictionary<string, AgentContextSnapshot?> _lastSnapshotBySession
         = new(StringComparer.Ordinal);
 
     /// <summary>构造 provider。</summary>
-    /// <param name="adapter">Agent adapter（共享 session 状态）。</param>
+    /// <param name="adapter">Agent adapter（共享 session 状态；支持 GenericTool/Codex/Claude）。</param>
     /// <param name="timeProvider">时间提供者（可选，默认 <see cref="TimeProvider.System"/>）。</param>
     public DefaultAgentWorkspaceContextProvider(
-        GenericToolAgentAdapter adapter,
+        AgentRuntimeBase adapter,
         TimeProvider? timeProvider = null)
     {
         ArgumentNullException.ThrowIfNull(adapter);

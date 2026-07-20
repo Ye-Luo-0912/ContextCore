@@ -5,57 +5,62 @@ using ContextCore.Abstractions;
 namespace ContextCore.Core.Services.Agent;
 
 // ===========================================================================
-// R23-3：GenericToolAgentAdapter — 通用 Agent 适配器基础实现。
+// R23-3/R23-4：Agent Runtime Adapter 实现
 //
-// 目标（对齐 R23 规格）：
-//   1. 提供 IAgentRuntime / IAgentSession / IAgentEventStream 的最小 in-memory 实现，
-//      不依赖任何 Agent SDK（Codex / Claude Code 等）。
-//   2. Session 状态（events / injections / tool results / snapshots）保存在
-//      ConcurrentDictionary；同一 process 内多线程访问安全。
-//   3. 不引入持久化（checkpoint store 由独立的 IAgentCheckpointStore 实现）。
-//   4. R23-4 的 CodexAgentRuntimeAdapter / ClaudeAgentRuntimeAdapter 可参考本实现
-//      的结构，但应独立实现而非继承（避免 Generic 行为污染 SDK 特定 adapter）。
+// 设计原则（对齐 R23 规格）：
+//   1. ContextCore 不直接依赖某一个 Agent SDK 的对象模型；所有 SDK 特定类型
+//      保留在 Adapter 实现内部，不进入 Abstractions。
+//   2. Adapter 持有 session 状态（events / injections / tool results / snapshots），
+//      保存在 ConcurrentDictionary；同一 process 内多线程访问安全。
+//   3. R23-3 提供 GenericToolAgentAdapter（通用 in-memory 实现）；
+//      R23-4 提供 CodexAgentRuntimeAdapter + ClaudeCodeAgentRuntimeAdapter
+//      （不依赖 SDK，仅命名空间占位 + RuntimeId/RuntimeKind 标识）。
+//   4. 三个 adapter 共享 AgentRuntimeBase 基类（session 状态管理 + 事件流），
+//      避免代码重复；各 adapter sealed 防止进一步继承污染。
 //
 // 设计边界：
-//   - Adapter 只负责 session 生命周期与事件流；不直接调用 ContextCore 内部接口
+//   - Base + Adapter 只负责 session 生命周期与事件流；不直接调用 ContextCore 内部接口
 //     （如 IContextPackageBuilder）；context snapshot 组装由
 //     DefaultAgentWorkspaceContextProvider 完成。
-//   - Adapter 暴露 GetSessionState / TryAppendEvent 等 public 方法供 provider 使用，
-//      避免 provider 通过反射访问内部状态。
-//   - Session 关闭后所有写操作抛 InvalidOperationException；读取仍允许（事件历史可查）。
+//   - Base 暴露 GetSessionState / TryAppendEvent 等 public 方法供 provider 使用。
+//   - Session 关闭后所有写操作抛 InvalidOperationException；读取仍允许。
 // ===========================================================================
 
 /// <summary>
-/// R23-3：通用 Agent 适配器。提供 <see cref="IAgentRuntime"/> 的 in-memory 实现。
+/// R23-4：Agent Runtime Adapter 抽象基类。
+/// 提供 session 状态管理 + 事件流的通用实现，供具体 adapter（GenericTool/Codex/Claude）继承。
 /// </summary>
 /// <remarks>
-/// 适用于不需要 Agent SDK 适配的场景（如本地工具型 Agent / 测试 / 演示）。
-/// 生产场景如需对接 Codex / Claude Code，请使用对应的 RuntimeAdapter（R23-4）。
-///
 /// <b>线程安全</b>：所有公共方法线程安全；session 状态使用
 /// <see cref="ConcurrentDictionary{TKey, TValue}"/> + 内部锁保护订阅者列表。
+///
+/// <b>扩展点</b>：子类通过 <see cref="RuntimeId"/> / <see cref="RuntimeKind"/>
+/// 标识自身；可选 override <see cref="CreateSessionAsync"/> 以添加 SDK 特定初始化逻辑。
 /// </remarks>
-public sealed class GenericToolAgentAdapter : IAgentRuntime
+public abstract class AgentRuntimeBase : IAgentRuntime
 {
-    /// <summary>Runtime 标识。</summary>
-    public string RuntimeId => "generic-v1";
-
-    /// <summary>Runtime 类型。</summary>
-    public AgentRuntimeKind RuntimeKind => AgentRuntimeKind.GenericTool;
-
     private readonly TimeProvider _timeProvider;
     private readonly ConcurrentDictionary<string, AgentSessionRecord> _sessions
         = new(StringComparer.Ordinal);
 
-    /// <summary>构造 adapter。</summary>
+    /// <summary>构造 base。</summary>
     /// <param name="timeProvider">时间提供者（可选，默认 <see cref="TimeProvider.System"/>）。</param>
-    public GenericToolAgentAdapter(TimeProvider? timeProvider = null)
+    protected AgentRuntimeBase(TimeProvider? timeProvider = null)
     {
         _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
+    /// <summary>时间提供者（供子类与 session 视图使用）。</summary>
+    protected TimeProvider TimeProvider => _timeProvider;
+
     /// <inheritdoc />
-    public Task<AgentSessionId> CreateSessionAsync(
+    public abstract string RuntimeId { get; }
+
+    /// <inheritdoc />
+    public abstract AgentRuntimeKind RuntimeKind { get; }
+
+    /// <inheritdoc />
+    public virtual Task<AgentSessionId> CreateSessionAsync(
         AgentSessionRequest request,
         CancellationToken cancellationToken = default)
     {
@@ -66,7 +71,7 @@ public sealed class GenericToolAgentAdapter : IAgentRuntime
         var sessionId = new AgentSessionId
         {
             Value = $"session-{Guid.NewGuid():N}",
-            RuntimeKind = AgentRuntimeKind.GenericTool,
+            RuntimeKind = RuntimeKind, // 子类决定 runtime kind
             WorkspaceId = request.WorkspaceId,
             CollectionId = request.CollectionId,
             CreatedAt = _timeProvider.GetUtcNow()
@@ -195,7 +200,30 @@ public sealed class GenericToolAgentAdapter : IAgentRuntime
 }
 
 /// <summary>
-/// R23-3：Agent session 内部状态记录。由 <see cref="GenericToolAgentAdapter"/> 管理。
+/// R23-3：通用 Agent 适配器。提供 <see cref="IAgentRuntime"/> 的 in-memory 实现。
+/// </summary>
+/// <remarks>
+/// 适用于不需要 Agent SDK 适配的场景（如本地工具型 Agent / 测试 / 演示）。
+/// 生产场景如需对接 Codex / Claude Code，请使用对应的 RuntimeAdapter（R23-4）。
+/// </remarks>
+public sealed class GenericToolAgentAdapter : AgentRuntimeBase
+{
+    /// <summary>Runtime 标识。</summary>
+    public override string RuntimeId => "generic-v1";
+
+    /// <summary>Runtime 类型。</summary>
+    public override AgentRuntimeKind RuntimeKind => AgentRuntimeKind.GenericTool;
+
+    /// <summary>构造 adapter。</summary>
+    /// <param name="timeProvider">时间提供者（可选，默认 <see cref="TimeProvider.System"/>）。</param>
+    public GenericToolAgentAdapter(TimeProvider? timeProvider = null)
+        : base(timeProvider)
+    {
+    }
+}
+
+/// <summary>
+/// R23-3：Agent session 内部状态记录。由 <see cref="AgentRuntimeBase"/> 管理。
 /// </summary>
 /// <remarks>
 /// 暴露为 public 仅供 provider（<see cref="DefaultAgentWorkspaceContextProvider"/>）访问；
@@ -271,12 +299,12 @@ public sealed class AgentToolResultRecord
 /// </remarks>
 internal sealed class GenericToolAgentSession : IAgentSession, IAgentEventStream
 {
-    private readonly GenericToolAgentAdapter _adapter;
+    private readonly AgentRuntimeBase _adapter;
     private readonly AgentSessionRecord _record;
     private readonly TimeProvider _timeProvider;
 
     public GenericToolAgentSession(
-        GenericToolAgentAdapter adapter,
+        AgentRuntimeBase adapter,
         AgentSessionRecord record,
         TimeProvider timeProvider)
     {
