@@ -1,3 +1,4 @@
+using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 
 namespace ContextCore.Core.Services;
@@ -226,5 +227,117 @@ public static class ContextDecisionProjector
             channels.Add(channel);
         }
         return channels;
+    }
+
+    // =========================================================================
+    // R18-2：envelope-to-decision 投影路径（新增，不替换 ProjectPackage/ProjectRetrieval）
+    // =========================================================================
+
+    /// <summary>
+    /// R18-2：从 <see cref="ContextDecisionResult"/>（envelope 集合）投影决策记录。
+    /// 与 <see cref="ProjectPackage"/> / <see cref="ProjectRetrieval"/> 并存，
+    /// 用于 R18-3 / R18-4 阶段的 adapter 路径。envelope 集合保持不变。
+    /// </summary>
+    /// <param name="result">Engine 输出的决策结果（SelectedEnvelopes + DroppedEnvelopes）。</param>
+    /// <returns>只读 <see cref="ContextDecisionRecord"/>，所有 Risk 标志位恒为 false。</returns>
+    public static ContextDecisionRecord ProjectFromEnvelopes(ContextDecisionResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+
+        var selected = result.SelectedEnvelopes
+            .Select(env => EnrichCandidate(new ContextDecisionCandidate
+            {
+                ItemId = env.CandidateId,
+                Kind = ResolveEnvelopeKindString(env.Source),
+                Type = env.Type,
+                Outcome = ContextDecisionCandidateOutcome.Selected,
+                SectionName = ResolveEnvelopeSectionName(env.Source),
+                Reason = ResolveEnvelopeSelectReason(env),
+                Score = env.Utility.FinalScore,
+                EstimatedTokens = env.EstimatedTokens,
+                SourceRefs = env.ProvenanceRefs
+                    .Where(r => !string.IsNullOrEmpty(r.RefId))
+                    .Select(r => r.RefId)
+                    .ToList(),
+                ChannelSources = env.Features.ChannelSources
+            }))
+            .ToList();
+
+        var dropped = result.DroppedEnvelopes
+            .Select(env => EnrichCandidate(new ContextDecisionCandidate
+            {
+                ItemId = env.CandidateId,
+                Kind = ResolveEnvelopeKindString(env.Source),
+                Type = env.Type,
+                Outcome = ContextDecisionCandidateOutcome.Dropped,
+                SectionName = ResolveEnvelopeSectionName(env.Source),
+                Reason = ResolveEnvelopeDropReason(env),
+                Score = env.Utility.FinalScore,
+                EstimatedTokens = env.EstimatedTokens,
+                SourceRefs = env.ProvenanceRefs
+                    .Where(r => !string.IsNullOrEmpty(r.RefId))
+                    .Select(r => r.RefId)
+                    .ToList(),
+                ChannelSources = env.Features.ChannelSources
+            }))
+            .ToList();
+
+        var candidates = new List<ContextDecisionCandidate>(selected.Count + dropped.Count);
+        candidates.AddRange(selected);
+        candidates.AddRange(dropped);
+
+        return new ContextDecisionRecord
+        {
+            DecisionId = result.RequestId,
+            Source = result.DecisionSource,
+            Candidates = candidates,
+            PolicyVersion = result.PolicyVersion,
+            Quality = null, // R18-2 不计算 quality；由 PackageQualityCalculator 单独计算
+            CreatedAt = result.DecidedAt
+        };
+    }
+
+    private static string ResolveEnvelopeKindString(ContextCandidateSource source) => source switch
+    {
+        ContextCandidateSource.Mandatory or ContextCandidateSource.Constraint => "hard_constraint",
+        ContextCandidateSource.WorkingMemory => "working_memory",
+        ContextCandidateSource.StableMemory => "stable_memory",
+        ContextCandidateSource.Lexical or ContextCandidateSource.Semantic or
+        ContextCandidateSource.Recency => "recent_context",
+        ContextCandidateSource.Graph or ContextCandidateSource.RelatedContext => "related_context",
+        ContextCandidateSource.GlobalContext => "global_context",
+        _ => "raw"
+    };
+
+    private static string ResolveEnvelopeSectionName(ContextCandidateSource source) => source switch
+    {
+        ContextCandidateSource.Mandatory or ContextCandidateSource.Constraint => "hard_constraints",
+        ContextCandidateSource.WorkingMemory => "working_memory",
+        ContextCandidateSource.StableMemory => "stable_memory",
+        ContextCandidateSource.Lexical or ContextCandidateSource.Semantic or
+        ContextCandidateSource.Recency => "recent_context",
+        ContextCandidateSource.Graph or ContextCandidateSource.RelatedContext => "related_context",
+        ContextCandidateSource.GlobalContext => "global_context",
+        _ => "recent_context"
+    };
+
+    private static string ResolveEnvelopeSelectReason(ContextCandidateEnvelope env)
+    {
+        // Source=Mandatory / Constraint 视为 mandatory 类候选；
+        // Safety.IsMandatory / IsHardConstraint 同样视为 mandatory 类。
+        if (env.Source == ContextCandidateSource.Mandatory || env.Safety.IsMandatory) return "mandatory";
+        if (env.Source == ContextCandidateSource.Constraint || env.Safety.IsHardConstraint) return "hard constraint";
+        return env.Utility.ModelScore.HasValue ? "model-weighted" : "selected by utility";
+    }
+
+    private static string ResolveEnvelopeDropReason(ContextCandidateEnvelope env)
+    {
+        if (!env.Safety.PassesSafetyGate)
+        {
+            var code = env.Safety.BlockReasonCode;
+            var detail = env.Safety.BlockReasonDetail;
+            return string.IsNullOrEmpty(detail) ? code.ToString() : $"{code}: {detail}";
+        }
+        return "budget exceeded";
     }
 }

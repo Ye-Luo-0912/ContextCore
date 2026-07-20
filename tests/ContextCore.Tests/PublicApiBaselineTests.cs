@@ -391,14 +391,24 @@ internal static class PublicApiSnapshotBuilder
         {
             var tick = name.IndexOf('`');
             if (tick >= 0) name = name.Substring(0, tick);
-            var args = type.GetGenericArguments();
-            name += "<";
-            for (var i = 0; i < args.Length; i++)
+            // 防御性处理：ContainsGenericParameters 为 true 时表示这是一个开放泛型
+            // （未绑定具体类型参数），GetGenericArguments 可能抛 InvalidOperationException。
+            // 这种情况常见于 out T / in T 等带有协变/逆变修饰的开放泛型接口。
+            if (type.ContainsGenericParameters)
             {
-                if (i > 0) name += ", ";
-                name += FormatTypeName(args[i]);
+                name += "<>";
             }
-            name += ">";
+            else
+            {
+                var args = type.GetGenericArguments();
+                name += "<";
+                for (var i = 0; i < args.Length; i++)
+                {
+                    if (i > 0) name += ", ";
+                    name += FormatTypeName(args[i]);
+                }
+                name += ">";
+            }
         }
         return name;
     }
