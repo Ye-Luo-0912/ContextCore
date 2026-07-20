@@ -71,14 +71,14 @@ R14-PG 收口后重新冻结 Current HEAD，确保所有性能指标指向同一
 
 ---
 
-## 当前验收指标（2026-07-20 R15-2/R16-1/R17-1/R16-2 完成）
+## 当前验收指标（2026-07-20 R17-2/P8 Learning Loop V1 完成）
 
 | 指标 | 当前值 | 目标 |
 |------|--------|------|
-| 当前 HEAD | R16-2 DefaultContextEvolutionAgent 实现（见 `git log --grep="feat(R16-2"`） | - |
-| PublicApi baseline 行数 | 7738（+74 R15 V1；+1 R15 V2 RebuildFromSnapshotAsync；+196 R16/R17 Evolution 契约）— R16-2 实现层类型在 ContextCore.Core 不进 Abstractions baseline | 单一事实源 |
+| 当前 HEAD | R17-2 DefaultGuardedOptimizationPipeline + P8 Learning Loop V1（见 `git log --grep="feat(R17-2\|feat(P8)"`） | - |
+| PublicApi baseline 行数 | 7962（+74 R15 V1；+1 R15 V2；+196 R16/R17 Evolution 契约；+224 P8 LearningLoopContracts）— 实现层类型在 ContextCore.Core 不进 Abstractions baseline | 单一事实源 |
 | 构建 | 0 警告 / 0 错误 | 0 / 0 |
-| 测试 | ContextCore.Tests 1223/1223（+17 自 R16-2）；IntegrationTests 75/75（1 skip）；Service.Tests 61/61（1 skip） | 0 失败 |
+| 测试 | ContextCore.Tests 1248/1248（+16 P8-A PromotionJudge；+30 P8-B/C/D LearningContracts；+19 R17-2 Pipeline）；IntegrationTests 75/75（1 skip）；Service.Tests 61/61（1 skip） | 0 失败 |
 | A3 / golden / graph 不回退 | 197 个 graph/eval/retrieval 测试全通过 | 不回退 |
 | Package Build Cold (InMemory, ItemCount=50) | 2,329 μs / 819 KB | ≤ 当前值 70% |
 | Package Build CacheHit (InMemory, ItemCount=50) | 6.6 μs / 12.56 KB | 优于 Cold |
@@ -114,6 +114,10 @@ R14-PG 收口后重新冻结 Current HEAD，确保所有性能指标指向同一
 | Evolution Contracts 单元测试 | 22 个测试全通过 | 已达成（R16/R17） |
 | R16 DefaultContextEvolutionAgent 实现 | DiagnoseAsync + RefineProposalAsync + HypothesisTemplates + DefaultAgentObservationSource | 已达成（R16-2） |
 | R16-2 实现层单元测试 | 17 个测试全通过（含 6 个 TargetComponent 模板覆盖 + 硬边界验证） | 已达成（R16-2） |
+| P8-A DefaultPromotionJudge 实现 | 逐条 ExpectedGain + RollbackCondition 评估；不使用单一质量总分 | 已达成（P8-A） |
+| P8-B/C/D Learning Loop 契约 | Dataset/ModelRegistry/Canary/Rollback 全部公共契约（224 条 PublicApi 条目） | 已达成（P8-B/C/D） |
+| R17-2 DefaultGuardedOptimizationPipeline 实现 | 5 阶段严格顺序 + 自动回滚 + in-memory run state | 已达成（R17-2） |
+| R17-2 Pipeline 单元测试 | 19 个测试覆盖 StartAsync/AdvanceWithMetricsAsync/GetStatusAsync + 阶段跳跃 + 终态幂等 | 已达成（R17-2） |
 
 ---
 
@@ -198,7 +202,7 @@ Agent 只负责离线控制面，不触碰正式 Policy 生产路径。
 - Proposal 持久化（存储到 PostgresContextLearningStore 或新 store）
 - ObservationSource 集成真实 telemetry sink（OpenTelemetry metrics registry）
 
-### R17 — Guarded Optimization（契约已完成）
+### R17 — Guarded Optimization（V1 契约 + V2 实现已完成）
 
 引入完整的优化闭环：
 
@@ -224,11 +228,78 @@ Agent 只负责离线控制面，不触碰正式 Policy 生产路径。
 - `IPromotionJudge` 接口（最小端到端学习闭环裁决器）
 - `IGuardedOptimizationPipeline` 接口（StartAsync/AdvanceAsync/GetStatusAsync）
 
-**R17 V2 待办**（实现层）：
-- `DefaultPromotionJudge` 实现：基于规则引擎（指标对比 + 风险评估 + 回滚条件触发）
-- `DefaultGuardedOptimizationPipeline` 实现：阶段顺序推进 + 自动回滚 + 持久化
-- Pipeline run 持久化（存储到 PostgresContextLearningStore 或新 store）
-- 第一项端到端集成：`PromotionJudge` + 简单 `OptimizationProposal` 流程验证
+**R17-2 已完成**（commit 见 `git log --grep="feat(R17-2)"`）：
+- `DefaultPromotionJudge`（P8-A，`ContextCore.Core/Services/Evolution/`）：规则引擎裁决器，逐条 ExpectedGain + RollbackCondition 评估；终态（AutomaticRollback/Promotion）直接返回 Rollback/Promote；不使用单一质量总分；构造函数 `DefaultPromotionJudge(double promotionConfidenceThreshold = 0.70, TimeProvider? = null)`
+- `DefaultGuardedOptimizationPipeline`：5 阶段严格顺序推进（OfflineExperiment → Shadow → ScopedCanary → Promotion）；自动回滚（任一 RollbackCondition 命中 experimentMetrics → AutomaticRollback 终态）；in-memory run state（ConcurrentDictionary，生产部署应替换为 PostgresContextLearningStore 或新 store）；持久化 BaselineComparison + RollbackRecord + CanaryAssignment
+- 接口扩展（非接口方法）：`AdvanceWithMetricsAsync(runId, baselineMetrics, experimentMetrics, ct)` 注入指标 + 调用 judge + 应用 decision；`RecordCanaryAssignmentAsync` / `GetCanaryAssignmentsAsync` / `GetRollbackRecordAsync` 辅助审计方法
+- 19 个 `DefaultGuardedOptimizationPipelineTests` 覆盖：StartAsync（ExperimentReady/非 ExperimentReady/无 RollbackConditions/null）+ AdvanceWithMetricsAsync（推进/驳斥/回滚/幂等/全 pipeline promote/Hold）+ GetStatusAsync（已知/未知 runId）+ CanaryAssignment 持久化 + BaselineComparison 持久化 + 接口方法无指标
+- 硬边界：仅接受 ExperimentReady proposal + 至少 1 条 RollbackCondition；阶段跳跃抛 InvalidOperationException；终态（Promoted/RolledBack/Rejected/Cancelled/Failed）幂等不可推进
+
+**R17 V3 待办**（集成层）：
+- Pipeline run 持久化（替换 in-memory ConcurrentDictionary 为 PostgresContextLearningStore 或新 store）
+- 第一项端到端集成：真实 dataset → model artifact → canary assignment → rollback 完整流程
+- Canary assignment strategy 实现选择（随机/分层/哈希分桶等）
+
+### P8 — Learning Loop V1（已部分完成）
+
+**第一条完整闭环**：Runtime evidence → Reviewed dataset → Versioned dataset → Training job → Model artifact → Offline replay → Shadow → Scoped canary → Rollback
+
+**已完成**（commit `719ad76` + `9ea5489`）：
+- **P8-A** `DefaultPromotionJudge`：规则引擎裁决器；不使用单一质量总分；逐条 ExpectedGain + RollbackCondition 评估（16 个测试）
+- **P8-B/C/D** `LearningLoopContracts`（Abstractions）：Dataset/ModelRegistry/Canary/Rollback 全部公共契约（30 个测试，+224 PublicApi 条目）
+  - Dataset：`DatasetSplitStrategy` / `DatasetReviewStatus` / `DatasetProvenance` / `FeatureSchemaVersion` / `DatasetVersion` / `DatasetManifest` / `DatasetStatistics` / `VersionedDataset`
+  - Model Registry：`ModelArtifactStatus` / `ModelCompatibilityLevel` / `ModelArtifactVersion` / `ModelCompatibilityContract` / `ModelArtifact` / `IModelRegistry` 接口
+  - Canary & Rollback：`CanaryAssignmentStrategy` / `RollbackReason` / `CanaryAssignment` / `RollbackRecord` / `BaselineComparison`
+- **R17-2** `DefaultGuardedOptimizationPipeline`：5 阶段严格顺序推进 + 自动回滚 + in-memory run state（19 个测试）
+
+**硬边界**（P8 学习闭环）：
+- **不**直接用 `selected = positive`、`dropped = negative`：Token budget、section quota 和 duplicate suppression 导致的 dropped 不能被当作不相关负样本（DatasetManifest 必须区分 `PositiveLabels` / `NegativeLabels` / `UnlabeledItems`）
+- 明确禁止：自动修改正式 Policy、自动提交配置、自动启用模型、绕过 shadow/canary、用单一质量总分决定上线
+- 当前 feedback candidate mapping 仍由硬编码 switch 维护，后续可收敛成 capability registry（**非第一优先级**）
+
+**第二 learned component 优先级建议**（R17 V3 集成时按此顺序）：
+1. PromotionJudge（已完成）
+2. CostAwareRetrievalRouter
+3. CandidateUtilityReranker
+4. ConstraintGapJudge
+5. Package-level listwise model
+
+**P8 待办**（V2 集成层，后续阶段）：
+- Dataset manifest 实际生成器（从 Runtime evidence → Reviewed dataset 的具体 ETL 实现）
+- Train/test group split 策略实现（`GroupKeyed` 默认避免数据泄漏）
+- Model registry 持久化（替换 in-memory 为 PostgresContextLearningStore 或新 store）
+- Model compatibility contract 运行时校验（model artifact 加载时校验 FeatureSchemaVersion 与运行时 schema 一致性）
+- Baseline comparison 自动采集（替换当前手动通过 `AdvanceWithMetricsAsync` 注入指标的方式）
+- Canary assignment strategy 实现选择（随机/分层/哈希分桶等）
+- Rollback record 持久化与审计查询
+
+### 代码优化（OPT-1~OPT-5）
+
+5 项代码细节优化（用户提出，按优先级处理）：
+
+**OPT-1 Trace schema 枚举化**（进行中）：
+- `PackageTraceRecorder.MapTraceFields` 当前通过字符串判断 kind/section，再输出 byte sourceType/authority/strategyType/channel
+- 改为正式枚举：`RuntimeCandidateSourceType` / `CandidateAuthorityLevel` / `CandidateStrategyType` / `RetrievalChannelType`
+- 序列化时再映射成数值；新增 section 不再静默落入默认值
+
+**OPT-2 Runtime Candidate Trace Sink 验证**：
+- 验证当前异步 dispatcher 在高并发下的正确性
+- 验证项：bounded queue / batch append / shutdown drain / dropped count / queue saturation / writer recreation
+
+**OPT-3 Trace fault injection 测试**：
+- Trace backend 延迟 100ms / 异常 / 队列满 / shutdown 期间 flush / 磁盘满 / Postgres 不可用
+- 验证：正式请求结果在 trace backend 故障时保持不变
+
+**OPT-4 Policy 版本从阶段号解耦**：
+- 当前决策版本名为 `context-decision-foundation/v17.0`，绑定了项目阶段编号
+- 改为按能力独立演进：`decision-schema/2.0`、`package-policy/3.1`、`retrieval-policy/4.0`、`relation-profile/2.0`、`quality-contract/1.0`
+
+**OPT-5 DI 架构测试**：
+- 每个 provider 的最终解析类型
+- 是否 Unsupported
+- 是否被意外重复覆盖
+- Data Plane 和 Control Plane 是否混用
+- Singleton 是否捕获 Scoped 依赖
 
 ### DTO-R4 剩余部分（暂缓，高风险）
 
