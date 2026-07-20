@@ -37,6 +37,67 @@ internal sealed class PackageTraceRecorder
         _getRequestId = getRequestId;
     }
 
+    /// <summary>
+    /// OPT-1: kind → SourceType 枚举映射。替代原 magic byte switch。
+    /// 未匹配 kind 显式返回 Unknown(0) 而非静默默认 Raw(1)，便于下游检测 schema 演进缺口。
+    /// </summary>
+    private static RuntimeCandidateSourceType MapSourceType(string kindLower) => kindLower switch
+    {
+        "raw" or "legacy" => RuntimeCandidateSourceType.Raw,
+        "current_task" => RuntimeCandidateSourceType.CurrentTask,
+        "hard_constraint" or "soft_constraint" or "merged_constraint" => RuntimeCandidateSourceType.Constraint,
+        "working_memory" or "stable_memory" or "historical_context" => RuntimeCandidateSourceType.Memory,
+        "global_context" => RuntimeCandidateSourceType.GlobalContext,
+        "recent_context" => RuntimeCandidateSourceType.RecentContext,
+        "related_context" => RuntimeCandidateSourceType.RelatedContext,
+        _ => RuntimeCandidateSourceType.Unknown
+    };
+
+    /// <summary>OPT-1: kind → AuthorityLevel 枚举映射。</summary>
+    private static CandidateAuthorityLevel MapAuthority(string kindLower) => kindLower switch
+    {
+        "raw" or "legacy" or "recent_context" => CandidateAuthorityLevel.UserAttached,
+        "current_task" => CandidateAuthorityLevel.Authoritative,
+        "hard_constraint" or "soft_constraint" or "merged_constraint" or "constraints" => CandidateAuthorityLevel.HardRequirement,
+        "working_memory" => CandidateAuthorityLevel.Authoritative,
+        "stable_memory" => CandidateAuthorityLevel.HardRequirement,
+        "global_context" => CandidateAuthorityLevel.HardRequirement,
+        "related_context" => CandidateAuthorityLevel.Inferred,
+        "historical_context" => CandidateAuthorityLevel.Reference,
+        _ => CandidateAuthorityLevel.Unknown
+    };
+
+    /// <summary>OPT-1: kind → StrategyType 枚举映射。</summary>
+    private static CandidateStrategyType MapStrategyType(string kindLower) => kindLower switch
+    {
+        "current_task" => CandidateStrategyType.Current,
+        "hard_constraint" or "soft_constraint" or "merged_constraint" or "constraints" => CandidateStrategyType.Constraint,
+        "working_memory" or "recent_context" => CandidateStrategyType.Recent,
+        "stable_memory" => CandidateStrategyType.Stable,
+        "global_context" => CandidateStrategyType.Stable,
+        "related_context" => CandidateStrategyType.Related,
+        "raw" or "legacy" => CandidateStrategyType.Recent,
+        _ => CandidateStrategyType.Unknown
+    };
+
+    /// <summary>
+    /// OPT-1: (section, kind) → RetrievalChannel 枚举映射。
+    /// 注意：原 byte 映射中 constraints section 的非 constraint kind 会回退到 Memory；此处保留相同语义。
+    /// </summary>
+    private static RuntimeCandidateRetrievalChannel MapRetrievalChannel(string sectionLower, string kindLower) => sectionLower switch
+    {
+        "raw" or "legacy" => RuntimeCandidateRetrievalChannel.Keyword,
+        "current_task" => RuntimeCandidateRetrievalChannel.Anchor,
+        "hard_constraints" or "soft_constraints" or "constraints" =>
+            kindLower.Contains("constraint")
+                ? RuntimeCandidateRetrievalChannel.Constraint
+                : RuntimeCandidateRetrievalChannel.Memory,
+        "working_memory" or "stable_memory" or "global_context" or "historical_context" => RuntimeCandidateRetrievalChannel.Memory,
+        "recent_context" => RuntimeCandidateRetrievalChannel.Keyword,
+        "related_context" => RuntimeCandidateRetrievalChannel.Graph,
+        _ => RuntimeCandidateRetrievalChannel.Memory
+    };
+
     internal void AddSectionDecisionsWithDedup(
         ICollection<ContextPackageDecision> selectedItems,
         ICollection<DroppedContextItem> droppedItems,
@@ -185,7 +246,7 @@ internal sealed class PackageTraceRecorder
                 Authority = auth,
                 StrategyType = stratType,
                 RetrievalChannel = chan,
-                TraceSource = (byte)3, // PackageTrace
+                TraceSource = RuntimeCandidateTraceSource.PackageTrace,
                 DeterministicScore = c.Score,
                 StrategyScore = c.Score,
                 FinalScore = c.Score,
@@ -222,59 +283,21 @@ internal sealed class PackageTraceRecorder
         }
     }
 
-    private static (byte sourceType, byte authority, byte strategyType, byte retrievalChannel) MapTraceFields(
+    /// <summary>
+    /// OPT-1: 聚合 (SourceType, Authority, StrategyType, RetrievalChannel) 枚举映射。
+    /// 替代原返回 byte tuple 的实现。未匹配 kind/section 显式落入 Unknown(0)，
+    /// 下游消费者可检测 0 值识别 schema 演进缺口，而非静默使用错误的默认值。
+    /// </summary>
+    private static (RuntimeCandidateSourceType sourceType, CandidateAuthorityLevel authority, CandidateStrategyType strategyType, RuntimeCandidateRetrievalChannel retrievalChannel) MapTraceFields(
         string kind, string section, PackageTraceCandidate c)
     {
         var kindLower = kind?.ToLowerInvariant() ?? section?.ToLowerInvariant() ?? "";
         var sectionLower = section?.ToLowerInvariant() ?? "";
 
-        byte sourceType = kindLower switch
-        {
-            "raw" or "legacy" => 1,
-            "current_task" => 6,
-            "hard_constraint" or "soft_constraint" or "merged_constraint" => 3,
-            "working_memory" or "stable_memory" or "historical_context" => 2,
-            "global_context" => 4,
-            "recent_context" => 5,
-            "related_context" => 7,
-            _ => 1
-        };
-
-        byte authority = kindLower switch
-        {
-            "raw" or "legacy" or "recent_context" => 2,
-            "current_task" => 5,
-            "hard_constraint" or "soft_constraint" or "merged_constraint" or "constraints" => 1,
-            "working_memory" => 5,
-            "stable_memory" => 1,
-            "global_context" => 1,
-            "related_context" => 4,
-            "historical_context" => 3,
-            _ => 1
-        };
-
-        byte strategyType = kindLower switch
-        {
-            "current_task" => 4,
-            "hard_constraint" or "soft_constraint" or "merged_constraint" or "constraints" => 3,
-            "working_memory" or "recent_context" => 1,
-            "stable_memory" => 2,
-            "global_context" => 2,
-            "related_context" => 5,
-            "raw" or "legacy" => 1,
-            _ => 1
-        };
-
-        byte retrievalChannel = sectionLower switch
-        {
-            "raw" or "legacy" => sectionLower == "legacy" ? (byte)4 : (byte)4,
-            "current_task" => (byte)5,
-            "hard_constraints" or "soft_constraints" or "constraints" => kindLower.Contains("constraint") ? (byte)6 : (byte)2,
-            "working_memory" or "stable_memory" or "global_context" or "historical_context" => (byte)2,
-            "recent_context" => (byte)4,
-            "related_context" => (byte)3,
-            _ => (byte)2
-        };
+        var sourceType = MapSourceType(kindLower);
+        var authority = MapAuthority(kindLower);
+        var strategyType = MapStrategyType(kindLower);
+        var retrievalChannel = MapRetrievalChannel(sectionLower, kindLower);
         return (sourceType, authority, strategyType, retrievalChannel);
     }
 
