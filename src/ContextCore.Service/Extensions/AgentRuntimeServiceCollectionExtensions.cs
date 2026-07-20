@@ -172,4 +172,70 @@ public static class AgentRuntimeServiceCollectionExtensions
             .AddAgentContextDeltaCalculator()
             .AddInMemoryAgentCheckpointStore();
     }
+
+    // ===== R24 扩展 =====
+
+    /// <summary>
+    /// 注册 <see cref="DefaultAgentContextBridge"/> 作为 <see cref="IAgentContextBridge"/> 单例。
+    /// </summary>
+    /// <param name="services">DI 容器。</param>
+    /// <param name="timeProvider">可选时间提供者。</param>
+    /// <returns>当前容器（链式调用）。</returns>
+    /// <remarks>
+    /// 自动解析已注册的 <see cref="IContextPackageBuilder"/>；
+    /// 需要先注册 ContextCore 上下文构建管线（如 AddContextCore）。
+    /// </remarks>
+    public static IServiceCollection AddAgentContextBridge(
+        this IServiceCollection services,
+        TimeProvider? timeProvider = null)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        services.AddSingleton<IAgentContextBridge>(sp =>
+        {
+            var packageBuilder = sp.GetService<IContextPackageBuilder>()
+                ?? throw new InvalidOperationException(
+                    "AddAgentContextBridge 需要先注册 IContextPackageBuilder" +
+                    "（如通过 AddContextCore 注册 ContextCore 上下文构建管线）。");
+            return new DefaultAgentContextBridge(packageBuilder, timeProvider);
+        });
+        return services;
+    }
+
+    /// <summary>
+    /// 注册 <see cref="InMemoryAgentTaskStateStore"/> 作为
+    /// <see cref="IAgentTaskStateStore"/> 单例。
+    /// </summary>
+    /// <param name="services">DI 容器。</param>
+    /// <returns>当前容器（链式调用）。</returns>
+    /// <remarks>
+    /// 注意：此实现为 in-memory；进程重启后丢失。
+    /// 生产场景应替换为持久化实现（如 PostgresAgentTaskStateStore，后续阶段提供）。
+    /// </remarks>
+    public static IServiceCollection AddInMemoryAgentTaskStateStore(this IServiceCollection services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        services.AddSingleton<IAgentTaskStateStore, InMemoryAgentTaskStateStore>();
+        return services;
+    }
+
+    /// <summary>
+    /// 一键注册全部 R23 + R24 默认实现（在 AddAgentRuntimeDefaults 基础上追加 bridge + task state store）。
+    /// </summary>
+    /// <param name="services">DI 容器。</param>
+    /// <param name="timeProvider">可选时间提供者。</param>
+    /// <returns>当前容器（链式调用）。</returns>
+    /// <remarks>
+    /// 注意：<see cref="AddAgentContextBridge"/> 需要先注册 <see cref="IContextPackageBuilder"/>；
+    /// 若未注册则会在解析时抛异常。调用方应先调用 AddContextCore 注册 ContextCore 管线。
+    /// </remarks>
+    public static IServiceCollection AddAgentRuntimeAndBridgeDefaults(
+        this IServiceCollection services,
+        TimeProvider? timeProvider = null)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        return services
+            .AddAgentRuntimeDefaults(timeProvider)
+            .AddAgentContextBridge(timeProvider)
+            .AddInMemoryAgentTaskStateStore();
+    }
 }
