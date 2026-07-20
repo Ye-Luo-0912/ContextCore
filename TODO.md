@@ -71,14 +71,14 @@ R14-PG 收口后重新冻结 Current HEAD，确保所有性能指标指向同一
 
 ---
 
-## 当前验收指标（2026-07-20 P0 冻结）
+## 当前验收指标（2026-07-20 R15-1 完成）
 
 | 指标 | 当前值 | 目标 |
 |------|--------|------|
-| 当前 HEAD | P0 冻结 commit（`fix(P0): freeze`，见 `git log --grep`） | - |
-| PublicApi baseline 行数 | 7467 | 单一事实源 |
+| 当前 HEAD | R15-1 增量上下文包 V1 commit（见 `git log --grep="feat(R15-1)"`） | - |
+| PublicApi baseline 行数 | 7541（+74：R15 增量包契约） | 单一事实源 |
 | 构建 | 0 警告 / 0 错误 | 0 / 0 |
-| 测试 | ContextCore.Tests 1171/1171；IntegrationTests 75/75（1 skip）；Service.Tests 61/61（1 skip） | 0 失败 |
+| 测试 | ContextCore.Tests 1180/1180；IntegrationTests 75/75（1 skip）；Service.Tests 61/61（1 skip） | 0 失败 |
 | A3 / golden / graph 不回退 | 197 个 graph/eval/retrieval 测试全通过 | 不回退 |
 | Package Build Cold (InMemory, ItemCount=50) | 2,329 μs / 819 KB | ≤ 当前值 70% |
 | Package Build CacheHit (InMemory, ItemCount=50) | 6.6 μs / 12.56 KB | 优于 Cold |
@@ -118,7 +118,7 @@ R14-PG 收口后重新冻结 Current HEAD，确保所有性能指标指向同一
 
 ## 下一阶段任务
 
-### R15 — Incremental Context Package
+### R15 — Incremental Context Package（V1 已完成）
 
 比 Embedding Cache 更接近真正的 KV Cache。最重要的验收不是速度，而是**幂等性**：
 
@@ -126,21 +126,22 @@ R14-PG 收口后重新冻结 Current HEAD，确保所有性能指标指向同一
 IncrementalBuild(snapshot) == FullBuild(snapshot)
 ```
 
-应使用随机状态序列进行 differential testing，而不是只写几个固定测试。
+R15 V1 已完成（commit 见 `git log --grep="feat(R15-1)"`）：
+- **Abstractions 层契约**：`StoreVersionVector`、`RequestSemanticFingerprint`、`SectionDependencySet`、`PackageStateSnapshot`、`PackageDeltaKind`、`PackageDeltaPlan`、`IPackageDeltaPlanner`、`IPackageIncrementalBuilder`、`ISnapshotCapablePackageBuilder`、`PackageBuildWithSnapshot`
+- **Core 层实现**：`PackageDeltaPlanner`（纯函数，比较请求指纹+版本向量）、`PackageIncrementalBuilder`（委托到 inner builder，保证等价性）、`PackageStateSnapshotCapture`（snapshot 捕获）、`SectionDependencyMapper`（section→scope 依赖映射）
+- **BasicContextPackageBuilder** 实现 `ISnapshotCapablePackageBuilder`，新增 `BuildDetailedWithSnapshotAsync` 方法
+- **Differential testing**：`IncrementalPackageDifferentialTests`，8 个测试覆盖固定种子/多种子/ContextStore/MemoryStore/ConstraintStore/请求变化/NoChange/Snapshot 捕获
+- **R15 V1 策略**：所有 delta kind 都委托到全量构建，等价性由 inner builder 的确定性保证。`IPackageDeltaPlanner` 输出仅用于可观测性。实际缓存命中/失效由 inner builder 既有 cache 机制处理（SHA-256 指纹 + DependencyScopeSet + 版本向量快照）
 
-**步骤**：
+**验收达成**：
+- `IncrementalBuild(snapshot) == FullBuild(snapshot)` 在随机 differential testing 下成立（8 个测试，多种子覆盖）
+- 比较维度：section 内容、selected IDs、dropped IDs、reason code、token attribution、source refs (ItemReferences)
+- Build 0/0，ContextCore.Tests 1180/1180，IntegrationTests 75/75，Service.Tests 61/61
 
-1. **Previous Template** — 复用上次 Package 构建结果作为不可变基线模板
-2. **Store version delta** — 计算自上次构建以来的输入变化（新增/删除/修改的 context items、constraints、memory）
-3. **Determine affected sections** — 基于 Delta 推导受影响 section 范围
-4. **Selective reload** — 仅重新读取发生变化的输入源，未变化的复用快照
-5. **Incremental candidate update** — 基于 Delta 增量更新候选集，避免全量重新评分
-6. **Global repack** — 增量重新打包，保留未受影响 section 的已生成内容
-
-**验收**：
-
-- `IncrementalBuild(snapshot) == FullBuild(snapshot)` 在随机 differential testing 下成立
-- 性能提升作为副产品，不是首要目标
+**R15 V2 待办**（性能优化，不影响 API 契约）：
+- 在 `PackageDeltaKind.NoChange` 分支直接复用快照中的 PackageTemplate，跳过 inner builder 调用
+- 在 `PackageDeltaKind.PartialSectionChange` 分支实现真正的选择性重载：复用未变 section 的候选列表，仅重载受影响 section，最后全局重新打包
+- 加入更大规模的随机 differential testing（100+ 步状态序列）
 
 ### R16 — Context Evolution Agent V1
 

@@ -9,7 +9,7 @@ namespace ContextCore.Core;
 /// <summary>
 /// 默认上下文包构建器，按请求或策略从原始上下文、记忆、约束、全局项和关系中选择内容。
 /// </summary>
-public sealed class BasicContextPackageBuilder : IContextPackageBuilder
+public sealed class BasicContextPackageBuilder : ISnapshotCapablePackageBuilder
 {
     private readonly IConstraintStore? _constraintStore;
     private readonly IGlobalContextStore? _globalContextStore;
@@ -23,6 +23,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
     private readonly GraphExpansionCoordinator _graphExpansionCoordinator;
     private readonly PackageTraceRecorder _traceRecorder;
     private readonly ContextStateCacheAccessor? _cacheAccessor;
+    private readonly IContextStateVersionStore? _versionStore;
     private readonly AsyncLocal<string?> _currentOperationId = new();
     private readonly AsyncLocal<string?> _currentRequestId = new();
     // 构建流水线四阶段（从原 BuildWithPolicyAsync 单体方法提取，保持字节级确定性输出不变）：
@@ -51,7 +52,8 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         IDecisionTraceStore? decisionTraceStore = null,
         IRuntimeCandidateTraceSink? runtimeCandidateTraceSink = null,
         RelationTraversalEngine? traversalEngine = null,
-        ContextStateCacheAccessor? cacheAccessor = null)
+        ContextStateCacheAccessor? cacheAccessor = null,
+        IContextStateVersionStore? versionStore = null)
     {
         _store = store;
         _constraintStore = constraintStore;
@@ -71,6 +73,7 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
             () => _currentOperationId.Value,
             () => _currentRequestId.Value);
         _cacheAccessor = cacheAccessor;
+        _versionStore = versionStore;
         // 初始化四阶段流水线：SectionAssembler/CandidateSelector 共享同一 EstimatePackageTokens 委托，
         // 保证 token 估算与原内联实现完全一致。
         _sectionAssembler = new SectionAssembler(EstimatePackageTokens, TruncatePackageTokens);
@@ -109,7 +112,8 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         _currentRequestId.Value = request.RequestId ?? Guid.NewGuid().ToString("N");
         try
         {
-            return await BuildDetailedCoreAsync(request, cancellationToken).ConfigureAwait(false);
+            var (result, _) = await BuildDetailedWithTemplateAsync(request, cancellationToken).ConfigureAwait(false);
+            return result;
         }
         finally
         {
@@ -118,7 +122,40 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
         }
     }
 
-    private async Task<ContextPackageBuildResult> BuildDetailedCoreAsync(
+    /// <summary>
+    /// R15 增量上下文包：执行全量构建并捕获状态快照。
+    /// 调用方将返回的 <see cref="PackageStateSnapshot"/> 传给
+    /// <see cref="IPackageIncrementalBuilder.IncrementalBuildAsync"/> 执行下次增量构建。
+    /// </summary>
+    public async Task<PackageBuildWithSnapshot> BuildDetailedWithSnapshotAsync(
+        ContextPackageRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        // 复用 BuildDetailedAsync 的 trace 上下文设置
+        var prevOpId = _currentOperationId.Value;
+        var prevReqId = _currentRequestId.Value;
+        _currentOperationId.Value = request.OperationId ?? Guid.NewGuid().ToString("N");
+        _currentRequestId.Value = request.RequestId ?? Guid.NewGuid().ToString("N");
+        try
+        {
+            var (result, template) = await BuildDetailedWithTemplateAsync(request, cancellationToken).ConfigureAwait(false);
+            // 捕获快照：使用刚构建的 PackageTemplate + 当前请求 + 版本存储
+            var policy = request.Policy ?? PackagePolicyResolver.CreateDefaultProductionPolicy(request);
+            var snapshot = await PackageStateSnapshotCapture.CaptureAsync(
+                template, request, policy, _versionStore, cancellationToken).ConfigureAwait(false);
+            return new PackageBuildWithSnapshot(result, snapshot);
+        }
+        finally
+        {
+            _currentOperationId.Value = prevOpId;
+            _currentRequestId.Value = prevReqId;
+        }
+    }
+
+    /// <summary>内部构建方法，返回 (result, template)，由 BuildDetailedAsync 与 BuildDetailedWithSnapshotAsync 共享。</summary>
+    private async Task<(ContextPackageBuildResult result, PackageTemplate template)> BuildDetailedWithTemplateAsync(
         ContextPackageRequest request,
         CancellationToken cancellationToken)
     {
@@ -145,15 +182,16 @@ public sealed class BasicContextPackageBuilder : IContextPackageBuilder
                 cancellationToken).ConfigureAwait(false);
             CoreMetrics.PackageBuildDuration.Record(sw.Elapsed.TotalMilliseconds);
             // 缓存命中/未命中均通过投影生成独立结果对象（新 PackageId/BuildId/CreatedAt/metadata）
-            return _resultProjector.ProjectResult(template, options, _packageTraceWriteFailures, _decisionTraceWriteFailures);
+            var result = _resultProjector.ProjectResult(template, options, _packageTraceWriteFailures, _decisionTraceWriteFailures);
+            return (result, template);
         }
 
         // 无缓存路径：构建模板 → 投影 → 写入 trace
         PackageTemplate tmpl = await BuildTemplateAsync(options, cancellationToken).ConfigureAwait(false);
-        var result = _resultProjector.ProjectResult(tmpl, options);
-        await WriteTracesAsync(result, cancellationToken).ConfigureAwait(false);
+        var resultNoCache = _resultProjector.ProjectResult(tmpl, options);
+        await WriteTracesAsync(resultNoCache, cancellationToken).ConfigureAwait(false);
         CoreMetrics.PackageBuildDuration.Record(sw.Elapsed.TotalMilliseconds);
-        return result;
+        return (resultNoCache, tmpl);
     }
 
     /// <summary>执行构建并写入 trace（package trace + decision trace，fail-open）。返回 PackageTemplate。</summary>
