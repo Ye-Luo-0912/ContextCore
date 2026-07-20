@@ -71,14 +71,14 @@ R14-PG 收口后重新冻结 Current HEAD，确保所有性能指标指向同一
 
 ---
 
-## 当前验收指标（2026-07-20 R15-2/R16-1/R17-1 完成）
+## 当前验收指标（2026-07-20 R15-2/R16-1/R17-1/R16-2 完成）
 
 | 指标 | 当前值 | 目标 |
 |------|--------|------|
-| 当前 HEAD | R15-2/R16-1/R17-1 增量包 V2 + Evolution Agent 契约（见 `git log --grep="feat(R15-2\|feat(R16-1\|feat(R17-1"`） | - |
-| PublicApi baseline 行数 | 7738（+74 R15 V1；+1 R15 V2 RebuildFromSnapshotAsync；+196 R16/R17 Evolution 契约） | 单一事实源 |
+| 当前 HEAD | R16-2 DefaultContextEvolutionAgent 实现（见 `git log --grep="feat(R16-2"`） | - |
+| PublicApi baseline 行数 | 7738（+74 R15 V1；+1 R15 V2 RebuildFromSnapshotAsync；+196 R16/R17 Evolution 契约）— R16-2 实现层类型在 ContextCore.Core 不进 Abstractions baseline | 单一事实源 |
 | 构建 | 0 警告 / 0 错误 | 0 / 0 |
-| 测试 | ContextCore.Tests 1206/1206（+26 自 R15-1）；IntegrationTests 75/75（1 skip）；Service.Tests 61/61（1 skip） | 0 失败 |
+| 测试 | ContextCore.Tests 1223/1223（+17 自 R16-2）；IntegrationTests 75/75（1 skip）；Service.Tests 61/61（1 skip） | 0 失败 |
 | A3 / golden / graph 不回退 | 197 个 graph/eval/retrieval 测试全通过 | 不回退 |
 | Package Build Cold (InMemory, ItemCount=50) | 2,329 μs / 819 KB | ≤ 当前值 70% |
 | Package Build CacheHit (InMemory, ItemCount=50) | 6.6 μs / 12.56 KB | 优于 Cold |
@@ -112,6 +112,8 @@ R14-PG 收口后重新冻结 Current HEAD，确保所有性能指标指向同一
 | R16 OptimizationProposal 契约 | 10 个公共类型 + 4 个接口 | 已达成（R16-1） |
 | R17 Guarded Optimization Pipeline 契约 | 3 个枚举 + 3 个 DTO + 2 个接口 | 已达成（R17-1） |
 | Evolution Contracts 单元测试 | 22 个测试全通过 | 已达成（R16/R17） |
+| R16 DefaultContextEvolutionAgent 实现 | DiagnoseAsync + RefineProposalAsync + HypothesisTemplates + DefaultAgentObservationSource | 已达成（R16-2） |
+| R16-2 实现层单元测试 | 17 个测试全通过（含 6 个 TargetComponent 模板覆盖 + 硬边界验证） | 已达成（R16-2） |
 
 ---
 
@@ -154,7 +156,7 @@ R15 V2 已完成（commit 见 `git log --grep="feat(R15-2)"`）：
 - 在 `PackageDeltaKind.PartialSectionChange` 分支实现真正的选择性重载：复用未变 section 的候选列表，仅重载受影响 section，最后全局重新打包
 - 增加性能基准：对比 NoChange 路径与全量构建的 latency 差异
 
-### R16 — Context Evolution Agent V1（契约已完成）
+### R16 — Context Evolution Agent（V1 契约 + V2 实现已完成）
 
 Agent 只负责离线控制面，不触碰正式 Policy 生产路径。
 
@@ -183,10 +185,18 @@ Agent 只负责离线控制面，不触碰正式 Policy 生产路径。
 - `AgentDiagnosticRequest` / `AgentDiagnosticResult` 类
 - 22 个 EvolutionContractsTests 验证契约可实施性
 
-**R16 V2 待办**（实现层）：
-- `DefaultContextEvolutionAgent` 实现：连接 `IAgentObservationSource` + benchmark runner + eval host
-- 采集运行时指标并生成 proposal 的完整流程
+**R16-2 已完成**（commit 见 `git log --grep="feat(R16-2)"`）：
+- `DefaultContextEvolutionAgent`（`ContextCore.Core/Services/Evolution/`）：基于 `IAgentObservationSource` 采集 + `HypothesisTemplates` 模板生成 Validated proposal；`RefineProposalAsync` 按 evidence 方向决定推进到 ExperimentReady 或 Rejected
+- `DefaultAgentObservationSource`：内存指标源（`RecordMetricsAsync` 写入 + `ObserveAsync` 读取），生产部署可替换为 telemetry sink 实现
+- `HypothesisTemplates`（internal）：为 6 个 `OptimizationTargetComponent` 提供预定义的 Title/Hypothesis/ExpectedGains/Risks/RollbackConditions 模板
+- 17 个 `DefaultContextEvolutionAgentTests` 覆盖：Diagnose 路径（无指标/有指标/ProposalId 编码/ExperimentConfig/全部 6 个 component 模板/null 防御）+ Refine 路径（支持推进/驳斥驳回/未匹配 metric/已 Rejected 不可逆/pipeline 状态拒绝/无 RollbackConditions 防御）
+- **硬边界**：Agent 输出 Status 上限为 ExperimentReady；接收 pipeline 状态（Shadow/ScopedCanary/Promoted/RolledBack）的 RefineProposalAsync 抛 InvalidOperationException
+- **实现策略**：DiagnoseAsync 用模板默认值作为 baseline 占位（observation 无该 metric 时）或取自 observation（实际值作为 baseline），ExperimentValue = baseline + ExpectedGain.EstimatedDelta；RefineProposalAsync 比较 `Math.Sign(evidence.Delta)` 与 `Math.Sign(ExpectedGain.EstimatedDelta)` 方向是否一致决定推进/驳回；不引入新的 Abstractions 契约（如 IExperimentRunner），实验 evidence 由调用方通过 RefineProposalAsync 注入
+
+**R16 V3 待办**（后续增强）：
+- 接入 benchmark runner + eval host（替代当前外部通过 RefineProposalAsync 注入 ExperimentEvidence 的方式，让 Agent 内部直接运行实验并采集真实 evidence）
 - Proposal 持久化（存储到 PostgresContextLearningStore 或新 store）
+- ObservationSource 集成真实 telemetry sink（OpenTelemetry metrics registry）
 
 ### R17 — Guarded Optimization（契约已完成）
 
