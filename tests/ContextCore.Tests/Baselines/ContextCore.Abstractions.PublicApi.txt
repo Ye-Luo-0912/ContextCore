@@ -61,6 +61,14 @@ F:ContextCore.Abstractions.ContextJobState.RequiresReview
 F:ContextCore.Abstractions.ContextJobState.Running
 F:ContextCore.Abstractions.ContextJobState.Succeeded
 F:ContextCore.Abstractions.ContextJobState.WaitingRetry
+F:ContextCore.Abstractions.ContextRepairReason.HardConstraintMissing
+F:ContextCore.Abstractions.ContextRepairReason.LifecycleConflictUnresolved
+F:ContextCore.Abstractions.ContextRepairReason.MustHitMissing
+F:ContextCore.Abstractions.ContextRepairReason.PrimaryAnchorUncovered
+F:ContextCore.Abstractions.ContextRepairReason.SectionSqueezeAnomaly
+F:ContextCore.Abstractions.ContextRepairReason.SevereRedundancy
+F:ContextCore.Abstractions.ContextRepairReason.TokenUtilizationTooLow
+F:ContextCore.Abstractions.ContextRepairReason.Unknown
 F:ContextCore.Abstractions.ContextTokenizationMetadataKeys.IsFallback
 F:ContextCore.Abstractions.ContextTokenizationMetadataKeys.Model
 F:ContextCore.Abstractions.ContextTokenizationMetadataKeys.Source
@@ -801,6 +809,13 @@ M:ContextCore.Abstractions.BaselineComparison.Equals(System.Object)
 M:ContextCore.Abstractions.BaselineComparison.GetHashCode()
 M:ContextCore.Abstractions.BaselineComparison.GetType()
 M:ContextCore.Abstractions.BaselineComparison.ToString()
+M:ContextCore.Abstractions.BoundedContextOrchestrationResult.#ctor()
+M:ContextCore.Abstractions.BoundedContextOrchestrationResult.<Clone>$()
+M:ContextCore.Abstractions.BoundedContextOrchestrationResult.Equals(ContextCore.Abstractions.BoundedContextOrchestrationResult)
+M:ContextCore.Abstractions.BoundedContextOrchestrationResult.Equals(System.Object)
+M:ContextCore.Abstractions.BoundedContextOrchestrationResult.GetHashCode()
+M:ContextCore.Abstractions.BoundedContextOrchestrationResult.GetType()
+M:ContextCore.Abstractions.BoundedContextOrchestrationResult.ToString()
 M:ContextCore.Abstractions.BudgetProfile.#ctor()
 M:ContextCore.Abstractions.BudgetProfile.<Clone>$()
 M:ContextCore.Abstractions.BudgetProfile.Equals(ContextCore.Abstractions.BudgetProfile)
@@ -945,6 +960,34 @@ M:ContextCore.Abstractions.ContextPolicySet.Equals(System.Object)
 M:ContextCore.Abstractions.ContextPolicySet.GetHashCode()
 M:ContextCore.Abstractions.ContextPolicySet.GetType()
 M:ContextCore.Abstractions.ContextPolicySet.ToString()
+M:ContextCore.Abstractions.ContextRepairBudget.#ctor()
+M:ContextCore.Abstractions.ContextRepairBudget.<Clone>$()
+M:ContextCore.Abstractions.ContextRepairBudget.Equals(ContextCore.Abstractions.ContextRepairBudget)
+M:ContextCore.Abstractions.ContextRepairBudget.Equals(System.Object)
+M:ContextCore.Abstractions.ContextRepairBudget.GetHashCode()
+M:ContextCore.Abstractions.ContextRepairBudget.GetType()
+M:ContextCore.Abstractions.ContextRepairBudget.ToString()
+M:ContextCore.Abstractions.ContextRepairDiagnosis.#ctor()
+M:ContextCore.Abstractions.ContextRepairDiagnosis.<Clone>$()
+M:ContextCore.Abstractions.ContextRepairDiagnosis.Equals(ContextCore.Abstractions.ContextRepairDiagnosis)
+M:ContextCore.Abstractions.ContextRepairDiagnosis.Equals(System.Object)
+M:ContextCore.Abstractions.ContextRepairDiagnosis.GetHashCode()
+M:ContextCore.Abstractions.ContextRepairDiagnosis.GetType()
+M:ContextCore.Abstractions.ContextRepairDiagnosis.ToString()
+M:ContextCore.Abstractions.ContextRepairRequest.#ctor()
+M:ContextCore.Abstractions.ContextRepairRequest.<Clone>$()
+M:ContextCore.Abstractions.ContextRepairRequest.Equals(ContextCore.Abstractions.ContextRepairRequest)
+M:ContextCore.Abstractions.ContextRepairRequest.Equals(System.Object)
+M:ContextCore.Abstractions.ContextRepairRequest.GetHashCode()
+M:ContextCore.Abstractions.ContextRepairRequest.GetType()
+M:ContextCore.Abstractions.ContextRepairRequest.ToString()
+M:ContextCore.Abstractions.ContextRepairResponse.#ctor()
+M:ContextCore.Abstractions.ContextRepairResponse.<Clone>$()
+M:ContextCore.Abstractions.ContextRepairResponse.Equals(ContextCore.Abstractions.ContextRepairResponse)
+M:ContextCore.Abstractions.ContextRepairResponse.Equals(System.Object)
+M:ContextCore.Abstractions.ContextRepairResponse.GetHashCode()
+M:ContextCore.Abstractions.ContextRepairResponse.GetType()
+M:ContextCore.Abstractions.ContextRepairResponse.ToString()
 M:ContextCore.Abstractions.ContextTokenEstimate.#ctor()
 M:ContextCore.Abstractions.ContextTokenEstimate.Equals(System.Object)
 M:ContextCore.Abstractions.ContextTokenEstimate.GetHashCode()
@@ -1043,6 +1086,7 @@ M:ContextCore.Abstractions.IArtifactStore.ListAsync(System.Nullable<ContextCore.
 M:ContextCore.Abstractions.IArtifactStore.ReadJsonAsync``1(ContextCore.Abstractions.Models.ArtifactDescriptor, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IArtifactStore.WriteJsonAsync``1(ContextCore.Abstractions.Models.ArtifactDescriptor, ContextCore.Abstractions.IArtifactStore+!!0, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IArtifactStore.WriteMarkdownAsync(ContextCore.Abstractions.Models.ArtifactDescriptor, System.String, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IBoundedContextOrchestrator.OrchestrateAsync(ContextCore.Abstractions.ContextDecisionResult, ContextCore.Abstractions.Models.PackageQualityReport, ContextCore.Abstractions.ContextRepairBudget, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.ICandidateConstraintReviewStore.AppendReviewAsync(ContextCore.Abstractions.Models.CandidateConstraintReviewRecord, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.ICandidateConstraintReviewStore.QueryReviewsAsync(System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.ICandidateMemoryReviewStore.AppendReviewAsync(ContextCore.Abstractions.Models.CandidateMemoryReviewRecord, System.Threading.CancellationToken)
@@ -1098,6 +1142,8 @@ M:ContextCore.Abstractions.IContextPackagePolicyStore.SaveAsync(ContextCore.Abst
 M:ContextCore.Abstractions.IContextPathResolver.GetRelativePath(System.String)
 M:ContextCore.Abstractions.IContextPathResolver.ResolveArtifactPath(ContextCore.Abstractions.Models.ArtifactDescriptor)
 M:ContextCore.Abstractions.IContextPathResolver.SanitizeSegment(System.String)
+M:ContextCore.Abstractions.IContextRepairDetector.DetectAsync(ContextCore.Abstractions.ContextDecisionResult, ContextCore.Abstractions.Models.PackageQualityReport, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IContextRepairExecutor.ExecuteAsync(ContextCore.Abstractions.ContextRepairRequest, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IContextRetrievalAdapter.ExecuteAsync(ContextCore.Abstractions.RetrievalAdapterRequest, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IContextRetriever.RetrieveAsync(ContextCore.Abstractions.Models.ContextRetrievalRequest, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IContextRuntimeService.AddWorkingMemoryAsync(ContextCore.Abstractions.Models.ContextMemoryItem, System.Threading.CancellationToken)
@@ -3663,6 +3709,16 @@ P:ContextCore.Abstractions.BaselineComparison.JudgeDecision (get|init)
 P:ContextCore.Abstractions.BaselineComparison.JudgeRationale (get|init)
 P:ContextCore.Abstractions.BaselineComparison.ProposalId (get)
 P:ContextCore.Abstractions.BaselineComparison.StageMetrics (get|init)
+P:ContextCore.Abstractions.BoundedContextOrchestrationResult.CompletedAt (get|init)
+P:ContextCore.Abstractions.BoundedContextOrchestrationResult.Diagnoses (get|init)
+P:ContextCore.Abstractions.BoundedContextOrchestrationResult.Duration (get)
+P:ContextCore.Abstractions.BoundedContextOrchestrationResult.FinalDecision (get|init)
+P:ContextCore.Abstractions.BoundedContextOrchestrationResult.FinalQualityReport (get|init)
+P:ContextCore.Abstractions.BoundedContextOrchestrationResult.IsSuccess (get)
+P:ContextCore.Abstractions.BoundedContextOrchestrationResult.OrchestrationId (get|init)
+P:ContextCore.Abstractions.BoundedContextOrchestrationResult.RepairResponse (get|init)
+P:ContextCore.Abstractions.BoundedContextOrchestrationResult.StartedAt (get|init)
+P:ContextCore.Abstractions.BoundedContextOrchestrationResult.WasRepaired (get)
 P:ContextCore.Abstractions.BudgetProfile.DefaultTokenBudget (get|init)
 P:ContextCore.Abstractions.BudgetProfile.DefaultTopK (get|init)
 P:ContextCore.Abstractions.BudgetProfile.ProfileId (get|init)
@@ -3853,6 +3909,38 @@ P:ContextCore.Abstractions.ContextPolicySet.PackagePolicyVersion (get|init)
 P:ContextCore.Abstractions.ContextPolicySet.QualityContractVersion (get|init)
 P:ContextCore.Abstractions.ContextPolicySet.RelationProfileVersion (get|init)
 P:ContextCore.Abstractions.ContextPolicySet.RetrievalPolicyVersion (get|init)
+P:ContextCore.Abstractions.ContextRepairBudget.MaxAdditionalCandidates (get|init)
+P:ContextCore.Abstractions.ContextRepairBudget.MaxAdditionalLatency (get|init)
+P:ContextCore.Abstractions.ContextRepairBudget.MaxAdditionalStoreCalls (get|init)
+P:ContextCore.Abstractions.ContextRepairBudget.MaxAdditionalTokens (get|init)
+P:ContextCore.Abstractions.ContextRepairDiagnosis.CollectionId (get|init)
+P:ContextCore.Abstractions.ContextRepairDiagnosis.DecisionRequestId (get|init)
+P:ContextCore.Abstractions.ContextRepairDiagnosis.DiagnosedAt (get|init)
+P:ContextCore.Abstractions.ContextRepairDiagnosis.DiagnosisId (get|init)
+P:ContextCore.Abstractions.ContextRepairDiagnosis.Metadata (get|init)
+P:ContextCore.Abstractions.ContextRepairDiagnosis.QualityReport (get|init)
+P:ContextCore.Abstractions.ContextRepairDiagnosis.Reason (get|init)
+P:ContextCore.Abstractions.ContextRepairDiagnosis.ReasonDetail (get|init)
+P:ContextCore.Abstractions.ContextRepairDiagnosis.SuggestedRepairStrategy (get|init)
+P:ContextCore.Abstractions.ContextRepairDiagnosis.TriggerMetricThreshold (get|init)
+P:ContextCore.Abstractions.ContextRepairDiagnosis.TriggerMetricValue (get|init)
+P:ContextCore.Abstractions.ContextRepairDiagnosis.WorkspaceId (get|init)
+P:ContextCore.Abstractions.ContextRepairRequest.Budget (get|init)
+P:ContextCore.Abstractions.ContextRepairRequest.Diagnosis (get|init)
+P:ContextCore.Abstractions.ContextRepairRequest.OriginalDecision (get|init)
+P:ContextCore.Abstractions.ContextRepairRequest.OriginalQualityReport (get|init)
+P:ContextCore.Abstractions.ContextRepairRequest.RepairRequestId (get|init)
+P:ContextCore.Abstractions.ContextRepairRequest.RequestedAt (get|init)
+P:ContextCore.Abstractions.ContextRepairRequest.TriggeredBy (get|init)
+P:ContextCore.Abstractions.ContextRepairResponse.CompletedAt (get|init)
+P:ContextCore.Abstractions.ContextRepairResponse.ConsumedBudget (get|init)
+P:ContextCore.Abstractions.ContextRepairResponse.Errors (get|init)
+P:ContextCore.Abstractions.ContextRepairResponse.IsSuccess (get|init)
+P:ContextCore.Abstractions.ContextRepairResponse.RepairRequestId (get|init)
+P:ContextCore.Abstractions.ContextRepairResponse.RepairSummary (get|init)
+P:ContextCore.Abstractions.ContextRepairResponse.RepairedDecision (get|init)
+P:ContextCore.Abstractions.ContextRepairResponse.RepairedQualityReport (get|init)
+P:ContextCore.Abstractions.ContextRepairResponse.WasRepaired (get|init)
 P:ContextCore.Abstractions.ContextTokenEstimate.IsFallback (get|init)
 P:ContextCore.Abstractions.ContextTokenEstimate.ModelName (get|init)
 P:ContextCore.Abstractions.ContextTokenEstimate.Source (get|init)
@@ -7987,6 +8075,7 @@ P:ContextCore.Abstractions.VersionedDataset.Version (get)
 T:ContextCore.Abstractions.AgentDiagnosticRequest
 T:ContextCore.Abstractions.AgentDiagnosticResult
 T:ContextCore.Abstractions.BaselineComparison
+T:ContextCore.Abstractions.BoundedContextOrchestrationResult
 T:ContextCore.Abstractions.BudgetProfile
 T:ContextCore.Abstractions.CacheInvalidationKey (Struct)
 T:ContextCore.Abstractions.CanaryAssignment
@@ -8018,6 +8107,11 @@ T:ContextCore.Abstractions.ContextOperationEvent
 T:ContextCore.Abstractions.ContextPolicyBundle
 T:ContextCore.Abstractions.ContextPolicyOverride
 T:ContextCore.Abstractions.ContextPolicySet
+T:ContextCore.Abstractions.ContextRepairBudget
+T:ContextCore.Abstractions.ContextRepairDiagnosis
+T:ContextCore.Abstractions.ContextRepairReason (Enum)
+T:ContextCore.Abstractions.ContextRepairRequest
+T:ContextCore.Abstractions.ContextRepairResponse
 T:ContextCore.Abstractions.ContextTokenEstimate
 T:ContextCore.Abstractions.ContextTokenizationMetadataKeys
 T:ContextCore.Abstractions.ContextValidationIssue
@@ -8038,6 +8132,7 @@ T:ContextCore.Abstractions.ExpertRoutingDecisionSet
 T:ContextCore.Abstractions.FeatureSchemaVersion
 T:ContextCore.Abstractions.IAgentObservationSource (Interface)
 T:ContextCore.Abstractions.IArtifactStore (Interface)
+T:ContextCore.Abstractions.IBoundedContextOrchestrator (Interface)
 T:ContextCore.Abstractions.ICandidateConstraintReviewStore (Interface)
 T:ContextCore.Abstractions.ICandidateMemoryReviewStore (Interface)
 T:ContextCore.Abstractions.ICandidateMemoryStore (Interface)
@@ -8059,6 +8154,8 @@ T:ContextCore.Abstractions.IContextPackageBuildTraceStore (Interface)
 T:ContextCore.Abstractions.IContextPackageBuilder (Interface)
 T:ContextCore.Abstractions.IContextPackagePolicyStore (Interface)
 T:ContextCore.Abstractions.IContextPathResolver (Interface)
+T:ContextCore.Abstractions.IContextRepairDetector (Interface)
+T:ContextCore.Abstractions.IContextRepairExecutor (Interface)
 T:ContextCore.Abstractions.IContextRetrievalAdapter (Interface)
 T:ContextCore.Abstractions.IContextRetriever (Interface)
 T:ContextCore.Abstractions.IContextRuntimeService (Interface)
