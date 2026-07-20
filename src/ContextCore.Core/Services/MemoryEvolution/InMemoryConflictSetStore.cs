@@ -56,6 +56,10 @@ public sealed class InMemoryConflictSetStore : IConflictSetStore
         {
             results = results.Where(c => c.DecisionId == query.DecisionId);
         }
+        if (query.ResolutionStatus is not null)
+        {
+            results = results.Where(c => c.ResolutionStatus == query.ResolutionStatus.Value);
+        }
         if (query.Since is not null)
         {
             results = results.Where(c => c.MaterializedAt >= query.Since.Value);

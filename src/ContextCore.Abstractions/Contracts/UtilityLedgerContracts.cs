@@ -29,7 +29,7 @@ namespace ContextCore.Abstractions;
 //   - ExpertRoutingDecisionSet（R20-1/20-2）：路由决策影响 per-Expert TopK
 //   - ContextCandidateEnvelope.Utility.CandidateUtilityScore（R18-1）：
 //     Utility Ledger 物化 CandidateUtilityScore 的历史快照
-//   - SupersedeEventRecord（R21-1）：ConflictSet 可关联 supersede 事件
+//   - MemoryStateEventRecord（R21-4）：ConflictSet 可关联 memory state 转换事件
 //   - ContextRelationTypes.Contradicts / Duplicates / ConflictsWith：
 //     ConflictSet 引用关系类型常量
 //
@@ -277,8 +277,21 @@ public sealed record ConflictSet
     /// <summary>"获胜"的 candidate ID（可空 = 全部 drop 或未解决）。</summary>
     public string? ResolvedItemId { get; init; }
 
-    /// <summary>关联的 supersede 事件 ID（仅当 Kind=SupersedeCycle 时填充）。</summary>
-    public string? SupersedeEventId { get; init; }
+    /// <summary>解决状态（R21-5b；默认 Unresolved；materializer 选定 resolved item 时为 AutoResolved）。</summary>
+    public ConflictResolutionStatus ResolutionStatus { get; init; } = ConflictResolutionStatus.Unresolved;
+
+    /// <summary>"获胜权威"来源（R21-5b；对齐用户规格的"chosen authority"字段）。
+    /// 取值："highest-score" / "lowest-token-cost" / "newest-version" / "manual:{reviewerId}" / null（未解决）。</summary>
+    public string? ChosenAuthority { get; init; }
+
+    /// <summary>解决时间戳（R21-5b；仅当 ResolutionStatus != Unresolved 时填充）。</summary>
+    public DateTimeOffset? ResolvedAt { get; init; }
+
+    /// <summary>解决者（R21-5b；仅当 ResolutionStatus=ManuallyResolved 时填充）。</summary>
+    public string? Resolver { get; init; }
+
+    /// <summary>关联的 memory state 转换事件 ID（仅当 Kind=SupersedeCycle 时填充）。</summary>
+    public string? MemoryStateEventId { get; init; }
 
     /// <summary>关联的关系 ID（仅当 Kind=Contradicts / Duplicate 时填充；对应 ContextRelation 关系 ID）。</summary>
     public string? RelationId { get; init; }
@@ -292,6 +305,27 @@ public sealed record ConflictSet
     /// <summary>条目元数据（自定义键值对，用于 trace 与审计）。</summary>
     public IReadOnlyDictionary<string, string> Metadata { get; init; }
         = new Dictionary<string, string>(StringComparer.Ordinal);
+}
+
+/// <summary>
+/// R21-5b：ConflictSet 解决状态。对齐用户规格中的"resolution status"字段。
+/// </summary>
+public enum ConflictResolutionStatus : byte
+{
+    /// <summary>未解决（默认；materializer 写入时若无法自动决定）。</summary>
+    Unresolved = 0,
+
+    /// <summary>已自动解决（materializer 选定 resolved item；后续可人工覆盖）。</summary>
+    AutoResolved = 1,
+
+    /// <summary>已人工解决（reviewer 选定 chosen authority）。</summary>
+    ManuallyResolved = 2,
+
+    /// <summary>已挂起（reviewer 标记为需要更多 evidence）。</summary>
+    Pending = 3,
+
+    /// <summary>已废弃（关联的 items 已被 Archived/Rejected）。</summary>
+    Obsolete = 4
 }
 
 /// <summary>
@@ -313,6 +347,9 @@ public sealed record ConflictSetQuery
 
     /// <summary>按 DecisionId 过滤（可空 = 不限制）。</summary>
     public string? DecisionId { get; init; }
+
+    /// <summary>按 ResolutionStatus 过滤（R21-5b；可空 = 不限制）。</summary>
+    public ConflictResolutionStatus? ResolutionStatus { get; init; }
 
     /// <summary>仅返回 MaterializedAt >= Since 的冲突集合（可空 = 不限制）。</summary>
     public DateTimeOffset? Since { get; init; }

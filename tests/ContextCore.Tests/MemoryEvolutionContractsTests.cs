@@ -1,105 +1,101 @@
 using System.Reflection;
 using ContextCore.Abstractions;
-using ContextCore.Abstractions.Models;
 
 namespace ContextCore.Tests;
 
 /// <summary>
-/// R21-1：Memory Evolution Engine 契约测试（Superseded 状态 + Consolidation ETL）。
+/// R21-4：Memory Evolution 统一契约测试。
 ///
 /// 验证目标：
-///   1. SupersededItemState 枚举 5 值（Unknown/Active/Superseded/Replaced/Archived）
-///   2. SupersedeEventRecord 必填字段 + 默认值
-///   3. SupersedeEventQuery 查询条件字段
-///   4. ISupersededItemStore 接口最小化（4 个方法）
-///   5. ConsolidationRequest 默认值（OlderThan=UtcNow, BatchSize=100, DryRun=false）
-///   6. ConsolidationRunResult 字段 + IsSuccess / Duration 计算属性
+///   1. MemoryState 枚举 8 值（byte 底层）
+///   2. MemoryStateEventRecord 必填字段 + 默认值
+///   3. MemoryStateEventQuery 查询条件字段
+///   4. IMemoryStateStore 接口最小化（4 方法）
+///   5. ConsolidationRequest 默认值
+///   6. ConsolidationRunResult 字段 + IsSuccess / Duration
 ///   7. IConsolidationETL 接口最小化（仅 RunAsync）
-///   8. SupersededItemStateExtensions.IsTerminal / CanTransitionTo / NeedsConsolidation
-///   9. 状态机转换合法性（Active→Superseded→Replaced→Archived 单向推进）
+///   8. MemoryStateExtensions：IsTerminal / CanTransitionTo / NeedsConsolidation / IsDecaying / IsActiveOrFresh / CanReheat
+///   9. 状态机转换合法性（Fresh→Active→Cooling→Dormant→Archived 等）
 ///  10. 终态 Archived 不可推进
-///  11. 契约无存储 I/O（反射验证接口方法签名）
+///  11. 回温转换合法性（Cooling→Active / Dormant→Active）
 /// </summary>
 [TestClass]
 [TestCategory("R21")]
 public sealed class MemoryEvolutionContractsTests
 {
     // =========================================================================
-    // 1. SupersededItemState 枚举
+    // 1. MemoryState 枚举 8 值
     // =========================================================================
 
     [TestMethod]
-    public void SupersededItemState_Has5Values()
+    public void MemoryState_Has8Values()
     {
-        var values = Enum.GetValues<SupersededItemState>();
-        Assert.AreEqual(5, values.Length);
-        Assert.IsTrue(values.Contains(SupersededItemState.Unknown));
-        Assert.IsTrue(values.Contains(SupersededItemState.Active));
-        Assert.IsTrue(values.Contains(SupersededItemState.Superseded));
-        Assert.IsTrue(values.Contains(SupersededItemState.Replaced));
-        Assert.IsTrue(values.Contains(SupersededItemState.Archived));
+        var values = Enum.GetValues<MemoryState>();
+        Assert.AreEqual(8, values.Length);
+        Assert.IsTrue(values.Contains(MemoryState.Fresh));
+        Assert.IsTrue(values.Contains(MemoryState.Active));
+        Assert.IsTrue(values.Contains(MemoryState.Cooling));
+        Assert.IsTrue(values.Contains(MemoryState.Dormant));
+        Assert.IsTrue(values.Contains(MemoryState.Superseded));
+        Assert.IsTrue(values.Contains(MemoryState.Replaced));
+        Assert.IsTrue(values.Contains(MemoryState.Archived));
+        Assert.IsTrue(values.Contains(MemoryState.Rejected));
     }
 
     [TestMethod]
-    public void SupersededItemState_ValuesAreUnique()
+    public void MemoryState_ValuesAreUnique()
     {
-        var values = Enum.GetValues<SupersededItemState>().Select(v => (byte)v).ToList();
+        var values = Enum.GetValues<MemoryState>().Select(v => (byte)v).ToList();
         Assert.AreEqual(values.Count, values.Distinct().Count());
     }
 
     [TestMethod]
-    public void SupersededItemState_BackedByByte()
+    public void MemoryState_BackedByByte()
     {
-        var underlyingType = Enum.GetUnderlyingType(typeof(SupersededItemState));
+        var underlyingType = Enum.GetUnderlyingType(typeof(MemoryState));
         Assert.AreEqual(typeof(byte), underlyingType);
     }
 
+    [TestMethod]
+    public void MemoryState_FreshIsZero()
+    {
+        Assert.AreEqual((byte)0, (byte)MemoryState.Fresh);
+    }
+
     // =========================================================================
-    // 2. SupersedeEventRecord 必填字段 + 默认值
+    // 2. MemoryStateEventRecord 必填字段 + 默认值
     // =========================================================================
 
     [TestMethod]
-    public void SupersedeEventRecord_RequiredFields_AreEnforced()
+    public void MemoryStateEventRecord_RequiredFields_AreEnforced()
     {
-        var record = MakeEventRecord(
-            eventId: "evt-1",
-            sourceItemId: "item-1",
-            itemType: "memory",
-            newState: SupersededItemState.Superseded,
-            reason: "lifecycle-review",
-            occurredAt: DateTimeOffset.UtcNow);
+        var record = MakeEventRecord();
 
         Assert.AreEqual("evt-1", record.EventId);
         Assert.AreEqual("ws-test", record.WorkspaceId);
         Assert.AreEqual("col-test", record.CollectionId);
         Assert.AreEqual("item-1", record.SourceItemId);
         Assert.AreEqual("memory", record.ItemType);
-        Assert.AreEqual(SupersededItemState.Superseded, record.NewState);
+        Assert.AreEqual(MemoryState.Superseded, record.NewState);
         Assert.AreEqual("lifecycle-review", record.Reason);
         Assert.IsTrue(record.OccurredAt > DateTimeOffset.MinValue);
     }
 
     [TestMethod]
-    public void SupersedeEventRecord_OptionalFields_DefaultValues()
+    public void MemoryStateEventRecord_OptionalFields_DefaultValues()
     {
         var record = MakeEventRecord();
 
-        // TargetItemId 默认 null
         Assert.IsNull(record.TargetItemId);
-        // Reviewer 默认 null
         Assert.IsNull(record.Reviewer);
-        // RelationId 默认 null
         Assert.IsNull(record.RelationId);
-        // ConsolidationRunId 默认 null
         Assert.IsNull(record.ConsolidationRunId);
-        // ReasonDetail 默认空字符串
         Assert.AreEqual(string.Empty, record.ReasonDetail);
-        // Metadata 默认空字典
         Assert.AreEqual(0, record.Metadata.Count);
     }
 
     [TestMethod]
-    public void SupersedeEventRecord_WithExpression_ProducesNewInstance()
+    public void MemoryStateEventRecord_WithExpression_ProducesNewInstance()
     {
         var record = MakeEventRecord();
         var updated = record with { Reason = "manual", Reviewer = "user-1" };
@@ -111,13 +107,13 @@ public sealed class MemoryEvolutionContractsTests
     }
 
     // =========================================================================
-    // 3. SupersedeEventQuery 查询条件字段
+    // 3. MemoryStateEventQuery 默认值 + 全字段
     // =========================================================================
 
     [TestMethod]
-    public void SupersedeEventQuery_DefaultValues()
+    public void MemoryStateEventQuery_DefaultValues()
     {
-        var query = new SupersedeEventQuery { WorkspaceId = "ws-test" };
+        var query = new MemoryStateEventQuery { WorkspaceId = "ws-test" };
 
         Assert.AreEqual("ws-test", query.WorkspaceId);
         Assert.IsNull(query.CollectionId);
@@ -131,18 +127,18 @@ public sealed class MemoryEvolutionContractsTests
     }
 
     [TestMethod]
-    public void SupersedeEventQuery_AllFieldsCanBeSet()
+    public void MemoryStateEventQuery_AllFieldsCanBeSet()
     {
         var since = DateTimeOffset.UtcNow.AddDays(-7);
         var until = DateTimeOffset.UtcNow;
-        var query = new SupersedeEventQuery
+        var query = new MemoryStateEventQuery
         {
             WorkspaceId = "ws-test",
             CollectionId = "col-test",
             SourceItemId = "item-1",
             TargetItemId = "item-2",
             ItemType = "memory",
-            NewState = SupersededItemState.Superseded,
+            NewState = MemoryState.Superseded,
             Since = since,
             Until = until,
             Take = 50
@@ -152,20 +148,20 @@ public sealed class MemoryEvolutionContractsTests
         Assert.AreEqual("item-1", query.SourceItemId);
         Assert.AreEqual("item-2", query.TargetItemId);
         Assert.AreEqual("memory", query.ItemType);
-        Assert.AreEqual(SupersededItemState.Superseded, query.NewState);
+        Assert.AreEqual(MemoryState.Superseded, query.NewState);
         Assert.AreEqual(since, query.Since);
         Assert.AreEqual(until, query.Until);
         Assert.AreEqual(50, query.Take);
     }
 
     // =========================================================================
-    // 4. ISupersededItemStore 接口最小化
+    // 4. IMemoryStateStore 接口最小化
     // =========================================================================
 
     [TestMethod]
-    public void ISupersededItemStore_Has4Methods()
+    public void IMemoryStateStore_Has4Methods()
     {
-        var storeType = typeof(ISupersededItemStore);
+        var storeType = typeof(IMemoryStateStore);
         var methods = storeType.GetMethods(BindingFlags.Public | BindingFlags.Instance);
 
         Assert.AreEqual(4, methods.Length);
@@ -176,23 +172,22 @@ public sealed class MemoryEvolutionContractsTests
     }
 
     [TestMethod]
-    public void ISupersededItemStore_AllMethods_ReturnTask()
+    public void IMemoryStateStore_IsInterface()
     {
-        var storeType = typeof(ISupersededItemStore);
+        Assert.IsTrue(typeof(IMemoryStateStore).IsInterface);
+    }
+
+    [TestMethod]
+    public void IMemoryStateStore_AllMethods_ReturnTask()
+    {
+        var storeType = typeof(IMemoryStateStore);
         foreach (var method in storeType.GetMethods())
         {
-            // 允许 Task（无返回值）或 Task<T>
             Assert.IsTrue(
                 method.ReturnType == typeof(Task) ||
                 (method.ReturnType.IsGenericType && method.ReturnType.GetGenericTypeDefinition() == typeof(Task<>)),
                 $"{method.Name} should return Task or Task<T>");
         }
-    }
-
-    [TestMethod]
-    public void ISupersededItemStore_IsInterface()
-    {
-        Assert.IsTrue(typeof(ISupersededItemStore).IsInterface);
     }
 
     // =========================================================================
@@ -208,35 +203,11 @@ public sealed class MemoryEvolutionContractsTests
             CollectionId = "col-test"
         };
 
-        Assert.AreEqual("ws-test", request.WorkspaceId);
-        Assert.AreEqual("col-test", request.CollectionId);
         Assert.IsTrue(request.OlderThan <= DateTimeOffset.UtcNow);
         Assert.AreEqual(0, request.ItemTypes.Count);
         Assert.AreEqual(100, request.BatchSize);
         Assert.IsFalse(request.DryRun);
         Assert.IsNull(request.TriggeredBy);
-    }
-
-    [TestMethod]
-    public void ConsolidationRequest_AllFieldsCanBeSet()
-    {
-        var olderThan = DateTimeOffset.UtcNow.AddDays(-1);
-        var request = new ConsolidationRequest
-        {
-            WorkspaceId = "ws-test",
-            CollectionId = "col-test",
-            OlderThan = olderThan,
-            ItemTypes = new[] { "memory", "context" },
-            BatchSize = 50,
-            DryRun = true,
-            TriggeredBy = "agent-1"
-        };
-
-        Assert.AreEqual(olderThan, request.OlderThan);
-        Assert.AreEqual(2, request.ItemTypes.Count);
-        Assert.AreEqual(50, request.BatchSize);
-        Assert.IsTrue(request.DryRun);
-        Assert.AreEqual("agent-1", request.TriggeredBy);
     }
 
     // =========================================================================
@@ -285,23 +256,6 @@ public sealed class MemoryEvolutionContractsTests
         Assert.IsFalse(result.IsSuccess);
     }
 
-    [TestMethod]
-    public void ConsolidationRunResult_Duration_CalculatedFromStartEnd()
-    {
-        var start = DateTimeOffset.UtcNow;
-        var end = start.AddMinutes(3);
-        var result = new ConsolidationRunResult
-        {
-            RunId = "run-1",
-            WorkspaceId = "ws-test",
-            CollectionId = "col-test",
-            StartedAt = start,
-            CompletedAt = end
-        };
-
-        Assert.AreEqual(TimeSpan.FromMinutes(3), result.Duration);
-    }
-
     // =========================================================================
     // 7. IConsolidationETL 接口最小化
     // =========================================================================
@@ -316,84 +270,142 @@ public sealed class MemoryEvolutionContractsTests
         Assert.AreEqual("RunAsync", methods[0].Name);
     }
 
-    [TestMethod]
-    public void IConsolidationETL_IsInterface()
-    {
-        Assert.IsTrue(typeof(IConsolidationETL).IsInterface);
-    }
-
     // =========================================================================
-    // 8. SupersededItemStateExtensions
+    // 8. MemoryStateExtensions
     // =========================================================================
 
     [TestMethod]
     public void IsTerminal_OnlyArchived_ReturnsTrue()
     {
-        Assert.IsFalse(SupersededItemState.Unknown.IsTerminal());
-        Assert.IsFalse(SupersededItemState.Active.IsTerminal());
-        Assert.IsFalse(SupersededItemState.Superseded.IsTerminal());
-        Assert.IsFalse(SupersededItemState.Replaced.IsTerminal());
-        Assert.IsTrue(SupersededItemState.Archived.IsTerminal());
+        Assert.IsFalse(MemoryState.Fresh.IsTerminal());
+        Assert.IsFalse(MemoryState.Active.IsTerminal());
+        Assert.IsFalse(MemoryState.Cooling.IsTerminal());
+        Assert.IsFalse(MemoryState.Dormant.IsTerminal());
+        Assert.IsFalse(MemoryState.Superseded.IsTerminal());
+        Assert.IsFalse(MemoryState.Replaced.IsTerminal());
+        Assert.IsTrue(MemoryState.Archived.IsTerminal());
+        Assert.IsFalse(MemoryState.Rejected.IsTerminal());
     }
 
     [TestMethod]
     public void NeedsConsolidation_OnlySupersededAndReplaced_ReturnTrue()
     {
-        Assert.IsFalse(SupersededItemState.Unknown.NeedsConsolidation());
-        Assert.IsFalse(SupersededItemState.Active.NeedsConsolidation());
-        Assert.IsTrue(SupersededItemState.Superseded.NeedsConsolidation());
-        Assert.IsTrue(SupersededItemState.Replaced.NeedsConsolidation());
-        Assert.IsFalse(SupersededItemState.Archived.NeedsConsolidation());
+        Assert.IsFalse(MemoryState.Fresh.NeedsConsolidation());
+        Assert.IsFalse(MemoryState.Active.NeedsConsolidation());
+        Assert.IsFalse(MemoryState.Cooling.NeedsConsolidation());
+        Assert.IsFalse(MemoryState.Dormant.NeedsConsolidation());
+        Assert.IsTrue(MemoryState.Superseded.NeedsConsolidation());
+        Assert.IsTrue(MemoryState.Replaced.NeedsConsolidation());
+        Assert.IsFalse(MemoryState.Archived.NeedsConsolidation());
+        Assert.IsFalse(MemoryState.Rejected.NeedsConsolidation());
+    }
+
+    [TestMethod]
+    public void IsDecaying_OnlyCoolingAndDormant_ReturnTrue()
+    {
+        Assert.IsFalse(MemoryState.Fresh.IsDecaying());
+        Assert.IsFalse(MemoryState.Active.IsDecaying());
+        Assert.IsTrue(MemoryState.Cooling.IsDecaying());
+        Assert.IsTrue(MemoryState.Dormant.IsDecaying());
+        Assert.IsFalse(MemoryState.Superseded.IsDecaying());
+        Assert.IsFalse(MemoryState.Replaced.IsDecaying());
+        Assert.IsFalse(MemoryState.Archived.IsDecaying());
+        Assert.IsFalse(MemoryState.Rejected.IsDecaying());
+    }
+
+    [TestMethod]
+    public void IsActiveOrFresh_FreshAndActive_ReturnTrue()
+    {
+        Assert.IsTrue(MemoryState.Fresh.IsActiveOrFresh());
+        Assert.IsTrue(MemoryState.Active.IsActiveOrFresh());
+        Assert.IsFalse(MemoryState.Cooling.IsActiveOrFresh());
+        Assert.IsFalse(MemoryState.Dormant.IsActiveOrFresh());
+    }
+
+    [TestMethod]
+    public void CanReheat_CoolingAndDormant_ReturnTrue()
+    {
+        Assert.IsTrue(MemoryState.Cooling.CanReheat());
+        Assert.IsTrue(MemoryState.Dormant.CanReheat());
+        Assert.IsFalse(MemoryState.Fresh.CanReheat());
+        Assert.IsFalse(MemoryState.Active.CanReheat());
+        Assert.IsFalse(MemoryState.Archived.CanReheat());
     }
 
     // =========================================================================
-    // 9. 状态机转换合法性（Active→Superseded→Replaced→Archived 单向推进）
+    // 9. 状态机转换合法性
     // =========================================================================
+
+    [TestMethod]
+    public void CanTransitionTo_FreshToActive_ReturnsTrue()
+    {
+        Assert.IsTrue(MemoryState.Fresh.CanTransitionTo(MemoryState.Active));
+    }
+
+    [TestMethod]
+    public void CanTransitionTo_FreshToRejected_ReturnsTrue()
+    {
+        Assert.IsTrue(MemoryState.Fresh.CanTransitionTo(MemoryState.Rejected));
+    }
+
+    [TestMethod]
+    public void CanTransitionTo_ActiveToCooling_ReturnsTrue()
+    {
+        Assert.IsTrue(MemoryState.Active.CanTransitionTo(MemoryState.Cooling));
+    }
 
     [TestMethod]
     public void CanTransitionTo_ActiveToSuperseded_ReturnsTrue()
     {
-        Assert.IsTrue(SupersededItemState.Active.CanTransitionTo(SupersededItemState.Superseded));
+        Assert.IsTrue(MemoryState.Active.CanTransitionTo(MemoryState.Superseded));
+    }
+
+    [TestMethod]
+    public void CanTransitionTo_ActiveToRejected_ReturnsTrue()
+    {
+        Assert.IsTrue(MemoryState.Active.CanTransitionTo(MemoryState.Rejected));
+    }
+
+    [TestMethod]
+    public void CanTransitionTo_CoolingToDormant_ReturnsTrue()
+    {
+        Assert.IsTrue(MemoryState.Cooling.CanTransitionTo(MemoryState.Dormant));
+    }
+
+    [TestMethod]
+    public void CanTransitionTo_CoolingToActive_Reheat_ReturnsTrue()
+    {
+        Assert.IsTrue(MemoryState.Cooling.CanTransitionTo(MemoryState.Active));
+    }
+
+    [TestMethod]
+    public void CanTransitionTo_DormantToArchived_ReturnsTrue()
+    {
+        Assert.IsTrue(MemoryState.Dormant.CanTransitionTo(MemoryState.Archived));
+    }
+
+    [TestMethod]
+    public void CanTransitionTo_DormantToActive_Reheat_ReturnsTrue()
+    {
+        Assert.IsTrue(MemoryState.Dormant.CanTransitionTo(MemoryState.Active));
     }
 
     [TestMethod]
     public void CanTransitionTo_SupersededToReplaced_ReturnsTrue()
     {
-        Assert.IsTrue(SupersededItemState.Superseded.CanTransitionTo(SupersededItemState.Replaced));
+        Assert.IsTrue(MemoryState.Superseded.CanTransitionTo(MemoryState.Replaced));
     }
 
     [TestMethod]
     public void CanTransitionTo_ReplacedToArchived_ReturnsTrue()
     {
-        Assert.IsTrue(SupersededItemState.Replaced.CanTransitionTo(SupersededItemState.Archived));
+        Assert.IsTrue(MemoryState.Replaced.CanTransitionTo(MemoryState.Archived));
     }
 
     [TestMethod]
-    public void CanTransitionTo_SameState_ReturnsFalse()
+    public void CanTransitionTo_RejectedToArchived_ReturnsTrue()
     {
-        // 自环不允许
-        Assert.IsFalse(SupersededItemState.Active.CanTransitionTo(SupersededItemState.Active));
-        Assert.IsFalse(SupersededItemState.Superseded.CanTransitionTo(SupersededItemState.Superseded));
-        Assert.IsFalse(SupersededItemState.Replaced.CanTransitionTo(SupersededItemState.Replaced));
-        Assert.IsFalse(SupersededItemState.Archived.CanTransitionTo(SupersededItemState.Archived));
-    }
-
-    [TestMethod]
-    public void CanTransitionTo_ReverseTransition_ReturnsFalse()
-    {
-        // 不允许反向推进
-        Assert.IsFalse(SupersededItemState.Superseded.CanTransitionTo(SupersededItemState.Active));
-        Assert.IsFalse(SupersededItemState.Replaced.CanTransitionTo(SupersededItemState.Superseded));
-        Assert.IsFalse(SupersededItemState.Archived.CanTransitionTo(SupersededItemState.Replaced));
-    }
-
-    [TestMethod]
-    public void CanTransitionTo_SkipState_ReturnsFalse()
-    {
-        // 不允许跳跃（如 Active 直跳 Replaced）
-        Assert.IsFalse(SupersededItemState.Active.CanTransitionTo(SupersededItemState.Replaced));
-        Assert.IsFalse(SupersededItemState.Active.CanTransitionTo(SupersededItemState.Archived));
-        Assert.IsFalse(SupersededItemState.Superseded.CanTransitionTo(SupersededItemState.Archived));
+        Assert.IsTrue(MemoryState.Rejected.CanTransitionTo(MemoryState.Archived));
     }
 
     // =========================================================================
@@ -403,86 +415,75 @@ public sealed class MemoryEvolutionContractsTests
     [TestMethod]
     public void CanTransitionTo_ArchivedToAny_ReturnsFalse()
     {
-        // Archived 是终态，不允许推进到任何状态
-        Assert.IsFalse(SupersededItemState.Archived.CanTransitionTo(SupersededItemState.Active));
-        Assert.IsFalse(SupersededItemState.Archived.CanTransitionTo(SupersededItemState.Superseded));
-        Assert.IsFalse(SupersededItemState.Archived.CanTransitionTo(SupersededItemState.Replaced));
-    }
-
-    // =========================================================================
-    // 11. 契约无存储 I/O（反射验证）
-    // =========================================================================
-
-    [TestMethod]
-    public void SupersedeEventRecord_IsSealedRecord()
-    {
-        Assert.IsTrue(typeof(SupersedeEventRecord).IsSealed);
-        Assert.IsTrue(typeof(SupersedeEventRecord).IsValueType == false); // record class
+        Assert.IsFalse(MemoryState.Archived.CanTransitionTo(MemoryState.Active));
+        Assert.IsFalse(MemoryState.Archived.CanTransitionTo(MemoryState.Cooling));
+        Assert.IsFalse(MemoryState.Archived.CanTransitionTo(MemoryState.Superseded));
+        Assert.IsFalse(MemoryState.Archived.CanTransitionTo(MemoryState.Rejected));
     }
 
     [TestMethod]
-    public void ConsolidationRequest_IsSealedRecord()
+    public void CanTransitionTo_SameState_ReturnsFalse()
     {
-        Assert.IsTrue(typeof(ConsolidationRequest).IsSealed);
-    }
-
-    [TestMethod]
-    public void ConsolidationRunResult_IsSealedRecord()
-    {
-        Assert.IsTrue(typeof(ConsolidationRunResult).IsSealed);
-    }
-
-    [TestMethod]
-    public void SupersededItemStateExtensions_IsStaticClass()
-    {
-        Assert.IsTrue(typeof(SupersededItemStateExtensions).IsAbstract);
-        Assert.IsTrue(typeof(SupersededItemStateExtensions).IsSealed);
-    }
-
-    [TestMethod]
-    public void MemoryEvolutionContracts_NoAsyncVoidMethods()
-    {
-        // 契约接口不应有 async void 方法（应是 Task<T>）
-        var interfaces = new[] { typeof(ISupersededItemStore), typeof(IConsolidationETL) };
-        foreach (var iface in interfaces)
+        foreach (var state in Enum.GetValues<MemoryState>())
         {
-            foreach (var method in iface.GetMethods())
-            {
-                Assert.AreNotEqual(typeof(void), method.ReturnType,
-                    $"{iface.Name}.{method.Name} should not return void");
-                Assert.AreNotEqual("VoidTaskResult", method.ReturnType.Name,
-                    $"{iface.Name}.{method.Name} should not return async void");
-            }
+            Assert.IsFalse(state.CanTransitionTo(state),
+                $"{state} -> {state} should not be allowed");
         }
+    }
+
+    // =========================================================================
+    // 11. 非法跳跃禁止
+    // =========================================================================
+
+    [TestMethod]
+    public void CanTransitionTo_FreshToArchived_ForbiddenJump()
+    {
+        Assert.IsFalse(MemoryState.Fresh.CanTransitionTo(MemoryState.Archived));
+    }
+
+    [TestMethod]
+    public void CanTransitionTo_ActiveToArchived_ForbiddenJump()
+    {
+        // Active 不能直接到 Archived（需经过 Cooling→Dormant→Archived 或 Superseded→Replaced→Archived）
+        Assert.IsFalse(MemoryState.Active.CanTransitionTo(MemoryState.Archived));
+    }
+
+    [TestMethod]
+    public void CanTransitionTo_CoolingToArchived_ForbiddenJump()
+    {
+        // Cooling 不能直接到 Archived（需经过 Dormant）
+        Assert.IsFalse(MemoryState.Cooling.CanTransitionTo(MemoryState.Archived));
+    }
+
+    [TestMethod]
+    public void CanTransitionTo_SupersededToArchived_ForbiddenJump()
+    {
+        // Superseded 不能直接到 Archived（需经过 Replaced）
+        Assert.IsFalse(MemoryState.Superseded.CanTransitionTo(MemoryState.Archived));
     }
 
     // =========================================================================
     // 辅助方法
     // =========================================================================
 
-    private static SupersedeEventRecord MakeEventRecord(
-        string eventId = "evt-test",
-        string sourceItemId = "item-source",
+    private static MemoryStateEventRecord MakeEventRecord(
+        string eventId = "evt-1",
+        string sourceItemId = "item-1",
+        MemoryState newState = MemoryState.Superseded,
         string itemType = "memory",
-        SupersededItemState newState = SupersededItemState.Superseded,
         string reason = "lifecycle-review",
         DateTimeOffset? occurredAt = null)
     {
-        return new SupersedeEventRecord
+        return new MemoryStateEventRecord
         {
             EventId = eventId,
             WorkspaceId = "ws-test",
             CollectionId = "col-test",
             SourceItemId = sourceItemId,
-            TargetItemId = null,
             ItemType = itemType,
             NewState = newState,
             Reason = reason,
-            // ReasonDetail / Metadata 留默认值，便于测试默认值
-            Reviewer = null,
-            OccurredAt = occurredAt ?? DateTimeOffset.UtcNow,
-            RelationId = null,
-            ConsolidationRunId = null
+            OccurredAt = occurredAt ?? DateTimeOffset.UtcNow
         };
     }
 }

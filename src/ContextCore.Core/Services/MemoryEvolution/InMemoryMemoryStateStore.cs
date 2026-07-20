@@ -4,42 +4,41 @@ using ContextCore.Abstractions;
 namespace ContextCore.Core.Services.MemoryEvolution;
 
 /// <summary>
-/// R21-3：ISupersededItemStore 的 in-memory 实现。
-/// append-only 事件流；线程安全。
+/// R21-4：IMemoryStateStore 的 in-memory 实现。append-only 事件流；线程安全。
 /// </summary>
 /// <remarks>
 /// 设计原则：
 ///   1. 事件流不可变：AppendEventAsync 校验 EventId 唯一性，重复 EventId 抛 ArgumentException。
-///   2. NewState 校验：SupersedeEventRecord.NewState 不允许为 Active
-///      （Active 是初始状态，不是事件目标）。
+///   2. NewState 校验：MemoryStateEventRecord.NewState 不允许为 Fresh
+///      （Fresh 是初始态，不是事件目标）。
 ///   3. GetLatestStateAsync：按 SourceItemId 过滤，取 OccurredAt 最晚的事件 NewState；
-///      从未记录返回 null（视为 Active）。
-///   4. 生产部署应替换为 PostgresSupersededItemStore 持久化实现。
+///      从未记录返回 null（视为 Fresh）。
+///   4. 生产部署应替换为 PostgresMemoryStateStore 持久化实现。
 /// </remarks>
-public sealed class InMemorySupersededItemStore : ISupersededItemStore
+public sealed class InMemoryMemoryStateStore : IMemoryStateStore
 {
-    private readonly ConcurrentDictionary<string, SupersedeEventRecord> _eventsById = new(StringComparer.Ordinal);
-    private readonly ConcurrentBag<SupersedeEventRecord> _events = new();
+    private readonly ConcurrentDictionary<string, MemoryStateEventRecord> _eventsById = new(StringComparer.Ordinal);
+    private readonly ConcurrentBag<MemoryStateEventRecord> _events = new();
 
     /// <inheritdoc />
     public Task AppendEventAsync(
-        SupersedeEventRecord record,
+        MemoryStateEventRecord record,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(record);
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (record.NewState == SupersededItemState.Active)
+        if (record.NewState == MemoryState.Fresh)
         {
             throw new ArgumentException(
-                "SupersedeEventRecord.NewState cannot be Active (Active is the initial state, not an event target).",
+                "MemoryStateEventRecord.NewState cannot be Fresh (Fresh is the initial state, not an event target).",
                 nameof(record));
         }
 
         if (!_eventsById.TryAdd(record.EventId, record))
         {
             throw new ArgumentException(
-                $"Duplicate EventId '{record.EventId}'. Supersede events are append-only and EventId must be unique.",
+                $"Duplicate EventId '{record.EventId}'. Memory state events are append-only and EventId must be unique.",
                 nameof(record));
         }
 
@@ -48,14 +47,14 @@ public sealed class InMemorySupersededItemStore : ISupersededItemStore
     }
 
     /// <inheritdoc />
-    public Task<IReadOnlyList<SupersedeEventRecord>> QueryEventsAsync(
-        SupersedeEventQuery query,
+    public Task<IReadOnlyList<MemoryStateEventRecord>> QueryEventsAsync(
+        MemoryStateEventQuery query,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(query);
         cancellationToken.ThrowIfCancellationRequested();
 
-        IEnumerable<SupersedeEventRecord> results = _events;
+        IEnumerable<MemoryStateEventRecord> results = _events;
 
         if (query.CollectionId is not null)
         {
@@ -92,11 +91,11 @@ public sealed class InMemorySupersededItemStore : ISupersededItemStore
             ordered = ordered.Take(query.Take).ToList();
         }
 
-        return Task.FromResult<IReadOnlyList<SupersedeEventRecord>>(ordered);
+        return Task.FromResult<IReadOnlyList<MemoryStateEventRecord>>(ordered);
     }
 
     /// <inheritdoc />
-    public Task<SupersedeEventRecord?> GetLatestStateAsync(
+    public Task<MemoryStateEventRecord?> GetLatestStateAsync(
         string workspaceId,
         string collectionId,
         string sourceItemId,
@@ -118,7 +117,7 @@ public sealed class InMemorySupersededItemStore : ISupersededItemStore
     }
 
     /// <inheritdoc />
-    public Task<IReadOnlyList<SupersedeEventRecord>> GetRecentAsync(
+    public Task<IReadOnlyList<MemoryStateEventRecord>> GetRecentAsync(
         string workspaceId,
         string collectionId,
         int take,
@@ -132,7 +131,7 @@ public sealed class InMemorySupersededItemStore : ISupersededItemStore
         }
         cancellationToken.ThrowIfCancellationRequested();
 
-        var query = new SupersedeEventQuery
+        var query = new MemoryStateEventQuery
         {
             WorkspaceId = workspaceId,
             CollectionId = collectionId,

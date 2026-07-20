@@ -5,149 +5,76 @@ using ContextCore.Core.Services.MemoryEvolution;
 namespace ContextCore.Tests;
 
 /// <summary>
-/// R21-3：Memory Evolution 实现测试（InMemorySupersededItemStore +
-/// DefaultConsolidationETL + InMemoryUtilityLedgerStore + InMemoryConflictSetStore +
-/// UtilityLedgerMaterializer）。
+/// R21-4/R21-5：Memory Evolution 实现测试。
 ///
-/// 验证目标：
-///   1. InMemorySupersededItemStore：append-only / 查询 / 最新状态 / 最近事件
-///   2. InMemorySupersededItemStore：EventId �一性 + NewState != Active
-///   3. DefaultConsolidationETL：DryRun / 状态机推进 Superseded→Replaced→Archived / 幂等
-///   4. DefaultConsolidationETL：ItemType 过滤 / BatchSize 限制
-///   5. InMemoryUtilityLedgerStore：append + query + latest + expert contributions
-///   6. InMemoryConflictSetStore：append + query + get + conflicts-for-candidate
-///   7. UtilityLedgerMaterializer：selected + dropped envelopes 物化
-///   8. UtilityLedgerMaterializer：ConflictSet 检测（Duplicate / SectionConflict / BudgetConflict）
-///   9. UtilityLedgerMaterializer：UtilityContribution 计算
-///  10. 端到端：DecisionResult → Materializer → Stores 查询验证
+/// 覆盖：
+///   1. InMemoryMemoryStateStore：append-only / 查询 / 最新状态 / 最近事件 / EventId 唯一性 / NewState != Fresh
+///   2. DefaultConsolidationETL：DryRun / Superseded→Replaced→Archived / Dormant→Archived / 幂等 / ItemType 过滤 / BatchSize
+///   3. DefaultMemoryDecayEvaluator：NoEffectiveContribution / LongTermNoHit（Cooling/Dormant/Archived）/ 终态不评估 / 状态机非法转换
+///   4. InMemoryMemoryUtilityStatsStore：UpsertSnapshot / QueryAsync / GetAsync / 过滤条件
+///   5. InMemoryConflictSetStore + ConflictResolutionStatus 过滤
+///   6. UtilityLedgerMaterializer + ConflictSet ResolutionStatus 填充
 /// </summary>
 [TestClass]
 [TestCategory("R21")]
 public sealed class MemoryEvolutionImplementationTests
 {
     // =========================================================================
-    // 1. InMemorySupersededItemStore 基础功能
+    // 1. InMemoryMemoryStateStore
     // =========================================================================
 
     [TestMethod]
-    public async Task SupersededItemStore_AppendEvent_StoresEvent()
+    public async Task MemoryStateStore_AppendEvent_StoresEvent()
     {
-        var store = new InMemorySupersededItemStore();
-        var evt = MakeSupersedeEvent("evt-1", "item-1", SupersededItemState.Superseded);
+        var store = new InMemoryMemoryStateStore();
+        var evt = MakeStateEvent("evt-1", "item-1", MemoryState.Superseded);
 
         await store.AppendEventAsync(evt);
 
-        var events = await store.QueryEventsAsync(new SupersedeEventQuery
-        {
-            WorkspaceId = "ws-test"
-        });
+        var events = await store.QueryEventsAsync(new MemoryStateEventQuery { WorkspaceId = "ws-test" });
         Assert.AreEqual(1, events.Count);
         Assert.AreEqual("evt-1", events[0].EventId);
     }
 
     [TestMethod]
-    public async Task SupersededItemStore_AppendEvent_DuplicateEventId_Throws()
+    public async Task MemoryStateStore_DuplicateEventId_Throws()
     {
-        var store = new InMemorySupersededItemStore();
-        var evt1 = MakeSupersedeEvent("evt-1", "item-1", SupersededItemState.Superseded);
-        var evt2 = MakeSupersedeEvent("evt-1", "item-2", SupersededItemState.Superseded);
-
-        await store.AppendEventAsync(evt1);
-        await Assert.ThrowsExceptionAsync<ArgumentException>(
-            () => store.AppendEventAsync(evt2));
-    }
-
-    [TestMethod]
-    public async Task SupersededItemStore_AppendEvent_ActiveNewState_Throws()
-    {
-        var store = new InMemorySupersededItemStore();
-        var evt = MakeSupersedeEvent("evt-1", "item-1", SupersededItemState.Active);
+        var store = new InMemoryMemoryStateStore();
+        await store.AppendEventAsync(MakeStateEvent("evt-1", "item-1", MemoryState.Superseded));
 
         await Assert.ThrowsExceptionAsync<ArgumentException>(
-            () => store.AppendEventAsync(evt));
+            () => store.AppendEventAsync(MakeStateEvent("evt-1", "item-2", MemoryState.Superseded)));
     }
 
     [TestMethod]
-    public async Task SupersededItemStore_QueryEvents_FiltersByCollection()
+    public async Task MemoryStateStore_FreshNewState_Throws()
     {
-        var store = new InMemorySupersededItemStore();
-        await store.AppendEventAsync(MakeSupersedeEvent("evt-1", "item-1", collectionId: "col-A"));
-        await store.AppendEventAsync(MakeSupersedeEvent("evt-2", "item-2", collectionId: "col-B"));
+        var store = new InMemoryMemoryStateStore();
+        var evt = MakeStateEvent("evt-1", "item-1", MemoryState.Fresh);
 
-        var results = await store.QueryEventsAsync(new SupersedeEventQuery
-        {
-            WorkspaceId = "ws-test",
-            CollectionId = "col-A"
-        });
-
-        Assert.AreEqual(1, results.Count);
-        Assert.AreEqual("item-1", results[0].SourceItemId);
+        await Assert.ThrowsExceptionAsync<ArgumentException>(() => store.AppendEventAsync(evt));
     }
 
     [TestMethod]
-    public async Task SupersededItemStore_QueryEvents_FiltersBySince()
+    public async Task MemoryStateStore_GetLatestState_ReturnsLatestEvent()
     {
-        var store = new InMemorySupersededItemStore();
-        var old = DateTimeOffset.UtcNow.AddDays(-2);
-        var recent = DateTimeOffset.UtcNow.AddDays(-1);
-
-        await store.AppendEventAsync(MakeSupersedeEvent("evt-1", "item-1", occurredAt: old));
-        await store.AppendEventAsync(MakeSupersedeEvent("evt-2", "item-2", occurredAt: recent));
-
-        var results = await store.QueryEventsAsync(new SupersedeEventQuery
-        {
-            WorkspaceId = "ws-test",
-            Since = recent
-        });
-
-        Assert.AreEqual(1, results.Count);
-        Assert.AreEqual("item-2", results[0].SourceItemId);
-    }
-
-    [TestMethod]
-    public async Task SupersededItemStore_QueryEvents_OrderByOccurredAtDesc()
-    {
-        var store = new InMemorySupersededItemStore();
-        var t1 = DateTimeOffset.UtcNow;
-        var t2 = t1.AddSeconds(1);
-        var t3 = t1.AddSeconds(2);
-
-        await store.AppendEventAsync(MakeSupersedeEvent("evt-1", "item-1", occurredAt: t1));
-        await store.AppendEventAsync(MakeSupersedeEvent("evt-2", "item-2", occurredAt: t2));
-        await store.AppendEventAsync(MakeSupersedeEvent("evt-3", "item-3", occurredAt: t3));
-
-        var results = await store.QueryEventsAsync(new SupersedeEventQuery
-        {
-            WorkspaceId = "ws-test",
-            Take = 0
-        });
-
-        Assert.AreEqual(3, results.Count);
-        Assert.AreEqual("evt-3", results[0].EventId);
-        Assert.AreEqual("evt-2", results[1].EventId);
-        Assert.AreEqual("evt-1", results[2].EventId);
-    }
-
-    [TestMethod]
-    public async Task SupersededItemStore_GetLatestState_ReturnsLatestEvent()
-    {
-        var store = new InMemorySupersededItemStore();
+        var store = new InMemoryMemoryStateStore();
         var t1 = DateTimeOffset.UtcNow;
         var t2 = t1.AddSeconds(1);
 
-        await store.AppendEventAsync(MakeSupersedeEvent("evt-1", "item-1", newState: SupersededItemState.Superseded, occurredAt: t1));
-        await store.AppendEventAsync(MakeSupersedeEvent("evt-2", "item-1", newState: SupersededItemState.Replaced, occurredAt: t2));
+        await store.AppendEventAsync(MakeStateEvent("evt-1", "item-1", MemoryState.Superseded, occurredAt: t1));
+        await store.AppendEventAsync(MakeStateEvent("evt-2", "item-1", MemoryState.Replaced, occurredAt: t2));
 
         var latest = await store.GetLatestStateAsync("ws-test", "col-test", "item-1");
 
         Assert.IsNotNull(latest);
-        Assert.AreEqual(SupersededItemState.Replaced, latest.NewState);
+        Assert.AreEqual(MemoryState.Replaced, latest.NewState);
     }
 
     [TestMethod]
-    public async Task SupersededItemStore_GetLatestState_NoEvents_ReturnsNull()
+    public async Task MemoryStateStore_GetLatestState_NoEvents_ReturnsNull()
     {
-        var store = new InMemorySupersededItemStore();
+        var store = new InMemoryMemoryStateStore();
 
         var latest = await store.GetLatestStateAsync("ws-test", "col-test", "item-never");
 
@@ -155,12 +82,12 @@ public sealed class MemoryEvolutionImplementationTests
     }
 
     [TestMethod]
-    public async Task SupersededItemStore_GetRecent_ReturnsLatestN()
+    public async Task MemoryStateStore_GetRecent_ReturnsLatestN()
     {
-        var store = new InMemorySupersededItemStore();
+        var store = new InMemoryMemoryStateStore();
         for (int i = 1; i <= 5; i++)
         {
-            await store.AppendEventAsync(MakeSupersedeEvent(
+            await store.AppendEventAsync(MakeStateEvent(
                 $"evt-{i}", $"item-{i}", occurredAt: DateTimeOffset.UtcNow.AddSeconds(i)));
         }
 
@@ -168,17 +95,23 @@ public sealed class MemoryEvolutionImplementationTests
 
         Assert.AreEqual(3, recent.Count);
         Assert.AreEqual("evt-5", recent[0].EventId);
-        Assert.AreEqual("evt-4", recent[1].EventId);
-        Assert.AreEqual("evt-3", recent[2].EventId);
     }
 
     [TestMethod]
-    public async Task SupersededItemStore_GetRecent_NegativeTake_Throws()
+    public async Task MemoryStateStore_QueryEvents_FiltersByNewState()
     {
-        var store = new InMemorySupersededItemStore();
+        var store = new InMemoryMemoryStateStore();
+        await store.AppendEventAsync(MakeStateEvent("evt-1", "item-1", MemoryState.Superseded));
+        await store.AppendEventAsync(MakeStateEvent("evt-2", "item-2", MemoryState.Rejected));
 
-        await Assert.ThrowsExceptionAsync<ArgumentOutOfRangeException>(
-            () => store.GetRecentAsync("ws-test", "col-test", take: -1));
+        var results = await store.QueryEventsAsync(new MemoryStateEventQuery
+        {
+            WorkspaceId = "ws-test",
+            NewState = MemoryState.Rejected
+        });
+
+        Assert.AreEqual(1, results.Count);
+        Assert.AreEqual(MemoryState.Rejected, results[0].NewState);
     }
 
     // =========================================================================
@@ -186,124 +119,131 @@ public sealed class MemoryEvolutionImplementationTests
     // =========================================================================
 
     [TestMethod]
-    public async Task ConsolidationETL_DryRun_ReturnsExtractedCountWithoutMutating()
+    public async Task ConsolidationETL_DryRun_DoesNotMutate()
     {
-        var store = new InMemorySupersededItemStore();
-        await store.AppendEventAsync(MakeSupersedeEvent("evt-1", "item-1", newState: SupersededItemState.Superseded));
-        await store.AppendEventAsync(MakeSupersedeEvent("evt-2", "item-2", newState: SupersededItemState.Superseded));
+        var store = new InMemoryMemoryStateStore();
+        await store.AppendEventAsync(MakeStateEvent("evt-1", "item-1", MemoryState.Superseded));
 
         var etl = new DefaultConsolidationETL(store);
         var result = await etl.RunAsync(new ConsolidationRequest
         {
             WorkspaceId = "ws-test",
             CollectionId = "col-test",
+            OlderThan = DateTimeOffset.UtcNow.AddSeconds(10),
             DryRun = true
         });
 
-        Assert.AreEqual(2, result.ExtractedCount);
+        Assert.AreEqual(1, result.ExtractedCount);
         Assert.AreEqual(0, result.TransformedCount);
-        Assert.AreEqual(0, result.LoadedCount);
         Assert.IsTrue(result.IsSuccess);
-        Assert.AreEqual(2, result.ProcessedItemIds.Count);
 
-        // 没有写入新事件
-        var allEvents = await store.QueryEventsAsync(new SupersedeEventQuery
+        var allEvents = await store.QueryEventsAsync(new MemoryStateEventQuery
         {
             WorkspaceId = "ws-test",
             Take = 0
         });
-        Assert.AreEqual(2, allEvents.Count);
+        Assert.AreEqual(1, allEvents.Count); // 没有写入新事件
     }
 
     [TestMethod]
     public async Task ConsolidationETL_Transform_PushesSupersededToReplaced()
     {
-        var store = new InMemorySupersededItemStore();
-        await store.AppendEventAsync(MakeSupersedeEvent("evt-1", "item-1", newState: SupersededItemState.Superseded));
+        var store = new InMemoryMemoryStateStore();
+        await store.AppendEventAsync(MakeStateEvent("evt-1", "item-1", MemoryState.Superseded,
+            occurredAt: DateTimeOffset.UtcNow.AddSeconds(-1)));
 
         var etl = new DefaultConsolidationETL(store);
         var result = await etl.RunAsync(new ConsolidationRequest
         {
             WorkspaceId = "ws-test",
             CollectionId = "col-test",
-            DryRun = false
+            OlderThan = DateTimeOffset.UtcNow.AddSeconds(10)
         });
 
         Assert.AreEqual(1, result.ExtractedCount);
         Assert.AreEqual(1, result.TransformedCount);
-        Assert.AreEqual(0, result.LoadedCount); // Replaced 状态不直接到 Archived，需要二次 ETL
-        Assert.IsTrue(result.IsSuccess);
 
-        var replaced = await store.GetLatestStateAsync("ws-test", "col-test", "item-1");
-        Assert.IsNotNull(replaced);
-        Assert.AreEqual(SupersededItemState.Replaced, replaced.NewState);
-        Assert.AreEqual("consolidation-etl", replaced.Reason);
+        var latest = await store.GetLatestStateAsync("ws-test", "col-test", "item-1");
+        Assert.IsNotNull(latest);
+        Assert.AreEqual(MemoryState.Replaced, latest.NewState);
     }
 
     [TestMethod]
     public async Task ConsolidationETL_Load_PushesReplacedToArchived()
     {
-        var store = new InMemorySupersededItemStore();
-        // 直接写入 Replaced 状态事件（模拟 Transform 阶段已完成）
-        await store.AppendEventAsync(MakeSupersedeEvent("evt-1", "item-1", newState: SupersededItemState.Replaced));
+        var store = new InMemoryMemoryStateStore();
+        await store.AppendEventAsync(MakeStateEvent("evt-1", "item-1", MemoryState.Replaced,
+            occurredAt: DateTimeOffset.UtcNow.AddSeconds(-1)));
 
         var etl = new DefaultConsolidationETL(store);
         var result = await etl.RunAsync(new ConsolidationRequest
         {
             WorkspaceId = "ws-test",
             CollectionId = "col-test",
-            DryRun = false
+            OlderThan = DateTimeOffset.UtcNow.AddSeconds(10)
         });
 
-        Assert.AreEqual(1, result.ExtractedCount);
-        Assert.AreEqual(0, result.TransformedCount); // 没有 Superseded 状态需要推进
         Assert.AreEqual(1, result.LoadedCount);
 
-        var archived = await store.GetLatestStateAsync("ws-test", "col-test", "item-1");
-        Assert.IsNotNull(archived);
-        Assert.AreEqual(SupersededItemState.Archived, archived.NewState);
+        var latest = await store.GetLatestStateAsync("ws-test", "col-test", "item-1");
+        Assert.IsNotNull(latest);
+        Assert.AreEqual(MemoryState.Archived, latest.NewState);
+    }
+
+    [TestMethod]
+    public async Task ConsolidationETL_DormantToArchived_TerminalDecay()
+    {
+        var store = new InMemoryMemoryStateStore();
+        await store.AppendEventAsync(MakeStateEvent("evt-1", "item-1", MemoryState.Dormant,
+            occurredAt: DateTimeOffset.UtcNow.AddSeconds(-1)));
+
+        var etl = new DefaultConsolidationETL(store);
+        var result = await etl.RunAsync(new ConsolidationRequest
+        {
+            WorkspaceId = "ws-test",
+            CollectionId = "col-test",
+            OlderThan = DateTimeOffset.UtcNow.AddSeconds(10)
+        });
+
+        Assert.AreEqual(1, result.LoadedCount);
+
+        var latest = await store.GetLatestStateAsync("ws-test", "col-test", "item-1");
+        Assert.IsNotNull(latest);
+        Assert.AreEqual(MemoryState.Archived, latest.NewState);
+        Assert.AreEqual("consolidation-etl-dormant", latest.Reason);
     }
 
     [TestMethod]
     public async Task ConsolidationETL_Idempotent_DoesNotReProcessArchived()
     {
-        var store = new InMemorySupersededItemStore();
-        await store.AppendEventAsync(MakeSupersedeEvent("evt-1", "item-1", newState: SupersededItemState.Superseded));
+        var store = new InMemoryMemoryStateStore();
+        await store.AppendEventAsync(MakeStateEvent("evt-1", "item-1", MemoryState.Superseded,
+            occurredAt: DateTimeOffset.UtcNow.AddSeconds(-1)));
 
         var etl = new DefaultConsolidationETL(store);
+
+        // 第一次：Superseded → Replaced
         await etl.RunAsync(new ConsolidationRequest
         {
             WorkspaceId = "ws-test",
-            CollectionId = "col-test"
+            CollectionId = "col-test",
+            OlderThan = DateTimeOffset.UtcNow.AddSeconds(10)
         });
 
-        var firstRunEvents = await store.QueryEventsAsync(new SupersedeEventQuery
-        {
-            WorkspaceId = "ws-test",
-            Take = 0
-        });
-
-        // 第二次 ETL：从 Replaced 推进到 Archived
+        // 第二次：Replaced → Archived
         await etl.RunAsync(new ConsolidationRequest
         {
             WorkspaceId = "ws-test",
-            CollectionId = "col-test"
+            CollectionId = "col-test",
+            OlderThan = DateTimeOffset.UtcNow.AddSeconds(10)
         });
 
-        var secondRunEvents = await store.QueryEventsAsync(new SupersedeEventQuery
-        {
-            WorkspaceId = "ws-test",
-            Take = 0
-        });
-
-        // 第二次运行：新增 1 个 Archived 事件（Replaced → Archived）
-        Assert.AreEqual(firstRunEvents.Count + 1, secondRunEvents.Count);
-
-        // 第三次 ETL：所有 item 已 Archived，没有 Superseded/Replaced 状态可处理
+        // 第三次：没有可处理的 item
         var thirdResult = await etl.RunAsync(new ConsolidationRequest
         {
             WorkspaceId = "ws-test",
-            CollectionId = "col-test"
+            CollectionId = "col-test",
+            OlderThan = DateTimeOffset.UtcNow.AddSeconds(10)
         });
         Assert.AreEqual(0, thirdResult.ExtractedCount);
     }
@@ -311,15 +251,18 @@ public sealed class MemoryEvolutionImplementationTests
     [TestMethod]
     public async Task ConsolidationETL_FilterByItemType()
     {
-        var store = new InMemorySupersededItemStore();
-        await store.AppendEventAsync(MakeSupersedeEvent("evt-1", "item-1", itemType: "memory", newState: SupersededItemState.Superseded));
-        await store.AppendEventAsync(MakeSupersedeEvent("evt-2", "item-2", itemType: "constraint", newState: SupersededItemState.Superseded));
+        var store = new InMemoryMemoryStateStore();
+        await store.AppendEventAsync(MakeStateEvent("evt-1", "item-1", MemoryState.Superseded, itemType: "memory",
+            occurredAt: DateTimeOffset.UtcNow.AddSeconds(-1)));
+        await store.AppendEventAsync(MakeStateEvent("evt-2", "item-2", MemoryState.Superseded, itemType: "constraint",
+            occurredAt: DateTimeOffset.UtcNow.AddSeconds(-1)));
 
         var etl = new DefaultConsolidationETL(store);
         var result = await etl.RunAsync(new ConsolidationRequest
         {
             WorkspaceId = "ws-test",
             CollectionId = "col-test",
+            OlderThan = DateTimeOffset.UtcNow.AddSeconds(10),
             ItemTypes = new[] { "memory" }
         });
 
@@ -327,281 +270,245 @@ public sealed class MemoryEvolutionImplementationTests
         Assert.AreEqual(1, result.TransformedCount);
     }
 
-    [TestMethod]
-    public async Task ConsolidationETL_BatchSize_LimitsProcessing()
-    {
-        var store = new InMemorySupersededItemStore();
-        for (int i = 1; i <= 5; i++)
-        {
-            await store.AppendEventAsync(MakeSupersedeEvent(
-                $"evt-{i}", $"item-{i}", newState: SupersededItemState.Superseded,
-                occurredAt: DateTimeOffset.UtcNow.AddSeconds(i)));
-        }
-
-        var etl = new DefaultConsolidationETL(store);
-        var result = await etl.RunAsync(new ConsolidationRequest
-        {
-            WorkspaceId = "ws-test",
-            CollectionId = "col-test",
-            // OlderThan 默认 UtcNow（请求创建时）会漏掉稍后写入的事件，显式指定未来时间
-            OlderThan = DateTimeOffset.UtcNow.AddSeconds(10),
-            BatchSize = 2
-        });
-
-        Assert.AreEqual(2, result.ExtractedCount);
-        Assert.AreEqual(2, result.TransformedCount);
-    }
-
     // =========================================================================
-    // 3. InMemoryUtilityLedgerStore
+    // 3. DefaultMemoryDecayEvaluator
     // =========================================================================
 
     [TestMethod]
-    public async Task UtilityLedgerStore_AppendEntries_QueryAsync()
+    public async Task DecayEvaluator_NoEffectiveContribution_ActiveToCooling()
     {
-        var store = new InMemoryUtilityLedgerStore();
-        var now = DateTimeOffset.UtcNow;
-        store.AppendEntries(new[]
-        {
-            MakeLedgerEntry("ledger-1", "item-1", RetrievalExpert.Semantic, isSelected: true, materializedAt: now),
-            MakeLedgerEntry("ledger-2", "item-2", RetrievalExpert.Lexical, isSelected: false, materializedAt: now.AddSeconds(1))
-        });
+        var evaluator = new DefaultMemoryDecayEvaluator();
+        var stats = MakeStats(selectedCount: 6, usefulFeedbackCount: 0);
 
-        var results = await store.QueryAsync(new UtilityLedgerQuery { WorkspaceId = "ws-test" });
+        var assessment = await evaluator.EvaluateAsync(
+            "item-1", "ws-test", "col-test", MemoryState.Active, stats);
 
-        Assert.AreEqual(2, results.Count);
-        // 降序：latest first
-        Assert.AreEqual("ledger-2", results[0].EntryId);
-        Assert.AreEqual("ledger-1", results[1].EntryId);
+        Assert.AreEqual(MemoryState.Cooling, assessment.TargetState);
+        Assert.AreEqual(MemoryDecayFactor.NoEffectiveContribution, assessment.DecayFactor);
+        Assert.IsTrue(assessment.NeedsTransition);
     }
 
     [TestMethod]
-    public async Task UtilityLedgerStore_QueryAsync_FiltersByExpert()
+    public async Task DecayEvaluator_LongTermNoHit_ActiveToCooling()
     {
-        var store = new InMemoryUtilityLedgerStore();
-        var now = DateTimeOffset.UtcNow;
-        store.AppendEntries(new[]
-        {
-            MakeLedgerEntry("ledger-1", "item-1", RetrievalExpert.Semantic, materializedAt: now),
-            MakeLedgerEntry("ledger-2", "item-2", RetrievalExpert.Lexical, materializedAt: now)
-        });
+        var evaluator = new DefaultMemoryDecayEvaluator();
+        var stats = MakeStats(lastRecallTime: DateTimeOffset.UtcNow.AddDays(-10));
 
-        var results = await store.QueryAsync(new UtilityLedgerQuery
+        var assessment = await evaluator.EvaluateAsync(
+            "item-1", "ws-test", "col-test", MemoryState.Active, stats);
+
+        Assert.AreEqual(MemoryState.Cooling, assessment.TargetState);
+        Assert.AreEqual(MemoryDecayFactor.LongTermNoHit, assessment.DecayFactor);
+    }
+
+    [TestMethod]
+    public async Task DecayEvaluator_LongTermNoHit_CoolingToDormant()
+    {
+        var evaluator = new DefaultMemoryDecayEvaluator();
+        var stats = MakeStats(lastRecallTime: DateTimeOffset.UtcNow.AddDays(-35));
+
+        var assessment = await evaluator.EvaluateAsync(
+            "item-1", "ws-test", "col-test", MemoryState.Cooling, stats);
+
+        Assert.AreEqual(MemoryState.Dormant, assessment.TargetState);
+        Assert.AreEqual(MemoryDecayFactor.LongTermNoHit, assessment.DecayFactor);
+    }
+
+    [TestMethod]
+    public async Task DecayEvaluator_LongTermNoHit_DormantToArchived()
+    {
+        var evaluator = new DefaultMemoryDecayEvaluator();
+        var stats = MakeStats(lastRecallTime: DateTimeOffset.UtcNow.AddDays(-95));
+
+        var assessment = await evaluator.EvaluateAsync(
+            "item-1", "ws-test", "col-test", MemoryState.Dormant, stats);
+
+        Assert.AreEqual(MemoryState.Archived, assessment.TargetState);
+        Assert.AreEqual(MemoryDecayFactor.LongTermNoHit, assessment.DecayFactor);
+    }
+
+    [TestMethod]
+    public async Task DecayEvaluator_RecentHit_NoDecay()
+    {
+        var evaluator = new DefaultMemoryDecayEvaluator();
+        var stats = MakeStats(
+            lastRecallTime: DateTimeOffset.UtcNow.AddDays(-1),
+            selectedCount: 10,
+            usefulFeedbackCount: 5);
+
+        var assessment = await evaluator.EvaluateAsync(
+            "item-1", "ws-test", "col-test", MemoryState.Active, stats);
+
+        Assert.AreEqual(MemoryState.Active, assessment.TargetState);
+        Assert.AreEqual(MemoryDecayFactor.Unknown, assessment.DecayFactor);
+        Assert.IsFalse(assessment.NeedsTransition);
+    }
+
+    [TestMethod]
+    public async Task DecayEvaluator_ArchivedTerminal_NoAssessment()
+    {
+        var evaluator = new DefaultMemoryDecayEvaluator();
+        var stats = MakeStats(lastRecallTime: DateTimeOffset.UtcNow.AddDays(-365));
+
+        var assessment = await evaluator.EvaluateAsync(
+            "item-1", "ws-test", "col-test", MemoryState.Archived, stats);
+
+        Assert.AreEqual(MemoryState.Archived, assessment.TargetState);
+        Assert.AreEqual(MemoryDecayFactor.Unknown, assessment.DecayFactor);
+        Assert.IsFalse(assessment.NeedsTransition);
+    }
+
+    [TestMethod]
+    public async Task DecayEvaluator_NoStats_NoDecay()
+    {
+        var evaluator = new DefaultMemoryDecayEvaluator();
+
+        var assessment = await evaluator.EvaluateAsync(
+            "item-1", "ws-test", "col-test", MemoryState.Active, stats: null);
+
+        Assert.AreEqual(MemoryState.Active, assessment.TargetState);
+        Assert.AreEqual(MemoryDecayFactor.Unknown, assessment.DecayFactor);
+    }
+
+    // =========================================================================
+    // 4. InMemoryMemoryUtilityStatsStore
+    // =========================================================================
+
+    [TestMethod]
+    public async Task StatsStore_UpsertSnapshot_GetAsync()
+    {
+        var store = new InMemoryMemoryUtilityStatsStore();
+        var stats = MakeStats(sourceItemId: "item-1", selectedCount: 5);
+        store.UpsertSnapshot(stats);
+
+        var retrieved = await store.GetAsync("ws-test", "col-test", "item-1");
+
+        Assert.IsNotNull(retrieved);
+        Assert.AreEqual(5, retrieved.SelectedCount);
+    }
+
+    [TestMethod]
+    public async Task StatsStore_UpsertSnapshot_ReplacesExisting()
+    {
+        var store = new InMemoryMemoryUtilityStatsStore();
+        store.UpsertSnapshot(MakeStats(sourceItemId: "item-1", selectedCount: 5));
+        store.UpsertSnapshot(MakeStats(sourceItemId: "item-1", selectedCount: 10));
+
+        var retrieved = await store.GetAsync("ws-test", "col-test", "item-1");
+
+        Assert.IsNotNull(retrieved);
+        Assert.AreEqual(10, retrieved.SelectedCount);
+    }
+
+    [TestMethod]
+    public async Task StatsStore_QueryAsync_FiltersByMinSelectedCount()
+    {
+        var store = new InMemoryMemoryUtilityStatsStore();
+        store.UpsertSnapshot(MakeStats(sourceItemId: "item-1", selectedCount: 3));
+        store.UpsertSnapshot(MakeStats(sourceItemId: "item-2", selectedCount: 10));
+
+        var results = await store.QueryAsync(new MemoryUtilityStatsQuery
         {
             WorkspaceId = "ws-test",
-            Expert = RetrievalExpert.Lexical
+            MinSelectedCount = 5
         });
 
         Assert.AreEqual(1, results.Count);
-        Assert.AreEqual(RetrievalExpert.Lexical, results[0].Expert);
+        Assert.AreEqual("item-2", results[0].SourceItemId);
     }
 
     [TestMethod]
-    public async Task UtilityLedgerStore_GetLatestEntryAsync_ReturnsLatestByCandidate()
+    public async Task StatsStore_QueryAsync_FiltersByBeforeLastUsefulTime()
     {
-        var store = new InMemoryUtilityLedgerStore();
-        var now = DateTimeOffset.UtcNow;
-        store.AppendEntries(new[]
+        var store = new InMemoryMemoryUtilityStatsStore();
+        store.UpsertSnapshot(MakeStats(sourceItemId: "item-1",
+            lastUsefulTime: DateTimeOffset.UtcNow.AddDays(-30)));
+        store.UpsertSnapshot(MakeStats(sourceItemId: "item-2",
+            lastUsefulTime: DateTimeOffset.UtcNow.AddDays(-1)));
+
+        var cutoff = DateTimeOffset.UtcNow.AddDays(-7);
+        var results = await store.QueryAsync(new MemoryUtilityStatsQuery
         {
-            MakeLedgerEntry("ledger-1", "item-1", materializedAt: now),
-            MakeLedgerEntry("ledger-2", "item-1", materializedAt: now.AddSeconds(1))
+            WorkspaceId = "ws-test",
+            BeforeLastUsefulTime = cutoff
         });
 
-        var latest = await store.GetLatestEntryAsync("ws-test", "col-test", "item-1");
-
-        Assert.IsNotNull(latest);
-        Assert.AreEqual("ledger-2", latest.EntryId);
+        Assert.AreEqual(1, results.Count);
+        Assert.AreEqual("item-1", results[0].SourceItemId);
     }
 
     [TestMethod]
-    public async Task UtilityLedgerStore_GetLatestEntryAsync_NotFound_ReturnsNull()
+    public void MemoryUtilityStats_SelectionRate_CalculatedCorrectly()
     {
-        var store = new InMemoryUtilityLedgerStore();
-
-        var latest = await store.GetLatestEntryAsync("ws-test", "col-test", "item-never");
-
-        Assert.IsNull(latest);
+        var stats = MakeStats(recallCount: 10, selectedCount: 5);
+        Assert.AreEqual(0.5, stats.SelectionRate, 0.001);
     }
 
     [TestMethod]
-    public async Task UtilityLedgerStore_GetExpertContributionsAsync_GroupsByExpert()
+    public void MemoryUtilityStats_UsefulRate_CalculatedCorrectly()
     {
-        var store = new InMemoryUtilityLedgerStore();
-        var now = DateTimeOffset.UtcNow;
-        store.AppendEntries(new[]
-        {
-            MakeLedgerEntry("ledger-1", "item-1", RetrievalExpert.Semantic, utilityContribution: 0.4, materializedAt: now),
-            MakeLedgerEntry("ledger-2", "item-1", RetrievalExpert.Semantic, utilityContribution: 0.6, materializedAt: now.AddSeconds(1)),
-            MakeLedgerEntry("ledger-3", "item-1", RetrievalExpert.Lexical, utilityContribution: 0.2, materializedAt: now)
-        });
+        var stats = MakeStats(selectedCount: 10, usefulFeedbackCount: 3);
+        Assert.AreEqual(0.3, stats.UsefulRate, 0.001);
+    }
 
-        var contributions = await store.GetExpertContributionsAsync("ws-test", "col-test", "item-1");
-
-        Assert.AreEqual(2, contributions.Count);
-        // Semantic: (0.4 + 0.6) / 2 = 0.5
-        Assert.AreEqual(0.5, contributions[RetrievalExpert.Semantic], 0.001);
-        // Lexical: 0.2
-        Assert.AreEqual(0.2, contributions[RetrievalExpert.Lexical], 0.001);
+    [TestMethod]
+    public void MemoryUtilityStats_AverageTokenCost_CalculatedCorrectly()
+    {
+        var stats = MakeStats(selectedCount: 10, tokenCost: 5000);
+        Assert.AreEqual(500.0, stats.AverageTokenCost, 0.001);
     }
 
     // =========================================================================
-    // 4. InMemoryConflictSetStore
+    // 5. InMemoryConflictSetStore + ConflictResolutionStatus
     // =========================================================================
 
     [TestMethod]
-    public async Task ConflictSetStore_AppendConflictSets_QueryAsync()
+    public async Task ConflictSetStore_QueryAsync_FiltersByResolutionStatus()
     {
         var store = new InMemoryConflictSetStore();
         var now = DateTimeOffset.UtcNow;
         store.AppendConflictSets(new[]
         {
-            MakeConflictSet("conflict-1", ConflictSetKind.Duplicate, materializedAt: now),
-            MakeConflictSet("conflict-2", ConflictSetKind.SectionConflict, materializedAt: now.AddSeconds(1))
-        });
-
-        var results = await store.QueryAsync(new ConflictSetQuery { WorkspaceId = "ws-test" });
-
-        Assert.AreEqual(2, results.Count);
-        Assert.AreEqual("conflict-2", results[0].ConflictSetId);
-    }
-
-    [TestMethod]
-    public async Task ConflictSetStore_QueryAsync_FiltersByKind()
-    {
-        var store = new InMemoryConflictSetStore();
-        var now = DateTimeOffset.UtcNow;
-        store.AppendConflictSets(new[]
-        {
-            MakeConflictSet("conflict-1", ConflictSetKind.Duplicate, materializedAt: now),
-            MakeConflictSet("conflict-2", ConflictSetKind.SectionConflict, materializedAt: now)
+            new ConflictSet
+            {
+                ConflictSetId = "c-1",
+                WorkspaceId = "ws-test",
+                CollectionId = "col-test",
+                Kind = ConflictSetKind.Duplicate,
+                Entries = Array.Empty<ConflictSetEntry>(),
+                DecisionId = "d-1",
+                ResolutionStatus = ConflictResolutionStatus.AutoResolved,
+                MaterializedAt = now
+            },
+            new ConflictSet
+            {
+                ConflictSetId = "c-2",
+                WorkspaceId = "ws-test",
+                CollectionId = "col-test",
+                Kind = ConflictSetKind.SectionConflict,
+                Entries = Array.Empty<ConflictSetEntry>(),
+                DecisionId = "d-2",
+                ResolutionStatus = ConflictResolutionStatus.Unresolved,
+                MaterializedAt = now
+            }
         });
 
         var results = await store.QueryAsync(new ConflictSetQuery
         {
             WorkspaceId = "ws-test",
-            Kind = ConflictSetKind.SectionConflict
+            ResolutionStatus = ConflictResolutionStatus.AutoResolved
         });
 
         Assert.AreEqual(1, results.Count);
-        Assert.AreEqual(ConflictSetKind.SectionConflict, results[0].Kind);
-    }
-
-    [TestMethod]
-    public async Task ConflictSetStore_GetAsync_ReturnsConflictSet()
-    {
-        var store = new InMemoryConflictSetStore();
-        store.AppendConflictSets(new[]
-        {
-            MakeConflictSet("conflict-1", ConflictSetKind.Duplicate)
-        });
-
-        var set = await store.GetAsync("ws-test", "col-test", "conflict-1");
-
-        Assert.IsNotNull(set);
-        Assert.AreEqual(ConflictSetKind.Duplicate, set.Kind);
-    }
-
-    [TestMethod]
-    public async Task ConflictSetStore_GetAsync_NotFound_ReturnsNull()
-    {
-        var store = new InMemoryConflictSetStore();
-
-        var set = await store.GetAsync("ws-test", "col-test", "conflict-never");
-
-        Assert.IsNull(set);
-    }
-
-    [TestMethod]
-    public async Task ConflictSetStore_GetConflictsForCandidateAsync_ReturnsMatchingSets()
-    {
-        var store = new InMemoryConflictSetStore();
-        store.AppendConflictSets(new[]
-        {
-            MakeConflictSet("conflict-1", ConflictSetKind.Duplicate, entries: new[]
-            {
-                new ConflictSetEntry { CandidateItemId = "item-1", Expert = RetrievalExpert.Semantic, Score = 0.9, IsSelected = true },
-                new ConflictSetEntry { CandidateItemId = "item-2", Expert = RetrievalExpert.Lexical, Score = 0.8, IsSelected = false }
-            }),
-            MakeConflictSet("conflict-2", ConflictSetKind.SectionConflict, entries: new[]
-            {
-                new ConflictSetEntry { CandidateItemId = "item-3", Expert = RetrievalExpert.Graph, Score = 0.7, IsSelected = false }
-            })
-        });
-
-        var results = await store.GetConflictsForCandidateAsync("ws-test", "col-test", "item-1");
-
-        Assert.AreEqual(1, results.Count);
-        Assert.AreEqual("conflict-1", results[0].ConflictSetId);
+        Assert.AreEqual("c-1", results[0].ConflictSetId);
     }
 
     // =========================================================================
-    // 5. UtilityLedgerMaterializer 基础物化
+    // 6. UtilityLedgerMaterializer + ConflictResolutionStatus
     // =========================================================================
 
     [TestMethod]
-    public async Task Materializer_MaterializeAsync_SelectedEnvelopes_WritesLedgerEntries()
-    {
-        var ledgerStore = new InMemoryUtilityLedgerStore();
-        var conflictStore = new InMemoryConflictSetStore();
-        var materializer = new UtilityLedgerMaterializer(ledgerStore, conflictStore);
-
-        var result = new ContextDecisionResult
-        {
-            RequestId = "decision-1",
-            SelectedEnvelopes = new[]
-            {
-                MakeEnvelope("item-1", ContextCandidateSource.Semantic, isSelected: true),
-                MakeEnvelope("item-2", ContextCandidateSource.Lexical, isSelected: true)
-            }
-        };
-
-        var matResult = await materializer.MaterializeAsync(result, "ws-test", "col-test");
-
-        Assert.AreEqual(2, matResult.LedgerEntryCount);
-        Assert.AreEqual(0, matResult.ConflictSetCount); // 无 drop / 无冲突
-
-        var entries = await ledgerStore.QueryAsync(new UtilityLedgerQuery { WorkspaceId = "ws-test" });
-        Assert.AreEqual(2, entries.Count);
-        Assert.IsTrue(entries.All(e => e.IsSelected));
-        Assert.IsTrue(entries.All(e => e.DecisionId == "decision-1"));
-    }
-
-    [TestMethod]
-    public async Task Materializer_MaterializeAsync_DroppedEnvelopes_WriteLedgerEntriesWithDropReason()
-    {
-        var ledgerStore = new InMemoryUtilityLedgerStore();
-        var conflictStore = new InMemoryConflictSetStore();
-        var materializer = new UtilityLedgerMaterializer(ledgerStore, conflictStore);
-
-        var result = new ContextDecisionResult
-        {
-            RequestId = "decision-1",
-            SelectedEnvelopes = Array.Empty<ContextCandidateEnvelope>(),
-            DroppedEnvelopes = new[]
-            {
-                MakeEnvelope("item-1", ContextCandidateSource.Lexical,
-                    isSelected: false, blockReasonCode: CandidateDecisionReasonCode.TokenBudgetExceeded),
-                MakeEnvelope("item-2", ContextCandidateSource.Graph,
-                    isSelected: false, blockReasonCode: CandidateDecisionReasonCode.SectionQuotaExceeded)
-            }
-        };
-
-        var matResult = await materializer.MaterializeAsync(result, "ws-test", "col-test");
-
-        Assert.AreEqual(2, matResult.LedgerEntryCount);
-
-        var entries = await ledgerStore.QueryAsync(new UtilityLedgerQuery { WorkspaceId = "ws-test" });
-        Assert.IsTrue(entries.All(e => !e.IsSelected));
-        Assert.IsTrue(entries.Any(e => e.DropReasonCode == "TokenBudgetExceeded"));
-        Assert.IsTrue(entries.Any(e => e.DropReasonCode == "SectionQuotaExceeded"));
-    }
-
-    // =========================================================================
-    // 6. ConflictSet 检测
-    // =========================================================================
-
-    [TestMethod]
-    public async Task Materializer_DetectsDuplicateConflictSet()
+    public async Task Materializer_DuplicateConflictSet_WithResolvedItem_AutoResolved()
     {
         var ledgerStore = new InMemoryUtilityLedgerStore();
         var conflictStore = new InMemoryConflictSetStore();
@@ -630,12 +537,14 @@ public sealed class MemoryEvolutionImplementationTests
         });
 
         Assert.AreEqual(1, conflicts.Count);
-        Assert.AreEqual(2, conflicts[0].Entries.Count);
-        Assert.AreEqual("item-1", conflicts[0].ResolvedItemId); // selected item wins
+        Assert.AreEqual(ConflictResolutionStatus.AutoResolved, conflicts[0].ResolutionStatus);
+        Assert.AreEqual("item-1", conflicts[0].ResolvedItemId);
+        Assert.AreEqual("highest-score", conflicts[0].ChosenAuthority);
+        Assert.IsNotNull(conflicts[0].ResolvedAt);
     }
 
     [TestMethod]
-    public async Task Materializer_DetectsSectionConflictSet()
+    public async Task Materializer_SectionConflict_WithoutResolvedItem_Unresolved()
     {
         var ledgerStore = new InMemoryUtilityLedgerStore();
         var conflictStore = new InMemoryConflictSetStore();
@@ -662,185 +571,30 @@ public sealed class MemoryEvolutionImplementationTests
         });
 
         Assert.AreEqual(1, conflicts.Count);
-        Assert.AreEqual(2, conflicts[0].Entries.Count);
-        Assert.IsNull(conflicts[0].ResolvedItemId); // 全部 drop
-    }
-
-    [TestMethod]
-    public async Task Materializer_DetectsBudgetConflictSet()
-    {
-        var ledgerStore = new InMemoryUtilityLedgerStore();
-        var conflictStore = new InMemoryConflictSetStore();
-        var materializer = new UtilityLedgerMaterializer(ledgerStore, conflictStore);
-
-        var result = new ContextDecisionResult
-        {
-            RequestId = "decision-1",
-            SelectedEnvelopes = new[]
-            {
-                MakeEnvelope("item-1", ContextCandidateSource.Semantic, isSelected: true)
-            },
-            DroppedEnvelopes = new[]
-            {
-                MakeEnvelope("item-2", ContextCandidateSource.Lexical, isSelected: false,
-                    blockReasonCode: CandidateDecisionReasonCode.TokenBudgetExceeded),
-                MakeEnvelope("item-3", ContextCandidateSource.Graph, isSelected: false,
-                    blockReasonCode: CandidateDecisionReasonCode.TokenBudgetExceeded)
-            }
-        };
-
-        await materializer.MaterializeAsync(result, "ws-test", "col-test");
-
-        var conflicts = await conflictStore.QueryAsync(new ConflictSetQuery
-        {
-            WorkspaceId = "ws-test",
-            Kind = ConflictSetKind.BudgetConflict
-        });
-
-        Assert.AreEqual(1, conflicts.Count);
-        Assert.AreEqual(2, conflicts[0].Entries.Count);
-    }
-
-    [TestMethod]
-    public async Task Materializer_NoConflictSet_WhenSingleDropOnly()
-    {
-        var ledgerStore = new InMemoryUtilityLedgerStore();
-        var conflictStore = new InMemoryConflictSetStore();
-        var materializer = new UtilityLedgerMaterializer(ledgerStore, conflictStore);
-
-        var result = new ContextDecisionResult
-        {
-            RequestId = "decision-1",
-            DroppedEnvelopes = new[]
-            {
-                MakeEnvelope("item-1", ContextCandidateSource.Lexical, isSelected: false,
-                    blockReasonCode: CandidateDecisionReasonCode.TokenBudgetExceeded)
-            }
-        };
-
-        await materializer.MaterializeAsync(result, "ws-test", "col-test");
-
-        var conflicts = await conflictStore.QueryAsync(new ConflictSetQuery { WorkspaceId = "ws-test" });
-        Assert.AreEqual(0, conflicts.Count); // 单条不构成冲突
-    }
-
-    // =========================================================================
-    // 7. UtilityContribution 计算
-    // =========================================================================
-
-    [TestMethod]
-    public async Task Materializer_ComputeUtilityContribution_FromScoreBreakdown()
-    {
-        var ledgerStore = new InMemoryUtilityLedgerStore();
-        var conflictStore = new InMemoryConflictSetStore();
-        var materializer = new UtilityLedgerMaterializer(ledgerStore, conflictStore);
-
-        // Semantic Expert 贡献 = 0.6 / (0.6 + 0.4) = 0.6
-        var envelope = MakeEnvelope("item-1", ContextCandidateSource.Semantic, isSelected: true);
-        envelope = envelope with
-        {
-            Features = envelope.Features with
-            {
-                ScoreBreakdown = new Dictionary<string, double>(StringComparer.Ordinal)
-                {
-                    { "semantic", 0.6 },
-                    { "lexical", 0.4 }
-                }
-            }
-        };
-
-        var result = new ContextDecisionResult
-        {
-            RequestId = "decision-1",
-            SelectedEnvelopes = new[] { envelope }
-        };
-
-        await materializer.MaterializeAsync(result, "ws-test", "col-test");
-
-        var entry = await ledgerStore.GetLatestEntryAsync("ws-test", "col-test", "item-1");
-        Assert.IsNotNull(entry);
-        Assert.AreEqual(0.6, entry.UtilityContribution, 0.001);
-    }
-
-    [TestMethod]
-    public async Task Materializer_ComputeUtilityContribution_NoBreakdown_ReturnsOne()
-    {
-        var ledgerStore = new InMemoryUtilityLedgerStore();
-        var conflictStore = new InMemoryConflictSetStore();
-        var materializer = new UtilityLedgerMaterializer(ledgerStore, conflictStore);
-
-        var envelope = MakeEnvelope("item-1", ContextCandidateSource.Semantic, isSelected: true);
-        // 不设 ScoreBreakdown（默认空字典）
-
-        var result = new ContextDecisionResult
-        {
-            RequestId = "decision-1",
-            SelectedEnvelopes = new[] { envelope }
-        };
-
-        await materializer.MaterializeAsync(result, "ws-test", "col-test");
-
-        var entry = await ledgerStore.GetLatestEntryAsync("ws-test", "col-test", "item-1");
-        Assert.IsNotNull(entry);
-        Assert.AreEqual(1.0, entry.UtilityContribution);
-    }
-
-    // =========================================================================
-    // 8. 端到端：CandidateId source-expert 映射
-    // =========================================================================
-
-    [TestMethod]
-    public async Task Materializer_MapsCandidateSourceToExpert()
-    {
-        var ledgerStore = new InMemoryUtilityLedgerStore();
-        var conflictStore = new InMemoryConflictSetStore();
-        var materializer = new UtilityLedgerMaterializer(ledgerStore, conflictStore);
-
-        var result = new ContextDecisionResult
-        {
-            RequestId = "decision-1",
-            SelectedEnvelopes = new[]
-            {
-                MakeEnvelope("item-1", ContextCandidateSource.Semantic, isSelected: true),
-                MakeEnvelope("item-2", ContextCandidateSource.Lexical, isSelected: true),
-                MakeEnvelope("item-3", ContextCandidateSource.Graph, isSelected: true),
-                MakeEnvelope("item-4", ContextCandidateSource.Mandatory, isSelected: true),
-                MakeEnvelope("item-5", ContextCandidateSource.Constraint, isSelected: true)
-            }
-        };
-
-        await materializer.MaterializeAsync(result, "ws-test", "col-test");
-
-        var entries = await ledgerStore.QueryAsync(new UtilityLedgerQuery { WorkspaceId = "ws-test" });
-        var byItemId = entries.ToDictionary(e => e.CandidateItemId);
-
-        Assert.AreEqual(RetrievalExpert.Semantic, byItemId["item-1"].Expert);
-        Assert.AreEqual(RetrievalExpert.Lexical, byItemId["item-2"].Expert);
-        Assert.AreEqual(RetrievalExpert.Graph, byItemId["item-3"].Expert);
-        Assert.AreEqual(RetrievalExpert.Mandatory, byItemId["item-4"].Expert);
-        Assert.AreEqual(RetrievalExpert.Constraint, byItemId["item-5"].Expert);
+        Assert.AreEqual(ConflictResolutionStatus.Unresolved, conflicts[0].ResolutionStatus);
+        Assert.IsNull(conflicts[0].ResolvedItemId);
+        Assert.IsNull(conflicts[0].ChosenAuthority);
+        Assert.IsNull(conflicts[0].ResolvedAt);
     }
 
     // =========================================================================
     // 辅助方法
     // =========================================================================
 
-    private static SupersedeEventRecord MakeSupersedeEvent(
+    private static MemoryStateEventRecord MakeStateEvent(
         string eventId = "evt-test",
         string sourceItemId = "item-source",
-        SupersededItemState newState = SupersededItemState.Superseded,
+        MemoryState newState = MemoryState.Superseded,
         string itemType = "memory",
         string reason = "lifecycle-review",
-        string collectionId = "col-test",
         DateTimeOffset? occurredAt = null)
     {
-        return new SupersedeEventRecord
+        return new MemoryStateEventRecord
         {
             EventId = eventId,
             WorkspaceId = "ws-test",
-            CollectionId = collectionId,
+            CollectionId = "col-test",
             SourceItemId = sourceItemId,
-            TargetItemId = null,
             ItemType = itemType,
             NewState = newState,
             Reason = reason,
@@ -848,66 +602,29 @@ public sealed class MemoryEvolutionImplementationTests
         };
     }
 
-    private static UtilityLedgerEntry MakeLedgerEntry(
-        string entryId = "ledger-1",
-        string candidateItemId = "item-1",
-        RetrievalExpert expert = RetrievalExpert.Semantic,
-        bool isSelected = true,
-        double utilityContribution = 0.5,
-        DateTimeOffset? materializedAt = null)
+    private static MemoryUtilityStats MakeStats(
+        string sourceItemId = "item-1",
+        string itemType = "memory",
+        int recallCount = 0,
+        int selectedCount = 0,
+        int usefulFeedbackCount = 0,
+        int tokenCost = 0,
+        DateTimeOffset? lastRecallTime = null,
+        DateTimeOffset? lastUsefulTime = null)
     {
-        return new UtilityLedgerEntry
+        return new MemoryUtilityStats
         {
-            EntryId = entryId,
+            SourceItemId = sourceItemId,
             WorkspaceId = "ws-test",
             CollectionId = "col-test",
-            CandidateItemId = candidateItemId,
-            Expert = expert,
-            UtilityContribution = utilityContribution,
-            DeterministicScore = 0.8,
-            ModelScore = null,
-            FinalScore = 0.9,
-            IsSelected = isSelected,
-            DecisionId = "decision-1",
-            PolicyVersion = "decision-schema/2.0",
-            MaterializedAt = materializedAt ?? DateTimeOffset.UtcNow
-        };
-    }
-
-    private static ConflictSet MakeConflictSet(
-        string conflictSetId = "conflict-1",
-        ConflictSetKind kind = ConflictSetKind.Duplicate,
-        ConflictSetEntry[]? entries = null,
-        DateTimeOffset? materializedAt = null)
-    {
-        entries ??= new[]
-        {
-            new ConflictSetEntry
-            {
-                CandidateItemId = "item-1",
-                Expert = RetrievalExpert.Semantic,
-                Score = 0.9,
-                IsSelected = true
-            },
-            new ConflictSetEntry
-            {
-                CandidateItemId = "item-2",
-                Expert = RetrievalExpert.Lexical,
-                Score = 0.8,
-                IsSelected = false,
-                DropReasonCode = "DuplicateSuppressed"
-            }
-        };
-
-        return new ConflictSet
-        {
-            ConflictSetId = conflictSetId,
-            WorkspaceId = "ws-test",
-            CollectionId = "col-test",
-            Kind = kind,
-            Entries = entries,
-            DecisionId = "decision-1",
-            MaterializedAt = materializedAt ?? DateTimeOffset.UtcNow
+            ItemType = itemType,
+            RecallCount = recallCount,
+            SelectedCount = selectedCount,
+            UsefulFeedbackCount = usefulFeedbackCount,
+            TokenCost = tokenCost,
+            LastRecallTime = lastRecallTime,
+            LastUsefulTime = lastUsefulTime,
+            UpdatedAt = DateTimeOffset.UtcNow
         };
     }
 

@@ -282,7 +282,7 @@ public sealed class UtilityLedgerContractsTests
         var set = MakeConflictSet();
 
         Assert.IsNull(set.ResolvedItemId);
-        Assert.IsNull(set.SupersedeEventId);
+        Assert.IsNull(set.MemoryStateEventId);
         Assert.IsNull(set.RelationId);
         Assert.IsNull(set.MaterializationBatchId);
         Assert.AreEqual(0, set.Metadata.Count);
@@ -302,16 +302,16 @@ public sealed class UtilityLedgerContractsTests
     }
 
     [TestMethod]
-    public void ConflictSet_SupersedeCycleKind_HasSupersedeEventId()
+    public void ConflictSet_SupersedeCycleKind_HasMemoryStateEventId()
     {
         var set = MakeConflictSet() with
         {
             Kind = ConflictSetKind.SupersedeCycle,
-            SupersedeEventId = "evt-supersede-1"
+            MemoryStateEventId = "evt-state-1"
         };
 
         Assert.AreEqual(ConflictSetKind.SupersedeCycle, set.Kind);
-        Assert.AreEqual("evt-supersede-1", set.SupersedeEventId);
+        Assert.AreEqual("evt-state-1", set.MemoryStateEventId);
     }
 
     // =========================================================================
@@ -328,6 +328,7 @@ public sealed class UtilityLedgerContractsTests
         Assert.IsNull(query.Kind);
         Assert.IsNull(query.CandidateItemId);
         Assert.IsNull(query.DecisionId);
+        Assert.IsNull(query.ResolutionStatus);
         Assert.IsNull(query.Since);
         Assert.IsNull(query.Until);
         Assert.AreEqual(100, query.Take);
@@ -345,6 +346,7 @@ public sealed class UtilityLedgerContractsTests
             Kind = ConflictSetKind.BudgetConflict,
             CandidateItemId = "item-1",
             DecisionId = "decision-1",
+            ResolutionStatus = ConflictResolutionStatus.AutoResolved,
             Since = since,
             Until = until,
             Take = 50

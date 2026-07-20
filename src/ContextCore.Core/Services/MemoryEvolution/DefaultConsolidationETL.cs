@@ -3,11 +3,11 @@ using ContextCore.Abstractions;
 namespace ContextCore.Core.Services.MemoryEvolution;
 
 /// <summary>
-/// R21-3：IConsolidationETL 的默认实现。把 superseded items 从 Superseded 状态
-/// 推进到 Replaced → Archived，通过 ISupersededItemStore 的事件流驱动状态迁移。
+/// R21-4：IConsolidationETL 的默认实现。把 superseded/replaced items 从 active store
+/// 推进到 Replaced → Archived，通过 IMemoryStateStore 的事件流驱动状态迁移。
 /// </summary>
 /// <remarks>
-/// 设计原则（对齐 R21-1 契约）：
+/// 设计原则（对齐 R21-4 契约）：
 ///   1. 幂等：重复执行不会产生副作用（已 Archived 的 item 跳过）。
 ///   2. 可中断：批次大小限制单次处理量；调用方可循环执行直到 ExtractedCount=0。
 ///   3. 失败不破坏数据：Transform 写入 Replaced 事件后失败，
@@ -15,13 +15,14 @@ namespace ContextCore.Core.Services.MemoryEvolution;
 ///   4. 不直接修改 active store 中的 item；只通过事件流推进状态。
 ///      item 在 active store 中的实际删除由独立 GC 流程处理。
 ///   5. DryRun=true 仅返回预计处理数量，不写入任何事件。
+///   6. 兼容衰减路径：Dormant → Archived 也可由 ETL 推进（彻底降权场景）。
 /// </remarks>
 public sealed class DefaultConsolidationETL : IConsolidationETL
 {
-    private readonly ISupersededItemStore _store;
+    private readonly IMemoryStateStore _store;
     private readonly TimeProvider? _timeProvider;
 
-    public DefaultConsolidationETL(ISupersededItemStore store, TimeProvider? timeProvider = null)
+    public DefaultConsolidationETL(IMemoryStateStore store, TimeProvider? timeProvider = null)
     {
         ArgumentNullException.ThrowIfNull(store);
         _store = store;
@@ -40,22 +41,23 @@ public sealed class DefaultConsolidationETL : IConsolidationETL
         var startedAt = Now();
 
         // Extract：查询所有事件，按 SourceItemId 分组取最新状态。
-        // 基于"最新状态"分类为 Superseded / Replaced 待处理列表（不是事件类型），
+        // 基于"最新状态"分类为待处理列表（Superseded / Replaced / Dormant 终极降权），
         // 确保已经被推进到 Replaced / Archived 的 item 不会被重复处理。
-        var allEvents = await _store.QueryEventsAsync(new SupersedeEventQuery
+        var allEvents = await _store.QueryEventsAsync(new MemoryStateEventQuery
         {
             WorkspaceId = request.WorkspaceId,
             CollectionId = request.CollectionId,
             Until = request.OlderThan,
-            Take = 0
+            Take = 0 // 不限制
         }, cancellationToken);
 
         // 按 SourceItemId 分组，取最新状态的事件
         var latestByItem = allEvents
             .GroupBy(e => e.SourceItemId)
             .Select(g => g.MaxBy(e => e.OccurredAt)!)
-            .Where(e => e.NewState == SupersededItemState.Superseded
-                || e.NewState == SupersededItemState.Replaced)
+            .Where(e => e.NewState == MemoryState.Superseded
+                || e.NewState == MemoryState.Replaced
+                || e.NewState == MemoryState.Dormant)
             .ToList();
 
         // 按 ItemType 过滤（若指定）
@@ -67,19 +69,24 @@ public sealed class DefaultConsolidationETL : IConsolidationETL
                 .ToList();
         }
 
-        // 分类为 Superseded / Replaced 待处理列表
+        // 分类为待处理列表
         var supersededToProcess = latestByItem
-            .Where(e => e.NewState == SupersededItemState.Superseded)
+            .Where(e => e.NewState == MemoryState.Superseded)
             .OrderBy(e => e.OccurredAt)
             .Take(request.BatchSize > 0 ? request.BatchSize : int.MaxValue)
             .ToList();
         var replacedToProcess = latestByItem
-            .Where(e => e.NewState == SupersededItemState.Replaced)
+            .Where(e => e.NewState == MemoryState.Replaced)
+            .OrderBy(e => e.OccurredAt)
+            .Take(request.BatchSize > 0 ? request.BatchSize : int.MaxValue)
+            .ToList();
+        var dormantToProcess = latestByItem
+            .Where(e => e.NewState == MemoryState.Dormant)
             .OrderBy(e => e.OccurredAt)
             .Take(request.BatchSize > 0 ? request.BatchSize : int.MaxValue)
             .ToList();
 
-        var extractedCount = supersededToProcess.Count + replacedToProcess.Count;
+        var extractedCount = supersededToProcess.Count + replacedToProcess.Count + dormantToProcess.Count;
         var processedItemIds = new List<string>();
         var errors = new List<string>();
 
@@ -89,6 +96,7 @@ public sealed class DefaultConsolidationETL : IConsolidationETL
             var dryRunCompletedAt = Now();
             processedItemIds.AddRange(supersededToProcess.Select(e => e.SourceItemId));
             processedItemIds.AddRange(replacedToProcess.Select(e => e.SourceItemId));
+            processedItemIds.AddRange(dormantToProcess.Select(e => e.SourceItemId));
 
             return new ConsolidationRunResult
             {
@@ -115,12 +123,11 @@ public sealed class DefaultConsolidationETL : IConsolidationETL
             try
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                if (!evt.NewState.CanTransitionTo(SupersededItemState.Replaced))
+                if (!evt.NewState.CanTransitionTo(MemoryState.Replaced))
                 {
-                    // 状态机不允许转换；跳过
                     continue;
                 }
-                var replacedEvent = new SupersedeEventRecord
+                var replacedEvent = new MemoryStateEventRecord
                 {
                     EventId = "evt-" + Guid.NewGuid().ToString("N"),
                     WorkspaceId = evt.WorkspaceId,
@@ -128,7 +135,7 @@ public sealed class DefaultConsolidationETL : IConsolidationETL
                     SourceItemId = evt.SourceItemId,
                     TargetItemId = evt.TargetItemId,
                     ItemType = evt.ItemType,
-                    NewState = SupersededItemState.Replaced,
+                    NewState = MemoryState.Replaced,
                     Reason = "consolidation-etl",
                     ReasonDetail = $"Transformed from Superseded by ETL run {runId}",
                     Reviewer = request.TriggeredBy,
@@ -157,11 +164,11 @@ public sealed class DefaultConsolidationETL : IConsolidationETL
             try
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                if (!evt.NewState.CanTransitionTo(SupersededItemState.Archived))
+                if (!evt.NewState.CanTransitionTo(MemoryState.Archived))
                 {
                     continue;
                 }
-                var archivedEvent = new SupersedeEventRecord
+                var archivedEvent = new MemoryStateEventRecord
                 {
                     EventId = "evt-" + Guid.NewGuid().ToString("N"),
                     WorkspaceId = evt.WorkspaceId,
@@ -169,7 +176,7 @@ public sealed class DefaultConsolidationETL : IConsolidationETL
                     SourceItemId = evt.SourceItemId,
                     TargetItemId = evt.TargetItemId,
                     ItemType = evt.ItemType,
-                    NewState = SupersededItemState.Archived,
+                    NewState = MemoryState.Archived,
                     Reason = "consolidation-etl",
                     ReasonDetail = $"Loaded (Archived) by ETL run {runId}",
                     Reviewer = request.TriggeredBy,
@@ -191,6 +198,49 @@ public sealed class DefaultConsolidationETL : IConsolidationETL
             catch (Exception ex)
             {
                 errors.Add($"Load failed for item '{evt.SourceItemId}': {ex.Message}");
+            }
+        }
+
+        // Load (Dormant)：对 Dormant 状态 item 推进到 Archived（彻底降权场景）
+        foreach (var evt in dormantToProcess)
+        {
+            try
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (!evt.NewState.CanTransitionTo(MemoryState.Archived))
+                {
+                    continue;
+                }
+                var archivedEvent = new MemoryStateEventRecord
+                {
+                    EventId = "evt-" + Guid.NewGuid().ToString("N"),
+                    WorkspaceId = evt.WorkspaceId,
+                    CollectionId = evt.CollectionId,
+                    SourceItemId = evt.SourceItemId,
+                    TargetItemId = evt.TargetItemId,
+                    ItemType = evt.ItemType,
+                    NewState = MemoryState.Archived,
+                    Reason = "consolidation-etl-dormant",
+                    ReasonDetail = $"Archived from Dormant by ETL run {runId} (terminal decay)",
+                    Reviewer = request.TriggeredBy,
+                    OccurredAt = Now(),
+                    RelationId = evt.RelationId,
+                    ConsolidationRunId = runId
+                };
+                await _store.AppendEventAsync(archivedEvent, cancellationToken);
+                loadedCount++;
+                if (!processedItemIds.Contains(evt.SourceItemId))
+                {
+                    processedItemIds.Add(evt.SourceItemId);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                errors.Add($"Load (Dormant) failed for item '{evt.SourceItemId}': {ex.Message}");
             }
         }
 

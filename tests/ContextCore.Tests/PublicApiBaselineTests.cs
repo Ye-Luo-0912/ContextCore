@@ -86,7 +86,6 @@ public sealed class PublicApiBaselineTests
     /// 辅助测试：将当前反射结果写到 baseline 文件，方便人工对比后签入。
     /// 默认 [Ignore]，仅在主动调用时执行。
     /// </summary>
-    [TestMethod]
     [Ignore("Manual trigger: rewrite baseline file from current reflection snapshot.")]
     public void PublicApi_RegenerateBaselineFile()
     {

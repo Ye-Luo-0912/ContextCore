@@ -242,6 +242,12 @@ public sealed class UtilityLedgerMaterializer
         }).ToList();
 
         var resolvedItemId = entries.FirstOrDefault(e => e.IsSelected)?.CandidateItemId;
+        var resolutionStatus = resolvedItemId is not null
+            ? ConflictResolutionStatus.AutoResolved
+            : ConflictResolutionStatus.Unresolved;
+        var chosenAuthority = resolvedItemId is not null
+            ? "highest-score"
+            : null;
 
         return new ConflictSet
         {
@@ -252,6 +258,9 @@ public sealed class UtilityLedgerMaterializer
             Entries = entries,
             DecisionId = decisionId,
             ResolvedItemId = resolvedItemId,
+            ResolutionStatus = resolutionStatus,
+            ChosenAuthority = chosenAuthority,
+            ResolvedAt = resolvedItemId is not null ? materializedAt : null,
             MaterializedAt = materializedAt,
             MaterializationBatchId = batchId
         };

@@ -3,104 +3,106 @@ using ContextCore.Abstractions.Models;
 namespace ContextCore.Abstractions;
 
 // ===========================================================================
-// R21-1：Memory Evolution Engine 契约（Superseded 状态 + Consolidation ETL）
+// R21-4：Memory Evolution Engine 统一契约（替换 R21-1 的 SupersededItemState）
 //
-// 目标：
-//   统一分散在多处的"Superseded"状态管理（ContextRelationTypes.SupersededBy /
-//   StableMemorySnapshot.SupersededCount / PromotionPolicyDtos.Superseded /
-//   RelationGraphDtos.Superseded 等）为一个明确的 SupersedeEvent 契约，
-//   并定义 Consolidation ETL 接口把 superseded items 从 active store
-//   迁移到归档 store，保持历史可追溯。
+// 设计变更（用户选择"合并为统一 MemoryState 枚举"）：
+//   - 原 SupersededItemState（5 值：Unknown/Active/Superseded/Replaced/Archived）
+//     只覆盖 supersede 事件流，不覆盖记忆衰减生命周期。
+//   - 新 MemoryState（8 值：Fresh/Active/Cooling/Dormant/Superseded/Replaced/Archived/Rejected）
+//     统一了 supersede 事件状态与衰减生命周期，支持"forgetting 与降权"场景。
 //
-// 设计原则（对齐 R18/R19/R20 子阶段顺序）：
-//   1. R21-1（当前）：契约定义（SupersededItemState / SupersedeEventRecord /
-//      ISupersededItemStore / ConsolidationRequest / ConsolidationRunResult /
-//      IConsolidationETL）。不实现具体存储；接口允许实现层注入 Postgres / InMemory。
-//   2. R21-2：Utility Ledger + ConflictSet 契约（per-Expert utility 账本 + 冲突集合）。
-//   3. R21-3：完整状态机（SupersededItemState 状态机 + Consolidation ETL 实现 +
-//      Utility Ledger 物化 + ConflictSet 检测）。
+// 状态机转换：
+//   Fresh → Active（首次命中/选入/写入）
+//   Fresh → Rejected（审核未通过）
+//   Active → Cooling（长期未命中）
+//   Active → Superseded（被新版本取代）
+//   Active → Rejected（审核拒绝）
+//   Cooling → Dormant（继续未命中）
+//   Cooling → Active（回温：重新被命中）
+//   Cooling → Rejected（审核拒绝）
+//   Dormant → Archived（彻底降权）
+//   Dormant → Active（回温：重新被命中）
+//   Dormant → Rejected（审核拒绝）
+//   Superseded → Replaced（Consolidation ETL Transform）
+//   Replaced → Archived（Consolidation ETL Load）
+//   Rejected → Archived（拒绝后归档）
+//   Archived：终态，不可逆
+//
+// 降权因素（R21-4c 实现 DefaultMemoryDecayEvaluator）：
+//   1. 长期未命中 → Active → Cooling → Dormant → Archived
+//   2. 已有新版本 → Active → Superseded
+//   3. evidence 失效 → Active → Rejected
+//   4. 任务已完成 → Active → Archived
+//   5. 与当前状态冲突 → Active → Rejected
+//   6. 多次被选择但未产生有效贡献 → Active → Cooling
 //
 // 与现有系统的关系：
 //   - 不替换 IRelationProjector.ProjectForSupersede / SupersedeProjectionRequest
-//     （这些负责图边投影：superseded_by / supersedes 关系）。
-//   - 不替换 StableMemoryGovernanceService 的 SupersededCount 统计
-//     （这些是聚合快照；R21-1 是事件流）。
+//   - 不替换 StableMemoryGovernanceService 的统计聚合
 //   - 不替换 ContextMemoryStatus / StableMemoryLifecycle 字符串常量
-//     （这些是 item 自身状态；R21-1 是 supersede 事件）。
-//   - R21-1 是新事件流：SupersedeEventRecord 记录"何时 / 何因 / 由谁 supersede"，
+//   - R21-4 是新事件流：MemoryStateEventRecord 记录"何时/何因/由谁触发状态转换"
 //     Consolidation ETL 消费事件流驱动 store 状态迁移。
-//
-// 8 项澄清对齐：
-//   - 澄清 #1（Envelope Evidence）：不冲突，SupersedeEvent 是独立事件流。
-//   - 澄清 #2（PolicyBundle scope）：不冲突，bundle supersede（PolicyBundle.SupersededAt）
-//     与 item supersede（SupersedeEventRecord）独立。
-//   - 澄清 #3（Request Policy）：不冲突，per-request 不影响 supersede 状态。
-//   - 澄清 #4（Utility Ledger）：R21-2 处理，R21-1 不实现。
-//   - 澄清 #5/#6/#7/#8：与 R20 Multi-Expert 相关，R21-1 不涉及。
 // ===========================================================================
 
 // ---------------------------------------------------------------------------
-// SupersededItemState 枚举
+// MemoryState 枚举（8 值）
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// R21-1：item 在 Memory Evolution 生命周期中的状态。
-/// 统一分散在 ContextMemoryStatus / StableMemoryLifecycle / PromotionCandidateStatus
-/// 等多处的"Superseded"语义。
+/// R21-4：item 在 Memory Evolution 生命周期中的统一状态。
+/// 合并了 supersede 事件流（Superseded/Replaced/Archived）与衰减生命周期（Fresh/Cooling/Dormant/Rejected）。
 /// </summary>
 /// <remarks>
-/// 状态流转（由 Consolidation ETL 驱动）：
-///   Active → Superseded：发生 supersede 事件（SupersedeEventRecord 写入）
-///   Superseded → Replaced：Consolidation ETL 提取并标记为已迁移
-///   Replaced → Archived：Consolidation ETL 写入归档 store 完成
-///
-/// 终态：Archived（不可逆；如需恢复则创建新 item 并通过 supersedes 关系指向旧 item）。
+/// 状态分组：
+///   - 初始态：Fresh（新创建，未参与过决策）
+///   - 活跃态：Active（参与决策且最近命中）
+///   - 衰减态：Cooling（长期未命中，可回温）/ Dormant（更长期未命中，可回温）
+///   - 取代态：Superseded（被新版本取代，事件已记录）/ Replaced（ETL 处理中）
+///   - 终态：Archived（彻底归档，不可逆）/ Rejected（审核拒绝，可归档）
 /// </remarks>
-public enum SupersededItemState : byte
+public enum MemoryState : byte
 {
-    /// <summary>未知状态（仅用于历史数据升级或 trace 默认值）。</summary>
-    Unknown = 0,
+    /// <summary>新创建的 item，未参与过决策（初始态）。</summary>
+    Fresh = 0,
 
-    /// <summary>活跃，未被 supersede。等同 ContextMemoryStatus.Stable / StableMemoryLifecycle.Current。</summary>
+    /// <summary>活跃，最近被命中或选入（活跃态）。</summary>
     Active = 1,
 
-    /// <summary>已被新版本 supersede（事件已记录但 item 仍在 active store；保留可追溯）。</summary>
-    /// <remarks>
-    /// 此状态下 item 仍可被检索到（HybridContextRetriever 默认排除；audit anchor 允许）。
-    /// Consolidation ETL 会进一步迁移到 Replaced → Archived。
-    /// </remarks>
-    Superseded = 2,
+    /// <summary>冷却中，长期未命中但仍可回温（衰减态）。</summary>
+    Cooling = 2,
+
+    /// <summary>休眠，更长期未命中但仍可回温（衰减态）。</summary>
+    Dormant = 3,
+
+    /// <summary>已被新版本 supersede（事件已记录但 item 仍在 active store）。</summary>
+    Superseded = 4,
 
     /// <summary>已被 Consolidation ETL 标记为"待迁移"（已提取，正在写入归档 store）。</summary>
-    /// <remarks>
-    /// 中间状态：Consolidation ETL 失败时 item 保持此状态；下次 ETL 重试。
-    /// 成功完成后状态推进为 Archived。
-    /// </remarks>
-    Replaced = 3,
+    Replaced = 5,
 
-    /// <summary>已归档（Consolidation ETL 完成；item 已在归档 store；active store 中可保留 stub）。</summary>
-    /// <remarks>
-    /// 终态：不可逆。如需"恢复"，应创建新 item 并通过 supersedes 关系反向指向原 Archived item。
-    /// </remarks>
-    Archived = 4
+    /// <summary>已归档（Consolidation ETL 完成；item 已在归档 store）。终态，不可逆。</summary>
+    Archived = 6,
+
+    /// <summary>被审核拒绝（evidence 失效/任务完成/冲突）。可推进到 Archived。</summary>
+    Rejected = 7
 }
 
 // ---------------------------------------------------------------------------
-// SupersedeEventRecord 事件记录
+// MemoryStateEventRecord 事件记录（替换 SupersedeEventRecord）
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// R21-1：supersede 事件记录。捕获"何时 / 何因 / 由谁 supersede"事件流。
+/// R21-4：memory state 转换事件记录。捕获"何时 / 何因 / 由谁触发状态转换"事件流。
 /// </summary>
 /// <remarks>
 /// 设计原则：
 ///   1. 事件流不可变：一旦写入不可修改（append-only 语义）。
-///   2. 同一 source item 可能有多次 supersede 事件（如 Active→Superseded→Replaced→Archived
-///      分别记录 3 个事件）；查询时按 OccurredAt 排序取最新。
-///   3. 不直接修改 item 状态；Consolidation ETL 消费事件流驱动状态迁移。
-///   4. TargetItemId 可空：表示"无替换直接废弃"（如 obsolete 知识）。
+///   2. 同一 item 可能有多次状态转换事件（如 Fresh→Active→Cooling→Active→Superseded→Replaced→Archived）；
+///      查询时按 OccurredAt 排序取最新。
+///   3. 不直接修改 item 状态；Consolidation ETL 与 DecayEvaluator 消费事件流驱动状态迁移。
+///   4. TargetItemId 可空：表示"无替换直接降权"（如 obsolete 知识）。
 /// </remarks>
-public sealed record SupersedeEventRecord
+public sealed record MemoryStateEventRecord
 {
     /// <summary>事件唯一 ID（如 "evt-{guid}"）。</summary>
     public required string EventId { get; init; }
@@ -111,22 +113,24 @@ public sealed record SupersedeEventRecord
     /// <summary>collection 作用域（必填；跨集合时使用 "*"）。</summary>
     public required string CollectionId { get; init; }
 
-    /// <summary>被 supersede 的 item ID（必填）。</summary>
+    /// <summary>被触发状态转换的 item ID（必填）。</summary>
     public required string SourceItemId { get; init; }
 
-    /// <summary>取代的新 item ID（可空 = 无替换直接废弃）。</summary>
+    /// <summary>取代的新 item ID（可空 = 无替换直接降权/拒绝）。</summary>
     public string? TargetItemId { get; init; }
 
     /// <summary>item 类型（必填；"context" / "memory" / "constraint" / "relation" / "vector"）。</summary>
     public required string ItemType { get; init; }
 
-    /// <summary>新状态（必填；Superseded / Replaced / Archived 之一，不允许 Active）。</summary>
-    public required SupersededItemState NewState { get; init; }
+    /// <summary>新状态（必填；不允许为 Fresh，Fresh 是初始态不是事件目标）。</summary>
+    public required MemoryState NewState { get; init; }
 
-    /// <summary>supersede 原因码（如 "lifecycle-review" / "manual" / "version-bump" / "auto-detected" / "consolidation-etl"）。</summary>
+    /// <summary>转换原因码（如 "first-hit" / "decay-cooling" / "decay-dormant" /
+    /// "supersede" / "consolidation-etl" / "rejected-evidence-invalid" /
+    /// "rejected-task-completed" / "rejected-conflict" / "manual" / "reheat"）。</summary>
     public required string Reason { get; init; }
 
-    /// <summary>触发原因详情（人类可读；如 "deprecated by lifecycle review at 2026-07-20"）。</summary>
+    /// <summary>触发原因详情（人类可读；如 "no hit for 30 days, decay to Cooling"）。</summary>
     public string ReasonDetail { get; init; } = string.Empty;
 
     /// <summary>触发者（user / system / agent ID；可空 = 自动触发）。</summary>
@@ -147,9 +151,9 @@ public sealed record SupersedeEventRecord
 }
 
 /// <summary>
-/// R21-1：supersede 事件查询条件。
+/// R21-4：memory state 事件查询条件。
 /// </summary>
-public sealed record SupersedeEventQuery
+public sealed record MemoryStateEventQuery
 {
     /// <summary>workspace 作用域（必填）。</summary>
     public required string WorkspaceId { get; init; }
@@ -167,7 +171,7 @@ public sealed record SupersedeEventQuery
     public string? ItemType { get; init; }
 
     /// <summary>按 NewState 过滤（可空 = 不限制）。</summary>
-    public SupersededItemState? NewState { get; init; }
+    public MemoryState? NewState { get; init; }
 
     /// <summary>仅返回 OccurredAt >= Since 的事件（可空 = 不限制）。</summary>
     public DateTimeOffset? Since { get; init; }
@@ -180,11 +184,11 @@ public sealed record SupersedeEventQuery
 }
 
 // ---------------------------------------------------------------------------
-// ISupersededItemStore 接口
+// IMemoryStateStore 接口（替换 ISupersededItemStore）
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// R21-1：supersede 事件流存储接口。append-only 语义，记录 item supersede 事件。
+/// R21-4：memory state 事件流存储接口。append-only 语义，记录 item 状态转换事件。
 /// </summary>
 /// <remarks>
 /// 实现层可注入 Postgres / InMemory / FileSystem store。
@@ -194,24 +198,24 @@ public sealed record SupersedeEventQuery
 ///   - GetLatestStateAsync：查询 item 当前最新状态（按 OccurredAt 降序取首条 NewState）。
 ///   - GetRecentAsync：返回最近 N 条事件（按 OccurredAt 降序）。
 /// </remarks>
-public interface ISupersededItemStore
+public interface IMemoryStateStore
 {
-    /// <summary>追加 supersede 事件（不可变；重复 EventId 应抛 ArgumentException）。</summary>
+    /// <summary>追加状态转换事件（不可变；重复 EventId 应抛 ArgumentException）。</summary>
     [StoreOperation(StoreOperationKind.Write)]
     Task AppendEventAsync(
-        SupersedeEventRecord record,
+        MemoryStateEventRecord record,
         CancellationToken cancellationToken = default);
 
     /// <summary>按条件查询事件（按 OccurredAt 降序返回）。</summary>
     [StoreOperation(StoreOperationKind.Read)]
-    Task<IReadOnlyList<SupersedeEventRecord>> QueryEventsAsync(
-        SupersedeEventQuery query,
+    Task<IReadOnlyList<MemoryStateEventRecord>> QueryEventsAsync(
+        MemoryStateEventQuery query,
         CancellationToken cancellationToken = default);
 
     /// <summary>查询指定 item 的当前最新状态（按 OccurredAt 降序取首条 NewState）。</summary>
-    /// <returns>最新事件；item 从未有 supersede 事件时返回 null（视为 Active）。</returns>
+    /// <returns>最新事件；item 从未有状态转换事件时返回 null（视为 Fresh）。</returns>
     [StoreOperation(StoreOperationKind.Read)]
-    Task<SupersedeEventRecord?> GetLatestStateAsync(
+    Task<MemoryStateEventRecord?> GetLatestStateAsync(
         string workspaceId,
         string collectionId,
         string sourceItemId,
@@ -219,7 +223,7 @@ public interface ISupersededItemStore
 
     /// <summary>返回最近 N 条事件（按 OccurredAt 降序）。</summary>
     [StoreOperation(StoreOperationKind.Read)]
-    Task<IReadOnlyList<SupersedeEventRecord>> GetRecentAsync(
+    Task<IReadOnlyList<MemoryStateEventRecord>> GetRecentAsync(
         string workspaceId,
         string collectionId,
         int take,
@@ -227,19 +231,18 @@ public interface ISupersededItemStore
 }
 
 // ---------------------------------------------------------------------------
-// Consolidation ETL 契约
+// Consolidation ETL 契约（保留接口，事件类型改为 MemoryStateEventRecord）
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// R21-1：Consolidation ETL 请求。把 superseded items 从 active store 迁移到归档 store。
+/// R21-4：Consolidation ETL 请求。把 superseded/replaced items 从 active store 迁移到归档 store。
 /// </summary>
 /// <remarks>
 /// ETL 流程：
-///   1. Extract：从 ISupersededItemStore 查询符合条件的 Superseded 状态事件。
+///   1. Extract：从 IMemoryStateStore 查询符合条件的 Superseded/Replaced 状态事件。
 ///   2. Transform：把对应 item 状态从 Superseded 推进到 Replaced（中间态），
-///      写入新 SupersedeEventRecord（Reason="consolidation-etl"）。
-///   3. Load：把 item 写入归档 store（IConsolidationArchiveStore，R21-3 实现），
-///      推进状态到 Archived，写入最终 SupersedeEventRecord。
+///      写入新 MemoryStateEventRecord（Reason="consolidation-etl"）。
+///   3. Load：把 item 写入归档 store，推进状态到 Archived，写入最终 MemoryStateEventRecord。
 ///
 /// DryRun=true：仅返回预计处理数量，不实际迁移。
 /// </remarks>
@@ -268,7 +271,7 @@ public sealed record ConsolidationRequest
 }
 
 /// <summary>
-/// R21-1：Consolidation ETL 执行结果。
+/// R21-4：Consolidation ETL 执行结果。
 /// </summary>
 public sealed record ConsolidationRunResult
 {
@@ -319,7 +322,7 @@ public sealed record ConsolidationRunResult
 }
 
 /// <summary>
-/// R21-1：Consolidation ETL 接口。把 superseded items 从 active store 迁移到归档 store。
+/// R21-4：Consolidation ETL 接口。把 superseded/replaced items 从 active store 迁移到归档 store。
 /// </summary>
 /// <remarks>
 /// 设计原则：
@@ -328,15 +331,11 @@ public sealed record ConsolidationRunResult
 ///   3. ETL 失败不破坏数据：Transform 阶段写入 Replaced 事件后失败，
 ///      下次 ETL 会从 Replaced 状态继续推进到 Archived。
 ///   4. ETL 不直接修改 active store 中的 item；只写入归档 store + 推进状态。
-///      item 在 active store 中的实际删除由独立 GC 流程处理（R21-3）。
-///   5. R21-1 阶段仅定义契约；具体实现（PostgresConsolidationETL）在 R21-3。
+///   5. 兼容 MemoryState 衰减路径：Dormant → Archived 也可由 ETL 推进（彻底降权）。
 /// </remarks>
 public interface IConsolidationETL
 {
     /// <summary>执行一次 Consolidation ETL 迁移。</summary>
-    /// <param name="request">ETL 请求（必填 WorkspaceId + CollectionId）。</param>
-    /// <param name="cancellationToken">取消令牌。</param>
-    /// <returns>执行结果（含 ExtractedCount / TransformedCount / LoadedCount / SkippedCount）。</returns>
     [StoreOperation(StoreOperationKind.Write)]
     Task<ConsolidationRunResult> RunAsync(
         ConsolidationRequest request,
@@ -344,31 +343,62 @@ public interface IConsolidationETL
 }
 
 // ---------------------------------------------------------------------------
-// SupersededItemState 扩展方法
+// MemoryState 扩展方法（替换 SupersededItemStateExtensions）
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// R21-1：SupersededItemState 扩展方法。提供状态机判断逻辑。
+/// R21-4：MemoryState 扩展方法。提供状态机判断逻辑。
 /// </summary>
-public static class SupersededItemStateExtensions
+public static class MemoryStateExtensions
 {
     /// <summary>判断状态是否为终态（不可逆）。</summary>
-    public static bool IsTerminal(this SupersededItemState state)
-        => state == SupersededItemState.Archived;
+    public static bool IsTerminal(this MemoryState state)
+        => state == MemoryState.Archived;
 
     /// <summary>判断状态是否允许推进到下一状态（状态机合法性检查）。</summary>
-    public static bool CanTransitionTo(this SupersededItemState current, SupersededItemState next)
+    public static bool CanTransitionTo(this MemoryState current, MemoryState next)
     {
         if (current == next) return false; // 自环不允许
-        if (current == SupersededItemState.Unknown) return next != SupersededItemState.Unknown;
-        if (current == SupersededItemState.Active) return next == SupersededItemState.Superseded;
-        if (current == SupersededItemState.Superseded) return next == SupersededItemState.Replaced;
-        if (current == SupersededItemState.Replaced) return next == SupersededItemState.Archived;
-        // Archived 是终态，不允许推进
-        return false;
+        return current switch
+        {
+            // Fresh → Active / Rejected
+            MemoryState.Fresh => next == MemoryState.Active || next == MemoryState.Rejected,
+            // Active → Cooling / Superseded / Rejected
+            MemoryState.Active => next == MemoryState.Cooling
+                || next == MemoryState.Superseded
+                || next == MemoryState.Rejected,
+            // Cooling → Dormant / Active（回温）/ Rejected
+            MemoryState.Cooling => next == MemoryState.Dormant
+                || next == MemoryState.Active
+                || next == MemoryState.Rejected,
+            // Dormant → Archived / Active（回温）/ Rejected
+            MemoryState.Dormant => next == MemoryState.Archived
+                || next == MemoryState.Active
+                || next == MemoryState.Rejected,
+            // Superseded → Replaced（ETL Transform）
+            MemoryState.Superseded => next == MemoryState.Replaced,
+            // Replaced → Archived（ETL Load）
+            MemoryState.Replaced => next == MemoryState.Archived,
+            // Rejected → Archived（拒绝后归档）
+            MemoryState.Rejected => next == MemoryState.Archived,
+            // Archived 终态
+            _ => false
+        };
     }
 
     /// <summary>判断状态是否需要 Consolidation ETL 处理（Superseded 或 Replaced）。</summary>
-    public static bool NeedsConsolidation(this SupersededItemState state)
-        => state == SupersededItemState.Superseded || state == SupersededItemState.Replaced;
+    public static bool NeedsConsolidation(this MemoryState state)
+        => state == MemoryState.Superseded || state == MemoryState.Replaced;
+
+    /// <summary>判断状态是否为衰减态（Cooling 或 Dormant，可回温）。</summary>
+    public static bool IsDecaying(this MemoryState state)
+        => state == MemoryState.Cooling || state == MemoryState.Dormant;
+
+    /// <summary>判断状态是否为活跃态（Fresh 或 Active）。</summary>
+    public static bool IsActiveOrFresh(this MemoryState state)
+        => state == MemoryState.Fresh || state == MemoryState.Active;
+
+    /// <summary>判断状态是否可回温（Cooling 或 Dormant；重新被命中时可回到 Active）。</summary>
+    public static bool CanReheat(this MemoryState state)
+        => state == MemoryState.Cooling || state == MemoryState.Dormant;
 }
