@@ -8,6 +8,29 @@
 #   E:<FullTypeName>.<EventName>
 # Entries are sorted alphabetically; re-running the test will produce identical output.
 
+F:ContextCore.Abstractions.AgentEventKind.CheckpointCreated
+F:ContextCore.Abstractions.AgentEventKind.CheckpointResumed
+F:ContextCore.Abstractions.AgentEventKind.ContextInjected
+F:ContextCore.Abstractions.AgentEventKind.DecisionPoint
+F:ContextCore.Abstractions.AgentEventKind.SessionClosed
+F:ContextCore.Abstractions.AgentEventKind.SessionCreated
+F:ContextCore.Abstractions.AgentEventKind.TokenBudgetExhausted
+F:ContextCore.Abstractions.AgentEventKind.TokenBudgetWarning
+F:ContextCore.Abstractions.AgentEventKind.ToolCallCompleted
+F:ContextCore.Abstractions.AgentEventKind.ToolCallFailed
+F:ContextCore.Abstractions.AgentEventKind.ToolCallStarted
+F:ContextCore.Abstractions.AgentEventKind.TurnCompleted
+F:ContextCore.Abstractions.AgentEventKind.TurnStarted
+F:ContextCore.Abstractions.AgentEventKind.Unknown
+F:ContextCore.Abstractions.AgentEventLevel.Error
+F:ContextCore.Abstractions.AgentEventLevel.Information
+F:ContextCore.Abstractions.AgentEventLevel.Trace
+F:ContextCore.Abstractions.AgentEventLevel.Warning
+F:ContextCore.Abstractions.AgentRuntimeKind.ClaudeCode
+F:ContextCore.Abstractions.AgentRuntimeKind.Codex
+F:ContextCore.Abstractions.AgentRuntimeKind.Custom
+F:ContextCore.Abstractions.AgentRuntimeKind.GenericTool
+F:ContextCore.Abstractions.AgentRuntimeKind.Unknown
 F:ContextCore.Abstractions.CanaryAssignmentStrategy.HashBased
 F:ContextCore.Abstractions.CanaryAssignmentStrategy.PercentageBased
 F:ContextCore.Abstractions.CanaryAssignmentStrategy.Random
@@ -792,6 +815,27 @@ F:ContextCore.Abstractions.StorageProviderKind.Postgres
 F:ContextCore.Abstractions.StorageProviderKind.Unknown
 F:ContextCore.Abstractions.StoreOperationKind.Read
 F:ContextCore.Abstractions.StoreOperationKind.Write
+M:ContextCore.Abstractions.AgentCheckpoint.#ctor()
+M:ContextCore.Abstractions.AgentCheckpoint.<Clone>$()
+M:ContextCore.Abstractions.AgentCheckpoint.Equals(ContextCore.Abstractions.AgentCheckpoint)
+M:ContextCore.Abstractions.AgentCheckpoint.Equals(System.Object)
+M:ContextCore.Abstractions.AgentCheckpoint.GetHashCode()
+M:ContextCore.Abstractions.AgentCheckpoint.GetType()
+M:ContextCore.Abstractions.AgentCheckpoint.ToString()
+M:ContextCore.Abstractions.AgentContextInjection.#ctor()
+M:ContextCore.Abstractions.AgentContextInjection.<Clone>$()
+M:ContextCore.Abstractions.AgentContextInjection.Equals(ContextCore.Abstractions.AgentContextInjection)
+M:ContextCore.Abstractions.AgentContextInjection.Equals(System.Object)
+M:ContextCore.Abstractions.AgentContextInjection.GetHashCode()
+M:ContextCore.Abstractions.AgentContextInjection.GetType()
+M:ContextCore.Abstractions.AgentContextInjection.ToString()
+M:ContextCore.Abstractions.AgentContextSnapshotRef.#ctor()
+M:ContextCore.Abstractions.AgentContextSnapshotRef.<Clone>$()
+M:ContextCore.Abstractions.AgentContextSnapshotRef.Equals(ContextCore.Abstractions.AgentContextSnapshotRef)
+M:ContextCore.Abstractions.AgentContextSnapshotRef.Equals(System.Object)
+M:ContextCore.Abstractions.AgentContextSnapshotRef.GetHashCode()
+M:ContextCore.Abstractions.AgentContextSnapshotRef.GetType()
+M:ContextCore.Abstractions.AgentContextSnapshotRef.ToString()
 M:ContextCore.Abstractions.AgentDiagnosticRequest.#ctor(System.String, System.String, ContextCore.Abstractions.OptimizationTargetComponent, System.Collections.Generic.IReadOnlyDictionary<System.String, System.String>)
 M:ContextCore.Abstractions.AgentDiagnosticRequest.Equals(System.Object)
 M:ContextCore.Abstractions.AgentDiagnosticRequest.GetHashCode()
@@ -802,6 +846,34 @@ M:ContextCore.Abstractions.AgentDiagnosticResult.Equals(System.Object)
 M:ContextCore.Abstractions.AgentDiagnosticResult.GetHashCode()
 M:ContextCore.Abstractions.AgentDiagnosticResult.GetType()
 M:ContextCore.Abstractions.AgentDiagnosticResult.ToString()
+M:ContextCore.Abstractions.AgentEvent.#ctor()
+M:ContextCore.Abstractions.AgentEvent.<Clone>$()
+M:ContextCore.Abstractions.AgentEvent.Equals(ContextCore.Abstractions.AgentEvent)
+M:ContextCore.Abstractions.AgentEvent.Equals(System.Object)
+M:ContextCore.Abstractions.AgentEvent.GetHashCode()
+M:ContextCore.Abstractions.AgentEvent.GetType()
+M:ContextCore.Abstractions.AgentEvent.ToString()
+M:ContextCore.Abstractions.AgentEventQuery.#ctor()
+M:ContextCore.Abstractions.AgentEventQuery.<Clone>$()
+M:ContextCore.Abstractions.AgentEventQuery.Equals(ContextCore.Abstractions.AgentEventQuery)
+M:ContextCore.Abstractions.AgentEventQuery.Equals(System.Object)
+M:ContextCore.Abstractions.AgentEventQuery.GetHashCode()
+M:ContextCore.Abstractions.AgentEventQuery.GetType()
+M:ContextCore.Abstractions.AgentEventQuery.ToString()
+M:ContextCore.Abstractions.AgentSessionId.#ctor()
+M:ContextCore.Abstractions.AgentSessionId.<Clone>$()
+M:ContextCore.Abstractions.AgentSessionId.Equals(ContextCore.Abstractions.AgentSessionId)
+M:ContextCore.Abstractions.AgentSessionId.Equals(System.Object)
+M:ContextCore.Abstractions.AgentSessionId.GetHashCode()
+M:ContextCore.Abstractions.AgentSessionId.GetType()
+M:ContextCore.Abstractions.AgentSessionId.ToString()
+M:ContextCore.Abstractions.AgentSessionRequest.#ctor()
+M:ContextCore.Abstractions.AgentSessionRequest.<Clone>$()
+M:ContextCore.Abstractions.AgentSessionRequest.Equals(ContextCore.Abstractions.AgentSessionRequest)
+M:ContextCore.Abstractions.AgentSessionRequest.Equals(System.Object)
+M:ContextCore.Abstractions.AgentSessionRequest.GetHashCode()
+M:ContextCore.Abstractions.AgentSessionRequest.GetType()
+M:ContextCore.Abstractions.AgentSessionRequest.ToString()
 M:ContextCore.Abstractions.BaselineComparison.#ctor(System.String, System.String, System.Collections.Generic.IReadOnlyDictionary<System.String, System.Double>, System.Collections.Generic.IReadOnlyDictionary<System.String, System.Double>, System.DateTimeOffset)
 M:ContextCore.Abstractions.BaselineComparison.<Clone>$()
 M:ContextCore.Abstractions.BaselineComparison.Equals(ContextCore.Abstractions.BaselineComparison)
@@ -1080,7 +1152,22 @@ M:ContextCore.Abstractions.FeatureSchemaVersion.Equals(System.Object)
 M:ContextCore.Abstractions.FeatureSchemaVersion.GetHashCode()
 M:ContextCore.Abstractions.FeatureSchemaVersion.GetType()
 M:ContextCore.Abstractions.FeatureSchemaVersion.ToString()
+M:ContextCore.Abstractions.IAgentCheckpointStore.DeleteAsync(System.String, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IAgentCheckpointStore.GetAsync(System.String, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IAgentCheckpointStore.ListAsync(ContextCore.Abstractions.AgentSessionId, System.Int32, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IAgentCheckpointStore.SaveAsync(ContextCore.Abstractions.AgentCheckpoint, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IAgentEventStream.QueryAsync(ContextCore.Abstractions.AgentEventQuery, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IAgentEventStream.SubscribeAsync(ContextCore.Abstractions.AgentSessionId, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IAgentObservationSource.ObserveAsync(System.String, System.String, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IAgentRuntime.CloseSessionAsync(ContextCore.Abstractions.AgentSessionId, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IAgentRuntime.CreateSessionAsync(ContextCore.Abstractions.AgentSessionRequest, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IAgentRuntime.IsSessionActiveAsync(ContextCore.Abstractions.AgentSessionId, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IAgentSession.CompleteTurnAsync(System.String, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IAgentSession.RecordToolCallResultAsync(System.String, System.String, System.String, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IAgentSession.StartTurnAsync(System.String, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IAgentWorkspaceContextProvider.GetContextSnapshotAsync(ContextCore.Abstractions.AgentSessionId, System.Int32, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IAgentWorkspaceContextProvider.IngestToolResultAsync(ContextCore.Abstractions.AgentSessionId, System.String, System.String, System.String, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IAgentWorkspaceContextProvider.InjectAsync(ContextCore.Abstractions.AgentSessionId, ContextCore.Abstractions.AgentContextInjection, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IArtifactStore.AppendJsonLineAsync``1(ContextCore.Abstractions.Models.ArtifactDescriptor, ContextCore.Abstractions.IArtifactStore+!!0, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IArtifactStore.ListAsync(System.Nullable<ContextCore.Abstractions.Models.ArtifactKind>, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IArtifactStore.ReadJsonAsync``1(ContextCore.Abstractions.Models.ArtifactDescriptor, System.Threading.CancellationToken)
@@ -3693,6 +3780,26 @@ M:ContextCore.Abstractions.VersionedDataset.Equals(System.Object)
 M:ContextCore.Abstractions.VersionedDataset.GetHashCode()
 M:ContextCore.Abstractions.VersionedDataset.GetType()
 M:ContextCore.Abstractions.VersionedDataset.ToString()
+P:ContextCore.Abstractions.AgentCheckpoint.CheckpointId (get|init)
+P:ContextCore.Abstractions.AgentCheckpoint.CreatedAt (get|init)
+P:ContextCore.Abstractions.AgentCheckpoint.Metadata (get|init)
+P:ContextCore.Abstractions.AgentCheckpoint.Session (get|init)
+P:ContextCore.Abstractions.AgentCheckpoint.SnapshotId (get|init)
+P:ContextCore.Abstractions.AgentCheckpoint.StateJson (get|init)
+P:ContextCore.Abstractions.AgentCheckpoint.TurnId (get|init)
+P:ContextCore.Abstractions.AgentContextInjection.ConstraintIds (get|init)
+P:ContextCore.Abstractions.AgentContextInjection.DecisionRequestIds (get|init)
+P:ContextCore.Abstractions.AgentContextInjection.FreeText (get|init)
+P:ContextCore.Abstractions.AgentContextInjection.InjectedAt (get|init)
+P:ContextCore.Abstractions.AgentContextInjection.InjectionId (get|init)
+P:ContextCore.Abstractions.AgentContextInjection.Metadata (get|init)
+P:ContextCore.Abstractions.AgentContextSnapshotRef.ActualTokens (get|init)
+P:ContextCore.Abstractions.AgentContextSnapshotRef.ContentJson (get|init)
+P:ContextCore.Abstractions.AgentContextSnapshotRef.CreatedAt (get|init)
+P:ContextCore.Abstractions.AgentContextSnapshotRef.Metadata (get|init)
+P:ContextCore.Abstractions.AgentContextSnapshotRef.Session (get|init)
+P:ContextCore.Abstractions.AgentContextSnapshotRef.SnapshotId (get|init)
+P:ContextCore.Abstractions.AgentContextSnapshotRef.TokenBudget (get|init)
 P:ContextCore.Abstractions.AgentDiagnosticRequest.CollectionId (get)
 P:ContextCore.Abstractions.AgentDiagnosticRequest.Hints (get)
 P:ContextCore.Abstractions.AgentDiagnosticRequest.TargetComponent (get)
@@ -3701,6 +3808,32 @@ P:ContextCore.Abstractions.AgentDiagnosticResult.HypothesisTrail (get)
 P:ContextCore.Abstractions.AgentDiagnosticResult.Observations (get)
 P:ContextCore.Abstractions.AgentDiagnosticResult.Proposal (get)
 P:ContextCore.Abstractions.AgentDiagnosticResult.Summary (get)
+P:ContextCore.Abstractions.AgentEvent.CorrelationId (get|init)
+P:ContextCore.Abstractions.AgentEvent.EventId (get|init)
+P:ContextCore.Abstractions.AgentEvent.Kind (get|init)
+P:ContextCore.Abstractions.AgentEvent.Level (get|init)
+P:ContextCore.Abstractions.AgentEvent.Metadata (get|init)
+P:ContextCore.Abstractions.AgentEvent.OccurredAt (get|init)
+P:ContextCore.Abstractions.AgentEvent.PayloadJson (get|init)
+P:ContextCore.Abstractions.AgentEvent.Session (get|init)
+P:ContextCore.Abstractions.AgentEvent.TurnId (get|init)
+P:ContextCore.Abstractions.AgentEventQuery.CorrelationId (get|init)
+P:ContextCore.Abstractions.AgentEventQuery.Kind (get|init)
+P:ContextCore.Abstractions.AgentEventQuery.Level (get|init)
+P:ContextCore.Abstractions.AgentEventQuery.SessionId (get|init)
+P:ContextCore.Abstractions.AgentEventQuery.Since (get|init)
+P:ContextCore.Abstractions.AgentEventQuery.Take (get|init)
+P:ContextCore.Abstractions.AgentEventQuery.TurnId (get|init)
+P:ContextCore.Abstractions.AgentEventQuery.Until (get|init)
+P:ContextCore.Abstractions.AgentSessionId.CollectionId (get|init)
+P:ContextCore.Abstractions.AgentSessionId.CreatedAt (get|init)
+P:ContextCore.Abstractions.AgentSessionId.RuntimeKind (get|init)
+P:ContextCore.Abstractions.AgentSessionId.Value (get|init)
+P:ContextCore.Abstractions.AgentSessionId.WorkspaceId (get|init)
+P:ContextCore.Abstractions.AgentSessionRequest.CollectionId (get|init)
+P:ContextCore.Abstractions.AgentSessionRequest.InitialTurnId (get|init)
+P:ContextCore.Abstractions.AgentSessionRequest.Metadata (get|init)
+P:ContextCore.Abstractions.AgentSessionRequest.WorkspaceId (get|init)
 P:ContextCore.Abstractions.BaselineComparison.BaselineMetrics (get)
 P:ContextCore.Abstractions.BaselineComparison.ComparedAt (get)
 P:ContextCore.Abstractions.BaselineComparison.ComparisonId (get)
@@ -4018,6 +4151,10 @@ P:ContextCore.Abstractions.FeatureSchemaVersion.Initial (get)
 P:ContextCore.Abstractions.FeatureSchemaVersion.Major (get|init)
 P:ContextCore.Abstractions.FeatureSchemaVersion.Minor (get|init)
 P:ContextCore.Abstractions.IAgentObservationSource.SourceId (get)
+P:ContextCore.Abstractions.IAgentRuntime.RuntimeId (get)
+P:ContextCore.Abstractions.IAgentRuntime.RuntimeKind (get)
+P:ContextCore.Abstractions.IAgentSession.Events (get)
+P:ContextCore.Abstractions.IAgentSession.SessionId (get)
 P:ContextCore.Abstractions.IContextEventSink.Kind (get)
 P:ContextCore.Abstractions.IContextJobProcessor.Kind (get)
 P:ContextCore.Abstractions.IContextPathResolver.RootPath (get)
@@ -8072,8 +8209,18 @@ P:ContextCore.Abstractions.VersionedDataset.CreatedAt (get)
 P:ContextCore.Abstractions.VersionedDataset.Manifest (get)
 P:ContextCore.Abstractions.VersionedDataset.Statistics (get)
 P:ContextCore.Abstractions.VersionedDataset.Version (get)
+T:ContextCore.Abstractions.AgentCheckpoint
+T:ContextCore.Abstractions.AgentContextInjection
+T:ContextCore.Abstractions.AgentContextSnapshotRef
 T:ContextCore.Abstractions.AgentDiagnosticRequest
 T:ContextCore.Abstractions.AgentDiagnosticResult
+T:ContextCore.Abstractions.AgentEvent
+T:ContextCore.Abstractions.AgentEventKind (Enum)
+T:ContextCore.Abstractions.AgentEventLevel (Enum)
+T:ContextCore.Abstractions.AgentEventQuery
+T:ContextCore.Abstractions.AgentRuntimeKind (Enum)
+T:ContextCore.Abstractions.AgentSessionId
+T:ContextCore.Abstractions.AgentSessionRequest
 T:ContextCore.Abstractions.BaselineComparison
 T:ContextCore.Abstractions.BoundedContextOrchestrationResult
 T:ContextCore.Abstractions.BudgetProfile
@@ -8130,7 +8277,12 @@ T:ContextCore.Abstractions.ExperimentEvidence
 T:ContextCore.Abstractions.ExpertRoutingDecision
 T:ContextCore.Abstractions.ExpertRoutingDecisionSet
 T:ContextCore.Abstractions.FeatureSchemaVersion
+T:ContextCore.Abstractions.IAgentCheckpointStore (Interface)
+T:ContextCore.Abstractions.IAgentEventStream (Interface)
 T:ContextCore.Abstractions.IAgentObservationSource (Interface)
+T:ContextCore.Abstractions.IAgentRuntime (Interface)
+T:ContextCore.Abstractions.IAgentSession (Interface)
+T:ContextCore.Abstractions.IAgentWorkspaceContextProvider (Interface)
 T:ContextCore.Abstractions.IArtifactStore (Interface)
 T:ContextCore.Abstractions.IBoundedContextOrchestrator (Interface)
 T:ContextCore.Abstractions.ICandidateConstraintReviewStore (Interface)
