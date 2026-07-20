@@ -8,6 +8,10 @@
 #   E:<FullTypeName>.<EventName>
 # Entries are sorted alphabetically; re-running the test will produce identical output.
 
+F:ContextCore.Abstractions.CanaryAssignmentStrategy.HashBased
+F:ContextCore.Abstractions.CanaryAssignmentStrategy.PercentageBased
+F:ContextCore.Abstractions.CanaryAssignmentStrategy.Random
+F:ContextCore.Abstractions.CanaryAssignmentStrategy.Whitelist
 F:ContextCore.Abstractions.ComparisonOperator.Equals
 F:ContextCore.Abstractions.ComparisonOperator.GreaterThan
 F:ContextCore.Abstractions.ComparisonOperator.GreaterThanOrEqual
@@ -40,6 +44,28 @@ F:ContextCore.Abstractions.ContextTokenizationMetadataKeys.Source
 F:ContextCore.Abstractions.ContextValidationSeverity.Error
 F:ContextCore.Abstractions.ContextValidationSeverity.Info
 F:ContextCore.Abstractions.ContextValidationSeverity.Warning
+F:ContextCore.Abstractions.DatasetProvenance.Replay
+F:ContextCore.Abstractions.DatasetProvenance.ReviewedByHuman
+F:ContextCore.Abstractions.DatasetProvenance.RuntimeEvidence
+F:ContextCore.Abstractions.DatasetProvenance.Synthetic
+F:ContextCore.Abstractions.DatasetReviewStatus.Approved
+F:ContextCore.Abstractions.DatasetReviewStatus.AutoReviewed
+F:ContextCore.Abstractions.DatasetReviewStatus.HumanReviewed
+F:ContextCore.Abstractions.DatasetReviewStatus.Rejected
+F:ContextCore.Abstractions.DatasetReviewStatus.Unreviewed
+F:ContextCore.Abstractions.DatasetSplitStrategy.GroupKeyed
+F:ContextCore.Abstractions.DatasetSplitStrategy.Random
+F:ContextCore.Abstractions.DatasetSplitStrategy.Stratified
+F:ContextCore.Abstractions.DatasetSplitStrategy.TimeSeries
+F:ContextCore.Abstractions.ModelArtifactStatus.Active
+F:ContextCore.Abstractions.ModelArtifactStatus.Deprecated
+F:ContextCore.Abstractions.ModelArtifactStatus.Draft
+F:ContextCore.Abstractions.ModelArtifactStatus.Retired
+F:ContextCore.Abstractions.ModelArtifactStatus.Staged
+F:ContextCore.Abstractions.ModelArtifactStatus.Validated
+F:ContextCore.Abstractions.ModelCompatibilityLevel.AdditiveOnly
+F:ContextCore.Abstractions.ModelCompatibilityLevel.Breaking
+F:ContextCore.Abstractions.ModelCompatibilityLevel.Compatible
 F:ContextCore.Abstractions.Models.AnchorType.Constraint
 F:ContextCore.Abstractions.Models.AnchorType.Entity
 F:ContextCore.Abstractions.Models.AnchorType.Intent
@@ -677,6 +703,11 @@ F:ContextCore.Abstractions.RiskSeverity.Critical
 F:ContextCore.Abstractions.RiskSeverity.High
 F:ContextCore.Abstractions.RiskSeverity.Low
 F:ContextCore.Abstractions.RiskSeverity.Medium
+F:ContextCore.Abstractions.RollbackReason.CanaryDurationExpired
+F:ContextCore.Abstractions.RollbackReason.ManualIntervention
+F:ContextCore.Abstractions.RollbackReason.ModelPerformanceRegression
+F:ContextCore.Abstractions.RollbackReason.RollbackConditionTriggered
+F:ContextCore.Abstractions.RollbackReason.SystemError
 F:ContextCore.Abstractions.StorageProviderKind.FileSystem
 F:ContextCore.Abstractions.StorageProviderKind.InMemory
 F:ContextCore.Abstractions.StorageProviderKind.Postgres
@@ -693,6 +724,13 @@ M:ContextCore.Abstractions.AgentDiagnosticResult.Equals(System.Object)
 M:ContextCore.Abstractions.AgentDiagnosticResult.GetHashCode()
 M:ContextCore.Abstractions.AgentDiagnosticResult.GetType()
 M:ContextCore.Abstractions.AgentDiagnosticResult.ToString()
+M:ContextCore.Abstractions.BaselineComparison.#ctor(System.String, System.String, System.Collections.Generic.IReadOnlyDictionary<System.String, System.Double>, System.Collections.Generic.IReadOnlyDictionary<System.String, System.Double>, System.DateTimeOffset)
+M:ContextCore.Abstractions.BaselineComparison.<Clone>$()
+M:ContextCore.Abstractions.BaselineComparison.Equals(ContextCore.Abstractions.BaselineComparison)
+M:ContextCore.Abstractions.BaselineComparison.Equals(System.Object)
+M:ContextCore.Abstractions.BaselineComparison.GetHashCode()
+M:ContextCore.Abstractions.BaselineComparison.GetType()
+M:ContextCore.Abstractions.BaselineComparison.ToString()
 M:ContextCore.Abstractions.CacheInvalidationKey.#ctor(System.String, System.String, System.String, System.String)
 M:ContextCore.Abstractions.CacheInvalidationKey.Deconstruct(out System.String, out System.String, out System.String, out System.String)
 M:ContextCore.Abstractions.CacheInvalidationKey.Equals(ContextCore.Abstractions.CacheInvalidationKey)
@@ -700,6 +738,13 @@ M:ContextCore.Abstractions.CacheInvalidationKey.Equals(System.Object)
 M:ContextCore.Abstractions.CacheInvalidationKey.GetHashCode()
 M:ContextCore.Abstractions.CacheInvalidationKey.GetType()
 M:ContextCore.Abstractions.CacheInvalidationKey.ToString()
+M:ContextCore.Abstractions.CanaryAssignment.#ctor(System.String, System.String, System.String, ContextCore.Abstractions.CanaryAssignmentStrategy, System.DateTimeOffset)
+M:ContextCore.Abstractions.CanaryAssignment.<Clone>$()
+M:ContextCore.Abstractions.CanaryAssignment.Equals(ContextCore.Abstractions.CanaryAssignment)
+M:ContextCore.Abstractions.CanaryAssignment.Equals(System.Object)
+M:ContextCore.Abstractions.CanaryAssignment.GetHashCode()
+M:ContextCore.Abstractions.CanaryAssignment.GetType()
+M:ContextCore.Abstractions.CanaryAssignment.ToString()
 M:ContextCore.Abstractions.ContextCoreDiagnostics.Equals(System.Object)
 M:ContextCore.Abstractions.ContextCoreDiagnostics.GetHashCode()
 M:ContextCore.Abstractions.ContextCoreDiagnostics.GetType()
@@ -742,6 +787,30 @@ M:ContextCore.Abstractions.ContextValidationResult.Equals(System.Object)
 M:ContextCore.Abstractions.ContextValidationResult.GetHashCode()
 M:ContextCore.Abstractions.ContextValidationResult.GetType()
 M:ContextCore.Abstractions.ContextValidationResult.ToString()
+M:ContextCore.Abstractions.DatasetManifest.#ctor(System.String, System.String, System.String, System.Int32, System.String, ContextCore.Abstractions.FeatureSchemaVersion, ContextCore.Abstractions.DatasetProvenance, System.DateTimeOffset)
+M:ContextCore.Abstractions.DatasetManifest.<Clone>$()
+M:ContextCore.Abstractions.DatasetManifest.Equals(ContextCore.Abstractions.DatasetManifest)
+M:ContextCore.Abstractions.DatasetManifest.Equals(System.Object)
+M:ContextCore.Abstractions.DatasetManifest.GetHashCode()
+M:ContextCore.Abstractions.DatasetManifest.GetType()
+M:ContextCore.Abstractions.DatasetManifest.ToString()
+M:ContextCore.Abstractions.DatasetStatistics.#ctor(System.Int32, System.Int32, System.Int32, System.Int32, System.Int32, System.Int32, System.Int32)
+M:ContextCore.Abstractions.DatasetStatistics.<Clone>$()
+M:ContextCore.Abstractions.DatasetStatistics.Equals(ContextCore.Abstractions.DatasetStatistics)
+M:ContextCore.Abstractions.DatasetStatistics.Equals(System.Object)
+M:ContextCore.Abstractions.DatasetStatistics.GetHashCode()
+M:ContextCore.Abstractions.DatasetStatistics.GetType()
+M:ContextCore.Abstractions.DatasetStatistics.ToString()
+M:ContextCore.Abstractions.DatasetVersion.#ctor(System.Int32, System.Int32)
+M:ContextCore.Abstractions.DatasetVersion.<Clone>$()
+M:ContextCore.Abstractions.DatasetVersion.BumpMajor()
+M:ContextCore.Abstractions.DatasetVersion.BumpMinor()
+M:ContextCore.Abstractions.DatasetVersion.Deconstruct(out System.Int32, out System.Int32)
+M:ContextCore.Abstractions.DatasetVersion.Equals(ContextCore.Abstractions.DatasetVersion)
+M:ContextCore.Abstractions.DatasetVersion.Equals(System.Object)
+M:ContextCore.Abstractions.DatasetVersion.GetHashCode()
+M:ContextCore.Abstractions.DatasetVersion.GetType()
+M:ContextCore.Abstractions.DatasetVersion.ToString()
 M:ContextCore.Abstractions.DependencyScopeSet.#ctor(ContextCore.Abstractions.CacheInvalidationKey[])
 M:ContextCore.Abstractions.DependencyScopeSet.#ctor(System.Collections.Generic.IEnumerable<ContextCore.Abstractions.CacheInvalidationKey>)
 M:ContextCore.Abstractions.DependencyScopeSet.Equals(System.Object)
@@ -758,6 +827,16 @@ M:ContextCore.Abstractions.ExperimentEvidence.Equals(System.Object)
 M:ContextCore.Abstractions.ExperimentEvidence.GetHashCode()
 M:ContextCore.Abstractions.ExperimentEvidence.GetType()
 M:ContextCore.Abstractions.ExperimentEvidence.ToString()
+M:ContextCore.Abstractions.FeatureSchemaVersion.#ctor(System.Int32, System.Int32)
+M:ContextCore.Abstractions.FeatureSchemaVersion.<Clone>$()
+M:ContextCore.Abstractions.FeatureSchemaVersion.BumpMajor()
+M:ContextCore.Abstractions.FeatureSchemaVersion.BumpMinor()
+M:ContextCore.Abstractions.FeatureSchemaVersion.Deconstruct(out System.Int32, out System.Int32)
+M:ContextCore.Abstractions.FeatureSchemaVersion.Equals(ContextCore.Abstractions.FeatureSchemaVersion)
+M:ContextCore.Abstractions.FeatureSchemaVersion.Equals(System.Object)
+M:ContextCore.Abstractions.FeatureSchemaVersion.GetHashCode()
+M:ContextCore.Abstractions.FeatureSchemaVersion.GetType()
+M:ContextCore.Abstractions.FeatureSchemaVersion.ToString()
 M:ContextCore.Abstractions.IAgentObservationSource.ObserveAsync(System.String, System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IArtifactStore.AppendJsonLineAsync``1(ContextCore.Abstractions.Models.ArtifactDescriptor, ContextCore.Abstractions.IArtifactStore+!!0, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IArtifactStore.ListAsync(System.Nullable<ContextCore.Abstractions.Models.ArtifactKind>, System.Threading.CancellationToken)
@@ -873,6 +952,10 @@ M:ContextCore.Abstractions.IMemoryStore.QueryAsync(ContextCore.Abstractions.Mode
 M:ContextCore.Abstractions.IMemoryStore.SaveAsync(ContextCore.Abstractions.Models.ContextMemoryItem, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IMemoryStore.UpdateStatusAsync(System.String, System.String, System.String, ContextCore.Abstractions.Models.ContextMemoryStatus, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IMemoryStoreBatchLookup.BatchGetAsync(System.String, System.String, System.Collections.Generic.IReadOnlyList<System.String>, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IModelRegistry.GetAsync(System.String, ContextCore.Abstractions.ModelArtifactVersion, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IModelRegistry.ListAsync(System.String, System.Nullable<ContextCore.Abstractions.ModelArtifactStatus>, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IModelRegistry.PromoteAsync(System.String, ContextCore.Abstractions.ModelArtifactVersion, ContextCore.Abstractions.ModelArtifactStatus, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IModelRegistry.RegisterAsync(ContextCore.Abstractions.ModelArtifact, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IPackageDeltaPlanner.Plan(ContextCore.Abstractions.PackageStateSnapshot, ContextCore.Abstractions.RequestSemanticFingerprint, ContextCore.Abstractions.StoreVersionVector)
 M:ContextCore.Abstractions.IPackageIncrementalBuilder.IncrementalBuildAsync(ContextCore.Abstractions.PackageStateSnapshot, ContextCore.Abstractions.Models.ContextPackageRequest, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IPromotionCandidateFactory.CreateCandidate(ContextCore.Abstractions.Models.PromotionEvaluationRequest, ContextCore.Abstractions.Models.PromotionEvaluationResult, System.String, System.Threading.CancellationToken)
@@ -979,6 +1062,30 @@ M:ContextCore.Abstractions.IWorkingMemoryService.SetCurrentTaskAsync(ContextCore
 M:ContextCore.Abstractions.IWriteTransactionScope.CommitAsync(System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IWriteTransactionScope.RollbackAsync(System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IWriteTransactionScopeFactory.BeginAsync(System.Threading.CancellationToken)
+M:ContextCore.Abstractions.ModelArtifact.#ctor(System.String, ContextCore.Abstractions.ModelArtifactVersion, ContextCore.Abstractions.OptimizationTargetComponent, System.String, System.DateTimeOffset, ContextCore.Abstractions.ModelArtifactStatus)
+M:ContextCore.Abstractions.ModelArtifact.<Clone>$()
+M:ContextCore.Abstractions.ModelArtifact.Equals(ContextCore.Abstractions.ModelArtifact)
+M:ContextCore.Abstractions.ModelArtifact.Equals(System.Object)
+M:ContextCore.Abstractions.ModelArtifact.GetHashCode()
+M:ContextCore.Abstractions.ModelArtifact.GetType()
+M:ContextCore.Abstractions.ModelArtifact.ToString()
+M:ContextCore.Abstractions.ModelArtifactVersion.#ctor(System.Int32, System.Int32)
+M:ContextCore.Abstractions.ModelArtifactVersion.<Clone>$()
+M:ContextCore.Abstractions.ModelArtifactVersion.BumpMajor()
+M:ContextCore.Abstractions.ModelArtifactVersion.BumpMinor()
+M:ContextCore.Abstractions.ModelArtifactVersion.Deconstruct(out System.Int32, out System.Int32)
+M:ContextCore.Abstractions.ModelArtifactVersion.Equals(ContextCore.Abstractions.ModelArtifactVersion)
+M:ContextCore.Abstractions.ModelArtifactVersion.Equals(System.Object)
+M:ContextCore.Abstractions.ModelArtifactVersion.GetHashCode()
+M:ContextCore.Abstractions.ModelArtifactVersion.GetType()
+M:ContextCore.Abstractions.ModelArtifactVersion.ToString()
+M:ContextCore.Abstractions.ModelCompatibilityContract.#ctor(ContextCore.Abstractions.FeatureSchemaVersion, ContextCore.Abstractions.ModelCompatibilityLevel, System.String, System.String, System.String)
+M:ContextCore.Abstractions.ModelCompatibilityContract.<Clone>$()
+M:ContextCore.Abstractions.ModelCompatibilityContract.Equals(ContextCore.Abstractions.ModelCompatibilityContract)
+M:ContextCore.Abstractions.ModelCompatibilityContract.Equals(System.Object)
+M:ContextCore.Abstractions.ModelCompatibilityContract.GetHashCode()
+M:ContextCore.Abstractions.ModelCompatibilityContract.GetType()
+M:ContextCore.Abstractions.ModelCompatibilityContract.ToString()
 M:ContextCore.Abstractions.Models.ArtifactDescriptor.#ctor()
 M:ContextCore.Abstractions.Models.ArtifactDescriptor.<Clone>$()
 M:ContextCore.Abstractions.Models.ArtifactDescriptor.Equals(ContextCore.Abstractions.Models.ArtifactDescriptor)
@@ -3153,6 +3260,13 @@ M:ContextCore.Abstractions.RollbackCondition.GetHashCode()
 M:ContextCore.Abstractions.RollbackCondition.GetType()
 M:ContextCore.Abstractions.RollbackCondition.IsTriggered(System.Double)
 M:ContextCore.Abstractions.RollbackCondition.ToString()
+M:ContextCore.Abstractions.RollbackRecord.#ctor(System.String, System.String, System.String, ContextCore.Abstractions.RollbackReason, System.DateTimeOffset)
+M:ContextCore.Abstractions.RollbackRecord.<Clone>$()
+M:ContextCore.Abstractions.RollbackRecord.Equals(ContextCore.Abstractions.RollbackRecord)
+M:ContextCore.Abstractions.RollbackRecord.Equals(System.Object)
+M:ContextCore.Abstractions.RollbackRecord.GetHashCode()
+M:ContextCore.Abstractions.RollbackRecord.GetType()
+M:ContextCore.Abstractions.RollbackRecord.ToString()
 M:ContextCore.Abstractions.SectionDependencySet.#ctor(System.String, System.Collections.Generic.IReadOnlyList<ContextCore.Abstractions.VersionScope>)
 M:ContextCore.Abstractions.SectionDependencySet.Equals(System.Object)
 M:ContextCore.Abstractions.SectionDependencySet.GetHashCode()
@@ -3196,6 +3310,11 @@ M:ContextCore.Abstractions.VersionScope.Equals(System.Object)
 M:ContextCore.Abstractions.VersionScope.GetHashCode()
 M:ContextCore.Abstractions.VersionScope.GetType()
 M:ContextCore.Abstractions.VersionScope.ToString()
+M:ContextCore.Abstractions.VersionedDataset.#ctor(ContextCore.Abstractions.DatasetManifest, ContextCore.Abstractions.DatasetVersion, ContextCore.Abstractions.DatasetStatistics, System.DateTimeOffset)
+M:ContextCore.Abstractions.VersionedDataset.Equals(System.Object)
+M:ContextCore.Abstractions.VersionedDataset.GetHashCode()
+M:ContextCore.Abstractions.VersionedDataset.GetType()
+M:ContextCore.Abstractions.VersionedDataset.ToString()
 P:ContextCore.Abstractions.AgentDiagnosticRequest.CollectionId (get)
 P:ContextCore.Abstractions.AgentDiagnosticRequest.Hints (get)
 P:ContextCore.Abstractions.AgentDiagnosticRequest.TargetComponent (get)
@@ -3204,10 +3323,28 @@ P:ContextCore.Abstractions.AgentDiagnosticResult.HypothesisTrail (get)
 P:ContextCore.Abstractions.AgentDiagnosticResult.Observations (get)
 P:ContextCore.Abstractions.AgentDiagnosticResult.Proposal (get)
 P:ContextCore.Abstractions.AgentDiagnosticResult.Summary (get)
+P:ContextCore.Abstractions.BaselineComparison.BaselineMetrics (get)
+P:ContextCore.Abstractions.BaselineComparison.ComparedAt (get)
+P:ContextCore.Abstractions.BaselineComparison.ComparisonId (get)
+P:ContextCore.Abstractions.BaselineComparison.ExperimentMetrics (get)
+P:ContextCore.Abstractions.BaselineComparison.JudgeDecision (get|init)
+P:ContextCore.Abstractions.BaselineComparison.JudgeRationale (get|init)
+P:ContextCore.Abstractions.BaselineComparison.ProposalId (get)
+P:ContextCore.Abstractions.BaselineComparison.StageMetrics (get|init)
 P:ContextCore.Abstractions.CacheInvalidationKey.CollectionId (get|init)
 P:ContextCore.Abstractions.CacheInvalidationKey.EntityId (get|init)
 P:ContextCore.Abstractions.CacheInvalidationKey.StoreKind (get|init)
 P:ContextCore.Abstractions.CacheInvalidationKey.WorkspaceId (get|init)
+P:ContextCore.Abstractions.CanaryAssignment.AffectedCollectionIds (get|init)
+P:ContextCore.Abstractions.CanaryAssignment.AffectedWorkspaceIds (get|init)
+P:ContextCore.Abstractions.CanaryAssignment.AssignedAt (get)
+P:ContextCore.Abstractions.CanaryAssignment.AssignmentId (get)
+P:ContextCore.Abstractions.CanaryAssignment.Percentage (get|init)
+P:ContextCore.Abstractions.CanaryAssignment.ProposalId (get)
+P:ContextCore.Abstractions.CanaryAssignment.RunId (get)
+P:ContextCore.Abstractions.CanaryAssignment.Strategy (get)
+P:ContextCore.Abstractions.CanaryAssignment.StrategyConfigJson (get|init)
+P:ContextCore.Abstractions.CanaryAssignment.WhitelistHash (get|init)
 P:ContextCore.Abstractions.ContextJob.CollectionId (get|init)
 P:ContextCore.Abstractions.ContextJob.CompletedAt (get|init)
 P:ContextCore.Abstractions.ContextJob.CreatedAt (get|init)
@@ -3249,6 +3386,36 @@ P:ContextCore.Abstractions.ContextValidationIssue.Path (get|init)
 P:ContextCore.Abstractions.ContextValidationIssue.Severity (get|init)
 P:ContextCore.Abstractions.ContextValidationResult.Issues (get|init)
 P:ContextCore.Abstractions.ContextValidationResult.Succeeded (get|init)
+P:ContextCore.Abstractions.DatasetManifest.CreatedAt (get)
+P:ContextCore.Abstractions.DatasetManifest.DatasetId (get)
+P:ContextCore.Abstractions.DatasetManifest.FeatureSchemaVersion (get)
+P:ContextCore.Abstractions.DatasetManifest.GroupKeyField (get|init)
+P:ContextCore.Abstractions.DatasetManifest.HashSha256 (get)
+P:ContextCore.Abstractions.DatasetManifest.ItemCount (get)
+P:ContextCore.Abstractions.DatasetManifest.Name (get)
+P:ContextCore.Abstractions.DatasetManifest.Provenance (get)
+P:ContextCore.Abstractions.DatasetManifest.ReviewNotes (get|init)
+P:ContextCore.Abstractions.DatasetManifest.ReviewStatus (get|init)
+P:ContextCore.Abstractions.DatasetManifest.ReviewedAt (get|init)
+P:ContextCore.Abstractions.DatasetManifest.ReviewerId (get|init)
+P:ContextCore.Abstractions.DatasetManifest.SourceCorpusDescription (get)
+P:ContextCore.Abstractions.DatasetManifest.SplitStrategy (get|init)
+P:ContextCore.Abstractions.DatasetManifest.TestItemIds (get|init)
+P:ContextCore.Abstractions.DatasetManifest.TestRatio (get|init)
+P:ContextCore.Abstractions.DatasetManifest.TrainItemIds (get|init)
+P:ContextCore.Abstractions.DatasetManifest.TrainRatio (get|init)
+P:ContextCore.Abstractions.DatasetManifest.ValidationItemIds (get|init)
+P:ContextCore.Abstractions.DatasetManifest.ValidationRatio (get|init)
+P:ContextCore.Abstractions.DatasetStatistics.NegativeLabels (get)
+P:ContextCore.Abstractions.DatasetStatistics.PositiveLabels (get)
+P:ContextCore.Abstractions.DatasetStatistics.TestItems (get)
+P:ContextCore.Abstractions.DatasetStatistics.TotalItems (get)
+P:ContextCore.Abstractions.DatasetStatistics.TrainItems (get)
+P:ContextCore.Abstractions.DatasetStatistics.UnlabeledItems (get)
+P:ContextCore.Abstractions.DatasetStatistics.ValidationItems (get)
+P:ContextCore.Abstractions.DatasetVersion.Initial (get)
+P:ContextCore.Abstractions.DatasetVersion.Major (get|init)
+P:ContextCore.Abstractions.DatasetVersion.Minor (get|init)
 P:ContextCore.Abstractions.DependencyScopeSet.Count (get)
 P:ContextCore.Abstractions.DependencyScopeSet.Scopes (get)
 P:ContextCore.Abstractions.ExpectedGain.Confidence (get)
@@ -3263,6 +3430,9 @@ P:ContextCore.Abstractions.ExperimentEvidence.MetricName (get)
 P:ContextCore.Abstractions.ExperimentEvidence.Notes (get)
 P:ContextCore.Abstractions.ExperimentEvidence.SampleCount (get)
 P:ContextCore.Abstractions.ExperimentEvidence.Source (get)
+P:ContextCore.Abstractions.FeatureSchemaVersion.Initial (get)
+P:ContextCore.Abstractions.FeatureSchemaVersion.Major (get|init)
+P:ContextCore.Abstractions.FeatureSchemaVersion.Minor (get|init)
 P:ContextCore.Abstractions.IAgentObservationSource.SourceId (get)
 P:ContextCore.Abstractions.IContextEventSink.Kind (get)
 P:ContextCore.Abstractions.IContextJobProcessor.Kind (get)
@@ -3277,6 +3447,27 @@ P:ContextCore.Abstractions.IEmbeddingGeneratorDescriptor.PoolingStrategy (get)
 P:ContextCore.Abstractions.IEmbeddingGeneratorDescriptor.ProviderType (get)
 P:ContextCore.Abstractions.IStoreRuntimeCapabilities.Profile (get)
 P:ContextCore.Abstractions.IWriteTransactionScope.IsActive (get)
+P:ContextCore.Abstractions.ModelArtifact.ArtifactUri (get)
+P:ContextCore.Abstractions.ModelArtifact.CompatibilityContract (get|init)
+P:ContextCore.Abstractions.ModelArtifact.CreatedAt (get)
+P:ContextCore.Abstractions.ModelArtifact.FeatureSchemaVersion (get|init)
+P:ContextCore.Abstractions.ModelArtifact.HyperparametersJson (get|init)
+P:ContextCore.Abstractions.ModelArtifact.MetricsJson (get|init)
+P:ContextCore.Abstractions.ModelArtifact.ModelId (get)
+P:ContextCore.Abstractions.ModelArtifact.Status (get|init)
+P:ContextCore.Abstractions.ModelArtifact.TargetCapability (get)
+P:ContextCore.Abstractions.ModelArtifact.TrainedOnDatasetId (get|init)
+P:ContextCore.Abstractions.ModelArtifact.TrainedOnDatasetVersion (get|init)
+P:ContextCore.Abstractions.ModelArtifact.TrainingNotes (get|init)
+P:ContextCore.Abstractions.ModelArtifact.Version (get)
+P:ContextCore.Abstractions.ModelArtifactVersion.Initial (get)
+P:ContextCore.Abstractions.ModelArtifactVersion.Major (get|init)
+P:ContextCore.Abstractions.ModelArtifactVersion.Minor (get|init)
+P:ContextCore.Abstractions.ModelCompatibilityContract.BreakingChangeNotes (get)
+P:ContextCore.Abstractions.ModelCompatibilityContract.CompatibilityLevel (get)
+P:ContextCore.Abstractions.ModelCompatibilityContract.MaxRuntimeVersion (get)
+P:ContextCore.Abstractions.ModelCompatibilityContract.MinRuntimeVersion (get)
+P:ContextCore.Abstractions.ModelCompatibilityContract.RequiredFeatureSchemaVersion (get)
 P:ContextCore.Abstractions.Models.ArtifactDescriptor.CapabilityId (get|init)
 P:ContextCore.Abstractions.Models.ArtifactDescriptor.CollectionId (get|init)
 P:ContextCore.Abstractions.Models.ArtifactDescriptor.DateShard (get|init)
@@ -7124,6 +7315,16 @@ P:ContextCore.Abstractions.RollbackCondition.Description (get)
 P:ContextCore.Abstractions.RollbackCondition.MetricName (get)
 P:ContextCore.Abstractions.RollbackCondition.Operator (get)
 P:ContextCore.Abstractions.RollbackCondition.Threshold (get)
+P:ContextCore.Abstractions.RollbackRecord.OperatorNotes (get|init)
+P:ContextCore.Abstractions.RollbackRecord.ProposalId (get)
+P:ContextCore.Abstractions.RollbackRecord.Reason (get)
+P:ContextCore.Abstractions.RollbackRecord.RecordId (get)
+P:ContextCore.Abstractions.RollbackRecord.RunId (get)
+P:ContextCore.Abstractions.RollbackRecord.TriggeredAt (get)
+P:ContextCore.Abstractions.RollbackRecord.TriggeredAtStage (get|init)
+P:ContextCore.Abstractions.RollbackRecord.TriggeredConditionMetricName (get|init)
+P:ContextCore.Abstractions.RollbackRecord.TriggeredConditionThreshold (get|init)
+P:ContextCore.Abstractions.RollbackRecord.TriggeredConditionValue (get|init)
 P:ContextCore.Abstractions.SectionDependencySet.DependencyScopes (get)
 P:ContextCore.Abstractions.SectionDependencySet.SectionName (get)
 P:ContextCore.Abstractions.StateCacheKey.Value (get|init)
@@ -7152,9 +7353,16 @@ P:ContextCore.Abstractions.TokenTruncationResult.WasTruncated (get|init)
 P:ContextCore.Abstractions.VersionScope.CollectionId (get|init)
 P:ContextCore.Abstractions.VersionScope.StoreKind (get|init)
 P:ContextCore.Abstractions.VersionScope.WorkspaceId (get|init)
+P:ContextCore.Abstractions.VersionedDataset.CreatedAt (get)
+P:ContextCore.Abstractions.VersionedDataset.Manifest (get)
+P:ContextCore.Abstractions.VersionedDataset.Statistics (get)
+P:ContextCore.Abstractions.VersionedDataset.Version (get)
 T:ContextCore.Abstractions.AgentDiagnosticRequest
 T:ContextCore.Abstractions.AgentDiagnosticResult
+T:ContextCore.Abstractions.BaselineComparison
 T:ContextCore.Abstractions.CacheInvalidationKey (Struct)
+T:ContextCore.Abstractions.CanaryAssignment
+T:ContextCore.Abstractions.CanaryAssignmentStrategy (Enum)
 T:ContextCore.Abstractions.ComparisonOperator (Enum)
 T:ContextCore.Abstractions.ContextCoreDiagnostics
 T:ContextCore.Abstractions.ContextEventLevel (Enum)
@@ -7169,9 +7377,16 @@ T:ContextCore.Abstractions.ContextTokenizationMetadataKeys
 T:ContextCore.Abstractions.ContextValidationIssue
 T:ContextCore.Abstractions.ContextValidationResult
 T:ContextCore.Abstractions.ContextValidationSeverity (Enum)
+T:ContextCore.Abstractions.DatasetManifest
+T:ContextCore.Abstractions.DatasetProvenance (Enum)
+T:ContextCore.Abstractions.DatasetReviewStatus (Enum)
+T:ContextCore.Abstractions.DatasetSplitStrategy (Enum)
+T:ContextCore.Abstractions.DatasetStatistics
+T:ContextCore.Abstractions.DatasetVersion
 T:ContextCore.Abstractions.DependencyScopeSet
 T:ContextCore.Abstractions.ExpectedGain
 T:ContextCore.Abstractions.ExperimentEvidence
+T:ContextCore.Abstractions.FeatureSchemaVersion
 T:ContextCore.Abstractions.IAgentObservationSource (Interface)
 T:ContextCore.Abstractions.IArtifactStore (Interface)
 T:ContextCore.Abstractions.ICandidateConstraintReviewStore (Interface)
@@ -7218,6 +7433,7 @@ T:ContextCore.Abstractions.ILeasedJobQueue (Interface)
 T:ContextCore.Abstractions.IMemoryPromotionService (Interface)
 T:ContextCore.Abstractions.IMemoryStore (Interface)
 T:ContextCore.Abstractions.IMemoryStoreBatchLookup (Interface)
+T:ContextCore.Abstractions.IModelRegistry (Interface)
 T:ContextCore.Abstractions.IPackageDeltaPlanner (Interface)
 T:ContextCore.Abstractions.IPackageIncrementalBuilder (Interface)
 T:ContextCore.Abstractions.IPromotionCandidateFactory (Interface)
@@ -7253,6 +7469,11 @@ T:ContextCore.Abstractions.IVectorStore (Interface)
 T:ContextCore.Abstractions.IWorkingMemoryService (Interface)
 T:ContextCore.Abstractions.IWriteTransactionScope (Interface)
 T:ContextCore.Abstractions.IWriteTransactionScopeFactory (Interface)
+T:ContextCore.Abstractions.ModelArtifact
+T:ContextCore.Abstractions.ModelArtifactStatus (Enum)
+T:ContextCore.Abstractions.ModelArtifactVersion
+T:ContextCore.Abstractions.ModelCompatibilityContract
+T:ContextCore.Abstractions.ModelCompatibilityLevel (Enum)
 T:ContextCore.Abstractions.Models.AnchorType (Enum)
 T:ContextCore.Abstractions.Models.ArtifactDescriptor
 T:ContextCore.Abstractions.Models.ArtifactKind (Enum)
@@ -7728,6 +7949,8 @@ T:ContextCore.Abstractions.RetrievalAdapterResult
 T:ContextCore.Abstractions.RiskAssessment
 T:ContextCore.Abstractions.RiskSeverity (Enum)
 T:ContextCore.Abstractions.RollbackCondition
+T:ContextCore.Abstractions.RollbackReason (Enum)
+T:ContextCore.Abstractions.RollbackRecord
 T:ContextCore.Abstractions.SectionDependencySet
 T:ContextCore.Abstractions.StateCacheKey (Struct)
 T:ContextCore.Abstractions.StorageExecutionProfile
@@ -7737,3 +7960,4 @@ T:ContextCore.Abstractions.StoreOperationKind (Enum)
 T:ContextCore.Abstractions.StoreVersionVector
 T:ContextCore.Abstractions.TokenTruncationResult
 T:ContextCore.Abstractions.VersionScope (Struct)
+T:ContextCore.Abstractions.VersionedDataset
