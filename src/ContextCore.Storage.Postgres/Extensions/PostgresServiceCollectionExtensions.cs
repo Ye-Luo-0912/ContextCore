@@ -136,6 +136,13 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<PostgresContextStateVersionStore>();
         services.AddSingleton<IContextStateVersionStore>(sp => sp.GetRequiredService<PostgresContextStateVersionStore>());
 
+        // R26-2：Agent Runtime 持久化（checkpoint + task state）。
+        // 替代 InMemory 默认注册，让 HA 场景下 agent session/task 状态可跨进程持久化与恢复。
+        services.AddSingleton<PostgresAgentCheckpointStore>();
+        services.AddSingleton<IAgentCheckpointStore>(sp => sp.GetRequiredService<PostgresAgentCheckpointStore>());
+        services.AddSingleton<PostgresAgentTaskStateStore>();
+        services.AddSingleton<IAgentTaskStateStore>(sp => sp.GetRequiredService<PostgresAgentTaskStateStore>());
+
         // PackageBuildTraceStore
         services.AddSingleton<PostgresContextPackageBuildTraceStore>();
         services.AddSingleton<IContextPackageBuildTraceStore>(sp =>

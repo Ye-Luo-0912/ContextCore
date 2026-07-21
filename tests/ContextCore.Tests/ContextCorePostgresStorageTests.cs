@@ -162,6 +162,11 @@ public sealed class ContextCorePostgresStorageTests
         // R14-PG-6：分布式 context state 版本存储注册
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(PostgresContextStateVersionStore)));
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(IContextStateVersionStore)));
+        // R26-2：Agent Runtime 持久化（checkpoint + task state）注册
+        Assert.IsTrue(services.Any(item => item.ServiceType == typeof(PostgresAgentCheckpointStore)));
+        Assert.IsTrue(services.Any(item => item.ServiceType == typeof(IAgentCheckpointStore)));
+        Assert.IsTrue(services.Any(item => item.ServiceType == typeof(PostgresAgentTaskStateStore)));
+        Assert.IsTrue(services.Any(item => item.ServiceType == typeof(IAgentTaskStateStore)));
     }
 
     [TestMethod]
@@ -539,7 +544,7 @@ public sealed class ContextCorePostgresStorageTests
         var sql = PostgresMigrationRunner.BuildMigrationSql(options);
         var requiredIndexes = PostgresMigrationRunner.GetRequiredIndexNames(options);
 
-        Assert.AreEqual("cc-schema-v13", PostgresMigrationRunner.SchemaVersion);
+        Assert.AreEqual("cc-schema-v14", PostgresMigrationRunner.SchemaVersion);
         StringAssert.Contains(sql, "CREATE EXTENSION IF NOT EXISTS vector");
         StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_vector_index_entries");
         StringAssert.Contains(sql, "source_id text NOT NULL DEFAULT ''");
@@ -591,6 +596,16 @@ public sealed class ContextCorePostgresStorageTests
         StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_context_state_versions");
         StringAssert.Contains(sql, "store_kind text NOT NULL");
         StringAssert.Contains(sql, "version bigint NOT NULL DEFAULT 0");
+        // R26-1：agent_checkpoints + agent_task_states 表与索引
+        StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_agent_checkpoints");
+        StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_agent_task_states");
+        StringAssert.Contains(sql, "session_value text NOT NULL");
+        StringAssert.Contains(sql, "runtime_kind text NOT NULL DEFAULT 'Unknown'");
+        StringAssert.Contains(sql, "state_json text NOT NULL DEFAULT ''");
+        CollectionAssert.Contains(requiredIndexes.ToArray(), "ix_cc_agent_checkpoints_session");
+        CollectionAssert.Contains(requiredIndexes.ToArray(), "ix_cc_agent_checkpoints_created");
+        CollectionAssert.Contains(requiredIndexes.ToArray(), "ix_cc_agent_task_states_session");
+        CollectionAssert.Contains(requiredIndexes.ToArray(), "ix_cc_agent_task_states_updated");
     }
 
     [TestMethod]
@@ -696,6 +711,16 @@ public sealed class ContextCorePostgresStorageTests
         StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_context_state_versions");
         StringAssert.Contains(sql, "store_kind text NOT NULL");
         StringAssert.Contains(sql, "version bigint NOT NULL DEFAULT 0");
+        // R26-1：agent_checkpoints + agent_task_states 表 DDL（索引断言在 PostgresMigrationSql_ShouldExposeVectorIndexProviderSchema 中）
+        StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_agent_checkpoints");
+        StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_agent_task_states");
+        StringAssert.Contains(sql, "session_value text NOT NULL");
+        StringAssert.Contains(sql, "runtime_kind text NOT NULL DEFAULT 'Unknown'");
+        StringAssert.Contains(sql, "state_json text NOT NULL DEFAULT ''");
+        StringAssert.Contains(sql, "ix_cc_agent_checkpoints_session");
+        StringAssert.Contains(sql, "ix_cc_agent_checkpoints_created");
+        StringAssert.Contains(sql, "ix_cc_agent_task_states_session");
+        StringAssert.Contains(sql, "ix_cc_agent_task_states_updated");
     }
 
     [TestMethod]

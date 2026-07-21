@@ -19,8 +19,9 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
     /// R14-PG-4：v10 → v11，新增 context learning / governance review 表与索引。
     /// R14-PG-5：v11 → v12，新增 vector lifecycle + artifact 表与索引。
     /// R14-PG-6：v12 → v13，新增 context_state_versions 表用于分布式版本号。
+    /// R26-1：v13 → v14，新增 agent_checkpoints + agent_task_states 表与索引（Agent Runtime 持久化）。
     /// </summary>
-    public const string SchemaVersion = "cc-schema-v13";
+    public const string SchemaVersion = "cc-schema-v14";
 
     public const string BaselineMigrationId = "0001_operational_store_baseline";
 
@@ -74,7 +75,10 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         "vector_reindex_reports",
         // R14-PG-6：分布式 context state 版本号表（不同于 schema_versions 用于 schema migration 跟踪）
         "context_state_versions",
-        "context_schema_migrations"
+        "context_schema_migrations",
+        // R26-1：Agent Runtime 持久化（checkpoint + task state）
+        "agent_checkpoints",
+        "agent_task_states"
     ];
 
     public static readonly IReadOnlyList<(string TableSuffix, string IndexSuffix)> RequiredOperationalIndexDefinitions =
@@ -175,7 +179,12 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         ("vector_lifecycle_metadata_reviews", "candidate"),
         ("vector_lifecycle_metadata_reviews", "reviewed"),
         ("vector_lifecycle_sidecar_metadata", "created"),
-        ("vector_reindex_reports", "created")
+        ("vector_reindex_reports", "created"),
+        // R26-1：Agent Runtime 持久化索引
+        ("agent_checkpoints", "session"),
+        ("agent_checkpoints", "created"),
+        ("agent_task_states", "session"),
+        ("agent_task_states", "updated")
     ];
 
     private readonly PostgresConnectionFactory _connectionFactory;
@@ -253,6 +262,9 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         var artifacts = Infrastructure.PostgresNames.Table(options, "artifacts");
         // R14-PG-6：分布式 context state 版本号表
         var contextStateVersions = Infrastructure.PostgresNames.Table(options, "context_state_versions");
+        // R26-1：Agent Runtime 持久化表
+        var agentCheckpoints = Infrastructure.PostgresNames.Table(options, "agent_checkpoints");
+        var agentTaskStates = Infrastructure.PostgresNames.Table(options, "agent_task_states");
         var extensionSql = options.EnablePgVectorExtension
             ? "CREATE EXTENSION IF NOT EXISTS vector;"
             : string.Empty;
@@ -1153,6 +1165,42 @@ CREATE TABLE IF NOT EXISTS {vectorIndexManifests} (
 );
 
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "vector_index_manifests", "updated")} ON {vectorIndexManifests} (workspace_id, collection_id, updated_at DESC);
+
+-- R26-1：Agent Runtime 持久化表（checkpoint + task state）
+-- 表反规范化 session 字段（session_value / runtime_kind / workspace_id / collection_id）以便按 session 索引查询；
+-- 完整 AgentCheckpoint / AgentTaskState 对象保存在 data jsonb，由 store 反序列化。
+CREATE TABLE IF NOT EXISTS {agentCheckpoints} (
+    workspace_id text NOT NULL,
+    collection_id text NULL,
+    session_value text NOT NULL,
+    runtime_kind text NOT NULL DEFAULT 'Unknown',
+    checkpoint_id text NOT NULL,
+    turn_id text NULL,
+    snapshot_id text NULL,
+    created_at timestamptz NOT NULL,
+    state_json text NOT NULL DEFAULT '',
+    data jsonb NOT NULL,
+    PRIMARY KEY (workspace_id, checkpoint_id)
+);
+
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "agent_checkpoints", "session")} ON {agentCheckpoints} (workspace_id, session_value, created_at DESC);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "agent_checkpoints", "created")} ON {agentCheckpoints} (workspace_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS {agentTaskStates} (
+    workspace_id text NOT NULL,
+    collection_id text NULL,
+    session_value text NOT NULL,
+    runtime_kind text NOT NULL DEFAULT 'Unknown',
+    task_id text NOT NULL,
+    status text NOT NULL DEFAULT '',
+    created_at timestamptz NOT NULL,
+    updated_at timestamptz NOT NULL,
+    data jsonb NOT NULL,
+    PRIMARY KEY (workspace_id, task_id)
+);
+
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "agent_task_states", "session")} ON {agentTaskStates} (workspace_id, session_value, updated_at DESC);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "agent_task_states", "updated")} ON {agentTaskStates} (workspace_id, updated_at DESC);
 """;
     }
 
