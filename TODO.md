@@ -1,6 +1,6 @@
 # ContextCore 项目路线图
 
-> 最近更新：P0 冻结完成，下一阶段进入 R15（2026-07-20）
+> 最近更新：R27 Evolution Pipeline Postgres 持久化完成，下一阶段 R18-R21 路线图（2026-07-21）
 
 > 本文件是 ContextCore 的**唯一当前路线图**。docs/ 下的 `*_Freeze*.md`、`*_Report*.md`、`*_Audit*.md`、`*_Plan*.md`、`*_Gap_Map*.md`、`新阶段*` 类文档均已标注"历史快照"声明，仅供回溯，不作为 current-head 决策依据。历史完成记录已迁入 [docs/archive/roadmap-history.md](docs/archive/roadmap-history.md)。
 
@@ -8,7 +8,16 @@
 
 ## 当前阶段
 
-**R14-PG：Postgres Runtime Parity & HA Gate 已完成** — 10 个子任务全部完成并提交（HEAD `540a6fc`）。P0 冻结在 R14-PG 收口（`3dbc1db`）基础上完成代码修复与基线重测，所有性能指标指向同一 commit（`git log --grep="fix(P0): freeze"`）。
+**R27 Evolution Pipeline Postgres 持久化已完成**（HEAD `6fe3203`）。延续 R26 in-memory → Postgres 模式，将 `DefaultGuardedOptimizationPipeline` 的 in-memory `ConcurrentDictionary` 状态扩展到 PostgreSQL，支持 HA 场景下的跨进程恢复。
+
+- **R22 Bounded Context Orchestrator** 完成（HEAD `03b42fa`，3 commits）：在线 Agent 主轴 Plan→Decide→Build→Quality Evaluate→Optional Single Repair→Finalize，仅一次修复且针对 7 类确定性异常，定义 `ContextRepairBudget`。1751 测试通过（+97 PublicApi baseline）。
+- **R23 Agent Runtime Integration** 完成（HEAD `8573aed`，4 commits，180 tests）：5 interfaces + 3 enums + 7 records + `AgentContextSnapshot`/`AgentContextDelta` + `GenericToolAgentAdapter`/`CodexAgentRuntimeAdapter`/`ClaudeCodeAgentRuntimeAdapter` + `AgentRuntimeBase` 抽象基类。1931 测试通过（+122 PublicApi baseline）。
+- **R24 Agent Context Bridge + Task State Store** 完成（commit `c93e4a3`）：连接 Agent Runtime 到 ContextCore retrieval，`AgentTaskState` + `IAgentTaskStateStore` 契约。
+- **R25 Bridging Agent Workspace Context Provider** 完成（commit `eba7bf9`）：合并 ContextCore retrieval + session injection。
+- **R26 Agent Runtime Postgres Persistence** 完成（HEAD `802592d`）：`agent_checkpoints` + `agent_task_states` 表 + `PostgresAgentCheckpointStore` + `PostgresAgentTaskStateStore`，SchemaVersion v13 → v14。2069 测试通过。
+- **R27 Evolution Pipeline Postgres Persistence** 完成（HEAD `6fe3203`）：`pipeline_runs` + 3 audit tables（`pipeline_canary_assignments`/`pipeline_rollback_records`/`pipeline_baseline_comparisons`）+ `IPipelineRunStore` 接口（9 methods）+ `PipelineRunSnapshot` record（11 fields，immutable）+ `PostgresPipelineRunStore` + `InMemoryPipelineRunStore`，SchemaVersion v14 → v15。`DefaultGuardedOptimizationPipeline` 重构为注入 `IPipelineRunStore`（默认 InMemory，Postgres provider 注册后覆盖）。2103 测试通过（+34 自 R26）。
+
+下一阶段为 **R18-R21 路线图**（统一决策内核 → Policy Bundle → Multi-Expert → Memory Evolution），见文末章节。
 
 - R14-PG-1 移除 LearningFeedback/Review 的 Unsupported 覆盖，正式绑定 Postgres 实现（commit `28b7c49`）
 - R14-PG-2 PostgresDecisionTraceStore + decision_traces 表（commit `72d8f20`）
@@ -71,14 +80,14 @@ R14-PG 收口后重新冻结 Current HEAD，确保所有性能指标指向同一
 
 ---
 
-## 当前验收指标（2026-07-20 R17-2/P8 Learning Loop V1 + OPT-1~OPT-5 完成）
+## 当前验收指标（2026-07-21 R27 Evolution Pipeline Postgres Persistence 完成）
 
 | 指标 | 当前值 | 目标 |
 |------|--------|------|
-| 当前 HEAD | `a4a6fdb`（OPT-3 收口）；R17-2 DefaultGuardedOptimizationPipeline + P8 Learning Loop V1 + OPT-1~OPT-5 全部完成 | - |
-| PublicApi baseline 行数 | 7967（+74 R15 V1；+1 R15 V2；+196 R16/R17 Evolution 契约；+224 P8 LearningLoopContracts；+5 OPT-4 ContextDecisionPolicyVersions）— 实现层类型在 ContextCore.Core 不进 Abstractions baseline | 单一事实源 |
+| 当前 HEAD | `6fe3203`（R27）；R22 Bounded Orchestrator → R23 Agent Runtime → R24 Agent Bridge → R25 Bridging Provider → R26 Agent Postgres → R27 Pipeline Postgres 全部完成 | - |
+| PublicApi baseline 行数 | 9047（R27 +30 PipelineRunSnapshot + IPipelineRunStore；R26 9017；R23 8976；R17-2 7967）— 实现层类型在 ContextCore.Core 不进 Abstractions baseline | 单一事实源 |
 | 构建 | 0 警告 / 0 错误 | 0 / 0 |
-| 测试 | ContextCore.Tests 1345/1345（+16 P8-A；+30 P8-B/C/D；+19 R17-2；+8 OPT-1；+16 OPT-2；+14 OPT-3；+14 OPT-5；skip 10 文档化缺口）；IntegrationTests 75/75（1 skip pg_dump；`ConcurrentBuild_16Way` 性能阈值在 WSL2 上 marginal flaky，重跑通过）；Service.Tests 61/61（1 skip manual OpenApi_RegenerateSnapshot） | 0 失败 |
+| 测试 | ContextCore.Tests 2103/2103 passed / 9 skipped（R27 +34 自 R26 的 2069）；IntegrationTests 75/75（1 skip pg_dump）；Service.Tests 61/61（1 skip manual OpenApi_RegenerateSnapshot） | 0 失败 |
 | A3 / golden / graph 不回退 | 197 个 graph/eval/retrieval 测试全通过 | 不回退 |
 | Package Build Cold (InMemory, ItemCount=50) | 2,329 μs / 819 KB | ≤ 当前值 70% |
 | Package Build CacheHit (InMemory, ItemCount=50) | 6.6 μs / 12.56 KB | 优于 Cold |
@@ -101,7 +110,7 @@ R14-PG 收口后重新冻结 Current HEAD，确保所有性能指标指向同一
 | Decision Evidence V2 | CandidateDecisionReasonCode 枚举 + V2 字段填充 | 已达成（R14-1） |
 | Package Quality 报告 | 8 指标 + OverallScore 加权 | 已达成（R14-2） |
 | OpenAPI snapshot 辅助再生 | OpenApi_RegenerateSnapshot `[Ignore]` 方法 | 已达成 |
-| Postgres schema 版本 | v13（自 R14-PG-6 起稳定） | 稳定 |
+| Postgres schema 版本 | v15（自 R27 起稳定；R14-PG-6 起 v13，R26 起 v14） | 稳定 |
 | Postgres Unsupported stores 残留 | 0（R14-PG-5 完成时清零） | 0 |
 | Postgres 多实例 cache invalidation | PostgresContextStateVersionStore + Decorator 文档化 | 已达成（R14-PG-6/7） |
 | Postgres migration 框架 | registry + history + rollback + 版本短路 | 已达成（R14-PG-8 + P0 冻结） |
@@ -236,7 +245,7 @@ Agent 只负责离线控制面，不触碰正式 Policy 生产路径。
 - 硬边界：仅接受 ExperimentReady proposal + 至少 1 条 RollbackCondition；阶段跳跃抛 InvalidOperationException；终态（Promoted/RolledBack/Rejected/Cancelled/Failed）幂等不可推进
 
 **R17 V3 待办**（集成层）：
-- Pipeline run 持久化（替换 in-memory ConcurrentDictionary 为 PostgresContextLearningStore 或新 store）
+- ~~Pipeline run 持久化（替换 in-memory ConcurrentDictionary 为 PostgresContextLearningStore 或新 store）~~ **已完成（R27，HEAD `6fe3203`）** — `DefaultGuardedOptimizationPipeline` 重构为注入 `IPipelineRunStore`，Postgres 实现通过 `PostgresPipelineRunStore` 持久化到 `pipeline_runs` + 3 audit tables，SchemaVersion v15。
 - 第一项端到端集成：真实 dataset → model artifact → canary assignment → rollback 完整流程
 - Canary assignment strategy 实现选择（随机/分层/哈希分桶等）
 
