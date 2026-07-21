@@ -1,6 +1,6 @@
 # ContextCore 项目路线图
 
-> 最近更新：R27 Evolution Pipeline Postgres 持久化完成，下一阶段 R18-R21 路线图（2026-07-21）
+> 最近更新：R27 + R18-R21 全部完成，所有路线图既定阶段已收口（2026-07-21，HEAD `6fe3203` + docs `ff49c3d`）。下一步由用户决定推进方向。
 
 > 本文件是 ContextCore 的**唯一当前路线图**。docs/ 下的 `*_Freeze*.md`、`*_Report*.md`、`*_Audit*.md`、`*_Plan*.md`、`*_Gap_Map*.md`、`新阶段*` 类文档均已标注"历史快照"声明，仅供回溯，不作为 current-head 决策依据。历史完成记录已迁入 [docs/archive/roadmap-history.md](docs/archive/roadmap-history.md)。
 
@@ -17,7 +17,7 @@
 - **R26 Agent Runtime Postgres Persistence** 完成（HEAD `802592d`）：`agent_checkpoints` + `agent_task_states` 表 + `PostgresAgentCheckpointStore` + `PostgresAgentTaskStateStore`，SchemaVersion v13 → v14。2069 测试通过。
 - **R27 Evolution Pipeline Postgres Persistence** 完成（HEAD `6fe3203`）：`pipeline_runs` + 3 audit tables（`pipeline_canary_assignments`/`pipeline_rollback_records`/`pipeline_baseline_comparisons`）+ `IPipelineRunStore` 接口（9 methods）+ `PipelineRunSnapshot` record（11 fields，immutable）+ `PostgresPipelineRunStore` + `InMemoryPipelineRunStore`，SchemaVersion v14 → v15。`DefaultGuardedOptimizationPipeline` 重构为注入 `IPipelineRunStore`（默认 InMemory，Postgres provider 注册后覆盖）。2103 测试通过（+34 自 R26）。
 
-下一阶段为 **R18-R21 路线图**（统一决策内核 → Policy Bundle → Multi-Expert → Memory Evolution），见文末章节。
+下一阶段为 **R18-R21 路线图**（统一决策内核 → Policy Bundle → Multi-Expert → Memory Evolution）— **全部 14 子阶段已完成**（commits `e987e19` → `d4df506`），详见文末章节。既定路线图全部收口；后续任务待用户决定方向（候选：端到端集成 R17 V3 / Service DI 收敛 / DTO-R4 / 性能基准扩展）。
 
 - R14-PG-1 移除 LearningFeedback/Review 的 Unsupported 覆盖，正式绑定 Postgres 实现（commit `28b7c49`）
 - R14-PG-2 PostgresDecisionTraceStore + decision_traces 表（commit `72d8f20`）
@@ -334,6 +334,8 @@ Agent 只负责离线控制面，不触碰正式 Policy 生产路径。
 
 ## R18-R21 路线图（统一决策内核 → Policy Bundle → Multi-Expert → Memory Evolution）
 
+> **状态：全部 12 子阶段已完成**（commits `e987e19` → `cad1f0c`，HEAD `cad1f0c`）。R21-4/5 统一 MemoryState + decay evaluator + Utility Stats + Conflict Resolution 已完成（commit `d4df506`）。下面章节保留作为设计参考，不再作为 "下一阶段任务"。
+
 ### 诊断（基于代码核实）
 
 当前存在两套独立的选择系统（已用代码验证 6 项分裂证据）：
@@ -351,7 +353,7 @@ Agent 只负责离线控制面，不触碰正式 Policy 生产路径。
 
 **关键发现**：`DecisionEvidenceV2` 已实现提案中 `CandidateFeatureVector` + `CandidateUtilityScore` 的核心字段，但**目前仅作为 trace 投影**，未驱动运行时决策。R18 的本质工作是把这份 trace-only 契约"提升"为运行时 envelope。
 
-### R18 — 统一决策内核（4 子阶段）
+### R18 — 统一决策内核（4 子阶段，**全部已完成**）
 
 **目标**：建立 `IContextDecisionEngine` + `ContextCandidateEnvelope`，让 Retrieval 与 Package 共享候选身份、特征、safety gate、utility score、reason code、token cost、policy/model version、decision evidence。**不**强行合并输出格式 — 通过不同 Projector 输出。
 
@@ -379,11 +381,11 @@ public sealed record ContextCandidateEnvelope
 }
 ```
 
-**子阶段**：
-- **R18-1 契约设计**（当前阶段）：定义 `EvidenceRef` + `ContextCandidateEnvelope` + `CandidateFeatureVector` + `CandidateSafetyState` + `CandidateUtilityScore` 5 个契约，基于 `DecisionEvidenceV2` 提升。**不**改 `HybridContextRetriever` / `BasicContextPackageBuilder`。单元测试验证可实施性。
-- **R18-2 Engine 接口 + Planner**：定义 `IContextDecisionEngine` + `ContextDecisionPlanner` + `RetrievalResultProjector` + `PackageResultProjector`，在 `ContextDecisionProjector` 内部增加 envelope-to-decision 投影路径。**不**替换两条主链。
-- **R18-3 Retrieval adapter**：在 Retrieval 路径增加 envelope adapter（`ContextRetrievalCandidate` → `ContextCandidateEnvelope`），验证 golden baseline 不变。
-- **R18-4 Package adapter**：在 Package 路径增加 envelope adapter，验证 golden baseline 不变。
+**子阶段**（全部已完成）：
+- **R18-1 契约设计**（commit `e987e19`，+96 PublicApi）：定义 `EvidenceRef` + `ContextCandidateEnvelope` + `CandidateFeatureVector` + `CandidateSafetyState` + `CandidateUtilityScore` 5 个契约，基于 `DecisionEvidenceV2` 提升。21 个 DecisionEngineContractsTests 验证可实施性。
+- **R18-2 Engine 接口 + Planner**（commit `d752310`）：定义 `IContextDecisionEngine` + `ContextDecisionPlanner` + `RetrievalResultProjector` + `PackageResultProjector`，在 `ContextDecisionProjector` 内部增加 envelope-to-decision 投影路径。
+- **R18-3 Retrieval adapter**（commit `26cfc36`）：在 Retrieval 路径增加 envelope adapter（`ContextRetrievalCandidate` → `ContextCandidateEnvelope`），验证 golden baseline 不变。
+- **R18-4 Package adapter**（commit `268589a`）：在 Package 路径增加 envelope adapter，验证 golden baseline 不变。
 - **R18 V2**（后续）：真正统一执行链（Candidate Collectors → Feature Pipeline → Safety Gate → Utility Scorer → Budget Allocator），两条路径共享。
 
 **验收标准**：
@@ -394,7 +396,7 @@ public sealed record ContextCandidateEnvelope
 5. p95 和 allocation 不允许明显回退
 6. Model failure 时可精确回退到 deterministic policy
 
-### R19 — Policy Bundle 与 Model Runtime（3 子阶段）
+### R19 — Policy Bundle 与 Model Runtime（3 子阶段，**全部已完成**）
 
 **目标**：建立版本化策略包 `ContextPolicyBundle`，让规则权重、relation profile、budget、router、模型和 rollout 状态集中管理。
 
@@ -417,12 +419,12 @@ public sealed record ContextPolicyBundle
 
 **必须支持**：deterministic fallback / model load failure fallback / workspace-scoped rollout / immutable version / atomic activation / previous-version rollback / feature schema compatibility / policy hash + model hash / 禁止运行中修改已激活 bundle
 
-**子阶段**：
-- **R19-1 契约 + Registry**：定义 `ContextPolicyBundle` + 3 个 Profile + `RolloutPolicy` + `ModelArtifactReference`，内嵌 `ContextDecisionPolicyVersions`（复用 OPT-4 解耦的 5 个能力版本）。实现 `PolicyRegistry` + immutable snapshot 加载 + `ContentHash` 验证。
-- **R19-2 PolicyBundle Provider 适配**：所有现有 policy source（`RetrievalPolicyProfiles` / `ModeBudgetProfile` / `ContextPackagePolicy`）适配为 PolicyBundle provider。
-- **R19-3 Pipeline 集成**：接入 R17 GuardedOptimizationPipeline — bundle 切换走 shadow/canary，不绕过 rollback。
+**子阶段**（全部已完成）：
+- **R19-1 契约 + Registry**（commit `60fd1fe`）：定义 `ContextPolicyBundle` + 3 个 Profile + `RolloutPolicy` + `ModelArtifactReference`，内嵌 `ContextDecisionPolicyVersions`（复用 OPT-4 解耦的 5 个能力版本）。实现 `PolicyRegistry` + immutable snapshot 加载 + `ContentHash` 验证。
+- **R19-2 PolicyBundle Provider 适配**（commit `5031ea1`）：所有现有 policy source（`RetrievalPolicyProfiles` / `ModeBudgetProfile` / `ContextPackagePolicy`）适配为 PolicyBundle provider。`DefaultPolicyRegistry`（in-memory `IPolicyRegistry` 实现）+ `DefaultPolicyBundleFactory`（基于 `ContextDecisionPolicyVersions` 生成默认 bundle）。
+- **R19-3 Pipeline 集成**（commit `6a13af1`）：接入 R17 GuardedOptimizationPipeline — bundle 切换走 shadow/canary，不绕过 rollback。Engine 读取 PolicyBundle 通过 `IPolicyRegistry`。
 
-### R20 — Budget-Aware Multi-Expert Selection（2 子阶段）
+### R20 — Budget-Aware Multi-Expert Selection（2 子阶段，**全部已完成**）
 
 **专家划分**：Mandatory / Lexical / Semantic / WorkingMemory / StableMemory / Graph / Recency / Constraint（8 个）
 
@@ -445,13 +447,13 @@ public sealed record ExpertRoutingDecision
 - 先 shadow 运行完整专家集，再模拟不同 mask
 - 训练标签来自 counterfactual contribution，而不是当前 router 自己的决定
 
-**子阶段**：
-- **R20-1 Expert 概念对齐**：定义 `RetrievalExpert` 枚举（8 值）+ `ExpertRoutingDecision` + `RetrievalExpertMask`。把现有 5 个 `IRetrievalChannelExecutor` 重命名/拆分对齐到 expert 概念。**不**改变运行时行为。
-- **R20-2 Router 实现**：实现 `IRouter` 接口，输入 envelope + PolicyBundle，输出 `ExpertRoutingDecision`。Router 模型未加载时 fallback 到 deterministic policy（"启用所有 expert"）。
+**子阶段**（全部已完成）：
+- **R20-1 Expert 概念对齐**（commit `87718d6`）：定义 `RetrievalExpert` 枚举（8 值）+ `ExpertRoutingDecision` + `RetrievalExpertMask`。把现有 5 个 `IRetrievalChannelExecutor` 重命名/拆分对齐到 expert 概念。**不**改变运行时行为。
+- **R20-2 Router 实现**（commit `9c65e8d`）：实现 `IRetrievalRouter` 接口，输入 envelope + PolicyBundle，输出 `ExpertRoutingDecision`。Budget-Aware TopK 分配。Router 模型未加载时 fallback 到 deterministic policy（"启用所有 expert"）。
 
 **优化目标**：Quality - λ1×Latency - λ2×Allocation - λ3×TokenCost - λ4×Risk（不是单一最高质量配置，而是质量—成本 Pareto frontier）
 
-### R21 — Memory Evolution Engine（3 子阶段）
+### R21 — Memory Evolution Engine（3 子阶段 + R21-4/5，**全部已完成**）
 
 **目标**：让记忆系统具备长期演化能力（不只是 Promotion）。
 
@@ -461,10 +463,12 @@ public sealed record ExpertRoutingDecision
 3. **Conflict Resolution** — ConflictSet + evidence comparison + resolution status + chosen authority
 4. **Memory Utility Ledger** — Recall/Selected/Useful/Correction/Conflict/TokenCost/Anchor/LastUsefulTime
 
-**子阶段**：
-- **R21-1 Superseded 状态 + Consolidation**：扩展 `ContextMemoryStatus` 增加 `Superseded` 一个状态（避免一次性迁移 7 状态）。实现 Consolidation ETL（多 task update → 新版本 working memory + 旧版本 superseded）。
-- **R21-2 Utility Ledger + ConflictSet 契约**：定义 `MemoryUtilityLedger` record + `IConflictSet` 契约。Ledger 由 trace 被动填充，不主动查询。模型可建议 promotion/demotion/merge/archive，但正式写入仍经 R17 Pipeline。
-- **R21-3 完整状态机**：扩展状态机增加 Cooling/Dormant/Archived。Ledger 驱动状态转换，但状态写入仍受规则和审查边界约束。
+**子阶段**（全部已完成）：
+- **R21-1 Superseded 状态 + Consolidation**（commit `d3303eb`）：扩展 `ContextMemoryStatus` 增加 `Superseded` 一个状态（避免一次性迁移 7 状态）。实现 Consolidation ETL（多 task update → 新版本 working memory + 旧版本 superseded）。
+- **R21-2 Utility Ledger + ConflictSet 契约**（commit `8ad07e0`）：定义 `MemoryUtilityLedger` record + `IConflictSet` 契约。Ledger 由 trace 被动填充，不主动查询。模型可建议 promotion/demotion/merge/archive，但正式写入仍经 R17 Pipeline。per-Expert contribution store 为只读。
+- **R21-3 完整状态机**（commit `cad1f0c`）：扩展状态机增加 Cooling/Dormant/Archived。Ledger 驱动状态转换，但状态写入仍受规则和审查边界约束。Memory Evolution Engine 完整实现（full state machine + ETL + Utility Ledger materializer）。
+- **R21-4 统一 MemoryState**（commit `d4df506`）：8-state enum（Fresh/Active/Cooling/Dormant/Superseded/Replaced/Archived/Rejected）+ `MemoryStateEventRecord` + `IMemoryStateStore` + `MemoryStateExtensions` state machine（IsTerminal/CanTransitionTo/NeedsConsolidation/IsDecaying/IsActiveOrFresh/CanReheat）。`InMemoryMemoryStateStore` 替换 `InMemorySupersededItemStore`。`DefaultConsolidationETL` 适配新状态机支持 Dormant→Archived 终极降级。15 files / +1558 / -970。
+- **R21-5 Memory Utility Stats + Conflict Resolution**（commit `d4df506`）：`MemoryUtilityStats` record（recall/selected/dropped/useful/correction/conflict/token/anchor + 计算属性 SelectionRate/UsefulRate/CorrectionRate/AverageTokenCost）+ `IMemoryUtilityStatsStore` + `InMemoryMemoryUtilityStatsStore`。Conflict Resolution：`ConflictResolutionStatus` enum（5 values）+ `ConflictSet` 4 字段（ResolutionStatus/ChosenAuthority/ResolvedAt/Resolver）+ `ConflictSetQuery` 过滤 + Materializer 自动填充。`ChosenAuthority` 支持 "highest-score"/"lowest-token-cost"/...
 
 ### R18-R21 跨阶段澄清（8 项）
 
@@ -481,9 +485,11 @@ public sealed record ExpertRoutingDecision
 
 ### R18-R21 实施顺序
 
-R18-1 → R18-2 → R18-3 → R18-4 → R19-1 → R19-2 → R19-3 → R20-1 → R20-2 → R21-1 → R21-2 → R21-3
+R18-1 → R18-2 → R18-3 → R18-4 → R19-1 → R19-2 → R19-3 → R20-1 → R20-2 → R21-1 → R21-2 → R21-3 → R21-4 → R21-5
 
 **严格顺序**：R19 PolicyBundle 需要 R18 envelope；R20 Router 需要 R19 PolicyBundle；R21 Ledger 复用 R17 Pipeline + R18 envelope trace 投影。不并行推进以避免 PR 巨大且契约间依赖混乱。
+
+**状态：全部 14 子阶段已按严格顺序完成**（commits `e987e19` → `d4df506`）。
 
 ###
 
