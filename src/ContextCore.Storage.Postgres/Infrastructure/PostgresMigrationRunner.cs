@@ -20,8 +20,9 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
     /// R14-PG-5：v11 → v12，新增 vector lifecycle + artifact 表与索引。
     /// R14-PG-6：v12 → v13，新增 context_state_versions 表用于分布式版本号。
     /// R26-1：v13 → v14，新增 agent_checkpoints + agent_task_states 表与索引（Agent Runtime 持久化）。
+    /// R27-1：v14 → v15，新增 pipeline_runs + pipeline_canary_assignments + pipeline_rollback_records + pipeline_baseline_comparisons 表与索引（Evolution Pipeline 持久化）。
     /// </summary>
-    public const string SchemaVersion = "cc-schema-v14";
+    public const string SchemaVersion = "cc-schema-v15";
 
     public const string BaselineMigrationId = "0001_operational_store_baseline";
 
@@ -78,7 +79,12 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         "context_schema_migrations",
         // R26-1：Agent Runtime 持久化（checkpoint + task state）
         "agent_checkpoints",
-        "agent_task_states"
+        "agent_task_states",
+        // R27-1：Evolution Pipeline 持久化（run state + 3 audit tables）
+        "pipeline_runs",
+        "pipeline_canary_assignments",
+        "pipeline_rollback_records",
+        "pipeline_baseline_comparisons"
     ];
 
     public static readonly IReadOnlyList<(string TableSuffix, string IndexSuffix)> RequiredOperationalIndexDefinitions =
@@ -184,7 +190,17 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         ("agent_checkpoints", "session"),
         ("agent_checkpoints", "created"),
         ("agent_task_states", "session"),
-        ("agent_task_states", "updated")
+        ("agent_task_states", "updated"),
+        // R27-1：Evolution Pipeline 持久化索引
+        ("pipeline_runs", "proposal"),
+        ("pipeline_runs", "status"),
+        ("pipeline_runs", "updated"),
+        ("pipeline_canary_assignments", "run"),
+        ("pipeline_canary_assignments", "assigned"),
+        ("pipeline_rollback_records", "run"),
+        ("pipeline_rollback_records", "triggered"),
+        ("pipeline_baseline_comparisons", "proposal"),
+        ("pipeline_baseline_comparisons", "compared")
     ];
 
     private readonly PostgresConnectionFactory _connectionFactory;
@@ -265,6 +281,11 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         // R26-1：Agent Runtime 持久化表
         var agentCheckpoints = Infrastructure.PostgresNames.Table(options, "agent_checkpoints");
         var agentTaskStates = Infrastructure.PostgresNames.Table(options, "agent_task_states");
+        // R27-1：Evolution Pipeline 持久化表
+        var pipelineRuns = Infrastructure.PostgresNames.Table(options, "pipeline_runs");
+        var pipelineCanaryAssignments = Infrastructure.PostgresNames.Table(options, "pipeline_canary_assignments");
+        var pipelineRollbackRecords = Infrastructure.PostgresNames.Table(options, "pipeline_rollback_records");
+        var pipelineBaselineComparisons = Infrastructure.PostgresNames.Table(options, "pipeline_baseline_comparisons");
         var extensionSql = options.EnablePgVectorExtension
             ? "CREATE EXTENSION IF NOT EXISTS vector;"
             : string.Empty;
@@ -1201,6 +1222,67 @@ CREATE TABLE IF NOT EXISTS {agentTaskStates} (
 
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "agent_task_states", "session")} ON {agentTaskStates} (workspace_id, session_value, updated_at DESC);
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "agent_task_states", "updated")} ON {agentTaskStates} (workspace_id, updated_at DESC);
+
+-- R27-1：Evolution Pipeline 持久化表（run state + 3 audit tables）
+-- 表反规范化 proposal_id / status / run_id 字段以便按 proposal/status/run 索引查询；
+-- 完整 PipelineRunSnapshot / CanaryAssignment / RollbackRecord / BaselineComparison 对象保存在 data jsonb，由 store 反序列化。
+CREATE TABLE IF NOT EXISTS {pipelineRuns} (
+    run_id text NOT NULL,
+    proposal_id text NOT NULL,
+    proposal_major integer NOT NULL,
+    proposal_minor integer NOT NULL,
+    target_component text NOT NULL DEFAULT 'PackagePolicy',
+    current_stage text NOT NULL DEFAULT 'OfflineExperiment',
+    status text NOT NULL DEFAULT 'Running',
+    started_at timestamptz NOT NULL,
+    updated_at timestamptz NOT NULL,
+    completed_at timestamptz NULL,
+    rollback_reason text NULL,
+    data jsonb NOT NULL,
+    PRIMARY KEY (run_id)
+);
+
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "pipeline_runs", "proposal")} ON {pipelineRuns} (proposal_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "pipeline_runs", "status")} ON {pipelineRuns} (status, updated_at DESC);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "pipeline_runs", "updated")} ON {pipelineRuns} (updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS {pipelineCanaryAssignments} (
+    assignment_id text NOT NULL,
+    run_id text NOT NULL,
+    proposal_id text NOT NULL,
+    strategy text NOT NULL DEFAULT 'Random',
+    assigned_at timestamptz NOT NULL,
+    data jsonb NOT NULL,
+    PRIMARY KEY (assignment_id)
+);
+
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "pipeline_canary_assignments", "run")} ON {pipelineCanaryAssignments} (run_id, assigned_at);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "pipeline_canary_assignments", "assigned")} ON {pipelineCanaryAssignments} (assigned_at DESC);
+
+CREATE TABLE IF NOT EXISTS {pipelineRollbackRecords} (
+    record_id text NOT NULL,
+    run_id text NOT NULL,
+    proposal_id text NOT NULL,
+    reason text NOT NULL DEFAULT 'RollbackConditionTriggered',
+    triggered_at timestamptz NOT NULL,
+    data jsonb NOT NULL,
+    PRIMARY KEY (record_id)
+);
+
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "pipeline_rollback_records", "run")} ON {pipelineRollbackRecords} (run_id);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "pipeline_rollback_records", "triggered")} ON {pipelineRollbackRecords} (triggered_at DESC);
+
+CREATE TABLE IF NOT EXISTS {pipelineBaselineComparisons} (
+    comparison_id text NOT NULL,
+    proposal_id text NOT NULL,
+    run_id text NULL,
+    compared_at timestamptz NOT NULL,
+    data jsonb NOT NULL,
+    PRIMARY KEY (comparison_id)
+);
+
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "pipeline_baseline_comparisons", "proposal")} ON {pipelineBaselineComparisons} (proposal_id, compared_at DESC);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "pipeline_baseline_comparisons", "compared")} ON {pipelineBaselineComparisons} (compared_at DESC);
 """;
     }
 

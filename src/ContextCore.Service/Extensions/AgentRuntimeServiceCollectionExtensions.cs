@@ -1,5 +1,6 @@
 using ContextCore.Abstractions;
 using ContextCore.Core.Services.Agent;
+using ContextCore.Core.Services.Evolution;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace ContextCore.Service.Extensions;
@@ -237,5 +238,24 @@ public static class AgentRuntimeServiceCollectionExtensions
             .AddAgentRuntimeDefaults(timeProvider)
             .AddAgentContextBridge(timeProvider)
             .AddInMemoryAgentTaskStateStore();
+    }
+
+    // ===== R27 扩展 =====
+
+    /// <summary>
+    /// 注册 <see cref="InMemoryPipelineRunStore"/> 作为
+    /// <see cref="IPipelineRunStore"/> 单例。
+    /// </summary>
+    /// <param name="services">DI 容器。</param>
+    /// <returns>当前容器（链式调用）。</returns>
+    /// <remarks>
+    /// 注意：此实现为 in-memory；进程重启后丢失。
+    /// 生产场景应替换为持久化实现（如 PostgresPipelineRunStore，由 AddContextCorePostgresStorage 自动覆盖）。
+    /// </remarks>
+    public static IServiceCollection AddInMemoryPipelineRunStore(this IServiceCollection services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        services.AddSingleton<IPipelineRunStore, InMemoryPipelineRunStore>();
+        return services;
     }
 }

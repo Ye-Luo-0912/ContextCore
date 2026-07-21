@@ -1,10 +1,9 @@
-using System.Collections.Concurrent;
 using ContextCore.Abstractions;
 
 namespace ContextCore.Core.Services.Evolution;
 
 /// <summary>
-/// R17-2 默认 <see cref="IGuardedOptimizationPipeline"/> 实现：5 阶段严格顺序推进 + 自动回滚 + in-memory run state。
+/// R17-2 默认 <see cref="IGuardedOptimizationPipeline"/> 实现：5 阶段严格顺序推进 + 自动回滚 + 持久化 run state。
 /// </summary>
 /// <remarks>
 /// <b>硬边界</b>（与 project memory 一致）：
@@ -15,8 +14,8 @@ namespace ContextCore.Core.Services.Evolution;
 /// <item>仅暴露 <see cref="StartAsync"/> / <see cref="AdvanceAsync"/> / <see cref="GetStatusAsync"/>；不暴露 Policy 修改 / 配置修改 / 模型启用接口。</item>
 /// </list>
 ///
-/// <b>State storage</b>：本实现使用 <see cref="ConcurrentDictionary{TKey, TValue}"/> in-memory store。
-/// 生产部署应替换为基于 PostgresContextLearningStore 或新 store 的持久化实现。
+/// <b>State storage</b>（R27-3 起）：本实现通过注入 <see cref="IPipelineRunStore"/> 持久化 run state + 3 类审计记录。
+/// 默认使用 <see cref="InMemoryPipelineRunStore"/>（in-memory）；生产部署应注入 PostgresPipelineRunStore 以支持 HA 场景跨进程恢复。
 ///
 /// <b>Metrics 注入</b>：本实现提供 <see cref="AdvanceWithMetricsAsync"/> 扩展方法（非接口方法），
 /// 允许调用方注入 baseline/experiment 指标；接口 <see cref="AdvanceAsync"/> 仅触发推进并使用上次注入的指标。
@@ -24,26 +23,26 @@ namespace ContextCore.Core.Services.Evolution;
 public sealed class DefaultGuardedOptimizationPipeline : IGuardedOptimizationPipeline
 {
     private readonly IPromotionJudge _judge;
+    private readonly IPipelineRunStore _store;
     private readonly TimeProvider _timeProvider;
-    private readonly ConcurrentDictionary<string, PipelineRunState> _runs = new(StringComparer.Ordinal);
-    private readonly ConcurrentDictionary<string, CanaryAssignment> _canaryAssignments = new(StringComparer.Ordinal);
-    private readonly ConcurrentDictionary<string, RollbackRecord> _rollbackRecords = new(StringComparer.Ordinal);
-    private readonly ConcurrentDictionary<string, BaselineComparison> _baselineComparisons = new(StringComparer.Ordinal);
 
     /// <summary>构造 pipeline。</summary>
     /// <param name="judge">Promotion judge（必填）。</param>
+    /// <param name="store">Pipeline run store（可选，默认 <see cref="InMemoryPipelineRunStore"/>）。</param>
     /// <param name="timeProvider">时间提供者（可选，默认 <see cref="TimeProvider.System"/>）。</param>
     public DefaultGuardedOptimizationPipeline(
         IPromotionJudge judge,
+        IPipelineRunStore? store = null,
         TimeProvider? timeProvider = null)
     {
         ArgumentNullException.ThrowIfNull(judge);
         _judge = judge;
+        _store = store ?? new InMemoryPipelineRunStore();
         _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
     /// <inheritdoc />
-    public Task<PipelineRunResult> StartAsync(
+    public async Task<PipelineRunResult> StartAsync(
         OptimizationProposal proposal,
         CancellationToken cancellationToken = default)
     {
@@ -67,7 +66,7 @@ public sealed class DefaultGuardedOptimizationPipeline : IGuardedOptimizationPip
 
         var runId = BuildRunId(proposal);
         var now = _timeProvider.GetUtcNow();
-        var state = new PipelineRunState
+        var snapshot = new PipelineRunSnapshot
         {
             RunId = runId,
             ProposalId = proposal.ProposalId,
@@ -76,14 +75,14 @@ public sealed class DefaultGuardedOptimizationPipeline : IGuardedOptimizationPip
             CurrentStage = OptimizationStage.OfflineExperiment,
             Status = PipelineRunStatus.Running,
             StartedAt = now,
-            UpdatedAt = now
+            UpdatedAt = now,
+            CompletedAt = null,
+            RollbackReason = null,
+            StageMetrics = Array.Empty<BaselineComparison>()
         };
-        if (!_runs.TryAdd(runId, state))
-        {
-            throw new InvalidOperationException($"Pipeline run ID 冲突：{runId}");
-        }
+        await _store.SaveRunAsync(snapshot, cancellationToken).ConfigureAwait(false);
 
-        return Task.FromResult(BuildResult(state));
+        return BuildResult(snapshot);
     }
 
     /// <inheritdoc />
@@ -91,22 +90,23 @@ public sealed class DefaultGuardedOptimizationPipeline : IGuardedOptimizationPip
     /// 接口方法：使用上次通过 <see cref="AdvanceWithMetricsAsync"/> 注入的指标。
     /// 若无注入指标，返回当前状态（视为未观察到指标变化，等价于 Hold）。
     /// </remarks>
-    public Task<PipelineRunResult> AdvanceAsync(
+    public async Task<PipelineRunResult> AdvanceAsync(
         string runId,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(runId);
         cancellationToken.ThrowIfCancellationRequested();
-        if (!_runs.TryGetValue(runId, out var state))
+        var snapshot = await _store.GetRunAsync(runId, cancellationToken).ConfigureAwait(false);
+        if (snapshot is null)
         {
             throw new InvalidOperationException($"Pipeline run not found: {runId}");
         }
-        if (IsTerminal(state.Status))
+        if (IsTerminal(snapshot.Status))
         {
-            return Task.FromResult(BuildResult(state));
+            return BuildResult(snapshot);
         }
         // 接口方法不注入新指标 → 返回当前状态（等价于 Hold）
-        return Task.FromResult(BuildResult(state));
+        return BuildResult(snapshot);
     }
 
     /// <summary>
@@ -127,36 +127,39 @@ public sealed class DefaultGuardedOptimizationPipeline : IGuardedOptimizationPip
         ArgumentNullException.ThrowIfNull(experimentMetrics);
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (!_runs.TryGetValue(runId, out var state))
+        var snapshot = await _store.GetRunAsync(runId, cancellationToken).ConfigureAwait(false);
+        if (snapshot is null)
         {
             throw new InvalidOperationException($"Pipeline run not found: {runId}");
         }
 
         // 终态：直接返回当前状态（幂等）
-        if (IsTerminal(state.Status))
+        if (IsTerminal(snapshot.Status))
         {
-            return BuildResult(state);
+            return BuildResult(snapshot);
         }
 
         // 持久化 BaselineComparison（供审计）
         var comparison = new BaselineComparison(
-            comparisonId: $"cmp-{runId}-{state.StageMetrics.Count + 1}",
-            proposalId: state.ProposalId,
+            comparisonId: $"cmp-{runId}-{snapshot.StageMetrics.Count + 1}",
+            proposalId: snapshot.ProposalId,
             baselineMetrics: baselineMetrics,
             experimentMetrics: experimentMetrics,
             comparedAt: _timeProvider.GetUtcNow());
-        _baselineComparisons[comparison.ComparisonId] = comparison;
-        state.StageMetrics = state.StageMetrics.Append(comparison).ToList();
+        await _store.SaveBaselineComparisonAsync(comparison, cancellationToken).ConfigureAwait(false);
+        var updatedMetrics = snapshot.StageMetrics.Append(comparison).ToList();
 
         // 调用 judge
         var request = new PromotionJudgeRequest(
-            proposal: state.Proposal,
-            currentStage: state.CurrentStage,
+            proposal: snapshot.Proposal,
+            currentStage: snapshot.CurrentStage,
             baselineMetrics: baselineMetrics,
             experimentMetrics: experimentMetrics);
         var judgeResult = await _judge.JudgeAsync(request, cancellationToken).ConfigureAwait(false);
 
-        // 应用 judge decision
+        // 应用 judge decision → 生成新 snapshot
+        var now = _timeProvider.GetUtcNow();
+        PipelineRunSnapshot nextSnapshot;
         switch (judgeResult.Decision)
         {
             case PromotionDecision.Advance:
@@ -166,48 +169,73 @@ public sealed class DefaultGuardedOptimizationPipeline : IGuardedOptimizationPip
                         $"Judge returned Advance 但未提供 NextStage；runId={runId}");
                 }
                 // 硬边界：严格顺序推进 — 验证下一阶段是当前阶段的合法后继
-                VerifyStageProgression(state.CurrentStage, judgeResult.NextStage.Value);
-                state.CurrentStage = judgeResult.NextStage.Value;
-                state.Status = PipelineRunStatus.StageCompleted;
+                VerifyStageProgression(snapshot.CurrentStage, judgeResult.NextStage.Value);
+                nextSnapshot = snapshot with
+                {
+                    CurrentStage = judgeResult.NextStage.Value,
+                    Status = PipelineRunStatus.StageCompleted,
+                    UpdatedAt = now,
+                    StageMetrics = updatedMetrics
+                };
                 break;
 
             case PromotionDecision.Promote:
-                state.CurrentStage = OptimizationStage.Promotion;
-                state.Status = PipelineRunStatus.Promoted;
-                state.CompletedAt = _timeProvider.GetUtcNow();
+                nextSnapshot = snapshot with
+                {
+                    CurrentStage = OptimizationStage.Promotion,
+                    Status = PipelineRunStatus.Promoted,
+                    CompletedAt = now,
+                    UpdatedAt = now,
+                    StageMetrics = updatedMetrics
+                };
                 break;
 
             case PromotionDecision.Rollback:
-                var triggeredCondition = FindTriggeredCondition(state.Proposal, experimentMetrics);
+                var triggeredCondition = FindTriggeredCondition(snapshot.Proposal, experimentMetrics);
                 var rollbackRecord = new RollbackRecord(
-                    recordId: $"rb-{runId}-{_timeProvider.GetUtcNow().UtcDateTime.Ticks}",
+                    recordId: $"rb-{runId}-{now.UtcDateTime.Ticks}",
                     runId: runId,
-                    proposalId: state.ProposalId,
+                    proposalId: snapshot.ProposalId,
                     reason: RollbackReason.RollbackConditionTriggered,
-                    triggeredAt: _timeProvider.GetUtcNow())
+                    triggeredAt: now)
                 {
                     TriggeredConditionMetricName = triggeredCondition?.MetricName,
                     TriggeredConditionThreshold = triggeredCondition?.Threshold,
                     TriggeredConditionValue = triggeredCondition is not null
                         ? experimentMetrics.TryGetValue(triggeredCondition.MetricName, out var v) ? v : (double?)null
                         : null,
-                    TriggeredAtStage = state.CurrentStage
+                    TriggeredAtStage = snapshot.CurrentStage
                 };
-                _rollbackRecords[rollbackRecord.RecordId] = rollbackRecord;
-                state.RollbackReason = judgeResult.Rationale;
-                state.CurrentStage = OptimizationStage.AutomaticRollback;
-                state.Status = PipelineRunStatus.RolledBack;
-                state.CompletedAt = _timeProvider.GetUtcNow();
+                await _store.SaveRollbackRecordAsync(rollbackRecord, cancellationToken).ConfigureAwait(false);
+                nextSnapshot = snapshot with
+                {
+                    RollbackReason = judgeResult.Rationale,
+                    CurrentStage = OptimizationStage.AutomaticRollback,
+                    Status = PipelineRunStatus.RolledBack,
+                    CompletedAt = now,
+                    UpdatedAt = now,
+                    StageMetrics = updatedMetrics
+                };
                 break;
 
             case PromotionDecision.Reject:
-                state.Status = PipelineRunStatus.Rejected;
-                state.RollbackReason = judgeResult.Rationale;
-                state.CompletedAt = _timeProvider.GetUtcNow();
+                nextSnapshot = snapshot with
+                {
+                    Status = PipelineRunStatus.Rejected,
+                    RollbackReason = judgeResult.Rationale,
+                    CompletedAt = now,
+                    UpdatedAt = now,
+                    StageMetrics = updatedMetrics
+                };
                 break;
 
             case PromotionDecision.Hold:
-                // 保持当前 stage，Status 仍为 Running（等待更多数据）
+                // 保持当前 stage，Status 仍为 Running（等待更多数据）；仅更新 StageMetrics + UpdatedAt
+                nextSnapshot = snapshot with
+                {
+                    UpdatedAt = now,
+                    StageMetrics = updatedMetrics
+                };
                 break;
 
             default:
@@ -215,24 +243,19 @@ public sealed class DefaultGuardedOptimizationPipeline : IGuardedOptimizationPip
                     $"Judge 返回未知的 PromotionDecision: {judgeResult.Decision}");
         }
 
-        state.UpdatedAt = _timeProvider.GetUtcNow();
-        _runs[runId] = state; // 替换为更新后的状态（线程安全）
-
-        return BuildResult(state);
+        await _store.SaveRunAsync(nextSnapshot, cancellationToken).ConfigureAwait(false);
+        return BuildResult(nextSnapshot);
     }
 
     /// <inheritdoc />
-    public Task<PipelineRunResult?> GetStatusAsync(
+    public async Task<PipelineRunResult?> GetStatusAsync(
         string runId,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(runId);
         cancellationToken.ThrowIfCancellationRequested();
-        if (!_runs.TryGetValue(runId, out var state))
-        {
-            return Task.FromResult<PipelineRunResult?>(null);
-        }
-        return Task.FromResult<PipelineRunResult?>(BuildResult(state));
+        var snapshot = await _store.GetRunAsync(runId, cancellationToken).ConfigureAwait(false);
+        return snapshot is null ? null : BuildResult(snapshot);
     }
 
     /// <summary>获取指定 run 的所有 canary assignment（供审计）。</summary>
@@ -241,11 +264,7 @@ public sealed class DefaultGuardedOptimizationPipeline : IGuardedOptimizationPip
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var list = _canaryAssignments.Values
-            .Where(a => a.RunId == runId)
-            .OrderBy(a => a.AssignedAt)
-            .ToList();
-        return Task.FromResult<IReadOnlyList<CanaryAssignment>>(list);
+        return _store.ListCanaryAssignmentsByRunAsync(runId, cancellationToken);
     }
 
     /// <summary>记录 canary assignment（供 ScopedCanary 阶段审计）。</summary>
@@ -255,8 +274,7 @@ public sealed class DefaultGuardedOptimizationPipeline : IGuardedOptimizationPip
     {
         ArgumentNullException.ThrowIfNull(assignment);
         cancellationToken.ThrowIfCancellationRequested();
-        _canaryAssignments[assignment.AssignmentId] = assignment;
-        return Task.CompletedTask;
+        return _store.SaveCanaryAssignmentAsync(assignment, cancellationToken);
     }
 
     /// <summary>获取指定 run 的回滚记录（如有）。</summary>
@@ -265,8 +283,7 @@ public sealed class DefaultGuardedOptimizationPipeline : IGuardedOptimizationPip
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var record = _rollbackRecords.Values.FirstOrDefault(r => r.RunId == runId);
-        return Task.FromResult(record);
+        return _store.GetRollbackRecordByRunAsync(runId, cancellationToken);
     }
 
     private static bool IsTerminal(PipelineRunStatus status) => status switch
@@ -322,36 +339,20 @@ public sealed class DefaultGuardedOptimizationPipeline : IGuardedOptimizationPip
         return $"run-{componentTag}-{proposal.ProposalId}-{timestamp}";
     }
 
-    private static PipelineRunResult BuildResult(PipelineRunState state)
+    private static PipelineRunResult BuildResult(PipelineRunSnapshot snapshot)
     {
         // 将最近一次 BaselineComparison 的实验指标作为 StageMetrics（符合契约类型 IReadOnlyDictionary<string, double>）
-        var latestMetrics = state.StageMetrics.Count > 0
-            ? state.StageMetrics[^1].ExperimentMetrics
+        var latestMetrics = snapshot.StageMetrics.Count > 0
+            ? snapshot.StageMetrics[^1].ExperimentMetrics
             : new Dictionary<string, double>();
         return new PipelineRunResult(
-            runId: state.RunId,
-            proposalId: state.ProposalId,
-            proposalVersion: state.ProposalVersion,
-            stage: state.CurrentStage,
-            status: state.Status,
+            runId: snapshot.RunId,
+            proposalId: snapshot.ProposalId,
+            proposalVersion: snapshot.ProposalVersion,
+            stage: snapshot.CurrentStage,
+            status: snapshot.Status,
             stageMetrics: latestMetrics,
-            rollbackReason: state.RollbackReason,
-            completedAt: state.CompletedAt);
-    }
-
-    /// <summary>Pipeline run 内部状态（in-memory，不暴露到 Abstractions）。</summary>
-    private sealed class PipelineRunState
-    {
-        public string RunId { get; init; } = string.Empty;
-        public string ProposalId { get; init; } = string.Empty;
-        public OptimizationProposalVersion ProposalVersion { get; init; } = OptimizationProposalVersion.Initial;
-        public OptimizationProposal Proposal { get; init; } = null!;
-        public OptimizationStage CurrentStage { get; set; }
-        public PipelineRunStatus Status { get; set; }
-        public DateTimeOffset StartedAt { get; init; }
-        public DateTimeOffset UpdatedAt { get; set; }
-        public DateTimeOffset? CompletedAt { get; set; }
-        public string? RollbackReason { get; set; }
-        public List<BaselineComparison> StageMetrics { get; set; } = new();
+            rollbackReason: snapshot.RollbackReason,
+            completedAt: snapshot.CompletedAt);
     }
 }

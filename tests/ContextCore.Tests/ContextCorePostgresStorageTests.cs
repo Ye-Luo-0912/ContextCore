@@ -167,6 +167,9 @@ public sealed class ContextCorePostgresStorageTests
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(IAgentCheckpointStore)));
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(PostgresAgentTaskStateStore)));
         Assert.IsTrue(services.Any(item => item.ServiceType == typeof(IAgentTaskStateStore)));
+        // R27-3：Evolution Pipeline 持久化注册
+        Assert.IsTrue(services.Any(item => item.ServiceType == typeof(PostgresPipelineRunStore)));
+        Assert.IsTrue(services.Any(item => item.ServiceType == typeof(IPipelineRunStore)));
     }
 
     [TestMethod]
@@ -544,7 +547,7 @@ public sealed class ContextCorePostgresStorageTests
         var sql = PostgresMigrationRunner.BuildMigrationSql(options);
         var requiredIndexes = PostgresMigrationRunner.GetRequiredIndexNames(options);
 
-        Assert.AreEqual("cc-schema-v14", PostgresMigrationRunner.SchemaVersion);
+        Assert.AreEqual("cc-schema-v15", PostgresMigrationRunner.SchemaVersion);
         StringAssert.Contains(sql, "CREATE EXTENSION IF NOT EXISTS vector");
         StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_vector_index_entries");
         StringAssert.Contains(sql, "source_id text NOT NULL DEFAULT ''");
@@ -606,6 +609,25 @@ public sealed class ContextCorePostgresStorageTests
         CollectionAssert.Contains(requiredIndexes.ToArray(), "ix_cc_agent_checkpoints_created");
         CollectionAssert.Contains(requiredIndexes.ToArray(), "ix_cc_agent_task_states_session");
         CollectionAssert.Contains(requiredIndexes.ToArray(), "ix_cc_agent_task_states_updated");
+        // R27-1：pipeline_runs + 3 audit tables 表与索引
+        StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_pipeline_runs");
+        StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_pipeline_canary_assignments");
+        StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_pipeline_rollback_records");
+        StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_pipeline_baseline_comparisons");
+        StringAssert.Contains(sql, "proposal_major integer NOT NULL");
+        StringAssert.Contains(sql, "current_stage text NOT NULL DEFAULT 'OfflineExperiment'");
+        StringAssert.Contains(sql, "status text NOT NULL DEFAULT 'Running'");
+        StringAssert.Contains(sql, "strategy text NOT NULL DEFAULT 'Random'");
+        StringAssert.Contains(sql, "reason text NOT NULL DEFAULT 'RollbackConditionTriggered'");
+        CollectionAssert.Contains(requiredIndexes.ToArray(), "ix_cc_pipeline_runs_proposal");
+        CollectionAssert.Contains(requiredIndexes.ToArray(), "ix_cc_pipeline_runs_status");
+        CollectionAssert.Contains(requiredIndexes.ToArray(), "ix_cc_pipeline_runs_updated");
+        CollectionAssert.Contains(requiredIndexes.ToArray(), "ix_cc_pipeline_canary_assignments_run");
+        CollectionAssert.Contains(requiredIndexes.ToArray(), "ix_cc_pipeline_canary_assignments_assigned");
+        CollectionAssert.Contains(requiredIndexes.ToArray(), "ix_cc_pipeline_rollback_records_run");
+        CollectionAssert.Contains(requiredIndexes.ToArray(), "ix_cc_pipeline_rollback_records_triggered");
+        CollectionAssert.Contains(requiredIndexes.ToArray(), "ix_cc_pipeline_baseline_comparisons_proposal");
+        CollectionAssert.Contains(requiredIndexes.ToArray(), "ix_cc_pipeline_baseline_comparisons_compared");
     }
 
     [TestMethod]

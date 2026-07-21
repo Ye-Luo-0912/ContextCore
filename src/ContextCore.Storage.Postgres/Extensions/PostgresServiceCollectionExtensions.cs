@@ -143,6 +143,11 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<PostgresAgentTaskStateStore>();
         services.AddSingleton<IAgentTaskStateStore>(sp => sp.GetRequiredService<PostgresAgentTaskStateStore>());
 
+        // R27-3：Evolution Pipeline 持久化（run state + 3 audit tables）。
+        // 替代 InMemory 默认注册，让 HA 场景下 pipeline run state / canary / rollback / baseline 审计记录可跨进程持久化。
+        services.AddSingleton<PostgresPipelineRunStore>();
+        services.AddSingleton<IPipelineRunStore>(sp => sp.GetRequiredService<PostgresPipelineRunStore>());
+
         // PackageBuildTraceStore
         services.AddSingleton<PostgresContextPackageBuildTraceStore>();
         services.AddSingleton<IContextPackageBuildTraceStore>(sp =>
