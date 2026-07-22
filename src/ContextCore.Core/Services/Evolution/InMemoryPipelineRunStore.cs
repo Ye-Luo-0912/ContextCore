@@ -47,6 +47,15 @@ public sealed class InMemoryPipelineRunStore : IPipelineRunStore
     }
 
     /// <inheritdoc />
+    /// <remarks>P2-1：使用 ConcurrentDictionary.TryAdd 实现 insert-if-absent 语义。</remarks>
+    public Task<bool> TryCreateRunAsync(PipelineRunSnapshot snapshot, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult(_runs.TryAdd(snapshot.RunId, snapshot));
+    }
+
+    /// <inheritdoc />
     public Task<PipelineRunSnapshot?> GetRunAsync(string runId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(runId);

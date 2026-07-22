@@ -174,6 +174,8 @@ public sealed class DefaultPolicyRegistryTests
             WorkspaceId = "ws-1",
             CollectionId = "col-1",
             BundleId = "bundle-custom-1",
+            BundleVersion = "1.0.0",
+            BundleContentHash = "sha256:test",
             ActivatedAt = DateTimeOffset.UtcNow
         };
         await registry.ActivateAsync(activation);
@@ -201,18 +203,18 @@ public sealed class DefaultPolicyRegistryTests
             WorkspaceId = "ws-2",
             CollectionId = "col-2",
             BundleId = "bundle-override-test",
+            BundleVersion = "1.0.0",
+            BundleContentHash = "sha256:test",
             ActivatedAt = DateTimeOffset.UtcNow,
-            BudgetOverride = new BudgetProfile
+            // P1-4：override 使用受限类型 RequestBudgetOverride / RequestRoutingOverride。
+            BudgetOverride = new RequestBudgetOverride
             {
-                ProfileId = "budget-canary-2",
-                DefaultTokenBudget = 2000,
-                DefaultTopK = 10
+                TokenBudget = 2000,
+                TopK = 10
             },
-            RoutingOverride = new RoutingProfile
+            RoutingOverride = new RequestRoutingOverride
             {
-                ProfileId = "routing-canary-2",
-                EnableModelScoring = true,
-                ModelArtifactId = "router-v1"
+                EnableModelScoring = true
             }
         };
         await registry.ActivateAsync(activation);
@@ -220,9 +222,9 @@ public sealed class DefaultPolicyRegistryTests
         var retrievedActivation = await registry.GetActivationAsync("ws-2", "col-2");
         Assert.IsNotNull(retrievedActivation);
         Assert.IsNotNull(retrievedActivation.BudgetOverride);
-        Assert.AreEqual(2000, retrievedActivation.BudgetOverride.DefaultTokenBudget);
+        Assert.AreEqual(2000, retrievedActivation.BudgetOverride.TokenBudget);
         Assert.IsNotNull(retrievedActivation.RoutingOverride);
-        Assert.IsTrue(retrievedActivation.RoutingOverride.EnableModelScoring);
+        Assert.IsTrue(retrievedActivation.RoutingOverride.EnableModelScoring == true);
     }
 
     // =========================================================================
@@ -386,6 +388,8 @@ public sealed class DefaultPolicyRegistryTests
                 WorkspaceId = $"ws-{i}",
                 CollectionId = $"col-{i}",
                 BundleId = "bundle-concurrent-activation",
+                BundleVersion = "1.0",
+                BundleContentHash = "sha256:test",
                 ActivatedAt = DateTimeOffset.UtcNow
             }));
 
@@ -432,6 +436,8 @@ public sealed class DefaultPolicyRegistryTests
             WorkspaceId = "ws-1",
             CollectionId = "col-1",
             BundleId = "bundle-ws1-col1",
+            BundleVersion = "1.0",
+            BundleContentHash = "sha256:test",
             ActivatedAt = DateTimeOffset.UtcNow
         });
 

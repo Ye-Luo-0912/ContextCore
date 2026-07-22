@@ -777,6 +777,8 @@ public sealed class DefaultContextDecisionEnginePolicyIntegrationTests
             WorkspaceId = "ws-test",
             CollectionId = "col-test",
             BundleId = bundle.BundleId,
+            BundleVersion = bundle.Version,
+            BundleContentHash = "sha256:test",
             ActivatedAt = DateTimeOffset.UtcNow,
             ActivatedBy = "test"
         }).Wait();

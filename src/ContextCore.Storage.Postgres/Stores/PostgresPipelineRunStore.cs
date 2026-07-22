@@ -88,6 +88,46 @@ ON CONFLICT (run_id) DO UPDATE SET
     }
 
     /// <inheritdoc />
+    /// <remarks>P2-1：使用 ON CONFLICT (run_id) DO NOTHING 实现 insert-if-absent 语义。</remarks>
+    public async Task<bool> TryCreateRunAsync(PipelineRunSnapshot snapshot, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+        command.CommandText = $"""
+INSERT INTO {Table("pipeline_runs")} (
+    run_id, proposal_id, proposal_major, proposal_minor, target_component,
+    current_stage, status, started_at, updated_at, completed_at, rollback_reason,
+    revision, lease_owner, lease_expires_at, last_transition_id, data)
+VALUES (
+    @run_id, @proposal_id, @proposal_major, @proposal_minor, @target_component,
+    @current_stage, @status, @started_at, @updated_at, @completed_at, @rollback_reason,
+    @revision, @lease_owner, @lease_expires_at, @last_transition_id, @data)
+ON CONFLICT (run_id) DO NOTHING;
+""";
+        command.Parameters.AddWithValue("run_id", snapshot.RunId);
+        command.Parameters.AddWithValue("proposal_id", snapshot.ProposalId);
+        command.Parameters.AddWithValue("proposal_major", snapshot.ProposalVersion.Major);
+        command.Parameters.AddWithValue("proposal_minor", snapshot.ProposalVersion.Minor);
+        command.Parameters.AddWithValue("target_component", snapshot.Proposal.TargetComponent.ToString());
+        command.Parameters.AddWithValue("current_stage", snapshot.CurrentStage.ToString());
+        command.Parameters.AddWithValue("status", snapshot.Status.ToString());
+        command.Parameters.AddWithValue("started_at", snapshot.StartedAt);
+        command.Parameters.AddWithValue("updated_at", snapshot.UpdatedAt);
+        command.Parameters.AddWithValue("completed_at", (object?)snapshot.CompletedAt ?? DBNull.Value);
+        command.Parameters.AddWithValue("rollback_reason", (object?)snapshot.RollbackReason ?? DBNull.Value);
+        command.Parameters.AddWithValue("revision", snapshot.Revision);
+        command.Parameters.AddWithValue("lease_owner", (object?)snapshot.LeaseOwner ?? DBNull.Value);
+        command.Parameters.AddWithValue("lease_expires_at", (object?)snapshot.LeaseExpiresAt ?? DBNull.Value);
+        command.Parameters.AddWithValue("last_transition_id", (object?)snapshot.LastTransitionId ?? DBNull.Value);
+        AddJson(command, "data", snapshot);
+        var rowsAffected = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        return rowsAffected > 0;
+    }
+
+    /// <inheritdoc />
     public async Task<PipelineRunSnapshot?> GetRunAsync(string runId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(runId);

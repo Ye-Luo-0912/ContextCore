@@ -53,15 +53,16 @@ public sealed class DefaultPolicyRegistry : IPolicyRegistry
         var key = BuildActivationKey(workspaceId, collectionId);
         if (_activations.TryGetValue(key, out var activation))
         {
-            // P0-4：bundles 以 (BundleId, Version) 复合主键存储。
-            // activation.BundleId 用于查找该 BundleId 下最新非 superseded 版本。
-            var bundle = FindLatestBundleForId(activation.BundleId);
+            // P1-3：精确读取 (BundleId, BundleVersion)，不再漂移到"最新版本"。
+            // activation 记录了激活时的 BundleVersion，必须精确匹配。
+            var bundle = GetBundleAsync(activation.BundleId, activation.BundleVersion, cancellationToken)
+                .GetAwaiter().GetResult();
             if (bundle is not null)
             {
                 return Task.FromResult(bundle);
             }
         }
-        // 未激活 → 返回全局默认 bundle
+        // 未激活或 bundle 已删除 → 返回全局默认 bundle
         return Task.FromResult(_defaultBundle.Value);
     }
 
@@ -190,6 +191,9 @@ public sealed class DefaultPolicyRegistry : IPolicyRegistry
                 WorkspaceId = next.WorkspaceId,
                 CollectionId = next.CollectionId,
                 BundleId = next.BundleId,
+                // P1-3：传播版本固定字段，确保 activation 精确指向激活时的 bundle 版本。
+                BundleVersion = next.BundleVersion,
+                BundleContentHash = next.BundleContentHash,
                 ActivatedAt = next.ActivatedAt,
                 ActivatedBy = next.ActivatedBy,
                 RolloutStatus = next.RolloutStatus,
@@ -212,6 +216,9 @@ public sealed class DefaultPolicyRegistry : IPolicyRegistry
                 WorkspaceId = next.WorkspaceId,
                 CollectionId = next.CollectionId,
                 BundleId = next.BundleId,
+                // P1-3：传播版本固定字段，确保 activation 精确指向激活时的 bundle 版本。
+                BundleVersion = next.BundleVersion,
+                BundleContentHash = next.BundleContentHash,
                 ActivatedAt = next.ActivatedAt,
                 ActivatedBy = next.ActivatedBy,
                 RolloutStatus = next.RolloutStatus,

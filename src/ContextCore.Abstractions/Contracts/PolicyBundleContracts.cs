@@ -294,7 +294,7 @@ public sealed record ContextPolicyBundle
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// R19-1：策略激活记录。表示某 workspace+collection 当前激活的 bundle + 可选 profile override。
+/// R19-1：策略激活记录。表示某 workspace/collection 当前激活的 bundle + 可选 profile override。
 /// </summary>
 /// <remarks>
 /// 设计原则（用户澄清 #2）：
@@ -302,6 +302,11 @@ public sealed record ContextPolicyBundle
 ///   - Profile override 受限：不允许替换 SafetyProfile；BudgetProfile / RoutingProfile 仅允许
 ///     部分字段 override（用户澄清 #3）。
 /// P0-4 修复：新增 <see cref="Epoch"/> 单调递增版本号，支持 compare-and-swap 原子激活。
+/// P1-3 修复：新增 <see cref="BundleVersion"/> + <see cref="BundleContentHash"/> required 字段，
+///   GetActiveBundleAsync 必须精确读取 (BundleId, BundleVersion)，不再漂移到"最新版本"。
+/// P1-4 修复：BudgetOverride / RoutingOverride 改用受限类型
+///   (<see cref="RequestBudgetOverride"/> / <see cref="RequestRoutingOverride"/>)，
+///   从类型系统上禁止控制面注入 ModelArtifactId / 模型权重 / confidence threshold / EnabledExperts。
 /// </remarks>
 public sealed record PolicyActivation
 {
@@ -313,6 +318,18 @@ public sealed record PolicyActivation
 
     /// <summary>激活的 bundle ID（必填）。</summary>
     public required string BundleId { get; init; }
+
+    /// <summary>
+    /// P1-3：激活的 bundle 版本号（必填）。
+    /// GetActiveBundleAsync 必须精确读取 (BundleId, BundleVersion)，不漂移到"最新版本"。
+    /// </summary>
+    public required string BundleVersion { get; init; }
+
+    /// <summary>
+    /// P1-3：bundle 内容哈希（必填）。用于验证 bundle 不可变性 —
+    /// 注册新版本后，旧 activation 的 BundleContentHash 不变，确保不会自动漂移。
+    /// </summary>
+    public required string BundleContentHash { get; init; }
 
     /// <summary>激活时间（UTC）。</summary>
     public required DateTimeOffset ActivatedAt { get; init; }
@@ -331,16 +348,16 @@ public sealed record PolicyActivation
     public long Epoch { get; init; } = 1;
 
     /// <summary>
-    /// Budget profile override（受限 override；不允许替换 SafetyProfile）。
+    /// P1-4：预算 override（受限类型）。仅允许调整 TokenBudget / TopK / SectionRatios。
     /// null = 使用 bundle 中的 BudgetProfile。
     /// </summary>
-    public BudgetProfile? BudgetOverride { get; init; }
+    public RequestBudgetOverride? BudgetOverride { get; init; }
 
     /// <summary>
-    /// Routing profile override（受限 override；不允许替换 ModelArtifactId）。
+    /// P1-4：路由 override（受限类型）。仅允许调整 EnableModelScoring。
     /// null = 使用 bundle 中的 RoutingProfile。
     /// </summary>
-    public RoutingProfile? RoutingOverride { get; init; }
+    public RequestRoutingOverride? RoutingOverride { get; init; }
 }
 
 /// <summary>
@@ -417,13 +434,14 @@ public interface IPolicyRegistry
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 激活 bundle 到 workspace+collection 作用域（无条件覆盖；向后兼容）。
+    /// 激活 bundle 到 workspace/collection 作用域（无条件覆盖；向后兼容）。
     /// </summary>
     /// <param name="activation">激活记录（含可选 profile override）。</param>
     /// <remarks>
-    /// 此方法不校验 epoch，直接覆盖当前 activation。
-    /// 推荐使用 <see cref="TryActivateAsync"/> 实现原子 CAS 激活。
+    /// P1-4：此方法不校验 epoch，直接覆盖当前 activation，可绕过 CAS。
+    /// 已标记 Obsolete；推荐使用 <see cref="TryActivateAsync"/> 实现原子 CAS 激活。
     /// </remarks>
+    [Obsolete("Use TryActivateAsync for CAS atomic activation. ActivateAsync bypasses epoch check.", error: false)]
     Task ActivateAsync(
         PolicyActivation activation,
         CancellationToken cancellationToken = default);

@@ -47,10 +47,10 @@ public static class PackageCandidateAdapter
     /// 将单个 <see cref="PackageTraceCandidate"/> 转换为 <see cref="ContextCandidateEnvelope"/>。
     /// </summary>
     /// <remarks>
-    /// 此重载不传 <see cref="CandidateAdaptationContext"/>；将在入口处读取一次
-    /// <see cref="DateTimeOffset.UtcNow"/> 作为 <c>ObservedAt</c>，但映射函数内部不再读时间。
-    /// 推荐调用方使用接受 context 的重载以获得确定性。
+    /// P1-2：此重载不传 <see cref="CandidateAdaptationContext"/>，破坏确定性和作用域。
+    /// 已标记为编译错误；调用方必须使用接受 context 的重载。
     /// </remarks>
+    [Obsolete("CandidateAdaptationContext is required for determinism and scope. Use ToEnvelope(candidate, context).", error: true)]
     public static ContextCandidateEnvelope ToEnvelope(PackageTraceCandidate candidate)
         => ToEnvelope(candidate, new CandidateAdaptationContext
         {
@@ -133,6 +133,7 @@ public static class PackageCandidateAdapter
     /// 将 <see cref="PackageTraceCandidate"/> 集合批量转换为
     /// <see cref="ContextCandidateEnvelope"/> 集合。
     /// </summary>
+    [Obsolete("CandidateAdaptationContext is required for determinism and scope. Use ToEnvelopes(candidates, context).", error: true)]
     public static IReadOnlyList<ContextCandidateEnvelope> ToEnvelopes(
         IEnumerable<PackageTraceCandidate> candidates)
         => ToEnvelopes(candidates, new CandidateAdaptationContext
@@ -158,15 +159,7 @@ public static class PackageCandidateAdapter
     /// 将 <see cref="ContextPackageBuildResult"/> 整体转换为
     /// <see cref="ContextDecisionRequest"/>，可直接传入 Engine.DecideAsync。
     /// </summary>
-    /// <param name="result">Package 主链产出的结果。</param>
-    /// <param name="tokenBudget">token 预算上限。</param>
-    /// <param name="enableModel">是否启用模型评分（默认 false）。</param>
-    /// <remarks>
-    /// 注意：ContextPackageBuildResult.SelectedItems 是 ContextPackageDecision（output DTO），
-    /// 不是 PackageTraceCandidate（internal 类型）。此方法只能基于 output DTO 转换，
-    /// 因此丢失部分 internal 字段（如 ScoreBreakdown）。如需保留完整字段，
-    /// 调用方应在 BuildDetailedAsync 之后直接用 PackageTraceCandidate 集合调用 ToEnvelopes。
-    /// </remarks>
+    [Obsolete("CandidateAdaptationContext is required for determinism and scope. Use ToDecisionRequest(result, tokenBudget, enableModel, context).", error: true)]
     public static ContextDecisionRequest ToDecisionRequest(
         ContextPackageBuildResult result,
         int tokenBudget,
@@ -199,7 +192,7 @@ public static class PackageCandidateAdapter
             .Select(d => ToEnvelopeFromDecision(d, context))
             .ToList();
         var droppedEnvelopes = result.DroppedItems
-            .Select(ToEnvelopeFromDroppedItem)
+            .Select(item => ToEnvelopeFromDroppedItem(item, context))
             .ToList();
 
         var allEnvelopes = new List<ContextCandidateEnvelope>(selectedEnvelopes.Count + droppedEnvelopes.Count);
@@ -391,16 +384,25 @@ public static class PackageCandidateAdapter
         };
     }
 
-    private static ContextCandidateEnvelope ToEnvelopeFromDroppedItem(DroppedContextItem item)
+    private static ContextCandidateEnvelope ToEnvelopeFromDroppedItem(
+        DroppedContextItem item,
+        CandidateAdaptationContext context)
     {
         var source = ResolveCandidateSource(item.Kind);
+        var constraintLevel = ResolveConstraintLevel(item.Kind);
         var blockReason = CandidateDecisionReasonCodeMapper.MapFromReason(item.Reason);
         return new ContextCandidateEnvelope
         {
             CandidateId = item.ItemId,
             Source = source,
+            Type = item.Type,
+            EstimatedTokens = item.EstimatedTokens,
+            WorkspaceId = context.WorkspaceId,
+            CollectionId = context.CollectionId,
             Safety = new CandidateSafetyState
             {
+                ConstraintLevel = constraintLevel,
+                IsHardConstraint = constraintLevel == ConstraintLevel.Hard,
                 PassesSafetyGate = false,
                 BlockReasonCode = blockReason,
                 BlockReasonDetail = item.Reason
@@ -413,6 +415,21 @@ public static class PackageCandidateAdapter
             Features = new CandidateFeatureVector
             {
                 ChannelSources = ResolveChannelSources(item.Kind)
+            },
+            // P1-2：dropped envelope 填充 provenance（与 selected 路径一致）
+            ProvenanceRefs = new List<EvidenceRef>
+            {
+                new()
+                {
+                    RefId = item.ItemId,
+                    RefType = "package-dropped-ref",
+                    WorkspaceId = string.IsNullOrEmpty(context.WorkspaceId) ? null : context.WorkspaceId,
+                    CollectionId = string.IsNullOrEmpty(context.CollectionId) ? null : context.CollectionId,
+                    GeneratedAt = context.ObservedAt,
+                    ContentFingerprint = context.PolicySnapshot is null
+                        ? null
+                        : $"{context.PolicySnapshot.BundleId}@{context.PolicySnapshot.Version}"
+                }
             }
         };
     }

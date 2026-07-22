@@ -51,10 +51,10 @@ public static class RetrievalCandidateAdapter
     /// 将单个 <see cref="ContextRetrievalCandidate"/> 转换为 <see cref="ContextCandidateEnvelope"/>。
     /// </summary>
     /// <remarks>
-    /// 此重载不传 <see cref="CandidateAdaptationContext"/>；将在入口处读取一次
-    /// <see cref="DateTimeOffset.UtcNow"/> 作为 <c>ObservedAt</c>，但映射函数内部不再读时间。
-    /// 推荐调用方使用接受 context 的重载以获得确定性。
+    /// P1-2：此重载不传 <see cref="CandidateAdaptationContext"/>，破坏确定性和作用域。
+    /// 已标记为编译错误；调用方必须使用接受 context 的重载。
     /// </remarks>
+    [Obsolete("CandidateAdaptationContext is required for determinism and scope. Use ToEnvelope(candidate, context).", error: true)]
     public static ContextCandidateEnvelope ToEnvelope(ContextRetrievalCandidate candidate)
         => ToEnvelope(candidate, new CandidateAdaptationContext
         {
@@ -82,6 +82,7 @@ public static class RetrievalCandidateAdapter
 
         var source = ResolveCandidateSource(candidate);
         var isMandatory = IsMandatoryCandidate(candidate);
+        var constraintLevel = ResolveConstraintLevel(candidate);
         var lifecycleState = ResolveLifecycleState(candidate);
 
         return new ContextCandidateEnvelope
@@ -94,9 +95,15 @@ public static class RetrievalCandidateAdapter
             CollectionId = context.CollectionId,
             Safety = new CandidateSafetyState
             {
-                IsMandatory = isMandatory,
-                IsHardConstraint = source == ContextCandidateSource.Mandatory
-                                    || source == ContextCandidateSource.Constraint,
+                // P1-1：不再把 Constraint 来源一律视为 hard。
+                // IsMandatory：metadata mandatory 标记 || ConstraintLevel is Hard or System。
+                // IsHardConstraint：仅当 ConstraintLevel == Hard（与 PackageCandidateAdapter 对齐）。
+                // soft_constraint（Soft）与 merged_constraint（Mixed）均不免预算。
+                IsMandatory = isMandatory
+                              || constraintLevel is ConstraintLevel.Hard
+                                  or ConstraintLevel.System,
+                ConstraintLevel = constraintLevel,
+                IsHardConstraint = constraintLevel == ConstraintLevel.Hard,
                 LifecycleState = lifecycleState,
                 IsSuperseded = lifecycleState.Equals("superseded", StringComparison.OrdinalIgnoreCase),
                 PassesSafetyGate = true // 默认通过；具体拦截由 Engine 阶段决定
@@ -134,6 +141,7 @@ public static class RetrievalCandidateAdapter
     /// 将 <see cref="ContextRetrievalCandidate"/> 集合批量转换为
     /// <see cref="ContextCandidateEnvelope"/> 集合。
     /// </summary>
+    [Obsolete("CandidateAdaptationContext is required for determinism and scope. Use ToEnvelopes(candidates, context).", error: true)]
     public static IReadOnlyList<ContextCandidateEnvelope> ToEnvelopes(
         IEnumerable<ContextRetrievalCandidate> candidates)
         => ToEnvelopes(candidates, new CandidateAdaptationContext
@@ -159,10 +167,7 @@ public static class RetrievalCandidateAdapter
     /// 将 <see cref="ContextRetrievalResult"/> 整体转换为
     /// <see cref="ContextDecisionRequest"/>，可直接传入 Engine.DecideAsync。
     /// </summary>
-    /// <param name="result">Retrieval 主链产出的结果。</param>
-    /// <param name="tokenBudget">token 预算上限（如 request.TokenBudget）。</param>
-    /// <param name="topK">TopK 上限（如 request.TopK）。</param>
-    /// <param name="enableModel">是否启用模型评分（默认 false）。</param>
+    [Obsolete("CandidateAdaptationContext is required for determinism and scope. Use ToDecisionRequest(result, tokenBudget, topK, enableModel, context).", error: true)]
     public static ContextDecisionRequest ToDecisionRequest(
         ContextRetrievalResult result,
         int tokenBudget,
@@ -196,7 +201,7 @@ public static class RetrievalCandidateAdapter
 
         var selectedEnvelopes = ToEnvelopes(result.SelectedItems, context);
         var droppedEnvelopes = result.DroppedItems
-            .Select(dec => ToEnvelopeFromDecision(dec))
+            .Select(dec => ToEnvelopeFromDecision(dec, context))
             .ToList();
 
         // 合并 selected + dropped 作为 Engine 输入；Engine 会重新决策
@@ -247,6 +252,37 @@ public static class RetrievalCandidateAdapter
             && mandatory;
     }
 
+    /// <summary>
+    /// P1-1：从 Retrieval 候选的 Metadata 解析约束强制级别。
+    /// 优先读取 metadata["constraintLevel"]（强类型字段），其次从 metadata["source"] 推导。
+    /// 非 Constraint 来源返回 null。
+    /// </summary>
+    private static ConstraintLevel? ResolveConstraintLevel(ContextRetrievalCandidate candidate)
+    {
+        // 1. 强类型字段：metadata["constraintLevel"]
+        if (candidate.Metadata.TryGetValue("constraintLevel", out var levelStr)
+            && !string.IsNullOrEmpty(levelStr)
+            && Enum.TryParse<ConstraintLevel>(levelStr, ignoreCase: true, out var parsed))
+        {
+            return parsed;
+        }
+
+        // 2. 从 metadata["source"] 推导（如 "hard_constraint" / "soft_constraint" / "merged_constraint"）
+        if (candidate.Metadata.TryGetValue("source", out var sourceStr)
+            && !string.IsNullOrEmpty(sourceStr))
+        {
+            return sourceStr.ToLowerInvariant() switch
+            {
+                "hard_constraint" or "constraints" => ConstraintLevel.Hard,
+                "soft_constraint" => ConstraintLevel.Soft,
+                "merged_constraint" => ConstraintLevel.Mixed,
+                _ => null
+            };
+        }
+
+        return null;
+    }
+
     private static string ResolveLifecycleState(ContextRetrievalCandidate candidate)
     {
         return candidate.Metadata.TryGetValue("lifecycleStatus", out var state)
@@ -276,7 +312,9 @@ public static class RetrievalCandidateAdapter
         return channels;
     }
 
-    private static ContextCandidateEnvelope ToEnvelopeFromDecision(ContextRetrievalDecision decision)
+    private static ContextCandidateEnvelope ToEnvelopeFromDecision(
+        ContextRetrievalDecision decision,
+        CandidateAdaptationContext context)
     {
         var candidateId = string.IsNullOrWhiteSpace(decision.CandidateId)
             ? decision.SourceId
@@ -291,6 +329,8 @@ public static class RetrievalCandidateAdapter
             Source = source,
             Type = decision.Type,
             EstimatedTokens = decision.EstimatedTokens,
+            WorkspaceId = context.WorkspaceId,
+            CollectionId = context.CollectionId,
             Safety = new CandidateSafetyState
             {
                 PassesSafetyGate = false,
@@ -303,6 +343,22 @@ public static class RetrievalCandidateAdapter
                 FinalScore = decision.Score,
                 ModelConfidence = 0.0,
                 ReasonCode = "dropped-by-retrieval"
+            },
+            // P1-2：dropped envelope 填充 workspace/collection/provenance（与 selected 路径一致）
+            // ContextRetrievalDecision 不含 SourceRefs，故 ProvenanceRefs 仅携带 context 指纹
+            ProvenanceRefs = new List<EvidenceRef>
+            {
+                new()
+                {
+                    RefId = candidateId,
+                    RefType = "retrieval-dropped-ref",
+                    WorkspaceId = string.IsNullOrEmpty(context.WorkspaceId) ? null : context.WorkspaceId,
+                    CollectionId = string.IsNullOrEmpty(context.CollectionId) ? null : context.CollectionId,
+                    GeneratedAt = context.ObservedAt,
+                    ContentFingerprint = context.PolicySnapshot is null
+                        ? null
+                        : $"{context.PolicySnapshot.BundleId}@{context.PolicySnapshot.Version}"
+                }
             }
         };
     }

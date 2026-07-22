@@ -11,6 +11,12 @@ namespace ContextCore.Abstractions;
 //   3. 失败语义：SaveRunAsync 幂等（同 RunId 覆盖）；GetRunAsync 不存在返回 null。
 //   4. P0-7：TryTransitionAsync 原子 CAS 推进（revision + stage 双重检查 + 审计批量同事务），
 //      避免 HA 场景下两个实例同时推进同一 run 导致状态分裂。
+//   5. P2-1：TryCreateRunAsync insert-if-absent（同 RunId 已存在返回 false，不覆盖），
+//      替代 SaveRunAsync 用于 StartAsync 创建新 run，避免秒精度 RunId 碰撞导致覆盖。
+//   6. P2-2：PipelineTransitionRequest 让调用方提供 TransitionId 实现端到端幂等；
+//      Postgres 实现应在 transitions 审计表上建立 (run_id, transition_id) 唯一约束。
+//   7. P2-3：CanaryAssignment 应作为进入 ScopedCanary 的 transition audit 一部分原子提交，
+//      不再通过独立的 SaveCanaryAssignmentAsync 写入。
 //
 // 设计边界：
 //   - Store 仅负责持久化；不负责状态机转换（如 OfflineExperiment → Shadow）
@@ -19,7 +25,7 @@ namespace ContextCore.Abstractions;
 //   - 默认实现使用 ConcurrentDictionary（in-memory）；生产实现替换为 Postgres store。
 //   - 与 IAgentCheckpointStore 设计模式对齐（R26-2）。
 //   - P0-7：TryTransitionAsync 是唯一允许并发推进 run state 的入口；
-//     SaveRunAsync 仅用于 StartAsync 创建新 run（首次写入），后续推进必须走 CAS 路径。
+//     P2-1：TryCreateRunAsync 是唯一创建新 run 的入口（insert-if-absent 语义）。
 // ===========================================================================
 
 /// <summary>
@@ -119,6 +125,37 @@ public sealed record PipelineAuditBatch
 }
 
 /// <summary>
+/// P2-2：调用方提供的 transition 标识，用于端到端幂等。
+/// </summary>
+/// <remarks>
+/// 当调用方在收到 <c>TryTransitionAsync</c> 响应前超时，重试时必须复用同一
+/// <see cref="TransitionId"/>。Store 通过 <see cref="PipelineRunSnapshot.LastTransitionId"/>
+/// 幂等检查识别重试并返回当前快照（CAS 跳过）。
+/// <para>
+/// Postgres 实现应在 transitions 审计表上建立 <c>(run_id, transition_id)</c> 唯一约束，
+/// 确保数据库层面也拒绝重复 transition。
+/// </para>
+/// </remarks>
+public sealed record PipelineTransitionRequest
+{
+    /// <summary>
+    /// 调用方生成的唯一 transition ID（如 GUID）。重试时必须复用同一值。
+    /// Store 将此值写入 <see cref="PipelineRunSnapshot.LastTransitionId"/>，
+    /// 后续相同 TransitionId 的重试会被识别为幂等重放。
+    /// </summary>
+    public required string TransitionId { get; init; }
+
+    /// <summary>可选的 observation batch ID（关联指标批次，用于审计溯源）。</summary>
+    public string? ObservationBatchId { get; init; }
+
+    /// <summary>
+    /// 可选的幂等键（用于 DB 唯一约束去重）。
+    /// 若提供，Postgres 实现应将其作为 <c>(run_id, idempotency_key)</c> 唯一约束的一部分。
+    /// </summary>
+    public string? IdempotencyKey { get; init; }
+}
+
+/// <summary>
 /// R27-2：Pipeline Run Store 接口。持久化 <see cref="PipelineRunSnapshot"/> 与 3 类审计记录。
 /// </summary>
 /// <remarks>
@@ -133,7 +170,27 @@ public interface IPipelineRunStore
     /// <summary>保存或更新 pipeline run snapshot（同 RunId 覆盖）。</summary>
     /// <param name="snapshot">Run 快照（必填）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
+    [Obsolete("Use TryCreateRunAsync for new run creation (insert-if-absent). SaveRunAsync overwrites on conflict.", error: false)]
     Task SaveRunAsync(PipelineRunSnapshot snapshot, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// P2-1：创建新 pipeline run（insert-if-absent 语义）。
+    /// 同 RunId 已存在时返回 false（不覆盖）；不存在时插入并返回 true。
+    /// </summary>
+    /// <param name="snapshot">Run 快照（必填）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>true = 创建成功；false = RunId 已存在。</returns>
+    /// <remarks>
+    /// P2-1 修复：替代 <see cref="SaveRunAsync"/> 用于 <c>StartAsync</c> 创建新 run。
+    /// <see cref="SaveRunAsync"/> 使用 ON CONFLICT DO UPDATE 会覆盖同 RunId 的已有 run，
+    /// 导致同秒启动两次（秒精度 RunId 碰撞）时第二次覆盖第一次。
+    /// TryCreateRunAsync 使用 ON CONFLICT DO NOTHING，第二次启动返回 false，
+    /// 调用方据此决定重试（使用新 GUID RunId）或放弃。
+    /// <para>
+    /// RunId 应使用 GUID/ULID 保证唯一性，不依赖秒精度时间戳。
+    /// </para>
+    /// </remarks>
+    Task<bool> TryCreateRunAsync(PipelineRunSnapshot snapshot, CancellationToken cancellationToken = default);
 
     /// <summary>按 RunId 获取 pipeline run snapshot。</summary>
     /// <param name="runId">Run ID。</param>
@@ -194,6 +251,13 @@ public interface IPipelineRunStore
     /// <summary>保存 canary assignment（同 AssignmentId 覆盖）。</summary>
     /// <param name="assignment">Canary assignment（必填）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
+    /// <remarks>
+    /// P2-3：推荐通过 <see cref="PipelineAuditBatch.CanaryAssignment"/> 在
+    /// <see cref="TryTransitionAsync"/> 的 transition audit 中原子提交 canary assignment，
+    /// 而非通过此方法独立写入。独立写入可能导致状态已进入 ScopedCanary 但 assignment 未写入
+    /// （或反之）的不一致。此方法保留用于管理员手动恢复 / 测试场景。
+    /// </remarks>
+    [Obsolete("Use PipelineAuditBatch.CanaryAssignment in TryTransitionAsync for atomic canary assignment. This method bypasses transition audit.", error: false)]
     Task SaveCanaryAssignmentAsync(CanaryAssignment assignment, CancellationToken cancellationToken = default);
 
     /// <summary>按 RunId 列出所有 canary assignment（按 AssignedAt 升序）。</summary>

@@ -22,6 +22,13 @@ namespace ContextCore.Tests;
 [TestCategory("R18")]
 public sealed class RetrievalCandidateAdapterTests
 {
+    private static CandidateAdaptationContext MakeContext() => new()
+    {
+        WorkspaceId = "ws-test",
+        CollectionId = "col-test",
+        ObservedAt = new DateTimeOffset(2026, 7, 21, 0, 0, 0, TimeSpan.Zero)
+    };
+
     // =========================================================================
     // 1. 字段映射
     // =========================================================================
@@ -41,7 +48,7 @@ public sealed class RetrievalCandidateAdapterTests
             SourceRefs = new[] { "trace:abc", "store:item-1" }
         };
 
-        var envelope = RetrievalCandidateAdapter.ToEnvelope(candidate);
+        var envelope = RetrievalCandidateAdapter.ToEnvelope(candidate, MakeContext());
 
         Assert.AreEqual("cand-1", envelope.CandidateId);
         Assert.AreEqual(ContextCandidateSource.Lexical, envelope.Source);
@@ -65,7 +72,7 @@ public sealed class RetrievalCandidateAdapterTests
             Kind = ContextRetrievalCandidateKind.ContextItem
         };
 
-        var envelope = RetrievalCandidateAdapter.ToEnvelope(candidate);
+        var envelope = RetrievalCandidateAdapter.ToEnvelope(candidate, MakeContext());
 
         Assert.AreEqual("src-fallback", envelope.CandidateId);
     }
@@ -83,7 +90,7 @@ public sealed class RetrievalCandidateAdapterTests
             Kind = ContextRetrievalCandidateKind.MemoryItem
         };
 
-        var envelope = RetrievalCandidateAdapter.ToEnvelope(candidate);
+        var envelope = RetrievalCandidateAdapter.ToEnvelope(candidate, MakeContext());
 
         Assert.AreEqual(ContextCandidateSource.WorkingMemory, envelope.Source);
     }
@@ -97,7 +104,7 @@ public sealed class RetrievalCandidateAdapterTests
             Kind = ContextRetrievalCandidateKind.ContextItem
         };
 
-        var envelope = RetrievalCandidateAdapter.ToEnvelope(candidate);
+        var envelope = RetrievalCandidateAdapter.ToEnvelope(candidate, MakeContext());
 
         Assert.AreEqual(ContextCandidateSource.Lexical, envelope.Source);
     }
@@ -119,7 +126,7 @@ public sealed class RetrievalCandidateAdapterTests
             }
         };
 
-        var envelope = RetrievalCandidateAdapter.ToEnvelope(candidate);
+        var envelope = RetrievalCandidateAdapter.ToEnvelope(candidate, MakeContext());
 
         Assert.AreEqual(ContextCandidateSource.Semantic, envelope.Source);
     }
@@ -137,7 +144,7 @@ public sealed class RetrievalCandidateAdapterTests
             }
         };
 
-        var envelope = RetrievalCandidateAdapter.ToEnvelope(candidate);
+        var envelope = RetrievalCandidateAdapter.ToEnvelope(candidate, MakeContext());
 
         Assert.IsTrue(envelope.Safety.IsMandatory);
     }
@@ -155,7 +162,7 @@ public sealed class RetrievalCandidateAdapterTests
             }
         };
 
-        var envelope = RetrievalCandidateAdapter.ToEnvelope(candidate);
+        var envelope = RetrievalCandidateAdapter.ToEnvelope(candidate, MakeContext());
 
         Assert.AreEqual("superseded", envelope.Safety.LifecycleState);
         Assert.IsTrue(envelope.Safety.IsSuperseded);
@@ -175,7 +182,7 @@ public sealed class RetrievalCandidateAdapterTests
             }
         };
 
-        var envelope = RetrievalCandidateAdapter.ToEnvelope(candidate);
+        var envelope = RetrievalCandidateAdapter.ToEnvelope(candidate, MakeContext());
 
         Assert.AreEqual(2, envelope.Features.ChannelSources.Count);
         Assert.AreEqual("vector", envelope.Features.ChannelSources[0]);
@@ -196,7 +203,7 @@ public sealed class RetrievalCandidateAdapterTests
             new ContextRetrievalCandidate { CandidateId = "c3", Kind = ContextRetrievalCandidateKind.ContextItem }
         };
 
-        var envelopes = RetrievalCandidateAdapter.ToEnvelopes(candidates);
+        var envelopes = RetrievalCandidateAdapter.ToEnvelopes(candidates, MakeContext());
 
         Assert.AreEqual(3, envelopes.Count);
         Assert.AreEqual("c1", envelopes[0].CandidateId);
@@ -207,7 +214,7 @@ public sealed class RetrievalCandidateAdapterTests
     [TestMethod]
     public void ToEnvelopes_EmptyInput_ReturnsEmptyList()
     {
-        var envelopes = RetrievalCandidateAdapter.ToEnvelopes(Array.Empty<ContextRetrievalCandidate>());
+        var envelopes = RetrievalCandidateAdapter.ToEnvelopes(Array.Empty<ContextRetrievalCandidate>(), MakeContext());
 
         Assert.AreEqual(0, envelopes.Count);
     }
@@ -245,7 +252,7 @@ public sealed class RetrievalCandidateAdapterTests
             }
         };
 
-        var request = RetrievalCandidateAdapter.ToDecisionRequest(result, tokenBudget: 500);
+        var request = RetrievalCandidateAdapter.ToDecisionRequest(result, tokenBudget: 500, topK: int.MaxValue, enableModel: false, MakeContext());
 
         Assert.AreEqual("op-1", request.RequestId);
         Assert.AreEqual(ContextDecisionSource.Retrieval, request.DecisionSource);
@@ -282,7 +289,7 @@ public sealed class RetrievalCandidateAdapterTests
             }
         };
 
-        var envelope = RetrievalCandidateAdapter.ToEnvelope(candidate);
+        var envelope = RetrievalCandidateAdapter.ToEnvelope(candidate, MakeContext());
 
         // 原候选不变
         Assert.AreEqual("original-1", candidate.CandidateId);
@@ -329,7 +336,7 @@ public sealed class RetrievalCandidateAdapterTests
 
         // Step 2: 通过适配器转换为 DecisionRequest
         var request = RetrievalCandidateAdapter.ToDecisionRequest(
-            retrievalResult, tokenBudget: 150); // 只够 1 个候选
+            retrievalResult, tokenBudget: 150, topK: int.MaxValue, enableModel: false, MakeContext()); // 只够 1 个候选
 
         // Step 3: 通过 Engine 决策
         var engine = new DefaultContextDecisionEngine();
@@ -482,23 +489,23 @@ public sealed class RetrievalCandidateAdapterTests
     }
 
     [TestMethod]
-    public void ToEnvelope_WithoutContext_BackwardCompatible_UsesDefaultObservedAt()
+    public void ToEnvelope_WithContext_UsesContextObservedAtAndScope()
     {
-        // P0-5：旧重载向后兼容 — 不传 context 仍可工作（入口处读 UtcNow）
+        // P1-2：旧无 context 重载已标记 [Obsolete(error: true)]，所有调用必须显式传 context。
+        // context 中的 ObservedAt / WorkspaceId / CollectionId 必须原样传播到 envelope，
+        // 不再回退到 DateTimeOffset.UtcNow 或空字符串（保证确定性 + 作用域可追溯）。
         var candidate = new ContextRetrievalCandidate
         {
             CandidateId = "legacy-1",
             Kind = ContextRetrievalCandidateKind.ContextItem,
             SourceRefs = new[] { "trace:legacy" }
         };
-        var before = DateTimeOffset.UtcNow;
+        var context = MakeContext();
 
-        var envelope = RetrievalCandidateAdapter.ToEnvelope(candidate);
+        var envelope = RetrievalCandidateAdapter.ToEnvelope(candidate, context);
 
-        var after = DateTimeOffset.UtcNow;
-        Assert.IsTrue(envelope.ProvenanceRefs[0].GeneratedAt >= before);
-        Assert.IsTrue(envelope.ProvenanceRefs[0].GeneratedAt <= after);
-        Assert.AreEqual(string.Empty, envelope.WorkspaceId);
-        Assert.AreEqual(string.Empty, envelope.CollectionId);
+        Assert.AreEqual(context.ObservedAt, envelope.ProvenanceRefs[0].GeneratedAt);
+        Assert.AreEqual(context.WorkspaceId, envelope.WorkspaceId);
+        Assert.AreEqual(context.CollectionId, envelope.CollectionId);
     }
 }

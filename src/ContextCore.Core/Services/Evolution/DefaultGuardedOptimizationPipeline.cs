@@ -79,13 +79,22 @@ public sealed class DefaultGuardedOptimizationPipeline : IGuardedOptimizationPip
             CompletedAt = null,
             RollbackReason = null,
             StageMetrics = Array.Empty<BaselineComparison>(),
-            // P0-7：初始 revision = 1；StartAsync 创建新 run 使用 SaveRunAsync（首次写入，非 CAS 路径）
+            // P0-7：初始 revision = 1
+            // P2-1：StartAsync 使用 TryCreateRunAsync（insert-if-absent）替代 SaveRunAsync（覆盖）
             Revision = 1,
             LeaseOwner = null,
             LeaseExpiresAt = null,
             LastTransitionId = null
         };
-        await _store.SaveRunAsync(snapshot, cancellationToken).ConfigureAwait(false);
+        // P2-1：TryCreateRunAsync 保证 RunId 碰撞时返回 false 而非覆盖。
+        // GUID RunId 碰撞概率极低；若发生，抛异常通知调用方。
+        var created = await _store.TryCreateRunAsync(snapshot, cancellationToken).ConfigureAwait(false);
+        if (!created)
+        {
+            throw new InvalidOperationException(
+                $"Pipeline run 创建失败：RunId={runId} 已存在。" +
+                "GUID RunId 碰撞概率极低；若反复出现请检查 RunId 生成逻辑。");
+        }
 
         return BuildResult(snapshot);
     }
@@ -116,25 +125,63 @@ public sealed class DefaultGuardedOptimizationPipeline : IGuardedOptimizationPip
 
     /// <summary>
     /// 推进到下一阶段（注入指标版）：调用 <see cref="IPromotionJudge"/> 裁决并应用 decision。
+    /// 此重载自动生成 transitionId（非幂等；重试时生成新 ID）。
     /// </summary>
     /// <param name="runId">运行 ID。</param>
     /// <param name="baselineMetrics">基线指标。</param>
     /// <param name="experimentMetrics">实验指标。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <remarks>
-    /// P0-7：使用 <see cref="IPipelineRunStore.TryTransitionAsync"/> 原子 CAS 推进。
-    /// snapshot 更新 + audit 批量（BaselineComparison / CanaryAssignment / RollbackRecord）在同一事务内提交。
-    /// 若 CAS 失败（并发推进冲突），抛 <see cref="InvalidOperationException"/> 通知调用方。
+    /// P2-2：需要端到端幂等的调用方应使用接受 <see cref="PipelineTransitionRequest"/> 的重载，
+    /// 在重试时复用同一 TransitionId，让 store 的幂等检查识别重放。
     /// </remarks>
-    public async Task<PipelineRunResult> AdvanceWithMetricsAsync(
+    public Task<PipelineRunResult> AdvanceWithMetricsAsync(
         string runId,
         IReadOnlyDictionary<string, double> baselineMetrics,
         IReadOnlyDictionary<string, double> experimentMetrics,
         CancellationToken cancellationToken = default)
     {
+        // P2-2：自动生成 transitionId（非幂等场景；向后兼容）
+        var transitionId = $"t-{runId}-{Guid.NewGuid():N}";
+        return AdvanceWithMetricsAsync(
+            runId, baselineMetrics, experimentMetrics,
+            new PipelineTransitionRequest { TransitionId = transitionId },
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// 推进到下一阶段（注入指标版 + 调用方提供 transition 标识）：调用 <see cref="IPromotionJudge"/> 裁决并应用 decision。
+    /// </summary>
+    /// <param name="runId">运行 ID。</param>
+    /// <param name="baselineMetrics">基线指标。</param>
+    /// <param name="experimentMetrics">实验指标。</param>
+    /// <param name="transition">P2-2：调用方提供的 transition 标识（含 TransitionId / ObservationBatchId / IdempotencyKey）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <remarks>
+    /// P0-7：使用 <see cref="IPipelineRunStore.TryTransitionAsync"/> 原子 CAS 推进。
+    /// snapshot 更新 + audit 批量（BaselineComparison / CanaryAssignment / RollbackRecord）在同一事务内提交。
+    /// 若 CAS 失败（并发推进冲突），抛 <see cref="InvalidOperationException"/> 通知调用方。
+    /// <para>
+    /// P2-2：调用方提供 <paramref name="transition"/>.TransitionId 实现端到端幂等。
+    /// 若响应丢失后重试，使用相同 TransitionId，store 通过 LastTransitionId 幂等检查返回当前快照。
+    /// </para>
+    /// <para>
+    /// P2-3：当 judge 决定推进到 <see cref="OptimizationStage.ScopedCanary"/> 时，
+    /// 自动生成 <see cref="CanaryAssignment"/> 并作为 transition audit 一部分原子提交，
+    /// 不再需要调用方通过 <see cref="RecordCanaryAssignmentAsync"/> 独立写入。
+    /// </para>
+    /// </remarks>
+    public async Task<PipelineRunResult> AdvanceWithMetricsAsync(
+        string runId,
+        IReadOnlyDictionary<string, double> baselineMetrics,
+        IReadOnlyDictionary<string, double> experimentMetrics,
+        PipelineTransitionRequest transition,
+        CancellationToken cancellationToken = default)
+    {
         ArgumentException.ThrowIfNullOrWhiteSpace(runId);
         ArgumentNullException.ThrowIfNull(baselineMetrics);
         ArgumentNullException.ThrowIfNull(experimentMetrics);
+        ArgumentNullException.ThrowIfNull(transition);
         cancellationToken.ThrowIfCancellationRequested();
 
         var snapshot = await _store.GetRunAsync(runId, cancellationToken).ConfigureAwait(false);
@@ -167,10 +214,12 @@ public sealed class DefaultGuardedOptimizationPipeline : IGuardedOptimizationPip
         var judgeResult = await _judge.JudgeAsync(request, cancellationToken).ConfigureAwait(false);
 
         // 应用 judge decision → 生成 next snapshot（P0-7：Revision +1 + LastTransitionId）
+        // P2-2：使用调用方提供的 transitionId
         var now = _timeProvider.GetUtcNow();
-        var transitionId = $"t-{runId}-{snapshot.Revision}-{now.UtcDateTime.Ticks}";
+        var transitionId = transition.TransitionId;
         PipelineRunSnapshot nextSnapshot;
         RollbackRecord? rollbackRecord = null;
+        CanaryAssignment? canaryAssignment = null;
         switch (judgeResult.Decision)
         {
             case PromotionDecision.Advance:
@@ -181,6 +230,16 @@ public sealed class DefaultGuardedOptimizationPipeline : IGuardedOptimizationPip
                 }
                 // 硬边界：严格顺序推进 — 验证下一阶段是当前阶段的合法后继
                 VerifyStageProgression(snapshot.CurrentStage, judgeResult.NextStage.Value);
+                // P2-3：进入 ScopedCanary 时自动生成 CanaryAssignment 作为 transition audit 一部分原子提交。
+                if (judgeResult.NextStage == OptimizationStage.ScopedCanary)
+                {
+                    canaryAssignment = new CanaryAssignment(
+                        assignmentId: $"ca-{runId}-{now.UtcDateTime.Ticks}",
+                        proposalId: snapshot.ProposalId,
+                        runId: runId,
+                        strategy: CanaryAssignmentStrategy.HashBased,
+                        assignedAt: now);
+                }
                 nextSnapshot = snapshot with
                 {
                     CurrentStage = judgeResult.NextStage.Value,
@@ -264,9 +323,11 @@ public sealed class DefaultGuardedOptimizationPipeline : IGuardedOptimizationPip
         }
 
         // P0-7：原子 CAS 推进 — snapshot + audit 批量在同一事务内写入
+        // P2-3：CanaryAssignment 作为 transition audit 一部分原子提交（不再独立写入）
         var auditBatch = new PipelineAuditBatch
         {
             BaselineComparison = comparison,
+            CanaryAssignment = canaryAssignment,
             RollbackRecord = rollbackRecord
         };
         var transitionedSnapshot = await _store.TryTransitionAsync(
@@ -309,6 +370,12 @@ public sealed class DefaultGuardedOptimizationPipeline : IGuardedOptimizationPip
     }
 
     /// <summary>记录 canary assignment（供 ScopedCanary 阶段审计）。</summary>
+    /// <remarks>
+    /// P2-3：已过时。CanaryAssignment 现在通过 <see cref="AdvanceWithMetricsAsync"/> 的
+    /// transition audit（<see cref="PipelineAuditBatch.CanaryAssignment"/>）原子提交，
+    /// 不再需要独立写入。此方法保留用于管理员手动恢复 / 测试场景。
+    /// </remarks>
+    [Obsolete("CanaryAssignment is now created atomically via AdvanceWithMetricsAsync transition audit. Use PipelineAuditBatch.CanaryAssignment.", error: false)]
     public Task RecordCanaryAssignmentAsync(
         CanaryAssignment assignment,
         CancellationToken cancellationToken = default)
@@ -376,8 +443,9 @@ public sealed class DefaultGuardedOptimizationPipeline : IGuardedOptimizationPip
     private static string BuildRunId(OptimizationProposal proposal)
     {
         var componentTag = proposal.TargetComponent.ToString().ToLowerInvariant();
-        var timestamp = DateTimeOffset.UtcNow.UtcDateTime.ToString("yyyyMMddHHmmss", System.Globalization.CultureInfo.InvariantCulture);
-        return $"run-{componentTag}-{proposal.ProposalId}-{timestamp}";
+        // P2-1：使用 GUID 保证 RunId 唯一性，不依赖秒精度时间戳（避免同秒碰撞导致覆盖）。
+        var uniqueId = Guid.NewGuid().ToString("N");
+        return $"run-{componentTag}-{proposal.ProposalId}-{uniqueId}";
     }
 
     private static PipelineRunResult BuildResult(PipelineRunSnapshot snapshot)

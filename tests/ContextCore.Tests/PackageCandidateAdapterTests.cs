@@ -22,6 +22,13 @@ namespace ContextCore.Tests;
 [TestCategory("R18")]
 public sealed class PackageCandidateAdapterTests
 {
+    private static CandidateAdaptationContext MakeContext() => new()
+    {
+        WorkspaceId = "ws-test",
+        CollectionId = "col-test",
+        ObservedAt = new DateTimeOffset(2026, 7, 21, 0, 0, 0, TimeSpan.Zero)
+    };
+
     // =========================================================================
     // 1. 字段映射
     // =========================================================================
@@ -41,7 +48,7 @@ public sealed class PackageCandidateAdapterTests
         };
         var candidate = PackageTraceCandidate.FromMemory(item, kind: "working_memory", score: 0.85, estimatedTokens: 120);
 
-        var envelope = PackageCandidateAdapter.ToEnvelope(candidate);
+        var envelope = PackageCandidateAdapter.ToEnvelope(candidate, MakeContext());
 
         Assert.AreEqual("pkg-1", envelope.CandidateId);
         Assert.AreEqual(ContextCandidateSource.WorkingMemory, envelope.Source);
@@ -64,7 +71,7 @@ public sealed class PackageCandidateAdapterTests
     {
         var candidate = MakeCandidate("wm-1", "working_memory");
 
-        var envelope = PackageCandidateAdapter.ToEnvelope(candidate);
+        var envelope = PackageCandidateAdapter.ToEnvelope(candidate, MakeContext());
 
         Assert.AreEqual(ContextCandidateSource.WorkingMemory, envelope.Source);
     }
@@ -74,7 +81,7 @@ public sealed class PackageCandidateAdapterTests
     {
         var candidate = MakeCandidate("sm-1", "stable_memory");
 
-        var envelope = PackageCandidateAdapter.ToEnvelope(candidate);
+        var envelope = PackageCandidateAdapter.ToEnvelope(candidate, MakeContext());
 
         Assert.AreEqual(ContextCandidateSource.StableMemory, envelope.Source);
     }
@@ -84,7 +91,7 @@ public sealed class PackageCandidateAdapterTests
     {
         var candidate = MakeCandidate("hist-1", "historical_context");
 
-        var envelope = PackageCandidateAdapter.ToEnvelope(candidate);
+        var envelope = PackageCandidateAdapter.ToEnvelope(candidate, MakeContext());
 
         Assert.AreEqual(ContextCandidateSource.StableMemory, envelope.Source);
     }
@@ -94,7 +101,7 @@ public sealed class PackageCandidateAdapterTests
     {
         var candidate = MakeCandidate("glob-1", "global_context");
 
-        var envelope = PackageCandidateAdapter.ToEnvelope(candidate);
+        var envelope = PackageCandidateAdapter.ToEnvelope(candidate, MakeContext());
 
         Assert.AreEqual(ContextCandidateSource.GlobalContext, envelope.Source);
     }
@@ -104,7 +111,7 @@ public sealed class PackageCandidateAdapterTests
     {
         var candidate = MakeCandidate("recent-1", "recent_context");
 
-        var envelope = PackageCandidateAdapter.ToEnvelope(candidate);
+        var envelope = PackageCandidateAdapter.ToEnvelope(candidate, MakeContext());
 
         Assert.AreEqual(ContextCandidateSource.Recency, envelope.Source);
     }
@@ -115,7 +122,7 @@ public sealed class PackageCandidateAdapterTests
         // current_task 在枚举注释中明确归入 Recency（"Recency / Task-State"）
         var candidate = MakeCandidate("task-1", "current_task");
 
-        var envelope = PackageCandidateAdapter.ToEnvelope(candidate);
+        var envelope = PackageCandidateAdapter.ToEnvelope(candidate, MakeContext());
 
         Assert.AreEqual(ContextCandidateSource.Recency, envelope.Source);
     }
@@ -126,7 +133,7 @@ public sealed class PackageCandidateAdapterTests
         // raw/legacy 在 PackageTraceRecorder 中映射到 Keyword channel（lexical 路径）
         var candidate = MakeCandidate("raw-1", "raw");
 
-        var envelope = PackageCandidateAdapter.ToEnvelope(candidate);
+        var envelope = PackageCandidateAdapter.ToEnvelope(candidate, MakeContext());
 
         Assert.AreEqual(ContextCandidateSource.Lexical, envelope.Source);
     }
@@ -136,7 +143,7 @@ public sealed class PackageCandidateAdapterTests
     {
         var candidate = MakeCandidate("legacy-1", "legacy");
 
-        var envelope = PackageCandidateAdapter.ToEnvelope(candidate);
+        var envelope = PackageCandidateAdapter.ToEnvelope(candidate, MakeContext());
 
         Assert.AreEqual(ContextCandidateSource.Lexical, envelope.Source);
     }
@@ -146,7 +153,7 @@ public sealed class PackageCandidateAdapterTests
     {
         var candidate = MakeCandidate("rel-1", "related_context");
 
-        var envelope = PackageCandidateAdapter.ToEnvelope(candidate);
+        var envelope = PackageCandidateAdapter.ToEnvelope(candidate, MakeContext());
 
         Assert.AreEqual(ContextCandidateSource.RelatedContext, envelope.Source);
     }
@@ -156,7 +163,7 @@ public sealed class PackageCandidateAdapterTests
     {
         var candidate = MakeCandidate("hc-1", "hard_constraint");
 
-        var envelope = PackageCandidateAdapter.ToEnvelope(candidate);
+        var envelope = PackageCandidateAdapter.ToEnvelope(candidate, MakeContext());
 
         Assert.AreEqual(ContextCandidateSource.Constraint, envelope.Source);
         Assert.IsTrue(envelope.Safety.IsMandatory);
@@ -171,7 +178,7 @@ public sealed class PackageCandidateAdapterTests
         // P0-1：soft_constraint 不再被错误提升为 hard
         var candidate = MakeCandidate("sc-1", "soft_constraint");
 
-        var envelope = PackageCandidateAdapter.ToEnvelope(candidate);
+        var envelope = PackageCandidateAdapter.ToEnvelope(candidate, MakeContext());
 
         Assert.AreEqual(ContextCandidateSource.Constraint, envelope.Source);
         Assert.IsFalse(envelope.Safety.IsMandatory, "soft_constraint 不应被视为 mandatory");
@@ -185,7 +192,7 @@ public sealed class PackageCandidateAdapterTests
         // P0-1：merged_constraint 不再被整体视为 hard / mandatory
         var candidate = MakeCandidate("mc-1", "merged_constraint");
 
-        var envelope = PackageCandidateAdapter.ToEnvelope(candidate);
+        var envelope = PackageCandidateAdapter.ToEnvelope(candidate, MakeContext());
 
         Assert.AreEqual(ContextCandidateSource.Constraint, envelope.Source);
         Assert.IsFalse(envelope.Safety.IsMandatory, "merged_constraint 不应被视为 mandatory（Mixed 不可直接免预算）");
@@ -198,7 +205,7 @@ public sealed class PackageCandidateAdapterTests
     {
         var candidate = MakeCandidate("unk-1", "totally-unknown-kind");
 
-        var envelope = PackageCandidateAdapter.ToEnvelope(candidate);
+        var envelope = PackageCandidateAdapter.ToEnvelope(candidate, MakeContext());
 
         Assert.AreEqual(ContextCandidateSource.Unknown, envelope.Source);
     }
@@ -208,7 +215,7 @@ public sealed class PackageCandidateAdapterTests
     {
         var candidate = MakeCandidate("empty-1", "");
 
-        var envelope = PackageCandidateAdapter.ToEnvelope(candidate);
+        var envelope = PackageCandidateAdapter.ToEnvelope(candidate, MakeContext());
 
         Assert.AreEqual(ContextCandidateSource.Unknown, envelope.Source);
     }
@@ -223,7 +230,7 @@ public sealed class PackageCandidateAdapterTests
         var candidate = MakeCandidate("sup-1", "working_memory",
             metadata: new Dictionary<string, string> { ["lifecycleStatus"] = "superseded" });
 
-        var envelope = PackageCandidateAdapter.ToEnvelope(candidate);
+        var envelope = PackageCandidateAdapter.ToEnvelope(candidate, MakeContext());
 
         Assert.AreEqual("superseded", envelope.Safety.LifecycleState);
         Assert.IsTrue(envelope.Safety.IsSuperseded);
@@ -241,7 +248,7 @@ public sealed class PackageCandidateAdapterTests
                 ["lifecycleStatus"] = "deprecated"
             });
 
-        var envelope = PackageCandidateAdapter.ToEnvelope(candidate);
+        var envelope = PackageCandidateAdapter.ToEnvelope(candidate, MakeContext());
 
         Assert.AreEqual("deprecated", envelope.Safety.LifecycleState);
         Assert.IsFalse(envelope.Safety.IsDeprecatedUsedByActiveChain);
@@ -258,7 +265,7 @@ public sealed class PackageCandidateAdapterTests
                 ["usedByActiveChain"] = "true"
             });
 
-        var envelope = PackageCandidateAdapter.ToEnvelope(candidate);
+        var envelope = PackageCandidateAdapter.ToEnvelope(candidate, MakeContext());
 
         Assert.IsTrue(envelope.Safety.IsDeprecatedUsedByActiveChain);
     }
@@ -296,7 +303,7 @@ public sealed class PackageCandidateAdapterTests
         };
         var candidate = PackageTraceCandidate.FromMemory(item, kind: "working_memory", breakdown: breakdown, estimatedTokens: 100);
 
-        var envelope = PackageCandidateAdapter.ToEnvelope(candidate);
+        var envelope = PackageCandidateAdapter.ToEnvelope(candidate, MakeContext());
 
         var dict = envelope.Features.ScoreBreakdown;
         Assert.AreEqual(11, dict.Count); // 13 个字段 - 2 个零值 = 11
@@ -321,7 +328,7 @@ public sealed class PackageCandidateAdapterTests
         // FromMemory(item, kind, score, tokens) 不填充 ScoreBreakdown（保持 null）
         var candidate = MakeCandidate("null-sb-1", "working_memory");
 
-        var envelope = PackageCandidateAdapter.ToEnvelope(candidate);
+        var envelope = PackageCandidateAdapter.ToEnvelope(candidate, MakeContext());
 
         Assert.AreEqual(0, envelope.Features.ScoreBreakdown.Count);
     }
@@ -340,7 +347,7 @@ public sealed class PackageCandidateAdapterTests
             MakeCandidate("p3", "recent_context")
         };
 
-        var envelopes = PackageCandidateAdapter.ToEnvelopes(candidates);
+        var envelopes = PackageCandidateAdapter.ToEnvelopes(candidates, MakeContext());
 
         Assert.AreEqual(3, envelopes.Count);
         Assert.AreEqual("p1", envelopes[0].CandidateId);
@@ -354,7 +361,7 @@ public sealed class PackageCandidateAdapterTests
     [TestMethod]
     public void ToEnvelopes_EmptyInput_ReturnsEmptyList()
     {
-        var envelopes = PackageCandidateAdapter.ToEnvelopes(Array.Empty<PackageTraceCandidate>());
+        var envelopes = PackageCandidateAdapter.ToEnvelopes(Array.Empty<PackageTraceCandidate>(), MakeContext());
 
         Assert.AreEqual(0, envelopes.Count);
     }
@@ -393,7 +400,7 @@ public sealed class PackageCandidateAdapterTests
             }
         };
 
-        var request = PackageCandidateAdapter.ToDecisionRequest(result, tokenBudget: 500);
+        var request = PackageCandidateAdapter.ToDecisionRequest(result, tokenBudget: 500, enableModel: false, MakeContext());
 
         Assert.AreEqual("build-1", request.RequestId);
         Assert.AreEqual(ContextDecisionSource.Package, request.DecisionSource);
@@ -424,7 +431,7 @@ public sealed class PackageCandidateAdapterTests
             score: 0.7,
             metadata: new Dictionary<string, string> { ["lifecycleStatus"] = "active" });
 
-        var envelope = PackageCandidateAdapter.ToEnvelope(candidate);
+        var envelope = PackageCandidateAdapter.ToEnvelope(candidate, MakeContext());
 
         // 原候选不变
         Assert.AreEqual("orig-1", candidate.Id);
@@ -473,7 +480,7 @@ public sealed class PackageCandidateAdapterTests
 
         // Step 2: 通过适配器转换为 DecisionRequest
         var request = PackageCandidateAdapter.ToDecisionRequest(
-            packageResult, tokenBudget: 150); // 只够 1 个候选
+            packageResult, tokenBudget: 150, enableModel: false, MakeContext()); // 只够 1 个候选
 
         // Step 3: 通过 Engine 决策
         var engine = new DefaultContextDecisionEngine();
@@ -614,21 +621,24 @@ public sealed class PackageCandidateAdapterTests
     }
 
     [TestMethod]
-    public void ToEnvelope_WithoutContext_BackwardCompatible_UsesDefaultObservedAt()
+    public void ToEnvelope_WithContext_UsesContextObservedAt()
     {
-        // P0-5：旧重载向后兼容 — 不传 context 仍可工作（入口处读 UtcNow）
+        // P1-2：context-aware 重载使用 context.ObservedAt（确定性）
         var candidate = MakeCandidate("legacy-1", "working_memory");
-        var before = DateTimeOffset.UtcNow;
+        var observedAt = new DateTimeOffset(2026, 7, 21, 0, 0, 0, TimeSpan.Zero);
+        var context = new CandidateAdaptationContext
+        {
+            WorkspaceId = "ws-deterministic",
+            CollectionId = "col-deterministic",
+            ObservedAt = observedAt
+        };
 
-        var envelope = PackageCandidateAdapter.ToEnvelope(candidate);
+        var envelope = PackageCandidateAdapter.ToEnvelope(candidate, context);
 
-        var after = DateTimeOffset.UtcNow;
-        // GeneratedAt 应在 [before, after] 区间内（仅在入口处读一次）
-        Assert.IsTrue(envelope.ProvenanceRefs[0].GeneratedAt >= before);
-        Assert.IsTrue(envelope.ProvenanceRefs[0].GeneratedAt <= after);
-        // workspace/collection 在旧重载中为空
-        Assert.AreEqual(string.Empty, envelope.WorkspaceId);
-        Assert.AreEqual(string.Empty, envelope.CollectionId);
+        // GeneratedAt 来自 context.ObservedAt，不读系统时间
+        Assert.AreEqual(observedAt, envelope.ProvenanceRefs[0].GeneratedAt);
+        Assert.AreEqual("ws-deterministic", envelope.WorkspaceId);
+        Assert.AreEqual("col-deterministic", envelope.CollectionId);
     }
 
     // =========================================================================

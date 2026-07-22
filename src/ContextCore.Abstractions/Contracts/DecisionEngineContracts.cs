@@ -377,8 +377,9 @@ public sealed record CandidateAdaptationContext
     /// <summary>
     /// 观察时间（UTC）。由调用方在请求入口处传入，用于填充
     /// <see cref="EvidenceRef.GeneratedAt"/>。适配器不读取系统时间。
+    /// P1-2：改为 required，删除默认 UtcNow，强制调用方显式传入以保证确定性。
     /// </summary>
-    public DateTimeOffset ObservedAt { get; init; } = DateTimeOffset.UtcNow;
+    public required DateTimeOffset ObservedAt { get; init; }
 
     /// <summary>
     /// 已解析的策略快照引用（可选）。仅包含 BundleId + Version，

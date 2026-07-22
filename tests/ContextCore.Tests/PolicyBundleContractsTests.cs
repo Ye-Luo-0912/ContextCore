@@ -336,6 +336,8 @@ public sealed class PolicyBundleContractsTests
             WorkspaceId = "ws-1",
             CollectionId = "col-1",
             BundleId = "bundle-1",
+            BundleVersion = "1.0.0",
+            BundleContentHash = "sha256:test",
             ActivatedAt = DateTimeOffset.UtcNow
         };
 
@@ -353,19 +355,22 @@ public sealed class PolicyBundleContractsTests
             WorkspaceId = "ws-1",
             CollectionId = "col-1",
             BundleId = "bundle-1",
+            BundleVersion = "1.0.0",
+            BundleContentHash = "sha256:test",
             ActivatedAt = DateTimeOffset.UtcNow,
             ActivatedBy = "agent",
             RolloutStatus = PolicyRolloutStrategy.ScopedCanary,
-            BudgetOverride = new BudgetProfile { ProfileId = "budget-canary", DefaultTokenBudget = 2000 },
-            RoutingOverride = new RoutingProfile { ProfileId = "routing-canary", EnableModelScoring = true }
+            // P1-4：override 使用受限类型 RequestBudgetOverride / RequestRoutingOverride。
+            BudgetOverride = new RequestBudgetOverride { TokenBudget = 2000 },
+            RoutingOverride = new RequestRoutingOverride { EnableModelScoring = true }
         };
 
         Assert.AreEqual("agent", activation.ActivatedBy);
         Assert.AreEqual(PolicyRolloutStrategy.ScopedCanary, activation.RolloutStatus);
         Assert.IsNotNull(activation.BudgetOverride);
-        Assert.AreEqual(2000, activation.BudgetOverride.DefaultTokenBudget);
+        Assert.AreEqual(2000, activation.BudgetOverride.TokenBudget);
         Assert.IsNotNull(activation.RoutingOverride);
-        Assert.IsTrue(activation.RoutingOverride.EnableModelScoring);
+        Assert.IsTrue(activation.RoutingOverride.EnableModelScoring == true);
     }
 
     // =========================================================================
@@ -453,6 +458,8 @@ public sealed class PolicyBundleContractsTests
             WorkspaceId = "ws-1",
             CollectionId = "col-1",
             BundleId = "bundle-test",
+            BundleVersion = "1.0.0",
+            BundleContentHash = "sha256:test",
             ActivatedAt = DateTimeOffset.UtcNow
         };
         await registry.ActivateAsync(activation);
