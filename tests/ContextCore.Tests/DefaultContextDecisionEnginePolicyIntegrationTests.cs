@@ -461,11 +461,11 @@ public sealed class DefaultContextDecisionEnginePolicyIntegrationTests
             policyOverride: new ContextPolicyOverride
             {
                 BundleId = bundle.BundleId,
-                BudgetOverride = new BudgetProfile
+                // P0-3 修复：使用 RequestBudgetOverride（仅允许 TokenBudget/TopK/SectionRatios）
+                BudgetOverride = new RequestBudgetOverride
                 {
-                    ProfileId = "budget-override",
-                    DefaultTokenBudget = 300,
-                    DefaultTopK = 10
+                    TokenBudget = 300,
+                    TopK = 10
                 }
             });
 
@@ -512,8 +512,9 @@ public sealed class DefaultContextDecisionEnginePolicyIntegrationTests
             policyOverride: new ContextPolicyOverride
             {
                 BundleId = bundle.BundleId,
-                // 仅允许调整 EnableModelScoring（不能替换 ModelArtifactId）
-                RoutingOverride = bundle.Routing with { EnableModelScoring = true }
+                // P0-3 修复：使用 RequestRoutingOverride（仅允许 EnableModelScoring）
+                // bundle.Routing.ModelArtifactId 等字段不可被 Request 替换
+                RoutingOverride = new RequestRoutingOverride { EnableModelScoring = true }
             });
 
         var result = await engine.DecideAsync(request);
@@ -624,21 +625,24 @@ public sealed class DefaultContextDecisionEnginePolicyIntegrationTests
     }
 
     // =========================================================================
-    // 11. PolicyBundleId 显式提供时不调用 registry
+    // 11. PolicyBundleId 显式提供时不调用 GetActiveBundleAsync（P0-2：改走 GetBundleAsync）
     // =========================================================================
 
     [TestMethod]
     public async Task DecideAsync_WithRegistry_PolicyBundleIdProvided_SkipsRegistry()
     {
         // 自定义计数 registry：GetActiveBundleAsync 调用计数
-        var countingRegistry = new CountingPolicyRegistry(MakeBundle());
+        // P0-2 修复：PolicyBundleId 显式提供时，Engine 通过 GetBundleAsync 精确加载
+        // （不再静默回退默认 Bundle）。
+        var bundle = MakeBundle(bundleId: "bundle-explicit-id");
+        var countingRegistry = new CountingPolicyRegistry(bundle);
 
         var engine = new DefaultContextDecisionEngine(countingRegistry);
         var candidates = new[]
         {
             MakeEnvelope("c1", ContextCandidateSource.Semantic, score: 0.5, tokens: 100)
         };
-        // request.PolicyBundleId 显式提供 → 不调用 registry.GetActiveBundleAsync
+        // request.PolicyBundleId 显式提供 → 跳过 GetActiveBundleAsync，改调 GetBundleAsync
         var request = new ContextDecisionRequest
         {
             RequestId = "req-test-explicit",
@@ -648,15 +652,42 @@ public sealed class DefaultContextDecisionEnginePolicyIntegrationTests
             Candidates = candidates,
             TokenBudget = 1000,
             EnableModel = true,
-            PolicyBundleId = "bundle-explicit-id" // 显式提供 → 跳过 registry
+            PolicyBundleId = "bundle-explicit-id"
         };
 
         var result = await engine.DecideAsync(request);
 
         Assert.AreEqual(0, countingRegistry.GetActiveBundleCallCount,
             "GetActiveBundleAsync 不应被调用");
-        // bundle=null → 使用 hardcoded defaults
+        // P0-2：显式 BundleId 解析成功 → 使用该 bundle（而非 hardcoded defaults）
         Assert.AreEqual(ContextDecisionPolicyVersions.DecisionSchemaV2_0, result.PolicyVersion);
+    }
+
+    [TestMethod]
+    public async Task DecideAsync_WithRegistry_PolicyBundleIdProvided_ButNotFound_FailsClosed()
+    {
+        // P0-2 fail-closed 契约：当 PolicyBundleId 显式提供但 GetBundleAsync 返回 null 时，
+        // Engine 不允许静默回退默认 Bundle，必须抛 InvalidOperationException。
+        var countingRegistry = new CountingPolicyRegistry(MakeBundle(bundleId: "bundle-real"));
+        var engine = new DefaultContextDecisionEngine(countingRegistry);
+        var candidates = new[]
+        {
+            MakeEnvelope("c1", ContextCandidateSource.Semantic, score: 0.5, tokens: 100)
+        };
+        var request = new ContextDecisionRequest
+        {
+            RequestId = "req-test-missing",
+            DecisionSource = ContextDecisionSource.Retrieval,
+            WorkspaceId = "ws-test",
+            CollectionId = "col-test",
+            Candidates = candidates,
+            TokenBudget = 1000,
+            EnableModel = true,
+            PolicyBundleId = "bundle-nonexistent"
+        };
+
+        await Assert.ThrowsExceptionAsync<InvalidOperationException>(
+            () => engine.DecideAsync(request));
     }
 
     // =========================================================================
@@ -834,5 +865,16 @@ public sealed class DefaultContextDecisionEnginePolicyIntegrationTests
         public Task ActivateAsync(
             PolicyActivation activation, CancellationToken cancellationToken = default)
             => Task.CompletedTask;
+
+        // P0-2：精确加载 bundle；此 stub 未追踪多版本 bundle，故仅在 BundleId 匹配时返回。
+        public Task<ContextPolicyBundle?> GetBundleAsync(
+            string bundleId, string? version, CancellationToken cancellationToken = default)
+            => Task.FromResult<ContextPolicyBundle?>(
+                string.Equals(_bundle.BundleId, bundleId, StringComparison.Ordinal) ? _bundle : null);
+
+        // P0-4：CAS 激活；此 stub 不维护 epoch，无竞争场景下总是成功。
+        public Task<bool> TryActivateAsync(
+            PolicyActivation next, long expectedEpoch, CancellationToken cancellationToken = default)
+            => Task.FromResult(true);
     }
 }

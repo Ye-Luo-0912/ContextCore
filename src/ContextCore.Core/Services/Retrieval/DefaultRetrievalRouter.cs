@@ -68,9 +68,13 @@ public sealed class DefaultRetrievalRouter : IRetrievalRouter
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
 
-        // 1. 解析 routing / budget profile（PolicyOverride 优先）
-        var routing = request.PolicyOverride?.RoutingOverride ?? bundle?.Routing;
-        var budget = request.PolicyOverride?.BudgetOverride ?? bundle?.Budget;
+        // 1. 解析 routing / budget profile
+        //    P0-3 修复：原 `request.PolicyOverride?.RoutingOverride ?? bundle?.Routing` 会
+        //    完整替换 RoutingProfile，允许 Request 修改 ModelArtifactId / 模型权重 / confidence
+        //    threshold / EnabledExperts。现改为 ApplyRoutingOverride 仅合并 EnableModelScoring 字段，
+        //    其余字段保留 bundle 默认（与 DefaultContextDecisionEngine.ApplyRoutingOverride 对齐）。
+        var routing = ApplyRoutingOverride(bundle?.Routing, request.PolicyOverride?.RoutingOverride);
+        var budget = ApplyBudgetOverride(bundle?.Budget, request.PolicyOverride?.BudgetOverride);
 
         // 2. 解析 totalTokenBudget / totalTopK（request > bundle default > hardcoded）
         var totalTokenBudget = ResolveTotalTokenBudget(request, budget);
@@ -279,5 +283,43 @@ public sealed class DefaultRetrievalRouter : IRetrievalRouter
         set.Add(RetrievalExpert.Mandatory);
         set.Add(RetrievalExpert.Constraint);
         return set;
+    }
+
+    // -----------------------------------------------------------------------
+    // P0-3：受限 override 合并（与 DefaultContextDecisionEngine 对齐）
+    // -----------------------------------------------------------------------
+
+    /// <summary>
+    /// P0-3：将 RequestBudgetOverride 的字段合并到 bundle 的 BudgetProfile，
+    /// 仅覆盖非空字段（TokenBudget / TopK / SectionRatios），不替换整个 profile。
+    /// </summary>
+    private static BudgetProfile? ApplyBudgetOverride(
+        BudgetProfile? baseProfile,
+        RequestBudgetOverride? budgetOverride)
+    {
+        if (baseProfile is null) return null;
+        if (budgetOverride is null) return baseProfile;
+        return baseProfile with
+        {
+            DefaultTokenBudget = budgetOverride.TokenBudget ?? baseProfile.DefaultTokenBudget,
+            DefaultTopK = budgetOverride.TopK ?? baseProfile.DefaultTopK,
+            SectionRatios = budgetOverride.SectionRatios ?? baseProfile.SectionRatios
+        };
+    }
+
+    /// <summary>
+    /// P0-3：将 RequestRoutingOverride 的字段合并到 bundle 的 RoutingProfile，
+    /// 仅覆盖 EnableModelScoring（非空时），不替换整个 profile。
+    /// </summary>
+    private static RoutingProfile? ApplyRoutingOverride(
+        RoutingProfile? baseProfile,
+        RequestRoutingOverride? routingOverride)
+    {
+        if (baseProfile is null) return null;
+        if (routingOverride is null) return baseProfile;
+        return baseProfile with
+        {
+            EnableModelScoring = routingOverride.EnableModelScoring ?? baseProfile.EnableModelScoring
+        };
     }
 }

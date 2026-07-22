@@ -301,6 +301,7 @@ public sealed record ContextPolicyBundle
 ///   - Activation 按 workspace/collection 隔离；同一 workspace+collection 同一时刻只有一个 active bundle。
 ///   - Profile override 受限：不允许替换 SafetyProfile；BudgetProfile / RoutingProfile 仅允许
 ///     部分字段 override（用户澄清 #3）。
+/// P0-4 修复：新增 <see cref="Epoch"/> 单调递增版本号，支持 compare-and-swap 原子激活。
 /// </remarks>
 public sealed record PolicyActivation
 {
@@ -323,6 +324,13 @@ public sealed record PolicyActivation
     public PolicyRolloutStrategy RolloutStatus { get; init; } = PolicyRolloutStrategy.Promoted;
 
     /// <summary>
+    /// P0-4：激活 epoch（单调递增版本号）。每次 TryActivateAsync 成功时 +1。
+    /// 用于 compare-and-swap：调用方传入 expectedEpoch，仅当当前 epoch 匹配时才激活。
+    /// 首次激活时 epoch = 1。
+    /// </summary>
+    public long Epoch { get; init; } = 1;
+
+    /// <summary>
     /// Budget profile override（受限 override；不允许替换 SafetyProfile）。
     /// null = 使用 bundle 中的 BudgetProfile。
     /// </summary>
@@ -339,12 +347,14 @@ public sealed record PolicyActivation
 /// R19-1：策略包注册表接口。负责解析给定 workspace+collection 当前激活的 bundle。
 /// </summary>
 /// <remarks>
-/// 接口契约最小化：
+/// 接口契约：
 ///   - GetActiveBundleAsync：返回当前激活的 bundle（未找到时返回全局默认 bundle）。
-///   - GetActivationAsync：返回激活记录（含 profile override）。
+///   - GetBundleAsync（P0-2 新增）：按 bundleId + version 精确加载；未找到返回 null（fail-closed）。
+///   - GetActivationAsync：返回激活记录（含 profile override + epoch）。
 ///   - ListBundlesAsync：列出所有 bundle（可选包含 superseded）。
-///   - RegisterBundleAsync：注册新 bundle（不激活）。
-///   - ActivateAsync：激活 bundle 到 workspace+collection 作用域。
+///   - RegisterBundleAsync：注册新 bundle（insert-if-absent；P0-4 修复：相同 BundleId+Version 已存在则抛异常）。
+///   - ActivateAsync：激活 bundle 到 workspace+collection 作用域（无条件覆盖；向后兼容）。
+///   - TryActivateAsync（P0-4 新增）：compare-and-swap 原子激活；expectedEpoch 匹配时才激活并返回 true。
 ///
 /// 实现层可注入 Postgres / InMemory store；契约本身不依赖存储。
 /// </remarks>
@@ -360,8 +370,29 @@ public interface IPolicyRegistry
         string collectionId,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// P0-2：按 bundleId + version 精确加载 bundle。
+    /// </summary>
+    /// <param name="bundleId">bundle 唯一 ID。</param>
+    /// <param name="version">
+    /// bundle 版本号（null = 加载该 BundleId 下最新非 superseded 版本；
+    /// 非空 = 精确匹配版本）。
+    /// </param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>
+    /// 匹配的 bundle；未找到返回 null（fail-closed：调用方必须显式处理，不可静默回退默认 bundle）。
+    /// </returns>
+    /// <remarks>
+    /// P0-2 修复：当调用方显式指定 PolicyBundleId 时，Engine 通过此方法精确加载。
+    /// 找不到时返回 null 而非默认 bundle，避免静默回退掩盖配置错误。
+    /// </remarks>
+    Task<ContextPolicyBundle?> GetBundleAsync(
+        string bundleId,
+        string? version,
+        CancellationToken cancellationToken = default);
+
     /// <summary>获取指定 workspace+collection 的激活记录。</summary>
-    /// <returns>激活记录；未激活时返回 null。</returns>
+    /// <returns>激活记录（含 epoch）；未激活时返回 null。</returns>
     Task<PolicyActivation?> GetActivationAsync(
         string workspaceId,
         string collectionId,
@@ -373,21 +404,91 @@ public interface IPolicyRegistry
         bool includeSuperseded = false,
         CancellationToken cancellationToken = default);
 
-    /// <summary>注册新 bundle（不激活）。</summary>
+    /// <summary>
+    /// 注册新 bundle（不激活）。
+    /// </summary>
+    /// <remarks>
+    /// P0-4 修复：insert-if-absent 语义。相同 (BundleId, Version) 已存在时抛
+    /// <see cref="InvalidOperationException"/>，不再静默覆盖。
+    /// bundle 全局不可变；supersede 通过新建 bundle 实现。
+    /// </remarks>
     Task RegisterBundleAsync(
         ContextPolicyBundle bundle,
         CancellationToken cancellationToken = default);
 
-    /// <summary>激活 bundle 到 workspace+collection 作用域。</summary>
+    /// <summary>
+    /// 激活 bundle 到 workspace+collection 作用域（无条件覆盖；向后兼容）。
+    /// </summary>
     /// <param name="activation">激活记录（含可选 profile override）。</param>
+    /// <remarks>
+    /// 此方法不校验 epoch，直接覆盖当前 activation。
+    /// 推荐使用 <see cref="TryActivateAsync"/> 实现原子 CAS 激活。
+    /// </remarks>
     Task ActivateAsync(
         PolicyActivation activation,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// P0-4：compare-and-swap 原子激活。
+    /// </summary>
+    /// <param name="next">待激活的记录（BundleId / WorkspaceId / CollectionId 必填）。</param>
+    /// <param name="expectedEpoch">
+    /// 期望的当前 epoch。0 = 首次激活（当前无 activation 记录）。
+    /// 非零 = 仅当当前 activation.Epoch == expectedEpoch 时才激活。
+    /// </param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>
+    /// true = CAS 成功，activation 已更新为 next（next.Epoch = expectedEpoch + 1 或 1）；
+    /// false = CAS 失败（epoch 不匹配，已有更新版本激活）。
+    /// </returns>
+    /// <remarks>
+    /// P0-4 修复：解决"两个实例同时激活不同 bundle 到同一 workspace+collection"的竞态。
+    /// 数据库条件：UPDATE ... SET epoch = epoch + 1 WHERE epoch = @expected_epoch。
+    /// </remarks>
+    Task<bool> TryActivateAsync(
+        PolicyActivation next,
+        long expectedEpoch,
         CancellationToken cancellationToken = default);
 }
 
 // ---------------------------------------------------------------------------
 // PolicyOverride（per-request 受限 override）
 // ---------------------------------------------------------------------------
+
+/// <summary>
+/// P0-3：per-request 路由 override。仅允许调整 EnableModelScoring 开关。
+/// </summary>
+/// <remarks>
+/// P0-3 修复：原 ContextPolicyOverride.RoutingOverride 直接复用 RoutingProfile，
+/// 允许调用方修改 ModelArtifactId / DeterministicWeight / ModelWeight /
+/// ModelConfidenceThreshold / EnabledExperts，违反"不允许替换正式模型"的受限规则。
+/// 此 record 从类型系统上禁止 Request 修改这些字段。
+/// </remarks>
+public sealed record RequestRoutingOverride
+{
+    /// <summary>是否启用模型评分（null = 不调整，使用 bundle 默认）。</summary>
+    public bool? EnableModelScoring { get; init; }
+}
+
+/// <summary>
+/// P0-3：per-request 预算 override。仅允许调整 TokenBudget / TopK / SectionRatios。
+/// </summary>
+/// <remarks>
+/// P0-3 修复：原 ContextPolicyOverride.BudgetOverride 直接复用 BudgetProfile，
+/// 允许调用方修改 StrictBudgetEnforcement / ProfileId 等字段。
+/// 此 record 从类型系统上限制可调整字段。
+/// </remarks>
+public sealed record RequestBudgetOverride
+{
+    /// <summary>token 预算上限（null = 不调整）。</summary>
+    public int? TokenBudget { get; init; }
+
+    /// <summary>TopK 上限（null = 不调整）。</summary>
+    public int? TopK { get; init; }
+
+    /// <summary>section 比例分配（null = 不调整）。</summary>
+    public IReadOnlyDictionary<string, double>? SectionRatios { get; init; }
+}
 
 /// <summary>
 /// R19-1：per-request 策略 override。允许调用方在不替换 bundle 的前提下
@@ -397,8 +498,12 @@ public interface IPolicyRegistry
 /// 设计原则（用户澄清 #3）：
 ///   - 不允许替换 SafetyProfile（安全边界由 bundle 全局决定）。
 ///   - 不允许替换 ModelArtifactReference（正式模型由 bundle 全局决定）。
-///   - 仅允许调整：BudgetProfile 的部分字段 + RoutingProfile.EnableModelScoring。
+///   - 仅允许调整：TokenBudget / TopK / SectionRatios / EnableModelScoring。
 ///   - 字段全为可选：null = 使用 bundle 中的默认 profile。
+/// P0-3 修复：BudgetOverride / RoutingOverride 改用受限类型
+///   (<see cref="RequestBudgetOverride"/> / <see cref="RequestRoutingOverride"/>)，
+///   从类型系统上禁止 Request 修改 ModelArtifactId / 模型权重 / confidence threshold /
+///   EnabledExperts / SafetyProfile。
 /// </remarks>
 public sealed record ContextPolicyOverride
 {
@@ -408,21 +513,20 @@ public sealed record ContextPolicyOverride
     /// </remarks>
     public string? BundleId { get; init; }
 
-    /// <summary>预算 profile override（仅允许调整 TopK / TokenBudget / SectionRatios）。</summary>
-    public BudgetProfile? BudgetOverride { get; init; }
+    /// <summary>预算 profile override（仅允许调整 TokenBudget / TopK / SectionRatios）。</summary>
+    public RequestBudgetOverride? BudgetOverride { get; init; }
 
     /// <summary>路由 profile override（仅允许调整 EnableModelScoring）。</summary>
-    public RoutingProfile? RoutingOverride { get; init; }
+    public RequestRoutingOverride? RoutingOverride { get; init; }
 
     /// <summary>验证 override 是否符合受限规则（不替换安全边界 / 正式模型）。</summary>
     /// <returns>true = 合规；false = 违反受限规则。</returns>
     /// <remarks>
-    /// 实现层（PolicyRegistry）在 ActivateAsync 时调用此方法校验 override。
-    /// 当前契约层仅定义字段，验证逻辑在 R19-2 实现层提供。
+    /// P0-3 修复后，受限规则由类型系统保证（RequestBudgetOverride / RequestRoutingOverride
+    /// 仅暴露安全字段），此方法始终返回 true（只要任一字段非空即表示有 override）。
     /// </remarks>
     public bool IsCompliant()
     {
-        // 暂时仅做存在性检查；详细字段验证在 R19-2 实现
         return BudgetOverride != null || RoutingOverride != null || BundleId != null;
     }
 }

@@ -161,19 +161,36 @@ public sealed class PackageCandidateAdapterTests
         Assert.AreEqual(ContextCandidateSource.Constraint, envelope.Source);
         Assert.IsTrue(envelope.Safety.IsMandatory);
         Assert.IsTrue(envelope.Safety.IsHardConstraint);
+        Assert.AreEqual(ConstraintLevel.Hard, envelope.Safety.ConstraintLevel);
         Assert.AreEqual("mandatory", envelope.Utility.ReasonCode);
     }
 
     [TestMethod]
-    public void ToEnvelope_MergedConstraintKind_MapsToConstraintSource()
+    public void ToEnvelope_SoftConstraintKind_MapsToConstraintSourceButNotHard()
     {
+        // P0-1：soft_constraint 不再被错误提升为 hard
+        var candidate = MakeCandidate("sc-1", "soft_constraint");
+
+        var envelope = PackageCandidateAdapter.ToEnvelope(candidate);
+
+        Assert.AreEqual(ContextCandidateSource.Constraint, envelope.Source);
+        Assert.IsFalse(envelope.Safety.IsMandatory, "soft_constraint 不应被视为 mandatory");
+        Assert.IsFalse(envelope.Safety.IsHardConstraint, "soft_constraint 不应被视为 hard");
+        Assert.AreEqual(ConstraintLevel.Soft, envelope.Safety.ConstraintLevel);
+    }
+
+    [TestMethod]
+    public void ToEnvelope_MergedConstraintKind_MapsToMixedNotMandatory()
+    {
+        // P0-1：merged_constraint 不再被整体视为 hard / mandatory
         var candidate = MakeCandidate("mc-1", "merged_constraint");
 
         var envelope = PackageCandidateAdapter.ToEnvelope(candidate);
 
         Assert.AreEqual(ContextCandidateSource.Constraint, envelope.Source);
-        Assert.IsTrue(envelope.Safety.IsMandatory);
-        Assert.IsTrue(envelope.Safety.IsHardConstraint);
+        Assert.IsFalse(envelope.Safety.IsMandatory, "merged_constraint 不应被视为 mandatory（Mixed 不可直接免预算）");
+        Assert.IsFalse(envelope.Safety.IsHardConstraint, "merged_constraint 不应被视为 hard");
+        Assert.AreEqual(ConstraintLevel.Mixed, envelope.Safety.ConstraintLevel);
     }
 
     [TestMethod]
@@ -479,6 +496,139 @@ public sealed class PackageCandidateAdapterTests
         Assert.AreEqual("e2e-build-1", finalDto.BuildId);
         Assert.AreEqual(1, finalDto.SelectedItems.Count);
         Assert.AreEqual("high", finalDto.SelectedItems[0].ItemId);
+    }
+
+    // =========================================================================
+    // 9. P0-5：CandidateAdaptationContext 上下文传入
+    // =========================================================================
+
+    [TestMethod]
+    public void ToEnvelope_WithContext_FillsWorkspaceAndCollectionAndObservedAt()
+    {
+        // P0-5：context 提供 WorkspaceId/CollectionId/ObservedAt，适配器不应读系统时间
+        var candidate = MakeCandidate("ctx-1", "working_memory");
+        var observedAt = new DateTimeOffset(2026, 7, 21, 12, 0, 0, TimeSpan.Zero);
+        var context = new CandidateAdaptationContext
+        {
+            WorkspaceId = "ws-p0-5",
+            CollectionId = "col-p0-5",
+            RequestId = "req-123",
+            QueryText = "test query",
+            ObservedAt = observedAt
+        };
+
+        var envelope = PackageCandidateAdapter.ToEnvelope(candidate, context);
+
+        Assert.AreEqual("ws-p0-5", envelope.WorkspaceId);
+        Assert.AreEqual("col-p0-5", envelope.CollectionId);
+        // EvidenceRef.GeneratedAt 应来自 context.ObservedAt
+        Assert.AreEqual(observedAt, envelope.ProvenanceRefs[0].GeneratedAt);
+        Assert.AreEqual("ws-p0-5", envelope.ProvenanceRefs[0].WorkspaceId);
+        Assert.AreEqual("col-p0-5", envelope.ProvenanceRefs[0].CollectionId);
+    }
+
+    [TestMethod]
+    public void ToEnvelope_WithContext_IsDeterministic_SameInputProducesSameOutput()
+    {
+        // P0-5：相同候选 + 相同 context 应产生完全相同的 envelope（幂等性）
+        var candidate = MakeCandidate("det-1", "working_memory", score: 0.5,
+            metadata: new Dictionary<string, string> { ["lifecycleStatus"] = "active" });
+        var observedAt = new DateTimeOffset(2026, 7, 21, 12, 0, 0, TimeSpan.Zero);
+        var context = new CandidateAdaptationContext
+        {
+            WorkspaceId = "ws-det",
+            CollectionId = "col-det",
+            ObservedAt = observedAt
+        };
+
+        var envelope1 = PackageCandidateAdapter.ToEnvelope(candidate, context);
+        var envelope2 = PackageCandidateAdapter.ToEnvelope(candidate, context);
+
+        Assert.AreEqual(envelope1.CandidateId, envelope2.CandidateId);
+        Assert.AreEqual(envelope1.WorkspaceId, envelope2.WorkspaceId);
+        Assert.AreEqual(envelope1.CollectionId, envelope2.CollectionId);
+        Assert.AreEqual(envelope1.ProvenanceRefs.Count, envelope2.ProvenanceRefs.Count);
+        Assert.AreEqual(envelope1.ProvenanceRefs[0].GeneratedAt, envelope2.ProvenanceRefs[0].GeneratedAt);
+    }
+
+    [TestMethod]
+    public void ToEnvelope_WithContextPolicySnapshot_AttachesFingerprintToEvidenceRef()
+    {
+        var candidate = MakeCandidate("fp-1", "working_memory");
+        var context = new CandidateAdaptationContext
+        {
+            WorkspaceId = "ws-fp",
+            CollectionId = "col-fp",
+            ObservedAt = DateTimeOffset.UtcNow,
+            PolicySnapshot = new ResolvedPolicySnapshot
+            {
+                BundleId = "bundle-2026-07-v1",
+                Version = "1.0.0"
+            }
+        };
+
+        var envelope = PackageCandidateAdapter.ToEnvelope(candidate, context);
+
+        Assert.IsNotNull(envelope.ProvenanceRefs[0].ContentFingerprint);
+        Assert.AreEqual("bundle-2026-07-v1@1.0.0", envelope.ProvenanceRefs[0].ContentFingerprint);
+    }
+
+    [TestMethod]
+    public void ToDecisionRequest_WithContext_FillsWorkspaceCollectionQueryText()
+    {
+        // P0-5：ToDecisionRequest 必须填充 WorkspaceId/CollectionId/QueryText，
+        // 避免 PolicyRegistry 按空 workspace 解析默认 Bundle
+        var result = new ContextPackageBuildResult
+        {
+            BuildId = "build-ctx-1",
+            SelectedItems = new[]
+            {
+                new ContextPackageDecision
+                {
+                    ItemId = "sel-1",
+                    Kind = "working_memory",
+                    Score = 0.9,
+                    EstimatedTokens = 100
+                }
+            },
+            DroppedItems = Array.Empty<DroppedContextItem>()
+        };
+        var context = new CandidateAdaptationContext
+        {
+            WorkspaceId = "ws-req",
+            CollectionId = "col-req",
+            RequestId = "req-explicit-1",
+            QueryText = "find related memories",
+            ObservedAt = new DateTimeOffset(2026, 7, 21, 12, 0, 0, TimeSpan.Zero)
+        };
+
+        var request = PackageCandidateAdapter.ToDecisionRequest(result, tokenBudget: 500, enableModel: false, context);
+
+        Assert.AreEqual("ws-req", request.WorkspaceId);
+        Assert.AreEqual("col-req", request.CollectionId);
+        Assert.AreEqual("find related memories", request.QueryText);
+        Assert.AreEqual("req-explicit-1", request.RequestId); // context.RequestId 优先
+        // 候选 envelope 也带 workspace/collection
+        Assert.AreEqual("ws-req", request.Candidates[0].WorkspaceId);
+        Assert.AreEqual("col-req", request.Candidates[0].CollectionId);
+    }
+
+    [TestMethod]
+    public void ToEnvelope_WithoutContext_BackwardCompatible_UsesDefaultObservedAt()
+    {
+        // P0-5：旧重载向后兼容 — 不传 context 仍可工作（入口处读 UtcNow）
+        var candidate = MakeCandidate("legacy-1", "working_memory");
+        var before = DateTimeOffset.UtcNow;
+
+        var envelope = PackageCandidateAdapter.ToEnvelope(candidate);
+
+        var after = DateTimeOffset.UtcNow;
+        // GeneratedAt 应在 [before, after] 区间内（仅在入口处读一次）
+        Assert.IsTrue(envelope.ProvenanceRefs[0].GeneratedAt >= before);
+        Assert.IsTrue(envelope.ProvenanceRefs[0].GeneratedAt <= after);
+        // workspace/collection 在旧重载中为空
+        Assert.AreEqual(string.Empty, envelope.WorkspaceId);
+        Assert.AreEqual(string.Empty, envelope.CollectionId);
     }
 
     // =========================================================================

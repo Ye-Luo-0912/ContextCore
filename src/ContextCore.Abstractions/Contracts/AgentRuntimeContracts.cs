@@ -493,6 +493,9 @@ public sealed record AgentContextInjection
 ///      Store 仅负责持久化与查询。
 ///   3. Resume 时恢复 session 状态（包括 context snapshot / task state / event 顺序）。
 ///   4. Store 是 read-write 接口；写入通过 SaveAsync，读取通过 GetAsync / ListAsync。
+///   5. P0-6 修复：GetAsync / DeleteAsync 必须传 workspaceId 以保证跨 workspace 隔离。
+///      主键为 (workspace_id, checkpoint_id)；调用方必须显式传入 workspaceId，
+///      不允许只按 checkpointId 查询（避免跨 workspace 误读 / 误删）。
 /// </remarks>
 public interface IAgentCheckpointStore
 {
@@ -502,12 +505,18 @@ public interface IAgentCheckpointStore
     [StoreOperation(StoreOperationKind.Write)]
     Task SaveAsync(AgentCheckpoint checkpoint, CancellationToken cancellationToken = default);
 
-    /// <summary>获取指定 checkpoint。</summary>
+    /// <summary>
+    /// 获取指定 checkpoint。
+    /// </summary>
+    /// <param name="workspaceId">workspace 作用域（与 checkpoint 主键组合；P0-6 修复）。</param>
     /// <param name="checkpointId">Checkpoint ID。</param>
     /// <param name="cancellationToken">取消令牌。</param>
-    /// <returns>Checkpoint 数据（null = 不存在）。</returns>
+    /// <returns>Checkpoint 数据（null = 不存在或跨 workspace 不可见）。</returns>
     [StoreOperation(StoreOperationKind.Read)]
-    Task<AgentCheckpoint?> GetAsync(string checkpointId, CancellationToken cancellationToken = default);
+    Task<AgentCheckpoint?> GetAsync(
+        string workspaceId,
+        string checkpointId,
+        CancellationToken cancellationToken = default);
 
     /// <summary>列出 session 的所有 checkpoint（按时间倒序）。</summary>
     /// <param name="sessionId">Session 标识。</param>
@@ -520,12 +529,18 @@ public interface IAgentCheckpointStore
         int take = 10,
         CancellationToken cancellationToken = default);
 
-    /// <summary>删除 checkpoint。</summary>
+    /// <summary>
+    /// 删除 checkpoint。
+    /// </summary>
+    /// <param name="workspaceId">workspace 作用域（与 checkpoint 主键组合；P0-6 修复）。</param>
     /// <param name="checkpointId">Checkpoint ID。</param>
     /// <param name="cancellationToken">取消令牌。</param>
-    /// <returns>true = 删除成功；false = 不存在。</returns>
+    /// <returns>true = 删除成功；false = 不存在或跨 workspace 不可见。</returns>
     [StoreOperation(StoreOperationKind.Write)]
-    Task<bool> DeleteAsync(string checkpointId, CancellationToken cancellationToken = default);
+    Task<bool> DeleteAsync(
+        string workspaceId,
+        string checkpointId,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>

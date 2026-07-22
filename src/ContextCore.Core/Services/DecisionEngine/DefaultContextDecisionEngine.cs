@@ -78,18 +78,36 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
 
-        // R19-3：解析 PolicyBundle
+        // P0-2：解析 PolicyBundle
+        // PolicyBundleId 非空 → 精确加载（fail-closed：找不到则抛异常，不静默回退默认 bundle）
+        // PolicyBundleId 为空 → 解析 workspace/collection 激活的 bundle
         ContextPolicyBundle? bundle = null;
-        if (_policyRegistry is not null && string.IsNullOrEmpty(request.PolicyBundleId))
+        if (_policyRegistry is not null)
         {
-            bundle = await _policyRegistry.GetActiveBundleAsync(
-                request.WorkspaceId, request.CollectionId, cancellationToken).ConfigureAwait(false);
+            if (!string.IsNullOrEmpty(request.PolicyBundleId))
+            {
+                bundle = await _policyRegistry.GetBundleAsync(
+                    request.PolicyBundleId, version: null, cancellationToken).ConfigureAwait(false);
+                if (bundle is null)
+                {
+                    throw new InvalidOperationException(
+                        $"PolicyBundle not found: BundleId={request.PolicyBundleId}. " +
+                        "Explicit bundle reference must resolve; fail-closed.");
+                }
+            }
+            else
+            {
+                bundle = await _policyRegistry.GetActiveBundleAsync(
+                    request.WorkspaceId, request.CollectionId, cancellationToken).ConfigureAwait(false);
+            }
         }
 
-        // per-request override（受限：仅 Budget + Routing.EnableModelScoring；不允许替换 SafetyProfile）
+        // P0-3：应用受限 override（合并到 bundle profile，不替换整个 profile）
+        // 不允许替换 SafetyProfile；BudgetOverride 仅调整 TokenBudget/TopK/SectionRatios；
+        // RoutingOverride 仅调整 EnableModelScoring。
         var safety = bundle?.Safety;
-        var budget = request.PolicyOverride?.BudgetOverride ?? bundle?.Budget;
-        var routing = request.PolicyOverride?.RoutingOverride ?? bundle?.Routing;
+        var budget = ApplyBudgetOverride(bundle?.Budget, request.PolicyOverride?.BudgetOverride);
+        var routing = ApplyRoutingOverride(bundle?.Routing, request.PolicyOverride?.RoutingOverride);
 
         // 阶段 1：Safety Gate — 分离 passing / blocked
         var passing = new List<ContextCandidateEnvelope>();
@@ -325,5 +343,43 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
         // 不重新计算 FinalScore；保留 envelope 预设值
         // （Engine 信任调用方/adapter 已正确加权；R20 Router 才会真正注入模型权重）
         return envelope;
+    }
+
+    // -----------------------------------------------------------------------
+    // P0-3：受限 override 合并辅助方法
+    // -----------------------------------------------------------------------
+
+    /// <summary>
+    /// P0-3：将 RequestBudgetOverride 的字段合并到 bundle 的 BudgetProfile，
+    /// 仅覆盖非空字段，不替换整个 profile。
+    /// </summary>
+    private static BudgetProfile? ApplyBudgetOverride(
+        BudgetProfile? baseProfile,
+        RequestBudgetOverride? budgetOverride)
+    {
+        if (baseProfile is null) return null;
+        if (budgetOverride is null) return baseProfile;
+        return baseProfile with
+        {
+            DefaultTokenBudget = budgetOverride.TokenBudget ?? baseProfile.DefaultTokenBudget,
+            DefaultTopK = budgetOverride.TopK ?? baseProfile.DefaultTopK,
+            SectionRatios = budgetOverride.SectionRatios ?? baseProfile.SectionRatios
+        };
+    }
+
+    /// <summary>
+    /// P0-3：将 RequestRoutingOverride 的字段合并到 bundle 的 RoutingProfile，
+    /// 仅覆盖 EnableModelScoring（非空时），不替换整个 profile。
+    /// </summary>
+    private static RoutingProfile? ApplyRoutingOverride(
+        RoutingProfile? baseProfile,
+        RequestRoutingOverride? routingOverride)
+    {
+        if (baseProfile is null) return null;
+        if (routingOverride is null) return baseProfile;
+        return baseProfile with
+        {
+            EnableModelScoring = routingOverride.EnableModelScoring ?? baseProfile.EnableModelScoring
+        };
     }
 }

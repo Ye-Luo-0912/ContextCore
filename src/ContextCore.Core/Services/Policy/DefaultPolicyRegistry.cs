@@ -16,14 +16,16 @@ namespace ContextCore.Core.Services.Policy;
 //      生产部署应替换为 PostgresPolicyRegistry（持久化）+ MemoryCache。
 //   2. GetActiveBundleAsync 在未激活时返回 DefaultPolicyBundleFactory.Create()，
 //      保证调用方始终拿到非 null bundle（用户澄清 #2：bundle 全局不可变）。
-//   3. ActivateAsync 不校验 BundleId 是否存在（懒加载语义）；
-//      若 GetActiveBundleAsync 时找不到对应 bundle 则回退到默认 bundle。
-//   4. ListBundlesAsync(includeSuperseded=false) 默认排除已 supersede 的 bundle。
-//   5. RegisterBundleAsync 幂等：相同 BundleId 覆盖。
+//   3. P0-4 修复：RegisterBundleAsync 改为 insert-if-absent（相同 BundleId+Version
+//      已存在时抛 InvalidOperationException，不再静默覆盖）。
+//   4. P0-4 修复：TryActivateAsync 实现 CAS（compare-and-swap）原子激活。
+//   5. P0-2 修复：GetBundleAsync 按 bundleId + version 精确加载；未找到返回 null。
+//   6. ListBundlesAsync(includeSuperseded=false) 默认排除已 supersede 的 bundle。
 //
 // 与 R19-3 Pipeline 集成：
 //   Engine.DecideAsync 在请求 PolicyBundleId 为空时，通过 IPolicyRegistry
 //   解析当前 workspace+collection 的激活 bundle；未激活时使用默认 bundle。
+//   PolicyBundleId 非空时通过 GetBundleAsync 精确加载（fail-closed）。
 // ===========================================================================
 
 /// <summary>
@@ -35,6 +37,7 @@ namespace ContextCore.Core.Services.Policy;
 /// </remarks>
 public sealed class DefaultPolicyRegistry : IPolicyRegistry
 {
+    // P0-4：bundle 主键改为 (BundleId, Version) 复合键，保证不可变语义。
     private readonly ConcurrentDictionary<string, ContextPolicyBundle> _bundles = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, PolicyActivation> _activations = new(StringComparer.Ordinal);
 
@@ -48,13 +51,68 @@ public sealed class DefaultPolicyRegistry : IPolicyRegistry
         CancellationToken cancellationToken = default)
     {
         var key = BuildActivationKey(workspaceId, collectionId);
-        if (_activations.TryGetValue(key, out var activation)
-            && _bundles.TryGetValue(activation.BundleId, out var bundle))
+        if (_activations.TryGetValue(key, out var activation))
         {
-            return Task.FromResult(bundle);
+            // P0-4：bundles 以 (BundleId, Version) 复合主键存储。
+            // activation.BundleId 用于查找该 BundleId 下最新非 superseded 版本。
+            var bundle = FindLatestBundleForId(activation.BundleId);
+            if (bundle is not null)
+            {
+                return Task.FromResult(bundle);
+            }
         }
         // 未激活 → 返回全局默认 bundle
         return Task.FromResult(_defaultBundle.Value);
+    }
+
+    /// <inheritdoc />
+    public Task<ContextPolicyBundle?> GetBundleAsync(
+        string bundleId,
+        string? version,
+        CancellationToken cancellationToken = default)
+    {
+        // P0-2 + P0-4：精确加载。
+        // - version 非空：按 (BundleId, Version) 复合主键精确查找。
+        // - version 为空：返回该 BundleId 下最新非 superseded 版本。
+        if (version is not null)
+        {
+            if (_bundles.TryGetValue(BuildBundleKey(bundleId, version), out var bundle))
+            {
+                return Task.FromResult<ContextPolicyBundle?>(bundle);
+            }
+            return Task.FromResult<ContextPolicyBundle?>(null);
+        }
+
+        // version 为空 → 查找最新非 superseded 版本
+        var latest = FindLatestBundleForId(bundleId);
+        return Task.FromResult(latest);
+    }
+
+    /// <summary>
+    /// 在 _bundles 中查找指定 BundleId 下最新非 superseded 的版本。
+    /// 用于 GetActiveBundleAsync 和 GetBundleAsync(version=null) 路径。
+    /// </summary>
+    private ContextPolicyBundle? FindLatestBundleForId(string bundleId)
+    {
+        ContextPolicyBundle? best = null;
+        foreach (var kvp in _bundles)
+        {
+            var bundle = kvp.Value;
+            if (!string.Equals(bundle.BundleId, bundleId, StringComparison.Ordinal))
+            {
+                continue;
+            }
+            if (bundle.IsSuperseded)
+            {
+                continue;
+            }
+            // 选 Version 字典序最大的（简化语义；生产 Postgres 实现按 SemVer 排序）
+            if (best is null || string.Compare(bundle.Version, best.Version, StringComparison.Ordinal) > 0)
+            {
+                best = bundle;
+            }
+        }
+        return best;
     }
 
     /// <inheritdoc />
@@ -86,7 +144,17 @@ public sealed class DefaultPolicyRegistry : IPolicyRegistry
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(bundle);
-        _bundles[bundle.BundleId] = bundle;
+        // P0-4：insert-if-absent。(BundleId, Version) 为复合主键：
+        //   - 相同 (BundleId, Version) 已存在 → 抛 InvalidOperationException（不可变）
+        //   - 同 BundleId 不同 Version → 视为不同 bundle（支持 supersede 链）
+        //   - 同 BundleId 同 Version → 不允许（bundle 全局不可变）
+        var key = BuildBundleKey(bundle.BundleId, bundle.Version);
+        if (!_bundles.TryAdd(key, bundle))
+        {
+            throw new InvalidOperationException(
+                $"Bundle already registered: BundleId={bundle.BundleId}, Version={bundle.Version}. " +
+                "Bundle is immutable; supersede by registering a new bundle with a different BundleId or Version.");
+        }
         return Task.CompletedTask;
     }
 
@@ -96,9 +164,66 @@ public sealed class DefaultPolicyRegistry : IPolicyRegistry
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(activation);
+        // P0-4：无条件覆盖（向后兼容）。推荐使用 TryActivateAsync 实现 CAS。
         var key = BuildActivationKey(activation.WorkspaceId, activation.CollectionId);
         _activations[key] = activation;
         return Task.CompletedTask;
+    }
+
+    /// <inheritdoc />
+    public Task<bool> TryActivateAsync(
+        PolicyActivation next,
+        long expectedEpoch,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(next);
+        var key = BuildActivationKey(next.WorkspaceId, next.CollectionId);
+
+        // P0-4：CAS 语义
+        // expectedEpoch == 0：首次激活（当前无 activation 记录）
+        // expectedEpoch > 0：仅当当前 activation.Epoch == expectedEpoch 时才激活
+        if (expectedEpoch == 0)
+        {
+            // 首次激活：仅当当前无记录时才成功
+            var activated = new PolicyActivation
+            {
+                WorkspaceId = next.WorkspaceId,
+                CollectionId = next.CollectionId,
+                BundleId = next.BundleId,
+                ActivatedAt = next.ActivatedAt,
+                ActivatedBy = next.ActivatedBy,
+                RolloutStatus = next.RolloutStatus,
+                Epoch = 1,
+                BudgetOverride = next.BudgetOverride,
+                RoutingOverride = next.RoutingOverride
+            };
+            return Task.FromResult(_activations.TryAdd(key, activated));
+        }
+
+        // CAS：读取当前 epoch，匹配则更新
+        if (_activations.TryGetValue(key, out var current))
+        {
+            if (current.Epoch != expectedEpoch)
+            {
+                return Task.FromResult(false);
+            }
+            var updated = new PolicyActivation
+            {
+                WorkspaceId = next.WorkspaceId,
+                CollectionId = next.CollectionId,
+                BundleId = next.BundleId,
+                ActivatedAt = next.ActivatedAt,
+                ActivatedBy = next.ActivatedBy,
+                RolloutStatus = next.RolloutStatus,
+                Epoch = current.Epoch + 1,
+                BudgetOverride = next.BudgetOverride,
+                RoutingOverride = next.RoutingOverride
+            };
+            return Task.FromResult(_activations.TryUpdate(key, updated, current));
+        }
+
+        // expectedEpoch > 0 但当前无记录 → CAS 失败
+        return Task.FromResult(false);
     }
 
     /// <summary>暴露默认 bundle（仅用于测试与诊断）。</summary>
@@ -106,6 +231,9 @@ public sealed class DefaultPolicyRegistry : IPolicyRegistry
 
     private static string BuildActivationKey(string workspaceId, string collectionId)
         => $"{workspaceId}/{collectionId}";
+
+    private static string BuildBundleKey(string bundleId, string? version)
+        => version is null ? bundleId : $"{bundleId}@{version}";
 }
 
 // ===========================================================================

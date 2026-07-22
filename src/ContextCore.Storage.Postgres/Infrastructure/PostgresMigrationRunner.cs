@@ -21,8 +21,9 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
     /// R14-PG-6：v12 → v13，新增 context_state_versions 表用于分布式版本号。
     /// R26-1：v13 → v14，新增 agent_checkpoints + agent_task_states 表与索引（Agent Runtime 持久化）。
     /// R27-1：v14 → v15，新增 pipeline_runs + pipeline_canary_assignments + pipeline_rollback_records + pipeline_baseline_comparisons 表与索引（Evolution Pipeline 持久化）。
+    /// P0-7：v15 → v16，pipeline_runs 表追加 revision / lease_owner / lease_expires_at / last_transition_id 列支持 HA CAS 推进。
     /// </summary>
-    public const string SchemaVersion = "cc-schema-v15";
+    public const string SchemaVersion = "cc-schema-v16";
 
     public const string BaselineMigrationId = "0001_operational_store_baseline";
 
@@ -1226,6 +1227,7 @@ CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "agent_t
 -- R27-1：Evolution Pipeline 持久化表（run state + 3 audit tables）
 -- 表反规范化 proposal_id / status / run_id 字段以便按 proposal/status/run 索引查询；
 -- 完整 PipelineRunSnapshot / CanaryAssignment / RollbackRecord / BaselineComparison 对象保存在 data jsonb，由 store 反序列化。
+-- P0-7：新增 revision / lease_owner / lease_expires_at / last_transition_id 列支持 HA CAS 推进。
 CREATE TABLE IF NOT EXISTS {pipelineRuns} (
     run_id text NOT NULL,
     proposal_id text NOT NULL,
@@ -1238,9 +1240,19 @@ CREATE TABLE IF NOT EXISTS {pipelineRuns} (
     updated_at timestamptz NOT NULL,
     completed_at timestamptz NULL,
     rollback_reason text NULL,
+    revision bigint NOT NULL DEFAULT 1,
+    lease_owner text NULL,
+    lease_expires_at timestamptz NULL,
+    last_transition_id text NULL,
     data jsonb NOT NULL,
     PRIMARY KEY (run_id)
 );
+
+-- P0-7：v15 → v16 升级路径 — 已有 pipeline_runs 表追加新列（幂等）
+ALTER TABLE {pipelineRuns} ADD COLUMN IF NOT EXISTS revision bigint NOT NULL DEFAULT 1;
+ALTER TABLE {pipelineRuns} ADD COLUMN IF NOT EXISTS lease_owner text NULL;
+ALTER TABLE {pipelineRuns} ADD COLUMN IF NOT EXISTS lease_expires_at timestamptz NULL;
+ALTER TABLE {pipelineRuns} ADD COLUMN IF NOT EXISTS last_transition_id text NULL;
 
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "pipeline_runs", "proposal")} ON {pipelineRuns} (proposal_id, updated_at DESC);
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "pipeline_runs", "status")} ON {pipelineRuns} (status, updated_at DESC);

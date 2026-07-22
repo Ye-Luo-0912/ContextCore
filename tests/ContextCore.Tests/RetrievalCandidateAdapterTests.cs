@@ -353,4 +353,152 @@ public sealed class RetrievalCandidateAdapterTests
         Assert.AreEqual(1, finalDto.SelectedItems.Count);
         Assert.AreEqual("high", finalDto.SelectedItems[0].CandidateId);
     }
+
+    // =========================================================================
+    // 8. P0-5：CandidateAdaptationContext 上下文传入
+    // =========================================================================
+
+    [TestMethod]
+    public void ToEnvelope_WithContext_FillsWorkspaceAndCollectionAndObservedAt()
+    {
+        // P0-5：context 提供 WorkspaceId/CollectionId/ObservedAt，适配器不应读系统时间
+        var candidate = new ContextRetrievalCandidate
+        {
+            CandidateId = "ctx-1",
+            Kind = ContextRetrievalCandidateKind.ContextItem,
+            SourceRefs = new[] { "trace:abc" }
+        };
+        var observedAt = new DateTimeOffset(2026, 7, 21, 12, 0, 0, TimeSpan.Zero);
+        var context = new CandidateAdaptationContext
+        {
+            WorkspaceId = "ws-p0-5",
+            CollectionId = "col-p0-5",
+            RequestId = "req-123",
+            QueryText = "test query",
+            ObservedAt = observedAt
+        };
+
+        var envelope = RetrievalCandidateAdapter.ToEnvelope(candidate, context);
+
+        Assert.AreEqual("ws-p0-5", envelope.WorkspaceId);
+        Assert.AreEqual("col-p0-5", envelope.CollectionId);
+        Assert.AreEqual(observedAt, envelope.ProvenanceRefs[0].GeneratedAt);
+        Assert.AreEqual("ws-p0-5", envelope.ProvenanceRefs[0].WorkspaceId);
+        Assert.AreEqual("col-p0-5", envelope.ProvenanceRefs[0].CollectionId);
+    }
+
+    [TestMethod]
+    public void ToEnvelope_WithContext_IsDeterministic_SameInputProducesSameOutput()
+    {
+        // P0-5：相同候选 + 相同 context 应产生完全相同的 envelope（幂等性）
+        var candidate = new ContextRetrievalCandidate
+        {
+            CandidateId = "det-1",
+            Kind = ContextRetrievalCandidateKind.ContextItem,
+            Score = 0.5,
+            SourceRefs = new[] { "trace:det" }
+        };
+        var observedAt = new DateTimeOffset(2026, 7, 21, 12, 0, 0, TimeSpan.Zero);
+        var context = new CandidateAdaptationContext
+        {
+            WorkspaceId = "ws-det",
+            CollectionId = "col-det",
+            ObservedAt = observedAt
+        };
+
+        var envelope1 = RetrievalCandidateAdapter.ToEnvelope(candidate, context);
+        var envelope2 = RetrievalCandidateAdapter.ToEnvelope(candidate, context);
+
+        Assert.AreEqual(envelope1.CandidateId, envelope2.CandidateId);
+        Assert.AreEqual(envelope1.WorkspaceId, envelope2.WorkspaceId);
+        Assert.AreEqual(envelope1.CollectionId, envelope2.CollectionId);
+        Assert.AreEqual(envelope1.ProvenanceRefs[0].GeneratedAt, envelope2.ProvenanceRefs[0].GeneratedAt);
+    }
+
+    [TestMethod]
+    public void ToEnvelope_WithContextPolicySnapshot_AttachesFingerprintToEvidenceRef()
+    {
+        var candidate = new ContextRetrievalCandidate
+        {
+            CandidateId = "fp-1",
+            Kind = ContextRetrievalCandidateKind.ContextItem,
+            SourceRefs = new[] { "trace:fp" }
+        };
+        var context = new CandidateAdaptationContext
+        {
+            WorkspaceId = "ws-fp",
+            CollectionId = "col-fp",
+            ObservedAt = DateTimeOffset.UtcNow,
+            PolicySnapshot = new ResolvedPolicySnapshot
+            {
+                BundleId = "bundle-2026-07-v1",
+                Version = "1.0.0"
+            }
+        };
+
+        var envelope = RetrievalCandidateAdapter.ToEnvelope(candidate, context);
+
+        Assert.IsNotNull(envelope.ProvenanceRefs[0].ContentFingerprint);
+        Assert.AreEqual("bundle-2026-07-v1@1.0.0", envelope.ProvenanceRefs[0].ContentFingerprint);
+    }
+
+    [TestMethod]
+    public void ToDecisionRequest_WithContext_FillsWorkspaceCollectionQueryText()
+    {
+        // P0-5：ToDecisionRequest 必须填充 WorkspaceId/CollectionId/QueryText，
+        // 避免 PolicyRegistry 按空 workspace 解析默认 Bundle
+        var result = new ContextRetrievalResult
+        {
+            OperationId = "op-ctx-1",
+            SelectedItems = new[]
+            {
+                new ContextRetrievalCandidate
+                {
+                    CandidateId = "sel-1",
+                    Kind = ContextRetrievalCandidateKind.ContextItem,
+                    Score = 0.9,
+                    EstimatedTokens = 100
+                }
+            },
+            DroppedItems = Array.Empty<ContextRetrievalDecision>()
+        };
+        var context = new CandidateAdaptationContext
+        {
+            WorkspaceId = "ws-req",
+            CollectionId = "col-req",
+            RequestId = "req-explicit-1",
+            QueryText = "find related memories",
+            ObservedAt = new DateTimeOffset(2026, 7, 21, 12, 0, 0, TimeSpan.Zero)
+        };
+
+        var request = RetrievalCandidateAdapter.ToDecisionRequest(result, tokenBudget: 500, topK: 10, enableModel: false, context);
+
+        Assert.AreEqual("ws-req", request.WorkspaceId);
+        Assert.AreEqual("col-req", request.CollectionId);
+        Assert.AreEqual("find related memories", request.QueryText);
+        Assert.AreEqual("req-explicit-1", request.RequestId);
+        Assert.AreEqual("ws-req", request.Candidates[0].WorkspaceId);
+        Assert.AreEqual("col-req", request.Candidates[0].CollectionId);
+    }
+
+    [TestMethod]
+    public void ToEnvelope_WithoutContext_BackwardCompatible_UsesDefaultObservedAt()
+    {
+        // P0-5：旧重载向后兼容 — 不传 context 仍可工作（入口处读 UtcNow）
+        var candidate = new ContextRetrievalCandidate
+        {
+            CandidateId = "legacy-1",
+            Kind = ContextRetrievalCandidateKind.ContextItem,
+            SourceRefs = new[] { "trace:legacy" }
+        };
+        var before = DateTimeOffset.UtcNow;
+
+        var envelope = RetrievalCandidateAdapter.ToEnvelope(candidate);
+
+        var after = DateTimeOffset.UtcNow;
+        Assert.IsTrue(envelope.ProvenanceRefs[0].GeneratedAt >= before);
+        Assert.IsTrue(envelope.ProvenanceRefs[0].GeneratedAt <= after);
+        Assert.AreEqual(string.Empty, envelope.WorkspaceId);
+        Assert.AreEqual(string.Empty, envelope.CollectionId);
+    }
 }

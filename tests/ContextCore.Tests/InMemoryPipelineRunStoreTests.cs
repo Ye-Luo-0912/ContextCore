@@ -226,13 +226,197 @@ public sealed class InMemoryPipelineRunStoreTests
     }
 
     // =========================================================================
+    // 8. P0-7：TryTransitionAsync CAS 推进
+    // =========================================================================
+
+    [TestMethod]
+    public async Task TryTransitionAsync_NullRunId_Throws()
+    {
+        // ArgumentException.ThrowIfNullOrWhiteSpace(null) 抛 ArgumentNullException（ArgumentNullException 派生自 ArgumentException）
+        var store = new InMemoryPipelineRunStore();
+        var next = MakeRunSnapshot("run-1", "prop-1", stage: OptimizationStage.Shadow, revision: 2);
+        await Assert.ThrowsExceptionAsync<ArgumentNullException>(
+            () => store.TryTransitionAsync(null!, 1, OptimizationStage.OfflineExperiment, next));
+    }
+
+    [TestMethod]
+    public async Task TryTransitionAsync_EmptyRunId_Throws()
+    {
+        var store = new InMemoryPipelineRunStore();
+        var next = MakeRunSnapshot("run-1", "prop-1", stage: OptimizationStage.Shadow, revision: 2);
+        await Assert.ThrowsExceptionAsync<ArgumentException>(
+            () => store.TryTransitionAsync("", 1, OptimizationStage.OfflineExperiment, next));
+    }
+
+    [TestMethod]
+    public async Task TryTransitionAsync_NullNext_Throws()
+    {
+        var store = new InMemoryPipelineRunStore();
+        await Assert.ThrowsExceptionAsync<ArgumentNullException>(
+            () => store.TryTransitionAsync("run-1", 1, OptimizationStage.OfflineExperiment, null!));
+    }
+
+    [TestMethod]
+    public async Task TryTransitionAsync_RunIdMismatch_Throws()
+    {
+        var store = new InMemoryPipelineRunStore();
+        var next = MakeRunSnapshot("run-1", "prop-1", stage: OptimizationStage.Shadow, revision: 2);
+        await Assert.ThrowsExceptionAsync<ArgumentException>(
+            () => store.TryTransitionAsync("different-run", 1, OptimizationStage.OfflineExperiment, next));
+    }
+
+    [TestMethod]
+    public async Task TryTransitionAsync_RunNotFound_ReturnsNull()
+    {
+        // CAS 失败语义：runId 与 next.RunId 一致但 store 中不存在该 run → 返回 null
+        var store = new InMemoryPipelineRunStore();
+        var next = MakeRunSnapshot("run-1", "prop-1", stage: OptimizationStage.Shadow, revision: 2);
+
+        var result = await store.TryTransitionAsync("run-1", 1, OptimizationStage.OfflineExperiment, next);
+
+        Assert.IsNull(result);
+    }
+
+    [TestMethod]
+    public async Task TryTransitionAsync_RevisionAndStageMatch_ReturnsNext()
+    {
+        // P0-7：CAS 成功 — revision=1 + stage=OfflineExperiment 匹配 → 推进到 Shadow
+        var store = new InMemoryPipelineRunStore();
+        await store.SaveRunAsync(MakeRunSnapshot("run-1", "prop-1", stage: OptimizationStage.OfflineExperiment, revision: 1));
+        var next = MakeRunSnapshot("run-1", "prop-1", stage: OptimizationStage.Shadow, revision: 2);
+
+        var result = await store.TryTransitionAsync("run-1", 1, OptimizationStage.OfflineExperiment, next);
+
+        Assert.IsNotNull(result);
+        Assert.AreEqual(OptimizationStage.Shadow, result!.CurrentStage);
+        Assert.AreEqual(2, result.Revision);
+
+        var fetched = await store.GetRunAsync("run-1");
+        Assert.AreEqual(OptimizationStage.Shadow, fetched!.CurrentStage);
+        Assert.AreEqual(2, fetched.Revision);
+    }
+
+    [TestMethod]
+    public async Task TryTransitionAsync_RevisionMismatch_ReturnsNull()
+    {
+        // P0-7：CAS 失败 — 当前 revision=2，但 expectedRevision=1 → 返回 null
+        var store = new InMemoryPipelineRunStore();
+        await store.SaveRunAsync(MakeRunSnapshot("run-1", "prop-1", revision: 2));
+        var next = MakeRunSnapshot("run-1", "prop-1", stage: OptimizationStage.Shadow, revision: 3);
+
+        var result = await store.TryTransitionAsync("run-1", 1, OptimizationStage.OfflineExperiment, next);
+
+        Assert.IsNull(result);
+        // 当前快照未被修改
+        var fetched = await store.GetRunAsync("run-1");
+        Assert.AreEqual(2, fetched!.Revision);
+        Assert.AreEqual(OptimizationStage.OfflineExperiment, fetched.CurrentStage);
+    }
+
+    [TestMethod]
+    public async Task TryTransitionAsync_StageMismatch_ReturnsNull()
+    {
+        // P0-7：CAS 失败 — revision 匹配但 stage 不匹配（已被并发推进到 Shadow）
+        var store = new InMemoryPipelineRunStore();
+        await store.SaveRunAsync(MakeRunSnapshot("run-1", "prop-1", stage: OptimizationStage.Shadow, revision: 2));
+        var next = MakeRunSnapshot("run-1", "prop-1", stage: OptimizationStage.ScopedCanary, revision: 3);
+
+        var result = await store.TryTransitionAsync("run-1", 2, OptimizationStage.OfflineExperiment, next);
+
+        Assert.IsNull(result);
+        var fetched = await store.GetRunAsync("run-1");
+        Assert.AreEqual(OptimizationStage.Shadow, fetched!.CurrentStage);
+    }
+
+    [TestMethod]
+    public async Task TryTransitionAsync_AuditBatchWrittenAtomically()
+    {
+        // P0-7：CAS 成功时，BaselineComparison + RollbackRecord 应在同事务内写入
+        var store = new InMemoryPipelineRunStore();
+        await store.SaveRunAsync(MakeRunSnapshot("run-1", "prop-1", revision: 1));
+        var next = MakeRunSnapshot("run-1", "prop-1", stage: OptimizationStage.Shadow, revision: 2);
+        var comparison = MakeBaselineComparison("cmp-1", "prop-1");
+        var rollback = MakeRollbackRecord("rb-1", "run-1", "prop-1");
+        var audit = new PipelineAuditBatch
+        {
+            BaselineComparison = comparison,
+            RollbackRecord = rollback
+        };
+
+        var result = await store.TryTransitionAsync("run-1", 1, OptimizationStage.OfflineExperiment, next, audit);
+
+        Assert.IsNotNull(result);
+        Assert.AreEqual(1, store.BaselineComparisonCount);
+        Assert.AreEqual(1, store.RollbackRecordCount);
+        // 未在 audit 中提供 CanaryAssignment → 数量保持 0
+        Assert.AreEqual(0, store.CanaryAssignmentCount);
+    }
+
+    [TestMethod]
+    public async Task TryTransitionAsync_CasFailure_AuditNotWritten()
+    {
+        // P0-7：CAS 失败时，audit 批量不应写入
+        var store = new InMemoryPipelineRunStore();
+        await store.SaveRunAsync(MakeRunSnapshot("run-1", "prop-1", revision: 5));
+        var next = MakeRunSnapshot("run-1", "prop-1", stage: OptimizationStage.Shadow, revision: 6);
+        var comparison = MakeBaselineComparison("cmp-1", "prop-1");
+        var audit = new PipelineAuditBatch { BaselineComparison = comparison };
+
+        var result = await store.TryTransitionAsync("run-1", 1, OptimizationStage.OfflineExperiment, next, audit);
+
+        Assert.IsNull(result);
+        Assert.AreEqual(0, store.BaselineComparisonCount);
+    }
+
+    [TestMethod]
+    public async Task TryTransitionAsync_IdempotentRetry_SameTransitionId_ReturnsCurrent()
+    {
+        // P0-7：幂等重试 — next.LastTransitionId 与 current.LastTransitionId 相同 → 返回当前快照
+        var store = new InMemoryPipelineRunStore();
+        var current = MakeRunSnapshot("run-1", "prop-1", stage: OptimizationStage.Shadow, revision: 2, lastTransitionId: "t-123");
+        await store.SaveRunAsync(current);
+        // 调用方重试：使用相同的 transitionId
+        var next = MakeRunSnapshot("run-1", "prop-1", stage: OptimizationStage.Shadow, revision: 2, lastTransitionId: "t-123");
+
+        var result = await store.TryTransitionAsync("run-1", 1, OptimizationStage.OfflineExperiment, next);
+
+        // 幂等：返回当前快照（不 CAS，不递增 revision）
+        Assert.IsNotNull(result);
+        Assert.AreEqual(2, result!.Revision);
+        Assert.AreEqual(OptimizationStage.Shadow, result.CurrentStage);
+        Assert.AreEqual("t-123", result.LastTransitionId);
+    }
+
+    [TestMethod]
+    public async Task TryTransitionAsync_ConcurrentTransition_SecondFails()
+    {
+        // P0-7：模拟并发推进 — 两个调用方同时推进同一 run，只有一个成功
+        var store = new InMemoryPipelineRunStore();
+        await store.SaveRunAsync(MakeRunSnapshot("run-1", "prop-1", revision: 1));
+        var next1 = MakeRunSnapshot("run-1", "prop-1", stage: OptimizationStage.Shadow, revision: 2, lastTransitionId: "t-1");
+        var next2 = MakeRunSnapshot("run-1", "prop-1", stage: OptimizationStage.Shadow, revision: 2, lastTransitionId: "t-2");
+
+        var result1 = await store.TryTransitionAsync("run-1", 1, OptimizationStage.OfflineExperiment, next1);
+        var result2 = await store.TryTransitionAsync("run-1", 1, OptimizationStage.OfflineExperiment, next2);
+
+        Assert.IsNotNull(result1);
+        Assert.IsNull(result2);
+        // 当前快照是第一个推进的结果
+        var fetched = await store.GetRunAsync("run-1");
+        Assert.AreEqual(2, fetched!.Revision);
+        Assert.AreEqual("t-1", fetched.LastTransitionId);
+    }
+
+    // =========================================================================
     // 辅助方法
     // =========================================================================
 
     private static PipelineRunSnapshot MakeRunSnapshot(
         string runId,
         string proposalId,
-        OptimizationStage stage = OptimizationStage.OfflineExperiment) => new()
+        OptimizationStage stage = OptimizationStage.OfflineExperiment,
+        long revision = 1,
+        string? lastTransitionId = null) => new()
     {
         RunId = runId,
         ProposalId = proposalId,
@@ -253,7 +437,10 @@ public sealed class InMemoryPipelineRunStoreTests
         CurrentStage = stage,
         Status = PipelineRunStatus.Running,
         StartedAt = DateTimeOffset.UtcNow,
-        UpdatedAt = DateTimeOffset.UtcNow
+        UpdatedAt = DateTimeOffset.UtcNow,
+        // P0-7：HA 字段
+        Revision = revision,
+        LastTransitionId = lastTransitionId
     };
 
     private static CanaryAssignment MakeCanaryAssignment(

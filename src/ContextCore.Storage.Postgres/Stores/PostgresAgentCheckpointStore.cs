@@ -15,6 +15,8 @@ namespace ContextCore.Storage.Postgres.Stores;
 ///   2. 主键 (workspace_id, checkpoint_id)：跨 workspace 隔离 + 同 workspace 内 checkpoint id 唯一。
 ///   3. <see cref="ListAsync"/> 按 session_value 过滤 + created_at DESC，与 InMemory 实现语义一致。
 ///   4. <see cref="SaveAsync"/> 幂等（同主键覆盖）。
+///   5. P0-6 修复：<see cref="GetAsync"/> / <see cref="DeleteAsync"/> 必须传 workspaceId，
+///      SQL WHERE 同时匹配 (workspace_id, checkpoint_id)，避免跨 workspace 误读 / 误删。
 /// </remarks>
 public sealed class PostgresAgentCheckpointStore : PostgresStoreBase, IAgentCheckpointStore
 {
@@ -62,8 +64,13 @@ ON CONFLICT (workspace_id, checkpoint_id) DO UPDATE SET
     }
 
     /// <inheritdoc />
-    public async Task<AgentCheckpoint?> GetAsync(string checkpointId, CancellationToken cancellationToken = default)
+    public async Task<AgentCheckpoint?> GetAsync(
+        string workspaceId,
+        string checkpointId,
+        CancellationToken cancellationToken = default)
     {
+        // P0-6：必须同时匹配 (workspace_id, checkpoint_id)，避免跨 workspace 误读
+        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
         ArgumentException.ThrowIfNullOrWhiteSpace(checkpointId);
         await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
         await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
@@ -72,9 +79,10 @@ ON CONFLICT (workspace_id, checkpoint_id) DO UPDATE SET
         command.CommandText = $"""
 SELECT data
 FROM {Table("agent_checkpoints")}
-WHERE checkpoint_id = @checkpoint_id
+WHERE workspace_id = @workspace_id AND checkpoint_id = @checkpoint_id
 LIMIT 1;
 """;
+        command.Parameters.AddWithValue("workspace_id", workspaceId);
         command.Parameters.AddWithValue("checkpoint_id", checkpointId);
         return await ExecuteScalarJsonAsync<AgentCheckpoint>(command, cancellationToken).ConfigureAwait(false);
     }
@@ -110,8 +118,13 @@ LIMIT @take;
     }
 
     /// <inheritdoc />
-    public async Task<bool> DeleteAsync(string checkpointId, CancellationToken cancellationToken = default)
+    public async Task<bool> DeleteAsync(
+        string workspaceId,
+        string checkpointId,
+        CancellationToken cancellationToken = default)
     {
+        // P0-6：必须同时匹配 (workspace_id, checkpoint_id)，避免跨 workspace 误删
+        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
         ArgumentException.ThrowIfNullOrWhiteSpace(checkpointId);
         await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
         await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
@@ -119,8 +132,9 @@ LIMIT @take;
         command.CommandTimeout = Options.CommandTimeoutSeconds;
         command.CommandText = $"""
 DELETE FROM {Table("agent_checkpoints")}
-WHERE checkpoint_id = @checkpoint_id;
+WHERE workspace_id = @workspace_id AND checkpoint_id = @checkpoint_id;
 """;
+        command.Parameters.AddWithValue("workspace_id", workspaceId);
         command.Parameters.AddWithValue("checkpoint_id", checkpointId);
         var affected = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         return affected > 0;

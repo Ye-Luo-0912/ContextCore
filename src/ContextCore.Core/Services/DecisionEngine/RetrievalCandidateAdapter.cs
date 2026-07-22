@@ -20,6 +20,10 @@ namespace ContextCore.Core.Services.DecisionEngine;
 //      三个正交维度结构化表达。
 //   5. 适配器不破坏现有 HybridContextRetriever.RetrieveAsync 主链；它只是
 //      提供一个可选的 envelope 转换入口。
+//   6. P0-5 修复：映射函数不再读取 DateTimeOffset.UtcNow。
+//      时间戳由 CandidateAdaptationContext.ObservedAt 统一传入；
+//      ToDecisionRequest 填充 WorkspaceId / CollectionId / QueryText，
+//      避免 PolicyRegistry 按空 workspace 解析默认 Bundle。
 //
 // 字段映射：
 //   ContextRetrievalCandidate.CandidateId → envelope.CandidateId（首选）
@@ -46,9 +50,31 @@ public static class RetrievalCandidateAdapter
     /// <summary>
     /// 将单个 <see cref="ContextRetrievalCandidate"/> 转换为 <see cref="ContextCandidateEnvelope"/>。
     /// </summary>
+    /// <remarks>
+    /// 此重载不传 <see cref="CandidateAdaptationContext"/>；将在入口处读取一次
+    /// <see cref="DateTimeOffset.UtcNow"/> 作为 <c>ObservedAt</c>，但映射函数内部不再读时间。
+    /// 推荐调用方使用接受 context 的重载以获得确定性。
+    /// </remarks>
     public static ContextCandidateEnvelope ToEnvelope(ContextRetrievalCandidate candidate)
+        => ToEnvelope(candidate, new CandidateAdaptationContext
+        {
+            WorkspaceId = string.Empty,
+            CollectionId = string.Empty,
+            ObservedAt = DateTimeOffset.UtcNow
+        });
+
+    /// <summary>
+    /// P0-5：将单个 <see cref="ContextRetrievalCandidate"/> 转换为
+    /// <see cref="ContextCandidateEnvelope"/>，使用传入的 context 提供时间戳与作用域。
+    /// </summary>
+    /// <param name="candidate">原始候选。</param>
+    /// <param name="context">适配上下文（提供 ObservedAt / WorkspaceId / CollectionId 等）。</param>
+    public static ContextCandidateEnvelope ToEnvelope(
+        ContextRetrievalCandidate candidate,
+        CandidateAdaptationContext context)
     {
         ArgumentNullException.ThrowIfNull(candidate);
+        ArgumentNullException.ThrowIfNull(context);
 
         var candidateId = string.IsNullOrWhiteSpace(candidate.CandidateId)
             ? candidate.SourceId
@@ -64,6 +90,8 @@ public static class RetrievalCandidateAdapter
             Source = source,
             Type = candidate.Type,
             EstimatedTokens = candidate.EstimatedTokens,
+            WorkspaceId = context.WorkspaceId,
+            CollectionId = context.CollectionId,
             Safety = new CandidateSafetyState
             {
                 IsMandatory = isMandatory,
@@ -84,13 +112,19 @@ public static class RetrievalCandidateAdapter
             {
                 ChannelSources = ResolveChannelSources(candidate)
             },
+            // P0-5：使用 context.ObservedAt 而非 DateTimeOffset.UtcNow
             ProvenanceRefs = candidate.SourceRefs
                 .Where(r => !string.IsNullOrEmpty(r))
                 .Select(r => new EvidenceRef
                 {
                     RefId = r,
                     RefType = "retrieval-source-ref",
-                    GeneratedAt = DateTimeOffset.UtcNow
+                    WorkspaceId = string.IsNullOrEmpty(context.WorkspaceId) ? null : context.WorkspaceId,
+                    CollectionId = string.IsNullOrEmpty(context.CollectionId) ? null : context.CollectionId,
+                    GeneratedAt = context.ObservedAt,
+                    ContentFingerprint = context.PolicySnapshot is null
+                        ? null
+                        : $"{context.PolicySnapshot.BundleId}@{context.PolicySnapshot.Version}"
                 })
                 .ToList()
         };
@@ -102,9 +136,23 @@ public static class RetrievalCandidateAdapter
     /// </summary>
     public static IReadOnlyList<ContextCandidateEnvelope> ToEnvelopes(
         IEnumerable<ContextRetrievalCandidate> candidates)
+        => ToEnvelopes(candidates, new CandidateAdaptationContext
+        {
+            WorkspaceId = string.Empty,
+            CollectionId = string.Empty,
+            ObservedAt = DateTimeOffset.UtcNow
+        });
+
+    /// <summary>
+    /// P0-5：批量转换，使用传入的 context 提供时间戳与作用域。
+    /// </summary>
+    public static IReadOnlyList<ContextCandidateEnvelope> ToEnvelopes(
+        IEnumerable<ContextRetrievalCandidate> candidates,
+        CandidateAdaptationContext context)
     {
         ArgumentNullException.ThrowIfNull(candidates);
-        return candidates.Select(ToEnvelope).ToList();
+        ArgumentNullException.ThrowIfNull(context);
+        return candidates.Select(c => ToEnvelope(c, context)).ToList();
     }
 
     /// <summary>
@@ -120,10 +168,33 @@ public static class RetrievalCandidateAdapter
         int tokenBudget,
         int topK = int.MaxValue,
         bool enableModel = false)
+        => ToDecisionRequest(result, tokenBudget, topK, enableModel, new CandidateAdaptationContext
+        {
+            WorkspaceId = string.Empty,
+            CollectionId = string.Empty,
+            ObservedAt = DateTimeOffset.UtcNow
+        });
+
+    /// <summary>
+    /// P0-5：将 <see cref="ContextRetrievalResult"/> 整体转换为
+    /// <see cref="ContextDecisionRequest"/>，并填充 workspace/collection/query 作用域。
+    /// </summary>
+    /// <param name="result">Retrieval 主链产出的结果。</param>
+    /// <param name="tokenBudget">token 预算上限。</param>
+    /// <param name="topK">TopK 上限。</param>
+    /// <param name="enableModel">是否启用模型评分。</param>
+    /// <param name="context">适配上下文（提供 WorkspaceId/CollectionId/QueryText/ObservedAt）。</param>
+    public static ContextDecisionRequest ToDecisionRequest(
+        ContextRetrievalResult result,
+        int tokenBudget,
+        int topK,
+        bool enableModel,
+        CandidateAdaptationContext context)
     {
         ArgumentNullException.ThrowIfNull(result);
+        ArgumentNullException.ThrowIfNull(context);
 
-        var selectedEnvelopes = ToEnvelopes(result.SelectedItems);
+        var selectedEnvelopes = ToEnvelopes(result.SelectedItems, context);
         var droppedEnvelopes = result.DroppedItems
             .Select(dec => ToEnvelopeFromDecision(dec))
             .ToList();
@@ -133,10 +204,14 @@ public static class RetrievalCandidateAdapter
         allEnvelopes.AddRange(selectedEnvelopes);
         allEnvelopes.AddRange(droppedEnvelopes);
 
+        // P0-5：填充 WorkspaceId / CollectionId / QueryText / RequestId
         return new ContextDecisionRequest
         {
-            RequestId = result.OperationId,
+            RequestId = string.IsNullOrEmpty(context.RequestId) ? result.OperationId : context.RequestId,
             DecisionSource = ContextDecisionSource.Retrieval,
+            WorkspaceId = context.WorkspaceId,
+            CollectionId = context.CollectionId,
+            QueryText = context.QueryText,
             Candidates = allEnvelopes,
             TokenBudget = tokenBudget,
             TopK = topK,

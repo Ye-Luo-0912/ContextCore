@@ -52,10 +52,16 @@ public enum ContextScope
 /// <summary>约束条件的强制级别。</summary>
 public enum ConstraintLevel
 {
-    /// <summary>硬约束，必须遵守。</summary>
+    /// <summary>硬约束，必须遵守（免预算、免 TopK 截断）。</summary>
     Hard,
-    /// <summary>软约束，尽量遵守。</summary>
+    /// <summary>软约束，尽量遵守（受预算和 TopK 限制）。</summary>
     Soft,
+    /// <summary>混合约束（merged section：Hard + Soft + 其他级别混合）。</summary>
+    /// <remarks>
+    /// P0-1 修复：merged_constraint 不再被整体视为 hard。Mixed 不可直接免预算，
+    /// 应由 section allocator 确保其中的 Hard segment 被保留。
+    /// </remarks>
+    Mixed,
     /// <summary>运行时约束，仅在运行时生效。</summary>
     Runtime,
     /// <summary>系统级约束。</summary>

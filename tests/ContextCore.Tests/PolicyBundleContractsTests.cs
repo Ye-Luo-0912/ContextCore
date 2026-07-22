@@ -391,9 +391,10 @@ public sealed class PolicyBundleContractsTests
     [TestMethod]
     public void ContextPolicyOverride_WithBudgetOverride_IsCompliant()
     {
+        // P0-3 修复：BudgetOverride 现使用 RequestBudgetOverride（仅允许 TokenBudget/TopK/SectionRatios）
         var override_ = new ContextPolicyOverride
         {
-            BudgetOverride = new BudgetProfile { ProfileId = "budget-override", DefaultTokenBudget = 1000 }
+            BudgetOverride = new RequestBudgetOverride { TokenBudget = 1000, TopK = 20 }
         };
 
         Assert.IsTrue(override_.IsCompliant());
@@ -591,6 +592,45 @@ public sealed class PolicyBundleContractsTests
             var key = $"{activation.WorkspaceId}/{activation.CollectionId}";
             _activations[key] = activation;
             return Task.CompletedTask;
+        }
+
+        // P0-2：精确加载 bundle；此 stub 仅按 BundleId 索引（忽略 version 精确匹配）。
+        // 若 _bundles 中无对应 BundleId，返回 null（fail-closed，不静默回退默认 bundle）。
+        public Task<ContextPolicyBundle?> GetBundleAsync(
+            string bundleId, string? version, CancellationToken cancellationToken = default)
+        {
+            _bundles.TryGetValue(bundleId, out var bundle);
+            return Task.FromResult<ContextPolicyBundle?>(bundle);
+        }
+
+        // P0-4：CAS 原子激活。
+        // expectedEpoch=0 表示首次激活（当前无 activation 记录）；
+        // 非零表示仅当当前 activation.Epoch == expectedEpoch 时才激活。
+        // CAS 失败（epoch 不匹配）返回 false，调用方可重试。
+        public Task<bool> TryActivateAsync(
+            PolicyActivation next, long expectedEpoch, CancellationToken cancellationToken = default)
+        {
+            var key = $"{next.WorkspaceId}/{next.CollectionId}";
+            lock (_activations)
+            {
+                if (!_activations.TryGetValue(key, out var current))
+                {
+                    if (expectedEpoch != 0)
+                    {
+                        return Task.FromResult(false);
+                    }
+                    _activations[key] = next with { Epoch = 1 };
+                    return Task.FromResult(true);
+                }
+
+                if (current.Epoch != expectedEpoch)
+                {
+                    return Task.FromResult(false);
+                }
+
+                _activations[key] = next with { Epoch = current.Epoch + 1 };
+                return Task.FromResult(true);
+            }
         }
     }
 }

@@ -1,6 +1,7 @@
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services.Policy;
+using System.Linq;
 
 namespace ContextCore.Tests;
 
@@ -284,22 +285,46 @@ public sealed class DefaultPolicyRegistryTests
     }
 
     // =========================================================================
-    // 8. RegisterBundleAsync 幂等覆盖
+    // 8. RegisterBundleAsync — P0-4：Bundle 全局不可变（相同 BundleId+Version 重复注册抛异常）
     // =========================================================================
 
     [TestMethod]
-    public async Task RegisterBundleAsync_SameIdTwice_OverwritesPrevious()
+    public async Task RegisterBundleAsync_SameIdAndVersionTwice_Throws()
     {
+        // P0-4 修复：insert-if-absent 语义。相同 (BundleId, Version) 已存在时抛 InvalidOperationException，
+        // 不再静默覆盖。Bundle 全局不可变；supersede 通过新建 bundle 实现。
         var registry = new DefaultPolicyRegistry();
         var original = new ContextPolicyBundle { BundleId = "bundle-1", Version = "1.0.0" };
-        var updated = new ContextPolicyBundle { BundleId = "bundle-1", Version = "2.0.0" };
+        var duplicate = new ContextPolicyBundle { BundleId = "bundle-1", Version = "1.0.0" };
 
         await registry.RegisterBundleAsync(original);
-        await registry.RegisterBundleAsync(updated);
 
+        await Assert.ThrowsExceptionAsync<InvalidOperationException>(
+            () => registry.RegisterBundleAsync(duplicate));
+
+        // 原始 bundle 未被覆盖
         var bundles = await registry.ListBundlesAsync();
         Assert.AreEqual(1, bundles.Count);
-        Assert.AreEqual("2.0.0", bundles[0].Version);
+        Assert.AreEqual("1.0.0", bundles[0].Version);
+    }
+
+    [TestMethod]
+    public async Task RegisterBundleAsync_SameIdDifferentVersion_RegistersBoth()
+    {
+        // P0-4：(BundleId, Version) 为复合主键。同一 BundleId 不同 Version 视为不同 bundle，
+        // 都允许注册（用于支持 supersede：新版本注册后激活，旧版本保留为历史）。
+        var registry = new DefaultPolicyRegistry();
+        var v1 = new ContextPolicyBundle { BundleId = "bundle-1", Version = "1.0.0" };
+        var v2 = new ContextPolicyBundle { BundleId = "bundle-1", Version = "2.0.0" };
+
+        await registry.RegisterBundleAsync(v1);
+        await registry.RegisterBundleAsync(v2);
+
+        var bundles = await registry.ListBundlesAsync(includeSuperseded: true);
+        Assert.AreEqual(2, bundles.Count);
+        CollectionAssert.AreEquivalent(
+            new[] { "1.0.0", "2.0.0" },
+            bundles.Select(b => b.Version).ToArray());
     }
 
     // =========================================================================

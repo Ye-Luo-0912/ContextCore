@@ -15,6 +15,8 @@ namespace ContextCore.Tests;
 ///   2. 参数校验（null / 空字符串在 EnsureMigrated 之前抛）
 ///   3. 接口实现契约（IAgentCheckpointStore）
 ///   4. DI 注册路径（PostgresServiceCollectionExtensions）
+///   5. P0-6：<see cref="GetAsync"/> / <see cref="DeleteAsync"/> 必须传 workspaceId，
+///      workspaceId 与 checkpointId 的 null / empty / whitespace 校验独立
 ///
 /// 端到端持久化语义由 ContextCore.IntegrationTests 覆盖（需 Testcontainers）。
 /// </summary>
@@ -58,32 +60,56 @@ public sealed class PostgresAgentCheckpointStoreTests
     }
 
     // =========================================================================
-    // 3. GetAsync 参数校验
+    // 3. GetAsync 参数校验（P0-6：workspaceId + checkpointId）
     // =========================================================================
 
     [TestMethod]
-    public async Task GetAsync_NullId_ThrowsArgumentNullException()
+    public async Task GetAsync_NullWorkspaceId_ThrowsArgumentNullException()
     {
-        // ThrowIfNullOrWhiteSpace 在 null 时抛 ArgumentNullException（而非 ArgumentException）
+        // P0-6：ThrowIfNullOrWhiteSpace 在 null 时抛 ArgumentNullException
         var store = CreateStoreWithoutConnection();
         await Assert.ThrowsExceptionAsync<ArgumentNullException>(
-            () => store.GetAsync(null!));
+            () => store.GetAsync(null!, "ckpt-1"));
     }
 
     [TestMethod]
-    public async Task GetAsync_EmptyId_ThrowsArgumentException()
+    public async Task GetAsync_EmptyWorkspaceId_ThrowsArgumentException()
     {
         var store = CreateStoreWithoutConnection();
         await Assert.ThrowsExceptionAsync<ArgumentException>(
-            () => store.GetAsync(""));
+            () => store.GetAsync("", "ckpt-1"));
     }
 
     [TestMethod]
-    public async Task GetAsync_WhitespaceId_ThrowsArgumentException()
+    public async Task GetAsync_WhitespaceWorkspaceId_ThrowsArgumentException()
     {
         var store = CreateStoreWithoutConnection();
         await Assert.ThrowsExceptionAsync<ArgumentException>(
-            () => store.GetAsync("   "));
+            () => store.GetAsync("   ", "ckpt-1"));
+    }
+
+    [TestMethod]
+    public async Task GetAsync_NullCheckpointId_ThrowsArgumentNullException()
+    {
+        var store = CreateStoreWithoutConnection();
+        await Assert.ThrowsExceptionAsync<ArgumentNullException>(
+            () => store.GetAsync("ws-1", null!));
+    }
+
+    [TestMethod]
+    public async Task GetAsync_EmptyCheckpointId_ThrowsArgumentException()
+    {
+        var store = CreateStoreWithoutConnection();
+        await Assert.ThrowsExceptionAsync<ArgumentException>(
+            () => store.GetAsync("ws-1", ""));
+    }
+
+    [TestMethod]
+    public async Task GetAsync_WhitespaceCheckpointId_ThrowsArgumentException()
+    {
+        var store = CreateStoreWithoutConnection();
+        await Assert.ThrowsExceptionAsync<ArgumentException>(
+            () => store.GetAsync("ws-1", "   "));
     }
 
     // =========================================================================
@@ -108,31 +134,55 @@ public sealed class PostgresAgentCheckpointStoreTests
     }
 
     // =========================================================================
-    // 5. DeleteAsync 参数校验
+    // 5. DeleteAsync 参数校验（P0-6：workspaceId + checkpointId）
     // =========================================================================
 
     [TestMethod]
-    public async Task DeleteAsync_NullId_ThrowsArgumentNullException()
+    public async Task DeleteAsync_NullWorkspaceId_ThrowsArgumentNullException()
     {
         var store = CreateStoreWithoutConnection();
         await Assert.ThrowsExceptionAsync<ArgumentNullException>(
-            () => store.DeleteAsync(null!));
+            () => store.DeleteAsync(null!, "ckpt-1"));
     }
 
     [TestMethod]
-    public async Task DeleteAsync_EmptyId_ThrowsArgumentException()
+    public async Task DeleteAsync_EmptyWorkspaceId_ThrowsArgumentException()
     {
         var store = CreateStoreWithoutConnection();
         await Assert.ThrowsExceptionAsync<ArgumentException>(
-            () => store.DeleteAsync(""));
+            () => store.DeleteAsync("", "ckpt-1"));
     }
 
     [TestMethod]
-    public async Task DeleteAsync_WhitespaceId_ThrowsArgumentException()
+    public async Task DeleteAsync_WhitespaceWorkspaceId_ThrowsArgumentException()
     {
         var store = CreateStoreWithoutConnection();
         await Assert.ThrowsExceptionAsync<ArgumentException>(
-            () => store.DeleteAsync("   "));
+            () => store.DeleteAsync("   ", "ckpt-1"));
+    }
+
+    [TestMethod]
+    public async Task DeleteAsync_NullCheckpointId_ThrowsArgumentNullException()
+    {
+        var store = CreateStoreWithoutConnection();
+        await Assert.ThrowsExceptionAsync<ArgumentNullException>(
+            () => store.DeleteAsync("ws-1", null!));
+    }
+
+    [TestMethod]
+    public async Task DeleteAsync_EmptyCheckpointId_ThrowsArgumentException()
+    {
+        var store = CreateStoreWithoutConnection();
+        await Assert.ThrowsExceptionAsync<ArgumentException>(
+            () => store.DeleteAsync("ws-1", ""));
+    }
+
+    [TestMethod]
+    public async Task DeleteAsync_WhitespaceCheckpointId_ThrowsArgumentException()
+    {
+        var store = CreateStoreWithoutConnection();
+        await Assert.ThrowsExceptionAsync<ArgumentException>(
+            () => store.DeleteAsync("ws-1", "   "));
     }
 
     // =========================================================================

@@ -96,10 +96,35 @@ public enum ContextCandidateSource : byte
 /// </remarks>
 public sealed record CandidateSafetyState
 {
-    /// <summary>候选是否为 mandatory（hard constraint / required tag）。</summary>
+    /// <summary>
+    /// 约束强制级别（P0-1 修复新增）。仅当候选 <see cref="ContextCandidateSource.Constraint"/> 时填充。
+    /// </summary>
+    /// <remarks>
+    /// P0-1 修复：不再从 <see cref="ContextCandidateSource"/> 推导约束强制级别。
+    /// hard_constraint → <see cref="ConstraintLevel.Hard"/>
+    /// soft_constraint → <see cref="ConstraintLevel.Soft"/>
+    /// merged_constraint → <see cref="ConstraintLevel.Mixed"/>（不可直接免预算）
+    /// 非 Constraint 来源候选此字段为 null，由 <see cref="IsMandatory"/> 直接表达。
+    /// </remarks>
+    public ConstraintLevel? ConstraintLevel { get; init; }
+
+    /// <summary>
+    /// 候选是否为 mandatory（hard constraint / required tag / system constraint）。
+    /// </summary>
+    /// <remarks>
+    /// P0-1 修复：当 <see cref="ConstraintLevel"/> 非空时，由 Engine 根据
+    /// ConstraintLevel is Hard or System or Mixed 推导；adapter 仍可直接设置
+    /// 此字段以表达 Mandatory 来源（required tag）的强制选中语义。
+    /// </remarks>
     public bool IsMandatory { get; init; }
 
-    /// <summary>候选是否为 hard constraint（constraint kind）。</summary>
+    /// <summary>
+    /// 候选是否为 hard constraint（仅 ConstraintLevel == Hard）。
+    /// </summary>
+    /// <remarks>
+    /// P0-1 修复：adapter 必须基于 <see cref="ConstraintLevel"/> 设置此字段，
+    /// 不可对 soft_constraint / merged_constraint 设置为 true。
+    /// </remarks>
     public bool IsHardConstraint { get; init; }
 
     /// <summary>候选 lifecycle 状态（active / deprecated / superseded / frozen）。</summary>
@@ -311,4 +336,69 @@ public sealed record ContextCandidateEnvelope
 
     /// <summary>候选 collection ID（跨 collection 决策时填充）。</summary>
     public string CollectionId { get; init; } = string.Empty;
+}
+
+// ---------------------------------------------------------------------------
+// P0-5：CandidateAdaptationContext
+// ---------------------------------------------------------------------------
+
+/// <summary>
+/// P0-5：候选适配上下文。封装适配器（PackageCandidateAdapter / RetrievalCandidateAdapter）
+/// 在将原始候选（PackageTraceCandidate / ContextRetrievalCandidate）转换为
+/// <see cref="ContextCandidateEnvelope"/> 时所需的作用域信息与时间戳。
+/// </summary>
+/// <remarks>
+/// 设计原则（P0-5 修复）：
+///   1. 适配器不再在映射函数内部读取 <c>DateTimeOffset.UtcNow</c>；
+///      相同输入应产生相同输出（幂等性契约）。
+///   2. <see cref="ObservedAt"/> 由调用方在请求入口处统一传入，
+///      用于填充 <see cref="EvidenceRef.GeneratedAt"/>。
+///   3. <see cref="WorkspaceId"/> / <see cref="CollectionId"/> / <see cref="QueryText"/>
+///      由调用方从 <see cref="ContextDecisionRequest"/> 中带入，避免适配器在
+///      <c>ToDecisionRequest</c> 时丢失作用域（导致 PolicyRegistry 按空 workspace
+///      解析默认 Bundle）。
+///   4. <see cref="PolicySnapshot"/> 为已解析的策略快照引用（仅 BundleId + Version），
+///      适配器不直接消费策略内容，仅作为溯源信息附加到 EvidenceRef。
+/// </remarks>
+public sealed record CandidateAdaptationContext
+{
+    /// <summary>workspace 作用域（必填）。</summary>
+    public required string WorkspaceId { get; init; }
+
+    /// <summary>collection 作用域（必填）。</summary>
+    public required string CollectionId { get; init; }
+
+    /// <summary>请求 ID（用于 trace 溯源；可选）。</summary>
+    public string? RequestId { get; init; }
+
+    /// <summary>查询文本（用于 trace 溯源；可选）。</summary>
+    public string? QueryText { get; init; }
+
+    /// <summary>
+    /// 观察时间（UTC）。由调用方在请求入口处传入，用于填充
+    /// <see cref="EvidenceRef.GeneratedAt"/>。适配器不读取系统时间。
+    /// </summary>
+    public DateTimeOffset ObservedAt { get; init; } = DateTimeOffset.UtcNow;
+
+    /// <summary>
+    /// 已解析的策略快照引用（可选）。仅包含 BundleId + Version，
+    /// 适配器将其附加到 EvidenceRef 用于溯源；不直接消费策略内容。
+    /// </summary>
+    public ResolvedPolicySnapshot? PolicySnapshot { get; init; }
+}
+
+/// <summary>
+/// P0-5：已解析的策略快照引用。仅承载 BundleId + Version，
+/// 不携带完整 bundle 内容（避免适配器耦合具体策略）。
+/// </summary>
+public sealed record ResolvedPolicySnapshot
+{
+    /// <summary>策略 bundle ID。</summary>
+    public required string BundleId { get; init; }
+
+    /// <summary>策略 bundle 版本。</summary>
+    public required string Version { get; init; }
+
+    /// <summary>bundle 解析时间（UTC）。</summary>
+    public DateTimeOffset ResolvedAt { get; init; } = DateTimeOffset.UtcNow;
 }

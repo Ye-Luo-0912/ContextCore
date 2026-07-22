@@ -78,7 +78,12 @@ public sealed class DefaultGuardedOptimizationPipeline : IGuardedOptimizationPip
             UpdatedAt = now,
             CompletedAt = null,
             RollbackReason = null,
-            StageMetrics = Array.Empty<BaselineComparison>()
+            StageMetrics = Array.Empty<BaselineComparison>(),
+            // P0-7：初始 revision = 1；StartAsync 创建新 run 使用 SaveRunAsync（首次写入，非 CAS 路径）
+            Revision = 1,
+            LeaseOwner = null,
+            LeaseExpiresAt = null,
+            LastTransitionId = null
         };
         await _store.SaveRunAsync(snapshot, cancellationToken).ConfigureAwait(false);
 
@@ -116,6 +121,11 @@ public sealed class DefaultGuardedOptimizationPipeline : IGuardedOptimizationPip
     /// <param name="baselineMetrics">基线指标。</param>
     /// <param name="experimentMetrics">实验指标。</param>
     /// <param name="cancellationToken">取消令牌。</param>
+    /// <remarks>
+    /// P0-7：使用 <see cref="IPipelineRunStore.TryTransitionAsync"/> 原子 CAS 推进。
+    /// snapshot 更新 + audit 批量（BaselineComparison / CanaryAssignment / RollbackRecord）在同一事务内提交。
+    /// 若 CAS 失败（并发推进冲突），抛 <see cref="InvalidOperationException"/> 通知调用方。
+    /// </remarks>
     public async Task<PipelineRunResult> AdvanceWithMetricsAsync(
         string runId,
         IReadOnlyDictionary<string, double> baselineMetrics,
@@ -139,14 +149,13 @@ public sealed class DefaultGuardedOptimizationPipeline : IGuardedOptimizationPip
             return BuildResult(snapshot);
         }
 
-        // 持久化 BaselineComparison（供审计）
+        // 构造 BaselineComparison（供审计，在 CAS 事务内写入）
         var comparison = new BaselineComparison(
             comparisonId: $"cmp-{runId}-{snapshot.StageMetrics.Count + 1}",
             proposalId: snapshot.ProposalId,
             baselineMetrics: baselineMetrics,
             experimentMetrics: experimentMetrics,
             comparedAt: _timeProvider.GetUtcNow());
-        await _store.SaveBaselineComparisonAsync(comparison, cancellationToken).ConfigureAwait(false);
         var updatedMetrics = snapshot.StageMetrics.Append(comparison).ToList();
 
         // 调用 judge
@@ -157,9 +166,11 @@ public sealed class DefaultGuardedOptimizationPipeline : IGuardedOptimizationPip
             experimentMetrics: experimentMetrics);
         var judgeResult = await _judge.JudgeAsync(request, cancellationToken).ConfigureAwait(false);
 
-        // 应用 judge decision → 生成新 snapshot
+        // 应用 judge decision → 生成 next snapshot（P0-7：Revision +1 + LastTransitionId）
         var now = _timeProvider.GetUtcNow();
+        var transitionId = $"t-{runId}-{snapshot.Revision}-{now.UtcDateTime.Ticks}";
         PipelineRunSnapshot nextSnapshot;
+        RollbackRecord? rollbackRecord = null;
         switch (judgeResult.Decision)
         {
             case PromotionDecision.Advance:
@@ -175,7 +186,9 @@ public sealed class DefaultGuardedOptimizationPipeline : IGuardedOptimizationPip
                     CurrentStage = judgeResult.NextStage.Value,
                     Status = PipelineRunStatus.StageCompleted,
                     UpdatedAt = now,
-                    StageMetrics = updatedMetrics
+                    StageMetrics = updatedMetrics,
+                    Revision = snapshot.Revision + 1,
+                    LastTransitionId = transitionId
                 };
                 break;
 
@@ -186,13 +199,15 @@ public sealed class DefaultGuardedOptimizationPipeline : IGuardedOptimizationPip
                     Status = PipelineRunStatus.Promoted,
                     CompletedAt = now,
                     UpdatedAt = now,
-                    StageMetrics = updatedMetrics
+                    StageMetrics = updatedMetrics,
+                    Revision = snapshot.Revision + 1,
+                    LastTransitionId = transitionId
                 };
                 break;
 
             case PromotionDecision.Rollback:
                 var triggeredCondition = FindTriggeredCondition(snapshot.Proposal, experimentMetrics);
-                var rollbackRecord = new RollbackRecord(
+                rollbackRecord = new RollbackRecord(
                     recordId: $"rb-{runId}-{now.UtcDateTime.Ticks}",
                     runId: runId,
                     proposalId: snapshot.ProposalId,
@@ -206,7 +221,6 @@ public sealed class DefaultGuardedOptimizationPipeline : IGuardedOptimizationPip
                         : null,
                     TriggeredAtStage = snapshot.CurrentStage
                 };
-                await _store.SaveRollbackRecordAsync(rollbackRecord, cancellationToken).ConfigureAwait(false);
                 nextSnapshot = snapshot with
                 {
                     RollbackReason = judgeResult.Rationale,
@@ -214,7 +228,9 @@ public sealed class DefaultGuardedOptimizationPipeline : IGuardedOptimizationPip
                     Status = PipelineRunStatus.RolledBack,
                     CompletedAt = now,
                     UpdatedAt = now,
-                    StageMetrics = updatedMetrics
+                    StageMetrics = updatedMetrics,
+                    Revision = snapshot.Revision + 1,
+                    LastTransitionId = transitionId
                 };
                 break;
 
@@ -225,7 +241,9 @@ public sealed class DefaultGuardedOptimizationPipeline : IGuardedOptimizationPip
                     RollbackReason = judgeResult.Rationale,
                     CompletedAt = now,
                     UpdatedAt = now,
-                    StageMetrics = updatedMetrics
+                    StageMetrics = updatedMetrics,
+                    Revision = snapshot.Revision + 1,
+                    LastTransitionId = transitionId
                 };
                 break;
 
@@ -234,7 +252,9 @@ public sealed class DefaultGuardedOptimizationPipeline : IGuardedOptimizationPip
                 nextSnapshot = snapshot with
                 {
                     UpdatedAt = now,
-                    StageMetrics = updatedMetrics
+                    StageMetrics = updatedMetrics,
+                    Revision = snapshot.Revision + 1,
+                    LastTransitionId = transitionId
                 };
                 break;
 
@@ -243,8 +263,29 @@ public sealed class DefaultGuardedOptimizationPipeline : IGuardedOptimizationPip
                     $"Judge 返回未知的 PromotionDecision: {judgeResult.Decision}");
         }
 
-        await _store.SaveRunAsync(nextSnapshot, cancellationToken).ConfigureAwait(false);
-        return BuildResult(nextSnapshot);
+        // P0-7：原子 CAS 推进 — snapshot + audit 批量在同一事务内写入
+        var auditBatch = new PipelineAuditBatch
+        {
+            BaselineComparison = comparison,
+            RollbackRecord = rollbackRecord
+        };
+        var transitionedSnapshot = await _store.TryTransitionAsync(
+            runId,
+            expectedRevision: snapshot.Revision,
+            expectedStage: snapshot.CurrentStage,
+            next: nextSnapshot,
+            audit: auditBatch,
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        if (transitionedSnapshot is null)
+        {
+            throw new InvalidOperationException(
+                $"Pipeline CAS 推进失败：runId={runId}，expectedRevision={snapshot.Revision}，" +
+                $"expectedStage={snapshot.CurrentStage}。可能原因：另一实例已并发推进此 run。" +
+                "调用方应重新读取当前状态并决定是否重试。");
+        }
+
+        return BuildResult(transitionedSnapshot);
     }
 
     /// <inheritdoc />

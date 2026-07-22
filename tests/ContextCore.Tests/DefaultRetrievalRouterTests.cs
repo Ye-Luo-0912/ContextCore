@@ -16,8 +16,8 @@ namespace ContextCore.Tests;
 ///   4. Request 显式值覆盖 bundle 默认
 ///   5. Budget-Aware TopK 平均分配（V1 简化版）
 ///   6. PolicyBundle.Routing.EnabledExperts 过滤 mask
-///   7. PolicyOverride.RoutingOverride 完整替换 bundle.Routing
-///   8. PolicyOverride.BudgetOverride 完整替换 bundle.Budget
+///   7. PolicyOverride.RoutingOverride 仅合并 EnableModelScoring（不替换 EnabledExperts）
+///   8. PolicyOverride.BudgetOverride 仅合并 TokenBudget/TopK（不替换 ProfileId）
 ///   9. DisabledExpert 的 TopK/TokenBudget=0
 ///  10. ReasonCode 区分 mandatory / default / ablation-disabled / policy-disabled
 ///  11. RouterId / RouterVersion 默认值
@@ -331,23 +331,24 @@ public sealed class DefaultRetrievalRouterTests
     }
 
     // =========================================================================
-    // 7. PolicyOverride.RoutingOverride 完整替换 bundle.Routing
+    // 7. PolicyOverride.RoutingOverride 仅合并 EnableModelScoring（不替换 EnabledExperts）
     // =========================================================================
 
     [TestMethod]
-    public void Route_PolicyOverrideRoutingOverride_ReplacesBundleRouting()
+    public void Route_PolicyOverrideRoutingOverride_OnlyMergesEnableModelScoring()
     {
+        // P0-3 修复：RoutingOverride 不再完整替换 RoutingProfile。
+        // - RequestRoutingOverride 仅暴露 EnableModelScoring 字段；
+        // - EnabledExperts / ModelArtifactId 等字段保留 bundle 默认。
         var router = new DefaultRetrievalRouter();
         var request = MakeRequest(
             tokenBudget: 6000,
             topK: 60,
-            routingOverride: new RoutingProfile
+            routingOverride: new RequestRoutingOverride
             {
-                ProfileId = "override-routing",
-                EnableModelScoring = true,
-                EnabledExperts = new[] { "Graph" } // override 只允许 Graph
+                EnableModelScoring = true
             });
-        // bundle 允许 Lexical + Semantic（应被 override 覆盖）
+        // bundle 仅允许 Lexical + Semantic（PolicyOverride 不应改变此过滤）
         var bundle = MakeBundle(
             defaultTokenBudget: 6000,
             defaultTopK: 60,
@@ -356,30 +357,32 @@ public sealed class DefaultRetrievalRouterTests
         var mask = RetrievalExpertMask.AllEnabled;
         var decisionSet = router.Route(request, mask, bundle);
 
-        // override 生效：Graph 启用，Lexical/Semantic 禁用
-        Assert.IsTrue(decisionSet.IsExpertEnabled(RetrievalExpert.Graph));
-        Assert.IsFalse(decisionSet.IsExpertEnabled(RetrievalExpert.Lexical));
-        Assert.IsFalse(decisionSet.IsExpertEnabled(RetrievalExpert.Semantic));
+        // bundle 的 EnabledExperts 仍生效：Lexical/Semantic 启用，Graph 禁用
+        Assert.IsTrue(decisionSet.IsExpertEnabled(RetrievalExpert.Lexical));
+        Assert.IsTrue(decisionSet.IsExpertEnabled(RetrievalExpert.Semantic));
+        Assert.IsFalse(decisionSet.IsExpertEnabled(RetrievalExpert.Graph));
     }
 
     // =========================================================================
-    // 8. PolicyOverride.BudgetOverride 完整替换 bundle.Budget
+    // 8. PolicyOverride.BudgetOverride 仅合并 TokenBudget/TopK（不替换 ProfileId）
     // =========================================================================
 
     [TestMethod]
-    public void Route_PolicyOverrideBudgetOverride_ReplacesBundleBudget()
+    public void Route_PolicyOverrideBudgetOverride_MergesTokenBudgetAndTopK()
     {
+        // P0-3 修复：BudgetOverride 不再完整替换 BudgetProfile。
+        // - RequestBudgetOverride 仅暴露 TokenBudget / TopK / SectionRatios；
+        // - ProfileId / StrictBudgetEnforcement 等字段保留 bundle 默认。
         var router = new DefaultRetrievalRouter();
         var request = MakeRequest(
             tokenBudget: 0,
             topK: 0,
-            budgetOverride: new BudgetProfile
+            budgetOverride: new RequestBudgetOverride
             {
-                ProfileId = "override-budget",
-                DefaultTokenBudget = 12000,
-                DefaultTopK = 100
+                TokenBudget = 12000,
+                TopK = 100
             });
-        // bundle 默认 4000/20（应被 override 覆盖）
+        // bundle 默认 4000/20（应被 override 的 12000/100 覆盖）
         var bundle = MakeBundle(defaultTokenBudget: 4000, defaultTopK: 20);
         var mask = RetrievalExpertMask.AllEnabled;
 
@@ -634,8 +637,8 @@ public sealed class DefaultRetrievalRouterTests
     private static ContextDecisionRequest MakeRequest(
         int tokenBudget = 8000,
         int topK = 50,
-        BudgetProfile? budgetOverride = null,
-        RoutingProfile? routingOverride = null)
+        RequestBudgetOverride? budgetOverride = null,
+        RequestRoutingOverride? routingOverride = null)
     {
         ContextPolicyOverride? policyOverride = null;
         if (budgetOverride is not null || routingOverride is not null)

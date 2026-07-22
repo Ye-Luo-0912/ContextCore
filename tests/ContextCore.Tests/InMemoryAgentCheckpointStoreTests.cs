@@ -14,6 +14,7 @@ namespace ContextCore.Tests;
 ///   5. ListAsync take 限制 + take<0 抛异常
 ///   6. DeleteAsync 存在/不存在
 ///   7. Count 属性
+///   8. P0-6：跨 workspace 隔离（相同 checkpointId 在不同 workspace 互不可见）
 /// </summary>
 [TestClass]
 [TestCategory("R23")]
@@ -43,8 +44,9 @@ public sealed class InMemoryAgentCheckpointStoreTests
     }
 
     [TestMethod]
-    public async Task SaveAsync_SameId_Overwrites()
+    public async Task SaveAsync_SameWorkspaceAndId_Overwrites()
     {
+        // P0-6：主键 (workspace_id, checkpoint_id) — 同 workspace 同 id 覆盖
         var store = new InMemoryAgentCheckpointStore();
         var cp1 = MakeCheckpoint("ckpt-1", "session-1", stateJson: "v1");
         var cp2 = MakeCheckpoint("ckpt-1", "session-1", stateJson: "v2");
@@ -53,7 +55,7 @@ public sealed class InMemoryAgentCheckpointStoreTests
         await store.SaveAsync(cp2);
 
         Assert.AreEqual(1, store.Count);
-        var fetched = await store.GetAsync("ckpt-1");
+        var fetched = await store.GetAsync("ws-1", "ckpt-1");
         Assert.AreEqual("v2", fetched!.StateJson);
     }
 
@@ -62,18 +64,26 @@ public sealed class InMemoryAgentCheckpointStoreTests
     // =========================================================================
 
     [TestMethod]
-    public async Task GetAsync_NullId_Throws()
+    public async Task GetAsync_NullWorkspaceId_Throws()
     {
         var store = new InMemoryAgentCheckpointStore();
         await Assert.ThrowsExceptionAsync<ArgumentException>(
-            () => store.GetAsync(""));
+            () => store.GetAsync("", "ckpt-1"));
+    }
+
+    [TestMethod]
+    public async Task GetAsync_NullCheckpointId_Throws()
+    {
+        var store = new InMemoryAgentCheckpointStore();
+        await Assert.ThrowsExceptionAsync<ArgumentException>(
+            () => store.GetAsync("ws-1", ""));
     }
 
     [TestMethod]
     public async Task GetAsync_NotFound_ReturnsNull()
     {
         var store = new InMemoryAgentCheckpointStore();
-        var cp = await store.GetAsync("nonexistent");
+        var cp = await store.GetAsync("ws-1", "nonexistent");
         Assert.IsNull(cp);
     }
 
@@ -84,7 +94,7 @@ public sealed class InMemoryAgentCheckpointStoreTests
         var cp = MakeCheckpoint("ckpt-1", "session-1", stateJson: "{\"x\":1}");
         await store.SaveAsync(cp);
 
-        var fetched = await store.GetAsync("ckpt-1");
+        var fetched = await store.GetAsync("ws-1", "ckpt-1");
 
         Assert.IsNotNull(fetched);
         Assert.AreEqual("ckpt-1", fetched!.CheckpointId);
@@ -177,11 +187,19 @@ public sealed class InMemoryAgentCheckpointStoreTests
     // =========================================================================
 
     [TestMethod]
-    public async Task DeleteAsync_NullId_Throws()
+    public async Task DeleteAsync_NullWorkspaceId_Throws()
     {
         var store = new InMemoryAgentCheckpointStore();
         await Assert.ThrowsExceptionAsync<ArgumentException>(
-            () => store.DeleteAsync(""));
+            () => store.DeleteAsync("", "ckpt-1"));
+    }
+
+    [TestMethod]
+    public async Task DeleteAsync_NullCheckpointId_Throws()
+    {
+        var store = new InMemoryAgentCheckpointStore();
+        await Assert.ThrowsExceptionAsync<ArgumentException>(
+            () => store.DeleteAsync("ws-1", ""));
     }
 
     [TestMethod]
@@ -190,18 +208,18 @@ public sealed class InMemoryAgentCheckpointStoreTests
         var store = new InMemoryAgentCheckpointStore();
         await store.SaveAsync(MakeCheckpoint("ckpt-1", "session-1"));
 
-        var result = await store.DeleteAsync("ckpt-1");
+        var result = await store.DeleteAsync("ws-1", "ckpt-1");
 
         Assert.IsTrue(result);
         Assert.AreEqual(0, store.Count);
-        Assert.IsNull(await store.GetAsync("ckpt-1"));
+        Assert.IsNull(await store.GetAsync("ws-1", "ckpt-1"));
     }
 
     [TestMethod]
     public async Task DeleteAsync_Nonexistent_ReturnsFalse()
     {
         var store = new InMemoryAgentCheckpointStore();
-        var result = await store.DeleteAsync("nonexistent");
+        var result = await store.DeleteAsync("ws-1", "nonexistent");
         Assert.IsFalse(result);
     }
 
@@ -217,14 +235,107 @@ public sealed class InMemoryAgentCheckpointStoreTests
     }
 
     // =========================================================================
+    // 6. P0-6：跨 workspace 隔离
+    // =========================================================================
+
+    [TestMethod]
+    public async Task CrossWorkspace_SameCheckpointId_RemainsIsolated()
+    {
+        // P0-6：两个 workspace 各自保存同 ID checkpoint，应互不可见
+        var store = new InMemoryAgentCheckpointStore();
+        var ws1Cp = MakeCheckpoint("ckpt-shared", "session-ws1", stateJson: "ws1-state", workspaceId: "ws-1");
+        var ws2Cp = MakeCheckpoint("ckpt-shared", "session-ws2", stateJson: "ws2-state", workspaceId: "ws-2");
+
+        await store.SaveAsync(ws1Cp);
+        await store.SaveAsync(ws2Cp);
+
+        // 两条记录共存（不同主键）
+        Assert.AreEqual(2, store.Count);
+
+        // ws-1 看到自己的 state
+        var ws1Fetched = await store.GetAsync("ws-1", "ckpt-shared");
+        Assert.IsNotNull(ws1Fetched);
+        Assert.AreEqual("ws1-state", ws1Fetched!.StateJson);
+        Assert.AreEqual("ws-1", ws1Fetched.Session.WorkspaceId);
+
+        // ws-2 看到自己的 state（不会误读 ws-1 的）
+        var ws2Fetched = await store.GetAsync("ws-2", "ckpt-shared");
+        Assert.IsNotNull(ws2Fetched);
+        Assert.AreEqual("ws2-state", ws2Fetched!.StateJson);
+        Assert.AreEqual("ws-2", ws2Fetched.Session.WorkspaceId);
+    }
+
+    [TestMethod]
+    public async Task CrossWorkspace_GetAsync_UnknownWorkspace_ReturnsNull()
+    {
+        // P0-6：ws-1 的 checkpoint，ws-2 看不到（不会误读）
+        var store = new InMemoryAgentCheckpointStore();
+        await store.SaveAsync(MakeCheckpoint("ckpt-1", "session-ws1", workspaceId: "ws-1"));
+
+        var fetched = await store.GetAsync("ws-2", "ckpt-1");
+        Assert.IsNull(fetched, "跨 workspace 读取应返回 null");
+    }
+
+    [TestMethod]
+    public async Task CrossWorkspace_DeleteAsync_DoesNotAffectOtherWorkspace()
+    {
+        // P0-6：删除 ws-1 的 checkpoint 不影响 ws-2 的同 ID checkpoint
+        var store = new InMemoryAgentCheckpointStore();
+        await store.SaveAsync(MakeCheckpoint("ckpt-shared", "session-ws1", workspaceId: "ws-1"));
+        await store.SaveAsync(MakeCheckpoint("ckpt-shared", "session-ws2", workspaceId: "ws-2"));
+
+        var deleted = await store.DeleteAsync("ws-1", "ckpt-shared");
+        Assert.IsTrue(deleted);
+
+        // ws-2 的 checkpoint 应仍存在
+        Assert.AreEqual(1, store.Count);
+        var ws2Fetched = await store.GetAsync("ws-2", "ckpt-shared");
+        Assert.IsNotNull(ws2Fetched);
+        Assert.AreEqual("ws-2", ws2Fetched!.Session.WorkspaceId);
+    }
+
+    [TestMethod]
+    public async Task CrossWorkspace_DeleteAsync_UnknownWorkspace_ReturnsFalse()
+    {
+        // P0-6：尝试用 ws-2 删除 ws-1 的 checkpoint 应返回 false（未删除任何记录）
+        var store = new InMemoryAgentCheckpointStore();
+        await store.SaveAsync(MakeCheckpoint("ckpt-1", "session-ws1", workspaceId: "ws-1"));
+
+        var deleted = await store.DeleteAsync("ws-2", "ckpt-1");
+        Assert.IsFalse(deleted, "跨 workspace 删除应返回 false");
+
+        // ws-1 的 checkpoint 仍存在
+        Assert.AreEqual(1, store.Count);
+        var ws1Fetched = await store.GetAsync("ws-1", "ckpt-1");
+        Assert.IsNotNull(ws1Fetched);
+    }
+
+    [TestMethod]
+    public async Task CrossWorkspace_DuplicateIdAcrossWorkspaces_RemainsIsolated()
+    {
+        // P0-6：边界场景 — 在两个 workspace 中保存相同 ID，应共存而不互相覆盖
+        var store = new InMemoryAgentCheckpointStore();
+        var ws1Cp = MakeCheckpoint("ckpt-dup", "session-1", stateJson: "ws1", workspaceId: "ws-1");
+        var ws2Cp = MakeCheckpoint("ckpt-dup", "session-2", stateJson: "ws2", workspaceId: "ws-2");
+
+        await store.SaveAsync(ws1Cp);
+        await store.SaveAsync(ws2Cp);
+
+        // 两条都存在
+        Assert.AreEqual(2, store.Count);
+        Assert.AreEqual("ws1", (await store.GetAsync("ws-1", "ckpt-dup"))!.StateJson);
+        Assert.AreEqual("ws2", (await store.GetAsync("ws-2", "ckpt-dup"))!.StateJson);
+    }
+
+    // =========================================================================
     // 辅助方法
     // =========================================================================
 
-    private static AgentSessionId MakeSessionId(string value) => new()
+    private static AgentSessionId MakeSessionId(string value, string workspaceId = "ws-1") => new()
     {
         Value = value,
         RuntimeKind = AgentRuntimeKind.GenericTool,
-        WorkspaceId = "ws-1",
+        WorkspaceId = workspaceId,
         CreatedAt = DateTimeOffset.UtcNow
     };
 
@@ -232,10 +343,11 @@ public sealed class InMemoryAgentCheckpointStoreTests
         string id,
         string sessionValue,
         string? stateJson = null,
-        DateTimeOffset? createdAt = null) => new()
+        DateTimeOffset? createdAt = null,
+        string workspaceId = "ws-1") => new()
     {
         CheckpointId = id,
-        Session = MakeSessionId(sessionValue),
+        Session = MakeSessionId(sessionValue, workspaceId),
         CreatedAt = createdAt ?? DateTimeOffset.UtcNow,
         StateJson = stateJson ?? "{}"
     };

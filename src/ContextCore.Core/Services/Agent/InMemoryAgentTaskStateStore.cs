@@ -8,10 +8,11 @@ namespace ContextCore.Core.Services.Agent;
 //
 // 实现 IAgentTaskStateStore：
 //   - ConcurrentDictionary<string, AgentTaskState> 后端
-//   - SaveAsync 幂等（同 TaskId 覆盖）
-//   - GetAsync 不存在返回 null
+//   - 主键 (workspace_id, task_id) 复合键（P0-6 修复）
+//   - SaveAsync 幂等（同主键覆盖）
+//   - GetAsync 必须传 workspaceId（P0-6 修复）；不存在返回 null
 //   - ListBySessionAsync 按 SessionId 过滤 + UpdatedAt 倒序
-//   - DeleteAsync 存在/不存在
+//   - DeleteAsync 必须传 workspaceId（P0-6 修复）；存在/不存在
 // ===========================================================================
 
 /// <summary>
@@ -22,6 +23,7 @@ namespace ContextCore.Core.Services.Agent;
 /// </remarks>
 public sealed class InMemoryAgentTaskStateStore : IAgentTaskStateStore
 {
+    // P0-6：主键改为复合 (workspace_id, task_id)
     private readonly ConcurrentDictionary<string, AgentTaskState> _tasks = new(StringComparer.Ordinal);
 
     /// <inheritdoc />
@@ -29,16 +31,20 @@ public sealed class InMemoryAgentTaskStateStore : IAgentTaskStateStore
     {
         ArgumentNullException.ThrowIfNull(taskState);
         cancellationToken.ThrowIfCancellationRequested();
-        _tasks[taskState.TaskId] = taskState;
+        _tasks[BuildKey(taskState.Session.WorkspaceId, taskState.TaskId)] = taskState;
         return Task.CompletedTask;
     }
 
     /// <inheritdoc />
-    public Task<AgentTaskState?> GetAsync(string taskId, CancellationToken cancellationToken = default)
+    public Task<AgentTaskState?> GetAsync(
+        string workspaceId,
+        string taskId,
+        CancellationToken cancellationToken = default)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
         ArgumentException.ThrowIfNullOrWhiteSpace(taskId);
         cancellationToken.ThrowIfCancellationRequested();
-        _tasks.TryGetValue(taskId, out var task);
+        _tasks.TryGetValue(BuildKey(workspaceId, taskId), out var task);
         return Task.FromResult(task);
     }
 
@@ -51,7 +57,8 @@ public sealed class InMemoryAgentTaskStateStore : IAgentTaskStateStore
         cancellationToken.ThrowIfCancellationRequested();
 
         var list = _tasks.Values
-            .Where(t => string.Equals(t.Session.Value, sessionId.Value, StringComparison.Ordinal))
+            .Where(t => string.Equals(t.Session.WorkspaceId, sessionId.WorkspaceId, StringComparison.Ordinal)
+                && string.Equals(t.Session.Value, sessionId.Value, StringComparison.Ordinal))
             .OrderByDescending(t => t.UpdatedAt)
             .ThenByDescending(t => t.TaskId)
             .ToList();
@@ -59,13 +66,20 @@ public sealed class InMemoryAgentTaskStateStore : IAgentTaskStateStore
     }
 
     /// <inheritdoc />
-    public Task<bool> DeleteAsync(string taskId, CancellationToken cancellationToken = default)
+    public Task<bool> DeleteAsync(
+        string workspaceId,
+        string taskId,
+        CancellationToken cancellationToken = default)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
         ArgumentException.ThrowIfNullOrWhiteSpace(taskId);
         cancellationToken.ThrowIfCancellationRequested();
-        return Task.FromResult(_tasks.TryRemove(taskId, out _));
+        return Task.FromResult(_tasks.TryRemove(BuildKey(workspaceId, taskId), out _));
     }
 
     /// <summary>当前任务总数（测试与诊断用）。</summary>
     public int Count => _tasks.Count;
+
+    private static string BuildKey(string workspaceId, string taskId)
+        => $"{workspaceId}/{taskId}";
 }

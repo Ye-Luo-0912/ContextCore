@@ -18,6 +18,10 @@ namespace ContextCore.Core.Services.DecisionEngine;
 //   4. 适配器不破坏现有 BasicContextPackageBuilder.BuildDetailedAsync 主链。
 //   5. Kind 字符串（如 "working_memory" / "hard_constraint"）映射到
 //      ContextCandidateSource 枚举，统一两路径的候选来源表达。
+//   6. P0-5 修复：映射函数不再读取 DateTimeOffset.UtcNow。
+//      时间戳由 CandidateAdaptationContext.ObservedAt 统一传入；
+//      ToDecisionRequest 填充 WorkspaceId / CollectionId / QueryText，
+//      避免 PolicyRegistry 按空 workspace 解析默认 Bundle。
 //
 // 字段映射：
 //   PackageTraceCandidate.Id → envelope.CandidateId
@@ -42,12 +46,35 @@ public static class PackageCandidateAdapter
     /// <summary>
     /// 将单个 <see cref="PackageTraceCandidate"/> 转换为 <see cref="ContextCandidateEnvelope"/>。
     /// </summary>
+    /// <remarks>
+    /// 此重载不传 <see cref="CandidateAdaptationContext"/>；将在入口处读取一次
+    /// <see cref="DateTimeOffset.UtcNow"/> 作为 <c>ObservedAt</c>，但映射函数内部不再读时间。
+    /// 推荐调用方使用接受 context 的重载以获得确定性。
+    /// </remarks>
     public static ContextCandidateEnvelope ToEnvelope(PackageTraceCandidate candidate)
+        => ToEnvelope(candidate, new CandidateAdaptationContext
+        {
+            WorkspaceId = string.Empty,
+            CollectionId = string.Empty,
+            ObservedAt = DateTimeOffset.UtcNow
+        });
+
+    /// <summary>
+    /// P0-5：将单个 <see cref="PackageTraceCandidate"/> 转换为
+    /// <see cref="ContextCandidateEnvelope"/>，使用传入的 context 提供时间戳与作用域。
+    /// </summary>
+    /// <param name="candidate">原始候选。</param>
+    /// <param name="context">适配上下文（提供 ObservedAt / WorkspaceId / CollectionId 等）。</param>
+    public static ContextCandidateEnvelope ToEnvelope(
+        PackageTraceCandidate candidate,
+        CandidateAdaptationContext context)
     {
         ArgumentNullException.ThrowIfNull(candidate);
+        ArgumentNullException.ThrowIfNull(context);
 
         var source = ResolveCandidateSource(candidate.Kind);
         var isMandatory = IsMandatoryKind(candidate.Kind);
+        var constraintLevel = ResolveConstraintLevel(candidate.Kind);
         var lifecycleState = ResolveLifecycleState(candidate.Metadata);
 
         return new ContextCandidateEnvelope
@@ -56,11 +83,17 @@ public static class PackageCandidateAdapter
             Source = source,
             Type = candidate.Type,
             EstimatedTokens = candidate.EstimatedTokens,
+            WorkspaceId = context.WorkspaceId,
+            CollectionId = context.CollectionId,
             Safety = new CandidateSafetyState
             {
+                // P0-1：不再把 Constraint 来源一律视为 hard。
+                // IsMandatory 仅对 hard_constraint / constraints 为 true（Hard 级别）；
+                // soft_constraint（Soft）与 merged_constraint（Mixed）均不免预算。
+                // IsHardConstraint 仅当 ConstraintLevel == Hard 时为 true。
                 IsMandatory = isMandatory,
-                IsHardConstraint = source == ContextCandidateSource.Mandatory
-                                    || source == ContextCandidateSource.Constraint,
+                ConstraintLevel = constraintLevel,
+                IsHardConstraint = constraintLevel == ConstraintLevel.Hard,
                 LifecycleState = lifecycleState,
                 IsSuperseded = lifecycleState.Equals("superseded", StringComparison.OrdinalIgnoreCase),
                 IsDeprecatedUsedByActiveChain = IsDeprecatedUsedByActiveChain(candidate.Metadata),
@@ -78,13 +111,19 @@ public static class PackageCandidateAdapter
                 ScoreBreakdown = ConvertScoreBreakdown(candidate.ScoreBreakdown),
                 ChannelSources = ResolveChannelSources(candidate.Kind)
             },
+            // P0-5：使用 context.ObservedAt 而非 DateTimeOffset.UtcNow
             ProvenanceRefs = candidate.SourceRefs
                 .Where(r => !string.IsNullOrEmpty(r))
                 .Select(r => new EvidenceRef
                 {
                     RefId = r,
                     RefType = "package-source-ref",
-                    GeneratedAt = DateTimeOffset.UtcNow
+                    WorkspaceId = string.IsNullOrEmpty(context.WorkspaceId) ? null : context.WorkspaceId,
+                    CollectionId = string.IsNullOrEmpty(context.CollectionId) ? null : context.CollectionId,
+                    GeneratedAt = context.ObservedAt,
+                    ContentFingerprint = context.PolicySnapshot is null
+                        ? null
+                        : $"{context.PolicySnapshot.BundleId}@{context.PolicySnapshot.Version}"
                 })
                 .ToList()
         };
@@ -96,9 +135,23 @@ public static class PackageCandidateAdapter
     /// </summary>
     public static IReadOnlyList<ContextCandidateEnvelope> ToEnvelopes(
         IEnumerable<PackageTraceCandidate> candidates)
+        => ToEnvelopes(candidates, new CandidateAdaptationContext
+        {
+            WorkspaceId = string.Empty,
+            CollectionId = string.Empty,
+            ObservedAt = DateTimeOffset.UtcNow
+        });
+
+    /// <summary>
+    /// P0-5：批量转换，使用传入的 context 提供时间戳与作用域。
+    /// </summary>
+    public static IReadOnlyList<ContextCandidateEnvelope> ToEnvelopes(
+        IEnumerable<PackageTraceCandidate> candidates,
+        CandidateAdaptationContext context)
     {
         ArgumentNullException.ThrowIfNull(candidates);
-        return candidates.Select(ToEnvelope).ToList();
+        ArgumentNullException.ThrowIfNull(context);
+        return candidates.Select(c => ToEnvelope(c, context)).ToList();
     }
 
     /// <summary>
@@ -118,11 +171,32 @@ public static class PackageCandidateAdapter
         ContextPackageBuildResult result,
         int tokenBudget,
         bool enableModel = false)
+        => ToDecisionRequest(result, tokenBudget, enableModel, new CandidateAdaptationContext
+        {
+            WorkspaceId = string.Empty,
+            CollectionId = string.Empty,
+            ObservedAt = DateTimeOffset.UtcNow
+        });
+
+    /// <summary>
+    /// P0-5：将 <see cref="ContextPackageBuildResult"/> 整体转换为
+    /// <see cref="ContextDecisionRequest"/>，并填充 workspace/collection/query 作用域。
+    /// </summary>
+    /// <param name="result">Package 主链产出的结果。</param>
+    /// <param name="tokenBudget">token 预算上限。</param>
+    /// <param name="enableModel">是否启用模型评分。</param>
+    /// <param name="context">适配上下文（提供 WorkspaceId/CollectionId/QueryText/ObservedAt）。</param>
+    public static ContextDecisionRequest ToDecisionRequest(
+        ContextPackageBuildResult result,
+        int tokenBudget,
+        bool enableModel,
+        CandidateAdaptationContext context)
     {
         ArgumentNullException.ThrowIfNull(result);
+        ArgumentNullException.ThrowIfNull(context);
 
         var selectedEnvelopes = result.SelectedItems
-            .Select(ToEnvelopeFromDecision)
+            .Select(d => ToEnvelopeFromDecision(d, context))
             .ToList();
         var droppedEnvelopes = result.DroppedItems
             .Select(ToEnvelopeFromDroppedItem)
@@ -132,10 +206,14 @@ public static class PackageCandidateAdapter
         allEnvelopes.AddRange(selectedEnvelopes);
         allEnvelopes.AddRange(droppedEnvelopes);
 
+        // P0-5：填充 WorkspaceId / CollectionId / QueryText / RequestId
         return new ContextDecisionRequest
         {
-            RequestId = result.BuildId,
+            RequestId = string.IsNullOrEmpty(context.RequestId) ? result.BuildId : context.RequestId,
             DecisionSource = ContextDecisionSource.Package,
+            WorkspaceId = context.WorkspaceId,
+            CollectionId = context.CollectionId,
+            QueryText = context.QueryText,
             Candidates = allEnvelopes,
             TokenBudget = tokenBudget,
             EnableModel = enableModel
@@ -177,7 +255,28 @@ public static class PackageCandidateAdapter
     {
         if (string.IsNullOrEmpty(kind)) return false;
         var lower = kind.ToLowerInvariant();
-        return lower == "hard_constraint" || lower == "constraints" || lower == "merged_constraint";
+        // P0-1：仅 hard_constraint / constraints 视为 mandatory（Hard 级别）。
+        // merged_constraint（Mixed）与 soft_constraint（Soft）不再免预算。
+        return lower == "hard_constraint" || lower == "constraints";
+    }
+
+    /// <summary>
+    /// P0-1：根据 kind 字符串解析约束强制级别。
+    /// hard_constraint / constraints → Hard
+    /// soft_constraint → Soft
+    /// merged_constraint → Mixed（不可直接免预算）
+    /// 其他 → null（非 Constraint 来源）
+    /// </summary>
+    private static ConstraintLevel? ResolveConstraintLevel(string kind)
+    {
+        if (string.IsNullOrEmpty(kind)) return null;
+        return kind.ToLowerInvariant() switch
+        {
+            "hard_constraint" or "constraints" => ConstraintLevel.Hard,
+            "soft_constraint" => ConstraintLevel.Soft,
+            "merged_constraint" => ConstraintLevel.Mixed,
+            _ => null
+        };
     }
 
     private static string ResolveLifecycleState(Dictionary<string, string> metadata)
@@ -241,20 +340,26 @@ public static class PackageCandidateAdapter
         return new[] { kind };
     }
 
-    private static ContextCandidateEnvelope ToEnvelopeFromDecision(ContextPackageDecision decision)
+    private static ContextCandidateEnvelope ToEnvelopeFromDecision(
+        ContextPackageDecision decision,
+        CandidateAdaptationContext context)
     {
         var source = ResolveCandidateSource(decision.Kind);
+        var constraintLevel = ResolveConstraintLevel(decision.Kind);
         return new ContextCandidateEnvelope
         {
             CandidateId = decision.ItemId,
             Source = source,
             Type = decision.Type,
             EstimatedTokens = decision.EstimatedTokens,
+            WorkspaceId = context.WorkspaceId,
+            CollectionId = context.CollectionId,
             Safety = new CandidateSafetyState
             {
+                // P0-1：与 ToEnvelope 保持一致的 ConstraintLevel 推导
                 IsMandatory = IsMandatoryKind(decision.Kind),
-                IsHardConstraint = source == ContextCandidateSource.Mandatory
-                                    || source == ContextCandidateSource.Constraint,
+                ConstraintLevel = constraintLevel,
+                IsHardConstraint = constraintLevel == ConstraintLevel.Hard,
                 PassesSafetyGate = true
             },
             Utility = new CandidateUtilityScore
@@ -268,13 +373,19 @@ public static class PackageCandidateAdapter
             {
                 ChannelSources = ResolveChannelSources(decision.Kind)
             },
+            // P0-5：使用 context.ObservedAt 而非 DateTimeOffset.UtcNow
             ProvenanceRefs = decision.SourceRefs
                 .Where(r => !string.IsNullOrEmpty(r))
                 .Select(r => new EvidenceRef
                 {
                     RefId = r,
                     RefType = "package-source-ref",
-                    GeneratedAt = DateTimeOffset.UtcNow
+                    WorkspaceId = string.IsNullOrEmpty(context.WorkspaceId) ? null : context.WorkspaceId,
+                    CollectionId = string.IsNullOrEmpty(context.CollectionId) ? null : context.CollectionId,
+                    GeneratedAt = context.ObservedAt,
+                    ContentFingerprint = context.PolicySnapshot is null
+                        ? null
+                        : $"{context.PolicySnapshot.BundleId}@{context.PolicySnapshot.Version}"
                 })
                 .ToList()
         };

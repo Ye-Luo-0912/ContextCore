@@ -15,6 +15,8 @@ namespace ContextCore.Storage.Postgres.Stores;
 ///   2. 主键 (workspace_id, task_id)：跨 workspace 隔离 + 同 workspace 内 task id 唯一。
 ///   3. <see cref="ListBySessionAsync"/> 按 session_value 过滤 + updated_at DESC，与 InMemory 实现语义一致。
 ///   4. <see cref="SaveAsync"/> 幂等（同主键覆盖）；状态机转换由调用方负责。
+///   5. P0-6 修复：<see cref="GetAsync"/> / <see cref="DeleteAsync"/> 必须传 workspaceId，
+///      SQL WHERE 同时匹配 (workspace_id, task_id)，避免跨 workspace 误读 / 误删。
 /// </remarks>
 public sealed class PostgresAgentTaskStateStore : PostgresStoreBase, IAgentTaskStateStore
 {
@@ -60,8 +62,13 @@ ON CONFLICT (workspace_id, task_id) DO UPDATE SET
     }
 
     /// <inheritdoc />
-    public async Task<AgentTaskState?> GetAsync(string taskId, CancellationToken cancellationToken = default)
+    public async Task<AgentTaskState?> GetAsync(
+        string workspaceId,
+        string taskId,
+        CancellationToken cancellationToken = default)
     {
+        // P0-6：必须同时匹配 (workspace_id, task_id)，避免跨 workspace 误读
+        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
         ArgumentException.ThrowIfNullOrWhiteSpace(taskId);
         await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
         await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
@@ -70,9 +77,10 @@ ON CONFLICT (workspace_id, task_id) DO UPDATE SET
         command.CommandText = $"""
 SELECT data
 FROM {Table("agent_task_states")}
-WHERE task_id = @task_id
+WHERE workspace_id = @workspace_id AND task_id = @task_id
 LIMIT 1;
 """;
+        command.Parameters.AddWithValue("workspace_id", workspaceId);
         command.Parameters.AddWithValue("task_id", taskId);
         return await ExecuteScalarJsonAsync<AgentTaskState>(command, cancellationToken).ConfigureAwait(false);
     }
@@ -100,8 +108,13 @@ ORDER BY updated_at DESC, task_id DESC;
     }
 
     /// <inheritdoc />
-    public async Task<bool> DeleteAsync(string taskId, CancellationToken cancellationToken = default)
+    public async Task<bool> DeleteAsync(
+        string workspaceId,
+        string taskId,
+        CancellationToken cancellationToken = default)
     {
+        // P0-6：必须同时匹配 (workspace_id, task_id)，避免跨 workspace 误删
+        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
         ArgumentException.ThrowIfNullOrWhiteSpace(taskId);
         await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
         await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
@@ -109,8 +122,9 @@ ORDER BY updated_at DESC, task_id DESC;
         command.CommandTimeout = Options.CommandTimeoutSeconds;
         command.CommandText = $"""
 DELETE FROM {Table("agent_task_states")}
-WHERE task_id = @task_id;
+WHERE workspace_id = @workspace_id AND task_id = @task_id;
 """;
+        command.Parameters.AddWithValue("workspace_id", workspaceId);
         command.Parameters.AddWithValue("task_id", taskId);
         var affected = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         return affected > 0;
