@@ -3,6 +3,7 @@ using ContextCore.Abstractions.Models;
 using ContextCore.Core;
 using ContextCore.Core.Jobs;
 using ContextCore.Core.Services;
+using ContextCore.Core.Services.DecisionEngine;
 using ContextCore.Core.Services.Promotion;
 using ContextCore.Core.Services.Graph;
 using ContextCore.Core.Services.Learning.V14_0;
@@ -337,6 +338,26 @@ internal static class CoreExtensions
 		services.AddSingleton<IContextPackageBuilder>(sp => sp.GetRequiredService<RuntimeServices>().PackageBuilder);
 		services.AddSingleton(sp => sp.GetRequiredService<RuntimeServices>().Retriever);
 		services.AddSingleton<IContextRetriever>(sp => sp.GetRequiredService<RuntimeServices>().Retriever);
+
+		// R28-B B-1：Unified Decision Runtime 骨架注册（不改生产行为）。
+		// 这些注册仅让新契约可被 DI 解析；主链（IContextRetriever / IContextPackageBuilder）
+		// 仍走 RuntimeServices 路径。B-2 阶段才将 IContextDecisionRuntime 接入真实编排。
+		// DefaultContextDecisionEngine 依赖可选 IPolicyRegistry（Postgres provider 注册时非空）。
+		services.AddSingleton<DefaultContextDecisionEngine>(sp => new DefaultContextDecisionEngine(
+			sp.GetService<IPolicyRegistry>()));
+		services.AddSingleton<IContextDecisionEngine>(sp => sp.GetRequiredService<DefaultContextDecisionEngine>());
+		services.AddSingleton<IResolvedPolicyProvider, DefaultResolvedPolicyProvider>();
+		services.AddSingleton<IExpertCatalog, DefaultExpertCatalog>();
+		services.AddSingleton<ContextCore.Abstractions.IRouter, DefaultRouter>();
+		services.AddSingleton<ICanonicalCandidateMerger, DefaultCanonicalCandidateMerger>();
+		services.AddSingleton<IEarlyAdmissionGate, DefaultEarlyAdmissionGate>();
+		services.AddSingleton<IFeaturePipeline, DefaultFeaturePipeline>();
+		services.AddSingleton<ISafetyGate, DefaultSafetyGate>();
+		services.AddSingleton<ILifecycleGate, DefaultLifecycleGate>();
+		services.AddSingleton<IUtilityScorer, DefaultUtilityScorer>();
+		services.AddSingleton<IGlobalAllocator, DefaultGlobalAllocator>();
+		services.AddSingleton<IAgentContextProjector, AgentContextProjector>();
+		services.AddSingleton<IContextDecisionRuntime, DefaultContextDecisionRuntime>();
 
 		return services;
 	}

@@ -148,6 +148,19 @@ public sealed class ContextDecisionResult
 
     /// <summary>是否启用了模型评分（false = 纯 deterministic 路径）。</summary>
     public bool ModelEnabled { get; init; }
+
+    /// <summary>R28-B：业务用途轴（Retrieval / Package / AgentContext）。</summary>
+    public ContextDecisionPurpose Purpose { get; init; } = ContextDecisionPurpose.Retrieval;
+
+    /// <summary>R28-B：运行实现轴（Legacy / UnifiedV2）。</summary>
+    public ContextDecisionRuntimeKind RuntimeKind { get; init; } = ContextDecisionRuntimeKind.Legacy;
+
+    /// <summary>R28-B：Allocator 产出的分配决策（与 Envelope 解耦）。</summary>
+    public IReadOnlyList<CandidateAllocationDecision> AllocationDecisions { get; init; }
+        = Array.Empty<CandidateAllocationDecision>();
+
+    /// <summary>R28-B：策略引用（provenance；null = 未绑定到有效策略快照）。</summary>
+    public ResolvedPolicyReference? PolicyReference { get; init; }
 }
 
 /// <summary>

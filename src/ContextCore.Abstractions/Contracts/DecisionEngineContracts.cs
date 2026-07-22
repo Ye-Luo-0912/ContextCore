@@ -336,6 +336,19 @@ public sealed record ContextCandidateEnvelope
 
     /// <summary>候选 collection ID（跨 collection 决策时填充）。</summary>
     public string CollectionId { get; init; } = string.Empty;
+
+    /// <summary>R28-B：规范化候选标识（跨 Expert 合并去重键）。</summary>
+    public CanonicalCandidateKey CanonicalKey { get; init; }
+
+    /// <summary>R28-B：多 Expert 来源记录（合并时 union）。</summary>
+    public IReadOnlyList<ExpertOrigin> Origins { get; init; } = Array.Empty<ExpertOrigin>();
+
+    /// <summary>R28-B：per-Expert 贡献权重（保留 per-Expert contribution，不合并为单一值）。</summary>
+    public IReadOnlyDictionary<ExpertKind, double> ExpertContributions { get; init; }
+        = new Dictionary<ExpertKind, double>();
+
+    /// <summary>R28-B：策略引用（provenance；null = 未绑定到有效策略快照）。</summary>
+    public ResolvedPolicyReference? PolicyReference { get; init; }
 }
 
 // ---------------------------------------------------------------------------
