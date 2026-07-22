@@ -339,10 +339,10 @@ internal static class CoreExtensions
 		services.AddSingleton(sp => sp.GetRequiredService<RuntimeServices>().Retriever);
 		services.AddSingleton<IContextRetriever>(sp => sp.GetRequiredService<RuntimeServices>().Retriever);
 
-		// R28-B B-1：Unified Decision Runtime 骨架注册（不改生产行为）。
-		// 这些注册仅让新契约可被 DI 解析；主链（IContextRetriever / IContextPackageBuilder）
-		// 仍走 RuntimeServices 路径。B-2 阶段才将 IContextDecisionRuntime 接入真实编排。
-		// DefaultContextDecisionEngine 依赖可选 IPolicyRegistry（Postgres provider 注册时非空）。
+		// R28-B B-2：Unified Decision Runtime — pure Runtime + Shadow tee 注册。
+		// 主链（IContextRetriever / IContextPackageBuilder）仍走 RuntimeServices 路径。
+		// IContextDecisionRuntime 已升级为真实编排（EarlyGate → Feature → Safety → Score → Engine → Allocator）。
+		// ShadowDecisionRuntime 编排 Legacy + Tee + V2 + Parity，产出 Diagnostic parity 报告（B-3 升级为 Hard）。
 		services.AddSingleton<DefaultContextDecisionEngine>(sp => new DefaultContextDecisionEngine(
 			sp.GetService<IPolicyRegistry>()));
 		services.AddSingleton<IContextDecisionEngine>(sp => sp.GetRequiredService<DefaultContextDecisionEngine>());
@@ -358,6 +358,8 @@ internal static class CoreExtensions
 		services.AddSingleton<IGlobalAllocator, DefaultGlobalAllocator>();
 		services.AddSingleton<IAgentContextProjector, AgentContextProjector>();
 		services.AddSingleton<IContextDecisionRuntime, DefaultContextDecisionRuntime>();
+		services.AddSingleton<DecisionExperimentPlane>();
+		services.AddSingleton<ShadowDecisionRuntime>();
 
 		return services;
 	}

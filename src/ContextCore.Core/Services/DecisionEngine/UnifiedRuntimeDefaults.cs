@@ -31,35 +31,61 @@ namespace ContextCore.Core.Services.DecisionEngine;
 // ===========================================================================
 
 // ---------------------------------------------------------------------------
-// §5.1 DefaultContextDecisionRuntime
+// §5.1 DefaultContextDecisionRuntime（B-2 升级为 pure Runtime）
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// R28-B B-1：统一 Context Decision Runtime 默认骨架实现。
+/// R28-B B-2：统一 Context Decision Runtime — pure Runtime 真实编排。
 /// </summary>
 /// <remarks>
-/// B-1 阶段：仅消费 SeedCandidates，委托 IContextDecisionEngine 执行纯决策。
-/// 不接入 CandidateProviders / Router / CanonicalMerger（B-2 才接入）。
-/// 调用方需显式注入此类型（AddContextCore 不自动注册到主链）。
+/// B-2 阶段升级：从 B-1 骨架（仅委托 Engine）升级为真实编排
+/// （Policy → EarlyGate → FeaturePipeline → Engine → Allocator）。
+/// 候选来源：SeedCandidates（由 WorkingSetTee 从 Legacy 主链捕获）。
+/// Provider 网络不接入（B-4 才接入真实 ICandidateProvider）。
+///
+/// 编排流程：
+///   1. 策略解析（IResolvedPolicyProvider → EffectivePolicySnapshot）
+///   2. EarlyAdmissionGate 评估（scope mismatch / superseded）
+///   3. FeaturePipeline 特征计算（identity transform in B-2）
+///   4. SafetyGate + LifecycleGate 评估
+///   5. UtilityScorer 评分（rule-only in B-2）
+///   6. Engine 决策（委托既有 IContextDecisionEngine 执行 budget allocation）
+///   7. Allocator 全局分配（TopK + TokenBudget 截断）
 /// </remarks>
 public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
 {
     private readonly IContextDecisionEngine _engine;
     private readonly IResolvedPolicyProvider _policyProvider;
+    private readonly IEarlyAdmissionGate _earlyAdmissionGate;
+    private readonly IFeaturePipeline _featurePipeline;
+    private readonly ISafetyGate _safetyGate;
+    private readonly ILifecycleGate _lifecycleGate;
+    private readonly IUtilityScorer _utilityScorer;
+    private readonly IGlobalAllocator _allocator;
 
-    /// <summary>构造 Runtime 骨架。</summary>
-    /// <param name="engine">纯决策引擎（既有 IContextDecisionEngine 实现）。</param>
-    /// <param name="policyProvider">策略快照提供者。</param>
+    /// <summary>构造 pure Runtime。</summary>
     public DefaultContextDecisionRuntime(
         IContextDecisionEngine engine,
-        IResolvedPolicyProvider policyProvider)
+        IResolvedPolicyProvider policyProvider,
+        IEarlyAdmissionGate earlyAdmissionGate,
+        IFeaturePipeline featurePipeline,
+        ISafetyGate safetyGate,
+        ILifecycleGate lifecycleGate,
+        IUtilityScorer utilityScorer,
+        IGlobalAllocator allocator)
     {
         _engine = engine ?? throw new ArgumentNullException(nameof(engine));
         _policyProvider = policyProvider ?? throw new ArgumentNullException(nameof(policyProvider));
+        _earlyAdmissionGate = earlyAdmissionGate ?? throw new ArgumentNullException(nameof(earlyAdmissionGate));
+        _featurePipeline = featurePipeline ?? throw new ArgumentNullException(nameof(featurePipeline));
+        _safetyGate = safetyGate ?? throw new ArgumentNullException(nameof(safetyGate));
+        _lifecycleGate = lifecycleGate ?? throw new ArgumentNullException(nameof(lifecycleGate));
+        _utilityScorer = utilityScorer ?? throw new ArgumentNullException(nameof(utilityScorer));
+        _allocator = allocator ?? throw new ArgumentNullException(nameof(allocator));
     }
 
     /// <summary>
-    /// 执行决策编排。B-1 骨架：仅消费 SeedCandidates，委托 Engine 决策。
+    /// 执行 pure Runtime 编排：Policy → EarlyGate → Feature → Safety → Lifecycle → Score → Engine → Allocate。
     /// </summary>
     public async ValueTask<ContextDecisionResult> ExecuteAsync(
         ContextDecisionRuntimeRequest request,
@@ -68,21 +94,79 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
 
-        // B-1 骨架：策略解析（用于填充 PolicyReference provenance，不参与决策逻辑）
+        // Step 1：策略解析
         var snapshot = await _policyProvider.ResolveAsync(request, cancellationToken).ConfigureAwait(false);
 
-        // B-1 骨架：仅消费 SeedCandidates（无 Provider 网络接入）
-        // 调用方未注入 SeedCandidates 时返回空结果（不抛异常，保持 fail-soft 语义）
-        var candidates = request.SeedCandidates;
+        var seedCandidates = request.SeedCandidates;
+        if (seedCandidates.Count == 0)
+        {
+            return EmptyResult(request, snapshot);
+        }
 
-        // 映射 RuntimeRequest → 既有 ContextDecisionRequest（委托 Engine 执行 safety/score/allocate）
+        // Step 2：EarlyAdmissionGate — 拒绝 scope mismatch / superseded
+        var admitted = new List<ContextCandidateEnvelope>(seedCandidates.Count);
+        foreach (var envelope in seedCandidates)
+        {
+            var admission = _earlyAdmissionGate.Evaluate(envelope, snapshot);
+            if (admission.Admitted)
+            {
+                admitted.Add(envelope);
+            }
+        }
+
+        if (admitted.Count == 0)
+        {
+            return EmptyResult(request, snapshot);
+        }
+
+        // Step 3：FeaturePipeline — 特征计算（B-2 identity transform）
+        var enriched = await _featurePipeline.EnrichAsync(
+            admitted,
+            new FeaturePipelineContext(
+                Policy: snapshot,
+                AdaptationContext: new CandidateAdaptationContext
+                {
+                    WorkspaceId = request.Scope.WorkspaceId,
+                    CollectionId = request.Scope.CollectionId,
+                    RequestId = request.RequestId,
+                    QueryText = request.QueryText,
+                    ObservedAt = DateTimeOffset.UtcNow
+                }),
+            cancellationToken).ConfigureAwait(false);
+
+        // Step 4 + 5：SafetyGate + LifecycleGate — 拒绝非法候选
+        var passedGates = new List<ContextCandidateEnvelope>(enriched.Count);
+        foreach (var envelope in enriched)
+        {
+            var safety = _safetyGate.Evaluate(envelope, snapshot.Safety);
+            if (!safety.Passes)
+            {
+                continue;
+            }
+            var lifecycle = _lifecycleGate.Evaluate(envelope);
+            if (!lifecycle.Passes)
+            {
+                continue;
+            }
+            passedGates.Add(envelope);
+        }
+
+        if (passedGates.Count == 0)
+        {
+            return EmptyResult(request, snapshot);
+        }
+
+        // Step 6：UtilityScorer — 评分（B-2 rule-only no-op，adapter 已填充 FinalScore）
+        _utilityScorer.Score(passedGates, snapshot);
+
+        // Step 7：委托既有 IContextDecisionEngine 执行 budget allocation
         var decisionRequest = new ContextDecisionRequest
         {
             RequestId = request.RequestId,
             DecisionSource = ResolveDecisionSource(request.Purpose),
             WorkspaceId = request.Scope.WorkspaceId,
             CollectionId = request.Scope.CollectionId,
-            Candidates = candidates,
+            Candidates = passedGates,
             TokenBudget = request.TokenBudget > 0 ? request.TokenBudget : snapshot.Budget.DefaultTokenBudget,
             TopK = request.TopK > 0 && request.TopK != int.MaxValue
                 ? request.TopK
@@ -94,23 +178,55 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
             EnableModel = snapshot.Routing.EnableModelScoring
         };
 
-        var result = await _engine.DecideAsync(decisionRequest, cancellationToken).ConfigureAwait(false);
+        var engineResult = await _engine.DecideAsync(decisionRequest, cancellationToken).ConfigureAwait(false);
 
-        // 填充 R28-B provenance 字段（不改变 Engine 已计算的 SelectedEnvelopes / DroppedEnvelopes）
-        // ContextDecisionResult 是 sealed class（非 record），需手动构造新实例
+        // Step 8：Allocator 全局分配（补充 AllocationDecisions，与 Envelope 解耦）
+        var allocationResult = _allocator.Allocate(engineResult.SelectedEnvelopes, snapshot);
+
         return new ContextDecisionResult
         {
-            RequestId = result.RequestId,
-            DecisionSource = result.DecisionSource,
-            SelectedEnvelopes = result.SelectedEnvelopes,
-            DroppedEnvelopes = result.DroppedEnvelopes,
-            Outcome = result.Outcome,
-            PolicyVersion = result.PolicyVersion,
-            ModelVersion = result.ModelVersion,
-            DecidedAt = result.DecidedAt,
-            ModelEnabled = result.ModelEnabled,
+            RequestId = engineResult.RequestId,
+            DecisionSource = engineResult.DecisionSource,
+            SelectedEnvelopes = allocationResult.Selected,
+            DroppedEnvelopes = allocationResult.Dropped,
+            Outcome = allocationResult.Outcome,
+            PolicyVersion = engineResult.PolicyVersion,
+            ModelVersion = engineResult.ModelVersion,
+            DecidedAt = engineResult.DecidedAt,
+            ModelEnabled = engineResult.ModelEnabled,
             Purpose = request.Purpose,
             RuntimeKind = ContextDecisionRuntimeKind.UnifiedV2,
+            AllocationDecisions = allocationResult.AllocationDecisions,
+            PolicyReference = snapshot.Reference
+        };
+    }
+
+    private static ContextDecisionResult EmptyResult(
+        ContextDecisionRuntimeRequest request,
+        EffectivePolicySnapshot snapshot)
+    {
+        return new ContextDecisionResult
+        {
+            RequestId = request.RequestId,
+            DecisionSource = ResolveDecisionSource(request.Purpose),
+            SelectedEnvelopes = Array.Empty<ContextCandidateEnvelope>(),
+            DroppedEnvelopes = Array.Empty<ContextCandidateEnvelope>(),
+            Outcome = new ContextDecisionOutcomeSummary
+            {
+                SelectedCount = 0,
+                DroppedCount = 0,
+                EstimatedTokens = 0,
+                TokenBudget = request.TokenBudget > 0 ? request.TokenBudget : snapshot.Budget.DefaultTokenBudget,
+                Sections = Array.Empty<string>(),
+                SafetyGateBlockedCount = 0,
+                BudgetExceededCount = 0
+            },
+            PolicyVersion = snapshot.FeatureSchemaVersion,
+            ModelEnabled = false,
+            DecidedAt = DateTimeOffset.UtcNow,
+            Purpose = request.Purpose,
+            RuntimeKind = ContextDecisionRuntimeKind.UnifiedV2,
+            AllocationDecisions = Array.Empty<CandidateAllocationDecision>(),
             PolicyReference = snapshot.Reference
         };
     }
