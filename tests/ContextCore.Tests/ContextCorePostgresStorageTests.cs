@@ -547,7 +547,7 @@ public sealed class ContextCorePostgresStorageTests
         var sql = PostgresMigrationRunner.BuildMigrationSql(options);
         var requiredIndexes = PostgresMigrationRunner.GetRequiredIndexNames(options);
 
-        Assert.AreEqual("cc-schema-v17", PostgresMigrationRunner.SchemaVersion);
+        Assert.AreEqual("cc-schema-v18", PostgresMigrationRunner.SchemaVersion);
         StringAssert.Contains(sql, "CREATE EXTENSION IF NOT EXISTS vector");
         StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_vector_index_entries");
         StringAssert.Contains(sql, "source_id text NOT NULL DEFAULT ''");

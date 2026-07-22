@@ -2,6 +2,78 @@ using ContextCore.Abstractions;
 
 namespace ContextCore.Core.Services.DecisionEngine;
 
+// ---------------------------------------------------------------------------
+// §10.0 IExperimentRecorder — P0-9：Replay fixture 持久化抽象
+// ---------------------------------------------------------------------------
+
+/// <summary>
+/// P0-9：Replay fixture 持久化抽象。
+/// 默认实现为 in-memory；生产环境可替换为 file/Postgres 后端。
+/// </summary>
+public interface IExperimentRecorder
+{
+    /// <summary>持久化一条 replay fixture。</summary>
+    ValueTask RecordAsync(ReplayFixture fixture, CancellationToken cancellationToken = default);
+
+    /// <summary>读取全部历史 fixture（按时间升序）。</summary>
+    ValueTask<IReadOnlyList<ReplayFixture>> GetHistoryAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>清除全部历史 fixture（用于测试或重置）。</summary>
+    ValueTask ClearAsync(CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// P0-9：默认 in-memory 实现。进程内 List + lock，重启即丢失。
+/// 生产环境可通过 DI 替换为持久化实现。
+/// </summary>
+public sealed class InMemoryExperimentRecorder : IExperimentRecorder
+{
+    private readonly List<ReplayFixture> _fixtures = new();
+    private readonly int _maxCapacity;
+    private readonly object _lock = new();
+
+    /// <summary>构造 in-memory recorder，默认保留最近 10000 条。</summary>
+    public InMemoryExperimentRecorder(int maxCapacity = 10000)
+    {
+        if (maxCapacity <= 0) throw new ArgumentOutOfRangeException(nameof(maxCapacity));
+        _maxCapacity = maxCapacity;
+    }
+
+    /// <inheritdoc/>
+    public ValueTask RecordAsync(ReplayFixture fixture, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(fixture);
+        lock (_lock)
+        {
+            _fixtures.Add(fixture);
+            while (_fixtures.Count > _maxCapacity)
+            {
+                _fixtures.RemoveAt(0);
+            }
+        }
+        return ValueTask.CompletedTask;
+    }
+
+    /// <inheritdoc/>
+    public ValueTask<IReadOnlyList<ReplayFixture>> GetHistoryAsync(CancellationToken cancellationToken = default)
+    {
+        lock (_lock)
+        {
+            return new ValueTask<IReadOnlyList<ReplayFixture>>(_fixtures.ToList());
+        }
+    }
+
+    /// <inheritdoc/>
+    public ValueTask ClearAsync(CancellationToken cancellationToken = default)
+    {
+        lock (_lock)
+        {
+            _fixtures.Clear();
+        }
+        return ValueTask.CompletedTask;
+    }
+}
+
 // ===========================================================================
 // R28-B B-5：Legacy Removal + DecisionExperimentPlane 长期保留
 //
@@ -39,8 +111,13 @@ public sealed class CutoverConfiguration
     /// <summary>环境变量名：控制 V2 流量百分比（0-100）。</summary>
     public const string CutoverPercentageEnvVar = "CC_CUTOVER_PERCENTAGE";
 
-    /// <summary>默认 cutover 百分比（B-5: 100 = V2 only）。</summary>
-    public const int DefaultCutoverPercentage = 100;
+    /// <summary>默认 cutover 百分比（R28-B.6 Closure Gate: 0 = Legacy only，直到 Closure Gate 通过）。</summary>
+    /// <remarks>
+    /// R28-B.5 曾设为 100（V2 only），但 B.6 Closure Gate 要求在验收测试通过前
+    /// 默认走 Legacy，避免未完成的 Provider 网络导致空结果。
+    /// 通过环境变量 CC_CUTOVER_PERCENTAGE 可覆盖（如测试环境设为 100）。
+    /// </remarks>
+    public const int DefaultCutoverPercentage = 0;
 
     /// <summary>当前配置的 cutover 百分比。</summary>
     public int CutoverPercentage { get; init; } = DefaultCutoverPercentage;
@@ -113,31 +190,25 @@ public sealed class DecisionExperimentPlaneIntegration
     private readonly DecisionExperimentPlane _experimentPlane;
     private readonly ShadowGateEvaluator _gateEvaluator;
     private readonly CutoverConfiguration _configuration;
-    private readonly List<ReplayFixture> _fixtureHistory;
+    private readonly IExperimentRecorder _recorder;
 
     /// <summary>构造长期实验平面集成。</summary>
     public DecisionExperimentPlaneIntegration(
         DecisionExperimentPlane experimentPlane,
         ShadowGateEvaluator gateEvaluator,
-        CutoverConfiguration configuration)
+        CutoverConfiguration configuration,
+        IExperimentRecorder? recorder = null)
     {
         _experimentPlane = experimentPlane ?? throw new ArgumentNullException(nameof(experimentPlane));
         _gateEvaluator = gateEvaluator ?? throw new ArgumentNullException(nameof(gateEvaluator));
         _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
-        _fixtureHistory = new List<ReplayFixture>();
+        // P0-9：持久化委托给 IExperimentRecorder；未注入时回退到 in-memory 默认实现。
+        _recorder = recorder ?? new InMemoryExperimentRecorder();
     }
 
     /// <summary>历史 replay fixture 集合（线程安全快照）。</summary>
     public IReadOnlyList<ReplayFixture> FixtureHistory
-    {
-        get
-        {
-            lock (_fixtureHistory)
-            {
-                return _fixtureHistory.ToList();
-            }
-        }
-    }
+        => _recorder.GetHistoryAsync().GetAwaiter().GetResult();
 
     /// <summary>
     /// 记录一次 parity 对比，存为 replay fixture。
@@ -155,51 +226,199 @@ public sealed class DecisionExperimentPlaneIntegration
         return (hash % 10000) < (_configuration.ShadowSampleRate * 10000);
     }
 
-    /// <summary>记录 parity fixture（线程安全）。</summary>
+    /// <summary>记录 parity fixture（仅聚合标量；P0-9 前的旧入口）。</summary>
     public void RecordFixture(ParityReport report, string fixtureId, string purpose, string notes = "")
     {
         ArgumentNullException.ThrowIfNull(report);
         var fixture = ReplayFixture.FromReport(report, fixtureId, purpose, notes);
-        lock (_fixtureHistory)
-        {
-            _fixtureHistory.Add(fixture);
-            // 限制历史大小（保留最近 10000 条）
-            if (_fixtureHistory.Count > 10000)
-            {
-                _fixtureHistory.RemoveAt(0);
-            }
-        }
+        _recorder.RecordAsync(fixture).AsTask().GetAwaiter().GetResult();
+    }
+
+    /// <summary>
+    /// P0-9：从完整 Retrieval shadow 报告构建并持久化 replay fixture。
+    /// 携带 WorkingSet + V2Result，使 fixture 可离线重放。
+    /// </summary>
+    public void RecordShadowReport(RetrievalShadowReport shadowReport, string fixtureId, string purpose, string notes = "")
+    {
+        ArgumentNullException.ThrowIfNull(shadowReport);
+        var fixture = ReplayFixture.FromShadowReport(
+            shadowReport.Parity, shadowReport.WorkingSet, shadowReport.V2Result,
+            fixtureId, purpose, notes);
+        _recorder.RecordAsync(fixture).AsTask().GetAwaiter().GetResult();
+    }
+
+    /// <summary>
+    /// P0-9：从完整 Package shadow 报告构建并持久化 replay fixture。
+    /// 携带 WorkingSet + V2Result，使 fixture 可离线重放。
+    /// </summary>
+    public void RecordShadowReport(PackageShadowReport shadowReport, string fixtureId, string purpose, string notes = "")
+    {
+        ArgumentNullException.ThrowIfNull(shadowReport);
+        var fixture = ReplayFixture.FromShadowReport(
+            shadowReport.Parity, shadowReport.WorkingSet, shadowReport.V2Result,
+            fixtureId, purpose, notes);
+        _recorder.RecordAsync(fixture).AsTask().GetAwaiter().GetResult();
     }
 
     /// <summary>评估历史 fixture，产出 cutover 就绪判定（CI 验收 hook）。</summary>
     public CutoverReadinessAssessment EvaluateHistoricalFixtures()
     {
-        lock (_fixtureHistory)
-        {
-            var reports = _fixtureHistory
-                .Select(f => new ParityReport(
-                    LegacySelectedCount: f.LegacySelectedCount,
-                    V2SelectedCount: f.V2SelectedCount,
-                    CommonSelectedCount: f.CommonSelectedCount,
-                    OnlyInLegacyCount: f.OnlyInLegacyCount,
-                    OnlyInV2Count: f.OnlyInV2Count,
-                    JaccardIndex: f.JaccardIndex,
-                    ParityLevel: f.ParityLevel,
-                    LegacyTokenTotal: f.LegacyTokenTotal,
-                    V2TokenTotal: f.V2TokenTotal,
-                    WorkingSetCandidateCount: f.WorkingSetCandidateCount))
-                .ToList();
-            return _gateEvaluator.EvaluateBatch(reports);
-        }
+        var fixtures = _recorder.GetHistoryAsync().GetAwaiter().GetResult();
+        var reports = fixtures
+            .Select(f => new ParityReport(
+                LegacySelectedCount: f.LegacySelectedCount,
+                V2SelectedCount: f.V2SelectedCount,
+                CommonSelectedCount: f.CommonSelectedCount,
+                OnlyInLegacyCount: f.OnlyInLegacyCount,
+                OnlyInV2Count: f.OnlyInV2Count,
+                JaccardIndex: f.JaccardIndex,
+                ParityLevel: f.ParityLevel,
+                LegacyTokenTotal: f.LegacyTokenTotal,
+                V2TokenTotal: f.V2TokenTotal,
+                WorkingSetCandidateCount: f.WorkingSetCandidateCount))
+            .ToList();
+        return _gateEvaluator.EvaluateBatch(reports);
     }
 
     /// <summary>清除历史 fixture（用于测试或重置）。</summary>
     public void ClearHistory()
     {
-        lock (_fixtureHistory)
+        _recorder.ClearAsync().AsTask().GetAwaiter().GetResult();
+    }
+
+    /// <summary>
+    /// R28-B.6 阶段 E：从历史 fixture 重放 V2 决策，验证决策可重现性。
+    /// </summary>
+    /// <remarks>
+    /// 流程：
+    ///   1. 按 fixtureId 从 recorder 加载 ReplayFixture。
+    ///   2. 若 fixture 携带 WorkingSet + V2Result（P0-9 增强字段），使用 WorkingSet 作为 SeedCandidates
+    ///      重新执行 V2 决策。
+    ///   3. 用 DecisionExperimentPlane.Compare 对比存储的 V2Result 与重放结果，产出 ParityReport。
+    ///   4. fixture 不含完整重放数据（WorkingSet/V2Result 为 null）时返回 null，调用方可降级到
+    ///      EvaluateHistoricalFixtures 的标量路径。
+    /// </remarks>
+    /// <param name="fixtureId">要重放的 fixture ID。</param>
+    /// <param name="v2Runtime">V2 pure Runtime，用于重放决策。null 时返回 null（仅离线扫描 fixture 元数据）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>重放报告（含 stored V2Result vs replayed V2Result 的 ParityReport）；fixture 不存在或不完整时返回 null。</returns>
+    public async ValueTask<FixtureReplayReport?> ReplayFixtureAsync(
+        string fixtureId,
+        IContextDecisionRuntime? v2Runtime,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(fixtureId);
+
+        var fixtures = await _recorder.GetHistoryAsync(cancellationToken).ConfigureAwait(false);
+        var fixture = fixtures.FirstOrDefault(f => string.Equals(f.FixtureId, fixtureId, StringComparison.Ordinal));
+        if (fixture is null)
         {
-            _fixtureHistory.Clear();
+            return null;
         }
+
+        // 缺少完整重放数据：无法离线 replay，调用方应降级到标量路径
+        if (fixture.WorkingSet is null || fixture.V2Result is null)
+        {
+            return null;
+        }
+
+        // v2Runtime 为 null 时无法重放，返回 fixture 元数据但 Parity 为 null
+        if (v2Runtime is null)
+        {
+            return new FixtureReplayReport(
+                FixtureId: fixture.FixtureId,
+                RecordedAt: fixture.RecordedAt,
+                Purpose: fixture.Purpose,
+                StoredParity: new ParityReport(
+                    LegacySelectedCount: fixture.LegacySelectedCount,
+                    V2SelectedCount: fixture.V2SelectedCount,
+                    CommonSelectedCount: fixture.CommonSelectedCount,
+                    OnlyInLegacyCount: fixture.OnlyInLegacyCount,
+                    OnlyInV2Count: fixture.OnlyInV2Count,
+                    JaccardIndex: fixture.JaccardIndex,
+                    ParityLevel: fixture.ParityLevel,
+                    LegacyTokenTotal: fixture.LegacyTokenTotal,
+                    V2TokenTotal: fixture.V2TokenTotal,
+                    WorkingSetCandidateCount: fixture.WorkingSetCandidateCount),
+                ReplayParity: null,
+                ReplaySucceeded: false,
+                Notes: "v2Runtime not provided — cannot replay decision");
+        }
+
+        // 重建 V2 RuntimeRequest：用 fixture 的 WorkingSet 作为 SeedCandidates
+        // 注意：ContextDecisionResult 不携带 Scope/QueryText（这些是 Request 字段），
+        // replay 从 WorkingSet 的首个 envelope 推导 Scope（replay 场景仅需决策可重现，不需原始查询文本）。
+        var firstEnvelope = fixture.WorkingSet.Envelopes.FirstOrDefault();
+        var replayScope = new ContextDecisionScope(
+            firstEnvelope.WorkspaceId,
+            firstEnvelope.CollectionId);
+        var replayRequest = new ContextDecisionRuntimeRequest
+        {
+            RequestId = $"replay:{fixture.FixtureId}",
+            Purpose = fixture.V2Result.Purpose,
+            Scope = replayScope,
+            QueryText = null, // replay 不携带原始查询文本；决策可重现性不依赖查询文本
+            TokenBudget = fixture.V2Result.Outcome.TokenBudget,
+            TopK = fixture.V2Result.Outcome.SelectedCount > 0
+                ? fixture.V2Result.Outcome.SelectedCount
+                : 10,
+            SeedCandidates = fixture.WorkingSet.Envelopes
+        };
+
+        ContextDecisionResult replayedResult;
+        try
+        {
+            replayedResult = await v2Runtime.ExecuteAsync(replayRequest, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            return new FixtureReplayReport(
+                FixtureId: fixture.FixtureId,
+                RecordedAt: fixture.RecordedAt,
+                Purpose: fixture.Purpose,
+                StoredParity: new ParityReport(
+                    LegacySelectedCount: fixture.LegacySelectedCount,
+                    V2SelectedCount: fixture.V2SelectedCount,
+                    CommonSelectedCount: fixture.CommonSelectedCount,
+                    OnlyInLegacyCount: fixture.OnlyInLegacyCount,
+                    OnlyInV2Count: fixture.OnlyInV2Count,
+                    JaccardIndex: fixture.JaccardIndex,
+                    ParityLevel: fixture.ParityLevel,
+                    LegacyTokenTotal: fixture.LegacyTokenTotal,
+                    V2TokenTotal: fixture.V2TokenTotal,
+                    WorkingSetCandidateCount: fixture.WorkingSetCandidateCount),
+                ReplayParity: null,
+                ReplaySucceeded: false,
+                Notes: $"Replay failed: {ex.GetType().Name}: {ex.Message}");
+        }
+
+        // 用 DecisionExperimentPlane.Compare 对比存储 V2Result 与重放结果
+        // 注意：这里比较的是 stored-V2 vs replayed-V2，验证 V2 决策的可重现性（不是 Legacy vs V2 parity）。
+        // 如果 Runtime 是确定性的（无模型随机性、无时间敏感逻辑），replayParity 应为 Hard（Jaccard=1.0）。
+        var replayParity = _experimentPlane.Compare(fixture.V2Result, replayedResult, fixture.WorkingSet);
+
+        return new FixtureReplayReport(
+            FixtureId: fixture.FixtureId,
+            RecordedAt: fixture.RecordedAt,
+            Purpose: fixture.Purpose,
+            StoredParity: new ParityReport(
+                LegacySelectedCount: fixture.LegacySelectedCount,
+                V2SelectedCount: fixture.V2SelectedCount,
+                CommonSelectedCount: fixture.CommonSelectedCount,
+                OnlyInLegacyCount: fixture.OnlyInLegacyCount,
+                OnlyInV2Count: fixture.OnlyInV2Count,
+                JaccardIndex: fixture.JaccardIndex,
+                ParityLevel: fixture.ParityLevel,
+                LegacyTokenTotal: fixture.LegacyTokenTotal,
+                V2TokenTotal: fixture.V2TokenTotal,
+                WorkingSetCandidateCount: fixture.WorkingSetCandidateCount),
+            ReplayParity: replayParity,
+            ReplaySucceeded: true,
+            Notes: string.Empty);
     }
 
     private static uint StableHash(string value)
@@ -213,3 +432,22 @@ public sealed class DecisionExperimentPlaneIntegration
         return hash;
     }
 }
+
+/// <summary>
+/// R28-B.6 阶段 E：fixture 重放报告。
+/// </summary>
+/// <param name="FixtureId">重放的 fixture ID。</param>
+/// <param name="RecordedAt">fixture 原始记录时间。</param>
+/// <param name="Purpose">fixture 用途标签。</param>
+/// <param name="StoredParity">fixture 存储时的 Legacy vs V2 parity（标量重建）。</param>
+/// <param name="ReplayParity">重放结果与存储 V2Result 的 parity；null 表示重放未执行或失败。</param>
+/// <param name="ReplaySucceeded">重放是否成功执行（未抛异常）。</param>
+/// <param name="Notes">重放备注（失败原因等）。</param>
+public sealed record FixtureReplayReport(
+    string FixtureId,
+    DateTimeOffset RecordedAt,
+    string Purpose,
+    ParityReport StoredParity,
+    ParityReport? ReplayParity,
+    bool ReplaySucceeded,
+    string Notes);

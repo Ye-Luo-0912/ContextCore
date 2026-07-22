@@ -7,6 +7,7 @@ using ContextCore.Core.Services.DecisionEngine;
 using ContextCore.Core.Services.Promotion;
 using ContextCore.Core.Services.Graph;
 using ContextCore.Core.Services.Learning.V14_0;
+using ContextCore.Core.Services.Policy;
 using ContextCore.Core.Services.Retrieval;
 using ContextCore.ModelGateway;
 using ContextCore.ModelGateway.Infrastructure;
@@ -14,6 +15,7 @@ using ContextCore.Runtime;
 using ContextCore.Service.Infrastructure;
 using ContextCore.Storage.FileSystem;
 using ContextCore.Storage.Postgres.Stores;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 
 namespace ContextCore.Service.Extensions;
@@ -334,22 +336,62 @@ internal static class CoreExtensions
 		services.AddSingleton(sp => sp.GetRequiredService<RuntimeServices>().RelationExpansionPreviewService);
 		services.AddSingleton(sp => sp.GetRequiredService<RuntimeServices>().PromotionService);
 		services.AddSingleton<IMemoryPromotionService>(sp => sp.GetRequiredService<RuntimeServices>().PromotionService);
+		// P0-1：Legacy 具体类型仍注册为 concrete type（供 Authoritative Runtime 注入）
 		services.AddSingleton(sp => sp.GetRequiredService<RuntimeServices>().PackageBuilder);
-		services.AddSingleton<IContextPackageBuilder>(sp => sp.GetRequiredService<RuntimeServices>().PackageBuilder);
 		services.AddSingleton(sp => sp.GetRequiredService<RuntimeServices>().Retriever);
-		services.AddSingleton<IContextRetriever>(sp => sp.GetRequiredService<RuntimeServices>().Retriever);
 
 		// R28-B B-2：Unified Decision Runtime — pure Runtime + Shadow tee 注册。
-		// 主链（IContextRetriever / IContextPackageBuilder）仍走 RuntimeServices 路径。
+		// P0-1：主链（IContextRetriever / IContextPackageBuilder）已切换为 Authoritative Runtime（装饰器模式）。
 		// IContextDecisionRuntime 已升级为真实编排（EarlyGate → Feature → Safety → Score → Engine → Allocator）。
 		// ShadowDecisionRuntime 编排 Legacy + Tee + V2 + Parity，产出 Diagnostic parity 报告（B-3 升级为 Hard）。
+		// P0-3：注册 IPolicyRegistry 默认实现（in-memory DefaultPolicyRegistry）。
+		// 使用 TryAdd 避免 Postgres provider 扩展已注册 PostgresPolicyRegistry 时产生重复注册。
+		// 调用顺序：AddContextStorage(Postgres) 先注册 → AddContextCore 的 TryAdd 跳过。
+		// 未配置 Postgres 时 TryAdd 生效，确保 PostgresResolvedPolicyProvider 可解析策略。
+		services.TryAddSingleton<DefaultPolicyRegistry>();
+		services.TryAddSingleton<IPolicyRegistry>(sp => sp.GetRequiredService<DefaultPolicyRegistry>());
+		// R28-B.6：Engine 注入全部 V2 决策抽象（SafetyGate/LifecycleGate/UtilityScorer/GlobalAllocator）。
+		// Engine 是唯一决策点：Runtime 不再在 Engine 前执行 Safety/Lifecycle/Score。
 		services.AddSingleton<DefaultContextDecisionEngine>(sp => new DefaultContextDecisionEngine(
-			sp.GetService<IPolicyRegistry>()));
+			sp.GetService<IPolicyRegistry>(),
+			safetyGate: sp.GetService<ISafetyGate>(),
+			lifecycleGate: sp.GetService<ILifecycleGate>(),
+			utilityScorer: sp.GetService<IUtilityScorer>(),
+			globalAllocator: sp.GetService<IGlobalAllocator>()));
 		services.AddSingleton<IContextDecisionEngine>(sp => sp.GetRequiredService<DefaultContextDecisionEngine>());
-		services.AddSingleton<IResolvedPolicyProvider, DefaultResolvedPolicyProvider>();
+		// P0-3：将 IResolvedPolicyProvider 从 B-1 骨架 DefaultResolvedPolicyProvider 替换为
+		// PostgresResolvedPolicyProvider，接入 IPolicyRegistry（CAS epoch + content hash +
+		// activation override + request override）。IPolicyRegistry 由 DefaultPolicyRegistry
+		// （in-memory）或 PostgresPolicyRegistry（生产）提供。
+		services.AddSingleton<PostgresResolvedPolicyProvider>();
+		services.AddSingleton<IResolvedPolicyProvider>(sp => sp.GetRequiredService<PostgresResolvedPolicyProvider>());
 		services.AddSingleton<IExpertCatalog, DefaultExpertCatalog>();
 		services.AddSingleton<ContextCore.Abstractions.IRouter, DefaultRouter>();
 		services.AddSingleton<ICanonicalCandidateMerger, DefaultCanonicalCandidateMerger>();
+		// R28-B.6：真实 ICandidateProvider 注册。每个 Provider 对应一个 ExpertKind，
+		// 注入对应 Store（可选 Store 为 null 时 Provider 返回空结果，不抛异常）。
+		services.AddSingleton<ICandidateProvider>(sp => new MandatoryCandidateProvider(
+			sp.GetRequiredService<IContextStore>()));
+		services.AddSingleton<ICandidateProvider>(sp => new ConstraintCandidateProvider(
+			sp.GetService<IConstraintStore>()));
+		services.AddSingleton<ICandidateProvider>(sp => new LexicalCandidateProvider(
+			sp.GetRequiredService<IContextStore>()));
+		services.AddSingleton<ICandidateProvider>(sp => new SemanticCandidateProvider(
+			sp.GetRequiredService<IContextStore>(),
+			sp.GetService<IMemoryStore>(),
+			sp.GetService<IEmbeddingProvider>(),
+			sp.GetService<IVectorStore>()));
+		services.AddSingleton<ICandidateProvider>(sp => new WorkingMemoryCandidateProvider(
+			sp.GetService<IMemoryStore>()));
+		services.AddSingleton<ICandidateProvider>(sp => new StableMemoryCandidateProvider(
+			sp.GetService<IMemoryStore>()));
+		services.AddSingleton<ICandidateProvider>(sp => new GraphCandidateProvider(
+			sp.GetRequiredService<IContextStore>(),
+			sp.GetService<IRelationStore>(),
+			sp.GetService<IMemoryStore>()));
+		// 收集所有 ICandidateProvider 到 IReadOnlyList（DI 容器不自动处理 IReadOnlyList<T>）
+		services.AddSingleton<IReadOnlyList<ICandidateProvider>>(
+			sp => sp.GetServices<ICandidateProvider>().ToList());
 		services.AddSingleton<IEarlyAdmissionGate, DefaultEarlyAdmissionGate>();
 		services.AddSingleton<IFeaturePipeline, DefaultFeaturePipeline>();
 		services.AddSingleton<ISafetyGate, DefaultSafetyGate>();
@@ -375,7 +417,16 @@ internal static class CoreExtensions
 		services.AddSingleton<AuthoritativeRetrievalRuntime>();
 		services.AddSingleton<AuthoritativePackageRuntime>();
 		services.AddSingleton<AuthoritativeAgentContextRuntime>();
+		// P0-1：主链接口注册为 Authoritative Runtime（装饰器模式）。
+		// IContextRetriever → AuthoritativeRetrievalRuntime（注入 HybridContextRetriever 具体类型，无 DI 循环）。
+		// IContextPackageBuilder → AuthoritativePackageRuntime（注入 BasicContextPackageBuilder 具体类型，无 DI 循环）。
+		// Legacy 具体类型仍注册为 concrete type（上方 RuntimeServices.PackageBuilder / .Retriever），
+		// 供 Authoritative Runtime 作为 fallback 路径注入。普通消费者通过接口获取的是 V2 装饰器。
+		services.AddSingleton<IContextRetriever>(sp => sp.GetRequiredService<AuthoritativeRetrievalRuntime>());
+		services.AddSingleton<IContextPackageBuilder>(sp => sp.GetRequiredService<AuthoritativePackageRuntime>());
 		// B-5：DecisionExperimentPlane 长期保留（sampled shadow + replay fixtures）
+		// P0-9：注册 IExperimentRecorder（默认 in-memory；可替换为持久化实现）
+		services.TryAddSingleton<IExperimentRecorder, InMemoryExperimentRecorder>();
 		services.AddSingleton<DecisionExperimentPlaneIntegration>();
 
 		return services;

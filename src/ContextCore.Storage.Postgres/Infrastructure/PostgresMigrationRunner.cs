@@ -23,8 +23,9 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
     /// R27-1：v14 → v15，新增 pipeline_runs + pipeline_canary_assignments + pipeline_rollback_records + pipeline_baseline_comparisons 表与索引（Evolution Pipeline 持久化）。
     /// P0-7：v15 → v16，pipeline_runs 表追加 revision / lease_owner / lease_expires_at / last_transition_id 列支持 HA CAS 推进。
     /// WS-A：v16 → v17，新增 policy_bundles + policy_activations 表与索引（Postgres Policy Registry 持久化 + CAS 激活）。
+    /// R28-B.6 阶段 E：v17 → v18，新增 experiment_replay_fixtures 表与索引（Postgres Experiment Recorder 持久化 replay fixture）。
     /// </summary>
-    public const string SchemaVersion = "cc-schema-v17";
+    public const string SchemaVersion = "cc-schema-v18";
 
     public const string BaselineMigrationId = "0001_operational_store_baseline";
 
@@ -89,7 +90,9 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         "pipeline_baseline_comparisons",
         // WS-A：Policy Registry 持久化（bundle 注册 + activation CAS 激活）
         "policy_bundles",
-        "policy_activations"
+        "policy_activations",
+        // R28-B.6 阶段 E：Experiment Recorder 持久化（replay fixture 存储）
+        "experiment_replay_fixtures"
     ];
 
     public static readonly IReadOnlyList<(string TableSuffix, string IndexSuffix)> RequiredOperationalIndexDefinitions =
@@ -209,7 +212,10 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         // WS-A：Policy Registry 索引
         ("policy_bundles", "bundle"),
         ("policy_bundles", "superseded"),
-        ("policy_activations", "bundle")
+        ("policy_activations", "bundle"),
+        // R28-B.6 阶段 E：experiment_replay_fixtures 索引（按时间倒序 + 按 purpose 过滤）
+        ("experiment_replay_fixtures", "recorded"),
+        ("experiment_replay_fixtures", "purpose")
     ];
 
     private readonly PostgresConnectionFactory _connectionFactory;
@@ -298,6 +304,8 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         // WS-A：Policy Registry 持久化表
         var policyBundles = Infrastructure.PostgresNames.Table(options, "policy_bundles");
         var policyActivations = Infrastructure.PostgresNames.Table(options, "policy_activations");
+        // R28-B.6 阶段 E：Experiment Recorder 持久化表
+        var experimentReplayFixtures = Infrastructure.PostgresNames.Table(options, "experiment_replay_fixtures");
         var extensionSql = options.EnablePgVectorExtension
             ? "CREATE EXTENSION IF NOT EXISTS vector;"
             : string.Empty;
@@ -1336,6 +1344,31 @@ CREATE TABLE IF NOT EXISTS {policyActivations} (
 );
 
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "policy_activations", "bundle")} ON {policyActivations} (bundle_id, bundle_version);
+
+-- R28-B.6 阶段 E：Experiment Recorder 持久化表（replay fixture 索引 + jsonb）
+-- FileSystem 存 raw fixture JSON，PostgreSQL 存索引列 + jsonb（含 WorkingSet + V2Result）。
+-- fixture_id 为主键，幂等写入（ON CONFLICT DO NOTHING）；recorded_at + purpose 为查询索引。
+CREATE TABLE IF NOT EXISTS {experimentReplayFixtures} (
+    fixture_id text NOT NULL,
+    recorded_at timestamptz NOT NULL,
+    purpose text NOT NULL,
+    legacy_selected_count integer NOT NULL,
+    v2_selected_count integer NOT NULL,
+    common_selected_count integer NOT NULL,
+    only_in_legacy_count integer NOT NULL,
+    only_in_v2_count integer NOT NULL,
+    jaccard_index double precision NOT NULL,
+    legacy_token_total integer NOT NULL,
+    v2_token_total integer NOT NULL,
+    working_set_candidate_count integer NOT NULL,
+    parity_level text NOT NULL,
+    notes text NOT NULL DEFAULT '',
+    data jsonb NOT NULL,
+    PRIMARY KEY (fixture_id)
+);
+
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "experiment_replay_fixtures", "recorded")} ON {experimentReplayFixtures} (recorded_at DESC);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "experiment_replay_fixtures", "purpose")} ON {experimentReplayFixtures} (purpose, recorded_at DESC);
 """;
     }
 

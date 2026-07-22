@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 
@@ -69,6 +71,20 @@ public static class RetrievalCandidateAdapter
         var constraintLevel = ResolveConstraintLevel(candidate);
         var lifecycleState = ResolveLifecycleState(candidate);
 
+        // P0-5：填充 CanonicalKey / Origins / ExpertContributions / PolicyReference
+        var expertKind = MapSourceToExpertKind(source);
+        var canonicalKey = CanonicalCandidateKey.Create(
+            workspaceId: context.WorkspaceId,
+            collectionId: context.CollectionId,
+            entityKind: ResolveEntityKind(candidate, source),
+            entityId: candidateId,
+            entityVersion: ResolveEntityVersion(candidate));
+        var origins = new List<ExpertOrigin>
+        {
+            new(expertKind, Contribution: 1.0, ObservedAt: context.ObservedAt)
+        };
+        var expertContributions = new Dictionary<ExpertKind, double> { [expertKind] = 1.0 };
+
         return new ContextCandidateEnvelope
         {
             CandidateId = candidateId,
@@ -77,6 +93,10 @@ public static class RetrievalCandidateAdapter
             EstimatedTokens = candidate.EstimatedTokens,
             WorkspaceId = context.WorkspaceId,
             CollectionId = context.CollectionId,
+            CanonicalKey = canonicalKey,
+            Origins = origins,
+            ExpertContributions = expertContributions,
+            PolicyReference = context.PolicyReference,
             Safety = new CandidateSafetyState
             {
                 // P1-1：不再把 Constraint 来源一律视为 hard。
@@ -155,7 +175,7 @@ public static class RetrievalCandidateAdapter
 
         var selectedEnvelopes = ToEnvelopes(result.SelectedItems, context);
         var droppedEnvelopes = result.DroppedItems
-            .Select(dec => ToEnvelopeFromDecision(dec, context))
+            .Select(dec => ToEnvelopeFromDecisionPublic(dec, context))
             .ToList();
 
         // 合并 selected + dropped 作为 Engine 输入；Engine 会重新决策
@@ -266,7 +286,11 @@ public static class RetrievalCandidateAdapter
         return channels;
     }
 
-    private static ContextCandidateEnvelope ToEnvelopeFromDecision(
+    /// <summary>
+    /// P0-4：将 dropped 的 <see cref="ContextRetrievalDecision"/> 转换为
+    /// <see cref="ContextCandidateEnvelope"/>，用于 parity 对比中 Legacy dropped 集合。
+    /// </summary>
+    public static ContextCandidateEnvelope ToEnvelopeFromDecisionPublic(
         ContextRetrievalDecision decision,
         CandidateAdaptationContext context)
     {
@@ -277,6 +301,15 @@ public static class RetrievalCandidateAdapter
             ? ContextCandidateSource.WorkingMemory
             : ContextCandidateSource.Lexical;
 
+        // P0-5：填充 CanonicalKey（required）
+        var expertKind = MapSourceToExpertKind(source);
+        var canonicalKey = CanonicalCandidateKey.Create(
+            workspaceId: context.WorkspaceId,
+            collectionId: context.CollectionId,
+            entityKind: string.IsNullOrEmpty(decision.Type) ? source.ToString().ToLowerInvariant() : decision.Type,
+            entityId: candidateId,
+            entityVersion: ComputeStableContentHash(candidateId, decision.Type, decision.Score, decision.EstimatedTokens));
+
         return new ContextCandidateEnvelope
         {
             CandidateId = candidateId,
@@ -285,6 +318,10 @@ public static class RetrievalCandidateAdapter
             EstimatedTokens = decision.EstimatedTokens,
             WorkspaceId = context.WorkspaceId,
             CollectionId = context.CollectionId,
+            CanonicalKey = canonicalKey,
+            Origins = new List<ExpertOrigin> { new(expertKind, 1.0, context.ObservedAt) },
+            ExpertContributions = new Dictionary<ExpertKind, double> { [expertKind] = 1.0 },
+            PolicyReference = context.PolicyReference,
             Safety = new CandidateSafetyState
             {
                 PassesSafetyGate = false,
@@ -315,5 +352,70 @@ public static class RetrievalCandidateAdapter
                 }
             }
         };
+    }
+
+    // ----------------------------------------------------------------------
+    // P0-5：CanonicalKey / Expert 派生辅助方法
+    // ----------------------------------------------------------------------
+
+    /// <summary>
+    /// P0-5：将 ContextCandidateSource 映射到 ExpertKind（用于 Origins/ExpertContributions）。
+    /// </summary>
+    private static ExpertKind MapSourceToExpertKind(ContextCandidateSource source) => source switch
+    {
+        ContextCandidateSource.Mandatory => ExpertKind.Mandatory,
+        ContextCandidateSource.Constraint => ExpertKind.Constraint,
+        ContextCandidateSource.Lexical => ExpertKind.Lexical,
+        ContextCandidateSource.Semantic => ExpertKind.Semantic,
+        ContextCandidateSource.WorkingMemory => ExpertKind.WorkingMemory,
+        ContextCandidateSource.StableMemory => ExpertKind.StableMemory,
+        ContextCandidateSource.Graph => ExpertKind.Graph,
+        ContextCandidateSource.Recency => ExpertKind.Recency,
+        ContextCandidateSource.GlobalContext => ExpertKind.Mandatory,
+        ContextCandidateSource.RelatedContext => ExpertKind.Graph,
+        _ => ExpertKind.Lexical
+    };
+
+    /// <summary>
+    /// P0-5：解析 EntityKind。优先使用 candidate.Type（业务类型），
+    /// 退回 candidate.Kind 枚举名，最后退回 Source 枚举名。
+    /// </summary>
+    private static string ResolveEntityKind(ContextRetrievalCandidate candidate, ContextCandidateSource source)
+    {
+        if (!string.IsNullOrEmpty(candidate.Type)) return candidate.Type;
+        return source.ToString().ToLowerInvariant();
+    }
+
+    /// <summary>
+    /// P0-5：解析 EntityVersion。优先使用 metadata["version"] / metadata["entityVersion"]，
+    /// 否则使用 candidate.Content 的 stable content hash。
+    /// </summary>
+    private static string ResolveEntityVersion(ContextRetrievalCandidate candidate)
+    {
+        if (candidate.Metadata.TryGetValue("version", out var ver) && !string.IsNullOrEmpty(ver))
+            return ver;
+        if (candidate.Metadata.TryGetValue("entityVersion", out var ev) && !string.IsNullOrEmpty(ev))
+            return ev;
+        // 退回 stable content hash（基于 Content + Type + Score + Tokens 的确定性哈希）
+        return ComputeStableContentHash(
+            candidate.CandidateId, candidate.Type, candidate.Content,
+            candidate.Score, candidate.EstimatedTokens);
+    }
+
+    /// <summary>
+    /// P0-5：计算 stable content hash（SHA256，截取前 16 字符）。
+    /// 用于 EntityVersion 在无显式版本号时的稳定回退。
+    /// </summary>
+    internal static string ComputeStableContentHash(params object[] parts)
+    {
+        var sb = new StringBuilder();
+        foreach (var part in parts)
+        {
+            sb.Append(part ?? "null");
+            sb.Append('|');
+        }
+        var bytes = Encoding.UTF8.GetBytes(sb.ToString());
+        var hash = SHA256.HashData(bytes);
+        return "sha256:" + Convert.ToHexString(hash, 0, 8).ToLowerInvariant();
     }
 }

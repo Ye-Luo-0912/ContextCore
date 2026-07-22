@@ -433,6 +433,12 @@ public sealed class DefaultBoundedContextOrchestratorTests
                 new ContextCandidateEnvelope
                 {
                     CandidateId = "c1",
+                    CanonicalKey = CanonicalCandidateKey.Create(
+                        workspaceId: "test-ws",
+                        collectionId: "test-col",
+                        entityKind: "test-entity",
+                        entityId: "c1",
+                        entityVersion: "v1"),
                     Source = ContextCandidateSource.Semantic,
                     WorkspaceId = "ws-test",
                     CollectionId = "col-test"

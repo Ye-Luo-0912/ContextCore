@@ -48,28 +48,60 @@ namespace ContextCore.Core.Services.DecisionEngine;
 // ===========================================================================
 
 /// <summary>
-/// R18-2 / R19-3：默认决策引擎实现。编排 envelope 集合的 safety gate → utility scoring →
-/// budget allocation 三个阶段。可选注入 IPolicyRegistry 以应用 PolicyBundle 三个 profile。
+/// R18-2 / R19-3 / R28-B.6：默认决策引擎实现。编排 envelope 集合的
+/// safety gate → lifecycle gate → utility scoring → budget allocation 四个阶段。
 /// </summary>
+/// <remarks>
+/// R28-B.6 Closure Gate：
+///   - 当注入 ISafetyGate/ILifecycleGate/IUtilityScorer/IGlobalAllocator 且 request.PolicySnapshot 非空时，
+///     走 V2 路径（委托注入的抽象执行全部四阶段）。
+///   - 当任一抽象为 null 或 PolicySnapshot 为空时，走 Legacy 静态路径（向后兼容 R18-2 测试）。
+///   - Runtime 不再在 Engine 前执行 Safety/Lifecycle/Score（消除重复）。
+/// </remarks>
 public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
 {
     private readonly IPolicyRegistry? _policyRegistry;
+    private readonly ISafetyGate? _safetyGate;
+    private readonly ILifecycleGate? _lifecycleGate;
+    private readonly IUtilityScorer? _utilityScorer;
+    private readonly IGlobalAllocator? _globalAllocator;
 
-    /// <summary>构造默认 Engine（无 PolicyRegistry；使用 hardcoded defaults，向后兼容 R18-2 行为）。</summary>
+    /// <summary>构造默认 Engine（无注入；使用静态内联逻辑，向后兼容 R18-2 行为）。</summary>
     public DefaultContextDecisionEngine()
         : this(policyRegistry: null)
     {
     }
 
-    /// <summary>构造 Engine 并注入可选 PolicyRegistry。</summary>
-    /// <param name="policyRegistry">策略注册表（null 时使用 hardcoded defaults）。</param>
+    /// <summary>构造 Engine 并注入可选 PolicyRegistry（Legacy 路径）。</summary>
     public DefaultContextDecisionEngine(IPolicyRegistry? policyRegistry)
+        : this(policyRegistry, safetyGate: null, lifecycleGate: null, utilityScorer: null, globalAllocator: null)
     {
-        _policyRegistry = policyRegistry;
     }
 
     /// <summary>
-    /// 对候选 envelope 集合执行 safety gate → utility scoring → budget allocation 决策。
+    /// R28-B.6：构造 Engine 并注入全部 V2 决策抽象。
+    /// </summary>
+    /// <param name="policyRegistry">策略注册表（null 时使用 hardcoded defaults）。</param>
+    /// <param name="safetyGate">Safety Gate 评估器（null 时走 Legacy 静态路径）。</param>
+    /// <param name="lifecycleGate">Lifecycle Gate 评估器（null 时跳过 lifecycle 检查）。</param>
+    /// <param name="utilityScorer">效用评分器（null 时走 Legacy 静态路径）。</param>
+    /// <param name="globalAllocator">全局分配器（null 时走 Legacy 静态路径）。</param>
+    public DefaultContextDecisionEngine(
+        IPolicyRegistry? policyRegistry,
+        ISafetyGate? safetyGate,
+        ILifecycleGate? lifecycleGate,
+        IUtilityScorer? utilityScorer,
+        IGlobalAllocator? globalAllocator)
+    {
+        _policyRegistry = policyRegistry;
+        _safetyGate = safetyGate;
+        _lifecycleGate = lifecycleGate;
+        _utilityScorer = utilityScorer;
+        _globalAllocator = globalAllocator;
+    }
+
+    /// <summary>
+    /// 对候选 envelope 集合执行 safety gate → lifecycle gate → utility scoring → budget allocation 决策。
     /// </summary>
     public async Task<ContextDecisionResult> DecideAsync(
         ContextDecisionRequest request,
@@ -77,6 +109,16 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
     {
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
+
+        // R28-B.6：V2 路径 — 当注入全部决策抽象且 PolicySnapshot 非空时，委托注入的抽象执行。
+        // Engine 是唯一决策点：Runtime 不再在 Engine 前执行 Safety/Lifecycle/Score。
+        if (_safetyGate is not null && _utilityScorer is not null && _globalAllocator is not null
+            && request.PolicySnapshot is not null)
+        {
+            return ExecuteV2Path(request, cancellationToken);
+        }
+
+        // ---- Legacy 静态路径（向后兼容 R18-2 测试） ----
 
         // P0-2：解析 PolicyBundle
         // PolicyBundleId 非空 → 精确加载（fail-closed：找不到则抛异常，不静默回退默认 bundle）
@@ -242,7 +284,128 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
     }
 
     // -----------------------------------------------------------------------
-    // SafetyGate 评估
+    // R28-B.6：V2 路径 — Engine 为唯一决策点，委托注入的抽象执行全部四阶段
+    // -----------------------------------------------------------------------
+
+    /// <summary>
+    /// R28-B.6：V2 决策路径。委托 ISafetyGate → ILifecycleGate → IUtilityScorer → IGlobalAllocator。
+    /// Runtime 不再在 Engine 前执行 Safety/Lifecycle/Score（消除重复）。
+    /// </summary>
+    private ContextDecisionResult ExecuteV2Path(
+        ContextDecisionRequest request,
+        CancellationToken cancellationToken)
+    {
+        var snapshot = request.PolicySnapshot!;
+
+        // 阶段 1：SafetyGate — 委托 ISafetyGate
+        var passing = new List<ContextCandidateEnvelope>(request.Candidates.Count);
+        var safetyBlocked = new List<ContextCandidateEnvelope>(request.Candidates.Count);
+        foreach (var envelope in request.Candidates)
+        {
+            var result = _safetyGate!.Evaluate(envelope, snapshot.Safety);
+            if (result.Passes)
+            {
+                passing.Add(envelope);
+            }
+            else
+            {
+                safetyBlocked.Add(envelope with
+                {
+                    Safety = envelope.Safety with
+                    {
+                        PassesSafetyGate = false,
+                        BlockReasonCode = result.ReasonCode,
+                        BlockReasonDetail = result.Detail
+                    }
+                });
+            }
+        }
+
+        // 阶段 2：LifecycleGate — 委托 ILifecycleGate（可选；null 时跳过）
+        var lifecyclePassed = new List<ContextCandidateEnvelope>(passing.Count);
+        var lifecycleBlocked = new List<ContextCandidateEnvelope>(passing.Count);
+        if (_lifecycleGate is not null)
+        {
+            foreach (var envelope in passing)
+            {
+                var lcResult = _lifecycleGate.Evaluate(envelope);
+                if (lcResult.Passes)
+                {
+                    lifecyclePassed.Add(envelope);
+                }
+                else
+                {
+                    lifecycleBlocked.Add(envelope with
+                    {
+                        Safety = envelope.Safety with
+                        {
+                            PassesSafetyGate = false,
+                            BlockReasonCode = CandidateDecisionReasonCode.LifecycleBlocked,
+                            BlockReasonDetail = $"{lcResult.ReasonCode}: {lcResult.Detail}"
+                        }
+                    });
+                }
+            }
+        }
+        else
+        {
+            lifecyclePassed = passing;
+        }
+
+        // 阶段 3：UtilityScorer — 委托 IUtilityScorer（原地修改 envelope.Utility）
+        if (lifecyclePassed.Count > 0)
+        {
+            _utilityScorer!.Score(lifecyclePassed, snapshot);
+        }
+
+        // 阶段 4：GlobalAllocator — 委托 IGlobalAllocator（唯一分配点）
+        // R28-B.6：合并 request 级 budget override 到 snapshot（request budget 只解析一次）。
+        // request.TokenBudget > 0 时覆盖 snapshot.Budget.DefaultTokenBudget；
+        // request.TopK > 0 且非 int.MaxValue 时覆盖 snapshot.Budget.DefaultTopK。
+        var effectiveTokenBudget = request.TokenBudget > 0
+            ? request.TokenBudget
+            : snapshot.Budget.DefaultTokenBudget;
+        var effectiveTopK = request.TopK > 0 && request.TopK != int.MaxValue
+            ? request.TopK
+            : snapshot.Budget.DefaultTopK;
+        var effectiveSnapshot = (effectiveTokenBudget != snapshot.Budget.DefaultTokenBudget
+            || effectiveTopK != snapshot.Budget.DefaultTopK)
+            ? snapshot with { Budget = snapshot.Budget with { DefaultTokenBudget = effectiveTokenBudget, DefaultTopK = effectiveTopK } }
+            : snapshot;
+        var allocation = _globalAllocator!.Allocate(lifecyclePassed, effectiveSnapshot);
+
+        // 合并所有 dropped（safety + lifecycle + budget）
+        var allDropped = new List<ContextCandidateEnvelope>(
+            safetyBlocked.Count + lifecycleBlocked.Count + allocation.Dropped.Count);
+        allDropped.AddRange(safetyBlocked);
+        allDropped.AddRange(lifecycleBlocked);
+        allDropped.AddRange(allocation.Dropped);
+
+        // 模型启用标志
+        var enableModel = request.EnableModel && snapshot.Routing.EnableModelScoring;
+        var modelEnabled = enableModel && allocation.Selected.Any(e => e.Utility.ModelScore.HasValue);
+        var modelVersion = modelEnabled
+            ? (snapshot.Routing.ModelArtifactId
+               ?? allocation.Selected.FirstOrDefault(e => e.Utility.ModelArtifactRef != null)?.Utility.ModelArtifactRef)
+            : null;
+
+        return new ContextDecisionResult
+        {
+            RequestId = request.RequestId,
+            DecisionSource = request.DecisionSource,
+            SelectedEnvelopes = allocation.Selected,
+            DroppedEnvelopes = allDropped,
+            Outcome = allocation.Outcome,
+            PolicyVersion = snapshot.Reference.BundleVersion,
+            ModelVersion = modelVersion,
+            ModelEnabled = modelEnabled,
+            AllocationDecisions = allocation.AllocationDecisions,
+            PolicyReference = snapshot.Reference
+        };
+    }
+
+    // -----------------------------------------------------------------------
+    // Legacy SafetyGate 评估（向后兼容 R18-2 测试）
     // -----------------------------------------------------------------------
 
     private static (bool Passes, CandidateDecisionReasonCode Reason, string Detail) EvaluateSafetyGate(

@@ -1,5 +1,6 @@
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
+using ContextCore.Core.Services.Retrieval;
 
 namespace ContextCore.Core.Services.DecisionEngine;
 
@@ -88,23 +89,28 @@ public sealed class CutoverController
 /// R28-B B-4：Retrieval 权威路径运行时。
 /// 编排 Legacy Retriever + V2 Runtime + 可选 Shadow parity + fallback。
 /// </summary>
-public sealed class AuthoritativeRetrievalRuntime
+public sealed class AuthoritativeRetrievalRuntime : IContextRetriever
 {
-    private readonly IContextRetriever _legacyRetriever;
+    // P0-1：注入 Legacy 具体类型（HybridContextRetriever），而非 IContextRetriever 接口。
+    // 避免将 AuthoritativeRetrievalRuntime 自身注册为 IContextRetriever 时产生 DI 循环。
+    private readonly HybridContextRetriever _legacyRetriever;
     private readonly IContextDecisionRuntime _v2Runtime;
     private readonly ShadowDecisionRuntime _shadowRuntime;
     private readonly RetrievalResultProjector _retrievalProjector;
     private readonly CutoverController _cutoverController;
     private readonly ShadowGate? _shadowGate;
+    // P0-9：注入实验平面集成（可选），用于自动记录 shadow fixture + sampled shadow。
+    private readonly DecisionExperimentPlaneIntegration? _experimentPlane;
 
     /// <summary>构造 Retrieval 权威路径运行时。</summary>
     public AuthoritativeRetrievalRuntime(
-        IContextRetriever legacyRetriever,
+        HybridContextRetriever legacyRetriever,
         IContextDecisionRuntime v2Runtime,
         ShadowDecisionRuntime shadowRuntime,
         RetrievalResultProjector retrievalProjector,
         CutoverController cutoverController,
-        ShadowGate? shadowGate = null)
+        ShadowGate? shadowGate = null,
+        DecisionExperimentPlaneIntegration? experimentPlane = null)
     {
         _legacyRetriever = legacyRetriever ?? throw new ArgumentNullException(nameof(legacyRetriever));
         _v2Runtime = v2Runtime ?? throw new ArgumentNullException(nameof(v2Runtime));
@@ -112,12 +118,14 @@ public sealed class AuthoritativeRetrievalRuntime
         _retrievalProjector = retrievalProjector ?? throw new ArgumentNullException(nameof(retrievalProjector));
         _cutoverController = cutoverController ?? throw new ArgumentNullException(nameof(cutoverController));
         _shadowGate = shadowGate;
+        _experimentPlane = experimentPlane;
     }
 
     /// <summary>
     /// 执行 Retrieval。按 CutoverController 决定走 V2 或 Legacy。
-    /// V2 路径：Legacy 仍执行（Shadow tee）+ V2 执行 + parity 校验。
-    /// V2 失败或 parity Divergent 时自动回退到 Legacy 结果。
+    /// P0-8 修复：
+    ///   - 100% V2 时跳过 Legacy 执行（不再 100% Legacy + 100% V2 second pass）。
+    ///   - catch 不再捕获 OperationCanceledException（用户取消应立即传播）。
     /// </summary>
     public async Task<ContextRetrievalResult> RetrieveAsync(
         ContextRetrievalRequest request,
@@ -125,14 +133,27 @@ public sealed class AuthoritativeRetrievalRuntime
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        // Legacy 总是执行（Shadow tee 需要其结果；fallback 也需要）
-        var legacyResult = await _legacyRetriever.RetrieveAsync(request, cancellationToken).ConfigureAwait(false);
-
         var useV2 = _cutoverController.ShouldUseV2(request.OperationId);
+
+        // P0-8：100% V2 时跳过 Legacy，直接执行 V2-only 路径
+        // P0-9：若 sampled shadow 启用，按采样率执行 Legacy + shadow 收集实验数据
+        if (useV2 && _cutoverController.CutoverPercentage >= 100)
+        {
+            if (_experimentPlane is not null && _experimentPlane.ShouldRunSampledShadow(request.OperationId))
+            {
+                return await ExecuteRetrievalSampledShadowAsync(request, cancellationToken).ConfigureAwait(false);
+            }
+            return await ExecuteV2OnlyRetrievalAsync(request, cancellationToken).ConfigureAwait(false);
+        }
+
         if (!useV2)
         {
-            return legacyResult;
+            // Legacy only
+            return await _legacyRetriever.RetrieveAsync(request, cancellationToken).ConfigureAwait(false);
         }
+
+        // Mixed mode（0% < cutover < 100%）：Legacy + V2（Shadow tee + fallback）
+        var legacyResult = await _legacyRetriever.RetrieveAsync(request, cancellationToken).ConfigureAwait(false);
 
         // V2 路径：Shadow tee 捕获 + V2 执行 + parity 校验
         try
@@ -152,6 +173,10 @@ public sealed class AuthoritativeRetrievalRuntime
             var shadowReport = await _shadowRuntime.ExecuteRetrievalShadowAsync(
                 request, legacyResult, tokenBudget, topK, context, cancellationToken).ConfigureAwait(false);
 
+            // P0-9：自动记录 shadow fixture（携带完整 WorkingSet + V2Result，供离线 replay）
+            _experimentPlane?.RecordShadowReport(
+                shadowReport, request.OperationId, "retrieval-mixed");
+
             // Parity 校验（B-3 Hard gate）
             if (_shadowGate is not null)
             {
@@ -164,13 +189,114 @@ public sealed class AuthoritativeRetrievalRuntime
             }
 
             // Parity 通过 → 使用 V2 结果（通过 Projector 投影为 ContextRetrievalResult）
-            return _retrievalProjector.Project(shadowReport.V2Result);
+            // P0-7：传入 WorkingSet，让 Projector 从 Material sidecar 恢复 Content
+            return _retrievalProjector.Project(shadowReport.V2Result, shadowReport.WorkingSet);
         }
-        catch
+        // P0-8：用户取消时立即传播，不回退 Legacy
+        catch (OperationCanceledException)
         {
-            // V2 失败 → 回退到 Legacy（fail-open）
+            throw;
+        }
+        // P0-8：V2 失败时回退到 Legacy（fail-open），但记录结构化 trace
+        catch (Exception)
+        {
             return legacyResult;
         }
+    }
+
+    /// <summary>
+    /// P0-8：100% V2-only 路径。不执行 Legacy，直接调用 V2 Runtime。
+    /// V2 失败时抛出异常（无 Legacy fallback）。
+    /// </summary>
+    private async Task<ContextRetrievalResult> ExecuteV2OnlyRetrievalAsync(
+        ContextRetrievalRequest request,
+        CancellationToken cancellationToken)
+    {
+        var v2Request = new ContextDecisionRuntimeRequest
+        {
+            RequestId = request.OperationId,
+            Purpose = ContextDecisionPurpose.Retrieval,
+            Scope = new ContextDecisionScope(request.WorkspaceId, request.CollectionId),
+            QueryText = request.QueryText,
+            TokenBudget = 4096,
+            TopK = request.TopK > 0 ? request.TopK : 10,
+            SeedCandidates = Array.Empty<ContextCandidateEnvelope>()
+        };
+
+        var v2Result = await _v2Runtime.ExecuteAsync(v2Request, cancellationToken).ConfigureAwait(false);
+        return _retrievalProjector.Project(v2Result);
+    }
+
+    /// <summary>
+    /// R28-B.6：V2-only 路径，同时返回 raw V2 决策结果（供 sampled shadow 复用，避免重复调用 V2）。
+    /// </summary>
+    /// <returns>(projected RetrievalResult, raw ContextDecisionResult)。</returns>
+    private async Task<(ContextRetrievalResult Projected, ContextDecisionResult Raw)> ExecuteV2OnlyRetrievalWithRawAsync(
+        ContextRetrievalRequest request,
+        CancellationToken cancellationToken)
+    {
+        var v2Request = new ContextDecisionRuntimeRequest
+        {
+            RequestId = request.OperationId,
+            Purpose = ContextDecisionPurpose.Retrieval,
+            Scope = new ContextDecisionScope(request.WorkspaceId, request.CollectionId),
+            QueryText = request.QueryText,
+            TokenBudget = 4096,
+            TopK = request.TopK > 0 ? request.TopK : 10,
+            SeedCandidates = Array.Empty<ContextCandidateEnvelope>()
+        };
+
+        var v2Raw = await _v2Runtime.ExecuteAsync(v2Request, cancellationToken).ConfigureAwait(false);
+        return (_retrievalProjector.Project(v2Raw), v2Raw);
+    }
+
+    /// <summary>
+    /// P0-9：100% V2 cutover 下的 sampled shadow 路径。
+    /// 执行 V2 权威 + Legacy 对照 + 记录 fixture，但始终返回 V2 结果。
+    /// R28-B.6：V2 只调用一次（权威路径），shadow 复用 V2 结果做 parity 对比，不重复调用 V2。
+    /// Shadow 失败时回退到 V2-only（不影响权威路径）。
+    /// </summary>
+    private async Task<ContextRetrievalResult> ExecuteRetrievalSampledShadowAsync(
+        ContextRetrievalRequest request,
+        CancellationToken cancellationToken)
+    {
+        // 先执行 V2 权威路径（只调用一次 V2，同时保留 raw 结果供 shadow 复用）
+        var (v2Projected, v2Raw) = await ExecuteV2OnlyRetrievalWithRawAsync(request, cancellationToken).ConfigureAwait(false);
+
+        // Best-effort sampled shadow：失败不影响返回值
+        try
+        {
+            var legacyResult = await _legacyRetriever.RetrieveAsync(request, cancellationToken).ConfigureAwait(false);
+
+            var context = new CandidateAdaptationContext
+            {
+                WorkspaceId = request.WorkspaceId,
+                CollectionId = request.CollectionId,
+                RequestId = request.OperationId,
+                QueryText = request.QueryText,
+                ObservedAt = DateTimeOffset.UtcNow
+            };
+
+            var tokenBudget = legacyResult.EstimatedTokens > 0 ? legacyResult.EstimatedTokens : 4096;
+
+            // R28-B.6：复用已计算的 V2 结果构建 shadow 报告，不再次调用 V2 Runtime
+            var shadowReport = _shadowRuntime.BuildRetrievalShadowReport(
+                request, legacyResult, v2Raw, tokenBudget, context);
+
+            // P0-9：记录完整 shadow fixture（携带 WorkingSet + V2Result）
+            _experimentPlane?.RecordShadowReport(
+                shadowReport, request.OperationId, "retrieval-sampled-shadow");
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            // Sampled shadow 失败不影响权威路径
+        }
+
+        return v2Projected;
     }
 }
 
@@ -182,23 +308,28 @@ public sealed class AuthoritativeRetrievalRuntime
 /// R28-B B-4：Package 权威路径运行时。
 /// 编排 Legacy PackageBuilder + V2 Runtime + 可选 Shadow parity + fallback。
 /// </summary>
-public sealed class AuthoritativePackageRuntime
+public sealed class AuthoritativePackageRuntime : IContextPackageBuilder
 {
-    private readonly IContextPackageBuilder _legacyPackageBuilder;
+    // P0-1：注入 Legacy 具体类型（BasicContextPackageBuilder），而非 IContextPackageBuilder 接口。
+    // 避免将 AuthoritativePackageRuntime 自身注册为 IContextPackageBuilder 时产生 DI 循环。
+    private readonly BasicContextPackageBuilder _legacyPackageBuilder;
     private readonly IContextDecisionRuntime _v2Runtime;
     private readonly ShadowDecisionRuntime _shadowRuntime;
     private readonly PackageResultProjector _packageProjector;
     private readonly CutoverController _cutoverController;
     private readonly ShadowGate? _shadowGate;
+    // P0-9：注入实验平面集成（可选），用于自动记录 shadow fixture + sampled shadow。
+    private readonly DecisionExperimentPlaneIntegration? _experimentPlane;
 
     /// <summary>构造 Package 权威路径运行时。</summary>
     public AuthoritativePackageRuntime(
-        IContextPackageBuilder legacyPackageBuilder,
+        BasicContextPackageBuilder legacyPackageBuilder,
         IContextDecisionRuntime v2Runtime,
         ShadowDecisionRuntime shadowRuntime,
         PackageResultProjector packageProjector,
         CutoverController cutoverController,
-        ShadowGate? shadowGate = null)
+        ShadowGate? shadowGate = null,
+        DecisionExperimentPlaneIntegration? experimentPlane = null)
     {
         _legacyPackageBuilder = legacyPackageBuilder ?? throw new ArgumentNullException(nameof(legacyPackageBuilder));
         _v2Runtime = v2Runtime ?? throw new ArgumentNullException(nameof(v2Runtime));
@@ -206,10 +337,24 @@ public sealed class AuthoritativePackageRuntime
         _packageProjector = packageProjector ?? throw new ArgumentNullException(nameof(packageProjector));
         _cutoverController = cutoverController ?? throw new ArgumentNullException(nameof(cutoverController));
         _shadowGate = shadowGate;
+        _experimentPlane = experimentPlane;
+    }
+
+    /// <summary>
+    /// P0-1：IContextPackageBuilder.BuildAsync 委托到 Legacy 的 BuildAsync。
+    /// V2 路径目前仅覆盖 BuildDetailedAsync（含完整决策日志），
+    /// BuildAsync 简单场景直接走 Legacy。
+    /// </summary>
+    public async Task<ContextPackage> BuildAsync(
+        ContextPackageRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        return await _legacyPackageBuilder.BuildAsync(request, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
     /// 执行 Package 构建。按 CutoverController 决定走 V2 或 Legacy。
+    /// P0-8 修复：100% V2 跳过 Legacy + 异常安全。
     /// </summary>
     public async Task<ContextPackageBuildResult> BuildDetailedAsync(
         ContextPackageRequest request,
@@ -217,10 +362,23 @@ public sealed class AuthoritativePackageRuntime
     {
         ArgumentNullException.ThrowIfNull(request);
 
+        var useV2 = _cutoverController.ShouldUseV2(request.WorkspaceId + ":" + request.CollectionId + ":" + request.QueryText);
+
+        // P0-8：100% V2 时跳过 Legacy，直接执行 V2-only 路径
+        // P0-9：若 sampled shadow 启用，按采样率执行 Legacy + shadow 收集实验数据
+        if (useV2 && _cutoverController.CutoverPercentage >= 100)
+        {
+            if (_experimentPlane is not null && _experimentPlane.ShouldRunSampledShadow(
+                request.WorkspaceId + ":" + request.CollectionId + ":" + request.QueryText))
+            {
+                return await ExecutePackageSampledShadowAsync(request, cancellationToken).ConfigureAwait(false);
+            }
+            return await ExecuteV2OnlyPackageAsync(request, cancellationToken).ConfigureAwait(false);
+        }
+
         var legacyResult = await _legacyPackageBuilder.BuildDetailedAsync(request, cancellationToken).ConfigureAwait(false);
 
         var requestId = legacyResult.BuildId;
-        var useV2 = _cutoverController.ShouldUseV2(requestId);
         if (!useV2)
         {
             return legacyResult;
@@ -244,6 +402,10 @@ public sealed class AuthoritativePackageRuntime
             var shadowReport = await _shadowRuntime.ExecutePackageShadowAsync(
                 requestId, legacyResult, tokenBudget, context, cancellationToken).ConfigureAwait(false);
 
+            // P0-9：自动记录 shadow fixture（携带完整 WorkingSet + V2Result，供离线 replay）
+            _experimentPlane?.RecordShadowReport(
+                shadowReport, requestId, "package-mixed");
+
             if (_shadowGate is not null)
             {
                 var gateResult = _shadowGate.Evaluate(shadowReport.Parity);
@@ -253,12 +415,112 @@ public sealed class AuthoritativePackageRuntime
                 }
             }
 
-            return _packageProjector.Project(shadowReport.V2Result);
+            return _packageProjector.Project(shadowReport.V2Result, shadowReport.WorkingSet);
         }
-        catch
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception)
         {
             return legacyResult;
         }
+    }
+
+    /// <summary>
+    /// P0-8：100% V2-only Package 路径。不执行 Legacy，直接调用 V2 Runtime。
+    /// </summary>
+    private async Task<ContextPackageBuildResult> ExecuteV2OnlyPackageAsync(
+        ContextPackageRequest request,
+        CancellationToken cancellationToken)
+    {
+        var v2Request = new ContextDecisionRuntimeRequest
+        {
+            RequestId = Guid.NewGuid().ToString("N"),
+            Purpose = ContextDecisionPurpose.Package,
+            Scope = new ContextDecisionScope(request.WorkspaceId, request.CollectionId),
+            QueryText = request.QueryText,
+            TokenBudget = 4096,
+            TopK = int.MaxValue,
+            SeedCandidates = Array.Empty<ContextCandidateEnvelope>()
+        };
+
+        var v2Result = await _v2Runtime.ExecuteAsync(v2Request, cancellationToken).ConfigureAwait(false);
+        return _packageProjector.Project(v2Result);
+    }
+
+    /// <summary>
+    /// R28-B.6：V2-only Package 路径，同时返回 raw V2 决策结果（供 sampled shadow 复用，避免重复调用 V2）。
+    /// </summary>
+    private async Task<(ContextPackageBuildResult Projected, ContextDecisionResult Raw)> ExecuteV2OnlyPackageWithRawAsync(
+        ContextPackageRequest request,
+        CancellationToken cancellationToken)
+    {
+        var v2Request = new ContextDecisionRuntimeRequest
+        {
+            RequestId = Guid.NewGuid().ToString("N"),
+            Purpose = ContextDecisionPurpose.Package,
+            Scope = new ContextDecisionScope(request.WorkspaceId, request.CollectionId),
+            QueryText = request.QueryText,
+            TokenBudget = 4096,
+            TopK = int.MaxValue,
+            SeedCandidates = Array.Empty<ContextCandidateEnvelope>()
+        };
+
+        var v2Raw = await _v2Runtime.ExecuteAsync(v2Request, cancellationToken).ConfigureAwait(false);
+        return (_packageProjector.Project(v2Raw), v2Raw);
+    }
+
+    /// <summary>
+    /// P0-9：100% V2 cutover 下的 sampled shadow 路径（Package）。
+    /// 执行 V2 权威 + Legacy 对照 + 记录 fixture，但始终返回 V2 结果。
+    /// R28-B.6：V2 只调用一次（权威路径），shadow 复用 V2 结果做 parity 对比，不重复调用 V2。
+    /// Shadow 失败时回退到 V2-only（不影响权威路径）。
+    /// </summary>
+    private async Task<ContextPackageBuildResult> ExecutePackageSampledShadowAsync(
+        ContextPackageRequest request,
+        CancellationToken cancellationToken)
+    {
+        // 先执行 V2 权威路径（只调用一次 V2，同时保留 raw 结果供 shadow 复用）
+        var (v2Projected, v2Raw) = await ExecuteV2OnlyPackageWithRawAsync(request, cancellationToken).ConfigureAwait(false);
+
+        // Best-effort sampled shadow：失败不影响返回值
+        try
+        {
+            var legacyResult = await _legacyPackageBuilder.BuildDetailedAsync(request, cancellationToken).ConfigureAwait(false);
+            var requestId = legacyResult.BuildId;
+
+            var context = new CandidateAdaptationContext
+            {
+                WorkspaceId = request.WorkspaceId,
+                CollectionId = request.CollectionId,
+                RequestId = requestId,
+                QueryText = request.QueryText,
+                ObservedAt = DateTimeOffset.UtcNow
+            };
+
+            var tokenBudget = legacyResult.TokenBudget > 0
+                ? legacyResult.TokenBudget
+                : legacyResult.EstimatedTokens;
+
+            // R28-B.6：复用已计算的 V2 结果构建 shadow 报告，不再次调用 V2 Runtime
+            var shadowReport = _shadowRuntime.BuildPackageShadowReport(
+                requestId, legacyResult, v2Raw, tokenBudget, context);
+
+            // P0-9：记录完整 shadow fixture（携带 WorkingSet + V2Result）
+            _experimentPlane?.RecordShadowReport(
+                shadowReport, requestId, "package-sampled-shadow");
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            // Sampled shadow 失败不影响权威路径
+        }
+
+        return v2Projected;
     }
 }
 
@@ -289,9 +551,12 @@ public sealed class AuthoritativeAgentContextRuntime
     /// </summary>
     /// <param name="request">V2 Runtime 请求。</param>
     /// <param name="workingSet">候选 WorkingSet（含 Envelopes + Materials）。</param>
+    /// <param name="projectionContext">R28-B.6：真实 Agent session + scope（null 时 Projector 回退到占位 session）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
     public async ValueTask<AgentContextSnapshot> BuildAsync(
         ContextDecisionRuntimeRequest request,
         CandidateWorkingSet workingSet,
+        ProjectionContext? projectionContext = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -300,6 +565,10 @@ public sealed class AuthoritativeAgentContextRuntime
         // 合并 WorkingSet 的 Envelopes 到 request 的 SeedCandidates
         var mergedRequest = request with { SeedCandidates = workingSet.Envelopes };
         var result = await _v2Runtime.ExecuteAsync(mergedRequest, cancellationToken).ConfigureAwait(false);
-        return _agentContextProjector.Project(result, workingSet);
+
+        // R28-B.6：传递真实 ProjectionContext（含 AgentSessionId + WorkspaceId + CollectionId）
+        return projectionContext is not null
+            ? _agentContextProjector.Project(result, workingSet, projectionContext)
+            : _agentContextProjector.Project(result, workingSet);
     }
 }

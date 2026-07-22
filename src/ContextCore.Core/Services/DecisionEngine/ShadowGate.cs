@@ -47,9 +47,13 @@ public sealed class ShadowGate
     private readonly int _droppedTolerance;
 
     /// <summary>构造 ShadowGate，使用默认验收阈值。</summary>
+    /// <remarks>
+    /// P0-4 修复：Hard parity 阈值从 0.99 改为 1.0（要求集合完全相同）。
+    /// 0.99 允许 1% 候选不一致，不足以作为权威切换门。
+    /// </remarks>
     public ShadowGate()
         : this(
-            hardJaccardThreshold: 0.99,
+            hardJaccardThreshold: 1.0,
             diagnosticJaccardThreshold: 0.90,
             tokenTolerance: 0.05,
             droppedTolerance: 2)
@@ -90,9 +94,10 @@ public sealed class ShadowGate
         var dimensions = new List<ShadowGateDimensionResult>(3);
 
         // 维度 1：Jaccard 一致性
+        // P0-4：Hard parity 要求 Jaccard=1.0（集合完全相同），不再使用 0.99
         var jaccardLevel = report.JaccardIndex switch
         {
-            >= 0.99 when report.JaccardIndex >= _hardJaccardThreshold => ParityLevel.Hard,
+            1.0 when report.JaccardIndex >= _hardJaccardThreshold => ParityLevel.Hard,
             >= 0.90 when report.JaccardIndex >= _diagnosticJaccardThreshold => ParityLevel.Diagnostic,
             _ => ParityLevel.Divergent
         };
@@ -176,6 +181,10 @@ public sealed record ShadowGateResult(
 /// R28-B B-3：可重放的 parity fixture。
 /// 序列化为 JSON 供回归测试和 CI 验收消费。
 /// </summary>
+/// <remarks>
+/// P0-9 修复：除聚合标量外，fixture 现在携带完整重放数据（WorkingSet + V2Result），
+/// 使回归测试和离线 replay 可以重建决策现场，而不仅依赖计数摘要。
+/// </remarks>
 public sealed record ReplayFixture(
     string FixtureId,
     DateTimeOffset RecordedAt,
@@ -192,7 +201,13 @@ public sealed record ReplayFixture(
     ParityLevel ParityLevel,
     string Notes)
 {
-    /// <summary>从 ParityReport 构建 ReplayFixture。</summary>
+    /// <summary>P0-9：完整候选工作集（Envelopes + Materials sidecar），用于离线 replay。</summary>
+    public CandidateWorkingSet? WorkingSet { get; init; }
+
+    /// <summary>P0-9：V2 决策结果快照（含 AllocationDecisions），用于离线 replay。</summary>
+    public ContextDecisionResult? V2Result { get; init; }
+
+    /// <summary>从 ParityReport 构建 ReplayFixture（不含完整重放数据）。</summary>
     public static ReplayFixture FromReport(ParityReport report, string fixtureId, string purpose, string notes = "")
     {
         ArgumentNullException.ThrowIfNull(report);
@@ -211,6 +226,25 @@ public sealed record ReplayFixture(
             WorkingSetCandidateCount: report.WorkingSetCandidateCount,
             ParityLevel: report.ParityLevel,
             Notes: notes);
+    }
+
+    /// <summary>
+    /// P0-9：从完整 shadow 报告构建 ReplayFixture，携带 WorkingSet + V2Result 用于离线 replay。
+    /// </summary>
+    public static ReplayFixture FromShadowReport(
+        ParityReport report,
+        CandidateWorkingSet? workingSet,
+        ContextDecisionResult? v2Result,
+        string fixtureId,
+        string purpose,
+        string notes = "")
+    {
+        ArgumentNullException.ThrowIfNull(report);
+        return FromReport(report, fixtureId, purpose, notes) with
+        {
+            WorkingSet = workingSet,
+            V2Result = v2Result
+        };
     }
 }
 

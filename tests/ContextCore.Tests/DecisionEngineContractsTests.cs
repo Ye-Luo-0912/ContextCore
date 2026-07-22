@@ -29,6 +29,12 @@ public sealed class DecisionEngineContractsTests
         var envelope = new ContextCandidateEnvelope
         {
             CandidateId = "cand-1",
+            CanonicalKey = CanonicalCandidateKey.Create(
+                workspaceId: "test-ws",
+                collectionId: "test-col",
+                entityKind: "test-entity",
+                entityId: "cand-1",
+                entityVersion: "v1"),
             Source = ContextCandidateSource.Lexical
         };
 
@@ -54,6 +60,12 @@ public sealed class DecisionEngineContractsTests
         var baseEnvelope = new ContextCandidateEnvelope
         {
             CandidateId = "cand-1",
+            CanonicalKey = CanonicalCandidateKey.Create(
+                workspaceId: "test-ws",
+                collectionId: "test-col",
+                entityKind: "test-entity",
+                entityId: "cand-1",
+                entityVersion: "v1"),
             Source = ContextCandidateSource.Semantic,
             Type = "note",
             EstimatedTokens = 100
@@ -92,6 +104,12 @@ public sealed class DecisionEngineContractsTests
         var envelope = new ContextCandidateEnvelope
         {
             CandidateId = "x",
+            CanonicalKey = CanonicalCandidateKey.Create(
+                workspaceId: "test-ws",
+                collectionId: "test-col",
+                entityKind: "test-entity",
+                entityId: "x",
+                entityVersion: "v1"),
             Source = ContextCandidateSource.Unknown
         };
         Assert.AreEqual("x", envelope.CandidateId);
@@ -348,6 +366,12 @@ public sealed class DecisionEngineContractsTests
         var envelope = new ContextCandidateEnvelope
         {
             CandidateId = "cand-multi-source",
+            CanonicalKey = CanonicalCandidateKey.Create(
+                workspaceId: "test-ws",
+                collectionId: "test-col",
+                entityKind: "test-entity",
+                entityId: "cand-multi-source",
+                entityVersion: "v1"),
             Source = ContextCandidateSource.Graph,
             ProvenanceRefs = new[]
             {
@@ -400,6 +424,12 @@ public sealed class DecisionEngineContractsTests
             new ContextCandidateEnvelope
             {
                 CandidateId = "c1",
+                CanonicalKey = CanonicalCandidateKey.Create(
+                    workspaceId: "test-ws",
+                    collectionId: "test-col",
+                    entityKind: "test-entity",
+                    entityId: "c1",
+                    entityVersion: "v1"),
                 Source = ContextCandidateSource.Mandatory,
                 Safety = new CandidateSafetyState { IsMandatory = true, PassesSafetyGate = true },
                 Utility = new CandidateUtilityScore { DeterministicScore = 0.9, FinalScore = 0.9 }
@@ -407,6 +437,12 @@ public sealed class DecisionEngineContractsTests
             new ContextCandidateEnvelope
             {
                 CandidateId = "c2",
+                CanonicalKey = CanonicalCandidateKey.Create(
+                    workspaceId: "test-ws",
+                    collectionId: "test-col",
+                    entityKind: "test-entity",
+                    entityId: "c2",
+                    entityVersion: "v1"),
                 Source = ContextCandidateSource.Lexical,
                 Safety = new CandidateSafetyState
                 {
@@ -419,6 +455,12 @@ public sealed class DecisionEngineContractsTests
             new ContextCandidateEnvelope
             {
                 CandidateId = "c3",
+                CanonicalKey = CanonicalCandidateKey.Create(
+                    workspaceId: "test-ws",
+                    collectionId: "test-col",
+                    entityKind: "test-entity",
+                    entityId: "c3",
+                    entityVersion: "v1"),
                 Source = ContextCandidateSource.Semantic,
                 Safety = new CandidateSafetyState { PassesSafetyGate = true },
                 Utility = new CandidateUtilityScore { DeterministicScore = 0.7, FinalScore = 0.7 }
@@ -455,6 +497,12 @@ public sealed class DecisionEngineContractsTests
         var envelopeWithModel = new ContextCandidateEnvelope
         {
             CandidateId = "c1",
+            CanonicalKey = CanonicalCandidateKey.Create(
+                workspaceId: "test-ws",
+                collectionId: "test-col",
+                entityKind: "test-entity",
+                entityId: "c1",
+                entityVersion: "v1"),
             Source = ContextCandidateSource.Semantic,
             Utility = new CandidateUtilityScore
             {

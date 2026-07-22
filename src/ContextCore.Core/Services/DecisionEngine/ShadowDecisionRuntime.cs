@@ -170,20 +170,26 @@ public sealed class DecisionExperimentPlane
             v2Result.SelectedEnvelopes.Select(e => e.CandidateId),
             StringComparer.Ordinal);
 
-        var commonSelected = legacySelectedIds.Count > 0
-            ? legacySelectedIds.Intersect(v2SelectedIds).Count()
-            : v2SelectedIds.Count;
+        // P0-4 修复：交集计算不应对空集特殊处理。空集与任何集合的交集恒为 0。
+        // 旧代码在 legacy 为空时把 commonSelected 设为 v2 数量，导致空 vs 非空错误得到 Jaccard=1.0。
+        var commonSelected = legacySelectedIds.Intersect(v2SelectedIds).Count();
         var onlyInLegacy = legacySelectedIds.Except(v2SelectedIds).Count();
         var onlyInV2 = v2SelectedIds.Except(legacySelectedIds).Count();
 
-        var totalCandidates = legacySelectedIds.Count + v2SelectedIds.Count;
-        var jaccardIndex = totalCandidates == 0
+        // P0-4 修复：Jaccard 正确分母是 |A ∪ B| = |A| + |B| - |A ∩ B|，不是 |A| + |B|。
+        // 旧代码用 common / (legacyCount + v2Count)，导致两个完全相同的非空集合
+        // （如各 10 个候选，common=10）得到 Jaccard=0.5 而非 1.0，被误判为 Divergent。
+        var unionCount = legacySelectedIds.Count + v2SelectedIds.Count - commonSelected;
+        var jaccardIndex = unionCount == 0
             ? 1.0
-            : (double)commonSelected / totalCandidates;
+            : (double)commonSelected / unionCount;
 
+        // P0-4 修复：Hard parity 应要求语义字段完全一致，不应仅依赖 Jaccard ≥ 0.99。
+        // 当 Jaccard=1.0（集合完全相同）时，进一步检查 token 偏差；
+        // Jaccard<1.0 时不可能为 Hard parity。
         var parityLevel = jaccardIndex switch
         {
-            >= 0.99 => ParityLevel.Hard,
+            1.0 => ParityLevel.Hard,
             >= 0.90 => ParityLevel.Diagnostic,
             _ => ParityLevel.Divergent
         };
@@ -289,19 +295,48 @@ public sealed class ShadowDecisionRuntime
         // Step 3：V2 pure Runtime 执行
         var v2Result = await _v2Runtime.ExecuteAsync(v2Request, cancellationToken).ConfigureAwait(false);
 
-        // Step 4：Legacy 结果 → Envelope（用于 parity 对比）
-        var legacyDecisionRequest = RetrievalCandidateAdapter.ToDecisionRequest(
-            legacyResult,
-            tokenBudget: tokenBudget,
-            topK: topK,
-            enableModel: false,
-            context);
+        // Step 4+5：构建 parity 报告（不再次调用 V2）
+        return BuildRetrievalShadowReport(legacyRequest, legacyResult, v2Result, tokenBudget, context);
+    }
+
+    /// <summary>
+    /// R28-B.6：使用预计算的 V2 结果构建 Retrieval shadow 报告，不再次调用 V2 Runtime。
+    /// 用于 sampled shadow 路径（权威 V2 结果已就绪，仅需 Legacy 对照 + parity 计算）。
+    /// </summary>
+    /// <param name="legacyRequest">原始 Retrieval 请求。</param>
+    /// <param name="legacyResult">Legacy 执行结果。</param>
+    /// <param name="v2Result">已计算的 V2 决策结果（复用，不重复调用）。</param>
+    /// <param name="tokenBudget">Token 预算（用于 Legacy outcome 记录）。</param>
+    /// <param name="context">候选适配上下文。</param>
+    /// <returns>Shadow 执行报告（含 WorkingSet + parity 对比）。</returns>
+    public RetrievalShadowReport BuildRetrievalShadowReport(
+        ContextRetrievalRequest legacyRequest,
+        ContextRetrievalResult legacyResult,
+        ContextDecisionResult v2Result,
+        int tokenBudget,
+        CandidateAdaptationContext context)
+    {
+        ArgumentNullException.ThrowIfNull(legacyRequest);
+        ArgumentNullException.ThrowIfNull(legacyResult);
+        ArgumentNullException.ThrowIfNull(v2Result);
+        ArgumentNullException.ThrowIfNull(context);
+
+        // Tee 捕获 — 从 Legacy 结果构建 V2 WorkingSet
+        var workingSet = WorkingSetTee.BuildRetrievalWorkingSet(legacyResult, context);
+
+        // Legacy 结果 → Envelope（用于 parity 对比）
+        // P0-4 修复：Legacy SelectedEnvelopes 必须只包含 selected 候选，不能包含 dropped。
+        var legacySelectedEnvelopes = RetrievalCandidateAdapter.ToEnvelopes(
+            legacyResult.SelectedItems, context);
+        var legacyDroppedEnvelopes = legacyResult.DroppedItems
+            .Select(dec => RetrievalCandidateAdapter.ToEnvelopeFromDecisionPublic(dec, context))
+            .ToList();
         var legacyDecisionResult = new ContextDecisionResult
         {
             RequestId = legacyRequest.OperationId,
             DecisionSource = ContextDecisionSource.Retrieval,
-            SelectedEnvelopes = legacyDecisionRequest.Candidates,
-            DroppedEnvelopes = Array.Empty<ContextCandidateEnvelope>(),
+            SelectedEnvelopes = legacySelectedEnvelopes,
+            DroppedEnvelopes = legacyDroppedEnvelopes,
             Outcome = new ContextDecisionOutcomeSummary
             {
                 SelectedCount = legacyResult.SelectedItems.Count,
@@ -319,7 +354,7 @@ public sealed class ShadowDecisionRuntime
             PolicyReference = v2Result.PolicyReference
         };
 
-        // Step 5：Parity 对比
+        // Parity 对比
         var parityReport = _experimentPlane.Compare(legacyDecisionResult, v2Result, workingSet);
 
         return new RetrievalShadowReport(
@@ -357,18 +392,41 @@ public sealed class ShadowDecisionRuntime
 
         var v2Result = await _v2Runtime.ExecuteAsync(v2Request, cancellationToken).ConfigureAwait(false);
 
+        // 构建 parity 报告（不再次调用 V2）
+        return BuildPackageShadowReport(requestId, legacyResult, v2Result, tokenBudget, context);
+    }
+
+    /// <summary>
+    /// R28-B.6：使用预计算的 V2 结果构建 Package shadow 报告，不再次调用 V2 Runtime。
+    /// 用于 sampled shadow 路径（权威 V2 结果已就绪，仅需 Legacy 对照 + parity 计算）。
+    /// </summary>
+    public PackageShadowReport BuildPackageShadowReport(
+        string requestId,
+        ContextPackageBuildResult legacyResult,
+        ContextDecisionResult v2Result,
+        int tokenBudget,
+        CandidateAdaptationContext context)
+    {
+        ArgumentNullException.ThrowIfNull(legacyResult);
+        ArgumentNullException.ThrowIfNull(v2Result);
+        ArgumentNullException.ThrowIfNull(context);
+
+        var workingSet = WorkingSetTee.BuildPackageWorkingSet(legacyResult, context);
+
         // Legacy 结果 → Envelope
-        var legacyDecisionRequest = PackageCandidateAdapter.ToDecisionRequest(
-            legacyResult,
-            tokenBudget: tokenBudget,
-            enableModel: false,
-            context);
+        // P0-4 修复：Legacy SelectedEnvelopes 必须只包含 selected 候选，不能包含 dropped。
+        var legacySelectedEnvelopes = legacyResult.SelectedItems
+            .Select(d => PackageCandidateAdapter.ToEnvelopeFromDecision(d, context))
+            .ToList();
+        var legacyDroppedEnvelopes = legacyResult.DroppedItems
+            .Select(item => PackageCandidateAdapter.ToEnvelopeFromDroppedItem(item, context))
+            .ToList();
         var legacyDecisionResult = new ContextDecisionResult
         {
             RequestId = requestId,
             DecisionSource = ContextDecisionSource.Package,
-            SelectedEnvelopes = legacyDecisionRequest.Candidates,
-            DroppedEnvelopes = Array.Empty<ContextCandidateEnvelope>(),
+            SelectedEnvelopes = legacySelectedEnvelopes,
+            DroppedEnvelopes = legacyDroppedEnvelopes,
             Outcome = new ContextDecisionOutcomeSummary
             {
                 SelectedCount = legacyResult.SelectedItems.Count,

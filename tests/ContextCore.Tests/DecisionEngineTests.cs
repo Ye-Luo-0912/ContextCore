@@ -569,6 +569,12 @@ public sealed class DecisionEngineTests
         return new ContextCandidateEnvelope
         {
             CandidateId = candidateId,
+            CanonicalKey = CanonicalCandidateKey.Create(
+                workspaceId: "test-ws",
+                collectionId: "test-col",
+                entityKind: "test-entity",
+                entityId: candidateId,
+                entityVersion: "v1"),
             Source = source,
             EstimatedTokens = tokens,
             Safety = safety ?? new CandidateSafetyState(),

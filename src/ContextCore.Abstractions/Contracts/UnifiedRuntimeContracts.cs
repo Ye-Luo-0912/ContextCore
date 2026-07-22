@@ -209,13 +209,53 @@ public enum ContextDecisionRuntimeKind : byte
 /// <remarks>
 /// 同一实体不同版本（EntityVersion 不同）不直接合并；
 /// 相同 EntityId 不同 EntityKind 不得碰撞。
+/// P0-5：所有字段必须非空。EntityVersion 应为 stable content hash 或显式版本号。
+/// 使用 <see cref="Create"/> 工厂方法进行验证；直接调用 primary constructor 不做校验
+/// （保留为 internal 供 record struct 序列化/反序列化使用）。
 /// </remarks>
 public readonly record struct CanonicalCandidateKey(
     string WorkspaceId,
     string CollectionId,
     string EntityKind,
     string EntityId,
-    string EntityVersion);
+    string EntityVersion)
+{
+    /// <summary>
+    /// P0-5：创建并验证 CanonicalCandidateKey。所有字段必须非空。
+    /// EntityVersion 必须非空（显式版本号或 stable content hash）。
+    /// </summary>
+    public static CanonicalCandidateKey Create(
+        string workspaceId,
+        string collectionId,
+        string entityKind,
+        string entityId,
+        string entityVersion)
+    {
+        if (string.IsNullOrEmpty(workspaceId))
+            throw new ArgumentException("WorkspaceId must be non-empty", nameof(workspaceId));
+        if (string.IsNullOrEmpty(collectionId))
+            throw new ArgumentException("CollectionId must be non-empty", nameof(collectionId));
+        if (string.IsNullOrEmpty(entityKind))
+            throw new ArgumentException("EntityKind must be non-empty", nameof(entityKind));
+        if (string.IsNullOrEmpty(entityId))
+            throw new ArgumentException("EntityId must be non-empty", nameof(entityId));
+        if (string.IsNullOrEmpty(entityVersion))
+            throw new ArgumentException(
+                "EntityVersion must be non-empty (use stable content hash or explicit version)",
+                nameof(entityVersion));
+        return new CanonicalCandidateKey(workspaceId, collectionId, entityKind, entityId, entityVersion);
+    }
+
+    /// <summary>
+    /// P0-5：验证此 key 的所有字段是否非空。
+    /// </summary>
+    public bool IsValid =>
+        !string.IsNullOrEmpty(WorkspaceId)
+        && !string.IsNullOrEmpty(CollectionId)
+        && !string.IsNullOrEmpty(EntityKind)
+        && !string.IsNullOrEmpty(EntityId)
+        && !string.IsNullOrEmpty(EntityVersion);
+}
 
 /// <summary>
 /// R28-B：Expert 来源记录。合并时 union 到 Envelope.Origins。
@@ -573,4 +613,30 @@ public interface IAgentContextProjector
     /// <param name="workingSet">候选正文 sidecar。</param>
     /// <returns>AgentContextSnapshot。</returns>
     AgentContextSnapshot Project(ContextDecisionResult result, CandidateWorkingSet workingSet);
+
+    /// <summary>
+    /// P0-7：将决策结果 + 候选正文 + 投影上下文投影为 AgentContextSnapshot。
+    /// 使用 context.AgentSession 而非构造假 session ID。
+    /// </summary>
+    /// <param name="result">决策结果。</param>
+    /// <param name="workingSet">候选正文 sidecar。</param>
+    /// <param name="context">投影上下文（含真实 AgentSessionId）。</param>
+    /// <returns>AgentContextSnapshot。</returns>
+    AgentContextSnapshot Project(ContextDecisionResult result, CandidateWorkingSet workingSet, ProjectionContext context);
+}
+
+/// <summary>
+/// R28-B P0-7：投影上下文。携带调用方提供的 session 信息与作用域，
+/// 供 Projector 构造真实 AgentSessionId 而非伪造的 session。
+/// </summary>
+public sealed record ProjectionContext
+{
+    /// <summary>真实 Agent session ID（null = 未运行在 Agent 上下文中，Projector 可回退到伪造 session）。</summary>
+    public AgentSessionId? AgentSession { get; init; }
+
+    /// <summary>workspace 作用域（从 Request.Scope 传入）。</summary>
+    public string? WorkspaceId { get; init; }
+
+    /// <summary>collection 作用域（从 Request.Scope 传入）。</summary>
+    public string? CollectionId { get; init; }
 }

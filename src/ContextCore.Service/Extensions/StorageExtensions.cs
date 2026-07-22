@@ -2,6 +2,7 @@ using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Core;
 using ContextCore.Core.Services;
+using ContextCore.Core.Services.DecisionEngine;
 using ContextCore.Runtime;
 using ContextCore.Service.Infrastructure;
 using ContextCore.Storage.FileSystem;
@@ -137,7 +138,82 @@ internal static class StorageExtensions
 				$"未知存储提供商 '{options.Provider}'。支持的 provider: filesystem, memory, postgres。");
 		}
 
+		// R28-B.6 阶段 E：按 provider 注册 IExperimentRecorder。
+		// 显式 env CC_EXPERIMENT_RECORDER_BACKEND 可覆盖默认选择（memory/filesystem/postgres）。
+		// 未注入时 CoreExtensions 的 TryAddSingleton<IExperimentRecorder, InMemoryExperimentRecorder> 回退。
+		RegisterExperimentRecorder(services, options);
+
 		return services;
+	}
+
+	/// <summary>
+	/// R28-B.6 阶段 E：按 storage provider 注册 IExperimentRecorder。
+	/// 默认映射：postgres → PostgresExperimentRecorder，filesystem → FileSystemExperimentRecorder，memory → 不注册（回退到 InMemory）。
+	/// 显式 env CC_EXPERIMENT_RECORDER_BACKEND 可覆盖：memory=强制 InMemory，filesystem=强制 FileSystem，postgres=强制 Postgres。
+	/// </summary>
+	/// <remarks>
+	/// 注册顺序：StorageExtensions.AddContextStorage 在 AddContextCore 之前调用，
+	/// CoreExtensions 的 TryAddSingleton<IExperimentRecorder, InMemoryExperimentRecorder> 是 no-op（已注册时跳过）。
+	/// PostgresExperimentRecorder 依赖 PostgresConnectionFactory（仅 postgres provider 注册时可用）。
+	/// FileSystemExperimentRecorder 依赖 rootPath（仅 filesystem provider 解析后可用）。
+	/// </remarks>
+	private static void RegisterExperimentRecorder(IServiceCollection services, StorageOptions options)
+	{
+		var backend = Environment.GetEnvironmentVariable("CC_EXPERIMENT_RECORDER_BACKEND");
+		if (!string.IsNullOrWhiteSpace(backend))
+		{
+			backend = backend.Trim();
+		}
+
+		// 显式指定 memory：跳过注册，让 CoreExtensions 的 TryAddSingleton 回退到 InMemory
+		if (string.Equals(backend, "memory", StringComparison.OrdinalIgnoreCase))
+		{
+			return;
+		}
+
+		// 显式指定 filesystem：只要 rootPath 可解析就注册
+		if (string.Equals(backend, "filesystem", StringComparison.OrdinalIgnoreCase))
+		{
+			RegisterFileSystemExperimentRecorder(services, options.ResolvedRootPath);
+			return;
+		}
+
+		// 显式指定 postgres：要求 Postgres provider 基础设施可用
+		if (string.Equals(backend, "postgres", StringComparison.OrdinalIgnoreCase))
+		{
+			RegisterPostgresExperimentRecorder(services);
+			return;
+		}
+
+		// 未指定 backend：按 storage provider 默认选择
+		if (options.IsPostgres)
+		{
+			RegisterPostgresExperimentRecorder(services);
+		}
+		else if (options.IsFileSystem)
+		{
+			RegisterFileSystemExperimentRecorder(services, options.ResolvedRootPath);
+		}
+		// memory provider 不注册，回退到 InMemoryExperimentRecorder
+	}
+
+	private static void RegisterPostgresExperimentRecorder(IServiceCollection services)
+	{
+		// PostgresConnectionFactory / PostgresJsonSerializer / PostgresMigrationRunner 已由
+		// AddContextCorePostgresStorage（RegisterPostgres 路径）注册，DI 可直接解析。
+		services.AddSingleton<IExperimentRecorder>(sp =>
+		{
+			var connectionFactory = sp.GetRequiredService<PostgresConnectionFactory>();
+			var serializer = sp.GetRequiredService<PostgresJsonSerializer>();
+			var migrationRunner = sp.GetRequiredService<PostgresMigrationRunner>();
+			return new PostgresExperimentRecorder(connectionFactory, serializer, migrationRunner);
+		});
+	}
+
+	private static void RegisterFileSystemExperimentRecorder(IServiceCollection services, string rootPath)
+	{
+		// fixture 文件落在 {rootPath}/experiment_fixtures/ 下，与 logs/ 平级。
+		services.AddSingleton<IExperimentRecorder>(_ => new FileSystemExperimentRecorder(rootPath));
 	}
 
 	/// <summary>

@@ -638,6 +638,12 @@ public sealed class MemoryEvolutionImplementationTests
         return new ContextCandidateEnvelope
         {
             CandidateId = candidateId,
+            CanonicalKey = CanonicalCandidateKey.Create(
+                workspaceId: "test-ws",
+                collectionId: "test-col",
+                entityKind: "test-entity",
+                entityId: candidateId,
+                entityVersion: "v1"),
             Source = source,
             Type = "memory",
             WorkspaceId = "ws-test",

@@ -338,7 +338,11 @@ public sealed record ContextCandidateEnvelope
     public string CollectionId { get; init; } = string.Empty;
 
     /// <summary>R28-B：规范化候选标识（跨 Expert 合并去重键）。</summary>
-    public CanonicalCandidateKey CanonicalKey { get; init; }
+    /// <remarks>
+    /// P0-5：required。Adapter/Provider 必须填充，不得使用默认空 struct。
+    /// 空 CanonicalKey 会导致 WorkingSetTee 中多个候选互相覆盖。
+    /// </remarks>
+    public required CanonicalCandidateKey CanonicalKey { get; init; }
 
     /// <summary>R28-B：多 Expert 来源记录（合并时 union）。</summary>
     public IReadOnlyList<ExpertOrigin> Origins { get; init; } = Array.Empty<ExpertOrigin>();
@@ -399,6 +403,13 @@ public sealed record CandidateAdaptationContext
     /// 适配器将其附加到 EvidenceRef 用于溯源；不直接消费策略内容。
     /// </summary>
     public ResolvedPolicySnapshot? PolicySnapshot { get; init; }
+
+    /// <summary>
+    /// P0-5：完整策略引用（可选）。Adapter 将其复制到 Envelope.PolicyReference。
+    /// 包含 BundleId + BundleVersion + BundleContentHash + ActivationEpoch。
+    /// null 时 Envelope.PolicyReference 也为 null（未绑定到有效策略快照）。
+    /// </summary>
+    public ResolvedPolicyReference? PolicyReference { get; init; }
 }
 
 /// <summary>

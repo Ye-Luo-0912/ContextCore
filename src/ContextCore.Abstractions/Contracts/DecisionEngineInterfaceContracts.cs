@@ -107,6 +107,16 @@ public sealed class ContextDecisionRequest
     /// null = 使用当前激活 bundle 的 profile（无 override）。
     /// </remarks>
     public ContextPolicyOverride? PolicyOverride { get; init; }
+
+    /// <summary>
+    /// R28-B.6：有效策略快照（V2 路径专用）。
+    /// </summary>
+    /// <remarks>
+    /// 由 DefaultContextDecisionRuntime 在委托 Engine 前设置。
+    /// Engine 注入 IGlobalAllocator 时，将此 snapshot 传给 Allocator.Execute。
+    /// null = Legacy 路径（Engine 使用静态内联分配，向后兼容 R18-2 测试）。
+    /// </remarks>
+    public EffectivePolicySnapshot? PolicySnapshot { get; init; }
 }
 
 /// <summary>
@@ -238,4 +248,14 @@ public interface IResultProjector<TResult>
     /// <param name="result">决策结果（SelectedEnvelopes + DroppedEnvelopes）。</param>
     /// <returns>目标 DTO（RetrievalResult / PackageBuildResult 等）。</returns>
     TResult Project(ContextDecisionResult result);
+
+    /// <summary>
+    /// P0-7：将决策结果 + 候选正文 sidecar 投影为目标 DTO。
+    /// Projector 从 workingSet.Materials 恢复候选 Content，从 result.AllocationDecisions
+    /// 消费 Section / IncludedTokens / IsTruncated。
+    /// </summary>
+    /// <param name="result">决策结果（含 AllocationDecisions）。</param>
+    /// <param name="workingSet">候选正文 sidecar（按 CanonicalKey 索引 Material）。</param>
+    /// <returns>目标 DTO。</returns>
+    TResult Project(ContextDecisionResult result, CandidateWorkingSet workingSet);
 }

@@ -91,6 +91,8 @@ public sealed class ContextCoreDiArchitectureTests
         typeof(IContextPackagePolicyStore),
         // 4. 多实现注册（按能力多注册，非覆盖语义）
         typeof(IContextJobProcessor),
+        // R28-B.6：7 个 ICandidateProvider（每个 ExpertKind 一个）按能力多注册
+        typeof(ICandidateProvider),
     };
 
     private static bool IsUnsupportedPlaceholder(object instance)
