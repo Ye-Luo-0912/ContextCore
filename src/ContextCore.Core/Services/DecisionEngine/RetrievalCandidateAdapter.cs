@@ -48,23 +48,7 @@ namespace ContextCore.Core.Services.DecisionEngine;
 public static class RetrievalCandidateAdapter
 {
     /// <summary>
-    /// 将单个 <see cref="ContextRetrievalCandidate"/> 转换为 <see cref="ContextCandidateEnvelope"/>。
-    /// </summary>
-    /// <remarks>
-    /// P1-2：此重载不传 <see cref="CandidateAdaptationContext"/>，破坏确定性和作用域。
-    /// 已标记为编译错误；调用方必须使用接受 context 的重载。
-    /// </remarks>
-    [Obsolete("CandidateAdaptationContext is required for determinism and scope. Use ToEnvelope(candidate, context).", error: true)]
-    public static ContextCandidateEnvelope ToEnvelope(ContextRetrievalCandidate candidate)
-        => ToEnvelope(candidate, new CandidateAdaptationContext
-        {
-            WorkspaceId = string.Empty,
-            CollectionId = string.Empty,
-            ObservedAt = DateTimeOffset.UtcNow
-        });
-
-    /// <summary>
-    /// P0-5：将单个 <see cref="ContextRetrievalCandidate"/> 转换为
+    /// 将单个 <see cref="ContextRetrievalCandidate"/> 转换为
     /// <see cref="ContextCandidateEnvelope"/>，使用传入的 context 提供时间戳与作用域。
     /// </summary>
     /// <param name="candidate">原始候选。</param>
@@ -139,20 +123,7 @@ public static class RetrievalCandidateAdapter
 
     /// <summary>
     /// 将 <see cref="ContextRetrievalCandidate"/> 集合批量转换为
-    /// <see cref="ContextCandidateEnvelope"/> 集合。
-    /// </summary>
-    [Obsolete("CandidateAdaptationContext is required for determinism and scope. Use ToEnvelopes(candidates, context).", error: true)]
-    public static IReadOnlyList<ContextCandidateEnvelope> ToEnvelopes(
-        IEnumerable<ContextRetrievalCandidate> candidates)
-        => ToEnvelopes(candidates, new CandidateAdaptationContext
-        {
-            WorkspaceId = string.Empty,
-            CollectionId = string.Empty,
-            ObservedAt = DateTimeOffset.UtcNow
-        });
-
-    /// <summary>
-    /// P0-5：批量转换，使用传入的 context 提供时间戳与作用域。
+    /// <see cref="ContextCandidateEnvelope"/> 集合，使用传入的 context。
     /// </summary>
     public static IReadOnlyList<ContextCandidateEnvelope> ToEnvelopes(
         IEnumerable<ContextRetrievalCandidate> candidates,
@@ -165,23 +136,6 @@ public static class RetrievalCandidateAdapter
 
     /// <summary>
     /// 将 <see cref="ContextRetrievalResult"/> 整体转换为
-    /// <see cref="ContextDecisionRequest"/>，可直接传入 Engine.DecideAsync。
-    /// </summary>
-    [Obsolete("CandidateAdaptationContext is required for determinism and scope. Use ToDecisionRequest(result, tokenBudget, topK, enableModel, context).", error: true)]
-    public static ContextDecisionRequest ToDecisionRequest(
-        ContextRetrievalResult result,
-        int tokenBudget,
-        int topK = int.MaxValue,
-        bool enableModel = false)
-        => ToDecisionRequest(result, tokenBudget, topK, enableModel, new CandidateAdaptationContext
-        {
-            WorkspaceId = string.Empty,
-            CollectionId = string.Empty,
-            ObservedAt = DateTimeOffset.UtcNow
-        });
-
-    /// <summary>
-    /// P0-5：将 <see cref="ContextRetrievalResult"/> 整体转换为
     /// <see cref="ContextDecisionRequest"/>，并填充 workspace/collection/query 作用域。
     /// </summary>
     /// <param name="result">Retrieval 主链产出的结果。</param>

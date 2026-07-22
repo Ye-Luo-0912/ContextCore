@@ -772,7 +772,7 @@ public sealed class DefaultContextDecisionEnginePolicyIntegrationTests
     {
         var registry = new DefaultPolicyRegistry();
         registry.RegisterBundleAsync(bundle).Wait();
-        registry.ActivateAsync(new PolicyActivation
+        registry.TryActivateAsync(new PolicyActivation
         {
             WorkspaceId = "ws-test",
             CollectionId = "col-test",
@@ -781,7 +781,7 @@ public sealed class DefaultContextDecisionEnginePolicyIntegrationTests
             BundleContentHash = "sha256:test",
             ActivatedAt = DateTimeOffset.UtcNow,
             ActivatedBy = "test"
-        }).Wait();
+        }, expectedEpoch: 0).Wait();
         return registry;
     }
 

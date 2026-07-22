@@ -547,7 +547,7 @@ public sealed class ContextCorePostgresStorageTests
         var sql = PostgresMigrationRunner.BuildMigrationSql(options);
         var requiredIndexes = PostgresMigrationRunner.GetRequiredIndexNames(options);
 
-        Assert.AreEqual("cc-schema-v16", PostgresMigrationRunner.SchemaVersion);
+        Assert.AreEqual("cc-schema-v17", PostgresMigrationRunner.SchemaVersion);
         StringAssert.Contains(sql, "CREATE EXTENSION IF NOT EXISTS vector");
         StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_vector_index_entries");
         StringAssert.Contains(sql, "source_id text NOT NULL DEFAULT ''");
@@ -628,6 +628,17 @@ public sealed class ContextCorePostgresStorageTests
         CollectionAssert.Contains(requiredIndexes.ToArray(), "ix_cc_pipeline_rollback_records_triggered");
         CollectionAssert.Contains(requiredIndexes.ToArray(), "ix_cc_pipeline_baseline_comparisons_proposal");
         CollectionAssert.Contains(requiredIndexes.ToArray(), "ix_cc_pipeline_baseline_comparisons_compared");
+        // WS-A：Policy Registry 持久化表 + CAS 激活索引
+        StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_policy_bundles");
+        StringAssert.Contains(sql, "CREATE TABLE IF NOT EXISTS cc_policy_activations");
+        StringAssert.Contains(sql, "bundle_id text NOT NULL");
+        StringAssert.Contains(sql, "bundle_version text NOT NULL");
+        StringAssert.Contains(sql, "bundle_content_hash text NOT NULL");
+        StringAssert.Contains(sql, "epoch bigint NOT NULL DEFAULT 1");
+        StringAssert.Contains(sql, "is_superseded boolean NOT NULL DEFAULT false");
+        CollectionAssert.Contains(requiredIndexes.ToArray(), "ix_cc_policy_bundles_bundle");
+        CollectionAssert.Contains(requiredIndexes.ToArray(), "ix_cc_policy_bundles_superseded");
+        CollectionAssert.Contains(requiredIndexes.ToArray(), "ix_cc_policy_activations_bundle");
     }
 
     [TestMethod]

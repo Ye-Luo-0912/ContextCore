@@ -370,8 +370,8 @@ public sealed record PolicyActivation
 ///   - GetActivationAsync：返回激活记录（含 profile override + epoch）。
 ///   - ListBundlesAsync：列出所有 bundle（可选包含 superseded）。
 ///   - RegisterBundleAsync：注册新 bundle（insert-if-absent；P0-4 修复：相同 BundleId+Version 已存在则抛异常）。
-///   - ActivateAsync：激活 bundle 到 workspace+collection 作用域（无条件覆盖；向后兼容）。
-///   - TryActivateAsync（P0-4 新增）：compare-and-swap 原子激活；expectedEpoch 匹配时才激活并返回 true。
+///   - TryActivateAsync：compare-and-swap 原子激活；expectedEpoch 匹配时才激活并返回 true。
+///     （WS-A：原 ActivateAsync 无条件覆盖入口已彻底删除，仅保留 CAS 路径，防止绕过 epoch 检查。）
 ///
 /// 实现层可注入 Postgres / InMemory store；契约本身不依赖存储。
 /// </remarks>
@@ -434,20 +434,7 @@ public interface IPolicyRegistry
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 激活 bundle 到 workspace/collection 作用域（无条件覆盖；向后兼容）。
-    /// </summary>
-    /// <param name="activation">激活记录（含可选 profile override）。</param>
-    /// <remarks>
-    /// P1-4：此方法不校验 epoch，直接覆盖当前 activation，可绕过 CAS。
-    /// 已标记 Obsolete；推荐使用 <see cref="TryActivateAsync"/> 实现原子 CAS 激活。
-    /// </remarks>
-    [Obsolete("Use TryActivateAsync for CAS atomic activation. ActivateAsync bypasses epoch check.", error: false)]
-    Task ActivateAsync(
-        PolicyActivation activation,
-        CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// P0-4：compare-and-swap 原子激活。
+    /// compare-and-swap 原子激活。
     /// </summary>
     /// <param name="next">待激活的记录（BundleId / WorkspaceId / CollectionId 必填）。</param>
     /// <param name="expectedEpoch">

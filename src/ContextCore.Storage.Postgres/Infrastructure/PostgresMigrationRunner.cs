@@ -22,8 +22,9 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
     /// R26-1：v13 → v14，新增 agent_checkpoints + agent_task_states 表与索引（Agent Runtime 持久化）。
     /// R27-1：v14 → v15，新增 pipeline_runs + pipeline_canary_assignments + pipeline_rollback_records + pipeline_baseline_comparisons 表与索引（Evolution Pipeline 持久化）。
     /// P0-7：v15 → v16，pipeline_runs 表追加 revision / lease_owner / lease_expires_at / last_transition_id 列支持 HA CAS 推进。
+    /// WS-A：v16 → v17，新增 policy_bundles + policy_activations 表与索引（Postgres Policy Registry 持久化 + CAS 激活）。
     /// </summary>
-    public const string SchemaVersion = "cc-schema-v16";
+    public const string SchemaVersion = "cc-schema-v17";
 
     public const string BaselineMigrationId = "0001_operational_store_baseline";
 
@@ -85,7 +86,10 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         "pipeline_runs",
         "pipeline_canary_assignments",
         "pipeline_rollback_records",
-        "pipeline_baseline_comparisons"
+        "pipeline_baseline_comparisons",
+        // WS-A：Policy Registry 持久化（bundle 注册 + activation CAS 激活）
+        "policy_bundles",
+        "policy_activations"
     ];
 
     public static readonly IReadOnlyList<(string TableSuffix, string IndexSuffix)> RequiredOperationalIndexDefinitions =
@@ -201,7 +205,11 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         ("pipeline_rollback_records", "run"),
         ("pipeline_rollback_records", "triggered"),
         ("pipeline_baseline_comparisons", "proposal"),
-        ("pipeline_baseline_comparisons", "compared")
+        ("pipeline_baseline_comparisons", "compared"),
+        // WS-A：Policy Registry 索引
+        ("policy_bundles", "bundle"),
+        ("policy_bundles", "superseded"),
+        ("policy_activations", "bundle")
     ];
 
     private readonly PostgresConnectionFactory _connectionFactory;
@@ -287,6 +295,9 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         var pipelineCanaryAssignments = Infrastructure.PostgresNames.Table(options, "pipeline_canary_assignments");
         var pipelineRollbackRecords = Infrastructure.PostgresNames.Table(options, "pipeline_rollback_records");
         var pipelineBaselineComparisons = Infrastructure.PostgresNames.Table(options, "pipeline_baseline_comparisons");
+        // WS-A：Policy Registry 持久化表
+        var policyBundles = Infrastructure.PostgresNames.Table(options, "policy_bundles");
+        var policyActivations = Infrastructure.PostgresNames.Table(options, "policy_activations");
         var extensionSql = options.EnablePgVectorExtension
             ? "CREATE EXTENSION IF NOT EXISTS vector;"
             : string.Empty;
@@ -1295,6 +1306,36 @@ CREATE TABLE IF NOT EXISTS {pipelineBaselineComparisons} (
 
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "pipeline_baseline_comparisons", "proposal")} ON {pipelineBaselineComparisons} (proposal_id, compared_at DESC);
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "pipeline_baseline_comparisons", "compared")} ON {pipelineBaselineComparisons} (compared_at DESC);
+
+-- WS-A：Policy Registry 持久化表（bundle 注册 + activation CAS 激活）
+-- policy_bundles: (bundle_id, version) 复合主键 — bundle 全局不可变；supersede 通过新建 bundle 实现
+-- policy_activations: (workspace_id, collection_id) 主键 — 每个作用域仅一条 activation 记录；epoch 用于 CAS
+-- 反规范化 bundle_id / bundle_version / epoch 字段以便索引查询 + CAS UPDATE；完整对象保存在 data jsonb
+CREATE TABLE IF NOT EXISTS {policyBundles} (
+    bundle_id text NOT NULL,
+    version text NOT NULL,
+    is_superseded boolean NOT NULL DEFAULT false,
+    created_at timestamptz NOT NULL,
+    data jsonb NOT NULL,
+    PRIMARY KEY (bundle_id, version)
+);
+
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "policy_bundles", "bundle")} ON {policyBundles} (bundle_id, is_superseded);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "policy_bundles", "superseded")} ON {policyBundles} (is_superseded);
+
+CREATE TABLE IF NOT EXISTS {policyActivations} (
+    workspace_id text NOT NULL,
+    collection_id text NOT NULL,
+    bundle_id text NOT NULL,
+    bundle_version text NOT NULL,
+    bundle_content_hash text NOT NULL,
+    epoch bigint NOT NULL DEFAULT 1,
+    activated_at timestamptz NOT NULL,
+    data jsonb NOT NULL,
+    PRIMARY KEY (workspace_id, collection_id)
+);
+
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "policy_activations", "bundle")} ON {policyActivations} (bundle_id, bundle_version);
 """;
     }
 

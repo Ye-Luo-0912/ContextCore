@@ -419,7 +419,9 @@ public sealed class PolicyBundleContractsTests
         Assert.IsNotNull(type.GetMethod(nameof(IPolicyRegistry.GetActivationAsync)));
         Assert.IsNotNull(type.GetMethod(nameof(IPolicyRegistry.ListBundlesAsync)));
         Assert.IsNotNull(type.GetMethod(nameof(IPolicyRegistry.RegisterBundleAsync)));
-        Assert.IsNotNull(type.GetMethod(nameof(IPolicyRegistry.ActivateAsync)));
+        Assert.IsNotNull(type.GetMethod(nameof(IPolicyRegistry.TryActivateAsync)));
+        // WS-A：ActivateAsync 已彻底删除，仅保留 TryActivateAsync CAS 路径
+        Assert.IsNull(type.GetMethod("ActivateAsync"));
     }
 
     [TestMethod]
@@ -462,7 +464,7 @@ public sealed class PolicyBundleContractsTests
             BundleContentHash = "sha256:test",
             ActivatedAt = DateTimeOffset.UtcNow
         };
-        await registry.ActivateAsync(activation);
+        Assert.IsTrue(await registry.TryActivateAsync(activation, expectedEpoch: 0));
 
         var retrieved = await registry.GetActiveBundleAsync("ws-1", "col-1");
         Assert.AreEqual("bundle-test", retrieved.BundleId);
@@ -590,14 +592,6 @@ public sealed class PolicyBundleContractsTests
             ContextPolicyBundle bundle, CancellationToken cancellationToken = default)
         {
             _bundles[bundle.BundleId] = bundle;
-            return Task.CompletedTask;
-        }
-
-        public Task ActivateAsync(
-            PolicyActivation activation, CancellationToken cancellationToken = default)
-        {
-            var key = $"{activation.WorkspaceId}/{activation.CollectionId}";
-            _activations[key] = activation;
             return Task.CompletedTask;
         }
 

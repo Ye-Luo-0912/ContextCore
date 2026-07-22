@@ -148,6 +148,11 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<PostgresPipelineRunStore>();
         services.AddSingleton<IPipelineRunStore>(sp => sp.GetRequiredService<PostgresPipelineRunStore>());
 
+        // WS-A：Postgres Policy Registry 持久化（bundle 注册 + activation CAS 激活）。
+        // 替代 InMemory DefaultPolicyRegistry，让 HA 场景下 policy activation 可跨进程持久化 + CAS。
+        services.AddSingleton<PostgresPolicyRegistry>();
+        services.AddSingleton<IPolicyRegistry>(sp => sp.GetRequiredService<PostgresPolicyRegistry>());
+
         // PackageBuildTraceStore
         services.AddSingleton<PostgresContextPackageBuildTraceStore>();
         services.AddSingleton<IContextPackageBuildTraceStore>(sp =>

@@ -160,18 +160,6 @@ public sealed class DefaultPolicyRegistry : IPolicyRegistry
     }
 
     /// <inheritdoc />
-    public Task ActivateAsync(
-        PolicyActivation activation,
-        CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(activation);
-        // P0-4：无条件覆盖（向后兼容）。推荐使用 TryActivateAsync 实现 CAS。
-        var key = BuildActivationKey(activation.WorkspaceId, activation.CollectionId);
-        _activations[key] = activation;
-        return Task.CompletedTask;
-    }
-
-    /// <inheritdoc />
     public Task<bool> TryActivateAsync(
         PolicyActivation next,
         long expectedEpoch,

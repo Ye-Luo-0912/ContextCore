@@ -1383,7 +1383,6 @@ M:ContextCore.Abstractions.IPipelineRunStore.SaveRollbackRecordAsync(ContextCore
 M:ContextCore.Abstractions.IPipelineRunStore.SaveRunAsync(ContextCore.Abstractions.PipelineRunSnapshot, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IPipelineRunStore.TryCreateRunAsync(ContextCore.Abstractions.PipelineRunSnapshot, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IPipelineRunStore.TryTransitionAsync(System.String, System.Int64, ContextCore.Abstractions.OptimizationStage, ContextCore.Abstractions.PipelineRunSnapshot, ContextCore.Abstractions.PipelineAuditBatch, System.Threading.CancellationToken)
-M:ContextCore.Abstractions.IPolicyRegistry.ActivateAsync(ContextCore.Abstractions.PolicyActivation, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IPolicyRegistry.GetActivationAsync(System.String, System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IPolicyRegistry.GetActiveBundleAsync(System.String, System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IPolicyRegistry.GetBundleAsync(System.String, System.String, System.Threading.CancellationToken)

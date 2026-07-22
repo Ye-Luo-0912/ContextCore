@@ -178,7 +178,7 @@ public sealed class DefaultPolicyRegistryTests
             BundleContentHash = "sha256:test",
             ActivatedAt = DateTimeOffset.UtcNow
         };
-        await registry.ActivateAsync(activation);
+        Assert.IsTrue(await registry.TryActivateAsync(activation, expectedEpoch: 0));
 
         var retrievedBundle = await registry.GetActiveBundleAsync("ws-1", "col-1");
         Assert.AreEqual("bundle-custom-1", retrievedBundle.BundleId);
@@ -189,7 +189,7 @@ public sealed class DefaultPolicyRegistryTests
     }
 
     [TestMethod]
-    public async Task ActivateAsync_WithBundleOverride_PreservesOverride()
+    public async Task TryActivateAsync_WithBundleOverride_PreservesOverride()
     {
         var registry = new DefaultPolicyRegistry();
         await registry.RegisterBundleAsync(new ContextPolicyBundle
@@ -217,7 +217,7 @@ public sealed class DefaultPolicyRegistryTests
                 EnableModelScoring = true
             }
         };
-        await registry.ActivateAsync(activation);
+        Assert.IsTrue(await registry.TryActivateAsync(activation, expectedEpoch: 0));
 
         var retrievedActivation = await registry.GetActivationAsync("ws-2", "col-2");
         Assert.IsNotNull(retrievedActivation);
@@ -371,7 +371,7 @@ public sealed class DefaultPolicyRegistryTests
     }
 
     [TestMethod]
-    public async Task ActivateAsync_ConcurrentActivations_AllSucceed()
+    public async Task TryActivateAsync_ConcurrentActivations_AllSucceed()
     {
         var registry = new DefaultPolicyRegistry();
         // 先注册 bundle
@@ -381,8 +381,8 @@ public sealed class DefaultPolicyRegistryTests
             Version = "1.0"
         });
 
-        // 并发激活到不同 ws/col
-        var tasks = Enumerable.Range(0, 10).Select(i => registry.ActivateAsync(
+        // 并发激活到不同 ws/col（首次激活，expectedEpoch: 0）
+        var tasks = Enumerable.Range(0, 10).Select(i => registry.TryActivateAsync(
             new PolicyActivation
             {
                 WorkspaceId = $"ws-{i}",
@@ -391,9 +391,10 @@ public sealed class DefaultPolicyRegistryTests
                 BundleVersion = "1.0",
                 BundleContentHash = "sha256:test",
                 ActivatedAt = DateTimeOffset.UtcNow
-            }));
+            }, expectedEpoch: 0));
 
-        await Task.WhenAll(tasks);
+        var results = await Task.WhenAll(tasks);
+        Assert.IsTrue(results.All(r => r), "All concurrent first-time activations should succeed via CAS.");
 
         // 验证每个 ws/col 都能查到
         for (var i = 0; i < 10; i++)
@@ -431,7 +432,7 @@ public sealed class DefaultPolicyRegistryTests
             BundleId = "bundle-ws1-col1",
             Version = "1.0"
         });
-        await registry.ActivateAsync(new PolicyActivation
+        Assert.IsTrue(await registry.TryActivateAsync(new PolicyActivation
         {
             WorkspaceId = "ws-1",
             CollectionId = "col-1",
@@ -439,7 +440,7 @@ public sealed class DefaultPolicyRegistryTests
             BundleVersion = "1.0",
             BundleContentHash = "sha256:test",
             ActivatedAt = DateTimeOffset.UtcNow
-        });
+        }, expectedEpoch: 0));
 
         var ws1Bundle = await registry.GetActiveBundleAsync("ws-1", "col-1");
         var ws2Bundle = await registry.GetActiveBundleAsync("ws-2", "col-2");
