@@ -362,12 +362,21 @@ internal static class CoreExtensions
 		services.AddSingleton<ShadowDecisionRuntime>();
 		services.AddSingleton<ShadowGate>();
 		services.AddSingleton<ShadowGateEvaluator>();
-		services.AddSingleton<CutoverController>();
+		// B-5：CutoverConfiguration 从环境变量读取（默认 100% = V2 only）
+		services.AddSingleton(CutoverConfiguration.FromEnvironment());
+		services.AddSingleton<CutoverController>(sp =>
+		{
+			var config = sp.GetRequiredService<CutoverConfiguration>();
+			var controller = new CutoverController(config.CutoverPercentage);
+			return controller;
+		});
 		services.AddSingleton<RetrievalResultProjector>();
 		services.AddSingleton<PackageResultProjector>();
 		services.AddSingleton<AuthoritativeRetrievalRuntime>();
 		services.AddSingleton<AuthoritativePackageRuntime>();
 		services.AddSingleton<AuthoritativeAgentContextRuntime>();
+		// B-5：DecisionExperimentPlane 长期保留（sampled shadow + replay fixtures）
+		services.AddSingleton<DecisionExperimentPlaneIntegration>();
 
 		return services;
 	}
