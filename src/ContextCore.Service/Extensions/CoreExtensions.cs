@@ -360,6 +360,8 @@ internal static class CoreExtensions
 		services.AddSingleton<IContextDecisionRuntime, DefaultContextDecisionRuntime>();
 		services.AddSingleton<DecisionExperimentPlane>();
 		services.AddSingleton<ShadowDecisionRuntime>();
+		services.AddSingleton<ShadowGate>();
+		services.AddSingleton<ShadowGateEvaluator>();
 
 		return services;
 	}
