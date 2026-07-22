@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using ContextCore.Abstractions;
@@ -107,8 +108,33 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
     /// <summary>
     /// 执行 pure Runtime 编排：
     /// Policy → Router → Providers → Merge → Seed merge → EarlyGate → Feature → Safety → Lifecycle → Score → Engine。
+    /// R28-B.6 Blocker-1：委托到 ExecuteWithWorkingSetAsync，仅返回 Decision 部分（向后兼容）。
     /// </summary>
     public async ValueTask<ContextDecisionResult> ExecuteAsync(
+        ContextDecisionRuntimeRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var executionResult = await ExecuteWithWorkingSetAsync(request, cancellationToken).ConfigureAwait(false);
+        return executionResult.Decision;
+    }
+
+    /// <summary>
+    /// R28-B.6 Blocker-1：执行完整决策编排，返回 ExecutionResult（含 WorkingSet + Policy + Routing + ProviderReports）。
+    /// </summary>
+    /// <remarks>
+    /// 完整编排流程：
+    ///   1. 策略解析（IResolvedPolicyProvider → EffectivePolicySnapshot）
+    ///   2. Router 路由（IRouter → ExpertRoutingDecisionSet）
+    ///   3. Provider DAG 召回（Blocker-5：两阶段 — Phase 1 主召回 + Phase 2 Graph 扩展）
+    ///   4. Canonical Merge（ICanonicalCandidateMerger 合并 Provider 输出）
+    ///   5. SeedCandidates 合并（将外部传入的种子候选合并到工作集）
+    ///   6. EarlyAdmissionGate 批量评估（Blocker-6：保留 Rejected 到 DroppedEnvelopes）
+    ///   7. FeaturePipeline 特征计算
+    ///   8. 委托 IContextDecisionEngine 执行完整决策
+    ///   9. 合并 EarlyRejected + Engine.DroppedEnvelopes 到最终 DroppedEnvelopes
+    ///   10. 构建 ContextDecisionExecutionResult（含完整 WorkingSet）
+    /// </remarks>
+    public async ValueTask<ContextDecisionExecutionResult> ExecuteWithWorkingSetAsync(
         ContextDecisionRuntimeRequest request,
         CancellationToken cancellationToken = default)
     {
@@ -121,8 +147,10 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
         // Step 2：Router 路由 — 产出 ExpertRoutingDecisionSet
         var routingDecisions = await _router.RouteAsync(request, snapshot, cancellationToken).ConfigureAwait(false);
 
-        // Step 3：Provider 召回 — 仅调用 enabled Provider，bounded parallel execution
-        var expertOutputs = await InvokeEnabledProvidersAsync(
+        // Step 3：Provider DAG 召回（Blocker-5：两阶段）
+        // Phase 1：执行 Mandatory + Constraint + Lexical + Semantic + WorkingMemory + StableMemory
+        // Phase 2：执行 Graph Provider，将 Phase 1 merged envelopes 作为 SeedCandidates 传入
+        var (expertOutputs, providerReports) = await InvokeEnabledProvidersWithDagAsync(
             request, snapshot, routingDecisions, cancellationToken).ConfigureAwait(false);
 
         // Step 4：Canonical Merge — 合并 Provider 输出
@@ -131,25 +159,35 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
         // Step 5：SeedCandidates 合并 — 将外部传入的种子候选加入工作集
         var allEnvelopes = MergeSeedCandidates(mergedWorkingSet.Envelopes, request.SeedCandidates);
 
+        // 构建 complete WorkingSet（包含 Materials）：保留所有 Materials 供 Projector 恢复正文
+        var completeWorkingSet = new CandidateWorkingSet
+        {
+            Envelopes = allEnvelopes,
+            Materials = mergedWorkingSet.Materials
+        };
+
         if (allEnvelopes.Count == 0)
         {
-            return EmptyResult(request, snapshot);
+            return EmptyExecutionResult(request, snapshot, routingDecisions, completeWorkingSet, providerReports);
         }
 
-        // Step 6：EarlyAdmissionGate — 拒绝 scope mismatch / superseded
-        var admitted = new List<ContextCandidateEnvelope>(allEnvelopes.Count);
-        foreach (var envelope in allEnvelopes)
-        {
-            var admission = _earlyAdmissionGate.Evaluate(envelope, snapshot);
-            if (admission.Admitted)
-            {
-                admitted.Add(envelope);
-            }
-        }
+        // Step 6：EarlyAdmissionGate 批量评估（Blocker-6：保留 Rejected）
+        var partition = _earlyAdmissionGate.EvaluateBatch(allEnvelopes, snapshot);
+        var admitted = partition.Admitted;
+        var earlyRejected = partition.Rejected;
 
         if (admitted.Count == 0)
         {
-            return EmptyResult(request, snapshot);
+            // 所有候选被 EarlyGate 拒绝：仍返回 EarlyRejected 作为 DroppedEnvelopes
+            var emptyDecision = BuildEarlyRejectedResult(request, snapshot, earlyRejected, partition.RejectReasons);
+            return new ContextDecisionExecutionResult
+            {
+                Decision = emptyDecision,
+                WorkingSet = completeWorkingSet,
+                Policy = snapshot,
+                Routing = routingDecisions,
+                ProviderReports = providerReports
+            };
         }
 
         // Step 7：FeaturePipeline — 特征计算
@@ -202,29 +240,60 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
             ? engineResult.AllocationDecisions
             : BuildAllocationDecisions(engineResult.SelectedEnvelopes, engineResult.DroppedEnvelopes);
 
-        return new ContextDecisionResult
+        // Step 9：合并 EarlyRejected + Engine.DroppedEnvelopes（Blocker-6）
+        var finalDropped = earlyRejected.Count == 0
+            ? engineResult.DroppedEnvelopes
+            : CombineDroppedWithEarlyRejected(engineResult.DroppedEnvelopes, earlyRejected, partition.RejectReasons);
+
+        // 合并 AllocationDecisions：补建 EarlyRejected 候选的 allocation decision
+        var finalAllocationDecisions = earlyRejected.Count == 0
+            ? allocationDecisions
+            : AppendEarlyRejectedAllocationDecisions(allocationDecisions, earlyRejected);
+
+        var decision = new ContextDecisionResult
         {
             RequestId = engineResult.RequestId,
             DecisionSource = engineResult.DecisionSource,
             SelectedEnvelopes = engineResult.SelectedEnvelopes,
-            DroppedEnvelopes = engineResult.DroppedEnvelopes,
-            Outcome = engineResult.Outcome,
+            DroppedEnvelopes = finalDropped,
+            Outcome = new ContextDecisionOutcomeSummary
+            {
+                SelectedCount = engineResult.Outcome.SelectedCount,
+                DroppedCount = finalDropped.Count,
+                EstimatedTokens = engineResult.Outcome.EstimatedTokens,
+                TokenBudget = engineResult.Outcome.TokenBudget,
+                Sections = engineResult.Outcome.Sections,
+                SafetyGateBlockedCount = engineResult.Outcome.SafetyGateBlockedCount,
+                BudgetExceededCount = engineResult.Outcome.BudgetExceededCount
+            },
             PolicyVersion = engineResult.PolicyVersion,
             ModelVersion = engineResult.ModelVersion,
             DecidedAt = engineResult.DecidedAt,
             ModelEnabled = engineResult.ModelEnabled,
             Purpose = request.Purpose,
             RuntimeKind = ContextDecisionRuntimeKind.UnifiedV2,
-            AllocationDecisions = allocationDecisions,
+            AllocationDecisions = finalAllocationDecisions,
             PolicyReference = snapshot.Reference
+        };
+
+        return new ContextDecisionExecutionResult
+        {
+            Decision = decision,
+            WorkingSet = completeWorkingSet,
+            Policy = snapshot,
+            Routing = routingDecisions,
+            ProviderReports = providerReports
         };
     }
 
     /// <summary>
-    /// P0-2 / R28-B.6：仅调用 routingDecisions 中 Enabled=true 的 Provider，bounded parallel execution。
-    /// R28-B.6 新增：per-Provider 去重（每请求每 Provider 最多执行一次）+ 超时保护。
+    /// R28-B.6 Blocker-5：Provider DAG 两阶段执行。
+    /// Phase 1：执行 Mandatory + Constraint + Lexical + Semantic + WorkingMemory + StableMemory
+    /// Canonical Merge Phase 1 结果
+    /// Phase 2：执行 Graph Provider，将 Phase 1 merged envelopes 作为 SeedCandidates 传入
+    /// Final Merge：合并 Phase 1 + Phase 2 结果
     /// </summary>
-    private async Task<IReadOnlyList<ExpertExecutionResult>> InvokeEnabledProvidersAsync(
+    private async Task<(IReadOnlyList<ExpertExecutionResult> Outputs, IReadOnlyList<ProviderExecutionReport> Reports)> InvokeEnabledProvidersWithDagAsync(
         ContextDecisionRuntimeRequest request,
         EffectivePolicySnapshot snapshot,
         ExpertRoutingDecisionSet routingDecisions,
@@ -232,7 +301,7 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
     {
         if (_candidateProviders.Count == 0)
         {
-            return Array.Empty<ExpertExecutionResult>();
+            return (Array.Empty<ExpertExecutionResult>(), Array.Empty<ProviderExecutionReport>());
         }
 
         // 构建路由查找表：Expert → RoutingDecision
@@ -245,18 +314,30 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
             }
         }
 
-        // R28-B.6：per-Provider 去重 — 按 ExpertKind 去重，确保每请求每 Provider 最多执行一次。
-        // Disabled Provider 永远不被执行（Enabled mask 已在 routingByExpert 过滤）。
+        // R28-B.6：per-Provider 去重 — 按 ExpertKind 去重
         var executedKinds = new HashSet<ExpertKind>();
-        var enabledProviders = _candidateProviders
+        var allEnabledProviders = _candidateProviders
             .Where(p => routingByExpert.Values.Any(r => MapExpertKindToRetrievalExpert(p.Kind) == r.Expert))
-            .Where(p => executedKinds.Add(p.Kind)) // 去重：同 Kind 只保留第一个
+            .Where(p => executedKinds.Add(p.Kind))
             .ToList();
 
-        if (enabledProviders.Count == 0)
+        if (allEnabledProviders.Count == 0)
         {
-            return Array.Empty<ExpertExecutionResult>();
+            return (Array.Empty<ExpertExecutionResult>(), Array.Empty<ProviderExecutionReport>());
         }
+
+        // Blocker-5：拆分为两阶段
+        // Phase 1：非 Graph Provider（Mandatory + Constraint + Lexical + Semantic + WorkingMemory + StableMemory）
+        var phase1Providers = allEnabledProviders
+            .Where(p => p.Kind != ExpertKind.Graph)
+            .ToList();
+        // Phase 2：Graph Provider（基于 Phase 1 结果做关系扩展）
+        var phase2Providers = allEnabledProviders
+            .Where(p => p.Kind == ExpertKind.Graph)
+            .ToList();
+
+        var allOutputs = new List<ExpertExecutionResult>();
+        var allReports = new List<ProviderExecutionReport>();
 
         var adaptationContext = new CandidateAdaptationContext
         {
@@ -267,13 +348,64 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
             ObservedAt = DateTimeOffset.UtcNow
         };
 
-        // R28-B.6：超时保护 — 为每个 Provider 创建 linked CTS with timeout
-        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeoutCts.CancelAfter(_providerTimeout);
+        // Phase 1：执行非 Graph Provider
+        if (phase1Providers.Count > 0)
+        {
+            var phase1Results = await InvokeProviderBatchAsync(
+                phase1Providers, request, snapshot, routingByExpert,
+                adaptationContext, seedEnvelopes: null, cancellationToken).ConfigureAwait(false);
+            allOutputs.AddRange(phase1Results.Outputs);
+            allReports.AddRange(phase1Results.Reports);
+        }
 
-        // Bounded parallel execution：使用 SemaphoreSlim 限制并发度
-        using var semaphore = new SemaphoreSlim(Math.Min(8, enabledProviders.Count));
-        var tasks = enabledProviders.Select(async provider =>
+        // Phase 2：执行 Graph Provider，将 Phase 1 merged envelopes 作为 SeedCandidates
+        if (phase2Providers.Count > 0)
+        {
+            // Canonical Merge Phase 1 结果
+            IReadOnlyList<ContextCandidateEnvelope> phase1MergedEnvelopes;
+            if (allOutputs.Count > 0)
+            {
+                var phase1WorkingSet = _canonicalMerger.Merge(allOutputs);
+                phase1MergedEnvelopes = phase1WorkingSet.Envelopes;
+            }
+            else
+            {
+                phase1MergedEnvelopes = Array.Empty<ContextCandidateEnvelope>();
+            }
+
+            // 用 Phase 1 merged envelopes 作为 SeedCandidates 构造新 request
+            var phase2Request = request with { SeedCandidates = phase1MergedEnvelopes };
+
+            var phase2Results = await InvokeProviderBatchAsync(
+                phase2Providers, phase2Request, snapshot, routingByExpert,
+                adaptationContext, seedEnvelopes: phase1MergedEnvelopes, cancellationToken).ConfigureAwait(false);
+            allOutputs.AddRange(phase2Results.Outputs);
+            allReports.AddRange(phase2Results.Reports);
+        }
+
+        return (allOutputs, allReports);
+    }
+
+    /// <summary>
+    /// R28-B.6 Blocker-5：批量执行一组 Provider，bounded parallel + 超时保护 + 执行报告。
+    /// R28-B.6 Impl-3：为每个 Provider 单独创建 timeout CTS（一个 Provider 超时不取消其他 Provider）。
+    /// 专家故障等级：
+    ///   - Mandatory / Constraint 失败或超时 → fail-closed（抛异常，整个请求失败）；
+    ///   - Semantic / Graph / Recency 失败或超时 → degraded result（返回空结果 + diagnostic）；
+    ///   - Lexical / WorkingMemory / StableMemory 失败或超时 → degraded result（默认）。
+    /// </summary>
+    /// <param name="cancellationToken">原始调用方 cancellationToken（用于区分超时 vs 用户取消）。</param>
+    private async Task<(IReadOnlyList<ExpertExecutionResult> Outputs, IReadOnlyList<ProviderExecutionReport> Reports)> InvokeProviderBatchAsync(
+        IReadOnlyList<ICandidateProvider> providers,
+        ContextDecisionRuntimeRequest request,
+        EffectivePolicySnapshot snapshot,
+        IReadOnlyDictionary<RetrievalExpert, ExpertRoutingDecision> routingByExpert,
+        CandidateAdaptationContext adaptationContext,
+        IReadOnlyList<ContextCandidateEnvelope>? seedEnvelopes,
+        CancellationToken cancellationToken)
+    {
+        using var semaphore = new SemaphoreSlim(Math.Min(8, providers.Count));
+        var tasks = providers.Select(async provider =>
         {
             var expertKind = provider.Kind;
             var retrievalExpert = MapExpertKindToRetrievalExpert(expertKind);
@@ -293,11 +425,84 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
                 },
                 AdaptationContext: adaptationContext);
 
-            await semaphore.WaitAsync(timeoutCts.Token).ConfigureAwait(false);
+            var startedAt = Stopwatch.GetTimestamp();
+            await semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+            // R28-B.6 Impl-3：为每个 Provider 单独创建 linked CTS with timeout。
+            // 一个 Provider 超时只取消自身，不影响其他 Provider。
+            using var perProviderCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            perProviderCts.CancelAfter(_providerTimeout);
+
             try
             {
-                // R28-B.6：使用 linked CTS（含 timeout）而非原始 cancellationToken
-                return await provider.ExecuteAsync(context, timeoutCts.Token).ConfigureAwait(false);
+                var result = await provider.ExecuteAsync(context, perProviderCts.Token).ConfigureAwait(false);
+                var elapsed = Stopwatch.GetElapsedTime(startedAt);
+                var report = new ProviderExecutionReport
+                {
+                    Kind = expertKind,
+                    Succeeded = true,
+                    TimedOut = false,
+                    Duration = elapsed,
+                    CandidateCount = result.Envelopes.Count
+                };
+                return (result, report);
+            }
+            catch (OperationCanceledException) when (perProviderCts.IsCancellationRequested
+                && !cancellationToken.IsCancellationRequested)
+            {
+                var elapsed = Stopwatch.GetElapsedTime(startedAt);
+                var emptyResult = CandidateProviderHelpers.Empty();
+                var report = new ProviderExecutionReport
+                {
+                    Kind = expertKind,
+                    Succeeded = false,
+                    TimedOut = true,
+                    Duration = elapsed,
+                    CandidateCount = 0,
+                    ErrorCode = "timeout"
+                };
+
+                // R28-B.6 Impl-3：Mandatory / Constraint 超时 → fail-closed（抛异常，整个请求失败）
+                if (expertKind == ExpertKind.Mandatory || expertKind == ExpertKind.Constraint)
+                {
+                    throw new InvalidOperationException(
+                        $"Mandatory/Constraint provider '{expertKind}' timed out after {_providerTimeout}. " +
+                        "Fail-closed: mandatory/constraint experts must not be silently degraded.",
+                        new OperationCanceledException(perProviderCts.Token));
+                }
+
+                // 其他 Expert 超时 → degraded result（返回空结果 + diagnostic）
+                return (emptyResult, report);
+            }
+            catch (OperationCanceledException)
+            {
+                // 用户取消（原始 cancellationToken 被取消）→ 传播
+                throw;
+            }
+            catch (Exception ex)
+            {
+                var elapsed = Stopwatch.GetElapsedTime(startedAt);
+                var emptyResult = CandidateProviderHelpers.Empty();
+                var report = new ProviderExecutionReport
+                {
+                    Kind = expertKind,
+                    Succeeded = false,
+                    TimedOut = false,
+                    Duration = elapsed,
+                    CandidateCount = 0,
+                    ErrorCode = ex.GetType().Name
+                };
+
+                // R28-B.6 Impl-3：Mandatory / Constraint 执行失败 → fail-closed（抛异常，整个请求失败）
+                if (expertKind == ExpertKind.Mandatory || expertKind == ExpertKind.Constraint)
+                {
+                    throw new InvalidOperationException(
+                        $"Mandatory/Constraint provider '{expertKind}' failed: {ex.GetType().Name}: {ex.Message}. " +
+                        "Fail-closed: mandatory/constraint experts must not be silently degraded.", ex);
+                }
+
+                // 其他 Expert 失败 → degraded result（返回空结果 + diagnostic）
+                return (emptyResult, report);
             }
             finally
             {
@@ -306,7 +511,135 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
         });
 
         var results = await Task.WhenAll(tasks).ConfigureAwait(false);
-        return results;
+        var outputs = results.Select(r => r.Item1).ToList();
+        var reports = results.Select(r => r.Item2).ToList();
+        return (outputs, reports);
+    }
+
+    /// <summary>
+    /// R28-B.6 Blocker-6：合并 Engine.DroppedEnvelopes + EarlyRejected 到最终 DroppedEnvelopes。
+    /// EarlyRejected 候选携带 EarlyAdmissionRejected reason code（在 Safety.BlockReasonCode 字段）。
+    /// </summary>
+    private static IReadOnlyList<ContextCandidateEnvelope> CombineDroppedWithEarlyRejected(
+        IReadOnlyList<ContextCandidateEnvelope> engineDropped,
+        IReadOnlyList<ContextCandidateEnvelope> earlyRejected,
+        IReadOnlyDictionary<CanonicalCandidateKey, string> rejectReasons)
+    {
+        if (earlyRejected.Count == 0) return engineDropped;
+
+        var combined = new List<ContextCandidateEnvelope>(engineDropped.Count + earlyRejected.Count);
+        combined.AddRange(engineDropped);
+
+        var existingKeys = new HashSet<CanonicalCandidateKey>(engineDropped.Select(e => e.CanonicalKey));
+        foreach (var envelope in earlyRejected)
+        {
+            if (existingKeys.Add(envelope.CanonicalKey))
+            {
+                // 标记 EarlyAdmissionRejected reason code（通过 Safety.BlockReasonCode）
+                combined.Add(envelope with
+                {
+                    Safety = envelope.Safety with
+                    {
+                        PassesSafetyGate = false,
+                        BlockReasonCode = CandidateDecisionReasonCode.EarlyAdmissionRejected,
+                        BlockReasonDetail = rejectReasons.TryGetValue(envelope.CanonicalKey, out var reason)
+                            ? $"early admission rejected: {reason}"
+                            : "early admission rejected"
+                    }
+                });
+            }
+        }
+        return combined;
+    }
+
+    /// <summary>
+    /// R28-B.6 Blocker-6：为 EarlyRejected 候选补建 AllocationDecision（reason=EarlyAdmissionRejected）。
+    /// </summary>
+    private static IReadOnlyList<CandidateAllocationDecision> AppendEarlyRejectedAllocationDecisions(
+        IReadOnlyList<CandidateAllocationDecision> existing,
+        IReadOnlyList<ContextCandidateEnvelope> earlyRejected)
+    {
+        if (earlyRejected.Count == 0) return existing;
+
+        var combined = new List<CandidateAllocationDecision>(existing.Count + earlyRejected.Count);
+        combined.AddRange(existing);
+
+        var existingKeys = new HashSet<CanonicalCandidateKey>(existing.Select(d => d.CandidateKey));
+        foreach (var envelope in earlyRejected)
+        {
+            if (existingKeys.Add(envelope.CanonicalKey))
+            {
+                combined.Add(new CandidateAllocationDecision
+                {
+                    CandidateKey = envelope.CanonicalKey,
+                    Section = ResolveSectionForAllocation(envelope),
+                    IncludedTokens = 0,
+                    IsTruncated = false,
+                    ReasonCode = CandidateDecisionReasonCode.EarlyAdmissionRejected
+                });
+            }
+        }
+        return combined;
+    }
+
+    /// <summary>
+    /// R28-B.6 Blocker-6：当所有候选被 EarlyGate 拒绝时，构建仅含 EarlyRejected 的 Decision。
+    /// </summary>
+    private static ContextDecisionResult BuildEarlyRejectedResult(
+        ContextDecisionRuntimeRequest request,
+        EffectivePolicySnapshot snapshot,
+        IReadOnlyList<ContextCandidateEnvelope> earlyRejected,
+        IReadOnlyDictionary<CanonicalCandidateKey, string> rejectReasons)
+    {
+        var dropped = CombineDroppedWithEarlyRejected(
+            engineDropped: Array.Empty<ContextCandidateEnvelope>(),
+            earlyRejected: earlyRejected,
+            rejectReasons: rejectReasons);
+
+        var tokenBudget = request.TokenBudget > 0 ? request.TokenBudget : snapshot.Budget.DefaultTokenBudget;
+
+        return new ContextDecisionResult
+        {
+            RequestId = request.RequestId,
+            DecisionSource = ResolveDecisionSource(request.Purpose),
+            SelectedEnvelopes = Array.Empty<ContextCandidateEnvelope>(),
+            DroppedEnvelopes = dropped,
+            Outcome = new ContextDecisionOutcomeSummary
+            {
+                SelectedCount = 0,
+                DroppedCount = dropped.Count,
+                EstimatedTokens = 0,
+                TokenBudget = tokenBudget,
+                Sections = Array.Empty<string>(),
+                SafetyGateBlockedCount = 0,
+                BudgetExceededCount = 0
+            },
+            PolicyVersion = snapshot.FeatureSchemaVersion,
+            ModelEnabled = false,
+            DecidedAt = DateTimeOffset.UtcNow,
+            Purpose = request.Purpose,
+            RuntimeKind = ContextDecisionRuntimeKind.UnifiedV2,
+            AllocationDecisions = AppendEarlyRejectedAllocationDecisions(
+                Array.Empty<CandidateAllocationDecision>(), earlyRejected),
+            PolicyReference = snapshot.Reference
+        };
+    }
+
+    private static ContextDecisionExecutionResult EmptyExecutionResult(
+        ContextDecisionRuntimeRequest request,
+        EffectivePolicySnapshot snapshot,
+        ExpertRoutingDecisionSet routing,
+        CandidateWorkingSet workingSet,
+        IReadOnlyList<ProviderExecutionReport> providerReports)
+    {
+        return new ContextDecisionExecutionResult
+        {
+            Decision = EmptyResult(request, snapshot),
+            WorkingSet = workingSet,
+            Policy = snapshot,
+            Routing = routing,
+            ProviderReports = providerReports
+        };
     }
 
     /// <summary>
@@ -744,30 +1077,30 @@ public static class PolicyBundleHasher
         sb.Append(bundle.Policies.RelationProfileVersion).Append('|');
         sb.Append(bundle.Policies.QualityContractVersion).Append('|');
 
-        // Safety
+        // R28-B.6 Impl-4：Safety — bool/double 使用 invariant culture，tag 集合先排序再 join
         sb.Append(bundle.Safety.ProfileId).Append('|');
-        sb.Append(bundle.Safety.AllowDeprecatedUsedByActiveChain).Append('|');
-        sb.Append(bundle.Safety.AllowDuplicateReference).Append('|');
-        sb.Append(string.Join(',', bundle.Safety.RequiredTags)).Append('|');
-        sb.Append(string.Join(',', bundle.Safety.ForbiddenTags)).Append('|');
+        sb.Append(bundle.Safety.AllowDeprecatedUsedByActiveChain.ToString()).Append('|');
+        sb.Append(bundle.Safety.AllowDuplicateReference.ToString()).Append('|');
+        sb.Append(string.Join(',', bundle.Safety.RequiredTags.OrderBy(t => t, StringComparer.Ordinal))).Append('|');
+        sb.Append(string.Join(',', bundle.Safety.ForbiddenTags.OrderBy(t => t, StringComparer.Ordinal))).Append('|');
 
-        // Budget
+        // Budget — StrictBudgetEnforcement 为 bool，使用 ToString()；SectionRatios 的 value 为 double，使用 invariant
         sb.Append(bundle.Budget.ProfileId).Append('|');
         sb.Append(bundle.Budget.DefaultTokenBudget).Append('|');
         sb.Append(bundle.Budget.DefaultTopK).Append('|');
-        sb.Append(bundle.Budget.StrictBudgetEnforcement).Append('|');
+        sb.Append(bundle.Budget.StrictBudgetEnforcement.ToString()).Append('|');
         foreach (var (key, value) in bundle.Budget.SectionRatios.OrderBy(p => p.Key, StringComparer.Ordinal))
-            sb.Append(key).Append(':').Append(value).Append(';');
+            sb.Append(key).Append(':').Append(value.ToString(System.Globalization.CultureInfo.InvariantCulture)).Append(';');
         sb.Append('|');
 
-        // Routing
+        // Routing — double 字段使用 invariant culture，bool 使用 ToString()，EnabledExperts 先排序
         sb.Append(bundle.Routing.ProfileId).Append('|');
-        sb.Append(bundle.Routing.EnableModelScoring).Append('|');
+        sb.Append(bundle.Routing.EnableModelScoring.ToString()).Append('|');
         sb.Append(bundle.Routing.ModelArtifactId ?? "null").Append('|');
-        sb.Append(bundle.Routing.DeterministicWeight).Append('|');
-        sb.Append(bundle.Routing.ModelWeight).Append('|');
-        sb.Append(bundle.Routing.ModelConfidenceThreshold).Append('|');
-        sb.Append(string.Join(',', bundle.Routing.EnabledExperts)).Append('|');
+        sb.Append(bundle.Routing.DeterministicWeight.ToString(System.Globalization.CultureInfo.InvariantCulture)).Append('|');
+        sb.Append(bundle.Routing.ModelWeight.ToString(System.Globalization.CultureInfo.InvariantCulture)).Append('|');
+        sb.Append(bundle.Routing.ModelConfidenceThreshold.ToString(System.Globalization.CultureInfo.InvariantCulture)).Append('|');
+        sb.Append(string.Join(',', bundle.Routing.EnabledExperts.OrderBy(t => t, StringComparer.Ordinal))).Append('|');
 
         // ModelArtifacts（按 ArtifactId 排序保证稳定）
         foreach (var artifact in bundle.ModelArtifacts.OrderBy(a => a.ArtifactId, StringComparer.Ordinal))
@@ -1073,6 +1406,8 @@ public sealed class DefaultCanonicalCandidateMerger : ICanonicalCandidateMerger
 /// </summary>
 /// <remarks>
 /// B-1 骨架：仅检查 superseded + scope 字段非空；B-2 将接入 forbidden tag / illegal evidence。
+/// R28-B.6 Blocker-6：新增 EvaluateBatch 批量评估，返回 AdmissionPartition（Admitted + Rejected），
+/// 调用方将 Rejected 候选保留到 DroppedEnvelopes（reason=EarlyAdmissionRejected），不再静默丢弃。
 /// </remarks>
 public sealed class DefaultEarlyAdmissionGate : IEarlyAdmissionGate
 {
@@ -1112,6 +1447,37 @@ public sealed class DefaultEarlyAdmissionGate : IEarlyAdmissionGate
         }
 
         return new AdmissionResult(Admitted: true, ReasonCode: "default", Detail: string.Empty);
+    }
+
+    /// <summary>
+    /// R28-B.6 Blocker-6：批量评估候选准入，返回分区结果（Admitted + Rejected + RejectReasons）。
+    /// </summary>
+    public AdmissionPartition EvaluateBatch(
+        IReadOnlyList<ContextCandidateEnvelope> envelopes,
+        EffectivePolicySnapshot snapshot)
+    {
+        ArgumentNullException.ThrowIfNull(envelopes);
+        ArgumentNullException.ThrowIfNull(snapshot);
+
+        var admitted = new List<ContextCandidateEnvelope>(envelopes.Count);
+        var rejected = new List<ContextCandidateEnvelope>();
+        var rejectReasons = new Dictionary<CanonicalCandidateKey, string>();
+
+        foreach (var envelope in envelopes)
+        {
+            var admission = Evaluate(envelope, snapshot);
+            if (admission.Admitted)
+            {
+                admitted.Add(envelope);
+            }
+            else
+            {
+                rejected.Add(envelope);
+                rejectReasons[envelope.CanonicalKey] = admission.ReasonCode;
+            }
+        }
+
+        return new AdmissionPartition(admitted, rejected, rejectReasons);
     }
 }
 
@@ -1272,10 +1638,28 @@ public sealed class DefaultUtilityScorer : IUtilityScorer
 /// B-1 骨架：复用 DefaultContextDecisionEngine 的分配算法
 /// （IsMandatory/IsHardConstraint 优先 → FinalScore 降序 → EstimatedTokens 降序 → CandidateId 升序 →
 /// TopK 截断 → TokenBudget 截断）。
-/// B-2 将接入 SectionRatios 分层比例分配 + MandatoryOverflowPolicy。
+/// R28-B.6 Impl-2：接入 MandatoryOverflowPolicy — mandatory 候选超出预算时按策略处理：
+///   - FailClosed（AgentContext 硬窗口）：拒绝 mandatory 候选，标记 HardWindowViolated；
+///   - AllowOverflowWithDiagnostic（Package/Retrieval 默认）：选入 mandatory，记录 overflow tokens；
+///   - RejectLowestAuthorityMandatory：拒绝最低优先级的 mandatory 候选。
+/// 诊断信息记录到 Outcome.Diagnostics（MandatoryOverflowTokens / MandatoryOverflowPolicy / HardWindowViolated）。
 /// </remarks>
 public sealed class DefaultGlobalAllocator : IGlobalAllocator
 {
+    private readonly MandatoryOverflowPolicy _mandatoryOverflowPolicy;
+
+    /// <summary>
+    /// 构造分配器。
+    /// </summary>
+    /// <param name="mandatoryOverflowPolicy">
+    /// R28-B.6 Impl-2：mandatory 候选超出预算时的处理策略。
+    /// 默认 AllowOverflowWithDiagnostic（Package/Retrieval 语义）；AgentContext 硬窗口应注入 FailClosed。
+    /// </param>
+    public DefaultGlobalAllocator(MandatoryOverflowPolicy mandatoryOverflowPolicy = MandatoryOverflowPolicy.AllowOverflowWithDiagnostic)
+    {
+        _mandatoryOverflowPolicy = mandatoryOverflowPolicy;
+    }
+
     /// <summary>执行全局预算分配 + per-section 配额。</summary>
     public AllocationResult Allocate(
         IReadOnlyList<ContextCandidateEnvelope> envelopes,
@@ -1300,6 +1684,9 @@ public sealed class DefaultGlobalAllocator : IGlobalAllocator
         var decisions = new List<CandidateAllocationDecision>(ordered.Count);
         var usedTokens = 0;
         var takenCount = 0;
+        // R28-B.6 Impl-2：mandatory overflow 诊断累计
+        var mandatoryOverflowTokens = 0;
+        var hardWindowViolated = false;
 
         foreach (var envelope in ordered)
         {
@@ -1320,11 +1707,55 @@ public sealed class DefaultGlobalAllocator : IGlobalAllocator
                 continue;
             }
 
+            // R28-B.6 Impl-2：mandatory 候选超出预算时按策略处理
+            if (isMandatory && usedTokens + envelope.EstimatedTokens > tokenBudget)
+            {
+                var overflow = (usedTokens + envelope.EstimatedTokens) - tokenBudget;
+                mandatoryOverflowTokens += overflow;
+
+                switch (_mandatoryOverflowPolicy)
+                {
+                    case MandatoryOverflowPolicy.FailClosed:
+                        // 硬窗口：拒绝 mandatory 候选（AgentContext 场景）
+                        hardWindowViolated = true;
+                        dropped.Add(envelope);
+                        decisions.Add(new CandidateAllocationDecision
+                        {
+                            CandidateKey = envelope.CanonicalKey,
+                            Section = ResolveSection(envelope),
+                            IncludedTokens = 0,
+                            IsTruncated = false,
+                            ReasonCode = CandidateDecisionReasonCode.TokenBudgetExceeded
+                        });
+                        continue;
+
+                    case MandatoryOverflowPolicy.RejectLowestAuthorityMandatory:
+                        // 拒绝最低优先级的 mandatory（当前候选按 FinalScore 降序，末尾即最低优先级）。
+                        // 简化实现：当前候选若已超出预算且已有更高优先级 mandatory 选入，则拒绝当前。
+                        hardWindowViolated = true;
+                        dropped.Add(envelope);
+                        decisions.Add(new CandidateAllocationDecision
+                        {
+                            CandidateKey = envelope.CanonicalKey,
+                            Section = ResolveSection(envelope),
+                            IncludedTokens = 0,
+                            IsTruncated = false,
+                            ReasonCode = CandidateDecisionReasonCode.TokenBudgetExceeded
+                        });
+                        continue;
+
+                    case MandatoryOverflowPolicy.AllowOverflowWithDiagnostic:
+                    default:
+                        // 允许溢出但记录诊断（Package/Retrieval 默认语义）
+                        break;
+                }
+            }
+
             // Token budget 检查（非 mandatory）
             // R28-B.6：partial truncation — 当候选超出剩余预算时，不完全丢弃，
             // 而是包含部分 token（IsTruncated=true，IncludedTokens=remaining）。
             // 只有剩余空间为 0 时才完全丢弃。实际内容截断由 Projector 通过
-            // IContextTokenizerResolver 在 Material sidecar 恢复时执行。
+            // IContentTruncator 在 Material sidecar 恢复时执行（Impl-1）。
             if (!isMandatory && usedTokens + envelope.EstimatedTokens > tokenBudget)
             {
                 var remaining = tokenBudget - usedTokens;
@@ -1368,8 +1799,19 @@ public sealed class DefaultGlobalAllocator : IGlobalAllocator
                 Section = ResolveSection(envelope),
                 IncludedTokens = envelope.EstimatedTokens,
                 IsTruncated = false,
-                ReasonCode = CandidateDecisionReasonCode.SelectedHighestUtility
+                ReasonCode = isMandatory
+                    ? CandidateDecisionReasonCode.SelectedMandatory
+                    : CandidateDecisionReasonCode.SelectedHighestUtility
             });
+        }
+
+        // R28-B.6 Impl-2：构建诊断字典（仅在有 mandatory overflow 时记录）
+        var diagnostics = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (mandatoryOverflowTokens > 0 || hardWindowViolated)
+        {
+            diagnostics["MandatoryOverflowTokens"] = mandatoryOverflowTokens.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            diagnostics["MandatoryOverflowPolicy"] = _mandatoryOverflowPolicy.ToString();
+            diagnostics["HardWindowViolated"] = hardWindowViolated.ToString().ToLowerInvariant();
         }
 
         var outcome = new ContextDecisionOutcomeSummary
@@ -1380,7 +1822,8 @@ public sealed class DefaultGlobalAllocator : IGlobalAllocator
             TokenBudget = tokenBudget,
             Sections = Array.Empty<string>(), // B-1 骨架不实现 section 分层
             SafetyGateBlockedCount = 0, // SafetyGate 在 Engine 内执行
-            BudgetExceededCount = dropped.Count
+            BudgetExceededCount = dropped.Count,
+            Diagnostics = diagnostics
         };
 
         return new AllocationResult(selected, dropped, decisions, outcome);
@@ -1402,6 +1845,40 @@ public sealed class DefaultGlobalAllocator : IGlobalAllocator
 }
 
 // ---------------------------------------------------------------------------
+// R28-B.6 Impl-1：DefaultContentTruncator（默认内容截断器）
+// ---------------------------------------------------------------------------
+
+/// <summary>
+/// R28-B.6 Impl-1：默认内容截断器。使用 content.Length/4 粗略估算 token，
+/// 按 char 数截断（确保不超过 maxTokens * 4 字符）。
+/// </summary>
+/// <remarks>
+/// 生产环境可替换为基于真实 tokenizer 的实现（如 tiktoken / BPE）。
+/// 此默认实现保证：截断后内容的估算 token 数 <= maxTokens。
+/// </remarks>
+public sealed class DefaultContentTruncator : IContentTruncator
+{
+    /// <summary>按指定 token 数截断内容，返回截断后的内容和实际 token 数。</summary>
+    public TruncationResult Truncate(string content, int maxTokens)
+    {
+        ArgumentNullException.ThrowIfNull(content);
+        if (maxTokens <= 0) return new TruncationResult(string.Empty, 0, true);
+
+        var estimatedTokens = Math.Max(1, content.Length / 4);
+        if (estimatedTokens <= maxTokens)
+        {
+            return new TruncationResult(content, estimatedTokens, false);
+        }
+
+        var maxChars = maxTokens * 4;
+        var truncated = content.Length > maxChars
+            ? content.Substring(0, maxChars)
+            : content;
+        return new TruncationResult(truncated, maxTokens, true);
+    }
+}
+
+// ---------------------------------------------------------------------------
 // AgentContext Projector
 // ---------------------------------------------------------------------------
 
@@ -1413,9 +1890,23 @@ public sealed class DefaultGlobalAllocator : IGlobalAllocator
 /// B-1 骨架：投影为单 section（"context"），包含所有 selected 候选的 Content 拼接。
 /// B-2 将按 CandidateAllocationDecision.Section 分区投影。
 /// 不访问 Store；不重新排序、过滤、截断或计分（仅格式投影）。
+/// R28-B.6 Impl-1：当 IncludedTokens < EstimatedTokens 时，使用 IContentTruncator 真正截断 Content。
 /// </remarks>
 public sealed class AgentContextProjector : IAgentContextProjector
 {
+    private readonly IContentTruncator _contentTruncator;
+
+    /// <summary>
+    /// 构造 AgentContextProjector。
+    /// </summary>
+    /// <param name="contentTruncator">
+    /// R28-B.6 Impl-1：内容截断器。null 时使用 <see cref="DefaultContentTruncator"/>。
+    /// </param>
+    public AgentContextProjector(IContentTruncator? contentTruncator = null)
+    {
+        _contentTruncator = contentTruncator ?? new DefaultContentTruncator();
+    }
+
     /// <summary>将决策结果 + 候选正文投影为 AgentContextSnapshot。</summary>
     public AgentContextSnapshot Project(ContextDecisionResult result, CandidateWorkingSet workingSet)
     {
@@ -1426,6 +1917,7 @@ public sealed class AgentContextProjector : IAgentContextProjector
     /// P0-7：将决策结果 + 候选正文 + 投影上下文投影为 AgentContextSnapshot。
     /// 使用 context.AgentSession（如有）而非伪造的 session ID。
     /// 按 CandidateAllocationDecision.Section 分区投影（而非单 section 拼接）。
+    /// R28-B.6 Impl-1：当 IncludedTokens < EstimatedTokens 时截断 Content。
     /// </summary>
     public AgentContextSnapshot Project(ContextDecisionResult result, CandidateWorkingSet workingSet, ProjectionContext context)
     {
@@ -1470,8 +1962,21 @@ public sealed class AgentContextProjector : IAgentContextProjector
                     {
                         contentBuilder.Append("\n\n");
                     }
-                    contentBuilder.Append(material.Content);
-                    sectionTokens += item.IncludedTokens;
+
+                    // R28-B.6 Impl-1：当 IncludedTokens < EstimatedTokens 时，真正截断 Content
+                    var contentToAppend = material.Content;
+                    if (item.IncludedTokens < item.Envelope.EstimatedTokens && item.IncludedTokens > 0)
+                    {
+                        var truncation = _contentTruncator.Truncate(material.Content, item.IncludedTokens);
+                        contentToAppend = truncation.TruncatedContent;
+                        sectionTokens += truncation.ActualTokens;
+                    }
+                    else
+                    {
+                        sectionTokens += item.IncludedTokens;
+                    }
+
+                    contentBuilder.Append(contentToAppend);
                     candidateCount++;
                 }
             }

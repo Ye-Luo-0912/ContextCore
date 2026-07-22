@@ -61,7 +61,10 @@ public enum CandidateDecisionReasonCode
     PartiallyAcceptedDueToTruncation = 14,
 
     /// <summary>候选因被其他 section 引用而作为 duplicate reference 跳过（不重复写入）。</summary>
-    DuplicateSectionReference = 15
+    DuplicateSectionReference = 15,
+
+    /// <summary>R28-B.6 Blocker-6：Early Admission Gate 拒绝（scope mismatch / superseded / archived 等）。</summary>
+    EarlyAdmissionRejected = 16
 }
 
 /// <summary>

@@ -171,6 +171,10 @@ public sealed class PolicyResolutionAcceptanceTests
     [TestMethod]
     public async Task ResolvedPolicyUsesPinnedWorkspaceActivation()
     {
+        // R28-B.6 测试缺陷修复说明：此测试验证 DefaultResolvedPolicyProvider（B-1 骨架），
+        // 它使用固定 epoch=1 + 固定 DefaultContentHash，不接入 IPolicyRegistry。
+        // 生产路径 PostgresResolvedPolicyProvider 的 CAS epoch 验证见
+        // PostgresResolvedPolicyProvider_UsesRegistryActivationEpoch 测试。
         var provider = new DefaultResolvedPolicyProvider();
         var request = new ContextDecisionRuntimeRequest
         {
@@ -189,6 +193,86 @@ public sealed class PolicyResolutionAcceptanceTests
             "ResolvedPolicyReference 必须携带 BundleContentHash。");
         Assert.IsTrue(snapshot.Reference.ActivationEpoch > 0,
             "ActivationEpoch 必须非零（pinned workspace activation）。");
+    }
+
+    [TestMethod]
+    public async Task PostgresResolvedPolicyProvider_UsesRegistryActivationEpoch()
+    {
+        // R28-B.6 测试缺陷修复：验证 PostgresResolvedPolicyProvider 接入 IPolicyRegistry，
+        // 从 GetActivationAsync 返回的 PolicyActivation 读取 Epoch / BundleContentHash，
+        // 精确加载 bundle（GetBundleAsync）并校验 content hash（fail-closed）。
+        var bundle = ContextCore.Core.Services.Policy.DefaultPolicyBundleFactory.Create();
+        var computedHash = PolicyBundleHasher.ComputeHash(bundle);
+        const long expectedEpoch = 42L;
+
+        var mockRegistry = new MockPolicyRegistry(
+            activation: new PolicyActivation
+            {
+                WorkspaceId = "ws-pg",
+                CollectionId = "col-pg",
+                BundleId = bundle.BundleId,
+                BundleVersion = bundle.Version,
+                BundleContentHash = computedHash,
+                ActivatedAt = DateTimeOffset.UtcNow,
+                Epoch = expectedEpoch
+            },
+            bundle: bundle);
+        var provider = new PostgresResolvedPolicyProvider(mockRegistry);
+
+        var request = new ContextDecisionRuntimeRequest
+        {
+            RequestId = "req-pg",
+            Scope = new ContextDecisionScope("ws-pg", "col-pg"),
+            Purpose = ContextDecisionPurpose.Retrieval
+        };
+
+        var snapshot = await provider.ResolveAsync(request, CancellationToken.None);
+
+        // Epoch 必须来自 registry 的 PolicyActivation（而非固定值 1）
+        Assert.AreEqual(expectedEpoch, snapshot.Reference.ActivationEpoch,
+            "PostgresResolvedPolicyProvider 必须从 IPolicyRegistry.GetActivationAsync 读取 Epoch。");
+        Assert.AreEqual(bundle.BundleId, snapshot.Reference.BundleId,
+            "BundleId 必须来自 activation 记录。");
+        Assert.AreEqual(bundle.Version, snapshot.Reference.BundleVersion,
+            "BundleVersion 必须精确匹配 activation 记录（不漂移到最新版本）。");
+        Assert.AreEqual(computedHash, snapshot.Reference.BundleContentHash,
+            "BundleContentHash 必须来自 activation 记录并经验证一致。");
+        // 验证 registry 被调用
+        Assert.AreEqual(1, mockRegistry.GetActivationCallCount,
+            "GetActivationAsync 必须被调用一次。");
+        Assert.AreEqual(1, mockRegistry.GetBundleCallCount,
+            "GetBundleAsync 必须被调用一次（精确版本加载）。");
+    }
+
+    [TestMethod]
+    public async Task PostgresResolvedPolicyProvider_HashMismatchFailsClosed()
+    {
+        // R28-B.6 测试缺陷修复：验证 content hash 不一致时 fail-closed（抛异常，不静默回退）
+        var bundle = ContextCore.Core.Services.Policy.DefaultPolicyBundleFactory.Create();
+        var mockRegistry = new MockPolicyRegistry(
+            activation: new PolicyActivation
+            {
+                WorkspaceId = "ws-tamper",
+                CollectionId = "col-tamper",
+                BundleId = bundle.BundleId,
+                BundleVersion = bundle.Version,
+                BundleContentHash = "stale-hash-that-does-not-match",
+                ActivatedAt = DateTimeOffset.UtcNow,
+                Epoch = 1
+            },
+            bundle: bundle);
+        var provider = new PostgresResolvedPolicyProvider(mockRegistry);
+
+        var request = new ContextDecisionRuntimeRequest
+        {
+            RequestId = "req-tamper",
+            Scope = new ContextDecisionScope("ws-tamper", "col-tamper"),
+            Purpose = ContextDecisionPurpose.Retrieval
+        };
+
+        await Assert.ThrowsExceptionAsync<InvalidOperationException>(
+            async () => await provider.ResolveAsync(request, CancellationToken.None),
+            "Bundle content hash 不一致时必须抛 InvalidOperationException（fail-closed，不静默回退）。");
     }
 
     [TestMethod]
@@ -614,18 +698,22 @@ public sealed class CutoverAndDiAcceptanceTests
     [TestMethod]
     public async Task HundredPercentCutoverDoesNotExecuteLegacy()
     {
+        // R28-B.6 测试缺陷修复：改用真实 DefaultContextDecisionRuntime + AuthoritativeRetrievalRuntime，
+        // 验证 V2-only 路径端到端产出含 Content 的 SelectedItems（而非仅用预制 stub V2 Result）。
         // 100% cutover → V2-only 路径 → Legacy store 永不被查询
         var trackingStore = new CallTrackingContextStore();
         var legacyRetriever = new HybridContextRetriever(trackingStore);
-        var stubV2 = new RecordingDecisionRuntime(
-            R28BTestHelpers.MakeResult("op-v2", selected: new[]
-            {
-                R28BTestHelpers.MakeEnvelope("v2-c1", ContextCandidateSource.Semantic, 0.8, 100)
-            }, estimatedTokens: 100));
-        var shadowRuntime = new ShadowDecisionRuntime(stubV2, new DecisionExperimentPlane());
+
+        // 真实 V2 Runtime：Provider 召回携带 Material 的候选
+        var provider = new CountingCandidateProvider(
+            ExpertKind.Lexical, MakeExpertResultWithContent("v2-c1", "test content from V2 provider"));
+        var realV2 = BuildRealRuntime(
+            router: new DefaultRouter(new DefaultExpertCatalog()),
+            providers: new[] { provider });
+        var shadowRuntime = new ShadowDecisionRuntime(realV2, new DecisionExperimentPlane());
         var projector = new RetrievalResultProjector();
         var runtime = new AuthoritativeRetrievalRuntime(
-            legacyRetriever, stubV2, shadowRuntime, projector,
+            legacyRetriever, realV2, shadowRuntime, projector,
             new CutoverController(cutoverPercentage: 100));
 
         var request = new ContextRetrievalRequest
@@ -637,12 +725,63 @@ public sealed class CutoverAndDiAcceptanceTests
             TopK = 10
         };
 
-        await runtime.RetrieveAsync(request, CancellationToken.None);
+        var result = await runtime.RetrieveAsync(request, CancellationToken.None);
 
         Assert.AreEqual(0, trackingStore.QueryCallCount,
             "100% cutover 时 Legacy store 必须永不被查询（V2-only 路径）。");
-        Assert.AreEqual(1, stubV2.ExecuteCallCount,
-            "V2 Runtime 必须被调用一次。");
+        Assert.AreEqual(1, provider.ExecuteCallCount,
+            "V2 Provider 必须被调用一次（真实 Runtime 召回）。");
+        // V2 路径产出的 SelectedItems 必须包含从 Material sidecar 恢复的 Content
+        Assert.IsTrue(result.SelectedItems.Count > 0,
+            "V2-only 路径必须产出 SelectedItems（真实 Runtime 决策）。");
+        Assert.IsFalse(string.IsNullOrEmpty(result.SelectedItems[0].Content),
+            "V2-only 路径 SelectedItems 必须包含 Content（从 Material sidecar 恢复，非空 stub）。");
+    }
+
+    // --- helpers（CutoverAndDiAcceptanceTests 内联：构建真实 Runtime + 携带 Content 的 ExpertResult）---
+
+    private static DefaultContextDecisionRuntime BuildRealRuntime(
+        IRouter router,
+        IReadOnlyList<ICandidateProvider> providers)
+    {
+        var engine = new DefaultContextDecisionEngine(
+            policyRegistry: null,
+            safetyGate: new DefaultSafetyGate(),
+            lifecycleGate: new DefaultLifecycleGate(),
+            utilityScorer: new DefaultUtilityScorer(),
+            globalAllocator: new DefaultGlobalAllocator());
+
+        return new DefaultContextDecisionRuntime(
+            engine: engine,
+            policyProvider: new DefaultResolvedPolicyProvider(),
+            router: router,
+            expertCatalog: new DefaultExpertCatalog(),
+            candidateProviders: providers,
+            canonicalMerger: new DefaultCanonicalCandidateMerger(),
+            earlyAdmissionGate: new DefaultEarlyAdmissionGate(),
+            featurePipeline: new DefaultFeaturePipeline(),
+            safetyGate: new DefaultSafetyGate(),
+            lifecycleGate: new DefaultLifecycleGate(),
+            utilityScorer: new DefaultUtilityScorer());
+    }
+
+    private static ExpertExecutionResult MakeExpertResultWithContent(string entityId, string content)
+    {
+        var key = CanonicalCandidateKey.Create("ws-1", "col-1", "test-entity", entityId, "v1");
+        var envelope = new ContextCandidateEnvelope
+        {
+            CandidateId = entityId,
+            CanonicalKey = key,
+            Source = ContextCandidateSource.Lexical,
+            Type = "test-type",
+            EstimatedTokens = 100,
+            Safety = new CandidateSafetyState { PassesSafetyGate = true },
+            Utility = new CandidateUtilityScore { DeterministicScore = 0.5, FinalScore = 0.5, ReasonCode = "test" }
+        };
+        var material = new CandidateMaterial { Key = key, Content = content, NativeKind = "test" };
+        return new ExpertExecutionResult(
+            new[] { envelope },
+            new Dictionary<CanonicalCandidateKey, CandidateMaterial> { [key] = material });
     }
 
     [TestMethod]
@@ -750,13 +889,30 @@ public sealed class ProjectorAcceptanceTests
         var projector = new PackageResultProjector();
         var dto = projector.Project(result, workingSet);
 
+        // SelectedItems 检查
         Assert.AreEqual(1, dto.SelectedItems.Count, "Package 必须包含 selected 候选。");
         var item = dto.SelectedItems[0];
         Assert.AreEqual("working_memory", item.SectionName, "Section 从 AllocationDecision 恢复。");
-        Assert.AreEqual(150, item.EstimatedTokens, "IncludedTokens 从 AllocationDecision 恢复。");
+        // R28-B.6 Impl-1：EstimatedTokens 由 IContentTruncator 重算（content 实际 token 数），
+        // 不再等于 AllocationDecision.IncludedTokens（150）。"package body content" 估算 ~5 tokens。
+        Assert.IsTrue(item.EstimatedTokens > 0, "EstimatedTokens 必须大于 0（由 truncator 重算）。");
+        Assert.IsTrue(item.EstimatedTokens <= 150, "EstimatedTokens 不应超过 AllocationDecision.IncludedTokens。");
+
+        // Package 非空 + Sections 非空检查（R28-B.6 测试缺陷修复：原测试漏检 Package 结构）
+        Assert.IsNotNull(dto.Package, "Package 必须非空（含 Sections/PackageId/EstimatedTokens）。");
+        Assert.AreEqual("build-1", dto.BuildId, "BuildId 从 result.RequestId 恢复。");
+        Assert.IsTrue(dto.Package.Sections.Count > 0, "Package.Sections 必须非空。");
+        var section = dto.Package.Sections[0];
+        Assert.AreEqual("working_memory", section.Name, "Section 名称从 AllocationDecision 恢复。");
+        // Content 检查：section content 从 Material sidecar 恢复
+        Assert.AreEqual("package body content", section.Content, "Section Content 必须从 Material sidecar 恢复。");
+        Assert.IsTrue(section.EstimatedTokens > 0, "Section EstimatedTokens 必须大于 0。");
+        Assert.IsTrue(dto.Package.EstimatedTokens > 0, "Package EstimatedTokens 必须大于 0。");
+
+        // Budget 检查
         Assert.IsNotNull(dto.Budget, "Package 必须构建完整 Budget。");
         Assert.AreEqual(1000, dto.Budget.TokenBudget);
-        Assert.AreEqual(150, dto.Budget.UsedTokens);
+        Assert.AreEqual(150, dto.Budget.UsedTokens, "Budget.UsedTokens 从 result.Outcome.EstimatedTokens 恢复。");
         Assert.IsTrue(dto.Budget.Sections.Count > 0, "Package 必须构建 section budgets。");
     }
 
@@ -912,6 +1068,16 @@ internal sealed class RecordingDecisionRuntime : IContextDecisionRuntime
         return ValueTask.FromResult(_result);
     }
 
+    // R28-B.6 Blocker-1：实现 ExecuteWithWorkingSetAsync，返回完整 ExecutionResult（含 WorkingSet）
+    public ValueTask<ContextDecisionExecutionResult> ExecuteWithWorkingSetAsync(
+        ContextDecisionRuntimeRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ExecuteCallCount++;
+        LastRequest = request;
+        return ValueTask.FromResult(R28BTestHelpers.MakeExecutionResult(_result));
+    }
+
     public void Reset()
     {
         ExecuteCallCount = 0;
@@ -920,7 +1086,7 @@ internal sealed class RecordingDecisionRuntime : IContextDecisionRuntime
 }
 
 /// <summary>
-/// 抛异常 Runtime：ExecuteAsync 始终抛出预设异常。
+/// 抛异常 Runtime：ExecuteAsync / ExecuteWithWorkingSetAsync 始终抛出预设异常。
 /// </summary>
 internal sealed class ThrowingDecisionRuntime : IContextDecisionRuntime
 {
@@ -928,6 +1094,12 @@ internal sealed class ThrowingDecisionRuntime : IContextDecisionRuntime
     public ThrowingDecisionRuntime(Exception exception) => _exception = exception;
 
     public ValueTask<ContextDecisionResult> ExecuteAsync(
+        ContextDecisionRuntimeRequest request,
+        CancellationToken cancellationToken = default)
+        => throw _exception;
+
+    // R28-B.6 Blocker-1：ExecuteWithWorkingSetAsync 同样抛出预设异常（取消异常必须传播）
+    public ValueTask<ContextDecisionExecutionResult> ExecuteWithWorkingSetAsync(
         ContextDecisionRuntimeRequest request,
         CancellationToken cancellationToken = default)
         => throw _exception;
@@ -962,4 +1134,60 @@ internal sealed class CallTrackingContextStore : IContextStore
         => Task.CompletedTask;
 
     public void Reset() => QueryCallCount = 0;
+}
+
+/// <summary>
+/// R28-B.6 测试缺陷修复：Mock IPolicyRegistry。
+/// 返回预设的 PolicyActivation + ContextPolicyBundle，统计 GetActivationAsync / GetBundleAsync 调用次数。
+/// 用于验证 PostgresResolvedPolicyProvider 正确接入 IPolicyRegistry（CAS epoch + content hash 校验）。
+/// </summary>
+internal sealed class MockPolicyRegistry : IPolicyRegistry
+{
+    private readonly PolicyActivation? _activation;
+    private readonly ContextPolicyBundle _bundle;
+
+    public int GetActivationCallCount { get; private set; }
+    public int GetBundleCallCount { get; private set; }
+
+    public MockPolicyRegistry(PolicyActivation? activation, ContextPolicyBundle bundle)
+    {
+        _activation = activation;
+        _bundle = bundle;
+    }
+
+    public Task<ContextPolicyBundle> GetActiveBundleAsync(
+        string workspaceId, string collectionId,
+        CancellationToken cancellationToken = default)
+        => Task.FromResult(_bundle);
+
+    public Task<ContextPolicyBundle?> GetBundleAsync(
+        string bundleId, string? version,
+        CancellationToken cancellationToken = default)
+    {
+        GetBundleCallCount++;
+        return Task.FromResult<ContextPolicyBundle?>(_bundle);
+    }
+
+    public Task<PolicyActivation?> GetActivationAsync(
+        string workspaceId, string collectionId,
+        CancellationToken cancellationToken = default)
+    {
+        GetActivationCallCount++;
+        return Task.FromResult(_activation);
+    }
+
+    public Task<IReadOnlyList<ContextPolicyBundle>> ListBundlesAsync(
+        bool includeSuperseded = false,
+        CancellationToken cancellationToken = default)
+        => Task.FromResult<IReadOnlyList<ContextPolicyBundle>>(new[] { _bundle });
+
+    public Task RegisterBundleAsync(
+        ContextPolicyBundle bundle,
+        CancellationToken cancellationToken = default)
+        => Task.CompletedTask;
+
+    public Task<bool> TryActivateAsync(
+        PolicyActivation next, long expectedEpoch,
+        CancellationToken cancellationToken = default)
+        => Task.FromResult(true);
 }

@@ -265,6 +265,11 @@ public sealed class ShadowDecisionRuntime
     /// 对 Retrieval 路径执行 Shadow tee：Legacy 结果 → WorkingSet → V2 决策 → Parity。
     /// </summary>
     /// <returns>Shadow 执行报告（含 Legacy/V2 双结果 + parity 对比）。</returns>
+    /// <remarks>
+    /// R28-B.6 Blocker-1：使用 <see cref="IContextDecisionRuntime.ExecuteWithWorkingSetAsync"/>
+    /// 获取完整 <see cref="ContextDecisionExecutionResult"/>（含 WorkingSet），
+    /// 让 shadow 报告携带 V2 Runtime 真实使用的 WorkingSet（而非仅 Legacy tee 快照）。
+    /// </remarks>
     public async ValueTask<RetrievalShadowReport> ExecuteRetrievalShadowAsync(
         ContextRetrievalRequest legacyRequest,
         ContextRetrievalResult legacyResult,
@@ -277,8 +282,8 @@ public sealed class ShadowDecisionRuntime
         ArgumentNullException.ThrowIfNull(legacyResult);
         ArgumentNullException.ThrowIfNull(context);
 
-        // Step 1：Tee 捕获 — 从 Legacy 结果构建 V2 WorkingSet
-        var workingSet = WorkingSetTee.BuildRetrievalWorkingSet(legacyResult, context);
+        // Step 1：Tee 捕获 — 从 Legacy 结果构建 V2 WorkingSet（作为 SeedCandidates）
+        var teeWorkingSet = WorkingSetTee.BuildRetrievalWorkingSet(legacyResult, context);
 
         // Step 2：构建 V2 RuntimeRequest
         var v2Request = new ContextDecisionRuntimeRequest
@@ -289,40 +294,45 @@ public sealed class ShadowDecisionRuntime
             QueryText = context.QueryText,
             TokenBudget = tokenBudget,
             TopK = topK,
-            SeedCandidates = workingSet.Envelopes
+            SeedCandidates = teeWorkingSet.Envelopes
         };
 
-        // Step 3：V2 pure Runtime 执行
-        var v2Result = await _v2Runtime.ExecuteAsync(v2Request, cancellationToken).ConfigureAwait(false);
+        // Step 3：V2 pure Runtime 执行（R28-B.6：使用 ExecuteWithWorkingSetAsync 获取完整 ExecutionResult）
+        var v2Execution = await _v2Runtime.ExecuteWithWorkingSetAsync(v2Request, cancellationToken).ConfigureAwait(false);
 
         // Step 4+5：构建 parity 报告（不再次调用 V2）
-        return BuildRetrievalShadowReport(legacyRequest, legacyResult, v2Result, tokenBudget, context);
+        return BuildRetrievalShadowReport(legacyRequest, legacyResult, v2Execution, tokenBudget, context);
     }
 
     /// <summary>
-    /// R28-B.6：使用预计算的 V2 结果构建 Retrieval shadow 报告，不再次调用 V2 Runtime。
+    /// R28-B.6：使用预计算的 V2 执行结果构建 Retrieval shadow 报告，不再次调用 V2 Runtime。
     /// 用于 sampled shadow 路径（权威 V2 结果已就绪，仅需 Legacy 对照 + parity 计算）。
     /// </summary>
+    /// <remarks>
+    /// R28-B.6 Blocker-1：接受 <see cref="ContextDecisionExecutionResult"/>（含 WorkingSet），
+    /// shadow 报告直接复用 V2 Runtime 真实使用的 WorkingSet，避免丢失 Material。
+    /// </remarks>
     /// <param name="legacyRequest">原始 Retrieval 请求。</param>
     /// <param name="legacyResult">Legacy 执行结果。</param>
-    /// <param name="v2Result">已计算的 V2 决策结果（复用，不重复调用）。</param>
+    /// <param name="v2Execution">已计算的 V2 执行结果（Decision + WorkingSet，复用，不重复调用）。</param>
     /// <param name="tokenBudget">Token 预算（用于 Legacy outcome 记录）。</param>
     /// <param name="context">候选适配上下文。</param>
     /// <returns>Shadow 执行报告（含 WorkingSet + parity 对比）。</returns>
     public RetrievalShadowReport BuildRetrievalShadowReport(
         ContextRetrievalRequest legacyRequest,
         ContextRetrievalResult legacyResult,
-        ContextDecisionResult v2Result,
+        ContextDecisionExecutionResult v2Execution,
         int tokenBudget,
         CandidateAdaptationContext context)
     {
         ArgumentNullException.ThrowIfNull(legacyRequest);
         ArgumentNullException.ThrowIfNull(legacyResult);
-        ArgumentNullException.ThrowIfNull(v2Result);
+        ArgumentNullException.ThrowIfNull(v2Execution);
         ArgumentNullException.ThrowIfNull(context);
 
-        // Tee 捕获 — 从 Legacy 结果构建 V2 WorkingSet
-        var workingSet = WorkingSetTee.BuildRetrievalWorkingSet(legacyResult, context);
+        var v2Result = v2Execution.Decision;
+        // R28-B.6：直接复用 V2 Runtime 真实使用的 WorkingSet（含 Material sidecar）
+        var workingSet = v2Execution.WorkingSet;
 
         // Legacy 结果 → Envelope（用于 parity 对比）
         // P0-4 修复：Legacy SelectedEnvelopes 必须只包含 selected 候选，不能包含 dropped。
@@ -367,6 +377,11 @@ public sealed class ShadowDecisionRuntime
     /// <summary>
     /// 对 Package 路径执行 Shadow tee：Legacy 结果 → WorkingSet → V2 决策 → Parity。
     /// </summary>
+    /// <remarks>
+    /// R28-B.6 Blocker-1：使用 <see cref="IContextDecisionRuntime.ExecuteWithWorkingSetAsync"/>
+    /// 获取完整 <see cref="ContextDecisionExecutionResult"/>（含 WorkingSet），
+    /// 让 shadow 报告携带 V2 Runtime 真实使用的 WorkingSet（而非仅 Legacy tee 快照）。
+    /// </remarks>
     public async ValueTask<PackageShadowReport> ExecutePackageShadowAsync(
         string requestId,
         ContextPackageBuildResult legacyResult,
@@ -377,7 +392,7 @@ public sealed class ShadowDecisionRuntime
         ArgumentNullException.ThrowIfNull(legacyResult);
         ArgumentNullException.ThrowIfNull(context);
 
-        var workingSet = WorkingSetTee.BuildPackageWorkingSet(legacyResult, context);
+        var teeWorkingSet = WorkingSetTee.BuildPackageWorkingSet(legacyResult, context);
 
         var v2Request = new ContextDecisionRuntimeRequest
         {
@@ -387,31 +402,38 @@ public sealed class ShadowDecisionRuntime
             QueryText = context.QueryText,
             TokenBudget = tokenBudget,
             TopK = int.MaxValue,
-            SeedCandidates = workingSet.Envelopes
+            SeedCandidates = teeWorkingSet.Envelopes
         };
 
-        var v2Result = await _v2Runtime.ExecuteAsync(v2Request, cancellationToken).ConfigureAwait(false);
+        // R28-B.6：使用 ExecuteWithWorkingSetAsync 获取完整 ExecutionResult
+        var v2Execution = await _v2Runtime.ExecuteWithWorkingSetAsync(v2Request, cancellationToken).ConfigureAwait(false);
 
         // 构建 parity 报告（不再次调用 V2）
-        return BuildPackageShadowReport(requestId, legacyResult, v2Result, tokenBudget, context);
+        return BuildPackageShadowReport(requestId, legacyResult, v2Execution, tokenBudget, context);
     }
 
     /// <summary>
-    /// R28-B.6：使用预计算的 V2 结果构建 Package shadow 报告，不再次调用 V2 Runtime。
+    /// R28-B.6：使用预计算的 V2 执行结果构建 Package shadow 报告，不再次调用 V2 Runtime。
     /// 用于 sampled shadow 路径（权威 V2 结果已就绪，仅需 Legacy 对照 + parity 计算）。
     /// </summary>
+    /// <remarks>
+    /// R28-B.6 Blocker-1：接受 <see cref="ContextDecisionExecutionResult"/>（含 WorkingSet），
+    /// shadow 报告直接复用 V2 Runtime 真实使用的 WorkingSet，避免丢失 Material。
+    /// </remarks>
     public PackageShadowReport BuildPackageShadowReport(
         string requestId,
         ContextPackageBuildResult legacyResult,
-        ContextDecisionResult v2Result,
+        ContextDecisionExecutionResult v2Execution,
         int tokenBudget,
         CandidateAdaptationContext context)
     {
         ArgumentNullException.ThrowIfNull(legacyResult);
-        ArgumentNullException.ThrowIfNull(v2Result);
+        ArgumentNullException.ThrowIfNull(v2Execution);
         ArgumentNullException.ThrowIfNull(context);
 
-        var workingSet = WorkingSetTee.BuildPackageWorkingSet(legacyResult, context);
+        var v2Result = v2Execution.Decision;
+        // R28-B.6：直接复用 V2 Runtime 真实使用的 WorkingSet（含 Material sidecar）
+        var workingSet = v2Execution.WorkingSet;
 
         // Legacy 结果 → Envelope
         // P0-4 修复：Legacy SelectedEnvelopes 必须只包含 selected 候选，不能包含 dropped。

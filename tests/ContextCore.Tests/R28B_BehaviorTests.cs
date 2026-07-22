@@ -97,6 +97,61 @@ internal static class R28BTestHelpers
         };
     }
 
+    /// <summary>
+    /// R28-B.6 Blocker-1：从 ContextDecisionResult 构建 ContextDecisionExecutionResult（含 WorkingSet）。
+    /// 供测试桩（StubDecisionRuntime / RecordingDecisionRuntime）使用，
+    /// 让 ExecuteWithWorkingSetAsync 返回完整 ExecutionResult。
+    /// WorkingSet 从 result 的 SelectedEnvelopes + DroppedEnvelopes 构建（Materials 留空）。
+    /// </summary>
+    public static ContextDecisionExecutionResult MakeExecutionResult(ContextDecisionResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+
+        // 从 result 的 envelopes 构建 WorkingSet（Materials 留空，测试桩不访问 Store）
+        var allEnvelopes = result.SelectedEnvelopes
+            .Concat(result.DroppedEnvelopes)
+            .ToList();
+
+        var workingSet = new CandidateWorkingSet
+        {
+            Envelopes = allEnvelopes,
+            Materials = new Dictionary<CanonicalCandidateKey, CandidateMaterial>()
+        };
+
+        // 构建最小 EffectivePolicySnapshot（使用 DefaultPolicyBundleFactory）
+        var bundle = ContextCore.Core.Services.Policy.DefaultPolicyBundleFactory.Create();
+        var snapshot = new EffectivePolicySnapshot
+        {
+            Reference = new ResolvedPolicyReference
+            {
+                BundleId = bundle.BundleId,
+                BundleVersion = bundle.Version,
+                BundleContentHash = DefaultResolvedPolicyProvider.DefaultContentHash,
+                ActivationEpoch = DefaultResolvedPolicyProvider.DefaultActivationEpoch
+            },
+            Safety = bundle.Safety,
+            Budget = bundle.Budget,
+            Routing = bundle.Routing,
+            FeatureSchemaVersion = bundle.Policies.DecisionSchemaVersion,
+            ResolutionScope = new ContextDecisionScope("test-ws", "test-col")
+        };
+
+        // 构建空 ExpertRoutingDecisionSet（测试桩不做真实路由）
+        var routing = new ExpertRoutingDecisionSet
+        {
+            Decisions = Array.Empty<ExpertRoutingDecision>()
+        };
+
+        return new ContextDecisionExecutionResult
+        {
+            Decision = result,
+            WorkingSet = workingSet,
+            Policy = snapshot,
+            Routing = routing,
+            ProviderReports = Array.Empty<ProviderExecutionReport>()
+        };
+    }
+
     public static CandidateAllocationDecision MakeAllocation(
         CanonicalCandidateKey key,
         string section,
@@ -216,8 +271,9 @@ public sealed class RetrievalResultProjectorTests
         var dto = projector.Project(result, workingSet);
 
         Assert.AreEqual(1, dto.SelectedItems.Count);
-        // P0-7：IncludedTokens 从 AllocationDecision 恢复（200 → 150）
-        Assert.AreEqual(150, dto.SelectedItems[0].EstimatedTokens);
+        // R28-B.6 Impl-1：EstimatedTokens 由 IContentTruncator 重算（content 实际 token 数）。
+        // content="content"（7 chars）估算 7/4=1 token，1 <= maxTokens(150) 故不截断，ActualTokens=1。
+        Assert.AreEqual(1, dto.SelectedItems[0].EstimatedTokens);
         // P0-7：IsTruncated=true 添加 "truncated" reason
         CollectionAssert.Contains(dto.SelectedItems[0].Reasons.ToList(), "truncated");
     }
@@ -320,8 +376,9 @@ public sealed class PackageResultProjectorTests
         var decision = dto.SelectedItems[0];
         // P0-7：Section 从 AllocationDecision 恢复
         Assert.AreEqual("custom-section", decision.SectionName);
-        // P0-7：IncludedTokens 从 AllocationDecision 恢复（200 → 120）
-        Assert.AreEqual(120, decision.EstimatedTokens);
+        // R28-B.6 Impl-1：EstimatedTokens 由 IContentTruncator 重算（content 实际 token 数）。
+        // content="package content body"（20 chars）估算 20/4=5 token，5 <= maxTokens(120) 故不截断，ActualTokens=5。
+        Assert.AreEqual(5, decision.EstimatedTokens);
         // P0-7：IsTruncated=true 写入 metadata["truncated"]="true"
         Assert.IsNotNull(decision.Metadata);
         Assert.IsTrue(decision.Metadata.TryGetValue("truncated", out var truncatedVal));
@@ -999,6 +1056,8 @@ public sealed class DecisionExperimentPlaneIntegrationTests
 
         integration.RecordShadowReport(shadowReport, "fx-1", "retrieval-mixed");
 
+        // R28-B.6 Impl-5：RecordShadowReport 已改为非阻塞入队，读 customRecorder 前需 flush
+        await integration.FlushAsync();
         var history = await customRecorder.GetHistoryAsync();
         Assert.AreEqual(1, history.Count);
         var fixture = history[0];
@@ -1045,6 +1104,8 @@ public sealed class DecisionExperimentPlaneIntegrationTests
 
         integration.RecordShadowReport(shadowReport, "fx-pkg-1", "package-mixed");
 
+        // R28-B.6 Impl-5：RecordShadowReport 已改为非阻塞入队，读 customRecorder 前需 flush
+        await integration.FlushAsync();
         var history = await customRecorder.GetHistoryAsync();
         Assert.AreEqual(1, history.Count);
         Assert.AreEqual("fx-pkg-1", history[0].FixtureId);
@@ -1442,6 +1503,19 @@ public sealed class ShadowDecisionRuntimeTests
             ExecuteCallCount++;
             LastRequest = request;
             return new ValueTask<ContextDecisionResult>(_result);
+        }
+
+        // R28-B.6 Blocker-1：实现 ExecuteWithWorkingSetAsync，返回完整 ExecutionResult（含 WorkingSet）
+        public ValueTask<ContextDecisionExecutionResult> ExecuteWithWorkingSetAsync(
+            ContextDecisionRuntimeRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(request);
+            cancellationToken.ThrowIfCancellationRequested();
+            ExecuteCallCount++;
+            LastRequest = request;
+            return new ValueTask<ContextDecisionExecutionResult>(
+                R28BTestHelpers.MakeExecutionResult(_result));
         }
     }
 }

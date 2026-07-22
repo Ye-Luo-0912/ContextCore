@@ -1,3 +1,4 @@
+using System.Text;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 
@@ -23,8 +24,25 @@ namespace ContextCore.Core.Services.DecisionEngine;
 /// R18-2：Package 结果投影器。将 Engine 输出的 envelope 集合投影为
 /// <see cref="ContextPackageBuildResult"/>，保持与现有 Package 主链出口 DTO 兼容。
 /// </summary>
+/// <remarks>
+/// R28-B.6 Impl-1：当 AllocationDecision.IsTruncated=true 时，使用 IContentTruncator
+/// 真正截断 Material.Content，并重新计算 ActualTokens（section content + SelectedItems）。
+/// </remarks>
 public sealed class PackageResultProjector : IResultProjector<ContextPackageBuildResult>
 {
+    private readonly IContentTruncator _contentTruncator;
+
+    /// <summary>
+    /// 构造 PackageResultProjector。
+    /// </summary>
+    /// <param name="contentTruncator">
+    /// R28-B.6 Impl-1：内容截断器。null 时使用 <see cref="DefaultContentTruncator"/>。
+    /// </param>
+    public PackageResultProjector(IContentTruncator? contentTruncator = null)
+    {
+        _contentTruncator = contentTruncator ?? new DefaultContentTruncator();
+    }
+
     /// <summary>
     /// 将决策结果投影为 ContextPackageBuildResult。
     /// </summary>
@@ -59,6 +77,8 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
     /// P0-7：将决策结果 + 候选正文 sidecar 投影为 ContextPackageBuildResult。
     /// 从 workingSet.Materials 恢复候选 Content；从 result.AllocationDecisions
     /// 消费 Section / IncludedTokens / IsTruncated 构建 section + token 分配。
+    /// R28-B.6 Blocker-2：真正构建 ContextPackage（含 Sections/PackageId/SourceRefs/CreatedAt）+
+    /// ContextPackageStandardOutput，赋值到 BuildResult.Package。
     /// </summary>
     public ContextPackageBuildResult Project(ContextDecisionResult result, CandidateWorkingSet workingSet)
     {
@@ -91,9 +111,134 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
             })
             .ToList();
 
+        // R28-B.6 Blocker-2：按 AllocationDecision.Section 分组，构建 ContextPackageSection 列表
+        var sectionGroups = result.SelectedEnvelopes
+            .Select(env =>
+            {
+                var section = ResolveSectionName(env.Source);
+                var includedTokens = env.EstimatedTokens;
+                var isTruncated = false;
+                if (allocationByKey.TryGetValue(env.CanonicalKey, out var decision))
+                {
+                    section = decision.Section;
+                    includedTokens = decision.IncludedTokens;
+                    isTruncated = decision.IsTruncated;
+                }
+                return new
+                {
+                    Envelope = env,
+                    Section = section,
+                    IncludedTokens = includedTokens,
+                    IsTruncated = isTruncated
+                };
+            })
+            .GroupBy(x => x.Section, StringComparer.Ordinal)
+            .OrderBy(g => g.Key, StringComparer.Ordinal)
+            .ToList();
+
+        var sections = new List<ContextPackageSection>(sectionGroups.Count);
+        var allSourceRefs = new List<string>();
+        var totalUsedTokens = 0;
+
+        foreach (var group in sectionGroups)
+        {
+            var sectionContentBuilder = new StringBuilder();
+            var sectionItemRefs = new List<string>();
+            var sectionSourceRefs = new List<string>();
+            var sectionTokens = 0;
+
+            foreach (var item in group)
+            {
+                sectionItemRefs.Add(item.Envelope.CandidateId);
+
+                // 从 Material sidecar 恢复正文
+                if (workingSet.Materials.TryGetValue(item.Envelope.CanonicalKey, out var material))
+                {
+                    if (sectionContentBuilder.Length > 0)
+                    {
+                        sectionContentBuilder.Append("\n\n");
+                    }
+
+                    // R28-B.6 Impl-1：当 IsTruncated=true 时，真正截断 Material.Content 并重算 ActualTokens
+                    var contentToAppend = material.Content;
+                    if (item.IsTruncated && !string.IsNullOrEmpty(contentToAppend) && item.IncludedTokens > 0)
+                    {
+                        var truncation = _contentTruncator.Truncate(contentToAppend, item.IncludedTokens);
+                        contentToAppend = truncation.TruncatedContent;
+                        sectionTokens += truncation.ActualTokens;
+                    }
+                    else
+                    {
+                        sectionTokens += item.IncludedTokens;
+                    }
+
+                    sectionContentBuilder.Append(contentToAppend);
+                    foreach (var sr in material.SourceRefs)
+                    {
+                        sectionSourceRefs.Add(sr);
+                        allSourceRefs.Add(sr);
+                    }
+                }
+                else
+                {
+                    sectionTokens += item.IncludedTokens;
+                }
+
+                // 加入 envelope 的 ProvenanceRefs
+                foreach (var provenanceRef in item.Envelope.ProvenanceRefs)
+                {
+                    if (!string.IsNullOrEmpty(provenanceRef.RefId))
+                    {
+                        sectionSourceRefs.Add(provenanceRef.RefId);
+                        allSourceRefs.Add(provenanceRef.RefId);
+                    }
+                }
+            }
+
+            sections.Add(new ContextPackageSection
+            {
+                Name = group.Key,
+                Priority = sections.Count,
+                Content = sectionContentBuilder.ToString(),
+                ContentFormat = ContextContentFormat.PlainText,
+                SourceRefs = sectionSourceRefs.Distinct(StringComparer.Ordinal).ToList(),
+                ItemRefs = sectionItemRefs,
+                EstimatedTokens = sectionTokens
+            });
+            totalUsedTokens += sectionTokens;
+        }
+
+        // R28-B.6 Blocker-2：构建 ContextPackage（含 PackageId/WorkspaceId/CollectionId/Sections/EstimatedTokens/SourceRefs/CreatedAt）
+        // WorkspaceId/CollectionId 从 SelectedEnvelopes 的首个 CanonicalKey 推导（result 不携带 Scope）
+        var firstEnvelope = result.SelectedEnvelopes.FirstOrDefault();
+        var packageWorkspaceId = firstEnvelope?.CanonicalKey.WorkspaceId ?? string.Empty;
+        var packageCollectionId = firstEnvelope?.CanonicalKey.CollectionId ?? string.Empty;
+
+        var package = new ContextPackage
+        {
+            PackageId = $"pkg-{result.RequestId}",
+            WorkspaceId = packageWorkspaceId,
+            CollectionId = packageCollectionId,
+            Sections = sections,
+            EstimatedTokens = totalUsedTokens,
+            SourceRefs = allSourceRefs.Distinct(StringComparer.Ordinal).ToList(),
+            Metadata = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["policyVersion"] = result.PolicyVersion,
+                ["modelEnabled"] = result.ModelEnabled.ToString().ToLowerInvariant(),
+                ["purpose"] = result.Purpose.ToString(),
+                ["runtimeKind"] = result.RuntimeKind.ToString()
+            },
+            CreatedAt = result.DecidedAt
+        };
+
+        // R28-B.6 Blocker-2：构建稳定的 ContextPackageStandardOutput
+        var standardOutput = BuildStandardOutput(result, sections);
+
         return new ContextPackageBuildResult
         {
             BuildId = result.RequestId,
+            Package = package,
             SelectedItems = selectedItems,
             DroppedItems = droppedItems,
             Budget = new ContextPackageBudgetReport
@@ -106,17 +251,102 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
                     : 0,
                 Sections = sectionBudgets
             },
+            Output = standardOutput,
+            TokenBudget = result.Outcome.TokenBudget,
+            EstimatedTokens = result.Outcome.EstimatedTokens,
             Metadata = new Dictionary<string, string>
             {
                 ["policyVersion"] = result.PolicyVersion,
                 ["modelEnabled"] = result.ModelEnabled.ToString().ToLowerInvariant(),
                 ["safetyGateBlocked"] = result.Outcome.SafetyGateBlockedCount.ToString(),
                 ["budgetExceeded"] = result.Outcome.BudgetExceededCount.ToString()
+            },
+            CreatedAt = result.DecidedAt
+        };
+    }
+
+    /// <summary>
+    /// R28-B.6 Blocker-2：构建稳定的 ContextPackageStandardOutput。
+    /// 按 section 名称映射到标准 schema 的 7 个分组（CurrentTask/RecentContext/WorkingState/
+    /// StableBackground/Constraints/Entities/Relations/Evidence）。
+    /// </summary>
+    private static ContextPackageStandardOutput BuildStandardOutput(
+        ContextDecisionResult result,
+        IReadOnlyList<ContextPackageSection> sections)
+    {
+        var recentContext = new List<ContextPackageOutputItem>();
+        var workingState = new List<ContextPackageOutputItem>();
+        var stableBackground = new List<ContextPackageOutputItem>();
+        var constraints = new List<ContextPackageOutputItem>();
+        var entities = new List<ContextPackageOutputItem>();
+        var relations = new List<ContextPackageOutputItem>();
+        var evidence = new List<ContextPackageOutputItem>();
+
+        foreach (var section in sections)
+        {
+            var outputItem = new ContextPackageOutputItem
+            {
+                SectionName = section.Name,
+                Content = section.Content,
+                ContentFormat = section.ContentFormat,
+                SourceRefs = section.SourceRefs,
+                ItemRefs = section.ItemRefs,
+                EstimatedTokens = section.EstimatedTokens
+            };
+
+            // 按 section 名称映射到标准 schema 分组
+            switch (section.Name)
+            {
+                case "mandatory":
+                case "constraint":
+                    constraints.Add(outputItem);
+                    break;
+                case "working_memory":
+                case "memory":
+                    workingState.Add(outputItem);
+                    break;
+                case "stable_memory":
+                    stableBackground.Add(outputItem);
+                    break;
+                case "recent_context":
+                case "global":
+                case "global_context":
+                case "related":
+                    recentContext.Add(outputItem);
+                    break;
+                case "relations":
+                case "related_context":
+                    relations.Add(outputItem);
+                    break;
+                default:
+                    recentContext.Add(outputItem);
+                    break;
+            }
+        }
+
+        return new ContextPackageStandardOutput
+        {
+            RecentContext = recentContext,
+            WorkingState = workingState,
+            StableBackground = stableBackground,
+            Constraints = constraints,
+            Entities = entities,
+            Relations = relations,
+            Evidence = evidence,
+            Excluded = result.DroppedEnvelopes.Select(ProjectToDroppedItem).ToList(),
+            Budget = new ContextPackageBudgetReport
+            {
+                TokenBudget = result.Outcome.TokenBudget,
+                UsedTokens = result.Outcome.EstimatedTokens,
+                RemainingTokens = Math.Max(0, result.Outcome.TokenBudget - result.Outcome.EstimatedTokens),
+                UsageRatio = result.Outcome.TokenBudget > 0
+                    ? (double)result.Outcome.EstimatedTokens / result.Outcome.TokenBudget
+                    : 0
             }
         };
     }
 
-    private static ContextPackageDecision ProjectToPackageDecisionWithMaterial(
+    private ContextPackageDecision ProjectToPackageDecisionWithMaterial(
         ContextCandidateEnvelope envelope,
         CandidateWorkingSet workingSet,
         IReadOnlyDictionary<CanonicalCandidateKey, CandidateAllocationDecision> allocationByKey)
@@ -137,6 +367,14 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
         if (workingSet.Materials.TryGetValue(envelope.CanonicalKey, out var material))
         {
             content = material.Content;
+        }
+
+        // R28-B.6 Impl-1：当 IsTruncated=true 且有 Material 时，真正截断 Content 并重算 ActualTokens
+        if (isTruncated && !string.IsNullOrEmpty(content) && includedTokens > 0)
+        {
+            var truncation = _contentTruncator.Truncate(content, includedTokens);
+            content = truncation.TruncatedContent;
+            includedTokens = truncation.ActualTokens;
         }
 
         var metadata = new Dictionary<string, string>(StringComparer.Ordinal)

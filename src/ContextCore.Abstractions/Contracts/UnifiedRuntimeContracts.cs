@@ -53,6 +53,73 @@ public interface IContextDecisionRuntime
     ValueTask<ContextDecisionResult> ExecuteAsync(
         ContextDecisionRuntimeRequest request,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// R28-B.6 Blocker-1：执行完整决策编排，返回 ExecutionResult（含 WorkingSet）。
+    /// </summary>
+    /// <remarks>
+    /// 与 <see cref="ExecuteAsync"/> 的差异：返回 <see cref="ContextDecisionExecutionResult"/>，
+    /// 携带完整 <see cref="CandidateWorkingSet"/>（Envelopes + Materials）+ Policy + Routing + ProviderReports，
+    /// 让 Projector 始终能从 Material sidecar 恢复候选正文。
+    /// </remarks>
+    /// <param name="request">运行时请求（含 Scope / Purpose / SeedCandidates）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>完整执行结果（Decision + WorkingSet + Policy + Routing + ProviderReports）。</returns>
+    ValueTask<ContextDecisionExecutionResult> ExecuteWithWorkingSetAsync(
+        ContextDecisionRuntimeRequest request,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// R28-B.6 Blocker-1：Provider 执行报告。
+/// </summary>
+public sealed record ProviderExecutionReport
+{
+    /// <summary>Provider 对应的 Expert 类型。</summary>
+    public required ExpertKind Kind { get; init; }
+
+    /// <summary>是否执行成功。</summary>
+    public required bool Succeeded { get; init; }
+
+    /// <summary>是否超时。</summary>
+    public required bool TimedOut { get; init; }
+
+    /// <summary>执行耗时。</summary>
+    public required TimeSpan Duration { get; init; }
+
+    /// <summary>产出的候选数。</summary>
+    public required int CandidateCount { get; init; }
+
+    /// <summary>Store 调用次数（可选，用于诊断）。</summary>
+    public int StoreCallCount { get; init; }
+
+    /// <summary>错误码（失败时填入，如 "timeout" / "store-unavailable"）。</summary>
+    public string? ErrorCode { get; init; }
+}
+
+/// <summary>
+/// R28-B.6 Blocker-1：完整执行结果（Decision + WorkingSet + Policy + Routing + ProviderReports）。
+/// </summary>
+/// <remarks>
+/// Runtime 返回此类型，Projector 始终消费 Decision + WorkingSet + ProjectionContext，
+/// 不再依赖仅有 Decision 的旧路径（避免 V2-only 路径丢失 Material）。
+/// </remarks>
+public sealed record ContextDecisionExecutionResult
+{
+    /// <summary>决策结果（SelectedEnvelopes + DroppedEnvelopes + AllocationDecisions + Outcome）。</summary>
+    public required ContextDecisionResult Decision { get; init; }
+
+    /// <summary>候选工作集（Envelopes + Materials），Projector 从 Materials 恢复正文。</summary>
+    public required CandidateWorkingSet WorkingSet { get; init; }
+
+    /// <summary>有效策略快照（请求生命周期内不可变）。</summary>
+    public required EffectivePolicySnapshot Policy { get; init; }
+
+    /// <summary>Expert 路由决策集。</summary>
+    public required ExpertRoutingDecisionSet Routing { get; init; }
+
+    /// <summary>各 Provider 的执行报告（按执行顺序；Phase 2 Graph 在最后）。</summary>
+    public IReadOnlyList<ProviderExecutionReport> ProviderReports { get; init; } = [];
 }
 
 /// <summary>
@@ -85,6 +152,123 @@ public sealed record ContextDecisionRuntimeRequest
     /// <summary>种子候选（Replay / 测试 / 显式注入；正常路径由 Providers 产出）。</summary>
     public IReadOnlyList<ContextCandidateEnvelope> SeedCandidates { get; init; }
         = Array.Empty<ContextCandidateEnvelope>();
+
+    /// <summary>R28-B.6 Blocker-4：Retrieval 专用输入（Purpose=Retrieval 时使用）。</summary>
+    public RetrievalInput? RetrievalInput { get; init; }
+
+    /// <summary>R28-B.6 Blocker-4：Package 专用输入（Purpose=Package 时使用）。</summary>
+    public PackageInput? PackageInput { get; init; }
+
+    /// <summary>R28-B.6 Blocker-4：AgentContext 专用输入（Purpose=AgentContext 时使用）。</summary>
+    public AgentInput? AgentInput { get; init; }
+}
+
+/// <summary>
+/// R28-B.6 Blocker-4：Retrieval 专用输入。完整保留原 ContextRetrievalRequest 语义。
+/// </summary>
+public sealed record RetrievalInput
+{
+    /// <summary>改写后的查询文本（如 query rewriting 后的结果）。</summary>
+    public string? RewrittenQueryText { get; init; }
+
+    /// <summary>必需 tag 列表（命中所有 tag 才入选）。</summary>
+    public IReadOnlyList<string> RequiredTags { get; init; } = [];
+
+    /// <summary>必需类型列表。</summary>
+    public IReadOnlyList<string> RequiredTypes { get; init; } = [];
+
+    /// <summary>必需 ID 列表（mandatory recall）。</summary>
+    public IReadOnlyList<string> RequiredIds { get; init; } = [];
+
+    /// <summary>外部 refs（强制召回）。</summary>
+    public IReadOnlyList<string> Refs { get; init; } = [];
+
+    /// <summary>查询向量（语义召回用）。</summary>
+    public IReadOnlyList<float> QueryVector { get; init; } = [];
+
+    /// <summary>embedding 模型名。</summary>
+    public string? ModelName { get; init; }
+
+    /// <summary>embedding query instruction（如 BGE 前缀）。</summary>
+    public string? QueryInstruction { get; init; }
+
+    /// <summary>候选 take（粗排上限）。</summary>
+    public int CandidateTake { get; init; }
+
+    /// <summary>向量召回 TopK。</summary>
+    public int VectorTopK { get; init; }
+
+    /// <summary>向量召回最低分数。</summary>
+    public double? MinVectorScore { get; init; }
+
+    /// <summary>关系扩展允许的关系类型；为空表示不限制。</summary>
+    public IReadOnlyList<string> AllowedRelationTypes { get; init; } = [];
+
+    /// <summary>关系扩展最大跳数。</summary>
+    public int RelationExpansionDepth { get; init; }
+
+    /// <summary>是否启用关键词召回。</summary>
+    public bool IncludeKeywordRecall { get; init; } = true;
+
+    /// <summary>是否启用向量召回。</summary>
+    public bool IncludeVectorRecall { get; init; } = true;
+
+    /// <summary>是否启用关系扩展。</summary>
+    public bool IncludeRelationExpansion { get; init; } = true;
+
+    /// <summary>是否启用短期记忆召回。</summary>
+    public bool IncludeWorkingMemory { get; init; } = true;
+}
+
+/// <summary>
+/// R28-B.6 Blocker-4：Package 专用输入。
+/// </summary>
+public sealed record PackageInput
+{
+    /// <summary>必需 tag 列表。</summary>
+    public IReadOnlyList<string> RequiredTags { get; init; } = [];
+
+    /// <summary>必需类型列表。</summary>
+    public IReadOnlyList<string> RequiredTypes { get; init; } = [];
+
+    /// <summary>必需 ID 列表（mandatory recall）。</summary>
+    public IReadOnlyList<string> RequiredIds { get; init; } = [];
+
+    /// <summary>查询向量（语义召回用）。</summary>
+    public IReadOnlyList<float> QueryVector { get; init; } = [];
+
+    /// <summary>embedding 模型名。</summary>
+    public string? ModelName { get; init; }
+
+    /// <summary>embedding query instruction。</summary>
+    public string? QueryInstruction { get; init; }
+
+    /// <summary>候选 take。</summary>
+    public int CandidateTake { get; init; }
+
+    /// <summary>向量召回 TopK。</summary>
+    public int VectorTopK { get; init; }
+
+    /// <summary>向量召回最低分数。</summary>
+    public double? MinVectorScore { get; init; }
+
+    /// <summary>section 比例（覆盖 policy 默认 SectionRatios）。</summary>
+    public IReadOnlyDictionary<string, double>? SectionRatios { get; init; }
+}
+
+/// <summary>
+/// R28-B.6 Blocker-4：AgentContext 专用输入。
+/// </summary>
+public sealed record AgentInput
+{
+    /// <summary>Agent session ID（用于 AgentContext 投影）。</summary>
+    public AgentSessionId? Session { get; init; }
+
+    /// <summary>必需 tag 列表。</summary>
+    public IReadOnlyList<string> RequiredTags { get; init; } = [];
+
+    /// <summary>必需 ID 列表（mandatory recall）。</summary>
+    public IReadOnlyList<string> RequiredIds { get; init; } = [];
 }
 
 /// <summary>
@@ -430,6 +614,19 @@ public interface IEarlyAdmissionGate
     /// 评估候选是否通过早期准入。
     /// </summary>
     AdmissionResult Evaluate(ContextCandidateEnvelope envelope, EffectivePolicySnapshot snapshot);
+
+    /// <summary>
+    /// R28-B.6 Blocker-6：评估候选集合的准入，返回分区结果（Admitted + Rejected）。
+    /// </summary>
+    /// <remarks>
+    /// 与 <see cref="Evaluate"/> 的差异：批量评估并返回分区结果，
+    /// 调用方可保留 Rejected 候选到 <c>DroppedEnvelopes</c>（而非直接丢弃），
+    /// 让 Early Gate 失败的候选仍可被 trace / 解释。
+    /// </remarks>
+    /// <param name="envelopes">待评估的候选集合。</param>
+    /// <param name="snapshot">有效策略快照。</param>
+    /// <returns>分区结果（Admitted + Rejected + RejectReasons）。</returns>
+    AdmissionPartition EvaluateBatch(IReadOnlyList<ContextCandidateEnvelope> envelopes, EffectivePolicySnapshot snapshot);
 }
 
 /// <summary>
@@ -439,6 +636,17 @@ public sealed record AdmissionResult(
     bool Admitted,
     string ReasonCode,
     string Detail);
+
+/// <summary>
+/// R28-B.6 Blocker-6：准入分区结果。
+/// </summary>
+/// <param name="Admitted">通过 Early Admission Gate 的候选集合。</param>
+/// <param name="Rejected">被 Early Admission Gate 拒绝的候选集合（保留到 DroppedEnvelopes，不丢失）。</param>
+/// <param name="RejectReasons">被拒绝候选的 reason code（按 CanonicalCandidateKey 索引）。</param>
+public sealed record AdmissionPartition(
+    IReadOnlyList<ContextCandidateEnvelope> Admitted,
+    IReadOnlyList<ContextCandidateEnvelope> Rejected,
+    IReadOnlyDictionary<CanonicalCandidateKey, string> RejectReasons);
 
 /// <summary>
 /// R28-B：Decision Safety Gate。在 Feature Pipeline 之后做完整安全检查。
@@ -640,3 +848,30 @@ public sealed record ProjectionContext
     /// <summary>collection 作用域（从 Request.Scope 传入）。</summary>
     public string? CollectionId { get; init; }
 }
+
+// ---------------------------------------------------------------------------
+// R28-B.6 Impl-1：内容截断器
+// ---------------------------------------------------------------------------
+
+/// <summary>
+/// R28-B.6 Impl-1：内容截断器接口。按 token 数截断候选正文。
+/// </summary>
+/// <remarks>
+/// Allocator 在预算不足时仅做账面截断（IncludedTokens=remaining, IsTruncated=true），
+/// 但实际正文可能超出预算。Projector 在恢复 Material.Content 时使用此截断器
+/// 真正裁剪正文，确保模型输入不超过预算。
+/// </remarks>
+public interface IContentTruncator
+{
+    /// <summary>按指定 token 数截断内容，返回截断后的内容和实际 token 数。</summary>
+    /// <param name="content">原始正文。</param>
+    /// <param name="maxTokens">允许的最大 token 数。</param>
+    /// <returns>截断结果（含截断后正文、实际 token 数、是否发生截断）。</returns>
+    TruncationResult Truncate(string content, int maxTokens);
+}
+
+/// <summary>R28-B.6 Impl-1：截断结果。</summary>
+/// <param name="TruncatedContent">截断后的正文（不超过 maxTokens 对应的字符数）。</param>
+/// <param name="ActualTokens">截断后正文的实际 token 估算数。</param>
+/// <param name="WasTruncated">是否发生了截断。</param>
+public sealed record TruncationResult(string TruncatedContent, int ActualTokens, bool WasTruncated);

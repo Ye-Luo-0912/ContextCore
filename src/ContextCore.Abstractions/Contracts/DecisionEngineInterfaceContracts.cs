@@ -198,6 +198,13 @@ public sealed class ContextDecisionOutcomeSummary
 
     /// <summary>本次决策的 budget 拦截数（因 token budget 超限被丢弃的候选数）。</summary>
     public int BudgetExceededCount { get; init; }
+
+    /// <summary>
+    /// R28-B.6 Impl-2：决策诊断字典。记录 mandatory overflow / hard window violation 等
+    /// 无法用标量字段表达的诊断信息（key=诊断名，value=字符串值）。
+    /// </summary>
+    public IReadOnlyDictionary<string, string> Diagnostics { get; init; }
+        = new Dictionary<string, string>(StringComparer.Ordinal);
 }
 
 /// <summary>

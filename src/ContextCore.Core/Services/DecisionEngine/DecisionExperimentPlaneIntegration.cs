@@ -1,3 +1,4 @@
+using System.Threading.Channels;
 using ContextCore.Abstractions;
 
 namespace ContextCore.Core.Services.DecisionEngine;
@@ -185,12 +186,21 @@ public sealed class CutoverConfiguration
 ///   - B-2~B-4：Shadow 是切换前的验收手段
 ///   - B-5：Shadow 是切换后的持续监控手段（detect V2 drift over time）
 /// </remarks>
-public sealed class DecisionExperimentPlaneIntegration
+public sealed class DecisionExperimentPlaneIntegration : IAsyncDisposable
 {
     private readonly DecisionExperimentPlane _experimentPlane;
     private readonly ShadowGateEvaluator _gateEvaluator;
     private readonly CutoverConfiguration _configuration;
     private readonly IExperimentRecorder _recorder;
+
+    // R28-B.6 Impl-5：异步非阻塞队列。写路径（RecordFixture / RecordShadowReport /
+    // ClearHistory）只入队即返回，后台 consumer 串行消费调用 _recorder。
+    // 读路径（FixtureHistory / EvaluateHistoricalFixtures）先 FlushAsync 再读取，
+    // 保证调用方看到入队事件已落盘。生产环境若需纯异步读取可调用 FlushAsync 后
+    // 直接访问 IExperimentRecorder。
+    private readonly Channel<ExperimentEvent> _queue;
+    private readonly Task _consumerTask;
+    private readonly CancellationTokenSource _shutdownCts;
 
     /// <summary>构造长期实验平面集成。</summary>
     public DecisionExperimentPlaneIntegration(
@@ -204,11 +214,39 @@ public sealed class DecisionExperimentPlaneIntegration
         _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
         // P0-9：持久化委托给 IExperimentRecorder；未注入时回退到 in-memory 默认实现。
         _recorder = recorder ?? new InMemoryExperimentRecorder();
+
+        // R28-B.6 Impl-5：unbounded channel 保证 TryWrite 永不阻塞（写路径完全非阻塞）。
+        // Replay fixture 频率低（CI/抽样 shadow），unbounded 不会造成内存压力。
+        _queue = Channel.CreateUnbounded<ExperimentEvent>(
+            new UnboundedChannelOptions { SingleReader = true, SingleWriter = false });
+        _shutdownCts = new CancellationTokenSource();
+        _consumerTask = Task.Run(() => ConsumeAsync(_shutdownCts.Token));
     }
 
     /// <summary>历史 replay fixture 集合（线程安全快照）。</summary>
+    /// <remarks>
+    /// R28-B.6 Impl-5：写路径已异步化（Channel + 后台 consumer）。此 getter 为向后兼容
+    /// 保留 sync-over-async：先 FlushAsync 排空队列，再同步读取 recorder 历史。
+    /// 生产环境高并发读取应优先使用 <see cref="GetFixtureHistoryAsync"/>。
+    /// </remarks>
     public IReadOnlyList<ReplayFixture> FixtureHistory
-        => _recorder.GetHistoryAsync().GetAwaiter().GetResult();
+    {
+        get
+        {
+            FlushAsync().GetAwaiter().GetResult();
+            return _recorder.GetHistoryAsync().GetAwaiter().GetResult();
+        }
+    }
+
+    /// <summary>
+    /// R28-B.6 Impl-5：异步读取历史 fixture。先 flush 写队列，再异步读取 recorder。
+    /// </summary>
+    public async ValueTask<IReadOnlyList<ReplayFixture>> GetFixtureHistoryAsync(
+        CancellationToken cancellationToken = default)
+    {
+        await FlushAsync(cancellationToken).ConfigureAwait(false);
+        return await _recorder.GetHistoryAsync(cancellationToken).ConfigureAwait(false);
+    }
 
     /// <summary>
     /// 记录一次 parity 对比，存为 replay fixture。
@@ -227,42 +265,59 @@ public sealed class DecisionExperimentPlaneIntegration
     }
 
     /// <summary>记录 parity fixture（仅聚合标量；P0-9 前的旧入口）。</summary>
+    /// <remarks>
+    /// R28-B.6 Impl-5：非阻塞入队，立即返回。后台 consumer 异步调用 _recorder.RecordAsync。
+    /// 调用方若需保证落盘可见，应随后调用 <see cref="FlushAsync"/> 或使用读取入口
+    /// （<see cref="FixtureHistory"/> / <see cref="EvaluateHistoricalFixtures"/> 会自动 flush）。
+    /// </remarks>
     public void RecordFixture(ParityReport report, string fixtureId, string purpose, string notes = "")
     {
         ArgumentNullException.ThrowIfNull(report);
         var fixture = ReplayFixture.FromReport(report, fixtureId, purpose, notes);
-        _recorder.RecordAsync(fixture).AsTask().GetAwaiter().GetResult();
+        Enqueue(new ExperimentEvent.Record(fixture));
     }
 
     /// <summary>
     /// P0-9：从完整 Retrieval shadow 报告构建并持久化 replay fixture。
     /// 携带 WorkingSet + V2Result，使 fixture 可离线重放。
     /// </summary>
+    /// <remarks>
+    /// R28-B.6 Impl-5：非阻塞入队，立即返回（详见 <see cref="RecordFixture"/>）。
+    /// </remarks>
     public void RecordShadowReport(RetrievalShadowReport shadowReport, string fixtureId, string purpose, string notes = "")
     {
         ArgumentNullException.ThrowIfNull(shadowReport);
         var fixture = ReplayFixture.FromShadowReport(
             shadowReport.Parity, shadowReport.WorkingSet, shadowReport.V2Result,
             fixtureId, purpose, notes);
-        _recorder.RecordAsync(fixture).AsTask().GetAwaiter().GetResult();
+        Enqueue(new ExperimentEvent.Record(fixture));
     }
 
     /// <summary>
     /// P0-9：从完整 Package shadow 报告构建并持久化 replay fixture。
     /// 携带 WorkingSet + V2Result，使 fixture 可离线重放。
     /// </summary>
+    /// <remarks>
+    /// R28-B.6 Impl-5：非阻塞入队，立即返回（详见 <see cref="RecordFixture"/>）。
+    /// </remarks>
     public void RecordShadowReport(PackageShadowReport shadowReport, string fixtureId, string purpose, string notes = "")
     {
         ArgumentNullException.ThrowIfNull(shadowReport);
         var fixture = ReplayFixture.FromShadowReport(
             shadowReport.Parity, shadowReport.WorkingSet, shadowReport.V2Result,
             fixtureId, purpose, notes);
-        _recorder.RecordAsync(fixture).AsTask().GetAwaiter().GetResult();
+        Enqueue(new ExperimentEvent.Record(fixture));
     }
 
     /// <summary>评估历史 fixture，产出 cutover 就绪判定（CI 验收 hook）。</summary>
+    /// <remarks>
+    /// R28-B.6 Impl-5：先 FlushAsync 排空写队列，再同步读取 recorder 历史。
+    /// 保留 sync-over-async 仅为向后兼容 CI 入口；生产环境可用
+    /// <see cref="EvaluateHistoricalFixturesAsync"/>。
+    /// </remarks>
     public CutoverReadinessAssessment EvaluateHistoricalFixtures()
     {
+        FlushAsync().GetAwaiter().GetResult();
         var fixtures = _recorder.GetHistoryAsync().GetAwaiter().GetResult();
         var reports = fixtures
             .Select(f => new ParityReport(
@@ -280,10 +335,38 @@ public sealed class DecisionExperimentPlaneIntegration
         return _gateEvaluator.EvaluateBatch(reports);
     }
 
+    /// <summary>
+    /// R28-B.6 Impl-5：异步评估历史 fixture，产出 cutover 就绪判定。
+    /// </summary>
+    public async ValueTask<CutoverReadinessAssessment> EvaluateHistoricalFixturesAsync(
+        CancellationToken cancellationToken = default)
+    {
+        await FlushAsync(cancellationToken).ConfigureAwait(false);
+        var fixtures = await _recorder.GetHistoryAsync(cancellationToken).ConfigureAwait(false);
+        var reports = fixtures
+            .Select(f => new ParityReport(
+                LegacySelectedCount: f.LegacySelectedCount,
+                V2SelectedCount: f.V2SelectedCount,
+                CommonSelectedCount: f.CommonSelectedCount,
+                OnlyInLegacyCount: f.OnlyInLegacyCount,
+                OnlyInV2Count: f.OnlyInV2Count,
+                JaccardIndex: f.JaccardIndex,
+                ParityLevel: f.ParityLevel,
+                LegacyTokenTotal: f.LegacyTokenTotal,
+                V2TokenTotal: f.V2TokenTotal,
+                WorkingSetCandidateCount: f.WorkingSetCandidateCount))
+            .ToList();
+        return _gateEvaluator.EvaluateBatch(reports);
+    }
+
     /// <summary>清除历史 fixture（用于测试或重置）。</summary>
+    /// <remarks>
+    /// R28-B.6 Impl-5：非阻塞入队 Clear 事件。调用方若需立即生效应调用
+    /// <see cref="FlushAsync"/> 或随后读取 <see cref="FixtureHistory"/>（自动 flush）。
+    /// </remarks>
     public void ClearHistory()
     {
-        _recorder.ClearAsync().AsTask().GetAwaiter().GetResult();
+        Enqueue(new ExperimentEvent.Clear());
     }
 
     /// <summary>
@@ -309,6 +392,8 @@ public sealed class DecisionExperimentPlaneIntegration
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(fixtureId);
 
+        // R28-B.6 Impl-5：先 flush 写队列，保证重放读到最新落盘的 fixture。
+        await FlushAsync(cancellationToken).ConfigureAwait(false);
         var fixtures = await _recorder.GetHistoryAsync(cancellationToken).ConfigureAwait(false);
         var fixture = fixtures.FirstOrDefault(f => string.Equals(f.FixtureId, fixtureId, StringComparison.Ordinal));
         if (fixture is null)
@@ -430,6 +515,121 @@ public sealed class DecisionExperimentPlaneIntegration
             hash *= 16777619u;
         }
         return hash;
+    }
+
+    // -----------------------------------------------------------------------
+    // R28-B.6 Impl-5：异步队列基础设施
+    // -----------------------------------------------------------------------
+
+    /// <summary>
+    /// R28-B.6 Impl-5：非阻塞入队。unbounded channel 下 TryWrite 永远成功。
+    /// </summary>
+    private void Enqueue(ExperimentEvent evt)
+    {
+        if (!_queue.Writer.TryWrite(evt))
+        {
+            // 理论不可达（unbounded channel 不会满）；防御性回退到同步等待。
+            _queue.Writer.WriteAsync(evt).AsTask().GetAwaiter().GetResult();
+        }
+    }
+
+    /// <summary>
+    /// R28-B.6 Impl-5：等待队列中此前所有事件被 consumer 处理完成。
+    /// 通过入队一个 sentinel（TaskCompletionSource）并在 consumer 处理到它时
+    /// 完成 TCS，实现"排空到此处"的语义。
+    /// </summary>
+    public async ValueTask FlushAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var sentinel = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        if (!_queue.Writer.TryWrite(new ExperimentEvent.Flush(sentinel)))
+        {
+            await _queue.Writer.WriteAsync(new ExperimentEvent.Flush(sentinel), cancellationToken).ConfigureAwait(false);
+        }
+        await sentinel.Task.ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// R28-B.6 Impl-5：后台 consumer。串行处理队列中的事件，调用 _recorder。
+    /// 异常被捕获以避免 consumer Task 终止（保证后续事件不丢失）；生产环境
+    /// 可通过包装 IExperimentRecorder 注入 ILogger 记录异常。
+    /// </summary>
+    private async Task ConsumeAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await foreach (var evt in _queue.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
+            {
+                try
+                {
+                    switch (evt)
+                    {
+                        case ExperimentEvent.Record rec:
+                            await _recorder.RecordAsync(rec.Fixture, cancellationToken).ConfigureAwait(false);
+                            break;
+                        case ExperimentEvent.Clear:
+                            await _recorder.ClearAsync(cancellationToken).ConfigureAwait(false);
+                            break;
+                        case ExperimentEvent.Flush flush:
+                            flush.Completion.TrySetResult();
+                            break;
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    // shutdown：不再处理后续事件
+                    return;
+                }
+                catch (Exception)
+                {
+                    // 单个事件失败不应终止 consumer；后续事件继续处理。
+                    // 失败的 fixture 不会落盘，调用方通过 FlushAsync 后读取
+                    // FixtureHistory 即可发现缺失（CI 验收 hook 会捕获 parity 不足）。
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // shutdown：正常退出
+        }
+    }
+
+    /// <summary>
+    /// R28-B.6 Impl-5：优雅停用。取消后台 consumer 并等待其退出。
+    /// 调用后不应再调用 RecordFixture / RecordShadowReport / ClearHistory。
+    /// </summary>
+    public async ValueTask DisposeAsync()
+    {
+        _shutdownCts.Cancel();
+        _queue.Writer.TryComplete();
+        try
+        {
+            await _consumerTask.ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // 预期退出
+        }
+        catch (Exception)
+        {
+            // consumer 内部已捕获所有非取消异常，此处仅为防御
+        }
+        _shutdownCts.Dispose();
+    }
+
+    /// <summary>
+    /// R28-B.6 Impl-5：实验事件（写路径入队条目）。
+    /// </summary>
+    private abstract record ExperimentEvent
+    {
+        /// <summary>记录一条 replay fixture。</summary>
+        public sealed record Record(ReplayFixture Fixture) : ExperimentEvent;
+
+        /// <summary>清除全部历史 fixture。</summary>
+        public sealed record Clear : ExperimentEvent;
+
+        /// <summary>Flush sentinel：consumer 处理到此事件时完成 TCS，标记此前所有事件已落盘。</summary>
+        public sealed record Flush(TaskCompletionSource Completion) : ExperimentEvent;
     }
 }
 
