@@ -362,6 +362,12 @@ internal static class CoreExtensions
 		services.AddSingleton<ShadowDecisionRuntime>();
 		services.AddSingleton<ShadowGate>();
 		services.AddSingleton<ShadowGateEvaluator>();
+		services.AddSingleton<CutoverController>();
+		services.AddSingleton<RetrievalResultProjector>();
+		services.AddSingleton<PackageResultProjector>();
+		services.AddSingleton<AuthoritativeRetrievalRuntime>();
+		services.AddSingleton<AuthoritativePackageRuntime>();
+		services.AddSingleton<AuthoritativeAgentContextRuntime>();
 
 		return services;
 	}
