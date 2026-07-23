@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
@@ -1116,11 +1117,21 @@ public sealed class PostgresResolvedPolicyProvider : IResolvedPolicyProvider
 /// </remarks>
 public static class PolicyBundleHasher
 {
-    /// <summary>计算 bundle 的内容哈希（SHA256 前 16 字符，前缀 "sha256:"）。</summary>
+    // bundle 不可变，按 (BundleId, Version) 缓存哈希结果，避免每次请求重复 SHA256 + StringBuilder
+    private static readonly ConcurrentDictionary<(string BundleId, string Version), string> _hashCache = new();
+
+    /// <summary>计算 bundle 的内容哈希（SHA256 前 16 字符，前缀 "sha256:"）。
+    /// bundle 不可变，结果按 (BundleId, Version) 缓存。</summary>
     public static string ComputeHash(ContextPolicyBundle bundle)
     {
         ArgumentNullException.ThrowIfNull(bundle);
+        var cacheKey = (bundle.BundleId, bundle.Version);
+        return _hashCache.GetOrAdd(cacheKey, _ => ComputeHashUncached(bundle));
+    }
 
+    /// <summary>实际计算 bundle 内容哈希（无缓存）。</summary>
+    private static string ComputeHashUncached(ContextPolicyBundle bundle)
+    {
         var sb = new StringBuilder();
         sb.Append(bundle.BundleId).Append('|');
         sb.Append(bundle.Version).Append('|');
@@ -1444,25 +1455,11 @@ public sealed class DefaultCanonicalCandidateMerger : ICanonicalCandidateMerger
             foreach (var envelope in output.Envelopes)
             {
                 var key = envelope.CanonicalKey;
-                if (envelopeByKey.TryGetValue(key, out var existing))
+                if (envelopeByKey.TryGetValue(key, out _))
                 {
-                    // 合并 Origins（union）
-                    if (!originsByKey.ContainsKey(key))
-                    {
-                        originsByKey[key] = new List<ExpertOrigin>(existing.Origins);
-                    }
+                    // 重复 key：Origins/Contributions 已在首次插入时初始化，此处仅累加
                     originsByKey[key].AddRange(envelope.Origins);
 
-                    // 合并 ExpertContributions（sum per-Expert）
-                    if (!contributionsByKey.ContainsKey(key))
-                    {
-                        contributionsByKey[key] = new Dictionary<ExpertKind, double>(
-                            existing.ExpertContributions.Count);
-                        foreach (var (expert, contribution) in existing.ExpertContributions)
-                        {
-                            contributionsByKey[key][expert] = contribution;
-                        }
-                    }
                     foreach (var (expert, contribution) in envelope.ExpertContributions)
                     {
                         contributionsByKey[key].TryAdd(expert, 0);

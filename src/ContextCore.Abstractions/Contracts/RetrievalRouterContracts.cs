@@ -56,6 +56,7 @@ namespace ContextCore.Abstractions;
 ///   5. Router 不直接调用 HybridContextRetriever 的 channel executor；
 ///      调用方根据 ExpertRoutingDecisionSet 自行决定 channel 执行策略。
 /// </remarks>
+[Obsolete("R28-B: 已被 IRouter 取代，将在后续版本移除。")]
 public interface IRetrievalRouter
 {
     /// <summary>

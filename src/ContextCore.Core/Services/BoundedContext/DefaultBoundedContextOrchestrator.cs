@@ -39,20 +39,19 @@ namespace ContextCore.Core.Services.BoundedContext;
 public sealed class DefaultBoundedContextOrchestrator : IBoundedContextOrchestrator
 {
     private readonly IContextRepairDetector _detector;
-    private readonly IContextRepairExecutor _executor;
+    private readonly IContextRepairExecutor? _executor;
     private readonly TimeProvider _timeProvider;
 
     /// <summary>构造默认 orchestrator。</summary>
     /// <param name="detector">修复检测器（必填）。</param>
-    /// <param name="executor">修复执行器（必填）。</param>
+    /// <param name="executor">修复执行器（可选；null 时跳过修复步骤，IContextRepairExecutor 当前无实现）。</param>
     /// <param name="timeProvider">时间提供者（可选，默认 <see cref="TimeProvider.System"/>）。</param>
     public DefaultBoundedContextOrchestrator(
         IContextRepairDetector detector,
-        IContextRepairExecutor executor,
+        IContextRepairExecutor? executor = null,
         TimeProvider? timeProvider = null)
     {
         ArgumentNullException.ThrowIfNull(detector);
-        ArgumentNullException.ThrowIfNull(executor);
         _detector = detector;
         _executor = executor;
         _timeProvider = timeProvider ?? TimeProvider.System;
@@ -80,7 +79,7 @@ public sealed class DefaultBoundedContextOrchestrator : IBoundedContextOrchestra
         var finalDecision = decision;
         var finalQualityReport = qualityReport;
 
-        if (diagnoses.Count > 0 && HasBudget(budget))
+        if (_executor is not null && diagnoses.Count > 0 && HasBudget(budget))
         {
             // 仅取第一条 Diagnosis 触发修复（优先级顺序）
             var firstDiagnosis = diagnoses[0];

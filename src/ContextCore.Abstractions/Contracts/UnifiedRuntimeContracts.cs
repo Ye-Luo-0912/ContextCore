@@ -479,11 +479,24 @@ public sealed record ExpertOrigin(
 /// </summary>
 public sealed record CandidateMaterial
 {
+    private string _content = string.Empty;
+
     /// <summary>对应的规范化候选标识。</summary>
     public required CanonicalCandidateKey Key { get; init; }
 
-    /// <summary>候选正文内容。</summary>
-    public required string Content { get; init; }
+    /// <summary>
+    /// 候选正文内容。
+    /// </summary>
+    /// <remarks>
+    /// 运行时非空校验：编译器已通过 required 保证编译期非 null，
+    /// 此 init accessor 对反射/序列化等绕过场景补充运行时检查，
+    /// 调用方赋 null 时立即抛出 ArgumentNullException。
+    /// </remarks>
+    public required string Content
+    {
+        get => _content;
+        init => _content = value ?? throw new ArgumentNullException(nameof(Content));
+    }
 
     /// <summary>原生类型（如 "note" / "memory" / "constraint"）。</summary>
     public required string NativeKind { get; init; }

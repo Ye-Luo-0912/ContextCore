@@ -81,7 +81,7 @@ public sealed class InMemoryExperimentRecorder : IExperimentRecorder
 // 目标（B-5 阶段：V2 成为唯一权威路径，Legacy 代码保留但默认停用）：
 //   1. DecisionExperimentPlaneIntegration：长期保留的实验平面集成入口。
 //      提供 sampled shadow（抽样校验）、replay fixture 存储、CI 验收 hook。
-//   2. CutoverConfiguration：从配置读取默认 cutover 比例（默认 100% = V2 only）。
+//   2. CutoverConfiguration：从配置读取默认 cutover 比例（默认 0% = Legacy only（Closure Gate 通过前安全默认））。
 //   3. LegacyCodeMarkedDeprecated：标记 Legacy 路径为 [Obsolete]（不物理删除，
 //      保留用于回滚和 DecisionExperimentPlane 的 parity 对比基线）。
 //
@@ -89,7 +89,7 @@ public sealed class InMemoryExperimentRecorder : IExperimentRecorder
 //   1. B-5 不物理删除 Legacy 代码（HybridContextRetriever / BasicContextPackageBuilder）。
 //      原因：DecisionExperimentPlane 需要 Legacy 作为 parity 基线；
 //      回滚安全需要 Legacy 代码可用。
-//   2. CutoverController 默认 100%（V2 only），可通过配置降级。
+//   2. CutoverController 默认 0%（Legacy only），可通过配置降级。
 //   3. DecisionExperimentPlane 作为长期基础设施：
 //      - Sampled shadow：即使 V2 已权威，仍按采样率执行 Legacy + parity 对比
 //      - Replay fixture：存储历史 parity 报告供回归分析
@@ -104,8 +104,8 @@ public sealed class InMemoryExperimentRecorder : IExperimentRecorder
 /// R28-B B-5：Cutover 配置。从环境变量/配置读取默认 cutover 比例。
 /// </summary>
 /// <remarks>
-/// 默认 100%（V2 only）。可通过环境变量 CC_CUTOVER_PERCENTAGE 降级。
-/// B-5 阶段 Legacy 代码保留但默认停用（CutoverPercentage=100）。
+/// 默认 0%（Legacy only）。可通过环境变量 CC_CUTOVER_PERCENTAGE 降级。
+/// B-5 阶段 Legacy 代码保留但默认停用（CutoverPercentage=0）。
 /// </remarks>
 public sealed class CutoverConfiguration
 {
@@ -227,12 +227,15 @@ public sealed class DecisionExperimentPlaneIntegration : IAsyncDisposable
     /// <remarks>
     /// R28-B.6 Impl-5：写路径已异步化（Channel + 后台 consumer）。此 getter 为向后兼容
     /// 保留 sync-over-async：先 FlushAsync 排空队列，再同步读取 recorder 历史。
-    /// 生产环境高并发读取应优先使用 <see cref="GetFixtureHistoryAsync"/>。
+    /// 警告：sync-over-async 在高并发下可能导致线程池饥饿，生产环境应优先使用
+    /// <see cref="GetFixtureHistoryAsync"/>。
     /// </remarks>
+    [Obsolete("Use GetFixtureHistoryAsync instead.")]
     public IReadOnlyList<ReplayFixture> FixtureHistory
     {
         get
         {
+            // 警告：保留 sync-over-async 仅为向后兼容，高并发场景请使用 GetFixtureHistoryAsync。
             FlushAsync().GetAwaiter().GetResult();
             return _recorder.GetHistoryAsync().GetAwaiter().GetResult();
         }
@@ -312,11 +315,13 @@ public sealed class DecisionExperimentPlaneIntegration : IAsyncDisposable
     /// <summary>评估历史 fixture，产出 cutover 就绪判定（CI 验收 hook）。</summary>
     /// <remarks>
     /// R28-B.6 Impl-5：先 FlushAsync 排空写队列，再同步读取 recorder 历史。
-    /// 保留 sync-over-async 仅为向后兼容 CI 入口；生产环境可用
+    /// 警告：保留 sync-over-async 仅为向后兼容 CI 入口，高并发场景请使用
     /// <see cref="EvaluateHistoricalFixturesAsync"/>。
     /// </remarks>
+    [Obsolete("Use EvaluateHistoricalFixturesAsync instead.")]
     public CutoverReadinessAssessment EvaluateHistoricalFixtures()
     {
+        // 警告：保留 sync-over-async 仅为向后兼容，高并发场景请使用 EvaluateHistoricalFixturesAsync。
         FlushAsync().GetAwaiter().GetResult();
         var fixtures = _recorder.GetHistoryAsync().GetAwaiter().GetResult();
         var reports = fixtures
@@ -528,8 +533,8 @@ public sealed class DecisionExperimentPlaneIntegration : IAsyncDisposable
     {
         if (!_queue.Writer.TryWrite(evt))
         {
-            // 理论不可达（unbounded channel 不会满）；防御性回退到同步等待。
-            _queue.Writer.WriteAsync(evt).AsTask().GetAwaiter().GetResult();
+            // 理论不可达（unbounded channel 不会满）；fail-fast 避免 sync-over-async 阻塞线程池。
+            throw new InvalidOperationException("Channel write failed: unbounded channel TryWrite returned false.");
         }
     }
 

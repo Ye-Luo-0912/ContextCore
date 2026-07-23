@@ -20,6 +20,7 @@ public sealed class RetrievalAdapterResult
 }
 
 /// <summary>检索适配器接缝。主适配器在 pipeline 中调用，可修改候选集。</summary>
+[Obsolete("R28-B: 无实现无使用，将在后续版本移除。")]
 public interface IContextRetrievalAdapter
 {
     string Name { get; }
@@ -27,4 +28,5 @@ public interface IContextRetrievalAdapter
 }
 
 /// <summary>影子追踪适配器。仅记录和追踪，不修改候选集。</summary>
+[Obsolete("R28-B: 无实现无使用，将在后续版本移除。")]
 public interface IShadowRetrievalAdapter : IContextRetrievalAdapter { }

@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
+using ContextCore.Core.Services.Retrieval;
 
 namespace ContextCore.Core.Services.DecisionEngine;
 
@@ -27,12 +28,18 @@ namespace ContextCore.Core.Services.DecisionEngine;
 /// </summary>
 internal static class CandidateProviderHelpers
 {
+    /// <summary>并行回退路径的默认读并发上限，避免 store 不支持批量时击穿连接池。</summary>
+    internal const int DefaultReadFanout = 16;
+
     /// <summary>计算 stable content hash（SHA256 前 16 字符），用作 EntityVersion。</summary>
     internal static string ComputeContentHash(string content)
     {
         var bytes = Encoding.UTF8.GetBytes(content ?? string.Empty);
         var hash = SHA256.HashData(bytes);
-        return "sha256:" + Convert.ToHexString(hash).ToLowerInvariant().AsSpan(0, 16).ToString();
+        // 用 stackalloc + chars 减少分配：避免 ToHexString 产生的大写字符串再 ToLowerInvariant 拷贝
+        Span<char> hex = stackalloc char[32];
+        Convert.ToHexString(hash).AsSpan().ToLowerInvariant(hex);
+        return string.Concat("sha256:", hex.Slice(0, 16));
     }
 
     /// <summary>粗略估算 token 数（~4 chars/token，最小 1）。</summary>
@@ -311,17 +318,50 @@ public sealed class MandatoryCandidateProvider : ICandidateProvider
 
         if (requiredIds.Count > 0)
         {
+            // 过滤空 ID 和已见 ID，保留原始顺序去重
+            var idsToFetch = new List<string>();
+            var fetchSeen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var id in requiredIds)
             {
-                if (string.IsNullOrEmpty(id) || seenIds.Contains(id)) continue;
+                if (string.IsNullOrEmpty(id) || seenIds.Contains(id) || !fetchSeen.Add(id)) continue;
+                idsToFetch.Add(id);
+            }
 
-                // 按 ID 强制召回（mandatory recall）
-                var item = await _contextStore.GetAsync(workspaceId, collectionId, id, cancellationToken)
-                    .ConfigureAwait(false);
-                if (item is not null)
+            if (idsToFetch.Count > 0)
+            {
+                // 批量或并行查询，消除 N+1
+                var fetchedDict = new Dictionary<string, ContextItem>(StringComparer.OrdinalIgnoreCase);
+                if (_contextStore is IContextStoreBatchLookup batchLookup && idsToFetch.Count > 1)
                 {
-                    seenIds.Add(id);
-                    mergedItems.Add(item);
+                    var batchItems = await batchLookup.BatchGetAsync(
+                        workspaceId, collectionId, idsToFetch, cancellationToken).ConfigureAwait(false);
+                    foreach (var item in batchItems)
+                    {
+                        if (item is not null) fetchedDict[item.Id] = item;
+                    }
+                }
+                else
+                {
+                    // 回退到带节流的并行单条查询
+                    var fetched = await BoundedFanout.WhenAllAsync(
+                        idsToFetch,
+                        (id, ct) => _contextStore.GetAsync(workspaceId, collectionId, id, ct),
+                        CandidateProviderHelpers.DefaultReadFanout,
+                        cancellationToken).ConfigureAwait(false);
+                    foreach (var item in fetched)
+                    {
+                        if (item is not null) fetchedDict[item.Id] = item;
+                    }
+                }
+
+                // 按 idsToFetch 原始顺序合并（保留原行为）
+                foreach (var id in idsToFetch)
+                {
+                    if (fetchedDict.TryGetValue(id, out var item))
+                    {
+                        seenIds.Add(id);
+                        mergedItems.Add(item);
+                    }
                 }
             }
         }
@@ -627,25 +667,106 @@ public sealed class SemanticCandidateProvider : ICandidateProvider
             if (hits.Count == 0) return CandidateProviderHelpers.Empty();
         }
 
-        // 3. Hydration：按 SourceKind 分组
+        // 3. Hydration：按 SourceKind 分组批量查询，消除 N+1
         var envelopes = new List<ContextCandidateEnvelope>(hits.Count);
         var materials = new Dictionary<CanonicalCandidateKey, CandidateMaterial>(hits.Count);
         var seenKeys = new HashSet<CanonicalCandidateKey>();
 
+        var batchContextStore = _contextStore as IContextStoreBatchLookup;
+        var batchMemoryStore = _memoryStore as IMemoryStoreBatchLookup;
+        var workspaceId = context.Request.Scope.WorkspaceId;
+        var defaultCollectionId = context.Request.Scope.CollectionId;
+
+        // 按 CollectionId 分组收集 SourceId（context hits / memory hits 分别处理）
+        var contextHitGroups = new Dictionary<string, List<VectorSearchResult>>(StringComparer.OrdinalIgnoreCase);
+        var memoryHitGroups = new Dictionary<string, List<VectorSearchResult>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var hit in hits)
+        {
+            var collId = hit.Record.CollectionId ?? defaultCollectionId;
+            if (IsContextSourceKind(hit.Record.SourceKind))
+            {
+                if (!contextHitGroups.TryGetValue(collId, out var list))
+                    contextHitGroups[collId] = list = new List<VectorSearchResult>();
+                list.Add(hit);
+            }
+            else if (_memoryStore is not null && IsMemorySourceKind(hit.Record.SourceKind))
+            {
+                if (!memoryHitGroups.TryGetValue(collId, out var list))
+                    memoryHitGroups[collId] = list = new List<VectorSearchResult>();
+                list.Add(hit);
+            }
+        }
+
+        // 批量查询 context items（按 collectionId 分组）
+        var contextItemDict = new Dictionary<string, ContextItem>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (collId, groupHits) in contextHitGroups)
+        {
+            var sourceIds = groupHits.Select(h => h.Record.SourceId).ToArray();
+            if (batchContextStore is not null)
+            {
+                var items = await batchContextStore.BatchGetAsync(
+                    workspaceId, collId, sourceIds, cancellationToken).ConfigureAwait(false);
+                foreach (var item in items)
+                {
+                    if (item is not null) contextItemDict[item.Id] = item;
+                }
+            }
+            else
+            {
+                // 回退到带节流的并行单条查询
+                var fetched = await BoundedFanout.WhenAllAsync(
+                    sourceIds,
+                    (id, ct) => _contextStore.GetAsync(workspaceId, collId, id, ct),
+                    CandidateProviderHelpers.DefaultReadFanout,
+                    cancellationToken).ConfigureAwait(false);
+                foreach (var item in fetched)
+                {
+                    if (item is not null) contextItemDict[item.Id] = item;
+                }
+            }
+        }
+
+        // 批量查询 memory items（按 collectionId 分组）
+        var memoryItemDict = new Dictionary<string, ContextMemoryItem>(StringComparer.OrdinalIgnoreCase);
+        if (_memoryStore is not null)
+        {
+            var ms = _memoryStore;
+            foreach (var (collId, groupHits) in memoryHitGroups)
+            {
+                var sourceIds = groupHits.Select(h => h.Record.SourceId).ToArray();
+                if (batchMemoryStore is not null)
+                {
+                    var memories = await batchMemoryStore.BatchGetAsync(
+                        workspaceId, collId, sourceIds, cancellationToken).ConfigureAwait(false);
+                    foreach (var memory in memories)
+                    {
+                        if (memory is not null) memoryItemDict[memory.Id] = memory;
+                    }
+                }
+                else
+                {
+                    // 回退到带节流的并行单条查询
+                    var fetched = await BoundedFanout.WhenAllAsync(
+                        sourceIds,
+                        (id, ct) => ms.GetAsync(workspaceId, collId, id, ct),
+                        CandidateProviderHelpers.DefaultReadFanout,
+                        cancellationToken).ConfigureAwait(false);
+                    foreach (var memory in fetched)
+                    {
+                        if (memory is not null) memoryItemDict[memory.Id] = memory;
+                    }
+                }
+            }
+        }
+
+        // 按 hit 原始顺序构造 envelope（保留原 dedup 行为）
         foreach (var hit in hits)
         {
             var score = Math.Max(0.0, hit.Score) * 100.0;
-            var collectionId = hit.Record.CollectionId ?? context.Request.Scope.CollectionId;
 
             if (IsContextSourceKind(hit.Record.SourceKind))
             {
-                var item = await _contextStore.GetAsync(
-                    context.Request.Scope.WorkspaceId,
-                    collectionId,
-                    hit.Record.SourceId,
-                    cancellationToken).ConfigureAwait(false);
-
-                if (item is null) continue;
+                if (!contextItemDict.TryGetValue(hit.Record.SourceId, out var item)) continue;
 
                 var (envelope, material) = CandidateProviderHelpers.BuildFromContextItem(
                     item, ContextCandidateSource.Semantic, ExpertKind.Semantic, score, context.AdaptationContext);
@@ -658,13 +779,7 @@ public sealed class SemanticCandidateProvider : ICandidateProvider
             }
             else if (_memoryStore is not null && IsMemorySourceKind(hit.Record.SourceKind))
             {
-                var memory = await _memoryStore.GetAsync(
-                    context.Request.Scope.WorkspaceId,
-                    collectionId,
-                    hit.Record.SourceId,
-                    cancellationToken).ConfigureAwait(false);
-
-                if (memory is null) continue;
+                if (!memoryItemDict.TryGetValue(hit.Record.SourceId, out var memory)) continue;
 
                 var (envelope, material) = CandidateProviderHelpers.BuildFromMemoryItem(
                     memory, ContextCandidateSource.Semantic, ExpertKind.Semantic, score, context.AdaptationContext);
@@ -860,46 +975,144 @@ public sealed class GraphCandidateProvider : ICandidateProvider
 
         if (seedItemIds.Count == 0) return CandidateProviderHelpers.Empty();
 
-        // 2. 对每个种子查询邻居关系
+        // 2. 对种子批量查询邻居关系（消除逐种子 N+1 往返）
         var neighborItemIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var seedItemId in seedItemIds)
+        var rs = _relationStore;
+
+        if (rs is not null && seedItemIds.Count > 1)
         {
-            var relations = await _relationStore.QueryNeighborsAsync(new RelationNeighborQuery
+            // 批量查询所有种子的邻居
+            var batchResults = await rs.QueryNeighborsBatchAsync(new RelationNeighborBatchQuery
             {
                 WorkspaceId = workspaceId,
                 CollectionId = collectionId,
-                ItemId = seedItemId,
+                ItemIds = seedItemIds.ToArray(),
                 Direction = RelationDirection.Both,
                 Take = take
             }, cancellationToken).ConfigureAwait(false);
 
-            foreach (var relation in relations)
+            foreach (var result in batchResults)
             {
-                // 提取"另一端"的 ItemId
-                var otherId = string.Equals(relation.SourceId, seedItemId, StringComparison.OrdinalIgnoreCase)
-                    ? relation.TargetId
-                    : relation.SourceId;
-
-                if (!string.IsNullOrEmpty(otherId) && !seedItemIds.Contains(otherId))
+                var seedItemId = result.ItemId;
+                foreach (var relation in result.Relations)
                 {
-                    neighborItemIds.Add(otherId);
+                    // 提取"另一端"的 ItemId
+                    var otherId = string.Equals(relation.SourceId, seedItemId, StringComparison.OrdinalIgnoreCase)
+                        ? relation.TargetId
+                        : relation.SourceId;
+
+                    if (!string.IsNullOrEmpty(otherId) && !seedItemIds.Contains(otherId))
+                    {
+                        neighborItemIds.Add(otherId);
+                    }
+                }
+            }
+        }
+        else if (rs is not null)
+        {
+            // 回退到带节流的并行单条查询
+            var seedArray = seedItemIds.ToArray();
+            var relationsPerSeed = await BoundedFanout.WhenAllAsync(
+                seedArray,
+                (seedItemId, ct) => rs.QueryNeighborsAsync(new RelationNeighborQuery
+                {
+                    WorkspaceId = workspaceId,
+                    CollectionId = collectionId,
+                    ItemId = seedItemId,
+                    Direction = RelationDirection.Both,
+                    Take = take
+                }, ct),
+                CandidateProviderHelpers.DefaultReadFanout,
+                cancellationToken).ConfigureAwait(false);
+
+            for (var i = 0; i < relationsPerSeed.Length; i++)
+            {
+                var seedItemId = seedArray[i];
+                foreach (var relation in relationsPerSeed[i])
+                {
+                    // 提取"另一端"的 ItemId
+                    var otherId = string.Equals(relation.SourceId, seedItemId, StringComparison.OrdinalIgnoreCase)
+                        ? relation.TargetId
+                        : relation.SourceId;
+
+                    if (!string.IsNullOrEmpty(otherId) && !seedItemIds.Contains(otherId))
+                    {
+                        neighborItemIds.Add(otherId);
+                    }
                 }
             }
         }
 
         if (neighborItemIds.Count == 0) return CandidateProviderHelpers.Empty();
 
-        // 3. Hydration：从 IContextStore 获取关联条目（回退到 IMemoryStore）
+        // 3. Hydration：批量获取关联条目（context store 优先，未命中的回退到 memory store）
         var envelopes = new List<ContextCandidateEnvelope>(neighborItemIds.Count);
         var materials = new Dictionary<CanonicalCandidateKey, CandidateMaterial>(neighborItemIds.Count);
         var seenKeys = new HashSet<CanonicalCandidateKey>();
 
-        foreach (var itemId in neighborItemIds)
-        {
-            var item = await _contextStore.GetAsync(
-                workspaceId, collectionId, itemId, cancellationToken).ConfigureAwait(false);
+        var neighborIdList = neighborItemIds.ToArray();
 
-            if (item is not null)
+        // 批量查询 context store
+        var contextItemDict = new Dictionary<string, ContextItem>(StringComparer.OrdinalIgnoreCase);
+        var batchContextStore = _contextStore as IContextStoreBatchLookup;
+        if (batchContextStore is not null && neighborIdList.Length > 1)
+        {
+            var items = await batchContextStore.BatchGetAsync(
+                workspaceId, collectionId, neighborIdList, cancellationToken).ConfigureAwait(false);
+            foreach (var item in items)
+            {
+                if (item is not null) contextItemDict[item.Id] = item;
+            }
+        }
+        else
+        {
+            // 回退到带节流的并行单条查询
+            var fetched = await BoundedFanout.WhenAllAsync(
+                neighborIdList,
+                (id, ct) => _contextStore.GetAsync(workspaceId, collectionId, id, ct),
+                CandidateProviderHelpers.DefaultReadFanout,
+                cancellationToken).ConfigureAwait(false);
+            foreach (var item in fetched)
+            {
+                if (item is not null) contextItemDict[item.Id] = item;
+            }
+        }
+
+        // 收集 context store 未命中的 ID，批量查询 memory store
+        var memoryItemDict = new Dictionary<string, ContextMemoryItem>(StringComparer.OrdinalIgnoreCase);
+        var missingIds = neighborIdList.Where(id => !contextItemDict.ContainsKey(id)).ToArray();
+        if (missingIds.Length > 0 && _memoryStore is not null)
+        {
+            var ms = _memoryStore;
+            var batchMemoryStore = ms as IMemoryStoreBatchLookup;
+            if (batchMemoryStore is not null && missingIds.Length > 1)
+            {
+                var memories = await batchMemoryStore.BatchGetAsync(
+                    workspaceId, collectionId, missingIds, cancellationToken).ConfigureAwait(false);
+                foreach (var memory in memories)
+                {
+                    if (memory is not null) memoryItemDict[memory.Id] = memory;
+                }
+            }
+            else
+            {
+                // 回退到带节流的并行单条查询
+                var fetched = await BoundedFanout.WhenAllAsync(
+                    missingIds,
+                    (id, ct) => ms.GetAsync(workspaceId, collectionId, id, ct),
+                    CandidateProviderHelpers.DefaultReadFanout,
+                    cancellationToken).ConfigureAwait(false);
+                foreach (var memory in fetched)
+                {
+                    if (memory is not null) memoryItemDict[memory.Id] = memory;
+                }
+            }
+        }
+
+        // 按原始顺序构造 envelope（context 优先，memory 回退）
+        foreach (var itemId in neighborIdList)
+        {
+            if (contextItemDict.TryGetValue(itemId, out var item))
             {
                 var (envelope, material) = CandidateProviderHelpers.BuildFromContextItem(
                     item, ContextCandidateSource.Graph, ExpertKind.Graph,
@@ -912,21 +1125,15 @@ public sealed class GraphCandidateProvider : ICandidateProvider
                 continue;
             }
 
-            if (_memoryStore is not null)
+            if (memoryItemDict.TryGetValue(itemId, out var memory))
             {
-                var memory = await _memoryStore.GetAsync(
-                    workspaceId, collectionId, itemId, cancellationToken).ConfigureAwait(false);
-
-                if (memory is not null)
+                var (envelope, material) = CandidateProviderHelpers.BuildFromMemoryItem(
+                    memory, ContextCandidateSource.Graph, ExpertKind.Graph,
+                    30.0, context.AdaptationContext);
+                if (seenKeys.Add(envelope.CanonicalKey))
                 {
-                    var (envelope, material) = CandidateProviderHelpers.BuildFromMemoryItem(
-                        memory, ContextCandidateSource.Graph, ExpertKind.Graph,
-                        30.0, context.AdaptationContext);
-                    if (seenKeys.Add(envelope.CanonicalKey))
-                    {
-                        envelopes.Add(envelope);
-                        materials[envelope.CanonicalKey] = material;
-                    }
+                    envelopes.Add(envelope);
+                    materials[envelope.CanonicalKey] = material;
                 }
             }
         }

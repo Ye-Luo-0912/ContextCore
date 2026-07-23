@@ -439,6 +439,7 @@ public sealed record ModelArtifact
 }
 
 /// <summary>模型 registry 接口：管理 artifact 的注册、查询、状态推进。</summary>
+[Obsolete("R28-B: 无实现无使用，将在后续版本移除。")]
 public interface IModelRegistry
 {
     /// <summary>注册新 artifact。</summary>

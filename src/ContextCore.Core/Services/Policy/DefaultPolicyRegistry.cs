@@ -45,7 +45,7 @@ public sealed class DefaultPolicyRegistry : IPolicyRegistry
     private readonly Lazy<ContextPolicyBundle> _defaultBundle = new(DefaultPolicyBundleFactory.Create);
 
     /// <inheritdoc />
-    public Task<ContextPolicyBundle> GetActiveBundleAsync(
+    public async Task<ContextPolicyBundle> GetActiveBundleAsync(
         string workspaceId,
         string collectionId,
         CancellationToken cancellationToken = default)
@@ -55,15 +55,15 @@ public sealed class DefaultPolicyRegistry : IPolicyRegistry
         {
             // P1-3：精确读取 (BundleId, BundleVersion)，不再漂移到"最新版本"。
             // activation 记录了激活时的 BundleVersion，必须精确匹配。
-            var bundle = GetBundleAsync(activation.BundleId, activation.BundleVersion, cancellationToken)
-                .GetAwaiter().GetResult();
+            var bundle = await GetBundleAsync(activation.BundleId, activation.BundleVersion, cancellationToken)
+                .ConfigureAwait(false);
             if (bundle is not null)
             {
-                return Task.FromResult(bundle);
+                return bundle;
             }
         }
         // 未激活或 bundle 已删除 → 返回全局默认 bundle
-        return Task.FromResult(_defaultBundle.Value);
+        return _defaultBundle.Value;
     }
 
     /// <inheritdoc />

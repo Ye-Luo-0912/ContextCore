@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 
@@ -51,7 +52,10 @@ public sealed class EmbeddingCacheService
             if (_vectors.TryGetValue(Key(modelName, contentHash), out var entry))
             {
                 entry.LastAccess = DateTimeOffset.UtcNow;
-                vector = Clone(entry.Vector);
+                // 直接返回冻结后的向量引用：Values 已是不可变数组、Metadata 在写入时克隆隔离，
+                // 因此读取无需再 Clone，消除每次读取的数组+字典分配。
+                // 注意：返回向量的 Metadata 与缓存条目共享，调用方应按只读约定使用。
+                vector = entry.Vector;
                 return true;
             }
         }
@@ -68,7 +72,7 @@ public sealed class EmbeddingCacheService
         lock (_gate)
         {
             var key = Key(modelName, contentHash);
-            _vectors[key] = new CacheEntry(Clone(vector), DateTimeOffset.UtcNow);
+            _vectors[key] = new CacheEntry(Freeze(vector), DateTimeOffset.UtcNow);
             EvictIfNeeded();
         }
     }
@@ -91,7 +95,7 @@ public sealed class EmbeddingCacheService
             foreach (var (contentHash, vector) in items)
             {
                 var key = Key(modelName, contentHash);
-                _vectors[key] = new CacheEntry(Clone(vector), now);
+                _vectors[key] = new CacheEntry(Freeze(vector), now);
             }
 
             EvictIfNeeded();
@@ -113,10 +117,16 @@ public sealed class EmbeddingCacheService
             return;
         }
 
-        while (_vectors.Count > _maxEntries)
+        var excess = _vectors.Count - _maxEntries;
+        if (excess <= 0)
         {
-            // LRU 淘汰：移除最久未访问的条目
-            var oldestKey = default(string?);
+            return;
+        }
+
+        if (excess == 1)
+        {
+            // 逐条写入的常见路径：单次 O(n) 扫描定位最旧条目并删除，无额外分配。
+            string? oldestKey = null;
             var oldestAccess = DateTimeOffset.MaxValue;
             foreach (var pair in _vectors)
             {
@@ -131,27 +141,47 @@ public sealed class EmbeddingCacheService
             {
                 _vectors.Remove(oldestKey);
             }
-            else
-            {
-                break;
-            }
+
+            return;
+        }
+
+        // 批量写入导致一次淘汰多条：用稳定排序一次性选出 excess 个最旧条目再批量删除，
+        // 避免原来“每删一条都全表扫描”的 O(excess * n) 复杂度。
+        // OrderBy 为稳定排序：LastAccess 相等时保留字典迭代（插入）顺序，
+        // 与逐条扫描“首个最小者先淘汰”的语义保持一致。
+        var keysToRemove = _vectors
+            .OrderBy(static pair => pair.Value.LastAccess)
+            .Take(excess)
+            .Select(static pair => pair.Key)
+            .ToList();
+
+        foreach (var key in keysToRemove)
+        {
+            _vectors.Remove(key);
         }
     }
+
+    private const string KeySeparator = "\u001f";
 
     private static string Key(
         string modelName,
         string contentHash)
     {
-        return $"{modelName}\u001f{contentHash}";
+        // 直接拼接，避免插值字符串 handler 的额外分配。
+        return string.Concat(modelName, KeySeparator, contentHash);
     }
 
-    private static EmbeddingVector Clone(EmbeddingVector vector)
+    /// <summary>
+    /// 冻结向量：将 Values 转为不可变数组、Metadata 克隆隔离后存入缓存。
+    /// 之后读取可直接共享引用而无需 Clone。
+    /// </summary>
+    private static EmbeddingVector Freeze(EmbeddingVector vector)
     {
         return new EmbeddingVector
         {
             InputId = vector.InputId,
             SourceRef = vector.SourceRef,
-            Values = vector.Values.ToArray(),
+            Values = vector.Values.ToImmutableArray(),
             Norm = vector.Norm,
             Metadata = new Dictionary<string, string>(vector.Metadata)
         };

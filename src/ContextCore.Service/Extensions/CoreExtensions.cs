@@ -404,7 +404,7 @@ internal static class CoreExtensions
 		services.AddSingleton<ShadowDecisionRuntime>();
 		services.AddSingleton<ShadowGate>();
 		services.AddSingleton<ShadowGateEvaluator>();
-		// B-5：CutoverConfiguration 从环境变量读取（默认 100% = V2 only）
+		// B-5：CutoverConfiguration 从环境变量读取（默认 0% = Legacy only）
 		services.AddSingleton(CutoverConfiguration.FromEnvironment());
 		services.AddSingleton<CutoverController>(sp =>
 		{
