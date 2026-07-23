@@ -36,11 +36,23 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
     /// 构造 PackageResultProjector。
     /// </summary>
     /// <param name="contentTruncator">
-    /// R28-B.6 Impl-1：内容截断器。null 时使用 <see cref="DefaultContentTruncator"/>。
+    /// R28-B.6 Impl-1：内容截断器。null 时回退到 tokenizerResolver 或 <see cref="DefaultContentTruncator"/>。
     /// </param>
-    public PackageResultProjector(IContentTruncator? contentTruncator = null)
+    /// <param name="tokenizerResolver">
+    /// R28-B.6 P0-6：tokenizer 解析器（可选）。contentTruncator 为 null 且 tokenizerResolver 非空时，
+    /// 使用 <see cref="TokenizerContentTruncator"/>（真正按 BPE/CJK 截断）。
+    /// </param>
+    /// <param name="modelName">tokenizer 使用的模型名（可选）。</param>
+    public PackageResultProjector(
+        IContentTruncator? contentTruncator = null,
+        IContextTokenizerResolver? tokenizerResolver = null,
+        string? modelName = null)
     {
-        _contentTruncator = contentTruncator ?? new DefaultContentTruncator();
+        // R28-B.6 P0-6：优先级 contentTruncator > tokenizerResolver > DefaultContentTruncator
+        _contentTruncator = contentTruncator
+            ?? (tokenizerResolver is not null
+                ? new TokenizerContentTruncator(tokenizerResolver, modelName)
+                : new DefaultContentTruncator());
     }
 
     /// <summary>
@@ -146,6 +158,7 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
             var sectionItemRefs = new List<string>();
             var sectionSourceRefs = new List<string>();
             var sectionTokens = 0;
+            var separatorTokens = 0;
 
             foreach (var item in group)
             {
@@ -154,16 +167,23 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
                 // 从 Material sidecar 恢复正文
                 if (workingSet.Materials.TryGetValue(item.Envelope.CanonicalKey, out var material))
                 {
-                    if (sectionContentBuilder.Length > 0)
+                    // R28-B.6 P0-6：分隔符 "\n\n" 的 token 预留（2 token/候选，避免后续追加时超出预算）
+                    var isNotFirst = sectionContentBuilder.Length > 0;
+                    if (isNotFirst)
                     {
                         sectionContentBuilder.Append("\n\n");
+                        separatorTokens += 2;
                     }
 
-                    // R28-B.6 Impl-1：当 IsTruncated=true 时，真正截断 Material.Content 并重算 ActualTokens
+                    // R28-B.6 Impl-1 + P0-6：当 IsTruncated=true 时，真正截断 Material.Content 并重算 ActualTokens。
+                    // 截断时减去分隔符预留预算（2 token），确保 section 总 token 不超出 IncludedTokens。
                     var contentToAppend = material.Content;
                     if (item.IsTruncated && !string.IsNullOrEmpty(contentToAppend) && item.IncludedTokens > 0)
                     {
-                        var truncation = _contentTruncator.Truncate(contentToAppend, item.IncludedTokens);
+                        var effectiveBudget = isNotFirst
+                            ? Math.Max(1, item.IncludedTokens - 2)
+                            : item.IncludedTokens;
+                        var truncation = _contentTruncator.Truncate(contentToAppend, effectiveBudget);
                         contentToAppend = truncation.TruncatedContent;
                         sectionTokens += truncation.ActualTokens;
                     }
@@ -195,6 +215,8 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
                 }
             }
 
+            // R28-B.6 P0-6：section 总 token = 候选正文 token + 分隔符预留 token
+            var totalSectionTokens = sectionTokens + separatorTokens;
             sections.Add(new ContextPackageSection
             {
                 Name = group.Key,
@@ -203,9 +225,9 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
                 ContentFormat = ContextContentFormat.PlainText,
                 SourceRefs = sectionSourceRefs.Distinct(StringComparer.Ordinal).ToList(),
                 ItemRefs = sectionItemRefs,
-                EstimatedTokens = sectionTokens
+                EstimatedTokens = totalSectionTokens
             });
-            totalUsedTokens += sectionTokens;
+            totalUsedTokens += totalSectionTokens;
         }
 
         // R28-B.6 Blocker-2：构建 ContextPackage（含 PackageId/WorkspaceId/CollectionId/Sections/EstimatedTokens/SourceRefs/CreatedAt）

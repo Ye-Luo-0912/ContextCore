@@ -156,14 +156,19 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
         // Step 4：Canonical Merge — 合并 Provider 输出
         var mergedWorkingSet = _canonicalMerger.Merge(expertOutputs);
 
-        // Step 5：SeedCandidates 合并 — 将外部传入的种子候选加入工作集
-        var allEnvelopes = MergeSeedCandidates(mergedWorkingSet.Envelopes, request.SeedCandidates);
+        // Step 5：SeedCandidates / SeedWorkingSet 合并 — 将外部传入的种子候选加入工作集
+        // R28-B.6 P0-4：优先使用 SeedWorkingSet（含 Envelopes + Materials），回退到 SeedCandidates（仅 Envelopes）
+        var seedEnvelopes = request.SeedWorkingSet?.Envelopes ?? request.SeedCandidates;
+        var allEnvelopes = MergeSeedCandidates(mergedWorkingSet.Envelopes, seedEnvelopes);
+
+        // R28-B.6 P0-4：合并 SeedWorkingSet.Materials 到 complete WorkingSet（保留种子 Material，不丢失）
+        var completeMaterials = MergeSeedMaterials(mergedWorkingSet.Materials, request.SeedWorkingSet?.Materials);
 
         // 构建 complete WorkingSet（包含 Materials）：保留所有 Materials 供 Projector 恢复正文
         var completeWorkingSet = new CandidateWorkingSet
         {
             Envelopes = allEnvelopes,
-            Materials = mergedWorkingSet.Materials
+            Materials = completeMaterials
         };
 
         if (allEnvelopes.Count == 0)
@@ -212,6 +217,14 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
         // Step 8：委托 IContextDecisionEngine 执行完整决策（Safety → Lifecycle → Score → Allocate）
         // P0-6 修复：Runtime 不再在 Engine 后二次 Allocate。
         // R28-B.6：Engine 通过 PolicySnapshot 字段接收已解析的 snapshot，走 V2 路径。
+        // R28-B.6 P0-5：构建 AllocationContext 传给 Engine（AgentContext → FailClosed 默认）。
+        var allocationContext = new AllocationContext
+        {
+            Purpose = request.Purpose,
+            Budget = snapshot.Budget,
+            MandatoryOverflowPolicy = ResolveMandatoryOverflowPolicy(request.Purpose),
+            TokenizerVersion = null
+        };
         var decisionRequest = new ContextDecisionRequest
         {
             RequestId = request.RequestId,
@@ -228,7 +241,9 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
             QueryText = request.QueryText,
             CreatedAt = DateTimeOffset.UtcNow,
             EnableModel = snapshot.Routing.EnableModelScoring,
-            PolicySnapshot = snapshot
+            PolicySnapshot = snapshot,
+            // P0-5：传 AllocationContext 给 Engine，让 Engine 在 V2 路径调用 Allocator 时使用
+            AllocationContext = allocationContext
         };
 
         var engineResult = await _engine.DecideAsync(decisionRequest, cancellationToken).ConfigureAwait(false);
@@ -264,7 +279,9 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
                 TokenBudget = engineResult.Outcome.TokenBudget,
                 Sections = engineResult.Outcome.Sections,
                 SafetyGateBlockedCount = engineResult.Outcome.SafetyGateBlockedCount,
-                BudgetExceededCount = engineResult.Outcome.BudgetExceededCount
+                BudgetExceededCount = engineResult.Outcome.BudgetExceededCount,
+                // R28-B.6 P0-5：保留 Engine Outcome.Diagnostics（mandatory overflow / hard window violated 等）
+                Diagnostics = engineResult.Outcome.Diagnostics
             },
             PolicyVersion = engineResult.PolicyVersion,
             ModelVersion = engineResult.ModelVersion,
@@ -667,6 +684,31 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
     }
 
     /// <summary>
+    /// R28-B.6 P0-4：合并 Provider 产出 Materials 与 SeedWorkingSet.Materials。
+    /// 按 CanonicalCandidateKey 去重：Provider 产出优先（已包含完整 Material），
+    /// SeedWorkingSet.Materials 仅补充 Provider 未产出的候选正文。
+    /// </summary>
+    private static IReadOnlyDictionary<CanonicalCandidateKey, CandidateMaterial> MergeSeedMaterials(
+        IReadOnlyDictionary<CanonicalCandidateKey, CandidateMaterial> providerMaterials,
+        IReadOnlyDictionary<CanonicalCandidateKey, CandidateMaterial>? seedMaterials)
+    {
+        if (seedMaterials is null || seedMaterials.Count == 0) return providerMaterials;
+        if (providerMaterials.Count == 0) return seedMaterials;
+
+        // 复制 provider materials，再补充 seed 中 provider 未产出的 key
+        var merged = new Dictionary<CanonicalCandidateKey, CandidateMaterial>(providerMaterials);
+        foreach (var (key, material) in seedMaterials)
+        {
+            // Provider 产出优先（已含 Material），不覆盖
+            if (!merged.ContainsKey(key))
+            {
+                merged[key] = material;
+            }
+        }
+        return merged;
+    }
+
+    /// <summary>
     /// P0-6：从 Engine 的 selected/dropped 输出构造 AllocationDecisions。
     /// Engine 是分配的唯一权威所有者，AllocationDecisions 反映 Engine 的决策结果。
     /// </summary>
@@ -768,6 +810,19 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
         ContextDecisionPurpose.Package => ContextDecisionSource.Package,
         ContextDecisionPurpose.AgentContext => ContextDecisionSource.Package, // AgentContext 复用 Package 决策链
         _ => ContextDecisionSource.Package
+    };
+
+    /// <summary>
+    /// R28-B.6 P0-5：根据业务用途解析 MandatoryOverflow 默认策略。
+    /// AgentContext → FailClosed（硬窗口，拒绝 mandatory 溢出）；
+    /// Retrieval/Package → AllowOverflowWithDiagnostic（允许溢出但记录诊断）。
+    /// </summary>
+    private static MandatoryOverflowPolicy ResolveMandatoryOverflowPolicy(ContextDecisionPurpose purpose) => purpose switch
+    {
+        ContextDecisionPurpose.AgentContext => MandatoryOverflowPolicy.FailClosed,
+        ContextDecisionPurpose.Retrieval or ContextDecisionPurpose.Package =>
+            MandatoryOverflowPolicy.AllowOverflowWithDiagnostic,
+        _ => MandatoryOverflowPolicy.AllowOverflowWithDiagnostic
     };
 }
 
@@ -1164,8 +1219,21 @@ public sealed class DefaultRouter : IRouter
 
         // B-1 骨架：Catalog 已注册的 Expert 启用；未注册（如 Recency）disable
         var available = _catalog.AvailableExperts;
+
+        // R28-B.6 P0-1：读取 RetrievalInput 的 Include* 开关（仅 Purpose=Retrieval 时生效）。
+        // 默认全部 true（兼容非 Retrieval 路径与未指定字段的请求）。
+        var retrievalInput = request.RetrievalInput;
+        var includeKeyword = retrievalInput?.IncludeKeywordRecall ?? true;
+        var includeVector = retrievalInput?.IncludeVectorRecall ?? true;
+        var includeRelation = retrievalInput?.IncludeRelationExpansion ?? true;
+        var includeWorkingMemory = retrievalInput?.IncludeWorkingMemory ?? true;
+        // P0-2 新增：StableMemory Include 开关（默认 true）
+        var includeStableMemory = retrievalInput?.IncludeStableMemory ?? true;
+
+        // 统计启用计数（排除 Mandatory/Constraint — 它们永远启用且不计入预算分配）
         var nonMandatoryEnabledCount = available.Count(
-            e => e != ExpertKind.Mandatory && e != ExpertKind.Constraint);
+            e => e != ExpertKind.Mandatory && e != ExpertKind.Constraint
+                && IsIncludeEnabled(e, includeKeyword, includeVector, includeRelation, includeWorkingMemory, includeStableMemory));
 
         var perExpertTokenBudget = nonMandatoryEnabledCount > 0
             ? totalTokenBudget / nonMandatoryEnabledCount
@@ -1188,9 +1256,36 @@ public sealed class DefaultRouter : IRouter
             var isMandatory = expert == RetrievalExpert.Mandatory
                 || expert == RetrievalExpert.Constraint;
 
-            var enabled = isMandatory || isRegistered;
+            // R28-B.6 P0-1：Include 开关检查（仅对非 Mandatory/Constraint 的 Expert 生效）
+            var includeEnabled = IsIncludeEnabled(
+                mappedKind, includeKeyword, includeVector,
+                includeRelation, includeWorkingMemory, includeStableMemory);
+
+            // enabled = Mandatory/Constraint(永远启用) || (已注册 && Include 开关启用)
+            var disabledByInclude = !isMandatory && !includeEnabled;
+            var enabled = isMandatory || (isRegistered && includeEnabled);
+
             var decisionTopK = isMandatory ? totalTopK : (enabled ? perExpertTopK : 0);
             var decisionTokenBudget = isMandatory ? totalTokenBudget : (enabled ? perExpertTokenBudget : 0);
+
+            // R28-B.6 P0-1：根据 disable 原因区分 ReasonCode
+            string reasonCode;
+            string? disabledReason;
+            if (enabled)
+            {
+                reasonCode = isMandatory ? "mandatory-always-enabled" : "default";
+                disabledReason = null;
+            }
+            else if (disabledByInclude)
+            {
+                reasonCode = "disabled-by-request-include-flag";
+                disabledReason = "expert disabled by RetrievalInput.Include* flag";
+            }
+            else
+            {
+                reasonCode = "expert-not-registered";
+                disabledReason = "expert not registered in catalog";
+            }
 
             decisions.Add(new ExpertRoutingDecision
             {
@@ -1199,9 +1294,8 @@ public sealed class DefaultRouter : IRouter
                 TopK = decisionTopK,
                 TokenBudget = decisionTokenBudget,
                 Weight = 1.0,
-                ReasonCode = isMandatory ? "mandatory-always-enabled"
-                    : (enabled ? "default" : "expert-not-registered"),
-                DisabledReason = enabled ? null : "expert not registered in catalog",
+                ReasonCode = reasonCode,
+                DisabledReason = disabledReason,
                 Metadata = new Dictionary<string, string>(StringComparer.Ordinal)
                 {
                     ["totalTokenBudget"] = totalTokenBudget.ToString(System.Globalization.CultureInfo.InvariantCulture),
@@ -1222,6 +1316,29 @@ public sealed class DefaultRouter : IRouter
 
         return ValueTask.FromResult(decisionSet);
     }
+
+    /// <summary>
+    /// R28-B.6 P0-1：根据 RetrievalInput 的 Include* 开关判断 Expert 是否应启用。
+    /// Mandatory/Constraint 永远启用（不受 Include 开关控制，由调用方判断）。
+    /// </summary>
+    private static bool IsIncludeEnabled(
+        ExpertKind kind,
+        bool includeKeyword,
+        bool includeVector,
+        bool includeRelation,
+        bool includeWorkingMemory,
+        bool includeStableMemory) => kind switch
+        {
+            ExpertKind.Lexical => includeKeyword,
+            ExpertKind.Semantic => includeVector,
+            ExpertKind.Graph => includeRelation,
+            ExpertKind.WorkingMemory => includeWorkingMemory,
+            ExpertKind.StableMemory => includeStableMemory,
+            // Mandatory/Constraint 永远启用（由调用方 isMandatory 判断处理）
+            ExpertKind.Mandatory or ExpertKind.Constraint => true,
+            // Recency 默认不注册，Include 开关也无意义
+            _ => true
+        };
 
     private static ExpertKind MapToExpertKind(RetrievalExpert expert) => expert switch
     {
@@ -1654,13 +1771,15 @@ public sealed class DefaultGlobalAllocator : IGlobalAllocator
     /// <param name="mandatoryOverflowPolicy">
     /// R28-B.6 Impl-2：mandatory 候选超出预算时的处理策略。
     /// 默认 AllowOverflowWithDiagnostic（Package/Retrieval 语义）；AgentContext 硬窗口应注入 FailClosed。
+    /// R28-B.6 P0-5：此构造函数策略仅作为旧 Allocate(envelopes, snapshot) 重载的 fallback；
+    /// 新 Allocate(envelopes, snapshot, context) 重载优先使用 context 中的策略。
     /// </param>
     public DefaultGlobalAllocator(MandatoryOverflowPolicy mandatoryOverflowPolicy = MandatoryOverflowPolicy.AllowOverflowWithDiagnostic)
     {
         _mandatoryOverflowPolicy = mandatoryOverflowPolicy;
     }
 
-    /// <summary>执行全局预算分配 + per-section 配额。</summary>
+    /// <summary>执行全局预算分配 + per-section 配额（Legacy 重载，使用构造函数策略）。</summary>
     public AllocationResult Allocate(
         IReadOnlyList<ContextCandidateEnvelope> envelopes,
         EffectivePolicySnapshot snapshot)
@@ -1668,6 +1787,38 @@ public sealed class DefaultGlobalAllocator : IGlobalAllocator
         ArgumentNullException.ThrowIfNull(envelopes);
         ArgumentNullException.ThrowIfNull(snapshot);
 
+        // P0-5：旧重载使用构造函数注入的策略（向后兼容测试 / Legacy 路径）
+        return Allocate(envelopes, snapshot, _mandatoryOverflowPolicy, purpose: null);
+    }
+
+    /// <summary>
+    /// R28-B.6 P0-5：执行全局预算分配，接受 AllocationContext（携带 Purpose + MandatoryOverflowPolicy）。
+    /// 根据 context.Purpose 选择默认策略（AgentContext → FailClosed；Retrieval/Package → AllowOverflowWithDiagnostic）；
+    /// context.MandatoryOverflowPolicy 始终显式传入，调用方（Runtime/Engine）负责解析最终策略。
+    /// </summary>
+    public AllocationResult Allocate(
+        IReadOnlyList<ContextCandidateEnvelope> envelopes,
+        EffectivePolicySnapshot snapshot,
+        AllocationContext context)
+    {
+        ArgumentNullException.ThrowIfNull(envelopes);
+        ArgumentNullException.ThrowIfNull(snapshot);
+        ArgumentNullException.ThrowIfNull(context);
+
+        return Allocate(envelopes, snapshot, context.MandatoryOverflowPolicy, context.Purpose);
+    }
+
+    /// <summary>
+    /// R28-B.6 P0-5：核心分配实现。使用显式传入的 MandatoryOverflowPolicy（已由调用方解析）。
+    /// </summary>
+    /// <param name="mandatoryOverflowPolicy">本次分配使用的 overflow 策略。</param>
+    /// <param name="purpose">业务用途（仅用于诊断；null 时记录 "Unknown"）。</param>
+    private AllocationResult Allocate(
+        IReadOnlyList<ContextCandidateEnvelope> envelopes,
+        EffectivePolicySnapshot snapshot,
+        MandatoryOverflowPolicy mandatoryOverflowPolicy,
+        ContextDecisionPurpose? purpose)
+    {
         // 排序：IsMandatory/IsHardConstraint 降序 → FinalScore 降序 → EstimatedTokens 降序 → CandidateId 升序
         var ordered = envelopes
             .OrderByDescending(e => e.Safety.IsMandatory || e.Safety.IsHardConstraint)
@@ -1713,7 +1864,7 @@ public sealed class DefaultGlobalAllocator : IGlobalAllocator
                 var overflow = (usedTokens + envelope.EstimatedTokens) - tokenBudget;
                 mandatoryOverflowTokens += overflow;
 
-                switch (_mandatoryOverflowPolicy)
+                switch (mandatoryOverflowPolicy)
                 {
                     case MandatoryOverflowPolicy.FailClosed:
                         // 硬窗口：拒绝 mandatory 候选（AgentContext 场景）
@@ -1810,8 +1961,10 @@ public sealed class DefaultGlobalAllocator : IGlobalAllocator
         if (mandatoryOverflowTokens > 0 || hardWindowViolated)
         {
             diagnostics["MandatoryOverflowTokens"] = mandatoryOverflowTokens.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            diagnostics["MandatoryOverflowPolicy"] = _mandatoryOverflowPolicy.ToString();
+            diagnostics["MandatoryOverflowPolicy"] = mandatoryOverflowPolicy.ToString();
             diagnostics["HardWindowViolated"] = hardWindowViolated.ToString().ToLowerInvariant();
+            // P0-5：记录 Purpose（诊断用），null 时记 "Unknown"
+            diagnostics["Purpose"] = purpose?.ToString() ?? "Unknown";
         }
 
         var outcome = new ContextDecisionOutcomeSummary
@@ -1878,6 +2031,43 @@ public sealed class DefaultContentTruncator : IContentTruncator
     }
 }
 
+/// <summary>
+/// R28-B.6 P0-6：使用 <see cref="IContextTokenizerResolver"/> 的内容截断器。
+/// </summary>
+/// <remarks>
+/// 替代 <see cref="DefaultContentTruncator"/>（content.Length/4 粗略估算），
+/// 委托给 <see cref="IContextTokenizerResolver.TruncateForTokenBudget"/> 真正按 BPE/CJK 估算并截断，
+/// 对中文 / JSON / 代码 / emoji 偏差小。
+/// </remarks>
+public sealed class TokenizerContentTruncator : IContentTruncator
+{
+    private readonly IContextTokenizerResolver _tokenizerResolver;
+    private readonly string? _modelName;
+
+    /// <summary>
+    /// 构造 TokenizerContentTruncator。
+    /// </summary>
+    /// <param name="tokenizerResolver">tokenizer 解析器（非空）。</param>
+    /// <param name="modelName">模型名（可选，传给 tokenizer 选择具体实现）。</param>
+    public TokenizerContentTruncator(IContextTokenizerResolver tokenizerResolver, string? modelName = null)
+    {
+        _tokenizerResolver = tokenizerResolver ?? throw new ArgumentNullException(nameof(tokenizerResolver));
+        _modelName = modelName;
+    }
+
+    /// <summary>
+    /// R28-B.6 P0-6：委托给 tokenizerResolver 真正按 token 预算截断。
+    /// </summary>
+    public TruncationResult Truncate(string content, int maxTokens)
+    {
+        ArgumentNullException.ThrowIfNull(content);
+        if (maxTokens <= 0) return new TruncationResult(string.Empty, 0, true);
+
+        var result = _tokenizerResolver.TruncateForTokenBudget(content, maxTokens, _modelName);
+        return new TruncationResult(result.TruncatedContent, result.TokenCount, result.WasTruncated);
+    }
+}
+
 // ---------------------------------------------------------------------------
 // AgentContext Projector
 // ---------------------------------------------------------------------------
@@ -1900,11 +2090,23 @@ public sealed class AgentContextProjector : IAgentContextProjector
     /// 构造 AgentContextProjector。
     /// </summary>
     /// <param name="contentTruncator">
-    /// R28-B.6 Impl-1：内容截断器。null 时使用 <see cref="DefaultContentTruncator"/>。
+    /// R28-B.6 Impl-1：内容截断器。null 时回退到 tokenizerResolver 或 <see cref="DefaultContentTruncator"/>。
     /// </param>
-    public AgentContextProjector(IContentTruncator? contentTruncator = null)
+    /// <param name="tokenizerResolver">
+    /// R28-B.6 P0-6：tokenizer 解析器（可选）。contentTruncator 为 null 且 tokenizerResolver 非空时，
+    /// 使用 <see cref="TokenizerContentTruncator"/>（真正按 BPE/CJK 截断），否则回退到 <see cref="DefaultContentTruncator"/>。
+    /// </param>
+    /// <param name="modelName">tokenizer 使用的模型名（可选）。</param>
+    public AgentContextProjector(
+        IContentTruncator? contentTruncator = null,
+        IContextTokenizerResolver? tokenizerResolver = null,
+        string? modelName = null)
     {
-        _contentTruncator = contentTruncator ?? new DefaultContentTruncator();
+        // R28-B.6 P0-6：优先级 contentTruncator > tokenizerResolver > DefaultContentTruncator
+        _contentTruncator = contentTruncator
+            ?? (tokenizerResolver is not null
+                ? new TokenizerContentTruncator(tokenizerResolver, modelName)
+                : new DefaultContentTruncator());
     }
 
     /// <summary>将决策结果 + 候选正文投影为 AgentContextSnapshot。</summary>

@@ -117,6 +117,16 @@ public sealed class ContextDecisionRequest
     /// null = Legacy 路径（Engine 使用静态内联分配，向后兼容 R18-2 测试）。
     /// </remarks>
     public EffectivePolicySnapshot? PolicySnapshot { get; init; }
+
+    /// <summary>
+    /// R28-B.6 P0-5：分配上下文（V2 路径专用）。
+    /// </summary>
+    /// <remarks>
+    /// 由 DefaultContextDecisionRuntime 在委托 Engine 前设置，携带 Purpose + MandatoryOverflowPolicy。
+    /// Engine 在 V2 路径调用 Allocator.Allocate(envelopes, snapshot, context) 时使用此 context。
+    /// null = Legacy 路径或无 Allocator 注入（Engine 使用旧 Allocate 重载）。
+    /// </remarks>
+    public AllocationContext? AllocationContext { get; init; }
 }
 
 /// <summary>

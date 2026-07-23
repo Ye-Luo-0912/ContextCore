@@ -270,7 +270,11 @@ public sealed class AuthoritativeRetrievalRuntime : IContextRetriever
                 IncludeKeywordRecall = request.IncludeKeywordRecall,
                 IncludeVectorRecall = request.IncludeVectorRecall,
                 IncludeRelationExpansion = request.IncludeRelationExpansion,
-                IncludeWorkingMemory = request.IncludeWorkingMemory
+                IncludeWorkingMemory = request.IncludeWorkingMemory,
+                // R28-B.6 P0-2：补齐原 ContextRetrievalRequest 完整语义（含新字段）
+                IncludeStableMemory = request.IncludeStableMemory,
+                IncludeContent = request.IncludeContent,
+                Metadata = request.Metadata
             }
         };
     }
@@ -591,6 +595,11 @@ public sealed class AuthoritativeAgentContextRuntime
     /// <param name="workingSet">候选 WorkingSet（含 Envelopes + Materials）。</param>
     /// <param name="projectionContext">R28-B.6：真实 Agent session + scope（null 时 Projector 回退到占位 session）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
+    /// <remarks>
+    /// R28-B.6 P0-3：将 caller WorkingSet 作为 SeedWorkingSet 传入（含 Envelopes + Materials），
+    /// 使用 ExecuteWithWorkingSetAsync 获取完整 execution artifact。Projector 从 execution.WorkingSet
+    /// （包含 Provider 新召回的 Material）恢复正文，而非 caller 原始 WorkingSet。
+    /// </remarks>
     public async ValueTask<AgentContextSnapshot> BuildAsync(
         ContextDecisionRuntimeRequest request,
         CandidateWorkingSet workingSet,
@@ -600,13 +609,17 @@ public sealed class AuthoritativeAgentContextRuntime
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(workingSet);
 
-        // 合并 WorkingSet 的 Envelopes 到 request 的 SeedCandidates
-        var mergedRequest = request with { SeedCandidates = workingSet.Envelopes };
-        var result = await _v2Runtime.ExecuteAsync(mergedRequest, cancellationToken).ConfigureAwait(false);
+        // R28-B.6 P0-3 + P0-4：将 caller WorkingSet 作为 SeedWorkingSet 传入（含 Materials），
+        // 而非仅合并 Envelopes 到 SeedCandidates。Runtime 在合并阶段会保留 SeedWorkingSet.Materials。
+        var mergedRequest = request with { SeedWorkingSet = workingSet };
 
-        // R28-B.6：传递真实 ProjectionContext（含 AgentSessionId + WorkspaceId + CollectionId）
+        // R28-B.6 P0-3：使用 ExecuteWithWorkingSetAsync 获取完整 execution artifact
+        var execution = await _v2Runtime.ExecuteWithWorkingSetAsync(
+            mergedRequest, cancellationToken).ConfigureAwait(false);
+
+        // R28-B.6 P0-3：使用 execution.WorkingSet（包含 Provider 新召回的 Material），而非 caller 原始 WorkingSet
         return projectionContext is not null
-            ? _agentContextProjector.Project(result, workingSet, projectionContext)
-            : _agentContextProjector.Project(result, workingSet);
+            ? _agentContextProjector.Project(execution.Decision, execution.WorkingSet, projectionContext)
+            : _agentContextProjector.Project(execution.Decision, execution.WorkingSet);
     }
 }

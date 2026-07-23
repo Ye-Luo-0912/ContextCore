@@ -34,11 +34,23 @@ public sealed class RetrievalResultProjector : IResultProjector<ContextRetrieval
     /// 构造 RetrievalResultProjector。
     /// </summary>
     /// <param name="contentTruncator">
-    /// R28-B.6 Impl-1：内容截断器。null 时使用 <see cref="DefaultContentTruncator"/>。
+    /// R28-B.6 Impl-1：内容截断器。null 时回退到 tokenizerResolver 或 <see cref="DefaultContentTruncator"/>。
     /// </param>
-    public RetrievalResultProjector(IContentTruncator? contentTruncator = null)
+    /// <param name="tokenizerResolver">
+    /// R28-B.6 P0-6：tokenizer 解析器（可选）。contentTruncator 为 null 且 tokenizerResolver 非空时，
+    /// 使用 <see cref="TokenizerContentTruncator"/>（真正按 BPE/CJK 截断）。
+    /// </param>
+    /// <param name="modelName">tokenizer 使用的模型名（可选）。</param>
+    public RetrievalResultProjector(
+        IContentTruncator? contentTruncator = null,
+        IContextTokenizerResolver? tokenizerResolver = null,
+        string? modelName = null)
     {
-        _contentTruncator = contentTruncator ?? new DefaultContentTruncator();
+        // R28-B.6 P0-6：优先级 contentTruncator > tokenizerResolver > DefaultContentTruncator
+        _contentTruncator = contentTruncator
+            ?? (tokenizerResolver is not null
+                ? new TokenizerContentTruncator(tokenizerResolver, modelName)
+                : new DefaultContentTruncator());
     }
 
     /// <summary>

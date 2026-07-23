@@ -265,8 +265,11 @@ internal static class CandidateProviderHelpers
 /// R28-B.6：Mandatory 候选 Provider。从 IContextStore 召回标记为 mandatory 的条目。
 /// </summary>
 /// <remarks>
-/// V2 模型不使用 RequiredIds（ContextDecisionRuntimeRequest 无此字段），
-/// 而是通过 Tags=["mandatory"] 查询标记为强制注入的条目。
+/// R28-B.6 P0-1：合并两条召回路径：
+///   1. Tags=["mandatory"] 查询标记为强制注入的条目（原有逻辑）。
+///   2. RetrievalInput.RequiredIds（或 PackageInput.RequiredIds）强制 ID 召回 —
+///      调用方显式要求强制召回的条目，按 ID 逐个 GetAsync 获取。
+/// 两条路径结果合并去重。
 /// 这些条目的 Safety.IsMandatory=true，Engine 在 Budget Allocator 中无条件保留。
 /// </remarks>
 public sealed class MandatoryCandidateProvider : ICandidateProvider
@@ -288,21 +291,47 @@ public sealed class MandatoryCandidateProvider : ICandidateProvider
         cancellationToken.ThrowIfCancellationRequested();
 
         var take = CandidateProviderHelpers.ResolveTake(context);
+        var workspaceId = context.Request.Scope.WorkspaceId;
+        var collectionId = context.Request.Scope.CollectionId;
+
+        // 路径 1：Tags=["mandatory"] 召回
         var items = await _contextStore.QueryAsync(new ContextQuery
         {
-            WorkspaceId = context.Request.Scope.WorkspaceId,
-            CollectionId = context.Request.Scope.CollectionId,
+            WorkspaceId = workspaceId,
+            CollectionId = collectionId,
             Tags = new[] { "mandatory" },
             Take = take,
             IncludeContent = true
         }, cancellationToken).ConfigureAwait(false);
 
-        if (items.Count == 0) return CandidateProviderHelpers.Empty();
+        // R28-B.6 P0-1：路径 2 — RequiredIds 强制召回（RetrievalInput / PackageInput）
+        var requiredIds = ResolveRequiredIds(context.Request);
+        var seenIds = new HashSet<string>(items.Select(i => i.Id), StringComparer.OrdinalIgnoreCase);
+        var mergedItems = items.ToList();
 
-        var envelopes = new List<ContextCandidateEnvelope>(items.Count);
-        var materials = new Dictionary<CanonicalCandidateKey, CandidateMaterial>(items.Count);
+        if (requiredIds.Count > 0)
+        {
+            foreach (var id in requiredIds)
+            {
+                if (string.IsNullOrEmpty(id) || seenIds.Contains(id)) continue;
 
-        foreach (var item in items)
+                // 按 ID 强制召回（mandatory recall）
+                var item = await _contextStore.GetAsync(workspaceId, collectionId, id, cancellationToken)
+                    .ConfigureAwait(false);
+                if (item is not null)
+                {
+                    seenIds.Add(id);
+                    mergedItems.Add(item);
+                }
+            }
+        }
+
+        if (mergedItems.Count == 0) return CandidateProviderHelpers.Empty();
+
+        var envelopes = new List<ContextCandidateEnvelope>(mergedItems.Count);
+        var materials = new Dictionary<CanonicalCandidateKey, CandidateMaterial>(mergedItems.Count);
+
+        foreach (var item in mergedItems)
         {
             var (envelope, material) = CandidateProviderHelpers.BuildFromContextItem(
                 item, ContextCandidateSource.Mandatory, ExpertKind.Mandatory, 1000.0, context.AdaptationContext);
@@ -311,6 +340,22 @@ public sealed class MandatoryCandidateProvider : ICandidateProvider
         }
 
         return new ExpertExecutionResult(envelopes, materials);
+    }
+
+    /// <summary>
+    /// R28-B.6 P0-1：从 Request 解析 RequiredIds（RetrievalInput 优先，回退到 PackageInput）。
+    /// </summary>
+    private static IReadOnlyList<string> ResolveRequiredIds(ContextDecisionRuntimeRequest request)
+    {
+        if (request.RetrievalInput?.RequiredIds is { Count: > 0 } ids)
+        {
+            return ids;
+        }
+        if (request.PackageInput?.RequiredIds is { Count: > 0 } pkgIds)
+        {
+            return pkgIds;
+        }
+        return Array.Empty<string>();
     }
 }
 
@@ -408,12 +453,31 @@ public sealed class LexicalCandidateProvider : ICandidateProvider
             return CandidateProviderHelpers.Empty();
         }
 
+        // R28-B.6 P0-1：读取 RetrievalInput 的 RequiredTags / RequiredTypes
+        // PackageInput 也提供相同字段（Package 路径下 Lexical 不一定启用，但保留兼容）
+        var retrievalInput = context.Request.RetrievalInput;
+        var packageInput = context.Request.PackageInput;
+        var requiredTags = retrievalInput?.RequiredTags;
+        if (requiredTags is null || requiredTags.Count == 0)
+        {
+            requiredTags = packageInput?.RequiredTags;
+        }
+        var requiredTypes = retrievalInput?.RequiredTypes;
+        if (requiredTypes is null || requiredTypes.Count == 0)
+        {
+            requiredTypes = packageInput?.RequiredTypes;
+        }
+
         var take = CandidateProviderHelpers.ResolveTake(context);
         var items = await _contextStore.QueryAsync(new ContextQuery
         {
             WorkspaceId = context.Request.Scope.WorkspaceId,
             CollectionId = context.Request.Scope.CollectionId,
             QueryText = context.Request.QueryText,
+            // R28-B.6 P0-1：应用 RequiredTags / RequiredTypes 作为过滤条件
+            // （ContextQuery.Tags/Types 默认为空数组，等价于不应用过滤）
+            Tags = requiredTags ?? Array.Empty<string>(),
+            Types = requiredTypes ?? Array.Empty<string>(),
             Take = take,
             IncludeContent = true
         }, cancellationToken).ConfigureAwait(false);
@@ -486,24 +550,47 @@ public sealed class SemanticCandidateProvider : ICandidateProvider
         cancellationToken.ThrowIfCancellationRequested();
 
         if (_vectorStore is null) return CandidateProviderHelpers.Empty();
-        if (string.IsNullOrWhiteSpace(context.Request.QueryText)) return CandidateProviderHelpers.Empty();
 
-        // 1. 生成 query embedding
+        // R28-B.6 P0-1：读取 RetrievalInput 中的语义召回参数
+        var retrievalInput = context.Request.RetrievalInput;
+        var externalQueryVector = retrievalInput?.QueryVector;
+        var modelName = retrievalInput?.ModelName;
+        var queryInstruction = retrievalInput?.QueryInstruction;
+        var vectorTopKFromInput = retrievalInput?.VectorTopK ?? 0;
+        var minVectorScore = retrievalInput?.MinVectorScore;
+
+        // R28-B.6 P0-1：如果 QueryVector 非空，直接使用（不调用 EmbeddingProvider）
         IReadOnlyList<float> queryVector;
-        if (_embeddingProvider is not null)
+        if (externalQueryVector is { Count: > 0 } v)
         {
+            queryVector = v;
+        }
+        else
+        {
+            if (string.IsNullOrWhiteSpace(context.Request.QueryText)) return CandidateProviderHelpers.Empty();
+
+            // R28-B.6 P0-1：未提供 QueryVector 时使用 QueryText + QueryInstruction 调用 EmbeddingProvider
+            if (_embeddingProvider is null) return CandidateProviderHelpers.Empty();
+
+            // QueryInstruction 作为 BGE 前缀拼接到 QueryText
+            var effectiveQueryText = string.IsNullOrEmpty(queryInstruction)
+                ? context.Request.QueryText!
+                : queryInstruction + " " + context.Request.QueryText;
+
             var embedding = await _embeddingProvider.EmbedAsync(new EmbeddingRequest
             {
                 OperationId = context.Request.RequestId,
                 WorkspaceId = context.Request.Scope.WorkspaceId,
                 CollectionId = context.Request.Scope.CollectionId,
+                // R28-B.6 P0-1：传 ModelName 给 EmbeddingProvider
+                ModelName = modelName,
                 InputKind = EmbeddingInputKind.Query,
                 Inputs =
                 [
                     new EmbeddingInput
                     {
                         Id = "query",
-                        Text = context.Request.QueryText,
+                        Text = effectiveQueryText,
                         SourceRef = "query"
                     }
                 ]
@@ -513,15 +600,14 @@ public sealed class SemanticCandidateProvider : ICandidateProvider
                 ? embedding.Vectors[0].Values
                 : Array.Empty<float>();
         }
-        else
-        {
-            return CandidateProviderHelpers.Empty();
-        }
 
         if (queryVector.Count == 0) return CandidateProviderHelpers.Empty();
 
         // 2. 向量搜索
-        var topK = CandidateProviderHelpers.ResolveTake(context);
+        // R28-B.6 P0-1：VectorTopK 优先于 ResolveTake
+        var topK = vectorTopKFromInput > 0
+            ? vectorTopKFromInput
+            : CandidateProviderHelpers.ResolveTake(context);
         var hits = await _vectorStore.SearchAsync(new VectorQuery
         {
             WorkspaceId = context.Request.Scope.WorkspaceId,
@@ -532,6 +618,14 @@ public sealed class SemanticCandidateProvider : ICandidateProvider
         }, cancellationToken).ConfigureAwait(false);
 
         if (hits.Count == 0) return CandidateProviderHelpers.Empty();
+
+        // R28-B.6 P0-1：MinVectorScore 过滤（hit.Score < MinVectorScore 的结果剔除）
+        if (minVectorScore.HasValue)
+        {
+            var threshold = minVectorScore.Value;
+            hits = hits.Where(h => h.Score >= threshold).ToList();
+            if (hits.Count == 0) return CandidateProviderHelpers.Empty();
+        }
 
         // 3. Hydration：按 SourceKind 分组
         var envelopes = new List<ContextCandidateEnvelope>(hits.Count);

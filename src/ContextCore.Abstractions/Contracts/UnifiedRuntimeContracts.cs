@@ -153,6 +153,14 @@ public sealed record ContextDecisionRuntimeRequest
     public IReadOnlyList<ContextCandidateEnvelope> SeedCandidates { get; init; }
         = Array.Empty<ContextCandidateEnvelope>();
 
+    /// <summary>
+    /// R28-B.6 P0-4：种子 WorkingSet（含 Envelopes + Materials）。
+    /// 正式路径接受完整 WorkingSet，而非只有 Envelope 的 SeedCandidates。
+    /// Replay/Agent 显式注入时 Seed Material 不再丢失。
+    /// null 时回退到 <see cref="SeedCandidates"/>（向后兼容）。
+    /// </summary>
+    public CandidateWorkingSet? SeedWorkingSet { get; init; }
+
     /// <summary>R28-B.6 Blocker-4：Retrieval 专用输入（Purpose=Retrieval 时使用）。</summary>
     public RetrievalInput? RetrievalInput { get; init; }
 
@@ -218,6 +226,23 @@ public sealed record RetrievalInput
 
     /// <summary>是否启用短期记忆召回。</summary>
     public bool IncludeWorkingMemory { get; init; } = true;
+
+    // --- R28-B.6 P0-2：补齐原 ContextRetrievalRequest 完整语义 ---
+
+    /// <summary>R28-B.6 P0-2：是否启用稳定记忆召回（默认 true）。</summary>
+    public bool IncludeStableMemory { get; init; } = true;
+
+    /// <summary>R28-B.6 P0-2：是否在召回结果中包含候选正文 Content（默认 true）。</summary>
+    public bool IncludeContent { get; init; } = true;
+
+    /// <summary>R28-B.6 P0-2：附加元数据（透传到 Provider/Projector 用于诊断或策略）。</summary>
+    public IReadOnlyDictionary<string, string>? Metadata { get; init; }
+
+    /// <summary>
+    /// R28-B.6 P0-2：RetrievalPlan 序列化字符串（简化为 string，避免引入完整 RetrievalPlan 类型耦合）。
+    /// 用于 Provider 在需要时读取 plan 中的细粒度配置。
+    /// </summary>
+    public string? Plan { get; init; }
 }
 
 /// <summary>
@@ -736,11 +761,37 @@ public interface IUtilityScorer
 }
 
 /// <summary>
+/// R28-B.6 P0-5：分配上下文。携带 Purpose + Budget + MandatoryOverflowPolicy + TokenizerVersion。
+/// Allocator 不应在构造函数中固定 Purpose 相关策略（如 MandatoryOverflowPolicy），
+/// 应在每次 Allocate 时根据 context 选择策略。
+/// </summary>
+public sealed record AllocationContext
+{
+    /// <summary>业务用途轴（决定 mandatory overflow 默认策略）。</summary>
+    public required ContextDecisionPurpose Purpose { get; init; }
+
+    /// <summary>有效预算 profile（已合并 override）。</summary>
+    public required BudgetProfile Budget { get; init; }
+
+    /// <summary>
+    /// Mandatory 候选超出预算时的处理策略。
+    /// 显式指定时覆盖 Purpose 默认策略（AgentContext → FailClosed，Retrieval/Package → AllowOverflowWithDiagnostic）。
+    /// </summary>
+    public required MandatoryOverflowPolicy MandatoryOverflowPolicy { get; init; }
+
+    /// <summary>tokenizer 版本（可选，用于诊断）。</summary>
+    public string? TokenizerVersion { get; init; }
+}
+
+/// <summary>
 /// R28-B：统一全局分配器。消费 SectionRatios + TopK + TokenBudget。
 /// </summary>
 /// <remarks>
 /// 产出 CandidateAllocationDecision，不污染 Envelope。
 /// diversity extension point 存在但 rule-only convergence 阶段禁用行为变更。
+/// R28-B.6 P0-5：新增接受 AllocationContext 的重载。Allocator 不应在构造函数中固定
+/// Purpose 相关策略，应在每次 Allocate 时根据 context 选择策略（如 AgentContext 默认 FailClosed）。
+/// 旧重载保留向后兼容（测试 / Legacy 路径使用）。
 /// </remarks>
 public interface IGlobalAllocator
 {
@@ -753,6 +804,20 @@ public interface IGlobalAllocator
     AllocationResult Allocate(
         IReadOnlyList<ContextCandidateEnvelope> envelopes,
         EffectivePolicySnapshot snapshot);
+
+    /// <summary>
+    /// R28-B.6 P0-5：执行全局预算分配，接受 AllocationContext（携带 Purpose + MandatoryOverflowPolicy）。
+    /// Allocator 根据 context.Purpose 选择默认 MandatoryOverflowPolicy（如 AgentContext → FailClosed）；
+    /// 若 context.MandatoryOverflowPolicy 显式指定，则覆盖 Purpose 默认策略。
+    /// </summary>
+    /// <param name="envelopes">待分配的候选集合。</param>
+    /// <param name="snapshot">有效策略快照。</param>
+    /// <param name="context">分配上下文（Purpose + Budget + MandatoryOverflowPolicy + TokenizerVersion）。</param>
+    /// <returns>分配结果（Selected + Dropped + Decisions + Outcome，含 MandatoryOverflow 诊断）。</returns>
+    AllocationResult Allocate(
+        IReadOnlyList<ContextCandidateEnvelope> envelopes,
+        EffectivePolicySnapshot snapshot,
+        AllocationContext context);
 }
 
 /// <summary>

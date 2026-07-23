@@ -372,7 +372,11 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
             || effectiveTopK != snapshot.Budget.DefaultTopK)
             ? snapshot with { Budget = snapshot.Budget with { DefaultTokenBudget = effectiveTokenBudget, DefaultTopK = effectiveTopK } }
             : snapshot;
-        var allocation = _globalAllocator!.Allocate(lifecyclePassed, effectiveSnapshot);
+        // R28-B.6 P0-5：当 request.AllocationContext 非空时，使用新重载（携带 Purpose + MandatoryOverflowPolicy），
+        // 让 Allocator 按 Purpose 选择 overflow 策略并记录诊断；否则回退到 Legacy 重载（向后兼容）。
+        var allocation = request.AllocationContext is not null
+            ? _globalAllocator!.Allocate(lifecyclePassed, effectiveSnapshot, request.AllocationContext)
+            : _globalAllocator!.Allocate(lifecyclePassed, effectiveSnapshot);
 
         // 合并所有 dropped（safety + lifecycle + budget）
         var allDropped = new List<ContextCandidateEnvelope>(
