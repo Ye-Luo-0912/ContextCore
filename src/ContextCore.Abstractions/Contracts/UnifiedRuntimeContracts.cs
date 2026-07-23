@@ -879,6 +879,80 @@ public interface IGlobalAllocator
         AllocationContext context);
 }
 
+// ---------------------------------------------------------------------------
+// §5.9b Allocator V2.1（R28-B.8.1：section rollover + MMR diversity）
+// ---------------------------------------------------------------------------
+
+/// <summary>
+/// R28-B.8.1：Allocator V2.1 扩展接口。支持 section rollover + MMR diversity。
+/// </summary>
+/// <remarks>
+/// 继承 <see cref="IGlobalAllocator"/>（V2.0 基础分配），新增
+/// <see cref="AllocateWithDiversity"/> 重载：按 section 分组 → MMR 重排序 →
+/// section 顺序分配（未用完预算 rollover 到下一 section）。
+/// 默认仍注册 V2.0（<see cref="IGlobalAllocator"/>）；需要 diversity 的调用方显式注入 V2.1。
+/// </remarks>
+public interface IAllocatorV2_1 : IGlobalAllocator
+{
+    /// <summary>
+    /// 使用 MMR diversity 的分配。按 section 分组 → MMR 重排序 → section 顺序分配（含 rollover）。
+    /// </summary>
+    /// <param name="candidates">待分配的候选集合。</param>
+    /// <param name="context">分配上下文（携带 Purpose + Budget + MandatoryOverflowPolicy）。</param>
+    /// <param name="diversityOptions">diversity 配置（MMR lambda + section rollover 开关与比例）。</param>
+    /// <returns>分配结果（Selected + Dropped + Decisions + Outcome，含 section rollover 诊断）。</returns>
+    AllocationResult AllocateWithDiversity(
+        IReadOnlyList<ContextCandidateEnvelope> candidates,
+        AllocationContext context,
+        DiversityOptions diversityOptions);
+}
+
+/// <summary>
+/// R28-B.8.1：Diversity 配置。控制 MMR 重排序与 section rollover 行为。
+/// </summary>
+public sealed record DiversityOptions
+{
+    /// <summary>MMR lambda（0=纯 relevance，1=纯 diversity，默认 0.5）。</summary>
+    /// <remarks>
+    /// MMR = argmax [λ · sim(d, q) - (1-λ) · max sim(d, d')]。
+    /// lambda=1.0 时纯按 relevance 排序（等价于禁用 MMR）；lambda=0.0 时纯按 diversity 排序。
+    /// </remarks>
+    public double Lambda { get; init; } = 0.5;
+
+    /// <summary>section 内 diversity 比例（0-1，每个 section 至少保留此比例的 diverse 候选）。</summary>
+    public double SectionDiversityRatio { get; init; } = 0.3;
+
+    /// <summary>是否启用 section rollover。false 时每个 section 获得等分预算，不向下一 section 结转。</summary>
+    public bool EnableSectionRollover { get; init; } = true;
+
+    /// <summary>section 预算不足时，剩余预算 rollover 到下一 section 的比例（0-1）。</summary>
+    public double RolloverRatio { get; init; } = 1.0;
+}
+
+/// <summary>
+/// R28-B.8.1：Section 分配结果（含 rollover 信息）。
+/// </summary>
+public sealed record SectionAllocationResult
+{
+    /// <summary>section 名称。</summary>
+    public required string Section { get; init; }
+
+    /// <summary>实际分配的 token 数（本 section 已使用）。</summary>
+    public required int AllocatedTokens { get; init; }
+
+    /// <summary>本 section 的预算上限（含从上一 section rollover 获得的部分）。</summary>
+    public required int BudgetLimit { get; init; }
+
+    /// <summary>未用完的预算，rollover 到下一 section（>= 0）。</summary>
+    public required int RolloverTokens { get; init; }
+
+    /// <summary>从上一 section rollover 获得的预算（首个 section 为 0）。</summary>
+    public required int BorrowedTokens { get; init; }
+
+    /// <summary>本 section 内的候选分配决策（含 selected 与 dropped）。</summary>
+    public required IReadOnlyList<CandidateAllocationDecision> Decisions { get; init; }
+}
+
 /// <summary>
 /// R28-B：候选分配决策。与 Envelope 解耦，利于 Replay / counterfactual。
 /// </summary>

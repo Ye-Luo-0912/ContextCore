@@ -24,8 +24,10 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
     /// P0-7：v15 → v16，pipeline_runs 表追加 revision / lease_owner / lease_expires_at / last_transition_id 列支持 HA CAS 推进。
     /// WS-A：v16 → v17，新增 policy_bundles + policy_activations 表与索引（Postgres Policy Registry 持久化 + CAS 激活）。
     /// R28-B.6 阶段 E：v17 → v18，新增 experiment_replay_fixtures 表与索引（Postgres Experiment Recorder 持久化 replay fixture）。
+    /// R28-B.8：v18 → v19，新增 stage_transitions 表与索引（Canary Gate 渐进推进审计表，独立于 pipeline_runs 的 transition audit）。
+    /// R28-E：v19 → v20，新增 utility_ledger_entries + conflict_sets 表与索引（Durable Memory Governance 持久化：Utility/Conflict durable projection）。
     /// </summary>
-    public const string SchemaVersion = "cc-schema-v18";
+    public const string SchemaVersion = "cc-schema-v20";
 
     public const string BaselineMigrationId = "0001_operational_store_baseline";
 
@@ -92,7 +94,12 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         "policy_bundles",
         "policy_activations",
         // R28-B.6 阶段 E：Experiment Recorder 持久化（replay fixture 存储）
-        "experiment_replay_fixtures"
+        "experiment_replay_fixtures",
+        // R28-B.8：Canary Gate 渐进推进审计表（独立于 pipeline_runs 的 transition audit，记录每次 stage 推进的完整历史）
+        "stage_transitions",
+        // R28-E：Durable Memory Governance 持久化（Utility Ledger + ConflictSet durable projection）
+        "utility_ledger_entries",
+        "conflict_sets"
     ];
 
     public static readonly IReadOnlyList<(string TableSuffix, string IndexSuffix)> RequiredOperationalIndexDefinitions =
@@ -215,7 +222,18 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         ("policy_activations", "bundle"),
         // R28-B.6 阶段 E：experiment_replay_fixtures 索引（按时间倒序 + 按 purpose 过滤）
         ("experiment_replay_fixtures", "recorded"),
-        ("experiment_replay_fixtures", "purpose")
+        ("experiment_replay_fixtures", "purpose"),
+        // R28-B.8：stage_transitions 索引（按 run_id 查历史 + 按 idempotency_key 去重）
+        ("stage_transitions", "run_id"),
+        ("stage_transitions", "idempotency"),
+        // R28-E：Durable Memory Governance 索引（utility_ledger 按作用域/候选/决策/时间查；conflict_sets 按作用域/状态/候选查）
+        ("utility_ledger_entries", "workspace"),
+        ("utility_ledger_entries", "candidate"),
+        ("utility_ledger_entries", "decision"),
+        ("utility_ledger_entries", "materialized"),
+        ("conflict_sets", "workspace"),
+        ("conflict_sets", "status"),
+        ("conflict_sets", "candidate")
     ];
 
     private readonly PostgresConnectionFactory _connectionFactory;
@@ -306,6 +324,11 @@ public sealed class PostgresMigrationRunner : IStoreMigrationRunner
         var policyActivations = Infrastructure.PostgresNames.Table(options, "policy_activations");
         // R28-B.6 阶段 E：Experiment Recorder 持久化表
         var experimentReplayFixtures = Infrastructure.PostgresNames.Table(options, "experiment_replay_fixtures");
+        // R28-B.8：Canary Gate 渐进推进审计表（独立于 pipeline_runs 的 transition audit）
+        var stageTransitions = Infrastructure.PostgresNames.Table(options, "stage_transitions");
+        // R28-E：Durable Memory Governance 持久化表
+        var utilityLedgerEntries = Infrastructure.PostgresNames.Table(options, "utility_ledger_entries");
+        var conflictSets = Infrastructure.PostgresNames.Table(options, "conflict_sets");
         var extensionSql = options.EnablePgVectorExtension
             ? "CREATE EXTENSION IF NOT EXISTS vector;"
             : string.Empty;
@@ -1315,6 +1338,24 @@ CREATE TABLE IF NOT EXISTS {pipelineBaselineComparisons} (
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "pipeline_baseline_comparisons", "proposal")} ON {pipelineBaselineComparisons} (proposal_id, compared_at DESC);
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "pipeline_baseline_comparisons", "compared")} ON {pipelineBaselineComparisons} (compared_at DESC);
 
+-- R28-B.8：Canary Gate 渐进推进审计表
+-- 独立于 pipeline_runs 的 transition audit（PipelineAuditBatch），记录每次 stage 推进的完整历史
+-- 用于 CanaryProgressionService 推进/回滚决策的端到端审计溯源（含 idempotency_key 端到端幂等）
+CREATE TABLE IF NOT EXISTS {stageTransitions} (
+    transition_id text NOT NULL,
+    run_id text NOT NULL,
+    from_stage text NOT NULL,
+    to_stage text NOT NULL,
+    transitioned_at timestamptz NOT NULL,
+    idempotency_key text,
+    observation_batch_id text,
+    data jsonb NOT NULL DEFAULT jsonb_build_object(),
+    PRIMARY KEY (transition_id)
+);
+
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "stage_transitions", "run_id")} ON {stageTransitions} (run_id);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "stage_transitions", "idempotency")} ON {stageTransitions} (idempotency_key) WHERE idempotency_key IS NOT NULL;
+
 -- WS-A：Policy Registry 持久化表（bundle 注册 + activation CAS 激活）
 -- policy_bundles: (bundle_id, version) 复合主键 — bundle 全局不可变；supersede 通过新建 bundle 实现
 -- policy_activations: (workspace_id, collection_id) 主键 — 每个作用域仅一条 activation 记录；epoch 用于 CAS
@@ -1369,6 +1410,62 @@ CREATE TABLE IF NOT EXISTS {experimentReplayFixtures} (
 
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "experiment_replay_fixtures", "recorded")} ON {experimentReplayFixtures} (recorded_at DESC);
 CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "experiment_replay_fixtures", "purpose")} ON {experimentReplayFixtures} (purpose, recorded_at DESC);
+
+-- R28-E：Durable Memory Governance 持久化表（Utility Ledger + ConflictSet durable projection）
+-- utility_ledger_entries：per-Candidate per-Expert utility 贡献账本条目（read-only 公共 API，写入由 materializer 批量插入）
+-- 反规范化 workspace_id / collection_id / candidate_item_id / decision_id / materialized_at 字段以便索引查询；
+-- 完整 UtilityLedgerEntry 对象保存在 data jsonb，由 store 反序列化。
+CREATE TABLE IF NOT EXISTS {utilityLedgerEntries} (
+    entry_id text NOT NULL,
+    workspace_id text NOT NULL,
+    collection_id text NOT NULL,
+    candidate_item_id text NOT NULL,
+    expert text NOT NULL,
+    utility_contribution double precision NOT NULL,
+    deterministic_score double precision NOT NULL,
+    model_score double precision,
+    final_score double precision NOT NULL,
+    is_selected boolean NOT NULL,
+    drop_reason_code text,
+    decision_id text NOT NULL,
+    policy_version text NOT NULL,
+    router_id text NOT NULL,
+    materialized_at timestamptz NOT NULL,
+    materialization_batch_id text NOT NULL,
+    data jsonb NOT NULL DEFAULT jsonb_build_object(),
+    PRIMARY KEY (entry_id)
+);
+
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "utility_ledger_entries", "workspace")} ON {utilityLedgerEntries} (workspace_id, collection_id);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "utility_ledger_entries", "candidate")} ON {utilityLedgerEntries} (candidate_item_id);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "utility_ledger_entries", "decision")} ON {utilityLedgerEntries} (decision_id);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "utility_ledger_entries", "materialized")} ON {utilityLedgerEntries} (materialized_at DESC);
+
+-- conflict_sets：冲突集合（read-only 公共 API，写入由 materializer 批量插入）
+-- 反规范化 workspace_id / collection_id / kind / decision_id / resolution_status 字段以便索引查询；
+-- entries 列表保存在 data jsonb 的 Entries 节点（PascalCase，对齐 PostgresJsonSerializer 默认序列化），
+-- 通过 GIN 索引支持 candidate 包含查询；完整 ConflictSet 对象保存在 data jsonb。
+CREATE TABLE IF NOT EXISTS {conflictSets} (
+    conflict_set_id text NOT NULL,
+    workspace_id text NOT NULL,
+    collection_id text NOT NULL,
+    kind text NOT NULL,
+    decision_id text,
+    resolved_item_id text,
+    resolution_status text NOT NULL DEFAULT 'Unresolved',
+    chosen_authority text,
+    resolved_at timestamptz,
+    resolver text,
+    memory_state_event_id text,
+    relation_id text,
+    created_at timestamptz NOT NULL,
+    data jsonb NOT NULL DEFAULT jsonb_build_object(),
+    PRIMARY KEY (conflict_set_id)
+);
+
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "conflict_sets", "workspace")} ON {conflictSets} (workspace_id, collection_id);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "conflict_sets", "status")} ON {conflictSets} (resolution_status);
+CREATE INDEX IF NOT EXISTS {Infrastructure.PostgresNames.Index(options, "conflict_sets", "candidate")} ON {conflictSets} USING gin ((data->'Entries'));
 """;
     }
 

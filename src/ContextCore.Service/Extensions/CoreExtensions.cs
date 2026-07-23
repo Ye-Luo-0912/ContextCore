@@ -3,10 +3,13 @@ using ContextCore.Abstractions.Models;
 using ContextCore.Core;
 using ContextCore.Core.Jobs;
 using ContextCore.Core.Services;
+using ContextCore.Core.Services.Agent;
+using ContextCore.Core.Services.AgentKernel;
 using ContextCore.Core.Services.DecisionEngine;
 using ContextCore.Core.Services.Promotion;
 using ContextCore.Core.Services.Graph;
 using ContextCore.Core.Services.Learning.V14_0;
+using ContextCore.Core.Services.ModelExecution;
 using ContextCore.Core.Services.Policy;
 using ContextCore.Core.Services.Retrieval;
 using ContextCore.ModelGateway;
@@ -398,6 +401,14 @@ internal static class CoreExtensions
 		services.AddSingleton<ILifecycleGate, DefaultLifecycleGate>();
 		services.AddSingleton<IUtilityScorer, DefaultUtilityScorer>();
 		services.AddSingleton<IGlobalAllocator, DefaultGlobalAllocator>();
+		// R28-B.8.1：Allocator V2.1（section rollover + MMR diversity）。
+		// 默认不替换 IGlobalAllocator（仍为 V2.0 DefaultGlobalAllocator）；
+		// 需 diversity 的调用方可显式注入 IAllocatorV2_1 / DefaultAllocatorV2_1。
+		// 委托给已注册的 IGlobalAllocator 作为 base allocator；IContentTruncator 可选注入。
+		services.TryAddSingleton<DefaultAllocatorV2_1>(sp => new DefaultAllocatorV2_1(
+			sp.GetRequiredService<IGlobalAllocator>(),
+			sp.GetService<IContentTruncator>()));
+		services.TryAddSingleton<IAllocatorV2_1>(sp => sp.GetRequiredService<DefaultAllocatorV2_1>());
 		services.AddSingleton<IAgentContextProjector, AgentContextProjector>();
 		services.AddSingleton<IContextDecisionRuntime, DefaultContextDecisionRuntime>();
 		services.AddSingleton<DecisionExperimentPlane>();
@@ -428,6 +439,27 @@ internal static class CoreExtensions
 		// P0-9：注册 IExperimentRecorder（默认 in-memory；可替换为持久化实现）
 		services.TryAddSingleton<IExperimentRecorder, InMemoryExperimentRecorder>();
 		services.AddSingleton<DecisionExperimentPlaneIntegration>();
+
+		// R28-D：Model Execution Runtime 默认实现。
+		// - IFeatureRegistry：in-memory 特征 schema 注册表（生产可替换为持久化实现）
+		// - IBatchInferenceEngine：Deterministic fallback，真实模型不可用时使用 feature hash 产出确定性分数
+		// - ICalibrationService：Platt scaling 默认 A=1 B=0（identity 的 sigmoid 形式）
+		// 三者均为 Singleton 生命周期：无状态/线程安全，可被多个请求共享。
+		services.TryAddSingleton<IFeatureRegistry, DefaultFeatureRegistry>();
+		services.TryAddSingleton<IBatchInferenceEngine, DeterministicBatchInferenceEngine>();
+		services.TryAddSingleton<ICalibrationService, PlattCalibrationService>();
+
+		// R28-C：Agent Kernel — 极薄 .NET 决策循环（Transport + ToolDispatcher + Kernel）。
+		// 默认实现：InProcessTransport（进程内 Channel）+ EchoToolDispatcher（测试用 echo）+
+		// DefaultAgentKernel（编排 Transport → ToolDispatcher → CheckpointStore）。
+		// 生产部署可替换为自定义 IAgentKernelTransport（如 gRPC / WebSocket）和
+		// 自定义 IToolDispatcher（如 MCP tool bridge）。
+		// IAgentCheckpointStore 默认注册 InMemoryAgentCheckpointStore（TryAdd 不覆盖 Postgres 已注册的持久化实现；
+		// Postgres provider 在 AddContextCore 之前注册，故 TryAdd 跳过，PostgresAgentCheckpointStore 生效）。
+		services.TryAddSingleton<IAgentCheckpointStore, InMemoryAgentCheckpointStore>();
+		services.TryAddSingleton<IAgentKernelTransport, InProcessTransport>();
+		services.TryAddSingleton<IToolDispatcher, EchoToolDispatcher>();
+		services.TryAddSingleton<IAgentKernel, DefaultAgentKernel>();
 
 		return services;
 	}

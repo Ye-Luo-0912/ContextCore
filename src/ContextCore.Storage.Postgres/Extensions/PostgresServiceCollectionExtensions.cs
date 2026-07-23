@@ -175,6 +175,14 @@ public static class PostgresServiceCollectionExtensions
         services.AddSingleton<PostgresContextEventSink>();
         services.AddSingleton<IContextEventSink>(sp => sp.GetRequiredService<PostgresContextEventSink>());
 
+        // R28-E：Durable Memory Governance 持久化（UtilityLedger + ConflictSet durable projection）。
+        // read-only 公共 API；写入由 UtilityLedgerMaterializer 通过 internal BulkInsertAsync 调用。
+        // 无需失效 Decorator（读路径未接入缓存，与 IDecisionTraceStore / IRetrievalTraceStore 一致）。
+        services.AddSingleton<PostgresUtilityLedgerStore>();
+        services.AddSingleton<IUtilityLedgerStore>(sp => sp.GetRequiredService<PostgresUtilityLedgerStore>());
+        services.AddSingleton<PostgresConflictSetStore>();
+        services.AddSingleton<IConflictSetStore>(sp => sp.GetRequiredService<PostgresConflictSetStore>());
+
         // R14-PG-10：Postgres 备份/恢复 + PITR 执行器。
         // 注册为 Transient 因为它们持有 PostgresConnectionFactory（内含 NpgsqlDataSource），
         // 需要随调用方释放；CLI 与 AdminEndpoints 通过 IAsyncDisposable 模式使用。

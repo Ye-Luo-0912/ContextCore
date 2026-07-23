@@ -1,4 +1,5 @@
 using ContextCore.Abstractions;
+using ContextCore.Core.Services.DecisionEngine;
 
 namespace ContextCore.Core.Services.Evolution;
 
@@ -25,20 +26,26 @@ public sealed class DefaultGuardedOptimizationPipeline : IGuardedOptimizationPip
     private readonly IPromotionJudge _judge;
     private readonly IPipelineRunStore _store;
     private readonly TimeProvider _timeProvider;
+    // R28-B.8：可选的 Canary Gate 渐进推进服务。未注入时（默认）ScopedCanary 阶段沿用原 Promote 决策；
+    // 注入后，进入 ScopedCanary 时初始化百分比阶梯，每次 AdvanceWithMetricsAsync 评估 metrics 决定推进/回滚。
+    private readonly CanaryProgressionService? _canaryProgression;
 
     /// <summary>构造 pipeline。</summary>
     /// <param name="judge">Promotion judge（必填）。</param>
     /// <param name="store">Pipeline run store（可选，默认 <see cref="InMemoryPipelineRunStore"/>）。</param>
     /// <param name="timeProvider">时间提供者（可选，默认 <see cref="TimeProvider.System"/>）。</param>
+    /// <param name="canaryProgression">R28-B.8：Canary Gate 渐进推进服务（可选；注入后启用渐进百分比推进）。</param>
     public DefaultGuardedOptimizationPipeline(
         IPromotionJudge judge,
         IPipelineRunStore? store = null,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        CanaryProgressionService? canaryProgression = null)
     {
         ArgumentNullException.ThrowIfNull(judge);
         _judge = judge;
         _store = store ?? new InMemoryPipelineRunStore();
         _timeProvider = timeProvider ?? TimeProvider.System;
+        _canaryProgression = canaryProgression;
     }
 
     /// <inheritdoc />
@@ -196,6 +203,112 @@ public sealed class DefaultGuardedOptimizationPipeline : IGuardedOptimizationPip
             return BuildResult(snapshot);
         }
 
+        // R28-B.8：Canary Gate 渐进推进集成
+        // 当 run 处于 ScopedCanary 阶段且注入了 CanaryProgressionService 时：
+        //   1. 委托 CanaryProgressionService 评估 metrics（parity/error/latency 三类阈值）。
+        //   2. 根据评估结果决定推进百分比档 / 回滚 / 保持 / 已晋升。
+        //   3. 仅当 canary 已晋升到 100%（V2 only）才允许 judge 继续 Promote 决策；
+        //      未达 100% 时强制 Hold（阻止跳过百分比阶梯直接 Promote）。
+        // 未注入 canaryProgression 时（默认）跳过本块，沿用原 judge 决策（向后兼容）。
+        if (snapshot.CurrentStage == OptimizationStage.ScopedCanary && _canaryProgression is not null)
+        {
+            var canaryResult = await _canaryProgression.AdvanceAsync(
+                runId,
+                transition.TransitionId,
+                transition.IdempotencyKey,
+                baselineMetrics,
+                experimentMetrics,
+                cancellationToken).ConfigureAwait(false);
+
+            switch (canaryResult.Decision)
+            {
+                case CanaryProgressionDecision.Rollback:
+                    // Canary Gate 触发自动回滚：构造 RollbackRecord + 终态 snapshot
+                    var rbReason = RollbackReason.ModelPerformanceRegression;
+                    var canaryRollbackRecord = new RollbackRecord(
+                        recordId: $"rb-{runId}-{_timeProvider.GetUtcNow().UtcDateTime.Ticks}",
+                        runId: runId,
+                        proposalId: snapshot.ProposalId,
+                        reason: rbReason,
+                        triggeredAt: _timeProvider.GetUtcNow())
+                    {
+                        TriggeredAtStage = snapshot.CurrentStage
+                    };
+                    var rollbackSnapshot = snapshot with
+                    {
+                        RollbackReason = canaryResult.Rationale,
+                        CurrentStage = OptimizationStage.AutomaticRollback,
+                        Status = PipelineRunStatus.RolledBack,
+                        CompletedAt = _timeProvider.GetUtcNow(),
+                        UpdatedAt = _timeProvider.GetUtcNow(),
+                        StageMetrics = snapshot.StageMetrics.Append(new BaselineComparison(
+                            comparisonId: $"cmp-{runId}-{snapshot.StageMetrics.Count + 1}",
+                            proposalId: snapshot.ProposalId,
+                            baselineMetrics: baselineMetrics,
+                            experimentMetrics: experimentMetrics,
+                            comparedAt: _timeProvider.GetUtcNow())).ToList(),
+                        Revision = snapshot.Revision + 1,
+                        LastTransitionId = transition.TransitionId
+                    };
+                    var rbAudit = new PipelineAuditBatch
+                    {
+                        RollbackRecord = canaryRollbackRecord
+                    };
+                    var rbTransitioned = await _store.TryTransitionAsync(
+                        runId,
+                        expectedRevision: snapshot.Revision,
+                        expectedStage: snapshot.CurrentStage,
+                        next: rollbackSnapshot,
+                        audit: rbAudit,
+                        cancellationToken: cancellationToken).ConfigureAwait(false);
+                    if (rbTransitioned is null)
+                    {
+                        throw new InvalidOperationException(
+                            $"Canary Rollback CAS 推进失败：runId={runId}。" +
+                            "可能原因：另一实例已并发推进此 run。");
+                    }
+                    return BuildResult(rbTransitioned);
+
+                case CanaryProgressionDecision.Advance:
+                    // Canary 百分比档已推进（CutoverController 已更新）；
+                    // 保持 ScopedCanary 阶段，仅更新 StageMetrics + LastTransitionId
+                    var holdSnapshot = snapshot with
+                    {
+                        UpdatedAt = _timeProvider.GetUtcNow(),
+                        StageMetrics = snapshot.StageMetrics.Append(new BaselineComparison(
+                            comparisonId: $"cmp-{runId}-{snapshot.StageMetrics.Count + 1}",
+                            proposalId: snapshot.ProposalId,
+                            baselineMetrics: baselineMetrics,
+                            experimentMetrics: experimentMetrics,
+                            comparedAt: _timeProvider.GetUtcNow())).ToList(),
+                        Revision = snapshot.Revision + 1,
+                        LastTransitionId = transition.TransitionId
+                    };
+                    var holdTransitioned = await _store.TryTransitionAsync(
+                        runId,
+                        expectedRevision: snapshot.Revision,
+                        expectedStage: snapshot.CurrentStage,
+                        next: holdSnapshot,
+                        audit: null,
+                        cancellationToken: cancellationToken).ConfigureAwait(false);
+                    if (holdTransitioned is null)
+                    {
+                        throw new InvalidOperationException(
+                            $"Canary Advance CAS 推进失败：runId={runId}。" +
+                            "可能原因：另一实例已并发推进此 run。");
+                    }
+                    return BuildResult(holdTransitioned);
+
+                case CanaryProgressionDecision.Hold:
+                    // Canary 评估为 Hold（观察时长不足或数据缺失）：返回当前状态
+                    return BuildResult(snapshot);
+
+                case CanaryProgressionDecision.Promoted:
+                    // Canary 已晋升到 100%（V2 only）：fall through 到 judge 决策（允许 Promote）
+                    break;
+            }
+        }
+
         // 构造 BaselineComparison（供审计，在 CAS 事务内写入）
         var comparison = new BaselineComparison(
             comparisonId: $"cmp-{runId}-{snapshot.StageMetrics.Count + 1}",
@@ -239,6 +352,10 @@ public sealed class DefaultGuardedOptimizationPipeline : IGuardedOptimizationPip
                         runId: runId,
                         strategy: CanaryAssignmentStrategy.HashBased,
                         assignedAt: now);
+                    // R28-B.8：进入 ScopedCanary 时初始化 Canary 渐进推进状态
+                    // （设置 CutoverController 为 PercentageLadder[0]）。
+                    // 未初始化时 CanaryProgressionService.EvaluateAsync 永远返回 Hold。
+                    _canaryProgression?.InitializeCanary(runId);
                 }
                 nextSnapshot = snapshot with
                 {

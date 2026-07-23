@@ -249,6 +249,8 @@ internal static class StorageExtensions
 		// R14-PG-3：IShortTermMemoryStore / IShortTermPromotionCandidateStore / ICandidateMemoryReviewStore / IStableReviewCandidateStore 已由 PostgresServiceCollectionExtensions 正式绑定 Postgres 实现。
 		// R14-PG-4：IContextLearningStore / IStableLifecycleReviewStore / ICandidateConstraintReviewStore / IConstraintGapCandidateStore 已由 PostgresServiceCollectionExtensions 正式绑定 Postgres 实现。
 		// R14-PG-5 完成：全部 16 个 Postgres store 已正式绑定原生实现，无 Unsupported 覆盖。
+		// R28-E：IUtilityLedgerStore / IConflictSetStore 已由 PostgresServiceCollectionExtensions
+		// 正式绑定 PostgresUtilityLedgerStore / PostgresConflictSetStore（read-only 持久化，无需失效 Decorator）。
 
 		// R10-2：在 Postgres 实现之上叠加失效边界 Decorator（覆盖 AddContextCorePostgresStorage 的原始注册）。
 	// 失效 Decorator 位于最外层，写入成功后向 IStateCacheInvalidator 发出失效信号。
