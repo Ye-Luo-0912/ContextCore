@@ -174,7 +174,7 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
 
         if (allEnvelopes.Count == 0)
         {
-            return EmptyExecutionResult(request, snapshot, routingDecisions, completeWorkingSet, providerReports);
+            return EmptyExecutionResult(request, snapshot, routingDecisions, completeWorkingSet, providerReports, expertOutputs);
         }
 
         // Step 6：EarlyAdmissionGate 批量评估（Blocker-6：保留 Rejected）
@@ -186,14 +186,9 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
         {
             // 所有候选被 EarlyGate 拒绝：仍返回 EarlyRejected 作为 DroppedEnvelopes
             var emptyDecision = BuildEarlyRejectedResult(request, snapshot, earlyRejected, partition.RejectReasons);
-            return new ContextDecisionExecutionResult
-            {
-                Decision = emptyDecision,
-                WorkingSet = completeWorkingSet,
-                Policy = snapshot,
-                Routing = routingDecisions,
-                ProviderReports = providerReports
-            };
+            return ExecutionArtifactFactory.Create(
+                request, emptyDecision, completeWorkingSet,
+                snapshot, routingDecisions, providerReports, expertOutputs);
         }
 
         // Step 7：FeaturePipeline — 特征计算
@@ -247,7 +242,8 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
             AllocationContext = allocationContext
         };
 
-        var engineResult = await _engine.DecideAsync(decisionRequest, cancellationToken).ConfigureAwait(false);
+        var engineResult = await DecideWithFailClosedPropagationAsync(
+            decisionRequest, cancellationToken).ConfigureAwait(false);
 
         // P0-6：直接使用 Engine 结果，不再二次 Allocate。
         // R28-B.6：V2 路径下 Engine 已通过 IGlobalAllocator 产出 AllocationDecisions。
@@ -306,14 +302,9 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
             PolicyReference = snapshot.Reference
         };
 
-        return new ContextDecisionExecutionResult
-        {
-            Decision = decision,
-            WorkingSet = completeWorkingSet,
-            Policy = snapshot,
-            Routing = routingDecisions,
-            ProviderReports = providerReports
-        };
+        return ExecutionArtifactFactory.Create(
+            request, decision, completeWorkingSet,
+            snapshot, routingDecisions, providerReports, expertOutputs);
     }
 
     /// <summary>
@@ -403,12 +394,18 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
                 phase1MergedEnvelopes = Array.Empty<ContextCandidateEnvelope>();
             }
 
-            // 用 Phase 1 merged envelopes 作为 SeedCandidates 构造新 request
-            var phase2Request = request with { SeedCandidates = phase1MergedEnvelopes };
+            // P0-2 修复：Graph Phase 2 seeds = Phase 1 merged envelopes + 原始请求 seeds（去重）
+            // 原始 seeds（RequiredIds / 外部注入）必须参与图扩展，否则 mandatory / 显式注入候选
+            // 无法被 Graph Expert 用于关系遍历，导致扩展不完整。
+            var originalSeeds = request.SeedWorkingSet?.Envelopes ?? request.SeedCandidates;
+            var phase2Seeds = MergeSeedCandidates(phase1MergedEnvelopes, originalSeeds);
+
+            // 用合并后的 seeds 构造 Phase 2 request
+            var phase2Request = request with { SeedCandidates = phase2Seeds };
 
             var phase2Results = await InvokeProviderBatchAsync(
                 phase2Providers, phase2Request, snapshot, routingByExpert,
-                adaptationContext, seedEnvelopes: phase1MergedEnvelopes, cancellationToken).ConfigureAwait(false);
+                adaptationContext, seedEnvelopes: phase2Seeds, cancellationToken).ConfigureAwait(false);
             allOutputs.AddRange(phase2Results.Outputs);
             allReports.AddRange(phase2Results.Reports);
         }
@@ -660,16 +657,12 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
         EffectivePolicySnapshot snapshot,
         ExpertRoutingDecisionSet routing,
         CandidateWorkingSet workingSet,
-        IReadOnlyList<ProviderExecutionReport> providerReports)
+        IReadOnlyList<ProviderExecutionReport> providerReports,
+        IReadOnlyList<ExpertExecutionResult>? expertOutputs)
     {
-        return new ContextDecisionExecutionResult
-        {
-            Decision = EmptyResult(request, snapshot),
-            WorkingSet = workingSet,
-            Policy = snapshot,
-            Routing = routing,
-            ProviderReports = providerReports
-        };
+        return ExecutionArtifactFactory.Create(
+            request, EmptyResult(request, snapshot), workingSet,
+            snapshot, routing, providerReports, expertOutputs);
     }
 
     /// <summary>
@@ -837,6 +830,305 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
             MandatoryOverflowPolicy.AllowOverflowWithDiagnostic,
         _ => MandatoryOverflowPolicy.AllowOverflowWithDiagnostic
     };
+
+    /// <summary>
+    /// R28-B.7 P0-5：调用 Engine 并传播 fail-closed 异常。
+    /// </summary>
+    /// <remarks>
+    /// 异常处理策略（遵循硬约束：Runtime 不捕获 OperationCanceledException）：
+    ///   - <see cref="OperationCanceledException"/>：不捕获，向上传播（区分用户取消与超时）。
+    ///   - <see cref="MandatoryContextWindowExceededException"/>：不捕获，向上传播（fail-closed 语义：
+    ///     mandatory 硬窗口溢出必须让请求真正失败，不回退到 fallback）。
+    ///   - 其他异常：结构化回退（带 tracing），返回空决策 + 诊断信息，
+    ///     不让 Engine 内部错误导致整个 Runtime 崩溃。
+    /// </remarks>
+    private async Task<ContextDecisionResult> DecideWithFailClosedPropagationAsync(
+        ContextDecisionRequest decisionRequest,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await _engine.DecideAsync(decisionRequest, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // R28-B.7 P0-5：不捕获取消异常，向上传播
+            throw;
+        }
+        catch (MandatoryContextWindowExceededException)
+        {
+            // R28-B.7 P0-5：mandatory 硬窗口溢出 → fail-closed，向上传播（不回退）
+            throw;
+        }
+        catch (Exception ex)
+        {
+            // R28-B.7 P0-5：其他异常 → 结构化回退（带 tracing），返回空决策 + 诊断
+            return BuildEngineFallbackResult(decisionRequest, ex);
+        }
+    }
+
+    /// <summary>
+    /// R28-B.7 P0-5：Engine 异常时的结构化回退决策。
+    /// </summary>
+    /// <remarks>
+    /// 不抛异常，返回空 SelectedEnvelopes + 诊断信息（engine.faulted=true / engine.error）。
+    /// 让调用方能在诊断中看到 Engine 故障原因，而非收到未捕获异常。
+    /// </remarks>
+    private static ContextDecisionResult BuildEngineFallbackResult(
+        ContextDecisionRequest decisionRequest,
+        Exception ex)
+    {
+        var diagnostics = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["engine.faulted"] = "true",
+            ["engine.error"] = ex.GetType().Name,
+            ["engine.errorMessage"] = ex.Message
+        };
+
+        return new ContextDecisionResult
+        {
+            RequestId = decisionRequest.RequestId,
+            DecisionSource = decisionRequest.DecisionSource,
+            SelectedEnvelopes = Array.Empty<ContextCandidateEnvelope>(),
+            DroppedEnvelopes = Array.Empty<ContextCandidateEnvelope>(),
+            Outcome = new ContextDecisionOutcomeSummary
+            {
+                SelectedCount = 0,
+                DroppedCount = 0,
+                EstimatedTokens = 0,
+                TokenBudget = decisionRequest.TokenBudget,
+                Sections = Array.Empty<string>(),
+                SafetyGateBlockedCount = 0,
+                BudgetExceededCount = 0,
+                Diagnostics = diagnostics
+            },
+            PolicyVersion = decisionRequest.PolicySnapshot?.FeatureSchemaVersion ?? "unknown",
+            ModelEnabled = false,
+            DecidedAt = DateTimeOffset.UtcNow,
+            Purpose = ResolvePurposeFromDecisionSource(decisionRequest.DecisionSource),
+            RuntimeKind = ContextDecisionRuntimeKind.UnifiedV2,
+            AllocationDecisions = Array.Empty<CandidateAllocationDecision>(),
+            PolicyReference = decisionRequest.PolicySnapshot?.Reference
+        };
+    }
+
+    private static ContextDecisionPurpose ResolvePurposeFromDecisionSource(ContextDecisionSource source) => source switch
+    {
+        ContextDecisionSource.Retrieval => ContextDecisionPurpose.Retrieval,
+        ContextDecisionSource.Package => ContextDecisionPurpose.Package,
+        _ => ContextDecisionPurpose.Package
+    };
+}
+
+// ---------------------------------------------------------------------------
+// §5.1.1 ExecutionArtifactFactory — R28-B.7 P0-1：执行结果工厂
+// ---------------------------------------------------------------------------
+
+/// <summary>
+/// R28-B.7 P0-1：执行结果工厂，统一填充 <see cref="ContextDecisionExecutionResult"/> 的所有字段。
+/// </summary>
+/// <remarks>
+/// 设计目标：
+///   - 统一 Runtime 所有返回点（正常路径 / EarlyRejected 空路径 / 完全空候选路径）的结果构造，
+///     避免 P0-1 问题（新字段 NormalizedRequest / RequestSemanticHash / Scope /
+///     FeatureSchemaVersion / AllocatorVersion / TokenizerVersion / ProviderOutputSnapshots 未填充）。
+///   - ProviderOutputSnapshots 从 expertOutputs 构建，用于 Shadow replay 与审计。
+///   - RequestSemanticHash 基于请求语义字段计算 SHA256，用于 replay 匹配。
+/// </remarks>
+internal static class ExecutionArtifactFactory
+{
+    /// <summary>当前 Allocator 版本（与 DefaultAllocatorV2_1 诊断字段保持一致）。</summary>
+    private const string AllocatorVersion = "V2.1";
+
+    /// <summary>Tokenizer 版本占位（无 IContextTokenizerResolver 注入时为 null）。</summary>
+    private const string? TokenizerVersionValue = null;
+
+    /// <summary>
+    /// 创建完整填充的 <see cref="ContextDecisionExecutionResult"/>。
+    /// </summary>
+    public static ContextDecisionExecutionResult Create(
+        ContextDecisionRuntimeRequest request,
+        ContextDecisionResult decision,
+        CandidateWorkingSet workingSet,
+        EffectivePolicySnapshot snapshot,
+        ExpertRoutingDecisionSet routing,
+        IReadOnlyList<ProviderExecutionReport> providerReports,
+        IReadOnlyList<ExpertExecutionResult>? expertOutputs)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(decision);
+        ArgumentNullException.ThrowIfNull(workingSet);
+        ArgumentNullException.ThrowIfNull(snapshot);
+        ArgumentNullException.ThrowIfNull(routing);
+
+        return new ContextDecisionExecutionResult
+        {
+            Decision = decision,
+            WorkingSet = workingSet,
+            Policy = snapshot,
+            Routing = routing,
+            ProviderReports = providerReports,
+            // R28-B.7 P0-1：标准化请求（当前为 identity，后续接入 PurposeRequestNormalizer）
+            NormalizedRequest = request,
+            // R28-B.7 P0-1：请求语义哈希（用于 replay 匹配）
+            RequestSemanticHash = ComputeRequestSemanticHash(request),
+            // R28-B.7 P0-1：请求作用域（从请求直接获取，不从候选反推）
+            Scope = request.Scope,
+            // R28-B.7 P0-1：Feature Schema 版本（从 Policy 获取）
+            FeatureSchemaVersion = snapshot.FeatureSchemaVersion,
+            // R28-B.7 P0-1：Allocator 版本（用于 replay 兼容性）
+            AllocatorVersion = AllocatorVersion,
+            // R28-B.7 P0-1：Tokenizer 版本（无 resolver 注入时为 null）
+            TokenizerVersion = TokenizerVersionValue,
+            // R28-B.7 P0-1：Provider 输出快照（用于 replay 和审计）
+            ProviderOutputSnapshots = BuildProviderOutputSnapshots(expertOutputs, providerReports)
+        };
+    }
+
+    /// <summary>
+    /// R28-B.7 P0-1：计算请求语义哈希（SHA256，用于 replay 匹配）。
+    /// </summary>
+    /// <remarks>
+    /// 哈希输入：RequestId + Scope + Purpose + QueryText + TokenBudget + TopK。
+    /// 不包含 SeedCandidates / RetrievalInput / PackageInput（这些在 replay 时由 fixture 注入）。
+    /// </remarks>
+    private static string ComputeRequestSemanticHash(ContextDecisionRuntimeRequest request)
+    {
+        var sb = new StringBuilder(256);
+        sb.Append(request.RequestId);
+        sb.Append('|');
+        sb.Append(request.Scope.WorkspaceId);
+        sb.Append('|');
+        sb.Append(request.Scope.CollectionId);
+        sb.Append('|');
+        sb.Append((int)request.Purpose);
+        sb.Append('|');
+        sb.Append(request.QueryText ?? string.Empty);
+        sb.Append('|');
+        sb.Append(request.TokenBudget.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        sb.Append('|');
+        sb.Append(request.TopK.ToString(System.Globalization.CultureInfo.InvariantCulture));
+
+        var bytes = Encoding.UTF8.GetBytes(sb.ToString());
+        var hash = SHA256.HashData(bytes);
+        return Convert.ToHexString(hash);
+    }
+
+    /// <summary>
+    /// R28-B.7 P0-1：从 ExpertExecutionResult + ProviderExecutionReport 构建 ProviderOutputSnapshot 列表。
+    /// </summary>
+    /// <remarks>
+    /// expertOutputs 与 providerReports 按相同顺序收集（InvokeProviderBatchAsync 产出），
+    /// 按索引配对：Kind/Succeeded/Duration 取自 report，Envelopes/Materials 取自 output。
+    /// 数量不匹配时按 output 为主，Kind 回退到 Semantic。
+    /// </remarks>
+    private static IReadOnlyList<ProviderOutputSnapshot> BuildProviderOutputSnapshots(
+        IReadOnlyList<ExpertExecutionResult>? expertOutputs,
+        IReadOnlyList<ProviderExecutionReport> providerReports)
+    {
+        if (expertOutputs is null || expertOutputs.Count == 0)
+        {
+            return Array.Empty<ProviderOutputSnapshot>();
+        }
+
+        var snapshots = new List<ProviderOutputSnapshot>(expertOutputs.Count);
+        for (var i = 0; i < expertOutputs.Count; i++)
+        {
+            var output = expertOutputs[i];
+            // 按索引从 providerReports 取 Kind / Succeeded / Duration（同序收集）
+            var (kind, succeeded, duration) = i < providerReports.Count
+                ? (providerReports[i].Kind, providerReports[i].Succeeded, providerReports[i].Duration)
+                : (ExpertKind.Semantic, true, TimeSpan.Zero);
+
+            snapshots.Add(new ProviderOutputSnapshot
+            {
+                Kind = kind,
+                Envelopes = output.Envelopes,
+                Materials = output.Materials,
+                Succeeded = succeeded,
+                Duration = duration
+            });
+        }
+        return snapshots;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// §5.1.2 TokenCostHelper — R28-B.7 P0-4：token 成本计算辅助
+// ---------------------------------------------------------------------------
+
+/// <summary>
+/// R28-B.7 P0-4：token 成本计算辅助，提供精确 token 计数（优先使用 tokenizer）。
+/// </summary>
+/// <remarks>
+/// 解决问题：EstimatedTokens 使用 length/4 粗略估算，对中文 / JSON / 代码偏差大
+/// （中文每字符约 1 token，length/4 低估 4 倍）。本 helper 在 Provider 召回时
+/// 通过 IContextTokenizerResolver 获取精确 token 数；不可用时回退到 length/4 估算。
+/// </remarks>
+internal static class TokenCostHelper
+{
+    /// <summary>粗略估算的 tokenizer 标识。</summary>
+    private const string EstimatedTokenizerId = "length-div-4";
+
+    /// <summary>section 分隔符（用于 Projector 重算总 token 时附加分隔符 token）。</summary>
+    public const string SectionSeparator = "\n---\n";
+
+    /// <summary>
+    /// 计算候选正文的 token 成本。
+    /// </summary>
+    /// <param name="content">候选正文（null 或空时返回 0 token）。</param>
+    /// <param name="tokenizerResolver">tokenizer 解析器（null 时回退到 length/4 估算）。</param>
+    /// <param name="modelName">tokenizer 使用的模型名（可选）。</param>
+    /// <returns>token 成本（精确或估算）。</returns>
+    public static CandidateTokenCost ComputeTokenCost(
+        string? content,
+        IContextTokenizerResolver? tokenizerResolver,
+        string? modelName = null)
+    {
+        if (string.IsNullOrEmpty(content))
+        {
+            return new CandidateTokenCost
+            {
+                ContentTokens = 0,
+                TokenizerId = tokenizerResolver is not null ? (modelName ?? "default") : EstimatedTokenizerId,
+                IsEstimated = tokenizerResolver is null
+            };
+        }
+
+        // 优先使用 tokenizer 精确计数
+        if (tokenizerResolver is not null)
+        {
+            var estimate = tokenizerResolver.Estimate(content, modelName);
+            return new CandidateTokenCost
+            {
+                ContentTokens = estimate.TokenCount,
+                TokenizerId = modelName ?? estimate.Source ?? "default",
+                IsEstimated = estimate.IsFallback
+            };
+        }
+
+        // 回退到 length/4 估算（对中文偏低，但对英文/拉丁文近似）
+        var estimatedTokens = Math.Max(1, content!.Length / 4);
+        return new CandidateTokenCost
+        {
+            ContentTokens = estimatedTokens,
+            TokenizerId = EstimatedTokenizerId,
+            IsEstimated = true
+        };
+    }
+
+    /// <summary>
+    /// R28-B.7 P0-4：计算包含 section 分隔符的总 token 数。
+    /// </summary>
+    /// <param name="candidateTokenSum">所有候选 token 之和（不含分隔符）。</param>
+    /// <param name="candidateCount">候选数量。</param>
+    /// <param name="separatorTokens">单个分隔符的 token 数（默认 3，约 "\n---\n"）。</param>
+    /// <returns>含分隔符的总 token 数。</returns>
+    public static int CountWithSeparators(int candidateTokenSum, int candidateCount, int separatorTokens = 3)
+    {
+        if (candidateCount <= 1) return candidateTokenSum;
+        return candidateTokenSum + separatorTokens * (candidateCount - 1);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1847,6 +2139,9 @@ public sealed class DefaultGlobalAllocator : IGlobalAllocator
         // R28-B.6 Impl-2：mandatory overflow 诊断累计
         var mandatoryOverflowTokens = 0;
         var hardWindowViolated = false;
+        // R28-B.7 P0-5：FailClosed 时收集溢出 mandatory 候选 ID + 总 token 需求（用于抛出异常）
+        var overflowedMandatoryIds = new List<string>();
+        var mandatoryRequiredTokens = 0;
 
         foreach (var envelope in ordered)
         {
@@ -1872,12 +2167,15 @@ public sealed class DefaultGlobalAllocator : IGlobalAllocator
             {
                 var overflow = (usedTokens + envelope.EstimatedTokens) - tokenBudget;
                 mandatoryOverflowTokens += overflow;
+                mandatoryRequiredTokens += envelope.EstimatedTokens;
 
                 switch (mandatoryOverflowPolicy)
                 {
                     case MandatoryOverflowPolicy.FailClosed:
-                        // 硬窗口：拒绝 mandatory 候选（AgentContext 场景）
+                        // R28-B.7 P0-5：硬窗口 fail-closed — 收集溢出 mandatory 候选 ID
+                        // 循环结束后抛出 MandatoryContextWindowExceededException（让请求真正失败）
                         hardWindowViolated = true;
+                        overflowedMandatoryIds.Add(envelope.CandidateId);
                         dropped.Add(envelope);
                         decisions.Add(new CandidateAllocationDecision
                         {
@@ -1953,6 +2251,8 @@ public sealed class DefaultGlobalAllocator : IGlobalAllocator
             selected.Add(envelope);
             usedTokens += envelope.EstimatedTokens;
             takenCount++;
+            // R28-B.7 P0-5：累计 mandatory token 需求（用于 FailClosed 异常）
+            if (isMandatory) mandatoryRequiredTokens += envelope.EstimatedTokens;
             decisions.Add(new CandidateAllocationDecision
             {
                 CandidateKey = envelope.CanonicalKey,
@@ -1963,6 +2263,17 @@ public sealed class DefaultGlobalAllocator : IGlobalAllocator
                     ? CandidateDecisionReasonCode.SelectedMandatory
                     : CandidateDecisionReasonCode.SelectedHighestUtility
             });
+        }
+
+        // R28-B.7 P0-5：FailClosed 策略下若有 mandatory 候选超出预算，抛出异常（fail-closed）
+        // 不静默丢弃 mandatory 候选后返回成功 — 让请求真正失败，调用方可见异常。
+        if (mandatoryOverflowPolicy == MandatoryOverflowPolicy.FailClosed
+            && overflowedMandatoryIds.Count > 0)
+        {
+            throw new MandatoryContextWindowExceededException(
+                mandatoryTokens: mandatoryRequiredTokens,
+                budgetLimit: tokenBudget,
+                overflowedCandidateIds: overflowedMandatoryIds);
         }
 
         // R28-B.6 Impl-2：构建诊断字典（仅在有 mandatory overflow 时记录）
@@ -2144,6 +2455,25 @@ public sealed class AgentContextProjector : IAgentContextProjector
     public AgentContextSnapshot Project(ContextDecisionResult result, CandidateWorkingSet workingSet)
     {
         return Project(result, workingSet, context: null);
+    }
+
+    /// <summary>
+    /// R28-B.7 P0-6：从完整执行结果投影为 AgentContextSnapshot。
+    /// </summary>
+    /// <remarks>便捷重载：从 execution 提取 Decision + WorkingSet。</remarks>
+    public AgentContextSnapshot Project(ContextDecisionExecutionResult execution)
+    {
+        ArgumentNullException.ThrowIfNull(execution);
+        return Project(execution.Decision, execution.WorkingSet, context: null);
+    }
+
+    /// <summary>
+    /// R28-B.7 P0-6：从完整执行结果 + 投影上下文投影为 AgentContextSnapshot。
+    /// </summary>
+    public AgentContextSnapshot Project(ContextDecisionExecutionResult execution, ProjectionContext context)
+    {
+        ArgumentNullException.ThrowIfNull(execution);
+        return Project(execution.Decision, execution.WorkingSet, context);
     }
 
     /// <summary>

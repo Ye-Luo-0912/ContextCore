@@ -371,7 +371,11 @@ public sealed class ShadowDecisionRuntime
             LegacyResult: legacyResult,
             V2Result: v2Result,
             WorkingSet: workingSet,
-            Parity: parityReport);
+            Parity: parityReport)
+        {
+            // R28-B.7 P0-3：携带完整 V2 执行结果，用于 ReplayFixture 纯决策重放
+            Execution = v2Execution
+        };
     }
 
     /// <summary>
@@ -472,7 +476,11 @@ public sealed class ShadowDecisionRuntime
             LegacyResult: legacyResult,
             V2Result: v2Result,
             WorkingSet: workingSet,
-            Parity: parityReport);
+            Parity: parityReport)
+        {
+            // R28-B.7 P0-3：携带完整 V2 执行结果，用于 ReplayFixture 纯决策重放
+            Execution = v2Execution
+        };
     }
 }
 
@@ -481,11 +489,27 @@ public sealed record RetrievalShadowReport(
     ContextRetrievalResult LegacyResult,
     ContextDecisionResult V2Result,
     CandidateWorkingSet WorkingSet,
-    ParityReport Parity);
+    ParityReport Parity)
+{
+    /// <summary>R28-B.7 P0-3：完整 V2 执行结果（含 Policy / Routing / ProviderOutputs），用于 replay fixture。</summary>
+    /// <remarks>
+    /// 携带完整 Execution 数据，让 ReplayFixture 能填充 StoredPolicySnapshot / StoredProviderOutputs，
+    /// 使离线 replay 能纯决策重放（不重新解析 Policy / 不重新调用 Provider）。
+    /// </remarks>
+    public ContextDecisionExecutionResult? Execution { get; init; }
+}
 
 /// <summary>R28-B B-2：Package 路径 Shadow 执行报告。</summary>
 public sealed record PackageShadowReport(
     ContextPackageBuildResult LegacyResult,
     ContextDecisionResult V2Result,
     CandidateWorkingSet WorkingSet,
-    ParityReport Parity);
+    ParityReport Parity)
+{
+    /// <summary>R28-B.7 P0-3：完整 V2 执行结果（含 Policy / Routing / ProviderOutputs），用于 replay fixture。</summary>
+    /// <remarks>
+    /// 携带完整 Execution 数据，让 ReplayFixture 能填充 StoredPolicySnapshot / StoredProviderOutputs，
+    /// 使离线 replay 能纯决策重放（不重新解析 Policy / 不重新调用 Provider）。
+    /// </remarks>
+    public ContextDecisionExecutionResult? Execution { get; init; }
+}

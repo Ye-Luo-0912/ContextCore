@@ -318,6 +318,14 @@ public sealed record ContextCandidateEnvelope
     /// <summary>候选估算 token 数（截断前）。</summary>
     public int EstimatedTokens { get; init; }
 
+    /// <summary>R28-B.7 P0-4：候选 token 成本（精确计算或估算）。</summary>
+    /// <remarks>
+    /// Provider 召回时若 IContextTokenizerResolver 可用，填充精确 token 成本；
+    /// null 时回退到 <see cref="EstimatedTokens"/>（length/4 粗略估算）。
+    /// Allocator / Projector 优先消费此字段做预算控制。
+    /// </remarks>
+    public CandidateTokenCost? TokenCost { get; init; }
+
     /// <summary>来源溯源链（store path / buildId / traceId / modelArtifactRef）。</summary>
     /// <remarks>
     /// 设计澄清（用户澄清 #1）：Envelope 使用 ProvenanceRefs；

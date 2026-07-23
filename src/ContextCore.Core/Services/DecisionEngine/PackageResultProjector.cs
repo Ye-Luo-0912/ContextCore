@@ -106,6 +106,20 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
     }
 
     /// <summary>
+    /// R28-B.7 P0-6：从完整执行结果投影为 ContextPackageBuildResult。
+    /// </summary>
+    /// <remarks>
+    /// 便捷重载：从 execution 提取 Decision + WorkingSet + Scope。
+    /// 关键修复：使用 execution.Scope 而非 default，避免空 Package 丢失 Scope
+    /// （候选为空时仍能从 execution.Scope 获取 WorkspaceId/CollectionId）。
+    /// </remarks>
+    public ContextPackageBuildResult Project(ContextDecisionExecutionResult execution)
+    {
+        ArgumentNullException.ThrowIfNull(execution);
+        return Project(execution.Decision, execution.WorkingSet, execution.Scope);
+    }
+
+    /// <summary>
     /// R28-B.7：将决策结果 + 候选正文 sidecar + 作用域投影为 ContextPackageBuildResult。
     /// 空 Package（无选中候选）时从 scope 获取 WorkspaceId/CollectionId，而非从候选反推
     /// （候选为空时反推会丢失 Scope）。
@@ -149,7 +163,8 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
             .Select(env =>
             {
                 var section = ResolveSectionName(env.Source);
-                var includedTokens = env.EstimatedTokens;
+                // R28-B.7 P0-4：优先使用 TokenCost.ContentTokens（精确 token 计数），回退到 EstimatedTokens
+                var includedTokens = env.TokenCost?.ContentTokens ?? env.EstimatedTokens;
                 var isTruncated = false;
                 if (allocationByKey.TryGetValue(env.CanonicalKey, out var decision))
                 {
@@ -431,7 +446,8 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
     {
         // P0-7：从 AllocationDecision 消费 Section / IncludedTokens / IsTruncated
         var section = ResolveSectionName(envelope.Source);
-        var includedTokens = envelope.EstimatedTokens;
+        // R28-B.7 P0-4：优先使用 TokenCost.ContentTokens（精确 token 计数），回退到 EstimatedTokens
+        var includedTokens = envelope.TokenCost?.ContentTokens ?? envelope.EstimatedTokens;
         var isTruncated = false;
         if (allocationByKey.TryGetValue(envelope.CanonicalKey, out var decision))
         {

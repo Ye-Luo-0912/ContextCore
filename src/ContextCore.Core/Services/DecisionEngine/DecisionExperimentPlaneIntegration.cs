@@ -342,9 +342,11 @@ public sealed class DecisionExperimentPlaneIntegration : IAsyncDisposable
     public void RecordShadowReport(RetrievalShadowReport shadowReport, string fixtureId, string purpose, string notes = "")
     {
         ArgumentNullException.ThrowIfNull(shadowReport);
-        var fixture = ReplayFixture.FromShadowReport(
-            shadowReport.Parity, shadowReport.WorkingSet, shadowReport.V2Result,
-            fixtureId, purpose, notes);
+        // R28-B.7 P0-3：优先使用 FromExecution 携带完整 Execution 数据（Policy / ProviderOutputs）；
+        // Execution 为 null 时回退到 FromShadowReport（使用 shadowReport 自身的 WorkingSet + V2Result）
+        var fixture = shadowReport.Execution is not null
+            ? ReplayFixture.FromExecution(shadowReport.Parity, shadowReport.Execution, fixtureId, purpose, notes)
+            : ReplayFixture.FromShadowReport(shadowReport.Parity, shadowReport.WorkingSet, shadowReport.V2Result, fixtureId, purpose, notes);
         Enqueue(new ExperimentEvent.Record(fixture));
     }
 
@@ -358,9 +360,11 @@ public sealed class DecisionExperimentPlaneIntegration : IAsyncDisposable
     public void RecordShadowReport(PackageShadowReport shadowReport, string fixtureId, string purpose, string notes = "")
     {
         ArgumentNullException.ThrowIfNull(shadowReport);
-        var fixture = ReplayFixture.FromShadowReport(
-            shadowReport.Parity, shadowReport.WorkingSet, shadowReport.V2Result,
-            fixtureId, purpose, notes);
+        // R28-B.7 P0-3：优先使用 FromExecution 携带完整 Execution 数据（Policy / ProviderOutputs）；
+        // Execution 为 null 时回退到 FromShadowReport（使用 shadowReport 自身的 WorkingSet + V2Result）
+        var fixture = shadowReport.Execution is not null
+            ? ReplayFixture.FromExecution(shadowReport.Parity, shadowReport.Execution, fixtureId, purpose, notes)
+            : ReplayFixture.FromShadowReport(shadowReport.Parity, shadowReport.WorkingSet, shadowReport.V2Result, fixtureId, purpose, notes);
         Enqueue(new ExperimentEvent.Record(fixture));
     }
 

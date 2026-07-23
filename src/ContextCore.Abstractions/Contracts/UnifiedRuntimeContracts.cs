@@ -144,6 +144,26 @@ public sealed record ContextDecisionExecutionResult
 }
 
 /// <summary>
+/// R28-B.7 P0-4：候选 token 成本（精确或估算）。
+/// </summary>
+/// <remarks>
+/// Provider 召回候选时计算 token 成本。若 IContextTokenizerResolver 可用则使用精确 tokenizer；
+/// 否则回退到 length/4 粗略估算（IsEstimated=true），对中文/JSON/代码偏差大。
+/// Allocator / Projector 消费此字段做预算控制，避免依赖粗略的 EstimatedTokens。
+/// </remarks>
+public sealed record CandidateTokenCost
+{
+    /// <summary>候选正文的 token 数（精确或估算）。</summary>
+    public required int ContentTokens { get; init; }
+
+    /// <summary>tokenizer 标识（如 "unicode-cjk-v1" / "length-div-4"）。</summary>
+    public required string TokenizerId { get; init; }
+
+    /// <summary>是否为粗略估算（true = length/4 回退；false = 精确 tokenizer）。</summary>
+    public required bool IsEstimated { get; init; }
+}
+
+/// <summary>
 /// R28-B.7：Provider 输出快照（用于 replay 和审计）。
 /// </summary>
 /// <remarks>
@@ -998,6 +1018,40 @@ public enum MandatoryOverflowPolicy : byte
     RejectLowestAuthorityMandatory = 2
 }
 
+/// <summary>
+/// R28-B.7 P0-5：mandatory 候选超出硬窗口时抛出。
+/// </summary>
+/// <remarks>
+/// 当 MandatoryOverflowPolicy=FailClosed 且 mandatory 候选总 token 超出预算时，
+/// Allocator 抛出此异常。Runtime 不捕获此异常（不回退到 fallback），
+/// 让请求真正失败（fail-closed 语义），而非把 mandatory 放入 dropped 后返回成功。
+/// </remarks>
+public sealed class MandatoryContextWindowExceededException : InvalidOperationException
+{
+    /// <summary>mandatory 候选所需的总 token 数。</summary>
+    public int MandatoryTokens { get; }
+
+    /// <summary>预算上限。</summary>
+    public int BudgetLimit { get; }
+
+    /// <summary>超出预算的候选 ID 列表。</summary>
+    public IReadOnlyList<string> OverflowedCandidateIds { get; }
+
+    /// <summary>构造 mandatory 窗口溢出异常。</summary>
+    public MandatoryContextWindowExceededException(
+        int mandatoryTokens,
+        int budgetLimit,
+        IReadOnlyList<string> overflowedCandidateIds)
+        : base($"Mandatory context window exceeded: {mandatoryTokens} tokens required, " +
+               $"budget limit is {budgetLimit}. Overflowed candidates: " +
+               $"{string.Join(", ", overflowedCandidateIds)}")
+    {
+        MandatoryTokens = mandatoryTokens;
+        BudgetLimit = budgetLimit;
+        OverflowedCandidateIds = overflowedCandidateIds;
+    }
+}
+
 // ---------------------------------------------------------------------------
 // AgentContext Projector
 // ---------------------------------------------------------------------------
@@ -1029,6 +1083,21 @@ public interface IAgentContextProjector
     /// <param name="context">投影上下文（含真实 AgentSessionId）。</param>
     /// <returns>AgentContextSnapshot。</returns>
     AgentContextSnapshot Project(ContextDecisionResult result, CandidateWorkingSet workingSet, ProjectionContext context);
+
+    /// <summary>
+    /// R28-B.7 P0-6：从完整执行结果投影为 AgentContextSnapshot。
+    /// </summary>
+    /// <param name="execution">完整执行结果（含 Decision + WorkingSet）。</param>
+    /// <returns>AgentContextSnapshot。</returns>
+    AgentContextSnapshot Project(ContextDecisionExecutionResult execution);
+
+    /// <summary>
+    /// R28-B.7 P0-6：从完整执行结果 + 投影上下文投影为 AgentContextSnapshot。
+    /// </summary>
+    /// <param name="execution">完整执行结果（含 Decision + WorkingSet）。</param>
+    /// <param name="context">投影上下文（含真实 AgentSessionId）。</param>
+    /// <returns>AgentContextSnapshot。</returns>
+    AgentContextSnapshot Project(ContextDecisionExecutionResult execution, ProjectionContext context);
 }
 
 /// <summary>

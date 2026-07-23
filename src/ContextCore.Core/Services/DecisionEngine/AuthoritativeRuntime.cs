@@ -218,7 +218,8 @@ public sealed class AuthoritativeRetrievalRuntime : IContextRetriever
     {
         var v2Request = BuildV2RetrievalRequest(request);
         var execution = await _v2Runtime.ExecuteWithWorkingSetAsync(v2Request, cancellationToken).ConfigureAwait(false);
-        return _retrievalProjector.Project(execution.Decision, execution.WorkingSet);
+        // R28-B.7 P0-6：使用 execution 重载，确保 Projector 从 WorkingSet 恢复 Material 正文
+        return _retrievalProjector.Project(execution);
     }
 
     /// <summary>
@@ -233,7 +234,8 @@ public sealed class AuthoritativeRetrievalRuntime : IContextRetriever
     {
         var v2Request = BuildV2RetrievalRequest(request);
         var execution = await _v2Runtime.ExecuteWithWorkingSetAsync(v2Request, cancellationToken).ConfigureAwait(false);
-        return (_retrievalProjector.Project(execution.Decision, execution.WorkingSet), execution);
+        // R28-B.7 P0-6：使用 execution 重载
+        return (_retrievalProjector.Project(execution), execution);
     }
 
     /// <summary>
@@ -470,7 +472,9 @@ public sealed class AuthoritativePackageRuntime : IContextPackageBuilder
     {
         var v2Request = BuildV2PackageRequest(request);
         var execution = await _v2Runtime.ExecuteWithWorkingSetAsync(v2Request, cancellationToken).ConfigureAwait(false);
-        return _packageProjector.Project(execution.Decision, execution.WorkingSet);
+        // R28-B.7 P0-6：使用 execution 重载，从 execution.Scope 获取 WorkspaceId/CollectionId
+        // 修复空 Package 丢失 Scope 问题（候选为空时仍能从 execution.Scope 获取作用域）
+        return _packageProjector.Project(execution);
     }
 
     /// <summary>
@@ -484,7 +488,8 @@ public sealed class AuthoritativePackageRuntime : IContextPackageBuilder
     {
         var v2Request = BuildV2PackageRequest(request);
         var execution = await _v2Runtime.ExecuteWithWorkingSetAsync(v2Request, cancellationToken).ConfigureAwait(false);
-        return (_packageProjector.Project(execution.Decision, execution.WorkingSet, v2Request.Scope), execution);
+        // R28-B.7 P0-6：使用 execution 重载（含 Scope，修复空 Package Scope 丢失）
+        return (_packageProjector.Project(execution), execution);
     }
 
     /// <summary>
@@ -618,8 +623,9 @@ public sealed class AuthoritativeAgentContextRuntime
             mergedRequest, cancellationToken).ConfigureAwait(false);
 
         // R28-B.6 P0-3：使用 execution.WorkingSet（包含 Provider 新召回的 Material），而非 caller 原始 WorkingSet
+        // R28-B.7 P0-6：使用 execution 重载
         return projectionContext is not null
-            ? _agentContextProjector.Project(execution.Decision, execution.WorkingSet, projectionContext)
-            : _agentContextProjector.Project(execution.Decision, execution.WorkingSet);
+            ? _agentContextProjector.Project(execution, projectionContext)
+            : _agentContextProjector.Project(execution);
     }
 }

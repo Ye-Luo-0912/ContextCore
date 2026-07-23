@@ -268,6 +268,35 @@ public sealed record ReplayFixture(
             V2Result = v2Result
         };
     }
+
+    /// <summary>
+    /// R28-B.7 P0-3：从完整 V2 执行结果构建 ReplayFixture，携带完整重放数据。
+    /// </summary>
+    /// <remarks>
+    /// 填充 StoredWorkingSet / StoredPolicySnapshot / StoredProviderOutputs，
+    /// 使离线 replay 能纯决策重放（DecisionReplay / ExpertReplay）：
+    ///   - StoredPolicySnapshot：直接喂给 IContextDecisionEngine.DecideAsync，不重新解析 Policy；
+    ///   - StoredProviderOutputs：跳过 Provider 执行，直接 Merge 后进入 Engine；
+    ///   - StoredWorkingSet：Engine 入口候选快照。
+    /// </remarks>
+    public static ReplayFixture FromExecution(
+        ParityReport report,
+        ContextDecisionExecutionResult? execution,
+        string fixtureId,
+        string purpose,
+        string notes = "")
+    {
+        ArgumentNullException.ThrowIfNull(report);
+        var fixture = FromShadowReport(report, execution?.WorkingSet, execution?.Decision, fixtureId, purpose, notes);
+        if (execution is null) return fixture;
+
+        return fixture with
+        {
+            StoredWorkingSet = execution.WorkingSet,
+            StoredPolicySnapshot = execution.Policy,
+            StoredProviderOutputs = execution.ProviderOutputSnapshots
+        };
+    }
 }
 
 // ---------------------------------------------------------------------------

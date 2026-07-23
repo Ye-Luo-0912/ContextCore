@@ -87,6 +87,20 @@ public sealed class RetrievalResultProjector : IResultProjector<ContextRetrieval
     }
 
     /// <summary>
+    /// R28-B.7 P0-6：从完整执行结果投影为 ContextRetrievalResult。
+    /// </summary>
+    /// <remarks>
+    /// 便捷重载：从 execution 提取 Decision + WorkingSet，委托到
+    /// <see cref="Project(ContextDecisionResult, CandidateWorkingSet)"/>。
+    /// 确保 Projector 始终从 WorkingSet 恢复 Material 正文，不丢失候选内容。
+    /// </remarks>
+    public ContextRetrievalResult Project(ContextDecisionExecutionResult execution)
+    {
+        ArgumentNullException.ThrowIfNull(execution);
+        return Project(execution.Decision, execution.WorkingSet);
+    }
+
+    /// <summary>
     /// P0-7：将决策结果 + 候选正文 sidecar 投影为 ContextRetrievalResult。
     /// 从 workingSet.Materials 恢复候选 Content；从 result.AllocationDecisions
     /// 消费 Section / IncludedTokens / IsTruncated（如有）。
@@ -109,6 +123,13 @@ public sealed class RetrievalResultProjector : IResultProjector<ContextRetrieval
             .Select(ProjectToRetrievalDecision)
             .ToList();
 
+        // R28-B.7 P0-4：重算总 token 数（含 section 分隔符 token）
+        // Engine Outcome.EstimatedTokens 仅含候选 token 之和，不计分隔符；
+        // Projector 输出时附加分隔符 token（每个候选间一个 "\n---\n" 约 3 token）。
+        var candidateTokenSum = selectedItems.Sum(c => c.EstimatedTokens);
+        var totalTokensWithSeparators = TokenCostHelper.CountWithSeparators(
+            candidateTokenSum, selectedItems.Count);
+
         // R28-B.7 工作包 D：传播 Engine Outcome.Diagnostics 到输出 Metadata（不丢失诊断）。
         // 诊断键加 "diag." 前缀以避免与既有 Metadata 键冲突。
         var metadata = new Dictionary<string, string>
@@ -129,7 +150,8 @@ public sealed class RetrievalResultProjector : IResultProjector<ContextRetrieval
             Succeeded = true,
             SelectedItems = selectedItems,
             DroppedItems = droppedItems,
-            EstimatedTokens = result.Outcome.EstimatedTokens,
+            // R28-B.7 P0-4：使用含分隔符的总 token 数（比 Engine Outcome 更精确）
+            EstimatedTokens = totalTokensWithSeparators,
             CreatedAt = result.DecidedAt,
             Metadata = metadata
         };
@@ -148,7 +170,8 @@ public sealed class RetrievalResultProjector : IResultProjector<ContextRetrieval
         }
 
         // P0-7：从 AllocationDecision 恢复 IncludedTokens / IsTruncated（如有）
-        var includedTokens = envelope.EstimatedTokens;
+        // R28-B.7 P0-4：优先使用 TokenCost.ContentTokens（精确 token 计数），回退到 EstimatedTokens
+        var includedTokens = envelope.TokenCost?.ContentTokens ?? envelope.EstimatedTokens;
         var isTruncated = false;
         if (allocationByKey.TryGetValue(envelope.CanonicalKey, out var decision))
         {
