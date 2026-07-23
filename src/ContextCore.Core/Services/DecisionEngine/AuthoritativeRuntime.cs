@@ -484,7 +484,7 @@ public sealed class AuthoritativePackageRuntime : IContextPackageBuilder
     {
         var v2Request = BuildV2PackageRequest(request);
         var execution = await _v2Runtime.ExecuteWithWorkingSetAsync(v2Request, cancellationToken).ConfigureAwait(false);
-        return (_packageProjector.Project(execution.Decision, execution.WorkingSet), execution);
+        return (_packageProjector.Project(execution.Decision, execution.WorkingSet, v2Request.Scope), execution);
     }
 
     /// <summary>

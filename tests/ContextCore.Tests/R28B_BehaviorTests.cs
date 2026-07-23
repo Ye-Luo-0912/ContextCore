@@ -423,7 +423,10 @@ public sealed class PackageResultProjectorTests
 
         Assert.IsNotNull(dto.Budget);
         Assert.AreEqual(1000, dto.Budget.TokenBudget);
-        Assert.AreEqual(240, dto.Budget.UsedTokens);
+        // R28-B.7：Budget.UsedTokens 使用 Projector 截断后的真实 token 数（含 section 内分隔符），
+        // 不再等于 result.Outcome.EstimatedTokens（240）。
+        // recent_context：80+60=140 + 2（env1/env2 间 "\n\n" 分隔符）= 142；working_memory：100；合计 242。
+        Assert.AreEqual(242, dto.Budget.UsedTokens);
 
         // 两个 section：recent_context（80+60=140）和 working_memory（100）
         var sections = dto.Budget.Sections.ToList();

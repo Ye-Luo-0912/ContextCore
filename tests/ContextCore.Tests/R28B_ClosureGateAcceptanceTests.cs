@@ -912,7 +912,12 @@ public sealed class ProjectorAcceptanceTests
         // Budget 检查
         Assert.IsNotNull(dto.Budget, "Package 必须构建完整 Budget。");
         Assert.AreEqual(1000, dto.Budget.TokenBudget);
-        Assert.AreEqual(150, dto.Budget.UsedTokens, "Budget.UsedTokens 从 result.Outcome.EstimatedTokens 恢复。");
+        // R28-B.7：Budget.UsedTokens 使用 Projector 截断后的真实 token 数，
+        // 不再等于 result.Outcome.EstimatedTokens（150）。
+        // "package body content"（20 chars）经 DefaultContentTruncator 估算 = 20/4 = 5 tokens。
+        Assert.AreEqual(dto.Package.EstimatedTokens, dto.Budget.UsedTokens, "Budget.UsedTokens 必须与 Package.EstimatedTokens 一致（同源）。");
+        Assert.IsTrue(dto.Budget.UsedTokens > 0, "Budget.UsedTokens 必须大于 0（由 truncator 重算）。");
+        Assert.IsTrue(dto.Budget.UsedTokens <= 150, "Budget.UsedTokens 不应超过 AllocationDecision.IncludedTokens。");
         Assert.IsTrue(dto.Budget.Sections.Count > 0, "Package 必须构建 section budgets。");
     }
 

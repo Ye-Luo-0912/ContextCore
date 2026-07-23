@@ -120,6 +120,52 @@ public sealed record ContextDecisionExecutionResult
 
     /// <summary>各 Provider 的执行报告（按执行顺序；Phase 2 Graph 在最后）。</summary>
     public IReadOnlyList<ProviderExecutionReport> ProviderReports { get; init; } = [];
+
+    /// <summary>R28-B.7：标准化后的请求（Purpose Request Normalizer 产出）。</summary>
+    public ContextDecisionRuntimeRequest? NormalizedRequest { get; init; }
+
+    /// <summary>R28-B.7：请求语义哈希（用于 replay 匹配）。</summary>
+    public string? RequestSemanticHash { get; init; }
+
+    /// <summary>R28-B.7：请求作用域（标准化，不从候选反推）。</summary>
+    public ContextDecisionScope Scope { get; init; }
+
+    /// <summary>R28-B.7：Feature Schema 版本（从 Policy 获取，用于 replay 兼容性）。</summary>
+    public string? FeatureSchemaVersion { get; init; }
+
+    /// <summary>R28-B.7：Allocator 版本（用于 replay 兼容性）。</summary>
+    public string? AllocatorVersion { get; init; }
+
+    /// <summary>R28-B.7：Tokenizer 版本（用于精确 token 计算兼容性）。</summary>
+    public string? TokenizerVersion { get; init; }
+
+    /// <summary>R28-B.7：Provider 输出快照（每个 Provider 的 Envelopes+Materials 快照，用于 replay）。</summary>
+    public IReadOnlyList<ProviderOutputSnapshot> ProviderOutputSnapshots { get; init; } = [];
+}
+
+/// <summary>
+/// R28-B.7：Provider 输出快照（用于 replay 和审计）。
+/// </summary>
+/// <remarks>
+/// 捕获每个 Provider 执行后的 Envelopes + Materials + 成功状态 + 耗时，
+/// 让 replay 能从快照恢复完整候选工作集，无需重新调用 Provider。
+/// </remarks>
+public sealed record ProviderOutputSnapshot
+{
+    /// <summary>Provider 对应的 Expert 类型。</summary>
+    public required ExpertKind Kind { get; init; }
+
+    /// <summary>Provider 产出的候选 envelope 集合。</summary>
+    public required IReadOnlyList<ContextCandidateEnvelope> Envelopes { get; init; }
+
+    /// <summary>Provider 产出的候选正文 sidecar（按 CanonicalCandidateKey 索引）。</summary>
+    public required IReadOnlyDictionary<CanonicalCandidateKey, CandidateMaterial> Materials { get; init; }
+
+    /// <summary>Provider 是否执行成功。</summary>
+    public required bool Succeeded { get; init; }
+
+    /// <summary>Provider 执行耗时。</summary>
+    public required TimeSpan Duration { get; init; }
 }
 
 /// <summary>
@@ -946,6 +992,12 @@ public interface IContentTruncator
     /// <param name="maxTokens">允许的最大 token 数。</param>
     /// <returns>截断结果（含截断后正文、实际 token 数、是否发生截断）。</returns>
     TruncationResult Truncate(string content, int maxTokens);
+
+    /// <summary>R28-B.7：计算完整序列的 token 数（包括所有 section、separator、header）。</summary>
+    /// <param name="content">待计算的内容（可以是单个候选正文、section 拼接或完整序列化 package）。</param>
+    /// <param name="modelName">tokenizer 使用的模型名（可选，null 时使用截断器默认模型）。</param>
+    /// <returns>内容的 token 数。</returns>
+    int CountTokens(string content, string? modelName = null);
 }
 
 /// <summary>R28-B.6 Impl-1：截断结果。</summary>

@@ -109,6 +109,20 @@ public sealed class RetrievalResultProjector : IResultProjector<ContextRetrieval
             .Select(ProjectToRetrievalDecision)
             .ToList();
 
+        // R28-B.7 工作包 D：传播 Engine Outcome.Diagnostics 到输出 Metadata（不丢失诊断）。
+        // 诊断键加 "diag." 前缀以避免与既有 Metadata 键冲突。
+        var metadata = new Dictionary<string, string>
+        {
+            ["policyVersion"] = result.PolicyVersion,
+            ["modelEnabled"] = result.ModelEnabled.ToString().ToLowerInvariant(),
+            ["safetyGateBlocked"] = result.Outcome.SafetyGateBlockedCount.ToString(),
+            ["budgetExceeded"] = result.Outcome.BudgetExceededCount.ToString()
+        };
+        foreach (var (key, value) in result.Outcome.Diagnostics)
+        {
+            metadata[$"diag.{key}"] = value;
+        }
+
         return new ContextRetrievalResult
         {
             OperationId = result.RequestId,
@@ -117,13 +131,7 @@ public sealed class RetrievalResultProjector : IResultProjector<ContextRetrieval
             DroppedItems = droppedItems,
             EstimatedTokens = result.Outcome.EstimatedTokens,
             CreatedAt = result.DecidedAt,
-            Metadata = new Dictionary<string, string>
-            {
-                ["policyVersion"] = result.PolicyVersion,
-                ["modelEnabled"] = result.ModelEnabled.ToString().ToLowerInvariant(),
-                ["safetyGateBlocked"] = result.Outcome.SafetyGateBlockedCount.ToString(),
-                ["budgetExceeded"] = result.Outcome.BudgetExceededCount.ToString()
-            }
+            Metadata = metadata
         };
     }
 

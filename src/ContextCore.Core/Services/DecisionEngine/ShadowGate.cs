@@ -207,6 +207,28 @@ public sealed record ReplayFixture(
     /// <summary>P0-9：V2 决策结果快照（含 AllocationDecisions），用于离线 replay。</summary>
     public ContextDecisionResult? V2Result { get; init; }
 
+    /// <summary>R28-B.7：存储的 WorkingSet（用于 DecisionReplay）。</summary>
+    /// <remarks>
+    /// 与 <see cref="WorkingSet"/> 区分：WorkingSet 携带 shadow 报告时的候选快照，
+    /// StoredWorkingSet 是专为 DecisionReplay 准备的 Engine 入口候选（语义相同但来源独立，
+    /// 便于在 WorkingSet 为 null 而 StoredWorkingSet 单独注入时仍能纯决策重放）。
+    /// </remarks>
+    public CandidateWorkingSet? StoredWorkingSet { get; init; }
+
+    /// <summary>R28-B.7：存储的 PolicySnapshot（用于 DecisionReplay / ExpertReplay）。</summary>
+    /// <remarks>
+    /// 请求生命周期内不可变的有效策略快照，直接喂给 IContextDecisionEngine.DecideAsync，
+    /// 不重新解析 Policy / 不调用 Router，保证纯决策重放。
+    /// </remarks>
+    public EffectivePolicySnapshot? StoredPolicySnapshot { get; init; }
+
+    /// <summary>R28-B.7：存储的 Provider 输出快照（用于 ExpertReplay）。</summary>
+    /// <remarks>
+    /// 每个 Provider 的 Envelopes + Materials 快照。ExpertReplay 跳过 Provider 执行，
+    /// 直接 Merge 这些快照后进入 Engine。
+    /// </remarks>
+    public IReadOnlyList<ProviderOutputSnapshot>? StoredProviderOutputs { get; init; }
+
     /// <summary>从 ParityReport 构建 ReplayFixture（不含完整重放数据）。</summary>
     public static ReplayFixture FromReport(ParityReport report, string fixtureId, string purpose, string notes = "")
     {

@@ -1,5 +1,6 @@
 using System.Threading.Channels;
 using ContextCore.Abstractions;
+using ContextCore.Abstractions.Models;
 
 namespace ContextCore.Core.Services.DecisionEngine;
 
@@ -192,35 +193,86 @@ public sealed class DecisionExperimentPlaneIntegration : IAsyncDisposable
     private readonly ShadowGateEvaluator _gateEvaluator;
     private readonly CutoverConfiguration _configuration;
     private readonly IExperimentRecorder _recorder;
+    // R28-B.7 工作包 F：纯决策重放内核。可选注入；为 null 时 DecisionReplay/ExpertReplay 抛异常。
+    private readonly IContextDecisionEngine? _engine;
 
     // R28-B.6 Impl-5：异步非阻塞队列。写路径（RecordFixture / RecordShadowReport /
     // ClearHistory）只入队即返回，后台 consumer 串行消费调用 _recorder。
     // 读路径（FixtureHistory / EvaluateHistoricalFixtures）先 FlushAsync 再读取，
     // 保证调用方看到入队事件已落盘。生产环境若需纯异步读取可调用 FlushAsync 后
     // 直接访问 IExperimentRecorder。
+    //
+    // R28-B.7 工作包 G：bounded channel（容量 1024，DropOldest）。
+    // 旧实现使用 unbounded channel，在 Postgres/磁盘持续故障导致 consumer 长期阻塞时
+    // 会让内存无限增长；bounded + DropOldest 丢弃最旧事件保住内存上限，并通过
+    // DroppedCount 暴露丢弃量供监控告警。
     private readonly Channel<ExperimentEvent> _queue;
     private readonly Task _consumerTask;
     private readonly CancellationTokenSource _shutdownCts;
 
+    // R28-B.7 工作包 G：可靠性计数器 + dead-letter。
+    // _droppedCount：入队失败（writer 已完成 / bounded 满 DropOldest 时 TryWrite 仍返回 true，
+    //   仅在 writer 完成后 TryWrite 返回 false 时累加）。
+    // _failedWriteCount：重试 3 次后仍写入失败的 Record 事件数。
+    // _processedCount：成功落盘的 Record 事件数。
+    private int _droppedCount;
+    private int _failedWriteCount;
+    private int _processedCount;
+    private readonly List<ExperimentEvent> _deadLetterQueue = new();
+    private readonly object _deadLetterLock = new();
+
     /// <summary>构造长期实验平面集成。</summary>
+    /// <param name="engine">R28-B.7 工作包 F：纯决策 Engine。可选；注入后启用 DecisionReplay/ExpertReplay。</param>
     public DecisionExperimentPlaneIntegration(
         DecisionExperimentPlane experimentPlane,
         ShadowGateEvaluator gateEvaluator,
         CutoverConfiguration configuration,
-        IExperimentRecorder? recorder = null)
+        IExperimentRecorder? recorder = null,
+        IContextDecisionEngine? engine = null)
     {
         _experimentPlane = experimentPlane ?? throw new ArgumentNullException(nameof(experimentPlane));
         _gateEvaluator = gateEvaluator ?? throw new ArgumentNullException(nameof(gateEvaluator));
         _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
         // P0-9：持久化委托给 IExperimentRecorder；未注入时回退到 in-memory 默认实现。
         _recorder = recorder ?? new InMemoryExperimentRecorder();
+        _engine = engine;
 
-        // R28-B.6 Impl-5：unbounded channel 保证 TryWrite 永不阻塞（写路径完全非阻塞）。
-        // Replay fixture 频率低（CI/抽样 shadow），unbounded 不会造成内存压力。
-        _queue = Channel.CreateUnbounded<ExperimentEvent>(
-            new UnboundedChannelOptions { SingleReader = true, SingleWriter = false });
+        // R28-B.7 工作包 G：bounded channel。容量 1024 平衡内存上限与突发写入；
+        // DropOldest 保证最新事件优先入队（CI / shadow 采样最新数据更重要）；
+        // SingleReader=true 由单 consumer 保证；SingleWriter=false 允许多线程入队。
+        _queue = Channel.CreateBounded<ExperimentEvent>(
+            new BoundedChannelOptions(1024)
+            {
+                FullMode = BoundedChannelFullMode.DropOldest,
+                SingleReader = true,
+                SingleWriter = false
+            });
         _shutdownCts = new CancellationTokenSource();
         _consumerTask = Task.Run(() => ConsumeAsync(_shutdownCts.Token));
+    }
+
+    /// <summary>R28-B.7 工作包 G：当前队列深度（未消费事件数）。</summary>
+    public int QueueDepth => _queue.Reader.Count;
+
+    /// <summary>R28-B.7 工作包 G：累计丢弃事件数（writer 完成后入队失败）。</summary>
+    public int DroppedCount => _droppedCount;
+
+    /// <summary>R28-B.7 工作包 G：累计写入失败事件数（重试 3 次仍未成功，已进 dead-letter）。</summary>
+    public int FailedWriteCount => _failedWriteCount;
+
+    /// <summary>R28-B.7 工作包 G：累计成功落盘 Record 事件数。</summary>
+    public int ProcessedCount => _processedCount;
+
+    /// <summary>R28-B.7 工作包 G：dead-letter 队列当前长度（重试失败后保留的事件数）。</summary>
+    public int DeadLetterCount
+    {
+        get
+        {
+            lock (_deadLetterLock)
+            {
+                return _deadLetterQueue.Count;
+            }
+        }
     }
 
     /// <summary>历史 replay fixture 集合（线程安全快照）。</summary>
@@ -375,9 +427,140 @@ public sealed class DecisionExperimentPlaneIntegration : IAsyncDisposable
     }
 
     /// <summary>
-    /// R28-B.6 阶段 E：从历史 fixture 重放 V2 决策，验证决策可重现性。
+    /// R28-B.7 工作包 F：纯决策重放。不访问 Store，不调用 Provider/Router。
+    /// 直接从 stored WorkingSet + stored EffectivePolicySnapshot 进入 Engine。
     /// </summary>
     /// <remarks>
+    /// 与 <see cref="LiveReexecutionComparisonAsync"/> 的差异：
+    ///   - DecisionReplay 不重新解析 Policy、不调用 Router、不执行 Providers、不访问 Store；
+    ///   - 输入完全来自 fixture 的 StoredWorkingSet + StoredPolicySnapshot；
+    ///   - 直接调用 <see cref="IContextDecisionEngine.DecideAsync"/>，验证纯决策内核的可重现性。
+    /// Engine 未注入（构造时 engine=null）时抛 <see cref="InvalidOperationException"/>。
+    /// </remarks>
+    /// <param name="fixture">要重放的 fixture（必须携带 StoredWorkingSet + StoredPolicySnapshot）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>Engine 产出的决策结果。</returns>
+    public async ValueTask<ContextDecisionResult> DecisionReplayAsync(
+        ReplayFixture fixture,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(fixture);
+
+        if (_engine is null)
+            throw new InvalidOperationException(
+                "DecisionReplay requires IContextDecisionEngine to be configured at construction.");
+        if (fixture.StoredPolicySnapshot is null)
+            throw new InvalidOperationException("DecisionReplay requires fixture.StoredPolicySnapshot.");
+        if (fixture.StoredWorkingSet is null)
+            throw new InvalidOperationException("DecisionReplay requires fixture.StoredWorkingSet.");
+
+        var engineRequest = BuildReplayEngineRequest(fixture, fixture.StoredWorkingSet, "replay");
+        return await _engine.DecideAsync(engineRequest, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// R28-B.7 工作包 F：Expert 重放。使用已存 Provider 输出快照，跳过 Provider 执行。
+    /// </summary>
+    /// <remarks>
+    /// 流程：
+    ///   1. 从 fixture.StoredProviderOutputs 合并所有 Provider 的 Envelopes + Materials（按 CanonicalCandidateKey 去重 Materials）。
+    ///   2. 用合并后的候选集合 + StoredPolicySnapshot 构建 Engine 请求。
+    ///   3. 调用 <see cref="IContextDecisionEngine.DecideAsync"/>，跳过 Provider/Router/Store。
+    /// 与 <see cref="DecisionReplayAsync"/> 的差异：DecisionReplay 直接用 StoredWorkingSet；
+    /// ExpertReplay 从多个 Provider 快照重建 WorkingSet（验证 Provider 输出快照的可重放性）。
+    /// </remarks>
+    /// <param name="fixture">要重放的 fixture（必须携带 StoredProviderOutputs + StoredPolicySnapshot）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>Engine 产出的决策结果。</returns>
+    public async ValueTask<ContextDecisionResult> ExpertReplayAsync(
+        ReplayFixture fixture,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(fixture);
+
+        if (_engine is null)
+            throw new InvalidOperationException(
+                "ExpertReplay requires IContextDecisionEngine to be configured at construction.");
+        if (fixture.StoredPolicySnapshot is null)
+            throw new InvalidOperationException("ExpertReplay requires fixture.StoredPolicySnapshot.");
+        if (fixture.StoredProviderOutputs is null || fixture.StoredProviderOutputs.Count == 0)
+            throw new InvalidOperationException("ExpertReplay requires fixture.StoredProviderOutputs (non-empty).");
+
+        // 合并 Provider 输出快照：Envelopes 累加，Materials 按 CanonicalCandidateKey 去重（后写覆盖前写）。
+        var mergedEnvelopes = new List<ContextCandidateEnvelope>();
+        var mergedMaterials = new Dictionary<CanonicalCandidateKey, CandidateMaterial>();
+        foreach (var snapshot in fixture.StoredProviderOutputs)
+        {
+            foreach (var envelope in snapshot.Envelopes)
+            {
+                mergedEnvelopes.Add(envelope);
+            }
+            foreach (var pair in snapshot.Materials)
+            {
+                mergedMaterials[pair.Key] = pair.Value;
+            }
+        }
+
+        var workingSet = new CandidateWorkingSet
+        {
+            Envelopes = mergedEnvelopes,
+            Materials = mergedMaterials
+        };
+
+        var engineRequest = BuildReplayEngineRequest(fixture, workingSet, "expert-replay");
+        return await _engine.DecideAsync(engineRequest, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// R28-B.7 工作包 F：构建 Engine 重放请求（DecisionReplay / ExpertReplay 共用）。
+    /// PolicySnapshot 直接挂到请求；TokenBudget/TopK 优先取 stored V2Result，回退到 PolicySnapshot 默认值。
+    /// </summary>
+    private ContextDecisionRequest BuildReplayEngineRequest(
+        ReplayFixture fixture,
+        CandidateWorkingSet workingSet,
+        string requestIdPrefix)
+    {
+        var snapshot = fixture.StoredPolicySnapshot!;
+        var firstEnvelope = workingSet.Envelopes.FirstOrDefault();
+        var scope = firstEnvelope is not null
+            ? new ContextDecisionScope(firstEnvelope.WorkspaceId, firstEnvelope.CollectionId)
+            : snapshot.ResolutionScope;
+
+        var tokenBudget = fixture.V2Result?.Outcome.TokenBudget > 0
+            ? fixture.V2Result.Outcome.TokenBudget
+            : snapshot.Budget.DefaultTokenBudget;
+        var topK = fixture.V2Result is { Outcome.SelectedCount: > 0 }
+            ? fixture.V2Result.Outcome.SelectedCount
+            : snapshot.Budget.DefaultTopK;
+        var purpose = fixture.V2Result?.Purpose ?? ContextDecisionPurpose.Retrieval;
+
+        return new ContextDecisionRequest
+        {
+            RequestId = $"{requestIdPrefix}-{fixture.FixtureId}",
+            DecisionSource = ContextDecisionSource.Retrieval,
+            WorkspaceId = scope.WorkspaceId,
+            CollectionId = scope.CollectionId,
+            Candidates = workingSet.Envelopes,
+            TokenBudget = tokenBudget,
+            TopK = topK,
+            PolicySnapshot = snapshot,
+            AllocationContext = new AllocationContext
+            {
+                Purpose = purpose,
+                Budget = snapshot.Budget,
+                MandatoryOverflowPolicy = MandatoryOverflowPolicy.AllowOverflowWithDiagnostic
+            }
+        };
+    }
+
+    /// <summary>
+    /// R28-B.6 阶段 E / R28-B.7 工作包 F：live re-execution 重放。
+    /// 从历史 fixture 重新执行 V2 决策（重新解析 Policy、调用 Router、执行 Providers、访问 Store），
+    /// 验证决策可重现性。
+    /// </summary>
+    /// <remarks>
+    /// R28-B.7 工作包 F：原 <c>ReplayFixtureAsync</c> 重命名为 <c>LiveReexecutionComparisonAsync</c>，
+    /// 以区分 <see cref="DecisionReplayAsync"/>（纯 Engine replay）与 <see cref="ExpertReplayAsync"/>（Provider 快照 replay）。
     /// 流程：
     ///   1. 按 fixtureId 从 recorder 加载 ReplayFixture。
     ///   2. 若 fixture 携带 WorkingSet + V2Result（P0-9 增强字段），使用 WorkingSet 作为 SeedCandidates
@@ -390,7 +573,7 @@ public sealed class DecisionExperimentPlaneIntegration : IAsyncDisposable
     /// <param name="v2Runtime">V2 pure Runtime，用于重放决策。null 时返回 null（仅离线扫描 fixture 元数据）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>重放报告（含 stored V2Result vs replayed V2Result 的 ParityReport）；fixture 不存在或不完整时返回 null。</returns>
-    public async ValueTask<FixtureReplayReport?> ReplayFixtureAsync(
+    public async ValueTask<FixtureReplayReport?> LiveReexecutionComparisonAsync(
         string fixtureId,
         IContextDecisionRuntime? v2Runtime,
         CancellationToken cancellationToken = default)
@@ -511,6 +694,22 @@ public sealed class DecisionExperimentPlaneIntegration : IAsyncDisposable
             Notes: string.Empty);
     }
 
+    /// <summary>
+    /// R28-B.7 工作包 F：[Obsolete] 别名，转发到 <see cref="LiveReexecutionComparisonAsync"/>。
+    /// </summary>
+    /// <remarks>
+    /// 旧入口保留以兼容既有调用方；新代码应按重放语义选择：
+    /// <see cref="DecisionReplayAsync"/>（纯 Engine replay）、
+    /// <see cref="ExpertReplayAsync"/>（Provider 快照 replay）、
+    /// <see cref="LiveReexecutionComparisonAsync"/>（live re-execution，原行为）。
+    /// </remarks>
+    [Obsolete("Use LiveReexecutionComparisonAsync/DecisionReplayAsync/ExpertReplayAsync")]
+    public ValueTask<FixtureReplayReport?> ReplayFixtureAsync(
+        string fixtureId,
+        IContextDecisionRuntime? v2Runtime,
+        CancellationToken cancellationToken = default)
+        => LiveReexecutionComparisonAsync(fixtureId, v2Runtime, cancellationToken);
+
     private static uint StableHash(string value)
     {
         uint hash = 2166136261u;
@@ -527,38 +726,53 @@ public sealed class DecisionExperimentPlaneIntegration : IAsyncDisposable
     // -----------------------------------------------------------------------
 
     /// <summary>
-    /// R28-B.6 Impl-5：非阻塞入队。unbounded channel 下 TryWrite 永远成功。
+    /// R28-B.6 Impl-5 / R28-B.7 工作包 G：非阻塞入队。
     /// </summary>
+    /// <remarks>
+    /// bounded channel（DropOldest）下：writer 未完成时 TryWrite 返回 true（必要时丢弃最旧事件）；
+    /// writer 已完成（DisposeAsync 后）时 TryWrite 返回 false，此时累加 _droppedCount 并静默丢弃，
+    /// 不再抛异常（避免 shutdown 后调用 RecordFixture 导致进程崩溃）。
+    /// </remarks>
     private void Enqueue(ExperimentEvent evt)
     {
         if (!_queue.Writer.TryWrite(evt))
         {
-            // 理论不可达（unbounded channel 不会满）；fail-fast 避免 sync-over-async 阻塞线程池。
-            throw new InvalidOperationException("Channel write failed: unbounded channel TryWrite returned false.");
+            // writer 已完成（shutdown 后）：计数并丢弃，不阻塞调用方。
+            Interlocked.Increment(ref _droppedCount);
         }
     }
 
     /// <summary>
-    /// R28-B.6 Impl-5：等待队列中此前所有事件被 consumer 处理完成。
-    /// 通过入队一个 sentinel（TaskCompletionSource）并在 consumer 处理到它时
-    /// 完成 TCS，实现"排空到此处"的语义。
+    /// R28-B.6 Impl-5 / R28-B.7 工作包 G：等待队列中此前所有事件被 consumer 处理完成，
+    /// 并返回累计计数快照。
     /// </summary>
-    public async ValueTask FlushAsync(CancellationToken cancellationToken = default)
+    /// <remarks>
+    /// 通过入队一个 sentinel（TaskCompletionSource）并在 consumer 处理到它时
+    /// 完成 TCS，实现"排空到此处"的语义。<b>不</b>调用 TryComplete（保留 writer 以便后续写入）；
+    /// TryComplete 仅在 <see cref="DisposeAsync"/> 中调用。
+    /// </remarks>
+    public async ValueTask<FlushResult> FlushAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var sentinel = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         if (!_queue.Writer.TryWrite(new ExperimentEvent.Flush(sentinel)))
         {
-            await _queue.Writer.WriteAsync(new ExperimentEvent.Flush(sentinel), cancellationToken).ConfigureAwait(false);
+            // writer 已完成（shutdown 后）：sentinel 无法入队，直接返回当前计数快照。
+            return new FlushResult(_processedCount, _failedWriteCount, _droppedCount);
         }
         await sentinel.Task.ConfigureAwait(false);
+        return new FlushResult(_processedCount, _failedWriteCount, _droppedCount);
     }
 
     /// <summary>
-    /// R28-B.6 Impl-5：后台 consumer。串行处理队列中的事件，调用 _recorder。
-    /// 异常被捕获以避免 consumer Task 终止（保证后续事件不丢失）；生产环境
-    /// 可通过包装 IExperimentRecorder 注入 ILogger 记录异常。
+    /// R28-B.6 Impl-5 / R28-B.7 工作包 G：后台 consumer。串行处理队列中的事件，调用 _recorder。
     /// </summary>
+    /// <remarks>
+    /// R28-B.7 工作包 G：Record 事件写入失败时重试至 3 次尝试（退避 100ms/200ms），
+    /// 仍失败则放入 dead-letter list 并累加 _failedWriteCount；不再静默吞掉。
+    /// Clear / Flush 事件保持单次尝试（语义上 Clear 失败不影响后续 Record；Flush 仅完成 sentinel）。
+    /// 重试期间若收到取消信号（shutdown）则向上抛 OperationCanceledException 退出。
+    /// </remarks>
     private async Task ConsumeAsync(CancellationToken cancellationToken)
     {
         try
@@ -570,7 +784,7 @@ public sealed class DecisionExperimentPlaneIntegration : IAsyncDisposable
                     switch (evt)
                     {
                         case ExperimentEvent.Record rec:
-                            await _recorder.RecordAsync(rec.Fixture, cancellationToken).ConfigureAwait(false);
+                            await ProcessRecordWithRetryAsync(rec, cancellationToken).ConfigureAwait(false);
                             break;
                         case ExperimentEvent.Clear:
                             await _recorder.ClearAsync(cancellationToken).ConfigureAwait(false);
@@ -587,9 +801,8 @@ public sealed class DecisionExperimentPlaneIntegration : IAsyncDisposable
                 }
                 catch (Exception)
                 {
-                    // 单个事件失败不应终止 consumer；后续事件继续处理。
-                    // 失败的 fixture 不会落盘，调用方通过 FlushAsync 后读取
-                    // FixtureHistory 即可发现缺失（CI 验收 hook 会捕获 parity 不足）。
+                    // 重试已穷尽后的兜底：单个事件失败不终止 consumer，后续事件继续处理。
+                    // （重试 + dead-letter 已在 ProcessRecordWithRetryAsync 内完成。）
                 }
             }
         }
@@ -600,20 +813,86 @@ public sealed class DecisionExperimentPlaneIntegration : IAsyncDisposable
     }
 
     /// <summary>
-    /// R28-B.6 Impl-5：优雅停用。取消后台 consumer 并等待其退出。
-    /// 调用后不应再调用 RecordFixture / RecordShadowReport / ClearHistory。
+    /// R28-B.7 工作包 G：Record 事件重试 + dead-letter。
+    /// 写入失败重试 3 次；仍失败则放入 dead-letter list 并累加 _failedWriteCount。
+    /// 成功则累加 _processedCount。
     /// </summary>
+    private async Task ProcessRecordWithRetryAsync(ExperimentEvent.Record rec, CancellationToken cancellationToken)
+    {
+        var retryCount = 0;
+        while (retryCount <= 3)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                await _recorder.RecordAsync(rec.Fixture, cancellationToken).ConfigureAwait(false);
+                Interlocked.Increment(ref _processedCount);
+                return;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception)
+            {
+                retryCount++;
+                if (retryCount >= 3)
+                {
+                    // 重试穷尽：放入 dead-letter，累加失败计数，不再重试。
+                    lock (_deadLetterLock)
+                    {
+                        _deadLetterQueue.Add(rec);
+                    }
+                    Interlocked.Increment(ref _failedWriteCount);
+                    return;
+                }
+                // 退避：100ms / 200ms（第 3 次重试前等 200ms）。
+                try
+                {
+                    await Task.Delay(100 * retryCount, cancellationToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// R28-B.6 Impl-5 / R28-B.7 工作包 G：优雅停用。
+    /// </summary>
+    /// <remarks>
+    /// R28-B.7 工作包 G：先 TryComplete writer（让 consumer 排空剩余事件再退出），
+    /// 再以 5 秒 drain 超时等待 consumer。超时则强制取消 _shutdownCts 释放线程，
+    /// 未处理事件丢弃（避免 recorder 持续故障时 DisposeAsync 永久阻塞）。
+    /// 调用后不应再调用 RecordFixture / RecordShadowReport / ClearHistory（TryWrite 会返回 false 并计入 DroppedCount）。
+    /// </remarks>
     public async ValueTask DisposeAsync()
     {
-        _shutdownCts.Cancel();
         _queue.Writer.TryComplete();
+
+        using var drainCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
         try
         {
-            await _consumerTask.ConfigureAwait(false);
+            await _consumerTask.WaitAsync(drainCts.Token).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
-            // 预期退出
+            // drain 超时：强制取消 consumer 以释放线程，未处理事件丢弃。
+            _shutdownCts.Cancel();
+            try
+            {
+                await _consumerTask.ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                // 预期退出
+            }
+            catch (Exception)
+            {
+                // 防御：consumer 退出时的异常忽略
+            }
         }
         catch (Exception)
         {
@@ -656,3 +935,11 @@ public sealed record FixtureReplayReport(
     ParityReport? ReplayParity,
     bool ReplaySucceeded,
     string Notes);
+
+/// <summary>
+/// R28-B.7 工作包 G：FlushAsync 结果快照。
+/// </summary>
+/// <param name="ProcessedCount">已成功落盘的 Record 事件数。</param>
+/// <param name="FailedCount">重试 3 次仍失败、已进 dead-letter 的 Record 事件数。</param>
+/// <param name="DroppedCount">入队失败（writer 已完成 / bounded 丢弃）的事件数。</param>
+public sealed record FlushResult(int ProcessedCount, int FailedCount, int DroppedCount);

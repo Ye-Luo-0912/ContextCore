@@ -266,6 +266,17 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
             ? allocationDecisions
             : AppendEarlyRejectedAllocationDecisions(allocationDecisions, earlyRejected);
 
+        // R28-B.7 工作包 D：合并 EarlyRejected 后重构造 Outcome 时，复制 Engine Outcome.Diagnostics
+        // 并添加 Runtime 级别 diagnostics（earlyAdmission.rejectedCount），不丢失 Engine 诊断。
+        // 仅在有 EarlyRejected 时创建新字典（避免无谓分配）；否则直接复用 Engine Diagnostics 引用。
+        IReadOnlyDictionary<string, string> mergedDiagnostics = engineResult.Outcome.Diagnostics;
+        if (earlyRejected.Count > 0)
+        {
+            var diag = new Dictionary<string, string>(engineResult.Outcome.Diagnostics, StringComparer.Ordinal);
+            diag["earlyAdmission.rejectedCount"] = earlyRejected.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            mergedDiagnostics = diag;
+        }
+
         var decision = new ContextDecisionResult
         {
             RequestId = engineResult.RequestId,
@@ -281,8 +292,9 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
                 Sections = engineResult.Outcome.Sections,
                 SafetyGateBlockedCount = engineResult.Outcome.SafetyGateBlockedCount,
                 BudgetExceededCount = engineResult.Outcome.BudgetExceededCount,
-                // R28-B.6 P0-5：保留 Engine Outcome.Diagnostics（mandatory overflow / hard window violated 等）
-                Diagnostics = engineResult.Outcome.Diagnostics
+                // R28-B.6 P0-5 + R28-B.7 工作包 D：保留 Engine Outcome.Diagnostics（mandatory overflow / hard window violated 等）
+                // 并补充 Runtime 级 diagnostics（earlyAdmission.rejectedCount）
+                Diagnostics = mergedDiagnostics
             },
             PolicyVersion = engineResult.PolicyVersion,
             ModelVersion = engineResult.ModelVersion,
@@ -2026,6 +2038,16 @@ public sealed class DefaultContentTruncator : IContentTruncator
             : content;
         return new TruncationResult(truncated, maxTokens, true);
     }
+
+    /// <summary>
+    /// R28-B.7：计算内容的 token 数。使用 content.Length/4 粗略估算（与 <see cref="Truncate"/> 的估算口径一致）。
+    /// </summary>
+    public int CountTokens(string content, string? modelName = null)
+    {
+        ArgumentNullException.ThrowIfNull(content);
+        if (content.Length == 0) return 0;
+        return Math.Max(1, content.Length / 4);
+    }
 }
 
 /// <summary>
@@ -2062,6 +2084,18 @@ public sealed class TokenizerContentTruncator : IContentTruncator
 
         var result = _tokenizerResolver.TruncateForTokenBudget(content, maxTokens, _modelName);
         return new TruncationResult(result.TruncatedContent, result.TokenCount, result.WasTruncated);
+    }
+
+    /// <summary>
+    /// R28-B.7：计算内容的 token 数，委托给 <see cref="IContextTokenizerResolver.Estimate"/>。
+    /// 与 <see cref="Truncate"/> 使用同一 tokenizer，保证计数与截断口径一致。
+    /// </summary>
+    public int CountTokens(string content, string? modelName = null)
+    {
+        ArgumentNullException.ThrowIfNull(content);
+        if (content.Length == 0) return 0;
+        var estimate = _tokenizerResolver.Estimate(content, modelName ?? _modelName);
+        return estimate.TokenCount;
     }
 }
 

@@ -31,6 +31,7 @@ namespace ContextCore.Core.Services.DecisionEngine;
 public sealed class PackageResultProjector : IResultProjector<ContextPackageBuildResult>
 {
     private readonly IContentTruncator _contentTruncator;
+    private readonly string? _modelName;
 
     /// <summary>
     /// 构造 PackageResultProjector。
@@ -53,6 +54,8 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
             ?? (tokenizerResolver is not null
                 ? new TokenizerContentTruncator(tokenizerResolver, modelName)
                 : new DefaultContentTruncator());
+        // R28-B.7：保存 modelName，用于 CountTokens 统一口径计算
+        _modelName = modelName;
     }
 
     /// <summary>
@@ -92,7 +95,25 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
     /// R28-B.6 Blocker-2：真正构建 ContextPackage（含 Sections/PackageId/SourceRefs/CreatedAt）+
     /// ContextPackageStandardOutput，赋值到 BuildResult.Package。
     /// </summary>
+    /// <remarks>
+    /// R28-B.7：此重载不携带 Scope，空 Package 时 WorkspaceId/CollectionId 将为空。
+    /// 调用方应优先使用 <see cref="Project(ContextDecisionResult, CandidateWorkingSet, ContextDecisionScope)"/>
+    /// 传入真实 Scope，避免空 Package 丢失 Scope。
+    /// </remarks>
     public ContextPackageBuildResult Project(ContextDecisionResult result, CandidateWorkingSet workingSet)
+    {
+        return Project(result, workingSet, scope: default);
+    }
+
+    /// <summary>
+    /// R28-B.7：将决策结果 + 候选正文 sidecar + 作用域投影为 ContextPackageBuildResult。
+    /// 空 Package（无选中候选）时从 scope 获取 WorkspaceId/CollectionId，而非从候选反推
+    /// （候选为空时反推会丢失 Scope）。
+    /// </summary>
+    public ContextPackageBuildResult Project(
+        ContextDecisionResult result,
+        CandidateWorkingSet workingSet,
+        ContextDecisionScope scope)
     {
         ArgumentNullException.ThrowIfNull(result);
         ArgumentNullException.ThrowIfNull(workingSet);
@@ -231,10 +252,11 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
         }
 
         // R28-B.6 Blocker-2：构建 ContextPackage（含 PackageId/WorkspaceId/CollectionId/Sections/EstimatedTokens/SourceRefs/CreatedAt）
-        // WorkspaceId/CollectionId 从 SelectedEnvelopes 的首个 CanonicalKey 推导（result 不携带 Scope）
+        // R28-B.7：空 Package（无选中候选）时从 scope 获取 WorkspaceId/CollectionId，而非候选反推
+        // （候选为空时 firstEnvelope 为 null，反推会丢失 Scope）
         var firstEnvelope = result.SelectedEnvelopes.FirstOrDefault();
-        var packageWorkspaceId = firstEnvelope?.CanonicalKey.WorkspaceId ?? string.Empty;
-        var packageCollectionId = firstEnvelope?.CanonicalKey.CollectionId ?? string.Empty;
+        var packageWorkspaceId = firstEnvelope?.CanonicalKey.WorkspaceId ?? scope.WorkspaceId;
+        var packageCollectionId = firstEnvelope?.CanonicalKey.CollectionId ?? scope.CollectionId;
 
         var package = new ContextPackage
         {
@@ -254,8 +276,27 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
             CreatedAt = result.DecidedAt
         };
 
+        // R28-B.7：BuildResult 的 token 字段使用 Projector 截断后的真实 token 数
+        // （package.EstimatedTokens = totalUsedTokens），而非 Allocator 的预估值
+        // （result.Outcome.EstimatedTokens）。统一事实源，避免双重报告。
+        var actualUsedTokens = package.EstimatedTokens;
+
         // R28-B.6 Blocker-2：构建稳定的 ContextPackageStandardOutput
-        var standardOutput = BuildStandardOutput(result, sections);
+        var standardOutput = BuildStandardOutput(result, sections, actualUsedTokens);
+
+        // R28-B.7 工作包 D：传播 Engine Outcome.Diagnostics 到输出 Metadata（不丢失诊断）。
+        // 诊断键加 "diag." 前缀以避免与既有 Metadata 键冲突。
+        var metadata = new Dictionary<string, string>
+        {
+            ["policyVersion"] = result.PolicyVersion,
+            ["modelEnabled"] = result.ModelEnabled.ToString().ToLowerInvariant(),
+            ["safetyGateBlocked"] = result.Outcome.SafetyGateBlockedCount.ToString(),
+            ["budgetExceeded"] = result.Outcome.BudgetExceededCount.ToString()
+        };
+        foreach (var (key, value) in result.Outcome.Diagnostics)
+        {
+            metadata[$"diag.{key}"] = value;
+        }
 
         return new ContextPackageBuildResult
         {
@@ -266,24 +307,36 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
             Budget = new ContextPackageBudgetReport
             {
                 TokenBudget = result.Outcome.TokenBudget,
-                UsedTokens = result.Outcome.EstimatedTokens,
-                RemainingTokens = Math.Max(0, result.Outcome.TokenBudget - result.Outcome.EstimatedTokens),
+                UsedTokens = actualUsedTokens,
+                RemainingTokens = Math.Max(0, result.Outcome.TokenBudget - actualUsedTokens),
                 UsageRatio = result.Outcome.TokenBudget > 0
-                    ? (double)result.Outcome.EstimatedTokens / result.Outcome.TokenBudget
+                    ? (double)actualUsedTokens / result.Outcome.TokenBudget
                     : 0,
                 Sections = sectionBudgets
             },
             Output = standardOutput,
             TokenBudget = result.Outcome.TokenBudget,
-            EstimatedTokens = result.Outcome.EstimatedTokens,
-            Metadata = new Dictionary<string, string>
-            {
-                ["policyVersion"] = result.PolicyVersion,
-                ["modelEnabled"] = result.ModelEnabled.ToString().ToLowerInvariant(),
-                ["safetyGateBlocked"] = result.Outcome.SafetyGateBlockedCount.ToString(),
-                ["budgetExceeded"] = result.Outcome.BudgetExceededCount.ToString()
-            },
+            EstimatedTokens = actualUsedTokens,
+            Metadata = metadata,
             CreatedAt = result.DecidedAt
+        };
+    }
+
+    /// <summary>
+    /// R28-B.7：重建 ContextPackageSection，替换 Content 和 EstimatedTokens。
+    /// ContextPackageSection 是 class with init，无法原地修改，需创建新实例。
+    /// </summary>
+    private static ContextPackageSection RebuildSection(ContextPackageSection section, string content, int tokens)
+    {
+        return new ContextPackageSection
+        {
+            Name = section.Name,
+            Priority = section.Priority,
+            Content = content,
+            ContentFormat = section.ContentFormat,
+            SourceRefs = section.SourceRefs,
+            ItemRefs = section.ItemRefs,
+            EstimatedTokens = tokens
         };
     }
 
@@ -291,10 +344,13 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
     /// R28-B.6 Blocker-2：构建稳定的 ContextPackageStandardOutput。
     /// 按 section 名称映射到标准 schema 的 7 个分组（CurrentTask/RecentContext/WorkingState/
     /// StableBackground/Constraints/Entities/Relations/Evidence）。
+    /// R28-B.7：Budget 的 token 字段使用 Projector 截断后的真实 token 数（actualUsedTokens），
+    /// 而非 Allocator 预估值（result.Outcome.EstimatedTokens）。
     /// </summary>
     private static ContextPackageStandardOutput BuildStandardOutput(
         ContextDecisionResult result,
-        IReadOnlyList<ContextPackageSection> sections)
+        IReadOnlyList<ContextPackageSection> sections,
+        int actualUsedTokens)
     {
         var recentContext = new List<ContextPackageOutputItem>();
         var workingState = new List<ContextPackageOutputItem>();
@@ -359,10 +415,10 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
             Budget = new ContextPackageBudgetReport
             {
                 TokenBudget = result.Outcome.TokenBudget,
-                UsedTokens = result.Outcome.EstimatedTokens,
-                RemainingTokens = Math.Max(0, result.Outcome.TokenBudget - result.Outcome.EstimatedTokens),
+                UsedTokens = actualUsedTokens,
+                RemainingTokens = Math.Max(0, result.Outcome.TokenBudget - actualUsedTokens),
                 UsageRatio = result.Outcome.TokenBudget > 0
-                    ? (double)result.Outcome.EstimatedTokens / result.Outcome.TokenBudget
+                    ? (double)actualUsedTokens / result.Outcome.TokenBudget
                     : 0
             }
         };
@@ -485,7 +541,19 @@ public sealed class PackageResultProjector : IResultProjector<ContextPackageBuil
         // P0-7：保留 Safety.IsMandatory / IsHardConstraint 的语义判定，
         // 但不通过 Kind/Section 字面量升硬；仅用于 Reason 文本。
         if (envelope.Source == ContextCandidateSource.Mandatory || envelope.Safety.IsMandatory) return "mandatory";
-        if (envelope.Source == ContextCandidateSource.Constraint || envelope.Safety.IsHardConstraint) return "hard constraint";
+        if (envelope.Source == ContextCandidateSource.Constraint || envelope.Safety.IsHardConstraint)
+        {
+            // R28-B.7：根据 ConstraintLevel 返回不同解释，区分 hard/soft/mixed/system
+            // （之前统一返回 "hard constraint"，导致 soft constraint 被误报为 hard）
+            return envelope.Safety.ConstraintLevel switch
+            {
+                ConstraintLevel.Hard => "hard constraint",
+                ConstraintLevel.Soft => "soft constraint",
+                ConstraintLevel.Mixed => "mixed constraint",
+                ConstraintLevel.System => "system constraint",
+                _ => "hard constraint"
+            };
+        }
         return envelope.Utility.ModelScore.HasValue ? "model-weighted" : "selected by utility";
     }
 
