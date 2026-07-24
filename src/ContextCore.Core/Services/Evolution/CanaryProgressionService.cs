@@ -24,24 +24,6 @@ namespace ContextCore.Core.Services.Evolution;
 // ===========================================================================
 
 /// <summary>
-/// R28-B.8：Canary 渐进推进决策类型。
-/// </summary>
-public enum CanaryProgressionDecision
-{
-    /// <summary>推进到下一档百分比。</summary>
-    Advance,
-
-    /// <summary>停留在当前档继续观察（观察时长不足或数据缺失）。</summary>
-    Hold,
-
-    /// <summary>触发自动回滚（指标超阈值）。</summary>
-    Rollback,
-
-    /// <summary>已晋升到 100%（V2 only），无可继续推进。</summary>
-    Promoted
-}
-
-/// <summary>
 /// R28-B.8：Canary 渐进推进评估结果。
 /// </summary>
 public sealed record CanaryProgressionEvaluation
@@ -96,39 +78,6 @@ public sealed record CanaryProgressionResult
 }
 
 /// <summary>
-/// R28-B.8：Canary 阶段审计记录（对应 stage_transitions 表的 in-memory 投影）。
-/// </summary>
-public sealed record StageTransitionRecord
-{
-    /// <summary>transition ID（主键）。</summary>
-    public required string TransitionId { get; init; }
-
-    /// <summary>关联的 pipeline run ID。</summary>
-    public required string RunId { get; init; }
-
-    /// <summary>推进前的百分比档（from）。</summary>
-    public required int FromPercentage { get; init; }
-
-    /// <summary>推进后的百分比档（to）。</summary>
-    public required int ToPercentage { get; init; }
-
-    /// <summary>推进时间（UTC）。</summary>
-    public required DateTimeOffset TransitionedAt { get; init; }
-
-    /// <summary>幂等键（用于 stage_transitions 表去重）。</summary>
-    public string? IdempotencyKey { get; init; }
-
-    /// <summary>关联的 observation batch ID。</summary>
-    public string? ObservationBatchId { get; init; }
-
-    /// <summary>决策类型（Advance/Hold/Rollback/Promoted）。</summary>
-    public required CanaryProgressionDecision Decision { get; init; }
-
-    /// <summary>决策理由。</summary>
-    public required string Rationale { get; init; }
-}
-
-/// <summary>
 /// R28-B.8：Canary 渐进推进服务。基于 metrics 自动推进或回滚。
 /// </summary>
 /// <remarks>
@@ -155,6 +104,10 @@ public sealed class CanaryProgressionService
     private readonly CutoverController _cutoverController;
     private readonly CanaryGateOptions _options;
     private readonly TimeProvider _timeProvider;
+    // R28-B.8 工作包 B：可选的 per-run CutoverController 注册表。
+    // 非空时 InitializeCanary/AdvanceAsync/RollbackAsync 操作 registry.GetOrCreate(runId) 专用控制器；
+    // 为 null 时回退到直接注入的 _cutoverController（B-8 之前行为，保持向后兼容）。
+    private readonly CutoverControllerRegistry? _registry;
 
     // 按 runId 维度记录当前百分比档 + 进入当前档的时间戳
     private readonly ConcurrentDictionary<string, CanaryRunState> _runStates
@@ -169,11 +122,16 @@ public sealed class CanaryProgressionService
     /// <param name="cutoverController">Cutover 控制器（必填，由调用方注入并共享给 AuthoritativeRuntime）。</param>
     /// <param name="options">Canary Gate 配置（可选，默认 <see cref="CanaryGateOptions"/>）。</param>
     /// <param name="timeProvider">时间提供者（可选，默认 <see cref="TimeProvider.System"/>）。</param>
+    /// <param name="registry">
+    /// R28-B.8 工作包 B：可选的 per-run CutoverController 注册表。非空时按 runId 隔离控制器，
+    /// 避免多 run 共享 Singleton 导致百分比互相覆盖；为 null 时回退到 <paramref name="cutoverController"/>。
+    /// </param>
     public CanaryProgressionService(
         IPipelineRunStore pipelineRunStore,
         CutoverController cutoverController,
         CanaryGateOptions? options = null,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        CutoverControllerRegistry? registry = null)
     {
         ArgumentNullException.ThrowIfNull(pipelineRunStore);
         ArgumentNullException.ThrowIfNull(cutoverController);
@@ -181,6 +139,16 @@ public sealed class CanaryProgressionService
         _cutoverController = cutoverController;
         _options = options ?? new CanaryGateOptions();
         _timeProvider = timeProvider ?? TimeProvider.System;
+        _registry = registry;
+    }
+
+    /// <summary>
+    /// R28-B.8 工作包 B：解析指定 run 应操作的 CutoverController。
+    /// registry 非空时返回该 run 的专用控制器（按需创建）；否则回退到共享的 <see cref="_cutoverController"/>。
+    /// </summary>
+    private CutoverController GetController(string runId)
+    {
+        return _registry is null ? _cutoverController : _registry.GetOrCreate(runId);
     }
 
     /// <summary>当前使用的 Canary Gate 配置（只读视图）。</summary>
@@ -207,7 +175,8 @@ public sealed class CanaryProgressionService
         if (_runStates.TryAdd(runId, state))
         {
             // 仅在首次初始化时调整 CutoverController
-            _cutoverController.SetCutoverPercentage(initialPercentage);
+            // R28-B.8 工作包 B：registry 非空时操作 per-run 专用控制器
+            GetController(runId).SetCutoverPercentage(initialPercentage);
         }
         // 已存在 → no-op（幂等）
     }
@@ -391,11 +360,12 @@ public sealed class CanaryProgressionService
             case CanaryProgressionDecision.Advance:
                 {
                     var nextPercentage = evaluation.NextPercentage!.Value;
-                    _cutoverController.SetCutoverPercentage(nextPercentage);
+                    // R28-B.8 工作包 B：registry 非空时操作 per-run 专用控制器
+                    GetController(runId).SetCutoverPercentage(nextPercentage);
                     var now = _timeProvider.GetUtcNow();
                     _runStates[runId] = new CanaryRunState(nextPercentage, now);
 
-                    RecordTransition(new StageTransitionRecord
+                    await RecordTransitionAsync(new StageTransitionRecord
                     {
                         TransitionId = transitionId,
                         RunId = runId,
@@ -405,7 +375,7 @@ public sealed class CanaryProgressionService
                         IdempotencyKey = idempotencyKey,
                         Decision = CanaryProgressionDecision.Advance,
                         Rationale = evaluation.Rationale
-                    });
+                    }, cancellationToken).ConfigureAwait(false);
 
                     return new CanaryProgressionResult
                     {
@@ -437,7 +407,7 @@ public sealed class CanaryProgressionService
             case CanaryProgressionDecision.Promoted:
                 {
                     var now = _timeProvider.GetUtcNow();
-                    RecordTransition(new StageTransitionRecord
+                    await RecordTransitionAsync(new StageTransitionRecord
                     {
                         TransitionId = transitionId,
                         RunId = runId,
@@ -447,7 +417,7 @@ public sealed class CanaryProgressionService
                         IdempotencyKey = idempotencyKey,
                         Decision = CanaryProgressionDecision.Promoted,
                         Rationale = evaluation.Rationale
-                    });
+                    }, cancellationToken).ConfigureAwait(false);
 
                     return new CanaryProgressionResult
                     {
@@ -465,7 +435,7 @@ public sealed class CanaryProgressionService
             default:
                 {
                     var now = _timeProvider.GetUtcNow();
-                    RecordTransition(new StageTransitionRecord
+                    await RecordTransitionAsync(new StageTransitionRecord
                     {
                         TransitionId = transitionId,
                         RunId = runId,
@@ -475,7 +445,7 @@ public sealed class CanaryProgressionService
                         IdempotencyKey = idempotencyKey,
                         Decision = CanaryProgressionDecision.Hold,
                         Rationale = evaluation.Rationale
-                    });
+                    }, cancellationToken).ConfigureAwait(false);
 
                     return new CanaryProgressionResult
                     {
@@ -514,10 +484,11 @@ public sealed class CanaryProgressionService
         var now = _timeProvider.GetUtcNow();
 
         // 重置 CutoverController 到 0%（全部 Legacy）
-        _cutoverController.SetCutoverPercentage(0);
+        // R28-B.8 工作包 B：registry 非空时操作 per-run 专用控制器
+        GetController(runId).SetCutoverPercentage(0);
         _runStates[runId] = new CanaryRunState(0, now);
 
-        RecordTransition(new StageTransitionRecord
+        await RecordTransitionAsync(new StageTransitionRecord
         {
             TransitionId = tid,
             RunId = runId,
@@ -527,7 +498,7 @@ public sealed class CanaryProgressionService
             IdempotencyKey = idempotencyKey,
             Decision = CanaryProgressionDecision.Rollback,
             Rationale = $"Canary 自动回滚：reason={reason}"
-        });
+        }, cancellationToken).ConfigureAwait(false);
 
         // 同步持久化 RollbackRecord 到 store（供 Pipeline 的 GetRollbackRecordAsync 查询）
         var snapshot = await _pipelineRunStore.GetRunAsync(runId, cancellationToken).ConfigureAwait(false);
@@ -556,17 +527,18 @@ public sealed class CanaryProgressionService
     }
 
     /// <summary>获取指定 run 的所有 stage transition 审计记录（按时间升序）。</summary>
-    public IReadOnlyList<StageTransitionRecord> ListStageTransitions(string runId)
+    /// <remarks>R28-B.8 持久化：直接从 store 查询（权威来源），不再读取 in-memory 字典。</remarks>
+    public async Task<IReadOnlyList<StageTransitionRecord>> ListStageTransitionsAsync(string runId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(runId);
-        return _stageTransitions.Values
-            .Where(r => string.Equals(r.RunId, runId, StringComparison.Ordinal))
-            .OrderBy(r => r.TransitionedAt)
-            .ThenBy(r => r.TransitionId)
-            .ToList();
+        return await _pipelineRunStore.ListStageTransitionsByRunAsync(runId, CancellationToken.None).ConfigureAwait(false);
     }
 
     /// <summary>当前 stage_transitions 审计记录总数（测试与诊断用）。</summary>
+    /// <remarks>
+    /// 注意：此计数基于 in-memory 投影，仅反映当前进程内通过 RecordTransitionAsync 写入的 transition，
+    /// 用于测试快速断言；跨进程或 HA 场景下的权威来源应为 store（<see cref="ListStageTransitionsAsync"/>）。
+    /// </remarks>
     public int StageTransitionCount => _stageTransitions.Count;
 
     // -----------------------------------------------------------------------
@@ -630,10 +602,12 @@ public sealed class CanaryProgressionService
         return null;
     }
 
-    private void RecordTransition(StageTransitionRecord record)
+    private async ValueTask RecordTransitionAsync(StageTransitionRecord record, CancellationToken cancellationToken)
     {
-        // 幂等：相同 transitionId 不覆盖（TryAdd 语义）
+        // 幂等：相同 transitionId 不覆盖（TryAdd 语义）— in-memory 快速路径，供 StageTransitionCount 与 AdvanceAsync 幂等检查使用
         _stageTransitions.TryAdd(record.TransitionId, record);
+        // 持久化到 store（权威来源；同 TransitionId 覆盖）
+        await _pipelineRunStore.SaveStageTransitionAsync(record, cancellationToken).ConfigureAwait(false);
     }
 
     private static bool IsTerminal(PipelineRunStatus status) => status switch

@@ -81,6 +81,27 @@ public sealed class CutoverController
     }
 }
 
+/// <summary>
+/// R28-B.8 工作包 B：从请求 metadata 中提取 canary run ID 的内部辅助方法。
+/// </summary>
+internal static class CanaryRunIdResolver
+{
+    /// <summary>metadata 中标识 canary run ID 的键名。</summary>
+    public const string RunIdMetadataKey = "canaryRunId";
+
+    /// <summary>从请求 metadata 中读取 canary run ID；不存在时返回 null。</summary>
+    public static string? TryGetCanaryRunId(IReadOnlyDictionary<string, string>? metadata)
+    {
+        if (metadata is null || metadata.Count == 0)
+        {
+            return null;
+        }
+        return metadata.TryGetValue(RunIdMetadataKey, out var runId) && !string.IsNullOrWhiteSpace(runId)
+            ? runId
+            : null;
+    }
+}
+
 // ---------------------------------------------------------------------------
 // §9.2 AuthoritativeRetrievalRuntime — Retrieval 权威路径
 // ---------------------------------------------------------------------------
@@ -101,6 +122,10 @@ public sealed class AuthoritativeRetrievalRuntime : IContextRetriever
     private readonly ShadowGate? _shadowGate;
     // P0-9：注入实验平面集成（可选），用于自动记录 shadow fixture + sampled shadow。
     private readonly DecisionExperimentPlaneIntegration? _experimentPlane;
+    // R28-B.8 工作包 B：可选的 per-run CutoverController 解析器。
+    // 非空时按请求 metadata 中的 canaryRunId 解析到对应 run 的专用控制器；
+    // 为 null 时回退到直接注入的 _cutoverController（B-5 行为，向后兼容）。
+    private readonly ICutoverControllerResolver? _cutoverResolver;
 
     /// <summary>构造 Retrieval 权威路径运行时。</summary>
     public AuthoritativeRetrievalRuntime(
@@ -110,7 +135,8 @@ public sealed class AuthoritativeRetrievalRuntime : IContextRetriever
         RetrievalResultProjector retrievalProjector,
         CutoverController cutoverController,
         ShadowGate? shadowGate = null,
-        DecisionExperimentPlaneIntegration? experimentPlane = null)
+        DecisionExperimentPlaneIntegration? experimentPlane = null,
+        ICutoverControllerResolver? cutoverResolver = null)
     {
         _legacyRetriever = legacyRetriever ?? throw new ArgumentNullException(nameof(legacyRetriever));
         _v2Runtime = v2Runtime ?? throw new ArgumentNullException(nameof(v2Runtime));
@@ -119,6 +145,22 @@ public sealed class AuthoritativeRetrievalRuntime : IContextRetriever
         _cutoverController = cutoverController ?? throw new ArgumentNullException(nameof(cutoverController));
         _shadowGate = shadowGate;
         _experimentPlane = experimentPlane;
+        _cutoverResolver = cutoverResolver;
+    }
+
+    /// <summary>
+    /// R28-B.8 工作包 B：解析当前请求应使用的 CutoverController。
+    /// resolver 非空时从请求 metadata 读取 canaryRunId 解析到 per-run 控制器；
+    /// 否则回退到直接注入的 _cutoverController。
+    /// </summary>
+    private CutoverController ResolveController(ContextRetrievalRequest request)
+    {
+        if (_cutoverResolver is null)
+        {
+            return _cutoverController;
+        }
+        var runId = CanaryRunIdResolver.TryGetCanaryRunId(request.Metadata);
+        return _cutoverResolver.Resolve(runId);
     }
 
     /// <summary>
@@ -133,11 +175,13 @@ public sealed class AuthoritativeRetrievalRuntime : IContextRetriever
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var useV2 = _cutoverController.ShouldUseV2(request.OperationId);
+        // R28-B.8 工作包 B：按请求解析 per-run CutoverController（resolver 为 null 时回退到共享控制器）
+        var cutoverController = ResolveController(request);
+        var useV2 = cutoverController.ShouldUseV2(request.OperationId);
 
         // P0-8：100% V2 时跳过 Legacy，直接执行 V2-only 路径
         // P0-9：若 sampled shadow 启用，按采样率执行 Legacy + shadow 收集实验数据
-        if (useV2 && _cutoverController.CutoverPercentage >= 100)
+        if (useV2 && cutoverController.CutoverPercentage >= 100)
         {
             if (_experimentPlane is not null && _experimentPlane.ShouldRunSampledShadow(request.OperationId))
             {
@@ -352,6 +396,8 @@ public sealed class AuthoritativePackageRuntime : IContextPackageBuilder
     private readonly ShadowGate? _shadowGate;
     // P0-9：注入实验平面集成（可选），用于自动记录 shadow fixture + sampled shadow。
     private readonly DecisionExperimentPlaneIntegration? _experimentPlane;
+    // R28-B.8 工作包 B：可选的 per-run CutoverController 解析器（语义同 Retrieval 运行时）。
+    private readonly ICutoverControllerResolver? _cutoverResolver;
 
     /// <summary>构造 Package 权威路径运行时。</summary>
     public AuthoritativePackageRuntime(
@@ -361,7 +407,8 @@ public sealed class AuthoritativePackageRuntime : IContextPackageBuilder
         PackageResultProjector packageProjector,
         CutoverController cutoverController,
         ShadowGate? shadowGate = null,
-        DecisionExperimentPlaneIntegration? experimentPlane = null)
+        DecisionExperimentPlaneIntegration? experimentPlane = null,
+        ICutoverControllerResolver? cutoverResolver = null)
     {
         _legacyPackageBuilder = legacyPackageBuilder ?? throw new ArgumentNullException(nameof(legacyPackageBuilder));
         _v2Runtime = v2Runtime ?? throw new ArgumentNullException(nameof(v2Runtime));
@@ -370,6 +417,20 @@ public sealed class AuthoritativePackageRuntime : IContextPackageBuilder
         _cutoverController = cutoverController ?? throw new ArgumentNullException(nameof(cutoverController));
         _shadowGate = shadowGate;
         _experimentPlane = experimentPlane;
+        _cutoverResolver = cutoverResolver;
+    }
+
+    /// <summary>
+    /// R28-B.8 工作包 B：解析当前请求应使用的 CutoverController（语义同 Retrieval 运行时）。
+    /// </summary>
+    private CutoverController ResolveController(ContextPackageRequest request)
+    {
+        if (_cutoverResolver is null)
+        {
+            return _cutoverController;
+        }
+        var runId = CanaryRunIdResolver.TryGetCanaryRunId(request.Metadata);
+        return _cutoverResolver.Resolve(runId);
     }
 
     /// <summary>
@@ -394,11 +455,13 @@ public sealed class AuthoritativePackageRuntime : IContextPackageBuilder
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var useV2 = _cutoverController.ShouldUseV2(request.WorkspaceId + ":" + request.CollectionId + ":" + request.QueryText);
+        // R28-B.8 工作包 B：按请求解析 per-run CutoverController（resolver 为 null 时回退到共享控制器）
+        var cutoverController = ResolveController(request);
+        var useV2 = cutoverController.ShouldUseV2(request.WorkspaceId + ":" + request.CollectionId + ":" + request.QueryText);
 
         // P0-8：100% V2 时跳过 Legacy，直接执行 V2-only 路径
         // P0-9：若 sampled shadow 启用，按采样率执行 Legacy + shadow 收集实验数据
-        if (useV2 && _cutoverController.CutoverPercentage >= 100)
+        if (useV2 && cutoverController.CutoverPercentage >= 100)
         {
             if (_experimentPlane is not null && _experimentPlane.ShouldRunSampledShadow(
                 request.WorkspaceId + ":" + request.CollectionId + ":" + request.QueryText))

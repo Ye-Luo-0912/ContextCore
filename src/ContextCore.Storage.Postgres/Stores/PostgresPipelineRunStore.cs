@@ -175,6 +175,34 @@ LIMIT @take;
     }
 
     /// <inheritdoc />
+    public async Task<IReadOnlyList<PipelineRunSnapshot>> ListRunsByStageAsync(
+        OptimizationStage stage,
+        int take = 100,
+        CancellationToken cancellationToken = default)
+    {
+        if (take < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(take), take, "take must be >= 0");
+        }
+
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+        command.CommandText = $"""
+SELECT data
+FROM {Table("pipeline_runs")}
+WHERE current_stage = @current_stage
+ORDER BY updated_at DESC, run_id DESC
+LIMIT @take;
+""";
+        command.Parameters.AddWithValue("current_stage", stage.ToString());
+        command.Parameters.AddWithValue("take", take == 0 ? int.MaxValue : take);
+
+        return await ExecuteReaderJsonAsync<PipelineRunSnapshot>(command, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
     public async Task<bool> DeleteRunAsync(string runId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(runId);
@@ -570,5 +598,68 @@ ORDER BY compared_at DESC, comparison_id DESC;
         command.Parameters.AddWithValue("proposal_id", proposalId);
 
         return await ExecuteReaderJsonAsync<BaselineComparison>(command, cancellationToken).ConfigureAwait(false);
+    }
+
+    // ---------- Stage transitions (R28-B.8) ----------
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// R28-B.8：stage_transitions 表使用与 pipeline_runs 等表一致的“反规范化索引列 + data jsonb”模式。
+    /// from_stage / to_stage 列存百分比值的文本形式（与迁移 DDL 的 text 类型一致），完整记录保存在 data jsonb。
+    /// ON CONFLICT (transition_id) DO UPDATE 实现同 TransitionId 覆盖（幂等）。
+    /// </remarks>
+    public async Task SaveStageTransitionAsync(StageTransitionRecord record, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(record);
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+        command.CommandText = $"""
+INSERT INTO {Table("stage_transitions")} (
+    transition_id, run_id, from_stage, to_stage, transitioned_at,
+    idempotency_key, observation_batch_id, data)
+VALUES (
+    @transition_id, @run_id, @from_stage, @to_stage, @transitioned_at,
+    @idempotency_key, @observation_batch_id, @data)
+ON CONFLICT (transition_id) DO UPDATE SET
+    run_id = EXCLUDED.run_id,
+    from_stage = EXCLUDED.from_stage,
+    to_stage = EXCLUDED.to_stage,
+    transitioned_at = EXCLUDED.transitioned_at,
+    idempotency_key = EXCLUDED.idempotency_key,
+    observation_batch_id = EXCLUDED.observation_batch_id,
+    data = EXCLUDED.data;
+""";
+        command.Parameters.AddWithValue("transition_id", record.TransitionId);
+        command.Parameters.AddWithValue("run_id", record.RunId);
+        command.Parameters.AddWithValue("from_stage", record.FromPercentage.ToString());
+        command.Parameters.AddWithValue("to_stage", record.ToPercentage.ToString());
+        command.Parameters.AddWithValue("transitioned_at", record.TransitionedAt);
+        command.Parameters.AddWithValue("idempotency_key", (object?)record.IdempotencyKey ?? DBNull.Value);
+        command.Parameters.AddWithValue("observation_batch_id", (object?)record.ObservationBatchId ?? DBNull.Value);
+        AddJson(command, "data", record);
+        await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<StageTransitionRecord>> ListStageTransitionsByRunAsync(
+        string runId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(runId);
+        await EnsureMigratedAsync(cancellationToken).ConfigureAwait(false);
+        await using var connection = await ConnectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandTimeout = Options.CommandTimeoutSeconds;
+        command.CommandText = $"""
+SELECT data
+FROM {Table("stage_transitions")}
+WHERE run_id = @run_id
+ORDER BY transitioned_at ASC, transition_id ASC;
+""";
+        command.Parameters.AddWithValue("run_id", runId);
+
+        return await ExecuteReaderJsonAsync<StageTransitionRecord>(command, cancellationToken).ConfigureAwait(false);
     }
 }

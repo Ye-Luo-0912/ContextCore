@@ -520,6 +520,24 @@ public enum OptimizationStage
 }
 
 /// <summary>
+/// R28-B.8：Canary 渐进推进决策类型。
+/// </summary>
+public enum CanaryProgressionDecision
+{
+    /// <summary>推进到下一档百分比。</summary>
+    Advance,
+
+    /// <summary>停留在当前档继续观察（观察时长不足或数据缺失）。</summary>
+    Hold,
+
+    /// <summary>触发自动回滚（指标超阈值）。</summary>
+    Rollback,
+
+    /// <summary>已晋升到 100%（V2 only），无可继续推进。</summary>
+    Promoted
+}
+
+/// <summary>
 /// R17 Pipeline 运行状态。
 /// </summary>
 public enum PipelineRunStatus

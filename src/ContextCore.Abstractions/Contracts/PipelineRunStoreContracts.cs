@@ -122,6 +122,9 @@ public sealed record PipelineAuditBatch
 
     /// <summary>可选的 RollbackRecord（自动回滚记录）。</summary>
     public RollbackRecord? RollbackRecord { get; init; }
+
+    /// <summary>R28-B.8：可选的 StageTransitionRecord（canary 百分比推进审计）。</summary>
+    public StageTransitionRecord? StageTransition { get; init; }
 }
 
 /// <summary>
@@ -215,6 +218,24 @@ public interface IPipelineRunStore
     Task<bool> DeleteRunAsync(string runId, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// R28-B.8：按 <paramref name="stage"/> 列出所有处于该阶段的 pipeline run snapshot
+    /// （按 UpdatedAt 倒序）。供 CanaryProgressionHostedService 轮询 ScopedCanary 阶段的 run。
+    /// </summary>
+    /// <param name="stage">目标阶段。</param>
+    /// <param name="take">最大返回数量（默认 100）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>Run 快照列表。</returns>
+    /// <remarks>
+    /// 默认实现返回空列表（向后兼容未升级的 store 实现）；
+    /// <see cref="InMemoryPipelineRunStore"/> 与 <see cref="PostgresPipelineRunStore"/> 覆盖此默认实现。
+    /// </remarks>
+    Task<IReadOnlyList<PipelineRunSnapshot>> ListRunsByStageAsync(
+        OptimizationStage stage,
+        int take = 100,
+        CancellationToken cancellationToken = default)
+        => Task.FromResult<IReadOnlyList<PipelineRunSnapshot>>(Array.Empty<PipelineRunSnapshot>());
+
+    /// <summary>
     /// P0-7：原子 CAS 推进 pipeline run snapshot。
     /// 仅当 store 内当前 <c>Revision == expectedRevision</c> 且 <c>CurrentStage == expectedStage</c> 时，
     /// 替换为 <paramref name="next"/> 并在同事务内写入 <paramref name="audit"/> 中的审计记录。
@@ -295,4 +316,62 @@ public interface IPipelineRunStore
     Task<IReadOnlyList<BaselineComparison>> ListBaselineComparisonsByProposalAsync(
         string proposalId,
         CancellationToken cancellationToken = default);
+
+    // ---------- Stage transitions (R28-B.8) ----------
+
+    /// <summary>
+    /// R28-B.8：保存 canary 百分比推进审计记录（同 TransitionId 覆盖）。
+    /// </summary>
+    /// <param name="record">Stage transition 记录（必填）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    Task SaveStageTransitionAsync(StageTransitionRecord record, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// R28-B.8：按 RunId 列出所有 stage transition 审计记录（按 TransitionedAt 升序）。
+    /// </summary>
+    /// <param name="runId">Run ID。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>Stage transition 记录列表（按时间升序）。</returns>
+    Task<IReadOnlyList<StageTransitionRecord>> ListStageTransitionsByRunAsync(
+        string runId,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// R28-B.8：Canary 百分比推进审计记录（对应 stage_transitions 持久化表）。
+/// </summary>
+/// <remarks>
+/// 每次 CanaryProgressionService 推进（Advance/Hold/Rollback/Promoted）生成一条记录。
+/// 推荐通过 <see cref="PipelineAuditBatch.StageTransition"/> 在
+/// <see cref="IPipelineRunStore.TryTransitionAsync"/> 的 transition audit 中原子提交，
+/// 也可通过 <see cref="IPipelineRunStore.SaveStageTransitionAsync"/> 独立写入。
+/// </remarks>
+public sealed record StageTransitionRecord
+{
+    /// <summary>transition ID（主键）。</summary>
+    public required string TransitionId { get; init; }
+
+    /// <summary>关联的 pipeline run ID。</summary>
+    public required string RunId { get; init; }
+
+    /// <summary>推进前的百分比档（from）。</summary>
+    public required int FromPercentage { get; init; }
+
+    /// <summary>推进后的百分比档（to）。</summary>
+    public required int ToPercentage { get; init; }
+
+    /// <summary>推进时间（UTC）。</summary>
+    public required DateTimeOffset TransitionedAt { get; init; }
+
+    /// <summary>幂等键（用于 stage_transitions 表去重）。</summary>
+    public string? IdempotencyKey { get; init; }
+
+    /// <summary>关联的 observation batch ID。</summary>
+    public string? ObservationBatchId { get; init; }
+
+    /// <summary>决策类型（Advance/Hold/Rollback/Promoted）。</summary>
+    public required CanaryProgressionDecision Decision { get; init; }
+
+    /// <summary>决策理由。</summary>
+    public required string Rationale { get; init; }
 }

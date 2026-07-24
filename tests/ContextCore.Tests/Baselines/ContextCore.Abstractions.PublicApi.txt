@@ -45,6 +45,10 @@ F:ContextCore.Abstractions.CanaryAssignmentStrategy.HashBased
 F:ContextCore.Abstractions.CanaryAssignmentStrategy.PercentageBased
 F:ContextCore.Abstractions.CanaryAssignmentStrategy.Random
 F:ContextCore.Abstractions.CanaryAssignmentStrategy.Whitelist
+F:ContextCore.Abstractions.CanaryProgressionDecision.Advance
+F:ContextCore.Abstractions.CanaryProgressionDecision.Hold
+F:ContextCore.Abstractions.CanaryProgressionDecision.Promoted
+F:ContextCore.Abstractions.CanaryProgressionDecision.Rollback
 F:ContextCore.Abstractions.ComparisonOperator.Equals
 F:ContextCore.Abstractions.ComparisonOperator.GreaterThan
 F:ContextCore.Abstractions.ComparisonOperator.GreaterThanOrEqual
@@ -1647,10 +1651,13 @@ M:ContextCore.Abstractions.IPipelineRunStore.GetRunAsync(System.String, System.T
 M:ContextCore.Abstractions.IPipelineRunStore.ListBaselineComparisonsByProposalAsync(System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IPipelineRunStore.ListCanaryAssignmentsByRunAsync(System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IPipelineRunStore.ListRunsByProposalAsync(System.String, System.Int32, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IPipelineRunStore.ListRunsByStageAsync(ContextCore.Abstractions.OptimizationStage, System.Int32, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IPipelineRunStore.ListStageTransitionsByRunAsync(System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IPipelineRunStore.SaveBaselineComparisonAsync(ContextCore.Abstractions.BaselineComparison, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IPipelineRunStore.SaveCanaryAssignmentAsync(ContextCore.Abstractions.CanaryAssignment, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IPipelineRunStore.SaveRollbackRecordAsync(ContextCore.Abstractions.RollbackRecord, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IPipelineRunStore.SaveRunAsync(ContextCore.Abstractions.PipelineRunSnapshot, System.Threading.CancellationToken)
+M:ContextCore.Abstractions.IPipelineRunStore.SaveStageTransitionAsync(ContextCore.Abstractions.StageTransitionRecord, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IPipelineRunStore.TryCreateRunAsync(ContextCore.Abstractions.PipelineRunSnapshot, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IPipelineRunStore.TryTransitionAsync(System.String, System.Int64, ContextCore.Abstractions.OptimizationStage, ContextCore.Abstractions.PipelineRunSnapshot, ContextCore.Abstractions.PipelineAuditBatch, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IPolicyRegistry.GetActivationAsync(System.String, System.String, System.Threading.CancellationToken)
@@ -4216,6 +4223,13 @@ M:ContextCore.Abstractions.SectionTokenCost.Equals(System.Object)
 M:ContextCore.Abstractions.SectionTokenCost.GetHashCode()
 M:ContextCore.Abstractions.SectionTokenCost.GetType()
 M:ContextCore.Abstractions.SectionTokenCost.ToString()
+M:ContextCore.Abstractions.StageTransitionRecord.#ctor()
+M:ContextCore.Abstractions.StageTransitionRecord.<Clone>$()
+M:ContextCore.Abstractions.StageTransitionRecord.Equals(ContextCore.Abstractions.StageTransitionRecord)
+M:ContextCore.Abstractions.StageTransitionRecord.Equals(System.Object)
+M:ContextCore.Abstractions.StageTransitionRecord.GetHashCode()
+M:ContextCore.Abstractions.StageTransitionRecord.GetType()
+M:ContextCore.Abstractions.StageTransitionRecord.ToString()
 M:ContextCore.Abstractions.StateCacheKey.#ctor(System.String)
 M:ContextCore.Abstractions.StateCacheKey.Deconstruct(out System.String)
 M:ContextCore.Abstractions.StateCacheKey.Equals(ContextCore.Abstractions.StateCacheKey)
@@ -8807,6 +8821,7 @@ P:ContextCore.Abstractions.PathHygieneScanReport.TotalFiles (get|init)
 P:ContextCore.Abstractions.PipelineAuditBatch.BaselineComparison (get|init)
 P:ContextCore.Abstractions.PipelineAuditBatch.CanaryAssignment (get|init)
 P:ContextCore.Abstractions.PipelineAuditBatch.RollbackRecord (get|init)
+P:ContextCore.Abstractions.PipelineAuditBatch.StageTransition (get|init)
 P:ContextCore.Abstractions.PipelineRunResult.CompletedAt (get)
 P:ContextCore.Abstractions.PipelineRunResult.ProposalId (get)
 P:ContextCore.Abstractions.PipelineRunResult.ProposalVersion (get)
@@ -8998,6 +9013,15 @@ P:ContextCore.Abstractions.SectionTokenCost.HeaderTokens (get|init)
 P:ContextCore.Abstractions.SectionTokenCost.Section (get|init)
 P:ContextCore.Abstractions.SectionTokenCost.SeparatorTokens (get|init)
 P:ContextCore.Abstractions.SectionTokenCost.TotalTokens (get)
+P:ContextCore.Abstractions.StageTransitionRecord.Decision (get|init)
+P:ContextCore.Abstractions.StageTransitionRecord.FromPercentage (get|init)
+P:ContextCore.Abstractions.StageTransitionRecord.IdempotencyKey (get|init)
+P:ContextCore.Abstractions.StageTransitionRecord.ObservationBatchId (get|init)
+P:ContextCore.Abstractions.StageTransitionRecord.Rationale (get|init)
+P:ContextCore.Abstractions.StageTransitionRecord.RunId (get|init)
+P:ContextCore.Abstractions.StageTransitionRecord.ToPercentage (get|init)
+P:ContextCore.Abstractions.StageTransitionRecord.TransitionId (get|init)
+P:ContextCore.Abstractions.StageTransitionRecord.TransitionedAt (get|init)
 P:ContextCore.Abstractions.StateCacheKey.Value (get|init)
 P:ContextCore.Abstractions.StorageExecutionProfile.FileSystem (get)
 P:ContextCore.Abstractions.StorageExecutionProfile.InMemory (get)
@@ -9102,6 +9126,7 @@ T:ContextCore.Abstractions.CacheInvalidationKey (Struct)
 T:ContextCore.Abstractions.CalibrationParameters
 T:ContextCore.Abstractions.CanaryAssignment
 T:ContextCore.Abstractions.CanaryAssignmentStrategy (Enum)
+T:ContextCore.Abstractions.CanaryProgressionDecision (Enum)
 T:ContextCore.Abstractions.CandidateAdaptationContext
 T:ContextCore.Abstractions.CandidateAllocationDecision
 T:ContextCore.Abstractions.CandidateFeatureVector
@@ -9824,6 +9849,7 @@ T:ContextCore.Abstractions.SafetyProfile
 T:ContextCore.Abstractions.SectionAllocationResult
 T:ContextCore.Abstractions.SectionDependencySet
 T:ContextCore.Abstractions.SectionTokenCost
+T:ContextCore.Abstractions.StageTransitionRecord
 T:ContextCore.Abstractions.StateCacheKey (Struct)
 T:ContextCore.Abstractions.StorageExecutionProfile
 T:ContextCore.Abstractions.StorageProviderKind (Enum)

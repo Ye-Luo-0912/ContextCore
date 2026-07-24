@@ -31,6 +31,8 @@ public sealed class InMemoryPipelineRunStore : IPipelineRunStore
         = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, BaselineComparison> _baselineComparisons
         = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, StageTransitionRecord> _stageTransitions
+        = new(StringComparer.Ordinal);
 
     // P0-7：保护 TryTransitionAsync 的 CAS 原子性
     private readonly object _transitionLock = new();
@@ -92,6 +94,27 @@ public sealed class InMemoryPipelineRunStore : IPipelineRunStore
         ArgumentException.ThrowIfNullOrWhiteSpace(runId);
         cancellationToken.ThrowIfCancellationRequested();
         return Task.FromResult(_runs.TryRemove(runId, out _));
+    }
+
+    /// <inheritdoc />
+    public Task<IReadOnlyList<PipelineRunSnapshot>> ListRunsByStageAsync(
+        OptimizationStage stage,
+        int take = 100,
+        CancellationToken cancellationToken = default)
+    {
+        if (take < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(take), take, "take must be >= 0");
+        }
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var list = _runs.Values
+            .Where(r => r.CurrentStage == stage)
+            .OrderByDescending(r => r.UpdatedAt)
+            .ThenByDescending(r => r.RunId)
+            .Take(take == 0 ? int.MaxValue : take)
+            .ToList();
+        return Task.FromResult<IReadOnlyList<PipelineRunSnapshot>>(list);
     }
 
     /// <inheritdoc />
@@ -231,6 +254,31 @@ public sealed class InMemoryPipelineRunStore : IPipelineRunStore
         return Task.FromResult<IReadOnlyList<BaselineComparison>>(list);
     }
 
+    // ---------- Stage transitions (R28-B.8) ----------
+
+    /// <inheritdoc />
+    public Task SaveStageTransitionAsync(StageTransitionRecord record, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(record);
+        cancellationToken.ThrowIfCancellationRequested();
+        _stageTransitions[record.TransitionId] = record;
+        return Task.CompletedTask;
+    }
+
+    /// <inheritdoc />
+    public Task<IReadOnlyList<StageTransitionRecord>> ListStageTransitionsByRunAsync(
+        string runId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(runId);
+        cancellationToken.ThrowIfCancellationRequested();
+        var list = _stageTransitions.Values
+            .Where(r => string.Equals(r.RunId, runId, StringComparison.Ordinal))
+            .OrderBy(r => r.TransitionedAt)
+            .ThenBy(r => r.TransitionId)
+            .ToList();
+        return Task.FromResult<IReadOnlyList<StageTransitionRecord>>(list);
+    }
+
     // ---------- 测试与诊断用 ----------
 
     /// <summary>当前 run snapshot 总数（测试与诊断用）。</summary>
@@ -244,4 +292,7 @@ public sealed class InMemoryPipelineRunStore : IPipelineRunStore
 
     /// <summary>当前 baseline comparison 总数（测试与诊断用）。</summary>
     public int BaselineComparisonCount => _baselineComparisons.Count;
+
+    /// <summary>R28-B.8 stage transition count (test).</summary>
+    public int StageTransitionCount => _stageTransitions.Count;
 }

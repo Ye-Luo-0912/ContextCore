@@ -6,6 +6,7 @@ using ContextCore.Core.Services;
 using ContextCore.Core.Services.Agent;
 using ContextCore.Core.Services.AgentKernel;
 using ContextCore.Core.Services.DecisionEngine;
+using ContextCore.Core.Services.Evolution;
 using ContextCore.Core.Services.Promotion;
 using ContextCore.Core.Services.Graph;
 using ContextCore.Core.Services.Learning.V14_0;
@@ -427,6 +428,16 @@ internal static class CoreExtensions
 			var controller = new CutoverController(config.CutoverPercentage);
 			return controller;
 		});
+		// R28-B.8 工作包 B：Per-run CutoverController 隔离。
+		// CutoverControllerRegistry 包装默认控制器（CutoverPercentage 从环境变量读取），
+		// 并为每个 canary run 维护独立的 CutoverController 实例，避免多 run 百分比互相覆盖。
+		// ICutoverControllerResolver 供 AuthoritativeRuntime 按请求 metadata 中的 canaryRunId 路由。
+		services.AddSingleton<CutoverControllerRegistry>(sp =>
+		{
+			var defaultController = sp.GetRequiredService<CutoverController>();
+			return new CutoverControllerRegistry(defaultController);
+		});
+		services.AddSingleton<ICutoverControllerResolver, DefaultCutoverControllerResolver>();
 		services.AddSingleton<RetrievalResultProjector>();
 		services.AddSingleton<PackageResultProjector>();
 		services.AddSingleton<AuthoritativeRetrievalRuntime>();
@@ -443,6 +454,35 @@ internal static class CoreExtensions
 		// P0-9：注册 IExperimentRecorder（默认 in-memory；可替换为持久化实现）
 		services.TryAddSingleton<IExperimentRecorder, InMemoryExperimentRecorder>();
 		services.AddSingleton<DecisionExperimentPlaneIntegration>();
+
+		// R28-B.8 工作包 C：Canary Metrics 采集器。从 shadow/parity 报告聚合 divergence_rate /
+		// error_rate / p95_latency_ms，供 CanaryProgressionService.EvaluateAsync 消费。
+		services.AddSingleton<ICanaryMetricsCollector, DefaultCanaryMetricsCollector>();
+
+		// R28-B.8 工作包 D：Canary Progression HostedService。
+		// CanarySchedulerOptions 从配置节 "CanaryScheduler" 绑定（未配置时使用默认 60 秒轮询 + 启用）。
+		services.AddSingleton<CanarySchedulerOptions>(sp =>
+		{
+			var opts = new CanarySchedulerOptions();
+			sp.GetService<IConfiguration>()?.GetSection("CanaryScheduler").Bind(opts);
+			return opts;
+		});
+		// CanaryProgressionService 注册为 Singleton（依赖均为 Singleton）。
+		// 注入 CutoverControllerRegistry 实现 per-run 控制器隔离；注入 CutoverConfiguration 读取默认百分比。
+		services.AddSingleton<CanaryProgressionService>(sp =>
+		{
+			var store = sp.GetService<IPipelineRunStore>() ?? new InMemoryPipelineRunStore();
+			var defaultController = sp.GetService<CutoverController>() ?? new CutoverController(0);
+			var registry = sp.GetService<CutoverControllerRegistry>();
+			var timeProvider = sp.GetService<TimeProvider>();
+			return new CanaryProgressionService(
+				store, defaultController,
+				options: CanaryGateOptions.FromEnvironment(),
+			 timeProvider: timeProvider,
+				registry: registry);
+		});
+		// HostedService 注册：定时轮询 ScopedCanary 阶段的 run 并自动推进/回滚。
+		services.AddHostedService<CanaryProgressionHostedService>();
 
 		// R28-D：Model Execution Runtime 默认实现。
 		// - IFeatureRegistry：in-memory 特征 schema 注册表（生产可替换为持久化实现）

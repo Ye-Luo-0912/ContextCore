@@ -305,7 +305,7 @@ public sealed class R28B_CanaryGateTests
         await service.AdvanceAsync(runId, "t-audit-2", "idem-2",
             HealthyBaseline, HealthyExperiment);
 
-        var transitions = service.ListStageTransitions(runId);
+        var transitions = await service.ListStageTransitionsAsync(runId);
 
         Assert.AreEqual(2, transitions.Count, "应有 2 条审计记录");
         Assert.AreEqual("t-audit-1", transitions[0].TransitionId);
@@ -323,7 +323,7 @@ public sealed class R28B_CanaryGateTests
         // 验证幂等推进不会产生重复审计记录
         await service.AdvanceAsync(runId, "t-audit-1", "idem-1",
             HealthyBaseline, HealthyExperiment);
-        var transitionsAfterIdempotent = service.ListStageTransitions(runId);
+        var transitionsAfterIdempotent = await service.ListStageTransitionsAsync(runId);
         Assert.AreEqual(2, transitionsAfterIdempotent.Count, "幂等推进不应新增审计记录");
     }
 
