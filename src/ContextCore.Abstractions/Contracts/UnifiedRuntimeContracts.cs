@@ -345,6 +345,26 @@ public sealed record PackageInput
 
     /// <summary>section 比例（覆盖 policy 默认 SectionRatios）。</summary>
     public IReadOnlyDictionary<string, double>? SectionRatios { get; init; }
+
+    // --- R28-B.7 P1-2：补齐原 ContextPackageRequest 完整语义 ---
+
+    /// <summary>R28-B.7 P1-2：场景模式，优先级高于 metadata["mode"]。指定后按预设权重分配 token 预算。</summary>
+    public ContextPackageMode Mode { get; init; } = ContextPackageMode.None;
+
+    /// <summary>R28-B.7 P1-2：显式策略引用（可选）。</summary>
+    public ContextPackagePolicy? Policy { get; init; }
+
+    /// <summary>R28-B.7 P1-2：是否包含近期对话（默认 true）。</summary>
+    public bool IncludeRecent { get; init; } = true;
+
+    /// <summary>
+    /// R28-B.7 P1-2：显式审计模式信号。任一为 true 即启用；任一为 false（且无 true）即关闭；均 null 时默认 false。
+    /// 审计模式启用后会召回废弃/被替代记忆并归入 historical_context section。
+    /// </summary>
+    public bool? IsAuditMode { get; init; }
+
+    /// <summary>R28-B.7 P1-2：附加元数据（透传到 Provider/Projector 用于诊断或策略）。</summary>
+    public IReadOnlyDictionary<string, string>? Metadata { get; init; }
 }
 
 /// <summary>

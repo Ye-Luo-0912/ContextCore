@@ -1264,7 +1264,11 @@ public sealed class PostgresResolvedPolicyProvider : IResolvedPolicyProvider
                     "Fail-closed: refusing to fall back to default bundle.");
 
             // 3. verify ContentHash — bundle 不可变性验证
-            var computedHash = PolicyBundleHasher.ComputeHash(bundle);
+            // R28-B.7 P1-4：使用 uncached hash，确保 tampered bundle 不会被缓存的旧哈希掩盖。
+            // ComputeHash 按 (BundleId, Version) 缓存，假设 bundle 内容不可变；
+            // 若 bundle 被篡改（内容修改但 BundleId/Version 不变），缓存会返回旧哈希掩盖篡改。
+            // 此处使用 ComputeHashUncached 绕过缓存，每次重新计算 SHA256，保证验证的严肃性。
+            var computedHash = PolicyBundleHasher.ComputeHashUncached(bundle);
             if (!string.Equals(computedHash, activation.BundleContentHash, StringComparison.Ordinal))
             {
                 throw new InvalidOperationException(
@@ -1433,8 +1437,18 @@ public static class PolicyBundleHasher
         return _hashCache.GetOrAdd(cacheKey, _ => ComputeHashUncached(bundle));
     }
 
-    /// <summary>实际计算 bundle 内容哈希（无缓存）。</summary>
-    private static string ComputeHashUncached(ContextPolicyBundle bundle)
+    /// <summary>
+    /// R28-B.7 P1-4：计算 bundle 的内容哈希（无缓存）。
+    /// 用于 bundle 不可变性验证 — 始终重新计算，不受缓存影响，
+    /// 确保 tampered bundle 不会被缓存的旧哈希掩盖。
+    /// </summary>
+    /// <remarks>
+    /// 安全性说明：<see cref="ComputeHash"/> 使用 (BundleId, Version) 作为缓存键，
+    /// 假设 bundle 内容不可变。若 bundle 被篡改（内容修改但 BundleId/Version 不变），
+    /// 缓存会返回旧哈希，掩盖篡改。此 uncached 方法绕过缓存，每次重新计算 SHA256，
+    /// 用于 PostgresResolvedPolicyProvider 的 immutability 验证（步骤 3）。
+    /// </remarks>
+    public static string ComputeHashUncached(ContextPolicyBundle bundle)
     {
         var sb = new StringBuilder();
         sb.Append(bundle.BundleId).Append('|');

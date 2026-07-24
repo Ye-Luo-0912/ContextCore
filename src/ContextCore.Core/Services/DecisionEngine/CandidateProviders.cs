@@ -73,12 +73,14 @@ internal static class CandidateProviderHelpers
     }
 
     /// <summary>从 ContextItem 构建 Envelope + Material。</summary>
+    /// <param name="includeContent">R28-B.7 P1-1：是否包含候选正文（false 时 Content 置空，尊重 RetrievalInput.IncludeContent）。</param>
     internal static (ContextCandidateEnvelope Envelope, CandidateMaterial Material) BuildFromContextItem(
         ContextItem item,
         ContextCandidateSource source,
         ExpertKind expertKind,
         double score,
-        CandidateAdaptationContext adaptationContext)
+        CandidateAdaptationContext adaptationContext,
+        bool includeContent = true)
     {
         var contentHash = ComputeContentHash(item.Content);
         var key = CanonicalCandidateKey.Create(
@@ -120,7 +122,8 @@ internal static class CandidateProviderHelpers
         var material = new CandidateMaterial
         {
             Key = key,
-            Content = item.Content,
+            // R28-B.7 P1-1：IncludeContent=false 时不输出正文（尊重 RetrievalInput.IncludeContent）
+            Content = includeContent ? item.Content : string.Empty,
             NativeKind = string.IsNullOrEmpty(item.Type) ? "context" : item.Type,
             SourceRefs = item.SourceRefs.Concat(item.Refs).Distinct(StringComparer.OrdinalIgnoreCase).ToArray()
         };
@@ -129,12 +132,14 @@ internal static class CandidateProviderHelpers
     }
 
     /// <summary>从 ContextMemoryItem 构建 Envelope + Material。</summary>
+    /// <param name="includeContent">R28-B.7 P1-1：是否包含候选正文（false 时 Content 置空，尊重 RetrievalInput.IncludeContent）。</param>
     internal static (ContextCandidateEnvelope Envelope, CandidateMaterial Material) BuildFromMemoryItem(
         ContextMemoryItem memory,
         ContextCandidateSource source,
         ExpertKind expertKind,
         double score,
-        CandidateAdaptationContext adaptationContext)
+        CandidateAdaptationContext adaptationContext,
+        bool includeContent = true)
     {
         var contentHash = ComputeContentHash(memory.Content);
         var key = CanonicalCandidateKey.Create(
@@ -175,7 +180,8 @@ internal static class CandidateProviderHelpers
         var material = new CandidateMaterial
         {
             Key = key,
-            Content = memory.Content,
+            // R28-B.7 P1-1：IncludeContent=false 时不输出正文（尊重 RetrievalInput.IncludeContent）
+            Content = includeContent ? memory.Content : string.Empty,
             NativeKind = string.IsNullOrEmpty(memory.Type) ? "memory" : memory.Type,
             SourceRefs = memory.SourceRefs
         };
@@ -300,6 +306,8 @@ public sealed class MandatoryCandidateProvider : ICandidateProvider
         var take = CandidateProviderHelpers.ResolveTake(context);
         var workspaceId = context.Request.Scope.WorkspaceId;
         var collectionId = context.Request.Scope.CollectionId;
+        // R28-B.7 P1-1：尊重 RetrievalInput.IncludeContent（默认 true）
+        var includeContent = context.Request.RetrievalInput?.IncludeContent ?? true;
 
         // 路径 1：Tags=["mandatory"] 召回
         var items = await _contextStore.QueryAsync(new ContextQuery
@@ -308,10 +316,12 @@ public sealed class MandatoryCandidateProvider : ICandidateProvider
             CollectionId = collectionId,
             Tags = new[] { "mandatory" },
             Take = take,
-            IncludeContent = true
+            // R28-B.7 P1-1：将 IncludeContent 传递到 Store 查询
+            IncludeContent = includeContent
         }, cancellationToken).ConfigureAwait(false);
 
         // R28-B.6 P0-1：路径 2 — RequiredIds 强制召回（RetrievalInput / PackageInput）
+        // R28-B.7 P1-1：Refs 也作为额外 RequiredIds 强制召回
         var requiredIds = ResolveRequiredIds(context.Request);
         var seenIds = new HashSet<string>(items.Select(i => i.Id), StringComparer.OrdinalIgnoreCase);
         var mergedItems = items.ToList();
@@ -374,7 +384,8 @@ public sealed class MandatoryCandidateProvider : ICandidateProvider
         foreach (var item in mergedItems)
         {
             var (envelope, material) = CandidateProviderHelpers.BuildFromContextItem(
-                item, ContextCandidateSource.Mandatory, ExpertKind.Mandatory, 1000.0, context.AdaptationContext);
+                item, ContextCandidateSource.Mandatory, ExpertKind.Mandatory, 1000.0,
+                context.AdaptationContext, includeContent);
             envelopes.Add(envelope);
             materials[envelope.CanonicalKey] = material;
         }
@@ -384,13 +395,22 @@ public sealed class MandatoryCandidateProvider : ICandidateProvider
 
     /// <summary>
     /// R28-B.6 P0-1：从 Request 解析 RequiredIds（RetrievalInput 优先，回退到 PackageInput）。
+    /// R28-B.7 P1-1：Refs 也合并为额外 RequiredIds（强制召回）。
     /// </summary>
     private static IReadOnlyList<string> ResolveRequiredIds(ContextDecisionRuntimeRequest request)
     {
-        if (request.RetrievalInput?.RequiredIds is { Count: > 0 } ids)
+        var ids = new List<string>();
+        if (request.RetrievalInput?.RequiredIds is { Count: > 0 } retrievalIds)
         {
-            return ids;
+            ids.AddRange(retrievalIds);
         }
+        // R28-B.7 P1-1：Refs 作为额外 RequiredIds
+        if (request.RetrievalInput?.Refs is { Count: > 0 } refs)
+        {
+            ids.AddRange(refs);
+        }
+        if (ids.Count > 0) return ids;
+
         if (request.PackageInput?.RequiredIds is { Count: > 0 } pkgIds)
         {
             return pkgIds;
@@ -487,15 +507,19 @@ public sealed class LexicalCandidateProvider : ICandidateProvider
         ArgumentNullException.ThrowIfNull(context);
         cancellationToken.ThrowIfCancellationRequested();
 
-        // 无查询文本时 lexical 召回无意义
-        if (string.IsNullOrWhiteSpace(context.Request.QueryText))
+        // R28-B.7 P1-1：优先使用 RewrittenQueryText（query rewriting 后的结果），回退到 QueryText
+        var retrievalInput = context.Request.RetrievalInput;
+        var effectiveQueryText = retrievalInput?.RewrittenQueryText ?? context.Request.QueryText;
+
+        // 无查询文本且无 Refs 时 lexical 召回无意义
+        var hasRefs = retrievalInput?.Refs is { Count: > 0 };
+        if (string.IsNullOrWhiteSpace(effectiveQueryText) && !hasRefs)
         {
             return CandidateProviderHelpers.Empty();
         }
 
         // R28-B.6 P0-1：读取 RetrievalInput 的 RequiredTags / RequiredTypes
         // PackageInput 也提供相同字段（Package 路径下 Lexical 不一定启用，但保留兼容）
-        var retrievalInput = context.Request.RetrievalInput;
         var packageInput = context.Request.PackageInput;
         var requiredTags = retrievalInput?.RequiredTags;
         if (requiredTags is null || requiredTags.Count == 0)
@@ -508,18 +532,30 @@ public sealed class LexicalCandidateProvider : ICandidateProvider
             requiredTypes = packageInput?.RequiredTypes;
         }
 
+        // R28-B.7 P1-1：尊重 RetrievalInput.IncludeContent（默认 true）
+        var includeContent = retrievalInput?.IncludeContent ?? true;
+
+        // R28-B.7 P1-1：从 Metadata 解析排除类型/排除 ID（过滤用）
+        var (excludedTypes, excludedIds) = ResolveExcludedFiltersFromMetadata(retrievalInput?.Metadata);
+
         var take = CandidateProviderHelpers.ResolveTake(context);
         var items = await _contextStore.QueryAsync(new ContextQuery
         {
             WorkspaceId = context.Request.Scope.WorkspaceId,
             CollectionId = context.Request.Scope.CollectionId,
-            QueryText = context.Request.QueryText,
+            QueryText = effectiveQueryText,
             // R28-B.6 P0-1：应用 RequiredTags / RequiredTypes 作为过滤条件
             // （ContextQuery.Tags/Types 默认为空数组，等价于不应用过滤）
             Tags = requiredTags ?? Array.Empty<string>(),
             Types = requiredTypes ?? Array.Empty<string>(),
+            // R28-B.7 P1-1：应用 Refs（如果有 Refs，按 Refs 召回）
+            Refs = retrievalInput?.Refs ?? Array.Empty<string>(),
+            // R28-B.7 P1-1：应用 Metadata 解析的排除过滤
+            ExcludedTypes = excludedTypes,
+            ExcludedIds = excludedIds,
             Take = take,
-            IncludeContent = true
+            // R28-B.7 P1-1：将 IncludeContent 传递到 Store 查询
+            IncludeContent = includeContent
         }, cancellationToken).ConfigureAwait(false);
 
         if (items.Count == 0) return CandidateProviderHelpers.Empty();
@@ -531,18 +567,46 @@ public sealed class LexicalCandidateProvider : ICandidateProvider
         {
             // 简单关键词评分：查询文本出现在 Title 中加分
             var score = 10.0;
-            if (!string.IsNullOrEmpty(item.Title) &&
-                item.Title.Contains(context.Request.QueryText, StringComparison.OrdinalIgnoreCase))
+            if (!string.IsNullOrEmpty(item.Title) && !string.IsNullOrEmpty(effectiveQueryText) &&
+                item.Title.Contains(effectiveQueryText, StringComparison.OrdinalIgnoreCase))
             {
                 score += 50.0;
             }
             var (envelope, material) = CandidateProviderHelpers.BuildFromContextItem(
-                item, ContextCandidateSource.Lexical, ExpertKind.Lexical, score, context.AdaptationContext);
+                item, ContextCandidateSource.Lexical, ExpertKind.Lexical, score,
+                context.AdaptationContext, includeContent);
             envelopes.Add(envelope);
             materials[envelope.CanonicalKey] = material;
         }
 
         return new ExpertExecutionResult(envelopes, materials);
+    }
+
+    /// <summary>
+    /// R28-B.7 P1-1：从 RetrievalInput.Metadata 解析排除过滤条件。
+    /// 支持 "excludedTypes"（逗号分隔）和 "excludedIds"（逗号分隔）两个键。
+    /// </summary>
+    private static (IReadOnlyList<string> ExcludedTypes, IReadOnlyList<string> ExcludedIds) ResolveExcludedFiltersFromMetadata(
+        IReadOnlyDictionary<string, string>? metadata)
+    {
+        if (metadata is null || metadata.Count == 0)
+        {
+            return (Array.Empty<string>(), Array.Empty<string>());
+        }
+
+        IReadOnlyList<string> excludedTypes = Array.Empty<string>();
+        IReadOnlyList<string> excludedIds = Array.Empty<string>();
+
+        if (metadata.TryGetValue("excludedTypes", out var typesStr) && !string.IsNullOrWhiteSpace(typesStr))
+        {
+            excludedTypes = typesStr.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        }
+        if (metadata.TryGetValue("excludedIds", out var idsStr) && !string.IsNullOrWhiteSpace(idsStr))
+        {
+            excludedIds = idsStr.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        }
+
+        return (excludedTypes, excludedIds);
     }
 }
 
@@ -598,6 +662,8 @@ public sealed class SemanticCandidateProvider : ICandidateProvider
         var queryInstruction = retrievalInput?.QueryInstruction;
         var vectorTopKFromInput = retrievalInput?.VectorTopK ?? 0;
         var minVectorScore = retrievalInput?.MinVectorScore;
+        // R28-B.7 P1-1：尊重 RetrievalInput.IncludeContent（默认 true）
+        var includeContent = retrievalInput?.IncludeContent ?? true;
 
         // R28-B.6 P0-1：如果 QueryVector 非空，直接使用（不调用 EmbeddingProvider）
         IReadOnlyList<float> queryVector;
@@ -768,8 +834,9 @@ public sealed class SemanticCandidateProvider : ICandidateProvider
             {
                 if (!contextItemDict.TryGetValue(hit.Record.SourceId, out var item)) continue;
 
+                // R28-B.7 P1-1：传递 includeContent 控制候选正文输出
                 var (envelope, material) = CandidateProviderHelpers.BuildFromContextItem(
-                    item, ContextCandidateSource.Semantic, ExpertKind.Semantic, score, context.AdaptationContext);
+                    item, ContextCandidateSource.Semantic, ExpertKind.Semantic, score, context.AdaptationContext, includeContent);
 
                 if (seenKeys.Add(envelope.CanonicalKey))
                 {
@@ -781,8 +848,9 @@ public sealed class SemanticCandidateProvider : ICandidateProvider
             {
                 if (!memoryItemDict.TryGetValue(hit.Record.SourceId, out var memory)) continue;
 
+                // R28-B.7 P1-1：传递 includeContent 控制候选正文输出
                 var (envelope, material) = CandidateProviderHelpers.BuildFromMemoryItem(
-                    memory, ContextCandidateSource.Semantic, ExpertKind.Semantic, score, context.AdaptationContext);
+                    memory, ContextCandidateSource.Semantic, ExpertKind.Semantic, score, context.AdaptationContext, includeContent);
 
                 if (seenKeys.Add(envelope.CanonicalKey))
                 {
@@ -835,6 +903,9 @@ public sealed class WorkingMemoryCandidateProvider : ICandidateProvider
 
         if (_memoryStore is null) return CandidateProviderHelpers.Empty();
 
+        // R28-B.7 P1-1：尊重 RetrievalInput.IncludeContent（默认 true）
+        var includeContent = context.Request.RetrievalInput?.IncludeContent ?? true;
+
         var take = CandidateProviderHelpers.ResolveTake(context);
         var memories = await _memoryStore.QueryAsync(new ContextMemoryQuery
         {
@@ -851,9 +922,10 @@ public sealed class WorkingMemoryCandidateProvider : ICandidateProvider
 
         foreach (var memory in memories)
         {
+            // R28-B.7 P1-1：传递 includeContent 控制候选正文输出
             var (envelope, material) = CandidateProviderHelpers.BuildFromMemoryItem(
                 memory, ContextCandidateSource.WorkingMemory, ExpertKind.WorkingMemory,
-                50.0, context.AdaptationContext);
+                50.0, context.AdaptationContext, includeContent);
             envelopes.Add(envelope);
             materials[envelope.CanonicalKey] = material;
         }
@@ -889,6 +961,9 @@ public sealed class StableMemoryCandidateProvider : ICandidateProvider
 
         if (_memoryStore is null) return CandidateProviderHelpers.Empty();
 
+        // R28-B.7 P1-1：尊重 RetrievalInput.IncludeContent（默认 true）
+        var includeContent = context.Request.RetrievalInput?.IncludeContent ?? true;
+
         var take = CandidateProviderHelpers.ResolveTake(context);
         var memories = await _memoryStore.QueryAsync(new ContextMemoryQuery
         {
@@ -906,9 +981,10 @@ public sealed class StableMemoryCandidateProvider : ICandidateProvider
 
         foreach (var memory in memories)
         {
+            // R28-B.7 P1-1：传递 includeContent 控制候选正文输出
             var (envelope, material) = CandidateProviderHelpers.BuildFromMemoryItem(
                 memory, ContextCandidateSource.StableMemory, ExpertKind.StableMemory,
-                80.0, context.AdaptationContext);
+                80.0, context.AdaptationContext, includeContent);
             envelopes.Add(envelope);
             materials[envelope.CanonicalKey] = material;
         }
@@ -963,6 +1039,17 @@ public sealed class GraphCandidateProvider : ICandidateProvider
         var workspaceId = context.Request.Scope.WorkspaceId;
         var collectionId = context.Request.Scope.CollectionId;
 
+        // R28-B.7 P1-1：从 RetrievalInput 读取图扩展参数
+        var retrievalInput = context.Request.RetrievalInput;
+        // AllowedRelationTypes：为空表示不限制；非空时仅召回这些关系类型
+        var allowedRelationTypes = retrievalInput?.AllowedRelationTypes ?? Array.Empty<string>();
+        // RelationExpansionDepth：图扩展最大跳数（默认 0 → 视为 1 跳，保持向后兼容）
+        var maxDepth = retrievalInput?.RelationExpansionDepth > 0
+            ? retrievalInput.RelationExpansionDepth
+            : 1;
+        // IncludeContent：是否包含候选正文（默认 true）
+        var includeContent = retrievalInput?.IncludeContent ?? true;
+
         // 1. 从 SeedCandidates 提取种子 ItemId
         var seedItemIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var seed in context.Request.SeedCandidates)
@@ -975,72 +1062,88 @@ public sealed class GraphCandidateProvider : ICandidateProvider
 
         if (seedItemIds.Count == 0) return CandidateProviderHelpers.Empty();
 
-        // 2. 对种子批量查询邻居关系（消除逐种子 N+1 往返）
+        // 2. BFS 多跳扩展：按 maxDepth 迭代，每跳批量查询 frontier 的邻居
+        // R28-B.7 P1-1：应用 AllowedRelationTypes 过滤（非空时仅召回允许的关系类型）
         var neighborItemIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var rs = _relationStore;
+        var visitedItemIds = new HashSet<string>(seedItemIds, StringComparer.OrdinalIgnoreCase);
+        var currentFrontier = seedItemIds.ToList();
 
-        if (rs is not null && seedItemIds.Count > 1)
+        for (var depth = 0; depth < maxDepth && currentFrontier.Count > 0; depth++)
         {
-            // 批量查询所有种子的邻居
-            var batchResults = await rs.QueryNeighborsBatchAsync(new RelationNeighborBatchQuery
-            {
-                WorkspaceId = workspaceId,
-                CollectionId = collectionId,
-                ItemIds = seedItemIds.ToArray(),
-                Direction = RelationDirection.Both,
-                Take = take
-            }, cancellationToken).ConfigureAwait(false);
+            var nextFrontier = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-            foreach (var result in batchResults)
+            if (currentFrontier.Count > 1)
             {
-                var seedItemId = result.ItemId;
-                foreach (var relation in result.Relations)
-                {
-                    // 提取"另一端"的 ItemId
-                    var otherId = string.Equals(relation.SourceId, seedItemId, StringComparison.OrdinalIgnoreCase)
-                        ? relation.TargetId
-                        : relation.SourceId;
-
-                    if (!string.IsNullOrEmpty(otherId) && !seedItemIds.Contains(otherId))
-                    {
-                        neighborItemIds.Add(otherId);
-                    }
-                }
-            }
-        }
-        else if (rs is not null)
-        {
-            // 回退到带节流的并行单条查询
-            var seedArray = seedItemIds.ToArray();
-            var relationsPerSeed = await BoundedFanout.WhenAllAsync(
-                seedArray,
-                (seedItemId, ct) => rs.QueryNeighborsAsync(new RelationNeighborQuery
+                // 批量查询 frontier 的邻居
+                var batchResults = await rs.QueryNeighborsBatchAsync(new RelationNeighborBatchQuery
                 {
                     WorkspaceId = workspaceId,
                     CollectionId = collectionId,
-                    ItemId = seedItemId,
+                    ItemIds = currentFrontier.ToArray(),
                     Direction = RelationDirection.Both,
+                    // R28-B.7 P1-1：应用 AllowedRelationTypes
+                    AllowedRelationTypes = allowedRelationTypes,
                     Take = take
-                }, ct),
-                CandidateProviderHelpers.DefaultReadFanout,
-                cancellationToken).ConfigureAwait(false);
+                }, cancellationToken).ConfigureAwait(false);
 
-            for (var i = 0; i < relationsPerSeed.Length; i++)
-            {
-                var seedItemId = seedArray[i];
-                foreach (var relation in relationsPerSeed[i])
+                foreach (var result in batchResults)
                 {
-                    // 提取"另一端"的 ItemId
-                    var otherId = string.Equals(relation.SourceId, seedItemId, StringComparison.OrdinalIgnoreCase)
-                        ? relation.TargetId
-                        : relation.SourceId;
-
-                    if (!string.IsNullOrEmpty(otherId) && !seedItemIds.Contains(otherId))
+                    var seedItemId = result.ItemId;
+                    foreach (var relation in result.Relations)
                     {
-                        neighborItemIds.Add(otherId);
+                        // 提取"另一端"的 ItemId
+                        var otherId = string.Equals(relation.SourceId, seedItemId, StringComparison.OrdinalIgnoreCase)
+                            ? relation.TargetId
+                            : relation.SourceId;
+
+                        if (!string.IsNullOrEmpty(otherId) && visitedItemIds.Add(otherId))
+                        {
+                            neighborItemIds.Add(otherId);
+                            nextFrontier.Add(otherId);
+                        }
                     }
                 }
             }
+            else
+            {
+                // 回退到带节流的并行单条查询
+                var seedArray = currentFrontier.ToArray();
+                var relationsPerSeed = await BoundedFanout.WhenAllAsync(
+                    seedArray,
+                    (seedItemId, ct) => rs.QueryNeighborsAsync(new RelationNeighborQuery
+                    {
+                        WorkspaceId = workspaceId,
+                        CollectionId = collectionId,
+                        ItemId = seedItemId,
+                        Direction = RelationDirection.Both,
+                        // R28-B.7 P1-1：应用 AllowedRelationTypes
+                        AllowedRelationTypes = allowedRelationTypes,
+                        Take = take
+                    }, ct),
+                    CandidateProviderHelpers.DefaultReadFanout,
+                    cancellationToken).ConfigureAwait(false);
+
+                for (var i = 0; i < relationsPerSeed.Length; i++)
+                {
+                    var seedItemId = seedArray[i];
+                    foreach (var relation in relationsPerSeed[i])
+                    {
+                        // 提取"另一端"的 ItemId
+                        var otherId = string.Equals(relation.SourceId, seedItemId, StringComparison.OrdinalIgnoreCase)
+                            ? relation.TargetId
+                            : relation.SourceId;
+
+                        if (!string.IsNullOrEmpty(otherId) && visitedItemIds.Add(otherId))
+                        {
+                            neighborItemIds.Add(otherId);
+                            nextFrontier.Add(otherId);
+                        }
+                    }
+                }
+            }
+
+            currentFrontier = nextFrontier.ToList();
         }
 
         if (neighborItemIds.Count == 0) return CandidateProviderHelpers.Empty();
@@ -1114,9 +1217,10 @@ public sealed class GraphCandidateProvider : ICandidateProvider
         {
             if (contextItemDict.TryGetValue(itemId, out var item))
             {
+                // R28-B.7 P1-1：传递 includeContent 控制候选正文输出
                 var (envelope, material) = CandidateProviderHelpers.BuildFromContextItem(
                     item, ContextCandidateSource.Graph, ExpertKind.Graph,
-                    30.0, context.AdaptationContext);
+                    30.0, context.AdaptationContext, includeContent);
                 if (seenKeys.Add(envelope.CanonicalKey))
                 {
                     envelopes.Add(envelope);
@@ -1127,9 +1231,10 @@ public sealed class GraphCandidateProvider : ICandidateProvider
 
             if (memoryItemDict.TryGetValue(itemId, out var memory))
             {
+                // R28-B.7 P1-1：传递 includeContent 控制候选正文输出
                 var (envelope, material) = CandidateProviderHelpers.BuildFromMemoryItem(
                     memory, ContextCandidateSource.Graph, ExpertKind.Graph,
-                    30.0, context.AdaptationContext);
+                    30.0, context.AdaptationContext, includeContent);
                 if (seenKeys.Add(envelope.CanonicalKey))
                 {
                     envelopes.Add(envelope);

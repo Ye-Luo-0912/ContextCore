@@ -495,11 +495,14 @@ public sealed class AuthoritativePackageRuntime : IContextPackageBuilder
     /// <summary>
     /// R28-B.6 Blocker-4：从 ContextPackageRequest 构建完整的 V2 RuntimeRequest，
     /// 携带 PackageInput（完整保留 RequiredIds/RequiredTags/QueryVector 等）+ 真实 TokenBudget。
+    /// R28-B.7 P1-2：补齐 Mode/Policy/IncludeRecent/IsAuditMode/Metadata 字段映射，
+    /// 完整保留原 ContextPackageRequest 语义。
     /// </summary>
     private static ContextDecisionRuntimeRequest BuildV2PackageRequest(ContextPackageRequest request)
     {
         // PackageRequest 不携带 QueryVector / ModelName 等 retrieval-specific 字段，
         // 但保留 RequiredTags / RequiredTypes / TokenBudget 等公共字段。
+        // R28-B.7 P1-2：补齐 Mode/Policy/IncludeRecent/IsAuditMode/Metadata。
         return new ContextDecisionRuntimeRequest
         {
             RequestId = request.RequestId ?? request.OperationId ?? Guid.NewGuid().ToString("N"),
@@ -512,7 +515,13 @@ public sealed class AuthoritativePackageRuntime : IContextPackageBuilder
             PackageInput = new PackageInput
             {
                 RequiredTags = request.RequiredTags,
-                RequiredTypes = request.RequiredTypes
+                RequiredTypes = request.RequiredTypes,
+                // R28-B.7 P1-2：补齐原 ContextPackageRequest 完整语义
+                Mode = request.Mode,
+                Policy = request.Policy,
+                IncludeRecent = request.IncludeRecent,
+                IsAuditMode = request.IsAuditMode,
+                Metadata = request.Metadata
             }
         };
     }
@@ -598,12 +607,14 @@ public sealed class AuthoritativeAgentContextRuntime
     /// </summary>
     /// <param name="request">V2 Runtime 请求。</param>
     /// <param name="workingSet">候选 WorkingSet（含 Envelopes + Materials）。</param>
-    /// <param name="projectionContext">R28-B.6：真实 Agent session + scope（null 时 Projector 回退到占位 session）。</param>
+    /// <param name="projectionContext">R28-B.6：真实 Agent session + scope（null 时从 request.AgentInput.Session 自动构造）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <remarks>
     /// R28-B.6 P0-3：将 caller WorkingSet 作为 SeedWorkingSet 传入（含 Envelopes + Materials），
     /// 使用 ExecuteWithWorkingSetAsync 获取完整 execution artifact。Projector 从 execution.WorkingSet
     /// （包含 Provider 新召回的 Material）恢复正文，而非 caller 原始 WorkingSet。
+    /// R28-B.7 P1-3：projectionContext 为 null 时，从 request.AgentInput.Session 自动构造 ProjectionContext，
+    /// 让 Projector 始终使用真实 AgentSessionId，而非回退到伪造的 session-{requestId}。
     /// </remarks>
     public async ValueTask<AgentContextSnapshot> BuildAsync(
         ContextDecisionRuntimeRequest request,
@@ -622,10 +633,35 @@ public sealed class AuthoritativeAgentContextRuntime
         var execution = await _v2Runtime.ExecuteWithWorkingSetAsync(
             mergedRequest, cancellationToken).ConfigureAwait(false);
 
+        // R28-B.7 P1-3：projectionContext 为 null 时，从 request.AgentInput.Session 自动构造 ProjectionContext。
+        // 这样 Projector 始终使用真实 AgentSessionId（而非回退到伪造的 session-{requestId}）。
+        // 仅当 AgentInput.Session 非空时构造；Session 也为 null 时回退到 execution 重载（Projector 内部构造占位 session）。
+        var effectiveContext = projectionContext ?? BuildProjectionContextFromAgentInput(request);
+
         // R28-B.6 P0-3：使用 execution.WorkingSet（包含 Provider 新召回的 Material），而非 caller 原始 WorkingSet
         // R28-B.7 P0-6：使用 execution 重载
-        return projectionContext is not null
-            ? _agentContextProjector.Project(execution, projectionContext)
+        return effectiveContext is not null
+            ? _agentContextProjector.Project(execution, effectiveContext)
             : _agentContextProjector.Project(execution);
+    }
+
+    /// <summary>
+    /// R28-B.7 P1-3：从 request.AgentInput.Session 构造 ProjectionContext。
+    /// 仅当 AgentInput 非空且 Session 非空时返回非 null；否则返回 null（让 Projector 回退到占位 session）。
+    /// </summary>
+    private static ProjectionContext? BuildProjectionContextFromAgentInput(ContextDecisionRuntimeRequest request)
+    {
+        var agentInput = request.AgentInput;
+        if (agentInput?.Session is null)
+        {
+            return null;
+        }
+
+        return new ProjectionContext
+        {
+            AgentSession = agentInput.Session,
+            WorkspaceId = request.Scope.WorkspaceId,
+            CollectionId = request.Scope.CollectionId
+        };
     }
 }

@@ -195,6 +195,8 @@ public sealed class DecisionExperimentPlaneIntegration : IAsyncDisposable
     private readonly IExperimentRecorder _recorder;
     // R28-B.7 工作包 F：纯决策重放内核。可选注入；为 null 时 DecisionReplay/ExpertReplay 抛异常。
     private readonly IContextDecisionEngine? _engine;
+    // R28-B.7 P1-5：候选合并器。用于 ExpertReplay 合并 Provider 输出快照（冲突检测，非后写覆盖）。
+    private readonly ICanonicalCandidateMerger _merger;
 
     // R28-B.6 Impl-5：异步非阻塞队列。写路径（RecordFixture / RecordShadowReport /
     // ClearHistory）只入队即返回，后台 consumer 串行消费调用 _recorder。
@@ -202,10 +204,13 @@ public sealed class DecisionExperimentPlaneIntegration : IAsyncDisposable
     // 保证调用方看到入队事件已落盘。生产环境若需纯异步读取可调用 FlushAsync 后
     // 直接访问 IExperimentRecorder。
     //
-    // R28-B.7 工作包 G：bounded channel（容量 1024，DropOldest）。
+    // R28-B.7 工作包 G / P1-6：bounded channel（容量 1024，Wait 模式）。
     // 旧实现使用 unbounded channel，在 Postgres/磁盘持续故障导致 consumer 长期阻塞时
-    // 会让内存无限增长；bounded + DropOldest 丢弃最旧事件保住内存上限，并通过
-    // DroppedCount 暴露丢弃量供监控告警。
+    // 会让内存无限增长；bounded 保住内存上限。
+    // R28-B.7 P1-6：FullMode 从 DropOldest 改为 Wait。DropOldest 模式下 TryWrite 在
+    // 队列满时仍返回 true（内部丢弃最旧事件），导致 DroppedCount 永远不递增，
+    // 指标不可信。Wait 模式下 TryWrite 在队列满时返回 false，Enqueue 据此递增
+    // _droppedCount，使 DropCount 指标准确反映因队列满而丢弃的事件数。
     private readonly Channel<ExperimentEvent> _queue;
     private readonly Task _consumerTask;
     private readonly CancellationTokenSource _shutdownCts;
@@ -223,12 +228,15 @@ public sealed class DecisionExperimentPlaneIntegration : IAsyncDisposable
 
     /// <summary>构造长期实验平面集成。</summary>
     /// <param name="engine">R28-B.7 工作包 F：纯决策 Engine。可选；注入后启用 DecisionReplay/ExpertReplay。</param>
+    /// <param name="merger">R28-B.7 P1-5：候选合并器。可选；未注入时使用 <see cref="DefaultCanonicalCandidateMerger"/>。
+    /// ExpertReplay 使用此合并器合并 Provider 输出快照（冲突检测，非后写覆盖）。</param>
     public DecisionExperimentPlaneIntegration(
         DecisionExperimentPlane experimentPlane,
         ShadowGateEvaluator gateEvaluator,
         CutoverConfiguration configuration,
         IExperimentRecorder? recorder = null,
-        IContextDecisionEngine? engine = null)
+        IContextDecisionEngine? engine = null,
+        ICanonicalCandidateMerger? merger = null)
     {
         _experimentPlane = experimentPlane ?? throw new ArgumentNullException(nameof(experimentPlane));
         _gateEvaluator = gateEvaluator ?? throw new ArgumentNullException(nameof(gateEvaluator));
@@ -236,14 +244,17 @@ public sealed class DecisionExperimentPlaneIntegration : IAsyncDisposable
         // P0-9：持久化委托给 IExperimentRecorder；未注入时回退到 in-memory 默认实现。
         _recorder = recorder ?? new InMemoryExperimentRecorder();
         _engine = engine;
+        // R28-B.7 P1-5：未注入合并器时回退到默认实现（含冲突检测 + SourceRefs 合并）。
+        _merger = merger ?? new DefaultCanonicalCandidateMerger();
 
-        // R28-B.7 工作包 G：bounded channel。容量 1024 平衡内存上限与突发写入；
-        // DropOldest 保证最新事件优先入队（CI / shadow 采样最新数据更重要）；
+        // R28-B.7 工作包 G / P1-6：bounded channel。容量 1024 平衡内存上限与突发写入；
+        // Wait 模式下队列满时 TryWrite 返回 false，Enqueue 据此递增 _droppedCount，
+        // 使 DropCount 指标准确（DropOldest 模式下 TryWrite 永远返回 true，丢弃不可观测）；
         // SingleReader=true 由单 consumer 保证；SingleWriter=false 允许多线程入队。
         _queue = Channel.CreateBounded<ExperimentEvent>(
             new BoundedChannelOptions(1024)
             {
-                FullMode = BoundedChannelFullMode.DropOldest,
+                FullMode = BoundedChannelFullMode.Wait,
                 SingleReader = true,
                 SingleWriter = false
             });
@@ -254,7 +265,7 @@ public sealed class DecisionExperimentPlaneIntegration : IAsyncDisposable
     /// <summary>R28-B.7 工作包 G：当前队列深度（未消费事件数）。</summary>
     public int QueueDepth => _queue.Reader.Count;
 
-    /// <summary>R28-B.7 工作包 G：累计丢弃事件数（writer 完成后入队失败）。</summary>
+    /// <summary>R28-B.7 工作包 G / P1-6：累计丢弃事件数（队列满时 TryWrite 返回 false，或 writer 完成后入队失败）。</summary>
     public int DroppedCount => _droppedCount;
 
     /// <summary>R28-B.7 工作包 G：累计写入失败事件数（重试 3 次仍未成功，已进 dead-letter）。</summary>
@@ -467,7 +478,10 @@ public sealed class DecisionExperimentPlaneIntegration : IAsyncDisposable
     /// </summary>
     /// <remarks>
     /// 流程：
-    ///   1. 从 fixture.StoredProviderOutputs 合并所有 Provider 的 Envelopes + Materials（按 CanonicalCandidateKey 去重 Materials）。
+    ///   1. 从 fixture.StoredProviderOutputs 合并所有 Provider 的 Envelopes + Materials。
+    ///      R28-B.7 P1-5：使用 <see cref="ICanonicalCandidateMerger"/> 执行正式合并逻辑
+    ///      （冲突检测：相同 CanonicalCandidateKey + 不同 content hash → 抛异常；
+    ///       相同 key + 相同 content hash → 合并 SourceRefs），而非后写覆盖。
     ///   2. 用合并后的候选集合 + StoredPolicySnapshot 构建 Engine 请求。
     ///   3. 调用 <see cref="IContextDecisionEngine.DecideAsync"/>，跳过 Provider/Router/Store。
     /// 与 <see cref="DecisionReplayAsync"/> 的差异：DecisionReplay 直接用 StoredWorkingSet；
@@ -490,26 +504,17 @@ public sealed class DecisionExperimentPlaneIntegration : IAsyncDisposable
         if (fixture.StoredProviderOutputs is null || fixture.StoredProviderOutputs.Count == 0)
             throw new InvalidOperationException("ExpertReplay requires fixture.StoredProviderOutputs (non-empty).");
 
-        // 合并 Provider 输出快照：Envelopes 累加，Materials 按 CanonicalCandidateKey 去重（后写覆盖前写）。
-        var mergedEnvelopes = new List<ContextCandidateEnvelope>();
-        var mergedMaterials = new Dictionary<CanonicalCandidateKey, CandidateMaterial>();
-        foreach (var snapshot in fixture.StoredProviderOutputs)
-        {
-            foreach (var envelope in snapshot.Envelopes)
-            {
-                mergedEnvelopes.Add(envelope);
-            }
-            foreach (var pair in snapshot.Materials)
-            {
-                mergedMaterials[pair.Key] = pair.Value;
-            }
-        }
-
-        var workingSet = new CandidateWorkingSet
-        {
-            Envelopes = mergedEnvelopes,
-            Materials = mergedMaterials
-        };
+        // R28-B.7 P1-5：使用正式合并逻辑（ICanonicalCandidateMerger），而非后写覆盖。
+        // 将 ProviderOutputSnapshot 转换为 ExpertExecutionResult，委托给合并器执行：
+        //   - 相同 CanonicalCandidateKey + 相同 content hash → 合并 SourceRefs（union）；
+        //   - 相同 key + 不同 content hash → 抛 InvalidOperationException（fail-fast，检测冲突）；
+        //   - 不同 EntityVersion → CanonicalKey 自然不同，两个 Material 都保留。
+        // 这与生产路径（DefaultContextDecisionRuntime 调用 _canonicalMerger.Merge）语义一致，
+        // 确保 replay 合并结果与生产一致，不因后写覆盖掩盖冲突。
+        var expertOutputs = fixture.StoredProviderOutputs
+            .Select(snapshot => new ExpertExecutionResult(snapshot.Envelopes, snapshot.Materials))
+            .ToList();
+        var workingSet = _merger.Merge(expertOutputs);
 
         var engineRequest = BuildReplayEngineRequest(fixture, workingSet, "expert-replay");
         return await _engine.DecideAsync(engineRequest, cancellationToken).ConfigureAwait(false);
@@ -730,18 +735,22 @@ public sealed class DecisionExperimentPlaneIntegration : IAsyncDisposable
     // -----------------------------------------------------------------------
 
     /// <summary>
-    /// R28-B.6 Impl-5 / R28-B.7 工作包 G：非阻塞入队。
+    /// R28-B.6 Impl-5 / R28-B.7 工作包 G / P1-6：非阻塞入队。
     /// </summary>
     /// <remarks>
-    /// bounded channel（DropOldest）下：writer 未完成时 TryWrite 返回 true（必要时丢弃最旧事件）；
-    /// writer 已完成（DisposeAsync 后）时 TryWrite 返回 false，此时累加 _droppedCount 并静默丢弃，
-    /// 不再抛异常（避免 shutdown 后调用 RecordFixture 导致进程崩溃）。
+    /// bounded channel（Wait 模式）下：TryWrite 在以下情况返回 false：
+    ///   1. 队列已满（consumer 跟不上写入速率）— R28-B.7 P1-6 修复：DropOldest 模式下
+    ///      TryWrite 永远返回 true（内部静默丢弃最旧事件），DroppedCount 不可信；
+    ///      Wait 模式下 TryWrite 返回 false，此处据此递增 _droppedCount，使指标准确；
+    ///   2. writer 已完成（DisposeAsync 后）— shutdown 后入队失败，计数并丢弃。
+    /// 两种情况均累加 _droppedCount 并静默丢弃，不阻塞调用方，不抛异常
+    /// （避免 shutdown 后或队列满时调用 RecordFixture 导致进程崩溃）。
     /// </remarks>
     private void Enqueue(ExperimentEvent evt)
     {
         if (!_queue.Writer.TryWrite(evt))
         {
-            // writer 已完成（shutdown 后）：计数并丢弃，不阻塞调用方。
+            // 队列满或 writer 已完成：计数并丢弃，不阻塞调用方。
             Interlocked.Increment(ref _droppedCount);
         }
     }
