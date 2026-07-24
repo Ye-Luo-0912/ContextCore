@@ -983,15 +983,22 @@ public sealed record FeaturePipelineContext(
 /// </summary>
 /// <remarks>
 /// rule-only 模式：w_d=1.0, w_m=0.0，FinalScore = DeterministicScore。
+/// R28-D：契约从 void Score 改为 ScoreAsync 返回新列表（immutable record 友好），
+/// 支持模型加权（FinalScore = w_d * Det + w_m * Model）。
 /// </remarks>
 public interface IUtilityScorer
 {
     /// <summary>
-    /// 对候选集合计算效用评分。
+    /// 对候选集合计算效用评分，返回更新后的 envelope 列表。
     /// </summary>
     /// <param name="envelopes">待评分的候选集合。</param>
-    /// <param name="snapshot">有效策略快照。</param>
-    void Score(IReadOnlyList<ContextCandidateEnvelope> envelopes, EffectivePolicySnapshot snapshot);
+    /// <param name="snapshot">有效策略快照（含 Routing.EnableModelScoring / 权重 / 阈值）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>更新后的 envelope 列表（Utility.ModelScore / FinalScore 可能被填充）。</returns>
+    ValueTask<IReadOnlyList<ContextCandidateEnvelope>> ScoreAsync(
+        IReadOnlyList<ContextCandidateEnvelope> envelopes,
+        EffectivePolicySnapshot snapshot,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>

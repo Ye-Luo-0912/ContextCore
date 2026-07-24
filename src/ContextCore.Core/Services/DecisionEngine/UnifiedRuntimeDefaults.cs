@@ -2364,15 +2364,17 @@ public sealed class DefaultEarlyAdmissionGate : IEarlyAdmissionGate
 }
 
 /// <summary>
-/// R28-B B-1：Feature Pipeline 默认骨架。Identity transform（不修改 Envelope）。
+/// R28-D：Feature Pipeline 默认实现。将 ScoreBreakdown 提升为强类型特征字段。
 /// </summary>
 /// <remarks>
-/// B-1 骨架：返回输入 envelopes 不变（rule-only convergence 阶段无需特征工程）。
-/// B-2 将接入真实特征计算（semantic embedding / relation path 标准化）。
+/// rule-only 模式：特征仅记录到 envelope.Features 供 trace（不影响 FinalScore）。
+/// model 模式：特征作为模型输入 FeatureVector 的数据源。
+/// 提升映射：rawTokenMatch→LexicalScore, semanticAnchor→SemanticScore,
+/// recency→RecencyScore, relation→RelationBoost, mandatory→MandatoryWeight。
 /// </remarks>
 public sealed class DefaultFeaturePipeline : IFeaturePipeline
 {
-    /// <summary>计算/标准化候选特征向量。B-1 骨架：identity transform。</summary>
+    /// <summary>计算/标准化候选特征向量。</summary>
     public ValueTask<IReadOnlyList<ContextCandidateEnvelope>> EnrichAsync(
         IReadOnlyList<ContextCandidateEnvelope> envelopes,
         FeaturePipelineContext context,
@@ -2382,8 +2384,75 @@ public sealed class DefaultFeaturePipeline : IFeaturePipeline
         ArgumentNullException.ThrowIfNull(context);
         cancellationToken.ThrowIfCancellationRequested();
 
-        // Identity transform：直接返回输入（envelopes 已是不可变 record）
-        return ValueTask.FromResult<IReadOnlyList<ContextCandidateEnvelope>>(envelopes);
+        // 快速路径：空集合直接返回
+        if (envelopes.Count == 0)
+        {
+            return ValueTask.FromResult<IReadOnlyList<ContextCandidateEnvelope>>(envelopes);
+        }
+
+        var result = new List<ContextCandidateEnvelope>(envelopes.Count);
+        foreach (var envelope in envelopes)
+        {
+            result.Add(EnrichEnvelope(envelope));
+        }
+        return ValueTask.FromResult<IReadOnlyList<ContextCandidateEnvelope>>(result);
+    }
+
+    /// <summary>将 ScoreBreakdown 值提升为强类型字段，并填充 MandatoryWeight。</summary>
+    private static ContextCandidateEnvelope EnrichEnvelope(ContextCandidateEnvelope envelope)
+    {
+        var features = envelope.Features;
+        var breakdown = features.ScoreBreakdown;
+
+        // 如果强类型字段已非零，说明 adapter 已填充，不覆盖
+        var lexical = features.LexicalScore != 0
+            ? features.LexicalScore
+            : TryGet(breakdown, "rawTokenMatch", out var v1) ? v1
+            : TryGet(breakdown, "lexical", out var v1b) ? v1b : 0;
+        var semantic = features.SemanticScore != 0
+            ? features.SemanticScore
+            : TryGet(breakdown, "semanticAnchor", out var v2) ? v2
+            : TryGet(breakdown, "semantic", out var v2b) ? v2b : 0;
+        var recency = features.RecencyScore != 0
+            ? features.RecencyScore
+            : TryGet(breakdown, "recency", out var v3) ? v3 : 0;
+        var relation = features.RelationBoost != 0
+            ? features.RelationBoost
+            : TryGet(breakdown, "relation", out var v4) ? v4
+            : TryGet(breakdown, "relation_boost", out var v4b) ? v4b : 0;
+        var mandatory = features.MandatoryWeight != 0
+            ? features.MandatoryWeight
+            : envelope.Safety.IsMandatory ? 1.0 : 0;
+
+        // 如果所有字段都已有值（无需提升），返回原 envelope 避免分配
+        if (lexical == features.LexicalScore && semantic == features.SemanticScore
+            && recency == features.RecencyScore && relation == features.RelationBoost
+            && mandatory == features.MandatoryWeight)
+        {
+            return envelope;
+        }
+
+        return envelope with
+        {
+            Features = features with
+            {
+                LexicalScore = lexical,
+                SemanticScore = semantic,
+                RecencyScore = recency,
+                RelationBoost = relation,
+                MandatoryWeight = mandatory
+            }
+        };
+    }
+
+    private static bool TryGet(IReadOnlyDictionary<string, double> dict, string key, out double value)
+    {
+        if (dict is null || dict.Count == 0)
+        {
+            value = 0;
+            return false;
+        }
+        return dict.TryGetValue(key, out value);
     }
 }
 
@@ -2490,26 +2559,222 @@ public sealed class DefaultLifecycleGate : ILifecycleGate
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// R28-B B-1：Utility Scorer 默认骨架。rule-only 模式（w_d=1.0, w_m=0.0）。
+/// R28-D：Utility Scorer 默认实现。支持 rule-only 和 model-weighted 两种模式。
 /// </summary>
 /// <remarks>
-/// B-1 骨架：envelopes 是不可变 record，void Score 无法原地修改。
-/// rule-only convergence 阶段：adapter 已在构造 envelope 时填充 DeterministicScore，
-/// FinalScore = DeterministicScore（由 adapter 保证）。
-/// 此骨架实现为 no-op（读取校验 FinalScore 已等于 DeterministicScore）。
-/// B-2 将契约改为 ScoreAsync 返回新列表（与 EnrichAsync 对齐）。
+/// rule-only 模式（EnableModelScoring=false，默认）：FinalScore = DeterministicScore（adapter 已填充），
+/// 直接返回输入不变。
+/// model-weighted 模式（EnableModelScoring=true）：FinalScore = w_d * Det + w_m * Model，
+/// 仅当 ModelConfidence >= threshold 时使用模型加权，否则回退 deterministic 并标记 ReasonCode。
+/// 模型推理失败时静默降级到 deterministic（fail-open，不阻塞主链）。
 /// </remarks>
 public sealed class DefaultUtilityScorer : IUtilityScorer
 {
-    /// <summary>对候选集合计算效用评分。B-1 骨架：no-op（rule-only，adapter 已填充 FinalScore）。</summary>
-    public void Score(IReadOnlyList<ContextCandidateEnvelope> envelopes, EffectivePolicySnapshot snapshot)
+    private readonly IBatchInferenceEngine? _inferenceEngine;
+    private readonly ICalibrationService? _calibrationService;
+    private readonly IFeatureRegistry? _featureRegistry;
+
+    /// <summary>
+    /// 构造 Utility Scorer。
+    /// </summary>
+    /// <param name="inferenceEngine">R28-D：模型批量推理引擎（null 时强制 rule-only）。</param>
+    /// <param name="calibrationService">R28-D：分数校准服务（null 时使用原始模型分数）。</param>
+    /// <param name="featureRegistry">R28-D：特征 schema 注册表（null 时无法构造 FeatureVector，强制 rule-only）。</param>
+    public DefaultUtilityScorer(
+        IBatchInferenceEngine? inferenceEngine = null,
+        ICalibrationService? calibrationService = null,
+        IFeatureRegistry? featureRegistry = null)
+    {
+        _inferenceEngine = inferenceEngine;
+        _calibrationService = calibrationService;
+        _featureRegistry = featureRegistry;
+    }
+
+    /// <summary>对候选集合计算效用评分，返回更新后的 envelope 列表。</summary>
+    public async ValueTask<IReadOnlyList<ContextCandidateEnvelope>> ScoreAsync(
+        IReadOnlyList<ContextCandidateEnvelope> envelopes,
+        EffectivePolicySnapshot snapshot,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(envelopes);
         ArgumentNullException.ThrowIfNull(snapshot);
 
-        // B-1 骨架：rule-only 模式下 FinalScore 应已由 adapter 设置为 DeterministicScore。
-        // 此处仅做读取校验，不修改 envelopes（不可变 record，void 签名无法原地修改）。
-        // B-2 将契约改为 ScoreAsync 返回新列表以支持模型加权。
+        // rule-only 模式：FinalScore 已由 adapter 填充为 DeterministicScore，直接返回。
+        if (!snapshot.Routing.EnableModelScoring)
+        {
+            return envelopes;
+        }
+
+        // model 模式但缺少推理引擎 → 回退 rule-only
+        if (_inferenceEngine is null || _featureRegistry is null)
+        {
+            return envelopes;
+        }
+
+        return await ScoreWithModelAsync(envelopes, snapshot, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>R28-D：模型加权评分路径。</summary>
+    private async ValueTask<IReadOnlyList<ContextCandidateEnvelope>> ScoreWithModelAsync(
+        IReadOnlyList<ContextCandidateEnvelope> envelopes,
+        EffectivePolicySnapshot snapshot,
+        CancellationToken cancellationToken)
+    {
+        var routing = snapshot.Routing;
+        var w_d = routing.DeterministicWeight;
+        var w_m = routing.ModelWeight;
+        var threshold = routing.ModelConfidenceThreshold;
+        var modelArtifactId = routing.ModelArtifactId;
+
+        // 按 ModelVersion 解析 FeatureSchema
+        var featureSchema = _featureRegistry!.Get(_inferenceEngine!.ModelVersion);
+        if (featureSchema is null)
+        {
+            // 无匹配 schema → 回退 rule-only
+            return envelopes;
+        }
+
+        // 构造批量推理请求
+        var featureVectors = new List<FeatureVector>(envelopes.Count);
+        var indexMap = new List<int>(envelopes.Count); // 有效候选索引映射
+
+        for (var i = 0; i < envelopes.Count; i++)
+        {
+            var envelope = envelopes[i];
+            var vector = BuildFeatureVector(envelope, featureSchema);
+            featureVectors.Add(vector!);
+            indexMap.Add(i);
+        }
+
+        if (featureVectors.Count == 0)
+        {
+            return envelopes; // 无可推理候选 → 回退 rule-only
+        }
+
+        // 调用模型批量推理（fail-open：异常降级到 deterministic）
+        BatchInferenceResult inferenceResult;
+        try
+        {
+            inferenceResult = await _inferenceEngine.InferAsync(
+                new BatchInferenceRequest
+                {
+                    Inputs = featureVectors
+                },
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            // 模型推理失败 → 静默降级到 rule-only
+            return envelopes;
+        }
+
+        if (!inferenceResult.Succeeded)
+        {
+            // 推理报告失败 → 降级
+            return envelopes;
+        }
+
+        // 应用校准并聚合 FinalScore
+        var result = new List<ContextCandidateEnvelope>(envelopes.Count);
+        var inferenceIdx = 0;
+        for (var i = 0; i < envelopes.Count; i++)
+        {
+            var envelope = envelopes[i];
+
+            // 未参与推理的候选保持不变
+            if (inferenceIdx >= indexMap.Count || indexMap[inferenceIdx] != i)
+            {
+                result.Add(envelope);
+                continue;
+            }
+
+            var output = inferenceResult.Outputs[inferenceIdx];
+            inferenceIdx++;
+
+            // 校准（如有校准服务）
+            var rawScore = output.Score;
+            var confidence = output.Confidence;
+            var calibratedScore = _calibrationService is not null
+                ? _calibrationService.Calibrate(rawScore, _inferenceEngine.ModelVersion)
+                : rawScore;
+
+            // 低于置信阈值 → 回退 deterministic
+            if (confidence < threshold)
+            {
+                result.Add(envelope with
+                {
+                    Utility = envelope.Utility with
+                    {
+                        ModelScore = calibratedScore,
+                        ModelConfidence = confidence,
+                        FinalScore = envelope.Utility.DeterministicScore,
+                        ReasonCode = "fallback-to-deterministic",
+                        ModelArtifactRef = modelArtifactId
+                    }
+                });
+                continue;
+            }
+
+            // 模型加权：FinalScore = w_d * Det + w_m * Model
+            var finalScore = w_d * envelope.Utility.DeterministicScore + w_m * calibratedScore;
+            result.Add(envelope with
+            {
+                Utility = envelope.Utility with
+                {
+                    ModelScore = calibratedScore,
+                    ModelConfidence = confidence,
+                    FinalScore = finalScore,
+                    ReasonCode = "model-weighted",
+                    ModelArtifactRef = modelArtifactId
+                }
+            });
+        }
+
+        return result;
+    }
+
+    /// <summary>从 envelope 构造模型输入 FeatureVector（按 schema 映射）。</summary>
+    private static FeatureVector BuildFeatureVector(ContextCandidateEnvelope envelope, FeatureSchema schema)
+    {
+        var features = envelope.Features;
+        var values = new Dictionary<string, object>(StringComparer.Ordinal);
+
+        foreach (var def in schema.Features)
+        {
+            object value = def.Name switch
+            {
+                "lexical_score" => features.LexicalScore,
+                "semantic_score" => features.SemanticScore,
+                "recency_score" => features.RecencyScore,
+                "relation_boost" => features.RelationBoost,
+                "mandatory_weight" => features.MandatoryWeight,
+                "deterministic_score" => envelope.Utility.DeterministicScore,
+                _ => TryGetScoreBreakdown(features.ScoreBreakdown, def.Name, out var bd)
+                    ? bd
+                    : 0.0
+            };
+            values[def.Name] = value;
+        }
+
+        return new FeatureVector
+        {
+            SchemaVersion = schema.Version,
+            Values = values
+        };
+    }
+
+    private static bool TryGetScoreBreakdown(IReadOnlyDictionary<string, double> breakdown, string key, out double value)
+    {
+        if (breakdown is null || breakdown.Count == 0)
+        {
+            value = 0;
+            return false;
+        }
+        return breakdown.TryGetValue(key, out value);
     }
 }
 

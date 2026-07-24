@@ -1760,7 +1760,7 @@ M:ContextCore.Abstractions.ITransactionalRelationStore.QueryAsync(ContextCore.Ab
 M:ContextCore.Abstractions.IUtilityLedgerStore.GetExpertContributionsAsync(System.String, System.String, System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IUtilityLedgerStore.GetLatestEntryAsync(System.String, System.String, System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IUtilityLedgerStore.QueryAsync(ContextCore.Abstractions.UtilityLedgerQuery, System.Threading.CancellationToken)
-M:ContextCore.Abstractions.IUtilityScorer.Score(System.Collections.Generic.IReadOnlyList<ContextCore.Abstractions.ContextCandidateEnvelope>, ContextCore.Abstractions.EffectivePolicySnapshot)
+M:ContextCore.Abstractions.IUtilityScorer.ScoreAsync(System.Collections.Generic.IReadOnlyList<ContextCore.Abstractions.ContextCandidateEnvelope>, ContextCore.Abstractions.EffectivePolicySnapshot, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IVectorIndexStore.DeleteAsync(System.String, System.String, System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IVectorIndexStore.GetByItemIdAsync(System.String, System.String, System.String, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IVectorIndexStore.GetDiagnosticsAsync(ContextCore.Abstractions.Models.VectorIndexQuery, System.Threading.CancellationToken)

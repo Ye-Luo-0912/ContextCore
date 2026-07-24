@@ -400,7 +400,12 @@ internal static class CoreExtensions
 		services.AddSingleton<IFeaturePipeline, DefaultFeaturePipeline>();
 		services.AddSingleton<ISafetyGate, DefaultSafetyGate>();
 		services.AddSingleton<ILifecycleGate, DefaultLifecycleGate>();
-		services.AddSingleton<IUtilityScorer, DefaultUtilityScorer>();
+		// R28-D：DefaultUtilityScorer 注入模型推理 + 校准 + 特征 schema（可选）。
+		// null 时强制 rule-only（EnableModelScoring=true 也不触发模型路径）。
+		services.AddSingleton<IUtilityScorer>(sp => new DefaultUtilityScorer(
+			sp.GetService<IBatchInferenceEngine>(),
+			sp.GetService<ICalibrationService>(),
+			sp.GetService<IFeatureRegistry>()));
 		services.AddSingleton<IGlobalAllocator, DefaultGlobalAllocator>();
 		// R28-B.8.1：Allocator V2.1（section rollover + MMR diversity）。
 		// 默认不替换 IGlobalAllocator（仍为 V2.0 DefaultGlobalAllocator）；
@@ -489,7 +494,27 @@ internal static class CoreExtensions
 		// - IBatchInferenceEngine：Deterministic fallback，真实模型不可用时使用 feature hash 产出确定性分数
 		// - ICalibrationService：Platt scaling 默认 A=1 B=0（identity 的 sigmoid 形式）
 		// 三者均为 Singleton 生命周期：无状态/线程安全，可被多个请求共享。
-		services.TryAddSingleton<IFeatureRegistry, DefaultFeatureRegistry>();
+		// R28-D WP-D：IFeatureRegistry 预注册 default schema 匹配 DeterministicBatchInferenceEngine.ModelVersion，
+		// 使 EnableModelScoring=true 时模型路径可实际执行（否则 Get(modelVersion) 返回 null 导致回退 rule-only）。
+		services.TryAddSingleton<IFeatureRegistry>(sp =>
+		{
+			var registry = new DefaultFeatureRegistry();
+			registry.Register(new FeatureSchema
+			{
+				Version = "deterministic-hash-v1",
+				CreatedAt = DateTimeOffset.UtcNow,
+				Features = new[]
+				{
+					new FeatureDefinition { Name = "lexical_score", Type = FeatureType.Numeric, IsRequired = false, DefaultValue = "0" },
+					new FeatureDefinition { Name = "semantic_score", Type = FeatureType.Numeric, IsRequired = false, DefaultValue = "0" },
+					new FeatureDefinition { Name = "recency_score", Type = FeatureType.Numeric, IsRequired = false, DefaultValue = "0" },
+					new FeatureDefinition { Name = "relation_boost", Type = FeatureType.Numeric, IsRequired = false, DefaultValue = "0" },
+					new FeatureDefinition { Name = "mandatory_weight", Type = FeatureType.Numeric, IsRequired = false, DefaultValue = "0" },
+					new FeatureDefinition { Name = "deterministic_score", Type = FeatureType.Numeric, IsRequired = false, DefaultValue = "0" }
+				}
+			});
+			return registry;
+		});
 		services.TryAddSingleton<IBatchInferenceEngine, DeterministicBatchInferenceEngine>();
 		services.TryAddSingleton<ICalibrationService, PlattCalibrationService>();
 

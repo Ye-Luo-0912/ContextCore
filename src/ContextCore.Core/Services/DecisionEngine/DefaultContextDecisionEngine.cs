@@ -115,7 +115,7 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
         if (_safetyGate is not null && _utilityScorer is not null && _globalAllocator is not null
             && request.PolicySnapshot is not null)
         {
-            return ExecuteV2Path(request, cancellationToken);
+            return await ExecuteV2PathAsync(request, cancellationToken).ConfigureAwait(false);
         }
 
         // ---- Legacy 静态路径（向后兼容 R18-2 测试） ----
@@ -291,7 +291,7 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
     /// R28-B.6：V2 决策路径。委托 ISafetyGate → ILifecycleGate → IUtilityScorer → IGlobalAllocator。
     /// Runtime 不再在 Engine 前执行 Safety/Lifecycle/Score（消除重复）。
     /// </summary>
-    private ContextDecisionResult ExecuteV2Path(
+    private async Task<ContextDecisionResult> ExecuteV2PathAsync(
         ContextDecisionRequest request,
         CancellationToken cancellationToken)
     {
@@ -352,10 +352,13 @@ public sealed class DefaultContextDecisionEngine : IContextDecisionEngine
             lifecyclePassed = passing;
         }
 
-        // 阶段 3：UtilityScorer — 委托 IUtilityScorer（原地修改 envelope.Utility）
+        // 阶段 3：UtilityScorer — R28-D：ScoreAsync 返回新列表（immutable record 友好）
         if (lifecyclePassed.Count > 0)
         {
-            _utilityScorer!.Score(lifecyclePassed, snapshot);
+            var scored = await _utilityScorer!.ScoreAsync(lifecyclePassed, snapshot, cancellationToken).ConfigureAwait(false);
+            lifecyclePassed = scored is List<ContextCandidateEnvelope> scoredList
+                ? scoredList
+                : new List<ContextCandidateEnvelope>(scored);
         }
 
         // 阶段 4：GlobalAllocator — 委托 IGlobalAllocator（唯一分配点）
