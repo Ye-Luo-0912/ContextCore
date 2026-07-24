@@ -29,6 +29,7 @@ F:ContextCore.Abstractions.AgentEventLevel.Error
 F:ContextCore.Abstractions.AgentEventLevel.Information
 F:ContextCore.Abstractions.AgentEventLevel.Trace
 F:ContextCore.Abstractions.AgentEventLevel.Warning
+F:ContextCore.Abstractions.AgentKernelInstructionKind.BuildContext
 F:ContextCore.Abstractions.AgentKernelInstructionKind.Checkpoint
 F:ContextCore.Abstractions.AgentKernelInstructionKind.Execute
 F:ContextCore.Abstractions.AgentKernelInstructionKind.Shutdown
@@ -851,6 +852,13 @@ F:ContextCore.Abstractions.StorageProviderKind.Postgres
 F:ContextCore.Abstractions.StorageProviderKind.Unknown
 F:ContextCore.Abstractions.StoreOperationKind.Read
 F:ContextCore.Abstractions.StoreOperationKind.Write
+F:ContextCore.Abstractions.ToolSideEffect.None
+F:ContextCore.Abstractions.ToolSideEffect.ReadOnly
+F:ContextCore.Abstractions.ToolSideEffect.Unknown
+F:ContextCore.Abstractions.ToolSideEffect.Write
+F:ContextCore.Abstractions.TransportFailurePolicy.FailFast
+F:ContextCore.Abstractions.TransportFailurePolicy.FallbackToDeterministic
+F:ContextCore.Abstractions.TransportFailurePolicy.Retry
 M:ContextCore.Abstractions.AdmissionPartition.#ctor(System.Collections.Generic.IReadOnlyList<ContextCore.Abstractions.ContextCandidateEnvelope>, System.Collections.Generic.IReadOnlyList<ContextCore.Abstractions.ContextCandidateEnvelope>, System.Collections.Generic.IReadOnlyDictionary<ContextCore.Abstractions.CanonicalCandidateKey, System.String>)
 M:ContextCore.Abstractions.AdmissionPartition.<Clone>$()
 M:ContextCore.Abstractions.AdmissionPartition.Deconstruct(out System.Collections.Generic.IReadOnlyList<ContextCore.Abstractions.ContextCandidateEnvelope>, out System.Collections.Generic.IReadOnlyList<ContextCore.Abstractions.ContextCandidateEnvelope>, out System.Collections.Generic.IReadOnlyDictionary<ContextCore.Abstractions.CanonicalCandidateKey, System.String>)
@@ -1465,6 +1473,7 @@ M:ContextCore.Abstractions.IAgentContextProjector.Project(ContextCore.Abstractio
 M:ContextCore.Abstractions.IAgentEventStream.QueryAsync(ContextCore.Abstractions.AgentEventQuery, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IAgentEventStream.SubscribeAsync(ContextCore.Abstractions.AgentSessionId, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IAgentKernel.GetStatus()
+M:ContextCore.Abstractions.IAgentKernel.ResumeAsync(ContextCore.Abstractions.AgentCheckpoint, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IAgentKernel.RunAsync(System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IAgentKernel.SubmitAsync(ContextCore.Abstractions.AgentKernelInstruction, System.Threading.CancellationToken)
 M:ContextCore.Abstractions.IAgentKernelTransport.ReceiveAsync(System.Threading.CancellationToken)
@@ -1790,6 +1799,13 @@ M:ContextCore.Abstractions.InferenceOutput.Equals(System.Object)
 M:ContextCore.Abstractions.InferenceOutput.GetHashCode()
 M:ContextCore.Abstractions.InferenceOutput.GetType()
 M:ContextCore.Abstractions.InferenceOutput.ToString()
+M:ContextCore.Abstractions.KernelTransportOptions.#ctor()
+M:ContextCore.Abstractions.KernelTransportOptions.<Clone>$()
+M:ContextCore.Abstractions.KernelTransportOptions.Equals(ContextCore.Abstractions.KernelTransportOptions)
+M:ContextCore.Abstractions.KernelTransportOptions.Equals(System.Object)
+M:ContextCore.Abstractions.KernelTransportOptions.GetHashCode()
+M:ContextCore.Abstractions.KernelTransportOptions.GetType()
+M:ContextCore.Abstractions.KernelTransportOptions.ToString()
 M:ContextCore.Abstractions.LifecycleGateResult.#ctor(System.Boolean, System.String, System.String)
 M:ContextCore.Abstractions.LifecycleGateResult.<Clone>$()
 M:ContextCore.Abstractions.LifecycleGateResult.Deconstruct(out System.Boolean, out System.String, out System.String)
@@ -4413,7 +4429,9 @@ P:ContextCore.Abstractions.AgentKernelInstruction.Metadata (get|init)
 P:ContextCore.Abstractions.AgentKernelInstruction.Payload (get|init)
 P:ContextCore.Abstractions.AgentKernelResult.Error (get|init)
 P:ContextCore.Abstractions.AgentKernelResult.InstructionId (get|init)
+P:ContextCore.Abstractions.AgentKernelResult.LastSnapshotId (get|init)
 P:ContextCore.Abstractions.AgentKernelResult.Output (get|init)
+P:ContextCore.Abstractions.AgentKernelResult.Snapshot (get|init)
 P:ContextCore.Abstractions.AgentKernelResult.Succeeded (get|init)
 P:ContextCore.Abstractions.AgentKernelStatus.LastProcessedAt (get|init)
 P:ContextCore.Abstractions.AgentKernelStatus.PendingCount (get|init)
@@ -4905,6 +4923,10 @@ P:ContextCore.Abstractions.IWriteTransactionScope.IsActive (get)
 P:ContextCore.Abstractions.InferenceOutput.Confidence (get|init)
 P:ContextCore.Abstractions.InferenceOutput.PerClassScores (get|init)
 P:ContextCore.Abstractions.InferenceOutput.Score (get|init)
+P:ContextCore.Abstractions.KernelTransportOptions.Default (get)
+P:ContextCore.Abstractions.KernelTransportOptions.FailurePolicy (get|init)
+P:ContextCore.Abstractions.KernelTransportOptions.MaxRetries (get|init)
+P:ContextCore.Abstractions.KernelTransportOptions.RetryDelay (get|init)
 P:ContextCore.Abstractions.LifecycleGateResult.Detail (get|init)
 P:ContextCore.Abstractions.LifecycleGateResult.Passes (get|init)
 P:ContextCore.Abstractions.LifecycleGateResult.ReasonCode (get|init)
@@ -9051,6 +9073,7 @@ P:ContextCore.Abstractions.ToolDispatchRequest.ToolName (get|init)
 P:ContextCore.Abstractions.ToolDispatchResult.Duration (get|init)
 P:ContextCore.Abstractions.ToolDispatchResult.Error (get|init)
 P:ContextCore.Abstractions.ToolDispatchResult.Result (get|init)
+P:ContextCore.Abstractions.ToolDispatchResult.SideEffect (get|init)
 P:ContextCore.Abstractions.ToolDispatchResult.Succeeded (get|init)
 P:ContextCore.Abstractions.TruncationResult.ActualTokens (get|init)
 P:ContextCore.Abstractions.TruncationResult.TruncatedContent (get|init)
@@ -9330,6 +9353,7 @@ T:ContextCore.Abstractions.IWorkingMemoryService (Interface)
 T:ContextCore.Abstractions.IWriteTransactionScope (Interface)
 T:ContextCore.Abstractions.IWriteTransactionScopeFactory (Interface)
 T:ContextCore.Abstractions.InferenceOutput
+T:ContextCore.Abstractions.KernelTransportOptions
 T:ContextCore.Abstractions.LifecycleGateResult
 T:ContextCore.Abstractions.MandatoryContextWindowExceededException
 T:ContextCore.Abstractions.MandatoryOverflowPolicy (Enum)
@@ -9859,6 +9883,8 @@ T:ContextCore.Abstractions.StoreVersionVector
 T:ContextCore.Abstractions.TokenTruncationResult
 T:ContextCore.Abstractions.ToolDispatchRequest
 T:ContextCore.Abstractions.ToolDispatchResult
+T:ContextCore.Abstractions.ToolSideEffect (Enum)
+T:ContextCore.Abstractions.TransportFailurePolicy (Enum)
 T:ContextCore.Abstractions.TruncationResult
 T:ContextCore.Abstractions.UtilityLedgerEntry
 T:ContextCore.Abstractions.UtilityLedgerQuery

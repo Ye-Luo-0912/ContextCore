@@ -45,6 +45,15 @@ public interface IAgentKernel
     /// <summary>获取当前 Kernel 状态（线程安全快照）。</summary>
     /// <returns>当前状态快照。</returns>
     AgentKernelStatus GetStatus();
+
+    /// <summary>
+    /// R28-C WP-B：从 checkpoint 恢复 Kernel 状态。
+    /// 恢复已提交的 tool 结果（去重，避免重复执行）和上次 AgentContextSnapshot。
+    /// 恢复后可调用 <see cref="RunAsync"/> 继续处理。
+    /// </summary>
+    /// <param name="checkpoint">之前保存的检查点（含已提交 tool 结果 + snapshot 引用）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    ValueTask ResumeAsync(AgentCheckpoint checkpoint, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -83,7 +92,15 @@ public enum AgentKernelInstructionKind : byte
     Checkpoint = 1,
 
     /// <summary>关闭指令：排空 inbox 后停止 Kernel 循环。</summary>
-    Shutdown = 2
+    Shutdown = 2,
+
+    /// <summary>
+    /// R28-C WP-A：构建 Agent Context 指令。
+    /// 调用 IContextDecisionRuntime.ExecuteWithWorkingSetAsync(Purpose=AgentContext) →
+    /// IAgentContextProjector.Project → 产出 AgentContextSnapshot。
+    /// Metadata 必须含 workspaceId / collectionId / sessionId；可选 queryText / tokenBudget / requiredIds。
+    /// </summary>
+    BuildContext = 3
 }
 
 /// <summary>
@@ -120,6 +137,44 @@ public enum AgentKernelState : byte
 
     /// <summary>已停止：循环已退出（Shutdown 完成或取消）。</summary>
     Stopped = 3
+}
+
+/// <summary>
+/// R28-C WP-D：传输失败策略。当 Kernel 通过 Transport 发送/接收失败时的处理方式。
+/// </summary>
+public enum TransportFailurePolicy : byte
+{
+    /// <summary>立即失败：Transport 异常直接抛出，Kernel 循环终止。</summary>
+    FailFast = 0,
+
+    /// <summary>重试：按 MaxRetries + RetryDelay 重试，全部失败后抛出。</summary>
+    Retry = 1,
+
+    /// <summary>
+    /// 降级到确定性结果：Transport 失败后，用确定性算法产出 fallback result，
+    /// 不中断 Kernel 循环（用于 model transport 不可用时的 fail-safe）。
+    /// </summary>
+    FallbackToDeterministic = 2
+}
+
+/// <summary>
+/// R28-C WP-D：Kernel 传输选项。控制 Transport 失败时的重试与降级行为。
+/// </summary>
+public sealed record KernelTransportOptions
+{
+    /// <summary>失败策略（默认 FailFast）。</summary>
+    public TransportFailurePolicy FailurePolicy { get; init; } = TransportFailurePolicy.FailFast;
+
+    /// <summary>最大重试次数（Retry 策略下生效；默认 3）。</summary>
+    public int MaxRetries { get; init; } = 3;
+
+    /// <summary>重试间隔（Retry 策略下生效；默认 100ms）。</summary>
+    public TimeSpan RetryDelay { get; init; } = TimeSpan.FromMilliseconds(100);
+
+    /// <summary>
+    /// 默认选项（FailFast 策略，与 R28-C 之前行为一致）。
+    /// </summary>
+    public static KernelTransportOptions Default { get; } = new();
 }
 
 /// <summary>
@@ -179,6 +234,26 @@ public sealed record ToolDispatchRequest
 }
 
 /// <summary>
+/// R28-C WP-C：Tool 副作用分类。决定恢复时是否自动重放。
+/// </summary>
+public enum ToolSideEffect : byte
+{
+    /// <summary>纯函数，无副作用（如 echo / 只读查询）。恢复时可安全重放。</summary>
+    None = 0,
+
+    /// <summary>只读副作用（如日志/trace 写入，不改变业务状态）。恢复时可重放。</summary>
+    ReadOnly = 1,
+
+    /// <summary>写副作用（改变业务状态，如写入文件/DB）。恢复时使用缓存结果，不重新执行。</summary>
+    Write = 2,
+
+    /// <summary>
+    /// 未知副作用。恢复时<b>不自动重放</b>——需调用方显式确认后才提交。
+    /// </summary>
+    Unknown = 3
+}
+
+/// <summary>
 /// R28-C：Tool 分派结果。
 /// </summary>
 public sealed record ToolDispatchResult
@@ -194,6 +269,12 @@ public sealed record ToolDispatchResult
 
     /// <summary>Tool 执行耗时。</summary>
     public required TimeSpan Duration { get; init; }
+
+    /// <summary>
+    /// R28-C WP-C：Tool 副作用分类。默认 Unknown（保守策略：未声明的 tool 不自动重放）。
+    /// Tool 实现应显式声明副作用类型。EchoToolDispatcher 声明 None。
+    /// </summary>
+    public ToolSideEffect SideEffect { get; init; } = ToolSideEffect.Unknown;
 }
 
 /// <summary>
@@ -216,4 +297,16 @@ public sealed record AgentKernelResult
 
     /// <summary>错误信息（失败时）。</summary>
     public string? Error { get; init; }
+
+    /// <summary>
+    /// R28-C WP-A：BuildContext 指令产出的 AgentContextSnapshot。
+    /// 非 BuildContext 指令时为 null。
+    /// </summary>
+    public AgentContextSnapshot? Snapshot { get; init; }
+
+    /// <summary>
+    /// R28-C WP-B：Checkpoint 指令关联的 SnapshotId（若 BuildContext 在前已产出 snapshot）。
+    /// 用于恢复时定位上次 context 快照。
+    /// </summary>
+    public string? LastSnapshotId { get; init; }
 }

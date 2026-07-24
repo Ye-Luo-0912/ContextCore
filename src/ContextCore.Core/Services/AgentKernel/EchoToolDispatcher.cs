@@ -35,7 +35,9 @@ public sealed class EchoToolDispatcher : IToolDispatcher
         {
             Succeeded = true,
             Result = request.Payload,
-            Duration = TimeSpan.Zero
+            Duration = TimeSpan.Zero,
+            // R28-C WP-C：echo 是纯函数，无副作用，恢复时可安全重放
+            SideEffect = ToolSideEffect.None
         });
     }
 }

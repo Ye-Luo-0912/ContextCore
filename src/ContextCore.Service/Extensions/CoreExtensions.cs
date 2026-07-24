@@ -493,9 +493,11 @@ internal static class CoreExtensions
 		services.TryAddSingleton<IBatchInferenceEngine, DeterministicBatchInferenceEngine>();
 		services.TryAddSingleton<ICalibrationService, PlattCalibrationService>();
 
-		// R28-C：Agent Kernel — 极薄 .NET 决策循环（Transport + ToolDispatcher + Kernel）。
+		// R28-C：Agent Kernel — .NET 决策循环（Transport + ToolDispatcher + Kernel + V2 Runtime）。
 		// 默认实现：InProcessTransport（进程内 Channel）+ EchoToolDispatcher（测试用 echo）+
-		// DefaultAgentKernel（编排 Transport → ToolDispatcher → CheckpointStore）。
+		// DefaultAgentKernel（编排 Transport → ToolDispatcher → CheckpointStore → IContextDecisionRuntime）。
+		// R28-C WP-A：DefaultAgentKernel 额外注入 IContextDecisionRuntime + IAgentContextProjector
+		//（均已在前注册，DI 自动解析）；BuildContext 指令经 V2 路径产出 AgentContextSnapshot。
 		// 生产部署可替换为自定义 IAgentKernelTransport（如 gRPC / WebSocket）和
 		// 自定义 IToolDispatcher（如 MCP tool bridge）。
 		// IAgentCheckpointStore 默认注册 InMemoryAgentCheckpointStore（TryAdd 不覆盖 Postgres 已注册的持久化实现；

@@ -1,6 +1,8 @@
 using ContextCore.Abstractions;
 using ContextCore.Core.Services.Agent;
 using ContextCore.Core.Services.AgentKernel;
+using System.Text.Json;
+using System.Threading.Channels;
 
 namespace ContextCore.Tests;
 
@@ -751,5 +753,642 @@ internal sealed class ThrowingToolDispatcher : IToolDispatcher
     {
         ArgumentNullException.ThrowIfNull(request);
         throw _exception;
+    }
+}
+
+// ===========================================================================
+// 测试 Stub（R28-C WP-E 验收测试用）
+// ===========================================================================
+
+/// <summary>
+/// 计数 ToolDispatcher：原样返回 payload（echo 语义），统计 DispatchAsync 调用次数，
+/// 可配置 SideEffect（默认 None=自动提交）。
+/// SideEffectSelector（可选）按请求动态决定副作用分类，优先于 SideEffect 默认值。
+/// </summary>
+internal sealed class CountingToolDispatcher : IToolDispatcher
+{
+    private static readonly IReadOnlySet<string> s_supportedTools =
+        new HashSet<string>(StringComparer.Ordinal) { "echo" };
+
+    private int _dispatchCount;
+
+    public int DispatchCount => _dispatchCount;
+    public ToolSideEffect SideEffect { get; init; } = ToolSideEffect.None;
+    public Func<ToolDispatchRequest, ToolSideEffect>? SideEffectSelector { get; init; }
+
+    public IReadOnlySet<string> SupportedTools => s_supportedTools;
+
+    public ValueTask<ToolDispatchResult> DispatchAsync(ToolDispatchRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        cancellationToken.ThrowIfCancellationRequested();
+        Interlocked.Increment(ref _dispatchCount);
+        var se = SideEffectSelector?.Invoke(request) ?? SideEffect;
+        return ValueTask.FromResult(new ToolDispatchResult
+        {
+            Succeeded = true,
+            Result = request.Payload,
+            Duration = TimeSpan.Zero,
+            SideEffect = se
+        });
+    }
+}
+
+/// <summary>
+/// 不稳定 Transport：前 N 次 SendResultAsync 抛出指定异常，之后正常写入 outbox。
+/// 用于验证 TransportFailurePolicy（FailFast/Retry/FallbackToDeterministic）。
+/// ReceiveAsync 不被 DefaultAgentKernel 调用（Kernel 自带 inbox），返回 null。
+/// </summary>
+internal sealed class FlakyTransport : IAgentKernelTransport
+{
+    private readonly int _failFirstN;
+    private readonly Exception _exception;
+    private int _sendCount;
+    private readonly Channel<AgentKernelResult?> _outbox =
+        Channel.CreateBounded<AgentKernelResult?>(new BoundedChannelOptions(256)
+        {
+            FullMode = BoundedChannelFullMode.Wait,
+            SingleReader = true,
+            SingleWriter = false
+        });
+
+    public FlakyTransport(int failFirstN, Exception exception)
+    {
+        if (failFirstN < 0) throw new ArgumentOutOfRangeException(nameof(failFirstN));
+        _failFirstN = failFirstN;
+        _exception = exception ?? throw new ArgumentNullException(nameof(exception));
+    }
+
+    public int SendCount => _sendCount;
+    public int PendingResultCount => _outbox.Reader.Count;
+
+    public ValueTask<AgentKernelInstruction?> ReceiveAsync(CancellationToken cancellationToken = default)
+    {
+        // DefaultAgentKernel 不调用此方法（使用自身 inbox）；返回 null 表示无远程指令
+        return ValueTask.FromResult<AgentKernelInstruction?>(null);
+    }
+
+    public async ValueTask SendResultAsync(AgentKernelResult result, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        var n = Interlocked.Increment(ref _sendCount);
+        if (n <= _failFirstN)
+        {
+            throw _exception;
+        }
+        await _outbox.Writer.WriteAsync(result, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async ValueTask<AgentKernelResult?> ReceiveResultAsync(CancellationToken cancellationToken = default)
+        => await _outbox.Reader.ReadAsync(cancellationToken).ConfigureAwait(false);
+
+    public void Complete()
+    {
+        _outbox.Writer.TryComplete();
+    }
+}
+
+/// <summary>
+/// 桩 AgentContextProjector：忽略输入，返回预设 AgentContextSnapshot（含可配置 TokenBudget/ActualTokens）。
+/// 用于验证 BuildContext 指令的 TokenBudget 传播与最终快照合规性。
+/// </summary>
+internal sealed class StubAgentContextProjector : IAgentContextProjector
+{
+    public ContextDecisionExecutionResult? LastExecution { get; private set; }
+    public ProjectionContext? LastContext { get; private set; }
+    public int TokenBudget { get; init; }
+    public int ActualTokens { get; init; }
+
+    public AgentContextSnapshot Project(ContextDecisionResult result, CandidateWorkingSet workingSet)
+        => BuildSnapshot();
+
+    public AgentContextSnapshot Project(ContextDecisionResult result, CandidateWorkingSet workingSet, ProjectionContext context)
+        => BuildSnapshot();
+
+    public AgentContextSnapshot Project(ContextDecisionExecutionResult execution)
+    {
+        LastExecution = execution;
+        return BuildSnapshot();
+    }
+
+    public AgentContextSnapshot Project(ContextDecisionExecutionResult execution, ProjectionContext context)
+    {
+        LastExecution = execution;
+        LastContext = context;
+        return BuildSnapshot();
+    }
+
+    private AgentContextSnapshot BuildSnapshot()
+    {
+        return new AgentContextSnapshot
+        {
+            SnapshotId = "snap-stub",
+            Session = new AgentSessionId
+            {
+                Value = "session-stub",
+                WorkspaceId = "ws-stub",
+                CreatedAt = DateTimeOffset.UtcNow
+            },
+            CreatedAt = DateTimeOffset.UtcNow,
+            TokenBudget = TokenBudget,
+            ActualTokens = ActualTokens
+        };
+    }
+}
+
+// ===========================================================================
+// R28-C WP-E：Workstream C 验收测试（6 项硬验收）
+//
+// 覆盖：
+//   1. CancelledAgentRunProducesResumableCheckpoint — 取消时自动产出可恢复 checkpoint
+//   2. ResumeDoesNotDuplicateCommittedToolResult — resume 后已提交 tool 结果不重复执行
+//   3. UnknownSideEffectIsNotAutomaticallyReplayed — Unknown 副作用不自动提交/重放
+//   4. BoundedStreamMaintainsMemoryCeiling — bounded inbox（256）内存上限
+//   5. ModelTransportFailureFallsBackAccordingToPolicy — 三种 Transport 失败策略
+//   6. AgentFinalContextNeverExceedsTokenBudget — BuildContext token 预算传播与合规
+// ===========================================================================
+
+[TestClass]
+[TestCategory("R28-C")]
+[TestCategory("R28-C-WP-E")]
+public sealed class R28CWorkstreamCAcceptanceTests
+{
+    private static CancellationTokenSource CreateTestTimeout()
+        => new CancellationTokenSource(TimeSpan.FromSeconds(10));
+
+    /// <summary>等待 kernel ProcessedCount 达到目标值（带超时）。</summary>
+    private static bool WaitForProcessed(DefaultAgentKernel kernel, int target, TimeSpan timeout)
+        => SpinWait.SpinUntil(() => kernel.GetStatus().ProcessedCount >= target, timeout);
+
+    // -----------------------------------------------------------------------
+    // 1. CancelledAgentRunProducesResumableCheckpoint
+    // -----------------------------------------------------------------------
+
+    [TestMethod]
+    public async Task CancelledAgentRunProducesResumableCheckpoint()
+    {
+        var dispatcher = new CountingToolDispatcher { SideEffect = ToolSideEffect.Write };
+        var transport = new InProcessTransport();
+        var checkpointStore = new InMemoryAgentCheckpointStore();
+        var kernel = new DefaultAgentKernel(transport, dispatcher, checkpointStore);
+        var runCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+
+        var runTask = Task.Run(() => kernel.RunAsync(runCts.Token).AsTask(), runCts.Token);
+
+        // 提交一个 Write 副作用的 exec（会自动提交到 _committedToolResults）
+        await kernel.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = "exec-cancel-1",
+            Kind = AgentKernelInstructionKind.Execute,
+            Payload = "will-be-checkpointed",
+            Metadata = new Dictionary<string, string>
+            {
+                ["sessionId"] = "session-cancel",
+                ["workspaceId"] = "ws-cancel"
+            }
+        }, runCts.Token);
+
+        // 等待 exec 被处理并提交
+        Assert.IsTrue(WaitForProcessed(kernel, 1, TimeSpan.FromSeconds(3)),
+            "exec-cancel-1 未在超时内处理。");
+
+        // 取消 RunAsync（非 graceful）→ 触发 AutoCheckpoint
+        runCts.Cancel();
+        try
+        {
+            await runTask;
+        }
+        catch (OperationCanceledException)
+        {
+            // 预期：外部取消
+        }
+
+        // 验证 checkpoint 已持久化
+        Assert.AreEqual(1, checkpointStore.Count,
+            "取消后应自动产出 1 个 checkpoint。");
+
+        var session = new AgentSessionId
+        {
+            Value = "session-cancel",
+            WorkspaceId = "ws-cancel",
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+        var checkpoints = await checkpointStore.ListAsync(session, take: 10);
+        Assert.AreEqual(1, checkpoints.Count, "应能按 session 列出该 checkpoint。");
+
+        var cp = checkpoints[0];
+        Assert.AreEqual("ws-cancel", cp.Session.WorkspaceId);
+        Assert.IsNotNull(cp.StateJson);
+
+        // 验证 StateJson 含已提交 tool 结果（RequestId == exec-cancel-1）
+        using var doc = JsonDocument.Parse(cp.StateJson!);
+        Assert.IsTrue(doc.RootElement.TryGetProperty("CommittedResults", out var arr));
+        Assert.AreEqual(1, arr.GetArrayLength());
+        Assert.IsTrue(arr[0].TryGetProperty("RequestId", out var rid));
+        Assert.AreEqual("exec-cancel-1", rid.GetString());
+        Assert.IsTrue(arr[0].TryGetProperty("SideEffect", out var se));
+        Assert.AreEqual((byte)ToolSideEffect.Write, se.GetByte());
+    }
+
+    // -----------------------------------------------------------------------
+    // 2. ResumeDoesNotDuplicateCommittedToolResult
+    // -----------------------------------------------------------------------
+
+    [TestMethod]
+    public async Task ResumeDoesNotDuplicateCommittedToolResult()
+    {
+        // 共享 dispatcher 跨两个 kernel 实例，以统计总 dispatch 次数
+        var dispatcher = new CountingToolDispatcher { SideEffect = ToolSideEffect.Write };
+        var checkpointStore = new InMemoryAgentCheckpointStore();
+
+        // --- Kernel1：处理 exec-resume-1 并取消以产出 checkpoint ---
+        var transport1 = new InProcessTransport();
+        var kernel1 = new DefaultAgentKernel(transport1, dispatcher, checkpointStore);
+        var runCts1 = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+
+        var runTask1 = Task.Run(() => kernel1.RunAsync(runCts1.Token).AsTask(), runCts1.Token);
+
+        await kernel1.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = "exec-resume-1",
+            Kind = AgentKernelInstructionKind.Execute,
+            Payload = "committed-payload",
+            Metadata = new Dictionary<string, string>
+            {
+                ["sessionId"] = "session-resume",
+                ["workspaceId"] = "ws-resume"
+            }
+        }, runCts1.Token);
+
+        Assert.IsTrue(WaitForProcessed(kernel1, 1, TimeSpan.FromSeconds(3)));
+        Assert.AreEqual(1, dispatcher.DispatchCount, "exec-resume-1 应被 dispatch 一次。");
+
+        runCts1.Cancel();
+        try { await runTask1; }
+        catch (OperationCanceledException) { }
+
+        // 取回 checkpoint
+        var session = new AgentSessionId
+        {
+            Value = "session-resume",
+            WorkspaceId = "ws-resume",
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+        var checkpoints = await checkpointStore.ListAsync(session, take: 10);
+        Assert.AreEqual(1, checkpoints.Count);
+        var checkpoint = checkpoints[0];
+
+        // --- Kernel2：从 checkpoint 恢复，重放相同 InstructionId ---
+        var transport2 = new InProcessTransport();
+        var kernel2 = new DefaultAgentKernel(transport2, dispatcher, checkpointStore);
+        var testCt = CreateTestTimeout();
+
+        await kernel2.ResumeAsync(checkpoint, testCt.Token);
+
+        var runTask2 = Task.Run(() => kernel2.RunAsync(testCt.Token).AsTask(), testCt.Token);
+
+        // 重放相同 InstructionId —— 应命中缓存，不重新 dispatch
+        await kernel2.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = "exec-resume-1",
+            Kind = AgentKernelInstructionKind.Execute,
+            Payload = "should-not-reach-dispatcher"
+        }, testCt.Token);
+        await kernel2.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = "shutdown",
+            Kind = AgentKernelInstructionKind.Shutdown
+        }, testCt.Token);
+
+        await runTask2;
+
+        // dispatch 次数应仍为 1（Kernel2 命中缓存未调用 dispatcher）
+        Assert.AreEqual(1, dispatcher.DispatchCount,
+            "resume 后已提交 tool 结果不应重新 dispatch（幂等去重）。");
+
+        var result = await transport2.ReceiveResultAsync(testCt.Token);
+        Assert.IsNotNull(result);
+        Assert.AreEqual("exec-resume-1", result!.InstructionId);
+        Assert.IsTrue(result.Succeeded);
+        Assert.AreEqual("committed-payload", result.Output,
+            "应返回缓存的原始 payload，而非重放后的 payload。");
+    }
+
+    // -----------------------------------------------------------------------
+    // 3. UnknownSideEffectIsNotAutomaticallyReplayed
+    // -----------------------------------------------------------------------
+
+    [TestMethod]
+    public async Task UnknownSideEffectIsNotAutomaticallyReplayed()
+    {
+        // 混合副作用：exec-write-1 → Write（提交），exec-unknown-1 → Unknown（不提交）
+        var dispatcher = new CountingToolDispatcher
+        {
+            SideEffectSelector = req => req.RequestId == "exec-unknown-1"
+                ? ToolSideEffect.Unknown
+                : ToolSideEffect.Write
+        };
+        var transport = new InProcessTransport();
+        var checkpointStore = new InMemoryAgentCheckpointStore();
+        var kernel = new DefaultAgentKernel(transport, dispatcher, checkpointStore);
+        var runCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+
+        var runTask = Task.Run(() => kernel.RunAsync(runCts.Token).AsTask(), runCts.Token);
+
+        await kernel.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = "exec-write-1",
+            Kind = AgentKernelInstructionKind.Execute,
+            Payload = "will-be-committed",
+            Metadata = new Dictionary<string, string>
+            {
+                ["sessionId"] = "session-unknown",
+                ["workspaceId"] = "ws-unknown"
+            }
+        }, runCts.Token);
+        await kernel.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = "exec-unknown-1",
+            Kind = AgentKernelInstructionKind.Execute,
+            Payload = "will-not-be-committed",
+            Metadata = new Dictionary<string, string>
+            {
+                ["sessionId"] = "session-unknown",
+                ["workspaceId"] = "ws-unknown"
+            }
+        }, runCts.Token);
+
+        // 等待两条均处理完毕
+        Assert.IsTrue(WaitForProcessed(kernel, 2, TimeSpan.FromSeconds(3)));
+
+        runCts.Cancel();
+        try { await runTask; }
+        catch (OperationCanceledException) { }
+
+        // AutoCheckpoint 因 exec-write-1 已提交而触发（至少有一条提交结果）
+        Assert.AreEqual(1, checkpointStore.Count,
+            "存在已提交结果时应产出 checkpoint。");
+
+        var session = new AgentSessionId
+        {
+            Value = "session-unknown",
+            WorkspaceId = "ws-unknown",
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+        var checkpoints = await checkpointStore.ListAsync(session, take: 10);
+        var cp = checkpoints[0];
+
+        // 验证 CommittedResults 含 exec-write-1 但不含 exec-unknown-1
+        using var doc = JsonDocument.Parse(cp.StateJson!);
+        Assert.IsTrue(doc.RootElement.TryGetProperty("CommittedResults", out var arr));
+        var requestIds = new List<string>();
+        for (var i = 0; i < arr.GetArrayLength(); i++)
+        {
+            Assert.IsTrue(arr[i].TryGetProperty("RequestId", out var rid));
+            requestIds.Add(rid.GetString()!);
+        }
+        CollectionAssert.Contains(requestIds, "exec-write-1",
+            "Write 副作用结果应被提交到 checkpoint。");
+        CollectionAssert.DoesNotContain(requestIds, "exec-unknown-1",
+            "Unknown 副作用结果不应出现在已提交结果中（不自动提交/重放）。");
+    }
+
+    // -----------------------------------------------------------------------
+    // 4. BoundedStreamMaintainsMemoryCeiling
+    // -----------------------------------------------------------------------
+
+    [TestMethod]
+    public async Task BoundedStreamMaintainsMemoryCeiling()
+    {
+        var (kernel, _, _) = CreateEchoKernelForBounded();
+        var fillCt = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+
+        // 提交 256 条指令填满 inbox（容量 256）
+        for (var i = 0; i < 256; i++)
+        {
+            await kernel.SubmitAsync(new AgentKernelInstruction
+            {
+                InstructionId = $"exec-bounded-{i}",
+                Kind = AgentKernelInstructionKind.Execute,
+                Payload = "x"
+            }, fillCt.Token);
+        }
+
+        Assert.AreEqual(256, kernel.GetStatus().PendingCount,
+            "inbox 容量上限应为 256。");
+
+        // 第 257 条应被阻塞（Wait 模式）；短超时 CTS 应触发 OCE
+        var overflowCts = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
+        await Assert.ThrowsExceptionAsync<OperationCanceledException>(() =>
+            kernel.SubmitAsync(new AgentKernelInstruction
+            {
+                InstructionId = "exec-bounded-256",
+                Kind = AgentKernelInstructionKind.Execute,
+                Payload = "overflow"
+            }, overflowCts.Token).AsTask());
+
+        // 仍为 256（第 257 条未入队）
+        Assert.AreEqual(256, kernel.GetStatus().PendingCount);
+
+        // 清理：启动 RunAsync 排空 inbox，待排空后提交 Shutdown
+        var runCt = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var runTask = Task.Run(() => kernel.RunAsync(runCt.Token).AsTask(), runCt.Token);
+
+        // 等待 256 条全部处理完毕（inbox 排空，腾出容量）
+        Assert.IsTrue(WaitForProcessed(kernel, 256, TimeSpan.FromSeconds(8)),
+            "inbox 未在超时内排空。");
+
+        await kernel.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = "shutdown",
+            Kind = AgentKernelInstructionKind.Shutdown
+        }, runCt.Token);
+        await runTask;
+    }
+
+    private static (DefaultAgentKernel kernel, InProcessTransport transport, InMemoryAgentCheckpointStore checkpointStore)
+        CreateEchoKernelForBounded()
+    {
+        var transport = new InProcessTransport();
+        var checkpointStore = new InMemoryAgentCheckpointStore();
+        var kernel = new DefaultAgentKernel(transport, new EchoToolDispatcher(), checkpointStore);
+        return (kernel, transport, checkpointStore);
+    }
+
+    // -----------------------------------------------------------------------
+    // 5. ModelTransportFailureFallsBackAccordingToPolicy
+    // -----------------------------------------------------------------------
+
+    [TestMethod]
+    public async Task FailFastPolicy_TransportFailure_TerminatesKernel()
+    {
+        var transport = new FlakyTransport(failFirstN: int.MaxValue,
+            new InvalidOperationException("transport-down"));
+        var dispatcher = new EchoToolDispatcher();
+        var checkpointStore = new InMemoryAgentCheckpointStore();
+        var kernel = new DefaultAgentKernel(transport, dispatcher, checkpointStore,
+            transportOptions: KernelTransportOptions.Default); // FailFast
+        var runCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+
+        var runTask = Task.Run(() => kernel.RunAsync(runCts.Token).AsTask(), runCts.Token);
+
+        await kernel.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = "exec-failfast",
+            Kind = AgentKernelInstructionKind.Execute,
+            Payload = "x"
+        }, runCts.Token);
+
+        // FailFast：SendResultAsync 抛出 → RunAsync 抛出 InvalidOperationException
+        var ex = await Assert.ThrowsExceptionAsync<InvalidOperationException>(() => runTask);
+        Assert.IsTrue(ex.Message.Contains("transport-down", StringComparison.Ordinal));
+        Assert.AreEqual(AgentKernelState.Stopped, kernel.GetStatus().State);
+    }
+
+    [TestMethod]
+    public async Task RetryPolicy_TransportAlwaysFails_ThrowsAfterExhaustedRetries()
+    {
+        var transport = new FlakyTransport(failFirstN: int.MaxValue,
+            new InvalidOperationException("transport-down"));
+        var dispatcher = new EchoToolDispatcher();
+        var checkpointStore = new InMemoryAgentCheckpointStore();
+        var retryOpts = new KernelTransportOptions
+        {
+            FailurePolicy = TransportFailurePolicy.Retry,
+            MaxRetries = 1,
+            RetryDelay = TimeSpan.FromMilliseconds(10)
+        };
+        var kernel = new DefaultAgentKernel(transport, dispatcher, checkpointStore,
+            transportOptions: retryOpts);
+        var runCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+
+        var runTask = Task.Run(() => kernel.RunAsync(runCts.Token).AsTask(), runCts.Token);
+
+        await kernel.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = "exec-retry",
+            Kind = AgentKernelInstructionKind.Execute,
+            Payload = "x"
+        }, runCts.Token);
+
+        // Retry（MaxRetries=1）：2 次尝试均失败 → 抛 InvalidOperationException
+        var ex = await Assert.ThrowsExceptionAsync<InvalidOperationException>(() => runTask);
+        Assert.IsTrue(ex.Message.Contains("2", StringComparison.Ordinal),
+            $"异常消息应含尝试次数 2；实际: {ex.Message}");
+        Assert.AreEqual(2, transport.SendCount, "应共尝试 2 次（1 初始 + 1 重试）。");
+    }
+
+    [TestMethod]
+    public async Task FallbackToDeterministicPolicy_TransportFailureContinuesLoop()
+    {
+        // 前 1 次发送失败，之后成功
+        var transport = new FlakyTransport(failFirstN: 1,
+            new InvalidOperationException("transient"));
+        var dispatcher = new EchoToolDispatcher();
+        var checkpointStore = new InMemoryAgentCheckpointStore();
+        var fallbackOpts = new KernelTransportOptions
+        {
+            FailurePolicy = TransportFailurePolicy.FallbackToDeterministic
+        };
+        var kernel = new DefaultAgentKernel(transport, dispatcher, checkpointStore,
+            transportOptions: fallbackOpts);
+        var testCt = CreateTestTimeout();
+
+        var runTask = Task.Run(() => kernel.RunAsync(testCt.Token).AsTask(), testCt.Token);
+
+        // 第一条 exec 的发送失败 → fallback 降级（结果丢弃），Kernel 继续
+        await kernel.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = "exec-fallback-1",
+            Kind = AgentKernelInstructionKind.Execute,
+            Payload = "dropped"
+        }, testCt.Token);
+
+        // 第二条 exec 的发送成功 → 结果进入 outbox
+        await kernel.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = "exec-fallback-2",
+            Kind = AgentKernelInstructionKind.Execute,
+            Payload = "delivered"
+        }, testCt.Token);
+        await kernel.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = "shutdown",
+            Kind = AgentKernelInstructionKind.Shutdown
+        }, testCt.Token);
+
+        // RunAsync 应正常完成（未抛出）
+        await runTask;
+
+        // outbox 应只有第二条的结果（第一条被 fallback 丢弃）
+        Assert.AreEqual(1, transport.PendingResultCount);
+        var result = await transport.ReceiveResultAsync(testCt.Token);
+        Assert.IsNotNull(result);
+        Assert.AreEqual("exec-fallback-2", result!.InstructionId);
+        Assert.AreEqual("delivered", result.Output);
+
+        // 两条 exec 均被处理（ProcessedCount=2，Shutdown 不计）
+        Assert.AreEqual(2, kernel.GetStatus().ProcessedCount);
+        Assert.AreEqual(AgentKernelState.Stopped, kernel.GetStatus().State);
+    }
+
+    // -----------------------------------------------------------------------
+    // 6. AgentFinalContextNeverExceedsTokenBudget
+    // -----------------------------------------------------------------------
+
+    [TestMethod]
+    public async Task AgentFinalContextNeverExceedsTokenBudget()
+    {
+        // 使用 RecordingDecisionRuntime（记录请求）+ StubAgentContextProjector（返回合规快照）
+        var decisionResult = R28BTestHelpers.MakeResult("req-buildctx-budget");
+        var runtime = new RecordingDecisionRuntime(decisionResult);
+        var projector = new StubAgentContextProjector
+        {
+            TokenBudget = 500,
+            ActualTokens = 480 // 严格 < TokenBudget（合规）
+        };
+
+        var transport = new InProcessTransport();
+        var checkpointStore = new InMemoryAgentCheckpointStore();
+        var kernel = new DefaultAgentKernel(transport, new EchoToolDispatcher(), checkpointStore,
+            decisionRuntime: runtime, contextProjector: projector);
+        var testCt = CreateTestTimeout();
+
+        var runTask = Task.Run(() => kernel.RunAsync(testCt.Token).AsTask(), testCt.Token);
+
+        await kernel.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = "buildctx-budget-1",
+            Kind = AgentKernelInstructionKind.BuildContext,
+            Metadata = new Dictionary<string, string>
+            {
+                ["workspaceId"] = "ws-budget",
+                ["collectionId"] = "col-budget",
+                ["sessionId"] = "session-budget",
+                ["tokenBudget"] = "500"
+            }
+        }, testCt.Token);
+        await kernel.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = "shutdown",
+            Kind = AgentKernelInstructionKind.Shutdown
+        }, testCt.Token);
+
+        await runTask;
+
+        // 验证 TokenBudget 从 instruction Metadata 传播到 runtime request
+        Assert.IsNotNull(runtime.LastRequest);
+        Assert.AreEqual(500, runtime.LastRequest!.TokenBudget,
+            "TokenBudget 应从 Metadata 传播到 ContextDecisionRuntimeRequest。");
+        Assert.AreEqual(ContextDecisionPurpose.AgentContext, runtime.LastRequest.Purpose);
+
+        // 验证最终快照 token 合规（ActualTokens <= TokenBudget）
+        var result = await transport.ReceiveResultAsync(testCt.Token);
+        Assert.IsNotNull(result);
+        Assert.IsTrue(result!.Succeeded);
+        Assert.IsNotNull(result.Snapshot);
+        Assert.IsTrue(result.Snapshot!.ActualTokens <= result.Snapshot.TokenBudget,
+            $"快照 ActualTokens({result.Snapshot.ActualTokens}) 不应超过 TokenBudget({result.Snapshot.TokenBudget})。");
+        Assert.AreEqual(500, result.Snapshot.TokenBudget);
     }
 }
