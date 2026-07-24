@@ -60,7 +60,28 @@ public sealed class DefaultAgentKernel : IAgentKernel
     // R28-C WP-C：已提交的 tool 结果（按 RequestId 索引）。
     // SideEffect != Unknown 的结果自动提交；Unknown 需显式 Ack 后才提交。
     // 已提交的结果在 resume 时可安全重放（返回缓存结果不重新执行）。
+    // R28-G P1-5：以 FIFO 容量上限淘汰最旧条目，避免长会话无界增长。
     private readonly Dictionary<string, ToolDispatchResult> _committedToolResults = new(StringComparer.Ordinal);
+
+    // R28-G P1-5：committed result 的序号（与 _committedToolResults 并行维护）。
+    // 用于 delta checkpoint：仅序列化 Sequence > _lastCheckpointSequence 的新增条目。
+    private readonly Dictionary<string, long> _committedResultSequences = new(StringComparer.Ordinal);
+
+    // R28-G P1-5：FIFO 插入顺序队列，用于在容量超限时淘汰最旧条目。
+    private readonly Queue<string> _committedResultOrder = new();
+
+    // R28-G P1-5：committed result 容量上限（默认 1024）。超过时按 FIFO 淘汰。
+    private readonly int _maxCommittedResults = DefaultMaxCommittedResults;
+
+    // R28-G P1-5：committed result 单调递增序号；每次新增条目 +1。
+    private long _committedResultSequence;
+
+    // R28-G P1-5：上次成功 checkpoint 覆盖的最大 Sequence（0 = 从未 checkpoint）。
+    // 工厂据此决定 Delta（>0）或 Full（==0）模式。
+    private long _lastCheckpointSequence;
+
+    // R28-G P1-5：上次成功 checkpoint 的 ID（用于 delta 链 BaseCheckpointId 链接）。
+    private string? _lastCheckpointId;
 
     // R28-E P1-3：pending 的 Unknown 副作用 tool 结果（按 RequestId 索引）。
     // 等待 AcknowledgeToolResult 移到 _committedToolResults 或 RejectToolResult 丢弃。
@@ -71,6 +92,12 @@ public sealed class DefaultAgentKernel : IAgentKernel
     private string _lastSessionId = "kernel-default-session";
     private string _lastWorkspaceId = "kernel-default-workspace";
     private bool _gracefulShutdown;
+
+    /// <summary>
+    /// R28-G P1-5：committed result 默认容量上限（1024 条）。
+    /// 长会话下 _committedToolResults 不会无界增长；旧条目按 FIFO 淘汰。
+    /// </summary>
+    public const int DefaultMaxCommittedResults = 1024;
 
     /// <summary>
     /// 构造默认 Agent Kernel。
@@ -99,6 +126,9 @@ public sealed class DefaultAgentKernel : IAgentKernel
     /// <param name="dispatchJournal">
     /// R28-E P1-4：tool 分派 journal（exactly-once 语义）。null 时退回进程内去重（不保证崩溃恢复）。
     /// </param>
+    /// <param name="maxCommittedResults">
+    /// R28-G P1-5：_committedToolResults 容量上限。超过时按 FIFO 淘汰最旧条目。null 或 &lt;= 0 时使用默认 1024。
+    /// </param>
     public DefaultAgentKernel(
         IAgentKernelTransport transport,
         IToolDispatcher toolDispatcher,
@@ -109,7 +139,8 @@ public sealed class DefaultAgentKernel : IAgentKernel
         IKernelResultOutbox? resultOutbox = null,
         IAgentCheckpointFactory? checkpointFactory = null,
         IAgentContextSnapshotStore? snapshotStore = null,
-        IToolDispatchJournal? dispatchJournal = null)
+        IToolDispatchJournal? dispatchJournal = null,
+        int? maxCommittedResults = null)
     {
         _transport = transport ?? throw new ArgumentNullException(nameof(transport));
         _toolDispatcher = toolDispatcher ?? throw new ArgumentNullException(nameof(toolDispatcher));
@@ -120,8 +151,10 @@ public sealed class DefaultAgentKernel : IAgentKernel
         _resultOutbox = resultOutbox;
         _snapshotStore = snapshotStore;
         _dispatchJournal = dispatchJournal;
+        _maxCommittedResults = maxCommittedResults is > 0 ? maxCommittedResults.Value : DefaultMaxCommittedResults;
 
         // R28-E P1-1：若未注入 checkpointFactory，使用默认实现（绑定到当前 Kernel 状态访问器）
+        // R28-G P1-5：accessor 暴露 delta cursor + pending results，支持 delta checkpoint
         if (checkpointFactory is not null)
         {
             _checkpointFactory = checkpointFactory;
@@ -130,7 +163,11 @@ public sealed class DefaultAgentKernel : IAgentKernel
         {
             var accessor = new DefaultAgentCheckpointFactory.KernelStateAccessor(
                 getLastSnapshotId: () => _lastSnapshot?.SnapshotId,
-                getCommittedResults: () => _committedToolResults);
+                getCommittedResults: () => _committedToolResults,
+                getCommittedResultSequences: () => _committedResultSequences,
+                getPendingResults: () => _pendingToolResults,
+                getLastCheckpointSequence: () => _lastCheckpointSequence,
+                getLastCheckpointId: () => _lastCheckpointId);
             _checkpointFactory = new DefaultAgentCheckpointFactory(accessor);
         }
 
@@ -404,7 +441,8 @@ public sealed class DefaultAgentKernel : IAgentKernel
         // Unknown 不自动提交——存入 pending，等待 Acknowledge/Reject
         if (dispatchResult.SideEffect != ToolSideEffect.Unknown)
         {
-            _committedToolResults[instruction.InstructionId] = dispatchResult;
+            // R28-G P1-5：通过 helper 维护 FIFO 顺序 + 容量淘汰 + 序号分配
+            AddCommittedResult(instruction.InstructionId, dispatchResult);
 
             // R28-E P1-4：标记 Committed（若注入了 journal）
             if (_dispatchJournal is not null)
@@ -462,6 +500,9 @@ public sealed class DefaultAgentKernel : IAgentKernel
         }
 
         await _checkpointStore.SaveAsync(checkpoint, cancellationToken).ConfigureAwait(false);
+
+        // R28-G P1-5：推进 cursor，下次 Checkpoint 指令走 Delta 路径
+        AdvanceCheckpointCursor(checkpoint);
 
         return new AgentKernelResult
         {
@@ -624,9 +665,9 @@ public sealed class DefaultAgentKernel : IAgentKernel
             };
         }
 
-        // 移到 committed
+        // 移到 committed（R28-G P1-5：通过 helper 维护 FIFO + 序号）
         _pendingToolResults.Remove(requestId);
-        _committedToolResults[requestId] = pending;
+        AddCommittedResult(requestId, pending);
 
         // R28-E P1-4：标记 Committed（若注入了 journal）
         if (_dispatchJournal is not null)
@@ -881,25 +922,74 @@ public sealed class DefaultAgentKernel : IAgentKernel
     {
         ArgumentNullException.ThrowIfNull(checkpoint);
 
+        // R28-G P1-5：清空 in-memory 状态（resume 总是从 checkpoint 完整重建）。
+        // 防止旧数据与新 checkpoint 混合；resume 后下次 checkpoint 为 Full 模式（cursor 重置为 0）。
+        _committedToolResults.Clear();
+        _committedResultSequences.Clear();
+        _committedResultOrder.Clear();
+        _pendingToolResults.Clear();
+        _committedResultSequence = 0;
+        _lastCheckpointSequence = 0;
+        _lastCheckpointId = null;
+
         // 反序列化 checkpoint StateJson → 恢复已提交 tool 结果
         if (!string.IsNullOrWhiteSpace(checkpoint.StateJson))
         {
             try
             {
                 var state = JsonSerializer.Deserialize<DefaultAgentCheckpointFactory.KernelCheckpointStateDto>(checkpoint.StateJson);
-                if (state?.CommittedResults is not null)
+                if (state is not null)
                 {
-                    foreach (var entry in state.CommittedResults)
+                    // R28-G P1-5：Delta 模式需先加载 BaseCheckpoint（递归到 Full），再 apply delta 条目。
+                    if (state.Mode == DefaultAgentCheckpointFactory.CheckpointMode.Delta
+                        && !string.IsNullOrEmpty(state.BaseCheckpointId)
+                        && _checkpointStore is not null)
                     {
-                        _committedToolResults[entry.RequestId] = new ToolDispatchResult
+                        var baseCheckpoint = await _checkpointStore.GetAsync(
+                            checkpoint.Session?.WorkspaceId ?? checkpoint.Session?.Value ?? string.Empty,
+                            state.BaseCheckpointId, cancellationToken).ConfigureAwait(false);
+                        if (baseCheckpoint is not null)
                         {
-                            Succeeded = entry.Succeeded,
-                            Result = entry.Result,
-                            Error = entry.Error,
-                            Duration = TimeSpan.Zero,
-                            SideEffect = entry.SideEffect
-                        };
+                            // 递归 resume base checkpoint（Full 模式），重建完整状态后再 apply delta。
+                            await ResumeAsync(baseCheckpoint, cancellationToken).ConfigureAwait(false);
+                        }
                     }
+
+                    // apply committed results（Full：完整重建；Delta：仅追加新增条目）
+                    if (state.CommittedResults is not null)
+                    {
+                        foreach (var entry in state.CommittedResults)
+                        {
+                            AddCommittedResult(entry.RequestId, new ToolDispatchResult
+                            {
+                                Succeeded = entry.Succeeded,
+                                Result = entry.Result,
+                                Error = entry.Error,
+                                Duration = TimeSpan.Zero,
+                                SideEffect = entry.SideEffect
+                            });
+                        }
+                    }
+
+                    // R28-G P1-5：恢复 pending results（Unknown 副作用，未提交）
+                    if (state.PendingResults is not null)
+                    {
+                        foreach (var entry in state.PendingResults)
+                        {
+                            _pendingToolResults[entry.RequestId] = new ToolDispatchResult
+                            {
+                                Succeeded = entry.Succeeded,
+                                Result = entry.Result,
+                                Error = entry.Error,
+                                Duration = TimeSpan.Zero,
+                                SideEffect = entry.SideEffect
+                            };
+                        }
+                    }
+
+                    // R28-G P1-5：恢复 delta cursor，确保下次 checkpoint 为 Delta（基于本次 LastSequence）
+                    _lastCheckpointSequence = state.LastSequence;
+                    _lastCheckpointId = checkpoint.CheckpointId;
                 }
             }
             catch (JsonException)
@@ -950,8 +1040,70 @@ public sealed class DefaultAgentKernel : IAgentKernel
     }
 
     /// <summary>
+    /// R28-G P1-5：向 _committedToolResults 添加条目并维护 FIFO 容量上限 + 序号分配。
+    /// </summary>
+    /// <remarks>
+    /// - 已存在的 requestId：仅更新 Result，保留原 Sequence（避免序号回退破坏 delta cursor 语义）。
+    /// - 新增 requestId：分配下一个单调 Sequence，加入 FIFO 队列；超容量时按 FIFO 淘汰最旧条目。
+    /// - 调用方不应直接写 <c>_committedToolResults[x] = y</c>，应通过本方法。
+    /// </remarks>
+    /// <param name="requestId">Tool RequestId（与 InstructionId 对应）。</param>
+    /// <param name="result">已提交的 ToolDispatchResult。</param>
+    private void AddCommittedResult(string requestId, ToolDispatchResult result)
+    {
+        // 已存在：仅更新 Result，保留原 Sequence（避免序号回退破坏 delta cursor 语义）
+        if (_committedToolResults.TryGetValue(requestId, out _))
+        {
+            _committedToolResults[requestId] = result;
+            return;
+        }
+
+        // 容量超限：FIFO 淘汰最旧条目（包括 dict + sequences + queue 三处同步）
+        while (_committedToolResults.Count >= _maxCommittedResults && _committedResultOrder.Count > 0)
+        {
+            var oldest = _committedResultOrder.Dequeue();
+            _committedToolResults.Remove(oldest);
+            _committedResultSequences.Remove(oldest);
+        }
+
+        var seq = ++_committedResultSequence;
+        _committedToolResults[requestId] = result;
+        _committedResultSequences[requestId] = seq;
+        _committedResultOrder.Enqueue(requestId);
+    }
+
+    /// <summary>
+    /// R28-G P1-5：从 checkpoint StateJson 提取 LastSequence 用于更新 delta cursor。
+    /// </summary>
+    /// <remarks>
+    /// checkpoint 保存成功后调用，将 _lastCheckpointSequence 推进到本次 checkpoint 的 LastSequence，
+    /// 使下次 checkpoint 走 Delta 路径（仅序列化新增条目）。
+    /// </remarks>
+    private void AdvanceCheckpointCursor(AgentCheckpoint checkpoint)
+    {
+        if (string.IsNullOrWhiteSpace(checkpoint.StateJson))
+        {
+            return;
+        }
+        try
+        {
+            var state = JsonSerializer.Deserialize<DefaultAgentCheckpointFactory.KernelCheckpointStateDto>(checkpoint.StateJson);
+            if (state is not null)
+            {
+                _lastCheckpointSequence = state.LastSequence;
+                _lastCheckpointId = checkpoint.CheckpointId;
+            }
+        }
+        catch (JsonException)
+        {
+            // StateJson 解析失败：不推进 cursor（下次仍走 Full 路径，安全降级）
+        }
+    }
+
+    /// <summary>
     /// R28-C WP-B：取消时自动产出可恢复 checkpoint。
     /// R28-E P1-1：通过 <see cref="IAgentCheckpointFactory"/> 统一构建（与手动 Checkpoint 相同格式）。
+    /// R28-G P1-5：成功保存后推进 delta cursor（下次 AutoCheckpoint 走 Delta 路径）。
     /// </summary>
     private async ValueTask AutoCheckpointAsync(CancellationToken cancellationToken)
     {
@@ -968,6 +1120,9 @@ public sealed class DefaultAgentKernel : IAgentKernel
             checkpointId, _lastSessionId, _lastWorkspaceId, cancellationToken).ConfigureAwait(false);
 
         await _checkpointStore.SaveAsync(checkpoint, cancellationToken).ConfigureAwait(false);
+
+        // R28-G P1-5：推进 cursor，下次 AutoCheckpoint 可走 Delta 路径
+        AdvanceCheckpointCursor(checkpoint);
     }
 
     // R28-E P1-1：KernelCheckpointState / CommittedToolResultEntry 序列化模型已移到

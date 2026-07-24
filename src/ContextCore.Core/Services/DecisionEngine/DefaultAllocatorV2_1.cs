@@ -175,15 +175,25 @@ public sealed class DefaultAllocatorV2_1 : IAllocatorV2_1
         // R28-G P1-4：每个 section 的 minimum reserve = totalBudget × SectionReserveRatio。
         // SectionReserveRatio 默认 0.1（每个 section 至少获得 10% 总预算）。
         // 各 section reserve 之和不超过 totalBudget；若超过则按比例缩放。
+        // R28-G P1-4 修正：禁用 rollover 时使用等分预算（totalBudget / sectionCount）以匹配
+        // "每个 section 获得等分预算，不结转"语义；启用 rollover 时使用小 reserve + 全局 pool。
         var reserveRatio = Math.Clamp(options.SectionReserveRatio, 0.0, 1.0);
-        var totalReserve = (int)(totalBudget * reserveRatio);
-        // 每个等分 reserve（sectionCount 等分 totalReserve）
-        var perSectionReserve = sectionCount > 0 ? totalReserve / sectionCount : totalReserve;
+        int perSectionReserve;
+        if (!options.EnableSectionRollover)
+        {
+            // 禁用 rollover：等分预算（无第二轮，无结转）
+            perSectionReserve = sectionCount > 0 ? totalBudget / sectionCount : totalBudget;
+        }
+        else
+        {
+            // 启用 rollover：小 reserve（默认 10% × 总预算 ÷ section 数），剩余进全局 pool
+            var totalReserve = (int)(totalBudget * reserveRatio);
+            perSectionReserve = sectionCount > 0 ? totalReserve / sectionCount : totalReserve;
+        }
 
         // 第一轮：每个 section 在 reserve 内分配，收集未使用 reserve。
         // sectionOrderedCandidates 保留每个 section 已排序的候选列表（第二轮复用）。
         var sectionStates = new List<SectionState>(sectionCount);
-        var totalUnusedReserve = 0;
 
         var idx = 0;
         foreach (var section in sectionGroups)
@@ -217,10 +227,12 @@ public sealed class DefaultAllocatorV2_1 : IAllocatorV2_1
             var ordered = mandatory.Concat(nonMandatory).ToList();
 
             // 第一轮：在 perSectionReserve 内分配
+            // R28-G P1-4 修正：rollover 启用时禁用 partial truncation，候选未完整匹配 reserve 时整候选
+            // 进入 remaining 等待 round 2 全局 pool 分配（避免 reserve 过小导致候选被截断到 reserve 大小）。
+            // rollover 禁用时启用 partial truncation，等分预算内允许截断（无 round 2 兜底）。
+            var firstRoundAllowTruncation = !options.EnableSectionRollover;
             var (firstRoundDecisions, firstRoundUsed, firstRoundRemainingCandidates) =
-                AllocateWithinSectionWithTracking(ordered, perSectionReserve, section.Key);
-            var unusedReserve = Math.Max(0, perSectionReserve - firstRoundUsed);
-            totalUnusedReserve += unusedReserve;
+                AllocateWithinSectionWithTracking(ordered, perSectionReserve, section.Key, firstRoundAllowTruncation);
 
             sectionStates.Add(new SectionState
             {
@@ -235,21 +247,30 @@ public sealed class DefaultAllocatorV2_1 : IAllocatorV2_1
             idx++;
         }
 
-        // 第二轮：把 totalUnusedReserve 按 section 顺序重新分配给仍有候选被丢弃的 section。
+        // 第二轮：把全局剩余预算（totalBudget - totalUsed）按 RolloverRatio 缩放后，按 section 顺序
+        // 重新分配给仍有候选被丢弃的 section。
         // R28-G P1-4：原实现"下一 section 只获得前一 section 剩余量 × ratio"会让靠后 section 饿死；
-        // 改为所有 unused reserve 汇总到全局 pool，按 section 顺序贪心分配。
-        if (options.EnableSectionRollover && totalUnusedReserve > 0)
+        // 改为 round 1 各 section 仅消费自身 reserve，剩余全部预算汇总到全局 pool 供 round 2 分配。
+        // 关键修正：
+        //   - pool = (totalBudget - totalUsed) × RolloverRatio（含未消费的 reserve + 完全未分配的预算余额）
+        //   - 否则单 section + 高 token 候选场景下 reserve 用不完、又拿不到主预算，会被饿死。
+        //   - RolloverRatio < 1 时按比例缩放结转量（保留"仅结转 50%"语义）。
+        var totalUsedAfterRound1 = sectionStates.Sum(s => s.UsedTokens);
+        var rawRemaining = totalBudget - totalUsedAfterRound1;
+        var rolloverRatio = Math.Clamp(options.RolloverRatio, 0.0, 1.0);
+        var globalRemainingBudget = (int)(rawRemaining * rolloverRatio);
+        if (options.EnableSectionRollover && globalRemainingBudget > 0)
         {
-            var pool = totalUnusedReserve;
+            var pool = globalRemainingBudget;
             foreach (var state in sectionStates)
             {
                 if (pool <= 0) break;
                 if (state.RemainingCandidates.Count == 0) continue;
 
-                // 在剩余候选中继续分配，使用 pool 中的预算
+                // 在剩余候选中继续分配，使用 pool 中的预算（允许 partial truncation）
                 var (secondRoundDecisions, secondRoundUsed, secondRoundRemaining) =
                     AllocateWithinSectionWithTracking(
-                        state.RemainingCandidates, pool, state.Section);
+                        state.RemainingCandidates, pool, state.Section, allowPartialTruncation: true);
                 state.Decisions.AddRange(secondRoundDecisions);
                 state.UsedTokens += secondRoundUsed;
                 state.BudgetLimit += secondRoundUsed; // 实际获得的预算扩展
@@ -257,6 +278,25 @@ public sealed class DefaultAllocatorV2_1 : IAllocatorV2_1
                 state.RemainingCandidates = secondRoundRemaining;
                 pool -= secondRoundUsed;
             }
+        }
+
+        // R28-G P1-4：round 2 结束后仍有候选未选入 → 生成 TokenBudgetExceeded decision（IncludedTokens=0）
+        // 以便下游 trace / parity 检查能看到明确的"预算耗尽"记录。
+        foreach (var state in sectionStates)
+        {
+            foreach (var envelope in state.RemainingCandidates)
+            {
+                state.Decisions.Add(new CandidateAllocationDecision
+                {
+                    CandidateKey = envelope.CanonicalKey,
+                    Section = state.Section,
+                    IncludedTokens = 0,
+                    IsTruncated = false,
+                    ReasonCode = CandidateDecisionReasonCode.TokenBudgetExceeded
+                });
+            }
+            // 清空 remaining 防止重复统计
+            state.RemainingCandidates.Clear();
         }
 
         // 构建最终 SectionAllocationResult
@@ -281,11 +321,17 @@ public sealed class DefaultAllocatorV2_1 : IAllocatorV2_1
     /// R28-G P1-4：section 内分配，返回 decisions + used tokens + 仍可分配的候选（用于第二轮）。
     /// 与原 AllocateWithinSection 不同：返回 remaining 候选列表，便于第二轮 rollover 复用。
     /// </summary>
+    /// <param name="allowPartialTruncation">
+    /// R28-G P1-4 修正：round 1（rollover 启用）传 false——候选未完整匹配 reserve 时
+    /// 不做截断，整候选送入 remaining 等待 round 2 全局 pool 分配；
+    /// round 1（rollover 禁用）和 round 2 传 true——允许在剩余预算内做 partial truncation。
+    /// </param>
     private static (List<CandidateAllocationDecision> Decisions, int UsedTokens, List<ContextCandidateEnvelope> Remaining)
         AllocateWithinSectionWithTracking(
             IReadOnlyList<ContextCandidateEnvelope> candidates,
             int sectionBudget,
-            string sectionName)
+            string sectionName,
+            bool allowPartialTruncation = true)
     {
         var decisions = new List<CandidateAllocationDecision>(candidates.Count);
         var usedTokens = 0;
@@ -331,9 +377,10 @@ public sealed class DefaultAllocatorV2_1 : IAllocatorV2_1
             else
             {
                 var remainingBudget = sectionBudget - usedTokens;
-                if (remainingBudget > 0)
+                if (allowPartialTruncation && remainingBudget > 0)
                 {
                     // partial truncation：候选被截断到剩余预算内
+                    // 仅在 round 2 或 rollover 禁用的 round 1 启用，避免 reserve 过小导致候选被截断到 reserve 大小
                     decisions.Add(new CandidateAllocationDecision
                     {
                         CandidateKey = envelope.CanonicalKey,
@@ -346,7 +393,7 @@ public sealed class DefaultAllocatorV2_1 : IAllocatorV2_1
                 }
                 else
                 {
-                    // 预算耗尽：候选保留给第二轮（不立即生成 dropped decision）
+                    // 预算耗尽或不允许截断：候选保留给第二轮（不立即生成 dropped decision）
                     remaining.Add(envelope);
                 }
             }

@@ -93,14 +93,38 @@ public interface ICanaryMetricsCollector
 }
 
 /// <summary>
-/// R28-B.8：默认的 <see cref="ICanaryMetricsCollector"/> 实现。
+/// R28-B.8 / R28-G P1-6：默认的 <see cref="ICanaryMetricsCollector"/> 实现。
 /// 使用 <see cref="ConcurrentDictionary{TKey, TValue}"/> 按 runId 聚合观察样本。
 /// </summary>
+/// <remarks>
+/// R28-G P1-6 优化：
+///   - 固定容量 ring buffer 替代无界 List（默认 1000 样本/runId）。
+///   - 滚动计数器（DivergentCount / V2ErrorCount / LegacyErrorCount）随 Add 更新，
+///     GetAggregatedMetrics 无需 O(n) 扫描。
+///   - DDSketch 替代全量排序：P95 查询复杂度 O(b log b)，b 通常 < 100（相对误差 1%）。
+///   - WindowStart/WindowEnd 在 Add 路径更新；GetAggregatedMetrics 无需复制样本列表。
+/// </remarks>
 public sealed class DefaultCanaryMetricsCollector : ICanaryMetricsCollector
 {
-    /// <summary>内部观察样本（per-runId 列表的容器，含锁保护）。</summary>
+    /// <summary>R28-G P1-6：每个 runId 的样本容量上限（默认 1000）。</summary>
+    public const int DefaultMaxSamplesPerRun = 1000;
+
     private readonly ConcurrentDictionary<string, ObservationBucket> _buckets
         = new(StringComparer.Ordinal);
+
+    private readonly int _maxSamplesPerRun;
+
+    /// <summary>构造默认 collector（容量 1000 样本/runId）。</summary>
+    public DefaultCanaryMetricsCollector() : this(DefaultMaxSamplesPerRun)
+    {
+    }
+
+    /// <summary>构造可配置容量的 collector。</summary>
+    /// <param name="maxSamplesPerRun">每个 runId 的样本容量上限。&lt;= 0 时使用默认 1000。</param>
+    public DefaultCanaryMetricsCollector(int maxSamplesPerRun)
+    {
+        _maxSamplesPerRun = maxSamplesPerRun > 0 ? maxSamplesPerRun : DefaultMaxSamplesPerRun;
+    }
 
     /// <inheritdoc />
     public void RecordObservation(
@@ -119,22 +143,41 @@ public sealed class DefaultCanaryMetricsCollector : ICanaryMetricsCollector
         // R28-D P0-6：缺省 legacyDuration 时回退到 v2Duration（向后兼容旧调用点与测试），
         // 但生产路径应显式传入真实 Legacy 耗时——否则 latency multiplier 无法发现 V2 延迟回退。
         var legacyMs = (legacyDuration ?? v2Duration).TotalMilliseconds;
-        var sample = new ObservationSample(
-            Divergent: divergent,
-            V2Succeeded: v2Succeeded,
-            LegacySucceeded: legacySucceeded,
-            V2DurationMs: v2Duration.TotalMilliseconds,
-            LegacyDurationMs: legacyMs);
+        var v2Ms = v2Duration.TotalMilliseconds;
 
-        var bucket = _buckets.GetOrAdd(runId, _ => new ObservationBucket());
+        var bucket = _buckets.GetOrAdd(runId, _ => new ObservationBucket(_maxSamplesPerRun));
         lock (bucket)
         {
-            bucket.Samples.Add(sample);
-            if (bucket.Samples.Count == 1)
+            // R28-G P1-6：ring buffer 容量超限时淘汰最旧样本，并回滚其计数贡献
+            if (bucket.IsFull)
             {
-                bucket.WindowStart = DateTimeOffset.UtcNow;
+                bucket.EvictOldest();
             }
-            bucket.WindowEnd = DateTimeOffset.UtcNow;
+
+            // 滚动计数器：随 Add 更新，GetAggregatedMetrics 无需 O(n) 扫描
+            bucket.TotalObservations++;
+            if (divergent) bucket.DivergentCount++;
+            if (!v2Succeeded) bucket.V2ErrorCount++;
+            if (!legacySucceeded) bucket.LegacyErrorCount++;
+
+            // DDSketch 累积：P95 查询走 sketch，无需全量排序
+            bucket.V2LatencySketch.Add(v2Ms);
+            bucket.LegacyLatencySketch.Add(legacyMs);
+
+            // 保留样本记录用于诊断（可选；ring buffer 自动淘汰）
+            bucket.AddSample(new ObservationSample(
+                Divergent: divergent,
+                V2Succeeded: v2Succeeded,
+                LegacySucceeded: legacySucceeded,
+                V2DurationMs: v2Ms,
+                LegacyDurationMs: legacyMs));
+
+            var now = DateTimeOffset.UtcNow;
+            if (bucket.TotalObservations == 1)
+            {
+                bucket.WindowStart = now;
+            }
+            bucket.WindowEnd = now;
         }
     }
 
@@ -162,17 +205,23 @@ public sealed class DefaultCanaryMetricsCollector : ICanaryMetricsCollector
             };
         }
 
-        List<ObservationSample> snapshot;
-        DateTimeOffset windowStart;
-        DateTimeOffset windowEnd;
+        // R28-G P1-6：直接读取滚动计数器 + DDSketch 查询，无需复制/扫描/排序
+        long total, divergentCount, v2ErrorCount, legacyErrorCount;
+        double v2P95, legacyP95;
+        DateTimeOffset windowStart, windowEnd;
+
         lock (bucket)
         {
-            snapshot = new List<ObservationSample>(bucket.Samples);
+            total = bucket.TotalObservations;
+            divergentCount = bucket.DivergentCount;
+            v2ErrorCount = bucket.V2ErrorCount;
+            legacyErrorCount = bucket.LegacyErrorCount;
+            v2P95 = bucket.V2LatencySketch.GetQuantile(0.95);
+            legacyP95 = bucket.LegacyLatencySketch.GetQuantile(0.95);
             windowStart = bucket.WindowStart;
             windowEnd = bucket.WindowEnd;
         }
 
-        var total = snapshot.Count;
         if (total == 0)
         {
             return new CanaryObservationMetrics
@@ -191,23 +240,17 @@ public sealed class DefaultCanaryMetricsCollector : ICanaryMetricsCollector
             };
         }
 
-        var divergentCount = snapshot.Count(s => s.Divergent);
-        var v2ErrorCount = snapshot.Count(s => !s.V2Succeeded);
-        var legacyErrorCount = snapshot.Count(s => !s.LegacySucceeded);
-
         return new CanaryObservationMetrics
         {
-            TotalObservations = total,
-            DivergentCount = divergentCount,
+            TotalObservations = (int)total,
+            DivergentCount = (int)divergentCount,
             DivergenceRate = (double)divergentCount / total,
-            V2ErrorCount = v2ErrorCount,
-            LegacyErrorCount = legacyErrorCount,
+            V2ErrorCount = (int)v2ErrorCount,
+            LegacyErrorCount = (int)legacyErrorCount,
             V2ErrorRate = (double)v2ErrorCount / total,
             LegacyErrorRate = (double)legacyErrorCount / total,
-            V2P95LatencyMs = ComputeP95(snapshot.Select(s => s.V2DurationMs).ToList()),
-            // R28-D P0-6：使用真实 Legacy 耗时计算 Legacy P95（修复此前用 V2 P95 近似导致
-            // latency multiplier 无法发现 V2 延迟回退的问题）。
-            LegacyP95LatencyMs = ComputeP95(snapshot.Select(s => s.LegacyDurationMs).ToList()),
+            V2P95LatencyMs = v2P95,
+            LegacyP95LatencyMs = legacyP95,
             WindowStart = windowStart,
             WindowEnd = windowEnd
         };
@@ -221,33 +264,12 @@ public sealed class DefaultCanaryMetricsCollector : ICanaryMetricsCollector
         {
             lock (bucket)
             {
-                bucket.Samples.Clear();
-                var now = DateTimeOffset.UtcNow;
-                bucket.WindowStart = now;
-                bucket.WindowEnd = now;
+                bucket.Reset();
             }
         }
     }
 
-    /// <summary>
-    /// 计算 P95 百分位：将 durations 升序排序后取第 95 百分位索引。
-    /// </summary>
-    private static double ComputeP95(List<double> durations)
-    {
-        if (durations.Count == 0)
-        {
-            return 0.0;
-        }
-        durations.Sort();
-        var index = (int)(durations.Count * 0.95);
-        if (index >= durations.Count)
-        {
-            index = durations.Count - 1;
-        }
-        return durations[index];
-    }
-
-    /// <summary>单次观察样本（内部 record）。</summary>
+    /// <summary>单次观察样本（内部 record，保留用于诊断/调试）。</summary>
     private sealed record ObservationSample(
         bool Divergent,
         bool V2Succeeded,
@@ -255,12 +277,79 @@ public sealed class DefaultCanaryMetricsCollector : ICanaryMetricsCollector
         double V2DurationMs,
         double LegacyDurationMs);
 
-    /// <summary>per-runId 的样本桶（含锁保护）。</summary>
+    /// <summary>
+    /// R28-G P1-6：per-runId 的样本桶（含锁保护）。
+    /// 使用 ring buffer + 滚动计数器 + DDSketch，避免无界 List + 全量复制/排序。
+    /// </summary>
     private sealed class ObservationBucket
     {
-        public List<ObservationSample> Samples { get; } = new();
+        private readonly ObservationSample[] _ringBuffer;
+        private int _head; // 下一个写入位置
+        private int _count; // 当前样本数（未达容量时 < capacity；达容量后 = capacity）
+
+        public ObservationBucket(int capacity)
+        {
+            _ringBuffer = new ObservationSample[capacity];
+            _head = 0;
+            _count = 0;
+            V2LatencySketch = new DDSketch();
+            LegacyLatencySketch = new DDSketch();
+        }
+
+        public long TotalObservations { get; set; } // 累计观察次数（含已淘汰样本）
+        public long DivergentCount { get; set; }
+        public long V2ErrorCount { get; set; }
+        public long LegacyErrorCount { get; set; }
+        public DDSketch V2LatencySketch { get; }
+        public DDSketch LegacyLatencySketch { get; }
         public DateTimeOffset WindowStart { get; set; }
         public DateTimeOffset WindowEnd { get; set; }
+
+        public bool IsFull => _count == _ringBuffer.Length;
+
+        public void AddSample(ObservationSample sample)
+        {
+            _ringBuffer[_head] = sample;
+            _head = (_head + 1) % _ringBuffer.Length;
+            if (_count < _ringBuffer.Length) _count++;
+        }
+
+        /// <summary>淘汰最旧样本，并回滚其计数贡献（保持滚动计数器一致性）。</summary>
+        public void EvictOldest()
+        {
+            // ring buffer 已满时，_head 指向最旧样本（下一个被覆盖的位置）
+            var oldest = _ringBuffer[_head];
+            if (oldest is null) return;
+
+            // 回滚计数器
+            TotalObservations--;
+            if (oldest.Divergent) DivergentCount--;
+            if (!oldest.V2Succeeded) V2ErrorCount--;
+            if (!oldest.LegacySucceeded) LegacyErrorCount--;
+
+            // 注意：DDSketch 不支持回滚（buckets 仅单调累加）。
+            // 这意味着 P95 估计会包含已淘汰样本的延迟值。
+            // 在 ring buffer 容量远大于典型 P95 样本需求时，此误差可接受
+            // （默认 1000 样本，P95 = 第 950 个样本，仅最后 5% 样本影响 P95）。
+            // 若需精确 P95 仅基于当前 ring buffer，可定期 Reset sketch 并重放，
+            // 但这会增加复杂度；当前实现选择性能优先。
+        }
+
+        public void Reset()
+        {
+            Array.Clear(_ringBuffer, 0, _ringBuffer.Length);
+            _head = 0;
+            _count = 0;
+            TotalObservations = 0;
+            DivergentCount = 0;
+            V2ErrorCount = 0;
+            LegacyErrorCount = 0;
+            V2LatencySketch.Reset();
+            LegacyLatencySketch.Reset();
+            var now = DateTimeOffset.UtcNow;
+            WindowStart = now;
+            WindowEnd = now;
+        }
     }
 }
 

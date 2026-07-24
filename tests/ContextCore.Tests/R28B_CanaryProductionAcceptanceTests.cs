@@ -492,9 +492,10 @@ public sealed class CanaryMetricsCollectorAcceptanceTests
         var metrics = collector.GetAggregatedMetrics(runId);
         Assert.AreEqual(20, metrics.TotalObservations, "总观察次数应为 20");
         // P95 索引 = (int)(20 * 0.95) = 19，排序后 durations[19] = 200ms
+        // R28-G P1-6：DDSketch 相对误差 ≤ 1%，200ms 估计值在 [198, 202] 区间，放宽到 180-205
         Assert.IsTrue(
-            metrics.V2P95LatencyMs >= 180.0 && metrics.V2P95LatencyMs <= 200.0,
-            $"V2P95LatencyMs 应在 180-200ms 范围内，实际={metrics.V2P95LatencyMs}ms");
+            metrics.V2P95LatencyMs >= 180.0 && metrics.V2P95LatencyMs <= 205.0,
+            $"V2P95LatencyMs 应在 180-205ms 范围内（DDSketch 相对误差 ≤ 1%），实际={metrics.V2P95LatencyMs}ms");
     }
 
     // ===========================================================================
@@ -817,10 +818,11 @@ public sealed class CanaryProductionSampleSourceAcceptanceTests
 
         var metrics = collector.GetAggregatedMetrics(runId);
         Assert.AreEqual(10, metrics.TotalObservations, "总观察次数应为 10");
-        Assert.AreEqual(200.0, metrics.V2P95LatencyMs, 0.01,
-            "V2 P95 应为 200ms（真实 V2 耗时）");
-        Assert.AreEqual(50.0, metrics.LegacyP95LatencyMs, 0.01,
-            "Legacy P95 应为 50ms（真实 Legacy 耗时，而非 V2 近似值）");
+        // R28-G P1-6：DDSketch 返回相对误差 1% 内的估计值（200ms ± 2ms），使用 delta 3.0 容忍
+        Assert.AreEqual(200.0, metrics.V2P95LatencyMs, 3.0,
+            "V2 P95 应接近 200ms（真实 V2 耗时，DDSketch 相对误差 ≤ 1%）");
+        Assert.AreEqual(50.0, metrics.LegacyP95LatencyMs, 1.0,
+            "Legacy P95 应接近 50ms（真实 Legacy 耗时，而非 V2 近似值，DDSketch 相对误差 ≤ 1%）");
         Assert.AreNotEqual(metrics.V2P95LatencyMs, metrics.LegacyP95LatencyMs,
             "V2 P95 与 Legacy P95 必须不同（修复前 LegacyP95LatencyMs = V2P95LatencyMs 的问题）");
     }
@@ -841,8 +843,9 @@ public sealed class CanaryProductionSampleSourceAcceptanceTests
             v2Duration: TimeSpan.FromMilliseconds(80));
 
         var metrics = collector.GetAggregatedMetrics(runId);
-        Assert.AreEqual(80.0, metrics.V2P95LatencyMs, 0.01, "V2 P95 应为 80ms");
-        Assert.AreEqual(80.0, metrics.LegacyP95LatencyMs, 0.01,
+        // R28-G P1-6：DDSketch 返回相对误差 1% 内的估计值（80ms ± 0.8ms），使用 delta 1.5 容忍
+        Assert.AreEqual(80.0, metrics.V2P95LatencyMs, 1.5, "V2 P95 应接近 80ms（DDSketch 相对误差 ≤ 1%）");
+        Assert.AreEqual(80.0, metrics.LegacyP95LatencyMs, 1.5,
             "legacyDuration=null 时 Legacy P95 应回退到 V2 P95（向后兼容）");
     }
 

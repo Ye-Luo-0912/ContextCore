@@ -1558,15 +1558,30 @@ public sealed class R28E_AgentKernelReliabilityTests
         var autoCp = autoCheckpoints.FirstOrDefault(c => c.CheckpointId != "ckpt-shared-manual");
         Assert.IsNotNull(autoCp, "应存在一个 AutoCheckpoint。");
 
-        // 两者 StateJson 都应含 CommittedResults 数组
+        // 两者 StateJson 都应含 CommittedResults 数组（shape 一致）
         Assert.IsNotNull(manualCp!.StateJson);
         Assert.IsNotNull(autoCp!.StateJson);
         using var manualDoc = JsonDocument.Parse(manualCp.StateJson!);
         using var autoDoc = JsonDocument.Parse(autoCp.StateJson!);
         Assert.IsTrue(manualDoc.RootElement.TryGetProperty("CommittedResults", out var manualArr));
         Assert.IsTrue(autoDoc.RootElement.TryGetProperty("CommittedResults", out var autoArr));
+
+        // R28-G P1-5：Manual checkpoint（首次）为 Full 模式 → 含全部 1 条 committed result。
+        Assert.IsTrue(manualDoc.RootElement.TryGetProperty("Mode", out var manualModeProp));
+        Assert.AreEqual((int)DefaultAgentCheckpointFactory.CheckpointMode.Full, manualModeProp.GetInt32());
         Assert.AreEqual(1, manualArr.GetArrayLength());
-        Assert.AreEqual(1, autoArr.GetArrayLength());
+
+        // R28-G P1-5：AutoCheckpoint（取消触发，在 Manual 之后）为 Delta 模式：
+        //   - Manual 已推进 cursor 至 Sequence=1
+        //   - Auto 与 Manual 之间无新 tool 提交 → Delta CommittedResults 为空
+        //   - BaseCheckpointId 应链接 Manual checkpoint
+        //   - LastSequence 应等于 Manual 的 LastSequence（无新增）
+        // 这是 delta checkpoint 的预期行为：避免每次 auto 都重复序列化全部历史。
+        Assert.IsTrue(autoDoc.RootElement.TryGetProperty("Mode", out var autoModeProp));
+        Assert.AreEqual((int)DefaultAgentCheckpointFactory.CheckpointMode.Delta, autoModeProp.GetInt32());
+        Assert.AreEqual(0, autoArr.GetArrayLength());
+        Assert.IsTrue(autoDoc.RootElement.TryGetProperty("BaseCheckpointId", out var baseProp));
+        Assert.AreEqual("ckpt-shared-manual", baseProp.GetString());
     }
 
     // -----------------------------------------------------------------------
@@ -2257,6 +2272,312 @@ public sealed class R28E_AgentKernelReliabilityTests
             Kind = AgentKernelInstructionKind.Shutdown
         }, testCt.Token);
         await runTask;
+    }
+}
+
+// ===========================================================================
+// R28-G P1-5：Agent Checkpoint 容量上限 + Delta Checkpoint 验收测试
+//
+// 覆盖：
+//   1. FIFO 容量淘汰：超过 maxCommittedResults 时最旧条目被移除。
+//   2. 首次 Checkpoint 走 Full 模式（Mode=Full, BaseCheckpointId=null）。
+//   3. 后续 Checkpoint 走 Delta 模式（Mode=Delta, BaseCheckpointId=上次 checkpointId）。
+//   4. Delta checkpoint StateJson 仅包含新增条目（小于全量）。
+//   5. ResumeAsync 从 Delta 递归加载 BaseCheckpoint，重建完整状态。
+// ===========================================================================
+[TestClass]
+[TestCategory("R28-G")]
+public sealed class R28G_AgentKernelCheckpointTests
+{
+    private static CancellationTokenSource CreateTestTimeout()
+        => new CancellationTokenSource(TimeSpan.FromSeconds(10));
+
+    private static bool WaitForProcessed(DefaultAgentKernel kernel, int target, TimeSpan timeout)
+        => SpinWait.SpinUntil(() => kernel.GetStatus().ProcessedCount >= target, timeout);
+
+    private static async Task<(DefaultAgentKernel kernel, InProcessTransport transport, InMemoryAgentCheckpointStore store, Task runTask)> StartKernelAsync(
+        int? maxCommittedResults = null, CancellationToken cancellationToken = default)
+    {
+        var dispatcher = new CountingToolDispatcher { SideEffect = ToolSideEffect.Write };
+        var transport = new InProcessTransport();
+        var store = new InMemoryAgentCheckpointStore();
+        var kernel = new DefaultAgentKernel(transport, dispatcher, store, maxCommittedResults: maxCommittedResults);
+        var runTask = Task.Run(() => kernel.RunAsync(cancellationToken).AsTask(), cancellationToken);
+        // 等待 kernel 进入 Running 状态
+        SpinWait.SpinUntil(() => kernel.GetStatus().State == AgentKernelState.Running, TimeSpan.FromSeconds(2));
+        return (kernel, transport, store, runTask);
+    }
+
+    private static async Task SubmitAndWaitAsync(DefaultAgentKernel kernel, InProcessTransport transport, string instructionId, string payload, CancellationToken ct)
+    {
+        await kernel.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = instructionId,
+            Kind = AgentKernelInstructionKind.Execute,
+            Payload = payload,
+            Metadata = new Dictionary<string, string>
+            {
+                ["sessionId"] = "session-p1-5",
+                ["workspaceId"] = "ws-p1-5",
+                ["tool"] = "echo"
+            }
+        }, ct);
+        Assert.IsTrue(WaitForProcessed(kernel, kernel.GetStatus().ProcessedCount + 1, TimeSpan.FromSeconds(3)),
+            $"Kernel 未在超时内处理 instruction {instructionId}。");
+        await transport.ReceiveResultAsync(ct);
+    }
+
+    private static async Task<string> SubmitCheckpointAsync(DefaultAgentKernel kernel, InProcessTransport transport, string checkpointId, CancellationToken ct)
+    {
+        await kernel.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = checkpointId,
+            Kind = AgentKernelInstructionKind.Checkpoint,
+            Metadata = new Dictionary<string, string>
+            {
+                ["sessionId"] = "session-p1-5",
+                ["workspaceId"] = "ws-p1-5"
+            }
+        }, ct);
+        Assert.IsTrue(WaitForProcessed(kernel, kernel.GetStatus().ProcessedCount + 1, TimeSpan.FromSeconds(3)));
+        var result = await transport.ReceiveResultAsync(ct);
+        return result?.Output ?? string.Empty;
+    }
+
+    // -----------------------------------------------------------------------
+    // P1-5.1: FIFO 容量淘汰
+    // -----------------------------------------------------------------------
+
+    [TestMethod]
+    public async Task FIFO_Eviction_OldestRemovedWhenCapacityExceeded()
+    {
+        var testCt = CreateTestTimeout();
+        var (kernel, transport, _, runTask) = await StartKernelAsync(maxCommittedResults: 3, testCt.Token);
+
+        try
+        {
+            // 提交 4 个 tool 调用（容量 3），第 1 个应被淘汰
+            await SubmitAndWaitAsync(kernel, transport, "exec-1", "p1", testCt.Token);
+            await SubmitAndWaitAsync(kernel, transport, "exec-2", "p2", testCt.Token);
+            await SubmitAndWaitAsync(kernel, transport, "exec-3", "p3", testCt.Token);
+            await SubmitAndWaitAsync(kernel, transport, "exec-4", "p4", testCt.Token);
+
+            // 再次提交 exec-1：因已被淘汰，应重新执行（DispatchCount=4 -> 5）
+            // 若未被淘汰，exec-1 走缓存路径，DispatchCount 不变
+            await kernel.SubmitAsync(new AgentKernelInstruction
+            {
+                InstructionId = "exec-1",
+                Kind = AgentKernelInstructionKind.Execute,
+                Payload = "p1-replay",
+                Metadata = new Dictionary<string, string>
+                {
+                    ["sessionId"] = "session-p1-5",
+                    ["workspaceId"] = "ws-p1-5",
+                    ["tool"] = "echo"
+                }
+            }, testCt.Token);
+            Assert.IsTrue(WaitForProcessed(kernel, 5, TimeSpan.FromSeconds(3)));
+            await transport.ReceiveResultAsync(testCt.Token);
+
+            Assert.AreEqual(5, ((CountingToolDispatcher)typeof(DefaultAgentKernel)
+                .GetField("_toolDispatcher", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
+                .GetValue(kernel)!).DispatchCount,
+                "exec-1 应被 FIFO 淘汰后重新执行（DispatchCount 从 4 增至 5）。");
+        }
+        finally
+        {
+            await kernel.SubmitAsync(new AgentKernelInstruction
+            {
+                InstructionId = "shutdown",
+                Kind = AgentKernelInstructionKind.Shutdown
+            }, testCt.Token);
+            await runTask;
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // P1-5.2: 首次 Checkpoint 走 Full 模式
+    // -----------------------------------------------------------------------
+
+    [TestMethod]
+    public async Task FirstCheckpoint_IsFullMode_NoBaseCheckpointId()
+    {
+        var testCt = CreateTestTimeout();
+        var (kernel, transport, store, runTask) = await StartKernelAsync(cancellationToken: testCt.Token);
+
+        try
+        {
+            await SubmitAndWaitAsync(kernel, transport, "exec-full-1", "p1", testCt.Token);
+            await SubmitAndWaitAsync(kernel, transport, "exec-full-2", "p2", testCt.Token);
+
+            var checkpointId = await SubmitCheckpointAsync(kernel, transport, "cp-1", testCt.Token);
+            Assert.IsFalse(string.IsNullOrEmpty(checkpointId), "Checkpoint ID 不应为空。");
+
+            var checkpoint = await store.GetAsync("ws-p1-5", checkpointId, testCt.Token);
+            Assert.IsNotNull(checkpoint, "Checkpoint 应已持久化。");
+            Assert.IsFalse(string.IsNullOrWhiteSpace(checkpoint!.StateJson));
+
+            var state = System.Text.Json.JsonSerializer.Deserialize<DefaultAgentCheckpointFactory.KernelCheckpointStateDto>(checkpoint.StateJson);
+            Assert.IsNotNull(state);
+            Assert.AreEqual(DefaultAgentCheckpointFactory.CheckpointMode.Full, state!.Mode,
+                "首次 checkpoint 应为 Full 模式。");
+            Assert.IsNull(state.BaseCheckpointId, "Full 模式 BaseCheckpointId 应为 null。");
+            Assert.AreEqual(2, state.CommittedResults.Count,
+                "Full 模式应包含全部 2 条 committed results。");
+            Assert.IsTrue(state.LastSequence > 0, "LastSequence 应大于 0。");
+        }
+        finally
+        {
+            await kernel.SubmitAsync(new AgentKernelInstruction
+            {
+                InstructionId = "shutdown",
+                Kind = AgentKernelInstructionKind.Shutdown
+            }, testCt.Token);
+            await runTask;
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // P1-5.3: 后续 Checkpoint 走 Delta 模式
+    // -----------------------------------------------------------------------
+
+    [TestMethod]
+    public async Task SecondCheckpoint_IsDeltaMode_ContainsOnlyNewEntries()
+    {
+        var testCt = CreateTestTimeout();
+        var (kernel, transport, store, runTask) = await StartKernelAsync(cancellationToken: testCt.Token);
+
+        try
+        {
+            await SubmitAndWaitAsync(kernel, transport, "exec-delta-1", "p1", testCt.Token);
+            var firstCpId = await SubmitCheckpointAsync(kernel, transport, "cp-delta-1", testCt.Token);
+
+            // 新增 1 条 tool 调用
+            await SubmitAndWaitAsync(kernel, transport, "exec-delta-2", "p2", testCt.Token);
+            var secondCpId = await SubmitCheckpointAsync(kernel, transport, "cp-delta-2", testCt.Token);
+
+            var secondCp = await store.GetAsync("ws-p1-5", secondCpId, testCt.Token);
+            Assert.IsNotNull(secondCp);
+            var state = System.Text.Json.JsonSerializer.Deserialize<DefaultAgentCheckpointFactory.KernelCheckpointStateDto>(secondCp!.StateJson);
+
+            Assert.IsNotNull(state);
+            Assert.AreEqual(DefaultAgentCheckpointFactory.CheckpointMode.Delta, state!.Mode,
+                "第二次 checkpoint 应为 Delta 模式。");
+            Assert.AreEqual(firstCpId, state.BaseCheckpointId,
+                "Delta 模式 BaseCheckpointId 应链接到首次 checkpoint。");
+            Assert.AreEqual(1, state.CommittedResults.Count,
+                "Delta 模式应仅包含新增条目（exec-delta-2）。");
+            Assert.AreEqual("exec-delta-2", state.CommittedResults[0].RequestId);
+        }
+        finally
+        {
+            await kernel.SubmitAsync(new AgentKernelInstruction
+            {
+                InstructionId = "shutdown",
+                Kind = AgentKernelInstructionKind.Shutdown
+            }, testCt.Token);
+            await runTask;
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // P1-5.4: ResumeAsync 从 Delta 重建完整状态
+    // -----------------------------------------------------------------------
+
+    [TestMethod]
+    public async Task ResumeAsync_FromDelta_RebuildsFullStateViaBaseCheckpoint()
+    {
+        var testCt = CreateTestTimeout();
+        var (kernel, transport, store, runTask) = await StartKernelAsync(cancellationToken: testCt.Token);
+
+        string firstCpId;
+        string secondCpId;
+        try
+        {
+            await SubmitAndWaitAsync(kernel, transport, "exec-resume-1", "p1", testCt.Token);
+            await SubmitAndWaitAsync(kernel, transport, "exec-resume-2", "p2", testCt.Token);
+            firstCpId = await SubmitCheckpointAsync(kernel, transport, "cp-resume-1", testCt.Token);
+
+            await SubmitAndWaitAsync(kernel, transport, "exec-resume-3", "p3", testCt.Token);
+            secondCpId = await SubmitCheckpointAsync(kernel, transport, "cp-resume-2", testCt.Token);
+
+            await kernel.SubmitAsync(new AgentKernelInstruction
+            {
+                InstructionId = "shutdown",
+                Kind = AgentKernelInstructionKind.Shutdown
+            }, testCt.Token);
+            await runTask;
+        }
+        finally
+        {
+            if (kernel.GetStatus().State != AgentKernelState.Stopped)
+            {
+                await kernel.SubmitAsync(new AgentKernelInstruction
+                {
+                    InstructionId = "shutdown",
+                    Kind = AgentKernelInstructionKind.Shutdown
+                }, testCt.Token);
+                await runTask;
+            }
+        }
+
+        // 新 kernel，从 delta checkpoint resume
+        var dispatcher2 = new CountingToolDispatcher { SideEffect = ToolSideEffect.Write };
+        var transport2 = new InProcessTransport();
+        var kernel2 = new DefaultAgentKernel(transport2, dispatcher2, store);
+        var deltaCheckpoint = await store.GetAsync("ws-p1-5", secondCpId, testCt.Token);
+        Assert.IsNotNull(deltaCheckpoint);
+
+        await kernel2.ResumeAsync(deltaCheckpoint!, testCt.Token);
+
+        // 验证：exec-resume-1/2/3 都应走缓存（DispatchCount=0）
+        // 若 Delta resume 失败（仅加载 delta 条目），exec-resume-1/2 会被重新执行
+        var runTask2 = Task.Run(() => kernel2.RunAsync(testCt.Token).AsTask(), testCt.Token);
+        SpinWait.SpinUntil(() => kernel2.GetStatus().State == AgentKernelState.Running, TimeSpan.FromSeconds(2));
+
+        await kernel2.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = "exec-resume-1",
+            Kind = AgentKernelInstructionKind.Execute,
+            Payload = "p1-replay",
+            Metadata = new Dictionary<string, string>
+            {
+                ["sessionId"] = "session-p1-5",
+                ["workspaceId"] = "ws-p1-5",
+                ["tool"] = "echo"
+            }
+        }, testCt.Token);
+        Assert.IsTrue(WaitForProcessed(kernel2, 1, TimeSpan.FromSeconds(3)));
+        var r1 = await transport2.ReceiveResultAsync(testCt.Token);
+        Assert.AreEqual("p1", r1?.Output,
+            "Delta resume 应通过 BaseCheckpoint 重建 exec-resume-1 的缓存结果。");
+
+        await kernel2.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = "exec-resume-3",
+            Kind = AgentKernelInstructionKind.Execute,
+            Payload = "p3-replay",
+            Metadata = new Dictionary<string, string>
+            {
+                ["sessionId"] = "session-p1-5",
+                ["workspaceId"] = "ws-p1-5",
+                ["tool"] = "echo"
+            }
+        }, testCt.Token);
+        Assert.IsTrue(WaitForProcessed(kernel2, 2, TimeSpan.FromSeconds(3)));
+        var r3 = await transport2.ReceiveResultAsync(testCt.Token);
+        Assert.AreEqual("p3", r3?.Output,
+            "Delta 条目（exec-resume-3）应通过 delta resume 重建缓存。");
+
+        Assert.AreEqual(0, dispatcher2.DispatchCount,
+            "所有 tool 调用应走缓存，DispatchCount 应保持 0。");
+
+        await kernel2.SubmitAsync(new AgentKernelInstruction
+        {
+            InstructionId = "shutdown",
+            Kind = AgentKernelInstructionKind.Shutdown
+        }, testCt.Token);
+        await runTask2;
     }
 }
 

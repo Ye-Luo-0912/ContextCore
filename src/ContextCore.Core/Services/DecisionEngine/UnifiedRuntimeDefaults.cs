@@ -2296,25 +2296,25 @@ public sealed class DefaultCanonicalCandidateMerger : ICanonicalCandidateMerger
             {
                 var key = envelope.CanonicalKey;
                 ref var acc = ref CollectionsMarshal.GetValueRefOrAddDefault(accumulators, key, out var exists);
-                if (!exists)
+                if (!exists || acc.Envelope is null)
                 {
-                    // 首次见到此 key 的 Envelope：初始化 accumulator
+                    // 首次见到此 key 的 Envelope（或 accumulator 仅由 Material 路径初始化过）：
+                    //   - 直接采用当前 Envelope 作为基准
+                    //   - 初始化 Origins / Contributions（若已存在则保留，因为 Material 路径不会触碰它们）
                     acc.Envelope = envelope;
-                    acc.Origins = new List<ExpertOrigin>(envelope.Origins.Count);
+                    acc.Origins ??= new List<ExpertOrigin>(envelope.Origins.Count);
                     acc.Origins.AddRange(envelope.Origins);
-                    acc.Contributions = new Dictionary<ExpertKind, double>(envelope.ExpertContributions.Count);
+                    acc.Contributions ??= new Dictionary<ExpertKind, double>(envelope.ExpertContributions.Count);
                     foreach (var (expert, contribution) in envelope.ExpertContributions)
                     {
-                        acc.Contributions[expert] = contribution;
+                        acc.Contributions.TryGetValue(expert, out var prev);
+                        acc.Contributions[expert] = prev + contribution;
                     }
                 }
                 else
                 {
-                    // 重复 key：累加 Origins / Contributions
-                    if (acc.Origins is null)
-                    {
-                        acc.Origins = new List<ExpertOrigin>();
-                    }
+                    // 重复 key（accumulator 已有 Envelope）：累加 Origins / Contributions
+                    acc.Origins ??= new List<ExpertOrigin>();
                     acc.Origins.AddRange(envelope.Origins);
 
                     acc.Contributions ??= new Dictionary<ExpertKind, double>();
@@ -2327,7 +2327,7 @@ public sealed class DefaultCanonicalCandidateMerger : ICanonicalCandidateMerger
                     // R28-G P1-1 修复：合并 Features / Utility（原实现只保留首个 Envelope）。
                     //   - Features：取每维 max（多 Expert 观察到更高信号时应保留）
                     //   - Utility：取 max(FinalScore)（最高分胜出，与 Ranking 阶段排序一致）
-                    acc.Envelope = MergeEnvelope(acc.Envelope!, envelope);
+                    acc.Envelope = MergeEnvelope(acc.Envelope, envelope);
                 }
             }
         }
