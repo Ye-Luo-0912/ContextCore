@@ -75,9 +75,15 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
     private readonly ILifecycleGate _lifecycleGate;
     private readonly IUtilityScorer _utilityScorer;
     private readonly TimeSpan _providerTimeout;
+    private readonly IRuntimeRequestNormalizer _requestNormalizer;
+    private readonly IRequestSemanticHasher _requestSemanticHasher;
+    private readonly IExecutionArtifactFactory _executionArtifactFactory;
 
     /// <summary>构造 pure Runtime。</summary>
     /// <param name="providerTimeout">R28-B.6：单个 Provider 调用超时（默认 30s）。</param>
+    /// <param name="requestNormalizer">R28-B.7-Final：请求标准化器（null 时使用默认实现）。</param>
+    /// <param name="requestSemanticHasher">R28-B.7-Final：请求语义哈希器（null 时使用默认实现）。</param>
+    /// <param name="executionArtifactFactory">R28-B.7-Final：执行结果工厂（null 时使用默认实现）。</param>
     public DefaultContextDecisionRuntime(
         IContextDecisionEngine engine,
         IResolvedPolicyProvider policyProvider,
@@ -90,7 +96,10 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
         ISafetyGate safetyGate,
         ILifecycleGate lifecycleGate,
         IUtilityScorer utilityScorer,
-        TimeSpan? providerTimeout = null)
+        TimeSpan? providerTimeout = null,
+        IRuntimeRequestNormalizer? requestNormalizer = null,
+        IRequestSemanticHasher? requestSemanticHasher = null,
+        IExecutionArtifactFactory? executionArtifactFactory = null)
     {
         _engine = engine ?? throw new ArgumentNullException(nameof(engine));
         _policyProvider = policyProvider ?? throw new ArgumentNullException(nameof(policyProvider));
@@ -104,6 +113,10 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
         _lifecycleGate = lifecycleGate ?? throw new ArgumentNullException(nameof(lifecycleGate));
         _utilityScorer = utilityScorer ?? throw new ArgumentNullException(nameof(utilityScorer));
         _providerTimeout = providerTimeout ?? TimeSpan.FromSeconds(30);
+        // R28-B.7-Final：注入新的 artifact 服务，null 时回退到默认单例实现
+        _requestNormalizer = requestNormalizer ?? DefaultRuntimeRequestNormalizer.Instance;
+        _requestSemanticHasher = requestSemanticHasher ?? DefaultRequestSemanticHasher.Instance;
+        _executionArtifactFactory = executionArtifactFactory ?? DefaultExecutionArtifactFactory.Instance;
     }
 
     /// <summary>
@@ -142,6 +155,11 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
 
+        // R28-B.7-Final：请求标准化（填充默认值、规范化 Scope），贯穿整个请求生命周期
+        request = _requestNormalizer.Normalize(request);
+        // R28-B.7-Final：请求语义哈希（基于标准化请求计算，用于 replay 匹配与审计）
+        var requestSemanticHash = _requestSemanticHasher.ComputeHash(request);
+
         // Step 1：策略解析
         var snapshot = await _policyProvider.ResolveAsync(request, cancellationToken).ConfigureAwait(false);
 
@@ -153,6 +171,10 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
         // Phase 2：执行 Graph Provider，将 Phase 1 merged envelopes 作为 SeedCandidates 传入
         var (expertOutputs, providerReports) = await InvokeEnabledProvidersWithDagAsync(
             request, snapshot, routingDecisions, cancellationToken).ConfigureAwait(false);
+
+        // R28-B.7-Final：从 expertOutputs + providerReports 构建 ProviderExecutionArtifact[]，
+        // 供 IExecutionArtifactFactory 统一构建 ProviderReports 与 ProviderOutputSnapshots
+        var providerArtifacts = BuildProviderArtifacts(expertOutputs, providerReports);
 
         // Step 4：Canonical Merge — 合并 Provider 输出
         var mergedWorkingSet = _canonicalMerger.Merge(expertOutputs);
@@ -174,7 +196,7 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
 
         if (allEnvelopes.Count == 0)
         {
-            return EmptyExecutionResult(request, snapshot, routingDecisions, completeWorkingSet, providerReports, expertOutputs);
+            return EmptyExecutionResult(request, requestSemanticHash, providerArtifacts, snapshot, routingDecisions, completeWorkingSet);
         }
 
         // Step 6：EarlyAdmissionGate 批量评估（Blocker-6：保留 Rejected）
@@ -186,9 +208,9 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
         {
             // 所有候选被 EarlyGate 拒绝：仍返回 EarlyRejected 作为 DroppedEnvelopes
             var emptyDecision = BuildEarlyRejectedResult(request, snapshot, earlyRejected, partition.RejectReasons);
-            return ExecutionArtifactFactory.Create(
-                request, emptyDecision, completeWorkingSet,
-                snapshot, routingDecisions, providerReports, expertOutputs);
+            return _executionArtifactFactory.Create(
+                request, requestSemanticHash, emptyDecision, completeWorkingSet,
+                snapshot, routingDecisions, providerArtifacts);
         }
 
         // Step 7：FeaturePipeline — 特征计算
@@ -232,7 +254,12 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
             TopK = request.TopK > 0 && request.TopK != int.MaxValue
                 ? request.TopK
                 : snapshot.Budget.DefaultTopK,
-            SectionRatios = snapshot.Budget.SectionRatios.Count > 0 ? snapshot.Budget.SectionRatios : null,
+            // R28-B.7 工作包 B-2：PackageInput.SectionRatios 作为 per-request override，
+            // 优先于 snapshot.Budget.SectionRatios（与 ContextDecisionRequest.SectionRatios 语义一致：
+            // 调用方显式值高于 Policy 默认值）。Retrieval/AgentContext 路径无 PackageInput，回退到 snapshot。
+            SectionRatios = request.PackageInput?.SectionRatios is { Count: > 0 } pkgRatios
+                ? pkgRatios
+                : (snapshot.Budget.SectionRatios.Count > 0 ? snapshot.Budget.SectionRatios : null),
             PolicyBundleId = snapshot.Reference.BundleId,
             QueryText = request.QueryText,
             CreatedAt = DateTimeOffset.UtcNow,
@@ -263,13 +290,29 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
             : AppendEarlyRejectedAllocationDecisions(allocationDecisions, earlyRejected);
 
         // R28-B.7 工作包 D：合并 EarlyRejected 后重构造 Outcome 时，复制 Engine Outcome.Diagnostics
-        // 并添加 Runtime 级别 diagnostics（earlyAdmission.rejectedCount），不丢失 Engine 诊断。
-        // 仅在有 EarlyRejected 时创建新字典（避免无谓分配）；否则直接复用 Engine Diagnostics 引用。
+        // 并添加 Runtime 级别 diagnostics（earlyAdmission.rejectedCount / provider.degraded），不丢失 Engine 诊断。
+        // 仅在有 EarlyRejected 或 Provider degraded 时创建新字典（避免无谓分配）；否则直接复用 Engine Diagnostics 引用。
         IReadOnlyDictionary<string, string> mergedDiagnostics = engineResult.Outcome.Diagnostics;
-        if (earlyRejected.Count > 0)
+        var hasEarlyRejected = earlyRejected.Count > 0;
+        var hasProviderDegraded = providerReports.Count > 0 && providerReports.Any(r => !r.Succeeded);
+        if (hasEarlyRejected || hasProviderDegraded)
         {
             var diag = new Dictionary<string, string>(engineResult.Outcome.Diagnostics, StringComparer.Ordinal);
-            diag["earlyAdmission.rejectedCount"] = earlyRejected.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            if (hasEarlyRejected)
+            {
+                diag["earlyAdmission.rejectedCount"] = earlyRejected.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            }
+            if (hasProviderDegraded)
+            {
+                // R28-B.7-Final 工作包 D：Provider degraded 状态进入 Execution Artifact 诊断
+                diag["provider.degraded"] = "true";
+                var degradedKinds = providerReports
+                    .Where(r => !r.Succeeded)
+                    .Select(r => r.Kind.ToString())
+                    .Distinct(StringComparer.Ordinal)
+                    .OrderBy(s => s, StringComparer.Ordinal);
+                diag["provider.degradedKinds"] = string.Join(",", degradedKinds);
+            }
             mergedDiagnostics = diag;
         }
 
@@ -302,9 +345,9 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
             PolicyReference = snapshot.Reference
         };
 
-        return ExecutionArtifactFactory.Create(
-            request, decision, completeWorkingSet,
-            snapshot, routingDecisions, providerReports, expertOutputs);
+        return _executionArtifactFactory.Create(
+            request, requestSemanticHash, decision, completeWorkingSet,
+            snapshot, routingDecisions, providerArtifacts);
     }
 
     /// <summary>
@@ -652,17 +695,75 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
         };
     }
 
-    private static ContextDecisionExecutionResult EmptyExecutionResult(
+    private ContextDecisionExecutionResult EmptyExecutionResult(
         ContextDecisionRuntimeRequest request,
+        string requestSemanticHash,
+        IReadOnlyList<ProviderExecutionArtifact> providerArtifacts,
         EffectivePolicySnapshot snapshot,
         ExpertRoutingDecisionSet routing,
-        CandidateWorkingSet workingSet,
-        IReadOnlyList<ProviderExecutionReport> providerReports,
-        IReadOnlyList<ExpertExecutionResult>? expertOutputs)
+        CandidateWorkingSet workingSet)
     {
-        return ExecutionArtifactFactory.Create(
-            request, EmptyResult(request, snapshot), workingSet,
-            snapshot, routing, providerReports, expertOutputs);
+        return _executionArtifactFactory.Create(
+            request, requestSemanticHash, EmptyResult(request, snapshot), workingSet,
+            snapshot, routing, providerArtifacts);
+    }
+
+    /// <summary>
+    /// R28-B.7-Final：从 expertOutputs + providerReports 构建 ProviderExecutionArtifact[]。
+    /// </summary>
+    /// <remarks>
+    /// expertOutputs 与 providerReports 按相同顺序收集（InvokeEnabledProvidersWithDagAsync 产出），
+    /// 按索引配对：Kind/Succeeded/Duration/StoreCallCount/ErrorCode 取自 report，
+    /// Envelopes/Materials 取自 output。数量不匹配时按 output 为主，Kind 回退到 Semantic。
+    /// </remarks>
+    private static IReadOnlyList<ProviderExecutionArtifact> BuildProviderArtifacts(
+        IReadOnlyList<ExpertExecutionResult> expertOutputs,
+        IReadOnlyList<ProviderExecutionReport> providerReports)
+    {
+        if (expertOutputs.Count == 0)
+        {
+            return Array.Empty<ProviderExecutionArtifact>();
+        }
+
+        var artifacts = new List<ProviderExecutionArtifact>(expertOutputs.Count);
+        for (var i = 0; i < expertOutputs.Count; i++)
+        {
+            var output = expertOutputs[i];
+            // 按索引从 providerReports 取 Kind / Succeeded / Duration / StoreCallCount / ErrorCode（同序收集）
+            ExpertKind kind;
+            bool succeeded;
+            TimeSpan duration;
+            int storeCallCount;
+            string? errorCode;
+            if (i < providerReports.Count)
+            {
+                kind = providerReports[i].Kind;
+                succeeded = providerReports[i].Succeeded;
+                duration = providerReports[i].Duration;
+                storeCallCount = providerReports[i].StoreCallCount;
+                errorCode = providerReports[i].ErrorCode;
+            }
+            else
+            {
+                kind = ExpertKind.Semantic;
+                succeeded = true;
+                duration = TimeSpan.Zero;
+                storeCallCount = 0;
+                errorCode = null;
+            }
+
+            artifacts.Add(new ProviderExecutionArtifact
+            {
+                Kind = kind,
+                Envelopes = output.Envelopes,
+                Materials = output.Materials,
+                Succeeded = succeeded,
+                Duration = duration,
+                StoreCallCount = storeCallCount,
+                ErrorCode = errorCode
+            });
+        }
+        return artifacts;
     }
 
     /// <summary>
@@ -921,7 +1022,248 @@ public sealed class DefaultContextDecisionRuntime : IContextDecisionRuntime
 }
 
 // ---------------------------------------------------------------------------
-// §5.1.1 ExecutionArtifactFactory — R28-B.7 P0-1：执行结果工厂
+// §5.1.1a DefaultRuntimeRequestNormalizer — R28-B.7-Final：请求标准化器默认实现
+// ---------------------------------------------------------------------------
+
+/// <summary>
+/// R28-B.7-Final：Runtime 请求标准化器默认实现。
+/// </summary>
+/// <remarks>
+/// 标准化规则：
+///   1. RequestId：空时生成 GUID（保证 replay 可追溯）。
+///   2. Scope：trim 空白；WorkspaceId/CollectionId 空时回退到 "default"。
+///   3. TokenBudget：&lt;= 0 时填充默认 4096（与 BuildV2RetrievalRequest 一致）。
+///   4. TopK：&lt;= 0 或 int.MaxValue 时保留（由后续 Policy/Router 解析默认值）。
+///   5. QueryText：trim 空白（空字符串 → null，避免后续 Provider 误判）。
+///   6. 专用 Input（RetrievalInput/PackageInput/AgentInput）：原样保留，不做转换。
+/// 标准化后的请求不可变，贯穿整个请求生命周期。
+/// </remarks>
+public sealed class DefaultRuntimeRequestNormalizer : IRuntimeRequestNormalizer
+{
+    /// <summary>默认 token 预算（与 BuildV2RetrievalRequest / BuildV2PackageRequest 一致）。</summary>
+    private const int DefaultTokenBudget = 4096;
+
+    /// <summary>默认 workspace 回退值（Scope 空时使用）。</summary>
+    private const string DefaultWorkspaceId = "default";
+
+    /// <summary>默认 collection 回退值（Scope 空时使用）。</summary>
+    private const string DefaultCollectionId = "default";
+
+    /// <summary>单例实例（无状态，可共享）。</summary>
+    public static readonly DefaultRuntimeRequestNormalizer Instance = new();
+
+    /// <summary>标准化 Runtime 请求。</summary>
+    public ContextDecisionRuntimeRequest Normalize(ContextDecisionRuntimeRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var requestId = string.IsNullOrWhiteSpace(request.RequestId)
+            ? Guid.NewGuid().ToString("N")
+            : request.RequestId.Trim();
+
+        var workspaceId = string.IsNullOrWhiteSpace(request.Scope.WorkspaceId)
+            ? DefaultWorkspaceId
+            : request.Scope.WorkspaceId.Trim();
+        var collectionId = string.IsNullOrWhiteSpace(request.Scope.CollectionId)
+            ? DefaultCollectionId
+            : request.Scope.CollectionId.Trim();
+        var scope = new ContextDecisionScope(workspaceId, collectionId);
+
+        var tokenBudget = request.TokenBudget > 0
+            ? request.TokenBudget
+            : DefaultTokenBudget;
+
+        // TopK <= 0 或 int.MaxValue 保留原值（由 Policy/Router 解析默认值，避免覆盖 Package 的 int.MaxValue 语义）
+        var topK = request.TopK;
+
+        // QueryText trim 空白（空字符串 → null）
+        var queryText = string.IsNullOrWhiteSpace(request.QueryText)
+            ? null
+            : request.QueryText.Trim();
+
+        // 如果所有字段都已标准化，直接返回原请求（避免无谓的 record 拷贝）
+        if (ReferenceEquals(request.RequestId, requestId)
+            && request.Scope.Equals(scope)
+            && request.TokenBudget == tokenBudget
+            && request.TopK == topK
+            && ReferenceEquals(request.QueryText, queryText))
+        {
+            return request;
+        }
+
+        return request with
+        {
+            RequestId = requestId,
+            Scope = scope,
+            TokenBudget = tokenBudget,
+            TopK = topK,
+            QueryText = queryText
+        };
+    }
+}
+
+// ---------------------------------------------------------------------------
+// §5.1.1b DefaultRequestSemanticHasher — R28-B.7-Final：请求语义哈希器默认实现
+// ---------------------------------------------------------------------------
+
+/// <summary>
+/// R28-B.7-Final：请求语义哈希器默认实现。使用 SHA256 + invariant culture 计算稳定哈希。
+/// </summary>
+/// <remarks>
+/// 哈希输入：RequestId + Scope + Purpose + QueryText + TokenBudget + TopK。
+/// 不包含 SeedCandidates / RetrievalInput / PackageInput（这些在 replay 时由 fixture 注入）。
+/// 哈希跨进程/跨平台稳定（使用 invariant culture 格式化数值）。
+/// </remarks>
+public sealed class DefaultRequestSemanticHasher : IRequestSemanticHasher
+{
+    /// <summary>单例实例（无状态，可共享）。</summary>
+    public static readonly DefaultRequestSemanticHasher Instance = new();
+
+    /// <summary>计算请求的语义哈希（SHA256 hex）。</summary>
+    public string ComputeHash(ContextDecisionRuntimeRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var sb = new StringBuilder(256);
+        sb.Append(request.RequestId);
+        sb.Append('|');
+        sb.Append(request.Scope.WorkspaceId);
+        sb.Append('|');
+        sb.Append(request.Scope.CollectionId);
+        sb.Append('|');
+        sb.Append((int)request.Purpose);
+        sb.Append('|');
+        sb.Append(request.QueryText ?? string.Empty);
+        sb.Append('|');
+        sb.Append(request.TokenBudget.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        sb.Append('|');
+        sb.Append(request.TopK.ToString(System.Globalization.CultureInfo.InvariantCulture));
+
+        var bytes = Encoding.UTF8.GetBytes(sb.ToString());
+        var hash = SHA256.HashData(bytes);
+        return Convert.ToHexString(hash);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// §5.1.1c DefaultExecutionArtifactFactory — R28-B.7-Final：Execution Artifact 工厂默认实现
+// ---------------------------------------------------------------------------
+
+/// <summary>
+/// R28-B.7-Final：Execution Artifact 工厂默认实现。
+/// 从 <see cref="ProviderExecutionArtifact"/>[] 构建完整 <see cref="ContextDecisionExecutionResult"/>。
+/// </summary>
+/// <remarks>
+/// 替代旧的 internal static ExecutionArtifactFactory，改为可注入的 IExecutionArtifactFactory 实现。
+/// 从单一数据源（ProviderExecutionArtifact[]）构建 ProviderReports 与 ProviderOutputSnapshots，
+/// 让 Runtime 不再分散处理 expertOutputs + providerReports 的配对逻辑。
+/// </remarks>
+public sealed class DefaultExecutionArtifactFactory : IExecutionArtifactFactory
+{
+    /// <summary>当前 Allocator 版本（与 DefaultAllocatorV2_1 诊断字段保持一致）。</summary>
+    private const string AllocatorVersion = "V2.1";
+
+    /// <summary>单例实例（无状态，可共享）。</summary>
+    public static readonly DefaultExecutionArtifactFactory Instance = new();
+
+    /// <summary>创建完整填充的 <see cref="ContextDecisionExecutionResult"/>。</summary>
+    public ContextDecisionExecutionResult Create(
+        ContextDecisionRuntimeRequest normalizedRequest,
+        string requestSemanticHash,
+        ContextDecisionResult decision,
+        CandidateWorkingSet workingSet,
+        EffectivePolicySnapshot policy,
+        ExpertRoutingDecisionSet routing,
+        IReadOnlyList<ProviderExecutionArtifact> providerArtifacts)
+    {
+        ArgumentNullException.ThrowIfNull(normalizedRequest);
+        ArgumentNullException.ThrowIfNull(decision);
+        ArgumentNullException.ThrowIfNull(workingSet);
+        ArgumentNullException.ThrowIfNull(policy);
+        ArgumentNullException.ThrowIfNull(routing);
+        ArgumentNullException.ThrowIfNull(providerArtifacts);
+
+        // R28-B.7-Final 工作包 C：计算最终 Artifact token 成本（含 section 明细 + 分隔符）。
+        // Allocator 与 Projector 使用同一 tokenizer 版本（TokenizerId），确保 token 计数一致。
+        var finalTokenCost = TokenCostHelper.ComputeFinalArtifactTokenCost(decision, workingSet);
+
+        return new ContextDecisionExecutionResult
+        {
+            Decision = decision,
+            WorkingSet = workingSet,
+            Policy = policy,
+            Routing = routing,
+            // 从 ProviderExecutionArtifact[] 构建 ProviderReports（向后兼容字段）
+            ProviderReports = BuildProviderReports(providerArtifacts),
+            // 标准化后的请求
+            NormalizedRequest = normalizedRequest,
+            // 请求语义哈希（由 IRequestSemanticHasher 计算，用于 replay 匹配）
+            RequestSemanticHash = requestSemanticHash,
+            // 请求作用域（从标准化请求直接获取，不从候选反推）
+            Scope = normalizedRequest.Scope,
+            // Feature Schema 版本（从 Policy 获取）
+            FeatureSchemaVersion = policy.FeatureSchemaVersion,
+            // Allocator 版本（用于 replay 兼容性）
+            AllocatorVersion = AllocatorVersion,
+            // R28-B.7-Final 工作包 C：Tokenizer 版本从 FinalTokenCost.TokenizerId 获取，
+            // 确保 TokenizerVersion 与实际 token 计算使用的 tokenizer 一致（可追溯）。
+            TokenizerVersion = finalTokenCost.TokenizerId,
+            // Provider 输出快照（用于 replay 和审计）
+            ProviderOutputSnapshots = BuildProviderOutputSnapshots(providerArtifacts),
+            // R28-B.7-Final 工作包 C：最终序列化 token 成本（含 section content + separator + header）
+            FinalTokenCost = finalTokenCost,
+            // R28-B.7-Final 工作包 D：任一 Provider degraded 时标记 IsDegraded=true
+            IsDegraded = providerArtifacts.Count > 0 && providerArtifacts.Any(p => !p.Succeeded)
+        };
+    }
+
+    /// <summary>从 ProviderExecutionArtifact[] 构建 ProviderExecutionReport 列表。</summary>
+    private static IReadOnlyList<ProviderExecutionReport> BuildProviderReports(
+        IReadOnlyList<ProviderExecutionArtifact> artifacts)
+    {
+        if (artifacts.Count == 0) return Array.Empty<ProviderExecutionReport>();
+
+        var reports = new List<ProviderExecutionReport>(artifacts.Count);
+        foreach (var artifact in artifacts)
+        {
+            reports.Add(new ProviderExecutionReport
+            {
+                Kind = artifact.Kind,
+                Succeeded = artifact.Succeeded,
+                TimedOut = !artifact.Succeeded && artifact.ErrorCode == "timeout",
+                Duration = artifact.Duration,
+                CandidateCount = artifact.Envelopes.Count,
+                StoreCallCount = artifact.StoreCallCount,
+                ErrorCode = artifact.ErrorCode
+            });
+        }
+        return reports;
+    }
+
+    /// <summary>从 ProviderExecutionArtifact[] 构建 ProviderOutputSnapshot 列表。</summary>
+    private static IReadOnlyList<ProviderOutputSnapshot> BuildProviderOutputSnapshots(
+        IReadOnlyList<ProviderExecutionArtifact> artifacts)
+    {
+        if (artifacts.Count == 0) return Array.Empty<ProviderOutputSnapshot>();
+
+        var snapshots = new List<ProviderOutputSnapshot>(artifacts.Count);
+        foreach (var artifact in artifacts)
+        {
+            snapshots.Add(new ProviderOutputSnapshot
+            {
+                Kind = artifact.Kind,
+                Envelopes = artifact.Envelopes,
+                Materials = artifact.Materials,
+                Succeeded = artifact.Succeeded,
+                Duration = artifact.Duration
+            });
+        }
+        return snapshots;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// §5.1.1 ExecutionArtifactFactory — R28-B.7 P0-1：执行结果工厂（保留向后兼容）
 // ---------------------------------------------------------------------------
 
 /// <summary>
@@ -981,7 +1323,11 @@ internal static class ExecutionArtifactFactory
             // R28-B.7 P0-1：Tokenizer 版本（无 resolver 注入时为 null）
             TokenizerVersion = TokenizerVersionValue,
             // R28-B.7 P0-1：Provider 输出快照（用于 replay 和审计）
-            ProviderOutputSnapshots = BuildProviderOutputSnapshots(expertOutputs, providerReports)
+            ProviderOutputSnapshots = BuildProviderOutputSnapshots(expertOutputs, providerReports),
+            // R28-B.7-Final 工作包 C：统一 Token Ledger — 从 AllocationDecisions + WorkingSet 精确计算
+            FinalTokenCost = TokenCostHelper.ComputeFinalArtifactTokenCost(decision, workingSet),
+            // R28-B.7-Final 工作包 D：Provider degraded 标记（任一 Provider 失败时为 true）
+            IsDegraded = providerReports.Count > 0 && providerReports.Any(r => !r.Succeeded)
         };
     }
 
@@ -1035,10 +1381,10 @@ internal static class ExecutionArtifactFactory
         for (var i = 0; i < expertOutputs.Count; i++)
         {
             var output = expertOutputs[i];
-            // 按索引从 providerReports 取 Kind / Succeeded / Duration（同序收集）
-            var (kind, succeeded, duration) = i < providerReports.Count
-                ? (providerReports[i].Kind, providerReports[i].Succeeded, providerReports[i].Duration)
-                : (ExpertKind.Semantic, true, TimeSpan.Zero);
+            // 按索引从 providerReports 取 Kind / Succeeded / Duration / ErrorCode（同序收集）
+            var (kind, succeeded, duration, errorCode) = i < providerReports.Count
+                ? (providerReports[i].Kind, providerReports[i].Succeeded, providerReports[i].Duration, providerReports[i].ErrorCode)
+                : (ExpertKind.Semantic, true, TimeSpan.Zero, (string?)null);
 
             snapshots.Add(new ProviderOutputSnapshot
             {
@@ -1046,7 +1392,9 @@ internal static class ExecutionArtifactFactory
                 Envelopes = output.Envelopes,
                 Materials = output.Materials,
                 Succeeded = succeeded,
-                Duration = duration
+                Duration = duration,
+                // R28-B.7-Final 工作包 D：传播错误码到快照（用于 replay 诊断 degraded 原因）
+                ErrorCode = errorCode
             });
         }
         return snapshots;
@@ -1128,6 +1476,108 @@ internal static class TokenCostHelper
     {
         if (candidateCount <= 1) return candidateTokenSum;
         return candidateTokenSum + separatorTokens * (candidateCount - 1);
+    }
+
+    /// <summary>
+    /// R28-B.7-Final：计算最终 Artifact 的统一 Token Ledger（CandidateTokenCost → SectionTokenCost → FinalArtifactTokenCost）。
+    /// </summary>
+    /// <param name="decision">决策结果（含 AllocationDecisions + Outcome.TokenBudget）。</param>
+    /// <param name="workingSet">候选工作集（含 Materials，用于精确 token 计算）。</param>
+    /// <param name="tokenizerResolver">tokenizer 解析器（null 时使用 AllocationDecisions.IncludedTokens）。</param>
+    /// <param name="modelName">tokenizer 使用的模型名（可选）。</param>
+    /// <returns>最终 Artifact token 成本（含 section 明细 + 总 token + 预算状态）。</returns>
+    /// <remarks>
+    /// Allocator 与 Projector 必须使用同一 tokenizer 版本（TokenizerId）以保证一致性。
+    /// 当 tokenizerResolver 可用时，从 Materials 正文精确计算 content tokens；
+    /// 否则回退到 AllocationDecisions.IncludedTokens（Allocator 预估值）。
+    /// 分隔符 token = 2/候选间（"\n\n"），与 PackageResultProjector 一致。
+    /// </remarks>
+    public static FinalArtifactTokenCost ComputeFinalArtifactTokenCost(
+        ContextDecisionResult decision,
+        CandidateWorkingSet workingSet,
+        IContextTokenizerResolver? tokenizerResolver = null,
+        string? modelName = null)
+    {
+        ArgumentNullException.ThrowIfNull(decision);
+        ArgumentNullException.ThrowIfNull(workingSet);
+
+        // 按 Section 分组 AllocationDecisions
+        var sectionGroups = decision.AllocationDecisions
+            .GroupBy(d => d.Section, StringComparer.Ordinal)
+            .OrderBy(g => g.Key, StringComparer.Ordinal)
+            .ToList();
+
+        var sections = new List<SectionTokenCost>(sectionGroups.Count);
+        var totalTokens = 0;
+        var tokenizerId = EstimatedTokenizerId;
+
+        foreach (var group in sectionGroups)
+        {
+            var allocations = group.ToList();
+            var contentTokens = 0;
+            // 分隔符 token：2/候选间（"\n\n"），与 PackageResultProjector 一致
+            var separatorTokens = 2 * Math.Max(0, allocations.Count - 1);
+            // section 名为元数据，不计入内容 token
+            var headerTokens = 0;
+
+            if (tokenizerResolver is not null)
+            {
+                // 精确模式：从 Materials 提取正文，使用 tokenizer 精确计数
+                tokenizerId = modelName ?? "default";
+                foreach (var alloc in allocations)
+                {
+                    if (workingSet.Materials.TryGetValue(alloc.CandidateKey, out var material))
+                    {
+                        var cost = ComputeTokenCost(material.Content, tokenizerResolver, modelName);
+                        if (!cost.IsEstimated) tokenizerId = cost.TokenizerId;
+                        contentTokens += cost.ContentTokens;
+                    }
+                    else
+                    {
+                        // Material 缺失时回退到 IncludedTokens
+                        contentTokens += alloc.IncludedTokens;
+                    }
+                }
+            }
+            else
+            {
+                // 估算模式：使用 Allocator 的 IncludedTokens（与 Projector 消费同一数据源）
+                tokenizerId = "allocator-included-tokens";
+                contentTokens = allocations.Sum(d => d.IncludedTokens);
+            }
+
+            sections.Add(new SectionTokenCost
+            {
+                Section = group.Key,
+                ContentTokens = contentTokens,
+                SeparatorTokens = separatorTokens,
+                HeaderTokens = headerTokens
+            });
+            totalTokens += contentTokens + separatorTokens + headerTokens;
+        }
+
+        // 无 AllocationDecisions 时（如 Retrieval 路径或空决策）：使用 Outcome.EstimatedTokens 作为总 token
+        if (sections.Count == 0 && decision.Outcome.EstimatedTokens > 0)
+        {
+            sections.Add(new SectionTokenCost
+            {
+                Section = "default",
+                ContentTokens = decision.Outcome.EstimatedTokens,
+                SeparatorTokens = 0,
+                HeaderTokens = 0
+            });
+            totalTokens = decision.Outcome.EstimatedTokens;
+        }
+
+        var budgetLimit = decision.Outcome.TokenBudget;
+        return new FinalArtifactTokenCost
+        {
+            Sections = sections,
+            TotalTokens = totalTokens,
+            TokenizerId = tokenizerId,
+            WithinBudget = budgetLimit <= 0 || totalTokens <= budgetLimit,
+            BudgetLimit = budgetLimit
+        };
     }
 }
 

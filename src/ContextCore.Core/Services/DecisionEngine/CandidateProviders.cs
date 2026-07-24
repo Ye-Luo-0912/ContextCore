@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services.Retrieval;
@@ -70,6 +71,68 @@ internal static class CandidateProviderHelpers
         if (context.Routing.TokenBudget > 0) return context.Routing.TokenBudget;
         if (context.Request.TokenBudget > 0) return context.Request.TokenBudget;
         return context.Policy.Budget.DefaultTokenBudget;
+    }
+
+    /// <summary>
+    /// R28-B.7-Final：从 RetrievalInput.Plan（序列化 JSON 字符串）解析排除状态列表。
+    /// </summary>
+    /// <remarks>
+    /// Plan 是 RetrievalPlan 的 JSON 序列化字符串，ExcludedStatuses 字段指定应从召回结果中
+    /// 排除的条目状态（如 "deprecated"、"rejected"）。Provider 在召回后按此列表过滤。
+    /// 解析失败或字段缺失时返回空数组（兼容旧格式 / 非 JSON Plan）。
+    /// </remarks>
+    internal static IReadOnlyList<string> ResolveExcludedStatusesFromPlan(string? plan)
+    {
+        if (string.IsNullOrWhiteSpace(plan)) return Array.Empty<string>();
+        try
+        {
+            using var doc = JsonDocument.Parse(plan);
+            if (doc.RootElement.TryGetProperty("ExcludedStatuses", out var statusesEl)
+                && statusesEl.ValueKind == JsonValueKind.Array)
+            {
+                var result = new List<string>(statusesEl.GetArrayLength());
+                foreach (var item in statusesEl.EnumerateArray())
+                {
+                    if (item.ValueKind == JsonValueKind.String)
+                    {
+                        var s = item.GetString();
+                        if (!string.IsNullOrWhiteSpace(s)) result.Add(s);
+                    }
+                }
+                return result;
+            }
+        }
+        catch (JsonException)
+        {
+            // Plan 不是有效 JSON 时忽略（兼容旧格式）
+        }
+        return Array.Empty<string>();
+    }
+
+    /// <summary>
+    /// R28-B.7-Final：应用 Plan 的 ExcludedStatuses 过滤到记忆条目列表。
+    /// </summary>
+    /// <remarks>
+    /// 从 Plan 解析排除状态列表，过滤掉 Status 匹配的记忆条目（如 "deprecated"、"rejected"）。
+    /// 无排除状态时直接返回原列表（避免无谓分配）。
+    /// </remarks>
+    internal static IReadOnlyList<ContextMemoryItem> ApplyExcludedStatusesFilter(
+        IReadOnlyList<ContextMemoryItem> memories,
+        string? plan)
+    {
+        var excludedStatuses = ResolveExcludedStatusesFromPlan(plan);
+        if (excludedStatuses.Count == 0) return memories;
+
+        var excludedSet = new HashSet<string>(excludedStatuses, StringComparer.OrdinalIgnoreCase);
+        var filtered = new List<ContextMemoryItem>(memories.Count);
+        foreach (var memory in memories)
+        {
+            if (!excludedSet.Contains(memory.Status.ToString()))
+            {
+                filtered.Add(memory);
+            }
+        }
+        return filtered;
     }
 
     /// <summary>从 ContextItem 构建 Envelope + Material。</summary>
@@ -396,6 +459,7 @@ public sealed class MandatoryCandidateProvider : ICandidateProvider
     /// <summary>
     /// R28-B.6 P0-1：从 Request 解析 RequiredIds（RetrievalInput 优先，回退到 PackageInput）。
     /// R28-B.7 P1-1：Refs 也合并为额外 RequiredIds（强制召回）。
+    /// R28-B.7-Final：AgentInput.RequiredIds 也作为回退源（AgentContext 路径 mandatory recall）。
     /// </summary>
     private static IReadOnlyList<string> ResolveRequiredIds(ContextDecisionRuntimeRequest request)
     {
@@ -414,6 +478,11 @@ public sealed class MandatoryCandidateProvider : ICandidateProvider
         if (request.PackageInput?.RequiredIds is { Count: > 0 } pkgIds)
         {
             return pkgIds;
+        }
+        // R28-B.7-Final：AgentInput.RequiredIds 回退（AgentContext 路径）
+        if (request.AgentInput?.RequiredIds is { Count: > 0 } agentIds)
+        {
+            return agentIds;
         }
         return Array.Empty<string>();
     }
@@ -506,6 +575,12 @@ public sealed class LexicalCandidateProvider : ICandidateProvider
     {
         ArgumentNullException.ThrowIfNull(context);
         cancellationToken.ThrowIfCancellationRequested();
+
+        // R28-B.7-Final：尊重 RetrievalInput.IncludeKeywordRecall（默认 true，false 时跳过关键词召回）
+        if (context.Request.RetrievalInput?.IncludeKeywordRecall == false)
+        {
+            return CandidateProviderHelpers.Empty();
+        }
 
         // R28-B.7 P1-1：优先使用 RewrittenQueryText（query rewriting 后的结果），回退到 QueryText
         var retrievalInput = context.Request.RetrievalInput;
@@ -654,6 +729,12 @@ public sealed class SemanticCandidateProvider : ICandidateProvider
         cancellationToken.ThrowIfCancellationRequested();
 
         if (_vectorStore is null) return CandidateProviderHelpers.Empty();
+
+        // R28-B.7-Final：尊重 RetrievalInput.IncludeVectorRecall（默认 true，false 时跳过向量召回）
+        if (context.Request.RetrievalInput?.IncludeVectorRecall == false)
+        {
+            return CandidateProviderHelpers.Empty();
+        }
 
         // R28-B.6 P0-1：读取 RetrievalInput 中的语义召回参数
         var retrievalInput = context.Request.RetrievalInput;
@@ -903,6 +984,12 @@ public sealed class WorkingMemoryCandidateProvider : ICandidateProvider
 
         if (_memoryStore is null) return CandidateProviderHelpers.Empty();
 
+        // R28-B.7-Final：尊重 RetrievalInput.IncludeWorkingMemory（默认 true，false 时跳过工作记忆召回）
+        if (context.Request.RetrievalInput?.IncludeWorkingMemory == false)
+        {
+            return CandidateProviderHelpers.Empty();
+        }
+
         // R28-B.7 P1-1：尊重 RetrievalInput.IncludeContent（默认 true）
         var includeContent = context.Request.RetrievalInput?.IncludeContent ?? true;
 
@@ -915,6 +1002,10 @@ public sealed class WorkingMemoryCandidateProvider : ICandidateProvider
             Take = take
         }, cancellationToken).ConfigureAwait(false);
 
+        if (memories.Count == 0) return CandidateProviderHelpers.Empty();
+
+        // R28-B.7-Final：应用 Plan 的 ExcludedStatuses 过滤（排除废弃/拒绝等状态的记忆）
+        memories = CandidateProviderHelpers.ApplyExcludedStatusesFilter(memories, context.Request.RetrievalInput?.Plan);
         if (memories.Count == 0) return CandidateProviderHelpers.Empty();
 
         var envelopes = new List<ContextCandidateEnvelope>(memories.Count);
@@ -961,6 +1052,12 @@ public sealed class StableMemoryCandidateProvider : ICandidateProvider
 
         if (_memoryStore is null) return CandidateProviderHelpers.Empty();
 
+        // R28-B.7-Final：尊重 RetrievalInput.IncludeStableMemory（默认 true，false 时跳过稳定记忆召回）
+        if (context.Request.RetrievalInput?.IncludeStableMemory == false)
+        {
+            return CandidateProviderHelpers.Empty();
+        }
+
         // R28-B.7 P1-1：尊重 RetrievalInput.IncludeContent（默认 true）
         var includeContent = context.Request.RetrievalInput?.IncludeContent ?? true;
 
@@ -974,6 +1071,10 @@ public sealed class StableMemoryCandidateProvider : ICandidateProvider
             Take = take
         }, cancellationToken).ConfigureAwait(false);
 
+        if (memories.Count == 0) return CandidateProviderHelpers.Empty();
+
+        // R28-B.7-Final：应用 Plan 的 ExcludedStatuses 过滤（排除废弃/拒绝等状态的记忆）
+        memories = CandidateProviderHelpers.ApplyExcludedStatusesFilter(memories, context.Request.RetrievalInput?.Plan);
         if (memories.Count == 0) return CandidateProviderHelpers.Empty();
 
         var envelopes = new List<ContextCandidateEnvelope>(memories.Count);
@@ -1034,6 +1135,12 @@ public sealed class GraphCandidateProvider : ICandidateProvider
 
         if (_relationStore is null) return CandidateProviderHelpers.Empty();
         if (context.Request.SeedCandidates.Count == 0) return CandidateProviderHelpers.Empty();
+
+        // R28-B.7-Final：尊重 RetrievalInput.IncludeRelationExpansion（默认 true，false 时跳过关系图扩展）
+        if (context.Request.RetrievalInput?.IncludeRelationExpansion == false)
+        {
+            return CandidateProviderHelpers.Empty();
+        }
 
         var take = CandidateProviderHelpers.ResolveTake(context);
         var workspaceId = context.Request.Scope.WorkspaceId;

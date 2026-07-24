@@ -226,6 +226,15 @@ public sealed class DecisionExperimentPlaneIntegration : IAsyncDisposable
     private readonly List<ExperimentEvent> _deadLetterQueue = new();
     private readonly object _deadLetterLock = new();
 
+    // R28-B.7 工作包 F：sequence-aware flush。
+    // _sequenceCounter：单调递增的事件序号（Enqueue 时 Interlocked.Increment 分配）。
+    //   让 FlushResult 能返回 AcceptedSequence（sentinel 序号）+ LastPersistedSequence（最后成功落盘序号），
+    //   调用方可据此判断 flush 是否覆盖了目标序号之前所有事件。
+    // _lastPersistedSequence：consumer 最后一次成功 RecordAsync 的事件序号；
+    //   失败/丢弃事件不更新此值，使 LastPersistedSequence 准确反映"已落盘到哪个序号"。
+    private long _sequenceCounter;
+    private long _lastPersistedSequence;
+
     /// <summary>构造长期实验平面集成。</summary>
     /// <param name="engine">R28-B.7 工作包 F：纯决策 Engine。可选；注入后启用 DecisionReplay/ExpertReplay。</param>
     /// <param name="merger">R28-B.7 P1-5：候选合并器。可选；未注入时使用 <see cref="DefaultCanonicalCandidateMerger"/>。
@@ -284,6 +293,39 @@ public sealed class DecisionExperimentPlaneIntegration : IAsyncDisposable
                 return _deadLetterQueue.Count;
             }
         }
+    }
+
+    /// <summary>R28-B.7 工作包 F / Final：查询 dead-letter 队列（重试失败后保留的事件快照）。</summary>
+    /// <returns>dead-letter 队列的线程安全快照（副本）。</returns>
+    /// <remarks>
+    /// 返回副本避免调用方持锁访问；调用方可检视失败事件的 Fixture + Sequence 用于诊断。
+    /// </remarks>
+    public IReadOnlyList<ExperimentEvent> GetDeadLetterQueue()
+    {
+        lock (_deadLetterLock)
+        {
+            return _deadLetterQueue.ToList();
+        }
+    }
+
+    /// <summary>R28-B.7 工作包 F：获取实验平面指标快照（供 ControlRoom / 诊断工具消费）。</summary>
+    /// <returns>包含 QueueDepth / DroppedCount / FailedWriteCount / DeadLetterCount 等指标的不可变快照。</returns>
+    /// <remarks>
+    /// 一次调用捕获全部关键指标，避免 ControlRoom 多次读取时计数器不一致。
+    /// ControlRoom 可定期调用此方法渲染指标页面，监控实验平面健康度。
+    /// </remarks>
+    public ExperimentPlaneMetricsSnapshot GetMetricsSnapshot()
+    {
+        return new ExperimentPlaneMetricsSnapshot
+        {
+            QueueDepth = _queue.Reader.Count,
+            DroppedCount = _droppedCount,
+            FailedWriteCount = _failedWriteCount,
+            ProcessedCount = _processedCount,
+            DeadLetterCount = DeadLetterCount,
+            LastPersistedSequence = Interlocked.Read(ref _lastPersistedSequence),
+            LastAcceptedSequence = Interlocked.Read(ref _sequenceCounter)
+        };
     }
 
     /// <summary>历史 replay fixture 集合（线程安全快照）。</summary>
@@ -735,9 +777,11 @@ public sealed class DecisionExperimentPlaneIntegration : IAsyncDisposable
     // -----------------------------------------------------------------------
 
     /// <summary>
-    /// R28-B.6 Impl-5 / R28-B.7 工作包 G / P1-6：非阻塞入队。
+    /// R28-B.6 Impl-5 / R28-B.7 工作包 G / P1-6 / 工作包 F：非阻塞入队。
     /// </summary>
     /// <remarks>
+    /// R28-B.7 工作包 F：入队前为事件分配单调递增的 Sequence（Interlocked.Increment），
+    /// 让 FlushResult 能返回 AcceptedSequence + LastPersistedSequence，实现 sequence-aware flush。
     /// bounded channel（Wait 模式）下：TryWrite 在以下情况返回 false：
     ///   1. 队列已满（consumer 跟不上写入速率）— R28-B.7 P1-6 修复：DropOldest 模式下
     ///      TryWrite 永远返回 true（内部静默丢弃最旧事件），DroppedCount 不可信；
@@ -748,7 +792,9 @@ public sealed class DecisionExperimentPlaneIntegration : IAsyncDisposable
     /// </remarks>
     private void Enqueue(ExperimentEvent evt)
     {
-        if (!_queue.Writer.TryWrite(evt))
+        // 工作包 F：分配单调递增序号，使 FlushResult 能报告 AcceptedSequence / LastPersistedSequence。
+        var sequenced = evt with { Sequence = Interlocked.Increment(ref _sequenceCounter) };
+        if (!_queue.Writer.TryWrite(sequenced))
         {
             // 队列满或 writer 已完成：计数并丢弃，不阻塞调用方。
             Interlocked.Increment(ref _droppedCount);
@@ -756,25 +802,41 @@ public sealed class DecisionExperimentPlaneIntegration : IAsyncDisposable
     }
 
     /// <summary>
-    /// R28-B.6 Impl-5 / R28-B.7 工作包 G：等待队列中此前所有事件被 consumer 处理完成，
-    /// 并返回累计计数快照。
+    /// R28-B.6 Impl-5 / R28-B.7 工作包 G / 工作包 F：等待队列中此前所有事件被 consumer 处理完成，
+    /// 并返回累计计数快照 + sequence 信息。
     /// </summary>
     /// <remarks>
     /// 通过入队一个 sentinel（TaskCompletionSource）并在 consumer 处理到它时
     /// 完成 TCS，实现"排空到此处"的语义。<b>不</b>调用 TryComplete（保留 writer 以便后续写入）；
     /// TryComplete 仅在 <see cref="DisposeAsync"/> 中调用。
+    /// R28-B.7 工作包 F：FlushResult 携带 AcceptedSequence（sentinel 序号）+ LastPersistedSequence
+    /// （最后成功落盘序号），调用方可据此判断 flush 是否覆盖目标序号之前的所有事件，
+    /// 以及是否有事件因写入失败而未落盘（LastPersistedSequence < AcceptedSequence - 1 时存在 gap）。
     /// </remarks>
     public async ValueTask<FlushResult> FlushAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var sentinel = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        if (!_queue.Writer.TryWrite(new ExperimentEvent.Flush(sentinel)))
+        // 工作包 F：sentinel 也分配 Sequence，AcceptedSequence 即 sentinel 序号。
+        var acceptedSequence = Interlocked.Increment(ref _sequenceCounter);
+        var flushEvent = new ExperimentEvent.Flush(sentinel) with { Sequence = acceptedSequence };
+        if (!_queue.Writer.TryWrite(flushEvent))
         {
             // writer 已完成（shutdown 后）：sentinel 无法入队，直接返回当前计数快照。
-            return new FlushResult(_processedCount, _failedWriteCount, _droppedCount);
+            return new FlushResult(
+                _processedCount,
+                _failedWriteCount,
+                _droppedCount,
+                acceptedSequence,
+                Interlocked.Read(ref _lastPersistedSequence));
         }
         await sentinel.Task.ConfigureAwait(false);
-        return new FlushResult(_processedCount, _failedWriteCount, _droppedCount);
+        return new FlushResult(
+            _processedCount,
+            _failedWriteCount,
+            _droppedCount,
+            acceptedSequence,
+            Interlocked.Read(ref _lastPersistedSequence));
     }
 
     /// <summary>
@@ -826,9 +888,9 @@ public sealed class DecisionExperimentPlaneIntegration : IAsyncDisposable
     }
 
     /// <summary>
-    /// R28-B.7 工作包 G：Record 事件重试 + dead-letter。
+    /// R28-B.7 工作包 G / 工作包 F：Record 事件重试 + dead-letter。
     /// 写入失败重试 3 次；仍失败则放入 dead-letter list 并累加 _failedWriteCount。
-    /// 成功则累加 _processedCount。
+    /// 成功则累加 _processedCount 并更新 _lastPersistedSequence（工作包 F：sequence-aware flush）。
     /// </summary>
     private async Task ProcessRecordWithRetryAsync(ExperimentEvent.Record rec, CancellationToken cancellationToken)
     {
@@ -840,6 +902,9 @@ public sealed class DecisionExperimentPlaneIntegration : IAsyncDisposable
             {
                 await _recorder.RecordAsync(rec.Fixture, cancellationToken).ConfigureAwait(false);
                 Interlocked.Increment(ref _processedCount);
+                // 工作包 F：记录最后成功落盘的事件序号，让 FlushResult.LastPersistedSequence 准确。
+                // 使用 Interlocked.Max 保证并发安全（虽然当前 consumer 是单线程，但防御性写法）。
+                InterlockedMax(ref _lastPersistedSequence, rec.Sequence);
                 return;
             }
             catch (OperationCanceledException)
@@ -872,27 +937,48 @@ public sealed class DecisionExperimentPlaneIntegration : IAsyncDisposable
         }
     }
 
+    /// <summary>R28-B.7 工作包 F：线程安全的 Interlocked.Max（long）。</summary>
+    private static void InterlockedMax(ref long target, long value)
+    {
+        long initial;
+        do
+        {
+            initial = Interlocked.CompareExchange(ref target, 0, 0);
+            if (value <= initial) return;
+        }
+        while (Interlocked.CompareExchange(ref target, value, initial) != initial);
+    }
+
     /// <summary>
-    /// R28-B.6 Impl-5 / R28-B.7 工作包 G：优雅停用。
+    /// R28-B.6 Impl-5 / R28-B.7 工作包 G / 工作包 F：优雅停用。
     /// </summary>
     /// <remarks>
     /// R28-B.7 工作包 G：先 TryComplete writer（让 consumer 排空剩余事件再退出），
     /// 再以 5 秒 drain 超时等待 consumer。超时则强制取消 _shutdownCts 释放线程，
     /// 未处理事件丢弃（避免 recorder 持续故障时 DisposeAsync 永久阻塞）。
+    /// R28-B.7 工作包 F：记录 drain 结果到 <see cref="DrainResult"/>，
+    /// 让 ControlRoom / 诊断工具能检视 shutdown 时已 drain / 未 drain 的事件数。
     /// 调用后不应再调用 RecordFixture / RecordShadowReport / ClearHistory（TryWrite 会返回 false 并计入 DroppedCount）。
     /// </remarks>
     public async ValueTask DisposeAsync()
     {
         _queue.Writer.TryComplete();
 
+        // R28-B.7 工作包 F：记录 drain 前已成功落盘的计数，作为 DrainedCount 基线。
+        var drainedCount = _processedCount;
+        var undrainedCount = 0;
+
         using var drainCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
         try
         {
             await _consumerTask.WaitAsync(drainCts.Token).ConfigureAwait(false);
+            // consumer 正常退出：drainedCount 为 drain 后的累计落盘数。
+            drainedCount = _processedCount;
         }
         catch (OperationCanceledException)
         {
             // drain 超时：强制取消 consumer 以释放线程，未处理事件丢弃。
+            undrainedCount = _queue.Reader.Count;
             _shutdownCts.Cancel();
             try
             {
@@ -912,13 +998,28 @@ public sealed class DecisionExperimentPlaneIntegration : IAsyncDisposable
             // consumer 内部已捕获所有非取消异常，此处仅为防御
         }
         _shutdownCts.Dispose();
+
+        // R28-B.7 工作包 F：记录 drain 结果，供 ControlRoom / 诊断工具检视。
+        DrainResult = new DisposeDrainResult(drainedCount, undrainedCount);
     }
 
+    /// <summary>R28-B.7 工作包 F：DisposeAsync 的 drain 结果（null 表示尚未 Dispose）。</summary>
+    public DisposeDrainResult? DrainResult { get; private set; }
+
     /// <summary>
-    /// R28-B.6 Impl-5：实验事件（写路径入队条目）。
+    /// R28-B.6 Impl-5 / R28-B.7 工作包 F：实验事件（写路径入队条目）。
     /// </summary>
-    private abstract record ExperimentEvent
+    /// <remarks>
+    /// R28-B.7 工作包 F：基类携带 Sequence 字段（init 属性），由 Enqueue 在入队前分配。
+    /// 使用 init 属性而非构造参数，避免改变派生 record 的构造函数签名（向后兼容）。
+    /// R28-B.7 Final：改为 public 嵌套类型，让 <see cref="GetDeadLetterQueue"/> 能返回
+    /// <c>IReadOnlyList&lt;ExperimentEvent&gt;</c>，供 ControlRoom / 诊断工具检视失败事件。
+    /// </remarks>
+    public abstract record ExperimentEvent
     {
+        /// <summary>R28-B.7 工作包 F：事件序号（Enqueue 时单调递增分配）。</summary>
+        public long Sequence { get; init; }
+
         /// <summary>记录一条 replay fixture。</summary>
         public sealed record Record(ReplayFixture Fixture) : ExperimentEvent;
 
@@ -950,9 +1051,55 @@ public sealed record FixtureReplayReport(
     string Notes);
 
 /// <summary>
-/// R28-B.7 工作包 G：FlushAsync 结果快照。
+/// R28-B.7 工作包 G / 工作包 F：FlushAsync 结果快照。
 /// </summary>
 /// <param name="ProcessedCount">已成功落盘的 Record 事件数。</param>
 /// <param name="FailedCount">重试 3 次仍失败、已进 dead-letter 的 Record 事件数。</param>
 /// <param name="DroppedCount">入队失败（writer 已完成 / bounded 丢弃）的事件数。</param>
-public sealed record FlushResult(int ProcessedCount, int FailedCount, int DroppedCount);
+/// <param name="AcceptedSequence">R28-B.7 工作包 F：sentinel 事件序号（flush 接受到的最大序号）。</param>
+/// <param name="LastPersistedSequence">R28-B.7 工作包 F：最后成功落盘的 Record 事件序号；小于 AcceptedSequence 表示存在未落盘 gap。</param>
+public sealed record FlushResult(
+    int ProcessedCount,
+    int FailedCount,
+    int DroppedCount,
+    long AcceptedSequence,
+    long LastPersistedSequence);
+
+/// <summary>
+/// R28-B.7 工作包 F：DisposeAsync 的 drain 结果。
+/// </summary>
+/// <param name="DrainedCount">shutdown 时已成功落盘的 Record 事件数（consumer 正常退出后的累计计数）。</param>
+/// <param name="UndrainedCount">shutdown 时因 drain 超时未处理的事件数（队列中剩余事件数）。</param>
+public sealed record DisposeDrainResult(int DrainedCount, int UndrainedCount);
+
+/// <summary>
+/// R28-B.7 工作包 F：实验平面指标快照（供 ControlRoom / 诊断工具消费）。
+/// </summary>
+/// <remarks>
+/// 一次调用捕获全部关键指标，避免 ControlRoom 多次读取时计数器不一致。
+/// ControlRoom 可定期调用 <see cref="DecisionExperimentPlaneIntegration.GetMetricsSnapshot"/>
+/// 渲染指标页面，监控实验平面健康度。
+/// </remarks>
+public sealed record ExperimentPlaneMetricsSnapshot
+{
+    /// <summary>当前队列深度（未消费事件数）。</summary>
+    public int QueueDepth { get; init; }
+
+    /// <summary>累计丢弃事件数（队列满时 TryWrite 返回 false，或 writer 完成后入队失败）。</summary>
+    public int DroppedCount { get; init; }
+
+    /// <summary>累计写入失败事件数（重试 3 次仍未成功，已进 dead-letter）。</summary>
+    public int FailedWriteCount { get; init; }
+
+    /// <summary>累计成功落盘 Record 事件数。</summary>
+    public int ProcessedCount { get; init; }
+
+    /// <summary>dead-letter 队列当前长度（重试失败后保留的事件数）。</summary>
+    public int DeadLetterCount { get; init; }
+
+    /// <summary>R28-B.7 工作包 F：最后成功落盘的 Record 事件序号。</summary>
+    public long LastPersistedSequence { get; init; }
+
+    /// <summary>R28-B.7 工作包 F：最后接受（入队）的事件序号。</summary>
+    public long LastAcceptedSequence { get; init; }
+}

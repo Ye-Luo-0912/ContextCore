@@ -229,6 +229,48 @@ public sealed record ReplayFixture(
     /// </remarks>
     public IReadOnlyList<ProviderOutputSnapshot>? StoredProviderOutputs { get; init; }
 
+    /// <summary>R28-B.7 工作包 E：存储的标准化请求（Purpose Request Normalizer 产出）。</summary>
+    /// <remarks>
+    /// 携带标准化后的请求，让 replay 能对比 stored 与 replayed 的请求标准化结果，
+    /// 检测 Normalizer 版本漂移。null 表示 Execution 未携带。
+    /// </remarks>
+    public ContextDecisionRuntimeRequest? StoredNormalizedRequest { get; init; }
+
+    /// <summary>R28-B.7 工作包 E：存储的请求语义哈希（用于 replay 匹配）。</summary>
+    /// <remarks>
+    /// 让 replay 能按语义哈希匹配历史 fixture，而非依赖 RequestId 字符串匹配。
+    /// null 表示 Execution 未携带。
+    /// </remarks>
+    public string? StoredRequestSemanticHash { get; init; }
+
+    /// <summary>R28-B.7 工作包 E：存储的 Feature Schema 版本（用于 replay 兼容性校验）。</summary>
+    /// <remarks>
+    /// replay 前校验 schema 版本一致，避免 Feature Pipeline 版本不兼容导致重放结果失真。
+    /// null 表示 Execution 未携带。
+    /// </remarks>
+    public string? StoredFeatureSchemaVersion { get; init; }
+
+    /// <summary>R28-B.7 工作包 E：存储的 Allocator 版本（用于 replay 兼容性校验）。</summary>
+    /// <remarks>
+    /// replay 前校验 Allocator 版本一致，避免分配逻辑变更导致重放结果不可比。
+    /// null 表示 Execution 未携带。
+    /// </remarks>
+    public string? StoredAllocatorVersion { get; init; }
+
+    /// <summary>R28-B.7 工作包 E：存储的 Tokenizer 版本（用于 replay 兼容性校验）。</summary>
+    /// <remarks>
+    /// replay 前校验 Tokenizer 版本一致，避免 token 计算口径变化导致预算重放失真。
+    /// null 表示 Execution 未携带。
+    /// </remarks>
+    public string? StoredTokenizerVersion { get; init; }
+
+    /// <summary>R28-B.7 工作包 E：存储的最终产出 token 成本快照（用于 replay 漂移检测）。</summary>
+    /// <remarks>
+    /// 携带 stored 决策的最终 token 成本，让 replay 能对比 stored 与 replayed 的 token 成本，
+    /// 检测 Allocator/Tokenizer 版本漂移。null 表示 Execution 未携带。
+    /// </remarks>
+    public FinalArtifactTokenCost? StoredFinalTokenCost { get; init; }
+
     /// <summary>从 ParityReport 构建 ReplayFixture（不含完整重放数据）。</summary>
     public static ReplayFixture FromReport(ParityReport report, string fixtureId, string purpose, string notes = "")
     {
@@ -270,14 +312,19 @@ public sealed record ReplayFixture(
     }
 
     /// <summary>
-    /// R28-B.7 P0-3：从完整 V2 执行结果构建 ReplayFixture，携带完整重放数据。
+    /// R28-B.7 P0-3 / 工作包 E：从完整 V2 执行结果构建 ReplayFixture，携带完整重放数据。
     /// </summary>
     /// <remarks>
-    /// 填充 StoredWorkingSet / StoredPolicySnapshot / StoredProviderOutputs，
-    /// 使离线 replay 能纯决策重放（DecisionReplay / ExpertReplay）：
+    /// 填充 StoredWorkingSet / StoredPolicySnapshot / StoredProviderOutputs +
+    /// 工作包 E 新增的 StoredNormalizedRequest / StoredRequestSemanticHash /
+    /// StoredFeatureSchemaVersion / StoredAllocatorVersion / StoredTokenizerVersion /
+    /// StoredFinalTokenCost，使离线 replay 能纯决策重放（DecisionReplay / ExpertReplay）：
     ///   - StoredPolicySnapshot：直接喂给 IContextDecisionEngine.DecideAsync，不重新解析 Policy；
     ///   - StoredProviderOutputs：跳过 Provider 执行，直接 Merge 后进入 Engine；
-    ///   - StoredWorkingSet：Engine 入口候选快照。
+    ///   - StoredWorkingSet：Engine 入口候选快照；
+    ///   - StoredNormalizedRequest / StoredRequestSemanticHash：replay 匹配与标准化对比；
+    ///   - StoredFeatureSchemaVersion / StoredAllocatorVersion / StoredTokenizerVersion：replay 兼容性校验；
+    ///   - StoredFinalTokenCost：stored vs replayed token 成本漂移检测。
     /// </remarks>
     public static ReplayFixture FromExecution(
         ParityReport report,
@@ -290,11 +337,19 @@ public sealed record ReplayFixture(
         var fixture = FromShadowReport(report, execution?.WorkingSet, execution?.Decision, fixtureId, purpose, notes);
         if (execution is null) return fixture;
 
+        // R28-B.7 工作包 E：从 Execution 提取完整 artifact 字段，让 replay 能离线重放且可校验版本漂移。
+        // FinalTokenCost 直接取自 execution（由 Runtime 在执行时填充）；未填充时为 null，replay 侧降级跳过校验。
         return fixture with
         {
             StoredWorkingSet = execution.WorkingSet,
             StoredPolicySnapshot = execution.Policy,
-            StoredProviderOutputs = execution.ProviderOutputSnapshots
+            StoredProviderOutputs = execution.ProviderOutputSnapshots,
+            StoredNormalizedRequest = execution.NormalizedRequest,
+            StoredRequestSemanticHash = execution.RequestSemanticHash,
+            StoredFeatureSchemaVersion = execution.FeatureSchemaVersion,
+            StoredAllocatorVersion = execution.AllocatorVersion,
+            StoredTokenizerVersion = execution.TokenizerVersion,
+            StoredFinalTokenCost = execution.FinalTokenCost
         };
     }
 }

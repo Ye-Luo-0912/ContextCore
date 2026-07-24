@@ -141,6 +141,12 @@ public sealed record ContextDecisionExecutionResult
 
     /// <summary>R28-B.7：Provider 输出快照（每个 Provider 的 Envelopes+Materials 快照，用于 replay）。</summary>
     public IReadOnlyList<ProviderOutputSnapshot> ProviderOutputSnapshots { get; init; } = [];
+
+    /// <summary>R28-B.7-Final：最终序列化 token 成本（精确计算，含 section content + separator + header）。</summary>
+    public FinalArtifactTokenCost? FinalTokenCost { get; init; }
+
+    /// <summary>R28-B.7-Final：是否有 Provider degraded（任一 ProviderExecutionReport.Succeeded=false 时为 true）。</summary>
+    public bool IsDegraded { get; init; }
 }
 
 /// <summary>
@@ -161,6 +167,44 @@ public sealed record CandidateTokenCost
 
     /// <summary>是否为粗略估算（true = length/4 回退；false = 精确 tokenizer）。</summary>
     public required bool IsEstimated { get; init; }
+}
+
+/// <summary>R28-B.7-Final：Section token 成本。</summary>
+public sealed record SectionTokenCost
+{
+    /// <summary>section 名称。</summary>
+    public required string Section { get; init; }
+
+    /// <summary>section 正文 token 数。</summary>
+    public required int ContentTokens { get; init; }
+
+    /// <summary>section 内候选间分隔符 token 数。</summary>
+    public required int SeparatorTokens { get; init; }
+
+    /// <summary>section 头部 token 数（如 section 名标记）。</summary>
+    public required int HeaderTokens { get; init; }
+
+    /// <summary>section 总 token 数 = 正文 + 分隔符 + 头部。</summary>
+    public int TotalTokens => ContentTokens + SeparatorTokens + HeaderTokens;
+}
+
+/// <summary>R28-B.7-Final：最终 Artifact token 成本。</summary>
+public sealed record FinalArtifactTokenCost
+{
+    /// <summary>各 section 的 token 成本明细。</summary>
+    public required IReadOnlyList<SectionTokenCost> Sections { get; init; }
+
+    /// <summary>最终序列化总 token 数（含所有 section 正文 + 分隔符 + 头部）。</summary>
+    public required int TotalTokens { get; init; }
+
+    /// <summary>tokenizer 标识（与 CandidateTokenCost.TokenizerId 一致）。</summary>
+    public required string TokenizerId { get; init; }
+
+    /// <summary>是否在预算内（TotalTokens &lt;= BudgetLimit）。</summary>
+    public required bool WithinBudget { get; init; }
+
+    /// <summary>预算上限（0 表示无预算约束）。</summary>
+    public int BudgetLimit { get; init; }
 }
 
 /// <summary>
@@ -186,6 +230,97 @@ public sealed record ProviderOutputSnapshot
 
     /// <summary>Provider 执行耗时。</summary>
     public required TimeSpan Duration { get; init; }
+
+    /// <summary>R28-B.7-Final：Provider 错误码（失败时填入，如 "timeout" / "store-unavailable"；成功时为 null）。</summary>
+    public string? ErrorCode { get; init; }
+}
+
+/// <summary>R28-B.7-Final：Runtime 请求标准化器。</summary>
+/// <remarks>
+/// 在 Runtime 编排入口对请求做标准化：填充缺失字段（TokenBudget / TopK 默认值）、
+/// 规范化 Scope（trim 空白、空值回退）、统一 Purpose 对应的专用 Input。
+/// 标准化后的请求不可变，贯穿整个请求生命周期，用于 replay 匹配与审计。
+/// </remarks>
+public interface IRuntimeRequestNormalizer
+{
+    /// <summary>标准化 Runtime 请求，返回填充了默认值与规范化字段的新请求实例。</summary>
+    /// <param name="request">原始请求（可能含缺失字段或未规范化 Scope）。</param>
+    /// <returns>标准化后的请求（不可变，用于后续编排与 replay）。</returns>
+    ContextDecisionRuntimeRequest Normalize(ContextDecisionRuntimeRequest request);
+}
+
+/// <summary>R28-B.7-Final：请求语义哈希器。</summary>
+/// <remarks>
+/// 基于请求的语义字段（RequestId / Scope / Purpose / QueryText / TokenBudget / TopK）
+/// 计算稳定哈希，用于 replay 匹配与请求去重。哈希应跨进程/跨平台稳定（invariant culture）。
+/// </remarks>
+public interface IRequestSemanticHasher
+{
+    /// <summary>计算请求的语义哈希。</summary>
+    /// <param name="request">标准化后的请求。</param>
+    /// <returns>稳定哈希字符串（如 SHA256 hex）。</returns>
+    string ComputeHash(ContextDecisionRuntimeRequest request);
+}
+
+/// <summary>R28-B.7-Final：Provider 执行 artifact（含 Envelopes + Materials + 执行报告）。</summary>
+/// <remarks>
+/// 由 Runtime 在 Provider 执行后构建，作为 <see cref="IExecutionArtifactFactory"/> 的输入。
+/// 合并了 <see cref="ExpertExecutionResult"/>（Envelopes + Materials）与
+/// <see cref="ProviderExecutionReport"/>（成功状态 + 耗时 + Store 调用计数 + 错误码），
+/// 让 Factory 能从单一数据源构建完整的 <see cref="ContextDecisionExecutionResult"/>。
+/// </remarks>
+public sealed record ProviderExecutionArtifact
+{
+    /// <summary>Provider 对应的 Expert 类型。</summary>
+    public required ExpertKind Kind { get; init; }
+
+    /// <summary>Provider 产出的候选 envelope 集合。</summary>
+    public required IReadOnlyList<ContextCandidateEnvelope> Envelopes { get; init; }
+
+    /// <summary>Provider 产出的候选正文 sidecar（按 CanonicalCandidateKey 索引）。</summary>
+    public required IReadOnlyDictionary<CanonicalCandidateKey, CandidateMaterial> Materials { get; init; }
+
+    /// <summary>Provider 是否执行成功。</summary>
+    public required bool Succeeded { get; init; }
+
+    /// <summary>Provider 执行耗时。</summary>
+    public required TimeSpan Duration { get; init; }
+
+    /// <summary>Store 调用次数（可选，用于诊断）。</summary>
+    public int StoreCallCount { get; init; }
+
+    /// <summary>错误码（失败时填入，如 "timeout" / "store-unavailable"）。</summary>
+    public string? ErrorCode { get; init; }
+}
+
+/// <summary>R28-B.7-Final：Execution Artifact 工厂。</summary>
+/// <remarks>
+/// 统一 Runtime 所有返回点的结果构造，确保 <see cref="ContextDecisionExecutionResult"/>
+/// 的所有字段（Decision / WorkingSet / Policy / Routing / ProviderReports /
+/// NormalizedRequest / RequestSemanticHash / Scope / FeatureSchemaVersion /
+/// AllocatorVersion / TokenizerVersion / ProviderOutputSnapshots）被完整填充。
+/// Factory 从 <see cref="ProviderExecutionArtifact"/>[] 构建 ProviderReports 与 ProviderOutputSnapshots，
+/// 让 Runtime 不再分散处理这些字段。
+/// </remarks>
+public interface IExecutionArtifactFactory
+{
+    /// <summary>创建完整填充的 <see cref="ContextDecisionExecutionResult"/>。</summary>
+    /// <param name="normalizedRequest">标准化后的请求（填充 NormalizedRequest 字段）。</param>
+    /// <param name="requestSemanticHash">请求语义哈希（填充 RequestSemanticHash 字段）。</param>
+    /// <param name="decision">决策结果（SelectedEnvelopes + DroppedEnvelopes + AllocationDecisions + Outcome）。</param>
+    /// <param name="workingSet">候选工作集（Envelopes + Materials）。</param>
+    /// <param name="policy">有效策略快照（请求生命周期内不可变）。</param>
+    /// <param name="routing">Expert 路由决策集。</param>
+    /// <param name="providerArtifacts">各 Provider 的执行 artifact（按执行顺序；Phase 2 Graph 在最后）。</param>
+    /// <returns>完整执行结果（所有字段已填充）。</returns>
+    ContextDecisionExecutionResult Create(
+        ContextDecisionRuntimeRequest normalizedRequest,
+        string requestSemanticHash,
+        ContextDecisionResult decision,
+        CandidateWorkingSet workingSet,
+        EffectivePolicySnapshot policy,
+        ExpertRoutingDecisionSet routing,
+        IReadOnlyList<ProviderExecutionArtifact> providerArtifacts);
 }
 
 /// <summary>

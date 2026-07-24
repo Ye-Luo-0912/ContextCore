@@ -410,6 +410,10 @@ internal static class CoreExtensions
 			sp.GetService<IContentTruncator>()));
 		services.TryAddSingleton<IAllocatorV2_1>(sp => sp.GetRequiredService<DefaultAllocatorV2_1>());
 		services.AddSingleton<IAgentContextProjector, AgentContextProjector>();
+		// R28-B.7-Final：Artifact 真实化服务注册（可被测试/生产覆盖；默认使用无状态单例实现）
+		services.TryAddSingleton<IRuntimeRequestNormalizer>(DefaultRuntimeRequestNormalizer.Instance);
+		services.TryAddSingleton<IRequestSemanticHasher>(DefaultRequestSemanticHasher.Instance);
+		services.TryAddSingleton<IExecutionArtifactFactory>(DefaultExecutionArtifactFactory.Instance);
 		services.AddSingleton<IContextDecisionRuntime, DefaultContextDecisionRuntime>();
 		services.AddSingleton<DecisionExperimentPlane>();
 		services.AddSingleton<ShadowDecisionRuntime>();
