@@ -152,8 +152,13 @@ public sealed class DefaultAllocatorV2_1 : IAllocatorV2_1
 
     /// <summary>
     /// 逐 section 分配，含 rollover 逻辑。
-    /// 启用 rollover 时：当前 section 获得全部剩余预算，未用完的按 RolloverRatio 结转到下一 section。
-    /// 禁用 rollover 时：每个 section 获得等分预算，未用完的不结转。
+    /// R28-G P1-4 修正：原实现"第一个 section 获得全部剩余预算 → 下一 section 只获得前一 section
+    /// 剩余量 × ratio"会让靠后的 section 饿死。改为两轮分配：
+    ///   1. 第一轮：每个 section 获得 minimum reserve（totalBudget × SectionReserveRatio），
+    ///      在 reserve 内做基础分配，收集未使用的预算（unused reserve）。
+    ///   2. 第二轮：把所有 unused reserve 汇总，按 section 顺序（已 MMR 排序）重新分配给
+    ///      仍有候选被丢弃的 section，直到耗尽或全部 section 满足。
+    /// 启用 rollover 时执行两轮；禁用时只执行第一轮（等分预算，不结转）。
     /// </summary>
     private static IReadOnlyList<SectionAllocationResult> AllocateSectionsWithRollover(
         IReadOnlyList<IGrouping<string, ContextCandidateEnvelope>> sectionGroups,
@@ -161,17 +166,28 @@ public sealed class DefaultAllocatorV2_1 : IAllocatorV2_1
         DiversityOptions options)
     {
         var results = new List<SectionAllocationResult>(sectionGroups.Count);
-        var remainingBudget = totalBudget;
         var sectionCount = sectionGroups.Count;
-        // 禁用 rollover 时每个 section 的等分预算
-        var perSectionBudget = sectionCount > 0 ? totalBudget / sectionCount : totalBudget;
-        var borrowedFromPrevious = 0;
+        if (sectionCount == 0)
+        {
+            return results;
+        }
 
+        // R28-G P1-4：每个 section 的 minimum reserve = totalBudget × SectionReserveRatio。
+        // SectionReserveRatio 默认 0.1（每个 section 至少获得 10% 总预算）。
+        // 各 section reserve 之和不超过 totalBudget；若超过则按比例缩放。
+        var reserveRatio = Math.Clamp(options.SectionReserveRatio, 0.0, 1.0);
+        var totalReserve = (int)(totalBudget * reserveRatio);
+        // 每个等分 reserve（sectionCount 等分 totalReserve）
+        var perSectionReserve = sectionCount > 0 ? totalReserve / sectionCount : totalReserve;
+
+        // 第一轮：每个 section 在 reserve 内分配，收集未使用 reserve。
+        // sectionOrderedCandidates 保留每个 section 已排序的候选列表（第二轮复用）。
+        var sectionStates = new List<SectionState>(sectionCount);
+        var totalUnusedReserve = 0;
+
+        var idx = 0;
         foreach (var section in sectionGroups)
         {
-            // 启用 rollover：当前 section 获得全部剩余预算
-            // 禁用 rollover：当前 section 获得等分预算
-            var sectionBudget = options.EnableSectionRollover ? remainingBudget : perSectionBudget;
             var sectionCandidates = section.ToList();
 
             // 分离 mandatory / non-mandatory（mandatory 不受 MMR 影响）
@@ -200,53 +216,88 @@ public sealed class DefaultAllocatorV2_1 : IAllocatorV2_1
             // 合并：mandatory 优先，然后（MMR 重排序后的）non-mandatory
             var ordered = mandatory.Concat(nonMandatory).ToList();
 
-            // 在 section 预算内分配（mandatory overflow 允许，non-mandatory 尊重预算）
-            var (allocated, usedTokens) = AllocateWithinSection(ordered, sectionBudget, section.Key);
-            var rollover = Math.Max(0, sectionBudget - usedTokens);
+            // 第一轮：在 perSectionReserve 内分配
+            var (firstRoundDecisions, firstRoundUsed, firstRoundRemainingCandidates) =
+                AllocateWithinSectionWithTracking(ordered, perSectionReserve, section.Key);
+            var unusedReserve = Math.Max(0, perSectionReserve - firstRoundUsed);
+            totalUnusedReserve += unusedReserve;
 
-            results.Add(new SectionAllocationResult
+            sectionStates.Add(new SectionState
             {
                 Section = section.Key,
-                AllocatedTokens = usedTokens,
-                BudgetLimit = sectionBudget,
-                RolloverTokens = rollover,
-                BorrowedTokens = borrowedFromPrevious,
-                Decisions = allocated
+                OrderedCandidates = ordered,
+                Decisions = firstRoundDecisions,
+                UsedTokens = firstRoundUsed,
+                BudgetLimit = perSectionReserve,
+                RemainingCandidates = firstRoundRemainingCandidates,
+                BorrowedTokens = 0
             });
+            idx++;
+        }
 
-            // 计算下一 section 的 borrowed / remaining
-            if (options.EnableSectionRollover)
+        // 第二轮：把 totalUnusedReserve 按 section 顺序重新分配给仍有候选被丢弃的 section。
+        // R28-G P1-4：原实现"下一 section 只获得前一 section 剩余量 × ratio"会让靠后 section 饿死；
+        // 改为所有 unused reserve 汇总到全局 pool，按 section 顺序贪心分配。
+        if (options.EnableSectionRollover && totalUnusedReserve > 0)
+        {
+            var pool = totalUnusedReserve;
+            foreach (var state in sectionStates)
             {
-                // rollover 到下一 section（按 RolloverRatio 缩放）
-                borrowedFromPrevious = (int)(rollover * options.RolloverRatio);
-                remainingBudget = borrowedFromPrevious;
+                if (pool <= 0) break;
+                if (state.RemainingCandidates.Count == 0) continue;
+
+                // 在剩余候选中继续分配，使用 pool 中的预算
+                var (secondRoundDecisions, secondRoundUsed, secondRoundRemaining) =
+                    AllocateWithinSectionWithTracking(
+                        state.RemainingCandidates, pool, state.Section);
+                state.Decisions.AddRange(secondRoundDecisions);
+                state.UsedTokens += secondRoundUsed;
+                state.BudgetLimit += secondRoundUsed; // 实际获得的预算扩展
+                state.BorrowedTokens = secondRoundUsed; // 从全局 pool 借入
+                state.RemainingCandidates = secondRoundRemaining;
+                pool -= secondRoundUsed;
             }
-            else
+        }
+
+        // 构建最终 SectionAllocationResult
+        foreach (var state in sectionStates)
+        {
+            var rollover = Math.Max(0, state.BudgetLimit - state.UsedTokens);
+            results.Add(new SectionAllocationResult
             {
-                // 禁用 rollover：下一 section 获得独立的等分预算，未用完的不结转
-                borrowedFromPrevious = 0;
-                remainingBudget = Math.Max(0, remainingBudget - perSectionBudget);
-            }
+                Section = state.Section,
+                AllocatedTokens = state.UsedTokens,
+                BudgetLimit = state.BudgetLimit,
+                RolloverTokens = rollover,
+                BorrowedTokens = state.BorrowedTokens,
+                Decisions = state.Decisions
+            });
         }
 
         return results;
     }
 
     /// <summary>
-    /// 在 section 预算内分配候选。尊重候选顺序（mandatory 优先，然后 MMR 重排序后的 non-mandatory）。
-    /// mandatory 候选始终选入（overflow 允许）；non-mandatory 候选按预算截断或丢弃。
+    /// R28-G P1-4：section 内分配，返回 decisions + used tokens + 仍可分配的候选（用于第二轮）。
+    /// 与原 AllocateWithinSection 不同：返回 remaining 候选列表，便于第二轮 rollover 复用。
     /// </summary>
-    private static (List<CandidateAllocationDecision> Decisions, int UsedTokens) AllocateWithinSection(
-        IReadOnlyList<ContextCandidateEnvelope> candidates,
-        int sectionBudget,
-        string sectionName)
+    private static (List<CandidateAllocationDecision> Decisions, int UsedTokens, List<ContextCandidateEnvelope> Remaining)
+        AllocateWithinSectionWithTracking(
+            IReadOnlyList<ContextCandidateEnvelope> candidates,
+            int sectionBudget,
+            string sectionName)
     {
         var decisions = new List<CandidateAllocationDecision>(candidates.Count);
         var usedTokens = 0;
+        var remaining = new List<ContextCandidateEnvelope>();
 
         foreach (var envelope in candidates)
         {
             var isMandatory = envelope.Safety.IsMandatory || envelope.Safety.IsHardConstraint;
+
+            // R28-G P1-4：使用 EffectiveTokens（TokenCost 优先）替代 EstimatedTokens（length/4 粗估）。
+            // 原实现用 EstimatedTokens 导致中文/JSON/代码场景严重低估 token 成本。
+            var effectiveTokens = GetEffectiveTokens(envelope);
 
             if (isMandatory)
             {
@@ -255,60 +306,75 @@ public sealed class DefaultAllocatorV2_1 : IAllocatorV2_1
                 {
                     CandidateKey = envelope.CanonicalKey,
                     Section = sectionName,
-                    IncludedTokens = envelope.EstimatedTokens,
+                    IncludedTokens = effectiveTokens,
                     IsTruncated = false,
                     ReasonCode = CandidateDecisionReasonCode.SelectedMandatory
                 });
-                usedTokens += envelope.EstimatedTokens;
+                usedTokens += effectiveTokens;
                 continue;
             }
 
             // non-mandatory：尊重 section 预算
-            if (usedTokens + envelope.EstimatedTokens <= sectionBudget)
+            if (usedTokens + effectiveTokens <= sectionBudget)
             {
                 // 完全包含
                 decisions.Add(new CandidateAllocationDecision
                 {
                     CandidateKey = envelope.CanonicalKey,
                     Section = sectionName,
-                    IncludedTokens = envelope.EstimatedTokens,
+                    IncludedTokens = effectiveTokens,
                     IsTruncated = false,
                     ReasonCode = CandidateDecisionReasonCode.SelectedHighestUtility
                 });
-                usedTokens += envelope.EstimatedTokens;
+                usedTokens += effectiveTokens;
             }
             else
             {
-                var remaining = sectionBudget - usedTokens;
-                if (remaining > 0)
+                var remainingBudget = sectionBudget - usedTokens;
+                if (remainingBudget > 0)
                 {
                     // partial truncation：候选被截断到剩余预算内
                     decisions.Add(new CandidateAllocationDecision
                     {
                         CandidateKey = envelope.CanonicalKey,
                         Section = sectionName,
-                        IncludedTokens = remaining,
+                        IncludedTokens = remainingBudget,
                         IsTruncated = true,
                         ReasonCode = CandidateDecisionReasonCode.SelectedHighestUtility
                     });
-                    usedTokens += remaining;
+                    usedTokens += remainingBudget;
                 }
                 else
                 {
-                    // 预算耗尽：完全丢弃
-                    decisions.Add(new CandidateAllocationDecision
-                    {
-                        CandidateKey = envelope.CanonicalKey,
-                        Section = sectionName,
-                        IncludedTokens = 0,
-                        IsTruncated = false,
-                        ReasonCode = CandidateDecisionReasonCode.TokenBudgetExceeded
-                    });
+                    // 预算耗尽：候选保留给第二轮（不立即生成 dropped decision）
+                    remaining.Add(envelope);
                 }
             }
         }
 
-        return (decisions, usedTokens);
+        return (decisions, usedTokens, remaining);
+    }
+
+    /// <summary>
+    /// R28-G P1-4：获取候选的有效 token 数（与 DefaultGlobalAllocator.GetEffectiveTokens 语义一致）。
+    /// 优先使用 CandidateTokenCost.ContentTokens（基于 IContextTokenizer 精确计算），
+    /// 回退到 EstimatedTokens（length/4 粗估）。
+    /// </summary>
+    private static int GetEffectiveTokens(ContextCandidateEnvelope envelope)
+    {
+        return envelope.TokenCost?.ContentTokens ?? envelope.EstimatedTokens;
+    }
+
+    /// <summary>R28-G P1-4：section 分配中间状态（便于第二轮 rollover 复用）。</summary>
+    private sealed class SectionState
+    {
+        public string Section { get; init; } = string.Empty;
+        public List<ContextCandidateEnvelope> OrderedCandidates { get; init; } = new();
+        public List<CandidateAllocationDecision> Decisions { get; init; } = new();
+        public int UsedTokens { get; set; }
+        public int BudgetLimit { get; set; }
+        public List<ContextCandidateEnvelope> RemainingCandidates { get; set; } = new();
+        public int BorrowedTokens { get; set; }
     }
 
     /// <summary>

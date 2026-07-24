@@ -706,7 +706,8 @@ public sealed record ExpertOrigin(
     DateTimeOffset ObservedAt);
 
 /// <summary>
-/// R28-B：候选正文 Material sidecar。正文与决策分离，Projector 不访问 Store。
+/// R28-B / R28-G P1-1：候选正文 Material sidecar。正文与决策分离，Projector 不访问 Store。
+/// R28-G P1-1：新增 ContentHash / TokenCost 字段，避免 Merger 在冲突检测时重复计算 SHA256。
 /// </summary>
 public sealed record CandidateMaterial
 {
@@ -726,7 +727,16 @@ public sealed record CandidateMaterial
     public required string Content
     {
         get => _content;
-        init => _content = value ?? throw new ArgumentNullException(nameof(Content));
+        init
+        {
+            _content = value ?? throw new ArgumentNullException(nameof(Content));
+            // R28-G P1-1：赋值时若未显式提供 ContentHash，则惰性计算并缓存。
+            // Merger 后续冲突检测可直接读取此字段，避免每次比对都重算 SHA256。
+            if (string.IsNullOrEmpty(_contentHash))
+            {
+                _contentHash = ComputeContentHash(_content);
+            }
+        }
     }
 
     /// <summary>原生类型（如 "note" / "memory" / "constraint"）。</summary>
@@ -734,6 +744,35 @@ public sealed record CandidateMaterial
 
     /// <summary>来源引用列表（store path / buildId / traceId）。</summary>
     public IReadOnlyList<string> SourceRefs { get; init; } = [];
+
+    /// <summary>
+    /// R28-G P1-1：Content 的稳定哈希（"sha256:&lt;16hex&gt;"）。
+    /// 由 Content 的 init accessor 自动计算；调用方也可显式覆盖（如 Provider 已计算过）。
+    /// Merger 用此字段做冲突检测，避免重复 SHA256.HashData。
+    /// </summary>
+    private string _contentHash = string.Empty;
+    public string ContentHash
+    {
+        get => _contentHash;
+        init => _contentHash = value ?? string.Empty;
+    }
+
+    /// <summary>
+    /// R28-G P1-1：可选的 token 成本（Provider 已精确计算时填充）。
+    /// Merger 不依赖此字段，但 Allocator 可直接读取避免重复 tokenizer 调用。
+    /// null 时 Allocator 回退到 EstimatedTokens 或重新计算。
+    /// </summary>
+    public CandidateTokenCost? TokenCost { get; init; }
+
+    /// <summary>R28-G P1-1：计算 Content 的稳定 hash（与 Merger 旧实现公式一致）。</summary>
+    /// <param name="content">正文内容。</param>
+    /// <returns>"sha256:&lt;16hex&gt;" 形式的哈希字符串；空内容返回 "sha256:" 前缀。</returns>
+    internal static string ComputeContentHash(string content)
+    {
+        var bytes = System.Text.Encoding.UTF8.GetBytes(content ?? string.Empty);
+        var hash = System.Security.Cryptography.SHA256.HashData(bytes);
+        return "sha256:" + Convert.ToHexString(hash, 0, 16).ToLowerInvariant();
+    }
 }
 
 /// <summary>
@@ -1130,6 +1169,18 @@ public sealed record DiversityOptions
 
     /// <summary>section 预算不足时，剩余预算 rollover 到下一 section 的比例（0-1）。</summary>
     public double RolloverRatio { get; init; } = 1.0;
+
+    /// <summary>
+    /// R28-G P1-4：每个 section 的 minimum reserve 占总预算的比例（0-1，默认 0.1）。
+    /// 第一轮每个 section 至少获得 totalBudget × SectionReserveRatio ÷ sectionCount 的预算，
+    /// 未用完的部分汇总到全局 pool 供第二轮 rollover 分配。
+    /// 0 表示禁用 reserve（每个 section 第一轮获得等分预算）。
+    /// </summary>
+    /// <remarks>
+    /// 原实现"第一个 section 获得全部剩余预算 → 下一 section 只获得前一 section 剩余量 × ratio"
+    /// 会让靠后的 section 饿死；引入 reserve 保证每个 section 至少能分到一部分预算。
+    /// </remarks>
+    public double SectionReserveRatio { get; init; } = 0.1;
 }
 
 /// <summary>

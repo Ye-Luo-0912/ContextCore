@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using ContextCore.Abstractions;
@@ -2223,11 +2224,17 @@ public sealed class DefaultExpertCatalog : IExpertCatalog
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// R28-B B-1：规范化候选合并器默认骨架。按 CanonicalCandidateKey 合并多 Expert 来源。
+/// R28-B / R28-G P1-1：规范化候选合并器默认实现。按 CanonicalCandidateKey 合并多 Expert 来源。
 /// </summary>
 /// <remarks>
-/// B-1 骨架：合并策略为 union Origins + sum ExpertContributions + 保留首次出现的 Features/Utility。
-/// B-2 将接入 Material sidecar 完整合并（同 Key 不同版本的版本选择策略）。
+/// R28-G P1-1 重构：
+///   - 单一 accumulator：Dictionary&lt;CanonicalCandidateKey, CandidateAccumulator&gt;，
+///     替代 envelopeByKey + originsByKey + contributionsByKey + materials 四重字典。
+///   - Material 冲突检测读取 CandidateMaterial.ContentHash 字段（构造时已缓存），
+///     不再每次冲突比对都重算 SHA256。
+///   - SourceRefs 用 HashSet&lt;string&gt; 累加，避免每次 LINQ Concat+Distinct+ToList 分配。
+///   - 修复合并语义 bug：重复候选不再只保留首个 Envelope 的 Features/Utility，
+///     改为 Features 取 max（多 Expert 信号强化）、Utility 取 max(FinalScore)（最高分胜出）。
 /// </remarks>
 public sealed class DefaultCanonicalCandidateMerger : ICanonicalCandidateMerger
 {
@@ -2236,10 +2243,7 @@ public sealed class DefaultCanonicalCandidateMerger : ICanonicalCandidateMerger
     {
         ArgumentNullException.ThrowIfNull(expertOutputs);
 
-        var envelopeByKey = new Dictionary<CanonicalCandidateKey, ContextCandidateEnvelope>();
-        var originsByKey = new Dictionary<CanonicalCandidateKey, List<ExpertOrigin>>();
-        var contributionsByKey = new Dictionary<CanonicalCandidateKey, Dictionary<ExpertKind, double>>();
-        var materials = new Dictionary<CanonicalCandidateKey, CandidateMaterial>();
+        var accumulators = new Dictionary<CanonicalCandidateKey, CandidateAccumulator>();
 
         foreach (var output in expertOutputs)
         {
@@ -2247,20 +2251,24 @@ public sealed class DefaultCanonicalCandidateMerger : ICanonicalCandidateMerger
             //   - 相同 key、相同 content hash：合并 SourceRefs（union）；
             //   - 相同 key、不同 content hash：冲突 → throw（fail-fast）；
             //   - 不同 EntityVersion：CanonicalKey 自然不同，两个 Material 都保留。
+            // R28-G P1-1：直接读取 material.ContentHash（CandidateMaterial 构造时已缓存），
+            // 避免每次冲突比对都重算 SHA256。
             foreach (var (key, material) in output.Materials)
             {
-                if (materials.TryGetValue(key, out var existing))
+                // R28-G P1-1：用 ref 访问 accumulator，避免值类型 Dictionary 副本修改丢失。
+                ref var accRef = ref CollectionsMarshal.GetValueRefOrAddDefault(accumulators, key, out var exists);
+                if (exists && accRef.Material is { } existing)
                 {
-                    var existingHash = ComputeMaterialContentHash(existing.Content);
-                    var newHash = ComputeMaterialContentHash(material.Content);
+                    var existingHash = existing.ContentHash;
+                    var newHash = material.ContentHash;
                     if (string.Equals(existingHash, newHash, StringComparison.Ordinal))
                     {
-                        // 相同 content hash：合并 SourceRefs
-                        var mergedRefs = existing.SourceRefs
-                            .Concat(material.SourceRefs)
-                            .Distinct(StringComparer.Ordinal)
-                            .ToList();
-                        materials[key] = existing with { SourceRefs = mergedRefs };
+                        // 相同 content hash：合并 SourceRefs（HashSet 累加，O(1) 每条）
+                        // accRef.MaterialSourceRefs 在首次初始化时已创建，此处非 null。
+                        foreach (var r in material.SourceRefs)
+                        {
+                            accRef.MaterialSourceRefs!.Add(r);
+                        }
                     }
                     else
                     {
@@ -2274,52 +2282,81 @@ public sealed class DefaultCanonicalCandidateMerger : ICanonicalCandidateMerger
                 }
                 else
                 {
-                    materials[key] = material;
+                    // 首次见到此 key 的 Material：初始化 accumulator
+                    accRef.Material = material;
+                    accRef.MaterialSourceRefs = new HashSet<string>(StringComparer.Ordinal);
+                    foreach (var r in material.SourceRefs)
+                    {
+                        accRef.MaterialSourceRefs.Add(r);
+                    }
                 }
             }
 
             foreach (var envelope in output.Envelopes)
             {
                 var key = envelope.CanonicalKey;
-                if (envelopeByKey.TryGetValue(key, out _))
+                ref var acc = ref CollectionsMarshal.GetValueRefOrAddDefault(accumulators, key, out var exists);
+                if (!exists)
                 {
-                    // 重复 key：Origins/Contributions 已在首次插入时初始化，此处仅累加
-                    originsByKey[key].AddRange(envelope.Origins);
-
+                    // 首次见到此 key 的 Envelope：初始化 accumulator
+                    acc.Envelope = envelope;
+                    acc.Origins = new List<ExpertOrigin>(envelope.Origins.Count);
+                    acc.Origins.AddRange(envelope.Origins);
+                    acc.Contributions = new Dictionary<ExpertKind, double>(envelope.ExpertContributions.Count);
                     foreach (var (expert, contribution) in envelope.ExpertContributions)
                     {
-                        contributionsByKey[key].TryAdd(expert, 0);
-                        contributionsByKey[key][expert] += contribution;
+                        acc.Contributions[expert] = contribution;
                     }
-
-                    // 保留首次出现的 Features/Utility（B-2 将引入更复杂的特征合并）
-                    // envelopeByKey[key] 不更新
                 }
                 else
                 {
-                    envelopeByKey[key] = envelope;
-                    originsByKey[key] = new List<ExpertOrigin>(envelope.Origins);
-                    contributionsByKey[key] = new Dictionary<ExpertKind, double>(
-                        envelope.ExpertContributions.Count);
+                    // 重复 key：累加 Origins / Contributions
+                    if (acc.Origins is null)
+                    {
+                        acc.Origins = new List<ExpertOrigin>();
+                    }
+                    acc.Origins.AddRange(envelope.Origins);
+
+                    acc.Contributions ??= new Dictionary<ExpertKind, double>();
                     foreach (var (expert, contribution) in envelope.ExpertContributions)
                     {
-                        contributionsByKey[key][expert] = contribution;
+                        acc.Contributions.TryGetValue(expert, out var prev);
+                        acc.Contributions[expert] = prev + contribution;
                     }
+
+                    // R28-G P1-1 修复：合并 Features / Utility（原实现只保留首个 Envelope）。
+                    //   - Features：取每维 max（多 Expert 观察到更高信号时应保留）
+                    //   - Utility：取 max(FinalScore)（最高分胜出，与 Ranking 阶段排序一致）
+                    acc.Envelope = MergeEnvelope(acc.Envelope!, envelope);
                 }
             }
         }
 
-        // 重建合并后的 Envelopes（应用 union Origins + sum Contributions）
-        var mergedEnvelopes = new List<ContextCandidateEnvelope>(envelopeByKey.Count);
-        foreach (var (key, envelope) in envelopeByKey)
+        // 重建合并后的 Envelopes + Materials
+        var mergedEnvelopes = new List<ContextCandidateEnvelope>(accumulators.Count);
+        var materials = new Dictionary<CanonicalCandidateKey, CandidateMaterial>(accumulators.Count);
+        foreach (var (key, acc) in accumulators)
         {
-            var origins = originsByKey[key];
-            var contributions = contributionsByKey[key];
-            mergedEnvelopes.Add(envelope with
+            // Envelope：应用 union Origins + sum Contributions + 合并后的 Features/Utility
+            var envelope = acc.Envelope!;
+            if (acc.Origins is not null)
             {
-                Origins = origins,
-                ExpertContributions = contributions
-            });
+                envelope = envelope with { Origins = acc.Origins };
+            }
+            if (acc.Contributions is not null)
+            {
+                envelope = envelope with { ExpertContributions = acc.Contributions };
+            }
+            mergedEnvelopes.Add(envelope);
+
+            // Material：应用 union SourceRefs（若有）
+            if (acc.Material is { } material)
+            {
+                var finalMaterial = acc.MaterialSourceRefs is { Count: > 0 } refs
+                    ? material with { SourceRefs = refs.ToArray() }
+                    : material;
+                materials[key] = finalMaterial;
+            }
         }
 
         return new CandidateWorkingSet
@@ -2330,14 +2367,93 @@ public sealed class DefaultCanonicalCandidateMerger : ICanonicalCandidateMerger
     }
 
     /// <summary>
-    /// P0-5：计算 Material Content 的 stable content hash。
-    /// 用于 Material 冲突检测（相同 key + 不同 content hash = 冲突）。
+    /// R28-G P1-1：合并两个相同 CanonicalKey 的 Envelope。
+    /// Features 取每维 max，Utility 取 max(FinalScore)；其他字段保留首个（首个已通过 Safety/Provenance 校验）。
     /// </summary>
-    private static string ComputeMaterialContentHash(string content)
+    private static ContextCandidateEnvelope MergeEnvelope(
+        ContextCandidateEnvelope first,
+        ContextCandidateEnvelope next)
     {
-        var bytes = Encoding.UTF8.GetBytes(content ?? string.Empty);
-        var hash = SHA256.HashData(bytes);
-        return "sha256:" + Convert.ToHexString(hash, 0, 16).ToLowerInvariant();
+        // 首个 Envelope 已通过 Safety/Provenance 校验；只合并 Features 与 Utility。
+        var mergedFeatures = MergeFeatures(first.Features, next.Features);
+        var mergedUtility = MergeUtility(first.Utility, next.Utility);
+        return first with
+        {
+            Features = mergedFeatures,
+            Utility = mergedUtility
+        };
+    }
+
+    /// <summary>合并 Features：每维取 max（多 Expert 信号强化）。</summary>
+    private static CandidateFeatureVector MergeFeatures(
+        CandidateFeatureVector a,
+        CandidateFeatureVector b)
+    {
+        return new CandidateFeatureVector
+        {
+            LexicalScore = Math.Max(a.LexicalScore, b.LexicalScore),
+            SemanticScore = Math.Max(a.SemanticScore, b.SemanticScore),
+            RecencyScore = Math.Max(a.RecencyScore, b.RecencyScore),
+            RelationBoost = Math.Max(a.RelationBoost, b.RelationBoost),
+            MandatoryWeight = Math.Max(a.MandatoryWeight, b.MandatoryWeight),
+            FeatureSchemaVersion = a.FeatureSchemaVersion
+        };
+    }
+
+    /// <summary>合并 Utility：取 max(FinalScore)；保留模型相关字段（ModelApplied 优先 true）。</summary>
+    private static CandidateUtilityScore MergeUtility(
+        CandidateUtilityScore a,
+        CandidateUtilityScore b)
+    {
+        // FinalScore 取 max：高分的候选在后续 Allocator 排序中应胜出，
+        // 避免被首个低分 Expert "锁死"。
+        var pickFinal = a.FinalScore >= b.FinalScore ? a : b;
+
+        // DeterministicScore 取 max（与 FinalScore 取 max 语义一致）。
+        var detScore = Math.Max(a.DeterministicScore, b.DeterministicScore);
+
+        // ModelScore：优先取非 null（任一 Expert 观察到模型分数则保留）。
+        var modelScore = a.ModelScore ?? b.ModelScore;
+
+        // ModelAttempted / ModelApplied：任一 true 即 true（最宽口径，便于审计）。
+        var modelAttempted = a.ModelAttempted || b.ModelAttempted;
+        var modelApplied = a.ModelApplied || b.ModelApplied;
+
+        // ModelFallbackReason：若任一 Expert 应用成功则清空；否则保留首个非空原因。
+        string? fallbackReason = modelApplied
+            ? null
+            : (a.ModelFallbackReason ?? b.ModelFallbackReason);
+
+        return pickFinal with
+        {
+            DeterministicScore = detScore,
+            ModelScore = modelScore,
+            ModelAttempted = modelAttempted,
+            ModelApplied = modelApplied,
+            ModelFallbackReason = fallbackReason
+        };
+    }
+
+    /// <summary>
+    /// R28-G P1-1：单一 accumulator（值类型，避免为每个 key 分配多个小对象）。
+    /// 合并完成后再 build 为最终 Envelope/Material。
+    /// </summary>
+    private struct CandidateAccumulator
+    {
+        /// <summary>首个出现的 Envelope（合并完成后被 with 替换）。</summary>
+        public ContextCandidateEnvelope? Envelope;
+
+        /// <summary>累积的 Origins（union）。</summary>
+        public List<ExpertOrigin>? Origins;
+
+        /// <summary>累积的 Contributions（sum per Expert）。</summary>
+        public Dictionary<ExpertKind, double>? Contributions;
+
+        /// <summary>首个出现的 Material（若该 key 有正文）。</summary>
+        public CandidateMaterial? Material;
+
+        /// <summary>累积的 Material SourceRefs（union）。</summary>
+        public HashSet<string>? MaterialSourceRefs;
     }
 }
 
@@ -2992,8 +3108,17 @@ public sealed class DefaultGlobalAllocator : IGlobalAllocator
     }
 
     /// <summary>
-    /// R28-B.6 P0-5：核心分配实现。使用显式传入的 MandatoryOverflowPolicy（已由调用方解析）。
+    /// R28-B.6 P0-5 / R28-G P1-2：核心分配实现。使用显式传入的 MandatoryOverflowPolicy（已由调用方解析）。
     /// </summary>
+    /// <remarks>
+    /// R28-G P1-2 优化：把全量 O(n log n) 排序改为：
+    ///   1. mandatory partition（按 FinalScore 降序，mandatory 候选数量通常很小）
+    ///   2. non-mandatory partial TopK 选择（堆大小 K，仅保留前 K 候选）
+    ///   3. 最终对 K 项做稳定排序
+    /// 当 n &gt;&gt; K 时复杂度从 O(n log n) 降至 O(n log K)。
+    /// 语义与原实现等价：mandatory 优先 → non-mandatory 按 FinalScore/EffectiveTokens/CandidateId 排序 →
+    /// TopK 截断 → TokenBudget 截断。
+    /// </remarks>
     /// <param name="mandatoryOverflowPolicy">本次分配使用的 overflow 策略。</param>
     /// <param name="purpose">业务用途（仅用于诊断；null 时记录 "Unknown"）。</param>
     private AllocationResult Allocate(
@@ -3002,21 +3127,38 @@ public sealed class DefaultGlobalAllocator : IGlobalAllocator
         MandatoryOverflowPolicy mandatoryOverflowPolicy,
         ContextDecisionPurpose? purpose)
     {
-        // 排序：IsMandatory/IsHardConstraint 降序 → FinalScore 降序 → EffectiveTokens 降序 → CandidateId 升序
-        // R28-D P0-3：EffectiveTokens 优先使用 TokenCost.ContentTokens（精确）而非 EstimatedTokens（length/4 粗估）
-        var ordered = envelopes
-            .OrderByDescending(e => e.Safety.IsMandatory || e.Safety.IsHardConstraint)
-            .ThenByDescending(e => e.Utility.FinalScore)
-            .ThenByDescending(e => GetEffectiveTokens(e))
-            .ThenBy(e => e.CandidateId, StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
         var tokenBudget = snapshot.Budget.DefaultTokenBudget;
         var topK = snapshot.Budget.DefaultTopK;
 
+        // R28-G P1-2：mandatory / non-mandatory 分区（一次遍历，避免 LINQ Where 二次扫描）
+        var mandatory = new List<ContextCandidateEnvelope>();
+        var nonMandatory = new List<ContextCandidateEnvelope>();
+        foreach (var e in envelopes)
+        {
+            if (e.Safety.IsMandatory || e.Safety.IsHardConstraint)
+            {
+                mandatory.Add(e);
+            }
+            else
+            {
+                nonMandatory.Add(e);
+            }
+        }
+
+        // mandatory 按 FinalScore 降序 → EffectiveTokens 降序 → CandidateId 升序
+        // mandatory 数量通常远小于 non-mandatory，全量排序成本可忽略
+        mandatory.Sort(MandatoryComparison);
+        // non-mandatory：partial TopK 选择，仅保留前 topK 候选
+        var nonMandatoryTopK = SelectTopK(nonMandatory, topK);
+        // 对选出的 topK 做稳定排序（K 很小，O(K log K)）
+        nonMandatoryTopK.Sort(NonMandatoryComparison);
+
+        // 合并为最终遍历顺序：mandatory 优先，然后 non-mandatory TopK
+        // decisions 容量按全部候选预留（dropped 候选也要生成 decision）
+        var decisions = new List<CandidateAllocationDecision>(envelopes.Count);
+
         var selected = new List<ContextCandidateEnvelope>();
         var dropped = new List<ContextCandidateEnvelope>();
-        var decisions = new List<CandidateAllocationDecision>(ordered.Count);
         var usedTokens = 0;
         var takenCount = 0;
         // R28-B.6 Impl-2：mandatory overflow 诊断累计
@@ -3026,24 +3168,33 @@ public sealed class DefaultGlobalAllocator : IGlobalAllocator
         var overflowedMandatoryIds = new List<string>();
         var mandatoryRequiredTokens = 0;
 
-        foreach (var envelope in ordered)
+        // 把 non-mandatory TopK 候选 ID 放入 set，便于后面区分 dropped
+        var nonMandatoryTopKSet = new HashSet<ContextCandidateEnvelope>(
+            nonMandatoryTopK, ReferenceEqualityComparer.Instance);
+
+        // R28-G P1-2：先处理 non-mandatory 中未被 TopK 选中的候选（SectionQuotaExceeded）
+        // 保持原语义：TopK 截断的候选标记为 dropped（reason=SectionQuotaExceeded）
+        foreach (var envelope in nonMandatory)
+        {
+            if (nonMandatoryTopKSet.Contains(envelope))
+            {
+                continue; // 已选入 TopK，后续主循环处理
+            }
+            dropped.Add(envelope);
+            decisions.Add(new CandidateAllocationDecision
+            {
+                CandidateKey = envelope.CanonicalKey,
+                Section = ResolveSection(envelope),
+                IncludedTokens = 0,
+                IsTruncated = false,
+                ReasonCode = CandidateDecisionReasonCode.SectionQuotaExceeded
+            });
+        }
+
+        // 主遍历：mandatory 优先，然后 non-mandatory TopK
+        foreach (var envelope in IterateMandatoryThenTopK(mandatory, nonMandatoryTopK))
         {
             var isMandatory = envelope.Safety.IsMandatory || envelope.Safety.IsHardConstraint;
-
-            // TopK 检查（非 mandatory）
-            if (!isMandatory && takenCount >= topK)
-            {
-                dropped.Add(envelope);
-                decisions.Add(new CandidateAllocationDecision
-                {
-                    CandidateKey = envelope.CanonicalKey,
-                    Section = ResolveSection(envelope),
-                    IncludedTokens = 0,
-                    IsTruncated = false,
-                    ReasonCode = CandidateDecisionReasonCode.SectionQuotaExceeded
-                });
-                continue;
-            }
 
             // R28-B.6 Impl-2：mandatory 候选超出预算时按策略处理
             // R28-D P0-3：使用 EffectiveTokens（TokenCost 优先）
@@ -3188,6 +3339,133 @@ public sealed class DefaultGlobalAllocator : IGlobalAllocator
 
         return new AllocationResult(selected, dropped, decisions, outcome);
     }
+
+    /// <summary>
+    /// R28-G P1-2：partial TopK 选择。使用最小堆（大小 K）保留前 K 个候选。
+    /// 复杂度 O(n log K)，当 n &gt;&gt; K 时优于全量排序 O(n log n)。
+    /// 当 topK &lt;= 0 或候选数 &lt;= topK 时直接返回原列表（避免无意义堆操作）。
+    /// </summary>
+    /// <param name="candidates">候选列表（不会被修改）。</param>
+    /// <param name="topK">TopK 上限。</param>
+    /// <returns>前 K 个候选（无序；调用方需排序）。</returns>
+    private static List<ContextCandidateEnvelope> SelectTopK(
+        IReadOnlyList<ContextCandidateEnvelope> candidates,
+        int topK)
+    {
+        if (topK <= 0 || candidates.Count <= topK)
+        {
+            // topK <= 0 表示无 TopK 限制（保留全部）；候选数 <= topK 时全部保留
+            return candidates as List<ContextCandidateEnvelope> ?? new List<ContextCandidateEnvelope>(candidates);
+        }
+
+        // 最小堆：堆顶是当前堆中"最小"的候选（按 NonMandatoryComparison，最小者先出堆）。
+        // 堆大小 = topK；遍历候选时比堆顶大则替换堆顶。
+        var heap = new List<ContextCandidateEnvelope>(topK);
+        for (var i = 0; i < topK; i++)
+        {
+            heap.Add(candidates[i]);
+            SiftUp(heap, heap.Count - 1);
+        }
+
+        for (var i = topK; i < candidates.Count; i++)
+        {
+            var candidate = candidates[i];
+            // 堆顶是最小者；若当前候选更大则替换堆顶并下沉
+            if (NonMandatoryComparison(candidate, heap[0]) > 0)
+            {
+                heap[0] = candidate;
+                SiftDown(heap, 0, heap.Count);
+            }
+        }
+
+        return heap;
+    }
+
+    /// <summary>最小堆上浮：把 idx 位置的元素上浮到正确位置。</summary>
+    private static void SiftUp(List<ContextCandidateEnvelope> heap, int idx)
+    {
+        while (idx > 0)
+        {
+            var parent = (idx - 1) >> 1;
+            if (NonMandatoryComparison(heap[idx], heap[parent]) < 0)
+            {
+                (heap[idx], heap[parent]) = (heap[parent], heap[idx]);
+                idx = parent;
+            }
+            else
+            {
+                break;
+            }
+        }
+    }
+
+    /// <summary>最小堆下沉：把 idx 位置的元素下沉到正确位置。</summary>
+    private static void SiftDown(List<ContextCandidateEnvelope> heap, int idx, int count)
+    {
+        while (true)
+        {
+            var left = 2 * idx + 1;
+            var right = 2 * idx + 2;
+            var smallest = idx;
+            if (left < count && NonMandatoryComparison(heap[left], heap[smallest]) < 0)
+            {
+                smallest = left;
+            }
+            if (right < count && NonMandatoryComparison(heap[right], heap[smallest]) < 0)
+            {
+                smallest = right;
+            }
+            if (smallest != idx)
+            {
+                (heap[idx], heap[smallest]) = (heap[smallest], heap[idx]);
+                idx = smallest;
+            }
+            else
+            {
+                break;
+            }
+        }
+    }
+
+    /// <summary>R28-G P1-2：合并 mandatory 与 non-mandatory TopK 为单一遍历序列。</summary>
+    private static IEnumerable<ContextCandidateEnvelope> IterateMandatoryThenTopK(
+        IReadOnlyList<ContextCandidateEnvelope> mandatory,
+        IReadOnlyList<ContextCandidateEnvelope> nonMandatoryTopK)
+    {
+        foreach (var e in mandatory)
+        {
+            yield return e;
+        }
+        foreach (var e in nonMandatoryTopK)
+        {
+            yield return e;
+        }
+    }
+
+    /// <summary>
+    /// R28-G P1-2：mandatory 候选排序比较器。
+    /// FinalScore 降序 → EffectiveTokens 降序 → CandidateId 升序（与原 OrderBy 链等价）。
+    /// </summary>
+    private static int MandatoryComparison(ContextCandidateEnvelope a, ContextCandidateEnvelope b)
+    {
+        // FinalScore 降序
+        var cmp = b.Utility.FinalScore.CompareTo(a.Utility.FinalScore);
+        if (cmp != 0) return cmp;
+        // EffectiveTokens 降序
+        var tokensA = GetEffectiveTokens(a);
+        var tokensB = GetEffectiveTokens(b);
+        cmp = tokensB.CompareTo(tokensA);
+        if (cmp != 0) return cmp;
+        // CandidateId 升序
+        return StringComparer.OrdinalIgnoreCase.Compare(a.CandidateId, b.CandidateId);
+    }
+
+    /// <summary>
+    /// R28-G P1-2：non-mandatory 候选排序比较器（与 MandatoryComparison 同序，便于统一）。
+    /// FinalScore 降序 → EffectiveTokens 降序 → CandidateId 升序（与原 OrderBy 链等价）。
+    /// </summary>
+    private static int NonMandatoryComparison(ContextCandidateEnvelope a, ContextCandidateEnvelope b)
+        => MandatoryComparison(a, b);
 
     private static string ResolveSection(ContextCandidateEnvelope envelope)
     {
