@@ -57,9 +57,18 @@ public sealed class InProcessTransport : IAgentKernelTransport
         });
     }
 
-    /// <summary>提交指令到 inbox（测试和单机部署用）。</summary>
+    /// <summary>
+    /// 提交指令到 Transport 的 inbox（测试和单机部署用）。
+    /// </summary>
     /// <param name="instruction">要提交的指令。</param>
     /// <param name="cancellationToken">取消令牌。</param>
+    /// <remarks>
+    /// R28-D P0-4：<b>注意</b>——此方法写入 Transport 自己的 inbox。
+    /// <see cref="DefaultAgentKernel"/> 维护独立 inbox，<b>不</b>读取 Transport 的 inbox，
+    /// 因此调用此方法提交的指令<b>不会被默认 Kernel 处理</b>。
+    /// 要驱动默认 Kernel，请使用 <see cref="IAgentKernel.SubmitAsync"/>。
+    /// 此方法仅供自定义 Kernel 实现或测试需要从 Transport.ReceiveAsync 读取指令的场景使用。
+    /// </remarks>
     public ValueTask SubmitAsync(AgentKernelInstruction instruction, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(instruction);

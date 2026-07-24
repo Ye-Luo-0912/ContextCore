@@ -68,8 +68,19 @@ public interface ICanaryMetricsCollector
     /// <param name="parityReport">parity 对比报告（从中提取 ParityLevel 判定是否 Divergent）。</param>
     /// <param name="v2Succeeded">V2 路径是否成功（false 计入 V2ErrorCount）。</param>
     /// <param name="legacySucceeded">Legacy 路径是否成功（false 计入 LegacyErrorCount）。</param>
-    /// <param name="v2Duration">V2 路径执行耗时（用于 P95 计算）。</param>
-    void RecordObservation(string runId, ParityReport parityReport, bool v2Succeeded, bool legacySucceeded, TimeSpan v2Duration);
+    /// <param name="v2Duration">V2 路径执行耗时（用于 V2 P95 计算）。</param>
+    /// <param name="legacyDuration">
+    /// R28-D P0-6：Legacy 路径执行耗时（用于 Legacy P95 计算）。
+    /// 缺省值 <c>null</c> 时回退到 <paramref name="v2Duration"/>（向后兼容旧调用点），
+    /// 但生产路径应显式传入真实 Legacy 耗时——否则 latency multiplier 无法发现 V2 延迟回退。
+    /// </param>
+    void RecordObservation(
+        string runId,
+        ParityReport parityReport,
+        bool v2Succeeded,
+        bool legacySucceeded,
+        TimeSpan v2Duration,
+        TimeSpan? legacyDuration = null);
 
     /// <summary>获取当前观察窗口的聚合指标。</summary>
     /// <param name="runId">Canary run ID。</param>
@@ -92,18 +103,28 @@ public sealed class DefaultCanaryMetricsCollector : ICanaryMetricsCollector
         = new(StringComparer.Ordinal);
 
     /// <inheritdoc />
-    public void RecordObservation(string runId, ParityReport parityReport, bool v2Succeeded, bool legacySucceeded, TimeSpan v2Duration)
+    public void RecordObservation(
+        string runId,
+        ParityReport parityReport,
+        bool v2Succeeded,
+        bool legacySucceeded,
+        TimeSpan v2Duration,
+        TimeSpan? legacyDuration = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(runId);
         ArgumentNullException.ThrowIfNull(parityReport);
 
         // Divergent = ParityLevel < Hard（含 Divergent 与 Diagnostic）
         var divergent = parityReport.ParityLevel < ParityLevel.Hard;
+        // R28-D P0-6：缺省 legacyDuration 时回退到 v2Duration（向后兼容旧调用点与测试），
+        // 但生产路径应显式传入真实 Legacy 耗时——否则 latency multiplier 无法发现 V2 延迟回退。
+        var legacyMs = (legacyDuration ?? v2Duration).TotalMilliseconds;
         var sample = new ObservationSample(
             Divergent: divergent,
             V2Succeeded: v2Succeeded,
             LegacySucceeded: legacySucceeded,
-            V2DurationMs: v2Duration.TotalMilliseconds);
+            V2DurationMs: v2Duration.TotalMilliseconds,
+            LegacyDurationMs: legacyMs);
 
         var bucket = _buckets.GetOrAdd(runId, _ => new ObservationBucket());
         lock (bucket)
@@ -184,9 +205,9 @@ public sealed class DefaultCanaryMetricsCollector : ICanaryMetricsCollector
             V2ErrorRate = (double)v2ErrorCount / total,
             LegacyErrorRate = (double)legacyErrorCount / total,
             V2P95LatencyMs = ComputeP95(snapshot.Select(s => s.V2DurationMs).ToList()),
-            // Legacy 延迟未单独采集（RecordObservation 仅接收 V2 耗时）；
-            // 使用 V2 p95 作为 Legacy 近似值，避免除零与未采集导致 NaN。
-            LegacyP95LatencyMs = ComputeP95(snapshot.Select(s => s.V2DurationMs).ToList()),
+            // R28-D P0-6：使用真实 Legacy 耗时计算 Legacy P95（修复此前用 V2 P95 近似导致
+            // latency multiplier 无法发现 V2 延迟回退的问题）。
+            LegacyP95LatencyMs = ComputeP95(snapshot.Select(s => s.LegacyDurationMs).ToList()),
             WindowStart = windowStart,
             WindowEnd = windowEnd
         };
@@ -231,7 +252,8 @@ public sealed class DefaultCanaryMetricsCollector : ICanaryMetricsCollector
         bool Divergent,
         bool V2Succeeded,
         bool LegacySucceeded,
-        double V2DurationMs);
+        double V2DurationMs,
+        double LegacyDurationMs);
 
     /// <summary>per-runId 的样本桶（含锁保护）。</summary>
     private sealed class ObservationBucket

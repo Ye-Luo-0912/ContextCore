@@ -1,5 +1,6 @@
 using ContextCore.Abstractions;
 using ContextCore.Abstractions.Models;
+using ContextCore.Core.Services.Evolution;
 using ContextCore.Core.Services.Retrieval;
 
 namespace ContextCore.Core.Services.DecisionEngine;
@@ -126,6 +127,9 @@ public sealed class AuthoritativeRetrievalRuntime : IContextRetriever
     // 非空时按请求 metadata 中的 canaryRunId 解析到对应 run 的专用控制器；
     // 为 null 时回退到直接注入的 _cutoverController（B-5 行为，向后兼容）。
     private readonly ICutoverControllerResolver? _cutoverResolver;
+    // R28-D P0-6：可选的 Canary 指标采集器。非空时 Mixed mode + Sampled shadow 路径会调用
+    // RecordObservation 上报 V2/Legacy 耗时与 parity，让 CanaryProgressionHostedService 有生产样本可消费。
+    private readonly ICanaryMetricsCollector? _canaryMetricsCollector;
 
     /// <summary>构造 Retrieval 权威路径运行时。</summary>
     public AuthoritativeRetrievalRuntime(
@@ -136,7 +140,8 @@ public sealed class AuthoritativeRetrievalRuntime : IContextRetriever
         CutoverController cutoverController,
         ShadowGate? shadowGate = null,
         DecisionExperimentPlaneIntegration? experimentPlane = null,
-        ICutoverControllerResolver? cutoverResolver = null)
+        ICutoverControllerResolver? cutoverResolver = null,
+        ICanaryMetricsCollector? canaryMetricsCollector = null)
     {
         _legacyRetriever = legacyRetriever ?? throw new ArgumentNullException(nameof(legacyRetriever));
         _v2Runtime = v2Runtime ?? throw new ArgumentNullException(nameof(v2Runtime));
@@ -146,6 +151,7 @@ public sealed class AuthoritativeRetrievalRuntime : IContextRetriever
         _shadowGate = shadowGate;
         _experimentPlane = experimentPlane;
         _cutoverResolver = cutoverResolver;
+        _canaryMetricsCollector = canaryMetricsCollector;
     }
 
     /// <summary>
@@ -197,9 +203,13 @@ public sealed class AuthoritativeRetrievalRuntime : IContextRetriever
         }
 
         // Mixed mode（0% < cutover < 100%）：Legacy + V2（Shadow tee + fallback）
+        var legacyStopwatch = System.Diagnostics.Stopwatch.StartNew();
         var legacyResult = await _legacyRetriever.RetrieveAsync(request, cancellationToken).ConfigureAwait(false);
+        legacyStopwatch.Stop();
 
         // V2 路径：Shadow tee 捕获 + V2 执行 + parity 校验
+        RetrievalShadowReport? shadowReport = null;
+        var v2Stopwatch = System.Diagnostics.Stopwatch.StartNew();
         try
         {
             var context = new CandidateAdaptationContext
@@ -214,8 +224,9 @@ public sealed class AuthoritativeRetrievalRuntime : IContextRetriever
             var tokenBudget = legacyResult.EstimatedTokens > 0 ? legacyResult.EstimatedTokens : 4096;
             var topK = request.TopK > 0 ? request.TopK : 10;
 
-            var shadowReport = await _shadowRuntime.ExecuteRetrievalShadowAsync(
+            shadowReport = await _shadowRuntime.ExecuteRetrievalShadowAsync(
                 request, legacyResult, tokenBudget, topK, context, cancellationToken).ConfigureAwait(false);
+            v2Stopwatch.Stop();
 
             // P0-9：自动记录 shadow fixture（携带完整 WorkingSet + V2Result，供离线 replay）
             _experimentPlane?.RecordShadowReport(
@@ -227,13 +238,23 @@ public sealed class AuthoritativeRetrievalRuntime : IContextRetriever
                 var gateResult = _shadowGate.Evaluate(shadowReport.Parity);
                 if (gateResult.OverallLevel == ParityLevel.Divergent)
                 {
-                    // Divergent → 回退到 Legacy
+                    // Divergent → 回退到 Legacy（仍上报观察样本，让 Canary 看到发散率）
+                    RecordCanaryObservation(
+                        request, shadowReport.Parity,
+                        v2Succeeded: true, legacySucceeded: true,
+                        v2Duration: v2Stopwatch.Elapsed,
+                        legacyDuration: legacyStopwatch.Elapsed);
                     return legacyResult;
                 }
             }
 
             // Parity 通过 → 使用 V2 结果（通过 Projector 投影为 ContextRetrievalResult）
             // P0-7：传入 WorkingSet，让 Projector 从 Material sidecar 恢复 Content
+            RecordCanaryObservation(
+                request, shadowReport.Parity,
+                v2Succeeded: true, legacySucceeded: true,
+                v2Duration: v2Stopwatch.Elapsed,
+                legacyDuration: legacyStopwatch.Elapsed);
             return _retrievalProjector.Project(shadowReport.V2Result, shadowReport.WorkingSet);
         }
         // P0-8：用户取消时立即传播，不回退 Legacy
@@ -244,6 +265,14 @@ public sealed class AuthoritativeRetrievalRuntime : IContextRetriever
         // P0-8：V2 失败时回退到 Legacy（fail-open），但记录结构化 trace
         catch (Exception)
         {
+            v2Stopwatch.Stop();
+            // R28-D P0-6：V2 失败也要上报样本（V2 error rate 是回滚阈值之一）。
+            // parity 用空报告占位（Divergent 视为 true，让 Canary 看到失败）。
+            RecordCanaryObservation(
+                request, shadowReport?.Parity ?? BuildEmptyParityReport(),
+                v2Succeeded: false, legacySucceeded: true,
+                v2Duration: v2Stopwatch.Elapsed,
+                legacyDuration: legacyStopwatch.Elapsed);
             return legacyResult;
         }
     }
@@ -331,18 +360,23 @@ public sealed class AuthoritativeRetrievalRuntime : IContextRetriever
     /// R28-B.6：V2 只调用一次（权威路径），shadow 复用 V2 结果做 parity 对比，不重复调用 V2。
     /// R28-B.6 Blocker-1：sampled shadow 同样使用 ExecuteWithWorkingSetAsync 获取完整 ExecutionResult。
     /// Shadow 失败时回退到 V2-only（不影响权威路径）。
+    /// R28-D P0-6：sampled shadow 路径同样调用 RecordObservation 上报 Canary 样本。
     /// </summary>
     private async Task<ContextRetrievalResult> ExecuteRetrievalSampledShadowAsync(
         ContextRetrievalRequest request,
         CancellationToken cancellationToken)
     {
         // 先执行 V2 权威路径（只调用一次 V2，同时保留 raw 结果供 shadow 复用）
+        var v2Stopwatch = System.Diagnostics.Stopwatch.StartNew();
         var (v2Projected, v2Execution) = await ExecuteV2OnlyRetrievalWithRawAsync(request, cancellationToken).ConfigureAwait(false);
+        v2Stopwatch.Stop();
 
         // Best-effort sampled shadow：失败不影响返回值
         try
         {
+            var legacyStopwatch = System.Diagnostics.Stopwatch.StartNew();
             var legacyResult = await _legacyRetriever.RetrieveAsync(request, cancellationToken).ConfigureAwait(false);
+            legacyStopwatch.Stop();
 
             var context = new CandidateAdaptationContext
             {
@@ -362,6 +396,13 @@ public sealed class AuthoritativeRetrievalRuntime : IContextRetriever
             // P0-9：记录完整 shadow fixture（携带 WorkingSet + V2Result）
             _experimentPlane?.RecordShadowReport(
                 shadowReport, request.OperationId, "retrieval-sampled-shadow");
+
+            // R28-D P0-6：sampled shadow 同样上报 Canary 样本（V2 + Legacy 耗时均为真实测量值）
+            RecordCanaryObservation(
+                request, shadowReport.Parity,
+                v2Succeeded: true, legacySucceeded: true,
+                v2Duration: v2Stopwatch.Elapsed,
+                legacyDuration: legacyStopwatch.Elapsed);
         }
         catch (OperationCanceledException)
         {
@@ -374,6 +415,54 @@ public sealed class AuthoritativeRetrievalRuntime : IContextRetriever
 
         return v2Projected;
     }
+
+    /// <summary>
+    /// R28-D P0-6：上报 Canary 观察样本到 ICanaryMetricsCollector（若注入）。
+    /// 仅当请求 metadata 中携带 canaryRunId 时上报（无 runId 的请求不属于任何 canary run）。
+    /// </summary>
+    private void RecordCanaryObservation(
+        ContextRetrievalRequest request,
+        ParityReport parityReport,
+        bool v2Succeeded,
+        bool legacySucceeded,
+        TimeSpan v2Duration,
+        TimeSpan legacyDuration)
+    {
+        if (_canaryMetricsCollector is null)
+        {
+            return;
+        }
+        var runId = CanaryRunIdResolver.TryGetCanaryRunId(request.Metadata);
+        if (string.IsNullOrWhiteSpace(runId))
+        {
+            return;
+        }
+        try
+        {
+            _canaryMetricsCollector.RecordObservation(
+                runId, parityReport, v2Succeeded, legacySucceeded,
+                v2Duration, legacyDuration);
+        }
+        catch
+        {
+            // 上报失败不影响权威路径（best-effort）
+        }
+    }
+
+    /// <summary>
+    /// R28-D P0-6：构建 V2 失败时的占位 ParityReport（Divergent，让 Canary 看到失败）。
+    /// </summary>
+    private static ParityReport BuildEmptyParityReport() => new(
+        LegacySelectedCount: 0,
+        V2SelectedCount: 0,
+        CommonSelectedCount: 0,
+        OnlyInLegacyCount: 0,
+        OnlyInV2Count: 0,
+        JaccardIndex: 0.0,
+        ParityLevel: ParityLevel.Divergent,
+        LegacyTokenTotal: 0,
+        V2TokenTotal: 0,
+        WorkingSetCandidateCount: 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -398,6 +487,8 @@ public sealed class AuthoritativePackageRuntime : IContextPackageBuilder
     private readonly DecisionExperimentPlaneIntegration? _experimentPlane;
     // R28-B.8 工作包 B：可选的 per-run CutoverController 解析器（语义同 Retrieval 运行时）。
     private readonly ICutoverControllerResolver? _cutoverResolver;
+    // R28-D P0-6：可选的 Canary 指标采集器（语义同 Retrieval 运行时）。
+    private readonly ICanaryMetricsCollector? _canaryMetricsCollector;
 
     /// <summary>构造 Package 权威路径运行时。</summary>
     public AuthoritativePackageRuntime(
@@ -408,7 +499,8 @@ public sealed class AuthoritativePackageRuntime : IContextPackageBuilder
         CutoverController cutoverController,
         ShadowGate? shadowGate = null,
         DecisionExperimentPlaneIntegration? experimentPlane = null,
-        ICutoverControllerResolver? cutoverResolver = null)
+        ICutoverControllerResolver? cutoverResolver = null,
+        ICanaryMetricsCollector? canaryMetricsCollector = null)
     {
         _legacyPackageBuilder = legacyPackageBuilder ?? throw new ArgumentNullException(nameof(legacyPackageBuilder));
         _v2Runtime = v2Runtime ?? throw new ArgumentNullException(nameof(v2Runtime));
@@ -418,6 +510,7 @@ public sealed class AuthoritativePackageRuntime : IContextPackageBuilder
         _shadowGate = shadowGate;
         _experimentPlane = experimentPlane;
         _cutoverResolver = cutoverResolver;
+        _canaryMetricsCollector = canaryMetricsCollector;
     }
 
     /// <summary>
@@ -471,7 +564,9 @@ public sealed class AuthoritativePackageRuntime : IContextPackageBuilder
             return await ExecuteV2OnlyPackageAsync(request, cancellationToken).ConfigureAwait(false);
         }
 
+        var legacyStopwatch = System.Diagnostics.Stopwatch.StartNew();
         var legacyResult = await _legacyPackageBuilder.BuildDetailedAsync(request, cancellationToken).ConfigureAwait(false);
+        legacyStopwatch.Stop();
 
         var requestId = legacyResult.BuildId;
         if (!useV2)
@@ -479,6 +574,8 @@ public sealed class AuthoritativePackageRuntime : IContextPackageBuilder
             return legacyResult;
         }
 
+        PackageShadowReport? shadowReport = null;
+        var v2Stopwatch = System.Diagnostics.Stopwatch.StartNew();
         try
         {
             var context = new CandidateAdaptationContext
@@ -494,8 +591,9 @@ public sealed class AuthoritativePackageRuntime : IContextPackageBuilder
                 ? legacyResult.TokenBudget
                 : legacyResult.EstimatedTokens;
 
-            var shadowReport = await _shadowRuntime.ExecutePackageShadowAsync(
+            shadowReport = await _shadowRuntime.ExecutePackageShadowAsync(
                 requestId, legacyResult, tokenBudget, context, cancellationToken).ConfigureAwait(false);
+            v2Stopwatch.Stop();
 
             // P0-9：自动记录 shadow fixture（携带完整 WorkingSet + V2Result，供离线 replay）
             _experimentPlane?.RecordShadowReport(
@@ -506,10 +604,21 @@ public sealed class AuthoritativePackageRuntime : IContextPackageBuilder
                 var gateResult = _shadowGate.Evaluate(shadowReport.Parity);
                 if (gateResult.OverallLevel == ParityLevel.Divergent)
                 {
+                    // Divergent → 回退到 Legacy（仍上报观察样本，让 Canary 看到发散率）
+                    RecordCanaryObservation(
+                        request, shadowReport.Parity,
+                        v2Succeeded: true, legacySucceeded: true,
+                        v2Duration: v2Stopwatch.Elapsed,
+                        legacyDuration: legacyStopwatch.Elapsed);
                     return legacyResult;
                 }
             }
 
+            RecordCanaryObservation(
+                request, shadowReport.Parity,
+                v2Succeeded: true, legacySucceeded: true,
+                v2Duration: v2Stopwatch.Elapsed,
+                legacyDuration: legacyStopwatch.Elapsed);
             return _packageProjector.Project(shadowReport.V2Result, shadowReport.WorkingSet);
         }
         catch (OperationCanceledException)
@@ -518,6 +627,13 @@ public sealed class AuthoritativePackageRuntime : IContextPackageBuilder
         }
         catch (Exception)
         {
+            v2Stopwatch.Stop();
+            // R28-D P0-6：V2 失败也上报样本（V2 error rate 是回滚阈值之一）
+            RecordCanaryObservation(
+                request, shadowReport?.Parity ?? BuildEmptyParityReport(),
+                v2Succeeded: false, legacySucceeded: true,
+                v2Duration: v2Stopwatch.Elapsed,
+                legacyDuration: legacyStopwatch.Elapsed);
             return legacyResult;
         }
     }
@@ -595,18 +711,23 @@ public sealed class AuthoritativePackageRuntime : IContextPackageBuilder
     /// R28-B.6：V2 只调用一次（权威路径），shadow 复用 V2 结果做 parity 对比，不重复调用 V2。
     /// R28-B.6 Blocker-1：sampled shadow 同样使用 ExecuteWithWorkingSetAsync 获取完整 ExecutionResult。
     /// Shadow 失败时回退到 V2-only（不影响权威路径）。
+    /// R28-D P0-6：sampled shadow 路径同样调用 RecordObservation 上报 Canary 样本。
     /// </summary>
     private async Task<ContextPackageBuildResult> ExecutePackageSampledShadowAsync(
         ContextPackageRequest request,
         CancellationToken cancellationToken)
     {
         // 先执行 V2 权威路径（只调用一次 V2，同时保留 raw 结果供 shadow 复用）
+        var v2Stopwatch = System.Diagnostics.Stopwatch.StartNew();
         var (v2Projected, v2Execution) = await ExecuteV2OnlyPackageWithRawAsync(request, cancellationToken).ConfigureAwait(false);
+        v2Stopwatch.Stop();
 
         // Best-effort sampled shadow：失败不影响返回值
         try
         {
+            var legacyStopwatch = System.Diagnostics.Stopwatch.StartNew();
             var legacyResult = await _legacyPackageBuilder.BuildDetailedAsync(request, cancellationToken).ConfigureAwait(false);
+            legacyStopwatch.Stop();
             var requestId = legacyResult.BuildId;
 
             var context = new CandidateAdaptationContext
@@ -629,6 +750,13 @@ public sealed class AuthoritativePackageRuntime : IContextPackageBuilder
             // P0-9：记录完整 shadow fixture（携带 WorkingSet + V2Result）
             _experimentPlane?.RecordShadowReport(
                 shadowReport, requestId, "package-sampled-shadow");
+
+            // R28-D P0-6：sampled shadow 同样上报 Canary 样本（V2 + Legacy 耗时均为真实测量值）
+            RecordCanaryObservation(
+                request, shadowReport.Parity,
+                v2Succeeded: true, legacySucceeded: true,
+                v2Duration: v2Stopwatch.Elapsed,
+                legacyDuration: legacyStopwatch.Elapsed);
         }
         catch (OperationCanceledException)
         {
@@ -641,6 +769,53 @@ public sealed class AuthoritativePackageRuntime : IContextPackageBuilder
 
         return v2Projected;
     }
+
+    /// <summary>
+    /// R28-D P0-6：上报 Package 路径的 Canary 观察样本（语义同 Retrieval 路径的同名方法）。
+    /// </summary>
+    private void RecordCanaryObservation(
+        ContextPackageRequest request,
+        ParityReport parityReport,
+        bool v2Succeeded,
+        bool legacySucceeded,
+        TimeSpan v2Duration,
+        TimeSpan legacyDuration)
+    {
+        if (_canaryMetricsCollector is null)
+        {
+            return;
+        }
+        var runId = CanaryRunIdResolver.TryGetCanaryRunId(request.Metadata);
+        if (string.IsNullOrWhiteSpace(runId))
+        {
+            return;
+        }
+        try
+        {
+            _canaryMetricsCollector.RecordObservation(
+                runId, parityReport, v2Succeeded, legacySucceeded,
+                v2Duration, legacyDuration);
+        }
+        catch
+        {
+            // 上报失败不影响权威路径（best-effort）
+        }
+    }
+
+    /// <summary>
+    /// R28-D P0-6：构建 V2 失败时的占位 ParityReport（Divergent，让 Canary 看到失败）。
+    /// </summary>
+    private static ParityReport BuildEmptyParityReport() => new(
+        LegacySelectedCount: 0,
+        V2SelectedCount: 0,
+        CommonSelectedCount: 0,
+        OnlyInLegacyCount: 0,
+        OnlyInV2Count: 0,
+        JaccardIndex: 0.0,
+        ParityLevel: ParityLevel.Divergent,
+        LegacyTokenTotal: 0,
+        V2TokenTotal: 0,
+        WorkingSetCandidateCount: 0);
 }
 
 // ---------------------------------------------------------------------------

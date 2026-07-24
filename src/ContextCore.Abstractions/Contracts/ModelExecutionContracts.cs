@@ -81,6 +81,30 @@ public enum FeatureType : byte
     Text = 3
 }
 
+/// <summary>
+/// R28-D P0-1：推理引擎类型。让消费方区分真实模型 vs 确定性 fallback，
+/// 避免把 DeterministicBatchInferenceEngine 的 feature hash 当成真实模型分数参与排序。
+/// </summary>
+public enum InferenceEngineKind : byte
+{
+    /// <summary>
+    /// 真实模型（远程推理服务 / ONNX 等）。其分数可参与 FinalScore 加权。
+    /// </summary>
+    RealModel = 0,
+
+    /// <summary>
+    /// 确定性回放（feature hash / 规则评分）。仅用于：
+    ///   - 模型不可用时的 fail-safe 降级
+    ///   - 基础设施测试与本地预览
+    ///   - contract test
+    /// 默认配置下不得改变 FinalScore（除非显式开启 EnableModelScoring 且接受 hash 评分）。
+    /// </summary>
+    DeterministicReplay = 1,
+
+    /// <summary>禁用：引擎不可用，所有推理请求立即失败。</summary>
+    Disabled = 2
+}
+
 /// <summary>R28-D：Batch Inference Engine — 批量推理。</summary>
 public interface IBatchInferenceEngine
 {
@@ -89,6 +113,12 @@ public interface IBatchInferenceEngine
 
     /// <summary>模型版本。</summary>
     string ModelVersion { get; }
+
+    /// <summary>
+    /// R28-D P0-1：引擎类型。消费方据此判断是否信任分数参与排序。
+    /// DeterministicReplay 类型不得在默认配置下改变 FinalScore。
+    /// </summary>
+    InferenceEngineKind Kind { get; }
 }
 
 /// <summary>R28-D：批量推理请求。</summary>

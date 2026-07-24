@@ -44,6 +44,7 @@ public sealed class DefaultAgentKernel : IAgentKernel
     private readonly IContextDecisionRuntime? _decisionRuntime;
     private readonly IAgentContextProjector? _contextProjector;
     private readonly KernelTransportOptions _transportOptions;
+    private readonly IKernelResultOutbox? _resultOutbox;
     private readonly Channel<AgentKernelInstruction> _inbox;
     private readonly CancellationTokenSource _shutdownCts;
     private AgentKernelState _state;

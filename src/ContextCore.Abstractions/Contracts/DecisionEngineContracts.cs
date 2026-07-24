@@ -216,6 +216,8 @@ public sealed record CandidateFeatureVector
 ///   - ModelScore：模型评分（Router / Ranker / Listwise model 输出），可为 null。
 ///   - FinalScore：Engine 聚合后的最终分数（deterministic + model 加权）。
 ///   - ModelConfidence：模型置信度 [0,1]；0 或低于阈值时 Engine 回退到 DeterministicScore。
+///   - R28-D P0-1：ModelAttempted/ModelApplied/ModelFallbackReason 区分"模型尝试过"和"实际参与排序"，
+///     避免把 fallback 误认为模型已生效。
 ///
 /// 这样 Model failure 时可精确回退到 deterministic policy（验收标准 #6）。
 /// </remarks>
@@ -242,6 +244,27 @@ public sealed record CandidateUtilityScore
 
     /// <summary>评分使用到的模型 artifact 引用（ModelScore 非 null 时填充）；用于 trace 溯源。</summary>
     public string? ModelArtifactRef { get; init; }
+
+    /// <summary>
+    /// R28-D P0-1：模型是否被尝试过（即 EnableModelScoring=true 且引擎/registry 可用）。
+    /// true 不代表模型分数已应用，仅代表走过模型路径。
+    /// 区分"未启用模型"和"启用但失败"。
+    /// </summary>
+    public bool ModelAttempted { get; init; }
+
+    /// <summary>
+    /// R28-D P0-1：模型分数是否实际参与了 FinalScore 加权。
+    /// 仅当 ModelAttempted=true 且 confidence >= threshold 且推理成功时为 true。
+    /// </summary>
+    public bool ModelApplied { get; init; }
+
+    /// <summary>
+    /// R28-D P0-1：模型降级原因（ModelAttempted=true 但 ModelApplied=false 时填充）。
+    /// 取值如 "engine-unavailable" / "schema-not-found" / "inference-failed" /
+    /// "inference-succeeded-false" / "confidence-below-threshold" / "deterministic-replay-skipped"。
+    /// ModelApplied=true 时为 null。
+    /// </summary>
+    public string? ModelFallbackReason { get; init; }
 }
 
 /// <summary>

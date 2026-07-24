@@ -1110,9 +1110,13 @@ public sealed class DefaultRuntimeRequestNormalizer : IRuntimeRequestNormalizer
 /// R28-B.7-Final：请求语义哈希器默认实现。使用 SHA256 + invariant culture 计算稳定哈希。
 /// </summary>
 /// <remarks>
-/// 哈希输入：RequestId + Scope + Purpose + QueryText + TokenBudget + TopK。
-/// 不包含 SeedCandidates / RetrievalInput / PackageInput（这些在 replay 时由 fixture 注入）。
-/// 哈希跨进程/跨平台稳定（使用 invariant culture 格式化数值）。
+/// R28-D P0-7：哈希输入包含完整业务语义，而非仅浅层字段。
+///   - 不含 RequestId（RequestId 是 CorrelationId，仅用于链路追踪，不代表业务语义）
+///   - 含 Scope / Purpose / QueryText / TokenBudget / TopK
+///   - 含 RetrievalInput 关键字段（RequiredIds/RequiredTags/RequiredTypes/QueryVector 哈希/Include* 开关等）
+///   - 含 PackageInput 关键字段（Mode/Policy/IncludeRecent/IsAuditMode 等）
+///   - 含 SeedCandidates/SeedWorkingSet 的存在性与数量
+/// 哈希跨进程/跨平台稳定（使用 invariant culture 格式化数值；无序集合排序后拼接）。
 /// </remarks>
 public sealed class DefaultRequestSemanticHasher : IRequestSemanticHasher
 {
@@ -1124,24 +1128,92 @@ public sealed class DefaultRequestSemanticHasher : IRequestSemanticHasher
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var sb = new StringBuilder(256);
-        sb.Append(request.RequestId);
-        sb.Append('|');
-        sb.Append(request.Scope.WorkspaceId);
-        sb.Append('|');
-        sb.Append(request.Scope.CollectionId);
-        sb.Append('|');
-        sb.Append((int)request.Purpose);
-        sb.Append('|');
-        sb.Append(request.QueryText ?? string.Empty);
-        sb.Append('|');
-        sb.Append(request.TokenBudget.ToString(System.Globalization.CultureInfo.InvariantCulture));
-        sb.Append('|');
-        sb.Append(request.TopK.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        var sb = new StringBuilder(512);
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+
+        // --- 基础语义字段（不含 RequestId，RequestId 仅作 CorrelationId） ---
+        sb.Append("scope=").Append(request.Scope.WorkspaceId).Append(':').Append(request.Scope.CollectionId);
+        sb.Append("|purpose=").Append((int)request.Purpose);
+        sb.Append("|query=").Append(request.QueryText ?? string.Empty);
+        sb.Append("|budget=").Append(request.TokenBudget.ToString(inv));
+        sb.Append("|topK=").Append(request.TopK.ToString(inv));
+
+        // --- RetrievalInput 关键字段 ---
+        if (request.RetrievalInput is { } ri)
+        {
+            sb.Append("|ri.tags=").Append(JoinSorted(ri.RequiredTags));
+            sb.Append("|ri.types=").Append(JoinSorted(ri.RequiredTypes));
+            sb.Append("|ri.ids=").Append(JoinSorted(ri.RequiredIds));
+            sb.Append("|ri.refs=").Append(JoinSorted(ri.Refs));
+            sb.Append("|ri.qv=").Append(HashFloats(ri.QueryVector));
+            sb.Append("|ri.model=").Append(ri.ModelName ?? string.Empty);
+            sb.Append("|ri.instr=").Append(ri.QueryInstruction ?? string.Empty);
+            sb.Append("|ri.ctake=").Append(ri.CandidateTake.ToString(inv));
+            sb.Append("|ri.vtopk=").Append(ri.VectorTopK.ToString(inv));
+            sb.Append("|ri.minv=").Append(ri.MinVectorScore?.ToString(inv) ?? "null");
+            sb.Append("|ri.rel=").Append(JoinSorted(ri.AllowedRelationTypes));
+            sb.Append("|ri.rdepth=").Append(ri.RelationExpansionDepth.ToString(inv));
+            sb.Append("|ri.ikw=").Append(ri.IncludeKeywordRecall);
+            sb.Append("|ri.ivec=").Append(ri.IncludeVectorRecall);
+            sb.Append("|ri.irel=").Append(ri.IncludeRelationExpansion);
+            sb.Append("|ri.iwm=").Append(ri.IncludeWorkingMemory);
+            sb.Append("|ri.ism=").Append(ri.IncludeStableMemory);
+            sb.Append("|ri.icontent=").Append(ri.IncludeContent);
+            sb.Append("|ri.plan=").Append(ri.Plan ?? string.Empty);
+        }
+
+        // --- PackageInput 关键字段 ---
+        if (request.PackageInput is { } pi)
+        {
+            sb.Append("|pi.tags=").Append(JoinSorted(pi.RequiredTags));
+            sb.Append("|pi.types=").Append(JoinSorted(pi.RequiredTypes));
+            sb.Append("|pi.ids=").Append(JoinSorted(pi.RequiredIds));
+            sb.Append("|pi.qv=").Append(HashFloats(pi.QueryVector));
+            sb.Append("|pi.model=").Append(pi.ModelName ?? string.Empty);
+            sb.Append("|pi.instr=").Append(pi.QueryInstruction ?? string.Empty);
+            sb.Append("|pi.ctake=").Append(pi.CandidateTake.ToString(inv));
+            sb.Append("|pi.vtopk=").Append(pi.VectorTopK.ToString(inv));
+            sb.Append("|pi.minv=").Append(pi.MinVectorScore?.ToString(inv) ?? "null");
+            sb.Append("|pi.mode=").Append((int)pi.Mode);
+            sb.Append("|pi.policy=").Append(pi.Policy?.ToString() ?? "null");
+            sb.Append("|pi.irecent=").Append(pi.IncludeRecent);
+        }
+
+        // --- SeedCandidates / SeedWorkingSet 存在性与数量 ---
+        sb.Append("|seeds.count=").Append(request.SeedCandidates.Count);
+        if (request.SeedWorkingSet is { } sws)
+        {
+            sb.Append("|sws.envs=").Append(sws.Envelopes?.Count ?? 0);
+            sb.Append("|sws.mats=").Append(sws.Materials?.Count ?? 0);
+        }
 
         var bytes = Encoding.UTF8.GetBytes(sb.ToString());
         var hash = SHA256.HashData(bytes);
         return Convert.ToHexString(hash);
+    }
+
+    private static string JoinSorted(IReadOnlyList<string> values)
+    {
+        if (values is null || values.Count == 0) return string.Empty;
+        var arr = new string[values.Count];
+        for (var i = 0; i < values.Count; i++) arr[i] = values[i];
+        Array.Sort(arr, StringComparer.Ordinal);
+        return string.Join(",", arr);
+    }
+
+    private static string HashFloats(IReadOnlyList<float> values)
+    {
+        if (values is null || values.Count == 0) return "empty";
+        // 向量内容哈希：避免长向量拼入 hash 输入，同时区分不同向量
+        var sb = new StringBuilder(values.Count * 4);
+        for (var i = 0; i < values.Count; i++)
+        {
+            if (i > 0) sb.Append(',');
+            sb.Append(values[i].ToString("R", System.Globalization.CultureInfo.InvariantCulture));
+        }
+        var bytes = Encoding.UTF8.GetBytes(sb.ToString());
+        var hash = SHA256.HashData(bytes);
+        return Convert.ToHexString(hash).AsSpan(0, 16).ToString(); // 取前 16 hex 字符作摘要
     }
 }
 
@@ -1335,29 +1407,14 @@ internal static class ExecutionArtifactFactory
     /// R28-B.7 P0-1：计算请求语义哈希（SHA256，用于 replay 匹配）。
     /// </summary>
     /// <remarks>
-    /// 哈希输入：RequestId + Scope + Purpose + QueryText + TokenBudget + TopK。
-    /// 不包含 SeedCandidates / RetrievalInput / PackageInput（这些在 replay 时由 fixture 注入）。
+    /// R28-D P0-7：委托给 DefaultRequestSemanticHasher，消除重复实现。
+    /// 哈希输入包含完整业务语义（Scope/Purpose/QueryText/TokenBudget/TopK +
+    /// RetrievalInput/PackageInput 关键字段 + SeedCandidates 数量），
+    /// 不含 RequestId（RequestId 仅作 CorrelationId）。
     /// </remarks>
     private static string ComputeRequestSemanticHash(ContextDecisionRuntimeRequest request)
     {
-        var sb = new StringBuilder(256);
-        sb.Append(request.RequestId);
-        sb.Append('|');
-        sb.Append(request.Scope.WorkspaceId);
-        sb.Append('|');
-        sb.Append(request.Scope.CollectionId);
-        sb.Append('|');
-        sb.Append((int)request.Purpose);
-        sb.Append('|');
-        sb.Append(request.QueryText ?? string.Empty);
-        sb.Append('|');
-        sb.Append(request.TokenBudget.ToString(System.Globalization.CultureInfo.InvariantCulture));
-        sb.Append('|');
-        sb.Append(request.TopK.ToString(System.Globalization.CultureInfo.InvariantCulture));
-
-        var bytes = Encoding.UTF8.GetBytes(sb.ToString());
-        var hash = SHA256.HashData(bytes);
-        return Convert.ToHexString(hash);
+        return DefaultRequestSemanticHasher.Instance.ComputeHash(request);
     }
 
     /// <summary>
@@ -2364,13 +2421,15 @@ public sealed class DefaultEarlyAdmissionGate : IEarlyAdmissionGate
 }
 
 /// <summary>
-/// R28-D：Feature Pipeline 默认实现。将 ScoreBreakdown 提升为强类型特征字段。
+/// R28-D：Feature Pipeline 默认实现。将 ScoreBreakdown 提升为强类型特征字段，并做 [0,1] 归一化。
 /// </summary>
 /// <remarks>
 /// rule-only 模式：特征仅记录到 envelope.Features 供 trace（不影响 FinalScore）。
 /// model 模式：特征作为模型输入 FeatureVector 的数据源。
 /// 提升映射：rawTokenMatch→LexicalScore, semanticAnchor→SemanticScore,
 /// recency→RecencyScore, relation→RelationBoost, mandatory→MandatoryWeight。
+/// P0-2：归一化 — LexicalScore/SemanticScore/RecencyScore/RelationBoost clamp 到 [0,1]；
+/// MandatoryWeight 保持 0/1（不 clamp）。Provider 已填充的强类型字段（非零）不被覆盖。
 /// </remarks>
 public sealed class DefaultFeaturePipeline : IFeaturePipeline
 {
@@ -2398,7 +2457,7 @@ public sealed class DefaultFeaturePipeline : IFeaturePipeline
         return ValueTask.FromResult<IReadOnlyList<ContextCandidateEnvelope>>(result);
     }
 
-    /// <summary>将 ScoreBreakdown 值提升为强类型字段，并填充 MandatoryWeight。</summary>
+    /// <summary>将 ScoreBreakdown 值提升为强类型字段，填充 MandatoryWeight，并对特征值做 [0,1] 归一化。</summary>
     private static ContextCandidateEnvelope EnrichEnvelope(ContextCandidateEnvelope envelope)
     {
         var features = envelope.Features;
@@ -2423,6 +2482,12 @@ public sealed class DefaultFeaturePipeline : IFeaturePipeline
         var mandatory = features.MandatoryWeight != 0
             ? features.MandatoryWeight
             : envelope.Safety.IsMandatory ? 1.0 : 0;
+
+        // P0-2：归一化 — 将特征值 clamp 到 [0,1]（MandatoryWeight 保持 0/1 不 clamp）
+        lexical = Math.Clamp(lexical, 0.0, 1.0);
+        semantic = Math.Clamp(semantic, 0.0, 1.0);
+        recency = Math.Clamp(recency, 0.0, 1.0);
+        relation = Math.Clamp(relation, 0.0, 1.0);
 
         // 如果所有字段都已有值（无需提升），返回原 envelope 避免分配
         if (lexical == features.LexicalScore && semantic == features.SemanticScore
@@ -2605,13 +2670,68 @@ public sealed class DefaultUtilityScorer : IUtilityScorer
             return envelopes;
         }
 
-        // model 模式但缺少推理引擎 → 回退 rule-only
+        // model 模式但缺少推理引擎 / registry → 标记 ModelAttempted 并降级
         if (_inferenceEngine is null || _featureRegistry is null)
+        {
+            return MarkModelAttempted(envelopes, applied: false, fallbackReason: "engine-unavailable");
+        }
+
+        // R28-D P0-1：DeterministicReplay 引擎默认不参与 FinalScore 加权，
+        // 避免把 feature hash 当成真实模型分数扰动排序。
+        // 仅当 Policy 显式允许（AllowDeterministicReplayScoring=true）时才走模型路径。
+        if (_inferenceEngine.Kind == InferenceEngineKind.DeterministicReplay
+            && !snapshot.AllowDeterministicReplayScoring)
+        {
+            return MarkModelAttempted(envelopes, applied: false, fallbackReason: "deterministic-replay-skipped");
+        }
+
+        // Disabled 引擎立即降级
+        if (_inferenceEngine.Kind == InferenceEngineKind.Disabled)
+        {
+            return MarkModelAttempted(envelopes, applied: false, fallbackReason: "engine-disabled");
+        }
+
+        return await ScoreWithModelAsync(envelopes, snapshot, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// R28-D P0-1：在不应用模型分数的情况下，标记 ModelAttempted=true / ModelApplied=false，
+    /// 并记录降级原因。保留原 DeterministicScore 作为 FinalScore。
+    /// </summary>
+    private static IReadOnlyList<ContextCandidateEnvelope> MarkModelAttempted(
+        IReadOnlyList<ContextCandidateEnvelope> envelopes,
+        bool applied,
+        string fallbackReason)
+    {
+        if (envelopes.Count == 0)
         {
             return envelopes;
         }
 
-        return await ScoreWithModelAsync(envelopes, snapshot, cancellationToken).ConfigureAwait(false);
+        var result = new List<ContextCandidateEnvelope>(envelopes.Count);
+        foreach (var envelope in envelopes)
+        {
+            // 仅当原始 ModelAttempted=false 时才标记，避免覆盖更精确的下游标记
+            if (envelope.Utility.ModelAttempted)
+            {
+                result.Add(envelope);
+                continue;
+            }
+
+            result.Add(envelope with
+            {
+                Utility = envelope.Utility with
+                {
+                    ModelAttempted = true,
+                    ModelApplied = applied,
+                    ModelFallbackReason = applied ? null : fallbackReason,
+                    // 保留 ReasonCode 原值（可能是 "deterministic-only" 或 "provider-recall"）
+                    // 仅在 applied=false 且原 ReasonCode 表示已应用模型时才改写
+                    ReasonCode = applied ? envelope.Utility.ReasonCode : "fallback-to-deterministic"
+                }
+            });
+        }
+        return result;
     }
 
     /// <summary>R28-D：模型加权评分路径。</summary>
@@ -2630,8 +2750,8 @@ public sealed class DefaultUtilityScorer : IUtilityScorer
         var featureSchema = _featureRegistry!.Get(_inferenceEngine!.ModelVersion);
         if (featureSchema is null)
         {
-            // 无匹配 schema → 回退 rule-only
-            return envelopes;
+            // 无匹配 schema → 标记降级
+            return MarkModelAttempted(envelopes, applied: false, fallbackReason: "schema-not-found");
         }
 
         // 构造批量推理请求
@@ -2648,7 +2768,7 @@ public sealed class DefaultUtilityScorer : IUtilityScorer
 
         if (featureVectors.Count == 0)
         {
-            return envelopes; // 无可推理候选 → 回退 rule-only
+            return envelopes; // 无可推理候选 → 保持原状
         }
 
         // 调用模型批量推理（fail-open：异常降级到 deterministic）
@@ -2668,14 +2788,14 @@ public sealed class DefaultUtilityScorer : IUtilityScorer
         }
         catch (Exception)
         {
-            // 模型推理失败 → 静默降级到 rule-only
-            return envelopes;
+            // 模型推理失败 → 标记降级
+            return MarkModelAttempted(envelopes, applied: false, fallbackReason: "inference-failed");
         }
 
         if (!inferenceResult.Succeeded)
         {
-            // 推理报告失败 → 降级
-            return envelopes;
+            // 推理报告失败 → 标记降级
+            return MarkModelAttempted(envelopes, applied: false, fallbackReason: "inference-succeeded-false");
         }
 
         // 应用校准并聚合 FinalScore
@@ -2702,7 +2822,7 @@ public sealed class DefaultUtilityScorer : IUtilityScorer
                 ? _calibrationService.Calibrate(rawScore, _inferenceEngine.ModelVersion)
                 : rawScore;
 
-            // 低于置信阈值 → 回退 deterministic
+            // 低于置信阈值 → 回退 deterministic（但标记 ModelAttempted=true）
             if (confidence < threshold)
             {
                 result.Add(envelope with
@@ -2713,7 +2833,10 @@ public sealed class DefaultUtilityScorer : IUtilityScorer
                         ModelConfidence = confidence,
                         FinalScore = envelope.Utility.DeterministicScore,
                         ReasonCode = "fallback-to-deterministic",
-                        ModelArtifactRef = modelArtifactId
+                        ModelArtifactRef = modelArtifactId,
+                        ModelAttempted = true,
+                        ModelApplied = false,
+                        ModelFallbackReason = "confidence-below-threshold"
                     }
                 });
                 continue;
@@ -2729,7 +2852,10 @@ public sealed class DefaultUtilityScorer : IUtilityScorer
                     ModelConfidence = confidence,
                     FinalScore = finalScore,
                     ReasonCode = "model-weighted",
-                    ModelArtifactRef = modelArtifactId
+                    ModelArtifactRef = modelArtifactId,
+                    ModelAttempted = true,
+                    ModelApplied = true,
+                    ModelFallbackReason = null
                 }
             });
         }
@@ -2849,11 +2975,12 @@ public sealed class DefaultGlobalAllocator : IGlobalAllocator
         MandatoryOverflowPolicy mandatoryOverflowPolicy,
         ContextDecisionPurpose? purpose)
     {
-        // 排序：IsMandatory/IsHardConstraint 降序 → FinalScore 降序 → EstimatedTokens 降序 → CandidateId 升序
+        // 排序：IsMandatory/IsHardConstraint 降序 → FinalScore 降序 → EffectiveTokens 降序 → CandidateId 升序
+        // R28-D P0-3：EffectiveTokens 优先使用 TokenCost.ContentTokens（精确）而非 EstimatedTokens（length/4 粗估）
         var ordered = envelopes
             .OrderByDescending(e => e.Safety.IsMandatory || e.Safety.IsHardConstraint)
             .ThenByDescending(e => e.Utility.FinalScore)
-            .ThenByDescending(e => e.EstimatedTokens)
+            .ThenByDescending(e => GetEffectiveTokens(e))
             .ThenBy(e => e.CandidateId, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
@@ -2892,11 +3019,13 @@ public sealed class DefaultGlobalAllocator : IGlobalAllocator
             }
 
             // R28-B.6 Impl-2：mandatory 候选超出预算时按策略处理
-            if (isMandatory && usedTokens + envelope.EstimatedTokens > tokenBudget)
+            // R28-D P0-3：使用 EffectiveTokens（TokenCost 优先）
+            var effectiveTokens = GetEffectiveTokens(envelope);
+            if (isMandatory && usedTokens + effectiveTokens > tokenBudget)
             {
-                var overflow = (usedTokens + envelope.EstimatedTokens) - tokenBudget;
+                var overflow = (usedTokens + effectiveTokens) - tokenBudget;
                 mandatoryOverflowTokens += overflow;
-                mandatoryRequiredTokens += envelope.EstimatedTokens;
+                mandatoryRequiredTokens += effectiveTokens;
 
                 switch (mandatoryOverflowPolicy)
                 {
@@ -2943,7 +3072,8 @@ public sealed class DefaultGlobalAllocator : IGlobalAllocator
             // 而是包含部分 token（IsTruncated=true，IncludedTokens=remaining）。
             // 只有剩余空间为 0 时才完全丢弃。实际内容截断由 Projector 通过
             // IContentTruncator 在 Material sidecar 恢复时执行（Impl-1）。
-            if (!isMandatory && usedTokens + envelope.EstimatedTokens > tokenBudget)
+            // R28-D P0-3：使用 EffectiveTokens（TokenCost 优先）
+            if (!isMandatory && usedTokens + effectiveTokens > tokenBudget)
             {
                 var remaining = tokenBudget - usedTokens;
                 if (remaining > 0)
@@ -2978,15 +3108,16 @@ public sealed class DefaultGlobalAllocator : IGlobalAllocator
             }
 
             selected.Add(envelope);
-            usedTokens += envelope.EstimatedTokens;
+            // R28-D P0-3：使用 EffectiveTokens（TokenCost 优先）
+            usedTokens += effectiveTokens;
             takenCount++;
             // R28-B.7 P0-5：累计 mandatory token 需求（用于 FailClosed 异常）
-            if (isMandatory) mandatoryRequiredTokens += envelope.EstimatedTokens;
+            if (isMandatory) mandatoryRequiredTokens += effectiveTokens;
             decisions.Add(new CandidateAllocationDecision
             {
                 CandidateKey = envelope.CanonicalKey,
                 Section = ResolveSection(envelope),
-                IncludedTokens = envelope.EstimatedTokens,
+                IncludedTokens = effectiveTokens,
                 IsTruncated = false,
                 ReasonCode = isMandatory
                     ? CandidateDecisionReasonCode.SelectedMandatory
@@ -3043,6 +3174,20 @@ public sealed class DefaultGlobalAllocator : IGlobalAllocator
             ContextCandidateSource.RelatedContext => "related",
             _ => "default"
         };
+    }
+
+    /// <summary>
+    /// R28-D P0-3：获取候选的有效 token 数。
+    /// 优先使用 CandidateTokenCost.ContentTokens（基于 IContextTokenizer 精确计算），
+    /// 回退到 EstimatedTokens（length/4 粗估，仅用于兼容/诊断）。
+    /// </summary>
+    /// <remarks>
+    /// 这是 Allocator 的权威 token 输入：中文/代码/JSON 场景下 EstimatedTokens 严重低估，
+    /// 必须使用基于 tokenizer 的精确 TokenCost 才能避免预算超支。
+    /// </remarks>
+    private static int GetEffectiveTokens(ContextCandidateEnvelope envelope)
+    {
+        return envelope.TokenCost?.ContentTokens ?? envelope.EstimatedTokens;
     }
 }
 

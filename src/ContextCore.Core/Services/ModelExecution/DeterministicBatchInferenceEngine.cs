@@ -36,6 +36,12 @@ public sealed class DeterministicBatchInferenceEngine : IBatchInferenceEngine
     /// <summary>引擎使用的固定模型版本号。</summary>
     public string ModelVersion => DefaultModelVersion;
 
+    /// <summary>
+    /// R28-D P0-1：引擎类型 = DeterministicReplay。
+    /// 该引擎仅产出 feature hash，不调用真实模型；默认配置下不得改变 FinalScore。
+    /// </summary>
+    public InferenceEngineKind Kind => InferenceEngineKind.DeterministicReplay;
+
     /// <inheritdoc />
     public ValueTask<BatchInferenceResult> InferAsync(BatchInferenceRequest request, CancellationToken ct = default)
     {

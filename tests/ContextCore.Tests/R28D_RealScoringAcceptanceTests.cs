@@ -331,7 +331,11 @@ public sealed class R28D_DefaultUtilityScorerTests
         // fail-open：异常被吞，返回原 envelope（ModelScore 保持 null）
         Assert.AreEqual(1, result.Count);
         Assert.IsNull(result[0].Utility.ModelScore);
-        Assert.AreEqual("deterministic-only", result[0].Utility.ReasonCode);
+        // P0-1：模型已尝试但失败 → 标记 fallback-to-deterministic 并记录原因
+        Assert.IsTrue(result[0].Utility.ModelAttempted, "ModelAttempted 应为 true（模型已尝试）");
+        Assert.IsFalse(result[0].Utility.ModelApplied, "ModelApplied 应为 false（模型未实际应用）");
+        Assert.AreEqual("inference-failed", result[0].Utility.ModelFallbackReason);
+        Assert.AreEqual("fallback-to-deterministic", result[0].Utility.ReasonCode);
     }
 
     [TestMethod]
@@ -348,7 +352,11 @@ public sealed class R28D_DefaultUtilityScorerTests
 
         Assert.AreEqual(1, result.Count);
         Assert.IsNull(result[0].Utility.ModelScore);
-        Assert.AreEqual("deterministic-only", result[0].Utility.ReasonCode);
+        // P0-1：模型已尝试但返回 Succeeded=false → 标记 fallback-to-deterministic 并记录原因
+        Assert.IsTrue(result[0].Utility.ModelAttempted, "ModelAttempted 应为 true（模型已尝试）");
+        Assert.IsFalse(result[0].Utility.ModelApplied, "ModelApplied 应为 false（模型未实际应用）");
+        Assert.AreEqual("inference-succeeded-false", result[0].Utility.ModelFallbackReason);
+        Assert.AreEqual("fallback-to-deterministic", result[0].Utility.ReasonCode);
     }
 
     [TestMethod]
@@ -481,7 +489,8 @@ public sealed class R28D_EndToEndIntegrationTests
             deterministicWeight: 0.5,
             modelWeight: 0.5,
             modelArtifactId: engine.ModelVersion,
-            confidenceThreshold: 0.0); // Deterministic 引擎的 confidence 可能低于默认 0.70，置 0 确保 model-weighted 路径
+            confidenceThreshold: 0.0, // Deterministic 引擎的 confidence 可能低于默认 0.70，置 0 确保 model-weighted 路径
+            allowDeterministicReplayScoring: true); // R28-D P0-1：显式允许 DeterministicReplay 参与评分（测试/预览场景）
 
         // 阶段 1：特征提升
         var enriched = await pipeline.EnrichAsync(envelopes, R28DTestHelpers.BuildContext(), default);
@@ -588,7 +597,8 @@ internal static class R28DTestHelpers
         double deterministicWeight = 1.0,
         double modelWeight = 0.0,
         double confidenceThreshold = 0.70,
-        string? modelArtifactId = null)
+        string? modelArtifactId = null,
+        bool allowDeterministicReplayScoring = false)
     {
         var bundle = DefaultPolicyBundleFactory.Create();
         var routing = bundle.Routing with
@@ -612,7 +622,8 @@ internal static class R28DTestHelpers
             Budget = bundle.Budget,
             Routing = routing,
             FeatureSchemaVersion = bundle.Policies.DecisionSchemaVersion,
-            ResolutionScope = new ContextDecisionScope("test-ws", "test-col")
+            ResolutionScope = new ContextDecisionScope("test-ws", "test-col"),
+            AllowDeterministicReplayScoring = allowDeterministicReplayScoring
         };
     }
 
@@ -656,6 +667,9 @@ internal sealed class StubBatchInferenceEngine : IBatchInferenceEngine
     }
 
     public string ModelVersion { get; }
+
+    // R28-D P0-1：Stub 默认为 RealModel，让测试可验证 model-weighted 路径
+    public InferenceEngineKind Kind { get; set; } = InferenceEngineKind.RealModel;
 
     public StubBatchInferenceEngine WithOutput(double score, double confidence)
     {

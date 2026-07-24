@@ -332,7 +332,9 @@ public interface IExecutionArtifactFactory
 /// </remarks>
 public sealed record ContextDecisionRuntimeRequest
 {
-    /// <summary>关联的请求 ID。</summary>
+    /// <summary>
+    /// 关联的请求 ID（R28-D P0-7：仅作为 CorrelationId 用于链路追踪，不参与 SemanticHash 计算）。
+    /// </summary>
     public required string RequestId { get; init; }
 
     /// <summary>请求作用域（workspace + collection）。</summary>
@@ -580,6 +582,14 @@ public sealed record EffectivePolicySnapshot
 
     /// <summary>解析作用域（与 Request.Scope 校验，不一致则 fail-closed）。</summary>
     public required ContextDecisionScope ResolutionScope { get; init; }
+
+    /// <summary>
+    /// R28-D P0-1：是否允许 DeterministicReplay 引擎的分数参与 FinalScore 加权。
+    /// 默认 false：即使 EnableModelScoring=true，DeterministicReplay 引擎也不改变 FinalScore，
+    /// 避免把 feature hash 当成真实模型分数扰动排序。
+    /// 仅在测试 / 预览场景显式开启 true。
+    /// </summary>
+    public bool AllowDeterministicReplayScoring { get; init; } = false;
 }
 
 /// <summary>
@@ -807,7 +817,18 @@ public sealed record CandidateProviderContext(
     ContextDecisionRuntimeRequest Request,
     EffectivePolicySnapshot Policy,
     ExpertRoutingDecision Routing,
-    CandidateAdaptationContext AdaptationContext);
+    CandidateAdaptationContext AdaptationContext)
+{
+    /// <summary>
+    /// R28-D P0-3：可选的 tokenizer 解析器。Provider 使用它精确计算 CandidateTokenCost，
+    /// 让 Allocator 基于真实 token 数做预算控制（而非 length/4 粗估）。
+    /// null 时 TokenCost 回退到 length/4 估算（IsEstimated=true）。
+    /// </summary>
+    public IContextTokenizerResolver? TokenizerResolver { get; init; }
+
+    /// <summary>R28-D P0-3：tokenizer 使用的模型名（可选，从 Policy 路由）。</summary>
+    public string? TokenizerModelName { get; init; }
+}
 
 /// <summary>
 /// R28-B：统一 Expert 类型。与既有 RetrievalExpert 枚举值对齐。

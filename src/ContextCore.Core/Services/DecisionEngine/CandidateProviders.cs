@@ -49,6 +49,33 @@ internal static class CandidateProviderHelpers
         return Math.Max(1, (content?.Length ?? 0) / 4);
     }
 
+    /// <summary>
+    /// R28-D P0-3：使用 tokenizer 精确计算候选正文 token 数，填充 envelope.TokenCost。
+    /// </summary>
+    /// <param name="envelope">待填充的 envelope（TokenCost 字段会被设置）。</param>
+    /// <param name="material">对应的 Material（提供正文）。</param>
+    /// <param name="tokenizerResolver">tokenizer 解析器（null 时 TokenCost 也基于 length/4 但 IsEstimated=true）。</param>
+    /// <param name="modelName">tokenizer 使用的模型名（可选）。</param>
+    /// <remarks>
+    /// 即使 tokenizerResolver 为 null 也填充 TokenCost（IsEstimated=true），
+    /// 让 Allocator 始终消费 TokenCost 而非裸 EstimatedTokens，保证硬不变量 FinalSerializedTokenCount <= TokenBudget。
+    /// </remarks>
+    internal static ContextCandidateEnvelope EnrichTokenCost(
+        ContextCandidateEnvelope envelope,
+        CandidateMaterial material,
+        Abstractions.IContextTokenizerResolver? tokenizerResolver,
+        string? modelName = null)
+    {
+        if (envelope.TokenCost is not null)
+        {
+            return envelope; // 已填充，不覆盖
+        }
+
+        var content = material?.Content;
+        var cost = TokenCostHelper.ComputeTokenCost(content, tokenizerResolver, modelName);
+        return envelope with { TokenCost = cost };
+    }
+
     /// <summary>构建空 ExpertExecutionResult。</summary>
     internal static ExpertExecutionResult Empty()
     {
@@ -143,7 +170,9 @@ internal static class CandidateProviderHelpers
         ExpertKind expertKind,
         double score,
         CandidateAdaptationContext adaptationContext,
-        bool includeContent = true)
+        bool includeContent = true,
+        IContextTokenizerResolver? tokenizerResolver = null,
+        string? tokenizerModelName = null)
     {
         var contentHash = ComputeContentHash(item.Content);
         var key = CanonicalCandidateKey.Create(
@@ -162,6 +191,7 @@ internal static class CandidateProviderHelpers
             WorkspaceId = item.WorkspaceId,
             CollectionId = item.CollectionId,
             CanonicalKey = key,
+            Features = BuildFeatureVector(source, score),
             Safety = new CandidateSafetyState
             {
                 IsMandatory = source == ContextCandidateSource.Mandatory,
@@ -191,6 +221,9 @@ internal static class CandidateProviderHelpers
             SourceRefs = item.SourceRefs.Concat(item.Refs).Distinct(StringComparer.OrdinalIgnoreCase).ToArray()
         };
 
+        // R28-D P0-3：填充 CandidateTokenCost（使用 tokenizer 精确计算）
+        envelope = EnrichTokenCost(envelope, material, tokenizerResolver, tokenizerModelName);
+
         return (envelope, material);
     }
 
@@ -202,7 +235,9 @@ internal static class CandidateProviderHelpers
         ExpertKind expertKind,
         double score,
         CandidateAdaptationContext adaptationContext,
-        bool includeContent = true)
+        bool includeContent = true,
+        IContextTokenizerResolver? tokenizerResolver = null,
+        string? tokenizerModelName = null)
     {
         var contentHash = ComputeContentHash(memory.Content);
         var key = CanonicalCandidateKey.Create(
@@ -221,6 +256,7 @@ internal static class CandidateProviderHelpers
             WorkspaceId = memory.WorkspaceId,
             CollectionId = memory.CollectionId,
             CanonicalKey = key,
+            Features = BuildFeatureVector(source, score),
             Safety = new CandidateSafetyState
             {
                 PassesSafetyGate = true
@@ -249,6 +285,9 @@ internal static class CandidateProviderHelpers
             SourceRefs = memory.SourceRefs
         };
 
+        // R28-D P0-3：填充 CandidateTokenCost（使用 tokenizer 精确计算）
+        envelope = EnrichTokenCost(envelope, material, tokenizerResolver, tokenizerModelName);
+
         return (envelope, material);
     }
 
@@ -257,7 +296,9 @@ internal static class CandidateProviderHelpers
         ContextConstraint constraint,
         ExpertKind expertKind,
         double score,
-        CandidateAdaptationContext adaptationContext)
+        CandidateAdaptationContext adaptationContext,
+        IContextTokenizerResolver? tokenizerResolver = null,
+        string? tokenizerModelName = null)
     {
         var contentHash = ComputeContentHash(constraint.Content);
         var collectionId = constraint.CollectionId ?? string.Empty;
@@ -279,6 +320,7 @@ internal static class CandidateProviderHelpers
             WorkspaceId = constraint.WorkspaceId,
             CollectionId = collectionId,
             CanonicalKey = key,
+            Features = BuildFeatureVector(ContextCandidateSource.Constraint, score, isHard),
             Safety = new CandidateSafetyState
             {
                 ConstraintLevel = constraint.Level,
@@ -309,7 +351,79 @@ internal static class CandidateProviderHelpers
             SourceRefs = constraint.SourceRefs
         };
 
+        // R28-D P0-3：填充 CandidateTokenCost（使用 tokenizer 精确计算）
+        envelope = EnrichTokenCost(envelope, material, tokenizerResolver, tokenizerModelName);
+
         return (envelope, material);
+    }
+
+    /// <summary>
+    /// R28-D P0-2：根据 source / score 构造权威原始特征向量。
+    /// </summary>
+    /// <remarks>
+    /// 这些特征值基于现有 Provider 产出的 score 做合理映射（非真实 BM25/cosine 计算），
+    /// 让模型推理输入有非零值。真实 BM25/cosine 需后续在 Store 层暴露原始信号。
+    /// ScoreBreakdown 同步写入对应维度键（lexical/semantic/recency/relation/mandatory），
+    /// 供 DefaultFeaturePipeline 后续提升或 trace 使用。
+    /// </remarks>
+    private static CandidateFeatureVector BuildFeatureVector(
+        ContextCandidateSource source,
+        double score,
+        bool isHardConstraint = false)
+    {
+        double lexical = 0, semantic = 0, recency = 0, relation = 0, mandatory = 0;
+        var breakdown = new Dictionary<string, double>(StringComparer.Ordinal);
+
+        switch (source)
+        {
+            case ContextCandidateSource.Mandatory:
+                mandatory = 1.0;
+                breakdown["mandatory"] = mandatory;
+                break;
+            case ContextCandidateSource.Constraint:
+                mandatory = isHardConstraint ? 1.0 : 0.0;
+                relation = 0.1; // 约束关联性加分
+                breakdown["mandatory"] = mandatory;
+                breakdown["relation"] = relation;
+                break;
+            case ContextCandidateSource.Semantic:
+                // Provider 传入 score = hit.Score * 100，归一化到 [0,1]
+                semantic = score / 100.0;
+                breakdown["semantic"] = semantic;
+                break;
+            case ContextCandidateSource.Lexical:
+                // title 命中加 50，基础 10，归一化到 [0,1]
+                lexical = Math.Min(1.0, score / 60.0);
+                breakdown["lexical"] = lexical;
+                break;
+            case ContextCandidateSource.WorkingMemory:
+                recency = 0.8; // 短期记忆高 recency
+                breakdown["recency"] = recency;
+                break;
+            case ContextCandidateSource.StableMemory:
+                recency = 0.3; // 长期记忆低 recency
+                breakdown["recency"] = recency;
+                break;
+            case ContextCandidateSource.Graph:
+                // Graph 基础分 30，归一化到 [0,1]
+                relation = Math.Min(1.0, score / 30.0);
+                breakdown["relation"] = relation;
+                break;
+            default:
+                // Unknown / Recency / GlobalContext / RelatedContext：不填充强类型特征，
+                // 由 DefaultFeaturePipeline 后续从 ScoreBreakdown 提升（保持原行为）
+                break;
+        }
+
+        return new CandidateFeatureVector
+        {
+            LexicalScore = lexical,
+            SemanticScore = semantic,
+            RecencyScore = recency,
+            RelationBoost = relation,
+            MandatoryWeight = mandatory,
+            ScoreBreakdown = breakdown
+        };
     }
 
     private static IReadOnlyList<EvidenceRef> BuildProvenanceRefs(

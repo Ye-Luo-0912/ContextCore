@@ -172,9 +172,47 @@ public sealed record KernelTransportOptions
     public TimeSpan RetryDelay { get; init; } = TimeSpan.FromMilliseconds(100);
 
     /// <summary>
+    /// R28-D P0-5：FallbackToDeterministic 策略下，发送失败的结果是否写入本地 outbox 持久化。
+    /// 默认 true：失败结果写入 outbox，待 transport 恢复后重放（而非静默丢弃）。
+    /// 设为 false 时回退到旧行为（静默丢弃，不推荐）。
+    /// </summary>
+    public bool EnableResultOutbox { get; init; } = true;
+
+    /// <summary>
+    /// R28-D P0-5：本地 outbox 最大积压数量（默认 1024）。
+    /// 超过此数量时最早的结果被丢弃并记录诊断（避免内存耗尽）。
+    /// </summary>
+    public int MaxOutboxBacklog { get; init; } = 1024;
+
+    /// <summary>
     /// 默认选项（FailFast 策略，与 R28-C 之前行为一致）。
     /// </summary>
     public static KernelTransportOptions Default { get; } = new();
+}
+
+/// <summary>
+/// R28-D P0-5：Kernel 结果 outbox 抽象。
+/// FallbackToDeterministic 策略下，Transport 发送失败的结果写入 outbox 持久化，
+/// 待 Transport 恢复后由 Kernel 重放（而非静默丢弃）。
+/// </summary>
+/// <remarks>
+/// 默认实现 <c>InMemoryKernelResultOutbox</c> 提供进程内 Channel 缓冲。
+/// 生产部署应替换为持久化实现（如基于文件/DB 的 outbox）。
+/// </remarks>
+public interface IKernelResultOutbox
+{
+    /// <summary>将发送失败的结果写入 outbox。</summary>
+    /// <param name="result">待持久化的结果。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    ValueTask EnqueueAsync(AgentKernelResult result, CancellationToken cancellationToken = default);
+
+    /// <summary>从 outbox 读取待重放的结果（按 FIFO 顺序）。</summary>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>待重放的结果；outbox 为空时返回 null。</returns>
+    ValueTask<AgentKernelResult?> DequeueAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>当前 outbox 中待重放的结果数量。</summary>
+    int PendingCount { get; }
 }
 
 /// <summary>
@@ -185,12 +223,26 @@ public sealed record KernelTransportOptions
 ///   - <see cref="ReceiveAsync"/>：Kernel 从 Transport 接收指令（远程 / 进程外来源）。
 ///   - <see cref="SendResultAsync"/>：Kernel 通过 Transport 发送执行结果。
 /// 默认实现 <c>InProcessTransport</c> 提供进程内 Channel 传输。
+///
+/// R28-D P0-4：<b>输入链明确化</b>。
+/// <see cref="DefaultAgentKernel"/> 默认维护自身 inbox（通过 <see cref="IAgentKernel.SubmitAsync"/> 提交），
+/// <b>不</b>调用 <see cref="ReceiveAsync"/>。Transport 的 inbox 仅用于自定义 Kernel 实现从远程接收指令。
+/// 调用方若要驱动默认 Kernel，必须使用 <see cref="IAgentKernel.SubmitAsync"/>，
+/// 而非 <c>InProcessTransport.SubmitAsync</c>（后者写入 Transport 的 inbox，默认 Kernel 不读取）。
+/// 如需远程指令驱动 Kernel，需自定义 Kernel 实现从 Transport.ReceiveAsync 读取。
 /// </remarks>
 public interface IAgentKernelTransport
 {
-    /// <summary>从 Transport 接收下一条指令（阻塞直到有指令或取消）。</summary>
+    /// <summary>
+    /// 从 Transport 接收下一条指令（阻塞直到有指令或取消）。
+    /// </summary>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>接收到的指令；Transport 关闭时返回 null。</returns>
+    /// <remarks>
+    /// R28-D P0-4：<see cref="DefaultAgentKernel"/> 默认不调用此方法。
+    /// 仅自定义 Kernel 实现用于从远程 Transport 接收指令时调用。
+    /// 默认 Kernel 通过 <see cref="IAgentKernel.SubmitAsync"/> 接收指令。
+    /// </remarks>
     ValueTask<AgentKernelInstruction?> ReceiveAsync(CancellationToken cancellationToken = default);
 
     /// <summary>通过 Transport 发送执行结果。</summary>

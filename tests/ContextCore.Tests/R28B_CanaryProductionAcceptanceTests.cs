@@ -1,6 +1,8 @@
 using ContextCore.Abstractions;
+using ContextCore.Abstractions.Models;
 using ContextCore.Core.Services.DecisionEngine;
 using ContextCore.Core.Services.Evolution;
+using ContextCore.Core.Services.Retrieval;
 
 namespace ContextCore.Tests;
 
@@ -777,5 +779,242 @@ public sealed class CanaryEndToEndAcceptanceTests
         Assert.AreEqual(CanaryProgressionDecision.Advance, run2Advance.Decision,
             $"run2 应仍能正常推进；rationale={run2Advance.Rationale}");
         Assert.AreEqual(10, controller2.CutoverPercentage, "run2 应推进到 10%");
+    }
+}
+
+// ===========================================================================
+// 测试类 5：CanaryProductionSampleSourceAcceptanceTests
+// 验证 R28-D P0-6：Authoritative Runtime 在生产路径调用 RecordObservation
+// 并记录真实 Legacy 延迟（修复此前 Collector 永远没有样本 + LegacyP95LatencyMs = V2P95LatencyMs 的问题）
+// ===========================================================================
+
+[TestClass]
+[TestCategory("R28-B")]
+[TestCategory("R28-B.8")]
+public sealed class CanaryProductionSampleSourceAcceptanceTests
+{
+    // ===========================================================================
+    // 13. RecordObservation_SeparateLegacyDuration_ComputesRealLegacyP95
+    //     验证：RecordObservation 接收独立的 legacyDuration 参数；
+    //     当 V2 耗时显著高于 Legacy 耗时时，LegacyP95LatencyMs != V2P95LatencyMs
+    //     （latency multiplier 可发现 V2 延迟回退）。
+    // ===========================================================================
+    [TestMethod]
+    public void RecordObservation_SeparateLegacyDuration_ComputesRealLegacyP95()
+    {
+        var collector = new DefaultCanaryMetricsCollector();
+        var runId = "run-p0-6-legacy-latency-001";
+        var hardReport = CanaryAcceptanceHelpers.BuildParityReport(ParityLevel.Hard);
+
+        // 10 次观察：V2 耗时 200ms（回退），Legacy 耗时 50ms（基线）
+        for (var i = 0; i < 10; i++)
+        {
+            collector.RecordObservation(runId, hardReport,
+                v2Succeeded: true, legacySucceeded: true,
+                v2Duration: TimeSpan.FromMilliseconds(200),
+                legacyDuration: TimeSpan.FromMilliseconds(50));
+        }
+
+        var metrics = collector.GetAggregatedMetrics(runId);
+        Assert.AreEqual(10, metrics.TotalObservations, "总观察次数应为 10");
+        Assert.AreEqual(200.0, metrics.V2P95LatencyMs, 0.01,
+            "V2 P95 应为 200ms（真实 V2 耗时）");
+        Assert.AreEqual(50.0, metrics.LegacyP95LatencyMs, 0.01,
+            "Legacy P95 应为 50ms（真实 Legacy 耗时，而非 V2 近似值）");
+        Assert.AreNotEqual(metrics.V2P95LatencyMs, metrics.LegacyP95LatencyMs,
+            "V2 P95 与 Legacy P95 必须不同（修复前 LegacyP95LatencyMs = V2P95LatencyMs 的问题）");
+    }
+
+    // ===========================================================================
+    // 14. RecordObservation_NullLegacyDuration_FallsBackToV2Duration
+    //     验证：legacyDuration=null 时回退到 v2Duration（向后兼容旧调用点）。
+    // ===========================================================================
+    [TestMethod]
+    public void RecordObservation_NullLegacyDuration_FallsBackToV2Duration()
+    {
+        var collector = new DefaultCanaryMetricsCollector();
+        var runId = "run-p0-6-null-legacy-001";
+        var hardReport = CanaryAcceptanceHelpers.BuildParityReport(ParityLevel.Hard);
+
+        collector.RecordObservation(runId, hardReport,
+            v2Succeeded: true, legacySucceeded: true,
+            v2Duration: TimeSpan.FromMilliseconds(80));
+
+        var metrics = collector.GetAggregatedMetrics(runId);
+        Assert.AreEqual(80.0, metrics.V2P95LatencyMs, 0.01, "V2 P95 应为 80ms");
+        Assert.AreEqual(80.0, metrics.LegacyP95LatencyMs, 0.01,
+            "legacyDuration=null 时 Legacy P95 应回退到 V2 P95（向后兼容）");
+    }
+
+    // ===========================================================================
+    // 15. AuthoritativeRetrievalRuntime_MixedMode_RecordsCanaryObservation
+    //     验证：AuthoritativeRetrievalRuntime 在 Mixed mode（0 < cutover < 100）下，
+    //     当请求 metadata 携带 canaryRunId 时，调用 RecordObservation 上报样本。
+    //     修复前：RecordObservation 仅在测试代码中调用，生产路径永不调用 → Collector 永远没有样本。
+    //     注意：使用 cutoverPercentage=99（仍属 Mixed mode，因 < 100）确保绝大多数 OperationId 走 V2。
+    // ===========================================================================
+    [TestMethod]
+    public async Task AuthoritativeRetrievalRuntime_MixedMode_RecordsCanaryObservation()
+    {
+        var trackingStore = new CallTrackingContextStore();
+        var legacyRetriever = new HybridContextRetriever(trackingStore);
+        var stubV2 = new RecordingDecisionRuntime(
+            R28BTestHelpers.MakeResult("op-mixed-canary"));
+        var shadowRuntime = new ShadowDecisionRuntime(stubV2, new DecisionExperimentPlane());
+        var projector = new RetrievalResultProjector();
+        var collector = new DefaultCanaryMetricsCollector();
+        var runId = "run-mixed-canary-001";
+
+        var runtime = new AuthoritativeRetrievalRuntime(
+            legacyRetriever, stubV2, shadowRuntime, projector,
+            new CutoverController(cutoverPercentage: 99),
+            canaryMetricsCollector: collector);
+
+        var request = new ContextRetrievalRequest
+        {
+            OperationId = "op-mixed-canary",
+            WorkspaceId = "ws-canary",
+            CollectionId = "col-canary",
+            Metadata = new Dictionary<string, string>
+            {
+                [CanaryRunIdResolver.RunIdMetadataKey] = runId
+            }
+        };
+
+        await runtime.RetrieveAsync(request, CancellationToken.None);
+
+        var metrics = collector.GetAggregatedMetrics(runId);
+        Assert.IsTrue(metrics.TotalObservations >= 1,
+            "Mixed mode 路径下 AuthoritativeRetrievalRuntime 必须调用 RecordObservation 上报样本。" +
+            $"TotalObservations={metrics.TotalObservations}（修复前永远为 0）");
+    }
+
+    // ===========================================================================
+    // 16. AuthoritativeRetrievalRuntime_NoCanaryRunId_DoesNotRecordObservation
+    //     验证：请求 metadata 不携带 canaryRunId 时，不调用 RecordObservation
+    //     （无 runId 的请求不属于任何 canary run，不应污染 Collector）。
+    // ===========================================================================
+    [TestMethod]
+    public async Task AuthoritativeRetrievalRuntime_NoCanaryRunId_DoesNotRecordObservation()
+    {
+        var trackingStore = new CallTrackingContextStore();
+        var legacyRetriever = new HybridContextRetriever(trackingStore);
+        var stubV2 = new RecordingDecisionRuntime(
+            R28BTestHelpers.MakeResult("op-no-runid"));
+        var shadowRuntime = new ShadowDecisionRuntime(stubV2, new DecisionExperimentPlane());
+        var projector = new RetrievalResultProjector();
+        var collector = new DefaultCanaryMetricsCollector();
+
+        var runtime = new AuthoritativeRetrievalRuntime(
+            legacyRetriever, stubV2, shadowRuntime, projector,
+            new CutoverController(cutoverPercentage: 50),
+            canaryMetricsCollector: collector);
+
+        var request = new ContextRetrievalRequest
+        {
+            OperationId = "op-goes-v2",
+            WorkspaceId = "ws-no-runid",
+            CollectionId = "col-no-runid"
+            // 故意不设置 canaryRunId metadata
+        };
+
+        await runtime.RetrieveAsync(request, CancellationToken.None);
+
+        // 没有 canaryRunId 时不应上报任何样本
+        // 注意：GetAggregatedMetrics 传入未知的 runId 时返回 TotalObservations=0
+        var metrics = collector.GetAggregatedMetrics("any-run-id");
+        Assert.AreEqual(0, metrics.TotalObservations,
+            "请求未携带 canaryRunId 时不应调用 RecordObservation。");
+    }
+
+    // ===========================================================================
+    // 17. AuthoritativeRetrievalRuntime_SampledShadow_RecordsCanaryObservation
+    //     验证：sampled shadow 路径（100% cutover + 启用 sampled shadow）也调用 RecordObservation。
+    // ===========================================================================
+    [TestMethod]
+    public async Task AuthoritativeRetrievalRuntime_SampledShadow_RecordsCanaryObservation()
+    {
+        var trackingStore = new CallTrackingContextStore();
+        var legacyRetriever = new HybridContextRetriever(trackingStore);
+        var stubV2 = new RecordingDecisionRuntime(
+            R28BTestHelpers.MakeResult("op-sampled-shadow"));
+        var shadowRuntime = new ShadowDecisionRuntime(stubV2, new DecisionExperimentPlane());
+        var projector = new RetrievalResultProjector();
+        var collector = new DefaultCanaryMetricsCollector();
+        var runId = "run-sampled-shadow-001";
+
+        // 启用 sampled shadow（rate=1.0 → 所有请求执行 Legacy 对照）
+        var integration = new DecisionExperimentPlaneIntegration(
+            new DecisionExperimentPlane(), new ShadowGateEvaluator(),
+            new CutoverConfiguration { CutoverPercentage = 100, EnableSampledShadow = true, ShadowSampleRate = 1.0 });
+
+        var runtime = new AuthoritativeRetrievalRuntime(
+            legacyRetriever, stubV2, shadowRuntime, projector,
+            new CutoverController(cutoverPercentage: 100),
+            shadowGate: null,
+            experimentPlane: integration,
+            canaryMetricsCollector: collector);
+
+        var request = new ContextRetrievalRequest
+        {
+            OperationId = "op-sampled-shadow",
+            WorkspaceId = "ws-sampled",
+            CollectionId = "col-sampled",
+            Metadata = new Dictionary<string, string>
+            {
+                [CanaryRunIdResolver.RunIdMetadataKey] = runId
+            }
+        };
+
+        await runtime.RetrieveAsync(request, CancellationToken.None);
+
+        var metrics = collector.GetAggregatedMetrics(runId);
+        Assert.IsTrue(metrics.TotalObservations >= 1,
+            "sampled shadow 路径下 AuthoritativeRetrievalRuntime 必须调用 RecordObservation 上报样本。" +
+            $"TotalObservations={metrics.TotalObservations}（修复前永远为 0）");
+    }
+
+    // ===========================================================================
+    // 18. AuthoritativeRetrievalRuntime_V2Failure_RecordsObservationWithV2Error
+    //     验证：V2 路径抛异常时（fail-open 回退 Legacy），仍调用 RecordObservation
+    //     且 v2Succeeded=false（让 Canary error rate 能捕获 V2 失败率）。
+    // ===========================================================================
+    [TestMethod]
+    public async Task AuthoritativeRetrievalRuntime_V2Failure_RecordsObservationWithV2Error()
+    {
+        var trackingStore = new CallTrackingContextStore();
+        var legacyRetriever = new HybridContextRetriever(trackingStore);
+        // V2 抛非取消异常 → Runtime 应 fail-open 回退 Legacy 并上报 v2Succeeded=false
+        var throwingV2 = new ThrowingDecisionRuntime(new InvalidOperationException("V2 down"));
+        var shadowRuntime = new ShadowDecisionRuntime(throwingV2, new DecisionExperimentPlane());
+        var projector = new RetrievalResultProjector();
+        var collector = new DefaultCanaryMetricsCollector();
+        var runId = "run-v2-failure-001";
+
+        var runtime = new AuthoritativeRetrievalRuntime(
+            legacyRetriever, throwingV2, shadowRuntime, projector,
+            new CutoverController(cutoverPercentage: 99),
+            canaryMetricsCollector: collector);
+
+        var request = new ContextRetrievalRequest
+        {
+            OperationId = "op-v2-failure",
+            WorkspaceId = "ws-v2-fail",
+            CollectionId = "col-v2-fail",
+            Metadata = new Dictionary<string, string>
+            {
+                [CanaryRunIdResolver.RunIdMetadataKey] = runId
+            }
+        };
+
+        // V2 抛异常时 Runtime 应 fail-open 回退 Legacy（不向外抛）
+        var result = await runtime.RetrieveAsync(request, CancellationToken.None);
+        Assert.IsNotNull(result, "V2 失败时应 fail-open 回退到 Legacy 结果。");
+
+        var metrics = collector.GetAggregatedMetrics(runId);
+        Assert.IsTrue(metrics.TotalObservations >= 1,
+            "V2 失败时也必须上报样本（让 Canary error rate 能捕获 V2 失败率）。");
+        Assert.IsTrue(metrics.V2ErrorRate > 0.0,
+            "V2 失败时 V2ErrorRate 必须 > 0（让 Canary 回滚阈值能触发）。");
     }
 }
